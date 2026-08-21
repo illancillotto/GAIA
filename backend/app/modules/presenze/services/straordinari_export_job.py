@@ -191,7 +191,7 @@ def build_straordinari_export_items(
 
     missing_ids = [record_id for record_id in requested_motivations if record_id not in preview_by_record_id]
     if missing_ids:
-        raise ValueError("Una o piu giornate selezionate non sono piu valide per il mese selezionato")
+        raise ValueError("Una o piu giornate selezionate non sono piu valide per il mese precedente")
 
     items = [
         StraordinariExportItem(

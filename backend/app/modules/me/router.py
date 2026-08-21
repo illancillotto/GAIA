@@ -78,6 +78,7 @@ from app.modules.presenze.services.straordinari_export_job import (
     generate_straordinari_export,
     list_straordinari_available_months,
     list_straordinari_preview_items,
+    previous_month_period_start,
 )
 
 router = APIRouter(prefix="/me", tags=["me"])
@@ -458,7 +459,7 @@ def preview_me_straordinari_request(
     return _build_me_straordinari_preview_response(
         db,
         collaborator,
-        period_start=_resolve_month_start(None),
+        period_start=previous_month_period_start(),
         include_available_months=True,
     )
 
@@ -495,7 +496,7 @@ def download_me_straordinari_request(
         payload,
         db,
         collaborator,
-        _resolve_month_start(None),
+        previous_month_period_start(),
     )
 
 

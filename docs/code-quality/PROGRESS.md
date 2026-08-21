@@ -390,7 +390,7 @@ alle feature in corso senza avviare automaticamente hotspot applicativi.
 
 - Scope: `/me/straordinari`, self-service Presenze backend `/api/me/presenze/straordinari`, helper export straordinari e tipi frontend; nessuna modifica DB, auth o template XLSX.
 - Funzionalita: la pagina usa il mese corrente come riferimento iniziale, mostra un selettore dei mesi con dati Presenze extra effettivi e ricarica preview/export sul mese scelto.
-- Backend: aggiunti endpoint periodici `GET /me/presenze/straordinari/preview/{period_start}` e `POST /me/presenze/straordinari/export/{artifact_format}/{period_start}`; gli endpoint senza periodo restano disponibili e defaultano al mese corrente.
+- Backend: aggiunti endpoint periodici `GET /me/presenze/straordinari/preview/{period_start}` e `POST /me/presenze/straordinari/export/{artifact_format}/{period_start}`; gli endpoint senza periodo preservano il default storico sul mese precedente, mentre il frontend usa sempre il mese selezionato.
 - Mesi disponibili: calcolati da `PresenzeDailyRecord` del collaboratore con extra effettivi positivi, includendo override di straordinario/MPE, ordinati dal piu recente.
 - Coverage frontend runtime modificati: `106/106` statement, `74/74` branch, `45/45` funzioni e `90/90` righe, `100%`; comando con `VITEST_COVERAGE_INCLUDE=src/app/me/straordinari/page.tsx,src/lib/me-straordinari-api.ts`.
 - Test: frontend mirati `109 passed`; backend `backend/tests/test_presenze_straordinari_export.py` `21 passed`; backend service coverage `241/241` statement, `100%`; typecheck frontend `PASS`; backend compileall `PASS`.

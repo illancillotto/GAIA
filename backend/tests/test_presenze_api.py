@@ -2639,6 +2639,18 @@ def test_presenze_straordinari_preview_uses_previous_month_and_returns_candidate
         }
     ]
 
+    legacy_response = client.get(
+        "/me/presenze/straordinari/preview",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    period_response = client.get(
+        f"/me/presenze/straordinari/preview/{period_start.isoformat()}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert legacy_response.status_code == 200
+    assert period_response.status_code == 200
+    assert period_response.json() == legacy_response.json()
+
 
 def test_presenze_straordinari_export_job_can_be_created(monkeypatch: pytest.MonkeyPatch) -> None:
     admin = _create_user("straordinari_export_job_admin")
@@ -3531,6 +3543,14 @@ def test_me_straordinari_export_downloads_xlsx(monkeypatch: pytest.MonkeyPatch) 
     assert response.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     assert "Straordinari_2026_07_Luglio.xlsx" in response.headers["content-disposition"]
 
+    period_response = client.post(
+        f"/me/presenze/straordinari/export/xlsx/{period_start.isoformat()}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"items": [{"record_id": record_id, "motivation": "Servizio urgente"}]},
+    )
+    assert period_response.status_code == 200
+    assert period_response.content == b"xlsx-self-service"
+
 
 def test_me_straordinari_pdf_reports_missing_libreoffice(monkeypatch: pytest.MonkeyPatch) -> None:
     user = _create_user("me_straordinari_pdf_user", role=ApplicationUserRole.VIEWER.value)
@@ -3596,6 +3616,14 @@ def test_me_straordinari_export_rejects_unsupported_format() -> None:
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Formato richiesta straordinari non supportato"
+
+    period_response = client.post(
+        "/me/presenze/straordinari/export/csv/2026-07-01",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"items": [{"record_id": str(uuid.uuid4()), "motivation": "Servizio urgente"}]},
+    )
+    assert period_response.status_code == 404
+    assert period_response.json()["detail"] == "Formato richiesta straordinari non supportato"
 
 
 def test_me_straordinari_export_rejects_invalid_selected_record() -> None:
