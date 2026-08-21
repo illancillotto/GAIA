@@ -158,6 +158,25 @@ def list_straordinari_preview_items(
     return collaborator, items
 
 
+def list_straordinari_available_months(db: Session, *, collaborator_id: uuid.UUID) -> list[date]:
+    records = db.execute(
+        select(PresenzeDailyRecord)
+        .where(PresenzeDailyRecord.collaborator_id == collaborator_id)
+        .order_by(PresenzeDailyRecord.work_date.desc())
+    ).scalars().all()
+    seen: set[date] = set()
+    months: list[date] = []
+    for record in records:
+        if effective_extra_minutes(record) <= 0:
+            continue
+        month_start = date(record.work_date.year, record.work_date.month, 1)
+        if month_start in seen:
+            continue
+        seen.add(month_start)
+        months.append(month_start)
+    return months
+
+
 def build_straordinari_export_items(
     db: Session,
     *,
@@ -172,7 +191,7 @@ def build_straordinari_export_items(
 
     missing_ids = [record_id for record_id in requested_motivations if record_id not in preview_by_record_id]
     if missing_ids:
-        raise ValueError("Una o piu giornate selezionate non sono piu valide per il mese precedente")
+        raise ValueError("Una o piu giornate selezionate non sono piu valide per il mese selezionato")
 
     items = [
         StraordinariExportItem(

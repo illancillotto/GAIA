@@ -201,6 +201,66 @@ def test_straordinari_preview_items_use_effective_extra_notes_and_last_punches(d
     assert items[1].end_time is None
 
 
+def test_straordinari_available_months_use_effective_extra_minutes(db_session: Session) -> None:
+    user = _create_user(db_session)
+    collaborator = _create_collaborator(db_session, user)
+    other_collaborator = PresenzeCollaborator(
+        owner_user_id=user.id,
+        employee_code="9999",
+        company_code="53",
+        name="ALTRO OPERATORE",
+    )
+    db_session.add(other_collaborator)
+    db_session.flush()
+    db_session.add_all(
+        [
+            PresenzeDailyRecord(
+                collaborator_id=collaborator.id,
+                owner_user_id=user.id,
+                application_user_id=user.id,
+                work_date=date(2026, 8, 5),
+                straordinario_minutes=0,
+                override_straordinario_minutes=45,
+            ),
+            PresenzeDailyRecord(
+                collaborator_id=collaborator.id,
+                owner_user_id=user.id,
+                application_user_id=user.id,
+                work_date=date(2026, 8, 6),
+                mpe_minutes=15,
+            ),
+            PresenzeDailyRecord(
+                collaborator_id=collaborator.id,
+                owner_user_id=user.id,
+                application_user_id=user.id,
+                work_date=date(2026, 7, 10),
+                straordinario_minutes=30,
+            ),
+            PresenzeDailyRecord(
+                collaborator_id=collaborator.id,
+                owner_user_id=user.id,
+                application_user_id=user.id,
+                work_date=date(2026, 6, 10),
+                straordinario_minutes=90,
+                override_straordinario_minutes=0,
+            ),
+            PresenzeDailyRecord(
+                collaborator_id=other_collaborator.id,
+                owner_user_id=user.id,
+                application_user_id=user.id,
+                work_date=date(2026, 9, 1),
+                straordinario_minutes=120,
+            ),
+        ]
+    )
+    db_session.commit()
+
+    assert export_job.list_straordinari_available_months(db_session, collaborator_id=collaborator.id) == [
+        date(2026, 8, 1),
+        date(2026, 7, 1),
+    ]
+
+
 def test_straordinari_preview_deducts_missing_lunch_break_from_long_entry_exit_span(db_session: Session) -> None:
     user = _create_user(db_session)
     collaborator = _create_collaborator(db_session, user)

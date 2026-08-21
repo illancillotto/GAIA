@@ -5,17 +5,17 @@ import MeStraordinariPage from "@/app/me/straordinari/page";
 
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
-  previewMeStraordinariRequest: vi.fn(),
-  downloadMeStraordinariRequest: vi.fn(),
+  previewMeStraordinariPeriodRequest: vi.fn(),
+  downloadMeStraordinariPeriodRequest: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: mocks.getStoredAccessToken,
 }));
 
-vi.mock("@/lib/api", () => ({
-  previewMeStraordinariRequest: mocks.previewMeStraordinariRequest,
-  downloadMeStraordinariRequest: mocks.downloadMeStraordinariRequest,
+vi.mock("@/lib/me-straordinari-api", () => ({
+  previewMeStraordinariPeriodRequest: mocks.previewMeStraordinariPeriodRequest,
+  downloadMeStraordinariPeriodRequest: mocks.downloadMeStraordinariPeriodRequest,
 }));
 
 vi.mock("@/components/app/protected-page", () => ({
@@ -31,10 +31,11 @@ describe("MeStraordinariPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getStoredAccessToken.mockReturnValue("token");
-    mocks.previewMeStraordinariRequest.mockResolvedValue({
+    mocks.previewMeStraordinariPeriodRequest.mockResolvedValue({
       collaborator: { id: "collab-1", name: "AMADU SALVATORE", employee_code: "1854" },
       period_start: "2026-07-01",
       period_end: "2026-07-31",
+      available_months: ["2026-07-01", "2026-06-01"],
       items: [
         {
           record_id: "record-1",
@@ -47,7 +48,7 @@ describe("MeStraordinariPage", () => {
         },
       ],
     });
-    mocks.downloadMeStraordinariRequest.mockResolvedValue(new Blob(["xlsx"], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+    mocks.downloadMeStraordinariPeriodRequest.mockResolvedValue(new Blob(["xlsx"], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:test");
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
   });
@@ -55,7 +56,9 @@ describe("MeStraordinariPage", () => {
   test("loads preview, edits motivation and downloads the Excel module", async () => {
     render(<MeStraordinariPage />);
 
-    await waitFor(() => expect(mocks.previewMeStraordinariRequest).toHaveBeenCalledWith("token"));
+    await waitFor(() =>
+      expect(mocks.previewMeStraordinariPeriodRequest).toHaveBeenCalledWith("token", expect.stringMatching(/^\d{4}-\d{2}-01$/)),
+    );
     expect(screen.getByText("Richiesta straordinari")).toBeInTheDocument();
     expect(screen.getByText("AMADU SALVATORE · matricola 1854")).toBeInTheDocument();
     expect(screen.getAllByText("01:30")).toHaveLength(2);
@@ -64,33 +67,74 @@ describe("MeStraordinariPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Scarica Excel" }));
 
     await waitFor(() =>
-      expect(mocks.downloadMeStraordinariRequest).toHaveBeenCalledWith("token", "xlsx", {
+      expect(mocks.downloadMeStraordinariPeriodRequest).toHaveBeenCalledWith("token", "xlsx", {
         items: [{ record_id: "record-1", motivation: "Servizio urgente" }],
-      }),
+      }, expect.stringMatching(/^\d{4}-\d{2}-01$/)),
     );
     expect(URL.createObjectURL).toHaveBeenCalled();
     expect(screen.getByText(/Excel generato/)).toBeInTheDocument();
   });
 
   test("shows an empty state when there are no overtime candidates", async () => {
-    mocks.previewMeStraordinariRequest.mockResolvedValueOnce({
+    mocks.previewMeStraordinariPeriodRequest.mockResolvedValueOnce({
       collaborator: { id: "collab-1", name: "AMADU SALVATORE", employee_code: "1854" },
       period_start: "2026-07-01",
       period_end: "2026-07-31",
+      available_months: ["2026-07-01"],
       items: [],
     });
 
     render(<MeStraordinariPage />);
 
-    expect(await screen.findByText("Nessuno straordinario nel mese precedente")).toBeInTheDocument();
+    expect(await screen.findByText(/Nessuno straordinario per/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Scarica Excel" })).toBeDisabled();
   });
 
+  test("switches preview to another available month", async () => {
+    mocks.previewMeStraordinariPeriodRequest
+      .mockResolvedValueOnce({
+        collaborator: { id: "collab-1", name: "AMADU SALVATORE", employee_code: "1854" },
+        period_start: "2026-08-01",
+        period_end: "2026-08-31",
+        available_months: ["2026-08-01", "2026-07-01"],
+        items: [],
+      })
+      .mockResolvedValueOnce({
+        collaborator: { id: "collab-1", name: "AMADU SALVATORE", employee_code: "1854" },
+        period_start: "2026-07-01",
+        period_end: "2026-07-31",
+        available_months: ["2026-08-01", "2026-07-01"],
+        items: [
+          {
+            record_id: "record-7",
+            work_date: "2026-07-12",
+            motivation: "Cambio turno",
+            start_time: "17:00",
+            end_time: "18:00",
+            duration_minutes: 60,
+            duration_label: "01:00",
+          },
+        ],
+      });
+
+    render(<MeStraordinariPage />);
+
+    await screen.findByText(/Nessuno straordinario per/);
+    fireEvent.change(screen.getByLabelText("Mese di riferimento"), { target: { value: "2026-07" } });
+
+    await waitFor(() =>
+      expect(mocks.previewMeStraordinariPeriodRequest).toHaveBeenLastCalledWith("token", "2026-07-01"),
+    );
+    expect(await screen.findByDisplayValue("Cambio turno")).toBeInTheDocument();
+    expect(screen.getAllByText("luglio 2026").length).toBeGreaterThan(0);
+  });
+
   test("downloads the PDF module and shows the fallback time label for missing punches", async () => {
-    mocks.previewMeStraordinariRequest.mockResolvedValueOnce({
+    mocks.previewMeStraordinariPeriodRequest.mockResolvedValueOnce({
       collaborator: { id: "collab-1", name: "AMADU SALVATORE", employee_code: "1854" },
       period_start: "2026-07-01",
       period_end: "2026-07-31",
+      available_months: ["2026-07-01"],
       items: [
         {
           record_id: "record-1",
@@ -103,7 +147,7 @@ describe("MeStraordinariPage", () => {
         },
       ],
     });
-    mocks.downloadMeStraordinariRequest.mockResolvedValueOnce(new Blob(["pdf"], { type: "application/pdf" }));
+    mocks.downloadMeStraordinariPeriodRequest.mockResolvedValueOnce(new Blob(["pdf"], { type: "application/pdf" }));
 
     render(<MeStraordinariPage />);
 
@@ -111,9 +155,9 @@ describe("MeStraordinariPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Scarica PDF" }));
 
     await waitFor(() =>
-      expect(mocks.downloadMeStraordinariRequest).toHaveBeenCalledWith("token", "pdf", {
+      expect(mocks.downloadMeStraordinariPeriodRequest).toHaveBeenCalledWith("token", "pdf", {
         items: [{ record_id: "record-1", motivation: "" }],
-      }),
+      }, expect.stringMatching(/^\d{4}-\d{2}-01$/)),
     );
     expect(screen.getByText(/PDF generato/)).toBeInTheDocument();
   });
@@ -136,16 +180,16 @@ describe("MeStraordinariPage", () => {
 
     const { unmount } = render(<MeStraordinariPage />);
     expect(await screen.findByText("Sessione non disponibile. Effettua il login.")).toBeInTheDocument();
-    expect(mocks.previewMeStraordinariRequest).not.toHaveBeenCalled();
+    expect(mocks.previewMeStraordinariPeriodRequest).not.toHaveBeenCalled();
 
     mocks.getStoredAccessToken.mockReturnValue("token");
-    mocks.previewMeStraordinariRequest.mockRejectedValueOnce(new Error("Preview non disponibile"));
+    mocks.previewMeStraordinariPeriodRequest.mockRejectedValueOnce(new Error("Preview non disponibile"));
     unmount();
     const secondRender = render(<MeStraordinariPage />);
 
     expect(await screen.findByText("Preview non disponibile")).toBeInTheDocument();
 
-    mocks.previewMeStraordinariRequest.mockRejectedValueOnce("errore non standard");
+    mocks.previewMeStraordinariPeriodRequest.mockRejectedValueOnce("errore non standard");
     secondRender.unmount();
     render(<MeStraordinariPage />);
 
@@ -153,7 +197,7 @@ describe("MeStraordinariPage", () => {
   });
 
   test("shows download errors", async () => {
-    mocks.downloadMeStraordinariRequest.mockRejectedValueOnce(new Error("LibreOffice non trovato"));
+    mocks.downloadMeStraordinariPeriodRequest.mockRejectedValueOnce(new Error("LibreOffice non trovato"));
 
     render(<MeStraordinariPage />);
 
@@ -164,7 +208,7 @@ describe("MeStraordinariPage", () => {
   });
 
   test("shows fallback text for non-standard download errors", async () => {
-    mocks.downloadMeStraordinariRequest.mockRejectedValueOnce("errore non standard");
+    mocks.downloadMeStraordinariPeriodRequest.mockRejectedValueOnce("errore non standard");
 
     render(<MeStraordinariPage />);
 
@@ -182,14 +226,15 @@ describe("MeStraordinariPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Scarica Excel" }));
 
     expect(await screen.findByText("Sessione non disponibile. Effettua il login.")).toBeInTheDocument();
-    expect(mocks.downloadMeStraordinariRequest).not.toHaveBeenCalled();
+    expect(mocks.downloadMeStraordinariPeriodRequest).not.toHaveBeenCalled();
   });
 
   test("updates only the edited row when multiple candidates are available", async () => {
-    mocks.previewMeStraordinariRequest.mockResolvedValueOnce({
+    mocks.previewMeStraordinariPeriodRequest.mockResolvedValueOnce({
       collaborator: { id: "collab-1", name: "AMADU SALVATORE", employee_code: "1854" },
       period_start: "2026-07-01",
       period_end: "2026-07-31",
+      available_months: ["2026-07-01"],
       items: [
         {
           record_id: "record-1",
@@ -219,17 +264,18 @@ describe("MeStraordinariPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Scarica Excel" }));
 
     await waitFor(() =>
-      expect(mocks.downloadMeStraordinariRequest).toHaveBeenCalledWith("token", "xlsx", {
+      expect(mocks.downloadMeStraordinariPeriodRequest).toHaveBeenCalledWith("token", "xlsx", {
         items: [{ record_id: "record-2", motivation: "Seconda aggiornata" }],
-      }),
+      }, expect.stringMatching(/^\d{4}-\d{2}-01$/)),
     );
   });
 
   test("filters rows with missing lunch break adjustments", async () => {
-    mocks.previewMeStraordinariRequest.mockResolvedValueOnce({
+    mocks.previewMeStraordinariPeriodRequest.mockResolvedValueOnce({
       collaborator: { id: "collab-1", name: "AMADU SALVATORE", employee_code: "1854" },
       period_start: "2026-07-01",
       period_end: "2026-07-31",
+      available_months: ["2026-07-01"],
       items: [
         {
           record_id: "record-1",
@@ -276,10 +322,11 @@ describe("MeStraordinariPage", () => {
   });
 
   test("shows post-lunch band alignment when lunch break is valid", async () => {
-    mocks.previewMeStraordinariRequest.mockResolvedValueOnce({
+    mocks.previewMeStraordinariPeriodRequest.mockResolvedValueOnce({
       collaborator: { id: "collab-1", name: "AMADU SALVATORE", employee_code: "1854" },
       period_start: "2026-07-01",
       period_end: "2026-07-31",
+      available_months: ["2026-07-01"],
       items: [
         {
           record_id: "record-1",

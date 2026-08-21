@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { ChangeEvent } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon } from "@/components/ui/icons";
-import { downloadMeStraordinariRequest, previewMeStraordinariRequest } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { MeStraordinariPreviewResponse } from "@/types/api";
+import { downloadMeStraordinariPeriodRequest, previewMeStraordinariPeriodRequest } from "@/lib/me-straordinari-api";
+import type { MeStraordinariPreviewItem, MeStraordinariPreviewResponse } from "@/types/api";
 
 type DraftItem = {
   recordId: string;
@@ -25,6 +26,14 @@ type DraftItem = {
 };
 
 type PauseFilter = "all" | "adjusted" | "plain";
+
+function currentMonthValue(reference = new Date()): string {
+  return `${reference.getFullYear()}-${String(reference.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthStartFromValue(value: string): string {
+  return `${value}-01`;
+}
 
 function formatMonthLabel(value: string): string {
   return new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" }).format(new Date(`${value}T00:00:00`));
@@ -56,7 +65,97 @@ function downloadBlob(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
+function buildMonthOptions(preview: MeStraordinariPreviewResponse | null, selectedMonth: string): string[] {
+  const values = new Set<string>([selectedMonth]);
+  for (const month of preview?.available_months ?? []) {
+    values.add(month.slice(0, 7));
+  }
+  return Array.from(values).sort((left, right) => right.localeCompare(left));
+}
+
+function draftItemFromPreviewItem(item: MeStraordinariPreviewItem): DraftItem {
+  return {
+    recordId: item.record_id,
+    workDate: item.work_date,
+    startTime: item.start_time,
+    endTime: item.end_time,
+    durationMinutes: item.duration_minutes,
+    durationLabel: item.duration_label,
+    originalDurationMinutes: item.original_duration_minutes ?? item.duration_minutes,
+    pauseDeductionMinutes: item.pause_deduction_minutes ?? 0,
+    lunchBreakMinutes: item.lunch_break_minutes ?? null,
+    durationAdjustmentReason: item.duration_adjustment_reason ?? null,
+    selected: true,
+    motivation: item.motivation,
+  };
+}
+
+function HeroSummary({ selectedMinutesLabel }: { selectedMinutesLabel: string }) {
+  return (
+    <article className="rounded-[28px] border border-emerald-100 bg-gradient-to-br from-[#F3FAF0] via-white to-[#FFF7E8] p-6 shadow-sm">
+      <p className="section-kicker">Self-service operatore</p>
+      <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h2 className="text-2xl font-semibold text-emerald-950">Modulo richiesta straordinari</h2>
+          <p className="mt-2 max-w-3xl text-sm text-gray-600">
+            Il modulo usa il template ufficiale <span className="font-semibold">Straordinari.xlsx</span>. Seleziona uno dei mesi con dati Presenze e puoi correggere le motivazioni prima
+            di scaricare il file.
+          </p>
+        </div>
+        <div className="rounded-2xl border border-white/80 bg-white/80 px-4 py-3 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Totale selezionato</p>
+          <p className="mt-1 text-2xl font-semibold text-emerald-950">{selectedMinutesLabel}</p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function PeriodActions({
+  isDownloading,
+  isLoading,
+  monthOptions,
+  onDownload,
+  onMonthChange,
+  selectedItemsCount,
+  selectedMonth,
+}: {
+  isDownloading: "xlsx" | "pdf" | null;
+  isLoading: boolean;
+  monthOptions: string[];
+  onDownload: (format: "xlsx" | "pdf") => void;
+  onMonthChange: (value: string) => void;
+  selectedItemsCount: number;
+  selectedMonth: string;
+}) {
+  const downloadsDisabled = isLoading || isDownloading != null || selectedItemsCount === 0;
+  function handleMonthSelect(event: ChangeEvent<HTMLSelectElement>) {
+    onMonthChange(event.target.value);
+  }
+  return (
+    <div className="flex flex-wrap items-end gap-2">
+      <label className="min-w-[220px] text-sm font-medium text-gray-700">
+        Mese di riferimento
+        <select className="form-control mt-1" value={selectedMonth} disabled={isLoading} onChange={handleMonthSelect}>
+          {monthOptions.map((month) => (
+            <option key={month} value={month}>
+              {formatMonthLabel(month)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button className="btn-secondary" type="button" onClick={() => onDownload("xlsx")} disabled={downloadsDisabled}>
+        {isDownloading === "xlsx" ? "Genero Excel..." : "Scarica Excel"}
+      </button>
+      <button className="btn-primary" type="button" onClick={() => onDownload("pdf")} disabled={downloadsDisabled}>
+        {isDownloading === "pdf" ? "Genero PDF..." : "Scarica PDF"}
+      </button>
+    </div>
+  );
+}
+
 export default function MeStraordinariPage() {
+  const [selectedMonth, setSelectedMonth] = useState(() => currentMonthValue());
   const [preview, setPreview] = useState<MeStraordinariPreviewResponse | null>(null);
   const [draftItems, setDraftItems] = useState<DraftItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -73,25 +172,12 @@ export default function MeStraordinariPage() {
         setIsLoading(false);
         return;
       }
+      setIsLoading(true);
+      setSuccess(null);
       try {
-        const result = await previewMeStraordinariRequest(token);
+        const result = await previewMeStraordinariPeriodRequest(token, monthStartFromValue(selectedMonth));
         setPreview(result);
-        setDraftItems(
-          result.items.map((item) => ({
-            recordId: item.record_id,
-            workDate: item.work_date,
-            startTime: item.start_time,
-            endTime: item.end_time,
-            durationMinutes: item.duration_minutes,
-            durationLabel: item.duration_label,
-            originalDurationMinutes: item.original_duration_minutes ?? item.duration_minutes,
-            pauseDeductionMinutes: item.pause_deduction_minutes ?? 0,
-            lunchBreakMinutes: item.lunch_break_minutes ?? null,
-            durationAdjustmentReason: item.duration_adjustment_reason ?? null,
-            selected: true,
-            motivation: item.motivation,
-          })),
-        );
+        setDraftItems(result.items.map(draftItemFromPreviewItem));
         setError(null);
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Errore caricamento richiesta straordinari");
@@ -101,11 +187,12 @@ export default function MeStraordinariPage() {
     }
 
     void loadPreview();
-  }, []);
+  }, [selectedMonth]);
 
   const selectedItems = useMemo(() => draftItems.filter((item) => item.selected), [draftItems]);
   const adjustedItemsCount = useMemo(() => draftItems.filter((item) => item.pauseDeductionMinutes > 0).length, [draftItems]);
   const alignedItemsCount = useMemo(() => draftItems.filter((item) => item.pauseDeductionMinutes === 0 && item.originalDurationMinutes !== item.durationMinutes).length, [draftItems]);
+  const monthOptions = useMemo(() => buildMonthOptions(preview, selectedMonth), [preview, selectedMonth]);
   const visibleDraftItems = useMemo(
     () =>
       draftItems.filter((item) => {
@@ -137,12 +224,12 @@ export default function MeStraordinariPage() {
     setError(null);
     setSuccess(null);
     try {
-      const blob = await downloadMeStraordinariRequest(token, format, {
+      const blob = await downloadMeStraordinariPeriodRequest(token, format, {
         items: selectedItems.map((item) => ({
           record_id: item.recordId,
           motivation: item.motivation,
         })),
-      });
+      }, monthStartFromValue(selectedMonth));
       downloadBlob(blob, buildFilename(preview, format));
       setSuccess(format === "pdf" ? "PDF generato. Se la conversione non e disponibile usa il file Excel." : "Excel generato: puoi stamparlo o inoltrarlo al caposettore.");
     } catch (downloadError) {
@@ -160,22 +247,7 @@ export default function MeStraordinariPage() {
       requiredModule="presenze"
     >
       <section className="page-body space-y-6">
-        <article className="rounded-[28px] border border-emerald-100 bg-gradient-to-br from-[#F3FAF0] via-white to-[#FFF7E8] p-6 shadow-sm">
-          <p className="section-kicker">Self-service operatore</p>
-          <div className="mt-3 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <h2 className="text-2xl font-semibold text-emerald-950">Modulo richiesta straordinari</h2>
-              <p className="mt-2 max-w-3xl text-sm text-gray-600">
-                Il modulo usa il template ufficiale <span className="font-semibold">Straordinari.xlsx</span>. Le giornate candidate arrivano dal mese precedente e
-                puoi correggere le motivazioni prima di scaricare il file.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-white/80 bg-white/80 px-4 py-3 shadow-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Totale selezionato</p>
-              <p className="mt-1 text-2xl font-semibold text-emerald-950">{selectedMinutesLabel}</p>
-            </div>
-          </div>
-        </article>
+        <HeroSummary selectedMinutesLabel={selectedMinutesLabel} />
 
         {error ? <p className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">{error}</p> : null}
         {success ? <p className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">{success}</p> : null}
@@ -193,21 +265,22 @@ export default function MeStraordinariPage() {
                 </p>
               ) : null}
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button className="btn-secondary" type="button" onClick={() => void handleDownload("xlsx")} disabled={isLoading || isDownloading != null || selectedItems.length === 0}>
-                {isDownloading === "xlsx" ? "Genero Excel..." : "Scarica Excel"}
-              </button>
-              <button className="btn-primary" type="button" onClick={() => void handleDownload("pdf")} disabled={isLoading || isDownloading != null || selectedItems.length === 0}>
-                {isDownloading === "pdf" ? "Genero PDF..." : "Scarica PDF"}
-              </button>
-            </div>
+            <PeriodActions
+              isDownloading={isDownloading}
+              isLoading={isLoading}
+              monthOptions={monthOptions}
+              onDownload={(format) => void handleDownload(format)}
+              onMonthChange={setSelectedMonth}
+              selectedItemsCount={selectedItems.length}
+              selectedMonth={selectedMonth}
+            />
           </div>
 
           {isLoading ? (
             <p className="mt-6 text-sm text-gray-500">Caricamento giornate con straordinario...</p>
           ) : draftItems.length === 0 ? (
             <div className="mt-6">
-              <EmptyState icon={DocumentIcon} title="Nessuno straordinario nel mese precedente" description="Non risultano giornate candidate per compilare il modulo." />
+              <EmptyState icon={DocumentIcon} title={`Nessuno straordinario per ${formatMonthLabel(selectedMonth)}`} description="Non risultano giornate candidate per compilare il modulo." />
             </div>
           ) : (
             <>
