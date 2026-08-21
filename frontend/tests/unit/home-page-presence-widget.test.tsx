@@ -258,7 +258,7 @@ describe("HomePage presence widget", () => {
 
     render(<HomePage />);
 
-    const input = await screen.findByPlaceholderText("Cerca utenza, ruolo, catasto…");
+    const input = await screen.findByPlaceholderText("Cerca utenza, ruolo, catasto o coordinate…");
 
     expect(document.activeElement).toBe(input);
     fireEvent.keyDown(input, { key: "Enter" });
@@ -292,7 +292,7 @@ describe("HomePage presence widget", () => {
 
     expect(await screen.findByRole("link", { name: "Apri GIS Platform" })).toHaveAttribute("href", "/gis/catalogo");
 
-    fireEvent.change(screen.getByPlaceholderText("Cerca utenza, ruolo, catasto…"), { target: { value: "postgis" } });
+    fireEvent.change(screen.getByPlaceholderText("Cerca utenza, ruolo, catasto o coordinate…"), { target: { value: "postgis" } });
     fireEvent.click(screen.getByRole("button", { name: "GIS Platform · Catalogo" }));
 
     expect(mocks.push).toHaveBeenCalledWith("/gis/catalogo");
@@ -714,7 +714,7 @@ describe("HomePage presence widget", () => {
     render(<HomePage />);
 
     await screen.findByText("Hub operativo GAIA");
-    const input = screen.getByPlaceholderText("Cerca utenza, ruolo, catasto…");
+    const input = screen.getByPlaceholderText("Cerca utenza, ruolo, catasto o coordinate…");
 
     fireEvent.change(input, { target: { value: "GIS Platform · Catalogo" } });
     fireEvent.keyDown(input, { key: "Enter" });
@@ -733,6 +733,48 @@ describe("HomePage presence widget", () => {
     fireEvent.mouseDown(document.body);
     expect(screen.queryByRole("button", { name: "GIS Platform · Catalogo" })).not.toBeInTheDocument();
 
+  });
+
+  test("opens Catasto GIS when the home search receives latitude and longitude", async () => {
+    mocks.getCurrentUser.mockResolvedValue({
+      id: 9,
+      username: "catasto-coordinate",
+      email: "catasto-coordinate@example.local",
+      role: "viewer",
+      is_active: true,
+      module_accessi: false,
+      module_rete: false,
+      module_inventario: false,
+      module_catasto: true,
+      module_utenze: false,
+      module_operazioni: false,
+      module_riordino: false,
+      module_ruolo: false,
+      module_presenze: false,
+      enabled_modules: ["catasto"],
+    });
+    mocks.getMyPermissions.mockResolvedValue({
+      sections: [],
+      granted_keys: [],
+    });
+
+    render(<HomePage />);
+
+    await screen.findByText("Hub operativo GAIA");
+    const input = screen.getByPlaceholderText("Cerca utenza, ruolo, catasto o coordinate…");
+
+    fireEvent.change(input, { target: { value: "39,9042 8,5917" } });
+    expect(screen.getByRole("button", { name: "Catasto · GIS coordinate" })).toBeInTheDocument();
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(mocks.push).toHaveBeenCalledWith("/catasto/gis?coordinate=39.904200%2C+8.591700");
+
+    mocks.push.mockClear();
+    fireEvent.change(input, { target: { value: "39°54'15\"N 8°35'30\"E" } });
+    expect(screen.getByRole("button", { name: "Catasto · GIS coordinate" })).toBeInTheDocument();
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(mocks.push).toHaveBeenCalledWith("/catasto/gis?coordinate=39.904167%2C+8.591667");
   });
 
   test("shows operational search results before shortcut results", async () => {
@@ -787,7 +829,7 @@ describe("HomePage presence widget", () => {
     render(<HomePage />);
 
     await screen.findByText("Hub operativo GAIA");
-    const input = screen.getByPlaceholderText("Cerca utenza, ruolo, catasto…");
+    const input = screen.getByPlaceholderText("Cerca utenza, ruolo, catasto o coordinate…");
     fireEvent.change(input, { target: { value: "rossi" } });
 
     expect(screen.getByText("Ricerca operativa in corso…")).toBeInTheDocument();
@@ -825,7 +867,7 @@ describe("HomePage presence widget", () => {
     render(<HomePage />);
 
     await screen.findByText("Hub operativo GAIA");
-    fireEvent.change(screen.getByPlaceholderText("Cerca utenza, ruolo, catasto…"), { target: { value: "catasto" } });
+    fireEvent.change(screen.getByPlaceholderText("Cerca utenza, ruolo, catasto o coordinate…"), { target: { value: "catasto" } });
 
     expect(await screen.findByText("Backend ricerca non disponibile")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Catasto · Dashboard" })).toBeInTheDocument();
@@ -855,7 +897,7 @@ describe("HomePage presence widget", () => {
     render(<HomePage />);
 
     await screen.findByText("Hub operativo GAIA");
-    fireEvent.change(screen.getByPlaceholderText("Cerca utenza, ruolo, catasto…"), { target: { value: "particella" } });
+    fireEvent.change(screen.getByPlaceholderText("Cerca utenza, ruolo, catasto o coordinate…"), { target: { value: "particella" } });
 
     expect(await screen.findByText("Ricerca non disponibile")).toBeInTheDocument();
   });
@@ -886,7 +928,7 @@ describe("HomePage presence widget", () => {
     render(<HomePage />);
 
     await screen.findByText("Hub operativo GAIA");
-    const input = screen.getByPlaceholderText("Cerca utenza, ruolo, catasto…");
+    const input = screen.getByPlaceholderText("Cerca utenza, ruolo, catasto o coordinate…");
 
     fireEvent.change(input, { target: { value: "dashboard" } });
     expect(screen.getByRole("button", { name: "Catasto · Dashboard" })).toBeInTheDocument();
@@ -982,7 +1024,7 @@ describe("HomePage presence widget", () => {
     render(<HomePage />);
 
     await screen.findByText("Hub operativo GAIA");
-    const input = screen.getByPlaceholderText("Cerca utenza, ruolo, catasto…");
+    const input = screen.getByPlaceholderText("Cerca utenza, ruolo, catasto o coordinate…");
     fireEvent.change(input, { target: { value: "rossi" } });
 
     await waitFor(() => expect(mocks.searchOperational).toHaveBeenCalledWith("token", "rossi", { limit: 8 }));
@@ -1021,7 +1063,7 @@ describe("HomePage presence widget", () => {
     render(<HomePage />);
 
     await screen.findByText("Hub operativo GAIA");
-    const input = screen.getByPlaceholderText("Cerca utenza, ruolo, catasto…");
+    const input = screen.getByPlaceholderText("Cerca utenza, ruolo, catasto o coordinate…");
     fireEvent.change(input, { target: { value: "qq" } });
     await waitFor(() => expect(mocks.searchOperational).toHaveBeenCalledWith("token", "qq", { limit: 8 }));
 
@@ -1068,7 +1110,7 @@ describe("HomePage presence widget", () => {
     render(<HomePage />);
 
     await screen.findByRole("link", { name: "Apri GIS Platform" });
-    fireEvent.change(screen.getByPlaceholderText("Cerca utenza, ruolo, catasto…"), { target: { value: "NAS" } });
+    fireEvent.change(screen.getByPlaceholderText("Cerca utenza, ruolo, catasto o coordinate…"), { target: { value: "NAS" } });
 
     await waitFor(() => {
       expect(screen.getByText("Nessun risultato disponibile per i permessi correnti.")).toBeInTheDocument();

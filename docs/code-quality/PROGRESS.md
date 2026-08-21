@@ -1174,6 +1174,43 @@ Top H2-I2 candidates after H2-I1:
 - Lint frontend: exit `0`, con soli warning legacy fuori dal perimetro Portal Health; nessun warning nuovo attribuito alla slice.
 - Graphify: backend e frontend senza variazioni topologiche; domain docs `1151` nodi, `1756` archi e `109` community; refresh platform docs `PASS`.
 
+## Functional maintenance - Catasto GIS coordinate search from home (2026-08-21)
+
+- Scope: home operational search, `/catasto/gis` smart search, MapContainer focus bounds and two pure frontend helpers; nessuna modifica API backend, DB, auth o contratti REST.
+- Funzionalita: la ricerca globale in home riconosce coordinate decimali e DMS e apre `/catasto/gis?coordinate=...`; la pagina GIS consuma il parametro, crea un risultato sintetico GeoJSON `Point`, mostra il marker tramite overlay centroid e centra la mappa.
+- Formati coperti: `39.9042, 8.5917`, `39,9042 8,5917`, `39,9042; 8,5917`, `39°54'15"N 8°35'30"E`, `N 39 54 15 E 8 35 30`, DMS firmato senza direzioni e direzioni `S/W` negative.
+- Correzione emersa dai test: input DMS con lettere direzionali incoerenti non fa piu fallback al parser DMS firmato; se contiene `N/S/E/W` deve validare come DMS direzionale.
+- Complexity: la logica e stata estratta in `catasto-gis-coordinate-search.ts` e `catasto-gis-search-runner.ts`; `make complexity-check` restituisce `findings: []`, snapshot `1041` file, `16156` callable, `4142` violation (`1999` error, `2143` warning). Nessuna baseline aggiornata per questa slice.
+- Coverage nuovi helper runtime: `87/87` statement, `82/82` branch, `18/18` funzioni e `69/69` righe, `100%`; comando `cd frontend && npx vitest run tests/unit/catasto-gis-coordinate-search.test.ts tests/unit/catasto-gis-search-runner.test.ts --coverage --coverage.include=src/lib/catasto-gis-coordinate-search.ts --coverage.include=src/lib/catasto-gis-search-runner.ts`.
+- Test mirati: `cd frontend && npx vitest run tests/unit/catasto-gis-coordinate-search.test.ts tests/unit/catasto-gis-search-runner.test.ts tests/unit/home-page-presence-widget.test.tsx` -> `35 passed`.
+- Regressioni frontend: `cd frontend && npm test` -> `18 passed`; `cd frontend && npm run typecheck:from-root` -> `PASS`; `git diff --check` -> `PASS`.
+- Graphify: `make graphify-frontend` `4963` nodi, `12373` archi e `187` community; `make graphify-platform-docs` finale dopo deploy/docs `PASS`.
+- Deploy locale: `./scripts/frontend_clean_build.sh` -> `PASS`; build production Next completata, route `/catasto/gis` generata e container `gaia-frontend` riavviato.
+- Smoke locale: `docker compose ps frontend nginx` -> frontend e nginx `healthy`; `GET http://127.0.0.1:8080/catasto/gis` -> `200`; `GET http://127.0.0.1:8080/catasto/gis?coordinate=39.9042%2C8.5917` -> `200`; `GET http://127.0.0.1/catasto/gis` con header `Host: gaia.lan` -> `200`.
+- Nota dominio: `gaia.lan` risolve a `192.168.1.110` su questa macchina, quindi il controllo diretto `http://gaia.lan/catasto/gis` puo colpire il server LAN/CED; per validare lo stack locale con quel virtual host e stato usato l'header `Host: gaia.lan` verso `127.0.0.1`.
+
+### Marker coordinate addendum
+
+- Correzione UI: il focus automatico delle ricerche coordinate usa ora `maxZoom: 13` invece di `18`, per mantenere visibile il centroid marker esistente; a zoom `18` lo stile overlay corrente azzera il raggio dei centroidi.
+- Home search: la ricerca home usa lo stesso parser coordinate della pagina GIS anche come scorciatoia visibile nel dropdown/modal; input decimali e DMS aprono `/catasto/gis?coordinate=...` normalizzato se l'utente ha accesso al modulo Catasto.
+- Tentativo scartato: una modifica diretta allo stile centroidi in `MapContainer.tsx` rendeva il marker piu grande, ma spostava callback anonime in un file legacy grande e faceva fallire `make complexity-check` con `ambiguous_identity`; la baseline non e stata aggiornata.
+- Verifiche addendum: test mirati coordinate/home `35 passed`; typecheck frontend `PASS`; coverage helper coordinate/search-runner `88/88` statement, `82/82` branch, `18/18` funzioni e `70/70` righe, `100%`; smoke frontend `18 passed`; `git diff --check` `PASS`.
+- Complexity addendum: dopo la correzione home, `make complexity-check` non segnala regressioni su `operational-search-box.tsx`; la revalidazione globale finale e `PASS` con `findings: []`.
+
+### Mobile waypoint addendum
+
+- Correzione mobile: il GeoJSON della ricerca coordinate include ora un waypoint halo a rombo di circa `90m` attorno al punto esatto, oltre alla feature `Point`; il layer GIS lo rende con fill/outline esistenti, risultando leggibile anche su viewport mobile affollati da altri marker.
+- Invariante: il punto esatto resta in coordinate `[lon, lat]` con `id: coordinate-search`; il waypoint ha `id: coordinate-search-waypoint` e serve solo alla visibilita cartografica.
+- Verifiche mobile waypoint: test mirati coordinate/home `35 passed`; typecheck frontend `PASS`; coverage helper coordinate/search-runner `96/96` statement, `82/82` branch, `19/19` funzioni e `78/78` righe, `100%`; smoke frontend `18 passed`; `git diff --check` `PASS`.
+
+### Coordinate zoom addendum
+
+- Correzione UX: il focus automatico delle ricerche coordinate usa ora `maxZoom: 15`, aumentando il dettaglio rispetto al valore mobile-safe `13` mantenendo visibile il waypoint halo introdotto per viewport piccoli.
+- Verifiche zoom: test mirati coordinate/home `35 passed`; coverage helper coordinate/search-runner `96/96` statement, `82/82` branch, `19/19` funzioni e `78/78` righe, `100%`; typecheck frontend `PASS`; smoke frontend `18 passed`; `make complexity-check` `PASS` con `findings: []`; `git diff --check` `PASS`.
+- Graphify: `make graphify-frontend` `PASS` senza variazioni topologiche; `make graphify-platform-docs` finale `PASS` dopo l'addendum.
+- Deploy locale: `./scripts/frontend_clean_build.sh` `PASS`; frontend e nginx `healthy`; `GET http://127.0.0.1:8080/catasto/gis?coordinate=39.763917%2C+8.639222` -> `200`; stesso path con header `Host: gaia.lan` verso `127.0.0.1` -> `200`.
+- Revalidazione pre-commit: test mirati coordinate/home `35 passed`; coverage helper coordinate/search-runner `96/96` statement, `82/82` branch, `19/19` funzioni e `78/78` righe, `100%`; typecheck frontend `PASS`; smoke frontend `18 passed`; `make complexity-check` `PASS` con `findings: []`; `git diff --check` `PASS`.
+
 ## Functional maintenance - Me straordinari month navigation (2026-08-21)
 
 - Scope: `/me/straordinari`, self-service Presenze backend `/api/me/presenze/straordinari`, helper export straordinari e tipi frontend; nessuna modifica DB, auth o template XLSX.

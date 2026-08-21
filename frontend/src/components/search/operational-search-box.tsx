@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { getStoredAccessToken } from "@/lib/auth";
+import { buildCatastoGisCoordinateHref } from "@/lib/catasto-gis-coordinate-search";
 import { cn } from "@/lib/cn";
 import { hasUserModuleAccess } from "@/lib/module-access";
 import { searchOperational } from "@/lib/operational-search-api";
@@ -63,6 +64,7 @@ const menuSearchRoutes: SearchRoute[] = [
   { label: "Presenze · Banca ore", href: "/presenze/banca-ore", moduleKey: "presenze", keywords: ["banca ore", "liquidazioni", "saldo ore"] },
   { label: "GIS Platform · Catalogo", href: "/gis/catalogo", moduleKey: "gis", keywords: ["gis", "catalogo", "layer", "postgis", "martin"] },
   { label: "Catasto · Dashboard", href: "/catasto", moduleKey: "catasto" },
+  { label: "Catasto · GIS", href: "/catasto/gis", moduleKey: "catasto", keywords: ["gis", "mappa", "coordinate", "latitudine", "longitudine"] },
   { label: "Catasto · Distretti", href: "/catasto/distretti", moduleKey: "catasto", keywords: ["distretti"] },
   { label: "Catasto · Particelle", href: "/catasto/particelle", moduleKey: "catasto", keywords: ["mappali", "terreni"] },
   { label: "Catasto · Contatori irrigui", href: "/catasto/letture-contatori", moduleKey: "catasto", keywords: ["letture contatori", "contatori", "gate mobile", "mobile", "gps", "foto"] },
@@ -124,6 +126,62 @@ function searchPageHref(query: string): string {
   return `/search?q=${encodeURIComponent(query.trim())}`;
 }
 
+function buildCoordinateSearchRoute(query: string, currentUser: CurrentUser): SearchRoute | null {
+  const href = buildCatastoGisCoordinateHref(query);
+  if (!href || !hasUserModuleAccess(currentUser, "catasto")) return null;
+  return {
+    label: "Catasto · GIS coordinate",
+    href,
+    moduleKey: "catasto",
+    keywords: ["coordinate", "latitudine", "longitudine", "dms"],
+  };
+}
+
+function canShowMenuSearchRoute(route: SearchRoute, currentUser: CurrentUser, grantedSectionKeys: string[]): boolean {
+  const userRole = currentUser.role;
+  const isAdmin = userRole === "admin" || userRole === "super_admin";
+  if (route.requiredRoles && !route.requiredRoles.includes(userRole)) return false;
+  if (route.requiredSection && !hasSectionAccess(grantedSectionKeys, route.requiredSection)) return false;
+  if (!route.moduleKey) return true;
+  if (isAdmin) return true;
+  return hasUserModuleAccess(currentUser, route.moduleKey);
+}
+
+function scoreMenuSearchRoute(route: SearchRoute, query: string): number {
+  const haystack = [route.label, ...(route.keywords ?? [])].join(" ").toLowerCase();
+  if (haystack === query) return 100;
+  if (route.label.toLowerCase().startsWith(query)) return 80;
+  if (haystack.includes(query)) return 60;
+  return 0;
+}
+
+function buildMenuSearchResults(query: string, currentUser: CurrentUser, grantedSectionKeys: string[]): SearchRoute[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return [];
+  const coordinateRoute = buildCoordinateSearchRoute(query, currentUser);
+  const routes = menuSearchRoutes
+    .filter((route) => canShowMenuSearchRoute(route, currentUser, grantedSectionKeys))
+    .map((route) => ({ route, score: scoreMenuSearchRoute(route, normalizedQuery) }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score || a.route.label.localeCompare(b.route.label))
+    .slice(0, 10)
+    .map((item) => item.route);
+  return coordinateRoute ? [coordinateRoute, ...routes] : routes;
+}
+
+function directSearchHrefForEnter(
+  query: string,
+  currentUser: CurrentUser,
+  operationalResults: OperationalSearchResult[],
+  menuResults: SearchRoute[],
+): string | null {
+  const coordinateHref = buildCatastoGisCoordinateHref(query);
+  if (coordinateHref && hasUserModuleAccess(currentUser, "catasto")) return coordinateHref;
+  const resultCount = operationalResults.length + menuResults.length;
+  if (resultCount !== 1) return null;
+  return operationalResults[0]?.href ?? menuResults[0]?.href ?? null;
+}
+
 export function OperationalSearchBox({
   currentUser,
   grantedSectionKeys,
@@ -143,35 +201,7 @@ export function OperationalSearchBox({
   const isHero = variant === "hero";
 
   const menuSearchResults = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) return [];
-
-    const userRole = currentUser.role;
-    const isAdmin = userRole === "admin" || userRole === "super_admin";
-
-    function isRouteAllowed(route: SearchRoute): boolean {
-      if (route.requiredRoles && !route.requiredRoles.includes(userRole)) return false;
-      if (route.requiredSection && !hasSectionAccess(grantedSectionKeys, route.requiredSection)) return false;
-      if (!route.moduleKey) return true;
-      if (isAdmin) return true;
-      return hasUserModuleAccess(currentUser, route.moduleKey);
-    }
-
-    function scoreRoute(route: SearchRoute): number {
-      const haystack = [route.label, ...(route.keywords ?? [])].join(" ").toLowerCase();
-      if (haystack === query) return 100;
-      if (route.label.toLowerCase().startsWith(query)) return 80;
-      if (haystack.includes(query)) return 60;
-      return 0;
-    }
-
-    return menuSearchRoutes
-      .filter(isRouteAllowed)
-      .map((route) => ({ route, score: scoreRoute(route) }))
-      .filter((item) => item.score > 0)
-      .sort((a, b) => b.score - a.score || a.route.label.localeCompare(b.route.label))
-      .slice(0, 10)
-      .map((item) => item.route);
+    return buildMenuSearchResults(searchQuery, currentUser, grantedSectionKeys);
   }, [currentUser, grantedSectionKeys, searchQuery]);
 
   useEffect(() => {
@@ -252,7 +282,7 @@ export function OperationalSearchBox({
     return Object.entries(groups);
   }, [operationalSearchResults]);
 
-  const placeholder = isHero ? "Cerca utenza, ruolo, catasto…" : "Cerca in GAIA…";
+  const placeholder = isHero ? "Cerca utenza, ruolo, catasto o coordinate…" : "Cerca in GAIA…";
   const normalizedQuery = searchQuery.trim();
   const resultCount = operationalSearchResults.length + menuSearchResults.length;
   const shouldShowSearchPageLink = normalizedQuery.length >= 2 && resultCount !== 1;
@@ -274,10 +304,8 @@ export function OperationalSearchBox({
 
   function navigateFromEnter(): void {
     if (!normalizedQuery) return;
-    if (resultCount === 1) {
-      navigateTo(operationalSearchResults[0]?.href ?? menuSearchResults[0].href);
-      return;
-    }
+    const directHref = directSearchHrefForEnter(normalizedQuery, currentUser, operationalSearchResults, menuSearchResults);
+    if (directHref) return navigateTo(directHref);
     openResultsModal();
   }
 
