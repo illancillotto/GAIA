@@ -32,6 +32,9 @@ File principali del flusso:
 - `modules/elaborazioni/worker/sister_request_rows.py`
 - `modules/elaborazioni/worker/sister_worker_reliability.py`
 - `modules/elaborazioni/worker/sister_worker_files.py`
+- `modules/elaborazioni/worker/sister_observability.py`
+- `modules/elaborazioni/worker/sister_telemetry.py`
+- `modules/elaborazioni/worker/sister_retention.py`
 - `modules/elaborazioni/worker/sister_selectors.json`
 
 Comando utile per rebuild worker:
@@ -45,6 +48,82 @@ Comando utile per i log:
 ```bash
 docker compose logs -f elaborazioni-worker-visure
 ```
+
+## Telemetria operativa
+
+La superficie `/elaborazioni/portal-health` usa eventi strutturati append-only
+salvati in `sister_portal_events`. La strumentazione avvolge il worker e la
+sessione browser senza cambiare retry, timeout, concorrenza o transazioni del
+flusso visure. La scrittura e fail-open: un errore DB viene loggato e ignorato,
+quindi non puo fermare una visura.
+
+Eventi principali:
+
+- inizio e conclusione di ogni tentativo, correlati con batch, richiesta, sessione e run
+- durata di login, navigazione, submit, polling, download, logout e tracing browser
+- risposte HTTP `5xx` dei soli host `agenziaentrate.gov.it`
+- retry richieste, cooldown credenziali e pause globali gia decisi dal worker
+- esito persistito della richiesta e stato operativo per credenziale
+
+Sicurezza dei dati:
+
+- l'endpoint conserva solo il path, senza schema, host o query string
+- il contesto accetta soltanto chiavi operative predefinite
+- password, testo o immagine CAPTCHA, nominativi e riferimenti catastali non vengono registrati
+- API e dashboard filtrano sempre gli eventi per `current_user`
+
+Superfici:
+
+```text
+GET /elaborazioni/portal-health?hours=24
+GET /elaborazioni/portal-health/events?hours=24&limit=100
+```
+
+La dashboard calcola stato `healthy`, `degraded`, `critical` o `unknown`, tempi
+medi/P95, errori raggruppati e alert per risposte `5xx` ripetute, tasso di
+errore elevato, P95 oltre 120 secondi e cooldown attivi. Il refresh automatico
+e ogni 30 secondi; le finestre UI sono 24 ore, 7 giorni e 30 giorni.
+
+Retention:
+
+- eventi DB: `ELABORAZIONI_SISTER_EVENT_RETENTION_DAYS`, default `30`
+- debug artifact e report: `ELABORAZIONI_SISTER_ARTIFACT_RETENTION_DAYS`, default `14`
+- simulazione senza cancellazione: `ELABORAZIONI_SISTER_RETENTION_DRY_RUN=true`
+- la pulizia parte al massimo una volta al giorno durante l'attivita del worker
+- sono ammesse solo le root debug/report configurate e i link simbolici non vengono seguiti
+
+Il logging Docker del worker visure usa rotazione `json-file`, `10m` per file e
+massimo `5` file. Per una diagnosi rapida:
+
+```bash
+docker compose logs --since=30m elaborazioni-worker-visure
+docker compose exec backend alembic current
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost/api/elaborazioni/portal-health?hours=24"
+```
+
+### Verifica automatizzata
+
+I file runtime nuovi o modificati della telemetria devono restare al `100%` sia
+su statement sia su branch. I gate sono separati per evitare che gli stub di
+`test_worker.py` contaminino gli altri processi:
+
+```bash
+cd backend
+.venv/bin/python -m pytest tests/test_sister_portal_telemetry.py \
+  --cov=app.db.base --cov=app.modules.elaborazioni.router \
+  --cov=app.modules.elaborazioni.telemetry_models \
+  --cov=app.modules.elaborazioni.telemetry_routes \
+  --cov=app.modules.elaborazioni.telemetry_schemas \
+  --cov=app.modules.elaborazioni.telemetry_service \
+  --cov-branch --cov-fail-under=100
+```
+
+Per worker e frontend usare le suite mirate `test_sister_observability.py`,
+`test_sister_retention.py`, `test_sister_telemetry.py`, i tre file
+`test_worker*.py` e i quattro test `portal-health`/navigazione. Il gate frontend
+deve impostare `VITEST_COVERAGE_INCLUDE` sul runtime Portal Health e richiedere
+le quattro soglie Vitest al `100%`.
 
 ## Stato attuale del debug
 
@@ -301,6 +380,26 @@ Mitigazione implementata:
 - chiusura sessione remota
 - retry login controllato
 
+### Caso D: credenziali rifiutate
+
+Sintomo:
+
+- `Credenziali errate`
+- `Autenticazione fallita`
+- oppure `Credenziali SISTER rifiutate dal portale`
+
+Mitigazione implementata:
+
+- classificazione come errore recuperabile della credenziale
+- richiesta corrente differita, senza avanzare e fallire in sequenza le altre righe
+- cooldown della credenziale e retry tracciato nella telemetria
+- per batch grandi, rilascio resumibile fino all'aggiornamento e al test positivo della credenziale
+
+Prima di riprendere una batch rilasciata, aggiornare la password in
+`/elaborazioni/settings` ed eseguire il test della credenziale. Il rilascio con
+operazione `Release requested by user` preserva le richieste e consente il
+riavvio dal portale dopo il test positivo.
+
 ## Messaggi utente
 
 Messaggio standardizzato mostrato in UI:
@@ -404,8 +503,7 @@ Elenco minimo da considerare:
 ### Priorità media
 
 1. Evitare trace HTML nei millisecondi in cui la pagina sta navigando per ridurre rumore nei log.
-2. Salvare anche un file strutturato di timeline per batch/request.
-3. Tradurre in italiano eventuali residui messaggi inglesi ancora visibili in DB/UI.
+2. Tradurre in italiano eventuali residui messaggi inglesi ancora visibili in DB/UI.
 
 ### Priorità bassa
 

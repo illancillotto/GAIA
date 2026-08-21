@@ -121,6 +121,7 @@ describe("layout navigation helpers", () => {
       "Cruscotto operatori",
     ]);
     expect(getAdminNavigationItems(buildUser()).length).toBe(0);
+    expect(canAccessOperatorDashboard(buildUser())).toBe(false);
   });
 
   test("builds sidebar state from the current path and user access", () => {
@@ -173,5 +174,64 @@ describe("layout navigation helpers", () => {
         }),
       ]),
     );
+  });
+
+  test("builds every module section and exposes SISTER portal health", () => {
+    const moduleKeys = [
+      "nas_control",
+      "catasto",
+      "gis",
+      "elaborazioni",
+      "gaia",
+      "utenze",
+      "operazioni",
+      "riordino",
+      "ruolo",
+      "organigramma",
+      "wiki",
+      "inventory",
+    ] as const;
+
+    for (const currentModuleKey of moduleKeys) {
+      const sections = getModuleSections({
+        currentModuleKey,
+        currentUserRole: "super_admin",
+        grantedSectionKeys: ["accessi.users", "organigramma.read", "organigramma.manage"],
+        reviewBadge: 3,
+        userBadge: 2,
+      });
+      expect(sections.length).toBeGreaterThan(0);
+    }
+
+    const elaborazioniItems = getModuleSections({ currentModuleKey: "elaborazioni" })
+      .flatMap((section) => section.items);
+    expect(elaborazioniItems).toContainEqual(expect.objectContaining({
+      href: "/elaborazioni/portal-health",
+      label: "Stato portale SISTER",
+      match: "prefix",
+    }));
+  });
+
+  test("applies conditional module permissions and badge fallbacks", () => {
+    const restrictedNas = getModuleSections({ currentModuleKey: "nas_control" });
+    const allowedNasWithoutCount = getModuleSections({
+      currentModuleKey: "nas_control",
+      grantedSectionKeys: ["accessi.users"],
+    });
+    expect(restrictedNas.flatMap((section) => section.items).find((entry) => entry.label === "Utenti"))
+      .toMatchObject({ disabled: true, badge: undefined });
+    expect(allowedNasWithoutCount.flatMap((section) => section.items).find((entry) => entry.label === "Utenti"))
+      .toMatchObject({ disabled: false, badge: undefined });
+
+    const catastoViewer = getModuleSections({ currentModuleKey: "catasto", currentUserRole: "viewer" });
+    const utenzeViewer = getModuleSections({ currentModuleKey: "utenze", currentUserRole: "viewer" });
+    expect(catastoViewer.flatMap((section) => section.items).some((entry) => entry.href.includes("configurazione")))
+      .toBe(false);
+    expect(utenzeViewer.flatMap((section) => section.items).some((entry) => entry.href.includes("anomalies")))
+      .toBe(false);
+
+    const restrictedOrganigramma = getModuleSections({ currentModuleKey: "organigramma" });
+    expect(restrictedOrganigramma).toHaveLength(1);
+    expect(restrictedOrganigramma[0].items.every((entry) => entry.disabled)).toBe(true);
   });
 });

@@ -53,6 +53,7 @@ from app.modules.organigramma.models import (
     OrgVisibilityOverride,
 )
 from app.modules.inventory.models import WarehouseRequest
+from app.modules.elaborazioni.telemetry_models import SisterPortalEvent
 from app.modules.presenze.models import (
     OrganizationTeam,
     OrganizationTeamMembership,
@@ -185,6 +186,7 @@ from app.modules.gis.models import (
 )
 
 __all__ = [
+    "SisterPortalEvent",
     "ApplicationUser",
     "OrgStructureAssignment",
     "OrgUnit",
