@@ -39,7 +39,7 @@ describe("catasto GIS smart search runner", () => {
   test("runs text search through the Catasto GIS API", async () => {
     const geojson: GeoJSON.FeatureCollection = {
       type: "FeatureCollection",
-      features: [{ type: "Feature", geometry: null, properties: { id: "p1" } }],
+      features: [{ type: "Feature", geometry: { type: "Point", coordinates: [8.59, 39.9] }, properties: { id: "p1" } }],
     };
     mocks.catastoGisSearch.mockResolvedValue({
       query: "foglio 1",
