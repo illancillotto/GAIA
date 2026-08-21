@@ -348,3 +348,14 @@ alle feature in corso senza avviare automaticamente hotspot applicativi.
 - Gate: typecheck frontend, compile backend, `make quality-test` (`22 passed`), `make complexity-check` (`findings: []`), `git diff --check`, compose e Alembic head/current `20260820_1100`: `PASS`.
 - Lint frontend: exit `0`, con soli warning legacy fuori dal perimetro Portal Health; nessun warning nuovo attribuito alla slice.
 - Graphify: backend e frontend senza variazioni topologiche; domain docs `1151` nodi, `1756` archi e `109` community; refresh platform docs `PASS`.
+
+## Functional maintenance - Me straordinari month navigation (2026-08-21)
+
+- Scope: `/me/straordinari`, self-service Presenze backend `/api/me/presenze/straordinari`, helper export straordinari e tipi frontend; nessuna modifica DB, auth o template XLSX.
+- Funzionalita: la pagina usa il mese corrente come riferimento iniziale, mostra un selettore dei mesi con dati Presenze extra effettivi e ricarica preview/export sul mese scelto.
+- Backend: aggiunti endpoint periodici `GET /me/presenze/straordinari/preview/{period_start}` e `POST /me/presenze/straordinari/export/{artifact_format}/{period_start}`; gli endpoint senza periodo restano disponibili e defaultano al mese corrente.
+- Mesi disponibili: calcolati da `PresenzeDailyRecord` del collaboratore con extra effettivi positivi, includendo override di straordinario/MPE, ordinati dal piu recente.
+- Coverage frontend runtime modificati: `106/106` statement, `74/74` branch, `45/45` funzioni e `90/90` righe, `100%`; comando con `VITEST_COVERAGE_INCLUDE=src/app/me/straordinari/page.tsx,src/lib/me-straordinari-api.ts`.
+- Test: frontend mirati `109 passed`; backend `backend/tests/test_presenze_straordinari_export.py` `21 passed`; backend service coverage `241/241` statement, `100%`; typecheck frontend `PASS`; backend compileall `PASS`.
+- Complexity: `make complexity-check` `PASS`, `findings: []`; snapshot `1042` file, `16178` callable, `4142` violation (`1999` error, `2143` warning). Nessuna baseline aggiornata per questa slice.
+- Graphify: `make graphify-presenze-code` e `make graphify-frontend` `PASS`; nessuna variazione topologica nell'ultimo aggiornamento.
