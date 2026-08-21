@@ -6,33 +6,10 @@ import { useSearchParams } from "next/navigation";
 
 import { CatastoPage } from "@/components/catasto/catasto-page";
 import CoordinateMap from "@/components/catasto/gis/MapContainer";
-import { buildCatastoGisCoordinateSearchResponse } from "@/lib/catasto-gis-coordinate-search";
-import type { GisMapOverlayLayer } from "@/types/gis";
-
-export function buildCoordinateOverlay(
-  label: string,
-  geojson: GeoJSON.FeatureCollection,
-): { label: string; geojson: GeoJSON.FeatureCollection; layer: GisMapOverlayLayer } {
-  return {
-    label,
-    geojson,
-    layer: {
-      layer_key: "coordinate-search",
-      saved_selection_id: null,
-      name: `Waypoint ${label}`,
-      color: "#0F766E",
-      outlineColor: "#F97316",
-      opacity: 0.86,
-      outlineOpacity: 1,
-      outlineWidth: 3,
-      showFill: true,
-      showCentroids: true,
-      visible: true,
-      source_filename: null,
-      geojson,
-    },
-  };
-}
+import {
+  buildCatastoGisCoordinateOverlay,
+  buildCatastoGisCoordinateSearchResponse,
+} from "@/lib/catasto-gis-coordinate-search";
 
 function CoordinateWorkspace() {
   const query = useSearchParams().get("coordinate") ?? "";
@@ -53,7 +30,7 @@ function CoordinateWorkspace() {
     );
   }
 
-  const overlay = buildCoordinateOverlay(search.label, search.geojson);
+  const overlay = buildCatastoGisCoordinateOverlay(search.label, search.geojson);
   return (
     <CatastoPage title="Coordinate GIS" description="Waypoint cartografico centrato sulle coordinate cercate." breadcrumb="Catasto" requiredModule="catasto">
       <section className="page-body space-y-5">

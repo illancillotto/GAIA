@@ -2,7 +2,8 @@ import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-import CatastoGisCoordinatePage, { buildCoordinateOverlay } from "@/app/catasto/gis/coordinate/page";
+import CatastoGisCoordinatePage from "@/app/catasto/gis/coordinate/page";
+import { buildCatastoGisCoordinateOverlay } from "@/lib/catasto-gis-coordinate-search";
 
 const mocks = vi.hoisted(() => ({
   coordinate: "",
@@ -70,7 +71,7 @@ describe("Catasto GIS coordinate page", () => {
   test("builds the map overlay from the normalized coordinate collection", () => {
     const geojson: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
-    expect(buildCoordinateOverlay("39.900000, 8.500000", geojson)).toEqual({
+    expect(buildCatastoGisCoordinateOverlay("39.900000, 8.500000", geojson)).toEqual({
       label: "39.900000, 8.500000",
       geojson,
       layer: expect.objectContaining({

@@ -1,4 +1,4 @@
-import type { GisSearchResponse } from "@/types/gis";
+import type { GisMapOverlayLayer, GisSearchResponse } from "@/types/gis";
 
 export type ParsedGisCoordinate = {
   lat: number;
@@ -15,6 +15,31 @@ const SIGNED_DMS_PATTERN =
   /([+-]?\d+(?:[.,]\d+)?)\s*°\s*(?:(\d+(?:[.,]\d+)?)\s*(?:'|′)?)?\s*(?:(\d+(?:[.,]\d+)?)\s*(?:"|″)?)?/g;
 const METERS_PER_DEGREE_LATITUDE = 111_320;
 const COORDINATE_WAYPOINT_RADIUS_METERS = 90;
+
+export function buildCatastoGisCoordinateOverlay(
+  label: string,
+  geojson: GeoJSON.FeatureCollection,
+): { label: string; geojson: GeoJSON.FeatureCollection; layer: GisMapOverlayLayer } {
+  return {
+    label,
+    geojson,
+    layer: {
+      layer_key: "coordinate-search",
+      saved_selection_id: null,
+      name: `Waypoint ${label}`,
+      color: "#0F766E",
+      outlineColor: "#F97316",
+      opacity: 0.86,
+      outlineOpacity: 1,
+      outlineWidth: 3,
+      showFill: true,
+      showCentroids: true,
+      visible: true,
+      source_filename: null,
+      geojson,
+    },
+  };
+}
 
 function parseRequiredNumber(value: string): number {
   return Number(value.replace(",", "."));
