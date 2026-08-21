@@ -307,7 +307,7 @@ def _seed_batch(session_factory, *, request_statuses: list[str]) -> tuple[int, u
 
 def test_recoverable_credential_error_detects_locked_session_markers() -> None:
     errors = (RuntimeError("SISTER_SESSION_LOCKED"), RuntimeError("Timeout 60000ms exceeded"),
-              RuntimeError("Utente SISTER bloccato sul portale Agenzia delle Entrate."),
+              RuntimeError("Utente SISTER bloccato sul portale Agenzia delle Entrate."), RuntimeError("Credenziali SISTER rifiutate: Autenticazione fallita."),
               TimeoutError("poll scaduto"), worker_module.SisterInvalidDocumentError("file HTML"),
               SisterRequestCorrelationError("baseline non disponibile"))
     assert all(map(CatastoWorker._is_recoverable_credential_error, errors))

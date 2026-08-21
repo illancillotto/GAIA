@@ -1134,3 +1134,42 @@ Top H2-I2 candidates after H2-I1:
 - `git diff --check`: `PASS`.
 - Verifica HTTP: `GET http://gaia.lan/elaborazioni/settings` risponde `200`; validazione visuale browser non eseguita per assenza di una sessione Chrome DevTools disponibile.
 - Graphify: `make graphify-frontend` `PASS` (`4904` nodi, `12233` archi); `make graphify-docs` `PASS` (`1134` nodi, `1708` archi); `make graphify-platform-docs` `PASS` (`821` nodi, `1529` archi).
+
+## Functional maintenance - SISTER portal telemetry and DEMANIO R9 batch (2026-08-20)
+
+- Telemetria completa distribuita su backend, frontend e worker: eventi strutturati SISTER, dashboard `/elaborazioni/portal-health`, retention eventi/artifact e rotazione log Docker.
+- Alembic verificato con singolo head `20260820_1100`; backend e frontend healthy, worker visure stabile su Python `3.10.12`; la route protetta `GET /elaborazioni/portal-health` risponde `401` senza token.
+- Compatibilita worker corretta sostituendo `datetime.UTC` con `timezone.utc` nei moduli retention e telemetry; import dei moduli verificato nel container Python 3.10.
+- Safeguard login: `Credenziali SISTER rifiutate` e `Autenticazione fallita` sono errori recuperabili, quindi attivano differimento, cooldown e telemetria invece di fallire in sequenza tutte le richieste della batch.
+- Retention iniziale completata nel solo perimetro debug/report consentito: `76358` file, `22951` directory e `4691290206` byte rimossi; purge eventi scaduti `0`.
+
+### DEMANIO R9 deployment evidence
+
+- Origine: `/home/cbo/Desktop/DEMANIO_R9.xlsx`, `3503` righe complete; rimossi `144` duplicati esatti.
+- Template: `/home/cbo/Desktop/DEMANIO_R9_visure_template.xlsx`, SHA-256 `ab2db1d8eb296b6544e33dcc4047427b357ea3c6913bb349e9ac77a34043ac78`, `3359/3359` righe validate dal parser applicativo.
+- Mapping creato: Marrubiu `2168`, Terralba sezione `A` `124`, Uras `1067`; catasto `Terreni`, tipo visura `Sintetica`.
+- Batch server: `32f88227-962f-4751-9efe-2d5a6c178689`, nome `DEMANIO R9 - Visure terreni`, utente `admin`, `3359` richieste.
+- Il collaudo live ha rilevato `Credenziali errate / Autenticazione fallita` sulla credenziale predefinita. La batch e stata rilasciata e normalizzata in stato resumibile: `cancelled`, `3359` richieste `skipped` con operazione di release, nessun fallimento catastale persistito.
+- Condizione di ripresa: aggiornare e testare positivamente la password SISTER in `/elaborazioni/settings`, quindi riavviare la batch esistente; non crearne una nuova.
+
+### Tests and gates
+
+- Retention e telemetry: `215/215` statement e `36/36` branch, `100%`, `6 passed`.
+- Worker e reliability: `1333/1333` statement e `364/364` branch, `100%`, `116 passed`.
+- Test completi precedenti della slice: worker regressioni `122 passed`, browser/reliability `146 passed`, backend Elaborazioni `67 passed`, frontend telemetria/navigazione `19 passed` con runtime modificato al `100%`; typecheck frontend `PASS`.
+- Baseline complexity: nessun aggiornamento eseguito in questa slice; le modifiche preesistenti al file baseline sono state preservate.
+- `make complexity-check`: `PASS`, `findings: []`; snapshot `1039` file, `16133` callable, `4141` violation (`1999` error, `2142` warning). `git diff --check` e `docker compose config --quiet`: `PASS`.
+- Graphify finale: backend `7219` nodi, `17418` archi e `423` community; frontend `4938` nodi, `12305` archi e `177` community; docs `1147` nodi, `1737` archi e `115` community.
+- Verifica live finale: `GET /health` `200`, `GET /elaborazioni/portal-health` senza token `401`; `20` eventi della batch registrati, inclusi login error, logout e chiusura sessione.
+
+### Revalidation 2026-08-21
+
+- Backend telemetria/router/base: `280/280` statement e `30/30` branch, `100%`, `3 passed`.
+- Worker osservabilita/retention/telemetry: `511/511` statement e `82/82` branch, `100%`, `23 passed`.
+- Worker orchestrazione/reliability: `1333/1333` statement e `364/364` branch, `100%`, `116 passed`.
+- Frontend Portal Health/navigazione: `170/170` statement, `179/179` branch, `58/58` funzioni e `141/141` righe, `100%`, `19 passed`.
+- Regressioni: backend Elaborazioni `68 passed`; browser/flow worker `158 passed`; client/osservabilita worker `53 passed`; CAPTCHA Pillow isolato `4 passed`.
+- Corretto il test backend dipendente dal giorno fisso: la finestra usa ora `datetime.now(UTC)` e verifica il totale dei bucket giornalieri senza assumere che le ultime sette ore cadano nello stesso giorno UTC.
+- Gate: typecheck frontend, compile backend, `make quality-test` (`22 passed`), `make complexity-check` (`findings: []`), `git diff --check`, compose e Alembic head/current `20260820_1100`: `PASS`.
+- Lint frontend: exit `0`, con soli warning legacy fuori dal perimetro Portal Health; nessun warning nuovo attribuito alla slice.
+- Graphify: backend e frontend senza variazioni topologiche; domain docs `1151` nodi, `1756` archi e `109` community; refresh platform docs `PASS`.

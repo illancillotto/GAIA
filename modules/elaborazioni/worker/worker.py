@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone
 import logging
 import os
@@ -94,6 +93,7 @@ from sister_worker_reliability import (
     SisterRequestRetryCoordinator,
     is_recoverable_credential_error,
 )
+from sister_observability import WorkerState, instrument_sister_worker
 from llm_captcha_solver import LLMCaptchaSolver
 from credential_vault import WorkerCredentialVault
 from reporting import write_batch_report
@@ -171,11 +171,7 @@ engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
-@dataclass(slots=True)
-class WorkerState:
-    stop_requested: bool = False
-
-
+@instrument_sister_worker
 class CatastoWorker:
     def __init__(self) -> None:
         self.state = WorkerState()

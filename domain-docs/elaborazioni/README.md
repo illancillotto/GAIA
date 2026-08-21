@@ -60,6 +60,10 @@ La pagina `/elaborazioni` usa una struttura a sezioni stabili:
 - il retry dei batch falliti rimette in coda solo le richieste `failed` e aggiorna il riferimento temporale del lotto, evitando che un batch rilanciato venga marcato subito come scaduto dalla pulizia dei `pending` orfani
 - il worker visure usa tutte le credenziali SISTER attive dell'utente come pool concorrente: una sessione browser per credenziale, claim atomico delle richieste e prosecuzione del batch anche quando una singola utenza entra in cooldown
 - gli errori transitori `SISTER_SESSION_LOCKED`, timeout login/menu e `HTTP 500` del portale non falliscono subito il lotto: la richiesta viene differita, la credenziale entra in cooldown e il runner passa alla richiesta successiva disponibile
+- un rifiuto esplicito `Credenziali SISTER rifiutate` / `Autenticazione fallita` segue la stessa protezione recuperabile: non deve produrre fallimenti in sequenza sulle particelle; per batch grandi si aggiorna e testa la password, quindi si riprende la batch rilasciata senza ricrearla
+- la pagina `/elaborazioni/portal-health` espone telemetria SISTER per utente: stato sintetico, tempi medi e P95 per fase, risposte HTTP 5xx, retry, cooldown, confronto tra credenziali, alert e ultimi eventi sanitizzati
+- `GET /elaborazioni/portal-health` restituisce gli aggregati per finestre da 1 a 720 ore; `GET /elaborazioni/portal-health/events` espone fino a 200 eventi recenti e applica lo stesso filtro sul `current_user`
+- gli eventi SISTER sono fail-open: un errore di persistenza della telemetria non interrompe il worker; URL completi, query string, password, CAPTCHA e dati catastali non vengono memorizzati
 - la dashboard `/elaborazioni` mostra KPI runtime aggregati letti da `GET /elaborazioni/metrics`: throughput ultime 24h, volumetria 7 giorni, success rate, tempo medio richiesta/batch, ultimo processato e stato finestra operativa
 - in alto la dashboard espone la sezione `Autosync automatici`, che centralizza i toggle operativi per `Visure NAS`, `ANPR batch`, `AutoSync visure a ruolo`, `WhiteCompany daily` e `WhiteCompany Operazioni live`
 - `GET /elaborazioni/auto-job-controls` restituisce l’elenco aggregato dei controlli automatici mostrati in dashboard, mentre `PUT /elaborazioni/auto-job-controls/{control_key}` permette agli admin di attivare o disattivare ogni job dalla stessa sezione
@@ -96,6 +100,10 @@ Variabili principali del runtime visure:
 - `ELABORAZIONI_SISTER_500_COOLDOWN_SEC`: cooldown base per `HTTP 500` SISTER
 - `ELABORAZIONI_SISTER_500_MAX_COOLDOWN_SEC`: tetto massimo del cooldown progressivo sui `500`
 - `ELABORAZIONI_SISTER_500_GLOBAL_PAUSE_SEC`: pausa globale breve quando tutte le credenziali stanno colpendo `500`
+- `ELABORAZIONI_SISTER_TELEMETRY_ENABLED`: abilita la registrazione strutturata degli eventi nel worker visure
+- `ELABORAZIONI_SISTER_EVENT_RETENTION_DAYS`: giorni di conservazione degli eventi DB; default `30`
+- `ELABORAZIONI_SISTER_ARTIFACT_RETENTION_DAYS`: giorni di conservazione di debug artifact e report; default `14`
+- `ELABORAZIONI_SISTER_RETENTION_DRY_RUN`: calcola file, directory e byte eliminabili senza cancellare artifact o eventi
 - `ELABORAZIONI_OPERATION_WINDOW_ENABLED`: abilita la finestra operativa oraria
 - `ELABORAZIONI_OPERATION_START_HOUR`: ora locale di inizio finestra
 - `ELABORAZIONI_OPERATION_END_HOUR`: ora locale di fine finestra

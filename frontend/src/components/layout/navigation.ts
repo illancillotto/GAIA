@@ -179,6 +179,11 @@ function item(
   return { href, icon, label, ...options };
 }
 
+const sisterNavigationItems: NavigationItem[] = [
+  item("/elaborazioni/visure", EyeIcon, "Visure Sister", { match: "prefix" }),
+  item("/elaborazioni/portal-health", ServerIcon, "Stato portale SISTER", { match: "prefix" }),
+];
+
 export function getCurrentModuleKey(pathname: string): CurrentModuleKey {
   if (pathname.startsWith("/gaia/users")) return "gaia";
   if (pathname.startsWith("/me")) return "me";
@@ -366,7 +371,7 @@ export function getModuleSections({
             item("/elaborazioni/bonifica", RefreshIcon, "WhiteCompany Sync", { match: "prefix" }),
             item("/elaborazioni/anpr", UserIcon, "ANPR batch", { match: "prefix" }),
             item("/elaborazioni/presenze-sync", RefreshIcon, "Presenze INAZ Sync", { match: "prefix" }),
-            item("/elaborazioni/visure", EyeIcon, "Visure Sister", { match: "prefix" }),
+            ...sisterNavigationItems,
             item("/elaborazioni/capacitas", BookOpenIcon, "Moduli Capacitas", { match: "prefix" }),
             item("/elaborazioni/ade-alignment", GridIcon, "Allineamento AdE", { match: "prefix" }),
             item("/elaborazioni/autodoc", TruckIcon, "AUTODOC mezzi", { match: "prefix" }),

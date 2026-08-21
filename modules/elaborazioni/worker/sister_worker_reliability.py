@@ -804,8 +804,8 @@ def is_recoverable_credential_error(exc: Exception, invalid_document_error: type
         "già in sessione",
         "utente sister bloccato",
         "error_locked.jsp",
-        "login timeout",
-        "timeout 60000ms exceeded",
+        "login timeout", "timeout 60000ms exceeded",
+        "credenziali sister rifiutate", "autenticazione fallita",
     )
     return (
         isinstance(exc, (TimeoutError, invalid_document_error, SisterRequestCorrelationError))
