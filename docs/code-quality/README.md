@@ -23,7 +23,7 @@ evidenze dell'esperimento iniziale sono in `QUALITY_RATCHET.md`.
 6. Applicare la modalita ratchet della skill durante gli sviluppi ordinari.
 7. Solo se necessario, avviare un goal per singolo hotspot con
    `HERMES_GOAL_REFACTOR_ONE_HOTSPOT.md`.
-7. Usare `PROGRESS.md` come fonte di verita tra sessioni.
+8. Usare `PROGRESS.md` come fonte di verita tra sessioni.
 
 ## File
 

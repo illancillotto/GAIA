@@ -1,4 +1,4 @@
-# Code Quality Progress
+# Progress - GAIA Code Complexity Program
 
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
@@ -19,10 +19,7 @@ blocco verificato e prima di chiudere un goal.
 > esperimento. Questa fondazione parte da `main` e non contiene i refactoring
 > Catasto o Presenze del branch archiviato.
 
-- Branch: `main`.
-- Commit di riferimento prima del programma: `2ded321cd99aeb59c02865e5e7f2bc158804e4b9`.
-- Baseline Code Quality iniziale: `1001` file, `15392` callable, `4141` legacy violations (`2032` error, `2109` warning).
-- Primo hotspot Fase 3: `frontend/src/app/catasto/gis/page.tsx::CatastoGisPage`.
+## Checkpoint
 
 | Checkpoint | Stato | Evidenza | Approvazione |
 | --- | --- | --- | --- |
@@ -32,15 +29,7 @@ blocco verificato e prima di chiudere un goal.
 | 3 - ratchet ordinario | technical pass | recupero Presenze verificato sul branch dedicato | review required |
 | 4 - hotspot dedicato | on demand | solo per impedimento concreto | explicit decision |
 
-- Esito: `CHECKPOINT 1 APPROVATO - PASS`.
-- Branch: `main`.
-- HEAD: `2ded321cd99aeb59c02865e5e7f2bc158804e4b9`.
-- Conteggi: `1001` file, `15392` callable, `4141` legacy violations, `2032` error, `2109` warning.
-- Test: `backend/.venv/bin/python -m pytest -q tests/code_quality/test_complexity_tool.py` -> `22 passed`; `make quality-test` -> pass.
-- Read-only: `make complexity-check`, `make complexity-changed BASE_REF=2ded321cd99aeb59c02865e5e7f2bc158804e4b9`, `make complexity-report REPORT_JSON=/tmp/... REPORT_MD=/tmp/...`, `make complexity-baseline-verify`, `cd frontend && npm run typecheck:from-root` hanno lasciato invariato `git status --porcelain=v1 -uall`.
-- Anti-laundering: engine migration + source regression -> exit `1`; engine migration + new violation -> exit `1`; engine migration + exclusion expansion -> exit `2`; baseline deletion -> exit `2`.
-- Decisione: baseline/soglie/eccezioni vuote approvate per attivare il gate differenziale.
-- Autorizzazione: `PHASE_2_AUTHORIZED`.
+## Decision log
 
 | Data | Decisione | Motivo | Impatto |
 | --- | --- | --- | --- |
@@ -64,13 +53,7 @@ blocco verificato e prima di chiudere un goal.
 - Decisione: non integrare il branch in blocco e non iniziare H2-I2. Estrarre
   soltanto rules, skill, scanner e test dopo hardening.
 
-- Esito: `CHECKPOINT 2 APPROVATO - PASS`.
-- Gate CI: `scripts/complexity_ci_gate.sh` integrato in `.github/workflows/backend.yml` e `.github/workflows/frontend.yml`.
-- Base PR/merge-base: workflow usa `fetch-depth: 0`; `BASE_REF=origin/${{ github.base_ref }}` per PR, fallback `origin/main`; lo script fallisce con exit `2` se merge-base non disponibile.
-- Comando locale autorevole: `make complexity-ci-gate` / `scripts/complexity_ci_gate.sh`.
-- Prova locale: `BASE_REF=2ded321cd99aeb59c02865e5e7f2bc158804e4b9 scripts/complexity_ci_gate.sh` -> pass.
-- Workflow validation: `.github/workflows/backend.yml` e `.github/workflows/frontend.yml` parsano con PyYAML.
-- Nessun refactoring applicativo avviato a CP2.
+## Audit corrente
 
 - Branch/commit: `gaia/complexity-quality-ratchet` da `main@9562c9e6`.
 - Working tree preesistente: pulito nel worktree dedicato; il working tree
@@ -85,7 +68,7 @@ blocco verificato e prima di chiudere un goal.
 - Coverage: policy corrente invariata.
 - Rischio principale corretto: baseline della stessa change non autorevole.
 
-### Initial metrics before runtime edit
+## Fase 1
 
 - [x] Audit completato
 - [x] Architettura del motore disponibile nel diff per review
@@ -148,13 +131,30 @@ blocco verificato e prima di chiudere un goal.
   community; `104` file da cache e `3` riestratti.
 - File runtime applicativi modificati: nessuno.
 
-### Selected slice
+## Iterazione attiva
 
-Extract pure Excel import data mapping from `handleImportXlsx` into a dedicated tested helper module, leaving API calls, state updates, map focus, layer insertion and messages in the existing component.
+- ID: `none`
+- Hotspot:
+- Modulo:
+- Motivazione:
+- Invarianti:
+- Test di caratterizzazione:
+- Metriche prima:
+- Slice pianificata:
+- File previsti:
+- Stato: `not_started`
+- Metriche dopo:
+- Verifiche:
+- Coverage:
+- Baseline diff:
+- Esito:
+- Debito residuo:
 
-### Files touched by this iteration
+## Iterazioni concluse
 
-Runtime / config:
+| ID | Data | Hotspot | Prima | Dopo | Test/coverage | Commit/PR |
+| --- | --- | --- | --- | --- | --- | --- |
+| - | - | - | - | - | - | - |
 
 ## Modifiche funzionali verificate fuori dal programma hotspot
 
@@ -207,9 +207,11 @@ Runtime / config:
 
 ## Failure preesistenti
 
-Tests:
+| Data | Comando | Failure | Riproducibile | Relazione con il lavoro |
+| --- | --- | --- | --- | --- |
+| - | - | - | - | - |
 
-- `frontend/tests/unit/catasto-gis-import-xlsx.test.ts`
+## Blocker e domande aperte
 
 - Revisionare e pubblicare i commit locali del workflow CI e del recupero
   Presenze; nessun push e stato eseguito.
@@ -221,7 +223,7 @@ Tests:
 - La policy coverage resta invariata; un eventuale ratchet per righe legacy e
   una decisione separata.
 
-- `docs/code-quality/PROGRESS.md`
+## Prossima azione
 
 Revisionare e integrare il recupero Presenze su `main`, poi applicare il ratchet
 alle feature in corso senza avviare automaticamente hotspot applicativi.

@@ -57,7 +57,6 @@ from app.modules.presenze.services.gate_mobile_payloads import (
     json_datetime as _json_datetime,
 )
 from app.modules.presenze.services.operai_rules import load_operai_rule_configs
-from app.modules.presenze.services.xlsm_export import resolve_export_absence_code
 
 OPERATOR_UPDATE_ACTION_TYPE = "propose_operator_update"
 OPERATOR_UPDATE_OPERATIONS = {"create_operator", "update_operator", "update_operator_domains"}
@@ -433,99 +432,6 @@ def _presenze_mobile_record_items_for_month(
             }
         )
     return record_items, analyses_by_record_id
-
-
-def _presenze_supervisors_by_team(
-    db: Session,
-    supervisors: list[tuple[OrganizationTeamSupervisorAssignment, ApplicationUser]],
-) -> dict[str, list[dict[str, Any]]]:
-    collaborators_by_user_id = {
-        collaborator.application_user_id: collaborator
-        for collaborator in db.scalars(
-            select(PresenzeCollaborator).where(PresenzeCollaborator.application_user_id.is_not(None))
-        ).all()
-        if collaborator.application_user_id is not None
-    }
-    result: dict[str, list[dict[str, Any]]] = {}
-    for supervisor, user in supervisors:
-        collaborator = collaborators_by_user_id.get(supervisor.application_user_id)
-        result.setdefault(str(supervisor.team_id), []).append(
-            {
-                "supervisor_assignment_id": str(supervisor.id),
-                "application_user_id": supervisor.application_user_id,
-                "username": user.username,
-                "user_label": user.full_name or user.username,
-                "collaborator_id": str(collaborator.id) if collaborator is not None else None,
-                "employee_code": collaborator.employee_code if collaborator is not None else None,
-                "collaborator_name": collaborator.name if collaborator is not None else None,
-                "permission_scope": supervisor.permission_scope,
-                "valid_from": _json_date(supervisor.valid_from),
-                "valid_to": _json_date(supervisor.valid_to),
-                "source_channel": _gate_channel(supervisor.source_channel),
-                "updated_at": _json_datetime(supervisor.updated_at),
-            }
-        )
-    return result
-
-
-def _presenze_mobile_record_payload(
-    record: PresenzeDailyRecord,
-    *,
-    collaborator: PresenzeCollaborator | None,
-    team_ids: list[UUID],
-    serialized: Any,
-    severity: str,
-    classification: Any,
-) -> dict[str, Any]:
-    return {
-        "record_id": str(record.id),
-        "collaborator_id": str(record.collaborator_id),
-        "collaborator_name": collaborator.name if collaborator is not None else str(record.collaborator_id),
-        "employee_code": collaborator.employee_code if collaborator is not None else "",
-        "team_ids": [str(team_id) for team_id in team_ids],
-        "work_date": _json_date(record.work_date),
-        "weekday": _weekday_label(record.work_date),
-        "status": serialized.operational_status,
-        "review_status": record.validation_status,
-        "severity": severity,
-        "contract_kind": collaborator.contract_kind if collaborator is not None else None,
-        "operai_group": collaborator.operai_group if collaborator is not None else None,
-        "standard_daily_minutes": collaborator.standard_daily_minutes if collaborator is not None else None,
-        "schedule_code": record.schedule_code,
-        "ordinary_minutes": record.ordinary_minutes,
-        "extra_minutes": serialized.effective_extra_minutes or 0,
-        "missing_minutes": serialized.operational_missing_minutes,
-        "absence_cause": serialized.resolved_absence_cause,
-        "has_request": bool(serialized.detail_requests or record.request_type or record.request_description),
-        "validated_at": _json_datetime(record.validated_at) if record.validated_at is not None else None,
-        "validated_by_user_id": record.validated_by_user_id,
-        **_gate_record_feature_values(record, serialized=serialized, classification=classification),
-    }
-
-
-def _gate_record_feature_values(record: PresenzeDailyRecord, *, serialized, classification) -> dict[str, Any]:
-    return {
-        "km_value": record.km_value,
-        "trasferta_minutes": record.trasferta_minutes,
-        "trasferta_montano": record.trasferta_montano,
-        "reperibilita_unit": record.reperibilita_unit,
-        "reperibilita_quantity": record.reperibilita_quantity,
-        "absence_minutes": record.absence_minutes,
-        "justified_minutes": record.justified_minutes,
-        "request_description": serialized.request_description,
-        "export_absence_code": resolve_export_absence_code(record),
-        "export_special_day": classification.special_day,
-        "export_ordinary_minutes": classification.ordinary_minutes,
-        "export_extra_minutes": classification.extra_minutes,
-        "export_ordinary_night_minutes": classification.ordinary_night_minutes,
-        "export_overtime_day_minutes": classification.overtime_day_minutes,
-        "export_overtime_night_minutes": classification.overtime_night_minutes,
-        "export_overtime_festive_minutes": classification.overtime_festive_minutes,
-        "export_overtime_festive_night_minutes": classification.overtime_festive_night_minutes,
-        "export_shift_festive_day_minutes": classification.shift_festive_day_minutes,
-        "export_shift_night_minutes": classification.shift_night_minutes,
-        "export_shift_festive_night_minutes": classification.shift_festive_night_minutes,
-    }
 
 
 def _presenze_punches_by_record_id(

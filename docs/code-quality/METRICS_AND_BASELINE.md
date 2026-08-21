@@ -58,10 +58,9 @@ La baseline deve contenere almeno:
   "schema_version": 2,
   "generated_at": "ISO-8601",
   "source_commit": "git-sha",
-  "provenance": {"tool": "tools/code_quality/complexity.py", "repo_root": "...", "source_commit": "git-sha"},
   "engines": {
-    "python": {"name": "python-ast", "version": "..."},
-    "javascript": {"name": "babel-parser-ast", "version": "...", "@babel/parser": "available"}
+    "python": {"name": "...", "version": "..."},
+    "javascript": {"name": "...", "version": "..."}
   },
   "scope": {"include": [], "exclude": []},
   "files": {}

@@ -1382,20 +1382,6 @@ def test_apply_presenze_pending_action_variants_and_validation_errors() -> None:
         assert resolve_ack["extra"]["pending_action_id"] == "resolve-1"
         assert db.get(PresenzeDailyRecord, daily_record_id).validation_status == "validated"
 
-        stale_record_ack = gate_mobile_sync_service._apply_presenze_pending_action(
-            db,
-            {
-                "id": "stale-record-1",
-                "type": "validate_daily_record",
-                "record_id": str(uuid.uuid4()),
-                "collaborator_id": "018f88a2-1797-7365-bf5e-8bb8b7f9d001",
-                "work_date": "2026-07-10",
-                "application_user_id": 77,
-                "validation_status": "validated",
-            },
-        )
-        assert stale_record_ack["gaia_entity_id"] == str(daily_record_id)
-
         assert gate_mobile_sync_service._pending_action_id({}) != ""
         assert len(gate_mobile_sync_service._task_months({})) == 2
 
