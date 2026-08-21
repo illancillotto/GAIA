@@ -165,7 +165,6 @@ export type MeStraordinariPreviewResponse = {
   };
   period_start: string;
   period_end: string;
-  available_months: string[];
   items: MeStraordinariPreviewItem[];
 };
 

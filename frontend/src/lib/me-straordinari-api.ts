@@ -3,8 +3,12 @@ import type { MeStraordinariExportRequest, MeStraordinariPreviewResponse } from 
 
 const ME_STRAORDINARI_API_BASE = "/api/me/presenze/straordinari";
 
-export async function previewMeStraordinariPeriodRequest(token: string, periodStart: string): Promise<MeStraordinariPreviewResponse> {
-  return request<MeStraordinariPreviewResponse>(`${ME_STRAORDINARI_API_BASE}/preview/${periodStart}`, {
+export type MeStraordinariPeriodPreviewResponse = MeStraordinariPreviewResponse & {
+  available_months: string[];
+};
+
+export async function previewMeStraordinariPeriodRequest(token: string, periodStart: string): Promise<MeStraordinariPeriodPreviewResponse> {
+  return request<MeStraordinariPeriodPreviewResponse>(`${ME_STRAORDINARI_API_BASE}/preview/${periodStart}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },

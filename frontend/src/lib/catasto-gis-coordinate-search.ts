@@ -118,7 +118,7 @@ export function buildCatastoGisCoordinateHref(input: string): string | null {
   const params = new URLSearchParams({
     coordinate: formatCatastoGisCoordinateLabel(coordinate),
   });
-  return `/catasto/gis?${params.toString()}`;
+  return `/catasto/gis/coordinate?${params.toString()}`;
 }
 
 export function buildCatastoGisCoordinateFeatureCollection(

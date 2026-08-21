@@ -27,6 +27,7 @@ import {
   catastoGisDeleteSavedSelection,
   catastoGisExport,
   catastoGisGetSavedSelection,
+  catastoGisSearch,
   catastoGisListSavedSelections,
   catastoGisResolveRefs,
   catastoGisUpdateSavedSelection,
@@ -36,10 +37,8 @@ import {
 import { searchAnagraficaSubjects } from "@/lib/api";
 import { describeCatastoAnomalia } from "@/lib/catasto-anomalie";
 import { storeGisTileRevision } from "@/lib/catasto-gis-cache";
-import { buildCatastoGisCoordinateSearchResponse } from "@/lib/catasto-gis-coordinate-search";
 import { getStoredAccessToken } from "@/lib/auth";
 import { useGisSelection } from "@/hooks/useGisSelection";
-import { CATASTO_GIS_COORDINATE_FOCUS_OPTIONS, runCatastoGisSmartSearch } from "@/lib/catasto-gis-search-runner";
 import type { CatAnagraficaMatch, CatDistretto } from "@/types/catasto";
 import type {
   AdeAlignmentReportResponse,
@@ -165,55 +164,6 @@ function toNullableCellString(value: unknown): string | null {
   if (value == null) return null;
   const normalized = String(value).trim();
   return normalized.length > 0 ? normalized : null;
-}
-
-function buildSearchOverlayLayer(searchResult: GisSearchResponse | null): OverlayLayerState | null {
-  if (!searchResult?.geojson || searchResult.geojson.features.length === 0) return null;
-  return {
-    layer_key: "gis-search-results",
-    saved_selection_id: null,
-    name: `Ricerca: ${searchResult.query}`,
-    color: "#FACC15",
-    outlineColor: "#F97316",
-    pulse: true,
-    pulseUntil: Date.now() + 4000,
-    opacity: 0.82,
-    showFill: true,
-    visible: true,
-    source_filename: null,
-    geojson: searchResult.geojson,
-    importStats: null,
-    importedItems: [],
-    isPersisted: false,
-    showCentroids: searchResult.results.length === 0,
-  };
-}
-
-function buildFocusedSearchOverlayLayer(
-  searchResult: GisSearchResponse | null,
-  focusedSearchIds: string[],
-): OverlayLayerState | null {
-  if (!searchResult?.geojson || focusedSearchIds.length === 0) return null;
-  const ids = new Set(focusedSearchIds);
-  const features = searchResult.geojson.features.filter((feature) => ids.has(String(feature.properties?.id ?? "")));
-  if (features.length === 0) return null;
-  return {
-    layer_key: "gis-search-focus",
-    saved_selection_id: null,
-    name: "Focus ricerca GIS",
-    color: "#F000B8",
-    outlineColor: "#C4008E",
-    pulse: true,
-    pulseUntil: Date.now() + 6000,
-    opacity: 0.9,
-    showFill: true,
-    visible: true,
-    source_filename: null,
-    geojson: { type: "FeatureCollection", features },
-    importStats: null,
-    importedItems: [],
-    isPersisted: false,
-  };
 }
 
 function triggerDownload(blob: Blob, filename: string): void {
@@ -525,11 +475,49 @@ export default function CatastoGisPage() {
       ),
     [overlayLayers],
   );
-  const searchOverlayLayer = useMemo(() => buildSearchOverlayLayer(searchResult), [searchResult]);
-  const focusedSearchOverlayLayer = useMemo(
-    () => buildFocusedSearchOverlayLayer(searchResult, focusedSearchIds),
-    [focusedSearchIds, searchResult],
-  );
+  const searchOverlayLayer = useMemo<OverlayLayerState | null>(() => {
+    if (!searchResult?.geojson || searchResult.geojson.features.length === 0) return null;
+    return {
+      layer_key: "gis-search-results",
+      saved_selection_id: null,
+      name: `Ricerca: ${searchResult.query}`,
+      color: "#FACC15",
+      outlineColor: "#F97316",
+      pulse: true,
+      pulseUntil: Date.now() + 4000,
+      opacity: 0.82,
+      showFill: true,
+      visible: true,
+      source_filename: null,
+      geojson: searchResult.geojson,
+      importStats: null,
+      importedItems: [],
+      isPersisted: false,
+    };
+  }, [searchResult]);
+  const focusedSearchOverlayLayer = useMemo<OverlayLayerState | null>(() => {
+    if (!searchResult?.geojson || focusedSearchIds.length === 0) return null;
+    const ids = new Set(focusedSearchIds);
+    const features = searchResult.geojson.features.filter((feature) => ids.has(String(feature.properties?.id ?? "")));
+    if (features.length === 0) return null;
+    return {
+      layer_key: "gis-search-focus",
+      saved_selection_id: null,
+      name: "Focus ricerca GIS",
+      color: "#F000B8",
+      outlineColor: "#C4008E",
+      pulse: true,
+      pulseUntil: Date.now() + 6000,
+      opacity: 0.9,
+      showFill: true,
+      visible: true,
+      source_filename: null,
+      geojson: { type: "FeatureCollection", features },
+      importStats: null,
+      importedItems: [],
+      isPersisted: false,
+    };
+  }, [focusedSearchIds, searchResult]);
   const whiteCompanyOverlayLayer = useMemo<OverlayLayerState | null>(() => {
     if (!whiteCompanyVisible || !whiteCompanyLayer?.geojson || whiteCompanyLayer.geojson.features.length === 0) return null;
     return {
@@ -898,14 +886,18 @@ export default function CatastoGisPage() {
     setGisError(null);
     setGisInfo(null);
     try {
-      const result = await runCatastoGisSmartSearch(token, query, searchMode, GIS_SEARCH_MODE_LABELS);
-      setSearchResult(result.response);
+      const response = await catastoGisSearch(token, { query, mode: searchMode, limit: 25 });
+      setSearchResult(response);
       setFocusedSearchIds([]);
       setShowParticelleFill(true);
-      if (result.focusGeojson) {
-        focusLayerGeojson(result.focusGeojson, result.focusOptions);
+      if (response.geojson && response.geojson.features.length > 0) {
+        focusLayerGeojson(response.geojson);
       }
-      setGisInfo(result.info);
+      setGisInfo(
+        response.total > 0
+          ? `Ricerca ${GIS_SEARCH_MODE_LABELS[response.mode_resolved]}: ${response.total.toLocaleString("it-IT")} risultati.`
+          : `Nessun risultato per “${query}”.`,
+      );
     } catch (e) {
       setSearchResult(null);
       setGisError(e instanceof Error ? e.message : "Ricerca GIS fallita");
@@ -913,22 +905,6 @@ export default function CatastoGisPage() {
       setSearchBusy(false);
     }
   }, [focusLayerGeojson, searchMode, searchQuery, token]);
-
-  useEffect(() => {
-    const coordinateQuery = new URLSearchParams(window.location.search).get("coordinate");
-    if (!coordinateQuery) return;
-    const coordinateSearch = buildCatastoGisCoordinateSearchResponse(coordinateQuery);
-    if (!coordinateSearch) {
-      setGisError("Coordinate GIS non valide.");
-      return;
-    }
-    setSearchQuery(coordinateSearch.label);
-    setSearchResult(coordinateSearch.response);
-    setFocusedSearchIds([]);
-    setShowParticelleFill(true);
-    focusLayerGeojson(coordinateSearch.geojson, CATASTO_GIS_COORDINATE_FOCUS_OPTIONS);
-    setGisInfo(`Coordinate: ${coordinateSearch.label}.`);
-  }, [focusLayerGeojson]);
 
   const handleOpenSearchResult = useCallback(async (item: GisSearchResultItem) => {
     if (!token) return;

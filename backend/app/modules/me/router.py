@@ -76,7 +76,6 @@ from app.modules.presenze.services.straordinari_export_job import (
     build_straordinari_export_items,
     format_duration_label,
     generate_straordinari_export,
-    list_straordinari_available_months,
     list_straordinari_preview_items,
     previous_month_period_start,
 )
@@ -121,11 +120,6 @@ def _current_month_bounds() -> tuple[date, date]:
     start = today.replace(day=1)
     end = today.replace(day=calendar.monthrange(today.year, today.month)[1])
     return start, end
-
-
-def _resolve_month_start(period_start: date | None) -> date:
-    value = period_start or date.today().replace(day=1)
-    return date(value.year, value.month, 1)
 
 
 def _resolve_period_bounds(period_start: date | None, period_end: date | None) -> tuple[date, date]:
@@ -175,91 +169,6 @@ def _get_mapped_collaborator_or_409(db: Session, current_user: ApplicationUser) 
 
 def _cleanup_temp_dir(path: str) -> None:
     shutil.rmtree(path, ignore_errors=True)
-
-
-def _build_me_straordinari_preview_response(
-    db: Session,
-    collaborator: PresenzeCollaborator,
-    *,
-    period_start: date,
-    include_available_months: bool,
-) -> MeStraordinariPreviewResponse:
-    period_end = date.fromordinal(build_straordinari_period_end(period_start).toordinal() - 1)
-    available_months = list_straordinari_available_months(db, collaborator_id=collaborator.id) if include_available_months else []
-    _, items = list_straordinari_preview_items(db, collaborator_id=collaborator.id, period_start=period_start)
-    return MeStraordinariPreviewResponse(
-        collaborator=MeStraordinariCollaboratorResponse(
-            id=collaborator.id,
-            name=collaborator.name,
-            employee_code=collaborator.employee_code,
-        ),
-        period_start=period_start,
-        period_end=period_end,
-        available_months=available_months,
-        items=[
-            MeStraordinariPreviewItemResponse(
-                record_id=item.record_id,
-                work_date=item.work_date,
-                motivation=item.motivation,
-                start_time=item.start_time,
-                end_time=item.end_time,
-                duration_minutes=item.duration_minutes,
-                duration_label=format_duration_label(item.duration_minutes),
-                original_duration_minutes=item.original_duration_minutes,
-                pause_deduction_minutes=item.pause_deduction_minutes,
-                lunch_break_minutes=item.lunch_break_minutes,
-                duration_adjustment_reason=item.duration_adjustment_reason,
-            )
-            for item in items
-        ],
-    )
-
-
-def _download_me_straordinari_for_period(
-    artifact_format: str,
-    payload: MeStraordinariExportRequest,
-    db: Session,
-    collaborator: PresenzeCollaborator,
-    period_start: date,
-) -> FileResponse:
-    requested_motivations = {item.record_id: item.motivation for item in payload.items}
-    try:
-        _, export_items = build_straordinari_export_items(
-            db,
-            collaborator_id=collaborator.id,
-            period_start=period_start,
-            requested_motivations=requested_motivations,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-
-    temp_dir = Path(tempfile.mkdtemp(prefix="gaia_me_straordinari_"))
-    try:
-        xlsx_filename = generate_straordinari_export(
-            collaborator_name=collaborator.name,
-            period_start=period_start,
-            items=export_items,
-            output_path=temp_dir / "straordinari.xlsx",
-        )
-        xlsx_path = temp_dir / "straordinari.xlsx"
-        if artifact_format == "xlsx":
-            return FileResponse(
-                xlsx_path,
-                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                filename=xlsx_filename,
-                background=BackgroundTask(_cleanup_temp_dir, str(temp_dir)),
-            )
-
-        pdf_path = _convert_xlsx_to_pdf(xlsx_path, temp_dir)
-    except Exception:  # noqa: BLE001 - temporary export directory must be removed for every failure mode.
-        _cleanup_temp_dir(str(temp_dir))
-        raise
-    return FileResponse(
-        pdf_path,
-        media_type="application/pdf",
-        filename=f"{Path(xlsx_filename).stem}.pdf",
-        background=BackgroundTask(_cleanup_temp_dir, str(temp_dir)),
-    )
 
 
 def _convert_xlsx_to_pdf(xlsx_path: Path, output_dir: Path) -> Path:
@@ -456,27 +365,33 @@ def preview_me_straordinari_request(
     _: Annotated[ApplicationUser, RequirePresenzeModule],
 ) -> MeStraordinariPreviewResponse:
     collaborator = _get_mapped_collaborator_or_409(db, current_user)
-    return _build_me_straordinari_preview_response(
-        db,
-        collaborator,
-        period_start=previous_month_period_start(),
-        include_available_months=True,
-    )
-
-
-@router.get("/presenze/straordinari/preview/{period_start}", response_model=MeStraordinariPreviewResponse)
-def preview_me_straordinari_period_request(
-    period_start: date,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
-    _: Annotated[ApplicationUser, RequirePresenzeModule],
-) -> MeStraordinariPreviewResponse:
-    collaborator = _get_mapped_collaborator_or_409(db, current_user)
-    return _build_me_straordinari_preview_response(
-        db,
-        collaborator,
-        period_start=_resolve_month_start(period_start),
-        include_available_months=True,
+    period_start = previous_month_period_start()
+    period_end = date.fromordinal(build_straordinari_period_end(period_start).toordinal() - 1)
+    _, items = list_straordinari_preview_items(db, collaborator_id=collaborator.id, period_start=period_start)
+    return MeStraordinariPreviewResponse(
+        collaborator=MeStraordinariCollaboratorResponse(
+            id=collaborator.id,
+            name=collaborator.name,
+            employee_code=collaborator.employee_code,
+        ),
+        period_start=period_start,
+        period_end=period_end,
+        items=[
+            MeStraordinariPreviewItemResponse(
+                record_id=item.record_id,
+                work_date=item.work_date,
+                motivation=item.motivation,
+                start_time=item.start_time,
+                end_time=item.end_time,
+                duration_minutes=item.duration_minutes,
+                duration_label=format_duration_label(item.duration_minutes),
+                original_duration_minutes=item.original_duration_minutes,
+                pause_deduction_minutes=item.pause_deduction_minutes,
+                lunch_break_minutes=item.lunch_break_minutes,
+                duration_adjustment_reason=item.duration_adjustment_reason,
+            )
+            for item in items
+        ],
     )
 
 
@@ -491,33 +406,44 @@ def download_me_straordinari_request(
     if artifact_format not in {"xlsx", "pdf"}:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Formato richiesta straordinari non supportato")
     collaborator = _get_mapped_collaborator_or_409(db, current_user)
-    return _download_me_straordinari_for_period(
-        artifact_format,
-        payload,
-        db,
-        collaborator,
-        previous_month_period_start(),
-    )
+    period_start = previous_month_period_start()
+    requested_motivations = {item.record_id: item.motivation for item in payload.items}
+    try:
+        _, export_items = build_straordinari_export_items(
+            db,
+            collaborator_id=collaborator.id,
+            period_start=period_start,
+            requested_motivations=requested_motivations,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
+    temp_dir = Path(tempfile.mkdtemp(prefix="gaia_me_straordinari_"))
+    try:
+        xlsx_filename = generate_straordinari_export(
+            collaborator_name=collaborator.name,
+            period_start=period_start,
+            items=export_items,
+            output_path=temp_dir / "straordinari.xlsx",
+        )
+        xlsx_path = temp_dir / "straordinari.xlsx"
+        if artifact_format == "xlsx":
+            return FileResponse(
+                xlsx_path,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                filename=xlsx_filename,
+                background=BackgroundTask(_cleanup_temp_dir, str(temp_dir)),
+            )
 
-@router.post("/presenze/straordinari/export/{artifact_format}/{period_start}")
-def download_me_straordinari_period_request(
-    artifact_format: str,
-    period_start: date,
-    payload: MeStraordinariExportRequest,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
-    _: Annotated[ApplicationUser, RequirePresenzeModule],
-) -> FileResponse:
-    if artifact_format not in {"xlsx", "pdf"}:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Formato richiesta straordinari non supportato")
-    collaborator = _get_mapped_collaborator_or_409(db, current_user)
-    return _download_me_straordinari_for_period(
-        artifact_format,
-        payload,
-        db,
-        collaborator,
-        _resolve_month_start(period_start),
+        pdf_path = _convert_xlsx_to_pdf(xlsx_path, temp_dir)
+    except Exception:  # noqa: BLE001 - temporary export directory must be removed for every failure mode.
+        _cleanup_temp_dir(str(temp_dir))
+        raise
+    return FileResponse(
+        pdf_path,
+        media_type="application/pdf",
+        filename=f"{Path(xlsx_filename).stem}.pdf",
+        background=BackgroundTask(_cleanup_temp_dir, str(temp_dir)),
     )
 
 

@@ -74,7 +74,6 @@ class MeStraordinariPreviewResponse(BaseModel):
     collaborator: MeStraordinariCollaboratorResponse
     period_start: date
     period_end: date
-    available_months: list[date] = Field(default_factory=list)
     items: list[MeStraordinariPreviewItemResponse]
 
 

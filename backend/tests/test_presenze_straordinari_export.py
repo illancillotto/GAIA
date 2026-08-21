@@ -294,6 +294,17 @@ def test_straordinari_preview_deducts_missing_lunch_break_from_long_entry_exit_s
     assert items[0].duration_adjustment_reason == "Detratta pausa pranzo non rilevata nelle timbrature (00:30)"
 
 
+def test_break_helpers_keep_the_largest_gap_when_later_breaks_are_shorter() -> None:
+    punches = [
+        PresenzeDailyPunch(sequence=1, entry_time=time(7, 0), exit_time=time(12, 0)),
+        PresenzeDailyPunch(sequence=2, entry_time=time(12, 30), exit_time=time(15, 0)),
+        PresenzeDailyPunch(sequence=3, entry_time=time(15, 15), exit_time=time(16, 0)),
+    ]
+
+    assert export_job.max_break_minutes(punches) == 30
+    assert export_job.post_lunch_tail_minutes(punches) == 210
+
+
 def test_straordinari_preview_deducts_only_missing_part_of_short_lunch_break(db_session: Session) -> None:
     user = _create_user(db_session)
     collaborator = _create_collaborator(db_session, user)

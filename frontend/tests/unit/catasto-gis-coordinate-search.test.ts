@@ -98,7 +98,7 @@ describe("catasto GIS coordinate search helpers", () => {
   });
 
   test("builds encoded Catasto GIS href from valid coordinates", () => {
-    expect(buildCatastoGisCoordinateHref("39,9042 8,5917")).toBe("/catasto/gis?coordinate=39.904200%2C+8.591700");
+    expect(buildCatastoGisCoordinateHref("39,9042 8,5917")).toBe("/catasto/gis/coordinate?coordinate=39.904200%2C+8.591700");
     expect(buildCatastoGisCoordinateHref("not coordinates")).toBeNull();
   });
 

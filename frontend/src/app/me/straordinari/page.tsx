@@ -8,7 +8,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
 import { downloadMeStraordinariPeriodRequest, previewMeStraordinariPeriodRequest } from "@/lib/me-straordinari-api";
-import type { MeStraordinariPreviewItem, MeStraordinariPreviewResponse } from "@/types/api";
+import type { MeStraordinariPeriodPreviewResponse } from "@/lib/me-straordinari-api";
+import type { MeStraordinariPreviewItem } from "@/types/api";
 
 type DraftItem = {
   recordId: string;
@@ -49,7 +50,7 @@ function formatDurationLabel(minutes: number): string {
   return `${String(hours).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
 }
 
-function buildFilename(preview: MeStraordinariPreviewResponse | null, format: "xlsx" | "pdf"): string {
+function buildFilename(preview: MeStraordinariPeriodPreviewResponse | null, format: "xlsx" | "pdf"): string {
   /* v8 ignore next -- defensive fallback; download buttons are only enabled after preview load. */
   if (!preview) return `richiesta-straordinari.${format}`;
   const month = preview.period_start.slice(0, 7);
@@ -65,7 +66,7 @@ function downloadBlob(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-function buildMonthOptions(preview: MeStraordinariPreviewResponse | null, selectedMonth: string): string[] {
+function buildMonthOptions(preview: MeStraordinariPeriodPreviewResponse | null, selectedMonth: string): string[] {
   const values = new Set<string>([selectedMonth]);
   for (const month of preview?.available_months ?? []) {
     values.add(month.slice(0, 7));
@@ -156,7 +157,7 @@ function PeriodActions({
 
 export default function MeStraordinariPage() {
   const [selectedMonth, setSelectedMonth] = useState(() => currentMonthValue());
-  const [preview, setPreview] = useState<MeStraordinariPreviewResponse | null>(null);
+  const [preview, setPreview] = useState<MeStraordinariPeriodPreviewResponse | null>(null);
   const [draftItems, setDraftItems] = useState<DraftItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDownloading, setIsDownloading] = useState<"xlsx" | "pdf" | null>(null);
