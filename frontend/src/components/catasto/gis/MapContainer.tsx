@@ -363,6 +363,21 @@ function buildDui2026TilesUrl(revision: string): string {
   return `${window.location.origin}/tiles/cat_dui_2026_current/{z}/{x}/{y}?v=${encodeURIComponent(revision)}`;
 }
 
+function extendBoundsWithGeometry(bounds: maplibregl.LngLatBounds, geom: GeoJSON.Geometry): void {
+  if (geom.type === "Point") {
+    bounds.extend([geom.coordinates[0], geom.coordinates[1]]);
+    return;
+  }
+  if (geom.type === "MultiPoint") {
+    for (const point of geom.coordinates) bounds.extend([point[0], point[1]]);
+    return;
+  }
+  const rings = getGeometryRings(geom);
+  for (const ring of rings) {
+    for (const point of ring) bounds.extend([point[0], point[1]]);
+  }
+}
+
 function fitCollectionBounds(
   map: maplibregl.Map,
   collection: GeoJSON.FeatureCollection | null | undefined,
@@ -379,10 +394,7 @@ function fitCollectionBounds(
     for (const feature of collection.features) {
       const geom = feature.geometry;
       if (!geom) continue;
-      const rings = getGeometryRings(geom);
-      for (const ring of rings) {
-        for (const point of ring) bounds.extend([point[0], point[1]]);
-      }
+      extendBoundsWithGeometry(bounds, geom);
     }
     if (!bounds.isEmpty()) {
       map.fitBounds(bounds, {
