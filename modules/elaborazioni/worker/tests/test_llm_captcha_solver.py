@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 from pathlib import Path
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -97,9 +98,9 @@ def test_llm_solver_returns_none_on_nonzero_exit() -> None:
     assert result is None
 
 
-def test_llm_solver_returns_none_on_invalid_json() -> None:
+def test_llm_solver_returns_none_on_explanatory_plain_text() -> None:
     solver = LLMCaptchaSolver()
-    proc = _make_proc(b"not json at all")
+    proc = _make_proc(b"I cannot read the captcha image with confidence")
 
     with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=proc)):
         result = run(solver.solve(b"fake-image"))
@@ -130,9 +131,121 @@ def test_llm_solver_passes_image_path_in_prompt() -> None:
 
     assert calls[0][0] == "myagent"
     assert "--print" in calls[0]
+    assert "--model" in calls[0]
+    assert "auto" in calls[0]
     assert "--output-format" in calls[0]
     prompt_arg = calls[0][-1]
     assert ".png" in prompt_arg
+
+
+def test_llm_solver_accepts_plain_text_agent_output() -> None:
+    solver = LLMCaptchaSolver()
+    proc = _make_proc(b"pitepade\n")
+
+    with patch("asyncio.create_subprocess_exec", AsyncMock(return_value=proc)):
+        result = run(solver.solve(b"fake-image"))
+
+    assert result == "pitepade"
+
+
+def test_llm_solver_loads_cursor_auth_token_from_file(tmp_path, monkeypatch) -> None:
+    token_file = tmp_path / "auth.json"
+    token_file.write_text(json.dumps({"accessToken": "secret-token"}))
+    monkeypatch.setenv("CURSOR_AUTH_TOKEN_FILE", str(token_file))
+    monkeypatch.delenv("CURSOR_AUTH_TOKEN", raising=False)
+    solver = LLMCaptchaSolver(agent_cmd="agent")
+    proc = _make_proc(b"roneota\n")
+    captured_env: dict[str, str] = {}
+
+    async def fake_exec(*args, **kwargs):
+        captured_env.update(kwargs.get("env") or {})
+        return proc
+
+    with patch("asyncio.create_subprocess_exec", fake_exec):
+        result = run(solver.solve(b"fake-image"))
+
+    assert result == "roneota"
+    assert captured_env["CURSOR_AUTH_TOKEN"] == "secret-token"
+    assert captured_env["HOME"] == os.environ.get("HOME", "")
+
+
+def test_llm_solver_does_not_override_existing_cursor_auth_token(tmp_path, monkeypatch) -> None:
+    token_file = tmp_path / "auth.json"
+    token_file.write_text(json.dumps({"accessToken": "file-token"}))
+    monkeypatch.setenv("CURSOR_AUTH_TOKEN_FILE", str(token_file))
+    monkeypatch.setenv("CURSOR_AUTH_TOKEN", "env-token")
+    solver = LLMCaptchaSolver(agent_cmd="agent")
+    proc = _make_proc(b"solangei\n")
+    captured_env: dict[str, str] = {}
+
+    async def fake_exec(*args, **kwargs):
+        captured_env.update(kwargs.get("env") or {})
+        return proc
+
+    with patch("asyncio.create_subprocess_exec", fake_exec):
+        result = run(solver.solve(b"fake-image"))
+
+    assert result == "solangei"
+    assert captured_env["CURSOR_AUTH_TOKEN"] == "env-token"
+
+
+def test_llm_solver_uses_refresh_token_fallback(tmp_path, monkeypatch) -> None:
+    token_file = tmp_path / "auth.json"
+    token_file.write_text(json.dumps({"refreshToken": "refresh-token"}))
+    monkeypatch.setenv("CURSOR_AUTH_TOKEN_FILE", str(token_file))
+    monkeypatch.delenv("CURSOR_AUTH_TOKEN", raising=False)
+    solver = LLMCaptchaSolver(agent_cmd="agent")
+    proc = _make_proc(b"neorave\n")
+    captured_env: dict[str, str] = {}
+
+    async def fake_exec(*args, **kwargs):
+        captured_env.update(kwargs.get("env") or {})
+        return proc
+
+    with patch("asyncio.create_subprocess_exec", fake_exec):
+        result = run(solver.solve(b"fake-image"))
+
+    assert result == "neorave"
+    assert captured_env["CURSOR_AUTH_TOKEN"] == "refresh-token"
+
+
+def test_llm_solver_ignores_unreadable_cursor_auth_token_file(tmp_path, monkeypatch) -> None:
+    token_file = tmp_path / "missing-auth.json"
+    monkeypatch.setenv("CURSOR_AUTH_TOKEN_FILE", str(token_file))
+    monkeypatch.delenv("CURSOR_AUTH_TOKEN", raising=False)
+    solver = LLMCaptchaSolver(agent_cmd="agent")
+    proc = _make_proc(b"dumata\n")
+    captured_env: dict[str, str] = {}
+
+    async def fake_exec(*args, **kwargs):
+        captured_env.update(kwargs.get("env") or {})
+        return proc
+
+    with patch("asyncio.create_subprocess_exec", fake_exec):
+        result = run(solver.solve(b"fake-image"))
+
+    assert result == "dumata"
+    assert "CURSOR_AUTH_TOKEN" not in captured_env
+
+
+def test_llm_solver_decodes_json_text_message_and_list() -> None:
+    assert LLMCaptchaSolver._decode_agent_stdout(json.dumps({"text": "abc123"}).encode()) == "abc123"
+    assert LLMCaptchaSolver._decode_agent_stdout(json.dumps({"message": "xyz789"}).encode()) == "xyz789"
+    assert LLMCaptchaSolver._decode_agent_stdout(json.dumps(["list-value"]).encode()) == "['list-value']"
+
+
+def test_llm_solver_extract_candidate_from_last_token_when_line_has_punctuation() -> None:
+    assert LLMCaptchaSolver._extract_candidate("candidate: neo-rave") == "rave"
+
+
+def test_llm_solver_decodes_empty_stdout() -> None:
+    assert LLMCaptchaSolver._decode_agent_stdout(b"   \n") == ""
+
+
+def test_llm_solver_extract_candidate_branches() -> None:
+    assert LLMCaptchaSolver._extract_candidate("!!!\nabc123") == "abc123"
+    assert LLMCaptchaSolver._extract_candidate("abc123 is-readable") == "readable"
+    assert LLMCaptchaSolver._extract_candidate("a b c 1 2 3") == "abc123"
 
 
 def test_llm_solver_from_path_skips_tempfile(tmp_path) -> None:

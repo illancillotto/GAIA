@@ -234,17 +234,16 @@ def test_snapshot_and_row_extraction(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     session._context = SnapshotContext(snapshot)
     monkeypatch.setattr(browser_module, "raise_if_sister_server_error", noop_async)
-    rows = run(session._snapshot_remote_request_rows())
-    assert rows[0].remote_id == "1" and snapshot.closed
+    assert run(session._snapshot_remote_request_rows()) == []
+    assert not snapshot.closed
     assert run(session._extract_remote_request_rows(snapshot))[0].remote_id == "1"
 
     async def fail(*_args):
         raise RuntimeError("snapshot")
 
     monkeypatch.setattr(browser_module, "raise_if_sister_server_error", fail)
-    with pytest.raises(RuntimeError, match="snapshot"):
-        run(session._snapshot_remote_request_rows())
-    assert snapshot.closed
+    assert run(session._snapshot_remote_request_rows()) == []
+    assert not snapshot.closed
 
 
 def test_url_and_error_delegation(monkeypatch: pytest.MonkeyPatch) -> None:

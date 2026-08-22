@@ -106,6 +106,14 @@ async def raise_if_sister_server_error(page, state: SisterSessionState) -> None:
     pending_error = state.pop_server_error()
     if pending_error is not None:
         status, response_url = pending_error
+        if await _is_non_blocking_init_portale_error(page, status, response_url):
+            logger.warning(
+                "Errore HTTP SISTER initPortale non bloccante ignorato: status=%s url=%s page=%s",
+                status,
+                response_url,
+                page.url,
+            )
+            return
         logger.error("Errore HTTP SISTER rilevato: status=%s url=%s", status, response_url)
         raise SisterServerError(f"SISTER HTTP {status} su {response_url}")
 
@@ -118,6 +126,24 @@ async def raise_if_sister_server_error(page, state: SisterSessionState) -> None:
     if "ERROR 500" in upper or "NULLPOINTEREXCEPTION" in upper or "HTTP STATUS 500" in upper:
         logger.error("Errore SISTER 500 rilevato: url=%s", page.url)
         raise SisterServerError(f"SISTER 500 su {page.url}")
+
+
+async def _is_non_blocking_init_portale_error(page, status: int, response_url: str) -> bool:
+    if status != 501 or "/portale-rest/rs/initPortale" not in response_url:
+        return False
+    page_url = (getattr(page, "url", "") or "").lower()
+    if "sister3.agenziaentrate.gov.it/servizi" not in page_url:
+        return False
+    try:
+        title = await page.title()
+        body_text = await page.locator("body").inner_text(timeout=1500)
+    except Exception as exc:
+        logger.debug("Impossibile validare initPortale 501 non bloccante: %s", exc)
+        return False
+    upper = re.sub(r"\s+", " ", f"{title} {body_text}").upper()
+    if "UTENTE BLOCCATO" in upper or "GIA' IN SESSIONE" in upper or "GIÀ IN SESSIONE" in upper:
+        return False
+    return "HOME DEI SERVIZI" in upper and "CONSULTAZIONI E CERTIFICAZIONI" in upper
 
 
 async def document_not_yet_produced_error(
@@ -157,6 +183,8 @@ def _is_pending_document_page(url: str, upper_body: str) -> bool:
 
 
 async def is_visura_area_ready(page, selectors) -> bool:
+    if "Visure/SceltaServizio.do" in page.url or "Visure/SelezioneConvenzione.do" in page.url:
+        return True
     if "Informativa.do" in page.url or "SelezioneConvenzione.do" in page.url:
         return False
     if await page.locator(selectors.catasto_selector).count() > 0:

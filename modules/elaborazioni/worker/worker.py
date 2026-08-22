@@ -84,6 +84,14 @@ from app.modules.catasto.routes.anagrafica import (
 from autodoc_sync import AUTODOC_SYNC_ENTITY, run_autodoc_sync_job_by_id
 from anti_captcha_client import AntiCaptchaClient
 from browser_session import BrowserSession, BrowserSessionConfig
+from sister_credential_pool import (
+    CredentialRejectionContext,
+    finalize_credential_pool,
+    isolate_rejected_credential_runner,
+    load_active_credential_pool,
+    quarantine_rejected_credential,
+    should_stop_credential_runner,
+)
 from sister_exceptions import SisterInvalidDocumentError, SisterServerError
 from sister_captcha_wait import SisterCaptchaClaim, SisterCaptchaWaitRepository
 from sister_worker_reliability import (
@@ -694,22 +702,8 @@ class CatastoWorker:
                 return
             batch.current_operation = "Batch preso in carico dal worker"
             db.commit()
-            if batch.credential_id is not None:
-                selected_credential = db.get(CatastoCredential, batch.credential_id)
-                active_credentials = (
-                    [selected_credential]
-                    if selected_credential is not None and selected_credential.user_id == batch.user_id and selected_credential.active
-                    else []
-                )
-            else:
-                all_credentials = list(
-                    db.scalars(
-                        select(CatastoCredential)
-                        .where(CatastoCredential.user_id == batch.user_id)
-                        .order_by(CatastoCredential.is_default.desc(), CatastoCredential.active.desc(), CatastoCredential.updated_at.desc())
-                    ).all()
-                )
-                active_credentials = [c for c in all_credentials if c.active]
+            credential_pool = load_active_credential_pool(db, batch)
+            active_credentials = credential_pool.credentials
             if not active_credentials:
                 batch.status = CatastoBatchStatus.FAILED.value
                 batch.current_operation = "Credenziali SISTER attive mancanti"
@@ -718,10 +712,7 @@ class CatastoWorker:
             logger.info("Batch %s preso in carico per utente %s", batch_id, batch.user_id)
 
         request_repository = self._request_repository()
-        request_repository.fail_unavailable_pinned_requests(
-            batch_id,
-            {credential.id for credential in active_credentials},
-        )
+        request_repository.fail_unavailable_pinned_requests(batch_id, credential_pool.available_ids)
         claim_lock = asyncio.Lock()
         shared_state_lock = asyncio.Lock()
         deferred_requests: dict[UUID, datetime] = {}
@@ -877,6 +868,10 @@ class CatastoWorker:
                         browser = await _restart_browser(browser)
                         await asyncio.sleep(5)
                     except Exception as exc:
+                        rejection_context = CredentialRejectionContext(
+                            credential_pool, credential, batch_id, request_id, execution_token, request_repository, self._set_batch_operation,
+                        )
+                        quarantine_rejected_credential(exc, rejection_context)
                         if self._is_recoverable_credential_error(exc):
                             async with shared_state_lock:
                                 credential_server_error_counts[credential.id] = 0
@@ -919,14 +914,10 @@ class CatastoWorker:
                     finally:
                         await claim_coordinator.release(request_id)
 
-                    if self.state.stop_requested:
-                        return
-                    if _batch_release_requested():
-                        logger.info(
-                            "Batch %s arrestato dopo completamento checkpoint corrente, logout per %s",
-                            batch_id,
-                            credential.sister_username,
-                        )
+                    if should_stop_credential_runner(
+                        self.state.stop_requested, batch_id,
+                        credential.sister_username, _batch_release_requested,
+                    ):
                         return
                     await asyncio.sleep(BETWEEN_VISURE_DELAY_SEC)
             finally:
@@ -941,8 +932,17 @@ class CatastoWorker:
         )
         self._set_batch_operation(batch_id, pool_label)
         try:
-            await asyncio.gather(*[_credential_runner(active_credential) for active_credential in active_credentials])
-            self._finalize_batch(batch_id)
+            await asyncio.gather(*[
+                isolate_rejected_credential_runner(_credential_runner(active_credential))
+                for active_credential in active_credentials
+            ])
+            finalize_credential_pool(
+                credential_pool,
+                batch_id,
+                self._batch_has_open_requests(batch_id),
+                SessionLocal,
+                self._finalize_batch,
+            )
         except Exception as exc:
             logger.exception("Batch %s fallito prima del completamento", batch_id)
             self._request_repository().fail_batch(batch_id, str(exc))

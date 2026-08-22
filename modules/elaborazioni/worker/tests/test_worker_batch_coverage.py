@@ -30,12 +30,13 @@ class BatchRepository:
         self.failed_requests: list[tuple] = []
         self.failed_batches: list[tuple] = []
         self.releases: list[object] = []
+        self.resets: list[tuple[tuple, dict]] = []
 
     def fail_unavailable_pinned_requests(self, *args):
         self.failed_unavailable.append(args)
 
-    def reset_for_retry(self, *_args):
-        return None
+    def reset_for_retry(self, *args, **kwargs):
+        self.resets.append((args, kwargs))
 
     def fail_request(self, *args):
         self.failed_requests.append(args)
@@ -357,6 +358,61 @@ def test_batch_recoverable_and_fatal_errors_are_isolated(tmp_path: Path, monkeyp
         fatal_request=SimpleNamespace(artifact_dir=None),
     )
     assert repository.failed_requests
+
+
+def test_batch_rejected_credential_reassigns_request_to_remaining_pool(monkeypatch: pytest.MonkeyPatch) -> None:
+    worker = bare_worker()
+    item = batch(pinned=False)
+    rejected = credential(username="rejected")
+    available = credential(username="available")
+    request_id = uuid4()
+    repository = BatchRepository([Selection(request_id), Selection(request_id), Selection()])
+    processed_by: list[str] = []
+
+    async def process(_browser, selected, _batch_id, _request_id):
+        processed_by.append(selected.sister_username)
+        if selected is rejected:
+            raise RuntimeError("Credenziali SISTER rifiutate: Autenticazione fallita.")
+
+    operations = install_batch_runtime(worker, repository, monkeypatch, process=process)
+    worker._batch_has_open_requests = lambda _batch_id: False
+    outer = FakeDb(get_values=[item], scalars_values=[[rejected, available]])
+    monkeypatch.setattr(worker_module, "SessionLocal", BatchSessionFactory(outer, item))
+
+    async def no_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr(worker_module.asyncio, "sleep", no_sleep)
+
+    run(worker._process_batch(item.id))
+
+    assert processed_by == ["rejected", "available"]
+    assert repository.resets[0][1]["error_code"] == "sister_credential_rejected"
+    assert repository.failed_unavailable[-1][1] == {available.id}
+    assert not repository.failed_requests
+    assert operations[-1] == "finalized"
+
+
+def test_batch_all_rejected_credentials_stops_in_resumable_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    worker = bare_worker()
+    item = batch(pinned=False)
+    rejected = credential(username="rejected")
+    repository = BatchRepository([Selection(uuid4())])
+
+    async def process(*_args):
+        raise RuntimeError("Credenziali errate. Autenticazione fallita.")
+
+    operations = install_batch_runtime(worker, repository, monkeypatch, process=process)
+    worker._batch_has_open_requests = lambda _batch_id: True
+    outer = FakeDb(get_values=[item], scalars_values=[[rejected]])
+    monkeypatch.setattr(worker_module, "SessionLocal", BatchSessionFactory(outer, item))
+
+    run(worker._process_batch(item.id))
+
+    assert item.status == worker_module.CatastoBatchStatus.FAILED.value
+    assert "aggiornare il pool e riprendere il batch" in item.current_operation
+    assert repository.resets
+    assert "finalized" not in operations
 
 
 def test_batch_stop_checkpoint_and_pool_failure(monkeypatch: pytest.MonkeyPatch) -> None:

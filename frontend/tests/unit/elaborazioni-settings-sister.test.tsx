@@ -600,7 +600,7 @@ describe("ElaborazioniSettingsWorkspace SISTER integration", () => {
     await waitFor(() => expect(apiMocks.startElaborazioneBatch).toHaveBeenCalledWith("token", "new"));
     expect(screen.getByText(/Restano 1 batch fermati/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Ferma e libera utenze" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pausa e libera sessioni" }));
     await waitFor(() => expect(apiMocks.releaseElaborazioneCredentials).toHaveBeenCalledWith("token"));
   });
 
@@ -672,7 +672,7 @@ describe("ElaborazioniSettingsWorkspace SISTER integration", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Riprendi batch" })).toBeEnabled());
     fireEvent.click(screen.getByRole("button", { name: "Riprendi batch" }));
     expect(await screen.findByText("resume error")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Ferma e libera utenze" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pausa e libera sessioni" }));
     expect(await screen.findByText("release error")).toBeInTheDocument();
   });
 
@@ -807,7 +807,7 @@ describe("ElaborazioniSettingsWorkspace SISTER integration", () => {
     await screen.findByText("Profilo primary");
     authState.token = null;
 
-    fireEvent.click(screen.getByRole("button", { name: "Ferma e libera utenze" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pausa e libera sessioni" }));
     fireEvent.click(screen.getByRole("button", { name: "Riprendi batch" }));
     fireEvent.click(screen.getByRole("button", { name: "Testa connessione" }));
     fireEvent.click(screen.getByRole("button", { name: "Aggiorna credenziale" }));
@@ -899,7 +899,7 @@ describe("ElaborazioniSettingsWorkspace SISTER integration", () => {
     render(<ElaborazioniSettingsWorkspace embedded />);
     await screen.findByText("Profilo primary");
 
-    fireEvent.click(screen.getByRole("button", { name: "Ferma e libera utenze" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pausa e libera sessioni" }));
     expect(await screen.findByText("Errore rilascio utenze SISTER")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Riprendi batch" }));
     expect(await screen.findByText("Errore ripresa batch rilasciato")).toBeInTheDocument();

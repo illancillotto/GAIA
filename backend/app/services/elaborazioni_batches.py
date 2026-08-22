@@ -133,9 +133,7 @@ def normalize_released_processing_batches(db: Session, user_id: int | None = Non
             continue
 
         for request in released_pending:
-            request.status = ElaborazioneRichiestaStatus.SKIPPED.value
-            request.current_operation = RELEASE_REQUESTED_OPERATION
-            request.processed_at = request.processed_at or now
+            mark_request_released(request, now)
 
         batch.status = ElaborazioneBatchStatus.CANCELLED.value
         batch.completed_at = now
@@ -701,6 +699,16 @@ def _skip_request(
     request.retry_not_before = None
 
 
+def is_release_marker_request(request: ElaborazioneRichiesta) -> bool:
+    return request.status == ElaborazioneRichiestaStatus.SKIPPED.value and request.current_operation == RELEASE_REQUESTED_OPERATION and request.error_message == RELEASE_REQUESTED_MESSAGE
+
+
+def mark_request_released(request: ElaborazioneRichiesta, processed_at: datetime) -> None: _skip_request(request, RELEASE_REQUESTED_OPERATION, RELEASE_REQUESTED_MESSAGE, processed_at)
+
+
+def queue_released_request(request: ElaborazioneRichiesta) -> None: _queue_request(request, "Queued after release")
+
+
 def start_batch(db: Session, user_id: int, batch_id: UUID) -> ElaborazioneBatch:
     expire_stale_pending_batches(db, user_id)
     batch = get_batch_for_user(db, user_id, batch_id)
@@ -726,12 +734,8 @@ def start_batch(db: Session, user_id: int, batch_id: UUID) -> ElaborazioneBatch:
     resumed_after_release = False
     if batch.status == ElaborazioneBatchStatus.CANCELLED.value:
         for request in requests:
-            if (
-                request.status == ElaborazioneRichiestaStatus.SKIPPED.value
-                and request.current_operation == RELEASE_REQUESTED_OPERATION
-                and request.error_message == RELEASE_REQUESTED_MESSAGE
-            ):
-                _queue_request(request, "Queued after release")
+            if is_release_marker_request(request):
+                queue_released_request(request)
                 resumed_after_release = True
 
         if not resumed_after_release:
@@ -796,7 +800,7 @@ def release_processing_batches_for_user(db: Session, user_id: int) -> tuple[int,
                 ElaborazioneRichiestaStatus.PROCESSING.value,
                 ElaborazioneRichiestaStatus.AWAITING_CAPTCHA.value,
             }:
-                _skip_request(request, RELEASE_REQUESTED_OPERATION, RELEASE_REQUESTED_MESSAGE, now)
+                mark_request_released(request, now)
         batch.status = ElaborazioneBatchStatus.CANCELLED.value
         batch.completed_at = now
         batch.current_operation = RELEASE_REQUESTED_OPERATION

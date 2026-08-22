@@ -106,8 +106,8 @@ describe("SisterCredentialPool", () => {
 
     expect(screen.getByText("Nessuna credenziale SISTER configurata")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Testa tutte" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Nessun batch da riprendere" })).toBeDisabled();
-    expect(screen.getByText("Nessun batch fermato da rilascio utenze disponibile per la ripartenza.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Nessun batch in pausa" })).toBeDisabled();
+    expect(screen.getByText("Nessun batch in pausa da rilascio sessioni disponibile per la ripartenza.")).toBeInTheDocument();
 
     view.rerender(<SisterCredentialPool {...props({ embedded: true })} />);
     expect(screen.getByText("Nessuna credenziale SISTER configurata")).toBeInTheDocument();
@@ -141,14 +141,14 @@ describe("SisterCredentialPool", () => {
 
     expect(screen.getByText("1/2 attive")).toBeInTheDocument();
     expect(screen.getByText("1 verificate")).toBeInTheDocument();
-    expect(screen.getByText("2 batch fermati dopo il rilascio delle utenze.")).toBeInTheDocument();
+    expect(screen.getByText("2 batch in pausa dopo il rilascio delle sessioni SISTER.")).toBeInTheDocument();
     expect(screen.getByText("Default")).toBeInTheDocument();
     expect(screen.getByText("Disattiva")).toBeInTheDocument();
     expect(screen.getByText("In verifica")).toBeInTheDocument();
     expect(screen.getAllByText("Non indicata")).toHaveLength(1);
     expect(screen.getAllByText("Non indicato")).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Ripresa..." })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Rilascio..." })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Pausa..." })).toBeDisabled();
 
     const secondaryCard = screen.getByText("Profilo secondary").closest("article");
     expect(secondaryCard).not.toBeNull();
@@ -179,7 +179,7 @@ describe("SisterCredentialPool", () => {
     expect(screen.getByRole("button", { name: "Testa" })).toBeEnabled();
 
     fireEvent.click(screen.getByRole("button", { name: "Riprendi batch" }));
-    fireEvent.click(screen.getByRole("button", { name: "Ferma e libera utenze" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pausa e libera sessioni" }));
     expect(callbacks.onResumeReleasedBatch).toHaveBeenCalledTimes(1);
     expect(callbacks.onReleaseSessions).toHaveBeenCalledTimes(1);
   });

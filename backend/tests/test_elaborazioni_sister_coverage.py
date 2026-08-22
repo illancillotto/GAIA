@@ -157,6 +157,35 @@ def _batch(status="processing", **values):
     return SimpleNamespace(**defaults)
 
 
+def test_release_marker_helpers_identify_and_transition_only_released_requests() -> None:
+    now = datetime.now(UTC)
+    released = _request(
+        "skipped",
+        current_operation=batches.RELEASE_REQUESTED_OPERATION,
+        error_message=batches.RELEASE_REQUESTED_MESSAGE,
+        processed_at=now,
+    )
+    cancelled = _request("skipped", current_operation="Cancelled", error_message="Batch cancelled by user")
+    pending = _request("pending")
+
+    assert batches.is_release_marker_request(released)
+    assert not batches.is_release_marker_request(cancelled)
+    assert not batches.is_release_marker_request(pending)
+
+    batches.queue_released_request(released)
+    assert released.status == "pending"
+    assert released.current_operation == "Queued after release"
+    assert released.error_message is None
+    assert released.processed_at is None
+
+    batches.mark_request_released(pending, now)
+    assert batches.is_release_marker_request(pending)
+    assert pending.status == "skipped"
+    assert pending.current_operation == batches.RELEASE_REQUESTED_OPERATION
+    assert pending.error_message == batches.RELEASE_REQUESTED_MESSAGE
+    assert pending.processed_at == now
+
+
 def test_normalize_released_batches_covers_empty_active_and_released(monkeypatch: pytest.MonkeyPatch) -> None:
     empty = _batch()
     active = _batch()

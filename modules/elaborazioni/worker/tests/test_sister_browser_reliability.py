@@ -274,6 +274,7 @@ def test_document_not_yet_produced_handles_absolute_missing_and_broken_links() -
     [
         (_Page(url="https://sister/Informativa.do"), False),
         (_Page(url="https://sister/SelezioneConvenzione.do"), False),
+        (_Page(url="https://sister/Visure/SelezioneConvenzione.do"), True),
         (_Page(catasto_count=1), True),
         (_Page(url="https://sister/SceltaLink.do"), True),
         (_Page(url="https://sister/RicercaIMM.do"), True),

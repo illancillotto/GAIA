@@ -319,6 +319,43 @@ def test_post_login_state_variants(monkeypatch: pytest.MonkeyPatch) -> None:
     assert run(session._wait_for_post_login_state()) == "unknown"
 
 
+def test_post_login_state_ignores_init_portale_501_when_sister_home_is_ready(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(browser_module.asyncio, "sleep", noop_async)
+    page = ScriptedPage(
+        url="https://sister3.agenziaentrate.gov.it/Servizi/",
+        title="Home dei Servizi",
+        body="Home dei Servizi Consultazioni e Certificazioni Esci",
+    )
+    session = make_session(page)
+    session._session_state.pending_server_error = (
+        501,
+        "https://portale.agenziaentrate.gov.it/portale-rest/rs/initPortale?v=1787351340826",
+    )
+
+    assert run(session._wait_for_post_login_state()) == "ready"
+
+
+def test_post_login_state_keeps_init_portale_501_blocking_on_locked_page(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(browser_module.asyncio, "sleep", noop_async)
+    page = ScriptedPage(
+        url="https://sister3.agenziaentrate.gov.it/Servizi/error_locked.jsp",
+        title="Utente bloccato",
+        body="Utente gia' in sessione sulla stessa o altra postazione.",
+    )
+    session = make_session(page)
+    session._session_state.pending_server_error = (
+        501,
+        "https://portale.agenziaentrate.gov.it/portale-rest/rs/initPortale?v=1787351340826",
+    )
+
+    with pytest.raises(SisterServerError, match="initPortale"):
+        run(session._wait_for_post_login_state())
+
+
 def test_debug_state_helpers_and_locked_error(tmp_path: Path) -> None:
     page = ScriptedPage(url="https://x", title="Title", body="many   spaces")
     session = make_session(page, debug_path=tmp_path)

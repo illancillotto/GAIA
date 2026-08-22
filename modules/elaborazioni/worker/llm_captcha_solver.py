@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 import tempfile
 from pathlib import Path
@@ -57,13 +58,17 @@ class LLMCaptchaSolver:
 
     async def _run_agent(self, image_path: Path) -> str | None:
         prompt = _PROMPT_TEMPLATE.format(image_path=image_path)
+        env = self._agent_environment()
         try:
             proc = await asyncio.create_subprocess_exec(
                 self._agent_cmd,
                 "--print",
                 "--trust",
-                "--output-format", "json",
+                "--mode", "ask",
+                "--model", os.getenv("CAPTCHA_LLM_AGENT_MODEL", "auto"),
+                "--output-format", os.getenv("CAPTCHA_LLM_AGENT_OUTPUT_FORMAT", "text"),
                 prompt,
+                env=env,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -80,16 +85,39 @@ class LLMCaptchaSolver:
             )
             return None
 
-        try:
-            data = json.loads(stdout.decode())
-            raw = data.get("result", "")
-        except Exception:
-            logger.warning("LLM CAPTCHA solver: risposta non JSON — stdout: %s", stdout[:200])
-            return None
+        raw = self._decode_agent_stdout(stdout)
 
         normalized = self._extract_candidate(str(raw))
         logger.info("LLM CAPTCHA solver raw=%r normalized=%r", raw, normalized)
         return normalized or None
+
+    @staticmethod
+    def _agent_environment() -> dict[str, str]:
+        env = os.environ.copy()
+        token_file = env.get("CURSOR_AUTH_TOKEN_FILE", "").strip()
+        if token_file and not env.get("CURSOR_AUTH_TOKEN"):
+            try:
+                data = json.loads(Path(token_file).read_text())
+                token = str(data.get("accessToken") or data.get("refreshToken") or "").strip()
+            except Exception:
+                logger.exception("LLM CAPTCHA solver: impossibile leggere CURSOR_AUTH_TOKEN_FILE")
+                token = ""
+            if token:
+                env["CURSOR_AUTH_TOKEN"] = token
+        return env
+
+    @staticmethod
+    def _decode_agent_stdout(stdout: bytes) -> str:
+        text = stdout.decode(errors="replace").strip()
+        if not text:
+            return ""
+        try:
+            data = json.loads(text)
+        except Exception:
+            return text
+        if isinstance(data, dict):
+            return str(data.get("result") or data.get("text") or data.get("message") or "")
+        return str(data)
 
     @staticmethod
     def _extract_candidate(raw: str) -> str | None:
@@ -109,12 +137,6 @@ class LLMCaptchaSolver:
                 return candidate
 
         raw_words = {word.lower() for word in re.findall(r"[A-Za-z]+", raw)}
-        quoted_tokens = _TOKEN_RE.findall(raw)
-        if quoted_tokens and not (raw_words & _EXPLANATION_MARKERS):
-            candidate = quoted_tokens[-1]
-            if 4 <= len(candidate) <= 12:
-                return candidate
-
         compact = "".join(ch for ch in raw if ch.isalnum())
         if 4 <= len(compact) <= 12 and not (raw_words & _EXPLANATION_MARKERS):
             return compact

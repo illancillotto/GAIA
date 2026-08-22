@@ -198,8 +198,11 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       CREDENTIAL_MASTER_KEY: ${CREDENTIAL_MASTER_KEY}
       BETWEEN_VISURE_DELAY_SEC: ${BETWEEN_VISURE_DELAY_SEC:-5}
-      CAPTCHA_LLM_AGENT_CMD: ${CAPTCHA_LLM_AGENT_CMD:-/home/cbo/.local/share/cursor-agent/versions/2026.05.09-0afadcc/cursor-agent}
-      HOME: /home/cbo
+      CAPTCHA_LLM_AGENT_CMD: ${CAPTCHA_LLM_AGENT_CMD:-${CAPTCHA_AGENT_HOME:-/home/cbo}/.local/bin/agent}
+      CAPTCHA_LLM_AGENT_MODEL: ${CAPTCHA_LLM_AGENT_MODEL:-auto}
+      CAPTCHA_LLM_AGENT_OUTPUT_FORMAT: ${CAPTCHA_LLM_AGENT_OUTPUT_FORMAT:-text}
+      CURSOR_AUTH_TOKEN_FILE: ${CURSOR_AUTH_TOKEN_FILE:-${CAPTCHA_AGENT_HOME:-/home/cbo}/.config/cursor/auth.json}
+      HOME: ${CAPTCHA_AGENT_HOME:-/home/cbo}
       CAPTCHA_LLM_ENABLED: ${CAPTCHA_LLM_ENABLED:-true}
       CAPTCHA_LLM_ATTEMPTS: ${CAPTCHA_LLM_ATTEMPTS:-3}
       CAPTCHA_EXTERNAL_ATTEMPTS: ${CAPTCHA_EXTERNAL_ATTEMPTS:-3}
@@ -219,9 +222,9 @@ services:
         condition: service_healthy
     volumes:
       - catasto-data:/data/catasto
-      - /home/cbo/.local/share/cursor-agent:/home/cbo/.local/share/cursor-agent:ro
-      - /home/cbo/.cursor:/home/cbo/.cursor:rw
-      - /home/cbo/.config/cursor:/home/cbo/.config/cursor:ro
+      - ${CAPTCHA_AGENT_HOME:-/home/cbo}/.local/share/cursor-agent:${CAPTCHA_AGENT_HOME:-/home/cbo}/.local/share/cursor-agent:ro
+      - ${CAPTCHA_AGENT_HOME:-/home/cbo}/.cursor:${CAPTCHA_AGENT_HOME:-/home/cbo}/.cursor:rw
+      - ${CAPTCHA_AGENT_HOME:-/home/cbo}/.config/cursor:${CAPTCHA_AGENT_HOME:-/home/cbo}/.config/cursor:rw
     logging:
       driver: json-file
       options:
@@ -246,8 +249,11 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       CREDENTIAL_MASTER_KEY: ${CREDENTIAL_MASTER_KEY}
       BETWEEN_VISURE_DELAY_SEC: ${BETWEEN_VISURE_DELAY_SEC:-5}
-      CAPTCHA_LLM_AGENT_CMD: ${CAPTCHA_LLM_AGENT_CMD:-/home/cbo/.local/share/cursor-agent/versions/2026.05.09-0afadcc/cursor-agent}
-      HOME: /home/cbo
+      CAPTCHA_LLM_AGENT_CMD: ${CAPTCHA_LLM_AGENT_CMD:-${CAPTCHA_AGENT_HOME:-/home/cbo}/.local/bin/agent}
+      CAPTCHA_LLM_AGENT_MODEL: ${CAPTCHA_LLM_AGENT_MODEL:-auto}
+      CAPTCHA_LLM_AGENT_OUTPUT_FORMAT: ${CAPTCHA_LLM_AGENT_OUTPUT_FORMAT:-text}
+      CURSOR_AUTH_TOKEN_FILE: ${CURSOR_AUTH_TOKEN_FILE:-${CAPTCHA_AGENT_HOME:-/home/cbo}/.config/cursor/auth.json}
+      HOME: ${CAPTCHA_AGENT_HOME:-/home/cbo}
       CAPTCHA_LLM_ENABLED: ${CAPTCHA_LLM_ENABLED:-true}
       CAPTCHA_LLM_ATTEMPTS: ${CAPTCHA_LLM_ATTEMPTS:-3}
       CAPTCHA_EXTERNAL_ATTEMPTS: ${CAPTCHA_EXTERNAL_ATTEMPTS:-3}
@@ -264,9 +270,9 @@ services:
         condition: service_healthy
     volumes:
       - catasto-data:/data/catasto
-      - /home/cbo/.local/share/cursor-agent:/home/cbo/.local/share/cursor-agent:ro
-      - /home/cbo/.cursor:/home/cbo/.cursor:rw
-      - /home/cbo/.config/cursor:/home/cbo/.config/cursor:ro
+      - ${CAPTCHA_AGENT_HOME:-/home/cbo}/.local/share/cursor-agent:${CAPTCHA_AGENT_HOME:-/home/cbo}/.local/share/cursor-agent:ro
+      - ${CAPTCHA_AGENT_HOME:-/home/cbo}/.cursor:${CAPTCHA_AGENT_HOME:-/home/cbo}/.cursor:rw
+      - ${CAPTCHA_AGENT_HOME:-/home/cbo}/.config/cursor:${CAPTCHA_AGENT_HOME:-/home/cbo}/.config/cursor:rw
 
   elaborazioni-worker-autodoc:
     build:
@@ -284,8 +290,11 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       CREDENTIAL_MASTER_KEY: ${CREDENTIAL_MASTER_KEY}
       BETWEEN_VISURE_DELAY_SEC: ${BETWEEN_VISURE_DELAY_SEC:-5}
-      CAPTCHA_LLM_AGENT_CMD: ${CAPTCHA_LLM_AGENT_CMD:-/home/cbo/.local/share/cursor-agent/versions/2026.05.09-0afadcc/cursor-agent}
-      HOME: /home/cbo
+      CAPTCHA_LLM_AGENT_CMD: ${CAPTCHA_LLM_AGENT_CMD:-${CAPTCHA_AGENT_HOME:-/home/cbo}/.local/bin/agent}
+      CAPTCHA_LLM_AGENT_MODEL: ${CAPTCHA_LLM_AGENT_MODEL:-auto}
+      CAPTCHA_LLM_AGENT_OUTPUT_FORMAT: ${CAPTCHA_LLM_AGENT_OUTPUT_FORMAT:-text}
+      CURSOR_AUTH_TOKEN_FILE: ${CURSOR_AUTH_TOKEN_FILE:-${CAPTCHA_AGENT_HOME:-/home/cbo}/.config/cursor/auth.json}
+      HOME: ${CAPTCHA_AGENT_HOME:-/home/cbo}
       CAPTCHA_LLM_ENABLED: ${CAPTCHA_LLM_ENABLED:-true}
       CAPTCHA_LLM_ATTEMPTS: ${CAPTCHA_LLM_ATTEMPTS:-3}
       CAPTCHA_EXTERNAL_ATTEMPTS: ${CAPTCHA_EXTERNAL_ATTEMPTS:-3}
@@ -300,9 +309,9 @@ services:
         condition: service_healthy
     volumes:
       - catasto-data:/data/catasto
-      - /home/cbo/.local/share/cursor-agent:/home/cbo/.local/share/cursor-agent:ro
-      - /home/cbo/.cursor:/home/cbo/.cursor:rw
-      - /home/cbo/.config/cursor:/home/cbo/.config/cursor:ro
+      - ${CAPTCHA_AGENT_HOME:-/home/cbo}/.local/share/cursor-agent:${CAPTCHA_AGENT_HOME:-/home/cbo}/.local/share/cursor-agent:ro
+      - ${CAPTCHA_AGENT_HOME:-/home/cbo}/.cursor:${CAPTCHA_AGENT_HOME:-/home/cbo}/.cursor:rw
+      - ${CAPTCHA_AGENT_HOME:-/home/cbo}/.config/cursor:${CAPTCHA_AGENT_HOME:-/home/cbo}/.config/cursor:rw
 
   scanner:
     build:

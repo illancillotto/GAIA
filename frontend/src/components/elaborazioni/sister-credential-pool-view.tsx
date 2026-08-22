@@ -109,7 +109,7 @@ function PoolHeader(props: SisterCredentialPoolViewProps) {
   return <div className={`border-b border-[#e5ebe3] bg-white ${props.embedded ? "px-4 py-4" : "px-5 py-5"}`}><div className="flex flex-wrap items-start justify-between gap-4">
     <div className="max-w-2xl"><div className="flex flex-wrap items-center gap-2"><p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#326447]">Pool credenziali SISTER</p><span className="rounded-full bg-[#eaf3ed] px-2.5 py-1 text-[10px] font-bold text-[#1D4E35]">{activeCount}/{props.credentials.length} attive</span><span className="rounded-full bg-sky-50 px-2.5 py-1 text-[10px] font-bold text-sky-800">{verifiedCount} verificate</span></div>
       <p className={`text-sm text-gray-600 ${props.embedded ? "mt-2 leading-5" : "mt-2 leading-6"}`}>Ogni profilo mostra configurazione, stato e ultimo test senza scorrimento orizzontale. Il test completo include anche gli account disattivati, ma il worker usa soltanto quelli attivi.</p>
-      <p className={`text-xs ${props.releasedBatchesCount > 0 ? "text-amber-700" : "text-gray-500"} ${props.embedded ? "mt-2" : "mt-3"}`}>{props.releasedBatchesCount > 0 ? `${props.releasedBatchesCount} batch fermat${props.releasedBatchesCount === 1 ? "o" : "i"} dopo il rilascio delle utenze.` : "Nessun batch fermato da rilascio utenze disponibile per la ripartenza."}</p>
+      <p className={`text-xs ${props.releasedBatchesCount > 0 ? "text-amber-700" : "text-gray-500"} ${props.embedded ? "mt-2" : "mt-3"}`}>{props.releasedBatchesCount > 0 ? `${props.releasedBatchesCount} batch in pausa dopo il rilascio delle sessioni SISTER.` : "Nessun batch in pausa da rilascio sessioni disponibile per la ripartenza."}</p>
     </div>
     <PoolActions {...props} />
   </div></div>;
@@ -118,8 +118,8 @@ function PoolHeader(props: SisterCredentialPoolViewProps) {
 function PoolActions(props: SisterCredentialPoolViewProps) {
   return <div className="flex flex-wrap items-center gap-2">
     {props.bulkRunning ? <button className="btn-secondary" disabled type="button"><RefreshIcon className="mr-2 inline h-4 w-4 animate-spin" />Test {props.runStatus === "stopping" ? "in arresto" : "in corso"}</button> : <button className="rounded-2xl bg-[#1D4E35] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[#143726] disabled:cursor-not-allowed disabled:bg-gray-300" disabled={props.controlsDisabled || props.credentials.length === 0} onClick={() => void props.onTestAll()} type="button"><CheckIcon className="mr-2 inline h-4 w-4" />Testa tutte{props.credentials.length > 0 ? ` (${props.credentials.length})` : ""}</button>}
-    <button className="btn-secondary" disabled={props.controlsDisabled || props.resumeReleasedBusy || props.releasedBatchesCount === 0} onClick={() => void props.onResumeReleasedBatch()} type="button">{props.resumeReleasedBusy ? "Ripresa..." : props.releasedBatchesCount > 0 ? `Riprendi batch${props.releasedBatchesCount > 1 ? ` (${props.releasedBatchesCount})` : ""}` : "Nessun batch da riprendere"}</button>
-    <button className="btn-secondary" disabled={props.controlsDisabled || props.releaseBusy} onClick={() => void props.onReleaseSessions()} type="button">{props.releaseBusy ? "Rilascio..." : "Ferma e libera utenze"}</button>
+    <button className="btn-secondary" disabled={props.controlsDisabled || props.resumeReleasedBusy || props.releasedBatchesCount === 0} onClick={() => void props.onResumeReleasedBatch()} type="button">{props.resumeReleasedBusy ? "Ripresa..." : props.releasedBatchesCount > 0 ? `Riprendi batch${props.releasedBatchesCount > 1 ? ` (${props.releasedBatchesCount})` : ""}` : "Nessun batch in pausa"}</button>
+    <button className="btn-secondary" disabled={props.controlsDisabled || props.releaseBusy} onClick={() => void props.onReleaseSessions()} type="button">{props.releaseBusy ? "Pausa..." : "Pausa e libera sessioni"}</button>
   </div>;
 }
 

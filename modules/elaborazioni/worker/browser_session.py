@@ -899,16 +899,11 @@ class BrowserSession:
             raise SisterRequestCorrelationError("SISTER non ha confermato l'eliminazione della richiesta non evadibile")
 
     async def _snapshot_remote_request_rows(self) -> list[SisterRemoteRequestRow]:
-        if self._context is None:
-            return []
-        snapshot_page = await self._context.new_page()
-        snapshot_page.on("response", self._track_response)
-        try:
-            await snapshot_page.goto(SISTER_REQUESTS_URL, wait_until="domcontentloaded")
-            await raise_if_sister_server_error(snapshot_page, self._session_state)
-            return await self._extract_remote_request_rows(snapshot_page)
-        finally:
-            await snapshot_page.close()
+        logger.info(
+            "Baseline richieste SISTER non navigata prima del submit: "
+            "il portale può bloccare sessioni con pagine parallele"
+        )
+        return []
 
     @staticmethod
     async def _extract_remote_request_rows(page: Page) -> list[SisterRemoteRequestRow]:
