@@ -68,10 +68,11 @@ class FakeBrowser:
         document_path.write_bytes(b"%PDF-1.4\n")
         return document_path.stat().st_size
 
-    async def poll_richieste_for_download(self, destination: Path, richieste_url: str | None = None) -> int:
+    async def poll_richieste_for_download(self, destination: Path, richieste_url: str | None = None, *, max_attempts: int | None = None) -> int:
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(b"%PDF-1.4\n")
         return destination.stat().st_size
+
 
 
 def _no_manual(_image_path: Path) -> ManualCaptchaDecision:
@@ -584,17 +585,20 @@ def test_existing_remote_request_resumes_polling_without_resubmit() -> None:
             super().__init__()
             self.begin_calls = 0
             self.poll_calls = 0
+            self.last_max_attempts: int | None = None
 
         async def begin_request_correlation(self, _request) -> None:
             self.begin_calls += 1
 
-        async def poll_richieste_for_download(self, destination: Path, richieste_url: str | None = None) -> int:
+        async def poll_richieste_for_download(self, destination: Path, richieste_url: str | None = None, *, max_attempts: int | None = None) -> int:
             self.poll_calls += 1
+            self.last_max_attempts = max_attempts
             assert richieste_url == ResumeRequest.sister_remote_request_url
-            return await super().poll_richieste_for_download(destination, richieste_url)
+            return await FakeBrowser.poll_richieste_for_download(self, destination, richieste_url, max_attempts=max_attempts)
 
         async def open_visura_form(self) -> None:
             raise AssertionError("La richiesta remota non deve essere reinviata")
+
 
     browser = ResumeBrowser()
     remote_states: list[tuple[str | None, str | None, str]] = []
@@ -768,7 +772,7 @@ def test_non_evadibile_during_polling_returns_correct_status() -> None:
         async def submit_captcha(self, text: str) -> bool:
             raise DocumentNotYetProducedError(richieste_url="https://sister/richieste")
 
-        async def poll_richieste_for_download(self, destination: Path, richieste_url: str | None = None) -> int:
+        async def poll_richieste_for_download(self, destination: Path, richieste_url: str | None = None, *, max_attempts: int | None = None) -> int:
             raise DocumentNonEvadibileError("non evadibile")
 
     async def fake_llm(_b: bytes) -> str | None:
@@ -1065,6 +1069,17 @@ def test_manual_null_text_without_skip_returns_failed() -> None:
     assert result.captcha_method == "manual"
 
 
+def test_sister_document_not_ready_error_is_timeout_subclass() -> None:
+    """SisterDocumentNotReadyError deve essere una sottoclasse di TimeoutError."""
+    from sister_exceptions import DocumentNotYetProducedError, SisterDocumentNotReadyError
+    err = SisterDocumentNotReadyError("test message")
+    assert isinstance(err, TimeoutError)
+    assert str(err) == "test message"
+    # Copre DocumentNotYetProducedError.correlated (righe 35-37)
+    corr = DocumentNotYetProducedError.correlated("https://sister/richieste", "REMOTE-1")
+    assert corr.richieste_url == "https://sister/richieste"
+    assert corr.remote_id == "REMOTE-1"
+
 def test_optional_callbacks_and_browser_capabilities_are_safe() -> None:
     callbacks = VisuraFlowCallbacks()
     callbacks.operation("noop")
@@ -1095,3 +1110,95 @@ def test_optional_callbacks_and_browser_capabilities_are_safe() -> None:
         )
         is None
     )
+
+
+# ---------------------------------------------------------------------------
+# Logica "submit + defer se non pronto subito" (storiche analitiche SISTER)
+# ---------------------------------------------------------------------------
+
+def test_initial_poll_timeout_returns_queued_status() -> None:
+    """Quando poll iniziale scade senza documento, la flow deve restituire
+    status='queued_sister' con remote_url valorizzato, invece di fallire."""
+    class SlowSisterBrowser(FakeBrowser):
+        async def submit_captcha(self, text: str) -> bool:
+            raise DocumentNotYetProducedError(richieste_url="https://sister/richieste")
+
+        async def poll_richieste_for_download(
+            self,
+            destination: Path,
+            richieste_url: str | None = None,
+            *,
+            max_attempts: int | None = None,
+        ) -> int:
+            # Simula timeout: il documento non è ancora pronto
+            from sister_exceptions import SisterDocumentNotReadyError
+            raise SisterDocumentNotReadyError("Documento SISTER non disponibile dopo i poll iniziali")
+
+    async def fake_llm(_b: bytes) -> str | None:
+        return "qualsiasi"
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=SlowSisterBrowser(),
+            request=FakeRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=_no_manual_async,
+            solve_llm_captcha=fake_llm,
+            initial_remote_poll_attempts=1,
+        )
+
+    assert result.status == "queued_sister"
+    assert result.remote_request_url == "https://sister/richieste"
+    assert result.error_message is None or "pronto" in (result.error_message or "")
+
+
+def test_resume_queued_sister_uses_full_poll_attempts() -> None:
+    """Una richiesta con sister_remote_state='submitted' deve usare i poll
+    completi (non quelli ridotti del primo tentativo) e completarsi."""
+
+    class QueuedRequest:
+        id = "req-queued"
+        search_mode = "immobile"
+        purpose = "visura_pdf"
+        sister_remote_state = "submitted"
+        sister_remote_request_url = "https://sister/richieste"
+        sister_remote_request_id = "REMOTE-Q1"
+
+    class ResumeSlowBrowser(FakeBrowser):
+        def __init__(self) -> None:
+            super().__init__()
+            self.poll_max_attempts: list[int | None] = []
+
+        async def begin_request_correlation(self, _request) -> None:
+            pass
+
+        async def poll_richieste_for_download(
+            self,
+            destination: Path,
+            richieste_url: str | None = None,
+            *,
+            max_attempts: int | None = None,
+        ) -> int:
+            self.poll_max_attempts.append(max_attempts)
+            return await FakeBrowser.poll_richieste_for_download(
+                self, destination, richieste_url, max_attempts=max_attempts
+            )
+
+        async def open_visura_form(self) -> None:
+            raise AssertionError("non deve reinviare la visura")
+
+    browser = ResumeSlowBrowser()
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=browser,
+            request=QueuedRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=_no_manual_async,
+            initial_remote_poll_attempts=1,
+        )
+
+    assert result.status == "completed"
+    # Il resume deve usare max_attempts None (completo) non quello ridotto
+    assert browser.poll_max_attempts == [None]

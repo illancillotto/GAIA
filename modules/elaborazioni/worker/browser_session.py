@@ -782,14 +782,21 @@ class BrowserSession:
         target_dir.mkdir(parents=True, exist_ok=True)
         return await self._write_artifacts_to_dir(target_dir, label)
 
-    async def poll_richieste_for_download(self, destination: Path, richieste_url: str | None = None) -> int:
-        """Poll ConsultazioneRichieste.do fino a che il documento è pronto o non evadibile."""
+    async def poll_richieste_for_download(self, destination: Path, richieste_url: str | None = None, *, max_attempts: int | None = None) -> int:
+        """Poll ConsultazioneRichieste.do fino a che il documento è pronto o non evadibile.
+
+        Se max_attempts è specificato e il documento non è pronto entro quel numero di
+        tentativi, solleva SisterDocumentNotReadyError (invece del TimeoutError completo)
+        per permettere alla flow di mettere la richiesta in coda e passare alla prossima.
+        """
+        from sister_exceptions import SisterDocumentNotReadyError
         url = richieste_url or SISTER_REQUESTS_URL
+        attempts = max_attempts if max_attempts is not None else RICHIESTE_POLL_ATTEMPTS
         page = self.page
         destination.parent.mkdir(parents=True, exist_ok=True)
 
-        for poll in range(1, RICHIESTE_POLL_ATTEMPTS + 1):
-            logger.info("Poll ConsultazioneRichieste %s/%s url=%s", poll, RICHIESTE_POLL_ATTEMPTS, url)
+        for poll in range(1, attempts + 1):
+            logger.info("Poll ConsultazioneRichieste %s/%s url=%s", poll, attempts, url)
             await page.goto(url, wait_until="domcontentloaded")
             await page.wait_for_timeout(1500)
             await self._trace_state(f"richieste-poll-{poll}")
@@ -797,14 +804,20 @@ class BrowserSession:
             downloaded = await self._poll_correlated_request(destination, await self._poll_body_upper())
             if downloaded is not None:
                 return downloaded
-            if poll < RICHIESTE_POLL_ATTEMPTS:
+            if poll < attempts:
                 logger.info("Documento non ancora disponibile, attesa %ss", RICHIESTE_POLL_INTERVAL_SEC)
                 await asyncio.sleep(RICHIESTE_POLL_INTERVAL_SEC)
 
+        if max_attempts is not None:
+            raise SisterDocumentNotReadyError(
+                f"Documento SISTER non disponibile dopo {attempts} poll iniziali "
+                f"({attempts * RICHIESTE_POLL_INTERVAL_SEC}s) — richiesta messa in coda"
+            )
         raise TimeoutError(
-            f"Documento SISTER non disponibile dopo {RICHIESTE_POLL_ATTEMPTS} poll "
-            f"({RICHIESTE_POLL_ATTEMPTS * RICHIESTE_POLL_INTERVAL_SEC}s)"
+            f"Documento SISTER non disponibile dopo {attempts} poll "
+            f"({attempts * RICHIESTE_POLL_INTERVAL_SEC}s)"
         )
+
 
     async def _poll_body_upper(self) -> str:
         body_text = ""

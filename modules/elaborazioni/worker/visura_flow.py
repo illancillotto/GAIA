@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Awaitable, Callable
 
-from sister_exceptions import DocumentNonEvadibileError, DocumentNotYetProducedError, SisterNotFoundError
+from sister_exceptions import DocumentNonEvadibileError, DocumentNotYetProducedError, SisterDocumentNotReadyError, SisterNotFoundError
 
 if TYPE_CHECKING:
     from browser_session import BrowserSession
@@ -74,17 +74,35 @@ async def _poll_and_download(
     richieste_url: str | None,
     callbacks: VisuraFlowCallbacks,
     remote_id: str | None = None,
+    *,
+    max_attempts: int | None = None,
 ) -> VisuraFlowResult:
     callbacks.operation("Documento in elaborazione SISTER, attesa ConsultazioneRichieste...")
     logger.info("Documento non ancora prodotto, avvio polling ConsultazioneRichieste")
     callbacks.remote_state(remote_id, richieste_url, "pending")
     try:
-        file_size = await browser.poll_richieste_for_download(document_path, richieste_url)
+        file_size = await browser.poll_richieste_for_download(document_path, richieste_url, max_attempts=max_attempts)
+    except SisterDocumentNotReadyError:
+        # Documento non ancora pronto dopo i poll iniziali ridotti:
+        # la richiesta viene messa in coda SISTER e ripresa successivamente.
+        resolved_id = _resolved_remote_id(browser, remote_id)
+        callbacks.remote_state(resolved_id, richieste_url, "pending")
+        logger.info("Documento SISTER non pronto ai poll iniziali — richiesta messa in coda: url=%s", richieste_url)
+        return VisuraFlowResult(
+            status="queued_sister",
+            captcha_image_path=submission.image_path,
+            captcha_method=submission.method,
+            last_ocr_text=submission.text,
+            remote_request_id=resolved_id,
+            remote_request_url=richieste_url,
+            error_message=None,
+        )
     except DocumentNonEvadibileError:
         return _non_evadibile_result(submission, richieste_url, callbacks, _resolved_remote_id(browser, remote_id))
     return _completed_remote_result(
         document_path, file_size, submission, richieste_url, callbacks, _resolved_remote_id(browser, remote_id)
     )
+
 
 
 def _resolved_remote_id(browser: "BrowserSession", remote_id: str | None) -> str | None:
@@ -131,6 +149,8 @@ async def _submit_captcha_then_download(
     submission: CaptchaSubmission,
     document_path: Path,
     callbacks: VisuraFlowCallbacks,
+    *,
+    initial_remote_poll_attempts: int | None = None,
 ) -> VisuraFlowResult | None:
     """Invia CAPTCHA e scarica il PDF. Restituisce None se CAPTCHA rifiutato."""
     try:
@@ -138,8 +158,10 @@ async def _submit_captcha_then_download(
     except DocumentNotYetProducedError as exc:
         return await _poll_and_download(
             browser, document_path, submission, exc.richieste_url, callbacks, exc.remote_id,
+            max_attempts=initial_remote_poll_attempts,
         )
     return await _download_submitted_captcha(browser, submission, document_path, callbacks) if accepted else None
+
 
 
 async def _send_captcha(
@@ -294,8 +316,17 @@ async def execute_visura_flow(
     max_llm_attempts: int = 3,
     max_external_attempts: int = 3,
     max_manual_attempts: int | None = None,
+    initial_remote_poll_attempts: int | None = None,
     callbacks: VisuraFlowCallbacks | None = None,
 ) -> VisuraFlowResult:
+    """Esegue il flusso completo di download visura SISTER.
+
+    initial_remote_poll_attempts: se impostato, il polling ConsultazioneRichieste
+    dopo il submit usa al massimo questo numero di tentativi. Se il documento non
+    è pronto, restituisce status='queued_sister' invece di aspettare il timeout
+    completo. Le richieste queued_sister vengono riprese nella sessione successiva
+    con il numero completo di poll (RICHIESTE_POLL_ATTEMPTS).
+    """
     callbacks = callbacks or VisuraFlowCallbacks()
     if max_manual_attempts is None:
         max_manual_attempts = int(os.getenv("CAPTCHA_MANUAL_ATTEMPTS", "5"))
@@ -305,6 +336,7 @@ async def execute_visura_flow(
     prepared = await _prepare_request(browser, request, document_path, callbacks)
     if prepared is not None:
         return prepared
+
 
     # Catena: Agent locale x N -> Anti-Captcha x M -> Manuale
     if solve_llm_captcha is not None:
@@ -333,6 +365,7 @@ async def execute_visura_flow(
                 CaptchaSubmission(captcha_path, "llm", llm_text),
                 document_path,
                 callbacks,
+                initial_remote_poll_attempts=initial_remote_poll_attempts,
             )
             if result is not None:
                 logger.info("Richiesta %s CAPTCHA Agent (%s) terminale status=%s", request.id, attempt, result.status)
@@ -367,6 +400,7 @@ async def execute_visura_flow(
                 CaptchaSubmission(captcha_path, "external", external_text),
                 document_path,
                 callbacks,
+                initial_remote_poll_attempts=initial_remote_poll_attempts,
             )
             if result is not None:
                 logger.info("Richiesta %s CAPTCHA Anti-Captcha (%s) terminale status=%s", request.id, attempt, result.status)
@@ -410,6 +444,7 @@ async def execute_visura_flow(
             CaptchaSubmission(captcha_path, "manual", decision.text),
             document_path,
             callbacks,
+            initial_remote_poll_attempts=initial_remote_poll_attempts,
         )
         if result is not None:
             logger.info("Richiesta %s CAPTCHA manuale terminale status=%s", request.id, result.status)

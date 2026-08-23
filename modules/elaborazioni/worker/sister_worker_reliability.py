@@ -407,6 +407,26 @@ class SisterRequestRepository:
                 return
             assert batch is not None and request is not None
             self._apply_result_metadata(request, result)
+            if result.status == "queued_sister":
+                # La richiesta è stata messa in coda da SISTER — salva la correlazione
+                # remota e reimposta lo stato in pending così il worker la riprende.
+                # Il sister_remote_state è già "pending" (aggiornato dai callbacks).
+                request.status = CatastoVisuraRequestStatus.PENDING.value
+                request.current_operation = "In coda SISTER — riprova in corso"
+                request.last_error_code = None
+                request.error_message = None
+                request.execution_token = None
+                request.retry_not_before = None
+                request.captcha_manual_solution = None
+                request.captcha_skip_requested = False
+                self._log_captcha_attempt(db, request_id, result)
+                self.refresh_batch_counts(db, batch)
+                db.commit()
+                logger.info(
+                    "Richiesta %s batch %s messa in coda SISTER (queued_sister) — sarà ripresa",
+                    request_id, batch_id,
+                )
+                return
             terminal_status = self.classify_terminal_status(result.status)
             if terminal_status == "non_evadibile":
                 self._persist_non_evadibile(db, batch, request, result)

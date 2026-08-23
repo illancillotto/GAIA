@@ -131,6 +131,7 @@ CREDENTIAL_LOCK_COOLDOWN_SEC = int(os.getenv("ELABORAZIONI_CREDENTIAL_LOCK_COOLD
 REQUEST_RETRY_DEFER_SEC = int(os.getenv("ELABORAZIONI_REQUEST_RETRY_DEFER_SEC", "45"))
 MAX_REQUEST_ATTEMPTS = int(os.getenv("ELABORAZIONI_MAX_REQUEST_ATTEMPTS", "5"))
 SISTER_SERVER_ERROR_BASE_COOLDOWN_SEC = int(os.getenv("ELABORAZIONI_SISTER_500_COOLDOWN_SEC", "90"))
+INITIAL_REMOTE_POLL_ATTEMPTS = int(os.getenv("ELABORAZIONI_INITIAL_REMOTE_POLL_ATTEMPTS", "2"))
 SISTER_SERVER_ERROR_MAX_COOLDOWN_SEC = int(os.getenv("ELABORAZIONI_SISTER_500_MAX_COOLDOWN_SEC", "300"))
 SISTER_SERVER_ERROR_GLOBAL_PAUSE_SEC = int(os.getenv("ELABORAZIONI_SISTER_500_GLOBAL_PAUSE_SEC", "45"))
 OPERATION_WINDOW_ENABLED = os.getenv("ELABORAZIONI_OPERATION_WINDOW_ENABLED", "false").lower() == "true"
@@ -1104,6 +1105,7 @@ class CatastoWorker:
             solve_external_captcha=self._solve_external_captcha if self.anti_captcha_client is not None else None,
             max_llm_attempts=CAPTCHA_LLM_ATTEMPTS,
             max_external_attempts=CAPTCHA_EXTERNAL_ATTEMPTS,
+            initial_remote_poll_attempts=INITIAL_REMOTE_POLL_ATTEMPTS if INITIAL_REMOTE_POLL_ATTEMPTS > 0 else None,
             callbacks=VisuraFlowCallbacks(
                 update_operation=lambda operation: repository.set_operation(request_id, operation, execution_token),
                 update_remote_state=lambda remote_id, remote_url, state: repository.set_remote_state(

@@ -39,3 +39,12 @@ class DocumentNotYetProducedError(RuntimeError):
 
 class DocumentNonEvadibileError(RuntimeError):
     """La richiesta SISTER è finita tra i non evadibili — eliminare e ritentare."""
+
+
+class SisterDocumentNotReadyError(TimeoutError):  # pragma: no cover
+    """Il documento SISTER non è ancora disponibile dopo i poll iniziali.
+
+    Viene sollevata da poll_richieste_for_download quando max_attempts è
+    impostato a un valore ridotto e scade senza trovare il documento.
+    La richiesta deve essere salvata come 'queued_sister' e ripresa più tardi.
+    """
