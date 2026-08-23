@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
+import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Awaitable, Callable
 
@@ -292,9 +293,12 @@ async def execute_visura_flow(
     solve_llm_captcha: Callable[[bytes], Awaitable[str | None]] | None = None,
     max_llm_attempts: int = 3,
     max_external_attempts: int = 3,
+    max_manual_attempts: int | None = None,
     callbacks: VisuraFlowCallbacks | None = None,
 ) -> VisuraFlowResult:
     callbacks = callbacks or VisuraFlowCallbacks()
+    if max_manual_attempts is None:
+        max_manual_attempts = int(os.getenv("CAPTCHA_MANUAL_ATTEMPTS", "5"))
     resumed = await _resume_remote_request(browser, request, document_path, callbacks)
     if resumed is not None:
         return resumed
@@ -371,46 +375,50 @@ async def execute_visura_flow(
             if attempt < max_external_attempts:
                 await browser.reload_captcha()
 
-    callbacks.operation("Richiesta CAPTCHA manuale")
-    logger.info("Richiesta %s passaggio a CAPTCHA manuale", request.id)
-    await browser.reload_captcha()
-    captcha_bytes = await browser.capture_captcha_image()
-    captcha_path = captcha_dir / f"{request.id}_manual.png"
-    captcha_path.parent.mkdir(parents=True, exist_ok=True)
-    captcha_path.write_bytes(captcha_bytes)
-    decision = await get_manual_captcha_decision(captcha_path)
+    last_captcha_path: Path | None = None
+    for attempt in range(1, max_manual_attempts + 1):
+        callbacks.operation(f"Richiesta CAPTCHA manuale ({attempt}/{max_manual_attempts})")
+        logger.info("Richiesta %s passaggio a CAPTCHA manuale %s/%s", request.id, attempt, max_manual_attempts)
+        await browser.reload_captcha()
+        captcha_bytes = await browser.capture_captcha_image()
+        captcha_path = captcha_dir / f"{request.id}_manual_{attempt}.png"
+        last_captcha_path = captcha_path
+        captcha_path.parent.mkdir(parents=True, exist_ok=True)
+        captcha_path.write_bytes(captcha_bytes)
+        decision = await get_manual_captcha_decision(captcha_path)
 
-    if decision.skip:
-        return VisuraFlowResult(
-            status="skipped",
-            captcha_image_path=captcha_path,
-            captcha_method="manual",
-            last_ocr_text=None,
-            error_message="Skipped after manual CAPTCHA request",
-        )
-    if not decision.text:
-        logger.warning("Richiesta %s CAPTCHA manuale mancante", request.id)
-        return VisuraFlowResult(
-            status="failed",
-            captcha_image_path=captcha_path,
-            captcha_method="manual",
-            last_ocr_text=None,
-            error_message="Automatic CAPTCHA exhausted; manual CAPTCHA response missing",
-        )
+        if decision.skip:
+            return VisuraFlowResult(
+                status="skipped",
+                captcha_image_path=captcha_path,
+                captcha_method="manual",
+                last_ocr_text=None,
+                error_message="Skipped after manual CAPTCHA request",
+            )
+        if not decision.text:
+            logger.warning("Richiesta %s CAPTCHA manuale mancante", request.id)
+            return VisuraFlowResult(
+                status="failed",
+                captcha_image_path=captcha_path,
+                captcha_method="manual",
+                last_ocr_text=None,
+                error_message="Automatic CAPTCHA exhausted; manual CAPTCHA response missing",
+            )
 
-    result = await _submit_captcha_then_download(
-        browser,
-        CaptchaSubmission(captcha_path, "manual", decision.text),
-        document_path,
-        callbacks,
-    )
-    if result is not None:
-        logger.info("Richiesta %s CAPTCHA manuale terminale status=%s", request.id, result.status)
-        return result
-    logger.warning("Richiesta %s CAPTCHA manuale rifiutato", request.id)
+        result = await _submit_captcha_then_download(
+            browser,
+            CaptchaSubmission(captcha_path, "manual", decision.text),
+            document_path,
+            callbacks,
+        )
+        if result is not None:
+            logger.info("Richiesta %s CAPTCHA manuale terminale status=%s", request.id, result.status)
+            return result
+        logger.warning("Richiesta %s CAPTCHA manuale rifiutato %s/%s", request.id, attempt, max_manual_attempts)
+
     return VisuraFlowResult(
         status="failed",
-        captcha_image_path=captcha_path,
+        captcha_image_path=last_captcha_path,
         captcha_method="manual",
         last_ocr_text=None,
         error_message="Manual CAPTCHA solution rejected by SISTER",

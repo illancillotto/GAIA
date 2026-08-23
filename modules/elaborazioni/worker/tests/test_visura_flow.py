@@ -312,8 +312,65 @@ def test_manual_skip_returns_skipped_status() -> None:
     assert result.captcha_method == "manual"
 
 
-def test_manual_wrong_answer_returns_failed_status() -> None:
-    browser = FakeBrowser(correct_answer="neorave")
+def test_manual_wrong_answer_reloads_and_waits_for_new_captcha() -> None:
+    class ChangingCaptchaBrowser(FakeBrowser):
+        def __init__(self) -> None:
+            super().__init__(correct_answer="fresh")
+            self._correct_by_submission = ["first", "fresh"]
+
+        async def submit_captcha(self, text: str) -> bool:
+            self.submit_attempts.append(text)
+            expected = self._correct_by_submission[min(len(self.submit_attempts) - 1, 1)]
+            return self._mark_submitted(text == expected)
+
+    browser = ChangingCaptchaBrowser()
+    manual_answers = iter(["wrong", "fresh"])
+
+    async def manual(_p: Path) -> ManualCaptchaDecision:
+        return ManualCaptchaDecision(text=next(manual_answers))
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=browser,
+            request=FakeRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=manual,
+        )
+
+    assert result.status == "completed"
+    assert browser.submit_attempts == ["wrong", "fresh"]
+    assert browser.captcha_captures == 2
+    assert browser.reload_calls >= 2
+
+
+def test_manual_rejection_exhausts_configured_attempts() -> None:
+    browser = FakeBrowser(correct_answer="fresh")
+
+    async def manual(_p: Path) -> ManualCaptchaDecision:
+        return ManualCaptchaDecision(text="wrong")
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=browser,
+            request=FakeRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=manual,
+            max_manual_attempts=2,
+        )
+
+    assert result.status == "failed"
+    assert result.captcha_method == "manual"
+    assert result.error_message == "Manual CAPTCHA solution rejected by SISTER"
+    assert browser.submit_attempts == ["wrong", "wrong"]
+    assert browser.captcha_captures == 2
+
+
+
+def test_manual_attempts_default_comes_from_environment(monkeypatch) -> None:
+    monkeypatch.setenv("CAPTCHA_MANUAL_ATTEMPTS", "2")
+    browser = FakeBrowser(correct_answer="fresh")
 
     async def manual(_p: Path) -> ManualCaptchaDecision:
         return ManualCaptchaDecision(text="wrong")
@@ -328,7 +385,9 @@ def test_manual_wrong_answer_returns_failed_status() -> None:
         )
 
     assert result.status == "failed"
-    assert "rejected" in (result.error_message or "")
+    assert result.error_message == "Manual CAPTCHA solution rejected by SISTER"
+    assert browser.submit_attempts == ["wrong", "wrong"]
+
 
 
 def test_manual_missing_after_automatic_attempts_uses_clear_error_message() -> None:

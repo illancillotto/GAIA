@@ -25,8 +25,8 @@ playwright_async_api.Playwright = object
 playwright_async_api.TimeoutError = TimeoutError
 playwright_async_api.async_playwright = lambda: None
 playwright_module.async_api = playwright_async_api
-sys.modules.setdefault("playwright", playwright_module)
-sys.modules.setdefault("playwright.async_api", playwright_async_api)
+sys.modules["playwright"] = playwright_module
+sys.modules["playwright.async_api"] = playwright_async_api
 
 import posta_online_client
 from posta_online_client import (
