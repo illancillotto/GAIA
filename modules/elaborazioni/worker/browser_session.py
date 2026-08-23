@@ -51,7 +51,7 @@ SESSION_RECOVERY_WAIT_SEC = 120
 RICHIESTE_POLL_ATTEMPTS = 10
 RICHIESTE_POLL_INTERVAL_SEC = 30
 SISTER_BASE_URL = "https://sister3.agenziaentrate.gov.it"
-SISTER_REQUESTS_URL = f"{SISTER_BASE_URL}/Visure/ConsultazioneRichieste.do?metodo=lista"
+SISTER_REQUESTS_URL = f"{SISTER_BASE_URL}/Visure/ConsultazioneRichieste.do?metodo=lista&numConv=1050380&apertura=T"
 
 
 @dataclass(slots=True)

@@ -577,7 +577,7 @@ def test_response_event_persists_correlated_submit() -> None:
     assert states == [
         (
             "REMOTE-7",
-            "https://sister3.agenziaentrate.gov.it/Visure/ConsultazioneRichieste.do?metodo=lista",
+            "https://sister3.agenziaentrate.gov.it/Visure/ConsultazioneRichieste.do?metodo=lista&numConv=1050380&apertura=T",
             "submitted",
         )
     ]
