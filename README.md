@@ -783,7 +783,8 @@ Credenziali bootstrap locali:
 - Non e ammesso usare una media globale di repository per compensare file runtime cambiati sotto soglia.
 - Parser, validatori, normalizzatori, scheduler, servizi puri, router e componenti frontend runtime toccati devono tutti rispettare lo stesso gate `100%`.
 - La CI backend pubblica `coverage.json` e `coverage.xml` come artifact del job, cosi il report resta consultabile anche quando il gate coverage fallisce.
-- La CI frontend esegue unit test Vitest con report `coverage-final.json`, `cobertura-coverage.xml` e report HTML, li pubblica come artifact e applica lo stesso gate `100%` sui file runtime cambiati sotto `frontend/src/` (esclusi `src/types/` e `*.d.ts`).
+- La CI/frontend locale esegue unit test Vitest con report `coverage-final.json`, `cobertura-coverage.xml` e report HTML, li pubblica come artifact e applica lo stesso gate `100%` sui file runtime cambiati sotto `frontend/src/` (esclusi `src/types/` e `*.d.ts`); se non ci sono file runtime frontend cambiati, il gate non misura l'intero legacy gap e resta verde senza indebolire l'obiettivo repository-wide.
+- Il typecheck frontend ordinario (`npm run typecheck` e `typecheck:from-root`) copre il runtime applicativo `frontend/src/**`; i test legacy restano eseguiti da Vitest e non bloccano il typecheck runtime quando i loro fixture/API mock sono temporaneamente disallineati dai tipi correnti.
 - Data di entrata in vigore della policy rafforzata: `2026-06-19`.
 - Il gate sui file cambiati resta il minimo obbligatorio immediato, ma l'obiettivo di piattaforma e la copertura `100%` dell'intero codice runtime versionato.
 - Il piano operativo per portare backend, frontend, worker e script runtime a copertura totale e documentato in `docs/TEST_COVERAGE_100_PLAN.md`.

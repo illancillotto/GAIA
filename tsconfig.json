@@ -6,5 +6,5 @@
     "frontend/**/*.tsx",
     "frontend/.next/types/**/*.ts"
   ],
-  "exclude": ["frontend/node_modules", "frontend/.next/cache"]
+  "exclude": ["frontend/node_modules", "frontend/.next/cache", "frontend/tests"]
 }

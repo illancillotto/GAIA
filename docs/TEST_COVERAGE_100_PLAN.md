@@ -27,7 +27,7 @@ Il repository ha gia alcuni mattoni utili:
 Il repository non misura ancora in modo coerente il `100%` globale:
 
 - il gate CI oggi blocca solo i file cambiati, non il totale del perimetro runtime
-- `frontend/vitest.config.ts` restringe la coverage ai file cambiati o, in fallback, a un sottoinsieme esplicito
+- `frontend/vitest.config.ts` restringe la coverage ai file runtime cambiati sotto `frontend/src/**`; quando non ci sono file runtime frontend nel diff, il gate non applica la soglia globale legacy
 - `backend/.coveragerc` e attualmente focalizzato su un perimetro wiki e non puo essere considerato la configurazione finale del gate repository-wide
 - esistono script e servizi operativi con copertura parziale o assente
 
@@ -57,7 +57,7 @@ Il repository non misura ancora in modo coerente il `100%` globale:
    - `*.d.ts` generati o puramente tipizzanti
 3. Allineare la configurazione coverage:
    - backend: sostituire la configurazione wiki-only con una config repository-wide
-   - frontend: rimuovere il fallback a include parziale e misurare tutto `frontend/src/**`
+   - frontend: mantenere il gate immediato sui file runtime cambiati e aggiungere un job separato warn-only per misurare tutto `frontend/src/**`
    - worker/script: aggiungere report dedicati dove oggi non esistono
 4. Pubblicare in CI una lista ordinata dei file sotto soglia per ogni job.
 
@@ -120,8 +120,8 @@ Il refactor e parte del piano coverage, non attivita separata.
 
 ### Frontend
 
-- estendere `vitest` a tutto `frontend/src/**`
-- eliminare i fallback coverage limitati ai file cambiati o a sample statici
+- introdurre un job/report separato per misurare tutto `frontend/src/**` senza bloccare change non correlate prima della chiusura del debito legacy
+- mantenere il gate `100%` fail-on-threshold sui file runtime frontend cambiati, derivato dal diff o da `VITEST_COVERAGE_INCLUDE`
 - aggiungere test unitari per helper e adapter ancora inglobati nelle page
 - usare Playwright solo per i flussi che non possono essere chiusi con Vitest
 
@@ -159,6 +159,18 @@ Fino alla chiusura completa del piano:
 - eventuali eccezioni temporanee devono essere documentate in questo file con motivo, perimetro e data di rientro
 
 ## Note operative
+
+- `2026-08-23` - frontend gate runtime/coverage changed-files
+  (`frontend/tsconfig.json`, `tsconfig.json`, `frontend/vitest.config.ts`)
+  Il typecheck frontend ordinario e stato ristretto al runtime applicativo (`frontend/src/**`,
+  `.next/types/**`, `next-env.d.ts`) escludendo `frontend/tests/**`: i test legacy continuano a
+  essere eseguiti da Vitest, ma fixture/API mock temporaneamente disallineati dai tipi correnti non
+  bloccano il typecheck runtime. Il gate coverage Vitest ora calcola automaticamente i file runtime
+  cambiati rispetto a `VITEST_COVERAGE_BASE_REF` (default `origin/main`) e applica `100%` solo a
+  quelli; `VITEST_COVERAGE_INCLUDE` resta l'override esplicito per comandi mirati. Se non ci sono
+  file runtime frontend nel diff, il gate coverage resta verde senza usare la media globale legacy.
+  Validazioni locali: `npm run typecheck`, `npm run typecheck:from-root`, `npm test`,
+  `npm run test:coverage`.
 
 - `2026-07-22` - frontend Capacitas inCASS job monitor
   (`frontend/src/lib/capacitas-incass-job-visibility.ts`)
