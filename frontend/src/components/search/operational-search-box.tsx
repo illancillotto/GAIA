@@ -121,6 +121,7 @@ const moduleLabels: Record<string, string> = {
   ruolo: "Ruolo",
   catasto: "Catasto",
 };
+const operationalSearchModuleOrder = ["utenze", "ruolo", "catasto"];
 
 function searchPageHref(query: string): string {
   return `/search?q=${encodeURIComponent(query.trim())}`;
@@ -279,7 +280,7 @@ export function OperationalSearchBox({
     for (const item of operationalSearchResults) {
       groups[item.module] = [...(groups[item.module] ?? []), item];
     }
-    return Object.entries(groups);
+    return Object.entries(groups).sort(([left], [right]) => operationalSearchModuleOrder.indexOf(left) - operationalSearchModuleOrder.indexOf(right));
   }, [operationalSearchResults]);
 
   const placeholder = isHero ? "Cerca utenza, ruolo, catasto o coordinate…" : "Cerca in GAIA…";

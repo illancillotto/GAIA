@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { OperationalSearchBox } from "@/components/search/operational-search-box";
@@ -92,5 +92,52 @@ describe("OperationalSearchBox compact mode", () => {
     fireEvent.change(input, { target: { value: "39.9042, 8.5917" } });
     fireEvent.keyDown(input, { key: "Enter" });
     expect(mocks.push).toHaveBeenCalledWith("/search?q=39.9042%2C%208.5917");
+  });
+
+  test("shows Utenze before payment notices regardless of API result order", async () => {
+    vi.useFakeTimers();
+    mocks.searchOperational.mockResolvedValue({
+      query: "porcu alberto",
+      total: 2,
+      modules: ["ruolo", "utenze"],
+      items: [
+        {
+          id: "notice-1",
+          module: "ruolo",
+          type: "avviso",
+          title: "Avviso 01.2025",
+          subtitle: "Ruolo · 2025",
+          href: "/ruolo/avvisi/notice-1",
+        },
+        {
+          id: "account-1",
+          module: "utenze",
+          type: "utenza",
+          title: "Utenza PORCU ALBERTO",
+          subtitle: "PRCLRT83P20B354J",
+          href: "/utenze/account-1",
+        },
+      ],
+    });
+
+    render(
+      <OperationalSearchBox
+        currentUser={adminUser}
+        grantedSectionKeys={[]}
+        variant="compact"
+      />,
+    );
+
+    const input = screen.getByPlaceholderText("Cerca in GAIA…");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "porcu alberto" } });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(180);
+    });
+
+    const utenzeHeading = screen.getByText("Utenze");
+    const ruoloHeading = screen.getByText("Ruolo");
+    expect(utenzeHeading.compareDocumentPosition(ruoloHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    vi.useRealTimers();
   });
 });
