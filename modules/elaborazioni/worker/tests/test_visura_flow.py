@@ -13,6 +13,7 @@ from sister_exceptions import DocumentNonEvadibileError, DocumentNotYetProducedE
 from visura_flow import (
     CaptchaSubmission,
     ManualCaptchaDecision,
+    PendingDocumentResubmit,
     VisuraFlowCallbacks,
     _current_correlation,
     _download_if_ready,
@@ -1151,6 +1152,146 @@ def test_initial_poll_timeout_returns_queued_status() -> None:
     assert result.status == "queued_sister"
     assert result.remote_request_url == "https://sister/richieste"
     assert result.error_message is None or "pronto" in (result.error_message or "")
+
+
+def test_pending_document_repeats_full_request_and_downloads_without_polling() -> None:
+    class RepeatRequestBrowser(FakeBrowser):
+        def __init__(self) -> None:
+            super().__init__(correct_answer="ok")
+            self.open_calls = 0
+            self.poll_calls = 0
+
+        async def open_visura_form(self) -> None:
+            self.open_calls += 1
+
+        async def submit_captcha(self, text: str) -> bool:
+            self.submit_attempts.append(text)
+            if len(self.submit_attempts) == 1:
+                raise DocumentNotYetProducedError(richieste_url="https://sister/richieste")
+            return self._mark_submitted(text == self._correct)
+
+        async def poll_richieste_for_download(self, *args, **kwargs) -> int:
+            self.poll_calls += 1
+            raise AssertionError("Il secondo inoltro pronto non deve usare ConsultazioneRichieste")
+
+    browser = RepeatRequestBrowser()
+    operations: list[str] = []
+
+    async def fake_llm(_bytes: bytes) -> str:
+        return "ok"
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=browser,
+            request=FakeRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=_no_manual_async,
+            solve_llm_captcha=fake_llm,
+            callbacks=VisuraFlowCallbacks(update_operation=operations.append),
+        )
+
+    assert result.status == "completed"
+    assert browser.open_calls == 2
+    assert browser.submit_attempts == ["ok", "ok"]
+    assert browser.poll_calls == 0
+    assert any("reinvio immediato" in operation for operation in operations)
+
+
+def test_pending_document_second_response_falls_back_to_existing_polling() -> None:
+    class StillPendingBrowser(FakeBrowser):
+        def __init__(self) -> None:
+            super().__init__()
+            self.open_calls = 0
+            self.poll_calls = 0
+
+        async def open_visura_form(self) -> None:
+            self.open_calls += 1
+
+        async def submit_captcha(self, text: str) -> bool:
+            self.submit_attempts.append(text)
+            raise DocumentNotYetProducedError(richieste_url="https://sister/richieste")
+
+        async def poll_richieste_for_download(self, destination, richieste_url=None, *, max_attempts=None) -> int:
+            self.poll_calls += 1
+            return await FakeBrowser.poll_richieste_for_download(
+                self, destination, richieste_url, max_attempts=max_attempts
+            )
+
+    browser = StillPendingBrowser()
+
+    async def fake_llm(_bytes: bytes) -> str:
+        return "ok"
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=browser,
+            request=FakeRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=_no_manual_async,
+            solve_llm_captcha=fake_llm,
+        )
+
+    assert result.status == "completed"
+    assert browser.open_calls == 2
+    assert browser.submit_attempts == ["ok", "ok"]
+    assert browser.poll_calls == 1
+
+
+def test_pending_document_before_captcha_repeats_full_request_once() -> None:
+    class EarlyPendingBrowser(FakeBrowser):
+        def __init__(self) -> None:
+            super().__init__()
+            self.open_calls = 0
+            self.prepare_calls = 0
+
+        async def open_visura_form(self) -> None:
+            self.open_calls += 1
+
+        async def prepare_captcha_or_download(self) -> str:
+            self.prepare_calls += 1
+            if self.prepare_calls == 1:
+                raise DocumentNotYetProducedError(richieste_url="https://sister/richieste")
+            return "download"
+
+    browser = EarlyPendingBrowser()
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=browser,
+            request=FakeRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=_no_manual_async,
+        )
+
+    assert result.status == "completed"
+    assert browser.open_calls == 2
+    assert browser.prepare_calls == 2
+    assert browser.captcha_captures == 0
+
+
+def test_explicit_pending_resubmit_policy_is_preserved() -> None:
+    browser = FakeBrowser(correct_answer="ok")
+    policy = PendingDocumentResubmit(attempts_remaining=0)
+
+    async def fake_llm(_bytes: bytes) -> str:
+        return "ok"
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=browser,
+            request=FakeRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=_no_manual_async,
+            solve_llm_captcha=fake_llm,
+            callbacks=VisuraFlowCallbacks(pending_document_resubmit=policy),
+        )
+
+    assert result.status == "completed"
+    assert policy.attempts_remaining == 0
 
 
 def test_resume_queued_sister_uses_full_poll_attempts() -> None:
