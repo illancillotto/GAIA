@@ -625,6 +625,21 @@ Fino alla chiusura completa del piano:
   - `pytest tests/test_presenze_api.py -q -k 'gate_presenze' --cov=app.modules.presenze.gate_router --cov-fail-under=100` -> `13` test passati, `100%` sul router (`343/343`);
   - `make complexity-ratchet BASE_REF=main` -> pass, findings vuoti; baseline globale invariata a `4328` violation e `make complexity-baseline-verify` verde.
 
+- `2026-08-24` - Audit PDF visure AdE e particelle soppresse
+  (`app/modules/catasto/services/ade_historical_visura_parser.py`,
+  `ade_document_audit.py`, `ade_document_audit_backfill.py`, modelli/schema
+  Catasto, worker SISTER e script operativo di backfill)
+  La classificazione usa indicatori di soppressione riferiti alla particella
+  richiesta e non considera sufficiente un'antenata storica marcata
+  `SOPPRESSO`. Tipo documento, classificazione, data e payload vengono
+  persistiti e tracciati con telemetria strutturata fail-open.
+  Esito validato:
+  - servizi audit/parser/backfill: `225/225` statement e `68/68` branch, `100%`;
+  - worker/repository: `1351/1351` statement e `362/362` branch, `100%`;
+  - flusso visura e telemetria worker: `100%` statement/branch;
+  - modelli/schema Catasto combinati su suite isolate: `541/541` statement e `20/20` branch, `100%`;
+  - entrypoint backfill: `32/32` statement e `8/8` branch, `100%`, con dry-run/apply e nessun accesso DB reale.
+
 ## Eccezioni temporanee aperte
 
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`

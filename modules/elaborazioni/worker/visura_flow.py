@@ -48,6 +48,7 @@ class VisuraFlowResult:
     ade_status_payload: dict | None = None
     remote_request_id: str | None = None
     remote_request_url: str | None = None
+    document_audit_payload: dict[str, object] | None = None
 
 
 @dataclass(frozen=True, slots=True)

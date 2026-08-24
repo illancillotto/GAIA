@@ -603,12 +603,19 @@ def test_process_request_handles_missing_and_full_flow(tmp_path: Path, monkeypat
     worker.llm_captcha_solver = None
     worker.anti_captcha_client = None
     monkeypatch.setattr(worker_module, "execute_visura_flow", lambda **_kwargs: async_value(result))
+    audit_payload = {"classification": "suppressed"}
+    emitted: list[dict] = []
+    monkeypatch.setattr(worker_module, "audit_downloaded_document", lambda *_args: audit_payload)
+    monkeypatch.setattr(worker_module, "emit_pdf_parcel_status", lambda _browser, payload: emitted.append(payload))
     run(worker._process_request(browser, credential, uuid4(), request.id))
     assert len(browser.previews) == 1
+    assert result.document_audit_payload == audit_payload
+    assert emitted == [audit_payload]
 
     request, result = _request_snapshot(artifact_dir=None, status="completed", search_mode="immobile")
     repository = FakeRequestRepository(SimpleNamespace(request=request, execution_token=uuid4()))
     worker._request_repository = lambda: repository
+    monkeypatch.setattr(worker_module, "audit_downloaded_document", lambda *_args: None)
     monkeypatch.setattr(worker_module, "execute_visura_flow", lambda **_kwargs: async_value(result))
     run(worker._process_request(browser, credential, uuid4(), request.id))
 

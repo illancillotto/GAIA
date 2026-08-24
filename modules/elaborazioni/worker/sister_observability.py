@@ -310,6 +310,7 @@ class BrowserTelemetryAdapter:
             return
         try:
             setattr(self.browser, "_gaia_sister_telemetry_installed", True)
+            setattr(self.browser, "_gaia_emit_sister_telemetry", self.emit)
         except Exception:
             return
         for method_name, event_type, step in FLOW_METHODS:
@@ -433,6 +434,30 @@ def _execution_result_record(status: str) -> SisterTelemetryRecord:
     )
 
 
+def emit_pdf_parcel_status(browser: object, payload: dict[str, object] | None) -> bool:
+    emitter = getattr(browser, "_gaia_emit_sister_telemetry", None)
+    if not callable(emitter) or not isinstance(payload, dict):
+        return False
+    classification = str(payload.get("classification") or "unknown")
+    request_type = payload.get("document_request_type")
+    suppression = payload.get("suppression")
+    context = {
+        "parcel_classification": classification,
+        "parcel_suppressed_from": suppression.get("suppressed_from") if isinstance(suppression, dict) else None,
+        "expected_request_type": request_type.get("expected") if isinstance(request_type, dict) else None,
+        "observed_request_type": request_type.get("observed") if isinstance(request_type, dict) else None,
+    }
+    severity = "warning" if classification in {"suppressed", "unknown", "parse_failed"} else "info"
+    emitter(SisterTelemetryRecord(
+        "pdf_parcel_status",
+        "document_audit",
+        outcome=classification,
+        severity=severity,
+        context=context,
+    ))
+    return True
+
+
 def _operation_record(operation: str) -> SisterTelemetryRecord | None:
     normalized = operation.lower()
     seconds = _operation_seconds(normalized)
@@ -514,4 +539,5 @@ __all__ = [
     "WorkerRuntimeContext",
     "WorkerState",
     "instrument_sister_worker",
+    "emit_pdf_parcel_status",
 ]

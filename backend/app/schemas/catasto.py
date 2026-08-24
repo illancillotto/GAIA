@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import date, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -226,6 +226,10 @@ class CatastoDocumentResponse(BaseModel):
     file_size: int | None
     sha256: str | None
     codice_fiscale: str | None
+    content_request_type: str | None
+    parcel_classification: str | None
+    parcel_suppressed_at: date | None
+    content_metadata_json: dict | None
     created_at: datetime
 
 

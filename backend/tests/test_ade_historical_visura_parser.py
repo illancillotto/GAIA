@@ -170,3 +170,63 @@ def test_parse_historical_visura_current_sister_suppressed_text() -> None:
         {"foglio": "18", "particella": "4181", "subalterno": None},
         {"foglio": "18", "particella": "4182", "subalterno": None},
     ]
+
+
+def test_historical_suppressed_ancestor_does_not_suppress_requested_parcel() -> None:
+    text = """
+    Visura storica per immobile
+    Dati della richiesta Comune di MARRUBIU (Codice:E972)
+    Catasto Terreni Foglio: 27 Particella: 604
+
+    Unita immobiliare dal 26/03/2002
+    Foglio 27 Particella 604 RELIT STRAD
+
+    Situazione dell'unita immobiliare che ha originato il precedente dal 31/08/2000
+    Foglio 27 Particella 603 SOPPRESSO
+    FRAZIONAMENTO del 31/08/2000 Pratica n. 54039 in atti dal 31/08/2000 (n. 54039.1/2000)
+    Nella variazione sono stati soppressi i seguenti immobili:
+    Foglio:27 Particella:369 ; Foglio:27 Particella:371 ;
+    """
+
+    payload = parse_historical_visura_text(text)
+
+    assert payload["classification"] == "current"
+    assert payload["requested"]["particella"] == "604"
+    assert payload["suppression"]["is_suppressed"] is False
+    assert payload["suppression"]["suppressed_from"] is None
+
+
+@pytest.mark.parametrize(
+    ("text", "classification"),
+    [("Non risultano dati", "not_found"), ("Nessun immobile", "not_found"), ("testo non catastale", "unknown")],
+)
+def test_historical_visura_classifies_empty_results(text: str, classification: str) -> None:
+    assert parse_historical_visura_text(text)["classification"] == classification
+
+
+def test_historical_visura_prefers_specific_act_and_deduplicates_originated_parcels() -> None:
+    text = """
+    Visura attuale per immobile soppresso
+    Comune di MARRUBIU (E972)
+    Foglio 12 Particella 1142
+    VARIAZIONE TIPO MAPPALE (n. 1.1/2025)
+    FRAZIONAMENTO (n. 2.1/2025)
+    VARIAZIONE (n. 3.1/2025)
+    costituito i seguenti immobili Foglio 12 Particella 2000
+    costituiti i seguenti immobili Foglio 12 Particella 2000
+    """
+    payload = parse_historical_visura_text(text)
+    assert payload["classification"] == "suppressed"
+    assert payload["suppression"]["act_type"] == "FRAZIONAMENTO"
+    assert payload["originated_or_varied_parcels"] == [
+        {"foglio": "12", "particella": "2000", "subalterno": None}
+    ]
+
+
+def test_historical_visura_recognizes_tipo_mappale_from_variation() -> None:
+    payload = parse_historical_visura_text(
+        "Visura storica per immobile soppresso\n"
+        "Comune di MARRUBIU (E972)\nFoglio 12 Particella 1142\n"
+        "VARIAZIONE TIPO MAPPALE (n. 20842.1/2023)"
+    )
+    assert payload["suppression"]["act_type"] == "TIPO MAPPALE"

@@ -268,6 +268,89 @@ Gestione implementata:
 - nella pagina `Tipo di visura`, i valori radio osservati sono `0=Completa`, `3=Storica Analitica`, `4=Storica Sintetica`; la scansione `ade_status_scan` usa `request_type=STORICA` e `tipo_visura=Sintetica`, quindi deve selezionare valore `4`
 - dopo la scelta del tipo visura, SISTER puo mostrare una pagina intermedia senza CAPTCHA e senza bottone `Salva`; in questo caso il worker esegue un click preliminare su `Inoltra` e poi attende la comparsa del CAPTCHA o del download PDF
 
+### 2.2 Verifica Attualita/Storica e contenuto PDF
+
+Il worker analizza il PDF scaricato e traccia separatamente tipo richiesto, tipo
+osservato e stato della particella richiesta. La diagnostica e fail-open: un PDF
+non classificabile o difforme non interrompe la richiesta.
+
+Log attesi per un flusso coerente:
+
+```text
+Elaborazione richiesta ... tipo_visura=Sintetica request_type=None
+Audit visura PDF: request_id=... classificazione=current tipo_richiesto=STORICA tipo_osservato=STORICA ...
+```
+
+Anomalie ricercabili:
+
+```text
+Audit visura PDF: ... classificazione=suppressed ...
+Audit visura PDF: ... classificazione=unknown ...
+Audit visura PDF non riuscito
+```
+
+Ogni PDF analizzato genera un evento strutturato:
+
+```text
+event_type=pdf_parcel_status
+step=document_audit
+outcome=current|suppressed|not_found|unknown|parse_failed
+```
+
+Diagnosi rapida sul worker:
+
+```bash
+docker compose logs --since=24h elaborazioni-worker-visure 2>&1 \
+  | grep -E "Audit visura PDF"
+```
+
+Query DB per gli eventi strutturati:
+
+```sql
+SELECT occurred_at, batch_id, request_id, outcome, severity, context_json
+FROM sister_portal_events
+WHERE event_type = 'pdf_parcel_status'
+ORDER BY occurred_at DESC;
+```
+
+La classificazione `suppressed` richiede un indicatore riferito alla particella
+richiesta: `Numero di mappa soppresso dal`, il titolo `Visura ... per immobile
+soppresso` oppure `Variazione in soppressione del`. La sola parola `SOPPRESSO`
+in una sezione storica non basta: puo descrivere una particella antenata mentre
+la particella richiesta e corrente.
+
+L'audit completo viene persistito su `catasto_documents` nei campi
+`content_request_type`, `parcel_classification`, `parcel_suppressed_at` e
+`content_metadata_json`. Per cercare i documenti soppressi:
+
+Il tipo atteso usa `request_type` quando esplicito; per le richieste immobile
+legacy lo deduce da `tipo_visura`, considerando `Sintetica` e `Analitica` come
+storiche e `Completa` come attualita.
+
+```sql
+SELECT request_id, filename, parcel_suppressed_at
+FROM catasto_documents
+WHERE parcel_classification = 'suppressed'
+ORDER BY parcel_suppressed_at DESC NULLS LAST;
+```
+
+### 2.3 Backfill dei PDF esistenti
+
+La migration deve essere applicata prima del backfill. Il comando e dry-run per
+default, accetta un batch specifico e non sovrascrive audit gia valorizzati:
+
+```bash
+docker compose exec backend alembic upgrade head
+docker compose exec backend python scripts/backfill_catasto_document_audits.py \
+  --batch-id UUID_BATCH
+docker compose exec backend python scripts/backfill_catasto_document_audits.py \
+  --batch-id UUID_BATCH --apply --commit-every 100
+```
+
+Usare `--force` soltanto per ricalcolare consapevolmente dati gia classificati.
+I contatori `missing_file` e `audit_failed` restano rieseguibili e non vengono
+marcati come aggiornati.
+
 ### 3. Menu servizi
 
 Caso osservato:

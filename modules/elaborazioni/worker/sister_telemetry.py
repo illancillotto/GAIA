@@ -22,6 +22,10 @@ ALLOWED_CONTEXT_KEYS = {
     "remote_state",
     "wait_reason",
     "result_status",
+    "parcel_classification",
+    "parcel_suppressed_from",
+    "expected_request_type",
+    "observed_request_type",
 }
 
 

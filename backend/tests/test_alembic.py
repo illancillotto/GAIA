@@ -142,3 +142,24 @@ def test_catasto_connection_tests_migration_creates_worker_queue_table() -> None
     assert '"persist_verification"' in migration
     assert '"authenticated"' in migration
     assert '"status"' in migration
+
+
+def test_catasto_document_content_audit_migration_adds_fields_and_indexes() -> None:
+    migration = (
+        ROOT
+        / "backend"
+        / "alembic"
+        / "versions"
+        / "20260824_1000_catasto_document_content_audit.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'down_revision = "20260824_0900"' in migration
+    for column in (
+        '"content_request_type"',
+        '"parcel_classification"',
+        '"parcel_suppressed_at"',
+        '"content_metadata_json"',
+    ):
+        assert column in migration
+    assert '"ix_catasto_documents_content_request_type"' in migration
+    assert '"ix_catasto_documents_parcel_classification"' in migration

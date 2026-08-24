@@ -86,7 +86,7 @@ class _VisuraFlowResult:
         self.last_ocr_text = None
         self.file_path = self.file_size = None
         self.ade_status_payload = None
-        self.remote_request_id = self.remote_request_url = None
+        self.remote_request_id = self.remote_request_url = self.document_audit_payload = None
 
 
 class _VisuraFlowCallbacks:
@@ -163,6 +163,8 @@ _stub_module(
 )
 _stub_module(
     "app.modules.catasto.services.ade_historical_visura_parser",
+    extract_pdf_text=lambda _path: "",
+    parse_historical_visura_text=lambda _text: {"classification": "unknown"},
     parse_historical_visura_pdf=lambda _path: {"classification": "unknown"},
 )
 _stub_module(
@@ -2431,6 +2433,11 @@ def test_request_repository_persists_completed_document_idempotently(worker_db, 
     result.captcha_image_path = tmp_path / "captcha_manual.png"
     result.captcha_method = "manual"
     result.last_ocr_text = "1234"
+    result.document_audit_payload = {
+        "classification": "suppressed",
+        "document_request_type": {"observed": "STORICA"},
+        "suppression": {"suppressed_from": "09/12/2025"},
+    }
     with SessionLocal() as db:
         request = db.get(CatastoVisuraRequest, request_ids[0])
         assert request is not None
@@ -2448,6 +2455,9 @@ def test_request_repository_persists_completed_document_idempotently(worker_db, 
         document_id = document.id
         assert request.status == CatastoVisuraRequestStatus.COMPLETED.value
         assert document.sha256 is not None and len(document.sha256) == 64
+        assert document.content_request_type == "STORICA"
+        assert document.parcel_classification == "suppressed"
+        assert document.parcel_suppressed_at.isoformat() == "2025-12-09"
         assert log.manual_text == "1234"
         request.status = CatastoVisuraRequestStatus.PROCESSING.value
         request.execution_token = token
@@ -2458,6 +2468,10 @@ def test_request_repository_persists_completed_document_idempotently(worker_db, 
     result.file_path = second_path
     result.file_size = second_path.stat().st_size
     result.captcha_image_path = None
+    result.document_audit_payload = {
+        "classification": "current",
+        "document_request_type": {"observed": "ATTUALITA"},
+    }
     repository.persist_flow_result(batch_id, request_ids[0], "USER", result, token)
 
     with SessionLocal() as db:
@@ -2465,6 +2479,46 @@ def test_request_repository_persists_completed_document_idempotently(worker_db, 
         assert len(documents) == 1
         assert documents[0].id == document_id
         assert documents[0].filename == "second.pdf"
+        assert documents[0].content_request_type == "ATTUALITA"
+        assert documents[0].parcel_classification == "current"
+        assert documents[0].parcel_suppressed_at is None
+
+
+def test_request_repository_persists_queued_sister_for_retry(worker_db, tmp_path: Path) -> None:
+    worker, SessionLocal, _ = worker_db
+    _, batch_id, request_ids = _seed_batch(
+        SessionLocal,
+        request_statuses=[CatastoVisuraRequestStatus.PROCESSING.value],
+    )
+    token = uuid.uuid4()
+    result = _VisuraFlowResult()
+    result.status = "queued_sister"
+    result.remote_request_id = "REMOTE-QUEUED"
+    result.remote_request_url = "https://sister/queued"
+    result.captcha_image_path = tmp_path / "captcha.png"
+    result.last_ocr_text = "1234"
+    with SessionLocal() as db:
+        request = db.get(CatastoVisuraRequest, request_ids[0])
+        assert request is not None
+        request.execution_token = token
+        request.retry_not_before = datetime.now(timezone.utc)
+        request.captcha_manual_solution = "9999"
+        request.captcha_skip_requested = True
+        db.commit()
+
+    worker._request_repository().persist_flow_result(batch_id, request_ids[0], "USER", result, token)
+
+    with SessionLocal() as db:
+        request = db.get(CatastoVisuraRequest, request_ids[0])
+        log = db.scalar(select(CatastoCaptchaLog).where(CatastoCaptchaLog.request_id == request_ids[0]))
+        assert request is not None and log is not None
+        assert request.status == CatastoVisuraRequestStatus.PENDING.value
+        assert request.current_operation == "In coda SISTER — riprova in corso"
+        assert request.sister_remote_request_id == "REMOTE-QUEUED"
+        assert request.execution_token is None
+        assert request.retry_not_before is None
+        assert request.captcha_manual_solution is None
+        assert request.captcha_skip_requested is False
 
 
 def test_request_repository_infers_captcha_log_method(worker_db, tmp_path: Path) -> None:

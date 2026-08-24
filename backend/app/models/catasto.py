@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 
 try:
@@ -10,7 +10,7 @@ except ImportError:
     class StrEnum(str, Enum):
         pass
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, LargeBinary, Numeric, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, LargeBinary, Numeric, String, Text, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -211,6 +211,10 @@ class CatastoDocument(Base):
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     codice_fiscale: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    content_request_type: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    parcel_classification: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    parcel_suppressed_at: Mapped[date | None] = mapped_column(Date, nullable=True)
+    content_metadata_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

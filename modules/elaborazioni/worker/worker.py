@@ -75,6 +75,7 @@ from app.services.elaborazioni_batches import (
 from app.modules.catasto.services.ade_status_scan import ADE_SCAN_PURPOSE, persist_ade_status_scan_result
 from app.modules.catasto.services.ade_wfs import execute_ade_sync_run, prepare_ade_sync_runs_for_recovery
 from app.modules.catasto.services.ade_historical_visura_parser import parse_historical_visura_pdf
+from app.modules.catasto.services.ade_document_audit import audit_downloaded_document, expected_document_request_type
 from app.modules.catasto.routes.anagrafica import (
     prepare_bulk_search_jobs_for_recovery,
     prepare_distretto_export_jobs_for_recovery,
@@ -101,7 +102,7 @@ from sister_worker_reliability import (
     SisterRequestRetryCoordinator,
     is_recoverable_credential_error,
 )
-from sister_observability import WorkerState, instrument_sister_worker
+from sister_observability import WorkerState, emit_pdf_parcel_status, instrument_sister_worker
 from llm_captcha_solver import LLMCaptchaSolver
 from credential_vault import WorkerCredentialVault
 from reporting import write_batch_report
@@ -1126,6 +1127,8 @@ class CatastoWorker:
             result.status,
             result.error_message,
         )
+        result.document_audit_payload = audit_downloaded_document(request_snapshot, result)
+        emit_pdf_parcel_status(browser, result.document_audit_payload)
         if request_snapshot.artifact_dir:
             if result.status == "not_found" and request_snapshot.search_mode == "soggetto":
                 await browser.capture_subject_not_found_preview(Path(request_snapshot.artifact_dir))
@@ -1137,7 +1140,8 @@ class CatastoWorker:
     @staticmethod
     def _log_request_start(batch_id, request: CatastoVisuraRequest) -> None:
         logger.info(
-            "Elaborazione richiesta %s del batch %s riga=%s mode=%s comune=%s foglio=%s particella=%s subject_id=%s",
+            "Elaborazione richiesta %s del batch %s riga=%s mode=%s comune=%s foglio=%s particella=%s "
+            "subject_id=%s tipo_visura=%s request_type=%s",
             request.id,
             batch_id,
             request.row_index,
@@ -1146,6 +1150,11 @@ class CatastoWorker:
             request.foglio,
             request.particella,
             request.subject_id,
+            getattr(request, "tipo_visura", None),
+            expected_document_request_type(
+                getattr(request, "request_type", None),
+                getattr(request, "tipo_visura", None),
+            ),
         )
 
     async def _wait_for_manual_captcha(

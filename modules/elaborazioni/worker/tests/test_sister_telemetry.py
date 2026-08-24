@@ -53,6 +53,10 @@ def test_sanitizers_keep_only_operational_data() -> None:
         "remote_state": 4,
         "wait_reason": 1.5,
         "result_status": True,
+        "parcel_classification": "suppressed",
+        "parcel_suppressed_from": "09/12/2025",
+        "expected_request_type": "STORICA",
+        "observed_request_type": "ATTUALITA",
         "password": "hidden",
     })
     assert sanitized == {
@@ -61,6 +65,10 @@ def test_sanitizers_keep_only_operational_data() -> None:
         "remote_state": 4,
         "wait_reason": 1.5,
         "result_status": True,
+        "parcel_classification": "suppressed",
+        "parcel_suppressed_from": "09/12/2025",
+        "expected_request_type": "STORICA",
+        "observed_request_type": "ATTUALITA",
     }
     assert normalize_step("  Login SISTER / Profilo A ") == "login_sister_profilo_a"
     assert normalize_step("***") == "unknown"

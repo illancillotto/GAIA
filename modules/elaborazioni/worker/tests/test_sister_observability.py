@@ -24,6 +24,7 @@ from sister_observability import (
     RequestInvocation,
     SisterWorkerObservability,
     WorkerRuntimeContext,
+    emit_pdf_parcel_status,
     instrument_sister_worker,
 )
 from sister_telemetry import SisterTelemetryRecord
@@ -268,6 +269,7 @@ def test_browser_adapter_records_success_error_trace_and_server_response(monkeyp
     adapter = BrowserTelemetryAdapter(browser)
     adapter.install()
     adapter.install()
+    assert browser._gaia_emit_sister_telemetry == adapter.emit
 
     assert run(browser.start()) == "started"
     browser.fail = True
@@ -308,6 +310,30 @@ def test_browser_adapter_records_success_error_trace_and_server_response(monkeyp
     empty_browser = SimpleNamespace()
     BrowserTelemetryAdapter(empty_browser).install()
     BrowserTelemetryAdapter(object()).install()
+
+
+def test_emit_pdf_parcel_status_records_safe_structured_context() -> None:
+    records = []
+    browser = SimpleNamespace(_gaia_emit_sister_telemetry=records.append)
+    payload = {
+        "classification": "suppressed",
+        "suppression": {"suppressed_from": "09/12/2025"},
+        "document_request_type": {"expected": "STORICA", "observed": "ATTUALITA"},
+    }
+    assert emit_pdf_parcel_status(browser, payload) is True
+    assert records[0].event_type == "pdf_parcel_status"
+    assert records[0].severity == "warning"
+    assert records[0].context == {
+        "parcel_classification": "suppressed",
+        "parcel_suppressed_from": "09/12/2025",
+        "expected_request_type": "STORICA",
+        "observed_request_type": "ATTUALITA",
+    }
+
+    assert emit_pdf_parcel_status(browser, {"classification": "current"}) is True
+    assert records[-1].severity == "info"
+    assert emit_pdf_parcel_status(SimpleNamespace(), payload) is False
+    assert emit_pdf_parcel_status(browser, None) is False
 
 
 def test_instrument_browser_reuses_adapter_and_binding_uses_safe_identity() -> None:

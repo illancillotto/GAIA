@@ -21,6 +21,7 @@ from app.models.catasto import (
 )
 from sister_exceptions import SisterRequestCorrelationError
 from sister_worker_files import build_document_path, build_request_artifact_dir, document_values, sha256_file
+from app.modules.catasto.services.ade_document_audit import apply_document_audit
 
 
 logger = logging.getLogger(__name__)
@@ -714,6 +715,7 @@ class SisterRequestRepository:
             classification = str(payload.get("classification") or "unknown") if isinstance(payload, dict) else None
             return None, payload, classification
         document = self.create_document(db, request, codice_fiscale, result.file_path, result.file_size)
+        apply_document_audit(document, result.document_audit_payload)
         request.document_id = document.id
         payload = self._parse_ade_document(request, result.file_path, document)
         classification = str(payload.get("classification") or "unknown") if isinstance(payload, dict) else "unknown"
@@ -746,6 +748,7 @@ class SisterRequestRepository:
         result: Any,
     ) -> None:
         document = self.create_document(db, request, codice_fiscale, result.file_path, result.file_size)
+        apply_document_audit(document, result.document_audit_payload)
         request.document_id = document.id
         request.status = CatastoVisuraRequestStatus.COMPLETED.value
         request.current_operation = "PDF scaricato"
@@ -855,11 +858,7 @@ def _captcha_can_resume(request: CatastoVisuraRequest) -> bool:
 
 
 def _has_completed_document(context: _ResultContext) -> bool:
-    return bool(
-        context.terminal_status == "completed"
-        and context.result.file_path is not None
-        and context.result.file_size is not None
-    )
+    return bool(context.terminal_status == "completed" and context.result.file_path is not None and context.result.file_size is not None)
 
 
 def _request_accepts_update(

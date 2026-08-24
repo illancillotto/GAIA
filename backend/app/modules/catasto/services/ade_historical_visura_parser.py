@@ -33,7 +33,7 @@ def parse_historical_visura_text(text: str) -> dict[str, object]:
         classification = "suppressed"
     elif "NON RISULTANO DATI" in upper or "NESSUN IMMOBILE" in upper:
         classification = "not_found"
-    elif not events and not requested:
+    elif not events and not any(requested.values()):
         classification = "unknown"
 
     return {
@@ -98,11 +98,20 @@ def _parse_suppression(text: str) -> dict[str, object]:
     if act_type == "VARIAZIONE" and re.search(r"TIPO\s+MAPPALE", act_match.group(0), re.IGNORECASE):
         act_type = "TIPO MAPPALE"
     return {
-        "is_suppressed": match is not None or " SOPPRESSO " in f" {text.upper()} ",
+        "is_suppressed": _has_explicit_suppression(text, match),
         "suppressed_from": match.group(1) if match else None,
         "act_type": act_type,
         "act_reference": act_match.group(2).strip() if act_match else None,
     }
+
+
+def _has_explicit_suppression(text: str, dated_match: re.Match[str] | None) -> bool:
+    upper = text.upper()
+    return bool(
+        dated_match is not None
+        or re.search(r"VISURA\s+(?:ATTUALE|STORICA)\s+PER\s+IMMOBILE\s+SOPPRESSO", upper)
+        or re.search(r"VARIAZIONE\s+IN\s+SOPPRESSIONE\s+DEL\s+\d{2}/\d{2}/\d{4}", upper)
+    )
 
 
 def _best_act_match(matches: list[re.Match[str]]) -> re.Match[str] | None:
