@@ -18,7 +18,7 @@ describe("me straordinari api", () => {
     mocks.request.mockResolvedValueOnce(payload);
 
     await expect(previewMeStraordinariPeriodRequest("token", "2026-08-01")).resolves.toEqual(payload);
-    expect(mocks.request).toHaveBeenCalledWith("/api/me/presenze/straordinari/preview/2026-08-01", {
+    expect(mocks.request).toHaveBeenCalledWith("/me/presenze/straordinari/preview/2026-08-01", {
       headers: {
         Authorization: "Bearer token",
       },
@@ -31,7 +31,7 @@ describe("me straordinari api", () => {
     mocks.requestBlob.mockResolvedValueOnce(blob);
 
     await expect(downloadMeStraordinariPeriodRequest("token", "xlsx", payload, "2026-08-01")).resolves.toBe(blob);
-    expect(mocks.requestBlob).toHaveBeenCalledWith("/api/me/presenze/straordinari/export/xlsx/2026-08-01", {
+    expect(mocks.requestBlob).toHaveBeenCalledWith("/me/presenze/straordinari/export/xlsx/2026-08-01", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -1,7 +1,7 @@
 import { request, requestBlob } from "@/lib/api";
 import type { MeStraordinariExportRequest, MeStraordinariPreviewResponse } from "@/types/api";
 
-const ME_STRAORDINARI_API_BASE = "/api/me/presenze/straordinari";
+const ME_STRAORDINARI_API_BASE = "/me/presenze/straordinari";
 
 export type MeStraordinariPeriodPreviewResponse = MeStraordinariPreviewResponse & {
   available_months: string[];

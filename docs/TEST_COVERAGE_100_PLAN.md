@@ -546,6 +546,15 @@ Fino alla chiusura completa del piano:
   Nota: `me-page-content.tsx` resta un contenitore monolitico multi-tab; il gate isolato sul file intero misura circa `61.53%` linee per codice preesistente fuori dalla change.
   Il nuovo runtime della feature e stato estratto proprio per mantenere il perimetro incrementale al `100%`.
 
+- `2026-08-24` - Fix client periodo richiesta straordinari self-service
+  (`frontend/src/lib/me-straordinari-api.ts`)
+  Il client dedicato alla pagina `/me/straordinari` usa ora il path backend relativo `/me/presenze/straordinari`, lasciando a `request()` l'aggiunta del base URL `/api`. Questo evita la chiamata errata `/api/api/me/presenze/straordinari/...`, che in produzione veniva inoltrata al backend come `/api/me/...` e produceva `404 Not Found`.
+  Test aggiornato: `frontend/tests/unit/me-straordinari-api.test.ts`.
+  Esito validato:
+  - `cd frontend && npm run test:unit -- tests/unit/me-straordinari-api.test.ts` -> `2` test passati.
+  - `cd frontend && VITEST_COVERAGE_INCLUDE='src/lib/me-straordinari-api.ts' npm run test:coverage -- tests/unit/me-straordinari-api.test.ts` -> `100%` statements / branches / functions / lines sul client runtime modificato.
+  - `cd frontend && npm run typecheck` -> pass.
+
 - `2026-08-10` - Presenze export tecnico richiesta straordinari
   (`app/modules/presenze/services/straordinari_export_job.py`, `app/modules/presenze/services/straordinari_export_worker.py`)
   I servizi Presenze generano il file `Straordinari_YYYY_MM_Mese.xlsx` dal template `Straordinari.xlsx` e restano riusabili dai workflow amministrativi o self-service. La pagina `/presenze/export` resta export giornaliere amministrativo, non il flusso operatore.

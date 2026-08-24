@@ -222,6 +222,7 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
   - i nuovi endpoint `/me/presenze/straordinari/preview/{period_start}` e `/me/presenze/straordinari/export/{xlsx|pdf}/{period_start}` normalizzano il periodo al primo giorno del mese selezionato;
   - la pagina parte dal mese corrente e propone i mesi che contengono extra effettivi positivi per il collaboratore, ordinati dal piu recente;
   - preview, motivazioni ed export vengono ricaricati sul mese scelto senza cambiare auth, mapping collaboratore o template XLSX;
+  - fix produzione `2026-08-24`: il client periodo usa il path relativo `/me/presenze/straordinari` invece di includere gia `/api`, evitando richieste duplicate `/api/api/me/...` e il conseguente `404 Not Found`;
   - build production frontend, test mirati backend/frontend e coverage al `100%` dei file runtime modificati risultano verdi;
   - preview dei giorni candidati da `straordinario` effettivo + `maggior presenza` effettiva, con orario ricavato dalle ultime timbrature disponibili;
   - compilazione motivazioni giornaliere da parte dell'operatore prima del download;
