@@ -11,6 +11,7 @@ Ambito runtime attuale:
 - selezione fail-closed della convenzione SISTER `idConv=1050380` Profilo A, senza flag manuali sulle credenziali multi-ruolo
 - correlazione persistita richiesta locale/remota, affinità con la credenziale SISTER, retry/backoff e fencing transazionale
 - download PDF atomico con validazione firma e SHA-256
+- naming PDF delle visure per immobile privo di dati dell'operatore SISTER: `COMUNE_FOGLIO_PARTICELLA[_SUBALTERNO].pdf`; lo username non viene salvato nel filename ne nel campo `codice_fiscale` del documento
 - attesa CAPTCHA manuale protetta dallo stesso execution token usato per cancel, release e retry; se SISTER rifiuta un CAPTCHA manuale e ne genera uno nuovo, il worker ricarica l'immagine, riapre l'attesa e riprova fino a `CAPTCHA_MANUAL_ATTEMPTS`
 - gestione asincrona delle visure storiche/analitiche SISTER: al primo messaggio di documento in elaborazione il worker ripete immediatamente una sola volta l'intera richiesta, inclusi form, CAPTCHA e inoltro; se anche il secondo inoltro resta in elaborazione, usa i poll iniziali su `ConsultazioneRichieste`, salva la correlazione remota, marca la richiesta come `queued_sister`/`sister_remote_state=pending` e passa alla particella successiva; i giri successivi riprendono le richieste gia accodate dalla pagina `Richieste`/`Espletate`
 - diagnostica login Capacitas con dump HTML/metadata del tentativo quando il token SSO non viene estratto

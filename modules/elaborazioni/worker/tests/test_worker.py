@@ -2660,7 +2660,7 @@ def test_document_path_builders_cover_subject_and_immobile_fallbacks(worker_db, 
         request.request_type = None
         subject_path = build_document_path(tmp_path, "USER", request)
 
-    assert immobile_path.name == "SISTER_ORISTANO_1_1_7.pdf"
+    assert immobile_path.name == "ORISTANO_1_1_7.pdf"
     assert subject_path.name == "SOGGETTO_UNKNOWN_ATTUALITA.pdf"
     payload = tmp_path / "payload.bin"
     payload.write_bytes(b"abc")
