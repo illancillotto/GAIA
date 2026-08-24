@@ -43,10 +43,6 @@ vi.mock("@/app/home-gate-mobile-summary", () => ({
   buildHomeGateMobileSummary: () => ({ value: "0", copy: "nessuna sync" }),
 }));
 
-vi.mock("@/components/wiki/WikiWelcomePopup", () => ({
-  WikiWelcomePopup: () => null,
-}));
-
 vi.mock("@/lib/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
   return {

@@ -21,7 +21,6 @@ import { hasUserModuleAccess } from "@/lib/module-access";
 import { usePresenceHeartbeat } from "@/lib/use-presence-heartbeat";
 import { hasSectionAccess } from "@/lib/section-access";
 import { OperationalSearchBox } from "@/components/search/operational-search-box";
-import { WikiWelcomePopup } from "@/components/wiki/WikiWelcomePopup";
 import type {
   AnagraficaStats,
   CurrentUser,
@@ -842,8 +841,6 @@ export default function HomePage() {
         <p>© GAIA platform · Consorzio di Bonifica dell&apos;Oristanese</p>
         <p>Sessione attiva: {currentUser.username} · {currentUser.role}</p>
       </footer>
-
-      <WikiWelcomePopup />
     </div>
   );
 }
