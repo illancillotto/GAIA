@@ -46,6 +46,13 @@ from app.modules.ruolo.models import (
     RuoloTributiYearManager,
 )
 from app.modules.ruolo.repositories import _get_subject_display_name
+from app.modules.ruolo.tributi_policy_repository import (
+    bollettino_policy_payload as _bollettino_policy_payload,
+    delete_calculation_policy,
+    get_calculation_policy_for_year,
+    list_calculation_policies,
+    upsert_calculation_policy,
+)
 from app.modules.ruolo.services.capacitas_role_codes import (
     CAPACITAS_ROLE_ACCOUNTING_SCOPE_OUT_OF_ORDINARY,
     CAPACITAS_ROLE_KIND_UNCLASSIFIED,
@@ -92,7 +99,6 @@ REMINDER_MIN_YEAR = 2022
 POSTA_ONLINE_DEFAULT_YEARS = (2022, 2023)
 INTEREST_START_MODE_FIXED_DATE = "fixed_date"
 INTEREST_START_MODE_NOTIFICATION_DATE = "notification_date"
-INTEREST_START_MODES = {INTEREST_START_MODE_FIXED_DATE, INTEREST_START_MODE_NOTIFICATION_DATE}
 EFFECTIVE_FILTER_SCAN_CHUNK_SIZE = 500
 EFFECTIVE_FILTER_EXACT_TOTAL_SCAN_LIMIT = 500
 SUMMARY_EFFECTIVE_FILTER_SCAN_LIMIT = 500
@@ -552,59 +558,6 @@ def delete_year_manager(db: Session, manager_id: uuid.UUID) -> bool:
     return True
 
 
-def _validate_calculation_policy_range(
-    db: Session,
-    *,
-    year_from: int | None,
-    year_to: int | None,
-    is_active: bool,
-    exclude_id: uuid.UUID | None = None,
-) -> None:
-    if year_from is not None and year_to is not None and year_from > year_to:
-        raise ValueError("year_from non puo essere maggiore di year_to")
-    if not is_active:
-        return
-
-    policies = db.scalars(
-        select(RuoloTributiCalculationPolicy).where(RuoloTributiCalculationPolicy.is_active.is_(True))
-    ).all()
-    for policy in policies:
-        if exclude_id is not None and policy.id == exclude_id:
-            continue
-        if _year_ranges_overlap(
-            first_from=year_from,
-            first_to=year_to,
-            second_from=policy.year_from,
-            second_to=policy.year_to,
-        ):
-            raise ValueError(f"Range annualita sovrapposto a {policy.name}")
-
-
-def list_calculation_policies(db: Session) -> list[RuoloTributiCalculationPolicy]:
-    return list(
-        db.scalars(
-            select(RuoloTributiCalculationPolicy).order_by(
-                RuoloTributiCalculationPolicy.year_from.asc().nullsfirst(),
-                RuoloTributiCalculationPolicy.year_to.asc().nullsfirst(),
-                RuoloTributiCalculationPolicy.name,
-            )
-        ).all()
-    )
-
-
-def get_calculation_policy_for_year(db: Session, year: int) -> RuoloTributiCalculationPolicy | None:
-    return db.execute(
-        select(RuoloTributiCalculationPolicy)
-        .where(
-            RuoloTributiCalculationPolicy.is_active.is_(True),
-            or_(RuoloTributiCalculationPolicy.year_from.is_(None), RuoloTributiCalculationPolicy.year_from <= year),
-            or_(RuoloTributiCalculationPolicy.year_to.is_(None), RuoloTributiCalculationPolicy.year_to >= year),
-        )
-        .order_by(RuoloTributiCalculationPolicy.year_from.desc().nullslast())
-        .limit(1)
-    ).scalar_one_or_none()
-
-
 def _calculation_policy_exists_for_year_expr() -> Any:
     return (
         select(RuoloTributiCalculationPolicy.id)
@@ -621,84 +574,10 @@ def _calculation_policy_sort_expr() -> Any:
     return case((_calculation_policy_exists_for_year_expr(), 0), else_=1)
 
 
-def upsert_calculation_policy(
-    db: Session,
-    *,
-    name: str,
-    year_from: int | None,
-    year_to: int | None,
-    bonario_due_date: date | None,
-    surcharge_rate_percent: object,
-    surcharge_from: date | None,
-    interest_rate_percent: object,
-    interest_from: date | None,
-    interest_start_mode: str,
-    is_active: bool,
-    notes: str | None,
-    updated_by: int | None,
-    policy_id: uuid.UUID | None = None,
-    euribor_6m_rate_percent: object = 0,
-    euribor_source_url: str | None = None,
-    euribor_reference_period: str | None = None,
-    euribor_fetched_at: datetime | None = None,
-) -> RuoloTributiCalculationPolicy:
-    surcharge_rate = Decimal(str(surcharge_rate_percent or 0)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
-    euribor_6m_rate = Decimal(str(euribor_6m_rate_percent or 0)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
-    interest_rate = Decimal(str(interest_rate_percent or 0)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
-    if surcharge_rate < 0 or euribor_6m_rate < 0 or interest_rate < 0:
-        raise ValueError("Le percentuali di maggiorazione, Euribor e interessi non possono essere negative")
-    if interest_start_mode not in INTEREST_START_MODES:
-        raise ValueError("Modalita decorrenza interessi non valida")
-    effective_surcharge_from = bonario_due_date + timedelta(days=1) if bonario_due_date is not None else surcharge_from
-
-    policy = db.get(RuoloTributiCalculationPolicy, policy_id) if policy_id is not None else None
-    if policy_id is not None and policy is None:
-        raise ValueError("Policy di calcolo non trovata")
-
-    _validate_calculation_policy_range(
-        db,
-        year_from=year_from,
-        year_to=year_to,
-        is_active=is_active,
-        exclude_id=policy.id if policy else None,
-    )
-
-    if policy is None:
-        policy = RuoloTributiCalculationPolicy()
-        db.add(policy)
-    policy.name = name.strip()
-    policy.year_from = year_from
-    policy.year_to = year_to
-    policy.bonario_due_date = bonario_due_date
-    policy.surcharge_rate_percent = surcharge_rate
-    policy.surcharge_from = effective_surcharge_from
-    policy.euribor_6m_rate_percent = euribor_6m_rate
-    policy.euribor_source_url = euribor_source_url
-    policy.euribor_reference_period = euribor_reference_period
-    policy.euribor_fetched_at = euribor_fetched_at
-    policy.interest_rate_percent = interest_rate
-    policy.interest_from = interest_from
-    policy.interest_start_mode = interest_start_mode
-    policy.is_active = is_active
-    policy.notes = notes
-    policy.updated_by = updated_by
-    db.flush()
-    return policy
-
-
 def _policy_effective_interest_rate_percent(policy: RuoloTributiCalculationPolicy) -> Decimal:
     euribor_rate = Decimal(str(getattr(policy, "euribor_6m_rate_percent", 0) or 0))
     deliberation_rate = Decimal(str(policy.interest_rate_percent or 0))
     return (euribor_rate + deliberation_rate).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
-
-
-def delete_calculation_policy(db: Session, policy_id: uuid.UUID) -> bool:
-    policy = db.get(RuoloTributiCalculationPolicy, policy_id)
-    if policy is None:
-        return False
-    db.delete(policy)
-    db.flush()
-    return True
 
 
 def _resolve_policy_interest_start(
@@ -4045,18 +3924,8 @@ def _build_batch_item_payload(
     notice_progressive: int,
     notice_reference_years: list[int],
 ) -> dict[str, Any]:
-    avvisi_payload = []
-    for avviso_summary in candidate["avvisi"]:
-        avviso_id = avviso_summary["id"]
-        avviso = db.get(RuoloAvviso, avviso_id)
-        avvisi_payload.append(
-            {
-                **{key: str(value) if isinstance(value, uuid.UUID) else value for key, value in avviso_summary.items()},
-                "partite": _partite_payload(db, avviso_id),
-                "partitario": _load_incass_partitario_payload(db, avviso) if avviso is not None else None,
-            }
-        )
     return {
+        **_bollettino_policy_payload(db, notice_reference_years),
         "codice_fiscale": candidate["codice_fiscale"],
         "display_name": candidate["display_name"],
         "comune": candidate["comune"],
@@ -4074,8 +3943,23 @@ def _build_batch_item_payload(
         "notice_emission_year": notice_emission_year,
         "notice_progressive": notice_progressive,
         "notice_reference_years": notice_reference_years,
-        "avvisi": avvisi_payload,
+        "avvisi": _batch_avvisi_payload(db, candidate["avvisi"]),
     }
+
+
+def _batch_avvisi_payload(db: Session, avvisi: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    payload = []
+    for summary in avvisi:
+        avviso_id = summary["id"]
+        avviso = db.get(RuoloAvviso, avviso_id)
+        payload.append(
+            {
+                **{key: str(value) if isinstance(value, uuid.UUID) else value for key, value in summary.items()},
+                "partite": _partite_payload(db, avviso_id),
+                "partitario": _load_incass_partitario_payload(db, avviso) if avviso is not None else None,
+            }
+        )
+    return payload
 
 
 def _partite_payload(db: Session, avviso_id: uuid.UUID) -> list[dict[str, Any]]:

@@ -6,6 +6,13 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
+from app.modules.ruolo.tributi_policy_schemas import (
+    RuoloTributiCalculationPolicyListResponse,
+    RuoloTributiCalculationPolicyResponse,
+    RuoloTributiCalculationPolicyUpsertRequest,
+    RuoloTributiEuriborRateResponse,
+)
+
 from app.modules.ruolo.services.capacitas_role_codes import (
     CAPACITAS_ROLE_ACCOUNTING_SCOPE_OUT_OF_ORDINARY,
     CAPACITAS_ROLE_OPERATIONAL_POLICY_AUDIT_ONLY,
@@ -504,63 +511,6 @@ class RuoloTributiYearManagerUpsertRequest(BaseModel):
 
 class RuoloTributiYearManagerListResponse(BaseModel):
     items: list[RuoloTributiYearManagerResponse]
-
-
-class RuoloTributiCalculationPolicyResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    name: str
-    year_from: int | None = None
-    year_to: int | None = None
-    bonario_due_date: date | None = None
-    surcharge_rate_percent: float
-    surcharge_from: date | None = None
-    euribor_6m_rate_percent: float = 0
-    euribor_source_url: str | None = None
-    euribor_reference_period: str | None = None
-    euribor_fetched_at: datetime | None = None
-    interest_rate_percent: float
-    effective_interest_rate_percent: float = 0
-    interest_from: date | None = None
-    interest_start_mode: str = "fixed_date"
-    is_active: bool
-    notes: str | None = None
-    updated_by: int | None = None
-    created_at: datetime
-    updated_at: datetime
-
-
-class RuoloTributiCalculationPolicyUpsertRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=160)
-    year_from: int | None = None
-    year_to: int | None = None
-    bonario_due_date: date | None = None
-    surcharge_rate_percent: float = Field(default=0, ge=0)
-    surcharge_from: date | None = None
-    euribor_6m_rate_percent: float = Field(default=0, ge=0)
-    euribor_source_url: str | None = None
-    euribor_reference_period: str | None = None
-    euribor_fetched_at: datetime | None = None
-    interest_rate_percent: float = Field(default=0, ge=0)
-    interest_from: date | None = None
-    interest_start_mode: str = Field(default="fixed_date", pattern="^(fixed_date|notification_date)$")
-    is_active: bool = True
-    notes: str | None = None
-
-
-class RuoloTributiCalculationPolicyListResponse(BaseModel):
-    items: list[RuoloTributiCalculationPolicyResponse]
-
-
-class RuoloTributiEuriborRateResponse(BaseModel):
-    year: int
-    rate_percent: float
-    reference_period: str
-    source_url: str
-    verification_url: str
-    fetched_at: datetime
-    observations_count: int
 
 
 class RuoloTributiAvvisoListItemResponse(BaseModel):

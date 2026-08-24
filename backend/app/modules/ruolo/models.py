@@ -372,6 +372,8 @@ class RuoloTributiCalculationPolicy(Base):
     interest_rate_percent: Mapped[float] = mapped_column(Numeric(7, 4), nullable=False, default=0)
     interest_from: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     interest_start_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="fixed_date", index=True)
+    bollettino_causale: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    bollettino_esercizio: Mapped[str | None] = mapped_column(String(4), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_by: Mapped[int | None] = mapped_column(

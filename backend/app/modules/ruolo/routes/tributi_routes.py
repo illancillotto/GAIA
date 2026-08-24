@@ -433,21 +433,7 @@ def create_calculation_policy(
     try:
         policy = repo.upsert_calculation_policy(
             db,
-            name=payload.name,
-            year_from=payload.year_from,
-            year_to=payload.year_to,
-            bonario_due_date=payload.bonario_due_date,
-            surcharge_rate_percent=payload.surcharge_rate_percent,
-            surcharge_from=payload.surcharge_from,
-            euribor_6m_rate_percent=payload.euribor_6m_rate_percent,
-            euribor_source_url=payload.euribor_source_url,
-            euribor_reference_period=payload.euribor_reference_period,
-            euribor_fetched_at=payload.euribor_fetched_at,
-            interest_rate_percent=payload.interest_rate_percent,
-            interest_from=payload.interest_from,
-            interest_start_mode=payload.interest_start_mode,
-            is_active=payload.is_active,
-            notes=payload.notes,
+            **payload.model_dump(),
             updated_by=current_user.id,
         )
         db.commit()
@@ -473,21 +459,7 @@ def update_calculation_policy(
         policy = repo.upsert_calculation_policy(
             db,
             policy_id=policy_id,
-            name=payload.name,
-            year_from=payload.year_from,
-            year_to=payload.year_to,
-            bonario_due_date=payload.bonario_due_date,
-            surcharge_rate_percent=payload.surcharge_rate_percent,
-            surcharge_from=payload.surcharge_from,
-            euribor_6m_rate_percent=payload.euribor_6m_rate_percent,
-            euribor_source_url=payload.euribor_source_url,
-            euribor_reference_period=payload.euribor_reference_period,
-            euribor_fetched_at=payload.euribor_fetched_at,
-            interest_rate_percent=payload.interest_rate_percent,
-            interest_from=payload.interest_from,
-            interest_start_mode=payload.interest_start_mode,
-            is_active=payload.is_active,
-            notes=payload.notes,
+            **payload.model_dump(),
             updated_by=current_user.id,
         )
         db.commit()

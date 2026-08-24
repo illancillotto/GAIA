@@ -89,6 +89,7 @@ def test_td896_datamatrix_ecc200_16_by_48_contract() -> None:
     assert 'aria-label="Data Matrix TD 896"' in svg
     assert 'viewBox="0 0 52 20"' in svg
     assert 'shape-rendering="crispEdges"' in svg
+    assert '<g fill="#000">' in svg
 
     with pytest.raises(ValueError, match="50 cifre"):
         td896.td896_datamatrix("123")

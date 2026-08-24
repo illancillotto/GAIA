@@ -26,6 +26,7 @@ from app.modules.ruolo.services.td896 import (
     td896_amount_code,
     td896_customer_code,
     td896_datamatrix_svg,
+    td896_esercizio,
 )
 
 DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -158,6 +159,7 @@ _HTML_BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
 _NON_DIGIT_RE = re.compile(r"\D+")
 _GAIA_ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
+_OCR_B_FONT_BASE64 = (_GAIA_ASSETS_DIR / "OCRB.otf.b64").read_text(encoding="ascii").strip()
 _GAIA_CBO_LOGO_CANDIDATES = (
     _GAIA_ASSETS_DIR / "cbo-logo.png",
 )
@@ -498,8 +500,8 @@ def _gaia_proposal_html(
 <head>
 <meta charset="utf-8">
 <title>GAIA - Proposta Avviso/Sollecito</title>
-<style>
-@page {{ size: A4; margin: 0; }}
+<style>@font-face {{ font-family: "OCR B"; src: url("data:font/otf;base64,{_OCR_B_FONT_BASE64}") format("opentype"); font-style: normal; font-weight: 400; }}
+@page {{ size: A4; margin: 0; }} @page bollettino {{ size: A4 landscape; margin: 0; }}
 * {{ box-sizing: border-box; }}
 body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; font-size: 10.2pt; line-height: 1.28; }}
 .page {{ width: 210mm; min-height: 297mm; break-after: page; page-break-after: always; position: relative; padding: 12mm 18mm 12mm 13mm; }}
@@ -558,64 +560,64 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .signature .name {{ font-size: 8.4pt; font-weight: 600; margin-top: .3mm; }}
 .signature .rule {{ width: 38mm; border-top: .7pt solid #87958e; margin: 1mm auto .75mm; }}
 .signature .note {{ font-size: 5.9pt; line-height: 1.05; color: #39443f; border: 0; margin: 0; padding: 0; }}
-.bollettino-page {{ padding: 0; overflow: hidden; color: #111; background: #fff; }}
-.bollettino-sheet {{ position: absolute; inset: 0; width: 210mm; height: 297mm; overflow: hidden; font: 9.8pt Arial, Helvetica, sans-serif; }}
-.bollettino-landscape {{ position: absolute; top: 292mm; left: 6mm; width: 297mm; height: 210mm; padding: 5.5mm 6.5mm; overflow: hidden; transform-origin: top left; transform: rotate(-90deg) scale(.940); }}
-.bollettino-methods {{ position: relative; height: 52mm; min-height: 52mm; }}
+.bollettino-page {{ page: bollettino; width: 297mm; min-height: 210mm; padding: 0; overflow: hidden; color: #000; background: #fff; }}
+.bollettino-sheet {{ position: absolute; inset: 0; width: 297mm; height: 210mm; overflow: hidden; font: 9.8pt Arial, Helvetica, sans-serif; }}
+.bollettino-landscape {{ position: absolute; inset: 0; width: 297mm; height: 210mm; overflow: hidden; }}
+.bollettino-methods {{ position: absolute; top: 5.5mm; left: 6.5mm; right: 6.5mm; height: 52mm; }}
 .bollettino-methods h2 {{ position: absolute; top: 0; left: 0; right: 0; margin: 0; text-align: center; font-size: 11pt; }}
 .bollettino-methods-box {{ position: absolute; left: 0; right: 0; top: 8.5mm; bottom: 0; border: 1.2pt solid #111; overflow: hidden; }}
 .bollettino-methods-box-inner {{ padding: 3.5mm; }}
 .bollettino-methods p {{ margin: .8mm 0; }}
 .bollettino-methods .indent {{ margin-left: 13mm; }}
 .bollettino-methods .under {{ text-decoration: underline; }}
-.bollettino-bonifico {{ margin-top: 5mm; border: 1.2pt solid #111; min-height: 25mm; padding: 4mm; text-align: center; }}
+.bollettino-bonifico {{ position: absolute; top: 62.5mm; left: 6.5mm; right: 6.5mm; height: 25mm; border: 1.2pt solid #000; padding: 4mm; text-align: center; }}
 .bollettino-bonifico h3 {{ margin: 0 0 5mm; font-size: 9.8pt; text-transform: uppercase; }}
 .bollettino-bonifico p {{ margin: 2mm 0; }}
-.bollettino-coupons {{ margin-top: 21mm; margin-left: -6.5mm; margin-right: -6.5mm; width: 297mm; height: 102mm; display: grid; grid-template-columns: 132mm 165mm; gap: 0; font-family: "Courier New", monospace; }}
-.bollettino-slip {{ height: 102mm; min-height: 0; padding: 0; position: relative; color: #111; border-top: 1pt solid #333; overflow: hidden; }}
-.bollettino-slip.accredito {{ border-left: 1pt solid #333; }}
-.bollettino-slip .band {{ position: absolute; left: 0; right: 0; top: 0; height: 4mm; padding: .6mm 6mm 0; background: #d6d6d6; border-bottom: .8pt solid #333; font: 6.6pt Arial, sans-serif; text-transform: uppercase; display: flex; justify-content: space-between; }}
+.bollettino-coupons {{ position: absolute; left: 0; bottom: 0; width: 297mm; height: 102mm; display: grid; grid-template-columns: 132mm 165mm; gap: 0; font-family: "OCR B", monospace; }}
+.bollettino-slip {{ height: 102mm; min-height: 0; padding: 0; position: relative; color: #000; border-top: 1pt solid #000; overflow: hidden; }}
+.bollettino-slip.accredito {{ border-left: 1pt solid #000; }} .bollettino-slip.accredito::after {{ content: ""; position: absolute; left: 0; right: 0; top: 83mm; border-top: .4pt solid #ccc; }}
+.bollettino-slip .band {{ position: absolute; left: 0; right: 0; top: 0; height: 4mm; padding: .6mm 6mm 0; background: #ccc; border-bottom: .8pt solid #000; color: #000; font: 6.6pt Arial, sans-serif; text-transform: uppercase; display: flex; justify-content: space-between; }}
 .bollettino-logo-cbo {{ position: absolute; left: 6mm; top: 7.5mm; width: 20mm; height: 15mm; display: flex; align-items: center; justify-content: center; }}
 .bollettino-logo-cbo img {{ max-width: 20mm; max-height: 15mm; object-fit: contain; filter: grayscale(100%); }}
 .bollettino-euro-block {{ position: absolute; top: 7.5mm; left: 7.5mm; width: 13mm; text-align: center; }}
 .bollettino-slip.versamento .bollettino-euro-block {{ left: 28mm; }}
-.bollettino-euro-mark {{ width: 7mm; height: 7mm; margin: 0 auto .6mm; background: #222; color: white; display: grid; place-content: center; font: 800 13pt Georgia, serif; }}
-.bollettino-small-label {{ font: 6.5pt Arial, sans-serif; text-transform: uppercase; color: #333; }}
-.bollettino-account-row {{ position: absolute; top: 9.5mm; left: 23mm; right: 40mm; white-space: nowrap; }}
+.bollettino-euro-mark {{ width: 7mm; height: 7mm; margin: 0 auto .6mm; background: #000; color: white; display: grid; place-content: center; font: 800 13pt Georgia, serif; }}
+.bollettino-small-label {{ font: 6.5pt Arial, sans-serif; text-transform: uppercase; color: #ccc; }}
+.bollettino-account-row {{ position: absolute; top: 10mm; left: 23mm; right: 40mm; white-space: nowrap; }}
 .bollettino-slip.versamento .bollettino-account-row {{ left: 44mm; }}
-.bollettino-account {{ font-weight: 800; letter-spacing: 1.6pt; font-size: 10.6pt; }}
-.bollettino-amount-row {{ position: absolute; top: 9.5mm; right: 7.5mm; width: 31mm; text-align: right; }}
-.bollettino-amount {{ font-weight: 800; letter-spacing: 1.7pt; font-size: 11.2pt; }}
-.bollettino-iban {{ position: absolute; top: 18mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center; gap: 2mm; align-items: center; white-space: nowrap; }}
+.bollettino-account, .bollettino-td {{ font: 10pt "OCR B", monospace; letter-spacing: 0; color: #000; }}
+.bollettino-amount-row {{ position: absolute; top: 10mm; right: 7.5mm; width: 31mm; text-align: right; }}
+.bollettino-amount {{ font: 10pt "OCR B", monospace; letter-spacing: 0; color: #000; }}
+.bollettino-iban {{ position: absolute; top: 16.5mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center; gap: 2mm; align-items: center; white-space: nowrap; color: #ccc; }}
 .bollettino-slip.versamento .bollettino-iban {{ left: 39mm; right: 3mm; }}
 .bollettino-boxes {{ display: grid; grid-template-columns: repeat(27, 2.52mm); width: max-content; white-space: nowrap; }}
-.bollettino-boxes span {{ height: 3.8mm; border: .4pt solid #cfcfcf; border-right: 0; display: grid; place-content: center; font-size: 7.7pt; line-height: 1; }}
-.bollettino-boxes span:last-child {{ border-right: .4pt solid #cfcfcf; }}
+.bollettino-boxes span {{ height: 3.8mm; border: .4pt solid #ccc; border-right: 0; display: grid; place-content: center; font-size: 7.7pt; line-height: 1; }}
+.bollettino-boxes span:last-child {{ border-right: .4pt solid #ccc; }}
 .bollettino-intestato-label {{ position: absolute; top: 24.5mm; left: 7.5mm; }}
-.bollettino-intestato {{ position: absolute; top: 28mm; left: 7.5mm; right: 7.5mm; font-size: 10.25pt; font-weight: 800; letter-spacing: 1.45pt; line-height: 1.12; }}
-.bollettino-eseguito {{ position: absolute; top: 36.8mm; left: 7.5mm; right: 61mm; max-height: 17mm; overflow: hidden; font-size: 8.25pt; line-height: 1.05; }}
+.bollettino-intestato {{ position: absolute; top: 28mm; left: 7.5mm; right: 7.5mm; font: 10pt/1.12 "OCR B", monospace; letter-spacing: 0; color: #000; }}
+.bollettino-eseguito {{ position: absolute; top: 35mm; left: 7.5mm; right: 61mm; max-height: 17mm; overflow: hidden; font-size: 8.25pt; line-height: 1.05; color: #000; }}
 .bollettino-eseguito-address {{ display: block; margin-top: .7mm; font-size: 7.05pt; line-height: 1.04; white-space: normal; overflow-wrap: break-word; }}
-.bollettino-slip.accredito .bollettino-eseguito {{ left: 60mm; right: 4mm; top: 35.2mm; max-height: 16mm; }}
+.bollettino-slip.accredito .bollettino-eseguito {{ left: 58.5mm; right: 4mm; top: 35mm; max-height: 27mm; }}
 .bollettino-details {{ position: absolute; left: 7.5mm; right: 61mm; top: 58.5mm; font-size: 9.1pt; line-height: 1.18; }}
-.bollettino-slip.accredito .bollettino-details {{ left: 60mm; right: 8mm; top: 53mm; }}
-.bollettino-customer {{ position: absolute; left: 7.5mm; top: 42mm; font-size: 13pt; font-weight: 800; letter-spacing: 1.5pt; }}
-.bollettino-barcode-svg {{ position: absolute; right: 10mm; top: 64mm; width: 93mm; height: 12mm; display: block; }}
-.bollettino-barcode-number {{ position: absolute; right: 10mm; top: 76.3mm; width: 93mm; text-align: center; font: 5.8pt Arial, Helvetica, sans-serif; letter-spacing: .15pt; }}
-.bollettino-barcode-note {{ position: absolute; right: 10mm; top: 79.2mm; width: 93mm; text-align: center; font: 4.9pt Arial, Helvetica, sans-serif; color: #444; text-transform: uppercase; }}
-.bollettino-postmark {{ position: absolute; width: 55mm; height: 34mm; border: .65pt dashed #d1d1d1; text-align: center; color: #444; }}
-.bollettino-slip.versamento .bollettino-postmark {{ right: 6mm; top: 49mm; height: 28mm; }}
-.bollettino-slip.accredito .bollettino-postmark {{ left: 55mm; top: 82mm; width: 38mm; height: 7mm; border-color: transparent; }}
+.bollettino-slip.accredito .bollettino-details {{ display: none; }}
+.bollettino-customer {{ position: absolute; left: 7.5mm; top: 42mm; font: 10pt "OCR B", monospace; letter-spacing: 0; color: #000; }}
+.bollettino-barcode-svg {{ position: absolute; left: 59mm; top: 64mm; width: 93mm; height: 12mm; display: block; }}
+.bollettino-barcode-number {{ position: absolute; left: 59mm; top: 76.3mm; width: 93mm; text-align: center; font: 5.8pt Arial, Helvetica, sans-serif; letter-spacing: .15pt; color: #000; }}
+.bollettino-barcode-note {{ position: absolute; left: 59mm; top: 79.2mm; width: 93mm; text-align: center; font: 4.9pt Arial, Helvetica, sans-serif; color: #ccc; text-transform: uppercase; }}
+.bollettino-postmark {{ position: absolute; width: 55mm; height: 34mm; top: 49mm; border: .65pt dashed #ccc; text-align: center; color: #ccc; }}
+.bollettino-slip.versamento .bollettino-postmark {{ right: 0; }}
+.bollettino-slip.accredito .bollettino-postmark {{ left: 0; }}
 .bollettino-postmark-label {{ margin-top: 10mm; font: 6.2pt Arial, Helvetica, sans-serif; text-transform: uppercase; letter-spacing: .18pt; }}
-.bollettino-slip.accredito .bollettino-postmark-label {{ margin-top: 0; }}
-.bollettino-postmark-code {{ font: 5.5pt Arial, Helvetica, sans-serif; color: #555; line-height: 1; }}
-.bollettino-datamatrix {{ position: absolute; right: 5mm; top: 77mm; width: 48.75mm; height: 18.75mm; display: block; }}
-.bollettino-codeline {{ position: absolute; left: 0; right: 0; bottom: 4mm; height: 9mm; font-size: 11.4pt; letter-spacing: .65pt; white-space: nowrap; }}
+.bollettino-slip.accredito .bollettino-postmark-label {{ margin-top: 10mm; }}
+.bollettino-postmark-code {{ font: 5.5pt Arial, Helvetica, sans-serif; color: #ccc; line-height: 1; }}
+.bollettino-datamatrix {{ position: absolute; right: 3.125mm; top: 82.625mm; width: 48.75mm; height: 18.75mm; display: block; }}
+.bollettino-codeline {{ position: absolute; left: 0; right: 0; top: 91.7mm; height: 3.6mm; font: 10pt/3.6mm "OCR B", monospace; letter-spacing: 0; color: #000; white-space: nowrap; z-index: 1; }}
 .bollettino-codeline span {{ position: absolute; top: 0; }}
 .bollettino-codeline .field-customer {{ left: 7.5mm; }}
 .bollettino-codeline .field-amount {{ left: 74mm; }}
 .bollettino-codeline .field-account {{ left: 108mm; }}
 .bollettino-codeline .field-td {{ right: 7.5mm; text-align: right; }}
-.bollettino-authorization {{ position: absolute; right: 8mm; top: 4.8mm; font: 5.8pt Arial, Helvetica, sans-serif; letter-spacing: .2pt; }}
+.bollettino-authorization {{ position: absolute; right: 8mm; top: 4.8mm; color: #ccc; font: 5.8pt Arial, Helvetica, sans-serif; letter-spacing: .2pt; }}
 .partitario-page {{ break-before: page; page-break-before: always; min-height: 297mm; }}
 .partitario-page:first-child {{ break-before: auto; page-break-before: auto; }}
 .partitario-title {{ margin: 0 0 3mm; color: #1f5d45; font: 800 14pt Arial, sans-serif; border-bottom: 1.2pt solid #1f5d45; padding-bottom: 2mm; }}
@@ -884,7 +886,7 @@ def _gaia_bollettino_slip_html(values: dict[str, str], *, title: str, kind: str)
       <div class="band"><span>Conti correnti postali - {html.escape(title)}</span><span>BancoPosta</span></div>
       {authorization_html}
       {logo_html}
-      <div class="bollettino-euro-block"><div class="bollettino-euro-mark">€</div><div class="bollettino-small-label">TD 896</div></div>
+      <div class="bollettino-euro-block"><div class="bollettino-euro-mark">€</div><div class="bollettino-small-label">TD</div><div class="bollettino-td">896</div></div>
       <div class="bollettino-account-row"><span class="bollettino-small-label">sul C/C n.</span> <span class="bollettino-account">{html.escape(values['postal_account'])}</span></div>
       <div class="bollettino-amount-row"><div class="bollettino-small-label">di Euro</div><div class="bollettino-amount">{html.escape(values['amount'])}</div></div>
       <div class="bollettino-iban"><span class="bollettino-small-label">Codice IBAN</span><span class="bollettino-boxes">{values['iban_boxes_html']}</span></div>
@@ -983,7 +985,7 @@ def _gaia_bollettino_code128_svg(value: str) -> str:
         '<svg class="bollettino-barcode-svg" role="img" aria-label="Codice a barre TD 896" '
         f'viewBox="0 0 {x_position} 60" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">'
         f'<rect width="{x_position}" height="60" fill="#fff"/>'
-        '<g fill="#111">'
+        '<g fill="#000">'
         f'{"".join(rects)}'
         "</g></svg>"
     )
@@ -1044,11 +1046,7 @@ def _gaia_bollettino_due_date(payload: dict[str, Any]) -> str:
 
 
 def _gaia_bollettino_esercizio(payload: dict[str, Any]) -> str:
-    years = _sorted_payload_years(payload, _batch_yearly_values(payload))
-    if not years:
-        return ""
-    suffix = str(years[-1])[-2:]
-    return f"{suffix}{suffix}"
+    return td896_esercizio(payload, _sorted_payload_years(payload, _batch_yearly_values(payload)))
 
 
 def _generate_batch_reminder_docx_from_template(

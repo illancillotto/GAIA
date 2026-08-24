@@ -1,0 +1,10 @@
+OCR B font
+
+The OCR-B source used to produce this font is Copyright 1995, 2010 Norbert Schwarz.
+It may be freely used, modified and/or distributed without limitation.
+
+The font build sources are Copyright 2012 Matthew Skala and released to the
+public domain by their author.
+
+The packaged font is derived from the Debian fonts-ocr-b package, version
+0.3~dfsg1-1, which identifies the typeface as ISO 1073/II-1976 (E).

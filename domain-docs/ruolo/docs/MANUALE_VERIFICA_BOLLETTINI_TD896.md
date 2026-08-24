@@ -1,6 +1,6 @@
 # Mini manuale di verifica bollettini TD 896 GAIA
 
-Aggiornamento del 2026-08-20.
+Aggiornamento del 2026-08-24.
 
 ## Scopo
 
@@ -18,7 +18,13 @@ PDF all'amministratore GAIA.
 3. Andare all'ultima pagina, che deve contenere il bollettino `TD 896`.
 4. Controllare che entrambe le ricevute riportino lo stesso importo della prima
    pagina, inclusi i centesimi.
-5. Controllare denominazione del contribuente, scadenza e causale.
+5. Controllare denominazione del contribuente, scadenza, causale ed esercizio.
+   Se nella `Regola ruolo` sono stati configurati `Causale bollettino` ed
+   `Esercizio bollettino`, la ricevuta di versamento deve mostrare esattamente i
+   codici di tre e quattro cifre inseriti. La ricevuta di accredito riserva la
+   zona cliente esclusivamente ai dati del versante, come richiesto dal manuale
+   Poste. Se i campi sono vuoti, GAIA applica i valori automatici derivati dal
+   numero avviso e dall'annualita piu recente.
 6. Verificare i dati fissi del Consorzio:
    - conto corrente postale `1007214826`;
    - conto a 12 cifre nella codeline `001007214826`;
@@ -30,6 +36,19 @@ PDF all'amministratore GAIA.
    due cifre di controllo modulo 93. Le cifre finali possono ripetersi tra
    avvisi diversi: l'identificativo da confrontare e sempre il codice completo
    di 18 cifre, mai il solo suffisso.
+
+## Verifica formato di stampa
+
+L'ultima pagina del PDF deve essere A4 orizzontale. Stampare al `100%` o con
+`Dimensioni effettive`, mai con `Adatta alla pagina`. Il modulo da ritagliare
+deve misurare `297 x 102 mm`, con ricevuta di versamento da `132 mm`, ricevuta
+di accredito da `165 mm`, corpo da `83 mm` e zona OCR inferiore da `19 mm`.
+
+I dati significativi e la codeline devono usare il font incorporato
+`OCRB-Regular` e il colore nero. Il barcode deve misurare circa `93 x 12 mm`;
+il Data Matrix utile `45 x 15 mm`, esclusa la quiet zone di due celle per lato.
+Le due aree per il bollo postale devono misurare `55 x 34 mm` e iniziare a
+`49 mm` dal bordo superiore del modulo.
 
 ## Verifica con lettore codici
 
@@ -68,6 +87,10 @@ Il bollettino e verificato solo se:
 - Code 128 e Data Matrix restituiscono lo stesso valore di 50 cifre;
 - codice cliente, conto e tipo documento rispettano lunghezze e valori sopra
   indicati;
+- causale ed esercizio coincidono con la `Regola ruolo` applicata oppure, se
+  non configurati, con i fallback automatici;
+- il PDF mantiene formato, font, colori e misure descritti nella verifica di
+  stampa, senza riduzioni automatiche;
 - il Data Matrix viene letto senza ritagliare o alterare le aree bianche che lo
   circondano.
 

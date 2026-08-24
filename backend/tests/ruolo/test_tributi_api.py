@@ -91,6 +91,7 @@ from app.models.section_permission import Section
 from app.modules.ruolo import tributi_repositories as tributi_repo
 from app.modules.ruolo.routes import tributi_routes
 from app.modules.ruolo.services import euribor as euribor_service
+from app.modules.ruolo.services import td896 as td896_service
 from app.modules.ruolo.services import tributi_reminder_service as reminder_service
 from app.modules.ruolo.models import (
     RuoloAvviso,
@@ -2390,6 +2391,8 @@ def test_tributi_calculation_policy_crud_validates_active_year_ranges() -> None:
             "euribor_6m_rate_percent": 3,
             "interest_rate_percent": 1,
             "interest_from": "2026-02-01",
+            "bollettino_causale": "025",
+            "bollettino_esercizio": "2424",
             "notes": "prima versione",
         },
     )
@@ -2401,6 +2404,18 @@ def test_tributi_calculation_policy_crud_validates_active_year_ranges() -> None:
     assert [item["name"] for item in list_response.json()["items"]] == ["Policy 2024"]
     assert list_response.json()["items"][0]["euribor_6m_rate_percent"] == 3.0
     assert list_response.json()["items"][0]["effective_interest_rate_percent"] == 4.0
+    assert list_response.json()["items"][0]["bollettino_causale"] == "025"
+    assert list_response.json()["items"][0]["bollettino_esercizio"] == "2424"
+
+    db = TestingSessionLocal()
+    try:
+        assert tributi_repo._bollettino_policy_payload(db, [2023, 2024]) == {
+            "bollettino_causale": "025",
+            "bollettino_esercizio": "2424",
+        }
+        assert tributi_repo._bollettino_policy_payload(db, []) == {}
+    finally:
+        db.close()
 
     overlap_response = client.post(
         "/ruolo/tributi/calculation-policies",
@@ -2427,6 +2442,8 @@ def test_tributi_calculation_policy_crud_validates_active_year_ranges() -> None:
             "euribor_6m_rate_percent": 1.5,
             "interest_rate_percent": 2,
             "interest_from": "2026-02-01",
+            "bollettino_causale": "026",
+            "bollettino_esercizio": "2525",
             "is_active": True,
         },
     )
@@ -2434,6 +2451,19 @@ def test_tributi_calculation_policy_crud_validates_active_year_ranges() -> None:
     assert update_response.json()["name"] == "Policy 2024 aggiornata"
     assert update_response.json()["surcharge_rate_percent"] == 6.0
     assert update_response.json()["effective_interest_rate_percent"] == 3.5
+    assert update_response.json()["bollettino_causale"] == "026"
+    assert update_response.json()["bollettino_esercizio"] == "2525"
+
+    invalid_bollettino_response = client.post(
+        "/ruolo/tributi/calculation-policies",
+        headers=headers,
+        json={
+            "name": "Codici bollettino errati",
+            "bollettino_causale": "25",
+            "bollettino_esercizio": "anno",
+        },
+    )
+    assert invalid_bollettino_response.status_code == 422
 
     invalid_range_update_response = client.put(
         f"/ruolo/tributi/calculation-policies/{policy_id}",
@@ -3640,6 +3670,8 @@ def test_gaia_reminder_template_contract() -> None:
         "saldo_amount": "210.00 EUR",
         "notice_number": "12026242500001",
         "notice_reference_years": [2024, 2025],
+        "bollettino_causale": "777",
+        "bollettino_esercizio": "9999",
         "due_date": "2025-11-21",
         "partitario_text": 'var mstrAvvisoDlgPartitarioKUI = "020240003642530";\n'
         '$(function () { $("#btnScaricaPartitarioDlgPartitarioKUI").click(function (e) { }); });\n'
@@ -3668,11 +3700,12 @@ def test_gaia_reminder_template_contract() -> None:
 
     rendered_html = reminder_service._gaia_proposal_html(payload)
 
-    assert "@page { size: A4; margin: 0; }" in rendered_html
-    assert ".bollettino-sheet { position: absolute; inset: 0; width: 210mm; height: 297mm;" in rendered_html
-    assert ".bollettino-landscape { position: absolute; top: 292mm; left: 6mm;" in rendered_html
-    assert "padding: 5.5mm 6.5mm; overflow: hidden;" in rendered_html
-    assert "transform: rotate(-90deg) scale(.940);" in rendered_html
+    assert '@font-face { font-family: "OCR B"; src: url("data:font/otf;base64,' in rendered_html
+    assert "@page { size: A4; margin: 0; } @page bollettino { size: A4 landscape; margin: 0; }" in rendered_html
+    assert ".bollettino-page { page: bollettino; width: 297mm; min-height: 210mm;" in rendered_html
+    assert ".bollettino-sheet { position: absolute; inset: 0; width: 297mm; height: 210mm;" in rendered_html
+    assert ".bollettino-landscape { position: absolute; inset: 0; width: 297mm; height: 210mm;" in rendered_html
+    assert "transform: rotate(-90deg) scale(.940);" not in rendered_html
     assert ".front { font-size: 11.45pt; line-height: 1.28; }" in rendered_html
     assert ".header { display: grid; grid-template-columns: 39mm 1fr 39mm;" in rendered_html
     assert ".brand.pagopa { justify-self: end; width: 39mm;" in rendered_html
@@ -3680,9 +3713,14 @@ def test_gaia_reminder_template_contract() -> None:
     assert "grid-template-columns: 132mm 165mm;" in rendered_html
     assert ".bollettino-slip { height: 102mm;" in rendered_html
     assert ".bollettino-eseguito-address { display: block; margin-top: .7mm; font-size: 7.05pt;" in rendered_html
-    assert ".bollettino-iban { position: absolute; top: 18mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center;" in rendered_html
-    assert ".bollettino-barcode-svg { position: absolute; right: 10mm; top: 64mm; width: 93mm; height: 12mm;" in rendered_html
-    assert ".bollettino-datamatrix { position: absolute; right: 5mm; top: 77mm; width: 48.75mm; height: 18.75mm;" in rendered_html
+    assert '.bollettino-account, .bollettino-td { font: 10pt "OCR B", monospace;' in rendered_html
+    assert '.bollettino-codeline { position: absolute; left: 0; right: 0; top: 91.7mm; height: 3.6mm; font: 10pt/3.6mm "OCR B", monospace;' in rendered_html
+    assert ".bollettino-iban { position: absolute; top: 16.5mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center;" in rendered_html
+    assert ".bollettino-barcode-svg { position: absolute; left: 59mm; top: 64mm; width: 93mm; height: 12mm;" in rendered_html
+    assert ".bollettino-datamatrix { position: absolute; right: 3.125mm; top: 82.625mm; width: 48.75mm; height: 18.75mm;" in rendered_html
+    assert ".bollettino-postmark { position: absolute; width: 55mm; height: 34mm; top: 49mm;" in rendered_html
+    assert ".bollettino-slip.accredito .bollettino-details { display: none; }" in rendered_html
+    assert '<div class="bollettino-small-label">TD</div><div class="bollettino-td">896</div>' in rendered_html
     assert ".legal-copy { font-size: 8.75pt; line-height: .97;" in rendered_html
     assert ".partitario-page { break-before: page; page-break-before: always; min-height: 297mm; }" in rendered_html
     assert ".partitario-page:first-child { break-before: auto; page-break-before: auto; }" in rendered_html
@@ -3729,7 +3767,7 @@ def test_gaia_reminder_template_contract() -> None:
     assert "Data Matrix TD 896" in rendered_html
     assert "A 12026242500001 CF RSSMRA80A01H501Z" in rendered_html
     assert "Scadenza: 21/11/2025 - Rata unica" in rendered_html
-    assert "Esercizio: &nbsp;&nbsp; 2525 Causale: 425" in rendered_html
+    assert "Esercizio: &nbsp;&nbsp; 9999 Causale: 777" in rendered_html
     assert '<span class="bollettino-boxes"><span>I</span><span>T</span><span>1</span><span>5</span><span>L</span>' in rendered_html
     assert rendered_html.count('<span class="bollettino-boxes">') == 2
     assert reminder_service._gaia_bollettino_iban_boxes_html("IT15").count("<span>") == 4
@@ -3773,16 +3811,59 @@ def test_gaia_reminder_template_contract() -> None:
     ).startswith(
         '<svg class="bollettino-datamatrix"'
     )
-    assert '<svg class="bollettino-barcode-svg"' in reminder_service._gaia_bollettino_code128_svg(
+    barcode_svg = reminder_service._gaia_bollettino_code128_svg(
         "18025257650095110900120010072148261000000120673896"
     )
+    assert '<svg class="bollettino-barcode-svg"' in barcode_svg
+    assert '<g fill="#000">' in barcode_svg
     assert reminder_service._gaia_code128c_codes("0012") == [105, 0, 12, 26, 106]
     with pytest.raises(ValueError, match="numero pari di cifre"):
         reminder_service._gaia_code128c_codes("123")
     assert reminder_service._gaia_bollettino_amount_code("120,67") == "00000120+67"
     assert reminder_service._gaia_bollettino_due_date({"deadline": "21.12.2024"}) == "21/12/2024"
     assert reminder_service._gaia_bollettino_due_date({"generated_at": "2026-07-22T00:00:00Z"}) == "21/08/2026"
+    assert reminder_service._gaia_bollettino_due_date({"deadline": " ", "generated_at": "2026-07-22"}) == "21/08/2026"
+    assert reminder_service._gaia_bollettino_esercizio({"years": [2024, 2025]}) == "2525"
+    assert reminder_service._gaia_bollettino_esercizio({"bollettino_esercizio": " 0123 "}) == "0123"
     assert reminder_service._gaia_bollettino_esercizio({}) == ""
+
+
+def test_td896_validation_boundaries(monkeypatch: pytest.MonkeyPatch) -> None:
+    with pytest.raises(ValueError, match="almeno una cifra"):
+        td896_service.td896_customer_code("AVV")
+    with pytest.raises(ValueError, match="superare 15 cifre"):
+        td896_service.td896_customer_code("1234567890123456")
+    assert td896_service.td896_amount_code(Decimal("1")) == "00000001+00"
+    with pytest.raises(ValueError, match="negativo"):
+        td896_service.td896_amount_code("-1")
+    with pytest.raises(ValueError, match="otto cifre"):
+        td896_service.td896_amount_code("100000000")
+    with pytest.raises(ValueError, match="decimale valido"):
+        td896_service.td896_amount_code("invalid")
+    with pytest.raises(ValueError, match="finito"):
+        td896_service.td896_amount_code("NaN")
+
+    customer_code = td896_service.td896_customer_code("AVV-1")
+    with pytest.raises(ValueError, match="formato"):
+        td896_service.build_td896_barcode_payload(customer_code, "1.00", "1007214826")
+    with pytest.raises(ValueError, match="conto corrente"):
+        td896_service.build_td896_barcode_payload(customer_code, "00000001+00", "invalid")
+    with pytest.raises(ValueError, match="conto corrente"):
+        td896_service.build_td896_barcode_payload(customer_code, "00000001+00", "1234567890123")
+    with pytest.raises(ValueError, match="18 cifre"):
+        td896_service.build_td896_barcode_payload("invalid", "00000001+00", "1007214826")
+    with pytest.raises(ValueError, match="modulo 93"):
+        td896_service.build_td896_barcode_payload(f"{customer_code[:-2]}00", "00000001+00", "1007214826")
+
+    monkeypatch.setattr(td896_service, "_BARCODE_PAYLOAD_LENGTH", 49)
+    with pytest.raises(ValueError, match="50 cifre"):
+        td896_service.build_td896_barcode_payload(customer_code, "00000001+00", "1007214826")
+    monkeypatch.setattr(td896_service, "_BARCODE_PAYLOAD_LENGTH", 50)
+    with pytest.raises(ValueError, match="payload numerico"):
+        td896_service.td896_datamatrix("1" * 49)
+    with pytest.raises(ValueError, match="payload numerico"):
+        td896_service.td896_datamatrix("A" * 50)
+    assert td896_service._galois_multiply(0, 1, [0], [0]) == 0
 
 
 def test_gaia_reminder_yearly_summary_shows_notice_number_per_year() -> None:
@@ -4036,6 +4117,18 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     )
     assert "QUANTO E QUANDO PAGARE" in no_legal_output
     assert "No legal page" not in no_legal_output
+    no_section_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        '<w:body><w:p><w:r><w:t>No section</w:t></w:r></w:p></w:body></w:document>'
+    )
+    no_section_output = reminder_service._stable_default_batch_template_xml(
+        no_section_xml,
+        payload=payload,
+        field_values=default_field_values,
+        yearly_rows=default_yearly_rows,
+    )
+    assert "QUANTO E QUANDO PAGARE" in no_section_output
     assert reminder_service._stored_partitario_lines(
         {"partitario_text": "RAW A", "avvisi": ["bad", {"partitario_text": "RAW B"}]}
     ) == ["RAW A", "", "RAW B"]
@@ -4068,10 +4161,19 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
         "================================================================================",
         "Partita RAW/00000 beni in comune di URAS",
     ]
+    assert reminder_service._split_partitario_text("<div> </div>\nRiga valida") == ["Riga valida"]
+    assert reminder_service._trim_partitario_ui_noise(["ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO"]) == [
+        "ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO"
+    ]
+    assert reminder_service._trim_partitario_ui_noise(
+        ["prefisso", "ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO"]
+    ) == ["ELENCO DELLE PARTITE SOGGETTE A CONTRIBUTO"]
+    assert reminder_service._trim_partitario_footer_actions([]) == []
     assert reminder_service._partitario_text_from_source("   ") is None
     assert reminder_service._partitario_text_from_source({"empty": "raw"}) is None
     assert reminder_service._partitario_cointestati_line({"co_intestati_raw": "ROSSI LUIGI"}) == "Co-intestato con: ROSSI LUIGI"
     assert reminder_service._format_partitario_sup_catastale({"sup_catastale_ha": "1.5"}) == "150"
+    assert reminder_service._format_partitario_sup_irrigata({"sup_irrigata_raw": "12000"}) == "12.000"
     assert reminder_service._format_partitario_integer("bad") == ""
     assert reminder_service._decimal_or_none("") is None
     assert reminder_service._decimal_or_none("bad") is None
@@ -4122,9 +4224,11 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     def fake_chromium_run(args: list[str], **_kwargs: object) -> object:
         local_pdf_path = Path(next(arg.removeprefix("--print-to-pdf=") for arg in args if arg.startswith("--print-to-pdf=")))
         html_path = Path(args[-1].removeprefix("file://"))
-        rendered_html["texts"].append(html_path.read_text(encoding="utf-8"))
+        html_text = html_path.read_text(encoding="utf-8")
+        rendered_html["texts"].append(html_text)
         writer = PdfWriter()
-        writer.add_blank_page(width=595, height=842)
+        page_size = (842, 595) if '<section class="page bollettino-page">' in html_text else (595, 842)
+        writer.add_blank_page(width=page_size[0], height=page_size[1])
         with local_pdf_path.open("wb") as pdf_file:
             writer.write(pdf_file)
         return object()
@@ -4135,7 +4239,9 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
         {**payload, "template_path": reminder_service.GAIA_PROPOSAL_TEMPLATE_KEY},
         output_path=gaia_pdf,
     )
-    assert len(PdfReader(str(gaia_pdf)).pages) == 3
+    gaia_pages = PdfReader(str(gaia_pdf)).pages
+    assert len(gaia_pages) == 3
+    assert (float(gaia_pages[-1].mediabox.width), float(gaia_pages[-1].mediabox.height)) == (842.0, 595.0)
     assert len(rendered_html["texts"]) == 3
     main_html, partitario_html, bollettino_html = rendered_html["texts"]
     all_html = "\n".join(rendered_html["texts"])
@@ -4157,11 +4263,12 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert ".logo-image { display: block; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }" in all_html
     assert ".brand.cbo .logo-image { inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }" in all_html
     assert ".brand.pagopa { justify-self: end; width: 39mm;" in all_html
+    assert "position: absolute; left: 0; bottom: 0; width: 297mm; height: 102mm;" in bollettino_html
     assert "grid-template-columns: 132mm 165mm;" in bollettino_html
     assert ".bollettino-slip { height: 102mm;" in bollettino_html
-    assert ".bollettino-iban { position: absolute; top: 18mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center;" in bollettino_html
-    assert ".bollettino-barcode-svg { position: absolute; right: 10mm; top: 64mm; width: 93mm; height: 12mm;" in bollettino_html
-    assert ".bollettino-datamatrix { position: absolute; right: 5mm; top: 77mm; width: 48.75mm; height: 18.75mm;" in bollettino_html
+    assert ".bollettino-iban { position: absolute; top: 16.5mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center;" in bollettino_html
+    assert ".bollettino-barcode-svg { position: absolute; left: 59mm; top: 64mm; width: 93mm; height: 12mm;" in bollettino_html
+    assert ".bollettino-datamatrix { position: absolute; right: 3.125mm; top: 82.625mm; width: 48.75mm; height: 18.75mm;" in bollettino_html
     assert ".partitario-page { break-before: page; page-break-before: always; min-height: 297mm; }" in all_html
     assert ".partitario-line { display: block; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }" in all_html
     assert "MODALITA' DI PAGAMENTO" not in main_html
@@ -4366,7 +4473,7 @@ def test_tributi_batch_pdf_conversion_errors(tmp_path: Path, monkeypatch: pytest
     assert convert_docx_to_pdf(docx_path, output_dir=tmp_path).exists()
 
 
-def test_tributi_reminder_service_helper_fallbacks(tmp_path: Path) -> None:
+def test_tributi_reminder_service_helper_fallbacks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     malformed_with_section = (
         '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
         "<w:body><w:p><w:r><w:t>base</w:t></w:r></w:p><w:sectPr"
@@ -4386,6 +4493,27 @@ def test_tributi_reminder_service_helper_fallbacks(tmp_path: Path) -> None:
     assert reminder_service._append_partitario_xml(xml_without_body, partitario_xml) == xml_without_body
 
     assert reminder_service._expand_yearly_summary_rows("<bad-xml", [{"Anno_Ruolo": "Ruolo 2022"}]) == "<bad-xml"
+    multi_table_xml = (
+        f'<w:document xmlns:w="{reminder_service.WORD_NAMESPACE}"><w:body>'
+        '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>senza placeholder</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+        '<w:tbl><w:tr><w:tc><w:p><w:r><w:t>«Anno_Ruolo»</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+        '</w:body></w:document>'
+    )
+    assert "Ruolo 2022" in reminder_service._expand_yearly_summary_rows(
+        multi_table_xml,
+        [{"Anno_Ruolo": "Ruolo 2022"}],
+    )
+
+    class MissingCandidate:
+        def exists(self) -> bool:
+            return False
+
+    class RootWithMissingCandidate:
+        def glob(self, _pattern: str) -> list[MissingCandidate]:
+            return [MissingCandidate()]
+
+    monkeypatch.setattr(reminder_service, "_playwright_browser_roots", lambda: [RootWithMissingCandidate()])
+    assert reminder_service._find_playwright_chromium_binary() is None
     assert reminder_service._sorted_payload_years({}, {2025: {"codice_cnc": "CNC-1"}}) == [2025]
     empty_partitario_html = reminder_service._gaia_partitario_sections_html([])
     assert "&nbsp;" in empty_partitario_html

@@ -17,6 +17,19 @@ import { DocumentIcon, LockIcon, SearchIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
 import { createCapacitasInCassSyncJob, getCurrentUser } from "@/lib/api";
 import { RuoloTributiFallback } from "./fallback";
+import {
+  EMPTY_CALCULATION_POLICY_FORM,
+  calculationPolicyAnnualityYears,
+  calculationPolicyFormFromPolicy,
+  calculationPolicyPayload,
+  formatPolicyBollettino,
+  optionalDate,
+  parseOptionalYear,
+  policyBonarioDueDate,
+  policyNameForAnnuality,
+  type CalculationPolicyFormState,
+} from "./calculation-policy-form";
+import { PolicyAnnualityCard, PolicyBollettinoFields } from "./policy-bollettino-fields";
 import { parseNoticeAmount } from "@/lib/utenze-payment-notices-summary";
 import {
   addTributiNote,
@@ -87,25 +100,6 @@ const EMPTY_YEAR_MANAGER_FORM = {
   is_active: true,
   notes: "",
 };
-const EMPTY_CALCULATION_POLICY_FORM = {
-  name: "",
-  year_from: "",
-  year_to: "",
-  bonario_due_date: "",
-  bonario_due_dates_by_year: {} as Record<string, string>,
-  surcharge_rate_percent: "",
-  euribor_6m_rate_percent: "",
-  euribor_source_url: "",
-  euribor_reference_period: "",
-  euribor_fetched_at: "",
-  interest_rate_percent: "",
-  interest_from: "",
-  interest_from_by_year: {} as Record<string, string>,
-  interest_start_mode: "notification_date" as RuoloTributiCalculationPolicyResponse["interest_start_mode"],
-  is_active: true,
-  notes: "",
-};
-
 const INTEREST_START_MODE_LABELS: Record<RuoloTributiCalculationPolicyResponse["interest_start_mode"], string> = {
   fixed_date: "Data fissa policy",
   notification_date: "PEC/raccomandata",
@@ -176,24 +170,9 @@ function formatDate(value: string | null | undefined): string {
   return new Intl.DateTimeFormat("it-IT", { dateStyle: "short" }).format(new Date(value));
 }
 
-/* c8 ignore start -- Compatibility helpers for pre-bonario policies; exercised through rendered legacy fixtures. */
-function previousIsoDate(value: string | null | undefined): string {
-  if (!value) return "";
-  const [year, month, day] = value.split("-").map(Number);
-  if (!year || !month || !day) return "";
-  const date = new Date(Date.UTC(year, month - 1, day));
-  date.setUTCDate(date.getUTCDate() - 1);
-  return date.toISOString().slice(0, 10);
-}
-
-function policyBonarioDueDate(policy: RuoloTributiCalculationPolicyResponse): string {
-  return policy.bonario_due_date ?? previousIsoDate(policy.surcharge_from);
-}
-
 function effectivePolicyInterestRatePercent(policy: RuoloTributiCalculationPolicyResponse): number {
   return policy.effective_interest_rate_percent ?? ((policy.euribor_6m_rate_percent ?? 0) + (policy.interest_rate_percent ?? 0));
 }
-/* c8 ignore stop */
 
 function formatDeliveryDate(value: string | null | undefined): string {
   if (!value) return "-";
@@ -240,38 +219,12 @@ function normaliseManagerKey(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/_+/g, "_").replace(/^_+|_+$/g, "");
 }
 
-function parseOptionalYear(value: string): number | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const parsed = Number(trimmed);
-  /* c8 ignore next -- Year inputs are digit-normalised before submit; this keeps the helper defensive. */
-  return Number.isInteger(parsed) ? parsed : null;
-}
-
-function parseOptionalPercent(value: string): number {
-  const parsed = Number(value.replace(",", "."));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function optionalDate(value: string | undefined): string | null {
-  return value || null;
-}
-
-function calculationPolicyAnnualityYears(yearFrom: number | null, yearTo: number | null): number[] {
-  if (yearFrom == null || yearTo == null || yearFrom > yearTo) return [];
-  return Array.from({ length: yearTo - yearFrom + 1 }, (_value, index) => yearFrom + index);
-}
-
 function calculationPolicyAnnualityRows(policy: RuoloTributiCalculationPolicyResponse): { key: string; label: string }[] {
   const years = calculationPolicyAnnualityYears(policy.year_from, policy.year_to);
   if (years.length === 0) {
     return [{ key: `${policy.id}-range`, label: `Annualita ${formatYearRange(policy).toLowerCase()}` }];
   }
   return years.map((year) => ({ key: `${policy.id}-${year}`, label: `Annualita ${year}` }));
-}
-
-function policyNameForAnnuality(name: string, year: number): string {
-  return `${name} ${year}`;
 }
 
 /* c8 ignore start -- Defensive fallbacks for malformed API payloads; normal values are covered through the UI. */
@@ -817,28 +770,8 @@ function RuoloTributiPageContent() {
   }
 
   function editCalculationPolicy(policy: RuoloTributiCalculationPolicyResponse) {
-    const annualityYears = calculationPolicyAnnualityYears(policy.year_from, policy.year_to);
-    const bonarioDueDate = policyBonarioDueDate(policy);
-    const interestFrom = policy.interest_from ?? "";
     setEditingCalculationPolicyId(policy.id);
-    setCalculationPolicyForm({
-      name: policy.name,
-      year_from: [policy.year_from].join(""),
-      year_to: [policy.year_to].join(""),
-      bonario_due_date: bonarioDueDate,
-      bonario_due_dates_by_year: Object.fromEntries(annualityYears.map((year) => [String(year), bonarioDueDate])),
-      surcharge_rate_percent: [policy.surcharge_rate_percent].join(""),
-      euribor_6m_rate_percent: [policy.euribor_6m_rate_percent].join(""),
-      euribor_source_url: policy.euribor_source_url ?? "",
-      euribor_reference_period: policy.euribor_reference_period ?? "",
-      euribor_fetched_at: policy.euribor_fetched_at ?? "",
-      interest_rate_percent: [policy.interest_rate_percent].join(""),
-      interest_from: [policy.interest_from].join(""),
-      interest_from_by_year: Object.fromEntries(annualityYears.map((year) => [String(year), interestFrom])),
-      interest_start_mode: policy.interest_start_mode,
-      is_active: policy.is_active,
-      notes: [policy.notes].join(""),
-    });
+    setCalculationPolicyForm(calculationPolicyFormFromPolicy(policy));
     setCalculationPolicyError(null);
     setCalculationPolicyMessage(null);
   }
@@ -854,27 +787,9 @@ function RuoloTributiPageContent() {
     event.preventDefault();
     /* c8 ignore next -- The form is usable only after token-backed page initialisation. */
     if (!token) return;
-    const yearFrom = parseOptionalYear(calculationPolicyForm.year_from);
-    const yearTo = parseOptionalYear(calculationPolicyForm.year_to);
-    const annualityYears = calculationPolicyAnnualityYears(yearFrom, yearTo);
+    const payload = calculationPolicyPayload(calculationPolicyForm);
+    const annualityYears = calculationPolicyAnnualityYears(payload.year_from, payload.year_to);
     const shouldSaveOnePolicyPerAnnuality = annualityYears.length > 1;
-    const payload = {
-      name: calculationPolicyForm.name.trim(),
-      year_from: yearFrom,
-      year_to: yearTo,
-      bonario_due_date: optionalDate(calculationPolicyForm.bonario_due_date),
-      surcharge_rate_percent: parseOptionalPercent(calculationPolicyForm.surcharge_rate_percent),
-      surcharge_from: null,
-      euribor_6m_rate_percent: parseOptionalPercent(calculationPolicyForm.euribor_6m_rate_percent),
-      euribor_source_url: calculationPolicyForm.euribor_source_url || null,
-      euribor_reference_period: calculationPolicyForm.euribor_reference_period || null,
-      euribor_fetched_at: calculationPolicyForm.euribor_fetched_at || null,
-      interest_rate_percent: parseOptionalPercent(calculationPolicyForm.interest_rate_percent),
-      interest_from: optionalDate(calculationPolicyForm.interest_from),
-      interest_start_mode: calculationPolicyForm.interest_start_mode,
-      is_active: calculationPolicyForm.is_active,
-      notes: calculationPolicyForm.notes.trim() || null,
-    };
     setCalculationPolicyError(null);
     setCalculationPolicyMessage(null);
     try {
@@ -1842,8 +1757,6 @@ function YearManagersPanel({
   );
 }
 
-type CalculationPolicyFormState = typeof EMPTY_CALCULATION_POLICY_FORM;
-
 function CalculationPoliciesPanel({
   policies,
   loading,
@@ -1996,12 +1909,7 @@ function CalculationPoliciesPanel({
                           ) : null}
                           <div className="mt-2 grid gap-1.5 text-xs text-gray-600 sm:grid-cols-2">
                             {calculationPolicyAnnualityRows(policy).map((annuality) => (
-                              <p key={annuality.key} className="rounded-2xl border border-amber-100 bg-amber-50/60 px-3 py-2 leading-5">
-                                <span className="font-semibold text-amber-900">{annuality.label}</span>
-                                <span className="block">Scadenza bonaria {formatDate(policyBonarioDueDate(policy))}</span>
-                                <span className="block">Maggiorazione dal {formatDate(policy.surcharge_from)}</span>
-                                <span className="block">Fallback/minimo interessi {formatDate(policy.interest_from)}</span>
-                              </p>
+                              <PolicyAnnualityCard key={annuality.key} label={annuality.label} bonarioDueDate={formatDate(policyBonarioDueDate(policy))} surchargeFrom={formatDate(policy.surcharge_from)} interestFrom={formatDate(policy.interest_from)} bollettino={formatPolicyBollettino(policy)} />
                             ))}
                           </div>
                           {policy.notes ? <p className="mt-2 text-xs leading-5 text-gray-600">{policy.notes}</p> : null}
@@ -2135,6 +2043,7 @@ function CalculationPoliciesPanel({
                         <option value="fixed_date">Da data fissa policy</option>
                       </select>
                     </label>
+                    <PolicyBollettinoFields form={form} onChange={onFormChange} />
                     <textarea value={form.notes} onChange={(event) => onFormChange({ ...form, notes: event.target.value })} rows={3} placeholder="Note operative" className="rounded-2xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-amber-400" />
                     <label className="flex items-center gap-2 text-sm text-gray-700">
                       <input type="checkbox" checked={form.is_active} onChange={(event) => onFormChange({ ...form, is_active: event.target.checked })} />

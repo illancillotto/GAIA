@@ -114,6 +114,16 @@ def td896_amount_code(amount: str | Decimal) -> str:
     return f"{integer_part:08d}+{cents:02d}"
 
 
+def td896_esercizio(payload: dict[str, object], years: list[int]) -> str:
+    configured = payload.get("bollettino_esercizio")
+    if isinstance(configured, str) and configured.strip():
+        return configured.strip()
+    if not years:
+        return ""
+    suffix = str(years[-1])[-2:]
+    return f"{suffix}{suffix}"
+
+
 def build_td896_barcode_payload(
     customer_code: str,
     amount_code: str,
@@ -152,7 +162,7 @@ def td896_datamatrix_svg(value: str) -> str:
         f'viewBox="0 0 {width} {height}" preserveAspectRatio="none" '
         'shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg">'
         f'<rect width="{width}" height="{height}" fill="#fff"/>'
-        '<g fill="#111">'
+        '<g fill="#000">'
         f'{"".join(rects)}'
         '</g></svg>'
     )

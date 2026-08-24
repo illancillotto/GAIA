@@ -9,7 +9,19 @@
 - Modulo: Ruolo
 - Stato complessivo: **documento archiviato; implementazione storica completata M1–M5**
 - Owner: TBD
-- Ultimo aggiornamento: 2026-08-20
+- Ultimo aggiornamento: 2026-08-24
+
+---
+
+## Aggiornamento operativo 2026-08-24
+
+- Estese le `Regole ruolo` con causale a tre cifre ed esercizio a quattro cifre opzionali per il bollettino TD 896.
+- I valori seguono la policy dell'annualita piu recente del sollecito; in loro assenza restano invariati i fallback automatici da numero avviso e annualita.
+- Allineati contratti API, persistenza, form `/ruolo/tributi`, payload batch e renderer GAIA; la migration `20260824_0900` mantiene un'unica catena Alembic.
+- Isolati CRUD e schemi delle policy in `tributi_policy_repository.py` e `tributi_policy_schemas.py`; il frontend separa stato/normalizzazione del form e campi bollettino dalla pagina legacy, mantenendo invariati gli import pubblici.
+- Quality ratchet contro la base del worktree senza finding; coverage completo dei file runtime modificati: backend `4701/4701` statement e frontend `712/712` statement, `702/702` branch, `234/234` funzioni e `644/644` linee.
+- Adeguato il TD 896 al modello CH8/Bis Poste: ultima pagina A4 landscape nativa, modulo `297 x 102 mm` senza scaling, OCR-B incorporato, codici ottici a dimensione nominale, aree bollo `55 x 34 mm`, zona cliente accredito riservata al solo versante e colori nero/grigio 20%.
+- Verifica renderer TD 896: `1034/1034` statement e `336/336` branch coperti (`100%`); PDF reale a 300 dpi con `OCRB-Regular` incorporato, Code 128 circa `92,79 x 11,60 mm` e Data Matrix utile circa `45,04 x 15,07 mm`, entrambi decodificati sul medesimo payload di 50 cifre. Complexity ratchet senza finding e grafi Ruolo code/docs aggiornati.
 
 ---
 

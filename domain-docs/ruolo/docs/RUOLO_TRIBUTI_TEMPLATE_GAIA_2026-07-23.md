@@ -1,6 +1,6 @@
 # Template GAIA avviso/sollecito tributi
 
-Aggiornamento del 2026-08-20.
+Aggiornamento del 2026-08-24.
 
 ## Scopo
 
@@ -25,7 +25,7 @@ Il renderer non usa percorsi locali del PC, cartelle `Downloads` o file temporan
 - Pagina 1: nella colonna `Numero avviso` del riepilogo annuale il template mostra il codice avviso senza il prefisso tecnico `01.`; il valore persistito `codice_cnc` resta invariato.
 - Pagina 2: comunicazioni amministrative complete derivate dal template originale, con interlinea compatta ma leggibile.
 - Pagina 3 e successive: dettaglio partitario allegato con font monospace ingrandito, wrapping controllato, formato raw preservato e titolo `Dettaglio partitario allegato - pagina X di N`.
-- Ultima pagina: bollettino postale TD 896 precompilato in A4 verticale con contenuto ruotato, allineato al formato Crystal Reports di riferimento e inserito dopo il partitario.
+- Ultima pagina: bollettino postale TD 896 precompilato in A4 orizzontale nativo, inserito dopo il partitario e stampabile al `100%` senza rotazioni o riduzioni.
 
 ## Bollettino TD 896
 
@@ -40,6 +40,9 @@ Il layout recepisce le misure principali del modello CH8/Bis TD 896 indicate nei
 - IBAN in 27 caselle sulla stessa riga, con ABI Poste `07601`;
 - barcode su ricevuta di accredito a circa `64mm` dal bordo superiore, largo `93mm` e alto `12mm`;
 - Data Matrix ECC 200 rettangolare `16 x 48`, con quiet zone di due celle per lato, generato dai dati dell'avviso e posizionato nella zona inferiore della ricevuta di versamento.
+- dati significativi e codeline nel font incorporato `OCRB-Regular`, nero puro;
+- elementi guida non significativi in grigio laserizzato al `20%`;
+- due aree bollo da `55mm x 34mm`, posizionate a `49mm` dal bordo superiore.
 
 Per la stampa PDF con Chromium il renderer usa tre job separati: avviso/comunicazioni,
 partitario e bollettino. I documenti vengono poi uniti con `pypdf` nell'ordine
@@ -47,10 +50,11 @@ partitario e bollettino. I documenti vengono poi uniti con `pypdf` nell'ordine
 partitario reale molto lungo faccia scattare lo shrink-to-fit di Chromium sulla pagina
 bollettino, mantenendo al tempo stesso il bollettino come ultima pagina del documento.
 
-Il bollettino viene renderizzato con un wrapper A4 portrait `210mm x 297mm` e un canvas interno
-landscape `297mm x 210mm` assoluto, ruotato di `-90deg` e scalato a `.968`. Il canvas e traslato
-verticalmente per mantenere il margine visivo del riferimento `/tmp/gaia_sollecito_bollettino_896_prova.pdf`
-anche con importi a sei cifre e denominazioni societarie lunghe.
+Il bollettino viene renderizzato direttamente su una pagina A4 landscape
+`297mm x 210mm`. Il modulo CH8/Bis e ancorato al bordo inferiore con dimensioni
+reali `297mm x 102mm`; non sono applicati `transform`, rotazioni o
+`shrink-to-fit`. Le altre pagine restano A4 portrait e `pypdf` conserva i
+formati pagina differenti durante l'unione.
 
 Valori fissi configurati nel renderer:
 
@@ -63,7 +67,22 @@ La codeline usa il codice cliente postale di 18 cifre. Le prime 16 cifre incorpo
 
 Un unico oggetto validato alimenta codeline, Code 128-C e Data Matrix. Il payload ottico contiene sempre 50 cifre con struttura: `18` + codice cliente di 18 cifre + `12` + conto corrente a 12 cifre + `10` + importo a 10 cifre senza separatore + `3` + tipo documento `896`. Il renderer genera il Code 128-C con checksum modulo 103 e il Data Matrix con 49 codeword dati e 28 codeword Reed-Solomon.
 
-Il campo `Esercizio` e derivato dall'anno piu alto presente nel payload del sollecito: per un avviso multi-annualita `2024-2025`, GAIA usa `2025`, prende il suffisso `25` e lo duplica in `2525`.
+La `Regola ruolo` puo configurare i campi opzionali `bollettino_causale` e
+`bollettino_esercizio`, rispettivamente di tre e quattro cifre. Durante la
+generazione del sollecito GAIA usa la policy attiva relativa all'annualita piu
+recente inclusa nell'avviso e copia i valori configurati nel payload del
+documento. La stessa configurazione si applica quindi alla preview rapida e al
+batch salvato nel NAS.
+
+Causale, esercizio e scadenza sono stampati nella ricevuta di versamento. La
+zona cliente della ricevuta di accredito contiene esclusivamente denominazione
+e indirizzo del versante; questa separazione evita l'inserimento di dati
+amministrativi nell'area riservata dal modello Poste.
+
+Se la policy non valorizza i campi, il comportamento resta automatico: la
+causale e derivata dal numero avviso e `Esercizio` dall'anno piu alto presente
+nel payload. Per un avviso multi-annualita `2024-2025`, GAIA usa `2025`, prende
+il suffisso `25` e lo duplica in `2525`.
 
 Nota operativa: la pagina rende un facsimile precompilato per stampa e pagamento manuale/online tramite dati, codeline e barcode. La piena omologazione di stampa in proprio Poste richiede verifica specialistica di posizionamenti OCR e Data Matrix secondo le specifiche ufficiali.
 
@@ -81,6 +100,7 @@ il vincolo primario e non sovrapporre codice cliente, scadenza, barcode e codeli
 - Il wizard batch e il fallback backend devono generare il template GAIA `__gaia_proposal__`, non il DOCX legacy, per includere sempre il bollettino postale.
 - Il bollettino TD 896 deve restare dopo il partitario, come ultima pagina, e deve usare codeline coerente con codice cliente, importo, conto corrente e tipo documento.
 - Code 128 e Data Matrix devono decodificare lo stesso payload numerico di 50 cifre.
+- Causale ed esercizio configurati nella `Regola ruolo` devono comparire nella ricevuta di versamento; se assenti devono restare attivi i fallback automatici.
 - Il partitario deve mantenere spaziatura e allineamenti del formato raw.
 - Il partitario non deve contenere script o frammenti UI Capacitas come `mstrAvvisoDlgPartitarioKUI`, `btnScaricaPartitarioDlgPartitarioKUI` o `exportExcel.aspx`.
 - Il partitario non deve stampare azioni di modale Capacitas come `Chiudi` o `Scarica` in coda.

@@ -3,6 +3,14 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { RuoloTributiFallback } from "@/app/ruolo/tributi/fallback";
 import RuoloTributiPage from "@/app/ruolo/tributi/page";
+import {
+  EMPTY_CALCULATION_POLICY_FORM,
+  calculationPolicyAnnualityYears,
+  calculationPolicyPayload,
+  optionalDate,
+  parseOptionalYear,
+  policyBonarioDueDate,
+} from "@/app/ruolo/tributi/calculation-policy-form";
 import type { CurrentUser } from "@/types/api";
 import type { RuoloTributiAvvisoListItemResponse } from "@/types/ruolo";
 
@@ -370,6 +378,8 @@ const calculationPolicies = [
     effective_interest_rate_percent: 6.25,
     interest_from: "2025-05-27",
     interest_start_mode: "notification_date" as const,
+    bollettino_causale: "025",
+    bollettino_esercizio: "2424",
     is_active: true,
     notes: "Interessi da invio PEC/ricezione raccomandata.",
     updated_by: null,
@@ -418,6 +428,35 @@ const reminderBatch = {
 };
 
 describe("Ruolo tributi page", () => {
+  test("normalizes calculation policy form edge cases", () => {
+    expect(parseOptionalYear(" ")).toBeNull();
+    expect(parseOptionalYear("2024.5")).toBeNull();
+    expect(parseOptionalYear("2024")).toBe(2024);
+    expect(optionalDate(undefined)).toBeNull();
+    expect(optionalDate("2026-08-24")).toBe("2026-08-24");
+    expect(calculationPolicyAnnualityYears(null, 2025)).toEqual([]);
+    expect(calculationPolicyAnnualityYears(2024, null)).toEqual([]);
+    expect(calculationPolicyAnnualityYears(2025, 2024)).toEqual([]);
+    expect(calculationPolicyAnnualityYears(2024, 2025)).toEqual([2024, 2025]);
+
+    const payload = calculationPolicyPayload({
+      ...EMPTY_CALCULATION_POLICY_FORM,
+      surcharge_rate_percent: "invalid",
+      euribor_6m_rate_percent: "1,5",
+      interest_rate_percent: "Infinity",
+    });
+    expect(payload.surcharge_rate_percent).toBe(0);
+    expect(payload.euribor_6m_rate_percent).toBe(1.5);
+    expect(payload.interest_rate_percent).toBe(0);
+
+    const policy = calculationPolicies[0];
+    expect(policyBonarioDueDate({ ...policy, bonario_due_date: null, surcharge_from: null })).toBe("");
+    expect(policyBonarioDueDate({ ...policy, bonario_due_date: null, surcharge_from: "bad" })).toBe("");
+    expect(policyBonarioDueDate({ ...policy, bonario_due_date: null, surcharge_from: "2025--01" })).toBe("");
+    expect(policyBonarioDueDate({ ...policy, bonario_due_date: null, surcharge_from: "2025-01-" })).toBe("");
+    expect(policyBonarioDueDate({ ...policy, bonario_due_date: null, surcharge_from: "2025-05-28" })).toBe("2025-05-27");
+  });
+
   beforeEach(() => {
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
@@ -719,6 +758,8 @@ describe("Ruolo tributi page", () => {
       interest_rate_percent: 0,
       interest_from: "2026-08-10",
       interest_start_mode: "fixed_date",
+      bollettino_causale: "025",
+      bollettino_esercizio: "2424",
       is_active: false,
       notes: "Nuova nota",
     });
@@ -736,6 +777,8 @@ describe("Ruolo tributi page", () => {
       interest_rate_percent: 0,
       interest_from: "2027-08-10",
       interest_start_mode: "fixed_date",
+      bollettino_causale: "025",
+      bollettino_esercizio: "2424",
       is_active: false,
       notes: "Nuova nota",
     });
@@ -767,8 +810,12 @@ describe("Ruolo tributi page", () => {
     fireEvent.click(await modal.findByRole("button", { name: "Modifica" }));
 
     expect(modal.queryByText("Date per annualita")).not.toBeInTheDocument();
+    expect(modal.getByLabelText("Causale bollettino")).toHaveValue("025");
+    expect(modal.getByLabelText("Esercizio bollettino")).toHaveValue("2424");
     fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario"), { target: { value: "2026-07-31" } });
     fireEvent.change(modal.getByLabelText("Fallback/minimo interessi"), { target: { value: "2026-08-10" } });
+    fireEvent.change(modal.getByLabelText("Causale bollettino"), { target: { value: "a0079" } });
+    fireEvent.change(modal.getByLabelText("Esercizio bollettino"), { target: { value: "x25259" } });
     fireEvent.click(modal.getByRole("button", { name: "Aggiorna" }));
 
     await waitFor(() => {
@@ -780,6 +827,8 @@ describe("Ruolo tributi page", () => {
           year_to: 2024,
           bonario_due_date: "2026-07-31",
           interest_from: "2026-08-10",
+          bollettino_causale: "007",
+          bollettino_esercizio: "2525",
         }),
       );
     });
@@ -822,12 +871,18 @@ describe("Ruolo tributi page", () => {
           euribor_source_url: null,
           euribor_reference_period: null,
           euribor_fetched_at: null,
+          euribor_6m_rate_percent: null as never,
+          effective_interest_rate_percent: undefined as never,
+          interest_rate_percent: null as never,
+          bollettino_causale: null,
+          bollettino_esercizio: null,
         },
       ],
     });
     render(<RuoloTributiPage />);
 
     expect(await screen.findByText("Regole ruolo")).toBeInTheDocument();
+    expect(screen.getByText("Int. eff. 0%")).toBeInTheDocument();
     expect(screen.queryByText("Verifica BCE")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Gestisci regole calcolo" }));
 
@@ -836,6 +891,8 @@ describe("Ruolo tributi page", () => {
     const modal = within(dialog as HTMLElement);
     fireEvent.click(await modal.findByRole("button", { name: "Modifica" }));
     expect(modal.queryByText("verifica il dato BCE")).not.toBeInTheDocument();
+    expect(modal.getByLabelText("Causale bollettino")).toHaveValue("");
+    expect(modal.getByLabelText("Esercizio bollettino")).toHaveValue("");
   });
 
   test("renders Euribor source link with missing reference period fallback", async () => {
@@ -895,6 +952,8 @@ describe("Ruolo tributi page", () => {
       interest_rate_percent: 0,
       interest_from: "2026-08-10",
       interest_start_mode: "notification_date",
+      bollettino_causale: null,
+      bollettino_esercizio: null,
       is_active: true,
       notes: null,
     });
@@ -912,6 +971,8 @@ describe("Ruolo tributi page", () => {
       interest_rate_percent: 0,
       interest_from: "2027-08-10",
       interest_start_mode: "notification_date",
+      bollettino_causale: null,
+      bollettino_esercizio: null,
       is_active: true,
       notes: null,
     });
