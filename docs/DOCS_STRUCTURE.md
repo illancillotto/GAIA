@@ -27,6 +27,7 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 - `docs/GIS_PLATFORM_IMPLEMENTATION_PLAN.md`: piano tecnico incrementale per completare la piattaforma GIS.
 - `docs/GIS_PLATFORM_MILESTONES.md`: milestone, deliverable ed exit criteria della piattaforma GIS.
 - `docs/GIS_PLATFORM_PROGRESS.md`: stato di avanzamento operativo della piattaforma GIS.
+- `docs/FRONTEND_SESSION_BOOTSTRAP.md`: cache, rivalidazione, rendering non bloccante e test del bootstrap sessione frontend.
 - `docs/data-model/`: poster A0, diagrammi ERD e dizionario relazioni generati dai modelli SQLAlchemy.
 - `docs/TEST_COVERAGE_100_PLAN.md`: policy e piano operativo per portare il codice runtime a coverage totale.
 - `docs/AGENTS.md`: linee guida operative per agenti/tooling.

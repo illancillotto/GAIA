@@ -26,6 +26,7 @@ Evoluzione pianificata:
 ## Documentazione
 
 - `docs/` contiene la documentazione di piattaforma.
+- `docs/FRONTEND_SESSION_BOOTSTRAP.md` descrive cache, rivalidazione e test della sessione frontend condivisa.
 - `domain-docs/` contiene la documentazione funzionale per dominio.
 - `modules/accessi/docs/` ospita documenti scaffold legacy mantenuti per compatibilità test/tooling.
 
@@ -802,6 +803,7 @@ Se la variabile e vuota/non impostata, la password non viene richiesta.
 - Architettura piattaforma: `docs/ARCHITECTURE.md`
 - PRD piattaforma: `docs/PRD.md`
 - Piano implementazione: `docs/IMPLEMENTATION_PLAN.md`
+- Bootstrap sessione frontend: `docs/FRONTEND_SESSION_BOOTSTRAP.md`
 - Wiki Agent (Milestone 9): `domain-docs/wiki/docs/`
   - il fallback della chat Wiki e del widget è contestuale a `module_key` e `page_path`, con priorità `pagina > modulo > generico`; label ed esempi sono centralizzati in `backend/app/modules/wiki/services/context_hints.py`
 - GAIA Accessi: `domain-docs/accessi/docs/`

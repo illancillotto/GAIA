@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { ProtectedPage } from "@/components/app/protected-page";
+import { clearSessionBootstrapCache } from "@/lib/session-bootstrap";
 
 const BOOTSTRAP_TIMEOUT_MS = 8_000;
 const replaceMock = vi.fn();
@@ -87,6 +88,7 @@ function buildUser(overrides: Record<string, unknown> = {}) {
 
 describe("ProtectedPage", () => {
   beforeEach(() => {
+    clearSessionBootstrapCache();
     window.history.replaceState({}, "", "/catasto");
     replaceMock.mockReset();
     mockGetCurrentUser.mockReset();
@@ -108,7 +110,7 @@ describe("ProtectedPage", () => {
     });
   });
 
-  test("shows a loading spinner while the session check is still in progress", () => {
+  test("shows a loading spinner while the session check is still in progress", async () => {
     const deferredUser = createDeferred<ReturnType<typeof buildUser>>();
     const deferredPermissions = createDeferred<{ granted_keys: string[] }>();
 
@@ -126,8 +128,10 @@ describe("ProtectedPage", () => {
     expect(screen.getByRole("status")).toHaveTextContent("Sto caricando la sessione e i permessi della pagina.");
     expect(screen.queryByText("Vai al login")).not.toBeInTheDocument();
 
-    deferredUser.resolve(buildUser());
-    deferredPermissions.resolve({ granted_keys: [] });
+    await act(async () => {
+      deferredUser.resolve(buildUser());
+      deferredPermissions.resolve({ granted_keys: [] });
+    });
   });
 
   test("redirects to login and exits the loading state when there is no stored token", async () => {
@@ -168,6 +172,32 @@ describe("ProtectedPage", () => {
     expect(mockHasSectionAccess).toHaveBeenCalledWith(["catasto.dashboard"], "catasto.dashboard");
   });
 
+  test("reuses the verified session without showing the auth gate after client navigation", async () => {
+    mockGetStoredAccessToken.mockReturnValue("token");
+    mockGetCurrentUser.mockResolvedValue(buildUser());
+    mockGetMyPermissions.mockResolvedValue({ granted_keys: ["catasto.dashboard"] });
+
+    const firstPage = render(
+      <ProtectedPage title="GAIA Catasto" description="Dashboard operativa">
+        <div>prima pagina</div>
+      </ProtectedPage>,
+    );
+    expect(await screen.findByText("prima pagina")).toBeInTheDocument();
+    await act(async () => {});
+    firstPage.unmount();
+
+    render(
+      <ProtectedPage title="GAIA Catasto" description="Seconda pagina">
+        <div>seconda pagina</div>
+      </ProtectedPage>,
+    );
+
+    expect(screen.getByText("seconda pagina")).toBeInTheDocument();
+    expect(screen.queryByText("Verifica sessione")).not.toBeInTheDocument();
+    expect(mockGetCurrentUser).toHaveBeenCalledTimes(1);
+    expect(mockGetMyPermissions).toHaveBeenCalledTimes(1);
+  });
+
   test("keeps rendering when the optional dashboard summary request fails", async () => {
     mockGetStoredAccessToken.mockReturnValue("token");
     mockGetCurrentUser.mockResolvedValue(buildUser());
@@ -181,6 +211,39 @@ describe("ProtectedPage", () => {
     );
 
     expect(await screen.findByText("contenuto")).toBeInTheDocument();
+  });
+
+  test("ignores a late dashboard summary after the protected page unmounts", async () => {
+    const pendingSummary = createDeferred<{
+      nas_users: number;
+      nas_groups: number;
+      shares: number;
+      reviews: number;
+      snapshots: number;
+      sync_runs: number;
+    }>();
+    mockGetStoredAccessToken.mockReturnValue("token");
+    mockGetCurrentUser.mockResolvedValue(buildUser());
+    mockGetMyPermissions.mockResolvedValue({ granted_keys: [] });
+    mockGetDashboardSummary.mockReturnValue(pendingSummary.promise);
+
+    const page = render(
+      <ProtectedPage title="GAIA Catasto" description="Dashboard operativa">
+        <div>contenuto</div>
+      </ProtectedPage>,
+    );
+    expect(await screen.findByText("contenuto")).toBeInTheDocument();
+    page.unmount();
+
+    pendingSummary.resolve({
+      nas_users: 1,
+      nas_groups: 0,
+      shares: 0,
+      reviews: 0,
+      snapshots: 0,
+      sync_runs: 0,
+    });
+    await act(async () => {});
   });
 
   test("shows the login card after an authentication error clears the session", async () => {

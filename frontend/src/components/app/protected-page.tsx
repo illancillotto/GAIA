@@ -1,22 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { PropsWithChildren, type ReactNode, useEffect, useState } from "react";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { Topbar } from "@/components/layout/topbar";
 import {
-  getCurrentUser,
   getDashboardSummary,
-  getMyPermissions,
-  isAuthError,
   SESSION_BOOTSTRAP_TIMEOUT_MS,
 } from "@/lib/api";
-import { clearStoredAccessToken, getStoredAccessToken } from "@/lib/auth";
 import { hasUserModuleAccess } from "@/lib/module-access";
 import { hasSectionAccess } from "@/lib/section-access";
-import type { CurrentUser, DashboardSummary } from "@/types/api";
+import { useSessionBootstrap } from "@/lib/use-session-bootstrap";
+import type { DashboardSummary } from "@/types/api";
 
 export type ProtectedPageProps = PropsWithChildren<{
   title: string;
@@ -51,66 +47,27 @@ export function ProtectedPage({
   embeddedCompact = false,
   children,
 }: ProtectedPageProps) {
-  const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const session = useSessionBootstrap();
   const [summary, setSummary] = useState<DashboardSummary>(emptySummary);
-  const [statusMessage, setStatusMessage] = useState("Accedi per caricare dati dal backend.");
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [isCheckingSession, setIsCheckingSession] = useState(true);
-  const [grantedSectionKeys, setGrantedSectionKeys] = useState<string[]>([]);
   const [isEmbedded, setIsEmbedded] = useState(false);
+  const currentUser = session.currentUser;
+  const grantedSectionKeys = session.grantedSectionKeys;
+  const isCheckingSession = session.status === "checking";
+  const statusMessage = session.status === "error"
+    ? "Backend non raggiungibile o richiesta scaduta."
+    : "Accesso richiesto. Effettua il login.";
 
   useEffect(() => {
-    async function loadSession() {
-      const token = getStoredAccessToken();
-
-      if (!token) {
-        setCurrentUser(null);
-        setSummary(emptySummary);
-        setGrantedSectionKeys([]);
-        setLoadError(null);
-        setStatusMessage("Accesso richiesto. Effettua il login.");
-        setIsCheckingSession(false);
-        router.replace("/login");
-        return;
-      }
-
-      try {
-        const [user, permissionSummary] = await Promise.all([
-          getCurrentUser(token, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS }),
-          getMyPermissions(token, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS }),
-        ]);
-
-        setCurrentUser(user);
-        setGrantedSectionKeys(permissionSummary.granted_keys);
-        setLoadError(null);
-        setStatusMessage("Sessione backend attiva.");
-        void getDashboardSummary(token, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS })
-          .then((dashboardSummary) => {
-            setSummary(dashboardSummary);
-          })
-          .catch(() => {
-            // The shell badges are useful but non-blocking for page rendering.
-          });
-      } catch (error) {
-        setLoadError(error instanceof Error ? error.message : "Errore imprevisto");
-        if (isAuthError(error)) {
-          clearStoredAccessToken();
-          setCurrentUser(null);
-          setSummary(emptySummary);
-          setGrantedSectionKeys([]);
-          setStatusMessage("Sessione non valida.");
-          router.replace("/login");
-        } else {
-          setStatusMessage("Backend non raggiungibile o richiesta scaduta.");
-        }
-      } finally {
-        setIsCheckingSession(false);
-      }
+    if (session.status !== "ready" || !session.token) {
+      return;
     }
 
-    void loadSession();
-  }, [router]);
+    void getDashboardSummary(session.token, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS })
+      .then(setSummary)
+      .catch(() => {
+        // The shell badges are useful but non-blocking for page rendering.
+      });
+  }, [session.status, session.token]);
 
   useEffect(() => {
     /* v8 ignore next -- jsdom unit tests always run with window available */
@@ -122,12 +79,8 @@ export function ProtectedPage({
   }, []);
 
   function handleLogout(): void {
-    setCurrentUser(null);
-    setLoadError(null);
     setSummary(emptySummary);
-    setGrantedSectionKeys([]);
-    setStatusMessage("Sessione chiusa. Effettua di nuovo il login.");
-    router.replace("/login");
+    session.logout();
   }
 
   if (isCheckingSession) {
@@ -160,8 +113,8 @@ export function ProtectedPage({
           </p>
           <h1 className="page-heading">{title}</h1>
           <p className="mt-2 text-sm text-gray-500">{description}</p>
-          <p className={`mt-4 text-sm ${loadError ? "text-red-600" : "text-gray-500"}`}>
-            {loadError ?? statusMessage}
+          <p className={`mt-4 text-sm ${session.error ? "text-red-600" : "text-gray-500"}`}>
+            {session.error ?? statusMessage}
           </p>
           <Link className="btn-primary mt-6" href="/login">
             Vai al login

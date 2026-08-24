@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import HomePage from "@/app/page";
+import { clearSessionBootstrapCache } from "@/lib/session-bootstrap";
 
 const BOOTSTRAP_TIMEOUT_MS = 8_000;
 const mocks = vi.hoisted(() => ({
@@ -72,8 +73,17 @@ vi.mock("@/lib/api/catasto", () => ({
   catastoGetIndiciOverview: mocks.catastoGetIndiciOverview,
 }));
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
+}
+
 describe("HomePage presence widget", () => {
   beforeEach(() => {
+    clearSessionBootstrapCache();
     mocks.replace.mockReset();
     mocks.push.mockReset();
     mocks.getStoredAccessToken.mockReset();
@@ -156,6 +166,42 @@ describe("HomePage presence widget", () => {
     mocks.catastoGetIndiciOverview.mockResolvedValue(null);
     mocks.searchOperational.mockResolvedValue({ query: "", items: [], total: 0, modules: [] });
     mocks.isAuthError.mockReturnValue(false);
+  });
+
+  test("renders the authenticated home before dashboard widgets finish loading", async () => {
+    const pendingDashboard = deferred<{
+      nas_users: number;
+      nas_groups: number;
+      shares: number;
+      reviews: number;
+      snapshots: number;
+      sync_runs: number;
+    }>();
+    mocks.getDashboardSummary.mockReturnValue(pendingDashboard.promise);
+    mocks.getPresenceSummary.mockResolvedValue({
+      window_minutes: 15,
+      active_users: 0,
+      visible_users: 0,
+      by_module: [],
+      items: [],
+    });
+
+    render(<HomePage />);
+
+    expect(await screen.findByText("Hub operativo GAIA")).toBeInTheDocument();
+    expect(screen.queryByText("Verifica sessione in corso…")).not.toBeInTheDocument();
+
+    await act(async () => {
+      pendingDashboard.resolve({
+        nas_users: 3,
+        nas_groups: 2,
+        shares: 1,
+        reviews: 0,
+        snapshots: 0,
+        sync_runs: 0,
+      });
+      await pendingDashboard.promise;
+    });
   });
 
   test("shows GAIA user activity widget for authorized admins", async () => {

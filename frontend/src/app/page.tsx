@@ -2,28 +2,23 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 
 import {
-  getCurrentUser,
   getDashboardSummary,
-  getMyPermissions,
   getPresenceSummary,
   getUtenzeStats,
   SESSION_BOOTSTRAP_TIMEOUT_MS,
-  isAuthError,
 } from "@/lib/api";
 import { catastoGetIndiciOverview } from "@/lib/api/catasto";
 import { getRuoloStats, getRuoloStatsAnalytics } from "@/lib/ruolo-api";
-import { clearStoredAccessToken, getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { hasUserModuleAccess } from "@/lib/module-access";
 import { usePresenceHeartbeat } from "@/lib/use-presence-heartbeat";
 import { hasSectionAccess } from "@/lib/section-access";
+import { useSessionBootstrap } from "@/lib/use-session-bootstrap";
 import { OperationalSearchBox } from "@/components/search/operational-search-box";
 import type {
   AnagraficaStats,
-  CurrentUser,
   DashboardSummary,
   UserPresenceSummary,
 } from "@/types/api";
@@ -324,151 +319,109 @@ function HomePageAccessRequired({ loadError }: { loadError: string | null }) {
 }
 
 export default function HomePage() {
-  const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const session = useSessionBootstrap();
   const [dashboardSummary, setDashboardSummary] = useState<DashboardSummary>(emptyDashboardSummary);
   const [utenzeSummary, setUtenzeSummary] = useState<AnagraficaStats>(emptyUtenzeSummary);
   const [presenceSummary, setPresenceSummary] = useState<UserPresenceSummary>(emptyPresenceSummary);
   const [ruoloStats, setRuoloStats] = useState<RuoloStatsResponse>(emptyRuoloStats);
   const [ruoloAnalytics, setRuoloAnalytics] = useState<RuoloStatsAnalyticsResponse | null>(null);
   const [catastoIndiciOverview, setCatastoIndiciOverview] = useState<CatIndiceOverview | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [isCheckingSession, setIsCheckingSession] = useState(true);
-  const [grantedSectionKeys, setGrantedSectionKeys] = useState<string[]>([]);
+  const currentUser = session.currentUser;
+  const grantedSectionKeys = session.grantedSectionKeys;
 
   usePresenceHeartbeat({ enabled: Boolean(currentUser) });
 
   useEffect(() => {
+    if (session.status !== "ready" || !session.token || !session.currentUser) {
+      return;
+    }
+
+    const token = session.token;
+    const user = session.currentUser;
+
     async function loadHome() {
-      const token = getStoredAccessToken();
+      const hasCatasto = user.enabled_modules.includes("catasto");
+      const hasRuolo = user.enabled_modules.includes("ruolo");
+      const hasUtenze = user.enabled_modules.includes("utenze");
+      const hasAccessi = user.enabled_modules.includes("accessi");
+      const canReadPresenceSummary =
+        (user.role === "admin" || user.role === "super_admin")
+        && hasAccessi
+        && hasSectionAccess(grantedSectionKeys, "accessi.users");
 
-      if (!token) {
-        setCurrentUser(null);
-        setDashboardSummary(emptyDashboardSummary);
-        setUtenzeSummary(emptyUtenzeSummary);
-        setPresenceSummary(emptyPresenceSummary);
-        setRuoloStats(emptyRuoloStats);
-        setRuoloAnalytics(null);
-        setCatastoIndiciOverview(null);
-        setGrantedSectionKeys([]);
-        setLoadError("Accesso richiesto. Effettua il login.");
-        setIsCheckingSession(false);
-        router.replace("/login");
-        return;
-      }
+      const [dashboardSummaryResult, utenzeStatsResult, presenceSummaryResult, ruoloStatsResult] = await Promise.allSettled([
+        hasAccessi ? getDashboardSummary(token, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS }) : Promise.resolve(emptyDashboardSummary),
+        hasUtenze ? getUtenzeStats(token) : Promise.resolve(emptyUtenzeSummary),
+        canReadPresenceSummary ? getPresenceSummary(token, { windowMinutes: 15 }) : Promise.resolve(emptyPresenceSummary),
+        hasRuolo ? getRuoloStats(token) : Promise.resolve(emptyRuoloStats),
+      ]);
 
-      try {
-        const [user, permissionSummary] = await Promise.all([
-          getCurrentUser(token, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS }),
-          getMyPermissions(token, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS }),
-        ]);
+      const loadedDashboardSummary =
+        dashboardSummaryResult.status === "fulfilled" ? dashboardSummaryResult.value : emptyDashboardSummary;
+      const loadedUtenzeSummary =
+        utenzeStatsResult.status === "fulfilled" ? utenzeStatsResult.value : emptyUtenzeSummary;
+      const presence =
+        presenceSummaryResult.status === "fulfilled" ? presenceSummaryResult.value : emptyPresenceSummary;
+      const loadedRuoloStats =
+        ruoloStatsResult.status === "fulfilled" ? ruoloStatsResult.value : emptyRuoloStats;
+      const latestRuoloYear = loadedRuoloStats.items[0]?.anno_tributario;
+      const [ruoloAnalyticsResult, catastoIndiciOverviewResult] = await Promise.allSettled([
+        hasRuolo && latestRuoloYear != null ? getRuoloStatsAnalytics(token, latestRuoloYear) : Promise.resolve(null),
+        hasCatasto ? catastoGetIndiciOverview(token, latestRuoloYear) : Promise.resolve(null),
+      ]);
+      const loadedRuoloAnalytics =
+        ruoloAnalyticsResult.status === "fulfilled" ? ruoloAnalyticsResult.value : null;
+      const loadedCatastoIndiciOverview =
+        catastoIndiciOverviewResult.status === "fulfilled" ? catastoIndiciOverviewResult.value : null;
 
-        const hasCatasto = user.enabled_modules.includes("catasto");
-        const hasRuolo = user.enabled_modules.includes("ruolo");
-        const hasUtenze = user.enabled_modules.includes("utenze");
-        const hasAccessi = user.enabled_modules.includes("accessi");
-        const canReadPresenceSummary =
-          (user.role === "admin" || user.role === "super_admin")
-          && user.enabled_modules.includes("accessi")
-          && hasSectionAccess(permissionSummary.granted_keys, "accessi.users");
-
-        const [dashboardSummaryResult, utenzeStatsResult, presenceSummaryResult, ruoloStatsResult] = await Promise.allSettled([
-          hasAccessi ? getDashboardSummary(token, { timeoutMs: SESSION_BOOTSTRAP_TIMEOUT_MS }) : Promise.resolve(emptyDashboardSummary),
-          hasUtenze ? getUtenzeStats(token) : Promise.resolve(emptyUtenzeSummary),
-          canReadPresenceSummary ? getPresenceSummary(token, { windowMinutes: 15 }) : Promise.resolve(emptyPresenceSummary),
-          hasRuolo ? getRuoloStats(token) : Promise.resolve(emptyRuoloStats),
-        ]);
-
-        const loadedDashboardSummary =
-          dashboardSummaryResult.status === "fulfilled" ? dashboardSummaryResult.value : emptyDashboardSummary;
-        const loadedUtenzeSummary =
-          utenzeStatsResult.status === "fulfilled" ? utenzeStatsResult.value : emptyUtenzeSummary;
-        const presence =
-          presenceSummaryResult.status === "fulfilled" ? presenceSummaryResult.value : emptyPresenceSummary;
-        const loadedRuoloStats =
-          ruoloStatsResult.status === "fulfilled" ? ruoloStatsResult.value : emptyRuoloStats;
-        const latestRuoloYear = loadedRuoloStats.items[0]?.anno_tributario;
-        const [ruoloAnalyticsResult, catastoIndiciOverviewResult] = await Promise.allSettled([
-          hasRuolo && latestRuoloYear != null ? getRuoloStatsAnalytics(token, latestRuoloYear) : Promise.resolve(null),
-          hasCatasto ? catastoGetIndiciOverview(token, latestRuoloYear) : Promise.resolve(null),
-        ]);
-        const loadedRuoloAnalytics =
-          ruoloAnalyticsResult.status === "fulfilled" ? ruoloAnalyticsResult.value : null;
-        const loadedCatastoIndiciOverview =
-          catastoIndiciOverviewResult.status === "fulfilled" ? catastoIndiciOverviewResult.value : null;
-
-        setCurrentUser(user);
-        setDashboardSummary(loadedDashboardSummary);
-        setUtenzeSummary(loadedUtenzeSummary);
-        setPresenceSummary(presence);
-        setRuoloStats(loadedRuoloStats);
-        setRuoloAnalytics(loadedRuoloAnalytics);
-        setCatastoIndiciOverview(loadedCatastoIndiciOverview);
-        setGrantedSectionKeys(permissionSummary.granted_keys);
-        setLoadError(null);
-
-        if (
-          dashboardSummaryResult.status === "rejected" ||
-          utenzeStatsResult.status === "rejected" ||
-          presenceSummaryResult.status === "rejected" ||
-          ruoloStatsResult.status === "rejected" ||
-          ruoloAnalyticsResult.status === "rejected" ||
-          catastoIndiciOverviewResult.status === "rejected"
-        ) {
-          console.warn("Home dashboard loaded with partial module data", {
-            dashboardError:
-              dashboardSummaryResult.status === "rejected" ? dashboardSummaryResult.reason : null,
-            utenzeError: utenzeStatsResult.status === "rejected" ? utenzeStatsResult.reason : null,
-            presenceSummaryError:
-              presenceSummaryResult.status === "rejected" ? presenceSummaryResult.reason : null,
-            ruoloStatsError: ruoloStatsResult.status === "rejected" ? ruoloStatsResult.reason : null,
-            ruoloAnalyticsError:
-              ruoloAnalyticsResult.status === "rejected" ? ruoloAnalyticsResult.reason : null,
-            catastoIndiciOverviewError:
-              catastoIndiciOverviewResult.status === "rejected" ? catastoIndiciOverviewResult.reason : null,
-          });
-        }
-      } catch (error) {
-        setLoadError(error instanceof Error ? error.message : "Errore imprevisto");
-        if (isAuthError(error)) {
-          clearStoredAccessToken();
-          setCurrentUser(null);
-          setDashboardSummary(emptyDashboardSummary);
-          setUtenzeSummary(emptyUtenzeSummary);
-          setPresenceSummary(emptyPresenceSummary);
-          setRuoloStats(emptyRuoloStats);
-          setRuoloAnalytics(null);
-          setCatastoIndiciOverview(null);
-          setGrantedSectionKeys([]);
-          router.replace("/login");
-        }
-      } finally {
-        setIsCheckingSession(false);
+      setDashboardSummary(loadedDashboardSummary);
+      setUtenzeSummary(loadedUtenzeSummary);
+      setPresenceSummary(presence);
+      setRuoloStats(loadedRuoloStats);
+      setRuoloAnalytics(loadedRuoloAnalytics);
+      setCatastoIndiciOverview(loadedCatastoIndiciOverview);
+      if (
+        dashboardSummaryResult.status === "rejected" ||
+        utenzeStatsResult.status === "rejected" ||
+        presenceSummaryResult.status === "rejected" ||
+        ruoloStatsResult.status === "rejected" ||
+        ruoloAnalyticsResult.status === "rejected" ||
+        catastoIndiciOverviewResult.status === "rejected"
+      ) {
+        console.warn("Home dashboard loaded with partial module data", {
+          dashboardError:
+            dashboardSummaryResult.status === "rejected" ? dashboardSummaryResult.reason : null,
+          utenzeError: utenzeStatsResult.status === "rejected" ? utenzeStatsResult.reason : null,
+          presenceSummaryError:
+            presenceSummaryResult.status === "rejected" ? presenceSummaryResult.reason : null,
+          ruoloStatsError: ruoloStatsResult.status === "rejected" ? ruoloStatsResult.reason : null,
+          ruoloAnalyticsError:
+            ruoloAnalyticsResult.status === "rejected" ? ruoloAnalyticsResult.reason : null,
+          catastoIndiciOverviewError:
+            catastoIndiciOverviewResult.status === "rejected" ? catastoIndiciOverviewResult.reason : null,
+        });
       }
     }
 
     void loadHome();
-  }, [router]);
+  }, [grantedSectionKeys, session.currentUser, session.status, session.token]);
 
   function handleLogout(): void {
-    clearStoredAccessToken();
-    setCurrentUser(null);
     setDashboardSummary(emptyDashboardSummary);
     setUtenzeSummary(emptyUtenzeSummary);
     setPresenceSummary(emptyPresenceSummary);
     setRuoloStats(emptyRuoloStats);
     setRuoloAnalytics(null);
     setCatastoIndiciOverview(null);
-    setGrantedSectionKeys([]);
-    router.replace("/login");
+    session.logout();
   }
 
-  if (isCheckingSession) {
+  if (session.status === "checking") {
     return <HomePageSkeleton />;
   }
 
   if (!currentUser) {
-    return <HomePageAccessRequired loadError={loadError} />;
+    return <HomePageAccessRequired loadError={session.error} />;
   }
 
   const user = currentUser;
