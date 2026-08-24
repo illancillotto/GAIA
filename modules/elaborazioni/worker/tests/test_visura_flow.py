@@ -257,6 +257,39 @@ def test_external_images_are_numbered_per_attempt() -> None:
     assert saved[2].name.endswith("_external_3.png")
 
 
+def test_agent_only_mode_does_not_request_manual_captcha() -> None:
+    """Con CAPTCHA manuale disabilitato, il worker deve fermarsi dopo Agent/solver automatici."""
+
+    async def always_wrong_llm(_b: bytes) -> str | None:
+        return "wrong"
+
+    manual_called = False
+
+    async def fail_if_manual(_image_path: Path) -> ManualCaptchaDecision:
+        nonlocal manual_called
+        manual_called = True
+        raise AssertionError("manual CAPTCHA must not be requested in agent-only mode")
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=FakeBrowser(),
+            request=FakeRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=fail_if_manual,
+            solve_llm_captcha=always_wrong_llm,
+            solve_external_captcha=None,
+            max_llm_attempts=2,
+            max_external_attempts=0,
+            max_manual_attempts=0,
+        )
+
+    assert result.status == "failed"
+    assert result.captcha_method == "llm"
+    assert result.error_message == "Agent CAPTCHA exhausted; manual CAPTCHA disabled"
+    assert manual_called is False
+
+
 # ---------------------------------------------------------------------------
 # Manuale
 # ---------------------------------------------------------------------------
@@ -288,6 +321,7 @@ def test_manual_reached_after_all_automated_fail() -> None:
             solve_external_captcha=fake_ext,
             max_llm_attempts=2,
             max_external_attempts=2,
+            max_manual_attempts=5,
         )
 
     assert result.status == "completed"
@@ -308,6 +342,7 @@ def test_manual_skip_returns_skipped_status() -> None:
             document_path=Path(tmp) / "visura.pdf",
             captcha_dir=Path(tmp) / "captcha",
             get_manual_captcha_decision=manual,
+            max_manual_attempts=5,
         )
 
     assert result.status == "skipped"
@@ -338,6 +373,7 @@ def test_manual_wrong_answer_reloads_and_waits_for_new_captcha() -> None:
             document_path=Path(tmp) / "visura.pdf",
             captcha_dir=Path(tmp) / "captcha",
             get_manual_captcha_decision=manual,
+            max_manual_attempts=5,
         )
 
     assert result.status == "completed"
@@ -410,6 +446,7 @@ def test_manual_missing_after_automatic_attempts_uses_clear_error_message() -> N
             get_manual_captcha_decision=manual,
             solve_llm_captcha=fake_llm,
             max_llm_attempts=1,
+            max_manual_attempts=5,
         )
 
     assert result.status == "failed"
@@ -688,6 +725,7 @@ def test_llm_exception_does_not_crash_flow() -> None:
             get_manual_captcha_decision=manual,
             solve_llm_captcha=crashing_llm,
             max_llm_attempts=2,
+            max_manual_attempts=5,
         )
 
     assert result.status == "completed"
@@ -712,6 +750,7 @@ def test_external_exception_does_not_crash_flow() -> None:
             solve_llm_captcha=None,
             solve_external_captcha=crashing_ext,
             max_external_attempts=2,
+            max_manual_attempts=5,
         )
 
     assert result.status == "completed"
@@ -872,6 +911,7 @@ def test_llm_none_result_falls_through_to_manual() -> None:
             get_manual_captcha_decision=manual,
             solve_llm_captcha=none_llm,
             max_llm_attempts=3,
+            max_manual_attempts=5,
         )
 
     assert result.status == "completed"
@@ -1005,6 +1045,7 @@ def test_update_operation_fires_before_manual_captcha() -> None:
             captcha_dir=Path(tmp) / "captcha",
             get_manual_captcha_decision=manual,
             callbacks=VisuraFlowCallbacks(update_operation=operations.append),
+            max_manual_attempts=5,
         )
 
     assert result.status == "completed"
@@ -1038,6 +1079,7 @@ def test_external_empty_string_falls_through_to_manual() -> None:
             solve_llm_captcha=None,
             solve_external_captcha=empty_ext,
             max_external_attempts=2,
+            max_manual_attempts=5,
         )
 
     assert result.status == "completed"
@@ -1063,6 +1105,7 @@ def test_manual_null_text_without_skip_returns_failed() -> None:
             document_path=Path(tmp) / "visura.pdf",
             captcha_dir=Path(tmp) / "captcha",
             get_manual_captcha_decision=manual,
+            max_manual_attempts=5,
         )
 
     assert result.status == "failed"

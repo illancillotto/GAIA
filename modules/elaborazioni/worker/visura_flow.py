@@ -373,7 +373,7 @@ async def execute_visura_flow(
     """
     callbacks = callbacks or VisuraFlowCallbacks()
     if max_manual_attempts is None:
-        max_manual_attempts = int(os.getenv("CAPTCHA_MANUAL_ATTEMPTS", "5"))
+        max_manual_attempts = int(os.getenv("CAPTCHA_MANUAL_ATTEMPTS", "0"))
     resumed = await _resume_remote_request(browser, request, document_path, callbacks)
     if resumed is not None:
         return resumed
@@ -452,6 +452,16 @@ async def execute_visura_flow(
             logger.info("Richiesta %s CAPTCHA rifiutato dal portale dopo Anti-Captcha (%s)", request.id, attempt)
             if attempt < max_external_attempts:
                 await browser.reload_captcha()
+
+    if max_manual_attempts <= 0:
+        logger.warning("Richiesta %s CAPTCHA automatico esaurito; fallback manuale disabilitato", request.id)
+        return VisuraFlowResult(
+            status="failed",
+            captcha_image_path=None,
+            captcha_method="llm" if solve_llm_captcha is not None else "external",
+            last_ocr_text=None,
+            error_message="Agent CAPTCHA exhausted; manual CAPTCHA disabled",
+        )
 
     last_captcha_path: Path | None = None
     for attempt in range(1, max_manual_attempts + 1):

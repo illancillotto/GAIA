@@ -12,7 +12,7 @@ Ambito runtime attuale:
 - correlazione persistita richiesta locale/remota, affinità con la credenziale SISTER, retry/backoff e fencing transazionale
 - download PDF atomico con validazione firma e SHA-256
 - naming PDF delle visure per immobile privo di dati dell'operatore SISTER: `COMUNE_FOGLIO_PARTICELLA[_SUBALTERNO].pdf`; lo username non viene salvato nel filename ne nel campo `codice_fiscale` del documento
-- attesa CAPTCHA manuale protetta dallo stesso execution token usato per cancel, release e retry; se SISTER rifiuta un CAPTCHA manuale e ne genera uno nuovo, il worker ricarica l'immagine, riapre l'attesa e riprova fino a `CAPTCHA_MANUAL_ATTEMPTS`
+- attesa CAPTCHA manuale protetta dallo stesso execution token usato per cancel, release e retry; il fallback manuale è disabilitato di default (`CAPTCHA_MANUAL_ATTEMPTS=0`) perché in produzione i CAPTCHA SISTER devono essere gestiti solo tramite Agent; se Agent esaurisce i tentativi, la richiesta fallisce in modo recuperabile/diagnosticabile invece di entrare in attesa manuale
 - gestione asincrona delle visure storiche/analitiche SISTER: al primo messaggio di documento in elaborazione il worker ripete immediatamente una sola volta l'intera richiesta, inclusi form, CAPTCHA e inoltro; se anche il secondo inoltro resta in elaborazione, usa i poll iniziali su `ConsultazioneRichieste`, salva la correlazione remota, marca la richiesta come `queued_sister`/`sister_remote_state=pending` e passa alla particella successiva; i giri successivi riprendono le richieste gia accodate dalla pagina `Richieste`/`Espletate`
 - diagnostica login Capacitas con dump HTML/metadata del tentativo quando il token SSO non viene estratto
 - provider `Bonifica Oristanese` con pool credenziali cifrato, test login HTTP su `https://login.bonificaoristanese.it/login`, helper DataTables condiviso, bootstrap `apps/registry.py` per le entity del portale e orchestratore di sync persistito su `wc_sync_job`
@@ -101,7 +101,7 @@ Variabili principali del runtime visure:
 - `ELABORAZIONI_REQUEST_RETRY_DEFER_SEC`: defer della richiesta quando viene rimessa in coda
 - `ELABORAZIONI_MAX_REQUEST_ATTEMPTS`: budget massimo di retry worker per errori recuperabili SISTER; default operativo `50`, cosi blackout/ambiguità transitorie del portale non consumano subito una richiesta sana
 - `ELABORAZIONI_INITIAL_REMOTE_POLL_ATTEMPTS`: numero di poll iniziali su `ConsultazioneRichieste` dopo che anche l'unico reinvio immediato della stessa visura ha restituito il documento in elaborazione; default `2`. Se il PDF non è pronto entro questi tentativi, la richiesta non fallisce e non blocca il runner: viene salvata come coda SISTER (`sister_remote_state=pending`) e ripresa più tardi con il polling completo
-- `CAPTCHA_MANUAL_ATTEMPTS`: numero massimo di CAPTCHA manuali successivi sulla stessa richiesta quando SISTER rigenera l'immagine dopo una risposta errata; default `5`
+- `CAPTCHA_MANUAL_ATTEMPTS`: numero massimo di CAPTCHA manuali successivi sulla stessa richiesta; default produzione `0`, quindi il fallback manuale è disabilitato e i CAPTCHA sono gestiti solo tramite Agent/solver automatici
 - `CAPTCHA_MANUAL_TIMEOUT_SEC`: finestra di attesa per ogni CAPTCHA manuale prima di fallire la richiesta; default operativo `900`
 - `ELABORAZIONI_SISTER_500_COOLDOWN_SEC`: cooldown base per `HTTP 500` SISTER
 - `ELABORAZIONI_SISTER_500_MAX_COOLDOWN_SEC`: tetto massimo del cooldown progressivo sui `500`
