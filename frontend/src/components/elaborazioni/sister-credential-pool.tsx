@@ -1,10 +1,14 @@
 "use client";
 
+import { useState } from "react";
+
 import {
   useBulkCredentialTest,
   useSingleCredentialTest,
 } from "@/components/elaborazioni/sister-credential-pool-controller";
 import { SisterCredentialPoolView } from "@/components/elaborazioni/sister-credential-pool-view";
+import { updateElaborazioneCredential } from "@/lib/api";
+import { getStoredAccessToken } from "@/lib/auth";
 import type { ElaborazioneCredential, ElaborazioneCredentialTestResult } from "@/types/api";
 
 type SisterCredentialPoolProps = {
@@ -31,7 +35,23 @@ type SisterCredentialPoolProps = {
 export function SisterCredentialPool(props: SisterCredentialPoolProps) {
   const single = useSingleCredentialTest(props);
   const bulk = useBulkCredentialTest(props);
-  const controlsDisabled = props.externalBusy || bulk.bulkRunning || single.singleTestingId != null;
+  const [releasingCredentialId, setReleasingCredentialId] = useState<string | null>(null);
+  const controlsDisabled = props.externalBusy || bulk.bulkRunning || single.singleTestingId != null || releasingCredentialId != null;
+
+  async function releaseCredential(credential: ElaborazioneCredential): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    props.onClearFeedback();
+    setReleasingCredentialId(credential.id);
+    try {
+      await updateElaborazioneCredential(token, credential.id, { active: false });
+      await props.onRefreshCredentials();
+    } catch (error) {
+      props.onTestError(error instanceof Error ? error.message : "Errore rilascio sessione SISTER");
+    } finally {
+      setReleasingCredentialId(null);
+    }
+  }
 
   return (
     <SisterCredentialPoolView
@@ -39,6 +59,7 @@ export function SisterCredentialPool(props: SisterCredentialPoolProps) {
       bulkRunning={bulk.bulkRunning}
       controlsDisabled={controlsDisabled}
       onCancel={bulk.cancel}
+      onReleaseCredential={releaseCredential}
       onTestAll={bulk.testAll}
       onTestCredential={single.testCredential}
       progressById={bulk.progressById}

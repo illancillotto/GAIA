@@ -11,6 +11,7 @@ from sister_credential_pool import (
     ActiveSisterCredentialPool,
     CredentialRejectionContext,
     RejectedCredentialQuarantined,
+    credential_is_active,
     finalize_credential_pool,
     is_rejected_credential_error,
     isolate_rejected_credential_runner,
@@ -153,6 +154,14 @@ def test_should_stop_credential_runner_preserves_release_semantics() -> None:
     assert not calls
     assert not should_stop_credential_runner(False, uuid4(), "user", lambda: False)
     assert should_stop_credential_runner(False, uuid4(), "user", lambda: True)
+    assert should_stop_credential_runner(False, uuid4(), "user", lambda: False, lambda: True)
+    assert not should_stop_credential_runner(False, uuid4(), "user", lambda: False, lambda: False)
+
+
+def test_credential_is_active_reads_current_persisted_state() -> None:
+    assert credential_is_active(lambda: FakeDb(get_value=credential()), uuid4())
+    assert not credential_is_active(lambda: FakeDb(get_value=credential(active=False)), uuid4())
+    assert not credential_is_active(lambda: FakeDb(get_value=None), uuid4())
 
 
 def test_finalize_pool_pauses_only_when_all_credentials_are_rejected() -> None:
@@ -167,7 +176,7 @@ def test_finalize_pool_pauses_only_when_all_credentials_are_rejected() -> None:
 
     assert batch.status == CatastoBatchStatus.FAILED.value
     assert batch.completed_at is not None
-    assert "riprendere il batch" in batch.current_operation
+    assert "riattivare o aggiornare il pool" in batch.current_operation
     assert db.commits == 1
     assert not finalized
 

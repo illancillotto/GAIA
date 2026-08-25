@@ -30,6 +30,7 @@ export type SisterCredentialPoolViewProps = {
   onTestAll: () => Promise<void>;
   onCancel: () => void;
   onReleaseSessions: () => Promise<void>;
+  onReleaseCredential: (credential: ElaborazioneCredential) => Promise<void>;
   onResumeReleasedBatch: () => Promise<void>;
 };
 
@@ -137,6 +138,7 @@ function CredentialActions(props: SisterCredentialPoolViewProps & { credential: 
     <button className="rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-[#8eab97] hover:text-[#1D4E35] disabled:opacity-50" disabled={props.controlsDisabled} onClick={() => props.onSelectCredential(props.credential)} type="button">Modifica</button>
     {!props.credential.is_default ? <button className="rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-amber-300 hover:text-amber-800 disabled:opacity-50" disabled={props.controlsDisabled} onClick={() => void props.onMakeDefault(props.credential)} type="button">Rendi default</button> : null}
     <button className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-800 transition hover:border-sky-300 hover:bg-sky-100 disabled:opacity-50" disabled={props.controlsDisabled} onClick={() => void props.onTestCredential(props.credential)} type="button">{props.isTesting ? "Test in corso" : "Testa"}</button>
+    <button className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 transition hover:border-amber-300 hover:bg-amber-100 disabled:opacity-50" disabled={props.controlsDisabled || props.releaseBusy || !props.credential.active} onClick={() => void props.onReleaseCredential(props.credential)} type="button">{props.credential.active ? "Pausa e libera" : "Sessione in pausa"}</button>
     <button className="rounded-xl border border-red-100 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:border-red-200 hover:bg-red-50 disabled:opacity-50" disabled={props.controlsDisabled} onClick={() => props.onDeleteCredential(props.credential)} type="button">Elimina</button>
   </div>;
 }

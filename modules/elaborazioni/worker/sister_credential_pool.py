@@ -139,17 +139,27 @@ def should_stop_credential_runner(
     batch_id: UUID,
     username: str,
     release_requested: Callable[[], bool],
+    credential_release_requested: Callable[[], bool] | None = None,
 ) -> bool:
     if stop_requested:
         return True
-    if not release_requested():
+    if release_requested():
+        logger.info(
+            "Batch %s arrestato dopo completamento checkpoint corrente, logout per %s",
+            batch_id,
+            username,
+        )
+        return True
+    if credential_release_requested is None or not credential_release_requested():
         return False
-    logger.info(
-        "Batch %s arrestato dopo completamento checkpoint corrente, logout per %s",
-        batch_id,
-        username,
-    )
+    logger.info("Credenziale %s messa in pausa, logout della singola sessione SISTER", username)
     return True
+
+
+def credential_is_active(session_factory: Callable[[], Session], credential_id: UUID) -> bool:
+    with session_factory() as db:
+        credential = db.get(CatastoCredential, credential_id)
+        return credential is not None and credential.active
 
 
 def finalize_credential_pool(
@@ -177,7 +187,7 @@ def _pause_batch_for_rejected_credentials(
         batch.status = CatastoBatchStatus.FAILED.value
         batch.completed_at = datetime.now(timezone.utc)
         batch.current_operation = (
-            f"Nessuna delle {credential_count} credenziali SISTER disponibili e' autenticabile; "
-            "aggiornare il pool e riprendere il batch"
+            f"Nessuna delle {credential_count} credenziali SISTER e' disponibile o autenticabile; "
+            "riattivare o aggiornare il pool e riprendere il batch"
         )
         db.commit()

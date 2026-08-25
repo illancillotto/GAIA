@@ -135,12 +135,36 @@ Il worker oggi:
 - gestisce l'informativa privacy
 - nel test credenziali di `/elaborazioni/settings`, considera riuscita la prova solo se dopo l'autenticazione viene eseguito anche il logout applicativo SISTER
 - a fine batch/richiesta operativa, prima di chiudere Playwright, tenta il logout applicativo SISTER per ridurre il rischio di sessioni server-side appese
+- consente di usare `Pausa e libera` sulla singola card credenziale: persiste `active=false`, completa al massimo la richiesta gia in corso e al checkpoint successivo esegue il logout applicativo e chiude soltanto quel browser
 - isola il pool credenziali SISTER per utente GAIA: il DB accetta lo stesso `sister_username` su utenti diversi, ma lo rende univoco dentro il singolo pool tramite `UNIQUE (user_id, sister_username)`
 - quando un batch fallito viene rilanciato, il backend aggiorna il riferimento temporale della rimessa in coda per evitare che la routine di expiry dei `pending` lo consideri subito orfano
 - prova a chiudere una sessione SISTER già attiva
 - aspetta alcuni secondi dopo `CloseSessionsSis` prima di ritentare il login
 - usa OCR locale Tesseract per i CAPTCHA testuali
 - può fare fallback su Anti-Captcha se configurato in `.env`
+
+## Pausa e rilascio di una singola sessione
+
+Nel pool credenziali di `/elaborazioni/settings`, il comando `Pausa e libera`
+agisce sulla sola card selezionata. Il frontend aggiorna la credenziale con
+`PATCH /elaborazioni/credentials/{credential_id}` e payload `active=false`.
+Non si tratta di un toggle temporaneo in memoria: per riutilizzare l'account e
+necessario modificarlo e riattivarlo esplicitamente.
+
+Il worker rilegge lo stato persistito prima di acquisire una nuova richiesta e
+dopo ogni richiesta completata. Quando rileva la pausa:
+
+- rimuove la credenziale dal pool disponibile del batch;
+- non acquisisce altre richieste per quell'account;
+- completa il blocco `finally`, tenta il logout applicativo SISTER e chiude la sola sessione Playwright interessata;
+- lascia operative le altre credenziali attive del pool.
+
+Le richieste remote conservano sempre l'affinita con la credenziale SISTER che
+le ha create. La pausa non autorizza un altro account a riprenderle: vengono
+marcate non disponibili secondo il contratto `sister_credential_unavailable`.
+Se non resta alcuna credenziale attiva o autenticabile, il worker rilascia il
+batch; dopo aver riattivato o aggiornato il pool, usare la normale azione di
+ripresa senza ricreare il lotto.
 
 ## Affidabilita richieste e Profilo A
 

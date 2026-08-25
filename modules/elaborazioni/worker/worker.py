@@ -87,6 +87,7 @@ from anti_captcha_client import AntiCaptchaClient
 from browser_session import BrowserSession, BrowserSessionConfig
 from sister_credential_pool import (
     CredentialRejectionContext,
+    credential_is_active,
     finalize_credential_pool,
     isolate_rejected_credential_runner,
     load_active_credential_pool,
@@ -790,6 +791,13 @@ class CatastoWorker:
                 batch = db.get(CatastoBatch, batch_id)
                 return batch is None or batch.status == CatastoBatchStatus.CANCELLED.value
 
+        def _credential_release_requested(credential_id: UUID) -> bool:
+            if credential_is_active(SessionLocal, credential_id):
+                return False
+            credential_pool.reject(credential_id)
+            request_repository.fail_unavailable_pinned_requests(batch_id, credential_pool.available_ids)
+            return True
+
         async def _credential_runner(credential: CatastoCredential) -> None:
             nonlocal global_server_error_pause_until
             browser = self._build_browser_session()
@@ -797,12 +805,13 @@ class CatastoWorker:
             await browser.start()
             try:
                 while not self.state.stop_requested:
-                    if _batch_release_requested():
-                        logger.info(
-                            "Batch %s rilascio richiesto, chiusura sessione SISTER per %s",
-                            batch_id,
-                            credential.sister_username,
-                        )
+                    if should_stop_credential_runner(
+                        self.state.stop_requested,
+                        batch_id,
+                        credential.sister_username,
+                        _batch_release_requested,
+                        lambda: _credential_release_requested(credential.id),
+                    ):
                         return
                     now = datetime.now(timezone.utc)
                     if not self._is_within_operating_window(now):
@@ -919,6 +928,7 @@ class CatastoWorker:
                     if should_stop_credential_runner(
                         self.state.stop_requested, batch_id,
                         credential.sister_username, _batch_release_requested,
+                        lambda: _credential_release_requested(credential.id),
                     ):
                         return
                     await asyncio.sleep(BETWEEN_VISURE_DELAY_SEC)

@@ -121,6 +121,7 @@ def install_batch_runtime(
     RetryCoordinator.instances.clear()
     monkeypatch.setattr(worker_module, "SisterRequestClaimCoordinator", ClaimCoordinator)
     monkeypatch.setattr(worker_module, "SisterRequestRetryCoordinator", RetryCoordinator)
+    monkeypatch.setattr(worker_module, "credential_is_active", lambda *_args: True)
     worker._request_repository = lambda: repository
     worker._set_batch_operation = lambda _batch_id, operation: operations.append(operation)
     worker._finalize_batch = lambda _batch_id: operations.append("finalized")
@@ -187,6 +188,19 @@ def test_batch_happy_path_role_label_and_release_checkpoints(monkeypatch: pytest
     run(worker._process_batch(item.id))
     assert calls == [request_id]
     assert operations[0].startswith("Avvio autosync ruolo") and operations[-1] == "finalized"
+
+    worker = bare_worker()
+    item = batch()
+    active = credential()
+    repository = BatchRepository([Selection(uuid4())])
+    operations = install_batch_runtime(worker, repository, monkeypatch)
+    monkeypatch.setattr(worker_module, "credential_is_active", lambda *_args: False)
+    outer = FakeDb(get_values=[item, active])
+    monkeypatch.setattr(worker_module, "SessionLocal", BatchSessionFactory(outer, item))
+    run(worker._process_batch(item.id))
+    assert not repository.releases
+    assert repository.failed_unavailable[-1] == (item.id, set())
+    assert operations[-1] == "finalized"
 
     worker = bare_worker()
     item = batch()

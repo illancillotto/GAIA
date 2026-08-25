@@ -7,6 +7,7 @@ import type { ElaborazioneCredential, ElaborazioneCredentialTestResult } from "@
 const apiMocks = vi.hoisted(() => ({
   getElaborazioneCredentialTest: vi.fn(),
   testElaborazioneCredentials: vi.fn(),
+  updateElaborazioneCredential: vi.fn(),
 }));
 
 const authState = vi.hoisted(() => ({ token: "token" as string | null }));
@@ -95,6 +96,8 @@ describe("SisterCredentialPool", () => {
     authState.token = "token";
     apiMocks.getElaborazioneCredentialTest.mockReset();
     apiMocks.testElaborazioneCredentials.mockReset();
+    apiMocks.updateElaborazioneCredential.mockReset();
+    apiMocks.updateElaborazioneCredential.mockResolvedValue(credential("updated", { active: false }));
   });
 
   afterEach(() => {
@@ -149,6 +152,7 @@ describe("SisterCredentialPool", () => {
     expect(screen.getAllByText("Non indicato")).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Ripresa..." })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Pausa..." })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Sessione in pausa" })).toBeDisabled();
 
     const secondaryCard = screen.getByText("Profilo secondary").closest("article");
     expect(secondaryCard).not.toBeNull();
@@ -180,8 +184,33 @@ describe("SisterCredentialPool", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Riprendi batch" }));
     fireEvent.click(screen.getByRole("button", { name: "Pausa e libera sessioni" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pausa e libera" }));
     expect(callbacks.onResumeReleasedBatch).toHaveBeenCalledTimes(1);
     expect(callbacks.onReleaseSessions).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(apiMocks.updateElaborazioneCredential).toHaveBeenCalledWith("token", "one", { active: false }));
+    expect(callbacks.onRefreshCredentials).toHaveBeenCalled();
+  });
+
+  test("reports single-session release failures and requires a token", async () => {
+    const item = credential("one");
+    const callbacks = props({ credentials: [item] });
+    apiMocks.updateElaborazioneCredential
+      .mockRejectedValueOnce(new Error("single release error"))
+      .mockRejectedValueOnce("release failed");
+    render(<SisterCredentialPool {...callbacks} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Pausa e libera" }));
+    await waitFor(() => expect(callbacks.onTestError).toHaveBeenCalledWith("single release error"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Pausa e libera" })).toBeEnabled());
+
+    fireEvent.click(screen.getByRole("button", { name: "Pausa e libera" }));
+    await waitFor(() => expect(callbacks.onTestError).toHaveBeenCalledWith("Errore rilascio sessione SISTER"));
+
+    apiMocks.updateElaborazioneCredential.mockClear();
+    authState.token = null;
+    await waitFor(() => expect(screen.getByRole("button", { name: "Pausa e libera" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Pausa e libera" }));
+    expect(apiMocks.updateElaborazioneCredential).not.toHaveBeenCalled();
   });
 
   test("reports Error and non-Error failures from an individual test", async () => {
