@@ -8,7 +8,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.elaborazioni import ElaborazioneConnectionTest, ElaborazioneConnectionTestStatus, ElaborazioneCredential
+from app.models.elaborazioni import (
+    ElaborazioneConnectionTest,
+    ElaborazioneConnectionTestStatus,
+    ElaborazioneCredential,
+)
 from app.schemas.elaborazioni import (
     ElaborazioneCredentialCreateRequest,
     ElaborazioneCredentialTestRequest,
@@ -45,6 +49,55 @@ def get_credential_fernet() -> Fernet:
 def _normalize_label(label: str | None, sister_username: str) -> str:
     normalized = (label or "").strip()
     return normalized or sister_username.strip()
+
+
+def _serialize_schedule(payload_schedule) -> dict | None:
+    return payload_schedule.model_dump() if payload_schedule else None
+
+
+def _schedule_create_values(payload: ElaborazioneCredentialCreateRequest) -> dict:
+    return {
+        "schedule_enabled": payload.schedule_enabled,
+        "availability_schedule": _serialize_schedule(payload.availability_schedule),
+    }
+
+
+def _add_and_flush_credential(db: Session, credential: ElaborazioneCredential) -> None:
+    db.add(credential)
+    db.flush()
+
+
+def _apply_identity_update(credential: ElaborazioneCredential, payload: ElaborazioneCredentialUpdateRequest) -> None:
+    if payload.label is not None:
+        credential.label = _normalize_label(payload.label, payload.sister_username or credential.sister_username)
+    if payload.sister_username is not None:
+        credential.sister_username = payload.sister_username.strip()
+        if payload.label is None and credential.label.strip() == "":
+            credential.label = credential.sister_username
+    if payload.sister_password is not None:
+        credential.sister_password_encrypted = get_credential_fernet().encrypt(payload.sister_password.strip().encode("utf-8"))
+
+
+def _apply_configuration_update(credential: ElaborazioneCredential, payload: ElaborazioneCredentialUpdateRequest) -> None:
+    if payload.convenzione is not None:
+        credential.convenzione = payload.convenzione.strip() or None
+    if payload.codice_richiesta is not None:
+        credential.codice_richiesta = payload.codice_richiesta.strip() or None
+    if payload.ufficio_provinciale is not None:
+        credential.ufficio_provinciale = payload.ufficio_provinciale.strip()
+    if payload.active is not None:
+        credential.active = payload.active
+    if payload.is_default is not None:
+        credential.is_default = payload.is_default
+
+
+def _apply_schedule_update(credential: ElaborazioneCredential, payload: ElaborazioneCredentialUpdateRequest) -> None:
+    if payload.schedule_enabled is not None:
+        credential.schedule_enabled = payload.schedule_enabled
+    if "availability_schedule" in payload.model_fields_set:
+        credential.availability_schedule = _serialize_schedule(payload.availability_schedule)
+    if credential.schedule_enabled and credential.availability_schedule is None:
+        raise ElaborazioneCredentialConfigurationError("Availability schedule is required when scheduling is enabled")
 
 
 def list_credentials_for_user(db: Session, user_id: int) -> list[ElaborazioneCredential]:
@@ -143,11 +196,11 @@ def create_credential(
         ufficio_provinciale=payload.ufficio_provinciale.strip(),
         active=payload.active,
         is_default=make_default,
+        **_schedule_create_values(payload),
     )
-    db.add(credential)
-    db.flush()
+    _add_and_flush_credential(db, credential)
 
-    if make_default:
+    if make_default:  # noqa: SIM114
         _ensure_single_default(db, user_id, credential.id)
     elif not any(item.is_default for item in credentials):
         _ensure_single_default(db, user_id, credential.id)
@@ -167,24 +220,9 @@ def update_credential(
     if credential is None:
         raise ElaborazioneCredentialNotFoundError(f"SISTER credential {credential_id} not found")
 
-    if payload.label is not None:
-        credential.label = _normalize_label(payload.label, payload.sister_username or credential.sister_username)
-    if payload.sister_username is not None:
-        credential.sister_username = payload.sister_username.strip()
-        if payload.label is None and credential.label.strip() == "":
-            credential.label = credential.sister_username
-    if payload.sister_password is not None:
-        credential.sister_password_encrypted = get_credential_fernet().encrypt(payload.sister_password.strip().encode("utf-8"))
-    if payload.convenzione is not None:
-        credential.convenzione = payload.convenzione.strip() or None
-    if payload.codice_richiesta is not None:
-        credential.codice_richiesta = payload.codice_richiesta.strip() or None
-    if payload.ufficio_provinciale is not None:
-        credential.ufficio_provinciale = payload.ufficio_provinciale.strip()
-    if payload.active is not None:
-        credential.active = payload.active
-    if payload.is_default is not None:
-        credential.is_default = payload.is_default
+    _apply_identity_update(credential, payload)
+    _apply_configuration_update(credential, payload)
+    _apply_schedule_update(credential, payload)
 
     db.flush()
 

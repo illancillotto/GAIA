@@ -4,10 +4,44 @@ import re
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 _CF_PF_RE = re.compile(r"^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$")
 _PIVA_RE = re.compile(r"^\d{11}$")
+_TIME_RE = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+
+
+class CatastoCredentialAvailabilityWindow(BaseModel):
+    start: str
+    end: str
+
+    @field_validator("start", "end")
+    @classmethod
+    def validate_time(cls, value: str) -> str:
+        if not _TIME_RE.fullmatch(value):
+            raise ValueError("Time must use HH:MM in the 00:00-23:59 range")
+        return value
+
+
+class CatastoCredentialAvailabilitySchedule(BaseModel):
+    timezone: str = "Europe/Rome"
+    weekly: dict[str, list[CatastoCredentialAvailabilityWindow]] = Field(default_factory=dict)
+
+    @field_validator("timezone")
+    @classmethod
+    def validate_timezone(cls, value: str) -> str:
+        if value != "Europe/Rome":
+            raise ValueError("Only Europe/Rome is supported")
+        return value
+
+    @field_validator("weekly")
+    @classmethod
+    def validate_weekly(cls, value: dict[str, list[CatastoCredentialAvailabilityWindow]]) -> dict[str, list[CatastoCredentialAvailabilityWindow]]:
+        if any(day not in {str(index) for index in range(7)} for day in value):
+            raise ValueError("Weekly schedule keys must be weekdays from 0 (Monday) to 6 (Sunday)")
+        if any(len(windows) > 4 for windows in value.values()):
+            raise ValueError("A maximum of four availability windows per day is supported")
+        return value
 
 
 class CatastoCredentialCreateRequest(BaseModel):
@@ -19,6 +53,14 @@ class CatastoCredentialCreateRequest(BaseModel):
     ufficio_provinciale: str = "ORISTANO Territorio"
     active: bool = True
     is_default: bool = False
+    schedule_enabled: bool = False
+    availability_schedule: CatastoCredentialAvailabilitySchedule | None = None
+
+    @model_validator(mode="after")
+    def validate_schedule(self) -> CatastoCredentialCreateRequest:
+        if self.schedule_enabled and self.availability_schedule is None:
+            raise ValueError("Availability schedule is required when scheduling is enabled")
+        return self
 
 
 class CatastoCredentialUpdateRequest(BaseModel):
@@ -30,6 +72,8 @@ class CatastoCredentialUpdateRequest(BaseModel):
     ufficio_provinciale: str | None = None
     active: bool | None = None
     is_default: bool | None = None
+    schedule_enabled: bool | None = None
+    availability_schedule: CatastoCredentialAvailabilitySchedule | None = None
 
 
 class CatastoCredentialTestRequest(BaseModel):
@@ -41,7 +85,7 @@ class CatastoCredentialTestRequest(BaseModel):
     ufficio_provinciale: str | None = None
 
     @model_validator(mode="after")
-    def validate_payload(self) -> "CatastoCredentialTestRequest":
+    def validate_payload(self) -> CatastoCredentialTestRequest:
         has_transient_credentials = bool(self.sister_username and self.sister_password)
         if self.credential_id is None and not has_transient_credentials:
             return self
@@ -64,6 +108,8 @@ class CatastoCredentialResponse(BaseModel):
     ufficio_provinciale: str
     active: bool
     is_default: bool
+    schedule_enabled: bool
+    availability_schedule: CatastoCredentialAvailabilitySchedule | None
     verified_at: datetime | None
     created_at: datetime
     updated_at: datetime
@@ -121,7 +167,7 @@ class CatastoSingleVisuraCreateRequest(BaseModel):
     intestazione: str | None = None
 
     @model_validator(mode="after")
-    def validate_payload(self) -> "CatastoSingleVisuraCreateRequest":
+    def validate_payload(self) -> CatastoSingleVisuraCreateRequest:
         mode = self.search_mode.strip().lower()
         if mode == "soggetto":
             if not self.subject_id or not self.subject_id.strip():

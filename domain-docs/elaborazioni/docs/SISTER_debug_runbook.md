@@ -166,6 +166,51 @@ Se non resta alcuna credenziale attiva o autenticabile, il worker rilascia il
 batch; dopo aver riattivato o aggiornato il pool, usare la normale azione di
 ripresa senza ricreare il lotto.
 
+## Fasce orarie per credenziale
+
+Ogni profilo SISTER puo limitare l'uso automatico del worker a un calendario
+settimanale. La UI `Credenziali` espone il toggle `Usa solo fuori dall'orario
+dell'operatore`, un editor giorno per giorno e il preset lunedi-venerdi
+`18:00-08:00`, sabato-domenica `00:00-00:00`. Un intervallo con ora iniziale
+uguale all'ora finale copre l'intera giornata; quando l'inizio e successivo alla
+fine, la fascia prosegue nel giorno seguente.
+
+Regole operative:
+
+- il calendario usa sempre `Europe/Rome`, inclusi i cambi tra ora solare e ora legale;
+- `schedule_enabled=false` lascia la credenziale disponibile senza vincoli orari;
+- il worker verifica la disponibilita prima di aprire la sessione e la ricontrolla almeno ogni minuto quando nessun profilo e utilizzabile;
+- nei batch con pool condiviso, mentre almeno un runner mantiene il lotto in esecuzione, il worker rilegge il pool ogni `ELABORAZIONI_POLL_INTERVAL_SEC` secondi e apre un runner per ogni nuova credenziale attiva e in fascia;
+- l'espansione e incrementale: le sessioni gia aperte continuano senza logout o restart e il claim atomico impedisce che due credenziali prendano la stessa richiesta;
+- i batch con `credential_id` valorizzata restano vincolati al profilo scelto e non acquisiscono nuove credenziali;
+- un ID gia avviato, rifiutato o messo in pausa non viene riaperto nello stesso lotto; una sua riattivazione viene applicata al batch successivo o a una ripresa esplicita;
+- una sessione gia aperta non viene interrotta a meta richiesta quando termina la fascia;
+- se tutti i profili sono temporaneamente fuori fascia, il batch resta `processing` e riparte automaticamente senza intervento;
+- `Testa` e `Testa tutte` ignorano il calendario, per consentire sempre la verifica manuale delle credenziali;
+- `Pausa e libera` prevale sul calendario: una credenziale con `active=false` non viene usata neppure durante una fascia disponibile.
+
+Persistenza e API:
+
+- `schedule_enabled` abilita il vincolo sulla singola riga `catasto_credentials`;
+- `availability_schedule` contiene timezone e mappa settimanale dei giorni `0`-`6`, da lunedi a domenica;
+- `POST /elaborazioni/credentials` e `PATCH /elaborazioni/credentials/{credential_id}` validano formato `HH:MM`, giorni e struttura degli intervalli;
+- `GET /elaborazioni/credentials` restituisce il calendario per alimentare stato corrente e prossima fascia nella UI.
+
+Esempio:
+
+```json
+{
+  "schedule_enabled": true,
+  "availability_schedule": {
+    "timezone": "Europe/Rome",
+    "weekly": {
+      "0": [{"start": "18:00", "end": "08:00"}],
+      "5": [{"start": "00:00", "end": "00:00"}]
+    }
+  }
+}
+```
+
 ## Affidabilita richieste e Profilo A
 
 Per il runtime visure la convenzione ammessa e:

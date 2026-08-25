@@ -9,6 +9,7 @@ import {
   type SisterCredentialTestProgress,
 } from "@/lib/sister-credential-tests";
 import type { ElaborazioneCredential, ElaborazioneCredentialTestResult } from "@/types/api";
+import { nextSisterAvailability, sisterCredentialIsAvailable } from "@/components/elaborazioni/sister-availability-schedule";
 
 export type SisterCredentialPoolViewProps = {
   credentials: ElaborazioneCredential[];
@@ -109,7 +110,7 @@ function PoolHeader(props: SisterCredentialPoolViewProps) {
   const verifiedCount = props.credentials.filter(isVerifiedCredential).length;
   return <div className={`border-b border-[#e5ebe3] bg-white ${props.embedded ? "px-4 py-4" : "px-5 py-5"}`}><div className="flex flex-wrap items-start justify-between gap-4">
     <div className="max-w-2xl"><div className="flex flex-wrap items-center gap-2"><p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#326447]">Pool credenziali SISTER</p><span className="rounded-full bg-[#eaf3ed] px-2.5 py-1 text-[10px] font-bold text-[#1D4E35]">{activeCount}/{props.credentials.length} attive</span><span className="rounded-full bg-sky-50 px-2.5 py-1 text-[10px] font-bold text-sky-800">{verifiedCount} verificate</span></div>
-      <p className={`text-sm text-gray-600 ${props.embedded ? "mt-2 leading-5" : "mt-2 leading-6"}`}>Ogni profilo mostra configurazione, stato e ultimo test senza scorrimento orizzontale. Il test completo include anche gli account disattivati, ma il worker usa soltanto quelli attivi.</p>
+      <p className={`text-sm text-gray-600 ${props.embedded ? "mt-2 leading-5" : "mt-2 leading-6"}`}>Ogni profilo mostra configurazione, stato e ultimo test senza scorrimento orizzontale. I test includono tutti gli account; il worker usa quelli attivi solo nelle fasce consentite.</p>
       <p className={`text-xs ${props.releasedBatchesCount > 0 ? "text-amber-700" : "text-gray-500"} ${props.embedded ? "mt-2" : "mt-3"}`}>{props.releasedBatchesCount > 0 ? `${props.releasedBatchesCount} batch in pausa dopo il rilascio delle sessioni SISTER.` : "Nessun batch in pausa da rilascio sessioni disponibile per la ripartenza."}</p>
     </div>
     <PoolActions {...props} />
@@ -125,11 +126,25 @@ function PoolActions(props: SisterCredentialPoolViewProps) {
 }
 
 function CredentialDetails({ credential }: { credential: ElaborazioneCredential }) {
+  const scheduleEnabled = credential.schedule_enabled ?? false;
+  const availabilitySchedule = credential.availability_schedule ?? null;
+  const availableNow = credential.active && sisterCredentialIsAvailable(scheduleEnabled, availabilitySchedule);
+  const nextAvailability = credential.active && !availableNow
+    ? nextSisterAvailability(scheduleEnabled, availabilitySchedule)
+    : null;
+  const availabilityLabel = !credential.active
+    ? "Non utilizzabile dal worker"
+    : availableNow
+      ? "Disponibile ora"
+      : nextAvailability
+        ? `Disponibile ${nextAvailability.toLocaleString("it-IT", { timeZone: "Europe/Rome", weekday: "short", hour: "2-digit", minute: "2-digit" })}`
+        : "Nessuna fascia disponibile";
   return <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-gray-100 py-3 text-xs">
     <div className="min-w-0"><dt className="font-semibold uppercase tracking-[0.12em] text-[9px] text-gray-400">Convenzione</dt><dd className="mt-1 truncate text-gray-700" title={credential.convenzione ?? undefined}>{credential.convenzione || "Non indicata"}</dd></div>
     <div className="min-w-0"><dt className="font-semibold uppercase tracking-[0.12em] text-[9px] text-gray-400">Codice richiesta</dt><dd className="mt-1 truncate font-mono text-gray-700">{credential.codice_richiesta || "Non indicato"}</dd></div>
     <div className="min-w-0"><dt className="font-semibold uppercase tracking-[0.12em] text-[9px] text-gray-400">Ufficio</dt><dd className="mt-1 truncate text-gray-700">{credential.ufficio_provinciale}</dd></div>
     <div className="min-w-0"><dt className="font-semibold uppercase tracking-[0.12em] text-[9px] text-gray-400">Ultima verifica</dt><dd className="mt-1 truncate text-gray-700">{formatDateTime(credential.verified_at)}</dd></div>
+    <div className="col-span-2 min-w-0"><dt className="font-semibold uppercase tracking-[0.12em] text-[9px] text-gray-400">Utilizzo automatico</dt><dd className={`mt-1 font-semibold ${availableNow ? "text-emerald-700" : "text-amber-800"}`}>{availabilityLabel}</dd></div>
   </dl>;
 }
 

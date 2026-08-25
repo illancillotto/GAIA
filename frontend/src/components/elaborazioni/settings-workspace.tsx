@@ -48,20 +48,17 @@ import type {
   ElaborazioneCredentialTestResult,
   ElaborazioneCredentialTestWebSocketEvent,
 } from "@/types/api";
+import {
+  SisterAvailabilityScheduleEditor,
+} from "@/components/elaborazioni/sister-availability-schedule";
+import {
+  sisterCredentialCreatePayload,
+  sisterCredentialFormFromCredential,
+  sisterCredentialUpdatePayload,
+  useSisterCredentialForm,
+} from "@/components/elaborazioni/sister-credential-form";
 
 const DEFAULT_UFFICIO = "ORISTANO Territorio";
-const DEFAULT_SISTER_FORM = {
-  id: null as string | null,
-  label: "",
-  sister_username: "",
-  sister_password: "",
-  convenzione: "",
-  codice_richiesta: "",
-  ufficio_provinciale: DEFAULT_UFFICIO,
-  active: true,
-  is_default: false,
-};
-
 const DEFAULT_CAPACITAS_FORM = {
   id: null as number | null,
   label: "",
@@ -349,7 +346,7 @@ export function CapacitasTestDialog({
 export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?: boolean }) {
   const [activeTab, setActiveTab] = useState<"sister" | "whitecompany" | "capacitas">("sister");
   const [credentialStatus, setCredentialStatus] = useState<ElaborazioneCredentialStatus | null>(null);
-  const [formState, setFormState] = useState(DEFAULT_SISTER_FORM);
+  const { formState, setFormState, resetForm: resetSisterForm, applyCredential: applyCredentialToForm } = useSisterCredentialForm();
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -402,24 +399,6 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
   useEffect(() => {
     void Promise.all([loadCredentials(), loadReleasedBatches(), loadBonificaCredentials(), loadCapacitasCredentials()]);
   }, []);
-
-  function resetSisterForm(): void {
-    setFormState(DEFAULT_SISTER_FORM);
-  }
-
-  function applyCredentialToForm(credential: ElaborazioneCredential): void {
-    setFormState({
-      id: credential.id,
-      label: credential.label,
-      sister_username: credential.sister_username,
-      sister_password: "",
-      convenzione: credential.convenzione ?? "",
-      codice_richiesta: credential.codice_richiesta ?? "",
-      ufficio_provinciale: credential.ufficio_provinciale,
-      active: credential.active,
-      is_default: credential.is_default,
-    });
-  }
 
   async function handleReleaseSisterSessions(): Promise<void> {
     const token = getStoredAccessToken();
@@ -573,40 +552,12 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
     try {
       let savedCredential: ElaborazioneCredential;
       if (formState.id) {
-        savedCredential = await updateElaborazioneCredential(token, formState.id, {
-          label: formState.label,
-          sister_username: formState.sister_username,
-          sister_password: formState.sister_password.trim().length > 0 ? formState.sister_password : undefined,
-          convenzione: formState.convenzione || null,
-          codice_richiesta: formState.codice_richiesta || null,
-          ufficio_provinciale: formState.ufficio_provinciale,
-          active: formState.active,
-          is_default: formState.is_default,
-        });
+        savedCredential = await updateElaborazioneCredential(token, formState.id, sisterCredentialUpdatePayload(formState));
       } else {
-        savedCredential = await saveElaborazioneCredentials(token, {
-          label: formState.label,
-          sister_username: formState.sister_username,
-          sister_password: formState.sister_password,
-          convenzione: formState.convenzione || undefined,
-          codice_richiesta: formState.codice_richiesta || undefined,
-          ufficio_provinciale: formState.ufficio_provinciale,
-          active: formState.active,
-          is_default: formState.is_default,
-        });
+        savedCredential = await saveElaborazioneCredentials(token, sisterCredentialCreatePayload(formState));
       }
       await loadCredentials();
-      setFormState({
-        id: savedCredential.id,
-        label: savedCredential.label,
-        sister_username: savedCredential.sister_username,
-        sister_password: "",
-        convenzione: savedCredential.convenzione ?? "",
-        codice_richiesta: savedCredential.codice_richiesta ?? "",
-        ufficio_provinciale: savedCredential.ufficio_provinciale,
-        active: savedCredential.active,
-        is_default: savedCredential.is_default,
-      });
+      setFormState(sisterCredentialFormFromCredential(savedCredential));
       setStatusMessage(formState.id ? "Credenziale SISTER aggiornata." : "Credenziale SISTER creata.");
       setError(null);
       setTestResult(null);
@@ -1377,7 +1328,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                         type="checkbox"
                         onChange={(event) => setFormState((current) => ({ ...current, active: event.target.checked }))}
                       />
-                      <span className="text-sm text-gray-700">Credenziale attiva per test e batch</span>
+                      <span className="text-sm text-gray-700">Credenziale attiva per i batch automatici</span>
                     </label>
                     <label className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-[#f8faf8] px-4 py-3">
                       <input
@@ -1388,6 +1339,12 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                       />
                       <span className="text-sm text-gray-700">Usa come profilo predefinito del worker</span>
                     </label>
+                    <SisterAvailabilityScheduleEditor
+                      enabled={formState.schedule_enabled}
+                      onEnabledChange={(schedule_enabled) => setFormState((current) => ({ ...current, schedule_enabled }))}
+                      onScheduleChange={(availability_schedule) => setFormState((current) => ({ ...current, availability_schedule }))}
+                      schedule={formState.availability_schedule}
+                    />
                   </div>
 
                   <div className={embedded ? "flex flex-wrap items-center gap-2" : "flex flex-wrap items-center gap-3"}>

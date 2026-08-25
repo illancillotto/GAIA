@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import pytest
 
+from sister_credential_pool import ActiveSisterCredentialPool
 from test_worker_orchestration_coverage import FakeBrowser, FakeDb, bare_worker, run
 import worker as worker_module
 
@@ -171,6 +172,25 @@ def test_batch_outer_guards_and_credential_selection(monkeypatch: pytest.MonkeyP
     assert repository.failed_unavailable[0][1] == {active.id}
 
 
+def test_batch_waits_when_active_credentials_are_outside_schedule(monkeypatch: pytest.MonkeyPatch) -> None:
+    worker = bare_worker()
+    item = batch()
+    resume_at = datetime.now(timezone.utc) + timedelta(hours=2)
+    outer = FakeDb(get_values=[item])
+    install_batch_runtime(worker, BatchRepository(), monkeypatch)
+    monkeypatch.setattr(
+        worker_module,
+        "load_active_credential_pool",
+        lambda *_args: SimpleNamespace(credentials=(), active_credential_count=1, next_availability=resume_at),
+    )
+    monkeypatch.setattr(worker_module, "SessionLocal", BatchSessionFactory(outer, item))
+
+    run(worker._process_batch(item.id))
+
+    assert item.status == worker_module.CatastoBatchStatus.PROCESSING.value
+    assert "prossima fascia credenziali" in item.current_operation
+
+
 def test_batch_happy_path_role_label_and_release_checkpoints(monkeypatch: pytest.MonkeyPatch) -> None:
     worker = bare_worker()
     item = batch(kind=worker_module.CatastoBatchKind.RUOLO_AUTOSYNC.value)
@@ -224,6 +244,64 @@ def test_batch_happy_path_role_label_and_release_checkpoints(monkeypatch: pytest
         BatchSessionFactory(outer, item, [item, SimpleNamespace(status=worker_module.CatastoBatchStatus.CANCELLED.value)]),
     )
     run(worker._process_batch(item.id))
+
+
+def test_running_shared_batch_adds_new_credentials_without_restarting_existing_runner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    worker = bare_worker()
+    item = batch(pinned=False)
+    first = credential(username="first")
+    added = credential(username="added")
+    request_id = uuid4()
+    repository = BatchRepository()
+    operations = install_batch_runtime(worker, repository, monkeypatch)
+    open_requests = True
+    release_first = worker_module.asyncio.Event()
+    processed_by: list[str] = []
+
+    class DynamicClaimCoordinator:
+        def __init__(self, *_args) -> None:
+            pass
+
+        async def claim_next(self, _repository, _batch_id, credential_id):
+            if credential_id == first.id:
+                await release_first.wait()
+                return Selection()
+            if credential_id == added.id and not processed_by:
+                return Selection(request_id)
+            return Selection()
+
+        async def release(self, _request_id):
+            return None
+
+    async def process(_browser, selected_credential, *_args):
+        nonlocal open_requests
+        processed_by.append(selected_credential.sister_username)
+        open_requests = False
+        release_first.set()
+
+    initial_pool = ActiveSisterCredentialPool((first,), 1)
+    monkeypatch.setattr(worker_module, "SisterRequestClaimCoordinator", DynamicClaimCoordinator)
+    monkeypatch.setattr(worker_module, "load_active_credential_pool", lambda *_args: initial_pool)
+    monkeypatch.setattr(
+        worker_module,
+        "refresh_shared_credential_pool",
+        lambda _factory, _batch_id, pool, _started_ids: pool.merge(
+            ActiveSisterCredentialPool((first, added), 2)
+        ),
+    )
+    worker._process_request = process
+    worker._batch_has_open_requests = lambda _batch_id: open_requests
+    outer = FakeDb(get_values=[item])
+    monkeypatch.setattr(worker_module, "SessionLocal", BatchSessionFactory(outer, item))
+
+    run(worker._process_batch(item.id))
+
+    assert processed_by == ["added"]
+    assert any(operation == "Pool visure aggiornato: 2 credenziali disponibili" for operation in operations)
+    assert repository.failed_unavailable[-1] == (item.id, {first.id, added.id})
+    assert operations[-1] == "finalized"
 
 
 @pytest.mark.parametrize("wait_reason", ["WAIT", "RETRY_LATER", None])

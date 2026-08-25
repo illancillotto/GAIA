@@ -4580,6 +4580,8 @@ export async function saveElaborazioneCredentials(
     ufficio_provinciale?: string;
     active?: boolean;
     is_default?: boolean;
+    schedule_enabled?: boolean;
+    availability_schedule?: ElaborazioneCredential["availability_schedule"];
   },
 ): Promise<ElaborazioneCredential> {
   return request<ElaborazioneCredential>("/elaborazioni/credentials", {
@@ -4603,6 +4605,8 @@ export async function updateElaborazioneCredential(
     ufficio_provinciale?: string;
     active?: boolean;
     is_default?: boolean;
+    schedule_enabled?: boolean;
+    availability_schedule?: ElaborazioneCredential["availability_schedule"];
   },
 ): Promise<ElaborazioneCredential> {
   return request<ElaborazioneCredential>(`/elaborazioni/credentials/${credentialId}`, {

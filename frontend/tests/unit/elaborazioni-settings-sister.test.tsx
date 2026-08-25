@@ -73,6 +73,8 @@ function credential(id: string, overrides: Partial<ElaborazioneCredential> = {})
     ufficio_provinciale: "ORISTANO Territorio",
     active: true,
     is_default: false,
+    schedule_enabled: false,
+    availability_schedule: null,
     verified_at: null,
     created_at: "2026-08-20T08:00:00Z",
     updated_at: "2026-08-20T08:00:00Z",
@@ -275,6 +277,12 @@ describe("ElaborazioniSettingsWorkspace SISTER integration", () => {
       { credential_id: "primary" },
       { credential_id: "secondary" },
     ]);
+
+    const primaryCard = screen.getByText("Profilo primary").closest("article");
+    fireEvent.click(within(primaryCard!).getByRole("button", { name: "Testa" }));
+    await waitFor(() => expect(apiMocks.testElaborazioneCredentials).toHaveBeenLastCalledWith("token", { credential_id: "primary" }));
+    fireEvent.click(within(primaryCard!).getByRole("button", { name: "Pausa e libera" }));
+    await waitFor(() => expect(apiMocks.updateElaborazioneCredential).toHaveBeenCalledWith("token", "primary", { active: false }));
 
     const secondaryCard = screen.getByText("Profilo secondary").closest("article");
     expect(secondaryCard).not.toBeNull();
@@ -575,6 +583,8 @@ describe("ElaborazioniSettingsWorkspace SISTER integration", () => {
         ufficio_provinciale: "CAGLIARI Territorio",
         active: false,
         is_default: false,
+        schedule_enabled: false,
+        availability_schedule: expect.objectContaining({ timezone: "Europe/Rome" }),
       }),
     );
 
@@ -593,6 +603,8 @@ describe("ElaborazioniSettingsWorkspace SISTER integration", () => {
         ufficio_provinciale: "ORISTANO Territorio",
         active: true,
         is_default: false,
+        schedule_enabled: false,
+        availability_schedule: expect.objectContaining({ timezone: "Europe/Rome" }),
       }),
     );
 
@@ -604,12 +616,75 @@ describe("ElaborazioniSettingsWorkspace SISTER integration", () => {
     await waitFor(() => expect(apiMocks.releaseElaborazioneCredentials).toHaveBeenCalledWith("token"));
   });
 
+  test("enables and saves the weekly SISTER availability", async () => {
+    const scheduled = credential("primary", {
+      is_default: true,
+      schedule_enabled: true,
+      availability_schedule: {
+        timezone: "Europe/Rome",
+        weekly: { "0": [{ start: "18:00", end: "08:00" }] },
+      },
+    });
+    apiMocks.getElaborazioneCredentials.mockResolvedValue({
+      configured: true,
+      credentials: [scheduled],
+      default_credential: scheduled,
+      credential: scheduled,
+    });
+    apiMocks.updateElaborazioneCredential.mockResolvedValue(scheduled);
+    render(<ElaborazioniSettingsWorkspace embedded />);
+    await screen.findByText("Profilo primary");
+
+    fireEvent.click(within(screen.getByText("Profilo primary").closest("article")!).getByRole("button", { name: "Modifica" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Usa solo fuori dall/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Usa solo fuori dall/ }));
+    fireEvent.change(await screen.findByLabelText("Lunedi dalle"), { target: { value: "19:00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Applica fuori orario ufficio" }));
+    fireEvent.click(screen.getByRole("button", { name: "Aggiorna credenziale" }));
+
+    await waitFor(() => expect(apiMocks.updateElaborazioneCredential).toHaveBeenCalledWith(
+      "token",
+      "primary",
+      expect.objectContaining({
+        schedule_enabled: true,
+        availability_schedule: expect.objectContaining({ timezone: "Europe/Rome" }),
+      }),
+    ));
+  });
+
+  test("shows immediate, scheduled and unavailable worker usage states", async () => {
+    const lateWindow = {
+      timezone: "Europe/Rome" as const,
+      weekly: Object.fromEntries(Array.from({ length: 7 }, (_, day) => [String(day), [{ start: "23:59", end: "00:00" }]])),
+    };
+    const primary = credential("primary", { is_default: true });
+    const scheduled = credential("scheduled", { schedule_enabled: true, availability_schedule: lateWindow });
+    const closed = credential("closed", {
+      schedule_enabled: true,
+      availability_schedule: undefined as unknown as null,
+    });
+    apiMocks.getElaborazioneCredentials.mockResolvedValue({
+      configured: true,
+      credentials: [primary, scheduled, closed],
+      default_credential: primary,
+      credential: primary,
+    });
+
+    render(<ElaborazioniSettingsWorkspace embedded />);
+
+    expect(await screen.findByText("Disponibile ora")).toBeInTheDocument();
+    expect(screen.getAllByText(/^Disponibile /)).toHaveLength(2);
+    expect(screen.getByText("Nessuna fascia disponibile")).toBeInTheDocument();
+  });
+
   test("normalizes nullable SISTER fields across selection, update and create", async () => {
     const primary = credential("primary", {
       label: "",
       is_default: true,
       convenzione: null,
       codice_richiesta: null,
+      schedule_enabled: undefined as unknown as boolean,
+      availability_schedule: undefined as unknown as null,
     });
     const secondary = credential("secondary", { convenzione: null, codice_richiesta: null });
     const created = credential("created", { convenzione: null, codice_richiesta: null });
@@ -626,6 +701,7 @@ describe("ElaborazioniSettingsWorkspace SISTER integration", () => {
     render(<ElaborazioniSettingsWorkspace embedded />);
     await screen.findByText("user-primary");
 
+    fireEvent.click(within(screen.getByText("user-primary").closest("article")!).getByRole("button", { name: "Modifica" }));
     fireEvent.click(screen.getByRole("button", { name: "Aggiorna credenziale" }));
     await waitFor(() =>
       expect(apiMocks.updateElaborazioneCredential).toHaveBeenCalledWith("token", "primary", expect.objectContaining({

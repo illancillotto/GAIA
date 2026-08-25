@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from datetime import datetime, time, timedelta, timezone
+from functools import partial
 import logging
 import os
 from pathlib import Path
@@ -87,11 +88,16 @@ from anti_captcha_client import AntiCaptchaClient
 from browser_session import BrowserSession, BrowserSessionConfig
 from sister_credential_pool import (
     CredentialRejectionContext,
+    announce_expanded_credential_pool,
     credential_is_active,
     finalize_credential_pool,
     isolate_rejected_credential_runner,
     load_active_credential_pool,
+    mark_batch_waiting_for_schedule,
+    next_processable_batch_id,
     quarantine_rejected_credential,
+    refresh_shared_credential_pool,
+    run_dynamic_credential_pool,
     should_stop_credential_runner,
 )
 from sister_exceptions import SisterInvalidDocumentError, SisterServerError
@@ -691,12 +697,7 @@ class CatastoWorker:
 
     def _next_batch_id(self):
         with SessionLocal() as db:
-            batch = db.scalar(
-                select(CatastoBatch)
-                .where(CatastoBatch.status == CatastoBatchStatus.PROCESSING.value)
-                .order_by(CatastoBatch.started_at.asc().nullsfirst(), CatastoBatch.created_at.asc())
-            )
-            return batch.id if batch is not None else None
+            return next_processable_batch_id(db)
 
     async def _process_batch(self, batch_id) -> None:
         with SessionLocal() as db:
@@ -708,8 +709,7 @@ class CatastoWorker:
             credential_pool = load_active_credential_pool(db, batch)
             active_credentials = credential_pool.credentials
             if not active_credentials:
-                batch.status = CatastoBatchStatus.FAILED.value
-                batch.current_operation = "Credenziali SISTER attive mancanti"
+                mark_batch_waiting_for_schedule(batch, credential_pool)
                 db.commit()
                 return
             logger.info("Batch %s preso in carico per utente %s", batch_id, batch.user_id)
@@ -767,7 +767,7 @@ class CatastoWorker:
                 credential_cooldowns[credential.id] = now + timedelta(seconds=cooldown_seconds)
                 all_credentials_in_cooldown = all(
                     (credential_cooldowns.get(active_credential.id) or now) > now
-                    for active_credential in active_credentials
+                    for active_credential in credential_pool.credentials
                 )
                 opened_global_pause = False
                 if all_credentials_in_cooldown:
@@ -944,10 +944,14 @@ class CatastoWorker:
         )
         self._set_batch_operation(batch_id, pool_label)
         try:
-            await asyncio.gather(*[
-                isolate_rejected_credential_runner(_credential_runner(active_credential))
-                for active_credential in active_credentials
-            ])
+            await run_dynamic_credential_pool(
+                active_credentials,
+                lambda credential: isolate_rejected_credential_runner(_credential_runner(credential)),
+                partial(refresh_shared_credential_pool, SessionLocal, batch_id, credential_pool),
+                lambda: self._batch_has_open_requests(batch_id),
+                partial(announce_expanded_credential_pool, credential_pool, batch_id, request_repository, self._set_batch_operation),
+                POLL_INTERVAL_SEC,
+            )
             finalize_credential_pool(
                 credential_pool,
                 batch_id,

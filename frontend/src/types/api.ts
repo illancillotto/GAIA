@@ -3850,9 +3850,21 @@ export type CatastoCredential = {
   ufficio_provinciale: string;
   active: boolean;
   is_default: boolean;
+  schedule_enabled: boolean;
+  availability_schedule: SisterCredentialAvailabilitySchedule | null;
   verified_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type SisterCredentialAvailabilityWindow = {
+  start: string;
+  end: string;
+};
+
+export type SisterCredentialAvailabilitySchedule = {
+  timezone: "Europe/Rome";
+  weekly: Record<string, SisterCredentialAvailabilityWindow[]>;
 };
 
 export type CatastoCredentialStatus = {

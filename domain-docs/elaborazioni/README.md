@@ -8,6 +8,7 @@ Ambito runtime attuale:
 - gestione CAPTCHA
 - report e artifact diagnostici batch/richiesta
 - pool credenziali SISTER con profilo default per worker e test connessione
+- calendario settimanale opzionale per ogni credenziale SISTER, con disponibilita calcolata in `Europe/Rome`: il worker usa il profilo solo nelle fasce configurate, mentre i test manuali restano sempre eseguibili
 - selezione fail-closed della convenzione SISTER `idConv=1050380` Profilo A, senza flag manuali sulle credenziali multi-ruolo
 - correlazione persistita richiesta locale/remota, affinità con la credenziale SISTER, retry/backoff e fencing transazionale
 - download PDF atomico con validazione firma e SHA-256
@@ -58,10 +59,15 @@ La pagina `/elaborazioni` usa una struttura a sezioni stabili:
 - nel workspace `Credenziali` i blocchi `SISTER` e `Capacitas` sono collassabili, cosi la modale puo comprimere i pannelli non necessari senza perdere il contesto operativo
 - il workspace `Credenziali` gestisce ora piu credenziali SISTER per utente: ogni profilo puo essere attivo/disattivo, editabile e impostato come `default`; il worker usa il profilo default attivo, oppure il primo profilo attivo disponibile
 - ogni card SISTER espone `Pausa e libera`: l'azione salva subito `active=false` e il worker, al checkpoint precedente il claim o successivo alla richiesta corrente, esegue il logout e chiude soltanto la sessione browser di quella credenziale; le altre sessioni continuano a lavorare e la riattivazione resta un'operazione esplicita dal form credenziale
+- ogni card SISTER puo attivare `Usa solo fuori dall'orario dell'operatore` e configurare una o piu fasce per giorno; il preset propone lunedi-venerdi `18:00-08:00` e sabato-domenica tutto il giorno, con stato corrente e prossima disponibilita leggibili direttamente nella card
 - il pool SISTER in `/elaborazioni/settings` usa card responsive senza tabella orizzontale e offre `Testa tutte`: la verifica include anche i profili disattivati, ma procede sempre in sequenza (avvio, polling fino all'esito terminale, account successivo) per non aprire sessioni SISTER concorrenti; avanzamento, esito per account, timeout e interruzione restano visibili nella stessa sezione
 - le credenziali SISTER sono isolate per utente GAIA: `GET /elaborazioni/credentials` restituisce solo il pool del `current_user`; il vincolo DB e `UNIQUE (user_id, sister_username)`, quindi lo stesso username SISTER puo esistere su utenti GAIA diversi ma non due volte nello stesso pool utente
 - il retry dei batch falliti rimette in coda solo le richieste `failed` e aggiorna il riferimento temporale del lotto, evitando che un batch rilanciato venga marcato subito come scaduto dalla pulizia dei `pending` orfani
 - il worker visure usa tutte le credenziali SISTER attive dell'utente come pool concorrente: una sessione browser per credenziale, claim atomico delle richieste e prosecuzione del batch anche quando una singola utenza entra in cooldown
+- il worker filtra il pool prima di aprire nuove sessioni usando il calendario della singola credenziale; gli intervalli con inizio successivo alla fine attraversano la mezzanotte e una sessione gia avviata completa la richiesta corrente senza essere interrotta
+- durante un batch con pool condiviso il worker rilegge periodicamente le credenziali: un nuovo profilo attivo e disponibile entra nel lotto in corso con una nuova sessione browser, senza riavviare o interrompere i runner gia operativi
+- i batch esplicitamente vincolati a una `credential_id` non espandono il pool; inoltre una credenziale rifiutata o messa in pausa non viene riavviata nello stesso lotto
+- se tutte le credenziali attive sono temporaneamente fuori fascia, il batch resta `processing`, espone il messaggio di attesa e viene rivalutato almeno una volta al minuto; non viene marcato `failed` e riparte automaticamente al primo profilo disponibile
 - la pausa di una singola credenziale non trasferisce a un altro account le richieste remote gia correlate: l'affinita SISTER resta vincolante e tali richieste vengono marcate non disponibili; se non restano credenziali attive o autenticabili, il batch viene rilasciato e puo essere ripreso dopo la riattivazione o l'aggiornamento del pool
 - gli errori transitori `SISTER_SESSION_LOCKED`, timeout login/menu e `HTTP 500` del portale non falliscono subito il lotto: la richiesta viene differita, la credenziale entra in cooldown e il runner passa alla richiesta successiva disponibile
 - un rifiuto esplicito `Credenziali SISTER rifiutate` / `Autenticazione fallita` segue la stessa protezione recuperabile: non deve produrre fallimenti in sequenza sulle particelle; per batch grandi si aggiorna e testa la password, quindi si riprende la batch rilasciata senza ricrearla

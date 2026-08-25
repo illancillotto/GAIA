@@ -856,6 +856,8 @@ Se la variabile e vuota/non impostata, la password non viene richiesta.
 - I batch `pending` mai avviati scadono automaticamente dopo `ELABORAZIONI_PENDING_START_TIMEOUT_MINUTES` e vengono marcati `failed`, evitando code orfane nello storico operativo
 - Metriche runtime visure disponibili via `GET /elaborazioni/metrics` e riusate nella dashboard `/elaborazioni` per throughput, success rate, tempi medi e ultimo processato
 - Finestra operativa opzionale del worker tramite `ELABORAZIONI_OPERATION_WINDOW_ENABLED`, `ELABORAZIONI_OPERATION_START_HOUR`, `ELABORAZIONI_OPERATION_END_HOUR`, `ELABORAZIONI_OPERATION_TIMEZONE`: i batch possono partire anche fuori fascia, ma i runner si mettono in pausa automatica e riprendono al primo orario utile
+- Calendario settimanale opzionale per singola credenziale SISTER in timezone `Europe/Rome`: il worker usa ciascun profilo solo nelle fasce configurate, mantiene i batch in attesa quando nessun profilo e disponibile e lascia sempre accessibili i test manuali
+- Espansione dinamica del pool SISTER sui batch condivisi: le nuove credenziali attive e in fascia entrano nei lotti gia in esecuzione senza riavviare le sessioni esistenti; i batch vincolati a una credenziale restano esclusi
 
 ## Network MVP
 

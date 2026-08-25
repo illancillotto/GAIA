@@ -74,6 +74,7 @@ class SessionQueue:
 def bare_worker() -> CatastoWorker:
     worker = CatastoWorker.__new__(CatastoWorker)
     worker.state = SimpleNamespace(stop_requested=False)
+    worker._scheduled_batch_resume_at = {}
     worker.vault = SimpleNamespace(decrypt=lambda value: f"plain:{value}")
     worker.anti_captcha_client = None
     worker.llm_captcha_solver = None
@@ -267,7 +268,10 @@ def test_recovery_resets_all_enabled_job_types(monkeypatch: pytest.MonkeyPatch) 
 def test_simple_next_id_queries(method: str, value, expected, monkeypatch: pytest.MonkeyPatch) -> None:
     if method == "_next_ade_sync_run_id" and value is not None:
         expected = str(value.id)
-    monkeypatch.setattr(worker_module, "SessionLocal", SessionQueue(FakeDb(scalar_values=[value])))
+    db = FakeDb(scalar_values=[value])
+    if method == "_next_batch_id":
+        db = FakeDb(scalars_values=[[value] if value is not None else []])
+    monkeypatch.setattr(worker_module, "SessionLocal", SessionQueue(db))
     assert getattr(bare_worker(), method)() == expected
 
 

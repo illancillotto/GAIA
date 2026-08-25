@@ -684,11 +684,18 @@ def test_credentials_are_encrypted_and_hidden_from_api() -> None:
             "sister_username": "RSSMRA80A01G113X",
             "sister_password": "sister-secret",
             "convenzione": "Consorzio",
+            "schedule_enabled": True,
+            "availability_schedule": {
+                "timezone": "Europe/Rome",
+                "weekly": {"0": [{"start": "18:00", "end": "08:00"}]},
+            },
         },
     )
 
     assert response.status_code == 200
     assert "sister_password" not in response.json()
+    assert response.json()["schedule_enabled"] is True
+    assert response.json()["availability_schedule"]["weekly"]["0"][0] == {"start": "18:00", "end": "08:00"}
 
     db = TestingSessionLocal()
     try:

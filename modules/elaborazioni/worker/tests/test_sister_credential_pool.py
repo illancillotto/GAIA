@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import asyncio
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from uuid import uuid4
 
-import asyncio
 import pytest
-
 from app.models.catasto import CatastoBatchStatus
 from sister_credential_pool import (
     ActiveSisterCredentialPool,
@@ -17,6 +17,7 @@ from sister_credential_pool import (
     isolate_rejected_credential_runner,
     load_active_credential_pool,
     quarantine_rejected_credential,
+    run_dynamic_credential_pool,
     should_stop_credential_runner,
 )
 
@@ -51,8 +52,15 @@ class FakeDb:
         self.commits += 1
 
 
-def credential(*, user_id=1, active=True, username="user"):
-    return SimpleNamespace(id=uuid4(), user_id=user_id, active=active, sister_username=username)
+def credential(*, user_id=1, active=True, username="user", schedule_enabled=False, availability_schedule=None):
+    return SimpleNamespace(
+        id=uuid4(),
+        user_id=user_id,
+        active=active,
+        sister_username=username,
+        schedule_enabled=schedule_enabled,
+        availability_schedule=availability_schedule,
+    )
 
 
 def test_load_active_credential_pool_honors_batch_scope() -> None:
@@ -77,6 +85,32 @@ def test_load_active_credential_pool_honors_batch_scope() -> None:
     ).credentials == (first, second)
 
 
+def test_load_active_credential_pool_defers_credentials_outside_their_schedule() -> None:
+    schedule = {
+        "timezone": "Europe/Rome",
+        "weekly": {"0": [{"start": "18:00", "end": "08:00"}]},
+    }
+    reference = datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc)
+    scheduled = credential(schedule_enabled=True, availability_schedule=schedule)
+    batch = SimpleNamespace(credential_id=scheduled.id, user_id=1)
+
+    pool = load_active_credential_pool(FakeDb(get_value=scheduled), batch, reference)
+
+    assert pool.credentials == ()
+    assert pool.active_credential_count == 1
+    assert pool.next_availability == datetime(2026, 8, 24, 16, 0, tzinfo=timezone.utc)
+
+    unpinned = SimpleNamespace(credential_id=None, user_id=1)
+    always_available = credential()
+    pool = load_active_credential_pool(
+        FakeDb(scalars_values=[scheduled, always_available]),
+        unpinned,
+        reference,
+    )
+    assert pool.credentials == (always_available,)
+    assert pool.next_availability == datetime(2026, 8, 24, 16, 0, tzinfo=timezone.utc)
+
+
 def test_pool_rejection_state_and_error_classification() -> None:
     first = credential(username="first")
     second = credential(username="second")
@@ -91,6 +125,21 @@ def test_pool_rejection_state_and_error_classification() -> None:
     assert is_rejected_credential_error(RuntimeError("Credenziali errate"))
     assert is_rejected_credential_error(RuntimeError("Autenticazione fallita"))
     assert not is_rejected_credential_error(RuntimeError("SISTER_SESSION_LOCKED"))
+
+
+def test_pool_merge_adds_only_new_available_credentials() -> None:
+    first = credential(username="first")
+    second = credential(username="second")
+    rejected = credential(username="rejected")
+    pool = ActiveSisterCredentialPool((first, rejected))
+    pool.reject(rejected.id)
+
+    added = pool.merge(ActiveSisterCredentialPool((first, second, rejected), 3))
+
+    assert added == (second,)
+    assert pool.credentials == (first, rejected, second)
+    assert pool.active_credential_count == 3
+    assert pool.available_ids == {first.id, second.id}
 
 
 def test_quarantine_rejected_credential_requeues_for_remaining_pool() -> None:
@@ -145,6 +194,22 @@ def test_isolate_rejected_credential_runner_only_suppresses_quarantine() -> None
     assert asyncio.run(isolate_rejected_credential_runner(quarantined())) is None
     with pytest.raises(RuntimeError, match="unexpected"):
         asyncio.run(isolate_rejected_credential_runner(failed()))
+
+
+def test_dynamic_pool_accepts_an_empty_initial_pool() -> None:
+    async def run_credential(_credential):
+        return None
+
+    asyncio.run(
+        run_dynamic_credential_pool(
+            (),
+            run_credential,
+            lambda _started_ids: (),
+            lambda: False,
+            lambda: None,
+            1,
+        )
+    )
 
 
 def test_should_stop_credential_runner_preserves_release_semantics() -> None:
