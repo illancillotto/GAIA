@@ -1,5 +1,12 @@
 import type { OrgUnitTreeNode, OrgUnitType } from "@/types/api";
 
+export type SchemaScaleSetter = (scale: number) => void;
+
+type AnimationFrameApi = {
+  requestAnimationFrame: (callback: FrameRequestCallback) => number;
+  cancelAnimationFrame: (handle: number) => void;
+};
+
 /** Visita in profondità: ritorna tutti i nodi dell'albero in lista piatta. */
 export function flattenTree(nodes: OrgUnitTreeNode[]): OrgUnitTreeNode[] {
   const out: OrgUnitTreeNode[] = [];
@@ -118,4 +125,58 @@ export function unitPath(unitId: string, units: OrgUnitTreeNode[]): OrgUnitTreeN
     cur = cur.parent_id ? byId.get(cur.parent_id) : undefined;
   }
   return out;
+}
+
+export function fitScrollableContentToViewport(
+  viewport: HTMLElement | null,
+  content: HTMLElement | null,
+  setScale: SchemaScaleSetter,
+  animationFrameApi: AnimationFrameApi = window,
+): boolean {
+  if (!viewport || !content) return false;
+  if (viewport.clientWidth <= 0 || viewport.clientHeight <= 0 || content.scrollWidth <= 0 || content.scrollHeight <= 0) {
+    return false;
+  }
+
+  const widthRatio = (viewport.clientWidth - 32) / Math.max(content.scrollWidth, 1);
+  const heightRatio = (viewport.clientHeight - 32) / Math.max(content.scrollHeight, 1);
+  const nextScale = Math.max(0.45, Math.min(1.15, Math.min(widthRatio, heightRatio)));
+  setScale(nextScale);
+  animationFrameApi.requestAnimationFrame(() => {
+    const scaledWidth = content.scrollWidth * nextScale;
+    const scaledHeight = content.scrollHeight * nextScale;
+    viewport.scrollLeft = Math.max((scaledWidth - viewport.clientWidth) / 2, 0);
+    viewport.scrollTop = Math.max((scaledHeight - viewport.clientHeight) / 2, 0);
+  });
+  return true;
+}
+
+export function scheduleScrollableContentFit(
+  onFit: () => void,
+  frames = 4,
+  onComplete: () => void = () => undefined,
+  animationFrameApi: AnimationFrameApi = window,
+): () => void {
+  const frameIds: number[] = [];
+  let remainingFrames = Math.max(1, frames);
+  let cancelled = false;
+
+  const run = () => {
+    if (cancelled) return;
+    onFit();
+    remainingFrames -= 1;
+    if (remainingFrames > 0) {
+      frameIds.push(animationFrameApi.requestAnimationFrame(run));
+      return;
+    }
+    onComplete();
+  };
+
+  frameIds.push(animationFrameApi.requestAnimationFrame(run));
+  return () => {
+    cancelled = true;
+    for (const frameId of frameIds) {
+      animationFrameApi.cancelAnimationFrame(frameId);
+    }
+  };
 }

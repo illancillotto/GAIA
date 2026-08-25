@@ -35,7 +35,7 @@ import {
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
-import { computeAutoCollapsedIds, computeTreeInclusion, filterTreeByRootIds, flattenTree, unitPath } from "@/lib/organigramma";
+import { computeAutoCollapsedIds, computeTreeInclusion, filterTreeByRootIds, fitScrollableContentToViewport, flattenTree, scheduleScrollableContentFit, unitPath } from "@/lib/organigramma";
 import type {
   ApplicationUser,
   CurrentUser,
@@ -1181,7 +1181,7 @@ function SchemaBoard({
         </div>
       ) : null}
 
-      <div ref={viewportRef} onMouseDown={onPanStart} className="w-full overflow-auto pb-2 [cursor:grab]">
+      <div ref={viewportRef} data-testid="schema-viewport" onMouseDown={onPanStart} className="w-full overflow-auto pb-2 [cursor:grab]">
         <div
           ref={contentRef}
           className="origin-top-left transition-transform duration-200"
@@ -1673,21 +1673,14 @@ export function OrganigrammaWorkspace({
     scrollTop: 0,
   });
 
-  const fitSchemaToViewport = useCallback(() => {
-    const viewport = schemaViewportRef.current;
-    const content = schemaContentRef.current;
-    if (!viewport || !content) return;
-    const widthRatio = (viewport.clientWidth - 32) / Math.max(content.scrollWidth, 1);
-    const heightRatio = (viewport.clientHeight - 32) / Math.max(content.scrollHeight, 1);
-    const nextScale = Math.max(0.45, Math.min(1.15, Math.min(widthRatio, heightRatio)));
-    setSchemaScale(nextScale);
-    window.requestAnimationFrame(() => {
-      const scaledWidth = content.scrollWidth * nextScale;
-      const scaledHeight = content.scrollHeight * nextScale;
-      viewport.scrollLeft = Math.max((scaledWidth - viewport.clientWidth) / 2, 0);
-      viewport.scrollTop = Math.max((scaledHeight - viewport.clientHeight) / 2, 0);
-    });
-  }, []);
+  const fitSchemaToViewport = useCallback(
+    () => fitScrollableContentToViewport(schemaViewportRef.current, schemaContentRef.current, setSchemaScale),
+    [],
+  );
+  const scheduleSchemaFitToViewport = useCallback(
+    (frames = 4, onComplete?: () => void) => scheduleScrollableContentFit(fitSchemaToViewport, frames, onComplete),
+    [fitSchemaToViewport],
+  );
   const supportsWhiteCompany = structureKind === "organigramma";
 
   useEffect(() => {
@@ -2606,11 +2599,11 @@ export function OrganigrammaWorkspace({
   useEffect(() => {
     if (view !== "schema" || loading || !roots.length || schemaAutoFitDoneRef.current) return;
     const id = window.requestAnimationFrame(() => {
-      fitSchemaToViewport();
+      scheduleSchemaFitToViewport();
       schemaAutoFitDoneRef.current = true;
     });
     return () => window.cancelAnimationFrame(id);
-  }, [view, loading, roots.length, fitSchemaToViewport]);
+  }, [view, loading, roots.length, scheduleSchemaFitToViewport]);
 
   useEffect(() => {
     if (view !== "schema") {
@@ -2676,11 +2669,8 @@ export function OrganigrammaWorkspace({
 
   useEffect(() => {
     if (view !== "schema") return;
-    const id = window.requestAnimationFrame(() => {
-      fitSchemaToViewport();
-    });
-    return () => window.cancelAnimationFrame(id);
-  }, [fitSchemaToViewport, guidedSchemaDensity, schemaCanvasMode, schemaCollapsedIds, schemaOrientation, view]);
+    return scheduleSchemaFitToViewport(2);
+  }, [guidedSchemaDensity, scheduleSchemaFitToViewport, schemaCanvasMode, schemaCollapsedIds, schemaOrientation, view]);
 
   useEffect(() => {
     if (view !== "schema" || !schemaFocusNodeId) return;

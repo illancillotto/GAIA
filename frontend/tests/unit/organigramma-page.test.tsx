@@ -234,6 +234,43 @@ describe("Organigramma page", () => {
     expect(screen.getByRole("button", { name: "Importa JSON" })).toBeInTheDocument();
   });
 
+  test("centers the schema viewport on first render without pressing Fit", async () => {
+    let frameId = 0;
+    const requestAnimationFrameSpy = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      frameId += 1;
+      callback(frameId);
+      return frameId;
+    });
+    const cancelAnimationFrameSpy = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+    const clientWidthSpy = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function getClientWidth() {
+      return this.getAttribute("data-testid") === "schema-viewport" ? 1000 : 0;
+    });
+    const clientHeightSpy = vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function getClientHeight() {
+      return this.getAttribute("data-testid") === "schema-viewport" ? 520 : 0;
+    });
+    const scrollWidthSpy = vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockImplementation(function getScrollWidth() {
+      return this.getAttribute("data-testid") === "schema-viewport" ? 1000 : 4000;
+    });
+    const scrollHeightSpy = vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(function getScrollHeight() {
+      return this.getAttribute("data-testid") === "schema-viewport" ? 520 : 900;
+    });
+
+    try {
+      render(<OrganigrammaPage />);
+
+      const viewport = await screen.findByTestId("schema-viewport");
+      await waitFor(() => expect(viewport.scrollLeft).toBeGreaterThan(0));
+      expect(viewport.scrollTop).toBeGreaterThanOrEqual(0);
+    } finally {
+      clientWidthSpy.mockRestore();
+      clientHeightSpy.mockRestore();
+      scrollWidthSpy.mockRestore();
+      scrollHeightSpy.mockRestore();
+      requestAnimationFrameSpy.mockRestore();
+      cancelAnimationFrameSpy.mockRestore();
+    }
+  });
+
   test("switches to schema view and links a block below another using arrows", async () => {
     render(<OrganigrammaPage />);
 

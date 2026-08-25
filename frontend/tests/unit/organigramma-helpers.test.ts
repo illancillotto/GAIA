@@ -37,6 +37,10 @@ describe("flattenTree", () => {
 });
 
 describe("computeAutoCollapsedIds", () => {
+  test("does not collapse small trees with default threshold", () => {
+    expect(computeAutoCollapsedIds(TREE).size).toBe(0);
+  });
+
   test("keeps root and next two levels visible when the tree is large", () => {
     const collapsed = computeAutoCollapsedIds(TREE, {
       threshold: 1,
