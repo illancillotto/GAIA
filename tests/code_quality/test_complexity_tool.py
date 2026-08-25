@@ -168,6 +168,20 @@ def test_rename_with_same_fingerprint_passes(tmp_path):
     assert run_tool("check", "--baseline", str(baseline), str(q)).returncode == 0
 
 
+def test_new_file_reusing_existing_fingerprint_is_not_a_rename(tmp_path):
+    source = "def same(x):\n    return x\n"
+    app = tmp_path / "backend/app"
+    write(app / "a.py", source)
+    write(app / "c.py", source)
+    baseline = tmp_path / "baseline.json"
+    assert run_tool("baseline", "--baseline", str(baseline), str(app)).returncode == 0
+
+    write(app / "b.py", source)
+    result = run_tool("check", "--baseline", str(baseline), str(app))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_ambiguous_fingerprint_exit_2(tmp_path):
     p = tmp_path / "backend/app/a.py"
     write(p, "def same(x):\n    return x\n")

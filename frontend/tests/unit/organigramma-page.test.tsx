@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   getOrgVisibility: vi.fn(),
   getOrgAssignments: vi.fn(),
   createOrgAssignment: vi.fn(),
+  updateOrgAssignment: vi.fn(),
   createOrgUnit: vi.fn(),
   deleteOrgAssignment: vi.fn(),
   deleteOrgUnit: vi.fn(),
@@ -39,6 +40,7 @@ vi.mock("@/lib/api", () => ({
   getOrgVisibility: mocks.getOrgVisibility,
   getOrgAssignments: mocks.getOrgAssignments,
   createOrgAssignment: mocks.createOrgAssignment,
+  updateOrgAssignment: mocks.updateOrgAssignment,
   createOrgUnit: mocks.createOrgUnit,
   deleteOrgAssignment: mocks.deleteOrgAssignment,
   deleteOrgUnit: mocks.deleteOrgUnit,
@@ -73,7 +75,7 @@ const detail: OrgUnitDetail = {
   assignments: [
     {
       id: "a1", user_id: 1, org_unit_id: "u1", manager_user_id: null, title: "Direttore Generale",
-      is_primary: true, active: true, valid_from: null, valid_to: null, source: "manuale", wc_operator_id: null,
+      position_code: "dirigente", is_primary: true, active: true, valid_from: null, valid_to: null, source: "manuale", wc_operator_id: null,
       created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
       person: { user_id: 1, full_name: "Mario Sanna", username: "msanna", email: "m@x.it", rbac_role: "super_admin", is_active: true },
       manager: null,
@@ -119,6 +121,7 @@ describe("Organigramma page", () => {
       org_unit_id: "u2",
       manager_user_id: null,
       title: null,
+      position_code: "collaboratore",
       is_primary: false,
       active: true,
       valid_from: null,
@@ -130,6 +133,7 @@ describe("Organigramma page", () => {
       person: { user_id: 2, full_name: "Anna Cabras", username: "acabras", email: "a@x.it", rbac_role: "viewer", is_active: true },
       manager: null,
     });
+    mocks.updateOrgAssignment.mockResolvedValue(undefined);
     mocks.createOrgUnit.mockResolvedValue({
       id: "u3",
       nome: "Nuovo Settore",
@@ -587,10 +591,100 @@ describe("Organigramma page", () => {
         org_unit_id: "u2",
         manager_user_id: null,
         title: null,
+        position_code: "collaboratore",
         is_primary: false,
         active: true,
         source: "manuale",
       }, "organigramma");
     });
+  });
+
+  test("assigns a unit lead and realigns existing direct reports", async () => {
+    const thirdUser = {
+      id: 3, username: "ppiras", email: "p@x.it", full_name: "Paolo Piras", role: "viewer", is_active: true,
+    } as ApplicationUser;
+    const directReport = {
+      ...detail.assignments[0], id: "a2", user_id: 2, org_unit_id: "u2", manager_user_id: null,
+      title: null, position_code: "collaboratore", is_primary: false, person: detail.assignments[0]!.person,
+    };
+    mocks.listAllApplicationUsers.mockResolvedValue([...users, thirdUser]);
+    mocks.getOrgAssignments.mockResolvedValue([...detail.assignments, directReport]);
+
+    render(<OrganigrammaPage />);
+
+    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByLabelText("Abilita modifica")[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Imposta responsabile" }));
+    expect((await screen.findAllByText("Drop su un nodo per impostarlo come responsabile.")).length).toBeGreaterThan(0);
+    fireEvent.dragStart(await screen.findByTestId("unassigned-user-3"));
+    const targetNode = await screen.findByTestId("schema-node-u2");
+    fireEvent.dragOver(targetNode);
+    fireEvent.drop(targetNode);
+
+    await waitFor(() => {
+      expect(mocks.createOrgAssignment).toHaveBeenCalledWith("token", expect.objectContaining({
+        user_id: 3,
+        org_unit_id: "u2",
+        manager_user_id: 1,
+        title: "Capo settore",
+        position_code: "capo_settore",
+        is_primary: true,
+      }), "organigramma");
+      expect(mocks.updateOrgAssignment).toHaveBeenCalledWith(
+        "token", "a2", { manager_user_id: 3 }, "organigramma",
+      );
+    });
+  });
+
+  test("creates a reparto with its initial lead", async () => {
+    mocks.createOrgUnit.mockResolvedValueOnce({
+      ...detail.unit, id: "u3", nome: "Reparto Pompe", tipo: "reparto", parent_id: "u2",
+    });
+    render(<OrganigrammaPage />);
+
+    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "+ Nuova unità" }));
+    fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Reparto Pompe" } });
+    fireEvent.change(screen.getByLabelText("Tipo"), { target: { value: "reparto" } });
+    fireEvent.change(screen.getByLabelText("Unità padre"), { target: { value: "u2" } });
+    fireEvent.change(screen.getByLabelText("Responsabile iniziale"), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Crea unità" }));
+
+    await waitFor(() => {
+      expect(mocks.createOrgAssignment).toHaveBeenCalledWith("token", expect.objectContaining({
+        user_id: 2,
+        org_unit_id: "u3",
+        title: "Capo reparto",
+        position_code: "capo_reparto",
+      }), "organigramma");
+    });
+  });
+
+  test("opens generic unit creation from the tree workspace", async () => {
+    render(<OrganigrammaPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /Albero/i }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Nuova unità" }));
+
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Nuova unità organizzativa");
+  });
+
+  test("rejects a sector whose parent is a reparto", async () => {
+    const reparto = treeNode("u3", "Reparto Pompe", "reparto", "u2");
+    mocks.getOrgTree.mockResolvedValue([
+      treeNode("u1", "Direzione Generale", "direzione", null, [
+        treeNode("u2", "Settore Idraulico", "settore", "u1", [reparto]),
+      ]),
+    ]);
+    render(<OrganigrammaPage />);
+
+    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "+ Nuovo settore" })[0]!);
+    fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Settore non valido" } });
+    fireEvent.change(screen.getByLabelText("Unità padre"), { target: { value: "u3" } });
+    fireEvent.click(screen.getByRole("button", { name: "Crea unità" }));
+
+    expect(await screen.findByText("Un settore non può essere creato sotto un reparto o una squadra.")).toBeInTheDocument();
+    expect(mocks.createOrgUnit).not.toHaveBeenCalled();
   });
 });

@@ -6,7 +6,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-OrgUnitTypeLiteral = Literal["direzione", "distretto", "settore", "squadra"]
+OrgUnitTypeLiteral = Literal["direzione", "distretto", "settore", "reparto", "squadra"]
+OrgPositionCodeLiteral = Literal["dirigente", "capo_settore", "capo_operai", "capo_reparto", "collaboratore"]
 SourceLiteral = Literal["manuale", "whitecompany", "bridge_team"]
 StructureKindLiteral = Literal["organigramma", "territoriale"]
 TargetTypeLiteral = Literal["user", "org_unit"]
@@ -110,6 +111,7 @@ class OrgAssignmentBase(BaseModel):
     org_unit_id: UUID
     manager_user_id: int | None = None
     title: str | None = Field(default=None, max_length=150)
+    position_code: OrgPositionCodeLiteral | None = None
     is_primary: bool = False
     active: bool = True
     valid_from: datetime | None = None
@@ -126,6 +128,7 @@ class OrgAssignmentUpdate(BaseModel):
     org_unit_id: UUID | None = None
     manager_user_id: int | None = None
     title: str | None = Field(default=None, max_length=150)
+    position_code: OrgPositionCodeLiteral | None = None
     is_primary: bool | None = None
     active: bool | None = None
     valid_from: datetime | None = None
@@ -142,6 +145,7 @@ class OrgAssignmentResponse(BaseModel):
     org_unit_id: UUID
     manager_user_id: int | None
     title: str | None
+    position_code: OrgPositionCodeLiteral | None
     is_primary: bool
     active: bool
     valid_from: datetime | None
@@ -242,6 +246,7 @@ class VisiblePerson(BaseModel):
     title: str | None
     org_unit_id: UUID | None = None
     via: ViaLiteral
+    scope: ScopeLiteral
 
 
 class VisibilityResult(BaseModel):

@@ -21,6 +21,7 @@ from app.modules.accessi.wc_org_charts import WCOrgChart, WCOrgChartEntry
 from app.modules.operazioni.models.wc_area import WCArea
 from app.modules.operazioni.models.wc_operator import WCOperator
 from app.modules.organigramma.models import OrgAssignment, OrgSourceLink, OrgUnit
+from app.modules.organigramma.positions import position_code_from_title
 from app.modules.organigramma.schemas import WhiteCompanySyncResult
 
 SOURCE_SYSTEM = "whitecompany"
@@ -425,7 +426,7 @@ def sync_from_whitecompany(db: Session, *, user_id: int | None) -> WhiteCompanyS
                     assignment.user_id = gaia_user_id
                     assignment.org_unit_id = unit.id
                     assignment.manager_user_id = manager_user_id
-                    assignment.title = entry.role
+                    assignment.title, assignment.position_code = entry.role, position_code_from_title(entry.role)
                     assignment.is_primary = True
                     assignment.active = True
                     assignment.source = "whitecompany"
@@ -445,7 +446,7 @@ def sync_from_whitecompany(db: Session, *, user_id: int | None) -> WhiteCompanyS
                     user_id=gaia_user_id,
                     org_unit_id=unit.id,
                     manager_user_id=manager_user_id,
-                    title=entry.role,
+                    title=entry.role, position_code=position_code_from_title(entry.role),
                     is_primary=True,
                     active=True,
                     source="whitecompany",
@@ -475,7 +476,7 @@ def sync_from_whitecompany(db: Session, *, user_id: int | None) -> WhiteCompanyS
             assignment.user_id = gaia_user_id
             assignment.org_unit_id = unit.id
             assignment.manager_user_id = manager_user_id
-            assignment.title = entry.role
+            assignment.title, assignment.position_code = entry.role, position_code_from_title(entry.role)
             assignment.is_primary = True
             assignment.active = True
             assignment.source = "whitecompany"

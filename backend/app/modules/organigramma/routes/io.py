@@ -163,7 +163,7 @@ def import_organigramma_json(
                     user_id=assignment.user_id,
                     org_unit_id=assignment.org_unit_id,
                     manager_user_id=assignment.manager_user_id,
-                    title=assignment.title,
+                    title=assignment.title, position_code=assignment.position_code,
                     is_primary=assignment.is_primary,
                     active=assignment.active,
                     valid_from=assignment.valid_from,
@@ -179,7 +179,7 @@ def import_organigramma_json(
             existing.user_id = assignment.user_id
             existing.org_unit_id = assignment.org_unit_id
             existing.manager_user_id = assignment.manager_user_id
-            existing.title = assignment.title
+            existing.title, existing.position_code = assignment.title, assignment.position_code
             existing.is_primary = assignment.is_primary
             existing.active = assignment.active
             existing.valid_from = assignment.valid_from

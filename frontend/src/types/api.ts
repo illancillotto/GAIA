@@ -556,7 +556,8 @@ export type OrgStructureBootstrapResult = {
 };
 
 // --- Organigramma (canonical layer) ---------------------------------------
-export type OrgUnitType = "direzione" | "distretto" | "settore" | "squadra";
+export type OrgUnitType = "direzione" | "distretto" | "settore" | "reparto" | "squadra";
+export type OrgPositionCode = "dirigente" | "capo_settore" | "capo_operai" | "capo_reparto" | "collaboratore";
 export type OrgSource = "manuale" | "whitecompany" | "bridge_team";
 export type OrgOverrideTargetType = "user" | "org_unit";
 export type OrgOverrideScope = "read" | "approve" | "full";
@@ -611,6 +612,7 @@ export type OrgAssignment = {
   org_unit_id: string;
   manager_user_id: number | null;
   title: string | null;
+  position_code: OrgPositionCode | null;
   is_primary: boolean;
   active: boolean;
   valid_from: string | null;
@@ -664,6 +666,7 @@ export type OrgVisiblePerson = {
   title: string | null;
   org_unit_id: string | null;
   via: OrgVisibilityVia;
+  scope: OrgOverrideScope;
 };
 
 export type OrgVisibilityResult = {
@@ -706,6 +709,7 @@ export type OrgAssignmentCreateInput = {
   org_unit_id: string;
   manager_user_id?: number | null;
   title?: string | null;
+  position_code?: OrgPositionCode | null;
   is_primary?: boolean;
   active?: boolean;
   valid_from?: string | null;
@@ -718,6 +722,7 @@ export type OrgAssignmentUpdateInput = {
   org_unit_id?: string;
   manager_user_id?: number | null;
   title?: string | null;
+  position_code?: OrgPositionCode | null;
   is_primary?: boolean;
   active?: boolean;
   valid_from?: string | null;

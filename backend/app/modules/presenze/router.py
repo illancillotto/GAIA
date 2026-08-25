@@ -183,7 +183,14 @@ from app.modules.presenze.services.xlsm_export_job import (
     generate_xlsm_export,
     resolve_export_template_path as _resolve_export_template_path,
 )
-from app.modules.accessi.org_structure import OrgStructureAssignment
+from app.modules.presenze.services.visibility_policy import (
+    can_approve_daily_record,
+    can_read_collaborator,
+    can_read_daily_record,
+    collaborator_visibility_filter,
+    daily_record_visibility_filter,
+    resolve_presenze_visibility,
+)
 
 router = APIRouter(prefix="/presenze", tags=["presenze"])
 RequirePresenzeModule = Depends(require_module("presenze"))
@@ -635,21 +642,13 @@ def get_presenze_access_context(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     _: Annotated[ApplicationUser, RequirePresenzeModule],
 ) -> PresenzeAccessContextResponse:
-    assigned_count = int(
-        db.scalar(
-            select(func.count(PresenzeSupervisorAssignment.id)).where(
-                PresenzeSupervisorAssignment.supervisor_user_id == current_user.id
-            )
-        )
-        or 0
-    )
-    hierarchy_scope_count = len(_hierarchy_scope_user_ids(db, current_user))
+    visibility = resolve_presenze_visibility(db, current_user)
     return PresenzeAccessContextResponse(
-        can_view_all_data=_can_view_all_inaz_data(current_user),
+        can_view_all_data=visibility.full_access,
         can_view_all_credentials=current_user.is_super_admin,
         can_manage_supervisors=_can_manage_supervisors(current_user),
-        is_supervisor=assigned_count > 0 or hierarchy_scope_count > 0,
-        assigned_collaborators_count=assigned_count + hierarchy_scope_count,
+        is_supervisor=bool(visibility.approvable_user_ids or visibility.legacy_collaborator_ids),
+        assigned_collaborators_count=visibility.subordinate_count,
     )
 
 
@@ -1161,16 +1160,7 @@ def list_collaborators(
     stmt = select(PresenzeCollaborator)
     count_stmt = select(func.count(PresenzeCollaborator.id))
     if not _can_view_all_inaz_data(current_user):
-        hierarchy_scope = _hierarchy_scope_user_ids(db, current_user)
-        visible_collaborator_ids = select(PresenzeSupervisorAssignment.collaborator_id).where(
-            PresenzeSupervisorAssignment.supervisor_user_id == current_user.id
-        )
-        visibility_filter = or_(
-            PresenzeCollaborator.owner_user_id == current_user.id,
-            PresenzeCollaborator.id.in_(visible_collaborator_ids),
-            PresenzeCollaborator.owner_user_id.in_(hierarchy_scope),
-            PresenzeCollaborator.application_user_id.in_(hierarchy_scope),
-        )
+        visibility_filter = collaborator_visibility_filter(resolve_presenze_visibility(db, current_user))
         stmt = stmt.where(visibility_filter)
         count_stmt = count_stmt.where(visibility_filter)
     if q:
@@ -1519,16 +1509,7 @@ def _apply_daily_record_filters(
 ):
 
     if not _can_view_all_inaz_data(current_user):
-        hierarchy_scope = _hierarchy_scope_user_ids(db, current_user)
-        visible_collaborator_ids = select(PresenzeSupervisorAssignment.collaborator_id).where(
-            PresenzeSupervisorAssignment.supervisor_user_id == current_user.id
-        )
-        visibility_filter = or_(
-            PresenzeDailyRecord.owner_user_id == current_user.id,
-            PresenzeDailyRecord.collaborator_id.in_(visible_collaborator_ids),
-            PresenzeDailyRecord.owner_user_id.in_(hierarchy_scope),
-            PresenzeDailyRecord.application_user_id.in_(hierarchy_scope),
-        )
+        visibility_filter = daily_record_visibility_filter(resolve_presenze_visibility(db, current_user))
         stmt = stmt.where(visibility_filter)
         count_stmt = count_stmt.where(visibility_filter)
 
@@ -2859,26 +2840,13 @@ def get_dashboard_summary(
     )
 
     if not _can_view_all_inaz_data(current_user):
-        hierarchy_scope = _hierarchy_scope_user_ids(db, current_user)
-        visible_collaborator_ids = select(PresenzeSupervisorAssignment.collaborator_id).where(
-            PresenzeSupervisorAssignment.supervisor_user_id == current_user.id
-        )
-        collaborator_visibility_filter = or_(
-            PresenzeCollaborator.owner_user_id == current_user.id,
-            PresenzeCollaborator.id.in_(visible_collaborator_ids),
-            PresenzeCollaborator.owner_user_id.in_(hierarchy_scope),
-            PresenzeCollaborator.application_user_id.in_(hierarchy_scope),
-        )
-        record_visibility_filter = or_(
-            PresenzeDailyRecord.owner_user_id == current_user.id,
-            PresenzeDailyRecord.collaborator_id.in_(visible_collaborator_ids),
-            PresenzeDailyRecord.owner_user_id.in_(hierarchy_scope),
-            PresenzeDailyRecord.application_user_id.in_(hierarchy_scope),
-        )
-        collaborator_stmt = collaborator_stmt.where(collaborator_visibility_filter)
-        collaborator_count_stmt = collaborator_count_stmt.where(collaborator_visibility_filter)
-        record_stmt = record_stmt.where(record_visibility_filter)
-        record_count_stmt = record_count_stmt.where(record_visibility_filter)
+        visibility = resolve_presenze_visibility(db, current_user)
+        collaborator_filter = collaborator_visibility_filter(visibility)
+        record_filter = daily_record_visibility_filter(visibility)
+        collaborator_stmt = collaborator_stmt.where(collaborator_filter)
+        collaborator_count_stmt = collaborator_count_stmt.where(collaborator_filter)
+        record_stmt = record_stmt.where(record_filter)
+        record_count_stmt = record_count_stmt.where(record_filter)
 
     collaborators_total = db.execute(collaborator_count_stmt).scalar_one()
     mapped_collaborators_total = db.execute(
@@ -4872,84 +4840,16 @@ def _can_manage_supervisors(current_user: ApplicationUser) -> bool:
     return _is_admin_user(current_user)
 
 
-def _has_supervisor_assignment(db: Session, current_user: ApplicationUser, collaborator_id: uuid.UUID) -> bool:
-    assignment = db.execute(
-        select(PresenzeSupervisorAssignment.id).where(
-            PresenzeSupervisorAssignment.supervisor_user_id == current_user.id,
-            PresenzeSupervisorAssignment.collaborator_id == collaborator_id,
-        )
-    ).scalar_one_or_none()
-    return assignment is not None
-
-
-def _hierarchy_scope_user_ids(db: Session, current_user: ApplicationUser) -> set[int]:
-    assignments = db.scalars(select(OrgStructureAssignment)).all()
-    children_by_manager: dict[int, list[int]] = {}
-    for assignment in assignments:
-        if assignment.manager_user_id is None:
-            continue
-        children_by_manager.setdefault(assignment.manager_user_id, []).append(assignment.application_user_id)
-    scope: set[int] = set()
-    queue = list(children_by_manager.get(current_user.id, []))
-    while queue:
-        user_id = queue.pop(0)
-        if user_id in scope:
-            continue
-        scope.add(user_id)
-        queue.extend(children_by_manager.get(user_id, []))
-    return scope
-
-
-def _can_access_by_hierarchy(current_user: ApplicationUser, *, owner_user_id: int | None, application_user_id: int | None, hierarchy_scope: set[int]) -> bool:
-    if owner_user_id == current_user.id:
-        return True
-    if owner_user_id is not None and owner_user_id in hierarchy_scope:
-        return True
-    if application_user_id is not None and application_user_id in hierarchy_scope:
-        return True
-    return False
-
-
 def _can_access_collaborator(db: Session, current_user: ApplicationUser, collaborator: PresenzeCollaborator) -> bool:
-    if _can_view_all_inaz_data(current_user):
-        return True
-    hierarchy_scope = _hierarchy_scope_user_ids(db, current_user)
-    if _can_access_by_hierarchy(
-        current_user,
-        owner_user_id=collaborator.owner_user_id,
-        application_user_id=collaborator.application_user_id,
-        hierarchy_scope=hierarchy_scope,
-    ):
-        return True
-    return _has_supervisor_assignment(db, current_user, collaborator.id)
+    return can_read_collaborator(resolve_presenze_visibility(db, current_user), collaborator)
 
 
 def _can_access_daily_record(db: Session, current_user: ApplicationUser, record: PresenzeDailyRecord) -> bool:
-    if _can_view_all_inaz_data(current_user):
-        return True
-    hierarchy_scope = _hierarchy_scope_user_ids(db, current_user)
-    if _can_access_by_hierarchy(
-        current_user,
-        owner_user_id=record.owner_user_id,
-        application_user_id=record.application_user_id,
-        hierarchy_scope=hierarchy_scope,
-    ):
-        return True
-    return _has_supervisor_assignment(db, current_user, record.collaborator_id)
+    return can_read_daily_record(resolve_presenze_visibility(db, current_user), record)
 
 
 def _can_validate_daily_record(db: Session, current_user: ApplicationUser, record: PresenzeDailyRecord) -> bool:
-    if _can_view_all_inaz_data(current_user):
-        return True
-    hierarchy_scope = _hierarchy_scope_user_ids(db, current_user)
-    if _can_access_by_hierarchy(
-        current_user,
-        owner_user_id=record.owner_user_id,
-        application_user_id=record.application_user_id,
-        hierarchy_scope=hierarchy_scope,
-    ):
-        return True
-    return _has_supervisor_assignment(db, current_user, record.collaborator_id)
+    return can_approve_daily_record(resolve_presenze_visibility(db, current_user), record)
 
 
 def _can_edit_daily_record(current_user: ApplicationUser, record: PresenzeDailyRecord) -> bool:

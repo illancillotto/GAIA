@@ -5,6 +5,7 @@ export type {
   OrgOverrideScope,
   OrgOverrideStatus,
   OrgOverrideTargetType,
+  OrgPositionCode,
   OrgPersonRef,
   OrgSource,
   OrgUnit,

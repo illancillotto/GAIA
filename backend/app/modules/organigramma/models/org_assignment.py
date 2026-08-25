@@ -8,6 +8,15 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 
+ORG_POSITION_CODES = (
+    "dirigente",
+    "capo_settore",
+    "capo_operai",
+    "capo_reparto",
+    "collaboratore",
+)
+ORG_LEADERSHIP_POSITION_CODES = frozenset(ORG_POSITION_CODES[:-1])
+
 
 class OrgAssignment(Base):
     """Perimetro organizzativo della persona, separato dalla persona stessa.
@@ -40,6 +49,7 @@ class OrgAssignment(Base):
         index=True,
     )
     title: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    position_code: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

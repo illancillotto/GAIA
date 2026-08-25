@@ -311,6 +311,24 @@ def list_revision_assignments(db: Session, revision_id: UUID) -> list[OrgRevisio
     )
 
 
+def _revision_assignment_values(assignment: OrgAssignment | OrgRevisionAssignment) -> dict[str, object]:
+    return {
+        "user_id": assignment.user_id,
+        "org_unit_id": assignment.org_unit_id,
+        "manager_user_id": assignment.manager_user_id,
+        "title": assignment.title,
+        "position_code": assignment.position_code,
+        "is_primary": assignment.is_primary,
+        "active": assignment.active,
+        "valid_from": assignment.valid_from,
+        "valid_to": assignment.valid_to,
+        "source": assignment.source,
+        "wc_operator_id": assignment.wc_operator_id,
+        "created_at": assignment.created_at,
+        "updated_at": assignment.updated_at,
+    }
+
+
 def snapshot_revision_from_canonical(db: Session, revision_id: UUID) -> None:
     units = list_units(db)
     assignments = list_assignments(db)
@@ -338,18 +356,7 @@ def snapshot_revision_from_canonical(db: Session, revision_id: UUID) -> None:
             OrgRevisionAssignment(
                 revision_id=revision_id,
                 logical_org_assignment_id=assignment.id,
-                user_id=assignment.user_id,
-                org_unit_id=assignment.org_unit_id,
-                manager_user_id=assignment.manager_user_id,
-                title=assignment.title,
-                is_primary=assignment.is_primary,
-                active=assignment.active,
-                valid_from=assignment.valid_from,
-                valid_to=assignment.valid_to,
-                source=assignment.source,
-                wc_operator_id=assignment.wc_operator_id,
-                created_at=assignment.created_at,
-                updated_at=assignment.updated_at,
+                **_revision_assignment_values(assignment),
             )
         )
     db.flush()
@@ -382,18 +389,7 @@ def clone_revision_snapshot(db: Session, *, source_revision_id: UUID, target_rev
             OrgRevisionAssignment(
                 revision_id=target_revision_id,
                 logical_org_assignment_id=assignment.logical_org_assignment_id,
-                user_id=assignment.user_id,
-                org_unit_id=assignment.org_unit_id,
-                manager_user_id=assignment.manager_user_id,
-                title=assignment.title,
-                is_primary=assignment.is_primary,
-                active=assignment.active,
-                valid_from=assignment.valid_from,
-                valid_to=assignment.valid_to,
-                source=assignment.source,
-                wc_operator_id=assignment.wc_operator_id,
-                created_at=assignment.created_at,
-                updated_at=assignment.updated_at,
+                **_revision_assignment_values(assignment),
             )
         )
     db.flush()

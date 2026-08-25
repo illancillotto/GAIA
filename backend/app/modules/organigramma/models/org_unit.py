@@ -9,7 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 
 # Valori validati app-side (vedi schemas). Tenuti come costanti per riuso nei test.
-ORG_UNIT_TYPES = ("direzione", "distretto", "settore", "squadra")
+ORG_UNIT_TYPES = ("direzione", "distretto", "settore", "reparto", "squadra")
 ORG_SOURCES = ("manuale", "whitecompany", "bridge_team")
 
 

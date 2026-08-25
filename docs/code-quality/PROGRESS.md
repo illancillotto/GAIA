@@ -349,6 +349,19 @@ alle feature in corso senza avviare automaticamente hotspot applicativi.
 - Lint frontend: exit `0`, con soli warning legacy fuori dal perimetro Portal Health; nessun warning nuovo attribuito alla slice.
 - Graphify: backend e frontend senza variazioni topologiche; domain docs `1151` nodi, `1756` archi e `109` community; refresh platform docs `PASS`.
 
+## Hotspot Presenze - visibility router characterization (2026-08-25)
+
+- Scope: singolo hotspot `backend/app/modules/presenze/router.py`; nessun secondo hotspot avviato. La policy estratta in `services/visibility_policy.py` conserva il dual-read tra Organigramma canonico e assegnazioni supervisore legacy.
+- Invarianti: `admin`, `hr_manager` e `super_admin` vedono tutti i dati Presenze; dirigenti e capi leggono il proprio sottoalbero; approvazione gerarchica distinta dagli override `read`; route, payload, schema DB e transazioni Presenze invariati.
+- Coverage router prima: `1603/1988` statement, `80,63%`. Dopo i test di caratterizzazione: `1988/1988`, `100%`, `0` righe mancanti e `0` esclusioni. La nuova policy di visibilita e a sua volta al `100%` (`56/56`, `0` mancanti).
+- Coverage runtime completo Organigramma/Presenze: `3350/3350`, `100%`, `0` righe mancanti e `0` esclusioni sui `13` file modificati. Il conteggio include modelli, posizioni, repository, import/export, bozze, servizi di organigramma/visibilita, sync WhiteCompany, router e policy Presenze.
+- Metriche prima, router: LOC `4668`, cognitive sum/max `1372/111`, cyclomatic sum/max `1156/64`, `1` violation file-level.
+- Metriche dopo, aggregato router + policy: LOC `4670`, cognitive sum/max `1366/111`, cyclomatic sum/max `1157/64`, `1` violation file-level. Il debito non e ridotto in modo univoco e non viene classificato come miglioramento.
+- Test: suite strumentata Organigramma/Presenze `PASS`; `pytest -q tests/organigramma tests/test_presenze_*.py` `PASS`; `compileall` e `git diff --check` `PASS`; `make quality-test` `34 passed` dopo l'aggiunta della regressione sul matching cross-file. `test_modified_runtime_coverage.py` caratterizza errori import, fallback bozze/dettagli, cicli di visibilita e rami di mapping WhiteCompany.
+- Ratchet autorevole isolato: checkout temporaneo della base `8e2008d24bac2f19c9403416fb06681a34952161` con i soli runtime Presenze modificati; `make complexity-ratchet BASE_REF=8e2008d24bac2f19c9403416fb06681a34952161` `PASS`, `findings: []`.
+- Ratchet globale: il falso rename di un file nuovo e stato corretto limitando il matching cross-file ai percorsi baseline realmente assenti. Il gate completo resta in exit `2` per una distinta `ambiguous_identity` nel file concorrente `frontend/src/app/gis/catalogo/page.tsx`, ampiamente riorganizzato; baseline globale non aggiornata.
+- Esito: `REORGANIZED_AND_CHARACTERIZED`. Debito residuo: router legacy sopra soglia LOC; una futura riduzione richiede una nuova autorizzazione hotspot separata.
+
 ## Functional maintenance - GIS coordinates and overtime months (2026-08-21)
 
 - Scope GIS: ricerca globale, parser coordinate e nuova route `/catasto/gis/coordinate`; la pagina `/catasto/gis` e `MapContainer` sono identici a `main`, senza modifiche API, DB o auth.

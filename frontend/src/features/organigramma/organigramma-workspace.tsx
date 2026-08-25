@@ -31,16 +31,18 @@ import {
   isAuthError,
   listAllApplicationUsers,
   syncOrgWhiteCompany,
+  updateOrgAssignment,
   updateOrgUnit,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { computeAutoCollapsedIds, computeTreeInclusion, filterTreeByRootIds, fitScrollableContentToViewport, flattenTree, scheduleScrollableContentFit, unitPath } from "@/lib/organigramma";
+import { TYPE_FILTERS, TYPE_META } from "@/features/organigramma/organigramma-config";
+import { buildAssignmentPayload, isInvalidSectorParent, nextChildUnitType, resolveManagerUserIds, syncDirectReportManagers } from "@/features/organigramma/organigramma-assignment";
 import type {
   ApplicationUser,
   CurrentUser,
   OrgAssignment,
-  OrgAssignmentCreateInput,
   OrganigrammaSnapshot,
   OrgOverrideScope,
   OrgOverrideStatus,
@@ -93,22 +95,7 @@ type ImportSnapshotAnalysis = {
   warnings: string[];
 };
 
-const TYPE_META: Record<OrgUnitType, { label: string; chip: string; dot: string }> = {
-  direzione: { label: "Direzione", chip: "bg-[#D3EAD4] text-[#163d29] border-[#bcd9bf]", dot: "#1D4E35" },
-  distretto: { label: "Distretto", chip: "bg-[#e0f3ec] text-[#0f6a4e] border-[#bfe5d6]", dot: "#1D9E75" },
-  settore: { label: "Settore", chip: "bg-[#e3f0f5] text-[#215a72] border-[#c4e0ea]", dot: "#3b82a6" },
-  squadra: { label: "Squadra", chip: "bg-[#efeaf7] text-[#574a78] border-[#ddd2ee]", dot: "#8a7bb8" },
-};
-
 const SCOPE_LABEL: Record<OrgOverrideScope, string> = { read: "Lettura", approve: "Approvazione", full: "Completo" };
-
-const TYPE_FILTERS: { value: OrgUnitType | "all"; label: string }[] = [
-  { value: "all", label: "Tutti" },
-  { value: "direzione", label: "Direzione" },
-  { value: "distretto", label: "Distretto" },
-  { value: "settore", label: "Settore" },
-  { value: "squadra", label: "Squadra" },
-];
 
 const SCHEMA_NODE_WIDTH = 246;
 const SCHEMA_NODE_HEIGHT = 188;
@@ -233,10 +220,9 @@ function isLeadershipTitle(title: string | null | undefined): boolean {
 }
 
 function pickLeadAssignment(assignments: OrgAssignment[]): OrgAssignment | null {
-  return assignments.find((assignment) => isLeadershipTitle(assignment.title))
-    ?? assignments.find((assignment) => assignment.manager_user_id == null)
-    ?? assignments[0]
-    ?? null;
+  return assignments.find(
+    (assignment) => assignment.position_code != null && assignment.position_code !== "collaboratore",
+  ) ?? assignments.find((assignment) => isLeadershipTitle(assignment.title)) ?? null;
 }
 
 function buildSchemaMeta(tree: OrgUnitTreeNode[], assignments: OrgAssignment[]): Map<string, SchemaNodeMeta> {
@@ -631,21 +617,6 @@ function resolveSubtreeCollisionShift(
   return orientation === "horizontal"
     ? { x: primaryStep * 8, y: 0 }
     : { x: primaryStep * 6, y: secondaryStep * 2 };
-}
-
-function defaultLeadTitle(tipo: OrgUnitType): string {
-  switch (tipo) {
-    case "direzione":
-      return "Direttore";
-    case "distretto":
-      return "Responsabile distretto";
-    case "settore":
-      return "Capo settore";
-    case "squadra":
-      return "Capo squadra";
-    default:
-      return "Responsabile unità";
-  }
 }
 
 function Pill({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -2160,18 +2131,13 @@ export function OrganigrammaWorkspace({
       return;
     }
 
-    const payload: OrgAssignmentCreateInput = {
-      user_id: userId,
-      org_unit_id: unitId,
-      manager_user_id: null,
-      title: mode === "lead" ? defaultLeadTitle(unit.tipo) : null,
-      is_primary: mode === "lead",
-      active: true,
-      source: "manuale",
-    };
+    const payload = buildAssignmentPayload({ userId, unit, mode, ...resolveManagerUserIds(unit, schemaMeta) });
 
     try {
       await createOrgAssignment(token, payload, structureKind);
+      await syncDirectReportManagers(mode, allAssignments, unitId, userId, (assignmentId) =>
+        updateOrgAssignment(token, assignmentId, { manager_user_id: userId }, structureKind),
+      );
       setNotice(
         mode === "lead"
           ? `${user.full_name ?? user.username} impostato come responsabile di ${unit.nome}.`
@@ -2196,16 +2162,9 @@ export function OrganigrammaWorkspace({
       };
       const created = await createOrgUnit(token, seededPayload, structureKind);
       if (responsibleUserId != null) {
-        const tipo = payload.tipo;
-        await createOrgAssignment(token, {
-          user_id: responsibleUserId,
-          org_unit_id: created.id,
-          manager_user_id: null,
-          title: defaultLeadTitle(tipo),
-          is_primary: true,
-          active: true,
-          source: "manuale",
-        }, structureKind);
+        await createOrgAssignment(token, buildAssignmentPayload({
+          userId: responsibleUserId, unit: created, mode: "lead", unitLeadUserId: null, parentLeadUserId: null,
+        }), structureKind);
       }
       setCreateUnitPreset(null);
       setSelectedId(created.id);
@@ -2231,13 +2190,6 @@ export function OrganigrammaWorkspace({
       return selectedSector.parent_id;
     }
     return selectedId;
-  }
-
-  function resolveGenericUnitType(): OrgUnitType {
-    if (selectedNode?.tipo === "direzione") return "distretto";
-    if (selectedNode?.tipo === "distretto") return "settore";
-    if (selectedNode?.tipo === "settore") return "squadra";
-    return "settore";
   }
 
   function snapCoordinate(value: number) {
@@ -3250,7 +3202,7 @@ export function OrganigrammaWorkspace({
                   onSelectNode={setSelectedId}
                   onConnectSelectedToNode={handleConnectSelectedNodeToTarget}
                   onCreateUnit={() => openCreateUnit("settore", resolveSectorParentId())}
-                  onCreateGenericUnit={() => openCreateUnit(resolveGenericUnitType(), selectedId)}
+                          onCreateGenericUnit={() => openCreateUnit(nextChildUnitType(selectedNode?.tipo), selectedId)}
                   onStartDragUser={setDraggingUserId}
                   onEndDragUser={() => setDraggingUserId(null)}
                 />
@@ -3339,7 +3291,7 @@ export function OrganigrammaWorkspace({
             onSelectNode={setSelectedId}
             onConnectSelectedToNode={handleConnectSelectedNodeToTarget}
             onCreateUnit={() => openCreateUnit("settore", resolveSectorParentId())}
-            onCreateGenericUnit={() => openCreateUnit(resolveGenericUnitType(), selectedId)}
+            onCreateGenericUnit={() => openCreateUnit(nextChildUnitType(selectedNode?.tipo), selectedId)}
             onStartDragUser={setDraggingUserId}
             onEndDragUser={() => setDraggingUserId(null)}
           />
@@ -4016,8 +3968,8 @@ function CreateUnitModal({
       setErr("Inserisci il nome della nuova unità.");
       return;
     }
-    if (tipo === "settore" && parentUnit && parentUnit.tipo === "squadra") {
-      setErr("Un settore non può essere creato sotto una squadra.");
+    if (isInvalidSectorParent(tipo, parentUnit?.tipo)) {
+      setErr("Un settore non può essere creato sotto un reparto o una squadra.");
       return;
     }
     setSaving(true);

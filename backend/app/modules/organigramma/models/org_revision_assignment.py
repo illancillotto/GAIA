@@ -34,6 +34,7 @@ class OrgRevisionAssignment(Base):
         index=True,
     )
     title: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    position_code: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

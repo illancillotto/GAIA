@@ -515,6 +515,7 @@ def test_import_snapshot_replace_recreates_organigramma(client, make_user, auth_
                 "org_unit_id": "22222222-2222-2222-2222-222222222222",
                 "manager_user_id": None,
                 "title": "Caposettore",
+                "position_code": "capo_settore",
                 "is_primary": True,
                 "active": True,
                 "valid_from": None,
@@ -557,6 +558,15 @@ def test_import_snapshot_replace_recreates_organigramma(client, make_user, auth_
     assignments = client.get("/organigramma/assignments", headers=header)
     assert assignments.status_code == 200, assignments.text
     assert assignments.json()[0]["title"] == "Caposettore"
+
+    snapshot["assignments"][0]["title"] = "Capo reparto"
+    snapshot["assignments"][0]["position_code"] = "capo_reparto"
+    merged = client.post("/organigramma/io/import?mode=merge", json=snapshot, headers=header)
+    assert merged.status_code == 200, merged.text
+    assert merged.json()["assignments_updated"] == 1
+    updated_assignment = client.get("/organigramma/assignments", headers=header).json()[0]
+    assert updated_assignment["title"] == "Capo reparto"
+    assert updated_assignment["position_code"] == "capo_reparto"
 
     overrides = client.get("/organigramma/overrides", headers=header)
     assert overrides.status_code == 200, overrides.text
@@ -641,11 +651,24 @@ def test_whitecompany_sync_maps_user_chart_to_area_tree_by_root_area_id(
     session.add_all([root_area, settore_area, sezione_area])
     session.flush()
 
+    legacy_unit = OrgUnit(nome="Collocazione legacy", tipo="settore", source="manuale")
+    session.add(legacy_unit)
+    session.flush()
+
     dirigente_wc = WCOperator(wc_id=455, gaia_user_id=dirigente.id)
     caposettore_wc = WCOperator(wc_id=13010, gaia_user_id=caposettore.id)
     caposezione_wc = WCOperator(wc_id=548, gaia_user_id=caposezione.id)
     session.add_all([dirigente_wc, caposettore_wc, caposezione_wc])
     session.flush()
+    session.add(
+        OrgAssignment(
+            user_id=dirigente.id,
+            org_unit_id=legacy_unit.id,
+            title="Responsabile legacy",
+            source="whitecompany",
+            wc_operator_id=dirigente_wc.id,
+        )
+    )
 
     area_chart = WCOrgChart(wc_id=9, chart_type="area", name="Area Agraria")
     user_chart = WCOrgChart(wc_id=1, chart_type="user", name="Area agraria")
@@ -711,7 +734,8 @@ def test_whitecompany_sync_maps_user_chart_to_area_tree_by_root_area_id(
 
     body = client.post("/organigramma/sync/whitecompany", headers=header).json()
     assert body["units_created"] == 3
-    assert body["assignments_created"] == 3
+    assert body["assignments_created"] == 2
+    assert body["assignments_updated"] == 1
 
     session.expire_all()
     units = {u.nome: u for u in session.query(OrgUnit).all()}
@@ -727,3 +751,13 @@ def test_whitecompany_sync_maps_user_chart_to_area_tree_by_root_area_id(
         units["Settore Manutenzione"].id,
         units["Sezione reti sud"].id,
     }
+    assert assignments[dirigente.id].position_code == "dirigente"
+    assert assignments[caposettore.id].position_code == "capo_settore"
+
+    dirigente_entry = session.query(WCOrgChartEntry).filter(WCOrgChartEntry.wc_id == 455).one()
+    dirigente_entry.role = "Direttore area"
+    session.commit()
+    repeated = client.post("/organigramma/sync/whitecompany", headers=header).json()
+    assert repeated["assignments_updated"] == 3
+    session.expire_all()
+    assert session.query(OrgAssignment).filter(OrgAssignment.user_id == dirigente.id).one().title == "Direttore area"

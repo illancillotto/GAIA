@@ -11,7 +11,11 @@ from app.modules.organigramma.schemas import (
 
 def test_unit_create_rejects_invalid_tipo():
     with pytest.raises(ValidationError):
-        OrgUnitCreate(nome="X", tipo="reparto")  # type: ignore[arg-type]
+        OrgUnitCreate(nome="X", tipo="ufficio")  # type: ignore[arg-type]
+
+
+def test_unit_create_accepts_reparto():
+    assert OrgUnitCreate(nome="Reparto officina", tipo="reparto").tipo == "reparto"
 
 
 def test_unit_create_rejects_invalid_source():

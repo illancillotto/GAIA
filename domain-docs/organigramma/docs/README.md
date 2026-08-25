@@ -24,7 +24,7 @@ Decisione architetturale adottata:
 
 Tabelle principali:
 
-- `org_unit`: albero unita organizzative (`direzione|distretto|settore|squadra`)
+- `org_unit`: albero unita organizzative (`direzione|distretto|settore|reparto|squadra`)
 - `org_assignment`: assegnazione `application_user -> org_unit` con manager diretto e title operativo
 - `org_visibility_override`: eccezioni esplicite di visibilita
 - `org_source_link`: mapping idempotente con sorgenti WhiteCompany
@@ -34,7 +34,8 @@ Vincoli chiave:
 - `application_users.id` resta `Integer` e tutte le FK verso utenti usano `Integer`
 - PK canoniche `org_*` in `Uuid`
 - `title` operativo non coincide con ruolo RBAC
-- solo `super_admin` bypassa la visibilita; `admin` no
+- `position_code` normalizza le posizioni `dirigente|capo_settore|capo_operai|capo_reparto|collaboratore`
+- nell'Organigramma canonico solo `super_admin` bypassa la visibilita; il dominio Presenze applica anche il bypass concordato per `admin` e `hr_manager`
 
 ## RBAC e visibilita
 
@@ -51,6 +52,16 @@ Visibilita dati:
 - base gerarchica: un viewer vede le unita dove e manager diretto dei membri e tutti i discendenti
 - override: un viewer puo ricevere visibilita aggiuntiva su un utente o su un sottoalbero
 - la provenienza della visibilita e tracciata come `gerarchia` oppure `override`
+- gli scope `read`, `approve` e `full` restano distinti; la gerarchia manageriale concede `approve`
+
+Nel dominio Presenze il resolver aggiunge le eccezioni applicative concordate:
+
+- `admin`, `super_admin` e `hr_manager` vedono tutti i dati delle giornaliere
+- dirigenti e capi vedono soltanto le persone nel proprio sottoalbero canonico
+- gli override `read` non consentono la validazione; `approve` e `full` la consentono
+- la visibilita delle giornaliere usa `PresenzeCollaborator.application_user_id`
+- `owner_user_id` identifica chi ha importato il dato e non propaga visibilita ai suoi responsabili
+- le assegnazioni supervisore e la gerarchia Accessi legacy restano lette durante la migrazione
 
 ## API principali
 
@@ -148,7 +159,7 @@ Client API:
 Stato attuale:
 
 - sync unita da `wc_area` implementato
-- sync assegnazioni operatori lasciato come follow-up documentato
+- sync assegnazioni operatori e posizioni normalizzate implementato
 
 Regole MVP:
 

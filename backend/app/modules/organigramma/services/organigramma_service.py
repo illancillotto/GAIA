@@ -285,7 +285,7 @@ def build_visibility_result(
                 full_name=(person.full_name or person.username) if person else None,
                 title=assignment.title if assignment else None,
                 org_unit_id=assignment.org_unit_id if assignment else None,
-                via=via,
+                via=via, scope=visibility.person_scope[user_id],
             )
         )
     visible_people.sort(key=lambda p: (p.full_name or ""))

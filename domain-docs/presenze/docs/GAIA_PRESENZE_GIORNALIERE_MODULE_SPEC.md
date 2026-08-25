@@ -48,6 +48,18 @@ Le giornaliere e gli extra orario oggi sono gestiti con estrazione manuale o sem
 - `viewer`: consulta le proprie giornaliere o quelle autorizzate.
 - `hr_manager`: supervisiona recuperi maturati/fruiti, rettifiche manuali e workflow approvativo.
 
+### 2.5 Visibilita organizzativa e approvazione
+
+- `admin`, `hr_manager` e `super_admin` mantengono visibilita completa sui dati Presenze;
+- `dirigente`, `capo_settore`, `capo_operai` e `capo_reparto` sono posizioni dell'Organigramma canonico, non ruoli RBAC globali;
+- dirigenti e capi vedono soltanto i collaboratori assegnati al proprio sottoalbero organizzativo;
+- la gerarchia manageriale concede lettura e approvazione, mentre un override `read` concede soltanto la lettura;
+- gli override `approve` e `full` consentono anche la validazione delle giornaliere;
+- il collegamento tra collaboratore Inaz e utente GAIA usa `PresenzeCollaborator.application_user_id`;
+- `owner_user_id` identifica chi ha importato il dato e non concede visibilita organizzativa;
+- la modifica dei dati operativi resta distinta dall'approvazione e continua a richiedere i permessi applicativi dedicati;
+- durante la migrazione restano attivi in dual-read supervisori e gerarchia Accessi legacy.
+
 ## 3. Stato sorgente Inaz
 
 ### 3.1 Tool esistente

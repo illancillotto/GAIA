@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time, timezone
+import asyncio
+import json
 from pathlib import Path
 from types import SimpleNamespace
 import uuid
@@ -28,6 +30,124 @@ from app.modules.presenze.schemas import PresenzeBankHoursCompensationSummaryRes
 class _DbWithoutCollaborator:
     def get(self, *_args, **_kwargs):
         return None
+
+
+class _ScalarRows:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self.rows
+
+    def scalar_one_or_none(self):
+        return self.rows[0] if self.rows else None
+
+    def scalar_one(self):
+        return self.rows[0]
+
+
+class _RecordingDb:
+    def __init__(self, rows=()):
+        self.rows = list(rows)
+        self.added = []
+        self.commits = 0
+
+    def add(self, item):
+        self.added.append(item)
+
+    def flush(self):
+        return None
+
+    def commit(self):
+        self.commits += 1
+
+    def refresh(self, _item):
+        return None
+
+    def execute(self, _statement):
+        return _ScalarRows(self.rows)
+
+    def get(self, _model, _identifier):
+        return None
+
+
+class _QueuedDb(_RecordingDb):
+    def __init__(self, *row_sets):
+        super().__init__()
+        self.row_sets = list(row_sets)
+
+    def execute(self, _statement):
+        return _ScalarRows(self.row_sets.pop(0))
+
+
+def test_hr_routes_reject_viewers_before_accessing_payload_or_database() -> None:
+    viewer = SimpleNamespace(role="viewer", is_super_admin=False)
+    adjustment_id = uuid.uuid4()
+    calls = [
+        lambda: router.get_recovery_dashboard(None, viewer, None),
+        lambda: router.list_recovery_adjustments(None, viewer, None),
+        lambda: router.create_recovery_adjustment(None, None, viewer, None),
+        lambda: router.update_recovery_adjustment(adjustment_id, None, None, viewer, None),
+        lambda: router.review_recovery_adjustment(adjustment_id, None, None, viewer, None),
+        lambda: router.delete_recovery_adjustment(adjustment_id, None, viewer, None),
+        lambda: router.get_bank_hours_dashboard(None, viewer, None),
+        lambda: router.get_bank_hours_collaborator_detail(adjustment_id, None, viewer, None),
+        lambda: router.list_bank_hours_adjustments(None, viewer, None),
+        lambda: router.create_bank_hours_adjustment(None, None, viewer, None),
+        lambda: router.update_bank_hours_adjustment(adjustment_id, None, None, viewer, None),
+        lambda: router.review_bank_hours_adjustment(adjustment_id, None, None, viewer, None),
+        lambda: router.delete_bank_hours_adjustment(adjustment_id, None, viewer, None),
+        lambda: router.get_bank_hours_guidance_policy(None, viewer, None),
+        lambda: router.put_bank_hours_guidance_policy(None, None, viewer, None),
+        lambda: router.get_bank_hours_guidance_policy_history(None, viewer, None),
+    ]
+
+    for call in calls:
+        with pytest.raises(HTTPException) as exc_info:
+            call()
+        assert exc_info.value.status_code == 403
+
+
+def test_adjustment_routes_return_not_found_for_unknown_ids() -> None:
+    admin = SimpleNamespace(role="admin", is_super_admin=False, id=1)
+    db = _DbWithoutCollaborator()
+    adjustment_id = uuid.uuid4()
+    calls = [
+        lambda: router.update_recovery_adjustment(adjustment_id, None, db, admin, None),
+        lambda: router.review_recovery_adjustment(adjustment_id, None, db, admin, None),
+        lambda: router.delete_recovery_adjustment(adjustment_id, db, admin, None),
+        lambda: router.update_bank_hours_adjustment(adjustment_id, None, db, admin, None),
+        lambda: router.review_bank_hours_adjustment(adjustment_id, None, db, admin, None),
+        lambda: router.delete_bank_hours_adjustment(adjustment_id, db, admin, None),
+    ]
+
+    for call in calls:
+        with pytest.raises(HTTPException) as exc_info:
+            call()
+        assert exc_info.value.status_code == 404
+
+
+def test_configuration_routes_return_not_found_for_unknown_ids() -> None:
+    db = _DbWithoutCollaborator()
+    calls = [
+        lambda: router.update_presenze_holiday(999, None, db, None, None),
+        lambda: router.delete_inaz_holiday(999, db, None, None),
+        lambda: router.update_schedule_template(999, None, db, None, None),
+        lambda: router.delete_schedule_template(999, db, None, None),
+        lambda: router.create_schedule_rule(999, None, db, None, None),
+        lambda: router.update_schedule_rule(999, None, db, None, None),
+        lambda: router.delete_schedule_rule(999, db, None, None),
+        lambda: router.create_collaborator_schedule_assignment(uuid.uuid4(), None, db, None, None),
+        lambda: router.delete_schedule_assignment(999, db, None, None),
+    ]
+
+    for call in calls:
+        with pytest.raises(HTTPException) as exc_info:
+            call()
+        assert exc_info.value.status_code == 404
 
 
 def test_resolve_export_template_path_supports_existing_normalized_and_default(
@@ -132,6 +252,403 @@ def test_suggest_bootstrap_preset_supports_gaia_operai_template_code() -> None:
     assert preset.preset_key == "operai_0714_primo_terzo_sabato"
     assert confidence == "high"
     assert reason is not None
+
+
+@pytest.mark.parametrize(
+    ("codes", "counts", "preset_key", "confidence"),
+    [
+        (["RIENTRO IMP"], {"RIENTRO IMP": 3}, "impiegati_rientro", "high"),
+        (["IMP1"], {"IMP1": 3}, "impiegati_flessibile", "high"),
+        (["OPE0736"], {"OPE0736": 3}, "operai_0620_1356", "high"),
+        (["OPESAB", "ALTRO"], {"OPESAB": 2, "ALTRO": 2}, "operai_0714_primo_terzo_sabato", "low"),
+    ],
+)
+def test_suggest_bootstrap_preset_covers_supported_profiles(
+    codes: list[str], counts: dict[str, int], preset_key: str, confidence: str
+) -> None:
+    preset, actual_confidence, reason = router._suggest_bootstrap_preset(codes, counts)
+    assert preset is not None
+    assert preset.preset_key == preset_key
+    assert actual_confidence == confidence
+    assert reason
+
+
+@pytest.mark.parametrize(
+    ("codes", "counts", "expected_key"),
+    [
+        (["OPE0613"], {"OPE0613": 1}, "operai_0714_primo_terzo_sabato"),
+        (["OP_5.3_12.3"], {"OP_5.3_12.3": 1}, "operai_0714_primo_terzo_sabato"),
+        (["IMP1"], {"IMP1": 1}, "impiegati_flessibile"),
+        (["RIENTRO IMP"], {"RIENTRO IMP": 1}, "impiegati_rientro"),
+        (["OPE0736"], {"OPE0736": 1}, "operai_0620_1356"),
+    ],
+)
+def test_probable_bootstrap_preset_profiles(
+    codes: list[str], counts: dict[str, int], expected_key: str
+) -> None:
+    suggestion = router._suggest_probable_bootstrap_preset(codes, counts)
+    assert suggestion is not None
+    assert suggestion[0] is not None
+    assert suggestion[0].preset_key == expected_key
+
+
+def test_probable_bootstrap_preset_handles_empty_and_unknown_codes() -> None:
+    assert router._suggest_probable_bootstrap_preset([], {}) is None
+    assert router._suggest_probable_bootstrap_preset(["UNKNOWN"], {"UNKNOWN": 1}) is None
+    assert router._suggest_bootstrap_preset(["UNKNOWN"], {"UNKNOWN": 1}) == (None, "none", None)
+
+
+def test_schedule_configuration_status_covers_current_and_legacy_profiles() -> None:
+    collaborator = SimpleNamespace(contract_kind="operaio", operai_group="agrario", standard_daily_minutes=420)
+    status, notes = router._resolve_schedule_configuration_status(
+        collaborator,
+        assigned_template_code="OPE0714_1E3SAB",
+        suggested_template_code="OPE0714_1E3SAB",
+    )
+    assert status == "current"
+    assert notes == ["Configurazione allineata alla logica GAIA corrente."]
+
+    legacy_status, legacy_notes = router._resolve_schedule_configuration_status(
+        collaborator,
+        assigned_template_code="IMP1",
+        suggested_template_code=None,
+    )
+    assert legacy_status == "legacy_review"
+    assert "non esiste un preset" in legacy_notes[0]
+
+    mismatch_status, mismatch_notes = router._resolve_schedule_configuration_status(
+        collaborator,
+        assigned_template_code="IMP1",
+        suggested_template_code="RIENTRO IMP",
+    )
+    assert mismatch_status == "legacy_review"
+    assert "dati suggeriscono" in mismatch_notes[0]
+
+
+def test_small_router_helpers_cover_empty_fallback_and_validation_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert router._build_collaborator_snapshot_map(None, []) == {}
+    assert router._build_classification_map(None, []) == {}
+    assert router._build_operational_quality_map(None, []) == {}
+    assert router._build_monthly_night_bonus_map(None, []) == {}
+    assert router._load_latest_template_codes_by_collaborator(None, []) == {}
+    assert router._summarize_detail_values({}) == "—"
+
+    request_record = SimpleNamespace(
+        raw_payload_json={},
+        request_type="permesso",
+        request_description=None,
+        request_status=None,
+        request_authorized_by=None,
+    )
+    assert router._daily_record_has_requests(request_record) is True
+    assert router._filter_anomaly_rows([request_record], only_anomalies=False, only_requests=True) == [request_record]
+
+    no_request_record = SimpleNamespace(
+        raw_payload_json={},
+        request_type=None,
+        request_description=None,
+        request_status=None,
+        request_authorized_by=None,
+    )
+    assert router._filter_anomaly_rows([no_request_record], only_anomalies=False, only_requests=True) == []
+
+    weekday_record = SimpleNamespace(work_date=date(2026, 8, 24), raw_payload_json={"special": True})
+    monkeypatch.setattr(router, "detail_indicates_special_day", lambda _payload: True)
+    assert router._daily_record_is_special_day(weekday_record) is True
+    weekday_record.raw_payload_json = None
+    assert router._daily_record_is_special_day(weekday_record) is False
+
+    assert len(router._resolve_recent_month_values(months=2, anchor_month=None)) == 2
+    with pytest.raises(HTTPException, match="anchor_month must be"):
+        router._resolve_recent_month_values(months=1, anchor_month="invalid")
+
+    punches = [
+        SimpleNamespace(entry_time=None, exit_time=time(10, 0)),
+        SimpleNamespace(entry_time=time(22, 0), exit_time=time(2, 0)),
+    ]
+    assert router._complete_punch_minutes(punches) == 240
+
+    positive_adjustment = SimpleNamespace(delta_minutes=30)
+    router._validate_bank_hours_adjustment_balance(None, positive_adjustment)
+
+
+def test_export_job_creation_persists_worker_start_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    db = _RecordingDb()
+    monkeypatch.setattr(router, "get_sync_artifact_dir", lambda _job_id: tmp_path)
+    monkeypatch.setattr(router, "launch_xlsm_export_worker", lambda _job: (_ for _ in ()).throw(RuntimeError("xlsm boom")))
+
+    with pytest.raises(HTTPException, match="xlsm boom") as xlsm_error:
+        router._create_xlsm_export_job_record(
+            db,
+            requested_by_user_id=1,
+            period_start=date(2026, 5, 1),
+            collaborator_ids=None,
+            employee_kind=None,
+            template_path=None,
+        )
+    assert xlsm_error.value.status_code == 500
+    assert db.added[-1].status == "failed"
+
+    collaborator = SimpleNamespace(id=uuid.uuid4(), name="Collaboratore test")
+    monkeypatch.setattr(
+        router,
+        "launch_straordinari_export_worker",
+        lambda _job: (_ for _ in ()).throw(RuntimeError("straordinari boom")),
+    )
+    with pytest.raises(HTTPException, match="straordinari boom") as straordinari_error:
+        router._create_straordinari_export_job_record(
+            db,
+            requested_by_user_id=1,
+            collaborator=collaborator,
+            period_start=date(2026, 5, 1),
+            template_path=None,
+            items=[],
+        )
+    assert straordinari_error.value.status_code == 500
+    assert db.added[-1].status == "failed"
+
+
+def test_resolve_straordinari_collaborator_covers_explicit_and_inferred_cases(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = SimpleNamespace(id=7, role="viewer", is_super_admin=False)
+    collaborator = SimpleNamespace(id=uuid.uuid4(), name="Unico")
+    monkeypatch.setattr(router, "_can_access_collaborator", lambda *_args: True)
+
+    explicit_db = _RecordingDb()
+    explicit_db.get = lambda _model, _identifier: collaborator
+    assert router._resolve_straordinari_collaborator(
+        explicit_db, current_user=user, collaborator_id=collaborator.id
+    ) is collaborator
+
+    missing_db = _RecordingDb()
+    with pytest.raises(HTTPException) as missing_explicit:
+        router._resolve_straordinari_collaborator(
+            missing_db, current_user=user, collaborator_id=uuid.uuid4()
+        )
+    assert missing_explicit.value.status_code == 404
+
+    assert router._resolve_straordinari_collaborator(
+        _RecordingDb([collaborator]), current_user=user, collaborator_id=None
+    ) is collaborator
+    with pytest.raises(HTTPException, match="Nessun collaboratore"):
+        router._resolve_straordinari_collaborator(_RecordingDb(), current_user=user, collaborator_id=None)
+    with pytest.raises(HTTPException, match="Seleziona il collaboratore"):
+        router._resolve_straordinari_collaborator(
+            _RecordingDb([collaborator, SimpleNamespace(id=uuid.uuid4(), name="Secondo")]),
+            current_user=user,
+            collaborator_id=None,
+        )
+
+
+@pytest.mark.parametrize("error", [FileNotFoundError("missing"), ValueError("invalid")])
+def test_sync_xlsm_export_maps_generator_errors_to_not_found(
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+) -> None:
+    monkeypatch.setattr(router, "generate_xlsm_export", lambda *_args, **_kwargs: (_ for _ in ()).throw(error))
+    with pytest.raises(HTTPException) as exc_info:
+        router.export_giornaliere_xlsm(
+            None,
+            None,
+            None,
+            period_start=date(2026, 5, 1),
+            collaborator_id=None,
+            employee_kind=None,
+            template_path=None,
+        )
+    assert exc_info.value.status_code == 404
+
+
+def test_sync_job_error_contracts(monkeypatch: pytest.MonkeyPatch) -> None:
+    admin = SimpleNamespace(id=1, role="admin", is_super_admin=False)
+    job_id = uuid.uuid4()
+    payload = SimpleNamespace(credential_id=1, year=2026, month=5, collaborator_limit=None, employee_codes=[])
+
+    monkeypatch.setattr(router, "has_running_sync_job", lambda _db: True)
+    with pytest.raises(HTTPException, match="Another Presenze sync"):
+        router.create_sync_job(payload, None, admin, None)
+    with pytest.raises(HTTPException, match="Another Presenze sync"):
+        router.retry_sync_job(job_id, None, admin, None)
+    with pytest.raises(HTTPException, match="Another Presenze sync"):
+        router.retry_sync_job_selected(job_id, payload, None, admin, None)
+
+    monkeypatch.setattr(router, "has_running_sync_job", lambda _db: False)
+    monkeypatch.setattr(router, "get_credential", lambda *_args: None)
+    with pytest.raises(HTTPException, match="Credenziale Presenze"):
+        router.create_sync_job(payload, None, admin, None)
+
+    missing_db = _RecordingDb()
+    with pytest.raises(HTTPException, match="Sync job not found"):
+        router.retry_sync_job(job_id, missing_db, admin, None)
+    with pytest.raises(HTTPException, match="Sync job not found"):
+        router.retry_sync_job_selected(job_id, payload, missing_db, admin, None)
+
+    def db_for(job):
+        db = _RecordingDb()
+        db.get = lambda _model, _identifier: job
+        return db
+
+    pending = SimpleNamespace(status="pending", requested_by_user_id=admin.id)
+    with pytest.raises(HTTPException, match="not retryable"):
+        router.retry_sync_job(job_id, db_for(pending), admin, None)
+
+    legacy = SimpleNamespace(status="completed", requested_by_user_id=admin.id, credential_id=None)
+    with pytest.raises(HTTPException, match="configurazione legacy"):
+        router.retry_sync_job(job_id, db_for(legacy), admin, None)
+    with pytest.raises(HTTPException, match="configurazione legacy"):
+        router.retry_sync_job_selected(job_id, payload, db_for(legacy), admin, None)
+
+    exhausted = SimpleNamespace(
+        status="failed",
+        requested_by_user_id=admin.id,
+        credential_id=1,
+        params_json={},
+        attempt_count=3,
+        max_attempts=3,
+    )
+    with pytest.raises(HTTPException, match="max attempts"):
+        router.retry_sync_job(job_id, db_for(exhausted), admin, None)
+
+    empty_codes = SimpleNamespace(employee_codes=[])
+    source = SimpleNamespace(requested_by_user_id=admin.id, credential_id=1)
+    with pytest.raises(HTTPException, match="At least one employee code"):
+        router.retry_sync_job_selected(job_id, empty_codes, db_for(source), admin, None)
+
+    source.id = job_id
+    monkeypatch.setattr(router, "_load_sync_job_summary", lambda _job_id: {})
+    with pytest.raises(HTTPException, match="No failed collaborators"):
+        router.retry_sync_job_selected(
+            job_id, SimpleNamespace(employee_codes=["1854"]), db_for(source), admin, None
+        )
+
+
+def test_sync_job_record_rejects_missing_and_inactive_credentials() -> None:
+    with pytest.raises(HTTPException) as missing:
+        router._create_sync_job_record(
+            _RecordingDb(),
+            requested_by_user_id=1,
+            credential_id=1,
+            year=2026,
+            month=5,
+            collaborator_limit=None,
+        )
+    assert missing.value.status_code == 404
+
+    inactive_db = _RecordingDb()
+    inactive_db.get = lambda _model, _identifier: SimpleNamespace(active=False)
+    with pytest.raises(HTTPException) as inactive:
+        router._create_sync_job_record(
+            inactive_db,
+            requested_by_user_id=1,
+            credential_id=1,
+            year=2026,
+            month=5,
+            collaborator_limit=None,
+        )
+    assert inactive.value.status_code == 409
+
+
+def test_cancel_sync_job_error_contracts(monkeypatch: pytest.MonkeyPatch) -> None:
+    admin = SimpleNamespace(id=1, role="admin", is_super_admin=False)
+    job_id = uuid.uuid4()
+    with pytest.raises(HTTPException) as missing:
+        router.cancel_sync_job(job_id, _RecordingDb(), admin, None)
+    assert missing.value.status_code == 404
+
+    def db_for(job):
+        db = _RecordingDb()
+        db.get = lambda _model, _identifier: job
+        return db
+
+    with pytest.raises(HTTPException, match="cannot be cancelled"):
+        router.cancel_sync_job(
+            job_id, db_for(SimpleNamespace(status="completed", requested_by_user_id=1)), admin, None
+        )
+
+    running = SimpleNamespace(status="running", requested_by_user_id=1, worker_pid=123)
+    monkeypatch.setattr(router, "stop_sync_worker", lambda _job: (_ for _ in ()).throw(RuntimeError("stop failed")))
+    with pytest.raises(HTTPException, match="stop failed") as stop_error:
+        router.cancel_sync_job(job_id, db_for(running), admin, None)
+    assert stop_error.value.status_code == 500
+
+
+def test_job_artifact_routes_cover_missing_invalid_and_absent_files(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    admin = SimpleNamespace(id=1, role="admin", is_super_admin=False)
+    job_id = uuid.uuid4()
+    calls = [
+        (router.download_sync_job_artifact, SimpleNamespace(id=job_id, requested_by_user_id=1, params_json={})),
+        (
+            router.download_xlsm_export_job_artifact,
+            SimpleNamespace(id=job_id, requested_by_user_id=1, params_json={"mode": "export_xlsm"}),
+        ),
+        (
+            router.download_straordinari_export_job_artifact,
+            SimpleNamespace(
+                id=job_id,
+                requested_by_user_id=1,
+                params_json={"mode": "export_straordinari_xlsx"},
+            ),
+        ),
+    ]
+    for function, job in calls:
+        with pytest.raises(HTTPException) as missing_job:
+            function(job_id, "invalid", _RecordingDb(), admin, None, None) if function is router.download_xlsm_export_job_artifact else function(job_id, "invalid", _RecordingDb(), admin, None)
+        assert missing_job.value.status_code == 404
+
+        db = _RecordingDb()
+        db.get = lambda _model, _identifier, job=job: job
+        monkeypatch.setattr(router, "resolve_sync_artifact_path", lambda *_args: (_ for _ in ()).throw(ValueError("bad artifact")))
+        with pytest.raises(HTTPException, match="bad artifact"):
+            function(job_id, "invalid", db, admin, None, None) if function is router.download_xlsm_export_job_artifact else function(job_id, "invalid", db, admin, None)
+
+        monkeypatch.setattr(router, "resolve_sync_artifact_path", lambda *_args: tmp_path / "missing")
+        with pytest.raises(HTTPException, match="artifact not found"):
+            function(job_id, "summary", db, admin, None, None) if function is router.download_xlsm_export_job_artifact else function(job_id, "summary", db, admin, None)
+
+
+def test_job_detail_and_delete_error_contracts(monkeypatch: pytest.MonkeyPatch) -> None:
+    admin = SimpleNamespace(id=1, role="admin", is_super_admin=False)
+    job_id = uuid.uuid4()
+    monkeypatch.setattr(router, "reconcile_stale_sync_jobs", lambda _db: None)
+
+    detail_calls = [
+        lambda db: router.get_import_job(job_id, db, admin, None),
+        lambda db: router.get_sync_job(job_id, db, admin, None),
+        lambda db: router.get_xlsm_export_job(job_id, db, admin, None, None),
+        lambda db: router.get_straordinari_export_job(job_id, db, admin, None),
+    ]
+    for call in detail_calls:
+        with pytest.raises(HTTPException) as exc_info:
+            call(_RecordingDb())
+        assert exc_info.value.status_code == 404
+
+    delete_calls = [
+        (router.delete_sync_job, {}),
+        (router.delete_xlsm_export_job, {"mode": "export_xlsm"}),
+        (router.delete_straordinari_export_job, {"mode": "export_straordinari_xlsx"}),
+    ]
+    for function, params_json in delete_calls:
+        with pytest.raises(HTTPException) as missing:
+            function(job_id, _RecordingDb(), admin, None, None) if function is router.delete_xlsm_export_job else function(job_id, _RecordingDb(), admin, None)
+        assert missing.value.status_code == 404
+
+        pending = SimpleNamespace(
+            id=job_id, status="pending", requested_by_user_id=1, params_json=params_json
+        )
+        db = _RecordingDb()
+        db.get = lambda _model, _identifier, pending=pending: pending
+        with pytest.raises(HTTPException) as non_terminal:
+            function(job_id, db, admin, None, None) if function is router.delete_xlsm_export_job else function(job_id, db, admin, None)
+        assert non_terminal.value.status_code == 409
 
 
 def test_bootstrap_preview_treats_orphan_assignment_as_unassigned() -> None:
@@ -562,3 +1079,485 @@ def test_serialize_daily_record_exposes_inaz_detail_punch_rows_with_orario_verso
     assert [row.direction for row in serialized.detail_punch_rows] == ["E", "U", "E"]
     assert [row.terminal_label for row in serialized.detail_punch_rows] == ["0", "CBON-Ingresso CBO", "CBON-Ingresso CBO"]
     assert serialized.punches[0].terminal_label == "0"
+
+
+def test_sync_summary_and_route_error_fallbacks(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    missing = tmp_path / "missing.json"
+    monkeypatch.setattr(router, "resolve_sync_artifact_path", lambda *_args: missing)
+    with pytest.raises(HTTPException, match="not available"):
+        router._load_sync_job_summary("missing")
+
+    invalid = tmp_path / "invalid.json"
+    invalid.write_text("{", encoding="utf-8")
+    monkeypatch.setattr(router, "resolve_sync_artifact_path", lambda *_args: invalid)
+    with pytest.raises(HTTPException, match="not valid JSON"):
+        router._load_sync_job_summary("invalid")
+
+    unexpected = tmp_path / "unexpected.json"
+    unexpected.write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(router, "resolve_sync_artifact_path", lambda *_args: unexpected)
+    with pytest.raises(HTTPException, match="unexpected structure"):
+        router._load_sync_job_summary("unexpected")
+
+    user = SimpleNamespace(id=7, role="viewer", is_super_admin=False)
+    assert router.list_import_jobs(_RecordingDb(), user, None).total == 0
+    assert router.list_sync_jobs(_QueuedDb([], [], [0]), user, None, limit=None).total == 0
+    assert router.list_xlsm_export_jobs(_RecordingDb(), user, None, None, limit=None).total == 0
+    assert router.list_straordinari_export_jobs(_RecordingDb(), user, None, limit=None).total == 0
+
+
+def test_configuration_and_credential_error_contracts(monkeypatch: pytest.MonkeyPatch) -> None:
+    admin = SimpleNamespace(id=1, role="admin", is_super_admin=False)
+    viewer = SimpleNamespace(id=2, role="viewer", is_super_admin=False)
+    collaborator_id = uuid.uuid4()
+
+    for call in (
+        lambda: router.list_inaz_application_users(None, viewer, None),
+        lambda: router.list_supervisor_assignments(None, viewer, None, supervisor_user_id=None),
+        lambda: router.update_supervisor_assignment(collaborator_id, None, None, viewer, None),
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            call()
+        assert exc_info.value.status_code == 403
+
+    monkeypatch.setattr(router, "update_credential", lambda *_args: None)
+    with pytest.raises(HTTPException) as update_error:
+        router.update_presenze_credential(99, None, admin, None, None)
+    assert update_error.value.status_code == 404
+
+    monkeypatch.setattr(router, "delete_credential", lambda *_args: False)
+    with pytest.raises(HTTPException) as delete_error:
+        router.delete_inaz_credential(99, admin, None, None)
+    assert delete_error.value.status_code == 404
+
+    async def failed_test(*_args):
+        return SimpleNamespace(ok=False, error="connection failed")
+
+    monkeypatch.setattr(router, "test_credential", failed_test)
+    with pytest.raises(HTTPException) as test_error:
+        asyncio.run(router.test_presenze_credential(99, admin, None, None))
+    assert test_error.value.status_code == 502
+
+    monkeypatch.setattr(router, "ensure_operai_rule_configs", lambda _db: None)
+    with pytest.raises(HTTPException) as rule_error:
+        router.update_operai_rule_config(99, SimpleNamespace(model_dump=lambda **_kwargs: {}), _RecordingDb(), admin, None)
+    assert rule_error.value.status_code == 404
+
+
+def test_import_refresh_and_export_error_contracts(monkeypatch: pytest.MonkeyPatch) -> None:
+    admin = SimpleNamespace(id=1, role="admin", is_super_admin=False)
+
+    class Upload:
+        filename = "input.json"
+
+        async def read(self):
+            return b"{}"
+
+    monkeypatch.setattr(router, "load_json_payload", lambda _content: {})
+    monkeypatch.setattr(router, "parse_import_payload", lambda _payload: {})
+    monkeypatch.setattr(router, "run_import_job", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bad import")))
+    with pytest.raises(HTTPException, match="bad import"):
+        asyncio.run(router.import_json(_RecordingDb(), admin, None, Upload()))
+
+    monkeypatch.setattr(router, "has_running_sync_job", lambda _db: True)
+    with pytest.raises(HTTPException) as running:
+        router.refresh_giornaliera_from_inaz(uuid.uuid4(), None, admin, None)
+    assert running.value.status_code == 409
+
+    monkeypatch.setattr(router, "has_running_sync_job", lambda _db: False)
+    monkeypatch.setattr(router, "_get_daily_record_or_404", lambda *_args: SimpleNamespace(collaborator_id=uuid.uuid4()))
+    monkeypatch.setattr(router, "_get_collaborator_or_404", lambda *_args: SimpleNamespace(employee_code=""))
+    with pytest.raises(HTTPException, match="matricola INAZ"):
+        router.refresh_giornaliera_from_inaz(uuid.uuid4(), None, admin, None)
+
+    monkeypatch.setattr(router, "_resolve_straordinari_collaborator", lambda *_args, **_kwargs: SimpleNamespace(id=uuid.uuid4()))
+    monkeypatch.setattr(router, "build_straordinari_export_items", lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("invalid export")))
+    payload = SimpleNamespace(collaborator_id=None, template_path=None, items=[])
+    with pytest.raises(HTTPException, match="invalid export"):
+        router.create_straordinari_export_job(payload, None, admin, None)
+
+
+def test_refresh_credential_resolution_prefers_auto_sync_and_rejects_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = SimpleNamespace(id=7)
+    active = SimpleNamespace(id=3, active=True)
+    monkeypatch.setattr(router, "get_auto_sync_config", lambda _db: SimpleNamespace(credential_id=3))
+    monkeypatch.setattr(router, "get_credential", lambda *_args: active)
+    assert router._resolve_refresh_credential_for_user(None, user) is active
+
+    monkeypatch.setattr(router, "get_auto_sync_config", lambda _db: SimpleNamespace(credential_id=None))
+    with pytest.raises(HTTPException, match="Nessuna credenziale"):
+        router._resolve_refresh_credential_for_user(_RecordingDb(), user)
+
+
+def test_recovery_and_bank_hours_dashboard_filter_and_aggregate_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    collaborator_id = uuid.uuid4()
+    collaborator = SimpleNamespace(
+        id=collaborator_id,
+        employee_code="1854",
+        name="Collaboratore",
+        company_code="53",
+        application_user_id=None,
+    )
+    record = SimpleNamespace(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator_id,
+        work_date=date(2026, 5, 17),
+        validation_status="pending",
+        raw_payload_json=None,
+        resolved_absence_cause="riposo",
+        request_description=None,
+        evidenze=None,
+        stato=None,
+    )
+    classification = SimpleNamespace(grants_recovery_day=True)
+    adjustments = [
+        SimpleNamespace(
+            collaborator_id=collaborator_id,
+            approval_status="approved",
+            delta_days=-2,
+            adjustment_date=date(2026, 5, 20),
+        ),
+        SimpleNamespace(
+            collaborator_id=collaborator_id,
+            approval_status="pending",
+            delta_days=1,
+            adjustment_date=date(2026, 5, 19),
+        ),
+    ]
+    monkeypatch.setattr(router, "_build_classification_map", lambda *_args, **_kwargs: {record.id: classification})
+    result = router._build_recovery_dashboard(
+        _QueuedDb([collaborator], [record], adjustments),
+        date_from=date(2026, 5, 1),
+        date_to=date(2026, 5, 31),
+        q="Collab",
+    )
+    assert result.matured_days_total == 1
+    assert result.used_days_total == 1
+    assert result.negative_balance_total == 1
+
+    filtered = router._build_recovery_dashboard(
+        _QueuedDb([collaborator], [], []),
+        date_from=None,
+        date_to=None,
+        q="none",
+        negative_only=True,
+        pending_validation_only=True,
+        pending_adjustments_only=True,
+        manual_adjustments_only=True,
+    )
+    assert filtered.items == []
+
+    profile = SimpleNamespace(contract_kind="operaio", standard_daily_minutes=420)
+    monkeypatch.setattr(router, "_resolve_collaborator_contract_profile", lambda *_args, **_kwargs: (profile, "explicit"))
+    monkeypatch.setattr(router, "_load_latest_template_codes_by_collaborator", lambda *_args: {})
+    bank_adjustment = SimpleNamespace(
+        approval_status="approved",
+        adjustment_date=date(2026, 5, 20),
+        delta_minutes=-5,
+        kind="correction",
+    )
+    monkeypatch.setattr(
+        router,
+        "_load_bank_hours_context",
+        lambda *_args, **_kwargs: ({}, {collaborator_id: [bank_adjustment]}),
+    )
+    bank_result = router._build_bank_hours_dashboard(
+        _QueuedDb([collaborator]), date_from=None, date_to=None, q="Collab"
+    )
+    assert bank_result.negative_balance_total == 1
+
+    monkeypatch.setattr(router, "_load_bank_hours_context", lambda *_args, **_kwargs: ({}, {}))
+    bank_filtered = router._build_bank_hours_dashboard(
+        _QueuedDb([collaborator]),
+        date_from=None,
+        date_to=None,
+        q="none",
+        negative_only=True,
+        pending_adjustments_only=True,
+        manual_adjustments_only=True,
+    )
+    assert bank_filtered.items == []
+
+
+def test_bank_hours_compensation_and_balance_fallbacks(monkeypatch: pytest.MonkeyPatch) -> None:
+    collaborator_id = uuid.uuid4()
+    assert router._build_bank_hours_compensation_summary(
+        _QueuedDb([]), collaborator_id=collaborator_id, date_from=None, date_to=None
+    ).records_total == 0
+
+    records = [
+        SimpleNamespace(id=uuid.uuid4(), ordinary_minutes=0, straordinario_minutes=0, mpe_minutes=0),
+        SimpleNamespace(id=uuid.uuid4(), ordinary_minutes=60, straordinario_minutes=0, mpe_minutes=0),
+        SimpleNamespace(id=uuid.uuid4(), ordinary_minutes=60, straordinario_minutes=0, mpe_minutes=0),
+    ]
+    classification = SimpleNamespace(
+        night_minutes=0,
+        festive_minutes=0,
+        festive_night_minutes=0,
+        ordinary_night_minutes=0,
+        overtime_day_minutes=0,
+        overtime_night_minutes=0,
+        overtime_festive_minutes=0,
+        overtime_festive_night_minutes=0,
+        shift_festive_day_minutes=0,
+        shift_night_minutes=0,
+        shift_festive_night_minutes=0,
+    )
+    monkeypatch.setattr(
+        router,
+        "_build_classification_map",
+        lambda *_args, **_kwargs: {records[1].id: classification, records[2].id: classification},
+    )
+    monkeypatch.setattr(
+        router,
+        "_build_monthly_night_bonus_map",
+        lambda *_args, **_kwargs: {
+            records[2].id: {
+                "monthly_night_shift_count": 12,
+                "ordinary_night_bonus_threshold_met": True,
+                "ordinary_night_bonus_rate": 10,
+            }
+        },
+    )
+    summary = router._build_bank_hours_compensation_summary(
+        _QueuedDb(records, []), collaborator_id=collaborator_id, date_from=None, date_to=None
+    )
+    assert summary.records_total == 3
+    assert summary.ordinary_night_bonus_threshold_met is True
+
+    excluded_id = uuid.uuid4()
+    balance_db = _QueuedDb(
+        [SimpleNamespace(description="Banca ore", saldo_totale_minutes=100)],
+        [SimpleNamespace(id=excluded_id, delta_minutes=20), SimpleNamespace(id=uuid.uuid4(), delta_minutes=-5)],
+    )
+    assert router._resolve_bank_hours_available_minutes(
+        balance_db,
+        collaborator_id=collaborator_id,
+        up_to_date=date(2026, 5, 31),
+        exclude_adjustment_id=excluded_id,
+    ) == 95
+
+
+def test_bootstrap_apply_skips_unresolvable_presets_and_suggestions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    preview = SimpleNamespace(
+        presets=[SimpleNamespace(already_exists=False, template_code="UNKNOWN")],
+        collaborator_suggestions=[
+            SimpleNamespace(suggested_template_code=None),
+            SimpleNamespace(
+                suggested_template_code="MISSING",
+                suggestion_confidence="high",
+                already_assigned=False,
+            ),
+        ],
+    )
+    monkeypatch.setattr(router, "_build_schedule_bootstrap_preview", lambda _db: preview)
+    monkeypatch.setattr(router, "_preset_by_template_code", lambda _code: None)
+    result = router.apply_schedule_bootstrap(
+        SimpleNamespace(create_missing_templates=True, assign_unassigned_collaborators=True),
+        _QueuedDb([]),
+        None,
+        None,
+    )
+    assert result.created_templates == 0
+    assert result.created_assignments == 0
+    assert result.skipped_existing_assignments == 1
+
+
+def test_system_templates_backfill_missing_notes(monkeypatch: pytest.MonkeyPatch) -> None:
+    template = SimpleNamespace(code="SYSTEM", notes=None)
+    definition = SimpleNamespace(code="SYSTEM", notes="Managed by GAIA", rules=())
+    monkeypatch.setattr(router, "SYSTEM_SCHEDULE_TEMPLATE_DEFINITIONS", (definition,))
+    monkeypatch.setattr(router, "BOOTSTRAP_TEMPLATE_PRESETS", ())
+    db = _QueuedDb([template], [template])
+
+    assert router.ensure_system_schedule_templates(db) == [template]
+    assert template.notes == "Managed by GAIA"
+    assert db.added == [template]
+    assert db.commits == 1
+
+
+def test_dashboard_summary_covers_travel_special_day_and_payload_schedule(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    collaborator_id = uuid.uuid4()
+    record = SimpleNamespace(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator_id,
+        ordinary_minutes=60,
+        absence_minutes=0,
+        justified_minutes=0,
+        override_straordinario_minutes=None,
+        straordinario_minutes=0,
+        override_mpe_minutes=None,
+        mpe_minutes=0,
+        km_value=5,
+        trasferta_minutes=30,
+        trasferta_montano=True,
+        raw_payload_json={"detail_programmed_schedule": "IMP1 - Standard"},
+        stato=None,
+        resolved_absence_cause=None,
+        schedule_code=None,
+        request_description=None,
+        evidenze=None,
+    )
+    classification = SimpleNamespace(special_day=True, grants_recovery_day=False)
+    monkeypatch.setattr(router, "_build_classification_map", lambda *_args: {record.id: classification})
+    monkeypatch.setattr(router, "_record_uses_recovery_day", lambda _record: False)
+    result = router.get_dashboard_summary(
+        _QueuedDb([1], [0], [1], [record]),
+        SimpleNamespace(role="admin", is_super_admin=False),
+        None,
+        period_start=date(2026, 5, 1),
+        period_end=date(2026, 5, 31),
+    )
+    assert result.trasferta_days_total == 1
+    assert result.trasferta_montano_days_total == 1
+    assert result.special_day_total == 1
+    assert result.schedule_stats == [{"code": "IMP1", "count": 1}]
+
+
+def test_anomaly_month_summary_empty_and_non_anomaly_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+    user = SimpleNamespace(role="admin", is_super_admin=False)
+    monkeypatch.setattr(router, "_resolve_recent_month_values", lambda **_kwargs: [])
+    assert router.get_anomalie_month_summary(None, user, None).items == []
+
+    monkeypatch.setattr(router, "_resolve_recent_month_values", lambda **_kwargs: ["2026-05"])
+    monkeypatch.setattr(
+        router,
+        "_apply_daily_record_filters",
+        lambda _db, _user, *, stmt, count_stmt, **_kwargs: (stmt, count_stmt),
+    )
+    monkeypatch.setattr(router, "_daily_record_has_anomaly", lambda _record: False)
+    result = router.get_anomalie_month_summary(
+        _QueuedDb([SimpleNamespace(work_date=date(2026, 5, 12))]), user, None
+    )
+    assert result.items == []
+
+
+def test_matrix_serializer_builds_default_classification_and_quality(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    classification = SimpleNamespace(
+        night_minutes=0,
+        festive_minutes=0,
+        festive_night_minutes=0,
+        ordinary_night_minutes=0,
+        overtime_day_minutes=0,
+        overtime_night_minutes=0,
+        overtime_festive_minutes=0,
+        overtime_festive_night_minutes=0,
+        shift_festive_day_minutes=0,
+        shift_night_minutes=0,
+        shift_festive_night_minutes=0,
+        special_day=False,
+        holiday_kind=None,
+        grants_recovery_day=False,
+    )
+    quality = SimpleNamespace(
+        status="ok",
+        formula_code="test",
+        expected_minutes=0,
+        worked_minutes=0,
+        missing_minutes=0,
+        mpe_minutes=0,
+        notes=(),
+    )
+    monkeypatch.setattr(router, "_build_daily_record_classification", lambda *_args, **_kwargs: classification)
+    monkeypatch.setattr(router, "build_daily_operational_quality", lambda *_args, **_kwargs: quality)
+    monkeypatch.setattr(router, "_record_uses_recovery_day", lambda _record: False)
+    monkeypatch.setattr(router, "_resolved_absence_cause_for_response", lambda *_args: None)
+    monkeypatch.setattr(
+        router,
+        "PresenzeDailyRecordResponse",
+        SimpleNamespace(model_validate=lambda value: value),
+    )
+    record = SimpleNamespace(
+        raw_payload_json=None,
+        override_straordinario_minutes=None,
+        straordinario_minutes=None,
+        override_mpe_minutes=None,
+        mpe_minutes=None,
+        request_type=None,
+        request_description=None,
+        request_status=None,
+        request_authorized_by=None,
+        resolved_absence_cause=None,
+        evidenze=None,
+        stato=None,
+    )
+
+    serialized = router._serialize_daily_record_matrix(record)
+    assert serialized["operational_status"] == "ok"
+    assert serialized["night_minutes"] == 0
+
+
+def test_mapping_helpers_cover_missing_related_rows_and_expired_assignment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    collaborator_id = uuid.uuid4()
+    record = SimpleNamespace(id=uuid.uuid4(), collaborator_id=collaborator_id, work_date=date(2026, 5, 1))
+    monkeypatch.setattr(router, "build_schedule_context", lambda *_args, **_kwargs: object())
+    sentinel = object()
+    monkeypatch.setattr(router, "classify_daily_record", lambda *_args: sentinel)
+    assert router._build_classification_map(
+        _QueuedDb([]), [record], punches_by_record_id={}
+    )[record.id] is sentinel
+
+    catasto_collaborator = SimpleNamespace(
+        contract_kind=router.PRESENZE_CONTRACT_KIND_OPERAIO,
+        operai_group=router.PRESENZE_OPERAI_GROUP_CATASTO_MAGAZZINO,
+    )
+    counts = router._build_catasto_saturday_coverage_counts(
+        _QueuedDb([]), [record], {collaborator_id: catasto_collaborator}
+    )
+    assert counts[(collaborator_id, 2026, 5)] == 0
+
+    monthly_record = SimpleNamespace(id=uuid.uuid4(), collaborator_id=collaborator_id, work_date=date(2026, 5, 3))
+    monkeypatch.setattr(router, "_build_classification_map", lambda *_args, **_kwargs: {})
+    bonus = router._build_monthly_night_bonus_map(_QueuedDb([monthly_record], []), [monthly_record])
+    assert bonus[monthly_record.id]["monthly_night_shift_count"] == 0
+
+    assignment = SimpleNamespace(
+        collaborator_id=collaborator_id,
+        template_id=10,
+        valid_from=date(2025, 1, 1),
+        valid_to=date(2025, 12, 31),
+    )
+    template = SimpleNamespace(id=10, code="LEGACY")
+    selected = router._load_latest_template_codes_by_collaborator(
+        _QueuedDb([assignment], [template]),
+        [collaborator_id],
+        reference_date=date(2026, 5, 1),
+    )
+    assert selected[collaborator_id] == "LEGACY"
+
+    assert router._load_bank_hours_context(
+        None, [], date_to=None
+    ) == ({}, {})
+
+
+def test_bootstrap_preview_ignores_blank_schedule_codes(monkeypatch: pytest.MonkeyPatch) -> None:
+    collaborator_id = uuid.uuid4()
+    collaborator = SimpleNamespace(
+        id=collaborator_id,
+        employee_code="1",
+        name="Blank schedule",
+        company_code="53",
+        contract_kind=None,
+        operai_group=None,
+        standard_daily_minutes=None,
+    )
+    monkeypatch.setattr(router, "_load_latest_template_codes_by_collaborator", lambda *_args: {})
+    preview = router._build_schedule_bootstrap_preview(
+        _QueuedDb([collaborator], [(collaborator_id, "  ")], [])
+    )
+    assert preview.collaborator_suggestions[0].schedule_codes == []

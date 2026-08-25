@@ -89,6 +89,11 @@ Ordine:
 3. fingerprint AST compatibile;
 4. posizione come tie-breaker.
 
+Il matching tramite fingerprint tra percorsi diversi considera soltanto
+candidati baseline il cui percorso di origine non e piu presente nel report
+corrente. Il riuso di una forma AST comune in un file nuovo non deve essere
+scambiato per un rename quando le sorgenti originali esistono ancora.
+
 Se due candidati sono equivalenti, uscita `2` e messaggio di configurazione.
 Non scegliere il candidato piu vicino in silenzio.
 

@@ -485,7 +485,12 @@ def resolve_baseline_callable(c: dict[str, Any], report: dict[str, Any], base: d
     if any(bc.get("path") == c.get("path") for bc in base.values()):
         return None, None, False
 
-    matches = base_by_fp.get(c.get("fingerprint"), [])
+    current_paths = {rc.get("path") for rc in report["callables"]}
+    matches = [
+        match
+        for match in base_by_fp.get(c.get("fingerprint"), [])
+        if match[1].get("path") not in current_paths
+    ]
     if len(matches) == 1:
         return matches[0][1], None, False
     if len(matches) > 1:

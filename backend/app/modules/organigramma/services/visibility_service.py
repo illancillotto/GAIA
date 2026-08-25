@@ -68,6 +68,7 @@ class EffectiveVisibility:
     unit_via: dict[UUID, str] = field(default_factory=dict)
     unit_scope: dict[UUID, str | None] = field(default_factory=dict)
     person_via: dict[int, str] = field(default_factory=dict)
+    person_scope: dict[int, str] = field(default_factory=dict)
 
     @property
     def unit_ids(self) -> set[UUID]:
@@ -76,6 +77,17 @@ class EffectiveVisibility:
     @property
     def person_ids(self) -> set[int]:
         return set(self.person_via.keys())
+
+    def add_person(self, user_id: int, via: str, scope: str) -> None:
+        existing = self.person_via.get(user_id)
+        if existing == VIA_HIERARCHY:
+            self.person_scope[user_id] = _stronger_scope(self.person_scope.get(user_id), scope)
+            return
+        if via == VIA_HIERARCHY or existing is None:
+            self.person_via[user_id] = via
+            self.person_scope[user_id] = scope
+            return
+        self.person_scope[user_id] = _stronger_scope(self.person_scope.get(user_id), scope)
 
 
 def ensure_aware(dt: datetime | None) -> datetime | None:
@@ -98,6 +110,23 @@ def _within_window(
     if valid_to is not None and valid_to < now:
         return False
     return True
+
+
+def _assignment_is_active(assignment: _AssignmentLike, now: datetime) -> bool:
+    return assignment.active and _within_window(
+        now,
+        getattr(assignment, "valid_from", None),
+        getattr(assignment, "valid_to", None),
+    )
+
+
+def _stronger_scope(current: str | None, candidate: str) -> str:
+    rank = {"read": 1, "approve": 2, "full": 3}
+    return candidate if rank[candidate] > rank.get(current or "", 0) else current or candidate
+
+
+def _person_scope(via: str, unit_scope: str | None) -> str:
+    return "approve" if via == VIA_HIERARCHY else unit_scope or "read"
 
 
 def _build_children_map(units: Iterable[_UnitLike]) -> dict[UUID | None, list[UUID]]:
@@ -156,7 +185,7 @@ def compute_visibility(
         manager_units = {
             a.org_unit_id
             for a in assignments
-            if a.manager_user_id == viewer_id and a.active
+            if a.manager_user_id == viewer_id and _assignment_is_active(a, now)
         }
         for unit_id in manager_units:
             for descendant in _descendants(unit_id, children_map):
@@ -172,22 +201,15 @@ def compute_visibility(
                     add_unit(descendant, VIA_OVERRIDE, override.scope)
             elif override.target_type == "user" and override.target_user_id is not None:
                 for a in assignments:
-                    if a.user_id == override.target_user_id and a.active:
+                    if a.user_id == override.target_user_id and _assignment_is_active(a, now):
                         add_unit(a.org_unit_id, VIA_OVERRIDE, override.scope)
 
-    def add_person(user_id: int, via: str) -> None:
-        existing = result.person_via.get(user_id)
-        if existing == VIA_HIERARCHY:
-            return
-        if via == VIA_HIERARCHY or existing is None:
-            result.person_via[user_id] = via
-
     for a in assignments:
-        if not a.active:
+        if not _assignment_is_active(a, now):
             continue
         via = result.unit_via.get(a.org_unit_id)
         if via is not None:
-            add_person(a.user_id, via)
+            result.add_person(a.user_id, via, _person_scope(via, result.unit_scope.get(a.org_unit_id)))
 
     if not is_super_admin:
         for override in overrides:
@@ -196,7 +218,7 @@ def compute_visibility(
             if not _within_window(now, override.valid_from, override.valid_to):
                 continue
             if override.target_type == "user" and override.target_user_id is not None:
-                add_person(override.target_user_id, VIA_OVERRIDE)
+                result.add_person(override.target_user_id, VIA_OVERRIDE, override.scope)
 
     return result
 

@@ -21,6 +21,7 @@ from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.accessi.org_structure import OrgStructureAssignment
+from app.modules.organigramma.models import OrgAssignment, OrgUnit, OrgVisibilityOverride
 from app.modules.presenze.models import (
     OrganizationTeam,
     OrganizationTeamMembership,
@@ -366,7 +367,11 @@ def test_presenze_operai_rule_config_endpoints_expose_defaults_and_allow_updates
     update = client.patch(
         f"/presenze/configuration/operai-rules/{body[1]['id']}",
         headers={"Authorization": f"Bearer {token}"},
-        json={"saturday_week_ordinals": [2, 4], "mpe_review_threshold_minutes": 150},
+        json={
+            "operai_group": "catasto_magazzino",
+            "saturday_week_ordinals": [2, 4],
+            "mpe_review_threshold_minutes": 150,
+        },
     )
     assert update.status_code == 200
     assert update.json()["saturday_week_ordinals"] == [2, 4]
@@ -663,7 +668,7 @@ def test_presenze_recovery_adjustments_crud_and_dashboard() -> None:
     adjustment_id = created.json()["id"]
 
     listed = client.get(
-        f"/presenze/recovery/adjustments?collaborator_id={collaborator_id}",
+        f"/presenze/recovery/adjustments?collaborator_id={collaborator_id}&approval_status=pending",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert listed.status_code == 200
@@ -691,6 +696,18 @@ def test_presenze_recovery_adjustments_crud_and_dashboard() -> None:
     assert body["pending_adjustments_total"] == 1
     assert body["items"][0]["manual_delta_days"] == 0
     assert body["items"][0]["pending_adjustment_count"] == 1
+
+    for query in (
+        "q=AMADU",
+        "negative_only=true",
+        "pending_validation_only=true",
+        "pending_adjustments_only=true",
+    ):
+        filtered = client.get(
+            f"/presenze/recovery/dashboard?date_from=2026-05-01&date_to=2026-05-31&{query}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert filtered.status_code == 200
 
     approved = client.post(
         f"/presenze/recovery/adjustments/{adjustment_id}/review",
@@ -1895,6 +1912,18 @@ def test_presenze_bank_hours_dashboard_aggregates_imported_snapshot_and_approved
     assert item["available_debit_days"] == 1.43
     assert item["liquidation_minutes_total"] == 120
 
+    for query in (
+        "q=AMADU",
+        "negative_only=true",
+        "pending_adjustments_only=true",
+        "manual_adjustments_only=true",
+    ):
+        filtered = client.get(
+            f"/presenze/bank-hours/dashboard?date_from=2026-05-01&date_to=2026-05-31&{query}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert filtered.status_code == 200
+
     detail = client.get(
         f"/presenze/bank-hours/collaborators/{collaborator_id}?date_from=2026-05-01&date_to=2026-05-31",
         headers={"Authorization": f"Bearer {token}"},
@@ -2418,6 +2447,17 @@ def test_presenze_schedule_bootstrap_apply_creates_templates_and_assignments() -
     assert suggestion["assigned_template_code"] == "OPE0714_1E3SAB"
     assert suggestion["configuration_status"] == "legacy_review"
     assert any("Gruppo operaio mancante" in note for note in suggestion["configuration_notes"])
+
+    repeated = client.post(
+        "/presenze/configuration/schedule-bootstrap-apply",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"create_missing_templates": True, "assign_unassigned_collaborators": True},
+    )
+    assert repeated.status_code == 200
+    assert repeated.json()["created_templates"] == 0
+    assert repeated.json()["created_assignments"] == 0
+    assert repeated.json()["skipped_existing_templates"] >= 1
+    assert repeated.json()["skipped_existing_assignments"] >= 1
 
 
 def test_presenze_schedule_bootstrap_apply_skips_probable_assignments() -> None:
@@ -3100,7 +3140,7 @@ def test_presenze_supervisor_can_validate_assigned_records_but_not_edit_operatio
     assert owner_edit.json()["manual_note"] == "Rettifica proprietario"
 
 
-def test_presenze_hierarchy_manager_sees_subordinate_records() -> None:
+def test_presenze_canonical_hierarchy_manager_sees_mapped_subordinate_records() -> None:
     owner = _create_user("hierarchy_owner", role=ApplicationUserRole.VIEWER.value)
     manager = _create_user("hierarchy_manager", role=ApplicationUserRole.VIEWER.value)
     owner_token = _login(owner.username)
@@ -3116,12 +3156,21 @@ def test_presenze_hierarchy_manager_sees_subordinate_records() -> None:
             filename="giornaliere.json",
             params_json={"format": "collaboratori-json", "origin": "hierarchy-scope-test"},
         )
+        collaborator = db.query(PresenzeCollaborator).one()
+        collaborator.application_user_id = owner.id
+        db.query(PresenzeDailyRecord).update({"application_user_id": owner.id})
+        sector = OrgUnit(nome="Settore tecnico", tipo="settore", source="manuale")
+        db.add(sector)
+        db.flush()
         db.add(
-            OrgStructureAssignment(
-                application_user_id=owner.id,
+            OrgAssignment(
+                user_id=owner.id,
+                org_unit_id=sector.id,
                 manager_user_id=manager.id,
-                source_mode="manual",
-                is_active=True,
+                title="Collaboratore",
+                position_code="collaboratore",
+                source="manuale",
+                active=True,
             )
         )
         db.commit()
@@ -3136,10 +3185,410 @@ def test_presenze_hierarchy_manager_sees_subordinate_records() -> None:
     assert manager_records.status_code == 200
     assert manager_records.json()["total"] == 1
 
+    manager_dashboard = client.get(
+        "/presenze/dashboard/summary?period_start=2026-05-01&period_end=2026-05-31",
+        headers={"Authorization": f"Bearer {manager_token}"},
+    )
+    assert manager_dashboard.status_code == 200
+    assert manager_dashboard.json()["collaborators_total"] == 1
+    assert manager_dashboard.json()["daily_records_total"] == 1
+
     access_context = client.get("/presenze/access-context", headers={"Authorization": f"Bearer {manager_token}"})
     assert access_context.status_code == 200
     assert access_context.json()["is_supervisor"] is True
     assert access_context.json()["assigned_collaborators_count"] == 1
+
+
+def test_presenze_import_owner_hierarchy_does_not_expose_unmapped_collaborators() -> None:
+    importer = _create_user("hierarchy_importer", role=ApplicationUserRole.VIEWER.value)
+    manager = _create_user("hierarchy_import_manager", role=ApplicationUserRole.VIEWER.value)
+    manager_token = _login(manager.username)
+
+    db = TestingSessionLocal()
+    try:
+        run_import_job(
+            db,
+            parsed=parse_import_payload(load_json_payload(_sample_payload())),
+            requested_by_user_id=importer.id,
+            filename="giornaliere.json",
+            params_json={"format": "collaboratori-json", "origin": "owner-is-not-person-test"},
+        )
+        db.add(
+            OrgStructureAssignment(
+                application_user_id=importer.id,
+                manager_user_id=manager.id,
+                source_mode="manual",
+                is_active=True,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    collaborators = client.get("/presenze/collaborators", headers={"Authorization": f"Bearer {manager_token}"})
+    records = client.get("/presenze/giornaliere", headers={"Authorization": f"Bearer {manager_token}"})
+    assert collaborators.status_code == 200
+    assert collaborators.json()["total"] == 0
+    assert records.status_code == 200
+    assert records.json()["total"] == 0
+
+
+def test_presenze_canonical_override_separates_read_from_approve() -> None:
+    owner = _create_user("scope_owner", role=ApplicationUserRole.VIEWER.value)
+    delegated = _create_user("scope_delegate", role=ApplicationUserRole.VIEWER.value)
+    delegated_token = _login(delegated.username)
+
+    db = TestingSessionLocal()
+    try:
+        run_import_job(
+            db,
+            parsed=parse_import_payload(load_json_payload(_sample_payload())),
+            requested_by_user_id=owner.id,
+            filename="giornaliere.json",
+            params_json={"format": "collaboratori-json", "origin": "canonical-scope-test"},
+        )
+        collaborator = db.query(PresenzeCollaborator).one()
+        collaborator.application_user_id = owner.id
+        db.query(PresenzeDailyRecord).update({"application_user_id": owner.id})
+        unit = OrgUnit(nome="Reparto officina", tipo="reparto", source="manuale")
+        db.add(unit)
+        db.flush()
+        db.add(
+            OrgAssignment(
+                user_id=owner.id,
+                org_unit_id=unit.id,
+                title="Collaboratore",
+                position_code="collaboratore",
+                active=True,
+                source="manuale",
+            )
+        )
+        visibility_override = OrgVisibilityOverride(
+            viewer_user_id=delegated.id,
+            target_type="user",
+            target_user_id=owner.id,
+            scope="read",
+            is_active=True,
+        )
+        db.add(visibility_override)
+        db.commit()
+        record_id = str(db.query(PresenzeDailyRecord).one().id)
+    finally:
+        db.close()
+
+    listing = client.get("/presenze/giornaliere", headers={"Authorization": f"Bearer {delegated_token}"})
+    assert listing.status_code == 200
+    assert listing.json()["total"] == 1
+    denied = client.patch(
+        f"/presenze/giornaliere/{record_id}",
+        headers={"Authorization": f"Bearer {delegated_token}"},
+        json={"validation_status": "validated"},
+    )
+    assert denied.status_code == 403
+
+    db = TestingSessionLocal()
+    try:
+        db.query(OrgVisibilityOverride).filter(OrgVisibilityOverride.viewer_user_id == delegated.id).update(
+            {"scope": "approve"}
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    approved = client.patch(
+        f"/presenze/giornaliere/{record_id}",
+        headers={"Authorization": f"Bearer {delegated_token}"},
+        json={"validation_status": "validated"},
+    )
+    assert approved.status_code == 200
+    operational_edit = client.patch(
+        f"/presenze/giornaliere/{record_id}",
+        headers={"Authorization": f"Bearer {delegated_token}"},
+        json={"km_value": 12},
+    )
+    assert operational_edit.status_code == 403
+
+
+def test_presenze_configuration_crud_lifecycle() -> None:
+    admin = _create_user("configuration_crud_admin")
+    supervisor = _create_user("configuration_crud_supervisor", role=ApplicationUserRole.REVIEWER.value)
+    replacement_supervisor = _create_user(
+        "configuration_crud_replacement", role=ApplicationUserRole.REVIEWER.value
+    )
+    token = _login(admin.username)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    imported = client.post(
+        "/presenze/import/json",
+        headers=headers,
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+    collaborator_id = client.get("/presenze/collaborators", headers=headers).json()["items"][0]["id"]
+    missing_user_mapping = client.put(
+        f"/presenze/collaborators/{collaborator_id}/application-user",
+        headers=headers,
+        json={"application_user_id": 999999},
+    )
+    assert missing_user_mapping.status_code == 404
+    assert client.get("/presenze/collaborators?q=AMADU", headers=headers).json()["total"] == 1
+    assert client.get("/presenze/collaborators?mapped_only=true", headers=headers).json()["total"] == 0
+    assert client.get("/presenze/collaborators?mapped_only=false", headers=headers).json()["total"] == 1
+
+    users = client.get("/presenze/application-users", headers=headers)
+    assert users.status_code == 200
+    assert supervisor.id in {item["id"] for item in users.json()}
+
+    assignment = client.put(
+        f"/presenze/supervisor-assignments/{collaborator_id}",
+        headers=headers,
+        json={"supervisor_user_id": supervisor.id},
+    )
+    assert assignment.status_code == 200
+    listed_assignments = client.get(
+        f"/presenze/supervisor-assignments?supervisor_user_id={supervisor.id}", headers=headers
+    )
+    assert listed_assignments.status_code == 200
+    assert listed_assignments.json()[0]["collaborator_id"] == collaborator_id
+    reassigned = client.put(
+        f"/presenze/supervisor-assignments/{collaborator_id}",
+        headers=headers,
+        json={"supervisor_user_id": replacement_supervisor.id},
+    )
+    assert reassigned.status_code == 200
+    assert reassigned.json()["supervisor_user_id"] == replacement_supervisor.id
+    removed_assignment = client.put(
+        f"/presenze/supervisor-assignments/{collaborator_id}",
+        headers=headers,
+        json={"supervisor_user_id": None},
+    )
+    assert removed_assignment.status_code == 200
+    assert removed_assignment.json() is None
+
+    bootstrapped = client.post("/presenze/holidays/bootstrap?year=2027", headers=headers)
+    assert bootstrapped.status_code == 200
+    assert bootstrapped.json()["created"] > 0
+    listed_holidays = client.get("/presenze/holidays?year=2027", headers=headers)
+    assert listed_holidays.status_code == 200
+    assert listed_holidays.json()
+
+    holiday = client.post(
+        "/presenze/holidays",
+        headers=headers,
+        json={"holiday_date": "2028-02-03", "label": "Test configurazione", "holiday_kind": "ordinary"},
+    )
+    assert holiday.status_code == 201
+    holiday_id = holiday.json()["id"]
+    updated_holiday = client.patch(
+        f"/presenze/holidays/{holiday_id}", headers=headers, json={"label": "Test aggiornato"}
+    )
+    assert updated_holiday.status_code == 200
+    assert updated_holiday.json()["label"] == "Test aggiornato"
+    assert client.delete(f"/presenze/holidays/{holiday_id}", headers=headers).status_code == 204
+
+    template = client.post(
+        "/presenze/schedule/templates",
+        headers=headers,
+        json={"code": "COVERAGE", "label": "Template coverage", "notes": "iniziale"},
+    )
+    assert template.status_code == 201
+    template_id = template.json()["id"]
+    missing_template_assignment = client.post(
+        f"/presenze/collaborators/{collaborator_id}/schedule-assignments",
+        headers=headers,
+        json={"template_id": template_id + 100000},
+    )
+    assert missing_template_assignment.status_code == 404
+    updated_template = client.patch(
+        f"/presenze/schedule/templates/{template_id}",
+        headers=headers,
+        json={"label": "Template coverage aggiornato", "notes": "aggiornato"},
+    )
+    assert updated_template.status_code == 200
+    assert updated_template.json()["label"] == "Template coverage aggiornato"
+
+    rule = client.post(
+        f"/presenze/schedule/templates/{template_id}/rules",
+        headers=headers,
+        json={"label": "Lunedi", "weekday": 0, "start_time": "07:00", "end_time": "14:00"},
+    )
+    assert rule.status_code == 201
+    rule_id = rule.json()["id"]
+    updated_rule = client.patch(
+        f"/presenze/schedule/rules/{rule_id}", headers=headers, json={"label": "Lunedi aggiornato"}
+    )
+    assert updated_rule.status_code == 200
+    assert updated_rule.json()["label"] == "Lunedi aggiornato"
+
+    schedule_assignment = client.post(
+        f"/presenze/collaborators/{collaborator_id}/schedule-assignments",
+        headers=headers,
+        json={"template_id": template_id, "valid_from": "2026-01-01", "notes": "coverage"},
+    )
+    assert schedule_assignment.status_code == 201
+    schedule_assignment_id = schedule_assignment.json()["id"]
+    assert client.delete(
+        f"/presenze/schedule-assignments/{schedule_assignment_id}", headers=headers
+    ).status_code == 204
+    assert client.delete(f"/presenze/schedule/rules/{rule_id}", headers=headers).status_code == 204
+    assert client.delete(f"/presenze/schedule/templates/{template_id}", headers=headers).status_code == 204
+
+
+def test_presenze_supervisor_assignment_rejects_invalid_candidates() -> None:
+    admin = _create_user("supervisor_validation_admin")
+    disabled_for_module = _create_user("supervisor_no_module", module_presenze=False)
+    operator = _create_user("supervisor_operator", role=ApplicationUserRole.OPERATOR.value)
+    inactive = _create_user("supervisor_inactive")
+    token = _login(admin.username)
+    headers = {"Authorization": f"Bearer {token}"}
+    client.post(
+        "/presenze/import/json",
+        headers=headers,
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    ).raise_for_status()
+    collaborator_id = client.get("/presenze/collaborators", headers=headers).json()["items"][0]["id"]
+    db = TestingSessionLocal()
+    try:
+        db.get(ApplicationUser, inactive.id).is_active = False
+        db.commit()
+    finally:
+        db.close()
+
+    cases = [
+        (999999, 404),
+        (inactive.id, 404),
+        (disabled_for_module.id, 409),
+        (operator.id, 409),
+    ]
+    for supervisor_id, expected_status in cases:
+        response = client.put(
+            f"/presenze/supervisor-assignments/{collaborator_id}",
+            headers=headers,
+            json={"supervisor_user_id": supervisor_id},
+        )
+        assert response.status_code == expected_status
+
+
+def test_presenze_bank_hours_adjustment_crud_lifecycle() -> None:
+    admin = _create_user("bank_hours_crud_admin")
+    token = _login(admin.username)
+    headers = {"Authorization": f"Bearer {token}"}
+    imported = client.post(
+        "/presenze/import/json",
+        headers=headers,
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+    collaborator_id = client.get("/presenze/collaborators", headers=headers).json()["items"][0]["id"]
+
+    created = client.post(
+        "/presenze/bank-hours/adjustments",
+        headers=headers,
+        json={
+            "collaborator_id": collaborator_id,
+            "adjustment_date": "2026-05-20",
+            "delta_minutes": 60,
+            "kind": "credit",
+            "reason": "Credito di caratterizzazione",
+        },
+    )
+    assert created.status_code == 201
+    adjustment_id = created.json()["id"]
+
+    listed = client.get(
+        f"/presenze/bank-hours/adjustments?collaborator_id={collaborator_id}&approval_status=pending",
+        headers=headers,
+    )
+    assert listed.status_code == 200
+    assert [item["id"] for item in listed.json()] == [adjustment_id]
+
+    updated = client.patch(
+        f"/presenze/bank-hours/adjustments/{adjustment_id}",
+        headers=headers,
+        json={"delta_minutes": 90, "kind": "credit", "note": "Aggiornato"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["delta_minutes"] == 90
+    assert updated.json()["approval_status"] == "pending"
+
+    rejected = client.post(
+        f"/presenze/bank-hours/adjustments/{adjustment_id}/review",
+        headers=headers,
+        json={"approval_status": "rejected", "approval_note": "Non dovuto"},
+    )
+    assert rejected.status_code == 200
+    assert rejected.json()["approval_status"] == "rejected"
+    assert client.delete(f"/presenze/bank-hours/adjustments/{adjustment_id}", headers=headers).status_code == 204
+
+
+def test_presenze_job_list_detail_and_terminal_delete_lifecycle() -> None:
+    admin = _create_user("job_lifecycle_admin")
+    token = _login(admin.username)
+    headers = {"Authorization": f"Bearer {token}"}
+    imported = client.post(
+        "/presenze/import/json",
+        headers=headers,
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    import_jobs = client.get("/presenze/import/jobs", headers=headers)
+    assert import_jobs.status_code == 200
+    assert import_jobs.json()["total"] == 1
+    import_job_id = import_jobs.json()["items"][0]["id"]
+    assert client.get(f"/presenze/import/jobs/{import_job_id}", headers=headers).status_code == 200
+
+    db = TestingSessionLocal()
+    try:
+        jobs = [
+            PresenzeSyncJob(
+                status="completed",
+                requested_by_user_id=admin.id,
+                period_start=date(2026, 5, 1),
+                period_end=date(2026, 5, 31),
+                params_json={"mode": "sync"},
+            ),
+            PresenzeSyncJob(
+                status="completed",
+                requested_by_user_id=admin.id,
+                period_start=date(2026, 5, 1),
+                period_end=date(2026, 5, 31),
+                params_json={"mode": "export_xlsm"},
+            ),
+            PresenzeSyncJob(
+                status="completed",
+                requested_by_user_id=admin.id,
+                period_start=date(2026, 5, 1),
+                period_end=date(2026, 5, 31),
+                params_json={"mode": "export_straordinari_xlsx", "output_filename": "Straordinari.xlsx"},
+            ),
+        ]
+        db.add_all(jobs)
+        db.commit()
+        for job in jobs:
+            db.refresh(job)
+        sync_id, xlsm_id, straordinari_id = (str(job.id) for job in jobs)
+    finally:
+        db.close()
+
+    sync_jobs = client.get("/presenze/sync/jobs?limit=2", headers=headers)
+    assert sync_jobs.status_code == 200
+    assert sync_jobs.json()["total"] == 3
+    assert client.get(f"/presenze/sync/jobs/{sync_id}", headers=headers).status_code == 200
+
+    xlsm_jobs = client.get("/presenze/export/jobs/xlsm?limit=1", headers=headers)
+    assert xlsm_jobs.status_code == 200
+    assert xlsm_jobs.json()["total"] == 1
+    assert client.get(f"/presenze/export/jobs/xlsm/{xlsm_id}", headers=headers).status_code == 200
+
+    straordinari_jobs = client.get("/presenze/export/jobs/straordinari?limit=1", headers=headers)
+    assert straordinari_jobs.status_code == 200
+    assert straordinari_jobs.json()["total"] == 1
+    assert client.get(f"/presenze/export/jobs/straordinari/{straordinari_id}", headers=headers).status_code == 200
+
+    assert client.delete(f"/presenze/sync/jobs/{sync_id}", headers=headers).status_code == 204
+    assert client.delete(f"/presenze/export/jobs/xlsm/{xlsm_id}", headers=headers).status_code == 204
+    assert client.delete(f"/presenze/export/jobs/straordinari/{straordinari_id}", headers=headers).status_code == 204
 
 
 def test_presenze_sync_job_retry_respects_max_attempts(monkeypatch: pytest.MonkeyPatch) -> None:

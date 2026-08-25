@@ -109,6 +109,7 @@ def test_manager_sees_unit_and_descendants():
     assert result.unit_via == {B: VIA_HIERARCHY, D: VIA_HIERARCHY}
     # persone nelle unità visibili
     assert result.person_via == {20: VIA_HIERARCHY, 30: VIA_HIERARCHY}
+    assert result.person_scope == {20: "approve", 30: "approve"}
     assert 40 not in result.person_ids
 
 
@@ -133,6 +134,7 @@ def test_override_org_unit_adds_subtree_with_scope():
     assert result.unit_via == {B: VIA_OVERRIDE, D: VIA_OVERRIDE}
     assert result.unit_scope[B] == "approve"
     assert result.person_via == {20: VIA_OVERRIDE}
+    assert result.person_scope == {20: "approve"}
 
 
 def test_hierarchy_takes_precedence_over_override():
@@ -150,6 +152,18 @@ def test_hierarchy_takes_precedence_over_override():
     assert result.person_via[20] == VIA_HIERARCHY
 
 
+def test_direct_override_strengthens_scope_without_replacing_hierarchy_source():
+    assignments = [assignment(20, B, manager_user_id=7)]
+    overrides = [override(7, target_type="user", target_user_id=20, scope="full")]
+
+    result = compute_visibility(
+        viewer_id=7, is_super_admin=False, units=UNITS, assignments=assignments, overrides=overrides, now=NOW
+    )
+
+    assert result.person_via[20] == VIA_HIERARCHY
+    assert result.person_scope[20] == "full"
+
+
 # --------------------------------------------------------------------------- #
 # Override user
 # --------------------------------------------------------------------------- #
@@ -160,6 +174,7 @@ def test_override_user_adds_target_person_and_unit():
         viewer_id=9, is_super_admin=False, units=UNITS, assignments=assignments, overrides=overrides, now=NOW
     )
     assert result.person_via == {50: VIA_OVERRIDE}
+    assert result.person_scope == {50: "read"}
     assert result.unit_via == {C: VIA_OVERRIDE}
 
 
@@ -204,3 +219,35 @@ def test_default_now_branch_executes():
         viewer_id=1, is_super_admin=False, units=UNITS, assignments=[], overrides=[]
     )
     assert result.unit_via == {}
+
+
+def test_assignment_validity_window_is_applied() -> None:
+    future = assignment(20, B, manager_user_id=2)
+    future.valid_from = NOW + timedelta(days=1)
+    expired = assignment(30, B, manager_user_id=2)
+    expired.valid_to = NOW - timedelta(days=1)
+    result = compute_visibility(
+        viewer_id=2,
+        is_super_admin=False,
+        units=UNITS,
+        assignments=[future, expired],
+        overrides=[],
+        now=NOW,
+    )
+    assert result.person_ids == set()
+
+
+def test_stronger_override_scope_wins_for_same_person() -> None:
+    overrides = [
+        override(9, target_type="user", target_user_id=50, scope="read"),
+        override(9, target_type="user", target_user_id=50, scope="full"),
+    ]
+    result = compute_visibility(
+        viewer_id=9,
+        is_super_admin=False,
+        units=UNITS,
+        assignments=[assignment(50, C)],
+        overrides=overrides,
+        now=NOW,
+    )
+    assert result.person_scope[50] == "full"
