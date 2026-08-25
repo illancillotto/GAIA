@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { ProtectedPage } from "@/components/app/protected-page";
@@ -17,13 +17,14 @@ import {
 } from "@/lib/api";
 import {
   PRESENZE_COLLABORATOR_DETAIL_UPDATED_MESSAGE,
-  scorePresenzeCollaboratorUserMatch,
+  suggestedUserForPresenzeCollaborator,
   usersForPresenzeCollaboratorMappingSorted,
 } from "@/lib/presenze-collaborator-mapping";
 import { getStoredAccessToken } from "@/lib/auth";
 import type { ApplicationUser, CurrentUser, PresenzeCollaborator, PresenzeDailyRecord } from "@/types/api";
+import { CollaboratorMappingPanel } from "./mapping-panel";
 
-type CollaboratorRow = {
+export type CollaboratorRow = {
   id: string;
   employeeCode: string;
   internalCode: string;
@@ -46,6 +47,9 @@ type CollaboratorRow = {
 };
 
 type ContractWizardSelection = "unset" | "operaio_agrario" | "operaio_catasto_magazzino" | "impiegato" | "quadro" | "altro";
+
+const INITIAL_MAPPING_ROWS = 25;
+const MAPPING_ROWS_INCREMENT = 25;
 
 function currentMonthBounds(): { start: string; end: string } {
   const now = new Date();
@@ -148,6 +152,8 @@ export default function PresenzeCollaboratoriPage() {
   const [contractWizardSaving, setContractWizardSaving] = useState(false);
   const [contractSelections, setContractSelections] = useState<Record<string, ContractWizardSelection>>({});
   const [error, setError] = useState<string | null>(null);
+  const [visibleMappingRowsCount, setVisibleMappingRowsCount] = useState(INITIAL_MAPPING_ROWS);
+  const deferredSearch = useDeferredValue(search);
 
   const applyCollaboratorsPageData = useCallback(
     (collaboratorItems: PresenzeCollaborator[], recordItems: PresenzeDailyRecord[], userItems: ApplicationUser[]) => {
@@ -236,6 +242,10 @@ export default function PresenzeCollaboratoriPage() {
     return () => window.removeEventListener("message", onMessage);
   }, [reloadCollaboratorsPageData, selectedCollaborator]);
 
+  useEffect(() => {
+    setVisibleMappingRowsCount(INITIAL_MAPPING_ROWS);
+  }, [deferredSearch, mappedOnly, operaiGroupFilter]);
+
   async function closeDetailModal() {
     if (detailModalDirty) {
       setRefreshingList(true);
@@ -257,34 +267,34 @@ export default function PresenzeCollaboratoriPage() {
     setSelectedCollaborator(row);
   }
 
+  function handleMappingChange(rowId: string, value: string) {
+    setSelectedMappings((current) => ({ ...current, [rowId]: value }));
+  }
+
+  function handleShowMoreMappingRows() {
+    setVisibleMappingRowsCount((current) => current + MAPPING_ROWS_INCREMENT);
+  }
+
+  const collaboratorMap = useMemo(() => new Map(collaborators.map((item) => [item.id, item])), [collaborators]);
   const userMap = useMemo(() => new Map(users.map((user) => [user.id, user])), [users]);
+  const assignedApplicationUserIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const collaborator of collaborators) {
+      if (collaborator.application_user_id != null) {
+        ids.add(collaborator.application_user_id);
+      }
+    }
+    return ids;
+  }, [collaborators]);
   const suggestionsByCollaborator = useMemo(() => {
     const suggestions = new Map<string, { userId: number | null; score: number; confidence: "high" | "medium" | "low" | "none" }>();
 
     for (const collaborator of collaborators) {
-      const candidateUsers = usersForPresenzeCollaboratorMappingSorted(collaborator, users, collaborators, collaborator.id);
-      let bestUser: ApplicationUser | null = null;
-      let bestScore = 0;
-      for (const user of candidateUsers) {
-        const score = scorePresenzeCollaboratorUserMatch(collaborator, user);
-        if (score > bestScore) {
-          bestScore = score;
-          bestUser = user;
-        }
-      }
-
-      const confidence: "high" | "medium" | "low" | "none" =
-        bestScore >= 120 ? "high" : bestScore >= 70 ? "medium" : bestScore >= 35 ? "low" : "none";
-
-      suggestions.set(collaborator.id, {
-        userId: bestUser && confidence !== "none" ? bestUser.id : null,
-        score: bestScore,
-        confidence,
-      });
+      suggestions.set(collaborator.id, suggestedUserForPresenzeCollaborator(collaborator, users, assignedApplicationUserIds));
     }
 
     return suggestions;
-  }, [collaborators, users]);
+  }, [assignedApplicationUserIds, collaborators, users]);
 
   useEffect(() => {
     if (users.length === 0 || collaborators.length === 0) return;
@@ -350,7 +360,7 @@ export default function PresenzeCollaboratoriPage() {
   );
 
   const filteredRows = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
+    const normalizedSearch = deferredSearch.trim().toLowerCase();
     return rows.filter((row) => {
       const mappingFilter =
         mappedOnly === "all" ||
@@ -367,7 +377,23 @@ export default function PresenzeCollaboratoriPage() {
         );
       return mappingFilter && operaiGroupMatches && searchFilter;
     });
-  }, [rows, search, mappedOnly, operaiGroupFilter]);
+  }, [rows, deferredSearch, mappedOnly, operaiGroupFilter]);
+
+  const mappingRows = useMemo(
+    () => filteredRows.slice(0, visibleMappingRowsCount),
+    [filteredRows, visibleMappingRowsCount],
+  );
+  const sortedMappingUsersByCollaborator = useMemo(() => {
+    const sortedUsers = new Map<string, ApplicationUser[]>();
+    for (const row of mappingRows) {
+      const collaborator = collaboratorMap.get(row.id)!;
+      sortedUsers.set(
+        row.id,
+        usersForPresenzeCollaboratorMappingSorted(collaborator, users, collaborators, row.id),
+      );
+    }
+    return sortedUsers;
+  }, [collaboratorMap, collaborators, mappingRows, users]);
 
   const collaboratorsNeedingContractReview = useMemo(
     () => collaborators.filter((item) => isContractProfileIncomplete(item)),
@@ -552,55 +578,17 @@ export default function PresenzeCollaboratoriPage() {
         </article>
 
         {canEditMapping ? (
-          <article className="panel-card">
-            <div className="mb-4">
-              <p className="section-title">Aggiorna mapping GAIA</p>
-              <p className="section-copy">Seleziona un utente GAIA per i collaboratori che richiedono collegamento. Il sistema precompila un suggerimento basato su nome completo, username ed email.</p>
-            </div>
-            <div className="mb-4 flex flex-wrap items-center gap-3">
-              <button className="btn-secondary" type="button" onClick={() => void handleApplySuggestedMappings()}>
-                Applica suggeriti
-              </button>
-              <p className="text-sm text-gray-500">
-                Vengono applicati solo i collaboratori non ancora mappati con un suggerimento disponibile.
-              </p>
-            </div>
-            <div className="space-y-3">
-              {filteredRows.map((row) => (
-                <div key={row.id} className="grid gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 lg:grid-cols-[1fr_320px_120px] lg:items-center">
-                  <div>
-                    <p className="font-medium text-gray-900">{row.name}</p>
-                    <p className="text-xs text-gray-500">Matricola {row.employeeCode} · {row.contractSummary}</p>
-                    {row.suggestionConfidence !== "none" ? (
-                      <p className="mt-1 text-xs text-emerald-700">
-                        Suggerito: {row.suggestedUserLabel} ({row.suggestionConfidence === "high" ? "confidenza alta" : row.suggestionConfidence === "medium" ? "confidenza media" : "confidenza bassa"})
-                      </p>
-                    ) : null}
-                  </div>
-                  <select
-                    className="form-control"
-                    value={selectedMappings[row.id] ?? String(collaborators.find((item) => item.id === row.id)?.application_user_id ?? "")}
-                    onChange={(event) => setSelectedMappings((current) => ({ ...current, [row.id]: event.target.value }))}
-                  >
-                    <option value="">Nessun mapping</option>
-                    {usersForPresenzeCollaboratorMappingSorted(
-                      collaborators.find((item) => item.id === row.id)!,
-                      users,
-                      collaborators,
-                      row.id,
-                    ).map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.username} · {user.email}
-                      </option>
-                    ))}
-                  </select>
-                  <button className="btn-primary" type="button" onClick={() => void handleMap(row.id)}>
-                    Salva
-                  </button>
-                </div>
-              ))}
-            </div>
-          </article>
+          <CollaboratorMappingPanel
+            rows={mappingRows}
+            totalRows={filteredRows.length}
+            selectedMappings={selectedMappings}
+            collaboratorMap={collaboratorMap}
+            sortedUsersByCollaborator={sortedMappingUsersByCollaborator}
+            onApplySuggestedMappings={handleApplySuggestedMappings}
+            onMappingChange={handleMappingChange}
+            onSaveMapping={handleMap}
+            onShowMore={handleShowMoreMappingRows}
+          />
         ) : null}
 
         {contractWizardOpen ? (

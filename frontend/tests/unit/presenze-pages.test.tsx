@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import PresenzeCapisettorePage from "@/app/presenze/capisettore/page";
+import { CollaboratorMappingPanel } from "@/app/presenze/collaboratori/mapping-panel";
 import PresenzeCollaboratoriPage from "@/app/presenze/collaboratori/page";
 import ElaborazioniPresenzeSyncPage from "@/app/elaborazioni/presenze-sync/page";
 import PresenzeImportPage from "@/app/presenze/import/page";
@@ -656,6 +657,101 @@ describe("Presenze pages", () => {
     await waitFor(() => {
       expect(mocks.mapPresenzeCollaboratorApplicationUser).toHaveBeenCalledWith("token", "collab-1", 7);
     });
+  });
+
+  test("renders collaborator mapping rows progressively", async () => {
+    mocks.listAllApplicationUsers.mockResolvedValueOnce([
+      {
+        id: 77,
+        username: "mapping.user",
+        email: "mapping.user@example.local",
+        full_name: "Mapping User",
+        role: "viewer",
+        is_active: true,
+        module_accessi: true,
+        module_rete: false,
+        module_inventario: false,
+        module_catasto: false,
+        module_utenze: false,
+        module_operazioni: false,
+        module_riordino: false,
+        module_ruolo: false,
+        module_presenze: true,
+        enabled_modules: ["accessi", "presenze"],
+        created_at: "2026-05-29T00:00:00Z",
+        updated_at: "2026-05-29T00:00:00Z",
+      },
+    ]);
+    mocks.listAllPresenzeCollaborators.mockResolvedValueOnce(
+      Array.from({ length: 26 }, (_, index) => ({
+        id: `batch-collab-${index + 1}`,
+        application_user_id: null,
+        kint: null,
+        kkint: null,
+        employee_code: String(3000 + index),
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: `BATCH COLLAB ${index + 1}`,
+        birth_date: null,
+        contract_kind: "operaio" as const,
+        operai_group: "agrario" as const,
+        standard_daily_minutes: 420,
+        is_active: true,
+        last_seen_at: null,
+        created_at: "2026-05-29T09:00:00Z",
+        updated_at: "2026-05-29T09:00:00Z",
+      })),
+    );
+
+    render(<PresenzeCollaboratoriPage />);
+
+    await screen.findByText("BATCH COLLAB 25");
+    expect(screen.queryByText("BATCH COLLAB 26")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Mostra altri mapping (1)"));
+
+    expect(await screen.findByText("BATCH COLLAB 26")).toBeInTheDocument();
+  });
+
+  test("renders mapping panel without precomputed user options", () => {
+    render(
+      <CollaboratorMappingPanel
+        rows={[
+          {
+            id: "missing-options",
+            employeeCode: "3999",
+            internalCode: "—",
+            name: "MAPPING SENZA OPZIONI",
+            birthDate: "—",
+            contractKind: null,
+            contractSummary: "Non impostato",
+            operaiGroupCode: null,
+            operaiGroup: "—",
+            lastSeen: "—",
+            active: true,
+            dailyRows: 0,
+            ordinaryHours: "0.0 h",
+            extraHours: "0.0 h",
+            mapped: false,
+            mappedUser: "—",
+            suggestedUserId: null,
+            suggestedUserLabel: "Nessun suggerimento",
+            suggestionConfidence: "none",
+          },
+        ]}
+        totalRows={1}
+        selectedMappings={{}}
+        collaboratorMap={new Map()}
+        sortedUsersByCollaborator={new Map()}
+        onApplySuggestedMappings={vi.fn()}
+        onMappingChange={vi.fn()}
+        onSaveMapping={vi.fn()}
+        onShowMore={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("MAPPING SENZA OPZIONI")).toBeInTheDocument();
+    expect(screen.getByRole("combobox").children).toHaveLength(1);
   });
 
   test("renders shared GAIA and GATE presenze rules", async () => {

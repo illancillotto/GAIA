@@ -36,6 +36,12 @@ export function usersForPresenzeCollaboratorMapping(
   return users.filter((user) => !assignedElsewhere.has(user.id));
 }
 
+export type PresenzeCollaboratorUserSuggestion = {
+  userId: number | null;
+  score: number;
+  confidence: "high" | "medium" | "low" | "none";
+};
+
 function normalizePersonText(value: string | null | undefined): string {
   return (value ?? "")
     .toLowerCase()
@@ -93,6 +99,35 @@ export function scorePresenzeCollaboratorUserMatch(collaborator: PresenzeCollabo
   }
 
   return score;
+}
+
+export function suggestedUserForPresenzeCollaborator(
+  collaborator: PresenzeCollaborator,
+  users: ApplicationUser[],
+  assignedApplicationUserIds: Set<number>,
+): PresenzeCollaboratorUserSuggestion {
+  let bestUser: ApplicationUser | null = null;
+  let bestScore = 0;
+  for (const user of users) {
+    const userMappedToCurrentCollaborator = collaborator.application_user_id === user.id;
+    if (!userMappedToCurrentCollaborator && assignedApplicationUserIds.has(user.id)) {
+      continue;
+    }
+    const score = scorePresenzeCollaboratorUserMatch(collaborator, user);
+    if (score > bestScore) {
+      bestScore = score;
+      bestUser = user;
+    }
+  }
+
+  const confidence: PresenzeCollaboratorUserSuggestion["confidence"] =
+    bestScore >= 120 ? "high" : bestScore >= 70 ? "medium" : bestScore >= 35 ? "low" : "none";
+
+  return {
+    userId: bestUser && confidence !== "none" ? bestUser.id : null,
+    score: bestScore,
+    confidence,
+  };
 }
 
 /** Available users for mapping, best name matches first. */

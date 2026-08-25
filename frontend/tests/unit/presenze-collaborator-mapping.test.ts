@@ -5,6 +5,7 @@ import {
   notifyPresenzeCollaboratorDetailUpdated,
   presenzeAssignedApplicationUserIds,
   scorePresenzeCollaboratorUserMatch,
+  suggestedUserForPresenzeCollaborator,
   usersForPresenzeCollaboratorMapping,
   usersForPresenzeCollaboratorMappingSorted,
 } from "@/lib/presenze-collaborator-mapping";
@@ -112,6 +113,58 @@ describe("presenze collaborator mapping helpers", () => {
     expect(scorePresenzeCollaboratorUserMatch(collaborator, sorted[0])).toBeGreaterThan(
       scorePresenzeCollaboratorUserMatch(collaborator, sorted[1]),
     );
+  });
+
+  test("suggests the best available user match", () => {
+    const collaborator = { ...baseCollaborator("ardu", null), name: "ARDU PIER PAOLO" };
+    const users = [
+      { ...baseUser(1), username: "unavailable", email: "ardu.pier@example.local", full_name: "ARDU PIER PAOLO" },
+      { ...baseUser(2), username: "ardu.pierpaolo", email: "pierpaoloardu41@gmail.com", full_name: null },
+      { ...baseUser(3), username: "nomatch", email: "nomatch@example.local", full_name: "Altro Utente" },
+    ];
+
+    expect(suggestedUserForPresenzeCollaborator(collaborator, users, new Set([1]))).toMatchObject({
+      userId: 2,
+      confidence: "high",
+    });
+  });
+
+  test("keeps the current mapped user available for suggestions", () => {
+    const collaborator = { ...baseCollaborator("mapped", 5), name: "ROSSI MARIO" };
+    const users = [{ ...baseUser(5), username: "rossi mario", email: "rossi.mario@example.local", full_name: "Rossi Mario" }];
+
+    expect(suggestedUserForPresenzeCollaborator(collaborator, users, new Set([5]))).toMatchObject({
+      userId: 5,
+      confidence: "high",
+    });
+  });
+
+  test("returns no suggestion when no candidate reaches the minimum score", () => {
+    const collaborator = { ...baseCollaborator("unknown", null), name: "NOME NON PRESENTE" };
+
+    expect(suggestedUserForPresenzeCollaborator(collaborator, [baseUser(20)], new Set())).toMatchObject({
+      userId: null,
+      score: 0,
+      confidence: "none",
+    });
+  });
+
+  test("classifies medium and low confidence suggestions", () => {
+    const mediumCollaborator = { ...baseCollaborator("medium", null), name: "ARDU PIER PAOLO" };
+    const mediumUser = { ...baseUser(21), username: "nomatch", email: "nomatch@example.local", full_name: "Pier Paolo Ardu" };
+    expect(suggestedUserForPresenzeCollaborator(mediumCollaborator, [mediumUser], new Set())).toMatchObject({
+      userId: 21,
+      score: 70,
+      confidence: "medium",
+    });
+
+    const lowCollaborator = { ...baseCollaborator("low", null), name: "ARDU PIER PAOLO" };
+    const lowUser = { ...baseUser(22), username: "nomatch", email: "nomatch@example.local", full_name: "Ardu Pier" };
+    expect(suggestedUserForPresenzeCollaborator(lowCollaborator, [lowUser], new Set())).toMatchObject({
+      userId: 22,
+      score: 36,
+      confidence: "low",
+    });
   });
 
   test("scores partial token matches and birth date bonus", () => {

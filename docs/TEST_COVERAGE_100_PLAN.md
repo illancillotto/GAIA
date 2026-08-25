@@ -640,6 +640,20 @@ Fino alla chiusura completa del piano:
   - modelli/schema Catasto combinati su suite isolate: `541/541` statement e `20/20` branch, `100%`;
   - entrypoint backfill: `32/32` statement e `8/8` branch, `100%`, con dry-run/apply e nessun accesso DB reale.
 
+- `2026-08-25` - Presenze collaboratori rendering mapping progressivo
+  (`src/app/presenze/collaboratori/page.tsx`,
+  `src/app/presenze/collaboratori/mapping-panel.tsx`,
+  `src/lib/presenze-collaborator-mapping.ts`)
+  La pagina Collaboratori mantiene la tabella completa, ma la sezione admin
+  `Aggiorna mapping GAIA` renderizza inizialmente solo `25` righe e carica le
+  successive con `Mostra altri mapping`; il suggerimento utente e condiviso in
+  helper testabile e la ricerca usa rendering differito lato React.
+  Esito validato:
+  - `cd frontend && npm run test:unit -- tests/unit/presenze-pages.test.tsx tests/unit/presenze-collaborator-mapping.test.ts` -> `75` test passati;
+  - `cd frontend && VITEST_COVERAGE_INCLUDE=src/app/presenze/collaboratori/page.tsx,src/app/presenze/collaboratori/mapping-panel.tsx,src/lib/presenze-collaborator-mapping.ts npx vitest run tests/unit/presenze-pages.test.tsx tests/unit/presenze-collaborator-mapping.test.ts --coverage` -> `100%` statements / branches / functions / lines sui file runtime modificati;
+  - `cd frontend && npm run typecheck` -> pass;
+  - `make complexity-ratchet BASE_REF=main` -> blocco non correlato su `backend/app/modules/elaborazioni/runtime_routes.py`, `frontend/src/components/elaborazioni/settings-workspace.tsx` e `frontend/src/lib/api.ts`; nessun finding sui file Presenze collaboratori modificati.
+
 ## Eccezioni temporanee aperte
 
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`
