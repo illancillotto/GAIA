@@ -221,7 +221,7 @@ export function OperationalSearchBox({
     setOperationalSearchError(null);
 
     const timeoutId = window.setTimeout(() => {
-      searchOperational(token, query, { limit: isHero && isResultsModalOpen ? 30 : 8 })
+      searchOperational(token, query, { limit: isResultsModalOpen ? 30 : 8 })
         .then((response) => {
           /* v8 ignore next -- defensive guard for stale in-flight searches after cleanup. */
           if (cancelled) return;
@@ -245,7 +245,7 @@ export function OperationalSearchBox({
       cancelled = true;
       window.clearTimeout(timeoutId);
     };
-  }, [isHero, isResultsModalOpen, searchQuery]);
+  }, [isResultsModalOpen, searchQuery]);
 
   useEffect(() => {
     function handleDocumentClick(event: MouseEvent) {
@@ -286,7 +286,7 @@ export function OperationalSearchBox({
   const placeholder = isHero ? "Cerca utenza, ruolo, catasto o coordinate…" : "Cerca in GAIA…";
   const normalizedQuery = searchQuery.trim();
   const resultCount = operationalSearchResults.length + menuSearchResults.length;
-  const shouldShowSearchPageLink = normalizedQuery.length >= 2 && resultCount !== 1;
+  const shouldShowResultsModal = normalizedQuery.length >= 2 && resultCount !== 1;
 
   function navigateTo(href: string): void {
     setIsSearchOpen(false);
@@ -295,10 +295,6 @@ export function OperationalSearchBox({
   }
 
   function openResultsModal(): void {
-    if (!isHero) {
-      navigateTo(searchPageHref(normalizedQuery));
-      return;
-    }
     setIsSearchOpen(false);
     setIsResultsModalOpen(true);
   }
@@ -363,7 +359,7 @@ export function OperationalSearchBox({
               ))}
             </div>
           ) : null}
-          {shouldShowSearchPageLink ? (
+          {shouldShowResultsModal ? (
             <div className="border-t border-surface-container px-3 py-2">
               <button
                 type="button"
@@ -384,7 +380,7 @@ export function OperationalSearchBox({
   }
 
   function renderResultsModal() {
-    if (!isHero || !isResultsModalOpen) return null;
+    if (!isResultsModalOpen) return null;
 
     return (
       <div className="fixed inset-0 z-50 flex items-start justify-center px-4 py-8 sm:py-14" role="dialog" aria-modal="true" aria-labelledby="operational-search-modal-title">
@@ -403,7 +399,7 @@ export function OperationalSearchBox({
                   Risultati per “{normalizedQuery}”
                 </h2>
                 <p className="mt-1 text-sm text-outline">
-                  Seleziona un risultato senza uscire dalla home, oppure apri la vista estesa.
+                  Seleziona un risultato senza uscire dalla ricerca, oppure apri la vista estesa.
                 </p>
               </div>
               <div className="flex items-center gap-2">

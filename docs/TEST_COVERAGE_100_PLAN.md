@@ -469,11 +469,19 @@ Fino alla chiusura completa del piano:
 
 - `2026-07-29` - SERP ricerca operativa
   (`frontend/src/app/search/page.tsx`, `frontend/src/components/search/operational-search-box.tsx`)
-  Per la change che aggiunge `/search?q=...`, il pulsante `Vedi tutti i risultati`
-  e la navigazione Enter verso SERP quando i risultati non sono univoci, la misurazione
+  Per la change che aggiunge `/search?q=...`, la modale estesa condivisa da home e topbar
+  per i risultati non univoci, e il pulsante `Vista estesa` verso la SERP, la misurazione
   affidabile e:
   `cd frontend && VITEST_COVERAGE_INCLUDE='src/app/page.tsx,src/app/search/page.tsx,src/components/search/operational-search-box.tsx,src/components/layout/topbar.tsx,src/components/layout/app-shell.tsx,src/components/layout/app-shell-context.tsx' npm run test:coverage -- tests/unit/home-page-presence-widget.test.tsx tests/unit/app-shell.test.tsx tests/unit/operational-search-page.test.tsx`.
   Esito: `100%` statements/branches/functions/lines sui runtime frontend toccati.
+
+- `2026-08-25` - Parita della ricerca operativa tra home e topbar
+  (`frontend/src/components/search/operational-search-box.tsx`)
+  Per la change che applica alla topbar la modale estesa, il limite `30`, la navigazione diretta,
+  le coordinate GIS, le scorciatoie e gli stati di errore gia disponibili nella home, la
+  misurazione affidabile e:
+  `cd frontend && VITEST_COVERAGE_INCLUDE='src/components/search/operational-search-box.tsx' npm run test:coverage -- tests/unit/operational-search-box.test.tsx`.
+  Esito: `100%` statements/branches/functions/lines sul runtime frontend modificato.
 
 - `2026-08-06` - Strumentazione coverage repository-wide e batch iniziale verso il 100% globale
   (`backend/.coveragerc`, `frontend/vitest.config.ts`, test backend/frontend lib e moduli `me`/`core`/`shared`/`riordino`/`ruolo`)

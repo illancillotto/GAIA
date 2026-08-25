@@ -14,6 +14,9 @@ from app.modules.search.schemas import OperationalSearchResponse, OperationalSea
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice, AnagraficaPerson
 
 
+_MODULE_PRIORITY: dict[SearchModule, int] = {"utenze": 0, "ruolo": 1, "catasto": 2}
+
+
 def search_operational(db: Session, current_user: ApplicationUser, query: str, limit: int = 12) -> OperationalSearchResponse:
     normalized = _normalize_query(query)
     if not normalized:
@@ -33,12 +36,16 @@ def search_operational(db: Session, current_user: ApplicationUser, query: str, l
         modules.append("catasto")
         module_hits.extend(_search_catasto(db, normalized, per_module_limit))
 
-    items = sorted(module_hits, key=lambda item: (-item.score, item.module, item.title.lower()))[:limit]
+    items = _sort_results(module_hits, limit)
     return OperationalSearchResponse(query=normalized, items=items, total=len(items), modules=modules)
 
 
 def _normalize_query(query: str) -> str:
     return " ".join(query.strip().split())
+
+
+def _sort_results(items: list[OperationalSearchResult], limit: int) -> list[OperationalSearchResult]:
+    return sorted(items, key=lambda item: (_MODULE_PRIORITY[item.module], -item.score, item.title.lower()))[:limit]
 
 
 def _can_search_module(user: ApplicationUser, module: SearchModule) -> bool:

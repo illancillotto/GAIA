@@ -145,7 +145,7 @@ describe("AppShell", () => {
     expect(mocks.push).toHaveBeenCalledWith("/gis/catalogo");
   });
 
-  test("keeps compact operational search on the extended search page for multiple matches", () => {
+  test("opens the extended results modal from compact operational search for multiple matches", () => {
     render(
       <AppShell
         currentUser={{
@@ -162,7 +162,8 @@ describe("AppShell", () => {
     fireEvent.change(input, { target: { value: "dashboard" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
-    expect(mocks.push).toHaveBeenCalledWith("/search?q=dashboard");
+    expect(mocks.push).not.toHaveBeenCalled();
+    expect(screen.getByRole("heading", { name: "Risultati per “dashboard”" })).toBeInTheDocument();
   });
 
   test("does not render compact operational search when topbar is outside an authenticated shell", () => {

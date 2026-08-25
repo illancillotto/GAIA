@@ -268,6 +268,7 @@ def test_operational_search_matches_multitoken_names_across_enabled_domains() ->
     assert ("utenze", "subject_person") in result_types
     assert ("ruolo", "avviso") in result_types
     assert ("catasto", "particella") in result_types
+    assert payload["items"][0]["module"] == "utenze"
 
 
 def test_operational_search_finds_catasto_from_intestatari_and_deduplicates_particelle() -> None:
