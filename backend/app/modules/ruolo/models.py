@@ -438,12 +438,37 @@ class RuoloTributiReminderBatch(Base):
     )
 
 
+class RuoloTributiNoticeNumber(Base):
+    __tablename__ = "ruolo_tributi_notice_numbers"
+    __table_args__ = (
+        UniqueConstraint("emission_year", "progressive", name="uq_ruolo_tributi_notice_year_progressive"),
+        UniqueConstraint("notice_number", name="uq_ruolo_tributi_notice_number"),
+        UniqueConstraint("identity_key", name="uq_ruolo_tributi_notice_identity"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    emission_year: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    progressive: Mapped[int] = mapped_column(Integer, nullable=False)
+    notice_number: Mapped[str] = mapped_column(String(40), nullable=False)
+    identity_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="reserved", index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 class RuoloTributiReminderBatchItem(Base):
     __tablename__ = "ruolo_tributi_reminder_batch_items"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     batch_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("ruolo_tributi_reminder_batches.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    notice_number_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ruolo_tributi_notice_numbers.id", ondelete="RESTRICT"), nullable=True, index=True
     )
     subject_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("ana_subjects.id", ondelete="SET NULL"), nullable=True, index=True

@@ -19,6 +19,20 @@ on:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: gaia_test
+          POSTGRES_USER: gaia_test
+          POSTGRES_PASSWORD: gaia_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gaia_test -d gaia_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - uses: actions/checkout@v4
@@ -44,6 +58,8 @@ jobs:
 
       - name: Test suite with coverage
         working-directory: backend
+        env:
+          GAIA_TEST_POSTGRES_URL: postgresql+psycopg://gaia_test:gaia_test@localhost:5432/gaia_test
         run: |
           pytest -q \
             --cov=app \

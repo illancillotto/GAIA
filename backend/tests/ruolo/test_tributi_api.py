@@ -93,12 +93,14 @@ from app.modules.ruolo.routes import tributi_routes
 from app.modules.ruolo.services import euribor as euribor_service
 from app.modules.ruolo.services import td896 as td896_service
 from app.modules.ruolo.services import tributi_reminder_service as reminder_service
+from app.modules.ruolo.services import tributi_notice_registry as notice_registry
 from app.modules.ruolo.models import (
     RuoloAvviso,
     RuoloImportJob,
     RuoloParticella,
     RuoloPartita,
     RuoloTributiCalculationPolicy,
+    RuoloTributiNoticeNumber,
     RuoloTributiPayment,
     RuoloTributiPaymentImportJob,
     RuoloTributiPostaOnlineImportJob,
@@ -3330,7 +3332,7 @@ def test_tributi_viewer_can_generate_and_download_reminder_batch_item(tmp_path: 
 def test_tributi_reminder_preview_regenerates_document_when_notice_identity_is_reused(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    seed_avviso(amount=100.0, anno=2024)
+    avviso_id = seed_avviso(amount=100.0, anno=2024)
     generated_payloads: list[dict[str, object]] = []
     generated_paths: list[Path] = []
 
@@ -3355,6 +3357,19 @@ def test_tributi_reminder_preview_regenerates_document_when_notice_identity_is_r
     }
 
     first_response = client.post("/ruolo/tributi/solleciti/batches", headers=headers, json=request_payload)
+
+    db = TestingSessionLocal()
+    db.add(
+        RuoloTributiPayment(
+            avviso_id=UUID(avviso_id),
+            amount=Decimal("10.00"),
+            source="manual",
+            status="valid",
+        )
+    )
+    db.commit()
+    db.close()
+
     second_response = client.post("/ruolo/tributi/solleciti/batches", headers=headers, json=request_payload)
 
     assert first_response.status_code == 200
@@ -3362,9 +3377,360 @@ def test_tributi_reminder_preview_regenerates_document_when_notice_identity_is_r
     assert len(generated_payloads) == 2
     assert generated_payloads[0]["notice_number"] == generated_payloads[1]["notice_number"]
     assert generated_payloads[0]["notice_progressive"] == generated_payloads[1]["notice_progressive"]
+    assert generated_payloads[0]["paid_amount"] == "0.00 EUR"
+    assert generated_payloads[1]["paid_amount"] == "10.00 EUR"
     assert generated_paths[0] != generated_paths[1]
     assert Path(first_response.json()["items"][0]["generated_document_path"]).read_bytes() == b"%PDF-1.4 preview 1"
     assert Path(second_response.json()["items"][0]["generated_document_path"]).read_bytes() == b"%PDF-1.4 preview 2"
+
+
+def test_tributi_reminder_batch_reserves_all_numbers_before_generation_and_reuses_them(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first_tax_code = "RSSMRA80A01H501Z"
+    second_tax_code = "BNCLGU80A01H501Y"
+    first_subject_id = seed_subject_with_nas(tmp_path, tax_code=first_tax_code)
+    second_subject_id = seed_subject_with_nas(tmp_path, tax_code=second_tax_code)
+    seed_avviso(amount=100, tax_code=first_tax_code, subject_id=first_subject_id, anno=2024)
+    seed_avviso(
+        amount=120,
+        tax_code=second_tax_code,
+        nominativo="BIANCHI LUIGI",
+        subject_id=second_subject_id,
+        anno=2024,
+    )
+
+    reservations_seen_during_generation: list[int] = []
+
+    def fake_generate_batch_reminder_pdf(payload: dict, *, output_path: Path) -> None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"%PDF-1.4 reserved batch")
+
+    original_insert = notice_registry.insert_notice_reservation
+    original_generate = tributi_repo._generate_prepared_batch_item
+    insert_attempts = 0
+
+    def collide_once(*args: object, **kwargs: object) -> RuoloTributiNoticeNumber | None:
+        nonlocal insert_attempts
+        insert_attempts += 1
+        if insert_attempts == 1:
+            return None
+        return original_insert(*args, **kwargs)
+
+    def observe_reserved_batch(*args: object, **kwargs: object) -> None:
+        db = args[0]
+        assert isinstance(db, Session)
+        reservations_seen_during_generation.append(len(db.scalars(select(RuoloTributiNoticeNumber)).all()))
+        original_generate(*args, **kwargs)
+
+    monkeypatch.setattr(notice_registry, "insert_notice_reservation", collide_once)
+    monkeypatch.setattr(tributi_repo, "_generate_prepared_batch_item", observe_reserved_batch)
+    monkeypatch.setattr(tributi_repo, "generate_batch_reminder_pdf", fake_generate_batch_reminder_pdf)
+    headers = auth_headers()
+    request_payload = {
+        "title": "Tutti i candidati",
+        "codice_fiscale": [],
+        "filters": {"years": [2024]},
+        "template_path": "/tmp/template.docx",
+    }
+
+    first_response = client.post("/ruolo/tributi/solleciti/batches", headers=headers, json=request_payload)
+    second_response = client.post("/ruolo/tributi/solleciti/batches", headers=headers, json=request_payload)
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert first_response.json()["items_total"] == 2
+    assert reservations_seen_during_generation == [2, 2, 2, 2]
+    first_numbers = sorted(item["payload_json"]["notice_number"] for item in first_response.json()["items"])
+    second_numbers = sorted(item["payload_json"]["notice_number"] for item in second_response.json()["items"])
+    assert second_numbers == first_numbers
+
+    db = TestingSessionLocal()
+    reservations = db.scalars(select(RuoloTributiNoticeNumber).order_by(RuoloTributiNoticeNumber.progressive)).all()
+    assert [reservation.progressive for reservation in reservations] == [1, 2]
+    assert [reservation.status for reservation in reservations] == ["generated", "generated"]
+    assert all(item.notice_number_id is not None for item in db.scalars(select(RuoloTributiReminderBatchItem)).all())
+    db.close()
+
+
+def test_tributi_notice_registry_enforces_uniqueness_and_adopts_legacy_payload() -> None:
+    db = TestingSessionLocal()
+    first = notice_registry.insert_notice_reservation(
+        db,
+        emission_year=2026,
+        progressive=1,
+        notice_number="120262400001",
+        identity_key="a" * 64,
+    )
+    assert first is not None
+    assert notice_registry.insert_notice_reservation(
+        db,
+        emission_year=2026,
+        progressive=2,
+        notice_number="120262400002",
+        identity_key="a" * 64,
+    ) is None
+    assert notice_registry.insert_notice_reservation(
+        db,
+        emission_year=2026,
+        progressive=1,
+        notice_number="120262500001",
+        identity_key="b" * 64,
+    ) is None
+
+    legacy_batch = RuoloTributiReminderBatch(
+        status="generated",
+        generated_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+    )
+    db.add(legacy_batch)
+    db.flush()
+    db.add(
+        RuoloTributiReminderBatchItem(
+            batch_id=legacy_batch.id,
+            codice_fiscale="BNCLGU80A01H501Y",
+            paid_amount=0,
+            status="generated",
+            payload_json={
+                "codice_fiscale": "BNCLGU80A01H501Y",
+                "years": [2025],
+                "avvisi": [{"id": "legacy-avviso"}],
+                "notice_emission_year": 2026,
+                "notice_progressive": 7,
+                "notice_number": "120262500007",
+            },
+        )
+    )
+    db.flush()
+
+    adopted = notice_registry.reserve_notice_number(
+        db,
+        emission_year=2026,
+        candidate={"codice_fiscale": "BNCLGU80A01H501Y", "avvisi": [{"id": "legacy-avviso"}]},
+        reference_years=[2025],
+    )
+    assert adopted.progressive == 7
+    assert adopted.notice_number == "120262500007"
+    db.close()
+
+
+def test_tributi_notice_registry_canonicalizes_identity_and_scopes_it_by_emission_year() -> None:
+    db = TestingSessionLocal()
+    canonical = notice_registry.reserve_notice_number(
+        db,
+        emission_year=2026,
+        candidate={
+            "codice_fiscale": "RSSMRA80A01H501Z",
+            "avvisi": [{"id": "avviso-b"}, {"id": "avviso-a"}],
+        },
+        reference_years=[2025, 2024],
+    )
+    reordered = notice_registry.reserve_notice_number(
+        db,
+        emission_year=2026,
+        candidate={
+            "codice_fiscale": " rssmra80a01h501z ",
+            "avvisi": [{"id": "avviso-a"}, {"id": "avviso-b"}, {"id": "avviso-a"}],
+        },
+        reference_years=[2024, 2025, 2024],
+    )
+    next_year = notice_registry.reserve_notice_number(
+        db,
+        emission_year=2027,
+        candidate={
+            "codice_fiscale": "RSSMRA80A01H501Z",
+            "avvisi": [{"id": "avviso-a"}, {"id": "avviso-b"}],
+        },
+        reference_years=[2024, 2025],
+    )
+    changed_notice_set = notice_registry.reserve_notice_number(
+        db,
+        emission_year=2026,
+        candidate={
+            "codice_fiscale": "RSSMRA80A01H501Z",
+            "avvisi": [{"id": "avviso-a"}, {"id": "avviso-b"}, {"id": "avviso-c"}],
+        },
+        reference_years=[2024, 2025],
+    )
+
+    assert reordered.id == canonical.id
+    assert next_year.id != canonical.id
+    assert changed_notice_set.id != canonical.id
+    assert canonical.notice_number == "12026242500001"
+    assert next_year.notice_number == "12027242500001"
+    assert changed_notice_set.notice_number == "12026242500002"
+    assert len(db.scalars(select(RuoloTributiNoticeNumber)).all()) == 3
+    db.close()
+
+
+def test_tributi_notice_reservation_rolls_back_with_outer_batch_transaction() -> None:
+    db = TestingSessionLocal()
+    batch = RuoloTributiReminderBatch(status="running", generated_at=datetime(2026, 1, 2, tzinfo=timezone.utc))
+    db.add(batch)
+    db.flush()
+    batch_id = batch.id
+    reservation = notice_registry.reserve_notice_number(
+        db,
+        emission_year=2026,
+        candidate={"codice_fiscale": "RSSMRA80A01H501Z", "avvisi": [{"id": "rollback-avviso"}]},
+        reference_years=[2025],
+    )
+    reservation_id = reservation.id
+    db.rollback()
+    db.close()
+
+    verification_db = TestingSessionLocal()
+    assert verification_db.get(RuoloTributiNoticeNumber, reservation_id) is None
+    assert verification_db.get(RuoloTributiReminderBatch, batch_id) is None
+    verification_db.close()
+
+
+def test_tributi_notice_registry_rejects_progressives_beyond_five_digits() -> None:
+    db = TestingSessionLocal()
+    db.add(
+        RuoloTributiNoticeNumber(
+            emission_year=2026,
+            progressive=99_999,
+            notice_number="120262599999",
+            identity_key="f" * 64,
+            status="generated",
+        )
+    )
+    db.flush()
+
+    with pytest.raises(RuntimeError, match="Progressivi sollecito esauriti per l'anno 2026"):
+        notice_registry.reserve_notice_number(
+            db,
+            emission_year=2026,
+            candidate={"codice_fiscale": "RSSMRA80A01H501Z", "avvisi": [{"id": "overflow-avviso"}]},
+            reference_years=[2025],
+        )
+    assert len(db.scalars(select(RuoloTributiNoticeNumber)).all()) == 1
+    db.close()
+
+
+def test_tributi_notice_registry_handles_concurrent_identity_winners_and_retry_exhaustion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert notice_registry._payload_int({"value": True}, "value") is None
+    assert notice_registry._payload_int({"value": "not-a-number"}, "value") is None
+    tributi_repo._update_notice_reservation_status(None, "failed")
+    db = TestingSessionLocal()
+    legacy_batch = RuoloTributiReminderBatch(status="generated", generated_at=datetime(2026, 1, 2, tzinfo=timezone.utc))
+    db.add(legacy_batch)
+    db.flush()
+    db.add_all(
+        [
+            RuoloTributiReminderBatchItem(
+                batch_id=legacy_batch.id,
+                codice_fiscale="RSSMRA80A01H501Z",
+                paid_amount=0,
+                status="generated",
+                payload_json=["payload-storico-non-dizionario"],
+            ),
+            RuoloTributiReminderBatchItem(
+                batch_id=legacy_batch.id,
+                codice_fiscale="RSSMRA80A01H501Z",
+                paid_amount=0,
+                status="generated",
+                payload_json={
+                    "codice_fiscale": "RSSMRA80A01H501Z",
+                    "years": [2024],
+                    "avvisi": [{"id": "legacy-race"}],
+                    "notice_emission_year": 2026,
+                    "notice_progressive": 8,
+                    "notice_number": "120262400008",
+                },
+            ),
+        ]
+    )
+    db.flush()
+    assert notice_registry.next_notice_progressive(db, emission_year=2025) == 1
+
+    original_insert = notice_registry.insert_notice_reservation
+
+    def concurrent_winner(*args: object, **kwargs: object) -> None:
+        assert original_insert(*args, **kwargs) is not None
+        return None
+
+    monkeypatch.setattr(notice_registry, "insert_notice_reservation", concurrent_winner)
+    legacy_winner = notice_registry.reserve_notice_number(
+        db,
+        emission_year=2026,
+        candidate={"codice_fiscale": "RSSMRA80A01H501Z", "avvisi": [{"id": "legacy-race"}]},
+        reference_years=[2024],
+    )
+    assert legacy_winner.progressive == 8
+
+    new_winner = notice_registry.reserve_notice_number(
+        db,
+        emission_year=2026,
+        candidate={"codice_fiscale": "RSSMRA80A01H501Z", "avvisi": [{"id": "new-race"}]},
+        reference_years=[2025],
+    )
+    assert new_winner.progressive == 9
+
+    monkeypatch.setattr(notice_registry, "insert_notice_reservation", lambda *args, **kwargs: None)
+    with pytest.raises(RuntimeError, match="Impossibile prenotare"):
+        notice_registry.reserve_notice_number(
+            db,
+            emission_year=2026,
+            candidate={"codice_fiscale": "RSSMRA80A01H501Z", "avvisi": [{"id": "exhausted"}]},
+            reference_years=[2025],
+        )
+    db.close()
+
+
+def test_tributi_failed_notice_keeps_number_when_nas_is_recovered(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    avviso_id = seed_avviso(amount=80.0, anno=2024)
+    headers = auth_headers()
+    request_payload = {
+        "codice_fiscale": ["RSSMRA80A01H501Z"],
+        "filters": {"years": [2024]},
+    }
+
+    failed_response = client.post("/ruolo/tributi/solleciti/batches", headers=headers, json=request_payload)
+    assert failed_response.status_code == 200
+    failed_item = failed_response.json()["items"][0]
+    assert failed_item["status"] == "failed"
+    failed_notice_number = failed_item["payload_json"]["notice_number"]
+
+    db = TestingSessionLocal()
+    subject = AnagraficaSubject(
+        source_name_raw="ROSSI MARIO",
+        nas_folder_path=str(tmp_path / "archivio" / "RSSMRA80A01H501Z"),
+        nas_folder_letter="R",
+    )
+    db.add(subject)
+    db.flush()
+    db.add(AnagraficaPerson(subject_id=subject.id, cognome="ROSSI", nome="MARIO", codice_fiscale="RSSMRA80A01H501Z"))
+    avviso = db.get(RuoloAvviso, UUID(avviso_id))
+    assert avviso is not None
+    avviso.subject_id = subject.id
+    db.commit()
+    db.close()
+
+    def fake_generate_batch_reminder_pdf(payload: dict, *, output_path: Path) -> None:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"%PDF-1.4 recovered")
+
+    monkeypatch.setattr(tributi_repo, "generate_batch_reminder_pdf", fake_generate_batch_reminder_pdf)
+    recovered_response = client.post("/ruolo/tributi/solleciti/batches", headers=headers, json=request_payload)
+    assert recovered_response.status_code == 200
+    recovered_item = recovered_response.json()["items"][0]
+    assert recovered_item["status"] == "generated"
+    assert recovered_item["payload_json"]["notice_number"] == failed_notice_number
+
+    db = TestingSessionLocal()
+    reservations = db.scalars(select(RuoloTributiNoticeNumber)).all()
+    assert len(reservations) == 1
+    assert reservations[0].status == "generated"
+    tributi_repo._update_notice_reservation_status(reservations[0], "failed")
+    assert reservations[0].status == "generated"
+    db.close()
 
 
 def test_tributi_reminder_batch_uploads_and_downloads_remote_nas_documents(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -4592,7 +4958,7 @@ def test_tributi_reminder_service_helper_fallbacks(tmp_path: Path, monkeypatch: 
         ]
     )
     db.flush()
-    assert tributi_repo._reuse_preview_notice_payload(
+    assert notice_registry.find_existing_notice_payload(
         db,
         emission_year=datetime.now(timezone.utc).year,
         candidate={"codice_fiscale": "RSSMRA80A01H501Z", "avvisi": [{"id": "avviso-1"}]},
@@ -4621,9 +4987,16 @@ def test_tributi_reminder_batch_tracks_missing_nas_and_missing_resources() -> No
     assert payload["status"] == "failed"
     assert payload["items_failed"] == 1
     assert payload["items"][0]["error_detail"] == "Cartella archivio NAS mancante per l'utenza"
+    assert payload["items"][0]["payload_json"]["notice_number"]
     assert payload["items"][0]["download_url"] is None
     failed_item_id = payload["items"][0]["id"]
     assert client.get(f"/ruolo/tributi/solleciti/items/{failed_item_id}/download", headers=headers).status_code == 404
+
+    db = TestingSessionLocal()
+    reservation = db.scalar(select(RuoloTributiNoticeNumber))
+    assert reservation is not None
+    assert reservation.status == "generation_failed"
+    db.close()
 
     empty_response = client.post(
         "/ruolo/tributi/solleciti/batches",

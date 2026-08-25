@@ -34,6 +34,7 @@ from app.modules.ruolo.models import (
     RuoloTributiAvvisoStatus,
     RuoloTributiCalculationPolicy,
     RuoloTributiNote,
+    RuoloTributiNoticeNumber,
     RuoloTributiPayment,
     RuoloTributiPaymentImportJob,
     RuoloTributiPostaOnlineImportJob,
@@ -77,6 +78,7 @@ from app.modules.ruolo.services.tributi_reminder_service import (
     generate_reminder_docx,
     reminder_storage_dir,
 )
+from app.modules.ruolo.services.tributi_notice_registry import reserve_notice_number
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice, AnagraficaPerson, AnagraficaSubject
 from app.modules.utenze.services.nas_path_service import canonical_subject_nas_folder_path
 from app.services.nas_connector import get_nas_client
@@ -263,15 +265,6 @@ def _parse_selected_years(raw_years: Any) -> list[int]:
         if isinstance(year, int) or (isinstance(year, str) and year.strip().isdigit())
     }
     return sorted(year for year in years if year >= REMINDER_MIN_YEAR)
-
-
-def _notice_reference_years_suffix(years: list[int]) -> str:
-    return "".join(f"{year % 100:02d}" for year in sorted(set(years)))
-
-
-def _build_notice_number(*, emission_year: int, reference_years: list[int], progressive: int) -> str:
-    years_suffix = _notice_reference_years_suffix(reference_years)
-    return f"1{emission_year}{years_suffix}{progressive:05d}"
 
 
 def _normalise_payment_header(value: object) -> str:
@@ -3420,13 +3413,12 @@ def create_reminder_batch(
     db.add(batch)
     db.flush()
 
-    for candidate in candidates:
-        item = _create_batch_item(
+    prepared_items = _prepare_batch_items(db, batch=batch, candidates=candidates, generated_at=generated_at)
+    for item, candidate in prepared_items:
+        _generate_prepared_batch_item(
             db,
-            batch=batch,
+            item=item,
             candidate=candidate,
-            template_path=batch.template_path,
-            generated_at=generated_at,
             preview_only=preview_only,
         )
         if item.status in {"generated", "generated_docx"}:
@@ -3710,106 +3702,26 @@ def _expand_selected_years_for_policy_group(
     return sorted(year for year in expanded_years if year >= REMINDER_MIN_YEAR)
 
 
-def _next_notice_progressive(db: Session, *, emission_year: int) -> int:
-    year_start = datetime(emission_year, 1, 1, tzinfo=timezone.utc)
-    year_end = datetime(emission_year + 1, 1, 1, tzinfo=timezone.utc)
-    payloads = db.scalars(
-        select(RuoloTributiReminderBatchItem.payload_json)
-        .join(RuoloTributiReminderBatch, RuoloTributiReminderBatch.id == RuoloTributiReminderBatchItem.batch_id)
-        .where(
-            RuoloTributiReminderBatch.generated_at >= year_start,
-            RuoloTributiReminderBatch.generated_at < year_end,
-        )
-    ).all()
-    max_progressive = 0
-    for payload in payloads:
-        if not isinstance(payload, dict):
-            continue
-        if _int_or_none(payload.get("notice_emission_year")) != emission_year:
-            continue
-        progressive = _int_or_none(payload.get("notice_progressive")) or 0
-        max_progressive = max(max_progressive, progressive)
-    return max_progressive + 1
-
-
-def _preview_notice_identity(candidate: dict[str, Any], *, reference_years: list[int]) -> tuple[str, tuple[int, ...], tuple[str, ...]]:
-    avviso_ids = tuple(sorted(str(avviso["id"]) for avviso in candidate["avvisi"]))
-    return candidate["codice_fiscale"], tuple(reference_years), avviso_ids
-
-
-def _reuse_preview_notice_payload(
-    db: Session,
-    *,
-    emission_year: int,
-    candidate: dict[str, Any],
-    reference_years: list[int],
-) -> dict[str, Any] | None:
-    expected_identity = _preview_notice_identity(candidate, reference_years=reference_years)
-    existing_items = db.scalars(
-        select(RuoloTributiReminderBatchItem)
-        .join(RuoloTributiReminderBatch, RuoloTributiReminderBatch.id == RuoloTributiReminderBatchItem.batch_id)
-        .where(RuoloTributiReminderBatchItem.status.in_(["generated", "generated_docx"]))
-        .order_by(RuoloTributiReminderBatchItem.created_at.desc())
-    ).all()
-    for existing_item in existing_items:
-        document_path = reminder_batch_item_document_path(existing_item)
-        if document_path is None:
-            continue
-        payload = existing_item.payload_json
-        if not isinstance(payload, dict):
-            continue
-        if _int_or_none(payload.get("notice_emission_year")) != emission_year:
-            continue
-        notice_number = str(payload.get("notice_number") or "")
-        notice_progressive = _int_or_none(payload.get("notice_progressive"))
-        payload_years = _parse_selected_years(payload.get("years"))
-        payload_avvisi = payload.get("avvisi") if isinstance(payload.get("avvisi"), list) else []
-        payload_identity = (
-            _normalise_tax_code(str(payload.get("codice_fiscale") or "")),
-            tuple(payload_years),
-            tuple(sorted(str(avviso.get("id")) for avviso in payload_avvisi if isinstance(avviso, dict) and avviso.get("id"))),
-        )
-        if notice_number and notice_progressive is not None and payload_identity == expected_identity:
-            return {
-                "notice_number": notice_number,
-                "notice_progressive": notice_progressive,
-                "payload_json": payload,
-                "generated_document_path": str(document_path),
-                "status": existing_item.status,
-                "error_detail": existing_item.error_detail,
-            }
-    return None
-
-
-def _create_batch_item(
+def _prepare_batch_item(
     db: Session,
     *,
     batch: RuoloTributiReminderBatch,
     candidate: dict[str, Any],
     template_path: str | None,
     generated_at: datetime,
-    preview_only: bool = False,
 ) -> RuoloTributiReminderBatchItem:
     avviso_ids = [str(avviso["id"]) for avviso in candidate["avvisi"]]
     emission_year = generated_at.astimezone(timezone.utc).year
     reference_years = sorted({int(year) for year in candidate["years"] if isinstance(year, int)})
-    reused_notice = (
-        _reuse_preview_notice_payload(db, emission_year=emission_year, candidate=candidate, reference_years=reference_years)
-        if preview_only
-        else None
+    reservation = reserve_notice_number(
+        db,
+        emission_year=emission_year,
+        candidate=candidate,
+        reference_years=reference_years,
     )
-    if reused_notice is not None:
-        notice_number = reused_notice["notice_number"]
-        notice_progressive = reused_notice["notice_progressive"]
-    else:
-        notice_progressive = _next_notice_progressive(db, emission_year=emission_year)
-        notice_number = _build_notice_number(
-            emission_year=emission_year,
-            reference_years=reference_years,
-            progressive=notice_progressive,
-        )
     item = RuoloTributiReminderBatchItem(
         batch_id=batch.id,
+        notice_number_id=reservation.id,
         subject_id=candidate["subject_id"],
         codice_fiscale=candidate["codice_fiscale"],
         display_name=candidate["display_name"],
@@ -3826,49 +3738,116 @@ def _create_batch_item(
     )
     db.add(item)
     db.flush()
-    filename = build_batch_reminder_filename(codice_fiscale=candidate["codice_fiscale"], years=candidate["years"])
-    if preview_only:
-        output_path = reminder_storage_dir() / f"{item.id}_{filename}"
-    elif not candidate["nas_folder_path"]:
-        item.status = "failed"
-        item.error_detail = "Cartella archivio NAS mancante per l'utenza"
-        db.flush()
-        return item
-    else:
-        output_path = Path(candidate["nas_folder_path"]) / "solleciti" / filename
     payload = _build_batch_item_payload(
         db,
         candidate,
         template_path=template_path,
         generated_at=generated_at,
-        notice_number=notice_number,
+        notice_number=reservation.notice_number,
         notice_emission_year=emission_year,
-        notice_progressive=notice_progressive,
+        notice_progressive=reservation.progressive,
         notice_reference_years=reference_years,
     )
     item.payload_json = payload
     db.flush()
+    return item
+
+
+def _prepare_batch_items(
+    db: Session,
+    *,
+    batch: RuoloTributiReminderBatch,
+    candidates: list[dict[str, Any]],
+    generated_at: datetime,
+) -> list[tuple[RuoloTributiReminderBatchItem, dict[str, Any]]]:
+    return [
+        (
+            _prepare_batch_item(
+                db,
+                batch=batch,
+                candidate=candidate,
+                template_path=batch.template_path,
+                generated_at=generated_at,
+            ),
+            candidate,
+        )
+        for candidate in candidates
+    ]
+
+
+def _generate_prepared_batch_item(
+    db: Session,
+    *,
+    item: RuoloTributiReminderBatchItem,
+    candidate: dict[str, Any],
+    preview_only: bool,
+) -> None:
+    reservation = db.get(RuoloTributiNoticeNumber, item.notice_number_id)
+    payload = item.payload_json or {}
+    output_path = _batch_item_output_path(item=item, candidate=candidate, preview_only=preview_only)
+    if output_path is None:
+        item.status = "failed"
+        item.error_detail = "Cartella archivio NAS mancante per l'utenza"
+        _update_notice_reservation_status(reservation, item.status)
+        db.flush()
+        return
+
+    item.status, item.generated_document_path, item.error_detail = _generate_batch_document(
+        payload,
+        output_path=output_path,
+    )
+    _update_notice_reservation_status(reservation, item.status)
+    db.flush()
+
+
+def _batch_item_output_path(
+    *,
+    item: RuoloTributiReminderBatchItem,
+    candidate: dict[str, Any],
+    preview_only: bool,
+) -> Path | None:
+    filename = build_batch_reminder_filename(codice_fiscale=candidate["codice_fiscale"], years=candidate["years"])
+    if preview_only:
+        return reminder_storage_dir() / f"{item.id}_{filename}"
+    if not candidate["nas_folder_path"]:
+        return None
+    return Path(candidate["nas_folder_path"]) / "solleciti" / filename
+
+
+def _generate_batch_document(payload: dict[str, Any], *, output_path: Path) -> tuple[str, str | None, str | None]:
     try:
         _generate_and_store_batch_reminder_pdf(payload, output_path=output_path)
     except Exception as exc:
         if _is_missing_libreoffice_error(exc):
-            try:
-                docx_path = output_path.with_suffix(".docx")
-                _generate_and_store_batch_reminder_docx(payload, output_path=docx_path)
-                item.status = "generated_docx"
-                item.generated_document_path = str(docx_path)
-                item.error_detail = "LibreOffice non disponibile: generato DOCX scaricabile senza preview PDF"
-            except Exception as fallback_exc:
-                item.status = "failed"
-                item.error_detail = str(fallback_exc)
-        else:
-            item.status = "failed"
-            item.error_detail = str(exc)
-    else:
-        item.status = "generated"
-        item.generated_document_path = str(output_path)
-    db.flush()
-    return item
+            return _generate_batch_docx_fallback(payload, output_path=output_path)
+        return "failed", None, str(exc)
+    return "generated", str(output_path), None
+
+
+def _generate_batch_docx_fallback(
+    payload: dict[str, Any],
+    *,
+    output_path: Path,
+) -> tuple[str, str | None, str | None]:
+    try:
+        docx_path = output_path.with_suffix(".docx")
+        _generate_and_store_batch_reminder_docx(payload, output_path=docx_path)
+    except Exception as exc:
+        return "failed", None, str(exc)
+    detail = "LibreOffice non disponibile: generato DOCX scaricabile senza preview PDF"
+    return "generated_docx", str(docx_path), detail
+
+
+def _update_notice_reservation_status(
+    reservation: RuoloTributiNoticeNumber | None,
+    item_status: str,
+) -> None:
+    if reservation is None:
+        return
+    if item_status in {"generated", "generated_docx"}:
+        reservation.status = "generated"
+    elif reservation.status == "reserved":
+        reservation.status = "generation_failed"
 
 
 def _is_missing_libreoffice_error(exc: Exception) -> bool:

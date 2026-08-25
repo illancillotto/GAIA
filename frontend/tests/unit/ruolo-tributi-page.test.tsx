@@ -1363,6 +1363,45 @@ describe("Ruolo tributi page", () => {
     expect(screen.queryByText("Crea batch PDF per utenze morose")).not.toBeInTheDocument();
   });
 
+  test("loads every reminder candidate page before selecting the batch", async () => {
+    const secondPageCandidate = {
+      ...reminderCandidate2024,
+      codice_fiscale: "BNCLGU80A01H501Y",
+      display_name: "BIANCHI LUIGI",
+      avvisi: [{ ...reminderCandidate2024.avvisi[0], id: "avviso-page-2" }],
+    };
+    mocks.listTributiReminderCandidates.mockImplementation(
+      (_token: string, params?: { anno_from?: number; page?: number }) => {
+        if (params?.anno_from === 2025) {
+          return Promise.resolve({ items: [], total: 0, page: 1, page_size: 80 });
+        }
+        if (params?.page === 2) {
+          return Promise.resolve({ items: [secondPageCandidate], total: 81, page: 2, page_size: 80 });
+        }
+        return Promise.resolve({ items: [reminderCandidate2024], total: 81, page: 1, page_size: 80 });
+      },
+    );
+
+    render(<RuoloTributiPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Wizard solleciti" }));
+
+    expect(await screen.findByText("BIANCHI LUIGI")).toBeInTheDocument();
+    expect(screen.getByText(/2 utenze aperte trovate/)).toBeInTheDocument();
+    expect(mocks.listTributiReminderCandidates).toHaveBeenCalledWith(
+      "token",
+      expect.objectContaining({ anno_from: 2024, page: 2, page_size: 80 }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Avanti" }));
+    expect(await screen.findByText("Conferma generazione di 2 solleciti")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Genera PDF nel NAS" }));
+    await waitFor(() => {
+      expect(mocks.createTributiReminderBatch).toHaveBeenCalledWith(
+        "token",
+        expect.objectContaining({ codice_fiscale: [] }),
+      );
+    });
+  });
+
   test("sorts reminder candidates and handles generation without selected years", async () => {
     const zetaFirst = {
       ...reminderCandidate2024,

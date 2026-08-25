@@ -30,6 +30,7 @@ import {
   type CalculationPolicyFormState,
 } from "./calculation-policy-form";
 import { PolicyAnnualityCard, PolicyBollettinoFields } from "./policy-bollettino-fields";
+import { listAllReminderCandidatesForYear, reminderBatchTaxCodes } from "./reminder-candidates";
 import { parseNoticeAmount } from "@/lib/utenze-payment-notices-summary";
 import {
   addTributiNote,
@@ -44,7 +45,6 @@ import {
   getTributiAvviso,
   getTributiSummary,
   listTributiCalculationPolicies,
-  listTributiReminderCandidates,
   listTributiAvvisi,
   listTributiYearManagers,
   updateTributiCalculationPolicy,
@@ -626,25 +626,23 @@ function RuoloTributiPageContent() {
     setWizardError(null);
     Promise.all(
       selectedReminderYears.map((year) =>
-        listTributiReminderCandidates(token, {
+        listAllReminderCandidatesForYear(token, {
           anno_from: year,
           anno_to: year,
           comune: comune || undefined,
           q: query || undefined,
           manager_key: managerKey,
-          page: 1,
-          page_size: 80,
         }),
       ),
     )
       .then((responses) => {
-        const mergedCandidates = mergeReminderCandidates(responses.map((response) => response.items));
+        const mergedCandidates = mergeReminderCandidates(responses);
         setCandidateItems(mergedCandidates);
         setCandidateTotal(mergedCandidates.length);
         setSelectedTaxCodes((current) => {
           const preserved = current.filter((taxCode) => mergedCandidates.some((item) => item.codice_fiscale === taxCode));
           if (preserved.length > 0) return preserved;
-          return mergedCandidates.filter((item) => item.has_nas_folder).map((item) => item.codice_fiscale);
+          return mergedCandidates.map((item) => item.codice_fiscale);
         });
       })
       .catch((err: unknown) => setWizardError(err instanceof Error ? err.message : "Errore caricamento utenze sollecitabili"))
@@ -988,7 +986,7 @@ function RuoloTributiPageContent() {
     setWizardStep(1);
     setWizardError(null);
     setBatchResult(null);
-    setSelectedReminderYears(defaultReminderYears);
+    resetReminderWizardSelection();
   }
 
   function closeReminderWizard() {
@@ -996,6 +994,11 @@ function RuoloTributiPageContent() {
     setWizardStep(1);
     setWizardError(null);
     setBatchResult(null);
+    resetReminderWizardSelection();
+  }
+
+  function resetReminderWizardSelection() {
+    setSelectedTaxCodes([]);
     setManualTaxCode("");
     setSelectedReminderYears(defaultReminderYears);
   }
@@ -1036,7 +1039,7 @@ function RuoloTributiPageContent() {
     try {
       const result = await createTributiReminderBatch(token, {
         title: `Solleciti tributi ${new Date().toLocaleDateString("it-IT")}`,
-        codice_fiscale: selectedTaxCodes,
+        codice_fiscale: reminderBatchTaxCodes(candidateItems, selectedTaxCodes),
         filters: {
           anno_from: Math.min(...selectedReminderYears),
           anno_to: Math.max(...selectedReminderYears),

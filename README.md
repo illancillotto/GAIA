@@ -757,6 +757,14 @@ Nota operativa Docker:
 - lo stack Compose forza temporaneamente `build.network: host` per il solo servizio `frontend`, per aggirare timeout DNS intermittenti del builder Docker verso `registry.npmjs.org`
 - il workaround e intenzionale ma non definitivo; l'obiettivo a regime e spostare la correzione sul daemon Docker host con DNS espliciti e rimuovere la dipendenza da `build.network: host`
 
+### Test backend PostgreSQL
+
+- test d'integrazione PostgreSQL del registro numeri solleciti Ruolo:
+  `make test-ruolo-postgres`
+- il target usa il PostgreSQL dello stack locale e crea schemi temporanei isolati, rimossi al termine
+- la suite backend CI avvia un servizio PostgreSQL 16 dedicato e include automaticamente questi test
+- senza `GAIA_TEST_POSTGRES_URL`, l'esecuzione pytest esterna al target marca i test come skipped
+
 ### Test frontend
 
 - smoke statici:

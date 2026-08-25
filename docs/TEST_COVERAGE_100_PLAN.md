@@ -160,6 +160,22 @@ Fino alla chiusura completa del piano:
 
 ## Note operative
 
+- `2026-08-25` - integrazione PostgreSQL registro numeri solleciti Ruolo
+  (`backend/tests/ruolo/test_tributi_notice_registry_postgres.py`,
+  `backend/tests/ruolo/test_tributi_notice_migration_postgres.py`, `backend/pytest.ini`,
+  `.github/workflows/backend.yml`, `Makefile`)
+  La suite backend CI dispone ora di PostgreSQL 16 reale tramite service container. I test marcati
+  `postgres` usano schemi temporanei isolati e coprono contesa con thread e processi distinti,
+  idempotenza della stessa identita, progressivi univoci per identita diverse, rollback della
+  transazione esterna e round-trip Alembic `upgrade -> downgrade -> upgrade` della revisione
+  `20260825_1100`, inclusi vincoli, indici e foreign key. In locale il comando operativo e
+  `make test-ruolo-postgres`; senza `GAIA_TEST_POSTGRES_URL` i test PostgreSQL vengono saltati
+  esplicitamente. Validazione: `6 passed` sul PostgreSQL dello stack locale, ripetuta tre volte
+  durante la stabilizzazione senza deadlock o duplicati. Coverage mirata backend sui runtime
+  modificati (`models.py`, `tributi_repositories.py`, `tributi_notice_registry.py`): `2287/2287`
+  statement, `100%`. Coverage frontend su `page.tsx` e `reminder-candidates.ts`: `100%` statement,
+  branch, funzioni e righe (`686/686`, `658/658`, `220/220`, `623/623`).
+
 - `2026-08-23` - frontend gate runtime/coverage changed-files
   (`frontend/tsconfig.json`, `tsconfig.json`, `frontend/vitest.config.ts`)
   Il typecheck frontend ordinario e stato ristretto al runtime applicativo (`frontend/src/**`,
