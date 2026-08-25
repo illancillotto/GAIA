@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.models.application_user import ApplicationUser
 from app.models.elaborazioni import (
     ElaborazioneConnectionTest,
     ElaborazioneConnectionTestStatus,
@@ -144,8 +145,22 @@ def get_runnable_credential_for_user(db: Session, user_id: int) -> ElaborazioneC
     return _pick_runnable_credential(list_credentials_for_user(db, user_id))
 
 
+def _get_runnable_credential_for_batch_owner(db: Session, user_id: int) -> ElaborazioneCredential | None:
+    owner = db.get(ApplicationUser, user_id)
+    if owner is None or not owner.is_super_admin:
+        return get_runnable_credential_for_user(db, user_id)
+    return db.scalar(
+        select(ElaborazioneCredential)
+        .where(ElaborazioneCredential.active.is_(True))
+        .order_by(
+            ElaborazioneCredential.is_default.desc(),
+            ElaborazioneCredential.updated_at.desc(),
+        )
+    )
+
+
 def require_credentials_for_user(db: Session, user_id: int) -> ElaborazioneCredential:
-    credential = get_runnable_credential_for_user(db, user_id)
+    credential = _get_runnable_credential_for_batch_owner(db, user_id)
     if credential is None:
         raise ElaborazioneCredentialNotFoundError("Active SISTER credentials required before starting a batch")
     return credential

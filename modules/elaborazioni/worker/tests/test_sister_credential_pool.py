@@ -6,7 +6,11 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from app.models.catasto import CatastoBatchStatus
+from app.models.application_user import ApplicationUser
+from app.models.catasto import CatastoBatch, CatastoBatchStatus, CatastoCredential
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
 from sister_credential_pool import (
     ActiveSisterCredentialPool,
     CredentialRejectionContext,
@@ -17,6 +21,7 @@ from sister_credential_pool import (
     isolate_rejected_credential_runner,
     load_active_credential_pool,
     quarantine_rejected_credential,
+    refresh_shared_credential_pool,
     run_dynamic_credential_pool,
     should_stop_credential_runner,
 )
@@ -31,9 +36,11 @@ class Rows:
 
 
 class FakeDb:
-    def __init__(self, *, get_value=None, scalars_values=()) -> None:
+    def __init__(self, *, get_value=None, get_values=None, scalars_values=()) -> None:
         self.get_value = get_value
+        self.get_values = get_values
         self.scalars_values = list(scalars_values)
+        self.scalar_queries = []
         self.commits = 0
 
     def __enter__(self):
@@ -42,10 +49,13 @@ class FakeDb:
     def __exit__(self, *_args):
         return False
 
-    def get(self, _model, _identity):
+    def get(self, model, _identity):
+        if self.get_values is not None:
+            return self.get_values.get(model)
         return self.get_value
 
-    def scalars(self, _query):
+    def scalars(self, query):
+        self.scalar_queries.append(query)
         return Rows(self.scalars_values)
 
     def commit(self):
@@ -79,10 +89,159 @@ def test_load_active_credential_pool_honors_batch_scope() -> None:
     first = credential(username="first")
     second = credential(username="second")
     unpinned_batch = SimpleNamespace(credential_id=None, user_id=1)
+    db = FakeDb(scalars_values=[first, second])
     assert load_active_credential_pool(
-        FakeDb(scalars_values=[first, second]),
+        db,
         unpinned_batch,
     ).credentials == (first, second)
+    assert "catasto_credentials.user_id" in str(db.scalar_queries[0]).split("WHERE", 1)[1]
+
+
+def test_super_admin_shared_pool_uses_all_available_credentials() -> None:
+    owner = SimpleNamespace(is_super_admin=True)
+    own = credential(user_id=1, username="own")
+    shared = credential(user_id=2, username="shared")
+    unavailable = credential(
+        user_id=3,
+        username="scheduled",
+        schedule_enabled=True,
+        availability_schedule={
+            "timezone": "Europe/Rome",
+            "weekly": {"0": [{"start": "18:00", "end": "08:00"}]},
+        },
+    )
+    db = FakeDb(
+        get_values={ApplicationUser: owner},
+        scalars_values=[own, shared, unavailable],
+    )
+    batch = SimpleNamespace(credential_id=None, user_id=1)
+
+    pool = load_active_credential_pool(
+        db,
+        batch,
+        datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc),
+    )
+
+    assert pool.credentials == (own, shared)
+    assert pool.active_credential_count == 3
+    assert pool.next_availability == datetime(2026, 8, 24, 16, 0, tzinfo=timezone.utc)
+    assert "catasto_credentials.user_id" not in str(db.scalar_queries[0]).split("WHERE", 1)[1]
+
+
+def test_super_admin_pinned_pool_remains_bound_to_owned_credential() -> None:
+    other_users_credential = credential(user_id=2)
+    batch = SimpleNamespace(credential_id=other_users_credential.id, user_id=1)
+
+    pool = load_active_credential_pool(FakeDb(get_value=other_users_credential), batch)
+
+    assert pool.credentials == ()
+
+
+def test_super_admin_global_pool_executes_real_queries_and_refreshes_cross_user_credentials() -> None:
+    engine = create_engine("sqlite://")
+    ApplicationUser.__table__.create(bind=engine)
+    CatastoCredential.__table__.create(bind=engine)
+    CatastoBatch.__table__.create(bind=engine)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    reference = datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc)
+
+    with session_factory() as db:
+        super_admin = ApplicationUser(
+            username="super-admin",
+            email="super-admin@example.local",
+            password_hash="hash",
+            role="super_admin",
+        )
+        operator = ApplicationUser(
+            username="operator",
+            email="operator@example.local",
+            password_hash="hash",
+            role="operator",
+        )
+        db.add_all([super_admin, operator])
+        db.flush()
+        own = CatastoCredential(
+            user_id=super_admin.id,
+            label="Own",
+            sister_username="own-real",
+            sister_password_encrypted=b"secret",
+            active=True,
+        )
+        shared = CatastoCredential(
+            user_id=operator.id,
+            label="Shared",
+            sister_username="shared-real",
+            sister_password_encrypted=b"secret",
+            active=True,
+        )
+        inactive = CatastoCredential(
+            user_id=operator.id,
+            label="Inactive",
+            sister_username="inactive-real",
+            sister_password_encrypted=b"secret",
+            active=False,
+        )
+        scheduled = CatastoCredential(
+            user_id=operator.id,
+            label="Scheduled",
+            sister_username="scheduled-real",
+            sister_password_encrypted=b"secret",
+            active=True,
+            schedule_enabled=True,
+            availability_schedule={
+                "timezone": "Europe/Rome",
+                "weekly": {},
+            },
+        )
+        db.add_all([own, shared, inactive, scheduled])
+        db.flush()
+        batch = CatastoBatch(
+            user_id=super_admin.id,
+            name="Global pool",
+            status=CatastoBatchStatus.PROCESSING.value,
+            total_items=1,
+        )
+        db.add(batch)
+        db.commit()
+
+        global_pool = load_active_credential_pool(db, batch, reference)
+        operator_pool = load_active_credential_pool(
+            db,
+            SimpleNamespace(credential_id=None, user_id=operator.id),
+            reference,
+        )
+
+        assert {item.id for item in global_pool.credentials} == {own.id, shared.id}
+        assert global_pool.active_credential_count == 3
+        assert operator_pool.credentials == (shared,)
+
+        late_user = ApplicationUser(
+            username="late-operator",
+            email="late-operator@example.local",
+            password_hash="hash",
+            role="operator",
+        )
+        db.add(late_user)
+        db.flush()
+        late = CatastoCredential(
+            user_id=late_user.id,
+            label="Late",
+            sister_username="late-real",
+            sister_password_encrypted=b"secret",
+            active=True,
+        )
+        db.add(late)
+        db.commit()
+
+    added = refresh_shared_credential_pool(
+        session_factory,
+        batch.id,
+        global_pool,
+        {item.id for item in global_pool.credentials},
+    )
+
+    assert {item.id for item in added} == {late.id}
+    engine.dispose()
 
 
 def test_load_active_credential_pool_defers_credentials_outside_their_schedule() -> None:
@@ -210,6 +369,31 @@ def test_dynamic_pool_accepts_an_empty_initial_pool() -> None:
             1,
         )
     )
+
+
+def test_dynamic_pool_starts_all_initial_credentials_concurrently() -> None:
+    credentials = tuple(credential(username=f"user-{index}") for index in range(3))
+    started: set[object] = set()
+    all_started = asyncio.Event()
+
+    async def run_credential(selected):
+        started.add(selected.id)
+        if len(started) == len(credentials):
+            all_started.set()
+        await asyncio.wait_for(all_started.wait(), timeout=1)
+
+    asyncio.run(
+        run_dynamic_credential_pool(
+            credentials,
+            run_credential,
+            lambda _started_ids: (),
+            lambda: False,
+            lambda: None,
+            1,
+        )
+    )
+
+    assert started == {selected.id for selected in credentials}
 
 
 def test_should_stop_credential_runner_preserves_release_semantics() -> None:

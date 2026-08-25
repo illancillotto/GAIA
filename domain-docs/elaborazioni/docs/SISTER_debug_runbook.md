@@ -136,7 +136,7 @@ Il worker oggi:
 - nel test credenziali di `/elaborazioni/settings`, considera riuscita la prova solo se dopo l'autenticazione viene eseguito anche il logout applicativo SISTER
 - a fine batch/richiesta operativa, prima di chiudere Playwright, tenta il logout applicativo SISTER per ridurre il rischio di sessioni server-side appese
 - consente di usare `Pausa e libera` sulla singola card credenziale: persiste `active=false`, completa al massimo la richiesta gia in corso e al checkpoint successivo esegue il logout applicativo e chiude soltanto quel browser
-- isola il pool credenziali SISTER per utente GAIA: il DB accetta lo stesso `sister_username` su utenti diversi, ma lo rende univoco dentro il singolo pool tramite `UNIQUE (user_id, sister_username)`
+- isola normalmente il pool credenziali SISTER per utente GAIA: il DB accetta lo stesso `sister_username` su utenti diversi, ma lo rende univoco dentro il singolo pool tramite `UNIQUE (user_id, sister_username)`; una batch condivisa del `super_admin` costituisce l'unica eccezione e aggrega tutte le credenziali attive disponibili per fascia
 - quando un batch fallito viene rilanciato, il backend aggiorna il riferimento temporale della rimessa in coda per evitare che la routine di expiry dei `pending` lo consideri subito orfano
 - prova a chiudere una sessione SISTER già attiva
 - aspetta alcuni secondi dopo `CloseSessionsSis` prima di ritentare il login
@@ -178,6 +178,7 @@ fine, la fascia prosegue nel giorno seguente.
 Regole operative:
 
 - il calendario usa sempre `Europe/Rome`, inclusi i cambi tra ora solare e ora legale;
+- una batch condivisa appartenente a un `super_admin` applica le stesse regole di calendario a tutte le credenziali GAIA e avvia un runner concorrente per ogni profilo disponibile; per gli altri ruoli la selezione resta limitata al proprietario della batch;
 - `schedule_enabled=false` lascia la credenziale disponibile senza vincoli orari;
 - il worker verifica la disponibilita prima di aprire la sessione e la ricontrolla almeno ogni minuto quando nessun profilo e utilizzabile;
 - nei batch con pool condiviso, mentre almeno un runner mantiene il lotto in esecuzione, il worker rilegge il pool ogni `ELABORAZIONI_POLL_INTERVAL_SEC` secondi e apre un runner per ogni nuova credenziale attiva e in fascia;

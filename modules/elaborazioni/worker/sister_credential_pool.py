@@ -9,6 +9,7 @@ from typing import Protocol
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+from app.models.application_user import ApplicationUser
 from app.models.catasto import CatastoBatch, CatastoBatchStatus, CatastoCredential
 from app.services.elaborazioni_credential_schedule import (
     credential_is_available,
@@ -122,14 +123,22 @@ def _load_pinned_pool(db: Session, batch: CatastoBatch, now: datetime) -> Active
     )
 
 
+def _shared_pool_owner_filters(db: Session, batch: CatastoBatch) -> tuple[object, ...]:
+    owner = db.get(ApplicationUser, batch.user_id)
+    if owner is not None and owner.is_super_admin:
+        return ()
+    return (CatastoCredential.user_id == batch.user_id,)
+
+
 def _load_shared_pool(db: Session, batch: CatastoBatch, now: datetime) -> ActiveSisterCredentialPool:
+    owner_filters = _shared_pool_owner_filters(db, batch)
     active_credentials = tuple(
         credential
         for credential in db.scalars(
             select(CatastoCredential)
             .where(
-                CatastoCredential.user_id == batch.user_id,
                 CatastoCredential.active.is_(True),
+                *owner_filters,
             )
             .order_by(
                 CatastoCredential.is_default.desc(),

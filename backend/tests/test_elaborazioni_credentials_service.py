@@ -3,11 +3,6 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from cryptography.fernet import Fernet
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-
 from app.db.base import Base
 from app.models.application_user import ApplicationUser
 from app.schemas.elaborazioni import (
@@ -33,6 +28,10 @@ from app.services.elaborazioni_credentials import (
     require_credentials_for_user,
     update_credential,
 )
+from cryptography.fernet import Fernet
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
 engine = create_engine(
@@ -132,6 +131,41 @@ def test_create_multiple_credentials_and_switch_default() -> None:
         )
         assert disabled.schedule_enabled is False
         assert disabled.availability_schedule is None
+    finally:
+        db.close()
+
+
+def test_super_admin_can_start_with_another_users_active_credential() -> None:
+    db = TestingSessionLocal()
+    try:
+        super_admin = db.query(ApplicationUser).filter(ApplicationUser.username == "worker").one()
+        super_admin.role = "super_admin"
+        operator = ApplicationUser(
+            username="operator",
+            email="operator@example.local",
+            password_hash="hash",
+            role="operator",
+            is_active=True,
+        )
+        db.add(operator)
+        db.commit()
+
+        shared = create_credential(
+            db,
+            operator.id,
+            ElaborazioneCredentialCreateRequest(
+                label="Credenziale condivisa",
+                sister_username="shared-sister-user",
+                sister_password="secret",
+            ),
+        )
+
+        assert require_credentials_for_user(db, super_admin.id).id == shared.id
+
+        super_admin.role = "admin"
+        db.commit()
+        with pytest.raises(ElaborazioneCredentialNotFoundError, match="Active SISTER"):
+            require_credentials_for_user(db, super_admin.id)
     finally:
         db.close()
 
