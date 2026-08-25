@@ -32,6 +32,7 @@ from app.modules.presenze.models import (
     PresenzeScheduleTemplate,
 )
 from app.services import gate_mobile_sync as gate_mobile_sync_service
+from app.modules.presenze.services import gate_mobile_team_actions
 from app.services.gate_mobile_sync import (
     build_mobile_operator_push_payload,
     build_mobile_catalog_push_payloads,
@@ -727,6 +728,238 @@ def test_process_presenze_pending_actions_acks_and_fails_gateway_actions() -> No
 
         assert "/api/mobile/connector/presenze/pending-actions/pending-ok/ack" in calls
         assert db.get(PresenzeDailyRecord, daily_record_id).km_value == 12
+    finally:
+        db.close()
+
+
+def test_presenze_team_change_pending_action_creates_updates_and_upserts_team() -> None:
+    db = _build_session()
+    try:
+        actor = ApplicationUser(
+            id=177,
+            username="gate.team.manager",
+            email="gate.team.manager@example.test",
+            full_name="Gate Team Manager",
+            password_hash="hash",
+            role=ApplicationUserRole.REVIEWER.value,
+            is_active=True,
+            module_presenze=True,
+        )
+        db.add(actor)
+        db.commit()
+
+        team_id = uuid.UUID("018f88a2-1797-7365-bf5e-8bb8b7f9a101")
+        create_ack = gate_mobile_sync_service._apply_presenze_pending_action(
+            db,
+            {
+                "pending_action_id": "team-create",
+                "action_type": "propose_team_change",
+                "payload_json": {
+                    "schema_version": 1,
+                    "source": "gate_admin_console",
+                    "operation": "create_team",
+                    "application_user_id": actor.id,
+                    "team": {
+                        "team_id": str(team_id),
+                        "name": "Squadra GaTe Ovest",
+                        "code": "G-OVEST",
+                        "scope": "presenze",
+                        "active": True,
+                    },
+                },
+            },
+        )
+
+        created = db.get(OrganizationTeam, team_id)
+        assert create_ack["gaia_entity_type"] == "organization_team"
+        assert create_ack["gaia_entity_id"] == str(team_id)
+        assert created is not None
+        assert created.name == "Squadra GaTe Ovest"
+        assert created.created_from_channel == "gate_mobile"
+        assert created.created_by_user_id == actor.id
+
+        gate_mobile_sync_service._apply_presenze_pending_action(
+            db,
+            {
+                "action_type": "propose_team_change",
+                "payload_json": json.dumps(
+                    {
+                        "schema_version": 1,
+                        "source": "gate_mobile",
+                        "operation": "update_team",
+                        "user_id": actor.id,
+                        "team": {
+                            "team_id": str(team_id),
+                            "name": "Squadra GaTe Ovest 2",
+                            "code": "G-OVEST-2",
+                            "scope": "gate",
+                            "active": False,
+                        },
+                    }
+                ),
+            },
+        )
+        updated = db.get(OrganizationTeam, team_id)
+        assert updated is not None
+        assert updated.name == "Squadra GaTe Ovest 2"
+        assert updated.code == "G-OVEST-2"
+        assert updated.scope == "gate"
+        assert updated.active is False
+
+        upsert = gate_mobile_team_actions.apply_presenze_team_change_proposal(
+            db,
+            {
+                "schema_version": 1,
+                "source": "gate",
+                "operation": "upsert_team",
+                "team": {
+                    "name": "Squadra GaTe Ovest 3",
+                    "code": "G-OVEST-2",
+                    "scope": "gate",
+                },
+            },
+            actor=actor,
+        )
+        assert upsert.team.id == team_id
+        assert upsert.team.name == "Squadra GaTe Ovest 3"
+
+        default_active = gate_mobile_team_actions.apply_presenze_team_change_proposal(
+            db,
+            {
+                "schema_version": 1,
+                "source": "gate",
+                "operation": "create_team",
+                "team": {"name": "Squadra GaTe Senza Codice"},
+            },
+            actor=actor,
+        )
+        assert default_active.team.code is None
+        assert default_active.team.scope == "presenze"
+        assert default_active.team.active is True
+    finally:
+        db.close()
+
+
+def test_presenze_team_change_validation_branches() -> None:
+    db = _build_session()
+    try:
+        actor = ApplicationUser(
+            id=178,
+            username="gate.team.validator",
+            email="gate.team.validator@example.test",
+            full_name="Gate Team Validator",
+            password_hash="hash",
+            role=ApplicationUserRole.REVIEWER.value,
+            is_active=True,
+            module_presenze=True,
+        )
+        existing = OrganizationTeam(
+            id=uuid.UUID("018f88a2-1797-7365-bf5e-8bb8b7f9a201"),
+            name="Squadra Esistente",
+            code="EXIST",
+            scope="presenze",
+            active=True,
+            created_from_channel="gaia_web",
+            created_by_user_id=actor.id,
+        )
+        db.add_all([actor, existing])
+        db.commit()
+
+        validation_cases = [
+            ({}, "schema_version"),
+            ({"schema_version": 1, "source": "bad", "operation": "create_team", "team": {}}, "source"),
+            ({"schema_version": 1, "source": "gate", "operation": "delete_team", "team": {}}, "operation"),
+            ({"schema_version": 1, "source": "gate", "operation": "create_team", "team": []}, "team mancante"),
+            (
+                {
+                    "schema_version": 1,
+                    "source": "gate",
+                    "operation": "create_team",
+                    "team": {"team_id": str(existing.id), "name": "Duplicata"},
+                },
+                "gia esistente",
+            ),
+            (
+                {
+                    "schema_version": 1,
+                    "source": "gate",
+                    "operation": "update_team",
+                    "team": {"team_id": str(uuid.uuid4()), "name": "Manca"},
+                },
+                "non trovata",
+            ),
+            (
+                {
+                    "schema_version": 1,
+                    "source": "gate",
+                    "operation": "create_team",
+                    "team": {"name": "Conflitto", "code": "EXIST"},
+                },
+                "code gia assegnato",
+            ),
+            (
+                {
+                    "schema_version": 1,
+                    "source": "gate",
+                    "operation": "create_team",
+                    "team": {"name": "Scope errato", "scope": "bad"},
+                },
+                "scope squadra",
+            ),
+            (
+                {
+                    "schema_version": 1,
+                    "source": "gate",
+                    "operation": "create_team",
+                    "team": {"name": "Flag errato", "active": "yes"},
+                },
+                "active deve essere booleano",
+            ),
+            (
+                {
+                    "schema_version": 1,
+                    "source": "gate",
+                    "operation": "create_team",
+                    "team": {"code": "NO-NAME"},
+                },
+                "name mancante",
+            ),
+            (
+                {
+                    "schema_version": 1,
+                    "source": "gate",
+                    "operation": "create_team",
+                    "team": {"name": "   "},
+                },
+                "name non puo essere vuoto",
+            ),
+            (
+                {
+                    "schema_version": 1,
+                    "source": "gate",
+                    "operation": "create_team",
+                    "team": {"name": "A", "code": "X" * 65},
+                },
+                "code supera",
+            ),
+            (
+                {
+                    "schema_version": 1,
+                    "source": "gate",
+                    "operation": "create_team",
+                    "team": {"team_id": "not-uuid", "name": "UUID errato"},
+                },
+                "team_id non e un UUID",
+            ),
+        ]
+        for payload, message in validation_cases:
+            try:
+                gate_mobile_team_actions.apply_presenze_team_change_proposal(db, payload, actor=actor)
+            except Exception as exc:
+                assert message in str(exc)
+                db.rollback()
+            else:
+                raise AssertionError(f"Expected validation error containing {message}")
     finally:
         db.close()
 

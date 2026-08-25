@@ -267,7 +267,8 @@ Pending actions implementate lato GAIA:
 - `validate_daily_record`;
 - `patch_daily_record`;
 - `resolve_anomaly`;
-- `propose_team_change`, oggi respinta con `fail` per revisione manuale GAIA.
+- `propose_team_change`, applicata automaticamente da GAIA per creare,
+  aggiornare o fare upsert delle squadre operative proposte da GaTe.
 
 GAIA valida:
 
@@ -276,6 +277,13 @@ GAIA valida:
 - perimetro dati via squadre/visibilita esistente;
 - payload Pydantic del tipo azione;
 - presenza record e stato modificabile.
+
+Per `propose_team_change`, GAIA accetta solo payload `schema_version=1`,
+source `gate_admin_console`, `gate_mobile` o `gate`, operazioni `create_team`,
+`update_team` e `upsert_team`, scope `presenze`, `gate` o `global`, nomi e
+codici nei limiti del modello locale. Le squadre create da GaTe sono persistite
+con `created_from_channel="gate_mobile"` e risultano visibili nella pagina
+GAIA `/presenze/squadre` dopo la sync successiva.
 
 ## 8. Contratto dati giornaliera
 

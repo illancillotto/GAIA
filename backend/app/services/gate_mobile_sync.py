@@ -56,13 +56,13 @@ from app.modules.presenze.services.gate_mobile_payloads import (
     json_date as _json_date,
     json_datetime as _json_datetime,
 )
+from app.modules.presenze.services.gate_mobile_team_actions import apply_presenze_team_change_proposal
 from app.modules.presenze.services.operai_rules import load_operai_rule_configs
 
 OPERATOR_UPDATE_ACTION_TYPE = "propose_operator_update"
 OPERATOR_UPDATE_OPERATIONS = {"create_operator", "update_operator", "update_operator_domains"}
 GATE_MOBILE_CONSOLE_ROLES = {"console_admin", "device_manager", "team_manager", "viewer"}
-OPERATOR_ACTIVE_STATUSES = {"ACTIVE"}
-OPERATOR_DISABLED_STATUSES = {"DISABLED", "INACTIVE"}
+OPERATOR_ACTIVE_STATUSES, OPERATOR_DISABLED_STATUSES = {"ACTIVE"}, {"DISABLED", "INACTIVE"}
 
 
 @dataclass(frozen=True)
@@ -830,7 +830,7 @@ def _apply_presenze_pending_action(db: Session, action: dict[str, Any]) -> dict[
         db.refresh(record)
         return _ack_payload("presenze_daily_record", record.id, action_id=action_id)
     if action_type == "propose_team_change":
-        raise PendingActionApplyError("propose_team_change non e ancora applicabile automaticamente: serve revisione GAIA")
+        return _ack_payload("organization_team", apply_presenze_team_change_proposal(db, payload, actor=actor).team.id, action_id=action_id)
     raise ValueError(f"Tipo pending action non supportato: {action_type}")
 
 

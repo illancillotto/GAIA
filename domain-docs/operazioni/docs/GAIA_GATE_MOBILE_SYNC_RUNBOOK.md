@@ -17,6 +17,9 @@ Decisione architetturale corrente:
 - il job outbound verso gateway pubblico serve solo a proiettare snapshot da GAIA al cloud
 - per il pilot corrente il perimetro outbound pubblicato include `operators` e Presenze: `presenze_teams`, `presenze_months`, `presenze_giornaliere`, `presenze_anomalie`, `presenze_rules`, `presenze_pending_actions`
 - il push `operators` include anche i campi console GATE `gate_mobile_console_enabled` e `gate_mobile_console_role`; il gateway deve usarli per distinguere operatori sincronizzati da operatori effettivamente abilitati alla console
+- le pending action Presenze includono anche `propose_team_change`: GAIA crea,
+  aggiorna o fa upsert delle squadre proposte da GaTe dopo validazione di
+  utente, payload, scope e codice squadra
 - per abilitazioni progressive, GAIA puo selezionare i candidati da `presenze_daily_records` collegati a `presenze_collaborators` con `contract_kind` `operaio` o `impiegato`, poi abilitarli su `wc_operator` con limite operativo prima del massivo
 - GATE cloud non chiama mai GAIA LAN/intranet: o GAIA pubblica direttamente verso `/api/mobile/connector/presenze/*/snapshot`, oppure il connector LAN legge da `/api/mobile-sync/presenze/{teams,months,giornaliere,anomalie,rules}` e ripubblica verso GATE in outbound. Gli URL legacy `/api/mobile-sync/presenze/*/snapshot` restano alias compatibili.
 - GAIA espone anche `POST /api/mobile-sync/mobile-devices` per accettare in modo idempotente le registrazioni device provenienti dal connector GATE.

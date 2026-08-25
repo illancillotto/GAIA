@@ -1467,6 +1467,9 @@ Note implementative:
 - `catalogs` espone attivita, categorie segnalazione, severita, mezzi e contatori;
 - `worksets` aggrega attivita operatore, squadre, mezzi disponibili e contatori assegnati;
 - `presenze/{teams,months,giornaliere,anomalie,rules}` e gli alias legacy `presenze/*/snapshot` espongono al connector LAN gli stessi payload snapshot usati dal push outbound verso GATE, inclusi giornaliere e anomalie per mese `YYYY-MM`;
+- il job outbound legge `presenze_pending_actions` dal gateway e applica
+  `propose_team_change` creando, aggiornando o facendo upsert delle squadre
+  operative GaTe validate da GAIA;
 - i payload mensili Presenze per connector usano serializzazione batch, senza query per singola giornaliera, per restare sotto timeout anche su mesi pieni;
 - questi endpoint Presenze sono solo LAN/trusted: GATE cloud resta passivo rispetto a GAIA e riceve i dati tramite chiamate outbound GAIA/connector -> GATE;
 - per compatibilita con GATE, il payload giornaliere include sia `records` sia `giornaliere`, mentre il payload anomalie include sia `anomalies` sia `anomalie`;
