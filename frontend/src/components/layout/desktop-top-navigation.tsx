@@ -9,7 +9,6 @@ import {
   type NavigationItem,
 } from "@/components/layout/navigation";
 import { useAppShellContext } from "@/components/layout/app-shell-context";
-import { GridIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 
 type DesktopNavigationLinkProps = {
@@ -97,13 +96,6 @@ export function DesktopTopNavigation() {
       <div className="flex flex-col gap-3 px-7 py-3">
         <div className="overflow-x-auto pb-1">
           <div className="flex min-w-max items-center gap-2">
-            <Link
-              href="/"
-              className="inline-flex items-center gap-1.5 rounded-full border border-transparent bg-[#1D4E35] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-[#163d29]"
-            >
-              <GridIcon className="h-3.5 w-3.5 shrink-0" />
-              <span>Home GAIA</span>
-            </Link>
             {platformModules.map(({ href, label, icon, aliases }) => (
               <DesktopNavigationLink
                 key={href}

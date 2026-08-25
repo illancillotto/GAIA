@@ -10,6 +10,10 @@ import {
 } from "@/components/elaborazioni/module-chrome";
 import { ModuleWorkspaceKpiRow, ModuleWorkspaceKpiTile } from "@/components/layout/module-workspace-hero";
 import { ElaborazioneOperationMessage } from "@/components/elaborazioni/operation-message";
+import {
+  ActiveOperationsOverview,
+  type DashboardRunningOperation,
+} from "@/components/elaborazioni/active-operations-overview";
 import { ElaborazioneStatusBadge } from "@/components/elaborazioni/status-badge";
 import { ElaborazioneWorkspaceModal } from "@/components/elaborazioni/workspace-modal";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -129,52 +133,6 @@ type DashboardModalState = {
   description?: string | null;
 };
 
-type DashboardRunningOperation = {
-  id: string;
-  area: string;
-  title: string;
-  detail: string;
-  startedAt: string | null;
-  tone: "default" | "warning" | "success";
-  kind: "batch" | "bonifica" | "particelle-sync";
-  bonifica?: {
-    entity: string;
-    records_synced: number | null;
-    records_skipped: number | null;
-    records_errors: number | null;
-    error_detail: string | null;
-    last_finished_at: string | null;
-  };
-  particelleSync?: {
-    status: string;
-    progress_percent: number | null;
-    total_items: number | null;
-    processed_items: number | null;
-    success_items: number | null;
-    skipped_items: number | null;
-    failed_items: number | null;
-    current_label: string | null;
-    aggressive_window: boolean | null;
-    throttle_ms: number | null;
-  };
-  autodocSync?: {
-    status: string;
-    records_synced: number | null;
-    records_skipped: number | null;
-    records_errors: number | null;
-    finished_at: string | null;
-    error_detail: string | null;
-    only_with_autodoc_url: boolean;
-    force_refresh: boolean;
-  };
-  mobileGatewaySync?: {
-    requested_tasks_count: number;
-    operators_pushed: number;
-    duration_ms: number | null;
-    trigger_source: string;
-  };
-};
-
 function formatRunRecordEsito(value: string): string {
   if (value === "alive") return "Vivo";
   if (value === "deceased") return "Deceduto";
@@ -191,6 +149,18 @@ function isParticelleSyncJobResult(value: CapacitasParticelleSyncJob["result_jso
 
 function isInCassJobInFlight(status: string): boolean {
   return status === "pending" || status === "processing" || status === "queued_resume";
+}
+
+function getRunningStatusLabel(status: string): DashboardRunningOperation["statusLabel"] {
+  if (status === "queued_resume") return "In ripresa";
+  if (status === "processing" || status === "running") return "In corso";
+  return "In coda";
+}
+
+function getInCassRunningDetail(status: string): string {
+  if (status === "queued_resume") return "Ripresa automatica dell'import";
+  if (status === "processing") return "Import delle posizioni contributive in corso";
+  return "Import in attesa di avvio";
 }
 
 function triggerDownload(blob: Blob, filename: string): void {
@@ -828,8 +798,14 @@ export default function ElaborazioniPage() {
         title: batch.name ?? batch.id,
         detail: batch.current_operation ?? batch.status,
         startedAt: batch.started_at ?? batch.created_at,
-        tone: batch.status === "processing" ? "warning" : "default",
-        kind: "batch",
+        statusLabel: getRunningStatusLabel(batch.status),
+        href: `/elaborazioni/batches/${batch.id}`,
+        progress: {
+          completed: batch.completed_items + batch.failed_items + batch.not_found_items + batch.skipped_items,
+          total: batch.total_items,
+          percent: null,
+          failed: batch.failed_items,
+        },
       });
     }
 
@@ -852,20 +828,27 @@ export default function ElaborazioniPage() {
             ? "Job in coda per la sync progressiva particelle"
             : "Monitor sync progressiva particelle in esecuzione",
         startedAt: job.started_at ?? job.created_at,
-        tone: job.status === "processing" || job.status === "queued_resume" ? "warning" : "default",
-        kind: "particelle-sync",
-        particelleSync: {
-          status: job.status,
-          progress_percent: progress,
-          total_items: totalItems,
-          processed_items: processedItems,
-          success_items: result?.success_items ?? null,
-          skipped_items: result?.skipped_items ?? null,
-          failed_items: result?.failed_items ?? null,
-          current_label: currentLabel,
-          aggressive_window: result?.aggressive_window ?? null,
-          throttle_ms: result?.throttle_ms ?? null,
+        statusLabel: getRunningStatusLabel(job.status),
+        href: "/elaborazioni/capacitas",
+        progress: {
+          completed: processedItems,
+          total: totalItems,
+          percent: progress,
+          failed: result?.failed_items ?? null,
         },
+      });
+    }
+
+    for (const job of incassJobs) {
+      if (!isInCassJobInFlight(job.status)) continue;
+      items.push({
+        id: `incass-${job.id}`,
+        area: "Capacitas inCass",
+        title: `Import posizioni #${job.id}`,
+        detail: getInCassRunningDetail(job.status),
+        startedAt: job.started_at ?? job.created_at,
+        statusLabel: getRunningStatusLabel(job.status),
+        href: "/elaborazioni/capacitas",
       });
     }
 
@@ -877,16 +860,9 @@ export default function ElaborazioniPage() {
         title: entityKey,
         detail: "Sync entity in esecuzione",
         startedAt: entity.last_started_at,
-        tone: "warning",
-        kind: "bonifica",
-        bonifica: {
-          entity: entity.entity,
-          records_synced: entity.records_synced,
-          records_skipped: entity.records_skipped,
-          records_errors: entity.records_errors,
-          error_detail: entity.error_detail,
-          last_finished_at: entity.last_finished_at,
-        },
+        statusLabel: "In corso",
+        href: "/elaborazioni/bonifica",
+        progress: { completed: entity.records_synced, total: null, percent: null, failed: entity.records_errors },
       });
     }
 
@@ -901,8 +877,8 @@ export default function ElaborazioniPage() {
             ? "Verifica username/password in esecuzione sul worker"
             : "Recupero raccomandate online 2022-2023 e import in tributi",
         startedAt: job.started_at ?? job.created_at,
-        tone: job.status === "processing" || job.status === "queued_resume" ? "warning" : "default",
-        kind: "batch",
+        statusLabel: getRunningStatusLabel(job.status),
+        href: "/elaborazioni/posta-online",
       });
     }
 
@@ -919,16 +895,9 @@ export default function ElaborazioniPage() {
               ? "Refresh forzato dei mezzi con link AUTODOC già noto"
               : "Aggiornamento mezzi con link AUTODOC già noto",
         startedAt: autodocSyncJob.started_at,
-        tone: "warning",
-        kind: "bonifica",
-        bonifica: {
-          entity: autodocSyncJob.entity,
-          records_synced: autodocSyncJob.records_synced,
-          records_skipped: autodocSyncJob.records_skipped,
-          records_errors: autodocSyncJob.records_errors,
-          error_detail: autodocSyncJob.error_detail,
-          last_finished_at: autodocSyncJob.finished_at,
-        },
+        statusLabel: getRunningStatusLabel(autodocSyncJob.status),
+        href: "/elaborazioni/autodoc",
+        progress: { completed: autodocSyncJob.records_synced, total: null, percent: null, failed: autodocSyncJob.records_errors },
       });
     }
 
@@ -939,22 +908,9 @@ export default function ElaborazioniPage() {
         title: "Sync outbound gateway",
         detail: "Handshake col gateway pubblico e push snapshot operatori in corso",
         startedAt: gateMobileSyncStatus.last_run.started_at,
-        tone: "warning",
-        kind: "bonifica",
-        bonifica: {
-          entity: "operators",
-          records_synced: gateMobileSyncStatus.last_run.operators_pushed,
-          records_skipped: null,
-          records_errors: null,
-          error_detail: gateMobileSyncStatus.last_run.error_message,
-          last_finished_at: gateMobileSyncStatus.last_run.finished_at,
-        },
-        mobileGatewaySync: {
-          requested_tasks_count: gateMobileSyncStatus.last_run.requested_tasks_count,
-          operators_pushed: gateMobileSyncStatus.last_run.operators_pushed,
-          duration_ms: gateMobileSyncStatus.last_run.duration_ms,
-          trigger_source: gateMobileSyncStatus.last_run.trigger_source,
-        },
+        statusLabel: "In corso",
+        href: "/elaborazioni/gaia-mobile-sync",
+        progress: { completed: gateMobileSyncStatus.last_run.operators_pushed, total: null, percent: null },
       });
     }
 
@@ -963,10 +919,18 @@ export default function ElaborazioniPage() {
       const rightTime = right.startedAt ? Date.parse(right.startedAt) : 0;
       return rightTime - leftTime;
     });
-  }, [autodocSyncJob, batches, bonificaSyncStatus, gateMobileSyncStatus, particelleSyncJobs, postaOnlineJobs]);
+  }, [autodocSyncJob, batches, bonificaSyncStatus, gateMobileSyncStatus, incassJobs, particelleSyncJobs, postaOnlineJobs]);
 
   function openWorkspaceModal(href: string, title: string, description?: string): void {
     setModalState({ href, title, description });
+  }
+
+  function handleOpenRunningOperation(operation: DashboardRunningOperation): void {
+    openWorkspaceModal(
+      operation.href,
+      operation.title,
+      `Monitor di ${operation.area}: stato, avanzamento e dettagli della lavorazione.`,
+    );
   }
 
   useEffect(() => {
@@ -986,7 +950,7 @@ export default function ElaborazioniPage() {
   return (
     <ProtectedPage
       title="GAIA Elaborazioni"
-      description="Workspace operativo per batch, richieste singole, CAPTCHA e monitoraggio esecuzioni del runtime catastale."
+      description="Controlla in modo semplice tutte le lavorazioni avviate in GAIA."
       breadcrumb="Elaborazioni"
       requiredModule="catasto"
     >
@@ -997,8 +961,8 @@ export default function ElaborazioniPage() {
             Workspace Elaborazioni
           </>
         }
-        title="Console operativa per richieste, batch, credenziali e pool Capacitas."
-        description="Qui restano concentrati i flussi runtime: stato credenziali, attività recenti, sync tecniche, CAPTCHA e accesso rapido alle azioni più usate."
+        title="Tutte le lavorazioni, in un solo colpo d’occhio."
+        description="Vedi subito cosa è in corso, a che punto si trova e se serve il tuo intervento. I dettagli tecnici restano disponibili nei monitor dedicati."
         actions={
           error ? (
             <ElaborazioneNoticeCard title="Errore dashboard" description={error} tone="danger" />
@@ -1039,6 +1003,12 @@ export default function ElaborazioniPage() {
             hint={`batch ${activeBatchCount} · sync ${activeBonificaCount + activePostaOnlineCount + activeAutodocCount + activeGateMobileCount} · particelle ${activeParticelleCount}`}
           />
         </ModuleWorkspaceKpiRow>
+        <ActiveOperationsOverview
+          attentionCount={totalWarnings}
+          isLive={hasActivePollingTargets}
+          onOpen={handleOpenRunningOperation}
+          operations={runningOperations}
+        />
         {latestGateMobileRun && (latestGateMobileRun.status === "failed" || latestGateMobileRun.status === "skipped") ? (
           <div
             className={[
@@ -1547,143 +1517,6 @@ export default function ElaborazioniPage() {
               );
             })}
           </div>
-        </div>
-      </article>
-
-      <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
-        <ElaborazionePanelHeader
-          badge={
-            <>
-              <RefreshIcon className="h-3.5 w-3.5" />
-              Operazioni in corso
-            </>
-          }
-          title="Esecuzioni attive aggregate"
-          description="Vista unica delle operazioni attualmente in lavorazione: batch runtime, sync tecniche e job progressivi ancora aperti."
-        />
-        <div className="p-6">
-          {runningOperations.length === 0 ? (
-            <EmptyState icon={RefreshIcon} title="Nessuna operazione attiva" description="Al momento non risultano batch, sync tecniche o job particelle in esecuzione." />
-          ) : (
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {runningOperations.map((operation) => (
-                <article
-                  key={operation.id}
-                  className="flex h-full flex-col justify-between gap-4 rounded-3xl border border-gray-100 bg-gray-50 p-4"
-                >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">{operation.area}</p>
-                        <p className="mt-1 truncate text-sm font-medium text-gray-900">{operation.title}</p>
-                      </div>
-                      <span
-                        className={`inline-flex shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ${
-                          operation.tone === "warning"
-                            ? "bg-amber-50 text-amber-700"
-                            : operation.tone === "success"
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "bg-gray-100 text-gray-700"
-                        }`}
-                      >
-                        attiva
-                      </span>
-                    </div>
-
-                    <p className="mt-2 line-clamp-2 text-sm text-gray-600">{operation.detail}</p>
-                    <p className="mt-2 text-xs text-gray-500">Avvio: {formatDateTime(operation.startedAt)}</p>
-
-                    {operation.kind === "bonifica" && operation.bonifica ? (
-                      <div className="mt-4 grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
-                        <div className="rounded-2xl bg-white px-3 py-2 ring-1 ring-gray-100">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Synced</p>
-                          <p className="mt-1 text-sm font-semibold text-emerald-700">{operation.bonifica.records_synced ?? "—"}</p>
-                        </div>
-                        <div className="rounded-2xl bg-white px-3 py-2 ring-1 ring-gray-100">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Errors</p>
-                          <p className="mt-1 text-sm font-semibold text-red-700">{operation.bonifica.records_errors ?? "—"}</p>
-                        </div>
-                        <div className="rounded-2xl bg-white px-3 py-2 ring-1 ring-gray-100">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Skipped</p>
-                          <p className="mt-1 text-sm font-semibold text-slate-700">{operation.bonifica.records_skipped ?? "—"}</p>
-                        </div>
-                        <div className="rounded-2xl bg-white px-3 py-2 ring-1 ring-gray-100">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Ultimo fine</p>
-                          <p className="mt-1 text-sm font-semibold text-gray-900">
-                            {operation.bonifica.last_finished_at ? formatDateTime(operation.bonifica.last_finished_at) : "—"}
-                          </p>
-                        </div>
-                        {operation.bonifica.error_detail ? (
-                          <div className="sm:col-span-2">
-                            <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2">
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">Errore</p>
-                              <p className="mt-1 break-words text-sm text-amber-900">{operation.bonifica.error_detail}</p>
-                            </div>
-                          </div>
-                        ) : null}
-                        {operation.mobileGatewaySync ? (
-                          <div className="sm:col-span-2">
-                            <div className="rounded-2xl bg-white px-3 py-2 ring-1 ring-gray-100">
-                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Trigger</p>
-                              <p className="mt-1 text-sm font-semibold text-gray-900">{operation.mobileGatewaySync.trigger_source}</p>
-                              <p className="mt-1 text-xs text-gray-500">
-                                task {operation.mobileGatewaySync.requested_tasks_count} · durata {formatMetricSeconds(operation.mobileGatewaySync.duration_ms ? operation.mobileGatewaySync.duration_ms / 1000 : null)}
-                              </p>
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-
-                    {operation.kind === "particelle-sync" && operation.particelleSync ? (
-                      <div className="mt-4 space-y-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">
-                              {operation.particelleSync.processed_items ?? "—"} / {operation.particelleSync.total_items ?? "—"} particelle
-                            </p>
-                            <p className="mt-1 text-xs text-gray-500">
-                              ok {operation.particelleSync.success_items ?? "—"} · skipped {operation.particelleSync.skipped_items ?? "—"} · failed{" "}
-                              {operation.particelleSync.failed_items ?? "—"}
-                            </p>
-                          </div>
-                          <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-[#1D4E35] shadow-sm">
-                            {operation.particelleSync.progress_percent != null ? `${operation.particelleSync.progress_percent}%` : operation.particelleSync.status}
-                          </span>
-                        </div>
-                        {operation.particelleSync.progress_percent != null ? (
-                          <div className="h-3 overflow-hidden rounded-full bg-[#dfe9df]">
-                            <div
-                              className="h-full rounded-full bg-[#1D4E35] transition-all duration-500"
-                              style={{ width: `${operation.particelleSync.progress_percent}%` }}
-                            />
-                          </div>
-                        ) : null}
-                        <div className="grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
-                          <div className="rounded-2xl bg-white px-3 py-2 ring-1 ring-gray-100">
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Finestra</p>
-                            <p className="mt-1 text-sm font-semibold text-gray-900">
-                              {operation.particelleSync.aggressive_window == null
-                                ? "—"
-                                : operation.particelleSync.aggressive_window
-                                  ? "Serale aggressiva"
-                                  : "Diurna conservativa"}
-                            </p>
-                          </div>
-                          <div className="rounded-2xl bg-white px-3 py-2 ring-1 ring-gray-100">
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Pausa</p>
-                            <p className="mt-1 text-sm font-semibold text-gray-900">
-                              {operation.particelleSync.throttle_ms != null ? `${operation.particelleSync.throttle_ms} ms` : "—"}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
         </div>
       </article>
 

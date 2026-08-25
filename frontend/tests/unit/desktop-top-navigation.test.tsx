@@ -87,7 +87,8 @@ describe("DesktopTopNavigation", () => {
   test("renders only desktop platform navigation without admin or module submenu links", () => {
     renderNavigation(buildUser(), { grantedSectionKeys: ["accessi.users"], reviewBadge: 5, userBadge: 9 });
 
-    expect(screen.getByRole("link", { name: "Home GAIA" })).toHaveAttribute("href", "/");
+    expect(screen.queryByRole("link", { name: "Home GAIA" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "La mia attività" })).toHaveAttribute("href", "/me");
     expect(screen.getByRole("link", { name: "NAS Control" })).toHaveAttribute("href", "/nas-control");
     expect(screen.getByRole("link", { name: "Catasto" })).toHaveAttribute("href", "/catasto");
     expect(screen.getByRole("link", { name: "Wiki" })).toHaveAttribute("href", "/wiki");
@@ -102,7 +103,7 @@ describe("DesktopTopNavigation", () => {
     expect(screen.queryByText(/Modulo attivo/)).not.toBeInTheDocument();
   });
 
-  test("does not render current module sections in desktop top navigation", () => {
+  test("renders self-service without current module sections in desktop top navigation", () => {
     mocks.pathname = "/me";
 
     renderNavigation(buildUser());
@@ -113,7 +114,7 @@ describe("DesktopTopNavigation", () => {
     expect(screen.queryByRole("link", { name: "Presenze" })).not.toBeInTheDocument();
   });
 
-  test("renders top-level organigramma module without module submenu entries", () => {
+  test("does not present organigramma as a top-level module", () => {
     mocks.pathname = "/organigramma";
     window.history.replaceState({}, "", "/organigramma#override");
 
@@ -123,7 +124,7 @@ describe("DesktopTopNavigation", () => {
       </AppShellProvider>,
     );
 
-    expect(screen.getByRole("link", { name: "Organigramma" })).toHaveClass("bg-[#EAF3E8]");
+    expect(screen.queryByRole("link", { name: "Organigramma" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Albero & dettaglio" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Eccezioni visibilità" })).not.toBeInTheDocument();
   });

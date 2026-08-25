@@ -161,12 +161,6 @@ const platformModules: PlatformModule[] = [
     icon: CalendarIcon,
     isVisible: (currentUser) => hasUserModuleAccess(currentUser, "presenze"),
   },
-  {
-    href: "/organigramma",
-    label: "Organigramma",
-    icon: UsersIcon,
-    isVisible: (currentUser) => hasUserModuleAccess(currentUser, "organigramma"),
-  },
   { href: "/wiki", label: "Wiki", icon: BookOpenIcon },
 ];
 

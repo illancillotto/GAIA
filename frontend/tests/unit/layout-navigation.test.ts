@@ -98,6 +98,7 @@ describe("layout navigation helpers", () => {
       "Wiki",
     ]);
     expect(getVisiblePlatformModules(superAdmin).map((module) => module.label)).toContain("Elaborazioni");
+    expect(getVisiblePlatformModules(superAdmin).map((module) => module.label)).not.toContain("Organigramma");
   });
 
   test("detects active platform modules for aliases and nested routes", () => {

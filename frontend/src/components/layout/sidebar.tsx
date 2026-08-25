@@ -9,7 +9,7 @@ import type { CurrentUser } from "@/types/api";
 import { Avatar } from "@/components/ui/avatar";
 import { ModuleSidebar } from "@/components/layout/module-sidebar";
 import { PlatformSidebar } from "@/components/layout/platform-sidebar";
-import { CloseIcon, UserIcon } from "@/components/ui/icons";
+import { ChevronRightIcon, CloseIcon, UserIcon } from "@/components/ui/icons";
 
 type CurrentModuleKey =
   | "nas_control"
@@ -180,6 +180,30 @@ export function MobileSidebarDrawer({
   );
 }
 
+function UserWorkspaceLink({ currentUser, pathname }: { currentUser: CurrentUser; pathname: string }) {
+  const isActive = pathname === "/me" || pathname.startsWith("/me/");
+
+  return (
+    <Link
+      href="/me"
+      aria-label="Apri La mia attività"
+      className={cn(
+        "group flex items-center gap-2 rounded-xl p-2 transition-colors",
+        isActive ? "bg-[#EAF3E8] text-[#1D4E35]" : "hover:bg-gray-50",
+      )}
+    >
+      <Avatar label={currentUser.username} />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium text-gray-800">{currentUser.username}</p>
+        <p className="text-xs text-gray-400">{currentUser.role}</p>
+        <p className="mt-0.5 text-[11px] font-medium text-[#1D4E35]">Apri La mia attività</p>
+      </div>
+      <div className="h-2 w-2 rounded-full bg-[#1D9E75]" title="Backend connesso" />
+      <ChevronRightIcon className="h-4 w-4 text-gray-300 transition group-hover:text-[#1D4E35]" />
+    </Link>
+  );
+}
+
 function SidebarContent({
   currentUser,
   onLogout,
@@ -238,14 +262,7 @@ function SidebarContent({
           </div>
         ) : null}
 
-        <div className="flex items-center gap-2">
-          <Avatar label={currentUser.username} />
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-gray-800">{currentUser.username}</p>
-            <p className="text-xs text-gray-400">{currentUser.role}</p>
-          </div>
-          <div className="ml-auto h-2 w-2 rounded-full bg-[#1D9E75]" title="Backend connesso" />
-        </div>
+        <UserWorkspaceLink currentUser={currentUser} pathname={pathname} />
         <button className="mt-2 text-xs font-medium text-gray-500 transition hover:text-[#1D4E35]" onClick={onLogout} type="button">
           Logout
         </button>
