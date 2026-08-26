@@ -1,5 +1,16 @@
 # Progress Presenze
 
+## Verifica export straordinari self-service - 2026-08-25
+
+- Il download Excel da `/me/straordinari` usa il percorso sincrono
+  `POST /me/presenze/straordinari/export/xlsx/{mese}`, non il job asincrono
+  amministrativo.
+- La riproduzione locale con i dati di agosto dell'operatore e il template
+  `Straordinari.xlsx` montato nel backend completa correttamente la generazione.
+- Il test API copre ora il workbook reale, incluse le celle intestazione, la
+  riga richiesta, la durata Excel e la pulizia dei valori preesistenti del
+  template.
+
 Data aggiornamento: 2026-08-21 (navigazione mensile self-service straordinari)
 
 ## Stato attuale

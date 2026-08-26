@@ -1,5 +1,5 @@
 from collections.abc import Generator
-from datetime import date, datetime, time, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 import io
 import json
@@ -44,6 +44,7 @@ from app.modules.operazioni.models.reports import FieldReport, FieldReportCatego
 from app.modules.operazioni.models.vehicles import Vehicle, VehicleAssignment, VehicleUsageSession
 from app.modules.presenze.services.import_jobs import run_import_job
 from app.modules.presenze.services.parser import load_json_payload, parse_import_payload
+from app.modules.presenze.services import straordinari_export_job
 from app.modules.presenze.services.straordinari_export_job import build_period_end as build_straordinari_period_end
 from app.modules.presenze.services.straordinari_export_job import previous_month_period_start
 
@@ -3945,7 +3946,7 @@ def test_me_straordinari_preview_uses_current_user_collaborator() -> None:
     ]
 
 
-def test_me_straordinari_export_downloads_xlsx(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_me_straordinari_export_downloads_xlsx(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     user = _create_user("me_straordinari_xlsx_user", role=ApplicationUserRole.VIEWER.value)
     token = _login(user.username)
     period_start = previous_month_period_start()
@@ -3975,15 +3976,13 @@ def test_me_straordinari_export_downloads_xlsx(monkeypatch: pytest.MonkeyPatch) 
     finally:
         db.close()
 
-    def fake_generate_straordinari_export(**kwargs) -> str:
-        kwargs["output_path"].write_bytes(b"xlsx-self-service")
-        assert kwargs["collaborator_name"] == "AMADU SALVATORE"
-        assert kwargs["period_start"] == period_start
-        assert kwargs["items"][0].motivation == "Servizio urgente"
-        return "Straordinari_2026_07_Luglio.xlsx"
-
-    monkeypatch.setattr("app.modules.me.router.generate_straordinari_export", fake_generate_straordinari_export)
-    monkeypatch.setattr("app.modules.me.straordinari_period_router.generate_straordinari_export", fake_generate_straordinari_export)
+    template_path = tmp_path / "Straordinari.xlsx"
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet["K13"] = "legacy value"
+    workbook.save(template_path)
+    workbook.close()
+    monkeypatch.setattr(straordinari_export_job, "DEFAULT_STRAORDINARI_TEMPLATE_CANDIDATES", (template_path,))
 
     response = client.post(
         "/me/presenze/straordinari/export/xlsx",
@@ -3992,9 +3991,18 @@ def test_me_straordinari_export_downloads_xlsx(monkeypatch: pytest.MonkeyPatch) 
     )
 
     assert response.status_code == 200
-    assert response.content == b"xlsx-self-service"
     assert response.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
     assert "Straordinari_2026_07_Luglio.xlsx" in response.headers["content-disposition"]
+    workbook = load_workbook(io.BytesIO(response.content), data_only=False)
+    worksheet = workbook.active
+    try:
+        assert worksheet["F7"].value == "AMADU SALVATORE"
+        assert worksheet["B13"].value == work_date.strftime("%d/%m/%Y")
+        assert worksheet["C13"].value == "Servizio urgente"
+        assert worksheet["J13"].value == timedelta(hours=1)
+        assert worksheet["K13"].value is None
+    finally:
+        workbook.close()
 
     period_response = client.post(
         f"/me/presenze/straordinari/export/xlsx/{period_start.isoformat()}",
@@ -4002,7 +4010,11 @@ def test_me_straordinari_export_downloads_xlsx(monkeypatch: pytest.MonkeyPatch) 
         json={"items": [{"record_id": record_id, "motivation": "Servizio urgente"}]},
     )
     assert period_response.status_code == 200
-    assert period_response.content == b"xlsx-self-service"
+    workbook = load_workbook(io.BytesIO(period_response.content))
+    try:
+        assert workbook.active["C13"].value == "Servizio urgente"
+    finally:
+        workbook.close()
 
 
 def test_me_straordinari_pdf_reports_missing_libreoffice(monkeypatch: pytest.MonkeyPatch) -> None:
