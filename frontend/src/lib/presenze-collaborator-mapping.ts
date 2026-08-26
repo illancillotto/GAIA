@@ -39,7 +39,7 @@ export function usersForPresenzeCollaboratorMapping(
 export type PresenzeCollaboratorUserSuggestion = {
   userId: number | null;
   score: number;
-  confidence: "high" | "medium" | "low" | "none";
+  confidence: "high" | "medium" | "low" | "none" | "conflict";
 };
 
 function normalizePersonText(value: string | null | undefined): string {
@@ -58,6 +58,25 @@ function buildTokenSet(value: string): Set<string> {
       .split(/[\s._-]+/)
       .filter((token) => token.length > 1),
   );
+}
+
+function candidateCoversCollaboratorName(collaboratorName: string, candidate: string): boolean {
+  if (!candidate) return false;
+  if (candidate === collaboratorName) return true;
+  const collaboratorTokens = buildTokenSet(collaboratorName);
+  if (collaboratorTokens.size < 2) return false;
+  const candidateTokens = buildTokenSet(candidate);
+  const candidateCompact = candidate.replace(/\s+/g, "");
+  return [...collaboratorTokens].every(
+    (token) => candidateTokens.has(token) || (token.length > 2 && candidateCompact.includes(token)),
+  );
+}
+
+function reliableIdentitySignalCount(collaborator: PresenzeCollaborator, user: ApplicationUser): number {
+  const collaboratorName = normalizePersonText(collaborator.name);
+  return [user.full_name, user.username, user.email.split("@")[0]].filter((candidate) =>
+    candidateCoversCollaboratorName(collaboratorName, normalizePersonText(candidate)),
+  ).length;
 }
 
 /** Higher score = closer match between collaborator name and GAIA user identity. */
@@ -108,6 +127,7 @@ export function suggestedUserForPresenzeCollaborator(
 ): PresenzeCollaboratorUserSuggestion {
   let bestUser: ApplicationUser | null = null;
   let bestScore = 0;
+  let bestScoreCandidates = 0;
   for (const user of users) {
     const userMappedToCurrentCollaborator = collaborator.application_user_id === user.id;
     if (!userMappedToCurrentCollaborator && assignedApplicationUserIds.has(user.id)) {
@@ -117,17 +137,55 @@ export function suggestedUserForPresenzeCollaborator(
     if (score > bestScore) {
       bestScore = score;
       bestUser = user;
+      bestScoreCandidates = 1;
+    } else if (score > 0 && score === bestScore) {
+      bestScoreCandidates += 1;
     }
   }
 
+  if (bestScore >= 35 && bestScoreCandidates > 1) {
+    return { userId: null, score: bestScore, confidence: "conflict" };
+  }
+
+  const reliableSignals = bestUser ? reliableIdentitySignalCount(collaborator, bestUser) : 0;
   const confidence: PresenzeCollaboratorUserSuggestion["confidence"] =
-    bestScore >= 120 ? "high" : bestScore >= 70 ? "medium" : bestScore >= 35 ? "low" : "none";
+    bestScore >= 70 && reliableSignals >= 2 ? "high" : bestScore >= 70 ? "medium" : bestScore >= 35 ? "low" : "none";
 
   return {
     userId: bestUser && confidence !== "none" ? bestUser.id : null,
     score: bestScore,
     confidence,
   };
+}
+
+/** Builds a collision-safe suggestion plan for the whole collaborator set. */
+export function buildPresenzeCollaboratorMappingSuggestionPlan(
+  collaborators: PresenzeCollaborator[],
+  users: ApplicationUser[],
+): Map<string, PresenzeCollaboratorUserSuggestion> {
+  const assignedUserIds = presenzeAssignedApplicationUserIds(collaborators);
+  const suggestions = new Map<string, PresenzeCollaboratorUserSuggestion>();
+  const claimsByUser = new Map<number, string[]>();
+
+  for (const collaborator of collaborators) {
+    const suggestion = suggestedUserForPresenzeCollaborator(collaborator, users, assignedUserIds);
+    suggestions.set(collaborator.id, suggestion);
+    if (collaborator.application_user_id == null && suggestion.userId != null) {
+      const claims = claimsByUser.get(suggestion.userId) ?? [];
+      claims.push(collaborator.id);
+      claimsByUser.set(suggestion.userId, claims);
+    }
+  }
+
+  for (const collaboratorIds of claimsByUser.values()) {
+    if (collaboratorIds.length < 2) continue;
+    for (const collaboratorId of collaboratorIds) {
+      const suggestion = suggestions.get(collaboratorId)!;
+      suggestions.set(collaboratorId, { ...suggestion, confidence: "conflict" });
+    }
+  }
+
+  return suggestions;
 }
 
 /** Available users for mapping, best name matches first. */

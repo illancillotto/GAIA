@@ -740,6 +740,7 @@ describe("Presenze pages", () => {
           },
         ]}
         totalRows={1}
+        suggestionCounts={{ high: 0, review: 0, conflict: 0, none: 1 }}
         selectedMappings={{}}
         collaboratorMap={new Map()}
         sortedUsersByCollaborator={new Map()}
@@ -1821,13 +1822,26 @@ describe("Presenze pages", () => {
 
     await screen.findAllByText("AMADU SALVATORE");
     expect(screen.getAllByRole("option", { name: /Inattivo \(solo identità\)/ })).not.toHaveLength(0);
-    fireEvent.click(screen.getByText("Applica suggeriti"));
+    mocks.getStoredAccessToken.mockReturnValueOnce(null);
+    fireEvent.click(screen.getByText("Applica alta confidenza (1)"));
+    expect(mocks.mapPresenzeCollaboratorApplicationUser).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("Applica alta confidenza (1)"));
     await waitFor(() => {
       expect(mocks.mapPresenzeCollaboratorApplicationUser).toHaveBeenCalledWith("token", "collab-1", 7);
     });
+  });
 
-    mocks.getStoredAccessToken.mockReturnValueOnce(null);
-    fireEvent.click(screen.getByText("Applica suggeriti"));
+  test("blocks ambiguous collaborator mapping suggestions", async () => {
+    mocks.listAllApplicationUsers.mockResolvedValueOnce([
+      { id: 71, username: "amadu.salvatore", email: "first@example.local", full_name: "AMADU SALVATORE" },
+      { id: 72, username: "amadu.salvatore", email: "second@example.local", full_name: "AMADU SALVATORE" },
+    ]);
+
+    render(<PresenzeCollaboratoriPage />);
+
+    expect((await screen.findAllByText("Conflitto bloccato")).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Conflitto rilevato: seleziona manualmente/)).toBeInTheDocument();
+    expect(screen.getByText(/Conflitti bloccati: 1/)).toBeInTheDocument();
   });
 
   test("reports suggested mapping batch failures", async () => {
@@ -1857,12 +1871,12 @@ describe("Presenze pages", () => {
     render(<PresenzeCollaboratoriPage />);
 
     await screen.findAllByText("AMADU SALVATORE");
-    fireEvent.click(screen.getByText("Applica suggeriti"));
+    fireEvent.click(screen.getByText("Applica alta confidenza (1)"));
 
     expect(await screen.findByText("Errore applicazione mapping suggeriti")).toBeInTheDocument();
 
     mocks.mapPresenzeCollaboratorApplicationUser.mockRejectedValueOnce(new Error("Errore batch"));
-    fireEvent.click(screen.getByText("Applica suggeriti"));
+    fireEvent.click(screen.getByText("Applica alta confidenza (1)"));
     expect(await screen.findByText("Errore batch")).toBeInTheDocument();
   });
 

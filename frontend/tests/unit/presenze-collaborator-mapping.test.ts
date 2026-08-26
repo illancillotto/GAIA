@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 
 import {
   PRESENZE_COLLABORATOR_DETAIL_UPDATED_MESSAGE,
+  buildPresenzeCollaboratorMappingSuggestionPlan,
   notifyPresenzeCollaboratorDetailUpdated,
   presenzeAssignedApplicationUserIds,
   scorePresenzeCollaboratorUserMatch,
@@ -158,6 +159,17 @@ describe("presenze collaborator mapping helpers", () => {
       confidence: "medium",
     });
 
+    const singleExactSurface = {
+      ...baseUser(23),
+      username: "unrelated",
+      email: "unrelated@example.local",
+      full_name: "ARDU PIER PAOLO",
+    };
+    expect(suggestedUserForPresenzeCollaborator(mediumCollaborator, [singleExactSurface], new Set())).toMatchObject({
+      userId: 23,
+      confidence: "medium",
+    });
+
     const lowCollaborator = { ...baseCollaborator("low", null), name: "ARDU PIER PAOLO" };
     const lowUser = { ...baseUser(22), username: "nomatch", email: "nomatch@example.local", full_name: "Ardu Pier" };
     expect(suggestedUserForPresenzeCollaborator(lowCollaborator, [lowUser], new Set())).toMatchObject({
@@ -165,6 +177,28 @@ describe("presenze collaborator mapping helpers", () => {
       score: 36,
       confidence: "low",
     });
+  });
+
+  test("blocks equal-scoring candidates and cross-collaborator collisions", () => {
+    const tiedCollaborator = { ...baseCollaborator("tied", null), name: "ROSSI MARIO" };
+    const tiedUsers = [
+      { ...baseUser(31), username: "rossi mario", full_name: null },
+      { ...baseUser(32), username: "rossi mario", full_name: null },
+    ];
+    expect(suggestedUserForPresenzeCollaborator(tiedCollaborator, tiedUsers, new Set())).toMatchObject({
+      userId: null,
+      confidence: "conflict",
+    });
+
+    const collaborators = [
+      { ...baseCollaborator("first", null), name: "BIANCHI LUCA" },
+      { ...baseCollaborator("second", null), name: "LUCA BIANCHI" },
+    ];
+    const sharedUser = { ...baseUser(33), username: "luca.bianchi", full_name: "LUCA BIANCHI" };
+    const plan = buildPresenzeCollaboratorMappingSuggestionPlan(collaborators, [sharedUser]);
+
+    expect(plan.get("first")?.confidence).toBe("conflict");
+    expect(plan.get("second")?.confidence).toBe("conflict");
   });
 
   test("scores partial token matches and birth date bonus", () => {
@@ -181,6 +215,7 @@ describe("presenze collaborator mapping helpers", () => {
         full_name: null,
       }),
     ).toBeLessThan(scorePresenzeCollaboratorUserMatch(birthDateCollaborator, birthDateUser));
+    expect(suggestedUserForPresenzeCollaborator(birthDateCollaborator, [birthDateUser], new Set()).confidence).toBe("low");
   });
 
   test("scores exact identity matches and empty collaborator names", () => {

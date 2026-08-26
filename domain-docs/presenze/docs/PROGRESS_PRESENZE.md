@@ -1,5 +1,20 @@
 # Progress Presenze
 
+## Workflow mapping assistito e audit reparti - 2026-08-26
+
+- Il batch di mapping applica esclusivamente suggerimenti ad alta confidenza,
+  definiti da almeno due segnali identitari indipendenti;
+  match medi o bassi richiedono il salvataggio manuale della singola riga.
+- Parita tra candidati e collisioni in cui piu collaboratori convergono sulla
+  stessa identita GAIA sono classificate come conflitti e bloccate.
+- La UI espone una preview quantitativa `alta/revisione/conflitto/nessun match`
+  prima di ogni applicazione; nessun mapping reale e stato applicato durante
+  questa change.
+- Audit read-only del database locale: `17` assegnazioni `capo_reparto`, `0`
+  unita tipizzate `reparto` e `7` unita con nome `Reparto ...` ancora tipizzate
+  `settore`. La riclassificazione dati va eseguita in una migration separata;
+  `Sezione impianti nord` resta esclusa perche semanticamente ambigua.
+
 ## Identita anagrafiche GAIA inattive - 2026-08-26
 
 - Lo stato attivo dell'account e separato dall'identita anagrafica: un utente

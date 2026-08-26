@@ -6,6 +6,7 @@ import type { CollaboratorRow } from "./page";
 type CollaboratorMappingPanelProps = {
   rows: CollaboratorRow[];
   totalRows: number;
+  suggestionCounts: { high: number; review: number; conflict: number; none: number };
   selectedMappings: Record<string, string>;
   collaboratorMap: Map<string, PresenzeCollaborator>;
   sortedUsersByCollaborator: Map<string, ApplicationUser[]>;
@@ -29,6 +30,7 @@ function mappingUserLabel(user: ApplicationUser): string {
 export function CollaboratorMappingPanel({
   rows,
   totalRows,
+  suggestionCounts,
   selectedMappings,
   collaboratorMap,
   sortedUsersByCollaborator,
@@ -46,11 +48,11 @@ export function CollaboratorMappingPanel({
         <p className="section-copy">Seleziona un utente GAIA per i collaboratori che richiedono collegamento. Gli utenti inattivi restano disponibili come identità anagrafiche, senza ottenere accesso a GAIA. Il sistema precompila un suggerimento basato su nome completo, username ed email.</p>
       </div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <button className="btn-secondary" type="button" onClick={() => void onApplySuggestedMappings()}>
-          Applica suggeriti
+        <button className="btn-secondary" type="button" disabled={suggestionCounts.high === 0} onClick={() => void onApplySuggestedMappings()}>
+          Applica alta confidenza ({suggestionCounts.high})
         </button>
         <p className="text-sm text-gray-500">
-          Vengono applicati solo i collaboratori non ancora mappati con un suggerimento disponibile.
+          Revisione manuale: {suggestionCounts.review} · Conflitti bloccati: {suggestionCounts.conflict} · Senza match: {suggestionCounts.none}
         </p>
       </div>
       <div className="space-y-3">
@@ -59,7 +61,9 @@ export function CollaboratorMappingPanel({
             <div>
               <p className="font-medium text-gray-900">{row.name}</p>
               <p className="text-xs text-gray-500">Matricola {row.employeeCode} · {row.contractSummary}</p>
-              {row.suggestionConfidence !== "none" ? (
+              {row.suggestionConfidence === "conflict" ? (
+                <p className="mt-1 text-xs font-medium text-amber-700">Conflitto rilevato: seleziona manualmente un'identità non assegnata.</p>
+              ) : row.suggestionConfidence !== "none" ? (
                 <p className="mt-1 text-xs text-emerald-700">
                   Suggerito: {row.suggestedUserLabel} ({confidenceLabel(row.suggestionConfidence)})
                 </p>

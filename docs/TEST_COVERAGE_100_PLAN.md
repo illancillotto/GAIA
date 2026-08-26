@@ -214,6 +214,17 @@ Fino alla chiusura completa del piano:
   `19 passed`; il file worker monolitico resta sotto il target globale, ma le nuove righe
   `_next_capacitas_job`/credential gate sono coperte e non risultano tra le righe mancanti.
 
+- `2026-08-26` - lease concorrente credenziali SISTER
+  (`modules/elaborazioni/worker/sister_credential_pool.py`,
+  `modules/elaborazioni/worker/worker.py`)
+  La protezione cross-batch per `sister_username` usa acquisizione atomica,
+  rinnovo heartbeat e rilascio a fine fascia o runner. Il gate eseguito e:
+  `PYTHONPATH=backend:modules/elaborazioni/worker .venv/bin/python -m pytest -q`
+  sui file `test_sister_credential_pool.py`, `test_worker.py`,
+  `test_worker_batch_coverage.py` e `test_worker_orchestration_coverage.py`, con
+  `--cov=sister_credential_pool --cov=worker --cov-branch --cov-fail-under=100`.
+  Esito: `142 passed`, `100%` statement e branch sui due file runtime.
+
 - `2026-07-22` - backend + frontend Ruolo import pagamenti CapaciTas
   (`app/modules/ruolo/routes/tributi_routes.py`, `app/modules/ruolo/schemas.py`,
   `app/modules/ruolo/tributi_repositories.py`,
@@ -691,6 +702,18 @@ Fino alla chiusura completa del piano:
   - typecheck frontend: passato;
   - complexity ratchet: nessun finding Presenze; gate globale bloccato da
     regressioni e nuove violation nei file GIS concorrenti.
+
+- `2026-08-26` - Presenze workflow mapping assistito collision-safe
+  (`src/app/presenze/collaboratori/page.tsx`, `mapping-panel.tsx`,
+  `src/lib/presenze-collaborator-mapping.ts`)
+  Il batch e limitato ai match ad alta confidenza; match da revisionare,
+  parita tra candidati, collisioni tra collaboratori e assenza di match sono
+  distinti nella preview prima dell'applicazione.
+  Esito validato:
+  - suite frontend mirata: `77` test passati;
+  - coverage dei tre file runtime modificati: `421/421` statement, `361/361`
+    branch, `114/114` funzioni e `368/368` linee, tutti al `100%`;
+  - typecheck frontend: passato.
 
 ## Eccezioni temporanee aperte
 

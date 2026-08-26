@@ -591,6 +591,12 @@ Mitigazioni:
 - mapping utente configurabile;
 - test con fixture HTML/JSON, non solo live portal.
 
+Il mapping assistito distingue quattro esiti: alta confidenza applicabile in
+batch, revisione manuale, nessun match e conflitto bloccato. Il batch non deve
+applicare match medi o bassi e non deve consentire che due collaboratori
+reclamino la stessa identita GAIA. Gli utenti inattivi restano identita
+anagrafiche valide senza acquisire login o accesso al modulo.
+
 ## 12. Prompt Codex operativo
 
 ```text

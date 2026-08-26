@@ -17,7 +17,7 @@ import {
 } from "@/lib/api";
 import {
   PRESENZE_COLLABORATOR_DETAIL_UPDATED_MESSAGE,
-  suggestedUserForPresenzeCollaborator,
+  buildPresenzeCollaboratorMappingSuggestionPlan,
   usersForPresenzeCollaboratorMappingSorted,
 } from "@/lib/presenze-collaborator-mapping";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -43,7 +43,7 @@ export type CollaboratorRow = {
   mappedUser: string;
   suggestedUserId: number | null;
   suggestedUserLabel: string;
-  suggestionConfidence: "high" | "medium" | "low" | "none";
+  suggestionConfidence: "high" | "medium" | "low" | "none" | "conflict";
 };
 
 type ContractWizardSelection = "unset" | "operaio_agrario" | "operaio_catasto_magazzino" | "impiegato" | "quadro" | "altro";
@@ -277,24 +277,9 @@ export default function PresenzeCollaboratoriPage() {
 
   const collaboratorMap = useMemo(() => new Map(collaborators.map((item) => [item.id, item])), [collaborators]);
   const userMap = useMemo(() => new Map(users.map((user) => [user.id, user])), [users]);
-  const assignedApplicationUserIds = useMemo(() => {
-    const ids = new Set<number>();
-    for (const collaborator of collaborators) {
-      if (collaborator.application_user_id != null) {
-        ids.add(collaborator.application_user_id);
-      }
-    }
-    return ids;
-  }, [collaborators]);
   const suggestionsByCollaborator = useMemo(() => {
-    const suggestions = new Map<string, { userId: number | null; score: number; confidence: "high" | "medium" | "low" | "none" }>();
-
-    for (const collaborator of collaborators) {
-      suggestions.set(collaborator.id, suggestedUserForPresenzeCollaborator(collaborator, users, assignedApplicationUserIds));
-    }
-
-    return suggestions;
-  }, [assignedApplicationUserIds, collaborators, users]);
+    return buildPresenzeCollaboratorMappingSuggestionPlan(collaborators, users);
+  }, [collaborators, users]);
 
   useEffect(() => {
     if (users.length === 0 || collaborators.length === 0) return;
@@ -306,7 +291,7 @@ export default function PresenzeCollaboratoriPage() {
           continue;
         }
         const suggestion = suggestionsByCollaborator.get(collaborator.id);
-        if (suggestion?.userId != null) {
+        if (suggestion?.userId != null && suggestion.confidence !== "conflict") {
           next[collaborator.id] = String(suggestion.userId);
           changed = true;
         }
@@ -383,6 +368,15 @@ export default function PresenzeCollaboratoriPage() {
     () => filteredRows.slice(0, visibleMappingRowsCount),
     [filteredRows, visibleMappingRowsCount],
   );
+  const mappingSuggestionCounts = useMemo(
+    () => ({
+      high: filteredRows.filter((row) => !row.mapped && row.suggestionConfidence === "high").length,
+      review: filteredRows.filter((row) => !row.mapped && (row.suggestionConfidence === "medium" || row.suggestionConfidence === "low")).length,
+      conflict: filteredRows.filter((row) => !row.mapped && row.suggestionConfidence === "conflict").length,
+      none: filteredRows.filter((row) => !row.mapped && row.suggestionConfidence === "none").length,
+    }),
+    [filteredRows],
+  );
   const sortedMappingUsersByCollaborator = useMemo(() => {
     const sortedUsers = new Map<string, ApplicationUser[]>();
     for (const row of mappingRows) {
@@ -431,7 +425,9 @@ export default function PresenzeCollaboratoriPage() {
     const token = getStoredAccessToken();
     if (!token) return;
     try {
-      const pending = filteredRows.filter((row) => !row.mapped && row.suggestedUserId != null);
+      const pending = filteredRows.filter(
+        (row) => !row.mapped && row.suggestedUserId != null && row.suggestionConfidence === "high",
+      );
       for (const row of pending) {
         const mapped = await mapPresenzeCollaboratorApplicationUser(token, row.id, row.suggestedUserId);
         setCollaborators((current) => current.map((item) => (item.id === row.id ? mapped : item)));
@@ -510,6 +506,8 @@ export default function PresenzeCollaboratoriPage() {
         cell: ({ row }) =>
           row.original.suggestionConfidence === "none" ? (
             <span className="text-sm text-gray-400">Nessuno</span>
+          ) : row.original.suggestionConfidence === "conflict" ? (
+            <Badge variant="warning">Conflitto bloccato</Badge>
           ) : (
             <div className="space-y-1">
               <p className="text-sm font-medium text-gray-900">{row.original.suggestedUserLabel}</p>
@@ -581,6 +579,7 @@ export default function PresenzeCollaboratoriPage() {
           <CollaboratorMappingPanel
             rows={mappingRows}
             totalRows={filteredRows.length}
+            suggestionCounts={mappingSuggestionCounts}
             selectedMappings={selectedMappings}
             collaboratorMap={collaboratorMap}
             sortedUsersByCollaborator={sortedMappingUsersByCollaborator}
