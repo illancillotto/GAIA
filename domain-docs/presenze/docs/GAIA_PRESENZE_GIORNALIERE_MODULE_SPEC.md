@@ -326,6 +326,8 @@ Questi campi possono essere derivati inizialmente dal template orario, ma devono
 
 Il mapping usa `application_users` come anagrafica canonica indipendentemente dallo stato dell'account. Un utente GAIA inattivo o privo del modulo Presenze puo quindi identificare un collaboratore, partecipare all'organigramma e rendere governabili le sue giornaliere, ma non acquisisce login, accesso al modulo o permessi operativi. Riattivazione e abilitazioni restano operazioni separate ed esplicite.
 
+Un `application_user_id` puo essere associato al piu a un collaboratore attivo nel mapping: l'indice unico parziale lo garantisce a livello DB. Ogni variazione di mapping (map, remap, unmap) lascia traccia in `presenze_collaborator_mapping_audit` con autore, motivo e timestamp; le operazioni noop non generano audit.
+
 ## 6. Endpoint GAIA proposti
 
 Tutti sotto prefisso `/presenze` incluso da `backend/app/api/router.py`.
@@ -364,7 +366,8 @@ Filtri minimi:
 | Metodo | Path | Permesso | Descrizione |
 | --- | --- | --- | --- |
 | `GET` | `/presenze/collaborators` | `inaz.giornaliere` | lista collaboratori Inaz con mapping GAIA, profilo contrattuale e gruppo operai |
-| `PUT` | `/presenze/collaborators/{id}/application-user` | `inaz.admin` | aggiorna mapping collaboratore -> utente GAIA |
+| `PUT` | `/presenze/collaborators/{id}/application-user` | `inaz.admin` | aggiorna mapping collaboratore -> utente GAIA (`reason` obbligatorio, non blank) |
+| `GET` | `/presenze/collaborators/{id}/application-user-audit` | `inaz.admin` | storico audit map/remap/unmap del collaboratore |
 | `PUT` | `/presenze/collaborators/{id}/contract-profile` | `inaz.admin` | aggiorna `contract_kind`, `operai_group` e `standard_daily_minutes` |
 | `GET` | `/presenze/collaborators/{id}/calendar` | `inaz.giornaliere` | cartellino periodo del collaboratore |
 | `GET` | `/presenze/collaborators/{id}/summary` | `inaz.giornaliere` | riepilogo eventi e KPI periodo |

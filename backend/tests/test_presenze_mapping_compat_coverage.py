@@ -8,11 +8,11 @@ from pydantic import ValidationError
 
 from app.modules.presenze import models as presenze_models
 from app.modules.presenze import schemas as presenze_schemas
+from app.modules.presenze.mapping_audit import PresenzeCollaboratorApplicationUserUpdate
 from app.modules.presenze.schemas import (
     GatePresenzeDailyRecordPatchRequest,
     OrganizationTeamMembershipCreate,
     OrganizationTeamSupervisorCreate,
-    PresenzeCollaboratorApplicationUserUpdate,
     PresenzeDailyRecordManualUpdate,
     resolve_presenze_holiday_kind,
 )

@@ -23,12 +23,12 @@ from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.accessi.org_structure import OrgStructureAssignment
 from app.modules.organigramma.models import OrgAssignment, OrgUnit, OrgVisibilityOverride
+from app.modules.presenze.mapping_audit import PresenzeCollaboratorMappingAudit
 from app.modules.presenze.models import (
     OrganizationTeam,
     OrganizationTeamMembership,
     OrganizationTeamSupervisorAssignment,
     PresenzeCollaborator,
-    PresenzeCollaboratorMappingAudit,
     PresenzeBankHoursGuidanceConfigRevision,
     PresenzeEventSummary,
     PresenzeCollaboratorScheduleAssignment,

@@ -1,5 +1,29 @@
 # Progress Presenze
 
+## Integrita mapping identita e audit trail - 2026-08-26
+
+- Il mapping collaboratore -> `application_users` e unico: indice parziale
+  `uq_presenze_collaborators_application_user_id` su PostgreSQL e SQLite.
+- Ogni map/remap/unmap scrive su `presenze_collaborator_mapping_audit` con
+  utente, motivo, azione e timestamp; i noop non generano audit.
+- Endpoint dedicato
+  `GET /presenze/collaborators/{id}/application-user-audit` per la storia
+  operativa del mapping.
+- Collisioni sul vincolo unique restano `409` e non lasciano stato parziale.
+- Verifiche: suite Presenze completa con coverage `100%` sui runtime
+  modificati (`models`, `router`, `schemas`, `collaborator_mapping`,
+  `mapping_audit`); test PostgreSQL `make test-presenze-postgres`; browser e2e
+  gerarchia read-only/approve verdi.
+- Contratti e modello audit vivono in `mapping_audit.py` per non peggiorare il
+  debito LOC legacy di `models.py`/`schemas.py`; l'indice unique e registrato
+  li e applicato da Alembic `20260826_1100`.
+- Migration `20260826_1100` + merge `20260826_1200` con i lease SISTER;
+  Alembic head unica `20260826_1200` applicata sul database locale.
+- Quality ratchet isolato sul perimetro Presenze vs `origin/main`: `PASS`,
+  `findings: []` (models LOC invariata `525`, schemas `1126 -> 1124`, router
+  LOC in calo). Il ratchet globale del branch include regressioni GIS
+  preesistenti fuori da questa slice.
+
 ## Workflow mapping assistito e audit reparti - 2026-08-26
 
 - Il batch di mapping applica esclusivamente suggerimenti ad alta confidenza,

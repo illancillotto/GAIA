@@ -38,6 +38,10 @@ from app.modules.presenze.models import (
     PresenzeSupervisorAssignment,
     PresenzeSyncJob,
 )
+from app.modules.presenze.mapping_audit import (
+    PresenzeCollaboratorApplicationUserUpdate,
+    PresenzeCollaboratorMappingAuditResponse,
+)
 from app.modules.presenze.schemas import (
     PresenzeAnomalyListItemResponse,
     PresenzeAnomalyListResponse,
@@ -66,8 +70,6 @@ from app.modules.presenze.schemas import (
     PresenzeScheduleBootstrapPreviewResponse,
     PresenzeScheduleProfilePreview,
     PresenzeScheduleBootstrapRulePreview,
-    PresenzeCollaboratorApplicationUserUpdate,
-    PresenzeCollaboratorMappingAuditResponse,
     PresenzeCollaboratorContractProfileUpdate,
     PresenzeCollaboratorScheduleAssignmentCreate,
     PresenzeCollaboratorScheduleAssignmentResponse,
@@ -1207,25 +1209,40 @@ def map_collaborator_to_application_user(
     __: Annotated[ApplicationUser, RequirePresenzeModule],
 ) -> PresenzeCollaboratorResponse:
     collaborator = _get_collaborator_or_404(db, collaborator_id)
-    if payload.application_user_id is not None and db.get(ApplicationUser, payload.application_user_id) is None:
+    _apply_collaborator_mapping_or_raise(
+        db,
+        collaborator=collaborator,
+        application_user_id=payload.application_user_id,
+        changed_by=current_user,
+        reason=payload.reason,
+    )
+    db.refresh(collaborator)
+    return _serialize_collaborator(db, collaborator)
+
+
+def _apply_collaborator_mapping_or_raise(
+    db: Session,
+    *,
+    collaborator: PresenzeCollaborator,
+    application_user_id: int | None,
+    changed_by: ApplicationUser,
+    reason: str,
+) -> None:
+    if application_user_id is not None and db.get(ApplicationUser, application_user_id) is None:
         raise HTTPException(status_code=404, detail="Application user not found")
     try:
-        changed = apply_collaborator_mapping(
+        apply_collaborator_mapping(
             db,
             collaborator=collaborator,
-            application_user_id=payload.application_user_id,
-            changed_by=current_user,
-            reason=payload.reason,
+            application_user_id=application_user_id,
+            changed_by=changed_by,
+            reason=reason,
         )
     except CollaboratorMappingConflictError as exc:
         raise HTTPException(
             status_code=409,
             detail="Application user is already mapped to another collaborator",
         ) from exc
-    if not changed:
-        return _serialize_collaborator(db, collaborator)
-    db.refresh(collaborator)
-    return _serialize_collaborator(db, collaborator)
 
 
 @router.get(

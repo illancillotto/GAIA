@@ -54,12 +54,12 @@ from app.modules.organigramma.models import (
 )
 from app.modules.inventory.models import WarehouseRequest
 from app.modules.elaborazioni.telemetry_models import SisterPortalEvent
+from app.modules.presenze.mapping_audit import PresenzeCollaboratorMappingAudit
 from app.modules.presenze.models import (
     OrganizationTeam,
     OrganizationTeamMembership,
     OrganizationTeamSupervisorAssignment,
     PresenzeCollaborator,
-    PresenzeCollaboratorMappingAudit,
     PresenzeBankHoursAdjustment,
     PresenzeBankHoursGuidanceConfig,
     PresenzeBankHoursGuidanceConfigRevision,

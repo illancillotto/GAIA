@@ -7,9 +7,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.application_user import ApplicationUser
+from app.modules.presenze.mapping_audit import PresenzeCollaboratorMappingAudit
 from app.modules.presenze.models import (
     PresenzeCollaborator,
-    PresenzeCollaboratorMappingAudit,
     PresenzeDailyRecord,
     PresenzeEventSummary,
 )

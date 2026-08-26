@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime, time
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, JSON, String, Text, Time, UniqueConstraint, Uuid, func, text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, String, Text, Time, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -226,13 +226,6 @@ class PresenzeCollaborator(Base):
     __tablename__ = "presenze_collaborators"
     __table_args__ = (
         UniqueConstraint("employee_code", "company_code", name="uq_presenze_collaborators_employee_company"),
-        Index(
-            "uq_presenze_collaborators_application_user_id",
-            "application_user_id",
-            unique=True,
-            postgresql_where=text("application_user_id IS NOT NULL"),
-            sqlite_where=text("application_user_id IS NOT NULL"),
-        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -257,27 +250,6 @@ class PresenzeCollaborator(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
-
-
-class PresenzeCollaboratorMappingAudit(Base):
-    __tablename__ = "presenze_collaborator_mapping_audit"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    collaborator_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("presenze_collaborators.id", ondelete="RESTRICT"), nullable=False, index=True
-    )
-    previous_application_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    new_application_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    changed_by_user_id: Mapped[int] = mapped_column(
-        ForeignKey("application_users.id", ondelete="RESTRICT"), nullable=False, index=True
-    )
-    changed_by_username: Mapped[str] = mapped_column(String(255), nullable=False)
-    action: Mapped[str] = mapped_column(String(16), nullable=False)
-    source: Mapped[str] = mapped_column(String(32), nullable=False, default="api")
-    reason: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
 
 
