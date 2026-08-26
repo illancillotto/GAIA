@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import date, datetime, time, timezone
+import html
 import logging
 import mimetypes
 from pathlib import Path, PurePosixPath
@@ -1113,7 +1114,7 @@ def _upsert_payment_notice(
     existing.source_internal_id = row.external_row_id
     existing.codice_fiscale = row.codice_fiscale or identifier
     existing.partita_iva = identifier if identifier.isdigit() and len(identifier) == 11 else None
-    existing.display_name = row.denominazione or display_name
+    existing.display_name = _decode_incass_text(row.denominazione) or display_name
     existing.anno = row.anno
     existing.stato_code = row.stato_pagamento_code
     existing.stato_label = row.stato_pagamento_label
@@ -1125,7 +1126,7 @@ def _upsert_payment_notice(
     existing.lista_descrizione = row.lista_descrizione
     existing.indirizzo = _join_address(row)
     existing.cap = row.cap
-    existing.citta = row.citta
+    existing.citta = _decode_incass_text(row.citta)
     existing.provincia = row.provincia
     existing.importo_carico = row.carico
     existing.importo_sgravio = row.sgravio
@@ -1241,10 +1242,19 @@ def _find_pending_payment_notice(
     return None
 
 
+def _decode_incass_text(value: str | None) -> str | None:
+    """L'API "incass" a volte restituisce testo libero (denominazione, indirizzo,
+    citta) con entita' HTML non decodificate, es. "S&#39;APPADROXIU" invece di
+    "S'APPADROXIU": normalizziamo qui, all'ingresso nel dominio."""
+    if value is None:
+        return None
+    return html.unescape(value)
+
+
 def _join_address(row: CapacitasInCassNoticeRow) -> str | None:
-    parts = [row.indirizzo, row.civico]
+    parts = [_decode_incass_text(row.indirizzo), _decode_incass_text(row.civico)]
     if row.sub_civico:
-        parts.append(f"/{row.sub_civico}")
+        parts.append(f"/{_decode_incass_text(row.sub_civico)}")
     return " ".join(part for part in parts if part).strip() or None
 
 

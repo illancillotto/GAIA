@@ -4512,6 +4512,12 @@ def test_incass_small_helpers_and_retryable_exceptions(monkeypatch: pytest.Monke
     assert _is_paid_like_status("Senza pagamenti") is False
     assert _is_paid_like_status("Pagato") is True
     assert _join_address(CapacitasInCassNoticeRow(indirizzo="Via Roma", civico="1", sub_civico="A")) == "Via Roma 1 /A"
+    # Regressione: l'API "incass" puo' restituire indirizzi con entita' HTML non
+    # decodificate (es. "S&#39;APPADROXIU" invece di "S'APPADROXIU").
+    assert (
+        _join_address(CapacitasInCassNoticeRow(indirizzo="LOCALITA` S&#39;APPADROXIU"))
+        == "LOCALITA` S'APPADROXIU"
+    )
     assert _upload_receipt_to_nas(subject, "ricevuta.eml", b"eml") == "/nas/acme/capacitas/ricevute/ricevuta.eml"
     assert _upload_notice_pdf_to_nas(subject, "avviso.pdf", b"pdf") == "/nas/acme/capacitas/avvisi/avviso.pdf"
     assert connector.uploads == [
@@ -4807,6 +4813,44 @@ def test_incass_mailing_edge_cases_and_upsert_guards(monkeypatch: pytest.MonkeyP
         assert notice_2 is not None
         assert notice_1.raw_detail_json["mailing_list"]["receipt_documents_by_parent_id"]["parent-1"][0]["object_id"] == "obj-1"
         assert notice_2.raw_detail_json["mailing_list"]["receipt_documents_by_parent_id"] == {}
+    finally:
+        db.close()
+
+
+def test_upsert_payment_notice_decodes_html_entities_from_incass_row() -> None:
+    """Regressione: l'API "incass" puo' restituire denominazione/indirizzo/citta
+    con entita' HTML non decodificate (es. "S&#39;APPADROXIU"); l'upsert deve
+    normalizzarle prima di scrivere AnagraficaPaymentNotice, cosi' tutti i
+    consumatori a valle (UI, export, avviso/bollettino) leggono testo pulito."""
+    db = TestingSessionLocal()
+    try:
+        subject = AnagraficaSubject(subject_type="person", source_name_raw="ZOCCHEDDU GIANNI")
+        db.add(subject)
+        db.flush()
+
+        _upsert_payment_notice(
+            db,
+            subject_id=subject.id,
+            identifier="ZCCGNN67C08G113Z",
+            display_name="ZOCCHEDDU GIANNI",
+            row=CapacitasInCassNoticeRow(
+                avviso="12026242500099",
+                denominazione="D&#39;Aloia Rossi &amp; Figli",
+                indirizzo="LOCALITA` S&#39;APPADROXIU",
+                citta="ORISTANO",
+            ),
+            detail_info_html=None,
+            detail_info_text=None,
+            pdf_links_json=[],
+            detail_payload=None,
+        )
+        db.flush()
+        notice = db.scalar(select(AnagraficaPaymentNotice))
+        assert notice is not None
+        assert notice.display_name == "D'Aloia Rossi & Figli"
+        assert notice.indirizzo == "LOCALITA` S'APPADROXIU"
+        assert "&#39;" not in notice.display_name
+        assert "&#39;" not in notice.indirizzo
     finally:
         db.close()
 

@@ -2039,7 +2039,10 @@ def _format_currency(value: Any) -> str | None:
 def _value(value: Any) -> str:
     if value is None or value == "":
         return "-"
-    return str(value)
+    # Sorgenti esterne (import "incass") a volte contengono indirizzi con
+    # entità HTML non decodificate (es. "S&#39;APPADROXIU" invece di
+    # "S'APPADROXIU"): normalizziamo qui, a monte di ogni html.escape().
+    return html.unescape(str(value))
 
 
 def _document_xml(paragraphs: list[str]) -> str:

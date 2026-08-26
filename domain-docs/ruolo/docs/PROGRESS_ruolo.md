@@ -9,7 +9,21 @@
 - Modulo: Ruolo
 - Stato complessivo: **documento archiviato; implementazione storica completata M1–M5**
 - Owner: TBD
-- Ultimo aggiornamento: 2026-08-24
+- Ultimo aggiornamento: 2026-08-26
+
+---
+
+## Aggiornamento operativo 2026-08-26
+
+- Corretto un bug di escaping HTML nell'avviso/sollecito e nel bollettino TD 896: indirizzi e nominativi provenienti dall'import esterno `incass` potevano arrivare con entità HTML non decodificate (es. `S&#39;APPADROXIU` invece di `S'APPADROXIU`), che venivano poi stampate letteralmente nel PDF perché il renderer si limita a fare escaping in uscita, mai unescape a monte.
+- `_value()` in `tributi_reminder_service.py` applica ora `html.unescape()` prima di ogni `html.escape()` a valle: normalizza `Denominazione`, `INDIRIZZO`, `INDIRIZZO_SPEDIZIONE`, `CodFiscale` e gli altri campi testuali condivisi da avviso PDF/DOCX e bollettino, senza impatto sui valori privi di entità.
+- Aggiunta regressione dedicata `test_tributi_reminder_field_values_decode_html_entities_from_source_address`, che copre sia l'indirizzo (`S&#39;APPADROXIU`) sia nome/cognome (`D&#39;Aloia Rossi &amp; Figli`), verificata contro il fix (fallisce senza, passa con).
+- Validata la change con `pytest tests/ruolo/test_tributi_api.py --cov=app.modules.ruolo.services.tributi_reminder_service --cov-report=term-missing --cov-fail-under=100 -q` nel venv del progetto: `819/819` statement coperti (`100%`), suite `tests/ruolo/` interamente verde.
+- Individuata la causa radice: `app/services/elaborazioni_capacitas_incass.py` scriveva `denominazione`/`indirizzo`/`citta` provenienti dall'API `incass` (`CapacitasInCassNoticeRow`) su `AnagraficaPaymentNotice` senza mai decodificare le entità HTML; da lì il testo sporco si propagava anche a schermate `/ruolo/tributi`, `/ruolo/avvisi/[id]` ed export CSV, non solo al PDF.
+- Aggiunto `_decode_incass_text()` in `elaborazioni_capacitas_incass.py`, applicato a `display_name`/`denominazione`, `citta` e ai componenti di `_join_address()` (indirizzo, civico, subcivico): le nuove sincronizzazioni `incass` arrivano ora già pulite in `AnagraficaPaymentNotice`, senza bisogno di normalizzare in ogni consumatore a valle. Il fix di difesa in `tributi_reminder_service.py` resta invariato. Scope limitato all'ingestione su richiesta esplicita: nessun backfill dei record già presenti in DB, nessuna modifica a frontend/export CSV.
+- Aggiunta regressione `_join_address` con entità HTML e nuovo test `test_upsert_payment_notice_decodes_html_entities_from_incass_row` in `tests/test_elaborazioni_capacitas.py`, verificato contro il fix (fallisce senza, passa con).
+- Validata la change con `pytest tests/test_elaborazioni_capacitas.py --cov=app.services.elaborazioni_capacitas_incass --cov-report=term-missing -q` nel venv del progetto: `624/624` statement coperti (`100%`).
+- Grafo codice Ruolo aggiornato con `make graphify-ruolo-code`.
 
 ---
 
