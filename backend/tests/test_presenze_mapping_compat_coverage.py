@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from datetime import date
 import uuid
+from datetime import date
 
 import pytest
 from pydantic import ValidationError
@@ -24,8 +24,9 @@ def test_presenze_models_legacy_aliases_and_unknown_attribute() -> None:
         presenze_models.INAZ_CONTRACT_KIND_OPERAIO
         is presenze_models.PRESENZE_CONTRACT_KIND_OPERAIO
     )
+    missing_name = "MissingAlias"
     with pytest.raises(AttributeError):
-        getattr(presenze_models, "MissingAlias")
+        getattr(presenze_models, missing_name)
 
 
 def test_presenze_schemas_legacy_aliases_and_unknown_attribute() -> None:
@@ -37,8 +38,9 @@ def test_presenze_schemas_legacy_aliases_and_unknown_attribute() -> None:
         presenze_schemas.InazModuleStatusResponse
         is presenze_schemas.PresenzeModuleStatusResponse
     )
+    missing_name = "MissingAlias"
     with pytest.raises(AttributeError):
-        getattr(presenze_schemas, "MissingAlias")
+        getattr(presenze_schemas, missing_name)
 
 
 def test_resolve_presenze_holiday_kind_validation_and_fallback() -> None:
