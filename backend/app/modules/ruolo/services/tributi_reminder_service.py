@@ -547,6 +547,7 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .summary td:first-child {{ text-align: left; font-weight: 800; }}
 .summary .notice-number {{ white-space: nowrap; text-align: left; font-size: 7.35pt; letter-spacing: -.12pt; }}
 .note {{ margin-top: 3mm; padding-top: 2.4mm; border-top: 1px solid #cfd8d2; font-size: 9.15pt; line-height: 1.16; color: #2e3934; text-align: justify; }}
+.rateization-note {{ margin-top: 2.5mm; padding: 2mm 3mm; background: #fdf2e0; border: 1pt solid #b18b3d; border-radius: 2mm; font-size: 9.15pt; line-height: 1.2; color: #5c4413; }}
 .privacy {{ margin-top: 1.6mm; }}
 .rev {{ position: absolute; bottom: 0; left: 0; font-size: 7.5pt; color: #5b6b63; }}
 .legal h2 {{ text-align: center; margin: 0 0 2.4mm; font-size: 10.2pt; font-weight: 800; }}
@@ -651,6 +652,7 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
     <div class="instructions"><h2>Come pagare</h2><p>Il pagamento potrà essere effettuato mediante bonifico bancario al Conto Corrente:</p><p><b>Intestato a:</b> CONSORZIO DI BONIFICA DELL'ORISTANESE - RISCOSSIONE QUOTE ASSOCIATIVE</p><p><b>IBAN:</b> IT15L0760117400001007214826</p><p><b>Causale:</b> {html.escape(field_values['CodFiscale'])}; {html.escape(field_values['Avviso_n'])}</p></div>
   </div>
   <table class="summary"><colgroup><col class="role"><col class="notice"><col class="opere"><col class="utenza"><col class="quota"><col class="magg"><col class="interessi"><col class="versate"><col class="spese"></colgroup><thead><tr><th>Ruolo</th><th>Numero avviso</th><th>0648 Opere irrigue</th><th>0668 Utenza</th><th>0985 Quota istituzionale</th><th>Magg.</th><th>Interessi</th><th>Somme versate</th><th>Altre spese</th></tr></thead><tbody>{summary_rows}<tr><td>SN01 Spese Notifica</td><td colspan="7"></td><td>{html.escape(notification_amount)}</td></tr></tbody></table>
+  {_gaia_rateization_residual_note_html(payload)}
   <div class="note">
     Si può richiedere, direttamente presso gli uffici dell'Ente, una diversa dilazione del pagamento. Per maggiori chiarimenti contattare l'Ente o recarsi presso la sede nei seguenti giorni: Lunedi e giovedì 11.00 - 13.00, - tel. 0783 3150212.
     <div class="privacy"><strong>INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI:</strong> lo scrivente Consorzio, titolare del trattamento dei dati personali, li utilizza esclusivamente per le finalità istituzionali previste dalla legge, anche quando comunicate a terzi. Il trattamento dei Suoi dati avviene anche mediante l'utilizzo di strumenti elettronici, con logistiche strettamente correlate alle predette finalità nel rispetto del D.LGS n. 196/2003.</div>
@@ -1844,6 +1846,8 @@ def _batch_yearly_values(payload: dict[str, Any]) -> dict[int, dict[str, Decimal
                 "paid": Decimal("0.00"),
                 "surcharge": Decimal("0.00"),
                 "interest": Decimal("0.00"),
+                "saldo": Decimal("0.00"),
+                "rateization_residual": Decimal("0.00"),
             },
         )
         codice_cnc = _value(avviso.get("codice_cnc"))
@@ -1854,7 +1858,43 @@ def _batch_yearly_values(payload: dict[str, Any]) -> dict[int, dict[str, Decimal
         values["paid"] = _decimal_or_zero(values["paid"]) + _decimal_or_zero(avviso.get("paid_amount"))
         values["surcharge"] = _decimal_or_zero(values["surcharge"]) + _decimal_or_zero(avviso.get("surcharge_amount"))
         values["interest"] = _decimal_or_zero(values["interest"]) + _decimal_or_zero(avviso.get("interest_amount"))
+        saldo = _decimal_or_zero(avviso.get("saldo_amount"))
+        values["saldo"] = _decimal_or_zero(values["saldo"]) + saldo
+        # Un ruolo rateizzato il cui residuo inCASS e' ancora scoperto (il
+        # "carico" e' stato versato ma non la quota di rateizzazione) va
+        # segnalato in modo visibile al contribuente: quel residuo e' gia'
+        # comprensivo della maggiorazione ricalcolata in sede di
+        # rateizzazione, quindi non lo sommiamo di nuovo altrove.
+        if avviso.get("rateization_fee_amount") and saldo > Decimal("0.00"):
+            values["rateization_residual"] = _decimal_or_zero(values["rateization_residual"]) + saldo
     return yearly
+
+
+def _gaia_rateization_residual_note_html(payload: dict[str, Any]) -> str:
+    yearly = _batch_yearly_values(payload)
+    entries = [
+        (year, values["rateization_residual"])
+        for year, values in sorted(yearly.items())
+        if _decimal_or_zero(values.get("rateization_residual")) > Decimal("0.00")
+    ]
+    if not entries:
+        return ""
+    if len(entries) == 1:
+        year, amount = entries[0]
+        body = (
+            f"il Ruolo {year} presenta un residuo di rateizzazione non versato di "
+            f"€ {_format_template_number(amount)}, già comprensivo della maggiorazione "
+            "ricalcolata in sede di rateizzazione."
+        )
+    else:
+        years_amounts = "; ".join(
+            f"Ruolo {year}: € {_format_template_number(amount)}" for year, amount in entries
+        )
+        body = (
+            "i seguenti ruoli presentano un residuo di rateizzazione non versato, già "
+            f"comprensivo della maggiorazione ricalcolata in sede di rateizzazione: {years_amounts}."
+        )
+    return f'<div class="rateization-note"><strong>Attenzione:</strong> {html.escape(body)}</div>'
 
 
 def _batch_address_values(payload: dict[str, Any]) -> dict[str, str]:

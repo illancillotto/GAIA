@@ -1330,6 +1330,60 @@ def test_tributi_detail_uses_incass_rateized_amounts_for_rateizzazione() -> None
     assert payload["payment_status"] == "partial"
 
 
+def test_tributi_rateized_incass_partial_notice_does_not_double_count_surcharge() -> None:
+    tax_code = "BBIVTS30T16B314S"
+    avviso_id = seed_avviso(amount=1000.0, anno=2024, tax_code=tax_code, nominativo="IBBA SALVATORE")
+    db = TestingSessionLocal()
+    db.add_all(
+        [
+            AnagraficaPaymentNotice(
+                source_system="incass",
+                source_notice_id="020240014003350",
+                codice_fiscale=tax_code,
+                display_name="IBBA SALVATORE",
+                anno="2024",
+                stato_label="Rateizzato e pagato in parte",
+                importo_carico="1.000,00",
+                importo_riscosso="-1.000,00",
+                importo_residuo="100,00",
+                importo_rateizzato="1.100,00",
+                detail_url="https://incass.example/avviso-rateizzato-residuo-non-versato",
+            ),
+            RuoloTributiCalculationPolicy(
+                name="Ruolo 2024",
+                year_from=2024,
+                year_to=2024,
+                bonario_due_date=date(2025, 5, 26),
+                surcharge_rate_percent=Decimal("10.0000"),
+                surcharge_from=date(2025, 5, 27),
+                interest_rate_percent=Decimal("0.0000"),
+                interest_from=None,
+                interest_start_mode="notification_date",
+                is_active=True,
+                notes=None,
+                updated_by=None,
+            ),
+        ]
+    )
+    db.commit()
+    db.close()
+
+    response = client.get(f"/ruolo/tributi/avvisi/{avviso_id}", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    # Il carico (1.000,00) e' interamente riscosso: il residuo inCASS di
+    # 100,00 e' gia' il ricalcolo della maggiorazione applicata in sede di
+    # rateizzazione (importo_rateizzato 1.100,00 - importo_carico 1.000,00).
+    # Anche con una policy attiva al 10%, non va sommata una seconda
+    # maggiorazione sopra al residuo: sarebbe un doppio conteggio.
+    assert payload["incass_notice"]["rateization_fee_amount"] == 100.0
+    assert payload["saldo_amount"] == 100.0
+    assert payload["surcharge_amount"] == 100.0
+    assert payload["adjusted_due_amount"] == 1100.0
+    assert payload["payment_status"] == "partial"
+
+
 def test_tributi_rateized_incass_payment_status_filter_uses_effective_amounts() -> None:
     tax_code = "BNCGLI70A01G113K"
     seed_avviso(amount=100.0, anno=2025, tax_code=tax_code, nominativo="BIANCHI GIULIA")
@@ -4232,6 +4286,68 @@ def test_td896_validation_boundaries(monkeypatch: pytest.MonkeyPatch) -> None:
     assert td896_service._galois_multiply(0, 1, [0], [0]) == 0
 
 
+def test_gaia_reminder_shows_visible_note_for_unpaid_rateization_residual() -> None:
+    payload = {
+        "display_name": "IBBA SALVATORE",
+        "codice_fiscale": "BBISVT30T16B314S",
+        "notice_number": "12026242500102",
+        "avvisi": [
+            {
+                "codice_cnc": "020240014003350",
+                "anno_tributario": 2024,
+                "importo_totale_0648": 726.70,
+                "importo_totale_0985": 519.26,
+                "importo_totale_0668": 0,
+                "paid_amount": 1245.96,
+                "surcharge_amount": 110.53,
+                "saldo_amount": 110.53,
+                "rateization_fee_amount": 110.53,
+            },
+            {
+                "codice_cnc": "020250013730530",
+                "anno_tributario": 2025,
+                "importo_totale_0648": 734.01,
+                "importo_totale_0985": 524.21,
+                "importo_totale_0668": 0,
+                "paid_amount": 0,
+                "surcharge_amount": 75.49,
+                "saldo_amount": 1333.71,
+                "rateization_fee_amount": None,
+            },
+        ],
+    }
+
+    rendered_html = reminder_service._gaia_proposal_html(payload, include_partitario=False, include_bollettino=False)
+
+    assert 'class="rateization-note"' in rendered_html
+    assert "Ruolo 2024" in rendered_html.split('class="rateization-note"')[1][:400]
+    assert "110,53" in rendered_html.split('class="rateization-note"')[1][:400]
+
+
+def test_gaia_reminder_hides_rateization_note_when_no_open_residual() -> None:
+    payload = {
+        "display_name": "ROSSI MARIO",
+        "codice_fiscale": "RSSMRA80A01H501Z",
+        "notice_number": "12026242500001",
+        "avvisi": [
+            {
+                "codice_cnc": "CNC-2025",
+                "anno_tributario": 2025,
+                "importo_totale_0648": 30,
+                "importo_totale_0985": 10,
+                "importo_totale_0668": 10,
+                "paid_amount": 0,
+                "saldo_amount": 50,
+                "rateization_fee_amount": None,
+            },
+        ],
+    }
+
+    rendered_html = reminder_service._gaia_proposal_html(payload, include_partitario=False, include_bollettino=False)
+
+    assert 'class="rateization-note"' not in rendered_html
+
+
 def test_gaia_reminder_yearly_summary_shows_notice_number_per_year() -> None:
     payload = {
         "display_name": "ROSSI MARIO",
@@ -4801,6 +4917,38 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
             {**payload, "template_path": reminder_service.GAIA_PROPOSAL_TEMPLATE_KEY},
             output_path=tmp_path / "gaia_missing.pdf",
         )
+
+
+def test_tributi_reminder_field_values_decode_html_entities_from_source_address() -> None:
+    """Regression: l'import "incass" può restituire indirizzi con entità HTML
+    non decodificate (es. "S&#39;APPADROXIU"); il campo INDIRIZZO usato per
+    avviso e bollettino deve mostrare l'apostrofo reale, non l'entità letterale."""
+    payload = {
+        "notice_number": "12026242500099",
+        "display_name": "D&#39;Aloia Rossi &amp; Figli",
+        "codice_fiscale": "ZCCGNN67C08G113Z",
+        "comune": "ORISTANO",
+        "avvisi": [
+            {
+                "residenza_raw": "LOCALITA` S&#39;APPADROXIU 09170 ORISTANO OR",
+                "domicilio_raw": "",
+                "anno_tributario": 2025,
+            }
+        ],
+        "years": [2025],
+    }
+
+    field_values = reminder_service._batch_template_field_values(payload)
+
+    assert field_values["INDIRIZZO"] == "LOCALITA` S'APPADROXIU"
+    assert "&#39;" not in field_values["INDIRIZZO"]
+    assert "&#39;" not in field_values["INDIRIZZO_SPEDIZIONE"]
+
+    # Stessa corruzione da entità HTML può colpire nome/cognome (Denominazione),
+    # proveniente dalla stessa sorgente esterna "incass".
+    assert field_values["Denominazione"] == "D'Aloia Rossi & Figli"
+    assert "&#39;" not in field_values["Denominazione"]
+    assert "&amp;" not in field_values["Denominazione"]
 
 
 def test_tributi_batch_pdf_conversion_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -982,6 +982,10 @@ def _build_effective_tributi_core(
             else max(incass_rateized_amount - paid_amount, _CURRENCY_ZERO)
         )
         derived_status, _ = derive_payment_status(due_amount=incass_rateized_amount, paid_amount=paid_amount)
+        # Il residuo della rateizzazione e' gia' il ricalcolo della
+        # maggiorazione applicata quando il ruolo e' stato rateizzato (es.
+        # importo_rateizzato - importo_carico): non va sommata un'ulteriore
+        # maggiorazione, sarebbe un doppio conteggio.
         adjusted = {
             "principal_saldo_amount": max((_money_or_zero(incass_carico_amount) - paid_amount), _CURRENCY_ZERO),
             "surcharge_amount": incass_rateization_fee or _CURRENCY_ZERO,
@@ -3614,6 +3618,8 @@ def _collect_reminder_candidates(
                 "saldo_amount": item["saldo_amount"],
                 "payment_status": item["payment_status"],
                 "capacitas_url": item["capacitas_url"],
+                "rateization_fee_amount": item["incass_notice"].get("rateization_fee_amount"),
+                "incass_stato_label": item["incass_notice"].get("stato_label"),
                 "annuality_manager_key": item["annuality_manager_key"],
                 "annuality_manager_label": item["annuality_manager_label"],
                 "calculation_policy": item["calculation_policy"],
