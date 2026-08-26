@@ -33,6 +33,7 @@ import {
 import { getStoredAccessToken } from "@/lib/auth";
 import type { ApplicationUser, CurrentUser, SectionResponse, UserPermissionsAdminView, UserPresenceRecentRoute, UserPresenceSummary } from "@/types/api";
 import { clearPresenceAction, recordPresenceAction } from "@/lib/presence-actions";
+import { GaiaRoleField } from "@/components/accessi/gaia-role-field";
 
 type GaiaUserRow = {
   id: number;
@@ -861,18 +862,12 @@ export default function GaiaUsersPage() {
             ) : null}
           </label>
 
-          <label className="block text-sm font-medium text-gray-700 lg:col-span-6">
-            Ruolo
-            <select className="form-control mt-1" value={formState.role} onChange={(event) => updateFormState("role", event.target.value)}>
-              {roleOptions
-                .filter((role) => currentUser?.role === "super_admin" || role.value !== "super_admin")
-                .map((role) => (
-                  <option key={role.value} value={role.value}>
-                    {role.label}
-                  </option>
-              ))}
-            </select>
-          </label>
+          <GaiaRoleField
+            value={formState.role}
+            options={roleOptions}
+            canAssignSuperAdmin={currentUser?.role === "super_admin"}
+            onChange={(value) => updateFormState("role", value)}
+          />
 
           {!isEditMode ? (
             <label className="flex items-start gap-3 rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4 text-sm text-gray-700 lg:col-span-6">
