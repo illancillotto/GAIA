@@ -1784,7 +1784,7 @@ describe("Presenze pages", () => {
         email: "amadu.salvatore@example.local",
         full_name: "AMADU SALVATORE",
         role: "viewer",
-        is_active: true,
+        is_active: false,
         module_accessi: true,
         module_rete: false,
         module_inventario: false,
@@ -1793,8 +1793,8 @@ describe("Presenze pages", () => {
         module_operazioni: false,
         module_riordino: false,
         module_ruolo: false,
-        module_presenze: true,
-        enabled_modules: ["accessi", "presenze"],
+        module_presenze: false,
+        enabled_modules: ["accessi"],
         created_at: "2026-05-29T00:00:00Z",
         updated_at: "2026-05-29T00:00:00Z",
       },
@@ -1820,6 +1820,7 @@ describe("Presenze pages", () => {
     render(<PresenzeCollaboratoriPage />);
 
     await screen.findAllByText("AMADU SALVATORE");
+    expect(screen.getAllByRole("option", { name: /Inattivo \(solo identità\)/ })).not.toHaveLength(0);
     fireEvent.click(screen.getByText("Applica suggeriti"));
     await waitFor(() => {
       expect(mocks.mapPresenzeCollaboratorApplicationUser).toHaveBeenCalledWith("token", "collab-1", 7);

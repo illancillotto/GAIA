@@ -21,6 +21,11 @@ function confidenceLabel(confidence: CollaboratorRow["suggestionConfidence"]): s
   return "confidenza bassa";
 }
 
+function mappingUserLabel(user: ApplicationUser): string {
+  const identity = `${user.username} · ${user.email}`;
+  return user.is_active ? identity : `${identity} · Inattivo (solo identità)`;
+}
+
 export function CollaboratorMappingPanel({
   rows,
   totalRows,
@@ -38,7 +43,7 @@ export function CollaboratorMappingPanel({
     <article className="panel-card">
       <div className="mb-4">
         <p className="section-title">Aggiorna mapping GAIA</p>
-        <p className="section-copy">Seleziona un utente GAIA per i collaboratori che richiedono collegamento. Il sistema precompila un suggerimento basato su nome completo, username ed email.</p>
+        <p className="section-copy">Seleziona un utente GAIA per i collaboratori che richiedono collegamento. Gli utenti inattivi restano disponibili come identità anagrafiche, senza ottenere accesso a GAIA. Il sistema precompila un suggerimento basato su nome completo, username ed email.</p>
       </div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <button className="btn-secondary" type="button" onClick={() => void onApplySuggestedMappings()}>
@@ -68,7 +73,7 @@ export function CollaboratorMappingPanel({
               <option value="">Nessun mapping</option>
               {(sortedUsersByCollaborator.get(row.id) ?? []).map((user) => (
                 <option key={user.id} value={user.id}>
-                  {user.username} · {user.email}
+                  {mappingUserLabel(user)}
                 </option>
               ))}
             </select>

@@ -678,6 +678,20 @@ Fino alla chiusura completa del piano:
   - `cd frontend && npm run typecheck` -> pass;
   - `make complexity-ratchet BASE_REF=main` -> blocco non correlato su `backend/app/modules/elaborazioni/runtime_routes.py`, `frontend/src/components/elaborazioni/settings-workspace.tsx` e `frontend/src/lib/api.ts`; nessun finding sui file Presenze collaboratori modificati.
 
+- `2026-08-26` - Presenze mapping verso identita GAIA inattive
+  (`src/app/presenze/collaboratori/mapping-panel.tsx`)
+  Lo stato account resta separato dall'identita anagrafica: il mapping accetta
+  utenti inattivi o senza modulo Presenze senza abilitarne login o accesso, e
+  la UI li identifica come `Inattivo (solo identita)`.
+  Esito validato:
+  - test API mirato mapping/login: `1` test passato;
+  - test frontend Presenze mapping: `62` test passati;
+  - coverage del componente runtime modificato: `15/15` statement, `16/16`
+    branch, `8/8` funzioni e `13/13` linee, tutti al `100%`;
+  - typecheck frontend: passato;
+  - complexity ratchet: nessun finding Presenze; gate globale bloccato da
+    regressioni e nuove violation nei file GIS concorrenti.
+
 ## Eccezioni temporanee aperte
 
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`

@@ -78,6 +78,7 @@ def _create_user(
     username: str,
     *,
     role: str = ApplicationUserRole.ADMIN.value,
+    is_active: bool = True,
     module_presenze: bool = True,
     module_operazioni: bool = False,
     module_rete: bool = False,
@@ -88,7 +89,7 @@ def _create_user(
         email=f"{username}@example.local",
         password_hash=hash_password("secret123"),
         role=role,
-        is_active=True,
+        is_active=is_active,
         module_accessi=True,
         module_operazioni=module_operazioni,
         module_rete=module_rete,
@@ -1083,7 +1084,12 @@ def test_presenze_daily_record_validation_reset_clears_validator_metadata() -> N
 
 def test_presenze_can_map_collaborator_to_application_user() -> None:
     admin = _create_user("map_admin")
-    mapped_user = _create_user("mapped_user", role=ApplicationUserRole.VIEWER.value)
+    mapped_user = _create_user(
+        "mapped_user",
+        role=ApplicationUserRole.VIEWER.value,
+        is_active=False,
+        module_presenze=False,
+    )
     token = _login(admin.username)
 
     imported = client.post(
@@ -1102,6 +1108,12 @@ def test_presenze_can_map_collaborator_to_application_user() -> None:
     )
     assert mapped.status_code == 200
     assert mapped.json()["application_user_id"] == mapped_user.id
+
+    denied_login = client.post(
+        "/auth/login",
+        json={"username": mapped_user.username, "password": "secret123"},
+    )
+    assert denied_login.status_code == 403
 
     calendar = client.get(
         f"/presenze/collaborators/{collab_id}/calendar?date_from=2026-05-01&date_to=2026-05-31",

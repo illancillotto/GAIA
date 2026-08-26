@@ -1,5 +1,14 @@
 # Progress Presenze
 
+## Identita anagrafiche GAIA inattive - 2026-08-26
+
+- Lo stato attivo dell'account e separato dall'identita anagrafica: un utente
+  GAIA inattivo o senza modulo Presenze puo essere associato a un collaboratore
+  e usato dall'organigramma senza poter effettuare login o accedere al modulo.
+- La UI di mapping mantiene queste identita selezionabili e le marca come
+  `Inattivo (solo identita)`; il test API verifica mapping riuscito e login
+  negato sulla stessa utenza.
+
 ## Verifica export straordinari self-service - 2026-08-25
 
 - Il download Excel da `/me/straordinari` usa il percorso sincrono

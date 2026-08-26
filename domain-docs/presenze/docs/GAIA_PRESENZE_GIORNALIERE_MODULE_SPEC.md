@@ -324,6 +324,8 @@ Nel modello reale il collaboratore Inaz non e solo un alias di `application_user
 
 Questi campi possono essere derivati inizialmente dal template orario, ma devono restare correggibili da admin/HR perche il template Inaz non e una fonte contrattuale completa.
 
+Il mapping usa `application_users` come anagrafica canonica indipendentemente dallo stato dell'account. Un utente GAIA inattivo o privo del modulo Presenze puo quindi identificare un collaboratore, partecipare all'organigramma e rendere governabili le sue giornaliere, ma non acquisisce login, accesso al modulo o permessi operativi. Riattivazione e abilitazioni restano operazioni separate ed esplicite.
+
 ## 6. Endpoint GAIA proposti
 
 Tutti sotto prefisso `/presenze` incluso da `backend/app/api/router.py`.
