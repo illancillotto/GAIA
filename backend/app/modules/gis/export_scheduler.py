@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import inspect
 import logging
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import suppress
-from typing import Any, Callable
+from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -57,6 +57,9 @@ async def register_gis_export_scheduler(
 ) -> None:
     if not settings.gis_export_scheduler_enabled:
         logger.info("GIS export scheduler disabled; skip registration")
+        return
+    if not settings.gis_export_scheduler_register_in_api:
+        logger.info("GIS export scheduler delegated to dedicated runner")
         return
 
     scheduler.add_job(

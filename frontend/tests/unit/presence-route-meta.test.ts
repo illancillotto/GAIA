@@ -35,6 +35,14 @@ describe("resolvePresenceRouteMeta", () => {
       moduleKey: "gis",
       routeLabel: "GIS Platform / Catalogo",
     });
+    expect(resolvePresenceRouteMeta("/gis/strumenti")).toEqual({
+      moduleKey: "gis",
+      routeLabel: "GIS Platform / Strumenti",
+    });
+    expect(resolvePresenceRouteMeta("/gis/amministrazione")).toEqual({
+      moduleKey: "gis",
+      routeLabel: "GIS Platform / Amministrazione",
+    });
     expect(resolvePresenceRouteMeta("/ruolo/avvisi/42")).toEqual({
       moduleKey: "ruolo",
       routeLabel: "Ruolo / Dettaglio avviso",

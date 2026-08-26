@@ -137,7 +137,9 @@ describe("Sidebar mobile drawer", () => {
 
     expect(screen.queryByRole("link", { name: "Utenti GAIA" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Cruscotto operatori" })).not.toBeInTheDocument();
-    expect(screen.getByText("Apri La mia attività").closest("a")).toHaveAttribute("href", "/me");
+    const workspaceLink = screen.getByText("Apri La mia attività").closest("a");
+    expect(workspaceLink).toHaveAttribute("href", "/me");
+    expect(workspaceLink).not.toHaveAttribute("aria-label");
   });
 
   test("does not render the drawer while closed", () => {

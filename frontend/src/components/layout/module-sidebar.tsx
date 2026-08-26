@@ -32,7 +32,7 @@ export function ModuleSidebar({
     <div className="space-y-0.5 px-2 pb-3">
       {sections.map((section) => (
         <Fragment key={section.label}>
-          <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">{section.label}</p>
+          <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-600">{section.label}</p>
           {section.items.map((navItem) => (
             <NavItem key={navItem.href} {...navItem} />
           ))}

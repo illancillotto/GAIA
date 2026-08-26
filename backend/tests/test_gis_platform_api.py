@@ -6,6 +6,7 @@ import zipfile
 from collections.abc import Generator
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
@@ -23,6 +24,7 @@ from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.gis import exporter as gis_exporter
+from app.modules.gis import runtime_health as gis_runtime_health
 from app.modules.gis import services as gis_services
 from app.modules.gis.bootstrap import (
     CATASTO_GIS_LAYER_DEFINITIONS,
@@ -33,9 +35,14 @@ from app.modules.gis.bootstrap import (
     ensure_network_gis_catalog,
     ensure_riordino_gis_catalog,
 )
-from app.modules.gis.models import GisAuditLog, GisChangeRequest, GisLayer, GisLayerExport, GisShapefileImport
-from app.modules.gis.models import GisLayerPermission
-
+from app.modules.gis.models import (
+    GisAuditLog,
+    GisChangeRequest,
+    GisLayer,
+    GisLayerExport,
+    GisLayerPermission,
+    GisShapefileImport,
+)
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
 engine = create_engine(
@@ -72,6 +79,7 @@ def setup_database() -> Generator[None, None, None]:
                 password_hash=hash_password("secret123"),
                 role=ApplicationUserRole.ADMIN.value,
                 is_active=True,
+                module_gis=True,
             ),
             ApplicationUser(
                 username="gis-viewer",
@@ -79,6 +87,7 @@ def setup_database() -> Generator[None, None, None]:
                 password_hash=hash_password("secret123"),
                 role=ApplicationUserRole.VIEWER.value,
                 is_active=True,
+                module_gis=True,
             ),
             ApplicationUser(
                 username="gis-editor",
@@ -86,6 +95,15 @@ def setup_database() -> Generator[None, None, None]:
                 password_hash=hash_password("secret123"),
                 role=ApplicationUserRole.OPERATOR.value,
                 is_active=True,
+                module_gis=True,
+            ),
+            ApplicationUser(
+                username="no-gis-viewer",
+                email="no-gis-viewer@example.local",
+                password_hash=hash_password("secret123"),
+                role=ApplicationUserRole.VIEWER.value,
+                is_active=True,
+                module_gis=False,
             ),
         ]
     )
@@ -102,6 +120,212 @@ def auth_headers(username: str) -> dict[str, str]:
     response = client.post("/auth/login", json={"username": username, "password": "secret123"})
     assert response.status_code == 200
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+
+def test_gis_router_requires_module_access() -> None:
+    response = client.get("/gis/layers", headers=auth_headers("no-gis-viewer"))
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Module access denied"
+
+
+def test_gis_runtime_health_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        gis_runtime_health,
+        "get_runtime_health",
+        lambda db: {
+            "generated_at": "2026-08-25T10:00:00Z",
+            "status": "warning",
+            "export_scheduler_enabled": False,
+            "components": [
+                {
+                    "key": "qgis",
+                    "label": "QGIS Server",
+                    "status": "not_configured",
+                    "message": "QGIS Server non configurato.",
+                    "checked_at": "2026-08-25T10:00:00Z",
+                    "details": {},
+                }
+            ],
+        },
+    )
+
+    response = client.get("/gis/runtime-health", headers=auth_headers("gis-viewer"))
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "warning"
+    assert response.json()["components"][0]["status"] == "not_configured"
+
+
+def test_gis_activity_histories_are_paginated_and_authorized() -> None:
+    admin_headers = auth_headers("gis-admin")
+    viewer_headers = auth_headers("gis-viewer")
+    layer = create_layer(admin_headers, name="history_layer", title="Storico GIS")
+
+    db = TestingSessionLocal()
+    try:
+        viewer = db.scalar(
+            select(ApplicationUser).where(ApplicationUser.username == "gis-viewer")
+        )
+        editor = db.scalar(
+            select(ApplicationUser).where(ApplicationUser.username == "gis-editor")
+        )
+        db.add(
+            GisLayerPermission(
+                layer_id=UUID(layer["id"]),
+                principal_type="role",
+                principal_key=ApplicationUserRole.VIEWER.value,
+                can_view=True,
+            )
+        )
+        viewer_import = GisShapefileImport(
+            status="validated",
+            original_filename="viewer.zip",
+            workspace="rete",
+            target_layer_name="viewer_import",
+            target_layer_title="Import viewer",
+            official_source="shapefile_upload",
+            source_srid=4326,
+            encoding="utf-8",
+            staging_schema="gis_staging",
+            staging_table="viewer_import",
+            feature_count=2,
+            checksum_sha256="a" * 64,
+            uploaded_by_user_id=viewer.id,
+            created_at=datetime(2026, 8, 25, 8, 0, tzinfo=UTC),
+        )
+        viewer_import_latest = GisShapefileImport(
+            status="validated",
+            original_filename="viewer-latest.zip",
+            workspace="rete",
+            target_layer_name="viewer_import_latest",
+            target_layer_title="Import viewer recente",
+            official_source="shapefile_upload",
+            source_srid=4326,
+            encoding="utf-8",
+            staging_schema="gis_staging",
+            staging_table="viewer_import_latest",
+            feature_count=1,
+            checksum_sha256="c" * 64,
+            uploaded_by_user_id=viewer.id,
+            created_at=datetime(2026, 8, 25, 9, 0, tzinfo=UTC),
+        )
+        editor_import = GisShapefileImport(
+            status="published",
+            original_filename="editor.zip",
+            workspace="rete",
+            target_layer_name="editor_import",
+            target_layer_title="Import editor",
+            official_source="shapefile_upload",
+            source_srid=4326,
+            encoding="utf-8",
+            staging_schema="gis_staging",
+            staging_table="editor_import",
+            feature_count=3,
+            checksum_sha256="b" * 64,
+            uploaded_by_user_id=editor.id,
+        )
+        export = GisLayerExport(
+            layer_id=UUID(layer["id"]),
+            version_label="v1",
+            status="completed",
+            nas_path="/tmp/history.zip",
+            requested_by_user_id=viewer.id,
+            created_at=datetime(2026, 8, 25, 8, 0, tzinfo=UTC),
+        )
+        latest_export = GisLayerExport(
+            layer_id=UUID(layer["id"]),
+            version_label="v2",
+            status="completed",
+            nas_path="/tmp/history-v2.zip",
+            requested_by_user_id=viewer.id,
+            created_at=datetime(2026, 8, 25, 9, 0, tzinfo=UTC),
+        )
+        db.add_all(
+            [viewer_import, viewer_import_latest, editor_import, export, latest_export]
+        )
+        db.flush()
+        db.add(
+            GisAuditLog(
+                layer_id=UUID(layer["id"]),
+                event_type="history.checked",
+                actor_user_id=viewer.id,
+                target_type="export",
+                target_id=export.id,
+                payload_json={"version": "v1"},
+                created_at=datetime(2026, 8, 25, 8, 0, tzinfo=UTC),
+            )
+        )
+        db.add(
+            GisAuditLog(
+                layer_id=UUID(layer["id"]),
+                event_type="history.checked",
+                actor_user_id=viewer.id,
+                target_type="export",
+                target_id=latest_export.id,
+                payload_json={"version": "v2"},
+                created_at=datetime(2026, 8, 25, 9, 0, tzinfo=UTC),
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    own_imports = client.get("/gis/imports?limit=1&offset=0", headers=viewer_headers)
+    assert own_imports.status_code == 200
+    assert own_imports.json()["total"] == 2
+    assert own_imports.json()["items"][0]["target_layer_name"] == "viewer_import_latest"
+    assert own_imports.json()["has_more"] is True
+    own_imports_next = client.get(
+        "/gis/imports?limit=1&offset=1", headers=viewer_headers
+    )
+    assert own_imports_next.json()["items"][0]["target_layer_name"] == "viewer_import"
+    assert own_imports_next.json()["has_more"] is False
+
+    filtered_imports = client.get(
+        "/gis/imports?status=published&limit=1&offset=0", headers=admin_headers
+    )
+    assert filtered_imports.status_code == 200
+    assert filtered_imports.json()["total"] == 1
+    assert filtered_imports.json()["items"][0]["target_layer_name"] == "editor_import"
+
+    exports = client.get(
+        f"/gis/exports?layer_id={layer['id']}&status=completed&limit=1",
+        headers=viewer_headers,
+    )
+    assert exports.status_code == 200
+    assert exports.json()["total"] == 2
+    assert exports.json()["items"][0]["version_label"] == "v2"
+    assert exports.json()["has_more"] is True
+    exports_next = client.get(
+        f"/gis/exports?layer_id={layer['id']}&status=completed&limit=1&offset=1",
+        headers=viewer_headers,
+    )
+    assert exports_next.json()["items"][0]["version_label"] == "v1"
+    assert exports_next.json()["has_more"] is False
+
+    denied_audit = client.get("/gis/audit", headers=viewer_headers)
+    assert denied_audit.status_code == 403
+    audit = client.get(
+        f"/gis/audit?layer_id={layer['id']}&event_type=history.checked&limit=1",
+        headers=admin_headers,
+    )
+    assert audit.status_code == 200
+    assert audit.json()["total"] == 2
+    assert audit.json()["items"][0]["payload"] == {"version": "v2"}
+    assert audit.json()["has_more"] is True
+    audit_next = client.get(
+        f"/gis/audit?layer_id={layer['id']}&event_type=history.checked&limit=1&offset=1",
+        headers=admin_headers,
+    )
+    assert audit_next.json()["items"][0]["payload"] == {"version": "v1"}
+    assert audit_next.json()["has_more"] is False
+
+    missing_layer = client.get(
+        "/gis/exports?layer_id=00000000-0000-0000-0000-000000000123",
+        headers=viewer_headers,
+    )
+    assert missing_layer.status_code == 404
 
 
 def create_layer(
@@ -356,6 +580,152 @@ def test_gis_catalog_dashboard_requires_authentication() -> None:
     response = client.get("/gis/catalog/dashboard")
 
     assert response.status_code == 401
+
+
+def test_layer_feature_selector_searches_pages_and_respects_permissions() -> None:
+    admin_headers = auth_headers("gis-admin")
+    viewer_headers = auth_headers("gis-viewer")
+    table_name = "rete_feature_selector"
+    seed_apply_source_table(table_name)
+    layer = create_layer(
+        admin_headers,
+        name=table_name,
+        workspace="rete",
+        title="Condotte selezionabili",
+        domain_module="network",
+        metadata={
+            "qgis": {"editable": True, "edit_policy": "controlled"},
+            "feature_selector": {"label_fields": ["name", "missing"]},
+        },
+    )
+    grant = client.post(
+        f"/gis/layers/{layer['id']}/permissions",
+        headers=admin_headers,
+        json={"principal_type": "role", "principal_key": "viewer", "access_level": "annotator"},
+    )
+    assert grant.status_code == 200
+
+    admin_search = client.get(
+        f"/gis/layers/{layer['id']}/features?query=condotta&limit=1&offset=0",
+        headers=admin_headers,
+    )
+    assert admin_search.status_code == 200
+    admin_payload = admin_search.json()
+    assert admin_payload == {
+        "items": [
+            {
+                "feature_id": "pipe-1",
+                "label": "pipe-1 - Condotta 1",
+                "attributes": {"id": "pipe-1", "name": "Condotta 1", "diameter": 120},
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": [[8.4, 39.9], [8.5, 40.0]],
+                },
+            }
+        ],
+        "total": 1,
+        "limit": 1,
+        "offset": 0,
+        "has_more": False,
+    }
+
+    viewer_list = client.get(f"/gis/layers/{layer['id']}/features", headers=viewer_headers)
+    assert viewer_list.status_code == 200
+    viewer_payload = viewer_list.json()
+    assert viewer_payload["total"] == 2
+    assert viewer_payload["items"][0]["attributes"] == {"id": "pipe-1", "name": "Condotta 1"}
+    assert viewer_payload["items"][1]["label"] == "pipe-delete - Da rimuovere"
+
+    viewer_permission = client.post(
+        f"/gis/layers/{layer['id']}/permissions",
+        headers=admin_headers,
+        json={"principal_type": "role", "principal_key": "viewer", "access_level": "viewer"},
+    )
+    assert viewer_permission.status_code == 200
+    viewer_map = client.get(f"/gis/layers/{layer['id']}/features?limit=1", headers=viewer_headers)
+    assert viewer_map.status_code == 200
+    assert viewer_map.json()["items"][0]["attributes"] == {"id": "pipe-1", "name": "Condotta 1"}
+
+    second_page = client.get(
+        f"/gis/layers/{layer['id']}/features?limit=1&offset=1",
+        headers=admin_headers,
+    )
+    assert second_page.status_code == 200
+    assert second_page.json()["items"][0]["feature_id"] == "pipe-delete"
+    assert second_page.json()["has_more"] is False
+
+    no_match = client.get(f"/gis/layers/{layer['id']}/features?query=inesistente", headers=admin_headers)
+    assert no_match.status_code == 200
+    assert no_match.json()["items"] == []
+    assert no_match.json()["total"] == 0
+
+    fallback_metadata = client.patch(
+        f"/gis/layers/{layer['id']}/metadata",
+        headers=admin_headers,
+        json={"metadata": {"feature_selector": {"label_fields": "automatic"}}},
+    )
+    assert fallback_metadata.status_code == 200
+    fallback_labels = client.get(
+        f"/gis/layers/{layer['id']}/features?limit=1",
+        headers=admin_headers,
+    )
+    assert fallback_labels.status_code == 200
+    assert fallback_labels.json()["items"][0]["label"] == "pipe-1 - Condotta 1 - 120"
+
+
+def test_layer_feature_selector_rejects_invalid_or_unavailable_sources() -> None:
+    admin_headers = auth_headers("gis-admin")
+    viewer_headers = auth_headers("gis-viewer")
+    table_name = "rete_feature_selector_guard"
+    seed_apply_source_table(table_name)
+    layer = create_layer(admin_headers, name=table_name, workspace="rete", domain_module="network")
+
+    forbidden = client.get(f"/gis/layers/{layer['id']}/features", headers=viewer_headers)
+    assert forbidden.status_code == 403
+
+    registry = create_layer(
+        admin_headers,
+        name="riordino_feature_registry",
+        workspace="riordino",
+        domain_module="riordino",
+        source_type="domain_registry",
+        official_source="riordino",
+    )
+    registry_response = client.get(f"/gis/layers/{registry['id']}/features", headers=admin_headers)
+    assert registry_response.status_code == 422
+    assert "requires a PostGIS layer" in registry_response.json()["detail"]
+
+    missing_table = create_layer(
+        admin_headers,
+        name="rete_missing_selector_table",
+        workspace="rete",
+        domain_module="network",
+    )
+    missing_response = client.get(f"/gis/layers/{missing_table['id']}/features", headers=admin_headers)
+    assert missing_response.status_code == 422
+    assert missing_response.json()["detail"] == "GIS layer source is unavailable"
+
+    db = TestingSessionLocal()
+    db.execute(text('CREATE TABLE "rete_selector_without_id" (name TEXT, geometry TEXT)'))
+    db.commit()
+    db.close()
+    missing_identifier = create_layer(
+        admin_headers,
+        name="rete_selector_without_id",
+        workspace="rete",
+        domain_module="network",
+    )
+    identifier_response = client.get(f"/gis/layers/{missing_identifier['id']}/features", headers=admin_headers)
+    assert identifier_response.status_code == 422
+    assert identifier_response.json()["detail"] == "GIS layer feature identifier is unavailable"
+
+
+def test_feature_geometry_parser_handles_native_invalid_and_empty_values() -> None:
+    geometry = {"type": "Point", "coordinates": [8.4, 39.9]}
+    assert gis_services._feature_geometry(geometry) is geometry
+    assert gis_services._feature_geometry("not-json") is None
+    assert gis_services._feature_geometry("[]") is None
+    assert gis_services._feature_geometry(None) is None
 
 
 def test_catalog_dashboard_handles_empty_visible_catalog() -> None:
@@ -2628,7 +2998,61 @@ def test_exporter_helper_edges_are_stable() -> None:
     assert gis_exporter._record_value(None) == ""
     assert gis_exporter._record_value(True) == "true"
     assert gis_exporter._record_value({"b": 2, "a": 1}) == '{"a": 1, "b": 2}'
+    assert len(gis_exporter._record_value("è" * 200).encode("utf-8")) == 254
     assert gis_exporter._shape_from_geometry(None) is None
+
+
+def test_exporter_streams_postgresql_rows_and_closes_result() -> None:
+    class FakeResult:
+        closed = False
+
+        def mappings(self):
+            return [
+                {
+                    "id": "feature-1",
+                    "geometry": "binary-placeholder",
+                    "__geometry_geojson": json.dumps(
+                        {"type": "Point", "coordinates": [8.4, 39.9]}
+                    ),
+                }
+            ]
+
+        def close(self) -> None:
+            self.closed = True
+
+    class FakeDb:
+        def __init__(self) -> None:
+            self.result = FakeResult()
+            self.calls: list[tuple[str, dict | None]] = []
+
+        def get_bind(self):
+            return SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+
+        def execute(self, statement, execution_options=None):
+            self.calls.append((str(statement), execution_options))
+            return self.result
+
+    layer = GisLayer(
+        workspace="catasto",
+        name="streamed",
+        title="Streamed",
+        postgis_schema="public",
+        postgis_table="streamed",
+        geometry_column="geometry",
+    )
+    db = FakeDb()
+
+    rows = list(gis_exporter._feature_rows(db, layer))
+
+    assert rows == [
+        (
+            {"id": "feature-1"},
+            {"type": "Point", "coordinates": [8.4, 39.9]},
+        )
+    ]
+    assert db.calls[0] == ("SET LOCAL max_parallel_workers_per_gather = 0", None)
+    assert db.calls[1][1] == {"stream_results": True, "yield_per": 1000}
+    assert db.result.closed is True
 
 
 def test_export_shapefile_marks_failures_without_publishing_zip(tmp_path: Path) -> None:

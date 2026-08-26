@@ -16,7 +16,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.datetime_compat import UTC
 from app.core.security import create_action_token, decode_action_token, hash_password
-from app.models.application_user import ApplicationUser
+from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.application_user_password_reset import ApplicationUserPasswordResetToken
 from app.modules.network.vpn_access import (
     VpnDeviceLimitExceeded,
@@ -53,6 +53,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 PASSWORD_RESET_REQUEST_MESSAGE = (
     "Se l'account esiste ed e attivo, riceverai una mail con le istruzioni per reimpostare la password."
 )
+ADMIN_VPN_MAX_ACTIVE_DEVICES = 7
 
 
 def _serialize_current_user(user: ApplicationUser) -> CurrentUserResponse:
@@ -93,6 +94,15 @@ def _client_ip_from_request(request: Request) -> str | None:
     return request.client.host if request.client else None
 
 
+def _vpn_device_limit_for_user(user: ApplicationUser) -> int:
+    if user.role in {
+        ApplicationUserRole.ADMIN.value,
+        ApplicationUserRole.SUPER_ADMIN.value,
+    }:
+        return ADMIN_VPN_MAX_ACTIVE_DEVICES
+    return settings.network_vpn_max_active_devices_per_user
+
+
 def _enforce_vpn_login_device(
     db: Session,
     *,
@@ -110,7 +120,7 @@ def _enforce_vpn_login_device(
             device_label=device_label,
             user_agent=user_agent,
             client_ip=client_ip,
-            max_devices=settings.network_vpn_max_active_devices_per_user,
+            max_devices=_vpn_device_limit_for_user(user),
             enforcement_enabled=settings.network_vpn_device_enforcement_enabled,
         )
     except VpnDeviceLimitExceeded as exc:

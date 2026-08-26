@@ -186,7 +186,6 @@ function UserWorkspaceLink({ currentUser, pathname }: { currentUser: CurrentUser
   return (
     <Link
       href="/me"
-      aria-label="Apri La mia attività"
       className={cn(
         "group flex items-center gap-2 rounded-xl p-2 transition-colors",
         isActive ? "bg-[#EAF3E8] text-[#1D4E35]" : "hover:bg-gray-50",
@@ -195,7 +194,7 @@ function UserWorkspaceLink({ currentUser, pathname }: { currentUser: CurrentUser
       <Avatar label={currentUser.username} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-gray-800">{currentUser.username}</p>
-        <p className="text-xs text-gray-400">{currentUser.role}</p>
+        <p className="text-xs text-gray-600">{currentUser.role}</p>
         <p className="mt-0.5 text-[11px] font-medium text-[#1D4E35]">Apri La mia attività</p>
       </div>
       <div className="h-2 w-2 rounded-full bg-[#1D9E75]" title="Backend connesso" />
@@ -232,7 +231,7 @@ function SidebarContent({
       <div className="border-t border-gray-100 px-4 py-3">
         {canManageGaiaUsers ? (
           <div className="mb-3 border-b border-gray-100 pb-3">
-            <p className="pb-1 text-[10px] font-medium uppercase tracking-widest text-gray-400">
+            <p className="pb-1 text-[10px] font-medium uppercase tracking-widest text-gray-600">
               Amministrazione
             </p>
             <Link

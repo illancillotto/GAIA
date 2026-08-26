@@ -3,24 +3,35 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   createGisLayerChangeRequest,
   createGisLayerAnnotation,
+  createGisCatalogLayer,
   createGisShapefileImportChangeRequests,
   createGisShapefileImport,
   downloadGisQgisProject,
   getGisCatalogDashboard,
+  getGisCatalogLayer,
+  getGisQgisGovernance,
   getGisOgcPoc,
+  getGisRuntimeHealth,
   getGisShapefileImport,
+  listGisAuditLogs,
   listGisChangeRequests,
+  listGisCatalogLayerExports,
   listGisCatalogLayers,
   listGisLayerAnnotations,
+  listGisLayerFeatures,
   listGisLayerPermissions,
+  listGisShapefileImports,
   previewGisShapefileImport,
   publishGisShapefileImport,
   rejectGisShapefileImport,
+  requestGisCatalogLayerExport,
   revokeGisLayerPermission,
   setGisChangeRequestStatus,
   setGisLayerAnnotationStatus,
+  setGisCatalogLayerActive,
   updateGisChangeRequest,
   updateGisLayerAnnotation,
+  updateGisCatalogLayerMetadata,
   upsertGisLayerPermission,
   validateGisShapefileImport,
 } from "@/lib/api/gis";
@@ -95,6 +106,54 @@ describe("GIS platform api client", () => {
     );
   });
 
+  test("calls the assisted catalog administration endpoints", async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(
+      new Response(JSON.stringify({ id: "layer-1" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    ));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getGisCatalogLayer("token", "layer-1");
+    await createGisCatalogLayer("token", {
+      workspace: "rete", name: "condotte", title: "Condotte",
+      description: " ", domainModule: " ", sourceType: " ", officialSource: " ",
+      postgisSchema: " ", postgisTable: "condotte", geometryColumn: " ",
+      geometryType: "LINESTRING", srid: 4326, featureIdColumn: " ",
+      martinLayerId: " ", nasExportRoot: " ",
+    });
+    await createGisCatalogLayer("token", {
+      workspace: "rete", name: "valvole", title: "Valvole", sourceType: "postgis_view",
+      officialSource: "survey", postgisSchema: "network", postgisTable: "valvole",
+      geometryColumn: "geom", featureIdColumn: "gid",
+    });
+    await updateGisCatalogLayerMetadata("token", "layer-1", {
+      title: " Condotte aggiornate ", description: "Descrizione",
+      ogcServiceUrl: "https://gis/ogc", qgisProjectPath: "/qgis/rete.qgz",
+      nasExportRoot: "/nas/gis",
+    });
+    await setGisCatalogLayerActive("token", "layer-1", true);
+    await setGisCatalogLayerActive("token", "layer-1", false);
+    await requestGisCatalogLayerExport("token", "layer-1", {
+      versionLabel: " v1 ", nasPath: " /nas/v1.zip ",
+    });
+    await getGisQgisGovernance("token");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/gis/layers/layer-1", expect.any(Object));
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({
+      source_type: "postgis", official_source: "postgis", postgis_schema: "public",
+      geometry_column: "geometry", feature_id_column: "id",
+    });
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toMatchObject({
+      source_type: "postgis_view", official_source: "survey", postgis_schema: "network",
+      geometry_column: "geom", feature_id_column: "gid",
+    });
+    expect(fetchMock.mock.calls[4][0]).toBe("/api/gis/layers/layer-1/activate");
+    expect(fetchMock.mock.calls[5][0]).toBe("/api/gis/layers/layer-1/deactivate");
+    expect(fetchMock.mock.calls[7][0]).toBe("/api/gis/qgis/governance");
+  });
+
   test("loads catalog dashboard health", async () => {
     const dashboard = {
       generated_at: "2026-07-14T08:00:00Z",
@@ -123,6 +182,135 @@ describe("GIS platform api client", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/gis/catalog/dashboard",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer token" }),
+      }),
+    );
+  });
+
+  test("loads runtime service health", async () => {
+    const payload = {
+      generated_at: "2026-08-25T10:00:00Z",
+      status: "warning",
+      export_scheduler_enabled: false,
+      components: [],
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getGisRuntimeHealth("token")).resolves.toEqual(payload);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/gis/runtime-health",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer token" }),
+      }),
+    );
+  });
+
+  test("loads paginated import, export and audit histories", async () => {
+    const responses = [
+      { items: [], total: 0, limit: 10, offset: 20, has_more: false },
+      { items: [], total: 0, limit: 5, offset: 0, has_more: false },
+      { items: [], total: 0, limit: 25, offset: 0, has_more: false },
+    ];
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(
+          new Response(JSON.stringify(responses.shift()), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        ),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await listGisShapefileImports("token", {
+      status: "validated",
+      limit: 10,
+      offset: 20,
+    });
+    await listGisCatalogLayerExports("token", {
+      layerId: " layer-1 ",
+      status: " completed ",
+      limit: 5,
+    });
+    await listGisAuditLogs("token", {
+      eventType: " export.completed ",
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/gis/imports?status=validated&limit=10&offset=20",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer token" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/gis/exports?layer_id=layer-1&status=completed&limit=5&offset=0",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer token" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/gis/audit?event_type=export.completed&limit=25&offset=0",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer token" }),
+      }),
+    );
+  });
+
+  test("uses default pagination for import and export histories", async () => {
+    const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(
+      new Response(JSON.stringify({ items: [], total: 0, limit: 25, offset: 0, has_more: false }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    ));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await listGisShapefileImports("token");
+    await listGisCatalogLayerExports("token");
+
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/gis/imports?limit=25&offset=0");
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/gis/exports?limit=25&offset=0");
+  });
+
+  test("searches selectable layer features with pagination", async () => {
+    const responsePayload = {
+      items: [
+        {
+          feature_id: "pipe-1",
+          label: "pipe-1 - Condotta 1",
+          attributes: { name: "Condotta 1" },
+        },
+      ],
+      total: 1,
+      limit: 10,
+      offset: 20,
+      has_more: false,
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(responsePayload), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      listGisLayerFeatures("token", "layer-1", " condotta ", 10, 20),
+    ).resolves.toEqual(responsePayload);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/gis/layers/layer-1/features?query=condotta&limit=10&offset=20",
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: "Bearer token" }),
       }),
@@ -249,16 +437,26 @@ describe("GIS platform api client", () => {
         }),
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ ...importResponse, status: "rejected" }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
+        new Response(
+          JSON.stringify({ ...importResponse, status: "rejected" }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ ...importResponse, status: "published", published_layer_id: "layer-1" }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
+        new Response(
+          JSON.stringify({
+            ...importResponse,
+            status: "published",
+            published_layer_id: "layer-1",
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
       );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -274,16 +472,28 @@ describe("GIS platform api client", () => {
         encoding: " utf-8 ",
       }),
     ).resolves.toMatchObject({ id: "import-1" });
-    await expect(getGisShapefileImport("token", "import-1")).resolves.toMatchObject({ id: "import-1" });
-    await expect(previewGisShapefileImport("token", "import-1", 2, 1)).resolves.toMatchObject({ returned_count: 1 });
-    await expect(validateGisShapefileImport("token", "import-1")).resolves.toMatchObject({ status: "validated" });
-    await expect(rejectGisShapefileImport("token", "import-1")).resolves.toMatchObject({ status: "rejected" });
-    await expect(publishGisShapefileImport("token", "import-1")).resolves.toMatchObject({ status: "published" });
+    await expect(
+      getGisShapefileImport("token", "import-1"),
+    ).resolves.toMatchObject({ id: "import-1" });
+    await expect(
+      previewGisShapefileImport("token", "import-1", 2, 1),
+    ).resolves.toMatchObject({ returned_count: 1 });
+    await expect(
+      validateGisShapefileImport("token", "import-1"),
+    ).resolves.toMatchObject({ status: "validated" });
+    await expect(
+      rejectGisShapefileImport("token", "import-1"),
+    ).resolves.toMatchObject({ status: "rejected" });
+    await expect(
+      publishGisShapefileImport("token", "import-1"),
+    ).resolves.toMatchObject({ status: "published" });
 
     const createCall = fetchMock.mock.calls[0];
     expect(createCall[0]).toBe("/api/gis/imports/shapefile");
     expect(createCall[1]).toEqual(expect.objectContaining({ method: "POST" }));
-    expect(createCall[1].headers).toEqual(expect.objectContaining({ Authorization: "Bearer token" }));
+    expect(createCall[1].headers).toEqual(
+      expect.objectContaining({ Authorization: "Bearer token" }),
+    );
     expect(createCall[1].headers).not.toHaveProperty("Content-Type");
     const formData = createCall[1].body as FormData;
     expect(formData.get("file")).toBe(file);
@@ -296,10 +506,28 @@ describe("GIS platform api client", () => {
     expect(formData.get("encoding")).toBe("utf-8");
     expect(fetchMock.mock.calls[1][0]).toBe("/api/gis/imports/import-1");
     expect(fetchMock.mock.calls[1][1].method).toBeUndefined();
-    expect(fetchMock).toHaveBeenNthCalledWith(3, "/api/gis/imports/import-1/preview?limit=2&offset=1", expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token" }) }));
-    expect(fetchMock).toHaveBeenNthCalledWith(4, "/api/gis/imports/import-1/validate", expect.objectContaining({ method: "POST" }));
-    expect(fetchMock).toHaveBeenNthCalledWith(5, "/api/gis/imports/import-1/reject", expect.objectContaining({ method: "POST" }));
-    expect(fetchMock).toHaveBeenNthCalledWith(6, "/api/gis/imports/import-1/publish", expect.objectContaining({ method: "POST" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/gis/imports/import-1/preview?limit=2&offset=1",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer token" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "/api/gis/imports/import-1/validate",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      "/api/gis/imports/import-1/reject",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      6,
+      "/api/gis/imports/import-1/publish",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 
   test("creates change requests from a shapefile import", async () => {
@@ -450,15 +678,25 @@ describe("GIS platform api client", () => {
         }),
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ id: "perm-1", principal_type: "role", principal_key: "viewer", access_level: "viewer" }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
+        new Response(
+          JSON.stringify({
+            id: "perm-1",
+            principal_type: "role",
+            principal_key: "viewer",
+            access_level: "viewer",
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
       )
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(listGisLayerPermissions("token", "layer-1")).resolves.toEqual([]);
+    await expect(listGisLayerPermissions("token", "layer-1")).resolves.toEqual(
+      [],
+    );
     await expect(
       upsertGisLayerPermission("token", "layer-1", {
         principalType: "role",
@@ -466,19 +704,27 @@ describe("GIS platform api client", () => {
         accessLevel: "viewer",
       }),
     ).resolves.toMatchObject({ id: "perm-1" });
-    await expect(revokeGisLayerPermission("token", "layer-1", "perm-1")).resolves.toBeUndefined();
+    await expect(
+      revokeGisLayerPermission("token", "layer-1", "perm-1"),
+    ).resolves.toBeUndefined();
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       "/api/gis/layers/layer-1/permissions",
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token" }) }),
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer token" }),
+      }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       "/api/gis/layers/layer-1/permissions",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ principal_type: "role", principal_key: "viewer", access_level: "viewer" }),
+        body: JSON.stringify({
+          principal_type: "role",
+          principal_key: "viewer",
+          access_level: "viewer",
+        }),
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
@@ -540,14 +786,20 @@ describe("GIS platform api client", () => {
       );
     vi.stubGlobal("fetch", fetchMock);
 
-    await listGisLayerAnnotations("token", "layer-1", { status: "open", featureId: " parcel-1 " });
+    await listGisLayerAnnotations("token", "layer-1", {
+      status: "open",
+      featureId: " parcel-1 ",
+    });
     await createGisLayerAnnotation("token", "layer-1", {
       featureId: " parcel-1 ",
       title: "Nota",
       body: "Testo",
       attachmentRefs: [{ filename: "foto.jpg" }],
     });
-    await updateGisLayerAnnotation("token", "layer-1", "ann-1", { title: "Aggiornata", body: "Testo aggiornato" });
+    await updateGisLayerAnnotation("token", "layer-1", "ann-1", {
+      title: "Aggiornata",
+      body: "Testo aggiornato",
+    });
     await setGisLayerAnnotationStatus("token", "layer-1", "ann-1", "in_review");
     await setGisLayerAnnotationStatus("token", "layer-1", "ann-1", "closed");
     await setGisLayerAnnotationStatus("token", "layer-1", "ann-1", "rejected");
@@ -647,16 +899,22 @@ describe("GIS platform api client", () => {
         }),
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ ...changeRequest, status: "submitted" }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
+        new Response(
+          JSON.stringify({ ...changeRequest, status: "submitted" }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ ...changeRequest, status: "needs_changes" }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        }),
+        new Response(
+          JSON.stringify({ ...changeRequest, status: "needs_changes" }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
       )
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ ...changeRequest, status: "approved" }), {
@@ -678,7 +936,10 @@ describe("GIS platform api client", () => {
       );
     vi.stubGlobal("fetch", fetchMock);
 
-    await listGisChangeRequests("token", { status: "submitted", layerId: " layer-1 " });
+    await listGisChangeRequests("token", {
+      status: "submitted",
+      layerId: " layer-1 ",
+    });
     await createGisLayerChangeRequest("token", "layer-1", {
       featureId: " parcel-1 ",
       changeType: "attribute_update",
@@ -691,7 +952,12 @@ describe("GIS platform api client", () => {
       payload: { geometry: { type: "Point" } },
       justification: " Aggiornata ",
     });
-    await setGisChangeRequestStatus("token", "cr-1", "needs_changes", " integra ");
+    await setGisChangeRequestStatus(
+      "token",
+      "cr-1",
+      "needs_changes",
+      " integra ",
+    );
     await setGisChangeRequestStatus("token", "cr-1", "approved", " valida ");
     await setGisChangeRequestStatus("token", "cr-1", "rejected", " duplicata ");
     await setGisChangeRequestStatus("token", "cr-1", "applied");
@@ -730,17 +996,26 @@ describe("GIS platform api client", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,
       "/api/gis/change-requests/cr-1/request-changes",
-      expect.objectContaining({ method: "POST", body: JSON.stringify({ review_notes: "integra" }) }),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ review_notes: "integra" }),
+      }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       5,
       "/api/gis/change-requests/cr-1/approve",
-      expect.objectContaining({ method: "POST", body: JSON.stringify({ review_notes: "valida" }) }),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ review_notes: "valida" }),
+      }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       6,
       "/api/gis/change-requests/cr-1/reject",
-      expect.objectContaining({ method: "POST", body: JSON.stringify({ review_notes: "duplicata" }) }),
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ review_notes: "duplicata" }),
+      }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       7,

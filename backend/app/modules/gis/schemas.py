@@ -116,6 +116,21 @@ class GisLayerListResponse(BaseModel):
     total: int
 
 
+class GisLayerFeatureOption(BaseModel):
+    feature_id: str
+    label: str
+    attributes: dict[str, Any] = Field(default_factory=dict)
+    geometry: dict[str, Any] | None = None
+
+
+class GisLayerFeatureListResponse(BaseModel):
+    items: list[GisLayerFeatureOption]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
 class GisCatalogWorkspaceSummary(BaseModel):
     workspace: str
     total_layers: int
@@ -164,6 +179,23 @@ class GisCatalogDashboardResponse(BaseModel):
     issues: list[GisCatalogHealthIssue]
     latest_exports: list[GisCatalogLatestExport]
     workspaces: list[GisCatalogWorkspaceSummary]
+
+
+class GisRuntimeComponentHealth(BaseModel):
+    key: Literal["postgis", "martin", "qgis", "nas"]
+    label: str
+    status: Literal["ok", "warning", "critical", "not_configured"]
+    message: str
+    latency_ms: float | None = None
+    checked_at: datetime
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class GisRuntimeHealthResponse(BaseModel):
+    generated_at: datetime
+    status: Literal["ok", "warning", "critical"]
+    export_scheduler_enabled: bool
+    components: list[GisRuntimeComponentHealth]
 
 
 class GisLayerPermissionUpsert(BaseModel):
@@ -274,6 +306,14 @@ class GisLayerExportResponse(BaseModel):
     created_at: datetime
 
 
+class GisLayerExportListResponse(BaseModel):
+    items: list[GisLayerExportResponse]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
 class GisShapefileImportResponse(BaseModel):
     id: UUID
     status: GisShapefileImportStatus
@@ -301,6 +341,33 @@ class GisShapefileImportResponse(BaseModel):
     published_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class GisShapefileImportListResponse(BaseModel):
+    items: list[GisShapefileImportResponse]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
+class GisAuditLogResponse(BaseModel):
+    id: UUID
+    layer_id: UUID | None = None
+    event_type: str
+    actor_user_id: int | None = None
+    target_type: str | None = None
+    target_id: UUID | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+
+
+class GisAuditLogListResponse(BaseModel):
+    items: list[GisAuditLogResponse]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
 
 
 class GisShapefileImportPreviewFeature(BaseModel):

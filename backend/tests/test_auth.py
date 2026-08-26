@@ -205,12 +205,14 @@ def test_login_registers_and_reuses_vpn_device() -> None:
     db.close()
 
 
-def test_login_blocks_fifth_active_vpn_device(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_login_blocks_eighth_active_vpn_device_for_admin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     create_user()
     monkeypatch.setattr(settings, "network_vpn_device_enforcement_enabled", True)
     monkeypatch.setattr(settings, "network_vpn_max_active_devices_per_user", 4)
 
-    for index in range(4):
+    for index in range(7):
         response = client.post(
             "/auth/login",
             json={"username": "admin", "password": "secret123", "device_id": f"device-{index}"},
@@ -220,20 +222,51 @@ def test_login_blocks_fifth_active_vpn_device(monkeypatch: pytest.MonkeyPatch) -
 
     blocked = client.post(
         "/auth/login",
-        json={"username": "admin", "password": "secret123", "device_id": "device-5"},
-        headers={"user-agent": "pytest-browser-5"},
+        json={"username": "admin", "password": "secret123", "device_id": "device-8"},
+        headers={"user-agent": "pytest-browser-8"},
     )
 
     assert blocked.status_code == 403
     assert "Limite dispositivi raggiunto" in blocked.json()["detail"]
 
     db = TestingSessionLocal()
-    assert db.query(NetworkVpnDevice).count() == 4
+    assert db.query(NetworkVpnDevice).count() == 7
     blocked_session = db.query(NetworkVpnSession).order_by(NetworkVpnSession.id.desc()).first()
     assert blocked_session is not None
     assert blocked_session.event_type == "login_blocked"
-    assert blocked_session.blocked_reason == "max_active_devices:4"
+    assert blocked_session.blocked_reason == "max_active_devices:7"
     db.close()
+
+
+def test_login_keeps_four_device_limit_for_non_admin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_viewer_user()
+    monkeypatch.setattr(settings, "network_vpn_device_enforcement_enabled", True)
+    monkeypatch.setattr(settings, "network_vpn_max_active_devices_per_user", 4)
+
+    for index in range(4):
+        response = client.post(
+            "/auth/login",
+            json={
+                "username": "viewer",
+                "password": "secret123",
+                "device_id": f"viewer-device-{index}",
+            },
+        )
+        assert response.status_code == 200
+
+    blocked = client.post(
+        "/auth/login",
+        json={
+            "username": "viewer",
+            "password": "secret123",
+            "device_id": "viewer-device-5",
+        },
+    )
+
+    assert blocked.status_code == 403
+    assert "massimo 4 dispositivi attivi" in blocked.json()["detail"]
 
 
 def test_login_blocks_revoked_vpn_device() -> None:

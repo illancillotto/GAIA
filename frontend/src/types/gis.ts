@@ -1,10 +1,20 @@
-export type GisCatalogAccessLevel = "viewer" | "annotator" | "editor" | "approver" | "admin";
-export type GisCatalogAnnotationStatus = "open" | "in_review" | "closed" | "rejected";
-export type GisCatalogChangeRequestStatus = "submitted" | "needs_changes" | "approved" | "rejected" | "applied";
-export type GisCatalogChangeRequestType = "attribute_update" | "geometry_update" | "feature_create" | "feature_delete";
+export type GisCatalogAccessLevel =
+  "viewer" | "annotator" | "editor" | "approver" | "admin";
+export type GisCatalogAnnotationStatus =
+  "open" | "in_review" | "closed" | "rejected";
+export type GisCatalogChangeRequestStatus =
+  "submitted" | "needs_changes" | "approved" | "rejected" | "applied";
+export type GisCatalogChangeRequestType =
+  "attribute_update" | "geometry_update" | "feature_create" | "feature_delete";
 export type GisCatalogHealthStatus = "ok" | "warning" | "critical";
 export type GisCatalogHealthSeverity = "warning" | "critical";
-export type GisShapefileImportStatus = "uploaded" | "validated" | "rejected" | "published" | "failed";
+export type GisRuntimeHealthStatus =
+  | "ok"
+  | "warning"
+  | "critical"
+  | "not_configured";
+export type GisShapefileImportStatus =
+  "uploaded" | "validated" | "rejected" | "published" | "failed";
 
 export interface GisCatalogLayer {
   id: string;
@@ -40,6 +50,94 @@ export interface GisCatalogLayer {
 export interface GisCatalogLayerListResponse {
   items: GisCatalogLayer[];
   total: number;
+}
+
+export interface GisCatalogLayerCreateInput {
+  workspace: string;
+  name: string;
+  title: string;
+  description?: string;
+  domainModule?: string;
+  sourceType?: string;
+  officialSource?: string;
+  postgisSchema?: string;
+  postgisTable?: string;
+  geometryColumn?: string;
+  geometryType?: string;
+  srid?: number;
+  featureIdColumn?: string;
+  martinLayerId?: string;
+  nasExportRoot?: string;
+}
+
+export interface GisCatalogLayerMetadataUpdateInput {
+  title?: string;
+  description?: string;
+  ogcServiceUrl?: string;
+  qgisProjectPath?: string;
+  nasExportRoot?: string;
+}
+
+export interface GisCatalogLayerExportInput {
+  versionLabel?: string;
+  nasPath?: string;
+}
+
+export interface GisCatalogLayerExport {
+  id: string;
+  layer_id: string;
+  version_label: string;
+  status: string;
+  nas_path: string;
+  checksum_sha256?: string | null;
+  requested_by_user_id?: number | null;
+  completed_at?: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface GisCatalogLayerExportListResponse {
+  items: GisCatalogLayerExport[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+}
+
+export interface GisQgisLayerGrant {
+  layer_id: string;
+  workspace: string;
+  layer_name: string;
+  source_table: string;
+  view_name: string;
+  read_role: string;
+  edit_role?: string | null;
+  editable: boolean;
+  edit_reason: string;
+}
+
+export interface GisQgisGovernanceResponse {
+  schema: string;
+  roles: Record<string, string>;
+  connection_policy: Record<string, string>;
+  layers: GisQgisLayerGrant[];
+  statements: string[];
+  sql: string;
+}
+
+export interface GisCatalogLayerFeature {
+  feature_id: string;
+  label: string;
+  attributes: Record<string, unknown>;
+  geometry?: GeoJSON.Geometry | null;
+}
+
+export interface GisCatalogLayerFeatureListResponse {
+  items: GisCatalogLayerFeature[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
 }
 
 export interface GisCatalogWorkspaceSummary {
@@ -90,6 +188,23 @@ export interface GisCatalogDashboardResponse {
   issues: GisCatalogHealthIssue[];
   latest_exports: GisCatalogLatestExport[];
   workspaces: GisCatalogWorkspaceSummary[];
+}
+
+export interface GisRuntimeComponentHealth {
+  key: "postgis" | "martin" | "qgis" | "nas";
+  label: string;
+  status: GisRuntimeHealthStatus;
+  message: string;
+  latency_ms?: number | null;
+  checked_at: string;
+  details: Record<string, unknown>;
+}
+
+export interface GisRuntimeHealthResponse {
+  generated_at: string;
+  status: Exclude<GisRuntimeHealthStatus, "not_configured">;
+  export_scheduler_enabled: boolean;
+  components: GisRuntimeComponentHealth[];
 }
 
 export interface GisOgcPocLayer {
@@ -145,6 +260,33 @@ export interface GisShapefileImport {
   published_at?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface GisShapefileImportListResponse {
+  items: GisShapefileImport[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+}
+
+export interface GisAuditLog {
+  id: string;
+  layer_id?: string | null;
+  event_type: string;
+  actor_user_id?: number | null;
+  target_type?: string | null;
+  target_id?: string | null;
+  payload: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface GisAuditLogListResponse {
+  items: GisAuditLog[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
 }
 
 export interface GisShapefileImportPreviewFeature {
@@ -358,7 +500,8 @@ export interface GisSelectResult {
   truncated: boolean;
 }
 
-export type GisSearchMode = "auto" | "particella" | "codice_fiscale" | "denominazione";
+export type GisSearchMode =
+  "auto" | "particella" | "codice_fiscale" | "denominazione";
 
 export interface GisSearchRequest {
   query: string;

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import pytest
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.modules.gis import export_scheduler
 
@@ -20,6 +20,7 @@ async def test_register_gis_export_scheduler_skips_when_disabled(monkeypatch: py
 async def test_register_gis_export_scheduler_registers_job(monkeypatch: pytest.MonkeyPatch) -> None:
     scheduler = AsyncIOScheduler(timezone="UTC")
     monkeypatch.setattr("app.core.config.settings.gis_export_scheduler_enabled", True)
+    monkeypatch.setattr("app.core.config.settings.gis_export_scheduler_register_in_api", True)
     monkeypatch.setattr("app.core.config.settings.gis_export_scheduler_cron", "30 2 * * *")
     monkeypatch.setattr("app.core.config.settings.gis_export_scheduler_timezone", "Europe/Rome")
     monkeypatch.setattr("app.core.config.settings.gis_export_retention_count", 5)
@@ -32,6 +33,21 @@ async def test_register_gis_export_scheduler_registers_job(monkeypatch: pytest.M
     assert job.id == "gis_shapefile_export_schedule"
     assert job.max_instances == 1
     assert job.coalesce is True
+
+
+@pytest.mark.anyio
+async def test_register_gis_export_scheduler_skips_api_when_delegated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scheduler = AsyncIOScheduler(timezone="UTC")
+    monkeypatch.setattr("app.core.config.settings.gis_export_scheduler_enabled", True)
+    monkeypatch.setattr(
+        "app.core.config.settings.gis_export_scheduler_register_in_api", False
+    )
+
+    await export_scheduler.register_gis_export_scheduler(scheduler, lambda: None)
+
+    assert scheduler.get_job("gis_shapefile_export_schedule") is None
 
 
 @pytest.mark.anyio

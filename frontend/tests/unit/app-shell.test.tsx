@@ -134,7 +134,7 @@ describe("AppShell", () => {
     );
 
     const input = screen.getByPlaceholderText("Cerca in GAIA…");
-    expect(screen.getByText("/ Particelle")).toBeInTheDocument();
+    expect(screen.getByText("/ Particelle")).toHaveClass("text-gray-600");
 
     fireEvent.keyDown(document, { key: "k", ctrlKey: true });
     expect(document.activeElement).toBe(input);

@@ -260,6 +260,7 @@ export function getModuleSections({
   const canAccessUsersSection = grantedSectionKeys.includes("accessi.users");
   const canAccessUtenzeAnprConfig = currentUserRole === "admin" || currentUserRole === "super_admin";
   const canManageCatastoAdmin = currentUserRole === "admin" || currentUserRole === "super_admin";
+  const canManageGisAdmin = currentUserRole === "admin" || currentUserRole === "super_admin";
   const canManageUtenzeAdmin = currentUserRole === "admin" || currentUserRole === "super_admin";
   const canReadOrganigramma = grantedSectionKeys.includes("organigramma.read");
   const canManageOrganigramma = grantedSectionKeys.includes("organigramma.manage");
@@ -346,7 +347,13 @@ export function getModuleSections({
       return [
         {
           label: "Piattaforma",
-          items: [item("/gis/catalogo", GridIcon, "Catalogo layer", { match: "prefix" })],
+          items: [
+            item("/gis/catalogo", GridIcon, "Catalogo mappe", { match: "prefix" }),
+            item("/gis/strumenti", RefreshIcon, "Strumenti GIS", { match: "prefix" }),
+            ...(canManageGisAdmin
+              ? [item("/gis/amministrazione", LockIcon, "Amministrazione GIS", { match: "prefix" })]
+              : []),
+          ],
         },
         {
           label: "Workspace dominio",

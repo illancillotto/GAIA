@@ -3,6 +3,7 @@ services:
     image: postgis/postgis:16-3.4-alpine
     container_name: gaia-postgres
     restart: unless-stopped
+    shm_size: 2gb
     command:
       - postgres
       - -c
@@ -58,6 +59,50 @@ services:
       postgres:
         condition: service_healthy
 
+  qgis-project-init:
+    image: ${COMPOSE_PROJECT_NAME:-gaia}-backend:latest
+    container_name: gaia-qgis-project-init
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      GIS_QGIS_SERVER_PROJECT_DIR: /srv/qgis
+    entrypoint: []
+    command: python -m app.modules.gis.qgis_server_bootstrap
+    volumes:
+      - qgis-project:/srv/qgis
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  qgis-server:
+    image: qgis/qgis-server:3.40.10
+    container_name: gaia-qgis-server
+    restart: unless-stopped
+    environment:
+      QGIS_PROJECT_FILE: /var/lib/qgis/gaia-gis-platform.qgs
+      QGIS_SERVER_PROJECT_FILE: /var/lib/qgis/gaia-gis-platform.qgs
+      QGIS_SERVER_FORCE_READONLY_LAYERS: "1"
+      QGIS_SERVER_LOG_LEVEL: "1"
+      QGIS_SERVER_LOG_STDERR: "true"
+    volumes:
+      - qgis-project:/srv/qgis:ro
+      - ./config/qgis/start.sh:/usr/local/bin/gaia-qgis-start.sh:ro
+    command: ["/bin/sh", "/usr/local/bin/gaia-qgis-start.sh"]
+    depends_on:
+      qgis-project-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- 'http://127.0.0.1/ows/?MAP=/var/lib/qgis/gaia-gis-platform.qgs&SERVICE=WMS&REQUEST=GetCapabilities' | grep -q 'WMS_Capabilities'",
+        ]
+      interval: 20s
+      timeout: 10s
+      retries: 8
+      start_period: 20s
+
   backend:
     build:
       context: ./backend
@@ -72,6 +117,8 @@ services:
     env_file:
       - .env
     environment:
+      GIS_EXPORT_SCHEDULER_REGISTER_IN_API: "false"
+      GIS_QGIS_SERVER_HEALTH_URL: http://qgis-server/ows/?MAP=/var/lib/qgis/gaia-gis-platform.qgs&SERVICE=WMS&REQUEST=GetCapabilities
       NETWORK_ARP_HELPER_BASE_URL: ${NETWORK_ARP_HELPER_BASE_URL:-http://host.docker.internal:9105}
       WIKI_AGENT_FALLBACK_ENABLED: ${WIKI_AGENT_FALLBACK_ENABLED:-false}
       WIKI_AGENT_CLI_PATH: ${WIKI_AGENT_CLI_PATH:-${WIKI_AGENT_HOST_HOME:-/home/cbo}/.local/bin/agent}
@@ -93,6 +140,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      qgis-server:
+        condition: service_healthy
     healthcheck:
       test:
         [
@@ -104,6 +153,33 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+
+  gis-export-scheduler:
+    image: ${COMPOSE_PROJECT_NAME:-gaia}-backend:latest
+    container_name: gaia-gis-export-scheduler
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      GIS_EXPORT_SCHEDULER_ENABLED: "true"
+      GIS_EXPORT_SCHEDULER_REGISTER_IN_API: "true"
+    entrypoint: []
+    command: python -m app.modules.gis.export_scheduler_runner
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "from pathlib import Path; assert b'export_scheduler_runner' in Path('/proc/1/cmdline').read_bytes()",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   presenze-worker:
     image: ${COMPOSE_PROJECT_NAME:-gaia}-backend:latest
@@ -166,6 +242,8 @@ services:
     depends_on:
       martin:
         condition: service_started
+      qgis-server:
+        condition: service_healthy
       frontend:
         condition: service_started
       backend:
@@ -424,3 +502,4 @@ volumes:
     name: ${POSTGRES_VOLUME_NAME:-gaia_postgres_data}
   catasto-data:
   anagrafica-data:
+  qgis-project:

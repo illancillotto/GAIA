@@ -1,13 +1,24 @@
 # GAIA GIS Platform Progress
 
-> Ultimo aggiornamento: 2026-07-29.
-> Branch corrente: `feature/gis-platform-m16-m19`.
+> Ultimo aggiornamento: 2026-08-26.
+> Branch corrente: `main`.
 
 ## Stato Sintetico
 
 La fondazione backend della piattaforma GIS e completata. Le milestone M1, M2,
 M3, M4, M5, M6, M7, M8, M9, M10, M11, M12, M13, M14, M15, M16, M17, M18,
 M19 e M20 sono implementate con:
+
+Lo stato milestone non equivale ancora a validazione con utenti finali. La
+verifica runtime del 2026-08-26 rileva `8` layer attivi, `0` annotazioni, `0`
+change request, `0` import, `16` export e `32` voci audit. Catalogo, viewer,
+amministrazione, strumenti e scheduler sono operativi; restano da validare i
+workflow guidati con utenti non tecnici e dati Rete ufficiali.
+
+Nel deploy locale PostGIS, Martin, QGIS Server read-only e NAS SFTP sono
+disponibili. Lo scheduler export e attivo in un runner singleton dedicato. La
+tabella `network.rete_condotte` esiste con geometria `MULTILINESTRING` SRID
+`4326`, vincoli e indici, ma non contiene ancora dati ufficiali.
 
 - commit `5405713 feat(gis): add governed catalog operations`;
 - commit `a6edcb1 feat(gis): complete layer permission governance`;
@@ -904,27 +915,197 @@ Verifiche:
   mancanti dopo il refactor del client request);
 - Graphify aggiornato con `make graphify-frontend` e `make graphify-docs`.
 
+## Catalogo Essenziale 2026-08-25
+
+Prima slice UX completata su `/gis/catalogo`, senza modifiche ad API o workflow:
+
+- ricerca locale immediata per titolo, descrizione, workspace e dominio;
+- categorie selezionabili `Tutte`, `Catasto`, `Rete` e `Riordino`;
+- conteggio risultati accessibile con `role=status` e `aria-live`;
+- filtri di dominio, stato, source e fonte ufficiale raccolti nell'area avanzata;
+- CTA primaria verso `/gis/catalogo/{layer_id}` per i layer PostGIS geometrici;
+  i registry non geometrici usano `/catasto/gis`, `/network` o `/riordino`;
+- avvertenza esplicita per i registry Riordino non geometrici;
+- schede layer piu compatte, con azioni operative in evidenza;
+- distinzione esplicita fra health del catalogo e disponibilita runtime dei
+  servizi GIS.
+
+Verifiche della slice:
+
+- `28` test unit catalogo passati;
+- coverage `100%` statement, branch, function e line sui due runtime modificati;
+- typecheck e lint mirato puliti;
+- quality ratchet `BLOCKED`: `ambiguous_identity` sul simbolo
+  `Program<anonymous>` di `page.tsx`, con `61` candidati, impedisce un confronto
+  affidabile. Non sono state aggiornate baseline o eccezioni per assorbire il
+  problema.
+
+Debito residuo, in ordine:
+
+1. validazione assistita con utenti non tecnici e dati operativi reali;
+2. import dei dati ufficiali nel layer `network.rete_condotte`;
+3. ripristino del quality ratchet GIS contro una baseline non ambigua;
+4. decisione sull'esposizione OGC esterna con autenticazione o vincolo VPN.
+
+## Hardening Runtime GIS 2026-08-25
+
+- `module_gis` e applicato come confine API a tutto il router `/gis`; il test
+  dedicato verifica `403 Module access denied` per un utente attivo senza flag;
+- migration `20260825_1200` crea `network.rete_condotte`, senza inserire dati
+  sintetici nel layer operativo;
+- il NAS GIS usa trasporto SFTP atomico sul root verificato
+  `/volume1/Settore Catasto/ARCHIVIO/Backups/GAIA/gis`;
+- il probe NAS esegue realmente create, write, read e delete di un marker;
+- uno smoke Shapefile di `rete_condotte` ha prodotto uno ZIP valido da `910`
+  byte con checksum remoto corrispondente e cleanup completato;
+- QGIS Server `3.40.10` genera il progetto dal catalogo al deploy e usa il
+  ruolo `gaia_gis_qgis_server`, con soli `CONNECT`, `USAGE` e `SELECT` sui
+  layer pubblicabili;
+- `GetCapabilities` WMS/WFS risponde `200`, pubblica `7` layer e include
+  `Condotte irrigue`; una richiesta WFS-T viene respinta con `400` e `No
+  capabilities to do WFS changes`;
+- lo scheduler e eseguito dal solo container `gis-export-scheduler`; i worker
+  API non registrano copie concorrenti del job.
+
+Verifiche della slice runtime:
+
+- `82` test backend GIS passati;
+- coverage `100%` sui `1.617` statement runtime verificati;
+- ruolo QGIS: `SELECT=true`, `INSERT/UPDATE/DELETE=false` su
+  `network.rete_condotte`;
+- PostGIS, Martin, QGIS Server e NAS riportano stato runtime `ok`;
+- Alembic riallineato su un solo head merge `20260825_1300`.
+
+## Workspace Operativi E Runtime Health 2026-08-25
+
+La terza slice separa le responsabilita prima concentrate nel catalogo:
+
+- `/gis/catalogo` per ricerca, schede, note e change request;
+- `/gis/catalogo/{layer_id}` per il viewer MapLibre/Martin e il dettaglio
+  contestuale della mappa;
+- `/gis/strumenti` per import shapefile guidati, coda persistente, anteprima,
+  publish/reject, progetto QGIS e piano OGC;
+- `/gis/amministrazione` per creazione layer, metadata, lifecycle, export,
+  permessi, governance QGIS e consultazione audit;
+- `GET /gis/imports`, `GET /gis/exports`, `GET /gis/audit` e
+  `GET /gis/runtime-health` per continuita operativa e monitoraggio reale.
+
+Il runtime health verifica PostGIS, Martin, QGIS Server e NAS, espone lo stato
+dello scheduler export e la freschezza disponibile. Non sostituisce il health
+catalogo, che resta dedicato a configurazione, metadati e permessi.
+
+Verifiche deploy e audit:
+
+- build Next.js di produzione e typecheck passati;
+- test mirati passati: `6/6` dettaglio, `14/14` catalogo e `7/7` viewer, con
+  coverage `100%` sui runtime modificati;
+- container backend, frontend e nginx healthy;
+- audit desktop e mobile `390x844` senza overflow orizzontale;
+- Lighthouse autenticato desktop e mobile finale: `100` nella categoria
+  accessibilita e nessun audit accessibilita fallito. Sul viewport mobile
+  `390x844` non risultano target GIS visibili sotto `44px`.
+
+## Workflow Guidati E Conferme 2026-08-25
+
+Seconda slice UX implementata su `/gis/catalogo`:
+
+- nuovo endpoint `GET /gis/layers/{layer_id}/features` con ricerca e
+  paginazione, disponibile solo ad annotatori/editor e solo per layer PostGIS;
+- attributi completi riservati agli editor, geometria GeoJSON e label
+  configurabili tramite metadata `feature_selector.label_fields`;
+- wizard note in tre passaggi: elemento, descrizione, riepilogo e conferma;
+- wizard richieste di modifica per attributi, geometrie, creazione ed
+  eliminazione, senza Feature ID o JSON manuali;
+- conferma esplicita con riepilogo conseguenze per revoca permessi, publish e
+  reject import e apply delle change request;
+- feedback persistente nella sessione con `role=status` e `aria-live`, errori
+  principali con `role=alert`;
+- dialog condivisa responsive con focus iniziale sicuro, focus trap, chiusura
+  tramite Escape e ripristino del focus al comando di origine;
+- modale preview import migrata sulla dialog accessibile condivisa.
+
+Verifiche:
+
+- `61` test frontend GIS passati;
+- coverage frontend `100%` statement, branch, function e line sui sei runtime
+  GIS modificati;
+- suite backend GIS passata con coverage `100%` su router, schemi e servizi;
+- typecheck ed ESLint mirato frontend puliti;
+- quality ratchet contro `main` senza baseline aggiornata: il confronto si
+  arresta con `ambiguous_fingerprint` sul simbolo scanner
+  `Program<anonymous>` del nuovo componente JSX. Non sono state aggiunte
+  eccezioni e la baseline non e stata rigenerata per assorbire l'ambiguita.
+
+## Chiusura Audit E Resilienza Export 2026-08-26
+
+L'audit autenticato finale e stato eseguito riutilizzando un dispositivo admin
+gia registrato, senza disattivare sessioni esistenti. Il limite admin resta a
+`7` dispositivi attivi e un ottavo identificativo viene respinto con `403`.
+
+- smoke API `200` per layer, dashboard, import, export, audit e runtime health;
+- audit Playwright su `1440x1000` e `390x844` per catalogo, dettaglio viewer,
+  strumenti e amministrazione: nessun overflow orizzontale, errore console,
+  page error o richiesta GIS fallita;
+- ricerca catalogo verificata da `8` a `1` risultato, categoria `Rete` e CTA
+  verso un layer PostGIS realmente leggibile;
+- target mobile GIS portati a un minimo di `44px` anche su viewport strette,
+  inclusi controlli MapLibre e link di attribuzione;
+- Lighthouse autenticato accessibilita `100/100` sia mobile sia desktop;
+- build Next.js produzione, typecheck e `109/109` test frontend GIS passati;
+- coverage frontend completa sull'albero `src/app/gis` e sul client API:
+  `1.330/1.330` statement, `953/953` branch, `460/460` funzioni e
+  `1.216/1.216` linee, tutte al `100%`.
+
+La pipeline export e stata rinforzata dopo aver osservato il primo ciclo reale:
+
+- cursore PostgreSQL streaming con batch da `1.000` righe e parallelismo
+  disabilitato soltanto nella transazione di estrazione;
+- `/dev/shm` del container PostGIS portato da `64MB` a `2GB`;
+- publish SFTP atomico con due retry limitati agli errori del connettore NAS;
+- troncamento DBF calcolato sui `254` byte UTF-8, senza tagliare sequenze
+  multibyte e senza warning pyshp ripetitivi;
+- runtime health NAS in `warning` quando l'ultimo ciclo pianificato contiene
+  export falliti, anche se il probe corrente di lettura/scrittura passa;
+- export reale del layer particelle completato con `283.469` record, checksum e
+  publish SFTP in `52s`;
+- ciclo scheduler finale completato su `7/7` layer, `0` falliti; PostGIS,
+  Martin, QGIS Server e NAS riportano `ok`, scheduler attivo.
+
+Verifiche backend: suite GIS `87` test passati, `2.489/2.489` statement e
+coverage `100%`; autenticazione `26/26` test e `203/203` statement al `100%`,
+incluso il limite admin a sette dispositivi; quality tooling `39/39`;
+`git diff --check` e compose config passati. Graphify backend aggiornato a
+`7.452` nodi, `18.246` archi e `422` community; il grafo frontend non presenta
+variazioni topologiche. Graphify `docs/` aggiornato a `1.177` nodi,
+`2.630` archi e `91` community. Nel perimetro export/health le violation scendono da
+`8` a `4` e
+`export_layer_to_shapefile_zip` passa da cyclomatic/cognitive/LOC
+`12/16/51` a `7/7/48`. Baseline ed eccezioni restano invariate.
+
 ## Decisioni Aperte
 
 - Se servono ruoli LOGIN QGIS personali o per postazione.
-- Se e quando avviare il POC QGIS Server read-only raccomandato da M7.
 - Se il layer Rete `rete_condotte` deve aggiungere rollback/versioning
   applicativo oltre agli snapshot audit M20.
-- Se promuovere il POC OGC M19 a deployment controllato QGIS Server o restare
-  su PostGIS/QGIS Desktop/API GAIA.
+- Se esporre QGIS Server fuori dalla rete Docker tramite autenticazione GAIA o
+  vincolo VPN; il runtime interno read-only e gia attivo.
 
 ## Rischi
 
-- L'export NAS reale usa il path configurato sul layer o sulla richiesta: in
-  produzione serve garantire permessi filesystem coerenti sul mount NAS.
-- Lo scheduler export GIS e disabilitato di default: va abilitato solo dopo aver
-  verificato mount NAS, spazio disponibile e finestra operativa.
+- L'export NAS reale usa SFTP e pubblicazione atomica sul path configurato; lo
+  spazio disponibile e la retention devono comunque essere monitorati. Il
+  publish ritenta gli errori transitori, mentre il health segnala i fallimenti
+  dell'ultimo ciclo finche un ciclo successivo non si chiude senza errori.
+- Lo scheduler export GIS resta disabilitato nei file esempio e va attivato in
+  ogni ambiente solo dopo lo smoke NAS; sul server locale lo smoke e passato e
+  il runner singleton e attivo.
 - Le change request Catasto arrivano fino a `applied`, ma l'apply resta no-op
   auditato: non modifica le tabelle ufficiali finche il dominio non abilita una
   policy esplicita. I layer non Catasto con opt-in controlled edit possono
   invece scrivere su PostGIS tramite M20.
-- La policy QGIS genera SQL ma non lo applica automaticamente: serve esecuzione
-  controllata da operatore DB e gestione sicura dei ruoli LOGIN.
+- La policy QGIS Desktop genera SQL ma non lo applica automaticamente. Il
+  bootstrap QGIS Server gestisce invece soltanto il proprio ruolo LOGIN
+  read-only; ruoli editor e account personali restano operazioni controllate.
 - I registry non geometrici, come `riordino_gis_links`, sono visibili nel
   catalogo ma non sono pubblicabili come QGIS layer ne esportabili come
   shapefile.
@@ -939,20 +1120,18 @@ Verifiche:
 - M17 crea change request `feature_create` da staging import: con M20 l'apply
   puo scrivere solo se il layer ufficiale target e non Catasto e ha opt-in
   controlled edit.
-- M18 abilita controlled edit QGIS a livello di policy/catalogo per Rete, ma non
-  configura credenziali LOGIN o rollback applicativo automatico: questi restano
-  operazioni ambiente/dominio.
-- M19 non avvia un runtime OGC: fornisce un piano read-only. Un deployment reale
-  richiede reverse proxy, credenziali dedicate, smoke GetCapabilities/GetMap e
-  decisione esplicita.
+- M18 dispone ora della tabella fisica Rete, ma i dati ufficiali devono ancora
+  essere importati e validati; rollback automatico resta un'attivita dominio.
+- M19 dispone ora di un runtime QGIS Server interno read-only e dello smoke
+  GetCapabilities. Reverse proxy esterno, autenticazione e GetMap assistito
+  restano una decisione separata.
 - M20 applica modifiche reali su PostGIS opt-in: prima di abilitarlo su nuovi
   layer servono backup, permessi DB coerenti e una procedura di rollback basata
   sugli snapshot audit o su versioning dominio.
 
 ## Prossima Azione Raccomandata
 
-Valutare M21:
-
-1. rollback/versioning applicativo per layer controlled edit;
-2. deployment controllato QGIS Server se il POC M19 viene approvato;
-3. onboarding di altri layer non Catasto solo dopo backup e policy dominio.
+Importare e validare i dati ufficiali di `network.rete_condotte`, poi eseguire
+prove assistite di catalogo, viewer e workflow con utenti non tecnici. In
+parallelo va gestito separatamente il debito concorrente rilevato dal quality
+ratchet globale; non sono state modificate baseline o eccezioni.

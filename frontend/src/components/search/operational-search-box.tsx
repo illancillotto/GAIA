@@ -520,7 +520,7 @@ export function OperationalSearchBox({
         }}
       />
       {!isHero ? (
-        <span className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-400 xl:inline">
+        <span className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded-md border border-gray-200 bg-white px-1.5 py-0.5 text-[10px] font-medium text-gray-600 xl:inline">
           Ctrl K
         </span>
       ) : null}

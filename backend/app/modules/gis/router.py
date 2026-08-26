@@ -6,24 +6,27 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_active_user
+from app.api.deps import require_active_user, require_module
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
-from app.modules.gis import services
+from app.modules.gis import runtime_health, services
 from app.modules.gis.schemas import (
     GisAnnotationCreate,
     GisAnnotationResponse,
     GisAnnotationStatus,
     GisAnnotationUpdate,
+    GisAuditLogListResponse,
+    GisCatalogDashboardResponse,
     GisChangeRequestCreate,
     GisChangeRequestResponse,
     GisChangeRequestReview,
     GisChangeRequestStatus,
     GisChangeRequestUpdate,
-    GisCatalogDashboardResponse,
     GisLayerCreate,
+    GisLayerExportListResponse,
     GisLayerExportRequest,
     GisLayerExportResponse,
+    GisLayerFeatureListResponse,
     GisLayerListResponse,
     GisLayerMetadataUpdate,
     GisLayerPermissionResponse,
@@ -31,17 +34,25 @@ from app.modules.gis.schemas import (
     GisLayerResponse,
     GisOgcPocResponse,
     GisQgisGovernanceResponse,
+    GisRuntimeHealthResponse,
     GisShapefileImportChangeRequestCreate,
     GisShapefileImportChangeRequestResponse,
+    GisShapefileImportListResponse,
     GisShapefileImportPreviewResponse,
     GisShapefileImportResponse,
+    GisShapefileImportStatus,
+)
+
+router = APIRouter(
+    prefix="/gis",
+    tags=["gis-platform"],
+    dependencies=[Depends(require_module("gis"))],
 )
 
 
-router = APIRouter(prefix="/gis", tags=["gis-platform"])
-
-
-@router.post("/layers", response_model=GisLayerResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/layers", response_model=GisLayerResponse, status_code=status.HTTP_201_CREATED
+)
 def create_layer(
     body: GisLayerCreate,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
@@ -90,6 +101,15 @@ def get_catalog_dashboard(
     return services.get_catalog_dashboard(db, current_user)
 
 
+@router.get("/runtime-health", response_model=GisRuntimeHealthResponse)
+def get_runtime_health(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> GisRuntimeHealthResponse:
+    del current_user
+    return runtime_health.get_runtime_health(db)
+
+
 @router.get("/qgis/governance", response_model=GisQgisGovernanceResponse)
 def get_qgis_governance(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
@@ -122,7 +142,11 @@ def download_qgis_project(
     )
 
 
-@router.post("/imports/shapefile", response_model=GisShapefileImportResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/imports/shapefile",
+    response_model=GisShapefileImportResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_shapefile_import(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
@@ -150,6 +174,25 @@ def create_shapefile_import(
     )
 
 
+@router.get("/imports", response_model=GisShapefileImportListResponse)
+def list_shapefile_imports(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+    import_status: Annotated[
+        GisShapefileImportStatus | None, Query(alias="status")
+    ] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> GisShapefileImportListResponse:
+    return services.list_shapefile_imports(
+        db,
+        current_user,
+        import_status=import_status,
+        limit=limit,
+        offset=offset,
+    )
+
+
 @router.get("/imports/{import_id}", response_model=GisShapefileImportResponse)
 def get_shapefile_import(
     import_id: UUID,
@@ -159,7 +202,9 @@ def get_shapefile_import(
     return services.get_shapefile_import(db, import_id, current_user)
 
 
-@router.get("/imports/{import_id}/preview", response_model=GisShapefileImportPreviewResponse)
+@router.get(
+    "/imports/{import_id}/preview", response_model=GisShapefileImportPreviewResponse
+)
 def preview_shapefile_import(
     import_id: UUID,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
@@ -167,17 +212,24 @@ def preview_shapefile_import(
     limit: Annotated[int, Query(ge=1, le=100)] = 10,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> GisShapefileImportPreviewResponse:
-    return services.preview_shapefile_import(db, import_id, current_user, limit=limit, offset=offset)
+    return services.preview_shapefile_import(
+        db, import_id, current_user, limit=limit, offset=offset
+    )
 
 
-@router.post("/imports/{import_id}/change-requests", response_model=GisShapefileImportChangeRequestResponse)
+@router.post(
+    "/imports/{import_id}/change-requests",
+    response_model=GisShapefileImportChangeRequestResponse,
+)
 def create_change_requests_from_shapefile_import(
     import_id: UUID,
     body: GisShapefileImportChangeRequestCreate,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> GisShapefileImportChangeRequestResponse:
-    return services.create_change_requests_from_shapefile_import(db, import_id, body, current_user)
+    return services.create_change_requests_from_shapefile_import(
+        db, import_id, body, current_user
+    )
 
 
 @router.post("/imports/{import_id}/validate", response_model=GisShapefileImportResponse)
@@ -244,7 +296,28 @@ def deactivate_layer(
     return services.set_layer_active(db, layer_id, False, current_user)
 
 
-@router.get("/layers/{layer_id}/annotations", response_model=list[GisAnnotationResponse])
+@router.get("/layers/{layer_id}/features", response_model=GisLayerFeatureListResponse)
+def list_layer_features(
+    layer_id: UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+    query: str | None = Query(default=None, max_length=120),
+    limit: int = Query(default=20, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
+) -> GisLayerFeatureListResponse:
+    return services.list_layer_features(
+        db,
+        layer_id,
+        current_user,
+        query=query,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/layers/{layer_id}/annotations", response_model=list[GisAnnotationResponse]
+)
 def list_annotations(
     layer_id: UUID,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
@@ -252,10 +325,16 @@ def list_annotations(
     status_filter: GisAnnotationStatus | None = Query(None, alias="status"),
     feature_id: str | None = None,
 ) -> list[GisAnnotationResponse]:
-    return services.list_annotations(db, layer_id, current_user, status_filter=status_filter, feature_id=feature_id)
+    return services.list_annotations(
+        db, layer_id, current_user, status_filter=status_filter, feature_id=feature_id
+    )
 
 
-@router.post("/layers/{layer_id}/annotations", response_model=GisAnnotationResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/layers/{layer_id}/annotations",
+    response_model=GisAnnotationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_annotation(
     layer_id: UUID,
     body: GisAnnotationCreate,
@@ -265,7 +344,10 @@ def create_annotation(
     return services.create_annotation(db, layer_id, body, current_user)
 
 
-@router.patch("/layers/{layer_id}/annotations/{annotation_id}", response_model=GisAnnotationResponse)
+@router.patch(
+    "/layers/{layer_id}/annotations/{annotation_id}",
+    response_model=GisAnnotationResponse,
+)
 def update_annotation(
     layer_id: UUID,
     annotation_id: UUID,
@@ -276,37 +358,54 @@ def update_annotation(
     return services.update_annotation(db, layer_id, annotation_id, body, current_user)
 
 
-@router.post("/layers/{layer_id}/annotations/{annotation_id}/in-review", response_model=GisAnnotationResponse)
+@router.post(
+    "/layers/{layer_id}/annotations/{annotation_id}/in-review",
+    response_model=GisAnnotationResponse,
+)
 def mark_annotation_in_review(
     layer_id: UUID,
     annotation_id: UUID,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> GisAnnotationResponse:
-    return services.set_annotation_status(db, layer_id, annotation_id, GisAnnotationStatus.in_review, current_user)
+    return services.set_annotation_status(
+        db, layer_id, annotation_id, GisAnnotationStatus.in_review, current_user
+    )
 
 
-@router.post("/layers/{layer_id}/annotations/{annotation_id}/close", response_model=GisAnnotationResponse)
+@router.post(
+    "/layers/{layer_id}/annotations/{annotation_id}/close",
+    response_model=GisAnnotationResponse,
+)
 def close_annotation(
     layer_id: UUID,
     annotation_id: UUID,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> GisAnnotationResponse:
-    return services.set_annotation_status(db, layer_id, annotation_id, GisAnnotationStatus.closed, current_user)
+    return services.set_annotation_status(
+        db, layer_id, annotation_id, GisAnnotationStatus.closed, current_user
+    )
 
 
-@router.post("/layers/{layer_id}/annotations/{annotation_id}/reject", response_model=GisAnnotationResponse)
+@router.post(
+    "/layers/{layer_id}/annotations/{annotation_id}/reject",
+    response_model=GisAnnotationResponse,
+)
 def reject_annotation(
     layer_id: UUID,
     annotation_id: UUID,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> GisAnnotationResponse:
-    return services.set_annotation_status(db, layer_id, annotation_id, GisAnnotationStatus.rejected, current_user)
+    return services.set_annotation_status(
+        db, layer_id, annotation_id, GisAnnotationStatus.rejected, current_user
+    )
 
 
-@router.get("/layers/{layer_id}/permissions", response_model=list[GisLayerPermissionResponse])
+@router.get(
+    "/layers/{layer_id}/permissions", response_model=list[GisLayerPermissionResponse]
+)
 def list_permissions(
     layer_id: UUID,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
@@ -315,7 +414,9 @@ def list_permissions(
     return services.list_permissions(db, layer_id, current_user)
 
 
-@router.post("/layers/{layer_id}/permissions", response_model=GisLayerPermissionResponse)
+@router.post(
+    "/layers/{layer_id}/permissions", response_model=GisLayerPermissionResponse
+)
 def upsert_permission(
     layer_id: UUID,
     body: GisLayerPermissionUpsert,
@@ -325,7 +426,10 @@ def upsert_permission(
     return services.upsert_permission(db, layer_id, body, current_user)
 
 
-@router.delete("/layers/{layer_id}/permissions/{permission_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/layers/{layer_id}/permissions/{permission_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
 def revoke_permission(
     layer_id: UUID,
     permission_id: UUID,
@@ -335,7 +439,11 @@ def revoke_permission(
     services.revoke_permission(db, layer_id, permission_id, current_user)
 
 
-@router.post("/layers/{layer_id}/change-requests", response_model=GisChangeRequestResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/layers/{layer_id}/change-requests",
+    response_model=GisChangeRequestResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_change_request(
     layer_id: UUID,
     body: GisChangeRequestCreate,
@@ -352,10 +460,14 @@ def list_change_requests(
     status_filter: GisChangeRequestStatus | None = Query(None, alias="status"),
     layer_id: UUID | None = None,
 ) -> list[GisChangeRequestResponse]:
-    return services.list_change_requests(db, current_user, status_filter=status_filter, layer_id=layer_id)
+    return services.list_change_requests(
+        db, current_user, status_filter=status_filter, layer_id=layer_id
+    )
 
 
-@router.patch("/change-requests/{change_request_id}", response_model=GisChangeRequestResponse)
+@router.patch(
+    "/change-requests/{change_request_id}", response_model=GisChangeRequestResponse
+)
 def update_change_request(
     change_request_id: UUID,
     body: GisChangeRequestUpdate,
@@ -365,17 +477,25 @@ def update_change_request(
     return services.update_change_request(db, change_request_id, body, current_user)
 
 
-@router.post("/change-requests/{change_request_id}/request-changes", response_model=GisChangeRequestResponse)
+@router.post(
+    "/change-requests/{change_request_id}/request-changes",
+    response_model=GisChangeRequestResponse,
+)
 def request_change_request_changes(
     change_request_id: UUID,
     body: GisChangeRequestReview,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> GisChangeRequestResponse:
-    return services.request_change_request_changes(db, change_request_id, body, current_user)
+    return services.request_change_request_changes(
+        db, change_request_id, body, current_user
+    )
 
 
-@router.post("/change-requests/{change_request_id}/reject", response_model=GisChangeRequestResponse)
+@router.post(
+    "/change-requests/{change_request_id}/reject",
+    response_model=GisChangeRequestResponse,
+)
 def reject_change_request(
     change_request_id: UUID,
     body: GisChangeRequestReview,
@@ -385,7 +505,10 @@ def reject_change_request(
     return services.reject_change_request(db, change_request_id, body, current_user)
 
 
-@router.post("/change-requests/{change_request_id}/approve", response_model=GisChangeRequestResponse)
+@router.post(
+    "/change-requests/{change_request_id}/approve",
+    response_model=GisChangeRequestResponse,
+)
 def approve_change_request(
     change_request_id: UUID,
     body: GisChangeRequestReview,
@@ -395,7 +518,10 @@ def approve_change_request(
     return services.approve_change_request(db, change_request_id, body, current_user)
 
 
-@router.post("/change-requests/{change_request_id}/apply", response_model=GisChangeRequestResponse)
+@router.post(
+    "/change-requests/{change_request_id}/apply",
+    response_model=GisChangeRequestResponse,
+)
 def apply_change_request(
     change_request_id: UUID,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
@@ -404,7 +530,11 @@ def apply_change_request(
     return services.apply_change_request(db, change_request_id, current_user)
 
 
-@router.post("/layers/{layer_id}/export-shapefile", response_model=GisLayerExportResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/layers/{layer_id}/export-shapefile",
+    response_model=GisLayerExportResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 def request_shapefile_export(
     layer_id: UUID,
     body: GisLayerExportRequest,
@@ -412,3 +542,41 @@ def request_shapefile_export(
     db: Annotated[Session, Depends(get_db)],
 ) -> GisLayerExportResponse:
     return services.request_shapefile_export(db, layer_id, body, current_user)
+
+
+@router.get("/exports", response_model=GisLayerExportListResponse)
+def list_shapefile_exports(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+    layer_id: UUID | None = None,
+    export_status: Annotated[str | None, Query(alias="status", max_length=32)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> GisLayerExportListResponse:
+    return services.list_shapefile_exports(
+        db,
+        current_user,
+        layer_id=layer_id,
+        export_status=export_status,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/audit", response_model=GisAuditLogListResponse)
+def list_audit_logs(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+    layer_id: UUID | None = None,
+    event_type: Annotated[str | None, Query(max_length=80)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> GisAuditLogListResponse:
+    return services.list_audit_logs(
+        db,
+        current_user,
+        layer_id=layer_id,
+        event_type=event_type,
+        limit=limit,
+        offset=offset,
+    )

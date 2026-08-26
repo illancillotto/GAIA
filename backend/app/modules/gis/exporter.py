@@ -5,8 +5,10 @@ import json
 import re
 import tempfile
 import uuid
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from itertools import chain
 from pathlib import Path
 from typing import Any
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -15,6 +17,7 @@ import shapefile
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.modules.gis.artifact_storage import publish_artifact
 from app.modules.gis.models import GisLayer
 
 
@@ -73,23 +76,34 @@ def _record_value(value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, (dict, list)):
-        return json.dumps(value, ensure_ascii=False, sort_keys=True)[:254]
-    return str(value)[:254]
+        value = json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return str(value).encode("utf-8")[:254].decode("utf-8", errors="ignore")
 
 
-def _feature_rows(db: Session, layer: GisLayer) -> list[tuple[dict[str, Any], dict[str, Any] | None]]:
-    query, geometry_column, geometry_alias = _source_query(layer, db.get_bind().dialect.name)
-    rows = db.execute(query).mappings().all()
-    features: list[tuple[dict[str, Any], dict[str, Any] | None]] = []
-    for row in rows:
-        geometry = _load_geometry(row.get(geometry_alias or geometry_column))
-        attributes = {
-            key: value
-            for key, value in row.items()
-            if key not in {geometry_column, "__geometry_geojson"} and not key.startswith("_sa_")
-        }
-        features.append((attributes, geometry))
-    return features
+def _row_feature(
+    row: Any,
+    geometry_column: str,
+    geometry_alias: str | None,
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    geometry = _load_geometry(row.get(geometry_alias or geometry_column))
+    attributes = {
+        key: value
+        for key, value in row.items()
+        if key not in {geometry_column, "__geometry_geojson"} and not key.startswith("_sa_")
+    }
+    return attributes, geometry
+
+
+def _feature_rows(db: Session, layer: GisLayer) -> Iterator[tuple[dict[str, Any], dict[str, Any] | None]]:
+    dialect_name = db.get_bind().dialect.name
+    query, geometry_column, geometry_alias = _source_query(layer, dialect_name)
+    if dialect_name == "postgresql":
+        db.execute(text("SET LOCAL max_parallel_workers_per_gather = 0"))
+    result = db.execute(query, execution_options={"stream_results": True, "yield_per": 1000})
+    try:
+        yield from (_row_feature(row, geometry_column, geometry_alias) for row in result.mappings())
+    finally:
+        result.close()
 
 
 def _shape_from_geometry(geometry: dict[str, Any] | None) -> shapefile.Shape | None:
@@ -135,6 +149,20 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _write_features(
+    writer: shapefile.Writer,
+    field_mapping: dict[str, str],
+    features: Iterator[tuple[dict[str, Any], dict[str, Any] | None]],
+) -> int:
+    row_count = 0
+    for attributes, geometry in features:
+        shape = _shape_from_geometry(geometry)
+        writer.null() if shape is None else writer.shape(shape)
+        writer.record(*[_record_value(attributes.get(name)) for name in field_mapping])
+        row_count += 1
+    return row_count
+
+
 def export_layer_to_shapefile_zip(
     db: Session,
     layer: GisLayer,
@@ -143,51 +171,46 @@ def export_layer_to_shapefile_zip(
     nas_path: str,
     metadata: dict[str, Any],
 ) -> GisExportArtifact:
-    features = _feature_rows(db, layer)
-    shapes = [(attributes, _shape_from_geometry(geometry)) for attributes, geometry in features]
-    shape_type = next((shape.shapeType for _, shape in shapes if shape is not None), shapefile.NULL)
+    features = iter(_feature_rows(db, layer))
+    first_feature = next(features, None)
     field_mapping: dict[str, str] = {}
     used_names: set[str] = set()
-    for attributes, _ in shapes:
-        for key in attributes:
-            if key not in field_mapping:
-                field_mapping[key] = _field_name(key, used_names)
+    if first_feature is not None:
+        for key in first_feature[0]:
+            field_mapping[key] = _field_name(key, used_names)
     if not field_mapping:
         field_mapping["_gaia_empty"] = "GAIA_EMPTY"
-    final_path = Path(nas_path)
-    final_path.parent.mkdir(parents=True, exist_ok=True)
-    manifest = _manifest(
-        layer=layer,
-        version_label=version_label,
-        row_count=len(shapes),
-        field_mapping=field_mapping,
-        metadata=metadata,
-    )
 
     with tempfile.TemporaryDirectory(prefix="gaia-gis-export-") as temp_dir:
         temp_root = Path(temp_dir)
         shapefile_base = temp_root / layer.name
-        writer = shapefile.Writer(str(shapefile_base), shapeType=shape_type, encoding="utf-8")
-        for original_name, dbf_name in field_mapping.items():
+        writer = shapefile.Writer(str(shapefile_base), shapeType=None, encoding="utf-8")
+        for dbf_name in field_mapping.values():
             writer.field(dbf_name, "C", size=254)
-        for attributes, shape in shapes:
-            if shape is None:
-                writer.null()
-            else:
-                writer.shape(shape)
-            writer.record(*[_record_value(attributes.get(original_name)) for original_name in field_mapping])
+        row_count = _write_features(
+            writer,
+            field_mapping,
+            chain(() if first_feature is None else (first_feature,), features),
+        )
         writer.close()
         shapefile_base.with_suffix(".cpg").write_text("UTF-8", encoding="ascii")
+        manifest = _manifest(
+            layer=layer,
+            version_label=version_label,
+            row_count=row_count,
+            field_mapping=field_mapping,
+            metadata=metadata,
+        )
         manifest_path = temp_root / "manifest.json"
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
 
-        temp_zip = final_path.parent / f".{final_path.name}.{uuid.uuid4().hex}.tmp"
+        temp_zip = temp_root / f"{uuid.uuid4().hex}.zip"
         with ZipFile(temp_zip, "w", compression=ZIP_DEFLATED) as archive:
             for suffix in ("shp", "shx", "dbf", "cpg"):
                 artifact = shapefile_base.with_suffix(f".{suffix}")
                 archive.write(artifact, arcname=f"{layer.name}.{suffix}")
             archive.write(manifest_path, arcname="manifest.json")
         checksum = _sha256(temp_zip)
-        temp_zip.replace(final_path)
+        publish_artifact(temp_zip, nas_path)
 
-    return GisExportArtifact(path=final_path, checksum_sha256=checksum, row_count=len(shapes), manifest=manifest)
+    return GisExportArtifact(path=Path(nas_path), checksum_sha256=checksum, row_count=row_count, manifest=manifest)

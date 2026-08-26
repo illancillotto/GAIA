@@ -35,7 +35,7 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
           <span className="text-xs font-medium tracking-wide">GAIA</span>
         </div>
         <p className="text-sm font-medium leading-tight text-gray-800">Consorzio di Bonifica</p>
-        <p className="text-xs text-gray-400">dell&apos;Oristanese</p>
+        <p className="text-xs text-gray-600">dell&apos;Oristanese</p>
       </div>
 
       <nav className="px-2 py-3">
@@ -48,7 +48,7 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
           </Link>
         </div>
 
-        <p className="px-2 pb-1 text-[10px] font-medium uppercase tracking-widest text-gray-400">
+        <p className="px-2 pb-1 text-[10px] font-medium uppercase tracking-widest text-gray-600">
           Modulo attivo
         </p>
         <div className="px-2">

@@ -61,7 +61,7 @@ describe("OperationalSearchBox compact mode", () => {
     );
 
     const input = screen.getByPlaceholderText("Cerca in GAIA…");
-    expect(screen.getByText("Ctrl K")).toBeInTheDocument();
+    expect(screen.getByText("Ctrl K")).toHaveClass("text-gray-600");
 
     fireEvent.keyDown(document, { key: "k" });
     fireEvent.keyDown(document, { key: "x", ctrlKey: true });

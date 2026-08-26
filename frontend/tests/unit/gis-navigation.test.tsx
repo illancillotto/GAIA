@@ -69,7 +69,9 @@ describe("GIS platform navigation", () => {
     render(<Sidebar currentUser={buildUser()} onLogout={vi.fn()} />);
 
     expect(screen.getByRole("button", { name: /GIS Platform/ })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Catalogo layer" })).toHaveAttribute("href", "/gis/catalogo");
+    expect(screen.getByRole("link", { name: "Catalogo mappe" })).toHaveAttribute("href", "/gis/catalogo");
+    expect(screen.getByRole("link", { name: "Strumenti GIS" })).toHaveAttribute("href", "/gis/strumenti");
+    expect(screen.queryByRole("link", { name: "Amministrazione GIS" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "GIS Catasto" })).toHaveAttribute("href", "/catasto/gis");
   });
 
@@ -82,9 +84,16 @@ describe("GIS platform navigation", () => {
     expect(screen.queryByRole("link", { name: "Catasto" })).not.toBeInTheDocument();
   });
 
+  test("shows GIS administration only to platform administrators", () => {
+    render(<Sidebar currentUser={buildUser({ role: "admin", enabled_modules: ["gis"] })} onLogout={vi.fn()} />);
+    expect(screen.getByRole("link", { name: "Amministrazione GIS" })).toHaveAttribute("href", "/gis/amministrazione");
+  });
+
   test("uses the GIS alias and closes the platform switcher after selection", () => {
     mocks.pathname = "/gis";
     render(<PlatformSidebar currentModuleLabel="GIS Platform" currentUser={buildUser({ enabled_modules: ["gis"] })} />);
+
+    expect(screen.getByText("dell'Oristanese")).toHaveClass("text-gray-600");
 
     fireEvent.click(screen.getByRole("button", { name: /GIS Platform/ }));
     const link = screen.getByRole("link", { name: "GIS Platform" });
