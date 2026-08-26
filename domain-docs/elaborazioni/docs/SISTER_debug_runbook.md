@@ -137,6 +137,7 @@ Il worker oggi:
 - a fine batch/richiesta operativa, prima di chiudere Playwright, tenta il logout applicativo SISTER per ridurre il rischio di sessioni server-side appese
 - consente di usare `Pausa e libera` sulla singola card credenziale: persiste `active=false`, completa al massimo la richiesta gia in corso e al checkpoint successivo esegue il logout applicativo e chiude soltanto quel browser
 - isola normalmente il pool credenziali SISTER per utente GAIA: il DB accetta lo stesso `sister_username` su utenti diversi, ma lo rende univoco dentro il singolo pool tramite `UNIQUE (user_id, sister_username)`; una batch condivisa del `super_admin` costituisce l'unica eccezione e aggrega tutte le credenziali attive disponibili per fascia
+- serializza comunque l'uso reale dell'account SISTER tramite `catasto_credential_leases`: la chiave e `sister_username`, quindi due pool GAIA non possono aprire sessioni simultanee dello stesso account
 - quando un batch fallito viene rilanciato, il backend aggiorna il riferimento temporale della rimessa in coda per evitare che la routine di expiry dei `pending` lo consideri subito orfano
 - prova a chiudere una sessione SISTER già attiva
 - aspetta alcuni secondi dopo `CloseSessionsSis` prima di ritentare il login
@@ -186,6 +187,9 @@ Regole operative:
 - i batch con `credential_id` valorizzata restano vincolati al profilo scelto e non acquisiscono nuove credenziali;
 - un ID gia avviato, rifiutato o messo in pausa non viene riaperto nello stesso lotto; una sua riattivazione viene applicata al batch successivo o a una ripresa esplicita;
 - una sessione gia aperta non viene interrotta a meta richiesta quando termina la fascia;
+- al checkpoint successivo alla richiesta, un profilo uscito dalla fascia esegue logout, chiude il browser e rilascia la lease; se la fascia riapre, il runner riacquisisce la lease prima di ricreare la sessione;
+- la lease scade dopo 15 minuti solo come recovery da crash ed e rinnovata ogni minuto anche durante richieste SISTER lente; se il rinnovo fallisce, il runner chiude la propria sessione al checkpoint successivo e non acquisisce nuove richieste;
+- se lo stesso account e gia in uso da un altro batch o worker, il runner resta in attesa senza aprire Playwright e riprova al poll successivo;
 - se tutti i profili sono temporaneamente fuori fascia, il batch resta `processing` e riparte automaticamente senza intervento;
 - `Testa` e `Testa tutte` ignorano il calendario, per consentire sempre la verifica manuale delle credenziali;
 - `Pausa e libera` prevale sul calendario: una credenziale con `active=false` non viene usata neppure durante una fascia disponibile.

@@ -9,6 +9,7 @@ Ambito runtime attuale:
 - report e artifact diagnostici batch/richiesta
 - pool credenziali SISTER con profilo default per worker e test connessione
 - calendario settimanale opzionale per ogni credenziale SISTER, con disponibilita calcolata in `Europe/Rome`: il worker usa il profilo solo nelle fasce configurate, mentre i test manuali restano sempre eseguibili
+- lease globale per `sister_username`: un account SISTER puo alimentare un solo runner alla volta tra batch e worker, anche se presente sotto utenti GAIA differenti; il rinnovo ogni minuto conserva la proprieta durante richieste lente e il rilascio avviene al checkpoint di pausa, fuori fascia e fine runner
 - selezione fail-closed della convenzione SISTER `idConv=1050380` Profilo A, senza flag manuali sulle credenziali multi-ruolo
 - correlazione persistita richiesta locale/remota, affinità con la credenziale SISTER, retry/backoff e fencing transazionale
 - download PDF atomico con validazione firma e SHA-256

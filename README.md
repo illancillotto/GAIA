@@ -859,6 +859,7 @@ Se la variabile e vuota/non impostata, la password non viene richiesta.
 - Calendario settimanale opzionale per singola credenziale SISTER in timezone `Europe/Rome`: il worker usa ciascun profilo solo nelle fasce configurate, mantiene i batch in attesa quando nessun profilo e disponibile e lascia sempre accessibili i test manuali
 - Espansione dinamica del pool SISTER sui batch condivisi: le nuove credenziali attive e in fascia entrano nei lotti gia in esecuzione senza riavviare le sessioni esistenti; i batch vincolati a una credenziale restano esclusi
 - Pool SISTER globale per il `super_admin`: i batch condivisi avviati dal super amministratore usano in parallelo tutte le credenziali attive e in fascia, anche se appartengono ad altri utenti; gli altri ruoli restano limitati alle proprie credenziali
+- Lease globale per account SISTER: `catasto_credential_leases` impedisce che lo stesso `sister_username` sia usato da due batch o worker contemporaneamente, anche se e registrato in pool GAIA diversi; la lease e rinnovata ogni minuto e viene rilasciata al logout, alla pausa e fuori fascia
 
 ## Network MVP
 

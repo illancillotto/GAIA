@@ -10,12 +10,18 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from app.models.application_user import ApplicationUser
-from app.models.catasto import CatastoBatch, CatastoBatchStatus, CatastoCredential
+from app.models.catasto import (
+    CatastoBatch,
+    CatastoBatchStatus,
+    CatastoCredential,
+    CatastoCredentialLease,
+)
 from app.services.elaborazioni_credential_schedule import (
     credential_is_available,
     next_credential_availability,
 )
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 _REJECTED_CREDENTIAL_MARKERS = (
@@ -25,6 +31,8 @@ _REJECTED_CREDENTIAL_MARKERS = (
 )
 logger = logging.getLogger(__name__)
 _SCHEDULED_BATCH_RESUME_AT: dict[UUID, datetime] = {}
+_CREDENTIAL_LEASE_SECONDS = 900
+_CREDENTIAL_LEASE_HEARTBEAT_SECONDS = 60
 
 
 class RejectedCredentialQuarantined(Exception):
@@ -98,6 +106,126 @@ def _is_available(credential: CatastoCredential, now: datetime) -> bool:
     )
 
 
+def _deduplicate_by_username(credentials: tuple[CatastoCredential, ...]) -> tuple[CatastoCredential, ...]:
+    unique: dict[str, CatastoCredential] = {}
+    for credential in credentials:
+        unique.setdefault(credential.sister_username, credential)
+    return tuple(unique.values())
+
+
+def credential_is_runnable(session_factory: Callable[[], Session], credential_id: UUID) -> bool:
+    with session_factory() as db:
+        credential = db.get(CatastoCredential, credential_id)
+        return credential is not None and credential.active and _is_available(credential, datetime.now(timezone.utc))
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+
+
+def acquire_credential_lease(
+    session_factory: Callable[[], Session], credential: CatastoCredential, batch_id: UUID
+) -> bool:
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(seconds=_CREDENTIAL_LEASE_SECONDS)
+    try:
+        with session_factory() as db:
+            renewed = db.execute(
+                update(CatastoCredentialLease)
+                .where(
+                    CatastoCredentialLease.sister_username == credential.sister_username,
+                    (CatastoCredentialLease.batch_id == batch_id)
+                    | (CatastoCredentialLease.expires_at <= now),
+                )
+                .values(credential_id=credential.id, batch_id=batch_id, expires_at=expires_at)
+            )
+            if renewed.rowcount == 0:
+                existing = db.get(CatastoCredentialLease, credential.sister_username)
+                if existing is not None and _as_utc(existing.expires_at) > now:
+                    return False
+                db.add(
+                    CatastoCredentialLease(
+                        sister_username=credential.sister_username,
+                        credential_id=credential.id,
+                        batch_id=batch_id,
+                        expires_at=expires_at,
+                    )
+                )
+            db.commit()
+            return True
+    except IntegrityError:
+        return False
+
+
+def renew_credential_lease(
+    session_factory: Callable[[], Session], credential: CatastoCredential, batch_id: UUID
+) -> bool:
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=_CREDENTIAL_LEASE_SECONDS)
+    with session_factory() as db:
+        result = db.execute(
+            update(CatastoCredentialLease)
+            .where(
+                CatastoCredentialLease.sister_username == credential.sister_username,
+                CatastoCredentialLease.batch_id == batch_id,
+            )
+            .values(expires_at=expires_at)
+        )
+        db.commit()
+        return result.rowcount == 1
+
+
+class CredentialLeaseHeartbeat:
+    def __init__(
+        self,
+        session_factory: Callable[[], Session],
+        credential: CatastoCredential,
+        batch_id: UUID,
+        interval_seconds: int = _CREDENTIAL_LEASE_HEARTBEAT_SECONDS,
+    ) -> None:
+        self._session_factory = session_factory
+        self._credential = credential
+        self._batch_id = batch_id
+        self._interval_seconds = interval_seconds
+        self.lost = asyncio.Event()
+        self._task: asyncio.Task[None] | None = None
+
+    def start(self) -> None:
+        if self._task is None:
+            self._task = asyncio.create_task(self._run())
+
+    async def stop(self) -> None:
+        if self._task is None:
+            return
+        self._task.cancel()
+        try:
+            await self._task
+        except asyncio.CancelledError:
+            pass
+        self._task = None
+
+    async def _run(self) -> None:
+        while True:
+            await asyncio.sleep(self._interval_seconds)
+            try:
+                renewed = renew_credential_lease(self._session_factory, self._credential, self._batch_id)
+            except Exception:
+                logger.exception("Unable to renew SISTER credential lease for %s", self._credential.sister_username)
+                self.lost.set()
+                return
+            if not renewed:
+                self.lost.set()
+                return
+
+
+def release_credential_lease(session_factory: Callable[[], Session], credential: CatastoCredential, batch_id: UUID) -> None:
+    with session_factory() as db:
+        db.execute(delete(CatastoCredentialLease).where(
+            CatastoCredentialLease.sister_username == credential.sister_username,
+            CatastoCredentialLease.batch_id == batch_id,
+        ))
+        db.commit()
+
+
 def _next_availability(credential: CatastoCredential, now: datetime) -> datetime | None:
     return next_credential_availability(
         getattr(credential, "schedule_enabled", False),
@@ -147,11 +275,11 @@ def _load_shared_pool(db: Session, batch: CatastoBatch, now: datetime) -> Active
         ).all()
         if credential.active
     )
-    credentials = tuple(
+    credentials = _deduplicate_by_username(tuple(
         credential
         for credential in active_credentials
         if _is_available(credential, now)
-    )
+    ))
     next_openings = [
         opening
         for credential in active_credentials

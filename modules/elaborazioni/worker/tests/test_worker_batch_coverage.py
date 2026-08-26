@@ -123,6 +123,9 @@ def install_batch_runtime(
     monkeypatch.setattr(worker_module, "SisterRequestClaimCoordinator", ClaimCoordinator)
     monkeypatch.setattr(worker_module, "SisterRequestRetryCoordinator", RetryCoordinator)
     monkeypatch.setattr(worker_module, "credential_is_active", lambda *_args: True)
+    monkeypatch.setattr(worker_module, "credential_is_runnable", lambda *_args: True)
+    monkeypatch.setattr(worker_module, "acquire_credential_lease", lambda *_args: True)
+    monkeypatch.setattr(worker_module, "release_credential_lease", lambda *_args: None)
     worker._request_repository = lambda: repository
     worker._set_batch_operation = lambda _batch_id, operation: operations.append(operation)
     worker._finalize_batch = lambda _batch_id: operations.append("finalized")
@@ -209,6 +212,46 @@ def test_batch_happy_path_role_label_and_release_checkpoints(monkeypatch: pytest
     assert calls == [request_id]
     assert operations[0].startswith("Avvio autosync ruolo") and operations[-1] == "finalized"
 
+
+def test_runner_releases_lease_outside_schedule_and_waits_for_busy_credential(monkeypatch: pytest.MonkeyPatch) -> None:
+    worker = bare_worker()
+    item = batch()
+    active = credential()
+    repository = BatchRepository([Selection(uuid4())])
+    install_batch_runtime(worker, repository, monkeypatch)
+    worker._batch_has_open_requests = lambda _batch_id: True
+    runnable = iter([True, False])
+    active_states = iter([True, True, False])
+    releases: list[object] = []
+    monkeypatch.setattr(worker_module, "credential_is_runnable", lambda *_args: next(runnable))
+    monkeypatch.setattr(worker_module, "credential_is_active", lambda *_args: next(active_states))
+    monkeypatch.setattr(worker_module, "acquire_credential_lease", lambda *_args: True)
+    monkeypatch.setattr(worker_module, "release_credential_lease", lambda *_args: releases.append(_args[1].id))
+    outer = FakeDb(get_values=[item, active])
+    monkeypatch.setattr(worker_module, "SessionLocal", BatchSessionFactory(outer, item))
+
+    run(worker._process_batch(item.id))
+
+    assert releases == [active.id]
+
+    worker = bare_worker()
+    item = batch()
+    active = credential()
+    repository = BatchRepository()
+    operations = install_batch_runtime(worker, repository, monkeypatch)
+    monkeypatch.setattr(worker_module, "acquire_credential_lease", lambda *_args: False)
+
+    async def stop_after_wait(_seconds):
+        worker.state.stop_requested = True
+
+    monkeypatch.setattr(worker_module.asyncio, "sleep", stop_after_wait)
+    outer = FakeDb(get_values=[item, active])
+    monkeypatch.setattr(worker_module, "SessionLocal", BatchSessionFactory(outer, item))
+
+    run(worker._process_batch(item.id))
+
+    assert any("gia in uso" in operation for operation in operations)
+
     worker = bare_worker()
     item = batch()
     active = credential()
@@ -221,7 +264,6 @@ def test_batch_happy_path_role_label_and_release_checkpoints(monkeypatch: pytest
     assert not repository.releases
     assert repository.failed_unavailable[-1] == (item.id, set())
     assert operations[-1] == "finalized"
-
     worker = bare_worker()
     item = batch()
     active = credential()
@@ -244,6 +286,83 @@ def test_batch_happy_path_role_label_and_release_checkpoints(monkeypatch: pytest
         BatchSessionFactory(outer, item, [item, SimpleNamespace(status=worker_module.CatastoBatchStatus.CANCELLED.value)]),
     )
     run(worker._process_batch(item.id))
+
+
+def test_runner_closes_open_browser_when_schedule_ends_or_lease_is_lost(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Heartbeat:
+        instances: list["Heartbeat"] = []
+
+        def __init__(self, *_args) -> None:
+            self.lost = worker_module.asyncio.Event()
+            self.stopped = False
+            type(self).instances.append(self)
+
+        def start(self) -> None:
+            return None
+
+        async def stop(self) -> None:
+            self.stopped = True
+
+    async def no_wait(_seconds: int) -> None:
+        return None
+
+    worker = bare_worker()
+    item = batch()
+    active = credential()
+    repository = BatchRepository([Selection(uuid4())])
+    operations = install_batch_runtime(worker, repository, monkeypatch)
+    monkeypatch.setattr(worker_module, "CredentialLeaseHeartbeat", Heartbeat)
+    monkeypatch.setattr(worker_module.asyncio, "sleep", no_wait)
+    runnable = iter([True, False])
+    monkeypatch.setattr(worker_module, "credential_is_runnable", lambda *_args: next(runnable))
+    monkeypatch.setattr(worker_module, "credential_is_active", lambda *_args: True)
+    worker._batch_has_open_requests = lambda _batch_id: True
+
+    def set_operation(_batch_id, operation: str) -> None:
+        operations.append(operation)
+        if "fuori fascia" in operation:
+            worker.state.stop_requested = True
+
+    worker._set_batch_operation = set_operation
+    outer = FakeDb(get_values=[item, active])
+    monkeypatch.setattr(worker_module, "SessionLocal", BatchSessionFactory(outer, item))
+
+    run(worker._process_batch(item.id))
+
+    assert any("fuori fascia" in operation for operation in operations)
+    assert Heartbeat.instances[0].stopped
+
+    worker = bare_worker()
+    item = batch()
+    active = credential()
+    repository = BatchRepository([Selection(uuid4())])
+    install_batch_runtime(worker, repository, monkeypatch)
+    monkeypatch.setattr(worker_module, "CredentialLeaseHeartbeat", Heartbeat)
+    monkeypatch.setattr(worker_module.asyncio, "sleep", no_wait)
+    runnable = iter([True, False])
+    active_states = iter([True, True, False])
+    runnable_calls: list[bool] = []
+
+    def is_runnable(*_args) -> bool:
+        value = next(runnable)
+        runnable_calls.append(value)
+        return value
+
+    monkeypatch.setattr(worker_module, "credential_is_runnable", is_runnable)
+    monkeypatch.setattr(worker_module, "credential_is_active", lambda *_args: next(active_states))
+    worker._batch_has_open_requests = lambda _batch_id: True
+
+    async def lose_lease(*_args) -> None:
+        Heartbeat.instances[-1].lost.set()
+
+    worker._process_request = lose_lease
+    outer = FakeDb(get_values=[item, active])
+    monkeypatch.setattr(worker_module, "SessionLocal", BatchSessionFactory(outer, item))
+
+    run(worker._process_batch(item.id))
+
+    assert Heartbeat.instances[-1].lost.is_set()
+    assert runnable_calls == [True, False]
 
 
 def test_running_shared_batch_adds_new_credentials_without_restarting_existing_runner(

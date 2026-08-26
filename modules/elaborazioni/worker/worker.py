@@ -10,6 +10,7 @@ from pathlib import Path
 import re
 import signal
 import traceback
+from typing import cast
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -87,15 +88,19 @@ from autodoc_sync import AUTODOC_SYNC_ENTITY, run_autodoc_sync_job_by_id
 from anti_captcha_client import AntiCaptchaClient
 from browser_session import BrowserSession, BrowserSessionConfig
 from sister_credential_pool import (
+    CredentialLeaseHeartbeat,
     CredentialRejectionContext,
+    acquire_credential_lease,
     announce_expanded_credential_pool,
     credential_is_active,
+    credential_is_runnable,
     finalize_credential_pool,
     isolate_rejected_credential_runner,
     load_active_credential_pool,
     mark_batch_waiting_for_schedule,
     next_processable_batch_id,
     quarantine_rejected_credential,
+    release_credential_lease,
     refresh_shared_credential_pool,
     run_dynamic_credential_pool,
     should_stop_credential_runner,
@@ -800,11 +805,47 @@ class CatastoWorker:
 
         async def _credential_runner(credential: CatastoCredential) -> None:
             nonlocal global_server_error_pause_until
-            browser = self._build_browser_session()
-            password = self.vault.decrypt(credential.sister_password_encrypted)
-            await browser.start()
+            browser: BrowserSession | None = None
+            lease_acquired = False
+            lease_heartbeat: CredentialLeaseHeartbeat | None = None
             try:
                 while not self.state.stop_requested:
+                    if lease_heartbeat is not None and lease_heartbeat.lost.is_set():
+                        # A heartbeat is started immediately before the browser session.
+                        lease_browser = cast(BrowserSession, browser)
+                        with contextlib.suppress(Exception):
+                            await lease_browser.logout()
+                        await lease_browser.stop()
+                        browser = None
+                        lease_acquired = False
+                        lease_heartbeat = None
+                    if not credential_is_runnable(SessionLocal, credential.id):
+                        if browser is not None:
+                            with contextlib.suppress(Exception):
+                                await browser.logout()
+                            await browser.stop()
+                            browser = None
+                        if lease_acquired:
+                            await lease_heartbeat.stop()
+                            release_credential_lease(SessionLocal, credential, batch_id)
+                            lease_acquired = False
+                            lease_heartbeat = None
+                        if not credential_is_active(SessionLocal, credential.id):
+                            return
+                        self._set_batch_operation(batch_id, f"Credenziale {credential.sister_username} fuori fascia, in attesa")
+                        await asyncio.sleep(min(POLL_INTERVAL_SEC, 60))
+                        continue
+                    if not lease_acquired:
+                        if not acquire_credential_lease(SessionLocal, credential, batch_id):
+                            self._set_batch_operation(batch_id, f"Credenziale {credential.sister_username} gia in uso, in attesa")
+                            await asyncio.sleep(POLL_INTERVAL_SEC)
+                            continue
+                        lease_acquired = True
+                        lease_heartbeat = CredentialLeaseHeartbeat(SessionLocal, credential, batch_id)
+                        lease_heartbeat.start()
+                    if browser is None:
+                        browser = self._build_browser_session()
+                        await browser.start()
                     if should_stop_credential_runner(
                         self.state.stop_requested,
                         batch_id,
@@ -933,9 +974,13 @@ class CatastoWorker:
                         return
                     await asyncio.sleep(BETWEEN_VISURE_DELAY_SEC)
             finally:
-                with contextlib.suppress(Exception):
-                    await browser.logout()
-                await browser.stop()
+                if browser is not None:
+                    with contextlib.suppress(Exception):
+                        await browser.logout()
+                    await browser.stop()
+                if lease_acquired:
+                    await cast(CredentialLeaseHeartbeat, lease_heartbeat).stop()
+                    release_credential_lease(SessionLocal, credential, batch_id)
 
         pool_label = (
             f"Avvio autosync ruolo con credenziale {active_credentials[0].sister_username}"

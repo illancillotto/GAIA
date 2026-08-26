@@ -59,6 +59,7 @@ from app.modules.presenze.models import (
     OrganizationTeamMembership,
     OrganizationTeamSupervisorAssignment,
     PresenzeCollaborator,
+    PresenzeCollaboratorMappingAudit,
     PresenzeBankHoursAdjustment,
     PresenzeBankHoursGuidanceConfig,
     PresenzeBankHoursGuidanceConfigRevision,
@@ -144,6 +145,7 @@ from app.models.catasto import (
     CatastoComune,
     CatastoConnectionTest,
     CatastoCredential,
+    CatastoCredentialLease,
     CatastoDocument,
     CatastoVisuraRequest,
 )
@@ -245,6 +247,7 @@ __all__ = [
     "CatastoComune",
     "CatastoConnectionTest",
     "CatastoCredential",
+    "CatastoCredentialLease",
     "CatastoDocument",
     "CatastoVisuraRequest",
     "CatConsorzioOccupancy",

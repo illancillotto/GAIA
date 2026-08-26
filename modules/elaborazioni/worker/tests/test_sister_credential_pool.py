@@ -7,21 +7,32 @@ from uuid import uuid4
 
 import pytest
 from app.models.application_user import ApplicationUser
-from app.models.catasto import CatastoBatch, CatastoBatchStatus, CatastoCredential
+from app.models.catasto import (
+    CatastoBatch,
+    CatastoBatchStatus,
+    CatastoCredential,
+    CatastoCredentialLease,
+)
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
 from sister_credential_pool import (
     ActiveSisterCredentialPool,
     CredentialRejectionContext,
+    CredentialLeaseHeartbeat,
     RejectedCredentialQuarantined,
+    acquire_credential_lease,
     credential_is_active,
+    credential_is_runnable,
     finalize_credential_pool,
     is_rejected_credential_error,
     isolate_rejected_credential_runner,
     load_active_credential_pool,
     quarantine_rejected_credential,
+    renew_credential_lease,
     refresh_shared_credential_pool,
+    release_credential_lease,
     run_dynamic_credential_pool,
     should_stop_credential_runner,
 )
@@ -142,6 +153,7 @@ def test_super_admin_global_pool_executes_real_queries_and_refreshes_cross_user_
     ApplicationUser.__table__.create(bind=engine)
     CatastoCredential.__table__.create(bind=engine)
     CatastoBatch.__table__.create(bind=engine)
+    CatastoCredentialLease.__table__.create(bind=engine)
     session_factory = sessionmaker(bind=engine, expire_on_commit=False)
     reference = datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc)
 
@@ -242,6 +254,95 @@ def test_super_admin_global_pool_executes_real_queries_and_refreshes_cross_user_
 
     assert {item.id for item in added} == {late.id}
     engine.dispose()
+
+
+def test_credential_lease_serializes_duplicate_sister_accounts() -> None:
+    engine = create_engine("sqlite://")
+    ApplicationUser.__table__.create(bind=engine)
+    CatastoCredential.__table__.create(bind=engine)
+    CatastoBatch.__table__.create(bind=engine)
+    CatastoCredentialLease.__table__.create(bind=engine)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    first_batch, second_batch = uuid4(), uuid4()
+
+    with session_factory() as db:
+        user = ApplicationUser(username="lease-user", email="lease@example.local", password_hash="hash")
+        db.add(user)
+        db.flush()
+        first = CatastoCredential(user_id=user.id, label="A", sister_username="same-account", sister_password_encrypted=b"a")
+        second = CatastoCredential(user_id=user.id, label="B", sister_username="same-account-copy", sister_password_encrypted=b"b")
+        db.add_all([first, second])
+        db.commit()
+
+    assert acquire_credential_lease(session_factory, first, first_batch)
+    assert not acquire_credential_lease(session_factory, first, second_batch)
+    assert acquire_credential_lease(session_factory, first, first_batch)
+    release_credential_lease(session_factory, first, first_batch)
+    assert acquire_credential_lease(session_factory, first, second_batch)
+    release_credential_lease(session_factory, first, second_batch)
+    assert not renew_credential_lease(session_factory, first, second_batch)
+    engine.dispose()
+
+
+def test_credential_runtime_checks_cover_missing_inactive_and_lease_conflict() -> None:
+    active = credential()
+    assert credential_is_runnable(lambda: FakeDb(get_value=active), active.id)
+    assert not credential_is_runnable(lambda: FakeDb(get_value=credential(active=False)), active.id)
+    assert not credential_is_runnable(lambda: FakeDb(get_value=None), active.id)
+
+    class FailingDb(FakeDb):
+        def execute(self, _statement):
+            return SimpleNamespace(rowcount=0)
+
+        def add(self, _value):
+            return None
+
+        def commit(self):
+            raise IntegrityError("insert", {}, RuntimeError("duplicate"))
+
+    assert not acquire_credential_lease(lambda: FailingDb(get_value=None), active, uuid4())
+
+
+def test_credential_lease_heartbeat_renews_and_detects_loss(monkeypatch: pytest.MonkeyPatch) -> None:
+    active = credential()
+    batch_id = uuid4()
+
+    async def no_wait(_seconds: int) -> None:
+        return None
+
+    renewals = iter([True, False])
+    monkeypatch.setattr("sister_credential_pool.asyncio.sleep", no_wait)
+    monkeypatch.setattr("sister_credential_pool.renew_credential_lease", lambda *_args: next(renewals))
+    heartbeat = CredentialLeaseHeartbeat(lambda: FakeDb(), active, batch_id, interval_seconds=1)
+
+    asyncio.run(heartbeat._run())
+
+    assert heartbeat.lost.is_set()
+    asyncio.run(heartbeat.stop())
+
+    monkeypatch.setattr(
+        "sister_credential_pool.renew_credential_lease",
+        lambda *_args: (_ for _ in ()).throw(RuntimeError("database unavailable")),
+    )
+    failed_heartbeat = CredentialLeaseHeartbeat(lambda: FakeDb(), active, batch_id, interval_seconds=1)
+    asyncio.run(failed_heartbeat._run())
+
+    assert failed_heartbeat.lost.is_set()
+
+
+def test_credential_lease_heartbeat_start_is_idempotent_and_stops(monkeypatch: pytest.MonkeyPatch) -> None:
+    active = credential()
+    heartbeat = CredentialLeaseHeartbeat(lambda: FakeDb(), active, uuid4())
+    async def exercise() -> None:
+        heartbeat.start()
+        task = heartbeat._task
+        heartbeat.start()
+
+        assert heartbeat._task is task
+        await heartbeat.stop()
+
+    asyncio.run(exercise())
+    assert heartbeat._task is None
 
 
 def test_load_active_credential_pool_defers_credentials_outside_their_schedule() -> None:
