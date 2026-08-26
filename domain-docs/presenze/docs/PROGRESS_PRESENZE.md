@@ -10,6 +10,8 @@
 - La UI espone una preview quantitativa `alta/revisione/conflitto/nessun match`
   prima di ogni applicazione; nessun mapping reale e stato applicato durante
   questa change.
+- Preview read-only sui `116` collaboratori non mappati: `7` match ad alta
+  confidenza, `96` da revisionare, `12` conflitti bloccati e `1` senza match.
 - Audit read-only iniziale: `17` assegnazioni `capo_reparto`, `0` unita
   tipizzate `reparto` e `10` unita con nome `Reparto ...` ancora tipizzate
   `settore`.
