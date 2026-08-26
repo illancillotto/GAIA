@@ -62,7 +62,7 @@ export function CollaboratorMappingPanel({
               <p className="font-medium text-gray-900">{row.name}</p>
               <p className="text-xs text-gray-500">Matricola {row.employeeCode} · {row.contractSummary}</p>
               {row.suggestionConfidence === "conflict" ? (
-                <p className="mt-1 text-xs font-medium text-amber-700">Conflitto rilevato: seleziona manualmente un'identità non assegnata.</p>
+                <p className="mt-1 text-xs font-medium text-amber-700">Conflitto rilevato: seleziona manualmente un&apos;identità non assegnata.</p>
               ) : row.suggestionConfidence !== "none" ? (
                 <p className="mt-1 text-xs text-emerald-700">
                   Suggerito: {row.suggestedUserLabel} ({confidenceLabel(row.suggestionConfidence)})
