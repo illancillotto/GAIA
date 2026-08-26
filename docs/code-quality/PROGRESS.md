@@ -41,6 +41,7 @@ blocco verificato e prima di chiudere un goal.
 | 2026-08-20 | Baseline autorevole dal merge-base | La baseline della stessa change puo mascherare una regressione coordinata | Nuovo comando `complexity-ratchet`; CI in una change successiva alla fondazione |
 | 2026-08-20 | Coverage invariata | Non abbassare implicitamente la policy esistente durante il redesign della complessita | Resta `100%` sui file runtime nuovi o modificati |
 | 2026-08-20 | Workflow code-quality dedicato | Evitare duplicazione e divergenza tra CI backend/frontend | Un solo job autorevole per test tooling e ratchet |
+| 2026-08-25 | Usare il diff come ultima evidenza per callable aggiunti | I nomi JS anonimi ripetuti possono collassare su una pseudo-identita; una nuova callback non deve ereditare arbitrariamente debito legacy | Il fallback si applica solo a span interamente aggiunti e non nasconde nuove violation error-level |
 
 ## Esperimento archiviato
 
@@ -154,9 +155,221 @@ blocco verificato e prima di chiudere un goal.
 
 | ID | Data | Hotspot | Prima | Dopo | Test/coverage | Commit/PR |
 | --- | --- | --- | --- | --- | --- | --- |
-| - | - | - | - | - | - | - |
+| GIS-H1 | 2026-08-25 | `GisAdministrationWorkspace` | cyc `40`, cog `46`, LOC `352` | cyc `3`, cog `3`, LOC `39` | `107` test GIS; coverage mirata `100%` | nessuno |
+| GIS-H2 | 2026-08-25 | `GisPermissionsPanel` | cyc `28`, cog `28`, LOC `217` | cyc `4`, cog `3`, LOC `47` | `107` test GIS; coverage mirata `100%` | nessuno |
+| GIS-H3 | 2026-08-25 | `GisLayerDetailWorkspace` | cyc `18`, cog `20`, LOC `114` | cyc `6`, cog `5`, LOC `16` | `107` test GIS; coverage mirata `100%` | nessuno |
+| GIS-H4 | 2026-08-26 | `ConfirmationDialog` | cyc `6`, cog `5`, LOC `86` | cyc `2`, cog `1`, LOC `20` | `107` test GIS; coverage mirata `100%` | nessuno |
+| GIS-H5 | 2026-08-26 | `FeatureSelector` | cyc `19`, cog `19`, LOC `170` | cyc `1`, cog `0`, LOC `33` | `108` test GIS; coverage mirata `100%` | nessuno |
+| GIS-H6 | 2026-08-26 | `GuidedChangeRequestComposer` | cyc `35`, cog `36`, LOC `361` | cyc `5`, cog `4`, LOC `54` | `108` test GIS; coverage mirata `100%` | nessuno |
+| GIS-H7 | 2026-08-26 | `GuidedAnnotationComposer` | cyc `22`, cog `23`, LOC `195` | cyc `4`, cog `3`, LOC `48` | `108` test GIS; coverage mirata `100%` | nessuno |
 
 ## Modifiche funzionali verificate fuori dal programma hotspot
+
+### 2026-08-26 - GIS-H7 wizard annotazioni
+
+- Hotspot: `GuidedAnnotationComposer`; invarianti preservati per scelta elemento
+  o intera mappa, caricamento iniziale, modifica con selezione disabilitata,
+  validazione titolo/descrizione, riepilogo, submit/retry/reset, annullamento,
+  focus dei tre passi e stati busy.
+- Slice: stato del wizard, pannelli target/dettaglio/riepilogo e costruzione del
+  payload sono separati nel modulo `guided-annotation-composer.tsx`. Il file
+  pubblico resta un barrel compatibile; DOM, testi, callback, payload API e
+  ordine delle transizioni restano invariati.
+- Metrica obiettivo: componente principale cyclomatic `22 -> 4`, cognitive
+  `23 -> 3`, LOC `195 -> 48`; tutte le tre violation sono eliminate. Il massimo
+  finale della responsabilita e cyclomatic `9`, cognitive `10`, LOC `48`, senza
+  warning o error.
+- Anti-trasferimento sul perimetro: callable `10 -> 22`, somma cognitive
+  `30 -> 29`, somma cyclomatic grezza `36 -> 46` e decision point normalizzati
+  `26 -> 24`; violation callable `3 -> 0`. Il file originario scende da LOC
+  `210` a `3`; il nuovo modulo ha LOC `386` senza violation file-level.
+- Verifiche: `10` test mirati e `15` file con `108` test GIS passati; typecheck
+  e lint mirato frontend puliti; `39` test del quality tooling passati; coverage
+  mirata dei due runtime `100%` con `51/51` statement, `37/37` branch, `22/22`
+  funzioni e `48/48` linee.
+- Ratchet autorevole contro il merge-base `61b5928952741466353e2587399cc288ebe37c41`:
+  il gate globale mostra i primi `100` finding concorrenti (`92` regressioni
+  legacy e `8` nuove violation), senza finding sui file H7. Baseline ed
+  eccezioni non modificate.
+- Graphify frontend aggiornato senza variazioni topologiche; refresh platform
+  docs `PASS`. Esito GIS-H7: `IMPROVED`.
+
+### 2026-08-26 - GIS-H6 wizard richieste di modifica
+
+- Hotspot: `GuidedChangeRequestComposer`; invarianti preservati per selezione
+  elemento e tipo, correzioni attributo/geometria, creazione/eliminazione,
+  valori prima/dopo, coordinate, motivazione, validazioni, submit/retry/reset,
+  modifica esistente, focus dei tre passi e stati busy.
+- Slice: shell del wizard condiviso, orchestrazione stato e pannelli dei passi
+  sono separati per responsabilita. L'export pubblico resta disponibile da
+  `guided-workflow-components.tsx`; DOM, testi, callback, payload API e ordine
+  degli effetti restano invariati.
+- Metrica obiettivo: componente principale cyclomatic `35 -> 5`, cognitive
+  `36 -> 4`, LOC `361 -> 54`; le tre violation error-level sono eliminate. Il
+  massimo specifico della nuova responsabilita e cyclomatic `6`, cognitive `7`,
+  LOC `67`, con due soli warning LOC e nessuna violation error-level.
+- Anti-trasferimento sul perimetro: callable `43 -> 64`, somma cognitive
+  `91 -> 77`, somma cyclomatic grezza `126 -> 132` e decision point
+  normalizzati `83 -> 68`; violation callable `6 -> 5`. Il file originario
+  scende da LOC `624` a `210`; i tre nuovi file hanno LOC `223`, `498` e `36`,
+  senza violation file-level. Il distinto `GuidedAnnotationComposer` resta
+  invariato a cyclomatic `22`, cognitive `23`, LOC `195`.
+- Verifiche: `10` test mirati e `15` file con `108` test GIS passati; typecheck
+  frontend e `39` test del quality tooling passati; coverage mirata dei quattro
+  runtime `100%` con `135/135` statement, `105/105` branch, `63/63` funzioni e
+  `123/123` linee.
+- Ratchet autorevole contro il merge-base `61b5928952741466353e2587399cc288ebe37c41`:
+  il gate globale mostra i primi `100` finding concorrenti (`90` regressioni
+  legacy e `10` nuove violation). Nessun finding riguarda i tre nuovi moduli;
+  i due del file pubblico appartengono al distinto composer delle annotazioni.
+  Baseline ed eccezioni non modificate.
+- Lint mirato pulito; Graphify aggiornato: frontend `5.303` nodi, `13.131`
+  archi e `201` community, refresh platform docs `PASS`. Esito GIS-H6:
+  `IMPROVED`.
+
+### 2026-08-26 - GIS-H5 selezione guidata elementi
+
+- Hotspot: `FeatureSelector`; invarianti preservati per caricamento iniziale,
+  ricerca testuale, paginazione, selezione e nota sull'intera mappa, stati
+  busy/disabled, messaggi di errore e annullamento delle risposte dopo unmount.
+- Slice: la responsabilita completa e stata spostata nel modulo dedicato
+  `feature-selector.tsx`; stato e caricamento sono isolati in un hook, mentre
+  ricerca, select, feedback e paginazione hanno confini presentazionali. DOM,
+  testi, classi CSS, chiamate API, callback e ordine degli effetti invariati.
+- Metrica obiettivo: componente principale cyclomatic `19 -> 1`, cognitive
+  `19 -> 0`, LOC `170 -> 33`; le tre violation del callable sono rimosse. Il
+  nuovo massimo della responsabilita e cyclomatic `7`, cognitive `6`, LOC `77`,
+  con il solo warning LOC dell'hook di caricamento.
+- Anti-trasferimento sul perimetro dei due file: callable `58 -> 65`, somma
+  cognitive `124 -> 117`, somma cyclomatic grezza `172 -> 174` e decision point
+  normalizzati `114 -> 109`; violation callable `9 -> 7`. Il file wizard scende
+  da LOC `794` a `624` e il nuovo modulo ha LOC `268` senza violation file-level.
+- Verifiche: `10` test mirati e `15` file con `108` test GIS passati; typecheck
+  frontend pulito; `39` test del quality tooling passati; coverage mirata dei
+  due file runtime `100%` con `160/160` statement, `142/142` branch, `64/64`
+  funzioni e `149/149` linee.
+- Ratchet autorevole contro il merge-base `61b5928952741466353e2587399cc288ebe37c41`:
+  il gate globale mostra ancora i primi `100` finding concorrenti (`88`
+  regressioni legacy e `12` nuove violation). Nessun finding riguarda il nuovo
+  `feature-selector.tsx`; i cinque del file wizard appartengono ai due composer
+  distinti e sono invariati rispetto alle metriche iniziali della slice.
+  Baseline ed eccezioni non modificate.
+- Graphify aggiornato: frontend `5.266` nodi, `13.055` archi e `190` community;
+  refresh platform docs `PASS`. Esito GIS-H5: `IMPROVED`.
+
+### 2026-08-26 - GIS-H4 dialog di conferma
+
+- Hotspot: `ConfirmationDialog`; invarianti preservati per testi e ordine DOM,
+  tono primario/distruttivo, conseguenze, feedback `alert`/`status`, azioni di
+  conferma e annullamento, blocco della chiusura durante le operazioni e
+  integrazione con focus trap, `Escape`, scroll lock e ripristino del focus.
+- Slice: props rese esplicite e intestazione, conseguenze/feedback e azioni
+  separate per responsabilita presentazionale. Contratto pubblico, callback,
+  classi CSS, condizioni di rendering e comportamento percepito invariati.
+- Metrica obiettivo: componente principale cyclomatic `6 -> 2`, cognitive
+  `5 -> 1`, LOC `86 -> 20`; la violation LOC error-level e stata rimossa e
+  nessun nuovo helper supera una soglia warning o error.
+- Anti-trasferimento sul file: callable `8 -> 11`, somma cognitive `47 -> 47`,
+  somma cyclomatic grezza `52 -> 55` e decision point normalizzati
+  `44 -> 44`; LOC file `175 -> 198`. I quattro warning preesistenti del distinto
+  `CatalogDialog` restano invariati e fuori dalla slice.
+- Verifiche: `6` test mirati e `15` file con `107` test GIS passati; typecheck
+  frontend pulito; `39` test del quality tooling passati; coverage mirata
+  `100%` con `59/59` statement, `34/34` branch, `11/11` funzioni e `54/54`
+  linee.
+- Ratchet autorevole contro il merge-base `61b5928952741466353e2587399cc288ebe37c41`:
+  il gate globale resta rosso per il debito applicativo concorrente e mostra i
+  primi `100` finding (`88` regressioni legacy e `12` nuove violation), ma
+  nessun finding riguarda `catalog-dialog.tsx`. Baseline ed eccezioni non
+  modificate.
+- Graphify frontend aggiornato: `5.257` nodi, `13.039` archi e `192` community.
+  Esito GIS-H4: `IMPROVED`.
+
+### 2026-08-25 - GIS-H3 dettaglio layer
+
+- Hotspot: `GisLayerDetailWorkspace`; invarianti preservati per caricamento e
+  cancellazione richieste, errore/not-found, viewer geometrico, redirect al
+  dominio, stato/descrizione/accesso e informazioni tecniche.
+- Slice: caricamento isolato in hook; stati pagina, intestazione, scelta
+  viewer/registro e dettagli tecnici separati per responsabilita. API, route,
+  testi, destinazioni e markup accessibile invariati.
+- Metrica obiettivo: componente principale cyclomatic `18 -> 6`, cognitive
+  `20 -> 5`, LOC `114 -> 16`; massimi file cyclomatic `18 -> 6` e cognitive
+  `20 -> 5`, senza violation o warning.
+- Anti-trasferimento: callable `8 -> 15`, somma cognitive `31 -> 29`; somma
+  cyclomatic grezza `36 -> 43`, con decision point normalizzati invariati
+  `28 -> 28`. LOC file `142 -> 145` e massimo callable finale `31`.
+- Verifiche: `15` file e `107` test unitari GIS passati; typecheck frontend
+  pulito; coverage mirata del file `100%` per statement, branch, funzioni e
+  linee; check senza baseline con finding e warning vuoti.
+- Baseline ed eccezioni non modificate. Esito GIS-H3: `IMPROVED`.
+
+### 2026-08-25 - GIS-H2 permessi GIS
+
+- Hotspot: `GisPermissionsPanel`; invarianti preservati per selezione automatica
+  dei layer amministrabili, filtro utenti attivi/GIS, assegnazione a ruolo o
+  persona, ricarica permessi, fallback etichette e revoca con conferma.
+- Slice: contesto layer/utenti e caricamento permessi isolati; editor e lista
+  possiedono rispettivamente assegnazione e revoca. Contratti API, payload,
+  testi, feedback ed effetti di cancellazione invariati.
+- Metrica obiettivo: componente principale cyclomatic `28 -> 4`, cognitive
+  `28 -> 3`, LOC `217 -> 47`; massimi file cyclomatic `28 -> 8` e cognitive
+  `28 -> 7`, senza violation o warning.
+- Anti-trasferimento: callable `40 -> 45`; somma cognitive `61 -> 56`; somma
+  cyclomatic grezza `98 -> 99`, mentre i decision point normalizzati per la base
+  di ogni callable scendono `58 -> 54`. LOC file `267 -> 347` per tipi e confini
+  espliciti, con massimo callable finale `47`.
+- Verifiche: `15` file e `107` test unitari GIS passati; typecheck frontend
+  pulito; coverage mirata del file `100%` per statement, branch, funzioni e
+  linee; check senza baseline con finding e warning vuoti.
+- Baseline ed eccezioni non modificate. Esito GIS-H2: `IMPROVED`.
+
+### 2026-08-25 - GIS-H1 amministrazione GIS
+
+- Hotspot: `GisAdministrationWorkspace`; invarianti preservati per caricamento,
+  selezione layer, creazione, metadati, lifecycle con conferma, export, feedback,
+  governance QGIS e sezioni amministrative collegate.
+- Slice: caricamento/selezione isolati in un hook di catalogo; registrazione,
+  metadati, lifecycle ed export separati per responsabilita. Nessuna API, tipo,
+  testo operativo o semantica di errore modificati.
+- Metrica obiettivo: componente principale cyclomatic `40 -> 3`, cognitive
+  `46 -> 3`, LOC `352 -> 39`.
+- Anti-trasferimento sul file: callable `71 -> 54`, somma cyclomatic
+  `143 -> 120`, somma cognitive `86 -> 77`, LOC file `466 -> 441`; massimi
+  finali cyclomatic `9`, cognitive `13`, LOC callable `47`, senza violation.
+- Verifiche: `15` file e `107` test unitari GIS passati; typecheck frontend
+  pulito; coverage mirata del file `100%` per statement, branch, funzioni e
+  linee; check senza baseline del nuovo file con finding vuoti.
+- Ratchet globale: resta rosso per gli hotspot applicativi residui gia rilevati;
+  baseline ed eccezioni non modificate. Esito GIS-H1: `IMPROVED`.
+
+### 2026-08-25 - Hardening identita callable JS nel quality ratchet
+
+- Scope: solo `tools/code_quality/complexity.py`, test del tooling e presente
+  registro; nessuna baseline, eccezione o sorgente applicativa modificata dalla
+  slice.
+- Problema riprodotto: `61` callback JSX di
+  `frontend/src/app/gis/catalogo/page.tsx` con pseudo-identita
+  `Program<anonymous>` causavano `ambiguous_identity`; tre effetti omonimi in
+  `operational-search-box.tsx` esponevano un secondo caso ambiguo.
+- Correzione: il matcher riserva prima i sibling associabili uno-a-uno tramite
+  fingerprint; solo come ultimo fallback riconosce come nuovo un callable il
+  cui intero span appartiene alle righe aggiunte dal diff autorevole.
+- Anti-laundering: i callable parzialmente aggiunti e quelli realmente
+  indistinguibili continuano a uscire con codice `2`; un callable aggiunto con
+  violation error-level continua a uscire con codice `1`.
+- Verifiche: `make quality-test` -> `39 passed`; test identita JS -> `9 passed`;
+  `make complexity-ratchet BASE_REF=main` non produce piu ambiguita ed esce
+  correttamente con codice `1` sui debiti applicativi reali, senza aggiornare la
+  baseline.
+- Debito rilevato: il confronto completo mostra `192` finding (`159`
+  regressioni callable legacy, `29` nuove violation e `4` regressioni
+  file-level). La baseline al merge-base `87e747d7` dichiara ancora come
+  sorgente `b1d4a988`; le modifiche successive della ricerca non erano state
+  sincronizzate. `complexity-baseline-verify` resta correttamente rosso e la
+  baseline non e stata rigenerata.
+- Esito della slice tooling: `IMPROVED`; il falso blocco di configurazione e
+  rimosso e le regressioni applicative restano visibili e bloccanti.
 
 ### 2026-08-19 - Export completo riepiloghi eventi INAZ
 

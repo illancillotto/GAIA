@@ -440,7 +440,37 @@ def unique_line_tiebreak(c: dict[str, Any], candidates: list[dict[str, Any]]) ->
     return None
 
 
-def resolve_baseline_callable(c: dict[str, Any], report: dict[str, Any], base: dict[str, dict[str, Any]], base_by_fp: dict[str, list[tuple[str, dict[str, Any]]]]) -> tuple[dict[str, Any] | None, dict[str, Any] | None, bool]:
+def callable_is_wholly_added(c: dict[str, Any], added_lines: dict[str, set[int]] | None) -> bool:
+    if not added_lines:
+        return False
+    start = int(c.get("line") or 0)
+    end = int(c.get("end_line") or start)
+    path_lines = added_lines.get(c.get("path", ""), set())
+    return start > 0 and all(line in path_lines for line in range(start, end + 1))
+
+
+def remove_candidates_reserved_by_unique_fingerprint(
+    c: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    current_calls: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    base_fingerprints = Counter(candidate.get("fingerprint") for candidate in candidates)
+    current_fingerprints = Counter(call.get("fingerprint") for call in current_calls)
+    reserved = {
+        fingerprint
+        for fingerprint, count in base_fingerprints.items()
+        if fingerprint != c.get("fingerprint") and count == 1 and current_fingerprints[fingerprint] == 1
+    }
+    return [candidate for candidate in candidates if candidate.get("fingerprint") not in reserved]
+
+
+def resolve_baseline_callable(
+    c: dict[str, Any],
+    report: dict[str, Any],
+    base: dict[str, dict[str, Any]],
+    base_by_fp: dict[str, list[tuple[str, dict[str, Any]]]],
+    added_lines: dict[str, set[int]] | None = None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, bool]:
     exact = base.get(callable_key(c))
     if exact:
         return exact, None, False
@@ -458,14 +488,26 @@ def resolve_baseline_callable(c: dict[str, Any], report: dict[str, Any], base: d
         picked = unique_line_tiebreak(c, same_identity_fp)
         if picked:
             return picked, None, False
+        if callable_is_wholly_added(c, added_lines):
+            return None, None, False
         return None, {"reason": "ambiguous_identity", "path": c["path"], "symbol": c["name"], "fingerprint": c.get("fingerprint")}, False
 
     if len(same_identity) == 1:
         return same_identity[0], None, False
     if same_identity:
-        picked = unique_line_tiebreak(c, same_identity)
+        current_same_identity = [
+            rc
+            for rc in report["callables"]
+            if rc.get("path") == c.get("path") and rc.get("name") == c.get("name")
+        ]
+        remaining = remove_candidates_reserved_by_unique_fingerprint(c, same_identity, current_same_identity)
+        if len(remaining) == 1:
+            return remaining[0], None, False
+        picked = unique_line_tiebreak(c, remaining)
         if picked:
             return picked, None, False
+        if callable_is_wholly_added(c, added_lines):
+            return None, None, False
         return None, {"reason": "ambiguous_identity", "path": c["path"], "symbol": c["name"], "candidates": len(same_identity)}, False
 
     same_path_fp = [bc for bc in base.values() if bc.get("path") == c.get("path") and bc.get("fingerprint") == c.get("fingerprint")]
@@ -480,6 +522,8 @@ def resolve_baseline_callable(c: dict[str, Any], report: dict[str, Any], base: d
         picked = unique_line_tiebreak(c, same_path_fp)
         if picked:
             return picked, None, False
+        if callable_is_wholly_added(c, added_lines):
+            return None, None, False
         return None, {"reason": "ambiguous_fingerprint", "path": c["path"], "symbol": c["name"]}, False
 
     if any(bc.get("path") == c.get("path") for bc in base.values()):
@@ -503,11 +547,18 @@ def resolve_baseline_callable(c: dict[str, Any], report: dict[str, Any], base: d
         picked = unique_line_tiebreak(c, match_calls)
         if picked:
             return picked, None, False
+        if callable_is_wholly_added(c, added_lines):
+            return None, None, False
         return None, {"reason": "ambiguous_fingerprint", "path": c["path"], "symbol": c["name"]}, False
     return None, None, False
 
 
-def compare(report: dict[str, Any], baseline: dict[str, Any] | None, changed_only: set[str] | None = None) -> tuple[int, list[dict[str, Any]]]:
+def compare(
+    report: dict[str, Any],
+    baseline: dict[str, Any] | None,
+    changed_only: set[str] | None = None,
+    added_lines: dict[str, set[int]] | None = None,
+) -> tuple[int, list[dict[str, Any]]]:
     if report.get("parse_errors") or report.get("exception_errors"):
         return 2, [{"reason": "configuration_error", "parse_errors": report.get("parse_errors"), "exception_errors": report.get("exception_errors")}]
     if baseline is None:
@@ -521,7 +572,7 @@ def compare(report: dict[str, Any], baseline: dict[str, Any] | None, changed_onl
     for k, c in base.items(): base_by_fp[c.get("fingerprint")].append((k, c))
     for c in report["callables"]:
         if changed_only is not None and c["path"] not in changed_only: continue
-        b, ambiguity, equivalent_group = resolve_baseline_callable(c, report, base, base_by_fp)
+        b, ambiguity, equivalent_group = resolve_baseline_callable(c, report, base, base_by_fp, added_lines)
         if ambiguity:
             return 2, [ambiguity]
         if equivalent_group:
@@ -574,6 +625,38 @@ def changed_files(base_ref: str, merge_base_commit: str | None = None) -> set[st
     return {x for output in (committed, worktree, untracked) for x in output.splitlines() if x}
 
 
+def parse_added_lines(diff: str) -> dict[str, set[int]]:
+    added: dict[str, set[int]] = defaultdict(set)
+    path: str | None = None
+    hunk_pattern = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+    for line in diff.splitlines():
+        if line.startswith("+++ "):
+            destination = line[4:].split("\t", 1)[0]
+            path = destination[2:] if destination.startswith("b/") else None
+            continue
+        match = hunk_pattern.match(line)
+        if not path or not match:
+            continue
+        start = int(match.group(1))
+        count = int(match.group(2) or 1)
+        added[path].update(range(start, start + count))
+    return dict(added)
+
+
+def added_lines_since(base_commit: str | None, paths: Iterable[str]) -> dict[str, set[int]]:
+    repo_paths = sorted({path for path in paths if path and not Path(path).is_absolute()})
+    if not base_commit or not repo_paths:
+        return {}
+    diff = subprocess.run(
+        ["git", "diff", "--unified=0", "--no-color", base_commit, "--", *repo_paths],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    return parse_added_lines(diff.stdout) if diff.returncode == 0 else {}
+
+
 def baseline_at_merge_base(base_ref: str, baseline_path: Path) -> tuple[str, dict[str, Any]]:
     base = merge_base(base_ref)
     try:
@@ -622,11 +705,14 @@ def cmd_check(args):
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 2
-    code, findings = compare(r, b)
+    added_lines = added_lines_since(b.get("source_commit"), r.get("files", {})) if b else {}
+    code, findings = compare(r, b, added_lines=added_lines)
     print(json.dumps({"summary": r["summary"], "findings": findings[:100]}, indent=2, sort_keys=True)); return code
 
 def cmd_changed(args):
-    try: changed = changed_files(args.base_ref)
+    try:
+        base = merge_base(args.base_ref)
+        changed = changed_files(args.base_ref, merge_base_commit=base)
     except Exception as e: print(str(e), file=sys.stderr); return 2
     r = scan(args.paths)
     try:
@@ -634,7 +720,7 @@ def cmd_changed(args):
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 2
-    code, findings = compare(r, b, changed_only=changed)
+    code, findings = compare(r, b, changed_only=changed, added_lines=added_lines_since(base, changed))
     print(json.dumps({"changed_files": sorted(changed), "findings": findings[:100]}, indent=2, sort_keys=True)); return code
 
 def cmd_ratchet(args):
@@ -656,7 +742,7 @@ def cmd_ratchet(args):
             "current_engines": comparable_engines(report.get("engines")),
         }, indent=2), file=sys.stderr)
         return 2
-    code, findings = compare(report, baseline, changed_only=changed)
+    code, findings = compare(report, baseline, changed_only=changed, added_lines=added_lines_since(base, changed))
     print(json.dumps({
         "base_ref": args.base_ref,
         "baseline_commit": base,
@@ -681,7 +767,8 @@ def cmd_baseline(args):
             if not args.allow_engine_migration:
                 print(json.dumps({"error": "engine_migration_requires_approval", "old_engines": old.get("engines"), "new_engines": newb.get("engines")}, indent=2), file=sys.stderr)
                 return 2
-        code, findings = compare(r, old)
+        added_lines = added_lines_since(old.get("source_commit"), r.get("files", {}))
+        code, findings = compare(r, old, added_lines=added_lines)
         if code != 0:
             print(json.dumps({"error": "baseline_update_rejected", "findings": findings[:100]}, indent=2), file=sys.stderr); return code
     bp.parent.mkdir(parents=True, exist_ok=True); bp.write_text(json.dumps(newb, indent=2, sort_keys=True) + "\n")
