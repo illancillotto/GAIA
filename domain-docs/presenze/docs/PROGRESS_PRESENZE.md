@@ -10,10 +10,14 @@
 - La UI espone una preview quantitativa `alta/revisione/conflitto/nessun match`
   prima di ogni applicazione; nessun mapping reale e stato applicato durante
   questa change.
-- Audit read-only del database locale: `17` assegnazioni `capo_reparto`, `0`
-  unita tipizzate `reparto` e `7` unita con nome `Reparto ...` ancora tipizzate
-  `settore`. La riclassificazione dati va eseguita in una migration separata;
-  `Sezione impianti nord` resta esclusa perche semanticamente ambigua.
+- Audit read-only iniziale: `17` assegnazioni `capo_reparto`, `0` unita
+  tipizzate `reparto` e `10` unita con nome `Reparto ...` ancora tipizzate
+  `settore`.
+- La migration `20260826_1000` riclassifica esclusivamente queste unita
+  canoniche. Upgrade e downgrade sono stati verificati su una copia mirata del
+  database locale; dopo l'upgrade risultano `10` reparti e `15` settori.
+  Tredici capi reparto ricadono ora sui reparti; i restanti `4` sono assegnati
+  a `Sezione impianti nord`, che resta `settore` perche semanticamente distinta.
 
 ## Identita anagrafiche GAIA inattive - 2026-08-26
 

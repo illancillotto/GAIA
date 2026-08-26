@@ -714,6 +714,9 @@ Fino alla chiusura completa del piano:
   - coverage dei tre file runtime modificati: `421/421` statement, `361/361`
     branch, `114/114` funzioni e `368/368` linee, tutti al `100%`;
   - typecheck frontend: passato.
+  - migration dati `20260826_1000` provata su copia locale: `10` unita
+    `Reparto ...` convertite in upgrade e ripristinate in downgrade; le `4`
+    unita `Sezione ...` restano invariate.
 
 ## Eccezioni temporanee aperte
 
