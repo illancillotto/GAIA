@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 from openpyxl import Workbook, load_workbook
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -27,6 +28,7 @@ from app.modules.presenze.models import (
     OrganizationTeamMembership,
     OrganizationTeamSupervisorAssignment,
     PresenzeCollaborator,
+    PresenzeCollaboratorMappingAudit,
     PresenzeBankHoursGuidanceConfigRevision,
     PresenzeEventSummary,
     PresenzeCollaboratorScheduleAssignment,
@@ -45,6 +47,7 @@ from app.modules.operazioni.models.vehicles import Vehicle, VehicleAssignment, V
 from app.modules.presenze.services.import_jobs import run_import_job
 from app.modules.presenze.services.parser import load_json_payload, parse_import_payload
 from app.modules.presenze.services import straordinari_export_job
+from app.modules.presenze.services import collaborator_mapping as collaborator_mapping_service
 from app.modules.presenze.services.straordinari_export_job import build_period_end as build_straordinari_period_end
 from app.modules.presenze.services.straordinari_export_job import previous_month_period_start
 
@@ -1123,6 +1126,179 @@ def test_presenze_can_map_collaborator_to_application_user() -> None:
     assert calendar.json()["items"][0]["application_user_id"] == mapped_user.id
     assert calendar.json()["items"][0]["night_minutes"] == 0
     assert calendar.json()["items"][0]["festive_night_minutes"] == 0
+
+
+def test_presenze_mapping_audit_records_map_remap_unmap_and_ignores_noop() -> None:
+    admin = _create_user("mapping_audit_admin")
+    first_user = _create_user("mapping_audit_first", is_active=False, module_presenze=False)
+    second_user = _create_user("mapping_audit_second", is_active=False, module_presenze=False)
+    headers = {"Authorization": f"Bearer {_login(admin.username)}"}
+    imported = client.post(
+        "/presenze/import/json",
+        headers=headers,
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+    collaborator_id = client.get("/presenze/collaborators", headers=headers).json()["items"][0]["id"]
+
+    changes = [
+        (first_user.id, "prima associazione"),
+        (first_user.id, "nessuna modifica"),
+        (second_user.id, "correzione identita"),
+        (None, "rimozione richiesta"),
+    ]
+    for application_user_id, reason in changes:
+        response = client.put(
+            f"/presenze/collaborators/{collaborator_id}/application-user",
+            headers=headers,
+            json={"application_user_id": application_user_id, "reason": reason},
+        )
+        assert response.status_code == 200
+        assert response.json()["application_user_id"] == application_user_id
+
+    audit_response = client.get(
+        f"/presenze/collaborators/{collaborator_id}/application-user-audit", headers=headers
+    )
+    assert audit_response.status_code == 200
+    audit = list(reversed(audit_response.json()))
+    assert [(item["action"], item["reason"]) for item in audit] == [
+        ("map", "prima associazione"),
+        ("remap", "correzione identita"),
+        ("unmap", "rimozione richiesta"),
+    ]
+    assert [
+        (item["previous_application_user_id"], item["new_application_user_id"])
+        for item in audit
+    ] == [(None, first_user.id), (first_user.id, second_user.id), (second_user.id, None)]
+    assert {item["changed_by_user_id"] for item in audit} == {admin.id}
+    assert {item["changed_by_username"] for item in audit} == {admin.username}
+    assert {item["source"] for item in audit} == {"api"}
+    assert all(item["created_at"] for item in audit)
+
+
+def test_presenze_mapping_rejects_duplicate_and_database_race_without_side_effects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    admin = _create_user("mapping_conflict_admin")
+    mapped_user = _create_user("mapping_conflict_identity", is_active=False, module_presenze=False)
+    headers = {"Authorization": f"Bearer {_login(admin.username)}"}
+    for employee_code in ("1854", "1855"):
+        imported = client.post(
+            "/presenze/import/json",
+            headers=headers,
+            files={
+                "file": (
+                    f"giornaliere-{employee_code}.json",
+                    _sample_payload(employee_code),
+                    "application/json",
+                )
+            },
+        )
+        assert imported.status_code == 200
+    collaborators = client.get("/presenze/collaborators", headers=headers).json()["items"]
+    collaborator_by_code = {item["employee_code"]: item for item in collaborators}
+
+    mapped = client.put(
+        f"/presenze/collaborators/{collaborator_by_code['1854']['id']}/application-user",
+        headers=headers,
+        json={"application_user_id": mapped_user.id, "reason": "mapping valido"},
+    )
+    assert mapped.status_code == 200
+    duplicate = client.put(
+        f"/presenze/collaborators/{collaborator_by_code['1855']['id']}/application-user",
+        headers=headers,
+        json={"application_user_id": mapped_user.id, "reason": "duplicato sequenziale"},
+    )
+    assert duplicate.status_code == 409
+
+    monkeypatch.setattr(
+        "app.modules.presenze.services.collaborator_mapping._mapping_owner_exists",
+        lambda *_args, **_kwargs: False,
+    )
+    raced = client.put(
+        f"/presenze/collaborators/{collaborator_by_code['1855']['id']}/application-user",
+        headers=headers,
+        json={"application_user_id": mapped_user.id, "reason": "race simulata"},
+    )
+    assert raced.status_code == 409
+    assert raced.json()["detail"] == "Application user is already mapped to another collaborator"
+
+    db = TestingSessionLocal()
+    second_collaborator = db.get(PresenzeCollaborator, uuid.UUID(collaborator_by_code["1855"]["id"]))
+    assert second_collaborator is not None
+    assert second_collaborator.application_user_id is None
+    assert db.query(PresenzeCollaboratorMappingAudit).filter_by(
+        collaborator_id=second_collaborator.id
+    ).count() == 0
+    assert db.query(PresenzeDailyRecord).filter_by(collaborator_id=second_collaborator.id).one().application_user_id is None
+    assert db.query(PresenzeEventSummary).filter_by(collaborator_id=second_collaborator.id).one().application_user_id is None
+    db.close()
+
+
+def test_presenze_mapping_reason_and_audit_access_are_validated() -> None:
+    admin = _create_user("mapping_validation_admin")
+    viewer = _create_user("mapping_audit_viewer", role=ApplicationUserRole.VIEWER.value)
+    headers = {"Authorization": f"Bearer {_login(admin.username)}"}
+    imported = client.post(
+        "/presenze/import/json",
+        headers=headers,
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+    collaborator_id = client.get("/presenze/collaborators", headers=headers).json()["items"][0]["id"]
+    blank_reason = client.put(
+        f"/presenze/collaborators/{collaborator_id}/application-user",
+        headers=headers,
+        json={"application_user_id": viewer.id, "reason": "   "},
+    )
+    assert blank_reason.status_code == 422
+    denied = client.get(
+        f"/presenze/collaborators/{collaborator_id}/application-user-audit",
+        headers={"Authorization": f"Bearer {_login(viewer.username)}"},
+    )
+    assert denied.status_code == 403
+    missing = client.get(
+        f"/presenze/collaborators/{uuid.uuid4()}/application-user-audit", headers=headers
+    )
+    assert missing.status_code == 404
+
+
+def test_presenze_mapping_propagates_unrelated_integrity_errors_and_recognizes_postgres_constraint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class PostgresUniqueViolation(Exception):
+        diag = SimpleNamespace(
+            constraint_name=collaborator_mapping_service.MAPPING_UNIQUE_INDEX
+        )
+
+    postgres_error = IntegrityError("update", {}, PostgresUniqueViolation())
+    assert collaborator_mapping_service._is_mapping_unique_violation(postgres_error) is True
+
+    admin = _create_user("mapping_integrity_admin")
+    mapped_user = _create_user("mapping_integrity_identity", is_active=False, module_presenze=False)
+    headers = {"Authorization": f"Bearer {_login(admin.username)}"}
+    imported = client.post(
+        "/presenze/import/json",
+        headers=headers,
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+    collaborator_id = client.get("/presenze/collaborators", headers=headers).json()["items"][0]["id"]
+    db = TestingSessionLocal()
+    collaborator = db.get(PresenzeCollaborator, uuid.UUID(collaborator_id))
+    assert collaborator is not None
+    unrelated_error = IntegrityError("update", {}, Exception("different constraint"))
+    monkeypatch.setattr(db, "commit", lambda: (_ for _ in ()).throw(unrelated_error))
+    with pytest.raises(IntegrityError) as captured:
+        collaborator_mapping_service.apply_collaborator_mapping(
+            db,
+            collaborator=collaborator,
+            application_user_id=mapped_user.id,
+            changed_by=admin,
+            reason="test errore non correlato",
+        )
+    assert captured.value is unrelated_error
+    db.close()
 
 
 def test_presenze_non_admin_does_not_see_data_only_because_of_application_mapping() -> None:

@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime, time
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.modules.presenze.models import (
     PRESENZE_HOLIDAY_KIND_ORDINARY,
@@ -41,6 +41,15 @@ class PresenzeModuleStatusResponse(BaseModel):
 
 class PresenzeCollaboratorApplicationUserUpdate(BaseModel):
     application_user_id: int | None = None
+    reason: str = Field(default="manual_api_update", min_length=1, max_length=500)
+
+    @field_validator("reason")
+    @classmethod
+    def normalize_reason(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("reason must not be blank")
+        return normalized
 
 
 PresenzeContractKind = Literal["operaio", "impiegato", "quadro", "altro"]
@@ -347,6 +356,21 @@ class PresenzeCollaboratorResponse(BaseModel):
     last_seen_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class PresenzeCollaboratorMappingAuditResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    collaborator_id: uuid.UUID
+    previous_application_user_id: int | None = None
+    new_application_user_id: int | None = None
+    changed_by_user_id: int
+    changed_by_username: str
+    action: Literal["map", "remap", "unmap"]
+    source: str
+    reason: str
+    created_at: datetime
 
 
 class PresenzeAccessContextResponse(BaseModel):
