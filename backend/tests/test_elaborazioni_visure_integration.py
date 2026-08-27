@@ -18,10 +18,17 @@ from app.models.elaborazioni import ElaborazioneCredential
 from app.modules.catasto.services.ade_status_scan import ADE_SCAN_PURPOSE, create_ade_status_scan_batch
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
 from app.services.catasto_credentials import get_credential_fernet
-from app.services.elaborazioni_batches import BatchConflictError, expire_stale_pending_batches, retry_failed_batch, validate_visure_records
+from app.services.elaborazioni_batches import (
+    BatchConflictError,
+    expire_stale_pending_batches,
+    load_upload_records,
+    retry_failed_batch,
+    validate_visure_records,
+)
 
 
 WORKER_ROOT = Path(__file__).resolve().parents[2] / "modules" / "elaborazioni" / "worker"
+VISURE_TEMPLATE_PATH = Path(__file__).resolve().parents[2] / "frontend" / "public" / "catasto-template.csv"
 if str(WORKER_ROOT) not in sys.path:
     sys.path.insert(0, str(WORKER_ROOT))
 
@@ -105,6 +112,27 @@ def test_validate_visure_records_supports_subject_pf_and_pnf() -> None:
     assert rows[0].request_type == "STORICA"
     assert rows[1].subject_kind == "PNF"
     assert rows[1].request_type == "ATTUALITA"
+
+
+def test_downloadable_csv_template_matches_the_backend_import_contract() -> None:
+    records = load_upload_records(VISURE_TEMPLATE_PATH.name, VISURE_TEMPLATE_PATH.read_bytes())
+
+    db = TestingSessionLocal()
+    try:
+        rows = validate_visure_records(db, records)
+    finally:
+        db.close()
+
+    assert len(rows) == 4
+    assert [(row.search_mode, row.comune, row.tipo_visura) for row in rows[:2]] == [
+        ("immobile", "Oristano", "Completa"),
+        ("immobile", "Arborea", "Analitica"),
+    ]
+    assert [row.request_type for row in rows[:2]] == ["ATTUALITA", "STORICA"]
+    assert [(row.search_mode, row.subject_kind, row.request_type) for row in rows[2:]] == [
+        ("soggetto", "PF", "ATTUALITA"),
+        ("soggetto", "PNF", "STORICA"),
+    ]
 
 
 def test_validate_visure_records_keeps_immobile_flow() -> None:

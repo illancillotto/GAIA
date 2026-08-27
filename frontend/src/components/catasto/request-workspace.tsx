@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import { CatastoHero, CatastoMiniStat, CatastoNoticeCard, CatastoPanelHeader } from "@/components/catasto/module-chrome";
 import { CatastoStatusBadge } from "@/components/catasto/status-badge";
+import { BatchCredentialSelector } from "@/components/elaborazioni/batch-credential-selector";
 import { DocumentIcon, FolderIcon, LockIcon, RefreshIcon, SearchIcon } from "@/components/ui/icons";
 import { ApiError, createElaborazioneBatch, createElaborazioneRichiesta, getCatastoComuni, startElaborazioneBatch } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -33,12 +34,6 @@ const DEFAULT_VALUES: ElaborazioneRichiestaCreateInput = {
   tipo_visura: "Sintetica",
 };
 
-const TEMPLATE_CSV = [
-  "citta,catasto,sezione,foglio,particella,subalterno,tipo_visura",
-  "MARRUBIU,Terreni,,12,603,,Sintetica",
-  "ORISTANO,Terreni e Fabbricati,,5,120,3,Completa",
-].join("\n");
-
 export function CatastoRequestWorkspace({ initialMode = "single" }: RequestWorkspaceProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -59,6 +54,7 @@ export function CatastoRequestWorkspace({ initialMode = "single" }: RequestWorks
   const [validationErrors, setValidationErrors] = useState<ValidationRowError[]>([]);
   const [batchError, setBatchError] = useState<string | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
+  const batchCredentialIds = useRef<string[]>([]);
 
   const {
     register,
@@ -114,7 +110,7 @@ export function CatastoRequestWorkspace({ initialMode = "single" }: RequestWorks
 
     setBatchBusy(true);
     try {
-      const createdBatch = await createElaborazioneBatch(token, file, batchName);
+      const createdBatch = await createElaborazioneBatch(token, file, batchName, batchCredentialIds.current);
       setDraftBatch(createdBatch);
       setValidationErrors([]);
       setBatchError(null);
@@ -149,16 +145,6 @@ export function CatastoRequestWorkspace({ initialMode = "single" }: RequestWorks
       setBatchError(startError instanceof Error ? startError.message : "Errore avvio batch");
       setBatchBusy(false);
     }
-  }
-
-  function handleDownloadTemplate(): void {
-    const blob = new Blob([TEMPLATE_CSV], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = window.document.createElement("a");
-    anchor.href = url;
-    anchor.download = "catasto-template.csv";
-    anchor.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   return (
@@ -347,6 +333,7 @@ export function CatastoRequestWorkspace({ initialMode = "single" }: RequestWorks
                 <span className="label-caption">Tipo visura</span>
                 <select className="form-control" {...register("tipo_visura", { required: true })}>
                   <option value="Sintetica">Sintetica</option>
+                  <option value="Analitica">Analitica</option>
                   <option value="Completa">Completa</option>
                 </select>
               </label>
@@ -396,13 +383,17 @@ export function CatastoRequestWorkspace({ initialMode = "single" }: RequestWorks
                   />
                 </label>
               </div>
+              <BatchCredentialSelector
+                disabled={batchBusy || Boolean(draftBatch)}
+                selectionRef={batchCredentialIds}
+              />
               <div className="mt-5 flex flex-wrap items-center gap-3">
                 <button className="btn-primary" disabled={batchBusy || !file} onClick={() => void handleUploadBatch()} type="button">
                   {batchBusy ? "Validazione..." : "Carica e valida"}
                 </button>
-                <button className="btn-secondary" onClick={handleDownloadTemplate} type="button">
+                <a className="btn-secondary" download href="/catasto-template.csv">
                   Scarica template CSV
-                </button>
+                </a>
                 <span className="text-xs text-gray-400">Il batch resta `pending` finché non confermi l’avvio.</span>
               </div>
             </div>

@@ -1,0 +1,5 @@
+modalita_ricerca,citta,catasto,sezione,foglio,particella,subalterno,codice_fiscale,tipo_soggetto,tipo_richiesta,intestazione,tipo_visura
+immobile,ORISTANO,Terreni e Fabbricati,,5,120,3,,,,,Completa
+immobile,ARBOREA,Terreni,,12,603,,,,STORICA,,Analitica
+soggetto,,,,,,,RSSMRA80A01H501U,PF,ATTUALITA,Rossi Mario,Sintetica
+soggetto,,,,,,,12345678901,PNF,STORICA,Impresa Rossi SRL,Completa

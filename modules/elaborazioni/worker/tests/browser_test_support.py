@@ -62,6 +62,10 @@ class ScriptedLocator:
         self._raise()
         self.checks += 1
 
+    async def is_checked(self) -> bool:
+        self._raise()
+        return self.checks > 0
+
     async def fill(self, value: str, timeout: int | None = None) -> None:
         self._raise()
         self.fills.append(value)

@@ -56,6 +56,9 @@ class FakeLocator:
         if self.on_click is not None:
             self.on_click()
 
+    async def is_checked(self) -> bool:
+        return self.clicks > 0
+
     async def wait_for(self, timeout: int | None = None) -> None:
         self.waits.append(timeout)
 
@@ -444,6 +447,7 @@ def test_fill_visura_form_accepts_immediate_captcha_without_tipo_visura(monkeypa
     session._trace_state = _noop_trace
     session._raise_if_server_error = _noop_trace
     session._raise_if_document_not_yet_produced = _noop_trace
+    monkeypatch.setattr(browser_session_module, "select_request_type", _noop_trace)
     page.locators["img[src*='captcha']"] = FakeLocator()
     monkeypatch.setattr(browser_session_module.asyncio, "sleep", _noop_sleep)
 
@@ -463,7 +467,8 @@ def test_fill_visura_form_accepts_immediate_captcha_without_tipo_visura(monkeypa
         },
     )()
 
-    asyncio.run(session.fill_visura_form(request))
+    with pytest.raises(SisterInvalidDocumentError, match="tipo di visura storica"):
+        asyncio.run(session.fill_visura_form(request))
 
     assert page.clicks == ["input[name='scelta'][value='Visura']"]
     assert all(selector != "input[name='tipoVisura'][value='4']" for selector in page.clicks)
@@ -517,7 +522,8 @@ def test_fill_visura_form_raises_classified_error_when_submit_does_not_advance(m
             "foglio": "24",
             "particella": "412",
             "subalterno": None,
-            "tipo_visura": "Sintetica",
+            "tipo_visura": "Completa",
+            "request_type": "ATTUALITA",
         },
     )()
 

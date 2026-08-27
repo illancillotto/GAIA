@@ -185,6 +185,7 @@ class CatastoBatch(Base):
         nullable=True,
         index=True,
     )
+    credential_ids: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     batch_kind: Mapped[str] = mapped_column(
         String(32),

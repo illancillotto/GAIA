@@ -624,6 +624,36 @@ def test_process_request_handles_missing_and_full_flow(tmp_path: Path, monkeypat
     run(worker._process_request(browser, credential, uuid4(), request.id))
 
 
+def test_reject_unexpected_document_type_deletes_only_untrusted_pdf(tmp_path: Path) -> None:
+    untouched = SimpleNamespace(document_audit_payload=None, file_path=None)
+    worker_module.reject_unexpected_document_type(untouched)
+
+    trusted_path = tmp_path / "trusted.pdf"
+    trusted_path.write_bytes(b"pdf")
+    trusted = SimpleNamespace(
+        document_audit_payload={"document_request_type": {"matches": True}},
+        file_path=trusted_path,
+    )
+    worker_module.reject_unexpected_document_type(trusted)
+    assert trusted_path.exists()
+
+    mismatched_path = tmp_path / "mismatched.pdf"
+    mismatched_path.write_bytes(b"pdf")
+    mismatched = SimpleNamespace(
+        document_audit_payload={
+            "document_request_type": {
+                "expected": "STORICA",
+                "observed": "ATTUALITA",
+                "matches": False,
+            }
+        },
+        file_path=mismatched_path,
+    )
+    with pytest.raises(worker_module.SisterInvalidDocumentError, match="richiesto STORICA"):
+        worker_module.reject_unexpected_document_type(mismatched)
+    assert not mismatched_path.exists()
+
+
 class CaptchaRepository:
     def __init__(self, states, *, begins=True) -> None:
         self.states = iter(states)

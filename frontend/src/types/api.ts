@@ -4682,6 +4682,29 @@ export type CatastoBatch = {
 
 export type CatastoBatchDetail = CatastoBatch & {
   requests: CatastoVisuraRequest[];
+  statistics?: CatastoBatchStatistics | null;
+};
+
+export type CatastoBatchCredentialUsage = {
+  credential_id: string;
+  label: string;
+  sister_username: string | null;
+  request_count: number;
+  execution_count: number;
+};
+
+export type CatastoBatchStatistics = {
+  duration_seconds: number;
+  processed_items: number;
+  remaining_items: number;
+  progress_percent: number;
+  success_rate_percent: number | null;
+  completed_per_hour: number | null;
+  processed_per_hour: number | null;
+  estimated_remaining_seconds: number | null;
+  total_attempts: number;
+  average_attempts: number;
+  credentials_used: CatastoBatchCredentialUsage[];
 };
 
 export type CatastoDocument = {

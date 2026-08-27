@@ -180,6 +180,22 @@ describe("RecentBatchesPanel open action", () => {
     expect(screen.getByText("skip 1")).toBeInTheDocument();
   });
 
+  test("shows batch statistics returned by the detail endpoint", async () => {
+    mocks.getElaborazioneBatch.mockResolvedValue({
+      id: "batch-1",
+      statistics: {
+        duration_seconds: 3723,
+        completed_per_hour: 4.5,
+        credentials_used: [{ label: "Marco" }],
+      },
+    });
+
+    render(<RecentBatchesPanel />);
+
+    expect(await screen.findByText(/4,5 visure\/ora/)).toBeInTheDocument();
+    expect(screen.getByText("Marco")).toBeInTheDocument();
+  });
+
   test("ignores detail lookup failures for recent batches", async () => {
     mocks.getElaborazioneBatch.mockRejectedValue(new Error("Dettaglio non disponibile"));
 

@@ -43,6 +43,12 @@ from sister_request_rows import (
     parse_remote_rows,
 )
 from sister_selectors import SisterSelectorsConfig
+from sister_visura_selection import (
+    expected_request_type,
+    reconfirm_visura_type,
+    select_request_type,
+    select_visura_type,
+)
 
 logger = logging.getLogger(__name__)
 MENU_NAVIGATION_RETRIES = 3
@@ -78,6 +84,7 @@ class BrowserSession:
         self._context: BrowserContext | None = None
         self._page: Page | None = None
         self._session_state = SisterSessionState()
+        self._pending_visura_type: tuple[str, str] | None = None
 
     @property
     def page(self) -> Page:
@@ -326,6 +333,11 @@ class BrowserSession:
 
     async def fill_visura_form(self, request) -> None:
         page = self.page
+        self._pending_visura_type = None
+        requested_document_type = expected_request_type(
+            getattr(request, "request_type", None),
+            self.tipo_visura_value(request.tipo_visura),
+        )
         logger.info(
             "Compilazione form visura per richiesta %s comune=%s foglio=%s particella=%s subalterno=%s tipo=%s",
             request.id,
@@ -335,7 +347,8 @@ class BrowserSession:
             request.subalterno,
             request.tipo_visura,
         )
-        await self._select_request_type_if_present(getattr(request, "request_type", None) or "ATTUALITA")
+        # For immobile searches SISTER encodes current/history in the
+        # tipoVisura choice shown only after the initial form submit.
         await page.select_option(self.selectors.catasto_selector, label=request.catasto)
         await page.select_option(self.selectors.comune_selector, value=request.comune_codice)
 
@@ -353,8 +366,17 @@ class BrowserSession:
         await page.select_option(self.selectors.motivo_selector, value=self.selectors.motivo_value)
         await page.click(self.selectors.visura_button_selector)
         await self._wait_for_visura_submission_state(request.id)
-        if await self._first_visible_count(self.selectors.tipo_visura_selector) > 0:
-            await page.check(f"{self.selectors.tipo_visura_selector}[value='{self.tipo_visura_value(request.tipo_visura)}']")
+        await select_visura_type(
+            page,
+            self.selectors.tipo_visura_selector,
+            request.tipo_visura,
+            self.tipo_visura_value(request.tipo_visura),
+            required=requested_document_type == "STORICA",
+        )
+        self._pending_visura_type = (
+            request.tipo_visura,
+            self.tipo_visura_value(request.tipo_visura),
+        )
         logger.info("Form visura inviato per richiesta %s", request.id)
         await self._trace_state(f"visura-form-submitted-{request.id}")
 
@@ -391,6 +413,7 @@ class BrowserSession:
 
     async def fill_subject_form(self, request) -> None:
         page = self.page
+        self._pending_visura_type = None
         logger.info(
             "Compilazione form soggetto per richiesta %s kind=%s subject_id=%s request_type=%s",
             request.id,
@@ -398,7 +421,7 @@ class BrowserSession:
             request.subject_id,
             request.request_type,
         )
-        await self._select_request_type_if_present(request.request_type or "ATTUALITA")
+        await select_request_type(page, request.request_type or "ATTUALITA")
         await self._fill_subject_identifier(request.subject_id or "")
         await page.select_option(self.selectors.motivo_selector, value=self.selectors.motivo_value)
         await self._trace_state(f"subject-form-filled-{request.id}")
@@ -679,6 +702,11 @@ class BrowserSession:
         inoltra = page.locator(self.selectors.inoltra_button_selector).first
         if await inoltra.count() > 0 and await inoltra.is_visible():
             logger.info("Pagina tipo visura senza CAPTCHA visibile, click preliminare su Inoltra")
+            await reconfirm_visura_type(
+                page,
+                getattr(self.selectors, "tipo_visura_selector", ""),
+                getattr(self, "_pending_visura_type", None),
+            )
             await inoltra.click(timeout=10000)
             with contextlib.suppress(Exception):
                 await page.wait_for_load_state("domcontentloaded", timeout=5000)
@@ -707,6 +735,11 @@ class BrowserSession:
     async def submit_captcha(self, text: str) -> bool:
         page = self.page
         logger.info("Invio candidato CAPTCHA con %s caratteri", len(text))
+        await reconfirm_visura_type(
+            page,
+            getattr(self.selectors, "tipo_visura_selector", ""),
+            getattr(self, "_pending_visura_type", None),
+        )
         await page.click(self.selectors.captcha_field_selector)
         await page.fill(self.selectors.captcha_field_selector, "")
         await page.type(self.selectors.captcha_field_selector, text, delay=80)
@@ -1129,22 +1162,6 @@ class BrowserSession:
             await locator.fill(normalized, timeout=5000)
             return
         raise RuntimeError("Campo identificativo soggetto non trovato (CF/P.IVA)")
-
-    async def _select_request_type_if_present(self, request_type: str) -> None:
-        desired = "Storica" if (request_type or "").strip().upper() == "STORICA" else "Attualità"
-        label_candidates = [
-            f"label:has-text('{desired}')",
-            f"input[type='radio'] >> xpath=following-sibling::label[contains(., '{desired}')]",
-        ]
-        for selector in label_candidates:
-            locator = self.page.locator(selector).first
-            if await locator.count() == 0:
-                continue
-            if not await locator.is_visible():
-                continue
-            with contextlib.suppress(Exception):
-                await locator.click(timeout=1500)
-                return
 
     async def _maybe_accept_privacy_notice(self) -> None:
         page = self.page

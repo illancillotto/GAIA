@@ -143,8 +143,12 @@ describe("api elaborazioni clients", () => {
     await expect(createCapacitasTerreniJob(TOKEN, {})).resolves.toBeDefined();
   });
   test("createElaborazioneBatch", async () => {
-    stubFetch(jsonResponse({ ok: true }));
-    await expect(createElaborazioneBatch(TOKEN, new File(['x'], 'file.csv'), "value")).resolves.toBeDefined();
+    const fetchMock = stubFetch(jsonResponse({ ok: true }));
+    await expect(
+      createElaborazioneBatch(TOKEN, new File(["x"], "file.csv"), "value", ["one", "two"]),
+    ).resolves.toBeDefined();
+    const body = fetchMock.mock.calls[0]?.[1]?.body as FormData;
+    expect(body.getAll("credential_ids")).toEqual(["one", "two"]);
   });
   test("createElaborazioneRichiesta", async () => {
     stubFetch(jsonResponse({ ok: true }));

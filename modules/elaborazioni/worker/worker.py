@@ -105,6 +105,7 @@ from sister_credential_pool import (
     run_dynamic_credential_pool,
     should_stop_credential_runner,
 )
+from sister_document_validation import reject_unexpected_document_type
 from sister_exceptions import SisterInvalidDocumentError, SisterServerError
 from sister_captcha_wait import SisterCaptchaClaim, SisterCaptchaWaitRepository
 from sister_worker_reliability import (
@@ -136,7 +137,7 @@ ANTI_CAPTCHA_POLL_INTERVAL_SEC = int(os.getenv("ANTI_CAPTCHA_POLL_INTERVAL_SEC",
 ANTI_CAPTCHA_TIMEOUT_SEC = int(os.getenv("ANTI_CAPTCHA_TIMEOUT_SEC", "120"))
 CAPTCHA_LLM_AGENT_CMD = os.getenv("CAPTCHA_LLM_AGENT_CMD", "agent").strip()
 CAPTCHA_LLM_ENABLED = os.getenv("CAPTCHA_LLM_ENABLED", "true").lower() != "false"
-CAPTCHA_LLM_ATTEMPTS = int(os.getenv("CAPTCHA_LLM_ATTEMPTS", "3"))
+CAPTCHA_LLM_ATTEMPTS = int(os.getenv("CAPTCHA_LLM_ATTEMPTS", "10"))
 CAPTCHA_EXTERNAL_ATTEMPTS = int(os.getenv("CAPTCHA_EXTERNAL_ATTEMPTS", "3"))
 BETWEEN_VISURE_DELAY_SEC = int(os.getenv("BETWEEN_VISURE_DELAY_SEC", "5"))
 SESSION_TIMEOUT_SEC = int(os.getenv("SESSION_TIMEOUT_SEC", "1680"))
@@ -1188,6 +1189,7 @@ class CatastoWorker:
         )
         result.document_audit_payload = audit_downloaded_document(request_snapshot, result)
         emit_pdf_parcel_status(browser, result.document_audit_payload)
+        reject_unexpected_document_type(result)
         if request_snapshot.artifact_dir:
             if result.status == "not_found" and request_snapshot.search_mode == "soggetto":
                 await browser.capture_subject_not_found_preview(Path(request_snapshot.artifact_dir))

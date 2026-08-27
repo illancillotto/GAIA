@@ -1006,11 +1006,71 @@ def test_create_batch_from_csv_builds_requests() -> None:
     assert len(payload["requests"]) == 2
     assert payload["requests"][0]["comune"] == "Marrubiu"
     assert payload["requests"][0]["comune_codice"] == "E972#MARRUBIU#0#0"
+    assert [item["request_type"] for item in payload["requests"]] == ["STORICA", "ATTUALITA"]
 
     batch_id = payload["id"]
     start_response = client.post(f"/elaborazioni/batches/{batch_id}/start", headers=auth_headers())
     assert start_response.status_code == 200
     assert start_response.json()["status"] == "processing"
+
+
+def test_batch_credential_allowlist_is_persisted_and_revalidated_on_start() -> None:
+    first_response = client.post(
+        "/elaborazioni/credentials",
+        headers=auth_headers(),
+        json={
+            "label": "Alessandro",
+            "sister_username": "ALLOWLIST-ONE",
+            "sister_password": "sister-secret",
+        },
+    )
+    second_response = client.post(
+        "/elaborazioni/credentials",
+        headers=auth_headers(),
+        json={
+            "label": "Marika",
+            "sister_username": "ALLOWLIST-TWO",
+            "sister_password": "sister-secret",
+        },
+    )
+    credential_ids = [first_response.json()["id"], second_response.json()["id"]]
+    csv_content = (
+        "citta,catasto,foglio,particella,tipo_visura\n"
+        "MARRUBIU,Terreni,33,815,Analitica\n"
+    )
+
+    response = client.post(
+        "/elaborazioni/batches",
+        headers=auth_headers(),
+        files={"file": ("storiche.csv", csv_content, "text/csv")},
+        data={"name": "Storiche allowlist", "credential_ids": credential_ids},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert set(payload["credential_ids"]) == set(credential_ids)
+    assert payload["requests"][0]["request_type"] == "STORICA"
+    assert payload["requests"][0]["tipo_visura"] == "Analitica"
+
+    deactivate = client.patch(
+        f"/elaborazioni/credentials/{credential_ids[1]}",
+        headers=auth_headers(),
+        json={"active": False},
+    )
+    assert deactivate.status_code == 200
+    blocked = client.post(f"/elaborazioni/batches/{payload['id']}/start", headers=auth_headers())
+    assert blocked.status_code == 409
+    assert "missing or inactive" in blocked.json()["detail"]
+
+    reactivate = client.patch(
+        f"/elaborazioni/credentials/{credential_ids[1]}",
+        headers=auth_headers(),
+        json={"active": True},
+    )
+    assert reactivate.status_code == 200
+    started = client.post(f"/elaborazioni/batches/{payload['id']}/start", headers=auth_headers())
+    assert started.status_code == 200
+    assert started.json()["status"] == "processing"
 
 
 def test_create_batch_rejects_invalid_rows_with_detail() -> None:
@@ -1449,6 +1509,9 @@ def test_get_batch_realigns_stale_completed_counter() -> None:
     payload = response.json()
     assert payload["completed_items"] == 1
     assert len(payload["requests"]) == 2
+    assert payload["statistics"]["processed_items"] == 1
+    assert payload["statistics"]["remaining_items"] == 1
+    assert payload["statistics"]["progress_percent"] == 50.0
 
     db = TestingSessionLocal()
     try:

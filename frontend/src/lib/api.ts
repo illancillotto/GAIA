@@ -5449,12 +5449,12 @@ export async function createElaborazioneBatch(
   token: string,
   file: File,
   name?: string,
+  credentialIds: string[] = [],
 ): Promise<ElaborazioneBatchDetail> {
   const formData = new FormData();
   formData.append("file", file);
-  if (name) {
-    formData.append("name", name);
-  }
+  if (name) formData.append("name", name);
+  credentialIds.forEach((credentialId) => formData.append("credential_ids", credentialId));
 
   return request<ElaborazioneBatchDetail>("/elaborazioni/batches", {
     method: "POST",

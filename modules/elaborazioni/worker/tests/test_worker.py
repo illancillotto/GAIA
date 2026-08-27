@@ -2092,6 +2092,9 @@ def test_retry_coordinator_persists_deadline_and_fencing_token() -> None:
     assert recoverable_retry_metadata(
         SisterRequestCorrelationError("ambigua"), "USER"
     ) == ("Correlazione SISTER non sicura, retry differito", "sister_correlation_error")
+    assert recoverable_retry_metadata(
+        worker_module.SisterInvalidDocumentError("difforme"), "USER"
+    ) == ("PDF SISTER difforme o non valido, retry differito", "sister_invalid_document")
     assert recoverable_retry_metadata(RuntimeError("timeout"), "USER") == (
         "Sessione/timeout su USER, retry differito",
         "session_recovery",
@@ -2254,6 +2257,34 @@ def test_request_repository_reset_for_retry_handles_release_and_guards(worker_db
         assert first.last_error_code == "temporary"
         assert released.status == CatastoVisuraRequestStatus.SKIPPED.value
         assert released.current_operation == worker_module.RELEASE_REQUESTED_OPERATION
+
+    invalid_document_token = uuid.uuid4()
+    with SessionLocal() as db:
+        first = db.get(CatastoVisuraRequest, request_ids[0])
+        assert first is not None
+        first.status = CatastoVisuraRequestStatus.PROCESSING.value
+        first.execution_token = invalid_document_token
+        first.sister_credential_id = uuid.uuid4()
+        first.sister_remote_request_id = "STALE"
+        first.sister_remote_request_url = "https://sister/stale"
+        first.sister_remote_state = "submitted"
+        first.sister_remote_baseline_keys = ["STALE"]
+        db.commit()
+    repository.reset_for_retry(
+        request_ids[0],
+        "invalid document",
+        retry_at,
+        "sister_invalid_document",
+        invalid_document_token,
+    )
+    with SessionLocal() as db:
+        first = db.get(CatastoVisuraRequest, request_ids[0])
+        assert first is not None
+        assert first.sister_credential_id is None
+        assert first.sister_remote_request_id is None
+        assert first.sister_remote_request_url is None
+        assert first.sister_remote_state is None
+        assert first.sister_remote_baseline_keys is None
 
     with SessionLocal() as db:
         batch = db.get(CatastoBatch, batch_id)

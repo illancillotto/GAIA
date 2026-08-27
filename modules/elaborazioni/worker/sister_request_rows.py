@@ -20,6 +20,8 @@ _REMOTE_ID_KEYS = {
     "requestid",
 }
 
+MAX_EQUIVALENT_DUPLICATE_ROWS = 3
+
 
 @dataclass(frozen=True, slots=True)
 class SisterRemoteRequestRow:
@@ -127,6 +129,9 @@ def correlate_remote_row(
             raise SisterRequestCorrelationError(
                 f"Identificativo SISTER duplicato per richiesta {correlation.local_request_id}"
             )
+        # The request can live in another SISTER tab (for example "Espletate").
+        # Do not replace a persisted remote identity with an unrelated visible row.
+        return None
 
     new_rows = [row for row in rows if row.key not in correlation.baseline_keys]
     if not new_rows:
@@ -137,6 +142,9 @@ def correlate_remote_row(
     token_matches = [row for row in new_rows if _matches_expected_tokens(row, correlation.expected_tokens)]
     if len(token_matches) == 1:
         return token_matches[0]
+    duplicate = _equivalent_duplicate_candidate(token_matches)
+    if duplicate is not None:
+        return duplicate
     raise SisterRequestCorrelationError(
         f"Correlazione SISTER ambigua per richiesta {correlation.local_request_id}: {len(new_rows)} nuove righe"
     )
@@ -173,3 +181,29 @@ def _matches_expected_tokens(row: SisterRemoteRequestRow, expected_tokens: tuple
     meaningful = [token for token in expected_tokens if len(token) >= 3]
     required = meaningful or list(expected_tokens)
     return all(token in normalized_row for token in required)
+
+
+def _equivalent_duplicate_candidate(rows: list[SisterRemoteRequestRow]) -> SisterRemoteRequestRow | None:
+    """Choose the first listed row only when SISTER exposes equivalent downloads."""
+    if not 2 <= len(rows) <= MAX_EQUIVALENT_DUPLICATE_ROWS:
+        return None
+    if any(not row.download_href for row in rows):
+        return None
+    labels = {_normalized_duplicate_label(row.text) for row in rows}
+    if len(labels) != 1:
+        return None
+    return max(rows, key=_duplicate_timestamp)
+
+
+def _normalized_duplicate_label(text: str) -> str:
+    normalized = normalize_portal_text(text)
+    # The request timestamp is the only expected difference between duplicate rows.
+    return re.sub(r"\b\d{1,2} \d{1,2} \d{4} \d{1,2} \d{1,2} \d{1,2}\b", "", normalized).strip()
+
+
+def _duplicate_timestamp(row: SisterRemoteRequestRow) -> tuple[int, int, int, int, int, int]:
+    match = re.search(r"\b(\d{1,2})/(\d{1,2})/(\d{4})\s+(\d{1,2}):(\d{1,2}):(\d{1,2})\b", row.text)
+    if match is None:
+        return (0, 0, 0, 0, 0, 0)
+    day, month, year, hour, minute, second = (int(value) for value in match.groups())
+    return (year, month, day, hour, minute, second)

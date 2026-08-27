@@ -20,6 +20,7 @@ from sister_exceptions import (
     DocumentNonEvadibileError,
     DocumentNotYetProducedError,
     SisterConventionSelectionError,
+    SisterDocumentNotReadyError,
     SisterRequestCorrelationError,
 )
 from sister_request_rows import SisterRemoteRequestRow, SisterRequestCorrelation
@@ -102,6 +103,9 @@ def test_poll_requests_download_and_timeout(monkeypatch: pytest.MonkeyPatch, tmp
     with pytest.raises(browser_module.TimeoutError):
         run(session.poll_richieste_for_download(tmp_path / "out.pdf", "https://custom"))
     assert session.page.gotos[-1] == "https://custom"
+
+    with pytest.raises(SisterDocumentNotReadyError, match="1 poll iniziali"):
+        run(session.poll_richieste_for_download(tmp_path / "out.pdf", max_attempts=1))
 
 
 def test_poll_body_and_correlated_dispatch() -> None:
@@ -383,14 +387,6 @@ def test_subject_identifier_and_request_type_helpers() -> None:
     session.page.locators.clear()
     with pytest.raises(RuntimeError, match="non trovato"):
         run(session._fill_subject_identifier("ABC"))
-
-    historic = "label:has-text('Storica')"
-    current = "label:has-text('Attualità')"
-    session.page.locators[historic] = ScriptedLocator()
-    run(session._select_request_type_if_present("STORICA"))
-    session.page.locators = {current: ScriptedLocator(visible=False)}
-    run(session._select_request_type_if_present("ATTUALITA"))
-
 
 def test_privacy_recovery_close_session_and_section(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(browser_module.asyncio, "sleep", noop_async)

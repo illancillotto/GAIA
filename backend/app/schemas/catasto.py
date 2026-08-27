@@ -289,6 +289,7 @@ class CatastoBatchResponse(BaseModel):
     id: UUID
     user_id: int
     credential_id: UUID | None
+    credential_ids: list[UUID] | None
     name: str | None
     batch_kind: str
     status: str
@@ -306,8 +307,31 @@ class CatastoBatchResponse(BaseModel):
     completed_at: datetime | None
 
 
+class CatastoBatchCredentialUsageResponse(BaseModel):
+    credential_id: UUID
+    label: str
+    sister_username: str | None
+    request_count: int
+    execution_count: int
+
+
+class CatastoBatchStatisticsResponse(BaseModel):
+    duration_seconds: int
+    processed_items: int
+    remaining_items: int
+    progress_percent: float
+    success_rate_percent: float | None
+    completed_per_hour: float | None
+    processed_per_hour: float | None
+    estimated_remaining_seconds: int | None
+    total_attempts: int
+    average_attempts: float
+    credentials_used: list[CatastoBatchCredentialUsageResponse]
+
+
 class CatastoBatchDetailResponse(CatastoBatchResponse):
     requests: list[CatastoVisuraRequestResponse]
+    statistics: CatastoBatchStatisticsResponse | None = None
 
 
 class CatastoOperationResponse(BaseModel):

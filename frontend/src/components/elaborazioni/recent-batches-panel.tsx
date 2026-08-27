@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FolderIcon, SearchIcon } from "@/components/ui/icons";
 import { ElaborazioneOperationMessage } from "@/components/elaborazioni/operation-message";
+import { BatchStatisticsInline, shouldRetainBatchDetail } from "@/components/elaborazioni/batch-statistics";
 import { ElaborazionePanelHeader } from "@/components/elaborazioni/module-chrome";
 import { useRecentBatchesOpenHandler } from "@/components/elaborazioni/recent-batches-open-context";
 import { ElaborazioneStatusBadge } from "@/components/elaborazioni/status-badge";
@@ -86,7 +87,7 @@ export function RecentBatchesPanel({ limit = 6, onOpenBatch }: RecentBatchesPane
         setBatchDetails((current) => {
           const next: Record<string, ElaborazioneBatchDetail> = {};
           result.forEach((batch) => {
-            if (current[batch.id]) {
+            if (shouldRetainBatchDetail(current[batch.id], batch.status)) {
               next[batch.id] = current[batch.id];
             }
           });
@@ -230,13 +231,12 @@ export function RecentBatchesPanel({ limit = 6, onOpenBatch }: RecentBatchesPane
                   <td className="font-medium text-gray-900">{batch.name ?? batch.id}</td>
                   <td><ElaborazioneStatusBadge status={batch.status} /></td>
                   <td>{batch.total_items}</td>
-                  <td>
-                    <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+                  <td><div className="flex flex-wrap gap-2 text-xs text-gray-600">
                       <span>ok {batch.completed_items}</span>
                       <span>ko {batch.failed_items}</span>
                       {batch.not_found_items > 0 ? <span>n.d. {batch.not_found_items}</span> : null}
                       {batch.skipped_items > 0 ? <span>skip {batch.skipped_items}</span> : null}
-                    </div>
+                    </div><div className="mt-2"><BatchStatisticsInline statistics={batchDetails[batch.id]?.statistics} /></div>
                   </td>
                   <td><ElaborazioneOperationMessage value={batch.current_operation} /></td>
                   <td>{formatDateTime(batch.created_at)}</td>

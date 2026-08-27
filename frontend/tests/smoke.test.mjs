@@ -91,6 +91,8 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   const newBatchPage = read("src/app/catasto/new-batch/page.tsx");
   const newSinglePage = read("src/app/catasto/new-single/page.tsx");
   const requestWorkspace = read("src/components/catasto/request-workspace.tsx");
+  const elaborazioniRequestWorkspace = read("src/components/elaborazioni/request-workspace.tsx");
+  const visureTemplate = read("public/catasto-template.csv");
   const archiveWorkspace = read("src/components/catasto/archive-workspace.tsx");
   const batchDetailPage = read("src/app/catasto/batches/[id]/page.tsx");
   const documentsPage = read("src/app/catasto/documents/page.tsx");
@@ -237,6 +239,12 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(requestWorkspace, /createElaborazioneBatch/);
   assert.match(requestWorkspace, /startElaborazioneBatch/);
   assert.match(requestWorkspace, /Scarica template CSV/);
+  assert.match(requestWorkspace, /href="\/catasto-template\.csv"/);
+  assert.match(elaborazioniRequestWorkspace, /href="\/catasto-template\.csv"/);
+  assert.match(elaborazioniRequestWorkspace, /BatchCredentialSelector/);
+  assert.match(visureTemplate, /^modalita_ricerca,/);
+  assert.match(visureTemplate, /STORICA,,Analitica/);
+  assert.doesNotMatch(visureTemplate, /\n\s*\n/);
   assert.match(requestWorkspace, /useForm/);
   assert.match(requestWorkspace, /createElaborazioneRichiesta/);
   assert.match(batchDetailPage, /createElaborazioneBatchWebSocket/);

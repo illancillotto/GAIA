@@ -340,13 +340,24 @@ Gestione implementata:
 - dopo la scelta provincia, il form iniziale puo restare su `Persona fisica`; per le richieste immobile il worker forza il click sulla voce `Immobile` prima della compilazione
 - nella pagina CAPTCHA della visura immobile il campo corrente osservato e `input[name='inCaptchaChars']`; il vecchio selettore `codSicurezza` non e piu valido per questo flusso
 - nella pagina `Tipo di visura`, i valori radio osservati sono `0=Completa`, `3=Storica Analitica`, `4=Storica Sintetica`; la scansione `ade_status_scan` usa `request_type=STORICA` e `tipo_visura=Sintetica`, quindi deve selezionare valore `4`
+- nelle ricerche immobile non esiste una radio separata `Storica`: la storicita e codificata esclusivamente da `tipoVisura=3` o `tipoVisura=4`; la radio `Storica` resta pertinente soltanto al form delle ricerche soggetto
+- per una richiesta immobile storica il tipo `Analitica`/`Sintetica` deve essere visibile, selezionabile e confermato; il worker lo riconferma immediatamente prima di ogni `Inoltra`, compresi i retry CAPTCHA, perche SISTER puo ripristinare `Completa`
+- se il tipo storico richiesto non puo essere confermato, la richiesta viene differita con `last_error_code=sister_invalid_document` senza persistere un eventuale PDF attuale
 - dopo la scelta del tipo visura, SISTER puo mostrare una pagina intermedia senza CAPTCHA e senza bottone `Salva`; in questo caso il worker esegue un click preliminare su `Inoltra` e poi attende la comparsa del CAPTCHA o del download PDF
+- se SISTER mostra da due a tre righe scaricabili equivalenti per la stessa particella, il worker seleziona la piu recente; oltre tre righe, oppure con descrizioni o link non equivalenti, la correlazione resta fail-closed e viene differita
 
 ### 2.2 Verifica Attualita/Storica e contenuto PDF
 
 Il worker analizza il PDF scaricato e traccia separatamente tipo richiesto, tipo
-osservato e stato della particella richiesta. La diagnostica e fail-open: un PDF
-non classificabile o difforme non interrompe la richiesta.
+osservato e stato della particella richiesta. Per le visure immobile il controllo
+del tipo e fail-closed: un PDF difforme, non classificabile o non analizzabile
+viene eliminato, non viene persistito come completato e la richiesta torna in
+retry con `last_error_code=sister_invalid_document`.
+
+Sia `sister_invalid_document` sia `sister_correlation_error` azzerano ID, URL,
+stato remoto, affinita credenziale e baseline della richiesta. Il retry deve
+quindi ripartire da una nuova richiesta SISTER invece di riprendere una
+richiesta remota ambigua o gia associata a un documento difforme.
 
 Log attesi per un flusso coerente:
 
@@ -361,6 +372,7 @@ Anomalie ricercabili:
 Audit visura PDF: ... classificazione=suppressed ...
 Audit visura PDF: ... classificazione=unknown ...
 Audit visura PDF non riuscito
+PDF SISTER difforme: richiesto STORICA, scaricato ATTUALITA
 ```
 
 Ogni PDF analizzato genera un evento strutturato:
@@ -376,6 +388,87 @@ Diagnosi rapida sul worker:
 ```bash
 docker compose logs --since=24h elaborazioni-worker-visure 2>&1 \
   | grep -E "Audit visura PDF"
+```
+
+Per un batch di sole visure storiche, la verifica DB minima deve restituire
+zero righe difformi:
+
+```sql
+SELECT COUNT(*) AS documenti_difformi
+FROM catasto_documents AS document
+JOIN catasto_visure_requests AS request ON request.document_id = document.id
+WHERE request.batch_id = :batch_id
+  AND (
+    document.content_request_type IS DISTINCT FROM 'STORICA'
+    OR request.request_type IS DISTINCT FROM 'STORICA'
+  );
+```
+
+### 2.2.1 Regressione e coverage
+
+La suite worker deve essere eseguita tramite il target isolato, perche
+`test_worker.py` installa stub globali che possono contaminare una collection
+pytest unica:
+
+```bash
+make test-worker
+```
+
+Nel checkout validato il target esegue `406` test. Gli otto runtime SISTER
+modificati (`browser_session`, pool credenziali, validazione documento, righe
+remote, metadata retry, selezione visura, repository affidabilita e worker)
+sono coperti al 100% con `2774/2774` statement e `786/786` branch. Il totale
+worker legacy resta al 93% e non sostituisce il gate per-file sui runtime
+toccati.
+
+I nuovi confini per l'allowlist batch hanno gate separati:
+
+```bash
+PYTHONPATH=backend backend/.venv/bin/python -m pytest -q \
+  backend/tests/test_elaborazioni_batch_credentials.py \
+  --cov=app.services.elaborazioni_batch_credentials \
+  --cov-branch --cov-fail-under=100
+
+cd frontend
+VITEST_COVERAGE_INCLUDE=src/components/elaborazioni/batch-credential-selector.tsx \
+  npm run test:coverage -- tests/unit/batch-credential-selector.test.tsx
+```
+
+Il servizio backend copre `32/32` statement e `12/12` branch. Il selettore UI
+copre `25/25` statement, `19/19` branch, `10/10` funzioni e `22/22` linee.
+
+### 2.2.2 Statistiche per batch
+
+`GET /elaborazioni/batches/{batch_id}` espone anche `statistics`, calcolato al
+momento della richiesta senza nuove colonne o contatori denormalizzati. La UI
+lo mostra nel dettaglio batch, nell'archivio tramite il dettaglio modale e in
+forma compatta nella lista dei batch recenti.
+
+Semantica dei valori:
+
+- `duration_seconds`: dal primo evento `execution_start` disponibile, con
+  fallback a `started_at`, fino a `completed_at` o all'istante corrente;
+- `completed_per_hour`: sole visure completate divise per la durata effettiva;
+- `processed_per_hour`: tutti gli esiti terminali divisi per la durata;
+- `progress_percent`: esiti terminali sul totale delle richieste;
+- `success_rate_percent`: completate sul totale degli esiti terminali;
+- `estimated_remaining_seconds`: durata media per esito terminale moltiplicata
+  per le richieste residue; resta `null` finche non esiste un primo esito;
+- `total_attempts` e `average_attempts`: tentativi persistiti sulle richieste;
+- `credentials_used`: unione tra eventi `execution_start` e affinita persistita
+  sulla richiesta, con numero di richieste distinte ed esecuzioni per account.
+
+La telemetria preserva gli account impiegati prima di un retry che azzera
+`sister_credential_id`. Per batch precedenti all'introduzione degli eventi il
+fallback sulla richiesta identifica comunque l'account finale; in quel caso il
+conteggio esecuzioni minimo coincide con il numero di richieste associate.
+
+Coverage dei nuovi runtime:
+
+```text
+backend elaborazioni_batch_statistics: 71/71 statement, 22/22 branch
+frontend batch-statistics: 24/24 statement, 22/22 branch,
+                           9/9 funzioni, 19/19 linee
 ```
 
 Query DB per gli eventi strutturati:

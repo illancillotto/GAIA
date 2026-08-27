@@ -549,6 +549,7 @@ async def create_batch(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
     name: Annotated[str | None, Form()] = None,
+    credential_ids: Annotated[list[UUID] | None, Form()] = None,
 ) -> ElaborazioneBatchDetailResponse:
     try:
         batch = create_batch_from_upload(
@@ -557,10 +558,11 @@ async def create_batch(
             filename=file.filename or "visure.csv",
             content=await file.read(),
             name=name,
+            credential_ids=credential_ids,
         )
     except BatchValidationError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.to_detail()) from exc
-    return build_batch_detail_response(batch, get_batch_requests(db, batch.id))
+    return build_batch_detail_response(batch, get_batch_requests(db, batch.id), db)
 
 
 @router.get("/batches", response_model=list[ElaborazioneBatchResponse])
@@ -652,7 +654,7 @@ def get_batch(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     requests = get_batch_requests(db, batch.id)
     sync_batch_counters(db, batch, requests)
-    return build_batch_detail_response(batch, requests)
+    return build_batch_detail_response(batch, requests, db)
 
 
 @router.get("/batches/{batch_id}/download")
@@ -761,7 +763,7 @@ def create_single_visura(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.to_detail()) from exc
     except (BatchConflictError, ElaborazioneCredentialConfigurationError) as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    return build_batch_detail_response(batch, get_batch_requests(db, batch.id))
+    return build_batch_detail_response(batch, get_batch_requests(db, batch.id), db)
 
 
 @router.get("/requests/{request_id}", response_model=ElaborazioneRichiestaResponse)

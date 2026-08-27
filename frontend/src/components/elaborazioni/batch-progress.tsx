@@ -1,9 +1,10 @@
 "use client";
 
-import type { ElaborazioneBatch } from "@/types/api";
+import { BatchStatisticsPanel } from "@/components/elaborazioni/batch-statistics";
+import type { ElaborazioneBatchDetail } from "@/types/api";
 
 type ElaborazioneBatchProgressProps = {
-  batch: ElaborazioneBatch;
+  batch: ElaborazioneBatchDetail;
 };
 
 export function ElaborazioneBatchProgress({ batch }: ElaborazioneBatchProgressProps) {
@@ -16,9 +17,7 @@ export function ElaborazioneBatchProgress({ batch }: ElaborazioneBatchProgressPr
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div>
             <p className="text-lg font-semibold text-gray-900">Avanzamento elaborazione</p>
-            <p className="mt-2 text-sm leading-6 text-gray-600">
-              {batch.current_operation ?? "In attesa del worker elaborazioni"}
-            </p>
+            <p className="mt-2 text-sm leading-6 text-gray-600">{batch.current_operation ?? "In attesa del worker elaborazioni"}</p>
           </div>
           <div className="text-sm font-medium text-gray-700">
             {processed}/{batch.total_items} · {percentage}%
@@ -44,6 +43,7 @@ export function ElaborazioneBatchProgress({ batch }: ElaborazioneBatchProgressPr
           </div>
         </div>
       </div>
+      <BatchStatisticsPanel statistics={batch.statistics} />
     </article>
   );
 }

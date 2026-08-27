@@ -13,29 +13,31 @@ from app.models.catasto import (
     CatastoCredential,
     CatastoCredentialLease,
 )
-from sqlalchemy import create_engine
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import sessionmaker
-
 from sister_credential_pool import (
+    _shared_pool_allowlist_filter,
     ActiveSisterCredentialPool,
-    CredentialRejectionContext,
     CredentialLeaseHeartbeat,
+    CredentialRejectionContext,
     RejectedCredentialQuarantined,
     acquire_credential_lease,
+    browser_session_limit,
     credential_is_active,
     credential_is_runnable,
     finalize_credential_pool,
     is_rejected_credential_error,
     isolate_rejected_credential_runner,
     load_active_credential_pool,
+    next_processable_batch_id,
     quarantine_rejected_credential,
-    renew_credential_lease,
     refresh_shared_credential_pool,
     release_credential_lease,
+    renew_credential_lease,
     run_dynamic_credential_pool,
     should_stop_credential_runner,
 )
+from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import sessionmaker
 
 
 class Rows:
@@ -106,6 +108,21 @@ def test_load_active_credential_pool_honors_batch_scope() -> None:
         unpinned_batch,
     ).credentials == (first, second)
     assert "catasto_credentials.user_id" in str(db.scalar_queries[0]).split("WHERE", 1)[1]
+
+
+def test_shared_pool_allowlist_normalizes_ids_and_fails_closed() -> None:
+    first_id = uuid4()
+    second_id = uuid4()
+
+    (allowlist_filter,) = _shared_pool_allowlist_filter(
+        SimpleNamespace(credential_ids=[first_id, str(second_id)])
+    )
+    assert allowlist_filter.right.value == [first_id, second_id]
+
+    (invalid_filter,) = _shared_pool_allowlist_filter(
+        SimpleNamespace(credential_ids=["invalid-uuid"])
+    )
+    assert invalid_filter.right.value == []
 
 
 def test_super_admin_shared_pool_uses_all_available_credentials() -> None:
@@ -254,6 +271,25 @@ def test_super_admin_global_pool_executes_real_queries_and_refreshes_cross_user_
 
     assert {item.id for item in added} == {late.id}
     engine.dispose()
+
+
+def test_super_admin_shared_pool_honors_batch_credential_allowlist() -> None:
+    owner = SimpleNamespace(is_super_admin=True)
+    selected = credential(username="selected")
+    db = FakeDb(
+        get_values={ApplicationUser: owner},
+        scalars_values=[selected],
+    )
+    batch = SimpleNamespace(
+        credential_id=None,
+        credential_ids=[str(selected.id)],
+        user_id=1,
+    )
+
+    pool = load_active_credential_pool(db, batch)
+
+    assert pool.credentials == (selected,)
+    assert "catasto_credentials.id IN" in str(db.scalar_queries[0])
 
 
 def test_credential_lease_serializes_duplicate_sister_accounts() -> None:
@@ -495,6 +531,56 @@ def test_dynamic_pool_starts_all_initial_credentials_concurrently() -> None:
     )
 
     assert started == {selected.id for selected in credentials}
+
+
+def test_dynamic_pool_caps_concurrent_browser_sessions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    credentials = tuple(credential(username=f"user-{index}") for index in range(4))
+    active = 0
+    peak = 0
+    release = asyncio.Event()
+
+    async def run_credential(_selected):
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        if peak == 2:
+            release.set()
+        await asyncio.wait_for(release.wait(), timeout=1)
+        active -= 1
+
+    monkeypatch.setenv("ELABORAZIONI_BROWSER_SESSION_LIMIT", "2")
+    asyncio.run(
+        run_dynamic_credential_pool(
+            credentials,
+            run_credential,
+            lambda _started_ids: (),
+            lambda: False,
+            lambda: None,
+            1,
+        )
+    )
+
+    assert peak == 2
+
+
+def test_browser_session_limit_validates_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("ELABORAZIONI_BROWSER_SESSION_LIMIT", raising=False)
+    assert browser_session_limit() == 4
+    monkeypatch.setenv("ELABORAZIONI_BROWSER_SESSION_LIMIT", "invalid")
+    assert browser_session_limit() == 4
+    monkeypatch.setenv("ELABORAZIONI_BROWSER_SESSION_LIMIT", "0")
+    assert browser_session_limit() == 1
+
+
+def test_next_processable_batch_returns_first_ready_job() -> None:
+    first = SimpleNamespace(id=uuid4())
+    second = SimpleNamespace(id=uuid4())
+    assert next_processable_batch_id(FakeDb(scalars_values=[first, second])) == first.id
+    assert next_processable_batch_id(FakeDb(), datetime.now(timezone.utc)) is None
 
 
 def test_should_stop_credential_runner_preserves_release_semantics() -> None:

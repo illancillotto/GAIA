@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ElaborazioneHero, ElaborazioneMiniStat, ElaborazioneNoticeCard, ElaborazionePanelHeader } from "@/components/elaborazioni/module-chrome";
+import { BatchCredentialSelector } from "@/components/elaborazioni/batch-credential-selector";
 import { RecentBatchesPanel } from "@/components/elaborazioni/recent-batches-panel";
 import { ElaborazioneStatusBadge } from "@/components/elaborazioni/status-badge";
 import { DocumentIcon, FolderIcon, LockIcon, RefreshIcon, SearchIcon } from "@/components/ui/icons";
@@ -62,16 +63,6 @@ const DEFAULT_VALUES: ElaborazioneRichiestaCreateInput = {
   intestazione: "",
 };
 
-const TEMPLATE_CSV = [
-  "citta,catasto,sezione,foglio,particella,subalterno,tipo_visura",
-  "MARRUBIU,Terreni,,12,603,,Sintetica",
-  "ORISTANO,Terreni e Fabbricati,,5,120,3,Completa",
-  "",
-  "subject_id,subject_kind,request_type,intestazione,tipo_visura",
-  "RSSMRA80A01H501U,PF,ATTUALITA,Rossi Mario,Sintetica",
-  "01234567890,PNF,STORICA,Impresa Rossi SRL,Completa",
-].join("\n");
-
 export function ElaborazioneRequestWorkspace({
   initialMode = "single",
   embedded = false,
@@ -97,6 +88,7 @@ export function ElaborazioneRequestWorkspace({
   const [validationErrors, setValidationErrors] = useState<ValidationRowError[]>([]);
   const [batchError, setBatchError] = useState<string | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
+  const batchCredentialIds = useRef<string[]>([]);
   const [credentials, setCredentials] = useState<ElaborazioneCredential[]>([]);
   const [autoSyncStatus, setAutoSyncStatus] = useState<ElaborazioneRuoloAutoSyncStatus | null>(null);
   const [autoSyncCredentialId, setAutoSyncCredentialId] = useState("");
@@ -275,7 +267,7 @@ export function ElaborazioneRequestWorkspace({
 
     setBatchBusy(true);
     try {
-      const createdBatch = await createElaborazioneBatch(token, file, batchName);
+      const createdBatch = await createElaborazioneBatch(token, file, batchName, batchCredentialIds.current);
       setDraftBatch(createdBatch);
       setValidationErrors([]);
       setBatchError(null);
@@ -314,16 +306,6 @@ export function ElaborazioneRequestWorkspace({
       setBatchError(startError instanceof Error ? startError.message : "Errore avvio batch");
       setBatchBusy(false);
     }
-  }
-
-  function handleDownloadTemplate(): void {
-    const blob = new Blob([TEMPLATE_CSV], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = window.document.createElement("a");
-    anchor.href = url;
-    anchor.download = "catasto-template.csv";
-    anchor.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   async function reloadAutoSyncState(): Promise<void> {
@@ -694,8 +676,9 @@ export function ElaborazioneRequestWorkspace({
                 <label className="space-y-2">
                   <span className="label-caption">Tipo visura</span>
                   <select className="form-control" {...register("tipo_visura", { required: true })}>
-                    <option value="Sintetica">Sintetica</option>
-                    <option value="Completa">Completa</option>
+                      <option value="Sintetica">Sintetica</option>
+                      <option value="Analitica">Analitica</option>
+                      <option value="Completa">Completa</option>
                   </select>
                 </label>
               </div>
@@ -802,13 +785,17 @@ export function ElaborazioneRequestWorkspace({
                   />
                 </label>
               </div>
+              <BatchCredentialSelector
+                disabled={batchBusy || Boolean(draftBatch)}
+                selectionRef={batchCredentialIds}
+              />
               <div className="mt-5 flex flex-wrap items-center gap-3">
                 <button className="btn-primary" disabled={batchBusy || !file} onClick={() => void handleUploadBatch()} type="button">
                   {batchBusy ? "Validazione..." : "Carica e valida"}
                 </button>
-                <button className="btn-secondary" onClick={handleDownloadTemplate} type="button">
+                <a className="btn-secondary" download href="/catasto-template.csv">
                   Scarica template CSV
-                </button>
+                </a>
                 <span className="text-xs text-gray-400">Il batch resta `pending` finché non confermi l’avvio.</span>
               </div>
             </div>

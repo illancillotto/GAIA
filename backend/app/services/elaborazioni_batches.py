@@ -25,10 +25,9 @@ from app.models.elaborazioni import (
 )
 from app.schemas.elaborazioni import ElaborazioneRichiestaCreateRequest
 from app.services.catasto_comuni import get_catasto_comuni_lookup
+from app.services.elaborazioni_batch_credentials import require_batch_credentials
 from app.services.elaborazioni_credentials import (
     ElaborazioneCredentialNotFoundError,
-    get_credential_for_user,
-    require_credentials_for_user,
 )
 
 
@@ -61,6 +60,7 @@ ALLOWED_CATASTO = {
 }
 ALLOWED_TIPO_VISURA = {
     "sintetica": "Sintetica",
+    "analitica": "Analitica",
     "completa": "Completa",
 }
 ALLOWED_SEARCH_MODE = {"immobile", "soggetto"}
@@ -341,6 +341,10 @@ def _normalize_request_type(value: str) -> str:
     return "ATTUALITA"
 
 
+def _immobile_request_type(tipo_visura: str) -> str:
+    return "ATTUALITA" if tipo_visura == ALLOWED_TIPO_VISURA["completa"] else "STORICA"
+
+
 def _normalize_subject_kind(value: str, subject_id: str) -> str:
     normalized = normalize_lookup_value(clean_cell(value))
     if normalized in {"pg", "persona giuridica", "giuridica", "pnf"}:
@@ -362,7 +366,7 @@ def validate_visure_records(db: Session, records: list[dict[str, str]]) -> list[
         tipo_visura_value = _normalize_tipo_visura(clean_cell(record.get("tipo_visura")))
 
         if tipo_visura_value is None:
-            row_errors.append("Tipo visura deve essere 'Sintetica' o 'Completa'.")
+            row_errors.append("Tipo visura deve essere 'Sintetica', 'Analitica' o 'Completa'.")
 
         if search_mode == "soggetto":
             subject_id = clean_cell(record.get("subject_id")).upper()
@@ -449,7 +453,7 @@ def validate_visure_records(db: Session, records: list[dict[str, str]]) -> list[
         if subalterno_value and not subalterno_value.isdigit():
             row_errors.append("Subalterno deve essere numerico se valorizzato.")
         if tipo_visura_value is None:
-            row_errors.append("Tipo visura deve essere 'Sintetica' o 'Completa'.")
+            row_errors.append("Tipo visura deve essere 'Sintetica', 'Analitica' o 'Completa'.")
 
         if row_errors:
             errors.append({"row_index": row_index, "errors": row_errors, "values": record})
@@ -470,6 +474,7 @@ def validate_visure_records(db: Session, records: list[dict[str, str]]) -> list[
                 particella=particella_value,
                 subalterno=subalterno_value or None,
                 tipo_visura=tipo_visura_value,
+                request_type=_immobile_request_type(tipo_visura_value),
             )
         )
 
@@ -484,11 +489,12 @@ def create_batch_from_upload(
     filename: str,
     content: bytes,
     name: str | None = None,
+    credential_ids: list[UUID] | None = None,
 ) -> ElaborazioneBatch:
     records = load_upload_records(filename, content)
     rows = validate_visure_records(db, records)
     batch_name = name.strip() if name and name.strip() else Path(filename).stem
-    batch, _ = create_batch_from_validated_rows(db, user_id, rows, batch_name, filename)
+    batch, _ = create_batch_from_validated_rows(db, user_id, rows, batch_name, filename, credential_ids=credential_ids)
     return batch
 
 
@@ -522,10 +528,12 @@ def create_batch_from_validated_rows(
     *,
     batch_kind: str = ElaborazioneBatchKind.MANUAL_BATCH.value,
     credential_id: UUID | None = None,
+    credential_ids: list[UUID] | None = None,
 ) -> tuple[ElaborazioneBatch, list[ElaborazioneRichiesta]]:
     batch = ElaborazioneBatch(
         user_id=user_id,
         credential_id=credential_id,
+        credential_ids=list(dict.fromkeys(str(item) for item in credential_ids or ())) or None,
         name=name,
         batch_kind=batch_kind,
         source_filename=source_filename,
@@ -713,12 +721,7 @@ def start_batch(db: Session, user_id: int, batch_id: UUID) -> ElaborazioneBatch:
     expire_stale_pending_batches(db, user_id)
     batch = get_batch_for_user(db, user_id, batch_id)
     try:
-        if batch.credential_id is not None:
-            credential = get_credential_for_user(db, user_id, batch.credential_id)
-            if credential is None or not credential.active:
-                raise ElaborazioneCredentialNotFoundError("Selected SISTER credential is not active anymore")
-        else:
-            require_credentials_for_user(db, user_id)
+        require_batch_credentials(db, batch, user_id)
     except ElaborazioneCredentialNotFoundError as exc:
         raise BatchConflictError(str(exc)) from exc
     ensure_no_processing_batch(db, user_id, current_batch_id=batch.id)

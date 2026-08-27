@@ -26,8 +26,8 @@ export function ModuleWorkspaceHero({
         compact ? "p-5" : "p-6",
       )}
     >
-      <div className={cn("grid xl:grid-cols-[1.15fr,0.85fr]", compact ? "gap-4" : "gap-6")}>
-        <div>
+      <div className={cn("grid min-w-0 xl:grid-cols-[1.15fr,0.85fr]", compact ? "gap-4" : "gap-6")}>
+        <div className="min-w-0">
           <div
             className={cn(
               "inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/70 font-semibold uppercase tracking-[0.22em] text-[#1D4E35]",
@@ -36,12 +36,12 @@ export function ModuleWorkspaceHero({
           >
             {badge}
           </div>
-          <h3 className={cn("max-w-2xl font-semibold tracking-tight text-[#183325]", compact ? "mt-3 text-[2rem] leading-tight" : "mt-4 text-3xl")}>
+          <h3 className={cn("max-w-2xl [overflow-wrap:anywhere] font-semibold tracking-tight text-[#183325]", compact ? "mt-3 text-[2rem] leading-tight" : "mt-4 text-3xl")}>
             {title}
           </h3>
           <p className={cn("max-w-2xl text-sm text-gray-600", compact ? "mt-3 leading-6" : "mt-4 leading-7")}>{description}</p>
         </div>
-        {actions ? <div className={cn("grid self-start", compact ? "gap-2" : "gap-3")}>{actions}</div> : null}
+        {actions ? <div className={cn("grid min-w-0 self-start", compact ? "gap-2" : "gap-3")}>{actions}</div> : null}
       </div>
       {children ? <div className={cn(compact ? "mt-4" : "mt-6")}>{children}</div> : null}
     </section>
@@ -69,10 +69,10 @@ export function ModuleWorkspaceMiniStat({
         : "border-white/70 bg-white/75";
 
   return (
-    <div className={cn("rounded-2xl border backdrop-blur", toneClasses, compact ? "p-3" : "p-4")}>
+    <div className={cn("min-w-0 rounded-2xl border backdrop-blur", toneClasses, compact ? "p-3" : "p-4")}>
       <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">{eyebrow}</p>
       <p className={cn("font-semibold text-gray-900", compact ? "mt-2 text-xl" : "mt-3 text-2xl")}>{value}</p>
-      <p className={cn("text-sm text-gray-600", compact ? "mt-1.5 leading-5" : "mt-2 leading-6")}>{description}</p>
+      <p className={cn("[overflow-wrap:anywhere] text-sm text-gray-600", compact ? "mt-1.5 leading-5" : "mt-2 leading-6")}>{description}</p>
     </div>
   );
 }
@@ -100,9 +100,9 @@ export function ModuleWorkspaceNoticeCard({
             : "border-white/80 bg-white/70 text-gray-600";
 
   return (
-    <div className={cn("rounded-2xl border", toneClasses, compact ? "px-4 py-2.5" : "px-4 py-3")}>
+    <div className={cn("min-w-0 rounded-2xl border", toneClasses, compact ? "px-4 py-2.5" : "px-4 py-3")}>
       <p className="text-sm font-semibold">{title}</p>
-      <p className={cn("text-sm", compact ? "mt-1 leading-5" : "mt-1 leading-6")}>{description}</p>
+      <p className={cn("[overflow-wrap:anywhere] text-sm", compact ? "mt-1 leading-5" : "mt-1 leading-6")}>{description}</p>
     </div>
   );
 }

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -33,6 +34,20 @@ logger = logging.getLogger(__name__)
 _SCHEDULED_BATCH_RESUME_AT: dict[UUID, datetime] = {}
 _CREDENTIAL_LEASE_SECONDS = 900
 _CREDENTIAL_LEASE_HEARTBEAT_SECONDS = 60
+DEFAULT_BROWSER_SESSION_LIMIT = 4
+
+
+def browser_session_limit() -> int:
+    try:
+        configured = int(
+            os.getenv(
+                "ELABORAZIONI_BROWSER_SESSION_LIMIT",
+                str(DEFAULT_BROWSER_SESSION_LIMIT),
+            )
+        )
+    except ValueError:
+        return DEFAULT_BROWSER_SESSION_LIMIT
+    return max(configured, 1)
 
 
 class RejectedCredentialQuarantined(Exception):
@@ -258,8 +273,20 @@ def _shared_pool_owner_filters(db: Session, batch: CatastoBatch) -> tuple[object
     return (CatastoCredential.user_id == batch.user_id,)
 
 
+def _shared_pool_allowlist_filter(batch: CatastoBatch) -> tuple[object, ...]:
+    values = getattr(batch, "credential_ids", None)
+    if values is None:
+        return ()
+    try:
+        credential_ids = tuple(UUID(str(value)) for value in values)
+    except (TypeError, ValueError):
+        credential_ids = ()
+    return (CatastoCredential.id.in_(credential_ids),)
+
+
 def _load_shared_pool(db: Session, batch: CatastoBatch, now: datetime) -> ActiveSisterCredentialPool:
     owner_filters = _shared_pool_owner_filters(db, batch)
+    allowlist_filter = _shared_pool_allowlist_filter(batch)
     active_credentials = tuple(
         credential
         for credential in db.scalars(
@@ -267,6 +294,7 @@ def _load_shared_pool(db: Session, batch: CatastoBatch, now: datetime) -> Active
             .where(
                 CatastoCredential.active.is_(True),
                 *owner_filters,
+                *allowlist_filter,
             )
             .order_by(
                 CatastoCredential.is_default.desc(),
@@ -336,10 +364,17 @@ async def run_dynamic_credential_pool(
 ) -> None:
     started_ids: set[UUID] = set()
     runner_tasks: dict[UUID, asyncio.Task[None]] = {}
+    browser_slots = asyncio.Semaphore(browser_session_limit())
+
+    async def run_with_browser_slot(credential: CatastoCredential) -> None:
+        async with browser_slots:
+            await run_credential(credential)
 
     def start_runner(credential: CatastoCredential) -> None:
         started_ids.add(credential.id)
-        runner_tasks[credential.id] = asyncio.create_task(run_credential(credential))
+        runner_tasks[credential.id] = asyncio.create_task(
+            run_with_browser_slot(credential)
+        )
 
     for credential in initial_credentials:
         start_runner(credential)

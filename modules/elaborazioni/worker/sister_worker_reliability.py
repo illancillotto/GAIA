@@ -20,6 +20,7 @@ from app.models.catasto import (
     CatastoVisuraRequestStatus,
 )
 from sister_exceptions import SisterRequestCorrelationError
+from sister_retry_metadata import clear_remote_request_metadata, recoverable_retry_metadata
 from sister_worker_files import build_document_path, build_request_artifact_dir, document_values, sha256_file
 from app.modules.catasto.services.ade_document_audit import apply_document_audit
 
@@ -284,6 +285,8 @@ class SisterRequestRepository:
             request.retry_not_before = retry_at
             request.last_error_code = error_code
             request.execution_token = None
+            if error_code in {"sister_invalid_document", "sister_correlation_error"}:
+                clear_remote_request_metadata(request, clear_baseline=True)
             db.commit()
 
     def claim_next(
@@ -382,10 +385,7 @@ class SisterRequestRepository:
                 return
             assert request is not None
             if request.sister_remote_state not in {"submitted", "pending", "ready"}:
-                request.sister_credential_id = None
-                request.sister_remote_request_id = None
-                request.sister_remote_request_url = None
-                request.sister_remote_state = None
+                clear_remote_request_metadata(request)
             request.sister_remote_baseline_keys = baseline_keys
             db.commit()
 
@@ -835,12 +835,6 @@ def is_recoverable_credential_error(exc: Exception, invalid_document_error: type
         or type(exc).__name__ == "TimeoutError"
         or any(marker in message for marker in markers)
     )
-
-
-def recoverable_retry_metadata(exc: Exception, username: str) -> tuple[str, str]:
-    if isinstance(exc, SisterRequestCorrelationError):
-        return "Correlazione SISTER non sicura, retry differito", "sister_correlation_error"
-    return f"Sessione/timeout su {username}, retry differito", "session_recovery"
 
 
 def _future_retry_seconds(deadline: datetime | None, now: datetime) -> int | None:

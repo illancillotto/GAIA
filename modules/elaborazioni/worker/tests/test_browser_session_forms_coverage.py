@@ -82,10 +82,15 @@ def test_open_subject_form_paths(kind: str, has_link: bool, has_territory: bool)
     ("section_mode", "subalterno", "tipo_visible"),
     [("select", "3", True), ("input", None, False), ("missing", None, False), ("none", None, False)],
 )
-def test_fill_visura_form_optional_fields(section_mode: str, subalterno: str | None, tipo_visible: bool) -> None:
+def test_fill_visura_form_optional_fields(
+    section_mode: str,
+    subalterno: str | None,
+    tipo_visible: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     page = ScriptedPage()
     session = make_session(page)
-    session._select_request_type_if_present = noop_async
+    monkeypatch.setattr(browser_module, "select_request_type", noop_async)
     session._ensure_sezione_options_loaded = noop_async
     session._wait_for_visura_submission_state = noop_async
     session._first_visible_count = lambda _selector: _async_value(1 if tipo_visible else 0)
@@ -94,9 +99,36 @@ def test_fill_visura_form_optional_fields(section_mode: str, subalterno: str | N
     elif section_mode == "input":
         page.locators[session.selectors.sezione_input_selector] = ScriptedLocator()
     row = request(sezione="A" if section_mode != "none" else None, subalterno=subalterno)
+    tipo_selector = f"{session.selectors.tipo_visura_selector}[value='4']"
+    if tipo_visible:
+        page.locators[tipo_selector] = ScriptedLocator()
     run(session.fill_visura_form(row))
     assert (session.selectors.foglio_selector, "1") in page.fills
-    assert bool(page.checks) is tipo_visible
+    assert bool(page.locators.get(tipo_selector) and page.locators[tipo_selector].checks) is tipo_visible
+
+
+def test_fill_historical_immobile_uses_post_submit_visura_type(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    page = ScriptedPage()
+    session = make_session(page)
+    session._wait_for_visura_submission_state = noop_async
+    historical_selector = f"{session.selectors.tipo_visura_selector}[value='3']"
+    page.locators[historical_selector] = ScriptedLocator()
+
+    async def reject_early_request_type_selection(*_args, **_kwargs) -> None:
+        raise AssertionError("immobile form has no separate request-type radio")
+
+    monkeypatch.setattr(browser_module, "select_request_type", reject_early_request_type_selection)
+
+    run(
+        session.fill_visura_form(
+            request(tipo_visura="Analitica", request_type="STORICA"),
+        )
+    )
+
+    assert page.locators[historical_selector].checks == 1
+    assert session._pending_visura_type == ("Analitica", "3")
 
 
 async def _async_value(value):
@@ -120,10 +152,10 @@ def test_search_immobile_status_form_variants(section_mode: str, subalterno: str
     assert run(session.search_immobile_status(row))["classification"] == "current"
 
 
-def test_fill_and_search_subject_paths() -> None:
+def test_fill_and_search_subject_paths(monkeypatch: pytest.MonkeyPatch) -> None:
     page = ScriptedPage()
     session = make_session(page)
-    session._select_request_type_if_present = noop_async
+    monkeypatch.setattr(browser_module, "select_request_type", noop_async)
     session._fill_subject_identifier = noop_async
     run(session.fill_subject_form(request()))
     assert page.selects
