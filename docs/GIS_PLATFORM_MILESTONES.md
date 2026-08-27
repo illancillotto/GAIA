@@ -783,3 +783,153 @@ Exit criteria:
 - errori di apply lasciano la change request in `approved`;
 - nessuna nuova migration richiesta;
 - coverage 100% sui runtime backend/frontend modificati.
+
+---
+
+# Programma Territorio Esterno (M21-M25)
+
+> Aggiunto: 2026-08-27.
+> Piano tecnico: `docs/GIS_PLATFORM_TERRITORIO_PLAN.md`.
+> Riferimento dati: `docs/GIS_PLATFORM_TERRITORIO_CATALOGO.md`.
+> Stato lavori: `docs/GIS_PLATFORM_TERRITORIO_PROGRESS.md`.
+> Prompt operativi: `docs/GIS_PLATFORM_TERRITORIO_PROMPTS.md`.
+
+Il programma estende la piattaforma ai layer cartografici pubblicati da terzi
+(RAS SITR, Agenzia delle Entrate), alla interrogazione puntuale multi-sorgente e
+alla scheda territoriale della particella. Nessun dato esterno viene copiato in
+PostGIS.
+
+## M21 - Fondazione Layer Esterni
+
+Stato: da implementare.
+
+Obiettivo:
+
+- rendere i layer esterni cittadini di prima classe del catalogo, senza ancora
+  popolare il seed ne toccare la mappa.
+
+Deliverable:
+
+- `source_type` `wms_external` e `wfs_external`;
+- registro sorgenti `external_sources.py`;
+- proxy `external_proxy.py` con allowlist operazioni e parametri, cache su
+  filesystem con TTL per layer, timeout per sorgente e pruning;
+- endpoint `GET /gis/external/{layer_id}/wms`,
+  `GET /gis/external/{layer_id}/wfs`, `GET /gis/external/sources`;
+- schema `GisExternalLayerConfig` con `license` e `attribution` obbligatori;
+- impostazioni `GIS_EXTERNAL_*` con flag disabilitato di default;
+- chiave `external_sources` in `runtime_health` con probe cachato.
+
+Exit criteria:
+
+- nessun layer esterno registrato nel seed;
+- proxy non accetta URL dal client: destinazione determinata solo da `layer_id`;
+- layer esterni esclusi da change request, export shapefile e governance QGIS
+  come tabella;
+- flag disabilitato produce `503` governato;
+- coverage 100% sui runtime nuovi e modificati.
+
+## M22 - Catalogo Territorio E Pannello Strati
+
+Stato: da implementare.
+
+Obiettivo:
+
+- popolare il catalogo con le sorgenti censite e renderle consultabili dalla
+  mappa Catasto.
+
+Deliverable:
+
+- `territorio_bootstrap.py` idempotente, workspace `territorio`,
+  `domain_module=gis`;
+- gruppi tematici `bonifica`, `colture`, `pericolosita`, `vincoli`,
+  `idrografia`, `amministrativo`, `eventi`, `catasto_ufficiale`, `ortofoto`,
+  `morfologia`;
+- `GET /gis/territorio/layers` con configurazione client gia risolta;
+- hook `use-territorio-layers.ts`, pannello `TerritorioLayerPanel.tsx`,
+  selettore `OrtofotoStoricheSelector.tsx`;
+- attribuzione visibile in mappa.
+
+Exit criteria:
+
+- bootstrap idempotente e definizione senza licenza rifiutata;
+- layer esterni sempre sotto i layer GAIA nell'ordine di rendering;
+- un layer irraggiungibile non rompe la mappa;
+- nessuna regressione su popup, ricerca, selezioni e strumenti esistenti.
+
+## M23 - Interrogazione Puntuale Multi-Sorgente
+
+Stato: da implementare.
+
+Obiettivo:
+
+- rispondere alla domanda "cosa insiste su questo punto" aggregando dato GAIA,
+  dato catastale ufficiale e layer territoriali in una risposta unica.
+
+Deliverable:
+
+- package `backend/app/modules/gis/interrogazione/` con `models.py`,
+  `local_probes.py`, `remote_probes.py`, `service.py`;
+- `POST /gis/interroga` con tre livelli `gaia`, `catasto_ufficiale`,
+  `territorio`;
+- stato e tempo di risposta per sorgente;
+- impostazioni `GIS_INTERROGAZIONE_*`;
+- pannello `InterrogazionePanel.tsx` affiancato al popup particella esistente.
+
+Exit criteria:
+
+- il livello GAIA non e opzionale: se fallisce, fallisce la richiesta;
+- con tutte le sorgenti esterne irraggiungibili la risposta resta valida;
+- layer `wms_visual_only` mai interrogati;
+- risultato vuoto e sorgente non disponibile distinti in UI;
+- il popup particella resta invariato.
+
+## M24 - Scheda Territoriale Particella
+
+Stato: da implementare.
+
+Obiettivo:
+
+- produrre in PDF la sintesi territoriale della particella, oggi distribuita su
+  piu schermate.
+
+Deliverable:
+
+- package `backend/app/modules/gis/scheda_territoriale/`;
+- resa HTML verso PDF con Chromium via `playwright`, assemblaggio con `pypdf`:
+  nessuna nuova dipendenza;
+- migration `gis_schede_territoriali` con snapshot JSON delle sorgenti
+  interrogate;
+- endpoint `POST /gis/scheda-territoriale`,
+  `GET /gis/scheda-territoriale/{scheda_id}` e `/pdf`;
+- audit `scheda_territoriale.requested`, `.completed`, `.failed`;
+- retention configurabile sul pattern M10.
+
+Exit criteria:
+
+- disclaimer in chiaro nella prima pagina, non in nota;
+- attribuzione di tutte le sorgenti usate;
+- layer non autorizzati esclusi e l'esclusione dichiarata nel documento;
+- snapshot sorgenti presente: la scheda deve restare ricostruibile.
+
+## M25 - Strumenti Di Campo E Propagazione QGIS
+
+Stato: da implementare.
+
+Obiettivo:
+
+- rifinitura degli strumenti di mappa e propagazione dei layer territoriali al
+  progetto QGIS generato da M16.
+
+Deliverable:
+
+- misura di distanze e aree con calcolo geodetico;
+- confronto diacronico ortofoto con slider per annata;
+- layout di stampa con scala, legenda, intestazione consortile e attribuzione;
+- layer territoriali visibili inclusi nel `.qgz`, puntando al proxy GAIA.
+
+Exit criteria:
+
+- misure corrette su un caso noto;
+- progetto QGIS filtrato sui layer visibili all'utente richiedente;
+- nessuna delle voci e bloccante per M21-M24.

@@ -508,6 +508,46 @@ rimossi dalla retention schedulata. Ogni prune scrive
 `export.retention_applied` con path, versione, retention count e indicazione se
 il file ZIP e stato eliminato.
 
+### Layer Territoriali Esterni M21-M25
+
+Stato: pianificato, non implementato.
+
+Il catalogo GIS governa oggi solo layer che vivono nel PostGIS GAIA
+(`postgis`, `postgis_staging`) o registri applicativi di dominio
+(`domain_registry`). Il programma Territorio Esterno introduce una quarta
+categoria: layer cartografici pubblicati da terzi e consumati via WMS/WFS, senza
+copia locale.
+
+Confini:
+
+- le sorgenti esterne restano autorevoli per il proprio dato; GAIA resta
+  autorevole per particelle, distretti, punti di consegna, rete e ruolo;
+- i layer esterni sono sempre read-only: esclusi da change request, export
+  shapefile e governance QGIS come tabella;
+- il consumo passa sempre dal proxy GAIA, mai da chiamata diretta del browser
+  al servizio remoto: serve per CORS, cache, timeout, audit e per generare un
+  URL stabile riusabile dal progetto QGIS;
+- la destinazione remota e determinata esclusivamente da `layer_id` e dal
+  registro sorgenti, mai da input del client;
+- licenza e attribuzione sono metadata obbligatori: una definizione che ne e
+  priva viene rifiutata dal bootstrap;
+- ogni sorgente ha timeout proprio e fallisce isolata; lo stato per sorgente e
+  sempre esplicito, mai un silenzio interpretabile come assenza di risultati.
+
+Sorgenti previste: GeoServer vettoriale e raster del SITR Regione Sardegna, e
+WMS Cartografia Catastale INSPIRE dell'Agenzia delle Entrate. Il WFS AdE gia
+usato dal modulo Catasto in `ade_wfs.py` non viene modificato.
+
+Superfici introdotte dal programma:
+
+- `GET /gis/external/{layer_id}/wms` e `/wfs`, proxy governato;
+- `GET /gis/territorio/layers`, catalogo tematico risolto per il client;
+- `POST /gis/interroga`, intersezione puntuale su tre livelli `gaia`,
+  `catasto_ufficiale`, `territorio`;
+- `POST /gis/scheda-territoriale` e download PDF della scheda particella.
+
+Il dettaglio e in `docs/GIS_PLATFORM_TERRITORIO_PLAN.md`.
+
 ## Roadmap Incrementale
 
 1. MVP backend: catalogo, permessi layer, annotazioni, change request, export
@@ -527,6 +567,9 @@ il file ZIP e stato eliminato.
 6. Workflow editing completo: draft, validazione, apply su layer ufficiale,
    audit geometrie/attributi e rollback/versioning.
 7. Valutazione POC QGIS Server vs GeoServer per pubblicazione WMS/WFS/WMTS.
+8. Programma Territorio Esterno: layer WMS/WFS di terzi nel catalogo,
+   interrogazione puntuale multi-sorgente e scheda territoriale particella.
+   Pianificato in M21-M25, non ancora avviato.
 
 ## Documenti Operativi
 
@@ -536,3 +579,11 @@ il file ZIP e stato eliminato.
 - `docs/GIS_QGIS_DESKTOP_RUNBOOK.md`: istruzioni operative QGIS Desktop.
 - `docs/GIS_SHAPEFILE_IMPORT_RUNBOOK.md`: percorso import shapefile governato.
 - `docs/GIS_OGC_DECISION_RECORD.md`: decisione QGIS Server vs GeoServer.
+- `docs/GIS_PLATFORM_TERRITORIO_PLAN.md`: piano tecnico M21-M25 per i layer
+  territoriali esterni.
+- `docs/GIS_PLATFORM_TERRITORIO_CATALOGO.md`: censimento sorgenti esterne e
+  definizione del catalogo seed.
+- `docs/GIS_PLATFORM_TERRITORIO_PROGRESS.md`: stato del programma Territorio
+  Esterno.
+- `docs/GIS_PLATFORM_TERRITORIO_PROMPTS.md`: prompt operativi eseguibili per
+  M21-M25.
