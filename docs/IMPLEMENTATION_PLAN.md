@@ -393,3 +393,22 @@ Codex deve:
 - privilegiare codice chiaro e manutenibile
 - documentare i punti critici
 - lasciare TODO espliciti dove la logica dipende dall'ambiente Synology reale
+
+---
+
+## 15. Programma scheduler e worker
+
+Il consolidamento operativo di scheduler, code e worker e tracciato nei
+documenti dedicati:
+
+- `docs/WORKER_ARCHITECTURE_PLAN.md` per architettura obiettivo, milestone,
+  invarianti e rollout;
+- `docs/WORKER_ARCHITECTURE_PROGRESS.md` per stato, metriche e gate eseguiti.
+- `docs/WORKER_OPERATIONS_RUNBOOK.md` per deploy, osservabilita, tuning e
+  rollback dei servizi.
+
+La prima milestone separa tutti gli scheduler dai quattro processi Uvicorn e li
+assegna al servizio singleton `platform-scheduler`. Le milestone successive
+ottimizzano Ruolo, introducono lease/fencing sulle code persistenti e applicano
+isolamento e limiti operativi per famiglia worker. Deploy e restart produzione
+non sono impliciti nell'implementazione locale.

@@ -1,6 +1,6 @@
 # GAIA GIS Platform Progress
 
-> Ultimo aggiornamento: 2026-08-26.
+> Ultimo aggiornamento: 2026-08-27.
 > Branch corrente: `main`.
 
 ## Stato Sintetico
@@ -964,8 +964,9 @@ Debito residuo, in ordine:
 - `GetCapabilities` WMS/WFS risponde `200`, pubblica `7` layer e include
   `Condotte irrigue`; una richiesta WFS-T viene respinta con `400` e `No
   capabilities to do WFS changes`;
-- lo scheduler e eseguito dal solo container `gis-export-scheduler`; i worker
-  API non registrano copie concorrenti del job.
+- lo scheduler export GIS e registrato dal solo container
+  `platform-scheduler`, insieme agli altri trigger periodici GAIA; i worker API
+  non registrano copie concorrenti del job.
 
 Verifiche della slice runtime:
 
@@ -1082,6 +1083,34 @@ variazioni topologiche. Graphify `docs/` aggiornato a `1.177` nodi,
 `export_layer_to_shapefile_zip` passa da cyclomatic/cognitive/LOC
 `12/16/51` a `7/7/48`. Baseline ed eccezioni restano invariate.
 
+## Quality Hotspot GIS-H8 2026-08-27
+
+Refactoring behavior-preserving di `GisToolsWorkspace` su `/gis/strumenti`.
+Nessuna modifica a route, payload `@/lib/api/gis`, autenticazione o UI percepita.
+
+- `tools-workspace.tsx` resta il composer pubblico `GisToolsWorkspace({ token })`;
+- helper puri in `tools-workspace-helpers.ts` per nome tecnico, SRID, payload
+  upload e ciclo paginato delle change request;
+- hook `useGisToolsWorkspace` per catalogo, upload, preview, publish/reject;
+- pannelli presentazionali per hero, form ZIP, anteprima e azioni.
+
+Metrica obiettivo: cyclomatic `60 -> 2`, cognitive `72 -> 1`, LOC `226 -> 17`.
+Le tre violation error-level del callable sono rimosse. Residuo: warning LOC
+`68` sull'hook, sotto la soglia error `80`.
+
+Verifiche 2026-08-27:
+
+- `12` test mirati e `15` file GIS con `111` test passati;
+- coverage `100%` sui quattro runtime (`170/170` statement, `102/102` branch,
+  `60/60` funzioni, `154/154` linee);
+- typecheck e lint mirato frontend puliti;
+- quality ratchet contro `main`: `findings: []`; baseline ed eccezioni invariate;
+- Graphify frontend `5.359` nodi / `13.271` archi; platform docs `1.198` nodi /
+  `2.669` archi.
+- smoke e2e Playwright `tests/e2e/gis-strumenti.spec.ts` `1 passed`: upload ZIP,
+  SRID, preview, publish/reject con conferma, paginazione change request e
+  piano OGC. Login mockato (`module_gis`) per evitare il tetto dispositivi.
+
 ## Decisioni Aperte
 
 - Se servono ruoli LOGIN QGIS personali o per postazione.
@@ -1132,6 +1161,19 @@ variazioni topologiche. Graphify `docs/` aggiornato a `1.177` nodi,
 ## Prossima Azione Raccomandata
 
 Importare e validare i dati ufficiali di `network.rete_condotte`, poi eseguire
-prove assistite di catalogo, viewer e workflow con utenti non tecnici. In
-parallelo va gestito separatamente il debito concorrente rilevato dal quality
-ratchet globale; non sono state modificate baseline o eccezioni.
+prove assistite di catalogo, viewer e workflow con utenti non tecnici. Per il
+programma complessita, il prossimo hotspot GIS consigliato e `GisLayerViewer`,
+senza avviarlo in questa slice. In parallelo va gestito separatamente il debito
+concorrente del quality ratchet globale; baseline ed eccezioni restano
+invariate.
+
+## Programma Territorio Esterno
+
+Il programma M21-M25, che estende la piattaforma ai layer cartografici esterni
+(RAS SITR, Agenzia delle Entrate), alla interrogazione puntuale multi-sorgente e
+alla scheda territoriale della particella, e tracciato separatamente in
+`docs/GIS_PLATFORM_TERRITORIO_PROGRESS.md`.
+
+Al 2026-08-27 nessuna delle sue milestone e implementata: lo stato e piano
+approvato con analisi delle sorgenti completata. Non impatta M1-M20 ne richiede
+migration sullo schema catalogo esistente.

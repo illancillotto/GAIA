@@ -21,6 +21,8 @@ Il repository ha gia alcuni mattoni utili:
 
 - CI backend con `pytest --cov=app` e gate `100%` sui file backend runtime cambiati
 - CI frontend con Vitest coverage e gate `100%` sui file frontend runtime cambiati
+- CI worker con collection pytest isolata per file, report runtime completo e gate
+  `100%` sui file worker runtime cambiati
 - suite backend ampia e gia distribuita per dominio
 - suite frontend unit + e2e gia presenti su moduli critici
 
@@ -29,6 +31,8 @@ Il repository non misura ancora in modo coerente il `100%` globale:
 - il gate CI oggi blocca solo i file cambiati, non il totale del perimetro runtime
 - `frontend/vitest.config.ts` restringe la coverage ai file runtime cambiati sotto `frontend/src/**`; quando non ci sono file runtime frontend nel diff, il gate non applica la soglia globale legacy
 - `backend/.coveragerc` e attualmente focalizzato su un perimetro wiki e non puo essere considerato la configurazione finale del gate repository-wide
+- il report worker completo e pubblicato come artifact ma resta warn-only sul
+  totale legacy, misurato al `93%` combinato statement e branch il `2026-08-27`
 - esistono script e servizi operativi con copertura parziale o assente
 
 ## Principi operativi
@@ -58,7 +62,8 @@ Il repository non misura ancora in modo coerente il `100%` globale:
 3. Allineare la configurazione coverage:
    - backend: sostituire la configurazione wiki-only con una config repository-wide
    - frontend: mantenere il gate immediato sui file runtime cambiati e aggiungere un job separato warn-only per misurare tutto `frontend/src/**`
-   - worker/script: aggiungere report dedicati dove oggi non esistono
+   - worker: report completo e gate changed-file attivi; aggiungere report
+     dedicati agli script runtime che ne sono ancora privi
 4. Pubblicare in CI una lista ordinata dei file sotto soglia per ogni job.
 
 ### Fase 2 - Costruire il baseline dei gap
@@ -127,7 +132,8 @@ Il refactor e parte del piano coverage, non attivita separata.
 
 ### Worker e script
 
-- misurare `modules/elaborazioni/worker/**` con report coverage esplicito
+- chiudere il debito del report completo worker dal `93%` al `100%`, senza
+  indebolire il gate changed-file gia attivo
 - coprire script Python operativi con test su subprocess, env e filesystem finti
 - per gli script shell, preferire smoke test automatizzati e wrapper testabili dove utile
 
@@ -159,6 +165,20 @@ Fino alla chiusura completa del piano:
 - eventuali eccezioni temporanee devono essere documentate in questo file con motivo, perimetro e data di rientro
 
 ## Note operative
+
+- `2026-08-27` - gate CI coverage worker
+  (`Makefile`, `.github/workflows/backend.yml`,
+  `scripts/check_changed_worker_coverage.py`,
+  `tests/code_quality/test_worker_coverage_gate.py`)
+  Il target `make test-worker` esegue ogni `test_*.py` worker in un processo
+  separato, per evitare la contaminazione degli stub globali di `test_worker.py`,
+  e combina branch coverage in JSON/XML escludendo test e cache. Il workflow
+  backend installa anche le dipendenze worker, pubblica gli artifact completi e
+  applica il `100%` combinato ai soli runtime worker modificati. Validazione
+  locale: `22` processi, `404 passed`; otto runtime modificati al `100%`; report
+  completo worker `93%`; checker CI `65/65` statement e `24/24` branch, `100%`,
+  con `7 passed`. Il totale legacy resta visibile ma warn-only finche non arriva
+  al `100%`.
 
 - `2026-08-25` - integrazione PostgreSQL registro numeri solleciti Ruolo
   (`backend/tests/ruolo/test_tributi_notice_registry_postgres.py`,

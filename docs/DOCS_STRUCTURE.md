@@ -23,16 +23,18 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 - `docs/ARCHITECTURE.md`: architettura generale.
 - `docs/PRD.md`: product requirements di livello progetto.
 - `docs/IMPLEMENTATION_PLAN.md`: piano di implementazione generale.
+- `docs/WORKER_ARCHITECTURE_PLAN.md`: architettura obiettivo, milestone e rollout per scheduler e worker GAIA.
+- `docs/WORKER_ARCHITECTURE_PROGRESS.md`: stato persistente ed evidenze dell'implementazione worker.
 - `docs/GIS_PLATFORM_ARCHITECTURE.md`: confini e roadmap della piattaforma GIS trasversale GAIA.
 - `docs/GIS_PLATFORM_IMPLEMENTATION_PLAN.md`: piano tecnico incrementale per completare la piattaforma GIS.
 - `docs/GIS_PLATFORM_MILESTONES.md`: milestone, deliverable ed exit criteria della piattaforma GIS.
 - `docs/GIS_PLATFORM_PROGRESS.md`: stato di avanzamento operativo della piattaforma GIS.
-- `docs/FRONTEND_SESSION_BOOTSTRAP.md`: cache, rivalidazione, rendering non bloccante e test del bootstrap sessione frontend.
-- `docs/data-model/`: poster A0, diagrammi ERD e dizionario relazioni generati dai modelli SQLAlchemy.
 - `docs/GIS_PLATFORM_TERRITORIO_PLAN.md`: piano tecnico M21-M25 per layer territoriali esterni, interrogazione puntuale e scheda territoriale.
 - `docs/GIS_PLATFORM_TERRITORIO_CATALOGO.md`: censimento sorgenti WMS/WFS esterne (RAS SITR, Agenzia Entrate) e catalogo seed.
 - `docs/GIS_PLATFORM_TERRITORIO_PROGRESS.md`: stato del programma Territorio Esterno.
 - `docs/GIS_PLATFORM_TERRITORIO_PROMPTS.md`: prompt operativi eseguibili per M21-M25.
+- `docs/FRONTEND_SESSION_BOOTSTRAP.md`: cache, rivalidazione, rendering non bloccante e test del bootstrap sessione frontend.
+- `docs/data-model/`: poster A0, diagrammi ERD e dizionario relazioni generati dai modelli SQLAlchemy.
 - `docs/TEST_COVERAGE_100_PLAN.md`: policy e piano operativo per portare il codice runtime a coverage totale.
 - `docs/AGENTS.md`: linee guida operative per agenti/tooling.
 - `docs/PROMPT_BACKEND.md`: prompt e istruzioni backend.
@@ -338,6 +340,9 @@ GAIA/
     ├── DOCS_STRUCTURE.md
     ├── data-model/
     ├── IMPLEMENTATION_PLAN.md
+    ├── WORKER_ARCHITECTURE_PLAN.md
+    ├── WORKER_ARCHITECTURE_PROGRESS.md
+    ├── WORKER_OPERATIONS_RUNBOOK.md
     ├── PRD.md
     ├── PROMPT_BACKEND.md
     ├── PROMPT_CODEX_permissions.md

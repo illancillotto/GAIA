@@ -19,6 +19,7 @@ Snapshot di preparazione: `main` a
 | candidate | `backend/app/modules/presenze/router.py` | circa 5.099 righe | Router molto esteso; verificare separazione endpoint/service |
 | candidate | `frontend/src/features/organigramma/organigramma-workspace.tsx` | circa 4.652 righe | Workspace React ad alto rischio di stato accoppiato |
 | candidate | `frontend/src/app/catasto/gis/page.tsx` | circa 3.512 righe | Pagina GIS; rischio side effect e integrazioni mappa |
+| reduced | `frontend/src/app/gis/strumenti/tools-workspace.tsx` | GIS-H8 `GisToolsWorkspace` cyc `60 -> 2` cog `72 -> 1` LOC `226 -> 17` | Hotspot dedicato chiuso; warning LOC residuo sull'hook |
 | candidate | `frontend/src/lib/api.ts` | circa 5.833 righe | Valutare quanto e dichiarativo prima di priorizzarlo |
 | candidate | `frontend/src/app/presenze/giornaliere/page.tsx` | file molto grande | Misurare componenti, hook e handler |
 | candidate | `backend/app/modules/ruolo/tributi_repositories.py` | circa 4.233 righe | Dominio critico; refactor solo con caratterizzazione forte |

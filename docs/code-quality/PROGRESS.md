@@ -9,10 +9,10 @@ blocco verificato e prima di chiudere un goal.
 - Current phase: `3 - ordinary ratchet applied to feature recovery`
 - Last verified commit: `31f875d4`
 - Reference branch: `main`
-- Working branch: `gaia/presenze-gate-canonical-export`
-- Last update: `2026-08-20`
+- Working branch: `main`
+- Last update: `2026-08-27`
 - Current owner: `GAIA maintainers`
-- Active goal: `selective Presenze recovery with quality ratchet`
+- Active goal: `GIS-H8 GisToolsWorkspace hotspot`
 - Blocking CI enabled: `local_main_not_pushed`
 
 > Il branch applicativo `gaia/code-complexity-refactor` e congelato come
@@ -134,22 +134,22 @@ blocco verificato e prima di chiudere un goal.
 
 ## Iterazione attiva
 
-- ID: `none`
-- Hotspot:
-- Modulo:
-- Motivazione:
-- Invarianti:
-- Test di caratterizzazione:
-- Metriche prima:
-- Slice pianificata:
-- File previsti:
-- Stato: `not_started`
-- Metriche dopo:
-- Verifiche:
-- Coverage:
-- Baseline diff:
-- Esito:
-- Debito residuo:
+- ID: `GIS-H8`
+- Hotspot: `frontend/src/app/gis/strumenti/tools-workspace.tsx` / `GisToolsWorkspace`
+- Modulo: GIS frontend
+- Motivazione: primo hotspot autorizzato dopo la chiusura GIS; il callable accumulava orchestrazione, validazione, JSX condizionale e paginazione.
+- Invarianti: preservati (route, catalogo, ZIP, SRID, payload, preview, publish/reject, paginazione change request, ActivityCenter, QGIS, ARIA, cleanup, contratto `{ token }`).
+- Test di caratterizzazione: `gis-tools-workspace.test.tsx` (12 test, inclusi SRID/encoding/`officialSource` e stop `has_more && returned_count === 0`).
+- Metriche prima: `GisToolsWorkspace` cyc `60`, cog `72`, LOC `226`; file `39` callable, cyc sum `147`, cog sum `134`, DP normalizzati `108`, 3 error.
+- Slice pianificata: helper puri, hook di orchestrazione, pannelli presentazionali, composer pubblico. Eseguita.
+- File previsti/toccati: `tools-workspace.tsx`, `tools-workspace-helpers.ts`, `tools-workspace-panels.tsx`, `use-gis-tools-workspace.ts`, test mirato, `PROGRESS.md`, `HOTSPOTS.md`.
+- Stato: `completed`
+- Metriche dopo: `GisToolsWorkspace` cyc `2`, cog `1`, LOC `17`; perimetro 4 file `60` callable, cyc sum `127`, cog sum `80`, DP normalizzati `67`, 0 error, 1 warning LOC sull'hook (`68`).
+- Verifiche: 12 test mirati e 15 file GIS `111` passed; typecheck e lint mirato puliti; `make quality-test` `39 passed`; coverage `100%`; ratchet merge-base `findings: []`; `git diff --check` pass; Graphify frontend aggiornato; smoke Playwright `tests/e2e/gis-strumenti.spec.ts` `1 passed`.
+- Coverage: `170/170` statement, `102/102` branch, `60/60` funzioni, `154/154` linee.
+- Baseline diff: nessuna; baseline ed eccezioni non aggiornate.
+- Esito: `IMPROVED`
+- Debito residuo: warning LOC `68` su `useGisToolsWorkspace`; hotspot GIS successivi non avviati.
 
 ## Iterazioni concluse
 
@@ -162,8 +162,20 @@ blocco verificato e prima di chiudere un goal.
 | GIS-H5 | 2026-08-26 | `FeatureSelector` | cyc `19`, cog `19`, LOC `170` | cyc `1`, cog `0`, LOC `33` | `108` test GIS; coverage mirata `100%` | nessuno |
 | GIS-H6 | 2026-08-26 | `GuidedChangeRequestComposer` | cyc `35`, cog `36`, LOC `361` | cyc `5`, cog `4`, LOC `54` | `108` test GIS; coverage mirata `100%` | nessuno |
 | GIS-H7 | 2026-08-26 | `GuidedAnnotationComposer` | cyc `22`, cog `23`, LOC `195` | cyc `4`, cog `3`, LOC `48` | `108` test GIS; coverage mirata `100%` | nessuno |
+| GIS-H8 | 2026-08-27 | `GisToolsWorkspace` | cyc `60`, cog `72`, LOC `226` | cyc `2`, cog `1`, LOC `17` | `111` test GIS; coverage mirata `100%` | nessuno |
 
 ## Modifiche funzionali verificate fuori dal programma hotspot
+
+### 2026-08-27 - GIS-H8 workspace strumenti GIS
+
+- Hotspot: `GisToolsWorkspace`; invarianti preservati per sessione senza token, caricamento catalogo e primo layer PostGIS editabile, selezione ZIP e inferenza nome tecnico, area/titolo/SRID/encoding, mapping `domainModule` (`rete -> network` sul valore non trimato), upload, preview, publish/reject con conferma, paginazione change request fino a `has_more=false` o `returned_count=0`, conteggio proposte, `historyVersion`, `GisActivityCenter`, `GisQgisTools`, testi/ARIA/busy e cleanup effetti.
+- Slice: validazione e payload in helper puri; catalogo, upload, preview, conferma e ciclo paginato isolati in handler di modulo; pannelli presentazionali per hero, upload, preview/azioni e proposte. Il contratto pubblico resta `GisToolsWorkspace({ token })` da `tools-workspace.tsx`. Nessun `useMemo`/`useCallback`.
+- Metrica obiettivo: componente principale cyclomatic `60 -> 2`, cognitive `72 -> 1`, LOC `226 -> 17`; le tre violation error-level sono eliminate. Il massimo residuo della responsabilita e LOC `68` sull'hook (`warning`), senza violation error-level. `buildShapefileUpload` resta a cyclomatic `8` e cognitive `11`, sotto soglia warning.
+- Anti-trasferimento sul perimetro dei quattro file: callable `39 -> 60`, somma cognitive `134 -> 80`, somma cyclomatic grezza `147 -> 127` e decision point normalizzati `108 -> 67`; violation error-level `3 -> 0` e warning callable `4 -> 1`. Il file pubblico scende da LOC `269` a `29`; i tre nuovi moduli hanno LOC `104`, `133` e `281`, tutti sotto la soglia file warning di `500`.
+- Verifiche: `12` test mirati e `15` file con `111` test GIS passati; typecheck frontend e lint mirato puliti; `39` test del quality tooling passati; coverage mirata dei quattro runtime `100%` con `170/170` statement, `102/102` branch, `60/60` funzioni e `154/154` linee.
+- Ratchet autorevole contro il merge-base `ae889f0405dba8cc3fe246f28d0c201384f02d3d` (`BASE_REF=main`): `findings: []`, exit `0`. Il working tree include modifiche concorrenti non GIS (SISTER, scheduler, compose, docs worker) che non appartengono a questa slice; il gate sulle file cambiate non ha introdotto finding sul perimetro H8. Baseline ed eccezioni non modificate. `complexity-check` globale sui quattro file segnala solo `ambiguous_fingerprint` su callback JSX anonime gia note, senza nuove violation error-level.
+- Graphify frontend aggiornato: `5.359` nodi, `13.271` archi e `187` community, senza ulteriori variazioni topologiche al re-run. Refresh platform docs `PASS`: `1.198` nodi, `2.669` archi e `92` community (`102` file da cache, `8` riestratti, chunk semantico completato con `gpt-5.4-mini`). Esito GIS-H8: `IMPROVED`.
+- Documentazione piattaforma: `docs/GIS_PLATFORM_PROGRESS.md` registra la slice H8, le verifiche 2026-08-27 e il prossimo hotspot `GisLayerViewer` senza avviarlo.
 
 ### 2026-08-26 - GIS-H7 wizard annotazioni
 
@@ -438,8 +450,11 @@ blocco verificato e prima di chiudere un goal.
 
 ## Prossima azione
 
-Revisionare e integrare il recupero Presenze su `main`, poi applicare il ratchet
-alle feature in corso senza avviare automaticamente hotspot applicativi.
+Hotspot GIS successivo consigliato, senza avviarlo: `GisLayerViewer` in
+`frontend/src/app/gis/catalogo/layer-viewer.tsx`. Non aprire in questa iterazione
+`list_layer_features`, `GisActivityCenter`, `geometryFromCoordinates`,
+`catalogo/page.tsx` o `services.py`. Le modifiche concorrenti nel working tree
+restano escluse.
 
 ## Functional maintenance - SISTER visure reliability and Profilo A (2026-08-20)
 
@@ -588,3 +603,20 @@ alle feature in corso senza avviare automaticamente hotspot applicativi.
 - Verifica finale del fix GIS: `15 passed`; `101/101` statement, `78/78` branch, `23/23` funzioni e `83/83` righe, `100%`; regressione frontend completa confermata a `149` file e `1447` test verdi.
 - Graphify: Presenze code `643` nodi e `1989` archi; Catasto code `871` nodi e `2097` archi; frontend finale `4521` nodi, `11051` archi e `185` community; refresh Catasto docs, Presenze docs e platform docs `PASS`.
 - Verifiche residue: backend `compileall` `PASS`; `git diff --check` `PASS`.
+
+## Tooling - worker coverage CI gate (2026-08-27)
+
+- Scope: solo tooling, test e documentazione; nessuna modifica ai runtime,
+  contratti, database, concorrenza o baseline complessita.
+- `make test-worker` esegue i 22 file pytest worker in processi distinti,
+  combina statement e branch coverage ed esclude test/cache dagli artifact.
+- `.github/workflows/backend.yml` installa le dipendenze worker, esegue il
+  target, pubblica JSON/XML e applica il gate changed-file al 100% tramite
+  `scripts/check_changed_worker_coverage.py`.
+- Validazione: `404 passed`; otto runtime worker modificati al 100%; report
+  completo runtime worker al 93% combinato, mantenuto warn-only per il debito
+  legacy. Checker CI: `65/65` statement, `24/24` branch, 100%, `7 passed`.
+- `make quality-test`: `46 passed`; compile, workflow YAML, Compose e
+  `git diff --check`: `PASS`.
+- Baseline complexity, eccezioni ed esclusioni: `NONE`; nessun runtime nel
+  perimetro di questa estensione del tooling.

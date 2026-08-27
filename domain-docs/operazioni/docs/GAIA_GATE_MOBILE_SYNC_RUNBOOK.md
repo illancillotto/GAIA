@@ -36,6 +36,7 @@ GATE_MOBILE_GATEWAY_BASE_URL=https://static.186.92.233.167.clients.your-server.d
 GATE_MOBILE_CONNECTOR_TOKEN=<token GAIA del gateway>
 GATE_MOBILE_SYNC_ENABLED=true
 GATE_MOBILE_SYNC_TIMEOUT_SECONDS=20
+GATE_MOBILE_SYNC_INTERVAL_SECONDS=300
 ```
 
 Nota operativa:
@@ -43,38 +44,28 @@ Nota operativa:
 - `GATE_MOBILE_CONNECTOR_TOKEN` resta il valore canonico condiviso con il team Gate
 - lato backend GAIA il token LAN `/api/mobile-sync/*` usa `MOBILE_CONNECTOR_TOKEN` se presente, altrimenti fa fallback su `GATE_MOBILE_CONNECTOR_TOKEN`
 - quindi nel setup attuale `MOBILE_CONNECTOR_TOKEN` puo restare vuoto se si vuole gestire un solo segreto
-- il job viene eseguito con `docker compose exec` dentro il container `backend`
-- dopo ogni modifica a `/opt/gaia/.env` il container `backend` va ricreato, altrimenti il nuovo token non entra nel processo
+- il job e posseduto dal servizio Compose singleton `gate-mobile-sync`
+- dopo una modifica alle variabili Gate va ricreato `gate-mobile-sync`, non il backend HTTP
 
 Comando di riallineamento container:
 
 ```bash
 cd /opt/gaia
-docker compose --env-file /opt/gaia/.env up -d backend
+docker compose --env-file /opt/gaia/.env up -d gate-mobile-sync
 ```
 
-## Installazione timer systemd
+## Migrazione dal timer systemd
 
-Modalita preferita: `systemd timer` ogni 5 minuti.
-
-File repository:
-
-- `deploy/systemd/gaia-gate-mobile-sync.service.tpl`
-- `deploy/systemd/gaia-gate-mobile-sync.timer`
-- `scripts/install_gate_mobile_sync_timer.sh`
-
-Installazione sul server CED:
+Prima di avviare il servizio Compose disabilitare l'eventuale ownership host:
 
 ```bash
+sudo systemctl disable --now gaia-gate-mobile-sync.timer
+sudo systemctl disable --now gaia-gate-mobile-sync.service
 cd /opt/gaia
-sudo CED_PROJECT_DIR=/opt/gaia ENV_FILE=/opt/gaia/.env ./scripts/install_gate_mobile_sync_timer.sh
+docker compose --env-file /opt/gaia/.env up -d gate-mobile-sync
 ```
 
-Il service generato esegue:
-
-```bash
-docker compose --env-file /opt/gaia/.env exec -T backend python -m app.scripts.gate_mobile_sync
-```
+Timer host e servizio Compose non devono essere attivi contemporaneamente.
 
 ## Verifica manuale
 
@@ -88,7 +79,7 @@ Run manuale:
 
 ```bash
 cd /opt/gaia
-docker compose --env-file /opt/gaia/.env exec -T backend python -m app.scripts.gate_mobile_sync
+docker compose --env-file /opt/gaia/.env run --rm --no-deps gate-mobile-sync python -m app.scripts.gate_mobile_sync
 ```
 
 Preview candidati console GATE da giornaliere, senza modificare il DB:
@@ -123,17 +114,16 @@ Esito atteso nel log:
 gate-mobile sync completed: tasks=<n> operators_pushed=<n>
 ```
 
-Verifica timer:
+Verifica servizio:
 
 ```bash
-systemctl status gaia-gate-mobile-sync.timer --no-pager
-systemctl list-timers gaia-gate-mobile-sync.timer --all
-journalctl -u gaia-gate-mobile-sync.service -n 50 --no-pager
+docker compose ps gate-mobile-sync
+docker compose logs --tail 50 gate-mobile-sync
 ```
 
 Evidenza del primo run automatico riuscito:
 
-- salvare l'output di `journalctl -u gaia-gate-mobile-sync.service -n 20 --no-pager`
+- salvare l'output di `docker compose logs --tail 20 gate-mobile-sync`
 - confermare la presenza della riga `gate-mobile sync completed`
 - annotare `operators_pushed=<n>` e timestamp del run
 
@@ -143,20 +133,20 @@ Procedura consigliata:
 
 1. Generare o recuperare il nuovo connector token dal lato gateway con canale sicuro del CED.
 2. Aggiornare `GATE_MOBILE_CONNECTOR_TOKEN` in `/opt/gaia/.env`.
-3. Ricreare il backend:
+3. Ricreare il servizio Gate Mobile:
 
 ```bash
 cd /opt/gaia
-docker compose --env-file /opt/gaia/.env up -d backend
+docker compose --env-file /opt/gaia/.env up -d gate-mobile-sync
 ```
 
 4. Eseguire un run manuale:
 
 ```bash
-docker compose --env-file /opt/gaia/.env exec -T backend python -m app.scripts.gate_mobile_sync
+docker compose --env-file /opt/gaia/.env run --rm --no-deps gate-mobile-sync python -m app.scripts.gate_mobile_sync
 ```
 
-5. Se il run e corretto, lasciare proseguire il timer.
+5. Se il run e corretto, lasciare proseguire il runner Compose.
 6. Revocare il token precedente sul gateway.
 
 Regole:

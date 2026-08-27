@@ -179,10 +179,14 @@ L’applicazione gira tramite Docker Compose con questi servizi:
 
 - `frontend`
 - `backend`
+- `platform-scheduler`
+- `gate-mobile-sync`
+- `presenze-worker`
 - `postgres`
 - `nginx`
 - `elaborazioni-worker-visure`
 - `elaborazioni-worker-runtime`
+- `elaborazioni-worker-poste`
 - `elaborazioni-worker-autodoc`
 - `scanner`
 - `arp-helper`
@@ -236,14 +240,27 @@ mantiene sempre un utente applicativo iniziale utilizzabile.
 All'avvio riallinea anche il catalogo `sections` e i default per ruolo dei moduli
 quando la tabella `sections` e disponibile, evitando `403` dovuti a nuove aree
 applicative presenti nel codice ma non ancora bootstrapate nel database locale.
+I quattro processi Uvicorn sono esclusivamente HTTP: il lifespan non registra
+APScheduler. Tutti i trigger periodici applicativi sono posseduti dal servizio
+singleton `platform-scheduler`, costruito dalla stessa immagine backend. Questo
+servizio sostituisce il precedente runner dedicato al solo export GIS e registra
+anche i trigger Catasto, Elaborazioni, Presenze, Network, Utenze e Wiki.
 I job monitorabili non vengono piu eseguiti nel processo web: le API
 creano o riaccodano record persistenti e i container tecnici dedicati
 li prelevano dal database, isolando le elaborazioni massive dai worker Uvicorn.
 La separazione minima corrente e:
 
 - `elaborazioni-worker-visure`: test connessione SISTER, run AdE, bulk search catastali e batch visure
-- `elaborazioni-worker-runtime`: job Capacitas, import REGISTRY e job Poste Online (`runtime,poste`) con scraping Playwright fuori dal backend web
+- `elaborazioni-worker-runtime`: job Capacitas e import REGISTRY (`runtime`)
+- `elaborazioni-worker-poste`: soli job Poste Online e relativo scraping Playwright
 - `elaborazioni-worker-autodoc`: sync massiva AUTODOC mezzi
+
+La coda Presenze usa claim `FOR UPDATE SKIP LOCKED`, lease con heartbeat,
+retry/backoff e `lease_generation` come fencing token. Gate Mobile e un servizio
+periodico Compose e non entra piu nel container `backend` tramite timer host.
+Visure applica un cap configurabile alle sessioni browser concorrenti prima dei
+budget CPU, memoria e PID. I valori e il rollout sono documentati in
+`docs/WORKER_OPERATIONS_RUNBOOK.md`.
 
 ### Presenza utenti GAIA
 Per il monitoraggio applicativo degli utenti autenticati e stato introdotto un meccanismo MVP di presenza basato su heartbeat:

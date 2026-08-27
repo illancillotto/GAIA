@@ -1,5 +1,12 @@
 # Piano Implementazione: AutoSync Visure Particelle a Ruolo
 
+> Evoluzione runtime 2026-08-27: i trigger autosync sono posseduti dal servizio
+> singleton `platform-scheduler`, non dai processi Uvicorn. La milestone di
+> performance ha introdotto single-flight PostgreSQL per scheduler, run-now e
+> refresh manuale, refresh incrementale della sorgente e status read-only
+> aggregato. Lo stato trasversale e in
+> `docs/WORKER_ARCHITECTURE_PROGRESS.md`.
+
 ## Obiettivo
 
 Introdurre in `Elaborazioni` un flusso aggiuntivo che, sfruttando il runtime visure esistente, mantenga allineato nel tempo il download delle visure per tutte le particelle presenti a ruolo.

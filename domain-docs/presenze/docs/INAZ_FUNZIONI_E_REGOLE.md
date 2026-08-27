@@ -231,6 +231,19 @@ Regole:
 - non deve coprire totale o footer;
 - preferire firma nel template, altrimenti supportare overlay configurabile.
 
+## Ownership worker e recovery
+
+Le sincronizzazioni persistite in `presenze_sync_jobs` sono prelevate dal
+servizio dedicato `presenze-worker` con `FOR UPDATE SKIP LOCKED`. Ogni claim
+assegna `worker_id`, `lease_token`, heartbeat, scadenza e incrementa
+`lease_generation`; questa generation e anche il version token SQLAlchemy e
+impedisce a un processo stale di committare dopo recovery o cancellazione.
+
+Una lease scaduta viene riaccodata con backoff finche restano tentativi; al
+raggiungimento di `max_attempts` il job e l'import collegato diventano `failed`.
+Il supervisore rinnova solo le lease dei child ancora attivi e da lui posseduti.
+I default e la procedura operativa sono in `docs/WORKER_OPERATIONS_RUNBOOK.md`.
+
 ## Comandi operativi utili
 
 Leggere codice evento banca ore:
