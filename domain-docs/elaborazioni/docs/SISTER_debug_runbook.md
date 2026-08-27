@@ -447,7 +447,9 @@ forma compatta nella lista dei batch recenti.
 Semantica dei valori:
 
 - `duration_seconds`: dal primo evento `execution_start` disponibile, con
-  fallback a `started_at`, fino a `completed_at` o all'istante corrente;
+  fallback a `started_at`; usa `completed_at` solo per batch terminali e
+  l'istante corrente per batch `pending` o `processing`, ignorando eventuali
+  timestamp di chiusura rimasti da un run precedente;
 - `completed_per_hour`: sole visure completate divise per la durata effettiva;
 - `processed_per_hour`: tutti gli esiti terminali divisi per la durata;
 - `progress_percent`: esiti terminali sul totale delle richieste;

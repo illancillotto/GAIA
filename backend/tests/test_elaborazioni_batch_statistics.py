@@ -38,8 +38,8 @@ def request(status: str, attempts: int, credential_id: UUID | None = None):
     )
 
 
-def batch(*, started_at: datetime | None, completed_at: datetime | None = None):
-    return SimpleNamespace(id=uuid4(), started_at=started_at, completed_at=completed_at)
+def batch(*, started_at: datetime | None, completed_at: datetime | None = None, status: str = "processing"):
+    return SimpleNamespace(id=uuid4(), started_at=started_at, completed_at=completed_at, status=status)
 
 
 def test_build_batch_statistics_reports_live_rates_eta_and_historical_credentials() -> None:
@@ -127,15 +127,23 @@ def test_build_batch_statistics_handles_empty_and_completed_batches() -> None:
     )
     fallback = build_batch_statistics(
         FakeDb(credentials=[fallback_credential]),
-        batch(started_at=now - timedelta(hours=1), completed_at=now),
+        batch(started_at=now - timedelta(hours=1), completed_at=now, status="completed"),
         [fallback_request],
     )
     assert fallback["credentials_used"][0]["execution_count"] == 1
 
+    restarted = build_batch_statistics(
+        FakeDb(),
+        batch(started_at=now - timedelta(hours=4), completed_at=now - timedelta(hours=3)),
+        [request("processing", 1)],
+        now=now,
+    )
+    assert restarted["duration_seconds"] == 14400
+
     completed_request = request("not_found", 0)
     completed = build_batch_statistics(
         FakeDb(events=[(None, None, now + timedelta(hours=2))]),
-        batch(started_at=now + timedelta(hours=1), completed_at=now),
+        batch(started_at=now + timedelta(hours=1), completed_at=now, status="completed"),
         [completed_request],
         now=now + timedelta(hours=3),
     )

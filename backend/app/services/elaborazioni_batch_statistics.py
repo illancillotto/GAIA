@@ -13,6 +13,7 @@ from app.modules.elaborazioni.telemetry_models import SisterPortalEvent
 
 
 TERMINAL_STATUSES = {"completed", "failed", "skipped", "not_found"}
+BATCH_TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
@@ -105,7 +106,8 @@ def _resolve_duration_seconds(
         started_at = first_execution_at
     if started_at is None:
         return 0
-    end_at = _as_utc(batch.completed_at) or _as_utc(now) or datetime.now(UTC)
+    completed_at = _as_utc(batch.completed_at) if batch.status in BATCH_TERMINAL_STATUSES else None
+    end_at = completed_at or _as_utc(now) or datetime.now(UTC)
     return max(round((end_at - started_at).total_seconds()), 0)
 
 
