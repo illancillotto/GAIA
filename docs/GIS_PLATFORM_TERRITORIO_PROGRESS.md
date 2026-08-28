@@ -14,15 +14,9 @@ sono stati verificati; il seed documentale e stato ristretto a `21` layer
 ammissibili (`14` RAS vettoriali, `4` RAS raster, `3` AdE).
 
 P1 e implementato: registro sorgenti, proxy governato, cache, health, nuovi
-source type e divieti backend sono coperti al `100%`. M21 non e dichiarata
-chiusa perche il ratchet di complessita fallisce, ma la verifica del 2026-08-28
-attribuisce il fallimento a una baseline stale rispetto a `main`, non alla
-slice. M22-M25 non sono avviate.
-
-Attenzione allo stato del codice: il lavoro M21 e presente solo nel working tree
-e non e committato. Non si trova ne su `main` ne sul branch
-`feature/gis-territorio-external-layers-m21`, che punta a `09160b81` e non
-contiene `external_sources.py` ne `external_proxy.py`.
+source type e divieti backend sono coperti al `100%`. La change quality separata
+e stata integrata in `main` a `3d373f28`; M21 e stata riallineata, congelata nel
+commit `07d9f7c4` e chiusa con ratchet verde. M22-M25 non sono avviate.
 
 La base M1-M20 della GIS Platform e in esercizio e non richiede modifiche
 preliminari: `source_type` e gia una colonna `String(32)` libera in `GisLayer` e
@@ -34,7 +28,7 @@ schema catalogo.
 | milestone | contenuto | stato | branch |
 | --- | --- | --- | --- |
 | P0 | Verifica licenze e disponibilita sorgenti | completato il 2026-08-27 | - |
-| M21 | Fondazione layer esterni: source type, proxy, cache, health | implementata, verifica complexity bloccata il 2026-08-28 | `feature/gis-territorio-external-layers-m21` |
+| M21 | Fondazione layer esterni: source type, proxy, cache, health | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-external-layers-m21` |
 | M22a | Seed catalogo `territorio` e `GET /gis/territorio/layers` | da implementare | `feature/gis-territorio-catalog-seed-m22` |
 | M22b | Pannello strati e ortofoto storiche in mappa | da implementare | `feature/gis-territorio-layer-panel-m22` |
 | M23a | Interrogazione puntuale multi-sorgente, backend | da implementare | `feature/gis-territorio-interrogazione-m23` |
@@ -73,73 +67,48 @@ decisione esplicita di autorevolezza prima del seed.
 Verifiche P1 eseguite il 2026-08-28:
 
 - `make lint-backend`: exit `0`;
-- `pytest` mirato su config, runtime health, sorgenti, proxy e API GIS: `112`
-  test verdi;
-- coverage selettiva sui runtime modificati: `2529` statement, `0` mancanti,
+- suite M21 mirata su config, runtime health, sorgenti, proxy e API GIS: verde;
+- coverage selettiva sui runtime modificati: `2403` statement, `0` mancanti,
   totale `100%`;
 - `external_sources.py`: `98/98`, `100%`;
 - `external_proxy.py`: `202/202`, `100%`;
-- `config.py`: `306/306`, `schemas.py`: `412/412`, `router.py`: `150/150`,
-  `runtime_health.py`: `132/132`, `services.py`: `1229/1229`;
-- `make complexity-changed BASE_REF=origin/main`: exit `1`;
-- `make complexity-ratchet BASE_REF=origin/main`: exit `1`, merge-base
-  `840c010001e0aa45434539c4cf96065de61bdc41`.
-- `make graphify-backend`: exit `0`, `7584` nodi, `18685` archi, `442`
-  community;
-- `make graphify-platform-docs`: exit `0`, `112` file da cache, `4`
-  riestratti, `1466` nodi, `3185` archi, `107` community.
+- `config.py`: `283/283`, `schemas.py`: `412/412`, `router.py`: `150/150`,
+  `runtime_health.py`: `132/132`, `services.py`: `1126/1126`;
+- `make complexity-ratchet BASE_REF=main`: exit `0`, merge-base
+  `3d373f28dbabeb475efbc5dfd41d53f4d8066586`, nessun finding;
+- `make quality-test`: `46 passed`;
+- `git diff --check`: exit `0`.
 
-Il ratchet segnala aumenti su callable non modificate dal diff M21, tra cui
-`services._validate_shapefile_zip` (`loc 63 -> 97`) e funzioni legacy del
-router. La baseline non e stata rigenerata o aggiornata, in conformita al
-quality ratchet.
+### Audit Del Drift E Chiusura Ratchet, 2026-08-28
 
-### Diagnosi Del Blocco Ratchet, Verificata Il 2026-08-28
-
-La prima registrazione attribuiva il blocco genericamente a un disallineamento
-tra baseline e merge-base. La verifica successiva dimostra che una parte
-preesistente del delta e gia presente su `main`; non dimostra invece, da sola,
-che ogni variazione M21 sia conforme al ratchet.
+Il primo ratchet rosso non e stato risolto rigenerando la baseline. P1 e rimasta
+congelata mentre il drift preesistente e stato analizzato sul branch separato
+`quality/gis-services-baseline-drift-20260828`, a partire dalla baseline sorgente
+`b1d4a988`.
 
 Evidenze:
 
-- la prima esecuzione usava `BASE_REF=origin/main` mentre `main` locale era
-  avanti di `4` commit non correlati (worker, elaborazioni, refactor GIS-H8):
-  il gate vedeva quel lavoro come parte del diff M21. Rieseguito con
-  `BASE_REF=main`, i finding fuori perimetro su worker e frontend spariscono;
-- `make complexity-baseline-verify` risponde
-  `baseline_reproducible_ignoring_timestamp_commit: false` anche su un worktree
-  di `main` pulito, senza alcun file M21 presente;
-- l'aritmetica dei delta esclude M21 come causa:
+- tutto il drift GIS preesistente deriva da `268234f9`;
+- `services.py` era cresciuto da `2304` a `3145` LOC: `+841`, non `+834`;
+- `74` callable, per `521` LOC aggiunte, hanno fingerprint AST identico e sono
+  state classificate come sola riformattazione;
+- `_default_export_path` aveva una regressione reale di `+1` cyclomatic, `+1`
+  cognitive e `+6` LOC;
+- nove callable erano nuove, per `301` LOC; le nuove violation reali erano in
+  `_feature_selector_columns` e `list_layer_features`;
+- non sono emersi errori di matching.
 
-| file | delta segnalato | contributo reale M21 | preesistente |
-| --- | --- | --- | --- |
-| `backend/app/core/config.py` | `653 -> 719` (`+66`) | `+30` | `+36` |
-| `backend/app/modules/gis/services.py` | `2304 -> 3183` (`+879`) | `+45` netto | `+834` |
+La change quality ha separato settings, query, costruzione delle response e
+supporto, ripristinando la formattazione AST-equivalente e creando headroom
+reale. I commit `691bec1d`, `be143751` e `3d373f28` sono stati integrati in
+`main`; la baseline `config/code-quality/complexity-baseline.json` e rimasta
+invariata.
 
-M21 vale circa l'`8%` del delta LOC osservato sui due file. Il resto era gia in
-`main` prima della slice, ma deve essere classificato prima di qualsiasi
-riallineamento della baseline.
-
-- `services._validate_shapefile_zip` non e toccata dal diff M21: la modifica a
-  `services.py` e additiva e introduce solo `resolve_external_layer_for_proxy` e
-  `_ensure_change_request_target_is_internal`;
-- il branch `gaia/presenze-gate-canonical-export`, in un worktree separato,
-  contiene a `623ae160` una propria modifica della baseline. Questo impone di
-  evitare aggiornamenti concorrenti non coordinati, ma non costituisce evidenza
-  che il drift di `main` sia gia stato analizzato o approvato.
-
-Verifica indipendente della slice, eseguita il 2026-08-28 con
-`backend/.venv/bin/python -m pytest` su `test_gis_external_sources.py`,
-`test_gis_external_proxy.py`, `test_gis_platform_api.py`,
-`test_gis_runtime_health.py` e `test_config.py`: `112 passed`. Coverage sui due
-runtime nuovi: `external_proxy.py` `202/202`, `external_sources.py` `98/98`,
-totale `100%`.
-
-Conseguenza: il gate rosso non puo essere attribuito integralmente a M21, ma
-M21 non puo ancora essere dichiarata conforme. La slice resta congelata e non
-chiusa finche il drift preesistente non e classificato in una change quality
-separata, il branch non e riallineato e il ratchet autorevole non passa.
+`make complexity-baseline` e stato tentato soltanto dopo il ratchet verde, ma
+ha rifiutato correttamente l'aggiornamento per oltre cento regressioni non
+classificate fuori dal perimetro GIS. Nessun JSON e stato modificato
+manualmente. Dopo il riallineamento, M21 e stata congelata in `07d9f7c4` e il
+ratchet autorevole contro `main` e passato senza finding.
 
 Comando coverage eseguito:
 
@@ -286,27 +255,5 @@ servizi pubblici e AdE dichiara esplicitamente un limite concorrente.
 
 Non aprire P2.
 
-La prossima azione e aprire da `main` una change quality dedicata che analizzi
-il drift preesistente, in particolare le almeno `834` LOC di
-`backend/app/modules/gis/services.py`. La baseline non deve essere rigenerata
-automaticamente ne aggiornata dentro M21.
-
-Prima di modificarla va coordinato il lavoro presente sul branch
-`gaia/presenze-gate-canonical-export`, che tocca lo stesso file: due
-aggiornamenti indipendenti produrrebbero un conflitto sull'artefatto che
-definisce il debito accettato.
-
-Vincoli della change quality:
-
-- eseguire il ratchet sempre con `BASE_REF=main`, non `origin/main`, quando
-  `main` locale e avanti rispetto al remoto: altrimenti il gate attribuisce alla
-  slice lavoro di terzi;
-- classificare ogni variazione come debito gia approvato, regressione da
-  correggere oppure errore di matching;
-- aggiornare la baseline solo dopo un ratchet verde e una review del diff,
-  senza assorbire automaticamente il drift;
-- M21 resta fuori da quella change.
-
-Dopo l'integrazione della change quality in `main`, M21 deve essere riallineata
-e il ratchet rieseguito. Solo un risultato verde consente di chiudere M21; P2
-resta fermo.
+M21 e chiusa con ratchet verde. P2 resta fermo e potra essere aperto soltanto su
+richiesta esplicita, partendo dallo stato integrato e verificato di M21.
