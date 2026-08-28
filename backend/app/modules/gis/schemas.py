@@ -281,6 +281,40 @@ class GisTerritorioLayerListResponse(BaseModel):
     total: int
 
 
+class GisInterrogazioneRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    lon: float
+    lat: float
+    srid: int = Field(default=4326, ge=1)
+    layer_ids: list[UUID] | None = None
+    radius_m: float | None = Field(default=None, gt=0, le=100_000)
+
+
+class GisInterrogazioneSourceResponse(BaseModel):
+    source_id: str
+    title: str
+    status: Literal["ok", "empty", "failed", "skipped"]
+    duration_ms: float = Field(ge=0)
+    data: list[dict[str, Any]] = Field(default_factory=list)
+    message: str | None = None
+
+
+class GisInterrogazioneLevelResponse(BaseModel):
+    key: Literal["gaia", "catasto_ufficiale", "territorio"]
+    sources: list[GisInterrogazioneSourceResponse]
+
+
+class GisInterrogazioneResponse(BaseModel):
+    lon: float
+    lat: float
+    srid: int
+    radius_m: float
+    gaia: GisInterrogazioneLevelResponse
+    catasto_ufficiale: GisInterrogazioneLevelResponse
+    territorio: GisInterrogazioneLevelResponse
+
+
 class GisLayerPermissionUpsert(BaseModel):
     principal_type: Literal["role", "user"]
     principal_key: str = Field(min_length=1, max_length=120)

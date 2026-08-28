@@ -561,6 +561,20 @@ Fondazione M21:
   `export.shapefile=false`; change request ed export restano inoltre bloccati
   nel servizio backend.
 
+Interrogazione backend M23a:
+
+- `backend/app/modules/gis/interrogazione/` separa modelli, sonde locali,
+  adapter remoti e orchestrazione dal servizio GIS legacy;
+- le sonde locali interrogano particella, distretto, punto di consegna, rete,
+  DUI, ruolo e utenze con SQL PostGIS parametrizzato;
+- WFS `GetFeature` e WMS `GetFeatureInfo` girano in parallelo con timeout
+  individuale; una failure esterna resta nel risultato, mentre una failure del
+  livello GAIA termina la richiesta;
+- il catalogo remoto e filtrato con `can_view`; i layer visual-only e quelli
+  oltre il limite configurato sono restituiti come `skipped` senza chiamata;
+- il flag `GIS_INTERROGAZIONE_ENABLED` resta `false` per default. Timeout,
+  raggio e limite remoto hanno default rispettivamente `8 s`, `150 m` e `12`.
+
 Superfici introdotte dal programma:
 
 - `GET /gis/external/{layer_id}/wms` e `/wfs`, proxy governato;

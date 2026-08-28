@@ -900,7 +900,8 @@ Evidenza M22b:
 
 ## M23 - Interrogazione Puntuale Multi-Sorgente
 
-Stato: da implementare.
+Stato: backend M23a completato il 2026-08-28 sul branch
+`feature/gis-territorio-interrogazione-m23`; frontend M23b da implementare.
 
 Obiettivo:
 
@@ -924,6 +925,18 @@ Exit criteria:
 - layer `wms_visual_only` mai interrogati;
 - risultato vuoto e sorgente non disponibile distinti in UI;
 - il popup particella resta invariato.
+
+Evidenza M23a:
+
+- package backend separato da `services.py`, con sei sonde locali PostGIS e
+  adapter WFS/WMS isolati;
+- `POST /gis/interroga` restituisce `gaia`, `catasto_ufficiale` e `territorio`,
+  con stato e durata per sorgente;
+- timeout individuale HTTP, parallelismo, limite remoto, `can_view` e
+  `wms_visual_only` verificati con client e sessioni simulati;
+- suite integrata `91 passed`, coverage runtime `1129/1129`, quality test e
+  complexity ratchet contro M22b verdi;
+- popup Catasto, frontend e baseline di complessita invariati.
 
 ## M24 - Scheda Territoriale Particella
 

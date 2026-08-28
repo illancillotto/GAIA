@@ -1,7 +1,7 @@
 # GAIA GIS Platform - Progress Territorio Esterno
 
 > Ultimo aggiornamento: 2026-08-28.
-> Branch corrente: `feature/gis-territorio-external-layers-m21`.
+> Branch corrente: `feature/gis-territorio-interrogazione-m23`.
 >
 > Piano tecnico: `docs/GIS_PLATFORM_TERRITORIO_PLAN.md`.
 > Riferimento dati: `docs/GIS_PLATFORM_TERRITORIO_CATALOGO.md`.
@@ -24,8 +24,12 @@ restituisce solo quelli attivi e visibili, raggruppati per tema.
 
 P3 e completato sul branch `feature/gis-territorio-layer-panel-m22`: pannello,
 opacita, legende autenticate, attribuzioni e selettore ortofoto sono integrati
-nelle mappe Catasto senza modificare l'hotspot `MapContainer.tsx`. M23-M25 non
-sono ancora avviate.
+nelle mappe Catasto senza modificare l'hotspot `MapContainer.tsx`.
+
+P4/M23a e completato sul branch
+`feature/gis-territorio-interrogazione-m23`: `POST /gis/interroga` aggrega le
+sonde GAIA e le sorgenti remote nei livelli `gaia`, `catasto_ufficiale` e
+`territorio`. M23b-M25 non sono ancora avviate.
 
 La base M1-M20 della GIS Platform e in esercizio e non richiede modifiche
 preliminari: `source_type` e gia una colonna `String(32)` libera in `GisLayer` e
@@ -40,7 +44,7 @@ schema catalogo.
 | M21 | Fondazione layer esterni: source type, proxy, cache, health | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-external-layers-m21` |
 | M22a | Seed catalogo `territorio` e `GET /gis/territorio/layers` | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-catalog-seed-m22` |
 | M22b | Pannello strati e ortofoto storiche in mappa | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-layer-panel-m22` |
-| M23a | Interrogazione puntuale multi-sorgente, backend | da implementare | `feature/gis-territorio-interrogazione-m23` |
+| M23a | Interrogazione puntuale multi-sorgente, backend | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-interrogazione-m23` |
 | M23b | Pannello interrogazione, frontend | da implementare | `feature/gis-territorio-interrogazione-ui-m23` |
 | M24 | Scheda territoriale particella in PDF | da implementare | `feature/gis-territorio-scheda-m24` |
 | M25 | Strumenti di campo e propagazione QGIS | da implementare | `feature/gis-territorio-strumenti-m25` |
@@ -72,6 +76,43 @@ governa internamente. La sovrapposizione e utile come controllo, ma richiede una
 decisione esplicita di autorevolezza prima del seed.
 
 ## Verifiche
+
+Verifiche P4 eseguite il 2026-08-28:
+
+- tre suite obbligatorie: `13 passed` su sonde locali, sonde remote e servizio;
+- suite integrata con config, sorgenti esterne e API GIS: `91 passed`;
+- coverage sui runtime modificati: `1129` statement, `0` mancanti, totale
+  `100%`;
+- `make lint-backend`: exit `0`;
+- `make quality-test`: `46 passed`;
+- `make complexity-ratchet
+  BASE_REF=feature/gis-territorio-layer-panel-m22`: exit `0`, baseline commit
+  `2b6f5651`, nessun finding;
+- `make graphify-backend`: exit `0`, `7209` nodi, `17448` archi e `427`
+  community;
+- `make graphify-platform-docs`: exit `0`, `388` nodi, `480` archi e `54`
+  community;
+- `git diff --check`: exit `0`.
+
+Il primo ratchet P4 ha rilevato una sola regressione file-level in
+`backend/app/core/config.py`, LOC `653 -> 661`. La baseline non e stata
+aggiornata. Le impostazioni GIS esterne M21 e le nuove impostazioni M23 sono
+state riallocate nel mixin esistente `app/core/gis_settings.py`, senza cambiare
+alias, default o validazioni; il ratchet successivo e verde. `services.py`, il
+popup Catasto e il frontend sono invariati.
+
+Decisioni M23a:
+
+- ogni sonda restituisce `ok`, `empty`, `failed` o `skipped`, durata, dati e
+  messaggio; solo il fallimento del livello locale GAIA produce errore API;
+- le sonde WFS usano un filtro spaziale `BBOX`, le sonde WMS usano
+  `GetFeatureInfo`; JSON e testo/HTML sono normalizzati;
+- `wms_visual_only` non genera HTTP e i layer interrogabili oltre il limite
+  restano visibili come `skipped`, senza omissioni silenziose;
+- AdE confluisce in `catasto_ufficiale`; gli altri layer ammessi confluiscono
+  in `territorio`; i layer senza `can_view` non compaiono;
+- `ST_DWithin` misura in EPSG:32632 e usa un pre-filtro bbox 4326 per attivare
+  gli indici GiST esistenti.
 
 Verifiche P3 eseguite il 2026-08-28:
 
