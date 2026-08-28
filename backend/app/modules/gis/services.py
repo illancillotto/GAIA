@@ -657,7 +657,25 @@ def create_layer(db: Session, body: GisLayerCreate, current_user: ApplicationUse
     if not is_gis_admin(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required")
 
-    layer = GisLayer(
+    metadata = body.metadata
+    layer = _new_layer(body, current_user, metadata)
+    db.add(layer)
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS layer already exists") from exc
+    _write_audit(db, event_type="layer.created", actor=current_user, layer_id=layer.id, target_type="layer", target_id=layer.id)
+    db.commit()
+    db.refresh(layer)
+    return _layer_response(layer, _admin_flags())
+
+
+def _new_layer(
+    body: GisLayerCreate,
+    current_user: ApplicationUser,
+    metadata: dict[str, Any] | None,
+) -> GisLayer:
+    return GisLayer(
         workspace=_clean(body.workspace) or body.workspace,
         name=_clean(body.name) or body.name,
         title=_clean(body.title) or body.title,
@@ -675,19 +693,10 @@ def create_layer(db: Session, body: GisLayerCreate, current_user: ApplicationUse
         ogc_service_url=_clean(body.ogc_service_url),
         qgis_project_path=_clean(body.qgis_project_path),
         nas_export_root=_clean(body.nas_export_root),
-        metadata_json=body.metadata,
+        metadata_json=metadata,
         created_by_user_id=current_user.id,
         updated_by_user_id=current_user.id,
     )
-    db.add(layer)
-    try:
-        db.flush()
-    except IntegrityError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS layer already exists") from exc
-    _write_audit(db, event_type="layer.created", actor=current_user, layer_id=layer.id, target_type="layer", target_id=layer.id)
-    db.commit()
-    db.refresh(layer)
-    return _layer_response(layer, _admin_flags())
 
 
 def list_layers(
@@ -1129,22 +1138,8 @@ def update_layer_metadata(
     if not fields:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="At least one metadata field is required")
 
-    updates: dict[str, Any] = {}
-    if "title" in fields:
-        cleaned_title = _clean(body.title)
-        if cleaned_title is None:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS layer title cannot be null")
-        updates["title"] = cleaned_title
-    if "description" in fields:
-        updates["description"] = _clean(body.description)
-    if "ogc_service_url" in fields:
-        updates["ogc_service_url"] = _clean(body.ogc_service_url)
-    if "qgis_project_path" in fields:
-        updates["qgis_project_path"] = _clean(body.qgis_project_path)
-    if "nas_export_root" in fields:
-        updates["nas_export_root"] = _clean(body.nas_export_root)
-    if "metadata" in fields:
-        updates["metadata_json"] = body.metadata
+    metadata = body.metadata
+    updates = _layer_metadata_updates(body, fields, metadata)
 
     changed_fields = []
     for field, value in updates.items():
@@ -1165,6 +1160,30 @@ def update_layer_metadata(
     db.commit()
     db.refresh(layer)
     return _layer_response(layer, _admin_flags())
+
+
+def _layer_metadata_updates(
+    body: GisLayerMetadataUpdate,
+    fields: set[str],
+    metadata: dict[str, Any] | None,
+) -> dict[str, Any]:
+    updates: dict[str, Any] = {}
+    if "title" in fields:
+        cleaned_title = _clean(body.title)
+        if cleaned_title is None:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS layer title cannot be null")
+        updates["title"] = cleaned_title
+    if "description" in fields:
+        updates["description"] = _clean(body.description)
+    if "ogc_service_url" in fields:
+        updates["ogc_service_url"] = _clean(body.ogc_service_url)
+    if "qgis_project_path" in fields:
+        updates["qgis_project_path"] = _clean(body.qgis_project_path)
+    if "nas_export_root" in fields:
+        updates["nas_export_root"] = _clean(body.nas_export_root)
+    if "metadata" in fields:
+        updates["metadata_json"] = metadata
+    return updates
 
 
 def set_layer_active(db: Session, layer_id: UUID, is_active: bool, current_user: ApplicationUser) -> GisLayerResponse:

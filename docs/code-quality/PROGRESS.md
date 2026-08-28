@@ -655,3 +655,16 @@ restano escluse.
 - Esito: `IMPROVED`. Debito residuo: `services.py` resta sopra la soglia file
   legacy, ma senza crescita rispetto alla baseline; il riallineamento globale
   della baseline richiede change separate per i finding non GIS rifiutati.
+
+### Follow-up callable headroom M21
+
+- Il primo riallineamento M21 ha isolato tre aumenti LOC reali nelle callable
+  legacy `_validate_change_request_payload` (`+1`), `create_layer` (`+1`) e
+  `update_layer_metadata` (`+2`); nessun aggiornamento baseline eseguito.
+- Costruzione `GisLayer` e calcolo degli update metadata sono stati estratti in
+  `_new_layer` e `_layer_metadata_updates`. I dati, gli alias, il controllo
+  admin, l'audit e i confini di commit/flush restano invariati.
+- Test GIS/config: `52 passed`, coverage `1384/1384` statement, `100%` su
+  `services.py` e `config.py`; `make lint-backend` e `git diff --check` verdi.
+- Ratchet della follow-up contro `main@691bec1d`: `PASS`, `findings: []`.
+  Baseline, eccezioni ed esclusioni restano invariate.
