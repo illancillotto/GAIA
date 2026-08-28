@@ -110,10 +110,14 @@ describe("GisToolsWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Controlla e carica" }));
 
     await waitFor(() => expect(mocks.createGisShapefileImport).toHaveBeenCalledWith("token", expect.objectContaining({
+      file: expect.any(File),
       workspace: "rete",
       domainModule: "network",
       targetLayerName: "rilievo_rete_2026",
       targetLayerTitle: "rilievo rete 2026",
+      officialSource: "shapefile_upload",
+      sourceSrid: undefined,
+      encoding: "",
     })));
     expect(await screen.findByText("Anteprima dei primi 1 elementi")).toBeInTheDocument();
     expect(screen.getByText(/nome: Condotta A/)).toBeInTheDocument();
@@ -177,6 +181,25 @@ describe("GisToolsWorkspace", () => {
     await waitFor(() => expect(mocks.createGisShapefileImport).toHaveBeenLastCalledWith("token", expect.objectContaining({ domainModule: "catasto" })));
   });
 
+  test("uploads a valid SRID, encoding and trimmed title without rewriting domain mapping", async () => {
+    mocks.createGisShapefileImport.mockResolvedValue(importItem);
+    render(<GisToolsWorkspace token="token" />);
+    fireEvent.change(screen.getByLabelText("File shapefile ZIP"), { target: { files: [new File(["zip"], "rilievo.zip")] } });
+    fireEvent.change(screen.getByLabelText("Titolo comprensibile"), { target: { value: "  Rilievo ufficiale  " } });
+    fireEvent.change(screen.getByLabelText("Sistema coordinate"), { target: { value: "3003" } });
+    fireEvent.change(screen.getByLabelText("Codifica testo"), { target: { value: "latin1" } });
+    fireEvent.change(screen.getByLabelText("Area"), { target: { value: "riordino" } });
+    fireEvent.click(screen.getByRole("button", { name: "Controlla e carica" }));
+    await waitFor(() => expect(mocks.createGisShapefileImport).toHaveBeenCalledWith("token", expect.objectContaining({
+      workspace: "riordino",
+      domainModule: "riordino",
+      targetLayerTitle: "Rilievo ufficiale",
+      sourceSrid: 3003,
+      encoding: "latin1",
+      officialSource: "shapefile_upload",
+    })));
+  });
+
   test("creates all guided change proposals without exposing batches", async () => {
     mocks.createGisShapefileImportChangeRequests
       .mockResolvedValueOnce({ created_count: 2, existing_count: 0, returned_count: 2, has_more: true })
@@ -199,6 +222,21 @@ describe("GisToolsWorkspace", () => {
     });
     expect(screen.getByText("3 proposte create, 1 già presenti.")).toBeInTheDocument();
     expect(screen.queryByLabelText(/offset|batch/i)).not.toBeInTheDocument();
+  });
+
+  test("stops guided proposals when a page reports more results but returns none", async () => {
+    mocks.createGisShapefileImportChangeRequests.mockResolvedValueOnce({
+      created_count: 0,
+      existing_count: 2,
+      returned_count: 0,
+      has_more: true,
+    });
+    render(<GisToolsWorkspace token="token" />);
+    fireEvent.click(screen.getByRole("button", { name: "Riprendi import test" }));
+    fireEvent.change(await screen.findByLabelText("Motivo della proposta"), { target: { value: "Motivo" } });
+    fireEvent.click(screen.getByRole("button", { name: "Crea proposte di modifica" }));
+    await waitFor(() => expect(mocks.createGisShapefileImportChangeRequests).toHaveBeenCalledTimes(1));
+    expect(screen.getByText("0 proposte create, 2 già presenti.")).toBeInTheDocument();
   });
 
   test("creates proposals without duplicate notices and renders empty preview attributes", async () => {
