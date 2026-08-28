@@ -8,7 +8,6 @@ import re
 import tempfile
 from pathlib import Path
 
-
 logger = logging.getLogger(__name__)
 
 _EXPLANATION_MARKERS = {
@@ -113,7 +112,7 @@ class LLMCaptchaSolver:
             return ""
         try:
             data = json.loads(text)
-        except Exception:
+        except json.JSONDecodeError:
             return text
         if isinstance(data, dict):
             return str(data.get("result") or data.get("text") or data.get("message") or "")
@@ -132,9 +131,7 @@ class LLMCaptchaSolver:
             compact_line = "".join(ch for ch in line if ch.isalnum())
             if 4 <= len(compact_line) <= 12:
                 return compact_line
-            candidate = tokens[-1]
-            if 4 <= len(candidate) <= 12:
-                return candidate
+            return tokens[-1]
 
         raw_words = {word.lower() for word in re.findall(r"[A-Za-z]+", raw)}
         compact = "".join(ch for ch in raw if ch.isalnum())

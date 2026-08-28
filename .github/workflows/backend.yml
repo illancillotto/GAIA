@@ -7,6 +7,8 @@ on:
       - "modules/elaborazioni/worker/**"
       - "scripts/check_shared_deps.py"
       - "scripts/check_changed_backend_coverage.py"
+      - "scripts/check_changed_worker_coverage.py"
+      - "Makefile"
       - ".github/workflows/backend.yml"
   pull_request:
     paths:
@@ -14,6 +16,8 @@ on:
       - "modules/elaborazioni/worker/**"
       - "scripts/check_shared_deps.py"
       - "scripts/check_changed_backend_coverage.py"
+      - "scripts/check_changed_worker_coverage.py"
+      - "Makefile"
       - ".github/workflows/backend.yml"
 
 jobs:
@@ -44,7 +48,7 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install -r backend/requirements.txt
+        run: pip install -r backend/requirements.txt -r modules/elaborazioni/worker/requirements.txt
 
       - name: Shared dependency guardrail
         run: |
@@ -83,6 +87,29 @@ jobs:
         run: |
           python scripts/check_changed_backend_coverage.py \
             --coverage-json backend/coverage.json \
+            --base-sha "$BASE_SHA" \
+            --head-sha "$HEAD_SHA" \
+            --min-coverage 100
+
+      - name: Worker tests with isolated collection and coverage
+        run: make test-worker WORKER_PYTHON=python
+
+      - name: Upload worker coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: worker-coverage
+          path: |
+            backend/coverage-worker.json
+            backend/coverage-worker.xml
+          if-no-files-found: error
+
+      - name: Enforce changed-file worker coverage
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          python scripts/check_changed_worker_coverage.py \
+            --coverage-json backend/coverage-worker.json \
             --base-sha "$BASE_SHA" \
             --head-sha "$HEAD_SHA" \
             --min-coverage 100

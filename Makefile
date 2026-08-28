@@ -13,10 +13,13 @@ GRAPHIFY_UTENZE_DOC_MODEL = gpt-5.4-mini
 GRAPHIFY_UTENZE_DOC_FLAGS = --max-concurrency 1 --api-timeout 60
 GRAPHIFY_UTENZE_DOC_TIMEOUT = timeout --foreground 180s
 QUALITY_PYTHON ?= python3
+WORKER_PYTHON ?= backend/.venv/bin/python
+WORKER_COVERAGE_JSON ?= backend/coverage-worker.json
+WORKER_COVERAGE_XML ?= backend/coverage-worker.xml
 
 .PHONY: test-ruolo-postgres test-presenze-postgres
 
-.PHONY: up down logs rebuild backend-shell frontend-shell migrate bootstrap-admin bootstrap-domain bootstrap-sections purge-seed live-sync scheduled-live-sync local-gateway-up local-gateway-down wiki-index wiki-reindex test test-wiki coverage-wiki smoke-network-vpn-bypass backup-db-to-nas restore-db-from-nas lint lint-backend lint-frontend complexity-report complexity-check complexity-changed complexity-ratchet complexity-baseline complexity-baseline-verify complexity-ci-gate quality-test graphify-patch-openai-base-url graphify-refresh-core-code graphify-refresh-core-docs graphify-refresh-core graphify-catasto-code graphify-catasto-docs graphify-catasto-query graphify-presenze-code graphify-presenze-docs graphify-presenze-query graphify-inaz-code graphify-inaz-docs graphify-inaz-query graphify-network-code graphify-network-docs graphify-network-query graphify-operazioni-code graphify-operazioni-docs graphify-operazioni-query graphify-organigramma-code graphify-organigramma-docs graphify-organigramma-query graphify-riordino-code graphify-riordino-docs graphify-riordino-query graphify-ruolo-code graphify-ruolo-docs graphify-ruolo-query graphify-utenze-code graphify-utenze-docs graphify-utenze-query graphify-wiki-code graphify-wiki-docs graphify-wiki-docs-debug graphify-wiki-query graphify-backend graphify-backend-query graphify-frontend graphify-frontend-query graphify-docs graphify-docs-query graphify-platform-docs graphify-platform-docs-query graphify-query
+.PHONY: up down logs rebuild backend-shell frontend-shell migrate bootstrap-admin bootstrap-domain bootstrap-sections purge-seed live-sync scheduled-live-sync local-gateway-up local-gateway-down wiki-index wiki-reindex test test-worker test-wiki coverage-wiki smoke-network-vpn-bypass backup-db-to-nas restore-db-from-nas lint lint-backend lint-frontend complexity-report complexity-check complexity-changed complexity-ratchet complexity-baseline complexity-baseline-verify complexity-ci-gate quality-test graphify-patch-openai-base-url graphify-refresh-core-code graphify-refresh-core-docs graphify-refresh-core graphify-catasto-code graphify-catasto-docs graphify-catasto-query graphify-presenze-code graphify-presenze-docs graphify-presenze-query graphify-inaz-code graphify-inaz-docs graphify-inaz-query graphify-network-code graphify-network-docs graphify-network-query graphify-operazioni-code graphify-operazioni-docs graphify-operazioni-query graphify-organigramma-code graphify-organigramma-docs graphify-organigramma-query graphify-riordino-code graphify-riordino-docs graphify-riordino-query graphify-ruolo-code graphify-ruolo-docs graphify-ruolo-query graphify-utenze-code graphify-utenze-docs graphify-utenze-query graphify-wiki-code graphify-wiki-docs graphify-wiki-docs-debug graphify-wiki-query graphify-backend graphify-backend-query graphify-frontend graphify-frontend-query graphify-docs graphify-docs-query graphify-platform-docs graphify-platform-docs-query graphify-query
 
 up:
 	$(COMPOSE) up -d
@@ -71,6 +74,33 @@ wiki-reindex:
 
 test:
 	$(COMPOSE) exec backend python -m pytest
+
+test-worker:
+	@set -eu; \
+	root="$$(pwd)"; \
+	worker_dir="$$root/modules/elaborazioni/worker"; \
+	python="$(WORKER_PYTHON)"; \
+	case "$$python" in /*) ;; */*) python="$$root/$$python" ;; esac; \
+	coverage_json="$(WORKER_COVERAGE_JSON)"; \
+	coverage_xml="$(WORKER_COVERAGE_XML)"; \
+	case "$$coverage_json" in /*) ;; *) coverage_json="$$root/$$coverage_json" ;; esac; \
+	case "$$coverage_xml" in /*) ;; *) coverage_xml="$$root/$$coverage_xml" ;; esac; \
+	data_dir="$$(mktemp -d /tmp/gaia-worker-coverage.XXXXXX)"; \
+	trap 'rm -rf "$$data_dir"' EXIT INT TERM; \
+	find "$$worker_dir/tests" -maxdepth 1 -type f -name 'test_*.py' -print | sort > "$$data_dir/test-files"; \
+	test -s "$$data_dir/test-files"; \
+	export PYTHONPATH="$$root/backend:$$worker_dir$${PYTHONPATH:+:$$PYTHONPATH}"; \
+	export COVERAGE_FILE="$$data_dir/.coverage"; \
+	while IFS= read -r test_file; do \
+		relative_test="$${test_file#$$worker_dir/}"; \
+		echo "==> worker $$relative_test"; \
+		(cd "$$worker_dir" && "$$python" -m coverage run --branch --parallel-mode --source="$$worker_dir" --omit="$$worker_dir/tests/*" -m pytest -q -o cache_dir="$$data_dir/pytest-cache" "$$relative_test"); \
+	done < "$$data_dir/test-files"; \
+	"$$python" -m coverage combine "$$data_dir"; \
+	mkdir -p "$$(dirname "$$coverage_json")" "$$(dirname "$$coverage_xml")"; \
+	"$$python" -m coverage json -o "$$coverage_json"; \
+	"$$python" -m coverage xml -o "$$coverage_xml"; \
+	"$$python" -m coverage report
 
 test-ruolo-postgres:
 	$(COMPOSE) exec backend sh -lc 'GAIA_TEST_POSTGRES_URL="$${DATABASE_URL}" python -m pytest -m postgres tests/ruolo/test_tributi_notice_registry_postgres.py tests/ruolo/test_tributi_notice_migration_postgres.py'
