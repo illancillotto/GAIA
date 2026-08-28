@@ -620,3 +620,38 @@ restano escluse.
   `git diff --check`: `PASS`.
 - Baseline complexity, eccezioni ed esclusioni: `NONE`; nessun runtime nel
   perimetro di questa estensione del tooling.
+
+## Hotspot GIS - services baseline drift (2026-08-28)
+
+- Branch: `quality/gis-services-baseline-drift-20260828`, derivato da
+  `main@7a27fdaf`. Scope: singolo hotspot
+  `backend/app/modules/gis/services.py` e impostazioni dichiarative necessarie
+  a rendere verificabile M21; nessun file M21 incluso.
+- Provenienza: tutto il drift GIS rispetto alla baseline sorgente
+  `b1d4a988` deriva da `268234f9`. Su `services.py` il report passa da `2304`
+  a `3145` LOC (`+841`), non `+834`; su `config.py` da `653` a `689` (`+36`).
+- Classificazione completa `services.py`: `74` callable con fingerprint AST
+  invariato e `+521` LOC di sola riformattazione; `_default_export_path` con
+  regressione funzionale reale (`cyclomatic +1`, `cognitive +1`, `LOC +6`);
+  nove callable nuove per `301` LOC, con errori nuovi su
+  `_feature_selector_columns` e `list_layer_features`; nessun errore di
+  matching.
+- Correzione: ripristinata la rappresentazione delle callable AST-equivalenti;
+  query catalogo/feature, builder di risposta e supporto export estratti in
+  moduli sotto soglia; `list_layer_features` scomposta; settings GIS e storage
+  ereditate da classi dichiarative dedicate. Route, payload, alias di settings,
+  transazioni e comportamento osservabile restano invariati.
+- Metriche dopo: `services.py` LOC `2266`, callable `110`, cyclomatic sum/max
+  `540/22`, cognitive sum/max `530/27`; `catalog_queries.py` LOC `314`,
+  cyclomatic max `9`, cognitive max `11`; `service_support.py` LOC `25` e
+  `response_builders.py` LOC `50`, nessuna violation. `config.py` LOC `612`;
+  il margine copre i `30` LOC M21 senza aggiornare la baseline.
+- `make complexity-ratchet BASE_REF=main` con motore Babel disponibile:
+  `PASS`, `findings: []`. `make quality-test`: `46 passed`.
+- `make complexity-baseline` e stato eseguito solo dopo il ratchet e ha
+  correttamente rifiutato l'update per regressioni non classificate di altri
+  domini gia presenti su `main`. Baseline, scope, eccezioni ed esclusioni
+  restano invariati; nessun JSON modificato manualmente.
+- Esito: `IMPROVED`. Debito residuo: `services.py` resta sopra la soglia file
+  legacy, ma senza crescita rispetto alla baseline; il riallineamento globale
+  della baseline richiede change separate per i finding non GIS rifiutati.
