@@ -35,6 +35,7 @@ from app.modules.gis.models import (
 from app.modules.gis.qgis_governance import build_qgis_governance
 from app.modules.gis.response_builders import (
     export_response as _export_response,
+    layer_response,
     shapefile_import_response as _shapefile_import_response,
 )
 from app.modules.gis.service_support import default_export_path, feature_geometry as _feature_geometry
@@ -263,32 +264,7 @@ def _get_manageable_layer(db: Session, layer_id: UUID, current_user: Application
 
 
 def _layer_response(layer: GisLayer, flags: dict[str, bool]) -> GisLayerResponse:
-    return GisLayerResponse(
-        id=layer.id,
-        workspace=layer.workspace,
-        name=layer.name,
-        title=layer.title,
-        description=layer.description,
-        domain_module=layer.domain_module,
-        source_type=layer.source_type,
-        official_source=layer.official_source,
-        postgis_schema=layer.postgis_schema,
-        postgis_table=layer.postgis_table,
-        geometry_column=layer.geometry_column,
-        geometry_type=layer.geometry_type,
-        srid=layer.srid,
-        feature_id_column=layer.feature_id_column,
-        martin_layer_id=layer.martin_layer_id,
-        ogc_service_url=layer.ogc_service_url,
-        qgis_project_path=layer.qgis_project_path,
-        nas_export_root=layer.nas_export_root,
-        metadata=layer.metadata_json or {},
-        is_active=layer.is_active,
-        effective_access_level=_flags_to_access_level(flags),
-        **flags,
-        created_at=layer.created_at,
-        updated_at=layer.updated_at,
-    )
+    return layer_response(layer, flags, _flags_to_access_level(flags))
 
 
 def _annotation_response(annotation: GisAnnotation) -> GisAnnotationResponse:

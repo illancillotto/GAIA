@@ -668,3 +668,10 @@ restano escluse.
   `services.py` e `config.py`; `make lint-backend` e `git diff --check` verdi.
 - Ratchet della follow-up contro `main@691bec1d`: `PASS`, `findings: []`.
   Baseline, eccezioni ed esclusioni restano invariate.
+- Il successivo gate M21 non ha piu rilevato regressioni callable, ma solo il
+  file-level `services.py 2304 -> 2323`. Il builder puro `_layer_response` e
+  stato quindi spostato in `response_builders.py`, mantenendo in `services.py`
+  il wrapper compatibile e la risoluzione dell'access level esistente.
+- Verifica dell'estrazione finale: `41 passed`, coverage `1116/1116` statement
+  (`100%`), lint e diff check verdi; ratchet contro `main@be143751` `PASS`,
+  `findings: []`. Nessun aggiornamento baseline.
