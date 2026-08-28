@@ -846,9 +846,10 @@ Evidenza corrente:
 
 ## M22 - Catalogo Territorio E Pannello Strati
 
-Stato: backend M22a completato il 2026-08-28 sul branch
-`feature/gis-territorio-catalog-seed-m22` con coverage `745/745` e ratchet
-verde; frontend M22b da implementare.
+Stato: completata il 2026-08-28. Backend M22a sul branch
+`feature/gis-territorio-catalog-seed-m22`, frontend M22b sul branch
+`feature/gis-territorio-layer-panel-m22`; entrambi con coverage `100%` e
+ratchet verde.
 
 Obiettivo:
 
@@ -883,6 +884,19 @@ Evidenza M22a:
   attribuzione, opacita, ordine e interrogabilita risolti;
 - layer inattivi o privi di `can_view` esclusi dalla risposta;
 - coverage runtime `100%`, quality test e complexity ratchet verdi.
+
+Evidenza M22b:
+
+- pannello richiudibile con gruppi in italiano, toggle, opacita, legenda
+  autenticata, badge di sola consultazione e sorgente;
+- errori isolati per layer e attribuzioni delle sole sorgenti attive;
+- ortofoto selezionabili e confronto generico pronto per piu annate; il seed
+  corrente espone la sola annata autorizzata da P0;
+- raster registrati sul proxy GAIA e inseriti prima dei layer applicativi;
+- `MapContainer.tsx` e `page.tsx` invariati; integrazione tramite wrapper e
+  registry MapLibre dedicati;
+- suite completa `1626` test, coverage runtime `100%`, build e complexity
+  ratchet verdi.
 
 ## M23 - Interrogazione Puntuale Multi-Sorgente
 

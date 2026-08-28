@@ -20,7 +20,11 @@ commit `07d9f7c4` e chiusa con ratchet verde.
 
 P2 e completato sul branch `feature/gis-territorio-catalog-seed-m22`: il seed
 idempotente registra i `21` layer ammessi e `GET /gis/territorio/layers`
-restituisce solo quelli attivi e visibili, raggruppati per tema. M22b-M25 non
+restituisce solo quelli attivi e visibili, raggruppati per tema.
+
+P3 e completato sul branch `feature/gis-territorio-layer-panel-m22`: pannello,
+opacita, legende autenticate, attribuzioni e selettore ortofoto sono integrati
+nelle mappe Catasto senza modificare l'hotspot `MapContainer.tsx`. M23-M25 non
 sono ancora avviate.
 
 La base M1-M20 della GIS Platform e in esercizio e non richiede modifiche
@@ -35,7 +39,7 @@ schema catalogo.
 | P0 | Verifica licenze e disponibilita sorgenti | completato il 2026-08-27 | - |
 | M21 | Fondazione layer esterni: source type, proxy, cache, health | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-external-layers-m21` |
 | M22a | Seed catalogo `territorio` e `GET /gis/territorio/layers` | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-catalog-seed-m22` |
-| M22b | Pannello strati e ortofoto storiche in mappa | da implementare | `feature/gis-territorio-layer-panel-m22` |
+| M22b | Pannello strati e ortofoto storiche in mappa | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-layer-panel-m22` |
 | M23a | Interrogazione puntuale multi-sorgente, backend | da implementare | `feature/gis-territorio-interrogazione-m23` |
 | M23b | Pannello interrogazione, frontend | da implementare | `feature/gis-territorio-interrogazione-ui-m23` |
 | M24 | Scheda territoriale particella in PDF | da implementare | `feature/gis-territorio-scheda-m24` |
@@ -68,6 +72,34 @@ governa internamente. La sovrapposizione e utile come controllo, ma richiede una
 decisione esplicita di autorevolezza prima del seed.
 
 ## Verifiche
+
+Verifiche P3 eseguite il 2026-08-28:
+
+- `npm run typecheck`: exit `0`;
+- `npm run lint`: exit `0`; restano solo warning preesistenti fuori dal
+  perimetro P3;
+- suite unit frontend completa: `178` file e `1626` test verdi, inclusa la
+  regressione `gis-tools-workspace.test.tsx`;
+- coverage sui runtime P3: `211/211` statement, `106/106` branch, `82/82`
+  funzioni e `171/171` linee, totale `100%`;
+- `npm run build`: exit `0`, `154` pagine generate; il chunk compilato contiene
+  il registry `territorio-source-`, confermando l'integrazione nella build;
+- `make complexity-ratchet
+  BASE_REF=feature/gis-territorio-catalog-seed-m22`: exit `0`, baseline commit
+  `d7861d06`, nessun finding;
+- `git diff --check`: exit `0`.
+
+Il primo ratchet P3 ha rifiutato correttamente callable nuove oltre soglia e un
+inserimento nel client GIS legacy che alterava il matching. La versione finale
+separa catalogo, sincronizzazione MapLibre, errori, legende e cleanup in hook
+sotto soglia, usa `frontend/src/lib/api/territorio.ts` e non modifica
+`MapContainer.tsx`, `page.tsx` o `api/gis.ts`.
+
+Le tile e le legende usano sempre il proxy GAIA con bearer token; nessun URL
+remoto e inviato dal browser. Ogni raster e inserito prima del primo layer GAIA
+e una failure aggiorna solo lo stato del layer coinvolto. Il selettore supporta
+il confronto tra piu annate, ma segnala correttamente che il seed corrente ne
+contiene una sola perche P0 ha escluso le altre per licenza.
 
 Verifiche P2 eseguite il 2026-08-28:
 
@@ -280,7 +312,6 @@ servizi pubblici e AdE dichiara esplicitamente un limite concorrente.
 
 ## Prossima Azione Raccomandata
 
-Aprire P3 sul branch `feature/gis-territorio-layer-panel-m22`, partendo dal
-branch P2 verificato. Implementare esclusivamente M22b: pannello strati,
-ortofoto storiche, attribuzioni e integrazione MapLibre. Non anticipare P4
-dentro la stessa change.
+Aprire P4 sul branch `feature/gis-territorio-interrogazione-m23`, partendo dal
+branch P3 verificato. Implementare esclusivamente l'interrogazione puntuale
+backend M23a; non anticipare il pannello P5 dentro la stessa change.
