@@ -45,6 +45,7 @@ from app.modules.gis.models import (
     GisLayerPermission,
     GisShapefileImport,
 )
+from app.modules.gis.territorio_bootstrap import ensure_territorio_gis_catalog
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
 engine = create_engine(
@@ -392,6 +393,14 @@ def seed_gis_platform_catalog() -> dict[str, int]:
     db = TestingSessionLocal()
     try:
         return ensure_gis_platform_catalog(db)
+    finally:
+        db.close()
+
+
+def seed_territorio_gis_catalog() -> int:
+    db = TestingSessionLocal()
+    try:
+        return ensure_territorio_gis_catalog(db)
     finally:
         db.close()
 
@@ -3677,3 +3686,60 @@ def test_external_layers_are_excluded_from_change_export_and_qgis() -> None:
     )
     assert governance.status_code == 200
     assert governance.json()["layers"] == []
+
+
+def test_territorio_layers_are_grouped_and_resolved_for_viewer() -> None:
+    assert seed_territorio_gis_catalog() == 21
+
+    response = client.get("/gis/territorio/layers", headers=auth_headers("gis-viewer"))
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 21
+    assert [group["theme"] for group in payload["groups"]] == [
+        "bonifica",
+        "colture",
+        "vincoli",
+        "idrografia",
+        "amministrativo",
+        "eventi",
+        "catasto_ufficiale",
+        "ortofoto",
+        "morfologia",
+    ]
+    first = payload["groups"][0]["layers"][0]
+    assert first["proxy_wms_url"] == f"/gis/external/{first['id']}/wms"
+    assert first["legend_url"].endswith("/wms?request=GetLegendGraphic")
+    assert first["attribution"]
+    assert first["queryable"] == "wfs_queryable"
+
+
+def test_territorio_layers_exclude_unauthorized_and_inactive_layers() -> None:
+    seed_territorio_gis_catalog()
+    db = TestingSessionLocal()
+    try:
+        hidden = db.scalar(select(GisLayer).where(GisLayer.name == "ras_aree_bonifica"))
+        inactive = db.scalar(select(GisLayer).where(GisLayer.name == "ras_comprensori_irrigui"))
+        assert hidden is not None and inactive is not None
+        permission = db.scalar(
+            select(GisLayerPermission).where(
+                GisLayerPermission.layer_id == hidden.id,
+                GisLayerPermission.principal_key == "viewer",
+            )
+        )
+        assert permission is not None
+        permission.can_view = False
+        inactive.is_active = False
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/gis/territorio/layers", headers=auth_headers("gis-viewer"))
+    names = {
+        layer["name"]
+        for group in response.json()["groups"]
+        for layer in group["layers"]
+    }
+    assert response.json()["total"] == 19
+    assert "ras_aree_bonifica" not in names
+    assert "ras_comprensori_irrigui" not in names

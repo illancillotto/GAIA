@@ -16,7 +16,12 @@ ammissibili (`14` RAS vettoriali, `4` RAS raster, `3` AdE).
 P1 e implementato: registro sorgenti, proxy governato, cache, health, nuovi
 source type e divieti backend sono coperti al `100%`. La change quality separata
 e stata integrata in `main` a `3d373f28`; M21 e stata riallineata, congelata nel
-commit `07d9f7c4` e chiusa con ratchet verde. M22-M25 non sono avviate.
+commit `07d9f7c4` e chiusa con ratchet verde.
+
+P2 e completato sul branch `feature/gis-territorio-catalog-seed-m22`: il seed
+idempotente registra i `21` layer ammessi e `GET /gis/territorio/layers`
+restituisce solo quelli attivi e visibili, raggruppati per tema. M22b-M25 non
+sono ancora avviate.
 
 La base M1-M20 della GIS Platform e in esercizio e non richiede modifiche
 preliminari: `source_type` e gia una colonna `String(32)` libera in `GisLayer` e
@@ -29,7 +34,7 @@ schema catalogo.
 | --- | --- | --- | --- |
 | P0 | Verifica licenze e disponibilita sorgenti | completato il 2026-08-27 | - |
 | M21 | Fondazione layer esterni: source type, proxy, cache, health | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-external-layers-m21` |
-| M22a | Seed catalogo `territorio` e `GET /gis/territorio/layers` | da implementare | `feature/gis-territorio-catalog-seed-m22` |
+| M22a | Seed catalogo `territorio` e `GET /gis/territorio/layers` | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-catalog-seed-m22` |
 | M22b | Pannello strati e ortofoto storiche in mappa | da implementare | `feature/gis-territorio-layer-panel-m22` |
 | M23a | Interrogazione puntuale multi-sorgente, backend | da implementare | `feature/gis-territorio-interrogazione-m23` |
 | M23b | Pannello interrogazione, frontend | da implementare | `feature/gis-territorio-interrogazione-ui-m23` |
@@ -63,6 +68,28 @@ governa internamente. La sovrapposizione e utile come controllo, ma richiede una
 decisione esplicita di autorevolezza prima del seed.
 
 ## Verifiche
+
+Verifiche P2 eseguite il 2026-08-28:
+
+- bootstrap eseguito due volte nei test: `21` layer creati alla prima
+  esecuzione, `0` alla seconda;
+- suite GIS, bootstrap e lifespan: verde;
+- coverage selettiva sui runtime modificati: `745` statement, `0` mancanti,
+  totale `100%`;
+- `main.py`: `74/74`, `router.py`: `153/153`, `schemas.py`: `432/432`,
+  `territorio_bootstrap.py`: `60/60`, `territorio_catalog.py`: `26/26`;
+- `make lint-backend`: exit `0`;
+- `make quality-test`: `46 passed`;
+- `make complexity-ratchet
+  BASE_REF=feature/gis-territorio-external-layers-m21`: exit `0`, baseline
+  commit `dddbbe58`, nessun finding;
+- `git diff --check`: exit `0`.
+
+Il primo ratchet P2 ha correttamente rifiutato un conditional aggiunto alla
+callable legacy `_ensure_gis_catalog_on_startup` e un factory con `11`
+parametri. Il bootstrap territorio e stato quindi isolato in una callable
+nuova e il factory ridotto a cinque campi obbligatori piu opzioni; il ratchet
+finale e verde senza aggiornare la baseline.
 
 Verifiche P1 eseguite il 2026-08-28:
 
@@ -253,7 +280,7 @@ servizi pubblici e AdE dichiara esplicitamente un limite concorrente.
 
 ## Prossima Azione Raccomandata
 
-Non aprire P2.
-
-M21 e chiusa con ratchet verde. P2 resta fermo e potra essere aperto soltanto su
-richiesta esplicita, partendo dallo stato integrato e verificato di M21.
+Aprire P3 sul branch `feature/gis-territorio-layer-panel-m22`, partendo dal
+branch P2 verificato. Implementare esclusivamente M22b: pannello strati,
+ortofoto storiche, attribuzioni e integrazione MapLibre. Non anticipare P4
+dentro la stessa change.

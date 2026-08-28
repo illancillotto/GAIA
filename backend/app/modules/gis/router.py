@@ -25,6 +25,7 @@ from app.modules.gis import (
     external_proxy,
     runtime_health,
     services,
+    territorio_catalog,
 )
 from app.modules.gis.schemas import (
     GisAnnotationCreate,
@@ -58,6 +59,7 @@ from app.modules.gis.schemas import (
     GisShapefileImportPreviewResponse,
     GisShapefileImportResponse,
     GisShapefileImportStatus,
+    GisTerritorioLayerListResponse,
 )
 
 router = APIRouter(
@@ -140,6 +142,14 @@ def list_external_sources(
         GisExternalSourceResponse.model_validate(item)
         for item in external_proxy.list_external_source_statuses()
     ]
+
+
+@router.get("/territorio/layers", response_model=GisTerritorioLayerListResponse)
+def list_territorio_layers(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> GisTerritorioLayerListResponse:
+    return territorio_catalog.list_territorio_layers(db, current_user)
 
 
 def _external_proxy_response(payload: external_proxy.ExternalProxyPayload) -> Response:

@@ -255,6 +255,32 @@ class GisExternalSourceResponse(BaseModel):
     status: Literal["enabled", "disabled", "not_configured"]
 
 
+class GisTerritorioLayer(BaseModel):
+    id: UUID
+    name: str
+    title: str
+    description: str | None = None
+    theme: str
+    source: str
+    proxy_wms_url: str
+    legend_url: str
+    default_opacity: float = Field(ge=0, le=1)
+    render_order: int = Field(ge=0)
+    queryable: Literal["wfs_queryable", "wms_infoable", "wms_visual_only"]
+    attribution: str
+
+
+class GisTerritorioLayerGroup(BaseModel):
+    theme: str
+    label: str
+    layers: list[GisTerritorioLayer]
+
+
+class GisTerritorioLayerListResponse(BaseModel):
+    groups: list[GisTerritorioLayerGroup]
+    total: int
+
+
 class GisLayerPermissionUpsert(BaseModel):
     principal_type: Literal["role", "user"]
     principal_key: str = Field(min_length=1, max_length=120)

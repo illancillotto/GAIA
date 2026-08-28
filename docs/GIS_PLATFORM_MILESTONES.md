@@ -846,7 +846,9 @@ Evidenza corrente:
 
 ## M22 - Catalogo Territorio E Pannello Strati
 
-Stato: da implementare.
+Stato: backend M22a completato il 2026-08-28 sul branch
+`feature/gis-territorio-catalog-seed-m22` con coverage `745/745` e ratchet
+verde; frontend M22b da implementare.
 
 Obiettivo:
 
@@ -871,6 +873,16 @@ Exit criteria:
 - layer esterni sempre sotto i layer GAIA nell'ordine di rendering;
 - un layer irraggiungibile non rompe la mappa;
 - nessuna regressione su popup, ricerca, selezioni e strumenti esistenti.
+
+Evidenza M22a:
+
+- seed idempotente di `21` layer, corrispondente al catalogo ammesso dopo P0;
+- definizioni senza licenza o attribuzione rifiutate;
+- permesso `viewer` read-only e divieti export/QGIS applicati a ogni layer;
+- `GET /gis/territorio/layers` raggruppato per tema, con URL proxy,
+  attribuzione, opacita, ordine e interrogabilita risolti;
+- layer inattivi o privi di `can_view` esclusi dalla risposta;
+- coverage runtime `100%`, quality test e complexity ratchet verdi.
 
 ## M23 - Interrogazione Puntuale Multi-Sorgente
 
