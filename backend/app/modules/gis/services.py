@@ -2153,8 +2153,7 @@ def _apply_feature_create(db: Session, layer: GisLayer, payload: dict[str, Any])
     geometry_column = layer.geometry_column or "geometry"
     columns = [str(key) for key in properties if key != geometry_column]
     values = {f"p{index}": _jsonable_record(properties[key]) for index, key in enumerate(columns)}
-    if geometry_column not in columns:
-        columns.append(geometry_column)
+    columns.append(geometry_column)
     params = {**values, "geometry_json": _json_dump(geometry)}
     placeholders = [f":p{index}" for index, column in enumerate(columns) if column != geometry_column]
     placeholders.append(_geometry_sql_expression(db, layer))
