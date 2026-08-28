@@ -900,8 +900,9 @@ Evidenza M22b:
 
 ## M23 - Interrogazione Puntuale Multi-Sorgente
 
-Stato: backend M23a completato il 2026-08-28 sul branch
-`feature/gis-territorio-interrogazione-m23`; frontend M23b da implementare.
+Stato: completata il 2026-08-28. Backend M23a sul branch
+`feature/gis-territorio-interrogazione-m23`, frontend M23b sul branch
+`feature/gis-territorio-interrogazione-ui-m23`.
 
 Obiettivo:
 
@@ -937,6 +938,18 @@ Evidenza M23a:
 - suite integrata `91 passed`, coverage runtime `1129/1129`, quality test e
   complexity ratchet contro M22b verdi;
 - popup Catasto, frontend e baseline di complessita invariati.
+
+Evidenza M23b:
+
+- azione esplicita `Interroga punto` che arma il clic senza sostituire il
+  listener del popup rapido;
+- pannello laterale non modale con GAIA sempre aperto, Catasto ufficiale e
+  Territorio collassabili, stati distinti e attribuzioni per sorgente;
+- risultati progressivi: GAIA viene caricato separatamente e le sorgenti
+  remote completano per layer con concorrenza client limitata a quattro;
+- layer visual-only marcati non interrogabili senza richiesta HTTP e azione
+  M24 presente ma disabilitata;
+- `MapContainer.tsx`, `ParticellaGisDialog.tsx` e pannello strati M22 invariati.
 
 ## M24 - Scheda Territoriale Particella
 

@@ -575,6 +575,18 @@ Interrogazione backend M23a:
 - il flag `GIS_INTERROGAZIONE_ENABLED` resta `false` per default. Timeout,
   raggio e limite remoto hanno default rispettivamente `8 s`, `150 m` e `12`.
 
+Pannello frontend M23b:
+
+- il wrapper `TerritorioMapExperience` collega il pannello a MapLibre senza
+  aggiungere logica a `MapContainer.tsx` e senza alterare il popup particella;
+- una azione esplicita arma il clic successivo, apre un overlay non modale e
+  mostra GAIA, Catasto ufficiale e Territorio con stati sempre espliciti;
+- GAIA e caricato con una richiesta senza layer remoti; i layer interrogabili
+  sono poi richiesti singolarmente con concorrenza limitata, cosi ogni sorgente
+  compare quando termina senza attendere la piu lenta;
+- i visual-only non generano richieste e la futura scheda M24 e mostrata come
+  azione disabilitata.
+
 Superfici introdotte dal programma:
 
 - `GET /gis/external/{layer_id}/wms` e `/wfs`, proxy governato;

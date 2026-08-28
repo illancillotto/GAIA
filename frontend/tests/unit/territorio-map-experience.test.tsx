@@ -5,6 +5,8 @@ import { describe, expect, test, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   useTerritorioLayers: vi.fn(() => ({ groups: [] })),
   panel: vi.fn(),
+  interrogationPanel: vi.fn(),
+  useInterrogazione: vi.fn(() => ({ open: false })),
   mapListener: null as ((maps: Array<{ getContainer: () => HTMLElement }>) => void) | null,
 }));
 
@@ -31,6 +33,17 @@ vi.mock("@/components/catasto/gis/TerritorioLayerPanel", () => ({
   },
 }));
 
+vi.mock("@/components/catasto/gis/use-interrogazione", () => ({
+  useInterrogazione: (...args: unknown[]) => mocks.useInterrogazione(...args),
+}));
+
+vi.mock("@/components/catasto/gis/InterrogazionePanel", () => ({
+  default: (props: object) => {
+    mocks.interrogationPanel(props);
+    return <div>pannello interrogazione</div>;
+  },
+}));
+
 import TerritorioMapExperience from "@/components/catasto/gis/TerritorioMapExperience";
 
 describe("TerritorioMapExperience", () => {
@@ -49,6 +62,7 @@ describe("TerritorioMapExperience", () => {
     );
     expect(screen.getByText("canvas GIS")).toBeInTheDocument();
     expect(screen.getByText("pannello territorio")).toBeInTheDocument();
+    expect(screen.getByText("pannello interrogazione")).toBeInTheDocument();
     act(() => {
       mocks.mapListener?.([{ getContainer: () => screen.getByTestId("map-canvas") }]);
     });
@@ -57,6 +71,11 @@ describe("TerritorioMapExperience", () => {
       "token",
     );
     expect(mocks.panel).toHaveBeenLastCalledWith(expect.objectContaining({ basemap: "satellite" }));
+    expect(mocks.useInterrogazione).toHaveBeenLastCalledWith(
+      expect.objectContaining({ getContainer: expect.any(Function) }),
+      "token",
+      [],
+    );
     unmount();
   });
 

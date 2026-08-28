@@ -5,11 +5,13 @@ import type maplibregl from "maplibre-gl";
 
 import MapContainer from "./MapContainer";
 import TerritorioLayerPanel from "@/components/catasto/gis/TerritorioLayerPanel";
+import InterrogazionePanel from "@/components/catasto/gis/InterrogazionePanel";
 import { subscribeTerritorioMaps } from "@/components/catasto/gis/territorio-map-registry";
 import {
   useTerritorioLayers,
   type TerritorioMapAdapter,
 } from "@/components/catasto/gis/use-territorio-layers";
+import { useInterrogazione } from "@/components/catasto/gis/use-interrogazione";
 
 type TerritorioMapExperienceProps = ComponentProps<typeof MapContainer>;
 
@@ -17,6 +19,7 @@ export default function TerritorioMapExperience(props: TerritorioMapExperiencePr
   const containerRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<maplibregl.Map | null>(null);
   const territorio = useTerritorioLayers(map as TerritorioMapAdapter | null, props.token);
+  const interrogazione = useInterrogazione(map, props.token, territorio.groups);
 
   useEffect(
     () => subscribeTerritorioMaps((availableMaps) => {
@@ -33,6 +36,7 @@ export default function TerritorioMapExperience(props: TerritorioMapExperiencePr
     <div ref={containerRef} className="relative h-full w-full">
       <MapContainer {...props} />
       <TerritorioLayerPanel {...territorio} basemap={props.basemap ?? "osm"} />
+      <InterrogazionePanel {...interrogazione} />
     </div>
   );
 }

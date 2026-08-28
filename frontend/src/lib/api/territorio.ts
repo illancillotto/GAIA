@@ -26,6 +26,32 @@ export type GisTerritorioLayerListResponse = {
   total: number;
 };
 
+export type GisInterrogazioneStatus = "ok" | "empty" | "failed" | "skipped";
+
+export type GisInterrogazioneSource = {
+  source_id: string;
+  title: string;
+  status: GisInterrogazioneStatus;
+  duration_ms: number;
+  data: Array<Record<string, unknown>>;
+  message: string | null;
+};
+
+export type GisInterrogazioneLevel = {
+  key: "gaia" | "catasto_ufficiale" | "territorio";
+  sources: GisInterrogazioneSource[];
+};
+
+export type GisInterrogazioneResponse = {
+  lon: number;
+  lat: number;
+  srid: number;
+  radius_m: number;
+  gaia: GisInterrogazioneLevel;
+  catasto_ufficiale: GisInterrogazioneLevel;
+  territorio: GisInterrogazioneLevel;
+};
+
 function authHeaders(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}` };
 }
@@ -35,6 +61,17 @@ export function listGisTerritorioLayers(
 ): Promise<GisTerritorioLayerListResponse> {
   return request<GisTerritorioLayerListResponse>("/gis/territorio/layers", {
     headers: authHeaders(token),
+  });
+}
+
+export function interrogaGisTerritorio(
+  token: string,
+  body: { lon: number; lat: number; layer_ids: string[] },
+): Promise<GisInterrogazioneResponse> {
+  return request<GisInterrogazioneResponse>("/gis/interroga", {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
 }
 

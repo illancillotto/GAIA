@@ -1,7 +1,7 @@
 # GAIA GIS Platform - Progress Territorio Esterno
 
 > Ultimo aggiornamento: 2026-08-28.
-> Branch corrente: `feature/gis-territorio-interrogazione-m23`.
+> Branch corrente: `feature/gis-territorio-interrogazione-ui-m23`.
 >
 > Piano tecnico: `docs/GIS_PLATFORM_TERRITORIO_PLAN.md`.
 > Riferimento dati: `docs/GIS_PLATFORM_TERRITORIO_CATALOGO.md`.
@@ -29,7 +29,12 @@ nelle mappe Catasto senza modificare l'hotspot `MapContainer.tsx`.
 P4/M23a e completato sul branch
 `feature/gis-territorio-interrogazione-m23`: `POST /gis/interroga` aggrega le
 sonde GAIA e le sorgenti remote nei livelli `gaia`, `catasto_ufficiale` e
-`territorio`. M23b-M25 non sono ancora avviate.
+`territorio`.
+
+P5/M23b e completato sul branch
+`feature/gis-territorio-interrogazione-ui-m23`: il pannello istruttorio si
+apre con una azione esplicita e aggiorna GAIA e ogni sorgente remota senza
+attendere la piu lenta. M24-M25 non sono ancora avviate.
 
 La base M1-M20 della GIS Platform e in esercizio e non richiede modifiche
 preliminari: `source_type` e gia una colonna `String(32)` libera in `GisLayer` e
@@ -45,7 +50,7 @@ schema catalogo.
 | M22a | Seed catalogo `territorio` e `GET /gis/territorio/layers` | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-catalog-seed-m22` |
 | M22b | Pannello strati e ortofoto storiche in mappa | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-layer-panel-m22` |
 | M23a | Interrogazione puntuale multi-sorgente, backend | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-interrogazione-m23` |
-| M23b | Pannello interrogazione, frontend | da implementare | `feature/gis-territorio-interrogazione-ui-m23` |
+| M23b | Pannello interrogazione, frontend | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-interrogazione-ui-m23` |
 | M24 | Scheda territoriale particella in PDF | da implementare | `feature/gis-territorio-scheda-m24` |
 | M25 | Strumenti di campo e propagazione QGIS | da implementare | `feature/gis-territorio-strumenti-m25` |
 
@@ -76,6 +81,36 @@ governa internamente. La sovrapposizione e utile come controllo, ma richiede una
 decisione esplicita di autorevolezza prima del seed.
 
 ## Verifiche
+
+Verifiche P5 eseguite il 2026-08-28:
+
+- suite mirata pannello, hook, wrapper e client API: `8 passed`;
+- coverage pannello/hook: `97/97` statement, `45/45` branch, `45/45`
+  funzioni e `78/78` linee; wrapper/client: `16/16` statement, `4/4` branch,
+  `8/8` funzioni e `15/15` linee;
+- `npm run typecheck`: exit `0`;
+- `npm run lint`: exit `0`, con soli warning preesistenti fuori dal perimetro;
+- suite unit frontend completa: `179` file e `1631` test verdi;
+- `npm run build`: exit `0`, compilazione riuscita e `154` pagine generate;
+- `make complexity-ratchet
+  BASE_REF=feature/gis-territorio-interrogazione-m23`: exit `0`, baseline
+  commit `352f3f23`, nessun finding.
+- `make graphify-frontend`: exit `0`, `4905` nodi, `11848` archi e `186`
+  community;
+- `make graphify-platform-docs`: exit `0`, `454` nodi, `618` archi e `61`
+  community.
+
+Decisioni M23b:
+
+- `Interroga punto` arma il clic successivo; il listener MapLibre dedicato non
+  rimuove o sostituisce quelli del popup rapido;
+- una richiesta senza layer carica subito GAIA, poi i layer interrogabili sono
+  richiesti singolarmente con massimo quattro richieste client concorrenti;
+- ogni completamento aggiorna solo la sorgente coinvolta; una failure non
+  interrompe le altre e i visual-only non generano HTTP;
+- il pannello resta overlay non modale e non modifica `MapContainer.tsx`,
+  `ParticellaGisDialog.tsx` o `TerritorioLayerPanel.tsx`;
+- la CTA scheda territoriale e disabilitata fino a M24.
 
 Verifiche P4 eseguite il 2026-08-28:
 
