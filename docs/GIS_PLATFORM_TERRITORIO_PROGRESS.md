@@ -401,6 +401,58 @@ catalogo. Le misure supportano il default M21 di `12 s`, senza costituire SLA.
 Non e stato eseguito un test concorrente: P0 doveva rilevare, non sollecitare, i
 servizi pubblici e AdE dichiara esplicitamente un limite concorrente.
 
+## Audit Conclusivo P0-P7
+
+Audit eseguito il 2026-08-28 confrontando i criteri di accettazione dei prompt
+con catalogo, implementazione, test e verifiche registrate sopra.
+
+- P0: le tre sorgenti hanno licenza, URL delle condizioni, attribuzione e
+  vincoli registrati; i `21` layer ammessi sono presenti nelle capabilities;
+  GetMap e GetFeature sono stati misurati; PAI e ortofoto senza licenza
+  accertabile hanno una motivazione esplicita. Tutti i criteri sono soddisfatti.
+- P1: validazione di `wms_external` e `wfs_external`, metadati legali
+  obbligatori, allowlist, cache, TTL, timeout, pruning, destinazione governata,
+  flag `503` e divieti change request/export/QGIS sono coperti dai test M21.
+  Coverage `2403/2403` e ratchet contro `3d373f28` sono verdi. Tutti i criteri
+  sono soddisfatti.
+- P2: il test idempotente crea `21` layer e nessun duplicato alla seconda
+  esecuzione; licenza e attribuzione mancanti sono rifiutate; catalogo,
+  raggruppamento e filtro `can_view` sono verificati. Coverage `745/745` e
+  ratchet contro `dddbbe58` sono verdi. Tutti i criteri sono soddisfatti.
+- P3: pannello, gruppi, toggle, opacita, legenda, ortofoto, confronto,
+  attribuzioni, ordine sotto i layer GAIA e isolamento degli errori sono
+  verificati dai test dedicati. Typecheck, suite unit completa, lint e ratchet
+  sono verdi; `MapContainer.tsx` non e stato modificato. Tutti i criteri sono
+  soddisfatti.
+- P4: endpoint e servizio restituiscono i tre livelli con stato e durata per
+  sorgente; i test verificano tutte le sorgenti remote fallite, livello GAIA
+  completo, visual-only saltati, limite remoto e permessi. Coverage
+  `1129/1129` e ratchet sono verdi. Tutti i criteri sono soddisfatti.
+- P5: i test verificano apertura esplicita sul clic, tre livelli, distinzione
+  tra vuoto e non disponibile e pubblicazione progressiva. La change non
+  modifica popup, `MapContainer.tsx` o pannello strati; typecheck, suite unit,
+  lint e ratchet sono verdi. Tutti i criteri sono soddisfatti.
+- P6: i test verificano generazione e download dal pannello, disclaimer in
+  prima pagina, attribuzioni, snapshot, esclusioni dichiarate, audit nei tre
+  esiti, retention e migration `upgrade()`/`downgrade()`. Coverage
+  `1157/1157` e ratchet sono verdi. Tutti i criteri sono soddisfatti.
+- P7: i test verificano l'arco equatoriale noto, confronto ortofoto, stampa con
+  scala, legenda, intestazione e attribuzioni, e progetto QGIS filtrato per
+  `can_view` con WMS sul proxy GAIA. Coverage backend `1476/1476`, coverage
+  frontend completa sul perimetro P7 e ratchet sono verdi. Tutti i criteri
+  sono soddisfatti.
+
+La catena verificata e lineare:
+`dddbbe58 -> d7861d06 -> 2b6f5651 -> 352f3f23 -> 24e6c04d -> d678b7e9 ->
+677e499c`. La fondazione M21 e attestata dal freeze `07d9f7c4` e dalla chiusura
+documentale `dddbbe58`. Il ref locale
+`feature/gis-territorio-external-layers-m21` punta oggi a `5f319127`, commit
+estraneo successivo presente nel worktree principale concorrente: non e stato
+spostato e non viene usato come evidenza dell'audit.
+
+Non risultano criteri aperti, baseline aggiornate per assorbire regressioni o
+milestone successive avviate. P0-P7 sono chiusi sui commit sopra indicati.
+
 ## Decisioni P0
 
 - RAS SITR vettoriale: `ammessa con vincoli`. Entrano solo i `14` layer con
