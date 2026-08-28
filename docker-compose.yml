@@ -109,6 +109,11 @@ services:
     image: ${COMPOSE_PROJECT_NAME:-gaia}-backend:latest
     container_name: gaia-backend
     restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    cpus: ${BACKEND_CPU_LIMIT:-4.0}
+    mem_limit: ${BACKEND_MEMORY_LIMIT:-4g}
+    pids_limit: ${BACKEND_PIDS_LIMIT:-512}
     dns:
       - 1.1.1.1
       - 8.8.8.8
@@ -154,17 +159,35 @@ services:
       timeout: 5s
       retries: 5
 
-  gis-export-scheduler:
+  platform-scheduler:
     image: ${COMPOSE_PROJECT_NAME:-gaia}-backend:latest
-    container_name: gaia-gis-export-scheduler
+    container_name: gaia-platform-scheduler
     restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    cpus: ${PLATFORM_SCHEDULER_CPU_LIMIT:-2.0}
+    mem_limit: ${PLATFORM_SCHEDULER_MEMORY_LIMIT:-2g}
+    pids_limit: ${PLATFORM_SCHEDULER_PIDS_LIMIT:-256}
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     env_file:
       - .env
     environment:
       GIS_EXPORT_SCHEDULER_ENABLED: "true"
       GIS_EXPORT_SCHEDULER_REGISTER_IN_API: "true"
+      NETWORK_ARP_HELPER_BASE_URL: ${NETWORK_ARP_HELPER_BASE_URL:-http://host.docker.internal:9105}
     entrypoint: []
-    command: python -m app.modules.gis.export_scheduler_runner
+    command: python -m app.platform_scheduler_runner
+    volumes:
+      - catasto-data:/data/catasto
+      - anagrafica-data:/data/anagrafica
+      - ./runtime-data:/runtime-data
+      - ./secrets/pdnd:/app/secrets/pdnd:ro
+      - ${PRESENZE_SCRAPER_HOST_PATH:-/home/cbo/CursorProjects/inaz-scraper}:/opt/presenze-scraper:ro
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       postgres:
         condition: service_healthy
@@ -173,8 +196,56 @@ services:
         [
           "CMD",
           "python",
-          "-c",
-          "from pathlib import Path; assert b'export_scheduler_runner' in Path('/proc/1/cmdline').read_bytes()",
+          "-m",
+          "app.worker_health",
+          "check",
+          "--service",
+          "platform-scheduler",
+          "--max-age-seconds",
+          "90",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  gate-mobile-sync:
+    image: ${COMPOSE_PROJECT_NAME:-gaia}-backend:latest
+    container_name: gaia-gate-mobile-sync
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    cpus: ${GATE_MOBILE_SYNC_CPU_LIMIT:-1.0}
+    mem_limit: ${GATE_MOBILE_SYNC_MEMORY_LIMIT:-1g}
+    pids_limit: ${GATE_MOBILE_SYNC_PIDS_LIMIT:-128}
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - .env
+    environment:
+      GATE_MOBILE_SYNC_INTERVAL_SECONDS: ${GATE_MOBILE_SYNC_INTERVAL_SECONDS:-300}
+    entrypoint: []
+    command: python -m app.scripts.gate_mobile_sync_runner
+    volumes:
+      - ./runtime-data:/runtime-data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-m",
+          "app.worker_health",
+          "check",
+          "--service",
+          "gate-mobile-sync",
+          "--max-age-seconds",
+          "900",
         ]
       interval: 30s
       timeout: 5s
@@ -185,6 +256,11 @@ services:
     image: ${COMPOSE_PROJECT_NAME:-gaia}-backend:latest
     container_name: gaia-presenze-worker
     restart: unless-stopped
+    init: true
+    stop_grace_period: 45s
+    cpus: ${PRESENZE_WORKER_CPU_LIMIT:-3.0}
+    mem_limit: ${PRESENZE_WORKER_MEMORY_LIMIT:-4g}
+    pids_limit: ${PRESENZE_WORKER_PIDS_LIMIT:-512}
     dns:
       - 1.1.1.1
       - 8.8.8.8
@@ -194,6 +270,8 @@ services:
       - .env
     environment:
       NETWORK_ARP_HELPER_BASE_URL: ${NETWORK_ARP_HELPER_BASE_URL:-http://host.docker.internal:9105}
+      PRESENZE_WORKER_LEASE_SECONDS: ${PRESENZE_WORKER_LEASE_SECONDS:-300}
+      PRESENZE_WORKER_RETRY_BACKOFF_SECONDS: ${PRESENZE_WORKER_RETRY_BACKOFF_SECONDS:-30}
     command: python -m app.modules.presenze.services.queue_worker
     volumes:
       - catasto-data:/data/catasto
@@ -203,6 +281,23 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-m",
+          "app.worker_health",
+          "check",
+          "--service",
+          "presenze-worker",
+          "--max-age-seconds",
+          "90",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   frontend:
     build:
@@ -266,7 +361,12 @@ services:
       dockerfile: ./modules/elaborazioni/worker/Dockerfile
     container_name: gaia-elaborazioni-worker-visure
     restart: unless-stopped
+    command: python /app/worker/worker_runner.py
+    init: true
     stop_grace_period: "30s"
+    cpus: ${ELABORAZIONI_VISURE_CPU_LIMIT:-6.0}
+    mem_limit: ${ELABORAZIONI_VISURE_MEMORY_LIMIT:-8g}
+    pids_limit: ${ELABORAZIONI_VISURE_PIDS_LIMIT:-1536}
     dns:
       - 1.1.1.1
       - 8.8.8.8
@@ -300,11 +400,13 @@ services:
       ELABORAZIONI_LOG_LEVEL: ${ELABORAZIONI_LOG_LEVEL:-${CATASTO_LOG_LEVEL:-INFO}}
       ELABORAZIONI_WORKER_FAMILIES: ${ELABORAZIONI_WORKER_FAMILIES_VISURE:-visure}
       ELABORAZIONI_BROWSER_SESSION_LIMIT: ${ELABORAZIONI_BROWSER_SESSION_LIMIT:-4}
+      GAIA_WORKER_HEALTH_SERVICE: elaborazioni-worker-visure
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       - catasto-data:/data/catasto
+      - ./runtime-data:/runtime-data
       - ${CAPTCHA_AGENT_HOME:-/home/cbo}/.local/share/cursor-agent:${CAPTCHA_AGENT_HOME:-/home/cbo}/.local/share/cursor-agent:ro
       - ${CAPTCHA_AGENT_HOME:-/home/cbo}/.cursor:${CAPTCHA_AGENT_HOME:-/home/cbo}/.cursor:rw
       - ${CAPTCHA_AGENT_HOME:-/home/cbo}/.config/cursor:${CAPTCHA_AGENT_HOME:-/home/cbo}/.config/cursor:rw
@@ -313,6 +415,23 @@ services:
       options:
         max-size: "10m"
         max-file: "5"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-m",
+          "app.worker_health",
+          "check",
+          "--service",
+          "elaborazioni-worker-visure",
+          "--max-age-seconds",
+          "90",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   elaborazioni-worker-runtime:
     build:
@@ -320,7 +439,12 @@ services:
       dockerfile: ./modules/elaborazioni/worker/Dockerfile
     container_name: gaia-elaborazioni-worker-runtime
     restart: unless-stopped
+    command: python /app/worker/worker_runner.py
+    init: true
     stop_grace_period: "30s"
+    cpus: ${ELABORAZIONI_RUNTIME_CPU_LIMIT:-2.0}
+    mem_limit: ${ELABORAZIONI_RUNTIME_MEMORY_LIMIT:-2g}
+    pids_limit: ${ELABORAZIONI_RUNTIME_PIDS_LIMIT:-256}
     dns:
       - 1.1.1.1
       - 8.8.8.8
@@ -338,7 +462,7 @@ services:
       CURSOR_AUTH_TOKEN_FILE: ${CURSOR_AUTH_TOKEN_FILE:-${CAPTCHA_AGENT_HOME:-/home/cbo}/.config/cursor/auth.json}
       HOME: ${CAPTCHA_AGENT_HOME:-/home/cbo}
       CAPTCHA_LLM_ENABLED: ${CAPTCHA_LLM_ENABLED:-true}
-      CAPTCHA_LLM_ATTEMPTS: ${CAPTCHA_LLM_ATTEMPTS:-3}
+      CAPTCHA_LLM_ATTEMPTS: ${CAPTCHA_LLM_ATTEMPTS:-10}
       CAPTCHA_EXTERNAL_ATTEMPTS: ${CAPTCHA_EXTERNAL_ATTEMPTS:-3}
       CAPTCHA_MANUAL_ATTEMPTS: ${CAPTCHA_MANUAL_ATTEMPTS:-0}
       CAPTCHA_MANUAL_TIMEOUT_SEC: ${CAPTCHA_MANUAL_TIMEOUT_SEC:-900}
@@ -349,7 +473,60 @@ services:
       ELABORAZIONI_DEBUG_ARTIFACTS_PATH: ${ELABORAZIONI_DEBUG_ARTIFACTS_PATH:-${CATASTO_DEBUG_ARTIFACTS_PATH:-/data/catasto/debug}}
       ELABORAZIONI_SISTER_SELECTORS_PATH: ${ELABORAZIONI_SISTER_SELECTORS_PATH:-${CATASTO_SISTER_SELECTORS_PATH:-/app/worker/sister_selectors.json}}
       ELABORAZIONI_LOG_LEVEL: ${ELABORAZIONI_LOG_LEVEL:-${CATASTO_LOG_LEVEL:-INFO}}
-      ELABORAZIONI_WORKER_FAMILIES: ${ELABORAZIONI_WORKER_FAMILIES_RUNTIME:-runtime,poste}
+      ELABORAZIONI_WORKER_FAMILIES: ${ELABORAZIONI_WORKER_FAMILIES_RUNTIME:-runtime}
+      GAIA_WORKER_HEALTH_SERVICE: elaborazioni-worker-runtime
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - catasto-data:/data/catasto
+      - ./runtime-data:/runtime-data
+      - ${CAPTCHA_AGENT_HOME:-/home/cbo}/.local/share/cursor-agent:${CAPTCHA_AGENT_HOME:-/home/cbo}/.local/share/cursor-agent:ro
+      - ${CAPTCHA_AGENT_HOME:-/home/cbo}/.cursor:${CAPTCHA_AGENT_HOME:-/home/cbo}/.cursor:rw
+      - ${CAPTCHA_AGENT_HOME:-/home/cbo}/.config/cursor:${CAPTCHA_AGENT_HOME:-/home/cbo}/.config/cursor:rw
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-m",
+          "app.worker_health",
+          "check",
+          "--service",
+          "elaborazioni-worker-runtime",
+          "--max-age-seconds",
+          "90",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  elaborazioni-worker-poste:
+    build:
+      context: .
+      dockerfile: ./modules/elaborazioni/worker/Dockerfile
+    container_name: gaia-elaborazioni-worker-poste
+    restart: unless-stopped
+    command: python /app/worker/worker_runner.py
+    init: true
+    stop_grace_period: "30s"
+    cpus: ${ELABORAZIONI_POSTE_CPU_LIMIT:-2.0}
+    mem_limit: ${ELABORAZIONI_POSTE_MEMORY_LIMIT:-3g}
+    pids_limit: ${ELABORAZIONI_POSTE_PIDS_LIMIT:-768}
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      CREDENTIAL_MASTER_KEY: ${CREDENTIAL_MASTER_KEY}
+      ELABORAZIONI_LOG_LEVEL: ${ELABORAZIONI_LOG_LEVEL:-${CATASTO_LOG_LEVEL:-INFO}}
+      ELABORAZIONI_WORKER_FAMILIES: ${ELABORAZIONI_WORKER_FAMILIES_POSTE:-poste}
+      GAIA_WORKER_HEALTH_SERVICE: elaborazioni-worker-poste
       POSTA_ONLINE_CDP_URL: ${POSTA_ONLINE_CDP_URL:-}
       POSTA_ONLINE_STORAGE_STATE_PATH: ${POSTA_ONLINE_STORAGE_STATE_PATH:-/app/worker/.posta-online-storage-state.json}
     depends_on:
@@ -357,9 +534,27 @@ services:
         condition: service_healthy
     volumes:
       - catasto-data:/data/catasto
+      - ./runtime-data:/runtime-data
       - ${CAPTCHA_AGENT_HOME:-/home/cbo}/.local/share/cursor-agent:${CAPTCHA_AGENT_HOME:-/home/cbo}/.local/share/cursor-agent:ro
       - ${CAPTCHA_AGENT_HOME:-/home/cbo}/.cursor:${CAPTCHA_AGENT_HOME:-/home/cbo}/.cursor:rw
       - ${CAPTCHA_AGENT_HOME:-/home/cbo}/.config/cursor:${CAPTCHA_AGENT_HOME:-/home/cbo}/.config/cursor:rw
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-m",
+          "app.worker_health",
+          "check",
+          "--service",
+          "elaborazioni-worker-poste",
+          "--max-age-seconds",
+          "90",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   elaborazioni-worker-autodoc:
     build:
@@ -367,7 +562,12 @@ services:
       dockerfile: ./modules/elaborazioni/worker/Dockerfile
     container_name: gaia-elaborazioni-worker-autodoc
     restart: unless-stopped
+    command: python /app/worker/worker_runner.py
+    init: true
     stop_grace_period: "30s"
+    cpus: ${ELABORAZIONI_AUTODOC_CPU_LIMIT:-2.0}
+    mem_limit: ${ELABORAZIONI_AUTODOC_MEMORY_LIMIT:-3g}
+    pids_limit: ${ELABORAZIONI_AUTODOC_PIDS_LIMIT:-768}
     dns:
       - 1.1.1.1
       - 8.8.8.8
@@ -383,7 +583,7 @@ services:
       CURSOR_AUTH_TOKEN_FILE: ${CURSOR_AUTH_TOKEN_FILE:-${CAPTCHA_AGENT_HOME:-/home/cbo}/.config/cursor/auth.json}
       HOME: ${CAPTCHA_AGENT_HOME:-/home/cbo}
       CAPTCHA_LLM_ENABLED: ${CAPTCHA_LLM_ENABLED:-true}
-      CAPTCHA_LLM_ATTEMPTS: ${CAPTCHA_LLM_ATTEMPTS:-3}
+      CAPTCHA_LLM_ATTEMPTS: ${CAPTCHA_LLM_ATTEMPTS:-10}
       CAPTCHA_EXTERNAL_ATTEMPTS: ${CAPTCHA_EXTERNAL_ATTEMPTS:-3}
       CAPTCHA_MANUAL_ATTEMPTS: ${CAPTCHA_MANUAL_ATTEMPTS:-0}
       CAPTCHA_MANUAL_TIMEOUT_SEC: ${CAPTCHA_MANUAL_TIMEOUT_SEC:-900}
@@ -395,14 +595,33 @@ services:
       ELABORAZIONI_SISTER_SELECTORS_PATH: ${ELABORAZIONI_SISTER_SELECTORS_PATH:-${CATASTO_SISTER_SELECTORS_PATH:-/app/worker/sister_selectors.json}}
       ELABORAZIONI_LOG_LEVEL: ${ELABORAZIONI_LOG_LEVEL:-${CATASTO_LOG_LEVEL:-INFO}}
       ELABORAZIONI_WORKER_FAMILIES: ${ELABORAZIONI_WORKER_FAMILIES_AUTODOC:-autodoc}
+      GAIA_WORKER_HEALTH_SERVICE: elaborazioni-worker-autodoc
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       - catasto-data:/data/catasto
+      - ./runtime-data:/runtime-data
       - ${CAPTCHA_AGENT_HOME:-/home/cbo}/.local/share/cursor-agent:${CAPTCHA_AGENT_HOME:-/home/cbo}/.local/share/cursor-agent:ro
       - ${CAPTCHA_AGENT_HOME:-/home/cbo}/.cursor:${CAPTCHA_AGENT_HOME:-/home/cbo}/.cursor:rw
       - ${CAPTCHA_AGENT_HOME:-/home/cbo}/.config/cursor:${CAPTCHA_AGENT_HOME:-/home/cbo}/.config/cursor:rw
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-m",
+          "app.worker_health",
+          "check",
+          "--service",
+          "elaborazioni-worker-autodoc",
+          "--max-age-seconds",
+          "90",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   scanner:
     build:

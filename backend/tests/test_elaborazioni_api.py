@@ -1,52 +1,58 @@
+import zipfile
 from collections.abc import Generator
 from datetime import UTC, date, datetime, timedelta
 from io import BytesIO
+from types import SimpleNamespace
 from uuid import UUID, uuid4
-import zipfile
 
-from cryptography.fernet import Fernet
 import pandas as pd
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
 from app.core.database import get_db
 from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.capacitas import CapacitasInCassSyncJob
-from app.models.elaborazioni import ElaborazioneAutoJobConfig
-from app.modules.ruolo.models import RuoloAvviso
-from app.modules.utenze.models import AnagraficaSubject
-from app.modules.utenze.anpr.models import AnprJobRun, AnprSyncConfig
 from app.models.catasto import (
     CatastoBatch,
+    CatastoBatchStatus,
+    CatastoComune,
     CatastoConnectionTest,
     CatastoConnectionTestStatus,
-    CatastoComune,
     CatastoCredential,
+    CatastoDocument,
+    CatastoRuoloAutoSyncConfig,
     CatastoRuoloAutoSyncItem,
     CatastoRuoloAutoSyncItemStatus,
-    CatastoDocument,
     CatastoVisuraRequest,
     CatastoVisuraRequestStatus,
 )
+from app.models.elaborazioni import ElaborazioneAutoJobConfig
+from app.modules.ruolo.models import (
+    RuoloAvviso,
+    RuoloImportJob,
+    RuoloParticella,
+    RuoloPartita,
+)
+from app.modules.utenze.anpr.models import AnprJobRun, AnprSyncConfig
+from app.modules.utenze.models import AnagraficaSubject
+from app.schemas.catasto import CatastoRuoloAutoSyncConfigUpdateRequest
+from app.services.catasto_credentials import get_credential_fernet
 from app.services.elaborazioni_batches import (
     RELEASE_REQUESTED_MESSAGE,
     RELEASE_REQUESTED_OPERATION,
 )
-from app.services.catasto_credentials import get_credential_fernet
 from app.services.elaborazioni_ruolo_autosync import (
     classify_ruolo_autosync_failure,
     ensure_ruolo_autosync_batch,
-    recover_stale_pending_ruolo_autosync_batches,
     reconcile_ruolo_autosync_items,
+    recover_stale_pending_ruolo_autosync_batches,
 )
-from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
-
+from cryptography.fernet import Fernet
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
 engine = create_engine(
@@ -1899,7 +1905,7 @@ def test_ruolo_autosync_recovers_stale_pending_batch_and_requeues_items() -> Non
         db.close()
 
 
-def test_ruolo_autosync_status_route_triggers_stale_pending_recovery() -> None:
+def test_ruolo_autosync_status_route_is_read_only_for_stale_pending_batch() -> None:
     user_id, credential_id = _seed_ruolo_autosync_fixture()
 
     client.put(
@@ -1935,12 +1941,412 @@ def test_ruolo_autosync_status_route_triggers_stale_pending_recovery() -> None:
     try:
         item = db.query(CatastoRuoloAutoSyncItem).filter(CatastoRuoloAutoSyncItem.user_id == user_id).one()
         batch = db.query(CatastoBatch).filter(CatastoBatch.user_id == user_id).one()
-        assert item.status == CatastoRuoloAutoSyncItemStatus.PENDING.value
-        assert item.linked_batch_id is None
-        assert batch.status == "failed"
+        assert item.status == CatastoRuoloAutoSyncItemStatus.QUEUED.value
+        assert item.linked_batch_id == batch.id
+        assert batch.status == "pending"
     finally:
         db.close()
 
+
+def test_ruolo_autosync_source_refresh_deduplicates_and_uses_incremental_watermark() -> None:
+    user_id, _ = _seed_ruolo_autosync_fixture()
+
+    import app.services.elaborazioni_ruolo_autosync as autosync_module
+
+    db = TestingSessionLocal()
+    try:
+        original = db.query(RuoloParticella).one()
+        newer = RuoloParticella(
+            partita_id=original.partita_id,
+            anno_tributario=2027,
+            foglio="99",
+            particella=original.particella,
+            subalterno="A",
+            cat_particella_id=original.cat_particella_id,
+            created_at=datetime.now(UTC) - timedelta(seconds=1),
+        )
+        db.add(newer)
+        db.commit()
+
+        first = autosync_module.refresh_ruolo_autosync_source(db, user_id)
+        assert first == {"created": 1, "updated": 0, "total_candidates": 1}
+        item = db.query(CatastoRuoloAutoSyncItem).one()
+        assert item.ruolo_particella_id == newer.id
+        assert item.foglio == "99"
+        assert item.subalterno == "A"
+
+        second = autosync_module.refresh_ruolo_autosync_source(db, user_id)
+        assert second == {"created": 0, "updated": 1, "total_candidates": 1}
+
+        config = db.query(CatastoRuoloAutoSyncConfig).filter_by(user_id=user_id).one()
+        watermark = config.last_source_refresh_at
+        assert watermark is not None
+        incremental_created_at = datetime.now(UTC)
+        config.last_source_refresh_at = incremental_created_at - timedelta(seconds=1)
+        original.created_at = incremental_created_at - timedelta(seconds=10)
+        newer.created_at = incremental_created_at - timedelta(seconds=10)
+        incremental_row = RuoloParticella(
+            partita_id=original.partita_id,
+            anno_tributario=2028,
+            foglio="100",
+            particella="604",
+            cat_particella_id=uuid4(),
+            created_at=incremental_created_at,
+        )
+        db.add(incremental_row)
+        db.commit()
+
+        incremental = autosync_module._refresh_ruolo_autosync_source_incremental(db, user_id)
+        assert incremental == {"created": 1, "updated": 0, "total_candidates": 1}
+
+        empty = autosync_module._refresh_ruolo_autosync_source_incremental(db, user_id)
+        assert empty == {"created": 0, "updated": 0, "total_candidates": 0}
+    finally:
+        db.close()
+
+
+def test_ruolo_autosync_source_refresh_blocks_and_unblocks_unknown_comune() -> None:
+    user_id, _ = _seed_ruolo_autosync_fixture()
+
+    import app.services.elaborazioni_ruolo_autosync as autosync_module
+
+    db = TestingSessionLocal()
+    try:
+        partita = db.query(RuoloPartita).one()
+        partita.comune_nome = "Atlantide"
+        db.commit()
+
+        autosync_module.refresh_ruolo_autosync_source(db, user_id)
+        item = db.query(CatastoRuoloAutoSyncItem).one()
+        assert item.status == CatastoRuoloAutoSyncItemStatus.BLOCKED_SOURCE.value
+        assert "non censito" in (item.last_error_message or "")
+
+        db.add(CatastoComune(nome="Atlantide", codice_sister="A000#ATLANTIDE#0#0", ufficio="ORISTANO"))
+        db.commit()
+        autosync_module.refresh_ruolo_autosync_source(db, user_id)
+        db.refresh(item)
+
+        assert item.status == CatastoRuoloAutoSyncItemStatus.PENDING.value
+        assert item.last_error_message is None
+    finally:
+        db.close()
+
+
+def test_ruolo_autosync_postgres_advisory_lock_helpers() -> None:
+    import app.services.elaborazioni_ruolo_autosync as autosync_module
+
+    class FakePostgresSession:
+        def __init__(self) -> None:
+            self.statements: list[str] = []
+
+        def get_bind(self):
+            return SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+
+        def scalar(self, statement):
+            self.statements.append(str(statement))
+            return True
+
+    db = FakePostgresSession()
+
+    assert autosync_module._try_acquire_ruolo_autosync_lock(db, 42) is True
+    autosync_module._acquire_ruolo_autosync_lock(db, 42)
+    autosync_module._release_ruolo_autosync_lock(db, 42)
+
+    assert "pg_try_advisory_lock" in db.statements[0]
+    assert "pg_advisory_lock" in db.statements[1]
+    assert "pg_advisory_unlock" in db.statements[2]
+
+
+def test_ruolo_autosync_maintenance_skips_busy_lock_and_releases_after_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.services.elaborazioni_ruolo_autosync as autosync_module
+
+    calls: list[str] = []
+    monkeypatch.setattr(autosync_module, "_try_acquire_ruolo_autosync_lock", lambda _db, _user_id: False)
+    monkeypatch.setattr(
+        autosync_module,
+        "_refresh_ruolo_autosync_source_incremental",
+        lambda *_args, **_kwargs: calls.append("refresh"),
+    )
+
+    assert autosync_module.maintain_ruolo_autosync(object(), 7) is None
+    assert calls == []
+
+    monkeypatch.setattr(autosync_module, "_try_acquire_ruolo_autosync_lock", lambda _db, _user_id: True)
+    monkeypatch.setattr(
+        autosync_module,
+        "_refresh_ruolo_autosync_source_incremental",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("refresh failed")),
+    )
+    monkeypatch.setattr(
+        autosync_module,
+        "_release_ruolo_autosync_lock",
+        lambda _db, _user_id: calls.append("release"),
+    )
+
+    with pytest.raises(RuntimeError, match="refresh failed"):
+        autosync_module.maintain_ruolo_autosync(object(), 7)
+    assert calls == ["release"]
+
+
+def test_ruolo_autosync_config_validation_and_missing_config_fallback() -> None:
+    import app.services.elaborazioni_ruolo_autosync as autosync_module
+
+    db = TestingSessionLocal()
+    try:
+        user = db.query(ApplicationUser).filter_by(username="elaborazioni-super-admin").one()
+        config = autosync_module.get_ruolo_autosync_config_for_update(db, user.id)
+        assert config.user_id == user.id
+
+        disabled = autosync_module.update_ruolo_autosync_config(
+            db,
+            user.id,
+            CatastoRuoloAutoSyncConfigUpdateRequest(enabled=False, credential_id=None),
+        )
+        assert disabled.enabled is False
+        assert disabled.credential_id is None
+        unchanged = autosync_module.update_ruolo_autosync_config(
+            db,
+            user.id,
+            CatastoRuoloAutoSyncConfigUpdateRequest(),
+        )
+        assert unchanged.enabled is False
+
+        with pytest.raises(ValueError, match="non trovata"):
+            autosync_module.update_ruolo_autosync_config(
+                db,
+                user.id,
+                CatastoRuoloAutoSyncConfigUpdateRequest(credential_id=uuid4()),
+            )
+
+        inactive = CatastoCredential(
+            user_id=user.id,
+            label="Inactive",
+            sister_username="inactive",
+            sister_password_encrypted=b"encrypted",
+            ufficio_provinciale="ORISTANO Territorio",
+            active=False,
+        )
+        db.add(inactive)
+        db.commit()
+        with pytest.raises(ValueError, match="non e attiva"):
+            autosync_module.update_ruolo_autosync_config(
+                db,
+                user.id,
+                CatastoRuoloAutoSyncConfigUpdateRequest(credential_id=inactive.id),
+            )
+
+        with pytest.raises(ValueError, match="devi selezionare"):
+            autosync_module.update_ruolo_autosync_config(
+                db,
+                user.id,
+                CatastoRuoloAutoSyncConfigUpdateRequest(enabled=True),
+            )
+
+        config.enabled = True
+        config.credential_id = uuid4()
+        db.add(config)
+        db.commit()
+        with pytest.raises(ValueError, match="non e disponibile"):
+            autosync_module.update_ruolo_autosync_config(
+                db,
+                user.id,
+                CatastoRuoloAutoSyncConfigUpdateRequest(enabled=True),
+            )
+    finally:
+        db.close()
+
+
+def test_ruolo_autosync_reconcile_covers_missing_processing_completed_and_retryable_requests() -> None:
+    user_id, credential_id = _seed_ruolo_autosync_fixture()
+    client.put(
+        "/elaborazioni/ruolo-autosync/config",
+        headers=auth_headers(),
+        json={"enabled": True, "credential_id": credential_id},
+    )
+    client.post("/elaborazioni/ruolo-autosync/refresh-source", headers=auth_headers())
+    client.post("/elaborazioni/ruolo-autosync/run-now", headers=auth_headers())
+
+    db = TestingSessionLocal()
+    try:
+        item = db.query(CatastoRuoloAutoSyncItem).one()
+        request = db.get(CatastoVisuraRequest, item.linked_request_id)
+        assert request is not None
+
+        request.status = CatastoVisuraRequestStatus.PROCESSING.value
+        request.attempts = 3
+        db.commit()
+        reconcile_ruolo_autosync_items(db, user_id)
+        assert item.status == CatastoRuoloAutoSyncItemStatus.PROCESSING.value
+        assert item.attempt_count == 3
+
+        request.status = CatastoVisuraRequestStatus.COMPLETED.value
+        request.processed_at = None
+        request.error_message = "completed note"
+        db.commit()
+        reconcile_ruolo_autosync_items(db, user_id)
+        assert item.status == CatastoRuoloAutoSyncItemStatus.COMPLETED.value
+        assert item.last_completed_at is not None
+
+        request.status = CatastoVisuraRequestStatus.FAILED.value
+        request.error_message = "temporary transport failure"
+        db.commit()
+        reconcile_ruolo_autosync_items(db, user_id)
+        assert item.status == CatastoRuoloAutoSyncItemStatus.PENDING.value
+        assert item.retry_after is not None
+
+        item.linked_request_id = uuid4()
+        item.status = CatastoRuoloAutoSyncItemStatus.QUEUED.value
+        db.commit()
+        reconcile_ruolo_autosync_items(db, user_id)
+        assert item.status == CatastoRuoloAutoSyncItemStatus.PENDING.value
+        assert item.retry_after is None
+
+        item.linked_request_id = uuid4()
+        item.status = CatastoRuoloAutoSyncItemStatus.COMPLETED.value
+        db.commit()
+        reconcile_ruolo_autosync_items(db, user_id)
+        assert item.status == CatastoRuoloAutoSyncItemStatus.COMPLETED.value
+
+        item.linked_request_id = request.id
+        item.status = CatastoRuoloAutoSyncItemStatus.PROCESSING.value
+        request.status = "cancelled"
+        db.commit()
+        reconcile_ruolo_autosync_items(db, user_id)
+        assert item.status == CatastoRuoloAutoSyncItemStatus.PROCESSING.value
+    finally:
+        db.close()
+
+
+def test_ruolo_autosync_batch_guard_branches(monkeypatch: pytest.MonkeyPatch) -> None:
+    user_id, credential_id = _seed_ruolo_autosync_fixture()
+
+    import app.services.elaborazioni_ruolo_autosync as autosync_module
+
+    db = TestingSessionLocal()
+    try:
+        assert ensure_ruolo_autosync_batch(db, user_id) is None
+
+        config = db.query(CatastoRuoloAutoSyncConfig).filter_by(user_id=user_id).one()
+        config.enabled = True
+        config.credential_id = uuid4()
+        db.commit()
+        assert ensure_ruolo_autosync_batch(db, user_id) is None
+        assert "non disponibile" in (config.last_error_message or "")
+
+        config.credential_id = UUID(credential_id)
+        db.commit()
+        assert ensure_ruolo_autosync_batch(db, user_id) is None
+
+        autosync_module.refresh_ruolo_autosync_source(db, user_id)
+        processing = CatastoBatch(
+            user_id=user_id,
+            name="Manual processing",
+            status=CatastoVisuraRequestStatus.PROCESSING.value,
+            total_items=1,
+        )
+        db.add(processing)
+        db.commit()
+        assert ensure_ruolo_autosync_batch(db, user_id) is None
+        db.delete(processing)
+        db.commit()
+
+        first_batch = ensure_ruolo_autosync_batch(db, user_id)
+        assert first_batch is not None
+        first_batch.status = CatastoBatchStatus.PENDING.value
+        first_batch.started_at = None
+        first_batch.completed_at = None
+        db.commit()
+        monkeypatch.setattr(
+            autosync_module,
+            "start_batch",
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(autosync_module.BatchConflictError("busy")),
+        )
+        assert ensure_ruolo_autosync_batch(db, user_id) is None
+    finally:
+        db.close()
+
+
+def test_ruolo_autosync_scheduler_continues_after_user_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    import app.services.elaborazioni_ruolo_autosync as autosync_module
+
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            ApplicationUser(
+                username="elaborazioni-third-admin",
+                email="elaborazioni-third-admin@example.local",
+                password_hash=hash_password("secret123"),
+                role=ApplicationUserRole.SUPER_ADMIN.value,
+                is_active=True,
+            )
+        )
+        db.commit()
+        users = db.query(ApplicationUser).order_by(ApplicationUser.id).all()
+        configs = [CatastoRuoloAutoSyncConfig(user_id=user.id, enabled=True) for user in users]
+        db.add_all(configs)
+        db.commit()
+
+        def maintain(_db, user_id):
+            if user_id == users[0].id:
+                return object()
+            if user_id == users[1].id:
+                return None
+            raise RuntimeError("isolated failure")
+
+        monkeypatch.setattr(autosync_module, "maintain_ruolo_autosync", maintain)
+
+        assert autosync_module.run_ruolo_autosync_maintenance_for_all_users(db) == 1
+        db.refresh(configs[2])
+        assert configs[2].last_error_message == "isolated failure"
+    finally:
+        db.close()
+
+
+def test_ruolo_autosync_stale_recovery_handles_empty_and_terminal_batches() -> None:
+    user_id, _ = _seed_ruolo_autosync_fixture()
+    db = TestingSessionLocal()
+    try:
+        created_at = datetime.now(UTC) - timedelta(minutes=10)
+        empty_batch = CatastoBatch(
+            user_id=user_id,
+            name="Empty stale autosync",
+            batch_kind="ruolo_autosync",
+            status="pending",
+            total_items=0,
+            created_at=created_at,
+        )
+        terminal_batch = CatastoBatch(
+            user_id=user_id,
+            name="Terminal stale autosync",
+            batch_kind="ruolo_autosync",
+            status="pending",
+            total_items=1,
+            created_at=created_at,
+        )
+        db.add_all([empty_batch, terminal_batch])
+        db.flush()
+        completed_request = CatastoVisuraRequest(
+            batch_id=terminal_batch.id,
+            user_id=user_id,
+            row_index=1,
+            comune="Oristano",
+            comune_codice="G113#ORISTANO#5#5",
+            catasto="Terreni",
+            foglio="1",
+            particella="1",
+            tipo_visura="Sintetica",
+            status=CatastoVisuraRequestStatus.COMPLETED.value,
+        )
+        db.add(completed_request)
+        db.commit()
+
+        assert recover_stale_pending_ruolo_autosync_batches(db, user_id) == 2
+        db.refresh(completed_request)
+        assert completed_request.status == CatastoVisuraRequestStatus.COMPLETED.value
+    finally:
+        db.close()
 
 def test_auto_job_controls_dashboard_lists_controls_and_updates_visure_toggle(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("app.core.config.settings.visure_nas_router_cron", "15 */2 * * *")

@@ -8,7 +8,11 @@ services:
       - ./backend:/app
       - qgis-project:/srv/qgis
 
-  gis-export-scheduler:
+  platform-scheduler:
+    volumes:
+      - ./backend:/app
+
+  gate-mobile-sync:
     volumes:
       - ./backend:/app
 
@@ -57,21 +61,28 @@ services:
       - "${FRONTEND_PORT:-3000}:3000"
 
   elaborazioni-worker-visure:
-    command: python /app/worker/worker.py
+    command: python /app/worker/worker_runner.py
     volumes:
       - ./modules/elaborazioni/worker:/app/worker
       - ./backend:/app/backend
       - catasto-data:/data/catasto
 
   elaborazioni-worker-runtime:
-    command: python /app/worker/worker.py
+    command: python /app/worker/worker_runner.py
+    volumes:
+      - ./modules/elaborazioni/worker:/app/worker
+      - ./backend:/app/backend
+      - catasto-data:/data/catasto
+
+  elaborazioni-worker-poste:
+    command: python /app/worker/worker_runner.py
     volumes:
       - ./modules/elaborazioni/worker:/app/worker
       - ./backend:/app/backend
       - catasto-data:/data/catasto
 
   elaborazioni-worker-autodoc:
-    command: python /app/worker/worker.py
+    command: python /app/worker/worker_runner.py
     volumes:
       - ./modules/elaborazioni/worker:/app/worker
       - ./backend:/app/backend

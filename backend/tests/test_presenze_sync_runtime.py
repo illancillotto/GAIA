@@ -1,22 +1,27 @@
 from __future__ import annotations
 
+import uuid
 from collections.abc import Generator
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-import uuid
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm.exc import StaleDataError
 from sqlalchemy.pool import StaticPool
 
 from app.core.datetime_compat import UTC
 from app.core.security import hash_password
 from app.db.base import Base
 from app.models.application_user import ApplicationUser, ApplicationUserRole
-from app.modules.presenze.models import PresenzeCredential, PresenzeImportJob, PresenzeSyncJob
+from app.modules.presenze import models as presenze_models
+from app.modules.presenze.models import (
+    PresenzeCredential,
+    PresenzeImportJob,
+    PresenzeSyncJob,
+)
 from app.modules.presenze.services import sync_runtime
-
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
@@ -59,6 +64,15 @@ def _create_sync_job(
     created_at: datetime | None = None,
     started_at: datetime | None = None,
     params_json: dict | None = None,
+    worker_id: str | None = None,
+    lease_token: uuid.UUID | None = None,
+    lease_generation: int = 0,
+    heartbeat_at: datetime | None = None,
+    lease_expires_at: datetime | None = None,
+    retry_not_before: datetime | None = None,
+    priority: int = 100,
+    attempt_count: int = 0,
+    max_attempts: int = 3,
 ) -> PresenzeSyncJob:
     job = PresenzeSyncJob(
         id=uuid.uuid4(),
@@ -67,7 +81,15 @@ def _create_sync_job(
         period_start=datetime(2026, 6, 1, tzinfo=UTC).date(),
         period_end=datetime(2026, 6, 30, tzinfo=UTC).date(),
         worker_pid=worker_pid,
-        max_attempts=3,
+        worker_id=worker_id,
+        lease_token=lease_token,
+        lease_generation=lease_generation,
+        heartbeat_at=heartbeat_at,
+        lease_expires_at=lease_expires_at,
+        retry_not_before=retry_not_before,
+        priority=priority,
+        attempt_count=attempt_count,
+        max_attempts=max_attempts,
         created_at=created_at or datetime.now(UTC),
         started_at=started_at,
         params_json=params_json,
@@ -106,11 +128,37 @@ def test_build_period_handles_regular_and_december_months() -> None:
 def test_as_utc_handles_none_naive_and_aware_datetimes() -> None:
     assert sync_runtime._as_utc(None) is None
 
-    naive = datetime(2026, 6, 1, 12, 0, 0)
+    naive = datetime(2026, 6, 1, 12, 0, 0, tzinfo=UTC).replace(tzinfo=None)
     assert sync_runtime._as_utc(naive) == naive.replace(tzinfo=UTC)
 
     aware = datetime(2026, 6, 1, 14, 0, 0, tzinfo=timezone(timedelta(hours=2)))
     assert sync_runtime._as_utc(aware) == datetime(2026, 6, 1, 12, 0, 0, tzinfo=UTC)
+
+
+def test_presenze_model_compatibility_aliases_and_holiday_property() -> None:
+    ordinary = presenze_models.PresenzeHoliday(
+        holiday_date=datetime(2026, 8, 15, tzinfo=UTC).date(),
+        label="Ferragosto",
+        holiday_kind=presenze_models.PRESENZE_HOLIDAY_KIND_ORDINARY,
+    )
+    override = presenze_models.PresenzeHoliday(
+        holiday_date=datetime(2026, 8, 16, tzinfo=UTC).date(),
+        label="Apertura",
+        holiday_kind=presenze_models.PRESENZE_HOLIDAY_KIND_WORKING_OVERRIDE,
+    )
+    assert ordinary.is_workday_override is False
+    assert override.is_workday_override is True
+    assert presenze_models.InazCredential is presenze_models.PresenzeCredential
+    assert (
+        presenze_models.INAZ_CONTRACT_KIND_OPERAIO
+        == presenze_models.PRESENZE_CONTRACT_KIND_OPERAIO
+    )
+    with pytest.raises(AttributeError):
+        presenze_models.__getattr__("InazMissingModel")
+    with pytest.raises(AttributeError):
+        presenze_models.__getattr__("INAZ_MISSING_CONSTANT")
+    with pytest.raises(AttributeError):
+        presenze_models.__getattr__("MissingModel")
 
 
 def test_artifact_helpers_resolve_and_delete_paths(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -128,6 +176,14 @@ def test_artifact_helpers_resolve_and_delete_paths(monkeypatch: pytest.MonkeyPat
 
     sync_runtime.delete_sync_artifact_dir(job_id)
     assert artifact_dir.exists() is False
+
+
+def test_retention_empty_queue_does_not_commit() -> None:
+    db = TestingSessionLocal()
+    try:
+        assert sync_runtime.apply_sync_job_retention(db, keep_count=2) == 0
+    finally:
+        db.close()
 
 
 def test_prepare_sync_job_artifacts_and_claim_next_pending_job(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -156,6 +212,12 @@ def test_prepare_sync_job_artifacts_and_claim_next_pending_job(monkeypatch: pyte
         assert claimed.id == pending.id
         assert claimed.status == "running"
         assert claimed.worker_pid == 5555
+        assert claimed.worker_id == "worker-instance-1"
+        assert claimed.lease_token is not None
+        assert claimed.lease_generation == 1
+        assert claimed.heartbeat_at is not None
+        assert claimed.lease_expires_at is not None
+        assert claimed.attempt_count == 1
         assert claimed.params_json["worker_mode"] == sync_runtime.QUEUE_WORKER_MODE
         assert claimed.params_json["worker_instance_id"] == "worker-instance-1"
         assert claimed.params_json["worker_claimed_at"]
@@ -169,6 +231,67 @@ def test_claim_next_pending_sync_job_returns_none_when_queue_is_empty() -> None:
     db = TestingSessionLocal()
     try:
         assert sync_runtime.claim_next_pending_sync_job(db, worker_pid=5555) is None
+    finally:
+        db.close()
+
+
+def test_claim_next_pending_sync_job_honors_priority_retry_and_attempt_limits(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    user = _create_user("presenze_runtime_claim_fair")
+    db = TestingSessionLocal()
+    now = datetime.now(UTC)
+    try:
+        credential = PresenzeCredential(
+            application_user_id=user.id,
+            label="Queue fair",
+            username="queue.fair.inaz",
+            password_encrypted="encrypted",
+            active=True,
+        )
+        db.add(credential)
+        db.commit()
+        db.refresh(credential)
+        oldest = _create_sync_job(
+            db,
+            user,
+            created_at=now - timedelta(hours=2),
+            priority=50,
+        )
+        preferred = _create_sync_job(
+            db,
+            user,
+            created_at=now - timedelta(minutes=1),
+            priority=10,
+        )
+        delayed = _create_sync_job(
+            db,
+            user,
+            created_at=now - timedelta(hours=3),
+            retry_not_before=now + timedelta(minutes=1),
+            priority=1,
+        )
+        exhausted = _create_sync_job(
+            db,
+            user,
+            created_at=now - timedelta(hours=4),
+            attempt_count=3,
+            max_attempts=3,
+            priority=1,
+        )
+        for job in (oldest, preferred, delayed, exhausted):
+            job.credential_id = credential.id
+        db.commit()
+        monkeypatch.setattr(sync_runtime.settings, "presenze_sync_artifacts_path", str(tmp_path))
+
+        claimed = sync_runtime.claim_next_pending_sync_job(db, worker_pid=5555)
+
+        assert claimed is not None
+        assert claimed.id == preferred.id
+        assert oldest.status == "pending"
+        assert delayed.status == "pending"
+        assert exhausted.status == "pending"
     finally:
         db.close()
 
@@ -322,21 +445,29 @@ def test_stop_sync_worker_and_pid_exists_cover_runtime_branches(monkeypatch: pyt
         sync_runtime.stop_sync_worker(job)
 
     job.worker_pid = 4321
+    job.worker_id = "worker-a"
+    job.lease_token = uuid.uuid4()
     calls: list[tuple[int, int]] = []
     monkeypatch.setattr(sync_runtime.os, "killpg", lambda pid, sig: calls.append((pid, sig)))
     sync_runtime.stop_sync_worker(job)
     assert calls == [(4321, sync_runtime.signal.SIGTERM)]
+    assert job.lease_generation == 1
+    assert job.worker_id is None
+    assert job.lease_token is None
+    assert job.worker_pid is None
 
     def fake_missing(pid: int, sig: int) -> None:
         raise ProcessLookupError()
 
     monkeypatch.setattr(sync_runtime.os, "killpg", fake_missing)
+    job.worker_pid = 4321
     sync_runtime.stop_sync_worker(job)
 
     def fake_oserror(pid: int, sig: int) -> None:
         raise OSError("boom")
 
     monkeypatch.setattr(sync_runtime.os, "killpg", fake_oserror)
+    job.worker_pid = 4321
     with pytest.raises(RuntimeError, match="Unable to stop worker process group 4321"):
         sync_runtime.stop_sync_worker(job)
 
@@ -420,6 +551,11 @@ def test_reconcile_stale_sync_jobs_does_not_use_local_pid_check_for_queue_worker
             user,
             status="running",
             worker_pid=3333,
+            worker_id="queue-worker",
+            lease_token=uuid.uuid4(),
+            lease_generation=1,
+            heartbeat_at=datetime.now(UTC),
+            lease_expires_at=datetime.now(UTC) + timedelta(minutes=5),
             started_at=datetime.now(UTC),
             params_json={"worker_mode": sync_runtime.QUEUE_WORKER_MODE},
         )
@@ -435,9 +571,12 @@ def test_reconcile_stale_sync_jobs_does_not_use_local_pid_check_for_queue_worker
         db.close()
 
 
-def test_mark_orphaned_queue_worker_jobs_marks_idle_worker_running_jobs_failed() -> None:
+def test_mark_orphaned_queue_worker_jobs_requeues_only_expired_leases(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     user = _create_user("presenze_runtime_orphan_queue")
     db = TestingSessionLocal()
+    recovery_at = datetime.now(UTC)
     try:
         import_job = _create_import_job(db, user, status="running")
         running = _create_sync_job(
@@ -445,6 +584,12 @@ def test_mark_orphaned_queue_worker_jobs_marks_idle_worker_running_jobs_failed()
             user,
             status="running",
             worker_pid=1,
+            worker_id="old-worker",
+            lease_token=uuid.uuid4(),
+            lease_generation=1,
+            heartbeat_at=recovery_at - timedelta(minutes=6),
+            lease_expires_at=recovery_at - timedelta(seconds=1),
+            attempt_count=1,
             params_json={
                 "worker_mode": sync_runtime.QUEUE_WORKER_MODE,
                 "worker_instance_id": "old-worker",
@@ -456,6 +601,12 @@ def test_mark_orphaned_queue_worker_jobs_marks_idle_worker_running_jobs_failed()
             user,
             status="running",
             worker_pid=2,
+            worker_id="new-worker",
+            lease_token=uuid.uuid4(),
+            lease_generation=1,
+            heartbeat_at=recovery_at,
+            lease_expires_at=recovery_at + timedelta(minutes=5),
+            attempt_count=1,
             params_json={"worker_mode": sync_runtime.QUEUE_WORKER_MODE, "worker_instance_id": "new-worker"},
         )
         subprocess_mode = _create_sync_job(
@@ -467,25 +618,30 @@ def test_mark_orphaned_queue_worker_jobs_marks_idle_worker_running_jobs_failed()
         )
         db.add_all([running, other_pid, subprocess_mode])
         db.commit()
+        monkeypatch.setattr(sync_runtime, "_worker_retry_backoff", lambda: timedelta(seconds=30))
 
-        changed = sync_runtime.mark_orphaned_queue_worker_jobs(db, worker_instance_id="new-worker")
+        changed = sync_runtime.recover_expired_queue_worker_jobs(db, now=recovery_at)
 
         db.refresh(running)
         db.refresh(import_job)
         db.refresh(other_pid)
         db.refresh(subprocess_mode)
         assert changed is True
-        assert running.status == "failed"
-        assert "Queue worker is idle" in (running.error_detail or "")
-        assert import_job.status == "failed"
-        assert import_job.error_detail == running.error_detail
+        assert running.status == "pending"
+        assert "lease expired" in (running.error_detail or "").lower()
+        assert sync_runtime._as_utc(running.retry_not_before) == recovery_at + timedelta(seconds=30)
+        assert running.lease_generation == 2
+        assert running.worker_id is None
+        assert running.lease_token is None
+        assert running.worker_pid is None
+        assert import_job.status == "running"
         assert other_pid.status == "running"
         assert subprocess_mode.status == "running"
     finally:
         db.close()
 
 
-def test_mark_orphaned_queue_worker_jobs_preserves_explicitly_active_jobs() -> None:
+def test_mark_orphaned_queue_worker_jobs_preserves_unexpired_jobs() -> None:
     user = _create_user("presenze_runtime_orphan_active")
     db = TestingSessionLocal()
     try:
@@ -494,6 +650,11 @@ def test_mark_orphaned_queue_worker_jobs_preserves_explicitly_active_jobs() -> N
             user,
             status="running",
             worker_pid=1,
+            worker_id="old-worker",
+            lease_token=uuid.uuid4(),
+            lease_generation=1,
+            heartbeat_at=datetime.now(UTC),
+            lease_expires_at=datetime.now(UTC) + timedelta(minutes=5),
             params_json={"worker_mode": sync_runtime.QUEUE_WORKER_MODE, "worker_instance_id": "old-worker"},
         )
 
@@ -508,6 +669,201 @@ def test_mark_orphaned_queue_worker_jobs_preserves_explicitly_active_jobs() -> N
         assert running.status == "running"
     finally:
         db.close()
+
+
+def test_mark_orphaned_queue_worker_jobs_recovers_legacy_owner_without_lease() -> None:
+    user = _create_user("presenze_runtime_orphan_legacy")
+    db = TestingSessionLocal()
+    try:
+        running = _create_sync_job(
+            db,
+            user,
+            status="running",
+            worker_pid=1,
+            attempt_count=1,
+            params_json={"worker_mode": sync_runtime.QUEUE_WORKER_MODE},
+        )
+
+        changed = sync_runtime.mark_orphaned_queue_worker_jobs(
+            db,
+            worker_instance_id="new-worker",
+        )
+
+        db.refresh(running)
+        assert changed is True
+        assert running.status == "pending"
+        assert running.lease_generation == 1
+        assert running.retry_not_before is not None
+    finally:
+        db.close()
+
+
+def test_recover_expired_queue_worker_job_fails_after_max_attempts() -> None:
+    user = _create_user("presenze_runtime_expired_max")
+    db = TestingSessionLocal()
+    recovery_at = datetime.now(UTC)
+    try:
+        import_job = _create_import_job(db, user, status="running")
+        running = _create_sync_job(
+            db,
+            user,
+            status="running",
+            worker_pid=1,
+            worker_id="expired-worker",
+            lease_token=uuid.uuid4(),
+            lease_generation=4,
+            heartbeat_at=recovery_at - timedelta(minutes=6),
+            lease_expires_at=recovery_at - timedelta(seconds=1),
+            attempt_count=3,
+            max_attempts=3,
+            params_json={"worker_mode": sync_runtime.QUEUE_WORKER_MODE},
+        )
+        running.import_job_id = import_job.id
+        db.commit()
+
+        assert sync_runtime.recover_expired_queue_worker_jobs(db, now=recovery_at) is True
+
+        db.refresh(running)
+        db.refresh(import_job)
+        assert running.status == "failed"
+        assert running.lease_generation == 5
+        assert running.worker_id is None
+        assert "maximum attempts" in (running.error_detail or "")
+        assert import_job.status == "failed"
+        assert import_job.error_detail == running.error_detail
+    finally:
+        db.close()
+
+
+def test_renew_queue_worker_leases_updates_only_matching_active_jobs() -> None:
+    user = _create_user("presenze_runtime_renew")
+    db = TestingSessionLocal()
+    heartbeat_at = datetime.now(UTC)
+    try:
+        owned = _create_sync_job(
+            db,
+            user,
+            status="running",
+            worker_id="worker-a",
+            lease_token=uuid.uuid4(),
+            lease_generation=1,
+            lease_expires_at=heartbeat_at - timedelta(seconds=1),
+        )
+        other = _create_sync_job(
+            db,
+            user,
+            status="running",
+            worker_id="worker-b",
+            lease_token=uuid.uuid4(),
+            lease_generation=1,
+            lease_expires_at=heartbeat_at - timedelta(seconds=1),
+        )
+
+        renewed = sync_runtime.renew_queue_worker_leases(
+            db,
+            worker_id="worker-a",
+            active_job_ids={str(owned.id), str(other.id), "not-a-uuid"},
+            now=heartbeat_at,
+        )
+
+        db.refresh(owned)
+        db.refresh(other)
+        assert renewed == 1
+        assert sync_runtime._as_utc(owned.heartbeat_at) == heartbeat_at
+        assert sync_runtime._as_utc(owned.lease_expires_at) == heartbeat_at + sync_runtime._worker_lease_duration()
+        assert other.heartbeat_at is None
+        assert sync_runtime.renew_queue_worker_leases(
+            db,
+            worker_id="worker-a",
+            active_job_ids={"not-a-uuid"},
+        ) == 0
+        assert sync_runtime.renew_queue_worker_leases(
+            db,
+            worker_id="worker-a",
+            active_job_ids={str(owned.id)},
+            now=heartbeat_at + timedelta(seconds=1),
+            commit=False,
+        ) == 1
+        db.rollback()
+    finally:
+        db.close()
+
+
+def test_touch_and_clear_sync_job_lease_require_active_ownership(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PRESENZE_WORKER_LEASE_SECONDS", "invalid")
+    assert sync_runtime._worker_lease_duration() == timedelta(
+        seconds=sync_runtime.DEFAULT_WORKER_LEASE_SECONDS
+    )
+    monkeypatch.setenv("PRESENZE_WORKER_LEASE_SECONDS", "1")
+    assert sync_runtime._worker_lease_duration() == timedelta(seconds=30)
+    monkeypatch.setenv("PRESENZE_WORKER_RETRY_BACKOFF_SECONDS", "0")
+    assert sync_runtime._worker_retry_backoff() == timedelta(seconds=1)
+
+    job = PresenzeSyncJob(
+        status="pending",
+        requested_by_user_id=1,
+        period_start=datetime(2026, 6, 1, tzinfo=UTC).date(),
+        period_end=datetime(2026, 6, 30, tzinfo=UTC).date(),
+    )
+    sync_runtime.touch_sync_job_lease(job)
+    assert job.heartbeat_at is None
+
+    heartbeat_at = datetime.now(UTC)
+    job.status = "running"
+    job.worker_id = "worker-a"
+    job.lease_token = uuid.uuid4()
+    job.worker_pid = 123
+    sync_runtime.touch_sync_job_lease(job, now=heartbeat_at)
+    assert job.heartbeat_at == heartbeat_at
+    assert job.lease_expires_at == heartbeat_at + timedelta(seconds=30)
+
+    sync_runtime.clear_sync_job_lease(job)
+    assert job.worker_id is None
+    assert job.lease_token is None
+    assert job.heartbeat_at is None
+    assert job.lease_expires_at is None
+    assert job.worker_pid is None
+
+
+def test_lease_generation_fences_a_stale_session() -> None:
+    user = _create_user("presenze_runtime_fencing")
+    seed_db = TestingSessionLocal()
+    try:
+        job = _create_sync_job(
+            seed_db,
+            user,
+            status="running",
+            worker_id="worker-a",
+            lease_token=uuid.uuid4(),
+            lease_generation=1,
+            lease_expires_at=datetime.now(UTC) + timedelta(minutes=5),
+        )
+        job_id = job.id
+    finally:
+        seed_db.close()
+
+    owner_db = TestingSessionLocal()
+    recovery_db = TestingSessionLocal()
+    try:
+        stale_owner = owner_db.get(PresenzeSyncJob, job_id)
+        recovered = recovery_db.get(PresenzeSyncJob, job_id)
+        assert stale_owner is not None
+        assert recovered is not None
+
+        recovered.lease_generation += 1
+        recovered.status = "pending"
+        sync_runtime.clear_sync_job_lease(recovered)
+        recovery_db.commit()
+
+        stale_owner.status = "completed"
+        with pytest.raises(StaleDataError):
+            owner_db.commit()
+    finally:
+        owner_db.rollback()
+        owner_db.close()
+        recovery_db.close()
 
 
 def test_reconcile_stale_sync_jobs_marks_linked_import_job_failed(

@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from collections import Counter
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
+from functools import wraps
+from typing import TypeVar
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models.catasto import (
     CatastoBatch,
     CatastoBatchKind,
     CatastoBatchStatus,
-    CatastoCredential,
     CatastoRuoloAutoSyncConfig,
     CatastoRuoloAutoSyncItem,
     CatastoRuoloAutoSyncItemStatus,
@@ -33,16 +33,92 @@ from app.services.elaborazioni_batches import (
     BatchConflictError,
     ValidatedVisuraRow,
     create_batch_from_validated_rows,
-    ensure_no_processing_batch,
     normalize_lookup_value,
     start_batch,
 )
-from app.services.elaborazioni_credentials import get_credential_for_user, get_runnable_credential_for_user
+from app.services.elaborazioni_credentials import (
+    get_credential_for_user,
+    get_runnable_credential_for_user,
+)
 
 UTC = timezone.utc
 AUTO_SYNC_RETRY_DELAY = timedelta(minutes=5)
 AUTO_SYNC_BATCH_SIZE = 20
 AUTO_SYNC_PENDING_BATCH_GRACE = timedelta(minutes=2)
+RUOLO_AUTOSYNC_LOCK_NAMESPACE = 1_196_572_802
+RuoloAutosyncResult = TypeVar("RuoloAutosyncResult")
+RuoloAutosyncOperation = Callable[[Session, int], CatastoBatch | None]
+
+
+def _try_acquire_ruolo_autosync_lock(db: Session, user_id: int) -> bool:
+    if db.get_bind().dialect.name != "postgresql":
+        return True
+    return bool(db.scalar(select(func.pg_try_advisory_lock(RUOLO_AUTOSYNC_LOCK_NAMESPACE, user_id))))
+
+
+def _acquire_ruolo_autosync_lock(db: Session, user_id: int) -> None:
+    if db.get_bind().dialect.name == "postgresql":
+        db.scalar(select(func.pg_advisory_lock(RUOLO_AUTOSYNC_LOCK_NAMESPACE, user_id)))
+
+
+def _release_ruolo_autosync_lock(db: Session, user_id: int) -> None:
+    if db.get_bind().dialect.name == "postgresql":
+        db.scalar(select(func.pg_advisory_unlock(RUOLO_AUTOSYNC_LOCK_NAMESPACE, user_id)))
+
+
+def _ruolo_autosync_serialized(
+    operation: Callable[[Session, int], RuoloAutosyncResult],
+) -> Callable[[Session, int], RuoloAutosyncResult]:
+    @wraps(operation)
+    def locked_operation(db: Session, user_id: int) -> RuoloAutosyncResult:
+        _acquire_ruolo_autosync_lock(db, user_id)
+        try:
+            return operation(db, user_id)
+        finally:
+            _release_ruolo_autosync_lock(db, user_id)
+
+    return locked_operation
+
+
+def _ruolo_autosync_single_flight(operation: RuoloAutosyncOperation) -> RuoloAutosyncOperation:
+    @wraps(operation)
+    def locked_operation(db: Session, user_id: int) -> CatastoBatch | None:
+        if not _try_acquire_ruolo_autosync_lock(db, user_id):
+            return None
+        try:
+            return operation(db, user_id)
+        finally:
+            _release_ruolo_autosync_lock(db, user_id)
+
+    return locked_operation
+
+
+def _ruolo_autosync_source_rows(*, refreshed_after: datetime | None):
+    rank = func.row_number().over(
+        partition_by=RuoloParticella.cat_particella_id,
+        order_by=(
+            RuoloParticella.anno_tributario.desc(),
+            RuoloParticella.created_at.desc(),
+            RuoloParticella.id.asc(),
+        ),
+    ).label("source_rank")
+    statement = (
+        select(
+            RuoloParticella.id.label("ruolo_particella_id"),
+            RuoloParticella.cat_particella_id,
+            RuoloParticella.foglio,
+            RuoloParticella.particella,
+            RuoloParticella.subalterno,
+            RuoloPartita.comune_nome,
+            RuoloParticella.created_at.label("source_created_at"),
+            rank,
+        )
+        .join(RuoloPartita, RuoloPartita.id == RuoloParticella.partita_id)
+        .where(RuoloParticella.cat_particella_id.is_not(None))
+    )
+    if refreshed_after is not None:
+        statement = statement.where(RuoloParticella.created_at > refreshed_after)
+    return statement.subquery("ruolo_autosync_source")
 
 
 def classify_ruolo_autosync_failure(error_message: str | None) -> str:
@@ -123,71 +199,114 @@ def update_ruolo_autosync_config(
     return config
 
 
-def refresh_ruolo_autosync_source(db: Session, user_id: int) -> dict[str, int]:
-    config = get_ruolo_autosync_config(db, user_id)
-    comune_lookup = get_catasto_comuni_lookup(db)
-    rows = db.execute(
-        select(
-            RuoloParticella.id,
-            RuoloParticella.cat_particella_id,
-            RuoloParticella.foglio,
-            RuoloParticella.particella,
-            RuoloParticella.subalterno,
-            RuoloPartita.comune_nome,
-        )
-        .join(RuoloPartita, RuoloPartita.id == RuoloParticella.partita_id)
-        .where(RuoloParticella.cat_particella_id.is_not(None))
-        .order_by(RuoloParticella.anno_tributario.desc(), RuoloParticella.created_at.desc(), RuoloParticella.id.asc())
-    ).all()
-
+def _load_ruolo_autosync_source_candidates(
+    db: Session,
+    user_id: int,
+    *,
+    refreshed_after: datetime | None,
+):
+    source_rows = _ruolo_autosync_source_rows(refreshed_after=refreshed_after)
+    candidates = select(
+        source_rows.c.ruolo_particella_id,
+        source_rows.c.cat_particella_id,
+        source_rows.c.foglio,
+        source_rows.c.particella,
+        source_rows.c.subalterno,
+        source_rows.c.comune_nome,
+        source_rows.c.source_created_at,
+    ).where(source_rows.c.source_rank == 1)
+    rows = db.execute(candidates.order_by(source_rows.c.ruolo_particella_id.asc())).all()
     existing = {
-        item.ruolo_particella_id: item
+        item.cat_particella_id: item
         for item in db.scalars(
-            select(CatastoRuoloAutoSyncItem).where(CatastoRuoloAutoSyncItem.user_id == user_id)
+            select(CatastoRuoloAutoSyncItem).where(
+                CatastoRuoloAutoSyncItem.user_id == user_id,
+                CatastoRuoloAutoSyncItem.cat_particella_id.in_(
+                    select(source_rows.c.cat_particella_id).where(source_rows.c.source_rank == 1)
+                ),
+            )
         ).all()
     }
-    seen_source_keys: set[str] = set()
-    created = 0
-    updated = 0
+    return rows, existing
 
-    for ruolo_particella_id, cat_particella_id, foglio, particella, subalterno, comune_nome in rows:
-        source_key = str(cat_particella_id or ruolo_particella_id)
-        if source_key in seen_source_keys:
-            continue
-        seen_source_keys.add(source_key)
 
-        comune = comune_lookup.get(normalize_lookup_value(comune_nome))
-        item = existing.get(ruolo_particella_id)
-        if item is None:
-            item = CatastoRuoloAutoSyncItem(
-                user_id=user_id,
-                ruolo_particella_id=ruolo_particella_id,
-            )
-            db.add(item)
-            created += 1
-        else:
-            updated += 1
+def _upsert_ruolo_autosync_item(
+    db: Session,
+    user_id: int,
+    row,
+    existing: dict,
+    comune_lookup: dict,
+) -> bool:
+    (
+        ruolo_particella_id,
+        cat_particella_id,
+        foglio,
+        particella,
+        subalterno,
+        comune_nome,
+        _source_created_at,
+    ) = row
+    comune = comune_lookup.get(normalize_lookup_value(comune_nome))
+    item = existing.get(cat_particella_id)
+    created = item is None
+    if created:
+        item = CatastoRuoloAutoSyncItem(user_id=user_id, ruolo_particella_id=ruolo_particella_id)
+        db.add(item)
 
-        item.cat_particella_id = cat_particella_id
-        item.comune = comune.nome if comune is not None else (comune_nome or None)
-        item.comune_codice = comune.codice_sister if comune is not None else None
-        item.catasto = "Terreni"
-        item.foglio = str(foglio).strip() if foglio is not None else None
-        item.particella = str(particella).strip() if particella is not None else None
-        item.subalterno = str(subalterno).strip() if subalterno else None
-        item.tipo_visura = "Sintetica"
-        if comune is None:
-            item.status = CatastoRuoloAutoSyncItemStatus.BLOCKED_SOURCE.value
-            item.last_error_message = f"Comune ruolo non censito in Catasto comuni: {comune_nome}"
-        elif item.status == CatastoRuoloAutoSyncItemStatus.BLOCKED_SOURCE.value:
-            item.status = CatastoRuoloAutoSyncItemStatus.PENDING.value
-            item.last_error_message = None
+    item.ruolo_particella_id = ruolo_particella_id
+    item.cat_particella_id = cat_particella_id
+    item.comune = comune.nome if comune is not None else (comune_nome or None)
+    item.comune_codice = comune.codice_sister if comune is not None else None
+    item.catasto = "Terreni"
+    item.foglio = str(foglio).strip() if foglio is not None else None
+    item.particella = str(particella).strip() if particella is not None else None
+    item.subalterno = str(subalterno).strip() if subalterno else None
+    item.tipo_visura = "Sintetica"
+    if comune is None:
+        item.status = CatastoRuoloAutoSyncItemStatus.BLOCKED_SOURCE.value
+        item.last_error_message = f"Comune ruolo non censito in Catasto comuni: {comune_nome}"
+    elif item.status == CatastoRuoloAutoSyncItemStatus.BLOCKED_SOURCE.value:
+        item.status = CatastoRuoloAutoSyncItemStatus.PENDING.value
+        item.last_error_message = None
+    return created
+
+
+def _refresh_ruolo_autosync_source(
+    db: Session,
+    user_id: int,
+    *,
+    incremental: bool,
+) -> dict[str, int]:
+    config = get_ruolo_autosync_config(db, user_id)
+    refresh_started_at = datetime.now(UTC)
+    refreshed_after = config.last_source_refresh_at if incremental else None
+    comune_lookup = get_catasto_comuni_lookup(db)
+    rows, existing = _load_ruolo_autosync_source_candidates(
+        db,
+        user_id,
+        refreshed_after=refreshed_after,
+    )
+
+    source_watermark = max(
+        (row.source_created_at for row in rows),
+        default=refreshed_after or refresh_started_at,
+    )
+    created = sum(_upsert_ruolo_autosync_item(db, user_id, row, existing, comune_lookup) for row in rows)
+    if rows:
         config.last_error_message = None
-
-    config.last_source_refresh_at = datetime.now(UTC)
+    config.last_source_refresh_at = source_watermark
     db.add(config)
     db.commit()
-    return {"created": created, "updated": updated, "total_candidates": len(seen_source_keys)}
+    return {"created": created, "updated": len(rows) - created, "total_candidates": len(rows)}
+
+
+@_ruolo_autosync_serialized
+def refresh_ruolo_autosync_source(db: Session, user_id: int) -> dict[str, int]:
+    return _refresh_ruolo_autosync_source(db, user_id, incremental=False)
+
+
+def _refresh_ruolo_autosync_source_incremental(db: Session, user_id: int) -> dict[str, int]:
+    return _refresh_ruolo_autosync_source(db, user_id, incremental=True)
 
 
 def recover_stale_pending_ruolo_autosync_batches(db: Session, user_id: int) -> int:
@@ -444,14 +563,12 @@ def ensure_ruolo_autosync_batch(db: Session, user_id: int) -> CatastoBatch | Non
         started = start_batch(db, user_id, batch.id)
     except BatchConflictError as exc:
         cleanup_now = datetime.now(UTC)
-        request_ids = {request.id for request in requests}
         for item in runnable_items:
-            if item.linked_batch_id == batch.id or item.linked_request_id in request_ids:
-                item.status = CatastoRuoloAutoSyncItemStatus.PENDING.value
-                item.linked_batch_id = None
-                item.linked_request_id = None
-                item.retry_after = cleanup_now + AUTO_SYNC_RETRY_DELAY
-                item.last_error_message = "Batch autosync non avviato per conflitto di concorrenza, item rimesso in coda"
+            item.status = CatastoRuoloAutoSyncItemStatus.PENDING.value
+            item.linked_batch_id = None
+            item.linked_request_id = None
+            item.retry_after = cleanup_now + AUTO_SYNC_RETRY_DELAY
+            item.last_error_message = "Batch autosync non avviato per conflitto di concorrenza, item rimesso in coda"
         config.last_error_message = str(exc)
         db.add(config)
         db.execute(delete(CatastoVisuraRequest).where(CatastoVisuraRequest.batch_id == batch.id))
@@ -461,8 +578,9 @@ def ensure_ruolo_autosync_batch(db: Session, user_id: int) -> CatastoBatch | Non
     return started
 
 
+@_ruolo_autosync_single_flight
 def maintain_ruolo_autosync(db: Session, user_id: int) -> CatastoBatch | None:
-    refresh_ruolo_autosync_source(db, user_id)
+    _refresh_ruolo_autosync_source_incremental(db, user_id)
     return ensure_ruolo_autosync_batch(db, user_id)
 
 
@@ -472,7 +590,7 @@ def run_ruolo_autosync_maintenance_for_all_users(db: Session) -> int:
     for config in configs:
         try:
             batch = maintain_ruolo_autosync(db, config.user_id)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - one user must not stop the scheduler
             config.last_error_message = str(exc)
             db.add(config)
             db.commit()
@@ -482,23 +600,52 @@ def run_ruolo_autosync_maintenance_for_all_users(db: Session) -> int:
     return started
 
 
-def build_ruolo_autosync_status(db: Session, user_id: int) -> CatastoRuoloAutoSyncStatusResponse:
-    config = get_ruolo_autosync_config(db, user_id)
-    reconcile_ruolo_autosync_items(db, user_id)
-    items = list(
+def _load_ruolo_autosync_item_status(db: Session, user_id: int):
+    counts = dict(
+        db.execute(
+            select(CatastoRuoloAutoSyncItem.status, func.count(CatastoRuoloAutoSyncItem.id))
+            .where(CatastoRuoloAutoSyncItem.user_id == user_id)
+            .group_by(CatastoRuoloAutoSyncItem.status)
+        ).all()
+    )
+    recent_items = list(
         db.scalars(
             select(CatastoRuoloAutoSyncItem)
             .where(CatastoRuoloAutoSyncItem.user_id == user_id)
             .order_by(CatastoRuoloAutoSyncItem.updated_at.desc(), CatastoRuoloAutoSyncItem.created_at.desc())
+            .limit(12)
         ).all()
     )
-    counter = Counter(item.status for item in items)
+    error_items = list(
+        db.scalars(
+            select(CatastoRuoloAutoSyncItem)
+            .where(
+                CatastoRuoloAutoSyncItem.user_id == user_id,
+                CatastoRuoloAutoSyncItem.status.in_(
+                    (
+                        CatastoRuoloAutoSyncItemStatus.PENDING.value,
+                        CatastoRuoloAutoSyncItemStatus.BLOCKED_SOURCE.value,
+                        CatastoRuoloAutoSyncItemStatus.BLOCKED_RUNTIME.value,
+                    )
+                ),
+                CatastoRuoloAutoSyncItem.last_error_message.is_not(None),
+            )
+            .order_by(CatastoRuoloAutoSyncItem.updated_at.desc(), CatastoRuoloAutoSyncItem.created_at.desc())
+            .limit(12)
+        ).all()
+    )
+    return counts, recent_items, error_items
+
+
+def _load_ruolo_autosync_status_batches(db: Session, user_id: int):
     running_batch = db.scalar(
-        select(CatastoBatch).where(
+        select(CatastoBatch)
+        .where(
             CatastoBatch.user_id == user_id,
             CatastoBatch.batch_kind == CatastoBatchKind.RUOLO_AUTOSYNC.value,
             CatastoBatch.status == CatastoBatchStatus.PROCESSING.value,
         )
+        .limit(1)
     )
     last_batch = db.scalar(
         select(CatastoBatch)
@@ -507,30 +654,29 @@ def build_ruolo_autosync_status(db: Session, user_id: int) -> CatastoRuoloAutoSy
             CatastoBatch.batch_kind == CatastoBatchKind.RUOLO_AUTOSYNC.value,
         )
         .order_by(CatastoBatch.created_at.desc())
+        .limit(1)
     )
-    error_items = [
-        item for item in items
-        if item.status in {
-            CatastoRuoloAutoSyncItemStatus.PENDING.value,
-            CatastoRuoloAutoSyncItemStatus.BLOCKED_SOURCE.value,
-            CatastoRuoloAutoSyncItemStatus.BLOCKED_RUNTIME.value,
-        }
-        and item.last_error_message
-    ][:12]
+    return running_batch, last_batch
+
+
+def build_ruolo_autosync_status(db: Session, user_id: int) -> CatastoRuoloAutoSyncStatusResponse:
+    config = get_ruolo_autosync_config(db, user_id)
+    counts, recent_items, error_items = _load_ruolo_autosync_item_status(db, user_id)
+    running_batch, last_batch = _load_ruolo_autosync_status_batches(db, user_id)
 
     return CatastoRuoloAutoSyncStatusResponse(
         config=CatastoRuoloAutoSyncConfigResponse.model_validate(config),
         counts=CatastoRuoloAutoSyncStatusCountsResponse(
-            total=len(items),
-            pending=counter.get(CatastoRuoloAutoSyncItemStatus.PENDING.value, 0),
-            queued=counter.get(CatastoRuoloAutoSyncItemStatus.QUEUED.value, 0),
-            processing=counter.get(CatastoRuoloAutoSyncItemStatus.PROCESSING.value, 0),
-            completed=counter.get(CatastoRuoloAutoSyncItemStatus.COMPLETED.value, 0),
-            blocked_source=counter.get(CatastoRuoloAutoSyncItemStatus.BLOCKED_SOURCE.value, 0),
-            blocked_runtime=counter.get(CatastoRuoloAutoSyncItemStatus.BLOCKED_RUNTIME.value, 0),
+            total=sum(counts.values()),
+            pending=counts.get(CatastoRuoloAutoSyncItemStatus.PENDING.value, 0),
+            queued=counts.get(CatastoRuoloAutoSyncItemStatus.QUEUED.value, 0),
+            processing=counts.get(CatastoRuoloAutoSyncItemStatus.PROCESSING.value, 0),
+            completed=counts.get(CatastoRuoloAutoSyncItemStatus.COMPLETED.value, 0),
+            blocked_source=counts.get(CatastoRuoloAutoSyncItemStatus.BLOCKED_SOURCE.value, 0),
+            blocked_runtime=counts.get(CatastoRuoloAutoSyncItemStatus.BLOCKED_RUNTIME.value, 0),
         ),
         running_batch=CatastoBatchResponse.model_validate(running_batch) if running_batch is not None else None,
         last_batch=CatastoBatchResponse.model_validate(last_batch) if last_batch is not None else None,
         error_items=[CatastoRuoloAutoSyncItemResponse.model_validate(item) for item in error_items],
-        recent_items=[CatastoRuoloAutoSyncItemResponse.model_validate(item) for item in items[:12]],
+        recent_items=[CatastoRuoloAutoSyncItemResponse.model_validate(item) for item in recent_items],
     )

@@ -4428,7 +4428,7 @@ def test_presenze_xlsm_export_job_can_be_deleted_when_terminal() -> None:
 def test_presenze_sync_job_can_be_cancelled(monkeypatch: pytest.MonkeyPatch) -> None:
     admin = _create_user("sync_cancel_admin")
     token = _login(admin.username)
-    monkeypatch.setattr("app.modules.presenze.router.stop_sync_worker", lambda job: None)
+    monkeypatch.setattr("app.modules.presenze.router.stop_sync_worker", lambda _job: None)
 
     db = TestingSessionLocal()
     try:

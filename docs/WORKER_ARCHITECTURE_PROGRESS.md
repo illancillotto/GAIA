@@ -6,7 +6,7 @@ Fonte di verita per l'implementazione del piano
 ## Stato generale
 
 - Program status: `IMPLEMENTED_LOCAL`
-- Current milestone: `M5 - validazione locale completata`
+- Current milestone: `M6 - pre-deploy e osservabilita completati localmente`
 - Last update: `2026-08-27`
 - Local branch: `main`
 - Local HEAD at baseline: `ae889f04`
@@ -64,6 +64,8 @@ checkout remoto era piu vecchio e sporco; nessuna modifica e stata eseguita.
 | 2026-08-27 | cap Visure a quattro sessioni prima del PID limit | limita browser reali mantenendo un budget PID non restrittivo |
 | 2026-08-27 | refresh manuale Ruolo usa lo stesso advisory lock | impedisce overlap con scheduler senza cambiare il contratto REST |
 | 2026-08-27 | metadata e migrazione indicizzano `RuoloParticella.created_at` | evita drift Alembic e accelera il watermark sulla sorgente effettiva |
+| 2026-08-27 | heartbeat su progresso loop invece del solo PID 1 | rileva event loop o supervisori bloccati senza confondere la liveness del processo con la salute operativa |
+| 2026-08-27 | soglia Gate Mobile 900 s, altri loop 90 s | Gate include il ciclo outbound sincrono; i ticker/supervisori interni devono avanzare con frequenza molto maggiore |
 
 ## Milestone tracker
 
@@ -75,6 +77,7 @@ checkout remoto era piu vecchio e sporco; nessuna modifica e stata eseguita.
 | M3 - lease/fencing/fairness | `DONE` | migrazione, crash/recovery, PostgreSQL e coverage 100% |
 | M4 - isolamento/limiti | `DONE_LOCAL` | servizi, cap browser, healthcheck, budget e runbook; deploy escluso |
 | M5 - validazione finale | `DONE_LOCAL` | test aggregati, ratchet del perimetro e Graphify; blocco globale concorrente documentato |
+| M6 - pre-deploy/health semantica | `DONE_LOCAL` | restore produzione, round-trip migration, audit timer CED e heartbeat stale-aware |
 
 ## Registro verifiche
 
@@ -115,6 +118,17 @@ checkout remoto era piu vecchio e sporco; nessuna modifica e stata eseguita.
 | 2026-08-27 | M5 | complexity ratchet globale contro `origin/main` | `BLOCKED_EXTERNAL`; 100 finding concorrenti, 96 regressioni legacy e 4 nuove violation, nessuno nel perimetro worker, baseline invariata |
 | 2026-08-27 | M5 | Graphify code | `PASS`; Presenze, Ruolo e Operazioni senza drift topologico; backend ricostruito con 7.510 nodi, 18.425 archi e 441 community |
 | 2026-08-27 | M5 | Graphify docs con `gpt-5.4-mini` | `PASS`; Presenze 419/854, Ruolo 707/1.761, Operazioni 298/665 e dominio aggregato 1.337/2.187 nodi/archi; piattaforma riallineata con refresh incrementale finale |
+| 2026-08-28 | M6 | revalidazione SISTER dopo le modifiche concorrenti | `PASS`; `make test-worker` finale 430 test e tutti i 27 runtime al 100%; suite backend batch/allowlist/integration e migration PostgreSQL verdi |
+| 2026-08-27 | M6 | restore backup CED `gaia-20260820-172136-pre-sister-20260820-172136.dump` | `PASS`; SHA-256 locale/remoto `fab968aa...7818`, restore PostgreSQL/PostGIS isolato exit 0; il dump locale del 6 agosto e stato scartato per EOF durante i dati |
+| 2026-08-27 | M6 | round-trip `20260826_1200 -> 0900 -> 1000 -> 1100` sul clone | `PASS`; nuovo unique e 3 indici Ruolo, zero duplicati, 7 colonne/3 indici Presenze e allowlist JSON; downgrade pulito e secondo upgrade ripetibile |
+| 2026-08-27 | M6 | audit Gate Mobile CED in sola lettura | `PASS`; timer/service systemd non installati, nessuna unita alias attiva e servizio Compose non ancora presente; nessuna disabilitazione necessaria |
+| 2026-08-27 | M6 | heartbeat semantici e Compose | `PASS`; file atomici stale-aware per 7 servizi, `docker compose config --quiet`, 43 test backend e coverage finale 374 statement/74 branch al 100% |
+| 2026-08-27 | M6 | canary singola replica su DB/schema clone isolato | `PASS_IDLE`; 7 loop, 120 s, zero restart/OOM/duplicati, 16 PID ciascuno, RSS 89-166 MiB; heartbeat tutti freschi e Gate disabilitato senza chiamate esterne |
+| 2026-08-27 | M6 | fault injection heartbeat | `PASS`; worker AUTODOC in pausa con PID vivo, check stale exit 1, recovery verde dopo `unpause` senza restart |
+| 2026-08-27 | M6 | compatibilita immagine worker Python 3.10 | `PASS`; sostituiti due usi runtime di `datetime.UTC`; startup delle 4 famiglie e coverage backend finale 374 statement/74 branch al 100% |
+| 2026-08-28 | M6 | coverage globale worker | `PASS`; 430 test isolati per file, 27 runtime, 5077/5077 statement e 1314/1314 branch al 100% |
+| 2026-08-28 | M6 | complexity ratchet finale contro `origin/main` | `PASS_SELECTED`; nessun finding nel perimetro worker, healthcheck e supervisori. Il checkout globale resta bloccato soltanto dalle modifiche concorrenti GIS M21/sidebar escluse dalla slice; baseline invariata |
+| 2026-08-27 | M6 | Graphify backend e platform docs | `PASS`; backend 7.535 nodi/18.564 archi/446 community; docs 1.398 nodi/3.051 archi/101 community, 112 file da cache e 3 riestratti |
 
 ## Metriche quality ratchet
 
@@ -144,13 +158,18 @@ checkout remoto era piu vecchio e sporco; nessuna modifica e stata eseguita.
   browser aggiunge un semaforo locale senza cambiare il claim delle richieste.
   Il pool corrente, inclusa l'allowlist concorrente, e coperto al 100% su 265
   statement e 54 branch con 40 test.
-- Chiusura worker: 406 test eseguiti con un processo pytest per file per evitare
-  la contaminazione degli stub globali installati da `test_worker.py`. Gli otto
-  runtime worker SISTER modificati totalizzano 2774 statement e 786 branch, tutti
-  coperti; non sono stati usati pragma o abbassamenti della soglia.
+- M6 health: nuovo `app.worker_health` con JSON atomico e CLI stale-aware;
+  ticker asincrono per scheduler/Elaborazioni, progress per giro supervisore
+  Presenze e stato ciclo Gate Mobile. Il perimetro backend finale totalizza
+  374 statement e 74 branch al 100%. Nessuna soglia o pragma coverage e stata
+  modificata.
+- Chiusura worker: 430 test eseguiti con un processo pytest per file per evitare
+  la contaminazione degli stub globali installati da `test_worker.py`. Tutti i
+  27 runtime worker totalizzano 5077 statement e 1314 branch, tutti coperti;
+  non sono stati usati pragma o abbassamenti della soglia.
 - Automazione CI: `make test-worker` riproduce l'isolamento, combina branch
-  coverage e pubblica JSON/XML. Il gate worker changed-file richiede il 100%; il
-  report runtime completo misura il debito legacy al 93% e resta warn-only.
+  coverage e pubblica JSON/XML. Il gate worker changed-file richiede il 100% e
+  il report runtime completo ha ora raggiunto il 100% statement/branch.
 - Packaging: le immagini backend, worker runtime e frontend sono state
   ricostruite. Gli smoke import offline confermano le dipendenze runtime del
   worker, inclusi Pillow `12.3.0` e `pytesseract 0.3.13`; il frontend completa
@@ -160,9 +179,9 @@ checkout remoto era piu vecchio e sporco; nessuna modifica e stata eseguita.
   cyclomatic/cognitive/LOC `5/4/32 -> 2/1/16`, run worker
   `51/116/262 -> 40/75/242`, refresh Ruolo `16/27/60 -> 1/0/2` e status Ruolo
   `9/8/51 -> 5/4/20`.
-- Baseline diff: nessun aggiornamento. Il ratchet globale resta bloccato da
-  modifiche concorrenti GIS e Ruolo tributi, quindi non puo autorizzare una
-  sincronizzazione della baseline in questa change.
+- Baseline diff: nessun aggiornamento. Il perimetro worker non produce finding;
+  il checkout globale resta bloccato dalle modifiche concorrenti GIS M21/sidebar
+  escluse dalla slice e non autorizza una sincronizzazione della baseline.
 
 ## Rischi aperti
 
@@ -175,40 +194,40 @@ checkout remoto era piu vecchio e sporco; nessuna modifica e stata eseguita.
   famiglia solo quando serve scalare repliche multiple.
 - I budget Compose sono default iniziali validati staticamente e con test di
   concorrenza, ma richiedono tuning su un carico produzione rappresentativo.
-- Il timer Gate Mobile eventualmente gia installato sul server va disabilitato
-  prima di avviare il servizio Compose.
+- L'audit CED del 2026-08-27 non ha trovato il timer Gate Mobile installato; va
+  comunque ripetuto immediatamente prima del rollout per evitare drift host.
 - La suite worker non va eseguita in un unico processo: `test_worker.py`
   installa stub globali in `sys.modules` che contaminano la collection degli
-  altri file. `make test-worker` automatizza il percorso validato (`406` test);
+  altri file. `make test-worker` automatizza il percorso validato (`430` test);
   Pillow e pytesseract sono presenti nel venv e nell'immagine worker.
-- Il ratchet esteso a tutta `modules/elaborazioni/worker` rileva 14 finding nel
-  flusso SISTER concorrente escluso da questo redesign. Il ratchet del perimetro
-  architetturale resta verde; la baseline non e stata aggiornata.
-- Il report completo worker resta al 93%. I gap principali sono
-  `autodoc_sync.py`, `reporting.py`, `runtime_policy.py` e
-  `credential_vault.py` a 0%; seguono `anti_captcha_client.py` al 72% e i
-  client/reliability browser tra 97% e 99%. La chiusura richiede una slice test
-  separata e non blocca il gate 100% dei file modificati.
-- Il ratchet globale del checkout deve tornare verde dopo la risoluzione delle
-  modifiche concorrenti GIS/Ruolo tributi; nessuna baseline e stata assorbita.
+- Il ratchet stabile non rileva regressioni su `_process_batch` o sulla closure
+  `_credential_runner`. Healthcheck, supervisori e test aggiunti non producono
+  finding; i soli blocchi globali appartengono al GIS M21/sidebar concorrenti e
+  restano esclusi. La baseline non e stata aggiornata.
+- Il bootstrap Alembic da database completamente vuoto fallisce nella revisione
+  storica `20260612_0900` per assenza di `org_unit`. Il dry-run su backup reale
+  e valido; il canary ha usato uno schema-only clone a head con tabelle vuote.
+  La catena greenfield richiede una correzione migration separata e testata.
+- Il canary eseguito e uno soak idle/sicuro, non un ciclo di picco con browser o
+  payload reali. Il soak di picco resta un gate di staging/pre-produzione.
 
 ## Backlog verifiche e implementazioni
 
 | Priorita | Tipo | Attivita | Gate di chiusura | Stato |
 | --- | --- | --- | --- | --- |
-| P0 | merge | risolvere i 100 finding del ratchet globale e i 14 finding SISTER concorrenti | ratchet globale `findings: []`, baseline non ampliata per assorbire regressioni | `OPEN_CONCURRENT` |
-| P0 | pre-deploy | provare `0900 -> 1000 -> 1100` su un restore del backup produzione | upgrade, smoke query, downgrade tecnico e nuovo upgrade documentati sul clone | `OPEN_EXTERNAL` |
-| P0 | rollout | verificare e disabilitare il timer Gate Mobile host prima del servizio Compose | nessun timer/service legacy attivo e un solo owner Compose | `OPEN_EXTERNAL` |
-| P0 | osservabilita | introdurre heartbeat semantici per scheduler e loop worker | healthcheck fallisce su loop fermo anche se PID 1 e ancora vivo | `OPEN_IMPLEMENTATION` |
-| P1 | staging | canary a replica singola e soak su un ciclo di picco | zero duplicati/OOM, lease e retry coerenti, KPI prima/dopo registrati | `OPEN_EXTERNAL` |
-| P1 | coverage | chiudere il report worker completo dal 93% al 100% | tutti i runtime worker al 100% statement e branch | `OPEN_IMPLEMENTATION` |
+| P0 | merge | integrare la slice worker separatamente dal GIS M21/sidebar concorrente | ratchet del perimetro worker senza finding, baseline invariata | `DONE_LOCAL` |
+| P0 | pre-deploy | provare `0900 -> 1000 -> 1100` su un restore del backup produzione | upgrade, smoke query, downgrade tecnico e nuovo upgrade documentati sul clone | `DONE_LOCAL` |
+| P0 | rollout | verificare e disabilitare il timer Gate Mobile host prima del servizio Compose | nessun timer/service legacy attivo e un solo owner Compose | `VERIFIED_NO_LEGACY_UNIT` |
+| P0 | osservabilita | introdurre heartbeat semantici per scheduler e loop worker | healthcheck fallisce su loop fermo anche se PID 1 e ancora vivo | `DONE_LOCAL` |
+| P1 | staging | canary a replica singola e soak su un ciclo di picco | zero duplicati/OOM, lease e retry coerenti, KPI prima/dopo registrati | `IDLE_CANARY_PASS_PEAK_OPEN` |
+| P1 | migration | riparare bootstrap Alembic greenfield a `20260612_0900` | `alembic upgrade head` da `template0` passa e preserva upgrade backup | `OPEN_PREEXISTING` |
+| P1 | coverage | chiudere il report worker completo dal 93% al 100% | tutti i runtime worker al 100% statement e branch | `DONE_LOCAL` |
 | P2 | evoluzione | spostare gli scheduler inline pesanti su code persistenti per famiglia | API e scheduler non eseguono carichi massivi inline | `PLANNED` |
 | P2 | scalabilita | estendere lease/fencing oltre Presenze solo alle famiglie da replicare | crash/recovery e stale-owner testati per ogni nuova famiglia | `PLANNED` |
 
-Gli healthcheck Compose correnti sono liveness check sul comando del PID 1. Sono
-utili contro processi terminati o entrypoint errati, ma non dimostrano avanzamento
-del loop; il canary deve quindi usare anche last-run, lease, eta coda ed eventi
-persistiti finche gli heartbeat semantici non saranno implementati.
+Gli healthcheck Compose verificano ora l'avanzamento semantico del loop tramite
+heartbeat stale-aware. Il canary deve comunque usare anche last-run, lease, eta
+coda ed eventi persistiti: il heartbeat prova responsivita, non successo del job.
 
 ## Prossima azione
 

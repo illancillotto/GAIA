@@ -1,26 +1,57 @@
 from __future__ import annotations
 
+import logging
 import os
-import signal
 import shutil
+import signal
 import subprocess
 import sys
+import uuid
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.datetime_compat import UTC
 from app.modules.presenze.models import PresenzeImportJob, PresenzeSyncJob
 
-
 # sync_runtime.py may run in a detached worker process, while `python -m app...`
 # needs the repository root `/app` on PYTHONPATH.
 BACKEND_ROOT = Path(__file__).resolve().parents[4]
 PENDING_WITHOUT_WORKER_STALE_AFTER = timedelta(minutes=5)
 QUEUE_WORKER_MODE = "queue_worker"
+DEFAULT_WORKER_LEASE_SECONDS = 300
+DEFAULT_WORKER_RETRY_BACKOFF_SECONDS = 30
+logger = logging.getLogger(__name__)
+
+
+def _positive_env_seconds(name: str, default: int, *, minimum: int = 1) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+    return max(minimum, value)
+
+
+def _worker_lease_duration() -> timedelta:
+    return timedelta(
+        seconds=_positive_env_seconds(
+            "PRESENZE_WORKER_LEASE_SECONDS",
+            DEFAULT_WORKER_LEASE_SECONDS,
+            minimum=30,
+        )
+    )
+
+
+def _worker_retry_backoff() -> timedelta:
+    return timedelta(
+        seconds=_positive_env_seconds(
+            "PRESENZE_WORKER_RETRY_BACKOFF_SECONDS",
+            DEFAULT_WORKER_RETRY_BACKOFF_SECONDS,
+        )
+    )
 
 
 def _as_utc(value: datetime | None) -> datetime | None:
@@ -135,9 +166,7 @@ def _mark_sync_job_failed(
     finished_at: datetime,
     error_detail: str,
 ) -> None:
-    job.status = "failed"
-    job.finished_at = finished_at
-    job.error_detail = error_detail
+    set_sync_job_failed_state(job, finished_at=finished_at, error_detail=error_detail)
     mark_linked_import_job_terminal(
         db,
         sync_job=job,
@@ -167,29 +196,211 @@ def mark_orphaned_queue_worker_jobs(
     active_job_ids: set[str] | None = None,
     commit: bool = True,
 ) -> bool:
-    active_job_ids = active_job_ids or set()
-    running_jobs = db.execute(select(PresenzeSyncJob).where(PresenzeSyncJob.status == "running")).scalars().all()
-    changed = False
-    now = datetime.now(UTC)
-    for job in running_jobs:
-        if str(job.id) in active_job_ids:
-            continue
-        mode = _sync_job_worker_mode(job)
-        if mode not in (None, QUEUE_WORKER_MODE):
-            continue
-        params = job.params_json or {}
-        if params.get("worker_instance_id") == worker_instance_id:
+    del worker_instance_id, active_job_ids
+    return recover_expired_queue_worker_jobs(db, commit=commit)
+
+
+def clear_sync_job_lease(job: PresenzeSyncJob) -> None:
+    job.worker_id = None
+    job.lease_token = None
+    job.heartbeat_at = None
+    job.lease_expires_at = None
+    job.worker_pid = None
+
+
+def advance_sync_job_lease_generation(job: PresenzeSyncJob) -> None:
+    job.lease_generation = (job.lease_generation or 0) + 1
+
+
+def set_sync_job_failed_state(
+    job: PresenzeSyncJob,
+    *,
+    finished_at: datetime,
+    error_detail: str,
+) -> None:
+    job.status = "failed"
+    job.finished_at = finished_at
+    job.error_detail = error_detail
+    clear_sync_job_lease(job)
+
+
+def touch_sync_job_lease(
+    job: PresenzeSyncJob,
+    *,
+    now: datetime | None = None,
+) -> None:
+    if job.worker_id is None or job.lease_token is None or job.status != "running":
+        return
+    heartbeat_at = now or datetime.now(UTC)
+    job.heartbeat_at = heartbeat_at
+    job.lease_expires_at = heartbeat_at + _worker_lease_duration()
+
+
+def recover_expired_queue_worker_jobs(
+    db: Session,
+    *,
+    now: datetime | None = None,
+    commit: bool = True,
+) -> bool:
+    recovery_at = now or datetime.now(UTC)
+    invalid_lease = and_(
+        PresenzeSyncJob.worker_id.is_not(None),
+        or_(
+            PresenzeSyncJob.lease_expires_at.is_(None),
+            PresenzeSyncJob.lease_expires_at < recovery_at,
+        ),
+    )
+    legacy_queue_owner = and_(
+        PresenzeSyncJob.worker_id.is_(None),
+        PresenzeSyncJob.params_json["worker_mode"].as_string() == QUEUE_WORKER_MODE,
+    )
+    expired_jobs = list(
+        db.scalars(
+            select(PresenzeSyncJob)
+            .where(
+                PresenzeSyncJob.status == "running",
+                or_(invalid_lease, legacy_queue_owner),
+            )
+            .with_for_update(skip_locked=True)
+        ).all()
+    )
+    for job in expired_jobs:
+        advance_sync_job_lease_generation(job)
+        if job.attempt_count < job.max_attempts:
+            job.status = "pending"
+            job.started_at = None
+            job.finished_at = None
+            job.retry_not_before = recovery_at + _worker_retry_backoff()
+            job.error_detail = "Worker lease expired; sync job requeued with a new fencing generation"
+            clear_sync_job_lease(job)
+            db.add(job)
+            logger.warning(
+                "Presenze lease expired; job=%s generation=%d attempt=%d/%d action=requeue",
+                job.id,
+                job.lease_generation,
+                job.attempt_count,
+                job.max_attempts,
+            )
             continue
         _mark_sync_job_failed(
             db,
             job,
-            finished_at=now,
-            error_detail="Queue worker is idle; running sync job marked stale after worker restart or crash",
+            finished_at=recovery_at,
+            error_detail="Worker lease expired after the configured maximum attempts",
         )
-        changed = True
-    if changed and commit:
+        logger.error(
+            "Presenze lease expired; job=%s generation=%d attempt=%d/%d action=fail",
+            job.id,
+            job.lease_generation,
+            job.attempt_count,
+            job.max_attempts,
+        )
+    if expired_jobs and commit:
         db.commit()
-    return changed
+    return bool(expired_jobs)
+
+
+def renew_queue_worker_leases(
+    db: Session,
+    *,
+    worker_id: str,
+    active_job_ids: set[str],
+    now: datetime | None = None,
+    commit: bool = True,
+) -> int:
+    parsed_ids = []
+    for job_id in active_job_ids:
+        try:
+            parsed_ids.append(uuid.UUID(job_id))
+        except ValueError:
+            continue
+    if not parsed_ids:
+        return 0
+    heartbeat_at = now or datetime.now(UTC)
+    result = db.execute(
+        update(PresenzeSyncJob)
+        .where(
+            PresenzeSyncJob.id.in_(parsed_ids),
+            PresenzeSyncJob.status == "running",
+            PresenzeSyncJob.worker_id == worker_id,
+        )
+        .values(
+            heartbeat_at=heartbeat_at,
+            lease_expires_at=heartbeat_at + _worker_lease_duration(),
+        )
+    )
+    if commit:
+        db.commit()
+    renewed = int(result.rowcount or 0)
+    logger.debug(
+        "Presenze leases renewed; worker=%s requested=%d renewed=%d",
+        worker_id,
+        len(parsed_ids),
+        renewed,
+    )
+    return renewed
+
+
+def _claimable_sync_job_stmt(now: datetime):
+    return (
+        select(PresenzeSyncJob)
+        .where(
+            PresenzeSyncJob.status == "pending",
+            PresenzeSyncJob.credential_id.is_not(None),
+            PresenzeSyncJob.attempt_count < PresenzeSyncJob.max_attempts,
+            or_(
+                PresenzeSyncJob.retry_not_before.is_(None),
+                PresenzeSyncJob.retry_not_before <= now,
+            ),
+        )
+        .order_by(
+            PresenzeSyncJob.priority.asc(),
+            PresenzeSyncJob.retry_not_before.asc().nullsfirst(),
+            PresenzeSyncJob.created_at.asc(),
+        )
+        .limit(1)
+        .with_for_update(skip_locked=True)
+    )
+
+
+def _assign_sync_job_lease(
+    job: PresenzeSyncJob,
+    *,
+    worker_pid: int,
+    worker_instance_id: str | None,
+    now: datetime,
+) -> None:
+    prepare_sync_job_artifacts(job)
+    job.status = "running"
+    job.started_at = now
+    job.finished_at = None
+    job.error_detail = None
+    job.worker_pid = worker_pid
+    job.worker_id = worker_instance_id or f"pid-{worker_pid}"
+    job.lease_token = uuid.uuid4()
+    advance_sync_job_lease_generation(job)
+    job.heartbeat_at = now
+    job.lease_expires_at = now + _worker_lease_duration()
+    job.retry_not_before = None
+    job.attempt_count += 1
+    params = dict(job.params_json or {})
+    params["worker_mode"] = QUEUE_WORKER_MODE
+    if worker_instance_id is not None:
+        params["worker_instance_id"] = worker_instance_id
+    params["worker_claimed_at"] = job.started_at.isoformat()
+    job.params_json = params
+
+
+def _log_sync_job_claim(job: PresenzeSyncJob) -> None:
+    logger.info(
+        "Presenze job claimed; job=%s worker=%s generation=%d attempt=%d/%d priority=%d",
+        job.id,
+        job.worker_id,
+        job.lease_generation,
+        job.attempt_count,
+        job.max_attempts,
+        job.priority,
+    )
 
 
 def claim_next_pending_sync_job(
@@ -198,32 +409,15 @@ def claim_next_pending_sync_job(
     worker_pid: int,
     worker_instance_id: str | None = None,
 ) -> PresenzeSyncJob | None:
-    stmt = (
-        select(PresenzeSyncJob)
-        .where(PresenzeSyncJob.status == "pending", PresenzeSyncJob.credential_id.is_not(None))
-        .order_by(PresenzeSyncJob.created_at.asc())
-        .limit(1)
-        .with_for_update(skip_locked=True)
-    )
-    job = db.execute(stmt).scalar_one_or_none()
+    now = datetime.now(UTC)
+    job = db.execute(_claimable_sync_job_stmt(now)).scalar_one_or_none()
     if job is None:
         return None
-
-    prepare_sync_job_artifacts(job)
-    job.status = "running"
-    job.started_at = datetime.now(UTC)
-    job.finished_at = None
-    job.error_detail = None
-    job.worker_pid = worker_pid
-    params = dict(job.params_json or {})
-    params["worker_mode"] = QUEUE_WORKER_MODE
-    if worker_instance_id is not None:
-        params["worker_instance_id"] = worker_instance_id
-    params["worker_claimed_at"] = job.started_at.isoformat()
-    job.params_json = params
+    _assign_sync_job_lease(job, worker_pid=worker_pid, worker_instance_id=worker_instance_id, now=now)
     db.add(job)
     db.commit()
     db.refresh(job)
+    _log_sync_job_claim(job)
     return job
 
 
@@ -297,15 +491,23 @@ def launch_straordinari_export_worker(job: PresenzeSyncJob) -> int:
     return process.pid
 
 
-def stop_sync_worker(job: PresenzeSyncJob) -> None:
+def _fence_sync_job_worker(job: PresenzeSyncJob) -> int:
     if job.worker_pid is None:
         raise RuntimeError("Sync job has no worker PID")
+    worker_pid = job.worker_pid
+    advance_sync_job_lease_generation(job)
+    clear_sync_job_lease(job)
+    return worker_pid
+
+
+def stop_sync_worker(job: PresenzeSyncJob) -> None:
+    worker_pid = _fence_sync_job_worker(job)
     try:
-        os.killpg(job.worker_pid, signal.SIGTERM)
+        os.killpg(worker_pid, signal.SIGTERM)
     except ProcessLookupError:
         return
     except OSError as exc:
-        raise RuntimeError(f"Unable to stop worker process group {job.worker_pid}: {exc}") from exc
+        raise RuntimeError(f"Unable to stop worker process group {worker_pid}: {exc}") from exc
 
 
 def _pid_exists(pid: int) -> bool:
@@ -318,11 +520,15 @@ def _pid_exists(pid: int) -> bool:
     return True
 
 
+def _external_process_sync_jobs(jobs: list[PresenzeSyncJob]) -> list[PresenzeSyncJob]:
+    return [job for job in jobs if _uses_external_process_check(job)]
+
+
 def reconcile_stale_sync_jobs(db: Session, *, commit: bool = True) -> bool:
     stale_jobs = db.execute(select(PresenzeSyncJob).where(PresenzeSyncJob.status.in_(("pending", "running")))).scalars().all()
-    changed = False
+    changed = recover_expired_queue_worker_jobs(db, commit=False)
     now = datetime.now(UTC)
-    for job in stale_jobs:
+    for job in _external_process_sync_jobs(stale_jobs):
         created_at = _as_utc(job.created_at)
         if (
             job.status == "pending"
@@ -330,17 +536,12 @@ def reconcile_stale_sync_jobs(db: Session, *, commit: bool = True) -> bool:
             and created_at is not None
             and now - created_at > PENDING_WITHOUT_WORKER_STALE_AFTER
         ):
-            job.status = "failed"
-            job.finished_at = now
-            job.error_detail = "Pending sync job had no worker assigned; marked stale after queue timeout"
-            mark_linked_import_job_terminal(
+            _mark_sync_job_failed(
                 db,
-                sync_job=job,
-                status="failed",
-                finished_at=job.finished_at,
-                error_detail=job.error_detail,
+                job,
+                finished_at=now,
+                error_detail="Pending sync job had no worker assigned; marked stale after queue timeout",
             )
-            db.add(job)
             changed = True
             continue
         if (
