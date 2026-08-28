@@ -212,13 +212,14 @@ def test_database_sqlite_engine_options_in_subprocess() -> None:
     assert completed.returncode == 0, completed.stderr
 
 
-def test_http_shared_build_batch_detail_response() -> None:
+def test_http_shared_build_batch_detail_response(monkeypatch: pytest.MonkeyPatch) -> None:
     now = datetime.now(timezone.utc)
     batch_id = uuid.uuid4()
     batch = SimpleNamespace(
         id=batch_id,
         user_id=1,
         credential_id=None,
+        credential_ids=None,
         name="Batch",
         batch_kind="visura",
         status="completed",
@@ -274,9 +275,11 @@ def test_http_shared_build_batch_detail_response() -> None:
         processed_at=now,
     )
 
-    response = http_shared.build_batch_detail_response(batch, [request])
+    monkeypatch.setattr(http_shared, "build_batch_statistics", lambda *_args: None)
+    response = http_shared.build_batch_detail_response(batch, [request], MagicMock())
 
     assert response.requests[0].id == request.id
+    assert response.statistics is None
 
 
 def test_http_shared_build_document_response_resolves_batch_id() -> None:
@@ -302,6 +305,10 @@ def test_http_shared_build_document_response_resolves_batch_id() -> None:
         file_size=10,
         sha256="0" * 64,
         codice_fiscale=None,
+        content_request_type=None,
+        parcel_classification=None,
+        parcel_suppressed_at=None,
+        content_metadata_json=None,
         created_at=now,
     )
     db = MagicMock()
@@ -310,6 +317,12 @@ def test_http_shared_build_document_response_resolves_batch_id() -> None:
     response = http_shared.build_document_response(db, document)
 
     assert response.batch_id == batch_id
+
+    document.request_id = None
+    response_without_request = http_shared.build_document_response(db, document)
+
+    assert response_without_request.batch_id is None
+    assert db.scalar.call_count == 1
 
 
 def test_http_shared_build_connection_test_response_status_branches() -> None:
