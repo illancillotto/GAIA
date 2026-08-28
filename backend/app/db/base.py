@@ -184,6 +184,7 @@ from app.modules.gis.models import (
     GisLayer,
     GisLayerExport,
     GisLayerPermission,
+    GisSchedaTerritoriale,
     GisShapefileImport,
 )
 
@@ -283,6 +284,7 @@ __all__ = [
     "GisLayer",
     "GisLayerExport",
     "GisLayerPermission",
+    "GisSchedaTerritoriale",
     "GisShapefileImport",
     "PermissionEntry",
     "Review",

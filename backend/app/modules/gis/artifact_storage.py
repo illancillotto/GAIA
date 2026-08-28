@@ -85,6 +85,16 @@ def delete_artifact(path: str) -> bool:
     return True
 
 
+def read_artifact(path: str) -> bytes:
+    if _uses_sftp(path):
+        client = get_nas_client()
+        try:
+            return client.download_file(path)
+        finally:
+            client.close()
+    return Path(path).read_bytes()
+
+
 def probe_artifact_storage(path: str) -> GisArtifactStorageProbe:
     transport = settings.gis_nas_transport.strip().lower() or "local"
     if transport == "sftp":

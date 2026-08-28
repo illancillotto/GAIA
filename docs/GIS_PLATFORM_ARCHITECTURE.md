@@ -584,8 +584,27 @@ Pannello frontend M23b:
 - GAIA e caricato con una richiesta senza layer remoti; i layer interrogabili
   sono poi richiesti singolarmente con concorrenza limitata, cosi ogni sorgente
   compare quando termina senza attendere la piu lenta;
-- i visual-only non generano richieste e la futura scheda M24 e mostrata come
-  azione disabilitata.
+- i visual-only non generano richieste.
+
+Scheda territoriale M24:
+
+- `backend/app/modules/gis/scheda_territoriale/` separa raccolta, resa PDF,
+  orchestrazione asincrona e superficie API dal router GIS principale;
+- il collector calcola centroide ed estensione della particella, riusa le
+  sonde M23 con un raggio che copre la geometria e richiede l'estratto ortofoto
+  attraverso il proxy governato;
+- i layer senza `can_view` sono esclusi dalla raccolta ma restano elencati con
+  motivazione nello snapshot e nel documento; tutte le attribuzioni non vuote
+  dei layer consultabili sono deduplicate e riportate nel PDF;
+- `gis_schede_territoriali` conserva richiedente, stato, artifact, checksum,
+  snapshot JSON obbligatorio e timestamp; lo snapshot viene committato prima
+  della resa Chromium e una failure precedente alla raccolta produce comunque
+  uno snapshot diagnostico;
+- il renderer genera HTML con disclaimer nella prima pagina, usa Chromium via
+  Playwright e normalizza il PDF finale con `pypdf`;
+- il frontend abilita la generazione solo quando M23 identifica una particella,
+  esegue polling sugli stati asincroni e scarica il PDF completato tramite URL
+  temporaneo revocato al cambio particella o allo smontaggio.
 
 Superfici introdotte dal programma:
 
@@ -618,7 +637,7 @@ Il dettaglio e in `docs/GIS_PLATFORM_TERRITORIO_PLAN.md`.
 7. Valutazione POC QGIS Server vs GeoServer per pubblicazione WMS/WFS/WMTS.
 8. Programma Territorio Esterno: layer WMS/WFS di terzi nel catalogo,
    interrogazione puntuale multi-sorgente e scheda territoriale particella.
-   Fondazione M21 implementata; M22-M25 non ancora avviate.
+   M21-M24 implementate; M25 non ancora avviata.
 
 ## Documenti Operativi
 

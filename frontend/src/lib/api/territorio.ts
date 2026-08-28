@@ -52,6 +52,16 @@ export type GisInterrogazioneResponse = {
   territorio: GisInterrogazioneLevel;
 };
 
+export type GisSchedaTerritoriale = {
+  id: string;
+  particella_id: string;
+  status: "queued" | "processing" | "completed" | "failed";
+  artifact_path: string | null;
+  checksum_sha256: string | null;
+  source_snapshot: Record<string, unknown>;
+  error_message: string | null;
+};
+
 function authHeaders(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}` };
 }
@@ -72,6 +82,35 @@ export function interrogaGisTerritorio(
     method: "POST",
     headers: { ...authHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify(body),
+  });
+}
+
+export function createGisSchedaTerritoriale(
+  token: string,
+  particellaId: string,
+): Promise<GisSchedaTerritoriale> {
+  return request<GisSchedaTerritoriale>("/gis/scheda-territoriale", {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ particella_id: particellaId }),
+  });
+}
+
+export function getGisSchedaTerritoriale(
+  token: string,
+  sheetId: string,
+): Promise<GisSchedaTerritoriale> {
+  return request<GisSchedaTerritoriale>(`/gis/scheda-territoriale/${sheetId}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export function downloadGisSchedaTerritoriale(
+  token: string,
+  sheetId: string,
+): Promise<Blob> {
+  return requestBlob(`/gis/scheda-territoriale/${sheetId}/pdf`, {
+    headers: authHeaders(token),
   });
 }
 

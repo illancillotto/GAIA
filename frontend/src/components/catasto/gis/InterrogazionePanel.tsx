@@ -1,6 +1,7 @@
 "use client";
 
 import type { InterrogazioneState, InterrogazioneViewSource } from "@/components/catasto/gis/use-interrogazione";
+import type { SchedaTerritorialeState } from "@/components/catasto/gis/use-scheda-territoriale";
 
 const STATUS_LABELS = {
   loading: "In caricamento",
@@ -63,7 +64,7 @@ function TerritorioSources({ items }: { items: InterrogazioneViewSource[] }) {
   );
 }
 
-export default function InterrogazionePanel(state: InterrogazioneState) {
+export default function InterrogazionePanel(state: InterrogazioneState & { scheda: SchedaTerritorialeState }) {
   if (!state.open) {
     return <button type="button" className="absolute bottom-4 right-4 z-20 rounded-full bg-[#173f32] px-5 py-3 text-sm font-bold text-white shadow-xl" onClick={state.arm}>Interroga punto</button>;
   }
@@ -79,7 +80,14 @@ export default function InterrogazionePanel(state: InterrogazioneState) {
         <section aria-label="GAIA" className="rounded-xl border border-emerald-900/15 bg-[#eef4ea] p-3"><h3 className="font-bold text-emerald-950">GAIA</h3><Sources items={state.gaia} /></section>
         <details open className="rounded-xl border border-stone-200 bg-stone-50 p-3"><summary className="cursor-pointer font-bold text-slate-900">Catasto ufficiale</summary><Sources items={state.catastoUfficiale} /></details>
         <details open className="rounded-xl border border-stone-200 bg-stone-50 p-3"><summary className="cursor-pointer font-bold text-slate-900">Territorio</summary><TerritorioSources items={state.territorio} /></details>
-        <button type="button" disabled className="w-full rounded-xl bg-stone-200 px-4 py-3 text-sm font-bold text-stone-500">Scheda territoriale disponibile da M24</button>
+        {state.scheda.error ? <p role="alert" className="rounded-xl bg-red-50 p-3 text-sm text-red-800">{state.scheda.error}</p> : null}
+        {state.scheda.downloadUrl ? (
+          <a href={state.scheda.downloadUrl} download className="block w-full rounded-xl bg-emerald-800 px-4 py-3 text-center text-sm font-bold text-white">Scarica scheda territoriale PDF</a>
+        ) : (
+          <button type="button" disabled={!state.scheda.parcelId || ["queued", "processing"].includes(state.scheda.sheet?.status ?? "")} onClick={state.scheda.generate} className="w-full rounded-xl bg-emerald-800 px-4 py-3 text-sm font-bold text-white disabled:bg-stone-200 disabled:text-stone-500">
+            {state.scheda.sheet?.status === "queued" ? "Scheda in coda..." : state.scheda.sheet?.status === "processing" ? "Generazione scheda..." : "Genera scheda territoriale"}
+          </button>
+        )}
       </div>
     </aside>
   );

@@ -1,7 +1,7 @@
 # GAIA GIS Platform - Progress Territorio Esterno
 
 > Ultimo aggiornamento: 2026-08-28.
-> Branch corrente: `feature/gis-territorio-interrogazione-ui-m23`.
+> Branch corrente: `feature/gis-territorio-scheda-m24`.
 >
 > Piano tecnico: `docs/GIS_PLATFORM_TERRITORIO_PLAN.md`.
 > Riferimento dati: `docs/GIS_PLATFORM_TERRITORIO_CATALOGO.md`.
@@ -34,7 +34,12 @@ sonde GAIA e le sorgenti remote nei livelli `gaia`, `catasto_ufficiale` e
 P5/M23b e completato sul branch
 `feature/gis-territorio-interrogazione-ui-m23`: il pannello istruttorio si
 apre con una azione esplicita e aggiorna GAIA e ogni sorgente remota senza
-attendere la piu lenta. M24-M25 non sono ancora avviate.
+attendere la piu lenta.
+
+P6/M24 e completato sul branch `feature/gis-territorio-scheda-m24`: la scheda
+PDF raccoglie i dati della particella e le sorgenti territoriali autorizzate,
+persiste lo snapshot, dichiara le esclusioni e gestisce audit e retention.
+M25 non e ancora avviata.
 
 La base M1-M20 della GIS Platform e in esercizio e non richiede modifiche
 preliminari: `source_type` e gia una colonna `String(32)` libera in `GisLayer` e
@@ -51,7 +56,7 @@ schema catalogo.
 | M22b | Pannello strati e ortofoto storiche in mappa | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-layer-panel-m22` |
 | M23a | Interrogazione puntuale multi-sorgente, backend | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-interrogazione-m23` |
 | M23b | Pannello interrogazione, frontend | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-interrogazione-ui-m23` |
-| M24 | Scheda territoriale particella in PDF | da implementare | `feature/gis-territorio-scheda-m24` |
+| M24 | Scheda territoriale particella in PDF | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-scheda-m24` |
 | M25 | Strumenti di campo e propagazione QGIS | da implementare | `feature/gis-territorio-strumenti-m25` |
 
 ## Analisi Preliminare Completata
@@ -81,6 +86,50 @@ governa internamente. La sovrapposizione e utile come controllo, ma richiede una
 decisione esplicita di autorevolezza prima del seed.
 
 ## Verifiche
+
+Verifiche P6 eseguite il 2026-08-28:
+
+- suite backend GIS integrata: `176 passed`;
+- coverage sui runtime backend modificati: `1157` statement, `0` mancanti,
+  totale `100%`;
+- test frontend P6: `13 passed`; coverage `76/76` statement, `63/63` branch,
+  `35/35` funzioni e `63/63` linee;
+- `make lint-backend`: exit `0`; `make quality-test`: `46 passed`;
+- `npm run typecheck`: exit `0`; `npm run lint`: exit `0`, con soli warning
+  preesistenti fuori dal perimetro;
+- suite unit frontend completa: `180` file e `1636` test verdi;
+- `npm run build`: exit `0`;
+- `make complexity-ratchet
+  BASE_REF=feature/gis-territorio-interrogazione-ui-m23`: exit `0`, baseline
+  commit `24e6c04d`, nessun finding;
+- `make graphify-backend`: exit `0`, `7241` nodi, `17507` archi e `444`
+  community;
+- `make graphify-frontend`: exit `0`, `4913` nodi, `11872` archi e `188`
+  community;
+- `make graphify-platform-docs`: exit `0`, `471` nodi, `671` archi e `59`
+  community;
+- `git diff --check`: exit `0` prima dell'aggiornamento documentale.
+
+La migration M24 e verificata direttamente invocando `upgrade()` e
+`downgrade()` nel test dedicato. La generazione Alembic offline dell'intera
+catena non e utilizzabile come ulteriore prova: la migration storica
+`20260529_0094_wiki_conversation_governance.py` esegue inspection del database
+ed e incompatibile con `--sql`. Non e stata dichiarata una applicazione
+end-to-end su PostgreSQL reale in questa change.
+
+Decisioni M24:
+
+- la richiesta crea un record `queued`; raccolta remota e resa Chromium sono
+  eseguite fuori dalla risposta HTTP con una sessione database propria;
+- lo snapshot delle sorgenti viene persistito prima del rendering e resta
+  valorizzato anche quando la raccolta fallisce prima di produrre dati;
+- il richiedente e gli amministratori GIS possono leggere e scaricare la
+  scheda; ogni layer territoriale richiede `can_view`, altrimenti compare tra
+  le esclusioni dichiarate;
+- il PDF contiene disclaimer in prima pagina, attribuzioni deduplicate,
+  dettaglio degli esiti M23 ed estratto ortofoto con scala e riferimenti;
+- il client usa polling a intervallo di un secondo e revoca il blob URL quando
+  cambia particella o il componente viene smontato.
 
 Verifiche P5 eseguite il 2026-08-28:
 
@@ -388,6 +437,7 @@ servizi pubblici e AdE dichiara esplicitamente un limite concorrente.
 
 ## Prossima Azione Raccomandata
 
-Aprire P4 sul branch `feature/gis-territorio-interrogazione-m23`, partendo dal
-branch P3 verificato. Implementare esclusivamente l'interrogazione puntuale
-backend M23a; non anticipare il pannello P5 dentro la stessa change.
+Chiudere P6 sul branch `feature/gis-territorio-scheda-m24` dopo Graphify e
+review finale. Solo dopo aprire P7 sul branch
+`feature/gis-territorio-strumenti-m25`, senza modificare la baseline di
+complessita per assorbire regressioni.

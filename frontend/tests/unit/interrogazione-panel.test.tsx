@@ -49,9 +49,17 @@ function state(overrides: Partial<InterrogazioneState> = {}): InterrogazioneStat
   };
 }
 
+const scheda = {
+  parcelId: null,
+  sheet: null,
+  error: null,
+  downloadUrl: null,
+  generate: vi.fn(),
+};
+
 describe("InterrogazionePanel", () => {
   test("renders every source state, data, attribution and disabled M24 action", () => {
-    render(<InterrogazionePanel {...state()} />);
+    render(<InterrogazionePanel {...state()} scheda={scheda} />);
     expect(screen.getByText("Risultato disponibile")).toBeInTheDocument();
     expect(screen.getAllByText("Nessun risultato")).toHaveLength(2);
     expect(screen.getByText("In caricamento")).toBeInTheDocument();
@@ -61,13 +69,13 @@ describe("InterrogazionePanel", () => {
     expect(screen.getByText("-")).toBeInTheDocument();
     expect(screen.getByText("Dati AdE")).toBeInTheDocument();
     expect(screen.getByText("Dati RAS")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Scheda territoriale/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Genera scheda territoriale/ })).toBeDisabled();
     expect(screen.getByRole("region", { name: "Vincoli e tutele" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "altro" })).toBeInTheDocument();
   });
 
   test("keeps GAIA open and lets official and territory sections collapse", () => {
-    render(<InterrogazionePanel {...state()} />);
+    render(<InterrogazionePanel {...state()} scheda={scheda} />);
     expect(screen.getByRole("region", { name: "GAIA" })).toBeInTheDocument();
     const official = screen.getByText("Catasto ufficiale").closest("details");
     const territory = screen.getByText("Territorio").closest("details");
@@ -81,11 +89,11 @@ describe("InterrogazionePanel", () => {
 
   test("arms from the closed control, shows instructions and closes", () => {
     const closed = state({ open: false });
-    const { rerender } = render(<InterrogazionePanel {...closed} />);
+    const { rerender } = render(<InterrogazionePanel {...closed} scheda={scheda} />);
     fireEvent.click(screen.getByRole("button", { name: "Interroga punto" }));
     expect(closed.arm).toHaveBeenCalledOnce();
     const armed = state({ armed: true, point: null, gaia: [], catastoUfficiale: [], territorio: [] });
-    rerender(<InterrogazionePanel {...armed} />);
+    rerender(<InterrogazionePanel {...armed} scheda={scheda} />);
     expect(screen.getByText(/Clicca un punto/)).toBeInTheDocument();
     expect(screen.getAllByText("Nessuna sorgente disponibile.")).toHaveLength(3);
     fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));

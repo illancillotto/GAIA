@@ -315,6 +315,26 @@ class GisInterrogazioneResponse(BaseModel):
     territorio: GisInterrogazioneLevelResponse
 
 
+class GisSchedaTerritorialeCreate(BaseModel):
+    particella_id: UUID
+
+
+class GisSchedaTerritorialeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    particella_id: UUID
+    requested_by_user_id: int | None = None
+    status: Literal["queued", "processing", "completed", "failed"]
+    artifact_path: str | None = None
+    checksum_sha256: str | None = None
+    source_snapshot: dict[str, Any] = Field(validation_alias="source_snapshot_json")
+    error_message: str | None = None
+    requested_at: datetime
+    completed_at: datetime | None = None
+    updated_at: datetime
+
+
 class GisLayerPermissionUpsert(BaseModel):
     principal_type: Literal["role", "user"]
     principal_key: str = Field(min_length=1, max_length=120)

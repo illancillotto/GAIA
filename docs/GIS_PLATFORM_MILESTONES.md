@@ -953,7 +953,8 @@ Evidenza M23b:
 
 ## M24 - Scheda Territoriale Particella
 
-Stato: da implementare.
+Stato: completata il 2026-08-28 sul branch
+`feature/gis-territorio-scheda-m24`.
 
 Obiettivo:
 
@@ -978,6 +979,20 @@ Exit criteria:
 - attribuzione di tutte le sorgenti usate;
 - layer non autorizzati esclusi e l'esclusione dichiarata nel documento;
 - snapshot sorgenti presente: la scheda deve restare ricostruibile.
+
+Evidenza M24:
+
+- generazione asincrona con stati `queued`, `processing`, `completed` e
+  `failed`, audit completo e retention configurabile degli artifact;
+- collector sul centroide e sulla estensione della particella, riuso delle
+  sonde M23, filtro `can_view`, esclusioni dichiarate ed estratto ortofoto;
+- PDF Chromium assemblato con `pypdf`, disclaimer in prima pagina,
+  attribuzioni e snapshot persistito prima della resa;
+- API di avvio, stato e download integrate nel pannello interrogazione con
+  polling e revoca dell'object URL;
+- suite GIS integrata `176 passed`, coverage backend `1157/1157`, coverage
+  frontend P6 al `100%`, suite frontend `180` file e `1636` test, build e
+  complexity ratchet contro M23b verdi.
 
 ## M25 - Strumenti Di Campo E Propagazione QGIS
 

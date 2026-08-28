@@ -64,6 +64,7 @@ def test_publish_and_delete_local_artifacts(
     artifact_storage.publish_artifact(source, str(destination))
 
     assert destination.read_bytes() == b"archive"
+    assert artifact_storage.read_artifact(str(destination)) == b"archive"
     assert artifact_storage.delete_artifact(str(destination)) is True
     assert artifact_storage.delete_artifact(str(destination)) is False
 
@@ -86,6 +87,15 @@ def test_publish_and_delete_sftp_artifacts(monkeypatch: pytest.MonkeyPatch) -> N
     assert move == ("move_file", upload[2], destination)
     assert any(call[0] == "run_command" and destination in call[1] for call in client.calls)
     assert client.calls.count(("close",)) == 2
+
+
+def test_read_sftp_artifact_closes_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    configure_transport(monkeypatch, "sftp")
+    client = FakeNasClient(downloaded=b"pdf")
+    monkeypatch.setattr(artifact_storage, "get_nas_client", lambda: client)
+    path = "/volume1/Backups/GAIA/gis/sheet.pdf"
+    assert artifact_storage.read_artifact(path) == b"pdf"
+    assert client.calls == [("download_file", path), ("close",)]
 
 
 def test_sftp_delete_returns_false_for_missing_artifact(

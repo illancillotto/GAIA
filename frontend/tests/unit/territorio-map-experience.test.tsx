@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   panel: vi.fn(),
   interrogationPanel: vi.fn(),
   useInterrogazione: vi.fn(() => ({ open: false })),
+  useScheda: vi.fn(() => ({ parcelId: null })),
   mapListener: null as ((maps: Array<{ getContainer: () => HTMLElement }>) => void) | null,
 }));
 
@@ -44,6 +45,10 @@ vi.mock("@/components/catasto/gis/InterrogazionePanel", () => ({
   },
 }));
 
+vi.mock("@/components/catasto/gis/use-scheda-territoriale", () => ({
+  useSchedaTerritoriale: (...args: unknown[]) => mocks.useScheda(...args),
+}));
+
 import TerritorioMapExperience from "@/components/catasto/gis/TerritorioMapExperience";
 
 describe("TerritorioMapExperience", () => {
@@ -76,6 +81,7 @@ describe("TerritorioMapExperience", () => {
       "token",
       [],
     );
+    expect(mocks.useScheda).toHaveBeenLastCalledWith("token", undefined);
     unmount();
   });
 

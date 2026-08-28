@@ -109,3 +109,12 @@ class GisSettings(StorageSettings):
         ge=1,
         alias="GIS_INTERROGAZIONE_MAX_REMOTE_LAYERS",
     )
+    gis_scheda_artifact_root: str = Field(
+        default="/data/gis/schede-territoriali",
+        alias="GIS_SCHEDA_ARTIFACT_ROOT",
+    )
+    gis_scheda_retention_count: int = Field(
+        default=20,
+        ge=1,
+        alias="GIS_SCHEDA_RETENTION_COUNT",
+    )

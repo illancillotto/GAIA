@@ -126,6 +126,8 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     assert settings.gis_export_scheduler_timezone == "Europe/Rome"
     assert settings.gis_export_retention_count == 5
     assert settings.gis_export_max_layers_per_run == 50
+    assert settings.gis_scheda_artifact_root == "/data/gis/schede-territoriali"
+    assert settings.gis_scheda_retention_count == 20
     assert settings.presenze_sync_running_stale_after_hours == 12
     assert settings.presenze_sync_retention_count == 5
     assert settings.presenze_auto_sync_retry_delay_hours == 12
@@ -223,6 +225,8 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     monkeypatch.setenv("GIS_EXPORT_SCHEDULER_TIMEZONE", "UTC")
     monkeypatch.setenv("GIS_EXPORT_RETENTION_COUNT", "8")
     monkeypatch.setenv("GIS_EXPORT_MAX_LAYERS_PER_RUN", "3")
+    monkeypatch.setenv("GIS_SCHEDA_ARTIFACT_ROOT", "/tmp/gis-sheets")
+    monkeypatch.setenv("GIS_SCHEDA_RETENTION_COUNT", "7")
 
     settings = Settings(_env_file=None)
 
@@ -306,6 +310,8 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     assert settings.gis_export_scheduler_timezone == "UTC"
     assert settings.gis_export_retention_count == 8
     assert settings.gis_export_max_layers_per_run == 3
+    assert settings.gis_scheda_artifact_root == "/tmp/gis-sheets"
+    assert settings.gis_scheda_retention_count == 7
     assert settings.presenze_sync_running_stale_after_hours == 18
     assert settings.presenze_sync_retention_count == 9
     assert settings.presenze_auto_sync_retry_delay_hours == 24
