@@ -70,7 +70,8 @@ L'archivio `.qgz` contiene:
 
 Regole di inclusione:
 
-- solo layer attivi, visibili all'utente e con `source_type=postgis`;
+- solo layer attivi e visibili all'utente;
+- layer PostGIS con colonna geometrica e layer territoriali esterni WMS;
 - solo layer con colonna geometrica configurata;
 - esclusione di layer `postgis_staging`, registry applicativi e metadata
   `qgis.mode=not_published`;
@@ -78,6 +79,25 @@ Regole di inclusione:
 - layer Catasto read-only;
 - eventuali layer editabili solo se il dominio ha policy `controlled` e ruoli
   DB coerenti.
+
+### Layer Territoriali Via Proxy GAIA
+
+I layer del workspace `territorio` sono inseriti come provider WMS che punta a
+`GIS_QGIS_PROXY_BASE_URL`, mai agli endpoint remoti RAS o AdE. Il valore deve
+essere la base URL HTTPS di GAIA raggiungibile dalle postazioni QGIS, per
+esempio `https://gaia.example.local`.
+
+Il progetto usa `authcfg=gaia_oauth` e non contiene token o password. Prima di
+aprire il progetto:
+
+1. creare in QGIS una configurazione di autenticazione con ID `gaia_oauth`;
+2. configurarla con una credenziale GAIA personale abilitata al modulo GIS;
+3. verificare che QGIS raggiunga `GIS_QGIS_PROXY_BASE_URL` via HTTPS;
+4. non esportare o condividere il database autenticazioni QGIS.
+
+L'endpoint `/gis/external/{layer_id}/qgis-wms` accetta da QGIS solo `LAYERS`
+uguale al layer locale atteso e delega al proxy governato M21. Permessi,
+allowlist, cache, timeout e audit degli errori restano quindi applicati.
 
 ## Pacchetto Offline
 
@@ -152,6 +172,7 @@ Catasto.
 - Eseguire SQL in manutenzione controllata.
 - Creare ruoli LOGIN `qgis_*` separati.
 - Configurare sul PC QGIS il servizio PostgreSQL `gaia_gis`.
+- Configurare `gaia_oauth` per i layer territoriali via proxy GAIA.
 - Scaricare il progetto da `/gis/catalogo` o da `GET /gis/qgis/project`.
 - Testare accesso reader su view `gis_qgis`.
 - Testare che Catasto sia read-only.

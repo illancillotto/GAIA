@@ -88,16 +88,20 @@ export default function OrtofotoStoricheSelector(props: OrtofotoStoricheSelector
       </label>
       {selection.comparisonId ? (
         <label className="mt-2 block text-xs font-semibold text-slate-700">
-          Trasparenza confronto
+          Bilanciamento annate
           <input
-            aria-label="Trasparenza confronto"
+            aria-label="Bilanciamento annate"
             className="mt-1 w-full accent-sky-700"
             type="range"
             min="0"
             max="1"
             step="0.05"
             value={opacity[selection.comparisonId] ?? 0.5}
-            onChange={(event) => onOpacityChange(selection.comparisonId, Number(event.target.value))}
+            onChange={(event) => {
+              const balance = Number(event.target.value);
+              onOpacityChange(selection.comparisonId, balance);
+              if (selection.primaryId) onOpacityChange(selection.primaryId, 1 - balance);
+            }}
           />
         </label>
       ) : null}

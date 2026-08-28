@@ -90,6 +90,10 @@ class GisSettings(StorageSettings):
         default="https://wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows01.php",
         alias="GIS_EXTERNAL_ADE_WMS_URL",
     )
+    gis_qgis_proxy_base_url: str = Field(
+        default="http://localhost:8000",
+        alias="GIS_QGIS_PROXY_BASE_URL",
+    )
     gis_interrogazione_enabled: bool = Field(
         default=False,
         alias="GIS_INTERROGAZIONE_ENABLED",

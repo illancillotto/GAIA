@@ -1355,6 +1355,50 @@ def test_qgis_project_download_includes_only_visible_publishable_postgis_layers(
     assert "Layer inclusi: 2" in readme
 
 
+def test_qgis_project_includes_only_visible_territorio_layers_through_gaia_proxy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    admin_headers = auth_headers("gis-admin")
+    viewer_headers = auth_headers("gis-viewer")
+    visible = _create_external_layer(admin_headers)
+    hidden_response = client.post(
+        "/gis/layers",
+        headers=admin_headers,
+        json={
+            "workspace": "territorio",
+            "name": "hidden_external",
+            "title": "Hidden external",
+            "source_type": "wms_external",
+            "official_source": "ras_sitr",
+            "metadata": _external_layer_metadata(remote_layer="dbu:hidden"),
+        },
+    )
+    assert hidden_response.status_code == 201
+    permission = client.post(
+        f"/gis/layers/{visible['id']}/permissions",
+        headers=admin_headers,
+        json={"principal_type": "role", "principal_key": "viewer", "access_level": "viewer"},
+    )
+    assert permission.status_code == 200
+    monkeypatch.setattr(settings, "gis_qgis_proxy_base_url", "https://gaia.example.test")
+
+    response = client.get("/gis/qgis/project", headers=viewer_headers)
+
+    assert response.status_code == 200
+    assert response.headers["x-gis-qgis-layer-count"] == "1"
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        project_xml = archive.read("gaia-gis-platform.qgs").decode()
+        manifest = json.loads(archive.read("manifest.json"))
+        readme = archive.read("README_QGIS.txt").decode()
+    assert f"https%3A%2F%2Fgaia.example.test%2Fgis%2Fexternal%2F{visible['id']}%2Fqgis-wms" in project_xml
+    assert "authcfg=gaia_oauth" in project_xml
+    assert "providerKey=\"wms\"" in project_xml
+    assert "hidden_external" not in project_xml
+    assert "webgis.regione.sardegna.it" not in project_xml
+    assert manifest["layers"][0]["source_type"] == "wms_external"
+    assert "non contiene token" in readme
+
+
 def test_qgis_project_download_requires_visible_publishable_layers() -> None:
     viewer_headers = auth_headers("gis-viewer")
 
@@ -1367,6 +1411,7 @@ def test_qgis_project_download_requires_visible_publishable_layers() -> None:
 def test_qgis_project_geometry_kind_mapping_covers_common_shapes() -> None:
     assert gis_services._qgis_geometry_kind(GisLayer(geometry_type="POINT")) == "Point"  # noqa: SLF001
     assert gis_services._qgis_geometry_kind(GisLayer(geometry_type="MULTILINESTRING")) == "Line"  # noqa: SLF001
+    assert gis_services._qgis_geometry_kind(GisLayer(geometry_type="POLYGON")) == "Polygon"  # noqa: SLF001
     assert gis_services._qgis_geometry_kind(GisLayer(geometry_type=None)) == "UnknownGeometry"  # noqa: SLF001
 
 

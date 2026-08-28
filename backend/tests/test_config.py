@@ -128,6 +128,7 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     assert settings.gis_export_max_layers_per_run == 50
     assert settings.gis_scheda_artifact_root == "/data/gis/schede-territoriali"
     assert settings.gis_scheda_retention_count == 20
+    assert settings.gis_qgis_proxy_base_url == "http://localhost:8000"
     assert settings.presenze_sync_running_stale_after_hours == 12
     assert settings.presenze_sync_retention_count == 5
     assert settings.presenze_auto_sync_retry_delay_hours == 12

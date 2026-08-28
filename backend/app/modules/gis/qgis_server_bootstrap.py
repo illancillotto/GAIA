@@ -13,7 +13,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.modules.gis.models import GisLayer
-from app.modules.gis.services import _build_qgis_project_xml, _is_qgis_project_layer
+from app.modules.gis.qgis_project import build_xml as _build_qgis_project_xml
+from app.modules.gis.qgis_project import is_project_layer as _is_qgis_project_layer
 
 PROJECT_FILENAME = "gaia-gis-platform.qgs"
 ROLE_PATTERN = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")

@@ -1,7 +1,7 @@
 # GAIA GIS Platform - Progress Territorio Esterno
 
 > Ultimo aggiornamento: 2026-08-28.
-> Branch corrente: `feature/gis-territorio-scheda-m24`.
+> Branch corrente: `feature/gis-territorio-strumenti-m25`.
 >
 > Piano tecnico: `docs/GIS_PLATFORM_TERRITORIO_PLAN.md`.
 > Riferimento dati: `docs/GIS_PLATFORM_TERRITORIO_CATALOGO.md`.
@@ -39,7 +39,10 @@ attendere la piu lenta.
 P6/M24 e completato sul branch `feature/gis-territorio-scheda-m24`: la scheda
 PDF raccoglie i dati della particella e le sorgenti territoriali autorizzate,
 persiste lo snapshot, dichiara le esclusioni e gestisce audit e retention.
-M25 non e ancora avviata.
+
+P7/M25 e completato sul branch `feature/gis-territorio-strumenti-m25`:
+misure geodetiche, confronto ortofoto, stampa e propagazione QGIS via proxy
+GAIA sono implementati senza modificare `MapContainer.tsx`.
 
 La base M1-M20 della GIS Platform e in esercizio e non richiede modifiche
 preliminari: `source_type` e gia una colonna `String(32)` libera in `GisLayer` e
@@ -57,7 +60,7 @@ schema catalogo.
 | M23a | Interrogazione puntuale multi-sorgente, backend | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-interrogazione-m23` |
 | M23b | Pannello interrogazione, frontend | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-interrogazione-ui-m23` |
 | M24 | Scheda territoriale particella in PDF | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-scheda-m24` |
-| M25 | Strumenti di campo e propagazione QGIS | da implementare | `feature/gis-territorio-strumenti-m25` |
+| M25 | Strumenti di campo e propagazione QGIS | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-strumenti-m25` |
 
 ## Analisi Preliminare Completata
 
@@ -86,6 +89,45 @@ governa internamente. La sovrapposizione e utile come controllo, ma richiede una
 decisione esplicita di autorevolezza prima del seed.
 
 ## Verifiche
+
+Verifiche P7 eseguite il 2026-08-28:
+
+- suite backend GIS integrata: `182 passed`; coverage runtime modificati
+  `1476/1476`, totale `100%`;
+- test frontend P7: `17 passed`; coverage `171/171` statement, `103/103`
+  branch, `49/49` funzioni e `125/125` linee;
+- caso geodetico noto: arco equatoriale di un grado circa `111.195 km`;
+- `make lint-backend`: exit `0`; `make quality-test`: `46 passed`;
+- `npm run typecheck`: exit `0`; `npm run lint`: exit `0`, con soli warning
+  preesistenti fuori perimetro;
+- suite unit frontend completa: `183` file e `1647` test verdi;
+- `npm run build`: exit `0`;
+- `make complexity-ratchet BASE_REF=feature/gis-territorio-scheda-m24`:
+  exit `0`, baseline commit `d678b7e9`, nessun finding;
+- `make graphify-backend`: exit `0`, `7258` nodi, `17534` archi e `450`
+  community;
+- `make graphify-frontend`: exit `0`, `4935` nodi, `11919` archi e `184`
+  community;
+- `make graphify-platform-docs`: exit `0`, `519` nodi, `747` archi e `66`
+  community;
+- il primo ratchet P7 ha rifiutato due nuove violation nei moduli QGIS. La
+  baseline non e stata aggiornata; datasource e validazione parametri sono
+  stati separati per responsabilita e il ratchet successivo e verde.
+
+Decisioni M25:
+
+- distanze e aree usano coordinate WGS84 e calcolo geodetico, non distanza
+  euclidea sul piano Web Mercator;
+- il confronto ortofoto bilancia simultaneamente opacita della annata
+  principale e della annata di confronto;
+- la stampa cattura la canvas e genera un layout con scala, legenda,
+  intestazione consortile e attribuzioni deduplicate;
+- `GIS_QGIS_PROXY_BASE_URL` definisce la base HTTPS raggiungibile dai desktop;
+  il progetto usa `authcfg=gaia_oauth` e non incorpora credenziali;
+- l'endpoint QGIS WMS accetta solo il nome locale esatto del layer nel path e
+  delega a M21, preservando allowlist e destinazione governata;
+- `services.py` e stato ridotto estraendo il builder in `qgis_project.py`;
+  `MapContainer.tsx` resta invariato.
 
 Verifiche P6 eseguite il 2026-08-28:
 
@@ -437,7 +479,6 @@ servizi pubblici e AdE dichiara esplicitamente un limite concorrente.
 
 ## Prossima Azione Raccomandata
 
-Chiudere P6 sul branch `feature/gis-territorio-scheda-m24` dopo Graphify e
-review finale. Solo dopo aprire P7 sul branch
-`feature/gis-territorio-strumenti-m25`, senza modificare la baseline di
-complessita per assorbire regressioni.
+Eseguire audit conclusivo requisito-per-requisito P0-P7, verificare commit e
+working tree di ogni branch e non aprire ulteriori milestone senza una nuova
+decisione di prodotto.

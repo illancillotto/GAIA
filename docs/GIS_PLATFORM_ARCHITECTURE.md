@@ -510,7 +510,7 @@ il file ZIP e stato eliminato.
 
 ### Layer Territoriali Esterni M21-M25
 
-Stato: fondazione M21 implementata; seed e superfici M22-M25 non implementati.
+Stato: M21-M25 implementate.
 
 Il catalogo GIS governa oggi solo layer che vivono nel PostGIS GAIA
 (`postgis`, `postgis_staging`) o registri applicativi di dominio
@@ -637,7 +637,7 @@ Il dettaglio e in `docs/GIS_PLATFORM_TERRITORIO_PLAN.md`.
 7. Valutazione POC QGIS Server vs GeoServer per pubblicazione WMS/WFS/WMTS.
 8. Programma Territorio Esterno: layer WMS/WFS di terzi nel catalogo,
    interrogazione puntuale multi-sorgente e scheda territoriale particella.
-   M21-M24 implementate; M25 non ancora avviata.
+   M21-M25 implementate.
 
 ## Documenti Operativi
 

@@ -34,8 +34,9 @@ describe("OrtofotoStoricheSelector", () => {
     expect(onToggle).toHaveBeenCalledWith("orto-1977");
     fireEvent.change(screen.getByLabelText("Annata di confronto"), { target: { value: "orto-2006" } });
     expect(onToggle).toHaveBeenCalledWith("orto-2006");
-    fireEvent.change(screen.getByLabelText("Trasparenza confronto"), { target: { value: "0.35" } });
+    fireEvent.change(screen.getByLabelText("Bilanciamento annate"), { target: { value: "0.35" } });
     expect(onOpacityChange).toHaveBeenCalledWith("orto-2006", 0.35);
+    expect(onOpacityChange).toHaveBeenCalledWith("orto-1977", 0.65);
 
     rerender(
       <OrtofotoStoricheSelector layers={layers} enabled={{ "orto-1977": true, "orto-2006": true }} opacity={{}} basemap="satellite" onToggle={onToggle} onOpacityChange={onOpacityChange} />,
@@ -67,6 +68,8 @@ describe("OrtofotoStoricheSelector", () => {
     fireEvent.change(screen.getByLabelText("Annata principale"), { target: { value: "" } });
 
     fireEvent.change(screen.getByLabelText("Annata di confronto"), { target: { value: "historic" } });
+    fireEvent.change(screen.getByLabelText("Bilanciamento annate"), { target: { value: "0.2" } });
+    expect(onToggle).toHaveBeenCalledWith("historic");
     fireEvent.change(screen.getByLabelText("Annata di confronto"), { target: { value: "orto-2006" } });
     fireEvent.change(screen.getByLabelText("Annata di confronto"), { target: { value: "" } });
     expect(onToggle.mock.calls.filter(([id]) => id === "historic").length).toBeGreaterThan(1);

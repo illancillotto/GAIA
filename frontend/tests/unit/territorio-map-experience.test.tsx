@@ -49,6 +49,10 @@ vi.mock("@/components/catasto/gis/use-scheda-territoriale", () => ({
   useSchedaTerritoriale: (...args: unknown[]) => mocks.useScheda(...args),
 }));
 
+vi.mock("@/components/catasto/gis/TerritorioFieldTools", () => ({
+  default: () => <div>strumenti territorio</div>,
+}));
+
 import TerritorioMapExperience from "@/components/catasto/gis/TerritorioMapExperience";
 
 describe("TerritorioMapExperience", () => {

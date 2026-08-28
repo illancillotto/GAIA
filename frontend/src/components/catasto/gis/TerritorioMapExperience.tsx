@@ -13,6 +13,7 @@ import {
 } from "@/components/catasto/gis/use-territorio-layers";
 import { useInterrogazione } from "@/components/catasto/gis/use-interrogazione";
 import { useSchedaTerritoriale } from "@/components/catasto/gis/use-scheda-territoriale";
+import TerritorioFieldTools, { type FieldMap } from "@/components/catasto/gis/TerritorioFieldTools";
 
 type TerritorioMapExperienceProps = ComponentProps<typeof MapContainer>;
 
@@ -39,6 +40,7 @@ export default function TerritorioMapExperience(props: TerritorioMapExperiencePr
       <MapContainer {...props} />
       <TerritorioLayerPanel {...territorio} basemap={props.basemap ?? "osm"} />
       <InterrogazionePanel {...interrogazione} scheda={scheda} />
+      <TerritorioFieldTools map={map as unknown as FieldMap | null} groups={territorio.groups} enabled={territorio.enabled} />
     </div>
   );
 }

@@ -31,6 +31,7 @@ from app.modules.gis import (
 from app.modules.gis.interrogazione import models as interrogazione_models
 from app.modules.gis.interrogazione import service as interrogazione_service
 from app.modules.gis.scheda_territoriale.router import router as scheda_router
+from app.modules.gis.qgis_external_router import router as qgis_external_router
 from app.modules.gis.schemas import (
     GisAnnotationCreate,
     GisAnnotationResponse,
@@ -74,6 +75,7 @@ router = APIRouter(
     dependencies=[Depends(require_module("gis"))],
 )
 router.include_router(scheda_router)
+router.include_router(qgis_external_router)
 
 
 @router.post(

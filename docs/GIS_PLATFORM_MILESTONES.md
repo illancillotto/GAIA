@@ -996,7 +996,8 @@ Evidenza M24:
 
 ## M25 - Strumenti Di Campo E Propagazione QGIS
 
-Stato: da implementare.
+Stato: completata il 2026-08-28 sul branch
+`feature/gis-territorio-strumenti-m25`.
 
 Obiettivo:
 
@@ -1015,3 +1016,18 @@ Exit criteria:
 - misure corrette su un caso noto;
 - progetto QGIS filtrato sui layer visibili all'utente richiedente;
 - nessuna delle voci e bloccante per M21-M24.
+
+Evidenza M25:
+
+- distanze con haversine e aree sferiche su coordinate geografiche, incluso
+  caso noto di un grado equatoriale pari a circa `111.195 km`;
+- overlay MapLibre dedicato per vertici, linea e poligono, senza modificare
+  `MapContainer.tsx`;
+- slider di confronto che esegue cross-fade tra annata principale e annata di
+  confronto;
+- layout A4 orizzontale con intestazione consortile, scala derivata da zoom e
+  latitudine, legenda e attribuzioni degli strati attivi;
+- progetto QGIS con layer territoriali visibili come WMS sul proxy GAIA,
+  `authcfg=gaia_oauth`, filtro `can_view` e nessun token o URL remoto incluso;
+- suite GIS e coverage backend `1476/1476`, coverage frontend P7 al `100%`,
+  suite frontend `183` file e `1647` test, build e ratchet contro M24 verdi.
