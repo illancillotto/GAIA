@@ -23,6 +23,11 @@ from sqlalchemy.orm import Session
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.gis.artifact_storage import delete_artifact as _delete_export_artifact
 from app.modules.gis.exporter import export_layer_to_shapefile_zip
+from app.modules.gis.external_sources import (
+    ExternalSourceConfigurationError,
+    is_external_source_type,
+    normalize_external_layer_metadata,
+)
 from app.modules.gis.models import (
     GisAnnotation,
     GisAuditLog,
@@ -251,6 +256,21 @@ def _get_layer(db: Session, layer_id: UUID) -> GisLayer:
     layer = db.get(GisLayer, layer_id)
     if layer is None or not layer.is_active:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="GIS layer not found")
+    return layer
+
+
+def resolve_external_layer_for_proxy(
+    db: Session,
+    layer_id: UUID,
+    current_user: ApplicationUser,
+) -> GisLayer:
+    layer = _get_layer(db, layer_id)
+    _ensure_layer_permission(db, layer, current_user, "can_view")
+    if not is_external_source_type(layer.source_type):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="GIS external proxy requires an external layer",
+        )
     return layer
 
 
@@ -576,6 +596,7 @@ def _validate_change_request_payload(
     feature_id: str | None,
     payload: dict[str, Any],
 ) -> None:
+    _ensure_change_request_target_is_internal(layer)
     if change_type == GisChangeRequestType.attribute_update:
         _require_feature_id(feature_id, change_type)
         _require_payload_object(payload, "after", change_type)
@@ -589,9 +610,26 @@ def _validate_change_request_payload(
         _require_feature_id(feature_id, change_type)
         _require_payload_object(payload, "before", change_type)
 
+    _run_change_request_validators(layer, change_type, feature_id, payload)
+
+
+def _run_change_request_validators(
+    layer: GisLayer,
+    change_type: GisChangeRequestType,
+    feature_id: str | None,
+    payload: dict[str, Any],
+) -> None:
     for scope in (str(layer.id), layer.domain_module, layer.workspace):
         if scope and (validator := CHANGE_REQUEST_VALIDATORS.get(scope)):
             validator(layer, change_type, feature_id, payload)
+
+
+def _ensure_change_request_target_is_internal(layer: GisLayer) -> None:
+    if is_external_source_type(layer.source_type):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="External GIS layers cannot be change request targets",
+        )
 
 
 def _ensure_change_request_open(change_request: GisChangeRequest) -> None:
@@ -629,11 +667,23 @@ def _set_change_request_review(
     )
 
 
+def _normalize_layer_metadata(
+    source_type: str, metadata: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    try:
+        return normalize_external_layer_metadata(source_type, metadata)
+    except ExternalSourceConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+
 def create_layer(db: Session, body: GisLayerCreate, current_user: ApplicationUser) -> GisLayerResponse:
     if not is_gis_admin(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required")
 
-    metadata = body.metadata
+    metadata = _normalize_layer_metadata(body.source_type, body.metadata)
     layer = _new_layer(body, current_user, metadata)
     db.add(layer)
     try:
@@ -1114,7 +1164,7 @@ def update_layer_metadata(
     if not fields:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="At least one metadata field is required")
 
-    metadata = body.metadata
+    metadata = _normalize_layer_metadata(layer.source_type, body.metadata) if "metadata" in fields else body.metadata
     updates = _layer_metadata_updates(body, fields, metadata)
 
     changed_fields = []

@@ -290,6 +290,36 @@ class Settings(GisSettings):
         default="",
         alias="ELABORAZIONI_DB_BACKUP_ENCRYPTION_PASSPHRASE",
     )
+    gis_external_layers_enabled: bool = Field(
+        default=False,
+        alias="GIS_EXTERNAL_LAYERS_ENABLED",
+    )
+    gis_external_cache_dir: str = Field(
+        default="/data/gis/external-cache",
+        alias="GIS_EXTERNAL_CACHE_DIR",
+    )
+    gis_external_cache_max_mb: int = Field(
+        default=2048,
+        ge=1,
+        alias="GIS_EXTERNAL_CACHE_MAX_MB",
+    )
+    gis_external_default_timeout_seconds: float = Field(
+        default=12.0,
+        gt=0,
+        alias="GIS_EXTERNAL_DEFAULT_TIMEOUT_SECONDS",
+    )
+    gis_external_ras_vector_url: str = Field(
+        default="https://webgis.regione.sardegna.it/geoserver/ows",
+        alias="GIS_EXTERNAL_RAS_VECTOR_URL",
+    )
+    gis_external_ras_raster_url: str = Field(
+        default="https://webgis.regione.sardegna.it/geoserverraster/ows",
+        alias="GIS_EXTERNAL_RAS_RASTER_URL",
+    )
+    gis_external_ade_wms_url: str = Field(
+        default="https://wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows01.php",
+        alias="GIS_EXTERNAL_ADE_WMS_URL",
+    )
     jwt_secret_key: str = Field(alias="JWT_SECRET_KEY")
     jwt_expire_minutes: int = Field(default=720, alias="JWT_EXPIRE_MINUTES")
     jwt_algorithm: str = "HS256"

@@ -801,7 +801,11 @@ PostGIS.
 
 ## M21 - Fondazione Layer Esterni
 
-Stato: da implementare.
+Stato: implementata e congelata sul branch M21 il 2026-08-28; chiusura bloccata
+dal ratchet di complessita. Su `services.py`, `834` delle `879` LOC di delta
+rispetto alla baseline risultano gia presenti su `main`, ma devono essere
+classificate in una change quality separata. Non avviare M22 finche il branch
+non e riallineato e il gate non passa senza assorbire regressioni.
 
 Obiettivo:
 
@@ -828,6 +832,18 @@ Exit criteria:
   come tabella;
 - flag disabilitato produce `503` governato;
 - coverage 100% sui runtime nuovi e modificati.
+
+Evidenza corrente:
+
+- proxy, registro, schema, configurazione, health e divieti backend
+  implementati senza seed esterno;
+- `112` test mirati verdi e coverage `100%` sui sette runtime modificati;
+- `make lint-backend` verde;
+- `make complexity-ratchet BASE_REF=origin/main` rosso: la baseline associata
+  al merge-base `840c010001e0aa45434539c4cf96065de61bdc41` attribuisce
+  regressioni anche a callable non modificate da M21. Questo non prova la
+  conformita della slice: la baseline non e stata aggiornata e M21 resta
+  bloccata fino al ratchet verde dopo l'audit separato.
 
 ## M22 - Catalogo Territorio E Pannello Strati
 
