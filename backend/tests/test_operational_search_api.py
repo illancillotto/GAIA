@@ -241,6 +241,7 @@ def test_operational_search_returns_grouped_domain_hits() -> None:
     assert ("ruolo", "avviso") in result_types
     assert ("catasto", "particella") in result_types
     assert ("catasto", "document") in result_types
+    assert payload["items"][0]["type"] in {"subject_person", "subject_company"}
     assert payload["items"][0]["score"] >= payload["items"][-1]["score"]
 
 
@@ -254,6 +255,39 @@ def test_operational_search_is_available_under_api_prefix() -> None:
     payload = response.json()
     assert payload["query"] == "rossi"
     assert payload["items"]
+
+
+def test_operational_search_ranks_linked_utenza_first_for_tax_identifiers() -> None:
+    user = _create_user("search-tax-id")
+    _seed_search_rows(user.id)
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            AnagraficaPaymentNotice(
+                source_system="incass",
+                source_notice_id="AZIENDA-NOTICE-1",
+                display_name="Rossi Agricola",
+                partita_iva="01234567890",
+                anno="2026",
+                stato_label="Da pagare",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    headers = _auth_headers("search-tax-id")
+    cf_payload = client.get("/search?q=RSSMRA80A01H501U&limit=20", headers=headers).json()
+    assert cf_payload["items"][0]["module"] == "utenze"
+    assert cf_payload["items"][0]["type"] == "subject_person"
+    assert cf_payload["items"][0]["title"] == "Rossi · Mario"
+    assert ("utenze", "payment_notice") in {(item["module"], item["type"]) for item in cf_payload["items"]}
+
+    piva_payload = client.get("/search?q=01234567890&limit=20", headers=headers).json()
+    assert piva_payload["items"][0]["module"] == "utenze"
+    assert piva_payload["items"][0]["type"] == "subject_company"
+    assert piva_payload["items"][0]["title"] == "Rossi Agricola"
+    assert ("utenze", "payment_notice") in {(item["module"], item["type"]) for item in piva_payload["items"]}
 
 
 def test_operational_search_matches_multitoken_names_across_enabled_domains() -> None:

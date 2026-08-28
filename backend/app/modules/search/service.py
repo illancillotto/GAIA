@@ -15,6 +15,7 @@ from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice
 
 
 _MODULE_PRIORITY: dict[SearchModule, int] = {"utenze": 0, "ruolo": 1, "catasto": 2}
+_SUBJECT_RESULT_TYPES = frozenset({"subject_person", "subject_company"})
 
 
 def search_operational(db: Session, current_user: ApplicationUser, query: str, limit: int = 12) -> OperationalSearchResponse:
@@ -45,7 +46,15 @@ def _normalize_query(query: str) -> str:
 
 
 def _sort_results(items: list[OperationalSearchResult], limit: int) -> list[OperationalSearchResult]:
-    return sorted(items, key=lambda item: (_MODULE_PRIORITY[item.module], -item.score, item.title.lower()))[:limit]
+    return sorted(
+        items,
+        key=lambda item: (
+            _MODULE_PRIORITY[item.module],
+            0 if item.type in _SUBJECT_RESULT_TYPES else 1,
+            -item.score,
+            item.title.lower(),
+        ),
+    )[:limit]
 
 
 def _can_search_module(user: ApplicationUser, module: SearchModule) -> bool:
