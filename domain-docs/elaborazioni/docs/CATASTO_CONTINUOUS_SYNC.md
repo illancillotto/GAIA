@@ -47,10 +47,20 @@ Per diagnosi verificare `last_source_refresh_at`, `last_planner_at`, `last_batch
 
 - Eseguire i test mirati backend con coverage al 100% su `elaborazioni_perpetual_sources`, `elaborazioni_perpetual_sync`, `elaborazioni_ruolo_autosync` e `autosync_scheduler`.
 - Eseguire il test del pannello continuo con coverage al 100% e il typecheck TypeScript dell'intero frontend.
-- Verificare che `python -m alembic heads` restituisca una sola head, `20260828_0900`.
+- Sul branch perpetual isolato, verificare che `python -m alembic heads`
+  restituisca `20260828_0900`. Dopo l'integrazione GIS completa, la merge
+  migration deve produrre una sola head `20260901_1000`.
 - Eseguire il round-trip della migrazione su PostgreSQL impostando `GAIA_TEST_POSTGRES_URL`; il test SQLite valida il contratto di base ma non sostituisce la prova sul database di produzione.
 - Eseguire il quality ratchet contro il merge-base prima dell'integrazione.
 
 ## Rollback
 
 Disattivare il toggle nella UI. Gli item persistiti restano disponibili per la ripresa; i batch gia in lavorazione non vengono cancellati implicitamente. Il downgrade schema rimuove `catasto_perpetual_sync_items` e le estensioni della configurazione, quindi deve essere preceduto da backup se lo storico operativo va conservato.
+
+## Evidenza integrazione 2026-08-29
+
+- Suite backend combinata GIS e perpetual-sync verde; coverage dei quattro runtime perpetual `675/675`, `100%`.
+- Pannello continuo incluso nella suite frontend completa: `184` file e `1654` test verdi; typecheck e build verdi.
+- Round-trip della migration perpetual passato su PostgreSQL effimero isolato.
+- Catena Alembic unificata dalla revision `20260901_1000`; `alembic heads` restituisce una sola head.
+- Quality ratchet contro `origin/main@840c0100` verde, senza finding e senza aggiornare la baseline.

@@ -92,6 +92,33 @@ decisione esplicita di autorevolezza prima del seed.
 
 ## Verifiche
 
+Verifiche integrazione completa eseguite il 2026-08-29:
+
+- M21 integrata in `8044b4a4`, M22-M25 in `1f5dbbad` e perpetual-sync in
+  `e25ba695`; i tre branch sorgente restano invariati;
+- suite combinata backend GIS e perpetual-sync: exit `0`; i quattro runtime
+  perpetual hanno coverage `675/675`, totale `100%`;
+- suite unit frontend completa: `184` file e `1654` test verdi;
+- `npm run typecheck`, `npm run build`, `npm run lint` e `make lint-backend`:
+  exit `0`; lint segnala soltanto warning preesistenti fuori perimetro;
+- `make quality-test`: `46 passed`;
+- `make complexity-ratchet BASE_REF=origin/main`: exit `0`, baseline commit
+  `840c0100`, nessun finding e baseline invariata;
+- `make complexity-baseline-verify`: restituisce correttamente `false` perche
+  il checkout integrato contiene codice funzionale non assorbito dalla baseline
+  di `origin/main`; la baseline non e stata rigenerata o ampliata;
+- Alembic espone una sola head `20260901_1000`, merge di `20260901_0900` e
+  `20260828_0900`;
+- round-trip PostgreSQL reale della migration perpetual: verde su database
+  effimero isolato;
+- l'upgrade dell'intera storia su database vuoto si ferma alla migration
+  storica `20260612_0900` per assenza della tabella `org_unit`; la stessa
+  failure e riprodotta su `origin/main` e non deriva dall'integrazione GIS.
+- Graphify aggiornato sui corpus coinvolti: backend `7290` nodi, `17609`
+  archi, `439` community; frontend `4966/11963/190`; documentazione Catasto
+  `120/202/11`; corpus aggregato `domain-docs` `530/708/37`; refresh della
+  documentazione piattaforma completato con esito `PASS`.
+
 Verifiche P7 eseguite il 2026-08-28:
 
 - suite backend GIS integrata: `182 passed`; coverage runtime modificati
@@ -485,10 +512,9 @@ con catalogo, implementazione, test e verifiche registrate sopra.
 La catena verificata e lineare:
 `dddbbe58 -> d7861d06 -> 2b6f5651 -> 352f3f23 -> 24e6c04d -> d678b7e9 ->
 677e499c`. La fondazione M21 e attestata dal freeze `07d9f7c4` e dalla chiusura
-documentale `dddbbe58`. Il ref locale
-`feature/gis-territorio-external-layers-m21` punta oggi a `5f319127`, commit
-estraneo successivo presente nel worktree principale concorrente: non e stato
-spostato e non viene usato come evidenza dell'audit.
+documentale `dddbbe58`. Il branch M21 e stato ripulito dal commit Search
+estraneo, termina a `b38d9ed1` e include la rimozione della guardia morta
+`6563cc1b`; la change Search resta sul branch autonomo dedicato.
 
 Non risultano criteri aperti, baseline aggiornate per assorbire regressioni o
 milestone successive avviate. P0-P7 sono chiusi sui commit sopra indicati.
