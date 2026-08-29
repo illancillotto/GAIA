@@ -342,6 +342,14 @@ class CatastoOperationResponse(BaseModel):
 class CatastoRuoloAutoSyncConfigUpdateRequest(BaseModel):
     enabled: bool | None = None
     credential_id: UUID | None = None
+    credential_ids: list[UUID] | None = None
+    primary_enabled: bool | None = None
+    secondary_enabled: bool | None = None
+    role_parcel_refresh_hours: int | None = Field(default=None, ge=1, le=8760)
+    role_subject_refresh_hours: int | None = Field(default=None, ge=1, le=8760)
+    consortium_parcel_refresh_hours: int | None = Field(default=None, ge=1, le=8760)
+    registry_subject_refresh_hours: int | None = Field(default=None, ge=1, le=8760)
+    batch_size: int | None = Field(default=None, ge=1, le=100)
 
 
 class CatastoRuoloAutoSyncConfigResponse(BaseModel):
@@ -349,6 +357,16 @@ class CatastoRuoloAutoSyncConfigResponse(BaseModel):
 
     enabled: bool
     credential_id: UUID | None
+    credential_ids: list[str] | None
+    primary_enabled: bool
+    secondary_enabled: bool
+    role_parcel_refresh_hours: int
+    role_subject_refresh_hours: int
+    consortium_parcel_refresh_hours: int
+    registry_subject_refresh_hours: int
+    batch_size: int
+    source_watermarks: dict | None
+    last_planner_at: datetime | None
     last_source_refresh_at: datetime | None
     last_batch_started_at: datetime | None
     last_error_message: str | None
@@ -393,6 +411,34 @@ class CatastoRuoloAutoSyncStatusCountsResponse(BaseModel):
     blocked_runtime: int = 0
 
 
+class CatastoPerpetualSyncItemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    scope: str
+    target_key: str
+    priority: int
+    search_mode: str
+    comune: str | None
+    foglio: str | None
+    particella: str | None
+    subalterno: str | None
+    subject_kind: str | None
+    subject_identifier: str | None
+    intestazione: str | None
+    status: str
+    attempt_count: int
+    linked_batch_id: UUID | None
+    linked_request_id: UUID | None
+    last_error_message: str | None
+    retry_after: datetime | None
+    next_due_at: datetime
+    last_enqueued_at: datetime | None
+    last_completed_at: datetime | None
+    source_updated_at: datetime | None
+    updated_at: datetime
+
+
 class CatastoRuoloAutoSyncStatusResponse(BaseModel):
     config: CatastoRuoloAutoSyncConfigResponse
     counts: CatastoRuoloAutoSyncStatusCountsResponse
@@ -400,3 +446,7 @@ class CatastoRuoloAutoSyncStatusResponse(BaseModel):
     last_batch: CatastoBatchResponse | None = None
     error_items: list[CatastoRuoloAutoSyncItemResponse] = Field(default_factory=list)
     recent_items: list[CatastoRuoloAutoSyncItemResponse] = Field(default_factory=list)
+    scope_counts: dict[str, dict[str, int]] = Field(default_factory=dict)
+    available_credential_ids: list[UUID] = Field(default_factory=list)
+    perpetual_error_items: list[CatastoPerpetualSyncItemResponse] = Field(default_factory=list)
+    perpetual_recent_items: list[CatastoPerpetualSyncItemResponse] = Field(default_factory=list)

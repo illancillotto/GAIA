@@ -35,6 +35,13 @@ limita a 12 elementi sia recenti sia errori. Il benchmark locale su 176.735 item
 ha misurato p95 `64,773 ms` prima e `18,367 ms` dopo gli indici della migrazione
 `20260827_0900`, su 25 campioni e senza persistere la migrazione nel DB locale.
 
+Dal `2026-08-28` lo scheduler usa il planner catastale continuo. Mantiene lo
+stesso advisory lock per utente, genera micro-batch `perpetual_sync`, filtra
+l'allowlist SISTER per finestra settimanale e lease globale e materializza le
+quattro sorgenti al massimo ogni 15 minuti. Gli SLA e la dimensione del batch
+sono configurabili dalla UI visure. Il runbook di dominio e
+`domain-docs/elaborazioni/docs/CATASTO_CONTINUOUS_SYNC.md`.
+
 ## Lease Presenze
 
 - Claim: `FOR UPDATE SKIP LOCKED`, ordinato per priorita, retry e anzianita.
@@ -74,10 +81,11 @@ Non avviare contemporaneamente timer legacy e servizio Compose.
 ## Sequenza rollout
 
 1. Salvare un backup, verificare una sola head Alembic e applicare le
-   migrazioni additive fino a `head`. Nel checkout validato la head e
-   `20260827_1100`; le revisioni del redesign worker sono `20260827_0900` e
+   migrazioni additive fino a `head`. Nel checkout corrente la head e
+   `20260828_0900`; le revisioni del redesign worker sono `20260827_0900` e
    `20260827_1000`, mentre `20260827_1100` aggiunge l'allowlist credenziali
-   batch usata dallo stesso runtime SISTER.
+   batch usata dallo stesso runtime SISTER; `20260828_0900` aggiunge planner,
+   scope, SLA e coda persistita della sincronizzazione continua.
 2. Verificare che il timer Gate Mobile legacy sia disabilitato.
 3. Ricreare `backend` con scheduler API disabilitati.
 4. Avviare un solo `platform-scheduler` e verificare il suo healthcheck.

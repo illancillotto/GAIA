@@ -24,6 +24,10 @@ Usare questo indice per capire rapidamente quali file sono:
 - `CAPACITAS_SYNC_FLOW.md`
   Sintesi operativa del flusso end-to-end Capacitas, utile per orientamento rapido,
   troubleshooting e allineamento tra backend, prodotto e operations.
+- `../../elaborazioni/docs/CATASTO_CONTINUOUS_SYNC.md`
+  Contratto operativo della sincronizzazione continua di visure storiche per
+  particelle e visure attuali per soggetti, con priorita ruolo, copertura
+  consortile/anagrafica, SLA e pool credenziali SISTER.
 - `Elaborazioni > Moduli Capacitas > Avvisi pagamenti`
   sincronizza in autosync gli avvisi inCASS, aggiorna gli stati pagamento e archivia i PDF avviso
   nel NAS del soggetto (`capacitas/avvisi`) esponendoli da GAIA tramite documenti Utenze.

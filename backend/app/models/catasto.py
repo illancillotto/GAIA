@@ -43,6 +43,7 @@ class CatastoBatchKind(StrEnum):
     MANUAL_SINGLE = "manual_single"
     MANUAL_BATCH = "manual_batch"
     RUOLO_AUTOSYNC = "ruolo_autosync"
+    PERPETUAL_SYNC = "perpetual_sync"
 
 
 class CatastoVisuraRequestStatus(StrEnum):
@@ -76,6 +77,13 @@ class CatastoRuoloAutoSyncItemStatus(StrEnum):
     COMPLETED = "completed"
     BLOCKED_SOURCE = "blocked_source"
     BLOCKED_RUNTIME = "blocked_runtime"
+
+
+class CatastoPerpetualSyncScope(StrEnum):
+    RUOLO_PARTICELLA = "ruolo_particella"
+    RUOLO_SOGGETTO = "ruolo_soggetto"
+    CONSORZIO_PARTICELLA = "consorzio_particella"
+    ANAGRAFE_SOGGETTO = "anagrafe_soggetto"
 
 
 class CatastoCredential(Base):
@@ -427,6 +435,16 @@ class CatastoRuoloAutoSyncConfig(Base):
         nullable=True,
         index=True,
     )
+    credential_ids: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    primary_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    secondary_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    role_parcel_refresh_hours: Mapped[int] = mapped_column(Integer, default=168, nullable=False)
+    role_subject_refresh_hours: Mapped[int] = mapped_column(Integer, default=168, nullable=False)
+    consortium_parcel_refresh_hours: Mapped[int] = mapped_column(Integer, default=2160, nullable=False)
+    registry_subject_refresh_hours: Mapped[int] = mapped_column(Integer, default=2160, nullable=False)
+    batch_size: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    source_watermarks: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    last_planner_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_source_refresh_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_batch_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -510,6 +528,60 @@ class CatastoRuoloAutoSyncItem(Base):
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+    )
+
+
+class CatastoPerpetualSyncItem(Base):
+    __tablename__ = "catasto_perpetual_sync_items"
+    __table_args__ = (
+        UniqueConstraint("user_id", "scope", "target_key", name="uq_catasto_perpetual_sync_target"),
+        Index("ix_catasto_perpetual_sync_due", "user_id", "status", "priority", "next_due_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("application_users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    scope: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    target_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    ruolo_particella_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ruolo_particelle.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    cat_particella_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True, index=True)
+    subject_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True, index=True)
+    search_mode: Mapped[str] = mapped_column(String(32), nullable=False)
+    comune: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    comune_codice: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    catasto: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    sezione: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    foglio: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    particella: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    subalterno: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    subject_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    subject_identifier: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    intestazione: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    tipo_visura: Mapped[str] = mapped_column(String(64), default="Sintetica", nullable=False)
+    request_type: Mapped[str] = mapped_column(String(32), default="ATTUALITA", nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False, index=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    linked_batch_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("catasto_batches.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    linked_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("catasto_visure_requests.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    last_error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    retry_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    next_due_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+    last_enqueued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    source_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
 
