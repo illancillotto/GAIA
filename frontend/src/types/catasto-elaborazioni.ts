@@ -1,0 +1,103 @@
+export type CatastoSingleVisuraPayload = {
+  search_mode?: "immobile" | "soggetto";
+  comune?: string;
+  catasto?: string;
+  sezione?: string;
+  foglio?: string;
+  particella?: string;
+  subalterno?: string;
+  tipo_visura: string;
+  subject_kind?: "PF" | "PNF";
+  subject_id?: string;
+  request_type?: "ATTUALITA" | "STORICA";
+  intestazione?: string;
+};
+
+export type CatastoComune = { id: number; nome: string; codice_sister: string; ufficio: string };
+export type CatastoRequestStatus = "pending" | "processing" | "awaiting_captcha" | "completed" | "failed" | "skipped" | "not_found";
+
+export type CatastoVisuraRequest = {
+  id: string;
+  batch_id: string;
+  user_id: number;
+  row_index: number;
+  search_mode: "immobile" | "soggetto";
+  comune: string | null;
+  comune_codice: string | null;
+  catasto: string | null;
+  sezione: string | null;
+  foglio: string | null;
+  particella: string | null;
+  subalterno: string | null;
+  tipo_visura: string;
+  subject_kind: "PF" | "PNF" | null;
+  subject_id: string | null;
+  request_type: "ATTUALITA" | "STORICA" | null;
+  intestazione: string | null;
+  status: CatastoRequestStatus;
+  current_operation: string | null;
+  error_message: string | null;
+  attempts: number;
+  sister_credential_id: string | null;
+  sister_remote_request_id: string | null;
+  sister_remote_state: string | null;
+  retry_not_before: string | null;
+  last_error_code: string | null;
+  captcha_image_path: string | null;
+  captcha_requested_at: string | null;
+  captcha_expires_at: string | null;
+  captcha_manual_solution?: string | null;
+  captcha_skip_requested: boolean;
+  artifact_dir: string | null;
+  document_id: string | null;
+  created_at: string;
+  processed_at: string | null;
+};
+
+export type CatastoBatch = {
+  id: string;
+  user_id: number;
+  credential_id?: string | null;
+  name: string | null;
+  batch_kind?: "manual_single" | "manual_batch" | "ruolo_autosync" | "perpetual_sync" | string;
+  status: "pending" | "processing" | "completed" | "failed" | "cancelled";
+  total_items: number;
+  completed_items: number;
+  failed_items: number;
+  skipped_items: number;
+  not_found_items: number;
+  source_filename: string | null;
+  current_operation: string | null;
+  report_json_path: string | null;
+  report_md_path: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+};
+
+export type CatastoBatchCredentialUsage = { credential_id: string; label: string; sister_username: string | null; request_count: number; execution_count: number };
+export type CatastoBatchStatistics = { duration_seconds: number; processed_items: number; remaining_items: number; progress_percent: number; success_rate_percent: number | null; completed_per_hour: number | null; processed_per_hour: number | null; estimated_remaining_seconds: number | null; total_attempts: number; average_attempts: number; credentials_used: CatastoBatchCredentialUsage[] };
+export type CatastoBatchDetail = CatastoBatch & { requests: CatastoVisuraRequest[]; statistics?: CatastoBatchStatistics | null };
+
+export type CatastoDocument = {
+  id: string;
+  user_id: number;
+  request_id: string | null;
+  batch_id: string | null;
+  search_mode: "immobile" | "soggetto";
+  comune: string | null;
+  foglio: string | null;
+  particella: string | null;
+  subalterno: string | null;
+  catasto: string | null;
+  tipo_visura: string;
+  subject_kind: "PF" | "PNF" | null;
+  subject_id: string | null;
+  request_type: "ATTUALITA" | "STORICA" | null;
+  intestazione: string | null;
+  filename: string;
+  file_size: number | null;
+  sha256?: string | null;
+  codice_fiscale: string | null;
+  created_at: string;
+};
