@@ -4,6 +4,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from io import BytesIO
 from pathlib import Path
+from typing import cast
 from uuid import UUID
 import zipfile
 
@@ -21,12 +22,22 @@ from app.schemas.catasto import (
     CatastoDocumentResponse,
     CatastoVisuraRequestResponse,
 )
+from app.services.elaborazioni_batch_statistics import build_batch_statistics
 
 
-def build_batch_detail_response(batch: object, requests: list[object]) -> CatastoBatchDetailResponse:
+def _build_batch_detail_response(
+    batch: object,
+    requests: list[object],
+) -> CatastoBatchDetailResponse:
     payload = CatastoBatchResponse.model_validate(batch).model_dump()
     payload["requests"] = [CatastoVisuraRequestResponse.model_validate(item) for item in requests]
     return CatastoBatchDetailResponse(**payload)
+
+
+def build_batch_detail_response(*context: object) -> CatastoBatchDetailResponse:
+    batch, requests, db = cast(tuple[object, list[object], Session], context)
+    response = _build_batch_detail_response(batch, requests)
+    return response.model_copy(update={"statistics": build_batch_statistics(db, batch, requests)})
 
 
 def build_document_response(db: Session, document: object) -> CatastoDocumentResponse:

@@ -9,6 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from sqlalchemy.orm.exc import StaleDataError
 
 import app.core.database as core_database
 import app.modules.presenze.services.sync_runtime as sync_runtime_module
@@ -45,6 +46,9 @@ class _FakeDb:
     def commit(self) -> None:
         self.commits += 1
 
+    def rollback(self) -> None:
+        return None
+
     def flush(self) -> None:
         for item in self.added:
             if getattr(item, "id", None) is None:
@@ -69,6 +73,11 @@ def _make_job(**overrides):
         "records_errors": 0,
         "error_detail": None,
         "worker_pid": None,
+        "worker_id": None,
+        "lease_token": None,
+        "lease_generation": 0,
+        "heartbeat_at": None,
+        "lease_expires_at": None,
         "worker_log_path": None,
         "json_artifact_path": None,
         "attempt_count": 0,
@@ -203,42 +212,14 @@ def test_failed_employee_retry_helpers_respect_guards(monkeypatch: pytest.Monkey
     assert sync_worker._enqueue_failed_employee_retry_jobs(_FakeDb(job=job), source_job=job, failed_codes=["A1"]) == []
 
 
-def test_mark_job_cancelled_and_handle_termination(monkeypatch: pytest.MonkeyPatch) -> None:
-    cancelled_import_job = _make_import_job(status="running")
-    cancelled_job = _make_job(status="running", import_job_id="import-1")
-    cancelled_db = _FakeDb(job=cancelled_job, import_job=cancelled_import_job)
-    missing_db = _FakeDb(job=None)
-    already_cancelled_db = _FakeDb(job=_make_job(status="cancelled"))
-    dbs = iter([missing_db, already_cancelled_db, cancelled_db])
-
-    monkeypatch.setattr(sync_worker, "SessionLocal", lambda: next(dbs))
-
-    sync_worker._mark_job_cancelled("missing")
-    sync_worker._mark_job_cancelled("already")
-    sync_worker._mark_job_cancelled("running")
-
-    assert missing_db.closed is True
-    assert already_cancelled_db.commits == 0
-    assert cancelled_job.status == "cancelled"
-    assert cancelled_job.error_detail == "Sync job cancelled by user"
-    assert cancelled_job.finished_at is not None
-    assert cancelled_import_job.status == "cancelled"
-    assert cancelled_import_job.error_detail == "Sync job cancelled by user"
-    assert cancelled_import_job.finished_at == cancelled_job.finished_at
-    assert cancelled_db.commits == 1
-
-    called: list[str] = []
-    monkeypatch.setattr(sync_worker, "_mark_job_cancelled", lambda job_id: called.append(job_id))
-
+def test_handle_termination_leaves_job_for_lease_recovery() -> None:
     sync_worker.CURRENT_JOB_ID = None
     with pytest.raises(SystemExit, match="143"):
         sync_worker._handle_termination(signal.SIGTERM, None)
-    assert called == []
 
     sync_worker.CURRENT_JOB_ID = "job-77"
     with pytest.raises(SystemExit, match="130"):
         sync_worker._handle_termination(signal.SIGINT, None)
-    assert called == ["job-77"]
 
 
 def test_parse_args_reads_required_job_id(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -267,8 +248,17 @@ def test_main_returns_2_when_job_is_missing(monkeypatch: pytest.MonkeyPatch, cap
     assert signal_calls[1][0] == signal.SIGINT
 
 
-def test_main_completes_job_and_writes_artifacts(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+@pytest.mark.parametrize("retry_enabled", [True, False])
+def test_main_completes_job_and_writes_artifacts(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    retry_enabled: bool,
+) -> None:
     job = _make_job(
+        worker_id="queue-worker",
+        lease_token="lease-1",
+        lease_generation=1,
+        attempt_count=1,
         params_json={
             "trigger": "auto",
             "year": 2026,
@@ -307,6 +297,7 @@ def test_main_completes_job_and_writes_artifacts(monkeypatch: pytest.MonkeyPatch
         assert kwargs["password"] == "pw"
         assert kwargs["employee_codes"] == ["BB2", "CC3"]
         assert kwargs["completed_employee_codes"] == ["AA1"]
+        kwargs["progress_callback"]({"type": "heartbeat"})
         kwargs["progress_callback"](
             {
                 "type": "collaborator_completed",
@@ -342,7 +333,11 @@ def test_main_completes_job_and_writes_artifacts(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(sync_worker, "run_scrape_with_credentials", fake_run_scrape_with_credentials)
     monkeypatch.setattr(sync_worker, "mark_credential_used", lambda current_db, credential_id, url: used_credentials.append((credential_id, url)))
     monkeypatch.setattr(sync_worker, "finalize_import_job", lambda current_db, *, job, status: setattr(job, "status", status))
-    monkeypatch.setattr(sync_worker.settings, "presenze_auto_sync_failed_employee_retry_enabled", True)
+    monkeypatch.setattr(
+        sync_worker.settings,
+        "presenze_auto_sync_failed_employee_retry_enabled",
+        retry_enabled,
+    )
     monkeypatch.setattr(sync_worker.settings, "presenze_auto_sync_failed_employee_retry_batch_size", 10)
     monkeypatch.setattr(sync_worker.settings, "presenze_auto_sync_failed_employee_retry_max_attempts", 2)
 
@@ -354,7 +349,9 @@ def test_main_completes_job_and_writes_artifacts(monkeypatch: pytest.MonkeyPatch
 
     assert exit_code == 0
     assert job.status == "completed"
-    assert job.worker_pid == 4321
+    assert job.worker_pid is None
+    assert job.worker_id is None
+    assert job.lease_token is None
     assert job.import_job_id == "import-1"
     assert job.records_imported == 1
     assert job.records_skipped == 2
@@ -366,19 +363,103 @@ def test_main_completes_job_and_writes_artifacts(monkeypatch: pytest.MonkeyPatch
     assert progress["failed_collaborators"] == 1
     assert summary["status"] == "completed"
     assert summary["resumed_from_checkpoint"] is True
-    assert len(summary["failed_employee_retry_job_ids"]) == 1
-    assert len(events) == 3
+    expected_retry_count = 1 if retry_enabled else 0
+    assert len(summary["failed_employee_retry_job_ids"]) == expected_retry_count
+    assert len(events) == 4
     assert json.loads(events[0])["type"] == "worker_started"
-    assert json.loads(events[1])["type"] == "collaborator_completed"
-    assert json.loads(events[2])["type"] == "job_completed"
-    assert json.loads(events[2])["failed_employee_retry_jobs"] == summary["failed_employee_retry_job_ids"]
+    assert json.loads(events[1])["type"] == "heartbeat"
+    assert json.loads(events[2])["type"] == "collaborator_completed"
+    assert json.loads(events[3])["type"] == "job_completed"
+    assert json.loads(events[3])["failed_employee_retry_jobs"] == summary["failed_employee_retry_job_ids"]
     assert job.params_json["checkpoint"]["completed_employee_codes"] == ["AA1", "BB2"]
-    assert job.params_json["failed_employee_retry"]["employee_codes"] == ["CC3"]
     retry_jobs = list({id(item): item for item in db.added if isinstance(item, sync_worker.PresenzeSyncJob)}.values())
-    assert len(retry_jobs) == 1
-    assert retry_jobs[0].params_json["trigger"] == sync_worker.FAILED_EMPLOYEE_RETRY_TRIGGER
-    assert retry_jobs[0].params_json["employee_codes"] == ["CC3"]
+    assert len(retry_jobs) == expected_retry_count
+    if retry_enabled:
+        assert job.params_json["failed_employee_retry"]["employee_codes"] == ["CC3"]
+        assert retry_jobs[0].params_json["trigger"] == sync_worker.FAILED_EMPLOYEE_RETRY_TRIGGER
+        assert retry_jobs[0].params_json["employee_codes"] == ["CC3"]
+    else:
+        assert "failed_employee_retry" not in job.params_json
     assert db.closed is True
+
+
+def test_run_job_returns_temporary_failure_after_losing_fencing_generation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    job = _make_job(worker_id="queue-worker", lease_token="lease-1")
+
+    class StaleDb(_FakeDb):
+        def commit(self) -> None:
+            raise StaleDataError("generation changed")
+
+    db = StaleDb(job=job)
+    monkeypatch.setattr(sync_worker, "SessionLocal", lambda: db)
+    monkeypatch.setattr(sync_worker, "get_sync_artifact_dir", lambda job_id: tmp_path / job_id)
+
+    assert sync_worker.run_job_by_id("job-1") == 75
+    assert "lost its lease fencing generation" in capsys.readouterr().err
+    assert db.closed is True
+
+
+def test_run_job_failure_does_not_overwrite_new_lease_owner(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    claimed_job = _make_job(
+        worker_id="old-worker",
+        lease_token="old-token",
+        import_job_id="import-9",
+    )
+    new_owner_job = _make_job(
+        status="running",
+        worker_id="new-worker",
+        lease_token="new-token",
+        import_job_id="import-9",
+    )
+    main_db = _FakeDb(job=claimed_job, import_job=_make_import_job(), user=None)
+    rollback_db = _FakeDb(
+        job=new_owner_job,
+        import_job=_make_import_job(),
+        user=None,
+    )
+    dbs = iter([main_db, rollback_db])
+    monkeypatch.setattr(sync_worker, "SessionLocal", lambda: next(dbs))
+    monkeypatch.setattr(sync_worker, "get_sync_artifact_dir", lambda job_id: tmp_path / job_id)
+
+    assert sync_worker.run_job_by_id("job-1") == 1
+    assert new_owner_job.status == "running"
+    assert rollback_db.commits == 0
+    assert rollback_db.closed is True
+
+
+def test_run_job_failure_without_linked_import_is_persisted(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    claimed_job = _make_job(worker_id="worker-a", lease_token="lease-a")
+    failed_job = _make_job(
+        status="running",
+        worker_id="worker-a",
+        lease_token="lease-a",
+        import_job_id=None,
+    )
+
+    class FailingCommitDb(_FakeDb):
+        def commit(self) -> None:
+            raise RuntimeError("initial commit failed")
+
+    main_db = FailingCommitDb(job=claimed_job)
+    rollback_db = _FakeDb(job=failed_job)
+    dbs = iter([main_db, rollback_db])
+    monkeypatch.setattr(sync_worker, "SessionLocal", lambda: next(dbs))
+    monkeypatch.setattr(sync_worker, "get_sync_artifact_dir", lambda job_id: tmp_path / job_id)
+
+    assert sync_worker.run_job_by_id("job-1") == 1
+    assert failed_job.status == "failed"
+    assert failed_job.error_detail == "initial commit failed"
+    assert rollback_db.commits == 1
 
 
 def test_main_marks_job_and_import_failed_when_scrape_raises(
@@ -422,10 +503,9 @@ def test_main_fails_when_requested_user_is_missing(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    job = _make_job(import_job_id="import-9")
-    import_job = _make_import_job(id="import-9", status="running")
-    main_db = _FakeDb(job=job, import_job=import_job, user=None)
-    rollback_db = _FakeDb(job=job, import_job=import_job, user=None)
+    job = _make_job(import_job_id=None)
+    main_db = _FakeDb(job=job, import_job=None, user=None)
+    rollback_db = _FakeDb(job=job, import_job=None, user=None)
     dbs = iter([main_db, rollback_db])
 
     monkeypatch.setattr(sync_worker, "parse_args", lambda: SimpleNamespace(job_id="job-1"))
@@ -438,7 +518,6 @@ def test_main_fails_when_requested_user_is_missing(
     assert exit_code == 1
     assert job.status == "failed"
     assert job.error_detail == "Requested by user not found for Presenze sync job"
-    assert import_job.status == "failed"
 
 
 def test_main_fails_when_credential_mode_is_legacy(
@@ -446,9 +525,10 @@ def test_main_fails_when_credential_mode_is_legacy(
     tmp_path: Path,
 ) -> None:
     job = _make_job(credential_id=None, import_job_id="import-9")
-    import_job = _make_import_job(id="import-9", status="running")
-    main_db = _FakeDb(job=job, import_job=import_job, user=SimpleNamespace(id=55))
-    rollback_db = _FakeDb(job=job, import_job=import_job, user=SimpleNamespace(id=55))
+    main_import_job = _make_import_job(id="import-9", status="running")
+    completed_import_job = _make_import_job(id="import-9", status="completed")
+    main_db = _FakeDb(job=job, import_job=main_import_job, user=SimpleNamespace(id=55))
+    rollback_db = _FakeDb(job=job, import_job=completed_import_job, user=SimpleNamespace(id=55))
     dbs = iter([main_db, rollback_db])
 
     monkeypatch.setattr(sync_worker, "parse_args", lambda: SimpleNamespace(job_id="job-1"))
@@ -461,7 +541,7 @@ def test_main_fails_when_credential_mode_is_legacy(
     assert exit_code == 1
     assert job.status == "failed"
     assert "Legacy Presenze sync mode is disabled" in (job.error_detail or "")
-    assert import_job.status == "failed"
+    assert completed_import_job.status == "completed"
 
 
 def test_module_main_guard_raises_system_exit(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

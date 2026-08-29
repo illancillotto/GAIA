@@ -166,6 +166,25 @@ Fino alla chiusura completa del piano:
 
 ## Note operative
 
+- `2026-08-27` - chiusura coverage globale worker Elaborazioni
+  (`modules/elaborazioni/worker`)
+  `make test-worker` esegue `430` test isolati per file e combina la coverage
+  dei 27 runtime: `5077/5077` statement e `1314/1314` branch, tutti al `100%`.
+  I gap legacy su AUTODOC, reporting, runtime policy, credential vault e rami
+  residui dei client sono chiusi con test di caratterizzazione; nessuna soglia,
+  esclusione o pragma coverage e stato modificato.
+
+- `2026-08-27` - healthcheck semantici worker
+  (`backend/app/worker_health.py`, runner scheduler/Gate Mobile/Presenze,
+  `modules/elaborazioni/worker/worker.py` e Compose)
+  Il controllo del solo PID 1 e stato sostituito da heartbeat JSON atomici con
+  verifica di staleness. La suite backend mirata copre i cinque runtime
+  backend modificati al `100%`; includendo il fix Python 3.10 emerso dal canary
+  su `elaborazioni_batch_statistics.py`, il risultato finale e `374/374`
+  statement e `74/74` branch. Il wrapper worker Elaborazioni e incluso nel
+  target isolato `make test-worker`.
+  Nessuna soglia, esclusione o pragma coverage e stato modificato.
+
 - `2026-08-27` - gate CI coverage worker
   (`Makefile`, `.github/workflows/backend.yml`,
   `scripts/check_changed_worker_coverage.py`,

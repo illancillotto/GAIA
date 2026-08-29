@@ -2,13 +2,15 @@ from functools import lru_cache
 from pathlib import Path
 
 from pydantic import AliasChoices, Field, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import SettingsConfigDict
+
+from app.core.gis_settings import GisSettings
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ROOT_ENV_FILE = REPO_ROOT / ".env"
 
 
-class Settings(BaseSettings):
+class Settings(GisSettings):
     project_name: str = "GAIA"
     app_version: str = "0.1.0"
     app_env: str = "development"
@@ -288,61 +290,35 @@ class Settings(BaseSettings):
         default="",
         alias="ELABORAZIONI_DB_BACKUP_ENCRYPTION_PASSPHRASE",
     )
-    gis_export_scheduler_enabled: bool = Field(
+    gis_external_layers_enabled: bool = Field(
         default=False,
-        alias="GIS_EXPORT_SCHEDULER_ENABLED",
+        alias="GIS_EXTERNAL_LAYERS_ENABLED",
     )
-    gis_export_scheduler_register_in_api: bool = Field(
-        default=True,
-        alias="GIS_EXPORT_SCHEDULER_REGISTER_IN_API",
+    gis_external_cache_dir: str = Field(
+        default="/data/gis/external-cache",
+        alias="GIS_EXTERNAL_CACHE_DIR",
     )
-    gis_export_scheduler_cron: str = Field(
-        default="30 2 * * *",
-        alias="GIS_EXPORT_SCHEDULER_CRON",
+    gis_external_cache_max_mb: int = Field(
+        default=2048,
+        ge=1,
+        alias="GIS_EXTERNAL_CACHE_MAX_MB",
     )
-    gis_export_scheduler_timezone: str = Field(
-        default="Europe/Rome",
-        alias="GIS_EXPORT_SCHEDULER_TIMEZONE",
+    gis_external_default_timeout_seconds: float = Field(
+        default=12.0,
+        gt=0,
+        alias="GIS_EXTERNAL_DEFAULT_TIMEOUT_SECONDS",
     )
-    gis_export_retention_count: int = Field(
-        default=5,
-        alias="GIS_EXPORT_RETENTION_COUNT",
+    gis_external_ras_vector_url: str = Field(
+        default="https://webgis.regione.sardegna.it/geoserver/ows",
+        alias="GIS_EXTERNAL_RAS_VECTOR_URL",
     )
-    gis_export_max_layers_per_run: int = Field(
-        default=50,
-        alias="GIS_EXPORT_MAX_LAYERS_PER_RUN",
+    gis_external_ras_raster_url: str = Field(
+        default="https://webgis.regione.sardegna.it/geoserverraster/ows",
+        alias="GIS_EXTERNAL_RAS_RASTER_URL",
     )
-    gis_martin_health_url: str = Field(
-        default="http://martin:3000/catalog",
-        alias="GIS_MARTIN_HEALTH_URL",
-    )
-    gis_qgis_server_health_url: str | None = Field(
-        default=None,
-        alias="GIS_QGIS_SERVER_HEALTH_URL",
-    )
-    gis_qgis_server_db_username: str = Field(
-        default="gaia_gis_qgis_server",
-        alias="GIS_QGIS_SERVER_DB_USERNAME",
-    )
-    gis_qgis_server_db_password: str = Field(
-        default="",
-        alias="GIS_QGIS_SERVER_DB_PASSWORD",
-    )
-    gis_qgis_server_project_dir: str = Field(
-        default="/srv/qgis",
-        alias="GIS_QGIS_SERVER_PROJECT_DIR",
-    )
-    gis_nas_health_path: str = Field(
-        default="/volume1/Settore Catasto/ARCHIVIO/Backups/GAIA/gis",
-        alias="GIS_NAS_HEALTH_PATH",
-    )
-    gis_nas_transport: str = Field(
-        default="local",
-        alias="GIS_NAS_TRANSPORT",
-    )
-    gis_runtime_health_timeout_seconds: float = Field(
-        default=2.0,
-        alias="GIS_RUNTIME_HEALTH_TIMEOUT_SECONDS",
+    gis_external_ade_wms_url: str = Field(
+        default="https://wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows01.php",
+        alias="GIS_EXTERNAL_ADE_WMS_URL",
     )
     jwt_secret_key: str = Field(alias="JWT_SECRET_KEY")
     jwt_expire_minutes: int = Field(default=720, alias="JWT_EXPIRE_MINUTES")
@@ -406,28 +382,6 @@ class Settings(BaseSettings):
     pdnd_loa: str = Field(default="LOW", alias="PDND_LOA")
     purpose_id_c030: str = Field(default="", alias="PURPOSE_ID_C030")
     purpose_id_c004: str = Field(default="", alias="PURPOSE_ID_C004")
-    nas_host: str = Field(default="nas.internal.local", alias="NAS_HOST")
-    nas_port: int = Field(default=22, alias="NAS_PORT")
-    nas_username: str = Field(default="svc_naap", alias="NAS_USERNAME")
-    nas_password: str = Field(default="change_me", alias="NAS_PASSWORD")
-    nas_private_key_path: str | None = Field(default=None, alias="NAS_PRIVATE_KEY_PATH")
-    nas_timeout: int = Field(default=10, alias="NAS_TIMEOUT")
-    anagrafica_nas_archive_root: str = Field(
-        default="/volume1/settore catasto/ARCHIVIO",
-        alias="ANAGRAFICA_NAS_ARCHIVE_ROOT",
-    )
-    utenze_nas_archive_root: str | None = Field(
-        default=None,
-        alias="UTENZE_NAS_ARCHIVE_ROOT",
-    )
-    anagrafica_document_storage_path: str = Field(
-        default="/data/anagrafica/documents",
-        alias="ANAGRAFICA_DOCUMENT_STORAGE_PATH",
-    )
-    utenze_document_storage_path: str | None = Field(
-        default=None,
-        alias="UTENZE_DOCUMENT_STORAGE_PATH",
-    )
     visure_nas_router_enabled: bool = Field(default=False, alias="VISURE_NAS_ROUTER_ENABLED")
     visure_nas_router_cron: str = Field(default="15 */2 * * *", alias="VISURE_NAS_ROUTER_CRON")
     visure_nas_router_timezone: str = Field(default="Europe/Rome", alias="VISURE_NAS_ROUTER_TIMEZONE")

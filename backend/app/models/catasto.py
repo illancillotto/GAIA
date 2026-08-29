@@ -16,6 +16,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     LargeBinary,
     Numeric,
@@ -444,7 +445,24 @@ class CatastoRuoloAutoSyncConfig(Base):
 
 class CatastoRuoloAutoSyncItem(Base):
     __tablename__ = "catasto_ruolo_autosync_items"
-    __table_args__ = (UniqueConstraint("user_id", "ruolo_particella_id", name="uq_catasto_ruolo_autosync_item_user_particella"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "cat_particella_id",
+            name="uq_catasto_ruolo_autosync_item_user_cat_particella",
+        ),
+        Index(
+            "ix_catasto_ruolo_autosync_items_user_status",
+            "user_id",
+            "status",
+        ),
+        Index(
+            "ix_catasto_ruolo_autosync_items_user_updated",
+            "user_id",
+            "updated_at",
+            "created_at",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id: Mapped[int] = mapped_column(

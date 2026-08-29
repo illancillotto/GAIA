@@ -510,7 +510,7 @@ il file ZIP e stato eliminato.
 
 ### Layer Territoriali Esterni M21-M25
 
-Stato: pianificato, non implementato.
+Stato: fondazione M21 implementata; seed e superfici M22-M25 non implementati.
 
 Il catalogo GIS governa oggi solo layer che vivono nel PostGIS GAIA
 (`postgis`, `postgis_staging`) o registri applicativi di dominio
@@ -537,6 +537,29 @@ Confini:
 Sorgenti previste: GeoServer vettoriale e raster del SITR Regione Sardegna, e
 WMS Cartografia Catastale INSPIRE dell'Agenzia delle Entrate. Il WFS AdE gia
 usato dal modulo Catasto in `ade_wfs.py` non viene modificato.
+
+Fondazione M21:
+
+- `external_sources.py` risolve le tre sorgenti configurate e valida
+  `metadata.external`, inclusi identificativo remoto, versione, licenza e
+  attribuzione;
+- `external_proxy.py` ammette solo le operazioni WMS/WFS previste e una
+  allowlist di parametri per operazione; URL, servizio, versione e layer remoto
+  sono sempre ricavati dal catalogo e dal registro, mai dalla richiesta client;
+- il proxy usa `httpx` senza inoltrare header GAIA, applica il timeout della
+  sorgente e mantiene una cache filesystem atomica con TTL per layer e pruning
+  sul limite `GIS_EXTERNAL_CACHE_MAX_MB`;
+- gli errori proxy sono auditati senza registrare le singole tile; un errore di
+  audit non sostituisce la risposta governata verso il client;
+- `GIS_EXTERNAL_LAYERS_ENABLED=false` lascia i proxy disponibili come
+  superficie API ma risponde `503`; il flag non registra alcun seed;
+- `runtime_health.external_sources` esegue `GetCapabilities` sulle tre sorgenti
+  con timeout corto e cache di `300` secondi, separatamente dal dashboard
+  catalogo deterministico;
+- i metadata dei layer esterni sono normalizzati a `read_only=true`,
+  `qgis.mode=not_published`, `qgis.editable=false` ed
+  `export.shapefile=false`; change request ed export restano inoltre bloccati
+  nel servizio backend.
 
 Superfici introdotte dal programma:
 
@@ -569,7 +592,7 @@ Il dettaglio e in `docs/GIS_PLATFORM_TERRITORIO_PLAN.md`.
 7. Valutazione POC QGIS Server vs GeoServer per pubblicazione WMS/WFS/WMTS.
 8. Programma Territorio Esterno: layer WMS/WFS di terzi nel catalogo,
    interrogazione puntuale multi-sorgente e scheda territoriale particella.
-   Pianificato in M21-M25, non ancora avviato.
+   Fondazione M21 implementata; M22-M25 non ancora avviate.
 
 ## Documenti Operativi
 

@@ -1,7 +1,7 @@
 # GAIA GIS Platform - Progress Territorio Esterno
 
-> Ultimo aggiornamento: 2026-08-27.
-> Branch corrente: `main`.
+> Ultimo aggiornamento: 2026-08-29.
+> Branch corrente: `feature/gis-territorio-external-layers-m21`, HEAD `6563cc1b`.
 >
 > Piano tecnico: `docs/GIS_PLATFORM_TERRITORIO_PLAN.md`.
 > Riferimento dati: `docs/GIS_PLATFORM_TERRITORIO_CATALOGO.md`.
@@ -9,9 +9,15 @@
 
 ## Stato Sintetico
 
-Nessuna milestone del programma Territorio Esterno e implementata. Il lavoro e
-in stato di piano approvato, con analisi delle sorgenti completata e catalogo
-seed definito.
+P0 e completato. Licenze, attribuzioni, disponibilita e tempi delle sorgenti
+sono stati verificati; il seed documentale e stato ristretto a `21` layer
+ammissibili (`14` RAS vettoriali, `4` RAS raster, `3` AdE).
+
+P1 e implementato: registro sorgenti, proxy governato, cache, health, nuovi
+source type e divieti backend sono coperti al `100%`. La change quality separata
+e stata integrata in `main` a `3d373f28`; M21 e stata riallineata, congelata nel
+commit `07d9f7c4` e chiusa con ratchet verde. Il branch e stato ripulito il
+2026-08-29 e contiene ora soltanto commit M21. M22-M25 non sono avviate.
 
 La base M1-M20 della GIS Platform e in esercizio e non richiede modifiche
 preliminari: `source_type` e gia una colonna `String(32)` libera in `GisLayer` e
@@ -22,8 +28,8 @@ schema catalogo.
 
 | milestone | contenuto | stato | branch |
 | --- | --- | --- | --- |
-| P0 | Verifica licenze e disponibilita sorgenti | da eseguire | - |
-| M21 | Fondazione layer esterni: source type, proxy, cache, health | da implementare | `feature/gis-territorio-external-layers-m21` |
+| P0 | Verifica licenze e disponibilita sorgenti | completato il 2026-08-27 | - |
+| M21 | Fondazione layer esterni: source type, proxy, cache, health | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-external-layers-m21` |
 | M22a | Seed catalogo `territorio` e `GET /gis/territorio/layers` | da implementare | `feature/gis-territorio-catalog-seed-m22` |
 | M22b | Pannello strati e ortofoto storiche in mappa | da implementare | `feature/gis-territorio-layer-panel-m22` |
 | M23a | Interrogazione puntuale multi-sorgente, backend | da implementare | `feature/gis-territorio-interrogazione-m23` |
@@ -46,7 +52,9 @@ GetCapabilities:
   `CP.CadastralZoning`, `fabbricati`, `acque`, `strade`, `vestizioni`,
   `province`, `codice_plla`, `simbolo_graffa`.
 
-Layer del seed verificati esistenti con titolo confermato dalla sorgente. Il
+Layer ammessi nel seed verificati esistenti con titolo confermato dalla
+sorgente. P0 ha corretto tre `remote_layer` DTM che erano nomi di stile WMS e ha
+escluso tre layer PAI e sette ortofoto senza licenza accertabile per GAIA. Il
 dettaglio e in `docs/GIS_PLATFORM_TERRITORIO_CATALOGO.md`.
 
 Constatazione rilevante per il dominio: il GeoServer RAS pubblica
@@ -57,7 +65,102 @@ decisione esplicita di autorevolezza prima del seed.
 
 ## Verifiche
 
-Nessuna verifica di implementazione eseguita: non c'e ancora codice.
+Verifiche P1 eseguite il 2026-08-28:
+
+- `make lint-backend`: exit `0`;
+- suite M21 mirata su config, runtime health, sorgenti, proxy e API GIS: verde;
+- coverage selettiva sui runtime modificati: `2403` statement, `0` mancanti,
+  totale `100%`;
+- `external_sources.py`: `98/98`, `100%`;
+- `external_proxy.py`: `202/202`, `100%`;
+- `config.py`: `283/283`, `schemas.py`: `412/412`, `router.py`: `150/150`,
+  `runtime_health.py`: `132/132`, `services.py`: `1126/1126`;
+- `make complexity-ratchet BASE_REF=main`: exit `0`, merge-base
+  `3d373f28dbabeb475efbc5dfd41d53f4d8066586`, nessun finding;
+- `make quality-test`: `46 passed`;
+- `git diff --check`: exit `0`.
+
+### Riordino Branch E Riverifica, 2026-08-29
+
+Il branch conteneva `5f319127 fix(search): rank linked utenza first for CF and
+P.IVA`, estraneo al perimetro Territorio Esterno: toccava
+`backend/app/modules/search/service.py`,
+`backend/tests/test_operational_search_api.py` e `docs/ARCHITECTURE.md`.
+
+Il commit e stato spostato su `fix/search-linked-utenza-ranking`, ramificato da
+`main` a `3d373f28` e non da M21, cosi da restare mergiabile in autonomia. Il
+cherry-pick `3d769709` e stato confrontato con l'originale: diff identico. La
+storia precedente resta su `backup/m21-pre-cleanup-20260829`.
+
+Il branch M21 e stato riscritto con `git rebase --onto dddbbe58 5f319127` e
+contiene ora tre commit: `07d9f7c4`, `dddbbe58` e `6563cc1b`. Il diff
+`main..HEAD` non presenta piu tracce della change Search, verificate a zero
+righe residue, e si riduce a `16` file tutti nel perimetro M21.
+
+Riverifica dopo il riordino, eseguita il 2026-08-29:
+
+- working tree pulito, `0` voci;
+- suite M21 mirata: `112 passed`;
+- coverage per statement sui sette runtime del perimetro: `2402` statement, `0`
+  mancanti, totale `100%`;
+- `external_sources.py`: `98/98`, `external_proxy.py`: `202/202`,
+  `config.py`: `283/283`, `schemas.py`: `412/412`, `router.py`: `150/150`,
+  `runtime_health.py`: `132/132`, `services.py`: `1125/1125`;
+- coverage per branch sui due runtime nuovi: `84` branch, `0` parziali,
+  `100%`;
+- `make lint-backend`: exit `0`;
+- `make complexity-ratchet BASE_REF=main`: exit `0`, `findings: []`, `16`
+  changed files.
+
+`services.py` passa da `1126` a `1125` statement per la rimozione della guardia
+morta in `_apply_feature_create`, commit `6563cc1b`. Il conteggio totale scende
+di conseguenza da `2403` a `2402`.
+
+Nessun push e nessuna integrazione in `main`.
+
+### Audit Del Drift E Chiusura Ratchet, 2026-08-28
+
+Il primo ratchet rosso non e stato risolto rigenerando la baseline. P1 e rimasta
+congelata mentre il drift preesistente e stato analizzato sul branch separato
+`quality/gis-services-baseline-drift-20260828`, a partire dalla baseline sorgente
+`b1d4a988`.
+
+Evidenze:
+
+- tutto il drift GIS preesistente deriva da `268234f9`;
+- `services.py` era cresciuto da `2304` a `3145` LOC: `+841`, non `+834`;
+- `74` callable, per `521` LOC aggiunte, hanno fingerprint AST identico e sono
+  state classificate come sola riformattazione;
+- `_default_export_path` aveva una regressione reale di `+1` cyclomatic, `+1`
+  cognitive e `+6` LOC;
+- nove callable erano nuove, per `301` LOC; le nuove violation reali erano in
+  `_feature_selector_columns` e `list_layer_features`;
+- non sono emersi errori di matching.
+
+La change quality ha separato settings, query, costruzione delle response e
+supporto, ripristinando la formattazione AST-equivalente e creando headroom
+reale. I commit `691bec1d`, `be143751` e `3d373f28` sono stati integrati in
+`main`; la baseline `config/code-quality/complexity-baseline.json` e rimasta
+invariata.
+
+`make complexity-baseline` e stato tentato soltanto dopo il ratchet verde, ma
+ha rifiutato correttamente l'aggiornamento per oltre cento regressioni non
+classificate fuori dal perimetro GIS. Nessun JSON e stato modificato
+manualmente. Dopo il riallineamento, M21 e stata congelata in `07d9f7c4` e il
+ratchet autorevole contro `main` e passato senza finding.
+
+Comando coverage eseguito:
+
+```bash
+cd backend && .venv/bin/python -m pytest -q \
+  tests/test_config.py tests/test_gis_runtime_health.py \
+  tests/test_gis_external_sources.py tests/test_gis_external_proxy.py \
+  tests/test_gis_platform_api.py \
+  --cov=app.core.config --cov=app.modules.gis.schemas \
+  --cov=app.modules.gis.router --cov=app.modules.gis.runtime_health \
+  --cov=app.modules.gis.services --cov=app.modules.gis.external_sources \
+  --cov=app.modules.gis.external_proxy --cov-report=term-missing
+```
 
 Verifiche di sorgente eseguite il 2026-08-27:
 
@@ -67,21 +170,90 @@ Verifiche di sorgente eseguite il 2026-08-27:
 - GetCapabilities WMS AdE Cartografia Catastale: risposta valida, layer INSPIRE
   presenti.
 
-Non ancora misurato:
+Verifiche P0 eseguite il 2026-08-27:
 
-- tempo di risposta di GetMap e GetFeature sui layer del seed;
-- comportamento sotto richieste concorrenti;
-- limiti di frequenza imposti dalle sorgenti.
+- GetCapabilities WMS RAS vettoriale: HTTP valido, `379` layer `dbu:`; tutti i
+  `14` layer ammessi presenti;
+- GetCapabilities WMS RAS raster: HTTP valido, `52` layer; tutti i `4` layer
+  ammessi presenti dopo la correzione dei tre nomi DTM;
+- GetCapabilities WMS AdE: HTTP valido, `13` layer nominati; tutti i `3` layer
+  ammessi presenti;
+- controllo metadati GeoNetwork per tutti i candidati RAS: `14` vettoriali,
+  ortofoto 1977-78 e tre DTM con CC BY 4.0; tre record PAI in `404`; sette
+  ortofoto con autorizzazione del proprietario richiesta o copyright;
+- condizioni AdE: CC BY 4.0, titolarita AdE da citare, limite concorrente non
+  quantificato e possibile limitazione dell'accesso per uso disturbante;
+- condizioni RAS WFS: massimo `100000` feature per richiesta; nessun rate limit
+  WMS numerico pubblicato.
 
-Queste misure sono parte di P0 e servono a dimensionare i timeout di M21.
+Comandi di evidenza, eseguiti dalla root del repository:
+
+```bash
+curl -sS "https://webgis.regione.sardegna.it/geoserver/ows?service=WMS&version=1.3.0&request=GetCapabilities"
+curl -sS "https://webgis.regione.sardegna.it/geoserverraster/ows?service=WMS&request=GetCapabilities"
+curl -sS "https://wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows01.php?service=WMS&request=GetCapabilities&version=1.3.0"
+```
+
+Confronto dei `Name` figli diretti di `Layer` dopo l'applicazione delle
+decisioni P0: RAS vettoriale `seed=14 missing=0`, RAS raster `seed=4 missing=0`,
+AdE `seed=3 missing=0`.
+
+Tempi misurati con tre richieste seriali per riga; valori mediani, con tutte le
+risposte HTTP 200:
+
+| layer | GetMap | GetFeature |
+| --- | --- | --- |
+| `dbu:areebonifica` | `0.732 s` | `0.276 s` |
+| `dbu:agr_consorzi_irrigui_bonif_comprensori` | `0.427 s` | `0.600 s` |
+| `dbu:usosuolo2008_areali` | `0.273 s` | `0.304 s` |
+| `raster:ortofoto_1977_1978` | `0.545 s` | non applicabile |
+| `CP.CadastralParcel` | `0.223 s` | non misurato in P0 |
+
+Intervalli, payload e metodologia sono registrati nella sezione "Licenze" del
+catalogo. Le misure supportano il default M21 di `12 s`, senza costituire SLA.
+Non e stato eseguito un test concorrente: P0 doveva rilevare, non sollecitare, i
+servizi pubblici e AdE dichiara esplicitamente un limite concorrente.
+
+## Decisioni P0
+
+- RAS SITR vettoriale: `ammessa con vincoli`. Entrano solo i `14` layer con
+  metadato CC BY 4.0; attribuzione RAS obbligatoria e massimo `100000` feature
+  per richiesta WFS.
+- RAS SITR raster: `ammessa con vincoli`. Entrano ortofoto 1977-78 e i tre DTM
+  corretti, tutti CC BY 4.0. Restano escluse le ortofoto 2022, 2019, 2013,
+  2006, 1997, 1954-55 e 1940-45 per autorizzazione mancante o copyright.
+- AdE Cartografia Catastale WMS: `ammessa con vincoli`. CC BY 4.0, citazione
+  della titolarita AdE obbligatoria, concorrenza limitata dal servizio e
+  sospensione possibile in caso di uso disturbante.
+- Layer PAI RAS: `esclusi`. I tre layer sono pubblicati, ma i record GeoNetwork
+  referenziati dalle capabilities restituiscono `404`; la licenza non e quindi
+  accertabile. Possono rientrare solo dopo ripristino dei metadati o evidenza
+  ufficiale equivalente.
+- Autorevolezza dei distretti irrigui: GAIA resta autorevole per
+  `cat_distretti`; il layer RAS e solo confronto informativo e la descrizione
+  M22 deve dichiararlo.
+- Timeout M21: mantenere il default pianificato di `12 s`, probe piu corto,
+  cache, backoff e degradazione governata. Le fonti non pubblicano SLA.
+
+## Decisioni P1
+
+- Le sorgenti fisiche configurate sono tre. `ras_sitr_vector` supporta WMS
+  `1.3.0` e WFS `1.1.0` sullo stesso endpoint; raster RAS e AdE espongono WMS
+  `1.3.0` nel registro M21.
+- La destinazione proxy deriva solo da `layer_id`, `source_key` registrata e
+  `remote_layer` validato. `url`, `service`, `version`, `layer` e `typename`
+  client sono rifiutati.
+- Il proxy usa timeout default `12 s`, cache filesystem atomica, TTL per layer
+  e pruning al limite configurato. Non inoltra `Authorization` o altri header
+  GAIA.
+- Gli errori sono auditati; tile e richieste riuscite non generano audit.
+- Il probe health usa `GetCapabilities`, il minimo tra timeout sorgente e
+  timeout health, e cache `300 s`.
+- Nessun layer esterno e stato aggiunto al bootstrap. Il flag resta disabilitato
+  per default.
 
 ## Decisioni Aperte
 
-- Licenza e attribuzione di ciascuna sorgente. Bloccante per M22: e l'unico
-  vincolo che, se scoperto tardi, obbliga a smontare lavoro gia fatto.
-- Autorevolezza in caso di divergenza tra distretti irrigui RAS e
-  `cat_distretti` GAIA. Proposta: GAIA resta autorevole, la sovrapposizione e
-  informativa, e la descrizione del layer lo dichiara. Da confermare.
 - Se il programma Territorio Esterno debba essere numerato come continuazione
   della GIS Platform (M21-M25, ipotesi adottata nei documenti) o come modulo
   affiancato con numerazione propria.
@@ -120,10 +292,17 @@ Queste misure sono parte di P0 e servono a dimensionare i timeout di M21.
 
 ## Prossima Azione Raccomandata
 
-Eseguire P0 di `docs/GIS_PLATFORM_TERRITORIO_PROMPTS.md`: accertare licenze,
-attribuzioni e limiti d'uso delle tre sorgenti, riconfermare l'esistenza dei
-layer del seed e misurare i tempi di risposta.
+Non aprire P2.
 
-Non aprire P1 prima che P0 sia chiuso e registrato in questo documento: i valori
-di timeout di M21 e l'ammissibilita dei layer del seed dipendono da quel
-risultato.
+M21 e chiusa con ratchet verde e il branch e ripulito. P2 resta fermo e potra
+essere aperto soltanto su richiesta esplicita, partendo dallo stato verificato
+di M21.
+
+Attivita residue, indipendenti da P2:
+
+- decidere se aprire una PR per `feature/gis-territorio-external-layers-m21`
+  verso `main`: il branch non ha upstream e non e mai stato pushato;
+- gestire separatamente `fix/search-linked-utenza-ranking`, che e pronto e
+  autonomo;
+- cancellare `backup/m21-pre-cleanup-20260829` quando l'esito del riordino sara
+  considerato definitivo.

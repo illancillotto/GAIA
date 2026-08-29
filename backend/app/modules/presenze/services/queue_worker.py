@@ -8,16 +8,29 @@ import time
 import uuid
 from datetime import datetime
 
+from sqlalchemy.orm import Session
+
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.datetime_compat import UTC
+from app.modules.presenze.models import PresenzeSyncJob
 from app.modules.presenze.services import sync_worker
-from app.modules.presenze.services.sync_runtime import claim_next_pending_sync_job, launch_sync_worker_process, mark_orphaned_queue_worker_jobs
-
+from app.modules.presenze.services.sync_runtime import (
+    claim_next_pending_sync_job,
+    launch_sync_worker_process,
+    mark_orphaned_queue_worker_jobs,
+    renew_queue_worker_leases,
+    set_sync_job_failed_state,
+)
+from app.worker_health import WorkerHeartbeat
 
 logger = logging.getLogger(__name__)
 WORKER_INSTANCE_ID = uuid.uuid4().hex
 _ACTIVE_PROCESSES: dict[str, subprocess.Popen] = {}
+PRESENZE_HEARTBEAT = WorkerHeartbeat(
+    "presenze-worker",
+    details={"role": "queue-supervisor"},
+)
 
 
 def run_once() -> bool:
@@ -56,6 +69,35 @@ def _reap_finished_processes() -> None:
             logger.warning("Presenze queue worker child finished job %s with exit code %s", job_id, exit_code)
 
 
+def _heartbeat_active_processes() -> int:
+    if not _ACTIVE_PROCESSES:
+        return 0
+    db = SessionLocal()
+    try:
+        return renew_queue_worker_leases(
+            db,
+            worker_id=WORKER_INSTANCE_ID,
+            active_job_ids=set(_ACTIVE_PROCESSES),
+        )
+    finally:
+        db.close()
+
+
+def _mark_worker_launch_failed(
+    db: Session,
+    job: PresenzeSyncJob,
+    exc: Exception,
+) -> None:
+    set_sync_job_failed_state(
+        job,
+        finished_at=datetime.now(UTC),
+        error_detail=f"Queue worker could not launch child process: {exc}",
+    )
+    db.add(job)
+    db.commit()
+    logger.exception("Presenze queue worker could not launch child process for job %s", job.id)
+
+
 def _claim_and_launch_one() -> bool:
     db = SessionLocal()
     try:
@@ -70,13 +112,8 @@ def _claim_and_launch_one() -> bool:
         job_id = str(job.id)
         try:
             process = launch_sync_worker_process(job)
-        except Exception as exc:
-            job.status = "failed"
-            job.finished_at = datetime.now(UTC)
-            job.error_detail = f"Queue worker could not launch child process: {exc}"
-            db.add(job)
-            db.commit()
-            logger.exception("Presenze queue worker could not launch child process for job %s", job_id)
+        except Exception as exc:  # noqa: BLE001 - persist every child-launch failure.
+            _mark_worker_launch_failed(db, job, exc)
             return True
         _ACTIVE_PROCESSES[job_id] = process
         logger.info(
@@ -102,9 +139,23 @@ def _terminate_active_processes() -> None:
             logger.exception("Presenze queue worker could not terminate child job %s pid=%s", job_id, process.pid)
 
 
+def _handle_termination(signum: int, frame: object) -> None:
+    _terminate_active_processes()
+    sync_worker._handle_termination(signum, frame)
+
+
+def _install_signal_handlers() -> None:
+    signal.signal(signal.SIGTERM, _handle_termination)
+    signal.signal(signal.SIGINT, _handle_termination)
+
+
+def _heartbeat_supervisor() -> None:
+    _heartbeat_active_processes()
+    PRESENZE_HEARTBEAT.touch(details={"active_jobs": len(_ACTIVE_PROCESSES)})
+
+
 def _main_parallel() -> int:
-    signal.signal(signal.SIGTERM, lambda signum, frame: (_terminate_active_processes(), sync_worker._handle_termination(signum, frame)))
-    signal.signal(signal.SIGINT, lambda signum, frame: (_terminate_active_processes(), sync_worker._handle_termination(signum, frame)))
+    _install_signal_handlers()
     logger.info(
         "Presenze queue worker supervisor started; instance=%s concurrency=%d",
         WORKER_INSTANCE_ID,
@@ -113,6 +164,7 @@ def _main_parallel() -> int:
 
     while True:
         _reap_finished_processes()
+        _heartbeat_supervisor()
         launched = False
         while len(_ACTIVE_PROCESSES) < settings.presenze_worker_concurrency:
             if not _claim_and_launch_one():
@@ -123,16 +175,7 @@ def _main_parallel() -> int:
 
 
 def main() -> int:
-    if settings.presenze_worker_concurrency > 1:
-        return _main_parallel()
-
-    signal.signal(signal.SIGTERM, sync_worker._handle_termination)
-    signal.signal(signal.SIGINT, sync_worker._handle_termination)
-
-    while True:
-        processed = run_once()
-        if not processed:
-            time.sleep(settings.presenze_worker_poll_seconds)
+    return _main_parallel()
 
 
 def _entrypoint() -> None:

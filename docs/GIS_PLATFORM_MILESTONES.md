@@ -801,7 +801,11 @@ PostGIS.
 
 ## M21 - Fondazione Layer Esterni
 
-Stato: da implementare.
+Stato: completata il 2026-08-28 sul branch M21, commit `07d9f7c4`, con ratchet
+verde rispetto al merge-base `3d373f28`. Il drift preesistente di `services.py`
+e stato classificato e corretto in una change quality separata, integrata in
+`main`; la baseline di complessita e rimasta invariata. Non avviare M22 senza
+richiesta esplicita del prompt P2.
 
 Obiettivo:
 
@@ -828,6 +832,17 @@ Exit criteria:
   come tabella;
 - flag disabilitato produce `503` governato;
 - coverage 100% sui runtime nuovi e modificati.
+
+Evidenza corrente:
+
+- proxy, registro, schema, configurazione, health e divieti backend
+  implementati senza seed esterno;
+- suite M21 verde e coverage `2403/2403`, `100%`, sui sette runtime modificati;
+- `make lint-backend` verde;
+- `make quality-test`: `46 passed`;
+- `make complexity-ratchet BASE_REF=main` verde, nessun finding;
+- baseline non aggiornata: il comando esplicito ha rifiutato regressioni non
+  classificate estranee al perimetro GIS.
 
 ## M22 - Catalogo Territorio E Pannello Strati
 

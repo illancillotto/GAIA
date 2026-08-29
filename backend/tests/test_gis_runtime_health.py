@@ -7,10 +7,9 @@ from types import SimpleNamespace
 from urllib.error import URLError
 
 import pytest
-from sqlalchemy.exc import SQLAlchemyError
-
 from app.modules.gis import runtime_health
 from app.modules.gis.schemas import GisRuntimeComponentHealth
+from sqlalchemy.exc import SQLAlchemyError
 
 CHECKED_AT = datetime(2026, 8, 25, 10, 0, tzinfo=UTC)
 
@@ -224,6 +223,7 @@ def test_runtime_health_aggregates_critical_warning_and_ok(
     monkeypatch.setattr(runtime_health, "_probe_postgis", lambda db, checked_at: _component("critical"))
     monkeypatch.setattr(runtime_health, "_probe_http_service", lambda **kwargs: _component("ok"))
     monkeypatch.setattr(runtime_health, "_probe_nas", lambda db, checked_at: _component("ok"))
+    monkeypatch.setattr(runtime_health, "_external_sources_health", lambda checked_at: _component("ok"))
     assert runtime_health.get_runtime_health(_FakeDb()).status == "critical"
 
     monkeypatch.setattr(runtime_health, "_probe_postgis", lambda db, checked_at: _component("warning"))
@@ -233,4 +233,4 @@ def test_runtime_health_aggregates_critical_warning_and_ok(
     result = runtime_health.get_runtime_health(_FakeDb())
     assert result.status == "ok"
     assert result.export_scheduler_enabled is False
-    assert len(result.components) == 4
+    assert len(result.components) == 5

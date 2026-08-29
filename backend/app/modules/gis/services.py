@@ -16,15 +16,18 @@ from zipfile import ZIP_DEFLATED, BadZipFile, ZipFile
 
 import shapefile
 from fastapi import HTTPException, status
-from sqlalchemy import func, nullslast, select, text
-from sqlalchemy import inspect as sa_inspect
+from sqlalchemy import nullslast, select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.models.application_user import ApplicationUser, ApplicationUserRole
-from app.modules.gis.artifact_storage import delete_artifact
+from app.modules.gis.artifact_storage import delete_artifact as _delete_export_artifact
 from app.modules.gis.exporter import export_layer_to_shapefile_zip
+from app.modules.gis.external_sources import (
+    ExternalSourceConfigurationError,
+    is_external_source_type,
+    normalize_external_layer_metadata,
+)
 from app.modules.gis.models import (
     GisAnnotation,
     GisAuditLog,
@@ -35,14 +38,18 @@ from app.modules.gis.models import (
     GisShapefileImport,
 )
 from app.modules.gis.qgis_governance import build_qgis_governance
+from app.modules.gis.response_builders import (
+    export_response as _export_response,
+    layer_response,
+    shapefile_import_response as _shapefile_import_response,
+)
+from app.modules.gis.service_support import default_export_path, feature_geometry as _feature_geometry
 from app.modules.gis.schemas import (
     GisAccessLevel,
     GisAnnotationCreate,
     GisAnnotationResponse,
     GisAnnotationStatus,
     GisAnnotationUpdate,
-    GisAuditLogListResponse,
-    GisAuditLogResponse,
     GisCatalogDashboardResponse,
     GisCatalogHealthIssue,
     GisCatalogLatestExport,
@@ -54,11 +61,8 @@ from app.modules.gis.schemas import (
     GisChangeRequestType,
     GisChangeRequestUpdate,
     GisLayerCreate,
-    GisLayerExportListResponse,
     GisLayerExportRequest,
     GisLayerExportResponse,
-    GisLayerFeatureListResponse,
-    GisLayerFeatureOption,
     GisLayerMetadataUpdate,
     GisLayerPermissionResponse,
     GisLayerPermissionUpsert,
@@ -68,14 +72,12 @@ from app.modules.gis.schemas import (
     GisQgisGovernanceResponse,
     GisShapefileImportChangeRequestCreate,
     GisShapefileImportChangeRequestResponse,
-    GisShapefileImportListResponse,
     GisShapefileImportPreviewFeature,
     GisShapefileImportPreviewResponse,
     GisShapefileImportResponse,
     GisShapefileImportStatus,
 )
 
-DEFAULT_NAS_EXPORT_ROOT = "/volume1/Settore Catasto/ARCHIVIO/Backups/GAIA/gis"
 GIS_ADMIN_ROLES = {
     ApplicationUserRole.SUPER_ADMIN.value,
     ApplicationUserRole.ADMIN.value,
@@ -178,9 +180,7 @@ def _clean(value: str | None) -> str | None:
     return cleaned or None
 
 
-def register_change_request_validator(
-    scope: str, validator: ChangeRequestValidator
-) -> None:
+def register_change_request_validator(scope: str, validator: ChangeRequestValidator) -> None:
     CHANGE_REQUEST_VALIDATORS[_clean(scope) or scope] = validator
 
 
@@ -220,9 +220,7 @@ def _merge_permission_rows(rows: list[GisLayerPermission]) -> dict[str, bool]:
     return flags
 
 
-def _permission_flags(
-    db: Session, layer_id: UUID, user: ApplicationUser
-) -> dict[str, bool]:
+def _permission_flags(db: Session, layer_id: UUID, user: ApplicationUser) -> dict[str, bool]:
     if is_gis_admin(user):
         return _admin_flags()
 
@@ -247,68 +245,46 @@ def _permission_flags(
     return _merge_permission_rows(list(role_rows))
 
 
-def _ensure_layer_permission(
-    db: Session, layer: GisLayer, user: ApplicationUser, capability: str
-) -> dict[str, bool]:
+def _ensure_layer_permission(db: Session, layer: GisLayer, user: ApplicationUser, capability: str) -> dict[str, bool]:
     flags = _permission_flags(db, layer.id, user)
     if not flags[capability]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="GIS layer permission denied"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS layer permission denied")
     return flags
 
 
 def _get_layer(db: Session, layer_id: UUID) -> GisLayer:
     layer = db.get(GisLayer, layer_id)
     if layer is None or not layer.is_active:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="GIS layer not found")
+    return layer
+
+
+def resolve_external_layer_for_proxy(
+    db: Session,
+    layer_id: UUID,
+    current_user: ApplicationUser,
+) -> GisLayer:
+    layer = _get_layer(db, layer_id)
+    _ensure_layer_permission(db, layer, current_user, "can_view")
+    if not is_external_source_type(layer.source_type):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="GIS layer not found"
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="GIS external proxy requires an external layer",
         )
     return layer
 
 
-def _get_manageable_layer(
-    db: Session, layer_id: UUID, current_user: ApplicationUser
-) -> GisLayer:
+def _get_manageable_layer(db: Session, layer_id: UUID, current_user: ApplicationUser) -> GisLayer:
     if not is_gis_admin(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required")
     layer = db.get(GisLayer, layer_id)
     if layer is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="GIS layer not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="GIS layer not found")
     return layer
 
 
 def _layer_response(layer: GisLayer, flags: dict[str, bool]) -> GisLayerResponse:
-    return GisLayerResponse(
-        id=layer.id,
-        workspace=layer.workspace,
-        name=layer.name,
-        title=layer.title,
-        description=layer.description,
-        domain_module=layer.domain_module,
-        source_type=layer.source_type,
-        official_source=layer.official_source,
-        postgis_schema=layer.postgis_schema,
-        postgis_table=layer.postgis_table,
-        geometry_column=layer.geometry_column,
-        geometry_type=layer.geometry_type,
-        srid=layer.srid,
-        feature_id_column=layer.feature_id_column,
-        martin_layer_id=layer.martin_layer_id,
-        ogc_service_url=layer.ogc_service_url,
-        qgis_project_path=layer.qgis_project_path,
-        nas_export_root=layer.nas_export_root,
-        metadata=layer.metadata_json or {},
-        is_active=layer.is_active,
-        effective_access_level=_flags_to_access_level(flags),
-        **flags,
-        created_at=layer.created_at,
-        updated_at=layer.updated_at,
-    )
+    return layer_response(layer, flags, _flags_to_access_level(flags))
 
 
 def _annotation_response(annotation: GisAnnotation) -> GisAnnotationResponse:
@@ -327,9 +303,7 @@ def _annotation_response(annotation: GisAnnotation) -> GisAnnotationResponse:
     )
 
 
-def _change_request_response(
-    change_request: GisChangeRequest,
-) -> GisChangeRequestResponse:
+def _change_request_response(change_request: GisChangeRequest) -> GisChangeRequestResponse:
     return GisChangeRequestResponse(
         id=change_request.id,
         layer_id=change_request.layer_id,
@@ -344,65 +318,6 @@ def _change_request_response(
         reviewed_at=change_request.reviewed_at,
         created_at=change_request.created_at,
         updated_at=change_request.updated_at,
-    )
-
-
-def _export_response(export: GisLayerExport) -> GisLayerExportResponse:
-    return GisLayerExportResponse(
-        id=export.id,
-        layer_id=export.layer_id,
-        version_label=export.version_label,
-        status=export.status,
-        nas_path=export.nas_path,
-        checksum_sha256=export.checksum_sha256,
-        requested_by_user_id=export.requested_by_user_id,
-        completed_at=export.completed_at,
-        metadata=export.metadata_json or {},
-        created_at=export.created_at,
-    )
-
-
-def _shapefile_import_response(item: GisShapefileImport) -> GisShapefileImportResponse:
-    return GisShapefileImportResponse(
-        id=item.id,
-        status=GisShapefileImportStatus(item.status),
-        original_filename=item.original_filename,
-        workspace=item.workspace,
-        domain_module=item.domain_module,
-        target_layer_name=item.target_layer_name,
-        target_layer_title=item.target_layer_title,
-        official_source=item.official_source,
-        source_srid=item.source_srid,
-        encoding=item.encoding,
-        staging_schema=item.staging_schema,
-        staging_table=item.staging_table,
-        feature_count=item.feature_count,
-        geometry_type=item.geometry_type,
-        bbox=item.bbox_json,
-        fields=item.field_schema_json or [],
-        validation_report=item.validation_report_json or {},
-        metadata=item.metadata_json or {},
-        checksum_sha256=item.checksum_sha256,
-        uploaded_by_user_id=item.uploaded_by_user_id,
-        published_layer_id=item.published_layer_id,
-        validated_at=item.validated_at,
-        rejected_at=item.rejected_at,
-        published_at=item.published_at,
-        created_at=item.created_at,
-        updated_at=item.updated_at,
-    )
-
-
-def _audit_response(item: GisAuditLog) -> GisAuditLogResponse:
-    return GisAuditLogResponse(
-        id=item.id,
-        layer_id=item.layer_id,
-        event_type=item.event_type,
-        actor_user_id=item.actor_user_id,
-        target_type=item.target_type,
-        target_id=item.target_id,
-        payload=item.payload_json or {},
-        created_at=item.created_at,
     )
 
 
@@ -456,10 +371,7 @@ def _safe_zip_name(name: str) -> str:
     normalized = name.replace("\\", "/").strip()
     parts = [part for part in normalized.split("/") if part]
     if normalized.startswith("/") or not parts or any(part == ".." for part in parts):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="GIS shapefile ZIP contains unsafe paths",
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS shapefile ZIP contains unsafe paths")
     return "/".join(parts)
 
 
@@ -477,10 +389,7 @@ def _zip_components(zip_bytes: bytes) -> dict[tuple[str, str], tuple[str, bytes]
                     components[(stem, suffix)] = (safe_name, archive.read(info))
             return components
     except BadZipFile as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="GIS shapefile import requires a valid ZIP",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS shapefile import requires a valid ZIP") from exc
 
 
 def _jsonable_record(value: Any) -> Any:
@@ -496,77 +405,44 @@ def _coerce_source_srid(source_srid: int | str | None) -> int | None:
     try:
         parsed = int(cleaned)
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="GIS shapefile import requires a positive SRID",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS shapefile import requires a positive SRID") from exc
     if parsed < 1:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="GIS shapefile import requires a positive SRID",
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS shapefile import requires a positive SRID")
     return parsed
 
 
 def _infer_source_srid_from_prj(prj_bytes: bytes) -> int | None:
     prj_text = prj_bytes.decode("utf-8", errors="ignore")
-    match = re.search(
-        r'(?:AUTHORITY\["EPSG"\s*,\s*"|ID\["EPSG"\s*,\s*|EPSG[:",\s]+)(\d{3,6})',
-        prj_text,
-        flags=re.IGNORECASE,
-    )
+    match = re.search(r'(?:AUTHORITY\["EPSG"\s*,\s*"|ID\["EPSG"\s*,\s*|EPSG[:",\s]+)(\d{3,6})', prj_text, flags=re.IGNORECASE)
     return int(match.group(1)) if match else None
 
 
-def _resolve_source_srid(
-    source_srid: int | str | None, prj_bytes: bytes
-) -> tuple[int, str]:
+def _resolve_source_srid(source_srid: int | str | None, prj_bytes: bytes) -> tuple[int, str]:
     parsed_source_srid = _coerce_source_srid(source_srid)
     if parsed_source_srid is not None:
         return parsed_source_srid, "form"
     inferred_source_srid = _infer_source_srid_from_prj(prj_bytes)
     if inferred_source_srid is None or inferred_source_srid < 1:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="GIS shapefile import requires source_srid or EPSG authority in .prj",
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS shapefile import requires source_srid or EPSG authority in .prj")
     return inferred_source_srid, "prj"
 
 
-def _validate_shapefile_zip(
-    zip_bytes: bytes, *, encoding: str | None, source_srid: int | str | None
-) -> GisValidatedShapefile:
+def _validate_shapefile_zip(zip_bytes: bytes, *, encoding: str | None, source_srid: int | str | None) -> GisValidatedShapefile:
     components = _zip_components(zip_bytes)
     stems = {stem for stem, suffix in components if suffix == ".shp"}
     if len(stems) != 1:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="GIS shapefile import requires exactly one .shp",
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS shapefile import requires exactly one .shp")
     stem = next(iter(stems))
-    missing = [
-        suffix
-        for suffix in SHAPEFILE_REQUIRED_SUFFIXES
-        if (stem, suffix) not in components
-    ]
+    missing = [suffix for suffix in SHAPEFILE_REQUIRED_SUFFIXES if (stem, suffix) not in components]
     if missing:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"GIS shapefile import missing components: {', '.join(missing)}",
         )
 
-    component_names = {
-        suffix.lstrip("."): components[(stem, suffix)][0]
-        for suffix in SHAPEFILE_REQUIRED_SUFFIXES
-    }
-    resolved_source_srid, source_srid_source = _resolve_source_srid(
-        source_srid, components[(stem, ".prj")][1]
-    )
-    cpg_encoding = (
-        components.get((stem, ".cpg"), ("", b""))[1]
-        .decode("ascii", errors="ignore")
-        .strip()
-    )
+    component_names = {suffix.lstrip("."): components[(stem, suffix)][0] for suffix in SHAPEFILE_REQUIRED_SUFFIXES}
+    resolved_source_srid, source_srid_source = _resolve_source_srid(source_srid, components[(stem, ".prj")][1])
+    cpg_encoding = components.get((stem, ".cpg"), ("", b""))[1].decode("ascii", errors="ignore").strip()
     selected_encoding = _clean(encoding) or cpg_encoding or "utf-8"
     try:
         reader = shapefile.Reader(
@@ -577,15 +453,9 @@ def _validate_shapefile_zip(
         )
         shape_records = list(reader.iterShapeRecords())
     except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"GIS shapefile validation failed: {exc}",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"GIS shapefile validation failed: {exc}") from exc
     if not shape_records:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="GIS shapefile import contains no features",
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS shapefile import contains no features")
 
     fields = [
         {"name": field[0], "type": field[1], "size": field[2], "decimal": field[3]}
@@ -593,14 +463,8 @@ def _validate_shapefile_zip(
     ]
     records: list[tuple[dict[str, Any], dict[str, Any] | None]] = []
     for item in shape_records:
-        attributes = {
-            key: _jsonable_record(value) for key, value in item.record.as_dict().items()
-        }
-        geometry = (
-            None
-            if item.shape.shapeType == shapefile.NULL
-            else dict(item.shape.__geo_interface__)
-        )
+        attributes = {key: _jsonable_record(value) for key, value in item.record.as_dict().items()}
+        geometry = None if item.shape.shapeType == shapefile.NULL else dict(item.shape.__geo_interface__)
         records.append((attributes, geometry))
 
     warnings = []
@@ -616,11 +480,7 @@ def _validate_shapefile_zip(
         "source_srid": resolved_source_srid,
         "source_srid_source": source_srid_source,
     }
-    bbox = (
-        [float(value) for value in reader.bbox]
-        if getattr(reader, "bbox", None)
-        else None
-    )
+    bbox = [float(value) for value in reader.bbox] if getattr(reader, "bbox", None) else None
     return GisValidatedShapefile(
         stem=stem,
         feature_count=len(shape_records),
@@ -659,9 +519,7 @@ def _create_staging_table(
 ) -> None:
     qualified = _qualified_table(schema_name, table_name)
     if schema_name is not None:
-        db.execute(
-            text(f"CREATE SCHEMA IF NOT EXISTS {_quote_identifier(schema_name)}")
-        )
+        db.execute(text(f"CREATE SCHEMA IF NOT EXISTS {_quote_identifier(schema_name)}"))
     db.execute(
         text(
             f"""
@@ -686,12 +544,8 @@ def _create_staging_table(
     rows = [
         {
             "feature_seq": index,
-            "attributes_json": json.dumps(
-                attributes, ensure_ascii=False, sort_keys=True
-            ),
-            "geometry_json": json.dumps(geometry, ensure_ascii=False, sort_keys=True)
-            if geometry is not None
-            else None,
+            "attributes_json": json.dumps(attributes, ensure_ascii=False, sort_keys=True),
+            "geometry_json": json.dumps(geometry, ensure_ascii=False, sort_keys=True) if geometry is not None else None,
             "geometry_type": geometry.get("type") if geometry is not None else None,
             "source_srid": source_srid,
         }
@@ -700,35 +554,25 @@ def _create_staging_table(
     db.execute(insert_sql, rows)
 
 
-def _drop_staging_table(
-    db: Session, *, schema_name: str | None, table_name: str
-) -> None:
-    db.execute(
-        text(f"DROP TABLE IF EXISTS {_qualified_table(schema_name, table_name)}")
-    )
+def _drop_staging_table(db: Session, *, schema_name: str | None, table_name: str) -> None:
+    db.execute(text(f"DROP TABLE IF EXISTS {_qualified_table(schema_name, table_name)}"))
 
 
 def _get_annotation(db: Session, layer: GisLayer, annotation_id: UUID) -> GisAnnotation:
     annotation = db.get(GisAnnotation, annotation_id)
     if annotation is None or annotation.layer_id != layer.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="GIS annotation not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="GIS annotation not found")
     return annotation
 
 
 def _get_change_request(db: Session, change_request_id: UUID) -> GisChangeRequest:
     change_request = db.get(GisChangeRequest, change_request_id)
     if change_request is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="GIS change request not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="GIS change request not found")
     return change_request
 
 
-def _require_feature_id(
-    feature_id: str | None, change_type: GisChangeRequestType
-) -> None:
+def _require_feature_id(feature_id: str | None, change_type: GisChangeRequestType) -> None:
     if feature_id is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -736,9 +580,7 @@ def _require_feature_id(
         )
 
 
-def _require_payload_object(
-    payload: dict[str, Any], key: str, change_type: GisChangeRequestType
-) -> dict[str, Any]:
+def _require_payload_object(payload: dict[str, Any], key: str, change_type: GisChangeRequestType) -> dict[str, Any]:
     value = payload.get(key)
     if not isinstance(value, dict) or not value:
         raise HTTPException(
@@ -754,6 +596,7 @@ def _validate_change_request_payload(
     feature_id: str | None,
     payload: dict[str, Any],
 ) -> None:
+    _ensure_change_request_target_is_internal(layer)
     if change_type == GisChangeRequestType.attribute_update:
         _require_feature_id(feature_id, change_type)
         _require_payload_object(payload, "after", change_type)
@@ -767,17 +610,31 @@ def _validate_change_request_payload(
         _require_feature_id(feature_id, change_type)
         _require_payload_object(payload, "before", change_type)
 
+    _run_change_request_validators(layer, change_type, feature_id, payload)
+
+
+def _run_change_request_validators(
+    layer: GisLayer,
+    change_type: GisChangeRequestType,
+    feature_id: str | None,
+    payload: dict[str, Any],
+) -> None:
     for scope in (str(layer.id), layer.domain_module, layer.workspace):
         if scope and (validator := CHANGE_REQUEST_VALIDATORS.get(scope)):
             validator(layer, change_type, feature_id, payload)
 
 
+def _ensure_change_request_target_is_internal(layer: GisLayer) -> None:
+    if is_external_source_type(layer.source_type):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="External GIS layers cannot be change request targets",
+        )
+
+
 def _ensure_change_request_open(change_request: GisChangeRequest) -> None:
     if change_request.status in CHANGE_REQUEST_TERMINAL_STATUSES:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="GIS change request is terminal",
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS change request is terminal")
 
 
 def _set_change_request_review(
@@ -791,20 +648,13 @@ def _set_change_request_review(
 ) -> None:
     _ensure_change_request_open(change_request)
     if change_request.status not in CHANGE_REQUEST_REVIEWABLE_STATUSES:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="GIS change request status transition denied",
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS change request status transition denied")
     previous_status = change_request.status
     change_request.status = next_status.value
     change_request.reviewed_by_user_id = current_user.id
     change_request.review_notes = _clean(review_notes)
     change_request.reviewed_at = datetime.now(UTC)
-    audit_payload = {
-        "previous_status": previous_status,
-        "status": change_request.status,
-        "review_notes": change_request.review_notes,
-    }
+    audit_payload = {"previous_status": previous_status, "status": change_request.status, "review_notes": change_request.review_notes}
     db.flush()
     _write_audit(
         db,
@@ -817,15 +667,41 @@ def _set_change_request_review(
     )
 
 
-def create_layer(
-    db: Session, body: GisLayerCreate, current_user: ApplicationUser
-) -> GisLayerResponse:
-    if not is_gis_admin(current_user):
+def _normalize_layer_metadata(
+    source_type: str, metadata: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    try:
+        return normalize_external_layer_metadata(source_type, metadata)
+    except ExternalSourceConfigurationError as exc:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required"
-        )
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
 
-    layer = GisLayer(
+
+def create_layer(db: Session, body: GisLayerCreate, current_user: ApplicationUser) -> GisLayerResponse:
+    if not is_gis_admin(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required")
+
+    metadata = _normalize_layer_metadata(body.source_type, body.metadata)
+    layer = _new_layer(body, current_user, metadata)
+    db.add(layer)
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS layer already exists") from exc
+    _write_audit(db, event_type="layer.created", actor=current_user, layer_id=layer.id, target_type="layer", target_id=layer.id)
+    db.commit()
+    db.refresh(layer)
+    return _layer_response(layer, _admin_flags())
+
+
+def _new_layer(
+    body: GisLayerCreate,
+    current_user: ApplicationUser,
+    metadata: dict[str, Any] | None,
+) -> GisLayer:
+    return GisLayer(
         workspace=_clean(body.workspace) or body.workspace,
         name=_clean(body.name) or body.name,
         title=_clean(body.title) or body.title,
@@ -843,28 +719,10 @@ def create_layer(
         ogc_service_url=_clean(body.ogc_service_url),
         qgis_project_path=_clean(body.qgis_project_path),
         nas_export_root=_clean(body.nas_export_root),
-        metadata_json=body.metadata,
+        metadata_json=metadata,
         created_by_user_id=current_user.id,
         updated_by_user_id=current_user.id,
     )
-    db.add(layer)
-    try:
-        db.flush()
-    except IntegrityError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="GIS layer already exists"
-        ) from exc
-    _write_audit(
-        db,
-        event_type="layer.created",
-        actor=current_user,
-        layer_id=layer.id,
-        target_type="layer",
-        target_id=layer.id,
-    )
-    db.commit()
-    db.refresh(layer)
-    return _layer_response(layer, _admin_flags())
 
 
 def list_layers(
@@ -889,11 +747,7 @@ def list_layers(
         query = query.where(GisLayer.source_type == _clean(source_type))
     if official_source:
         query = query.where(GisLayer.official_source == _clean(official_source))
-    layers = db.scalars(
-        query.order_by(
-            GisLayer.workspace.asc(), GisLayer.title.asc(), GisLayer.name.asc()
-        )
-    ).all()
+    layers = db.scalars(query.order_by(GisLayer.workspace.asc(), GisLayer.title.asc(), GisLayer.name.asc())).all()
     responses = []
     for layer in layers:
         flags = _permission_flags(db, layer.id, current_user)
@@ -912,20 +766,12 @@ def _nested_metadata(metadata: dict[str, Any], key: str) -> dict[str, Any]:
 
 
 def _is_qgis_publishable(layer: GisLayer) -> bool:
-    return (
-        layer.is_active
-        and layer.source_type == "postgis"
-        and bool(layer.postgis_table or layer.name)
-    )
+    return layer.is_active and layer.source_type == "postgis" and bool(layer.postgis_table or layer.name)
 
 
 def _is_qgis_project_layer(layer: GisLayer) -> bool:
     qgis_metadata = _nested_metadata(_metadata_mapping(layer.metadata_json), "qgis")
-    return (
-        _is_qgis_publishable(layer)
-        and bool(layer.geometry_column)
-        and qgis_metadata.get("mode") != "not_published"
-    )
+    return _is_qgis_publishable(layer) and bool(layer.geometry_column) and qgis_metadata.get("mode") != "not_published"
 
 
 def _is_shapefile_exportable(layer: GisLayer) -> bool:
@@ -996,9 +842,7 @@ def _qgis_layer_datasource(layer: GisLayer) -> str:
     )
 
 
-def _qgis_project_manifest(
-    layers: list[GisLayer], generated_at: datetime
-) -> dict[str, Any]:
+def _qgis_project_manifest(layers: list[GisLayer], generated_at: datetime) -> dict[str, Any]:
     return {
         "project": "GAIA GIS Platform",
         "generated_at": generated_at.astimezone(UTC).isoformat(),
@@ -1006,11 +850,7 @@ def _qgis_project_manifest(
         "policy": {
             "source": "postgis",
             "mode": "visible_read_only_layers",
-            "excluded": [
-                "postgis_staging",
-                "domain_registry",
-                "qgis.mode=not_published",
-            ],
+            "excluded": ["postgis_staging", "domain_registry", "qgis.mode=not_published"],
         },
         "layers": [
             {
@@ -1032,33 +872,21 @@ def _qgis_project_manifest(
 
 
 def _build_qgis_project_xml(layers: list[GisLayer], generated_at: datetime) -> bytes:
-    root = ET.Element(
-        "QGIS", attrib={"projectname": "GAIA GIS Platform", "version": "3.34.0"}
-    )
+    root = ET.Element("QGIS", attrib={"projectname": "GAIA GIS Platform", "version": "3.34.0"})
     ET.SubElement(root, "title").text = "GAIA GIS Platform"
     ET.SubElement(root, "autotransaction").text = "0"
     ET.SubElement(root, "evaluateDefaultValues").text = "0"
     ET.SubElement(root, "trust", attrib={"active": "0"})
     properties = ET.SubElement(root, "properties")
-    ET.SubElement(properties, "GeneratedAt").text = generated_at.astimezone(
-        UTC
-    ).isoformat()
+    ET.SubElement(properties, "GeneratedAt").text = generated_at.astimezone(UTC).isoformat()
     ET.SubElement(properties, "ConnectionService").text = QGIS_CONNECTION_SERVICE
 
-    layer_tree = ET.SubElement(
-        root,
-        "layer-tree-group",
-        attrib={"name": "GAIA GIS Platform", "checked": "Qt::Checked"},
-    )
+    layer_tree = ET.SubElement(root, "layer-tree-group", attrib={"name": "GAIA GIS Platform", "checked": "Qt::Checked"})
     groups: dict[str, ET.Element] = {}
     for layer in layers:
         group = groups.get(layer.workspace)
         if group is None:
-            group = ET.SubElement(
-                layer_tree,
-                "layer-tree-group",
-                attrib={"name": layer.workspace, "checked": "Qt::Checked"},
-            )
+            group = ET.SubElement(layer_tree, "layer-tree-group", attrib={"name": layer.workspace, "checked": "Qt::Checked"})
             groups[layer.workspace] = group
         ET.SubElement(
             group,
@@ -1077,22 +905,14 @@ def _build_qgis_project_xml(layers: list[GisLayer], generated_at: datetime) -> b
         map_layer = ET.SubElement(
             project_layers,
             "maplayer",
-            attrib={
-                "type": "vector",
-                "geometry": _qgis_geometry_kind(layer),
-                "styleCategories": "AllStyleCategories",
-            },
+            attrib={"type": "vector", "geometry": _qgis_geometry_kind(layer), "styleCategories": "AllStyleCategories"},
         )
         ET.SubElement(map_layer, "id").text = _qgis_project_layer_id(layer)
         ET.SubElement(map_layer, "datasource").text = _qgis_layer_datasource(layer)
         ET.SubElement(map_layer, "layername").text = layer.title
-        ET.SubElement(
-            map_layer, "provider", attrib={"encoding": "UTF-8"}
-        ).text = "postgres"
+        ET.SubElement(map_layer, "provider", attrib={"encoding": "UTF-8"}).text = "postgres"
         ET.SubElement(map_layer, "abstract").text = layer.description or ""
-        ET.SubElement(
-            map_layer, "keywordList"
-        ).text = f"{layer.workspace},{layer.domain_module or ''},GAIA"
+        ET.SubElement(map_layer, "keywordList").text = f"{layer.workspace},{layer.domain_module or ''},GAIA"
         srs = ET.SubElement(map_layer, "srs")
         ET.SubElement(srs, "spatialrefsys").text = f"EPSG:{layer.srid or 4326}"
     ET.indent(root, space="  ")
@@ -1113,22 +933,13 @@ def _qgis_project_readme(layer_count: int, generated_at: datetime) -> str:
     )
 
 
-def _build_qgis_project_archive(
-    layers: list[GisLayer], generated_at: datetime
-) -> bytes:
+def _build_qgis_project_archive(layers: list[GisLayer], generated_at: datetime) -> bytes:
     manifest = _qgis_project_manifest(layers, generated_at)
     buffer = io.BytesIO()
     with ZipFile(buffer, mode="w", compression=ZIP_DEFLATED) as archive:
-        archive.writestr(
-            QGIS_PROJECT_FILENAME, _build_qgis_project_xml(layers, generated_at)
-        )
-        archive.writestr(
-            "README_QGIS.txt", _qgis_project_readme(len(layers), generated_at)
-        )
-        archive.writestr(
-            "manifest.json",
-            json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True),
-        )
+        archive.writestr(QGIS_PROJECT_FILENAME, _build_qgis_project_xml(layers, generated_at))
+        archive.writestr("README_QGIS.txt", _qgis_project_readme(len(layers), generated_at))
+        archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True))
     return buffer.getvalue()
 
 
@@ -1181,9 +992,7 @@ def _layer_health_issues(db: Session, layer: GisLayer) -> list[GisCatalogHealthI
     metadata = _metadata_mapping(layer.metadata_json)
     qgis_metadata = _nested_metadata(metadata, "qgis")
     export_metadata = _nested_metadata(metadata, "export")
-    permissions = db.scalars(
-        select(GisLayerPermission).where(GisLayerPermission.layer_id == layer.id)
-    ).all()
+    permissions = db.scalars(select(GisLayerPermission).where(GisLayerPermission.layer_id == layer.id)).all()
     issues: list[GisCatalogHealthIssue] = []
     if layer.is_active and not any(permission.can_view for permission in permissions):
         issues.append(
@@ -1213,10 +1022,7 @@ def _layer_health_issues(db: Session, layer: GisLayer) -> list[GisCatalogHealthI
                     message="Layer PostGIS senza colonna geometria configurata.",
                 )
             )
-        if (
-            qgis_metadata.get("editable") is True
-            and qgis_metadata.get("edit_policy") != "controlled"
-        ):
+        if qgis_metadata.get("editable") is True and qgis_metadata.get("edit_policy") != "controlled":
             issues.append(
                 _catalog_health_issue(
                     layer,
@@ -1253,20 +1059,14 @@ def _latest_export_trigger(export: GisLayerExport) -> str | None:
     return str(trigger) if trigger else None
 
 
-def _latest_exports_for_layers(
-    db: Session, layers: list[GisLayer]
-) -> list[GisCatalogLatestExport]:
+def _latest_exports_for_layers(db: Session, layers: list[GisLayer]) -> list[GisCatalogLatestExport]:
     if not layers:
         return []
     layer_by_id = {layer.id: layer for layer in layers}
     exports = db.scalars(
         select(GisLayerExport)
         .where(GisLayerExport.layer_id.in_(layer_by_id))
-        .order_by(
-            nullslast(GisLayerExport.completed_at.desc()),
-            GisLayerExport.created_at.desc(),
-            GisLayerExport.id.desc(),
-        )
+        .order_by(nullslast(GisLayerExport.completed_at.desc()), GisLayerExport.created_at.desc(), GisLayerExport.id.desc())
     ).all()
     latest: list[GisCatalogLatestExport] = []
     seen_layer_ids: set[UUID] = set()
@@ -1291,24 +1091,17 @@ def _latest_exports_for_layers(
     return latest
 
 
-def get_catalog_dashboard(
-    db: Session, current_user: ApplicationUser
-) -> GisCatalogDashboardResponse:
+def get_catalog_dashboard(db: Session, current_user: ApplicationUser) -> GisCatalogDashboardResponse:
     query = select(GisLayer)
     if not is_gis_admin(current_user):
         query = query.where(GisLayer.is_active.is_(True))
-    layers = db.scalars(
-        query.order_by(GisLayer.workspace.asc(), GisLayer.name.asc())
-    ).all()
+    layers = db.scalars(query.order_by(GisLayer.workspace.asc(), GisLayer.name.asc())).all()
     visible_layers = [
         layer
         for layer in layers
-        if is_gis_admin(current_user)
-        or _permission_flags(db, layer.id, current_user)["can_view"]
+        if is_gis_admin(current_user) or _permission_flags(db, layer.id, current_user)["can_view"]
     ]
-    issues = [
-        issue for layer in visible_layers for issue in _layer_health_issues(db, layer)
-    ]
+    issues = [issue for layer in visible_layers for issue in _layer_health_issues(db, layer)]
     workspace_issues: dict[str, list[GisCatalogHealthIssue]] = defaultdict(list)
     for issue in issues:
         workspace_issues[issue.workspace].append(issue)
@@ -1328,15 +1121,9 @@ def get_catalog_dashboard(
             active_layers=sum(1 for item in items if item.is_active),
             inactive_layers=sum(1 for item in items if not item.is_active),
             postgis_layers=sum(1 for item in items if item.source_type == "postgis"),
-            domain_registry_layers=sum(
-                1 for item in items if item.source_type == "domain_registry"
-            ),
-            qgis_publishable_layers=sum(
-                1 for item in items if _is_qgis_publishable(item)
-            ),
-            exportable_layers=sum(
-                1 for item in items if _is_shapefile_exportable(item)
-            ),
+            domain_registry_layers=sum(1 for item in items if item.source_type == "domain_registry"),
+            qgis_publishable_layers=sum(1 for item in items if _is_qgis_publishable(item)),
+            exportable_layers=sum(1 for item in items if _is_shapefile_exportable(item)),
             issue_count=len(workspace_issues[workspace]),
             health_status=_catalog_health_status(workspace_issues[workspace]),
         )
@@ -1351,12 +1138,8 @@ def get_catalog_dashboard(
         workspace_count=len(workspace_layers),
         source_type_counts=dict(sorted(source_type_counts.items())),
         official_source_counts=dict(sorted(official_source_counts.items())),
-        qgis_publishable_layers=sum(
-            1 for layer in visible_layers if _is_qgis_publishable(layer)
-        ),
-        exportable_layers=sum(
-            1 for layer in visible_layers if _is_shapefile_exportable(layer)
-        ),
+        qgis_publishable_layers=sum(1 for layer in visible_layers if _is_qgis_publishable(layer)),
+        exportable_layers=sum(1 for layer in visible_layers if _is_shapefile_exportable(layer)),
         health_status=_catalog_health_status(issues),
         issues=issues,
         latest_exports=_latest_exports_for_layers(db, visible_layers),
@@ -1364,9 +1147,7 @@ def get_catalog_dashboard(
     )
 
 
-def get_layer(
-    db: Session, layer_id: UUID, current_user: ApplicationUser
-) -> GisLayerResponse:
+def get_layer(db: Session, layer_id: UUID, current_user: ApplicationUser) -> GisLayerResponse:
     layer = _get_layer(db, layer_id)
     flags = _ensure_layer_permission(db, layer, current_user, "can_view")
     return _layer_response(layer, flags)
@@ -1381,30 +1162,10 @@ def update_layer_metadata(
     layer = _get_manageable_layer(db, layer_id, current_user)
     fields = body.model_fields_set
     if not fields:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="At least one metadata field is required",
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="At least one metadata field is required")
 
-    updates: dict[str, Any] = {}
-    if "title" in fields:
-        cleaned_title = _clean(body.title)
-        if cleaned_title is None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="GIS layer title cannot be null",
-            )
-        updates["title"] = cleaned_title
-    if "description" in fields:
-        updates["description"] = _clean(body.description)
-    if "ogc_service_url" in fields:
-        updates["ogc_service_url"] = _clean(body.ogc_service_url)
-    if "qgis_project_path" in fields:
-        updates["qgis_project_path"] = _clean(body.qgis_project_path)
-    if "nas_export_root" in fields:
-        updates["nas_export_root"] = _clean(body.nas_export_root)
-    if "metadata" in fields:
-        updates["metadata_json"] = body.metadata
+    metadata = _normalize_layer_metadata(layer.source_type, body.metadata) if "metadata" in fields else body.metadata
+    updates = _layer_metadata_updates(body, fields, metadata)
 
     changed_fields = []
     for field, value in updates.items():
@@ -1427,9 +1188,31 @@ def update_layer_metadata(
     return _layer_response(layer, _admin_flags())
 
 
-def set_layer_active(
-    db: Session, layer_id: UUID, is_active: bool, current_user: ApplicationUser
-) -> GisLayerResponse:
+def _layer_metadata_updates(
+    body: GisLayerMetadataUpdate,
+    fields: set[str],
+    metadata: dict[str, Any] | None,
+) -> dict[str, Any]:
+    updates: dict[str, Any] = {}
+    if "title" in fields:
+        cleaned_title = _clean(body.title)
+        if cleaned_title is None:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS layer title cannot be null")
+        updates["title"] = cleaned_title
+    if "description" in fields:
+        updates["description"] = _clean(body.description)
+    if "ogc_service_url" in fields:
+        updates["ogc_service_url"] = _clean(body.ogc_service_url)
+    if "qgis_project_path" in fields:
+        updates["qgis_project_path"] = _clean(body.qgis_project_path)
+    if "nas_export_root" in fields:
+        updates["nas_export_root"] = _clean(body.nas_export_root)
+    if "metadata" in fields:
+        updates["metadata_json"] = metadata
+    return updates
+
+
+def set_layer_active(db: Session, layer_id: UUID, is_active: bool, current_user: ApplicationUser) -> GisLayerResponse:
     layer = _get_manageable_layer(db, layer_id, current_user)
     previous_is_active = layer.is_active
     layer.is_active = is_active
@@ -1442,10 +1225,7 @@ def set_layer_active(
         layer_id=layer.id,
         target_type="layer",
         target_id=layer.id,
-        payload={
-            "previous_is_active": previous_is_active,
-            "is_active": layer.is_active,
-        },
+        payload={"previous_is_active": previous_is_active, "is_active": layer.is_active},
     )
     db.commit()
     db.refresh(layer)
@@ -1468,20 +1248,13 @@ def create_shapefile_import(
     metadata: dict[str, Any] | None = None,
 ) -> GisShapefileImportResponse:
     if not is_gis_admin(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required")
     cleaned_workspace = _clean(workspace)
     cleaned_name = _clean(target_layer_name)
     cleaned_title = _clean(target_layer_title)
     if not cleaned_workspace or not cleaned_name or not cleaned_title:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="GIS shapefile import target fields are required",
-        )
-    validated = _validate_shapefile_zip(
-        zip_bytes, encoding=encoding, source_srid=source_srid
-    )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS shapefile import target fields are required")
+    validated = _validate_shapefile_zip(zip_bytes, encoding=encoding, source_srid=source_srid)
     item = GisShapefileImport(
         status=GisShapefileImportStatus.uploaded.value,
         original_filename=_clean(filename) or "upload.zip",
@@ -1533,11 +1306,7 @@ def create_shapefile_import(
         layer_id=None,
         target_type="shapefile_import",
         target_id=item.id,
-        payload={
-            "workspace": item.workspace,
-            "target_layer_name": item.target_layer_name,
-            "feature_count": item.feature_count,
-        },
+        payload={"workspace": item.workspace, "target_layer_name": item.target_layer_name, "feature_count": item.feature_count},
     )
     _write_audit(
         db,
@@ -1546,10 +1315,7 @@ def create_shapefile_import(
         layer_id=None,
         target_type="shapefile_import",
         target_id=item.id,
-        payload={
-            "staging_schema": item.staging_schema,
-            "staging_table": item.staging_table,
-        },
+        payload={"staging_schema": item.staging_schema, "staging_table": item.staging_table},
     )
     db.commit()
     db.refresh(item)
@@ -1559,37 +1325,21 @@ def create_shapefile_import(
 def _get_shapefile_import(db: Session, import_id: UUID) -> GisShapefileImport:
     item = db.get(GisShapefileImport, import_id)
     if item is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="GIS shapefile import not found",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="GIS shapefile import not found")
     return item
 
 
-def _ensure_shapefile_import_access(
-    item: GisShapefileImport, current_user: ApplicationUser
-) -> None:
+def _ensure_shapefile_import_access(item: GisShapefileImport, current_user: ApplicationUser) -> None:
     if not is_gis_admin(current_user) and item.uploaded_by_user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="GIS shapefile import access denied",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS shapefile import access denied")
 
 
 def _ensure_shapefile_import_staging_ready(item: GisShapefileImport) -> None:
-    if item.status not in {
-        GisShapefileImportStatus.validated.value,
-        GisShapefileImportStatus.published.value,
-    }:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="GIS shapefile import must be validated before change request",
-        )
+    if item.status not in {GisShapefileImportStatus.validated.value, GisShapefileImportStatus.published.value}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS shapefile import must be validated before change request")
 
 
-def _source_import_payload(
-    item: GisShapefileImport, feature_seq: int
-) -> dict[str, Any]:
+def _source_import_payload(item: GisShapefileImport, feature_seq: int) -> dict[str, Any]:
     return {
         "import_id": str(item.id),
         "feature_seq": feature_seq,
@@ -1600,78 +1350,19 @@ def _source_import_payload(
     }
 
 
-def _source_import_feature_seq(
-    change_request: GisChangeRequest, import_id: UUID
-) -> int | None:
-    payload = (
-        change_request.payload_json
-        if isinstance(change_request.payload_json, dict)
-        else {}
-    )
+def _source_import_feature_seq(change_request: GisChangeRequest, import_id: UUID) -> int | None:
+    payload = change_request.payload_json if isinstance(change_request.payload_json, dict) else {}
     source_import = payload.get("source_import")
-    if not isinstance(source_import, dict) or source_import.get("import_id") != str(
-        import_id
-    ):
+    if not isinstance(source_import, dict) or source_import.get("import_id") != str(import_id):
         return None
     feature_seq = source_import.get("feature_seq")
     return feature_seq if isinstance(feature_seq, int) else None
 
 
-def get_shapefile_import(
-    db: Session, import_id: UUID, current_user: ApplicationUser
-) -> GisShapefileImportResponse:
+def get_shapefile_import(db: Session, import_id: UUID, current_user: ApplicationUser) -> GisShapefileImportResponse:
     item = _get_shapefile_import(db, import_id)
     _ensure_shapefile_import_access(item, current_user)
     return _shapefile_import_response(item)
-
-
-def _paginated_scalars(
-    db: Session,
-    query: Any,
-    *,
-    order_by: tuple[Any, ...],
-    limit: int,
-    offset: int,
-) -> tuple[list[Any], int]:
-    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
-    items = list(
-        db.scalars(query.order_by(*order_by).limit(limit).offset(offset)).all()
-    )
-    return items, total
-
-
-def list_shapefile_imports(
-    db: Session,
-    current_user: ApplicationUser,
-    *,
-    import_status: GisShapefileImportStatus | None,
-    limit: int,
-    offset: int,
-) -> GisShapefileImportListResponse:
-    query = select(GisShapefileImport)
-    if not is_gis_admin(current_user):
-        query = query.where(
-            GisShapefileImport.uploaded_by_user_id == current_user.id
-        )
-    if import_status is not None:
-        query = query.where(GisShapefileImport.status == import_status.value)
-    page, total = _paginated_scalars(
-        db,
-        query,
-        order_by=(
-            GisShapefileImport.created_at.desc(),
-            GisShapefileImport.id.desc(),
-        ),
-        limit=limit,
-        offset=offset,
-    )
-    return GisShapefileImportListResponse(
-        items=[_shapefile_import_response(item) for item in page],
-        total=total,
-        limit=limit,
-        offset=offset,
-        has_more=offset + len(page) < total,
-    )
 
 
 def preview_shapefile_import(
@@ -1684,14 +1375,8 @@ def preview_shapefile_import(
 ) -> GisShapefileImportPreviewResponse:
     item = _get_shapefile_import(db, import_id)
     _ensure_shapefile_import_access(item, current_user)
-    if item.status not in {
-        GisShapefileImportStatus.validated.value,
-        GisShapefileImportStatus.published.value,
-    }:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="GIS shapefile import must be validated before preview",
-        )
+    if item.status not in {GisShapefileImportStatus.validated.value, GisShapefileImportStatus.published.value}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS shapefile import must be validated before preview")
 
     qualified = _qualified_table(item.staging_schema, item.staging_table)
     try:
@@ -1711,18 +1396,13 @@ def preview_shapefile_import(
             .all()
         )
     except SQLAlchemyError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="GIS shapefile import staging table is not available",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS shapefile import staging table is not available") from exc
 
     features = [
         GisShapefileImportPreviewFeature(
             feature_seq=row["feature_seq"],
             attributes=json.loads(row["attributes_json"]),
-            geometry=json.loads(row["geometry_json"])
-            if row["geometry_json"] is not None
-            else None,
+            geometry=json.loads(row["geometry_json"]) if row["geometry_json"] is not None else None,
             geometry_type=row["geometry_type"],
             source_srid=row["source_srid"],
         )
@@ -1779,10 +1459,7 @@ def create_change_requests_from_shapefile_import(
             .all()
         )
     except SQLAlchemyError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="GIS shapefile import staging table is not available",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS shapefile import staging table is not available") from exc
 
     existing_by_seq: dict[int, GisChangeRequest] = {}
     existing_change_requests = db.scalars(
@@ -1804,11 +1481,7 @@ def create_change_requests_from_shapefile_import(
             response_items.append(existing)
             existing_count += 1
             continue
-        geometry = (
-            json.loads(row["geometry_json"])
-            if row["geometry_json"] is not None
-            else None
-        )
+        geometry = json.loads(row["geometry_json"]) if row["geometry_json"] is not None else None
         if geometry is None:
             skipped_count += 1
             continue
@@ -1818,9 +1491,7 @@ def create_change_requests_from_shapefile_import(
             "properties": attributes or {"_gaia_feature_seq": feature_seq},
             "source_import": _source_import_payload(item, feature_seq),
         }
-        _validate_change_request_payload(
-            target_layer, GisChangeRequestType.feature_create, None, payload
-        )
+        _validate_change_request_payload(target_layer, GisChangeRequestType.feature_create, None, payload)
         change_request = GisChangeRequest(
             layer_id=target_layer.id,
             feature_id=None,
@@ -1867,26 +1538,16 @@ def create_change_requests_from_shapefile_import(
         limit=body.limit,
         offset=body.offset,
         has_more=body.offset + len(rows) < item.feature_count,
-        change_requests=[
-            _change_request_response(change_request)
-            for change_request in response_items
-        ],
+        change_requests=[_change_request_response(change_request) for change_request in response_items],
     )
 
 
-def validate_shapefile_import(
-    db: Session, import_id: UUID, current_user: ApplicationUser
-) -> GisShapefileImportResponse:
+def validate_shapefile_import(db: Session, import_id: UUID, current_user: ApplicationUser) -> GisShapefileImportResponse:
     if not is_gis_admin(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required")
     item = _get_shapefile_import(db, import_id)
     if item.status == GisShapefileImportStatus.rejected.value:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="GIS shapefile import is rejected",
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS shapefile import is rejected")
     if item.status == GisShapefileImportStatus.published.value:
         return _shapefile_import_response(item)
     if item.status != GisShapefileImportStatus.validated.value:
@@ -1900,33 +1561,21 @@ def validate_shapefile_import(
             layer_id=None,
             target_type="shapefile_import",
             target_id=item.id,
-            payload={
-                "staging_schema": item.staging_schema,
-                "staging_table": item.staging_table,
-            },
+            payload={"staging_schema": item.staging_schema, "staging_table": item.staging_table},
         )
         db.commit()
         db.refresh(item)
     return _shapefile_import_response(item)
 
 
-def reject_shapefile_import(
-    db: Session, import_id: UUID, current_user: ApplicationUser
-) -> GisShapefileImportResponse:
+def reject_shapefile_import(db: Session, import_id: UUID, current_user: ApplicationUser) -> GisShapefileImportResponse:
     if not is_gis_admin(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required")
     item = _get_shapefile_import(db, import_id)
     if item.status == GisShapefileImportStatus.published.value:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="GIS shapefile import is already published",
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS shapefile import is already published")
     if item.status != GisShapefileImportStatus.rejected.value:
-        _drop_staging_table(
-            db, schema_name=item.staging_schema, table_name=item.staging_table
-        )
+        _drop_staging_table(db, schema_name=item.staging_schema, table_name=item.staging_table)
         item.status = GisShapefileImportStatus.rejected.value
         item.rejected_at = datetime.now(UTC)
         db.flush()
@@ -1937,47 +1586,28 @@ def reject_shapefile_import(
             layer_id=None,
             target_type="shapefile_import",
             target_id=item.id,
-            payload={
-                "staging_schema": item.staging_schema,
-                "staging_table": item.staging_table,
-            },
+            payload={"staging_schema": item.staging_schema, "staging_table": item.staging_table},
         )
         db.commit()
         db.refresh(item)
     return _shapefile_import_response(item)
 
 
-def publish_shapefile_import(
-    db: Session, import_id: UUID, current_user: ApplicationUser
-) -> GisShapefileImportResponse:
+def publish_shapefile_import(db: Session, import_id: UUID, current_user: ApplicationUser) -> GisShapefileImportResponse:
     if not is_gis_admin(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required")
     item = _get_shapefile_import(db, import_id)
     if item.status == GisShapefileImportStatus.rejected.value:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="GIS shapefile import is rejected",
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS shapefile import is rejected")
     if item.status == GisShapefileImportStatus.published.value:
         return _shapefile_import_response(item)
     if item.status != GisShapefileImportStatus.validated.value:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="GIS shapefile import must be validated before publish",
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS shapefile import must be validated before publish")
     existing_layer = db.scalar(
-        select(GisLayer).where(
-            GisLayer.workspace == item.workspace,
-            GisLayer.name == item.target_layer_name,
-        )
+        select(GisLayer).where(GisLayer.workspace == item.workspace, GisLayer.name == item.target_layer_name)
     )
     if existing_layer is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="GIS layer target already exists",
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS layer target already exists")
 
     metadata = _metadata_mapping(item.metadata_json)
     import_metadata = {
@@ -2007,11 +1637,7 @@ def publish_shapefile_import(
             **metadata,
             "read_only": True,
             "import": import_metadata,
-            "qgis": {
-                "mode": "not_published",
-                "editable": False,
-                "reason": "staging_import_not_official",
-            },
+            "qgis": {"mode": "not_published", "editable": False, "reason": "staging_import_not_official"},
             "tiles": {"published": False, "reason": "staging_import_not_official"},
             "export": {"shapefile": False, "reason": "staging_import_not_official"},
         },
@@ -2023,10 +1649,7 @@ def publish_shapefile_import(
     try:
         db.flush()
     except IntegrityError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="GIS layer target already exists",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS layer target already exists") from exc
 
     viewer_flags = ACCESS_LEVEL_FLAGS[GisAccessLevel.viewer]
     db.add(
@@ -2053,11 +1676,7 @@ def publish_shapefile_import(
         layer_id=layer.id,
         target_type="shapefile_import",
         target_id=item.id,
-        payload={
-            "workspace": layer.workspace,
-            "layer_name": layer.name,
-            "source_type": layer.source_type,
-        },
+        payload={"workspace": layer.workspace, "layer_name": layer.name, "source_type": layer.source_type},
     )
     _write_audit(
         db,
@@ -2071,193 +1690,6 @@ def publish_shapefile_import(
     db.commit()
     db.refresh(item)
     return _shapefile_import_response(item)
-
-
-def _feature_selector_columns(
-    db: Session, layer: GisLayer, *, include_editable: bool
-) -> tuple[list[str], list[str]]:
-    schema = (
-        None
-        if db.get_bind().dialect.name == "sqlite"
-        else layer.postgis_schema or "public"
-    )
-    columns = [
-        str(column["name"])
-        for column in sa_inspect(db.get_bind()).get_columns(
-            layer.postgis_table or "", schema=schema
-        )
-    ]
-    feature_id_column = _layer_feature_id_column(layer)
-    if feature_id_column not in columns:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="GIS layer feature identifier is unavailable",
-        )
-
-    geometry_column = layer.geometry_column or "geometry"
-    attribute_columns = [column for column in columns if column != geometry_column]
-    selector_metadata = _nested_metadata(
-        _metadata_mapping(layer.metadata_json), "feature_selector"
-    )
-    configured_labels = selector_metadata.get("label_fields")
-    label_columns = (
-        [
-            str(column)
-            for column in configured_labels
-            if str(column) in attribute_columns
-        ]
-        if isinstance(configured_labels, list)
-        else []
-    )
-    if not label_columns:
-        label_columns = [
-            column for column in attribute_columns if column != feature_id_column
-        ][:2]
-    visible_columns = (
-        attribute_columns
-        if include_editable
-        else list(dict.fromkeys([feature_id_column, *label_columns]))
-    )
-    return visible_columns, label_columns
-
-
-def _feature_geometry(value: Any) -> dict[str, Any] | None:
-    if isinstance(value, dict):
-        return value
-    if isinstance(value, str):
-        try:
-            parsed = json.loads(value)
-        except json.JSONDecodeError:
-            return None
-        return parsed if isinstance(parsed, dict) else None
-    return None
-
-
-def _feature_option(
-    row: dict[str, Any],
-    *,
-    feature_id_column: str,
-    label_columns: list[str],
-) -> GisLayerFeatureOption:
-    feature_id = str(row[feature_id_column])
-    geometry = _feature_geometry(row.pop("__gaia_geometry", None))
-    attributes = {key: _jsonable_record(value) for key, value in row.items()}
-    label_parts = [
-        str(attributes[column])
-        for column in label_columns
-        if attributes.get(column) not in (None, "")
-    ]
-    label = (
-        " - ".join([feature_id, *label_parts])
-        if label_parts
-        else f"Elemento {feature_id}"
-    )
-    return GisLayerFeatureOption(
-        feature_id=feature_id, label=label, attributes=attributes, geometry=geometry
-    )
-
-
-def list_layer_features(
-    db: Session,
-    layer_id: UUID,
-    current_user: ApplicationUser,
-    *,
-    query: str | None = None,
-    limit: int = 20,
-    offset: int = 0,
-) -> GisLayerFeatureListResponse:
-    layer = _get_layer(db, layer_id)
-    flags = _permission_flags(db, layer.id, current_user)
-    if not flags["can_view"]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="GIS feature selection permission denied",
-        )
-    if layer.source_type != "postgis" or not layer.postgis_table:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="GIS feature selection requires a PostGIS layer",
-        )
-
-    try:
-        visible_columns, label_columns = _feature_selector_columns(
-            db, layer, include_editable=flags["can_edit"]
-        )
-        feature_id_column = _layer_feature_id_column(layer)
-        table_identifier = _layer_table_identifier(db, layer)
-        geometry_column = layer.geometry_column or "geometry"
-        actual_columns = {
-            str(column["name"])
-            for column in sa_inspect(db.get_bind()).get_columns(
-                layer.postgis_table,
-                schema=None
-                if db.get_bind().dialect.name == "sqlite"
-                else layer.postgis_schema or "public",
-            )
-        }
-        geometry_sql = "NULL"
-        if geometry_column in actual_columns:
-            quoted_geometry = _quote_identifier(geometry_column)
-            geometry_sql = (
-                quoted_geometry
-                if db.get_bind().dialect.name == "sqlite"
-                else f"ST_AsGeoJSON({quoted_geometry})"
-            )
-        search_value = _clean(query)
-        where_sql = ""
-        params: dict[str, Any] = {"limit": limit, "offset": offset}
-        if search_value:
-            searchable_columns = list(
-                dict.fromkeys([feature_id_column, *label_columns])
-            )
-            comparisons = [
-                f"LOWER(CAST({_quote_identifier(column)} AS TEXT)) LIKE :query"
-                for column in searchable_columns
-            ]
-            where_sql = f" WHERE {' OR '.join(comparisons)}"
-            params["query"] = f"%{search_value.lower()}%"
-        total = int(
-            db.execute(
-                text(f"SELECT COUNT(*) FROM {table_identifier}{where_sql}"), params
-            ).scalar_one()
-        )
-        selected_columns = ", ".join(
-            _quote_identifier(column) for column in visible_columns
-        )
-        rows = (
-            db.execute(
-                text(
-                f"SELECT {selected_columns}, {geometry_sql} AS __gaia_geometry "
-                f"FROM {table_identifier}{where_sql} "
-                f"ORDER BY CAST({_quote_identifier(feature_id_column)} AS TEXT) "
-                "LIMIT :limit OFFSET :offset"
-                ),
-                params,
-            )
-            .mappings()
-            .all()
-        )
-    except HTTPException:
-        raise
-    except SQLAlchemyError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="GIS layer source is unavailable",
-        ) from exc
-
-    items = [
-        _feature_option(
-            dict(row), feature_id_column=feature_id_column, label_columns=label_columns
-        )
-        for row in rows
-    ]
-    return GisLayerFeatureListResponse(
-        items=items,
-        total=total,
-        limit=limit,
-        offset=offset,
-        has_more=offset + len(items) < total,
-    )
 
 
 def list_annotations(
@@ -2274,17 +1706,12 @@ def list_annotations(
         query = query.where(GisAnnotation.status == status_filter.value)
     if feature_id:
         query = query.where(GisAnnotation.feature_id == _clean(feature_id))
-    annotations = db.scalars(
-        query.order_by(GisAnnotation.created_at.desc(), GisAnnotation.id.desc())
-    ).all()
+    annotations = db.scalars(query.order_by(GisAnnotation.created_at.desc(), GisAnnotation.id.desc())).all()
     return [_annotation_response(annotation) for annotation in annotations]
 
 
 def create_annotation(
-    db: Session,
-    layer_id: UUID,
-    body: GisAnnotationCreate,
-    current_user: ApplicationUser,
+    db: Session, layer_id: UUID, body: GisAnnotationCreate, current_user: ApplicationUser
 ) -> GisAnnotationResponse:
     layer = _get_layer(db, layer_id)
     _ensure_layer_permission(db, layer, current_user, "can_annotate")
@@ -2324,44 +1751,30 @@ def update_annotation(
     _ensure_layer_permission(db, layer, current_user, "can_annotate")
     annotation = _get_annotation(db, layer, annotation_id)
     if annotation.status in ANNOTATION_TERMINAL_STATUSES:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="GIS annotation is terminal"
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS annotation is terminal")
     fields = body.model_fields_set
     if not fields:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="At least one annotation field is required",
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="At least one annotation field is required")
 
     changed_fields = []
     if "title" in fields:
         cleaned_title = _clean(body.title)
         if cleaned_title is None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="GIS annotation title cannot be null",
-            )
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS annotation title cannot be null")
         if annotation.title != cleaned_title:
             annotation.title = cleaned_title
             changed_fields.append("title")
     if "body" in fields:
         cleaned_body = _clean(body.body)
         if cleaned_body is None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="GIS annotation body cannot be null",
-            )
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS annotation body cannot be null")
         if annotation.body != cleaned_body:
             annotation.body = cleaned_body
             changed_fields.append("body")
     if "geometry" in fields and annotation.geometry_json != body.geometry:
         annotation.geometry_json = body.geometry
         changed_fields.append("geometry")
-    if (
-        "attachment_refs" in fields
-        and annotation.attachment_refs_json != body.attachment_refs
-    ):
+    if "attachment_refs" in fields and annotation.attachment_refs_json != body.attachment_refs:
         annotation.attachment_refs_json = body.attachment_refs or []
         changed_fields.append("attachment_refs")
     db.flush()
@@ -2387,17 +1800,11 @@ def set_annotation_status(
     current_user: ApplicationUser,
 ) -> GisAnnotationResponse:
     layer = _get_layer(db, layer_id)
-    capability = (
-        "can_approve"
-        if next_status in {GisAnnotationStatus.closed, GisAnnotationStatus.rejected}
-        else "can_annotate"
-    )
+    capability = "can_approve" if next_status in {GisAnnotationStatus.closed, GisAnnotationStatus.rejected} else "can_annotate"
     _ensure_layer_permission(db, layer, current_user, capability)
     annotation = _get_annotation(db, layer, annotation_id)
     if annotation.status in ANNOTATION_TERMINAL_STATUSES:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="GIS annotation is terminal"
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS annotation is terminal")
     previous_status = annotation.status
     annotation.status = next_status.value
     db.flush()
@@ -2408,38 +1815,26 @@ def set_annotation_status(
         layer_id=layer.id,
         target_type="annotation",
         target_id=annotation.id,
-        payload={
-            "previous_status": previous_status,
-            "status": annotation.status,
-            "feature_id": annotation.feature_id,
-        },
+        payload={"previous_status": previous_status, "status": annotation.status, "feature_id": annotation.feature_id},
     )
     db.commit()
     db.refresh(annotation)
     return _annotation_response(annotation)
 
 
-def list_permissions(
-    db: Session, layer_id: UUID, current_user: ApplicationUser
-) -> list[GisLayerPermissionResponse]:
+def list_permissions(db: Session, layer_id: UUID, current_user: ApplicationUser) -> list[GisLayerPermissionResponse]:
     layer = _get_layer(db, layer_id)
     _ensure_layer_permission(db, layer, current_user, "can_manage")
     permissions = db.scalars(
         select(GisLayerPermission)
         .where(GisLayerPermission.layer_id == layer_id)
-        .order_by(
-            GisLayerPermission.principal_type.asc(),
-            GisLayerPermission.principal_key.asc(),
-        )
+        .order_by(GisLayerPermission.principal_type.asc(), GisLayerPermission.principal_key.asc())
     ).all()
     return [_permission_response(permission) for permission in permissions]
 
 
 def upsert_permission(
-    db: Session,
-    layer_id: UUID,
-    body: GisLayerPermissionUpsert,
-    current_user: ApplicationUser,
+    db: Session, layer_id: UUID, body: GisLayerPermissionUpsert, current_user: ApplicationUser
 ) -> GisLayerPermissionResponse:
     layer = _get_layer(db, layer_id)
     _ensure_layer_permission(db, layer, current_user, "can_manage")
@@ -2447,23 +1842,14 @@ def upsert_permission(
     user_id = None
     if body.principal_type == "role":
         if principal_key not in GIS_ROLE_PRINCIPAL_KEYS:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="GIS permission role not recognized",
-            )
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS permission role not recognized")
     else:
         try:
             user_id = int(principal_key)
         except ValueError as exc:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="User principal_key must be an integer id",
-            ) from exc
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="User principal_key must be an integer id") from exc
         if db.get(ApplicationUser, user_id) is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="GIS permission user not found",
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="GIS permission user not found")
 
     permission = db.scalar(
         select(GisLayerPermission).where(
@@ -2520,9 +1906,7 @@ def revoke_permission(
     _ensure_layer_permission(db, layer, current_user, "can_manage")
     permission = db.get(GisLayerPermission, permission_id)
     if permission is None or permission.layer_id != layer.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="GIS permission not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="GIS permission not found")
     payload = {
         "principal_type": permission.principal_type,
         "principal_key": permission.principal_key,
@@ -2542,10 +1926,7 @@ def revoke_permission(
 
 
 def create_change_request(
-    db: Session,
-    layer_id: UUID,
-    body: GisChangeRequestCreate,
-    current_user: ApplicationUser,
+    db: Session, layer_id: UUID, body: GisChangeRequestCreate, current_user: ApplicationUser
 ) -> GisChangeRequestResponse:
     layer = _get_layer(db, layer_id)
     _ensure_layer_permission(db, layer, current_user, "can_edit")
@@ -2568,11 +1949,7 @@ def create_change_request(
         layer_id=layer.id,
         target_type="change_request",
         target_id=change_request.id,
-        payload={
-            "feature_id": change_request.feature_id,
-            "change_type": change_request.change_type,
-            "status": change_request.status,
-        },
+        payload={"feature_id": change_request.feature_id, "change_type": change_request.change_type, "status": change_request.status},
     )
     db.commit()
     db.refresh(change_request)
@@ -2590,39 +1967,19 @@ def update_change_request(
     _ensure_layer_permission(db, layer, current_user, "can_edit")
     _ensure_change_request_open(change_request)
     if change_request.status == GisChangeRequestStatus.approved.value:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="GIS change request already approved",
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS change request already approved")
     fields = body.model_fields_set
     if not fields:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="At least one change request field is required",
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="At least one change request field is required")
 
-    next_feature_id = (
-        _clean(body.feature_id) if "feature_id" in fields else change_request.feature_id
-    )
-    next_change_type = (
-        body.change_type
-        if "change_type" in fields and body.change_type is not None
-        else GisChangeRequestType(change_request.change_type)
-    )
+    next_feature_id = _clean(body.feature_id) if "feature_id" in fields else change_request.feature_id
+    next_change_type = body.change_type if "change_type" in fields and body.change_type is not None else GisChangeRequestType(change_request.change_type)
     if "change_type" in fields and body.change_type is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="GIS change request type cannot be null",
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS change request type cannot be null")
     next_payload = body.payload if "payload" in fields else change_request.payload_json
     if next_payload is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="GIS change request payload cannot be null",
-        )
-    _validate_change_request_payload(
-        layer, next_change_type, next_feature_id, next_payload
-    )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS change request payload cannot be null")
+    _validate_change_request_payload(layer, next_change_type, next_feature_id, next_payload)
 
     changed_fields = []
     if change_request.feature_id != next_feature_id:
@@ -2653,11 +2010,7 @@ def update_change_request(
         layer_id=layer.id,
         target_type="change_request",
         target_id=change_request.id,
-        payload={
-            "changed_fields": changed_fields,
-            "previous_status": previous_status,
-            "status": change_request.status,
-        },
+        payload={"changed_fields": changed_fields, "previous_status": previous_status, "status": change_request.status},
     )
     db.commit()
     db.refresh(change_request)
@@ -2667,9 +2020,7 @@ def update_change_request(
 def _visible_layer_ids(db: Session, current_user: ApplicationUser) -> list[UUID]:
     return [
         item.id
-        for item in db.scalars(
-            select(GisLayer).where(GisLayer.is_active.is_(True))
-        ).all()
+        for item in db.scalars(select(GisLayer).where(GisLayer.is_active.is_(True))).all()
         if _permission_flags(db, item.id, current_user)["can_view"]
     ]
 
@@ -2690,19 +2041,12 @@ def list_change_requests(
         query = query.where(GisChangeRequest.layer_id.in_(layer_ids))
     if status_filter is not None:
         query = query.where(GisChangeRequest.status == status_filter.value)
-    change_requests = db.scalars(
-        query.order_by(GisChangeRequest.created_at.desc(), GisChangeRequest.id.desc())
-    ).all()
-    return [
-        _change_request_response(change_request) for change_request in change_requests
-    ]
+    change_requests = db.scalars(query.order_by(GisChangeRequest.created_at.desc(), GisChangeRequest.id.desc())).all()
+    return [_change_request_response(change_request) for change_request in change_requests]
 
 
 def request_change_request_changes(
-    db: Session,
-    change_request_id: UUID,
-    body: GisChangeRequestReview,
-    current_user: ApplicationUser,
+    db: Session, change_request_id: UUID, body: GisChangeRequestReview, current_user: ApplicationUser
 ) -> GisChangeRequestResponse:
     change_request = _get_change_request(db, change_request_id)
     layer = _get_layer(db, change_request.layer_id)
@@ -2721,10 +2065,7 @@ def request_change_request_changes(
 
 
 def reject_change_request(
-    db: Session,
-    change_request_id: UUID,
-    body: GisChangeRequestReview,
-    current_user: ApplicationUser,
+    db: Session, change_request_id: UUID, body: GisChangeRequestReview, current_user: ApplicationUser
 ) -> GisChangeRequestResponse:
     change_request = _get_change_request(db, change_request_id)
     layer = _get_layer(db, change_request.layer_id)
@@ -2743,10 +2084,7 @@ def reject_change_request(
 
 
 def approve_change_request(
-    db: Session,
-    change_request_id: UUID,
-    body: GisChangeRequestReview,
-    current_user: ApplicationUser,
+    db: Session, change_request_id: UUID, body: GisChangeRequestReview, current_user: ApplicationUser
 ) -> GisChangeRequestResponse:
     change_request = _get_change_request(db, change_request_id)
     layer = _get_layer(db, change_request.layer_id)
@@ -2777,15 +2115,8 @@ def _is_controlled_apply_enabled(layer: GisLayer) -> bool:
 
 def _layer_table_identifier(db: Session, layer: GisLayer) -> str:
     if not layer.postgis_table:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="GIS apply requires a PostGIS table",
-        )
-    schema = (
-        None
-        if db.get_bind().dialect.name == "sqlite"
-        else layer.postgis_schema or "public"
-    )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS apply requires a PostGIS table")
+    schema = None if db.get_bind().dialect.name == "sqlite" else layer.postgis_schema or "public"
     return _qualified_table(schema, layer.postgis_table)
 
 
@@ -2804,45 +2135,27 @@ def _json_dump(value: dict[str, Any]) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True)
 
 
-def _select_feature_snapshot(
-    db: Session, layer: GisLayer, feature_id: str
-) -> dict[str, Any] | None:
+def _select_feature_snapshot(db: Session, layer: GisLayer, feature_id: str) -> dict[str, Any] | None:
     table_identifier = _layer_table_identifier(db, layer)
     feature_id_column = _layer_feature_id_column(layer)
-    row = (
-        db.execute(
-            text(
-                f"SELECT * FROM {table_identifier} WHERE {_quote_identifier(feature_id_column)} = :feature_id"
-            ),
-            {"feature_id": feature_id},
-        )
-        .mappings()
-        .first()
-    )
+    row = db.execute(
+        text(f"SELECT * FROM {table_identifier} WHERE {_quote_identifier(feature_id_column)} = :feature_id"),
+        {"feature_id": feature_id},
+    ).mappings().first()
     if row is None:
         return None
     return {key: _jsonable_record(value) for key, value in row.items()}
 
 
-def _apply_feature_create(
-    db: Session, layer: GisLayer, payload: dict[str, Any]
-) -> dict[str, Any]:
+def _apply_feature_create(db: Session, layer: GisLayer, payload: dict[str, Any]) -> dict[str, Any]:
     properties = payload["properties"]
     geometry = payload["geometry"]
     geometry_column = layer.geometry_column or "geometry"
     columns = [str(key) for key in properties if key != geometry_column]
-    values = {
-        f"p{index}": _jsonable_record(properties[key])
-        for index, key in enumerate(columns)
-    }
-    if geometry_column not in columns:
-        columns.append(geometry_column)
+    values = {f"p{index}": _jsonable_record(properties[key]) for index, key in enumerate(columns)}
+    columns.append(geometry_column)
     params = {**values, "geometry_json": _json_dump(geometry)}
-    placeholders = [
-        f":p{index}"
-        for index, column in enumerate(columns)
-        if column != geometry_column
-    ]
+    placeholders = [f":p{index}" for index, column in enumerate(columns) if column != geometry_column]
     placeholders.append(_geometry_sql_expression(db, layer))
     db.execute(
         text(
@@ -2853,29 +2166,17 @@ def _apply_feature_create(
         params,
     )
     feature_id_column = _layer_feature_id_column(layer)
-    return {
-        "operation": "insert",
-        "columns": columns,
-        "feature_id": properties.get(feature_id_column),
-    }
+    return {"operation": "insert", "columns": columns, "feature_id": properties.get(feature_id_column)}
 
 
-def _apply_attribute_update(
-    db: Session, layer: GisLayer, change_request: GisChangeRequest
-) -> dict[str, Any]:
+def _apply_attribute_update(db: Session, layer: GisLayer, change_request: GisChangeRequest) -> dict[str, Any]:
     feature_id = change_request.feature_id or ""
     before = _select_feature_snapshot(db, layer, feature_id)
     if before is None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="GIS apply target feature not found",
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS apply target feature not found")
     updates = change_request.payload_json["after"]
     if not updates:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="GIS apply requires attribute updates",
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS apply requires attribute updates")
     geometry_column = layer.geometry_column or "geometry"
     assignments = []
     params = {"feature_id": feature_id}
@@ -2886,10 +2187,7 @@ def _apply_attribute_update(
         assignments.append(f"{_quote_identifier(str(key))} = :{param_name}")
         params[param_name] = _jsonable_record(value)
     if not assignments:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="GIS apply requires non-geometry attributes",
-        )
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS apply requires non-geometry attributes")
     db.execute(
         text(
             f"UPDATE {_layer_table_identifier(db, layer)} SET {', '.join(assignments)} "
@@ -2898,54 +2196,31 @@ def _apply_attribute_update(
         params,
     )
     after = _select_feature_snapshot(db, layer, feature_id)
-    return {
-        "operation": "attribute_update",
-        "feature_id": feature_id,
-        "before": before,
-        "after": after,
-    }
+    return {"operation": "attribute_update", "feature_id": feature_id, "before": before, "after": after}
 
 
-def _apply_geometry_update(
-    db: Session, layer: GisLayer, change_request: GisChangeRequest
-) -> dict[str, Any]:
+def _apply_geometry_update(db: Session, layer: GisLayer, change_request: GisChangeRequest) -> dict[str, Any]:
     feature_id = change_request.feature_id or ""
     before = _select_feature_snapshot(db, layer, feature_id)
     if before is None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="GIS apply target feature not found",
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS apply target feature not found")
     geometry_column = layer.geometry_column or "geometry"
     db.execute(
         text(
             f"UPDATE {_layer_table_identifier(db, layer)} SET {_quote_identifier(geometry_column)} = {_geometry_sql_expression(db, layer)} "
             f"WHERE {_quote_identifier(_layer_feature_id_column(layer))} = :feature_id"
         ),
-        {
-            "feature_id": feature_id,
-            "geometry_json": _json_dump(change_request.payload_json["geometry"]),
-        },
+        {"feature_id": feature_id, "geometry_json": _json_dump(change_request.payload_json["geometry"])},
     )
     after = _select_feature_snapshot(db, layer, feature_id)
-    return {
-        "operation": "geometry_update",
-        "feature_id": feature_id,
-        "before": before,
-        "after": after,
-    }
+    return {"operation": "geometry_update", "feature_id": feature_id, "before": before, "after": after}
 
 
-def _apply_feature_delete(
-    db: Session, layer: GisLayer, change_request: GisChangeRequest
-) -> dict[str, Any]:
+def _apply_feature_delete(db: Session, layer: GisLayer, change_request: GisChangeRequest) -> dict[str, Any]:
     feature_id = change_request.feature_id or ""
     before = _select_feature_snapshot(db, layer, feature_id)
     if before is None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="GIS apply target feature not found",
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS apply target feature not found")
     db.execute(
         text(
             f"DELETE FROM {_layer_table_identifier(db, layer)} "
@@ -2956,9 +2231,7 @@ def _apply_feature_delete(
     return {"operation": "feature_delete", "feature_id": feature_id, "before": before}
 
 
-def _apply_change_request(
-    db: Session, layer: GisLayer, change_request: GisChangeRequest
-) -> dict[str, Any]:
+def _apply_change_request(db: Session, layer: GisLayer, change_request: GisChangeRequest) -> dict[str, Any]:
     if layer.workspace == "catasto" or layer.domain_module == "catasto":
         return {
             "mode": "no_op",
@@ -3000,25 +2273,16 @@ def apply_change_request(
     _ensure_layer_permission(db, layer, current_user, "can_approve")
     _ensure_change_request_open(change_request)
     if change_request.status != GisChangeRequestStatus.approved.value:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="GIS change request must be approved before apply",
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS change request must be approved before apply")
     previous_status = change_request.status
     try:
         apply_result = _apply_change_request(db, layer, change_request)
     except HTTPException:
         raise
     except IntegrityError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="GIS apply violates target constraints",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS apply violates target constraints") from exc
     except SQLAlchemyError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="GIS apply target layer is not available",
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS apply target layer is not available") from exc
     change_request.status = GisChangeRequestStatus.applied.value
     db.flush()
     _write_audit(
@@ -3028,11 +2292,7 @@ def apply_change_request(
         layer_id=layer.id,
         target_type="change_request",
         target_id=change_request.id,
-        payload={
-            "previous_status": previous_status,
-            "status": change_request.status,
-            "apply_result": apply_result,
-        },
+        payload={"previous_status": previous_status, "status": change_request.status, "apply_result": apply_result},
     )
     db.commit()
     db.refresh(change_request)
@@ -3045,17 +2305,6 @@ def _ensure_layer_shapefile_exportable(layer: GisLayer) -> None:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="GIS shapefile export requires a PostGIS geometry layer",
         )
-
-
-def _default_export_path(layer: GisLayer, version_label: str) -> str:
-    export_root = (
-        layer.nas_export_root
-        or settings.gis_nas_health_path.strip()
-        or DEFAULT_NAS_EXPORT_ROOT
-    )
-    return (
-        f"{export_root.rstrip('/')}/{layer.workspace}/{layer.name}/{version_label}.zip"
-    )
 
 
 def _execute_shapefile_export(
@@ -3115,11 +2364,7 @@ def _execute_shapefile_export(
             layer_id=layer.id,
             target_type="export",
             target_id=export.id,
-            payload={
-                "nas_path": export.nas_path,
-                "version_label": export.version_label,
-                "error": export.metadata_json["error"],
-            },
+            payload={"nas_path": export.nas_path, "version_label": export.version_label, "error": export.metadata_json["error"]},
         )
         db.commit()
     else:
@@ -3154,18 +2399,13 @@ def _execute_shapefile_export(
 
 
 def request_shapefile_export(
-    db: Session,
-    layer_id: UUID,
-    body: GisLayerExportRequest,
-    current_user: ApplicationUser,
+    db: Session, layer_id: UUID, body: GisLayerExportRequest, current_user: ApplicationUser
 ) -> GisLayerExportResponse:
     layer = _get_layer(db, layer_id)
     _ensure_layer_permission(db, layer, current_user, "can_approve")
     _ensure_layer_shapefile_exportable(layer)
-    version_label = _clean(body.version_label) or datetime.now(UTC).strftime(
-        "%Y%m%d%H%M%S"
-    )
-    nas_path = _clean(body.nas_path) or _default_export_path(layer, version_label)
+    version_label = _clean(body.version_label) or datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+    nas_path = _clean(body.nas_path) or default_export_path(layer, version_label)
     requested_checksum = _clean(body.checksum_sha256)
     metadata = {"format": "shapefile", "source": "postgis", **body.metadata}
     if requested_checksum:
@@ -3184,82 +2424,7 @@ def request_shapefile_export(
     return _export_response(export)
 
 
-def list_shapefile_exports(
-    db: Session,
-    current_user: ApplicationUser,
-    *,
-    layer_id: UUID | None,
-    export_status: str | None,
-    limit: int,
-    offset: int,
-) -> GisLayerExportListResponse:
-    visible_layer_ids = {item.id for item in list_layers(db, current_user)}
-    if layer_id is not None and layer_id not in visible_layer_ids:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="GIS layer not found",
-        )
-    query = select(GisLayerExport).where(
-        GisLayerExport.layer_id.in_(visible_layer_ids)
-    )
-    if layer_id is not None:
-        query = query.where(GisLayerExport.layer_id == layer_id)
-    if export_status:
-        query = query.where(GisLayerExport.status == _clean(export_status))
-    page, total = _paginated_scalars(
-        db,
-        query,
-        order_by=(GisLayerExport.created_at.desc(), GisLayerExport.id.desc()),
-        limit=limit,
-        offset=offset,
-    )
-    return GisLayerExportListResponse(
-        items=[_export_response(item) for item in page],
-        total=total,
-        limit=limit,
-        offset=offset,
-        has_more=offset + len(page) < total,
-    )
-
-
-def list_audit_logs(
-    db: Session,
-    current_user: ApplicationUser,
-    *,
-    layer_id: UUID | None,
-    event_type: str | None,
-    limit: int,
-    offset: int,
-) -> GisAuditLogListResponse:
-    if not is_gis_admin(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="GIS admin role required",
-        )
-    query = select(GisAuditLog)
-    if layer_id is not None:
-        query = query.where(GisAuditLog.layer_id == layer_id)
-    if event_type:
-        query = query.where(GisAuditLog.event_type == _clean(event_type))
-    page, total = _paginated_scalars(
-        db,
-        query,
-        order_by=(GisAuditLog.created_at.desc(), GisAuditLog.id.desc()),
-        limit=limit,
-        offset=offset,
-    )
-    return GisAuditLogListResponse(
-        items=[_audit_response(item) for item in page],
-        total=total,
-        limit=limit,
-        offset=offset,
-        has_more=offset + len(page) < total,
-    )
-
-
-def build_qgis_project_download(
-    db: Session, current_user: ApplicationUser
-) -> GisQgisProjectArtifact:
+def build_qgis_project_download(db: Session, current_user: ApplicationUser) -> GisQgisProjectArtifact:
     layers = db.scalars(
         select(GisLayer)
         .where(GisLayer.is_active.is_(True), GisLayer.source_type == "postgis")
@@ -3268,14 +2433,10 @@ def build_qgis_project_download(
     visible_layers = [
         layer
         for layer in layers
-        if _is_qgis_project_layer(layer)
-        and _permission_flags(db, layer.id, current_user)["can_view"]
+        if _is_qgis_project_layer(layer) and _permission_flags(db, layer.id, current_user)["can_view"]
     ]
     if not visible_layers:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="No QGIS publishable layers visible for this user",
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No QGIS publishable layers visible for this user")
 
     generated_at = datetime.now(UTC)
     return GisQgisProjectArtifact(
@@ -3289,15 +2450,9 @@ def _scheduled_version_label(now: datetime) -> str:
     return now.astimezone(UTC).strftime("scheduled-%Y%m%dT%H%M%SZ")
 
 
-def _delete_export_artifact(nas_path: str) -> bool:
-    return delete_artifact(nas_path)
-
-
 def _apply_scheduled_export_retention(db: Session, *, retention_count: int) -> int:
     keep_count = max(retention_count, 1)
-    exports = db.scalars(
-        select(GisLayerExport).where(GisLayerExport.status == "completed")
-    ).all()
+    exports = db.scalars(select(GisLayerExport).where(GisLayerExport.status == "completed")).all()
     scheduled_by_layer: dict[UUID, list[GisLayerExport]] = defaultdict(list)
     for export in exports:
         metadata = _metadata_mapping(export.metadata_json)
@@ -3306,14 +2461,7 @@ def _apply_scheduled_export_retention(db: Session, *, retention_count: int) -> i
 
     pruned = 0
     for layer_exports in scheduled_by_layer.values():
-        layer_exports.sort(
-            key=lambda item: (
-                item.completed_at or item.created_at,
-                item.created_at,
-                str(item.id),
-            ),
-            reverse=True,
-        )
+        layer_exports.sort(key=lambda item: (item.completed_at or item.created_at, item.created_at, str(item.id)), reverse=True)
         for export in layer_exports[keep_count:]:
             file_deleted = _delete_export_artifact(export.nas_path)
             _write_audit(
@@ -3369,12 +2517,9 @@ def run_scheduled_shapefile_exports(
             db,
             layer=layer,
             version_label=version_label,
-            nas_path=_default_export_path(layer, version_label),
+            nas_path=default_export_path(layer, version_label),
             metadata=metadata,
-            artifact_metadata={
-                "trigger": "scheduled",
-                "scheduled_at": metadata["scheduled_at"],
-            },
+            artifact_metadata={"trigger": "scheduled", "scheduled_at": metadata["scheduled_at"]},
             actor=None,
             requested_by_user_id=None,
             requested_event_type="export.scheduled",
@@ -3393,17 +2538,11 @@ def run_scheduled_shapefile_exports(
     )
 
 
-def get_qgis_governance(
-    db: Session, current_user: ApplicationUser
-) -> GisQgisGovernanceResponse:
+def get_qgis_governance(db: Session, current_user: ApplicationUser) -> GisQgisGovernanceResponse:
     if not is_gis_admin(current_user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="GIS admin role required")
     layers = db.scalars(
-        select(GisLayer)
-        .where(GisLayer.source_type == "postgis")
-        .order_by(GisLayer.workspace.asc(), GisLayer.name.asc())
+        select(GisLayer).where(GisLayer.source_type == "postgis").order_by(GisLayer.workspace.asc(), GisLayer.name.asc())
     ).all()
     return GisQgisGovernanceResponse.model_validate(build_qgis_governance(list(layers)))
 
@@ -3417,17 +2556,14 @@ def get_ogc_poc(db: Session, current_user: ApplicationUser) -> GisOgcPocResponse
     visible_layers = [
         layer
         for layer in layers
-        if _is_qgis_project_layer(layer)
-        and _permission_flags(db, layer.id, current_user)["can_view"]
+        if _is_qgis_project_layer(layer) and _permission_flags(db, layer.id, current_user)["can_view"]
     ]
-    warnings = (
-        ["No visible OGC publishable layers for this user."]
-        if not visible_layers
-        else [
-            "POC read-only only: keep WFS-T disabled.",
-            "Protect /gis/ogc/ behind GAIA authentication, VPN or trusted reverse proxy.",
-        ]
-    )
+    warnings = [
+        "No visible OGC publishable layers for this user."
+    ] if not visible_layers else [
+        "POC read-only only: keep WFS-T disabled.",
+        "Protect /gis/ogc/ behind GAIA authentication, VPN or trusted reverse proxy.",
+    ]
     return GisOgcPocResponse(
         mode="read_only_poc",
         recommended_server="qgis_server",

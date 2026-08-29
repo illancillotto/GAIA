@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from time import perf_counter
+from threading import Lock
+from time import monotonic, perf_counter
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
@@ -12,6 +13,12 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.modules.gis.artifact_storage import probe_artifact_storage
+from app.modules.gis.external_sources import (
+    ExternalSourceConfigurationError,
+    ExternalSourceDefinition,
+    build_capabilities_url,
+    get_external_sources,
+)
 from app.modules.gis.models import GisLayer, GisLayerExport
 from app.modules.gis.schemas import (
     GisRuntimeComponentHealth,
@@ -31,7 +38,13 @@ _COMPONENT_LABELS = {
     "martin": "Martin tile server",
     "qgis": "QGIS Server",
     "nas": "NAS GIS",
+    "external_sources": "Sorgenti GIS esterne",
 }
+_EXTERNAL_HEALTH_TTL_SECONDS = 300.0
+_EXTERNAL_HEALTH_CACHE_LOCK = Lock()
+_EXTERNAL_HEALTH_CACHE: (
+    tuple[tuple[object, ...], float, GisRuntimeComponentHealth] | None
+) = None
 
 
 def _runtime_component(
@@ -157,7 +170,8 @@ def _latest_scheduled_export_health(db: Session) -> _ScheduledExportHealth:
                 GisLayerExport.version_label == version,
                 GisLayerExport.status == status,
             )
-        ) or 0
+        )
+        or 0
         for status in ("completed", "failed")
     }
     return _ScheduledExportHealth(
@@ -167,11 +181,19 @@ def _latest_scheduled_export_health(db: Session) -> _ScheduledExportHealth:
     )
 
 
-def _nas_status(readable: bool, writable: bool, scheduled_failed: int) -> tuple[str, str]:
+def _nas_status(
+    readable: bool, writable: bool, scheduled_failed: int
+) -> tuple[str, str]:
     if not (readable and writable):
-        return "critical", "Percorso NAS assente o senza permessi di lettura e scrittura."
+        return (
+            "critical",
+            "Percorso NAS assente o senza permessi di lettura e scrittura.",
+        )
     if scheduled_failed:
-        return "warning", "Percorso NAS disponibile, ma l'ultimo ciclo di export contiene errori."
+        return (
+            "warning",
+            "Percorso NAS disponibile, ma l'ultimo ciclo di export contiene errori.",
+        )
     return "ok", "Percorso NAS disponibile in lettura e scrittura."
 
 
@@ -220,6 +242,108 @@ def _probe_nas(db: Session, checked_at: datetime) -> GisRuntimeComponentHealth:
     )
 
 
+def _external_health_fingerprint() -> tuple[object, ...]:
+    return tuple(
+        (
+            source.source_key,
+            source.base_url,
+            source.enabled,
+            source.timeout_seconds,
+        )
+        for source in get_external_sources()
+    )
+
+
+def clear_external_health_cache() -> None:
+    global _EXTERNAL_HEALTH_CACHE
+    with _EXTERNAL_HEALTH_CACHE_LOCK:
+        _EXTERNAL_HEALTH_CACHE = None
+
+
+def _probe_external_source(
+    source: ExternalSourceDefinition,
+) -> dict[str, object]:
+    started_at = perf_counter()
+    try:
+        url = build_capabilities_url(source)
+        with urlopen(
+            url,
+            timeout=min(
+                source.timeout_seconds,
+                settings.gis_runtime_health_timeout_seconds,
+            ),
+        ) as response:
+            status_code = response.getcode()
+            response.read(1)
+        source_status = "ok" if 200 <= status_code < 400 else "critical"
+        detail: dict[str, object] = {"http_status": status_code}
+    except (
+        ExternalSourceConfigurationError,
+        HTTPError,
+        URLError,
+        TimeoutError,
+        OSError,
+        ValueError,
+    ) as exc:
+        source_status = "critical"
+        detail = {"error": str(exc)}
+    return {
+        "source_key": source.source_key,
+        "status": source_status,
+        "latency_ms": round((perf_counter() - started_at) * 1000, 1),
+        **detail,
+    }
+
+
+def _external_sources_health(
+    checked_at: datetime,
+) -> GisRuntimeComponentHealth:
+    global _EXTERNAL_HEALTH_CACHE
+    sources = get_external_sources()
+    if not settings.gis_external_layers_enabled:
+        return _runtime_component(
+            key="external_sources",
+            component_status="not_configured",
+            message="Layer GIS esterni disabilitati in questo ambiente.",
+            checked_at=checked_at,
+            details={"sources": [source.source_key for source in sources]},
+        )
+
+    fingerprint = _external_health_fingerprint()
+    cached_at = monotonic()
+    with _EXTERNAL_HEALTH_CACHE_LOCK:
+        cached = _EXTERNAL_HEALTH_CACHE
+        if (
+            cached is not None
+            and cached[0] == fingerprint
+            and cached_at - cached[1] < _EXTERNAL_HEALTH_TTL_SECONDS
+        ):
+            return cached[2]
+
+    results = [_probe_external_source(source) for source in sources]
+    ok_count = sum(result["status"] == "ok" for result in results)
+    if ok_count == len(results):
+        component_status = "ok"
+        message = "Tutte le sorgenti GIS esterne rispondono correttamente."
+    elif ok_count:
+        component_status = "warning"
+        message = "Alcune sorgenti GIS esterne non sono raggiungibili."
+    else:
+        component_status = "critical"
+        message = "Nessuna sorgente GIS esterna e raggiungibile."
+    component = _runtime_component(
+        key="external_sources",
+        component_status=component_status,
+        message=message,
+        checked_at=checked_at,
+        latency_ms=round(sum(float(item["latency_ms"]) for item in results), 1),
+        details={"cache_ttl_seconds": 300, "sources": results},
+    )
+    with _EXTERNAL_HEALTH_CACHE_LOCK:
+        _EXTERNAL_HEALTH_CACHE = (fingerprint, cached_at, component)
+    return component
+
+
 def get_runtime_health(db: Session) -> GisRuntimeHealthResponse:
     checked_at = datetime.now(UTC)
     components = [
@@ -237,6 +361,7 @@ def get_runtime_health(db: Session) -> GisRuntimeHealthResponse:
             checked_at=checked_at,
         ),
         _probe_nas(db, checked_at),
+        _external_sources_health(checked_at),
     ]
     statuses = {component.status for component in components}
     overall_status = (

@@ -1,28 +1,31 @@
 from __future__ import annotations
 
+import uuid
 from collections.abc import Generator
 from datetime import datetime
-import uuid
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-
 from app.core.datetime_compat import UTC
 from app.core.security import hash_password
 from app.db.base import Base
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.presenze.models import PresenzeCredential, PresenzeSyncJob
 from app.modules.presenze.services import queue_worker
-
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
 
 
 @pytest.fixture(autouse=True)
-def setup_database() -> Generator[None, None, None]:
+def setup_database(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
+    monkeypatch.setattr(
+        queue_worker,
+        "PRESENZE_HEARTBEAT",
+        type("FakeHeartbeat", (), {"touch": lambda self, **_kwargs: None})(),
+    )
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     queue_worker._ACTIVE_PROCESSES.clear()
@@ -167,6 +170,34 @@ def test_reap_finished_processes_handles_running_success_and_failed_children(cap
     assert "exit code 17" in caplog.text
 
 
+def test_heartbeat_active_processes_renews_owned_jobs(monkeypatch: pytest.MonkeyPatch) -> None:
+    job_id = _create_pending_job()
+    monkeypatch.setattr(queue_worker, "SessionLocal", TestingSessionLocal)
+    monkeypatch.setattr(queue_worker.os, "getpid", lambda: 7777)
+
+    class DummyProcess:
+        pid = 8888
+
+        def poll(self):
+            return None
+
+    monkeypatch.setattr(queue_worker, "launch_sync_worker_process", lambda _job: DummyProcess())
+
+    assert queue_worker._heartbeat_active_processes() == 0
+    assert queue_worker._claim_and_launch_one() is True
+    assert queue_worker._heartbeat_active_processes() == 1
+
+    db = TestingSessionLocal()
+    try:
+        job = db.get(PresenzeSyncJob, uuid.UUID(job_id))
+        assert job is not None
+        assert job.worker_id == queue_worker.WORKER_INSTANCE_ID
+        assert job.heartbeat_at is not None
+        assert job.lease_expires_at is not None
+    finally:
+        db.close()
+
+
 def test_terminate_active_processes_covers_signal_branches(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     class DummyProcess:
         def __init__(self, pid: int):
@@ -192,13 +223,54 @@ def test_terminate_active_processes_covers_signal_branches(monkeypatch: pytest.M
     assert "could not terminate child job oserror" in caplog.text
 
 
+def test_handle_termination_stops_children_before_forwarding_signal(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[object, ...]] = []
+    monkeypatch.setattr(queue_worker, "_terminate_active_processes", lambda: calls.append(("terminate",)))
+    monkeypatch.setattr(
+        queue_worker.sync_worker,
+        "_handle_termination",
+        lambda signum, frame: calls.append(("worker", signum, frame)),
+    )
+
+    queue_worker._handle_termination(queue_worker.signal.SIGTERM, None)
+
+    assert calls == [("terminate",), ("worker", queue_worker.signal.SIGTERM, None)]
+
+
+def test_heartbeat_supervisor_renews_leases_and_publishes_active_jobs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[object] = []
+    queue_worker._ACTIVE_PROCESSES["job"] = object()
+    monkeypatch.setattr(queue_worker, "_heartbeat_active_processes", lambda: calls.append("leases"))
+    monkeypatch.setattr(
+        queue_worker,
+        "PRESENZE_HEARTBEAT",
+        type(
+            "RecordingHeartbeat",
+            (),
+            {"touch": lambda self, **kwargs: calls.append(kwargs)},
+        )(),
+    )
+
+    queue_worker._heartbeat_supervisor()
+
+    assert calls == ["leases", {"details": {"active_jobs": 1}}]
+
+
 def test_main_parallel_installs_handlers_and_sleeps_when_idle(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[tuple[object, object]] = []
+    heartbeat_calls: list[dict[str, object]] = []
     monkeypatch.setattr(queue_worker.signal, "signal", lambda signum, handler: calls.append((signum, handler)))
     monkeypatch.setattr(queue_worker.settings, "presenze_worker_concurrency", 2)
     monkeypatch.setattr(queue_worker.settings, "presenze_worker_poll_seconds", 0.0)
     monkeypatch.setattr(queue_worker, "_reap_finished_processes", lambda: None)
     monkeypatch.setattr(queue_worker, "_claim_and_launch_one", lambda: False)
+    monkeypatch.setattr(
+        queue_worker,
+        "_heartbeat_supervisor",
+        lambda: heartbeat_calls.append({"details": {"active_jobs": 0}}),
+    )
 
     def _stop(_seconds: float) -> None:
         raise KeyboardInterrupt()
@@ -210,6 +282,7 @@ def test_main_parallel_installs_handlers_and_sleeps_when_idle(monkeypatch: pytes
 
     assert calls[0][0] == queue_worker.signal.SIGTERM
     assert calls[1][0] == queue_worker.signal.SIGINT
+    assert heartbeat_calls == [{"details": {"active_jobs": 0}}]
 
 
 def test_main_parallel_records_successful_launch_before_idle_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -217,6 +290,7 @@ def test_main_parallel_records_successful_launch_before_idle_sleep(monkeypatch: 
     monkeypatch.setattr(queue_worker.settings, "presenze_worker_concurrency", 2)
     monkeypatch.setattr(queue_worker.settings, "presenze_worker_poll_seconds", 0.0)
     monkeypatch.setattr(queue_worker, "_reap_finished_processes", lambda: None)
+    monkeypatch.setattr(queue_worker, "_heartbeat_active_processes", lambda: 0)
     claim_results = iter([True, False, False])
     monkeypatch.setattr(queue_worker, "_claim_and_launch_one", lambda: next(claim_results))
 
@@ -229,12 +303,23 @@ def test_main_parallel_records_successful_launch_before_idle_sleep(monkeypatch: 
         queue_worker.main()
 
 
-def test_main_installs_signal_handlers_and_sleeps_when_idle(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: list[tuple[object, object]] = []
-    monkeypatch.setattr(queue_worker.signal, "signal", lambda signum, handler: calls.append((signum, handler)))
+def test_main_parallel_sleeps_when_capacity_is_already_full(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class DummyProcess:
+        pid = 8888
+
+    queue_worker._ACTIVE_PROCESSES["active"] = DummyProcess()
+    monkeypatch.setattr(queue_worker.signal, "signal", lambda *_args: None)
     monkeypatch.setattr(queue_worker.settings, "presenze_worker_concurrency", 1)
     monkeypatch.setattr(queue_worker.settings, "presenze_worker_poll_seconds", 0.0)
-    monkeypatch.setattr(queue_worker, "run_once", lambda: False)
+    monkeypatch.setattr(queue_worker, "_reap_finished_processes", lambda: None)
+    monkeypatch.setattr(queue_worker, "_heartbeat_active_processes", lambda: 1)
+    monkeypatch.setattr(
+        queue_worker,
+        "_claim_and_launch_one",
+        lambda: pytest.fail("claim must not run while capacity is full"),
+    )
 
     def _stop(_seconds: float) -> None:
         raise KeyboardInterrupt()
@@ -244,9 +329,27 @@ def test_main_installs_signal_handlers_and_sleeps_when_idle(monkeypatch: pytest.
     with pytest.raises(KeyboardInterrupt):
         queue_worker.main()
 
-    assert calls == [
-        (queue_worker.signal.SIGTERM, queue_worker.sync_worker._handle_termination),
-        (queue_worker.signal.SIGINT, queue_worker.sync_worker._handle_termination),
+
+def test_main_uses_parallel_supervisor_with_concurrency_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[object, object]] = []
+    monkeypatch.setattr(queue_worker.signal, "signal", lambda signum, handler: calls.append((signum, handler)))
+    monkeypatch.setattr(queue_worker.settings, "presenze_worker_concurrency", 1)
+    monkeypatch.setattr(queue_worker.settings, "presenze_worker_poll_seconds", 0.0)
+    monkeypatch.setattr(queue_worker, "_reap_finished_processes", lambda: None)
+    monkeypatch.setattr(queue_worker, "_heartbeat_active_processes", lambda: 0)
+    monkeypatch.setattr(queue_worker, "_claim_and_launch_one", lambda: False)
+
+    def _stop(_seconds: float) -> None:
+        raise KeyboardInterrupt()
+
+    monkeypatch.setattr(queue_worker.time, "sleep", _stop)
+
+    with pytest.raises(KeyboardInterrupt):
+        queue_worker.main()
+
+    assert [signum for signum, _handler in calls] == [
+        queue_worker.signal.SIGTERM,
+        queue_worker.signal.SIGINT,
     ]
 
 

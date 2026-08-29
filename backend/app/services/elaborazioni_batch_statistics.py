@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import UTC, datetime
-from typing import Iterable
+from collections.abc import Iterable
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import select
@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 
 from app.models.catasto import CatastoBatch, CatastoCredential, CatastoVisuraRequest
 from app.modules.elaborazioni.telemetry_models import SisterPortalEvent
-
 
 TERMINAL_STATUSES = {"completed", "failed", "skipped", "not_found"}
 BATCH_TERMINAL_STATUSES = {"completed", "failed", "cancelled"}
@@ -20,8 +19,8 @@ def _as_utc(value: datetime | None) -> datetime | None:
     if value is None:
         return None
     if value.tzinfo is None:
-        return value.replace(tzinfo=UTC)
-    return value.astimezone(UTC)
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def _round_rate(value: float) -> float:
@@ -107,7 +106,7 @@ def _resolve_duration_seconds(
     if started_at is None:
         return 0
     completed_at = _as_utc(batch.completed_at) if batch.status in BATCH_TERMINAL_STATUSES else None
-    end_at = completed_at or _as_utc(now) or datetime.now(UTC)
+    end_at = completed_at or _as_utc(now) or datetime.now(timezone.utc)
     return max(round((end_at - started_at).total_seconds()), 0)
 
 

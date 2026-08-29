@@ -3,10 +3,26 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime, time
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, String, Text, Time, UniqueConstraint, Uuid, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    Time,
+    UniqueConstraint,
+    Uuid,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
+from app.modules.presenze.sync_models import (
+    PresenzeSyncJob,  # noqa: F401 - compatibility re-export
+)
 
 PRESENZE_HOLIDAY_KIND_ORDINARY = "ordinary"
 PRESENZE_HOLIDAY_KIND_SUPPRESSED = "suppressed"
@@ -312,38 +328,6 @@ class PresenzeImportJob(Base):
     records_imported: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     records_skipped: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     records_errors: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
-    params_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-
-
-class PresenzeSyncJob(Base):
-    __tablename__ = "presenze_sync_jobs"
-
-    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
-    requested_by_user_id: Mapped[int] = mapped_column(
-        ForeignKey("application_users.id", ondelete="CASCADE"), nullable=False, index=True
-    )
-    credential_id: Mapped[int | None] = mapped_column(
-        ForeignKey("presenze_credentials.id", ondelete="SET NULL"), nullable=True, index=True
-    )
-    import_job_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("presenze_import_jobs.id", ondelete="SET NULL"), nullable=True, index=True
-    )
-    period_start: Mapped[date] = mapped_column(Date, nullable=False, index=True)
-    period_end: Mapped[date] = mapped_column(Date, nullable=False, index=True)
-    collaborator_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    records_imported: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    records_skipped: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    records_errors: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    json_artifact_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    worker_log_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    worker_pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    max_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
     error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     params_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

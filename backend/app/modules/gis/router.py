@@ -3,13 +3,29 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user, require_module
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
-from app.modules.gis import runtime_health, services
+from app.modules.gis import (
+    catalog_queries,
+    external_proxy,
+    runtime_health,
+    services,
+)
 from app.modules.gis.schemas import (
     GisAnnotationCreate,
     GisAnnotationResponse,
@@ -22,6 +38,7 @@ from app.modules.gis.schemas import (
     GisChangeRequestReview,
     GisChangeRequestStatus,
     GisChangeRequestUpdate,
+    GisExternalSourceResponse,
     GisLayerCreate,
     GisLayerExportListResponse,
     GisLayerExportRequest,
@@ -110,6 +127,64 @@ def get_runtime_health(
     return runtime_health.get_runtime_health(db)
 
 
+@router.get("/external/sources", response_model=list[GisExternalSourceResponse])
+def list_external_sources(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+) -> list[GisExternalSourceResponse]:
+    if not services.is_gis_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="GIS admin role required",
+        )
+    return [
+        GisExternalSourceResponse.model_validate(item)
+        for item in external_proxy.list_external_source_statuses()
+    ]
+
+
+def _external_proxy_response(payload: external_proxy.ExternalProxyPayload) -> Response:
+    return Response(
+        content=payload.content,
+        status_code=payload.status_code,
+        media_type=payload.media_type,
+        headers={"X-GAIA-External-Cache": payload.cache_status},
+    )
+
+
+@router.get("/external/{layer_id}/wms")
+def proxy_external_wms(
+    layer_id: UUID,
+    request: Request,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> Response:
+    payload = external_proxy.proxy_external_request(
+        db,
+        layer_id,
+        current_user,
+        service="wms",
+        query_items=request.query_params.multi_items(),
+    )
+    return _external_proxy_response(payload)
+
+
+@router.get("/external/{layer_id}/wfs")
+def proxy_external_wfs(
+    layer_id: UUID,
+    request: Request,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> Response:
+    payload = external_proxy.proxy_external_request(
+        db,
+        layer_id,
+        current_user,
+        service="wfs",
+        query_items=request.query_params.multi_items(),
+    )
+    return _external_proxy_response(payload)
+
+
 @router.get("/qgis/governance", response_model=GisQgisGovernanceResponse)
 def get_qgis_governance(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
@@ -184,7 +259,7 @@ def list_shapefile_imports(
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> GisShapefileImportListResponse:
-    return services.list_shapefile_imports(
+    return catalog_queries.list_shapefile_imports(
         db,
         current_user,
         import_status=import_status,
@@ -212,9 +287,7 @@ def preview_shapefile_import(
     limit: Annotated[int, Query(ge=1, le=100)] = 10,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> GisShapefileImportPreviewResponse:
-    return services.preview_shapefile_import(
-        db, import_id, current_user, limit=limit, offset=offset
-    )
+    return services.preview_shapefile_import(db, import_id, current_user, limit=limit, offset=offset)
 
 
 @router.post(
@@ -227,9 +300,7 @@ def create_change_requests_from_shapefile_import(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> GisShapefileImportChangeRequestResponse:
-    return services.create_change_requests_from_shapefile_import(
-        db, import_id, body, current_user
-    )
+    return services.create_change_requests_from_shapefile_import(db, import_id, body, current_user)
 
 
 @router.post("/imports/{import_id}/validate", response_model=GisShapefileImportResponse)
@@ -305,7 +376,7 @@ def list_layer_features(
     limit: int = Query(default=20, ge=1, le=50),
     offset: int = Query(default=0, ge=0),
 ) -> GisLayerFeatureListResponse:
-    return services.list_layer_features(
+    return catalog_queries.list_layer_features(
         db,
         layer_id,
         current_user,
@@ -325,9 +396,7 @@ def list_annotations(
     status_filter: GisAnnotationStatus | None = Query(None, alias="status"),
     feature_id: str | None = None,
 ) -> list[GisAnnotationResponse]:
-    return services.list_annotations(
-        db, layer_id, current_user, status_filter=status_filter, feature_id=feature_id
-    )
+    return services.list_annotations(db, layer_id, current_user, status_filter=status_filter, feature_id=feature_id)
 
 
 @router.post(
@@ -368,9 +437,7 @@ def mark_annotation_in_review(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> GisAnnotationResponse:
-    return services.set_annotation_status(
-        db, layer_id, annotation_id, GisAnnotationStatus.in_review, current_user
-    )
+    return services.set_annotation_status(db, layer_id, annotation_id, GisAnnotationStatus.in_review, current_user)
 
 
 @router.post(
@@ -383,9 +450,7 @@ def close_annotation(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> GisAnnotationResponse:
-    return services.set_annotation_status(
-        db, layer_id, annotation_id, GisAnnotationStatus.closed, current_user
-    )
+    return services.set_annotation_status(db, layer_id, annotation_id, GisAnnotationStatus.closed, current_user)
 
 
 @router.post(
@@ -398,9 +463,7 @@ def reject_annotation(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> GisAnnotationResponse:
-    return services.set_annotation_status(
-        db, layer_id, annotation_id, GisAnnotationStatus.rejected, current_user
-    )
+    return services.set_annotation_status(db, layer_id, annotation_id, GisAnnotationStatus.rejected, current_user)
 
 
 @router.get(
@@ -460,9 +523,7 @@ def list_change_requests(
     status_filter: GisChangeRequestStatus | None = Query(None, alias="status"),
     layer_id: UUID | None = None,
 ) -> list[GisChangeRequestResponse]:
-    return services.list_change_requests(
-        db, current_user, status_filter=status_filter, layer_id=layer_id
-    )
+    return services.list_change_requests(db, current_user, status_filter=status_filter, layer_id=layer_id)
 
 
 @router.patch(
@@ -487,9 +548,7 @@ def request_change_request_changes(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> GisChangeRequestResponse:
-    return services.request_change_request_changes(
-        db, change_request_id, body, current_user
-    )
+    return services.request_change_request_changes(db, change_request_id, body, current_user)
 
 
 @router.post(
@@ -553,7 +612,7 @@ def list_shapefile_exports(
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> GisLayerExportListResponse:
-    return services.list_shapefile_exports(
+    return catalog_queries.list_shapefile_exports(
         db,
         current_user,
         layer_id=layer_id,
@@ -572,7 +631,7 @@ def list_audit_logs(
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> GisAuditLogListResponse:
-    return services.list_audit_logs(
+    return catalog_queries.list_audit_logs(
         db,
         current_user,
         layer_id=layer_id,

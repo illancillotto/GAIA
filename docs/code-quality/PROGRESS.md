@@ -620,3 +620,58 @@ restano escluse.
   `git diff --check`: `PASS`.
 - Baseline complexity, eccezioni ed esclusioni: `NONE`; nessun runtime nel
   perimetro di questa estensione del tooling.
+
+## Hotspot GIS - services baseline drift (2026-08-28)
+
+- Branch: `quality/gis-services-baseline-drift-20260828`, derivato da
+  `main@7a27fdaf`. Scope: singolo hotspot
+  `backend/app/modules/gis/services.py` e impostazioni dichiarative necessarie
+  a rendere verificabile M21; nessun file M21 incluso.
+- Provenienza: tutto il drift GIS rispetto alla baseline sorgente
+  `b1d4a988` deriva da `268234f9`. Su `services.py` il report passa da `2304`
+  a `3145` LOC (`+841`), non `+834`; su `config.py` da `653` a `689` (`+36`).
+- Classificazione completa `services.py`: `74` callable con fingerprint AST
+  invariato e `+521` LOC di sola riformattazione; `_default_export_path` con
+  regressione funzionale reale (`cyclomatic +1`, `cognitive +1`, `LOC +6`);
+  nove callable nuove per `301` LOC, con errori nuovi su
+  `_feature_selector_columns` e `list_layer_features`; nessun errore di
+  matching.
+- Correzione: ripristinata la rappresentazione delle callable AST-equivalenti;
+  query catalogo/feature, builder di risposta e supporto export estratti in
+  moduli sotto soglia; `list_layer_features` scomposta; settings GIS e storage
+  ereditate da classi dichiarative dedicate. Route, payload, alias di settings,
+  transazioni e comportamento osservabile restano invariati.
+- Metriche dopo: `services.py` LOC `2266`, callable `110`, cyclomatic sum/max
+  `540/22`, cognitive sum/max `530/27`; `catalog_queries.py` LOC `314`,
+  cyclomatic max `9`, cognitive max `11`; `service_support.py` LOC `25` e
+  `response_builders.py` LOC `50`, nessuna violation. `config.py` LOC `612`;
+  il margine copre i `30` LOC M21 senza aggiornare la baseline.
+- `make complexity-ratchet BASE_REF=main` con motore Babel disponibile:
+  `PASS`, `findings: []`. `make quality-test`: `46 passed`.
+- `make complexity-baseline` e stato eseguito solo dopo il ratchet e ha
+  correttamente rifiutato l'update per regressioni non classificate di altri
+  domini gia presenti su `main`. Baseline, scope, eccezioni ed esclusioni
+  restano invariati; nessun JSON modificato manualmente.
+- Esito: `IMPROVED`. Debito residuo: `services.py` resta sopra la soglia file
+  legacy, ma senza crescita rispetto alla baseline; il riallineamento globale
+  della baseline richiede change separate per i finding non GIS rifiutati.
+
+### Follow-up callable headroom M21
+
+- Il primo riallineamento M21 ha isolato tre aumenti LOC reali nelle callable
+  legacy `_validate_change_request_payload` (`+1`), `create_layer` (`+1`) e
+  `update_layer_metadata` (`+2`); nessun aggiornamento baseline eseguito.
+- Costruzione `GisLayer` e calcolo degli update metadata sono stati estratti in
+  `_new_layer` e `_layer_metadata_updates`. I dati, gli alias, il controllo
+  admin, l'audit e i confini di commit/flush restano invariati.
+- Test GIS/config: `52 passed`, coverage `1384/1384` statement, `100%` su
+  `services.py` e `config.py`; `make lint-backend` e `git diff --check` verdi.
+- Ratchet della follow-up contro `main@691bec1d`: `PASS`, `findings: []`.
+  Baseline, eccezioni ed esclusioni restano invariate.
+- Il successivo gate M21 non ha piu rilevato regressioni callable, ma solo il
+  file-level `services.py 2304 -> 2323`. Il builder puro `_layer_response` e
+  stato quindi spostato in `response_builders.py`, mantenendo in `services.py`
+  il wrapper compatibile e la risoluzione dell'access level esistente.
+- Verifica dell'estrazione finale: `41 passed`, coverage `1116/1116` statement
+  (`100%`), lint e diff check verdi; ratchet contro `main@be143751` `PASS`,
+  `findings: []`. Nessun aggiornamento baseline.

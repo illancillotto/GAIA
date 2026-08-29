@@ -10,15 +10,32 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from app.core.database import SessionLocal
+from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import StaleDataError
+
 from app.core.config import settings
+from app.core.database import SessionLocal
 from app.core.datetime_compat import UTC
 from app.models.application_user import ApplicationUser
 from app.modules.presenze.models import PresenzeImportJob, PresenzeSyncJob
-from app.modules.presenze.services.credentials import mark_credential_error, mark_credential_used, pick_credential
-from app.modules.presenze.services.import_jobs import create_import_job, finalize_import_job, import_collaborator_payload, parsed_collaborator_from_jsonable
+from app.modules.presenze.services.credentials import (
+    mark_credential_error,
+    mark_credential_used,
+    pick_credential,
+)
+from app.modules.presenze.services.import_jobs import (
+    create_import_job,
+    finalize_import_job,
+    import_collaborator_payload,
+    parsed_collaborator_from_jsonable,
+)
 from app.modules.presenze.services.live_login import run_scrape_with_credentials
-from app.modules.presenze.services.sync_runtime import get_sync_artifact_dir, mark_linked_import_job_terminal, prepare_sync_job_artifacts
+from app.modules.presenze.services.sync_runtime import (
+    clear_sync_job_lease,
+    get_sync_artifact_dir,
+    prepare_sync_job_artifacts,
+    touch_sync_job_lease,
+)
 
 CURRENT_JOB_ID: str | None = None
 FAILED_EMPLOYEE_RETRY_TRIGGER = "auto_failed_employee_retry"
@@ -156,32 +173,7 @@ def _enqueue_failed_employee_retry_jobs(
     return jobs
 
 
-def _mark_job_cancelled(job_id: str) -> None:
-    db = SessionLocal()
-    try:
-        job = db.get(PresenzeSyncJob, job_id)
-        if job is None or job.status == "cancelled":
-            return
-        finished_at = datetime.now(UTC)
-        job.status = "cancelled"
-        job.error_detail = "Sync job cancelled by user"
-        job.finished_at = finished_at
-        mark_linked_import_job_terminal(
-            db,
-            sync_job=job,
-            status="cancelled",
-            finished_at=finished_at,
-            error_detail=job.error_detail,
-        )
-        db.add(job)
-        db.commit()
-    finally:
-        db.close()
-
-
 def _handle_termination(signum: int, _frame) -> None:
-    if CURRENT_JOB_ID is not None:
-        _mark_job_cancelled(CURRENT_JOB_ID)
     raise SystemExit(128 + signum)
 
 
@@ -191,13 +183,87 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _lease_token_matches(job: PresenzeSyncJob | None, claimed_lease_token: str | None) -> bool:
+    return job is not None and (
+        (job.lease_token is None and claimed_lease_token is None)
+        or str(job.lease_token) == claimed_lease_token
+    )
+
+
+def _mark_failed_import_job(
+    db: Session,
+    failed_job: PresenzeSyncJob,
+    error_detail: str,
+) -> None:
+    if failed_job.import_job_id is None:
+        return
+    import_job = db.get(PresenzeImportJob, failed_job.import_job_id)
+    if import_job is None or import_job.status == "completed":
+        return
+    import_job.status = "failed"
+    import_job.error_detail = error_detail
+    import_job.finished_at = failed_job.finished_at
+    db.add(import_job)
+
+
+def _persist_sync_job_failure(
+    job_id: str,
+    claimed_lease_token: str | None,
+    exc: Exception,
+) -> None:
+    rollback_db = SessionLocal()
+    try:
+        failed_job = rollback_db.get(PresenzeSyncJob, job_id)
+        if not _lease_token_matches(failed_job, claimed_lease_token) or failed_job.status == "cancelled":
+            return
+        failed_job.status = "failed"
+        failed_job.error_detail = str(exc)
+        failed_job.finished_at = datetime.now(UTC)
+        failed_params = dict(failed_job.params_json or {})
+        failed_params["progress"] = {
+            **dict(failed_params.get("progress") or {}),
+            "state": "failed",
+            "finished_at": failed_job.finished_at.isoformat(),
+            "last_event": "job_failed",
+            "last_event_at": datetime.now(UTC).isoformat(),
+            "error": str(exc),
+        }
+        failed_job.params_json = failed_params
+        clear_sync_job_lease(failed_job)
+        rollback_db.add(failed_job)
+        _mark_failed_import_job(rollback_db, failed_job, str(exc))
+        rollback_db.commit()
+    finally:
+        rollback_db.close()
+
+
+def _report_stale_sync_job_lease(db: Session, job_id: str) -> int:
+    db.rollback()
+    print(f"Presenze sync job {job_id} lost its lease fencing generation", file=sys.stderr)
+    return 75
+
+
+def _report_sync_job_failure(
+    db: Session,
+    job_id: str,
+    claimed_lease_token: str | None,
+    exc: Exception,
+) -> int:
+    db.rollback()
+    _persist_sync_job_failure(job_id, claimed_lease_token, exc)
+    print(traceback.format_exc(), file=sys.stderr)
+    return 1
+
+
 def run_job_by_id(job_id: str) -> int:
     db = SessionLocal()
+    claimed_lease_token: str | None = None
     try:
         job = db.get(PresenzeSyncJob, job_id)
         if job is None:
             print(f"Presenze sync job {job_id} not found", file=sys.stderr)
             return 2
+        claimed_lease_token = str(job.lease_token) if job.lease_token is not None else None
 
         artifact_dir = get_sync_artifact_dir(str(job.id))
         artifact_dir.mkdir(parents=True, exist_ok=True)
@@ -215,7 +281,8 @@ def run_job_by_id(job_id: str) -> int:
         job.worker_pid = os.getpid()
         job.worker_log_path = str(artifact_dir / "worker.log")
         job.json_artifact_path = str(json_output)
-        job.attempt_count += 1
+        if job.lease_token is None:
+            job.attempt_count += 1
         base_params = dict(job.params_json or {})
         base_params["progress"] = {
             "state": "running",
@@ -232,6 +299,7 @@ def run_job_by_id(job_id: str) -> int:
             "selected_employee_codes": target_employee_codes,
         }
         job.params_json = base_params
+        touch_sync_job_lease(job)
         db.add(job)
         db.commit()
 
@@ -255,6 +323,7 @@ def run_job_by_id(job_id: str) -> int:
                 params_json={"format": "collaboratori-json", "source": "live-sync", "sync_job_id": str(job.id)},
             )
             job.import_job_id = import_job.id
+            touch_sync_job_lease(job)
             db.add(job)
             db.commit()
         else:
@@ -287,6 +356,7 @@ def run_job_by_id(job_id: str) -> int:
             job.records_imported = import_job.records_imported
             job.records_skipped = import_job.records_skipped
             job.records_errors = import_job.records_errors
+            touch_sync_job_lease(job)
             db.add(job)
             db.commit()
 
@@ -328,11 +398,11 @@ def run_job_by_id(job_id: str) -> int:
             updated_params = dict(job.params_json or {})
             updated_params["progress"] = progress
             job.params_json = updated_params
+            touch_sync_job_lease(job)
             db.add(job)
             db.commit()
             _write_progress(progress_path, progress)
 
-        params = job.params_json or {}
         if job.credential_id is not None:
             current_user = db.get(ApplicationUser, job.requested_by_user_id)
             if current_user is None:
@@ -379,6 +449,7 @@ def run_job_by_id(job_id: str) -> int:
                     "selected_employee_codes": target_employee_codes,
                 }
         job.params_json = final_params
+        clear_sync_job_lease(job)
         db.add(job)
         db.commit()
         failed_employee_codes = _failed_employee_codes(scrape_result.get("errors"))
@@ -432,37 +503,10 @@ def run_job_by_id(job_id: str) -> int:
         )
         _write_progress(progress_path, job.params_json["progress"])
         return 0
-    except Exception as exc:
-        rollback_db = SessionLocal()
-        try:
-            failed_job = rollback_db.get(PresenzeSyncJob, job_id)
-            if failed_job is not None and failed_job.status != "cancelled":
-                failed_job.status = "failed"
-                failed_job.error_detail = str(exc)
-                failed_job.finished_at = datetime.now(UTC)
-                failed_params = dict(failed_job.params_json or {})
-                failed_params["progress"] = {
-                    **dict(failed_params.get("progress") or {}),
-                    "state": "failed",
-                    "finished_at": failed_job.finished_at.isoformat(),
-                    "last_event": "job_failed",
-                    "last_event_at": datetime.now(UTC).isoformat(),
-                    "error": str(exc),
-                }
-                failed_job.params_json = failed_params
-                rollback_db.add(failed_job)
-                if failed_job.import_job_id is not None:
-                    failed_import_job = rollback_db.get(PresenzeImportJob, failed_job.import_job_id)
-                    if failed_import_job is not None and failed_import_job.status != "completed":
-                        failed_import_job.status = "failed"
-                        failed_import_job.error_detail = str(exc)
-                        failed_import_job.finished_at = failed_job.finished_at
-                        rollback_db.add(failed_import_job)
-                rollback_db.commit()
-        finally:
-            rollback_db.close()
-        print(traceback.format_exc(), file=sys.stderr)
-        return 1
+    except StaleDataError:
+        return _report_stale_sync_job_lease(db, job_id)
+    except Exception as exc:  # noqa: BLE001 - process boundary must persist every failure
+        return _report_sync_job_failure(db, job_id, claimed_lease_token, exc)
     finally:
         db.close()
 

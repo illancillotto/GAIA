@@ -70,6 +70,9 @@ class _RecordingDb:
     def execute(self, _statement):
         return _ScalarRows(self.rows)
 
+    def scalars(self, _statement):
+        return _ScalarRows([])
+
     def get(self, _model, _identifier):
         return None
 
@@ -81,6 +84,7 @@ class _QueuedDb(_RecordingDb):
 
     def execute(self, _statement):
         return _ScalarRows(self.row_sets.pop(0))
+
 
 
 def test_hr_routes_reject_viewers_before_accessing_payload_or_database() -> None:

@@ -132,9 +132,9 @@ python scripts/check_changed_worker_coverage.py \
 La regressione completa worker deve usare un processo pytest distinto per ogni
 file. `test_worker.py` installa stub globali in `sys.modules`, quindi una singola
 collection aggregata puo dipendere dall'ordine. Nel checkout validato il totale
-e `406 passed`; gli otto runtime SISTER modificati sono al 100% con `2774/2774`
-statement e `786/786` branch. Il report completo runtime e pubblicato da CI;
-il totale legacy resta warn-only finche non raggiunge il 100%.
+e `430 passed`; tutti i 27 runtime worker sono al 100% con `5077/5077`
+statement e `1314/1314` branch. Il report completo runtime e pubblicato da CI;
+il gate changed-file resta attivo e il totale globale non ha piu gap noti.
 
 Per l'allowlist credenziali dei batch, eseguire anche i gate mirati del servizio
 backend e del selettore UI documentati nel runbook SISTER. Nel checkout
@@ -156,11 +156,33 @@ validata completa anche typecheck Next e generazione di 154 pagine.
 
 ## Osservabilita
 
-Gli healthcheck Compose di scheduler e worker verificano la liveness del comando
-PID 1, non l'avanzamento semantico del loop. Un processo bloccato puo quindi
-restare `healthy`: durante canary e soak la decisione deve includere last-run,
-lease, eta coda ed eventi persistiti. L'heartbeat semantico resta un gate di
-implementazione prima di scalare repliche o automatizzare il rollout.
+Scheduler e worker pubblicano heartbeat JSON atomici in
+`runtime-data/worker-health/`. Gli healthcheck Compose usano
+`python -m app.worker_health check` e falliscono quando il timestamp non avanza,
+anche se il PID 1 e ancora vivo. Scheduler, Presenze e le quattro famiglie
+Elaborazioni hanno una soglia di 90 secondi; Gate Mobile usa 900 secondi per
+includere intervallo e durata del ciclo outbound.
+
+```bash
+docker compose ps platform-scheduler gate-mobile-sync presenze-worker \
+  elaborazioni-worker-visure elaborazioni-worker-runtime \
+  elaborazioni-worker-poste elaborazioni-worker-autodoc
+jq . runtime-data/worker-health/*.json
+docker compose exec platform-scheduler \
+  python -m app.worker_health check --service platform-scheduler \
+  --max-age-seconds 90
+```
+
+Un heartbeat `healthy` prova la responsivita del loop/supervisore, non il
+successo funzionale dei job. Durante canary e soak la decisione deve quindi
+includere anche last-run, lease, eta coda ed eventi persistiti. Per Gate Mobile
+il file passa da `cycle_running` a `waiting` e registra `last_exit_code`; per
+Presenze espone `active_jobs`; per Elaborazioni espone le famiglie assegnate.
+
+Nel canary isolato si puo provare esplicitamente la staleness mettendo in pausa
+un solo container e verificando da un altro container che il comando esca 1;
+eseguire sempre `unpause` e controllare il ritorno a `healthy`. Non usare fault
+injection sullo stack di produzione.
 
 Controllare almeno:
 

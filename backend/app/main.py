@@ -1,7 +1,6 @@
-from contextlib import asynccontextmanager
 import logging
+from contextlib import asynccontextmanager
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
@@ -9,21 +8,10 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.router import api_router
 from app.core.config import settings
-from app.core.database import SessionLocal, engine, get_db
+from app.core.database import SessionLocal, engine
 from app.core.logging import configure_logging
 from app.models.section_permission import Section
-from app.modules.catasto.ade_autosync_scheduler import register_catasto_ade_autosync_scheduler
-from app.modules.elaborazioni.bonifica_oristanese_scheduler import register_bonifica_scheduler
-from app.modules.elaborazioni.db_backup_scheduler import register_elaborazioni_db_backup_scheduler
-from app.modules.elaborazioni.incass_autosync_scheduler import register_incass_autosync_scheduler
-from app.modules.elaborazioni.autosync_scheduler import register_ruolo_autosync_scheduler
 from app.modules.gis.bootstrap import ensure_gis_platform_catalog
-from app.modules.gis.export_scheduler import register_gis_export_scheduler
-from app.modules.presenze.scheduler import register_presenze_scheduler
-from app.modules.network.telemetry_scheduler import register_network_telemetry_scheduler
-from app.modules.utenze.anpr.scheduler import register_anpr_scheduler
-from app.modules.utenze.visure_scheduler import register_visure_router_scheduler
-from app.modules.wiki.telemetry_scheduler import register_wiki_telemetry_scheduler
 from app.scripts.bootstrap_sections import ensure_default_sections
 from app.services.bootstrap_admin import ensure_bootstrap_admin
 
@@ -99,21 +87,7 @@ async def lifespan(_: FastAPI):
     _ensure_bootstrap_admin_on_startup()
     _ensure_sections_on_startup()
     _ensure_gis_catalog_on_startup()
-    scheduler = AsyncIOScheduler(timezone="UTC")
-    await register_catasto_ade_autosync_scheduler(scheduler, get_db)
-    await register_bonifica_scheduler(scheduler, get_db)
-    await register_elaborazioni_db_backup_scheduler(scheduler, get_db)
-    await register_incass_autosync_scheduler(scheduler, get_db)
-    await register_ruolo_autosync_scheduler(scheduler, get_db)
-    await register_gis_export_scheduler(scheduler, get_db)
-    await register_presenze_scheduler(scheduler, get_db)
-    await register_network_telemetry_scheduler(scheduler, get_db)
-    await register_anpr_scheduler(scheduler, get_db)
-    await register_visure_router_scheduler(scheduler, get_db)
-    await register_wiki_telemetry_scheduler(scheduler, get_db)
-    scheduler.start()
     yield
-    scheduler.shutdown(wait=False)
 
 app = FastAPI(
     title=settings.project_name,
