@@ -4,6 +4,7 @@ from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import TypeVar
+from uuid import UUID
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
@@ -12,16 +13,20 @@ from app.models.catasto import (
     CatastoBatch,
     CatastoBatchKind,
     CatastoBatchStatus,
+    CatastoCredential,
+    CatastoPerpetualSyncItem,
     CatastoRuoloAutoSyncConfig,
     CatastoRuoloAutoSyncItem,
     CatastoRuoloAutoSyncItemStatus,
     CatastoVisuraRequest,
     CatastoVisuraRequestStatus,
 )
+from app.models.application_user import ApplicationUser
 from app.models.elaborazioni import ElaborazioneBatch
 from app.modules.ruolo.models import RuoloParticella, RuoloPartita
 from app.schemas.catasto import (
     CatastoBatchResponse,
+    CatastoPerpetualSyncItemResponse,
     CatastoRuoloAutoSyncConfigResponse,
     CatastoRuoloAutoSyncConfigUpdateRequest,
     CatastoRuoloAutoSyncItemResponse,
@@ -40,6 +45,12 @@ from app.services.elaborazioni_credentials import (
     get_credential_for_user,
     get_runnable_credential_for_user,
 )
+from app.services.elaborazioni_perpetual_sync import (
+    available_perpetual_credentials,
+    maintain_perpetual_sync,
+    perpetual_sync_counts,
+    refresh_perpetual_sync_sources,
+)
 
 UTC = timezone.utc
 AUTO_SYNC_RETRY_DELAY = timedelta(minutes=5)
@@ -48,6 +59,15 @@ AUTO_SYNC_PENDING_BATCH_GRACE = timedelta(minutes=2)
 RUOLO_AUTOSYNC_LOCK_NAMESPACE = 1_196_572_802
 RuoloAutosyncResult = TypeVar("RuoloAutosyncResult")
 RuoloAutosyncOperation = Callable[[Session, int], CatastoBatch | None]
+CONTINUOUS_CONFIG_FIELDS = (
+    "primary_enabled",
+    "secondary_enabled",
+    "role_parcel_refresh_hours",
+    "role_subject_refresh_hours",
+    "consortium_parcel_refresh_hours",
+    "registry_subject_refresh_hours",
+    "batch_size",
+)
 
 
 def _try_acquire_ruolo_autosync_lock(db: Session, user_id: int) -> bool:
@@ -169,27 +189,12 @@ def update_ruolo_autosync_config(
 ) -> CatastoRuoloAutoSyncConfig:
     config = get_ruolo_autosync_config(db, user_id)
     fields = payload.model_fields_set
-
-    if "credential_id" in fields:
-        if payload.credential_id is None:
-            config.credential_id = None
-        else:
-            credential = get_credential_for_user(db, user_id, payload.credential_id)
-            if credential is None:
-                raise ValueError("Credenziale SISTER non trovata")
-            if not credential.active:
-                raise ValueError("La credenziale selezionata non e attiva")
-            config.credential_id = credential.id
-
+    _update_config_credentials(db, config, user_id, payload, fields)
     if "enabled" in fields and payload.enabled is not None:
         config.enabled = bool(payload.enabled)
-
+    _update_continuous_config_fields(config, payload, fields)
     if config.enabled:
-        if config.credential_id is None:
-            raise ValueError("Per attivare l'autosync devi selezionare una credenziale SISTER attiva")
-        selected_credential = get_credential_for_user(db, user_id, config.credential_id)
-        if selected_credential is None or not selected_credential.active:
-            raise ValueError("La credenziale autosync non e disponibile o non e attiva")
+        _validate_enabled_autosync_config(db, config, user_id)
 
     config.updated_by_user_id = user_id
     config.last_error_message = None
@@ -197,6 +202,67 @@ def update_ruolo_autosync_config(
     db.commit()
     db.refresh(config)
     return config
+
+
+def _update_config_credentials(
+    db: Session,
+    config: CatastoRuoloAutoSyncConfig,
+    user_id: int,
+    payload: CatastoRuoloAutoSyncConfigUpdateRequest,
+    fields: set[str],
+) -> None:
+
+    if "credential_ids" in fields:
+        config.credential_ids = (
+            list(dict.fromkeys(str(value) for value in payload.credential_ids or ()))
+            or None
+        )
+
+    if "credential_id" in fields:
+        if payload.credential_id is None:
+            config.credential_id = None
+        else:
+            credential = _get_autosync_credential(db, user_id, payload.credential_id)
+            if credential is None:
+                raise ValueError("Credenziale SISTER non trovata")
+            if not credential.active:
+                raise ValueError("La credenziale selezionata non e attiva")
+            config.credential_id = credential.id
+
+
+
+def _update_continuous_config_fields(
+    config: CatastoRuoloAutoSyncConfig,
+    payload: CatastoRuoloAutoSyncConfigUpdateRequest,
+    fields: set[str],
+) -> None:
+    for field in CONTINUOUS_CONFIG_FIELDS:
+        value = getattr(payload, field)
+        if field in fields and value is not None:
+            setattr(config, field, value)
+
+
+def _validate_enabled_autosync_config(
+    db: Session, config: CatastoRuoloAutoSyncConfig, user_id: int
+) -> None:
+    selected_ids = config.credential_ids or (
+        [str(config.credential_id)] if config.credential_id is not None else []
+    )
+    if not selected_ids:
+        raise ValueError("Per attivare l'autosync devi selezionare almeno una credenziale SISTER attiva")
+    for value in selected_ids:
+        selected_credential = _get_autosync_credential(db, user_id, UUID(str(value)))
+        if selected_credential is None or not selected_credential.active:
+            raise ValueError("Una credenziale autosync non e disponibile o non e attiva")
+    if not (config.primary_enabled or config.secondary_enabled):
+        raise ValueError("Attiva almeno una priorita della sincronizzazione continua")
+
+
+def _get_autosync_credential(db: Session, user_id: int, credential_id: UUID):
+    owner = db.get(ApplicationUser, user_id)
+    if owner is not None and owner.is_super_admin:
+        return db.get(CatastoCredential, credential_id)
+    return get_credential_for_user(db, user_id, credential_id)
 
 
 def _load_ruolo_autosync_source_candidates(
@@ -302,6 +368,10 @@ def _refresh_ruolo_autosync_source(
 
 @_ruolo_autosync_serialized
 def refresh_ruolo_autosync_source(db: Session, user_id: int) -> dict[str, int]:
+    config = get_ruolo_autosync_config(db, user_id)
+    if config.credential_ids is not None:
+        summary = refresh_perpetual_sync_sources(db, config)
+        return {**summary, "total_candidates": summary["created"] + summary["updated"]}
     return _refresh_ruolo_autosync_source(db, user_id, incremental=False)
 
 
@@ -578,10 +648,20 @@ def ensure_ruolo_autosync_batch(db: Session, user_id: int) -> CatastoBatch | Non
     return started
 
 
-@_ruolo_autosync_single_flight
-def maintain_ruolo_autosync(db: Session, user_id: int) -> CatastoBatch | None:
+def _maintain_legacy_ruolo_autosync(db: Session, user_id: int) -> CatastoBatch | None:
     _refresh_ruolo_autosync_source_incremental(db, user_id)
     return ensure_ruolo_autosync_batch(db, user_id)
+
+
+@_ruolo_autosync_single_flight
+def _maintain_autosync(db: Session, user_id: int) -> CatastoBatch | None:
+    config = get_ruolo_autosync_config(db, user_id)
+    if config.credential_ids is not None:
+        return maintain_perpetual_sync(db, config)
+    return _maintain_legacy_ruolo_autosync(db, user_id)
+
+
+maintain_ruolo_autosync = _maintain_autosync
 
 
 def run_ruolo_autosync_maintenance_for_all_users(db: Session) -> int:
@@ -591,6 +671,28 @@ def run_ruolo_autosync_maintenance_for_all_users(db: Session) -> int:
         try:
             batch = maintain_ruolo_autosync(db, config.user_id)
         except Exception as exc:  # noqa: BLE001 - one user must not stop the scheduler
+            config.last_error_message = str(exc)
+            db.add(config)
+            db.commit()
+            continue
+        if batch is not None:
+            started += 1
+    return started
+
+
+def run_perpetual_sync_maintenance_for_all_users(db: Session) -> int:
+    configs = list(
+        db.scalars(
+            select(CatastoRuoloAutoSyncConfig).where(
+                CatastoRuoloAutoSyncConfig.enabled.is_(True)
+            )
+        ).all()
+    )
+    started = 0
+    for config in configs:
+        try:
+            batch = maintain_ruolo_autosync(db, config.user_id)
+        except Exception as exc:  # noqa: BLE001 - one owner must not stop the planner
             config.last_error_message = str(exc)
             db.add(config)
             db.commit()
@@ -638,20 +740,27 @@ def _load_ruolo_autosync_item_status(db: Session, user_id: int):
 
 
 def _load_ruolo_autosync_status_batches(db: Session, user_id: int):
+    automatic_kinds = (
+        CatastoBatchKind.PERPETUAL_SYNC.value,
+        CatastoBatchKind.RUOLO_AUTOSYNC.value,
+    )
     running_batch = db.scalar(
         select(CatastoBatch)
         .where(
             CatastoBatch.user_id == user_id,
-            CatastoBatch.batch_kind == CatastoBatchKind.RUOLO_AUTOSYNC.value,
-            CatastoBatch.status == CatastoBatchStatus.PROCESSING.value,
+            CatastoBatch.batch_kind.in_(automatic_kinds),
+            CatastoBatch.status.in_(
+                (CatastoBatchStatus.PENDING.value, CatastoBatchStatus.PROCESSING.value)
+            ),
         )
+        .order_by(CatastoBatch.created_at.desc())
         .limit(1)
     )
     last_batch = db.scalar(
         select(CatastoBatch)
         .where(
             CatastoBatch.user_id == user_id,
-            CatastoBatch.batch_kind == CatastoBatchKind.RUOLO_AUTOSYNC.value,
+            CatastoBatch.batch_kind.in_(automatic_kinds),
         )
         .order_by(CatastoBatch.created_at.desc())
         .limit(1)
@@ -663,6 +772,25 @@ def build_ruolo_autosync_status(db: Session, user_id: int) -> CatastoRuoloAutoSy
     config = get_ruolo_autosync_config(db, user_id)
     counts, recent_items, error_items = _load_ruolo_autosync_item_status(db, user_id)
     running_batch, last_batch = _load_ruolo_autosync_status_batches(db, user_id)
+    perpetual_recent = list(
+        db.scalars(
+            select(CatastoPerpetualSyncItem)
+            .where(CatastoPerpetualSyncItem.user_id == user_id)
+            .order_by(CatastoPerpetualSyncItem.updated_at.desc())
+            .limit(12)
+        ).all()
+    )
+    perpetual_errors = list(
+        db.scalars(
+            select(CatastoPerpetualSyncItem)
+            .where(
+                CatastoPerpetualSyncItem.user_id == user_id,
+                CatastoPerpetualSyncItem.last_error_message.is_not(None),
+            )
+            .order_by(CatastoPerpetualSyncItem.updated_at.desc())
+            .limit(12)
+        ).all()
+    )
 
     return CatastoRuoloAutoSyncStatusResponse(
         config=CatastoRuoloAutoSyncConfigResponse.model_validate(config),
@@ -679,4 +807,14 @@ def build_ruolo_autosync_status(db: Session, user_id: int) -> CatastoRuoloAutoSy
         last_batch=CatastoBatchResponse.model_validate(last_batch) if last_batch is not None else None,
         error_items=[CatastoRuoloAutoSyncItemResponse.model_validate(item) for item in error_items],
         recent_items=[CatastoRuoloAutoSyncItemResponse.model_validate(item) for item in recent_items],
+        scope_counts=perpetual_sync_counts(db, user_id),
+        available_credential_ids=[
+            credential.id for credential in available_perpetual_credentials(db, config)
+        ],
+        perpetual_error_items=[
+            CatastoPerpetualSyncItemResponse.model_validate(item) for item in perpetual_errors
+        ],
+        perpetual_recent_items=[
+            CatastoPerpetualSyncItemResponse.model_validate(item) for item in perpetual_recent
+        ],
     )

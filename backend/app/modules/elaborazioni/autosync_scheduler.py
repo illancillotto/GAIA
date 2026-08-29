@@ -9,7 +9,9 @@ from typing import Any, Callable
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
-from app.services.elaborazioni_ruolo_autosync import run_ruolo_autosync_maintenance_for_all_users
+from app.services.elaborazioni_ruolo_autosync import (
+    run_perpetual_sync_maintenance_for_all_users,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +27,7 @@ async def _consume_db_factory(get_db: Callable[[], Any]) -> tuple[Any, Generator
 async def _run_job_wrapper(get_db: Callable[[], Any]) -> None:
     db, generator = await _consume_db_factory(get_db)
     try:
-        started = run_ruolo_autosync_maintenance_for_all_users(db)
+        started = run_perpetual_sync_maintenance_for_all_users(db)
         if started:
             logger.info("Ruolo autosync maintenance avviata per %s utenti", started)
     finally:
