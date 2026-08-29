@@ -45,6 +45,7 @@ from app.modules.gis.models import (
     GisLayerPermission,
     GisShapefileImport,
 )
+from app.modules.gis.territorio_bootstrap import ensure_territorio_gis_catalog
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
 engine = create_engine(
@@ -392,6 +393,14 @@ def seed_gis_platform_catalog() -> dict[str, int]:
     db = TestingSessionLocal()
     try:
         return ensure_gis_platform_catalog(db)
+    finally:
+        db.close()
+
+
+def seed_territorio_gis_catalog() -> int:
+    db = TestingSessionLocal()
+    try:
+        return ensure_territorio_gis_catalog(db)
     finally:
         db.close()
 
@@ -1346,6 +1355,50 @@ def test_qgis_project_download_includes_only_visible_publishable_postgis_layers(
     assert "Layer inclusi: 2" in readme
 
 
+def test_qgis_project_includes_only_visible_territorio_layers_through_gaia_proxy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    admin_headers = auth_headers("gis-admin")
+    viewer_headers = auth_headers("gis-viewer")
+    visible = _create_external_layer(admin_headers)
+    hidden_response = client.post(
+        "/gis/layers",
+        headers=admin_headers,
+        json={
+            "workspace": "territorio",
+            "name": "hidden_external",
+            "title": "Hidden external",
+            "source_type": "wms_external",
+            "official_source": "ras_sitr",
+            "metadata": _external_layer_metadata(remote_layer="dbu:hidden"),
+        },
+    )
+    assert hidden_response.status_code == 201
+    permission = client.post(
+        f"/gis/layers/{visible['id']}/permissions",
+        headers=admin_headers,
+        json={"principal_type": "role", "principal_key": "viewer", "access_level": "viewer"},
+    )
+    assert permission.status_code == 200
+    monkeypatch.setattr(settings, "gis_qgis_proxy_base_url", "https://gaia.example.test")
+
+    response = client.get("/gis/qgis/project", headers=viewer_headers)
+
+    assert response.status_code == 200
+    assert response.headers["x-gis-qgis-layer-count"] == "1"
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        project_xml = archive.read("gaia-gis-platform.qgs").decode()
+        manifest = json.loads(archive.read("manifest.json"))
+        readme = archive.read("README_QGIS.txt").decode()
+    assert f"https%3A%2F%2Fgaia.example.test%2Fgis%2Fexternal%2F{visible['id']}%2Fqgis-wms" in project_xml
+    assert "authcfg=gaia_oauth" in project_xml
+    assert "providerKey=\"wms\"" in project_xml
+    assert "hidden_external" not in project_xml
+    assert "webgis.regione.sardegna.it" not in project_xml
+    assert manifest["layers"][0]["source_type"] == "wms_external"
+    assert "non contiene token" in readme
+
+
 def test_qgis_project_download_requires_visible_publishable_layers() -> None:
     viewer_headers = auth_headers("gis-viewer")
 
@@ -1358,6 +1411,7 @@ def test_qgis_project_download_requires_visible_publishable_layers() -> None:
 def test_qgis_project_geometry_kind_mapping_covers_common_shapes() -> None:
     assert gis_services._qgis_geometry_kind(GisLayer(geometry_type="POINT")) == "Point"  # noqa: SLF001
     assert gis_services._qgis_geometry_kind(GisLayer(geometry_type="MULTILINESTRING")) == "Line"  # noqa: SLF001
+    assert gis_services._qgis_geometry_kind(GisLayer(geometry_type="POLYGON")) == "Polygon"  # noqa: SLF001
     assert gis_services._qgis_geometry_kind(GisLayer(geometry_type=None)) == "UnknownGeometry"  # noqa: SLF001
 
 
@@ -3677,3 +3731,60 @@ def test_external_layers_are_excluded_from_change_export_and_qgis() -> None:
     )
     assert governance.status_code == 200
     assert governance.json()["layers"] == []
+
+
+def test_territorio_layers_are_grouped_and_resolved_for_viewer() -> None:
+    assert seed_territorio_gis_catalog() == 21
+
+    response = client.get("/gis/territorio/layers", headers=auth_headers("gis-viewer"))
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 21
+    assert [group["theme"] for group in payload["groups"]] == [
+        "bonifica",
+        "colture",
+        "vincoli",
+        "idrografia",
+        "amministrativo",
+        "eventi",
+        "catasto_ufficiale",
+        "ortofoto",
+        "morfologia",
+    ]
+    first = payload["groups"][0]["layers"][0]
+    assert first["proxy_wms_url"] == f"/gis/external/{first['id']}/wms"
+    assert first["legend_url"].endswith("/wms?request=GetLegendGraphic")
+    assert first["attribution"]
+    assert first["queryable"] == "wfs_queryable"
+
+
+def test_territorio_layers_exclude_unauthorized_and_inactive_layers() -> None:
+    seed_territorio_gis_catalog()
+    db = TestingSessionLocal()
+    try:
+        hidden = db.scalar(select(GisLayer).where(GisLayer.name == "ras_aree_bonifica"))
+        inactive = db.scalar(select(GisLayer).where(GisLayer.name == "ras_comprensori_irrigui"))
+        assert hidden is not None and inactive is not None
+        permission = db.scalar(
+            select(GisLayerPermission).where(
+                GisLayerPermission.layer_id == hidden.id,
+                GisLayerPermission.principal_key == "viewer",
+            )
+        )
+        assert permission is not None
+        permission.can_view = False
+        inactive.is_active = False
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/gis/territorio/layers", headers=auth_headers("gis-viewer"))
+    names = {
+        layer["name"]
+        for group in response.json()["groups"]
+        for layer in group["layers"]
+    }
+    assert response.json()["total"] == 19
+    assert "ras_aree_bonifica" not in names
+    assert "ras_comprensori_irrigui" not in names

@@ -1,7 +1,7 @@
 # GAIA GIS Platform - Progress Territorio Esterno
 
 > Ultimo aggiornamento: 2026-08-29.
-> Branch corrente: `feature/gis-territorio-external-layers-m21`, HEAD `6563cc1b`.
+> Branch corrente: `integration/gis-platform-complete`.
 >
 > Piano tecnico: `docs/GIS_PLATFORM_TERRITORIO_PLAN.md`.
 > Riferimento dati: `docs/GIS_PLATFORM_TERRITORIO_CATALOGO.md`.
@@ -15,9 +15,36 @@ ammissibili (`14` RAS vettoriali, `4` RAS raster, `3` AdE).
 
 P1 e implementato: registro sorgenti, proxy governato, cache, health, nuovi
 source type e divieti backend sono coperti al `100%`. La change quality separata
-e stata integrata in `main` a `3d373f28`; M21 e stata riallineata, congelata nel
-commit `07d9f7c4` e chiusa con ratchet verde. Il branch e stato ripulito il
-2026-08-29 e contiene ora soltanto commit M21. M22-M25 non sono avviate.
+e stata integrata nella catena GIS a `3d373f28`; M21 e stata riallineata,
+congelata nel commit `07d9f7c4` e chiusa con ratchet verde. Il branch e stato
+ripulito il 2026-08-29 e contiene soltanto commit M21; la guardia morta rimossa
+in `6563cc1b` e inclusa nell'integrazione.
+
+P2 e completato sul branch `feature/gis-territorio-catalog-seed-m22`: il seed
+idempotente registra i `21` layer ammessi e `GET /gis/territorio/layers`
+restituisce solo quelli attivi e visibili, raggruppati per tema.
+
+P3 e completato sul branch `feature/gis-territorio-layer-panel-m22`: pannello,
+opacita, legende autenticate, attribuzioni e selettore ortofoto sono integrati
+nelle mappe Catasto senza modificare l'hotspot `MapContainer.tsx`.
+
+P4/M23a e completato sul branch
+`feature/gis-territorio-interrogazione-m23`: `POST /gis/interroga` aggrega le
+sonde GAIA e le sorgenti remote nei livelli `gaia`, `catasto_ufficiale` e
+`territorio`.
+
+P5/M23b e completato sul branch
+`feature/gis-territorio-interrogazione-ui-m23`: il pannello istruttorio si
+apre con una azione esplicita e aggiorna GAIA e ogni sorgente remota senza
+attendere la piu lenta.
+
+P6/M24 e completato sul branch `feature/gis-territorio-scheda-m24`: la scheda
+PDF raccoglie i dati della particella e le sorgenti territoriali autorizzate,
+persiste lo snapshot, dichiara le esclusioni e gestisce audit e retention.
+
+P7/M25 e completato sul branch `feature/gis-territorio-strumenti-m25`:
+misure geodetiche, confronto ortofoto, stampa e propagazione QGIS via proxy
+GAIA sono implementati senza modificare `MapContainer.tsx`.
 
 La base M1-M20 della GIS Platform e in esercizio e non richiede modifiche
 preliminari: `source_type` e gia una colonna `String(32)` libera in `GisLayer` e
@@ -30,12 +57,12 @@ schema catalogo.
 | --- | --- | --- | --- |
 | P0 | Verifica licenze e disponibilita sorgenti | completato il 2026-08-27 | - |
 | M21 | Fondazione layer esterni: source type, proxy, cache, health | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-external-layers-m21` |
-| M22a | Seed catalogo `territorio` e `GET /gis/territorio/layers` | da implementare | `feature/gis-territorio-catalog-seed-m22` |
-| M22b | Pannello strati e ortofoto storiche in mappa | da implementare | `feature/gis-territorio-layer-panel-m22` |
-| M23a | Interrogazione puntuale multi-sorgente, backend | da implementare | `feature/gis-territorio-interrogazione-m23` |
-| M23b | Pannello interrogazione, frontend | da implementare | `feature/gis-territorio-interrogazione-ui-m23` |
-| M24 | Scheda territoriale particella in PDF | da implementare | `feature/gis-territorio-scheda-m24` |
-| M25 | Strumenti di campo e propagazione QGIS | da implementare | `feature/gis-territorio-strumenti-m25` |
+| M22a | Seed catalogo `territorio` e `GET /gis/territorio/layers` | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-catalog-seed-m22` |
+| M22b | Pannello strati e ortofoto storiche in mappa | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-layer-panel-m22` |
+| M23a | Interrogazione puntuale multi-sorgente, backend | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-interrogazione-m23` |
+| M23b | Pannello interrogazione, frontend | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-interrogazione-ui-m23` |
+| M24 | Scheda territoriale particella in PDF | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-scheda-m24` |
+| M25 | Strumenti di campo e propagazione QGIS | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-strumenti-m25` |
 
 ## Analisi Preliminare Completata
 
@@ -64,6 +91,206 @@ governa internamente. La sovrapposizione e utile come controllo, ma richiede una
 decisione esplicita di autorevolezza prima del seed.
 
 ## Verifiche
+
+Verifiche P7 eseguite il 2026-08-28:
+
+- suite backend GIS integrata: `182 passed`; coverage runtime modificati
+  `1476/1476`, totale `100%`;
+- test frontend P7: `17 passed`; coverage `171/171` statement, `103/103`
+  branch, `49/49` funzioni e `125/125` linee;
+- caso geodetico noto: arco equatoriale di un grado circa `111.195 km`;
+- `make lint-backend`: exit `0`; `make quality-test`: `46 passed`;
+- `npm run typecheck`: exit `0`; `npm run lint`: exit `0`, con soli warning
+  preesistenti fuori perimetro;
+- suite unit frontend completa: `183` file e `1647` test verdi;
+- `npm run build`: exit `0`;
+- `make complexity-ratchet BASE_REF=feature/gis-territorio-scheda-m24`:
+  exit `0`, baseline commit `d678b7e9`, nessun finding;
+- `make graphify-backend`: exit `0`, `7258` nodi, `17534` archi e `450`
+  community;
+- `make graphify-frontend`: exit `0`, `4935` nodi, `11919` archi e `184`
+  community;
+- `make graphify-platform-docs`: exit `0`, `519` nodi, `747` archi e `66`
+  community;
+- il primo ratchet P7 ha rifiutato due nuove violation nei moduli QGIS. La
+  baseline non e stata aggiornata; datasource e validazione parametri sono
+  stati separati per responsabilita e il ratchet successivo e verde.
+
+Decisioni M25:
+
+- distanze e aree usano coordinate WGS84 e calcolo geodetico, non distanza
+  euclidea sul piano Web Mercator;
+- il confronto ortofoto bilancia simultaneamente opacita della annata
+  principale e della annata di confronto;
+- la stampa cattura la canvas e genera un layout con scala, legenda,
+  intestazione consortile e attribuzioni deduplicate;
+- `GIS_QGIS_PROXY_BASE_URL` definisce la base HTTPS raggiungibile dai desktop;
+  il progetto usa `authcfg=gaia_oauth` e non incorpora credenziali;
+- l'endpoint QGIS WMS accetta solo il nome locale esatto del layer nel path e
+  delega a M21, preservando allowlist e destinazione governata;
+- `services.py` e stato ridotto estraendo il builder in `qgis_project.py`;
+  `MapContainer.tsx` resta invariato.
+
+Verifiche P6 eseguite il 2026-08-28:
+
+- suite backend GIS integrata: `176 passed`;
+- coverage sui runtime backend modificati: `1157` statement, `0` mancanti,
+  totale `100%`;
+- test frontend P6: `13 passed`; coverage `76/76` statement, `63/63` branch,
+  `35/35` funzioni e `63/63` linee;
+- `make lint-backend`: exit `0`; `make quality-test`: `46 passed`;
+- `npm run typecheck`: exit `0`; `npm run lint`: exit `0`, con soli warning
+  preesistenti fuori dal perimetro;
+- suite unit frontend completa: `180` file e `1636` test verdi;
+- `npm run build`: exit `0`;
+- `make complexity-ratchet
+  BASE_REF=feature/gis-territorio-interrogazione-ui-m23`: exit `0`, baseline
+  commit `24e6c04d`, nessun finding;
+- `make graphify-backend`: exit `0`, `7241` nodi, `17507` archi e `444`
+  community;
+- `make graphify-frontend`: exit `0`, `4913` nodi, `11872` archi e `188`
+  community;
+- `make graphify-platform-docs`: exit `0`, `471` nodi, `671` archi e `59`
+  community;
+- `git diff --check`: exit `0` prima dell'aggiornamento documentale.
+
+La migration M24 e verificata direttamente invocando `upgrade()` e
+`downgrade()` nel test dedicato. La generazione Alembic offline dell'intera
+catena non e utilizzabile come ulteriore prova: la migration storica
+`20260529_0094_wiki_conversation_governance.py` esegue inspection del database
+ed e incompatibile con `--sql`. Non e stata dichiarata una applicazione
+end-to-end su PostgreSQL reale in questa change.
+
+Decisioni M24:
+
+- la richiesta crea un record `queued`; raccolta remota e resa Chromium sono
+  eseguite fuori dalla risposta HTTP con una sessione database propria;
+- lo snapshot delle sorgenti viene persistito prima del rendering e resta
+  valorizzato anche quando la raccolta fallisce prima di produrre dati;
+- il richiedente e gli amministratori GIS possono leggere e scaricare la
+  scheda; ogni layer territoriale richiede `can_view`, altrimenti compare tra
+  le esclusioni dichiarate;
+- il PDF contiene disclaimer in prima pagina, attribuzioni deduplicate,
+  dettaglio degli esiti M23 ed estratto ortofoto con scala e riferimenti;
+- il client usa polling a intervallo di un secondo e revoca il blob URL quando
+  cambia particella o il componente viene smontato.
+
+Verifiche P5 eseguite il 2026-08-28:
+
+- suite mirata pannello, hook, wrapper e client API: `8 passed`;
+- coverage pannello/hook: `97/97` statement, `45/45` branch, `45/45`
+  funzioni e `78/78` linee; wrapper/client: `16/16` statement, `4/4` branch,
+  `8/8` funzioni e `15/15` linee;
+- `npm run typecheck`: exit `0`;
+- `npm run lint`: exit `0`, con soli warning preesistenti fuori dal perimetro;
+- suite unit frontend completa: `179` file e `1631` test verdi;
+- `npm run build`: exit `0`, compilazione riuscita e `154` pagine generate;
+- `make complexity-ratchet
+  BASE_REF=feature/gis-territorio-interrogazione-m23`: exit `0`, baseline
+  commit `352f3f23`, nessun finding.
+- `make graphify-frontend`: exit `0`, `4905` nodi, `11848` archi e `186`
+  community;
+- `make graphify-platform-docs`: exit `0`, `454` nodi, `618` archi e `61`
+  community.
+
+Decisioni M23b:
+
+- `Interroga punto` arma il clic successivo; il listener MapLibre dedicato non
+  rimuove o sostituisce quelli del popup rapido;
+- una richiesta senza layer carica subito GAIA, poi i layer interrogabili sono
+  richiesti singolarmente con massimo quattro richieste client concorrenti;
+- ogni completamento aggiorna solo la sorgente coinvolta; una failure non
+  interrompe le altre e i visual-only non generano HTTP;
+- il pannello resta overlay non modale e non modifica `MapContainer.tsx`,
+  `ParticellaGisDialog.tsx` o `TerritorioLayerPanel.tsx`;
+- la CTA scheda territoriale e disabilitata fino a M24.
+
+Verifiche P4 eseguite il 2026-08-28:
+
+- tre suite obbligatorie: `13 passed` su sonde locali, sonde remote e servizio;
+- suite integrata con config, sorgenti esterne e API GIS: `91 passed`;
+- coverage sui runtime modificati: `1129` statement, `0` mancanti, totale
+  `100%`;
+- `make lint-backend`: exit `0`;
+- `make quality-test`: `46 passed`;
+- `make complexity-ratchet
+  BASE_REF=feature/gis-territorio-layer-panel-m22`: exit `0`, baseline commit
+  `2b6f5651`, nessun finding;
+- `make graphify-backend`: exit `0`, `7209` nodi, `17448` archi e `427`
+  community;
+- `make graphify-platform-docs`: exit `0`, `388` nodi, `480` archi e `54`
+  community;
+- `git diff --check`: exit `0`.
+
+Il primo ratchet P4 ha rilevato una sola regressione file-level in
+`backend/app/core/config.py`, LOC `653 -> 661`. La baseline non e stata
+aggiornata. Le impostazioni GIS esterne M21 e le nuove impostazioni M23 sono
+state riallocate nel mixin esistente `app/core/gis_settings.py`, senza cambiare
+alias, default o validazioni; il ratchet successivo e verde. `services.py`, il
+popup Catasto e il frontend sono invariati.
+
+Decisioni M23a:
+
+- ogni sonda restituisce `ok`, `empty`, `failed` o `skipped`, durata, dati e
+  messaggio; solo il fallimento del livello locale GAIA produce errore API;
+- le sonde WFS usano un filtro spaziale `BBOX`, le sonde WMS usano
+  `GetFeatureInfo`; JSON e testo/HTML sono normalizzati;
+- `wms_visual_only` non genera HTTP e i layer interrogabili oltre il limite
+  restano visibili come `skipped`, senza omissioni silenziose;
+- AdE confluisce in `catasto_ufficiale`; gli altri layer ammessi confluiscono
+  in `territorio`; i layer senza `can_view` non compaiono;
+- `ST_DWithin` misura in EPSG:32632 e usa un pre-filtro bbox 4326 per attivare
+  gli indici GiST esistenti.
+
+Verifiche P3 eseguite il 2026-08-28:
+
+- `npm run typecheck`: exit `0`;
+- `npm run lint`: exit `0`; restano solo warning preesistenti fuori dal
+  perimetro P3;
+- suite unit frontend completa: `178` file e `1626` test verdi, inclusa la
+  regressione `gis-tools-workspace.test.tsx`;
+- coverage sui runtime P3: `211/211` statement, `106/106` branch, `82/82`
+  funzioni e `171/171` linee, totale `100%`;
+- `npm run build`: exit `0`, `154` pagine generate; il chunk compilato contiene
+  il registry `territorio-source-`, confermando l'integrazione nella build;
+- `make complexity-ratchet
+  BASE_REF=feature/gis-territorio-catalog-seed-m22`: exit `0`, baseline commit
+  `d7861d06`, nessun finding;
+- `git diff --check`: exit `0`.
+
+Il primo ratchet P3 ha rifiutato correttamente callable nuove oltre soglia e un
+inserimento nel client GIS legacy che alterava il matching. La versione finale
+separa catalogo, sincronizzazione MapLibre, errori, legende e cleanup in hook
+sotto soglia, usa `frontend/src/lib/api/territorio.ts` e non modifica
+`MapContainer.tsx`, `page.tsx` o `api/gis.ts`.
+
+Le tile e le legende usano sempre il proxy GAIA con bearer token; nessun URL
+remoto e inviato dal browser. Ogni raster e inserito prima del primo layer GAIA
+e una failure aggiorna solo lo stato del layer coinvolto. Il selettore supporta
+il confronto tra piu annate, ma segnala correttamente che il seed corrente ne
+contiene una sola perche P0 ha escluso le altre per licenza.
+
+Verifiche P2 eseguite il 2026-08-28:
+
+- bootstrap eseguito due volte nei test: `21` layer creati alla prima
+  esecuzione, `0` alla seconda;
+- suite GIS, bootstrap e lifespan: verde;
+- coverage selettiva sui runtime modificati: `745` statement, `0` mancanti,
+  totale `100%`;
+- `main.py`: `74/74`, `router.py`: `153/153`, `schemas.py`: `432/432`,
+  `territorio_bootstrap.py`: `60/60`, `territorio_catalog.py`: `26/26`;
+- `make lint-backend`: exit `0`;
+- `make quality-test`: `46 passed`;
+- `make complexity-ratchet
+  BASE_REF=feature/gis-territorio-external-layers-m21`: exit `0`, baseline
+  commit `dddbbe58`, nessun finding;
+- `git diff --check`: exit `0`.
+
+Il primo ratchet P2 ha correttamente rifiutato un conditional aggiunto alla
+callable legacy `_ensure_gis_catalog_on_startup` e un factory con `11`
+parametri. Il bootstrap territorio e stato quindi isolato in una callable
+nuova e il factory ridotto a cinque campi obbligatori piu opzioni; il ratchet
+finale e verde senza aggiornare la baseline.
 
 Verifiche P1 eseguite il 2026-08-28:
 
@@ -214,6 +441,58 @@ catalogo. Le misure supportano il default M21 di `12 s`, senza costituire SLA.
 Non e stato eseguito un test concorrente: P0 doveva rilevare, non sollecitare, i
 servizi pubblici e AdE dichiara esplicitamente un limite concorrente.
 
+## Audit Conclusivo P0-P7
+
+Audit eseguito il 2026-08-28 confrontando i criteri di accettazione dei prompt
+con catalogo, implementazione, test e verifiche registrate sopra.
+
+- P0: le tre sorgenti hanno licenza, URL delle condizioni, attribuzione e
+  vincoli registrati; i `21` layer ammessi sono presenti nelle capabilities;
+  GetMap e GetFeature sono stati misurati; PAI e ortofoto senza licenza
+  accertabile hanno una motivazione esplicita. Tutti i criteri sono soddisfatti.
+- P1: validazione di `wms_external` e `wfs_external`, metadati legali
+  obbligatori, allowlist, cache, TTL, timeout, pruning, destinazione governata,
+  flag `503` e divieti change request/export/QGIS sono coperti dai test M21.
+  Coverage `2403/2403` e ratchet contro `3d373f28` sono verdi. Tutti i criteri
+  sono soddisfatti.
+- P2: il test idempotente crea `21` layer e nessun duplicato alla seconda
+  esecuzione; licenza e attribuzione mancanti sono rifiutate; catalogo,
+  raggruppamento e filtro `can_view` sono verificati. Coverage `745/745` e
+  ratchet contro `dddbbe58` sono verdi. Tutti i criteri sono soddisfatti.
+- P3: pannello, gruppi, toggle, opacita, legenda, ortofoto, confronto,
+  attribuzioni, ordine sotto i layer GAIA e isolamento degli errori sono
+  verificati dai test dedicati. Typecheck, suite unit completa, lint e ratchet
+  sono verdi; `MapContainer.tsx` non e stato modificato. Tutti i criteri sono
+  soddisfatti.
+- P4: endpoint e servizio restituiscono i tre livelli con stato e durata per
+  sorgente; i test verificano tutte le sorgenti remote fallite, livello GAIA
+  completo, visual-only saltati, limite remoto e permessi. Coverage
+  `1129/1129` e ratchet sono verdi. Tutti i criteri sono soddisfatti.
+- P5: i test verificano apertura esplicita sul clic, tre livelli, distinzione
+  tra vuoto e non disponibile e pubblicazione progressiva. La change non
+  modifica popup, `MapContainer.tsx` o pannello strati; typecheck, suite unit,
+  lint e ratchet sono verdi. Tutti i criteri sono soddisfatti.
+- P6: i test verificano generazione e download dal pannello, disclaimer in
+  prima pagina, attribuzioni, snapshot, esclusioni dichiarate, audit nei tre
+  esiti, retention e migration `upgrade()`/`downgrade()`. Coverage
+  `1157/1157` e ratchet sono verdi. Tutti i criteri sono soddisfatti.
+- P7: i test verificano l'arco equatoriale noto, confronto ortofoto, stampa con
+  scala, legenda, intestazione e attribuzioni, e progetto QGIS filtrato per
+  `can_view` con WMS sul proxy GAIA. Coverage backend `1476/1476`, coverage
+  frontend completa sul perimetro P7 e ratchet sono verdi. Tutti i criteri
+  sono soddisfatti.
+
+La catena verificata e lineare:
+`dddbbe58 -> d7861d06 -> 2b6f5651 -> 352f3f23 -> 24e6c04d -> d678b7e9 ->
+677e499c`. La fondazione M21 e attestata dal freeze `07d9f7c4` e dalla chiusura
+documentale `dddbbe58`. Il ref locale
+`feature/gis-territorio-external-layers-m21` punta oggi a `5f319127`, commit
+estraneo successivo presente nel worktree principale concorrente: non e stato
+spostato e non viene usato come evidenza dell'audit.
+
+Non risultano criteri aperti, baseline aggiornate per assorbire regressioni o
+milestone successive avviate. P0-P7 sono chiusi sui commit sopra indicati.
+
 ## Decisioni P0
 
 - RAS SITR vettoriale: `ammessa con vincoli`. Entrano solo i `14` layer con
@@ -292,17 +571,7 @@ servizi pubblici e AdE dichiara esplicitamente un limite concorrente.
 
 ## Prossima Azione Raccomandata
 
-Non aprire P2.
-
-M21 e chiusa con ratchet verde e il branch e ripulito. P2 resta fermo e potra
-essere aperto soltanto su richiesta esplicita, partendo dallo stato verificato
-di M21.
-
-Attivita residue, indipendenti da P2:
-
-- decidere se aprire una PR per `feature/gis-territorio-external-layers-m21`
-  verso `main`: il branch non ha upstream e non e mai stato pushato;
-- gestire separatamente `fix/search-linked-utenza-ranking`, che e pronto e
-  autonomo;
-- cancellare `backup/m21-pre-cleanup-20260829` quando l'esito del riordino sara
-  considerato definitivo.
+Completare i gate del branch `integration/gis-platform-complete`, inclusa la
+catena Alembic unificata, e non aprire ulteriori milestone senza una nuova
+decisione di prodotto. La change Search resta autonoma e fuori dal perimetro
+GIS.

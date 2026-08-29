@@ -255,6 +255,86 @@ class GisExternalSourceResponse(BaseModel):
     status: Literal["enabled", "disabled", "not_configured"]
 
 
+class GisTerritorioLayer(BaseModel):
+    id: UUID
+    name: str
+    title: str
+    description: str | None = None
+    theme: str
+    source: str
+    proxy_wms_url: str
+    legend_url: str
+    default_opacity: float = Field(ge=0, le=1)
+    render_order: int = Field(ge=0)
+    queryable: Literal["wfs_queryable", "wms_infoable", "wms_visual_only"]
+    attribution: str
+
+
+class GisTerritorioLayerGroup(BaseModel):
+    theme: str
+    label: str
+    layers: list[GisTerritorioLayer]
+
+
+class GisTerritorioLayerListResponse(BaseModel):
+    groups: list[GisTerritorioLayerGroup]
+    total: int
+
+
+class GisInterrogazioneRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    lon: float
+    lat: float
+    srid: int = Field(default=4326, ge=1)
+    layer_ids: list[UUID] | None = None
+    radius_m: float | None = Field(default=None, gt=0, le=100_000)
+
+
+class GisInterrogazioneSourceResponse(BaseModel):
+    source_id: str
+    title: str
+    status: Literal["ok", "empty", "failed", "skipped"]
+    duration_ms: float = Field(ge=0)
+    data: list[dict[str, Any]] = Field(default_factory=list)
+    message: str | None = None
+
+
+class GisInterrogazioneLevelResponse(BaseModel):
+    key: Literal["gaia", "catasto_ufficiale", "territorio"]
+    sources: list[GisInterrogazioneSourceResponse]
+
+
+class GisInterrogazioneResponse(BaseModel):
+    lon: float
+    lat: float
+    srid: int
+    radius_m: float
+    gaia: GisInterrogazioneLevelResponse
+    catasto_ufficiale: GisInterrogazioneLevelResponse
+    territorio: GisInterrogazioneLevelResponse
+
+
+class GisSchedaTerritorialeCreate(BaseModel):
+    particella_id: UUID
+
+
+class GisSchedaTerritorialeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    particella_id: UUID
+    requested_by_user_id: int | None = None
+    status: Literal["queued", "processing", "completed", "failed"]
+    artifact_path: str | None = None
+    checksum_sha256: str | None = None
+    source_snapshot: dict[str, Any] = Field(validation_alias="source_snapshot_json")
+    error_message: str | None = None
+    requested_at: datetime
+    completed_at: datetime | None = None
+    updated_at: datetime
+
+
 class GisLayerPermissionUpsert(BaseModel):
     principal_type: Literal["role", "user"]
     principal_key: str = Field(min_length=1, max_length=120)

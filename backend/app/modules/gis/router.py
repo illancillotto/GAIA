@@ -18,6 +18,7 @@ from fastapi import (
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user, require_module
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.modules.gis import (
@@ -25,7 +26,12 @@ from app.modules.gis import (
     external_proxy,
     runtime_health,
     services,
+    territorio_catalog,
 )
+from app.modules.gis.interrogazione import models as interrogazione_models
+from app.modules.gis.interrogazione import service as interrogazione_service
+from app.modules.gis.scheda_territoriale.router import router as scheda_router
+from app.modules.gis.qgis_external_router import router as qgis_external_router
 from app.modules.gis.schemas import (
     GisAnnotationCreate,
     GisAnnotationResponse,
@@ -39,6 +45,8 @@ from app.modules.gis.schemas import (
     GisChangeRequestStatus,
     GisChangeRequestUpdate,
     GisExternalSourceResponse,
+    GisInterrogazioneRequest,
+    GisInterrogazioneResponse,
     GisLayerCreate,
     GisLayerExportListResponse,
     GisLayerExportRequest,
@@ -58,6 +66,7 @@ from app.modules.gis.schemas import (
     GisShapefileImportPreviewResponse,
     GisShapefileImportResponse,
     GisShapefileImportStatus,
+    GisTerritorioLayerListResponse,
 )
 
 router = APIRouter(
@@ -65,6 +74,8 @@ router = APIRouter(
     tags=["gis-platform"],
     dependencies=[Depends(require_module("gis"))],
 )
+router.include_router(scheda_router)
+router.include_router(qgis_external_router)
 
 
 @router.post(
@@ -140,6 +151,35 @@ def list_external_sources(
         GisExternalSourceResponse.model_validate(item)
         for item in external_proxy.list_external_source_statuses()
     ]
+
+
+@router.get("/territorio/layers", response_model=GisTerritorioLayerListResponse)
+def list_territorio_layers(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> GisTerritorioLayerListResponse:
+    return territorio_catalog.list_territorio_layers(db, current_user)
+
+
+@router.post("/interroga", response_model=GisInterrogazioneResponse)
+def interroga(
+    body: GisInterrogazioneRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> GisInterrogazioneResponse:
+    point = interrogazione_models.InterrogationPoint(
+        lon=body.lon,
+        lat=body.lat,
+        srid=body.srid,
+        radius_m=body.radius_m or settings.gis_interrogazione_default_radius_m,
+    )
+    result = interrogazione_service.interrogate_point(
+        db,
+        current_user,
+        point,
+        body.layer_ids,
+    )
+    return GisInterrogazioneResponse.model_validate(result, from_attributes=True)
 
 
 def _external_proxy_response(payload: external_proxy.ExternalProxyPayload) -> Response:

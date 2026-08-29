@@ -4,7 +4,6 @@ import hashlib
 import io
 import json
 import re
-import xml.etree.ElementTree as ET
 from collections import defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -12,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import UUID
-from zipfile import ZIP_DEFLATED, BadZipFile, ZipFile
+from zipfile import BadZipFile, ZipFile
 
 import shapefile
 from fastapi import HTTPException, status
@@ -21,6 +20,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.modules.gis import qgis_project
 from app.modules.gis.artifact_storage import delete_artifact as _delete_export_artifact
 from app.modules.gis.exporter import export_layer_to_shapefile_zip
 from app.modules.gis.external_sources import (
@@ -100,9 +100,8 @@ ChangeRequestValidator = Callable[
 ]
 CHANGE_REQUEST_VALIDATORS: dict[str, ChangeRequestValidator] = {}
 SHAPEFILE_REQUIRED_SUFFIXES = (".shp", ".shx", ".dbf", ".prj")
-QGIS_PROJECT_FILENAME = "gaia-gis-platform.qgs"
 QGIS_PROJECT_ARCHIVE_FILENAME = "gaia-gis-platform.qgz"
-QGIS_CONNECTION_SERVICE = "gaia_gis"
+_qgis_geometry_kind = qgis_project.geometry_kind
 
 
 @dataclass(frozen=True)
@@ -810,137 +809,8 @@ def _catalog_health_issue(
     )
 
 
-def _qgis_project_layer_id(layer: GisLayer) -> str:
-    return f"gaia_{layer.workspace}_{layer.name}_{str(layer.id).replace('-', '')}"
-
-
-def _qgis_geometry_kind(layer: GisLayer) -> str:
-    geometry_type = (layer.geometry_type or "").lower()
-    if "point" in geometry_type:
-        return "Point"
-    if "line" in geometry_type:
-        return "Line"
-    if "polygon" in geometry_type:
-        return "Polygon"
-    return "UnknownGeometry"
-
-
-def _qgis_datasource_quote(value: str | int | None) -> str:
-    return str(value or "").replace("\\", "\\\\").replace("'", "\\'")
-
-
-def _qgis_layer_datasource(layer: GisLayer) -> str:
-    schema = _qgis_datasource_quote(layer.postgis_schema or "public")
-    table = _qgis_datasource_quote(layer.postgis_table or layer.name)
-    geometry_column = _qgis_datasource_quote(layer.geometry_column or "geometry")
-    feature_id_column = _qgis_datasource_quote(layer.feature_id_column or "id")
-    geometry_type = _qgis_datasource_quote(layer.geometry_type or "")
-    srid = layer.srid or 4326
-    return (
-        f"service='{QGIS_CONNECTION_SERVICE}' key='{feature_id_column}' srid={srid} "
-        f'type=\'{geometry_type}\' table="{schema}"."{table}" ({geometry_column}) sql='
-    )
-
-
-def _qgis_project_manifest(layers: list[GisLayer], generated_at: datetime) -> dict[str, Any]:
-    return {
-        "project": "GAIA GIS Platform",
-        "generated_at": generated_at.astimezone(UTC).isoformat(),
-        "connection_service": QGIS_CONNECTION_SERVICE,
-        "policy": {
-            "source": "postgis",
-            "mode": "visible_read_only_layers",
-            "excluded": ["postgis_staging", "domain_registry", "qgis.mode=not_published"],
-        },
-        "layers": [
-            {
-                "id": str(layer.id),
-                "workspace": layer.workspace,
-                "name": layer.name,
-                "title": layer.title,
-                "domain_module": layer.domain_module,
-                "postgis_schema": layer.postgis_schema or "public",
-                "postgis_table": layer.postgis_table or layer.name,
-                "geometry_column": layer.geometry_column,
-                "geometry_type": layer.geometry_type,
-                "srid": layer.srid,
-                "feature_id_column": layer.feature_id_column or "id",
-            }
-            for layer in layers
-        ],
-    }
-
-
-def _build_qgis_project_xml(layers: list[GisLayer], generated_at: datetime) -> bytes:
-    root = ET.Element("QGIS", attrib={"projectname": "GAIA GIS Platform", "version": "3.34.0"})
-    ET.SubElement(root, "title").text = "GAIA GIS Platform"
-    ET.SubElement(root, "autotransaction").text = "0"
-    ET.SubElement(root, "evaluateDefaultValues").text = "0"
-    ET.SubElement(root, "trust", attrib={"active": "0"})
-    properties = ET.SubElement(root, "properties")
-    ET.SubElement(properties, "GeneratedAt").text = generated_at.astimezone(UTC).isoformat()
-    ET.SubElement(properties, "ConnectionService").text = QGIS_CONNECTION_SERVICE
-
-    layer_tree = ET.SubElement(root, "layer-tree-group", attrib={"name": "GAIA GIS Platform", "checked": "Qt::Checked"})
-    groups: dict[str, ET.Element] = {}
-    for layer in layers:
-        group = groups.get(layer.workspace)
-        if group is None:
-            group = ET.SubElement(layer_tree, "layer-tree-group", attrib={"name": layer.workspace, "checked": "Qt::Checked"})
-            groups[layer.workspace] = group
-        ET.SubElement(
-            group,
-            "layer-tree-layer",
-            attrib={
-                "id": _qgis_project_layer_id(layer),
-                "name": layer.title,
-                "source": _qgis_layer_datasource(layer),
-                "providerKey": "postgres",
-                "checked": "Qt::Checked",
-            },
-        )
-
-    project_layers = ET.SubElement(root, "projectlayers")
-    for layer in layers:
-        map_layer = ET.SubElement(
-            project_layers,
-            "maplayer",
-            attrib={"type": "vector", "geometry": _qgis_geometry_kind(layer), "styleCategories": "AllStyleCategories"},
-        )
-        ET.SubElement(map_layer, "id").text = _qgis_project_layer_id(layer)
-        ET.SubElement(map_layer, "datasource").text = _qgis_layer_datasource(layer)
-        ET.SubElement(map_layer, "layername").text = layer.title
-        ET.SubElement(map_layer, "provider", attrib={"encoding": "UTF-8"}).text = "postgres"
-        ET.SubElement(map_layer, "abstract").text = layer.description or ""
-        ET.SubElement(map_layer, "keywordList").text = f"{layer.workspace},{layer.domain_module or ''},GAIA"
-        srs = ET.SubElement(map_layer, "srs")
-        ET.SubElement(srs, "spatialrefsys").text = f"EPSG:{layer.srid or 4326}"
-    ET.indent(root, space="  ")
-    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
-
-
-def _qgis_project_readme(layer_count: int, generated_at: datetime) -> str:
-    return (
-        "GAIA GIS Platform - progetto QGIS unico\n\n"
-        f"Generato: {generated_at.astimezone(UTC).isoformat()}\n"
-        f"Layer inclusi: {layer_count}\n"
-        f"Connessione PostGIS attesa: service={QGIS_CONNECTION_SERVICE}\n\n"
-        "Uso operativo:\n"
-        "1. Configurare nel PC il servizio PostgreSQL 'gaia_gis' con credenziali QGIS autorizzate.\n"
-        "2. Aprire il file gaia-gis-platform.qgs dentro questo archivio .qgz con QGIS Desktop.\n"
-        "3. Usare i layer come lettura governata. Le modifiche passano da change request GAIA o policy edit controllate.\n\n"
-        "Esclusioni intenzionali: layer staging da import shapefile, registry applicativi e layer marcati qgis.mode=not_published.\n"
-    )
-
-
 def _build_qgis_project_archive(layers: list[GisLayer], generated_at: datetime) -> bytes:
-    manifest = _qgis_project_manifest(layers, generated_at)
-    buffer = io.BytesIO()
-    with ZipFile(buffer, mode="w", compression=ZIP_DEFLATED) as archive:
-        archive.writestr(QGIS_PROJECT_FILENAME, _build_qgis_project_xml(layers, generated_at))
-        archive.writestr("README_QGIS.txt", _qgis_project_readme(len(layers), generated_at))
-        archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True))
-    return buffer.getvalue()
+    return qgis_project.build_archive(layers, generated_at)
 
 
 def _ogc_service_layer_name(layer: GisLayer) -> str:
@@ -2427,13 +2297,13 @@ def request_shapefile_export(
 def build_qgis_project_download(db: Session, current_user: ApplicationUser) -> GisQgisProjectArtifact:
     layers = db.scalars(
         select(GisLayer)
-        .where(GisLayer.is_active.is_(True), GisLayer.source_type == "postgis")
+        .where(GisLayer.is_active.is_(True), GisLayer.source_type.in_(("postgis", "wms_external", "wfs_external")))
         .order_by(GisLayer.workspace.asc(), GisLayer.title.asc(), GisLayer.name.asc())
     ).all()
     visible_layers = [
         layer
         for layer in layers
-        if _is_qgis_project_layer(layer) and _permission_flags(db, layer.id, current_user)["can_view"]
+        if qgis_project.is_project_layer(layer) and _permission_flags(db, layer.id, current_user)["can_view"]
     ]
     if not visible_layers:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No QGIS publishable layers visible for this user")
