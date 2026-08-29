@@ -1,7 +1,7 @@
 # GAIA GIS Platform - Progress Territorio Esterno
 
-> Ultimo aggiornamento: 2026-08-28.
-> Branch corrente: `feature/gis-territorio-external-layers-m21`.
+> Ultimo aggiornamento: 2026-08-29.
+> Branch corrente: `feature/gis-territorio-external-layers-m21`, HEAD `6563cc1b`.
 >
 > Piano tecnico: `docs/GIS_PLATFORM_TERRITORIO_PLAN.md`.
 > Riferimento dati: `docs/GIS_PLATFORM_TERRITORIO_CATALOGO.md`.
@@ -16,7 +16,8 @@ ammissibili (`14` RAS vettoriali, `4` RAS raster, `3` AdE).
 P1 e implementato: registro sorgenti, proxy governato, cache, health, nuovi
 source type e divieti backend sono coperti al `100%`. La change quality separata
 e stata integrata in `main` a `3d373f28`; M21 e stata riallineata, congelata nel
-commit `07d9f7c4` e chiusa con ratchet verde. M22-M25 non sono avviate.
+commit `07d9f7c4` e chiusa con ratchet verde. Il branch e stato ripulito il
+2026-08-29 e contiene ora soltanto commit M21. M22-M25 non sono avviate.
 
 La base M1-M20 della GIS Platform e in esercizio e non richiede modifiche
 preliminari: `source_type` e gia una colonna `String(32)` libera in `GisLayer` e
@@ -78,6 +79,44 @@ Verifiche P1 eseguite il 2026-08-28:
   `3d373f28dbabeb475efbc5dfd41d53f4d8066586`, nessun finding;
 - `make quality-test`: `46 passed`;
 - `git diff --check`: exit `0`.
+
+### Riordino Branch E Riverifica, 2026-08-29
+
+Il branch conteneva `5f319127 fix(search): rank linked utenza first for CF and
+P.IVA`, estraneo al perimetro Territorio Esterno: toccava
+`backend/app/modules/search/service.py`,
+`backend/tests/test_operational_search_api.py` e `docs/ARCHITECTURE.md`.
+
+Il commit e stato spostato su `fix/search-linked-utenza-ranking`, ramificato da
+`main` a `3d373f28` e non da M21, cosi da restare mergiabile in autonomia. Il
+cherry-pick `3d769709` e stato confrontato con l'originale: diff identico. La
+storia precedente resta su `backup/m21-pre-cleanup-20260829`.
+
+Il branch M21 e stato riscritto con `git rebase --onto dddbbe58 5f319127` e
+contiene ora tre commit: `07d9f7c4`, `dddbbe58` e `6563cc1b`. Il diff
+`main..HEAD` non presenta piu tracce della change Search, verificate a zero
+righe residue, e si riduce a `16` file tutti nel perimetro M21.
+
+Riverifica dopo il riordino, eseguita il 2026-08-29:
+
+- working tree pulito, `0` voci;
+- suite M21 mirata: `112 passed`;
+- coverage per statement sui sette runtime del perimetro: `2402` statement, `0`
+  mancanti, totale `100%`;
+- `external_sources.py`: `98/98`, `external_proxy.py`: `202/202`,
+  `config.py`: `283/283`, `schemas.py`: `412/412`, `router.py`: `150/150`,
+  `runtime_health.py`: `132/132`, `services.py`: `1125/1125`;
+- coverage per branch sui due runtime nuovi: `84` branch, `0` parziali,
+  `100%`;
+- `make lint-backend`: exit `0`;
+- `make complexity-ratchet BASE_REF=main`: exit `0`, `findings: []`, `16`
+  changed files.
+
+`services.py` passa da `1126` a `1125` statement per la rimozione della guardia
+morta in `_apply_feature_create`, commit `6563cc1b`. Il conteggio totale scende
+di conseguenza da `2403` a `2402`.
+
+Nessun push e nessuna integrazione in `main`.
 
 ### Audit Del Drift E Chiusura Ratchet, 2026-08-28
 
@@ -255,5 +294,15 @@ servizi pubblici e AdE dichiara esplicitamente un limite concorrente.
 
 Non aprire P2.
 
-M21 e chiusa con ratchet verde. P2 resta fermo e potra essere aperto soltanto su
-richiesta esplicita, partendo dallo stato integrato e verificato di M21.
+M21 e chiusa con ratchet verde e il branch e ripulito. P2 resta fermo e potra
+essere aperto soltanto su richiesta esplicita, partendo dallo stato verificato
+di M21.
+
+Attivita residue, indipendenti da P2:
+
+- decidere se aprire una PR per `feature/gis-territorio-external-layers-m21`
+  verso `main`: il branch non ha upstream e non e mai stato pushato;
+- gestire separatamente `fix/search-linked-utenza-ranking`, che e pronto e
+  autonomo;
+- cancellare `backup/m21-pre-cleanup-20260829` quando l'esito del riordino sara
+  considerato definitivo.
