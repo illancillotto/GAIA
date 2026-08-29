@@ -3,13 +3,35 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user, require_module
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
-from app.modules.gis import catalog_queries, runtime_health, services
+from app.modules.gis import (
+    catalog_queries,
+    external_proxy,
+    runtime_health,
+    services,
+    territorio_catalog,
+)
+from app.modules.gis.interrogazione import models as interrogazione_models
+from app.modules.gis.interrogazione import service as interrogazione_service
+from app.modules.gis.scheda_territoriale.router import router as scheda_router
+from app.modules.gis.qgis_external_router import router as qgis_external_router
 from app.modules.gis.schemas import (
     GisAnnotationCreate,
     GisAnnotationResponse,
@@ -22,6 +44,9 @@ from app.modules.gis.schemas import (
     GisChangeRequestReview,
     GisChangeRequestStatus,
     GisChangeRequestUpdate,
+    GisExternalSourceResponse,
+    GisInterrogazioneRequest,
+    GisInterrogazioneResponse,
     GisLayerCreate,
     GisLayerExportListResponse,
     GisLayerExportRequest,
@@ -41,6 +66,7 @@ from app.modules.gis.schemas import (
     GisShapefileImportPreviewResponse,
     GisShapefileImportResponse,
     GisShapefileImportStatus,
+    GisTerritorioLayerListResponse,
 )
 
 router = APIRouter(
@@ -48,6 +74,8 @@ router = APIRouter(
     tags=["gis-platform"],
     dependencies=[Depends(require_module("gis"))],
 )
+router.include_router(scheda_router)
+router.include_router(qgis_external_router)
 
 
 @router.post(
@@ -108,6 +136,93 @@ def get_runtime_health(
 ) -> GisRuntimeHealthResponse:
     del current_user
     return runtime_health.get_runtime_health(db)
+
+
+@router.get("/external/sources", response_model=list[GisExternalSourceResponse])
+def list_external_sources(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+) -> list[GisExternalSourceResponse]:
+    if not services.is_gis_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="GIS admin role required",
+        )
+    return [
+        GisExternalSourceResponse.model_validate(item)
+        for item in external_proxy.list_external_source_statuses()
+    ]
+
+
+@router.get("/territorio/layers", response_model=GisTerritorioLayerListResponse)
+def list_territorio_layers(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> GisTerritorioLayerListResponse:
+    return territorio_catalog.list_territorio_layers(db, current_user)
+
+
+@router.post("/interroga", response_model=GisInterrogazioneResponse)
+def interroga(
+    body: GisInterrogazioneRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> GisInterrogazioneResponse:
+    point = interrogazione_models.InterrogationPoint(
+        lon=body.lon,
+        lat=body.lat,
+        srid=body.srid,
+        radius_m=body.radius_m or settings.gis_interrogazione_default_radius_m,
+    )
+    result = interrogazione_service.interrogate_point(
+        db,
+        current_user,
+        point,
+        body.layer_ids,
+    )
+    return GisInterrogazioneResponse.model_validate(result, from_attributes=True)
+
+
+def _external_proxy_response(payload: external_proxy.ExternalProxyPayload) -> Response:
+    return Response(
+        content=payload.content,
+        status_code=payload.status_code,
+        media_type=payload.media_type,
+        headers={"X-GAIA-External-Cache": payload.cache_status},
+    )
+
+
+@router.get("/external/{layer_id}/wms")
+def proxy_external_wms(
+    layer_id: UUID,
+    request: Request,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> Response:
+    payload = external_proxy.proxy_external_request(
+        db,
+        layer_id,
+        current_user,
+        service="wms",
+        query_items=request.query_params.multi_items(),
+    )
+    return _external_proxy_response(payload)
+
+
+@router.get("/external/{layer_id}/wfs")
+def proxy_external_wfs(
+    layer_id: UUID,
+    request: Request,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> Response:
+    payload = external_proxy.proxy_external_request(
+        db,
+        layer_id,
+        current_user,
+        service="wfs",
+        query_items=request.query_params.multi_items(),
+    )
+    return _external_proxy_response(payload)
 
 
 @router.get("/qgis/governance", response_model=GisQgisGovernanceResponse)

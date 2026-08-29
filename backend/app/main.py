@@ -12,11 +12,19 @@ from app.core.database import SessionLocal, engine
 from app.core.logging import configure_logging
 from app.models.section_permission import Section
 from app.modules.gis.bootstrap import ensure_gis_platform_catalog
+from app.modules.gis.territorio_bootstrap import ensure_territorio_gis_catalog
 from app.scripts.bootstrap_sections import ensure_default_sections
 from app.services.bootstrap_admin import ensure_bootstrap_admin
 
 configure_logging()
 logger = logging.getLogger(__name__)
+
+
+def _ensure_gis_catalogs(db):
+    created = ensure_gis_platform_catalog(db)
+    if settings.gis_external_layers_enabled:
+        created["territorio"] = ensure_territorio_gis_catalog(db)
+    return created
 
 
 def _ensure_bootstrap_admin_on_startup() -> None:
@@ -76,7 +84,7 @@ def _ensure_gis_catalog_on_startup() -> None:
 
     db = SessionLocal()
     try:
-        created = ensure_gis_platform_catalog(db)
+        created = _ensure_gis_catalogs(db)
         logger.info("GIS catalog bootstrap ready on startup: layers_created=%s", created)
     finally:
         db.close()

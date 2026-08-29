@@ -136,6 +136,30 @@ class GisLayerExport(Base):
     layer: Mapped[GisLayer] = relationship(back_populates="exports")
 
 
+class GisSchedaTerritoriale(Base):
+    __tablename__ = "gis_schede_territoriali"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    particella_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cat_particelle.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    requested_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    status: Mapped[str] = mapped_column(String(32), default="queued", nullable=False, index=True)
+    artifact_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    checksum_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_snapshot_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    requested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 class GisShapefileImport(Base):
     __tablename__ = "gis_shapefile_imports"
 

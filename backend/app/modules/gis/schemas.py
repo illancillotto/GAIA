@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class GisAccessLevel(str, Enum):
@@ -46,6 +46,37 @@ class GisShapefileImportStatus(str, Enum):
     failed = "failed"
 
 
+class GisExternalLayerConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_key: str = Field(min_length=1, max_length=80, pattern=r"^[a-z0-9_]+$")
+    service: Literal["wms", "wfs"]
+    version: str = Field(
+        min_length=1, max_length=16, pattern=r"^[0-9]+(?:\.[0-9]+){1,2}$"
+    )
+    remote_layer: str = Field(
+        min_length=1,
+        max_length=255,
+        pattern=r"^[A-Za-z0-9_.:-]+$",
+    )
+    format: str = Field(min_length=1, max_length=120)
+    transparent: bool
+    srid: int = Field(ge=1)
+    queryable: Literal["wfs_queryable", "wms_infoable", "wms_visual_only"]
+    info_format: str | None = Field(default=None, max_length=120)
+    cache_ttl_seconds: int = Field(ge=1, le=31_536_000)
+    license: str = Field(min_length=1, max_length=500)
+    attribution: str = Field(min_length=1, max_length=2000)
+
+    @model_validator(mode="after")
+    def _validate_query_mode(self) -> GisExternalLayerConfig:
+        if self.service == "wfs" and self.queryable != "wfs_queryable":
+            raise ValueError("WFS external layers must be wfs_queryable")
+        if self.queryable == "wms_infoable" and not self.info_format:
+            raise ValueError("wms_infoable layers require info_format")
+        return self
+
+
 class GisLayerCreate(BaseModel):
     workspace: str = Field(min_length=1, max_length=80)
     name: str = Field(min_length=1, max_length=120)
@@ -65,6 +96,21 @@ class GisLayerCreate(BaseModel):
     qgis_project_path: str | None = None
     nas_export_root: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _validate_external_metadata(self) -> GisLayerCreate:
+        expected_service = {
+            "wms_external": "wms",
+            "wfs_external": "wfs",
+        }.get(self.source_type)
+        if expected_service is None:
+            return self
+        external = GisExternalLayerConfig.model_validate(self.metadata.get("external"))
+        if external.service != expected_service:
+            raise ValueError(
+                f"{self.source_type} requires metadata.external.service={expected_service}"
+            )
+        return self
 
 
 class GisLayerMetadataUpdate(BaseModel):
@@ -182,7 +228,7 @@ class GisCatalogDashboardResponse(BaseModel):
 
 
 class GisRuntimeComponentHealth(BaseModel):
-    key: Literal["postgis", "martin", "qgis", "nas"]
+    key: Literal["postgis", "martin", "qgis", "nas", "external_sources"]
     label: str
     status: Literal["ok", "warning", "critical", "not_configured"]
     message: str
@@ -196,6 +242,97 @@ class GisRuntimeHealthResponse(BaseModel):
     status: Literal["ok", "warning", "critical"]
     export_scheduler_enabled: bool
     components: list[GisRuntimeComponentHealth]
+
+
+class GisExternalSourceResponse(BaseModel):
+    source_key: str
+    base_url: str
+    service: Literal["wms", "wfs"]
+    version: str
+    supported_services: list[Literal["wms", "wfs"]]
+    timeout_seconds: float
+    enabled: bool
+    status: Literal["enabled", "disabled", "not_configured"]
+
+
+class GisTerritorioLayer(BaseModel):
+    id: UUID
+    name: str
+    title: str
+    description: str | None = None
+    theme: str
+    source: str
+    proxy_wms_url: str
+    legend_url: str
+    default_opacity: float = Field(ge=0, le=1)
+    render_order: int = Field(ge=0)
+    queryable: Literal["wfs_queryable", "wms_infoable", "wms_visual_only"]
+    attribution: str
+
+
+class GisTerritorioLayerGroup(BaseModel):
+    theme: str
+    label: str
+    layers: list[GisTerritorioLayer]
+
+
+class GisTerritorioLayerListResponse(BaseModel):
+    groups: list[GisTerritorioLayerGroup]
+    total: int
+
+
+class GisInterrogazioneRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    lon: float
+    lat: float
+    srid: int = Field(default=4326, ge=1)
+    layer_ids: list[UUID] | None = None
+    radius_m: float | None = Field(default=None, gt=0, le=100_000)
+
+
+class GisInterrogazioneSourceResponse(BaseModel):
+    source_id: str
+    title: str
+    status: Literal["ok", "empty", "failed", "skipped"]
+    duration_ms: float = Field(ge=0)
+    data: list[dict[str, Any]] = Field(default_factory=list)
+    message: str | None = None
+
+
+class GisInterrogazioneLevelResponse(BaseModel):
+    key: Literal["gaia", "catasto_ufficiale", "territorio"]
+    sources: list[GisInterrogazioneSourceResponse]
+
+
+class GisInterrogazioneResponse(BaseModel):
+    lon: float
+    lat: float
+    srid: int
+    radius_m: float
+    gaia: GisInterrogazioneLevelResponse
+    catasto_ufficiale: GisInterrogazioneLevelResponse
+    territorio: GisInterrogazioneLevelResponse
+
+
+class GisSchedaTerritorialeCreate(BaseModel):
+    particella_id: UUID
+
+
+class GisSchedaTerritorialeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    particella_id: UUID
+    requested_by_user_id: int | None = None
+    status: Literal["queued", "processing", "completed", "failed"]
+    artifact_path: str | None = None
+    checksum_sha256: str | None = None
+    source_snapshot: dict[str, Any] = Field(validation_alias="source_snapshot_json")
+    error_message: str | None = None
+    requested_at: datetime
+    completed_at: datetime | None = None
+    updated_at: datetime
 
 
 class GisLayerPermissionUpsert(BaseModel):

@@ -9,6 +9,33 @@ interface DrawingToolsProps {
   orientation?: "horizontal" | "vertical";
 }
 
+export type MeasurementMode = "distance" | "area" | null;
+
+export function MeasurementTools({
+  mode,
+  result,
+  onModeChange,
+  onClear,
+}: {
+  mode: MeasurementMode;
+  result: string | null;
+  onModeChange: (mode: Exclude<MeasurementMode, null>) => void;
+  onClear: () => void;
+}) {
+  return (
+    <section aria-label="Misure geodetiche" className="rounded-xl border border-emerald-900/15 bg-[#fffdf6]/95 p-3 shadow-lg">
+      <p className="text-xs font-bold uppercase tracking-[0.16em] text-emerald-900">Misure sul terreno</p>
+      <div className="mt-2 flex gap-2">
+        <button type="button" aria-pressed={mode === "distance"} onClick={() => onModeChange("distance")} className="rounded-lg bg-emerald-800 px-3 py-2 text-xs font-bold text-white">Distanza</button>
+        <button type="button" aria-pressed={mode === "area"} onClick={() => onModeChange("area")} className="rounded-lg bg-emerald-800 px-3 py-2 text-xs font-bold text-white">Area</button>
+        <button type="button" onClick={onClear} className="rounded-lg border border-stone-300 px-3 py-2 text-xs font-bold">Pulisci</button>
+      </div>
+      <p className="mt-2 text-xs text-slate-600">Clic sulla mappa per aggiungere vertici. Doppio clic per terminare.</p>
+      {result ? <output className="mt-2 block text-sm font-bold text-emerald-950">{result}</output> : null}
+    </section>
+  );
+}
+
 export default function DrawingTools({
   onDrawPolygon,
   onClearDrawing,

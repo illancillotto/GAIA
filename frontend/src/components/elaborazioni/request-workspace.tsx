@@ -8,6 +8,7 @@ import { ProtectedPage } from "@/components/app/protected-page";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ElaborazioneHero, ElaborazioneMiniStat, ElaborazioneNoticeCard, ElaborazionePanelHeader } from "@/components/elaborazioni/module-chrome";
 import { BatchCredentialSelector } from "@/components/elaborazioni/batch-credential-selector";
+import { ContinuousCatastoSyncPanel } from "@/components/elaborazioni/continuous-catasto-sync-panel";
 import { RecentBatchesPanel } from "@/components/elaborazioni/recent-batches-panel";
 import { ElaborazioneStatusBadge } from "@/components/elaborazioni/status-badge";
 import { DocumentIcon, FolderIcon, LockIcon, RefreshIcon, SearchIcon } from "@/components/ui/icons";
@@ -17,12 +18,7 @@ import {
   createElaborazioneRichiesta,
   getCatastoComuni,
   getElaborazioneBatches,
-  getElaborazioneCredentials,
-  getElaborazioneRuoloAutoSyncStatus,
-  refreshElaborazioneRuoloAutoSyncSource,
-  runElaborazioneRuoloAutoSyncNow,
   startElaborazioneBatch,
-  updateElaborazioneRuoloAutoSyncConfig,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { formatDateTime } from "@/lib/presentation";
@@ -30,9 +26,7 @@ import type {
   CatastoBatch,
   CatastoComune,
   ElaborazioneBatchDetail,
-  ElaborazioneCredential,
   ElaborazioneRichiestaCreateInput,
-  ElaborazioneRuoloAutoSyncStatus,
 } from "@/types/api";
 
 type ValidationRowError = {
@@ -89,13 +83,6 @@ export function ElaborazioneRequestWorkspace({
   const [batchError, setBatchError] = useState<string | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
   const batchCredentialIds = useRef<string[]>([]);
-  const [credentials, setCredentials] = useState<ElaborazioneCredential[]>([]);
-  const [autoSyncStatus, setAutoSyncStatus] = useState<ElaborazioneRuoloAutoSyncStatus | null>(null);
-  const [autoSyncCredentialId, setAutoSyncCredentialId] = useState("");
-  const [autoSyncBusy, setAutoSyncBusy] = useState(false);
-  const [autoSyncError, setAutoSyncError] = useState<string | null>(null);
-  const [autoSyncInfo, setAutoSyncInfo] = useState<string | null>(null);
-
   const {
     register,
     handleSubmit,
@@ -176,46 +163,6 @@ export function ElaborazioneRequestWorkspace({
     const intervalId = window.setInterval(() => {
       void loadActiveBatches();
     }, 10000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadAutoSyncState(): Promise<void> {
-      const token = getStoredAccessToken();
-      if (!token) {
-        return;
-      }
-
-      try {
-        const [credentialStatus, autosyncStatus] = await Promise.all([
-          getElaborazioneCredentials(token),
-          getElaborazioneRuoloAutoSyncStatus(token),
-        ]);
-        if (cancelled) {
-          return;
-        }
-        setCredentials(credentialStatus.credentials);
-        setAutoSyncStatus(autosyncStatus);
-        setAutoSyncCredentialId(autosyncStatus.config.credential_id ?? credentialStatus.default_credential?.id ?? "");
-        setAutoSyncError(null);
-      } catch (loadError) {
-        if (cancelled) {
-          return;
-        }
-        setAutoSyncError(loadError instanceof Error ? loadError.message : "Errore caricamento autosync ruolo");
-      }
-    }
-
-    void loadAutoSyncState();
-    const intervalId = window.setInterval(() => {
-      void loadAutoSyncState();
-    }, 15000);
 
     return () => {
       cancelled = true;
@@ -308,78 +255,6 @@ export function ElaborazioneRequestWorkspace({
     }
   }
 
-  async function reloadAutoSyncState(): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token) return;
-
-    const [credentialStatus, autosyncStatus] = await Promise.all([
-      getElaborazioneCredentials(token),
-      getElaborazioneRuoloAutoSyncStatus(token),
-    ]);
-    setCredentials(credentialStatus.credentials);
-    setAutoSyncStatus(autosyncStatus);
-    setAutoSyncCredentialId((currentValue) => {
-      if (currentValue) {
-        return currentValue;
-      }
-      return autosyncStatus.config.credential_id ?? credentialStatus.default_credential?.id ?? "";
-    });
-  }
-
-  async function handleAutoSyncConfigUpdate(enabled: boolean): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token) return;
-
-    setAutoSyncBusy(true);
-    try {
-      await updateElaborazioneRuoloAutoSyncConfig(token, {
-        enabled,
-        credential_id: autoSyncCredentialId || null,
-      });
-      await reloadAutoSyncState();
-      setAutoSyncInfo(enabled ? "AutoSync a ruolo attivato." : "AutoSync a ruolo disattivato.");
-      setAutoSyncError(null);
-    } catch (error) {
-      setAutoSyncError(error instanceof Error ? error.message : "Errore aggiornamento AutoSync");
-    } finally {
-      setAutoSyncBusy(false);
-    }
-  }
-
-  async function handleAutoSyncRefreshSource(): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token) return;
-
-    setAutoSyncBusy(true);
-    try {
-      const response = await refreshElaborazioneRuoloAutoSyncSource(token);
-      await reloadAutoSyncState();
-      setAutoSyncInfo(response.message);
-      setAutoSyncError(null);
-    } catch (error) {
-      setAutoSyncError(error instanceof Error ? error.message : "Errore refresh sorgente autosync");
-    } finally {
-      setAutoSyncBusy(false);
-    }
-  }
-
-  async function handleAutoSyncRunNow(): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token) return;
-
-    setAutoSyncBusy(true);
-    try {
-      const response = await runElaborazioneRuoloAutoSyncNow(token);
-      await reloadAutoSyncState();
-      setAutoSyncInfo(response.message);
-      setAutoSyncError(null);
-    } catch (error) {
-      setAutoSyncError(error instanceof Error ? error.message : "Errore avvio autosync");
-    } finally {
-      setAutoSyncBusy(false);
-    }
-  }
-
   const content = (
     <>
       <ElaborazioneHero
@@ -412,17 +287,7 @@ export function ElaborazioneRequestWorkspace({
               />
             )
           ) : mode === "autosync" ? (
-            autoSyncError ? (
-              <ElaborazioneNoticeCard compact={embedded} title="Errore AutoSync a ruolo" description={autoSyncError} tone="danger" />
-            ) : autoSyncInfo ? (
-              <ElaborazioneNoticeCard compact={embedded} title="AutoSync a ruolo" description={autoSyncInfo} tone="success" />
-            ) : (
-              <ElaborazioneNoticeCard
-                compact={embedded}
-                title="Batch continuo"
-                description="Il flusso autosync mantiene in coda le particelle a ruolo e riprova quelle fallite fino alla chiusura."
-              />
-            )
+            <ElaborazioneNoticeCard compact={embedded} title="Sincronizzazione continua" description="Configura pool, priorità e SLA nel pannello operativo." />
           ) : batchError ? (
             <ElaborazioneNoticeCard compact={embedded} title="Errore batch" description={batchError} tone="danger" />
           ) : draftBatch ? (
@@ -445,7 +310,7 @@ export function ElaborazioneRequestWorkspace({
           <ElaborazioneMiniStat compact={embedded} eyebrow="Modalità attiva" value={mode === "single" ? "Singola" : mode === "batch" ? "Batch" : mode === "recent" ? "Recenti" : "AutoSync"} description="Puoi cambiare modalità in qualsiasi momento senza uscire dalla pagina." tone="success" />
           <ElaborazioneMiniStat compact={embedded} eyebrow="Comuni" value={comuni.length} description="Archivio comuni disponibile per richieste puntuali." />
           <ElaborazioneMiniStat compact={embedded} eyebrow="Elaborazioni attive" value={activeBatchesSummary.total} description={activeBatchesSummary.total > 0 ? `${activeBatchesSummary.processing} in lavorazione · ${activeBatchesSummary.pending} in attesa` : "Nessuna elaborazione aperta per l'utente corrente."} />
-          <ElaborazioneMiniStat compact={embedded} eyebrow={mode === "autosync" ? "Coda AutoSync" : "Validazione"} value={mode === "autosync" ? autoSyncStatus?.counts.total ?? 0 : validationErrors.length} description={mode === "autosync" ? `${autoSyncStatus?.counts.processing ?? 0} in lavorazione · ${autoSyncStatus?.counts.pending ?? 0} da rilanciare` : "Righe batch con errori bloccanti rilevate."} tone={mode === "autosync" ? (((autoSyncStatus?.counts.blocked_source ?? 0) + (autoSyncStatus?.counts.blocked_runtime ?? 0)) > 0 ? "warning" : "default") : (validationErrors.length > 0 ? "warning" : "default")} />
+          <ElaborazioneMiniStat compact={embedded} eyebrow={mode === "autosync" ? "Copertura" : "Validazione"} value={mode === "autosync" ? "4 scope" : validationErrors.length} description={mode === "autosync" ? "Ruolo prioritario, poi consorzio e anagrafe." : "Righe batch con errori bloccanti rilevate."} tone={validationErrors.length > 0 ? "warning" : "default"} />
         </div>
       </ElaborazioneHero>
 
@@ -883,142 +748,7 @@ export function ElaborazioneRequestWorkspace({
           ) : null}
         </>
       ) : mode === "autosync" ? (
-        <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
-          <ElaborazionePanelHeader
-            badge={
-              <>
-                <RefreshIcon className="h-3.5 w-3.5" />
-                AutoSync a ruolo
-              </>
-            }
-            title="Coda automatica visure per particelle a ruolo"
-            description="Il flusso usa una sola utenza SISTER per volta, tiene in coda tutte le particelle collegate al ruolo e rimette in lavorazione i casi falliti."
-          />
-          <div className="space-y-6 p-6">
-            <div className="grid gap-4 lg:grid-cols-[1.2fr,1fr]">
-              <div className="space-y-4 rounded-[24px] border border-gray-100 bg-gray-50 p-4">
-                <label className="space-y-2">
-                  <span className="label-caption">Credenziale dedicata</span>
-                  <select
-                    className="form-control"
-                    disabled={autoSyncBusy}
-                    onChange={(event) => setAutoSyncCredentialId(event.target.value)}
-                    value={autoSyncCredentialId}
-                  >
-                    <option value="">Seleziona una credenziale attiva</option>
-                    {credentials.filter((credential) => credential.active).map((credential) => (
-                      <option key={credential.id} value={credential.id}>
-                        {credential.label} · {credential.sister_username}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    className="btn-primary"
-                    disabled={autoSyncBusy || !autoSyncCredentialId}
-                    onClick={() => void handleAutoSyncConfigUpdate(!(autoSyncStatus?.config.enabled ?? false))}
-                    type="button"
-                  >
-                    {autoSyncBusy ? "Aggiornamento..." : autoSyncStatus?.config.enabled ? "Metti su OFF" : "Metti su ON"}
-                  </button>
-                  <button className="btn-secondary" disabled={autoSyncBusy} onClick={() => void handleAutoSyncRefreshSource()} type="button">
-                    Aggiorna sorgente
-                  </button>
-                  <button className="btn-secondary" disabled={autoSyncBusy || !autoSyncCredentialId} onClick={() => void handleAutoSyncRunNow()} type="button">
-                    Esegui adesso
-                  </button>
-                </div>
-                <p className="text-xs text-gray-500">
-                  Stato: <span className="font-semibold text-gray-700">{autoSyncStatus?.config.enabled ? "ON" : "OFF"}</span>
-                  {autoSyncStatus?.config.last_source_refresh_at ? ` · sorgente aggiornata ${formatDateTime(autoSyncStatus.config.last_source_refresh_at)}` : ""}
-                  {autoSyncStatus?.config.last_batch_started_at ? ` · ultimo batch ${formatDateTime(autoSyncStatus.config.last_batch_started_at)}` : ""}
-                </p>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-                <div className="rounded-[20px] border border-gray-100 bg-white p-4">
-                  <p className="label-caption">In lavorazione</p>
-                  <p className="mt-2 text-2xl font-semibold text-gray-900">{autoSyncStatus?.counts.processing ?? 0}</p>
-                  <p className="mt-1 text-sm text-gray-500">Item attualmente presi in carico dal worker.</p>
-                </div>
-                <div className="rounded-[20px] border border-gray-100 bg-white p-4">
-                  <p className="label-caption">Da rilanciare</p>
-                  <p className="mt-2 text-2xl font-semibold text-gray-900">{(autoSyncStatus?.counts.pending ?? 0) + (autoSyncStatus?.counts.queued ?? 0)}</p>
-                  <p className="mt-1 text-sm text-gray-500">Particelle in attesa o rimesse in coda per retry.</p>
-                </div>
-                <div className="rounded-[20px] border border-gray-100 bg-white p-4">
-                  <p className="label-caption">Completate</p>
-                  <p className="mt-2 text-2xl font-semibold text-gray-900">{autoSyncStatus?.counts.completed ?? 0}</p>
-                  <p className="mt-1 text-sm text-gray-500">Visure già chiuse correttamente dal flusso automatico.</p>
-                </div>
-                <div className="rounded-[20px] border border-gray-100 bg-white p-4">
-                  <p className="label-caption">Bloccate in sorgente</p>
-                  <p className="mt-2 text-2xl font-semibold text-gray-900">{autoSyncStatus?.counts.blocked_source ?? 0}</p>
-                  <p className="mt-1 text-sm text-gray-500">Item non avviabili finché i dati ruolo/comune non sono coerenti.</p>
-                </div>
-                <div className="rounded-[20px] border border-gray-100 bg-white p-4">
-                  <p className="label-caption">Anomalie runtime</p>
-                  <p className="mt-2 text-2xl font-semibold text-gray-900">{autoSyncStatus?.counts.blocked_runtime ?? 0}</p>
-                  <p className="mt-1 text-sm text-gray-500">Casi fermati per comportamento anomalo del portale, da verificare manualmente.</p>
-                </div>
-              </div>
-            </div>
-
-            {autoSyncStatus?.running_batch ? (
-              <div className="rounded-[24px] border border-[#d9dfd6] bg-[#eef6f0] p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">{autoSyncStatus.running_batch.name ?? "Batch AutoSync attivo"}</p>
-                    <p className="mt-1 text-sm text-gray-600">{autoSyncStatus.running_batch.current_operation ?? "In lavorazione"}</p>
-                  </div>
-                  <ElaborazioneStatusBadge status={autoSyncStatus.running_batch.status} />
-                </div>
-              </div>
-            ) : null}
-
-            <div className="grid gap-4 xl:grid-cols-2">
-              <div className="rounded-[24px] border border-gray-100 bg-white p-4">
-                <p className="text-sm font-semibold text-gray-900">Errori e retry</p>
-                <div className="mt-3 space-y-3">
-                  {autoSyncStatus?.error_items.length ? autoSyncStatus.error_items.map((item) => (
-                    <div key={item.id} className="rounded-[18px] border border-red-100 bg-red-50 px-4 py-3">
-                      <p className="text-sm font-medium text-red-900">{item.comune ?? "Comune non risolto"} · Fg.{item.foglio ?? "-"} Part.{item.particella ?? "-"}</p>
-                      <p className="mt-1 text-sm text-red-700">{item.last_error_message ?? "In attesa di nuovo tentativo"}</p>
-                    </div>
-                  )) : (
-                    <p className="text-sm text-gray-500">Nessun item con errore da mostrare.</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="rounded-[24px] border border-gray-100 bg-white p-4">
-                <p className="text-sm font-semibold text-gray-900">Coda recente</p>
-                <div className="mt-3 space-y-3">
-                  {autoSyncStatus?.recent_items.length ? autoSyncStatus.recent_items.map((item) => (
-                    <div key={item.id} className="rounded-[18px] border border-gray-100 bg-gray-50 px-4 py-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{item.comune ?? "Comune"} · Fg.{item.foglio ?? "-"} Part.{item.particella ?? "-"}</p>
-                          <p className="mt-1 text-xs text-gray-500">
-                            tentativi {item.attempt_count}
-                            {item.last_completed_at ? ` · completata ${formatDateTime(item.last_completed_at)}` : ""}
-                            {item.retry_after ? ` · retry ${formatDateTime(item.retry_after)}` : ""}
-                          </p>
-                        </div>
-                        <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${item.status === "completed" ? "bg-emerald-100 text-emerald-700" : item.status === "processing" ? "bg-sky-100 text-sky-700" : item.status === "blocked_source" ? "bg-amber-100 text-amber-700" : item.status === "blocked_runtime" ? "bg-rose-100 text-rose-700" : "bg-slate-100 text-slate-700"}`}>
-                          {item.status === "blocked_source" ? "Bloccata sorgente" : item.status === "blocked_runtime" ? "Anomalia runtime" : item.status === "queued" ? "In coda" : item.status === "processing" ? "In lavorazione" : item.status === "completed" ? "Completata" : "Da rilanciare"}
-                        </span>
-                      </div>
-                    </div>
-                  )) : (
-                    <p className="text-sm text-gray-500">La coda autosync è ancora vuota.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </article>
+        <ContinuousCatastoSyncPanel />
       ) : (
         <RecentBatchesPanel />
       )}

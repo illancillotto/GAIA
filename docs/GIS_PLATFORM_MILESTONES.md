@@ -801,7 +801,11 @@ PostGIS.
 
 ## M21 - Fondazione Layer Esterni
 
-Stato: da implementare.
+Stato: completata il 2026-08-28 sul branch M21, commit `07d9f7c4`, con ratchet
+verde rispetto al merge-base `3d373f28`. Il drift preesistente di `services.py`
+e stato classificato e corretto in una change quality separata, integrata in
+`main`; la baseline di complessita e rimasta invariata. Non avviare M22 senza
+richiesta esplicita del prompt P2.
 
 Obiettivo:
 
@@ -829,9 +833,23 @@ Exit criteria:
 - flag disabilitato produce `503` governato;
 - coverage 100% sui runtime nuovi e modificati.
 
+Evidenza corrente:
+
+- proxy, registro, schema, configurazione, health e divieti backend
+  implementati senza seed esterno;
+- suite M21 verde e coverage `2403/2403`, `100%`, sui sette runtime modificati;
+- `make lint-backend` verde;
+- `make quality-test`: `46 passed`;
+- `make complexity-ratchet BASE_REF=main` verde, nessun finding;
+- baseline non aggiornata: il comando esplicito ha rifiutato regressioni non
+  classificate estranee al perimetro GIS.
+
 ## M22 - Catalogo Territorio E Pannello Strati
 
-Stato: da implementare.
+Stato: completata il 2026-08-28. Backend M22a sul branch
+`feature/gis-territorio-catalog-seed-m22`, frontend M22b sul branch
+`feature/gis-territorio-layer-panel-m22`; entrambi con coverage `100%` e
+ratchet verde.
 
 Obiettivo:
 
@@ -857,9 +875,34 @@ Exit criteria:
 - un layer irraggiungibile non rompe la mappa;
 - nessuna regressione su popup, ricerca, selezioni e strumenti esistenti.
 
+Evidenza M22a:
+
+- seed idempotente di `21` layer, corrispondente al catalogo ammesso dopo P0;
+- definizioni senza licenza o attribuzione rifiutate;
+- permesso `viewer` read-only e divieti export/QGIS applicati a ogni layer;
+- `GET /gis/territorio/layers` raggruppato per tema, con URL proxy,
+  attribuzione, opacita, ordine e interrogabilita risolti;
+- layer inattivi o privi di `can_view` esclusi dalla risposta;
+- coverage runtime `100%`, quality test e complexity ratchet verdi.
+
+Evidenza M22b:
+
+- pannello richiudibile con gruppi in italiano, toggle, opacita, legenda
+  autenticata, badge di sola consultazione e sorgente;
+- errori isolati per layer e attribuzioni delle sole sorgenti attive;
+- ortofoto selezionabili e confronto generico pronto per piu annate; il seed
+  corrente espone la sola annata autorizzata da P0;
+- raster registrati sul proxy GAIA e inseriti prima dei layer applicativi;
+- `MapContainer.tsx` e `page.tsx` invariati; integrazione tramite wrapper e
+  registry MapLibre dedicati;
+- suite completa `1626` test, coverage runtime `100%`, build e complexity
+  ratchet verdi.
+
 ## M23 - Interrogazione Puntuale Multi-Sorgente
 
-Stato: da implementare.
+Stato: completata il 2026-08-28. Backend M23a sul branch
+`feature/gis-territorio-interrogazione-m23`, frontend M23b sul branch
+`feature/gis-territorio-interrogazione-ui-m23`.
 
 Obiettivo:
 
@@ -884,9 +927,34 @@ Exit criteria:
 - risultato vuoto e sorgente non disponibile distinti in UI;
 - il popup particella resta invariato.
 
+Evidenza M23a:
+
+- package backend separato da `services.py`, con sei sonde locali PostGIS e
+  adapter WFS/WMS isolati;
+- `POST /gis/interroga` restituisce `gaia`, `catasto_ufficiale` e `territorio`,
+  con stato e durata per sorgente;
+- timeout individuale HTTP, parallelismo, limite remoto, `can_view` e
+  `wms_visual_only` verificati con client e sessioni simulati;
+- suite integrata `91 passed`, coverage runtime `1129/1129`, quality test e
+  complexity ratchet contro M22b verdi;
+- popup Catasto, frontend e baseline di complessita invariati.
+
+Evidenza M23b:
+
+- azione esplicita `Interroga punto` che arma il clic senza sostituire il
+  listener del popup rapido;
+- pannello laterale non modale con GAIA sempre aperto, Catasto ufficiale e
+  Territorio collassabili, stati distinti e attribuzioni per sorgente;
+- risultati progressivi: GAIA viene caricato separatamente e le sorgenti
+  remote completano per layer con concorrenza client limitata a quattro;
+- layer visual-only marcati non interrogabili senza richiesta HTTP e azione
+  M24 presente ma disabilitata;
+- `MapContainer.tsx`, `ParticellaGisDialog.tsx` e pannello strati M22 invariati.
+
 ## M24 - Scheda Territoriale Particella
 
-Stato: da implementare.
+Stato: completata il 2026-08-28 sul branch
+`feature/gis-territorio-scheda-m24`.
 
 Obiettivo:
 
@@ -912,9 +980,24 @@ Exit criteria:
 - layer non autorizzati esclusi e l'esclusione dichiarata nel documento;
 - snapshot sorgenti presente: la scheda deve restare ricostruibile.
 
+Evidenza M24:
+
+- generazione asincrona con stati `queued`, `processing`, `completed` e
+  `failed`, audit completo e retention configurabile degli artifact;
+- collector sul centroide e sulla estensione della particella, riuso delle
+  sonde M23, filtro `can_view`, esclusioni dichiarate ed estratto ortofoto;
+- PDF Chromium assemblato con `pypdf`, disclaimer in prima pagina,
+  attribuzioni e snapshot persistito prima della resa;
+- API di avvio, stato e download integrate nel pannello interrogazione con
+  polling e revoca dell'object URL;
+- suite GIS integrata `176 passed`, coverage backend `1157/1157`, coverage
+  frontend P6 al `100%`, suite frontend `180` file e `1636` test, build e
+  complexity ratchet contro M23b verdi.
+
 ## M25 - Strumenti Di Campo E Propagazione QGIS
 
-Stato: da implementare.
+Stato: completata il 2026-08-28 sul branch
+`feature/gis-territorio-strumenti-m25`.
 
 Obiettivo:
 
@@ -933,3 +1016,18 @@ Exit criteria:
 - misure corrette su un caso noto;
 - progetto QGIS filtrato sui layer visibili all'utente richiedente;
 - nessuna delle voci e bloccante per M21-M24.
+
+Evidenza M25:
+
+- distanze con haversine e aree sferiche su coordinate geografiche, incluso
+  caso noto di un grado equatoriale pari a circa `111.195 km`;
+- overlay MapLibre dedicato per vertici, linea e poligono, senza modificare
+  `MapContainer.tsx`;
+- slider di confronto che esegue cross-fade tra annata principale e annata di
+  confronto;
+- layout A4 orizzontale con intestazione consortile, scala derivata da zoom e
+  latitudine, legenda e attribuzioni degli strati attivi;
+- progetto QGIS con layer territoriali visibili come WMS sul proxy GAIA,
+  `authcfg=gaia_oauth`, filtro `can_view` e nessun token o URL remoto incluso;
+- suite GIS e coverage backend `1476/1476`, coverage frontend P7 al `100%`,
+  suite frontend `183` file e `1647` test, build e ratchet contro M24 verdi.

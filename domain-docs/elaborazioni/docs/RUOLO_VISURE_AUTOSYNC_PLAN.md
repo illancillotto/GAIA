@@ -6,6 +6,13 @@
 > refresh manuale, refresh incrementale della sorgente e status read-only
 > aggregato. Lo stato trasversale e in
 > `docs/WORKER_ARCHITECTURE_PROGRESS.md`.
+>
+> Evoluzione runtime 2026-08-28: la v1 descritta sotto e stata estesa a una
+> sincronizzazione catastale continua multi-credenziale, con particelle e
+> soggetti a ruolo in priorita primaria e patrimonio consortile/anagrafe in
+> priorita secondaria. Il contratto operativo corrente e documentato in
+> `CATASTO_CONTINUOUS_SYNC.md`; i vincoli single-account e gli elementi fuori
+> scope riportati sotto restano memoria della progettazione v1.
 
 ## Obiettivo
 

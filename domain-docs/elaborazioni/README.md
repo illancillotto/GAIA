@@ -78,6 +78,7 @@ La pagina `/elaborazioni` usa una struttura a sezioni stabili:
 - gli eventi SISTER sono fail-open: un errore di persistenza della telemetria non interrompe il worker; URL completi, query string, password, CAPTCHA e dati catastali non vengono memorizzati
 - la dashboard `/elaborazioni` mostra KPI runtime aggregati letti da `GET /elaborazioni/metrics`: throughput ultime 24h, volumetria 7 giorni, success rate, tempo medio richiesta/batch, ultimo processato e stato finestra operativa
 - in alto la dashboard espone la sezione `Autosync automatici`, che centralizza i toggle operativi per `Visure NAS`, `ANPR batch`, `AutoSync visure a ruolo`, `WhiteCompany daily` e `WhiteCompany Operazioni live`
+- il workspace visure espone la sincronizzazione catastale continua: pool multi-credenziale filtrato per finestra e lease, micro-batch prioritari per particelle/soggetti a ruolo e copertura secondaria di patrimonio consortile/anagrafe, con SLA e conteggi per scope configurabili
 - `GET /elaborazioni/auto-job-controls` restituisce l’elenco aggregato dei controlli automatici mostrati in dashboard, mentre `PUT /elaborazioni/auto-job-controls/{control_key}` permette agli admin di attivare o disattivare ogni job dalla stessa sezione
 - per `Visure NAS`, `WhiteCompany daily` e `WhiteCompany Operazioni live` il toggle dashboard viene persistito su tabella `elaborazione_auto_job_configs` e prevale sul default ambiente dopo il primo salvataggio, cosi il backend puo fermare o riattivare il job senza cambiare `.env`
 - `WhiteCompany Operazioni live` sincronizza automaticamente `reports`, `taken_charge`, `warehouse_requests` e `refuels` ogni 60 minuti nella finestra `06:00`-`21:00` locale di default; la schedulazione usa `WC_SYNC_OPERAZIONI_LIVE_START_HOUR`, `WC_SYNC_OPERAZIONI_LIVE_END_HOUR`, `WC_SYNC_OPERAZIONI_LIVE_TIMEZONE` e `WC_SYNC_OPERAZIONI_LIVE_LOOKBACK_DAYS`
@@ -87,6 +88,7 @@ La pagina `/elaborazioni` usa una struttura a sezioni stabili:
 
 - `docs/`: documentazione canonica del modulo `elaborazioni`
 - `docs/RUOLO_VISURE_AUTOSYNC_PLAN.md`: piano di implementazione dell'autosync visure per le particelle presenti a ruolo
+- `docs/CATASTO_CONTINUOUS_SYNC.md`: contratto runtime, SLA, pool SISTER, API e rollback del planner perpetuo
 - `capacitas/docs/CAPACITAS_DATA_RECOVERY.md`: guida operativa completa per recupero dati, storico anagrafico, Terreni e persistenza Capacitas
 - `GAIA_VISURE_PROMPT_1_ANALISI.md`
 - `GAIA_VISURE_PROMPT_2_IMPLEMENTAZIONE.md`

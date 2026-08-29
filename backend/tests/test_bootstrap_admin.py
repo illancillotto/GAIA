@@ -11,6 +11,7 @@ from app.models.application_user import ApplicationUser
 from app.models.section_permission import Section
 from app.modules.gis.bootstrap import CATASTO_GIS_LAYER_DEFINITIONS, NETWORK_GIS_LAYER_DEFINITIONS, RIORDINO_GIS_LAYER_DEFINITIONS
 from app.modules.gis.models import GisLayer, GisLayerPermission
+from app.modules.gis.territorio_bootstrap import TERRITORIO_GIS_LAYER_DEFINITIONS
 from app.services.bootstrap_admin import ensure_bootstrap_admin
 
 
@@ -236,6 +237,7 @@ def test_startup_gis_catalog_creates_platform_layers_when_tables_exist(monkeypat
 
     monkeypatch.setattr("app.main.engine", engine)
     monkeypatch.setattr("app.main.SessionLocal", SessionLocal)
+    monkeypatch.setattr("app.main.settings.gis_external_layers_enabled", True)
 
     _ensure_gis_catalog_on_startup()
 
@@ -244,6 +246,7 @@ def test_startup_gis_catalog_creates_platform_layers_when_tables_exist(monkeypat
         layers = db.query(GisLayer).filter(GisLayer.workspace == "catasto").all()
         riordino_layers = db.query(GisLayer).filter(GisLayer.workspace == "riordino").all()
         network_layers = db.query(GisLayer).filter(GisLayer.workspace == "rete").all()
+        territorio_layers = db.query(GisLayer).filter(GisLayer.workspace == "territorio").all()
         permissions = (
             db.query(GisLayerPermission)
             .join(GisLayer)
@@ -279,3 +282,4 @@ def test_startup_gis_catalog_creates_platform_layers_when_tables_exist(monkeypat
     assert len(network_viewer_permissions) == len(NETWORK_GIS_LAYER_DEFINITIONS)
     assert len(network_operator_permissions) == len(NETWORK_GIS_LAYER_DEFINITIONS)
     assert network_operator_permissions[0].can_edit is True
+    assert len(territorio_layers) == len(TERRITORIO_GIS_LAYER_DEFINITIONS)

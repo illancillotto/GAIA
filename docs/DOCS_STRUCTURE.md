@@ -50,6 +50,8 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 - `.github/workflows/`: pipeline CI/CD GitHub Actions.
 - `backend/app/MONOLITH_MODULAR.md`: note architetturali sul backend monolite modulare.
 - `backend/app/modules/inventory/`: modulo backend Inventory con router, modelli, schemi e servizi applicativi.
+- `backend/app/modules/gis/interrogazione/`: sonde e orchestrazione backend per
+  l'interrogazione puntuale multi-sorgente della GIS Platform.
 - `modules/README.md`: note sulla directory `modules/`.
 
 ## Documentazione per dominio

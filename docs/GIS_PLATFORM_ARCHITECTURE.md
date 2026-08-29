@@ -510,7 +510,7 @@ il file ZIP e stato eliminato.
 
 ### Layer Territoriali Esterni M21-M25
 
-Stato: pianificato, non implementato.
+Stato: M21-M25 implementate.
 
 Il catalogo GIS governa oggi solo layer che vivono nel PostGIS GAIA
 (`postgis`, `postgis_staging`) o registri applicativi di dominio
@@ -537,6 +537,74 @@ Confini:
 Sorgenti previste: GeoServer vettoriale e raster del SITR Regione Sardegna, e
 WMS Cartografia Catastale INSPIRE dell'Agenzia delle Entrate. Il WFS AdE gia
 usato dal modulo Catasto in `ade_wfs.py` non viene modificato.
+
+Fondazione M21:
+
+- `external_sources.py` risolve le tre sorgenti configurate e valida
+  `metadata.external`, inclusi identificativo remoto, versione, licenza e
+  attribuzione;
+- `external_proxy.py` ammette solo le operazioni WMS/WFS previste e una
+  allowlist di parametri per operazione; URL, servizio, versione e layer remoto
+  sono sempre ricavati dal catalogo e dal registro, mai dalla richiesta client;
+- il proxy usa `httpx` senza inoltrare header GAIA, applica il timeout della
+  sorgente e mantiene una cache filesystem atomica con TTL per layer e pruning
+  sul limite `GIS_EXTERNAL_CACHE_MAX_MB`;
+- gli errori proxy sono auditati senza registrare le singole tile; un errore di
+  audit non sostituisce la risposta governata verso il client;
+- `GIS_EXTERNAL_LAYERS_ENABLED=false` lascia i proxy disponibili come
+  superficie API ma risponde `503`; il flag non registra alcun seed;
+- `runtime_health.external_sources` esegue `GetCapabilities` sulle tre sorgenti
+  con timeout corto e cache di `300` secondi, separatamente dal dashboard
+  catalogo deterministico;
+- i metadata dei layer esterni sono normalizzati a `read_only=true`,
+  `qgis.mode=not_published`, `qgis.editable=false` ed
+  `export.shapefile=false`; change request ed export restano inoltre bloccati
+  nel servizio backend.
+
+Interrogazione backend M23a:
+
+- `backend/app/modules/gis/interrogazione/` separa modelli, sonde locali,
+  adapter remoti e orchestrazione dal servizio GIS legacy;
+- le sonde locali interrogano particella, distretto, punto di consegna, rete,
+  DUI, ruolo e utenze con SQL PostGIS parametrizzato;
+- WFS `GetFeature` e WMS `GetFeatureInfo` girano in parallelo con timeout
+  individuale; una failure esterna resta nel risultato, mentre una failure del
+  livello GAIA termina la richiesta;
+- il catalogo remoto e filtrato con `can_view`; i layer visual-only e quelli
+  oltre il limite configurato sono restituiti come `skipped` senza chiamata;
+- il flag `GIS_INTERROGAZIONE_ENABLED` resta `false` per default. Timeout,
+  raggio e limite remoto hanno default rispettivamente `8 s`, `150 m` e `12`.
+
+Pannello frontend M23b:
+
+- il wrapper `TerritorioMapExperience` collega il pannello a MapLibre senza
+  aggiungere logica a `MapContainer.tsx` e senza alterare il popup particella;
+- una azione esplicita arma il clic successivo, apre un overlay non modale e
+  mostra GAIA, Catasto ufficiale e Territorio con stati sempre espliciti;
+- GAIA e caricato con una richiesta senza layer remoti; i layer interrogabili
+  sono poi richiesti singolarmente con concorrenza limitata, cosi ogni sorgente
+  compare quando termina senza attendere la piu lenta;
+- i visual-only non generano richieste.
+
+Scheda territoriale M24:
+
+- `backend/app/modules/gis/scheda_territoriale/` separa raccolta, resa PDF,
+  orchestrazione asincrona e superficie API dal router GIS principale;
+- il collector calcola centroide ed estensione della particella, riusa le
+  sonde M23 con un raggio che copre la geometria e richiede l'estratto ortofoto
+  attraverso il proxy governato;
+- i layer senza `can_view` sono esclusi dalla raccolta ma restano elencati con
+  motivazione nello snapshot e nel documento; tutte le attribuzioni non vuote
+  dei layer consultabili sono deduplicate e riportate nel PDF;
+- `gis_schede_territoriali` conserva richiedente, stato, artifact, checksum,
+  snapshot JSON obbligatorio e timestamp; lo snapshot viene committato prima
+  della resa Chromium e una failure precedente alla raccolta produce comunque
+  uno snapshot diagnostico;
+- il renderer genera HTML con disclaimer nella prima pagina, usa Chromium via
+  Playwright e normalizza il PDF finale con `pypdf`;
+- il frontend abilita la generazione solo quando M23 identifica una particella,
+  esegue polling sugli stati asincroni e scarica il PDF completato tramite URL
+  temporaneo revocato al cambio particella o allo smontaggio.
 
 Superfici introdotte dal programma:
 
@@ -569,7 +637,7 @@ Il dettaglio e in `docs/GIS_PLATFORM_TERRITORIO_PLAN.md`.
 7. Valutazione POC QGIS Server vs GeoServer per pubblicazione WMS/WFS/WMTS.
 8. Programma Territorio Esterno: layer WMS/WFS di terzi nel catalogo,
    interrogazione puntuale multi-sorgente e scheda territoriale particella.
-   Pianificato in M21-M25, non ancora avviato.
+   M21-M25 implementate.
 
 ## Documenti Operativi
 

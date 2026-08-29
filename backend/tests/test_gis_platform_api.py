@@ -18,12 +18,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.gis import exporter as gis_exporter
+from app.modules.gis import external_proxy as gis_external_proxy
 from app.modules.gis import runtime_health as gis_runtime_health
 from app.modules.gis import services as gis_services
 from app.modules.gis.bootstrap import (
@@ -43,6 +45,7 @@ from app.modules.gis.models import (
     GisLayerPermission,
     GisShapefileImport,
 )
+from app.modules.gis.territorio_bootstrap import ensure_territorio_gis_catalog
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
 engine = create_engine(
@@ -303,6 +306,7 @@ def test_gis_activity_histories_are_paginated_and_authorized() -> None:
     )
     assert exports_next.json()["items"][0]["version_label"] == "v1"
     assert exports_next.json()["has_more"] is False
+    assert client.get("/gis/exports", headers=viewer_headers).status_code == 200
 
     denied_audit = client.get("/gis/audit", headers=viewer_headers)
     assert denied_audit.status_code == 403
@@ -320,6 +324,7 @@ def test_gis_activity_histories_are_paginated_and_authorized() -> None:
     )
     assert audit_next.json()["items"][0]["payload"] == {"version": "v1"}
     assert audit_next.json()["has_more"] is False
+    assert client.get("/gis/audit", headers=admin_headers).status_code == 200
 
     missing_layer = client.get(
         "/gis/exports?layer_id=00000000-0000-0000-0000-000000000123",
@@ -388,6 +393,14 @@ def seed_gis_platform_catalog() -> dict[str, int]:
     db = TestingSessionLocal()
     try:
         return ensure_gis_platform_catalog(db)
+    finally:
+        db.close()
+
+
+def seed_territorio_gis_catalog() -> int:
+    db = TestingSessionLocal()
+    try:
+        return ensure_territorio_gis_catalog(db)
     finally:
         db.close()
 
@@ -719,6 +732,25 @@ def test_layer_feature_selector_rejects_invalid_or_unavailable_sources() -> None
     assert identifier_response.status_code == 422
     assert identifier_response.json()["detail"] == "GIS layer feature identifier is unavailable"
 
+    db = TestingSessionLocal()
+    db.execute(text('CREATE TABLE "rete_selector_without_geometry" (id TEXT, name TEXT)'))
+    db.execute(
+        text('INSERT INTO "rete_selector_without_geometry" (id, name) VALUES ("1", "Senza geometria")')
+    )
+    db.commit()
+    db.close()
+    geometryless = create_layer(
+        admin_headers,
+        name="rete_selector_without_geometry",
+        workspace="rete",
+        domain_module="network",
+    )
+    geometryless_response = client.get(
+        f"/gis/layers/{geometryless['id']}/features", headers=admin_headers
+    )
+    assert geometryless_response.status_code == 200
+    assert geometryless_response.json()["items"][0]["geometry"] is None
+
 
 def test_feature_geometry_parser_handles_native_invalid_and_empty_values() -> None:
     geometry = {"type": "Point", "coordinates": [8.4, 39.9]}
@@ -726,6 +758,43 @@ def test_feature_geometry_parser_handles_native_invalid_and_empty_values() -> No
     assert gis_services._feature_geometry("not-json") is None
     assert gis_services._feature_geometry("[]") is None
     assert gis_services._feature_geometry(None) is None
+
+
+def test_gis_service_fallback_branches_are_stable() -> None:
+    db = TestingSessionLocal()
+    try:
+        unsaved_viewer = ApplicationUser(
+            username="unsaved-viewer",
+            email="unsaved-viewer@example.local",
+            password_hash="unused",
+            role=ApplicationUserRole.VIEWER.value,
+        )
+        assert gis_services._permission_flags(
+            db,
+            UUID("00000000-0000-0000-0000-000000000099"),
+            unsaved_viewer,
+        ) == gis_services._empty_flags()
+    finally:
+        db.close()
+
+    archive_bytes = io.BytesIO()
+    with zipfile.ZipFile(archive_bytes, "w") as archive:
+        archive.writestr("README.txt", "ignored")
+        archive.writestr("layer.shp", b"shape")
+    assert set(gis_services._zip_components(archive_bytes.getvalue())) == {
+        ("layer", ".shp")
+    }
+
+    gis_services._validate_change_request_payload(  # type: ignore[arg-type]
+        GisLayer(
+            id=UUID("00000000-0000-0000-0000-000000000098"),
+            workspace="",
+            source_type="postgis",
+        ),
+        "unsupported",
+        None,
+        {},
+    )
 
 
 def test_catalog_dashboard_handles_empty_visible_catalog() -> None:
@@ -1213,6 +1282,14 @@ def test_qgis_project_download_includes_only_visible_publishable_postgis_layers(
         domain_module="network",
         metadata={"qgis": {"mode": "read_only"}},
     )
+    second_visible_layer = create_layer(
+        admin_headers,
+        name="rete_valvole",
+        workspace="rete",
+        title="Rete valvole",
+        domain_module="network",
+        metadata={"qgis": {"mode": "read_only"}},
+    )
     not_published_layer = create_layer(
         admin_headers,
         name="rete_upload",
@@ -1238,7 +1315,12 @@ def test_qgis_project_download_includes_only_visible_publishable_postgis_layers(
         domain_module="network",
         metadata={"qgis": {"mode": "read_only"}},
     )
-    for layer in (visible_layer, not_published_layer, staging_layer):
+    for layer in (
+        visible_layer,
+        second_visible_layer,
+        not_published_layer,
+        staging_layer,
+    ):
         permission_response = client.post(
             f"/gis/layers/{layer['id']}/permissions",
             headers=admin_headers,
@@ -1250,7 +1332,7 @@ def test_qgis_project_download_includes_only_visible_publishable_postgis_layers(
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/vnd.qgis.qgisproject+zip"
-    assert response.headers["x-gis-qgis-layer-count"] == "1"
+    assert response.headers["x-gis-qgis-layer-count"] == "2"
     assert response.headers["content-disposition"] == 'attachment; filename="gaia-gis-platform.qgz"'
     with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
         assert set(archive.namelist()) == {"README_QGIS.txt", "gaia-gis-platform.qgs", "manifest.json"}
@@ -1260,13 +1342,61 @@ def test_qgis_project_download_includes_only_visible_publishable_postgis_layers(
 
     assert "service='gaia_gis'" in project_xml
     assert "Rete condotte" in project_xml
+    assert "Rete valvole" in project_xml
     assert "rete_upload" not in project_xml
     assert "rete_staging" not in project_xml
     assert hidden_layer["name"] not in project_xml
     assert manifest["connection_service"] == "gaia_gis"
     assert manifest["policy"]["excluded"] == ["postgis_staging", "domain_registry", "qgis.mode=not_published"]
-    assert [layer["name"] for layer in manifest["layers"]] == ["rete_condotte"]
-    assert "Layer inclusi: 1" in readme
+    assert [layer["name"] for layer in manifest["layers"]] == [
+        "rete_condotte",
+        "rete_valvole",
+    ]
+    assert "Layer inclusi: 2" in readme
+
+
+def test_qgis_project_includes_only_visible_territorio_layers_through_gaia_proxy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    admin_headers = auth_headers("gis-admin")
+    viewer_headers = auth_headers("gis-viewer")
+    visible = _create_external_layer(admin_headers)
+    hidden_response = client.post(
+        "/gis/layers",
+        headers=admin_headers,
+        json={
+            "workspace": "territorio",
+            "name": "hidden_external",
+            "title": "Hidden external",
+            "source_type": "wms_external",
+            "official_source": "ras_sitr",
+            "metadata": _external_layer_metadata(remote_layer="dbu:hidden"),
+        },
+    )
+    assert hidden_response.status_code == 201
+    permission = client.post(
+        f"/gis/layers/{visible['id']}/permissions",
+        headers=admin_headers,
+        json={"principal_type": "role", "principal_key": "viewer", "access_level": "viewer"},
+    )
+    assert permission.status_code == 200
+    monkeypatch.setattr(settings, "gis_qgis_proxy_base_url", "https://gaia.example.test")
+
+    response = client.get("/gis/qgis/project", headers=viewer_headers)
+
+    assert response.status_code == 200
+    assert response.headers["x-gis-qgis-layer-count"] == "1"
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        project_xml = archive.read("gaia-gis-platform.qgs").decode()
+        manifest = json.loads(archive.read("manifest.json"))
+        readme = archive.read("README_QGIS.txt").decode()
+    assert f"https%3A%2F%2Fgaia.example.test%2Fgis%2Fexternal%2F{visible['id']}%2Fqgis-wms" in project_xml
+    assert "authcfg=gaia_oauth" in project_xml
+    assert "providerKey=\"wms\"" in project_xml
+    assert "hidden_external" not in project_xml
+    assert "webgis.regione.sardegna.it" not in project_xml
+    assert manifest["layers"][0]["source_type"] == "wms_external"
+    assert "non contiene token" in readme
 
 
 def test_qgis_project_download_requires_visible_publishable_layers() -> None:
@@ -1281,6 +1411,7 @@ def test_qgis_project_download_requires_visible_publishable_layers() -> None:
 def test_qgis_project_geometry_kind_mapping_covers_common_shapes() -> None:
     assert gis_services._qgis_geometry_kind(GisLayer(geometry_type="POINT")) == "Point"  # noqa: SLF001
     assert gis_services._qgis_geometry_kind(GisLayer(geometry_type="MULTILINESTRING")) == "Line"  # noqa: SLF001
+    assert gis_services._qgis_geometry_kind(GisLayer(geometry_type="POLYGON")) == "Polygon"  # noqa: SLF001
     assert gis_services._qgis_geometry_kind(GisLayer(geometry_type=None)) == "UnknownGeometry"  # noqa: SLF001
 
 
@@ -1418,6 +1549,11 @@ def test_admin_imports_valid_shapefile_to_staging_and_rejects_it() -> None:
     assert preview_next.json()["features"][0]["attributes"]["name"] == "feature-2"
     assert client.post(f"/gis/imports/{import_id}/validate", headers=viewer_headers).status_code == 403
     assert client.post(f"/gis/imports/{import_id}/reject", headers=viewer_headers).status_code == 403
+    already_validated = client.post(
+        f"/gis/imports/{import_id}/validate", headers=admin_headers
+    )
+    assert already_validated.status_code == 200
+    assert already_validated.json()["status"] == "validated"
 
     db = TestingSessionLocal()
     try:
@@ -1980,6 +2116,11 @@ def test_admin_updates_layer_metadata_with_audit_and_field_guardrails() -> None:
         headers=admin_headers,
         json={"workspace": "blocked"},
     )
+    unchanged = client.patch(
+        f"/gis/layers/{layer['id']}/metadata",
+        headers=admin_headers,
+        json={"description": layer["description"]},
+    )
     updated = client.patch(
         f"/gis/layers/{layer['id']}/metadata",
         headers=admin_headers,
@@ -1997,6 +2138,7 @@ def test_admin_updates_layer_metadata_with_audit_and_field_guardrails() -> None:
     assert empty_update.status_code == 422
     assert null_title.status_code == 422
     assert critical_field.status_code == 422
+    assert unchanged.status_code == 200
     assert updated.status_code == 200
     payload = updated.json()
     assert payload["title"] == "Catasto pubblicato"
@@ -2010,9 +2152,23 @@ def test_admin_updates_layer_metadata_with_audit_and_field_guardrails() -> None:
 
     db = TestingSessionLocal()
     try:
-        audit = db.scalar(select(GisAuditLog).where(GisAuditLog.event_type == "layer.metadata_updated"))
-        assert audit is not None
-        assert audit.payload_json == {
+        audits = db.scalars(
+            select(GisAuditLog).where(
+                GisAuditLog.event_type == "layer.metadata_updated"
+            )
+        ).all()
+        assert {tuple(audit.payload_json["changed_fields"]) for audit in audits} == {
+            (),
+            (
+                "title",
+                "description",
+                "ogc_service_url",
+                "qgis_project_path",
+                "nas_export_root",
+                "metadata_json",
+            ),
+        }
+        assert audits[-1].payload_json == {
             "changed_fields": [
                 "title",
                 "description",
@@ -2141,6 +2297,16 @@ def test_annotation_lifecycle_filters_updates_permissions_and_audit() -> None:
     empty_update = client.patch(f"/gis/layers/{layer_id}/annotations/{annotation_id}", headers=viewer_headers, json={})
     null_title = client.patch(f"/gis/layers/{layer_id}/annotations/{annotation_id}", headers=viewer_headers, json={"title": None})
     null_body = client.patch(f"/gis/layers/{layer_id}/annotations/{annotation_id}", headers=viewer_headers, json={"body": None})
+    unchanged_title = client.patch(
+        f"/gis/layers/{layer_id}/annotations/{annotation_id}",
+        headers=viewer_headers,
+        json={"title": "Nota campo"},
+    )
+    unchanged_body = client.patch(
+        f"/gis/layers/{layer_id}/annotations/{annotation_id}",
+        headers=viewer_headers,
+        json={"body": "Primo testo"},
+    )
     updated = client.patch(
         f"/gis/layers/{layer_id}/annotations/{annotation_id}",
         headers=viewer_headers,
@@ -2174,6 +2340,8 @@ def test_annotation_lifecycle_filters_updates_permissions_and_audit() -> None:
     assert empty_update.status_code == 422
     assert null_title.status_code == 422
     assert null_body.status_code == 422
+    assert unchanged_title.status_code == 200
+    assert unchanged_body.status_code == 200
     assert updated.status_code == 200
     assert updated.json()["title"] == "Nota aggiornata"
     assert updated.json()["body"] == "Testo aggiornato"
@@ -2231,6 +2399,7 @@ def test_user_editor_change_request_and_admin_approval_workflow() -> None:
     assert change_request.json()["justification"] == "richiesta tecnico QGIS"
 
     change_request_id = change_request.json()["id"]
+    admin_unfiltered = client.get("/gis/change-requests", headers=admin_headers)
     invalid_status = client.get("/gis/change-requests?status=invalid", headers=editor_headers)
     listed_for_layer = client.get(f"/gis/change-requests?layer_id={layer_id}&status=submitted", headers=editor_headers)
     apply_before_approval = client.post(f"/gis/change-requests/{change_request_id}/apply", headers=admin_headers)
@@ -2249,6 +2418,16 @@ def test_user_editor_change_request_and_admin_approval_workflow() -> None:
         f"/gis/change-requests/{change_request_id}/request-changes",
         headers=admin_headers,
         json={"review_notes": "  integra fonte  "},
+    )
+    unchanged_payload = client.patch(
+        f"/gis/change-requests/{change_request_id}",
+        headers=editor_headers,
+        json={"payload": {"after": {"coltura": "mais"}}},
+    )
+    unchanged_justification = client.patch(
+        f"/gis/change-requests/{change_request_id}",
+        headers=editor_headers,
+        json={"justification": "richiesta tecnico QGIS"},
     )
     updated = client.patch(
         f"/gis/change-requests/{change_request_id}",
@@ -2290,6 +2469,7 @@ def test_user_editor_change_request_and_admin_approval_workflow() -> None:
     listed_applied = client.get("/gis/change-requests?status=applied", headers=editor_headers)
 
     assert blocked_approval.status_code == 403
+    assert admin_unfiltered.status_code == 200
     assert invalid_status.status_code == 422
     assert listed_for_layer.status_code == 200
     assert listed_for_layer.json()[0]["id"] == change_request_id
@@ -2300,6 +2480,8 @@ def test_user_editor_change_request_and_admin_approval_workflow() -> None:
     assert needs_changes.status_code == 200
     assert needs_changes.json()["status"] == "needs_changes"
     assert needs_changes.json()["review_notes"] == "integra fonte"
+    assert unchanged_payload.status_code == 200
+    assert unchanged_justification.status_code == 200
     assert updated.status_code == 200
     assert updated.json()["status"] == "submitted"
     assert updated.json()["feature_id"] == "parcel-43"
@@ -3282,3 +3464,327 @@ def test_admin_can_toggle_inactive_layers_while_viewers_do_not_see_them() -> Non
         assert "layer.activated" in audit_events
     finally:
         db.close()
+
+
+def _external_layer_metadata(**overrides: object) -> dict[str, object]:
+    external: dict[str, object] = {
+        "source_key": "ras_sitr_vector",
+        "service": "wms",
+        "version": "1.3.0",
+        "remote_layer": "dbu:areebonifica",
+        "format": "image/png",
+        "transparent": True,
+        "srid": 3857,
+        "queryable": "wfs_queryable",
+        "info_format": "application/json",
+        "cache_ttl_seconds": 300,
+        "license": "IODL 2.0",
+        "attribution": "Regione Autonoma della Sardegna",
+    }
+    external.update(overrides)
+    return {
+        "external": external,
+        "read_only": False,
+        "qgis": {"mode": "controlled_edit"},
+        "export": {"shapefile": True},
+    }
+
+
+def _create_external_layer(headers: dict[str, str]) -> dict:
+    response = client.post(
+        "/gis/layers",
+        headers=headers,
+        json={
+            "workspace": "territorio",
+            "name": "aree_bonifica",
+            "title": "Aree di bonifica",
+            "description": "Layer esterno RAS",
+            "domain_module": "gis",
+            "source_type": "wms_external",
+            "official_source": "ras_sitr",
+            "metadata": _external_layer_metadata(),
+        },
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
+def test_external_source_types_require_governed_metadata_and_preserve_policy() -> None:
+    admin_headers = auth_headers("gis-admin")
+
+    missing_metadata = client.post(
+        "/gis/layers",
+        headers=admin_headers,
+        json={
+            "workspace": "territorio",
+            "name": "missing_external",
+            "title": "Missing",
+            "source_type": "wms_external",
+            "official_source": "ras_sitr",
+        },
+    )
+    missing_license = client.post(
+        "/gis/layers",
+        headers=admin_headers,
+        json={
+            "workspace": "territorio",
+            "name": "missing_license",
+            "title": "Missing license",
+            "source_type": "wms_external",
+            "official_source": "ras_sitr",
+            "metadata": _external_layer_metadata(license=""),
+        },
+    )
+    wrong_service = client.post(
+        "/gis/layers",
+        headers=admin_headers,
+        json={
+            "workspace": "territorio",
+            "name": "wrong_service",
+            "title": "Wrong service",
+            "source_type": "wfs_external",
+            "official_source": "ras_sitr",
+            "metadata": _external_layer_metadata(),
+        },
+    )
+    unknown_source = client.post(
+        "/gis/layers",
+        headers=admin_headers,
+        json={
+            "workspace": "territorio",
+            "name": "unknown_source",
+            "title": "Unknown source",
+            "source_type": "wms_external",
+            "official_source": "ras_sitr",
+            "metadata": _external_layer_metadata(source_key="unknown"),
+        },
+    )
+
+    assert missing_metadata.status_code == 422
+    assert missing_license.status_code == 422
+    assert wrong_service.status_code == 422
+    assert unknown_source.status_code == 422
+    assert unknown_source.json()["detail"] == "Unknown external GIS source: unknown"
+
+    layer = _create_external_layer(admin_headers)
+    assert layer["source_type"] == "wms_external"
+    assert layer["metadata"]["read_only"] is True
+    assert layer["metadata"]["qgis"] == {
+        "mode": "not_published",
+        "editable": False,
+    }
+    assert layer["metadata"]["export"] == {"shapefile": False}
+
+    invalid_update = client.patch(
+        f"/gis/layers/{layer['id']}/metadata",
+        headers=admin_headers,
+        json={"metadata": _external_layer_metadata(attribution="")},
+    )
+    governed_update = client.patch(
+        f"/gis/layers/{layer['id']}/metadata",
+        headers=admin_headers,
+        json={"metadata": _external_layer_metadata(cache_ttl_seconds=600)},
+    )
+    assert invalid_update.status_code == 422
+    assert governed_update.status_code == 200
+    assert governed_update.json()["metadata"]["read_only"] is True
+    assert governed_update.json()["metadata"]["qgis"]["mode"] == "not_published"
+    assert governed_update.json()["metadata"]["export"]["shapefile"] is False
+    assert governed_update.json()["metadata"]["external"]["cache_ttl_seconds"] == 600
+
+
+def test_external_sources_endpoint_is_admin_only() -> None:
+    viewer = client.get(
+        "/gis/external/sources", headers=auth_headers("gis-viewer")
+    )
+    admin = client.get("/gis/external/sources", headers=auth_headers("gis-admin"))
+
+    assert viewer.status_code == 403
+    assert admin.status_code == 200
+    assert [item["source_key"] for item in admin.json()] == [
+        "ras_sitr_vector",
+        "ras_sitr_raster",
+        "ade_catasto_wms",
+    ]
+
+
+def test_external_proxy_requires_flag_view_permission_and_active_layer(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    admin_headers = auth_headers("gis-admin")
+    viewer_headers = auth_headers("gis-viewer")
+    layer = _create_external_layer(admin_headers)
+    proxy_url = f"/gis/external/{layer['id']}/wms?request=GetCapabilities"
+
+    disabled = client.get(proxy_url, headers=admin_headers)
+    assert disabled.status_code == 503
+
+    monkeypatch.setattr(settings, "gis_external_layers_enabled", True)
+    monkeypatch.setattr(
+        settings, "gis_external_ras_vector_url", "https://source.test/ows"
+    )
+    monkeypatch.setattr(settings, "gis_external_cache_dir", str(tmp_path))
+    monkeypatch.setattr(
+        gis_external_proxy,
+        "_fetch_remote",
+        lambda *_args: gis_external_proxy.ExternalProxyPayload(
+            b"<WMS_Capabilities/>", "text/xml", 200, "MISS"
+        ),
+    )
+
+    forbidden = client.get(proxy_url, headers=viewer_headers)
+    success = client.get(proxy_url, headers=admin_headers)
+    assert forbidden.status_code == 403
+    assert success.status_code == 200
+    assert success.headers["x-gaia-external-cache"] == "MISS"
+    assert success.content == b"<WMS_Capabilities/>"
+
+    postgis_layer = create_layer(admin_headers, name="internal_proxy_target")
+    non_external = client.get(
+        f"/gis/external/{postgis_layer['id']}/wms?request=GetCapabilities",
+        headers=admin_headers,
+    )
+    assert non_external.status_code == 422
+    assert non_external.json()["detail"] == (
+        "GIS external proxy requires an external layer"
+    )
+
+    deactivated = client.post(
+        f"/gis/layers/{layer['id']}/deactivate", headers=admin_headers
+    )
+    assert deactivated.status_code == 200
+    assert client.get(proxy_url, headers=admin_headers).status_code == 404
+
+
+def test_external_wfs_proxy_route(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    admin_headers = auth_headers("gis-admin")
+    create_response = client.post(
+        "/gis/layers",
+        headers=admin_headers,
+        json={
+            "workspace": "territorio",
+            "name": "aree_bonifica_wfs",
+            "title": "Aree di bonifica WFS",
+            "source_type": "wfs_external",
+            "official_source": "ras_sitr",
+            "metadata": _external_layer_metadata(
+                service="wfs",
+                version="1.1.0",
+                format="application/json",
+            ),
+        },
+    )
+    assert create_response.status_code == 201
+    layer = create_response.json()
+
+    monkeypatch.setattr(settings, "gis_external_layers_enabled", True)
+    monkeypatch.setattr(
+        settings, "gis_external_ras_vector_url", "https://source.test/ows"
+    )
+    monkeypatch.setattr(settings, "gis_external_cache_dir", str(tmp_path))
+    monkeypatch.setattr(
+        gis_external_proxy,
+        "_fetch_remote",
+        lambda *_args: gis_external_proxy.ExternalProxyPayload(
+            b'{"type":"FeatureCollection","features":[]}',
+            "application/json",
+            200,
+            "MISS",
+        ),
+    )
+
+    response = client.get(
+        f"/gis/external/{layer['id']}/wfs?request=GetFeature&count=10",
+        headers=admin_headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["features"] == []
+
+
+def test_external_layers_are_excluded_from_change_export_and_qgis() -> None:
+    admin_headers = auth_headers("gis-admin")
+    layer = _create_external_layer(admin_headers)
+
+    change_request = client.post(
+        f"/gis/layers/{layer['id']}/change-requests",
+        headers=admin_headers,
+        json={
+            "change_type": "attribute_update",
+            "feature_id": "1",
+            "payload": {"after": {"name": "blocked"}},
+        },
+    )
+    shapefile_export = client.post(
+        f"/gis/layers/{layer['id']}/export-shapefile",
+        headers=admin_headers,
+        json={"version_label": "blocked"},
+    )
+    governance = client.get("/gis/qgis/governance", headers=admin_headers)
+
+    assert change_request.status_code == 422
+    assert change_request.json()["detail"] == (
+        "External GIS layers cannot be change request targets"
+    )
+    assert shapefile_export.status_code == 422
+    assert shapefile_export.json()["detail"] == (
+        "GIS shapefile export requires a PostGIS geometry layer"
+    )
+    assert governance.status_code == 200
+    assert governance.json()["layers"] == []
+
+
+def test_territorio_layers_are_grouped_and_resolved_for_viewer() -> None:
+    assert seed_territorio_gis_catalog() == 21
+
+    response = client.get("/gis/territorio/layers", headers=auth_headers("gis-viewer"))
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 21
+    assert [group["theme"] for group in payload["groups"]] == [
+        "bonifica",
+        "colture",
+        "vincoli",
+        "idrografia",
+        "amministrativo",
+        "eventi",
+        "catasto_ufficiale",
+        "ortofoto",
+        "morfologia",
+    ]
+    first = payload["groups"][0]["layers"][0]
+    assert first["proxy_wms_url"] == f"/gis/external/{first['id']}/wms"
+    assert first["legend_url"].endswith("/wms?request=GetLegendGraphic")
+    assert first["attribution"]
+    assert first["queryable"] == "wfs_queryable"
+
+
+def test_territorio_layers_exclude_unauthorized_and_inactive_layers() -> None:
+    seed_territorio_gis_catalog()
+    db = TestingSessionLocal()
+    try:
+        hidden = db.scalar(select(GisLayer).where(GisLayer.name == "ras_aree_bonifica"))
+        inactive = db.scalar(select(GisLayer).where(GisLayer.name == "ras_comprensori_irrigui"))
+        assert hidden is not None and inactive is not None
+        permission = db.scalar(
+            select(GisLayerPermission).where(
+                GisLayerPermission.layer_id == hidden.id,
+                GisLayerPermission.principal_key == "viewer",
+            )
+        )
+        assert permission is not None
+        permission.can_view = False
+        inactive.is_active = False
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/gis/territorio/layers", headers=auth_headers("gis-viewer"))
+    names = {
+        layer["name"]
+        for group in response.json()["groups"]
+        for layer in group["layers"]
+    }
+    assert response.json()["total"] == 19
+    assert "ras_aree_bonifica" not in names
+    assert "ras_comprensori_irrigui" not in names

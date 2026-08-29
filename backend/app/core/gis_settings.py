@@ -60,3 +60,65 @@ class GisSettings(StorageSettings):
         default=2.0,
         alias="GIS_RUNTIME_HEALTH_TIMEOUT_SECONDS",
     )
+    gis_external_layers_enabled: bool = Field(
+        default=False,
+        alias="GIS_EXTERNAL_LAYERS_ENABLED",
+    )
+    gis_external_cache_dir: str = Field(
+        default="/data/gis/external-cache",
+        alias="GIS_EXTERNAL_CACHE_DIR",
+    )
+    gis_external_cache_max_mb: int = Field(
+        default=2048,
+        ge=1,
+        alias="GIS_EXTERNAL_CACHE_MAX_MB",
+    )
+    gis_external_default_timeout_seconds: float = Field(
+        default=12.0,
+        gt=0,
+        alias="GIS_EXTERNAL_DEFAULT_TIMEOUT_SECONDS",
+    )
+    gis_external_ras_vector_url: str = Field(
+        default="https://webgis.regione.sardegna.it/geoserver/ows",
+        alias="GIS_EXTERNAL_RAS_VECTOR_URL",
+    )
+    gis_external_ras_raster_url: str = Field(
+        default="https://webgis.regione.sardegna.it/geoserverraster/ows",
+        alias="GIS_EXTERNAL_RAS_RASTER_URL",
+    )
+    gis_external_ade_wms_url: str = Field(
+        default="https://wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows01.php",
+        alias="GIS_EXTERNAL_ADE_WMS_URL",
+    )
+    gis_qgis_proxy_base_url: str = Field(
+        default="http://localhost:8000",
+        alias="GIS_QGIS_PROXY_BASE_URL",
+    )
+    gis_interrogazione_enabled: bool = Field(
+        default=False,
+        alias="GIS_INTERROGAZIONE_ENABLED",
+    )
+    gis_interrogazione_remote_timeout_seconds: float = Field(
+        default=8.0,
+        gt=0,
+        alias="GIS_INTERROGAZIONE_REMOTE_TIMEOUT_SECONDS",
+    )
+    gis_interrogazione_default_radius_m: float = Field(
+        default=150.0,
+        gt=0,
+        alias="GIS_INTERROGAZIONE_DEFAULT_RADIUS_M",
+    )
+    gis_interrogazione_max_remote_layers: int = Field(
+        default=12,
+        ge=1,
+        alias="GIS_INTERROGAZIONE_MAX_REMOTE_LAYERS",
+    )
+    gis_scheda_artifact_root: str = Field(
+        default="/data/gis/schede-territoriali",
+        alias="GIS_SCHEDA_ARTIFACT_ROOT",
+    )
+    gis_scheda_retention_count: int = Field(
+        default=20,
+        ge=1,
+        alias="GIS_SCHEDA_RETENTION_COUNT",
+    )
