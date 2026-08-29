@@ -43,6 +43,14 @@ Il worker continua a rivalutare disponibilita, cooldown e lease. Un batch manual
 
 Per diagnosi verificare `last_source_refresh_at`, `last_planner_at`, `last_batch_started_at`, `last_error_message`, i conteggi `scope_counts` e il batch `perpetual_sync` piu recente. Un `run-now` senza batch non e un errore: puo indicare assenza di item scaduti, pool fuori orario/occupato o micro-batch gia attivo.
 
+## Validazione prima del rollout
+
+- Eseguire i test mirati backend con coverage al 100% su `elaborazioni_perpetual_sources`, `elaborazioni_perpetual_sync`, `elaborazioni_ruolo_autosync` e `autosync_scheduler`.
+- Eseguire il test del pannello continuo con coverage al 100% e il typecheck TypeScript dell'intero frontend.
+- Verificare che `python -m alembic heads` restituisca una sola head, `20260828_0900`.
+- Eseguire il round-trip della migrazione su PostgreSQL impostando `GAIA_TEST_POSTGRES_URL`; il test SQLite valida il contratto di base ma non sostituisce la prova sul database di produzione.
+- Eseguire il quality ratchet contro il merge-base prima dell'integrazione.
+
 ## Rollback
 
 Disattivare il toggle nella UI. Gli item persistiti restano disponibili per la ripresa; i batch gia in lavorazione non vengono cancellati implicitamente. Il downgrade schema rimuove `catasto_perpetual_sync_items` e le estensioni della configurazione, quindi deve essere preceduto da backup se lo storico operativo va conservato.
