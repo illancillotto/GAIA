@@ -4643,6 +4643,8 @@ export type CatastoRuoloAutoSyncStatusCounts = {
   blocked_runtime: number;
 };
 
+export type CatastoAutoSyncDashboard = import("./elaborazioni-continuous-sync").CatastoAutoSyncDashboard;
+
 export type CatastoRuoloAutoSyncStatus = {
   config: CatastoRuoloAutoSyncConfig;
   counts: CatastoRuoloAutoSyncStatusCounts;
@@ -4654,6 +4656,7 @@ export type CatastoRuoloAutoSyncStatus = {
   available_credential_ids: string[];
   perpetual_error_items: CatastoPerpetualSyncItem[];
   perpetual_recent_items: CatastoPerpetualSyncItem[];
+  dashboard: CatastoAutoSyncDashboard;
 };
 
 export type CatastoCaptchaSummary = {

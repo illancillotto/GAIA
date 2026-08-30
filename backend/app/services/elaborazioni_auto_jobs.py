@@ -142,8 +142,8 @@ def list_elaborazione_auto_job_controls(db: Session, *, user_id: int) -> list[El
         ),
         ElaborazioneAutoJobControlResponse(
             key=RUOLO_VISURE_AUTOSYNC_JOB_KEY,
-            label="AutoSync visure a ruolo",
-            description="Mantiene la coda delle particelle a ruolo e avvia i batch visure quando trova nuove lavorazioni.",
+            label="AutoSync Catasto",
+            description="Mantiene le code di soggetti e particelle e avvia micro-batch visure con priorita al ruolo.",
             enabled=ruolo_config.enabled,
             detail=(
                 "Scheduler ogni minuto"

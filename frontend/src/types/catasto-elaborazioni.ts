@@ -58,6 +58,7 @@ export type CatastoBatch = {
   id: string;
   user_id: number;
   credential_id?: string | null;
+  credential_ids?: string[] | null;
   name: string | null;
   batch_kind?: "manual_single" | "manual_batch" | "ruolo_autosync" | "perpetual_sync" | string;
   status: "pending" | "processing" | "completed" | "failed" | "cancelled";

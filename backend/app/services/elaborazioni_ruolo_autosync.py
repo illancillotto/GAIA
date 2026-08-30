@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import TypeVar
 from uuid import UUID
 
+from fastapi import HTTPException, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
@@ -34,6 +36,7 @@ from app.schemas.catasto import (
     CatastoRuoloAutoSyncStatusResponse,
 )
 from app.services.catasto_comuni import get_catasto_comuni_lookup
+from app.services.elaborazioni_autosync_dashboard import build_autosync_dashboard
 from app.services.elaborazioni_batches import (
     BatchConflictError,
     ValidatedVisuraRow,
@@ -70,20 +73,36 @@ CONTINUOUS_CONFIG_FIELDS = (
 )
 
 
-def _try_acquire_ruolo_autosync_lock(db: Session, user_id: int) -> bool:
-    if db.get_bind().dialect.name != "postgresql":
-        return True
-    return bool(db.scalar(select(func.pg_try_advisory_lock(RUOLO_AUTOSYNC_LOCK_NAMESPACE, user_id))))
+class RuoloAutosyncBusyError(HTTPException):
+    """HTTP 409 returned when another autosync operation owns the user lock."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Un aggiornamento delle sorgenti è già in corso. Riprova tra poco.",
+        )
 
 
-def _acquire_ruolo_autosync_lock(db: Session, user_id: int) -> None:
-    if db.get_bind().dialect.name == "postgresql":
-        db.scalar(select(func.pg_advisory_lock(RUOLO_AUTOSYNC_LOCK_NAMESPACE, user_id)))
+@contextmanager
+def _ruolo_autosync_xact_lock(db: Session, user_id: int) -> Iterator[bool]:
+    bind = db.get_bind()
+    if bind.dialect.name != "postgresql":
+        yield True
+        return
 
-
-def _release_ruolo_autosync_lock(db: Session, user_id: int) -> None:
-    if db.get_bind().dialect.name == "postgresql":
-        db.scalar(select(func.pg_advisory_unlock(RUOLO_AUTOSYNC_LOCK_NAMESPACE, user_id)))
+    # Keep the advisory transaction open on a dedicated connection. A rollback
+    # releases the lock even when the main Session commits or returns to its pool.
+    with bind.connect() as connection:
+        transaction = connection.begin()
+        try:
+            acquired = bool(
+                connection.scalar(
+                    select(func.pg_try_advisory_xact_lock(RUOLO_AUTOSYNC_LOCK_NAMESPACE, user_id))
+                )
+            )
+            yield acquired
+        finally:
+            transaction.rollback()
 
 
 def _ruolo_autosync_serialized(
@@ -91,11 +110,10 @@ def _ruolo_autosync_serialized(
 ) -> Callable[[Session, int], RuoloAutosyncResult]:
     @wraps(operation)
     def locked_operation(db: Session, user_id: int) -> RuoloAutosyncResult:
-        _acquire_ruolo_autosync_lock(db, user_id)
-        try:
+        with _ruolo_autosync_xact_lock(db, user_id) as acquired:
+            if not acquired:
+                raise RuoloAutosyncBusyError()
             return operation(db, user_id)
-        finally:
-            _release_ruolo_autosync_lock(db, user_id)
 
     return locked_operation
 
@@ -103,12 +121,10 @@ def _ruolo_autosync_serialized(
 def _ruolo_autosync_single_flight(operation: RuoloAutosyncOperation) -> RuoloAutosyncOperation:
     @wraps(operation)
     def locked_operation(db: Session, user_id: int) -> CatastoBatch | None:
-        if not _try_acquire_ruolo_autosync_lock(db, user_id):
-            return None
-        try:
+        with _ruolo_autosync_xact_lock(db, user_id) as acquired:
+            if not acquired:
+                return None
             return operation(db, user_id)
-        finally:
-            _release_ruolo_autosync_lock(db, user_id)
 
     return locked_operation
 
@@ -817,4 +833,5 @@ def build_ruolo_autosync_status(db: Session, user_id: int) -> CatastoRuoloAutoSy
         perpetual_recent_items=[
             CatastoPerpetualSyncItemResponse.model_validate(item) for item in perpetual_recent
         ],
+        dashboard=build_autosync_dashboard(db, user_id),
     )

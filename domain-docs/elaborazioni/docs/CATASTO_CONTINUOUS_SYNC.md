@@ -37,11 +37,28 @@ Il worker continua a rivalutare disponibilita, cooldown e lease. Un batch manual
 ## API e osservabilita
 
 - `GET/PUT /elaborazioni/ruolo-autosync/config`: configurazione compatibile, estesa con pool, scope, SLA e dimensione micro-batch.
-- `GET /elaborazioni/ruolo-autosync/status`: stato compatibile, conteggi per scope e credenziali disponibili ora.
+- `GET /elaborazioni/ruolo-autosync/status`: stato compatibile, conteggi per scope, credenziali disponibili e dashboard operativa aggregata.
 - `POST /elaborazioni/ruolo-autosync/refresh-source`: full refresh manuale; usa le quattro sorgenti quando e configurata l'allowlist continua.
 - `POST /elaborazioni/ruolo-autosync/run-now`: riconcilia e tenta l'avvio di un micro-batch; mantiene il comportamento v1 sulle configurazioni legacy a credenziale singola.
 
 Per diagnosi verificare `last_source_refresh_at`, `last_planner_at`, `last_batch_started_at`, `last_error_message`, i conteggi `scope_counts` e il batch `perpetual_sync` piu recente. Un `run-now` senza batch non e un errore: puo indicare assenza di item scaduti, pool fuori orario/occupato o micro-batch gia attivo.
+
+### Dashboard operativa AutoSync
+
+La schermata **Attivita AutoSync** e collocata sopra la configurazione e tratta la sincronizzazione continua come il dettaglio aggregato di un job permanente. Espone:
+
+- visure scaricate da SISTER, comprovate da record persistiti in `catasto_documents`;
+- richieste totali, completate, fallite e bloccate;
+- velocita oraria sul periodo osservato e durata media dei batch conclusi;
+- andamento UTC delle ultime 24 ore con completate, fallite e documenti prodotti;
+- stato delle quattro fasi: refresh sorgenti, planner/coda, micro-batch e archiviazione;
+- credenziali selezionate/disponibili e postura del worker derivata dal batch attivo;
+- ultimi batch AutoSync con avanzamento e link a `/elaborazioni/batches/<ID>`;
+- eventi strutturati, errori, CAPTCHA e altri blocchi con collegamento al batch.
+
+Le metriche sono calcolate esclusivamente sui batch `ruolo_autosync` e `perpetual_sync` dell'utente corrente. I log Docker non vengono analizzati dalla UI. La voce worker indica soltanto `in elaborazione` o `in attesa` in base alla presenza di un batch attivo e non equivale a un healthcheck del container. Analogamente, `Lock / concorrenza` indica batch attivo/libero e non pretende di rappresentare una lettura live degli advisory lock PostgreSQL.
+
+Il throughput usa le richieste completate nel periodo divise per l'intervallo realmente osservato, con denominatore minimo di un'ora. Le durate medie includono soltanto batch con `started_at` e `completed_at`. I conteggi degli intervalli `168` e `2160` restano ore, non quantita di record.
 
 ## Validazione prima del rollout
 

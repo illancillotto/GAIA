@@ -58,3 +58,42 @@ export type CatastoPerpetualSyncItem = {
   source_updated_at: string | null;
   updated_at: string;
 };
+
+export type CatastoAutoSyncDashboardSummary = {
+  period_hours: number;
+  batches_total: number;
+  batches_active: number;
+  batches_completed: number;
+  batches_failed: number;
+  requests_total: number;
+  requests_completed: number;
+  requests_failed: number;
+  requests_blocked: number;
+  documents_downloaded: number;
+  completed_per_hour: number;
+  average_batch_duration_seconds: number | null;
+  last_activity_at: string | null;
+};
+
+export type CatastoAutoSyncHourly = {
+  hour: string;
+  completed: number;
+  failed: number;
+  documents_downloaded: number;
+};
+
+export type CatastoAutoSyncEvent = {
+  timestamp: string;
+  level: "info" | "warning" | "error" | string;
+  title: string;
+  detail: string | null;
+  batch_id: string;
+  request_id: string | null;
+};
+
+export type CatastoAutoSyncDashboard = {
+  summary: CatastoAutoSyncDashboardSummary;
+  hourly: CatastoAutoSyncHourly[];
+  recent_batches: import("./catasto-elaborazioni").CatastoBatch[];
+  events: CatastoAutoSyncEvent[];
+};

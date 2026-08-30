@@ -41,6 +41,7 @@ from app.modules.utenze.anpr.models import AnprJobRun, AnprSyncConfig
 from app.modules.utenze.models import AnagraficaPerson, AnagraficaSubject
 from app.schemas.catasto import CatastoRuoloAutoSyncConfigUpdateRequest
 from app.services.catasto_credentials import get_credential_fernet
+from app.services.elaborazioni_autosync_dashboard import _as_utc, build_autosync_dashboard
 from app.services.elaborazioni_batches import (
     BatchConflictError,
     RELEASE_REQUESTED_MESSAGE,
@@ -1719,6 +1720,123 @@ def test_ruolo_autosync_config_status_and_run_now() -> None:
         db.close()
 
 
+def test_ruolo_autosync_status_exposes_operational_dashboard() -> None:
+    user_id, credential_id = _seed_ruolo_autosync_fixture()
+    assert client.put(
+        "/elaborazioni/ruolo-autosync/config",
+        headers=auth_headers(),
+        json={"enabled": True, "credential_id": credential_id},
+    ).status_code == 200
+
+    now = datetime.now(UTC).replace(minute=30, second=0, microsecond=0)
+    batch_id = uuid4()
+    completed_request_id = uuid4()
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            CatastoBatch(
+                id=batch_id,
+                user_id=user_id,
+                name="AutoSync operativo",
+                batch_kind="perpetual_sync",
+                status=CatastoBatchStatus.COMPLETED.value,
+                total_items=2,
+                completed_items=1,
+                failed_items=1,
+                skipped_items=0,
+                not_found_items=0,
+                current_operation="Micro-batch completato",
+                created_at=now - timedelta(minutes=20),
+                started_at=now - timedelta(minutes=15),
+                completed_at=now,
+            )
+        )
+        db.add_all(
+            [
+                CatastoVisuraRequest(
+                    id=completed_request_id,
+                    batch_id=batch_id,
+                    user_id=user_id,
+                    row_index=1,
+                    tipo_visura="Sintetica",
+                    status=CatastoVisuraRequestStatus.COMPLETED.value,
+                    current_operation="Visura scaricata",
+                    attempts=1,
+                    created_at=now - timedelta(minutes=15),
+                    processed_at=now,
+                ),
+                CatastoVisuraRequest(
+                    batch_id=batch_id,
+                    user_id=user_id,
+                    row_index=2,
+                    tipo_visura="Sintetica",
+                    status=CatastoVisuraRequestStatus.FAILED.value,
+                    current_operation="Blocco SISTER",
+                    error_message="CAPTCHA richiesto",
+                    last_error_code="CAPTCHA_REQUIRED",
+                    attempts=2,
+                    created_at=now - timedelta(minutes=15),
+                    processed_at=now,
+                ),
+            ]
+        )
+        db.add(
+            CatastoDocument(
+                user_id=user_id,
+                request_id=completed_request_id,
+                search_mode="immobile",
+                tipo_visura="Sintetica",
+                filename="visura.pdf",
+                filepath="/tmp/visura.pdf",
+                created_at=now,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/elaborazioni/ruolo-autosync/status", headers=auth_headers())
+    assert response.status_code == 200
+    dashboard = response.json()["dashboard"]
+    assert dashboard["summary"] == {
+        "period_hours": 24,
+        "batches_total": 1,
+        "batches_active": 0,
+        "batches_completed": 1,
+        "batches_failed": 0,
+        "requests_total": 2,
+        "requests_completed": 1,
+        "requests_failed": 1,
+        "requests_blocked": 1,
+        "documents_downloaded": 1,
+        "completed_per_hour": 1.0,
+        "average_batch_duration_seconds": 900,
+        "last_activity_at": now.isoformat().replace("+00:00", "Z"),
+    }
+    assert dashboard["hourly"][-1]["completed"] == 1
+    assert dashboard["hourly"][-1]["failed"] == 1
+    assert dashboard["hourly"][-1]["documents_downloaded"] == 1
+    assert dashboard["recent_batches"][0]["id"] == str(batch_id)
+    assert dashboard["events"][0]["level"] == "error"
+    assert dashboard["events"][0]["detail"] == "CAPTCHA richiesto"
+
+
+def test_autosync_dashboard_exposes_empty_state_and_normalizes_utc() -> None:
+    db = TestingSessionLocal()
+    try:
+        dashboard = build_autosync_dashboard(db, user_id=-1)
+    finally:
+        db.close()
+
+    assert dashboard.summary.batches_total == 0
+    assert dashboard.summary.completed_per_hour == 0
+    assert dashboard.hourly == []
+    assert dashboard.recent_batches == []
+    assert dashboard.events == []
+    aware = datetime(2026, 8, 30, 12, tzinfo=UTC)
+    assert _as_utc(aware) == aware
+
+
 def test_ruolo_autosync_failure_classifier_blocks_submit_anomaly() -> None:
     status = classify_ruolo_autosync_failure(
         "Submit visura non avanzato per richiesta abc: classification=current message=Particella presente in elenco immobili AdE."
@@ -2059,31 +2177,58 @@ def test_ruolo_autosync_source_refresh_blocks_and_unblocks_unknown_comune() -> N
 def test_ruolo_autosync_postgres_advisory_lock_helpers() -> None:
     import app.services.elaborazioni_ruolo_autosync as autosync_module
 
-    class FakePostgresSession:
+    class FakeTransaction:
         def __init__(self) -> None:
-            self.statements: list[str] = []
+            self.rolled_back = False
 
-        def get_bind(self):
-            return SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+        def rollback(self) -> None:
+            self.rolled_back = True
+
+    class FakeConnection:
+        def __init__(self) -> None:
+            self.statement = ""
+            self.transaction = FakeTransaction()
+            self.closed = False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            self.closed = True
+
+        def begin(self):
+            return self.transaction
 
         def scalar(self, statement):
-            self.statements.append(str(statement))
+            self.statement = str(statement)
             return True
+
+    class FakePostgresSession:
+        def __init__(self) -> None:
+            self.connection = FakeConnection()
+
+        def get_bind(self):
+            return SimpleNamespace(
+                dialect=SimpleNamespace(name="postgresql"),
+                connect=lambda: self.connection,
+            )
 
     db = FakePostgresSession()
 
-    assert autosync_module._try_acquire_ruolo_autosync_lock(db, 42) is True
-    autosync_module._acquire_ruolo_autosync_lock(db, 42)
-    autosync_module._release_ruolo_autosync_lock(db, 42)
+    with autosync_module._ruolo_autosync_xact_lock(db, 42) as acquired:
+        assert acquired is True
+        assert "pg_try_advisory_xact_lock" in db.connection.statement
+        assert db.connection.transaction.rolled_back is False
 
-    assert "pg_try_advisory_lock" in db.statements[0]
-    assert "pg_advisory_lock" in db.statements[1]
-    assert "pg_advisory_unlock" in db.statements[2]
+    assert db.connection.transaction.rolled_back is True
+    assert db.connection.closed is True
 
 
 def test_ruolo_autosync_maintenance_skips_busy_lock_and_releases_after_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from contextlib import contextmanager
+
     import app.services.elaborazioni_ruolo_autosync as autosync_module
 
     calls: list[str] = []
@@ -2092,7 +2237,12 @@ def test_ruolo_autosync_maintenance_skips_busy_lock_and_releases_after_failure(
         "get_ruolo_autosync_config",
         lambda _db, _user_id: SimpleNamespace(credential_ids=None),
     )
-    monkeypatch.setattr(autosync_module, "_try_acquire_ruolo_autosync_lock", lambda _db, _user_id: False)
+
+    @contextmanager
+    def busy_lock(_db, _user_id):
+        yield False
+
+    monkeypatch.setattr(autosync_module, "_ruolo_autosync_xact_lock", busy_lock)
     monkeypatch.setattr(
         autosync_module,
         "_refresh_ruolo_autosync_source_incremental",
@@ -2102,21 +2252,24 @@ def test_ruolo_autosync_maintenance_skips_busy_lock_and_releases_after_failure(
     assert autosync_module.maintain_ruolo_autosync(object(), 7) is None
     assert calls == []
 
-    monkeypatch.setattr(autosync_module, "_try_acquire_ruolo_autosync_lock", lambda _db, _user_id: True)
+    @contextmanager
+    def acquired_lock(_db, _user_id):
+        calls.append("acquire")
+        try:
+            yield True
+        finally:
+            calls.append("release")
+
+    monkeypatch.setattr(autosync_module, "_ruolo_autosync_xact_lock", acquired_lock)
     monkeypatch.setattr(
         autosync_module,
         "_refresh_ruolo_autosync_source_incremental",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("refresh failed")),
     )
-    monkeypatch.setattr(
-        autosync_module,
-        "_release_ruolo_autosync_lock",
-        lambda _db, _user_id: calls.append("release"),
-    )
 
     with pytest.raises(RuntimeError, match="refresh failed"):
         autosync_module.maintain_ruolo_autosync(object(), 7)
-    assert calls == ["release"]
+    assert calls == ["acquire", "release"]
 
 
 def test_ruolo_autosync_config_validation_and_missing_config_fallback() -> None:
@@ -2752,8 +2905,24 @@ def test_perpetual_planner_guards_and_batch_conflict(monkeypatch: pytest.MonkeyP
         db.close()
 
 
+def test_perpetual_maintenance_skips_disabled_config_before_refresh(monkeypatch: pytest.MonkeyPatch) -> None:
+    config = SimpleNamespace(enabled=False, last_source_refresh_at=None)
+    calls: list[str] = []
+    monkeypatch.setattr(
+        "app.services.elaborazioni_perpetual_sync.refresh_perpetual_sync_sources",
+        lambda *_args: calls.append("refresh"),
+    )
+    monkeypatch.setattr(
+        "app.services.elaborazioni_perpetual_sync.ensure_perpetual_sync_batch",
+        lambda *_args: calls.append("ensure"),
+    )
+
+    assert maintain_perpetual_sync(SimpleNamespace(), config) is None  # type: ignore[arg-type]
+    assert calls == []
+
+
 def test_perpetual_maintenance_refresh_interval_and_subject_validation(monkeypatch: pytest.MonkeyPatch) -> None:
-    config = SimpleNamespace(last_source_refresh_at=None)
+    config = SimpleNamespace(enabled=True, last_source_refresh_at=None)
     calls: list[str] = []
     monkeypatch.setattr(
         "app.services.elaborazioni_perpetual_sync.refresh_perpetual_sync_sources",

@@ -393,6 +393,8 @@ def ensure_perpetual_sync_batch(
 
 
 def maintain_perpetual_sync(db: Session, config: CatastoRuoloAutoSyncConfig) -> CatastoBatch | None:
+    if not config.enabled:
+        return None
     now = datetime.now(UTC)
     if (
         config.last_source_refresh_at is None

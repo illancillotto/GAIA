@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { AutoSyncActivityDashboard } from "@/components/elaborazioni/autosync-activity-dashboard";
 import { ElaborazioneNoticeCard, ElaborazionePanelHeader } from "@/components/elaborazioni/module-chrome";
 import { ElaborazioneStatusBadge } from "@/components/elaborazioni/status-badge";
 import { RefreshIcon } from "@/components/ui/icons";
@@ -44,13 +45,19 @@ const INITIAL_STATE: SyncState = {
   credentials: [], status: null, draft: null, busy: false, error: null, info: null,
 };
 
-const SLA_FIELDS: Array<[string, keyof SyncDraft]> = [
-  ["Particelle a ruolo", "roleParcelHours"],
-  ["Soggetti a ruolo", "roleSubjectHours"],
-  ["Particelle consorzio", "consortiumParcelHours"],
-  ["Soggetti anagrafe", "registrySubjectHours"],
-  ["Righe per micro-batch", "batchSize"],
+const REFRESH_FIELDS: Array<[string, keyof SyncDraft]> = [
+  ["Aggiorna particelle Ruolo ogni (ore)", "roleParcelHours"],
+  ["Aggiorna soggetti Ruolo ogni (ore)", "roleSubjectHours"],
+  ["Aggiorna particelle consorzio ogni (ore)", "consortiumParcelHours"],
+  ["Aggiorna soggetti anagrafe ogni (ore)", "registrySubjectHours"],
 ];
+
+const ITALIAN_INTERVAL_NUMBER = new Intl.NumberFormat("it-IT", { maximumFractionDigits: 1 });
+
+function refreshIntervalDescription(hours: number): string {
+  const days = hours / 24;
+  return `${hours} ${hours === 1 ? "ora" : "ore"} · ${ITALIAN_INTERVAL_NUMBER.format(days)} ${days === 1 ? "giorno" : "giorni"}`;
+}
 
 const SCOPES: Array<[string, string]> = [
   ["Particelle ruolo", "ruolo_particella"],
@@ -58,6 +65,38 @@ const SCOPES: Array<[string, string]> = [
   ["Particelle consorzio", "consorzio_particella"],
   ["Soggetti anagrafe", "anagrafe_soggetto"],
 ];
+
+type SyncAction = "save" | "toggle" | "refresh" | "run";
+
+const REFRESH_TIMEOUT_MS = 30_000;
+const REFRESH_TIMEOUT_MESSAGE = "Aggiornamento non completato entro il tempo massimo. Puoi riprovare.";
+
+async function withRefreshTimeout<T>(operation: Promise<T>): Promise<T> {
+  let timeoutId: number;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error(REFRESH_TIMEOUT_MESSAGE)), REFRESH_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([operation, timeout]);
+  } finally {
+    window.clearTimeout(timeoutId!);
+  }
+}
+
+function configActionEnabled(action: SyncAction, currentEnabled: boolean): boolean | null {
+  if (action === "save") return currentEnabled;
+  if (action === "toggle") return !currentEnabled;
+  return null;
+}
+
+function configActionMessage(action: SyncAction, enabled: boolean): string {
+  if (action === "save") return "Configurazione aggiornata";
+  return enabled ? "Sincronizzazione continua attivata" : "Sincronizzazione continua disattivata";
+}
+
+function draftHasSelectedCredentials(draft: SyncDraft | null): boolean {
+  return Boolean(draft?.credentialIds?.length);
+}
 
 function draftFromStatus(status: ElaborazioneRuoloAutoSyncStatus): SyncDraft {
   const config = status.config;
@@ -108,19 +147,20 @@ function useContinuousSyncState() {
     return () => { active = false; window.clearInterval(interval); };
   }, []);
 
-  async function execute(action: "save" | "refresh" | "run"): Promise<void> {
+  async function execute(action: SyncAction): Promise<void> {
     const token = getStoredAccessToken();
     const draft = state.draft;
     if (!token || !draft) return;
     setState((current) => ({ ...current, busy: true }));
     try {
       let message = "Configurazione aggiornata";
-      if (action === "save") {
-        const enabled = !state.status!.config.enabled;
+      const configEnabled = configActionEnabled(action, state.status!.config.enabled);
+      if (configEnabled !== null) {
+        const enabled = configEnabled;
         await updateElaborazioneRuoloAutoSyncConfig(token, { enabled, credential_id: null, credential_ids: draft.credentialIds, primary_enabled: draft.primaryEnabled, secondary_enabled: draft.secondaryEnabled, role_parcel_refresh_hours: draft.roleParcelHours, role_subject_refresh_hours: draft.roleSubjectHours, consortium_parcel_refresh_hours: draft.consortiumParcelHours, registry_subject_refresh_hours: draft.registrySubjectHours, batch_size: draft.batchSize });
-        message = enabled ? "Sincronizzazione continua attivata" : "Sincronizzazione continua disattivata";
+        message = configActionMessage(action, enabled);
       } else {
-        const result = action === "refresh" ? await refreshElaborazioneRuoloAutoSyncSource(token) : await runElaborazioneRuoloAutoSyncNow(token);
+        const result = action === "refresh" ? await withRefreshTimeout(refreshElaborazioneRuoloAutoSyncSource(token)) : await runElaborazioneRuoloAutoSyncNow(token);
         message = result.message;
       }
       await reload();
@@ -132,32 +172,53 @@ function useContinuousSyncState() {
     }
   }
 
-  const setDraft = (patch: Partial<SyncDraft>) => setState((current) => ({ ...current, draft: { ...current.draft!, ...patch } }));
+  const setDraft = (patch: Partial<SyncDraft>) => setState((current) => (
+    current.draft ? { ...current, draft: { ...current.draft, ...patch } } : current
+  ));
   return { state, setState, setDraft, execute };
 }
 
 function CredentialPool({ state, setState }: { state: SyncState; setState: React.Dispatch<React.SetStateAction<SyncState>> }) {
   const selectedIds = state.draft?.credentialIds ?? [];
   const availableIds = state.status?.available_credential_ids ?? [];
+  const activeCredentials = state.credentials.filter((credential) => credential.active);
+  const setCredentialIds = (credentialIds: string[]) => setState((current) => ({
+    ...current,
+    draft: { ...current.draft!, credentialIds },
+  }));
   return (
-    <div className="space-y-2">
-      <span className="label-caption">Pool credenziali SISTER</span>
+    <fieldset className="space-y-3" disabled={state.busy || !state.draft}>
+      <legend className="sr-only">Pool credenziali SISTER</legend>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="label-caption">Pool credenziali SISTER</p>
+          <p className="mt-1 text-xs text-gray-500">{selectedIds.length} di {activeCredentials.length} selezionate</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-secondary px-3 py-2 text-xs" disabled={state.busy || selectedIds.length === activeCredentials.length} onClick={() => setCredentialIds(activeCredentials.map((credential) => credential.id))} type="button">Seleziona tutte</button>
+          <button className="btn-secondary px-3 py-2 text-xs" disabled={state.busy || selectedIds.length === 0} onClick={() => setCredentialIds([])} type="button">Deseleziona tutte</button>
+        </div>
+      </div>
       <div className="grid gap-2 sm:grid-cols-2">
-        {state.credentials.filter((credential) => credential.active).map((credential) => {
+        {activeCredentials.map((credential) => {
           const selected = selectedIds.includes(credential.id);
           const available = availableIds.includes(credential.id);
-          const toggle = () => setState((current) => ({ ...current, draft: { ...current.draft!, credentialIds: selected ? selectedIds.filter((id) => id !== credential.id) : [...selectedIds, credential.id] } }));
+          const toggle = () => setCredentialIds(selected ? selectedIds.filter((id) => id !== credential.id) : [...selectedIds, credential.id]);
           return (
-            <label className={`rounded-[18px] border p-3 ${selected ? "border-[#80a98b] bg-white" : "border-gray-200 bg-gray-50"}`} key={credential.id}>
-              <span className="flex items-start gap-3">
-                <input checked={selected} disabled={state.busy} onChange={toggle} type="checkbox" />
-                <span><span className="block text-sm font-semibold text-gray-900">{credential.label}</span><span className="block text-xs text-gray-500">{credential.sister_username} · {available ? "disponibile ora" : "occupata o fuori orario"}</span></span>
+            <label className={`min-h-16 cursor-pointer rounded-[18px] border p-3 transition-colors ${selected ? "border-[#80a98b] bg-white ring-1 ring-[#d7e6da]" : "border-gray-200 bg-gray-50"}`} key={credential.id}>
+              <span className="flex items-center gap-3">
+                <input checked={selected} className="h-5 w-5 shrink-0 accent-[#477a55]" disabled={state.busy} onChange={toggle} type="checkbox" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-gray-900">{credential.label}</span>
+                  <span className="mt-0.5 block truncate text-xs text-gray-500">{credential.sister_username}</span>
+                </span>
+                <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-medium ${available ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{available ? "Disponibile" : "Non disponibile"}</span>
               </span>
             </label>
           );
         })}
       </div>
-    </div>
+    </fieldset>
   );
 }
 
@@ -186,15 +247,33 @@ function RunningBatch({ status }: { status: ElaborazioneRuoloAutoSyncStatus | nu
   return <div className="rounded-[24px] border border-[#d9dfd6] bg-[#eef6f0] p-4"><div className="flex justify-between gap-3"><div><p className="text-sm font-semibold">{batch.name ?? "Micro-batch attivo"}</p><p className="mt-1 text-sm text-gray-600">{batch.current_operation ?? "In lavorazione"}</p></div><ElaborazioneStatusBadge status={batch.status} /></div></div>;
 }
 
+function RefreshIntervalFields({ draft, disabled, setDraft }: {
+  draft: SyncDraft | null;
+  disabled: boolean;
+  setDraft: (patch: Partial<SyncDraft>) => void;
+}) {
+  return <section className="space-y-3" aria-labelledby="refresh-intervals-title"><div><h3 className="text-sm font-semibold text-gray-900" id="refresh-intervals-title">Intervalli di aggiornamento</h3><p className="mt-1 text-xs text-gray-500">Questi valori indicano la frequenza del nuovo controllo, non il numero di particelle o soggetti.</p></div><div className="grid gap-3 sm:grid-cols-2">{REFRESH_FIELDS.map(([label, field]) => <div className="space-y-1 rounded-[18px] border border-gray-100 bg-white p-3" key={field}><label className="block text-xs font-medium text-gray-600" htmlFor={`refresh-${field}`}>{label}</label><input aria-describedby={`refresh-${field}-description`} className="form-control" disabled={disabled} id={`refresh-${field}`} min="1" onChange={(event) => setDraft({ [field]: Math.max(1, Number(event.target.value) || 1) })} type="number" value={(draft?.[field] as number) ?? 1} /><span className="block text-xs text-gray-500" id={`refresh-${field}-description`}>{refreshIntervalDescription((draft?.[field] as number) ?? 1)}</span></div>)}</div></section>;
+}
+
+function BatchSizeField({ draft, disabled, setDraft }: {
+  draft: SyncDraft | null;
+  disabled: boolean;
+  setDraft: (patch: Partial<SyncDraft>) => void;
+}) {
+  return <div className="space-y-1"><label className="block text-xs font-medium text-gray-600" htmlFor="autosync-batch-size">Righe per micro-batch</label><input aria-describedby="autosync-batch-size-description" className="form-control sm:max-w-xs" disabled={disabled} id="autosync-batch-size" min="1" onChange={(event) => setDraft({ batchSize: Math.max(1, Number(event.target.value) || 1) })} type="number" value={draft?.batchSize ?? 1} /><span className="block text-xs text-gray-500" id="autosync-batch-size-description">Quantità massima elaborata in ogni micro-batch.</span></div>;
+}
+
 function SyncConfiguration({ state, setState, setDraft, execute }: {
   state: SyncState;
   setState: React.Dispatch<React.SetStateAction<SyncState>>;
   setDraft: (patch: Partial<SyncDraft>) => void;
-  execute: (action: "save" | "refresh" | "run") => Promise<void>;
+  execute: (action: SyncAction) => Promise<void>;
 }) {
   const draft = state.draft;
-  const canRun = Boolean(draft?.credentialIds.length);
-  return <><CredentialPool state={state} setState={setState} /><div className="grid gap-3 sm:grid-cols-2"><label className="rounded-[18px] border bg-white p-3 text-sm"><input checked={draft?.primaryEnabled ?? false} className="mr-2" onChange={(event) => setDraft({ primaryEnabled: event.target.checked })} type="checkbox" />Priorità 1: ruolo</label><label className="rounded-[18px] border bg-white p-3 text-sm"><input checked={draft?.secondaryEnabled ?? false} className="mr-2" onChange={(event) => setDraft({ secondaryEnabled: event.target.checked })} type="checkbox" />Priorità 2: consorzio e anagrafe</label></div><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{SLA_FIELDS.map(([label, field]) => <label className="space-y-1" key={field}><span className="text-xs font-medium text-gray-600">{label}</span><input className="form-control" min="1" onChange={(event) => setDraft({ [field]: Math.max(1, Number(event.target.value) || 1) })} type="number" value={(draft?.[field] as number) ?? 1} /></label>)}</div><div className="flex flex-wrap gap-3"><button className="btn-primary" disabled={state.busy || !canRun || !(draft?.primaryEnabled || draft?.secondaryEnabled)} onClick={() => void execute("save")} type="button">{state.status?.config.enabled ? "Metti su OFF" : "Metti su ON"}</button><button className="btn-secondary" disabled={state.busy} onClick={() => void execute("refresh")} type="button">Aggiorna sorgente</button><button className="btn-secondary" disabled={state.busy || !canRun} onClick={() => void execute("run")} type="button">Esegui adesso</button></div><p className="text-xs text-gray-500">Stato: {state.status?.config.enabled ? "ON" : "OFF"}{state.status?.config.last_source_refresh_at ? ` · sorgente ${formatDateTime(state.status.config.last_source_refresh_at)}` : ""}</p></>;
+  const configurationInputsDisabled = state.busy || !draft;
+  const canRun = draftHasSelectedCredentials(draft);
+  const configurationDisabled = state.busy || !canRun || !(draft?.primaryEnabled || draft?.secondaryEnabled);
+  return <><CredentialPool state={state} setState={setState} /><div className="grid gap-3 sm:grid-cols-2"><label className="rounded-[18px] border bg-white p-3 text-sm"><input checked={draft?.primaryEnabled ?? false} className="mr-2" disabled={configurationInputsDisabled} onChange={(event) => setDraft({ primaryEnabled: event.target.checked })} type="checkbox" />Priorità 1: ruolo</label><label className="rounded-[18px] border bg-white p-3 text-sm"><input checked={draft?.secondaryEnabled ?? false} className="mr-2" disabled={configurationInputsDisabled} onChange={(event) => setDraft({ secondaryEnabled: event.target.checked })} type="checkbox" />Priorità 2: consorzio e anagrafe</label></div><RefreshIntervalFields disabled={configurationInputsDisabled} draft={draft} setDraft={setDraft} /><BatchSizeField disabled={configurationInputsDisabled} draft={draft} setDraft={setDraft} /><div className="flex flex-wrap gap-3"><button className="btn-primary" disabled={configurationDisabled} onClick={() => void execute("toggle")} type="button">{state.status?.config.enabled ? "Metti su OFF" : "Metti su ON"}</button><button className="btn-secondary" disabled={configurationDisabled} onClick={() => void execute("save")} type="button">Salva configurazione</button><button className="btn-secondary" disabled={state.busy} onClick={() => void execute("refresh")} type="button">Aggiorna sorgente</button><button className="btn-secondary" disabled={state.busy || !canRun} onClick={() => void execute("run")} type="button">Esegui adesso</button></div><p className="text-xs text-gray-500">Stato: {state.status?.config.enabled ? "ON" : "OFF"}{state.status?.config.last_source_refresh_at ? ` · sorgente ${formatDateTime(state.status.config.last_source_refresh_at)}` : ""}</p></>;
 }
 
 export function ContinuousCatastoSyncPanel() {
@@ -202,15 +281,19 @@ export function ContinuousCatastoSyncPanel() {
   return (
     <div className="space-y-4">
       <SyncNotice state={state} />
+      <AutoSyncActivityDashboard credentials={state.credentials} status={state.status} />
       <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
         <ElaborazionePanelHeader badge={<><RefreshIcon className="h-3.5 w-3.5" />Sync continua</>} title="Sincronizzazione catastale continua" description="Micro-batch perpetui: prima ruolo, poi patrimonio consortile e anagrafe. Il planner usa solo credenziali libere e nelle finestre operative." />
         <div className="space-y-6 p-6">
+          <section aria-labelledby="autosync-configuration-title" className="space-y-4">
+            <div><h2 className="text-lg font-semibold text-gray-950" id="autosync-configuration-title">Configurazione AutoSync</h2><p className="mt-1 text-sm text-gray-500">Credenziali, priorità, intervalli e dimensione dei micro-batch.</p></div>
           <div className="grid gap-4 lg:grid-cols-[1.2fr,1fr]">
             <div className="space-y-4 rounded-[24px] border border-gray-100 bg-gray-50 p-4">
               <SyncConfiguration execute={execute} setDraft={setDraft} setState={setState} state={state} />
             </div>
             <ScopeCoverage status={state.status} />
           </div>
+          </section>
           <RunningBatch status={state.status} />
           <div className="grid gap-4 xl:grid-cols-2"><div className="rounded-[24px] border border-gray-100 p-4"><p className="text-sm font-semibold">Errori e retry</p><SyncItemList errorList items={state.status?.perpetual_error_items ?? []} /></div><div className="rounded-[24px] border border-gray-100 p-4"><p className="text-sm font-semibold">Coda recente</p><SyncItemList items={state.status?.perpetual_recent_items ?? []} /></div></div>
         </div>

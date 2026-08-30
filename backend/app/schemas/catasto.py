@@ -439,6 +439,45 @@ class CatastoPerpetualSyncItemResponse(BaseModel):
     updated_at: datetime
 
 
+class CatastoAutoSyncDashboardSummaryResponse(BaseModel):
+    period_hours: int = 24
+    batches_total: int = 0
+    batches_active: int = 0
+    batches_completed: int = 0
+    batches_failed: int = 0
+    requests_total: int = 0
+    requests_completed: int = 0
+    requests_failed: int = 0
+    requests_blocked: int = 0
+    documents_downloaded: int = 0
+    completed_per_hour: float = 0
+    average_batch_duration_seconds: int | None = None
+    last_activity_at: datetime | None = None
+
+
+class CatastoAutoSyncHourlyResponse(BaseModel):
+    hour: datetime
+    completed: int = 0
+    failed: int = 0
+    documents_downloaded: int = 0
+
+
+class CatastoAutoSyncEventResponse(BaseModel):
+    timestamp: datetime
+    level: str
+    title: str
+    detail: str | None = None
+    batch_id: UUID
+    request_id: UUID | None = None
+
+
+class CatastoAutoSyncDashboardResponse(BaseModel):
+    summary: CatastoAutoSyncDashboardSummaryResponse
+    hourly: list[CatastoAutoSyncHourlyResponse] = Field(default_factory=list)
+    recent_batches: list[CatastoBatchResponse] = Field(default_factory=list)
+    events: list[CatastoAutoSyncEventResponse] = Field(default_factory=list)
+
+
 class CatastoRuoloAutoSyncStatusResponse(BaseModel):
     config: CatastoRuoloAutoSyncConfigResponse
     counts: CatastoRuoloAutoSyncStatusCountsResponse
@@ -450,3 +489,4 @@ class CatastoRuoloAutoSyncStatusResponse(BaseModel):
     available_credential_ids: list[UUID] = Field(default_factory=list)
     perpetual_error_items: list[CatastoPerpetualSyncItemResponse] = Field(default_factory=list)
     perpetual_recent_items: list[CatastoPerpetualSyncItemResponse] = Field(default_factory=list)
+    dashboard: CatastoAutoSyncDashboardResponse
