@@ -59,7 +59,7 @@ def build_presenze_mobile_record_payload(
     return {
         "record_id": str(record.id),
         "collaborator_id": str(record.collaborator_id),
-        "gaia_user_id": json_optional_identifier(record.application_user_id),
+        "gaia_user_id": json_optional_identifier(getattr(collaborator, "application_user_id", None)),
         "collaborator_name": collaborator.name if collaborator is not None else str(record.collaborator_id),
         "employee_code": collaborator.employee_code if collaborator is not None else "",
         "team_ids": [str(team_id) for team_id in team_ids],

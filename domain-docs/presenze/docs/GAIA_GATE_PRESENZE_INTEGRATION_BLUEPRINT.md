@@ -144,7 +144,7 @@ GATE operator.gaia_user_id
   = supervisor.gaia_user_id
 ```
 
-`application_user_id` e il nome della foreign key interna GAIA; `gaia_user_id` e il nome esplicito nel contratto GATE. Non sono due chiavi alternative. GAIA deve propagare `gaia_user_id` su membership, supervisor, giornaliere e anomalie quando il collaboratore e mappato.
+`application_user_id` e il nome della foreign key interna GAIA; `gaia_user_id` e il nome esplicito nel contratto GATE. Non sono due chiavi alternative. GAIA deve propagare `gaia_user_id` su membership, supervisor, giornaliere e anomalie quando il collaboratore e mappato. Per giornaliere e anomalie il valore autorevole viene letto dal mapping corrente `PresenzeCollaborator.application_user_id`, non dalla copia denormalizzata eventualmente storica presente sul record giornaliero.
 
 `collaborator_id` resta la chiave tecnica Presenze per giornaliere, anomalie, pending action ed export. `employee_code` e una matricola descrittiva del dominio Presenze e non deve mai essere confrontato con `gaia_user_id`.
 

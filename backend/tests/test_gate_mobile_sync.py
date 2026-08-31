@@ -346,8 +346,20 @@ def test_build_presenze_rules_months_giornaliere_and_anomalie_payloads(monkeypat
         assert record is not None
         record.application_user_id = None
         db.commit()
+        record_mapping_stale_payload = build_presenze_giornaliere_push_payload(db, month="2026-07")
+        assert record_mapping_stale_payload["records"][0]["gaia_user_id"] == "77"
+
+        collaborator = db.get(PresenzeCollaborator, record.collaborator_id)
+        assert collaborator is not None
+        collaborator.application_user_id = None
+        record.application_user_id = 77
+        db.commit()
         unmapped_payload = build_presenze_giornaliere_push_payload(db, month="2026-07")
         assert unmapped_payload["records"][0]["gaia_user_id"] is None
+
+        monkeypatch.setattr(gate_mobile_sync_service, "_collaborator_map", lambda *_args, **_kwargs: {})
+        missing_collaborator_payload = build_presenze_giornaliere_push_payload(db, month="2026-07")
+        assert missing_collaborator_payload["records"][0]["gaia_user_id"] is None
     finally:
         db.close()
 

@@ -329,7 +329,7 @@ Il mapping usa `application_users` come anagrafica canonica indipendentemente da
 
 Un `application_user_id` puo essere associato al piu a un collaboratore attivo nel mapping: l'indice unico parziale lo garantisce a livello DB. Ogni variazione di mapping (map, remap, unmap) lascia traccia in `presenze_collaborator_mapping_audit` con autore, motivo e timestamp; le operazioni noop non generano audit.
 
-Per l'integrazione GATE, `application_user_id` e `gaia_user_id` rappresentano la stessa identita applicativa: il primo e la foreign key interna, il secondo e il nome del campo nel contratto. `PresenzeCollaborator.id`/`collaborator_id` resta la chiave tecnica dei record Presenze e `employee_code` resta la matricola. Questi namespace non sono intercambiabili. Lo scope di responsabili e squadre non usa fallback tramite username, email, nome o matricola; mapping mancanti o ambigui falliscono chiusi.
+Per l'integrazione GATE, `application_user_id` e `gaia_user_id` rappresentano la stessa identita applicativa: il primo e la foreign key interna, il secondo e il nome del campo nel contratto. `PresenzeCollaborator.id`/`collaborator_id` resta la chiave tecnica dei record Presenze e `employee_code` resta la matricola. Questi namespace non sono intercambiabili. Il payload di giornaliere e anomalie legge sempre il mapping corrente `PresenzeCollaborator.application_user_id`; l'eventuale copia denormalizzata su `PresenzeDailyRecord` non viene usata per autorizzare. Lo scope di responsabili e squadre non usa fallback tramite username, email, nome o matricola; mapping mancanti o ambigui falliscono chiusi.
 
 ## 6. Endpoint GAIA proposti
 
