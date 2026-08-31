@@ -56,6 +56,7 @@ from app.modules.presenze.services.gate_mobile_payloads import (
     gate_channel as _gate_channel,
     json_date as _json_date,
     json_datetime as _json_datetime,
+    json_optional_identifier as _json_optional_identifier,
 )
 from app.modules.presenze.services.gate_mobile_team_actions import apply_presenze_team_change_proposal
 from app.modules.presenze.services.inaz_sync_status import build_presenze_snapshot_metadata
@@ -253,7 +254,6 @@ def build_mobile_workset_push_payloads(db: Session) -> list[dict[str, Any]]:
 
 
 def build_presenze_teams_push_payload(db: Session, *, now: datetime | None = None) -> dict[str, Any]:
-    synced_at = now or datetime.now(timezone.utc)
     teams = db.scalars(select(OrganizationTeam).order_by(OrganizationTeam.name.asc())).all()
     memberships = db.execute(
         select(OrganizationTeamMembership, PresenzeCollaborator)
@@ -272,6 +272,7 @@ def build_presenze_teams_push_payload(db: Session, *, now: datetime | None = Non
             {
                 "membership_id": str(membership.id),
                 "collaborator_id": str(membership.collaborator_id),
+                "gaia_user_id": _json_optional_identifier(collaborator.application_user_id),
                 "employee_code": collaborator.employee_code,
                 "collaborator_name": collaborator.name,
                 "role": membership.role,
@@ -288,7 +289,7 @@ def build_presenze_teams_push_payload(db: Session, *, now: datetime | None = Non
         "schema_version": 1,
         "source": "gaia",
         "rules_version": RULES_VERSION,
-        "synced_from_gaia_at": synced_at.isoformat().replace("+00:00", "Z"),
+        "synced_from_gaia_at": (now or datetime.now(timezone.utc)).isoformat().replace("+00:00", "Z"),
         "teams": [
             {
                 "team_id": str(team.id),

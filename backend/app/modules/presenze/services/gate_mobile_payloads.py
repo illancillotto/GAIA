@@ -17,8 +17,7 @@ from app.modules.presenze.services.xlsm_export import resolve_export_absence_cod
 
 
 def build_presenze_supervisors_by_team(
-    db: Session,
-    supervisors: list[tuple[OrganizationTeamSupervisorAssignment, ApplicationUser]],
+    db: Session, supervisors: list[tuple[OrganizationTeamSupervisorAssignment, ApplicationUser]],
 ) -> dict[str, list[dict[str, Any]]]:
     collaborators_by_user_id = {
         collaborator.application_user_id: collaborator
@@ -34,6 +33,7 @@ def build_presenze_supervisors_by_team(
             {
                 "supervisor_assignment_id": str(supervisor.id),
                 "application_user_id": supervisor.application_user_id,
+                "gaia_user_id": str(supervisor.application_user_id),
                 "username": user.username,
                 "user_label": user.full_name or user.username,
                 "collaborator_id": str(collaborator.id) if collaborator is not None else None,
@@ -52,15 +52,14 @@ def build_presenze_supervisors_by_team(
 def build_presenze_mobile_record_payload(
     record: PresenzeDailyRecord,
     *,
-    collaborator: PresenzeCollaborator | None,
-    team_ids: list[UUID],
-    serialized: Any,
-    severity: str,
+    collaborator: PresenzeCollaborator | None, team_ids: list[UUID],
+    serialized: Any, severity: str,
     classification: Any,
 ) -> dict[str, Any]:
     return {
         "record_id": str(record.id),
         "collaborator_id": str(record.collaborator_id),
+        "gaia_user_id": json_optional_identifier(record.application_user_id),
         "collaborator_name": collaborator.name if collaborator is not None else str(record.collaborator_id),
         "employee_code": collaborator.employee_code if collaborator is not None else "",
         "team_ids": [str(team_id) for team_id in team_ids],
@@ -127,6 +126,10 @@ def json_datetime(value: datetime | None) -> str:
 
 def json_date(value: Any) -> str | None:
     return value.isoformat() if value is not None else None
+
+
+def json_optional_identifier(value: Any) -> str | None:
+    return str(value) if value is not None else None
 
 
 def gate_channel(value: str | None) -> str:
