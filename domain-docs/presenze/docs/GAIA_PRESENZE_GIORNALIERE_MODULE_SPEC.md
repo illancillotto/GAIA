@@ -56,6 +56,7 @@ Le giornaliere e gli extra orario oggi sono gestiti con estrazione manuale o sem
 - la gerarchia manageriale concede lettura e approvazione, mentre un override `read` concede soltanto la lettura;
 - gli override `approve` e `full` consentono anche la validazione delle giornaliere;
 - il collegamento tra collaboratore Inaz e utente GAIA usa `PresenzeCollaborator.application_user_id`;
+- nei contratti outbound verso GATE lo stesso valore viene esposto come `gaia_user_id`; non viene derivato da username, email, nome o matricola;
 - `owner_user_id` identifica chi ha importato il dato e non concede visibilita organizzativa;
 - la modifica dei dati operativi resta distinta dall'approvazione e continua a richiedere i permessi applicativi dedicati;
 - durante la migrazione restano attivi in dual-read supervisori e gerarchia Accessi legacy.
@@ -328,6 +329,8 @@ Il mapping usa `application_users` come anagrafica canonica indipendentemente da
 
 Un `application_user_id` puo essere associato al piu a un collaboratore attivo nel mapping: l'indice unico parziale lo garantisce a livello DB. Ogni variazione di mapping (map, remap, unmap) lascia traccia in `presenze_collaborator_mapping_audit` con autore, motivo e timestamp; le operazioni noop non generano audit.
 
+Per l'integrazione GATE, `application_user_id` e `gaia_user_id` rappresentano la stessa identita applicativa: il primo e la foreign key interna, il secondo e il nome del campo nel contratto. `PresenzeCollaborator.id`/`collaborator_id` resta la chiave tecnica dei record Presenze e `employee_code` resta la matricola. Questi namespace non sono intercambiabili. Lo scope di responsabili e squadre non usa fallback tramite username, email, nome o matricola; mapping mancanti o ambigui falliscono chiusi.
+
 ## 6. Endpoint GAIA proposti
 
 Tutti sotto prefisso `/presenze` incluso da `backend/app/api/router.py`.
@@ -532,7 +535,7 @@ Comportamenti operativi gia implementati:
 
 - implementare parser JSON compatibile con `OvertimeEntry` e `OvertimeRow`;
 - supportare CSV generato da `presenze-straordinari`;
-- gestire mapping verso `application_users` via `application_user_id`, username o email;
+- nell'import assistito, risolvere inizialmente `application_users` tramite `application_user_id`, username o email e salvare sempre la FK risultante; username/email non devono essere propagati né riusati come fallback di correlazione o autorizzazione GATE;
 - aggiungere endpoint preview e upload;
 - salvare job con metriche e scarti;
 - UI upload con preview.

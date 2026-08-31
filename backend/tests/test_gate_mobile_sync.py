@@ -271,8 +271,10 @@ def test_build_presenze_teams_push_payload_serializes_teams_memberships_and_supe
         assert payload["teams"][0]["created_from_channel"] == "gaia"
         assert payload["teams"][0]["audit"] == {}
         assert payload["teams"][0]["memberships"][0]["collaborator_name"] == "OPERATORE PRESENZE"
+        assert payload["teams"][0]["memberships"][0]["gaia_user_id"] == "77"
         assert payload["teams"][0]["memberships"][0]["source_channel"] == "gaia"
         assert payload["teams"][0]["supervisors"][0]["username"] == "presenze.supervisor"
+        assert payload["teams"][0]["supervisors"][0]["gaia_user_id"] == "77"
         assert payload["teams"][0]["supervisors"][0]["collaborator_id"] == "018f88a2-1797-7365-bf5e-8bb8b7f9d001"
         assert payload["teams"][0]["supervisors"][0]["employee_code"] == "P001"
         assert payload["teams"][0]["supervisors"][0]["collaborator_name"] == "OPERATORE PRESENZE"
@@ -281,6 +283,15 @@ def test_build_presenze_teams_push_payload_serializes_teams_memberships_and_supe
         assert gate_mobile_sync_service._gate_channel("gate") == "gate"
         assert gate_mobile_sync_service._gate_channel("custom") == "custom"
         assert gate_mobile_sync_service._gate_channel(None) == "gaia"
+
+        collaborator = db.get(PresenzeCollaborator, uuid.UUID("018f88a2-1797-7365-bf5e-8bb8b7f9d001"))
+        assert collaborator is not None
+        collaborator.application_user_id = None
+        db.commit()
+        unmapped_payload = build_presenze_teams_push_payload(db)
+        assert unmapped_payload["teams"][0]["memberships"][0]["gaia_user_id"] is None
+        assert unmapped_payload["teams"][0]["supervisors"][0]["gaia_user_id"] == "77"
+        assert unmapped_payload["teams"][0]["supervisors"][0]["collaborator_id"] is None
     finally:
         db.close()
 
@@ -307,6 +318,7 @@ def test_build_presenze_rules_months_giornaliere_and_anomalie_payloads(monkeypat
         assert rules_payload["rules"]["rules_version"] == "presenze-2026-07-extra-3h"
         assert months_payload["months"] == [{"month": "2026-07", "records_total": 1}]
         assert giornaliere_payload["records"][0]["record_id"] == str(daily_record_id)
+        assert giornaliere_payload["records"][0]["gaia_user_id"] == "77"
         assert giornaliere_payload["records"][0]["has_complete_punches"] is True
         assert giornaliere_payload["export_rules_version"] == "presenze-xlsm-2026-08"
         assert giornaliere_payload["records"][0]["km_value"] == 24
@@ -321,6 +333,7 @@ def test_build_presenze_rules_months_giornaliere_and_anomalie_payloads(monkeypat
         assert giornaliere_payload["records"][0]["export_extra_minutes"] == 240
         assert giornaliere_payload["giornaliere"] == giornaliere_payload["records"]
         assert anomalie_payload["anomalies"][0]["reasons"] == ["extra_over_3h"]
+        assert anomalie_payload["anomalies"][0]["gaia_user_id"] == "77"
         assert anomalie_payload["anomalie"] == anomalie_payload["anomalies"]
 
         db.get(PresenzeDailyRecord, daily_record_id).validation_status = "validated"
@@ -328,6 +341,13 @@ def test_build_presenze_rules_months_giornaliere_and_anomalie_payloads(monkeypat
         clean_payload = build_presenze_anomalie_push_payload(db, month="2026-07")
         assert clean_payload["anomalies"] == []
         assert clean_payload["anomalie"] == []
+
+        record = db.get(PresenzeDailyRecord, daily_record_id)
+        assert record is not None
+        record.application_user_id = None
+        db.commit()
+        unmapped_payload = build_presenze_giornaliere_push_payload(db, month="2026-07")
+        assert unmapped_payload["records"][0]["gaia_user_id"] is None
     finally:
         db.close()
 
@@ -369,6 +389,27 @@ def test_build_mobile_operator_push_payload_uses_display_name_fallbacks() -> Non
 
     operator.username = None
     assert gate_mobile_sync_service._operator_display_name(operator, ApplicationUser(username="")) == str(operator_id)
+
+
+def test_operator_field_helpers_handle_absent_optional_relations_and_pages() -> None:
+    db = _build_session()
+    try:
+        operator = WCOperator(id=uuid.uuid4(), wc_id=2005)
+
+        gate_mobile_sync_service._apply_operator_identity_fields(
+            db,
+            operator,
+            None,
+            None,
+            {"status": "DISABLED"},
+        )
+        gate_mobile_sync_service._apply_operator_console_fields(operator, {})
+
+        assert operator.enabled is False
+        assert operator.gate_mobile_console_role is None
+        assert operator.gate_mobile_console_pages is None
+    finally:
+        db.close()
 
 
 def test_run_gate_mobile_sync_once_requests_plan_then_pushes_operators() -> None:

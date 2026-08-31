@@ -111,6 +111,7 @@ Campi minimi `organization_team_memberships`:
 | `id` | Identificativo membership |
 | `team_id` | Squadra |
 | `collaborator_id` | Collaboratore presenze |
+| `gaia_user_id` | `application_users.id` collegato al collaboratore, se mappato |
 | `valid_from`, `valid_to` | Validita temporale |
 | `role` | `member`, `lead`, `substitute` |
 | `source_channel` | `gaia_web` o `gate_mobile` |
@@ -122,6 +123,7 @@ Campi minimi `organization_team_supervisor_assignments`:
 | `id` | Identificativo assegnazione |
 | `team_id` | Squadra |
 | `application_user_id` | Capo settore / operatore abilitato |
+| `gaia_user_id` | Alias di trasporto dello stesso `application_user_id`; i valori devono coincidere |
 | `permission_scope` | `view`, `validate`, `export`, `manage_team` |
 | `valid_from`, `valid_to` | Validita temporale |
 
@@ -130,6 +132,23 @@ Regola consigliata:
 - un collaboratore dovrebbe avere una sola assegnazione attiva principale nello stesso periodo;
 - eventuali eccezioni devono essere esplicite tramite ruolo o flag dedicato;
 - GATE puo proporre squadre e assegnazioni, ma GAIA deve validarle e persisterle.
+
+### 5.1 Identita canonica GAIA/GATE/Presenze
+
+La correlazione utente autorevole e una sola:
+
+```text
+GATE operator.gaia_user_id
+  = GAIA application_users.id
+  = supervisor.application_user_id
+  = supervisor.gaia_user_id
+```
+
+`application_user_id` e il nome della foreign key interna GAIA; `gaia_user_id` e il nome esplicito nel contratto GATE. Non sono due chiavi alternative. GAIA deve propagare `gaia_user_id` su membership, supervisor, giornaliere e anomalie quando il collaboratore e mappato.
+
+`collaborator_id` resta la chiave tecnica Presenze per giornaliere, anomalie, pending action ed export. `employee_code` e una matricola descrittiva del dominio Presenze e non deve mai essere confrontato con `gaia_user_id`.
+
+GATE non usa nome, username, email o matricola come fallback autorizzativo. Un mapping assente, duplicato o incoerente deve fallire chiuso. Un valore numerico uguale in `gaia_user_id` ed `employee_code` non dimostra alcuna relazione.
 
 ## 6. Permessi
 
@@ -219,6 +238,7 @@ Payload snapshot squadre inviato da GAIA:
         {
           "membership_id": "uuid",
           "collaborator_id": "uuid",
+          "gaia_user_id": "77",
           "employee_code": "P001",
           "collaborator_name": "ROSSI MARIO",
           "role": "member",
@@ -232,6 +252,7 @@ Payload snapshot squadre inviato da GAIA:
         {
           "supervisor_assignment_id": "uuid",
           "application_user_id": 77,
+          "gaia_user_id": "77",
           "username": "caposettore",
           "user_label": "Capo Settore",
           "collaborator_id": "uuid",
@@ -299,6 +320,7 @@ Payload minimo per elenco mensile:
     {
       "record_id": "uuid",
       "collaborator_id": "uuid",
+      "gaia_user_id": "77",
       "collaborator_name": "ROSSI MARIO",
       "team_ids": ["uuid"],
       "work_date": "2026-07-01",
@@ -492,6 +514,7 @@ e la pending action segue il normale flusso di errore.
 | Divergenza regole GAIA/GATE | Export o anomalie incoerenti | valori canonici GAIA, `export_rules_version`, test condivisi |
 | Doppio stato operativo | Validazioni discordanti | GATE salva solo pending actions; GAIA valida e conferma con ack/snapshot |
 | Organigramma locale GATE non allineato | Permessi errati | GAIA source of truth per squadre e assegnazioni |
+| Collisione fra ID utente e matricola | Accesso o export di una persona errata | correlazione solo via `gaia_user_id`, record via `collaborator_id`, test fail-closed |
 | Operativita offline non gestita | Perdita modifiche | `client_request_id`, pending actions, retry, ack/fail |
 | Permessi troppo larghi | Accesso improprio a giornaliere | Perimetro per team e audit |
 | Export generato con dati vecchi | File non coerente | snapshot versionato e overlay immediato delle azioni KM/reperibilita pendenti |
