@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from dataclasses import dataclass
 from datetime import datetime, time, timedelta, timezone
 from functools import partial
 import logging
@@ -92,7 +93,8 @@ from sister_credential_pool import (
     CredentialRejectionContext,
     acquire_credential_lease,
     announce_expanded_credential_pool,
-    credential_is_active,
+    batch_release_requested,
+    credential_is_enabled_for_batch,
     credential_is_runnable,
     finalize_credential_pool,
     isolate_rejected_credential_runner,
@@ -722,292 +724,13 @@ class CatastoWorker:
 
         request_repository = self._request_repository()
         request_repository.fail_unavailable_pinned_requests(batch_id, credential_pool.available_ids)
-        claim_lock = asyncio.Lock()
-        shared_state_lock = asyncio.Lock()
-        deferred_requests: dict[UUID, datetime] = {}
-        claimed_request_ids: set[UUID] = set()
-        credential_cooldowns: dict[UUID, datetime] = {}
-        credential_server_error_counts: dict[UUID, int] = {}
-        global_server_error_pause_until: datetime | None = None
-        retry_coordinator = SisterRequestRetryCoordinator(
-            shared_state_lock,
-            deferred_requests,
-            request_repository.reset_for_retry,
-            REQUEST_RETRY_DEFER_SEC,
+        runtime = _SisterBatchRuntime(
+            self,
+            batch,
+            credential_pool,
+            request_repository,
         )
-        claim_coordinator = SisterRequestClaimCoordinator(
-            claim_lock,
-            shared_state_lock,
-            deferred_requests,
-            claimed_request_ids,
-        )
-
-        async def _restart_browser(browser: BrowserSession) -> BrowserSession:
-            with contextlib.suppress(Exception):
-                await browser.logout()
-            with contextlib.suppress(Exception):
-                await browser.stop()
-            browser = self._build_browser_session()
-            await browser.start()
-            return browser
-
-        async def _next_wait_seconds() -> int:
-            now = datetime.now(timezone.utc)
-            async with shared_state_lock:
-                deferred_times = [value for value in deferred_requests.values() if value > now]
-                cooldown_times = [value for value in credential_cooldowns.values() if value > now]
-            candidates = deferred_times + cooldown_times
-            if not candidates:
-                return 2
-            retry_at = min(candidates)
-            return max(int((retry_at - now).total_seconds()), 1)
-
-        async def _register_sister_server_error(credential: CatastoCredential, request_id: UUID, exc: SisterServerError) -> tuple[int, bool]:
-            nonlocal global_server_error_pause_until
-
-            now = datetime.now(timezone.utc)
-            async with shared_state_lock:
-                consecutive_errors = credential_server_error_counts.get(credential.id, 0) + 1
-                credential_server_error_counts[credential.id] = consecutive_errors
-                cooldown_seconds = self._compute_sister_server_error_cooldown(consecutive_errors)
-                credential_cooldowns[credential.id] = now + timedelta(seconds=cooldown_seconds)
-                all_credentials_in_cooldown = all(
-                    (credential_cooldowns.get(active_credential.id) or now) > now
-                    for active_credential in credential_pool.credentials
-                )
-                opened_global_pause = False
-                if all_credentials_in_cooldown:
-                    global_server_error_pause_until = now + timedelta(seconds=SISTER_SERVER_ERROR_GLOBAL_PAUSE_SEC)
-                    opened_global_pause = True
-
-            logger.warning(
-                "Batch %s richiesta %s differita per errore 500 SISTER con %s: consecutive_errors=%s cooldown=%ss global_pause=%s detail=%s",
-                batch_id,
-                request_id,
-                credential.sister_username,
-                consecutive_errors,
-                cooldown_seconds,
-                opened_global_pause,
-                exc,
-            )
-            return cooldown_seconds, opened_global_pause
-
-        def _batch_release_requested() -> bool:
-            with SessionLocal() as db:
-                batch = db.get(CatastoBatch, batch_id)
-                return batch is None or batch.status == CatastoBatchStatus.CANCELLED.value
-
-        def _credential_release_requested(credential_id: UUID) -> bool:
-            if credential_is_active(SessionLocal, credential_id):
-                return False
-            credential_pool.reject(credential_id)
-            request_repository.fail_unavailable_pinned_requests(batch_id, credential_pool.available_ids)
-            return True
-
-        async def _credential_runner(credential: CatastoCredential) -> None:
-            nonlocal global_server_error_pause_until
-            browser: BrowserSession | None = None
-            lease_acquired = False
-            lease_heartbeat: CredentialLeaseHeartbeat | None = None
-            try:
-                while not self.state.stop_requested:
-                    if lease_heartbeat is not None and lease_heartbeat.lost.is_set():
-                        # A heartbeat is started immediately before the browser session.
-                        lease_browser = cast(BrowserSession, browser)
-                        with contextlib.suppress(Exception):
-                            await lease_browser.logout()
-                        await lease_browser.stop()
-                        browser = None
-                        lease_acquired = False
-                        lease_heartbeat = None
-                    if not credential_is_runnable(SessionLocal, credential.id):
-                        if browser is not None:
-                            with contextlib.suppress(Exception):
-                                await browser.logout()
-                            await browser.stop()
-                            browser = None
-                        if lease_acquired:
-                            await lease_heartbeat.stop()
-                            release_credential_lease(SessionLocal, credential, batch_id)
-                            lease_acquired = False
-                            lease_heartbeat = None
-                        if not credential_is_active(SessionLocal, credential.id):
-                            return
-                        self._set_batch_operation(batch_id, f"Credenziale {credential.sister_username} fuori fascia, in attesa")
-                        await asyncio.sleep(min(POLL_INTERVAL_SEC, 60))
-                        continue
-                    if not lease_acquired:
-                        if not acquire_credential_lease(SessionLocal, credential, batch_id):
-                            self._set_batch_operation(batch_id, f"Credenziale {credential.sister_username} gia in uso, in attesa")
-                            await asyncio.sleep(POLL_INTERVAL_SEC)
-                            continue
-                        lease_acquired = True
-                        lease_heartbeat = CredentialLeaseHeartbeat(SessionLocal, credential, batch_id)
-                        lease_heartbeat.start()
-                    if browser is None:
-                        browser = self._build_browser_session()
-                        await browser.start()
-                    if should_stop_credential_runner(
-                        self.state.stop_requested,
-                        batch_id,
-                        credential.sister_username,
-                        _batch_release_requested,
-                        lambda: _credential_release_requested(credential.id),
-                    ):
-                        return
-                    now = datetime.now(timezone.utc)
-                    if not self._is_within_operating_window(now):
-                        resume_at = self._next_operating_resume_at(now)
-                        wait_seconds = max(int((resume_at - now).total_seconds()), 1) if resume_at is not None else 60
-                        resume_label = resume_at.astimezone(self._operation_window_zone()).strftime("%H:%M") if resume_at is not None else "n/d"
-                        self._set_batch_operation(
-                            batch_id,
-                            f"Batch in pausa fuori finestra operativa, ripresa automatica alle {resume_label}",
-                        )
-                        await asyncio.sleep(min(wait_seconds, 60))
-                        continue
-                    async with shared_state_lock:
-                        cooldown_until = credential_cooldowns.get(credential.id)
-                        global_pause_until = global_server_error_pause_until
-                    if global_pause_until is not None and global_pause_until > now:
-                        wait_seconds = max(int((global_pause_until - now).total_seconds()), 1)
-                        self._set_batch_operation(
-                            batch_id,
-                            f"Portale SISTER instabile, pausa globale {wait_seconds}s prima della ripresa",
-                        )
-                        await asyncio.sleep(wait_seconds)
-                        continue
-                    if cooldown_until is not None and cooldown_until > now:
-                        wait_seconds = max(int((cooldown_until - now).total_seconds()), 1)
-                        self._set_batch_operation(
-                            batch_id,
-                            f"Credenziale {credential.sister_username} in cooldown, attesa {wait_seconds}s",
-                        )
-                        await asyncio.sleep(wait_seconds)
-                        continue
-
-                    selection = await claim_coordinator.claim_next(request_repository, batch_id, credential.id)
-                    request_id, execution_token = selection.request_id, selection.execution_token
-                    if request_id is None:
-                        if not self._batch_has_open_requests(batch_id):
-                            return
-                        if selection.wait_reason == "WAIT":
-                            self._set_batch_operation(batch_id, "In attesa di input CAPTCHA manuale")
-                        elif selection.wait_reason == "RETRY_LATER":
-                            wait_seconds = selection.resolved_wait_seconds(await _next_wait_seconds())
-                            self._set_batch_operation(batch_id, f"Richieste differite, attesa {wait_seconds}s")
-                            await asyncio.sleep(wait_seconds)
-                            continue
-                        await asyncio.sleep(2)
-                        continue
-
-                    try:
-                        await self._process_request(browser, credential, batch_id, request_id)
-                    except SisterServerError as exc:
-                        cooldown_seconds, opened_global_pause = await _register_sister_server_error(
-                            credential,
-                            request_id,
-                            exc,
-                        )
-                        await retry_coordinator.defer(
-                            request_id, execution_token,
-                            max(REQUEST_RETRY_DEFER_SEC, cooldown_seconds),
-                            (
-                                "Portale SISTER temporaneamente non disponibile, richiesta rimessa in coda"
-                                if opened_global_pause
-                                else f"Errore SISTER 500 su {credential.sister_username}, retry differito"
-                            ), "sister_server_error",
-                        )
-                        browser = await _restart_browser(browser)
-                        await asyncio.sleep(5)
-                    except Exception as exc:
-                        rejection_context = CredentialRejectionContext(
-                            credential_pool, credential, batch_id, request_id, execution_token, request_repository, self._set_batch_operation,
-                        )
-                        quarantine_rejected_credential(exc, rejection_context)
-                        if self._is_recoverable_credential_error(exc):
-                            async with shared_state_lock:
-                                credential_server_error_counts[credential.id] = 0
-                                global_server_error_pause_until = None
-                                credential_cooldowns[credential.id] = datetime.now(timezone.utc) + timedelta(
-                                    seconds=CREDENTIAL_LOCK_COOLDOWN_SEC
-                                )
-                            logger.warning(
-                                "Batch %s richiesta %s differita per errore recuperabile con %s: %s",
-                                batch_id,
-                                request_id,
-                                credential.sister_username,
-                                exc,
-                            )
-                            await retry_coordinator.defer_recoverable(
-                                request_id, execution_token, exc, credential.sister_username
-                            )
-                            browser = await _restart_browser(browser)
-                        else:
-                            async with shared_state_lock:
-                                credential_server_error_counts[credential.id] = 0
-                            logger.exception(
-                                "Batch %s richiesta %s fallita su %s, isolamento errore e prosecuzione batch",
-                                batch_id,
-                                request_id,
-                                credential.sister_username,
-                            )
-                            with SessionLocal() as db:
-                                request = db.get(CatastoVisuraRequest, request_id)
-                                if request is not None and request.artifact_dir:
-                                    artifact_dir = Path(request.artifact_dir)
-                                    self._write_request_error_artifact(artifact_dir, exc)
-                                    with contextlib.suppress(Exception):
-                                        await browser.capture_debug_snapshot(artifact_dir, "final-failed")
-                            request_repository.fail_request(batch_id, request_id, str(exc), execution_token)
-                            browser = await _restart_browser(browser)
-                    else:
-                        async with shared_state_lock:
-                            credential_server_error_counts[credential.id] = 0
-                    finally:
-                        await claim_coordinator.release(request_id)
-
-                    if should_stop_credential_runner(
-                        self.state.stop_requested, batch_id,
-                        credential.sister_username, _batch_release_requested,
-                        lambda: _credential_release_requested(credential.id),
-                    ):
-                        return
-                    await asyncio.sleep(BETWEEN_VISURE_DELAY_SEC)
-            finally:
-                if browser is not None:
-                    with contextlib.suppress(Exception):
-                        await browser.logout()
-                    await browser.stop()
-                if lease_acquired:
-                    await cast(CredentialLeaseHeartbeat, lease_heartbeat).stop()
-                    release_credential_lease(SessionLocal, credential, batch_id)
-
-        pool_label = (
-            f"Avvio autosync ruolo con credenziale {active_credentials[0].sister_username}"
-            if len(active_credentials) == 1 and batch.batch_kind == CatastoBatchKind.RUOLO_AUTOSYNC.value
-            else f"Avvio pool visure con {len(active_credentials)} credenziali"
-        )
-        self._set_batch_operation(batch_id, pool_label)
-        try:
-            await run_dynamic_credential_pool(
-                active_credentials,
-                lambda credential: isolate_rejected_credential_runner(_credential_runner(credential)),
-                partial(refresh_shared_credential_pool, SessionLocal, batch_id, credential_pool),
-                lambda: self._batch_has_open_requests(batch_id),
-                partial(announce_expanded_credential_pool, credential_pool, batch_id, request_repository, self._set_batch_operation),
-                POLL_INTERVAL_SEC,
-            )
-            finalize_credential_pool(
-                credential_pool,
-                batch_id,
-                self._batch_has_open_requests(batch_id),
-                SessionLocal,
-                self._finalize_batch,
-            )
-        except Exception as exc:
-            logger.exception("Batch %s fallito prima del completamento", batch_id)
-            self._request_repository().fail_batch(batch_id, str(exc))
+        await runtime.run()
 
     @staticmethod
     def _batch_cannot_process(batch: CatastoBatch | None) -> bool:
@@ -1362,6 +1085,490 @@ class CatastoWorker:
         if "Credenziali SISTER rifiutate" in message:
             return "Le credenziali SISTER sono state rifiutate dal portale."
         return message
+
+
+@dataclass
+class _CredentialRuntimeSession:
+    browser: BrowserSession | None = None
+    lease_acquired: bool = False
+    lease_heartbeat: CredentialLeaseHeartbeat | None = None
+
+
+class _SisterBatchRuntime:
+    def __init__(
+        self,
+        worker: CatastoWorker,
+        batch: CatastoBatch,
+        credential_pool,
+        request_repository: SisterRequestRepository,
+    ) -> None:
+        self.worker = worker
+        self.batch = batch
+        self.batch_id = batch.id
+        self.credential_pool = credential_pool
+        self.request_repository = request_repository
+        self.shared_state_lock = asyncio.Lock()
+        self.deferred_requests: dict[UUID, datetime] = {}
+        self.credential_cooldowns: dict[UUID, datetime] = {}
+        self.credential_server_error_counts: dict[UUID, int] = {}
+        self.global_server_error_pause_until: datetime | None = None
+        self.retry_coordinator = SisterRequestRetryCoordinator(
+            self.shared_state_lock,
+            self.deferred_requests,
+            request_repository.reset_for_retry,
+            REQUEST_RETRY_DEFER_SEC,
+        )
+        self.claim_coordinator = SisterRequestClaimCoordinator(
+            asyncio.Lock(),
+            self.shared_state_lock,
+            self.deferred_requests,
+            set(),
+        )
+
+    async def run(self) -> None:
+        active_credentials = self.credential_pool.credentials
+        pool_label = (
+            f"Avvio autosync ruolo con credenziale {active_credentials[0].sister_username}"
+            if len(active_credentials) == 1
+            and self.batch.batch_kind == CatastoBatchKind.RUOLO_AUTOSYNC.value
+            else f"Avvio pool visure con {len(active_credentials)} credenziali"
+        )
+        self.worker._set_batch_operation(self.batch_id, pool_label)
+        try:
+            await run_dynamic_credential_pool(
+                active_credentials,
+                lambda credential: isolate_rejected_credential_runner(
+                    self._credential_runner(credential)
+                ),
+                partial(
+                    refresh_shared_credential_pool,
+                    SessionLocal,
+                    self.batch_id,
+                    self.credential_pool,
+                ),
+                lambda: self.worker._batch_has_open_requests(self.batch_id),
+                partial(
+                    announce_expanded_credential_pool,
+                    self.credential_pool,
+                    self.batch_id,
+                    self.request_repository,
+                    self.worker._set_batch_operation,
+                ),
+                POLL_INTERVAL_SEC,
+            )
+            finalize_credential_pool(
+                self.credential_pool,
+                self.batch_id,
+                self.worker._batch_has_open_requests(self.batch_id),
+                SessionLocal,
+                self.worker._finalize_batch,
+            )
+        except Exception as exc:
+            logger.exception("Batch %s fallito prima del completamento", self.batch_id)
+            self.worker._request_repository().fail_batch(self.batch_id, str(exc))
+
+    async def _credential_runner(self, credential: CatastoCredential) -> None:
+        session = _CredentialRuntimeSession()
+        try:
+            while not self.worker.state.stop_requested:
+                readiness = await self._prepare_session(credential, session)
+                if readiness == "stop":
+                    return
+                if readiness == "wait":
+                    continue
+                if await self._wait_for_runtime_window(credential):
+                    continue
+                outcome = await self._process_next_request(credential, session)
+                if outcome == "stop":
+                    return
+        finally:
+            await self._close_session(credential, session)
+
+    async def _prepare_session(
+        self,
+        credential: CatastoCredential,
+        session: _CredentialRuntimeSession,
+    ) -> str:
+        if session.lease_heartbeat is not None and session.lease_heartbeat.lost.is_set():
+            await self._discard_lost_lease(session)
+        if not credential_is_runnable(SessionLocal, credential.id, self.batch_id):
+            await self._close_session(credential, session)
+            if not credential_is_enabled_for_batch(SessionLocal, credential.id, self.batch_id):
+                return "stop"
+            self.worker._set_batch_operation(
+                self.batch_id,
+                f"Credenziale {credential.sister_username} fuori fascia, in attesa",
+            )
+            await asyncio.sleep(min(POLL_INTERVAL_SEC, 60))
+            return "wait"
+        if not session.lease_acquired and not self._acquire_lease(credential, session):
+            await asyncio.sleep(POLL_INTERVAL_SEC)
+            return "wait"
+        if session.browser is None:
+            session.browser = self.worker._build_browser_session()
+            await session.browser.start()
+        if self._should_stop(credential):
+            return "stop"
+        return "ready"
+
+    def _acquire_lease(
+        self,
+        credential: CatastoCredential,
+        session: _CredentialRuntimeSession,
+    ) -> bool:
+        if not acquire_credential_lease(SessionLocal, credential, self.batch_id):
+            self.worker._set_batch_operation(
+                self.batch_id,
+                f"Credenziale {credential.sister_username} gia in uso, in attesa",
+            )
+            return False
+        session.lease_acquired = True
+        session.lease_heartbeat = CredentialLeaseHeartbeat(
+            SessionLocal,
+            credential,
+            self.batch_id,
+        )
+        session.lease_heartbeat.start()
+        return True
+
+    async def _discard_lost_lease(self, session: _CredentialRuntimeSession) -> None:
+        browser = cast(BrowserSession, session.browser)
+        with contextlib.suppress(Exception):
+            await browser.logout()
+        await browser.stop()
+        session.browser = None
+        session.lease_acquired = False
+        session.lease_heartbeat = None
+
+    async def _close_session(
+        self,
+        credential: CatastoCredential,
+        session: _CredentialRuntimeSession,
+    ) -> None:
+        if session.browser is not None:
+            with contextlib.suppress(Exception):
+                await session.browser.logout()
+            await session.browser.stop()
+            session.browser = None
+        if session.lease_acquired:
+            await cast(CredentialLeaseHeartbeat, session.lease_heartbeat).stop()
+            release_credential_lease(SessionLocal, credential, self.batch_id)
+            session.lease_acquired = False
+            session.lease_heartbeat = None
+
+    def _should_stop(self, credential: CatastoCredential) -> bool:
+        return should_stop_credential_runner(
+            self.worker.state.stop_requested,
+            self.batch_id,
+            credential.sister_username,
+            lambda: batch_release_requested(SessionLocal, self.batch_id),
+            lambda: self._credential_release_requested(credential.id),
+        )
+
+    def _credential_release_requested(self, credential_id: UUID) -> bool:
+        if credential_is_enabled_for_batch(SessionLocal, credential_id, self.batch_id):
+            return False
+        self.credential_pool.reject(credential_id)
+        self.request_repository.fail_unavailable_pinned_requests(
+            self.batch_id,
+            self.credential_pool.available_ids,
+        )
+        return True
+
+    async def _wait_for_runtime_window(self, credential: CatastoCredential) -> bool:
+        now = datetime.now(timezone.utc)
+        if not self.worker._is_within_operating_window(now):
+            await self._wait_for_operating_window(now)
+            return True
+        async with self.shared_state_lock:
+            cooldown_until = self.credential_cooldowns.get(credential.id)
+            global_pause_until = self.global_server_error_pause_until
+        if global_pause_until is not None and global_pause_until > now:
+            await self._wait_for_global_pause(global_pause_until, now)
+            return True
+        if cooldown_until is not None and cooldown_until > now:
+            await self._wait_for_credential_cooldown(credential, cooldown_until, now)
+            return True
+        return False
+
+    async def _wait_for_operating_window(self, now: datetime) -> None:
+        resume_at = self.worker._next_operating_resume_at(now)
+        wait_seconds = (
+            max(int((resume_at - now).total_seconds()), 1)
+            if resume_at is not None
+            else 60
+        )
+        resume_label = (
+            resume_at.astimezone(self.worker._operation_window_zone()).strftime("%H:%M")
+            if resume_at is not None
+            else "n/d"
+        )
+        self.worker._set_batch_operation(
+            self.batch_id,
+            f"Batch in pausa fuori finestra operativa, ripresa automatica alle {resume_label}",
+        )
+        await asyncio.sleep(min(wait_seconds, 60))
+
+    async def _wait_for_global_pause(self, pause_until: datetime, now: datetime) -> None:
+        wait_seconds = max(int((pause_until - now).total_seconds()), 1)
+        self.worker._set_batch_operation(
+            self.batch_id,
+            f"Portale SISTER instabile, pausa globale {wait_seconds}s prima della ripresa",
+        )
+        await asyncio.sleep(wait_seconds)
+
+    async def _wait_for_credential_cooldown(
+        self,
+        credential: CatastoCredential,
+        cooldown_until: datetime,
+        now: datetime,
+    ) -> None:
+        wait_seconds = max(int((cooldown_until - now).total_seconds()), 1)
+        self.worker._set_batch_operation(
+            self.batch_id,
+            f"Credenziale {credential.sister_username} in cooldown, attesa {wait_seconds}s",
+        )
+        await asyncio.sleep(wait_seconds)
+
+    async def _process_next_request(
+        self,
+        credential: CatastoCredential,
+        session: _CredentialRuntimeSession,
+    ) -> str:
+        selection = await self.claim_coordinator.claim_next(
+            self.request_repository,
+            self.batch_id,
+            credential.id,
+        )
+        request_id = selection.request_id
+        if request_id is None:
+            return await self._handle_empty_claim(selection)
+        try:
+            await self._execute_claimed_request(credential, session, selection)
+        finally:
+            await self.claim_coordinator.release(request_id)
+        if self._should_stop(credential):
+            return "stop"
+        await asyncio.sleep(BETWEEN_VISURE_DELAY_SEC)
+        return "continue"
+
+    async def _handle_empty_claim(self, selection) -> str:
+        if not self.worker._batch_has_open_requests(self.batch_id):
+            return "stop"
+        if selection.wait_reason == "WAIT":
+            self.worker._set_batch_operation(
+                self.batch_id,
+                "In attesa di input CAPTCHA manuale",
+            )
+        elif selection.wait_reason == "RETRY_LATER":
+            wait_seconds = selection.resolved_wait_seconds(await self._next_wait_seconds())
+            self.worker._set_batch_operation(
+                self.batch_id,
+                f"Richieste differite, attesa {wait_seconds}s",
+            )
+            await asyncio.sleep(wait_seconds)
+            return "continue"
+        await asyncio.sleep(2)
+        return "continue"
+
+    async def _execute_claimed_request(
+        self,
+        credential: CatastoCredential,
+        session: _CredentialRuntimeSession,
+        selection,
+    ) -> None:
+        request_id = selection.request_id
+        try:
+            await self.worker._process_request(
+                cast(BrowserSession, session.browser),
+                credential,
+                self.batch_id,
+                request_id,
+            )
+        except SisterServerError as exc:
+            await self._handle_sister_server_error(credential, session, selection, exc)
+        except Exception as exc:
+            await self._handle_request_error(credential, session, selection, exc)
+        else:
+            async with self.shared_state_lock:
+                self.credential_server_error_counts[credential.id] = 0
+
+    async def _handle_sister_server_error(
+        self,
+        credential: CatastoCredential,
+        session: _CredentialRuntimeSession,
+        selection,
+        exc: SisterServerError,
+    ) -> None:
+        cooldown_seconds, opened_global_pause = await self._register_server_error(
+            credential,
+            selection.request_id,
+            exc,
+        )
+        message = (
+            "Portale SISTER temporaneamente non disponibile, richiesta rimessa in coda"
+            if opened_global_pause
+            else f"Errore SISTER 500 su {credential.sister_username}, retry differito"
+        )
+        await self.retry_coordinator.defer(
+            selection.request_id,
+            selection.execution_token,
+            max(REQUEST_RETRY_DEFER_SEC, cooldown_seconds),
+            message,
+            "sister_server_error",
+        )
+        session.browser = await self._restart_browser(cast(BrowserSession, session.browser))
+        await asyncio.sleep(5)
+
+    async def _handle_request_error(
+        self,
+        credential: CatastoCredential,
+        session: _CredentialRuntimeSession,
+        selection,
+        exc: Exception,
+    ) -> None:
+        context = CredentialRejectionContext(
+            self.credential_pool,
+            credential,
+            self.batch_id,
+            selection.request_id,
+            selection.execution_token,
+            self.request_repository,
+            self.worker._set_batch_operation,
+        )
+        quarantine_rejected_credential(exc, context)
+        if self.worker._is_recoverable_credential_error(exc):
+            await self._defer_recoverable_error(credential, selection, exc)
+        else:
+            await self._fail_terminal_request(credential, session, selection, exc)
+        session.browser = await self._restart_browser(cast(BrowserSession, session.browser))
+
+    async def _defer_recoverable_error(
+        self,
+        credential: CatastoCredential,
+        selection,
+        exc: Exception,
+    ) -> None:
+        async with self.shared_state_lock:
+            self.credential_server_error_counts[credential.id] = 0
+            self.global_server_error_pause_until = None
+            self.credential_cooldowns[credential.id] = datetime.now(timezone.utc) + timedelta(
+                seconds=CREDENTIAL_LOCK_COOLDOWN_SEC
+            )
+        logger.warning(
+            "Batch %s richiesta %s differita per errore recuperabile con %s: %s",
+            self.batch_id,
+            selection.request_id,
+            credential.sister_username,
+            exc,
+        )
+        await self.retry_coordinator.defer_recoverable(
+            selection.request_id,
+            selection.execution_token,
+            exc,
+            credential.sister_username,
+        )
+
+    async def _fail_terminal_request(
+        self,
+        credential: CatastoCredential,
+        session: _CredentialRuntimeSession,
+        selection,
+        exc: Exception,
+    ) -> None:
+        async with self.shared_state_lock:
+            self.credential_server_error_counts[credential.id] = 0
+        logger.exception(
+            "Batch %s richiesta %s fallita su %s, isolamento errore e prosecuzione batch",
+            self.batch_id,
+            selection.request_id,
+            credential.sister_username,
+        )
+        await self._capture_terminal_error(
+            cast(BrowserSession, session.browser),
+            selection.request_id,
+            exc,
+        )
+        self.request_repository.fail_request(
+            self.batch_id,
+            selection.request_id,
+            str(exc),
+            selection.execution_token,
+        )
+
+    async def _capture_terminal_error(
+        self,
+        browser: BrowserSession,
+        request_id: UUID,
+        exc: Exception,
+    ) -> None:
+        with SessionLocal() as db:
+            request = db.get(CatastoVisuraRequest, request_id)
+            if request is None or not request.artifact_dir:
+                return
+            artifact_dir = Path(request.artifact_dir)
+            self.worker._write_request_error_artifact(artifact_dir, exc)
+            with contextlib.suppress(Exception):
+                await browser.capture_debug_snapshot(artifact_dir, "final-failed")
+
+    async def _register_server_error(
+        self,
+        credential: CatastoCredential,
+        request_id: UUID,
+        exc: SisterServerError,
+    ) -> tuple[int, bool]:
+        now = datetime.now(timezone.utc)
+        async with self.shared_state_lock:
+            consecutive_errors = self.credential_server_error_counts.get(credential.id, 0) + 1
+            self.credential_server_error_counts[credential.id] = consecutive_errors
+            cooldown_seconds = self.worker._compute_sister_server_error_cooldown(consecutive_errors)
+            self.credential_cooldowns[credential.id] = now + timedelta(seconds=cooldown_seconds)
+            opened_global_pause = self._all_credentials_in_cooldown(now)
+            if opened_global_pause:
+                self.global_server_error_pause_until = now + timedelta(
+                    seconds=SISTER_SERVER_ERROR_GLOBAL_PAUSE_SEC
+                )
+        logger.warning(
+            "Batch %s richiesta %s differita per errore 500 SISTER con %s: consecutive_errors=%s cooldown=%ss global_pause=%s detail=%s",
+            self.batch_id,
+            request_id,
+            credential.sister_username,
+            consecutive_errors,
+            cooldown_seconds,
+            opened_global_pause,
+            exc,
+        )
+        return cooldown_seconds, opened_global_pause
+
+    def _all_credentials_in_cooldown(self, now: datetime) -> bool:
+        return all(
+            (self.credential_cooldowns.get(credential.id) or now) > now
+            for credential in self.credential_pool.credentials
+        )
+
+    async def _next_wait_seconds(self) -> int:
+        now = datetime.now(timezone.utc)
+        async with self.shared_state_lock:
+            candidates = [
+                value
+                for value in (
+                    *self.deferred_requests.values(),
+                    *self.credential_cooldowns.values(),
+                )
+                if value > now
+            ]
+        if not candidates:
+            return 2
+        return max(int((min(candidates) - now).total_seconds()), 1)
+
+    async def _restart_browser(self, browser: BrowserSession) -> BrowserSession:
+        with contextlib.suppress(Exception):
+            await browser.logout()
+        with contextlib.suppress(Exception):
+            await browser.stop()
+        browser = self.worker._build_browser_session()
+        await browser.start()
+        return browser
 
 
 async def main() -> None:

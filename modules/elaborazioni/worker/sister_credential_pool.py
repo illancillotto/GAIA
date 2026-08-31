@@ -13,9 +13,11 @@ from zoneinfo import ZoneInfo
 from app.models.application_user import ApplicationUser
 from app.models.catasto import (
     CatastoBatch,
+    CatastoBatchKind,
     CatastoBatchStatus,
     CatastoCredential,
     CatastoCredentialLease,
+    CatastoRuoloAutoSyncConfig,
 )
 from app.services.elaborazioni_credential_schedule import (
     credential_is_available,
@@ -113,10 +115,18 @@ class ActiveSisterCredentialPool:
         )
 
 
-def _is_available(credential: CatastoCredential, now: datetime) -> bool:
-    return credential_is_available(
+def _is_available(
+    credential: CatastoCredential,
+    now: datetime,
+    schedule_override: tuple[bool, dict | None] | None = None,
+) -> bool:
+    schedule_enabled, schedule = schedule_override or (
         getattr(credential, "schedule_enabled", False),
         getattr(credential, "availability_schedule", None),
+    )
+    return credential_is_available(
+        schedule_enabled,
+        schedule,
         now,
     )
 
@@ -128,10 +138,77 @@ def _deduplicate_by_username(credentials: tuple[CatastoCredential, ...]) -> tupl
     return tuple(unique.values())
 
 
-def credential_is_runnable(session_factory: Callable[[], Session], credential_id: UUID) -> bool:
+def _autosync_credential_profile(
+    db: Session,
+    batch: CatastoBatch | None,
+    credential_id: UUID,
+) -> dict | None:
+    if batch is None or getattr(batch, "batch_kind", None) != CatastoBatchKind.PERPETUAL_SYNC.value:
+        return None
+    config = db.scalar(
+        select(CatastoRuoloAutoSyncConfig).where(
+            CatastoRuoloAutoSyncConfig.user_id == batch.user_id
+        )
+    )
+    profiles = config.credential_profiles if config is not None else None
+    if not isinstance(profiles, dict):
+        return None
+    profile = profiles.get(str(credential_id))
+    return profile if isinstance(profile, dict) else {"enabled": False}
+
+
+def credential_is_enabled_for_batch(
+    session_factory: Callable[[], Session],
+    credential_id: UUID,
+    batch_id: UUID | None = None,
+) -> bool:
     with session_factory() as db:
         credential = db.get(CatastoCredential, credential_id)
-        return credential is not None and credential.active and _is_available(credential, datetime.now(timezone.utc))
+        if credential is None or not credential.active:
+            return False
+        batch = db.get(CatastoBatch, batch_id) if batch_id is not None else None
+        profile = _autosync_credential_profile(db, batch, credential_id)
+        return profile is None or bool(profile.get("enabled"))
+
+
+def batch_release_requested(
+    session_factory: Callable[[], Session],
+    batch_id: UUID,
+) -> bool:
+    with session_factory() as db:
+        batch = db.get(CatastoBatch, batch_id)
+        if batch is None or batch.status == CatastoBatchStatus.CANCELLED.value:
+            return True
+        if batch.batch_kind != CatastoBatchKind.PERPETUAL_SYNC.value:
+            return False
+        enabled = db.scalar(
+            select(CatastoRuoloAutoSyncConfig.enabled).where(
+                CatastoRuoloAutoSyncConfig.user_id == batch.user_id
+            )
+        )
+        return not bool(enabled)
+
+
+def credential_is_runnable(
+    session_factory: Callable[[], Session],
+    credential_id: UUID,
+    batch_id: UUID | None = None,
+) -> bool:
+    with session_factory() as db:
+        credential = db.get(CatastoCredential, credential_id)
+        if credential is None or not credential.active:
+            return False
+        batch = db.get(CatastoBatch, batch_id) if batch_id is not None else None
+        profile = _autosync_credential_profile(db, batch, credential_id)
+        if profile is not None:
+            if not profile.get("enabled"):
+                return False
+            override = (
+                bool(profile.get("schedule_enabled")),
+                profile.get("availability_schedule"),
+            )
+            return _is_available(credential, datetime.now(timezone.utc), override)
+        return _is_available(credential, datetime.now(timezone.utc))
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -241,10 +318,18 @@ def release_credential_lease(session_factory: Callable[[], Session], credential:
         db.commit()
 
 
-def _next_availability(credential: CatastoCredential, now: datetime) -> datetime | None:
-    return next_credential_availability(
+def _next_availability(
+    credential: CatastoCredential,
+    now: datetime,
+    schedule_override: tuple[bool, dict | None] | None = None,
+) -> datetime | None:
+    schedule_enabled, schedule = schedule_override or (
         getattr(credential, "schedule_enabled", False),
         getattr(credential, "availability_schedule", None),
+    )
+    return next_credential_availability(
+        schedule_enabled,
+        schedule,
         now,
     )
 
@@ -303,18 +388,35 @@ def _load_shared_pool(db: Session, batch: CatastoBatch, now: datetime) -> Active
         ).all()
         if credential.active
     )
+    def availability(credential: CatastoCredential) -> bool:
+        profile = _autosync_credential_profile(db, batch, credential.id)
+        if profile is not None:
+            if not profile.get("enabled"):
+                return False
+            return _is_available(
+                credential,
+                now,
+                (bool(profile.get("schedule_enabled")), profile.get("availability_schedule")),
+            )
+        return _is_available(credential, now)
+
     credentials = _deduplicate_by_username(tuple(
-        credential
-        for credential in active_credentials
-        if _is_available(credential, now)
+        credential for credential in active_credentials if availability(credential)
     ))
-    next_openings = [
-        opening
-        for credential in active_credentials
-        if credential not in credentials
-        for opening in [_next_availability(credential, now)]
-        if opening is not None
-    ]
+    next_openings: list[datetime] = []
+    for credential in active_credentials:
+        if credential in credentials:
+            continue
+        profile = _autosync_credential_profile(db, batch, credential.id)
+        if profile is not None and not profile.get("enabled"):
+            continue
+        override = None if profile is None else (
+            bool(profile.get("schedule_enabled")),
+            profile.get("availability_schedule"),
+        )
+        opening = _next_availability(credential, now, override)
+        if opening is not None:
+            next_openings.append(opening)
     return _finalize_loaded_pool(
         batch,
         ActiveSisterCredentialPool(

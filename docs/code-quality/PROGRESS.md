@@ -166,6 +166,35 @@ blocco verificato e prima di chiudere un goal.
 
 ## Modifiche funzionali verificate fuori dal programma hotspot
 
+### 2026-08-31 - Worker SISTER AutoSync runtime batch
+
+- Hotspot: `CatastoWorker._process_batch` e runner credenziale annidato; la
+  crescita necessaria per profili AutoSync e stop graceful superava il ratchet
+  legacy.
+- Invarianti preservati: claim e fencing richiesta, concorrenza per credenziale,
+  lease/heartbeat, finestre operative, cooldown SISTER, retry, CAPTCHA, artifact
+  di errore, logout, rilascio lease, finalizzazione batch e stop AutoSync tra due
+  visure.
+- Slice: orchestration estratta in `_SisterBatchRuntime`, con stato condiviso
+  esplicito e metodi separati per lifecycle sessione, attese, claim ed esiti. Il
+  test SQLite del pool cross-user usa fixture locali di seeding sotto soglia.
+- Metriche principali: `_process_batch` cyclomatic `53 -> 3`, cognitive
+  `140 -> 2`, LOC `287 -> 23`; runner credenziale cyclomatic `38 -> 7`,
+  cognitive `124 -> 15`, LOC `174 -> 16`. Rispetto alla baseline del merge-base,
+  il file passa da somme cyclomatic/cognitive `431/678` a `298/324` e da `20` a
+  `4` violation error-level; nessun nuovo callable ha violation error-level.
+- Verifiche finali rieseguite sui `30` file di test worker: `make test-worker`
+  esegue `503` test verdi e porta tutti i `29` runtime worker a `5241/5241`
+  statement e `1358/1358` branch (`100%`). I
+  cinque runtime modificati rispetto a `main` totalizzano `1822/1822` statement
+  e `482/482` branch (`100%`); `make quality-test` produce `46 passed`, la
+  compilazione e `git diff --check` sono verdi e `complexity.py changed` mirato
+  produce `findings: []`. Il ratchet globale resta bloccato da nove regressioni
+  LOC GIS concorrenti estranee: otto callable in
+  `backend/app/modules/gis/router.py` (`+2` ciascuna) e il file
+  `frontend/src/types/gis.ts` (`705 -> 836`).
+- Baseline ed eccezioni non aggiornate. Esito: `IMPROVED`.
+
 ### 2026-08-27 - GIS-H8 workspace strumenti GIS
 
 - Hotspot: `GisToolsWorkspace`; invarianti preservati per sessione senza token, caricamento catalogo e primo layer PostGIS editabile, selezione ZIP e inferenza nome tecnico, area/titolo/SRID/encoding, mapping `domainModule` (`rete -> network` sul valore non trimato), upload, preview, publish/reject con conferma, paginazione change request fino a `has_more=false` o `returned_count=0`, conteggio proposte, `historyVersion`, `GisActivityCenter`, `GisQgisTools`, testi/ARIA/busy e cleanup effetti.

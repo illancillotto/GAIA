@@ -20,8 +20,10 @@ from app.models.catasto import (
     CatastoVisuraRequestStatus,
 )
 from sister_exceptions import SisterRequestCorrelationError
+from sister_cadastral_browser_session import install_cadastral_section_recovery
 from sister_retry_metadata import clear_remote_request_metadata, recoverable_retry_metadata
 from sister_worker_files import build_document_path, build_request_artifact_dir, document_values, sha256_file
+from sister_worker_types import ClaimedRequestSelection, PreparedSisterRequest, SisterRemoteStateUpdate
 from app.modules.catasto.services.ade_document_audit import apply_document_audit
 
 
@@ -47,31 +49,11 @@ OPEN_REQUEST_STATUSES = frozenset(
     }
 )
 ACTIVE_REMOTE_STATES = frozenset({"submitted", "pending", "ready"})
+PERPETUAL_SYNC_PURPOSE = "perpetual_sync"
+PERPETUAL_SYNC_MAX_ATTEMPTS = 3
 
+install_cadastral_section_recovery()
 
-@dataclass(slots=True)
-class ClaimedRequestSelection:
-    request_id: UUID | None
-    wait_reason: str | None = None
-    wait_seconds: int | None = None
-    execution_token: UUID | None = None
-
-    def resolved_wait_seconds(self, fallback: int) -> int:
-        return self.wait_seconds if self.wait_seconds is not None else fallback
-
-
-@dataclass(slots=True)
-class PreparedSisterRequest:
-    request: CatastoVisuraRequest
-    execution_token: UUID
-
-
-@dataclass(frozen=True, slots=True)
-class SisterRemoteStateUpdate:
-    remote_id: str | None
-    remote_url: str | None
-    state: str
-    credential_id: UUID | None = None
 
 
 @dataclass(slots=True)
@@ -495,8 +477,9 @@ class SisterRequestRepository:
         now: datetime,
     ) -> ClaimedRequestSelection | None:
         if request.status == CatastoVisuraRequestStatus.PENDING.value:
-            if request.attempts >= self.max_attempts:
-                self._mark_retry_exhausted(request, now)
+            max_attempts = self._max_attempts_for(request)
+            if request.attempts >= max_attempts:
+                self._mark_retry_exhausted(request, now, max_attempts)
                 db.commit()
                 return None
             request.status = CatastoVisuraRequestStatus.PROCESSING.value
@@ -596,10 +579,17 @@ class SisterRequestRepository:
         request.current_operation = self.release_requested_operation
         request.processed_at = request.processed_at or datetime.now(timezone.utc)
 
-    def _mark_retry_exhausted(self, request: CatastoVisuraRequest, now: datetime) -> None:
+    def _max_attempts_for(self, request: CatastoVisuraRequest) -> int:
+        if request.purpose == PERPETUAL_SYNC_PURPOSE:
+            return min(self.max_attempts, PERPETUAL_SYNC_MAX_ATTEMPTS)
+        return self.max_attempts
+
+    def _mark_retry_exhausted(
+        self, request: CatastoVisuraRequest, now: datetime, max_attempts: int
+    ) -> None:
         request.status = CatastoVisuraRequestStatus.FAILED.value
         request.current_operation = "Retry SISTER esauriti"
-        request.error_message = f"Numero massimo di tentativi SISTER raggiunto ({self.max_attempts})"
+        request.error_message = f"Numero massimo di tentativi SISTER raggiunto ({max_attempts})"
         request.last_error_code = "retry_exhausted"
         request.processed_at = now
         request.retry_not_before = None

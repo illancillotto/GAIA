@@ -9,6 +9,7 @@ import pytest
 from app.models.application_user import ApplicationUser
 from app.models.catasto import (
     CatastoBatch,
+    CatastoBatchKind,
     CatastoBatchStatus,
     CatastoCredential,
     CatastoCredentialLease,
@@ -20,8 +21,10 @@ from sister_credential_pool import (
     CredentialRejectionContext,
     RejectedCredentialQuarantined,
     acquire_credential_lease,
+    batch_release_requested,
     browser_session_limit,
     credential_is_active,
+    credential_is_enabled_for_batch,
     credential_is_runnable,
     finalize_credential_pool,
     is_rejected_credential_error,
@@ -49,10 +52,11 @@ class Rows:
 
 
 class FakeDb:
-    def __init__(self, *, get_value=None, get_values=None, scalars_values=()) -> None:
+    def __init__(self, *, get_value=None, get_values=None, scalar_value=None, scalars_values=()) -> None:
         self.get_value = get_value
         self.get_values = get_values
         self.scalars_values = list(scalars_values)
+        self.scalar_value = scalar_value
         self.scalar_queries = []
         self.commits = 0
 
@@ -70,6 +74,9 @@ class FakeDb:
     def scalars(self, query):
         self.scalar_queries.append(query)
         return Rows(self.scalars_values)
+
+    def scalar(self, _query):
+        return self.scalar_value
 
     def commit(self):
         self.commits += 1
@@ -165,15 +172,14 @@ def test_super_admin_pinned_pool_remains_bound_to_owned_credential() -> None:
     assert pool.credentials == ()
 
 
-def test_super_admin_global_pool_executes_real_queries_and_refreshes_cross_user_credentials() -> None:
-    engine = create_engine("sqlite://")
+def _create_pool_schema(engine) -> None:
     ApplicationUser.__table__.create(bind=engine)
     CatastoCredential.__table__.create(bind=engine)
     CatastoBatch.__table__.create(bind=engine)
     CatastoCredentialLease.__table__.create(bind=engine)
-    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
-    reference = datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc)
 
+
+def _seed_cross_user_pool(session_factory):
     with session_factory() as db:
         super_admin = ApplicationUser(
             username="super-admin",
@@ -232,18 +238,11 @@ def test_super_admin_global_pool_executes_real_queries_and_refreshes_cross_user_
         )
         db.add(batch)
         db.commit()
+        return batch, operator.id, own.id, shared.id
 
-        global_pool = load_active_credential_pool(db, batch, reference)
-        operator_pool = load_active_credential_pool(
-            db,
-            SimpleNamespace(credential_id=None, user_id=operator.id),
-            reference,
-        )
 
-        assert {item.id for item in global_pool.credentials} == {own.id, shared.id}
-        assert global_pool.active_credential_count == 3
-        assert operator_pool.credentials == (shared,)
-
+def _add_late_pool_credential(session_factory):
+    with session_factory() as db:
         late_user = ApplicationUser(
             username="late-operator",
             email="late-operator@example.local",
@@ -261,7 +260,29 @@ def test_super_admin_global_pool_executes_real_queries_and_refreshes_cross_user_
         )
         db.add(late)
         db.commit()
+        return late
 
+
+def test_super_admin_global_pool_executes_real_queries_and_refreshes_cross_user_credentials() -> None:
+    engine = create_engine("sqlite://")
+    _create_pool_schema(engine)
+    session_factory = sessionmaker(bind=engine, expire_on_commit=False)
+    reference = datetime(2026, 8, 24, 10, 0, tzinfo=timezone.utc)
+    batch, operator_id, own_id, shared_id = _seed_cross_user_pool(session_factory)
+
+    with session_factory() as db:
+        global_pool = load_active_credential_pool(db, batch, reference)
+        operator_pool = load_active_credential_pool(
+            db,
+            SimpleNamespace(credential_id=None, user_id=operator_id),
+            reference,
+        )
+
+        assert {item.id for item in global_pool.credentials} == {own_id, shared_id}
+        assert global_pool.active_credential_count == 3
+        assert tuple(item.id for item in operator_pool.credentials) == (shared_id,)
+
+    late = _add_late_pool_credential(session_factory)
     added = refresh_shared_credential_pool(
         session_factory,
         batch.id,
@@ -325,6 +346,76 @@ def test_credential_runtime_checks_cover_missing_inactive_and_lease_conflict() -
     assert credential_is_runnable(lambda: FakeDb(get_value=active), active.id)
     assert not credential_is_runnable(lambda: FakeDb(get_value=credential(active=False)), active.id)
     assert not credential_is_runnable(lambda: FakeDb(get_value=None), active.id)
+    assert not credential_is_enabled_for_batch(
+        lambda: FakeDb(get_value=credential(active=False)), active.id
+    )
+
+
+def test_batch_release_requested_covers_manual_and_perpetual_batches() -> None:
+    batch_id = uuid4()
+    assert batch_release_requested(lambda: FakeDb(get_value=None), batch_id)
+    assert batch_release_requested(
+        lambda: FakeDb(get_value=SimpleNamespace(status="cancelled")), batch_id
+    )
+    manual = SimpleNamespace(status="processing", batch_kind="manual_batch", user_id=1)
+    assert not batch_release_requested(lambda: FakeDb(get_value=manual), batch_id)
+    perpetual = SimpleNamespace(
+        status="processing",
+        batch_kind=CatastoBatchKind.PERPETUAL_SYNC.value,
+        user_id=1,
+    )
+    assert batch_release_requested(
+        lambda: FakeDb(get_value=perpetual, scalar_value=False), batch_id
+    )
+    assert not batch_release_requested(
+        lambda: FakeDb(get_value=perpetual, scalar_value=True), batch_id
+    )
+
+
+def test_autosync_profile_controls_only_perpetual_batch_runtime() -> None:
+    active = credential(schedule_enabled=True, availability_schedule={"weekly": {}})
+    batch_id = uuid4()
+    perpetual_batch = SimpleNamespace(
+        id=batch_id,
+        user_id=1,
+        batch_kind=CatastoBatchKind.PERPETUAL_SYNC.value,
+    )
+    enabled_profile = SimpleNamespace(credential_profiles={
+        str(active.id): {
+            "enabled": True,
+            "schedule_enabled": False,
+            "availability_schedule": None,
+        }
+    })
+    values = {CatastoCredential: active, CatastoBatch: perpetual_batch}
+
+    assert credential_is_enabled_for_batch(
+        lambda: FakeDb(get_values=values, scalar_value=enabled_profile), active.id, batch_id
+    )
+    assert credential_is_runnable(
+        lambda: FakeDb(get_values=values, scalar_value=enabled_profile), active.id, batch_id
+    )
+
+    enabled_profile.credential_profiles[str(active.id)]["enabled"] = False
+    assert not credential_is_enabled_for_batch(
+        lambda: FakeDb(get_values=values, scalar_value=enabled_profile), active.id, batch_id
+    )
+    assert not credential_is_runnable(
+        lambda: FakeDb(get_values=values, scalar_value=enabled_profile), active.id, batch_id
+    )
+
+    assert credential_is_enabled_for_batch(
+        lambda: FakeDb(get_values=values, scalar_value=None), active.id, batch_id
+    )
+
+    manual_batch = SimpleNamespace(id=batch_id, user_id=1, batch_kind="manual_batch")
+    values[CatastoBatch] = manual_batch
+    assert credential_is_enabled_for_batch(
+        lambda: FakeDb(get_values=values, scalar_value=enabled_profile), active.id, batch_id
+    )
+    assert not credential_is_runnable(
+        lambda: FakeDb(get_values=values, scalar_value=enabled_profile), active.id, batch_id
+    )
 
     class FailingDb(FakeDb):
         def execute(self, _statement):
@@ -337,6 +428,44 @@ def test_credential_runtime_checks_cover_missing_inactive_and_lease_conflict() -
             raise IntegrityError("insert", {}, RuntimeError("duplicate"))
 
     assert not acquire_credential_lease(lambda: FailingDb(get_value=None), active, uuid4())
+
+
+def test_autosync_profile_filters_disabled_credentials_from_shared_pool() -> None:
+    owner = SimpleNamespace(is_super_admin=True)
+    disabled = credential(username="disabled")
+    enabled = credential(
+        username="enabled",
+        schedule_enabled=True,
+        availability_schedule={"weekly": {}},
+    )
+    config = SimpleNamespace(credential_profiles={
+        str(disabled.id): {
+            "enabled": False,
+            "schedule_enabled": False,
+            "availability_schedule": None,
+        },
+        str(enabled.id): {
+            "enabled": True,
+            "schedule_enabled": False,
+            "availability_schedule": None,
+        },
+    })
+    batch = SimpleNamespace(
+        batch_kind=CatastoBatchKind.PERPETUAL_SYNC.value,
+        credential_id=None,
+        credential_ids=[str(disabled.id), str(enabled.id)],
+        user_id=1,
+    )
+    db = FakeDb(
+        get_values={ApplicationUser: owner},
+        scalar_value=config,
+        scalars_values=[disabled, enabled],
+    )
+
+    pool = load_active_credential_pool(db, batch)
+
+    assert pool.credentials == (enabled,)
+    assert pool.active_credential_count == 2
 
 
 def test_credential_lease_heartbeat_renews_and_detects_loss(monkeypatch: pytest.MonkeyPatch) -> None:

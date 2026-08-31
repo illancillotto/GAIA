@@ -122,7 +122,7 @@ def install_batch_runtime(
     RetryCoordinator.instances.clear()
     monkeypatch.setattr(worker_module, "SisterRequestClaimCoordinator", ClaimCoordinator)
     monkeypatch.setattr(worker_module, "SisterRequestRetryCoordinator", RetryCoordinator)
-    monkeypatch.setattr(worker_module, "credential_is_active", lambda *_args: True)
+    monkeypatch.setattr(worker_module, "credential_is_enabled_for_batch", lambda *_args: True)
     monkeypatch.setattr(worker_module, "credential_is_runnable", lambda *_args: True)
     monkeypatch.setattr(worker_module, "acquire_credential_lease", lambda *_args: True)
     monkeypatch.setattr(worker_module, "release_credential_lease", lambda *_args: None)
@@ -224,7 +224,7 @@ def test_runner_releases_lease_outside_schedule_and_waits_for_busy_credential(mo
     active_states = iter([True, True, False])
     releases: list[object] = []
     monkeypatch.setattr(worker_module, "credential_is_runnable", lambda *_args: next(runnable))
-    monkeypatch.setattr(worker_module, "credential_is_active", lambda *_args: next(active_states))
+    monkeypatch.setattr(worker_module, "credential_is_enabled_for_batch", lambda *_args: next(active_states))
     monkeypatch.setattr(worker_module, "acquire_credential_lease", lambda *_args: True)
     monkeypatch.setattr(worker_module, "release_credential_lease", lambda *_args: releases.append(_args[1].id))
     outer = FakeDb(get_values=[item, active])
@@ -257,7 +257,7 @@ def test_runner_releases_lease_outside_schedule_and_waits_for_busy_credential(mo
     active = credential()
     repository = BatchRepository([Selection(uuid4())])
     operations = install_batch_runtime(worker, repository, monkeypatch)
-    monkeypatch.setattr(worker_module, "credential_is_active", lambda *_args: False)
+    monkeypatch.setattr(worker_module, "credential_is_enabled_for_batch", lambda *_args: False)
     outer = FakeDb(get_values=[item, active])
     monkeypatch.setattr(worker_module, "SessionLocal", BatchSessionFactory(outer, item))
     run(worker._process_batch(item.id))
@@ -315,7 +315,7 @@ def test_runner_closes_open_browser_when_schedule_ends_or_lease_is_lost(monkeypa
     monkeypatch.setattr(worker_module.asyncio, "sleep", no_wait)
     runnable = iter([True, False])
     monkeypatch.setattr(worker_module, "credential_is_runnable", lambda *_args: next(runnable))
-    monkeypatch.setattr(worker_module, "credential_is_active", lambda *_args: True)
+    monkeypatch.setattr(worker_module, "credential_is_enabled_for_batch", lambda *_args: True)
     worker._batch_has_open_requests = lambda _batch_id: True
 
     def set_operation(_batch_id, operation: str) -> None:
@@ -349,7 +349,7 @@ def test_runner_closes_open_browser_when_schedule_ends_or_lease_is_lost(monkeypa
         return value
 
     monkeypatch.setattr(worker_module, "credential_is_runnable", is_runnable)
-    monkeypatch.setattr(worker_module, "credential_is_active", lambda *_args: next(active_states))
+    monkeypatch.setattr(worker_module, "credential_is_enabled_for_batch", lambda *_args: next(active_states))
     worker._batch_has_open_requests = lambda _batch_id: True
 
     async def lose_lease(*_args) -> None:
