@@ -969,7 +969,10 @@ def test_trigger_auto_sync_job_requeues_failed_auto_sync_after_retry_delay(
         assert retry_job.params_json["progress"]["state"] == "pending"
         assert retry_job.params_json["progress"]["last_event"] == "auto_retry_queued"
         assert "error" not in retry_job.params_json["progress"]
-        assert retry_job.params_json["auto_retry_history"][-1]["previous_status"] == "failed"
+        retry_history = retry_job.params_json["auto_retry_history"][-1]
+        assert retry_history["previous_status"] == "failed"
+        assert retry_history["previous_started_at"] is not None
+        assert retry_history["previous_finished_at"] is not None
         assert len(db.execute(select(PresenzeSyncJob)).scalars().all()) == 1
     finally:
         db.close()

@@ -15,6 +15,7 @@ from app.core.datetime_compat import UTC
 from app.models.application_user import ApplicationUser
 from app.modules.presenze.models import PresenzeAutoSyncConfig, PresenzeCollaborator, PresenzeCredential, PresenzeSyncJob
 from app.modules.presenze.schemas import PresenzeAutoSyncConfigResponse, PresenzeAutoSyncConfigUpdate
+from app.modules.presenze.services.inaz_sync_status import build_auto_retry_history_entry
 from app.modules.presenze.services.sync_runtime import (
     _as_utc,
     apply_sync_job_retention,
@@ -297,12 +298,7 @@ def _requeue_auto_sync_job(db: Session, job: PresenzeSyncJob, *, now: datetime) 
         retry_history = []
     retry_history = [
         *retry_history,
-        {
-            "queued_at": _as_utc(now).isoformat(),
-            "attempt_count": job.attempt_count,
-            "previous_status": job.status,
-            "previous_error": job.error_detail,
-        },
+        build_auto_retry_history_entry(job, queued_at=now),
     ][-AUTO_SYNC_RETRY_HISTORY_LIMIT:]
     progress = dict(params.get("progress") or {})
     progress.update(

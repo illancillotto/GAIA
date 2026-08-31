@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 import json
@@ -57,6 +58,7 @@ from app.modules.presenze.services.gate_mobile_payloads import (
     json_datetime as _json_datetime,
 )
 from app.modules.presenze.services.gate_mobile_team_actions import apply_presenze_team_change_proposal
+from app.modules.presenze.services.inaz_sync_status import build_presenze_snapshot_metadata
 from app.modules.presenze.services.operai_rules import load_operai_rule_configs
 
 OPERATOR_UPDATE_ACTION_TYPE = "propose_operator_update"
@@ -321,16 +323,9 @@ def build_presenze_rules_push_payload(*, now: datetime | None = None) -> dict[st
 
 
 def build_presenze_months_push_payload(db: Session, *, now: datetime | None = None) -> dict[str, Any]:
-    synced_at = now or datetime.now(timezone.utc)
-    counts: dict[str, int] = {}
-    for work_date in db.scalars(select(PresenzeDailyRecord.work_date)).all():
-        month = work_date.strftime("%Y-%m")
-        counts[month] = counts.get(month, 0) + 1
+    counts = Counter(work_date.strftime("%Y-%m") for work_date in db.scalars(select(PresenzeDailyRecord.work_date)).all())
     return {
-        "schema_version": 1,
-        "source": "gaia",
-        "rules_version": RULES_VERSION,
-        "synced_from_gaia_at": synced_at.isoformat().replace("+00:00", "Z"),
+        **build_presenze_snapshot_metadata(db, rules_version=RULES_VERSION, now=now),
         "months": [{"month": month, "records_total": counts[month]} for month in sorted(counts)],
     }
 
@@ -338,19 +333,18 @@ def build_presenze_months_push_payload(db: Session, *, now: datetime | None = No
 def build_presenze_giornaliere_push_payload(db: Session, *, month: str, now: datetime | None = None) -> dict[str, Any]:
     record_items, _ = _presenze_mobile_record_items_for_month(db, month=month)
     return {
-        "schema_version": 1,
-        "source": "gaia",
-        "month": month,
-        "rules_version": RULES_VERSION,
-        "export_rules_version": EXPORT_RULES_VERSION,
-        "synced_from_gaia_at": _json_datetime(now or datetime.now(timezone.utc)),
+        **build_presenze_snapshot_metadata(
+            db,
+            rules_version=RULES_VERSION,
+            export_rules_version=EXPORT_RULES_VERSION,
+            month=month, now=now,
+        ),
         "records": record_items,
         "giornaliere": record_items,
     }
 
 
 def build_presenze_anomalie_push_payload(db: Session, *, month: str, now: datetime | None = None) -> dict[str, Any]:
-    synced_at = now or datetime.now(timezone.utc)
     record_items, analyses_by_record_id = _presenze_mobile_record_items_for_month(db, month=month)
     anomalies: list[dict[str, Any]] = []
     for item in record_items:
@@ -367,11 +361,7 @@ def build_presenze_anomalie_push_payload(db: Session, *, month: str, now: dateti
             }
         )
     return {
-        "schema_version": 1,
-        "source": "gaia",
-        "month": month,
-        "rules_version": RULES_VERSION,
-        "synced_from_gaia_at": synced_at.isoformat().replace("+00:00", "Z"),
+        **build_presenze_snapshot_metadata(db, rules_version=RULES_VERSION, month=month, now=now),
         "anomalies": anomalies,
         "anomalie": anomalies,
     }

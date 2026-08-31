@@ -30,6 +30,7 @@ from app.modules.presenze.models import (
     PresenzeOperaiRuleConfig,
     PresenzeScheduleRule,
     PresenzeScheduleTemplate,
+    PresenzeSyncJob,
 )
 from app.services import gate_mobile_sync as gate_mobile_sync_service
 from app.modules.presenze.services import gate_mobile_team_actions
@@ -306,6 +307,7 @@ def test_build_presenze_rules_months_giornaliere_and_anomalie_payloads(monkeypat
         assert rules_payload["export_rules_version"] == "presenze-xlsm-2026-08"
         assert rules_payload["rules"]["rules_version"] == "presenze-2026-07-extra-3h"
         assert months_payload["months"] == [{"month": "2026-07", "records_total": 1}]
+        assert months_payload["inaz_sync"]["status"] == "never"
         assert giornaliere_payload["records"][0]["record_id"] == str(daily_record_id)
         assert giornaliere_payload["records"][0]["has_complete_punches"] is True
         assert giornaliere_payload["export_rules_version"] == "presenze-xlsm-2026-08"
@@ -320,8 +322,10 @@ def test_build_presenze_rules_months_giornaliere_and_anomalie_payloads(monkeypat
         assert giornaliere_payload["records"][0]["export_ordinary_minutes"] == 420
         assert giornaliere_payload["records"][0]["export_extra_minutes"] == 240
         assert giornaliere_payload["giornaliere"] == giornaliere_payload["records"]
+        assert giornaliere_payload["inaz_sync"]["status"] == "never"
         assert anomalie_payload["anomalies"][0]["reasons"] == ["extra_over_3h"]
         assert anomalie_payload["anomalie"] == anomalie_payload["anomalies"]
+        assert anomalie_payload["inaz_sync"]["status"] == "never"
 
         db.get(PresenzeDailyRecord, daily_record_id).validation_status = "validated"
         db.commit()
@@ -2043,6 +2047,7 @@ def _build_session() -> Session:
             PresenzeCollaboratorScheduleAssignment.__table__,
             PresenzeOperaiRuleConfig.__table__,
             PresenzeImportJob.__table__,
+            PresenzeSyncJob.__table__,
             PresenzeDailyRecord.__table__,
             PresenzeDailyPunch.__table__,
             OrganizationTeam.__table__,
