@@ -1,5 +1,30 @@
 # Progress Presenze
 
+## Correlazione canonica GATE e riconciliazione squadre - 2026-09-01
+
+- Il confine GAIA/GATE trasporta e risolve esclusivamente `gaia_user_id`; la
+  FK `application_user_id` resta interna a GAIA e non e piu accettata come
+  identita alternativa nelle pending action.
+- Giornaliere e anomalie serializzano il mapping corrente del collaboratore,
+  evitando copie denormalizzate obsolete sul record giornaliero.
+- GAIA applica `propose_team_create`, `propose_team_change`,
+  `propose_team_membership` e `propose_team_supervisor`; membership e
+  responsabili sono sostituiti atomicamente e falliscono chiusi su mapping
+  mancanti, duplicati o ambigui.
+- Aggiunto supporto allo scope `teti` e ai `team_id` GATE legacy non UUID,
+  riconciliabili solo tramite codice squadra univoco; le nuove squadre GATE
+  usano UUID.
+- Regressione dedicata: UUID/collaborator ID e `application_user_id` fuorvianti
+  nel payload non cambiano il risultato; solo `gaia_user_id` seleziona membro,
+  responsabile e autore.
+- Verifica: `33 passed`; coverage dei tre runtime sync modificati `100%` con
+  `878/878` statement e `324/324` branch. Il quality ratchet contro
+  `origin/main@840c0100` passa con `findings: []`; `gate_mobile_sync.py` scende
+  da `1146` a `1142` LOC e conserva il dispatcher legacy a cyclomatic `16`,
+  cognitive `20`, LOC `77`. La sincronizzazione globale della baseline resta
+  bloccata da regressioni GIS/Ruolo preesistenti e non correlate; nessun diff
+  baseline o ampliamento delle esclusioni e stato applicato.
+
 ## Integrita mapping identita e audit trail - 2026-08-26
 
 - Il mapping collaboratore -> `application_users` e unico: indice parziale

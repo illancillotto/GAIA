@@ -16,6 +16,18 @@ from app.modules.presenze.models import (
 from app.modules.presenze.services.xlsm_export import resolve_export_absence_code
 
 
+def pending_action_gaia_user_id(payload: dict[str, Any]) -> int:
+    value = payload.get("gaia_user_id")
+    if value is None and isinstance(payload.get("actor"), dict):
+        value = payload["actor"].get("gaia_user_id")
+    if value is None:
+        raise ValueError("gaia_user_id mancante nella pending action")
+    try:
+        return int(str(value))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("gaia_user_id non valido nella pending action") from exc
+
+
 def build_presenze_supervisors_by_team(
     db: Session, supervisors: list[tuple[OrganizationTeamSupervisorAssignment, ApplicationUser]],
 ) -> dict[str, list[dict[str, Any]]]:
@@ -32,7 +44,6 @@ def build_presenze_supervisors_by_team(
         result.setdefault(str(supervisor.team_id), []).append(
             {
                 "supervisor_assignment_id": str(supervisor.id),
-                "application_user_id": supervisor.application_user_id,
                 "gaia_user_id": str(supervisor.application_user_id),
                 "username": user.username,
                 "user_label": user.full_name or user.username,

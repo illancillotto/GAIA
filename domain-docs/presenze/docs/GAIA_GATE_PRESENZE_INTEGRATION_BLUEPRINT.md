@@ -122,8 +122,8 @@ Campi minimi `organization_team_supervisor_assignments`:
 | --- | --- |
 | `id` | Identificativo assegnazione |
 | `team_id` | Squadra |
-| `application_user_id` | Capo settore / operatore abilitato |
-| `gaia_user_id` | Alias di trasporto dello stesso `application_user_id`; i valori devono coincidere |
+| `application_user_id` | FK interna GAIA del capo settore / operatore abilitato; non viene usata come chiave di trasporto |
+| `gaia_user_id` | Unica identita applicativa trasportata nel contratto GATE |
 | `permission_scope` | `view`, `validate`, `export`, `manage_team` |
 | `valid_from`, `valid_to` | Validita temporale |
 
@@ -141,10 +141,9 @@ La correlazione utente autorevole e una sola:
 GATE operator.gaia_user_id
   = GAIA application_users.id
   = supervisor.application_user_id
-  = supervisor.gaia_user_id
 ```
 
-`application_user_id` e il nome della foreign key interna GAIA; `gaia_user_id` e il nome esplicito nel contratto GATE. Non sono due chiavi alternative. GAIA deve propagare `gaia_user_id` su membership, supervisor, giornaliere e anomalie quando il collaboratore e mappato. Per giornaliere e anomalie il valore autorevole viene letto dal mapping corrente `PresenzeCollaborator.application_user_id`, non dalla copia denormalizzata eventualmente storica presente sul record giornaliero.
+`application_user_id` resta il nome della foreign key interna GAIA; sul confine GATE viene trasportato esclusivamente `gaia_user_id`. Non sono due chiavi alternative e una pending action non puo identificare autore, membro o responsabile tramite `application_user_id`. GAIA deve propagare `gaia_user_id` su membership, supervisor, giornaliere e anomalie quando il collaboratore e mappato. Per giornaliere e anomalie il valore autorevole viene letto dal mapping corrente `PresenzeCollaborator.application_user_id`, non dalla copia denormalizzata eventualmente storica presente sul record giornaliero.
 
 `collaborator_id` resta la chiave tecnica Presenze per giornaliere, anomalie, pending action ed export. `employee_code` e una matricola descrittiva del dominio Presenze e non deve mai essere confrontato con `gaia_user_id`.
 
@@ -288,8 +287,13 @@ Pending actions implementate lato GAIA:
 - `validate_daily_record`;
 - `patch_daily_record`;
 - `resolve_anomaly`;
-- `propose_team_change`, applicata automaticamente da GAIA per creare,
-  aggiornare o fare upsert delle squadre operative proposte da GaTe.
+- `propose_team_create` e `propose_team_change`, applicate automaticamente da
+  GAIA per creare, rinominare, aggiornare o fare upsert delle squadre proposte
+  da GATE;
+- `propose_team_membership`, che sostituisce atomicamente i membri della
+  squadra risolvendo ogni collaboratore soltanto dal suo `gaia_user_id`;
+- `propose_team_supervisor`, che sostituisce atomicamente i responsabili della
+  squadra risolvendo ogni utente soltanto dal suo `gaia_user_id`.
 
 GAIA valida:
 
@@ -299,12 +303,22 @@ GAIA valida:
 - payload Pydantic del tipo azione;
 - presenza record e stato modificabile.
 
-Per `propose_team_change`, GAIA accetta solo payload `schema_version=1`,
-source `gate_admin_console`, `gate_mobile` o `gate`, operazioni `create_team`,
-`update_team` e `upsert_team`, scope `presenze`, `gate` o `global`, nomi e
-codici nei limiti del modello locale. Le squadre create da GaTe sono persistite
-con `created_from_channel="gate_mobile"` e risultano visibili nella pagina
-GAIA `/presenze/squadre` dopo la sync successiva.
+Il contratto accetta sia l'envelope versionato GAIA (`schema_version=1`,
+`source`) sia l'envelope operativo GATE (`requested_from=gate_console_mobile`).
+Le operazioni squadra supportate sono `create_team`, `rename_team`,
+`update_team`, `upsert_team`, `update_team_memberships` e
+`update_team_supervisors`; gli scope ammessi includono `presenze`, `teti`,
+`gate` e `global`. Le squadre nuove usano UUID; per le righe GATE legacy con
+`team_id` non UUID, GAIA riconcilia la squadra tramite `code` solo se il match e
+univoco. Le squadre create da GATE sono persistite con
+`created_from_channel="gate_mobile"`.
+
+Ogni pending action porta il `gaia_user_id` canonico dell'autore. Ogni elemento
+di `memberships` e `supervisors` deve avere il proprio `gaia_user_id`: nomi,
+email, username, matricole, `operator_id`, `collaborator_id` e campi
+`presenze_*` sono ammessi come metadati descrittivi ma non partecipano al
+matching. Mapping mancanti, ID duplicati, utenti inattivi e codici squadra
+ambigui producono un fail fatal senza modifiche parziali.
 
 ## 8. Contratto dati giornaliera
 

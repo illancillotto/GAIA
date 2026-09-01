@@ -55,8 +55,9 @@ from app.modules.presenze.services.gate_mobile_payloads import (
     gate_channel as _gate_channel,
     json_date as _json_date,
     json_datetime as _json_datetime, json_optional_identifier as _json_optional_identifier,
+    pending_action_gaia_user_id,
 )
-from app.modules.presenze.services.gate_mobile_team_actions import apply_presenze_team_change_proposal
+from app.modules.presenze.services.gate_mobile_team_actions import apply_presenze_team_proposal
 from app.modules.presenze.services.operai_rules import load_operai_rule_configs
 
 OPERATOR_UPDATE_ACTION_TYPE = "propose_operator_update"
@@ -829,8 +830,8 @@ def _apply_presenze_pending_action(db: Session, action: dict[str, Any]) -> dict[
         db.commit()
         db.refresh(record)
         return _ack_payload("presenze_daily_record", record.id, action_id=action_id)
-    if action_type == "propose_team_change":
-        return _ack_payload("organization_team", apply_presenze_team_change_proposal(db, payload, actor=actor).team.id, action_id=action_id)
+    if action_type.startswith("propose_team_"):
+        return _ack_payload("organization_team", apply_presenze_team_proposal(db, action_type, payload, actor=actor).team.id, action_id=action_id)
     raise ValueError(f"Tipo pending action non supportato: {action_type}")
 
 
@@ -1112,12 +1113,7 @@ def _pending_action_id(action: dict[str, Any]) -> str:
 
 
 def _pending_action_user(db: Session, payload: dict[str, Any]) -> ApplicationUser:
-    user_id = payload.get("application_user_id") or payload.get("user_id")
-    if user_id is None and isinstance(payload.get("actor"), dict):
-        user_id = payload["actor"].get("application_user_id") or payload["actor"].get("user_id")
-    if user_id is None:
-        raise ValueError("application_user_id mancante nella pending action")
-    user = db.get(ApplicationUser, int(user_id))
+    user = db.get(ApplicationUser, pending_action_gaia_user_id(payload))
     if user is None or not user.is_active:
         raise ValueError("Application user not found")
     if not user.module_presenze and not user.is_super_admin:
