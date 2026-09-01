@@ -134,22 +134,46 @@ blocco verificato e prima di chiudere un goal.
 
 ## Iterazione attiva
 
-- ID: `GIS-H8`
-- Hotspot: `frontend/src/app/gis/strumenti/tools-workspace.tsx` / `GisToolsWorkspace`
-- Modulo: GIS frontend
-- Motivazione: primo hotspot autorizzato dopo la chiusura GIS; il callable accumulava orchestrazione, validazione, JSX condizionale e paginazione.
-- Invarianti: preservati (route, catalogo, ZIP, SRID, payload, preview, publish/reject, paginazione change request, ActivityCenter, QGIS, ARIA, cleanup, contratto `{ token }`).
-- Test di caratterizzazione: `gis-tools-workspace.test.tsx` (12 test, inclusi SRID/encoding/`officialSource` e stop `has_more && returned_count === 0`).
-- Metriche prima: `GisToolsWorkspace` cyc `60`, cog `72`, LOC `226`; file `39` callable, cyc sum `147`, cog sum `134`, DP normalizzati `108`, 3 error.
-- Slice pianificata: helper puri, hook di orchestrazione, pannelli presentazionali, composer pubblico. Eseguita.
-- File previsti/toccati: `tools-workspace.tsx`, `tools-workspace-helpers.ts`, `tools-workspace-panels.tsx`, `use-gis-tools-workspace.ts`, test mirato, `PROGRESS.md`, `HOTSPOTS.md`.
-- Stato: `completed`
-- Metriche dopo: `GisToolsWorkspace` cyc `2`, cog `1`, LOC `17`; perimetro 4 file `60` callable, cyc sum `127`, cog sum `80`, DP normalizzati `67`, 0 error, 1 warning LOC sull'hook (`68`).
-- Verifiche: 12 test mirati e 15 file GIS `111` passed; typecheck e lint mirato puliti; `make quality-test` `39 passed`; coverage `100%`; ratchet merge-base `findings: []`; `git diff --check` pass; Graphify frontend aggiornato; smoke Playwright `tests/e2e/gis-strumenti.spec.ts` `1 passed`.
-- Coverage: `170/170` statement, `102/102` branch, `60/60` funzioni, `154/154` linee.
-- Baseline diff: nessuna; baseline ed eccezioni non aggiornate.
-- Esito: `IMPROVED`
-- Debito residuo: warning LOC `68` su `useGisToolsWorkspace`; hotspot GIS successivi non avviati.
+- ID: `Catasto-H3`.
+- Hotspot: `frontend/src/app/catasto/gis/page.tsx` / controller e composer di
+  `CatastoGisPage`.
+- Modulo: Catasto GIS frontend.
+- Motivazione: dopo l'estrazione presentazionale H2, la pagina resta non
+  importata dai test unitari e concentra ancora stato, effetti, handler e JSX;
+  il gate full-file misura `0/762` statement, `0/819` branch, `0/238` funzioni
+  e `0/658` righe.
+- Invarianti: route e autorizzazione `module_gis`, ordine incondizionato degli
+  hook, API e payload, ricerca unificata Territorio, `TerritorioMapExperience`,
+  contenuti e ordine dei pannelli, classi responsive, callback, busy/error,
+  preview AdE, overlay archivio e comportamento mappa invariati.
+- Test di caratterizzazione: i `25` test H2 sui cinque pannelli, smoke Catasto
+  esistente e smoke Territorio Playwright flag-on; test mirati da aggiungere
+  per helper, controller e composer prima della verifica finale.
+- Metriche prima H3: `CatastoGisPage` cyc `388`, cog `435`, LOC `2341`; file
+  LOC `2657`, `238` callable, cyc sum `962`, cog sum `831`, `29 useState`,
+  `10 useEffect`, tre violation file-level error.
+- Slice pianificata: separare helper puri, controller per responsabilita e
+  composer/popup presentazionali; la pagina route deve diventare un adapter
+  sottile. Vietato trasferire il callable monolitico in un singolo hook.
+- File previsti/toccati: `page.tsx`, moduli Catasto GIS dedicati per helper,
+  controller e vista, relativi test unitari, `PROGRESS.md` e `HOTSPOTS.md`.
+- Stato: `stop_condition_reached`.
+- Stop condition: nessun cambio funzionale, nessuna regressione del ratchet,
+  nessuna failure nuova e nessun hotspot adiacente.
+- Evidenza H3: la route e stata caratterizzata direttamente attraverso i
+  callback del confine mappa e mock delle API, senza introdurre un hook
+  monolitico. Cinque scenari coprono flusso principale, import/archivio,
+  sessione assente, degradazione/errori e polling AdE.
+- Coverage H3 corrente su `page.tsx`: statement `642/762` (`84,25%`), branch
+  `566/819` (`69,10%`), funzioni `173/238` (`72,68%`), linee `578/658`
+  (`87,84%`). La baseline iniziale della route era `0%` perche nessun test la
+  importava.
+- Decisione richiesta: i circa `253` branch residui appartengono soprattutto
+  ai popup e ai controlli layer duplicati tra sidebar e vista estesa. Chiuderli
+  richiede una nuova unita revisionabile (`Catasto-H4`) per estrarre popup e
+  console layer/import; proseguire dentro H3 violerebbe la stop condition.
+- Esito provvisorio: `REORGANIZED_AND_CHARACTERIZED`; il gate full-file non e
+  ancora verde e non viene dichiarato completato.
 
 ## Iterazioni concluse
 
@@ -163,6 +187,36 @@ blocco verificato e prima di chiudere un goal.
 | GIS-H6 | 2026-08-26 | `GuidedChangeRequestComposer` | cyc `35`, cog `36`, LOC `361` | cyc `5`, cog `4`, LOC `54` | `108` test GIS; coverage mirata `100%` | nessuno |
 | GIS-H7 | 2026-08-26 | `GuidedAnnotationComposer` | cyc `22`, cog `23`, LOC `195` | cyc `4`, cog `3`, LOC `48` | `108` test GIS; coverage mirata `100%` | nessuno |
 | GIS-H8 | 2026-08-27 | `GisToolsWorkspace` | cyc `60`, cog `72`, LOC `226` | cyc `2`, cog `1`, LOC `17` | `111` test GIS; coverage mirata `100%` | nessuno |
+| Catasto-H1 | 2026-08-31 | `CatastoParticellaDetailPage` | cyc `131`, cog `145`, LOC `656` | cyc `3`, cog `2`, LOC `42` | `234` test Catasto; coverage perimetro `100%` | nessuno |
+
+### 2026-08-31 - Catasto-H1 dettaglio particella
+
+- Hotspot: `CatastoParticellaDetailPage`; `ParticellaDetailDialog` escluso e
+  invariato. Preservati route, API e payload Catasto/Capacitas, fallback
+  dell'anno campagna, autenticazione, navigazione embedded, ordine
+  incondizionato degli hook, testi, rendering e azioni utente.
+- Slice: caricamento e azioni isolati nel controller; formatter e risoluzione
+  occupancy in helper puri; colonne e pannelli presentazionali separati per
+  responsabilita. Nessun monolite trasferito in un file adiacente.
+- Metrica obiettivo: componente principale cyclomatic `131 -> 3`, cognitive
+  `145 -> 2`, LOC `656 -> 42`; le violation error-level passano da `7` a `0`.
+- Anti-trasferimento sul perimetro dei sei runtime: LOC `778 -> 739`, somma
+  cyclomatic `385 -> 317`, somma cognitive `368 -> 260`; violation totali
+  `17 -> 4`, tutte warning presentazionali. I file restano sotto la soglia LOC
+  file-level e nessuna nuova callable supera una soglia error-level.
+- Verifiche: `20` test mirati; regressione Catasto `34` file e `234` test;
+  smoke `18` test; typecheck e lint mirato puliti; coverage `272/272`
+  statement, `309/309` branch, `99/99` funzioni e `237/237` righe (`100%`).
+  `make quality-test` `46 passed`; ratchet mirato contro merge-base
+  `840c0100` (`BASE_REF=origin/main`) `PASS`, `findings: []`.
+- Baseline ed eccezioni non aggiornate. `baseline-verify` sul working tree
+  funzionale restituisce correttamente `false`; la sincronizzazione globale
+  non viene eseguita per non assorbire modifiche concorrenti fuori scope. Una
+  baseline temporanea limitata ai sei runtime risulta invece riproducibile
+  (`baseline_reproducible_ignoring_timestamp_commit: true`).
+- Esito: `IMPROVED`. Debito residuo: quattro warning cyclomatic presentazionali
+  sotto soglia error; `ParticellaDetailDialog` resta un hotspot separato e non
+  viene avviato in questa iterazione.
 
 ## Modifiche funzionali verificate fuori dal programma hotspot
 

@@ -1,31 +1,31 @@
 # GAIA Complexity Report
 
-- Commit: `14695d30de2aaee8774e3e7ab0b1f06fa5b67b15`
-- Files: `1087`
-- Callables: `16808`
-- Violations: `4428` (`2109` error, `2319` warning)
+- Commit: `01011c93a2e178ceb704a66b197a8f1c61a03987`
+- Files: `5`
+- Callables: `46`
+- Violations: `5` (`0` error, `5` warning)
 
 ## Top callable
 
 | Path | Symbol | Line | Cog | Cyc | LOC | Nest | Params |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `frontend/src/app/catasto/gis/page.tsx` | `CatastoGisPage` | 393 | 591 | 538 | 3007 | 4 | 0 |
-| `frontend/src/app/presenze/giornaliere/page.tsx` | `PresenzeGiornalierePage` | 813 | 577 | 482 | 2314 | 3 | 0 |
-| `frontend/src/features/organigramma/organigramma-workspace.tsx` | `OrganigrammaWorkspace` | 1550 | 477 | 363 | 1779 | 3 | 1 |
-| `frontend/src/components/elaborazioni/capacitas-workspace.tsx` | `ElaborazioniCapacitasWorkspace` | 519 | 473 | 417 | 2635 | 2 | 1 |
-| `frontend/src/components/elaborazioni/settings-workspace.tsx` | `ElaborazioniSettingsWorkspace` | 346 | 411 | 343 | 1619 | 2 | 1 |
-| `frontend/src/app/utenze/[id]/page.tsx` | `DetailContent` | 214 | 393 | 306 | 1909 | 2 | 1 |
-| `frontend/src/app/catasto/anomalie/page.tsx` | `CatastoAnomaliePageContent` | 175 | 390 | 342 | 2109 | 2 | 0 |
-| `backend/app/modules/operazioni/routes/analytics.py` | `fuel_analytics` | 338 | 366 | 208 | 402 | 4 | 5 |
-| `backend/app/modules/operazioni/routes/analytics.py` | `anomalies_analytics` | 1102 | 365 | 160 | 388 | 4 | 5 |
-| `backend/app/modules/catasto/routes/anagrafica.py` | `execute_bulk_search_payload` | 964 | 363 | 68 | 320 | 10 | 3 |
-| `frontend/src/app/elaborazioni/page.tsx` | `ElaborazioniPage` | 237 | 318 | 264 | 1425 | 2 | 0 |
-| `backend/app/modules/catasto/routes/anagrafica.py` | `_build_bulk_export_rows` | 554 | 281 | 135 | 114 | 3 | 2 |
-| `frontend/src/app/me/me-page-content.tsx` | `MePageContent` | 347 | 271 | 256 | 1133 | 2 | 1 |
-| `backend/app/services/elaborazioni_bonifica_sync.py` | `_run_bonifica_sync_background` | 353 | 269 | 47 | 232 | 13 | 3 |
-| `frontend/src/components/elaborazioni/bonifica-sync-workspace.tsx` | `ElaborazioniBonificaSyncWorkspace` | 332 | 259 | 202 | 835 | 4 | 1 |
-| `frontend/src/components/catasto/gis/MapContainer.tsx` | `MapContainer` | 444 | 252 | 173 | 967 | 3 | 1 |
-| `frontend/src/app/presenze/collaboratori/[id]/page.tsx` | `PresenzeCollaboratoreDetailPage` | 100 | 233 | 212 | 1600 | 2 | 0 |
-| `frontend/src/components/elaborazioni/batch-detail-workspace.tsx` | `ElaborazioneBatchDetailWorkspace` | 52 | 222 | 182 | 762 | 3 | 1 |
-| `frontend/src/app/presenze/export/page.tsx` | `PresenzeExportPage` | 266 | 209 | 172 | 1097 | 3 | 0 |
-| `backend/app/modules/network/router.py` | `_build_network_statistics_summary` | 1541 | 209 | 109 | 226 | 4 | 2 |
+| `frontend/src/components/catasto/gis/OrtofotoStoricheSelector.tsx` | `useOrtofotoSelection` | 21 | 16 | 12 | 27 | 2 | 1 |
+| `frontend/src/components/catasto/gis/IncendiAnnualiSelector.tsx` | `IncendiAnnualiSelector` | 15 | 10 | 7 | 39 | 2 | 1 |
+| `frontend/src/components/catasto/gis/IncendiAnnualiSelector.tsx` | `selectYear` | 25 | 9 | 6 | 6 | 2 | 1 |
+| `frontend/src/components/catasto/gis/TerritorioLayerPanel.tsx` | `TerritorioLayerPanel` | 87 | 6 | 7 | 67 | 0 | 1 |
+| `backend/app/modules/gis/territorio_bootstrap.py` | `_external_metadata` | 265 | 6 | 6 | 38 | 2 | 2 |
+| `backend/app/modules/gis/territorio_catalog.py` | `list_territorio_layers` | 54 | 6 | 6 | 30 | 2 | 2 |
+| `frontend/src/components/catasto/gis/OrtofotoStoricheSelector.tsx` | `selectPrimary` | 36 | 6 | 5 | 5 | 1 | 1 |
+| `frontend/src/components/catasto/gis/OrtofotoStoricheSelector.tsx` | `selectComparison` | 41 | 6 | 5 | 5 | 1 | 1 |
+| `frontend/src/components/catasto/gis/OrtofotoStoricheSelector.tsx` | `OrtofotoStoricheSelector` | 49 | 5 | 6 | 66 | 1 | 1 |
+| `frontend/src/components/catasto/gis/TerritorioLayerPanel.tsx` | `TerritorioLayerItem` | 20 | 5 | 6 | 28 | 0 | 1 |
+| `frontend/src/components/catasto/gis/TerritorioLayerPanel.tsx` | `TerritorioThemeSection` | 60 | 4 | 5 | 25 | 0 | 1 |
+| `frontend/src/components/catasto/gis/OrtofotoStoricheSelector.tsx` | `useEffect[0]<callback>` | 27 | 4 | 4 | 9 | 2 | 0 |
+| `backend/app/modules/gis/territorio_bootstrap.py` | `ensure_territorio_gis_catalog` | 329 | 3 | 3 | 27 | 2 | 2 |
+| `backend/app/modules/gis/territorio_bootstrap.py` | `_definition` | 38 | 2 | 3 | 31 | 0 | 6 |
+| `frontend/src/components/catasto/gis/OrtofotoStoricheSelector.tsx` | `Program<anonymous>` | 100 | 1 | 2 | 5 | 1 | 1 |
+| `frontend/src/components/catasto/gis/OrtofotoStoricheSelector.tsx` | `yearLabel` | 17 | 1 | 2 | 3 | 0 | 1 |
+| `backend/app/modules/gis/territorio_catalog.py` | `_mapping` | 31 | 1 | 2 | 2 | 0 | 1 |
+| `frontend/src/components/catasto/gis/TerritorioLayerPanel.tsx` | `listedLayers:layers.filter[0]<callback>` | 63 | 1 | 2 | 1 | 0 | 1 |
+| `backend/app/modules/gis/territorio_bootstrap.py` | `_apply_definition` | 305 | 0 | 1 | 22 | 0 | 3 |
+| `backend/app/modules/gis/territorio_catalog.py` | `_client_layer` | 35 | 0 | 1 | 17 | 0 | 1 |

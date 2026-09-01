@@ -13,6 +13,8 @@ const statusLabels: Record<GisRuntimeHealthStatus, string> = {
   warning: "Da verificare",
   critical: "Non disponibile",
   not_configured: "Non configurato",
+  disabled: "Disabilitato",
+  unreachable: "Non raggiungibile",
 };
 
 const statusClasses: Record<GisRuntimeHealthStatus, string> = {
@@ -20,6 +22,8 @@ const statusClasses: Record<GisRuntimeHealthStatus, string> = {
   warning: "bg-[#FFF6D8] text-[#76560C]",
   critical: "bg-[#FFE5E1] text-[#9A2B1F]",
   not_configured: "bg-gray-100 text-gray-700",
+  disabled: "bg-stone-100 text-stone-700",
+  unreachable: "bg-amber-100 text-amber-900",
 };
 
 export function GisRuntimeHealthPanel({ token }: { token: string }) {

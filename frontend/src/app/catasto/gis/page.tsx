@@ -6,12 +6,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 
 import { UtenzeSubjectQuickViewDialog } from "@/components/utenze/utenze-subject-quick-view-dialog";
+import AdeAlignmentPanel from "@/components/catasto/gis/AdeAlignmentPanel";
 import AnalysisPanel from "@/components/catasto/gis/AnalysisPanel";
+import ArchiveList from "@/components/catasto/gis/ArchiveList";
 import { ParticellaDetailDialog } from "@/components/catasto/anagrafica/ParticellaDetailDialog";
 import { CatastoAnomaliaExplainer } from "@/components/catasto/catasto-anomalia-explainer";
+import DistrettiPanel from "@/components/catasto/gis/DistrettiPanel";
+import DeliveryPointQuickFilters, { type DeliveryPointQuickFilter } from "@/components/catasto/gis/DeliveryPointQuickFilters";
 import { Dui2026LivePanel } from "@/components/catasto/gis/Dui2026LivePanel";
 import DrawingTools from "@/components/catasto/gis/DrawingTools";
 import SelectionPanel from "@/components/catasto/gis/SelectionPanel";
+import WhiteCompanyReportsPanel, {
+  EMPTY_WHITECOMPANY_REPORT_FILTERS,
+  type WhiteCompanyReportFilters,
+} from "@/components/catasto/gis/WhiteCompanyReportsPanel";
 import { CatastoPage } from "@/components/catasto/catasto-page";
 import {
   capacitasGetRptCertificatoLink,
@@ -22,12 +30,10 @@ import {
   catastoGisGetWhiteCompanyReportLayer,
   catastoGisGetLatestAdeWfsRunStatus,
   catastoGisGetAdeWfsRunStatus,
-  catastoGisGetPopup,
   catastoGisCreateSavedSelection,
   catastoGisDeleteSavedSelection,
   catastoGisExport,
   catastoGisGetSavedSelection,
-  catastoGisSearch,
   catastoGisListSavedSelections,
   catastoGisResolveRefs,
   catastoGisUpdateSavedSelection,
@@ -50,9 +56,6 @@ import type {
   GisFilters,
   GisMapOverlayLayer,
   GisOverlayFeatureClick,
-  GisSearchMode,
-  GisSearchResponse,
-  GisSearchResultItem,
   GisParticellaRef,
   ParticellaPopupAnomalia,
   ParticellaPopupData,
@@ -63,7 +66,7 @@ import type {
   WhiteCompanyReportLayerResponse,
 } from "@/types/gis";
 
-const MapContainer = dynamic(() => import("@/components/catasto/gis/MapContainer"), {
+const MapContainer = dynamic(() => import("@/components/catasto/gis/TerritorioMapExperience"), {
   ssr: false,
   loading: () => (
     <div className="flex h-full min-h-[680px] items-center justify-center rounded-2xl bg-gray-100 text-sm text-gray-400">
@@ -87,21 +90,8 @@ interface OverlayLayerState extends GisMapOverlayLayer {
   isPersisted: boolean;
 }
 
-interface WhiteCompanyReportFilters {
-  dateFrom: string;
-  dateTo: string;
-  tipologia: string;
-  operatore: string;
-}
-
 const LAYER_COLORS = ["#10B981", "#F59E0B", "#3B82F6", "#EF4444", "#8B5CF6", "#14B8A6", "#F97316"];
 const WHITECOMPANY_REPORTS_LAYER_KEY = "whitecompany-reports";
-const EMPTY_WHITECOMPANY_REPORT_FILTERS: WhiteCompanyReportFilters = {
-  dateFrom: "",
-  dateTo: "",
-  tipologia: "",
-  operatore: "",
-};
 const DISTRETTO_COLORS = [
   "#2E7D32",
   "#1565C0",
@@ -123,42 +113,11 @@ const BASEMAP_OPTIONS: Array<{ id: GisBasemap; label: string; swatch: string; re
   { id: "google_satellite", label: "Google Earth", swatch: "bg-lime-600", requiresGoogleKey: true },
 ];
 type ParticelleQuickFilter = "all" | "ruolo" | "ruolo_inferito";
-type DeliveryPointQuickFilter = "all" | "with_meter" | "without_meter";
 const PARTICELLE_QUICK_FILTERS: Array<{ id: ParticelleQuickFilter; label: string; dot: string }> = [
   { id: "all", label: "Tutte", dot: "bg-indigo-400" },
   { id: "ruolo", label: "A ruolo", dot: "bg-emerald-500" },
   { id: "ruolo_inferito", label: "Ruolo inferito", dot: "bg-amber-500" },
 ];
-const DELIVERY_POINT_QUICK_FILTERS: Array<{ id: DeliveryPointQuickFilter; label: string; dot: string }> = [
-  { id: "all", label: "Tutti", dot: "bg-teal-400" },
-  { id: "with_meter", label: "Con contatore", dot: "bg-emerald-500" },
-  { id: "without_meter", label: "Senza contatore", dot: "bg-amber-500" },
-];
-const GIS_SEARCH_MODE_OPTIONS: Array<{ id: GisSearchMode; label: string }> = [
-  { id: "auto", label: "Auto" },
-  { id: "particella", label: "Particella" },
-  { id: "codice_fiscale", label: "CF" },
-  { id: "denominazione", label: "Denominazione" },
-];
-const GIS_SEARCH_MODE_LABELS: Record<GisSearchMode, string> = {
-  auto: "Auto",
-  particella: "Particella",
-  codice_fiscale: "Codice fiscale",
-  denominazione: "Denominazione",
-};
-const ADE_RUN_STATUS_LABELS: Record<string, string> = {
-  queued: "In coda",
-  processing: "In esecuzione",
-  completed: "Completato",
-  failed: "Fallito",
-};
-const ADE_RUN_PHASE_LABELS: Record<string, string> = {
-  queued: "In coda",
-  fetching: "Download tile",
-  persisting: "Persistenza",
-  completed: "Completato",
-  failed: "Fallito",
-};
 
 function toNullableCellString(value: unknown): string | null {
   if (value == null) return null;
@@ -326,11 +285,6 @@ function formatDateTime(value: string | null | undefined): string {
   });
 }
 
-function formatMeters(value: number | null | undefined): string {
-  if (value == null || !Number.isFinite(value)) return "-";
-  return `${value.toLocaleString("it-IT", { maximumFractionDigits: 2 })} m`;
-}
-
 function buildAdePreviewLayer(report: AdeAlignmentReportResponse): OverlayLayerState | null {
   if (!report.geojson || report.geojson.features.length === 0) return null;
   const features = report.geojson.features.map((feature, index) => {
@@ -388,7 +342,6 @@ function overlayPropertyText(properties: Record<string, unknown> | null | undefi
   const text = String(value).trim();
   return text ? text : null;
 }
-
 
 export default function CatastoGisPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -451,11 +404,6 @@ export default function CatastoGisPage() {
   const [popupSubjectLookupBusy, setPopupSubjectLookupBusy] = useState(false);
   const [popupSubjectLookupError, setPopupSubjectLookupError] = useState<string | null>(null);
   const [popupDetailOpen, setPopupDetailOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchMode, setSearchMode] = useState<GisSearchMode>("auto");
-  const [searchBusy, setSearchBusy] = useState(false);
-  const [searchResult, setSearchResult] = useState<GisSearchResponse | null>(null);
-  const [focusedSearchIds, setFocusedSearchIds] = useState<string[]>([]);
   const [adeRunStatus, setAdeRunStatus] = useState<AdeWfsRunStatusResponse | null>(null);
   const [adeReport, setAdeReport] = useState<AdeAlignmentReportResponse | null>(null);
   const layerCounterRef = useRef(0);
@@ -475,49 +423,6 @@ export default function CatastoGisPage() {
       ),
     [overlayLayers],
   );
-  const searchOverlayLayer = useMemo<OverlayLayerState | null>(() => {
-    if (!searchResult?.geojson || searchResult.geojson.features.length === 0) return null;
-    return {
-      layer_key: "gis-search-results",
-      saved_selection_id: null,
-      name: `Ricerca: ${searchResult.query}`,
-      color: "#FACC15",
-      outlineColor: "#F97316",
-      pulse: true,
-      pulseUntil: Date.now() + 4000,
-      opacity: 0.82,
-      showFill: true,
-      visible: true,
-      source_filename: null,
-      geojson: searchResult.geojson,
-      importStats: null,
-      importedItems: [],
-      isPersisted: false,
-    };
-  }, [searchResult]);
-  const focusedSearchOverlayLayer = useMemo<OverlayLayerState | null>(() => {
-    if (!searchResult?.geojson || focusedSearchIds.length === 0) return null;
-    const ids = new Set(focusedSearchIds);
-    const features = searchResult.geojson.features.filter((feature) => ids.has(String(feature.properties?.id ?? "")));
-    if (features.length === 0) return null;
-    return {
-      layer_key: "gis-search-focus",
-      saved_selection_id: null,
-      name: "Focus ricerca GIS",
-      color: "#F000B8",
-      outlineColor: "#C4008E",
-      pulse: true,
-      pulseUntil: Date.now() + 6000,
-      opacity: 0.9,
-      showFill: true,
-      visible: true,
-      source_filename: null,
-      geojson: { type: "FeatureCollection", features },
-      importStats: null,
-      importedItems: [],
-      isPersisted: false,
-    };
-  }, [focusedSearchIds, searchResult]);
   const whiteCompanyOverlayLayer = useMemo<OverlayLayerState | null>(() => {
     if (!whiteCompanyVisible || !whiteCompanyLayer?.geojson || whiteCompanyLayer.geojson.features.length === 0) return null;
     return {
@@ -543,12 +448,12 @@ export default function CatastoGisPage() {
   const visibleOverlayLayers = useMemo(
     () => {
       const visibleBaseLayers = overlayLayers.filter((layer) => layer.visible);
-      const searchLayers = [searchOverlayLayer, focusedSearchOverlayLayer, whiteCompanyOverlayLayer].filter(
+      const searchLayers = [whiteCompanyOverlayLayer].filter(
         (layer): layer is OverlayLayerState => layer != null && layer.visible,
       );
       return searchLayers.length > 0 ? [...searchLayers, ...visibleBaseLayers] : visibleBaseLayers;
     },
-    [focusedSearchOverlayLayer, overlayLayers, searchOverlayLayer, whiteCompanyOverlayLayer],
+    [overlayLayers, whiteCompanyOverlayLayer],
   );
   const distrettoColorMap = useMemo(
     () =>
@@ -862,71 +767,6 @@ export default function CatastoGisPage() {
     setFocusSignal((value) => value + 1);
     setResizeSignal((value) => value + 1);
   }, []);
-
-  const handleClearSearch = useCallback(() => {
-    setSearchResult(null);
-    setFocusedSearchIds([]);
-    setSearchQuery("");
-    setGisError(null);
-    setGisInfo(null);
-  }, []);
-
-  const handleRunSearch = useCallback(async () => {
-    if (!token) {
-      setGisError("Sessione non disponibile. Accedi di nuovo.");
-      return;
-    }
-    const query = searchQuery.trim();
-    if (!query) {
-      setGisError("Inserisci un criterio di ricerca.");
-      return;
-    }
-
-    setSearchBusy(true);
-    setGisError(null);
-    setGisInfo(null);
-    try {
-      const response = await catastoGisSearch(token, { query, mode: searchMode, limit: 25 });
-      setSearchResult(response);
-      setFocusedSearchIds([]);
-      setShowParticelleFill(true);
-      if (response.geojson && response.geojson.features.length > 0) {
-        focusLayerGeojson(response.geojson);
-      }
-      setGisInfo(
-        response.total > 0
-          ? `Ricerca ${GIS_SEARCH_MODE_LABELS[response.mode_resolved]}: ${response.total.toLocaleString("it-IT")} risultati.`
-          : `Nessun risultato per “${query}”.`,
-      );
-    } catch (e) {
-      setSearchResult(null);
-      setGisError(e instanceof Error ? e.message : "Ricerca GIS fallita");
-    } finally {
-      setSearchBusy(false);
-    }
-  }, [focusLayerGeojson, searchMode, searchQuery, token]);
-
-  const handleOpenSearchResult = useCallback(async (item: GisSearchResultItem) => {
-    if (!token) return;
-
-    const matchingFeatures = searchResult?.geojson?.features.filter((entry) => String(entry.properties?.id ?? "") === item.id) ?? [];
-    if (matchingFeatures.length > 0) {
-      setFocusedSearchIds(matchingFeatures.map((feature) => String(feature.properties?.id ?? item.id)));
-      focusLayerGeojson(
-        { type: "FeatureCollection", features: matchingFeatures },
-        { maxZoom: 18, padding: 18, duration: 700 },
-      );
-    } else {
-      setFocusedSearchIds([item.id]);
-    }
-    try {
-      const popup = await catastoGisGetPopup(token, item.id);
-      setPopupParticella(popup);
-      setPopupDetailOpen(false);
-    } catch (e) {
-      setGisError(e instanceof Error ? e.message : "Caricamento dettaglio particella fallito");
-    }
-  }, [focusLayerGeojson, searchResult, token]);
 
   useEffect(() => {
     if (!token || !adeRunStatus || !["queued", "processing"].includes(adeRunStatus.status)) {
@@ -1398,557 +1238,80 @@ export default function CatastoGisPage() {
   );
 
   const renderDeliveryPointQuickFilters = (isDark: boolean) => (
-    <div className={`mt-2 rounded-2xl border px-2.5 py-2 ${isDark ? "border-white/15 bg-white/5" : "border-teal-100 bg-white/70"}`}>
-      <p className={`mb-2 text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-white/50" : "text-teal-600"}`}>
-        Filtro punti di consegna
-      </p>
-      <div className="flex flex-wrap gap-1.5">
-        {DELIVERY_POINT_QUICK_FILTERS.map((option) => {
-          const selected = deliveryPointsQuickFilter === option.id;
-          return (
-            <button
-              key={option.id}
-              type="button"
-              onClick={() => setDeliveryPointsQuickFilter(option.id)}
-              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
-                selected
-                  ? option.id === "with_meter"
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm"
-                    : option.id === "without_meter"
-                      ? "border-amber-200 bg-amber-50 text-amber-700 shadow-sm"
-                      : "border-teal-200 bg-teal-50 text-teal-700 shadow-sm"
-                  : isDark
-                    ? "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
-                    : "border-gray-200 bg-white text-gray-500 hover:border-teal-100 hover:text-teal-700"
-              }`}
-            >
-              <span className={`h-1.5 w-1.5 rounded-full ${selected ? option.dot : isDark ? "bg-white/35" : "bg-gray-300"}`} />
-              {option.label}
-            </button>
-          );
-        })}
-      </div>
-      <div className={`mt-3 rounded-xl border px-3 py-2 ${isDark ? "border-white/10 bg-white/5" : "border-teal-100 bg-teal-50/70"}`}>
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-white/45" : "text-teal-700"}`}>
-              Cache tile GIS
-            </p>
-            <p className={`mt-0.5 text-[11px] ${isDark ? "text-white/55" : "text-slate-500"}`}>
-              Forza nuove tile per punti, canali, particelle e distretti.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void handleRefreshDeliveryPointsGisCache()}
-            disabled={deliveryPointsCacheRefreshing}
-            className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition ${
-              isDark
-                ? "border-white/15 bg-white/10 text-white/75 hover:bg-white/15 disabled:opacity-50"
-                : "border-teal-200 bg-white text-teal-700 shadow-sm hover:bg-teal-50 disabled:opacity-50"
-            }`}
-          >
-            {deliveryPointsCacheRefreshing ? "Aggiorno..." : "Aggiorna cache"}
-          </button>
-        </div>
-        {deliveryPointsCacheMessage ? (
-          <p className={`mt-2 text-[11px] font-medium ${isDark ? "text-emerald-200" : "text-emerald-700"}`}>
-            {deliveryPointsCacheMessage}
-          </p>
-        ) : null}
-      </div>
-    </div>
+    <DeliveryPointQuickFilters
+      isDark={isDark}
+      selectedFilter={deliveryPointsQuickFilter}
+      onFilterChange={setDeliveryPointsQuickFilter}
+      onRefreshCache={() => void handleRefreshDeliveryPointsGisCache()}
+      cacheRefreshing={deliveryPointsCacheRefreshing}
+      cacheMessage={deliveryPointsCacheMessage}
+    />
   );
+
+  const handleToggleDistrettiOpen = useCallback(() => {
+    setDistrettiOpen((value) => !value);
+  }, []);
+
+  const handleToggleParticelleFill = useCallback(() => {
+    setShowParticelleFill((value) => !value);
+  }, []);
+
+  const handleClearDistrettiSearch = useCallback(() => {
+    setDistrettiSearch("");
+  }, []);
+
+  const handleSelectPanelDistretto = useCallback((distretto: CatDistretto) => {
+    void handleSelectDistretto(distretto);
+  }, [handleSelectDistretto]);
 
   const renderDistrettiPanel = (isDark: boolean) => (
-    <div className={`rounded-2xl border p-3 ${isDark ? "border-white/15 bg-white/10" : "border-emerald-100 bg-emerald-50/30"}`}>
-      <button
-        type="button"
-        onClick={() => setDistrettiOpen((value) => !value)}
-        className="flex w-full items-center justify-between gap-3 text-left"
-      >
-        <div>
-          <p className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-emerald-200" : "text-emerald-700"}`}>Distretti irrigui</p>
-          <p className={`mt-1 text-xs ${isDark ? "text-white/60" : "text-gray-500"}`}>
-            {selectedDistretto
-              ? `Filtro attivo: distretto ${selectedDistretto.num_distretto}`
-              : "Seleziona un distretto per centrare la mappa e isolare il perimetro."}
-          </p>
-        </div>
-        <span className={`material-symbols-outlined text-[20px] transition ${distrettiOpen ? "rotate-180" : ""} ${isDark ? "text-white/60" : "text-emerald-700"}`}>
-          expand_more
-        </span>
-      </button>
-
-      {selectedDistretto ? (
-        <div className={`mt-3 rounded-xl border px-3 py-2 ${isDark ? "border-white/15 bg-white/10" : "border-white bg-white/80"}`}>
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span
-                  className="h-3 w-3 shrink-0 rounded-full ring-2 ring-white"
-                  style={{ backgroundColor: distrettoColorMap[selectedDistretto.num_distretto] ?? "#1D4E35" }}
-                />
-                <p className={`truncate text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
-                  Distretto {selectedDistretto.num_distretto}
-                </p>
-              </div>
-              <p className={`mt-0.5 truncate text-[11px] ${isDark ? "text-white/55" : "text-gray-500"}`}>
-                {selectedDistretto.nome_distretto ?? "Senza nome"}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={handleClearDistretto}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${isDark ? "bg-white/10 text-white/70 hover:bg-white/15" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-            >
-              Tutti
-            </button>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowParticelleFill((value) => !value)}
-            className={`mt-2 w-full rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
-              showParticelleFill
-                ? "border-indigo-200 bg-indigo-50 text-indigo-700"
-                : isDark
-                  ? "border-white/15 bg-white/10 text-white/70 hover:bg-white/15"
-                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            {showParticelleFill ? "Nascondi riempimento particelle" : "Mostra riempimento particelle"}
-          </button>
-        </div>
-      ) : null}
-
-      {distrettiOpen ? (
-        <div className="mt-3">
-          <label className="sr-only" htmlFor={`distretti-search-${isDark ? "dark" : "light"}`}>
-            Cerca distretto
-          </label>
-          <div className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 ${isDark ? "border-white/15 bg-white/5" : "border-white bg-white/85"}`}>
-            <span className={`material-symbols-outlined text-[16px] ${isDark ? "text-white/45" : "text-emerald-600"}`}>search</span>
-            <input
-              id={`distretti-search-${isDark ? "dark" : "light"}`}
-              type="search"
-              value={distrettiSearch}
-              onChange={(event) => setDistrettiSearch(event.target.value)}
-              placeholder="Cerca per numero o nome"
-              className={`min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-current/45 ${isDark ? "text-white" : "text-gray-800"}`}
-            />
-            {distrettiSearch ? (
-              <button
-                type="button"
-                onClick={() => setDistrettiSearch("")}
-                className={`rounded-full p-0.5 transition ${isDark ? "text-white/45 hover:bg-white/10 hover:text-white/75" : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"}`}
-                aria-label="Pulisci filtro distretti"
-              >
-                <span className="material-symbols-outlined text-[15px]">close</span>
-              </button>
-            ) : null}
-          </div>
-          <div className="mt-2 max-h-56 space-y-1.5 overflow-y-auto pr-1">
-          {distrettiLoading ? (
-            <div className={`rounded-xl border border-dashed px-3 py-4 text-center text-xs ${isDark ? "border-white/15 text-white/50" : "border-emerald-100 text-gray-500"}`}>
-              Caricamento distretti...
-            </div>
-          ) : distretti.length === 0 ? (
-            <div className={`rounded-xl border border-dashed px-3 py-4 text-center text-xs ${isDark ? "border-white/15 text-white/50" : "border-emerald-100 text-gray-500"}`}>
-              Nessun distretto disponibile.
-            </div>
-          ) : filteredDistretti.length === 0 ? (
-            <div className={`rounded-xl border border-dashed px-3 py-4 text-center text-xs ${isDark ? "border-white/15 text-white/50" : "border-emerald-100 text-gray-500"}`}>
-              Nessun distretto trovato per “{distrettiSearch.trim()}”.
-            </div>
-          ) : (
-            filteredDistretti.map((distretto) => {
-              const isSelected = distretto.num_distretto === distrettoLayer.trim();
-              const color = distrettoColorMap[distretto.num_distretto] ?? "#1D4E35";
-              return (
-                <button
-                  key={distretto.id}
-                  type="button"
-                  onClick={() => void handleSelectDistretto(distretto)}
-                  className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left transition ${
-                    isSelected
-                      ? "border-emerald-300 bg-white shadow-sm ring-1 ring-emerald-100"
-                      : isDark
-                        ? "border-white/10 bg-white/5 hover:bg-white/10"
-                        : "border-white/70 bg-white/70 hover:border-emerald-200 hover:bg-white"
-                  }`}
-                >
-                  <span className="h-3 w-3 shrink-0 rounded-full ring-2 ring-white" style={{ backgroundColor: color }} />
-                  <span className="min-w-0 flex-1">
-                    <span className={`block truncate text-xs font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
-                      Distretto {distretto.num_distretto}
-                    </span>
-                    <span className={`block truncate text-[10px] ${isDark ? "text-white/45" : "text-gray-500"}`}>
-                      {distretto.nome_distretto ?? "Senza nome"}
-                    </span>
-                  </span>
-                  {isSelected ? (
-                    <span className="material-symbols-outlined text-[16px] text-emerald-600">check_circle</span>
-                  ) : null}
-                </button>
-              );
-            })
-          )}
-          </div>
-        </div>
-      ) : null}
-    </div>
+    <DistrettiPanel
+      isDark={isDark}
+      selectedDistretto={selectedDistretto}
+      distrettiOpen={distrettiOpen}
+      onToggleOpen={handleToggleDistrettiOpen}
+      distrettoColorMap={distrettoColorMap}
+      showParticelleFill={showParticelleFill}
+      onToggleParticelleFill={handleToggleParticelleFill}
+      distrettiSearch={distrettiSearch}
+      onSearchChange={setDistrettiSearch}
+      onClearSearch={handleClearDistrettiSearch}
+      distrettiLoading={distrettiLoading}
+      distretti={distretti}
+      filteredDistretti={filteredDistretti}
+      distrettoLayer={distrettoLayer}
+      onSelectDistretto={handleSelectPanelDistretto}
+      onClearDistretto={handleClearDistretto}
+    />
   );
 
-  const renderWhiteCompanyReportsPanel = (isDark: boolean) => {
-    const stats = whiteCompanyLayer?.stats;
-    const mappedCount = stats?.mapped ?? 0;
-    const totalCount = stats?.total ?? 0;
-    const unmappedCount = stats?.unmapped ?? 0;
-    const featureCount = whiteCompanyLayer?.geojson.features.length ?? 0;
-    const panelBorder = isDark ? "border-white/15 bg-white/10" : "border-rose-100 bg-rose-50/30";
-    const inputClass = `w-full rounded-xl border px-3 py-2 text-xs outline-none transition ${
-      isDark
-        ? "border-white/15 bg-white/10 text-white placeholder:text-white/35 focus:border-rose-200"
-        : "border-white bg-white/90 text-slate-900 placeholder:text-slate-400 focus:border-rose-200 focus:ring-2 focus:ring-rose-100"
-    }`;
-
-    return (
-      <div className={`rounded-2xl border p-3 ${panelBorder}`}>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-rose-100" : "text-rose-700"}`}>Segnalazioni WhiteCompany</p>
-            <p className={`mt-1 text-xs leading-5 ${isDark ? "text-white/60" : "text-slate-500"}`}>
-              Layer puntuale da segnalazioni importate, filtrabile per data, tipologia e operatore.
-            </p>
-          </div>
-          <label className={`inline-flex shrink-0 items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${isDark ? "border-white/15 bg-white/10 text-white/70" : "border-rose-100 bg-white text-rose-700"}`}>
-            <input
-              type="checkbox"
-              checked={whiteCompanyVisible}
-              onChange={() => setWhiteCompanyVisible((value) => !value)}
-              className="h-3.5 w-3.5 rounded border-gray-300 text-rose-600 focus:ring-rose-500"
-            />
-            Visibile
-          </label>
-        </div>
-
-        <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11px]">
-          <div className={`${isDark ? "bg-white/10 text-white" : "bg-white/80 text-slate-800"} rounded-xl px-2 py-2`}>
-            <div className="font-semibold">{totalCount.toLocaleString("it-IT")}</div>
-            <div className={isDark ? "text-white/45" : "text-slate-400"}>totali</div>
-          </div>
-          <div className={`${isDark ? "bg-rose-500/20 text-rose-50" : "bg-rose-50 text-rose-700"} rounded-xl px-2 py-2`}>
-            <div className="font-semibold">{mappedCount.toLocaleString("it-IT")}</div>
-            <div className={isDark ? "text-rose-50/60" : "text-rose-900/45"}>in mappa</div>
-          </div>
-          <div className={`${isDark ? "bg-amber-500/20 text-amber-50" : "bg-amber-50 text-amber-700"} rounded-xl px-2 py-2`}>
-            <div className="font-semibold">{unmappedCount.toLocaleString("it-IT")}</div>
-            <div className={isDark ? "text-amber-50/60" : "text-amber-900/45"}>senza GPS</div>
-          </div>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <label className="text-[11px] font-semibold text-slate-500">
-            <span className={isDark ? "text-white/55" : "text-slate-500"}>Da</span>
-            <input
-              type="date"
-              value={whiteCompanyFilters.dateFrom}
-              onChange={(event) => setWhiteCompanyFilters((filters) => ({ ...filters, dateFrom: event.target.value }))}
-              className={`mt-1 ${inputClass}`}
-            />
-          </label>
-          <label className="text-[11px] font-semibold text-slate-500">
-            <span className={isDark ? "text-white/55" : "text-slate-500"}>A</span>
-            <input
-              type="date"
-              value={whiteCompanyFilters.dateTo}
-              onChange={(event) => setWhiteCompanyFilters((filters) => ({ ...filters, dateTo: event.target.value }))}
-              className={`mt-1 ${inputClass}`}
-            />
-          </label>
-        </div>
-        <div className="mt-2 grid gap-2">
-          <label className="text-[11px] font-semibold">
-            <span className={isDark ? "text-white/55" : "text-slate-500"}>Tipologia</span>
-            <select
-              value={whiteCompanyFilters.tipologia}
-              onChange={(event) => setWhiteCompanyFilters((filters) => ({ ...filters, tipologia: event.target.value }))}
-              className={`mt-1 ${inputClass}`}
-            >
-              <option value="">Tutte le tipologie</option>
-              {(whiteCompanyLayer?.tipologie ?? []).map((tipologia) => (
-                <option key={tipologia} value={tipologia}>{tipologia}</option>
-              ))}
-            </select>
-          </label>
-          <label className="text-[11px] font-semibold">
-            <span className={isDark ? "text-white/55" : "text-slate-500"}>Operatore</span>
-            <select
-              value={whiteCompanyFilters.operatore}
-              onChange={(event) => setWhiteCompanyFilters((filters) => ({ ...filters, operatore: event.target.value }))}
-              className={`mt-1 ${inputClass}`}
-            >
-              <option value="">Tutti gli operatori</option>
-              {(whiteCompanyLayer?.operatori ?? []).map((operatore) => (
-                <option key={operatore} value={operatore}>{operatore}</option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="mt-3 grid grid-cols-[1fr_auto] gap-2">
-          <button
-            type="button"
-            onClick={() => void loadWhiteCompanyReportsLayer()}
-            disabled={whiteCompanyBusy || !token}
-            className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-          >
-            {whiteCompanyBusy ? "Carico..." : "Applica filtri"}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setWhiteCompanyFilters(EMPTY_WHITECOMPANY_REPORT_FILTERS);
-              void loadWhiteCompanyReportsLayer(EMPTY_WHITECOMPANY_REPORT_FILTERS);
-            }}
-            disabled={whiteCompanyBusy || !token}
-            className={`rounded-xl border px-3 py-2 text-xs font-semibold transition disabled:opacity-50 ${
-              isDark
-                ? "border-white/15 bg-white/10 text-white/70 hover:bg-white/15"
-                : "border-gray-200 bg-white text-slate-600 hover:bg-slate-50"
-            }`}
-          >
-            Azzera
-          </button>
-        </div>
-
-        {whiteCompanyError ? (
-          <div className={`mt-2 rounded-xl border px-3 py-2 text-[11px] font-medium ${isDark ? "border-red-300/30 bg-red-500/20 text-red-100" : "border-red-100 bg-red-50 text-red-700"}`}>
-            {whiteCompanyError}
-          </div>
-        ) : null}
-        {stats?.truncated ? (
-          <div className={`mt-2 rounded-xl border px-3 py-2 text-[11px] ${isDark ? "border-amber-300/30 bg-amber-500/20 text-amber-50" : "border-amber-100 bg-amber-50 text-amber-700"}`}>
-            Mostrati {featureCount.toLocaleString("it-IT")} marker su {mappedCount.toLocaleString("it-IT")}: restringi i filtri per vedere tutto.
-          </div>
-        ) : null}
-      </div>
-    );
-  };
+  const handleRemoveLoadedSavedSelection = useCallback((selectionId: string) => {
+    const loadedLayer = overlayLayers.find((layer) => layer.saved_selection_id === selectionId);
+    if (loadedLayer) removeOverlayLayer(loadedLayer.layer_key);
+  }, [overlayLayers, removeOverlayLayer]);
 
   const renderArchivioList = (isDark: boolean) => (
-    <>
-      <div className="mb-2 flex items-center justify-between">
-        <p className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Archivio layer salvati</p>
-        <button
-          type="button"
-          onClick={() => void refreshSavedSelections()}
-          disabled={savedBusy}
-          className={`text-[11px] font-medium ${isDark ? "text-indigo-300 hover:text-indigo-200" : "text-indigo-600 hover:text-indigo-800"} disabled:opacity-50`}
-        >
-          Aggiorna
-        </button>
-      </div>
-      <div className="max-h-44 space-y-2 overflow-y-auto pr-1">
-        {savedSelections.length === 0 ? (
-          <div className={`rounded-xl border border-dashed px-3 py-4 text-center text-xs ${isDark ? "border-white/20 bg-white/5 text-white/50" : "border-gray-200 bg-gray-50 text-gray-400"}`}>
-            Nessuna selezione salvata.
-          </div>
-        ) : (
-          savedSelections.map((selection) => {
-            const loadedLayer = loadedSavedSelectionLayerMap.get(selection.id);
-            const effectiveShowFill = loadedLayer?.showFill ?? savedSelectionFills[selection.id] ?? true;
-            const effectiveOpacity = loadedLayer?.opacity ?? savedSelectionOpacities[selection.id] ?? 0.55;
-
-            return (
-              <div
-                key={selection.id}
-                className={`rounded-xl border bg-white p-2 shadow-sm ${
-                  loadedSavedSelectionIds.has(selection.id) ? "border-emerald-200 ring-1 ring-emerald-100" : "border-gray-100"
-                }`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={selection.color}
-                        onChange={(e) => setSavedSelections((ss) => ss.map((s) => s.id === selection.id ? { ...s, color: e.target.value } : s))}
-                        onBlur={(e) => void handleUpdateArchivedSelectionColor(selection.id, e.target.value.toUpperCase())}
-                        className="h-5 w-5 cursor-pointer rounded-full border-0 bg-transparent p-0"
-                        title="Modifica colore"
-                      />
-                      <p className="truncate text-sm font-semibold text-gray-800">{selection.name}</p>
-                    </div>
-                    <p className="mt-0.5 text-[11px] text-gray-400">
-                      {selection.n_particelle.toLocaleString("it-IT")} particelle · {selection.n_with_geometry.toLocaleString("it-IT")} in mappa
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void handleDeleteSavedSelection(selection.id)}
-                    disabled={savedBusy}
-                    className="text-[11px] font-medium text-gray-400 hover:text-red-600 disabled:text-gray-300"
-                  >
-                    Elimina
-                  </button>
-                </div>
-                <div className="mt-2 rounded-lg border border-gray-100 bg-gray-50/70 px-2.5 py-2">
-                  <button
-                    type="button"
-                    onClick={() => handleArchiveFillChange(selection.id, !effectiveShowFill)}
-                    className={`mb-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-all ${
-                      effectiveShowFill
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                        : "border-gray-200 bg-white text-gray-500 hover:border-emerald-100 hover:text-emerald-700"
-                    }`}
-                  >
-                    <span className={`h-1.5 w-1.5 rounded-full transition-colors ${effectiveShowFill ? "bg-emerald-400" : "bg-gray-300"}`} />
-                    Riempimento
-                  </button>
-                  <div className="mb-1 flex items-center justify-between text-[11px]">
-                    <span className="font-medium text-gray-600">Opacità</span>
-                    <span className="font-semibold text-gray-700">
-                      {Math.round(effectiveOpacity * 100)}%
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="5"
-                    max="100"
-                    step="5"
-                    value={Math.round(effectiveOpacity * 100)}
-                    onChange={(e) => handleArchiveOpacityChange(selection.id, Number(e.target.value) / 100)}
-                    className="w-full accent-emerald-600"
-                  />
-                </div>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void handleLoadSavedSelection(selection.id)}
-                    disabled={savedBusy}
-                    className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-indigo-50 hover:text-indigo-700 disabled:text-gray-300"
-                  >
-                    {loadedSavedSelectionIds.has(selection.id) ? "Porta in primo piano" : "Aggiungi in mappa"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const loadedLayer = overlayLayers.find((layer) => layer.saved_selection_id === selection.id);
-                      if (loadedLayer) removeOverlayLayer(loadedLayer.layer_key);
-                    }}
-                    disabled={!loadedSavedSelectionIds.has(selection.id)}
-                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-500 transition hover:bg-gray-50 hover:text-gray-700 disabled:text-gray-300"
-                  >
-                    Rimuovi
-                  </button>
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-    </>
+    <ArchiveList
+      isDark={isDark}
+      savedSelections={savedSelections}
+      loadedSavedSelectionIds={loadedSavedSelectionIds}
+      loadedSavedSelectionLayerMap={loadedSavedSelectionLayerMap}
+      savedSelectionFills={savedSelectionFills}
+      savedSelectionOpacities={savedSelectionOpacities}
+      savedBusy={savedBusy}
+      onRefresh={refreshSavedSelections}
+      onDraftColorChange={setSavedSelections}
+      onCommitColor={handleUpdateArchivedSelectionColor}
+      onDelete={handleDeleteSavedSelection}
+      onFillChange={handleArchiveFillChange}
+      onOpacityChange={handleArchiveOpacityChange}
+      onLoad={handleLoadSavedSelection}
+      onRemoveLoaded={handleRemoveLoadedSavedSelection}
+    />
   );
 
   const renderAdeAlignmentPanel = (isDark: boolean) => (
-    <div className={`rounded-2xl border p-3 ${isDark ? "border-white/15 bg-white/10" : "border-amber-100 bg-amber-50/40"}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-amber-200" : "text-amber-700"}`}>
-            Stato allineamento AdE
-          </p>
-          <p className={`mt-1 text-xs leading-5 ${isDark ? "text-white/60" : "text-slate-600"}`}>
-            Il workflow operativo di run, monitor e apply è stato spostato in `Elaborazioni`. Nel GIS restano l&apos;ultimo stato disponibile, il report differenze e la preview cartografica.
-          </p>
-        </div>
-        <Link
-          href="/elaborazioni/ade-alignment"
-          className={`inline-flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition ${
-            isDark ? "bg-white text-slate-900 hover:bg-amber-50" : "bg-slate-950 text-white hover:bg-slate-800"
-          }`}
-        >
-          <span className="material-symbols-outlined text-[16px]">open_in_new</span>
-          Apri workspace
-        </Link>
-      </div>
-
-      <div className={`mt-3 rounded-xl border px-3 py-2 text-xs ${isDark ? "border-white/15 bg-white/5 text-white/70" : "border-amber-100 bg-white/70 text-slate-600"}`}>
-        {adeRunStatus ? (
-          <>
-            <div className="flex items-center justify-between gap-2">
-              <div className="font-semibold text-slate-900">Run {adeRunStatus.run_id.slice(0, 8)}</div>
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                adeRunStatus.status === "completed"
-                  ? "bg-emerald-50 text-emerald-700"
-                  : adeRunStatus.status === "failed"
-                  ? "bg-rose-50 text-rose-700"
-                  : "bg-amber-50 text-amber-700"
-              }`}>
-                {ADE_RUN_STATUS_LABELS[adeRunStatus.status] ?? adeRunStatus.status}
-              </span>
-            </div>
-            <div className="mt-1">
-              {adeRunStatus.tiles_completed.toLocaleString("it-IT")} / {adeRunStatus.tiles.toLocaleString("it-IT")} tile · {adeRunStatus.features.toLocaleString("it-IT")} feature · {adeRunStatus.with_geometry.toLocaleString("it-IT")} con geometria
-            </div>
-            <div className="mt-1 text-[11px]">
-              {ADE_RUN_PHASE_LABELS[adeRunStatus.progress_phase] ?? adeRunStatus.progress_phase} · {adeRunStatus.progress_percent.toLocaleString("it-IT", { maximumFractionDigits: 1 })}% · Avvio {formatDateTime(adeRunStatus.started_at)} · fine {formatDateTime(adeRunStatus.completed_at)}
-            </div>
-            {adeRunStatus.progress_message ? <div className="mt-2 text-[11px]">{adeRunStatus.progress_message}</div> : null}
-            {adeRunStatus.error ? <div className="mt-2 text-rose-700">{adeRunStatus.error}</div> : null}
-          </>
-        ) : (
-          <div>Nessun run AdE disponibile. Avvia il comprensorio dal workspace elaborazioni.</div>
-        )}
-      </div>
-
-      {adeReport ? (
-        <div className="mt-3 space-y-3">
-          <div className="grid grid-cols-2 gap-2 text-center text-[11px]">
-            <div className="rounded-xl bg-emerald-50 px-2 py-2">
-              <div className="font-semibold text-emerald-700">{adeReport.counters.allineate.toLocaleString("it-IT")}</div>
-              <div className="text-emerald-900/50">allineate</div>
-            </div>
-            <div className="rounded-xl bg-amber-50 px-2 py-2">
-              <div className="font-semibold text-amber-700">{adeReport.counters.nuove_in_ade.toLocaleString("it-IT")}</div>
-              <div className="text-amber-900/50">nuove AdE</div>
-            </div>
-            <div className="rounded-xl bg-rose-50 px-2 py-2">
-              <div className="font-semibold text-rose-700">{adeReport.counters.geometrie_variate.toLocaleString("it-IT")}</div>
-              <div className="text-rose-900/50">geometrie variate</div>
-            </div>
-            <div className="rounded-xl bg-slate-100 px-2 py-2">
-              <div className="font-semibold text-slate-700">{adeReport.counters.mancanti_in_ade.toLocaleString("it-IT")}</div>
-              <div className="text-slate-500">mancanti AdE</div>
-            </div>
-          </div>
-          <div className="rounded-xl border border-white bg-white/80 px-3 py-2 text-[11px] text-slate-500">
-            Completato: {formatDateTime(adeReport.completed_at)} · soglia geometria {adeReport.geometry_threshold_m} m
-          </div>
-          {adeReport.geojson && adeReport.geojson.features.length > 0 ? (
-            <div className="rounded-xl border border-amber-100 bg-white px-3 py-2 text-[11px] text-slate-600">
-              Preview in mappa: giallo nuove AdE, rosso geometrie AdE variate, blu geometrie GAIA correnti, grigio mancanti AdE.
-            </div>
-          ) : null}
-          {adeReport.samples.length > 0 ? (
-            <div className="max-h-40 space-y-1.5 overflow-y-auto pr-1">
-              {adeReport.samples.slice(0, 8).map((item, index) => (
-                <div key={`${item.category}-${item.national_cadastral_reference ?? index}`} className="rounded-xl border border-amber-100 bg-white px-3 py-2 text-xs">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-slate-800">{item.national_cadastral_reference ?? `${item.foglio}/${item.particella}`}</span>
-                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">{item.category}</span>
-                  </div>
-                  <div className="mt-1 text-[11px] text-slate-500">
-                    {item.codice_catastale ?? "-"} · Fg. {item.foglio ?? "-"} · Part. {item.particella ?? "-"}
-                    {item.distance_m != null ? ` · ${formatMeters(item.distance_m)}` : ""}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
+    <AdeAlignmentPanel isDark={isDark} adeRunStatus={adeRunStatus} adeReport={adeReport} />
   );
 
   const popupRuoloSourceMode = popupParticella?.ruolo_summary?.source_mode ?? null;
@@ -2028,115 +1391,6 @@ export default function CatastoGisPage() {
                   Distretti, particelle, selezioni e layer importati nel comprensorio consortile.
                 </p>
               </div>
-            </div>
-            <div className="mt-2 rounded-2xl border border-sky-100 bg-sky-50/60 p-2 md:mt-3 md:p-2.5">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-sky-700">Ricerca smart GIS</p>
-                {searchResult ? (
-                  <button
-                    type="button"
-                    onClick={handleClearSearch}
-                    className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50"
-                  >
-                    Pulisci
-                  </button>
-                ) : null}
-              </div>
-              <form
-                className="space-y-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void handleRunSearch();
-                }}
-              >
-                <div className="flex items-center gap-2 rounded-2xl border border-white bg-white px-3 py-2 shadow-sm">
-                  <span className="material-symbols-outlined text-[18px] text-sky-700">search</span>
-                  <input
-                    type="search"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Particella, CF, denominazione, comune..."
-                    className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
-                  />
-                  <button
-                    type="submit"
-                    disabled={searchBusy}
-                    className="rounded-xl bg-slate-950 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
-                  >
-                    {searchBusy ? "Ricerca..." : "Cerca"}
-                  </button>
-                </div>
-                <div className="hidden flex-wrap gap-1.5 sm:flex">
-                  {GIS_SEARCH_MODE_OPTIONS.map((option) => {
-                    const selected = searchMode === option.id;
-                    return (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => setSearchMode(option.id)}
-                        className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
-                          selected
-                            ? "border-sky-200 bg-sky-50 text-sky-700"
-                            : "border-gray-200 bg-white text-gray-500 hover:border-sky-100 hover:text-sky-700"
-                        }`}
-                      >
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </form>
-              {searchResult ? (
-                <div className="mt-2 space-y-2">
-                  <div className="rounded-xl border border-sky-100 bg-white/85 px-3 py-2 text-[11px] text-slate-600">
-                    <span className="font-semibold text-slate-900">{searchResult.total.toLocaleString("it-IT")}</span> risultati
-                    {searchResult.mode_requested !== searchResult.mode_resolved
-                      ? ` · auto → ${GIS_SEARCH_MODE_LABELS[searchResult.mode_resolved]}`
-                      : ` · ${GIS_SEARCH_MODE_LABELS[searchResult.mode_resolved]}`}
-                  </div>
-                  <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
-                    {searchResult.results.map((item) => (
-                      <div key={item.id} className="rounded-xl border border-white bg-white/90 px-3 py-2 shadow-sm">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="truncate text-xs font-semibold text-slate-900">
-                              {item.utenza_denominazione || item.nome_comune || "Particella"}
-                            </div>
-                            <div className="mt-0.5 text-[11px] text-slate-500">
-                              {item.nome_comune ?? item.codice_catastale ?? "Comune ND"} · Fg. {item.foglio ?? "-"} · Part. {item.particella ?? "-"}
-                              {item.subalterno ? ` · Sub. ${item.subalterno}` : ""}
-                            </div>
-                          </div>
-                          <div className="text-right text-[11px] font-semibold text-emerald-700">
-                            {(item.superficie_mq ?? item.superficie_grafica_mq)?.toLocaleString("it-IT") ?? "-"} mq
-                          </div>
-                        </div>
-                        <div className="mt-2 flex gap-2">
-                          <button
-                            type="button"
-                            onClick={() => void handleOpenSearchResult(item)}
-                            className="rounded-lg bg-slate-950 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-slate-800"
-                          >
-                            Centra e apri
-                          </button>
-                          <a
-                            href={`/catasto/particelle/${item.id}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50"
-                          >
-                            Scheda
-                          </a>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <p className="mt-2 hidden text-[10px] leading-4 text-slate-500 sm:block">
-                  Esempi: `82`, `14/82`, `Arborea 14 82`, `RSSMRA80A01H501Z`, `Azienda Agricola Rossi`.
-                </p>
-              )}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/20 bg-white/95 p-2 shadow-2xl backdrop-blur">
@@ -3053,7 +2307,18 @@ export default function CatastoGisPage() {
                     </div>
                     {renderDistrettiPanel(false)}
                     {renderAdeAlignmentPanel(false)}
-                    {renderWhiteCompanyReportsPanel(false)}
+                    <WhiteCompanyReportsPanel
+                      isDark={false}
+                      token={token}
+                      layer={whiteCompanyLayer}
+                      visible={whiteCompanyVisible}
+                      busy={whiteCompanyBusy}
+                      error={whiteCompanyError}
+                      filters={whiteCompanyFilters}
+                      onVisibleChange={setWhiteCompanyVisible}
+                      onFiltersChange={setWhiteCompanyFilters}
+                      onLoadLayer={loadWhiteCompanyReportsLayer}
+                    />
                     <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
                       {renderArchivioList(false)}
                     </div>
@@ -3203,7 +2468,18 @@ export default function CatastoGisPage() {
 
                 {renderDistrettiPanel(false)}
                 {renderAdeAlignmentPanel(false)}
-                {renderWhiteCompanyReportsPanel(false)}
+                <WhiteCompanyReportsPanel
+                  isDark={false}
+                  token={token}
+                  layer={whiteCompanyLayer}
+                  visible={whiteCompanyVisible}
+                  busy={whiteCompanyBusy}
+                  error={whiteCompanyError}
+                  filters={whiteCompanyFilters}
+                  onVisibleChange={setWhiteCompanyVisible}
+                  onFiltersChange={setWhiteCompanyFilters}
+                  onLoadLayer={loadWhiteCompanyReportsLayer}
+                />
                 <Dui2026LivePanel
                   data={dui2026Layer}
                   loading={dui2026Busy}

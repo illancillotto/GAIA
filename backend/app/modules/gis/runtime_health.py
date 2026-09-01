@@ -275,7 +275,7 @@ def _probe_external_source(
         ) as response:
             status_code = response.getcode()
             response.read(1)
-        source_status = "ok" if 200 <= status_code < 400 else "critical"
+        source_status = "ok" if 200 <= status_code < 400 else "unreachable"
         detail: dict[str, object] = {"http_status": status_code}
     except (
         ExternalSourceConfigurationError,
@@ -285,7 +285,7 @@ def _probe_external_source(
         OSError,
         ValueError,
     ) as exc:
-        source_status = "critical"
+        source_status = "unreachable"
         detail = {"error": str(exc)}
     return {
         "source_key": source.source_key,
@@ -303,8 +303,8 @@ def _external_sources_health(
     if not settings.gis_external_layers_enabled:
         return _runtime_component(
             key="external_sources",
-            component_status="not_configured",
-            message="Layer GIS esterni disabilitati in questo ambiente.",
+            component_status="disabled",
+            message="Consultazione territoriale non attiva in questo ambiente.",
             checked_at=checked_at,
             details={"sources": [source.source_key for source in sources]},
         )
@@ -326,10 +326,10 @@ def _external_sources_health(
         component_status = "ok"
         message = "Tutte le sorgenti GIS esterne rispondono correttamente."
     elif ok_count:
-        component_status = "warning"
+        component_status = "unreachable"
         message = "Alcune sorgenti GIS esterne non sono raggiungibili."
     else:
-        component_status = "critical"
+        component_status = "unreachable"
         message = "Nessuna sorgente GIS esterna e raggiungibile."
     component = _runtime_component(
         key="external_sources",
@@ -368,7 +368,7 @@ def get_runtime_health(db: Session) -> GisRuntimeHealthResponse:
         "critical"
         if "critical" in statuses
         else "warning"
-        if statuses & {"warning", "not_configured"}
+        if statuses & {"warning", "not_configured", "disabled", "unreachable"}
         else "ok"
     )
     return GisRuntimeHealthResponse(

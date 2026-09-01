@@ -72,9 +72,7 @@ def test_postgis_probe_reports_sqlite_postgres_and_failures() -> None:
     postgres_result = runtime_health._probe_postgis(
         _FakeDb(dialect="postgresql"), CHECKED_AT
     )
-    failed_result = runtime_health._probe_postgis(
-        _FakeDb(fail=True), CHECKED_AT
-    )
+    failed_result = runtime_health._probe_postgis(_FakeDb(fail=True), CHECKED_AT)
 
     assert sqlite_result.status == "warning"
     assert sqlite_result.details["postgis_version"] is None
@@ -131,9 +129,7 @@ def test_nas_probe_handles_unconfigured_available_missing_and_errors(
     monkeypatch.setattr(
         runtime_health,
         "probe_artifact_storage",
-        lambda path: SimpleNamespace(
-            transport="local", readable=True, writable=True
-        ),
+        lambda path: SimpleNamespace(transport="local", readable=True, writable=True),
     )
     available = runtime_health._probe_nas(_FakeDb(), CHECKED_AT)
     assert available.status == "ok"
@@ -144,9 +140,7 @@ def test_nas_probe_handles_unconfigured_available_missing_and_errors(
     monkeypatch.setattr(
         runtime_health,
         "probe_artifact_storage",
-        lambda path: SimpleNamespace(
-            transport="local", readable=False, writable=False
-        ),
+        lambda path: SimpleNamespace(transport="local", readable=False, writable=False),
     )
     assert runtime_health._probe_nas(_FakeDb(), CHECKED_AT).status == "critical"
 
@@ -204,9 +198,7 @@ def test_nas_probe_warns_when_latest_scheduled_cycle_failed(
     monkeypatch.setattr(
         runtime_health,
         "probe_artifact_storage",
-        lambda path: SimpleNamespace(
-            transport="sftp", readable=True, writable=True
-        ),
+        lambda path: SimpleNamespace(transport="sftp", readable=True, writable=True),
     )
 
     result = runtime_health._probe_nas(_SequenceDb(), CHECKED_AT)
@@ -220,16 +212,40 @@ def test_runtime_health_aggregates_critical_warning_and_ok(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(runtime_health.settings, "gis_export_scheduler_enabled", False)
-    monkeypatch.setattr(runtime_health, "_probe_postgis", lambda db, checked_at: _component("critical"))
-    monkeypatch.setattr(runtime_health, "_probe_http_service", lambda **kwargs: _component("ok"))
-    monkeypatch.setattr(runtime_health, "_probe_nas", lambda db, checked_at: _component("ok"))
-    monkeypatch.setattr(runtime_health, "_external_sources_health", lambda checked_at: _component("ok"))
+    monkeypatch.setattr(
+        runtime_health, "_probe_postgis", lambda db, checked_at: _component("critical")
+    )
+    monkeypatch.setattr(
+        runtime_health, "_probe_http_service", lambda **kwargs: _component("ok")
+    )
+    monkeypatch.setattr(
+        runtime_health, "_probe_nas", lambda db, checked_at: _component("ok")
+    )
+    monkeypatch.setattr(
+        runtime_health, "_external_sources_health", lambda checked_at: _component("ok")
+    )
     assert runtime_health.get_runtime_health(_FakeDb()).status == "critical"
 
-    monkeypatch.setattr(runtime_health, "_probe_postgis", lambda db, checked_at: _component("warning"))
+    monkeypatch.setattr(
+        runtime_health, "_probe_postgis", lambda db, checked_at: _component("warning")
+    )
     assert runtime_health.get_runtime_health(_FakeDb()).status == "warning"
 
-    monkeypatch.setattr(runtime_health, "_probe_postgis", lambda db, checked_at: _component("ok"))
+    monkeypatch.setattr(
+        runtime_health, "_probe_postgis", lambda db, checked_at: _component("disabled")
+    )
+    assert runtime_health.get_runtime_health(_FakeDb()).status == "warning"
+
+    monkeypatch.setattr(
+        runtime_health,
+        "_probe_postgis",
+        lambda db, checked_at: _component("unreachable"),
+    )
+    assert runtime_health.get_runtime_health(_FakeDb()).status == "warning"
+
+    monkeypatch.setattr(
+        runtime_health, "_probe_postgis", lambda db, checked_at: _component("ok")
+    )
     result = runtime_health.get_runtime_health(_FakeDb())
     assert result.status == "ok"
     assert result.export_scheduler_enabled is False

@@ -230,7 +230,14 @@ class GisCatalogDashboardResponse(BaseModel):
 class GisRuntimeComponentHealth(BaseModel):
     key: Literal["postgis", "martin", "qgis", "nas", "external_sources"]
     label: str
-    status: Literal["ok", "warning", "critical", "not_configured"]
+    status: Literal[
+        "ok",
+        "warning",
+        "critical",
+        "not_configured",
+        "disabled",
+        "unreachable",
+    ]
     message: str
     latency_ms: float | None = None
     checked_at: datetime

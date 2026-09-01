@@ -18,7 +18,8 @@ Snapshot di preparazione: `main` a
 | --- | --- | --- | --- |
 | candidate | `backend/app/modules/presenze/router.py` | circa 5.099 righe | Router molto esteso; verificare separazione endpoint/service |
 | candidate | `frontend/src/features/organigramma/organigramma-workspace.tsx` | circa 4.652 righe | Workspace React ad alto rischio di stato accoppiato |
-| candidate | `frontend/src/app/catasto/gis/page.tsx` | circa 3.512 righe | Pagina GIS; rischio side effect e integrazioni mappa |
+| in_progress | `frontend/src/app/catasto/gis/page.tsx` | H2 cyc `538 -> 388`, cog `591 -> 435`, LOC `3007 -> 2341`; H3 controller/composer attivo | Cinque pannelli H2 coperti al 100%; resta il gate full-file della route |
+| reduced | `frontend/src/app/catasto/particelle/[id]/page.tsx` | Catasto-H1 `CatastoParticellaDetailPage` cyc `131 -> 3` cog `145 -> 2` LOC `656 -> 42` | Hotspot dedicato chiuso; perimetro aggregato senza violation error-level |
 | reduced | `frontend/src/app/gis/strumenti/tools-workspace.tsx` | GIS-H8 `GisToolsWorkspace` cyc `60 -> 2` cog `72 -> 1` LOC `226 -> 17` | Hotspot dedicato chiuso; warning LOC residuo sull'hook |
 | candidate | `frontend/src/lib/api.ts` | circa 5.833 righe | Valutare quanto e dichiarativo prima di priorizzarlo |
 | candidate | `frontend/src/app/presenze/giornaliere/page.tsx` | file molto grande | Misurare componenti, hook e handler |

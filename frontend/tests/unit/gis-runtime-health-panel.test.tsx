@@ -18,6 +18,7 @@ const health = {
     { key: "martin" as const, label: "Martin", status: "warning" as const, message: "Lento", latency_ms: null, checked_at: "2026-08-25T10:00:00Z", details: {} },
     { key: "qgis" as const, label: "QGIS", status: "not_configured" as const, message: "Non configurato", checked_at: "2026-08-25T10:00:00Z", details: {} },
     { key: "nas" as const, label: "NAS", status: "critical" as const, message: "Non raggiungibile", checked_at: "2026-08-25T10:00:00Z", details: {} },
+    { key: "external_sources" as const, label: "Sorgenti esterne", status: "disabled" as const, message: "Consultazione non attiva", checked_at: "2026-08-25T10:00:00Z", details: {} },
   ],
 };
 
@@ -33,10 +34,28 @@ describe("GisRuntimeHealthPanel", () => {
     expect(screen.getByText("Da verificare")).toBeInTheDocument();
     expect(screen.getByText("Non configurato", { selector: "span" })).toBeInTheDocument();
     expect(screen.getByText("Non disponibile")).toBeInTheDocument();
+    expect(screen.getByText("Disabilitato")).toBeInTheDocument();
     expect(screen.getByText("Risposta in 4.2 ms")).toBeInTheDocument();
     expect(screen.getByText("Scheduler export: disabilitato.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Verifica di nuovo" }));
     await waitFor(() => expect(mocks.getGisRuntimeHealth).toHaveBeenCalledTimes(2));
+  });
+
+  test("renders unreachable external sources in plain language", async () => {
+    mocks.getGisRuntimeHealth.mockResolvedValue({
+      ...health,
+      components: [{
+        key: "external_sources",
+        label: "Sorgenti esterne",
+        status: "unreachable",
+        message: "Alcune sorgenti GIS esterne non sono raggiungibili.",
+        checked_at: "2026-08-25T10:00:00Z",
+        details: {},
+      }],
+    });
+    render(<GisRuntimeHealthPanel token="token" />);
+    expect(await screen.findByText("Non raggiungibile")).toBeInTheDocument();
+    expect(screen.getByText(/Alcune sorgenti GIS esterne/)).toBeInTheDocument();
   });
 
   test("renders enabled scheduler and both error fallbacks", async () => {
