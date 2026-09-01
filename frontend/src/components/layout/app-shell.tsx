@@ -53,7 +53,7 @@ export function AppShell({
       openMobileSidebar={openMobileSidebar}
       onLogout={handleLogout}
     >
-      <div className="page-shell flex min-h-screen overflow-x-hidden">
+      <div className="page-shell flex min-h-screen overflow-x-clip">
         <Sidebar
           currentUser={currentUser}
           onLogout={handleLogout}

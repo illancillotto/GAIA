@@ -112,7 +112,13 @@ describe("AppShell", () => {
     expect(screen.getByText("Mobile drawer admin")).toBeInTheDocument();
     expect(screen.getByText("contenuto")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Apri navigazione" }));
+    const shell = screen.getByText("contenuto").closest(".page-shell");
+    const mobileMenuButton = screen.getByRole("button", { name: "Apri navigazione" });
+    expect(shell).toHaveClass("overflow-x-clip");
+    expect(shell).not.toHaveClass("overflow-x-hidden");
+    expect(mobileMenuButton.closest("header")).toHaveClass("sticky", "top-0");
+
+    fireEvent.click(mobileMenuButton);
     expect(screen.getByRole("button", { name: "logout drawer" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "logout shell" }));
@@ -143,6 +149,48 @@ describe("AppShell", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     expect(mocks.push).toHaveBeenCalledWith("/gis/catalogo");
+  });
+
+  test("renders a navigable breadcrumb without duplicating the current page title", () => {
+    render(
+      <AppShell currentUser={{ username: "admin", role: "admin", enabled_modules: [] } as never}>
+        <Topbar
+          pageTitle="Visure"
+          breadcrumbItems={[
+            { label: "Elaborazioni", href: "/elaborazioni" },
+            { label: "Visure" },
+          ]}
+        />
+      </AppShell>,
+    );
+
+    const breadcrumb = screen.getByRole("navigation", { name: "Percorso pagina" });
+    expect(breadcrumb).toHaveTextContent("Elaborazioni/Visure");
+    expect(breadcrumb).not.toHaveTextContent("Visure/Elaborazioni/Visure");
+    expect(screen.getByRole("link", { name: "Elaborazioni" })).toHaveAttribute("href", "/elaborazioni");
+    expect(screen.getByText("Visure", { selector: "[aria-current='page']" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Visure" })).not.toBeInTheDocument();
+  });
+
+  test("keeps the breadcrumb ancestor explicitly clickable on desktop", () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 });
+
+    render(
+      <AppShell currentUser={{ username: "admin", role: "admin", enabled_modules: [] } as never}>
+        <Topbar
+          pageTitle="Visure"
+          breadcrumbItems={[
+            { label: "Elaborazioni", href: "/elaborazioni" },
+            { label: "Visure" },
+          ]}
+        />
+      </AppShell>,
+    );
+
+    const desktopLink = screen.getByRole("link", { name: "Elaborazioni" });
+    expect(desktopLink).toHaveAttribute("href", "/elaborazioni");
+    expect(desktopLink).toHaveClass("pointer-events-auto", "cursor-pointer", "md:inline-flex");
+    expect(desktopLink).not.toHaveClass("hidden", "md:hidden");
   });
 
   test("opens the extended results modal from compact operational search for multiple matches", () => {

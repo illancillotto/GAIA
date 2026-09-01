@@ -1159,6 +1159,45 @@ describe("HomePage presence widget", () => {
     });
   });
 
+  test("keeps the mobile module launcher compact until the user requests all modules", async () => {
+    mocks.getCurrentUser.mockResolvedValue({
+      id: 21,
+      username: "mobile-admin",
+      email: "mobile-admin@example.local",
+      role: "super_admin",
+      is_active: true,
+      module_accessi: true,
+      module_rete: true,
+      module_inventario: true,
+      module_catasto: true,
+      module_utenze: true,
+      module_operazioni: true,
+      module_riordino: true,
+      module_ruolo: true,
+      module_presenze: true,
+      enabled_modules: ["accessi", "rete", "inventario", "catasto", "utenze", "operazioni", "riordino", "ruolo", "presenze", "gis", "wiki"],
+    });
+    mocks.getMyPermissions.mockResolvedValue({ sections: [], granted_keys: ["accessi.users"] });
+    mocks.getPresenceSummary.mockResolvedValue({
+      window_minutes: 15,
+      active_users: 0,
+      visible_users: 0,
+      by_module: [],
+      items: [],
+    });
+
+    render(<HomePage />);
+
+    await screen.findByText("Seleziona il dominio operativo");
+    const moduleCards = screen.getAllByTestId("home-module-card-shell");
+    expect(moduleCards).toHaveLength(14);
+    expect(moduleCards[6]).toHaveClass("hidden");
+    expect(moduleCards.filter((card) => card.className.includes("hidden"))).toHaveLength(8);
+    fireEvent.click(screen.getByRole("button", { name: "Mostra altri 8 moduli" }));
+    expect(screen.getAllByTestId("home-module-card-shell").every((card) => !card.className.includes("hidden"))).toBe(true);
+    expect(screen.getByRole("button", { name: "Mostra meno moduli" })).toBeInTheDocument();
+  });
+
   test("redirects anonymous users to login without leaving the home page in session-check loading", async () => {
     mocks.getStoredAccessToken.mockReturnValue(null);
 

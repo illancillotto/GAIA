@@ -79,6 +79,8 @@ const emptyRuoloStats: RuoloStatsResponse = {
   items: [],
 };
 
+const MOBILE_MODULE_LIMIT = 6;
+
 const allModules: HomeModule[] = [
   {
     id: "admin",
@@ -287,6 +289,50 @@ function normalizeRuoloDistrictKey(value: string | null | undefined): string | n
   return canonical.length === 1 && /^\d$/.test(canonical) ? canonical.padStart(2, "0") : canonical;
 }
 
+function HomeModuleCard({
+  mod,
+  statusBadge,
+  isCollapsedOnMobile,
+}: {
+  mod: HomeModule;
+  statusBadge: Record<ModuleStatus, string>;
+  isCollapsedOnMobile: boolean;
+}) {
+  const isInteractive = mod.status !== "coming";
+  const moduleCardClassName = cn(isCollapsedOnMobile ? "hidden md:block" : "block", "h-full");
+  const card = (
+    <article
+      data-testid="home-module-card"
+      className={cn(
+        "group relative flex h-full flex-col justify-between overflow-hidden rounded-xl border border-outline-variant/15 bg-surface-container-lowest p-4 transition-all duration-300 md:p-8",
+        isInteractive ? "cursor-pointer hover:shadow-2xl" : "cursor-default opacity-70",
+      )}
+    >
+      <div className="absolute right-0 top-0 p-2 sm:p-4">
+        <span className={cn("inline-flex items-center rounded-full px-2 py-1 text-[10px] font-label uppercase tracking-wider sm:px-3 sm:text-xs", statusBadge[mod.status])}>
+          {mod.statusLabel}
+        </span>
+      </div>
+      <div>
+        <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-primary-container md:mb-6 md:h-12 md:w-12">
+          <span className="material-symbols-outlined text-sm text-primary-fixed md:text-base">{mod.icon}</span>
+        </div>
+        <p className="mb-1 text-[10px] font-label uppercase tracking-[0.14em] text-outline md:mb-2 md:text-[11px] md:tracking-[0.18em]">{mod.eyebrow}</p>
+        <h3 className="mb-2 pr-10 text-lg font-headline leading-tight text-primary md:mb-3 md:pr-0 md:text-2xl">{mod.title}</h3>
+        <p className="line-clamp-2 text-xs leading-relaxed text-on-surface-variant md:line-clamp-none md:text-sm">{mod.description}</p>
+      </div>
+      <span className={cn("mt-4 flex items-center gap-2 text-sm font-bold transition-all md:mt-8", isInteractive ? "text-primary group-hover:gap-4" : "text-outline")}>
+        {isInteractive ? "Accedi al modulo" : "Disponibile prossimamente"}
+        <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+      </span>
+    </article>
+  );
+
+  if (!isInteractive) return <div data-testid="home-module-card-shell" className={moduleCardClassName}>{card}</div>;
+
+  return <Link data-testid="home-module-card-shell" href={mod.href} className={cn(moduleCardClassName, "rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30")}>{card}</Link>;
+}
+
 function HomePageSkeleton() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-surface text-on-surface font-body">
@@ -326,6 +372,7 @@ export default function HomePage() {
   const [ruoloStats, setRuoloStats] = useState<RuoloStatsResponse>(emptyRuoloStats);
   const [ruoloAnalytics, setRuoloAnalytics] = useState<RuoloStatsAnalyticsResponse | null>(null);
   const [catastoIndiciOverview, setCatastoIndiciOverview] = useState<CatIndiceOverview | null>(null);
+  const [showAllMobileModules, setShowAllMobileModules] = useState(false);
   const currentUser = session.currentUser;
   const grantedSectionKeys = session.grantedSectionKeys;
 
@@ -447,6 +494,7 @@ export default function HomePage() {
   const sortedVisibleModules = [...visibleModules].sort((a, b) =>
     a.title.replace("GAIA ", "").localeCompare(b.title.replace("GAIA ", ""), "it", { sensitivity: "base" }),
   );
+  const hiddenMobileModuleCount = Math.max(0, sortedVisibleModules.length - MOBILE_MODULE_LIMIT);
   const canOpenGisPlatform = visibleModules.some((mod) => mod.id === "gis" && mod.status !== "coming");
 
   const latestRuoloStats = ruoloStats.items[0] ?? null;
@@ -584,12 +632,12 @@ export default function HomePage() {
       </header>
 
       {/* Main content */}
-      <main className="pt-24 pb-12 px-8 max-w-[90rem] mx-auto min-h-screen">
+      <main className="min-h-screen max-w-[90rem] mx-auto px-4 pt-20 pb-8 sm:px-6 md:px-8 md:pt-24 md:pb-12">
         {/* Hero */}
-        <section className="mb-16 flex min-h-[58vh] flex-col items-center justify-center text-center">
+        <section className="mb-10 flex min-h-[42vh] flex-col items-center justify-center text-center md:mb-16 md:min-h-[58vh]">
           <div className="w-full max-w-4xl">
             <p className="mb-5 text-xs font-label uppercase tracking-[0.28em] text-outline">Hub operativo GAIA</p>
-            <h1 className="font-headline text-7xl font-semibold italic leading-none text-[#123826] md:text-8xl">
+            <h1 className="font-headline text-5xl font-semibold italic leading-none text-[#123826] sm:text-6xl md:text-8xl">
               GAIA
             </h1>
             <p className="mx-auto mt-5 max-w-2xl text-lg font-body text-outline leading-relaxed">
@@ -658,12 +706,12 @@ export default function HomePage() {
 
         {/* Module domains */}
         <section>
-          <div className="flex items-end justify-between mb-8">
+          <div className="mb-5 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h2 className="text-3xl font-headline text-primary mb-2">Seleziona il dominio operativo</h2>
-              <p className="text-outline font-body">Sistemi di controllo e gestione asset istituzionali</p>
+              <h2 className="mb-2 text-2xl font-headline text-primary sm:text-3xl">Seleziona il dominio operativo</h2>
+              <p className="text-sm font-body text-outline sm:text-base">Sistemi di controllo e gestione asset istituzionali</p>
             </div>
-            <div className="flex gap-4">
+            <div className="hidden gap-4 sm:flex">
               <span className="flex items-center gap-2 text-xs font-label tracking-widest uppercase text-outline">
                 <span className="w-2 h-2 rounded-full bg-primary-fixed" /> Operativo
               </span>
@@ -673,68 +721,28 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {sortedVisibleModules.map((mod) => {
-              const isInteractive = mod.status !== "coming";
-              const card = (
-                <article
-                  className={cn(
-                    "group bg-surface-container-lowest p-8 rounded-xl border border-outline-variant/15 transition-all duration-300 flex h-full flex-col justify-between relative overflow-hidden",
-                    isInteractive
-                      ? "hover:shadow-2xl cursor-pointer"
-                      : "opacity-70 cursor-default",
-                  )}
-                >
-                  {/* Status badge */}
-                  <div className="absolute top-0 right-0 p-4">
-                    <span
-                      className={cn(
-                        "inline-flex items-center rounded-full px-3 py-1 text-xs font-label uppercase tracking-wider",
-                        statusBadge[mod.status],
-                      )}
-                    >
-                      {mod.statusLabel}
-                    </span>
-                  </div>
-
-                  <div>
-                    <div className="w-12 h-12 bg-primary-container rounded-lg flex items-center justify-center mb-6">
-                      <span className="material-symbols-outlined text-primary-fixed">{mod.icon}</span>
-                    </div>
-                    <p className="mb-2 text-[11px] font-label uppercase tracking-[0.18em] text-outline">{mod.eyebrow}</p>
-                    <h3 className="text-2xl font-headline text-primary mb-3">{mod.title}</h3>
-                    <p className="text-on-surface-variant leading-relaxed text-sm">{mod.description}</p>
-                  </div>
-
-                  <button
-                    className={cn(
-                      "mt-8 flex items-center gap-2 font-bold transition-all",
-                      isInteractive
-                        ? "text-primary group-hover:gap-4"
-                        : "text-outline cursor-default",
-                    )}
-                    tabIndex={isInteractive ? 0 : -1}
-                    aria-hidden={!isInteractive}
-                  >
-                    {isInteractive ? "Accedi al modulo" : "Disponibile prossimamente"}
-                    <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-                  </button>
-                </article>
-              );
-
-              if (!isInteractive) return <div key={mod.id} className="h-full">{card}</div>;
-
-              return (
-                <Link
-                  key={mod.id}
-                  href={mod.href}
-                  className="block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-                >
-                  {card}
-                </Link>
-              );
-            })}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 md:gap-6 lg:grid-cols-3">
+            {sortedVisibleModules.map((mod) => (
+              <HomeModuleCard
+                isCollapsedOnMobile={sortedVisibleModules.indexOf(mod) >= MOBILE_MODULE_LIMIT && !showAllMobileModules}
+                key={mod.id}
+                mod={mod}
+                statusBadge={statusBadge}
+              />
+            ))}
           </div>
+          {hiddenMobileModuleCount > 0 ? (
+            <div className="mt-4 flex justify-center md:hidden">
+              <button
+                aria-expanded={showAllMobileModules}
+                className="rounded-full border border-primary/20 bg-white px-4 py-2 text-sm font-semibold text-primary shadow-sm transition hover:bg-surface-container-low"
+                onClick={() => setShowAllMobileModules((current) => !current)}
+                type="button"
+              >
+                {showAllMobileModules ? "Mostra meno moduli" : `Mostra altri ${hiddenMobileModuleCount} moduli`}
+              </button>
+            </div>
+          ) : null}
         </section>
 
         {canManageGaiaUsers ? (

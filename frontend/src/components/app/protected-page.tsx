@@ -4,7 +4,7 @@ import Link from "next/link";
 import { PropsWithChildren, type ReactNode, useEffect, useState } from "react";
 
 import { AppShell } from "@/components/layout/app-shell";
-import { Topbar } from "@/components/layout/topbar";
+import { Topbar, type BreadcrumbItem } from "@/components/layout/topbar";
 import {
   getDashboardSummary,
   SESSION_BOOTSTRAP_TIMEOUT_MS,
@@ -18,6 +18,7 @@ export type ProtectedPageProps = PropsWithChildren<{
   title: string;
   description: string;
   breadcrumb?: string;
+  breadcrumbItems?: BreadcrumbItem[];
   topbarActions?: ReactNode;
   requiredSection?: string;
   requiredModule?: string;
@@ -39,6 +40,7 @@ export function ProtectedPage({
   title,
   description,
   breadcrumb,
+  breadcrumbItems,
   topbarActions,
   requiredSection,
   requiredModule,
@@ -176,7 +178,7 @@ export function ProtectedPage({
         userBadge={summary.nas_users}
         grantedSectionKeys={grantedSectionKeys}
       >
-        <Topbar pageTitle={title} breadcrumb={breadcrumb} actions={topbarActions} />
+        <Topbar pageTitle={title} breadcrumb={breadcrumb} breadcrumbItems={breadcrumbItems} actions={topbarActions} />
         <section className="page-body">
           <div className="mb-6">
             <h2 className="page-heading">{title}</h2>
@@ -216,7 +218,7 @@ export function ProtectedPage({
       userBadge={summary.nas_users}
       grantedSectionKeys={grantedSectionKeys}
     >
-      <Topbar pageTitle={title} breadcrumb={breadcrumb} actions={topbarActions} />
+      <Topbar pageTitle={title} breadcrumb={breadcrumb} breadcrumbItems={breadcrumbItems} actions={topbarActions} />
       <section className="page-body">
         {!hideContentHeader ? (
           <div className="mb-6">

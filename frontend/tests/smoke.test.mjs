@@ -36,7 +36,8 @@ test("dashboard keeps login gate and GAIA module selector copy", () => {
   const homePage = read("src/app/page.tsx");
   const loginPage = read("src/app/login/page.tsx");
 
-  assert.match(homePage, /router\.replace\("\/login"\)/);
+  assert.match(homePage, /useSessionBootstrap/);
+  assert.match(homePage, /session\.status !== "ready"/);
   assert.match(homePage, /GAIA NAS Control/);
   assert.match(homePage, /GAIA Rete/);
   assert.match(homePage, /GAIA Catasto/);
@@ -63,7 +64,8 @@ test("layout includes app shell, sidebar and topbar", () => {
   assert.match(sidebar, /PlatformSidebar/);
   assert.match(sidebar, /ModuleSidebar/);
   assert.match(sidebar, /Logout/);
-  assert.match(desktopTopNavigation, /Home GAIA/);
+  assert.match(desktopTopNavigation, /getVisiblePlatformModules/);
+  assert.match(desktopTopNavigation, /platformModules\.map/);
   assert.match(platformSidebar, /Consorzio di Bonifica/);
   assert.match(platformSidebar, /dell&apos;Oristanese/);
   assert.match(platformSidebar, /Home GAIA/);
@@ -103,6 +105,7 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   const distrettiPage = read("src/app/catasto/distretti/page.tsx");
   const distrettoDetailPage = read("src/app/catasto/distretti/[id]/page.tsx");
   const particelleDetailPage = read("src/app/catasto/particelle/[id]/page.tsx");
+  const particelleDetailController = read("src/app/catasto/particelle/[id]/use-particella-detail-controller.ts");
   const anomaliePage = read("src/app/catasto/anomalie/page.tsx");
   const anagraficaPage = read("src/app/catasto/elaborazioni-massive/page.tsx");
   const anagraficaBulkPanel = read("src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx");
@@ -219,8 +222,9 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(anagraficaPage, /AnagraficaBulkPanel/);
   assert.match(anagraficaBulkPanel, /catastoUploadElaborazioneMassivaJob/);
   assert.match(anagraficaBulkPanel, /catastoGetElaborazioneMassivaJob/);
-  assert.match(particelleDetailPage, /catastoGetParticellaUtenze/);
-  assert.match(particelleDetailPage, /catastoGetParticellaAnomalie/);
+  assert.match(particelleDetailPage, /useParticellaDetailController/);
+  assert.match(particelleDetailController, /catastoGetParticellaUtenze/);
+  assert.match(particelleDetailController, /catastoGetParticellaAnomalie/);
   assert.match(mapContainer, /\/tiles\/cat_distretti\/\{z\}\/\{x\}\/\{y\}/);
   assert.match(mapContainer, /"source-layer": "cat_distretti"/);
   assert.match(mapContainer, /id: "distretti-fill"/);

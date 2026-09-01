@@ -6,17 +6,17 @@ import ElaborazioniVisurePage from "@/app/elaborazioni/visure/page";
 
 vi.mock("@/components/app/protected-page", () => ({
   ProtectedPage: ({
-    breadcrumb,
+    breadcrumbItems,
     children,
     description,
     title,
   }: {
-    breadcrumb: string;
+    breadcrumbItems: Array<{ label: string; href?: string }>;
     children: React.ReactNode;
     description: string;
     title: string;
   }) => (
-    <main data-breadcrumb={breadcrumb} data-description={description} data-title={title}>
+    <main data-breadcrumb={JSON.stringify(breadcrumbItems)} data-description={description} data-title={title}>
       {children}
     </main>
   ),
@@ -31,7 +31,10 @@ describe("ElaborazioniVisurePage", () => {
     render(<ElaborazioniVisurePage />);
 
     expect(screen.getByRole("main")).toHaveAttribute("data-title", "Visure");
-    expect(screen.getByRole("main")).toHaveAttribute("data-breadcrumb", "Elaborazioni / Visure");
+    expect(screen.getByRole("main")).toHaveAttribute(
+      "data-breadcrumb",
+      JSON.stringify([{ label: "Elaborazioni", href: "/elaborazioni" }, { label: "Visure" }]),
+    );
     expect(screen.getByRole("main")).toHaveAttribute(
       "data-description",
       "Ingresso operativo per visure singole e monitor dei lotti recenti.",
