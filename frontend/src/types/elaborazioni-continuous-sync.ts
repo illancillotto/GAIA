@@ -1,7 +1,19 @@
+export type AutoSyncCredentialSchedule = {
+  timezone: "Europe/Rome";
+  weekly: Record<string, Array<{ start: string; end: string }>>;
+};
+
+export type AutoSyncCredentialProfile = {
+  enabled: boolean;
+  schedule_enabled: boolean;
+  availability_schedule: AutoSyncCredentialSchedule | null;
+};
+
 export type CatastoRuoloAutoSyncConfig = {
   enabled: boolean;
   credential_id: string | null;
   credential_ids: string[] | null;
+  credential_profiles: Record<string, AutoSyncCredentialProfile> | null;
   primary_enabled: boolean;
   secondary_enabled: boolean;
   role_parcel_refresh_hours: number;
@@ -24,6 +36,7 @@ export type CatastoRuoloAutoSyncConfigUpdateInput = Partial<Pick<
   | "enabled"
   | "credential_id"
   | "credential_ids"
+  | "credential_profiles"
   | "primary_enabled"
   | "secondary_enabled"
   | "role_parcel_refresh_hours"

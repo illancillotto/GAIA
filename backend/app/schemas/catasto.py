@@ -339,10 +339,23 @@ class CatastoOperationResponse(BaseModel):
     message: str
 
 
+class CatastoAutoSyncCredentialProfile(BaseModel):
+    enabled: bool = False
+    schedule_enabled: bool = False
+    availability_schedule: CatastoCredentialAvailabilitySchedule | None = None
+
+    @model_validator(mode="after")
+    def validate_schedule(self) -> CatastoAutoSyncCredentialProfile:
+        if self.schedule_enabled and self.availability_schedule is None:
+            raise ValueError("Availability schedule is required when scheduling is enabled")
+        return self
+
+
 class CatastoRuoloAutoSyncConfigUpdateRequest(BaseModel):
     enabled: bool | None = None
     credential_id: UUID | None = None
     credential_ids: list[UUID] | None = None
+    credential_profiles: dict[str, CatastoAutoSyncCredentialProfile] | None = None
     primary_enabled: bool | None = None
     secondary_enabled: bool | None = None
     role_parcel_refresh_hours: int | None = Field(default=None, ge=1, le=8760)
@@ -358,6 +371,7 @@ class CatastoRuoloAutoSyncConfigResponse(BaseModel):
     enabled: bool
     credential_id: UUID | None
     credential_ids: list[str] | None
+    credential_profiles: dict[str, CatastoAutoSyncCredentialProfile] | None
     primary_enabled: bool
     secondary_enabled: bool
     role_parcel_refresh_hours: int

@@ -65,6 +65,10 @@ import {
   verifyUtenzeAnprAlive,
   verifyUtenzeAnprDeathDate,
 } from "@/lib/api";
+import {
+  getElaborazioneRuoloAutoSyncCampaignItems,
+  retryElaborazioneRuoloAutoSyncCampaignFailures,
+} from "@/lib/autosync-campaign-api";
 
 const TOKEN = "test-token";
 
@@ -309,6 +313,26 @@ describe("api misc clients", () => {
   test("runElaborazioneRuoloAutoSyncNow", async () => {
     stubFetch(jsonResponse({ ok: true }));
     await expect(runElaborazioneRuoloAutoSyncNow(TOKEN)).resolves.toBeDefined();
+  });
+  test("retryElaborazioneRuoloAutoSyncCampaignFailures", async () => {
+    const fetchMock = stubFetch(jsonResponse({ success: true, message: "1 elemento rimesso in coda" }));
+    await expect(
+      retryElaborazioneRuoloAutoSyncCampaignFailures(TOKEN, "ruolo_particella"),
+    ).resolves.toMatchObject({ success: true });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/elaborazioni/ruolo-autosync/campaigns/ruolo_particella/retry-failed",
+      expect.objectContaining({ method: "POST", headers: expect.objectContaining({ Authorization: `Bearer ${TOKEN}` }) }),
+    );
+  });
+  test("getElaborazioneRuoloAutoSyncCampaignItems", async () => {
+    const fetchMock = stubFetch(jsonResponse({ items: [], total: 0, limit: 50, offset: 100, has_more: false }));
+    await expect(
+      getElaborazioneRuoloAutoSyncCampaignItems(TOKEN, "ruolo_soggetto", 50, 100),
+    ).resolves.toMatchObject({ total: 0, has_more: false });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/elaborazioni/ruolo-autosync/campaigns/ruolo_soggetto/items?limit=50&offset=100",
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: `Bearer ${TOKEN}` }) }),
+    );
   });
   test("saveElaborazioneCredentials", async () => {
     stubFetch(jsonResponse({ ok: true }));

@@ -3,6 +3,9 @@
 import type { SisterCredentialAvailabilitySchedule } from "@/types/api";
 
 const DAYS = ["Lunedi", "Martedi", "Mercoledi", "Giovedi", "Venerdi", "Sabato", "Domenica"];
+const SHORT_DAYS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
+const MAX_WINDOWS_PER_DAY = 4;
+const DEFAULT_WINDOW = { start: "18:00", end: "08:00" };
 
 export const OUTSIDE_OFFICE_SCHEDULE: SisterCredentialAvailabilitySchedule = {
   timezone: "Europe/Rome",
@@ -28,6 +31,21 @@ function copySchedule(schedule: SisterCredentialAvailabilitySchedule): SisterCre
 
 export function defaultSisterSchedule(): SisterCredentialAvailabilitySchedule {
   return copySchedule(OUTSIDE_OFFICE_SCHEDULE);
+}
+
+export function formatSisterSchedule(
+  enabled: boolean,
+  schedule: SisterCredentialAvailabilitySchedule | null,
+): string {
+  if (!enabled) return "Sempre disponibile";
+  if (!schedule) return "Nessuna fascia configurata";
+  const days = SHORT_DAYS.flatMap((label, day) => {
+    const windows = schedule.weekly[String(day)] ?? [];
+    return windows.length > 0
+      ? [`${label} ${windows.map((window) => `${window.start}-${window.end}`).join(", ")}`]
+      : [];
+  });
+  return days.length > 0 ? days.join(" · ") : "Nessuna fascia configurata";
 }
 
 function romeClock(date: Date): { weekday: number; minute: number } {
@@ -96,11 +114,29 @@ type SisterAvailabilityScheduleEditorProps = {
 };
 
 export function SisterAvailabilityScheduleEditor(props: SisterAvailabilityScheduleEditorProps) {
-  function updateDay(day: number, enabled: boolean, field?: "start" | "end", value?: string): void {
-    const current = props.schedule.weekly[String(day)]?.[0] ?? { start: "18:00", end: "08:00" };
+  function replaceDay(day: number, windows: SisterCredentialAvailabilitySchedule["weekly"][string]): void {
     const weekly = { ...props.schedule.weekly };
-    weekly[String(day)] = enabled ? [{ ...current, ...(field && value ? { [field]: value } : {}) }] : [];
+    weekly[String(day)] = windows;
     props.onScheduleChange({ timezone: "Europe/Rome", weekly });
+  }
+
+  function toggleDay(day: number, enabled: boolean): void {
+    replaceDay(day, enabled ? [{ ...DEFAULT_WINDOW }] : []);
+  }
+
+  function updateWindow(day: number, index: number, field: "start" | "end", value: string): void {
+    const windows = props.schedule.weekly[String(day)].map((window, currentIndex) =>
+      currentIndex === index ? { ...window, [field]: value } : window,
+    );
+    replaceDay(day, windows);
+  }
+
+  function addWindow(day: number): void {
+    replaceDay(day, [...props.schedule.weekly[String(day)], { ...DEFAULT_WINDOW }]);
+  }
+
+  function removeWindow(day: number, index: number): void {
+    replaceDay(day, props.schedule.weekly[String(day)].filter((_, currentIndex) => currentIndex !== index));
   }
 
   return <section className="rounded-2xl border border-[#dbe6dc] bg-[#f6faf6] p-4 md:col-span-2 lg:col-span-3">
@@ -113,13 +149,26 @@ export function SisterAvailabilityScheduleEditor(props: SisterAvailabilitySchedu
     </div>
     {props.enabled ? <div className="mt-4 space-y-2 border-t border-[#dbe6dc] pt-4">
       {DAYS.map((label, day) => {
-        const window = props.schedule.weekly[String(day)]?.[0];
-        return <div className="grid items-center gap-2 rounded-xl bg-white px-3 py-2 sm:grid-cols-[120px_1fr]" key={label}>
-          <label className="flex items-center gap-2 text-sm font-semibold text-gray-800"><input aria-label={`${label} disponibile`} checked={Boolean(window)} className="h-4 w-4 accent-[#1D4E35]" onChange={(event) => updateDay(day, event.target.checked)} type="checkbox" />{label}</label>
-          {window ? <div className="flex items-center gap-2 text-xs text-gray-600"><span>Dalle</span><input aria-label={`${label} dalle`} className="form-control max-w-28 py-1.5" onChange={(event) => updateDay(day, true, "start", event.target.value)} type="time" value={window.start} /><span>alle</span><input aria-label={`${label} alle`} className="form-control max-w-28 py-1.5" onChange={(event) => updateDay(day, true, "end", event.target.value)} type="time" value={window.end} />{window.start === window.end ? <span className="font-semibold text-[#326447]">Tutto il giorno</span> : null}</div> : <span className="text-xs text-gray-500">Riservata all&apos;operatore per tutta la giornata</span>}
+        const windows = props.schedule.weekly[String(day)] ?? [];
+        return <div className="grid items-start gap-3 rounded-xl bg-white px-3 py-3 sm:grid-cols-[120px_1fr]" key={label}>
+          <label className="flex items-center gap-2 pt-2 text-sm font-semibold text-gray-800"><input aria-label={`${label} disponibile`} checked={windows.length > 0} className="h-4 w-4 accent-[#1D4E35]" onChange={(event) => toggleDay(day, event.target.checked)} type="checkbox" />{label}</label>
+          {windows.length > 0 ? <div className="space-y-2">
+            {windows.map((window, index) => {
+              const startLabel = index === 0 ? `${label} dalle` : `${label} fascia ${index + 1} dalle`;
+              const endLabel = index === 0 ? `${label} alle` : `${label} fascia ${index + 1} alle`;
+              return <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600" key={`${index}-${window.start}-${window.end}`}>
+                <span className="w-14 font-semibold text-gray-500">Fascia {index + 1}</span>
+                <span>Dalle</span><input aria-label={startLabel} className="form-control max-w-28 py-1.5" onChange={(event) => updateWindow(day, index, "start", event.target.value)} type="time" value={window.start} />
+                <span>alle</span><input aria-label={endLabel} className="form-control max-w-28 py-1.5" onChange={(event) => updateWindow(day, index, "end", event.target.value)} type="time" value={window.end} />
+                {window.start === window.end ? <span className="font-semibold text-[#326447]">Tutto il giorno</span> : null}
+                <button aria-label={`Rimuovi fascia ${index + 1} ${label}`} className="rounded-lg border border-red-100 px-2 py-1 font-semibold text-red-600 transition hover:bg-red-50" onClick={() => removeWindow(day, index)} type="button">Rimuovi</button>
+              </div>;
+            })}
+            <button className="rounded-lg border border-[#b9cdbd] px-2.5 py-1.5 text-xs font-semibold text-[#1D4E35] disabled:cursor-not-allowed disabled:opacity-45" disabled={windows.length >= MAX_WINDOWS_PER_DAY} onClick={() => addWindow(day)} type="button">Aggiungi fascia {label}</button>
+          </div> : <span className="pt-2 text-xs text-gray-500">Nessun utilizzo automatico in questa giornata</span>}
         </div>;
       })}
-      <p className="pt-1 text-xs text-gray-500">Se l&apos;ora finale e precedente a quella iniziale, la fascia continua durante la notte successiva.</p>
+      <p className="pt-1 text-xs text-gray-500">Puoi impostare fino a quattro fasce per giorno. Se l&apos;ora finale e precedente a quella iniziale, la fascia continua durante la notte successiva.</p>
     </div> : null}
   </section>;
 }

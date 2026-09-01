@@ -27,6 +27,7 @@ from app.models.application_user import ApplicationUser
 from app.models.elaborazioni import ElaborazioneBatch
 from app.modules.ruolo.models import RuoloParticella, RuoloPartita
 from app.schemas.catasto import (
+    CatastoAutoSyncCredentialProfile,
     CatastoBatchResponse,
     CatastoPerpetualSyncItemResponse,
     CatastoRuoloAutoSyncConfigResponse,
@@ -39,9 +40,13 @@ from app.services.catasto_comuni import get_catasto_comuni_lookup
 from app.services.elaborazioni_autosync_dashboard import build_autosync_dashboard
 from app.services.elaborazioni_batches import (
     BatchConflictError,
+    RELEASE_REQUESTED_OPERATION,
     ValidatedVisuraRow,
     create_batch_from_validated_rows,
+    get_batch_requests,
+    mark_request_released,
     normalize_lookup_value,
+    recalculate_batch_counters,
     start_batch,
 )
 from app.services.elaborazioni_credentials import (
@@ -206,6 +211,9 @@ def update_ruolo_autosync_config(
     config = get_ruolo_autosync_config(db, user_id)
     fields = payload.model_fields_set
     _update_config_credentials(db, config, user_id, payload, fields)
+    if "credential_profiles" in fields:
+        _sync_active_autosync_batch_credentials(db, user_id, config.credential_ids or [])
+    was_enabled = config.enabled
     if "enabled" in fields and payload.enabled is not None:
         config.enabled = bool(payload.enabled)
     _update_continuous_config_fields(config, payload, fields)
@@ -217,7 +225,61 @@ def update_ruolo_autosync_config(
     db.add(config)
     db.commit()
     db.refresh(config)
+    if was_enabled and not config.enabled:
+        _release_active_autosync_batches(db, user_id)
     return config
+
+
+def _sync_active_autosync_batch_credentials(
+    db: Session,
+    user_id: int,
+    credential_ids: list[str],
+) -> None:
+    batches = db.scalars(
+        select(CatastoBatch).where(
+            CatastoBatch.user_id == user_id,
+            CatastoBatch.batch_kind.in_((
+                CatastoBatchKind.RUOLO_AUTOSYNC.value,
+                CatastoBatchKind.PERPETUAL_SYNC.value,
+            )),
+            CatastoBatch.status.in_((
+                CatastoBatchStatus.PENDING.value,
+                CatastoBatchStatus.PROCESSING.value,
+            )),
+        )
+    ).all()
+    for batch in batches:
+        batch.credential_ids = list(credential_ids)
+
+
+def _release_active_autosync_batches(db: Session, user_id: int) -> None:
+    batches = db.scalars(
+        select(CatastoBatch).where(
+            CatastoBatch.user_id == user_id,
+            CatastoBatch.batch_kind.in_((
+                CatastoBatchKind.RUOLO_AUTOSYNC.value,
+                CatastoBatchKind.PERPETUAL_SYNC.value,
+            )),
+            CatastoBatch.status == CatastoBatchStatus.PROCESSING.value,
+        )
+    ).all()
+    now = datetime.now(UTC)
+    releasable_statuses = {
+        CatastoVisuraRequestStatus.PENDING.value,
+        CatastoVisuraRequestStatus.AWAITING_CAPTCHA.value,
+    }
+    for batch in batches:
+        requests = get_batch_requests(db, batch.id)
+        for request in requests:
+            if request.status in releasable_statuses:
+                mark_request_released(request, now)
+        batch.current_operation = RELEASE_REQUESTED_OPERATION
+        if not any(request.status == CatastoVisuraRequestStatus.PROCESSING.value for request in requests):
+            batch.status = CatastoBatchStatus.CANCELLED.value
+            batch.completed_at = now
+        recalculate_batch_counters(batch, requests)
+    if batches:
+        db.commit()
 
 
 def _update_config_credentials(
@@ -228,22 +290,65 @@ def _update_config_credentials(
     fields: set[str],
 ) -> None:
 
-    if "credential_ids" in fields:
-        config.credential_ids = (
-            list(dict.fromkeys(str(value) for value in payload.credential_ids or ()))
-            or None
+    if "credential_profiles" in fields:
+        normalized = _normalize_credential_profiles(
+            db,
+            user_id,
+            payload.credential_profiles or {},
         )
+        config.credential_profiles = normalized
+        config.credential_ids = [
+            credential_id
+            for credential_id, profile in normalized.items()
+            if bool(profile.get("enabled"))
+        ]
 
-    if "credential_id" in fields:
-        if payload.credential_id is None:
-            config.credential_id = None
-        else:
-            credential = _get_autosync_credential(db, user_id, payload.credential_id)
-            if credential is None:
-                raise ValueError("Credenziale SISTER non trovata")
-            if not credential.active:
-                raise ValueError("La credenziale selezionata non e attiva")
-            config.credential_id = credential.id
+    _update_legacy_credential_ids(config, payload, fields)
+    _update_legacy_credential(db, config, user_id, payload, fields)
+
+
+def _normalize_credential_profiles(
+    db: Session,
+    user_id: int,
+    profiles: dict[str, CatastoAutoSyncCredentialProfile],
+) -> dict[str, dict[str, object]]:
+    normalized: dict[str, dict[str, object]] = {}
+    for raw_id, profile in profiles.items():
+        credential_id = UUID(str(raw_id))
+        credential = _get_autosync_credential(db, user_id, credential_id)
+        if credential is None or not credential.active:
+            raise ValueError("Una credenziale autosync non e disponibile o non e attiva")
+        normalized[str(credential_id)] = profile.model_dump(mode="json")
+    return normalized
+
+
+def _update_legacy_credential_ids(
+    config: CatastoRuoloAutoSyncConfig,
+    payload: CatastoRuoloAutoSyncConfigUpdateRequest,
+    fields: set[str],
+) -> None:
+    if "credential_ids" in fields and "credential_profiles" not in fields:
+        config.credential_ids = list(dict.fromkeys(str(value) for value in payload.credential_ids or ()))
+
+
+def _update_legacy_credential(
+    db: Session,
+    config: CatastoRuoloAutoSyncConfig,
+    user_id: int,
+    payload: CatastoRuoloAutoSyncConfigUpdateRequest,
+    fields: set[str],
+) -> None:
+    if "credential_id" not in fields:
+        return
+    if payload.credential_id is None:
+        config.credential_id = None
+        return
+    credential = _get_autosync_credential(db, user_id, payload.credential_id)
+    if credential is None:
+        raise ValueError("Credenziale SISTER non trovata")
+    if not credential.active:
+        raise ValueError("La credenziale selezionata non e attiva")
+    config.credential_id = credential.id
 
 
 
@@ -264,8 +369,6 @@ def _validate_enabled_autosync_config(
     selected_ids = config.credential_ids or (
         [str(config.credential_id)] if config.credential_id is not None else []
     )
-    if not selected_ids:
-        raise ValueError("Per attivare l'autosync devi selezionare almeno una credenziale SISTER attiva")
     for value in selected_ids:
         selected_credential = _get_autosync_credential(db, user_id, UUID(str(value)))
         if selected_credential is None or not selected_credential.active:

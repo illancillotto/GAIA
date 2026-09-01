@@ -165,6 +165,30 @@ describe("SisterCredentialPool", () => {
     expect(callbacks.onDeleteCredential).toHaveBeenCalledWith(secondary);
   });
 
+  test("shows the schedule configured for every credential", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-01T10:00:00Z"));
+    const lateWindow = {
+      timezone: "Europe/Rome" as const,
+      weekly: { "1": [{ start: "14:00", end: "15:00" }] },
+    };
+    render(<SisterCredentialPool {...props({
+      credentials: [
+        credential("always", { schedule_enabled: false, availability_schedule: null }),
+        credential("paused", { active: false, schedule_enabled: true, availability_schedule: lateWindow }),
+        credential("scheduled", { schedule_enabled: true, availability_schedule: lateWindow }),
+        credential("closed", { schedule_enabled: true, availability_schedule: null }),
+      ],
+    })} />);
+
+    expect(screen.getByText("Sempre disponibile")).toBeInTheDocument();
+    expect(screen.getByText("Non utilizzabile dal worker")).toBeInTheDocument();
+    expect(screen.getAllByText("Mar 14:00-15:00")).toHaveLength(2);
+    expect(screen.getAllByText("Nessuna fascia configurata")).toHaveLength(1);
+    expect(screen.getByText("Nessuna fascia disponibile")).toBeInTheDocument();
+    expect(screen.getByText("Disponibile mar 14:00")).toBeInTheDocument();
+  });
+
   test("starts an individual saved-credential test", async () => {
     const item = credential("one");
     const pending = deferred<ElaborazioneCredentialTestResult>();

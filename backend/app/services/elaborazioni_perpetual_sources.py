@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -9,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models.catasto import CatastoPerpetualSyncScope
 from app.models.catasto_phase1 import CatParticella
-from app.modules.ruolo.models import RuoloAvviso, RuoloParticella, RuoloPartita
+from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, AnagraficaSubject
 from app.services.catasto_comuni import get_catasto_comuni_lookup
 from app.services.elaborazioni_batches import infer_subject_kind, normalize_lookup_value
@@ -55,20 +56,37 @@ def _parcel_key(comune: str | None, foglio: object, particella: object, subalter
     )
 
 
-def load_ruolo_parcel_targets(db: Session) -> list[PerpetualSourceTarget]:
+def _latest_completed_import_id():
+    return (
+        select(RuoloImportJob.id)
+        .where(RuoloImportJob.status == "completed")
+        .order_by(
+            RuoloImportJob.anno_tributario.desc(),
+            RuoloImportJob.created_at.desc(),
+            RuoloImportJob.id.desc(),
+        )
+        .limit(1)
+        .scalar_subquery()
+    )
+
+
+def iter_ruolo_parcel_targets(db: Session) -> Iterator[PerpetualSourceTarget]:
     lookup = get_catasto_comuni_lookup(db)
     rows = db.execute(
         select(RuoloParticella, RuoloPartita.comune_nome)
         .join(RuoloPartita, RuoloPartita.id == RuoloParticella.partita_id)
+        .join(RuoloAvviso, RuoloAvviso.id == RuoloPartita.avviso_id)
+        .where(RuoloAvviso.import_job_id == _latest_completed_import_id())
         .order_by(RuoloParticella.anno_tributario.desc(), RuoloParticella.created_at.desc())
-    ).all()
-    targets: dict[str, PerpetualSourceTarget] = {}
+    ).yield_per(1_000)
+    seen: set[str] = set()
     for parcel, comune_nome in rows:
         key = _parcel_key(comune_nome, parcel.foglio, parcel.particella, parcel.subalterno)
-        if key in targets:
+        if key in seen:
             continue
+        seen.add(key)
         comune = lookup.get(normalize_lookup_value(comune_nome))
-        targets[key] = PerpetualSourceTarget(
+        yield PerpetualSourceTarget(
             scope=CatastoPerpetualSyncScope.RUOLO_PARTICELLA.value,
             target_key=key,
             priority=10,
@@ -84,12 +102,20 @@ def load_ruolo_parcel_targets(db: Session) -> list[PerpetualSourceTarget]:
             subalterno=_clean(parcel.subalterno),
             request_type="STORICA",
         )
-    return list(targets.values())
+
+
+def load_ruolo_parcel_targets(db: Session) -> list[PerpetualSourceTarget]:
+    return list(iter_ruolo_parcel_targets(db))
 
 
 def _subject_target(
-    *, scope: str, priority: int, subject_id: UUID | None, identifier: str | None,
-    name: str | None, updated_at: datetime | None,
+    *,
+    scope: str,
+    priority: int,
+    subject_id: UUID | None,
+    identifier: str | None,
+    name: str | None,
+    updated_at: datetime | None,
 ) -> PerpetualSourceTarget | None:
     normalized = (_clean(identifier) or "").upper()
     if not normalized:
@@ -108,7 +134,7 @@ def _subject_target(
     )
 
 
-def load_ruolo_subject_targets(db: Session) -> list[PerpetualSourceTarget]:
+def iter_ruolo_subject_targets(db: Session) -> Iterator[PerpetualSourceTarget]:
     rows = db.execute(
         select(
             RuoloAvviso.subject_id,
@@ -121,9 +147,10 @@ def load_ruolo_subject_targets(db: Session) -> list[PerpetualSourceTarget]:
         )
         .outerjoin(AnagraficaPerson, AnagraficaPerson.subject_id == RuoloAvviso.subject_id)
         .outerjoin(AnagraficaCompany, AnagraficaCompany.subject_id == RuoloAvviso.subject_id)
+        .where(RuoloAvviso.import_job_id == _latest_completed_import_id())
         .order_by(RuoloAvviso.anno_tributario.desc(), RuoloAvviso.updated_at.desc())
-    ).all()
-    targets: dict[str, PerpetualSourceTarget] = {}
+    ).yield_per(1_000)
+    seen: set[str] = set()
     for subject_id, raw_cf, name, updated_at, person_cf, company_cf, vat in rows:
         target = _subject_target(
             scope=CatastoPerpetualSyncScope.RUOLO_SOGGETTO.value,
@@ -133,43 +160,47 @@ def load_ruolo_subject_targets(db: Session) -> list[PerpetualSourceTarget]:
             name=name,
             updated_at=updated_at,
         )
-        if target is not None:
-            targets.setdefault(target.target_key, target)
-    return list(targets.values())
+        if target is not None and target.target_key not in seen:
+            seen.add(target.target_key)
+            yield target
 
 
-def load_consortium_parcel_targets(db: Session) -> list[PerpetualSourceTarget]:
+def load_ruolo_subject_targets(db: Session) -> list[PerpetualSourceTarget]:
+    return list(iter_ruolo_subject_targets(db))
+
+
+def iter_consortium_parcel_targets(db: Session) -> Iterator[PerpetualSourceTarget]:
     lookup = get_catasto_comuni_lookup(db)
     parcels = db.scalars(
         select(CatParticella)
         .where(CatParticella.is_current.is_(True), CatParticella.suppressed.is_(False))
         .order_by(CatParticella.updated_at.desc())
-    ).all()
-    targets: list[PerpetualSourceTarget] = []
+    ).yield_per(1_000)
     for parcel in parcels:
         comune = lookup.get(normalize_lookup_value(parcel.nome_comune or ""))
-        targets.append(
-            PerpetualSourceTarget(
-                scope=CatastoPerpetualSyncScope.CONSORZIO_PARTICELLA.value,
-                target_key=str(parcel.id),
-                priority=30,
-                search_mode="immobile",
-                source_updated_at=parcel.updated_at,
-                cat_particella_id=parcel.id,
-                comune=comune.nome if comune else _clean(parcel.nome_comune),
-                comune_codice=comune.codice_sister if comune else None,
-                catasto="Terreni",
-                sezione=_clean(parcel.sezione_catastale),
-                foglio=_clean(parcel.foglio),
-                particella=_clean(parcel.particella),
-                subalterno=_clean(parcel.subalterno),
-                request_type="STORICA",
-            )
+        yield PerpetualSourceTarget(
+            scope=CatastoPerpetualSyncScope.CONSORZIO_PARTICELLA.value,
+            target_key=str(parcel.id),
+            priority=30,
+            search_mode="immobile",
+            source_updated_at=parcel.updated_at,
+            cat_particella_id=parcel.id,
+            comune=comune.nome if comune else _clean(parcel.nome_comune),
+            comune_codice=comune.codice_sister if comune else None,
+            catasto="Terreni",
+            sezione=_clean(parcel.sezione_catastale),
+            foglio=_clean(parcel.foglio),
+            particella=_clean(parcel.particella),
+            subalterno=_clean(parcel.subalterno),
+            request_type="STORICA",
         )
-    return targets
 
 
-def load_registry_subject_targets(db: Session) -> list[PerpetualSourceTarget]:
+def load_consortium_parcel_targets(db: Session) -> list[PerpetualSourceTarget]:
+    return list(iter_consortium_parcel_targets(db))
+
+
+def iter_registry_subject_targets(db: Session) -> Iterator[PerpetualSourceTarget]:
     rows = db.execute(
         select(
             AnagraficaSubject,
@@ -180,8 +211,7 @@ def load_registry_subject_targets(db: Session) -> list[PerpetualSourceTarget]:
         .outerjoin(AnagraficaPerson, AnagraficaPerson.subject_id == AnagraficaSubject.id)
         .outerjoin(AnagraficaCompany, AnagraficaCompany.subject_id == AnagraficaSubject.id)
         .order_by(AnagraficaSubject.updated_at.desc())
-    ).all()
-    targets: list[PerpetualSourceTarget] = []
+    ).yield_per(1_000)
     for subject, person_cf, company_cf, vat in rows:
         target = _subject_target(
             scope=CatastoPerpetualSyncScope.ANAGRAFE_SOGGETTO.value,
@@ -192,16 +222,23 @@ def load_registry_subject_targets(db: Session) -> list[PerpetualSourceTarget]:
             updated_at=subject.updated_at,
         )
         if target is not None:
-            targets.append(target)
-    return targets
+            yield target
+
+
+def load_registry_subject_targets(db: Session) -> list[PerpetualSourceTarget]:
+    return list(iter_registry_subject_targets(db))
+
+
+def iter_enabled_targets(
+    db: Session, *, primary: bool, secondary: bool
+) -> Iterator[PerpetualSourceTarget]:
+    if primary:
+        yield from iter_ruolo_parcel_targets(db)
+        yield from iter_ruolo_subject_targets(db)
+    if secondary:
+        yield from iter_consortium_parcel_targets(db)
+        yield from iter_registry_subject_targets(db)
 
 
 def load_enabled_targets(db: Session, *, primary: bool, secondary: bool) -> list[PerpetualSourceTarget]:
-    targets: list[PerpetualSourceTarget] = []
-    if primary:
-        targets.extend(load_ruolo_parcel_targets(db))
-        targets.extend(load_ruolo_subject_targets(db))
-    if secondary:
-        targets.extend(load_consortium_parcel_targets(db))
-        targets.extend(load_registry_subject_targets(db))
-    return targets
+    return list(iter_enabled_targets(db, primary=primary, secondary=secondary))

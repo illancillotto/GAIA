@@ -23,6 +23,7 @@ Ambito runtime attuale:
 ## Dashboard operativa
 
 La pagina `/elaborazioni` usa una struttura a sezioni stabili:
+- il monitor `/elaborazioni/autosync` espone le campagne permanenti **Particelle a ruolo** e **Anagrafiche a ruolo** come elenchi distinti, completi e paginati; entrambe considerano soltanto l'ultimo Ruolo completato, mentre il caricamento progressivo non mescola gli scope e resta owner-scoped;
 - barra superiore con azioni rapide in linea
 - card rapide dedicate a `Visure` e `Pool operativo dedicato`, allineate visivamente agli altri ingressi del modulo
 - provider `Bonifica Oristanese` gestito nello stesso workspace `Credenziali`, con CRUD account e test autenticazione Laravel
@@ -77,8 +78,8 @@ La pagina `/elaborazioni` usa una struttura a sezioni stabili:
 - `GET /elaborazioni/portal-health` restituisce gli aggregati per finestre da 1 a 720 ore; `GET /elaborazioni/portal-health/events` espone fino a 200 eventi recenti e applica lo stesso filtro sul `current_user`
 - gli eventi SISTER sono fail-open: un errore di persistenza della telemetria non interrompe il worker; URL completi, query string, password, CAPTCHA e dati catastali non vengono memorizzati
 - la dashboard `/elaborazioni` mostra KPI runtime aggregati letti da `GET /elaborazioni/metrics`: throughput ultime 24h, volumetria 7 giorni, success rate, tempo medio richiesta/batch, ultimo processato e stato finestra operativa
-- in alto la dashboard espone la sezione `Autosync automatici`, che centralizza i toggle operativi per `Visure NAS`, `ANPR batch`, `AutoSync visure a ruolo`, `WhiteCompany daily` e `WhiteCompany Operazioni live`
-- il workspace visure espone la sincronizzazione catastale continua: pool multi-credenziale filtrato per finestra e lease, micro-batch prioritari per particelle/soggetti a ruolo e copertura secondaria di patrimonio consortile/anagrafe, con SLA e conteggi per scope configurabili
+- in alto la dashboard espone la sezione `Autosync automatici`, che centralizza i toggle operativi per `Visure NAS`, `ANPR batch`, `AutoSync visure a ruolo`, `WhiteCompany daily` e `WhiteCompany Operazioni live`; il quadro `Operazioni in corso` espone l'azione `Apri monitor attività`, diretta a `/elaborazioni/autosync` anche quando non ci sono lavorazioni attive
+- il workspace visure espone la sincronizzazione catastale continua: due campagne permanenti e separate per particelle a ruolo e anagrafiche a ruolo, elaborate in sequenza e con retry manuale dei fallimenti; il limite per ciclo resta un dettaglio tecnico di throughput, mentre la copertura secondaria di patrimonio consortile/anagrafe mantiene configurazione e priorità distinte
 - `GET /elaborazioni/auto-job-controls` restituisce l’elenco aggregato dei controlli automatici mostrati in dashboard, mentre `PUT /elaborazioni/auto-job-controls/{control_key}` permette agli admin di attivare o disattivare ogni job dalla stessa sezione
 - per `Visure NAS`, `WhiteCompany daily` e `WhiteCompany Operazioni live` il toggle dashboard viene persistito su tabella `elaborazione_auto_job_configs` e prevale sul default ambiente dopo il primo salvataggio, cosi il backend puo fermare o riattivare il job senza cambiare `.env`
 - `WhiteCompany Operazioni live` sincronizza automaticamente `reports`, `taken_charge`, `warehouse_requests` e `refuels` ogni 60 minuti nella finestra `06:00`-`21:00` locale di default; la schedulazione usa `WC_SYNC_OPERAZIONI_LIVE_START_HOUR`, `WC_SYNC_OPERAZIONI_LIVE_END_HOUR`, `WC_SYNC_OPERAZIONI_LIVE_TIMEZONE` e `WC_SYNC_OPERAZIONI_LIVE_LOOKBACK_DAYS`

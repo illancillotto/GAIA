@@ -20,6 +20,10 @@ describe("ActiveOperationsOverview", () => {
   it("spiega chiaramente lo stato vuoto senza polling", () => {
     render(<ActiveOperationsOverview attentionCount={0} isLive={false} onOpen={vi.fn()} operations={[]} />);
 
+    expect(screen.getByRole("link", { name: "Apri monitor attività" })).toHaveAttribute(
+      "href",
+      "/elaborazioni/autosync",
+    );
     expect(screen.getByRole("heading", { name: "Nessuna lavorazione in corso" })).toBeInTheDocument();
     expect(screen.getByText("Il quadro si aggiorna quando torni su questa pagina.")).toBeInTheDocument();
     expect(screen.getByText("Nessun problema")).toBeInTheDocument();

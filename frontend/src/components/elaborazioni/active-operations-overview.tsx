@@ -1,5 +1,6 @@
 "use client";
 
+import { AutoSyncMonitorLink } from "@/components/elaborazioni/autosync-monitor-link";
 import { ChevronRightIcon, RefreshIcon } from "@/components/ui/icons";
 import { formatDateTime } from "@/lib/presentation";
 
@@ -100,6 +101,7 @@ export function ActiveOperationsOverview({ attentionCount, isLive, onOpen, opera
           </p>
         </div>
         <div className="flex flex-wrap gap-2 md:max-w-[260px] md:justify-end">
+          <AutoSyncMonitorLink />
           <span className="rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold ring-1 ring-white/25">
             {operations.length} attive
           </span>

@@ -436,6 +436,7 @@ class CatastoRuoloAutoSyncConfig(Base):
         index=True,
     )
     credential_ids: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    credential_profiles: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     primary_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     secondary_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     role_parcel_refresh_hours: Mapped[int] = mapped_column(Integer, default=168, nullable=False)

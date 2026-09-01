@@ -622,7 +622,9 @@ describe("ElaborazioniSettingsWorkspace SISTER integration", () => {
       schedule_enabled: true,
       availability_schedule: {
         timezone: "Europe/Rome",
-        weekly: { "0": [{ start: "18:00", end: "08:00" }] },
+        weekly: Object.fromEntries(
+          Array.from({ length: 7 }, (_, day) => [String(day), [{ start: "18:00", end: "08:00" }]]),
+        ),
       },
     });
     apiMocks.getElaborazioneCredentials.mockResolvedValue({

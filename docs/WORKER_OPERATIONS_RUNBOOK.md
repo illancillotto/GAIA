@@ -36,10 +36,15 @@ ha misurato p95 `64,773 ms` prima e `18,367 ms` dopo gli indici della migrazione
 `20260827_0900`, su 25 campioni e senza persistere la migrazione nel DB locale.
 
 Dal `2026-08-28` lo scheduler usa il planner catastale continuo. Mantiene lo
-stesso advisory lock per utente, genera micro-batch `perpetual_sync`, filtra
-l'allowlist SISTER per finestra settimanale e lease globale e materializza le
-quattro sorgenti al massimo ogni 15 minuti. Gli SLA e la dimensione del batch
-sono configurabili dalla UI visure. Il runbook di dominio e
+stesso advisory lock per utente, genera esecuzioni tecniche `perpetual_sync`,
+filtra l'allowlist SISTER per finestra settimanale e lease globale e
+materializza le sorgenti al massimo ogni 15 minuti. L'unica campagna permanente
+a ruolo e elaborata in due fasi: prima particelle, poi anagrafiche. Gli item
+completati vengono riaperti soltanto quando cambia la sorgente; gli scope
+secondari restano configurabili e successivi. I prelievi tecnici sono interni
+e non frammentano la campagna visibile. Ogni credenziale ha un profilo AutoSync
+separato dagli orari globali; la disattivazione viene applicata tra due visure,
+con logout e rilascio lease senza fermare batch manuali. Il runbook di dominio e
 `domain-docs/elaborazioni/docs/CATASTO_CONTINUOUS_SYNC.md`.
 
 ## Lease Presenze
@@ -82,10 +87,11 @@ Non avviare contemporaneamente timer legacy e servizio Compose.
 
 1. Salvare un backup, verificare una sola head Alembic e applicare le
    migrazioni additive fino a `head`. Nel checkout corrente la head e
-   `20260828_0900`; le revisioni del redesign worker sono `20260827_0900` e
+   `20260901_1100`; le revisioni del redesign worker sono `20260827_0900` e
    `20260827_1000`, mentre `20260827_1100` aggiunge l'allowlist credenziali
    batch usata dallo stesso runtime SISTER; `20260828_0900` aggiunge planner,
-   scope, SLA e coda persistita della sincronizzazione continua.
+   scope, SLA e coda persistita della sincronizzazione continua;
+   `20260901_1100` aggiunge i profili credenziale dedicati ad AutoSync.
 2. Verificare che il timer Gate Mobile legacy sia disabilitato.
 3. Ricreare `backend` con scheduler API disabilitati.
 4. Avviare un solo `platform-scheduler` e verificare il suo healthcheck.
@@ -110,9 +116,9 @@ Eseguire i gruppi coverage separatamente, sempre con branch coverage e soglia
 ```bash
 cd backend
 .venv/bin/python -m pytest tests/test_bootstrap_admin.py tests/test_main_lifespan_scheduler.py tests/test_platform_scheduler_runner.py --cov=app.main --cov=app.platform_scheduler_runner --cov-branch --cov-fail-under=100
-.venv/bin/python -m pytest tests/test_elaborazioni_api.py -k ruolo_autosync --cov=app --cov-branch --cov-report=
+.venv/bin/python -m pytest tests/test_elaborazioni_api.py -k 'ruolo_autosync or perpetual_campaign or perpetual_source or perpetual_reconcile' --cov=app --cov-branch --cov-report=
 .venv/bin/python -m pytest tests/ruolo/test_tributi_api.py::test_tributi_calculation_policy_crud_validates_active_year_ranges --cov=app --cov-branch --cov-append --cov-report=
-.venv/bin/python -m coverage report --include='app/models/catasto.py,app/modules/ruolo/models.py,app/services/elaborazioni_ruolo_autosync.py' --fail-under=100
+.venv/bin/python -m coverage report --include='app/models/catasto.py,app/modules/elaborazioni/autosync_campaign_routes.py,app/modules/ruolo/models.py,app/services/elaborazioni_perpetual_sources.py,app/services/elaborazioni_perpetual_sync.py,app/services/elaborazioni_ruolo_autosync.py' --fail-under=100
 .venv/bin/python -m pytest tests/test_presenze_queue_worker.py tests/test_presenze_sync_runtime.py tests/test_presenze_sync_worker.py --cov=app --cov-branch --cov-report=
 .venv/bin/python -m coverage report --include='app/modules/presenze/models.py,app/modules/presenze/sync_models.py,app/modules/presenze/services/queue_worker.py,app/modules/presenze/services/sync_runtime.py,app/modules/presenze/services/sync_worker.py' --fail-under=100
 .venv/bin/python -m pytest tests/test_gate_mobile_sync_runner.py --cov=app.scripts.gate_mobile_sync_runner --cov-branch --cov-fail-under=100

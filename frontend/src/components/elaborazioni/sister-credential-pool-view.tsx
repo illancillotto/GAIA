@@ -9,7 +9,11 @@ import {
   type SisterCredentialTestProgress,
 } from "@/lib/sister-credential-tests";
 import type { ElaborazioneCredential, ElaborazioneCredentialTestResult } from "@/types/api";
-import { nextSisterAvailability, sisterCredentialIsAvailable } from "@/components/elaborazioni/sister-availability-schedule";
+import {
+  formatSisterSchedule,
+  nextSisterAvailability,
+  sisterCredentialIsAvailable,
+} from "@/components/elaborazioni/sister-availability-schedule";
 
 export type SisterCredentialPoolViewProps = {
   credentials: ElaborazioneCredential[];
@@ -139,12 +143,14 @@ function CredentialDetails({ credential }: { credential: ElaborazioneCredential 
       : nextAvailability
         ? `Disponibile ${nextAvailability.toLocaleString("it-IT", { timeZone: "Europe/Rome", weekday: "short", hour: "2-digit", minute: "2-digit" })}`
         : "Nessuna fascia disponibile";
+  const scheduleLabel = formatSisterSchedule(scheduleEnabled, availabilitySchedule);
   return <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-gray-100 py-3 text-xs">
     <div className="min-w-0"><dt className="font-semibold uppercase tracking-[0.12em] text-[9px] text-gray-400">Convenzione</dt><dd className="mt-1 truncate text-gray-700" title={credential.convenzione ?? undefined}>{credential.convenzione || "Non indicata"}</dd></div>
     <div className="min-w-0"><dt className="font-semibold uppercase tracking-[0.12em] text-[9px] text-gray-400">Codice richiesta</dt><dd className="mt-1 truncate font-mono text-gray-700">{credential.codice_richiesta || "Non indicato"}</dd></div>
     <div className="min-w-0"><dt className="font-semibold uppercase tracking-[0.12em] text-[9px] text-gray-400">Ufficio</dt><dd className="mt-1 truncate text-gray-700">{credential.ufficio_provinciale}</dd></div>
     <div className="min-w-0"><dt className="font-semibold uppercase tracking-[0.12em] text-[9px] text-gray-400">Ultima verifica</dt><dd className="mt-1 truncate text-gray-700">{formatDateTime(credential.verified_at)}</dd></div>
     <div className="col-span-2 min-w-0"><dt className="font-semibold uppercase tracking-[0.12em] text-[9px] text-gray-400">Utilizzo automatico</dt><dd className={`mt-1 font-semibold ${availableNow ? "text-emerald-700" : "text-amber-800"}`}>{availabilityLabel}</dd></div>
+    <div className="col-span-2 min-w-0"><dt className="font-semibold uppercase tracking-[0.12em] text-[9px] text-gray-400">Fasce orarie</dt><dd className="mt-1 line-clamp-2 text-gray-700" title={scheduleLabel}>{scheduleLabel}</dd></div>
   </dl>;
 }
 

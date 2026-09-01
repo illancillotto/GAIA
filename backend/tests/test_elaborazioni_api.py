@@ -54,18 +54,21 @@ from app.services.elaborazioni_ruolo_autosync import (
     recover_stale_pending_ruolo_autosync_batches,
 )
 from app.services.elaborazioni_perpetual_sync import (
+    _autosync_schedule,
     available_perpetual_credentials,
     ensure_perpetual_sync_batch,
     maintain_perpetual_sync,
     perpetual_sync_counts,
     reconcile_perpetual_sync_items,
     refresh_perpetual_sync_sources,
+    retry_perpetual_sync_failures,
 )
 from app.services.elaborazioni_perpetual_sources import (
     PerpetualSourceTarget,
     _subject_target,
-    load_ruolo_parcel_targets,
     load_enabled_targets,
+    load_ruolo_parcel_targets,
+    load_ruolo_subject_targets,
 )
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
@@ -2319,12 +2322,14 @@ def test_ruolo_autosync_config_validation_and_missing_config_fallback() -> None:
                 CatastoRuoloAutoSyncConfigUpdateRequest(credential_id=inactive.id),
             )
 
-        with pytest.raises(ValueError, match="devi selezionare"):
-            autosync_module.update_ruolo_autosync_config(
-                db,
-                user.id,
-                CatastoRuoloAutoSyncConfigUpdateRequest(enabled=True),
-            )
+        waiting_for_credentials = autosync_module.update_ruolo_autosync_config(
+            db,
+            user.id,
+            CatastoRuoloAutoSyncConfigUpdateRequest(enabled=True),
+        )
+        assert waiting_for_credentials.enabled is True
+        waiting_for_credentials.enabled = False
+        db.commit()
 
         config.enabled = True
         config.credential_id = uuid4()
@@ -2662,11 +2667,234 @@ def test_continuous_sync_uses_only_open_unleased_credentials() -> None:
         assert [item.id for item in available_perpetual_credentials(db, config)] == [
             credential.id
         ]
+
+        config.credential_profiles = {
+            credential_id: {
+                "enabled": True,
+                "schedule_enabled": False,
+                "availability_schedule": None,
+            }
+        }
+        credential.schedule_enabled = True
+        credential.availability_schedule = {"weekly": {}}
+        db.commit()
+        assert [item.id for item in available_perpetual_credentials(db, config)] == [
+            credential.id
+        ]
+
+        config.credential_profiles = {
+            credential_id: {
+                "enabled": True,
+                "schedule_enabled": True,
+                "availability_schedule": {"weekly": {}},
+            }
+        }
+        db.commit()
+        assert available_perpetual_credentials(db, config) == []
+
+        config.credential_profiles = {
+            credential_id: {
+                "enabled": False,
+                "schedule_enabled": False,
+                "availability_schedule": None,
+            }
+        }
+        db.commit()
+        assert _autosync_schedule(config, credential) == (True, None)
+        assert available_perpetual_credentials(db, config) == []
     finally:
         db.close()
 
 
-def test_continuous_sync_creates_mixed_priority_batch_and_reschedules() -> None:
+def test_autosync_profiles_update_active_pool_and_off_releases_only_autosync() -> None:
+    user_id, credential_id = _seed_ruolo_autosync_fixture()
+    profile = {
+        "enabled": True,
+        "schedule_enabled": False,
+        "availability_schedule": None,
+    }
+    response = client.put(
+        "/elaborazioni/ruolo-autosync/config",
+        headers=auth_headers(),
+        json={
+            "enabled": True,
+            "credential_ids": [],
+            "credential_profiles": {credential_id: profile},
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["credential_profiles"][credential_id] == profile
+    assert response.json()["credential_ids"] == [credential_id]
+
+    invalid_schedule = client.put(
+        "/elaborazioni/ruolo-autosync/config",
+        headers=auth_headers(),
+        json={
+            "credential_profiles": {
+                credential_id: {"enabled": True, "schedule_enabled": True}
+            }
+        },
+    )
+    assert invalid_schedule.status_code == 422
+
+    missing_credential = client.put(
+        "/elaborazioni/ruolo-autosync/config",
+        headers=auth_headers(),
+        json={
+            "credential_profiles": {
+                str(uuid4()): {
+                    "enabled": True,
+                    "schedule_enabled": False,
+                    "availability_schedule": None,
+                }
+            }
+        },
+    )
+    assert missing_credential.status_code == 409
+
+    assert client.put(
+        "/elaborazioni/ruolo-autosync/config",
+        headers=auth_headers(),
+        json={"enabled": False},
+    ).status_code == 200
+    assert client.put(
+        "/elaborazioni/ruolo-autosync/config",
+        headers=auth_headers(),
+        json={"enabled": True, "credential_profiles": {credential_id: profile}},
+    ).status_code == 200
+
+    db = TestingSessionLocal()
+    try:
+        manual = CatastoBatch(
+            user_id=user_id,
+            name="Manuale",
+            batch_kind="manual_batch",
+            status="processing",
+            total_items=0,
+        )
+        autosync = CatastoBatch(
+            user_id=user_id,
+            name="AutoSync",
+            batch_kind="perpetual_sync",
+            status="processing",
+            total_items=2,
+            credential_ids=[credential_id],
+        )
+        db.add_all([manual, autosync])
+        db.flush()
+        autosync_request = CatastoVisuraRequest(
+            batch_id=autosync.id,
+            user_id=user_id,
+            row_index=1,
+            comune="Oristano",
+            foglio="1",
+            particella="1",
+            tipo_visura="Sintetica",
+            status=CatastoVisuraRequestStatus.PROCESSING.value,
+        )
+        completed_request = CatastoVisuraRequest(
+            batch_id=autosync.id,
+            user_id=user_id,
+            row_index=2,
+            comune="Oristano",
+            foglio="1",
+            particella="2",
+            tipo_visura="Sintetica",
+            status=CatastoVisuraRequestStatus.COMPLETED.value,
+        )
+        db.add_all([autosync_request, completed_request])
+        db.commit()
+        manual_id, autosync_id, autosync_request_id = manual.id, autosync.id, autosync_request.id
+    finally:
+        db.close()
+
+    disabled_profile = {**profile, "enabled": False}
+    response = client.put(
+        "/elaborazioni/ruolo-autosync/config",
+        headers=auth_headers(),
+        json={"credential_profiles": {credential_id: disabled_profile}},
+    )
+    assert response.status_code == 200
+
+    db = TestingSessionLocal()
+    try:
+        assert db.get(CatastoBatch, autosync_id).credential_ids == []
+        assert db.get(CatastoBatch, manual_id).status == "processing"
+    finally:
+        db.close()
+
+    response = client.put(
+        "/elaborazioni/ruolo-autosync/config",
+        headers=auth_headers(),
+        json={"enabled": False},
+    )
+    assert response.status_code == 200
+
+    db = TestingSessionLocal()
+    try:
+        assert db.get(CatastoBatch, autosync_id).status == "processing"
+        assert db.get(CatastoBatch, autosync_id).current_operation == RELEASE_REQUESTED_OPERATION
+        assert db.get(CatastoBatch, manual_id).status == "processing"
+        released = db.get(CatastoVisuraRequest, autosync_request_id)
+        assert released.status == CatastoVisuraRequestStatus.PROCESSING.value
+        assert released.current_operation is None
+        assert released.error_message is None
+        released.status = CatastoVisuraRequestStatus.COMPLETED.value
+        active_batch = db.get(CatastoBatch, autosync_id)
+        active_batch.status = CatastoBatchStatus.COMPLETED.value
+        db.commit()
+    finally:
+        db.close()
+
+    assert client.put(
+        "/elaborazioni/ruolo-autosync/config",
+        headers=auth_headers(),
+        json={"enabled": True},
+    ).status_code == 200
+    db = TestingSessionLocal()
+    try:
+        pending_batch = CatastoBatch(
+            user_id=user_id,
+            name="AutoSync in attesa",
+            batch_kind="perpetual_sync",
+            status="processing",
+            total_items=1,
+            credential_ids=[credential_id],
+        )
+        db.add(pending_batch)
+        db.flush()
+        pending_request = CatastoVisuraRequest(
+            batch_id=pending_batch.id,
+            user_id=user_id,
+            row_index=1,
+            comune="Oristano",
+            foglio="1",
+            particella="3",
+            tipo_visura="Sintetica",
+            status=CatastoVisuraRequestStatus.PENDING.value,
+        )
+        db.add(pending_request)
+        db.commit()
+        pending_batch_id, pending_request_id = pending_batch.id, pending_request.id
+    finally:
+        db.close()
+
+    assert client.put(
+        "/elaborazioni/ruolo-autosync/config",
+        headers=auth_headers(),
+        json={"enabled": False},
+    ).status_code == 200
+    db = TestingSessionLocal()
+    try:
+        assert db.get(CatastoBatch, pending_batch_id).status == CatastoBatchStatus.CANCELLED.value
+        pending_request = db.get(CatastoVisuraRequest, pending_request_id)
+        assert pending_request.status == CatastoVisuraRequestStatus.SKIPPED.value
+        assert pending_request.current_operation == RELEASE_REQUESTED_OPERATION
+    finally:
+        db.close()
+
+
+def test_continuous_sync_processes_permanent_role_campaigns_sequentially() -> None:
     user_id, credential_id = _seed_ruolo_autosync_fixture()
     config_response = client.put(
         "/elaborazioni/ruolo-autosync/config",
@@ -2699,12 +2927,13 @@ def test_continuous_sync_creates_mixed_priority_batch_and_reschedules() -> None:
         )
         assert batch.credential_id is None
         assert batch.credential_ids == [credential_id]
-        assert [request.search_mode for request in requests] == ["immobile", "soggetto"]
+        assert [request.search_mode for request in requests] == ["immobile"]
 
         completed_at = datetime.now(UTC)
-        for request in requests:
-            request.status = CatastoVisuraRequestStatus.COMPLETED.value
-            request.processed_at = completed_at
+        requests[0].status = CatastoVisuraRequestStatus.COMPLETED.value
+        requests[0].processed_at = completed_at
+        batch.status = CatastoBatchStatus.COMPLETED.value
+        batch.completed_at = completed_at
         config = db.query(CatastoRuoloAutoSyncConfig).filter_by(user_id=user_id).one()
         db.commit()
         reconcile_perpetual_sync_items(db, config)
@@ -2714,9 +2943,25 @@ def test_continuous_sync_creates_mixed_priority_batch_and_reschedules() -> None:
             .order_by(CatastoPerpetualSyncItem.priority)
             .all()
         )
+        assert [item.status for item in items] == ["completed", "pending"]
+        assert items[0].next_due_at.replace(tzinfo=UTC) == completed_at
+
+        subject_batch = ensure_perpetual_sync_batch(db, config)
+        assert subject_batch is not None
+        subject_requests = (
+            db.query(CatastoVisuraRequest)
+            .filter_by(batch_id=subject_batch.id)
+            .order_by(CatastoVisuraRequest.row_index)
+            .all()
+        )
+        assert [request.search_mode for request in subject_requests] == ["soggetto"]
+        subject_requests[0].status = CatastoVisuraRequestStatus.COMPLETED.value
+        subject_requests[0].processed_at = completed_at
+        subject_batch.status = CatastoBatchStatus.COMPLETED.value
+        subject_batch.completed_at = completed_at
+        db.commit()
+        reconcile_perpetual_sync_items(db, config)
         assert [item.status for item in items] == ["completed", "completed"]
-        assert items[0].next_due_at.replace(tzinfo=UTC) >= completed_at + timedelta(hours=23)
-        assert items[1].next_due_at.replace(tzinfo=UTC) >= completed_at + timedelta(hours=47)
     finally:
         db.close()
 
@@ -2741,7 +2986,7 @@ def test_perpetual_source_refresh_reopens_updates_and_disables(monkeypatch: pyte
             )
 
         monkeypatch.setattr(
-            "app.services.elaborazioni_perpetual_sync.load_enabled_targets",
+            "app.services.elaborazioni_perpetual_sync.iter_enabled_targets",
             lambda *_args, **_kwargs: [target(first_at)],
         )
         assert refresh_perpetual_sync_sources(db, config) == {
@@ -2753,7 +2998,7 @@ def test_perpetual_source_refresh_reopens_updates_and_disables(monkeypatch: pyte
         db.commit()
 
         monkeypatch.setattr(
-            "app.services.elaborazioni_perpetual_sync.load_enabled_targets",
+            "app.services.elaborazioni_perpetual_sync.iter_enabled_targets",
             lambda *_args, **_kwargs: [target(first_at + timedelta(hours=1))],
         )
         assert refresh_perpetual_sync_sources(db, config)["updated"] == 1
@@ -2762,7 +3007,7 @@ def test_perpetual_source_refresh_reopens_updates_and_disables(monkeypatch: pyte
         assert refresh_perpetual_sync_sources(db, config)["updated"] == 1
 
         monkeypatch.setattr(
-            "app.services.elaborazioni_perpetual_sync.load_enabled_targets",
+            "app.services.elaborazioni_perpetual_sync.iter_enabled_targets",
             lambda *_args, **_kwargs: [],
         )
         assert refresh_perpetual_sync_sources(db, config)["disabled"] == 1
@@ -2770,7 +3015,7 @@ def test_perpetual_source_refresh_reopens_updates_and_disables(monkeypatch: pyte
         assert item.status == "disabled"
 
         monkeypatch.setattr(
-            "app.services.elaborazioni_perpetual_sync.load_enabled_targets",
+            "app.services.elaborazioni_perpetual_sync.iter_enabled_targets",
             lambda *_args, **_kwargs: [target(first_at + timedelta(hours=1))],
         )
         assert refresh_perpetual_sync_sources(db, config)["updated"] == 1
@@ -2779,7 +3024,7 @@ def test_perpetual_source_refresh_reopens_updates_and_disables(monkeypatch: pyte
         assert item.retry_after is None
 
         monkeypatch.setattr(
-            "app.services.elaborazioni_perpetual_sync.load_enabled_targets",
+            "app.services.elaborazioni_perpetual_sync.iter_enabled_targets",
             lambda *_args, **_kwargs: [],
         )
         item.status = "queued"
@@ -2827,16 +3072,33 @@ def test_perpetual_reconcile_handles_request_states_and_missing_request() -> Non
         db.refresh(item)
         assert item.status == "pending"
         assert item.retry_after is not None
+        first_retry_after = item.retry_after
+        reconcile_perpetual_sync_items(db, config)
+        db.refresh(item)
+        assert item.retry_after == first_retry_after
 
         request.status = CatastoVisuraRequestStatus.SKIPPED.value
         request.last_error_code = "session_timeout"
         db.commit()
         reconcile_perpetual_sync_items(db, config)
         db.refresh(item)
-        assert item.retry_after.replace(tzinfo=UTC) > datetime.now(UTC) + timedelta(hours=5)
+        assert item.status == "skipped"
+        assert item.retry_after is None
+
+        request.current_operation = RELEASE_REQUESTED_OPERATION
+        request.error_message = RELEASE_REQUESTED_MESSAGE
+        item.status = "queued"
+        db.commit()
+        reconcile_perpetual_sync_items(db, config)
+        db.refresh(item)
+        assert item.status == "pending"
+        assert item.linked_batch_id is None
+        assert item.linked_request_id is None
 
         request.status = "custom_terminal_state"
         item.status = "processing"
+        item.linked_batch_id = request.batch_id
+        item.linked_request_id = request.id
         db.commit()
         reconcile_perpetual_sync_items(db, config)
         db.refresh(item)
@@ -2852,6 +3114,357 @@ def test_perpetual_reconcile_handles_request_states_and_missing_request() -> Non
         reconcile_perpetual_sync_items(db, config)
         db.refresh(item)
         assert item.status == "completed"
+    finally:
+        db.close()
+
+
+def test_perpetual_campaigns_process_role_parcels_before_role_subjects() -> None:
+    user_id, credential_id = _seed_ruolo_autosync_fixture()
+    db = TestingSessionLocal()
+    try:
+        config = CatastoRuoloAutoSyncConfig(
+            user_id=user_id, enabled=True, credential_ids=[credential_id],
+            primary_enabled=True, secondary_enabled=False, batch_size=20,
+        )
+        db.add(config)
+        now = datetime.now(UTC)
+        db.add_all([
+            CatastoPerpetualSyncItem(
+                user_id=user_id, scope="ruolo_particella", target_key="oristano|12|603|",
+                priority=10, search_mode="immobile", comune="Oristano",
+                comune_codice="G113#ORISTANO#5#5", catasto="Terreni", foglio="12",
+                particella="603", request_type="STORICA", next_due_at=now,
+            ),
+            CatastoPerpetualSyncItem(
+                user_id=user_id, scope="ruolo_soggetto", target_key="RSSMRA80A01H501U",
+                priority=20, search_mode="soggetto", subject_kind="PF",
+                subject_identifier="RSSMRA80A01H501U", request_type="ATTUALITA",
+                next_due_at=now,
+            ),
+        ])
+        db.commit()
+
+        first = ensure_perpetual_sync_batch(db, config)
+        assert first is not None
+        first_requests = db.query(CatastoVisuraRequest).filter_by(batch_id=first.id).all()
+        assert [request.search_mode for request in first_requests] == ["immobile"]
+
+        first_requests[0].status = CatastoVisuraRequestStatus.COMPLETED.value
+        first_requests[0].processed_at = now
+        first.status = CatastoBatchStatus.COMPLETED.value
+        first.completed_at = now
+        db.commit()
+        reconcile_perpetual_sync_items(db, config)
+
+        second = ensure_perpetual_sync_batch(db, config)
+        assert second is not None
+        second_requests = db.query(CatastoVisuraRequest).filter_by(batch_id=second.id).all()
+        assert [request.search_mode for request in second_requests] == ["soggetto"]
+    finally:
+        db.close()
+
+
+def test_perpetual_planner_ignores_other_users_active_campaign_batch() -> None:
+    user_id, credential_id = _seed_ruolo_autosync_fixture()
+    db = TestingSessionLocal()
+    try:
+        other = db.query(ApplicationUser).filter_by(username="elaborazioni-super-admin").one()
+        now = datetime.now(UTC)
+        config = CatastoRuoloAutoSyncConfig(
+            user_id=user_id,
+            enabled=True,
+            credential_ids=[credential_id],
+            primary_enabled=True,
+            secondary_enabled=False,
+            batch_size=20,
+        )
+        db.add_all(
+            [
+                config,
+                CatastoBatch(
+                    user_id=other.id,
+                    name="Other user AutoSync",
+                    batch_kind="perpetual_sync",
+                    status="pending",
+                    total_items=1,
+                ),
+                CatastoPerpetualSyncItem(
+                    user_id=user_id,
+                    scope="ruolo_particella",
+                    target_key="owner-parcel",
+                    priority=10,
+                    search_mode="immobile",
+                    comune="Oristano",
+                    comune_codice="G113#ORISTANO#5#5",
+                    catasto="Terreni",
+                    foglio="12",
+                    particella="603",
+                    request_type="STORICA",
+                    next_due_at=now,
+                ),
+            ]
+        )
+        db.commit()
+
+        batch = ensure_perpetual_sync_batch(db, config)
+
+        assert batch is not None
+        assert batch.user_id == user_id
+    finally:
+        db.close()
+
+
+def test_perpetual_planner_waits_when_campaign_items_are_not_due() -> None:
+    user_id, credential_id = _seed_ruolo_autosync_fixture()
+    db = TestingSessionLocal()
+    try:
+        config = CatastoRuoloAutoSyncConfig(
+            user_id=user_id, enabled=True, credential_ids=[credential_id],
+            primary_enabled=True, secondary_enabled=False,
+        )
+        db.add(config)
+        db.add(CatastoPerpetualSyncItem(
+            user_id=user_id, scope="ruolo_particella", target_key="oristano|12|603|",
+            priority=10, search_mode="immobile", comune="Oristano",
+            comune_codice="G113#ORISTANO#5#5", catasto="Terreni", foglio="12",
+            particella="603", request_type="STORICA",
+            next_due_at=datetime.now(UTC) + timedelta(hours=1),
+        ))
+        db.commit()
+
+        assert ensure_perpetual_sync_batch(db, config) is None
+    finally:
+        db.close()
+
+
+def test_perpetual_secondary_scopes_remain_processable_after_role_campaigns() -> None:
+    user_id, credential_id = _seed_ruolo_autosync_fixture()
+    db = TestingSessionLocal()
+    try:
+        config = CatastoRuoloAutoSyncConfig(
+            user_id=user_id, enabled=True, credential_ids=[credential_id],
+            primary_enabled=False, secondary_enabled=True, batch_size=20,
+        )
+        db.add(config)
+        db.add(CatastoPerpetualSyncItem(
+            user_id=user_id, scope="consorzio_particella", target_key="oristano|12|603|",
+            priority=30, search_mode="immobile", comune="Oristano",
+            comune_codice="G113#ORISTANO#5#5", catasto="Terreni", foglio="12",
+            particella="603", request_type="STORICA", next_due_at=datetime.now(UTC),
+        ))
+        db.commit()
+
+        batch = ensure_perpetual_sync_batch(db, config)
+
+        assert batch is not None
+        requests = db.query(CatastoVisuraRequest).filter_by(batch_id=batch.id).all()
+        assert [request.search_mode for request in requests] == ["immobile"]
+    finally:
+        db.close()
+
+
+def test_perpetual_failures_stop_after_three_attempts_and_manual_retry_requeues() -> None:
+    user_id, credential_id = _seed_ruolo_autosync_fixture()
+    db = TestingSessionLocal()
+    try:
+        config = CatastoRuoloAutoSyncConfig(
+            user_id=user_id, enabled=True, credential_ids=[credential_id],
+            primary_enabled=True, secondary_enabled=False,
+        )
+        db.add(config)
+        item = CatastoPerpetualSyncItem(
+            user_id=user_id, scope="ruolo_particella", target_key="oristano|12|603|",
+            priority=10, search_mode="immobile", comune="Oristano",
+            comune_codice="G113#ORISTANO#5#5", catasto="Terreni", foglio="12",
+            particella="603", request_type="STORICA", next_due_at=datetime.now(UTC),
+        )
+        db.add(item)
+        db.commit()
+        batch = ensure_perpetual_sync_batch(db, config)
+        assert batch is not None
+        request = db.query(CatastoVisuraRequest).filter_by(batch_id=batch.id).one()
+        request.status = CatastoVisuraRequestStatus.FAILED.value
+        request.attempts = 3
+        request.error_message = "errore tecnico"
+        request.last_error_code = "sister_timeout"
+        db.commit()
+
+        reconcile_perpetual_sync_items(db, config)
+        db.refresh(item)
+        assert item.status == "failed"
+        assert item.attempt_count == 3
+        assert item.retry_after is None
+
+        response = client.post(
+            "/elaborazioni/ruolo-autosync/campaigns/ruolo_particella/retry-failed",
+            headers=auth_headers(),
+        )
+        assert response.status_code == 200
+        assert response.json()["message"].startswith("1 elementi falliti rimessi in coda")
+        db.refresh(item)
+        assert item.status == "pending"
+        assert item.attempt_count == 0
+        assert item.linked_batch_id is None
+        assert item.linked_request_id is None
+        assert item.last_error_message is None
+    finally:
+        db.close()
+
+
+def test_perpetual_skipped_items_are_terminal_without_automatic_retry() -> None:
+    user_id, credential_id = _seed_ruolo_autosync_fixture()
+    db = TestingSessionLocal()
+    try:
+        config = CatastoRuoloAutoSyncConfig(
+            user_id=user_id, enabled=True, credential_ids=[credential_id],
+            primary_enabled=True, secondary_enabled=False,
+        )
+        db.add(config)
+        item = CatastoPerpetualSyncItem(
+            user_id=user_id, scope="ruolo_particella", target_key="oristano|12|603|",
+            priority=10, search_mode="immobile", comune="Oristano",
+            comune_codice="G113#ORISTANO#5#5", catasto="Terreni", foglio="12",
+            particella="603", request_type="STORICA", next_due_at=datetime.now(UTC),
+        )
+        db.add(item)
+        db.commit()
+        batch = ensure_perpetual_sync_batch(db, config)
+        assert batch is not None
+        request = db.query(CatastoVisuraRequest).filter_by(batch_id=batch.id).one()
+        request.status = CatastoVisuraRequestStatus.SKIPPED.value
+        request.attempts = 1
+        request.error_message = "saltata dall'operatore"
+        db.commit()
+
+        reconcile_perpetual_sync_items(db, config)
+        db.refresh(item)
+
+        assert item.status == "skipped"
+        assert item.retry_after is None
+    finally:
+        db.close()
+
+
+def test_perpetual_campaign_items_endpoint_is_owner_scoped_and_paginated() -> None:
+    db = TestingSessionLocal()
+    try:
+        owner = db.query(ApplicationUser).filter_by(username="elaborazioni-admin").one()
+        other = db.query(ApplicationUser).filter_by(username="elaborazioni-super-admin").one()
+        now = datetime.now(UTC)
+        db.add_all(
+            [
+                CatastoPerpetualSyncItem(
+                    user_id=owner.id,
+                    scope="ruolo_particella",
+                    target_key="owner-parcel",
+                    priority=10,
+                    search_mode="immobile",
+                    comune="Oristano",
+                    comune_codice="G113#ORISTANO#5#5",
+                    catasto="Terreni",
+                    foglio="12",
+                    particella="603",
+                    request_type="STORICA",
+                    next_due_at=now,
+                ),
+                CatastoPerpetualSyncItem(
+                    user_id=other.id,
+                    scope="ruolo_particella",
+                    target_key="other-parcel",
+                    priority=10,
+                    search_mode="immobile",
+                    comune="Cabras",
+                    comune_codice="B314#CABRAS#5#5",
+                    catasto="Terreni",
+                    foglio="4",
+                    particella="99",
+                    request_type="STORICA",
+                    next_due_at=now,
+                ),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(
+        "/elaborazioni/ruolo-autosync/campaigns/ruolo_particella/items?limit=1&offset=0",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["limit"] == 1
+    assert payload["offset"] == 0
+    assert payload["has_more"] is False
+    assert [item["target_key"] for item in payload["items"]] == ["owner-parcel"]
+
+
+def test_retry_perpetual_campaign_failures_service_rejects_unknown_scope() -> None:
+    db = TestingSessionLocal()
+    try:
+        with pytest.raises(ValueError, match="Campagna AutoSync non valida"):
+            retry_perpetual_sync_failures(db, 1, "unknown")
+    finally:
+        db.close()
+
+
+def test_retry_perpetual_campaign_failures_returns_zero_without_failed_items() -> None:
+    db = TestingSessionLocal()
+    try:
+        assert retry_perpetual_sync_failures(db, 1, "ruolo_particella") == 0
+    finally:
+        db.close()
+
+
+def test_retry_perpetual_campaign_failures_endpoint_rejects_unknown_scope() -> None:
+    response = client.post(
+        "/elaborazioni/ruolo-autosync/campaigns/unknown/retry-failed",
+        headers=auth_headers(),
+    )
+    assert response.status_code == 422
+
+
+def test_completed_perpetual_items_are_requeued_only_when_source_changes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_id, _credential_id = _seed_ruolo_autosync_fixture()
+    db = TestingSessionLocal()
+    try:
+        config = CatastoRuoloAutoSyncConfig(user_id=user_id, enabled=True, primary_enabled=True)
+        db.add(config)
+        source_at = datetime.now(UTC) - timedelta(days=1)
+
+        def target(updated_at: datetime) -> PerpetualSourceTarget:
+            return PerpetualSourceTarget(
+                scope="ruolo_particella", target_key="oristano|12|603|", priority=10,
+                search_mode="immobile", source_updated_at=updated_at, comune="Oristano",
+                comune_codice="G113#ORISTANO#5#5", catasto="Terreni", foglio="12",
+                particella="603", request_type="STORICA",
+            )
+
+        monkeypatch.setattr(
+            "app.services.elaborazioni_perpetual_sync.iter_enabled_targets",
+            lambda *_args, **_kwargs: [target(source_at)],
+        )
+        refresh_perpetual_sync_sources(db, config)
+        item = db.query(CatastoPerpetualSyncItem).filter_by(user_id=user_id).one()
+        item.status = "completed"
+        item.next_due_at = datetime.now(UTC) - timedelta(days=30)
+        db.commit()
+
+        refresh_perpetual_sync_sources(db, config)
+        db.refresh(item)
+        assert item.status == "completed"
+
+        monkeypatch.setattr(
+            "app.services.elaborazioni_perpetual_sync.iter_enabled_targets",
+            lambda *_args, **_kwargs: [target(source_at + timedelta(minutes=1))],
+        )
+        refresh_perpetual_sync_sources(db, config)
+        db.refresh(item)
+        assert item.status == "pending"
     finally:
         db.close()
 
@@ -2943,6 +3556,154 @@ def test_perpetual_maintenance_refresh_interval_and_subject_validation(monkeypat
         identifier="  ", name=None, updated_at=None,
     ) is None
     assert load_enabled_targets(SimpleNamespace(), primary=False, secondary=False) == []  # type: ignore[arg-type]
+
+
+def test_perpetual_source_iterator_is_lazy() -> None:
+    import app.services.elaborazioni_perpetual_sources as sources
+
+    iterator = sources.iter_enabled_targets(
+        SimpleNamespace(),  # type: ignore[arg-type]
+        primary=False,
+        secondary=False,
+    )
+
+    assert not isinstance(iterator, list)
+    assert list(iterator) == []
+
+
+def test_perpetual_source_chunk_and_loader_boundaries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.services.elaborazioni_perpetual_sources as sources
+    import app.services.elaborazioni_perpetual_sync as sync
+
+    target = PerpetualSourceTarget(
+        scope="consorzio_particella",
+        target_key="boundary",
+        priority=30,
+        search_mode="immobile",
+        source_updated_at=None,
+    )
+    chunks = list(sync._target_chunks(target for _ in range(1_001)))
+    assert [len(chunk) for chunk in chunks] == [1_000, 1]
+
+    monkeypatch.setattr(
+        sources,
+        "iter_consortium_parcel_targets",
+        lambda _db: iter([target]),
+    )
+    monkeypatch.setattr(
+        sources,
+        "iter_registry_subject_targets",
+        lambda _db: iter([target]),
+    )
+    assert sources.load_consortium_parcel_targets(SimpleNamespace()) == [target]
+    assert sources.load_registry_subject_targets(SimpleNamespace()) == [target]
+
+
+def test_perpetual_disable_missing_items_flushes_full_chunk() -> None:
+    import app.services.elaborazioni_perpetual_sync as sync
+
+    user_id, _credential_id = _seed_ruolo_autosync_fixture()
+    db = TestingSessionLocal()
+    try:
+        db.add_all(
+            [
+                CatastoPerpetualSyncItem(
+                    user_id=user_id,
+                    scope="ruolo_particella",
+                    target_key=f"missing-{index}",
+                    priority=10,
+                    search_mode="immobile",
+                    next_due_at=datetime.now(UTC),
+                )
+                for index in range(1_000)
+            ]
+        )
+        db.commit()
+
+        assert sync._disable_missing_items(db, user_id, set()) == 1_000
+        db.commit()
+        assert db.query(CatastoPerpetualSyncItem).filter_by(status="disabled").count() == 1_000
+    finally:
+        db.close()
+
+
+def test_perpetual_role_sources_only_use_latest_completed_import() -> None:
+    db = TestingSessionLocal()
+    try:
+        jobs = [
+            RuoloImportJob(anno_tributario=2024, status="completed"),
+            RuoloImportJob(anno_tributario=2025, status="completed"),
+            RuoloImportJob(anno_tributario=2026, status="processing"),
+        ]
+        db.add_all(jobs)
+        db.flush()
+        for index, job in enumerate(jobs, start=1):
+            avviso = RuoloAvviso(
+                import_job_id=job.id,
+                codice_cnc=f"LATEST-{index}",
+                anno_tributario=job.anno_tributario,
+                codice_fiscale_raw=f"RSSMRA80A01H50{index}X",
+                nominativo_raw=f"Soggetto {index}",
+            )
+            db.add(avviso)
+            db.flush()
+            partita = RuoloPartita(
+                avviso_id=avviso.id,
+                codice_partita=f"P-{index}",
+                comune_nome="Oristano",
+            )
+            db.add(partita)
+            db.flush()
+            db.add(
+                RuoloParticella(
+                    partita_id=partita.id,
+                    anno_tributario=job.anno_tributario,
+                    foglio=str(index),
+                    particella=str(index * 10),
+                )
+            )
+        db.commit()
+
+        parcels = load_ruolo_parcel_targets(db)
+        subjects = load_ruolo_subject_targets(db)
+
+        assert [(item.foglio, item.particella) for item in parcels] == [("2", "20")]
+        assert [item.subject_identifier for item in subjects] == ["RSSMRA80A01H502X"]
+    finally:
+        db.close()
+
+
+def test_perpetual_refresh_consumes_streaming_targets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_id, _credential_id = _seed_ruolo_autosync_fixture()
+    db = TestingSessionLocal()
+    try:
+        config = CatastoRuoloAutoSyncConfig(user_id=user_id)
+        db.add(config)
+        db.commit()
+        source_at = datetime.now(UTC)
+        streamed_target = PerpetualSourceTarget(
+            scope="ruolo_particella",
+            target_key="oristano|12|603|",
+            priority=10,
+            search_mode="immobile",
+            source_updated_at=source_at,
+            comune="Oristano",
+            foglio="12",
+            particella="603",
+        )
+        monkeypatch.setattr(
+            "app.services.elaborazioni_perpetual_sync.iter_enabled_targets",
+            lambda *_args, **_kwargs: iter([streamed_target]),
+            raising=False,
+        )
+
+        assert refresh_perpetual_sync_sources(db, config)["created"] == 1
+    finally:
+        db.close()
 
 
 def test_perpetual_sources_deduplicate_parcels_and_credentials_stay_owner_scoped() -> None:

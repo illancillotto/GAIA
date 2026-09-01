@@ -21,9 +21,9 @@ function formatDuration(seconds: number | null): string {
 
 function MetricCard({ label, value, detail }: { label: string; value: string | number; detail: string }) {
   return (
-    <div className="min-w-0 rounded-[20px] border border-gray-100 bg-white p-4">
-      <p className="text-xs font-medium text-gray-500">{label}</p>
-      <p className="mt-2 truncate text-2xl font-semibold text-gray-950">{value}</p>
+    <div className="min-w-0 rounded-[20px] border border-gray-100 bg-white p-3 sm:p-4">
+      <p className="text-[11px] font-medium text-gray-500 sm:text-xs">{label}</p>
+      <p className="mt-1 truncate text-xl font-semibold text-gray-950 sm:mt-2 sm:text-2xl">{value}</p>
       <p className="mt-1 text-xs text-gray-500">{detail}</p>
     </div>
   );
@@ -31,7 +31,7 @@ function MetricCard({ label, value, detail }: { label: string; value: string | n
 
 function SummaryMetrics({ summary }: { summary: CatastoAutoSyncDashboardSummary }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+    <div data-testid="autosync-summary-metrics" className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-6">
       <MetricCard detail="documenti prodotti" label="Visure scaricate da SISTER" value={NUMBER.format(summary.documents_downloaded)} />
       <MetricCard detail="visure completate/ora" label="Velocità oraria" value={NUMBER.format(summary.completed_per_hour)} />
       <MetricCard detail="richieste complessive" label="Visure elaborate" value={`${NUMBER.format(summary.requests_completed)} / ${NUMBER.format(summary.requests_total)}`} />
@@ -48,15 +48,15 @@ function OperationalPipeline({ status, credentials }: { status: ElaborazioneRuol
   const stages = [
     ["1. Aggiornamento sorgenti", status.config.last_source_refresh_at ? `Ultimo: ${formatDateTime(status.config.last_source_refresh_at)}` : "Non ancora eseguito"],
     ["2. Pianificazione e coda", `${status.counts.pending + status.counts.queued} in attesa · ${status.counts.processing} in corso`],
-    ["3. Micro-batch visure", status.running_batch?.current_operation ?? "Nessun batch attivo"],
+    ["3. Elaborazione progressiva", status.running_batch?.current_operation ?? "Nessuna elaborazione attiva"],
     ["4. Archiviazione documenti", `${status.dashboard.summary.documents_downloaded} visure disponibili`],
   ];
   return (
     <div className="grid gap-3 lg:grid-cols-[2fr,1fr]">
       <section aria-labelledby="autosync-pipeline-title" className="rounded-[24px] border border-gray-100 bg-gray-50 p-4">
         <h3 className="text-sm font-semibold text-gray-900" id="autosync-pipeline-title">Attività svolte dall’AutoSync</h3>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {stages.map(([title, detail]) => <div className="rounded-[18px] border border-gray-100 bg-white p-3" key={title}><p className="text-sm font-semibold text-gray-900">{title}</p><p className="mt-1 text-xs text-gray-500">{detail}</p></div>)}
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:gap-3">
+          {stages.map(([title, detail]) => <div className="min-w-0 rounded-[18px] border border-gray-100 bg-white p-3" key={title}><p className="text-sm font-semibold text-gray-900">{title}</p><p className="mt-1 text-xs text-gray-500">{detail}</p></div>)}
         </div>
       </section>
       <section aria-labelledby="autosync-runtime-title" className="rounded-[24px] border border-gray-100 bg-gray-50 p-4">
@@ -89,12 +89,12 @@ function HourlyTrend({ status }: { status: ElaborazioneRuoloAutoSyncStatus }) {
 function RecentBatches({ status }: { status: ElaborazioneRuoloAutoSyncStatus }) {
   return (
     <section aria-labelledby="autosync-batches-title" className="rounded-[24px] border border-gray-100 p-4">
-      <h3 className="text-sm font-semibold text-gray-900" id="autosync-batches-title">Ultimi batch AutoSync</h3>
+      <h3 className="text-sm font-semibold text-gray-900" id="autosync-batches-title">Ultime esecuzioni AutoSync</h3>
       <div className="mt-3 space-y-3">{status.dashboard.recent_batches.length ? status.dashboard.recent_batches.map((batch) => {
         const processed = batch.completed_items + batch.failed_items + batch.not_found_items + batch.skipped_items;
         const progress = Math.min(100, Math.round((processed / Math.max(1, batch.total_items)) * 100));
-        return <div className="rounded-[18px] border border-gray-100 bg-gray-50 p-3" key={batch.id}><div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-gray-900">{batch.name ?? "Micro-batch AutoSync"}</p><p className="mt-1 text-xs text-gray-500">{processed} / {batch.total_items} · {batch.current_operation ?? "In attesa"}</p></div><ElaborazioneStatusBadge status={batch.status} /></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-200"><div className="h-full rounded-full bg-[#477a55]" style={{ width: `${progress}%` }} /></div><div className="mt-3 flex justify-between gap-3 text-xs"><span className="text-gray-500">{formatDateTime(batch.created_at)}</span><Link className="font-semibold text-[#1D4E35] underline-offset-4 hover:underline" href={`/elaborazioni/batches/${batch.id}`}>Apri dettaglio</Link></div></div>;
-      }) : <p className="text-sm text-gray-500">Nessun batch AutoSync presente.</p>}</div>
+        return <div className="rounded-[18px] border border-gray-100 bg-gray-50 p-3" key={batch.id}><div className="flex flex-wrap items-start justify-between gap-2"><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-gray-900">{batch.name ?? "Esecuzione AutoSync"}</p><p className="mt-1 text-xs text-gray-500">{processed} / {batch.total_items} · {batch.current_operation ?? "In attesa"}</p></div><ElaborazioneStatusBadge status={batch.status} /></div><div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-200"><div className="h-full rounded-full bg-[#477a55]" style={{ width: `${progress}%` }} /></div><div className="mt-3 flex justify-between gap-3 text-xs"><span className="text-gray-500">{formatDateTime(batch.created_at)}</span><Link className="font-semibold text-[#1D4E35] underline-offset-4 hover:underline" href={`/elaborazioni/batches/${batch.id}`}>Apri dettaglio</Link></div></div>;
+      }) : <p className="text-sm text-gray-500">Nessuna esecuzione AutoSync presente.</p>}</div>
     </section>
   );
 }
@@ -113,7 +113,7 @@ function EventsAndBlocks({ status }: { status: ElaborazioneRuoloAutoSyncStatus }
 export function AutoSyncActivityDashboard({ status, credentials }: { status: ElaborazioneRuoloAutoSyncStatus | null; credentials: ElaborazioneCredential[] }) {
   if (!status) return <section aria-labelledby="autosync-activity-title" className="rounded-[28px] border border-gray-100 bg-white p-6 shadow-panel"><h2 className="text-lg font-semibold" id="autosync-activity-title">Attività AutoSync</h2><p className="mt-2 text-sm text-gray-500">Caricamento attività in corso…</p></section>;
   return (
-    <section aria-labelledby="autosync-activity-title" className="space-y-4 rounded-[28px] border border-[#d9dfd6] bg-white p-4 shadow-panel md:p-6">
+    <section aria-labelledby="autosync-activity-title" className="space-y-3 rounded-[28px] border border-[#d9dfd6] bg-white p-3 shadow-panel sm:space-y-4 md:p-6" data-testid="autosync-dashboard-shell">
       <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#477a55]">Monitor operativo</p><h2 className="mt-2 text-xl font-semibold text-gray-950" id="autosync-activity-title">Attività AutoSync</h2><p className="mt-1 max-w-3xl text-sm text-gray-600">Stato, avanzamento, visure, velocità, code, blocchi e log dell’elaborazione continua.</p></div><span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${status.config.enabled ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-700"}`}>AutoSync {status.config.enabled ? "ON" : "OFF"}</span></div>
       <SummaryMetrics summary={status.dashboard.summary} />
       <OperationalPipeline credentials={credentials} status={status} />
