@@ -23,6 +23,7 @@ from app.modules.gis.interrogazione.models import (
 )
 from app.modules.gis.models import GisLayer
 from app.modules.gis.schemas import GisExternalLayerConfig
+from app.modules.gis.territorio_availability import require_interrogazione_enabled
 
 
 def _mapping(value: object) -> dict[str, Any]:
@@ -133,11 +134,7 @@ def interrogate_point(
     point: InterrogationPoint,
     layer_ids: list[UUID] | None = None,
 ) -> InterrogationResponse:
-    if not settings.gis_interrogazione_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Interrogazione GIS non abilitata",
-        )
+    require_interrogazione_enabled()
     try:
         gaia_sources = local_probes.probe_gaia(db, point)
     except Exception as exc:

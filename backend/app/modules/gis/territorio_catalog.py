@@ -13,6 +13,7 @@ from app.modules.gis.schemas import (
     GisTerritorioLayerGroup,
     GisTerritorioLayerListResponse,
 )
+from app.modules.gis.territorio_availability import require_external_layers_enabled
 
 THEME_LABELS = {
     "bonifica": "Bonifica e comprensori",
@@ -54,6 +55,7 @@ def _client_layer(layer: GisLayer) -> GisTerritorioLayer:
 def list_territorio_layers(
     db: Session, current_user: ApplicationUser
 ) -> GisTerritorioLayerListResponse:
+    require_external_layers_enabled()
     layers = db.scalars(
         select(GisLayer)
         .where(

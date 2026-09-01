@@ -390,6 +390,32 @@ produzione:
 - `/gis/catalogo` mostra il pannello `POC OGC read-only` per verificare layer,
   proxy path e warning di sicurezza.
 
+P14 rende operativo il confine OGC senza introdurre GeoServer:
+
+- `/gis/ogc/layers/{layer_id}` e il solo reverse proxy client verso QGIS
+  Server interno;
+- GetCapabilities, GetMap e GetFeature richiedono autenticazione GAIA,
+  `module_gis`, `can_view` e `qgis.mode` pubblicabile;
+- GAIA deriva il nome servizio dal catalogo, filtra le capabilities sul solo
+  layer autorizzato e non accetta URL o path progetto dal client;
+- il ruolo DB del server mantiene solo `SELECT`, Catasto resta read-only e ogni
+  POST/WFS-T e rifiutato con `400`;
+- il `.qgs` server non contiene credenziali: usa un servizio libpq il cui file
+  `pg_service.conf` e installato separatamente con modo `0600`;
+- rete Docker o VPN CED sono ammesse tra backend e QGIS Server; esposizione
+  diretta su internet e credenziali nei progetti sono vietate.
+
+P15 tratta il DTM come consultazione raster, mai come globe 3D:
+
+- nessun terrain MapLibre, nessun Cesium, nessuna copia del DEM in PostGIS;
+- `ras_dtm_1m` e `ras_dtm_10m` sono `wms_infoable`; l'interrogazione aggiunge
+  una sonda GetFeatureInfo opzionale e isolata per layer, con lo stesso
+  timeout e thread pool di M23;
+- `ras_dtm_1m_hillshade` resta `wms_visual_only`, perche un'ombreggiatura non
+  e un valore di quota leggibile;
+- il risultato e sempre `quota (m s.l.m.)` con il disclaimer che non e un
+  rilievo di cantiere; nessuna nuova dipendenza frontend o backend.
+
 ### Export NAS Shapefile M5
 
 Il NAS conserva export e backup versionati prodotti da PostGIS:
@@ -508,9 +534,9 @@ rimossi dalla retention schedulata. Ogni prune scrive
 `export.retention_applied` con path, versione, retention count e indicazione se
 il file ZIP e stato eliminato.
 
-### Layer Territoriali Esterni M21-M25
+### Layer Territoriali Esterni M21-M26
 
-Stato: M21-M25 implementate.
+Stato: M21-M26 implementate.
 
 Il catalogo GIS governa oggi solo layer che vivono nel PostGIS GAIA
 (`postgis`, `postgis_staging`) o registri applicativi di dominio
@@ -551,11 +577,13 @@ Fondazione M21:
   sul limite `GIS_EXTERNAL_CACHE_MAX_MB`;
 - gli errori proxy sono auditati senza registrare le singole tile; un errore di
   audit non sostituisce la risposta governata verso il client;
-- `GIS_EXTERNAL_LAYERS_ENABLED=false` lascia i proxy disponibili come
-  superficie API ma risponde `503`; il flag non registra alcun seed;
+- `GIS_EXTERNAL_LAYERS_ENABLED=false` lascia catalogo e proxy disponibili come
+  superfici API ma risponde `503` con copy governato; il flag non registra
+  alcun seed;
 - `runtime_health.external_sources` esegue `GetCapabilities` sulle tre sorgenti
   con timeout corto e cache di `300` secondi, separatamente dal dashboard
-  catalogo deterministico;
+  catalogo deterministico; espone `disabled`, `unreachable` oppure `ok` e gli
+  stati non operativi degradano l'health complessivo a `warning`;
 - i metadata dei layer esterni sono normalizzati a `read_only=true`,
   `qgis.mode=not_published`, `qgis.editable=false` ed
   `export.shapefile=false`; change request ed export restano inoltre bloccati
@@ -574,6 +602,19 @@ Interrogazione backend M23a:
   oltre il limite configurato sono restituiti come `skipped` senza chiamata;
 - il flag `GIS_INTERROGAZIONE_ENABLED` resta `false` per default. Timeout,
   raggio e limite remoto hanno default rispettivamente `8 s`, `150 m` e `12`.
+- una `rete_condotte` vuota e un risultato GAIA valido con stato `empty` e
+  messaggio esplicito, non una failure della consultazione.
+
+Enablement P11:
+
+- i flag restano `false` in `.env.example` e vengono attivati soltanto nella
+  configurazione del singolo ambiente;
+- la sequenza e migration schede, layer esterni e seed al boot, smoke
+  GetCapabilities/proxy, interrogazione, quindi prova della scheda;
+- il rollback spegne prima l'interrogazione e poi i layer esterni;
+- cache, TTL, timeout e limite remoto non introducono retry aggressivi verso
+  AdE; l'indisponibilita RAS o AdE resta isolata e dichiarata;
+- la procedura completa e in `docs/GIS_TERRITORIO_ENABLEMENT_RUNBOOK.md`.
 
 Pannello frontend M23b:
 
@@ -585,6 +626,17 @@ Pannello frontend M23b:
   sono poi richiesti singolarmente con concorrenza limitata, cosi ogni sorgente
   compare quando termina senza attendere la piu lenta;
 - i visual-only non generano richieste.
+
+Catalogo incendi M26:
+
+- il seed Territorio passa da `21` a `40` layer aggiungendo la serie CFVA
+  `2005-2023` al layer `2024` gia presente;
+- ogni annata ha un identificativo GAIA e remoto distinto, licenza e
+  attribuzione `CC BY 4.0`, ed e interrogabile via WFS;
+- il pannello raggruppa la serie nel tema `eventi` con un selettore annuale e
+  mantiene al massimo una annata attiva, evitando venti toggle simultanei;
+- PAI e ortofoto extra restano fuori dal seed per le esclusioni P8; il
+  selettore ortofoto continua quindi a esporre la sola annata `1977-1978`.
 
 Scheda territoriale M24:
 
@@ -637,7 +689,7 @@ Il dettaglio e in `docs/GIS_PLATFORM_TERRITORIO_PLAN.md`.
 7. Valutazione POC QGIS Server vs GeoServer per pubblicazione WMS/WFS/WMTS.
 8. Programma Territorio Esterno: layer WMS/WFS di terzi nel catalogo,
    interrogazione puntuale multi-sorgente e scheda territoriale particella.
-   M21-M25 implementate.
+   M21-M26 implementate.
 
 ## Documenti Operativi
 
@@ -653,5 +705,5 @@ Il dettaglio e in `docs/GIS_PLATFORM_TERRITORIO_PLAN.md`.
   definizione del catalogo seed.
 - `docs/GIS_PLATFORM_TERRITORIO_PROGRESS.md`: stato del programma Territorio
   Esterno.
-- `docs/GIS_PLATFORM_TERRITORIO_PROMPTS.md`: prompt operativi eseguibili per
-  M21-M25.
+- `docs/GIS_PLATFORM_TERRITORIO_PROMPTS.md`: prompt operativi originari per
+  M21-M25; M26 e registrata nei milestone e nel progress.

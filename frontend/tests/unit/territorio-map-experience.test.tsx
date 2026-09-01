@@ -6,12 +6,15 @@ const mocks = vi.hoisted(() => ({
   useTerritorioLayers: vi.fn(() => ({ groups: [] })),
   panel: vi.fn(),
   interrogationPanel: vi.fn(),
-  useInterrogazione: vi.fn(() => ({ open: false })),
-  useScheda: vi.fn(() => ({ parcelId: null })),
+  unifiedSearch: vi.fn(),
+  useInterrogazione: vi.fn(() => ({
+    open: false,
+    gaia: [{ source_id: "particella", data: [{ id: "parcel-1" }] }],
+  })),
   mapListener: null as ((maps: Array<{ getContainer: () => HTMLElement }>) => void) | null,
 }));
 
-vi.mock("@/components/catasto/gis/MapContainer", () => ({
+vi.mock("@/components/catasto/gis/TerritorioRegisteredMap", () => ({
   default: () => <div data-testid="map-canvas">canvas GIS</div>,
 }));
 
@@ -45,8 +48,17 @@ vi.mock("@/components/catasto/gis/InterrogazionePanel", () => ({
   },
 }));
 
-vi.mock("@/components/catasto/gis/use-scheda-territoriale", () => ({
-  useSchedaTerritoriale: (...args: unknown[]) => mocks.useScheda(...args),
+vi.mock("@/components/catasto/gis/TerritorioUnifiedSearch", () => ({
+  default: (props: object) => {
+    mocks.unifiedSearch(props);
+    return <div>ricerca territorio</div>;
+  },
+}));
+
+vi.mock("@/components/layout/app-shell-context", () => ({
+  useAppShellContext: () => ({
+    currentUser: { enabled_modules: ["gis"], role: "viewer" },
+  }),
 }));
 
 vi.mock("@/components/catasto/gis/TerritorioFieldTools", () => ({
@@ -72,6 +84,7 @@ describe("TerritorioMapExperience", () => {
     expect(screen.getByText("canvas GIS")).toBeInTheDocument();
     expect(screen.getByText("pannello territorio")).toBeInTheDocument();
     expect(screen.getByText("pannello interrogazione")).toBeInTheDocument();
+    expect(screen.getByText("ricerca territorio")).toBeInTheDocument();
     act(() => {
       mocks.mapListener?.([{ getContainer: () => screen.getByTestId("map-canvas") }]);
     });
@@ -85,11 +98,25 @@ describe("TerritorioMapExperience", () => {
       "token",
       [],
     );
-    expect(mocks.useScheda).toHaveBeenLastCalledWith("token", undefined);
+    expect(mocks.unifiedSearch).toHaveBeenLastCalledWith(expect.objectContaining({
+      token: "token",
+      groups: [],
+    }));
+    expect(mocks.interrogationPanel).toHaveBeenLastCalledWith(expect.objectContaining({
+      scheda: {
+        token: "token",
+        particellaId: "parcel-1",
+        currentUser: { enabled_modules: ["gis"], role: "viewer" },
+      },
+    }));
     unmount();
   });
 
   test("defaults the basemap to OSM", () => {
+    mocks.useInterrogazione.mockReturnValueOnce({
+      open: false,
+      gaia: [{ source_id: "particella", data: [{ id: 7 }] }],
+    });
     render(
       <TerritorioMapExperience
         token={null}
@@ -102,5 +129,8 @@ describe("TerritorioMapExperience", () => {
       />,
     );
     expect(mocks.panel).toHaveBeenLastCalledWith(expect.objectContaining({ basemap: "osm" }));
+    expect(mocks.interrogationPanel).toHaveBeenLastCalledWith(expect.objectContaining({
+      scheda: expect.objectContaining({ particellaId: null }),
+    }));
   });
 });

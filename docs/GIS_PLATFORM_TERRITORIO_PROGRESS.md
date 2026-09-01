@@ -1,7 +1,7 @@
 # GAIA GIS Platform - Progress Territorio Esterno
 
-> Ultimo aggiornamento: 2026-08-29.
-> Branch corrente: `integration/gis-platform-complete`.
+> Ultimo aggiornamento: 2026-09-01.
+> Branch corrente: `main`.
 >
 > Piano tecnico: `docs/GIS_PLATFORM_TERRITORIO_PLAN.md`.
 > Riferimento dati: `docs/GIS_PLATFORM_TERRITORIO_CATALOGO.md`.
@@ -46,6 +46,50 @@ P7/M25 e completato sul branch `feature/gis-territorio-strumenti-m25`:
 misure geodetiche, confronto ortofoto, stampa e propagazione QGIS via proxy
 GAIA sono implementati senza modificare `MapContainer.tsx`.
 
+L'indagine e la documentazione P8 sono completate. Il gate e chiuso con
+decisione conservativa: i tre PAI restano esclusi per record GeoNetwork in `404`
+e le sette ortofoto extra restano escluse per autorizzazione mancante o
+copyright. Gli incendi `2005-2023` sono tutti ammissibili come candidati
+`CC BY 4.0`, ma non sono stati aggiunti al seed. Il DTM espone WCS e quota
+puntuale via WMS `GetFeatureInfo`; il 3D resta fuori scope. Nessun codice
+applicativo e nessun flag sono stati modificati. In P8, P9 non era ancora
+aperto.
+
+P9/M26 e implementato sul codice: il seed passa da `21` a `40` layer con la
+serie incendi `2005-2024`. Il pannello Eventi territoriali usa un selettore
+annuale e mantiene una sola annata attiva. PAI e ortofoto extra restano esclusi;
+il selettore ortofoto resta invariato sulla sola annata autorizzata `1977-1978`.
+
+P10 chiude l'exit criterion M24 "scheda da mappa e da anagrafica". La stessa
+azione asincrona e disponibile nel pannello interrogazione, nella route
+`/catasto/particelle/[id]` e nel dialog dettaglio particella. La generazione da
+anagrafica usa direttamente `particella_id`, non richiede un clic mappa e resta
+disponibile sul perimetro GAIA anche con interrogazione o layer esterni spenti.
+
+P11 e implementato sul codice e nella documentazione operativa. L'accensione
+resta per ambiente e segue il nuovo runbook: migration schede, catalogo esterno,
+smoke health/proxy, interrogazione e prova scheda. Health e pannelli distinguono
+`disabled`, `unreachable` e `ok`; la rete condotte vuota e un risultato `empty`,
+non una failure GAIA. I flag restano `false` in `.env.example`.
+
+P14 e implementato: `/gis/ogc/layers/{layer_id}` pubblica WMS/WFS read-only di
+QGIS Server dietro autenticazione GAIA, `module_gis` e `can_view`; WFS-T resta
+rifiutato con `400`. Nessun GeoServer e stato introdotto.
+
+P15 e implementato: il DTM resta consultazione raster, mai un globe 3D. `ras_dtm_1m`
+e `ras_dtm_10m` diventano `wms_infoable` e l'interrogazione espone una sonda di
+quota opzionale e isolata; `ras_dtm_1m_hillshade` resta `wms_visual_only`. Il
+valore e sempre mostrato come indicativo, mai come rilievo di cantiere.
+
+La validazione UX con utenti finali resta aperta. Il protocollo ripetibile e in
+`docs/GIS_TERRITORIO_UX_VALIDATION.md`; lo smoke Playwright opzionale verifica
+soltanto il collegamento tecnico dei flussi con sorgenti mockate e non sostituisce
+la sessione osservata con viewer e admin.
+
+Lo smoke opzionale Territorio e stato eseguito il 2026-08-31 su Chromium con
+flag Playwright attivo: `1 passed`. RAS e AdE erano mockati; l'ortofoto
+`wms_visual_only` e rimasta esclusa dalle richieste di interrogazione.
+
 La base M1-M20 della GIS Platform e in esercizio e non richiede modifiche
 preliminari: `source_type` e gia una colonna `String(32)` libera in `GisLayer` e
 `metadata_json` e gia `JSON`, quindi M21 non necessita di migration dello
@@ -63,6 +107,12 @@ schema catalogo.
 | M23b | Pannello interrogazione, frontend | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-interrogazione-ui-m23` |
 | M24 | Scheda territoriale particella in PDF | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-scheda-m24` |
 | M25 | Strumenti di campo e propagazione QGIS | completata il 2026-08-28 con ratchet verde | `feature/gis-territorio-strumenti-m25` |
+| P8 | Riverifica licenze e chiusura decisioni pre-rollout | completata il 2026-08-31; PAI e ortofoto extra esclusi | - |
+| M26 | Serie storica incendi nel catalogo e selettore annuale | implementata il 2026-08-31 nel prompt P9 | - |
+| P10 | Scheda territoriale da anagrafica | completata il 2026-08-31 con coverage e ratchet P10 verdi | - |
+| P11 | Enablement per ambiente, health e runbook | implementata il 2026-08-31; flag repository invariati | - |
+| P14 | Proxy OGC QGIS Server read-only | implementata il 2026-08-31; WMS/WFS autenticati, WFS-T rifiutato | - |
+| P15 | DTM come consultazione: quota via GetFeatureInfo, no 3D | implementata il 2026-09-01; ratchet e coverage verdi | `feature/gis-territorio-dtm-consulta-m31` |
 
 ## Analisi Preliminare Completata
 
@@ -91,6 +141,142 @@ governa internamente. La sovrapposizione e utile come controllo, ma richiede una
 decisione esplicita di autorevolezza prima del seed.
 
 ## Verifiche
+
+Verifiche P8 eseguite il 2026-08-31:
+
+- GetCapabilities RAS vettoriale: HTTP `200`, `379` layer `dbu:`, tutti i `14`
+  layer del seed presenti;
+- GetCapabilities RAS raster: HTTP `200`, `52` layer, tutti i `4` layer del
+  seed presenti;
+- GetCapabilities AdE WMS: HTTP `200`, `13` layer nominati, tutti i `3` layer
+  del seed presenti;
+- API GeoNetwork sui tre identificativi PAI completi `R_SARDEG:*`: HTTP `404`
+  per tutti e tre; decisione `escluso` invariata;
+- metadati GeoNetwork delle ortofoto `2022`, `2019`, `2013`, `2006`, `1997`,
+  `1954-55` e `1940-45`: raggiungibili; autorizzazione del proprietario ancora
+  richiesta, oppure copyright/accesso limitato per il `1997`; nessuna
+  autorizzazione GAIA trovata in `docs/`, `domain-docs/` o `reports/`;
+- incendi `2005-2023`: `19/19` layer presenti e `19/19` record metadata
+  raggiungibili, tutti `CC BY 4.0`; anni assenti `0`, anni esclusi `0`;
+- WCS RAS raster `2.0.1`: HTTP `200`, operazioni `GetCapabilities`,
+  `DescribeCoverage`, `GetCoverage`; presenti i coverage DTM altimetria 1 m e
+  10 m;
+- WMS `GetFeatureInfo` su un punto di prova presso Oristano: HTTP `200` JSON,
+  quota `GRAY_INDEX=5.322000026702881` sul DTM 1 m e `GRAY_INDEX=5` sul DTM
+  10 m;
+- `.env.example`: `GIS_EXTERNAL_LAYERS_ENABLED=false` e
+  `GIS_INTERROGAZIONE_ENABLED=false`, invariati.
+
+Verifiche P9/M26 eseguite il 2026-08-31:
+
+- test backend mirati seed, API catalogo e visual-only: `11 passed`;
+- suite backend GIS completa: `178 passed`;
+- bootstrap: `40` layer alla prima esecuzione e `0` alla seconda;
+- coverage `territorio_bootstrap.py`: `63/63` statement e `4/4` branch,
+  totale `100%`;
+- test frontend pannello, ortofoto e interrogazione: `14 passed`;
+- suite unit frontend completa: `186` file e `1677` test verdi;
+- coverage `TerritorioLayerPanel.tsx` e `IncendiAnnualiSelector.tsx`: `41/41`
+  statement, `40/40` branch, `25/25` funzioni e `36/36` linee, totale `100%`;
+- typecheck frontend: exit `0`;
+- build frontend, lint backend e frontend: exit `0`, con soli warning frontend
+  preesistenti fuori perimetro;
+- `make quality-test`: `46 passed`;
+- complexity report: nessuna violation error-level e cinque warning legacy
+  invariati; `make complexity-ratchet BASE_REF=origin/main`: `findings: []`;
+- `make graphify-backend`: exit `0`, `7816` nodi, `19731` archi e `458`
+  community;
+- `make graphify-frontend`: exit `0`, `5563` nodi, `13744` archi e `201`
+  community;
+- `make graphify-platform-docs`: exit `0`; corpus documentale riallineato;
+- PAI assenti, ortofoto limitate a `ras_ortofoto_1977`, divieti read-only e
+  filtro `can_view` verificati dai test.
+
+Verifiche P10 eseguite il 2026-08-31:
+
+- test mirati frontend: `27 passed`; avvio da route particella e dialog,
+  polling, download, revoca object URL e gate `module_gis` verificati;
+- coverage sui sette runtime P10: `123/123` statement, `116/116` branch,
+  `45/45` funzioni e `101/101` linee, totale `100%`;
+- suite unit frontend completa: `189` file e `1694` test verdi;
+- typecheck, lint e build frontend: exit `0`; lint segnala soltanto warning
+  preesistenti fuori perimetro;
+- non regressione backend M24 e filtro `can_view`: `13 passed`;
+- `make quality-test`: `46 passed`;
+- ratchet isolato sul perimetro P10 contro `origin/main`: `findings: []`;
+  il worktree condiviso completo segnala finding concorrenti fuori P10 nei
+  runtime elaborazioni e worker, non assorbiti ne modificati da questo prompt;
+- `MapContainer.tsx`, API backend, collector, renderer, audit e retention non
+  modificati.
+
+Verifiche P11 eseguite il 2026-08-31:
+
+- suite backend GIS completa: `180 passed`;
+- test frontend mirati health, catalogo e pannello: `16 passed`;
+- suite unit frontend completa: `189` file e `1698` test verdi;
+- coverage backend sui sette runtime P11: `944/944` statement e `98/98`
+  branch, totale `100%`;
+- coverage frontend sui tre runtime P11: `177/177` statement, `106/106`
+  branch, `71/71` funzioni e `144/144` linee, totale `100%`;
+- typecheck, lint backend mirato e lint frontend mirato: exit `0`;
+- build frontend: bloccato da `react/no-unescaped-entities` in
+  `continuous-catasto-sync-panel.tsx:289`, modifica concorrente fuori P11; la
+  compilazione Next precedente al lint e il typecheck sono verdi;
+- `make quality-test`: `46 passed`;
+- controllo complexity mirato sui dieci runtime P11 contro `origin/main`:
+  `findings: []`; il ratchet globale resta non verde per otto regressioni LOC
+  nel router GIS non toccato da P11 e per la crescita cumulativa P1-P10 di
+  `frontend/src/types/gis.ts`; baseline ed eccezioni non sono state aggiornate;
+- `make graphify-backend`: exit `0`, nessuna variazione topologica;
+- `make graphify-frontend`: exit `0`, `5576` nodi, `13790` archi e `202`
+  community;
+- `make graphify-platform-docs`: exit `0`; corpus documentale riallineato;
+- `.env.example` verificato con entrambi i flag ancora `false`;
+  `git diff --check` e controllo ASCII dei documenti GIS verdi.
+
+Verifiche P14 eseguite il 2026-08-31:
+
+- suite QGIS, configurazione e API GIS selezionata finale: `116 passed`;
+- smoke API autenticato: capabilities ridotte al layer con `can_view`, GetMap
+  `200`, layer senza `can_view` `403`, WFS-T via POST `400`;
+- coverage finale sui quattro runtime P14: `356/356` statement e `104/104`
+  branch, totale `100%`;
+- progetto QGIS Server privo di password e username; connessione separata in
+  `pg_service.conf` con modo `0600` e `PGSERVICEFILE` nel container;
+- lint Python mirato, `sh -n`, configurazione Compose e `git diff --check`
+  verdi;
+- `make quality-test`: `46 passed`;
+- ratchet del perimetro P14 contro merge-base `main@7bbebc33`:
+  `findings: []`; baseline ed eccezioni non aggiornate;
+- Graphify backend e platform-docs aggiornati. Il `baseline-verify` globale non
+  e riproducibile nel worktree condiviso per le modifiche concorrenti gia
+  presenti, non per finding P14.
+
+Verifiche P15 eseguite il 2026-09-01:
+
+- `ras_dtm_1m` e `ras_dtm_10m` passano da `wms_visual_only` a `wms_infoable`;
+  `ras_dtm_1m_hillshade` resta `wms_visual_only` (una shading non e una quota);
+- sonda remota isolata: la richiesta GetFeatureInfo su un DTM gira nello stesso
+  thread pool per-layer di M23, con lo stesso timeout e senza bloccare le
+  altre sorgenti in caso di lentezza o errore;
+- il valore raster a banda singola (chiave `GRAY_INDEX`, convenzione
+  QGIS/GeoServer) viene estratto e restituito come `quota (m s.l.m.)` con
+  messaggio esplicito "quota indicativa... non e un rilievo di cantiere";
+  qualunque altro payload `wms_infoable` (es. le feature catastali AdE) non
+  contiene quella chiave e non viene toccato dalla trasformazione;
+- nessuna nuova dipendenza, nessun terrain MapLibre, nessun Cesium, nessuna
+  copia del raster in PostGIS; il seed resta `wms_visual_only` per la resa
+  cartografica del DTM, la sonda e un canale aggiuntivo opzionale;
+- bootstrap idempotente riverificato: la modifica di `queryable` si applica
+  agli strati gia seminati al prossimo `ensure_territorio_gis_catalog`, senza
+  duplicare layer;
+- test aggiunti: `test_gis_territorio_bootstrap.py` (queryable DTM,
+  hillshade invariato, `info_format` coerente) e
+  `test_gis_interrogazione_remote.py` (estrazione quota, chiave assente,
+  valore non numerico); suite `gis` completa: verde;
+- nessuna modifica a `MapContainer.tsx`, `services.py` o al pannello
+  strati: la resa del valore riusa il rendering generico gia esistente per
+  le sorgenti territorio in `InterrogazionePanel.tsx`.
 
 Verifiche integrazione completa eseguite il 2026-08-29:
 
@@ -557,16 +743,114 @@ milestone successive avviate. P0-P7 sono chiusi sui commit sopra indicati.
 - Nessun layer esterno e stato aggiunto al bootstrap. Il flag resta disabilitato
   per default.
 
+## Decisioni P8
+
+- Scheda da anagrafica: ammessa in P10. P8 non modifica la scheda M24 ne le
+  superfici frontend.
+- Serie incendi: anni `2005`, `2006`, `2007`, `2008`, `2009`, `2010`, `2011`,
+  `2012`, `2013`, `2014`, `2015`, `2016`, `2017`, `2018`, `2019`, `2020`,
+  `2021`, `2022` e `2023` ammessi come candidati `CC BY 4.0`; nessun anno del
+  perimetro e assente o escluso. Il seed resta invariato in P8.
+- PAI: escluso. I tre layer `Rev. Dic_23` sono presenti nel WMS, ma i record
+  GeoNetwork restano in `404` e la licenza non e dimostrabile.
+- Ortofoto extra: escluse. I metadati richiedono ancora autorizzazione del
+  proprietario o dichiarano copyright; nessuna autorizzazione scritta per GAIA
+  e presente nel repository.
+- DTM 3D: fuori scope. Una quota puntuale e tecnicamente ammissibile in una
+  fase successiva perche P8 ha verificato WCS `2.0.1` e WMS `GetFeatureInfo`
+  numerico, sempre via proxy GAIA e senza copia in PostGIS.
+- Geocoding: P16 riguarda la ricerca nel comprensorio, non un geocoder civico
+  nazionale.
+- OGC: P14 resta QGIS Server read-only dietro proxy GAIA. GeoServer, WFS-T ed
+  editing OGC non sono ammessi.
+- Flag: `GIS_EXTERNAL_LAYERS_ENABLED` e `GIS_INTERROGAZIONE_ENABLED` restano
+  `false` in `.env.example`; accensione e runbook sono responsabilita di P11.
+
+## Decisioni P9
+
+- Il catalogo contiene gli incendi `2005-2024`; `2025` non entra perche fuori
+  dal perimetro verificato da P8.
+- Un anno o una revisione corrisponde sempre a un nuovo layer. Il bootstrap non
+  sovrascrive il layer `2024` con contenuto di un'altra annata.
+- Il tema API resta `eventi`; il frontend presenta la serie come selettore
+  annuale e non come venti toggle sparsi.
+- PAI e ortofoto extra restano esclusi. `OrtofotoStoricheSelector.tsx` e
+  invariato e continua a spiegare perche il confronto e disabilitato con una
+  sola annata autorizzata.
+- `GET /gis/territorio/layers`, `can_view`, permesso viewer, change request,
+  export e QGIS-tabella mantengono i contratti esistenti.
+
+## Decisioni P10
+
+- Scheda da anagrafica: ammessa e implementata. La route particella e il dialog
+  usano la stessa action asincrona del pannello mappa.
+- Il gate frontend richiede `module_gis` e il router backend mantiene il `403`
+  autorevole per utenti senza modulo GIS.
+- I flag `GIS_INTERROGAZIONE_ENABLED` e `GIS_EXTERNAL_LAYERS_ENABLED` non
+  governano l'avvio da anagrafica: il collector produce lo snapshot GAIA e
+  dichiara le esclusioni gia previste da M24.
+- Il documento resta una scheda istruttoria con disclaimer. Non e un CDU, non
+  certifica vincoli e non modifica attribuzioni, audit o retention.
+
+## Decisioni P11
+
+- L'ordine di attivazione e vincolante: migration schede, flag layer esterni,
+  smoke GetCapabilities/proxy, flag interrogazione, prova interrogazione e
+  scheda. Il rollback spegne prima l'interrogazione e poi i layer esterni.
+- `runtime_health.external_sources` usa solo gli stati `disabled`,
+  `unreachable` e `ok`. Gli ultimi due stati non nascondono quali sorgenti sono
+  fallite; `disabled` e `unreachable` portano l'health complessivo a `warning`,
+  non a `critical`.
+- Catalogo, proxy e interrogazione espongono `503` con copy italiano governato
+  quando il relativo flag e spento. La UI presenta lo stesso stato senza un
+  errore silenzioso.
+- Nessun retry aggressivo viene introdotto verso AdE. Timeout, cache e limite di
+  `12` layer remoti restano quelli definiti in M21-M23.
+- `rete_condotte` non viene importata da P11. Se non esistono condotte nel
+  raggio, la sonda GAIA risponde `empty` con `Nessuna condotta nel raggio.`.
+- L'accensione e descritta in `docs/GIS_TERRITORIO_ENABLEMENT_RUNBOOK.md` e
+  avviene solo nella configurazione dell'ambiente. I default di repository
+  restano spenti.
+
+## Decisioni P14
+
+- QGIS Server resta interno e read-only. Nessun GeoServer e stato introdotto.
+- `/gis/ogc/layers/{layer_id}` espone WMS GetCapabilities/GetMap e WFS
+  GetCapabilities/GetFeature solo dopo autenticazione GAIA, `module_gis`,
+  `can_view` e verifica `qgis.mode` pubblicabile.
+- Il client non passa URL QGIS Server o path progetto. Il nome servizio e
+  derivato dal catalogo; le capabilities contengono solo il layer autorizzato
+  e URL sotto `GIS_QGIS_PROXY_BASE_URL`.
+- Catasto ufficiale resta read-only. Ogni POST/WFS-T e rifiutato con `400` e la
+  policy SQL M6 non viene applicata automaticamente.
+- Il runbook distingue rete Docker e VPN CED. QGIS Server non va esposto in
+  chiaro su internet e i progetti non contengono credenziali.
+- La decisione LOGIN QGIS personali o per postazione resta aperta.
+
+## Decisioni P15
+
+- DTM 3D: confermato fuori scope. Nessun terrain MapLibre, nessun Cesium,
+  nessuna copia del DEM in PostGIS.
+- Quota puntuale: ammessa come sonda opzionale nell'interrogazione, isolata
+  per layer con lo stesso timeout e thread pool di M23. Un fallimento della
+  sonda quota non altera lo stato delle altre sorgenti.
+- `ras_dtm_1m` e `ras_dtm_10m` diventano `wms_infoable`; `ras_dtm_1m_hillshade`
+  resta `wms_visual_only` perche un'ombreggiatura non e una quota leggibile.
+- Il risultato mostra sempre `quota (m s.l.m.)` con il disclaimer "non e un
+  rilievo di cantiere"; non e mai presentato come dato certificativo.
+- Nessuna nuova dipendenza frontend o backend. Il rendering riusa il blocco
+  generico chiave/valore gia usato dalle altre sorgenti territorio.
+
 ## Decisioni Aperte
 
+- Esito della prima sessione UX osservata con viewer e admin secondo
+  `docs/GIS_TERRITORIO_UX_VALIDATION.md`.
 - Se il programma Territorio Esterno debba essere numerato come continuazione
   della GIS Platform (M21-M25, ipotesi adottata nei documenti) o come modulo
   affiancato con numerazione propria.
 - Se il precaricamento delle ortofoto sulla bounding box del comprensorio vada
   fatto subito o solo dopo aver misurato le prestazioni reali del proxy in
   esercizio.
-- Se la scheda territoriale M24 debba essere accessibile anche dall'anagrafica
-  particella oltre che dalla mappa.
 - Politica di aggiunta di nuovi layer al catalogo dopo il seed: chi approva la
   richiesta e con quale evidenza di caso d'uso.
 
@@ -597,7 +881,6 @@ milestone successive avviate. P0-P7 sono chiusi sui commit sopra indicati.
 
 ## Prossima Azione Raccomandata
 
-Completare i gate del branch `integration/gis-platform-complete`, inclusa la
-catena Alembic unificata, e non aprire ulteriori milestone senza una nuova
-decisione di prodotto. La change Search resta autonoma e fuori dal perimetro
-GIS.
+Eseguire l'enablement P11 in un ambiente controllato seguendo il runbook e
+registrare gli smoke reali prima dell'accensione in esercizio. PAI e ortofoto
+extra restano esclusi; i flag degli esempi repository non cambiano.

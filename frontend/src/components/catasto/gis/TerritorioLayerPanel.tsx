@@ -3,9 +3,10 @@
 import { useState } from "react";
 import Image from "next/image";
 
+import IncendiAnnualiSelector from "@/components/catasto/gis/IncendiAnnualiSelector";
 import OrtofotoStoricheSelector from "@/components/catasto/gis/OrtofotoStoricheSelector";
 import type { TerritorioLayerState } from "@/components/catasto/gis/use-territorio-layers";
-import type { GisTerritorioLayer } from "@/lib/api/territorio";
+import type { GisTerritorioLayer, GisTerritorioLayerGroup } from "@/lib/api/territorio";
 import type { GisBasemap } from "@/types/gis";
 
 type TerritorioLayerPanelProps = TerritorioLayerState & {
@@ -45,10 +46,49 @@ function TerritorioLayerItem({
   );
 }
 
+type ThemeSectionProps = Pick<
+  TerritorioLayerState,
+  "enabled" | "opacity" | "layerErrors" | "legendUrls" | "toggleLayer" | "setLayerOpacity"
+> & {
+  group: GisTerritorioLayerGroup;
+};
+
+function isFireLayer(layer: GisTerritorioLayer): boolean {
+  return layer.name.startsWith("ras_aree_incendiate_");
+}
+
+function TerritorioThemeSection({ group, ...layerState }: ThemeSectionProps) {
+  const fireLayers = group.theme === "eventi" ? group.layers.filter(isFireLayer) : [];
+  const listedLayers = group.layers.filter(
+    (layer) => !isFireLayer(layer) || Boolean(layerState.enabled[layer.id]),
+  );
+
+  return (
+    <section aria-label={group.label} className="rounded-xl border border-stone-200 bg-white p-3">
+      <h3 className="text-sm font-bold text-slate-900">{group.label}</h3>
+      {fireLayers.length ? (
+        <IncendiAnnualiSelector
+          layers={fireLayers}
+          enabled={layerState.enabled}
+          onToggle={layerState.toggleLayer}
+        />
+      ) : null}
+      {listedLayers.length ? (
+        <div className="mt-2 space-y-3">
+          {listedLayers.map((layer) => (
+            <TerritorioLayerItem key={layer.id} layer={layer} {...layerState} />
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export default function TerritorioLayerPanel({
   groups,
   loading,
   catalogError,
+  catalogDisabled,
   enabled,
   opacity,
   layerErrors,
@@ -83,7 +123,14 @@ export default function TerritorioLayerPanel({
       {open ? (
         <div className="mt-2 max-h-[70vh] space-y-3 overflow-y-auto rounded-2xl border border-emerald-900/10 bg-[#fffdf6]/95 p-3 shadow-xl backdrop-blur">
           {loading ? <p className="p-2 text-sm text-slate-600">Caricamento strati...</p> : null}
-          {catalogError ? <p role="alert" className="rounded-lg bg-red-50 p-2 text-sm text-red-800">{catalogError}</p> : null}
+          {catalogError ? (
+            <p
+              role={catalogDisabled ? "status" : "alert"}
+              className={`rounded-lg p-3 text-sm ${catalogDisabled ? "bg-stone-100 text-stone-700" : "bg-red-50 text-red-800"}`}
+            >
+              {catalogError}
+            </p>
+          ) : null}
           <OrtofotoStoricheSelector
             layers={ortofoto}
             enabled={enabled}
@@ -93,14 +140,16 @@ export default function TerritorioLayerPanel({
             onOpacityChange={setLayerOpacity}
           />
           {groups.filter((group) => group.theme !== "ortofoto").map((group) => (
-            <section key={group.theme} aria-label={group.label} className="rounded-xl border border-stone-200 bg-white p-3">
-              <h3 className="text-sm font-bold text-slate-900">{group.label}</h3>
-              <div className="mt-2 space-y-3">
-                {group.layers.map((layer) => (
-                  <TerritorioLayerItem key={layer.id} layer={layer} enabled={enabled} opacity={opacity} layerErrors={layerErrors} legendUrls={legendUrls} toggleLayer={toggleLayer} setLayerOpacity={setLayerOpacity} />
-                ))}
-              </div>
-            </section>
+            <TerritorioThemeSection
+              key={group.theme}
+              group={group}
+              enabled={enabled}
+              opacity={opacity}
+              layerErrors={layerErrors}
+              legendUrls={legendUrls}
+              toggleLayer={toggleLayer}
+              setLayerOpacity={setLayerOpacity}
+            />
           ))}
           {activeAttributions.length ? (
             <footer aria-label="Attribuzioni strati attivi" className="rounded-xl bg-slate-900 p-3 text-[11px] leading-5 text-slate-100">

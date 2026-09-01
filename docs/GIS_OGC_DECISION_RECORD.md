@@ -2,8 +2,8 @@
 
 > Data: 2026-07-15.
 > Milestone: M7, aggiornato con M19.
-> Stato: decisione architetturale iniziale confermata; M19 aggiunge POC
-> read-only da API/UI senza runtime OGC di produzione.
+> Stato: decisione architetturale confermata; M19 aggiunge il runtime interno
+> read-only e P14 chiude il proxy autenticato GAIA.
 
 ## Decisione
 
@@ -82,6 +82,19 @@ Stato M19:
 - gli snippet `qgis_server_env` e `reverse_proxy` sono documentazione operativa,
   non deployment automatico.
 
+Stato P14:
+
+- `GET /gis/ogc/layers/{layer_id}` espone solo WMS GetCapabilities/GetMap e
+  WFS GetCapabilities/GetFeature;
+- autenticazione GAIA, `module_gis`, `can_view`, layer attivo, sorgente PostGIS
+  e `qgis.mode` pubblicabile sono verificati prima della chiamata interna;
+- il nome layer inviato a QGIS Server e derivato dal catalogo e le capabilities
+  sono filtrate sul solo layer richiesto;
+- il progetto server usa `service=gaia_gis_server`; le credenziali vivono solo
+  nel `pg_service.conf` runtime con modo `0600`;
+- `POST` e WFS Transaction restituiscono `400`; Catasto resta read-only;
+- QGIS Server non e esposto direttamente e nessun GeoServer e introdotto.
+
 Exit criteria:
 
 - pubblica solo layer consentiti dalla policy M6;
@@ -121,7 +134,7 @@ Exit criteria:
 
 ## Piano Rollout Se Il POC Passa
 
-1. Decisione esplicita su QGIS Server o GeoServer.
+1. QGIS Server resta la scelta GAIA finche lo scope e WMS/WFS read-only.
 2. Branch dedicato con compose/profile separato, non default.
 3. Secret DB dedicati per OGC.
 4. Smoke test automatici su capabilities e layer ammessi.

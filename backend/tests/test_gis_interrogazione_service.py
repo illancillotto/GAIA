@@ -194,6 +194,9 @@ def test_gaia_failure_and_disabled_flag_are_governed(
     with pytest.raises(HTTPException) as disabled:
         service.interrogate_point(SimpleNamespace(), SimpleNamespace(), _point())
     assert disabled.value.status_code == 503
+    assert disabled.value.detail == (
+        "Interrogazione territoriale non attiva in questo ambiente."
+    )
 
 
 class _Scalars:
@@ -261,9 +264,20 @@ def test_visible_layers_respect_permissions_selection_and_validate_metadata(
     assert [layer.id for layer in layers] == [visible.id]
     assert layers[0].remote_layer == "dbu:visible"
 
+    all_layers = service._visible_layers(
+        _Session([visible]),  # type: ignore[arg-type]
+        SimpleNamespace(),
+        None,
+    )
+    assert [layer.id for layer in all_layers] == [visible.id]
+
     visible.metadata_json = {"external": {"bad": True}}
     with pytest.raises(service.ExternalSourceConfigurationError):
         service._remote_layer(visible)
+
+
+def test_remote_probe_runner_accepts_an_empty_catalog() -> None:
+    assert service._run_remote_probes([], _point()) == []
 
 
 def test_router_uses_default_radius_and_serializes_dataclass(

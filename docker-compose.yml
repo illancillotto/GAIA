@@ -85,6 +85,7 @@ services:
       QGIS_SERVER_FORCE_READONLY_LAYERS: "1"
       QGIS_SERVER_LOG_LEVEL: "1"
       QGIS_SERVER_LOG_STDERR: "true"
+      PGSERVICEFILE: /var/lib/qgis/pg_service.conf
     volumes:
       - qgis-project:/srv/qgis:ro
       - ./config/qgis/start.sh:/usr/local/bin/gaia-qgis-start.sh:ro

@@ -33,6 +33,8 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 - `docs/GIS_PLATFORM_TERRITORIO_CATALOGO.md`: censimento sorgenti WMS/WFS esterne (RAS SITR, Agenzia Entrate) e catalogo seed.
 - `docs/GIS_PLATFORM_TERRITORIO_PROGRESS.md`: stato del programma Territorio Esterno.
 - `docs/GIS_PLATFORM_TERRITORIO_PROMPTS.md`: prompt operativi eseguibili per M21-M25.
+- `docs/GIS_TERRITORIO_ENABLEMENT_RUNBOOK.md`: attivazione per ambiente, smoke, degradazione e rollback della consultazione territoriale.
+- `docs/GIS_TERRITORIO_UX_VALIDATION.md`: protocollo osservato da 45-60 minuti e smoke Playwright opzionale dei flussi Territorio.
 - `docs/FRONTEND_SESSION_BOOTSTRAP.md`: cache, rivalidazione, rendering non bloccante e test del bootstrap sessione frontend.
 - `docs/data-model/`: poster A0, diagrammi ERD e dizionario relazioni generati dai modelli SQLAlchemy.
 - `docs/TEST_COVERAGE_100_PLAN.md`: policy e piano operativo per portare il codice runtime a coverage totale.

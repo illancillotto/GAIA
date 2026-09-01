@@ -5,6 +5,7 @@ import {
   useTerritorioLayers,
   type TerritorioMapAdapter,
 } from "@/components/catasto/gis/use-territorio-layers";
+import { ApiError } from "@/lib/api";
 
 const apiMocks = vi.hoisted(() => ({
   listGisTerritorioLayers: vi.fn(),
@@ -110,6 +111,17 @@ describe("useTerritorioLayers", () => {
     apiMocks.listGisTerritorioLayers.mockRejectedValueOnce("catalog offline");
     const failed = renderHook(() => useTerritorioLayers(map, "new-token"));
     await waitFor(() => expect(failed.result.current.catalogError).toBe("Catalogo territoriale non disponibile"));
+  });
+
+  test("marks a governed 503 as disabled consultation", async () => {
+    apiMocks.listGisTerritorioLayers.mockRejectedValueOnce(
+      new ApiError("Consultazione territoriale non attiva in questo ambiente.", null, 503),
+    );
+    const disabled = renderHook(() => useTerritorioLayers(null, "token"));
+    await waitFor(() => expect(disabled.result.current.catalogDisabled).toBe(true));
+    expect(disabled.result.current.catalogError).toBe(
+      "Consultazione territoriale non attiva in questo ambiente.",
+    );
   });
 
   test("handles missing token, registration failures and cleanup", async () => {

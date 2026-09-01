@@ -402,7 +402,10 @@ def test_execute_external_request_rejects_disabled_source_and_tolerates_cache_fa
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(settings, "gis_external_layers_enabled", False)
-    with pytest.raises(ExternalProxyError, match="source is disabled") as exc_info:
+    with pytest.raises(
+        ExternalProxyError,
+        match="Consultazione territoriale non attiva",
+    ) as exc_info:
         execute_external_request(_layer(), "wms", [("request", "GetCapabilities")])
     assert exc_info.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
 
@@ -458,6 +461,9 @@ def test_proxy_flag_resolution_error_audit_and_success(
     with pytest.raises(HTTPException) as disabled:
         proxy_external_request(db, layer_id, user, service="wms", query_items=[])
     assert disabled.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert disabled.value.detail == (
+        "Consultazione territoriale non attiva in questo ambiente."
+    )
 
     monkeypatch.setattr(settings, "gis_external_layers_enabled", True)
     monkeypatch.setattr(
@@ -576,13 +582,13 @@ def test_external_health_probe_reports_http_and_configuration_failures(
     )
     assert (
         gis_runtime_health._probe_external_source(_health_source("bad"))["status"]
-        == "critical"
+        == "unreachable"
     )
 
     invalid = gis_runtime_health._probe_external_source(
         _health_source("invalid", url="relative")
     )
-    assert invalid["status"] == "critical"
+    assert invalid["status"] == "unreachable"
     assert "error" in invalid
 
 
@@ -596,7 +602,7 @@ def test_external_health_aggregation_flag_cache_and_statuses(
 
     monkeypatch.setattr(settings, "gis_external_layers_enabled", False)
     disabled = gis_runtime_health._external_sources_health(checked_at)
-    assert disabled.status == "not_configured"
+    assert disabled.status == "disabled"
     assert disabled.details["sources"] == ["one", "two"]
 
     monkeypatch.setattr(settings, "gis_external_layers_enabled", True)
@@ -621,22 +627,22 @@ def test_external_health_aggregation_flag_cache_and_statuses(
         "_probe_external_source",
         lambda source: {
             "source_key": source.source_key,
-            "status": "ok" if source.source_key == "one" else "critical",
+            "status": "ok" if source.source_key == "one" else "unreachable",
             "latency_ms": 2.0,
         },
     )
     gis_runtime_health.clear_external_health_cache()
     warning = gis_runtime_health._external_sources_health(checked_at)
-    assert warning.status == "warning"
+    assert warning.status == "unreachable"
 
     monkeypatch.setattr(
         gis_runtime_health,
         "_probe_external_source",
         lambda source: {
             "source_key": source.source_key,
-            "status": "critical",
+            "status": "unreachable",
             "latency_ms": 2.0,
         },
     )
     critical = gis_runtime_health._external_sources_health(checked_at)
-    assert critical.status == "critical"
+    assert critical.status == "unreachable"

@@ -168,6 +168,51 @@ def test_remote_probe_maps_malformed_json_timeout_and_unsupported_payload() -> N
     assert unsupported.status == "failed"
 
 
+def test_wms_infoable_probe_extracts_dtm_quota_as_indicative_value() -> None:
+    layer = _layer("wms_infoable")
+    _Client.response = _Response(
+        content_type="application/json",
+        payload={
+            "type": "FeatureCollection",
+            "features": [{"type": "Feature", "properties": {"GRAY_INDEX": "5.322000026702881"}}],
+        },
+    )
+
+    result = remote_probes.probe_remote_layer(layer, _point(), 3)
+
+    assert result.status == "ok"
+    assert result.data == [{"quota (m s.l.m.)": 5.32}]
+    assert result.message == remote_probes._QUOTA_DISCLAIMER
+    assert "rilievo di cantiere" in result.message
+
+
+def test_wms_infoable_probe_ignores_gray_index_extraction_when_key_missing() -> None:
+    layer = _layer("wms_infoable")
+    _Client.response = _Response(
+        content_type="application/json", payload={"parcel": "12"}
+    )
+
+    result = remote_probes.probe_remote_layer(layer, _point(), 3)
+
+    assert result.status == "ok"
+    assert result.data == [{"parcel": "12"}]
+    assert result.message is None
+
+
+def test_wms_infoable_probe_treats_unparsable_gray_index_as_missing_quota() -> None:
+    layer = _layer("wms_infoable")
+    _Client.response = _Response(
+        content_type="application/json",
+        payload={"properties": {"GRAY_INDEX": "no data"}},
+    )
+
+    result = remote_probes.probe_remote_layer(layer, _point(), 3)
+
+    assert result.status == "ok"
+    assert result.data == [{"properties": {"GRAY_INDEX": "no data"}}]
+    assert result.message is None
+
+
 def test_visual_only_and_disabled_sources_never_make_http_requests(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

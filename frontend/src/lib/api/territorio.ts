@@ -74,6 +74,21 @@ export function listGisTerritorioLayers(
   });
 }
 
+export function getGisTerritorioMunicipalities(
+  token: string,
+  layerId: string,
+): Promise<GeoJSON.FeatureCollection> {
+  const query = new URLSearchParams({
+    request: "GetFeature",
+    count: "500",
+    srsname: "EPSG:4326",
+    outputformat: "application/json",
+  });
+  return request<GeoJSON.FeatureCollection>(`/gis/external/${layerId}/wfs?${query.toString()}`, {
+    headers: authHeaders(token),
+  });
+}
+
 export function interrogaGisTerritorio(
   token: string,
   body: { lon: number; lat: number; layer_ids: string[] },

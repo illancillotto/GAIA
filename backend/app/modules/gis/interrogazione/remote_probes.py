@@ -125,6 +125,33 @@ def _result(
     )
 
 
+_QUOTA_DISCLAIMER = (
+    "Quota indicativa dal modello altimetrico raster RAS via GetFeatureInfo;"
+    " non e un rilievo di cantiere."
+)
+
+
+def _quota_from_gray_index(data: list[dict[str, Any]]) -> float | None:
+    """Extract a single-band raster quota (QGIS/GeoServer key `GRAY_INDEX`).
+
+    DTM altimetria layers are `wms_infoable` but expose no cadastral
+    attributes: a successful GetFeatureInfo returns one grayscale band value
+    for the queried pixel. Any other `wms_infoable` payload (e.g. AdE
+    cadastral features) never carries this key, so the transform is a no-op
+    for them.
+    """
+    for item in data:
+        candidate = item.get("properties") if isinstance(item.get("properties"), dict) else item
+        for key, value in candidate.items():
+            if key.strip().lower() != "gray_index":
+                continue
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return None
+    return None
+
+
 def skipped_remote_probe(layer: RemoteLayer, message: str) -> ProbeResult:
     return ProbeResult(
         source_id=str(layer.id),
@@ -164,6 +191,15 @@ def probe_remote_layer(
             )
             response.raise_for_status()
             data = _response_data(response)
+        quota = _quota_from_gray_index(data)
+        if quota is not None:
+            return _result(
+                layer,
+                "ok",
+                started_at,
+                data=[{"quota (m s.l.m.)": round(quota, 2)}],
+                message=_QUOTA_DISCLAIMER,
+            )
         return _result(
             layer,
             "ok" if data else "empty",

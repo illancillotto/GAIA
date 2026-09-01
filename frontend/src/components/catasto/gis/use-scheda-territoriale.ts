@@ -17,16 +17,10 @@ export type SchedaTerritorialeState = {
   generate: () => void;
 };
 
-function parcelIdFromGaia(gaia: Array<{ source_id: string; data: Array<Record<string, unknown>> }>): string | null {
-  const id = gaia.find((source) => source.source_id === "particella")?.data[0]?.id;
-  return typeof id === "string" ? id : null;
-}
-
 export function useSchedaTerritoriale(
   token: string | null,
-  gaia: Array<{ source_id: string; data: Array<Record<string, unknown>> }>,
+  parcelId: string | null,
 ): SchedaTerritorialeState {
-  const parcelId = parcelIdFromGaia(gaia);
   const [sheet, setSheet] = useState<GisSchedaTerritoriale | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);

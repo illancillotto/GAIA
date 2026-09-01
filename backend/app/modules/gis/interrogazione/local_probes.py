@@ -93,6 +93,7 @@ def _result(
     title: str,
     rows: list[dict[str, Any]],
     started_at: float,
+    empty_message: str = "Nessun elemento trovato.",
 ) -> ProbeResult:
     return ProbeResult(
         source_id=source_id,
@@ -100,7 +101,7 @@ def _result(
         status="ok" if rows else "empty",
         duration_ms=round((time.perf_counter() - started_at) * 1000, 3),
         data=rows,
-        message=None if rows else "Nessun elemento trovato.",
+        message=None if rows else empty_message,
     )
 
 
@@ -110,6 +111,7 @@ def _probe(
     source_id: str,
     title: str,
     sql: str,
+    empty_message: str = "Nessun elemento trovato.",
 ) -> ProbeResult:
     started_at = time.perf_counter()
     rows = _rows(
@@ -122,7 +124,7 @@ def _probe(
             "radius_m": point.radius_m,
         },
     )
-    return _result(source_id, title, rows, started_at)
+    return _result(source_id, title, rows, started_at, empty_message)
 
 
 def _parcel_id(result: ProbeResult) -> object | None:
@@ -146,15 +148,25 @@ def _probe_roles_and_users(
 
 def probe_gaia(db: Session, point: InterrogationPoint) -> list[ProbeResult]:
     specifications = (
-        ("particella", "Particella GAIA", _PARTICELLA_SQL),
-        ("distretto", "Distretto irriguo", _DISTRETTO_SQL),
-        ("punto_consegna", "Punto di consegna", _DELIVERY_POINT_SQL),
-        ("rete_condotte", "Rete condotte", _NETWORK_SQL),
-        ("dui", "Domanda irrigua", _DUI_SQL),
+        ("particella", "Particella GAIA", _PARTICELLA_SQL, "Nessun elemento trovato."),
+        ("distretto", "Distretto irriguo", _DISTRETTO_SQL, "Nessun elemento trovato."),
+        (
+            "punto_consegna",
+            "Punto di consegna",
+            _DELIVERY_POINT_SQL,
+            "Nessun elemento trovato.",
+        ),
+        (
+            "rete_condotte",
+            "Rete condotte",
+            _NETWORK_SQL,
+            "Nessuna condotta nel raggio.",
+        ),
+        ("dui", "Domanda irrigua", _DUI_SQL, "Nessun elemento trovato."),
     )
     results = [
-        _probe(db, point, source_id, title, sql)
-        for source_id, title, sql in specifications
+        _probe(db, point, source_id, title, sql, empty_message)
+        for source_id, title, sql, empty_message in specifications
     ]
     results.append(_probe_roles_and_users(db, _parcel_id(results[0])))
     return results

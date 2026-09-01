@@ -156,6 +156,22 @@ def test_provision_reader_reuses_existing_role(
     assert any("ALTER ROLE" in statement for statement, _ in db.executed)
 
 
+def test_provision_reader_skips_database_grant_without_database_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    configure_qgis(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        qgis_server_bootstrap.settings,
+        "database_url",
+        "postgresql://admin:password@postgres:5432/",
+    )
+    db = FakeDb(role_exists=True)
+
+    qgis_server_bootstrap._provision_reader(db, [layer()])
+
+    assert not any("GRANT CONNECT" in statement for statement, _ in db.executed)
+
+
 def test_atomic_write(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -166,10 +182,10 @@ def test_atomic_write(
     assert destination.stat().st_mode & 0o777 == 0o640
 
 
-def test_server_project_embeds_only_the_restricted_connection(
+def test_server_project_references_external_restricted_connection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    configure_qgis(monkeypatch, tmp_path, password="s'ecret\\value")
+    configure_qgis(monkeypatch, tmp_path, password="secret-value")
     monkeypatch.setattr(
         qgis_server_bootstrap,
         "_build_qgis_project_xml",
@@ -179,19 +195,47 @@ def test_server_project_embeds_only_the_restricted_connection(
             b"</maplayer><maplayer><datasource /></maplayer></projectlayers></QGIS>"
         ),
     )
+    monkeypatch.setattr(qgis_server_bootstrap, "_qgis_layer_id", lambda item: "rete-id")
 
     project = qgis_server_bootstrap._server_project_xml([layer()], SimpleNamespace())
     project_text = project.decode("utf-8")
 
     assert "service='gaia_gis'" not in project_text
-    assert "host='postgres'" in project_text
-    assert "user='gaia_gis_qgis_server'" in project_text
-    assert "password='s\\'ecret\\\\value'" in project_text
+    assert "service='gaia_gis_server'" in project_text
+    assert "host='postgres'" not in project_text
+    assert "gaia_gis_qgis_server" not in project_text
+    assert "secret-value" not in project_text
     assert "table=network.rete_condotte" in project_text
+    assert "<shortname>rete__rete_condotte</shortname>" in project_text
     assert "<value>rete-id</value>" in project_text
     assert '<Insert type="QStringList"' in project_text
     assert '<Update type="QStringList"' in project_text
     assert '<Delete type="QStringList"' in project_text
+
+
+def test_server_service_config_contains_restricted_connection_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    configure_qgis(monkeypatch, tmp_path, password="secret-value")
+
+    service_config = qgis_server_bootstrap._server_service_config().decode()
+
+    assert service_config.startswith("[gaia_gis_server]\n")
+    assert "host=postgres" in service_config
+    assert "port=5432" in service_config
+    assert "dbname=gaia" in service_config
+    assert "user=gaia_gis_qgis_server" in service_config
+    assert "password=secret-value" in service_config
+    assert "sslmode=prefer" in service_config
+
+
+def test_server_service_config_rejects_newlines_in_secret_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    configure_qgis(monkeypatch, tmp_path, password="secret\nvalue")
+
+    with pytest.raises(RuntimeError, match="contains a newline"):
+        qgis_server_bootstrap._server_service_config()
 
 
 def test_server_project_requires_properties_section(
@@ -229,6 +273,13 @@ def test_bootstrap_writes_server_project(
 
     assert qgis_server_bootstrap.bootstrap_qgis_server(db) == 1
     assert (tmp_path / qgis_server_bootstrap.PROJECT_FILENAME).read_bytes() == b"<QGIS />"
+    assert (tmp_path / qgis_server_bootstrap.SERVICE_FILENAME).read_text().startswith(
+        "[gaia_gis_server]\n"
+    )
+    assert (
+        (tmp_path / qgis_server_bootstrap.SERVICE_FILENAME).stat().st_mode & 0o777
+        == 0o600
+    )
 
 
 def test_bootstrap_rejects_empty_catalog(

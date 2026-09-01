@@ -99,6 +99,65 @@ L'endpoint `/gis/external/{layer_id}/qgis-wms` accetta da QGIS solo `LAYERS`
 uguale al layer locale atteso e delega al proxy governato M21. Permessi,
 allowlist, cache, timeout e audit degli errori restano quindi applicati.
 
+## Pubblicazione OGC Read-Only
+
+QGIS Server resta sulla rete interna e non deve essere pubblicato direttamente
+su internet. Il solo endpoint supportato dai client e il proxy GAIA:
+
+```text
+GET /gis/ogc/layers/{layer_id}?SERVICE=WMS&REQUEST=GetCapabilities
+GET /gis/ogc/layers/{layer_id}?SERVICE=WMS&REQUEST=GetMap&...
+GET /gis/ogc/layers/{layer_id}?SERVICE=WFS&REQUEST=GetCapabilities
+GET /gis/ogc/layers/{layer_id}?SERVICE=WFS&REQUEST=GetFeature&...
+```
+
+Il client passa un `layer_id` del catalogo, mai l'URL QGIS Server, il path del
+progetto o un URL remoto. GAIA verifica autenticazione, `module_gis`,
+`can_view`, stato attivo, sorgente PostGIS e `qgis.mode` pubblicabile. Le
+capabilities vengono ridotte al solo layer autorizzato. `POST` e WFS-T sono
+sempre rifiutati con `400`.
+
+Configurazione ambiente:
+
+```dotenv
+GIS_QGIS_SERVER_INTERNAL_URL=http://qgis-server/ows/
+GIS_QGIS_SERVER_TIMEOUT_SECONDS=12
+GIS_QGIS_PROXY_BASE_URL=https://gaia.example.local
+```
+
+`GIS_QGIS_SERVER_INTERNAL_URL` e raggiungibile solo dal backend. Nella rete
+Docker usa il nome servizio `qgis-server`; non pubblicare una porta host del
+container. Se backend e QGIS Server sono separati, usare la rete VPN CED e una
+regola firewall che ammetta solo il backend GAIA. In entrambi i casi
+`GIS_QGIS_PROXY_BASE_URL` e la base HTTPS GAIA raggiungibile dai client QGIS.
+
+Il progetto `.qgz` e le capabilities non devono contenere password, token,
+credenziali DB o l'URL interno QGIS Server. L'autenticazione client resta nella
+configurazione QGIS locale `gaia_oauth`; la scelta tra LOGIN personali e LOGIN
+per postazione resta aperta e non e risolta da questo proxy.
+
+Anche il progetto QGIS Server non contiene credenziali: usa
+`service=gaia_gis_server`. Il bootstrap genera separatamente
+`/srv/qgis/pg_service.conf` con modo `0600`; lo startup lo installa in
+`/var/lib/qgis/pg_service.conf` e `PGSERVICEFILE` punta a quel file. Il file e
+un secret runtime del container, non va copiato nei progetti, esportato o
+committato.
+
+Smoke minimo:
+
+1. Eseguire GetCapabilities come utente con `can_view` e verificare un solo
+   layer, con URL online sotto `GIS_QGIS_PROXY_BASE_URL`.
+2. Eseguire GetMap sullo stesso `layer_id` e verificare `200` e
+   `X-GAIA-OGC-Mode: read-only`.
+3. Revocare `can_view` e verificare `403` senza chiamata a QGIS Server.
+4. Eseguire un GetFeature WFS e verificare che il tipo sia quello governato.
+5. Tentare una Transaction WFS via POST e verificare `400`.
+
+Rollback: rimuovere l'accesso client al path `/gis/ogc/layers/` o spegnere il
+servizio QGIS Server interno. PostGIS, Martin, catalogo GAIA e proxy WMS
+territoriali restano indipendenti. Non applicare automaticamente lo SQL M6 per
+effettuare il rollback.
+
 ## Pacchetto Offline
 
 Il pacchetto offline ZIP e ammesso solo quando il PC non puo raggiungere il

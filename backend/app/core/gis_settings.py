@@ -36,6 +36,15 @@ class GisSettings(StorageSettings):
         default=None,
         alias="GIS_QGIS_SERVER_HEALTH_URL",
     )
+    gis_qgis_server_internal_url: str = Field(
+        default="http://qgis-server/ows/",
+        alias="GIS_QGIS_SERVER_INTERNAL_URL",
+    )
+    gis_qgis_server_timeout_seconds: float = Field(
+        default=12.0,
+        gt=0,
+        alias="GIS_QGIS_SERVER_TIMEOUT_SECONDS",
+    )
     gis_qgis_server_db_username: str = Field(
         default="gaia_gis_qgis_server",
         alias="GIS_QGIS_SERVER_DB_USERNAME",

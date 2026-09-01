@@ -15,9 +15,16 @@ from app.core.database import SessionLocal
 from app.modules.gis.models import GisLayer
 from app.modules.gis.qgis_project import build_xml as _build_qgis_project_xml
 from app.modules.gis.qgis_project import is_project_layer as _is_qgis_project_layer
+from app.modules.gis.qgis_project import layer_id as _qgis_layer_id
 
 PROJECT_FILENAME = "gaia-gis-platform.qgs"
+SERVICE_FILENAME = "pg_service.conf"
+SERVICE_NAME = "gaia_gis_server"
 ROLE_PATTERN = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
+
+
+def _service_layer_name(layer: GisLayer) -> str:
+    return f"{layer.workspace}__{layer.name}".replace("-", "_")
 
 
 def _quote_identifier(value: str) -> str:
@@ -79,28 +86,45 @@ def _provision_reader(db: Session, layers: list[GisLayer]) -> str:
     return username
 
 
-def _datasource_value(value: str) -> str:
-    return value.replace("\\", "\\\\").replace("'", "\\'")
+def _service_value(value: object) -> str:
+    normalized = str(value)
+    if "\n" in normalized or "\r" in normalized:
+        raise RuntimeError("GIS QGIS Server service value contains a newline")
+    return normalized
 
 
-def _server_project_xml(layers: list[GisLayer], generated_at: datetime) -> bytes:
+def _server_service_config() -> bytes:
     username, password = _reader_role()
     url = make_url(settings.database_url)
-    connection = " ".join(
-        (
-            f"host='{_datasource_value(url.host or 'postgres')}'",
-            f"port='{url.port or 5432}'",
-            f"dbname='{_datasource_value(url.database or '')}'",
-            f"user='{_datasource_value(username)}'",
-            f"password='{_datasource_value(password)}'",
-            "sslmode='prefer'",
-        )
-    )
-    root = ET.fromstring(_build_qgis_project_xml(layers, generated_at))
+    values = {
+        "host": url.host or "postgres",
+        "port": url.port or 5432,
+        "dbname": url.database or "",
+        "user": username,
+        "password": password,
+        "sslmode": "prefer",
+    }
+    lines = [f"[{SERVICE_NAME}]"]
+    lines.extend(f"{key}={_service_value(value)}" for key, value in values.items())
+    return ("\n".join(lines) + "\n").encode()
+
+
+def _add_service_short_names(root: ET.Element, layers: list[GisLayer]) -> None:
+    layers_by_id = {_qgis_layer_id(layer): layer for layer in layers}
+    for map_layer in root.findall("./projectlayers/maplayer"):
+        layer = layers_by_id.get(map_layer.findtext("id") or "")
+        if layer is not None:
+            ET.SubElement(map_layer, "shortname").text = _service_layer_name(layer)
+
+
+def _replace_project_connection(root: ET.Element) -> None:
     for datasource in root.iter("datasource"):
         datasource.text = (datasource.text or "").replace(
-            "service='gaia_gis'", connection
+            "service='gaia_gis'", f"service='{SERVICE_NAME}'"
         )
+
+
+def _configure_read_only_wfs(root: ET.Element) -> None:
     properties = root.find("properties")
     if properties is None:
         raise RuntimeError("Generated QGIS project has no properties section")
@@ -112,6 +136,13 @@ def _server_project_xml(layers: list[GisLayer], generated_at: datetime) -> bytes
     wfst_layers = ET.SubElement(properties, "WFSTLayers")
     for operation in ("Insert", "Update", "Delete"):
         ET.SubElement(wfst_layers, operation, attrib={"type": "QStringList"})
+
+
+def _server_project_xml(layers: list[GisLayer], generated_at: datetime) -> bytes:
+    root = ET.fromstring(_build_qgis_project_xml(layers, generated_at))
+    _add_service_short_names(root, layers)
+    _replace_project_connection(root)
+    _configure_read_only_wfs(root)
     ET.indent(root, space="  ")
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
@@ -134,6 +165,11 @@ def bootstrap_qgis_server(db: Session) -> int:
     _atomic_write(
         project_dir / PROJECT_FILENAME,
         _server_project_xml(layers, datetime.now(UTC)),
+        mode=0o600,
+    )
+    _atomic_write(
+        project_dir / SERVICE_FILENAME,
+        _server_service_config(),
         mode=0o600,
     )
     return len(layers)

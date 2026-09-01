@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 
+import ParticellaSchedaTerritorialeAction from "@/components/catasto/gis/ParticellaSchedaTerritorialeAction";
 import { getStoredAccessToken } from "@/lib/auth";
 import type { CatAnagraficaMatch, GeoJSONFeature } from "@/types/catasto";
 import type { GisMapOverlayLayer } from "@/types/gis";
@@ -15,6 +16,24 @@ const MapContainer = dynamic(() => import("@/components/catasto/gis/MapContainer
     </div>
   ),
 });
+
+const STATIC_MAP_PROPS = {
+  onGeometryDrawn: () => undefined,
+  onSelectionCleared: () => undefined,
+  filters: {},
+  drawSignal: 0,
+  clearSignal: 0,
+  basemap: "satellite" as const,
+  mapLayers: {
+    showDistretti: true,
+    showDistrettiFill: false,
+    showParticelleFill: false,
+    particelleOpacity: 0.25,
+    highlightSelected: true,
+  },
+  focusOptions: { maxZoom: 18, padding: 48, duration: 0 },
+  className: "border border-gray-200",
+};
 
 function formatCoordinate(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return "—";
@@ -75,7 +94,7 @@ export function ParticellaGisDialog({
       featureCollection
         ? [
             {
-              layer_key: `particella-${match?.particella_id ?? "current"}`,
+              layer_key: `particella-${match!.particella_id}`,
               name: "Particella selezionata",
               color: "#1D4E35",
               outlineColor: "#0F3B28",
@@ -89,7 +108,11 @@ export function ParticellaGisDialog({
     [featureCollection, match?.particella_id],
   );
 
-  if (!open || !match) return null;
+  if (!match) return null;
+
+  if (!open) {
+    return <ParticellaSchedaTerritorialeAction particellaId={match.particella_id} />;
+  }
 
   return (
     <div
@@ -156,26 +179,12 @@ export function ParticellaGisDialog({
 
         <div className="min-h-0 flex-1 p-4">
           <MapContainer
+            {...STATIC_MAP_PROPS}
             token={token}
-            onGeometryDrawn={() => undefined}
-            onSelectionCleared={() => undefined}
             selectedIds={match.particella_id ? [match.particella_id] : []}
-            filters={{}}
-            drawSignal={0}
-            clearSignal={0}
-            basemap="satellite"
-            mapLayers={{
-              showDistretti: true,
-              showDistrettiFill: false,
-              showParticelleFill: false,
-              particelleOpacity: 0.25,
-              highlightSelected: true,
-            }}
             overlayLayers={overlayLayers}
             focusGeojson={featureCollection}
             focusSignal={featureCollection ? 1 : 0}
-            focusOptions={{ maxZoom: 18, padding: 48, duration: 0 }}
-            className="border border-gray-200"
           />
         </div>
       </div>

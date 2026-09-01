@@ -1,6 +1,6 @@
 # GAIA GIS Platform - Catalogo Territorio Esterno
 
-> Data: 2026-08-27.
+> Data: 2026-09-01.
 > Scope: censimento delle sorgenti cartografiche esterne da registrare nel
 > catalogo GIS come layer di consultazione. Documento di riferimento dati, non
 > piano di implementazione.
@@ -137,11 +137,31 @@ dettaglio e nella sezione "Licenze".
 
 | name GAIA | remote_layer | titolo sorgente | domanda operativa |
 | --- | --- | --- | --- |
+| `ras_aree_incendiate_2005` | `dbu:areeincendiateperim2005` | CFVA - Perimetri dei soprassuoli percorsi dal fuoco - 2005 | Rilevante per esenzioni, danni e contenzioso sul ruolo. |
+| `ras_aree_incendiate_2006` | `dbu:areeincendiateperim2006` | CFVA - Perimetri dei soprassuoli percorsi dal fuoco - 2006 | Rilevante per esenzioni, danni e contenzioso sul ruolo. |
+| `ras_aree_incendiate_2007` | `dbu:areeincendiateperim2007` | CFVA - Perimetri dei soprassuoli percorsi dal fuoco - 2007 | Rilevante per esenzioni, danni e contenzioso sul ruolo. |
+| `ras_aree_incendiate_2008` | `dbu:areeincendiateperim2008` | CFVA - Perimetri dei soprassuoli percorsi dal fuoco - 2008 | Rilevante per esenzioni, danni e contenzioso sul ruolo. |
+| `ras_aree_incendiate_2009` | `dbu:areeincendiateperim2009` | CFVA - Perimetri dei soprassuoli percorsi dal fuoco - 2009 | Rilevante per esenzioni, danni e contenzioso sul ruolo. |
+| `ras_aree_incendiate_2010` | `dbu:areeincendiateperim2010` | CFVA - Perimetri dei soprassuoli percorsi dal fuoco - 2010 | Rilevante per esenzioni, danni e contenzioso sul ruolo. |
+| `ras_aree_incendiate_2011` | `dbu:areeincendiateperim2011` | CFVA - Perimetri dei soprassuoli percorsi dal fuoco - 2011 | Rilevante per esenzioni, danni e contenzioso sul ruolo. |
+| `ras_aree_incendiate_2012` | `dbu:areeincendiateperim2012` | CFVA - Perimetri dei soprassuoli percorsi dal fuoco - 2012 | Rilevante per esenzioni, danni e contenzioso sul ruolo. |
+| `ras_aree_incendiate_2013` | `dbu:areeincendiateperim2013` | CFVA - Perimetri dei soprassuoli percorsi dal fuoco - 2013 | Rilevante per esenzioni, danni e contenzioso sul ruolo. |
+| `ras_aree_incendiate_2014` | `dbu:areeincendiateperim2014` | CFVA - Perimetri dei soprassuoli percorsi dal fuoco - 2014 | Rilevante per esenzioni, danni e contenzioso sul ruolo. |
+| `ras_aree_incendiate_2015` | `dbu:areeincendiateperim2015` | CFVA - Perimetri dei soprassuoli percorsi dal fuoco - 2015 | Rilevante per esenzioni, danni e contenzioso sul ruolo. |
+| `ras_aree_incendiate_2016` | `dbu:areeincendiateperim2016` | CFVA - Perimetri dei soprassuoli percorsi dal fuoco - 2016 | Rilevante per esenzioni, danni e contenzioso sul ruolo. |
+| `ras_aree_incendiate_2017` | `dbu:areeincendiateperim2017` | CFVA - Perimetri dei soprassuoli percorsi dal fuoco - 2017 | Rilevante per esenzioni, danni e contenzioso sul ruolo. |
+| `ras_aree_incendiate_2018` | `dbu:areeincendiateperim2018` | CFVA - Perimetri dei soprassuoli percorsi dal fuoco - 2018 | Rilevante per esenzioni, danni e contenzioso sul ruolo. |
+| `ras_aree_incendiate_2019` | `dbu:areeincendiateperim2019` | CFVA - Perimetri dei soprassuoli percorsi dal fuoco - 2019 | Rilevante per esenzioni, danni e contenzioso sul ruolo. |
+| `ras_aree_incendiate_2020` | `dbu:areeincendiateperim2020` | CFVA - Perimetri dei soprassuoli percorsi dal fuoco - 2020 | Rilevante per esenzioni, danni e contenzioso sul ruolo. |
+| `ras_aree_incendiate_2021` | `dbu:areeincendiateperim2021` | CFVA - Perimetri dei soprassuoli percorsi dal fuoco - 2021 | Rilevante per esenzioni, danni e contenzioso sul ruolo. |
+| `ras_aree_incendiate_2022` | `dbu:areeincendiateperim2022` | CFVA - Perimetri dei soprassuoli percorsi dal fuoco - 2022 | Rilevante per esenzioni, danni e contenzioso sul ruolo. |
+| `ras_aree_incendiate_2023` | `dbu:areeincendiateperim2023` | CFVA - Perimetri dei soprassuoli percorsi dal fuoco - 2023 | Rilevante per esenzioni, danni e contenzioso sul ruolo. |
 | `ras_aree_incendiate_2024` | `dbu:areeincendiateperim2024` | CFVA - Perimetri dei soprassuoli percorsi dal fuoco - 2024 | Rilevante per esenzioni, danni e contenzioso sul ruolo. |
 
-> La serie `areeincendiateperim*` esiste per anno dal 2005. Il seed registra
-> solo l'anno piu recente disponibile. Gli anni precedenti si aggiungono su
-> richiesta motivata, secondo la regola di governo del catalogo.
+> M26 registra nel seed gli anni `2005-2024`, uno per layer, dopo la verifica
+> P8: tutti sono presenti e hanno metadato `CC BY 4.0`. Il servizio espone anche
+> `2025`, fuori dal perimetro P8 e non incluso. Una nuova annata o revisione va
+> aggiunta come nuovo layer, mai come overwrite silenzioso di un anno esistente.
 
 ### Gruppo `catasto_ufficiale`
 
@@ -162,19 +182,35 @@ Sorgente: GeoServer raster RAS. Solo WMS, nessuna interrogazione.
 Le altre ortofoto candidate non entrano nel seed: i rispettivi metadati
 richiedono autorizzazioni del proprietario o dichiarano copyright. Possono
 essere rivalutate solo dopo autorizzazione scritta; il dettaglio e nella
-sezione "Licenze".
+sezione "Licenze". P9/M26 non modifica il selettore ortofoto: resta disponibile
+la sola annata autorizzata `1977-1978`.
 
 ### Gruppo `morfologia`
 
 | name GAIA | remote_layer | uso |
 | --- | --- | --- |
-| `ras_dtm_1m` | `raster:DTM_1M_MOSAICO_ALTIMETRIA` | Quote da rilievo LiDAR per dimensionamento tratti. |
-| `ras_dtm_1m_hillshade` | `raster:DTM_1M_MOSAICO_OMBRE` | Lettura morfologica del terreno. |
-| `ras_dtm_10m` | `raster:DTM_10M_ALTIMETRIA_REV01` | Copertura estesa dove manca il rilievo 1m. |
+| `ras_dtm_1m` | `raster:DTM_1M_MOSAICO_ALTIMETRIA` | Quote da rilievo LiDAR per dimensionamento tratti. `wms_infoable` da P15: sonda quota via `GetFeatureInfo`. |
+| `ras_dtm_1m_hillshade` | `raster:DTM_1M_MOSAICO_OMBRE` | Lettura morfologica del terreno. `wms_visual_only`: un'ombreggiatura non e una quota leggibile. |
+| `ras_dtm_10m` | `raster:DTM_10M_ALTIMETRIA_REV01` | Copertura estesa dove manca il rilievo 1m. `wms_infoable` da P15: sonda quota via `GetFeatureInfo`. |
 
 P0 ha corretto i tre identificativi: quelli censiti inizialmente
 (`DTM_1m_altimetrie`, `DTM_1m_hillshade`, `DTM_10m_altimetrie`) erano nomi di
 stile presenti nelle capabilities, non nomi di layer WMS.
+
+P8 ha confermato una sorgente di quota puntuale senza copia locale del raster:
+il GeoServer raster espone WCS `2.0.1` con `GetCoverage` per
+`raster__DTM_1M_MOSAICO_ALTIMETRIA` e
+`raster__DTM_10M_ALTIMETRIA_REV01`; gli stessi layer WMS sono queryable e
+`GetFeatureInfo` in `application/json` restituisce il valore numerico
+`GRAY_INDEX`. Il seed e la categoria restano invariati in P8; visualizzazione
+3D e copia del DTM restano fuori scope in ogni fase.
+
+P15 attiva la quota puntuale confermata da P8, senza copia del raster: `ras_dtm_1m`
+e `ras_dtm_10m` passano a `wms_infoable` e l'interrogazione aggiunge una sonda
+`GetFeatureInfo` opzionale e isolata per layer. Il valore `GRAY_INDEX` viene
+esposto come `quota (m s.l.m.)` con il disclaimer che non e un rilievo di
+cantiere. `ras_dtm_1m_hillshade` resta `wms_visual_only`. Il WCS resta non
+sfruttato: la sonda usa solo `GetFeatureInfo`, gia coperto dal proxy GAIA.
 
 ## Interrogabilita
 
@@ -185,7 +221,7 @@ deve trattare tre categorie distinte:
 | --- | --- | --- |
 | `wfs_queryable` | RAS vettoriale, AdE | `GetFeature` WFS con filtro spaziale. Restituisce attributi strutturati. |
 | `wms_infoable` | layer vettoriali senza WFS affidabile | `GetFeatureInfo` WMS. Restituisce testo o HTML da normalizzare. |
-| `wms_visual_only` | ortofoto, DTM, mosaici raster | Nessuna interrogazione. Solo resa grafica. |
+| `wms_visual_only` | ortofoto, DTM ombreggiatura, mosaici raster | Nessuna interrogazione. Solo resa grafica. |
 
 La categoria va registrata nei metadata del layer al momento del seed e non
 dedotta a runtime.
@@ -240,13 +276,38 @@ usare timeout, cache, richieste serializzate o limitate, backoff su `429`/`5xx`
 e degradazione governata; la licenza non va interpretata come garanzia di
 disponibilita.
 
+### Riverifica P8
+
+Riverifica eseguita il 2026-08-31, senza modificare il seed:
+
+- GetCapabilities RAS vettoriale: `379` layer `dbu:`; tutti i `14` layer del
+  seed presenti;
+- GetCapabilities RAS raster: `52` layer; tutti i `4` layer del seed presenti;
+- GetCapabilities AdE WMS: `13` layer nominati; tutti i `3` layer del seed
+  presenti;
+- i tre record PAI, richiesti via API GeoNetwork con identificativo completo
+  `R_SARDEG:*`, restituiscono ancora `404`; i layer WMS restano presenti con i
+  titoli di revisione `Rev. Dic_23`, ma la licenza non e accertabile;
+- i metadati delle sette ortofoto escluse sono raggiungibili e mantengono
+  autorizzazione del proprietario obbligatoria, oppure copyright e accesso
+  pubblico limitato per il `1997`; nessuna autorizzazione scritta per l'uso
+  GAIA risulta in `docs/`, `domain-docs/` o `reports/`;
+- i record GeoNetwork degli incendi `2005-2023` sono tutti raggiungibili e
+  dichiarano `https://creativecommons.org/licenses/by/4.0` e nessuna
+  limitazione di accesso pubblico, come il record `2024`.
+
+Per tutti gli incendi ammessi vale l'attribuzione RAS gia definita sopra, con
+il titolo specifico dell'annata. Gli URL dei singoli record sono quelli
+pubblicati nel MetadataURL delle capabilities; la forma API verificata e
+`https://webgis2.regione.sardegna.it/geonetwork/srv/api/records/R_SARDEG%3A<id>`.
+
 ### Esclusioni P0
 
 | layer candidato | decisione | evidenza e motivazione |
 | --- | --- | --- |
-| `dbu:pai_pericolo_idraulico_rev_dic_23` | escluso | layer WMS presente, ma il [record GeoNetwork](https://webgis2.regione.sardegna.it/geonetwork/srv/ita/catalog.search#/metadata/R_SARDEG:132322a2-9287-4a38-bfcb-843dfb27d6f4) restituisce `404` via API: licenza non accertabile |
-| `dbu:pai_rischio_idraulico_rev_dic_23` | escluso | layer WMS presente, ma il [record GeoNetwork](https://webgis2.regione.sardegna.it/geonetwork/srv/ita/catalog.search#/metadata/R_SARDEG:f86ae5a0-7b76-47d0-8e35-f55b8515e4a2) restituisce `404` via API: licenza non accertabile |
-| `dbu:pai_pericolo_geomorfologico_rev_dic_23` | escluso | layer WMS presente, ma il [record GeoNetwork](https://webgis2.regione.sardegna.it/geonetwork/srv/ita/catalog.search#/metadata/R_SARDEG:ab75d78e-c23d-4224-b24a-903bcc32b238) restituisce `404` via API: licenza non accertabile |
+| `dbu:pai_pericolo_idraulico_rev_dic_23` | escluso | layer WMS `PAI - Pericolo Idraulico Rev. Dic_23` presente, ma il [record GeoNetwork](https://webgis2.regione.sardegna.it/geonetwork/srv/ita/catalog.search#/metadata/R_SARDEG:132322a2-9287-4a38-bfcb-843dfb27d6f4) restituisce ancora `404` via API alla riverifica P8: licenza non accertabile |
+| `dbu:pai_rischio_idraulico_rev_dic_23` | escluso | layer WMS `PAI - Rischio Idraulico Rev. Dic_23` presente, ma il [record GeoNetwork](https://webgis2.regione.sardegna.it/geonetwork/srv/ita/catalog.search#/metadata/R_SARDEG:f86ae5a0-7b76-47d0-8e35-f55b8515e4a2) restituisce ancora `404` via API alla riverifica P8: licenza non accertabile |
+| `dbu:pai_pericolo_geomorfologico_rev_dic_23` | escluso | layer WMS `PAI - Pericolo Geomorfologico Rev. Dic_23` presente, ma il [record GeoNetwork](https://webgis2.regione.sardegna.it/geonetwork/srv/ita/catalog.search#/metadata/R_SARDEG:ab75d78e-c23d-4224-b24a-903bcc32b238) restituisce ancora `404` via API alla riverifica P8: licenza non accertabile |
 | `raster:Mosaico_2022_GB` | escluso | il [metadato](https://webgis2.regione.sardegna.it/geonetwork/srv/ita/catalog.search#/metadata/R_SARDEG:b4355702-ed36-4f2e-97c8-07e65e785efc) richiede agli utenti terzi autorizzazione del proprietario |
 | `raster:ortofoto_2019` | escluso | il [metadato](https://webgis2.regione.sardegna.it/geonetwork/srv/ita/catalog.search#/metadata/R_SARDEG:c82b8535-50b8-4f00-8a5e-a3ae24c33030) richiede agli utenti terzi autorizzazione del proprietario |
 | `raster:ortofoto_2013` | escluso | il [metadato](https://webgis2.regione.sardegna.it/geonetwork/srv/ita/catalog.search#/metadata/R_SARDEG:6b5bd1ad-7730-4b2f-af64-59a7c69b14d1) richiede agli utenti terzi autorizzazione del proprietario |
@@ -257,7 +318,8 @@ disponibilita.
 
 Le esclusioni sono dal seed, non dal censimento. Possono essere riaperte solo
 con condizioni d'uso nuovamente pubblicate o autorizzazione scritta che copra
-l'uso GAIA e il testo di attribuzione.
+l'uso GAIA e il testo di attribuzione. P8 non ha trovato tale evidenza: PAI e
+le sette ortofoto restano esclusi.
 
 ### Disponibilita E Tempi P0
 

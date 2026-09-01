@@ -786,7 +786,7 @@ Exit criteria:
 
 ---
 
-# Programma Territorio Esterno (M21-M25)
+# Programma Territorio Esterno (M21-M26)
 
 > Aggiunto: 2026-08-27.
 > Piano tecnico: `docs/GIS_PLATFORM_TERRITORIO_PLAN.md`.
@@ -1031,3 +1031,30 @@ Evidenza M25:
   `authcfg=gaia_oauth`, filtro `can_view` e nessun token o URL remoto incluso;
 - suite GIS e coverage backend `1476/1476`, coverage frontend P7 al `100%`,
   suite frontend `183` file e `1647` test, build e ratchet contro M24 verdi.
+
+## M26 - Serie Storica Incendi Nel Catalogo
+
+Stato: implementata il 2026-08-31 nel prompt P9.
+
+Obiettivo:
+
+- chiudere il gap del catalogo sulla serie annuale delle aree percorse dal
+  fuoco, limitatamente agli anni ammessi dalla verifica licenze P8.
+
+Deliverable:
+
+- seed esteso da `21` a `40` layer con gli incendi `2005-2024`;
+- un layer distinto per anno, `ras_aree_incendiate_<anno>`, senza overwrite;
+- licenza e attribuzione RAS `CC BY 4.0`, permesso viewer read-only e divieti
+  change request, export shapefile e QGIS-tabella invariati;
+- selettore annuale nel gruppo Eventi territoriali, con una sola annata attiva
+  e senza venti toggle simultanei;
+- PAI e ortofoto extra ancora esclusi secondo P8.
+
+Exit criteria:
+
+- bootstrap idempotente su `40` layer;
+- anni `2005-2024` presenti e interrogabili via WFS;
+- catalogo tematico e filtro `can_view` invariati;
+- attribuzione visibile per l'annata attiva;
+- coverage `100%` sui runtime modificati e quality ratchet verde.

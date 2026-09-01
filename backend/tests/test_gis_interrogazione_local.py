@@ -77,7 +77,15 @@ def test_local_probes_return_empty_and_skip_relation_query_without_parcel() -> N
 
     assert len(session.calls) == 5
     assert all(item.status == "empty" for item in results)
-    assert all(item.message == "Nessun elemento trovato." for item in results)
+    assert [item.message for item in results] == [
+        "Nessun elemento trovato.",
+        "Nessun elemento trovato.",
+        "Nessun elemento trovato.",
+        "Nessuna condotta nel raggio.",
+        "Nessun elemento trovato.",
+        "Nessun elemento trovato.",
+    ]
+    assert results[3].status == "empty"
     assert results[-1].data == []
 
 

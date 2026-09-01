@@ -3,15 +3,17 @@ from __future__ import annotations
 from copy import deepcopy
 
 import pytest
-from app.core.database import Base
-from app.modules.gis.models import GisLayer, GisLayerPermission
-from app.modules.gis.territorio_bootstrap import (
-    TERRITORIO_GIS_LAYER_DEFINITIONS,
-    ensure_territorio_gis_catalog,
-)
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
+
+from app.core.database import Base
+from app.modules.gis.models import GisLayer, GisLayerPermission
+from app.modules.gis.territorio_bootstrap import (
+    TERRITORIO_FIRE_YEARS,
+    TERRITORIO_GIS_LAYER_DEFINITIONS,
+    ensure_territorio_gis_catalog,
+)
 
 
 @pytest.fixture
@@ -27,13 +29,13 @@ def db() -> Session:
 
 
 def test_seed_is_idempotent_and_creates_exact_catalog(db: Session) -> None:
-    assert ensure_territorio_gis_catalog(db) == 21
+    assert ensure_territorio_gis_catalog(db) == 40
     assert ensure_territorio_gis_catalog(db) == 0
 
     layers = db.scalars(
         select(GisLayer).where(GisLayer.workspace == "territorio")
     ).all()
-    assert len(layers) == 21
+    assert len(layers) == 40
     assert {layer.name for layer in layers} == {
         definition["name"] for definition in TERRITORIO_GIS_LAYER_DEFINITIONS
     }
@@ -48,6 +50,45 @@ def test_seed_is_idempotent_and_creates_exact_catalog(db: Session) -> None:
         "ortofoto",
         "morfologia",
     }
+
+
+def test_seed_contains_only_licensed_fire_and_imagery_layers() -> None:
+    definitions = {
+        definition["name"]: definition
+        for definition in TERRITORIO_GIS_LAYER_DEFINITIONS
+    }
+
+    assert TERRITORIO_FIRE_YEARS == tuple(range(2005, 2025))
+    for year in TERRITORIO_FIRE_YEARS:
+        definition = definitions[f"ras_aree_incendiate_{year}"]
+        assert definition["remote_layer"] == f"dbu:areeincendiateperim{year}"
+        assert definition["title"].endswith(str(year))
+        assert definition["theme"] == "eventi"
+        assert definition["queryable"] == "wfs_queryable"
+        assert definition["license"] == "CC BY 4.0"
+        assert f"fuoco - {year}" in definition["attribution"]
+
+    assert not any("pai_" in name for name in definitions)
+    assert {name for name in definitions if name.startswith("ras_ortofoto_")} == {
+        "ras_ortofoto_1977"
+    }
+
+
+def test_dtm_altimetria_is_queryable_and_hillshade_stays_visual_only() -> None:
+    definitions = {
+        definition["name"]: definition
+        for definition in TERRITORIO_GIS_LAYER_DEFINITIONS
+    }
+
+    for name in ("ras_dtm_1m", "ras_dtm_10m"):
+        definition = definitions[name]
+        assert definition["queryable"] == "wms_infoable"
+        assert definition["theme"] == "morfologia"
+        assert "rilievo di cantiere" in definition["description"]
+
+    hillshade = definitions["ras_dtm_1m_hillshade"]
+    assert hillshade["queryable"] == "wms_visual_only"
+    assert hillshade["theme"] == "morfologia"
 
 
 @pytest.mark.parametrize("missing", ["license", "attribution"])
@@ -76,6 +117,23 @@ def test_seed_applies_read_only_policy_and_viewer_permissions(db: Session) -> No
     assert all(
         layer.metadata_json["external"]["license"] == "CC BY 4.0" for layer in layers
     )
+
+
+def test_dtm_altimetria_metadata_has_info_format_for_get_feature_info(
+    db: Session,
+) -> None:
+    ensure_territorio_gis_catalog(db)
+    dtm_1m = db.scalar(select(GisLayer).where(GisLayer.name == "ras_dtm_1m"))
+    hillshade = db.scalar(
+        select(GisLayer).where(GisLayer.name == "ras_dtm_1m_hillshade")
+    )
+
+    assert dtm_1m is not None
+    assert dtm_1m.metadata_json["external"]["queryable"] == "wms_infoable"
+    assert dtm_1m.metadata_json["external"]["info_format"] == "application/json"
+    assert hillshade is not None
+    assert hillshade.metadata_json["external"]["queryable"] == "wms_visual_only"
+    assert hillshade.metadata_json["external"]["info_format"] is None
 
 
 def test_seed_preserves_governance_descriptions(db: Session) -> None:

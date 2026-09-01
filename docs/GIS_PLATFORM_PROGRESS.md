@@ -1041,7 +1041,8 @@ Verifiche:
 
 L'audit autenticato finale e stato eseguito riutilizzando un dispositivo admin
 gia registrato, senza disattivare sessioni esistenti. Il limite admin resta a
-`7` dispositivi attivi e un ottavo identificativo viene respinto con `403`.
+`7` dispositivi attivi e un ottavo identificativo viene respinto con `403`; il
+limite dedicato ai `super_admin` e `20` dispositivi attivi.
 
 - smoke API `200` per layer, dashboard, import, export, audit e runtime health;
 - audit Playwright su `1440x1000` e `390x844` per catalogo, dettaglio viewer,
@@ -1111,13 +1112,72 @@ Verifiche 2026-08-27:
   SRID, preview, publish/reject con conferma, paginazione change request e
   piano OGC. Login mockato (`module_gis`) per evitare il tetto dispositivi.
 
+## Blocco Dati Ufficiali Rete Condotte 2026-08-31
+
+Stato: `BLOCKED_SOURCE_MISSING`. Nessun caricamento e stato eseguito.
+
+La fonte ufficiale del tracciato non e disponibile nel checkout ne nei
+filesystem accessibili allo stack locale. La ricerca ha verificato:
+
+- nessun `.shp`, `.shx`, `.dbf`, `.prj`, `.cpg`, `.gpkg`, `.qgs` o `.qgz`
+  relativo alle condotte in repository, `docs/`, `domain-docs/` o `reports/`;
+- nessun asset condotte sotto `/data` nel container backend; il mount
+  `/volume1` non e presente sul filesystem locale perche il NAS GIS e
+  configurato via SFTP;
+- il solo progetto `/srv/qgis/gaia-gis-platform.qgs` e un artefatto generato:
+  referenzia `network.rete_condotte`, ma non contiene il dato sorgente;
+- `network.rete_condotte` esiste nel PostGIS locale ma contiene `0` righe;
+  catalogo e target dichiarano `MULTILINESTRING`, SRID `4326`;
+- lo ZIP da `910` byte citato nello smoke del 2026-08-25 e un export del layer
+  vuoto, non evidenza di un tracciato ufficiale importabile.
+
+Non sono quindi dimostrabili nome e percorso del file ufficiale, proprietario
+del dato, data/revisione, checksum, schema attributi e SRID della sorgente. Lo
+SRID `4326` della tabella target non autorizza a presumere che il file sorgente
+sia nello stesso sistema di riferimento. Non vanno create geometrie, convertiti
+layer RAS o caricati dati sintetici per superare il blocco.
+
+Percorso governato scelto, da usare solo dopo la consegna della fonte: import
+shapefile GIS Platform, staging M13-M15, change request `feature_create` M17
+verso il layer ufficiale `rete_condotte`, approvazione e apply M20. Non viene
+introdotto un job di dominio Network alternativo.
+
+Gate obbligatori prima della prima change request:
+
+- evidenza scritta di fonte ufficiale, proprietario, revisione e percorso
+  controllato NAS/QGIS, con checksum del pacchetto consegnato;
+- `.prj` o metadato autorevole che confermi `EPSG:4326`; nessuna assegnazione o
+  trasformazione implicita dello SRID;
+- geometrie valide e non vuote, normalizzate come `MULTILINESTRING`;
+- mapping revisionato verso `codice`, `descrizione`, `materiale`,
+  `diametro_mm`, `stato`, `note`; `codice` non nullo e univoco,
+  `diametro_mm >= 0` e geometria non nulla;
+- conteggio totale, conteggio scarti/duplicati e bbox campione coerente con il
+  comprensorio, approvati prima dell'apply;
+- change request approvate e applicate a batch, senza abilitare nuovo
+  rollback/versioning applicativo.
+
+Smoke sospesi finche il gate fonte non e chiuso:
+
+- catalogo GIS del layer e conteggio PostGIS non nullo; tile non richieste
+  perche M18 dichiara `tiles.published=false`;
+- `POST /gis/interroga` su coordinate ufficiali di un tratto atteso, con
+  risultato `rete_condotte=ok` e codice coerente;
+- progetto QGIS rigenerato con `Condotte irrigue` e verifica visuale del
+  campione sul comprensorio.
+
+Il blocco si chiude solo quando il responsabile del dato fornisce il pacchetto
+ufficiale e le evidenze sopra elencate. Fino ad allora il comportamento `empty`
+dell'interrogazione e corretto e non deve essere mascherato.
+
 ## Decisioni Aperte
 
 - Se servono ruoli LOGIN QGIS personali o per postazione.
 - Se il layer Rete `rete_condotte` deve aggiungere rollback/versioning
   applicativo oltre agli snapshot audit M20.
-- Se esporre QGIS Server fuori dalla rete Docker tramite autenticazione GAIA o
-  vincolo VPN; il runtime interno read-only e gia attivo.
+- Se il collegamento backend-QGIS Server debba usare stabilmente la rete Docker
+  o una VPN CED nei deploy separati. L'accesso client e chiuso da P15 tramite
+  proxy autenticato GAIA; l'esposizione diretta resta vietata.
 
 ## Rischi
 
@@ -1151,21 +1211,22 @@ Verifiche 2026-08-27:
   controlled edit.
 - M18 dispone ora della tabella fisica Rete, ma i dati ufficiali devono ancora
   essere importati e validati; rollback automatico resta un'attivita dominio.
-- M19 dispone ora di un runtime QGIS Server interno read-only e dello smoke
-  GetCapabilities. Reverse proxy esterno, autenticazione e GetMap assistito
-  restano una decisione separata.
+- M19 dispone di un runtime QGIS Server interno read-only. P15 aggiunge il
+  proxy autenticato per GetCapabilities, GetMap e GetFeature, filtrato su
+  `layer_id`, `can_view` e policy QGIS. WFS-T resta rifiutato con `400`.
 - M20 applica modifiche reali su PostGIS opt-in: prima di abilitarlo su nuovi
   layer servono backup, permessi DB coerenti e una procedura di rollback basata
   sugli snapshot audit o su versioning dominio.
 
 ## Prossima Azione Raccomandata
 
-Importare e validare i dati ufficiali di `network.rete_condotte`, poi eseguire
-prove assistite di catalogo, viewer e workflow con utenti non tecnici. Per il
-programma complessita, il prossimo hotspot GIS consigliato e `GisLayerViewer`,
-senza avviarlo in questa slice. In parallelo va gestito separatamente il debito
-concorrente del quality ratchet globale; baseline ed eccezioni restano
-invariate.
+Acquisire dal responsabile del dato il pacchetto ufficiale di
+`network.rete_condotte`, inclusi `.prj`, revisione, checksum e mapping attributi.
+Solo dopo la chiusura del gate fonte eseguire il percorso M17+M20 e gli smoke
+documentati sopra. Per il programma complessita, il prossimo hotspot GIS
+consigliato e `GisLayerViewer`, senza avviarlo in questa slice. In parallelo va
+gestito separatamente il debito concorrente del quality ratchet globale;
+baseline ed eccezioni restano invariate.
 
 ## Programma Territorio Esterno
 

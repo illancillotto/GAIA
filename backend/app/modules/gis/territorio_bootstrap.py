@@ -15,6 +15,7 @@ from app.modules.gis.schemas import GisAccessLevel, GisExternalLayerConfig
 TERRITORIO_WORKSPACE = "territorio"
 TERRITORIO_DOMAIN_MODULE = "gis"
 CC_BY_4 = "CC BY 4.0"
+TERRITORIO_FIRE_YEARS = tuple(range(2005, 2025))
 
 
 def _ras_attribution(title: str) -> str:
@@ -65,6 +66,16 @@ def _definition(
         "license": CC_BY_4,
         "attribution": configured["attribution"],
     }
+
+
+def _fire_definition(year: int) -> dict[str, Any]:
+    return _definition(
+        f"ras_aree_incendiate_{year}",
+        f"dbu:areeincendiateperim{year}",
+        f"CFVA - Perimetri dei soprassuoli percorsi dal fuoco - {year}",
+        "Contesto per esenzioni, danni e contenzioso sul ruolo.",
+        "eventi",
+    )
 
 
 TERRITORIO_GIS_LAYER_DEFINITIONS: tuple[dict[str, Any], ...] = (
@@ -159,13 +170,7 @@ TERRITORIO_GIS_LAYER_DEFINITIONS: tuple[dict[str, Any], ...] = (
         "Attribuzione comunale della particella.",
         "amministrativo",
     ),
-    _definition(
-        "ras_aree_incendiate_2024",
-        "dbu:areeincendiateperim2024",
-        "CFVA - Perimetri dei soprassuoli percorsi dal fuoco - 2024",
-        "Contesto per esenzioni, danni e contenzioso sul ruolo.",
-        "eventi",
-    ),
+    *(_fire_definition(year) for year in TERRITORIO_FIRE_YEARS),
     _definition(
         "ade_particelle_wms",
         "CP.CadastralParcel",
@@ -222,11 +227,13 @@ TERRITORIO_GIS_LAYER_DEFINITIONS: tuple[dict[str, Any], ...] = (
         "ras_dtm_1m",
         "raster:DTM_1M_MOSAICO_ALTIMETRIA",
         "DTM 1 m - altimetria",
-        "Quote da rilievo LiDAR per il dimensionamento dei tratti.",
+        "Quote da rilievo LiDAR per il dimensionamento dei tratti. Quota"
+        " puntuale via GetFeatureInfo dichiarata indicativa dalla sorgente,"
+        " mai un rilievo di cantiere.",
         "morfologia",
         {
             "source_key": "ras_sitr_raster",
-            "queryable": "wms_visual_only",
+            "queryable": "wms_infoable",
             "cache_ttl_seconds": 86400,
         },
     ),
@@ -246,11 +253,13 @@ TERRITORIO_GIS_LAYER_DEFINITIONS: tuple[dict[str, Any], ...] = (
         "ras_dtm_10m",
         "raster:DTM_10M_ALTIMETRIA_REV01",
         "DTM 10 m - altimetria",
-        "Copertura altimetrica estesa dove manca il rilievo a 1 m.",
+        "Copertura altimetrica estesa dove manca il rilievo a 1 m. Quota"
+        " puntuale via GetFeatureInfo dichiarata indicativa dalla sorgente,"
+        " mai un rilievo di cantiere.",
         "morfologia",
         {
             "source_key": "ras_sitr_raster",
-            "queryable": "wms_visual_only",
+            "queryable": "wms_infoable",
             "cache_ttl_seconds": 86400,
         },
     ),

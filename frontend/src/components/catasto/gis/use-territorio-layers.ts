@@ -14,6 +14,7 @@ import {
   type GisTerritorioLayer,
   type GisTerritorioLayerGroup,
 } from "@/lib/api/territorio";
+import { ApiError } from "@/lib/api";
 
 type MapErrorEvent = {
   error?: Error;
@@ -110,6 +111,7 @@ export type TerritorioLayerState = {
   groups: GisTerritorioLayerGroup[];
   loading: boolean;
   catalogError: string | null;
+  catalogDisabled: boolean;
   enabled: Record<string, boolean>;
   opacity: Record<string, number>;
   layerErrors: Record<string, string>;
@@ -139,16 +141,19 @@ function useTerritorioCatalog(token: string | null) {
   const [groups, setGroups] = useState<GisTerritorioLayerGroup[]>([]);
   const [loading, setLoading] = useState(Boolean(token));
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [catalogDisabled, setCatalogDisabled] = useState(false);
   const [opacity, setOpacity] = useState<Record<string, number>>({});
   useEffect(() => {
     let active = true;
     if (!token) {
       setGroups([]);
       setLoading(false);
+      setCatalogDisabled(false);
       return;
     }
     setLoading(true);
     setCatalogError(null);
+    setCatalogDisabled(false);
     listGisTerritorioLayers(token)
       .then((response) => {
         if (!active) return;
@@ -159,6 +164,7 @@ function useTerritorioCatalog(token: string | null) {
       })
       .catch((error: unknown) => {
         if (!active) return;
+        setCatalogDisabled(error instanceof ApiError && error.status === 503);
         setCatalogError(error instanceof Error ? error.message : "Catalogo territoriale non disponibile");
       })
       .finally(() => {
@@ -168,7 +174,7 @@ function useTerritorioCatalog(token: string | null) {
       active = false;
     };
   }, [token]);
-  return { groups, loading, catalogError, opacity, setOpacity };
+  return { groups, loading, catalogError, catalogDisabled, opacity, setOpacity };
 }
 
 function useMapLayerSynchronization(
@@ -278,6 +284,7 @@ export function useTerritorioLayers(
     groups: catalog.groups,
     loading: catalog.loading,
     catalogError: catalog.catalogError,
+    catalogDisabled: catalog.catalogDisabled,
     enabled,
     opacity: catalog.opacity,
     layerErrors,

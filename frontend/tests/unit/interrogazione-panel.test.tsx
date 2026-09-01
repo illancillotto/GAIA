@@ -50,11 +50,9 @@ function state(overrides: Partial<InterrogazioneState> = {}): InterrogazioneStat
 }
 
 const scheda = {
-  parcelId: null,
-  sheet: null,
-  error: null,
-  downloadUrl: null,
-  generate: vi.fn(),
+  token: "token",
+  particellaId: null,
+  currentUser: { enabled_modules: ["gis"], role: "viewer" },
 };
 
 describe("InterrogazionePanel", () => {
@@ -69,7 +67,7 @@ describe("InterrogazionePanel", () => {
     expect(screen.getByText("-")).toBeInTheDocument();
     expect(screen.getByText("Dati AdE")).toBeInTheDocument();
     expect(screen.getByText("Dati RAS")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Genera scheda territoriale/ })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /Genera scheda territoriale/ })).not.toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Vincoli e tutele" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "altro" })).toBeInTheDocument();
   });

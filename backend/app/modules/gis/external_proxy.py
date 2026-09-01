@@ -25,6 +25,7 @@ from app.modules.gis.external_sources import (
 )
 from app.modules.gis.models import GisAuditLog, GisLayer
 from app.modules.gis.schemas import GisExternalLayerConfig
+from app.modules.gis.territorio_availability import require_external_layers_enabled
 
 _OPERATIONS = {
     "wms": {
@@ -355,12 +356,12 @@ def _fetch_remote(url: str, timeout_seconds: float) -> ExternalProxyPayload:
     except httpx.TimeoutException as exc:
         raise ExternalProxyError(
             status.HTTP_504_GATEWAY_TIMEOUT,
-            "External GIS source timed out",
+            "Timeout della sorgente territoriale.",
         ) from exc
     except (httpx.HTTPStatusError, httpx.RequestError) as exc:
         raise ExternalProxyError(
             status.HTTP_502_BAD_GATEWAY,
-            "External GIS source is unavailable",
+            "Sorgente territoriale non raggiungibile.",
         ) from exc
     return ExternalProxyPayload(
         content=response.content,
@@ -393,7 +394,7 @@ def execute_external_request(
     if not source.enabled:
         raise ExternalProxyError(
             status.HTTP_503_SERVICE_UNAVAILABLE,
-            "External GIS source is disabled",
+            "Consultazione territoriale non attiva in questo ambiente.",
         )
     if service == "wms" and layer.source_type != "wms_external":
         raise ExternalProxyError(
@@ -439,11 +440,7 @@ def proxy_external_request(
     service: str,
     query_items: Iterable[tuple[str, str]],
 ) -> ExternalProxyPayload:
-    if not settings.gis_external_layers_enabled:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="External GIS layers are disabled",
-        )
+    require_external_layers_enabled()
     layer = services.resolve_external_layer_for_proxy(db, layer_id, current_user)
     try:
         return execute_external_request(layer, service, query_items)

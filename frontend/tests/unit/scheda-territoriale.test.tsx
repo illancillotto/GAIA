@@ -11,6 +11,7 @@ vi.mock("@/lib/api/territorio", async (importOriginal) => ({
 }));
 
 import InterrogazionePanel from "@/components/catasto/gis/InterrogazionePanel";
+import SchedaTerritorialeActions from "@/components/catasto/gis/SchedaTerritorialeActions";
 import { useSchedaTerritoriale, type SchedaTerritorialeState } from "@/components/catasto/gis/use-scheda-territoriale";
 import type { InterrogazioneState } from "@/components/catasto/gis/use-interrogazione";
 import type { GisSchedaTerritoriale } from "@/lib/api/territorio";
@@ -20,7 +21,7 @@ function sheet(status: GisSchedaTerritoriale["status"]): GisSchedaTerritoriale {
 }
 
 function Harness({ onState, token = "token", parcelId = "parcel-1" }: { onState: (value: SchedaTerritorialeState) => void; token?: string | null; parcelId?: unknown }) {
-  const value = useSchedaTerritoriale(token, [{ source_id: "particella", data: [{ id: parcelId }] }]);
+  const value = useSchedaTerritoriale(token, typeof parcelId === "string" ? parcelId : null);
   useEffect(() => onState(value), [onState, value]);
   return <button onClick={value.generate}>generate</button>;
 }
@@ -117,16 +118,32 @@ describe("scheda territoriale", () => {
 
   test("panel enables generation, shows progress, errors and download", () => {
     const base: InterrogazioneState = { open: true, armed: false, point: null, gaia: [], catastoUfficiale: [], territorio: [], arm: vi.fn(), close: vi.fn() };
-    const generate = vi.fn();
-    const { rerender } = render(<InterrogazionePanel {...base} scheda={{ parcelId: "parcel-1", sheet: null, error: null, downloadUrl: null, generate }} />);
+    api.create.mockResolvedValue(sheet("queued"));
+    const props = { token: "token", particellaId: "parcel-1", currentUser: { enabled_modules: ["gis"], role: "viewer" } };
+    const { rerender } = render(<InterrogazionePanel {...base} scheda={props} />);
     fireEvent.click(screen.getByRole("button", { name: "Genera scheda territoriale" }));
-    expect(generate).toHaveBeenCalled();
-    rerender(<InterrogazionePanel {...base} scheda={{ parcelId: "parcel-1", sheet: sheet("queued"), error: null, downloadUrl: null, generate }} />);
-    expect(screen.getByRole("button", { name: "Scheda in coda..." })).toBeDisabled();
-    rerender(<InterrogazionePanel {...base} scheda={{ parcelId: "parcel-1", sheet: sheet("processing"), error: "failed", downloadUrl: null, generate }} />);
-    expect(screen.getByText("Generazione scheda...")).toBeInTheDocument();
-    expect(screen.getByRole("alert")).toHaveTextContent("failed");
-    rerender(<InterrogazionePanel {...base} scheda={{ parcelId: "parcel-1", sheet: sheet("completed"), error: null, downloadUrl: "blob:sheet", generate }} />);
-    expect(screen.getByRole("link", { name: /Scarica scheda/ })).toHaveAttribute("href", "blob:sheet");
+    expect(api.create).toHaveBeenCalledWith("token", "parcel-1");
+    rerender(<InterrogazionePanel {...base} scheda={{ ...props, particellaId: null }} />);
+    expect(screen.queryByTestId("scheda-territoriale-actions")).not.toBeInTheDocument();
+  });
+
+  test("actions enforce module access and token availability", () => {
+    const gisUser = { enabled_modules: ["gis"], role: "viewer" };
+    const { rerender } = render(
+      <SchedaTerritorialeActions token="token" particellaId="parcel-1" currentUser={null} />,
+    );
+    expect(screen.queryByTestId("scheda-territoriale-actions")).not.toBeInTheDocument();
+    rerender(
+      <SchedaTerritorialeActions
+        token="token"
+        particellaId="parcel-1"
+        currentUser={{ enabled_modules: ["catasto"], role: "viewer" }}
+      />,
+    );
+    expect(screen.queryByTestId("scheda-territoriale-actions")).not.toBeInTheDocument();
+    rerender(
+      <SchedaTerritorialeActions token={null} particellaId="parcel-1" currentUser={gisUser} />,
+    );
+    expect(screen.getByRole("button", { name: "Genera scheda territoriale" })).toBeDisabled();
   });
 });

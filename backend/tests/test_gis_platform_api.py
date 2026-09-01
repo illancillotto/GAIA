@@ -9,6 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID
 
+import httpx
 import pytest
 import shapefile
 from fastapi import HTTPException, status
@@ -26,6 +27,7 @@ from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.gis import exporter as gis_exporter
 from app.modules.gis import external_proxy as gis_external_proxy
+from app.modules.gis import qgis_ogc_proxy as gis_qgis_ogc_proxy
 from app.modules.gis import runtime_health as gis_runtime_health
 from app.modules.gis import services as gis_services
 from app.modules.gis.bootstrap import (
@@ -1453,6 +1455,80 @@ def test_ogc_poc_handles_users_without_publishable_layers() -> None:
     assert payload["layers"] == []
     assert payload["warnings"] == ["No visible OGC publishable layers for this user."]
     assert "Publish 0 read-only layer(s)" in payload["config_snippets"]["rollout_note"]
+
+
+def test_authenticated_ogc_proxy_enforces_layer_permissions_and_read_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed_gis_platform_catalog()
+    admin_headers = auth_headers("gis-admin")
+    viewer_headers = auth_headers("gis-viewer")
+    poc = client.get("/gis/ogc/poc", headers=viewer_headers).json()
+    visible = poc["layers"][0]
+    service_name = visible["service_layer_name"]
+    capabilities = (
+        "<WMS_Capabilities><Capability><Layer><Title>GAIA</Title>"
+        f"<Layer><Name>{service_name}</Name><Title>Consentito</Title></Layer>"
+        "<Layer><Name>hidden</Name><Title>Riservato</Title></Layer>"
+        "</Layer></Capability></WMS_Capabilities>"
+    ).encode()
+
+    def qgis_get(url: str, **kwargs: object) -> httpx.Response:
+        params = kwargs["params"]
+        content = capabilities if params["REQUEST"] == "GetCapabilities" else b"png"
+        media_type = "application/xml" if content is capabilities else "image/png"
+        return httpx.Response(
+            200,
+            content=content,
+            headers={"content-type": media_type},
+            request=httpx.Request("GET", url),
+        )
+
+    monkeypatch.setattr(gis_qgis_ogc_proxy.httpx, "get", qgis_get)
+    endpoint = f"/gis/ogc/layers/{visible['layer_id']}"
+    response = client.get(
+        f"{endpoint}?SERVICE=WMS&REQUEST=GetCapabilities",
+        headers=viewer_headers,
+    )
+    assert response.status_code == 200
+    assert "Consentito" in response.text
+    assert "Riservato" not in response.text
+
+    get_map = client.get(
+        endpoint,
+        headers=viewer_headers,
+        params={
+            "SERVICE": "WMS",
+            "REQUEST": "GetMap",
+            "BBOX": "8,39,9,40",
+            "WIDTH": "256",
+            "HEIGHT": "256",
+            "CRS": "EPSG:4326",
+        },
+    )
+    assert get_map.status_code == 200
+    assert get_map.content == b"png"
+    assert get_map.headers["x-gaia-ogc-mode"] == "read-only"
+
+    hidden = create_layer(
+        admin_headers,
+        name="ogc_hidden",
+        title="OGC hidden",
+        metadata={"qgis": {"mode": "read_only"}},
+    )
+    denied = client.get(
+        f"/gis/ogc/layers/{hidden['id']}?SERVICE=WMS&REQUEST=GetCapabilities",
+        headers=viewer_headers,
+    )
+    assert denied.status_code == 403
+
+    transaction = client.post(
+        endpoint,
+        headers=viewer_headers,
+        content=b"<wfs:Transaction />",
+    )
+    assert transaction.status_code == 400
+    assert "WFS-T non e abilitato" in transaction.json()["detail"]
 
 
 def test_admin_imports_valid_shapefile_to_staging_and_rejects_it() -> None:
@@ -3733,14 +3809,17 @@ def test_external_layers_are_excluded_from_change_export_and_qgis() -> None:
     assert governance.json()["layers"] == []
 
 
-def test_territorio_layers_are_grouped_and_resolved_for_viewer() -> None:
-    assert seed_territorio_gis_catalog() == 21
+def test_territorio_layers_are_grouped_and_resolved_for_viewer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "gis_external_layers_enabled", True)
+    assert seed_territorio_gis_catalog() == 40
 
     response = client.get("/gis/territorio/layers", headers=auth_headers("gis-viewer"))
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["total"] == 21
+    assert payload["total"] == 40
     assert [group["theme"] for group in payload["groups"]] == [
         "bonifica",
         "colture",
@@ -3757,9 +3836,25 @@ def test_territorio_layers_are_grouped_and_resolved_for_viewer() -> None:
     assert first["legend_url"].endswith("/wms?request=GetLegendGraphic")
     assert first["attribution"]
     assert first["queryable"] == "wfs_queryable"
+    events = next(group for group in payload["groups"] if group["theme"] == "eventi")
+    assert [layer["name"] for layer in events["layers"]] == [
+        f"ras_aree_incendiate_{year}" for year in range(2005, 2025)
+    ]
+    assert all(layer["queryable"] == "wfs_queryable" for layer in events["layers"])
+    assert not any(
+        "pai_" in layer["name"]
+        for group in payload["groups"]
+        for layer in group["layers"]
+    )
+    assert [layer["name"] for group in payload["groups"] for layer in group["layers"] if layer["theme"] == "ortofoto"] == [
+        "ras_ortofoto_1977"
+    ]
 
 
-def test_territorio_layers_exclude_unauthorized_and_inactive_layers() -> None:
+def test_territorio_layers_exclude_unauthorized_and_inactive_layers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "gis_external_layers_enabled", True)
     seed_territorio_gis_catalog()
     db = TestingSessionLocal()
     try:
@@ -3785,6 +3880,21 @@ def test_territorio_layers_exclude_unauthorized_and_inactive_layers() -> None:
         for group in response.json()["groups"]
         for layer in group["layers"]
     }
-    assert response.json()["total"] == 19
+    assert response.json()["total"] == 38
     assert "ras_aree_bonifica" not in names
     assert "ras_comprensori_irrigui" not in names
+
+
+def test_territorio_layers_disabled_returns_governed_503(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "gis_external_layers_enabled", False)
+
+    response = client.get(
+        "/gis/territorio/layers", headers=auth_headers("gis-viewer")
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == (
+        "Consultazione territoriale non attiva in questo ambiente."
+    )
