@@ -274,6 +274,30 @@ def test_update_auto_sync_config_can_store_disabled_state_without_credential() -
         db.close()
 
 
+def test_update_auto_sync_config_preserves_enabled_state_when_field_is_omitted() -> None:
+    user = _create_user("auto_sync_preserve_enabled")
+    db = TestingSessionLocal()
+    try:
+        credential = _create_credential(db, user, active=True)
+        config = get_auto_sync_config(db)
+        config.job_enabled = True
+        config.credential_id = credential.id
+        db.add(config)
+        db.commit()
+
+        updated = update_auto_sync_config(
+            db,
+            PresenzeAutoSyncConfigUpdate(collaborator_limit=18),
+            user_id=user.id,
+        )
+
+        assert updated.job_enabled is True
+        assert updated.collaborator_limit == 18
+        assert updated.credential_id == credential.id
+    finally:
+        db.close()
+
+
 def test_update_auto_sync_config_rejects_unknown_credential() -> None:
     user = _create_user("auto_sync_missing_cred")
     db = TestingSessionLocal()
@@ -859,6 +883,39 @@ def test_trigger_auto_sync_job_returns_none_when_all_parallel_codes_are_already_
         db.close()
 
 
+def test_trigger_auto_sync_job_falls_back_to_serial_when_open_codes_are_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user = _create_user("auto_sync_parallel_unknown_open_codes")
+    db = TestingSessionLocal()
+    try:
+        credential = _create_credential(db, user, active=True)
+        config = get_auto_sync_config(db)
+        config.job_enabled = True
+        config.credential_id = credential.id
+        config.updated_by_user_id = user.id
+        db.add(config)
+        db.commit()
+
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.settings.presenze_auto_sync_parallel_enabled", True)
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync._open_employee_codes_for_period", lambda *_args, **_kwargs: None)
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync._reconcile_and_has_open_sync_job", lambda _db: (False, False))
+        fake_now = type(
+            "FakeDateTime",
+            (),
+            {"now": staticmethod(lambda _tz=None: datetime(2026, 7, 3, 12, 0))},
+        )
+        monkeypatch.setattr("app.modules.presenze.services.auto_sync.datetime", fake_now)
+
+        job = trigger_auto_sync_job(db)
+
+        assert job is not None
+        assert job.params_json["trigger"] == "auto"
+        assert "sync_group_id" not in job.params_json
+    finally:
+        db.close()
+
+
 def test_trigger_auto_sync_job_defers_recent_failed_auto_sync(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -938,8 +995,13 @@ def test_trigger_auto_sync_job_ignores_failed_duplicate_when_same_period_complet
         db.close()
 
 
+@pytest.mark.parametrize(
+    "existing_retry_history",
+    [None, [{"previous_status": "failed"}]],
+)
 def test_trigger_auto_sync_job_requeues_failed_auto_sync_after_retry_delay(
     monkeypatch: pytest.MonkeyPatch,
+    existing_retry_history: list[dict[str, str]] | None,
 ) -> None:
     user = _create_user("auto_sync_retry_due")
     db = TestingSessionLocal()
@@ -952,6 +1014,13 @@ def test_trigger_auto_sync_job_requeues_failed_auto_sync_after_retry_delay(
         db.add(config)
         db.commit()
         failed_job = _create_auto_sync_job(db, user, credential, finished_at=datetime.now(UTC) - timedelta(hours=13))
+        if existing_retry_history is not None:
+            failed_job.params_json = {
+                **failed_job.params_json,
+                "auto_retry_history": existing_retry_history,
+            }
+            db.add(failed_job)
+            db.commit()
 
         monkeypatch.setattr("app.modules.presenze.services.auto_sync._reconcile_and_has_open_sync_job", lambda db: (False, False))
         monkeypatch.setattr("app.modules.presenze.services.auto_sync.settings.presenze_auto_sync_retry_delay_hours", 12)
@@ -973,6 +1042,8 @@ def test_trigger_auto_sync_job_requeues_failed_auto_sync_after_retry_delay(
         assert retry_history["previous_status"] == "failed"
         assert retry_history["previous_started_at"] is not None
         assert retry_history["previous_finished_at"] is not None
+        if existing_retry_history is not None:
+            assert retry_job.params_json["auto_retry_history"][0] == existing_retry_history[0]
         assert len(db.execute(select(PresenzeSyncJob)).scalars().all()) == 1
     finally:
         db.close()

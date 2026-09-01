@@ -162,10 +162,7 @@ def _last_success_at(cohorts: Iterable[list[Any]]) -> datetime | None:
         if not cohort or not all(_job_succeeded(job) for job in cohort):
             continue
         finished_at = [_as_utc(getattr(job, "finished_at", None)) for job in cohort]
-        if all(value is not None for value in finished_at):
-            successful_at.append(
-                max(value for value in finished_at if value is not None)
-            )
+        successful_at.append(max(value for value in finished_at if value is not None))
     return max(successful_at, default=None)
 
 

@@ -71,6 +71,22 @@ def test_resolve_inaz_sync_status_reports_success_in_utc() -> None:
     }
 
 
+def test_resolve_inaz_sync_status_uses_latest_success_across_cohorts() -> None:
+    earlier = _job(
+        status="completed",
+        finished_at=datetime(2026, 8, 30, 7, 25, tzinfo=UTC),
+    )
+    later = _job(
+        status="completed",
+        finished_at=datetime(2026, 8, 31, 7, 25, tzinfo=UTC),
+    )
+
+    payload = resolve_inaz_sync_status([earlier, later])
+
+    assert payload["status"] == "success"
+    assert payload["last_success_at"] == "2026-08-31T07:25:00Z"
+
+
 def test_resolve_inaz_sync_status_reports_never_without_visible_attempts() -> None:
     queued = _job(status="pending", started_at=None, finished_at=None)
     file_import = _job(status="completed", params={"mode": "xlsm_export"})
