@@ -306,6 +306,7 @@ Copertura core attuale:
 Regole pratiche:
 
 - ogni target esegue Graphify dentro il corpus di riferimento, cosi ogni modulo mantiene il proprio `graphify-out/`
+- se una rimozione strutturale lascia archi obsoleti dopo l'update incrementale, rilancia lo stesso target con `GRAPHIFY_CODE_FLAGS=--force` (per esempio `make graphify-frontend GRAPHIFY_CODE_FLAGS=--force`)
 - i target `*-code` usano estrazione strutturale senza LLM e funzionano anche senza API key
 - i target `*-docs` usano estrazione semantica e richiedono una API key supportata da Graphify
 - se `.env.graphify` usa `OPENAI_BASE_URL`, su una installazione Graphify standard devi prima applicare `make graphify-patch-openai-base-url`

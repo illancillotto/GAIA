@@ -1,5 +1,6 @@
 COMPOSE = docker compose
 GRAPHIFY_ENV = if [ -f /home/cbo/CursorProjects/GAIA/.env.graphify ]; then set -a; . /home/cbo/CursorProjects/GAIA/.env.graphify; set +a; fi;
+GRAPHIFY_CODE_FLAGS ?=
 GRAPHIFY_WIKI_DOC_MODEL = gpt-5.4-mini
 GRAPHIFY_WIKI_DOC_FLAGS = --max-concurrency 1 --api-timeout 60
 GRAPHIFY_WIKI_DOC_TIMEOUT = timeout --foreground 180s
@@ -185,7 +186,7 @@ graphify-refresh-core:
 	$(MAKE) graphify-refresh-core-docs
 
 graphify-catasto-code:
-	cd backend/app/modules/catasto && $(GRAPHIFY_ENV) graphify update .
+	cd backend/app/modules/catasto && $(GRAPHIFY_ENV) graphify update . $(GRAPHIFY_CODE_FLAGS)
 
 graphify-catasto-docs:
 	cd domain-docs/catasto && $(GRAPHIFY_ENV) graphify extract .
@@ -195,7 +196,7 @@ graphify-catasto-query:
 	cd backend/app/modules/catasto && $(GRAPHIFY_ENV) graphify query "$(Q)"
 
 graphify-presenze-code:
-	cd backend/app/modules/presenze && $(GRAPHIFY_ENV) graphify update .
+	cd backend/app/modules/presenze && $(GRAPHIFY_ENV) graphify update . $(GRAPHIFY_CODE_FLAGS)
 
 graphify-presenze-docs:
 	cd domain-docs/presenze && $(GRAPHIFY_ENV) GRAPHIFY_OPENAI_MODEL=$(GRAPHIFY_PRESENZE_DOC_MODEL) $(GRAPHIFY_PRESENZE_DOC_TIMEOUT) graphify extract . $(GRAPHIFY_PRESENZE_DOC_FLAGS)
@@ -217,7 +218,7 @@ graphify-inaz-query:
 	@$(MAKE) graphify-presenze-query Q="$(Q)"
 
 graphify-network-code:
-	cd backend/app/modules/network && $(GRAPHIFY_ENV) graphify update .
+	cd backend/app/modules/network && $(GRAPHIFY_ENV) graphify update . $(GRAPHIFY_CODE_FLAGS)
 
 graphify-network-docs:
 	cd domain-docs/network && $(GRAPHIFY_ENV) graphify extract .
@@ -227,7 +228,7 @@ graphify-network-query:
 	cd backend/app/modules/network && $(GRAPHIFY_ENV) graphify query "$(Q)"
 
 graphify-operazioni-code:
-	cd backend/app/modules/operazioni && $(GRAPHIFY_ENV) graphify update .
+	cd backend/app/modules/operazioni && $(GRAPHIFY_ENV) graphify update . $(GRAPHIFY_CODE_FLAGS)
 
 graphify-operazioni-docs:
 	cd domain-docs/operazioni && $(GRAPHIFY_ENV) graphify extract .
@@ -237,7 +238,7 @@ graphify-operazioni-query:
 	cd backend/app/modules/operazioni && $(GRAPHIFY_ENV) graphify query "$(Q)"
 
 graphify-organigramma-code:
-	cd backend/app/modules/organigramma && $(GRAPHIFY_ENV) graphify update .
+	cd backend/app/modules/organigramma && $(GRAPHIFY_ENV) graphify update . $(GRAPHIFY_CODE_FLAGS)
 
 graphify-organigramma-docs:
 	cd domain-docs/organigramma && $(GRAPHIFY_ENV) graphify extract .
@@ -247,7 +248,7 @@ graphify-organigramma-query:
 	cd backend/app/modules/organigramma && $(GRAPHIFY_ENV) graphify query "$(Q)"
 
 graphify-riordino-code:
-	cd backend/app/modules/riordino && $(GRAPHIFY_ENV) graphify update .
+	cd backend/app/modules/riordino && $(GRAPHIFY_ENV) graphify update . $(GRAPHIFY_CODE_FLAGS)
 
 graphify-riordino-docs:
 	cd domain-docs/riordino && $(GRAPHIFY_ENV) graphify extract .
@@ -257,7 +258,7 @@ graphify-riordino-query:
 	cd backend/app/modules/riordino && $(GRAPHIFY_ENV) graphify query "$(Q)"
 
 graphify-ruolo-code:
-	cd backend/app/modules/ruolo && $(GRAPHIFY_ENV) graphify update .
+	cd backend/app/modules/ruolo && $(GRAPHIFY_ENV) graphify update . $(GRAPHIFY_CODE_FLAGS)
 
 graphify-ruolo-docs:
 	cd domain-docs/ruolo && $(GRAPHIFY_ENV) graphify extract .
@@ -267,7 +268,7 @@ graphify-ruolo-query:
 	cd backend/app/modules/ruolo && $(GRAPHIFY_ENV) graphify query "$(Q)"
 
 graphify-utenze-code:
-	cd backend/app/modules/utenze && $(GRAPHIFY_ENV) graphify update .
+	cd backend/app/modules/utenze && $(GRAPHIFY_ENV) graphify update . $(GRAPHIFY_CODE_FLAGS)
 
 graphify-utenze-docs:
 	cd domain-docs/utenze && $(GRAPHIFY_ENV) GRAPHIFY_OPENAI_MODEL=$(GRAPHIFY_UTENZE_DOC_MODEL) $(GRAPHIFY_UTENZE_DOC_TIMEOUT) graphify extract . $(GRAPHIFY_UTENZE_DOC_FLAGS)
@@ -277,7 +278,7 @@ graphify-utenze-query:
 	cd backend/app/modules/utenze && $(GRAPHIFY_ENV) graphify query "$(Q)"
 
 graphify-wiki-code:
-	cd backend/app/modules/wiki && $(GRAPHIFY_ENV) graphify update .
+	cd backend/app/modules/wiki && $(GRAPHIFY_ENV) graphify update . $(GRAPHIFY_CODE_FLAGS)
 
 graphify-wiki-docs:
 	cd domain-docs/wiki && $(GRAPHIFY_ENV) GRAPHIFY_OPENAI_MODEL=$(GRAPHIFY_WIKI_DOC_MODEL) $(GRAPHIFY_WIKI_DOC_TIMEOUT) graphify extract . $(GRAPHIFY_WIKI_DOC_FLAGS)
@@ -291,14 +292,14 @@ graphify-wiki-query:
 	cd backend/app/modules/wiki && $(GRAPHIFY_ENV) graphify query "$(Q)"
 
 graphify-backend:
-	cd backend/app && $(GRAPHIFY_ENV) graphify update .
+	cd backend/app && $(GRAPHIFY_ENV) graphify update . $(GRAPHIFY_CODE_FLAGS)
 
 graphify-backend-query:
 	@if [ -z "$(Q)" ]; then echo "Uso: make graphify-backend-query Q=\"domanda\""; exit 1; fi
 	cd backend/app && $(GRAPHIFY_ENV) graphify query "$(Q)"
 
 graphify-frontend:
-	cd frontend/src && $(GRAPHIFY_ENV) graphify update .
+	cd frontend/src && $(GRAPHIFY_ENV) graphify update . $(GRAPHIFY_CODE_FLAGS)
 
 graphify-frontend-query:
 	@if [ -z "$(Q)" ]; then echo "Uso: make graphify-frontend-query Q=\"domanda\""; exit 1; fi

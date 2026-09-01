@@ -1,6 +1,6 @@
 ---
 name: gaia-graphify-maintenance
-description: Keep Graphify outputs updated for GAIA module-level code and domain-doc corpora when code structure, routes, services, workflows, or docs change. Use this when working on GAIA modules such as catasto, inaz, network, operazioni, organigramma, riordino, ruolo, utenze, or wiki and you need to refresh graphify-out, run the correct make target, or query the right corpus without polluting the repo root graph.
+description: Keep Graphify outputs updated for GAIA module-level code and domain-doc corpora when code structure, routes, services, workflows, or docs change. Use this when working on GAIA modules such as catasto, presenze, network, operazioni, organigramma, riordino, ruolo, utenze, wiki, or cross-cutting elaborazioni workflows and you need to refresh graphify-out, run the correct make target, or query the right corpus without polluting the repo root graph.
 ---
 
 # GAIA Graphify Maintenance
@@ -10,7 +10,7 @@ Use this skill when working in the GAIA repository and changes affect module str
 ## Supported corpora
 
 - `backend/app/modules/catasto`
-- `backend/app/modules/inaz`
+- `backend/app/modules/presenze`
 - `backend/app/modules/ruolo`
 - `backend/app/modules/utenze`
 - `backend/app/modules/operazioni`
@@ -19,7 +19,7 @@ Use this skill when working in the GAIA repository and changes affect module str
 - `backend/app/modules/riordino`
 - `backend/app/modules/wiki`
 - `domain-docs/catasto`
-- `domain-docs/inaz`
+- `domain-docs/presenze`
 - `domain-docs/ruolo`
 - `domain-docs/utenze`
 - `domain-docs/operazioni`
@@ -30,6 +30,12 @@ Use this skill when working in the GAIA repository and changes affect module str
 - `backend/app`
 - `frontend/src`
 - `domain-docs`
+- `docs`
+
+Cross-cutting `elaborazioni` changes do not have a narrow dedicated target. Route
+and service changes use `graphify-backend`, UI changes use `graphify-frontend`,
+domain documentation uses `graphify-docs`, and general technical documentation
+under `docs/` uses `graphify-platform-docs`.
 
 ## Required workflow
 
@@ -44,6 +50,7 @@ Code graphs do not require an LLM key:
 
 - `make graphify-refresh-core-code`
 - `make graphify-catasto-code`
+- `make graphify-presenze-code`
 - `make graphify-inaz-code`
 - `make graphify-network-code`
 - `make graphify-operazioni-code`
@@ -55,11 +62,23 @@ Code graphs do not require an LLM key:
 - `make graphify-backend`
 - `make graphify-frontend`
 
+The `graphify-inaz-*` targets are legacy aliases of the corresponding
+`graphify-presenze-*` targets.
+
+When a structural refactor removes imports, symbols, or routes and the
+incremental graph retains stale edges, force pruning through the same Make
+target instead of invoking Graphify from the repository root:
+
+```bash
+make graphify-frontend GRAPHIFY_CODE_FLAGS=--force
+```
+
 Docs graphs require a valid Graphify-supported API key in `.env.graphify`:
 
 - `make graphify-refresh-core-docs`
 - `make graphify-refresh-core`
 - `make graphify-catasto-docs`
+- `make graphify-presenze-docs`
 - `make graphify-inaz-docs`
 - `make graphify-network-docs`
 - `make graphify-operazioni-docs`
@@ -69,6 +88,18 @@ Docs graphs require a valid Graphify-supported API key in `.env.graphify`:
 - `make graphify-utenze-docs`
 - `make graphify-wiki-docs`
 - `make graphify-docs`
+- `make graphify-platform-docs`
+
+Use `gpt-5.4-mini` as the normal docs extraction model. The dedicated Wiki and
+Presenze targets already apply their supported low-concurrency timeout profile;
+use `make graphify-wiki-docs-debug` only for bounded Wiki diagnostics.
+
+Every corpus with a Make target also has a matching `*-query` target. Prefer it
+to a manual `cd` when the target exists, for example:
+
+```bash
+make graphify-backend-query Q="Quali route espongono il monitor AutoSync?"
+```
 
 If `.env.graphify` points the `openai` backend to `codex-lb`, apply the local compatibility patch first:
 
@@ -89,4 +120,5 @@ graphify query "Quali sono i flussi principali del modulo?"
 - Do not commit `graphify-out/`.
 - If docs extraction fails for missing or invalid API key, update the code graph anyway and report the limitation.
 - Use `.graphifyignore` and the existing `Makefile` targets; do not invent ad hoc graph locations.
+- Use `GRAPHIFY_CODE_FLAGS=--force` only when removals leave stale topology; normal updates stay incremental.
 - On a fresh machine, a stock Graphify install does not honor `OPENAI_BASE_URL` for the `openai` backend until the local patch is applied.
