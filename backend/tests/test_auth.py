@@ -86,6 +86,22 @@ def create_viewer_user() -> ApplicationUser:
     return user
 
 
+def create_super_admin_user() -> ApplicationUser:
+    db = TestingSessionLocal()
+    user = ApplicationUser(
+        username="superadmin",
+        email="superadmin@example.local",
+        password_hash=hash_password("secret123"),
+        role=ApplicationUserRole.SUPER_ADMIN.value,
+        is_active=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    db.close()
+    return user
+
+
 def create_inactive_user() -> ApplicationUser:
     db = TestingSessionLocal()
     user = ApplicationUser(
@@ -235,6 +251,43 @@ def test_login_blocks_eighth_active_vpn_device_for_admin(
     assert blocked_session is not None
     assert blocked_session.event_type == "login_blocked"
     assert blocked_session.blocked_reason == "max_active_devices:7"
+    db.close()
+
+
+def test_login_blocks_twenty_first_active_vpn_device_for_super_admin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_super_admin_user()
+    monkeypatch.setattr(settings, "network_vpn_device_enforcement_enabled", True)
+
+    for index in range(20):
+        response = client.post(
+            "/auth/login",
+            json={
+                "username": "superadmin",
+                "password": "secret123",
+                "device_id": f"superadmin-device-{index}",
+            },
+        )
+        assert response.status_code == 200
+
+    blocked = client.post(
+        "/auth/login",
+        json={
+            "username": "superadmin",
+            "password": "secret123",
+            "device_id": "superadmin-device-20",
+        },
+    )
+
+    assert blocked.status_code == 403
+    assert "massimo 20 dispositivi attivi" in blocked.json()["detail"]
+
+    db = TestingSessionLocal()
+    assert db.query(NetworkVpnDevice).count() == 20
+    blocked_session = db.query(NetworkVpnSession).order_by(NetworkVpnSession.id.desc()).first()
+    assert blocked_session is not None
+    assert blocked_session.blocked_reason == "max_active_devices:20"
     db.close()
 
 

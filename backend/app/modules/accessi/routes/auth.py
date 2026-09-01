@@ -54,6 +54,7 @@ PASSWORD_RESET_REQUEST_MESSAGE = (
     "Se l'account esiste ed e attivo, riceverai una mail con le istruzioni per reimpostare la password."
 )
 ADMIN_VPN_MAX_ACTIVE_DEVICES = 7
+SUPER_ADMIN_VPN_MAX_ACTIVE_DEVICES = 20
 
 
 def _serialize_current_user(user: ApplicationUser) -> CurrentUserResponse:
@@ -95,10 +96,9 @@ def _client_ip_from_request(request: Request) -> str | None:
 
 
 def _vpn_device_limit_for_user(user: ApplicationUser) -> int:
-    if user.role in {
-        ApplicationUserRole.ADMIN.value,
-        ApplicationUserRole.SUPER_ADMIN.value,
-    }:
+    if user.role == ApplicationUserRole.SUPER_ADMIN.value:
+        return SUPER_ADMIN_VPN_MAX_ACTIVE_DEVICES
+    if user.role == ApplicationUserRole.ADMIN.value:
         return ADMIN_VPN_MAX_ACTIVE_DEVICES
     return settings.network_vpn_max_active_devices_per_user
 
