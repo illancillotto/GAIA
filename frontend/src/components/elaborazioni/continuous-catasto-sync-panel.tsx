@@ -346,8 +346,6 @@ export function ContinuousCatastoSyncPanel() {
   return (
     <div className="space-y-4">
       <SyncNotice state={state} />
-      <AutoSyncActivityDashboard credentials={state.credentials} status={state.status} />
-      <CampaignLists loadMore={campaigns.loadMore} pages={campaigns.pages} retryCampaign={retryAndRefresh} state={state} />
       <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
         <ElaborazionePanelHeader badge={<><RefreshIcon className="h-3.5 w-3.5" />Sync continua</>} title="Sincronizzazione catastale continua" description="Un'unica campagna permanente in due fasi: prima tutte le particelle a ruolo, poi le anagrafiche a ruolo." />
         <div className="space-y-5 p-4 md:space-y-6 md:p-6" data-testid="autosync-configuration-content">
@@ -364,6 +362,8 @@ export function ContinuousCatastoSyncPanel() {
           <div className="rounded-[24px] border border-gray-100 p-4"><p className="text-sm font-semibold">Errori recenti</p><SyncItemList errorList items={state.status?.perpetual_error_items ?? []} /></div>
         </div>
       </article>
+      <AutoSyncActivityDashboard credentials={state.credentials} status={state.status} />
+      <CampaignLists loadMore={campaigns.loadMore} pages={campaigns.pages} retryCampaign={retryAndRefresh} state={state} />
     </div>
   );
 }

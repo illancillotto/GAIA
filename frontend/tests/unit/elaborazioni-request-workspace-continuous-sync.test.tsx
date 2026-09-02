@@ -156,7 +156,7 @@ describe("ElaborazioneRequestWorkspace continuous sync", () => {
     expect(screen.getAllByText("720 ore · 30 giorni")).toHaveLength(2);
   });
 
-  test("shows the AutoSync operational dashboard above configuration", async () => {
+  test("shows AutoSync configuration above the operational dashboard", async () => {
     render(<ContinuousCatastoSyncPanel />);
 
     expect(await screen.findByText("Visure scaricate da SISTER")).toBeInTheDocument();
@@ -170,7 +170,7 @@ describe("ElaborazioneRequestWorkspace continuous sync", () => {
     expect(screen.getByText("Configurazione AutoSync")).toBeInTheDocument();
     const dashboard = screen.getByText("Attività AutoSync").closest("section");
     const configuration = screen.getByText("Configurazione AutoSync").closest("section");
-    expect(dashboard?.compareDocumentPosition(configuration as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(configuration?.compareDocumentPosition(dashboard as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   test("uses compact mobile grids for AutoSync monitoring and configuration", async () => {

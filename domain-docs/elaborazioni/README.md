@@ -23,7 +23,7 @@ Ambito runtime attuale:
 ## Dashboard operativa
 
 La pagina `/elaborazioni` usa una struttura a sezioni stabili:
-- il monitor `/elaborazioni/autosync` espone le campagne permanenti **Particelle a ruolo** e **Anagrafiche a ruolo** come elenchi distinti, completi e paginati; entrambe considerano soltanto l'ultimo Ruolo completato, mentre il caricamento progressivo non mescola gli scope e resta owner-scoped;
+- il monitor `/elaborazioni/autosync` apre in alto il blocco `Sincronizzazione catastale continua` (ON/OFF, credenziali, intervalli), poi il monitor operativo e le campagne permanenti **Particelle a ruolo** e **Anagrafiche a ruolo** come elenchi distinti, completi e paginati; entrambe considerano soltanto l'ultimo Ruolo completato, mentre il caricamento progressivo non mescola gli scope e resta owner-scoped;
 - barra superiore con azioni rapide in linea
 - card rapide dedicate a `Visure` e `Pool operativo dedicato`, allineate visivamente agli altri ingressi del modulo
 - provider `Bonifica Oristanese` gestito nello stesso workspace `Credenziali`, con CRUD account e test autenticazione Laravel
