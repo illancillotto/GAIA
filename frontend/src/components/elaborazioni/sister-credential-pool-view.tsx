@@ -114,7 +114,7 @@ function PoolHeader(props: SisterCredentialPoolViewProps) {
   const verifiedCount = props.credentials.filter(isVerifiedCredential).length;
   return <div className={`border-b border-[#e5ebe3] bg-white ${props.embedded ? "px-4 py-4" : "px-5 py-5"}`}><div className="flex flex-wrap items-start justify-between gap-4">
     <div className="max-w-2xl"><div className="flex flex-wrap items-center gap-2"><p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#326447]">Pool credenziali SISTER</p><span className="rounded-full bg-[#eaf3ed] px-2.5 py-1 text-[10px] font-bold text-[#1D4E35]">{activeCount}/{props.credentials.length} attive</span><span className="rounded-full bg-sky-50 px-2.5 py-1 text-[10px] font-bold text-sky-800">{verifiedCount} verificate</span></div>
-      <p className={`text-sm text-gray-600 ${props.embedded ? "mt-2 leading-5" : "mt-2 leading-6"}`}>Ogni profilo mostra configurazione, stato e ultimo test senza scorrimento orizzontale. I test includono tutti gli account; il worker usa quelli attivi solo nelle fasce consentite.</p>
+      <p className={`text-sm text-gray-600 ${props.embedded ? "mt-2 leading-5" : "mt-2 leading-6"}`}>Seleziona un profilo dall&apos;elenco; i dati si modificano nel pannello a destra.</p>
       <p className={`text-xs ${props.releasedBatchesCount > 0 ? "text-amber-700" : "text-gray-500"} ${props.embedded ? "mt-2" : "mt-3"}`}>{props.releasedBatchesCount > 0 ? `${props.releasedBatchesCount} batch in pausa dopo il rilascio delle sessioni SISTER.` : "Nessun batch in pausa da rilascio sessioni disponibile per la ripartenza."}</p>
     </div>
     <PoolActions {...props} />
@@ -144,18 +144,18 @@ function CredentialDetails({ credential }: { credential: ElaborazioneCredential 
         ? `Disponibile ${nextAvailability.toLocaleString("it-IT", { timeZone: "Europe/Rome", weekday: "short", hour: "2-digit", minute: "2-digit" })}`
         : "Nessuna fascia disponibile";
   const scheduleLabel = formatSisterSchedule(scheduleEnabled, availabilitySchedule);
-  return <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-y border-gray-100 py-3 text-xs">
-    <div className="min-w-0"><dt className="font-semibold uppercase tracking-[0.12em] text-[9px] text-gray-400">Convenzione</dt><dd className="mt-1 truncate text-gray-700" title={credential.convenzione ?? undefined}>{credential.convenzione || "Non indicata"}</dd></div>
-    <div className="min-w-0"><dt className="font-semibold uppercase tracking-[0.12em] text-[9px] text-gray-400">Codice richiesta</dt><dd className="mt-1 truncate font-mono text-gray-700">{credential.codice_richiesta || "Non indicato"}</dd></div>
-    <div className="min-w-0"><dt className="font-semibold uppercase tracking-[0.12em] text-[9px] text-gray-400">Ufficio</dt><dd className="mt-1 truncate text-gray-700">{credential.ufficio_provinciale}</dd></div>
-    <div className="min-w-0"><dt className="font-semibold uppercase tracking-[0.12em] text-[9px] text-gray-400">Ultima verifica</dt><dd className="mt-1 truncate text-gray-700">{formatDateTime(credential.verified_at)}</dd></div>
-    <div className="col-span-2 min-w-0"><dt className="font-semibold uppercase tracking-[0.12em] text-[9px] text-gray-400">Utilizzo automatico</dt><dd className={`mt-1 font-semibold ${availableNow ? "text-emerald-700" : "text-amber-800"}`}>{availabilityLabel}</dd></div>
-    <div className="col-span-2 min-w-0"><dt className="font-semibold uppercase tracking-[0.12em] text-[9px] text-gray-400">Fasce orarie</dt><dd className="mt-1 line-clamp-2 text-gray-700" title={scheduleLabel}>{scheduleLabel}</dd></div>
+  return <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 border-t border-gray-100 pt-3 text-xs">
+    <div className="min-w-0"><dt className="sr-only">Convenzione</dt><dd className="truncate text-gray-600" title={credential.convenzione ?? undefined}>{credential.convenzione || "Non indicata"}</dd></div>
+    <div className="min-w-0 text-right"><dt className="sr-only">Codice richiesta</dt><dd className="truncate font-mono text-gray-500">{credential.codice_richiesta || "Non indicato"}</dd></div>
+    <div className="min-w-0"><dt className="sr-only">Ufficio</dt><dd className="truncate text-gray-600">{credential.ufficio_provinciale}</dd></div>
+    <div className="min-w-0 text-right"><dt className="sr-only">Ultima verifica</dt><dd className="truncate text-gray-500">{formatDateTime(credential.verified_at)}</dd></div>
+    <div className="col-span-2 min-w-0"><dt className="sr-only">Utilizzo automatico</dt><dd className={`font-semibold ${availableNow ? "text-emerald-700" : "text-amber-800"}`}>{availabilityLabel}</dd></div>
+    <div className="col-span-2 min-w-0"><dt className="sr-only">Fasce orarie</dt><dd className="truncate text-gray-500" title={scheduleLabel}>{scheduleLabel}</dd></div>
   </dl>;
 }
 
 function CredentialActions(props: SisterCredentialPoolViewProps & { credential: ElaborazioneCredential; isTesting: boolean }) {
-  return <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+  return <div className="mt-3 grid grid-cols-2 gap-2">
     <button className="rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-[#8eab97] hover:text-[#1D4E35] disabled:opacity-50" disabled={props.controlsDisabled} onClick={() => props.onSelectCredential(props.credential)} type="button">Modifica</button>
     {!props.credential.is_default ? <button className="rounded-xl border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 transition hover:border-amber-300 hover:text-amber-800 disabled:opacity-50" disabled={props.controlsDisabled} onClick={() => void props.onMakeDefault(props.credential)} type="button">Rendi default</button> : null}
     <button className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-semibold text-sky-800 transition hover:border-sky-300 hover:bg-sky-100 disabled:opacity-50" disabled={props.controlsDisabled} onClick={() => void props.onTestCredential(props.credential)} type="button">{props.isTesting ? "Test in corso" : "Testa"}</button>
@@ -168,7 +168,8 @@ function CredentialCard(props: SisterCredentialPoolViewProps & { credential: Ela
   const progress = resolveProgress(props.credential, props.progressById[props.credential.id], props.currentTestResult);
   const isTesting = props.singleTestingId === props.credential.id || progress?.phase === "running";
   const terminal = progress && TERMINAL_PHASES.has(progress.phase) ? progress : null;
-  return <article className={`relative overflow-hidden rounded-[22px] border bg-white p-4 transition ${props.selectedCredentialId === props.credential.id ? "border-[#5b8b6d] shadow-[0_12px_30px_-24px_rgba(29,78,53,0.9)]" : "border-[#e1e8df] hover:border-[#b9cbbd]"} ${props.credential.active ? "" : "opacity-75"}`}>
+  const selected = props.selectedCredentialId === props.credential.id;
+  return <article aria-current={selected} className={`relative overflow-hidden rounded-[18px] border bg-white p-3 transition ${selected ? "border-[#4f8061] bg-[#f8fbf8] shadow-[0_10px_26px_-22px_rgba(29,78,53,0.9)]" : "border-[#e1e8df] hover:border-[#b9cbbd]"} ${props.credential.active ? "" : "opacity-75"}`} role="listitem">
     <div className={`absolute inset-y-0 left-0 w-1 ${props.credential.is_default ? "bg-[#d9a628]" : props.credential.active ? "bg-[#4c8a64]" : "bg-gray-300"}`} />
     <div className="flex items-start justify-between gap-3 pl-1"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="truncate text-sm font-semibold text-gray-950">{props.credential.label}</h3>{props.credential.is_default ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900">Default</span> : null}<span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${props.credential.active ? "bg-emerald-50 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>{props.credential.active ? "Attiva" : "Disattiva"}</span></div><p className="mt-1.5 truncate font-mono text-xs text-gray-500">{props.credential.sister_username}</p></div><TestStateBadge progress={progress} /></div>
     <CredentialDetails credential={props.credential} />
@@ -179,7 +180,7 @@ function CredentialCard(props: SisterCredentialPoolViewProps & { credential: Ela
 
 function CredentialGrid(props: SisterCredentialPoolViewProps) {
   if (props.credentials.length === 0) return <div className={`${props.embedded ? "px-4 py-5" : "px-5 py-7"} text-center`}><div className="mx-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-gray-100 text-gray-500"><AlertTriangleIcon className="h-5 w-5" /></div><p className="mt-3 text-sm font-semibold text-gray-800">Nessuna credenziale SISTER configurata</p><p className="mt-1 text-xs text-gray-500">Compila il form qui sopra per aggiungere il primo profilo operativo.</p></div>;
-  return <div className={`grid ${props.embedded ? "gap-3 p-3 md:grid-cols-2" : "gap-4 p-4 md:grid-cols-2"}`}>{props.credentials.map((credential) => <CredentialCard {...props} credential={credential} key={credential.id} />)}</div>;
+  return <div aria-label="Elenco credenziali SISTER" className={`grid max-h-[min(62rem,calc(100vh-12rem))] grid-cols-1 overflow-y-auto ${props.embedded ? "gap-2.5 p-3" : "gap-3 p-4"}`} role="list">{props.credentials.map((credential) => <CredentialCard {...props} credential={credential} key={credential.id} />)}</div>;
 }
 
 export function SisterCredentialPoolView(props: SisterCredentialPoolViewProps) {

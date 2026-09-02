@@ -1260,13 +1260,13 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                 </div>
               </div>
 
-              <div className={`grid ${embedded ? "gap-4 p-4 lg:grid-cols-1" : "gap-6 p-6 xl:grid-cols-[minmax(0,1.5fr),minmax(300px,0.5fr)]"}`}>
-                <div className={embedded ? "space-y-4" : "space-y-5"}>
-                  <div
-                    className={`grid ${
-                      embedded ? "gap-3 md:grid-cols-2 lg:grid-cols-3" : "gap-4 md:grid-cols-2"
-                    }`}
-                  >
+              <div className={`grid items-start ${embedded ? "gap-4 p-4" : "gap-6 p-6"} xl:grid-cols-[minmax(300px,0.72fr),minmax(0,1.28fr)]`}>
+                <div className="contents">
+                  <div aria-label="Editor credenziale SISTER" className={`order-2 grid rounded-[24px] border border-[#e1e8df] bg-[#fbfcfa] ${embedded ? "gap-3 p-4 md:grid-cols-2" : "gap-4 p-5 md:grid-cols-2"} xl:col-start-2 xl:row-start-1`} role="group">
+                    <div className="md:col-span-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#326447]">{formState.id ? "Modifica credenziale" : "Nuova credenziale"}</p>
+                      <p className="mt-1 text-sm text-gray-500">{formState.id ? "Stai aggiornando la credenziale selezionata." : "Inserisci i dati del nuovo profilo SISTER."}</p>
+                    </div>
                     <label className="space-y-2">
                       <span className="label-caption">Label operativa</span>
                       <input
@@ -1313,7 +1313,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                         value={formState.codice_richiesta}
                       />
                     </label>
-                    <label className={`space-y-2 ${embedded ? "lg:col-span-3" : "md:col-span-2"}`}>
+                    <label className="space-y-2 md:col-span-2">
                       <span className="label-caption">Ufficio provinciale</span>
                       <input
                         className="form-control"
@@ -1347,14 +1347,10 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                     />
                   </div>
 
-                  <div className={embedded ? "flex flex-wrap items-center gap-2" : "flex flex-wrap items-center gap-3"}>
+                  <div className={`order-3 flex flex-wrap items-center rounded-[20px] border border-[#e1e8df] bg-white p-3 xl:col-start-2 xl:row-start-2 ${embedded ? "gap-2" : "gap-3"}`}>
                     <button
                       className="btn-primary"
-                      disabled={
-                        busy ||
-                        !formState.sister_username.trim() ||
-                        (!formState.id && !formState.sister_password.trim())
-                      }
+                      disabled={busy || !formState.sister_username.trim() || (!formState.id && !formState.sister_password.trim())}
                       onClick={() => void handleSave()}
                       type="button"
                     >
@@ -1381,29 +1377,29 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                     </button>
                   </div>
 
-                  <SisterCredentialPool
-                    credentials={sisterCredentials}
-                    currentTestResult={testResult}
-                    embedded={embedded}
-                    externalBusy={busy || testBusy}
-                    onBulkBusyChange={setPoolTestBusy}
-                    onClearFeedback={handleClearSisterFeedback}
-                    onDeleteCredential={handleDeleteSisterCredential}
-                    onMakeDefault={handleMakeDefaultCredential}
-                    onRefreshCredentials={loadCredentials}
-                    onReleaseSessions={handleReleaseSisterSessions}
-                    onResumeReleasedBatch={handleResumeReleasedBatch}
-                    onSelectCredential={applyCredentialToForm}
-                    onTestError={handleCredentialTestError}
-                    onTestResult={handleCredentialTestResult}
-                    releaseBusy={releaseBusy}
-                    releasedBatchesCount={releasedBatches.length}
-                    resumeReleasedBusy={resumeReleasedBusy}
-                    selectedCredentialId={formState.id}
-                  />
+                  <div className="order-1 min-w-0 xl:sticky xl:top-4 xl:col-start-1 xl:row-span-3 xl:row-start-1"><SisterCredentialPool
+                      credentials={sisterCredentials}
+                      currentTestResult={testResult}
+                      embedded={embedded}
+                      externalBusy={busy || testBusy}
+                      onBulkBusyChange={setPoolTestBusy}
+                      onClearFeedback={handleClearSisterFeedback}
+                      onDeleteCredential={handleDeleteSisterCredential}
+                      onMakeDefault={handleMakeDefaultCredential}
+                      onRefreshCredentials={loadCredentials}
+                      onReleaseSessions={handleReleaseSisterSessions}
+                      onResumeReleasedBatch={handleResumeReleasedBatch}
+                      onSelectCredential={applyCredentialToForm}
+                      onTestError={handleCredentialTestError}
+                      onTestResult={handleCredentialTestResult}
+                      releaseBusy={releaseBusy}
+                      releasedBatchesCount={releasedBatches.length}
+                      resumeReleasedBusy={resumeReleasedBusy}
+                      selectedCredentialId={formState.id}
+                    /></div>
                 </div>
 
-                <div className={`space-y-4 ${embedded ? "lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0" : ""}`}>
+                <div className={`order-4 space-y-4 xl:col-start-2 xl:row-start-3 ${embedded ? "lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0" : ""}`}>
                   <div className={`rounded-[24px] border border-[#e1e8df] bg-[#f7faf7] ${embedded ? "p-4" : "p-5"}`}>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Stato rapido</p>
                     <div className={`${embedded ? "mt-3 space-y-2" : "mt-4 space-y-3"}`}>

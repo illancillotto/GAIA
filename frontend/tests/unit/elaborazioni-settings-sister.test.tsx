@@ -270,6 +270,8 @@ describe("ElaborazioniSettingsWorkspace SISTER integration", () => {
     expect(await screen.findByText("Profilo primary")).toBeInTheDocument();
     expect(screen.getByText("Profilo secondary")).toBeInTheDocument();
     expect(screen.getByText("1/2 attive")).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Elenco credenziali SISTER" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Editor credenziale SISTER" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Testa tutte (2)" }));
     expect(await screen.findByText("Verifica del pool completata")).toBeInTheDocument();
