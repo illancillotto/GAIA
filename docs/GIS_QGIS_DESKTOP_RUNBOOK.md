@@ -139,8 +139,10 @@ per postazione resta aperta e non e risolta da questo proxy.
 Anche il progetto QGIS Server non contiene credenziali: usa
 `service=gaia_gis_server`. Il bootstrap genera separatamente
 `/srv/qgis/pg_service.conf` con modo `0600`; lo startup lo installa in
-`/var/lib/qgis/pg_service.conf` e `PGSERVICEFILE` punta a quel file. Il file e
-un secret runtime del container, non va copiato nei progetti, esportato o
+`/var/lib/qgis/pg_service.conf` e anche in `/var/www/.pg_service.conf`, perche
+il processo FCGI gira come `www-data` e libpq legge `~/.pg_service.conf`.
+`PGSERVICEFILE` resta impostato sul path in `/var/lib/qgis`. Il file e un
+secret runtime del container, non va copiato nei progetti, esportato o
 committato.
 
 Smoke minimo:
