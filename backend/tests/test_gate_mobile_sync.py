@@ -324,9 +324,85 @@ def test_build_presenze_teams_push_payload_serializes_teams_memberships_and_supe
         collaborator.application_user_id = None
         db.commit()
         unmapped_payload = build_presenze_teams_push_payload(db)
-        assert unmapped_payload["teams"][0]["memberships"][0]["gaia_user_id"] is None
+        assert unmapped_payload["teams"][0]["memberships"] == []
         assert unmapped_payload["teams"][0]["supervisors"][0]["gaia_user_id"] == "77"
         assert unmapped_payload["teams"][0]["supervisors"][0]["collaborator_id"] is None
+    finally:
+        db.close()
+
+
+def test_operator_and_membership_payloads_fail_closed_on_ambiguous_or_incoherent_identity() -> None:
+    db = _build_session()
+    try:
+        _seed_operator(db)
+        db.add(
+            WCOperator(
+                id=uuid.UUID("18f82137-e156-4790-b248-c0bf171389a1"),
+                wc_id=1042,
+                email="duplicate@example.test",
+                enabled=True,
+                personnel_area="AGRARIO",
+                gaia_user_id=42,
+            )
+        )
+        db.commit()
+        assert build_mobile_operator_push_payload(db)["operators"] == []
+
+        _seed_presenze_team(db)
+        membership = db.scalar(select(OrganizationTeamMembership))
+        collaborator = db.scalar(select(PresenzeCollaborator))
+        assert membership is not None
+        assert collaborator is not None
+        membership.application_user_id = 77
+        collaborator.application_user_id = None
+        member_operator = WCOperator(
+            id=uuid.UUID("18f82137-e156-4790-b248-c0bf171389a2"),
+            wc_id=1077,
+            first_name=" Directory ",
+            last_name=" Member ",
+            enabled=True,
+            personnel_area="AGRARIO",
+            gaia_user_id=77,
+        )
+        db.add(member_operator)
+        db.commit()
+
+        canonical = build_presenze_teams_push_payload(db)["teams"][0]["memberships"]
+        assert canonical[0]["collaborator_id"] == str(member_operator.id)
+        assert canonical[0]["collaborator_name"] == "Directory Member"
+        assert canonical[0]["presenze_collaborator_id"] is None
+
+        duplicate_operator = WCOperator(
+            id=uuid.UUID("18f82137-e156-4790-b248-c0bf171389a3"),
+            wc_id=2077,
+            enabled=True,
+            personnel_area="AGRARIO",
+            gaia_user_id=77,
+        )
+        db.add(duplicate_operator)
+        db.commit()
+        assert build_presenze_teams_push_payload(db)["teams"][0]["memberships"] == []
+
+        db.delete(duplicate_operator)
+        collaborator.application_user_id = 77
+        membership.application_user_id = 78
+        db.add(
+            ApplicationUser(
+                id=78,
+                username="incoherent.member",
+                email="incoherent.member@example.test",
+                password_hash="hash",
+                role=ApplicationUserRole.OPERATOR.value,
+                is_active=True,
+            )
+        )
+        db.commit()
+        assert build_presenze_teams_push_payload(db)["teams"][0]["memberships"] == []
+
+        collaborator.application_user_id = None
+        membership.application_user_id = 999
+        db.commit()
+        assert build_presenze_teams_push_payload(db)["teams"][0]["memberships"] == []
     finally:
         db.close()
 
@@ -859,7 +935,17 @@ def test_presenze_team_pending_actions_are_canonical_idempotent_and_reconciliabl
             name="Canonical Member",
             application_user_id=member.id,
         )
-        db.add_all([actor, member, supervisor, collaborator])
+        member_operator_id = uuid.UUID("18f82137-e156-4790-b248-c0bf171389bc")
+        member_operator = WCOperator(
+            id=member_operator_id,
+            wc_id=1238,
+            first_name="Canonical",
+            last_name="Member",
+            enabled=True,
+            personnel_area="IMPIANTI",
+            gaia_user_id=member.id,
+        )
+        db.add_all([actor, member, supervisor, collaborator, member_operator])
         db.commit()
 
         legacy_team_id = "gate-team-manutenzione-nord-1-1787898841204"
@@ -927,6 +1013,7 @@ def test_presenze_team_pending_actions_are_canonical_idempotent_and_reconciliabl
             )
         )
         assert membership is not None
+        assert membership.application_user_id == member.id
         assert membership.collaborator_id == collaborator.id
         assert assignment is not None
         assert assignment.application_user_id == supervisor.id
@@ -973,11 +1060,27 @@ def test_presenze_team_pending_actions_are_canonical_idempotent_and_reconciliabl
         assert db.get(OrganizationTeam, team_id).name == "Reparto Nord Definitivo"
         snapshot = gate_mobile_sync_service.build_presenze_teams_push_payload(db)
         assert snapshot["teams"][0]["team_id"] == legacy_team_id
+        assert snapshot["teams"][0]["memberships"] == [
+            {
+                "membership_id": str(membership_id),
+                "collaborator_id": str(member_operator_id),
+                "gaia_user_id": str(member.id),
+                "employee_code": "1423",
+                "presenze_collaborator_id": str(collaborator.id),
+                "presenze_employee_code": "1423",
+                "collaborator_name": "Canonical Member",
+                "role": "member",
+                "valid_from": None,
+                "valid_to": None,
+                "source_channel": "gate",
+                "updated_at": snapshot["teams"][0]["memberships"][0]["updated_at"],
+            }
+        ]
     finally:
         db.close()
 
 
-def test_presenze_team_pending_actions_fail_closed_on_noncanonical_identity() -> None:
+def test_presenze_team_pending_actions_fail_closed_on_noncanonical_identity(monkeypatch) -> None:
     db = _build_session()
     try:
         actor = ApplicationUser(
@@ -1024,14 +1127,6 @@ def test_presenze_team_pending_actions_fail_closed_on_noncanonical_identity() ->
             ),
             (
                 {
-                    "operation": "update_team_memberships",
-                    "team": team_ref,
-                    "requested_memberships": [{"gaia_user_id": str(unmapped.id)}],
-                },
-                "Relazione Presenze non univoca",
-            ),
-            (
-                {
                     "operation": "update_team_supervisors",
                     "team": team_ref,
                     "requested_supervisors": [{"gaia_user_id": "999999"}],
@@ -1059,7 +1154,6 @@ def test_presenze_team_pending_actions_fail_closed_on_noncanonical_identity() ->
             "propose_team_create",
             "propose_team_create",
             "propose_team_membership",
-            "propose_team_membership",
             "propose_team_supervisor",
             "propose_team_supervisor",
             "propose_team_change",
@@ -1077,6 +1171,41 @@ def test_presenze_team_pending_actions_fail_closed_on_noncanonical_identity() ->
                 db.rollback()
             else:
                 raise AssertionError(f"Expected validation error containing {message}")
+
+        gate_mobile_team_actions.apply_presenze_team_proposal(
+            db,
+            {
+                "operation": "update_team_memberships",
+                "team": team_ref,
+                "requested_memberships": [{"gaia_user_id": str(unmapped.id)}],
+            },
+            actor=actor,
+            action_type="propose_team_membership",
+        )
+        membership = db.scalar(
+            select(OrganizationTeamMembership).where(
+                OrganizationTeamMembership.team_id == team.id
+            )
+        )
+        assert membership is not None
+        assert membership.application_user_id == unmapped.id
+        assert membership.collaborator_id is None
+        snapshot = gate_mobile_sync_service.build_presenze_teams_push_payload(db)
+        assert snapshot["teams"][0]["memberships"][0]["gaia_user_id"] == str(unmapped.id)
+        assert snapshot["teams"][0]["memberships"][0]["presenze_collaborator_id"] is None
+
+        class AmbiguousCollaborators:
+            @staticmethod
+            def all() -> list[object]:
+                return [object(), object()]
+
+        monkeypatch.setattr(db, "scalars", lambda _statement: AmbiguousCollaborators())
+        try:
+            gate_mobile_team_actions._optional_canonical_collaborator(db, unmapped.id)
+        except gate_mobile_team_actions.TeamChangeApplyError as exc:
+            assert "non univoca" in str(exc)
+        else:
+            raise AssertionError("Expected ambiguous Presenze relation to fail closed")
     finally:
         db.close()
 

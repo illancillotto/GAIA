@@ -35,7 +35,6 @@ from app.modules.presenze.models import (
     PRESENZE_CONTRACT_KIND_IMPIEGATO,
     PRESENZE_CONTRACT_KIND_OPERAIO,
     OrganizationTeam,
-    OrganizationTeamMembership,
     OrganizationTeamSupervisorAssignment,
     PresenzeCollaborator,
     PresenzeDailyPunch,
@@ -52,7 +51,7 @@ from app.modules.presenze.schemas import (
     GatePresenzeResolveAnomalyRequest,
 )
 from app.modules.presenze.services.gate_mobile_payloads import (
-    build_presenze_membership_payload,
+    build_presenze_memberships_by_team,
     build_presenze_mobile_record_payload,
     build_presenze_supervisors_by_team,
     build_presenze_team_payload,
@@ -136,10 +135,16 @@ def build_mobile_operator_push_payload(db: Session, *, now: datetime | None = No
         .order_by(WCOperator.last_name.asc(), WCOperator.first_name.asc(), WCOperator.email.asc())
     ).all()
 
+    canonical_rows = _unique_mobile_operator_rows(rows)
     return {
         "synced_from_gaia_at": synced_at.isoformat().replace("+00:00", "Z"),
-        "operators": [_mobile_operator_payload(*row) for row in rows],
+        "operators": [_mobile_operator_payload(*row) for row in canonical_rows],
     }
+
+
+def _unique_mobile_operator_rows(rows: list[Any]) -> list[Any]:
+    counts = Counter(user.id for _, user, _ in rows)
+    return [row for row in rows if counts[row[1].id] == 1]
 
 
 def _mobile_operator_payload(
@@ -270,22 +275,12 @@ def build_mobile_workset_push_payloads(db: Session) -> list[dict[str, Any]]:
 
 def build_presenze_teams_push_payload(db: Session, *, now: datetime | None = None) -> dict[str, Any]:
     teams = db.scalars(select(OrganizationTeam).order_by(OrganizationTeam.name.asc())).all()
-    memberships = db.execute(
-        select(OrganizationTeamMembership, PresenzeCollaborator)
-        .join(PresenzeCollaborator, PresenzeCollaborator.id == OrganizationTeamMembership.collaborator_id)
-        .order_by(OrganizationTeamMembership.team_id.asc(), PresenzeCollaborator.name.asc())
-    ).all()
+    memberships_by_team = build_presenze_memberships_by_team(db)
     supervisors = db.execute(
         select(OrganizationTeamSupervisorAssignment, ApplicationUser)
         .join(ApplicationUser, ApplicationUser.id == OrganizationTeamSupervisorAssignment.application_user_id)
         .order_by(OrganizationTeamSupervisorAssignment.team_id.asc(), ApplicationUser.username.asc())
     ).all()
-
-    memberships_by_team: dict[str, list[dict[str, Any]]] = {}
-    for membership, collaborator in memberships:
-        memberships_by_team.setdefault(str(membership.team_id), []).append(
-            build_presenze_membership_payload(membership, collaborator)
-        )
 
     supervisors_by_team = build_presenze_supervisors_by_team(db, supervisors)
 
@@ -303,7 +298,6 @@ def build_presenze_teams_push_payload(db: Session, *, now: datetime | None = Non
             for team in teams
         ],
     }
-
 
 def build_presenze_rules_push_payload(*, now: datetime | None = None) -> dict[str, Any]:
     synced_at = now or datetime.now(UTC)

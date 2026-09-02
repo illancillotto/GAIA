@@ -406,7 +406,6 @@ def create_gate_presenze_team_membership(
 ) -> OrganizationTeamMembershipResponse:
     _require_team_management(current_user)
     _get_team_or_404(db, team_id)
-    _get_collaborator_or_404(db, payload.collaborator_id)
     _ensure_no_overlapping_membership(
         db,
         collaborator_id=payload.collaborator_id,
@@ -416,6 +415,7 @@ def create_gate_presenze_team_membership(
     )
     membership = OrganizationTeamMembership(
         team_id=team_id,
+        application_user_id=_get_collaborator_or_404(db, payload.collaborator_id).application_user_id,
         collaborator_id=payload.collaborator_id,
         valid_from=payload.valid_from,
         valid_to=payload.valid_to,
@@ -690,7 +690,7 @@ def _period_membership_collaborator_ids(
     period_end: date | None,
     team_ids: list[uuid.UUID] | None,
 ) -> list[uuid.UUID]:
-    stmt = select(OrganizationTeamMembership.collaborator_id)
+    stmt = select(OrganizationTeamMembership.collaborator_id).where(OrganizationTeamMembership.collaborator_id.is_not(None))
     if team_ids is not None:
         if not team_ids:
             return []

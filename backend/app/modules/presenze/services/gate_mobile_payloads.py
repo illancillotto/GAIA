@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
@@ -8,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.application_user import ApplicationUser
+from app.modules.operazioni.models.wc_operator import WCOperator
 from app.modules.presenze.models import (
     OrganizationTeam,
     OrganizationTeamMembership,
@@ -16,6 +18,15 @@ from app.modules.presenze.models import (
     PresenzeDailyRecord,
 )
 from app.modules.presenze.services.xlsm_export import resolve_export_absence_code
+
+
+@dataclass(frozen=True)
+class _MembershipDirectory:
+    collaborators_by_id: dict[UUID, PresenzeCollaborator]
+    collaborators_by_user_id: dict[int, PresenzeCollaborator]
+    users_by_id: dict[int, ApplicationUser]
+    operators_by_user_id: dict[int, WCOperator]
+    ambiguous_operator_user_ids: set[int]
 
 
 def build_presenze_supervisors_by_team(
@@ -77,22 +88,155 @@ def build_presenze_team_payload(
 
 def build_presenze_membership_payload(
     membership: OrganizationTeamMembership,
-    collaborator: PresenzeCollaborator,
+    user: ApplicationUser,
+    collaborator: PresenzeCollaborator | None,
+    operator: WCOperator | None,
 ) -> dict[str, Any]:
+    directory_id = str(operator.id) if operator is not None else f"gaia-user:{user.id}"
     return {
         "membership_id": str(membership.id),
-        "collaborator_id": str(membership.collaborator_id),
-        "gaia_user_id": json_optional_identifier(collaborator.application_user_id),
-        "employee_code": collaborator.employee_code,
-        "presenze_collaborator_id": str(membership.collaborator_id),
-        "presenze_employee_code": collaborator.employee_code,
-        "collaborator_name": collaborator.name,
+        "collaborator_id": directory_id,
+        "gaia_user_id": str(user.id),
+        "employee_code": collaborator.employee_code if collaborator is not None else None,
+        "presenze_collaborator_id": str(collaborator.id) if collaborator is not None else None,
+        "presenze_employee_code": collaborator.employee_code if collaborator is not None else None,
+        "collaborator_name": _membership_name(user, collaborator, operator),
         "role": membership.role,
         "valid_from": json_date(membership.valid_from),
         "valid_to": json_date(membership.valid_to),
         "source_channel": gate_channel(membership.source_channel),
         "updated_at": json_datetime(membership.updated_at),
     }
+
+
+def build_presenze_memberships_by_team(db: Session) -> dict[str, list[dict[str, Any]]]:
+    memberships = db.scalars(
+        select(OrganizationTeamMembership).order_by(
+            OrganizationTeamMembership.team_id.asc(),
+            OrganizationTeamMembership.created_at.asc(),
+        )
+    ).all()
+    directory = _membership_directory(db, memberships)
+    result: dict[str, list[dict[str, Any]]] = {}
+    for membership in memberships:
+        payload = _canonical_membership_payload(membership, directory)
+        if payload is not None:
+            result.setdefault(str(membership.team_id), []).append(payload)
+    return result
+
+
+def _membership_directory(
+    db: Session,
+    memberships: list[OrganizationTeamMembership],
+) -> _MembershipDirectory:
+    collaborator_ids = {
+        membership.collaborator_id
+        for membership in memberships
+        if membership.collaborator_id is not None
+    }
+    collaborators_by_id = {
+        collaborator.id: collaborator
+        for collaborator in db.scalars(
+            select(PresenzeCollaborator).where(PresenzeCollaborator.id.in_(collaborator_ids))
+        ).all()
+    }
+    user_ids = {
+        user_id
+        for membership in memberships
+        if (user_id := _canonical_membership_user_id(membership, collaborators_by_id))
+        is not None
+    }
+    users_by_id = {
+        user.id: user
+        for user in db.scalars(
+            select(ApplicationUser).where(ApplicationUser.id.in_(user_ids))
+        ).all()
+    }
+    collaborators_by_user_id = {
+        collaborator.application_user_id: collaborator
+        for collaborator in db.scalars(
+            select(PresenzeCollaborator).where(
+                PresenzeCollaborator.application_user_id.in_(user_ids)
+            )
+        ).all()
+        if collaborator.application_user_id is not None
+    }
+    operators, ambiguous = _unique_wc_operators_by_user_id(db, user_ids)
+    return _MembershipDirectory(
+        collaborators_by_id,
+        collaborators_by_user_id,
+        users_by_id,
+        operators,
+        ambiguous,
+    )
+
+
+def _canonical_membership_payload(
+    membership: OrganizationTeamMembership,
+    directory: _MembershipDirectory,
+) -> dict[str, Any] | None:
+    user_id = _canonical_membership_user_id(membership, directory.collaborators_by_id)
+    if user_id is None or user_id in directory.ambiguous_operator_user_ids:
+        return None
+    user = directory.users_by_id.get(user_id)
+    if user is None:
+        return None
+    collaborator = directory.collaborators_by_id.get(membership.collaborator_id)
+    if collaborator is None or collaborator.application_user_id != user_id:
+        collaborator = directory.collaborators_by_user_id.get(user_id)
+    return build_presenze_membership_payload(
+        membership,
+        user,
+        collaborator,
+        directory.operators_by_user_id.get(user_id),
+    )
+
+
+def _canonical_membership_user_id(
+    membership: OrganizationTeamMembership,
+    collaborators_by_id: dict[UUID, PresenzeCollaborator],
+) -> int | None:
+    collaborator = collaborators_by_id.get(membership.collaborator_id)
+    collaborator_user_id = collaborator.application_user_id if collaborator is not None else None
+    if membership.application_user_id is None:
+        return collaborator_user_id
+    if collaborator_user_id not in {None, membership.application_user_id}:
+        return None
+    return membership.application_user_id
+
+
+def _unique_wc_operators_by_user_id(
+    db: Session,
+    user_ids: set[int],
+) -> tuple[dict[int, WCOperator], set[int]]:
+    grouped: dict[int, list[WCOperator]] = {}
+    operators = db.scalars(select(WCOperator).where(WCOperator.gaia_user_id.in_(user_ids))).all()
+    for operator in operators:
+        if operator.gaia_user_id is not None:
+            grouped.setdefault(operator.gaia_user_id, []).append(operator)
+    ambiguous = {user_id for user_id, matches in grouped.items() if len(matches) != 1}
+    return (
+        {user_id: matches[0] for user_id, matches in grouped.items() if user_id not in ambiguous},
+        ambiguous,
+    )
+
+
+def _membership_name(
+    user: ApplicationUser,
+    collaborator: PresenzeCollaborator | None,
+    operator: WCOperator | None,
+) -> str:
+    if collaborator is not None:
+        return collaborator.name
+    if operator is not None:
+        name = " ".join(
+            value.strip()
+            for value in (operator.first_name, operator.last_name)
+            if value and value.strip()
+        )
+        if name:
+            return name
+    return user.full_name or user.username
 
 
 def build_presenze_mobile_record_payload(
@@ -224,10 +368,6 @@ def json_datetime(value: datetime | None) -> str:
 
 def json_date(value: Any) -> str | None:
     return value.isoformat() if value is not None else None
-
-
-def json_optional_identifier(value: Any) -> str | None:
-    return str(value) if value is not None else None
 
 
 def gate_channel(value: str | None) -> str:

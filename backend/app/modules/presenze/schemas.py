@@ -448,7 +448,8 @@ class OrganizationTeamMembershipResponse(BaseModel):
 
     id: uuid.UUID
     team_id: uuid.UUID
-    collaborator_id: uuid.UUID
+    application_user_id: int | None = None
+    collaborator_id: uuid.UUID | None = None
     valid_from: date | None = None
     valid_to: date | None = None
     role: OrganizationTeamMembershipRole

@@ -187,16 +187,16 @@ def _replace_memberships(
     actor: ApplicationUser,
 ) -> None:
     requested = _requested_assignments(payload, "requested_memberships")
-    desired: dict[uuid.UUID, str] = {}
+    desired: dict[int, tuple[PresenzeCollaborator | None, str]] = {}
     seen_user_ids: set[int] = set()
     for item in requested:
         user = _canonical_user(db, item, label="membro")
         if user.id in seen_user_ids:
             raise TeamChangeApplyError(f"gaia_user_id duplicato nelle membership: {user.id}")
         seen_user_ids.add(user.id)
-        collaborator = _canonical_collaborator(db, user.id)
-        desired[collaborator.id] = (
-            _optional_text(item.get("role"), "role", max_length=32) or "member"
+        desired[user.id] = (
+            _optional_canonical_collaborator(db, user.id),
+            _optional_text(item.get("role"), "role", max_length=32) or "member",
         )
     existing = list(
         db.scalars(
@@ -207,21 +207,21 @@ def _replace_memberships(
             )
         ).all()
     )
-    by_collaborator: dict[uuid.UUID, OrganizationTeamMembership] = {}
+    by_user_id: dict[int, OrganizationTeamMembership] = {}
     for membership in existing:
         if (
-            membership.collaborator_id not in desired
-            or membership.collaborator_id in by_collaborator
+            membership.application_user_id not in desired
+            or membership.application_user_id in by_user_id
         ):
             db.delete(membership)
             continue
-        by_collaborator[membership.collaborator_id] = membership
-    for collaborator_id, role in desired.items():
-        membership = by_collaborator.get(collaborator_id)
+        by_user_id[membership.application_user_id] = membership
+    for user_id, (collaborator, role) in desired.items():
+        membership = by_user_id.get(user_id)
         if membership is None:
-            membership = OrganizationTeamMembership(
-                team_id=team.id, collaborator_id=collaborator_id
-            )
+            membership = OrganizationTeamMembership(team_id=team.id)
+        membership.application_user_id = user_id
+        membership.collaborator_id = collaborator.id if collaborator is not None else None
         membership.role = role
         membership.source_channel = "gate_mobile"
         membership.created_by_user_id = actor.id
@@ -293,7 +293,10 @@ def _canonical_user(db: Session, payload: dict[str, Any], *, label: str) -> Appl
     return user
 
 
-def _canonical_collaborator(db: Session, gaia_user_id: int) -> PresenzeCollaborator:
+def _optional_canonical_collaborator(
+    db: Session,
+    gaia_user_id: int,
+) -> PresenzeCollaborator | None:
     matches = list(
         db.scalars(
             select(PresenzeCollaborator).where(
@@ -301,11 +304,11 @@ def _canonical_collaborator(db: Session, gaia_user_id: int) -> PresenzeCollabora
             )
         ).all()
     )
-    if len(matches) != 1:
+    if len(matches) > 1:
         raise TeamChangeApplyError(
             f"Relazione Presenze non univoca per gaia_user_id {gaia_user_id}"
         )
-    return matches[0]
+    return matches[0] if matches else None
 
 
 def canonical_gaia_user_id(value: Any, *, label: str) -> int:
