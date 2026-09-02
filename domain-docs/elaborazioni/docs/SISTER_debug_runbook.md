@@ -80,6 +80,35 @@ GET /elaborazioni/portal-health?hours=24
 GET /elaborazioni/portal-health/events?hours=24&limit=100
 ```
 
+Estratto del contratto risposta:
+
+```json
+{
+  "downloads": {
+    "total": 18,
+    "by_visura_type": {"Sintetica": 12, "Completa": 6},
+    "by_request_type": {"ATTUALITA": 14, "STORICA": 4}
+  },
+  "credentials": [
+    {
+      "credential_id": "00000000-0000-0000-0000-000000000000",
+      "label": "Profilo operativo",
+      "events": 42,
+      "successes": 10,
+      "errors": 1,
+      "downloads": 9,
+      "success_rate": 90.9,
+      "last_seen_at": "2026-09-02T12:00:00Z"
+    }
+  ],
+  "recent_events": [
+    {
+      "credential_label": "Profilo operativo"
+    }
+  ]
+}
+```
+
 La dashboard calcola stato `healthy`, `degraded`, `critical` o `unknown`, tempi
 medi/P95, errori raggruppati e alert per risposte `5xx` ripetute, tasso di
 errore elevato, P95 oltre 120 secondi e cooldown attivi. La risposta health
