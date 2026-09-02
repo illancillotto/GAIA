@@ -86,7 +86,11 @@ errore elevato, P95 oltre 120 secondi e cooldown attivi. La risposta health
 include anche `downloads`, con `total`, `by_visura_type` e `by_request_type`.
 Il conteggio legge i documenti da `catasto_documents`, usa `created_at` per la
 finestra richiesta e applica lo scope del `current_user`; non e quindi un
-contatore globale né un'approssimazione ricavata dagli eventi. Il refresh
+contatore globale né un'approssimazione ricavata dagli eventi. Ogni elemento
+di `credentials` espone inoltre `downloads`: il valore e attribuito tramite la
+richiesta collegata al documento e il relativo `sister_credential_id`. Un
+documento senza richiesta o credenziale associata contribuisce al totale ma
+non a una card del pool. Il refresh
 automatico e ogni 30 secondi; le finestre UI sono 24 ore, 7 giorni e 30 giorni.
 
 Retention:

@@ -7,7 +7,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
 from app.models.application_user import ApplicationUser
-from app.models.catasto import CatastoCredential, CatastoDocument
+from app.models.catasto import CatastoCredential, CatastoDocument, CatastoVisuraRequest
 from app.modules.elaborazioni.router import router as elaborazioni_module_router
 from app.modules.elaborazioni.telemetry_models import SisterPortalEvent
 from app.modules.elaborazioni.telemetry_routes import (
@@ -77,12 +77,14 @@ def _document(
     tipo_visura: str,
     request_type: str | None,
     content_request_type: str | None = None,
+    request_id=None,
 ) -> CatastoDocument:
     return CatastoDocument(
         user_id=user_id,
         tipo_visura=tipo_visura,
         request_type=request_type,
         content_request_type=content_request_type,
+        request_id=request_id,
         filename=f"{uuid4()}.pdf",
         filepath=f"/tmp/{uuid4()}.pdf",
         created_at=created_at,
@@ -104,6 +106,18 @@ def test_portal_health_aggregates_metrics_alerts_and_user_scope() -> None:
     )
     db.add(credential)
     db.flush()
+    attributed_requests = [
+        CatastoVisuraRequest(
+            id=uuid4(),
+            batch_id=uuid4(),
+            user_id=user.id,
+            row_index=row_index,
+            tipo_visura="Sintetica",
+            sister_credential_id=credential.id,
+        )
+        for row_index in range(2)
+    ]
+    db.add_all(attributed_requests)
     events = [
         _event(user.id, now - timedelta(hours=1), credential_id=credential.id, duration_ms=180_000),
         _event(user.id, now - timedelta(hours=2), outcome="completed", credential_id=credential.id),
@@ -150,7 +164,11 @@ def test_portal_health_aggregates_metrics_alerts_and_user_scope() -> None:
     db.add_all(
         [
             _document(
-                user.id, now - timedelta(hours=1), tipo_visura="Sintetica", request_type="ATTUALITA"
+                user.id,
+                now - timedelta(hours=1),
+                tipo_visura="Sintetica",
+                request_type="ATTUALITA",
+                request_id=attributed_requests[0].id,
             ),
             _document(
                 user.id,
@@ -158,6 +176,7 @@ def test_portal_health_aggregates_metrics_alerts_and_user_scope() -> None:
                 tipo_visura="Completa",
                 request_type="ATTUALITA",
                 content_request_type="STORICA",
+                request_id=attributed_requests[1].id,
             ),
             _document(user.id, now - timedelta(hours=3), tipo_visura="", request_type=None),
             _document(
@@ -196,6 +215,11 @@ def test_portal_health_aggregates_metrics_alerts_and_user_scope() -> None:
         "sister-cooldown-active",
     }
     assert result.credentials[0].label in {"Profilo A", "Sessione non associata"}
+    credential_metric = next(
+        item for item in result.credentials if item.credential_id == credential.id
+    )
+    assert credential_metric.downloads == 2
+    assert next(item for item in result.credentials if item.credential_id is None).downloads == 0
     assert result.recent_events[0].credential_label == "Profilo A"
     assert any(item.credential_label is None for item in result.recent_events)
     assert len(result.recent_events) == 7

@@ -55,6 +55,7 @@ class SisterPortalCredentialMetric(BaseModel):
     events: int
     successes: int
     errors: int
+    downloads: int
     success_rate: float
     last_seen_at: datetime
 

@@ -47,6 +47,7 @@ export type SisterPortalCredentialMetric = {
   events: number;
   successes: number;
   errors: number;
+  downloads: number;
   success_rate: number;
   last_seen_at: string;
 };

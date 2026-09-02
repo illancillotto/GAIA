@@ -89,6 +89,7 @@ function health(overrides: Partial<SisterPortalHealth> = {}): SisterPortalHealth
         events: 10,
         successes: 3,
         errors: 2,
+        downloads: 4,
         success_rate: 60,
         last_seen_at: "2026-08-20T11:30:00Z",
       },
@@ -98,6 +99,7 @@ function health(overrides: Partial<SisterPortalHealth> = {}): SisterPortalHealth
         events: 2,
         successes: 0,
         errors: 0,
+        downloads: 0,
         success_rate: 0,
         last_seen_at: "2026-08-20T10:30:00Z",
       },
@@ -190,6 +192,7 @@ describe("SisterPortalHealthWorkspace", () => {
     expect(screen.getByText("Portale lento")).toBeInTheDocument();
     expect(screen.getAllByText("Profilo A")).toHaveLength(2);
     expect(screen.getByText("Visure scaricate")).toBeInTheDocument();
+    expect(screen.getByText((_, element) => element?.textContent === "4visure")).toBeInTheDocument();
     expect(screen.getByText("Completa 2 · Sintetica 4 · Attualità 4 · NON_CLASSIFICATA 1 · Storiche 1")).toBeInTheDocument();
     expect(screen.getByText("Non associata")).toBeInTheDocument();
     expect(screen.getAllByText("download pdf").length).toBeGreaterThan(0);

@@ -218,10 +218,11 @@ function CredentialCards({ items }: { items: SisterPortalCredentialMetric[] }) {
               {item.success_rate}%
             </span>
           </div>
-          <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs">
+          <div className="mt-4 grid grid-cols-2 gap-2 text-center text-xs sm:grid-cols-4">
             <div className="rounded-xl bg-white p-2"><b className="block text-base text-slate-900">{item.events}</b>eventi</div>
             <div className="rounded-xl bg-white p-2"><b className="block text-base text-emerald-700">{item.successes}</b>successi</div>
             <div className="rounded-xl bg-white p-2"><b className="block text-base text-rose-700">{item.errors}</b>errori</div>
+            <div className="rounded-xl bg-white p-2"><b className="block text-base text-sky-700">{item.downloads}</b>visure</div>
           </div>
         </article>
       ))}

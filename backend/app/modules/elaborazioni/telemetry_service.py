@@ -8,7 +8,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.catasto import CatastoCredential, CatastoDocument
+from app.models.catasto import CatastoCredential, CatastoDocument, CatastoVisuraRequest
 from app.modules.elaborazioni.telemetry_models import SisterPortalEvent
 from app.modules.elaborazioni.telemetry_schemas import (
     SisterPortalAlert,
@@ -160,6 +160,7 @@ def _credential_labels(
 def _credential_metrics(
     events: list[SisterPortalEvent],
     labels: dict[UUID, str],
+    downloads: dict[UUID | None, int],
 ) -> list[SisterPortalCredentialMetric]:
     grouped: dict[UUID | None, list[SisterPortalEvent]] = defaultdict(list)
     for event in events:
@@ -175,6 +176,7 @@ def _credential_metrics(
                 events=len(items),
                 successes=successes,
                 errors=errors,
+                downloads=downloads.get(credential_id, 0) if credential_id is not None else 0,
                 success_rate=_success_rate(successes, errors),
                 last_seen_at=max(_as_utc(item.occurred_at) for item in items),
             )
@@ -182,18 +184,23 @@ def _credential_metrics(
     return sorted(metrics, key=lambda item: (-item.errors, item.label))
 
 
-def _download_totals(
+def _download_metrics(
     db: Session,
     *,
     user_id: int,
     since: datetime,
-) -> SisterPortalDownloadTotals:
+) -> tuple[SisterPortalDownloadTotals, dict[UUID | None, int]]:
     rows = db.execute(
         select(
             CatastoDocument.tipo_visura,
             CatastoDocument.content_request_type,
             CatastoDocument.request_type,
+            CatastoVisuraRequest.sister_credential_id,
             func.count(CatastoDocument.id),
+        )
+        .outerjoin(
+            CatastoVisuraRequest,
+            CatastoVisuraRequest.id == CatastoDocument.request_id,
         )
         .where(
             CatastoDocument.user_id == user_id,
@@ -203,19 +210,25 @@ def _download_totals(
             CatastoDocument.tipo_visura,
             CatastoDocument.content_request_type,
             CatastoDocument.request_type,
+            CatastoVisuraRequest.sister_credential_id,
         )
     ).all()
     by_visura_type: dict[str, int] = defaultdict(int)
     by_request_type: dict[str, int] = defaultdict(int)
-    for visura_type, observed_request_type, requested_type, count in rows:
+    by_credential: dict[UUID | None, int] = defaultdict(int)
+    for visura_type, observed_request_type, requested_type, credential_id, count in rows:
         normalized_visura_type = (visura_type or "").strip() or "Non classificata"
         by_visura_type[normalized_visura_type] += count
         request_type = observed_request_type or requested_type or "NON_CLASSIFICATA"
         by_request_type[request_type.strip().upper()] += count
-    return SisterPortalDownloadTotals(
-        total=sum(by_visura_type.values()),
-        by_visura_type=dict(by_visura_type),
-        by_request_type=dict(by_request_type),
+        by_credential[credential_id] += count
+    return (
+        SisterPortalDownloadTotals(
+            total=sum(by_visura_type.values()),
+            by_visura_type=dict(by_visura_type),
+            by_request_type=dict(by_request_type),
+        ),
+        dict(by_credential),
     )
 
 
@@ -327,6 +340,7 @@ def get_portal_health(
         ).all()
     )
     credential_labels = _credential_labels(db, events)
+    downloads, credential_downloads = _download_metrics(db, user_id=user_id, since=since)
     successes = sum(event.outcome in SUCCESS_OUTCOMES for event in events)
     errors = sum(event.outcome in ERROR_OUTCOMES for event in events)
     durations = [event.duration_ms for event in events if event.duration_ms is not None]
@@ -347,11 +361,11 @@ def get_portal_health(
         window_hours=window_hours,
         status=_status(events, alerts),
         totals=totals,
-        downloads=_download_totals(db, user_id=user_id, since=since),
+        downloads=downloads,
         timeline=_timeline(events, window_hours),
         steps=_step_metrics(events),
         errors=_error_metrics(events),
-        credentials=_credential_metrics(events, credential_labels),
+        credentials=_credential_metrics(events, credential_labels, credential_downloads),
         alerts=alerts,
         recent_events=[
             _to_recent(event, credential_labels.get(event.credential_id)) for event in events[:50]
