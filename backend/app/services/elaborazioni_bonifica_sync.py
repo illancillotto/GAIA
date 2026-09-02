@@ -1,3 +1,4 @@
+# ruff: noqa: I001, UP017 - Preserve legacy imports and timezone usage without unrelated churn.
 from __future__ import annotations
 
 import asyncio
@@ -25,7 +26,6 @@ from app.modules.elaborazioni.bonifica_oristanese.apps.warehouse_requests.client
     BonificaWarehouseRequestsClient,
 )
 from app.modules.inventory.services import sync_white_warehouse_requests
-from app.modules.accessi.sync_org_charts import sync_white_org_charts
 from app.modules.utenze.services.sync_consorziati import sync_white_consorziati
 from app.modules.elaborazioni.bonifica_oristanese.models import (
     BonificaSyncEntityStatus,
@@ -50,6 +50,7 @@ from app.services.elaborazioni_bonifica_oristanese import (
     mark_credential_used,
     pick_credential,
 )
+from app.services.whitecompany_org_chart_sync import sync_white_org_charts_to_canonical
 
 SUPPORTED_SYNC_ENTITIES = (
     "report_types",
@@ -525,7 +526,7 @@ async def _run_bonifica_sync_background(
                 elif entity == "org_charts":
                     rows, total = await org_charts_client.fetch_org_charts()
                     _persist_job_runtime_snapshot(db, job, source_total=total)
-                    sync_result = sync_white_org_charts(db=db, rows=rows)
+                    sync_result = sync_white_org_charts_to_canonical(db=db, rows=rows, user_id=current_user.id)
                     result = _SyncExecutionResult(
                         synced=sync_result.synced,
                         skipped=sync_result.skipped,

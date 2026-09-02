@@ -160,6 +160,8 @@ Stato attuale:
 
 - sync unita da `wc_area` implementato
 - sync assegnazioni operatori e posizioni normalizzate implementato
+- il job WhyCompany `org_charts` aggiorna prima lo staging Accessi e poi, nello
+  stesso flusso, il livello canonico letto da `/presenze/organigramma`
 
 Regole MVP:
 
@@ -174,6 +176,7 @@ Backend:
 - `backend/tests/organigramma/test_visibility_service.py`
 - `backend/tests/organigramma/test_schemas.py`
 - `backend/tests/organigramma/test_api.py`
+- `backend/tests/test_elaborazioni_bonifica_oristanese.py`
 - `backend/tests/test_bootstrap_admin.py`
 - `backend/tests/test_section_permissions.py`
 
