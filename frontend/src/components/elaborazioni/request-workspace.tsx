@@ -42,6 +42,22 @@ type ElaborazioneRequestWorkspaceProps = {
   onOpenBatch?: (batchId: string) => void;
 };
 
+export function visureSearchMode(
+  searchMode: ElaborazioneRichiestaCreateInput["search_mode"],
+): "immobile" | "soggetto" {
+  return searchMode === "soggetto" ? "soggetto" : "immobile";
+}
+
+export function visureImmobileComune(firstNome?: string, current?: string): string {
+  if (firstNome) {
+    return firstNome;
+  }
+  if (current) {
+    return current;
+  }
+  return "";
+}
+
 const DEFAULT_VALUES: ElaborazioneRichiestaCreateInput = {
   search_mode: "immobile",
   comune: "",
@@ -92,7 +108,7 @@ export function ElaborazioneRequestWorkspace({
   } = useForm<ElaborazioneRichiestaCreateInput>({
     defaultValues: DEFAULT_VALUES,
   });
-  const singleSearchMode = watch("search_mode") ?? "immobile";
+  const singleSearchMode = visureSearchMode(watch("search_mode"));
 
   useEffect(() => {
     async function loadComuni(): Promise<void> {
@@ -120,15 +136,11 @@ export function ElaborazioneRequestWorkspace({
     async function loadActiveBatches(): Promise<void> {
       const token = getStoredAccessToken();
       if (!token) {
-        if (!cancelled) {
-          setActiveBatches([]);
-        }
+        setActiveBatches([]);
         return;
       }
 
-      if (!cancelled) {
-        setActiveBatchesBusy(true);
-      }
+      setActiveBatchesBusy(true);
 
       try {
         const [pendingBatches, processingBatches] = await Promise.all([
@@ -184,7 +196,7 @@ export function ElaborazioneRequestWorkspace({
     try {
       const batch = await createElaborazioneRichiesta(token, {
         ...values,
-        search_mode: values.search_mode ?? "immobile",
+        search_mode: visureSearchMode(values.search_mode),
         sezione: values.sezione?.trim() || undefined,
         subalterno: values.subalterno?.trim() || undefined,
         comune: values.comune?.trim() || undefined,
@@ -325,34 +337,19 @@ export function ElaborazioneRequestWorkspace({
           title="Scegli come vuoi lavorare"
           description="La modalità singola è pensata per una richiesta veloce. La modalità batch è pensata per import, controllo e avvio massivo."
         />
-        <div className="grid gap-4 p-6 md:grid-cols-4">
+        <div className="grid gap-4 p-6 md:grid-cols-4" data-testid="visure-flow-choice">
           <button
-            className={`rounded-[24px] border p-5 text-left transition ${mode === "single" ? "border-[#1D4E35] bg-[#eef6f0] shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"}`}
-            onClick={() => setMode("single")}
+            className={`rounded-[24px] border p-5 text-left transition ${mode === "autosync" ? "border-[#1D4E35] bg-[#eef6f0] shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"}`}
+            onClick={() => setMode("autosync")}
             type="button"
           >
             <div className="flex items-center gap-3">
-              <div className={`rounded-2xl p-3 ${mode === "single" ? "bg-[#1D4E35] text-white" : "bg-gray-100 text-gray-700"}`}>
-                <SearchIcon className="h-5 w-5" />
+              <div className={`rounded-2xl p-3 ${mode === "autosync" ? "bg-[#1D4E35] text-white" : "bg-gray-100 text-gray-700"}`}>
+                <RefreshIcon className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-base font-semibold text-gray-900">Visura singola</p>
-                <p className="mt-1 text-sm leading-6 text-gray-600">Un immobile o una particella, avvio immediato.</p>
-              </div>
-            </div>
-          </button>
-          <button
-            className={`rounded-[24px] border p-5 text-left transition ${mode === "batch" ? "border-[#1D4E35] bg-[#eef6f0] shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"}`}
-            onClick={() => setMode("batch")}
-            type="button"
-          >
-            <div className="flex items-center gap-3">
-              <div className={`rounded-2xl p-3 ${mode === "batch" ? "bg-[#1D4E35] text-white" : "bg-gray-100 text-gray-700"}`}>
-                <DocumentIcon className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-base font-semibold text-gray-900">Import batch</p>
-                <p className="mt-1 text-sm leading-6 text-gray-600">Più righe da file, validazione e preview prima del run.</p>
+                <p className="text-base font-semibold text-gray-900">AutoSync a ruolo</p>
+                <p className="mt-1 text-sm leading-6 text-gray-600">Scarico continuo visure delle particelle a ruolo, con retry automatici.</p>
               </div>
             </div>
           </button>
@@ -372,17 +369,32 @@ export function ElaborazioneRequestWorkspace({
             </div>
           </button>
           <button
-            className={`rounded-[24px] border p-5 text-left transition ${mode === "autosync" ? "border-[#1D4E35] bg-[#eef6f0] shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"}`}
-            onClick={() => setMode("autosync")}
+            className={`rounded-[24px] border p-5 text-left transition ${mode === "batch" ? "border-[#1D4E35] bg-[#eef6f0] shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"}`}
+            onClick={() => setMode("batch")}
             type="button"
           >
             <div className="flex items-center gap-3">
-              <div className={`rounded-2xl p-3 ${mode === "autosync" ? "bg-[#1D4E35] text-white" : "bg-gray-100 text-gray-700"}`}>
-                <RefreshIcon className="h-5 w-5" />
+              <div className={`rounded-2xl p-3 ${mode === "batch" ? "bg-[#1D4E35] text-white" : "bg-gray-100 text-gray-700"}`}>
+                <DocumentIcon className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-base font-semibold text-gray-900">AutoSync a ruolo</p>
-                <p className="mt-1 text-sm leading-6 text-gray-600">Scarico continuo visure delle particelle a ruolo, con retry automatici.</p>
+                <p className="text-base font-semibold text-gray-900">Import batch</p>
+                <p className="mt-1 text-sm leading-6 text-gray-600">Più righe da file, validazione e preview prima del run.</p>
+              </div>
+            </div>
+          </button>
+          <button
+            className={`rounded-[24px] border p-5 text-left transition ${mode === "single" ? "border-[#1D4E35] bg-[#eef6f0] shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"}`}
+            onClick={() => setMode("single")}
+            type="button"
+          >
+            <div className="flex items-center gap-3">
+              <div className={`rounded-2xl p-3 ${mode === "single" ? "bg-[#1D4E35] text-white" : "bg-gray-100 text-gray-700"}`}>
+                <SearchIcon className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-base font-semibold text-gray-900">Visura singola</p>
+                <p className="mt-1 text-sm leading-6 text-gray-600">Un immobile o una particella, avvio immediato.</p>
               </div>
             </div>
           </button>
@@ -409,7 +421,7 @@ export function ElaborazioneRequestWorkspace({
               <div className="mb-6 grid gap-4 md:grid-cols-2">
                 <button
                   className={`rounded-[20px] border px-4 py-4 text-left transition ${singleSearchMode === "immobile" ? "border-[#1D4E35] bg-[#eef6f0]" : "border-gray-200 bg-white hover:border-gray-300"}`}
-                  onClick={() => reset({ ...watch(), search_mode: "immobile", comune: comuni[0]?.nome ?? watch("comune") ?? "" })}
+                  onClick={() => reset({ ...watch(), search_mode: "immobile", comune: visureImmobileComune(comuni[0]?.nome, watch("comune")) })}
                   type="button"
                 >
                   <p className="text-sm font-semibold text-gray-900">Ricerca per immobile</p>
@@ -445,7 +457,7 @@ export function ElaborazioneRequestWorkspace({
 
                     <label className="space-y-2">
                       <span className="label-caption">Catasto</span>
-                      <select className="form-control" {...register("catasto", { required: true })}>
+                      <select className="form-control" {...register("catasto")}>
                         <option value="Terreni">Terreni</option>
                         <option value="Terreni e Fabbricati">Terreni e Fabbricati</option>
                       </select>
