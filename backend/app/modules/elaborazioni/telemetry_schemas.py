@@ -18,6 +18,12 @@ class SisterPortalTotals(BaseModel):
     p95_duration_ms: int | None
 
 
+class SisterPortalDownloadTotals(BaseModel):
+    total: int
+    by_visura_type: dict[str, int]
+    by_request_type: dict[str, int]
+
+
 class SisterPortalTimelinePoint(BaseModel):
     bucket: datetime
     events: int
@@ -74,6 +80,7 @@ class SisterPortalRecentEvent(BaseModel):
     attempt: int | None
     cooldown_seconds: int | None
     credential_id: UUID | None
+    credential_label: str | None
     batch_id: UUID | None
     request_id: UUID | None
 
@@ -83,6 +90,7 @@ class SisterPortalHealthResponse(BaseModel):
     window_hours: int
     status: str
     totals: SisterPortalTotals
+    downloads: SisterPortalDownloadTotals
     timeline: list[SisterPortalTimelinePoint]
     steps: list[SisterPortalStepMetric]
     errors: list[SisterPortalErrorMetric]
@@ -99,6 +107,7 @@ class SisterPortalEventListResponse(BaseModel):
 __all__ = [
     "SisterPortalAlert",
     "SisterPortalCredentialMetric",
+    "SisterPortalDownloadTotals",
     "SisterPortalErrorMetric",
     "SisterPortalEventListResponse",
     "SisterPortalHealthResponse",

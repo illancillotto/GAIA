@@ -34,6 +34,11 @@ function health(overrides: Partial<SisterPortalHealth> = {}): SisterPortalHealth
       average_duration_ms: 1500,
       p95_duration_ms: 120000,
     },
+    downloads: {
+      total: 6,
+      by_visura_type: { Sintetica: 4, Completa: 2 },
+      by_request_type: { ATTUALITA: 4, STORICA: 1, NON_CLASSIFICATA: 1 },
+    },
     timeline: [
       {
         bucket: "2026-08-20T11:00:00Z",
@@ -126,7 +131,8 @@ function health(overrides: Partial<SisterPortalHealth> = {}): SisterPortalHealth
         endpoint: "/Visure/test.do",
         attempt: 1,
         cooldown_seconds: 90,
-        credential_id: null,
+        credential_id: "11111111-1111-1111-1111-111111111111",
+        credential_label: "Profilo A",
         batch_id: null,
         request_id: null,
       },
@@ -143,6 +149,7 @@ function health(overrides: Partial<SisterPortalHealth> = {}): SisterPortalHealth
         attempt: null,
         cooldown_seconds: null,
         credential_id: null,
+        credential_label: null,
         batch_id: null,
         request_id: null,
       },
@@ -181,7 +188,10 @@ describe("SisterPortalHealthWorkspace", () => {
     await waitFor(() => expect(screen.getByText("Critico")).toBeInTheDocument());
     expect(screen.getByText("Errori server SISTER ripetuti")).toBeInTheDocument();
     expect(screen.getByText("Portale lento")).toBeInTheDocument();
-    expect(screen.getByText("Profilo A")).toBeInTheDocument();
+    expect(screen.getAllByText("Profilo A")).toHaveLength(2);
+    expect(screen.getByText("Visure scaricate")).toBeInTheDocument();
+    expect(screen.getByText("Completa 2 · Sintetica 4 · Attualità 4 · NON_CLASSIFICATA 1 · Storiche 1")).toBeInTheDocument();
+    expect(screen.getByText("Non associata")).toBeInTheDocument();
     expect(screen.getAllByText("download pdf").length).toBeGreaterThan(0);
     expect(screen.getAllByText("HTTP 503").length).toBeGreaterThan(0);
     expect(screen.getByText("timeout")).toBeInTheDocument();
@@ -203,6 +213,7 @@ describe("SisterPortalHealthWorkspace", () => {
       credentials: [],
       alerts: [],
       recent_events: [],
+      downloads: { total: 0, by_visura_type: {}, by_request_type: {} },
     }));
     render(<SisterPortalHealthWorkspace />);
     await waitFor(() => expect(screen.getByText("Operativo")).toBeInTheDocument());
@@ -211,6 +222,7 @@ describe("SisterPortalHealthWorkspace", () => {
     expect(screen.getByText("Nessuna sessione associata a credenziali nella finestra.")).toBeInTheDocument();
     expect(screen.getByText("Nessun errore classificato.")).toBeInTheDocument();
     expect(screen.getByText("Nessun evento recente.")).toBeInTheDocument();
+    expect(screen.getByText("nessuna visura nella finestra")).toBeInTheDocument();
   });
 
   test("shows degraded state and refreshes on interval", async () => {

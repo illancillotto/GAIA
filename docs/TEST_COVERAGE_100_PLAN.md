@@ -771,6 +771,19 @@ Fino alla chiusura completa del piano:
     `Reparto ...` convertite in upgrade e ripristinate in downgrade; le `4`
     unita `Sezione ...` restano invariate.
 
+- `2026-09-02` - Portal Health SISTER: credenziale eventi e KPI visure scaricate
+  (`app/modules/elaborazioni/telemetry_schemas.py`,
+  `app/modules/elaborazioni/telemetry_service.py`,
+  `src/components/elaborazioni/sister-portal-health-workspace.tsx`,
+  `src/types/portal-health.ts`)
+  Gli eventi recenti espongono l'etichetta sanitizzata della credenziale usata;
+  la testata mostra inoltre le visure scaricate nella finestra, ripartite per
+  formato e temporalita, con query owner-scoped sui documenti persistiti.
+  Esito validato:
+  - `cd backend && COVERAGE_FILE=/tmp/gaia-sister-portal-health.coverage .venv/bin/python -m pytest tests/test_sister_portal_telemetry.py --cov=app.modules.elaborazioni.telemetry_schemas --cov=app.modules.elaborazioni.telemetry_service --cov-branch --cov-report=term-missing --cov-fail-under=100 -q` -> `3` test passati, `100%` statement e branch sui due file runtime modificati;
+  - `cd frontend && VITEST_COVERAGE_INCLUDE='src/components/elaborazioni/sister-portal-health-workspace.tsx' npm run test:coverage -- --run tests/unit/sister-portal-health-workspace.test.tsx --coverage.reportsDirectory=/tmp/gaia-sister-portal-health-coverage` -> `5` test passati, `100%` statements / branches / functions / lines sul componente runtime modificato;
+  - `cd frontend && npm run typecheck` -> passato.
+
 ## Eccezioni temporanee aperte
 
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`

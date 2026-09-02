@@ -71,6 +71,7 @@ Sicurezza dei dati:
 - il contesto accetta soltanto chiavi operative predefinite
 - password, testo o immagine CAPTCHA, nominativi e riferimenti catastali non vengono registrati
 - API e dashboard filtrano sempre gli eventi per `current_user`
+- gli eventi recenti espongono `credential_label`, risolta dalla credenziale associata all'evento; username SISTER e segreti non fanno parte della risposta
 
 Superfici:
 
@@ -81,8 +82,12 @@ GET /elaborazioni/portal-health/events?hours=24&limit=100
 
 La dashboard calcola stato `healthy`, `degraded`, `critical` o `unknown`, tempi
 medi/P95, errori raggruppati e alert per risposte `5xx` ripetute, tasso di
-errore elevato, P95 oltre 120 secondi e cooldown attivi. Il refresh automatico
-e ogni 30 secondi; le finestre UI sono 24 ore, 7 giorni e 30 giorni.
+errore elevato, P95 oltre 120 secondi e cooldown attivi. La risposta health
+include anche `downloads`, con `total`, `by_visura_type` e `by_request_type`.
+Il conteggio legge i documenti da `catasto_documents`, usa `created_at` per la
+finestra richiesta e applica lo scope del `current_user`; non e quindi un
+contatore globale né un'approssimazione ricavata dagli eventi. Il refresh
+automatico e ogni 30 secondi; le finestre UI sono 24 ore, 7 giorni e 30 giorni.
 
 Retention:
 

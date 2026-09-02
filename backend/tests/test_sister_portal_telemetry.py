@@ -7,13 +7,13 @@ from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
 from app.models.application_user import ApplicationUser
-from app.models.catasto import CatastoCredential
+from app.models.catasto import CatastoCredential, CatastoDocument
+from app.modules.elaborazioni.router import router as elaborazioni_module_router
 from app.modules.elaborazioni.telemetry_models import SisterPortalEvent
 from app.modules.elaborazioni.telemetry_routes import (
     read_sister_portal_events,
     read_sister_portal_health,
 )
-from app.modules.elaborazioni.router import router as elaborazioni_module_router
 from app.modules.elaborazioni.telemetry_service import get_portal_health, list_portal_events
 
 
@@ -70,6 +70,25 @@ def _event(
     )
 
 
+def _document(
+    user_id: int,
+    created_at: datetime,
+    *,
+    tipo_visura: str,
+    request_type: str | None,
+    content_request_type: str | None = None,
+) -> CatastoDocument:
+    return CatastoDocument(
+        user_id=user_id,
+        tipo_visura=tipo_visura,
+        request_type=request_type,
+        content_request_type=content_request_type,
+        filename=f"{uuid4()}.pdf",
+        filepath=f"/tmp/{uuid4()}.pdf",
+        created_at=created_at,
+    )
+
+
 def test_portal_health_aggregates_metrics_alerts_and_user_scope() -> None:
     db = _session()
     now = datetime.now(UTC)
@@ -88,9 +107,27 @@ def test_portal_health_aggregates_metrics_alerts_and_user_scope() -> None:
     events = [
         _event(user.id, now - timedelta(hours=1), credential_id=credential.id, duration_ms=180_000),
         _event(user.id, now - timedelta(hours=2), outcome="completed", credential_id=credential.id),
-        _event(user.id, now - timedelta(hours=3), outcome="error", event_type="http_error", http_status=500),
-        _event(user.id, now - timedelta(hours=4), outcome="failed", event_type="http_error", http_status=502),
-        _event(user.id, now - timedelta(hours=5), outcome="timeout", event_type="http_error", http_status=503),
+        _event(
+            user.id,
+            now - timedelta(hours=3),
+            outcome="error",
+            event_type="http_error",
+            http_status=500,
+        ),
+        _event(
+            user.id,
+            now - timedelta(hours=4),
+            outcome="failed",
+            event_type="http_error",
+            http_status=502,
+        ),
+        _event(
+            user.id,
+            now - timedelta(hours=5),
+            outcome="timeout",
+            event_type="http_error",
+            http_status=503,
+        ),
         _event(
             user.id,
             now - timedelta(hours=6),
@@ -101,9 +138,39 @@ def test_portal_health_aggregates_metrics_alerts_and_user_scope() -> None:
             credential_id=uuid4(),
         ),
         _event(user.id, now - timedelta(hours=7), event_type="retry", outcome="scheduled"),
-        _event(other_user.id, now - timedelta(minutes=5), outcome="error", event_type="http_error", http_status=500),
+        _event(
+            other_user.id,
+            now - timedelta(minutes=5),
+            outcome="error",
+            event_type="http_error",
+            http_status=500,
+        ),
     ]
     db.add_all(events)
+    db.add_all(
+        [
+            _document(
+                user.id, now - timedelta(hours=1), tipo_visura="Sintetica", request_type="ATTUALITA"
+            ),
+            _document(
+                user.id,
+                now - timedelta(hours=2),
+                tipo_visura="Completa",
+                request_type="ATTUALITA",
+                content_request_type="STORICA",
+            ),
+            _document(user.id, now - timedelta(hours=3), tipo_visura="", request_type=None),
+            _document(
+                other_user.id,
+                now - timedelta(hours=1),
+                tipo_visura="Analitica",
+                request_type="STORICA",
+            ),
+            _document(
+                user.id, now - timedelta(hours=25), tipo_visura="Analitica", request_type="STORICA"
+            ),
+        ]
+    )
     db.commit()
 
     result = get_portal_health(db, user_id=user.id, window_hours=24, now=now)
@@ -116,6 +183,9 @@ def test_portal_health_aggregates_metrics_alerts_and_user_scope() -> None:
     assert result.totals.cooldowns == 1
     assert result.totals.success_rate == 40.0
     assert result.totals.p95_duration_ms == 180_000
+    assert result.downloads.total == 3
+    assert result.downloads.by_visura_type == {"Sintetica": 1, "Completa": 1, "Non classificata": 1}
+    assert result.downloads.by_request_type == {"ATTUALITA": 1, "STORICA": 1, "NON_CLASSIFICATA": 1}
     assert len(result.timeline) == 7
     assert result.steps[0].errors == 3
     assert result.errors[0].count == 1
@@ -126,6 +196,8 @@ def test_portal_health_aggregates_metrics_alerts_and_user_scope() -> None:
         "sister-cooldown-active",
     }
     assert result.credentials[0].label in {"Profilo A", "Sessione non associata"}
+    assert result.recent_events[0].credential_label == "Profilo A"
+    assert any(item.credential_label is None for item in result.recent_events)
     assert len(result.recent_events) == 7
 
     daily = get_portal_health(db, user_id=user.id, window_hours=168, now=now)
@@ -135,6 +207,7 @@ def test_portal_health_aggregates_metrics_alerts_and_user_scope() -> None:
     listed = list_portal_events(db, user_id=user.id, window_hours=24, limit=2)
     assert listed.total == 7
     assert len(listed.items) == 2
+    assert listed.items[0].credential_label == "Profilo A"
 
     assert read_sister_portal_health(user, db, hours=24).window_hours == 24
     assert read_sister_portal_events(user, db, hours=24, limit=1).total == 7
@@ -152,6 +225,9 @@ def test_portal_health_covers_unknown_healthy_and_degraded_states() -> None:
     assert empty.totals.success_rate == 0
     assert empty.totals.average_duration_ms is None
     assert empty.totals.p95_duration_ms is None
+    assert empty.downloads.total == 0
+    assert empty.downloads.by_visura_type == {}
+    assert empty.downloads.by_request_type == {}
     assert empty.timeline == []
     assert empty.credentials == []
     assert empty.alerts == []

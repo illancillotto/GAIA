@@ -8,11 +8,12 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.catasto import CatastoCredential
+from app.models.catasto import CatastoCredential, CatastoDocument
 from app.modules.elaborazioni.telemetry_models import SisterPortalEvent
 from app.modules.elaborazioni.telemetry_schemas import (
     SisterPortalAlert,
     SisterPortalCredentialMetric,
+    SisterPortalDownloadTotals,
     SisterPortalErrorMetric,
     SisterPortalEventListResponse,
     SisterPortalHealthResponse,
@@ -21,7 +22,6 @@ from app.modules.elaborazioni.telemetry_schemas import (
     SisterPortalTimelinePoint,
     SisterPortalTotals,
 )
-
 
 SUCCESS_OUTCOMES = {"success", "completed"}
 ERROR_OUTCOMES = {"error", "failed", "timeout"}
@@ -49,7 +49,10 @@ def _success_rate(successes: int, errors: int) -> float:
     return round(successes / terminal * 100, 1) if terminal else 0.0
 
 
-def _to_recent(event: SisterPortalEvent) -> SisterPortalRecentEvent:
+def _to_recent(
+    event: SisterPortalEvent,
+    credential_label: str | None = None,
+) -> SisterPortalRecentEvent:
     return SisterPortalRecentEvent(
         id=event.id,
         occurred_at=_as_utc(event.occurred_at),
@@ -63,12 +66,15 @@ def _to_recent(event: SisterPortalEvent) -> SisterPortalRecentEvent:
         attempt=event.attempt,
         cooldown_seconds=event.cooldown_seconds,
         credential_id=event.credential_id,
+        credential_label=credential_label,
         batch_id=event.batch_id,
         request_id=event.request_id,
     )
 
 
-def _timeline(events: list[SisterPortalEvent], window_hours: int) -> list[SisterPortalTimelinePoint]:
+def _timeline(
+    events: list[SisterPortalEvent], window_hours: int
+) -> list[SisterPortalTimelinePoint]:
     grouped: dict[datetime, list[SisterPortalEvent]] = defaultdict(list)
     for event in events:
         occurred_at = _as_utc(event.occurred_at)
@@ -85,7 +91,9 @@ def _timeline(events: list[SisterPortalEvent], window_hours: int) -> list[Sister
             events=len(items),
             successes=sum(item.outcome in SUCCESS_OUTCOMES for item in items),
             errors=sum(item.outcome in ERROR_OUTCOMES for item in items),
-            average_duration_ms=_average([item.duration_ms for item in items if item.duration_ms is not None]),
+            average_duration_ms=_average(
+                [item.duration_ms for item in items if item.duration_ms is not None]
+            ),
         )
         for bucket, items in sorted(grouped.items())
     ]
@@ -101,8 +109,12 @@ def _step_metrics(events: list[SisterPortalEvent]) -> list[SisterPortalStepMetri
             events=len(items),
             successes=sum(item.outcome in SUCCESS_OUTCOMES for item in items),
             errors=sum(item.outcome in ERROR_OUTCOMES for item in items),
-            average_duration_ms=_average([item.duration_ms for item in items if item.duration_ms is not None]),
-            p95_duration_ms=_percentile_95([item.duration_ms for item in items if item.duration_ms is not None]),
+            average_duration_ms=_average(
+                [item.duration_ms for item in items if item.duration_ms is not None]
+            ),
+            p95_duration_ms=_percentile_95(
+                [item.duration_ms for item in items if item.duration_ms is not None]
+            ),
         )
         for step, items in grouped.items()
     ]
@@ -127,19 +139,31 @@ def _error_metrics(events: list[SisterPortalEvent]) -> list[SisterPortalErrorMet
     return sorted(metrics, key=lambda item: (-item.count, item.event_type))[:20]
 
 
-def _credential_metrics(
+def _credential_labels(
     db: Session,
     events: list[SisterPortalEvent],
+) -> dict[UUID, str]:
+    credential_ids = {event.credential_id for event in events if event.credential_id is not None}
+    return (
+        dict(
+            db.execute(
+                select(CatastoCredential.id, CatastoCredential.label).where(
+                    CatastoCredential.id.in_(credential_ids)
+                )
+            ).all()
+        )
+        if credential_ids
+        else {}
+    )
+
+
+def _credential_metrics(
+    events: list[SisterPortalEvent],
+    labels: dict[UUID, str],
 ) -> list[SisterPortalCredentialMetric]:
     grouped: dict[UUID | None, list[SisterPortalEvent]] = defaultdict(list)
     for event in events:
         grouped[event.credential_id].append(event)
-    credential_ids = [credential_id for credential_id in grouped if credential_id is not None]
-    labels = dict(
-        db.execute(
-            select(CatastoCredential.id, CatastoCredential.label).where(CatastoCredential.id.in_(credential_ids))
-        ).all()
-    ) if credential_ids else {}
     metrics = []
     for credential_id, items in grouped.items():
         successes = sum(item.outcome in SUCCESS_OUTCOMES for item in items)
@@ -158,6 +182,43 @@ def _credential_metrics(
     return sorted(metrics, key=lambda item: (-item.errors, item.label))
 
 
+def _download_totals(
+    db: Session,
+    *,
+    user_id: int,
+    since: datetime,
+) -> SisterPortalDownloadTotals:
+    rows = db.execute(
+        select(
+            CatastoDocument.tipo_visura,
+            CatastoDocument.content_request_type,
+            CatastoDocument.request_type,
+            func.count(CatastoDocument.id),
+        )
+        .where(
+            CatastoDocument.user_id == user_id,
+            CatastoDocument.created_at >= since,
+        )
+        .group_by(
+            CatastoDocument.tipo_visura,
+            CatastoDocument.content_request_type,
+            CatastoDocument.request_type,
+        )
+    ).all()
+    by_visura_type: dict[str, int] = defaultdict(int)
+    by_request_type: dict[str, int] = defaultdict(int)
+    for visura_type, observed_request_type, requested_type, count in rows:
+        normalized_visura_type = (visura_type or "").strip() or "Non classificata"
+        by_visura_type[normalized_visura_type] += count
+        request_type = observed_request_type or requested_type or "NON_CLASSIFICATA"
+        by_request_type[request_type.strip().upper()] += count
+    return SisterPortalDownloadTotals(
+        total=sum(by_visura_type.values()),
+        by_visura_type=dict(by_visura_type),
+        by_request_type=dict(by_request_type),
+    )
+
+
 def _alerts(
     events: list[SisterPortalEvent],
     totals: SisterPortalTotals,
@@ -173,7 +234,9 @@ def _alerts(
 
 
 def _server_error_alert(events: list[SisterPortalEvent]) -> SisterPortalAlert | None:
-    server_errors = [event for event in events if event.http_status is not None and event.http_status >= 500]
+    server_errors = [
+        event for event in events if event.http_status is not None and event.http_status >= 500
+    ]
     if len(server_errors) < 3:
         return None
     return SisterPortalAlert(
@@ -263,6 +326,7 @@ def get_portal_health(
             .order_by(SisterPortalEvent.occurred_at.desc())
         ).all()
     )
+    credential_labels = _credential_labels(db, events)
     successes = sum(event.outcome in SUCCESS_OUTCOMES for event in events)
     errors = sum(event.outcome in ERROR_OUTCOMES for event in events)
     durations = [event.duration_ms for event in events if event.duration_ms is not None]
@@ -283,12 +347,15 @@ def get_portal_health(
         window_hours=window_hours,
         status=_status(events, alerts),
         totals=totals,
+        downloads=_download_totals(db, user_id=user_id, since=since),
         timeline=_timeline(events, window_hours),
         steps=_step_metrics(events),
         errors=_error_metrics(events),
-        credentials=_credential_metrics(db, events),
+        credentials=_credential_metrics(events, credential_labels),
         alerts=alerts,
-        recent_events=[_to_recent(event) for event in events[:50]],
+        recent_events=[
+            _to_recent(event, credential_labels.get(event.credential_id)) for event in events[:50]
+        ],
     )
 
 
@@ -311,7 +378,11 @@ def list_portal_events(
         .order_by(SisterPortalEvent.occurred_at.desc())
         .limit(limit)
     ).all()
-    return SisterPortalEventListResponse(total=total, items=[_to_recent(event) for event in events])
+    credential_labels = _credential_labels(db, list(events))
+    return SisterPortalEventListResponse(
+        total=total,
+        items=[_to_recent(event, credential_labels.get(event.credential_id)) for event in events],
+    )
 
 
 __all__ = ["get_portal_health", "list_portal_events"]

@@ -16,6 +16,7 @@ import { formatDateTime } from "@/lib/presentation";
 import type {
   SisterPortalAlert,
   SisterPortalCredentialMetric,
+  SisterPortalDownloadTotals,
   SisterPortalErrorMetric,
   SisterPortalHealth,
   SisterPortalRecentEvent,
@@ -262,6 +263,7 @@ function RecentEvents({ items }: { items: SisterPortalRecentEvent[] }) {
             <th className="px-3 py-3 font-semibold">Ora</th>
             <th className="px-3 py-3 font-semibold">Evento</th>
             <th className="px-3 py-3 font-semibold">Fase</th>
+            <th className="px-3 py-3 font-semibold">Credenziale</th>
             <th className="px-3 py-3 font-semibold">Esito</th>
             <th className="px-3 py-3 text-right font-semibold">Durata</th>
           </tr>
@@ -272,6 +274,9 @@ function RecentEvents({ items }: { items: SisterPortalRecentEvent[] }) {
               <td className="whitespace-nowrap px-3 py-3 text-xs text-slate-500">{formatDateTime(item.occurred_at)}</td>
               <td className="px-3 py-3 font-semibold text-slate-800">{item.event_type.replaceAll("_", " ")}</td>
               <td className="px-3 py-3 text-slate-600">{item.step.replaceAll("_", " ")}</td>
+              <td className="px-3 py-3 font-semibold text-slate-700">
+                {item.credential_label ?? "Non associata"}
+              </td>
               <td className="px-3 py-3">
                 <span className={`rounded-full px-2 py-1 text-xs font-bold ${
                   item.outcome === "error" || item.outcome === "failed"
@@ -287,6 +292,31 @@ function RecentEvents({ items }: { items: SisterPortalRecentEvent[] }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+
+function downloadBreakdown(downloads: SisterPortalDownloadTotals | undefined): string {
+  if (!downloads || downloads.total === 0) return "nessuna visura nella finestra";
+  const visuraTypes = Object.entries(downloads.by_visura_type)
+    .filter(([, count]) => count > 0)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([type, count]) => `${type} ${count}`);
+  const requestTypes = Object.entries(downloads.by_request_type)
+    .filter(([, count]) => count > 0)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([type, count]) => `${type === "ATTUALITA" ? "Attualità" : type === "STORICA" ? "Storiche" : type} ${count}`);
+  return [...visuraTypes, ...requestTypes].join(" · ");
+}
+
+
+function DownloadKpi({ health }: { health: SisterPortalHealth | null }) {
+  return (
+    <ModuleWorkspaceKpiTile
+      label="Visure scaricate"
+      value={health?.downloads.total ?? 0}
+      hint={downloadBreakdown(health?.downloads)}
+    />
   );
 }
 
@@ -315,6 +345,7 @@ function HealthHero({
     >
       <ModuleWorkspaceKpiRow>
         <ModuleWorkspaceKpiTile label="Esecuzioni" value={totals?.executions ?? 0} hint={`${totals?.events ?? 0} eventi`} />
+        <DownloadKpi health={health} />
         <ModuleWorkspaceKpiTile label="Successo" value={`${totals?.success_rate ?? 0}%`} hint={`${totals?.successes ?? 0} completate`} />
         <ModuleWorkspaceKpiTile label="Errori" value={totals?.errors ?? 0} hint="esiti terminali" variant={(totals?.errors ?? 0) > 0 ? "amber" : "default"} />
         <ModuleWorkspaceKpiTile label="P95" value={formatPortalDuration(totals?.p95_duration_ms ?? null)} hint="latenza osservata" />
