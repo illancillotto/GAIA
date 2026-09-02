@@ -102,6 +102,7 @@ class MobileOperatorResponseItem(BaseModel):
     display_name: str
     email: str
     phone: str | None
+    personnel_area: Literal["AGRARIO", "IMPIANTI"]
     status: str
     domains: list[str] | None = None
     gate_mobile_console_enabled: bool
@@ -1281,36 +1282,9 @@ def mobile_connector_handshake() -> MobileConnectorHandshakeResponse:
 def get_mobile_operators(
     db: Annotated[Session, Depends(get_db)],
 ):
-    rows = db.execute(
-        select(WCOperator, ApplicationUser, OperatorProfile)
-        .join(ApplicationUser, ApplicationUser.id == WCOperator.gaia_user_id)
-        .join(OperatorProfile, OperatorProfile.user_id == ApplicationUser.id, isouter=True)
-        .where(WCOperator.email.is_not(None))
-        .order_by(WCOperator.last_name.asc(), WCOperator.first_name.asc(), WCOperator.email.asc())
-    ).all()
+    from app.services.gate_mobile_sync import build_mobile_operator_push_payload
 
-    synced_from = _coalesce_datetime(
-        *[operator.wc_synced_at for operator, _, _ in rows],
-        *[operator.updated_at for operator, _, _ in rows],
-    )
-    operators = [
-        MobileOperatorResponseItem(
-            operator_id=operator.id,
-            gaia_user_id=str(user.id),
-            gaia_operator_profile_id=str(profile.id) if profile else None,
-            gaia_username=user.username,
-            display_name=_operator_display_name(operator, user),
-            email=operator.email or user.email,
-            phone=profile.phone if profile else None,
-            status="ACTIVE" if operator.enabled and user.is_active else "DISABLED",
-            domains=operator.domains,
-            gate_mobile_console_enabled=operator.gate_mobile_console_enabled,
-            gate_mobile_console_role=operator.gate_mobile_console_role,
-            gate_mobile_console_pages=operator.gate_mobile_console_pages,
-        )
-        for operator, user, profile in rows
-    ]
-    return MobileOperatorsResponse(synced_from_gaia_at=synced_from, operators=operators)
+    return build_mobile_operator_push_payload(db)
 
 
 @router.get("/catalogs", response_model=MobileCatalogsResponse)
