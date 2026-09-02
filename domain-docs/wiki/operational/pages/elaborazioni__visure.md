@@ -4,6 +4,7 @@
 
 La pagina `/elaborazioni/visure` consente consultazione stato visure, esiti, scarti, retry e artefatti prodotti.
 In `Scelta del flusso` l'ordine delle modalità è `AutoSync a ruolo`, `Batch recenti`, `Import batch`, `Visura singola`.
+La pagina si apre su `AutoSync a ruolo`.
 
 ## Navigazione dettaglio
 

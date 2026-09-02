@@ -53,7 +53,7 @@ La pagina `/elaborazioni` usa una struttura a sezioni stabili:
 - il corpo della dashboard è stato semplificato: sotto le azioni rapide restano solo l'elenco dei batch recenti e una vista aggregata delle operazioni in corso (batch runtime + sync WhiteCompany attive)
 - nella tabella `Batch recenti` la dashboard mostra anche la sintesi esiti per lotto (`ok`, `ko`, `n.d.`, `skip`) cosi i batch grandi risultano leggibili senza aprire subito il dettaglio
 - l'ingresso `Visure` sostituisce i due accessi separati `Visura singola` e `Import batch`: apre il workspace unico `ElaborazioneRequestWorkspace`, che gestisce entrambe le modalità
-- in `Scelta del flusso` le card sono in questo ordine: `AutoSync a ruolo`, `Batch recenti`, `Import batch`, `Visura singola`
+- in `Scelta del flusso` le card sono in questo ordine: `AutoSync a ruolo`, `Batch recenti`, `Import batch`, `Visura singola`; la pagina `/elaborazioni/visure` si apre su `AutoSync a ruolo`
 - spazio riservato all'aggiunta futura di altri provider/processi senza rimescolare i flussi esistenti
 - i workspace rapidi della dashboard si aprono in modale, con fallback a pagina completa quando serve approfondire o condividere il link
 - anche i punti di uscita frequenti nei workspace interni (`archivio batch/documenti`, `Capacitas`) riusano il pattern modale per ridurre i salti di pagina

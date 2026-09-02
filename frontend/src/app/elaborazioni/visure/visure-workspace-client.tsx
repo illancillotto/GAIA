@@ -26,7 +26,7 @@ export function ElaborazioniVisureWorkspaceClient() {
   return (
     <>
       <RecentBatchesOpenProvider value={{ onOpenBatch: openBatchModal }}>
-        <ElaborazioneRequestWorkspace embedded initialMode="recent" onOpenBatch={openBatchModal} />
+        <ElaborazioneRequestWorkspace embedded initialMode="autosync" onOpenBatch={openBatchModal} />
       </RecentBatchesOpenProvider>
       <ElaborazioneWorkspaceModal
         description={modalState?.description}

@@ -60,7 +60,7 @@ describe("ElaborazioniVisureWorkspaceClient", () => {
     render(<ElaborazioniVisureWorkspaceClient />);
 
     expect(screen.getByTestId("request-workspace")).toHaveAttribute("data-embedded", "true");
-    expect(screen.getByTestId("request-workspace")).toHaveAttribute("data-mode", "recent");
+    expect(screen.getByTestId("request-workspace")).toHaveAttribute("data-mode", "autosync");
     expect(screen.getByTestId("workspace-modal")).toHaveAttribute("data-open", "false");
 
     fireEvent.click(screen.getByRole("button", { name: "Apri via prop" }));
