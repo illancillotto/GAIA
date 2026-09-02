@@ -6,7 +6,6 @@ import { ProtectedPage } from "@/components/app/protected-page";
 import { SisterCredentialPool } from "@/components/elaborazioni/sister-credential-pool";
 import {
   AlertTriangleIcon,
-  CheckIcon,
   LockIcon,
   RefreshIcon,
   SearchIcon,
@@ -1233,7 +1232,6 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
 
       <section className="space-y-4">
         {activeTab === "sister" ? (
-          <section className={`grid ${embedded ? "gap-4 xl:grid-cols-1" : "gap-6 xl:grid-cols-[minmax(0,1.55fr),minmax(320px,0.45fr)]"}`}>
             <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
               <div className={`border-b border-[#edf1eb] bg-[linear-gradient(135deg,_rgba(29,78,53,0.06),_rgba(255,255,255,0.92))] ${embedded ? "px-4 py-3" : "px-6 py-5"}`}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1464,42 +1462,6 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                 </div>
               </div>
             </article>
-
-            {!embedded ? <aside className="space-y-6">
-              <article className="rounded-[28px] border border-[#d9dfd6] bg-white p-6 shadow-panel">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Dettagli SISTER</p>
-                <div className="mt-4 grid gap-3">
-                  <DetailCard label="Configurazione" value={hasSisterCredentials ? `${sisterCredentials.length} profili` : "Nessuna credenziale salvata"} />
-                  <DetailCard label="Default" value={credentialStatus?.default_credential?.label ?? "—"} />
-                  <DetailCard label="Username" value={selectedCredential?.sister_username ?? "—"} />
-                  <DetailCard label="Ultima verifica" value={formatDateTime(selectedCredential?.verified_at ?? null)} />
-                  <DetailCard label="Ultimo update" value={formatDateTime(selectedCredential?.updated_at ?? null)} />
-                </div>
-              </article>
-
-              <article className="rounded-[28px] border border-[#d9dfd6] bg-[#16261d] p-6 text-white shadow-panel">
-                <div className="flex items-start gap-3">
-                  <div className="rounded-2xl bg-white/10 p-3">
-                    <CheckIcon className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">Flusso consigliato</p>
-                    <p className="mt-2 text-sm leading-6 text-white/70">
-                      Salva le credenziali, lancia un test realtime su SISTER o Bonifica, poi verifica che Capacitas abbia
-                      almeno un account attivo senza warning prima di tornare ai batch.
-                    </p>
-                  </div>
-                </div>
-                <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/45">Test Capacitas</p>
-                  <p className="mt-2 text-sm leading-6 text-white/75">
-                    Il pulsante <span className="font-semibold text-white">Test</span> apre ora una modal con stato del test,
-                    codice HTTP, dettaglio backend e diagnosi operativa del fallimento.
-                  </p>
-                </div>
-              </article>
-            </aside> : null}
-          </section>
         ) : null}
       </section>
 

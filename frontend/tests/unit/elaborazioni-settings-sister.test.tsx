@@ -314,6 +314,8 @@ describe("ElaborazioniSettingsWorkspace SISTER integration", () => {
     render(<ElaborazioniSettingsWorkspace />);
 
     expect(await screen.findByRole("heading", { name: "Credenziali" })).toBeInTheDocument();
+    expect(screen.queryByText("Dettagli SISTER")).not.toBeInTheDocument();
+    expect(screen.queryByText("Flusso consigliato")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Testa connessione" }));
     await waitFor(() =>
       expect(apiMocks.testElaborazioneCredentials).toHaveBeenCalledWith("token", { credential_id: "primary" }),
