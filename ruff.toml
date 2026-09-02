@@ -1,0 +1,50 @@
+# GAIA Python style. Policy: docs/CODE_STYLE.md
+# Do not rely on Ruff's evolving defaults; keep select/ignore explicit.
+
+target-version = "py311"
+line-length = 100
+src = [
+  "backend",
+  "modules/elaborazioni/worker",
+  "scripts",
+  "tools",
+  "tests",
+]
+
+extend-exclude = [
+  ".venv",
+  "backend/.venv",
+  "node_modules",
+  "graphify-out",
+  "frontend",
+  "backend/alembic/versions",
+]
+
+[lint]
+select = [
+  "E",
+  "W",
+  "F",
+  "I",
+  "UP",
+  "B",
+  "RUF",
+]
+ignore = [
+  "E501",
+  "B008",
+  "RUF012",
+]
+
+[lint.per-file-ignores]
+"**/__init__.py" = ["F401"]
+"backend/app/db/base.py" = ["F401", "I001", "RUF022"]
+
+[lint.isort]
+known-first-party = ["app"]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"

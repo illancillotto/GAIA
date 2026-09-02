@@ -37,6 +37,7 @@ un sottoinsieme nominato manualmente.
 | Codice nuovo | nessuna nuova violation error-level |
 | Legacy | nessuna metrica callable o file gia in debito peggiorata |
 | Coverage | policy GAIA rispettata sui file runtime modificati |
+| Style | file Python toccati conformi a `docs/CODE_STYLE.md` e `make style-ratchet` |
 | Scope | nessun ampliamento silenzioso delle esclusioni |
 
 ## Singolo hotspot
@@ -44,7 +45,7 @@ un sottoinsieme nominato manualmente.
 | Gate | Deve dimostrare |
 | --- | --- |
 | Test di caratterizzazione | comportamento prima e dopo invariato |
-| Lint/formatter | nessun nuovo errore nel perimetro |
+| Lint/formatter | `make lint-backend` / `make lint-frontend` verdi nel perimetro; nessun nuovo errore di stile |
 | Coverage | 100% dei file runtime modificati secondo policy GAIA |
 | Complexity check | nessuna nuova violation o peggioramento |
 | Metriche prima/dopo | riduzione reale di almeno una metrica primaria |

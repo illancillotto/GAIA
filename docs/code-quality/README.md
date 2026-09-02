@@ -45,6 +45,9 @@ evidenze dell'esperimento iniziale sono in `QUALITY_RATCHET.md`.
 La skill di progetto si trova in
 `skills/gaia-complexity-reduction/SKILL.md`.
 
+Lo stile di scrittura (Ruff, ESLint, EditorConfig) non vive in questo pacchetto:
+vedi `docs/CODE_STYLE.md`.
+
 ## Comandi
 
 | Comando | Scopo |
@@ -60,6 +63,9 @@ La skill di progetto si trova in
 `complexity-ratchet` e il controllo anti-regressione autorevole.
 `complexity-check` da solo non basta, perche consulta la baseline presente nel
 working tree.
+
+Lo stile di scrittura e un ratchet separato: `make style-ratchet` e
+`docs/CODE_STYLE.md`. Non usare i target di complessita per sostituirlo.
 
 ## Principi non negoziabili
 

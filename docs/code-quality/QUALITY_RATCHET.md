@@ -88,3 +88,6 @@ La fondazione non indebolisce la policy corrente: resta richiesto il `100%` dei
 file runtime nuovi o modificati. Un eventuale passaggio a coverage differenziale
 su righe e branch legacy richiede una decisione separata e l'aggiornamento di
 `docs/TEST_COVERAGE_100_PLAN.md` e dei gate CI.
+
+Lo stile di scrittura e un ratchet distinto, descritto in `docs/CODE_STYLE.md`.
+Non va usato per assorbire o sostituire coverage e complessita.

@@ -575,6 +575,26 @@ Motivazioni:
 
 ---
 
+## 9.4 Quality gates
+
+Scelta:
+- tre programmi indipendenti sul perimetro toccato, senza campagne di pulizia
+  di massa: coverage `100%` sui file runtime, complexity ratchet, code style
+  ratchet
+
+Riferimenti:
+- `docs/TEST_COVERAGE_100_PLAN.md`
+- `docs/code-quality/`
+- `docs/CODE_STYLE.md`
+
+Motivazioni:
+- il debito legacy resta visibile e non peggiora
+- lint e formatter non sono un sostituto di test o di riduzione della
+  complessita
+- Ruff e ESLint restano gate di scrittura, non un rewrite dell'albero
+
+---
+
 ## 9.2 Snapshot-based audit
 Scelta:
 - lavorare su snapshot e non su sola lettura volatile

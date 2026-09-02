@@ -26,6 +26,7 @@ Evoluzione pianificata:
 ## Documentazione
 
 - `docs/` contiene la documentazione di piattaforma.
+- `docs/CODE_STYLE.md` definisce lint, formatter e ratchet di stile sui file toccati.
 - `docs/FRONTEND_SESSION_BOOTSTRAP.md` descrive cache, rivalidazione e test della sessione frontend condivisa.
 - `domain-docs/` contiene la documentazione funzionale per dominio.
 - `modules/accessi/docs/` ospita documenti scaffold legacy mantenuti per compatibilità test/tooling.
@@ -932,6 +933,9 @@ Componenti runtime del modulo Rete:
 | `make bootstrap-admin` | Crea utente admin |
 | `make bootstrap-domain` | Carica dati seed |
 | `make live-sync` | Sync live dal NAS via SSH |
+| `make lint` | Sintassi Python, ratchet Ruff e ESLint frontend |
+| `make lint-backend` | `compileall` e ratchet Ruff sui file Python toccati |
+| `make format-backend` | Formatter Ruff; non usarlo per riformattare il legacy |
 
 ## Piano di migrazione backend
 

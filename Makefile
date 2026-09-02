@@ -13,6 +13,8 @@ GRAPHIFY_PRESENZE_DOC_TIMEOUT = timeout --foreground 180s
 GRAPHIFY_UTENZE_DOC_MODEL = gpt-5.4-mini
 GRAPHIFY_UTENZE_DOC_FLAGS = --max-concurrency 1 --api-timeout 60
 GRAPHIFY_UTENZE_DOC_TIMEOUT = timeout --foreground 180s
+GRAPHIFY_PLATFORM_DOC_MODEL = gpt-5.4-mini
+GRAPHIFY_PLATFORM_DOC_FLAGS = --max-concurrency 1 --api-timeout 60
 QUALITY_PYTHON ?= python3
 WORKER_PYTHON ?= backend/.venv/bin/python
 WORKER_COVERAGE_JSON ?= backend/coverage-worker.json
@@ -20,7 +22,7 @@ WORKER_COVERAGE_XML ?= backend/coverage-worker.xml
 
 .PHONY: test-ruolo-postgres test-presenze-postgres
 
-.PHONY: up down logs rebuild backend-shell frontend-shell migrate bootstrap-admin bootstrap-domain bootstrap-sections purge-seed live-sync scheduled-live-sync local-gateway-up local-gateway-down wiki-index wiki-reindex test test-worker test-wiki coverage-wiki smoke-network-vpn-bypass backup-db-to-nas restore-db-from-nas lint lint-backend lint-frontend complexity-report complexity-check complexity-changed complexity-ratchet complexity-baseline complexity-baseline-verify complexity-ci-gate quality-test graphify-patch-openai-base-url graphify-refresh-core-code graphify-refresh-core-docs graphify-refresh-core graphify-catasto-code graphify-catasto-docs graphify-catasto-query graphify-presenze-code graphify-presenze-docs graphify-presenze-query graphify-inaz-code graphify-inaz-docs graphify-inaz-query graphify-network-code graphify-network-docs graphify-network-query graphify-operazioni-code graphify-operazioni-docs graphify-operazioni-query graphify-organigramma-code graphify-organigramma-docs graphify-organigramma-query graphify-riordino-code graphify-riordino-docs graphify-riordino-query graphify-ruolo-code graphify-ruolo-docs graphify-ruolo-query graphify-utenze-code graphify-utenze-docs graphify-utenze-query graphify-wiki-code graphify-wiki-docs graphify-wiki-docs-debug graphify-wiki-query graphify-backend graphify-backend-query graphify-frontend graphify-frontend-query graphify-docs graphify-docs-query graphify-platform-docs graphify-platform-docs-query graphify-query
+.PHONY: up down logs rebuild backend-shell frontend-shell migrate bootstrap-admin bootstrap-domain bootstrap-sections purge-seed live-sync scheduled-live-sync local-gateway-up local-gateway-down wiki-index wiki-reindex test test-worker test-wiki coverage-wiki smoke-network-vpn-bypass backup-db-to-nas restore-db-from-nas lint lint-backend lint-backend-all style-ratchet format-backend lint-frontend complexity-report complexity-check complexity-changed complexity-ratchet complexity-baseline complexity-baseline-verify complexity-ci-gate quality-test graphify-patch-openai-base-url graphify-refresh-core-code graphify-refresh-core-docs graphify-refresh-core graphify-catasto-code graphify-catasto-docs graphify-catasto-query graphify-presenze-code graphify-presenze-docs graphify-presenze-query graphify-inaz-code graphify-inaz-docs graphify-inaz-query graphify-network-code graphify-network-docs graphify-network-query graphify-operazioni-code graphify-operazioni-docs graphify-operazioni-query graphify-organigramma-code graphify-organigramma-docs graphify-organigramma-query graphify-riordino-code graphify-riordino-docs graphify-riordino-query graphify-ruolo-code graphify-ruolo-docs graphify-ruolo-query graphify-utenze-code graphify-utenze-docs graphify-utenze-query graphify-wiki-code graphify-wiki-docs graphify-wiki-docs-debug graphify-wiki-query graphify-backend graphify-backend-query graphify-frontend graphify-frontend-query graphify-docs graphify-docs-query graphify-platform-docs graphify-platform-docs-query graphify-query
 
 up:
 	$(COMPOSE) up -d
@@ -128,6 +130,17 @@ lint: lint-backend lint-frontend
 
 lint-backend:
 	$(QUALITY_PYTHON) -m compileall -q backend/app backend/tests modules/elaborazioni/worker
+	$(QUALITY_PYTHON) scripts/check_changed_python_style.py --base-ref $${BASE_REF:-origin/main}
+
+style-ratchet:
+	$(QUALITY_PYTHON) scripts/check_changed_python_style.py --base-ref $${BASE_REF:-origin/main}
+
+lint-backend-all:
+	$(QUALITY_PYTHON) -m compileall -q backend/app backend/tests modules/elaborazioni/worker
+	$(QUALITY_PYTHON) -m ruff check backend/app backend/tests backend/alembic/env.py modules/elaborazioni/worker scripts tools tests/code_quality
+
+format-backend:
+	$(QUALITY_PYTHON) -m ruff format backend/app backend/tests backend/alembic/env.py modules/elaborazioni/worker scripts tools tests/code_quality
 
 lint-frontend:
 	cd frontend && npm run lint
@@ -313,7 +326,7 @@ graphify-docs-query:
 	cd domain-docs && $(GRAPHIFY_ENV) graphify query "$(Q)"
 
 graphify-platform-docs:
-	cd docs && $(GRAPHIFY_ENV) graphify extract .
+	cd docs && $(GRAPHIFY_ENV) GRAPHIFY_OPENAI_MODEL=$(GRAPHIFY_PLATFORM_DOC_MODEL) graphify extract . $(GRAPHIFY_PLATFORM_DOC_FLAGS)
 
 graphify-platform-docs-query:
 	@if [ -z "$(Q)" ]; then echo "Uso: make graphify-platform-docs-query Q=\"domanda\""; exit 1; fi

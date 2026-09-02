@@ -58,7 +58,8 @@ Aggiungi il ratchet solo dopo che la baseline e presente nel branch base.
 `complexity-check` da solo non e un gate anti-regressione autorevole. Aggiungi
 solo comandi che esistono e passano localmente. Per un hotspot, aggiungi anche il
 comando di test mirato realmente usato dal modulo. Non inserire un gate
-placeholder e non puntare a una suite non disponibile.
+placeholder e non puntare a una suite non disponibile. Il code style vive in
+`docs/CODE_STYLE.md` e `make style-ratchet`; non e un sostituto di questi gate.
 
 Comandi di controllo del goal:
 

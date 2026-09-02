@@ -8,6 +8,8 @@ on:
       - "scripts/check_shared_deps.py"
       - "scripts/check_changed_backend_coverage.py"
       - "scripts/check_changed_worker_coverage.py"
+      - "scripts/check_changed_python_style.py"
+      - "ruff.toml"
       - "Makefile"
       - ".github/workflows/backend.yml"
   pull_request:
@@ -17,6 +19,8 @@ on:
       - "scripts/check_shared_deps.py"
       - "scripts/check_changed_backend_coverage.py"
       - "scripts/check_changed_worker_coverage.py"
+      - "scripts/check_changed_python_style.py"
+      - "ruff.toml"
       - "Makefile"
       - ".github/workflows/backend.yml"
 
@@ -59,6 +63,15 @@ jobs:
       - name: Syntax check
         working-directory: backend
         run: python -m compileall app tests
+
+      - name: Python style ratchet
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          python scripts/check_changed_python_style.py \
+            --base-sha "$BASE_SHA" \
+            --head-sha "$HEAD_SHA"
 
       - name: Test suite with coverage
         working-directory: backend

@@ -26,6 +26,9 @@ Il repository ha gia alcuni mattoni utili:
 - suite backend ampia e gia distribuita per dominio
 - suite frontend unit + e2e gia presenti su moduli critici
 
+I gate di stile e complessita sono indipendenti dalla coverage e non la
+assolvono. Vedi `docs/CODE_STYLE.md` e `docs/code-quality/`.
+
 Il repository non misura ancora in modo coerente il `100%` globale:
 
 - il gate CI oggi blocca solo i file cambiati, non il totale del perimetro runtime
@@ -165,6 +168,17 @@ Fino alla chiusura completa del piano:
 - eventuali eccezioni temporanee devono essere documentate in questo file con motivo, perimetro e data di rientro
 
 ## Note operative
+
+- `2026-09-02` - code style ratchet Python
+  (`docs/CODE_STYLE.md`, `ruff.toml`, `scripts/check_changed_python_style.py`,
+  `tests/code_quality/test_python_style_gate.py`, `Makefile`,
+  `.github/workflows/backend.yml`)
+  Il lint backend non e piu solo `compileall`. I file Python toccati nel
+  perimetro di stile devono passare `ruff check`; i file nuovi anche
+  `ruff format --check`. La policy coverage resta invariata: il ratchet di
+  stile non misura statement/branch e non sostituisce il `100%` sui runtime
+  modificati. Validazione: `make quality-test` `63 passed`; Ruff verde sui
+  file nuovi del gate.
 
 - `2026-08-27` - chiusura coverage globale worker Elaborazioni
   (`modules/elaborazioni/worker`)

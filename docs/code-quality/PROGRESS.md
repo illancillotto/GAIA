@@ -33,6 +33,7 @@ blocco verificato e prima di chiudere un goal.
 
 | Data | Decisione | Motivo | Impatto |
 | --- | --- | --- | --- |
+| 2026-09-02 | Adottare un code style ratchet distinto dalla complessita | Ruff era una dipendenza inutilizzata e `make lint-backend` faceva solo `compileall` | Policy in `docs/CODE_STYLE.md`, config in `ruff.toml`, gate sui file Python toccati; niente format di massa del legacy |
 | 2026-08-17 | Local-first in Fase 1 | Evitare dipendenza operativa dalla CI | Nessun gate bloccante prima del Checkpoint 1 |
 | 2026-08-17 | Un hotspot per goal | Ridurre rischio e facilitare review/revert | Niente batch refactor |
 | 2026-08-17 | `/goal` per modifiche, `/loop` per monitoraggio | Goal e verificabile; loop e temporizzato | Refactoring non eseguiti a timer |

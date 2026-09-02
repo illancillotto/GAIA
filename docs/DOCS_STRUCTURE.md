@@ -38,6 +38,8 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 - `docs/FRONTEND_SESSION_BOOTSTRAP.md`: cache, rivalidazione, rendering non bloccante e test del bootstrap sessione frontend.
 - `docs/data-model/`: poster A0, diagrammi ERD e dizionario relazioni generati dai modelli SQLAlchemy.
 - `docs/TEST_COVERAGE_100_PLAN.md`: policy e piano operativo per portare il codice runtime a coverage totale.
+- `docs/CODE_STYLE.md`: policy di stile, perimetro Ruff/ESLint e ratchet sui file toccati.
+- `docs/code-quality/`: programma di complessita, quality ratchet e baseline.
 - `docs/AGENTS.md`: linee guida operative per agenti/tooling.
 - `docs/PROMPT_BACKEND.md`: prompt e istruzioni backend.
 - `docs/PROMPT_FRONTEND.md`: prompt e istruzioni frontend.

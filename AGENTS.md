@@ -71,6 +71,15 @@ Regole:
 - Quando introduci codice non coperto da test, la change non e conforme anche se la media globale resta alta.
 - Se una modifica aggiorna la strategia di test, la configurazione coverage o il perimetro dei gate CI, aggiorna anche `docs/TEST_COVERAGE_100_PLAN.md` e la documentazione piattaforma impattata.
 
+## Code style
+
+- La policy e in `docs/CODE_STYLE.md`; la configurazione Python e `ruff.toml`.
+- I file Python nuovi o modificati nel perimetro di stile devono passare
+  `make lint-backend` / il ratchet Ruff. I file nuovi devono anche passare
+  `ruff format --check`.
+- Non riformattare alberi legacy per allineare lo stile.
+- `noqa`, `ruff: noqa` e `eslint-disable` solo con motivazione.
+
 ## Code complexity program
 
 Per modifiche sotto `backend/app`, `frontend/src` o

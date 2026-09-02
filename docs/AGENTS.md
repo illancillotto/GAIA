@@ -37,6 +37,7 @@ Regole di routing:
 - Se una modifica introduce o cambia regole operative per agenti o tooling locale, aggiorna anche `AGENTS.md` in root.
 - Per cambi al tooling Graphify usa i target `make` dedicati del repository, senza invocare `graphify extract` manualmente sui corpus docs salvo debug mirato; per i target `*-docs` il default operativo raccomandato e `gpt-5.4-mini` con concorrenza e timeout conservativi, per privilegiare stabilita/costo/latenza sui batch semantici. Evita `gpt-5.5` sui target docs che hanno gia mostrato hang o timeout.
 - Se una modifica introduce o cambia policy di test/coverage di piattaforma, aggiorna anche `docs/TEST_COVERAGE_100_PLAN.md`.
+- Se una modifica introduce o cambia regole di code style, formatter o lint di piattaforma, aggiorna anche `docs/CODE_STYLE.md`.
 
 Domini supportati:
 - accessi
