@@ -15,11 +15,8 @@ import {
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import type { ApplicationUser, GatePresenzeTeam, PresenzeCollaborator } from "@/types/api";
-
-type TeamFormState = {
-  name: string;
-  code: string;
-};
+import { TeamFormFields } from "./team-form-fields";
+import type { TeamFormState } from "./team-form-fields";
 
 type SupervisorCandidate = {
   collaboratorId: string;
@@ -50,7 +47,7 @@ export default function PresenzeSquadrePage() {
   const [collaborators, setCollaborators] = useState<PresenzeCollaborator[]>([]);
   const [users, setUsers] = useState<ApplicationUser[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState("");
-  const [teamForm, setTeamForm] = useState<TeamFormState>({ name: "", code: "" });
+  const [teamForm, setTeamForm] = useState<TeamFormState>({ name: "", code: "", personnelArea: "AGRARIO" });
   const [teamSearch, setTeamSearch] = useState("");
   const [collaboratorSearch, setCollaboratorSearch] = useState("");
   const [supervisorSearch, setSupervisorSearch] = useState("");
@@ -125,12 +122,12 @@ export default function PresenzeSquadrePage() {
       const created = await createGatePresenzeTeam(token, {
         name,
         code: code || null,
-        scope: "presenze",
+        personnel_area: teamForm.personnelArea,
         active: true,
       });
       setTeams((current) => [...current, created]);
       setSelectedTeamId(created.id);
-      setTeamForm({ name: "", code: "" });
+      setTeamForm({ name: "", code: "", personnelArea: "AGRARIO" });
       setError(null);
       setFeedback("Squadra creata.");
     } catch (createError) {
@@ -225,27 +222,8 @@ export default function PresenzeSquadrePage() {
             </div>
           </div>
 
-          <form className="grid gap-3 border-t border-emerald-100 bg-white/80 p-5 md:grid-cols-[1fr_180px_auto]" onSubmit={handleCreateTeam}>
-            <label className="text-sm font-semibold text-slate-700">
-              Nome squadra
-              <input
-                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                name="team_name"
-                value={teamForm.name}
-                onChange={(event) => setTeamForm((current) => ({ ...current, name: event.target.value }))}
-                placeholder="Es. Squadra Nord"
-              />
-            </label>
-            <label className="text-sm font-semibold text-slate-700">
-              Codice
-              <input
-                className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
-                name="team_code"
-                value={teamForm.code}
-                onChange={(event) => setTeamForm((current) => ({ ...current, code: event.target.value }))}
-                placeholder="NORD"
-              />
-            </label>
+          <form className="grid gap-3 border-t border-emerald-100 bg-white/80 p-5 md:grid-cols-[1fr_180px_180px_auto]" onSubmit={handleCreateTeam}>
+            <TeamFormFields value={teamForm} setValue={setTeamForm} />
             <button className="btn-primary self-end" type="submit">
               Crea squadra
             </button>
@@ -299,7 +277,7 @@ export default function PresenzeSquadrePage() {
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Squadra selezionata</p>
                     <h2 className="mt-1 text-2xl font-semibold text-slate-950">{selectedTeam.name}</h2>
-                    <p className="mt-1 text-sm text-slate-500">Codice {selectedTeam.code || "n/d"} · Scope {selectedTeam.scope}</p>
+                    <p className="mt-1 text-sm text-slate-500">Codice {selectedTeam.code || "n/d"} · Area {selectedTeam.personnel_area}</p>
                   </div>
                   <button className="btn-secondary" type="button" onClick={() => handleToggleTeamActive(selectedTeam)}>
                     {selectedTeam.active ? "Disattiva" : "Riattiva"}

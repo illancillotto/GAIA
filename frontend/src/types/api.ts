@@ -874,7 +874,7 @@ export type GatePresenzeTeam = {
   id: string;
   name: string;
   code: string | null;
-  scope: "presenze" | "gate" | "global";
+  personnel_area: "AGRARIO" | "IMPIANTI";
   active: boolean;
   created_from_channel: "gaia_web" | "gate_mobile";
   created_by_user_id: number | null;
@@ -887,7 +887,7 @@ export type GatePresenzeTeam = {
 export type GatePresenzeTeamCreateInput = {
   name: string;
   code?: string | null;
-  scope?: "presenze" | "gate" | "global";
+  personnel_area: "AGRARIO" | "IMPIANTI";
   active?: boolean;
 };
 

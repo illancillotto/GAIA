@@ -6,6 +6,7 @@ from datetime import date, datetime, time
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
@@ -84,13 +85,23 @@ class PresenzeSupervisorAssignment(Base):
 class OrganizationTeam(Base):
     __tablename__ = "organization_teams"
     __table_args__ = (
-        UniqueConstraint("code", "scope", name="uq_organization_teams_code_scope"),
+        UniqueConstraint(
+            "code",
+            "personnel_area",
+            name="uq_organization_teams_code_personnel_area",
+        ),
+        CheckConstraint(
+            "personnel_area IN ('AGRARIO', 'IMPIANTI')",
+            name="ck_organization_teams_personnel_area",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    gate_mobile_team_id: Mapped[str | None] = mapped_column(String(255), nullable=True, unique=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     code: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     scope: Mapped[str] = mapped_column(String(32), nullable=False, default="presenze", index=True)
+    personnel_area: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     created_from_channel: Mapped[str] = mapped_column(String(32), nullable=False, default="gaia_web", index=True)
     created_by_user_id: Mapped[int | None] = mapped_column(

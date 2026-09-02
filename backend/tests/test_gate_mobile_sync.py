@@ -3,10 +3,11 @@ from __future__ import annotations
 import asyncio
 import json
 import uuid
-from datetime import date, datetime, time, timezone
+from datetime import UTC, date, datetime, time
 
 import httpx
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -32,20 +33,20 @@ from app.modules.presenze.models import (
     PresenzeScheduleTemplate,
     PresenzeSyncJob,
 )
+from app.modules.presenze.services import gate_mobile_payloads, gate_mobile_team_actions
 from app.services import gate_mobile_sync as gate_mobile_sync_service
-from app.modules.presenze.services import gate_mobile_team_actions
 from app.services.gate_mobile_sync import (
-    build_mobile_operator_push_payload,
     build_mobile_catalog_push_payloads,
+    build_mobile_operator_push_payload,
     build_mobile_workset_push_payloads,
-    build_presenze_teams_push_payload,
-    build_presenze_rules_push_payload,
-    build_presenze_months_push_payload,
-    build_presenze_giornaliere_push_payload,
     build_presenze_anomalie_push_payload,
+    build_presenze_giornaliere_push_payload,
+    build_presenze_months_push_payload,
+    build_presenze_rules_push_payload,
+    build_presenze_teams_push_payload,
     execute_gate_mobile_sync,
-    get_running_gate_mobile_sync_run,
     get_gate_mobile_sync_status,
+    get_running_gate_mobile_sync_run,
     process_presenze_pending_actions,
     run_gate_mobile_sync_once,
 )
@@ -94,7 +95,7 @@ class _FakeCatalogResponse:
             {
                 "catalog_type": "meters",
                 "version": "v1",
-                "synced_from_gaia_at": datetime(2026, 6, 15, 10, 0, tzinfo=timezone.utc),
+                "synced_from_gaia_at": datetime(2026, 6, 15, 10, 0, tzinfo=UTC),
                 "payload": {"items": []},
             },
         )()
@@ -109,7 +110,7 @@ class _FakeWorksetResponse:
             {
                 "operator_id": uuid.UUID("018f88a2-1797-7365-bf5e-8bb8b7f9c0aa"),
                 "workset_type": "assigned_meters",
-                "synced_from_gaia_at": datetime(2026, 6, 15, 10, 0, tzinfo=timezone.utc),
+                "synced_from_gaia_at": datetime(2026, 6, 15, 10, 0, tzinfo=UTC),
                 "items": [
                     type(
                         "WorksetItem",
@@ -134,7 +135,7 @@ def test_build_mobile_operator_push_payload_serializes_wc_operators() -> None:
 
         payload = build_mobile_operator_push_payload(
             db,
-            now=datetime(2026, 6, 15, 10, 0, tzinfo=timezone.utc),
+            now=datetime(2026, 6, 15, 10, 0, tzinfo=UTC),
         )
 
         assert payload == {
@@ -148,6 +149,7 @@ def test_build_mobile_operator_push_payload_serializes_wc_operators() -> None:
                     "display_name": "Mario Rossi",
                     "email": "mario.rossi@example.test",
                     "phone": "+39070000000",
+                    "personnel_area": "AGRARIO",
                     "status": "ACTIVE",
                     "domains": None,
                     "gate_mobile_console_enabled": False,
@@ -156,6 +158,36 @@ def test_build_mobile_operator_push_payload_serializes_wc_operators() -> None:
                 }
             ],
         }
+    finally:
+        db.close()
+
+
+def test_gate_mobile_payloads_reject_missing_or_invalid_personnel_area() -> None:
+    db = _build_session()
+    try:
+        _seed_operator(db)
+        operator = db.scalar(select(WCOperator))
+        assert operator is not None
+        operator.personnel_area = None
+        db.commit()
+        try:
+            build_mobile_operator_push_payload(db)
+        except ValueError as exc:
+            assert "personnel_area" in str(exc)
+        else:
+            raise AssertionError("Expected missing operator personnel_area to fail")
+
+        _seed_presenze_team(db)
+        team = db.scalar(select(OrganizationTeam))
+        assert team is not None
+        team.personnel_area = "UNKNOWN"
+        try:
+            db.commit()
+        except IntegrityError as exc:
+            assert "ck_organization_teams_personnel_area" in str(exc)
+            db.rollback()
+        else:
+            raise AssertionError("Expected invalid team personnel_area constraint failure")
     finally:
         db.close()
 
@@ -262,13 +294,15 @@ def test_build_presenze_teams_push_payload_serializes_teams_memberships_and_supe
 
         payload = build_presenze_teams_push_payload(
             db,
-            now=datetime(2026, 7, 9, 9, 30, tzinfo=timezone.utc),
+            now=datetime(2026, 7, 9, 9, 30, tzinfo=UTC),
         )
 
         assert payload["source"] == "gaia"
         assert payload["rules_version"] == "presenze-2026-07-extra-3h"
         assert payload["synced_from_gaia_at"] == "2026-07-09T09:30:00Z"
         assert payload["teams"][0]["name"] == "Squadra Presenze Nord"
+        assert payload["teams"][0]["personnel_area"] == "AGRARIO"
+        assert "scope" not in payload["teams"][0]
         assert payload["teams"][0]["created_from_channel"] == "gaia"
         assert payload["teams"][0]["audit"] == {}
         assert payload["teams"][0]["memberships"][0]["collaborator_name"] == "OPERATORE PRESENZE"
@@ -280,10 +314,10 @@ def test_build_presenze_teams_push_payload_serializes_teams_memberships_and_supe
         assert payload["teams"][0]["supervisors"][0]["employee_code"] == "P001"
         assert payload["teams"][0]["supervisors"][0]["collaborator_name"] == "OPERATORE PRESENZE"
         assert payload["teams"][0]["supervisors"][0]["permission_scope"] == "validate"
-        assert gate_mobile_sync_service._gate_channel("gate_mobile") == "gate"
-        assert gate_mobile_sync_service._gate_channel("gate") == "gate"
-        assert gate_mobile_sync_service._gate_channel("custom") == "custom"
-        assert gate_mobile_sync_service._gate_channel(None) == "gaia"
+        assert gate_mobile_payloads.gate_channel("gate_mobile") == "gate"
+        assert gate_mobile_payloads.gate_channel("gate") == "gate"
+        assert gate_mobile_payloads.gate_channel("custom") == "custom"
+        assert gate_mobile_payloads.gate_channel(None) == "gaia"
 
         collaborator = db.get(PresenzeCollaborator, uuid.UUID("018f88a2-1797-7365-bf5e-8bb8b7f9d001"))
         assert collaborator is not None
@@ -301,17 +335,17 @@ def test_build_presenze_rules_months_giornaliere_and_anomalie_payloads(monkeypat
     db = _build_session()
     try:
         daily_record_id = _seed_presenze_daily_record(db)
-        rules_payload = build_presenze_rules_push_payload(now=datetime(2026, 7, 10, 8, 0, tzinfo=timezone.utc))
-        months_payload = build_presenze_months_push_payload(db, now=datetime(2026, 7, 10, 8, 0, tzinfo=timezone.utc))
+        rules_payload = build_presenze_rules_push_payload(now=datetime(2026, 7, 10, 8, 0, tzinfo=UTC))
+        months_payload = build_presenze_months_push_payload(db, now=datetime(2026, 7, 10, 8, 0, tzinfo=UTC))
         giornaliere_payload = build_presenze_giornaliere_push_payload(
             db,
             month="2026-07",
-            now=datetime(2026, 7, 10, 8, 0, tzinfo=timezone.utc),
+            now=datetime(2026, 7, 10, 8, 0, tzinfo=UTC),
         )
         anomalie_payload = build_presenze_anomalie_push_payload(
             db,
             month="2026-07",
-            now=datetime(2026, 7, 10, 8, 0, tzinfo=timezone.utc),
+            now=datetime(2026, 7, 10, 8, 0, tzinfo=UTC),
         )
 
         assert rules_payload["schema_version"] == 1
@@ -351,7 +385,20 @@ def test_build_presenze_rules_months_giornaliere_and_anomalie_payloads(monkeypat
         record.application_user_id = None
         db.commit()
         unmapped_payload = build_presenze_giornaliere_push_payload(db, month="2026-07")
-        assert unmapped_payload["records"][0]["gaia_user_id"] is None
+        assert unmapped_payload["records"][0]["gaia_user_id"] == "77"
+
+        record.application_user_id = 999
+        db.commit()
+        inconsistent_payload = build_presenze_giornaliere_push_payload(db, month="2026-07")
+        assert inconsistent_payload["records"][0]["gaia_user_id"] is None
+
+        collaborator = db.get(PresenzeCollaborator, record.collaborator_id)
+        assert collaborator is not None
+        collaborator.application_user_id = None
+        record.application_user_id = None
+        db.commit()
+        missing_relation_payload = build_presenze_giornaliere_push_payload(db, month="2026-07")
+        assert missing_relation_payload["records"][0]["gaia_user_id"] is None
     finally:
         db.close()
 
@@ -616,7 +663,7 @@ def test_run_gate_mobile_sync_once_pushes_presenze_snapshots_and_processes_pendi
                                 "type": "validate_daily_record",
                                 "payload": {
                                     "record_id": str(daily_record_id),
-                                    "application_user_id": 77,
+                                    "gaia_user_id": 77,
                                     "validation_status": "validated",
                                     "operator_note": "ok",
                                     "client_request_id": "client-1",
@@ -744,14 +791,14 @@ def test_process_presenze_pending_actions_acks_and_fails_gateway_actions() -> No
                             "pending_action_id": "pending-ok",
                             "action_type": "patch_daily_record",
                             "record_id": str(daily_record_id),
-                            "actor": {"application_user_id": 77},
+                            "actor": {"gaia_user_id": 77},
                             "km_value": 12,
                             "operator_note": "km",
                         },
                         {
                             "pending_action_id": "pending-fail",
                             "action_type": "propose_team_change",
-                            "application_user_id": 77,
+                            "gaia_user_id": 77,
                         },
                     ],
                 )
@@ -777,234 +824,501 @@ def test_process_presenze_pending_actions_acks_and_fails_gateway_actions() -> No
         db.close()
 
 
-def test_presenze_team_change_pending_action_creates_updates_and_upserts_team() -> None:
+def test_presenze_team_pending_actions_are_canonical_idempotent_and_reconciliable() -> None:
     db = _build_session()
     try:
         actor = ApplicationUser(
             id=177,
             username="gate.team.manager",
             email="gate.team.manager@example.test",
-            full_name="Gate Team Manager",
             password_hash="hash",
             role=ApplicationUserRole.REVIEWER.value,
             is_active=True,
             module_presenze=True,
         )
-        db.add(actor)
+        member = ApplicationUser(
+            id=238,
+            username="canonical.member",
+            email="canonical.member@example.test",
+            password_hash="hash",
+            role=ApplicationUserRole.OPERATOR.value,
+            is_active=True,
+        )
+        supervisor = ApplicationUser(
+            id=181,
+            username="canonical.supervisor",
+            email="canonical.supervisor@example.test",
+            password_hash="hash",
+            role=ApplicationUserRole.REVIEWER.value,
+            is_active=True,
+            module_presenze=True,
+        )
+        collaborator = PresenzeCollaborator(
+            id=uuid.UUID("13126cf8-32b6-4206-9910-58374f125681"),
+            employee_code="1423",
+            name="Canonical Member",
+            application_user_id=member.id,
+        )
+        db.add_all([actor, member, supervisor, collaborator])
         db.commit()
 
-        team_id = uuid.UUID("018f88a2-1797-7365-bf5e-8bb8b7f9a101")
-        create_ack = gate_mobile_sync_service._apply_presenze_pending_action(
-            db,
-            {
-                "pending_action_id": "team-create",
-                "action_type": "propose_team_change",
-                "payload_json": {
-                    "schema_version": 1,
-                    "source": "gate_admin_console",
-                    "operation": "create_team",
-                    "application_user_id": actor.id,
-                    "team": {
-                        "team_id": str(team_id),
-                        "name": "Squadra GaTe Ovest",
-                        "code": "G-OVEST",
-                        "scope": "presenze",
-                        "active": True,
-                    },
-                },
+        legacy_team_id = "gate-team-manutenzione-nord-1-1787898841204"
+        team_payload = {
+            "team_id": legacy_team_id,
+            "name": "Reparto Nord",
+            "code": "MANUTENZIONE-NORD-1",
+            "personnel_area": "IMPIANTI",
+            "active": True,
+        }
+        create_action = {
+            "pending_action_id": "team-create",
+            "action_type": "propose_team_create",
+            "payload_json": {
+                "operation": "create_team",
+                "gaia_user_id": str(actor.id),
+                "team": team_payload,
             },
-        )
-
+        }
+        create_ack = gate_mobile_sync_service._apply_presenze_pending_action(db, create_action)
+        team_id = uuid.UUID(create_ack["gaia_entity_id"])
         created = db.get(OrganizationTeam, team_id)
-        assert create_ack["gaia_entity_type"] == "organization_team"
-        assert create_ack["gaia_entity_id"] == str(team_id)
         assert created is not None
-        assert created.name == "Squadra GaTe Ovest"
-        assert created.created_from_channel == "gate_mobile"
+        assert created.personnel_area == "IMPIANTI"
+        assert created.gate_mobile_team_id == legacy_team_id
         assert created.created_by_user_id == actor.id
 
+        membership_action = {
+            "action_type": "propose_team_membership",
+            "payload_json": {
+                "operation": "update_team_memberships",
+                "gaia_user_id": str(actor.id),
+                "team": team_payload,
+                "requested_memberships": [
+                    {
+                        "gaia_user_id": str(member.id),
+                        "collaborator_id": "238",
+                        "employee_code": "238",
+                        "role": "member",
+                    }
+                ],
+            },
+        }
+        supervisor_action = {
+            "action_type": "propose_team_supervisor",
+            "payload_json": {
+                "operation": "update_team_supervisors",
+                "gaia_user_id": str(actor.id),
+                "team": team_payload,
+                "requested_supervisors": [
+                    {
+                        "gaia_user_id": str(supervisor.id),
+                        "application_user_id": "wrong-namespace",
+                        "permission_scope": "team",
+                    }
+                ],
+            },
+        }
+        gate_mobile_sync_service._apply_presenze_pending_action(db, membership_action)
+        gate_mobile_sync_service._apply_presenze_pending_action(db, supervisor_action)
+        membership = db.scalar(select(OrganizationTeamMembership).where(OrganizationTeamMembership.team_id == team_id))
+        assignment = db.scalar(
+            select(OrganizationTeamSupervisorAssignment).where(
+                OrganizationTeamSupervisorAssignment.team_id == team_id
+            )
+        )
+        assert membership is not None
+        assert membership.collaborator_id == collaborator.id
+        assert assignment is not None
+        assert assignment.application_user_id == supervisor.id
+        membership_id = membership.id
+        assignment_id = assignment.id
+
+        db.add(
+            OrganizationTeamMembership(
+                team_id=team_id,
+                collaborator_id=collaborator.id,
+                role="duplicate",
+            )
+        )
+        db.commit()
+
+        gate_mobile_sync_service._apply_presenze_pending_action(db, create_action)
+        gate_mobile_sync_service._apply_presenze_pending_action(db, membership_action)
+        gate_mobile_sync_service._apply_presenze_pending_action(db, supervisor_action)
+        memberships = list(
+            db.scalars(
+                select(OrganizationTeamMembership).where(OrganizationTeamMembership.team_id == team_id)
+            )
+        )
+        assert len(memberships) == 1
+        assert memberships[0].id == membership_id
+        assert db.scalar(
+            select(OrganizationTeamSupervisorAssignment).where(
+                OrganizationTeamSupervisorAssignment.team_id == team_id
+            )
+        ).id == assignment_id
+
+        renamed_payload = dict(team_payload, name="Reparto Nord Definitivo", previous_code=team_payload["code"])
         gate_mobile_sync_service._apply_presenze_pending_action(
             db,
             {
                 "action_type": "propose_team_change",
-                "payload_json": json.dumps(
-                    {
-                        "schema_version": 1,
-                        "source": "gate_mobile",
-                        "operation": "update_team",
-                        "user_id": actor.id,
-                        "team": {
-                            "team_id": str(team_id),
-                            "name": "Squadra GaTe Ovest 2",
-                            "code": "G-OVEST-2",
-                            "scope": "gate",
-                            "active": False,
-                        },
-                    }
-                ),
-            },
-        )
-        updated = db.get(OrganizationTeam, team_id)
-        assert updated is not None
-        assert updated.name == "Squadra GaTe Ovest 2"
-        assert updated.code == "G-OVEST-2"
-        assert updated.scope == "gate"
-        assert updated.active is False
-
-        upsert = gate_mobile_team_actions.apply_presenze_team_change_proposal(
-            db,
-            {
-                "schema_version": 1,
-                "source": "gate",
-                "operation": "upsert_team",
-                "team": {
-                    "name": "Squadra GaTe Ovest 3",
-                    "code": "G-OVEST-2",
-                    "scope": "gate",
+                "payload_json": {
+                    "operation": "rename_team",
+                    "gaia_user_id": str(actor.id),
+                    "team": renamed_payload,
                 },
             },
-            actor=actor,
         )
-        assert upsert.team.id == team_id
-        assert upsert.team.name == "Squadra GaTe Ovest 3"
-
-        default_active = gate_mobile_team_actions.apply_presenze_team_change_proposal(
-            db,
-            {
-                "schema_version": 1,
-                "source": "gate",
-                "operation": "create_team",
-                "team": {"name": "Squadra GaTe Senza Codice"},
-            },
-            actor=actor,
-        )
-        assert default_active.team.code is None
-        assert default_active.team.scope == "presenze"
-        assert default_active.team.active is True
+        assert db.get(OrganizationTeam, team_id).name == "Reparto Nord Definitivo"
+        snapshot = gate_mobile_sync_service.build_presenze_teams_push_payload(db)
+        assert snapshot["teams"][0]["team_id"] == legacy_team_id
     finally:
         db.close()
 
 
-def test_presenze_team_change_validation_branches() -> None:
+def test_presenze_team_pending_actions_fail_closed_on_noncanonical_identity() -> None:
     db = _build_session()
     try:
         actor = ApplicationUser(
             id=178,
             username="gate.team.validator",
             email="gate.team.validator@example.test",
-            full_name="Gate Team Validator",
             password_hash="hash",
             role=ApplicationUserRole.REVIEWER.value,
             is_active=True,
             module_presenze=True,
         )
-        existing = OrganizationTeam(
+        unmapped = ApplicationUser(
+            id=179,
+            username="unmapped.member",
+            email="unmapped.member@example.test",
+            password_hash="hash",
+            role=ApplicationUserRole.OPERATOR.value,
+            is_active=True,
+        )
+        team = OrganizationTeam(
             id=uuid.UUID("018f88a2-1797-7365-bf5e-8bb8b7f9a201"),
             name="Squadra Esistente",
             code="EXIST",
             scope="presenze",
+            personnel_area="AGRARIO",
             active=True,
             created_from_channel="gaia_web",
             created_by_user_id=actor.id,
         )
-        db.add_all([actor, existing])
+        db.add_all([actor, unmapped, team])
         db.commit()
-
-        validation_cases = [
-            ({}, "schema_version"),
-            ({"schema_version": 1, "source": "bad", "operation": "create_team", "team": {}}, "source"),
-            ({"schema_version": 1, "source": "gate", "operation": "delete_team", "team": {}}, "operation"),
-            ({"schema_version": 1, "source": "gate", "operation": "create_team", "team": []}, "team mancante"),
+        team_ref = {"team_id": str(team.id), "code": team.code, "personnel_area": "AGRARIO"}
+        cases = [
+            ({"operation": "create_team", "team": {"name": "Missing area"}}, "personnel_area"),
+            ({"operation": "delete_team", "team": team_ref}, "operation"),
+            ({"operation": "create_team", "team": []}, "team mancante"),
             (
                 {
-                    "schema_version": 1,
-                    "source": "gate",
-                    "operation": "create_team",
-                    "team": {"team_id": str(existing.id), "name": "Duplicata"},
+                    "operation": "update_team_memberships",
+                    "team": team_ref,
+                    "requested_memberships": [{"collaborator_id": str(uuid.uuid4())}],
                 },
-                "gia esistente",
+                "gaia_user_id",
             ),
             (
                 {
-                    "schema_version": 1,
-                    "source": "gate",
-                    "operation": "update_team",
-                    "team": {"team_id": str(uuid.uuid4()), "name": "Manca"},
+                    "operation": "update_team_memberships",
+                    "team": team_ref,
+                    "requested_memberships": [{"gaia_user_id": str(unmapped.id)}],
                 },
-                "non trovata",
+                "Relazione Presenze non univoca",
             ),
             (
                 {
-                    "schema_version": 1,
-                    "source": "gate",
-                    "operation": "create_team",
-                    "team": {"name": "Conflitto", "code": "EXIST"},
+                    "operation": "update_team_supervisors",
+                    "team": team_ref,
+                    "requested_supervisors": [{"gaia_user_id": "999999"}],
                 },
-                "code gia assegnato",
+                "non trovato",
             ),
             (
                 {
-                    "schema_version": 1,
-                    "source": "gate",
-                    "operation": "create_team",
-                    "team": {"name": "Scope errato", "scope": "bad"},
+                    "operation": "update_team_supervisors",
+                    "team": team_ref,
+                    "requested_supervisors": "not-a-list",
                 },
-                "scope squadra",
+                "lista di oggetti",
             ),
             (
                 {
-                    "schema_version": 1,
-                    "source": "gate",
-                    "operation": "create_team",
-                    "team": {"name": "Flag errato", "active": "yes"},
+                    "operation": "rename_team",
+                    "team": dict(team_ref, personnel_area="IMPIANTI", name="Wrong area"),
                 },
-                "active deve essere booleano",
-            ),
-            (
-                {
-                    "schema_version": 1,
-                    "source": "gate",
-                    "operation": "create_team",
-                    "team": {"code": "NO-NAME"},
-                },
-                "name mancante",
-            ),
-            (
-                {
-                    "schema_version": 1,
-                    "source": "gate",
-                    "operation": "create_team",
-                    "team": {"name": "   "},
-                },
-                "name non puo essere vuoto",
-            ),
-            (
-                {
-                    "schema_version": 1,
-                    "source": "gate",
-                    "operation": "create_team",
-                    "team": {"name": "A", "code": "X" * 65},
-                },
-                "code supera",
-            ),
-            (
-                {
-                    "schema_version": 1,
-                    "source": "gate",
-                    "operation": "create_team",
-                    "team": {"team_id": "not-uuid", "name": "UUID errato"},
-                },
-                "team_id non e un UUID",
+                "incoerente",
             ),
         ]
-        for payload, message in validation_cases:
+        action_types = [
+            "propose_team_create",
+            "propose_team_create",
+            "propose_team_create",
+            "propose_team_membership",
+            "propose_team_membership",
+            "propose_team_supervisor",
+            "propose_team_supervisor",
+            "propose_team_change",
+        ]
+        for action_type, (payload, message) in zip(action_types, cases, strict=True):
             try:
-                gate_mobile_team_actions.apply_presenze_team_change_proposal(db, payload, actor=actor)
+                gate_mobile_team_actions.apply_presenze_team_proposal(
+                    db,
+                    payload,
+                    actor=actor,
+                    action_type=action_type,
+                )
             except Exception as exc:
                 assert message in str(exc)
                 db.rollback()
             else:
                 raise AssertionError(f"Expected validation error containing {message}")
+    finally:
+        db.close()
+
+
+def test_presenze_team_action_replacement_and_validation_edges() -> None:
+    db = _build_session()
+    try:
+        actor = ApplicationUser(
+            id=301,
+            username="team.edge.actor",
+            email="team.edge.actor@example.test",
+            password_hash="hash",
+            role=ApplicationUserRole.REVIEWER.value,
+            is_active=True,
+            module_presenze=True,
+        )
+        person = ApplicationUser(
+            id=302,
+            username="team.edge.person",
+            email="team.edge.person@example.test",
+            password_hash="hash",
+            role=ApplicationUserRole.OPERATOR.value,
+            is_active=True,
+        )
+        collaborator = PresenzeCollaborator(
+            id=uuid.uuid4(),
+            employee_code="EDGE-302",
+            name="Edge Person",
+            application_user_id=person.id,
+        )
+        db.add_all([actor, person, collaborator])
+        db.commit()
+
+        created = gate_mobile_team_actions.apply_presenze_team_change_proposal(
+            db,
+            {
+                "operation": "create_team",
+                "team": {"name": "No Code Team", "personnel_area": "AGRARIO"},
+            },
+            actor=actor,
+        ).team
+        assert created.code is None
+        assert created.active is True
+
+        gate_mobile_team_actions.apply_presenze_team_change_proposal(
+            db,
+            {
+                "operation": "update_team",
+                "team": {"team_id": str(created.id), "personnel_area": "AGRARIO"},
+            },
+            actor=actor,
+        )
+
+        membership_payload = {
+            "operation": "update_team_memberships",
+            "team": {"team_id": str(created.id), "personnel_area": "AGRARIO"},
+            "requested_memberships": [
+                {"gaia_user_id": str(person.id)},
+                {"gaia_user_id": str(person.id)},
+            ],
+        }
+        supervisor_payload = {
+            "operation": "update_team_supervisors",
+            "team": {"team_id": str(created.id), "personnel_area": "AGRARIO"},
+            "requested_supervisors": [
+                {"gaia_user_id": str(person.id)},
+                {"gaia_user_id": str(person.id)},
+            ],
+        }
+        for action_type, payload, message in [
+            ("unknown", {"operation": "none", "team": {}}, "non supportato"),
+            ("propose_team_membership", membership_payload, "duplicato"),
+            ("propose_team_supervisor", supervisor_payload, "duplicato"),
+        ]:
+            try:
+                gate_mobile_team_actions.apply_presenze_team_proposal(
+                    db,
+                    payload,
+                    actor=actor,
+                    action_type=action_type,
+                )
+            except ValueError as exc:
+                assert message in str(exc)
+                db.rollback()
+            else:
+                raise AssertionError(f"Expected {message}")
+
+        membership_payload["requested_memberships"] = [{"gaia_user_id": str(person.id)}]
+        supervisor_payload["requested_supervisors"] = [{"gaia_user_id": str(person.id)}]
+        gate_mobile_team_actions.apply_presenze_team_proposal(
+            db,
+            membership_payload,
+            actor=actor,
+            action_type="propose_team_membership",
+        )
+        gate_mobile_team_actions.apply_presenze_team_proposal(
+            db,
+            supervisor_payload,
+            actor=actor,
+            action_type="propose_team_supervisor",
+        )
+        membership_payload["requested_memberships"] = []
+        supervisor_payload["requested_supervisors"] = []
+        gate_mobile_team_actions.apply_presenze_team_proposal(
+            db,
+            membership_payload,
+            actor=actor,
+            action_type="propose_team_membership",
+        )
+        gate_mobile_team_actions.apply_presenze_team_proposal(
+            db,
+            supervisor_payload,
+            actor=actor,
+            action_type="propose_team_supervisor",
+        )
+        assert db.scalar(
+            select(OrganizationTeamMembership).where(OrganizationTeamMembership.team_id == created.id)
+        ) is None
+        assert db.scalar(
+            select(OrganizationTeamSupervisorAssignment).where(
+                OrganizationTeamSupervisorAssignment.team_id == created.id
+            )
+        ) is None
+
+        existing_a = OrganizationTeam(
+            name="Existing A",
+            code="AMB-A",
+            scope="presenze",
+            personnel_area="IMPIANTI",
+        )
+        existing_b = OrganizationTeam(
+            name="Existing B",
+            code="AMB-B",
+            scope="gate",
+            personnel_area="IMPIANTI",
+        )
+        target = OrganizationTeam(
+            name="Target",
+            code="TARGET",
+            scope="presenze",
+            personnel_area="IMPIANTI",
+        )
+        db.add_all([existing_a, existing_b, target])
+        db.commit()
+        validation_cases = [
+            (
+                "propose_team_change",
+                {"operation": "rename_team", "team": {"team_id": "legacy", "code": "MISSING", "personnel_area": "AGRARIO"}},
+                "non trovata",
+            ),
+            (
+                "propose_team_membership",
+                {
+                    "operation": "update_team_memberships",
+                    "team": {"team_id": str(uuid.uuid4()), "code": "MISSING", "personnel_area": "AGRARIO"},
+                    "requested_memberships": [],
+                },
+                "non trovata",
+            ),
+            (
+                "propose_team_change",
+                {
+                    "operation": "rename_team",
+                    "team": {
+                        "team_id": "legacy",
+                        "previous_code": "AMB-A",
+                        "code": "AMB-B",
+                        "personnel_area": "IMPIANTI",
+                    },
+                },
+                "non trovata",
+            ),
+            (
+                "propose_team_change",
+                {
+                    "operation": "rename_team",
+                    "team": {
+                        "team_id": str(target.id),
+                        "code": "AMB-A",
+                        "name": "Conflict",
+                        "personnel_area": "IMPIANTI",
+                    },
+                },
+                "code gia assegnato",
+            ),
+            (
+                "propose_team_create",
+                {"operation": "create_team", "team": {"personnel_area": "AGRARIO"}},
+                "name mancante",
+            ),
+            (
+                "propose_team_create",
+                {"operation": "create_team", "team": {"name": 123, "personnel_area": "AGRARIO"}},
+                "stringa",
+            ),
+            (
+                "propose_team_create",
+                {"operation": "create_team", "team": {"name": " ", "personnel_area": "AGRARIO"}},
+                "vuoto",
+            ),
+            (
+                "propose_team_create",
+                {"operation": "create_team", "team": {"name": "X" * 256, "personnel_area": "AGRARIO"}},
+                "supera",
+            ),
+            (
+                "propose_team_create",
+                {"operation": "create_team", "team": {"name": "Bad flag", "personnel_area": "AGRARIO", "active": "yes"}},
+                "booleano",
+            ),
+            (
+                "propose_team_supervisor",
+                {
+                    "operation": "update_team_supervisors",
+                    "team": {"team_id": str(created.id), "personnel_area": "AGRARIO"},
+                    "requested_supervisors": [{"gaia_user_id": "not-an-id"}],
+                },
+                "gaia_user_id non valido",
+            ),
+            (
+                "propose_team_supervisor",
+                {
+                    "operation": "update_team_supervisors",
+                    "team": {"team_id": str(created.id), "personnel_area": "AGRARIO"},
+                    "requested_supervisors": [{"gaia_user_id": "0"}],
+                },
+                "gaia_user_id non valido",
+            ),
+        ]
+        for action_type, payload, message in validation_cases:
+            try:
+                gate_mobile_team_actions.apply_presenze_team_proposal(
+                    db,
+                    payload,
+                    actor=actor,
+                    action_type=action_type,
+                )
+            except ValueError as exc:
+                assert message in str(exc)
+                db.rollback()
+            else:
+                raise AssertionError(f"Expected {message}")
     finally:
         db.close()
 
@@ -1638,7 +1952,7 @@ def test_apply_presenze_pending_action_variants_and_validation_errors() -> None:
                 "client_request_id": "client-pending",
                 "type": "validate_daily_record",
                 "record_id": str(daily_record_id),
-                "user_id": 77,
+                "gaia_user_id": 77,
                 "validation_status": "pending",
             },
         )
@@ -1653,7 +1967,7 @@ def test_apply_presenze_pending_action_variants_and_validation_errors() -> None:
                 "id": "resolve-1",
                 "type": "resolve_anomaly",
                 "record_id": str(daily_record_id),
-                "application_user_id": 77,
+                "gaia_user_id": 77,
                 "operator_note": "risolta",
             },
         )
@@ -1685,11 +1999,13 @@ def test_apply_presenze_pending_action_variants_and_validation_errors() -> None:
         ) == daily_record_id
 
         for payload, message in [
-            ({}, "application_user_id"),
-            ({"application_user_id": 999}, "Application user not found"),
-            ({"application_user_id": 77, "type": "validate_daily_record"}, "record_id"),
-            ({"application_user_id": 77, "type": "validate_daily_record", "record_id": str(uuid.uuid4())}, "Daily record not found"),
-            ({"application_user_id": 77, "record_id": str(daily_record_id), "type": "unknown"}, "non supportato"),
+            ({}, "gaia_user_id"),
+            ({"application_user_id": 77}, "gaia_user_id"),
+            ({"gaia_user_id": "not-an-integer"}, "gaia_user_id non valido"),
+            ({"gaia_user_id": 999}, "Application user not found"),
+            ({"gaia_user_id": 77, "type": "validate_daily_record"}, "record_id"),
+            ({"gaia_user_id": 77, "type": "validate_daily_record", "record_id": str(uuid.uuid4())}, "Daily record not found"),
+            ({"gaia_user_id": 77, "record_id": str(daily_record_id), "type": "unknown"}, "non supportato"),
         ]:
             try:
                 gate_mobile_sync_service._apply_presenze_pending_action(db, payload)
@@ -1712,7 +2028,7 @@ def test_apply_presenze_pending_action_variants_and_validation_errors() -> None:
         try:
             gate_mobile_sync_service._apply_presenze_pending_action(
                 db,
-                {"application_user_id": 88, "record_id": str(daily_record_id), "type": "validate_daily_record"},
+                {"gaia_user_id": 88, "record_id": str(daily_record_id), "type": "validate_daily_record"},
             )
         except ValueError as exc:
             assert "non abilitato" in str(exc)
@@ -2123,6 +2439,7 @@ def _seed_operator(
         first_name="Mario",
         last_name="Rossi",
         enabled=True,
+        personnel_area="AGRARIO",
         gaia_user_id=42,
     )
     profile = OperatorProfile(
@@ -2158,6 +2475,7 @@ def _seed_presenze_team(db: Session) -> None:
         name="Squadra Presenze Nord",
         code="PNORD",
         scope="presenze",
+        personnel_area="AGRARIO",
         active=True,
         created_from_channel="gaia_web",
         created_by_user_id=77,

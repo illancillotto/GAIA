@@ -152,7 +152,7 @@ describe("api presenze clients", () => {
 
   test("createGatePresenzeTeam", async () => {
     const payload = { id: "team-1", name: "Team A" };
-    const input = { name: "Team A", slug: "team-a" };
+    const input = { name: "Team A", code: "TEAM-A", personnel_area: "AGRARIO" as const };
     const fetchMock = stubFetch(jsonResponse(payload));
     await expect(createGatePresenzeTeam(TOKEN, input)).resolves.toEqual(payload);
     expect(fetchMock).toHaveBeenCalledWith(

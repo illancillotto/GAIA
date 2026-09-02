@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import json
+import uuid
 from collections import Counter
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
-import json
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
-import uuid
 
 import httpx
 from sqlalchemy import select
@@ -15,7 +15,6 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, settings
 from app.models.application_user import ApplicationUser
-from app.schemas.users import normalize_email
 from app.modules.operazioni.models.gate_mobile_sync_run import GateMobileSyncRun
 from app.modules.operazioni.models.organizational import OperatorProfile
 from app.modules.operazioni.models.wc_operator import WCOperator
@@ -26,20 +25,18 @@ from app.modules.presenze.gate_router import (
     _append_gate_audit,
     _build_rules_response,
     _collaborator_map,
-    _gate_record_analysis,
     _gate_record_analysis_from_serialized,
     _gate_record_snapshot,
     _get_gate_record_or_404,
     _month_period,
-    _serialize_gate_record_item,
     _team_ids_by_collaborator,
 )
 from app.modules.presenze.models import (
+    PRESENZE_CONTRACT_KIND_IMPIEGATO,
+    PRESENZE_CONTRACT_KIND_OPERAIO,
     OrganizationTeam,
     OrganizationTeamMembership,
     OrganizationTeamSupervisorAssignment,
-    PRESENZE_CONTRACT_KIND_IMPIEGATO,
-    PRESENZE_CONTRACT_KIND_OPERAIO,
     PresenzeCollaborator,
     PresenzeDailyPunch,
     PresenzeDailyRecord,
@@ -49,18 +46,27 @@ from app.modules.presenze.router import (
     _build_operational_quality_map,
     _serialize_daily_record_matrix,
 )
-from app.modules.presenze.schemas import GatePresenzeDailyRecordPatchRequest, GatePresenzeDailyRecordValidateRequest, GatePresenzeResolveAnomalyRequest
+from app.modules.presenze.schemas import (
+    GatePresenzeDailyRecordPatchRequest,
+    GatePresenzeDailyRecordValidateRequest,
+    GatePresenzeResolveAnomalyRequest,
+)
 from app.modules.presenze.services.gate_mobile_payloads import (
+    build_presenze_membership_payload,
     build_presenze_mobile_record_payload,
     build_presenze_supervisors_by_team,
-    gate_channel as _gate_channel,
-    json_date as _json_date,
-    json_datetime as _json_datetime,
-    json_optional_identifier as _json_optional_identifier,
+    build_presenze_team_payload,
+    json_datetime,
+    required_personnel_area,
 )
-from app.modules.presenze.services.gate_mobile_team_actions import apply_presenze_team_change_proposal
+from app.modules.presenze.services.gate_mobile_team_actions import (
+    TEAM_ACTION_OPERATIONS,
+    apply_presenze_team_proposal,
+    pending_action_gaia_user_id,
+)
 from app.modules.presenze.services.inaz_sync_status import build_presenze_snapshot_metadata
 from app.modules.presenze.services.operai_rules import load_operai_rule_configs
+from app.schemas.users import normalize_email
 
 OPERATOR_UPDATE_ACTION_TYPE = "propose_operator_update"
 OPERATOR_UPDATE_OPERATIONS = {"create_operator", "update_operator", "update_operator_domains"}
@@ -121,7 +127,7 @@ class GateMobileConsoleEnableResult:
 
 
 def build_mobile_operator_push_payload(db: Session, *, now: datetime | None = None) -> dict[str, Any]:
-    synced_at = now or datetime.now(timezone.utc)
+    synced_at = now or datetime.now(UTC)
     rows = db.execute(
         select(WCOperator, ApplicationUser, OperatorProfile)
         .join(ApplicationUser, ApplicationUser.id == WCOperator.gaia_user_id)
@@ -132,23 +138,32 @@ def build_mobile_operator_push_payload(db: Session, *, now: datetime | None = No
 
     return {
         "synced_from_gaia_at": synced_at.isoformat().replace("+00:00", "Z"),
-        "operators": [
-            {
-                "operator_id": str(operator.id),
-                "gaia_user_id": str(user.id),
-                "gaia_operator_profile_id": str(profile.id) if profile else None,
-                "gaia_username": user.username,
-                "display_name": _operator_display_name(operator, user),
-                "email": operator.email or user.email,
-                "phone": profile.phone if profile else user.phone_extension,
-                "status": "ACTIVE" if operator.enabled and user.is_active else "DISABLED",
-                "domains": operator.domains,
-                "gate_mobile_console_enabled": operator.gate_mobile_console_enabled,
-                "gate_mobile_console_role": operator.gate_mobile_console_role,
-                "gate_mobile_console_pages": operator.gate_mobile_console_pages,
-            }
-            for operator, user, profile in rows
-        ],
+        "operators": [_mobile_operator_payload(*row) for row in rows],
+    }
+
+
+def _mobile_operator_payload(
+    operator: WCOperator,
+    user: ApplicationUser,
+    profile: OperatorProfile | None,
+) -> dict[str, Any]:
+    return {
+        "operator_id": str(operator.id),
+        "gaia_user_id": str(user.id),
+        "gaia_operator_profile_id": str(profile.id) if profile else None,
+        "gaia_username": user.username,
+        "display_name": _operator_display_name(operator, user),
+        "email": operator.email or user.email,
+        "phone": profile.phone if profile else user.phone_extension,
+        "personnel_area": required_personnel_area(
+            operator.personnel_area,
+            entity=f"wc_operator:{operator.id}",
+        ),
+        "status": "ACTIVE" if operator.enabled and user.is_active else "DISABLED",
+        "domains": operator.domains,
+        "gate_mobile_console_enabled": operator.gate_mobile_console_enabled,
+        "gate_mobile_console_role": operator.gate_mobile_console_role,
+        "gate_mobile_console_pages": operator.gate_mobile_console_pages,
     }
 
 
@@ -227,7 +242,7 @@ def build_mobile_catalog_push_payloads(db: Session) -> list[dict[str, Any]]:
         {
             "catalog_type": item.catalog_type,
             "version": item.version,
-            "synced_from_gaia_at": _json_datetime(item.synced_from_gaia_at),
+            "synced_from_gaia_at": json_datetime(item.synced_from_gaia_at),
             "payload": item.payload,
         }
         for item in response.catalogs
@@ -240,7 +255,7 @@ def build_mobile_workset_push_payloads(db: Session) -> list[dict[str, Any]]:
         {
             "operator_id": str(item.operator_id),
             "workset_type": item.workset_type,
-            "synced_from_gaia_at": _json_datetime(item.synced_from_gaia_at),
+            "synced_from_gaia_at": json_datetime(item.synced_from_gaia_at),
             "items": [
                 {
                     "gaia_entity_id": subitem.gaia_entity_id,
@@ -269,18 +284,7 @@ def build_presenze_teams_push_payload(db: Session, *, now: datetime | None = Non
     memberships_by_team: dict[str, list[dict[str, Any]]] = {}
     for membership, collaborator in memberships:
         memberships_by_team.setdefault(str(membership.team_id), []).append(
-            {
-                "membership_id": str(membership.id),
-                "collaborator_id": str(membership.collaborator_id),
-                "gaia_user_id": _json_optional_identifier(collaborator.application_user_id),
-                "employee_code": collaborator.employee_code,
-                "collaborator_name": collaborator.name,
-                "role": membership.role,
-                "valid_from": _json_date(membership.valid_from),
-                "valid_to": _json_date(membership.valid_to),
-                "source_channel": _gate_channel(membership.source_channel),
-                "updated_at": _json_datetime(membership.updated_at),
-            }
+            build_presenze_membership_payload(membership, collaborator)
         )
 
     supervisors_by_team = build_presenze_supervisors_by_team(db, supervisors)
@@ -289,29 +293,20 @@ def build_presenze_teams_push_payload(db: Session, *, now: datetime | None = Non
         "schema_version": 1,
         "source": "gaia",
         "rules_version": RULES_VERSION,
-        "synced_from_gaia_at": (now or datetime.now(timezone.utc)).isoformat().replace("+00:00", "Z"),
+        "synced_from_gaia_at": (now or datetime.now(UTC)).isoformat().replace("+00:00", "Z"),
         "teams": [
-            {
-                "team_id": str(team.id),
-                "name": team.name,
-                "code": team.code,
-                "scope": team.scope,
-                "active": team.active,
-                "created_from_channel": _gate_channel(team.created_from_channel),
-                "created_by_user_id": team.created_by_user_id,
-                "audit": {},
-                "created_at": _json_datetime(team.created_at),
-                "updated_at": _json_datetime(team.updated_at),
-                "memberships": memberships_by_team.get(str(team.id), []),
-                "supervisors": supervisors_by_team.get(str(team.id), []),
-            }
+            build_presenze_team_payload(
+                team,
+                memberships_by_team.get(str(team.id), []),
+                supervisors_by_team.get(str(team.id), []),
+            )
             for team in teams
         ],
     }
 
 
 def build_presenze_rules_push_payload(*, now: datetime | None = None) -> dict[str, Any]:
-    synced_at = now or datetime.now(timezone.utc)
+    synced_at = now or datetime.now(UTC)
     rules = _build_rules_response()
     return {
         "schema_version": 1,
@@ -586,7 +581,7 @@ async def execute_gate_mobile_sync(
     trigger_source: str = "manual_cli",
     raise_on_error: bool = True,
 ) -> GateMobileSyncExecutionResult:
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
     run = GateMobileSyncRun(
         trigger_source=trigger_source,
         status="running",
@@ -748,8 +743,7 @@ async def process_presenze_pending_actions(db: Session, *, client: httpx.AsyncCl
 
 def _apply_presenze_pending_action(db: Session, action: dict[str, Any]) -> dict[str, Any]:
     action_type = action.get("type") or action.get("action_type")
-    action_id = _pending_action_id(action)
-    payload = _pending_action_payload(action)
+    action_id, payload = _pending_action_id(action), _pending_action_payload(action)
     if action_type == OPERATOR_UPDATE_ACTION_TYPE:
         operator = _apply_operator_update_proposal(db, payload)
         return _ack_payload("wc_operator", operator.id, action_id=action_id)
@@ -762,7 +756,7 @@ def _apply_presenze_pending_action(db: Session, action: dict[str, Any]) -> dict[
         record.validation_note = request.operator_note
         if request.validation_status == "validated":
             record.validated_by_user_id = actor.id
-            record.validated_at = datetime.now(timezone.utc)
+            record.validated_at = datetime.now(UTC)
         else:
             record.validated_by_user_id = None
             record.validated_at = None
@@ -806,7 +800,7 @@ def _apply_presenze_pending_action(db: Session, action: dict[str, Any]) -> dict[
         record.validation_status = "validated"
         record.validation_note = request.operator_note
         record.validated_by_user_id = actor.id
-        record.validated_at = datetime.now(timezone.utc)
+        record.validated_at = datetime.now(UTC)
         _append_gate_audit(
             record,
             action="resolve_anomaly",
@@ -820,8 +814,9 @@ def _apply_presenze_pending_action(db: Session, action: dict[str, Any]) -> dict[
         db.commit()
         db.refresh(record)
         return _ack_payload("presenze_daily_record", record.id, action_id=action_id)
-    if action_type == "propose_team_change":
-        return _ack_payload("organization_team", apply_presenze_team_change_proposal(db, payload, actor=actor).team.id, action_id=action_id)
+    if action_type in TEAM_ACTION_OPERATIONS:
+        team_id = apply_presenze_team_proposal(db, payload, actor=actor, action_type=action_type).team.id
+        return _ack_payload("organization_team", team_id, action_id=action_id)
     raise ValueError(f"Tipo pending action non supportato: {action_type}")
 
 
@@ -1103,18 +1098,12 @@ def _pending_action_id(action: dict[str, Any]) -> str:
 
 
 def _pending_action_user(db: Session, payload: dict[str, Any]) -> ApplicationUser:
-    user_id = payload.get("application_user_id") or payload.get("user_id")
-    if user_id is None and isinstance(payload.get("actor"), dict):
-        user_id = payload["actor"].get("application_user_id") or payload["actor"].get("user_id")
-    if user_id is None:
-        raise ValueError("application_user_id mancante nella pending action")
-    user = db.get(ApplicationUser, int(user_id))
+    user = db.get(ApplicationUser, pending_action_gaia_user_id(payload))
     if user is None or not user.is_active:
         raise ValueError("Application user not found")
     if not user.module_presenze and not user.is_super_admin:
         raise ValueError("Utente non abilitato al modulo Presenze")
     return user
-
 
 def _pending_action_record(db: Session, payload: dict[str, Any], actor: ApplicationUser) -> PresenzeDailyRecord:
     record_id = payload.get("record_id") or payload.get("daily_record_id")
@@ -1143,7 +1132,7 @@ def _ack_payload(entity_type: str, entity_id: Any, *, action_id: str) -> dict[st
         "extra": {
             "pending_action_id": action_id,
             "rules_version": RULES_VERSION,
-            "applied_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "applied_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         },
     }
 
@@ -1244,7 +1233,7 @@ def _finalize_run(
     exc: Exception | None = None,
     raise_on_error: bool = True,
 ) -> GateMobileSyncExecutionResult:
-    finished_at = datetime.now(timezone.utc)
+    finished_at = datetime.now(UTC)
     run.status = status
     run.finished_at = finished_at
     run.duration_ms = max(0, int((finished_at - started_at).total_seconds() * 1000))

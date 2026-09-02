@@ -6,8 +6,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_, select
-from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.api.deps import require_active_user, require_module
 from app.core.database import get_db
@@ -30,16 +30,16 @@ from app.modules.presenze.schemas import (
     GatePresenzeDailyRecordDetailResponse,
     GatePresenzeDailyRecordItemResponse,
     GatePresenzeDailyRecordPatchRequest,
-    GatePresenzeDailyRecordValidateRequest,
     GatePresenzeDailyRecordsResponse,
-    GatePresenzeExportPreviewResponse,
+    GatePresenzeDailyRecordValidateRequest,
     GatePresenzeExportGenerateRequest,
     GatePresenzeExportGenerateResponse,
+    GatePresenzeExportPreviewResponse,
     GatePresenzeMonthItemResponse,
     GatePresenzeResolveAnomalyRequest,
     GatePresenzeRuleItemResponse,
-    GatePresenzeRulesResponse,
     GatePresenzeRuleSectionResponse,
+    GatePresenzeRulesResponse,
     OrganizationTeamCreate,
     OrganizationTeamMembershipCreate,
     OrganizationTeamMembershipResponse,
@@ -49,7 +49,6 @@ from app.modules.presenze.schemas import (
     OrganizationTeamUpdate,
 )
 from app.modules.presenze.services.gate_mobile_payloads import weekday_label as _weekday_label
-
 
 router = APIRouter(prefix="/gate/presenze", tags=["gate-presenze"])
 RequirePresenzeModule = Depends(require_module("presenze"))
@@ -333,12 +332,12 @@ def list_gate_presenze_teams(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     _: Annotated[ApplicationUser, RequirePresenzeModule],
-    scope: str | None = Query(default=None),
+    personnel_area: str | None = Query(default=None),
     active: bool | None = Query(default=None),
 ) -> list[OrganizationTeamResponse]:
     stmt = select(OrganizationTeam)
-    if scope is not None:
-        stmt = stmt.where(OrganizationTeam.scope == scope)
+    if personnel_area is not None:
+        stmt = stmt.where(OrganizationTeam.personnel_area == personnel_area)
     if active is not None:
         stmt = stmt.where(OrganizationTeam.active.is_(active))
     if not _can_view_all_data(current_user):
@@ -361,7 +360,7 @@ def create_gate_presenze_team(
     team = OrganizationTeam(
         name=payload.name.strip(),
         code=payload.code.strip() if payload.code else None,
-        scope=payload.scope,
+        scope="presenze", personnel_area=payload.personnel_area,
         active=payload.active,
         created_from_channel="gaia_web",
         created_by_user_id=current_user.id,
@@ -387,8 +386,8 @@ def update_gate_presenze_team(
         team.name = update_payload["name"].strip()
     if "code" in update_payload:
         team.code = update_payload["code"].strip() if update_payload["code"] else None
-    if "scope" in update_payload and update_payload["scope"] is not None:
-        team.scope = update_payload["scope"]
+    if "personnel_area" in update_payload and update_payload["personnel_area"] is not None:
+        team.personnel_area = update_payload["personnel_area"]
     if "active" in update_payload and update_payload["active"] is not None:
         team.active = update_payload["active"]
     db.add(team)

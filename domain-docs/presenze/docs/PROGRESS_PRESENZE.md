@@ -559,6 +559,18 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
 - test mirati: `28 passed`, coverage `100%` su `app.services.gate_mobile_sync`;
 - modifica classificata come manutenzione funzionale GATE/Presenze, separata dal programma di refactoring Catasto in `gaia/code-complexity-refactor`.
 
+### Identita canonica e area personale GATE Mobile - 2026-09-02
+
+- il contratto operatori e squadre pubblica `personnel_area` esclusivamente come `AGRARIO` o `IMPIANTI`; `scope` non classifica piu le squadre e TETI non produce anagrafiche;
+- membership, supervisor e Giornaliere correlano le persone esclusivamente tramite `gaia_user_id`; gli identificativi Presenze restano descrittivi e le relazioni mancanti o incoerenti falliscono chiuse;
+- le pending action `propose_team_create`, `propose_team_change`, `propose_team_membership` e `propose_team_supervisor` risolvono autore e persone dal solo `gaia_user_id` e applicano replace idempotenti;
+- aggiunto un manifest operativo esplicito e transazionale per valorizzare area operatore e relazione `presenze_collaborator_id -> gaia_user_id`, senza campi nome, username, email o matricola;
+- migrazione isolata verificata su PostgreSQL/PostGIS reale con upgrade, backfill area squadra, check/unique constraint, rifiuto del valore `TETI` e downgrade;
+- coverage backend `100%` statement/branch sui servizi sync, payload, pending action, manifest, mapping e script; `100%` anche su router, modelli e schema Presenze nelle suite aggregate;
+- frontend squadra: `158` test passati, typecheck verde e coverage `100%` statement/branch/function/line; GATE gateway: typecheck, lint e `40` test repository passati;
+- quality ratchet contro merge-base `729870fb` passato con `findings: []`; la rigenerazione baseline globale e `baseline-verify` restano bloccati da regressioni legacy non appartenenti alla change e non sono stati forzati;
+- Graphify aggiornato per Presenze, backend, frontend, documentazione Presenze e code map GATE.
+
 ## Gap aperti
 
 - UI frontend ancora essenziale:

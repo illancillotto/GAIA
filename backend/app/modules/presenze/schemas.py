@@ -8,7 +8,6 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.modules.presenze.models import (
     PRESENZE_HOLIDAY_KIND_ORDINARY,
-    PRESENZE_HOLIDAY_KIND_SUPPRESSED,
     PRESENZE_HOLIDAY_KIND_WORKING_OVERRIDE,
 )
 
@@ -407,14 +406,14 @@ class PresenzeSupervisorAssignmentResponse(BaseModel):
 class OrganizationTeamCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     code: str | None = Field(default=None, max_length=64)
-    scope: OrganizationTeamScope = "presenze"
+    personnel_area: Literal["AGRARIO", "IMPIANTI"]
     active: bool = True
 
 
 class OrganizationTeamUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     code: str | None = Field(default=None, max_length=64)
-    scope: OrganizationTeamScope | None = None
+    personnel_area: Literal["AGRARIO", "IMPIANTI"] | None = None
     active: bool | None = None
 
 
@@ -425,7 +424,7 @@ class OrganizationTeamMembershipCreate(BaseModel):
     role: OrganizationTeamMembershipRole = "member"
 
     @model_validator(mode="after")
-    def validate_period(self) -> "OrganizationTeamMembershipCreate":
+    def validate_period(self) -> OrganizationTeamMembershipCreate:
         if self.valid_from is not None and self.valid_to is not None and self.valid_to < self.valid_from:
             raise ValueError("valid_to must be greater than or equal to valid_from")
         return self
@@ -438,7 +437,7 @@ class OrganizationTeamSupervisorCreate(BaseModel):
     valid_to: date | None = None
 
     @model_validator(mode="after")
-    def validate_period(self) -> "OrganizationTeamSupervisorCreate":
+    def validate_period(self) -> OrganizationTeamSupervisorCreate:
         if self.valid_from is not None and self.valid_to is not None and self.valid_to < self.valid_from:
             raise ValueError("valid_to must be greater than or equal to valid_from")
         return self
@@ -484,7 +483,7 @@ class OrganizationTeamResponse(BaseModel):
     id: uuid.UUID
     name: str
     code: str | None = None
-    scope: OrganizationTeamScope
+    personnel_area: Literal["AGRARIO", "IMPIANTI"]
     active: bool
     created_from_channel: OrganizationTeamChannel
     created_by_user_id: int | None = None
@@ -594,7 +593,7 @@ class GatePresenzeDailyRecordPatchRequest(BaseModel):
     client_request_id: str | None = Field(default=None, max_length=120)
 
     @model_validator(mode="after")
-    def validate_reperibilita(self) -> "GatePresenzeDailyRecordPatchRequest":
+    def validate_reperibilita(self) -> GatePresenzeDailyRecordPatchRequest:
         if self.reperibilita_unit is None and self.reperibilita_quantity is None:
             return self
         unit = self.reperibilita_unit or "none"
@@ -834,7 +833,7 @@ class PresenzeDailyRecordManualUpdate(BaseModel):
     validation_note: str | None = Field(default=None, max_length=1000)
 
     @model_validator(mode="after")
-    def validate_reperibilita(self) -> "PresenzeDailyRecordManualUpdate":
+    def validate_reperibilita(self) -> PresenzeDailyRecordManualUpdate:
         if self.reperibilita_unit is None and self.reperibilita_quantity is None:
             return self
         unit = self.reperibilita_unit or "none"
@@ -966,7 +965,7 @@ class PresenzeBankHoursAdjustmentCreate(BaseModel):
     note: str | None = Field(default=None, max_length=2000)
 
     @model_validator(mode="after")
-    def validate_delta(self) -> "PresenzeBankHoursAdjustmentCreate":
+    def validate_delta(self) -> PresenzeBankHoursAdjustmentCreate:
         _validate_bank_hours_delta(self.kind, self.delta_minutes)
         return self
 
@@ -979,7 +978,7 @@ class PresenzeBankHoursAdjustmentUpdate(BaseModel):
     note: str | None = Field(default=None, max_length=2000)
 
     @model_validator(mode="after")
-    def validate_delta(self) -> "PresenzeBankHoursAdjustmentUpdate":
+    def validate_delta(self) -> PresenzeBankHoursAdjustmentUpdate:
         if self.kind is not None and self.delta_minutes is not None:
             _validate_bank_hours_delta(self.kind, self.delta_minutes)
         return self

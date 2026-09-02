@@ -409,7 +409,7 @@ describe("Presenze pages", () => {
         id: "team-1",
         name: "Squadra Nord",
         code: "NORD",
-        scope: "presenze",
+        personnel_area: "AGRARIO",
         active: true,
         created_from_channel: "gate_mobile",
         created_by_user_id: 1,
@@ -453,7 +453,7 @@ describe("Presenze pages", () => {
       id: "team-2",
       name: "Squadra Sud",
       code: "SUD",
-      scope: "presenze",
+      personnel_area: "AGRARIO",
       active: true,
       created_from_channel: "gate_mobile",
       created_by_user_id: 1,
@@ -466,7 +466,7 @@ describe("Presenze pages", () => {
       id: "team-1",
       name: "Squadra Nord",
       code: "NORD",
-      scope: "presenze",
+      personnel_area: "AGRARIO",
       active: false,
       created_from_channel: "gate_mobile",
       created_by_user_id: 1,
@@ -813,13 +813,14 @@ describe("Presenze pages", () => {
 
     fireEvent.change(screen.getByLabelText("Nome squadra"), { target: { value: "Squadra Sud" } });
     fireEvent.change(screen.getByLabelText("Codice"), { target: { value: "SUD" } });
+    fireEvent.change(screen.getByLabelText("Area personale"), { target: { value: "IMPIANTI" } });
     fireEvent.click(screen.getByText("Crea squadra"));
 
     await waitFor(() => {
       expect(mocks.createGatePresenzeTeam).toHaveBeenCalledWith("token", {
         name: "Squadra Sud",
         code: "SUD",
-        scope: "presenze",
+        personnel_area: "IMPIANTI",
         active: true,
       });
     });
@@ -868,7 +869,7 @@ describe("Presenze pages", () => {
         id: "team-fallback",
         name: "Squadra fallback",
         code: null,
-        scope: "presenze",
+        personnel_area: "AGRARIO",
         active: false,
         created_from_channel: "gate_mobile",
         created_by_user_id: 1,
@@ -912,7 +913,7 @@ describe("Presenze pages", () => {
       id: "team-fallback",
       name: "Squadra fallback",
       code: null,
-      scope: "presenze",
+      personnel_area: "AGRARIO",
       active: true,
       created_from_channel: "gate_mobile",
       created_by_user_id: 1,
@@ -928,7 +929,7 @@ describe("Presenze pages", () => {
     fireEvent.change(screen.getByLabelText("Cerca squadra"), { target: { value: "non-presente" } });
     expect(screen.getByText("Nessuna squadra trovata.")).toBeInTheDocument();
     fireEvent.click(screen.getByText("X"));
-    expect(screen.getByText("Codice n/d · Scope presenze")).toBeInTheDocument();
+    expect(screen.getByText("Codice n/d · Area AGRARIO")).toBeInTheDocument();
     expect(screen.getByText("collab-x")).toBeInTheDocument();
     expect(screen.getByText("Matricola n/d · ruolo substitute")).toBeInTheDocument();
     expect(screen.getByText("99")).toBeInTheDocument();
@@ -1020,7 +1021,7 @@ describe("Presenze pages", () => {
       id: "team-no-code",
       name: "Squadra senza codice",
       code: null,
-      scope: "presenze",
+      personnel_area: "AGRARIO",
       active: true,
       created_from_channel: "gate_mobile",
       created_by_user_id: 1,
@@ -1041,7 +1042,7 @@ describe("Presenze pages", () => {
       expect(mocks.createGatePresenzeTeam).toHaveBeenCalledWith("token", {
         name: "Squadra senza codice",
         code: null,
-        scope: "presenze",
+        personnel_area: "AGRARIO",
         active: true,
       });
     });
@@ -1260,7 +1261,7 @@ describe("Presenze pages", () => {
         id: "team-a",
         name: "Squadra A",
         code: "A",
-        scope: "presenze",
+        personnel_area: "AGRARIO",
         active: true,
         created_from_channel: "gate_mobile",
         created_by_user_id: 1,
@@ -1273,7 +1274,7 @@ describe("Presenze pages", () => {
         id: "team-b",
         name: "Squadra B",
         code: "B",
-        scope: "presenze",
+        personnel_area: "AGRARIO",
         active: true,
         created_from_channel: "gate_mobile",
         created_by_user_id: 1,
@@ -1287,7 +1288,7 @@ describe("Presenze pages", () => {
       id: "team-a",
       name: "Squadra A",
       code: "A",
-      scope: "presenze",
+      personnel_area: "AGRARIO",
       active: false,
       created_from_channel: "gate_mobile",
       created_by_user_id: 1,

@@ -150,6 +150,8 @@ GATE operator.gaia_user_id
 
 GATE non usa nome, username, email o matricola come fallback autorizzativo. Un mapping assente, duplicato o incoerente deve fallire chiuso. Un valore numerico uguale in `gaia_user_id` ed `employee_code` non dimostra alcuna relazione.
 
+Ogni operatore e ogni squadra trasporta inoltre `personnel_area=AGRARIO|IMPIANTI`, indipendente dai domini applicativi GAIA/TETI. Lo snapshot squadre non pubblica piu `scope`; membership e supervisor espongono `gaia_user_id` come unica identita personale canonica. Per una squadra nata in GATE, GAIA persiste il `team_id` esterno e lo ripubblica, cosi snapshot e retry riconciliano la stessa entita senza matching per nome.
+
 ## 6. Permessi
 
 Permessi minimi lato GAIA:
@@ -417,6 +419,8 @@ Operazioni ammesse:
 - creare o aggiornare squadra;
 - assegnare collaboratori a squadra;
 - assegnare capi settore/operatori a squadra.
+
+Le modifiche squadra usano `propose_team_create`, `propose_team_change`, `propose_team_membership` e `propose_team_supervisor`. Ogni payload contiene il `gaia_user_id` dell'autore e `team.personnel_area`; membri e responsabili vengono risolti esclusivamente dai rispettivi `gaia_user_id`. Membership e supervisor sono sostituzioni integrali idempotenti dell'assegnazione corrente.
 
 Ogni scrittura deve salvare:
 

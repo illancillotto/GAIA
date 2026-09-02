@@ -331,6 +331,8 @@ Un `application_user_id` puo essere associato al piu a un collaboratore attivo n
 
 Per l'integrazione GATE, `application_user_id` e `gaia_user_id` rappresentano la stessa identita applicativa: il primo e la foreign key interna, il secondo e il nome del campo nel contratto. `PresenzeCollaborator.id`/`collaborator_id` resta la chiave tecnica dei record Presenze e `employee_code` resta la matricola. Questi namespace non sono intercambiabili. Lo scope di responsabili e squadre non usa fallback tramite username, email, nome o matricola; mapping mancanti o ambigui falliscono chiusi.
 
+Il backfill canonico usa `backend/scripts/backfill_presenze_canonical_identities.py` e un manifest `version=1`. Ogni persona dichiara obbligatoriamente `gaia_user_id` e `personnel_area` (`AGRARIO` o `IMPIANTI`); il vero `presenze_collaborator_id` e opzionale e va indicato solo quando la relazione e stata verificata fuori dal processo. Il comando non accetta nome, username, email o matricola, valida l'intero manifest prima delle scritture e applica area, mapping, giornaliere, riepiloghi e audit in una sola transazione. Il default e dry-run; `--apply` abilita la scrittura.
+
 ## 6. Endpoint GAIA proposti
 
 Tutti sotto prefisso `/presenze` incluso da `backend/app/api/router.py`.

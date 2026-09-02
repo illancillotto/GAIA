@@ -3,7 +3,17 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Uuid, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Uuid,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -11,6 +21,12 @@ from app.core.database import Base
 
 class WCOperator(Base):
     __tablename__ = "wc_operator"
+    __table_args__ = (
+        CheckConstraint(
+            "personnel_area IS NULL OR personnel_area IN ('AGRARIO', 'IMPIANTI')",
+            name="ck_wc_operator_personnel_area",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     wc_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False, index=True)
@@ -25,6 +41,7 @@ class WCOperator(Base):
     gate_mobile_console_role: Mapped[str | None] = mapped_column(String(50), nullable=True)
     gate_mobile_console_pages: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     domains: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    personnel_area: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
     gaia_user_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("application_users.id"), nullable=True, index=True
     )

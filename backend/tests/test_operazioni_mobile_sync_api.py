@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import base64
+import os
 import sys
 import types
-import os
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from uuid import uuid4
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -33,14 +32,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.core.database import Base, get_db
 from app.core.config import settings
+from app.core.database import Base, get_db
 from app.core.security import hash_password
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.catasto_phase1 import CatDeliveryPoint, CatMeterReading
-from app.modules.operazioni.routes import mobile_sync as mobile_sync_routes
-from app.modules.operazioni.routes import mobile_gateway_sync as mobile_gateway_sync_routes
 from app.modules.operazioni.models.activities import ActivityCatalog, OperatorActivity
 from app.modules.operazioni.models.attachments import Attachment
 from app.modules.operazioni.models.gate_mobile_sync_run import GateMobileSyncRun
@@ -55,10 +52,11 @@ from app.modules.operazioni.models.reports import (
 )
 from app.modules.operazioni.models.vehicles import Vehicle, VehicleAssignment
 from app.modules.operazioni.models.wc_operator import WCOperator
+from app.modules.operazioni.routes import mobile_gateway_sync as mobile_gateway_sync_routes
+from app.modules.operazioni.routes import mobile_sync as mobile_sync_routes
 from app.modules.presenze.models import PresenzeCollaborator, PresenzeDailyRecord
 from app.services import gate_mobile_sync as gate_mobile_sync_service
 from app.services.gate_mobile_sync import GateMobileSyncExecutionResult, GateMobileSyncReport
-
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
 engine = create_engine(
@@ -142,6 +140,7 @@ def _seed_mobile_operator(db: Session) -> tuple[WCOperator, ApplicationUser]:
         enabled=True,
         gate_mobile_console_enabled=True,
         gate_mobile_console_role="console_admin",
+        personnel_area="AGRARIO",
         gaia_user_id=gaia_user.id,
         wc_synced_at=datetime.now(UTC),
     )
@@ -159,6 +158,7 @@ def test_gate_mobile_operator_push_payload_includes_console_permissions() -> Non
 
     assert payload["operators"][0]["gate_mobile_console_enabled"] is True
     assert payload["operators"][0]["gate_mobile_console_role"] == "console_admin"
+    assert payload["operators"][0]["personnel_area"] == "AGRARIO"
     db.close()
 
 

@@ -28,6 +28,30 @@ def apply_collaborator_mapping(
     application_user_id: int | None,
     changed_by: ApplicationUser,
     reason: str,
+    source: str = "api",
+) -> bool:
+    changed = stage_collaborator_mapping(
+        db,
+        collaborator=collaborator,
+        application_user_id=application_user_id,
+        changed_by=changed_by,
+        reason=reason,
+        source=source,
+    )
+    if not changed:
+        return False
+    commit_staged_collaborator_mappings(db)
+    return True
+
+
+def stage_collaborator_mapping(
+    db: Session,
+    *,
+    collaborator: PresenzeCollaborator,
+    application_user_id: int | None,
+    changed_by: ApplicationUser,
+    reason: str,
+    source: str,
 ) -> bool:
     previous_user_id = collaborator.application_user_id
     if previous_user_id == application_user_id:
@@ -47,7 +71,7 @@ def apply_collaborator_mapping(
             changed_by_user_id=changed_by.id,
             changed_by_username=changed_by.username,
             action=_mapping_action(previous_user_id, application_user_id),
-            source="api",
+            source=source,
             reason=reason.strip(),
         )
     )
@@ -57,6 +81,10 @@ def apply_collaborator_mapping(
     db.query(PresenzeEventSummary).filter(PresenzeEventSummary.collaborator_id == collaborator.id).update(
         {"application_user_id": application_user_id}
     )
+    return True
+
+
+def commit_staged_collaborator_mappings(db: Session) -> None:
     try:
         db.commit()
     except IntegrityError as exc:
@@ -64,7 +92,6 @@ def apply_collaborator_mapping(
         if _is_mapping_unique_violation(exc):
             raise CollaboratorMappingConflictError from exc
         raise
-    return True
 
 
 def list_collaborator_mapping_audit(

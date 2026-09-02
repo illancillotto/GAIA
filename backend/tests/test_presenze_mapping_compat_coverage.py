@@ -27,6 +27,9 @@ def test_presenze_models_legacy_aliases_and_unknown_attribute() -> None:
     missing_name = "MissingAlias"
     with pytest.raises(AttributeError):
         getattr(presenze_models, missing_name)
+    for missing_alias in ("InazMissingAlias", "INAZ_MISSING_ALIAS"):
+        with pytest.raises(AttributeError):
+            getattr(presenze_models, missing_alias)
 
 
 def test_presenze_schemas_legacy_aliases_and_unknown_attribute() -> None:
@@ -41,6 +44,9 @@ def test_presenze_schemas_legacy_aliases_and_unknown_attribute() -> None:
     missing_name = "MissingAlias"
     with pytest.raises(AttributeError):
         getattr(presenze_schemas, missing_name)
+    missing_inaz_alias = "InazMissingAlias"
+    with pytest.raises(AttributeError):
+        getattr(presenze_schemas, missing_inaz_alias)
 
 
 def test_resolve_presenze_holiday_kind_validation_and_fallback() -> None:
@@ -107,3 +113,9 @@ def test_validate_bank_hours_delta_rules() -> None:
     presenze_schemas._validate_bank_hours_delta("credit", 30)
     presenze_schemas._validate_bank_hours_delta("liquidation", -15)
     presenze_schemas._validate_bank_hours_delta("correction", -5)
+    update = presenze_schemas.PresenzeBankHoursAdjustmentUpdate(
+        kind="credit",
+        delta_minutes=30,
+    )
+    assert update.delta_minutes == 30
+    assert presenze_schemas.PresenzeBankHoursAdjustmentUpdate().delta_minutes is None

@@ -1,13 +1,14 @@
-from collections.abc import Generator
-from datetime import date, datetime, time, timedelta, timezone
-from decimal import Decimal
 import io
 import json
+import uuid
+from collections.abc import Generator
+from datetime import UTC, date, datetime, time, timedelta
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
-import uuid
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from openpyxl import Workbook, load_workbook
 from sqlalchemy import create_engine
@@ -15,42 +16,48 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.core.database import get_db
 from app.core.config import settings
+from app.core.database import get_db
 from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.accessi.org_structure import OrgStructureAssignment
+from app.modules.network.models import NetworkDevice
+from app.modules.operazioni.models.activities import ActivityCatalog, OperatorActivity
+from app.modules.operazioni.models.reports import (
+    FieldReport,
+    FieldReportCategory,
+    FieldReportSeverity,
+    InternalCase,
+)
+from app.modules.operazioni.models.vehicles import Vehicle, VehicleAssignment, VehicleUsageSession
 from app.modules.organigramma.models import OrgAssignment, OrgUnit, OrgVisibilityOverride
 from app.modules.presenze.mapping_audit import PresenzeCollaboratorMappingAudit
 from app.modules.presenze.models import (
     OrganizationTeam,
     OrganizationTeamMembership,
     OrganizationTeamSupervisorAssignment,
-    PresenzeCollaborator,
     PresenzeBankHoursGuidanceConfigRevision,
-    PresenzeEventSummary,
+    PresenzeCollaborator,
     PresenzeCollaboratorScheduleAssignment,
     PresenzeCredential,
     PresenzeDailyPunch,
     PresenzeDailyRecord,
+    PresenzeEventSummary,
     PresenzeScheduleRule,
     PresenzeScheduleTemplate,
     PresenzeSyncJob,
 )
-from app.modules.presenze.services.xlsm_export import close_workbook_resources
-from app.modules.network.models import NetworkDevice
-from app.modules.operazioni.models.activities import ActivityCatalog, OperatorActivity
-from app.modules.operazioni.models.reports import FieldReport, FieldReportCategory, FieldReportSeverity, InternalCase
-from app.modules.operazioni.models.vehicles import Vehicle, VehicleAssignment, VehicleUsageSession
+from app.modules.presenze.services import collaborator_mapping as collaborator_mapping_service
+from app.modules.presenze.services import straordinari_export_job
 from app.modules.presenze.services.import_jobs import run_import_job
 from app.modules.presenze.services.parser import load_json_payload, parse_import_payload
-from app.modules.presenze.services import straordinari_export_job
-from app.modules.presenze.services import collaborator_mapping as collaborator_mapping_service
-from app.modules.presenze.services.straordinari_export_job import build_period_end as build_straordinari_period_end
+from app.modules.presenze.services.straordinari_export_job import (
+    build_period_end as build_straordinari_period_end,
+)
 from app.modules.presenze.services.straordinari_export_job import previous_month_period_start
-
+from app.modules.presenze.services.xlsm_export import close_workbook_resources
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
@@ -187,7 +194,7 @@ def _sample_payload(employee_code: str = "1854", *, schedule_code: str = "OPESAB
       ]
     }}
   ]
-}}""".encode("utf-8")
+}}""".encode()
 
 
 def _create_template(path: Path) -> None:
@@ -1095,12 +1102,11 @@ def test_presenze_can_map_collaborator_to_application_user() -> None:
     )
     token = _login(admin.username)
 
-    imported = client.post(
+    client.post(
         "/presenze/import/json",
         headers={"Authorization": f"Bearer {token}"},
         files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
     )
-    collaborator_id = imported.json()["preview"]["collaborators"][0]["employee_code"]
     collaborators = client.get("/presenze/collaborators", headers={"Authorization": f"Bearer {token}"})
     collab_id = collaborators.json()["items"][0]["id"]
 
@@ -1638,8 +1644,8 @@ def test_me_operazioni_and_assets_are_scoped_to_current_user() -> None:
             operator_user_id=viewer.id,
             vehicle_id=vehicle.id,
             status="submitted",
-            started_at=datetime(2026, 6, 5, 8, 0, tzinfo=timezone.utc),
-            ended_at=datetime(2026, 6, 5, 10, 0, tzinfo=timezone.utc),
+            started_at=datetime(2026, 6, 5, 8, 0, tzinfo=UTC),
+            ended_at=datetime(2026, 6, 5, 10, 0, tzinfo=UTC),
             duration_minutes_calculated=120,
             text_note="Sopralluogo canale nord",
         )
@@ -1647,7 +1653,7 @@ def test_me_operazioni_and_assets_are_scoped_to_current_user() -> None:
             activity_catalog_id=activity_catalog.id,
             operator_user_id=other_viewer.id,
             status="submitted",
-            started_at=datetime(2026, 6, 5, 11, 0, tzinfo=timezone.utc),
+            started_at=datetime(2026, 6, 5, 11, 0, tzinfo=UTC),
             duration_minutes_calculated=45,
         )
         db.add_all([own_activity, other_activity])
@@ -1698,8 +1704,8 @@ def test_me_operazioni_and_assets_are_scoped_to_current_user() -> None:
             vehicle_id=vehicle.id,
             started_by_user_id=viewer.id,
             actual_driver_user_id=viewer.id,
-            started_at=datetime(2026, 6, 5, 7, 30, tzinfo=timezone.utc),
-            ended_at=datetime(2026, 6, 5, 10, 30, tzinfo=timezone.utc),
+            started_at=datetime(2026, 6, 5, 7, 30, tzinfo=UTC),
+            ended_at=datetime(2026, 6, 5, 10, 30, tzinfo=UTC),
             start_odometer_km=Decimal("1000.000"),
             end_odometer_km=Decimal("1018.500"),
             route_distance_km=Decimal("18.500"),
@@ -1710,8 +1716,8 @@ def test_me_operazioni_and_assets_are_scoped_to_current_user() -> None:
             vehicle_id=vehicle.id,
             started_by_user_id=other_viewer.id,
             actual_driver_user_id=other_viewer.id,
-            started_at=datetime(2026, 6, 5, 12, 0, tzinfo=timezone.utc),
-            ended_at=datetime(2026, 6, 5, 13, 0, tzinfo=timezone.utc),
+            started_at=datetime(2026, 6, 5, 12, 0, tzinfo=UTC),
+            ended_at=datetime(2026, 6, 5, 13, 0, tzinfo=UTC),
             start_odometer_km=Decimal("1018.500"),
             end_odometer_km=Decimal("1024.000"),
             route_distance_km=Decimal("5.500"),
@@ -1725,7 +1731,7 @@ def test_me_operazioni_and_assets_are_scoped_to_current_user() -> None:
             assignment_target_type="user",
             operator_user_id=viewer.id,
             assigned_by_user_id=viewer.id,
-            start_at=datetime(2026, 6, 1, 8, 0, tzinfo=timezone.utc),
+            start_at=datetime(2026, 6, 1, 8, 0, tzinfo=UTC),
             notes="Assegnazione stagionale",
         )
         db.add(own_assignment)
@@ -1737,14 +1743,14 @@ def test_me_operazioni_and_assets_are_scoped_to_current_user() -> None:
             display_name="Tablet squadra",
             lifecycle_state="active",
             status="online",
-            last_seen_at=datetime(2026, 6, 5, 18, 0, tzinfo=timezone.utc),
+            last_seen_at=datetime(2026, 6, 5, 18, 0, tzinfo=UTC),
         )
         other_device = NetworkDevice(
             assigned_user_id=other_viewer.id,
             ip_address="192.168.1.211",
             lifecycle_state="active",
             status="online",
-            last_seen_at=datetime(2026, 6, 5, 18, 5, tzinfo=timezone.utc),
+            last_seen_at=datetime(2026, 6, 5, 18, 5, tzinfo=UTC),
         )
         db.add_all([own_device, other_device])
         db.commit()
@@ -3332,7 +3338,6 @@ def test_presenze_supervisor_can_validate_assigned_records_but_not_edit_operatio
 def test_presenze_canonical_hierarchy_manager_sees_mapped_subordinate_records() -> None:
     owner = _create_user("hierarchy_owner", role=ApplicationUserRole.VIEWER.value)
     manager = _create_user("hierarchy_manager", role=ApplicationUserRole.VIEWER.value)
-    owner_token = _login(owner.username)
     manager_token = _login(manager.username)
 
     db = TestingSessionLocal()
@@ -4504,7 +4509,7 @@ def test_gate_presenze_team_workflow_creates_membership_and_supervisor() -> None
     create_response = client.post(
         "/gate/presenze/teams",
         headers={"Authorization": f"Bearer {token}"},
-        json={"name": "Squadra Nord", "code": "NORD", "scope": "presenze"},
+        json={"name": "Squadra Nord", "code": "NORD", "personnel_area": "AGRARIO"},
     )
     assert create_response.status_code == 200
     team_payload = create_response.json()
@@ -4565,7 +4570,7 @@ def test_gate_presenze_team_visibility_is_limited_to_assigned_supervisor() -> No
     team_response = client.post(
         "/gate/presenze/teams",
         headers={"Authorization": f"Bearer {admin_token}"},
-        json={"name": "Squadra Visibile", "code": "VISIBLE"},
+        json={"name": "Squadra Visibile", "code": "VISIBLE", "personnel_area": "AGRARIO"},
     )
     assert team_response.status_code == 200
     team_id = team_response.json()["id"]
@@ -4607,12 +4612,12 @@ def test_gate_presenze_team_membership_rejects_overlapping_team_assignment() -> 
     first_team = client.post(
         "/gate/presenze/teams",
         headers={"Authorization": f"Bearer {token}"},
-        json={"name": "Squadra A", "code": "A"},
+        json={"name": "Squadra A", "code": "A", "personnel_area": "AGRARIO"},
     )
     second_team = client.post(
         "/gate/presenze/teams",
         headers={"Authorization": f"Bearer {token}"},
-        json={"name": "Squadra B", "code": "B"},
+        json={"name": "Squadra B", "code": "B", "personnel_area": "AGRARIO"},
     )
     assert first_team.status_code == 200
     assert second_team.status_code == 200
@@ -4648,7 +4653,7 @@ def test_gate_presenze_team_management_requires_admin_or_hr() -> None:
     response = client.post(
         "/gate/presenze/teams",
         headers={"Authorization": f"Bearer {token}"},
-        json={"name": "Squadra Non Autorizzata"},
+        json={"name": "Squadra Non Autorizzata", "personnel_area": "AGRARIO"},
     )
     assert response.status_code == 403
 
@@ -4660,12 +4665,12 @@ def test_gate_presenze_team_update_and_filters() -> None:
     first = client.post(
         "/gate/presenze/teams",
         headers={"Authorization": f"Bearer {token}"},
-        json={"name": "Squadra Filtro A", "code": "FILTER-A", "scope": "presenze"},
+        json={"name": "Squadra Filtro A", "code": "FILTER-A", "personnel_area": "AGRARIO"},
     )
     second = client.post(
         "/gate/presenze/teams",
         headers={"Authorization": f"Bearer {token}"},
-        json={"name": "Squadra Filtro B", "code": "FILTER-B", "scope": "gate"},
+        json={"name": "Squadra Filtro B", "code": "FILTER-B", "personnel_area": "IMPIANTI"},
     )
     assert first.status_code == 200
     assert second.status_code == 200
@@ -4673,20 +4678,28 @@ def test_gate_presenze_team_update_and_filters() -> None:
     update = client.put(
         f"/gate/presenze/teams/{second.json()['id']}",
         headers={"Authorization": f"Bearer {token}"},
-        json={"name": "Squadra Filtro B aggiornata", "code": None, "scope": "global", "active": False},
+        json={"name": "Squadra Filtro B aggiornata", "code": None, "personnel_area": "AGRARIO", "active": False},
     )
     assert update.status_code == 200
     assert update.json()["name"] == "Squadra Filtro B aggiornata"
     assert update.json()["code"] is None
-    assert update.json()["scope"] == "global"
+    assert update.json()["personnel_area"] == "AGRARIO"
     assert update.json()["active"] is False
 
-    scope_filtered = client.get(
-        "/gate/presenze/teams?scope=presenze",
+    unchanged = client.put(
+        f"/gate/presenze/teams/{second.json()['id']}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={},
+    )
+    assert unchanged.status_code == 200
+    assert unchanged.json()["name"] == "Squadra Filtro B aggiornata"
+
+    area_filtered = client.get(
+        "/gate/presenze/teams?personnel_area=AGRARIO",
         headers={"Authorization": f"Bearer {token}"},
     )
-    assert scope_filtered.status_code == 200
-    assert [team["code"] for team in scope_filtered.json()] == ["FILTER-A"]
+    assert area_filtered.status_code == 200
+    assert [team["code"] for team in area_filtered.json()] == ["FILTER-A", None]
 
     active_filtered = client.get(
         "/gate/presenze/teams?active=false",
@@ -4714,7 +4727,7 @@ def test_gate_presenze_team_errors_are_explicit() -> None:
     team = client.post(
         "/gate/presenze/teams",
         headers={"Authorization": f"Bearer {token}"},
-        json={"name": "Squadra Errori", "code": "ERR"},
+        json={"name": "Squadra Errori", "code": "ERR", "personnel_area": "AGRARIO"},
     )
     assert team.status_code == 200
     team_id = team.json()["id"]
@@ -4765,7 +4778,7 @@ def test_gate_presenze_team_membership_allows_non_overlapping_periods_but_reject
     team = client.post(
         "/gate/presenze/teams",
         headers={"Authorization": f"Bearer {token}"},
-        json={"name": "Squadra Periodi", "code": "PERIODI"},
+        json={"name": "Squadra Periodi", "code": "PERIODI", "personnel_area": "AGRARIO"},
     )
     assert team.status_code == 200
     team_id = team.json()["id"]
@@ -4858,7 +4871,7 @@ def test_gate_presenze_daily_records_follow_team_visibility_and_month_contract()
     team = client.post(
         "/gate/presenze/teams",
         headers={"Authorization": f"Bearer {admin_token}"},
-        json={"name": "Squadra Giornaliere", "code": "GATE-DAY"},
+        json={"name": "Squadra Giornaliere", "code": "GATE-DAY", "personnel_area": "AGRARIO"},
     )
     assert team.status_code == 200
     team_id = team.json()["id"]
@@ -5071,13 +5084,13 @@ def test_gate_presenze_daily_record_edge_cases_cover_visibility_and_validation_e
 
     invalid_month = client.get("/gate/presenze/giornaliere?month=bad", headers={"Authorization": f"Bearer {admin_token}"})
     assert invalid_month.status_code == 422
-    with pytest.raises(Exception):
+    with pytest.raises(HTTPException):
         gate_router._month_period("bad")
 
     empty_team = client.post(
         "/gate/presenze/teams",
         headers={"Authorization": f"Bearer {admin_token}"},
-        json={"name": "Squadra Vuota", "code": "EMPTY"},
+        json={"name": "Squadra Vuota", "code": "EMPTY", "personnel_area": "AGRARIO"},
     )
     assert empty_team.status_code == 200
     empty_team_id = empty_team.json()["id"]
@@ -5145,7 +5158,7 @@ def test_gate_presenze_analysis_helper_covers_blocking_and_operational_review() 
     blocking = gate_router._gate_record_analysis_from_serialized(
         record,
         SimpleNamespace(
-            operational_status="blocking",
+            operational_status="in_analysis",
             operational_missing_minutes=15,
             effective_extra_minutes=240,
             detail_error="errore",
@@ -5155,6 +5168,8 @@ def test_gate_presenze_analysis_helper_covers_blocking_and_operational_review() 
     assert blocking.severity == "blocking"
     assert blocking.status == "correggere_subito"
     assert "missing_or_blocking_time" in blocking.reasons
+    assert "operational_review" in blocking.reasons
+    assert gate_router._gate_audit_entries(record) == []
 
     review = gate_router._gate_record_analysis_from_serialized(
         record,
