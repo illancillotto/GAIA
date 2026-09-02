@@ -834,7 +834,7 @@ def test_presenze_team_pending_actions_are_canonical_idempotent_and_reconciliabl
             password_hash="hash",
             role=ApplicationUserRole.REVIEWER.value,
             is_active=True,
-            module_presenze=True,
+            module_presenze=False,
         )
         member = ApplicationUser(
             id=238,
@@ -2120,6 +2120,45 @@ def test_execute_gate_mobile_sync_records_failure_run() -> None:
         assert run_row.status == "failed"
         assert run_row.error_kind == "http_status_error"
         assert "status=503" in (run_row.error_message or "")
+    finally:
+        db.close()
+
+
+def test_execute_gate_mobile_sync_run_survives_task_rollback(monkeypatch) -> None:
+    db = _build_session()
+    try:
+        async def rollback_task(
+            session: Session,
+            **_kwargs,
+        ) -> gate_mobile_sync_service.GateMobileSyncReport:
+            session.rollback()
+            return gate_mobile_sync_service.GateMobileSyncReport(
+                requested_tasks=[{"type": "presenze_pending_actions"}],
+                catalogs_pushed=0,
+                operators_pushed=0,
+                worksets_pushed=0,
+            )
+
+        monkeypatch.setattr(gate_mobile_sync_service, "run_gate_mobile_sync_once", rollback_task)
+        settings = Settings(
+            _env_file=None,
+            DATABASE_URL="sqlite:///./gate-mobile-sync-test.db",
+            JWT_SECRET_KEY="test-secret",
+            GATE_MOBILE_SYNC_ENABLED="true",
+        )
+
+        result = asyncio.run(
+            execute_gate_mobile_sync(
+                db,
+                app_settings=settings,
+                trigger_source="pytest-rollback",
+            )
+        )
+
+        assert result.status == "succeeded"
+        run_row = db.query(GateMobileSyncRun).one()
+        assert run_row.status == "succeeded"
+        assert run_row.requested_tasks_count == 1
     finally:
         db.close()
 

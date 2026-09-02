@@ -590,7 +590,7 @@ async def execute_gate_mobile_sync(
         started_at=started_at,
     )
     db.add(run)
-    db.flush()
+    db.commit()
 
     if not app_settings.gate_mobile_sync_enabled:
         return _finalize_run(
@@ -823,7 +823,7 @@ def _apply_presenze_pending_action(db: Session, action: dict[str, Any]) -> dict[
 def _pending_action_payload(action: dict[str, Any]) -> dict[str, Any]:
     raw_payload = action.get("payload_json")
     if raw_payload is None:
-        raw_payload = action.get("payload") if isinstance(action.get("payload"), (dict, str)) else action
+        raw_payload = action.get("payload") if isinstance(action.get("payload"), dict | str) else action
     if isinstance(raw_payload, str):
         try:
             raw_payload = json.loads(raw_payload)
@@ -1101,12 +1101,17 @@ def _pending_action_user(db: Session, payload: dict[str, Any]) -> ApplicationUse
     user = db.get(ApplicationUser, pending_action_gaia_user_id(payload))
     if user is None or not user.is_active:
         raise ValueError("Application user not found")
-    if not user.module_presenze and not user.is_super_admin:
-        raise ValueError("Utente non abilitato al modulo Presenze")
     return user
 
+
+def _authorized_pending_action_record_id(payload: dict[str, Any], actor: ApplicationUser) -> Any:
+    if not actor.module_presenze and not actor.is_super_admin:
+        raise ValueError("Utente non abilitato al modulo Presenze")
+    return payload.get("record_id") or payload.get("daily_record_id")
+
+
 def _pending_action_record(db: Session, payload: dict[str, Any], actor: ApplicationUser) -> PresenzeDailyRecord:
-    record_id = payload.get("record_id") or payload.get("daily_record_id")
+    record_id = _authorized_pending_action_record_id(payload, actor)
     if record_id is None:
         raise ValueError("record_id mancante nella pending action")
     return _get_gate_record_or_404(db, actor, _current_pending_action_record_id(db, payload, record_id))
