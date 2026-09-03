@@ -173,6 +173,13 @@ Limite residuo:
 - la derivazione automatica resta basata su template/codici Inaz quando il profilo non e stato corretto manualmente;
 - manca ancora una fonte HR esterna affidabile per popolare o revisionare automaticamente il profilo contrattuale reale.
 
+Aggiornamento 2026-09-03:
+
+- la derivazione non dipende piu dall'assegnazione di orario: quando il template manca, il profilo si deduce dai `schedule_code` delle giornate importate, scegliendo il codice piu ricorrente cosi che un codice di sabato o di turno non prevalga su quello ordinario;
+- i prefissi coperti sono `OPE`, `OP`, `OSAB`, `ADD` e `IRR` per gli operai, `IMP` e `TELEC` per gli impiegati; un codice operaio prevale su uno impiegato, perche i turnisti del telecontrollo portano `TELEC` solo nei giorni di turno;
+- un collaboratore con `standard_daily_minutes` impostato a mano ma senza `contract_kind` non resta piu senza tipo contratto: i minuti restano quelli di HR e viene dedotto solo il tipo mancante;
+- la deduzione avviene all'import delle giornaliere, non piu solo durante l'export mensile, quindi il profilo e disponibile alle regole operative senza attendere un export.
+
 ### Frontend - esposizione ore teoriche
 
 Il frontend gia mostra il dato giornaliero di ore teoriche.

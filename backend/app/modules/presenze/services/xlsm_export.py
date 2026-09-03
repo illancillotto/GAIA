@@ -71,15 +71,32 @@ ARCHIVIO_COLUMNS = {
     "bo_usata_mese": 36,
     "bo_residue": 37,
 }
+# Prefisso del giustificativo Inaz (la parte prima di " - " in request_description)
+# verso il codice della legenda dell'export mensile. La stessa tabella e replicata in
+# GATE Mobile (apps/gateway-api/src/services/presenze-absence-codes.ts) perche la
+# console mostra nella matrice giornaliere lo stesso codice che finisce nel file.
 LEGACY_ABSENCE_CODE_BY_REQUEST_PREFIX = {
+    "ASS.SIN": "PS",
     "ASSG": "AG",
+    "DON": "DS",
+    "EXFEST": "RC",
+    "EXFEST_HH": "RC",
+    "EXFESTCOLL": "RC",
     "FERIE": "F",
     "FERIECOLL": "F",
-    "MAL": "M",
+    "INF": "I",
+    "MA7": "L.104",
     "MA7HH": "L.104",
+    "MAL": "M",
+    "MALNOI": "M",
+    "MALOSP": "M",
+    "MB5G3": "L.104",
     "P. ORD": "P",
+    "P. STR": "PST",
     "P.ORD": "P",
     "PSERV": "PS",
+    "PSIEST": "PS",
+    "PSIRSA": "PS",
     "SOSPD": "SD",
 }
 LEGACY_ABSENCE_CODE_BY_CAUSE = {

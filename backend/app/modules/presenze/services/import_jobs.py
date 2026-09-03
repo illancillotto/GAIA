@@ -20,6 +20,7 @@ from app.modules.presenze.schemas import (
     PresenzeImportPreviewCollaborator,
     PresenzeImportPreviewResponse,
 )
+from app.modules.presenze.services.contract_profile import resolve_contract_profile
 from app.modules.presenze.services.parser import (
     ParsedCollaboratorPayload,
     ParsedImportPayload,
@@ -103,6 +104,7 @@ def import_collaborator_payload(
     imported_count = 0
     skipped_count = 0
     error_count = 0
+    imported_schedule_codes: list[str | None] = []
 
     collaborator = upsert_collaborator(db, payload)
     collaborator.owner_user_id = job.requested_by_user_id
@@ -136,6 +138,7 @@ def import_collaborator_payload(
         record.owner_user_id = job.requested_by_user_id
         record.application_user_id = collaborator.application_user_id
         record.schedule_code = resolve_schedule_code(daily_row)
+        imported_schedule_codes.append(record.schedule_code)
         record.teo_minutes = resolve_teo_minutes(daily_row)
         record.ordinary_minutes = resolve_ordinary_minutes(daily_row)
         record.absence_minutes = resolve_absence_minutes(daily_row)
@@ -209,6 +212,17 @@ def import_collaborator_payload(
                 source_job_id=job.id,
             )
         )
+
+    # Senza assegnazione di orario il profilo resterebbe vuoto e il collaboratore
+    # verrebbe valutato con le regole non operaio: lo si deduce dai codici importati.
+    profile = resolve_contract_profile(
+        collaborator.contract_kind,
+        collaborator.standard_daily_minutes,
+        schedule_codes=imported_schedule_codes,
+    )
+    collaborator.contract_kind = profile.contract_kind
+    collaborator.standard_daily_minutes = profile.standard_daily_minutes
+    db.add(collaborator)
 
     job.records_imported += imported_count
     job.records_skipped += skipped_count

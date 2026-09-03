@@ -131,6 +131,7 @@ def generate_xlsm_export(
             collaborator.contract_kind,
             collaborator.standard_daily_minutes,
             template_code=template_codes_by_collaborator.get(collaborator.id),
+            schedule_codes=[row.schedule_code for row in collaborator_daily_rows],
         )
         collaborator.contract_kind = profile.contract_kind
         collaborator.standard_daily_minutes = profile.standard_daily_minutes

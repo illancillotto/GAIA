@@ -301,7 +301,7 @@ def test_presenze_collaborator_contract_profile_infers_from_template_and_allows_
     import_response = client.post(
         "/presenze/import/json",
         headers={"Authorization": f"Bearer {token}"},
-        files={"file": ("giornaliere.json", _sample_payload(schedule_code="OPESAB"), "application/json")},
+        files={"file": ("giornaliere.json", _sample_payload(schedule_code="FESTIVO"), "application/json")},
     )
     assert import_response.status_code == 200
 
@@ -309,6 +309,7 @@ def test_presenze_collaborator_contract_profile_infers_from_template_and_allows_
     assert collaborators_response.status_code == 200
     collaborator = collaborators_response.json()["items"][0]
     collaborator_id = collaborator["id"]
+    # FESTIVO e un codice di calendario: non dice il contratto, quindi resta il template a deciderlo.
     assert collaborator["contract_kind"] is None
     assert collaborator["standard_daily_minutes"] is None
 
@@ -360,6 +361,25 @@ def test_presenze_collaborator_contract_profile_infers_from_template_and_allows_
     assert summary_response.json()["collaborator"]["contract_kind"] == "operaio"
     assert summary_response.json()["collaborator"]["operai_group"] == "agrario"
     assert summary_response.json()["collaborator"]["standard_daily_minutes"] == 420
+
+
+def test_presenze_import_derives_the_contract_profile_from_the_daily_schedule_codes() -> None:
+    admin = _create_user("contract_profile_no_template_admin")
+    token = _login(admin.username)
+
+    import_response = client.post(
+        "/presenze/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(schedule_code="OPESAB"), "application/json")},
+    )
+    assert import_response.status_code == 200
+
+    collaborators_response = client.get("/presenze/collaborators", headers={"Authorization": f"Bearer {token}"})
+    assert collaborators_response.status_code == 200
+    collaborator = collaborators_response.json()["items"][0]
+    # Nessuna assegnazione di orario: il profilo arriva dal codice della giornata.
+    assert collaborator["contract_kind"] == "operaio"
+    assert collaborator["standard_daily_minutes"] == 420
 
 
 def test_presenze_operai_rule_config_endpoints_expose_defaults_and_allow_updates() -> None:
@@ -1895,8 +1915,10 @@ def test_presenze_export_generates_xlsm(tmp_path: Path) -> None:
         assert archive2.cell(6, 5).value == "MANOVALE DI MAGAZZINO"
         assert archive2.cell(6, 6).value == "D107"
         assert archive2.cell(6, 7).value == "01/01/2000"
-        # giorno 16 => colonna 8 + 15, blocco ordinary_ferial
-        assert archive2.cell(6, 23).value == 5.5
+        # giorno 16 => colonna 8 + 15, blocco ordinary_ferial. Il codice OPESAB classifica
+        # il collaboratore come operaio, quindi le ordinarie sono i 335 minuti timbrati
+        # (06:55-12:30) e non i 05:30 dichiarati da Inaz.
+        assert archive2.cell(6, 23).value == 335 / 60
         # giorno 16 => colonna 8 + 15, blocco KM AUTO +279
         assert archive2.cell(6, 302).value == 24
         # giorno 16 => colonna 8 + 15, blocco reperibilita +467
@@ -1941,7 +1963,7 @@ def test_presenze_export_uses_operai_sheet_when_archive_history_is_missing(tmp_p
         archive2 = workbook["Archivio2"]
         assert archive2.cell(5, 1).value == "5/2026-CDNMRC80A01H501Z"
         assert archive2.cell(5, 2).value == 120
-        assert archive2.cell(5, 3).value == "PERSONALE_maggio-2026"
+        assert archive2.cell(5, 3).value == "OPERAI_maggio-2026"
         assert archive2.cell(5, 4).value == "CADONI MARCO"
         assert archive2.cell(5, 5).value == "ESCAVATORISTA"
         assert archive2.cell(5, 6).value == "D116"
@@ -2489,7 +2511,7 @@ def test_presenze_export_leaves_metadata_empty_when_missing_in_archive_and_opera
         archive2 = workbook["Archivio2"]
         assert archive2.cell(5, 1).value == "5/2026-120"
         assert archive2.cell(5, 2).value == 120
-        assert archive2.cell(5, 3).value == "PERSONALE_maggio-2026"
+        assert archive2.cell(5, 3).value == "OPERAI_maggio-2026"
         assert archive2.cell(5, 4).value == "CADONI MARCO"
         assert archive2.cell(5, 5).value is None
         assert archive2.cell(5, 6).value is None
