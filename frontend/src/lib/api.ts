@@ -70,6 +70,8 @@ import type {
   CapacitasDomandeIrrigueSyncJob,
   CapacitasDomandeIrrigueSyncJobCreateInput,
   CapacitasInCassSyncJob,
+  CapacitasInCassSyncJobListItem,
+  CapacitasInCassSyncJobListParams,
   CapacitasInCassRuoloHarvestInput,
   CapacitasInCassRuoloHarvestResult,
   CapacitasInCassSyncJobCreateInput,
@@ -5135,8 +5137,19 @@ export async function createCapacitasInCassRuoloHarvest(
   });
 }
 
-export async function listCapacitasInCassSyncJobs(token: string): Promise<CapacitasInCassSyncJob[]> {
-  return request<CapacitasInCassSyncJob[]>("/elaborazioni/capacitas/incass/avvisi/jobs", {
+export async function listCapacitasInCassSyncJobs(
+  token: string,
+  params: CapacitasInCassSyncJobListParams = {},
+): Promise<CapacitasInCassSyncJobListItem[]> {
+  const query = new URLSearchParams();
+  if (params.limit != null) {
+    query.set("limit", String(params.limit));
+  }
+  if (params.status) {
+    query.set("status", params.status);
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<CapacitasInCassSyncJobListItem[]>(`/elaborazioni/capacitas/incass/avvisi/jobs${suffix}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },

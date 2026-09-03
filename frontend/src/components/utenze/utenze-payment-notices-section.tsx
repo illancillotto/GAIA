@@ -13,7 +13,7 @@ import { createCapacitasInCassSyncJob, getUtenzeSubjectPaymentNotices, listCapac
 import { isCapacitasInCassActiveJobStatus } from "@/lib/capacitas-incass-job-visibility";
 import { buildNoticeResidualNotes, extractNoticeDetailFields, extractNoticeRateDetails } from "@/lib/utenze-payment-notice-detail";
 import { buildPaymentNoticeSummary, getPaymentNoticeStatus, parseNoticeAmount } from "@/lib/utenze-payment-notices-summary";
-import type { AnagraficaPaymentNotice, CapacitasInCassSyncJob } from "@/types/api";
+import type { AnagraficaPaymentNotice, CapacitasInCassSyncJobListItem } from "@/types/api";
 
 type Props = {
   subjectId: string;
@@ -61,7 +61,7 @@ function shouldIgnorePaymentNoticesError(message: string): boolean {
   return message.includes("403") || message.includes("Module access");
 }
 
-function buildIncassTerminalMessage(job: CapacitasInCassSyncJob): string {
+function buildIncassTerminalMessage(job: CapacitasInCassSyncJobListItem): string {
   if (job.status === "succeeded") {
     return `Sync inCASS #${job.id} completata. Avvisi aggiornati automaticamente.`;
   }

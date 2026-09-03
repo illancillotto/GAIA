@@ -4583,6 +4583,10 @@ export type CapacitasInCassSyncJobResult = {
   mailing_contacts_synced?: number;
   mailing_shipments_synced?: number;
   mailing_receipts_downloaded?: number;
+  /** Lunghezza reale di `items` prima dell'eventuale troncamento nella lista. */
+  total_items?: number;
+  /** Presente e `true` quando `items` è stato troncato nella risposta di lista. */
+  items_truncated?: boolean;
 };
 
 export type CapacitasInCassSyncJob = {
@@ -4598,6 +4602,31 @@ export type CapacitasInCassSyncJob = {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+/**
+ * Riga della lista job avvisi inCASS: `GET .../incass/avvisi/jobs`.
+ * Non include `payload_json` e ha `result_json` alleggerito (array `items` troncato,
+ * con `total_items`). Per il payload completo usare `getCapacitasInCassSyncJob`.
+ */
+export type CapacitasInCassSyncJobListItem = {
+  id: number;
+  credential_id: number | null;
+  requested_by_user_id: number | null;
+  status: string;
+  mode: string;
+  subject_count: number | null;
+  result_json: CapacitasInCassSyncJobResult | Record<string, unknown> | unknown[] | null;
+  error_detail: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CapacitasInCassSyncJobListParams = {
+  limit?: number;
+  status?: "active" | "terminal" | (string & {});
 };
 
 export type CatastoSingleVisuraPayload = import("./catasto-elaborazioni").CatastoSingleVisuraPayload;

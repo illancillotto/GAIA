@@ -23,6 +23,7 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasInCassRuoloHarvestRequest,
     CapacitasInCassRuoloHarvestResponse,
     CapacitasInCassSyncJobCreateRequest,
+    CapacitasInCassSyncJobListItemOut,
     CapacitasInCassSyncJobOut,
     CapacitasLookupOption,
     CapacitasParticelleSyncJobCreateRequest,
@@ -62,6 +63,8 @@ from app.services.elaborazioni_capacitas_anagrafica_history import (
     serialize_anagrafica_history_job,
 )
 from app.services.elaborazioni_capacitas_incass import (
+    ACTIVE_JOB_STATUSES as INCASS_ACTIVE_JOB_STATUSES,
+    TERMINAL_JOB_STATUSES as INCASS_TERMINAL_JOB_STATUSES,
     create_incass_ruolo_harvest_jobs,
     create_incass_sync_job,
     delete_incass_sync_job,
@@ -69,6 +72,7 @@ from app.services.elaborazioni_capacitas_incass import (
     get_incass_sync_job,
     list_incass_sync_jobs,
     serialize_incass_sync_job,
+    serialize_incass_sync_job_list_item,
 )
 from app.services.elaborazioni_capacitas_domande_irrigue import (
     create_domande_irrigue_sync_job,
@@ -460,13 +464,27 @@ async def create_incass_ruolo_harvest_route(
     )
 
 
-@router.get("/incass/avvisi/jobs", response_model=list[CapacitasInCassSyncJobOut])
+@router.get("/incass/avvisi/jobs", response_model=list[CapacitasInCassSyncJobListItemOut])
 def list_incass_jobs_route(
     _: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
-) -> list[CapacitasInCassSyncJobOut]:
-    expire_stale_incass_sync_jobs(db)
-    return [serialize_incass_sync_job(job) for job in list_incass_sync_jobs(db)]
+    limit: int = Query(default=200, ge=1, le=1000),
+    status_filter: Annotated[str | None, Query(alias="status")] = None,
+) -> list[CapacitasInCassSyncJobListItemOut]:
+    # Endpoint di polling: risposta alleggerita (niente payload_json, items troncati)
+    # e paginata. La riconciliazione dei job "stale" resta al worker, che chiama
+    # expire_stale_incass_sync_jobs a ogni giro: qui teniamo il path in sola lettura.
+    statuses: set[str] | None = None
+    if status_filter == "active":
+        statuses = set(INCASS_ACTIVE_JOB_STATUSES)
+    elif status_filter == "terminal":
+        statuses = set(INCASS_TERMINAL_JOB_STATUSES)
+    elif status_filter:
+        statuses = {status_filter}
+    return [
+        serialize_incass_sync_job_list_item(job)
+        for job in list_incass_sync_jobs(db, limit=limit, statuses=statuses)
+    ]
 
 
 @router.get("/incass/avvisi/jobs/{job_id}", response_model=CapacitasInCassSyncJobOut)

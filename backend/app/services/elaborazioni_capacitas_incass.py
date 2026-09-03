@@ -34,6 +34,7 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasInCassRuoloHarvestResponse,
     CapacitasInCassSyncItemResult,
     CapacitasInCassSyncJobCreateRequest,
+    CapacitasInCassSyncJobListItemOut,
     CapacitasInCassSyncJobOut,
     CapacitasInCassSyncJobResult,
 )
@@ -91,8 +92,66 @@ def create_incass_sync_job(
     return job
 
 
-def list_incass_sync_jobs(db: Session) -> list[CapacitasInCassSyncJob]:
-    return list(db.scalars(select(CapacitasInCassSyncJob).order_by(CapacitasInCassSyncJob.id.desc())).all())
+INCASS_LIST_DEFAULT_LIMIT = 200
+INCASS_LIST_MAX_LIMIT = 1000
+INCASS_LIST_RECENT_ITEMS = 15
+
+
+def list_incass_sync_jobs(
+    db: Session,
+    *,
+    limit: int = INCASS_LIST_DEFAULT_LIMIT,
+    statuses: set[str] | None = None,
+) -> list[CapacitasInCassSyncJob]:
+    stmt = select(CapacitasInCassSyncJob).order_by(CapacitasInCassSyncJob.id.desc())
+    if statuses:
+        stmt = stmt.where(CapacitasInCassSyncJob.status.in_(statuses))
+    stmt = stmt.limit(max(1, min(limit, INCASS_LIST_MAX_LIMIT)))
+    return list(db.scalars(stmt).all())
+
+
+def _incass_payload_subject_count(payload_json: object) -> int | None:
+    if isinstance(payload_json, dict):
+        subject_ids = payload_json.get("subject_ids")
+        if isinstance(subject_ids, list):
+            return len(subject_ids)
+    return None
+
+
+def _slim_incass_result_json(result_json: object) -> dict | list | None:
+    """Restituisce il ``result_json`` con l'array ``items`` troncato per la lista.
+
+    Aggiunge ``total_items`` (lunghezza reale) e ``items_truncated`` così che il
+    frontend possa calcolare l'avanzamento senza ricevere l'intero payload.
+    """
+    if not isinstance(result_json, dict):
+        return result_json
+    items = result_json.get("items")
+    if not isinstance(items, list):
+        return result_json
+    slimmed = dict(result_json)
+    slimmed["total_items"] = len(items)
+    if len(items) > INCASS_LIST_RECENT_ITEMS:
+        slimmed["items"] = items[:INCASS_LIST_RECENT_ITEMS]
+        slimmed["items_truncated"] = True
+    return slimmed
+
+
+def serialize_incass_sync_job_list_item(job: CapacitasInCassSyncJob) -> CapacitasInCassSyncJobListItemOut:
+    return CapacitasInCassSyncJobListItemOut(
+        id=job.id,
+        credential_id=job.credential_id,
+        requested_by_user_id=job.requested_by_user_id,
+        status=job.status,
+        mode=job.mode,
+        subject_count=_incass_payload_subject_count(job.payload_json),
+        result_json=_slim_incass_result_json(job.result_json),
+        error_detail=job.error_detail,
+        started_at=job.started_at,
+        completed_at=job.completed_at,
+        created_at=job.created_at,
+        updated_at=job.updated_at,
+    )
 
 
 def get_incass_sync_job(db: Session, job_id: int) -> CapacitasInCassSyncJob | None:

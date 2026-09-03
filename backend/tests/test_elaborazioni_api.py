@@ -873,6 +873,70 @@ def test_capacitas_incass_jobs_crud_and_rerun() -> None:
     assert not_found_response.status_code == 404
 
 
+def test_capacitas_incass_jobs_list_is_slim_and_filterable() -> None:
+    big_items = [
+        {
+            "subject_id": f"550e8400-e29b-41d4-a716-{index:012d}",
+            "identifier": f"CF{index}",
+            "display_name": f"Soggetto {index}",
+            "status": "synced",
+            "notices_found": 1,
+            "notices_synced": 1,
+            "error": None,
+        }
+        for index in range(30)
+    ]
+    db = TestingSessionLocal()
+    try:
+        terminal_job = CapacitasInCassSyncJob(
+            status="succeeded",
+            mode="subjects_sync",
+            payload_json={"subject_ids": [item["subject_id"] for item in big_items]},
+            result_json={
+                "items": big_items,
+                "processed_subjects": 30,
+                "failed_subjects": 0,
+                "notices_found": 30,
+                "notices_synced": 30,
+            },
+        )
+        active_job = CapacitasInCassSyncJob(
+            status="processing",
+            mode="subjects_sync",
+            payload_json={"subject_ids": ["550e8400-e29b-41d4-a716-446655440000"]},
+            result_json=None,
+        )
+        pending_job = CapacitasInCassSyncJob(status="pending", mode="subjects_sync", payload_json={"subject_ids": []})
+        db.add_all([terminal_job, active_job, pending_job])
+        db.commit()
+        terminal_id = terminal_job.id
+    finally:
+        db.close()
+
+    list_response = client.get("/elaborazioni/capacitas/incass/avvisi/jobs", headers=auth_headers())
+    assert list_response.status_code == 200
+    jobs = list_response.json()
+    assert len(jobs) == 3
+    terminal_row = next(row for row in jobs if row["id"] == terminal_id)
+    assert "payload_json" not in terminal_row
+    assert terminal_row["subject_count"] == 30
+    assert terminal_row["result_json"]["total_items"] == 30
+    assert terminal_row["result_json"]["items_truncated"] is True
+    assert len(terminal_row["result_json"]["items"]) == 15
+
+    limited = client.get("/elaborazioni/capacitas/incass/avvisi/jobs?limit=2", headers=auth_headers())
+    assert limited.status_code == 200
+    assert len(limited.json()) == 2
+
+    active_only = client.get("/elaborazioni/capacitas/incass/avvisi/jobs?status=active", headers=auth_headers())
+    assert active_only.status_code == 200
+    assert {row["status"] for row in active_only.json()} == {"processing", "pending"}
+
+    terminal_only = client.get("/elaborazioni/capacitas/incass/avvisi/jobs?status=terminal", headers=auth_headers())
+    assert terminal_only.status_code == 200
+    assert [row["id"] for row in terminal_only.json()] == [terminal_id]
+
+
 def test_capacitas_incass_ruolo_harvest_creates_chunked_jobs() -> None:
     db = TestingSessionLocal()
     try:

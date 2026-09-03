@@ -43,6 +43,7 @@ import {
   buildCapacitasInCassHarvestPayload,
   buildCapacitasInCassSyncPayload,
 } from "@/lib/api/capacitas-incass-payload";
+import { usePolling } from "@/hooks/use-polling";
 import { getStoredAccessToken } from "@/lib/auth";
 import {
   getVisibleCapacitasInCassJobs,
@@ -56,7 +57,7 @@ import type {
   CapacitasCredential,
   CapacitasFrazioneCandidate,
   CapacitasInCassRuoloHarvestResult,
-  CapacitasInCassSyncJob,
+  CapacitasInCassSyncJobListItem,
   CapacitasParticellaAnomalia,
   CapacitasParticelleSyncJob,
   CapacitasRefetchCertificatiResult,
@@ -65,7 +66,13 @@ import type {
   CapacitasTerreniJob,
 } from "@/types/api";
 
-const JOB_POLL_INTERVAL_MS = 5000;
+const JOB_POLL_INTERVAL_MS = 15000;
+// Gli avvisi inCASS restano "in coda" per ore quando si lancia un harvest massivo
+// e la lista non è paginata: allunghiamo il polling e rallentiamo ancora quando
+// la coda è grande, così non saturiamo il threadpool del backend.
+const INCASS_JOB_POLL_INTERVAL_MS = 20000;
+const INCASS_JOB_POLL_INTERVAL_BUSY_MS = 45000;
+const INCASS_JOB_BUSY_THRESHOLD = 100;
 const PREVIEW_ROWS_LIMIT = 20;
 
 export type CapacitasSection = "particelle" | "storico" | "terreni" | "certificati" | "anomalie" | "incass";
@@ -503,6 +510,8 @@ function isIncassSyncJobResult(value: unknown): value is {
   unpaid_notices?: number;
   payment_status_changed?: number;
   newly_paid_notices?: number;
+  total_items?: number;
+  items_truncated?: boolean;
 } {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;
@@ -596,7 +605,7 @@ export function ElaborazioniCapacitasWorkspace({
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [historyStatusMessage, setHistoryStatusMessage] = useState<string | null>(null);
   const [historyResult, setHistoryResult] = useState<CapacitasAnagraficaHistoryImportResult | null>(null);
-  const [incassJobs, setIncassJobs] = useState<CapacitasInCassSyncJob[]>([]);
+  const [incassJobs, setIncassJobs] = useState<CapacitasInCassSyncJobListItem[]>([]);
   const [incassJobsLoading, setIncassJobsLoading] = useState(false);
   const [incassCreatingJob, setIncassCreatingJob] = useState(false);
   const [incassHarvestCreating, setIncassHarvestCreating] = useState(false);
@@ -687,45 +696,28 @@ export function ElaborazioniCapacitasWorkspace({
     setActiveSection(initialSection);
   }, [initialSection]);
 
-  useEffect(() => {
-    if (!jobsInFlight) return undefined;
+  usePolling(() => loadTerreniJobs(true), {
+    enabled: jobsInFlight,
+    intervalMs: JOB_POLL_INTERVAL_MS,
+  });
 
-    const timer = window.setInterval(() => {
-      void loadTerreniJobs(true);
-    }, JOB_POLL_INTERVAL_MS);
+  usePolling(() => loadParticelleJobs(true), {
+    enabled: particelleJobsInFlight,
+    intervalMs: JOB_POLL_INTERVAL_MS,
+  });
 
-    return () => window.clearInterval(timer);
-  }, [jobsInFlight]);
+  usePolling(() => loadHistoryJobs(true), {
+    enabled: historyJobsInFlight,
+    intervalMs: JOB_POLL_INTERVAL_MS,
+  });
 
-  useEffect(() => {
-    if (!particelleJobsInFlight) return undefined;
-
-    const timer = window.setInterval(() => {
-      void loadParticelleJobs(true);
-    }, JOB_POLL_INTERVAL_MS);
-
-    return () => window.clearInterval(timer);
-  }, [particelleJobsInFlight]);
-
-  useEffect(() => {
-    if (!historyJobsInFlight) return undefined;
-
-    const timer = window.setInterval(() => {
-      void loadHistoryJobs(true);
-    }, JOB_POLL_INTERVAL_MS);
-
-    return () => window.clearInterval(timer);
-  }, [historyJobsInFlight]);
-
-  useEffect(() => {
-    if (!incassJobsInFlight) return undefined;
-
-    const timer = window.setInterval(() => {
-      void loadIncassJobs(true);
-    }, JOB_POLL_INTERVAL_MS);
-
-    return () => window.clearInterval(timer);
-  }, [incassJobsInFlight]);
+  usePolling(() => loadIncassJobs(true), {
+    enabled: incassJobsInFlight,
+    intervalMs:
+      incassJobs.length > INCASS_JOB_BUSY_THRESHOLD
+        ? INCASS_JOB_POLL_INTERVAL_BUSY_MS
+        : INCASS_JOB_POLL_INTERVAL_MS,
+  });
 
   async function loadCredentials(): Promise<void> {
     const token = getStoredAccessToken();
@@ -921,7 +913,7 @@ export function ElaborazioniCapacitasWorkspace({
       setIncassJobsLoading(true);
     }
     try {
-      const nextJobs = await listCapacitasInCassSyncJobs(token);
+      const nextJobs = await listCapacitasInCassSyncJobs(token, { limit: 300 });
       setIncassMonitorSessionExpired(false);
       const prevInFlight = incassInFlightJobIds.current;
       const terminalStatuses = new Set(["succeeded", "completed_with_errors", "failed"]);
@@ -2792,7 +2784,7 @@ export function ElaborazioniCapacitasWorkspace({
               {visibleIncassJobs.map((job) => {
                 const result = isIncassSyncJobResult(job.result_json) ? job.result_json : null;
                 const tone = renderJobStatus(job.status);
-                const totalSubjects = result?.items.length ?? 0;
+                const totalSubjects = result?.total_items ?? result?.items.length ?? 0;
                 const progress = totalSubjects > 0 ? Math.min(100, Math.round((result!.processed_subjects / totalSubjects) * 100)) : job.status === "succeeded" ? 100 : 0;
                 const active = isCapacitasInCassActiveJobStatus(job.status);
                 return (
@@ -2902,6 +2894,11 @@ export function ElaborazioniCapacitasWorkspace({
                                 ))}
                               </tbody>
                             </table>
+                            {result.items_truncated ? (
+                              <p className="mt-2 text-xs text-gray-400">
+                                Anteprima dei primi {result.items.length} soggetti su {totalSubjects}.
+                              </p>
+                            ) : null}
                           </div>
                         ) : null}
                       </>

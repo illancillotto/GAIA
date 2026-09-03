@@ -52,7 +52,7 @@ import type {
   BonificaOristaneseCredential,
   BonificaSyncStatusResponse,
   CapacitasCredential,
-  CapacitasInCassSyncJob,
+  CapacitasInCassSyncJobListItem,
   CapacitasParticelleSyncJob,
   CapacitasParticelleSyncJobResult,
   CatastoDocument,
@@ -244,7 +244,7 @@ export default function ElaborazioniPage() {
   const [runtimeMetrics, setRuntimeMetrics] = useState<ElaborazioneRuntimeMetrics | null>(null);
   const [autoJobControls, setAutoJobControls] = useState<ElaborazioneAutoJobControl[]>([]);
   const [capacitasCredentials, setCapacitasCredentials] = useState<CapacitasCredential[]>([]);
-  const [incassJobs, setIncassJobs] = useState<CapacitasInCassSyncJob[]>([]);
+  const [incassJobs, setIncassJobs] = useState<CapacitasInCassSyncJobListItem[]>([]);
   const [particelleSyncJobs, setParticelleSyncJobs] = useState<CapacitasParticelleSyncJob[]>([]);
   const [bonificaCredentials, setBonificaCredentials] = useState<BonificaOristaneseCredential[]>([]);
   const [bonificaSyncStatus, setBonificaSyncStatus] = useState<BonificaSyncStatusResponse | null>(null);
@@ -266,10 +266,17 @@ export default function ElaborazioniPage() {
   const [previewModalRequest, setPreviewModalRequest] = useState<{ requestId: string; label: string; reference: string } | null>(null);
   const [modalState, setModalState] = useState<DashboardModalState | null>(null);
   const artifactPreviewUrlsRef = useRef<Record<string, string>>({});
+  const dashboardLoadingRef = useRef(false);
 
   const loadDashboard = useCallback(async (): Promise<void> => {
     const token = getStoredAccessToken();
     if (!token) return;
+
+    // Evita che un tick del polling (o il rientro in primo piano) impili un
+    // secondo giro di ~15 fetch mentre il precedente è ancora in corso: con la
+    // lista job Capacitas non paginata il refresh può durare secondi.
+    if (dashboardLoadingRef.current) return;
+    dashboardLoadingRef.current = true;
 
     try {
       const [
@@ -296,7 +303,7 @@ export default function ElaborazioniPage() {
         getElaborazioneRuntimeMetrics(token),
         getElaborazioneAutoJobControls(token),
         listCapacitasCredentials(token),
-        listCapacitasInCassSyncJobs(token),
+        listCapacitasInCassSyncJobs(token, { limit: 60 }),
         listCapacitasParticelleSyncJobs(token),
         listBonificaOristaneseCredentials(token),
         getBonificaSyncStatus(token),
@@ -332,6 +339,8 @@ export default function ElaborazioniPage() {
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Errore caricamento dashboard Elaborazioni");
+    } finally {
+      dashboardLoadingRef.current = false;
     }
   }, []);
 

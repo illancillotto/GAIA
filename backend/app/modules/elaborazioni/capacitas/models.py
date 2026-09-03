@@ -834,3 +834,28 @@ class CapacitasInCassSyncJobOut(BaseModel):
     completed_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class CapacitasInCassSyncJobListItemOut(BaseModel):
+    """Riga della lista job avvisi inCASS.
+
+    Rispetto a :class:`CapacitasInCassSyncJobOut` non espone ``payload_json`` (che
+    contiene fino a 100 UUID per chunk) e restituisce un ``result_json`` alleggerito
+    con l'array ``items`` troncato: la lista è un endpoint di polling e va tenuta
+    leggera. Il dettaglio completo resta su ``GET .../jobs/{id}``.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    credential_id: int | None
+    requested_by_user_id: int | None
+    status: str
+    mode: str
+    subject_count: int | None = None
+    result_json: dict | list | None
+    error_detail: str | None
+    started_at: datetime | None
+    completed_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
