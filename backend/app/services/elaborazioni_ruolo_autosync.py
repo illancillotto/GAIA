@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import UTC as UTC_TZ
+from datetime import datetime, timedelta
 from functools import wraps
 from typing import TypeVar
 from uuid import UUID
@@ -11,6 +12,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app.models.application_user import ApplicationUser
 from app.models.catasto import (
     CatastoBatch,
     CatastoBatchKind,
@@ -23,7 +25,6 @@ from app.models.catasto import (
     CatastoVisuraRequest,
     CatastoVisuraRequestStatus,
 )
-from app.models.application_user import ApplicationUser
 from app.models.elaborazioni import ElaborazioneBatch
 from app.modules.ruolo.models import RuoloParticella, RuoloPartita
 from app.schemas.catasto import (
@@ -39,8 +40,8 @@ from app.schemas.catasto import (
 from app.services.catasto_comuni import get_catasto_comuni_lookup
 from app.services.elaborazioni_autosync_dashboard import build_autosync_dashboard
 from app.services.elaborazioni_batches import (
-    BatchConflictError,
     RELEASE_REQUESTED_OPERATION,
+    BatchConflictError,
     ValidatedVisuraRow,
     create_batch_from_validated_rows,
     get_batch_requests,
@@ -60,7 +61,7 @@ from app.services.elaborazioni_perpetual_sync import (
     refresh_perpetual_sync_sources,
 )
 
-UTC = timezone.utc
+UTC = UTC_TZ
 AUTO_SYNC_RETRY_DELAY = timedelta(minutes=5)
 AUTO_SYNC_BATCH_SIZE = 20
 AUTO_SYNC_PENDING_BATCH_GRACE = timedelta(minutes=2)
@@ -317,6 +318,8 @@ def _normalize_credential_profiles(
         credential_id = UUID(str(raw_id))
         credential = _get_autosync_credential(db, user_id, credential_id)
         if credential is None or not credential.active:
+            if not profile.enabled:
+                continue
             raise ValueError("Una credenziale autosync non e disponibile o non e attiva")
         normalized[str(credential_id)] = profile.model_dump(mode="json")
     return normalized
@@ -789,7 +792,7 @@ def run_ruolo_autosync_maintenance_for_all_users(db: Session) -> int:
     for config in configs:
         try:
             batch = maintain_ruolo_autosync(db, config.user_id)
-        except Exception as exc:  # noqa: BLE001 - one user must not stop the scheduler
+        except Exception as exc:
             config.last_error_message = str(exc)
             db.add(config)
             db.commit()
@@ -811,7 +814,7 @@ def run_perpetual_sync_maintenance_for_all_users(db: Session) -> int:
     for config in configs:
         try:
             batch = maintain_ruolo_autosync(db, config.user_id)
-        except Exception as exc:  # noqa: BLE001 - one owner must not stop the planner
+        except Exception as exc:
             config.last_error_message = str(exc)
             db.add(config)
             db.commit()

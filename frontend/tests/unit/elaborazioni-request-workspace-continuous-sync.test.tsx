@@ -470,6 +470,32 @@ describe("ElaborazioneRequestWorkspace continuous sync", () => {
     ));
   });
 
+  test("drops inactive credential profiles before saving the active pool", async () => {
+    api.getStatus.mockResolvedValueOnce({
+      ...(await api.getStatus()),
+      config: {
+        ...api.config,
+        enabled: true,
+        credential_ids: ["credential-a", "credential-off"],
+        credential_profiles: {
+          "credential-a": { enabled: true, schedule_enabled: false, availability_schedule: null },
+          "credential-off": { enabled: true, schedule_enabled: false, availability_schedule: null },
+        },
+      },
+    });
+    render(<ContinuousCatastoSyncPanel />);
+
+    await screen.findByText("Sincronizzazione catastale continua");
+    expect(screen.getByText("1 di 2 selezionate")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Salva configurazione" }));
+
+    await waitFor(() => expect(api.updateConfig).toHaveBeenCalled());
+    expect(api.updateConfig.mock.calls[0][1].credential_profiles).toEqual({
+      "credential-a": { enabled: true, schedule_enabled: false, availability_schedule: null },
+      "credential-b": expect.objectContaining({ enabled: false }),
+    });
+  });
+
   test("renders active batch, subject and parcel items and disables the flow", async () => {
     api.listCampaignItems.mockImplementation((_token: string, scope: string) => Promise.resolve({
       items: scope === "ruolo_particella" ? [{ id: "parcel", scope, target_key: "parcel", priority: 10, search_mode: "immobile", comune: null, foglio: null, particella: null, subalterno: null, subject_kind: null, subject_identifier: null, intestazione: null, attempt_count: 1, next_due_at: "2026-08-29T10:00:00Z", last_error_message: null, status: "completed", linked_batch_id: null, linked_request_id: null, retry_after: null, last_enqueued_at: null, last_completed_at: null, source_updated_at: null, updated_at: "2026-08-29T10:00:00Z" }] : [],

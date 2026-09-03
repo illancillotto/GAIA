@@ -7,6 +7,12 @@ from uuid import UUID, uuid4
 
 import pandas as pd
 import pytest
+from cryptography.fernet import Fernet
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
 from app.core.database import get_db
 from app.core.security import hash_password
 from app.db.base import Base
@@ -43,15 +49,16 @@ from app.schemas.catasto import CatastoRuoloAutoSyncConfigUpdateRequest
 from app.services.catasto_credentials import get_credential_fernet
 from app.services.elaborazioni_autosync_dashboard import _as_utc, build_autosync_dashboard
 from app.services.elaborazioni_batches import (
-    BatchConflictError,
     RELEASE_REQUESTED_MESSAGE,
     RELEASE_REQUESTED_OPERATION,
+    BatchConflictError,
 )
-from app.services.elaborazioni_ruolo_autosync import (
-    classify_ruolo_autosync_failure,
-    ensure_ruolo_autosync_batch,
-    reconcile_ruolo_autosync_items,
-    recover_stale_pending_ruolo_autosync_batches,
+from app.services.elaborazioni_perpetual_sources import (
+    PerpetualSourceTarget,
+    _subject_target,
+    load_enabled_targets,
+    load_ruolo_parcel_targets,
+    load_ruolo_subject_targets,
 )
 from app.services.elaborazioni_perpetual_sync import (
     _autosync_schedule,
@@ -63,18 +70,12 @@ from app.services.elaborazioni_perpetual_sync import (
     refresh_perpetual_sync_sources,
     retry_perpetual_sync_failures,
 )
-from app.services.elaborazioni_perpetual_sources import (
-    PerpetualSourceTarget,
-    _subject_target,
-    load_enabled_targets,
-    load_ruolo_parcel_targets,
-    load_ruolo_subject_targets,
+from app.services.elaborazioni_ruolo_autosync import (
+    classify_ruolo_autosync_failure,
+    ensure_ruolo_autosync_batch,
+    reconcile_ruolo_autosync_items,
+    recover_stale_pending_ruolo_autosync_batches,
 )
-from cryptography.fernet import Fernet
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
 engine = create_engine(
@@ -2275,6 +2276,27 @@ def test_ruolo_autosync_maintenance_skips_busy_lock_and_releases_after_failure(
     assert calls == ["acquire", "release"]
 
 
+def test_ruolo_autosync_serialized_operation_returns_conflict_when_lock_is_busy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from contextlib import contextmanager
+
+    import app.services.elaborazioni_ruolo_autosync as autosync_module
+
+    @contextmanager
+    def busy_lock(_db, _user_id):
+        yield False
+
+    monkeypatch.setattr(autosync_module, "_ruolo_autosync_xact_lock", busy_lock)
+    operation = autosync_module._ruolo_autosync_serialized(lambda _db, _user_id: {"unexpected": True})
+
+    with pytest.raises(autosync_module.RuoloAutosyncBusyError) as exc:
+        operation(object(), 7)
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail == "Un aggiornamento delle sorgenti è già in corso. Riprova tra poco."
+
+
 def test_ruolo_autosync_config_validation_and_missing_config_fallback() -> None:
     import app.services.elaborazioni_ruolo_autosync as autosync_module
 
@@ -2751,6 +2773,23 @@ def test_autosync_profiles_update_active_pool_and_off_releases_only_autosync() -
         },
     )
     assert missing_credential.status_code == 409
+
+    stale_disabled_credential = client.put(
+        "/elaborazioni/ruolo-autosync/config",
+        headers=auth_headers(),
+        json={
+            "credential_profiles": {
+                str(uuid4()): {
+                    "enabled": False,
+                    "schedule_enabled": False,
+                    "availability_schedule": None,
+                }
+            }
+        },
+    )
+    assert stale_disabled_credential.status_code == 200
+    assert stale_disabled_credential.json()["credential_profiles"] == {}
+    assert stale_disabled_credential.json()["credential_ids"] == []
 
     assert client.put(
         "/elaborazioni/ruolo-autosync/config",

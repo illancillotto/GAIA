@@ -111,9 +111,10 @@ function draftFromStatus(
 ): SyncDraft {
   const config = status.config;
   const selected = new Set(config.credential_ids ?? (config.credential_id ? [config.credential_id] : []));
-  const credentialProfiles = config.credential_profiles ?? Object.fromEntries(credentials.map((credential) => [
+  const configuredProfiles = config.credential_profiles ?? {};
+  const credentialProfiles = Object.fromEntries(credentials.filter((credential) => credential.active).map((credential) => [
     credential.id,
-    {
+    configuredProfiles[credential.id] ?? {
       enabled: selected.has(credential.id),
       schedule_enabled: false,
       availability_schedule: defaultSisterSchedule(),
@@ -231,8 +232,7 @@ function CredentialPool({ state, setState }: { state: SyncState; setState: React
     ...current, draft: { ...current.draft!, credentialProfiles: next },
   }));
   const setAll = (enabled: boolean) => updateProfiles(Object.fromEntries(activeCredentials.map((credential) => {
-    const current = profiles[credential.id];
-    return [credential.id, current ? { ...current, enabled } : { enabled, schedule_enabled: false, availability_schedule: defaultSisterSchedule() }];
+    return [credential.id, { ...profiles[credential.id]!, enabled }];
   })));
   return (
     <fieldset className="space-y-3" disabled={state.busy || !state.draft}>
@@ -249,7 +249,7 @@ function CredentialPool({ state, setState }: { state: SyncState; setState: React
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
         {activeCredentials.map((credential) => {
-          const profile = profiles[credential.id] ?? { enabled: false, schedule_enabled: false, availability_schedule: defaultSisterSchedule() };
+          const profile = profiles[credential.id]!;
           const selected = profile.enabled;
           const available = availableIds.includes(credential.id);
           const updateProfile = (patch: Partial<AutoSyncCredentialProfile>) => updateProfiles({
