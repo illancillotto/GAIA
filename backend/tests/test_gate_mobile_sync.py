@@ -432,6 +432,9 @@ def test_build_presenze_rules_months_giornaliere_and_anomalie_payloads(monkeypat
         assert giornaliere_payload["records"][0]["record_id"] == str(daily_record_id)
         assert giornaliere_payload["records"][0]["gaia_user_id"] == "77"
         assert giornaliere_payload["records"][0]["has_complete_punches"] is True
+        assert giornaliere_payload["records"][0]["detail_punch_rows"] == [
+            {"entry_time": "08:00", "exit_time": "15:00"}
+        ]
         assert giornaliere_payload["export_rules_version"] == "presenze-xlsm-2026-08"
         assert giornaliere_payload["records"][0]["km_value"] == 24
         assert giornaliere_payload["records"][0]["trasferta_minutes"] == 180
@@ -475,6 +478,74 @@ def test_build_presenze_rules_months_giornaliere_and_anomalie_payloads(monkeypat
         db.commit()
         missing_relation_payload = build_presenze_giornaliere_push_payload(db, month="2026-07")
         assert missing_relation_payload["records"][0]["gaia_user_id"] is None
+    finally:
+        db.close()
+
+
+def test_presenze_giornaliere_payload_serializes_complete_incomplete_and_missing_punches() -> None:
+    db = _build_session()
+    try:
+        _seed_presenze_daily_record(db)
+        collaborator_id = uuid.UUID("018f88a2-1797-7365-bf5e-8bb8b7f9d001")
+        no_punches = PresenzeDailyRecord(collaborator_id=collaborator_id, work_date=date(2026, 7, 11))
+        incomplete = PresenzeDailyRecord(collaborator_id=collaborator_id, work_date=date(2026, 7, 12))
+        multiple_intervals = PresenzeDailyRecord(collaborator_id=collaborator_id, work_date=date(2026, 7, 13))
+        entry_only = PresenzeDailyRecord(collaborator_id=collaborator_id, work_date=date(2026, 7, 14))
+        db.add_all([no_punches, incomplete, multiple_intervals, entry_only])
+        db.flush()
+        db.add_all(
+            [
+                PresenzeDailyPunch(
+                    daily_record_id=incomplete.id,
+                    sequence=1,
+                    entry_time=None,
+                    exit_time=time(14, 20),
+                    terminal_label="Sede Nord",
+                ),
+                PresenzeDailyPunch(
+                    daily_record_id=multiple_intervals.id,
+                    sequence=2,
+                    entry_time=time(12, 30),
+                    exit_time=time(16, 35),
+                    terminal_label="Sede",
+                ),
+                PresenzeDailyPunch(
+                    daily_record_id=multiple_intervals.id,
+                    sequence=1,
+                    entry_time=time(8, 5),
+                    exit_time=time(12, 0),
+                    terminal_label="Sede",
+                ),
+                PresenzeDailyPunch(
+                    daily_record_id=entry_only.id,
+                    sequence=1,
+                    entry_time=time(7, 10),
+                    exit_time=None,
+                ),
+            ]
+        )
+        db.commit()
+
+        records = {
+            item["work_date"]: item
+            for item in build_presenze_giornaliere_push_payload(db, month="2026-07")["records"]
+        }
+
+        assert records["2026-07-10"]["has_complete_punches"] is True
+        assert records["2026-07-10"]["detail_punch_rows"] == [{"entry_time": "08:00", "exit_time": "15:00"}]
+        assert records["2026-07-11"]["has_complete_punches"] is False
+        assert records["2026-07-11"]["detail_punch_rows"] == []
+        assert records["2026-07-12"]["has_complete_punches"] is False
+        assert records["2026-07-12"]["detail_punch_rows"] == [
+            {"entry_time": None, "exit_time": "14:20", "terminal_label": "Sede Nord"}
+        ]
+        assert records["2026-07-13"]["has_complete_punches"] is True
+        assert records["2026-07-13"]["detail_punch_rows"] == [
+            {"entry_time": "08:05", "exit_time": "12:00", "terminal_label": "Sede"},
+            {"entry_time": "12:30", "exit_time": "16:35", "terminal_label": "Sede"},
+        ]
+        assert records["2026-07-14"]["has_complete_punches"] is False
+        assert records["2026-07-14"]["detail_punch_rows"] == [{"entry_time": "07:10", "exit_time": None}]
     finally:
         db.close()
 
@@ -692,11 +763,6 @@ def test_run_gate_mobile_sync_once_pushes_presenze_snapshots_and_processes_pendi
         monkeypatch.setattr(gate_mobile_sync_service, "build_presenze_months_push_payload", lambda _db: {"months": [{"month": "2026-07"}]})
         monkeypatch.setattr(
             gate_mobile_sync_service,
-            "build_presenze_giornaliere_push_payload",
-            lambda _db, month: {"month": month, "records": [{"record_id": str(daily_record_id)}]},
-        )
-        monkeypatch.setattr(
-            gate_mobile_sync_service,
             "build_presenze_anomalie_push_payload",
             lambda _db, month: {"month": month, "anomalies": [{"record_id": str(daily_record_id)}]},
         )
@@ -726,6 +792,9 @@ def test_run_gate_mobile_sync_once_pushes_presenze_snapshots_and_processes_pendi
             if request.url.path == "/api/mobile/connector/presenze/months/snapshot":
                 return httpx.Response(200, json={"ok": True})
             if request.url.path == "/api/mobile/connector/presenze/giornaliere/snapshot":
+                payload = json.loads(request.read())
+                assert payload["records"][0]["record_id"] == str(daily_record_id)
+                assert payload["records"][0]["detail_punch_rows"] == [{"entry_time": "08:00", "exit_time": "15:00"}]
                 return httpx.Response(200, json={"records": {"count": 1}})
             if request.url.path == "/api/mobile/connector/presenze/anomalie/snapshot":
                 return httpx.Response(200, json={"anomalies": {"count": 1}})

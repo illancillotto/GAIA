@@ -533,7 +533,17 @@ def test_mobile_sync_exports_presenze_snapshots_for_lan_connector(monkeypatch) -
     monkeypatch.setattr(
         gate_mobile_sync_service,
         "build_presenze_giornaliere_push_payload",
-        lambda _db, month: {"schema_version": 1, "source": "gaia", "month": month, "records": [{"record_id": "rec-1"}]},
+        lambda _db, month: {
+            "schema_version": 1,
+            "source": "gaia",
+            "month": month,
+            "records": [
+                {
+                    "record_id": "rec-1",
+                    "detail_punch_rows": [{"entry_time": "08:05", "exit_time": "12:00"}],
+                }
+            ],
+        },
     )
     monkeypatch.setattr(
         gate_mobile_sync_service,
@@ -563,7 +573,12 @@ def test_mobile_sync_exports_presenze_snapshots_for_lan_connector(monkeypatch) -
     assert months.json()["months"] == [{"month": "2026-07"}]
     assert giornaliere.status_code == 200
     assert giornaliere.json()["month"] == "2026-07"
-    assert giornaliere.json()["records"] == [{"record_id": "rec-1"}]
+    assert giornaliere.json()["records"] == [
+        {
+            "record_id": "rec-1",
+            "detail_punch_rows": [{"entry_time": "08:05", "exit_time": "12:00"}],
+        }
+    ]
     assert anomalie.status_code == 200
     assert anomalie.json()["anomalies"] == [{"record_id": "rec-1"}]
     assert rules.status_code == 200
@@ -574,6 +589,7 @@ def test_mobile_sync_exports_presenze_snapshots_for_lan_connector(monkeypatch) -
     assert canonical_months.json()["months"] == [{"month": "2026-07"}]
     assert canonical_giornaliere.status_code == 200
     assert canonical_giornaliere.json()["month"] == "2026-07"
+    assert canonical_giornaliere.json()["records"][0]["detail_punch_rows"] == [{"entry_time": "08:05", "exit_time": "12:00"}]
     assert canonical_anomalie.status_code == 200
     assert canonical_anomalie.json()["anomalies"] == [{"record_id": "rec-1"}]
     assert canonical_rules.status_code == 200

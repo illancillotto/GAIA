@@ -4,7 +4,7 @@ import json
 import uuid
 from collections import Counter
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from typing import Any
 from uuid import UUID
 
@@ -409,6 +409,7 @@ def _presenze_mobile_record_items_for_month(
                     classification=classification_by_record_id[record.id],
                 ),
                 "has_complete_punches": _has_complete_punches(punches_by_record_id.get(record.id, [])),
+                "detail_punch_rows": _detail_punch_rows(punches_by_record_id.get(record.id, [])),
             }
         )
     return record_items, analyses_by_record_id
@@ -433,6 +434,19 @@ def _presenze_punches_by_record_id(
 
 def _has_complete_punches(punches: list[PresenzeDailyPunch]) -> bool:
     return bool(punches) and all(punch.entry_time is not None and punch.exit_time is not None for punch in punches)
+
+
+def _detail_punch_rows(punches: list[PresenzeDailyPunch]) -> list[dict[str, str | None]]:
+    rows: list[dict[str, str | None]] = []
+    for punch in sorted(punches, key=lambda item: (item.entry_time or item.exit_time or time.max, item.sequence)):
+        row: dict[str, str | None] = {
+            "entry_time": punch.entry_time.isoformat(timespec="minutes") if punch.entry_time is not None else None,
+            "exit_time": punch.exit_time.isoformat(timespec="minutes") if punch.exit_time is not None else None,
+        }
+        if punch.terminal_label:
+            row["terminal_label"] = punch.terminal_label
+        rows.append(row)
+    return rows
 
 
 async def run_gate_mobile_sync_once(
