@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -23,9 +24,27 @@ class CatastoCredentialAvailabilityWindow(BaseModel):
         return value
 
 
+class CatastoCredentialNthWeekdayException(BaseModel):
+    kind: Literal["nth_weekday_of_month"]
+    weekday: int = Field(ge=0, le=6)
+    occurrence: int = Field(ge=1, le=5)
+    windows: list[CatastoCredentialAvailabilityWindow] = Field(default_factory=list)
+
+    @field_validator("windows")
+    @classmethod
+    def validate_windows(
+        cls,
+        value: list[CatastoCredentialAvailabilityWindow],
+    ) -> list[CatastoCredentialAvailabilityWindow]:
+        if len(value) > 4:
+            raise ValueError("A maximum of four availability windows per day is supported")
+        return value
+
+
 class CatastoCredentialAvailabilitySchedule(BaseModel):
     timezone: str = "Europe/Rome"
     weekly: dict[str, list[CatastoCredentialAvailabilityWindow]] = Field(default_factory=dict)
+    exceptions: list[CatastoCredentialNthWeekdayException] = Field(default_factory=list)
 
     @field_validator("timezone")
     @classmethod
@@ -41,6 +60,20 @@ class CatastoCredentialAvailabilitySchedule(BaseModel):
             raise ValueError("Weekly schedule keys must be weekdays from 0 (Monday) to 6 (Sunday)")
         if any(len(windows) > 4 for windows in value.values()):
             raise ValueError("A maximum of four availability windows per day is supported")
+        return value
+
+    @field_validator("exceptions")
+    @classmethod
+    def validate_exceptions(
+        cls,
+        value: list[CatastoCredentialNthWeekdayException],
+    ) -> list[CatastoCredentialNthWeekdayException]:
+        seen: set[tuple[int, int]] = set()
+        for exception in value:
+            key = (exception.weekday, exception.occurrence)
+            if key in seen:
+                raise ValueError("nth-weekday exceptions must be unique per weekday and occurrence")
+            seen.add(key)
         return value
 
 

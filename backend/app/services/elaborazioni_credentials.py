@@ -53,7 +53,12 @@ def _normalize_label(label: str | None, sister_username: str) -> str:
 
 
 def _serialize_schedule(payload_schedule) -> dict | None:
-    return payload_schedule.model_dump() if payload_schedule else None
+    if payload_schedule is None:
+        return None
+    payload = payload_schedule.model_dump()
+    if not payload.get("exceptions"):
+        payload.pop("exceptions", None)
+    return payload
 
 
 def _schedule_create_values(payload: ElaborazioneCredentialCreateRequest) -> dict:

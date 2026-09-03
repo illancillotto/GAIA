@@ -3,6 +3,11 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from cryptography.fernet import Fernet
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
 from app.db.base import Base
 from app.models.application_user import ApplicationUser
 from app.schemas.elaborazioni import (
@@ -28,10 +33,6 @@ from app.services.elaborazioni_credentials import (
     require_credentials_for_user,
     update_credential,
 )
-from cryptography.fernet import Fernet
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
 engine = create_engine(
@@ -114,6 +115,26 @@ def test_create_multiple_credentials_and_switch_default() -> None:
         )
         assert scheduled.schedule_enabled is True
         assert scheduled.availability_schedule == schedule
+
+        exception_schedule = {
+            "timezone": "Europe/Rome",
+            "weekly": {"5": [{"start": "00:00", "end": "00:00"}]},
+            "exceptions": [
+                {
+                    "kind": "nth_weekday_of_month",
+                    "weekday": 5,
+                    "occurrence": 1,
+                    "windows": [{"start": "14:00", "end": "00:00"}],
+                }
+            ],
+        }
+        with_exception = update_credential(
+            db,
+            user.id,
+            second.id,
+            ElaborazioneCredentialUpdateRequest(availability_schedule=exception_schedule),
+        )
+        assert with_exception.availability_schedule == exception_schedule
 
         non_default = update_credential(
             db,

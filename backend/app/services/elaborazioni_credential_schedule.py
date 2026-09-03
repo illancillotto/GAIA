@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 SISTER_SCHEDULE_TIMEZONE = ZoneInfo("Europe/Rome")
@@ -16,6 +16,34 @@ def _weekly(schedule: dict | None) -> dict[str, list[dict[str, str]]]:
         return {}
     weekly = schedule.get("weekly")
     return weekly if isinstance(weekly, dict) else {}
+
+
+def _exceptions(schedule: dict | None) -> list[dict]:
+    if not isinstance(schedule, dict):
+        return []
+    exceptions = schedule.get("exceptions")
+    return exceptions if isinstance(exceptions, list) else []
+
+
+def _nth_weekday_occurrence(day: date) -> int:
+    return (day.day - 1) // 7 + 1
+
+
+def _windows_for_date(schedule: dict | None, day: date) -> list[dict[str, str]]:
+    occurrence = _nth_weekday_occurrence(day)
+    weekday = day.weekday()
+    for exception in _exceptions(schedule):
+        if not isinstance(exception, dict):
+            continue
+        if exception.get("kind") != "nth_weekday_of_month":
+            continue
+        if exception.get("weekday") != weekday:
+            continue
+        if exception.get("occurrence") != occurrence:
+            continue
+        windows = exception.get("windows")
+        return windows if isinstance(windows, list) else []
+    return _weekly(schedule).get(str(weekday), [])
 
 
 def _window_contains_minute(window: dict[str, str], minute: int) -> bool:
@@ -41,15 +69,15 @@ def credential_is_available(
         return True
     local_now = (at or datetime.now(timezone.utc)).astimezone(SISTER_SCHEDULE_TIMEZONE)
     minute = local_now.hour * 60 + local_now.minute
-    weekly = _weekly(schedule)
-
-    if any(_window_contains_minute(window, minute) for window in weekly.get(str(local_now.weekday()), [])):
+    if any(
+        _window_contains_minute(window, minute)
+        for window in _windows_for_date(schedule, local_now.date())
+    ):
         return True
-
-    previous_day = str((local_now.weekday() - 1) % 7)
+    previous_day = (local_now - timedelta(days=1)).date()
     return any(
         _overnight_window_contains_tail(window, minute)
-        for window in weekly.get(previous_day, [])
+        for window in _windows_for_date(schedule, previous_day)
     )
 
 
@@ -62,7 +90,9 @@ def next_credential_availability(
     if credential_is_available(schedule_enabled, schedule, reference):
         return reference
 
-    candidate = reference.astimezone(timezone.utc).replace(second=0, microsecond=0) + timedelta(minutes=1)
+    candidate = reference.astimezone(timezone.utc).replace(
+        second=0, microsecond=0
+    ) + timedelta(minutes=1)
     for _ in range(8 * 24 * 60):
         if credential_is_available(schedule_enabled, schedule, candidate):
             return candidate

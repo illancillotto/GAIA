@@ -210,10 +210,11 @@ ripresa senza ricreare il lotto.
 Ogni profilo SISTER puo limitare l'uso automatico del worker a un calendario
 settimanale. La UI `Credenziali` espone il toggle `Usa solo fuori dall'orario
 dell'operatore`, un editor giorno per giorno con un massimo di quattro fasce
-giornaliere e il preset lunedi-venerdi `18:00-08:00`, sabato-domenica
-`00:00-00:00`. Le fasce possono essere aggiunte e rimosse indipendentemente per
-ogni credenziale; la relativa card mostra il riepilogo settimanale e lo stato di
-disponibilita corrente. Un intervallo con ora iniziale uguale all'ora finale
+giornaliere e il preset lunedi-venerdi `15:00-07:30`, sabato-domenica
+`00:00-00:00`, con eccezione sul primo sabato del mese `14:00-00:00`. Le fasce
+possono essere aggiunte e rimosse indipendentemente per ogni credenziale; la
+relativa card mostra il riepilogo settimanale e lo stato di disponibilita
+corrente. Un intervallo con ora iniziale uguale all'ora finale
 copre l'intera giornata; quando l'inizio e successivo alla fine, la fascia
 prosegue nel giorno seguente.
 
@@ -238,8 +239,9 @@ Regole operative:
 Persistenza e API:
 
 - `schedule_enabled` abilita il vincolo sulla singola riga `catasto_credentials`;
-- `availability_schedule` contiene timezone e mappa settimanale dei giorni `0`-`6`, da lunedi a domenica;
-- `POST /elaborazioni/credentials` e `PATCH /elaborazioni/credentials/{credential_id}` validano formato `HH:MM`, giorni, struttura degli intervalli e limite di quattro fasce giornaliere;
+- `availability_schedule` contiene timezone, mappa settimanale dei giorni `0`-`6` da lunedi a domenica, e `exceptions` opzionali;
+- l'eccezione `nth_weekday_of_month` sostituisce le fasce del giorno corrispondente (es. primo sabato del mese); la coda notturna del giorno precedente resta valida;
+- `POST /elaborazioni/credentials` e `PATCH /elaborazioni/credentials/{credential_id}` validano formato `HH:MM`, giorni, eccezioni mensili, struttura degli intervalli e limite di quattro fasce giornaliere;
 - `GET /elaborazioni/credentials` restituisce il calendario per alimentare stato corrente e prossima fascia nella UI.
 
 Esempio:
@@ -255,7 +257,15 @@ Esempio:
         {"start": "18:00", "end": "23:00"}
       ],
       "5": [{"start": "00:00", "end": "00:00"}]
-    }
+    },
+    "exceptions": [
+      {
+        "kind": "nth_weekday_of_month",
+        "weekday": 5,
+        "occurrence": 1,
+        "windows": [{"start": "14:00", "end": "00:00"}]
+      }
+    ]
   }
 }
 ```

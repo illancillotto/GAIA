@@ -3869,9 +3869,17 @@ export type SisterCredentialAvailabilityWindow = {
   end: string;
 };
 
+export type SisterCredentialNthWeekdayException = {
+  kind: "nth_weekday_of_month";
+  weekday: number;
+  occurrence: number;
+  windows: SisterCredentialAvailabilityWindow[];
+};
+
 export type SisterCredentialAvailabilitySchedule = {
   timezone: "Europe/Rome";
   weekly: Record<string, SisterCredentialAvailabilityWindow[]>;
+  exceptions?: SisterCredentialNthWeekdayException[];
 };
 
 export type CatastoCredentialStatus = {
