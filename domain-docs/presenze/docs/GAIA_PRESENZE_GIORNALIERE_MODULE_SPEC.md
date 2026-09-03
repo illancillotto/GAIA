@@ -333,6 +333,13 @@ Per l'integrazione GATE, `application_user_id` e `gaia_user_id` rappresentano la
 
 Il backfill canonico usa `backend/scripts/backfill_presenze_canonical_identities.py` e un manifest `version=1`. Ogni persona dichiara obbligatoriamente `gaia_user_id` e `personnel_area` (`AGRARIO` o `IMPIANTI`); il vero `presenze_collaborator_id` e opzionale e va indicato solo quando la relazione e stata verificata fuori dal processo. Il comando non accetta nome, username, email o matricola, valida l'intero manifest prima delle scritture e applica area, mapping, giornaliere, riepiloghi e audit in una sola transazione. Il default e dry-run; `--apply` abilita la scrittura.
 
+La procedura operativa autorevole per audit degli unmapped, attestazione delle
+coppie, backup, applicazione, verifica e sincronizzazione GATE e
+`INAZ_GAIA_IDENTITY_MAPPING_RUNBOOK.md`. Il gate operativo richiede `0`
+collaboratori INAZ, attivi o storici, con `application_user_id IS NULL` dopo
+ogni prima acquisizione e nel controllo giornaliero; il sync GATE non crea
+autonomamente questo collegamento.
+
 ## 6. Endpoint GAIA proposti
 
 Tutti sotto prefisso `/presenze` incluso da `backend/app/api/router.py`.

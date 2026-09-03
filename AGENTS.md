@@ -60,6 +60,22 @@ Configurazione locale:
 - Le credenziali Graphify locali vivono in `.env.graphify`, ignorato da git.
 - I target `make` lo caricano automaticamente se presente.
 
+## Mapping identita GAIA-INAZ
+
+Per audit, backfill, incidenti o sincronizzazioni che coinvolgono il legame tra
+utenti GAIA e collaboratori INAZ/Presenze, leggere e applicare prima:
+
+- `skills/gaia-presenze-identity-mapping/SKILL.md`;
+- `domain-docs/presenze/docs/INAZ_GAIA_IDENTITY_MAPPING_RUNBOOK.md`.
+
+Il mapping canonico e esclusivamente
+`presenze_collaborators.application_user_id -> application_users.id`. Non sono
+ammessi mapping automatici o fallback tramite nome, username, email, matricola,
+codice fiscale o uguaglianze numeriche fra namespace. Nome e cognome possono
+solo generare candidati `REVIEW_REQUIRED`, da approvare esplicitamente prima
+del manifest canonico. Ogni collaboratore INAZ, attivo o storico, senza mapping
+deve essere rilevato dall'audit e resta fail-closed.
+
 ## Test coverage policy
 
 Data di entrata in vigore: `2026-06-19`.

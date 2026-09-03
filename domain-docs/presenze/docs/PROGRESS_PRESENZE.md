@@ -1,5 +1,36 @@
 # Progress Presenze
 
+## Runbook mapping canonico INAZ-GAIA - 2026-09-02
+
+- aggiunta la skill di progetto `gaia-presenze-identity-mapping`, obbligatoria
+  per audit, backfill e incidenti relativi all'identita Presenze;
+- aggiunto `INAZ_GAIA_IDENTITY_MAPPING_RUNBOOK.md` con audit read-only,
+  attestazione esplicita della coppia di ID, manifest minimale, dry-run,
+  backup, applicazione auditata, verifica idempotenza e sync GATE;
+- formalizzato il gate operativo: ogni collaboratore INAZ, attivo o storico,
+  deve avere `application_user_id`; `unmapped_total` e `active_unmapped` devono
+  essere zero dopo le nuove acquisizioni e nel controllo giornaliero;
+- vietata ogni applicazione automatica o fallback runtime da nome, username,
+  email, matricola, codice fiscale o uguaglianze numeriche fra namespace; tali
+  dati possono solo alimentare una lista di revisione e le identita non
+  approvate restano fail-closed.
+- analisi read-only sul CED: su `102` collaboratori non mappati sono emersi
+  `86` match nominali esatti univoci, `1` riordino di token e `3` corrispondenze
+  con secondi nomi aggiuntivi; `3` omonimie, `1` candidato non idoneo e `8`
+  righe senza candidato restano da gestire singolarmente in GAIA;
+- creati fuori repository un CSV completo e un JSON con `90` righe
+  `REVIEW_REQUIRED`, `auto_apply=false`; il dry-run canonico sul CED ha
+  validato tutte le coppie (`entries=90`, `collaborator_mapping_changes=90`)
+  senza conflitti o cambi di area;
+- dopo approvazione esplicita, applicate sul CED tutte le `90` coppie in una
+  sola transazione auditata; il secondo dry-run restituisce `unchanged=90`, i
+  collaboratori mappati passano da `94` a `184` e i residui da `102` a `12`;
+- sulle persone del batch risultano `7949` Giornaliere e `2294` riepiloghi con
+  `0` mismatch; il primo ciclo GATE successivo e terminato `succeeded` con `7`
+  task e `274` operatori pubblicati;
+- report nominativo, manifest, casi residui e checksum sono salvati fuori dal
+  repository in `~/Desktop/GAIA_INAZ_mapping_report_2026-09-03/`.
+
 ## Integrita mapping identita e audit trail - 2026-08-26
 
 - Il mapping collaboratore -> `application_users` e unico: indice parziale
