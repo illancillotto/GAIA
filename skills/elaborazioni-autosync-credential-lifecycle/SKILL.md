@@ -1,7 +1,7 @@
 ---
 name: elaborazioni-autosync-credential-lifecycle
 description: Gestisci le credenziali SISTER e la campagna AutoSync visure senza confondere l'abilitazione globale con le fasce dedicate della campagna.
-version: 1.0.0
+version: 1.1.0
 author: GAIA maintainers
 ---
 
@@ -50,6 +50,18 @@ ruolo.
   e batch gia in corso.
 - Non modificare `credential_profiles` via SQL per forzare un avvio: usare API
   o UI per mantenere lock, validazione e audit coerenti.
+
+## Artifact errori recenti
+
+- In `/elaborazioni/visure`, ogni errore recente con `linked_request_id` offre
+  `Dettagli`: mostra stato, tentativi, operazione, esecuzione ed errore della
+  richiesta batch collegata.
+- Se la richiesta ha `artifact_dir`, usare `Scarica artifact` per lo ZIP e
+  `Preview screenshot` per la schermata diagnostica. Le azioni riusano gli
+  endpoint autorizzati della Gestione batch e rispettano l'ownership utente.
+- Se la richiesta non ha artifact o la directory non e piu disponibile, non
+  ricostruire dati: conservare i dettagli persistiti e mostrare chiaramente
+  l'assenza dell'artifact.
 
 ## Verifiche minime
 

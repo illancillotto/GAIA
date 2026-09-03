@@ -519,6 +519,21 @@ describe("ElaborazioneRequestWorkspace continuous sync", () => {
     await waitFor(() => expect(api.updateConfig).toHaveBeenCalledWith("token", expect.objectContaining({ enabled: false })));
   });
 
+  test("renders every fallback used by subject campaign labels", async () => {
+    api.listCampaignItems.mockImplementation((_token: string, scope: string) => Promise.resolve({
+      items: scope === "ruolo_soggetto" ? [
+        { id: "subject-kind", scope, target_key: "subject-kind", priority: 10, search_mode: "soggetto", comune: null, foglio: null, particella: null, subalterno: null, subject_kind: "PF", subject_identifier: "CF-1", intestazione: null, status: "pending", attempt_count: 0, linked_batch_id: null, linked_request_id: null, last_error_message: "Errore campagna", retry_after: null, next_due_at: "2026-08-30T09:00:00Z", last_enqueued_at: null, last_completed_at: null, source_updated_at: null, updated_at: "2026-08-30T09:00:00Z" },
+        { id: "subject-fallback", scope, target_key: "subject-fallback", priority: 10, search_mode: "soggetto", comune: null, foglio: null, particella: null, subalterno: null, subject_kind: null, subject_identifier: "CF-2", intestazione: null, status: "pending", attempt_count: 0, linked_batch_id: null, linked_request_id: null, last_error_message: null, retry_after: null, next_due_at: "2026-08-30T09:00:00Z", last_enqueued_at: null, last_completed_at: null, source_updated_at: null, updated_at: "2026-08-30T09:00:00Z" },
+        { id: "subject-identifier", scope, target_key: "subject-identifier", priority: 10, search_mode: "soggetto", comune: null, foglio: null, particella: null, subalterno: null, subject_kind: "PF", subject_identifier: null, intestazione: "Mario Rossi", status: "pending", attempt_count: 0, linked_batch_id: null, linked_request_id: null, last_error_message: null, retry_after: null, next_due_at: "2026-08-30T09:00:00Z", last_enqueued_at: null, last_completed_at: null, source_updated_at: null, updated_at: "2026-08-30T09:00:00Z" },
+      ] : [], total: 3, limit: 50, offset: 0, has_more: false,
+    }));
+    render(<ContinuousCatastoSyncPanel />);
+    expect(await screen.findByText("PF · CF-1")).toBeInTheDocument();
+    expect(screen.getByText("Errore campagna")).toBeInTheDocument();
+    expect(screen.getByText("Soggetto · CF-2")).toBeInTheDocument();
+    expect(screen.getByText("Mario Rossi · identificativo mancante")).toBeInTheDocument();
+  });
+
   test("shows load and action failures", async () => {
     api.getCredentials.mockRejectedValueOnce(new Error("pool non disponibile"));
     const { unmount } = render(<ContinuousCatastoSyncPanel />);

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { AutoSyncActivityDashboard } from "@/components/elaborazioni/autosync-activity-dashboard";
+import { AutoSyncErrorArtifactList } from "@/components/elaborazioni/autosync-error-artifacts";
 import { ElaborazioneNoticeCard, ElaborazionePanelHeader } from "@/components/elaborazioni/module-chrome";
 import { ElaborazioneStatusBadge } from "@/components/elaborazioni/status-badge";
 import { RefreshIcon } from "@/components/ui/icons";
@@ -297,9 +298,9 @@ function CampaignLists({ state, pages, loadMore, retryCampaign }: {
   })}</div></section>;
 }
 
-function SyncItemList({ items, errorList }: { items: CatastoPerpetualSyncItem[]; errorList?: boolean }) {
+function SyncItemList({ items }: { items: CatastoPerpetualSyncItem[] }) {
   if (!items.length) return <p className="text-sm text-gray-500">Nessun elemento da mostrare.</p>;
-  return <div className="mt-3 space-y-3">{items.map((item) => <div className={`rounded-[18px] border px-4 py-3 ${errorList ? "border-red-100 bg-red-50" : "border-gray-100 bg-gray-50"}`} key={item.id}><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-medium text-gray-900">{itemLabel(item)}</p><p className="mt-1 text-xs text-gray-500">tentativi {item.attempt_count} · prossimo ciclo {formatDateTime(item.next_due_at)}</p>{item.last_error_message ? <p className="mt-1 text-sm text-red-700">{item.last_error_message}</p> : null}</div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">{item.status}</span></div></div>)}</div>;
+  return <div className="mt-3 space-y-3">{items.map((item) => <div className="rounded-[18px] border border-gray-100 bg-gray-50 px-4 py-3" key={item.id}><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-medium text-gray-900">{itemLabel(item)}</p><p className="mt-1 text-xs text-gray-500">tentativi {item.attempt_count} · prossimo ciclo {formatDateTime(item.next_due_at)}</p>{item.last_error_message ? <p className="mt-1 text-sm text-red-700">{item.last_error_message}</p> : null}</div><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">{item.status}</span></div></div>)}</div>;
 }
 
 function SyncNotice({ state }: { state: SyncState }) {
@@ -359,7 +360,7 @@ export function ContinuousCatastoSyncPanel() {
           </div>
           </section>
           <RunningBatch status={state.status} />
-          <div className="rounded-[24px] border border-gray-100 p-4"><p className="text-sm font-semibold">Errori recenti</p><SyncItemList errorList items={state.status?.perpetual_error_items ?? []} /></div>
+          <div className="rounded-[24px] border border-gray-100 p-4"><p className="text-sm font-semibold">Errori recenti</p><AutoSyncErrorArtifactList items={state.status?.perpetual_error_items ?? []} /></div>
         </div>
       </article>
       <AutoSyncActivityDashboard credentials={state.credentials} status={state.status} />
