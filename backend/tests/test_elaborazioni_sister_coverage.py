@@ -379,25 +379,30 @@ def test_start_cancel_release_and_retry_conflicts(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(batches, "ensure_no_processing_batch", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(batches, "get_batch_requests", lambda *_args: [])
 
+    # La verifica delle credenziali vive in require_batch_credentials: start_batch ne
+    # converte l'errore in BatchConflictError, ed e quello che questi casi coprono.
+    def _credentials_error(message: str):
+        return lambda *_args: (_ for _ in ()).throw(batches.ElaborazioneCredentialNotFoundError(message))
+
     selected = _batch("pending", credential_id=uuid4())
     monkeypatch.setattr(batches, "get_batch_for_user", lambda *_args: selected)
-    monkeypatch.setattr(batches, "get_credential_for_user", lambda *_args: None)
+    monkeypatch.setattr(
+        batches,
+        "require_batch_credentials",
+        _credentials_error("Selected SISTER credential is not active anymore"),
+    )
     with pytest.raises(batches.BatchConflictError, match="not active"):
         batches.start_batch(FakeDb(), 1, selected.id)
 
     unpinned = _batch("pending")
     monkeypatch.setattr(batches, "get_batch_for_user", lambda *_args: unpinned)
-    monkeypatch.setattr(
-        batches,
-        "require_credentials_for_user",
-        lambda *_args: (_ for _ in ()).throw(batches.ElaborazioneCredentialNotFoundError("missing")),
-    )
+    monkeypatch.setattr(batches, "require_batch_credentials", _credentials_error("missing"))
     with pytest.raises(batches.BatchConflictError, match="missing"):
         batches.start_batch(FakeDb(), 1, unpinned.id)
 
     invalid = _batch("completed")
     monkeypatch.setattr(batches, "get_batch_for_user", lambda *_args: invalid)
-    monkeypatch.setattr(batches, "require_credentials_for_user", lambda *_args: object())
+    monkeypatch.setattr(batches, "require_batch_credentials", lambda *_args: None)
     with pytest.raises(batches.BatchConflictError, match="cannot be started"):
         batches.start_batch(FakeDb(), 1, invalid.id)
     with pytest.raises(batches.BatchConflictError, match="cannot be cancelled"):

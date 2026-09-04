@@ -444,6 +444,12 @@ async def test_sync_single_deceased_infers_date_from_historical_c004_checks(db_s
         data_nascita=date(1958, 1, 24),
     )
 
+    # La ricerca parte dal primo probe a oggi-366 e ha un budget di 10 chiamate: se il
+    # decesso cade prima di quella soglia servono altri backoff e il budget finisce.
+    # Il decesso va quindi ancorato a oggi, non a una data fissa che col tempo esce
+    # dalla finestra del primo probe.
+    death_date = date.today() - timedelta(days=180)
+
     class FakeClient:
         def __init__(self) -> None:
             self.reference_dates: list[date | None] = []
@@ -460,7 +466,7 @@ async def test_sync_single_deceased_infers_date_from_historical_c004_checks(db_s
             assert key
             self.reference_dates.append(reference_date)
             effective_reference_date = reference_date or date.today()
-            esito = "deceased" if effective_reference_date >= date(2025, 8, 20) else "alive"
+            esito = "deceased" if effective_reference_date >= death_date else "alive"
             return C004Result(
                 success=True,
                 esito=esito,
@@ -481,13 +487,13 @@ async def test_sync_single_deceased_infers_date_from_historical_c004_checks(db_s
 
     assert result.success is True
     assert result.esito == "deceased"
-    assert result.data_decesso == date(2025, 8, 20)
+    assert result.data_decesso == death_date
     assert result.calls_made > 1
     assert person is not None
-    assert person.data_decesso == date(2025, 8, 20)
+    assert person.data_decesso == death_date
     assert len(logs) == result.calls_made
     assert client.reference_dates[1] == date.today() - timedelta(days=366)
-    assert date(2025, 8, 20) in [value for value in client.reference_dates if value is not None]
+    assert death_date in [value for value in client.reference_dates if value is not None]
 
 
 @pytest.mark.anyio

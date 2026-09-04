@@ -56,7 +56,10 @@ from app.modules.presenze.services.parser import load_json_payload, parse_import
 from app.modules.presenze.services.straordinari_export_job import (
     build_period_end as build_straordinari_period_end,
 )
-from app.modules.presenze.services.straordinari_export_job import previous_month_period_start
+from app.modules.presenze.services.straordinari_export_job import (
+    build_straordinari_filename,
+    previous_month_period_start,
+)
 from app.modules.presenze.services.xlsm_export import close_workbook_resources
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -4207,7 +4210,9 @@ def test_me_straordinari_export_downloads_xlsx(monkeypatch: pytest.MonkeyPatch, 
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    assert "Straordinari_2026_07_Luglio.xlsx" in response.headers["content-disposition"]
+    # Il nome deriva dal periodo esportato, che e sempre il mese precedente a oggi:
+    # va ricavato dalla stessa funzione del codice, non fissato a un mese.
+    assert build_straordinari_filename(period_start) in response.headers["content-disposition"]
     workbook = load_workbook(io.BytesIO(response.content), data_only=False)
     worksheet = workbook.active
     try:

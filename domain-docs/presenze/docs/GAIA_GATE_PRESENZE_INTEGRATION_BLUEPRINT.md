@@ -152,6 +152,8 @@ GATE non usa nome, username, email o matricola come fallback autorizzativo. Un m
 
 Ogni operatore e ogni squadra trasporta inoltre `personnel_area=AGRARIO|IMPIANTI`, indipendente dai domini applicativi GAIA/TETI. Lo snapshot squadre non pubblica piu `scope`; membership e supervisor espongono `gaia_user_id` come unica identita personale canonica. Per una squadra nata in GATE, GAIA persiste il `team_id` esterno e lo ripubblica, cosi snapshot e retry riconciliano la stessa entita senza matching per nome.
 
+Il vincolo e fail-closed: `required_personnel_area` alza se il valore manca o non e fra i due ammessi, e blocca l'intero payload, non solo la riga. Quindi un `WCOperator` senza `personnel_area` fa fallire sia il push operatori sia il tool Wiki `get_operazioni_mobile_sync_status`, che legge lo stesso payload.
+
 ## 6. Permessi
 
 Permessi minimi lato GAIA:

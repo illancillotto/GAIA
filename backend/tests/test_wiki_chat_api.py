@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from unittest.mock import patch
 from uuid import UUID, uuid4
 
@@ -101,6 +101,13 @@ def _login(username: str) -> str:
     resp = client.post("/auth/login", json={"username": username, "password": "pass123"})
     assert resp.status_code == 200
     return resp.json()["access_token"]
+
+
+def _recent(hour: int, minute: int = 0) -> datetime:
+    """Istante di ieri. Le analytics Operazioni filtrano su una finestra che finisce
+    oggi e parte 90 giorni prima: i dati vanno seminati vicino a oggi, perche una data
+    fissa esce dalla finestra col passare del tempo e le liste tornano vuote."""
+    return datetime.combine(date.today() - timedelta(days=1), time(hour, minute))
 
 
 _MOCK_RESPONSE = WikiChatResponse(
@@ -1635,6 +1642,8 @@ def test_chat_live_operazioni_mobile_sync_returns_summary() -> None:
             last_name="User",
             enabled=True,
             gaia_user_id=user.id,
+            # Il payload mobile richiede la personnel_area: senza, build_mobile_operator_push_payload alza.
+            personnel_area="AGRARIO",
             wc_synced_at=datetime(2026, 5, 27, 8, 0, 0),
         )
     )
@@ -1763,7 +1772,7 @@ def test_chat_live_operazioni_analytics_top_fuel_returns_data() -> None:
         VehicleFuelLog(
             vehicle_id=vehicle.id,
             recorded_by_user_id=user.id,
-            fueled_at=datetime(2026, 5, 27, 11, 0, 0),
+            fueled_at=_recent(11),
             liters=80,
             total_cost=120,
             station_name="Top station",
@@ -1806,8 +1815,8 @@ def test_chat_live_operazioni_analytics_top_km_operators_returns_data() -> None:
             vehicle_id=vehicle.id,
             started_by_user_id=user.id,
             actual_driver_user_id=user.id,
-            started_at=datetime(2026, 5, 27, 12, 0, 0),
-            ended_at=datetime(2026, 5, 27, 13, 0, 0),
+            started_at=_recent(12),
+            ended_at=_recent(13),
             start_odometer_km=2000,
             end_odometer_km=2080,
             status="closed",
@@ -1851,11 +1860,11 @@ def test_chat_live_operazioni_analytics_work_hours_by_team_returns_data() -> Non
             operator_user_id=user.id,
             team_id=team.id,
             status="approved",
-            started_at=datetime(2026, 5, 27, 14, 0, 0),
-            ended_at=datetime(2026, 5, 27, 15, 0, 0),
+            started_at=_recent(14),
+            ended_at=_recent(15),
             duration_minutes_declared=60,
             duration_minutes_calculated=60,
-            submitted_at=datetime(2026, 5, 27, 15, 1, 0),
+            submitted_at=_recent(15, 1),
             created_by_user_id=user.id,
         )
     )

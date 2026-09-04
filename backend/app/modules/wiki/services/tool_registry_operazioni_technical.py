@@ -99,7 +99,8 @@ def _operazioni_mobile_sync_status(db: Session, current_user: ApplicationUser, q
     )
 
     handshake = mobile_connector_handshake().model_dump(mode="json")
-    operators = get_mobile_operators(db=db).model_dump(mode="json")
+    # get_mobile_operators restituisce gia il dict del payload push, non un modello.
+    operators = get_mobile_operators(db=db)
     catalogs = get_mobile_catalogs(db=db).model_dump(mode="json")
     worksets = get_mobile_worksets(db=db, operator_id=None).model_dump(mode="json")
 

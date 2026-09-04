@@ -53,6 +53,18 @@ allineamento stilistico.
 Il default evolutivo di Ruff non e la policy GAIA. `ruff.toml` deve tenere
 `select` e `ignore` espliciti.
 
+### Date nei test
+
+Un test che semina dati dentro una finestra temporale relativa a oggi non deve
+usare una data fissa: passa il tempo e il dato esce dalla finestra, il test
+fallisce mesi dopo e la causa non ha niente a che vedere con l'ultima modifica.
+Le date vanno ancorate a `date.today()` con lo scostamento che serve.
+
+Vale per le analytics con finestra a `90` giorni, per i nomi file derivati dal
+periodo esportato (`build_straordinari_filename`) e per le ricerche con budget
+di chiamate come l'inferenza data decesso ANPR, dove la data fissa fa crescere
+lo spazio di ricerca fino a esaurire il budget.
+
 ### Ratchet Python
 
 Stesso modello della coverage sui file cambiati:
