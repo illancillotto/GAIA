@@ -790,6 +790,8 @@ describe("Gaia users page", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Apri componenti (2)" })[0]);
     expect(await screen.findByText("Componenti modulo")).toBeInTheDocument();
     expect(screen.getByText("Modulo abilitato")).toBeInTheDocument();
+    expect(screen.getByLabelText("Chiudi componenti modulo").parentElement?.className).toContain("z-[75]");
+    expect(screen.getByLabelText("Chiudi modifica utente").parentElement?.className).toContain("z-[70]");
 
     const permissionSelects = screen.getAllByLabelText("Permesso");
     fireEvent.change(permissionSelects[0], { target: { value: "inherit" } });
@@ -1178,6 +1180,11 @@ describe("Gaia users page", () => {
         gate_mobile_console: { operator_id: "op-viewer", enabled: true, role: "viewer" },
       }),
       buildUser({
+        id: 24,
+        username: "console-team-manager",
+        gate_mobile_console: { operator_id: "op-team", enabled: true, role: "team_manager" },
+      }),
+      buildUser({
         id: 23,
         username: "console-senza-ruolo",
         gate_mobile_console: { operator_id: "op-empty", enabled: false, role: null },
@@ -1194,6 +1201,10 @@ describe("Gaia users page", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "console-viewer" }));
     expect((await screen.findAllByText("Viewer")).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByLabelText("Chiudi modifica utente"));
+
+    fireEvent.click(screen.getByRole("button", { name: "console-team-manager" }));
+    expect(await screen.findByText("Team manager")).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText("Chiudi modifica utente"));
 
     fireEvent.click(screen.getByRole("button", { name: "console-senza-ruolo" }));

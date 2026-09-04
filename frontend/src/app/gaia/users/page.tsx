@@ -1518,7 +1518,7 @@ function ModuleComponentsModal({
   }, [requestClose]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0f1720]/40 px-4 py-8">
+    <div className="fixed inset-0 z-[75] flex items-center justify-center bg-[#0f1720]/40 px-4 py-8">
       <button aria-label="Chiudi componenti modulo" className="absolute inset-0" type="button" onClick={requestClose} />
       <div className="relative z-10 flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-[#dfe7dc] bg-white shadow-[0_32px_80px_rgba(15,23,32,0.22)]">
         <div className="border-b border-[#e7eee5] bg-[linear-gradient(180deg,#f8fbf8,#ffffff)] px-6 py-5">
