@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+
 from app import platform_scheduler_runner
 
 
@@ -45,6 +46,7 @@ async def test_register_platform_schedulers_registers_each_family_once(
         "register_elaborazioni_db_backup_scheduler",
         "register_incass_autosync_scheduler",
         "register_domande_irrigue_autosync_scheduler",
+        "register_particelle_autosync_scheduler",
         "register_ruolo_autosync_scheduler",
         "register_gis_export_scheduler",
         "register_presenze_scheduler",

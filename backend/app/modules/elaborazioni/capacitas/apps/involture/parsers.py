@@ -1,23 +1,27 @@
 from __future__ import annotations
 
-import json5
 import re
 from datetime import date, datetime
 from urllib.parse import unquote
 
+import json5
 from bs4 import BeautifulSoup
 
 from app.modules.elaborazioni.bonifica_oristanese.parsers import clean_html_text
 from app.modules.elaborazioni.capacitas.models import (
     CapacitasAnagraficaDetail,
-    CapacitasLookupOption,
+    CapacitasCertificatoTerreno,
     CapacitasIntestatario,
+    CapacitasLookupOption,
     CapacitasStoricoAnagraficaRow,
     CapacitasTerreniSearchResult,
     CapacitasTerrenoCertificato,
-    CapacitasCertificatoTerreno,
     CapacitasTerrenoDetail,
     CapacitasTerrenoRow,
+)
+
+_UTENZA_RE = re.compile(
+    r"UTENZA:\s*([^\s]+)\s*-\s*STATO CNC:\s*(.*?)(?:DI:|TERRENI(?:\s|$)|FABBRICATI(?:\s|$)|$)"
 )
 
 
@@ -123,7 +127,7 @@ def parse_certificato_html(html: str) -> CapacitasTerrenoCertificato:
     text = clean_html_text(container or html)
 
     partita_match = re.search(r"PARTITA:\s*([^\s]+)\s*-\s*(.*?)\s*-\s*STATO:\s*(.*?)(?:UTENZA:|$)", text)
-    utenza_match = re.search(r"UTENZA:\s*([^\s]+)\s*-\s*STATO CNC:\s*(.*?)(?:DI:|$)", text)
+    utenza_match = _UTENZA_RE.search(text)
 
     intestatari = _parse_capacitas_intestatari(container) if container else []
 

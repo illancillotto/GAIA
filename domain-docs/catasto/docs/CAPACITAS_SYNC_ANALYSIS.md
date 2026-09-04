@@ -20,6 +20,8 @@ Il perimetro analizzato riguarda soprattutto:
 - [backend/app/modules/elaborazioni/capacitas/apps/involture/client.py](/home/cbo/CursorProjects/GAIA/backend/app/modules/elaborazioni/capacitas/apps/involture/client.py:61)
 - [backend/app/services/elaborazioni_capacitas_terreni.py](/home/cbo/CursorProjects/GAIA/backend/app/services/elaborazioni_capacitas_terreni.py:111)
 - [backend/app/services/elaborazioni_capacitas_particelle_sync.py](/home/cbo/CursorProjects/GAIA/backend/app/services/elaborazioni_capacitas_particelle_sync.py:217)
+- [backend/app/modules/elaborazioni/capacitas_particelle_autosync_policy.py](/home/cbo/CursorProjects/GAIA/backend/app/modules/elaborazioni/capacitas_particelle_autosync_policy.py:1)
+- [backend/app/modules/elaborazioni/capacitas_particelle_autosync_scheduler.py](/home/cbo/CursorProjects/GAIA/backend/app/modules/elaborazioni/capacitas_particelle_autosync_scheduler.py:1)
 - [backend/app/services/elaborazioni_capacitas_anagrafica_history.py](/home/cbo/CursorProjects/GAIA/backend/app/services/elaborazioni_capacitas_anagrafica_history.py:258)
 - [backend/app/services/elaborazioni_capacitas_domande_irrigue.py](/home/cbo/CursorProjects/GAIA/backend/app/services/elaborazioni_capacitas_domande_irrigue.py:34)
 - [backend/app/modules/elaborazioni/capacitas/apps/involture/domande_irrigue.py](/home/cbo/CursorProjects/GAIA/backend/app/modules/elaborazioni/capacitas/apps/involture/domande_irrigue.py:94)
@@ -476,6 +478,78 @@ Caso speciale:
 
 - se la particella risulta valida in piu frazioni, viene marcata come anomalia `frazione_ambigua`
 
+### AutoSync particelle consortili
+
+Lo scheduler di piattaforma controlla ogni 5 minuti se esiste lavoro eleggibile
+e, in assenza di un altro job Particelle aperto, accoda una tranche limitata a
+100 particelle. Il job usa sempre la credenziale configurata esplicitamente,
+un solo worker e la pipeline completa Terreni con certificati e dettagli. Le
+impostazioni sono configurabili tramite le variabili
+`CAPACITAS_PARTICELLE_AUTOSYNC_*`; il default versionato resta disabilitato e
+senza credenziale per evitare attivazioni accidentali in ambienti nuovi.
+
+La policy operativa concordata e:
+
+- particelle mai sincronizzate: subito eleggibili e ordinate prima delle altre;
+- `synced` e `skipped`: nuovo tentativo dopo 30 giorni;
+- failure di sessione, rete, timeout, rate limit o HTTP transitorio: nuovo
+  tentativo dopo 1 ora;
+- particella non trovata o nessuna frazione Capacitas: nuovo tentativo dopo 30
+  giorni;
+- altre failure: nuovo tentativo dopo 24 ore;
+- particelle non correnti, soppresse, senza comune, senza foglio o in stato
+  `anomalia`: escluse dal ciclo automatico e lasciate alla correzione/revisione
+  del dato locale.
+
+Il job conserva nel payload il marker `trigger=autosync` e le finestre di retry,
+quindi mantiene la policy con cui e stato accodato anche dopo una modifica
+della configurazione. `max_instances=1` e il controllo degli stati `pending`,
+`queued_resume`, `processing` e `cancelling`
+impediscono allo scheduler di piattaforma corrente di aprire due tranche
+Particelle contemporaneamente.
+
+Baseline osservata il 4 settembre 2026 sul database locale:
+
+- 287.387 particelle correnti;
+- 17.027 sincronizzate, 37.985 fallite, 35.524 saltate e 196.851 mai
+  sincronizzate;
+- ultimo successo il 15 giugno 2026, relativo a una sync singola;
+- il maggiore job progressivo ha elaborato 15.016 particelle su 287.277 in
+  circa 5 ore prima di fallire;
+- tra le failure risultano 20.575 sessioni scadute, 12.551 particelle non
+  trovate, 2.474 casi senza frazione e 1.758 overflow di `utenza_status`;
+- 3.916 particelle hanno il foglio vuoto e restano sospese dall'AutoSync.
+
+Il parser del certificato ora termina `utenza_status` prima delle sezioni
+`TERRENI` o `FABBRICATI`, evitando che il resto del certificato confluisca nel
+campo `VARCHAR(100)`. Il re-login gia presente rende inoltre recuperabili le
+failure storiche di sessione, secondo la finestra rapida sopra indicata.
+
+Il percorso sequenziale e quello parallelo condividono `_sync_particella_item`
+per costruzione della richiesta, retry sessione, classificazione dell'esito e
+persistenza sulla particella. Questo evita divergenze tra le due velocita del
+job e mantiene separato il solo aggiornamento concorrente dei progressivi.
+
+Verifica del 4 settembre 2026: `262` test Capacitas passati e coverage
+`1074/1074` statement (`100%`) su configurazione, parser InVolture, policy,
+scheduler, runner di piattaforma e servizio progressivo modificati.
+
+#### Attivazione operativa
+
+La credenziale scelta deve essere attiva e disponibile nella propria finestra
+oraria. Al momento dell'analisi la credenziale `id=1` risulta disattivata dopo
+cinque failure consecutive e sono presenti 25 job inCASS pendenti/accodati.
+Riattivarla puo quindi sbloccare sia l'AutoSync Particelle sia la coda inCASS:
+prima dell'attivazione vanno verificati ordine e priorita delle code, salute del
+login Capacitas e capacita del worker.
+
+Il deployment corrente esegue un solo container `platform-scheduler`; se in
+futuro lo scheduler venisse replicato orizzontalmente, il controllo
+read-then-create dovrebbe essere protetto da advisory lock o vincolo DB per
+evitare due enqueue concorrenti. Il worker serializza il lavoro Capacitas, ma
+Particelle e inCASS condividono la stessa risorsa esterna: backlog e latenza di
+entrambe le code devono essere monitorati durante il recupero iniziale.
+
 ## Import storico anagrafico
 
 Riferimenti:
@@ -646,6 +720,15 @@ Se una riga live non espone tutto il contesto utile, il backend deve essere cons
 Se manca `IDXANA` e la ricerca per CF non restituisce un match affidabile:
 
 - il backend non puo importare correttamente lo storico
+
+### Rischio 5: capacita e concorrenza dell'AutoSync
+
+La tranche limitata evita un nuovo job monolitico, ma il recupero di oltre
+196.000 particelle mai sincronizzate richiede tempo e compete con gli altri job
+Capacitas. La configurazione iniziale deve essere osservata su durata media,
+failure rate, crescita delle code e disattivazioni della credenziale. La
+protezione da doppio enqueue e process-local finche esiste una sola istanza del
+container scheduler.
 
 ## Risposta sintetica alla domanda “cosa stiamo sincronizzando?”
 

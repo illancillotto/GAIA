@@ -182,6 +182,45 @@ class Settings(CapacitasAutoSyncSettings):
         default=True,
         alias="CAPACITAS_INCASS_AUTOSYNC_INCLUDE_PARTITARIO_FOR_NEW_NOTICES",
     )
+    capacitas_particelle_autosync_enabled: bool = Field(
+        default=False,
+        alias="CAPACITAS_PARTICELLE_AUTOSYNC_ENABLED",
+    )
+    capacitas_particelle_autosync_interval_minutes: int = Field(
+        default=5,
+        ge=1,
+        le=1440,
+        alias="CAPACITAS_PARTICELLE_AUTOSYNC_INTERVAL_MINUTES",
+    )
+    capacitas_particelle_autosync_credential_id: int | None = Field(
+        default=None,
+        ge=1,
+        alias="CAPACITAS_PARTICELLE_AUTOSYNC_CREDENTIAL_ID",
+    )
+    capacitas_particelle_autosync_batch_size: int = Field(
+        default=100,
+        ge=1,
+        le=5000,
+        alias="CAPACITAS_PARTICELLE_AUTOSYNC_BATCH_SIZE",
+    )
+    capacitas_particelle_autosync_refresh_days: int = Field(
+        default=30,
+        ge=1,
+        le=365,
+        alias="CAPACITAS_PARTICELLE_AUTOSYNC_REFRESH_DAYS",
+    )
+    capacitas_particelle_autosync_transient_retry_hours: int = Field(
+        default=1,
+        ge=1,
+        le=168,
+        alias="CAPACITAS_PARTICELLE_AUTOSYNC_TRANSIENT_RETRY_HOURS",
+    )
+    capacitas_particelle_autosync_failed_retry_hours: int = Field(
+        default=24,
+        ge=1,
+        le=720,
+        alias="CAPACITAS_PARTICELLE_AUTOSYNC_FAILED_RETRY_HOURS",
+    )
     bonifica_oristanese_debug_storage_path: str = Field(
         default="/data/elaborazioni/bonifica-oristanese-debug",
         alias="BONIFICA_ORISTANESE_DEBUG_STORAGE_PATH",

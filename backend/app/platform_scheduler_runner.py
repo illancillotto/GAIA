@@ -15,6 +15,9 @@ from app.modules.elaborazioni.autosync_scheduler import (
 from app.modules.elaborazioni.bonifica_oristanese_scheduler import (
     register_bonifica_scheduler,
 )
+from app.modules.elaborazioni.capacitas_particelle_autosync_scheduler import (
+    register_particelle_autosync_scheduler,
+)
 from app.modules.elaborazioni.db_backup_scheduler import (
     register_elaborazioni_db_backup_scheduler,
 )
@@ -46,6 +49,7 @@ async def register_platform_schedulers(scheduler: AsyncIOScheduler) -> None:
     await register_elaborazioni_db_backup_scheduler(scheduler, get_db)
     await register_incass_autosync_scheduler(scheduler, get_db)
     await register_domande_irrigue_autosync_scheduler(scheduler, get_db)
+    await register_particelle_autosync_scheduler(scheduler, get_db)
     await register_ruolo_autosync_scheduler(scheduler, get_db)
     await register_gis_export_scheduler(scheduler, get_db)
     await register_presenze_scheduler(scheduler, get_db)

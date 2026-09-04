@@ -4,25 +4,35 @@ import asyncio
 import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
-
-logger = logging.getLogger(__name__)
 
 from app.models.capacitas import CapacitasParticelleSyncJob
 from app.models.catasto_phase1 import CatComune, CatParticella
-from app.modules.elaborazioni.capacitas.apps.involture.client import CapacitasSessionExpiredError, InVoltureClient
+from app.modules.elaborazioni.capacitas.apps.involture.client import (
+    CapacitasSessionExpiredError,
+    InVoltureClient,
+)
 from app.modules.elaborazioni.capacitas.models import (
     CapacitasParticelleSyncJobCreateRequest,
     CapacitasParticelleSyncJobOut,
     CapacitasTerreniBatchItem,
     CapacitasTerreniBatchRequest,
 )
-from app.services.elaborazioni_capacitas_terreni import CapacitasFrazioneAmbiguaError, sync_terreni_batch
+from app.modules.elaborazioni.capacitas_particelle_autosync_policy import (
+    build_particelle_selection_query,
+    parse_particelle_job_payload,
+)
+from app.services.elaborazioni_capacitas_terreni import (
+    CapacitasFrazioneAmbiguaError,
+    sync_terreni_batch,
+)
+
+logger = logging.getLogger(__name__)
 
 ROME_TZ = ZoneInfo("Europe/Rome")
 DAY_THROTTLE_MS = 900
@@ -35,7 +45,6 @@ EVENING_RECHECK_HOURS = 12
 RECENT_ITEM_LIMIT = 200
 PARTICELLE_STALE_JOB_MINUTES = 30
 AUTO_RESUME_COMPATIBLE_MODES = {"progressive_catalog"}
-UTC = timezone.utc
 
 
 @dataclass(slots=True)
@@ -317,20 +326,11 @@ def _select_particelle_for_job(
     payload: CapacitasParticelleSyncJobCreateRequest,
     policy: ParticelleSyncPolicy,
 ) -> list[CatParticella]:
-    query = (
-        select(CatParticella)
-        .where(CatParticella.is_current.is_(True), CatParticella.suppressed.is_(False))
-        .order_by(CatParticella.capacitas_last_sync_at.asc().nullsfirst(), CatParticella.updated_at.asc())
+    query = build_particelle_selection_query(
+        payload=payload,
+        now=datetime.now(UTC),
+        due_before=policy.due_before,
     )
-    if payload.only_due:
-        query = query.where(
-            or_(
-                CatParticella.capacitas_last_sync_at.is_(None),
-                CatParticella.capacitas_last_sync_at < policy.due_before,
-            )
-        )
-    if payload.limit is not None:
-        query = query.limit(payload.limit)
     return list(db.scalars(query).all())
 
 
@@ -650,7 +650,7 @@ async def run_particelle_sync_job(
     session_factory: Callable[[], Session] | None = None,
     clients: Sequence[InVoltureClient] | None = None,
 ) -> CapacitasParticelleSyncJob:
-    payload = CapacitasParticelleSyncJobCreateRequest.model_validate(job.payload_json or {})
+    payload = parse_particelle_job_payload(job.payload_json)
     job.status = "processing"
     job.started_at = datetime.now(UTC)
     job.error_detail = None
@@ -704,136 +704,26 @@ async def run_particelle_sync_job(
             db.refresh(job)
             return job
 
-        for index, particella in enumerate(particelle, start=1):
-            # job attributes are expired by SQLAlchemy after each commit, so status re-loads from DB
+        items = _build_sync_items(db, particelle)
+        for index, item in enumerate(items, start=1):
             if job.status == "cancelling":
                 break
-            current_time = datetime.now(UTC)
-            current_result = dict(job.result_json or result_json)
-            label = (
-                f"{_resolve_comune_label(db, particella) or 'Comune sconosciuto'} "
-                f"{particella.foglio}/{particella.particella}"
-                f"{f'/{particella.subalterno}' if particella.subalterno else ''}"
+            item_result = await _sync_particella_item(
+                db,
+                client,
+                job_id=job.id,
+                credential_id=job.credential_id,
+                payload=payload,
+                item=item,
             )
-            current_result["current_label"] = label
-
-            comune_label = _resolve_comune_label(db, particella)
-            if not comune_label:
-                particella.capacitas_last_sync_at = current_time
-                particella.capacitas_last_sync_status = "skipped"
-                particella.capacitas_last_sync_error = "Comune non disponibile sulla particella."
-                particella.capacitas_last_sync_job_id = job.id
-                current_result["processed_items"] = int(current_result.get("processed_items", 0)) + 1
-                current_result["skipped_items"] = int(current_result.get("skipped_items", 0)) + 1
-                current_result["progress_percent"] = _compute_progress_percent(int(current_result["processed_items"]), len(particelle))
-                _append_recent_item(
-                    current_result,
-                    {
-                        "particella_id": str(particella.id),
-                        "label": label,
-                        "status": "skipped",
-                        "message": "Comune non disponibile sulla particella.",
-                    },
-                )
-                job.result_json = current_result
-                db.commit()
-                continue
-
-            try:
-                _batch_req = CapacitasTerreniBatchRequest(
-                    items=[
-                        CapacitasTerreniBatchItem(
-                            label=label,
-                            comune=comune_label,
-                            sezione=particella.sezione_catastale or "",
-                            foglio=particella.foglio,
-                            particella=particella.particella,
-                            sub=particella.subalterno or "",
-                        )
-                    ],
-                    continue_on_error=False,
-                    credential_id=job.credential_id,
-                    fetch_certificati=payload.fetch_certificati,
-                    fetch_details=payload.fetch_details,
-                )
-                try:
-                    sync_result = await sync_terreni_batch(db, client, _batch_req)
-                except CapacitasSessionExpiredError:
-                    logger.warning("Sessione Capacitas scaduta per %s, re-login e retry", label)
-                    await client.relogin()
-                    sync_result = await sync_terreni_batch(db, client, _batch_req)
-                item_result = sync_result.items[0] if sync_result.items else None
-                particella.capacitas_last_sync_at = current_time
-                particella.capacitas_last_sync_job_id = job.id
-                if item_result is None:
-                    particella.capacitas_last_sync_status = "failed"
-                    particella.capacitas_last_sync_error = "Nessun item result restituito dal sync."
-                    current_result["failed_items"] = int(current_result.get("failed_items", 0)) + 1
-                    item_status = "failed"
-                    item_message = "Nessun item result restituito dal sync."
-                elif not item_result.ok:
-                    particella.capacitas_last_sync_status = "failed"
-                    particella.capacitas_last_sync_error = item_result.error
-                    current_result["failed_items"] = int(current_result.get("failed_items", 0)) + 1
-                    item_status = "failed"
-                    item_message = item_result.error or "Errore sync particella."
-                elif item_result.total_rows <= 0:
-                    particella.capacitas_last_sync_status = "skipped"
-                    particella.capacitas_last_sync_error = None
-                    current_result["skipped_items"] = int(current_result.get("skipped_items", 0)) + 1
-                    item_status = "skipped"
-                    item_message = "Nessun risultato Capacitas per la particella."
-                else:
-                    particella.capacitas_last_sync_status = "synced"
-                    particella.capacitas_last_sync_error = None
-                    current_result["success_items"] = int(current_result.get("success_items", 0)) + 1
-                    item_status = "synced"
-                    item_message = (
-                        f"{item_result.total_rows} righe, "
-                        f"{item_result.imported_certificati} certificati, "
-                        f"{item_result.imported_details} dettagli"
-                    )
-
-                current_result["processed_items"] = int(current_result.get("processed_items", 0)) + 1
-                current_result["progress_percent"] = _compute_progress_percent(int(current_result["processed_items"]), len(particelle))
-                _append_recent_item(
-                    current_result,
-                    {
-                        "particella_id": str(particella.id),
-                        "label": label,
-                        "status": item_status,
-                        "message": item_message,
-                    },
-                )
-                job.result_json = current_result
-                db.commit()
-            except Exception as exc:
-                db.rollback()
-                job = db.get(CapacitasParticelleSyncJob, job.id)
-                particella = db.get(CatParticella, particella.id)
-                assert job is not None
-                assert particella is not None
-                current_result = dict(job.result_json or result_json)
-                particella.capacitas_last_sync_at = current_time
-                particella.capacitas_last_sync_status = "failed"
-                particella.capacitas_last_sync_error = str(exc)
-                particella.capacitas_last_sync_job_id = job.id
-                current_result["processed_items"] = int(current_result.get("processed_items", 0)) + 1
-                current_result["failed_items"] = int(current_result.get("failed_items", 0)) + 1
-                current_result["progress_percent"] = _compute_progress_percent(int(current_result["processed_items"]), len(particelle))
-                _append_recent_item(
-                    current_result,
-                    {
-                        "particella_id": str(particella.id),
-                        "label": label,
-                        "status": "failed",
-                        "message": str(exc),
-                    },
-                )
-                job.result_json = current_result
-                db.commit()
-
-            if index < len(particelle):
+            job = _apply_item_progress(
+                db,
+                job_id=job.id,
+                total_items=len(items),
+                item_result=item_result,
+                fallback_result=result_json,
+            )
+            if index < len(items):
                 # Re-read throttle_ms from result_json to pick up live speed overrides
                 job_now = db.get(CapacitasParticelleSyncJob, job.id)
                 effective_throttle = policy.throttle_ms

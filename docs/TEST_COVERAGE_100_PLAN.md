@@ -802,18 +802,21 @@ Fino alla chiusura completa del piano:
     `100%`, con soglia esplicita `--fail-under=100`;
   - Alembic espone una sola head, `20260905_0900`.
 
-## Eccezioni temporanee aperte
+- `2026-09-04` - AutoSync Capacitas particelle consortili
+  (`app/modules/elaborazioni/capacitas_particelle_autosync_policy.py`,
+  `app/modules/elaborazioni/capacitas_particelle_autosync_scheduler.py`, parser,
+  servizio progressivo, configurazione e runner di piattaforma)
+  La selezione automatica applica freschezza e retry per stato, accoda tranche
+  complete e conserva la policy nel payload del job. Il ciclo sequenziale usa
+  lo stesso helper per-item del percorso parallelo, eliminando la precedente
+  duplicazione di gestione esiti e progressivi. Esito validato:
+  - suite Capacitas estesa: `262` test passati;
+  - coverage del perimetro runtime modificato: `1074/1074` statement, `100%`,
+    con soglia esplicita `--fail-under=100`;
+  - policy e scheduler nuovi: `104/104` statement e branch coverage `100%`;
+  - complexity ratchet contro `a7d3823c`: passato senza finding.
 
-- `2026-09-04` - Capacitas sync progressiva particelle
-  (`backend/app/services/elaborazioni_capacitas_particelle_sync.py`)
-  La costruzione del payload Terreni per una particella avveniva fuori dalla
-  gestione per-riga: un `foglio` vuoto interrompeva l'intero job progressivo.
-  La correzione registra l'elemento non valido come `failed` e consente al
-  batch di proseguire. Il test mirato
-  `test_sync_particella_item_marks_invalid_cadastral_data_failed_without_calling_capacitas`
-  passa nel container backend. La coverage integrale del servizio e ancora da
-  completare prima del deploy: non dichiarare questa change conforme finche il
-  comando con `--cov-fail-under=100` non termina con esito verde.
+## Eccezioni temporanee aperte
 
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`
   Motivo: la pagina resta monolitica; la suite `presenze-collaboratore-detail` copre helper, tab `Cartellino`, tab `Riepilogo eventi`, rettifiche e flussi admin principali, ma il gate mirato Vitest misura ancora `98.21%` statement / `81.19%` branch / `100%` functions / `98.26%` lines.
