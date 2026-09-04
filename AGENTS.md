@@ -76,6 +76,18 @@ solo generare candidati `REVIEW_REQUIRED`, da approvare esplicitamente prima
 del manifest canonico. Ogni collaboratore INAZ, attivo o storico, senza mapping
 deve essere rilevato dall'audit e resta fail-closed.
 
+## Sync verso GaTe Mobile
+
+Per modifiche a `app/services/gate_mobile_sync.py`, alle route `mobile_sync`,
+agli schemi operatori/presenze verso GATE, o per incidenti "le Presenze non
+arrivano su GaTe Mobile", leggere prima `skills/gate-mobile-sync-contract/SKILL.md`.
+
+Invariante: il ciclo del connector e tutto-o-niente
+(`handshake -> catalogs -> mobile-operators -> worksets -> presenze/*`); il primo
+endpoint non-2xx congela **tutte** le Presenze su GATE. Il fail-hard di
+`required_personnel_area` in `build_mobile_operator_push_payload` e voluto e
+testato: si sistema il dato (`personnel_area` canonica), non il codice.
+
 ## Test coverage policy
 
 Data di entrata in vigore: `2026-06-19`.
