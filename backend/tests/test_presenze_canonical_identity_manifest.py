@@ -315,11 +315,56 @@ def test_backfill_script_dry_run_and_missing_actor(
 
     assert (
         backfill_script.main(
+            [
+                str(manifest_path),
+                "--changed-by-gaia-user-id",
+                "1",
+                "--reason",
+                "audit",
+                "--require-unchanged",
+            ]
+        )
+        == 1
+    )
+    output = capsys.readouterr()
+    assert json.loads(output.out)["operator_area_changes"] == 1
+    assert "IDENTITY_MANIFEST_DRIFT" in output.err
+
+    assert (
+        backfill_script.main(
             [str(manifest_path), "--changed-by-gaia-user-id", "1", "--reason", "test", "--apply"]
         )
         == 0
     )
     assert json.loads(capsys.readouterr().out)["operator_area_changes"] == 1
+
+    assert (
+        backfill_script.main(
+            [
+                str(manifest_path),
+                "--changed-by-gaia-user-id",
+                "1",
+                "--reason",
+                "audit",
+                "--require-unchanged",
+            ]
+        )
+        == 0
+    )
+    assert json.loads(capsys.readouterr().out)["unchanged"] == 1
+
+    with pytest.raises(CanonicalIdentityManifestError, match="read-only"):
+        backfill_script.main(
+            [
+                str(manifest_path),
+                "--changed-by-gaia-user-id",
+                "1",
+                "--reason",
+                "invalid",
+                "--apply",
+                "--require-unchanged",
+            ]
+        )
 
     with pytest.raises(CanonicalIdentityManifestError, match="autore"):
         backfill_script.main(

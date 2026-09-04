@@ -30,11 +30,20 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--apply", action="store_true", help="Applica il manifest; il default e dry-run."
     )
+    parser.add_argument(
+        "--require-unchanged",
+        action="store_true",
+        help="Fallisce se il dry-run rileva mapping o aree da ripristinare.",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_arg_parser().parse_args(argv)
+    if args.apply and args.require_unchanged:
+        raise CanonicalIdentityManifestError(
+            "--require-unchanged e un controllo read-only e non puo essere usato con --apply"
+        )
     raw = json.loads(args.manifest.read_text(encoding="utf-8"))
     entries = parse_canonical_identity_manifest(raw)
     with SessionLocal() as db:
@@ -49,6 +58,15 @@ def main(argv: list[str] | None = None) -> int:
             dry_run=not args.apply,
         )
     print(json.dumps(report.as_dict(), indent=2, sort_keys=True))
+    if args.require_unchanged and (
+        report.operator_area_changes or report.collaborator_mapping_changes
+    ):
+        print(
+            "IDENTITY_MANIFEST_DRIFT: il database non coincide con il registro canonico; "
+            "non riattivare sync o servizi Presenze prima della riconciliazione.",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 

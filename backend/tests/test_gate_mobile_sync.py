@@ -1086,6 +1086,7 @@ def test_presenze_team_pending_actions_are_canonical_idempotent_and_reconciliabl
         assert membership.collaborator_id == collaborator.id
         assert assignment is not None
         assert assignment.application_user_id == supervisor.id
+        assert assignment.permission_scope == "manage_team"
         membership_id = membership.id
         assignment_id = assignment.id
 
@@ -1363,6 +1364,22 @@ def test_presenze_team_action_replacement_and_validation_edges() -> None:
                 raise AssertionError(f"Expected {message}")
 
         membership_payload["requested_memberships"] = [{"gaia_user_id": str(person.id)}]
+        supervisor_payload["requested_supervisors"] = [
+            {"gaia_user_id": str(person.id), "permission_scope": "unknown"}
+        ]
+        try:
+            gate_mobile_team_actions.apply_presenze_team_proposal(
+                db,
+                supervisor_payload,
+                actor=actor,
+                action_type="propose_team_supervisor",
+            )
+        except ValueError as exc:
+            assert "permission_scope responsabile non valido" in str(exc)
+            db.rollback()
+        else:
+            raise AssertionError("Expected invalid supervisor permission scope")
+
         supervisor_payload["requested_supervisors"] = [{"gaia_user_id": str(person.id)}]
         gate_mobile_team_actions.apply_presenze_team_proposal(
             db,
@@ -1376,6 +1393,13 @@ def test_presenze_team_action_replacement_and_validation_edges() -> None:
             actor=actor,
             action_type="propose_team_supervisor",
         )
+        default_assignment = db.scalar(
+            select(OrganizationTeamSupervisorAssignment).where(
+                OrganizationTeamSupervisorAssignment.team_id == created.id
+            )
+        )
+        assert default_assignment is not None
+        assert default_assignment.permission_scope == "manage_team"
         membership_payload["requested_memberships"] = []
         supervisor_payload["requested_supervisors"] = []
         gate_mobile_team_actions.apply_presenze_team_proposal(

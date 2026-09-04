@@ -19,8 +19,10 @@ QUALITY_PYTHON ?= python3
 WORKER_PYTHON ?= backend/.venv/bin/python
 WORKER_COVERAGE_JSON ?= backend/coverage-worker.json
 WORKER_COVERAGE_XML ?= backend/coverage-worker.xml
+PRESENZE_IDENTITY_MANIFEST ?= secrets/presenze/canonical-identities.json
+PRESENZE_IDENTITY_AUDIT_USER_ID ?= 1
 
-.PHONY: test-ruolo-postgres test-presenze-postgres
+.PHONY: test-ruolo-postgres test-presenze-postgres audit-presenze-identities
 
 .PHONY: up down logs rebuild backend-shell frontend-shell migrate bootstrap-admin bootstrap-domain bootstrap-sections purge-seed live-sync scheduled-live-sync local-gateway-up local-gateway-down wiki-index wiki-reindex test test-worker test-wiki coverage-wiki smoke-network-vpn-bypass backup-db-to-nas restore-db-from-nas lint lint-backend lint-backend-all style-ratchet format-backend lint-frontend complexity-report complexity-check complexity-changed complexity-ratchet complexity-baseline complexity-baseline-verify complexity-ci-gate quality-test graphify-patch-openai-base-url graphify-refresh-core-code graphify-refresh-core-docs graphify-refresh-core graphify-catasto-code graphify-catasto-docs graphify-catasto-query graphify-presenze-code graphify-presenze-docs graphify-presenze-query graphify-inaz-code graphify-inaz-docs graphify-inaz-query graphify-network-code graphify-network-docs graphify-network-query graphify-operazioni-code graphify-operazioni-docs graphify-operazioni-query graphify-organigramma-code graphify-organigramma-docs graphify-organigramma-query graphify-riordino-code graphify-riordino-docs graphify-riordino-query graphify-ruolo-code graphify-ruolo-docs graphify-ruolo-query graphify-utenze-code graphify-utenze-docs graphify-utenze-query graphify-wiki-code graphify-wiki-docs graphify-wiki-docs-debug graphify-wiki-query graphify-backend graphify-backend-query graphify-frontend graphify-frontend-query graphify-docs graphify-docs-query graphify-platform-docs graphify-platform-docs-query graphify-query
 
@@ -110,6 +112,20 @@ test-ruolo-postgres:
 
 test-presenze-postgres:
 	$(COMPOSE) exec backend sh -lc 'GAIA_TEST_POSTGRES_URL="$${DATABASE_URL}" python -m pytest -m postgres tests/test_presenze_mapping_postgres.py'
+
+audit-presenze-identities:
+	@test -f "$(PRESENZE_IDENTITY_MANIFEST)" || { \
+		echo "Errore: registro canonico locale non trovato: $(PRESENZE_IDENTITY_MANIFEST)" >&2; \
+		exit 2; \
+	}
+	@container_manifest="/tmp/gaia-presenze-canonical-identities-audit.json"; \
+	trap '$(COMPOSE) exec -T backend find /tmp -maxdepth 1 -type f -name "$${container_manifest##*/}" -delete >/dev/null 2>&1 || true' EXIT INT TERM; \
+	$(COMPOSE) cp "$(PRESENZE_IDENTITY_MANIFEST)" "backend:$$container_manifest" >/dev/null; \
+	$(COMPOSE) exec -T backend python scripts/backfill_presenze_canonical_identities.py \
+		"$$container_manifest" \
+		--changed-by-gaia-user-id "$(PRESENZE_IDENTITY_AUDIT_USER_ID)" \
+		--reason "Audit read-only registro canonico locale" \
+		--require-unchanged
 
 test-wiki:
 	$(COMPOSE) exec backend python -m pytest tests/test_wiki_indexer.py tests/test_wiki_rag.py tests/test_wiki_requests_api.py tests/test_wiki_articles_api.py tests/test_wiki_chat_api.py -v

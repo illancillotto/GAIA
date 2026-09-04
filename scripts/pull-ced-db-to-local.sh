@@ -365,6 +365,7 @@ Dump scaricato e applicato in locale:
   $TRANSFER_DUMP_PATH
 
 Verifica manuale consigliata:
+  - make audit-presenze-identities (obbligatorio prima di riattivare sync Presenze)
   - login su GAIA locale
   - pagine con dati operativi recenti
   - eventuale test credenziali cifrate se CREDENTIAL_MASTER_KEY differisce

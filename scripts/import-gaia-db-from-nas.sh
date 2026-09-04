@@ -276,4 +276,7 @@ Backup preventivo locale:
 Dump importato:
   $DOWNLOADED_DUMP_PATH
 
+Verifica identita obbligatoria prima di riattivare sync Presenze:
+  make audit-presenze-identities
+
 EOF

@@ -16,6 +16,8 @@ from app.modules.presenze.models import (
 )
 
 PERSONNEL_AREAS = {"AGRARIO", "IMPIANTI"}
+TEAM_PERMISSION_SCOPES = {"view", "validate", "export", "manage_team"}
+TEAM_PERMISSION_SCOPE_ALIASES = {"team": "manage_team"}
 TEAM_ACTION_OPERATIONS = {
     "propose_team_create": {"create_team"},
     "propose_team_change": {"rename_team", "update_team", "upsert_team"},
@@ -241,14 +243,7 @@ def _replace_supervisors(
         user = _canonical_user(db, item, label="responsabile")
         if user.id in desired:
             raise TeamChangeApplyError(f"gaia_user_id duplicato nei supervisor: {user.id}")
-        desired[user.id] = (
-            _optional_text(
-                item.get("permission_scope"),
-                "permission_scope",
-                max_length=32,
-            )
-            or "team"
-        )
+        desired[user.id] = _team_permission_scope(item.get("permission_scope"))
     existing = list(
         db.scalars(
             select(OrganizationTeamSupervisorAssignment).where(
@@ -321,6 +316,14 @@ def canonical_gaia_user_id(value: Any, *, label: str) -> int:
     if user_id <= 0:
         raise TeamChangeApplyError(f"gaia_user_id non valido per {label}")
     return user_id
+
+
+def _team_permission_scope(value: Any) -> str:
+    scope = _optional_text(value, "permission_scope", max_length=32) or "manage_team"
+    scope = TEAM_PERMISSION_SCOPE_ALIASES.get(scope, scope)
+    if scope not in TEAM_PERMISSION_SCOPES:
+        raise TeamChangeApplyError("permission_scope responsabile non valido")
+    return scope
 
 
 def pending_action_gaia_user_id(payload: dict[str, Any]) -> int:

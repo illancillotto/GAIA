@@ -247,6 +247,34 @@ dry-run. Il report deve essere coerente con il manifest e non deve presentare
 errori. Qualunque identita inesistente, relazione `WCOperator` non univoca o
 mapping gia occupato interrompe l'intero batch prima delle scritture.
 
+## Registro locale e controllo post-restore
+
+Le coppie gia attestate devono restare disponibili in un registro locale
+privato anche quando un restore sostituisce database e tabella audit. Nel
+checkout operativo il percorso predefinito e
+`secrets/presenze/canonical-identities.json`, ignorato da Git. Il registro usa
+lo stesso schema `version=1` del manifest e non deve contenere nomi, username,
+email o matricole.
+
+Dopo ogni restore, prima di riattivare worker o sync Presenze, eseguire:
+
+```bash
+make audit-presenze-identities
+```
+
+Il target esegue un dry-run con `--require-unchanged`: exit code `0` significa
+che tutte le coppie registrate e le aree canoniche coincidono; exit code `1` e
+il marker `IDENTITY_MANIFEST_DRIFT` indicano che il restore ha perso o alterato
+almeno un'attestazione. Il controllo non scrive il database e un suo fallimento
+non autorizza il backfill automatico. Conservare il registro separatamente dai
+dump e includere questo gate nella checklist di restore CED/NAS.
+
+Caso omonimia noto: i due collaboratori SPANU SALVATORE sono persone distinte.
+Il registro conserva esclusivamente le coppie attestate
+`254 -> 1bf41d92-e6ed-4503-9e42-93f5cf43edf2` e
+`255 -> 33e64c8a-59b3-47b0-a186-cdec316246de`; il nome non deve mai essere
+usato per ricostruirle o invertirle.
+
 ## Backup e applicazione
 
 Prima di modificare produzione creare un backup verificabile:

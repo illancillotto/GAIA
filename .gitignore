@@ -29,6 +29,8 @@ frontend/.env
 .venv/
 secrets/pdnd/*
 !secrets/pdnd/.gitkeep
+secrets/presenze/*.json
+!secrets/presenze/README.md
 .venv-test-catasto/
 
 # Logs
