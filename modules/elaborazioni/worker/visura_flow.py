@@ -1,13 +1,19 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
-from functools import wraps
 import logging
 import os
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, replace
+from functools import wraps
 from pathlib import Path
-from typing import TYPE_CHECKING, Awaitable, Callable
+from typing import TYPE_CHECKING
 
-from sister_exceptions import DocumentNonEvadibileError, DocumentNotYetProducedError, SisterDocumentNotReadyError, SisterNotFoundError
+from sister_exceptions import (
+    DocumentNonEvadibileError,
+    DocumentNotYetProducedError,
+    SisterDocumentNotReadyError,
+    SisterNotFoundError,
+)
 
 if TYPE_CHECKING:
     from browser_session import BrowserSession
@@ -101,7 +107,7 @@ class CaptchaSubmission:
     text: str | None = None
 
 
-def _current_correlation(browser: "BrowserSession"):
+def _current_correlation(browser: BrowserSession):
     getter = getattr(browser, "get_request_correlation", None)
     if callable(getter):
         return getter()
@@ -109,7 +115,7 @@ def _current_correlation(browser: "BrowserSession"):
 
 
 async def _poll_and_download(
-    browser: "BrowserSession",
+    browser: BrowserSession,
     document_path: Path,
     submission: CaptchaSubmission,
     richieste_url: str | None,
@@ -146,7 +152,7 @@ async def _poll_and_download(
 
 
 
-def _resolved_remote_id(browser: "BrowserSession", remote_id: str | None) -> str | None:
+def _resolved_remote_id(browser: BrowserSession, remote_id: str | None) -> str | None:
     return getattr(_current_correlation(browser), "remote_id", None) or remote_id
 
 
@@ -186,7 +192,7 @@ def _completed_remote_result(
 
 
 async def _submit_captcha_then_download(
-    browser: "BrowserSession",
+    browser: BrowserSession,
     submission: CaptchaSubmission,
     document_path: Path,
     callbacks: VisuraFlowCallbacks,
@@ -207,7 +213,7 @@ async def _submit_captcha_then_download(
 
 
 async def _send_captcha(
-    browser: "BrowserSession",
+    browser: BrowserSession,
     submission: CaptchaSubmission,
     callbacks: VisuraFlowCallbacks,
 ) -> bool:
@@ -218,7 +224,7 @@ async def _send_captcha(
 
 
 async def _download_submitted_captcha(
-    browser: "BrowserSession",
+    browser: BrowserSession,
     submission: CaptchaSubmission,
     document_path: Path,
     callbacks: VisuraFlowCallbacks,
@@ -236,7 +242,7 @@ async def _download_submitted_captcha(
 
 
 async def _resume_remote_request(
-    browser: "BrowserSession",
+    browser: BrowserSession,
     request,
     document_path: Path,
     callbacks: VisuraFlowCallbacks,
@@ -263,7 +269,7 @@ async def _resume_remote_request(
 
 
 async def _download_if_ready(
-    browser: "BrowserSession",
+    browser: BrowserSession,
     request,
     document_path: Path,
     callbacks: VisuraFlowCallbacks,
@@ -294,7 +300,7 @@ async def _download_if_ready(
 
 
 async def _prepare_subject_request(
-    browser: "BrowserSession",
+    browser: BrowserSession,
     request,
     document_path: Path,
     callbacks: VisuraFlowCallbacks,
@@ -312,8 +318,24 @@ async def _prepare_subject_request(
     return await _download_if_ready(browser, request, document_path, callbacks, " (soggetto)")
 
 
+def _normalized_request_value(request, field: str) -> str:
+    return str(getattr(request, field, "") or "").strip().upper()
+
+
+def _is_simaxis_request(request) -> bool:
+    comune_code = _normalized_request_value(request, "comune_codice").partition("#")[0]
+    return comune_code == "I743" or _normalized_request_value(request, "comune") == "SIMAXIS"
+
+
+def _immobile_section_attempts(request) -> tuple[str | None, ...]:
+    section = _normalized_request_value(request, "sezione")
+    if not _is_simaxis_request(request):
+        return (section or None,)
+    return ("A", "B") if section in {"", "A"} else (section,)
+
+
 async def _prepare_immobile_request(
-    browser: "BrowserSession",
+    browser: BrowserSession,
     request,
     document_path: Path,
     callbacks: VisuraFlowCallbacks,
@@ -323,15 +345,31 @@ async def _prepare_immobile_request(
     await browser.open_visura_form()
     callbacks.operation("Compilazione dati visura")
     logger.info("Richiesta %s compilazione form visura", request.id)
-    try:
-        await browser.fill_visura_form(request)
-    except SisterNotFoundError as exc:
-        return VisuraFlowResult(status="not_found", error_message=str(exc))
-    return await _download_if_ready(browser, request, document_path, callbacks, "")
+    section_attempts = _immobile_section_attempts(request)
+    last_not_found: SisterNotFoundError | None = None
+    for attempt_index, section in enumerate(section_attempts):
+        if attempt_index:
+            callbacks.operation("Particella non trovata in Simaxis sezione A, ricerca in sezione B")
+            logger.info("Richiesta %s non trovata in Simaxis/A, nuovo tentativo in Simaxis/B", request.id)
+            await browser.open_visura_form()
+        if section is not None:
+            request.sezione = section
+        try:
+            await browser.fill_visura_form(request)
+        except SisterNotFoundError as exc:
+            last_not_found = exc
+            continue
+        return await _download_if_ready(browser, request, document_path, callbacks, "")
+
+    assert last_not_found is not None
+    message = str(last_not_found)
+    if section_attempts == ("A", "B"):
+        message = "Nessun immobile individuato da AdE nelle sezioni A e B di Simaxis."
+    return VisuraFlowResult(status="not_found", error_message=message)
 
 
 async def _prepare_request(
-    browser: "BrowserSession",
+    browser: BrowserSession,
     request,
     document_path: Path,
     callbacks: VisuraFlowCallbacks,
@@ -350,7 +388,7 @@ async def _prepare_request(
 
 @_resubmit_pending_document_once
 async def execute_visura_flow(
-    browser: "BrowserSession",
+    browser: BrowserSession,
     request,
     document_path: Path,
     captcha_dir: Path,
