@@ -1,5 +1,31 @@
 # Progress Presenze
 
+## Profilo contrattuale dedotto dai codici orario INAZ - 2026-09-04
+
+- `resolve_contract_profile` deduce ora il profilo anche dai codici orario
+  giornalieri, non piu solo dal codice template: `infer_contract_profile_from_schedule_codes`
+  scorre i codici del collaboratore in ordine di frequenza e ne ricava il tipo;
+- prefissi riconosciuti: `OPE`/`OP`/`OSAB`/`ADD`/`IRR` operai (`420` minuti,
+  `456` per `OPE0736`), `IMP` e `RIENTRO IMP` impiegati (`385`), `TELEC`
+  impiegati telecontrollo (`480`); un codice operaio prevale su uno impiegato
+  perche i turnisti del telecontrollo portano `TELEC` solo sui giorni di turno;
+- il profilo dichiarato in GAIA continua a vincere: la deduzione interviene solo
+  quando `contract_kind` e vuoto, e i minuti standard gia valorizzati non vengono
+  sovrascritti (prima il guard su `standard_daily_minutes` non nullo bloccava del
+  tutto la deduzione, lasciando senza tipo `9` collaboratori);
+- l'import giornaliere (`import_jobs`) raccoglie i codici orario del run e
+  aggiorna il collaboratore; l'export XLSM (`xlsm_export_job`) passa i codici
+  delle righe gia caricate, cosi il file mensile non dipende piu dall'ordine
+  degli import;
+- effetto misurato sui `197` collaboratori reali: `119` da vuoto a `operaio`,
+  `9` da vuoto a `impiegato`, nessun profilo gia presente sovrascritto;
+- `LEGACY_ABSENCE_CODE_BY_REQUEST_PREFIX` allineata alla legenda completa del
+  file HR, cosi il codice assenza pubblicato coincide con quello che GATE mostra
+  nelle giornaliere della console;
+- attenzione operativa: alla prossima rigenerazione del file mensile le ore
+  calcolate cambiano per i `119` collaboratori che prima erano senza profilo;
+  va fatto un confronto prima/dopo su qualche nominativo reale.
+
 ## Runbook mapping canonico INAZ-GAIA - 2026-09-02
 
 - aggiunta la skill di progetto `gaia-presenze-identity-mapping`, obbligatoria
@@ -608,7 +634,7 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
   - cartellino mensile a matrice disponibile su `/presenze/giornaliere`, ma manca ancora un calendario per singolo collaboratore nel dettaglio;
   - niente preview differenziale/import duplicati avanzata;
   - niente selector template assistito lato filesystem;
-- il profilo contrattuale e ora un dato manuale esplicito del collaboratore, ma manca ancora l'estrazione automatica affidabile da Inaz o da una fonte HR esterna;
+- il profilo contrattuale e dedotto dai codici orario Inaz quando non e dichiarato in GAIA (vedi la sezione del 2026-09-04); resta senza fonte per chi non ha nemmeno un codice orario riconosciuto, e i minuti standard per prefisso sono una tabella nel codice, non un dato HR;
 - la banca ore e oggi modellata come workflow HR su snapshot/eventi importati `Banca ore*` + rettifiche manuali approvabili:
   - non e ancora stato implementato il contatore storico esterno usato da Carlo per la liquidazione;
   - restano da chiarire le eventuali regole CCNL aggiuntive su maturazione/decadenza oltre ai semplici vincoli di saldo e approvazione;
