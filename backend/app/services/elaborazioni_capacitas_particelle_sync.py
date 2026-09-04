@@ -4,7 +4,7 @@ import asyncio
 import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -34,6 +34,7 @@ from app.services.elaborazioni_capacitas_terreni import (
 
 logger = logging.getLogger(__name__)
 
+UTC = timezone.utc  # noqa: UP017 - the runtime worker image still uses Python 3.10.
 ROME_TZ = ZoneInfo("Europe/Rome")
 DAY_THROTTLE_MS = 900
 EVENING_THROTTLE_MS = 350

@@ -4,7 +4,7 @@ import inspect
 import logging
 from collections.abc import Callable, Generator
 from contextlib import suppress
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -24,6 +24,7 @@ from app.services.elaborazioni_capacitas_particelle_sync import create_particell
 
 logger = logging.getLogger(__name__)
 
+UTC = timezone.utc  # noqa: UP017 - the runtime worker image still uses Python 3.10.
 ACTIVE_JOB_STATUSES = {"pending", "queued_resume", "processing", "cancelling"}
 
 
