@@ -2,7 +2,7 @@
 name: gate-mobile-sync-contract
 description: Contratto e invarianti degli endpoint mobile-sync che GAIA serve al connector GaTe Mobile. Usala quando tocchi gate_mobile_sync.py, le route mobile_sync, gli schemi operatori/presenze, o quando le Presenze non arrivano su GaTe Mobile.
 metadata:
-  short-description: GAIA -> GaTe Mobile: non rompere la pipeline
+  short-description: "GAIA -> GaTe Mobile: non rompere la pipeline"
 ---
 
 # GATE Mobile Sync Contract (lato GAIA)
@@ -84,14 +84,17 @@ payload/enum verso GATE:
 
 ## Verifica end-to-end
 
-Dal repo GaTe Mobile (`/home/cbo/CursorProjects/GaTe-mobile`):
+Dal checkout GaTe Mobile, usando la skill canonica di progetto:
 
 ```
-.claude/skills/presenze-sync-alignment/scripts/diagnose.sh
+skills/presenze-sync-alignment/scripts/diagnose.sh --env /path/to/gate.env
 ```
 
-Isola quale endpoint rompe il ciclo, la freschezza della cache GATE, e il
-verdetto. Per un singolo record: `scripts/compare-giornaliera.py`.
+Verifica la salute delle API LAN e gli indicatori aggregati della cache GATE.
+Per il push outbound abbina sempre lo stato GAIA
+`GET /operazioni/mobile-gateway-sync/status`; per un singolo record usa
+`skills/presenze-sync-alignment/scripts/compare-giornaliera.py` dal checkout
+GaTe Mobile.
 
 ## Stop condition
 
