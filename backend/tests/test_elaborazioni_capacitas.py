@@ -5981,6 +5981,49 @@ async def test_sync_particella_item_retries_once_after_session_expiry(monkeypatc
 
 
 @pytest.mark.anyio
+async def test_sync_particella_item_marks_invalid_cadastral_data_failed_without_calling_capacitas(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sqlalchemy import select as sa_select
+
+    from app.modules.elaborazioni.capacitas.models import CapacitasParticelleSyncJobCreateRequest
+    from app.services.elaborazioni_capacitas_particelle_sync import ParticellaSyncItem, _sync_particella_item
+
+    async def unexpected_sync(*_args, **_kwargs):
+        raise AssertionError("Capacitas non deve essere chiamato per dati locali non validi")
+
+    monkeypatch.setattr(
+        "app.services.elaborazioni_capacitas_particelle_sync.sync_terreni_batch",
+        unexpected_sync,
+    )
+
+    db = TestingSessionLocal()
+    try:
+        particella = db.scalar(sa_select(CatParticella).where(CatParticella.foglio == "1", CatParticella.particella == "680"))
+        assert particella is not None
+        job = CapacitasParticelleSyncJob(status="processing", mode="progressive_catalog", payload_json={}, result_json={})
+        db.add(job)
+        db.commit()
+
+        result = await _sync_particella_item(
+            db,
+            object(),
+            job_id=job.id,
+            credential_id=None,
+            payload=CapacitasParticelleSyncJobCreateRequest(only_due=False, fetch_certificati=False, fetch_details=False),
+            item=ParticellaSyncItem(1, particella.id, "Uras /680", "Uras", "", "", "680", ""),
+        )
+
+        db.refresh(particella)
+        assert result["status"] == "failed"
+        assert "foglio" in str(result["message"])
+        assert particella.capacitas_last_sync_status == "failed"
+        assert particella.capacitas_last_sync_job_id == job.id
+    finally:
+        db.close()
+
+
+@pytest.mark.anyio
 async def test_sync_particella_item_marks_failed_if_retry_also_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.modules.elaborazioni.capacitas.apps.involture.client import (
         CapacitasSessionExpiredError,

@@ -788,6 +788,17 @@ Fino alla chiusura completa del piano:
 
 ## Eccezioni temporanee aperte
 
+- `2026-09-04` - Capacitas sync progressiva particelle
+  (`backend/app/services/elaborazioni_capacitas_particelle_sync.py`)
+  La costruzione del payload Terreni per una particella avveniva fuori dalla
+  gestione per-riga: un `foglio` vuoto interrompeva l'intero job progressivo.
+  La correzione registra l'elemento non valido come `failed` e consente al
+  batch di proseguire. Il test mirato
+  `test_sync_particella_item_marks_invalid_cadastral_data_failed_without_calling_capacitas`
+  passa nel container backend. La coverage integrale del servizio e ancora da
+  completare prima del deploy: non dichiarare questa change conforme finche il
+  comando con `--cov-fail-under=100` non termina con esito verde.
+
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`
   Motivo: la pagina resta monolitica; la suite `presenze-collaboratore-detail` copre helper, tab `Cartellino`, tab `Riepilogo eventi`, rettifiche e flussi admin principali, ma il gate mirato Vitest misura ancora `98.21%` statement / `81.19%` branch / `100%` functions / `98.26%` lines.
   Rientro atteso: spezzare la page in componenti/helper testabili e chiudere i rami residui su redirect embedded, azioni admin edge e fallback di dettaglio.

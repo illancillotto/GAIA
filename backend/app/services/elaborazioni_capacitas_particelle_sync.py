@@ -390,24 +390,24 @@ async def _sync_particella_item(
             "message": "Comune non disponibile sulla particella.",
         }
 
-    batch_request = CapacitasTerreniBatchRequest(
-        items=[
-            CapacitasTerreniBatchItem(
-                label=item.label,
-                comune=item.comune_label,
-                sezione=item.sezione,
-                foglio=item.foglio,
-                particella=item.particella,
-                sub=item.sub,
-            ),
-        ],
-        continue_on_error=False,
-        credential_id=credential_id,
-        fetch_certificati=payload.fetch_certificati,
-        fetch_details=payload.fetch_details,
-    )
-
     try:
+        # Invalid local cadastral data must be recorded per item, not abort the batch.
+        batch_request = CapacitasTerreniBatchRequest(
+            items=[
+                CapacitasTerreniBatchItem(
+                    label=item.label,
+                    comune=item.comune_label,
+                    sezione=item.sezione,
+                    foglio=item.foglio,
+                    particella=item.particella,
+                    sub=item.sub,
+                ),
+            ],
+            continue_on_error=False,
+            credential_id=credential_id,
+            fetch_certificati=payload.fetch_certificati,
+            fetch_details=payload.fetch_details,
+        )
         try:
             sync_result = await sync_terreni_batch(db, client, batch_request)
         except CapacitasSessionExpiredError:
