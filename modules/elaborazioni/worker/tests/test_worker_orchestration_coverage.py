@@ -231,6 +231,7 @@ def test_recovery_resets_all_enabled_job_types(monkeypatch: pytest.MonkeyPatch) 
     values = {
         "prepare_anagrafica_history_jobs_for_recovery": [1],
         "prepare_incass_sync_jobs_for_recovery": [2],
+        "prepare_domande_irrigue_sync_jobs_for_recovery": [7],
         "prepare_terreni_sync_jobs_for_recovery": [3],
         "prepare_particelle_sync_jobs_for_recovery": [4],
         "prepare_registered_mail_sync_jobs_for_recovery": [5],
@@ -312,9 +313,10 @@ def test_processing_delegates_and_failure_guards(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(worker_module, "run_anagrafica_history_job_by_id", async_recorder("history"))
     monkeypatch.setattr(worker_module, "run_incass_job_by_id", async_recorder("incass"))
+    monkeypatch.setattr(worker_module, "run_domande_irrigue_job_by_id", async_recorder("domande_irrigue"))
     monkeypatch.setattr(worker_module, "run_terreni_job_by_id", async_recorder("terreni"))
     monkeypatch.setattr(worker_module, "run_particelle_job_by_id", async_recorder("particelle"))
-    for kind in ("anagrafica_history", "incass", "terreni", "particelle", "unknown"):
+    for kind in ("anagrafica_history", "incass", "domande_irrigue", "terreni", "particelle", "unknown"):
         run(worker._process_capacitas_job(kind, 31))
 
     monkeypatch.setattr(worker_module.asyncio, "to_thread", async_recorder("thread"))

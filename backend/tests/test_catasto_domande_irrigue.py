@@ -347,15 +347,20 @@ def test_persist_domande_irrigue_handles_dict_payloads_missing_context_and_sub_s
         malformed_summary = persist_capacitas_domande_irrigue_batch(db, malformed)
         db.commit()
 
-        assert malformed_summary.domande_inserted == 1
+        assert malformed_summary.domande_inserted == 0
+        assert malformed_summary.domande_seen == 0
+        assert malformed_summary.invalid_year_rows == (
+            {
+                "external_id": None,
+                "domanda_numero": None,
+                "anno": "bad",
+                "reason": "Anno Capacitas assente o fuori intervallo 1900-2100",
+            },
+        )
         assert malformed_summary.particelle_inserted == 0
-        malformed_domanda = db.execute(
-            select(CatDomandaIrrigua).where(CatDomandaIrrigua.source_row_id == "src-bad")
-        ).scalar_one()
-        assert malformed_domanda.anno == 0
-        assert malformed_domanda.utenza_id is None
-        assert malformed_domanda.occupancy_id is None
-        assert malformed_domanda.tot_sup_cat_mq is None
+        assert db.scalar(
+            select(func.count()).select_from(CatDomandaIrrigua).where(CatDomandaIrrigua.source_row_id == "src-bad")
+        ) == 0
 
         dict_result = {
             "source_row_id": "src-sub",
@@ -458,6 +463,34 @@ def test_scan_domande_irrigue_groups_unlinked_rows_and_service_helpers() -> None
         assert domande_irrigue_service._normalize_com("ABC") == "ABC"
         assert domande_irrigue_service._normalize_ccs(None) is None
         assert domande_irrigue_service._jsonable([Decimal("1.50")]) == ["1.50"]
+        assert domande_irrigue_service._find_utenza(db, anno=2026, cco=None, com="179", fra="16") is None
+        assert (
+            domande_irrigue_service._find_occupancy(
+                db,
+                cco=None,
+                com="179",
+                pvc="097",
+                fra="16",
+                ccs="00000",
+            )
+            is None
+        )
+        assert domande_irrigue_service._detail_rows_for_domanda({}, {}) == []
+        assert domande_irrigue_service._first_not_blank(None, " ") is None
+        assert (
+            domande_irrigue_service._find_existing_domanda(
+                db,
+                external_id=None,
+                anno=2026,
+                domanda_numero=None,
+                cco="000001001",
+                com="179",
+                pvc="097",
+                fra="16",
+                ccs="00000",
+            )
+            is None
+        )
         ambiguous_unit = CatConsorzioUnit(
             cod_comune_capacitas=179,
             source_cod_comune_capacitas=179,
@@ -546,17 +579,17 @@ def test_domande_irrigue_sync_job_runs_searches_persists_and_tracks_recovery() -
             expired_once={"expired"},
             failing={"bad"},
         )
+        valid_result = _capacitas_result(
+            domanda_id="dom-job",
+            domanda_numero="910",
+            data_ins="02/05/2026",
+            sup_irr="120",
+            autorinnovo="0",
+        )
+        valid_result.domande.append(CapacitasDomandaIrriguaRow(ID="dom-invalid", Anno="0", Domanda="911"))
         scraper = _JobDomandeScraper(
             {
-                "000001001": _capacitas_batch(
-                    _capacitas_result(
-                        domanda_id="dom-job",
-                        domanda_numero="910",
-                        data_ins="02/05/2026",
-                        sup_irr="120",
-                        autorinnovo="0",
-                    )
-                ),
+                "000001001": _capacitas_batch(valid_result),
                 "000001002": _capacitas_batch(
                     CapacitasDomandeIrrigueResult(
                         cco="000001002",
@@ -585,6 +618,8 @@ def test_domande_irrigue_sync_job_runs_searches_persists_and_tracks_recovery() -
         assert result["total_rows"] == 2
         assert result["processed_rows"] == 2
         assert result["failed_items"] == 2
+        assert result["invalid_year_rows"] == 1
+        assert result["recent_invalid_year_rows"][0]["external_id"] == "dom-invalid"
         assert result["domande_inserted"] == 1
         assert result["particelle_inserted"] == 1
         assert result["anomalies_opened"] == 2
@@ -632,6 +667,11 @@ def test_domande_irrigue_sync_job_runs_searches_persists_and_tracks_recovery() -
         domande_irrigue_job_service._append_recent_item(overflow_payload, {"i": 101})
         assert len(overflow_payload["recent_items"]) == 100
         assert overflow_payload["recent_items"][0] == {"i": 2}
+        invalid_payload: dict[str, object] = {}
+        for index in range(102):
+            domande_irrigue_job_service._append_invalid_year_item(invalid_payload, {"i": index, "empty": None})
+        assert len(invalid_payload["recent_invalid_year_rows"]) == 100
+        assert invalid_payload["recent_invalid_year_rows"][0] == {"i": 2}
 
         expire_stale_domande_irrigue_sync_jobs(db)
         db.refresh(stale)

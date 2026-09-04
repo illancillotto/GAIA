@@ -17,6 +17,7 @@ from app.models.catasto_phase1 import (
     CatUtenzaIrrigua,
 )
 from app.modules.catasto.models.domande_irrigue import CatDomandaIrrigua, CatDomandaIrriguaParticella
+from app.modules.catasto.services.domande_irrigue_import_validation import valid_year_rows
 
 DIR_ANOMALIA_SUPERFICIE_COLTURA = "DIR-01-superficie_coltura_superata"
 DIR_ANOMALIA_SUPERFICIE_TOTALE = "DIR-02-superficie_totale_da_verificare"
@@ -44,6 +45,7 @@ class DomandeIrriguePersistSummary:
     anomalies_opened: int = 0
     anomalies_updated: int = 0
     anomalies_closed: int = 0
+    invalid_year_rows: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -94,12 +96,11 @@ def persist_capacitas_domande_irrigue_batch(
     inserted = 0
     updated = 0
     particelle_inserted = 0
-    linked_utenze: set[Any] = set()
-    linked_occupancies: set[Any] = set()
-    linked_particelle: set[Any] = set()
+    linked_utenze, linked_occupancies, linked_particelle = set(), set(), set()
+    invalid_year_rows: list[dict[str, Any]] = []
 
     for source_item in source_items:
-        for domanda_row in _iter_domande(source_item):
+        for domanda_row in valid_year_rows(_iter_domande(source_item), invalid_year_rows):
             domande_seen += 1
             domanda, was_inserted = _upsert_domanda(db, source_item, domanda_row)
             if was_inserted:
@@ -131,6 +132,7 @@ def persist_capacitas_domande_irrigue_batch(
         anomalies_opened=anomalies.opened,
         anomalies_updated=anomalies.updated,
         anomalies_closed=anomalies.closed,
+        invalid_year_rows=tuple(invalid_year_rows),
     )
 
 
@@ -712,11 +714,8 @@ def _single_current_segment_id(unit: CatConsorzioUnit | None) -> Any | None:
 
 
 def _coerce_result_items(batch_or_result: Any) -> list[Any]:
-    if hasattr(batch_or_result, "items") and not isinstance(batch_or_result, dict):
-        items = getattr(batch_or_result, "items")
-        if isinstance(items, list):
-            return items
-    return [batch_or_result]
+    items = None if isinstance(batch_or_result, dict) else getattr(batch_or_result, "items", None)
+    return items if isinstance(items, list) else [batch_or_result]
 
 
 def _iter_domande(source_item: Any) -> Iterable[Any]:

@@ -39,6 +39,7 @@ from app.models.catasto import (
 from app.models.capacitas import (
     CapacitasAnagraficaHistoryImportJob,
     CapacitasCredential,
+    CapacitasDomandeIrrigueAutoSyncState,
     CapacitasDomandeIrrigueSyncJob,
     CapacitasInCassSyncJob,
     CapacitasParticelleSyncJob,
@@ -132,6 +133,7 @@ __all__ = [
     "CatUtenzaIntestatario",
     "CapacitasCredential",
     "CapacitasAnagraficaHistoryImportJob",
+    "CapacitasDomandeIrrigueAutoSyncState",
     "CapacitasDomandeIrrigueSyncJob",
     "CapacitasInCassSyncJob",
     "CapacitasParticelleSyncJob",

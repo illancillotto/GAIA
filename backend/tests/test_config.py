@@ -384,3 +384,26 @@ def test_settings_helper_properties_parse_tokens_and_fallbacks(monkeypatch) -> N
     assert settings.wc_sync_consorziati_role_id_value == "3"
     assert settings.catasto_ade_autosync_categories_list == ["nuove_in_ade", "geometrie_variate"]
     assert settings.effective_mobile_connector_token == "connector-token"
+
+
+def test_domande_irrigue_autosync_settings(monkeypatch) -> None:
+    _clear_settings_env(monkeypatch)
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///./test.db")
+    monkeypatch.setenv("JWT_SECRET_KEY", "config-secret")
+    monkeypatch.setenv("CAPACITAS_DOMANDE_IRRIGUE_AUTOSYNC_ENABLED", "true")
+    monkeypatch.setenv("CAPACITAS_DOMANDE_IRRIGUE_AUTOSYNC_INTERVAL_MINUTES", "12")
+    monkeypatch.setenv("CAPACITAS_DOMANDE_IRRIGUE_AUTOSYNC_CREDENTIAL_ID", "7")
+    monkeypatch.setenv("CAPACITAS_DOMANDE_IRRIGUE_AUTOSYNC_CHUNK_SIZE", "80")
+    monkeypatch.setenv("CAPACITAS_DOMANDE_IRRIGUE_AUTOSYNC_START_HOUR", "21")
+    monkeypatch.setenv("CAPACITAS_DOMANDE_IRRIGUE_AUTOSYNC_END_HOUR", "5")
+    monkeypatch.setenv("CAPACITAS_DOMANDE_IRRIGUE_AUTOSYNC_TIMEZONE", "UTC")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.capacitas_domande_irrigue_autosync_enabled is True
+    assert settings.capacitas_domande_irrigue_autosync_interval_minutes == 12
+    assert settings.capacitas_domande_irrigue_autosync_credential_id == 7
+    assert settings.capacitas_domande_irrigue_autosync_chunk_size == 80
+    assert settings.capacitas_domande_irrigue_autosync_start_hour == 21
+    assert settings.capacitas_domande_irrigue_autosync_end_hour == 5
+    assert settings.capacitas_domande_irrigue_autosync_timezone == "UTC"

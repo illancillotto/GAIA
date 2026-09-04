@@ -4,13 +4,13 @@ from pathlib import Path
 from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import SettingsConfigDict
 
-from app.core.gis_settings import GisSettings
+from app.core.capacitas_autosync_settings import CapacitasAutoSyncSettings
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ROOT_ENV_FILE = REPO_ROOT / ".env"
 
 
-class Settings(GisSettings):
+class Settings(CapacitasAutoSyncSettings):
     project_name: str = "GAIA"
     app_version: str = "0.1.0"
     app_env: str = "development"

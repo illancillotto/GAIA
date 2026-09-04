@@ -9,6 +9,7 @@ from app.models.bonifica_oristanese import BonificaOristaneseCredential
 from app.models.capacitas import (
     CapacitasAnagraficaHistoryImportJob,
     CapacitasCredential,
+    CapacitasDomandeIrrigueAutoSyncState,
     CapacitasDomandeIrrigueSyncJob,
     CapacitasInCassSyncJob,
     CapacitasParticelleSyncJob,
@@ -230,6 +231,7 @@ __all__ = [
     "BonificaOristaneseCredential",
     "CapacitasCredential",
     "CapacitasAnagraficaHistoryImportJob",
+    "CapacitasDomandeIrrigueAutoSyncState",
     "CapacitasDomandeIrrigueSyncJob",
     "CapacitasInCassSyncJob",
     "CapacitasParticelleSyncJob",

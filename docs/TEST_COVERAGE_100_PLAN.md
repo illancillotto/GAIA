@@ -786,6 +786,22 @@ Fino alla chiusura completa del piano:
   - `cd frontend && VITEST_COVERAGE_INCLUDE='src/components/elaborazioni/sister-portal-health-workspace.tsx' npm run test:coverage -- --run tests/unit/sister-portal-health-workspace.test.tsx --coverage.reportsDirectory=/tmp/gaia-sister-portal-health-coverage` -> `5` test passati, `100%` statements / branches / functions / lines sul componente runtime modificato;
   - `cd frontend && npm run typecheck` -> passato.
 
+- `2026-09-04` - AutoSync notturno Capacitas domande irrigue
+  (`app/modules/elaborazioni/domande_irrigue_autosync_scheduler.py`, servizi e
+  modelli backend collegati, `modules/elaborazioni/worker/worker.py`)
+  Lo scheduler usa chunk di CF/PIVA con checkpoint persistente; il worker
+  assegna priorita ai job manuali. L'anno viene letto esclusivamente dal campo
+  `Anno` Capacitas e gli scarti vengono conteggiati nel risultato del job.
+  Esito validato:
+  - suite Capacitas estesa: `224` test passati;
+  - suite worker completa con `PYTHONPATH=backend:modules/elaborazioni/worker`:
+    `510` test passati;
+  - coverage backend del perimetro modificato: `1420/1420` statement, `100%`,
+    con soglia esplicita `--fail-under=100`;
+  - coverage `modules/elaborazioni/worker/worker.py`: `892/892` statement,
+    `100%`, con soglia esplicita `--fail-under=100`;
+  - Alembic espone una sola head, `20260905_0900`.
+
 ## Eccezioni temporanee aperte
 
 - `2026-09-04` - Capacitas sync progressiva particelle

@@ -136,9 +136,15 @@ _stub_module(
 _stub_module(
     "app.services.elaborazioni_capacitas_runtime",
     run_anagrafica_history_job_by_id=lambda _job_id: None,
+    run_domande_irrigue_job_by_id=lambda _job_id: None,
     run_incass_job_by_id=lambda _job_id: None,
     run_particelle_job_by_id=lambda _job_id: None,
     run_terreni_job_by_id=lambda _job_id: None,
+)
+_stub_module(
+    "app.services.elaborazioni_capacitas_domande_irrigue",
+    expire_stale_domande_irrigue_sync_jobs=lambda _db: None,
+    prepare_domande_irrigue_sync_jobs_for_recovery=lambda _db: [],
 )
 _stub_module("app.services.elaborazioni_capacitas", has_available_credential=lambda _db, _credential_id=None: True)
 _stub_module(
@@ -180,8 +186,14 @@ from sister_exceptions import SisterRequestCorrelationError
 from sister_captcha_wait import SisterCaptchaClaim
 
 for _module_name in (
+    "anti_captcha_client",
+    "credential_vault",
+    "reporting",
+    "runtime_policy",
+    "sister_exceptions",
     "app.services.elaborazioni_capacitas",
     "app.services.elaborazioni_capacitas_anagrafica_history",
+    "app.services.elaborazioni_capacitas_domande_irrigue",
     "app.services.elaborazioni_capacitas_incass",
     "app.services.elaborazioni_capacitas_particelle_sync",
     "app.services.elaborazioni_capacitas_runtime",
@@ -195,6 +207,7 @@ from app.models.application_user import ApplicationUser
 from app.models.capacitas import (
     CapacitasAnagraficaHistoryImportJob,
     CapacitasCredential,
+    CapacitasDomandeIrrigueSyncJob,
     CapacitasInCassSyncJob,
     CapacitasParticelleSyncJob,
     CapacitasTerreniSyncJob,
@@ -224,6 +237,7 @@ def worker_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     ApplicationUser.__table__.create(bind=engine)
     CapacitasCredential.__table__.create(bind=engine)
     CapacitasAnagraficaHistoryImportJob.__table__.create(bind=engine)
+    CapacitasDomandeIrrigueSyncJob.__table__.create(bind=engine)
     CapacitasInCassSyncJob.__table__.create(bind=engine)
     CapacitasTerreniSyncJob.__table__.create(bind=engine)
     CapacitasParticelleSyncJob.__table__.create(bind=engine)
@@ -486,6 +500,35 @@ def test_next_capacitas_job_claims_when_credential_is_available(
         assert refreshed.started_at is not None
         assert refreshed.error_detail is None
     assert seen_credential_ids == [4]
+
+
+def test_next_capacitas_job_prioritizes_manual_job_across_kinds(
+    worker_db,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    worker, SessionLocal, _ = worker_db
+    monkeypatch.setattr(worker_module, "has_available_credential", lambda _db, _credential_id=None: True)
+    with SessionLocal() as db:
+        db.add(
+            CapacitasInCassSyncJob(
+                requested_by_user_id=None,
+                status="pending",
+                mode="subjects_sync",
+                payload_json={"subject_ids": [str(uuid.uuid4())]},
+            )
+        )
+        manual_job = CapacitasDomandeIrrigueSyncJob(
+            requested_by_user_id=1,
+            status="pending",
+            mode="anagrafica_search",
+            payload_json={"searches": [{"q": "RSSMRA80A01H501U"}]},
+        )
+        db.add(manual_job)
+        db.commit()
+        db.refresh(manual_job)
+        manual_job_id = manual_job.id
+
+    assert worker._next_capacitas_job() == ("domande_irrigue", manual_job_id)
 
 
 def test_next_capacitas_job_skips_incass_autosync_outside_window(

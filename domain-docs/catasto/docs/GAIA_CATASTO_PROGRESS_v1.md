@@ -181,6 +181,17 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 - `Elaborazioni massive > Particelle -> Intestatari`: se il match locale ha gia un `CCO` ma mancano ancora le fonti locali per costruire `link_involture` (`cat_capacitas_certificati`, `cat_consorzio_occupancies`, `cat_capacitas_terreni_rows`), il resolver live forza anche il backfill del certificato Capacitas e dei suoi intestatari, cosi il link e gli intestatari possono comparire gia nello stesso export
 - Job Capacitas monitorabili da frontend (`Terreni` e `sync progressiva particelle`): avvio runtime con `asyncio.create_task(...)` tracciato lato backend, stato persistito su DB e recovery automatico degli orfani/stale job; la scadenza della sessione GAIA interrompe il polling UI ma non deve essere confusa con l'arresto del job backend
 - `sync progressiva particelle`: al bootstrap backend i job compatibili in stato `pending/processing` vengono riconciliati in `queued_resume` e rilanciati automaticamente; il resume e guidato dal dominio (`capacitas_last_sync_at/status`) e non dal vecchio thread runtime interrotto
+- `AutoSync domande irrigue`: il `platform-scheduler` singleton accoda chunk
+  notturni di CF/PIVA estratti dalle utenze locali e conserva cursore e job in
+  attesa in `capacitas_domande_irrigue_autosync_state`. Il worker Capacitas
+  preleva questi job dopo quelli manuali; il cursore avanza solo per
+  `succeeded` o `completed_with_errors`, mentre una failure ripete il chunk.
+  L'anno della domanda e esclusivamente `Anno` Capacitas: valori assenti, non
+  numerici o fuori `1900..2100` sono scartati e registrati nel risultato. Il
+  default e disabilitato e richiede una credenziale fissa. Verifica locale:
+  suite Capacitas `224` test, suite worker `510` test, coverage backend
+  `1420/1420` e worker `892/892`, entrambi `100%`; migration head
+  `20260905_0900`.
 - `Terreni` batch: supporta `auto_resume` esplicito per i job che devono essere ripianificati automaticamente dopo restart backend; i batch manuali senza flag restano recuperabili solo via monitor/rerun esplicito
 - `Storico anagrafica Capacitas`: ora usa un modello job persistente dedicato con monitor frontend, progress report incrementale, cleanup stale e auto-resume dopo restart backend
 - `Catasto > Particelle`: la sync singola Capacitas è disponibile direttamente nella dialog/lista particelle e nella scheda dettaglio, con label di ultimo aggiornamento (`capacitas_last_sync_at/status/error`) e route dedicata `POST /catasto/particelle/{id}/capacitas-sync`

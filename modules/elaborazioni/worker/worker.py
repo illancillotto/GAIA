@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.models.capacitas import (
     CapacitasAnagraficaHistoryImportJob,
+    CapacitasDomandeIrrigueSyncJob,
     CapacitasInCassSyncJob,
     CapacitasParticelleSyncJob,
     CapacitasTerreniSyncJob,
@@ -53,6 +54,7 @@ from app.services.elaborazioni_capacitas_particelle_sync import (
 )
 from app.services.elaborazioni_capacitas_runtime import (
     run_anagrafica_history_job_by_id,
+    run_domande_irrigue_job_by_id,
     run_incass_job_by_id,
     run_particelle_job_by_id,
     run_terreni_job_by_id,
@@ -65,6 +67,10 @@ from app.services.elaborazioni_capacitas_terreni import (
 from app.services.elaborazioni_capacitas_incass import (
     expire_stale_incass_sync_jobs,
     prepare_incass_sync_jobs_for_recovery,
+)
+from app.services.elaborazioni_capacitas_domande_irrigue import (
+    expire_stale_domande_irrigue_sync_jobs,
+    prepare_domande_irrigue_sync_jobs_for_recovery,
 )
 from app.services.elaborazioni_posta_online import (
     expire_stale_registered_mail_sync_jobs,
@@ -343,21 +349,14 @@ class CatastoWorker:
                 for request in stuck_requests:
                     self._recover_visura_request(request)
 
-            history_ids: list[int] = []
-            incass_ids: list[int] = []
             posta_online_ids: list[int] = []
-            terreni_ids: list[int] = []
-            particelle_ids: list[int] = []
             bulk_jobs = 0
             distretto_export_jobs = 0
             registry_ids: list[int] = []
             ade_sync_runs = 0
 
             if self._handles_job_family("capacitas"):
-                history_ids = prepare_anagrafica_history_jobs_for_recovery(db)
-                incass_ids = prepare_incass_sync_jobs_for_recovery(db)
-                terreni_ids = prepare_terreni_sync_jobs_for_recovery(db)
-                particelle_ids = prepare_particelle_sync_jobs_for_recovery(db)
+                self._recover_capacitas_jobs(db)
             if self._handles_job_family("posta_online"):
                 posta_online_ids = prepare_registered_mail_sync_jobs_for_recovery(db)
             if self._handles_job_family("bulk_search"):
@@ -367,16 +366,8 @@ class CatastoWorker:
                 registry_ids = prepare_registry_import_jobs_for_recovery(db)
             if self._handles_job_family("ade_sync"):
                 ade_sync_runs = prepare_ade_sync_runs_for_recovery(db)
-            if history_ids:
-                logger.info("Recuperati %d job Capacitas storico anagrafica", len(history_ids))
-            if incass_ids:
-                logger.info("Recuperati %d job Capacitas inCASS", len(incass_ids))
             if posta_online_ids:
                 logger.info("Recuperati %d job Poste Online", len(posta_online_ids))
-            if terreni_ids:
-                logger.info("Recuperati %d job Capacitas terreni", len(terreni_ids))
-            if particelle_ids:
-                logger.info("Recuperati %d job Capacitas particelle", len(particelle_ids))
             if bulk_jobs:
                 logger.info("Recuperati %d job catasto elaborazione massiva", bulk_jobs)
             if distretto_export_jobs:
@@ -386,6 +377,20 @@ class CatastoWorker:
             if ade_sync_runs:
                 logger.info("Recuperati %d run AdE WFS", ade_sync_runs)
             db.commit()
+
+    @staticmethod
+    def _recover_capacitas_jobs(db: Session) -> None:
+        recovery_steps = (
+            ("storico anagrafica", prepare_anagrafica_history_jobs_for_recovery),
+            ("inCASS", prepare_incass_sync_jobs_for_recovery),
+            ("domande irrigue", prepare_domande_irrigue_sync_jobs_for_recovery),
+            ("terreni", prepare_terreni_sync_jobs_for_recovery),
+            ("particelle", prepare_particelle_sync_jobs_for_recovery),
+        )
+        for label, recover in recovery_steps:
+            recovered_ids = recover(db)
+            if recovered_ids:
+                logger.info("Recuperati %d job Capacitas %s", len(recovered_ids), label)
 
     def _next_connection_test_id(self):
         with SessionLocal() as db:
@@ -400,53 +405,60 @@ class CatastoWorker:
         with SessionLocal() as db:
             expire_stale_anagrafica_history_jobs(db)
             expire_stale_incass_sync_jobs(db)
+            expire_stale_domande_irrigue_sync_jobs(db)
             expire_stale_terreni_sync_jobs(db)
             expire_stale_particelle_sync_jobs(db)
 
-            for job_kind, model in (
+            job_models = (
                 ("anagrafica_history", CapacitasAnagraficaHistoryImportJob),
                 ("incass", CapacitasInCassSyncJob),
+                ("domande_irrigue", CapacitasDomandeIrrigueSyncJob),
                 ("terreni", CapacitasTerreniSyncJob),
                 ("particelle", CapacitasParticelleSyncJob),
-            ):
-                jobs = db.scalars(
-                    select(model)
-                    .where(
-                        model.status.in_(("pending", "queued_resume")),
-                        model.completed_at.is_(None),
-                    )
-                    .order_by(model.created_at.asc())
-                    .with_for_update(skip_locked=True)
-                ).all()
-                pending_credential_updates = False
-                for job in jobs:
-                    if (
-                        job_kind == "incass"
-                        and self._is_incass_autosync_job(job)
-                        and not self._is_within_incass_autosync_window()
-                    ):
-                        message = (
-                            "Autosync inCASS in pausa fuori finestra oraria "
-                            f"{self._incass_autosync_window_label()}"
-                        )
-                        if job.error_detail != message:
-                            job.error_detail = message
-                            pending_credential_updates = True
-                        continue
-                    credential_id = self._capacitas_job_credential_id(job)
-                    if not has_available_credential(db, credential_id):
-                        message = "In attesa di una credenziale Capacitas disponibile"
-                        if job.error_detail != message:
-                            job.error_detail = message
-                            pending_credential_updates = True
-                        continue
-                    job.status = "processing"
-                    job.started_at = datetime.now(timezone.utc)
-                    job.error_detail = None
-                    db.commit()
-                    return job_kind, job.id
-                if pending_credential_updates:
-                    db.commit()
+            )
+            for manual_jobs in (True, False):
+                for job_kind, model in job_models:
+                    claimed = self._claim_capacitas_job(db, job_kind, model, manual_jobs=manual_jobs)
+                    if claimed is not None:
+                        return claimed
+        return None
+
+    def _claim_capacitas_job(self, db: Session, job_kind: str, model, *, manual_jobs: bool):
+        requester_filter = (
+            model.requested_by_user_id.is_not(None) if manual_jobs else model.requested_by_user_id.is_(None)
+        )
+        jobs = db.scalars(
+            select(model)
+            .where(
+                model.status.in_(("pending", "queued_resume")),
+                model.completed_at.is_(None),
+                requester_filter,
+            )
+            .order_by(model.created_at.asc())
+            .with_for_update(skip_locked=True)
+        ).all()
+        changed = False
+        for job in jobs:
+            if job_kind == "incass" and self._is_incass_autosync_job(job) and not self._is_within_incass_autosync_window():
+                message = f"Autosync inCASS in pausa fuori finestra oraria {self._incass_autosync_window_label()}"
+                if job.error_detail != message:
+                    job.error_detail = message
+                    changed = True
+                continue
+            credential_id = self._capacitas_job_credential_id(job)
+            if not has_available_credential(db, credential_id):
+                message = "In attesa di una credenziale Capacitas disponibile"
+                if job.error_detail != message:
+                    job.error_detail = message
+                    changed = True
+                continue
+            job.status = "processing"
+            job.started_at = datetime.now(timezone.utc)
+            job.error_detail = None
+            db.commit()
+            return job_kind, job.id
+        if changed:
+            db.commit()
         return None
 
     @staticmethod
@@ -500,17 +512,15 @@ class CatastoWorker:
         return credential_id
 
     async def _process_capacitas_job(self, job_kind: str, job_id: int) -> None:
-        if job_kind == "anagrafica_history":
-            await run_anagrafica_history_job_by_id(job_id)
-            return
-        if job_kind == "incass":
-            await run_incass_job_by_id(job_id)
-            return
-        if job_kind == "terreni":
-            await run_terreni_job_by_id(job_id)
-            return
-        if job_kind == "particelle":
-            await run_particelle_job_by_id(job_id)
+        processor = {
+            "anagrafica_history": run_anagrafica_history_job_by_id,
+            "incass": run_incass_job_by_id,
+            "domande_irrigue": run_domande_irrigue_job_by_id,
+            "terreni": run_terreni_job_by_id,
+            "particelle": run_particelle_job_by_id,
+        }.get(job_kind)
+        if processor is not None:
+            await processor(job_id)
             return
         logger.error("Tipo job Capacitas non riconosciuto: %s", job_kind)
 

@@ -342,14 +342,7 @@ async def _process_rows(
                 "error": item.error if item is not None else None,
             }
             _append_recent_item(job.result_json or {}, item_payload)
-            _update_result(
-                db,
-                job,
-                processed_rows=1,
-                records_with_domande=1 if item is not None and item.total_domande > 0 else 0,
-                failed_items=1 if item_status == "failed" else 0,
-                **_summary_delta(summary),
-            )
+            _record_persist_summary(db, job, summary, item=item, item_status=item_status)
         except Exception as exc:
             db.rollback()
             _append_recent_item(
@@ -386,10 +379,16 @@ def _finish_job(db: Session, job: CapacitasDomandeIrrigueSyncJob) -> None:
     result_json["progress_percent"] = 100
     result_json["completed_at"] = datetime.now(UTC).isoformat()
     job.result_json = result_json
-    job.status = "succeeded" if int(result_json.get("failed_items", 0)) == 0 else "completed_with_errors"
+    job.status = _completion_status(result_json)
     job.completed_at = datetime.now(UTC)
     db.commit()
     db.refresh(job)
+
+
+def _completion_status(result_json: dict[str, Any]) -> str:
+    error_counters = ("failed_items", "invalid_year_rows")
+    has_errors = any(int(result_json.get(key, 0)) > 0 for key in error_counters)
+    return "completed_with_errors" if has_errors else "succeeded"
 
 
 def _build_initial_result(
@@ -419,15 +418,22 @@ def _build_initial_result(
         "anomalies_updated": 0,
         "anomalies_closed": 0,
         "failed_items": 0,
+        "invalid_year_rows": 0,
         "progress_percent": 0,
         "current_label": None,
         "recent_items": [],
     }
-    if role_anno_campagna is not None:
-        result["role_anno_campagna"] = role_anno_campagna
-    if role_cf_limit is not None:
-        result["role_cf_limit"] = role_cf_limit
+    result.update(_role_result_context(role_anno_campagna, role_cf_limit))
     return result
+
+
+def _role_result_context(role_anno_campagna: int | None, role_cf_limit: int | None) -> dict[str, int]:
+    context = {}
+    if role_anno_campagna is not None:
+        context["role_anno_campagna"] = role_anno_campagna
+    if role_cf_limit is not None:
+        context["role_cf_limit"] = role_cf_limit
+    return context
 
 
 def _update_result(db: Session, job: CapacitasDomandeIrrigueSyncJob, **deltas: Any) -> None:
@@ -453,6 +459,30 @@ def _append_recent_item(result_json: dict[str, Any], item: dict[str, Any]) -> No
     recent_items.append({key: value for key, value in item.items() if value is not None})
     if len(recent_items) > RECENT_DOMANDE_IRRIGUE_ITEM_LIMIT:
         del recent_items[0 : len(recent_items) - RECENT_DOMANDE_IRRIGUE_ITEM_LIMIT]
+
+
+def _append_invalid_year_item(result_json: dict[str, Any], item: dict[str, Any]) -> None:
+    invalid_items = result_json.get("recent_invalid_year_rows")
+    if not isinstance(invalid_items, list):
+        invalid_items = []
+        result_json["recent_invalid_year_rows"] = invalid_items
+    invalid_items.append({key: value for key, value in item.items() if value is not None})
+    if len(invalid_items) > RECENT_DOMANDE_IRRIGUE_ITEM_LIMIT:
+        del invalid_items[0 : len(invalid_items) - RECENT_DOMANDE_IRRIGUE_ITEM_LIMIT]
+
+
+def _record_persist_summary(db: Session, job: CapacitasDomandeIrrigueSyncJob, summary: Any, *, item: Any, item_status: str) -> None:
+    for invalid_year_row in summary.invalid_year_rows:
+        _append_invalid_year_item(job.result_json or {}, invalid_year_row)
+    _update_result(
+        db,
+        job,
+        processed_rows=1,
+        records_with_domande=1 if item is not None and item.total_domande > 0 else 0,
+        failed_items=1 if item_status == "failed" else 0,
+        invalid_year_rows=len(summary.invalid_year_rows),
+        **_summary_delta(summary),
+    )
 
 
 def _summary_delta(summary: Any) -> dict[str, int]:

@@ -44,6 +44,7 @@ async def test_register_platform_schedulers_registers_each_family_once(
         "register_bonifica_scheduler",
         "register_elaborazioni_db_backup_scheduler",
         "register_incass_autosync_scheduler",
+        "register_domande_irrigue_autosync_scheduler",
         "register_ruolo_autosync_scheduler",
         "register_gis_export_scheduler",
         "register_presenze_scheduler",

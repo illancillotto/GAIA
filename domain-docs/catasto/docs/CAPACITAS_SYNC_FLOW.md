@@ -354,6 +354,21 @@ Per le domande irrigue il flusso resta separato in due livelli:
 - adapter live in `backend/app/modules/elaborazioni/capacitas/apps/involture/domande_irrigue.py`
 - persistenza e controlli di dominio in `backend/app/modules/catasto/services/domande_irrigue.py`
 
+L'autosync notturno materializza chunk di CF/PIVA distinti presenti nelle
+utenze locali e salva il cursore in
+`capacitas_domande_irrigue_autosync_state`. Un solo chunk puo essere in attesa
+o in esecuzione: il cursore avanza soltanto dopo un esito terminale positivo e
+un fallimento ripropone lo stesso intervallo. I job manuali hanno precedenza
+globale sui job Capacitas di sistema ancora accodati.
+
+L'anno della domanda proviene esclusivamente dal campo `Anno` restituito da
+Capacitas. Non viene inferito dalla campagna Ruolo o dalle date: una riga con
+anno assente, non numerico o fuori `1900..2100` viene scartata, registrata nel
+risultato del job e porta lo stato finale a `completed_with_errors`. Il
+risultato conserva il conteggio completo in `invalid_year_rows` e i dettagli
+degli ultimi 100 scarti in `recent_invalid_year_rows`, per mantenere limitata
+la dimensione del JSON persistito.
+
 Il flusso operativo e:
 
 1. partire dai record caricati da `ricercaAnagrafica.aspx`
