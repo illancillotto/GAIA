@@ -46,7 +46,9 @@ import {
   queueVehicleAutodocSync,
   type VehicleAutodocSyncJob,
 } from "@/features/operazioni/api/client";
+import { usePolling } from "@/hooks/use-polling";
 import { getStoredAccessToken } from "@/lib/auth";
+import { dashboardHasActivePollingTargets } from "@/lib/elaborazioni-dashboard-overview";
 import { formatDateTime } from "@/lib/presentation";
 import type {
   BonificaOristaneseCredential,
@@ -266,17 +268,10 @@ export default function ElaborazioniPage() {
   const [previewModalRequest, setPreviewModalRequest] = useState<{ requestId: string; label: string; reference: string } | null>(null);
   const [modalState, setModalState] = useState<DashboardModalState | null>(null);
   const artifactPreviewUrlsRef = useRef<Record<string, string>>({});
-  const dashboardLoadingRef = useRef(false);
 
   const loadDashboard = useCallback(async (): Promise<void> => {
     const token = getStoredAccessToken();
     if (!token) return;
-
-    // Evita che un tick del polling (o il rientro in primo piano) impili un
-    // secondo giro di ~15 fetch mentre il precedente è ancora in corso: con la
-    // lista job Capacitas non paginata il refresh può durare secondi.
-    if (dashboardLoadingRef.current) return;
-    dashboardLoadingRef.current = true;
 
     try {
       const [
@@ -339,8 +334,6 @@ export default function ElaborazioniPage() {
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Errore caricamento dashboard Elaborazioni");
-    } finally {
-      dashboardLoadingRef.current = false;
     }
   }, []);
 
@@ -373,15 +366,24 @@ export default function ElaborazioniPage() {
       .slice(0, 6);
   }, [batches]);
 
-  const hasActivePollingTargets = useMemo(() => {
-    const hasActiveBatches = batches.some((batch) => ["pending", "processing"].includes(batch.status));
-    const hasActiveParticelleJobs = particelleSyncJobs.some((job) => ["pending", "processing", "queued_resume"].includes(job.status));
-    const hasActiveBonificaJobs = Object.values(bonificaSyncStatus?.entities ?? {}).some((item) => item.status === "running");
-    const hasActivePostaOnlineJobs = postaOnlineJobs.some((job) => ["pending", "processing", "queued_resume"].includes(job.status));
-    const hasActiveAutodocJob = autodocSyncJob?.status === "queued" || autodocSyncJob?.status === "running";
-    const hasActiveGateMobileJob = gateMobileSyncStatus?.last_run?.status === "running";
-    return hasActiveBatches || hasActiveParticelleJobs || hasActiveBonificaJobs || hasActivePostaOnlineJobs || hasActiveAutodocJob || hasActiveGateMobileJob;
-  }, [autodocSyncJob?.status, batches, bonificaSyncStatus, gateMobileSyncStatus?.last_run?.status, particelleSyncJobs, postaOnlineJobs]);
+  const hasActivePollingTargets = useMemo(
+    () => dashboardHasActivePollingTargets({
+      batchStatuses: batches.map((batch) => batch.status),
+      particelleStatuses: particelleSyncJobs.map((job) => job.status),
+      incassStatuses: incassJobs.map((job) => job.status),
+      bonificaStatuses: Object.values(bonificaSyncStatus?.entities ?? {}).map((item) => item.status),
+      postaOnlineStatuses: postaOnlineJobs.map((job) => job.status),
+      autodocStatus: autodocSyncJob?.status,
+      gateMobileStatus: gateMobileSyncStatus?.last_run?.status,
+    }),
+    [autodocSyncJob?.status, batches, bonificaSyncStatus, gateMobileSyncStatus?.last_run?.status, incassJobs, particelleSyncJobs, postaOnlineJobs],
+  );
+
+  usePolling(loadDashboard, {
+    enabled: hasActivePollingTargets,
+    intervalMs: DASHBOARD_REFRESH_INTERVAL_MS,
+    refetchOnVisible: false,
+  });
 
   useEffect(() => {
     function handleVisibilityChange(): void {
@@ -391,21 +393,8 @@ export default function ElaborazioniPage() {
     }
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    const intervalId = hasActivePollingTargets
-      ? window.setInterval(() => {
-          if (document.visibilityState === "visible") {
-            void loadDashboard();
-          }
-        }, DASHBOARD_REFRESH_INTERVAL_MS)
-      : null;
-
-    return () => {
-      if (intervalId !== null) {
-        window.clearInterval(intervalId);
-      }
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [hasActivePollingTargets, loadDashboard]);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [loadDashboard]);
 
   useEffect(() => {
     const token = getStoredAccessToken();

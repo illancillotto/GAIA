@@ -2,6 +2,7 @@
 
 import { AutoSyncMonitorLink } from "@/components/elaborazioni/autosync-monitor-link";
 import { ChevronRightIcon, RefreshIcon } from "@/components/ui/icons";
+import { collapseRunningOperationsByArea } from "@/lib/elaborazioni-dashboard-overview";
 import { formatDateTime } from "@/lib/presentation";
 
 export type DashboardRunningOperation = {
@@ -82,7 +83,37 @@ function OperationRow({ operation, onOpen }: { operation: DashboardRunningOperat
   );
 }
 
+function OverflowRow({
+  area,
+  hiddenCount,
+  onOpen,
+  sample,
+}: {
+  area: string;
+  hiddenCount: number;
+  onOpen: (operation: DashboardRunningOperation) => void;
+  sample: DashboardRunningOperation;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 bg-[#f7faf8] px-4 py-3 md:px-5">
+      <p className="text-sm text-gray-600">
+        Altri {hiddenCount} {area}
+      </p>
+      <button
+        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#bad0c1] bg-white px-4 py-2.5 text-sm font-semibold text-[#1D4E35] transition hover:border-[#1D4E35] hover:bg-[#edf5ef]"
+        onClick={() => onOpen(sample)}
+        type="button"
+      >
+        Apri monitor
+        <ChevronRightIcon className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
 export function ActiveOperationsOverview({ attentionCount, isLive, onOpen, operations }: ActiveOperationsOverviewProps) {
+  const collapsed = collapseRunningOperationsByArea(operations);
+
   return (
     <section className="mt-4 overflow-hidden rounded-[24px] border border-[#cfd9d1] bg-white/95 shadow-sm" aria-labelledby="active-operations-title">
       <div className="grid gap-4 border-b border-[#e5ebe6] bg-[linear-gradient(115deg,_#173f2b_0%,_#245b3d_58%,_#e6efe8_58%,_#f6f4eb_100%)] p-5 text-white md:grid-cols-[1fr,auto] md:items-center">
@@ -121,7 +152,16 @@ export function ActiveOperationsOverview({ attentionCount, isLive, onOpen, opera
         </div>
       ) : (
         <div className="divide-y divide-gray-100">
-          {operations.map((operation) => <OperationRow key={operation.id} operation={operation} onOpen={onOpen} />)}
+          {collapsed.items.map((operation) => <OperationRow key={operation.id} operation={operation} onOpen={onOpen} />)}
+          {collapsed.hiddenByArea.map((hidden) => (
+            <OverflowRow
+              area={hidden.area}
+              hiddenCount={hidden.hiddenCount}
+              key={hidden.area}
+              onOpen={onOpen}
+              sample={hidden.sample}
+            />
+          ))}
         </div>
       )}
     </section>
