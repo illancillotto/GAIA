@@ -20,11 +20,11 @@ export function GisToolsWorkspace({ token }: { token: string | null }) {
   return (
     <div className="space-y-6">
       <GisToolsHero />
+      <GisQgisTools token={token} />
       <GisToolsFeedback notice={tools.notice} error={tools.error} />
       <GisToolsUploadSection tools={tools} />
       <GisToolsImportSection tools={tools} />
       <GisActivityCenter key={tools.historyVersion} token={token} layers={tools.layers} onResumeImport={tools.loadPreview} />
-      <GisQgisTools token={token} />
       <GisToolsImportConfirmation tools={tools} />
     </div>
   );

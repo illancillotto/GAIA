@@ -102,7 +102,9 @@ describe("GisToolsWorkspace", () => {
     mocks.createGisShapefileImport.mockResolvedValue(importItem);
     mocks.publishGisShapefileImport.mockResolvedValue({ ...importItem, status: "published" });
     render(<GisToolsWorkspace token="token" />);
-    await screen.findByText("QGIS tools");
+    const qgisTools = await screen.findByText("QGIS tools");
+    const uploadHeading = screen.getByRole("heading", { name: "1. Carica una nuova fonte" });
+    expect(qgisTools.compareDocumentPosition(uploadHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText("File shapefile ZIP"), { target: { files: [new File(["zip"], "Rilievo Rète 2026.zip", { type: "application/zip" })] } });
     expect(screen.getByLabelText("Nome tecnico")).toHaveValue("rilievo_rete_2026");

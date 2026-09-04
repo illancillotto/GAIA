@@ -40,12 +40,22 @@ export function GisLayerDetailWorkspace({
   layerId: string;
 }) {
   const detail = useLayerDetail(token, layerId);
-  return !token || detail.loading ? (
+  const content = !token || detail.loading ? (
     <LayerDetailLoading />
   ) : detail.error || !detail.layer ? (
     <LayerDetailError message={detail.error ?? "Mappa non trovata"} />
   ) : (
     <LayerDetailContent token={token} layer={detail.layer} />
+  );
+
+  return (
+    <div className="space-y-4">
+      <Link className="btn-secondary w-fit shadow-sm" href="/gis/catalogo">
+        <span aria-hidden="true">&larr;</span>
+        Torna al catalogo
+      </Link>
+      {content}
+    </div>
   );
 }
 
@@ -95,7 +105,6 @@ function LayerDetailError({ message }: { message: string }) {
   return (
     <section className="rounded-2xl border border-red-200 bg-red-50 p-5" role="alert">
       <p className="font-semibold text-red-800">{message}</p>
-      <Link className="btn-secondary mt-4" href="/gis/catalogo">Torna al catalogo</Link>
     </section>
   );
 }
@@ -114,8 +123,7 @@ function LayerDetailHeader({ layer }: { layer: GisCatalogLayer }) {
   const accessDescription = layer.can_edit ? "proporre modifiche" : layer.can_annotate ? "aggiungere note" : "consultare";
   return (
     <section className="overflow-hidden rounded-[30px] border border-[#b9cdbd] bg-[radial-gradient(circle_at_top_right,_rgba(210,231,191,0.38),_transparent_38%),linear-gradient(135deg,_#16281c,_#29442e)] p-5 text-white shadow-xl sm:p-7">
-      <Link className="inline-flex items-center text-sm font-semibold text-[#dcebd0] underline-offset-4 hover:underline" href="/gis/catalogo">Torna al catalogo</Link>
-      <div className="mt-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#bcd6b1]">{layer.workspace} · {layer.is_active ? "Mappa attiva" : "Mappa non attiva"}</p>
           <h2 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">{layer.title}</h2>

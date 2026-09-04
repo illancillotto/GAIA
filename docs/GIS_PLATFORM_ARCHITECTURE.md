@@ -194,6 +194,12 @@ tendine: annotazioni (`open` -> "Aperta", ...), change request (`submitted` ->
 nessuna modifica avviene senza approvazione. I valori enum inviati alle API
 restano invariati: cambia solo la label presentata.
 
+Il dettaglio geometrico `/gis/catalogo/{layer_id}` mantiene sempre visibile il
+pulsante `Torna al catalogo`, sopra il contenuto della pagina e anche durante
+caricamento o errore. Il ritorno usa la destinazione stabile `/gis/catalogo` e
+non dipende dalla cronologia del browser, cosi resta disponibile anche dopo un
+accesso diretto o un refresh della mappa.
+
 ### Permessi Layer M2
 
 I permessi GIS sono gestibili per principal `role` e `user`.
@@ -452,6 +458,11 @@ Il percorso target e:
 4. anteprima e scelta di workspace, dominio, source ufficiale e permessi;
 5. pubblicazione nel catalogo GIS o apertura di change request se il dato
    modifica layer ufficiali.
+
+Nel workspace `/gis/strumenti`, dopo l'intestazione introduttiva, la sezione
+`Solo utenti tecnici` con download QGIS e verifica OGC precede il percorso
+guidato di upload/import. In questo modo gli strumenti specialistici restano
+immediatamente raggiungibili senza modificare permessi o workflow sottostanti.
 
 M12 documenta e mostra questo percorso nella UI. M13 implementa il backend per i
 passi 1-3:

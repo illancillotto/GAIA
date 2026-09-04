@@ -1006,6 +1006,26 @@ Verifiche deploy e audit:
   accessibilita e nessun audit accessibilita fallito. Sul viewport mobile
   `390x844` non risultano target GIS visibili sotto `44px`.
 
+## Navigazione Dettaglio Mappa 2026-09-04
+
+La route `/gis/catalogo/{layer_id}` espone ora un pulsante secondario persistente
+`Torna al catalogo` sopra il viewer. Il comando punta direttamente a
+`/gis/catalogo`, resta disponibile negli stati di caricamento ed errore e
+sostituisce i precedenti link testuali contestuali, meno riconoscibili come
+azione di ritorno.
+
+Verifiche:
+
+- suite unit GIS Platform: `15/15` file e `112/112` test passati; il test
+  mirato del dettaglio copre `6/6` scenari;
+- coverage del runtime `layer-detail-workspace.tsx`: `37/37` statement,
+  `38/38` branch, `15/15` funzioni e `33/33` linee (`100%`);
+- typecheck ed ESLint mirato passati;
+- quality ratchet contro `origin/main`: nessun finding e nessuna nuova
+  violation; baseline invariata;
+- grafi aggiornati con `make graphify-frontend` e
+  `make graphify-platform-docs`.
+
 ## Workflow Guidati E Conferme 2026-08-25
 
 Seconda slice UX implementata su `/gis/catalogo`:
@@ -1111,6 +1131,17 @@ Verifiche 2026-08-27:
 - smoke e2e Playwright `tests/e2e/gis-strumenti.spec.ts` `1 passed`: upload ZIP,
   SRID, preview, publish/reject con conferma, paginazione change request e
   piano OGC. Login mockato (`module_gis`) per evitare il tetto dispositivi.
+
+### Ordine strumenti tecnici 2026-09-04
+
+Nel composer `/gis/strumenti`, `GisQgisTools` e stato spostato subito sotto
+l'hero e prima di feedback, upload, import e centro attivita. Contenuti,
+permessi, stato e chiamate API restano invariati.
+
+Verifiche: `12/12` test mirati passati; coverage di `tools-workspace.tsx` al
+`100%` (`5/5` statement, `2/2` branch, `1/1` funzioni, `5/5` linee); typecheck
+ed ESLint mirato passati. Il test verifica esplicitamente che il blocco QGIS
+preceda il titolo `1. Carica una nuova fonte`.
 
 ## Blocco Dati Ufficiali Rete Condotte 2026-08-31
 

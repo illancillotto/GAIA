@@ -65,6 +65,8 @@ describe("GIS layer detail page", () => {
     expect(await screen.findByText("Condotte irrigue")).toBeInTheDocument();
     expect(screen.getByTestId("layer-viewer").closest(".gis-touch-targets")).toBeInTheDocument();
     expect(screen.getByTestId("layer-viewer")).toHaveTextContent("Viewer Condotte irrigue");
+    expect(screen.getByRole("link", { name: "Torna al catalogo" })).toHaveAttribute("href", "/gis/catalogo");
+    expect(screen.getByRole("link", { name: "Torna al catalogo" })).toHaveClass("btn-secondary");
     expect(screen.getByText("Puoi proporre modifiche")).toBeInTheDocument();
     expect(screen.getByText("MULTILINESTRING")).toBeInTheDocument();
     expect(mocks.getGisCatalogLayer).toHaveBeenCalledWith("token", "layer-1");
