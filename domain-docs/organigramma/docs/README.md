@@ -81,6 +81,7 @@ Manage:
 - `POST|PUT|DELETE /assignments`
 - `GET|POST|PUT|DELETE /overrides`
 - `POST /sync/whitecompany`
+- `POST /sync/inaz/preview`
 
 Il router applica:
 
@@ -168,6 +169,112 @@ Regole MVP:
 - mapping idempotente via `org_source_link`
 - righe con `is_manual_locked=True` non sovrascritte
 - `last_synced_at` aggiornato sui link processati
+
+## Sync INAZ
+
+La vista INAZ `Organigramma con Responsabile` viene acquisita come snapshot
+completo e firmata con checksum semantico. Il recupero usa credenziali e
+sessione dedicate, separate da quelle delle Giornaliere.
+
+Il `Kint` esposto dall'Organigramma non coincide necessariamente con
+`presenze_collaborators.kint`. Lo scraper apre quindi la scheda personale INAZ
+di ogni risorsa e produce uno snapshot schema `2` contenente la relazione
+tecnica fra `Kint`, codice azienda e codice dipendente:
+
+```json
+{
+  "schema_version": 2,
+  "source_system": "inaz",
+  "source_view": "Organigramma con Responsabile",
+  "units": [
+    {
+      "members": [
+        {
+          "kint": "<kint organigramma>",
+          "kkint": "<token volatile>",
+          "company_code": "<azienda INAZ>",
+          "employee_code": "<codice dipendente INAZ>"
+        }
+      ]
+    }
+  ]
+}
+```
+
+La preview risolve ogni persona esclusivamente tramite:
+
+```text
+(company_code, employee_code) dello snapshot
+  -> presenze_collaborators
+  -> presenze_collaborators.application_user_id
+  -> application_users.id
+```
+
+Il checksum include `company_code` ed `employee_code`, ma esclude `KKint`
+perche volatile. Non sono ammessi fallback tramite nome, email, matricola,
+`WCOperator.employee_code`, uguaglianza dei Kint o uguaglianze numeriche. Una
+risorsa senza codice, senza collaboratore Presenze univoco, senza mapping o con
+utente inesistente resta fail-closed. La preview e sempre read-only e non
+modifica `presenze_collaborators.application_user_id`.
+
+Workflow obbligatorio:
+
+1. acquisire lo snapshot completo con la sessione INAZ Organigramma dedicata;
+2. verificare checksum, conteggi e unicita delle identita dipendente;
+3. inviare lo snapshot a `POST /sync/inaz/preview`;
+4. risolvere nel dominio Presenze ogni issue restituita;
+5. richiedere `ready=true` prima di pianificare l'import di unita e assegnazioni.
+
+### Onboarding delle identita mancanti
+
+Il comando `backend/scripts/onboard_inaz_organization.py` prepara le identita
+GAIA necessarie allo snapshot. Il default e sempre dry-run e l'applicazione
+richiede `--apply`, un utente GAIA autore reale e un motivo di audit.
+
+La classificazione e fail-closed:
+
+- la coppia `(company_code, employee_code)` gia associata a un collaboratore
+  mappato risolve esclusivamente il mapping canonico gia attestato e resta
+  invariata;
+- un `Kint` univoco gia conservato su un collaboratore mappato puo attestare lo
+  stesso riferimento tecnico INAZ, ma non sovrascrive i campi posseduti dalla
+  sincronizzazione Presenze;
+- candidati ottenuti da nome o altri dati anagrafici restano
+  `REVIEW_REQUIRED` e non vengono applicati;
+- riferimenti tecnici duplicati, collaboratori esistenti ma non mappati e
+  risorse senza codice dipendente restano bloccati;
+- solo quando non esiste alcun riferimento tecnico o candidato GAIA viene
+  creata una nuova identita inattiva, collegata a un collaboratore Presenze e
+  a un `WCOperator` tecnico disabilitato.
+
+Gli account creati non acquisiscono accesso o credenziali utilizzabili: hanno
+ruolo `viewer`, sono inattivi e non sono inclusi nei payload operatori GATE. Il
+mapping canonico viene registrato tramite
+`presenze_collaborators.application_user_id` e relativo audit.
+
+Esecuzione:
+
+```bash
+python backend/scripts/onboard_inaz_organization.py \
+  /percorso/snapshot-v2.json \
+  /percorso/review-required.json \
+  --changed-by-gaia-user-id <ID_AUTORE_GAIA> \
+  --reason "Onboarding Organigramma INAZ YYYY-MM-DD"
+
+# Solo dopo backup verificato e dry-run approvato:
+python backend/scripts/onboard_inaz_organization.py \
+  /percorso/snapshot-v2.json \
+  /percorso/review-required.json \
+  --changed-by-gaia-user-id <ID_AUTORE_GAIA> \
+  --reason "Onboarding Organigramma INAZ YYYY-MM-DD" \
+  --apply
+```
+
+Dopo l'applicazione, rieseguire il dry-run: `new_users` ed
+`exact_kint_updates` devono essere zero. Verificare inoltre audit, duplicati,
+orfani, divergenze di mapping e impronta dei mapping preesistenti secondo il
+runbook Presenze. Le righe `REVIEW_REQUIRED` e `blocked` non autorizzano alcun
+fallback e devono restare escluse finche non sono risolte esplicitamente.
 
 ## Test e verifica
 
