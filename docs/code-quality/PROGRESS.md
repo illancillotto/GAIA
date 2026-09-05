@@ -759,3 +759,344 @@ restano escluse.
 - Verifica dell'estrazione finale: `41 passed`, coverage `1116/1116` statement
   (`100%`), lint e diff check verdi; ratchet contro `main@be143751` `PASS`,
   `findings: []`. Nessun aggiornamento baseline.
+
+## API/router modularization - type facade (2026-09-05)
+
+- Scope completato: `frontend/src/types/api.ts` trasformato in facciata
+  compatibile e definizioni ripartite in sette barrel di dominio sotto
+  `frontend/src/types/api/`; Presenze ed Elaborazioni sono ulteriormente
+  separati in `base` e `operations` per restare sotto soglia file-level.
+- Metriche prima: file dichiarativo, LOC scanner `4403`, callable `0`, cognitive
+  e cyclomatic `0`; nessuna complessita callable da ridurre.
+- Verifiche: typecheck frontend globale `PASS`; 409 test API mirati `PASS` sul
+  prototipo runtime e sulla facciata tipi.
+- Il prototipo `frontend/src/lib/api.ts` e stato ritirato: coverage mirata dei
+  moduli proposti 84.21% statement, 56.77% branch, 98.57% functions e 86.33%
+  lines, inferiore alla policy del 100% per nuovi runtime.
+- Router backend non modificati; snapshot OpenAPI pre-change: 746 path e 876
+  operazioni. Baseline complexity ed eccezioni non aggiornate.
+- Classificazione: `REORGANIZED_AND_CHARACTERIZED`. Prossima azione: completare
+  la caratterizzazione runtime di `lib/api.ts`, poi aprire separatamente il
+  pilot `utenze/router.py`.
+
+## API/router modularization - runtime facade (2026-09-05)
+
+- Scope completato: `frontend/src/lib/api.ts` sostituito dalla facciata
+  compatibile `frontend/src/lib/api/index.ts` e da 15 moduli per trasporto,
+  dominio e gruppo operativo. Inventario pubblico invariato: `450` export prima
+  e dopo, nessun nome mancante o aggiunto.
+- Caratterizzazione: generatori coverage aggiornati per la facciata modulare,
+  nuovo test generato dei branch e casi manuali aggiunti per trasporto e rami
+  non rappresentabili dal generatore. Suite API mirata: `811 passed`.
+- Coverage sui 16 file runtime della slice: `1,263/1,263` statement,
+  `826/826` branch, `420/420` funzioni e `1,195/1,195` linee, tutti al `100%`.
+- Metriche prima: LOC `5,339`, callable `419`, cognitive sum/max `545/54`,
+  cyclomatic sum/max `850/30`, una violation file-level error. Dopo: LOC
+  `5,080`, callable `420`, cognitive sum/max `545/54`, cyclomatic sum/max
+  `851/30`; resta un warning file-level su `frontend/src/lib/api/network.ts`.
+  Il callback `credentialIds.forEach`, ora rilevato separatamente, spiega il
+  callable e il punto ciclomatico aggiuntivi; non e stato introdotto un ramo di
+  comportamento.
+- Regressione frontend completa: `206` file e `2.205` test passati. Typecheck
+  globale: `PASS`. ESLint del perimetro: exit `0`, nessun errore e `11` warning
+  legacy nei test generati; nessun warning sul runtime o sui tipi estratti.
+- Generatori di caratterizzazione: output deterministico dopo rigenerazione;
+  `ruff check` e `ruff format --check`: `PASS`. `make quality-test`: `63 passed`.
+- `make complexity-ratchet BASE_REF=main`: nessun finding attribuito alla
+  modularizzazione; exit `2` soltanto per le nuove violation concorrenti
+  `get_portal_health` e `HealthHero` nelle modifiche Elaborazioni preesistenti.
+  Baseline ed eccezioni non aggiornate.
+- Graphify finale: frontend forzato per eliminare i riferimenti al file rimosso,
+  `6.647` nodi, `15.943` archi e `237` community; documentazione piattaforma
+  `1.855` nodi, `4.189` archi e `127` community.
+- Esito: `REORGANIZED_AND_CHARACTERIZED`. Debito callable invariato; ownership,
+  navigabilita e copertura migliorate. Prossima slice separata: pilot router
+  Utenze con snapshot OpenAPI invariato; Network e Presenze restano esclusi.
+
+## API/router modularization - Utenze router pilot (2026-09-05)
+
+- Scope: `backend/app/modules/utenze/router.py` sostituito dal package facade
+  compatibile `router/`; le 42 route locali sono assemblate nello stesso ordine
+  da moduli per import, Bonifica, soggetti, documenti e reporting. Supporto e
+  proiezione dettaglio soggetto sono separati senza modifiche funzionali.
+- Contratti legacy preservati: `get_anagrafica_import_service`, `get_stats`,
+  `_build_subject_detail` e il monkeypatch `get_nas_client` restano importabili
+  da `app.modules.utenze.router`.
+- OpenAPI normalizzata byte-identica: `746` path, `876` operazioni, SHA-256
+  `e5d00458a818f5c9af7e9d54b2aa6905d647c7b82588fb1382a1e18e5b34fada`.
+- Coverage: `89 passed`; `870/870` statement e `220/220` branch, `100%` su
+  facade e moduli nuovi. La suite preesistente copriva il monolite al `60%`;
+  sono stati caratterizzati error path, resume, XLSX, Bonifica, NAS e documenti.
+- Metriche prima: LOC `1.983`, callable `79`, cognitive sum/max `417/39`,
+  cyclomatic sum/max `409/28`, una violation file-level error. Dopo: LOC
+  `2.050`, callable `80`, cognitive `409/39`, cyclomatic `403/28`; resta un
+  warning LOC su `routes/support.py` (`640`), nessuna violation file-level error.
+- Ruff check/format, compileall, `make quality-test` (`63 passed`) e diff check:
+  `PASS`. Ratchet: zero finding Utenze; i soli finding globali sono
+  `get_portal_health` e `HealthHero` nelle modifiche Elaborazioni concorrenti.
+  Baseline ed eccezioni non aggiornate.
+- Graphify finale: Utenze `575` nodi, `1.579` archi e `24` community; backend
+  `8.077` nodi, `20.419` archi e `461` community. Platform docs aggiornato a
+  `1.874` nodi, `4.189` archi e `146` community con risultato parziale: uno dei
+  sei chunk semantici ha superato il timeout di 60 secondi.
+- Esito: `REORGANIZED_AND_CHARACTERIZED`. Prossima eventuale slice separata:
+  Network; Presenze resta fuori scope.
+
+## API/router modularization - Network router (2026-09-05)
+
+- Scope: `backend/app/modules/network/router.py` sostituito dal package facade
+  compatibile `router/`; 39 endpoint assemblati nello stesso ordine da route
+  VPN, overview, dispositivi, tracking, firewall, scansioni e planimetrie.
+  Helper separati per device/RDAP, label endpoint, tracking, inferenza, traffico,
+  scansioni e Sophos; ogni file resta sotto la soglia LOC file-level.
+- Compatibilita preservata: `_resolve_device_label` per il router `me` e i
+  monkeypatch `run_network_scan`, `poll_sophos_firewall_metrics` e
+  `urllib.request.urlopen` restano disponibili dalla facade.
+- OpenAPI normalizzata byte-identica: `746` path, `876` operazioni, SHA-256
+  `2392ea45da9938cfcd0773e2d7e253023604e8e38697b922404c04c950510a4e`.
+- Coverage: `75 passed`; `1.406/1.406` statement e `452/452` branch, `100%` su
+  facade e moduli nuovi. La baseline dei 41 test API copriva il monolite al
+  `74%`; sono stati caratterizzati error path, RDAP/DNS, riconciliazione e
+  inferenza, traffico/statistiche, timeline ARP, Sophos e diff scansioni.
+- Metriche prima: LOC `2.630`, callable `87`, cognitive sum/max `1.101/209`,
+  cyclomatic sum/max `774/109`, una violation file-level error. Dopo, aggregato
+  del package: LOC `2.943`, callable `87`, cognitive `1.101/209`, cyclomatic
+  `774/109`; l'aumento LOC e overhead di import/facade, mentre complessita e
+  callable sono identici e nessun file resta sopra soglia LOC.
+- Ruff runtime check/format, compileall, diff check e `make quality-test`
+  (`63 passed`): `PASS`. Ratchet: zero finding Network; i soli finding globali
+  sono `get_portal_health` e `HealthHero` nelle modifiche Elaborazioni
+  concorrenti. Baseline ed eccezioni non aggiornate.
+- Graphify finale: Network `429` nodi, `1.093` archi e `18` community; backend
+  `8.178` nodi, `20.710` archi e `448` community. Anche il grafo platform docs
+  e stato aggiornato con successo e tutti i file semantici modificati sono
+  stati estratti.
+- Esito: `REORGANIZED_AND_CHARACTERIZED`. Prossima eventuale slice separata:
+  Presenze; non avviata in questa iterazione.
+
+## API/router modularization - Presenze router (2026-09-05)
+
+- Scope: `backend/app/modules/presenze/router.py` sostituito dal package facade
+  compatibile `router/`; 86 route assemblate nello stesso ordine da 11 gruppi
+  HTTP. Helper separati per accesso, scheduling, collaboratori, giornaliere,
+  recovery, banca ore e job; definizioni dichiarative degli orari isolate.
+- Invarianti preservati: OpenAPI, auth, autorizzazioni, transazioni, ordine
+  route, import pubblici verso `me`/Gate Mobile e monkeypatch legacy. Il mapping
+  canonico resta esclusivamente
+  `presenze_collaborators.application_user_id -> application_users.id`, senza
+  fallback anagrafici o numerici.
+- OpenAPI globale byte-identica subito dopo la slice: `746` path, `876`
+  operazioni, SHA-256
+  `e5d00458a818f5c9af7e9d54b2aa6905d647c7b82588fb1382a1e18e5b34fada`.
+  Dopo l'aggiunta concorrente di `/organigramma/sync/inaz/preview`, il confronto
+  finale isolato Presenze resta byte-identico: `64` path, SHA-256
+  `19da9c78abf3488310bca1c1ff29ac65969f4125d09d6c026e4225710a36b35c`.
+- Coverage: `241` test passati; `2.292/2.292` statement e `696/696` branch,
+  `100%` sui 23 runtime nuovi. `make quality-test`: `63 passed`; lint/style e
+  format-check dei runtime: `PASS`.
+- Metriche prima: LOC `4.616`, callable `160`, cognitive sum/max `1.353/111`,
+  cyclomatic sum/max `1.139/64`, una violation file-level error. Dopo: LOC
+  aggregato `5.267`, callable `163`, cognitive `1.370/111`, cyclomatic
+  `1.154/64`, file max LOC `718`. Escludendo i tre callable tecnici della
+  facade, i 160 callable legacy conservano esattamente cognitive `1.353/111` e
+  cyclomatic `1.139/64`; la violation file-level e eliminata.
+- Ratchet autorevole contro `main@33fbdb9c`: non verde. I finding Presenze sono
+  falsi `new_callable_violation` su tre callable spostati ma modificati dopo il
+  source commit della baseline (`list_collaborators`,
+  `_apply_daily_record_filters`, `get_dashboard_summary`); AST e metriche prima
+  e dopo risultano invariati. Restano inoltre i finding concorrenti
+  `get_portal_health` e `HealthHero` di Elaborazioni. Baseline, matcher,
+  eccezioni ed esclusioni non sono stati modificati.
+- Graphify finale: Presenze `1.079` nodi, `3.432` archi e `43` community;
+  backend `8.379` nodi, `21.292` archi e `478` community; platform docs `1.935`
+  nodi, `4.318` archi e `144` community, con i tre file semantici residui
+  riestratti nel refresh finale.
+- Esito: `REORGANIZED_AND_CHARACTERIZED`. Debito callable invariato; ownership,
+  navigabilita, copertura e soglia file-level migliorate. Prossima azione:
+  riallineare la baseline storica Presenze in una change tooling dedicata e
+  indipendente, senza assorbire i finding concorrenti.
+
+## API/router modularization - Me router (2026-09-05)
+
+- Scope: `backend/app/modules/me/router.py` sostituito dal package facade
+  compatibile `router/`; 17 route assemblate nello stesso ordine da gruppi
+  stato/Presenze, summary, Operazioni e asset. I 14 helper condivisi vivono in
+  `common.py`.
+- Invarianti: path, metodi, operation ID, auth, response model, parametri,
+  transazioni e ordine route invariati. Gli import privati usati da
+  `straordinari_period_router.py` e i monkeypatch legacy su export,
+  `shutil`/`subprocess` e `_resolve_device_label` restano validi tramite facade.
+- OpenAPI Me byte-identica: `17` path e `17` operazioni, SHA-256
+  `cb6eb0146e45c4d6d7b5631f48c4ee84ce7babce22f2a59e42e3eb63ea3d6c61`;
+  anche la sequenza metodo/path coincide con lo snapshot precedente.
+- Coverage finale: `129` test passati; `369/369` statement e `70/70` branch,
+  `100%` sui sette runtime nuovi. `make quality-test`: `63 passed`.
+- Metriche prima: LOC file `862`, callable `29`, cognitive sum/max `123/38`,
+  cyclomatic sum/max `130/24`, LOC callable aggregata `765`, 18 violation
+  callable e una violation file-level error. Dopo: LOC package `990`, callable
+  `32`, cognitive `140/38`, cyclomatic `145/24`, file max LOC `336`.
+- I 29 fingerprint legacy sono tutti riconosciuti e conservano esattamente
+  cognitive `123`, cyclomatic `130`, LOC `765`, nesting, parametri e le 18
+  violation. I tre callable aggiunti appartengono solo alla facade e non hanno
+  violation. I blocchi `fmt: off` preservano il layout legacy misurato mentre
+  l'intero package passa `ruff format --check`.
+- Ruff check/format, compileall, diff check: `PASS`. Il ratchet globale contro
+  la baseline autorevole `b1d4a988` resta rosso per regressioni storiche gia
+  presenti in Elaborazioni, GIS, Presenze, Ruolo e frontend; nessun finding e
+  attribuito a Me. `style-ratchet` usa correttamente il virtualenv ma resta
+  rosso su 102 file storici non formattati. Baseline e tooling non aggiornati.
+- Graphify aggiornato: backend `8.437` nodi, `21.457` archi e `471` community;
+  platform docs `1.943` nodi, `4.348` archi e `143` community. Il primo tentativo
+  docs ha superato il timeout sul singolo chunk; il retry incrementale ha
+  estratto con successo tutti i sei file non in cache.
+- Esito: `REORGANIZED_AND_CHARACTERIZED`. La violation file-level e rimossa,
+  il debito callable non e stato ridotto ne spostato. Prossima azione: scegliere
+  una nuova slice indipendente; valutare GIS separatamente per rischio dominio.
+
+## API/router modularization - GIS Platform router (2026-09-05)
+
+- Scope: `backend/app/modules/gis/router.py` sostituito dal package facade
+  compatibile `router/`; sette moduli mantengono i gruppi contigui
+  catalogo/runtime, interrogazione/proxy/QGIS, import Shapefile, layer,
+  annotazioni, permessi/change request ed export/audit.
+- Invarianti: la facade registra prima i child router Scheda territoriale,
+  QGIS external e QGIS OGC, quindi i 45 endpoint locali nello stesso ordine.
+  Dipendenza `require_module("gis")`, tag, auth, modelli, parametri e transazioni
+  sono invariati. Anche `endpoint.__module__ == "app.modules.gis.router"` e il
+  forwarding legacy di `interrogazione_service`/`interroga` sono preservati.
+- OpenAPI GIS byte-identica: `47` path e `51` operazioni, SHA-256
+  `07d3eeae0e764aeff06e90d0b26704e0c976a8e53e8ea45717e39325f7ec2b95`;
+  sequenza metodo/path/modulo/nome endpoint identica allo snapshot precedente.
+- Coverage finale: `111` test passati; `272/272` statement e `24/24` branch,
+  `100%` sui nove runtime nuovi. Suite GIS estesa: `220 passed`.
+- Metriche prima: LOC file `587`, callable `46`, cognitive sum/max `6/2`,
+  cyclomatic sum/max `52/3`, LOC callable `408`, nove violation callable per
+  parametri e un warning file-level. Dopo: LOC package `709`, callable `49`,
+  cognitive `23/8`, cyclomatic `67/7`, file max LOC `122`.
+- Tutti i 46 fingerprint legacy conservano esattamente cognitive `6`,
+  cyclomatic `52`, LOC `408`, nesting, parametri e nove violation. I tre
+  callable nuovi appartengono soltanto alla facade e non hanno violation.
+- Ruff check/format, compileall, diff check e `make quality-test` (`63 passed`):
+  `PASS`. Il ratchet globale contro `b1d4a988` resta rosso con 100 finding
+  storici, nessuno sotto `backend/app/modules/gis/router/`; lo style ratchet
+  globale resta rosso su 105 file storici, mentre tutti i dieci file nuovi
+  della slice passano.
+- Graphify aggiornato: backend `8.493` nodi, `21.514` archi e `481` community;
+  platform docs `1.946` nodi, `4.360` archi e `147` community. Il primo batch
+  semantico e andato in timeout; il retry ha estratto tutti i sei file mancanti.
+- Esito: `REORGANIZED_AND_CHARACTERIZED`. Il warning file-level e rimosso e il
+  debito callable non e stato ridotto ne spostato. Baseline e tooling invariati;
+  `gis/services.py` resta una eventuale slice separata ad alto rischio.
+
+## API/router modularization - Catasto anagrafica router (2026-09-05)
+
+- Scope: `backend/app/modules/catasto/routes/anagrafica.py` sostituito dal
+  package facade compatibile `anagrafica/`; normalizzazione, export, upload,
+  persone, intestatari, matching, resolver live/autoritativi, execution e route
+  job/distretto hanno moduli con ownership separata.
+- Invarianti: le 13 operazioni conservano ordine, metodo, path, nome e
+  `endpoint.__module__ == "app.modules.catasto.routes.anagrafica"`. Auth,
+  request/response model, query, transazioni, worker/recovery, accesso live
+  Capacitas e punti di monkeypatch legacy restano invariati.
+- OpenAPI isolata byte-identica: 11 path, SHA-256
+  `c71647faeb8d71d05aa65ca2847e4ede74a2c2e4a4521e5a8a23afa8e9ff4709`;
+  anche lo snapshot ordinato delle route coincide byte per byte.
+- Coverage finale: `285 passed`; `1.791/1.791` statement e `634/634` branch,
+  `100%` sugli 11 moduli runtime. `make quality-test`: `63 passed`.
+- Metriche prima: LOC file `3.486`, callable `122`, cognitive sum/max
+  `2.087/363`, cyclomatic sum/max `1.354/135`, una violation file-level error.
+  Dopo: LOC package `4.335`, callable `125`, cognitive `2.101/363`, cyclomatic
+  `1.367/135`, file max LOC `765`; nessun file supera la soglia error `800`.
+- Ruff check/format, compileall e diff check: `PASS`. Il ratchet autorevole
+  contro `main@33fbdb9c` non passa: 49 finding sono incrementi LOC dei callable
+  legacy dopo la formattazione obbligatoria dei file nuovi; 20 record
+  `new_callable_violation` riguardano sette callable spostati il cui fingerprint
+  AST cambia con i nuovi confini/import. Baseline, matcher, eccezioni ed
+  esclusioni non sono stati modificati.
+- `make lint-backend` con il virtualenv resta rosso sul working tree condiviso:
+  460 errori Ruff in modifiche esterne alla slice e due nuovi test worker non
+  formattati. Il check Ruff mirato sui 15 file Catasto/test della slice passa;
+  la failure globale non e stata modificata o assorbita.
+- Esito: `REORGANIZED_AND_CHARACTERIZED`. Il monolite e rimosso e la soglia
+  file-level e risolta, ma gli aggregati callable non dimostrano una riduzione.
+  Stop condition: decidere in una change separata se migliorare il matching dei
+  move modulari o ridurre realmente i callable segnalati; non iniziare un altro
+  hotspot automaticamente.
+- Graphify aggiornato: Catasto `1.117` nodi, `2.674` archi e `52` community;
+  backend `8.668` nodi, `21.972` archi e `483` community; platform docs `1.953`
+  nodi, `4.380` archi e `144` community; sei file semantici sono stati
+  riestratti nel primo refresh e due nel riallineamento finale.
+
+### Follow-up matching move modulari Catasto
+
+- Scope: solo matcher e test del quality tooling; runtime Catasto, baseline,
+  eccezioni e soglie invariati.
+- Il matcher ora associa un callable a un path baseline rimosso quando il nome
+  qualificato e unico, anche se alias/import necessari allo split cambiano il
+  fingerprint AST. Se esistono piu candidati omonimi non sceglie; il callable
+  resta nuovo e continua a essere soggetto alle soglie error-level.
+- Test aggiunti: move unico con fingerprint diverso passa; una regressione del
+  move riconosciuto fallisce; candidati omonimi multipli non ereditano debito.
+  Suite tooling: `66 passed`; `py_compile` e diff check: `PASS`.
+- Ratchet Catasto dopo il fix: nessuna ambiguita e nessuna
+  `new_callable_violation`; tutti i move sono confrontati con la baseline e
+  restano 60 `legacy_metric_regression`, esclusivamente sulla LOC. Cognitive,
+  cyclomatic, nesting e parametri restano invariati.
+- Una simulazione a 120 colonne con trailing comma non magiche lascia 20
+  regressioni; una compressione a 1.000 colonne le nasconderebbe tutte ma e
+  stata rifiutata come metric gaming. Prossima azione separata: riduzione reale
+  o ripristino fedele del layout legacy dei callable, senza aggiornare la
+  baseline per assorbire i delta.
+
+### Follow-up layout legacy Catasto
+
+- Scope: soli 11 moduli del package `catasto/routes/anagrafica`; matcher,
+  baseline, soglie, eccezioni e comportamento runtime invariati.
+- Per 49 callable con fingerprint AST identico e stato ripristinato byte per
+  byte il segmento sorgente pre-change, recuperando le 230 LOC introdotte dal
+  formatter. Per i 10 callable esterni con AST adattato allo split, il layout
+  legacy e stato ricostruito applicando esclusivamente le differenze correnti;
+  ogni candidato e stato confrontato con `ast.dump` prima della sostituzione.
+  Il callable annidato `refresh_match` e compreso nel relativo segmento padre.
+- Blocchi `fmt: off` iniziano dopo import e costanti, come nei precedenti split
+  GIS/Me/Presenze: Ruff continua quindi a validare e ordinare gli import mentre
+  preserva il layout misurato dei callable legacy. Nessuna compressione globale
+  o configurazione a larghezza artificiale e stata applicata.
+- Metriche finali: 12 file, LOC package `3.943`, callable `125`, cognitive
+  sum/max `2.101/363`, cyclomatic sum/max `1.367/135`, file max LOC `712` in
+  `matching.py`. Prima: LOC `3.486`, callable `122`, cognitive `2.087/363`,
+  cyclomatic `1.354/135`, file max `3.486`; i tre callable aggiuntivi sono
+  infrastruttura facade sotto soglia.
+- Ratchet autorevole contro `main@c15f4e7a`: `PASS`, `findings: []`. Baseline,
+  eccezioni ed esclusioni non aggiornate.
+- Verifiche: `285 passed`; coverage `1.791/1.791` statement e `634/634` branch
+  (`100%`); 13 route e 11 path OpenAPI byte-identici; Ruff check/format,
+  compileall e diff check verdi; quality tooling `66 passed`.
+- Esito finale invariato: `REORGANIZED_AND_CHARACTERIZED`. La violation
+  file-level e rimossa e il ratchet non rileva debito callable spostato o
+  peggiorato; nessuna riduzione cognitive/cyclomatic viene dichiarata.
+
+### Chiusura e gate finali modularizzazione API/router (2026-09-06)
+
+- Coverage frontend isolata sui 16 runtime API: `811 passed`, statement
+  `1.263/1.263`, branch `826/826`, funzioni `420/420`, linee `1.195/1.195`.
+- Coverage backend, con processi e file dati separati: Utenze `89 passed`
+  (`870/870`, branch `220/220`), Network `68 passed` (`1.405/1.405`, branch
+  `452/452`), Presenze `241 passed` (`2.292/2.292`, branch `696/696`), Me `48`
+  test selezionati (`369/369`, branch `70/70`), GIS `73` test selezionati
+  (`272/272`, branch `24/24`) e Catasto `285 passed` (`1.791/1.791`, branch
+  `634/634`). Tutti i gate raggiungono `100%`.
+- Statici: ESLint mirato senza errori e con 11 warning legacy nei test; Ruff
+  check/format sui runtime e test nuovi, compileall e diff check passano;
+  `make quality-test` passa con `66` test.
+- Il typecheck globale e bloccato dalla modifica concorrente
+  `frontend/src/app/presenze/festivita/page.tsx` (`HTMLArticleElement`). I
+  ratchet globali restano rossi per modifiche concorrenti Elaborazioni/worker e
+  debito di stile whole-file. Dopo la riduzione neutra di una lista intermedia,
+  Network non introduce piu delta di codice; le sole segnalazioni dentro i
+  file API estratti riguardano metriche gia presenti byte-identiche nel
+  monolite a `main@c15f4e7a`, anteriori allo split. Baseline, eccezioni e scope
+  non sono stati aggiornati.
+- Classificazione conclusiva: `REORGANIZED_AND_CHARACTERIZED`. Contratti,
+  facade e ordine route restano invariati; nessuna riduzione cognitiva o
+  ciclomatica viene dichiarata.

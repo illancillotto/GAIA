@@ -1,5 +1,4 @@
 import asyncio
-import importlib.util
 import sys
 import types
 from collections.abc import Generator
@@ -7,9 +6,9 @@ from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from io import BytesIO
+from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 from xml.etree import ElementTree as ET
-from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 from openpyxl import Workbook
@@ -91,6 +90,16 @@ from app.modules.catasto.services.ade_wfs import (
     split_bbox,
 )
 from app.modules.catasto.routes.anagrafica import run_bulk_search_job_by_id, run_distretto_export_job_by_id
+from app.modules.catasto.routes.anagrafica.intestatari import (
+    _find_certificato_snapshot as find_certificato_snapshot,
+)
+from app.modules.catasto.routes.anagrafica.intestatari import (
+    _load_intestatari_from_cert_context as load_intestatari_from_cert_context,
+)
+from app.modules.catasto.routes.anagrafica.intestatari import (
+    _resolve_particella_cert_context as resolve_particella_cert_context,
+)
+from app.modules.catasto.routes.anagrafica.normalization import CapacitasLiveAuthoritativeSanitizer
 from app.modules.elaborazioni.capacitas.models import CapacitasAnagraficaDetail, CapacitasIntestatario, CapacitasTerrenoCertificato
 from app.modules.elaborazioni.capacitas.models import CapacitasLookupOption, CapacitasTerreniSearchResult
 from app.schemas.catasto_phase1 import CatAnagraficaMatch, CatAnagraficaUtenzaSummary, CatIntestatarioResponse
@@ -108,20 +117,6 @@ from tests.catasto_fixtures import (
     build_oristanese_territorial_capacitas_dataframe,
     build_oristanese_territorial_capacitas_workbook_bytes,
 )
-
-_ANAGRAFICA_ROUTE_PATH = Path(__file__).resolve().parents[1] / "app/modules/catasto/routes/anagrafica.py"
-_ANAGRAFICA_ROUTE_SPEC = importlib.util.spec_from_file_location(
-    "catasto_anagrafica_route_under_test",
-    _ANAGRAFICA_ROUTE_PATH,
-)
-assert _ANAGRAFICA_ROUTE_SPEC is not None and _ANAGRAFICA_ROUTE_SPEC.loader is not None
-_ANAGRAFICA_ROUTE_MODULE = importlib.util.module_from_spec(_ANAGRAFICA_ROUTE_SPEC)
-_ANAGRAFICA_ROUTE_SPEC.loader.exec_module(_ANAGRAFICA_ROUTE_MODULE)
-CapacitasLiveAuthoritativeSanitizer = _ANAGRAFICA_ROUTE_MODULE.CapacitasLiveAuthoritativeSanitizer
-resolve_particella_cert_context = _ANAGRAFICA_ROUTE_MODULE._resolve_particella_cert_context
-find_certificato_snapshot = _ANAGRAFICA_ROUTE_MODULE._find_certificato_snapshot
-load_intestatari_from_cert_context = _ANAGRAFICA_ROUTE_MODULE._load_intestatari_from_cert_context
-
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
 engine = create_engine(

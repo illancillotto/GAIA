@@ -55,6 +55,19 @@ Tecnologie:
 Path repository:
 - `frontend/`
 
+Il contratto TypeScript condiviso mantiene `frontend/src/types/api.ts` come
+facciata pubblica compatibile. Le definizioni sono organizzate per dominio in
+`frontend/src/types/api/` (`platform`, `organigramma`, `presenze`, `wiki`,
+`network`, `utenze`, `elaborazioni`); i domini più estesi possono avere
+sotto-moduli `base` e `operations`. Gli import tra moduli sono espliciti quando
+un contratto attraversa un confine di dominio.
+
+Anche il client HTTP condiviso mantiene il contratto pubblico `@/lib/api`
+tramite `frontend/src/lib/api/index.ts`. Trasporto, domini applicativi e gruppi
+operativi estesi vivono in moduli separati sotto `frontend/src/lib/api/`; i
+client dipendono direttamente da `core.ts` e non reimportano la facciata, cosi
+da evitare cicli e rendere esplicita la ownership delle chiamate.
+
 ---
 
 ### 2.2 Backend API
@@ -92,6 +105,46 @@ pagina `Utenti GAIA`. Le API continuano a filtrare i layer tramite permessi GIS.
 Non sostituisce il GIS Catasto esistente: `/catasto/gis` resta il workspace di
 dominio per popup, search, WFS AdE, selezioni e logiche Catasto. Il confine
 completo e descritto in `docs/GIS_PLATFORM_ARCHITECTURE.md`.
+
+Il router della GIS Platform mantiene `app.modules.gis.router` come facade
+compatibile. Registra prima Scheda territoriale e i proxy QGIS, poi i gruppi
+catalogo/runtime, interrogazione e proxy esterni, import Shapefile, layer,
+annotazioni, permessi/change request ed export/audit. La facade conserva ordine,
+dipendenza dal modulo `gis`, modulo dichiarato degli endpoint e simboli legacy.
+
+Il modulo Utenze mantiene `app.modules.utenze.router` come facade compatibile.
+Le route sono registrate nello stesso ordine storico da moduli contigui sotto
+`app/modules/utenze/routes/`: import, staging Bonifica, soggetti, documenti e
+reporting. Path, operation ID, dipendenze e contratti OpenAPI restano invariati.
+
+Il modulo Network usa lo stesso pattern: `app.modules.network.router` e una
+facade compatibile che registra in ordine i router VPN, overview, dispositivi,
+tracking, firewall, scansioni e planimetrie. Gli helper sotto `router/helpers/`
+separano serializzazione/RDAP, correlazione endpoint, tracking e inferenza,
+statistiche traffico, scansioni e copertura Sophos. Restano disponibili dalla
+facade i simboli legacy usati da `me` e dai test di integrazione.
+
+Il modulo Presenze mantiene `app.modules.presenze.router` come facade pubblica
+compatibile. Le route sono registrate nello stesso ordine storico da moduli
+separati per accesso, configurazione, giornaliere, recovery, banca ore, import,
+sync, export e dashboard; gli helper dedicati possiedono scheduling,
+serializzazione, classificazione e calcoli aggregati. La facade conserva gli
+import usati da `me` e Gate Mobile e inoltra i monkeypatch legacy. Questa
+riorganizzazione non introduce fallback identitari: il solo mapping valido
+resta `presenze_collaborators.application_user_id -> application_users.id`.
+
+Il modulo self-service Me applica lo stesso confine: `app.modules.me.router`
+resta la facade pubblica e registra, nell'ordine storico, i gruppi stato e
+Presenze, riepilogo, Operazioni e asset. Gli helper condivisi sono concentrati
+in `router/common.py`; import privati e monkeypatch legacy continuano a essere
+inoltrati dalla facade senza modificare i 17 path, auth o modelli OpenAPI.
+
+Il router Catasto per le elaborazioni massive anagrafiche mantiene
+`app.modules.catasto.routes.anagrafica` come facade package. Normalizzazione,
+upload, persone e intestatari, matching, resolver live/autoritativi, execution,
+export e route job/distretto hanno ownership separate; la facade conserva
+ordine delle 13 operazioni, contratti OpenAPI, modulo dichiarato degli endpoint
+e punti di monkeypatch legacy.
 
 Struttura interna canonica:
 

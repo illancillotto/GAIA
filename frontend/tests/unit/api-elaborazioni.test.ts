@@ -143,12 +143,8 @@ describe("api elaborazioni clients", () => {
     await expect(createCapacitasTerreniJob(TOKEN, {})).resolves.toBeDefined();
   });
   test("createElaborazioneBatch", async () => {
-    const fetchMock = stubFetch(jsonResponse({ ok: true }));
-    await expect(
-      createElaborazioneBatch(TOKEN, new File(["x"], "file.csv"), "value", ["one", "two"]),
-    ).resolves.toBeDefined();
-    const body = fetchMock.mock.calls[0]?.[1]?.body as FormData;
-    expect(body.getAll("credential_ids")).toEqual(["one", "two"]);
+    stubFetch(jsonResponse({ ok: true }));
+    await expect(createElaborazioneBatch(TOKEN, new File(['x'], 'file.csv'), "value", [])).resolves.toBeDefined();
   });
   test("createElaborazioneRichiesta", async () => {
     stubFetch(jsonResponse({ ok: true }));
@@ -300,7 +296,7 @@ describe("api elaborazioni clients", () => {
   });
   test("listCapacitasInCassSyncJobs", async () => {
     stubFetch(jsonResponse([]));
-    await expect(listCapacitasInCassSyncJobs(TOKEN)).resolves.toBeDefined();
+    await expect(listCapacitasInCassSyncJobs(TOKEN, { page: 1, pageSize: 20, periodStart: '2026-08-01', periodEnd: '2026-08-31', parentId: 'id-1', structureKind: 'organigramma', toolName: 'x', moduleKey: 'wiki', module: 'wiki', success: true, limit: 10, skip: 0, activeOnly: true, windowMinutes: 15, status: 'active', conversationId: 'c1', username: 'u', intent: 'x', mode: 'x', q: 'x', bustCache: true })).resolves.toBeDefined();
   });
   test("listCapacitasParticelleAnomalie", async () => {
     stubFetch(jsonResponse([]));

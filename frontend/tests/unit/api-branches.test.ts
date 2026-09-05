@@ -2,7 +2,12 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
   createElaborazioneBatchWebSocket,
+  createElaborazioneCredentialTestWebSocket,
+  downloadAnagraficaExportBlob,
+  getAnagraficaSubjects,
   getElaborazioneBatch,
+  getUtenzeVisureRoutingAnomalies,
+  listAllApplicationUsers,
   request,
   requestFormDataWithUploadProgress,
 } from "@/lib/api";
@@ -115,6 +120,28 @@ describe("api branch coverage", () => {
     await vi.advanceTimersByTimeAsync(60_000);
   });
 
+  test("pagination continues and boolean filters retain false values", async () => {
+    const page = Array.from({ length: 200 }, (_, id) => ({ id }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ items: page, total: 201 }))
+      .mockResolvedValueOnce(jsonResponse({ items: [{ id: 201 }], total: 201 }))
+      .mockResolvedValueOnce(jsonResponse({ items: [], total: 1 }))
+      .mockResolvedValueOnce(jsonResponse({ items: [], total: 0 }))
+      .mockResolvedValueOnce(jsonResponse({ items: [], total: 0 }))
+      .mockResolvedValueOnce(new Response(new Blob(["csv"]), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(listAllApplicationUsers("token")).resolves.toHaveLength(201);
+    await expect(listAllApplicationUsers("token")).resolves.toEqual([]);
+    await getAnagraficaSubjects("token", { requiresReview: false });
+    await getUtenzeVisureRoutingAnomalies("token", { resolved: false });
+    await downloadAnagraficaExportBlob("token", { requiresReview: false });
+
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("requires_review=false"))).toBe(true);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes("resolved=false"))).toBe(true);
+  });
+
   test("createElaborazioneBatchWebSocket returns null without window", () => {
     vi.stubGlobal("window", undefined);
     expect(createElaborazioneBatchWebSocket("batch-1", "token")).toBeNull();
@@ -137,5 +164,24 @@ describe("api branch coverage", () => {
     expect(socket).toBeInstanceOf(MockWebSocket);
     expect((socket as MockWebSocket).url).toContain("/elaborazioni/ws/batch-1");
     expect((socket as MockWebSocket).url).toContain("token=token");
+  });
+
+  test("createElaborazioneCredentialTestWebSocket handles server and browser contexts", () => {
+    vi.stubGlobal("window", undefined);
+    expect(createElaborazioneCredentialTestWebSocket("test-1", "token")).toBeNull();
+
+    class MockWebSocket {
+      constructor(readonly url: string) {}
+    }
+    vi.stubGlobal("window", {
+      location: { protocol: "https:", host: "gaia.example.com" },
+    } as Window & typeof globalThis);
+    vi.stubGlobal("WebSocket", MockWebSocket as unknown as typeof WebSocket);
+    vi.stubEnv("NEXT_PUBLIC_API_BASE_URL", "/api");
+
+    const socket = createElaborazioneCredentialTestWebSocket("test-1", "token");
+    expect((socket as MockWebSocket).url).toBe(
+      "wss://gaia.example.com/api/elaborazioni/ws/credentials-test/test-1?token=token",
+    );
   });
 });

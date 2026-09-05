@@ -25,6 +25,7 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 - `docs/IMPLEMENTATION_PLAN.md`: piano di implementazione generale.
 - `docs/WORKER_ARCHITECTURE_PLAN.md`: architettura obiettivo, milestone e rollout per scheduler e worker GAIA.
 - `docs/WORKER_ARCHITECTURE_PROGRESS.md`: stato persistente ed evidenze dell'implementazione worker.
+- `docs/API_ROUTER_MODULARIZATION_PLAN.md`: piano, invarianti e stato della suddivisione progressiva dei barrel API frontend e dei router FastAPI estesi.
 - `docs/GIS_PLATFORM_ARCHITECTURE.md`: confini e roadmap della piattaforma GIS trasversale GAIA.
 - `docs/GIS_PLATFORM_IMPLEMENTATION_PLAN.md`: piano tecnico incrementale per completare la piattaforma GIS.
 - `docs/GIS_PLATFORM_MILESTONES.md`: milestone, deliverable ed exit criteria della piattaforma GIS.
@@ -54,6 +55,14 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 - `.github/workflows/`: pipeline CI/CD GitHub Actions.
 - `backend/app/MONOLITH_MODULAR.md`: note architetturali sul backend monolite modulare.
 - `backend/app/modules/inventory/`: modulo backend Inventory con router, modelli, schemi e servizi applicativi.
+- `backend/app/modules/utenze/router/` e `backend/app/modules/utenze/routes/`: facade FastAPI compatibile e route Utenze separate per responsabilita.
+- `backend/app/modules/network/router/`: facade FastAPI Network, route HTTP e helper di correlazione/serializzazione separati per responsabilita.
+- `backend/app/modules/presenze/router/`: facade FastAPI Presenze, route di dominio e helper per scheduling, giornaliere, recovery, banca ore, sync ed export.
+- `backend/app/modules/me/router/`: facade FastAPI self-service, helper comuni e route separate per stato/Presenze, riepilogo, Operazioni e asset.
+- `backend/app/modules/gis/router/`: facade GIS Platform e route separate per catalogo, interrogazione/proxy, import, layer, annotazioni, change request ed export/audit.
+- `backend/app/modules/catasto/routes/anagrafica/`: facade Catasto per elaborazioni massive, con matching, resolver, export, upload e route job/distretto separati per responsabilita.
+- `frontend/src/types/api/`: contratti TypeScript condivisi separati per dominio; `frontend/src/types/api.ts` resta la facciata pubblica compatibile.
+- `frontend/src/lib/api/`: client HTTP condivisi separati per responsabilita; `index.ts` conserva la facciata pubblica `@/lib/api` e `core.ts` concentra il trasporto comune.
 - `backend/app/modules/gis/interrogazione/`: sonde e orchestrazione backend per
   l'interrogazione puntuale multi-sorgente della GIS Platform.
 - `modules/README.md`: note sulla directory `modules/`.

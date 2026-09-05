@@ -118,6 +118,6 @@ describe("api platform clients", () => {
   });
   test("updateApplicationUserPermissions", async () => {
     stubFetch(jsonResponse({ ok: true }), jsonResponse({ ok: true }));
-    await expect(updateApplicationUserPermissions(TOKEN, 1, false)).resolves.toBeDefined();
+    await expect(updateApplicationUserPermissions(TOKEN, 1, [])).resolves.toBeDefined();
   });
 });

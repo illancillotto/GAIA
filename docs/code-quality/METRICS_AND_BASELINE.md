@@ -87,7 +87,9 @@ Ordine:
 1. stesso percorso e nome qualificato;
 2. rename Git confermato;
 3. fingerprint AST compatibile;
-4. posizione come tie-breaker.
+4. nome qualificato unico proveniente da un path rimosso, per split modulari
+   che richiedono alias o accessi attributo equivalenti;
+5. posizione come tie-breaker.
 
 Il matching tramite fingerprint tra percorsi diversi considera soltanto
 candidati baseline il cui percorso di origine non e piu presente nel report
@@ -96,6 +98,13 @@ scambiato per un rename quando le sorgenti originali esistono ancora.
 
 Se due candidati sono equivalenti, uscita `2` e messaggio di configurazione.
 Non scegliere il candidato piu vicino in silenzio.
+
+Il fallback per nome qualificato tra path diversi si applica solo quando il
+path baseline non esiste piu nel report corrente e il candidato e unico. Se
+piu path rimossi espongono lo stesso nome, il matcher non sceglie: il callable
+resta nuovo e le normali soglie error-level continuano ad applicarsi. Anche un
+move riconosciuto conserva il confronto completo delle metriche legacy, quindi
+non autorizza regressioni o debt laundering.
 
 ## Debt laundering da bloccare
 

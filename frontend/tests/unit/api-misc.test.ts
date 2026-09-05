@@ -11,6 +11,7 @@ import {
   deactivateAnagraficaSubject,
   downloadAnagraficaDocumentBlob,
   downloadAnagraficaExportBlob,
+  downloadMeStraordinariRequest,
   downloadSelectedCatastoDocumentsZipBlob,
   downloadWikiRequestArtifact,
   enqueueWikiConversationMetricsBackfill,
@@ -32,6 +33,7 @@ import {
   pollNetworkFirewallMetrics,
   previewAnagraficaImport,
   previewLookupUtenzeAnprByCf,
+  previewMeStraordinariRequest,
   pruneWikiTelemetry,
   refreshElaborazioneRuoloAutoSyncSource,
   refreshWikiTelemetry,
@@ -65,10 +67,6 @@ import {
   verifyUtenzeAnprAlive,
   verifyUtenzeAnprDeathDate,
 } from "@/lib/api";
-import {
-  getElaborazioneRuoloAutoSyncCampaignItems,
-  retryElaborazioneRuoloAutoSyncCampaignFailures,
-} from "@/lib/autosync-campaign-api";
 
 const TOKEN = "test-token";
 
@@ -116,7 +114,7 @@ describe("api misc clients", () => {
   });
   test("bulkApproveUtenzeBonificaStaging", async () => {
     stubFetch(jsonResponse({ ok: true }));
-    await expect(bulkApproveUtenzeBonificaStaging(TOKEN, "value")).resolves.toBeDefined();
+    await expect(bulkApproveUtenzeBonificaStaging(TOKEN, [])).resolves.toBeDefined();
   });
   test("calculatePermissionPreview", async () => {
     stubFetch(jsonResponse([]));
@@ -142,9 +140,13 @@ describe("api misc clients", () => {
     stubFetch(blobResponse());
     await expect(downloadAnagraficaExportBlob(TOKEN, false)).resolves.toBeDefined();
   });
+  test("downloadMeStraordinariRequest", async () => {
+    stubFetch(blobResponse());
+    await expect(downloadMeStraordinariRequest(TOKEN, {}, {})).resolves.toBeDefined();
+  });
   test("downloadSelectedCatastoDocumentsZipBlob", async () => {
     stubFetch(blobResponse());
-    await expect(downloadSelectedCatastoDocumentsZipBlob(TOKEN, "value")).resolves.toBeDefined();
+    await expect(downloadSelectedCatastoDocumentsZipBlob(TOKEN, [])).resolves.toBeDefined();
   });
   test("downloadWikiRequestArtifact", async () => {
     stubFetch(jsonResponse({ ok: true }));
@@ -225,6 +227,10 @@ describe("api misc clients", () => {
   test("previewLookupUtenzeAnprByCf", async () => {
     stubFetch(jsonResponse({ ok: true }));
     await expect(previewLookupUtenzeAnprByCf(TOKEN, "value")).resolves.toBeDefined();
+  });
+  test("previewMeStraordinariRequest", async () => {
+    stubFetch(jsonResponse({ ok: true }));
+    await expect(previewMeStraordinariRequest(TOKEN)).resolves.toBeDefined();
   });
   test("pruneWikiTelemetry", async () => {
     stubFetch(jsonResponse({ ok: true }));
@@ -313,26 +319,6 @@ describe("api misc clients", () => {
   test("runElaborazioneRuoloAutoSyncNow", async () => {
     stubFetch(jsonResponse({ ok: true }));
     await expect(runElaborazioneRuoloAutoSyncNow(TOKEN)).resolves.toBeDefined();
-  });
-  test("retryElaborazioneRuoloAutoSyncCampaignFailures", async () => {
-    const fetchMock = stubFetch(jsonResponse({ success: true, message: "1 elemento rimesso in coda" }));
-    await expect(
-      retryElaborazioneRuoloAutoSyncCampaignFailures(TOKEN, "ruolo_particella"),
-    ).resolves.toMatchObject({ success: true });
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/elaborazioni/ruolo-autosync/campaigns/ruolo_particella/retry-failed",
-      expect.objectContaining({ method: "POST", headers: expect.objectContaining({ Authorization: `Bearer ${TOKEN}` }) }),
-    );
-  });
-  test("getElaborazioneRuoloAutoSyncCampaignItems", async () => {
-    const fetchMock = stubFetch(jsonResponse({ items: [], total: 0, limit: 50, offset: 100, has_more: false }));
-    await expect(
-      getElaborazioneRuoloAutoSyncCampaignItems(TOKEN, "ruolo_soggetto", 50, 100),
-    ).resolves.toMatchObject({ total: 0, has_more: false });
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/elaborazioni/ruolo-autosync/campaigns/ruolo_soggetto/items?limit=50&offset=100",
-      expect.objectContaining({ headers: expect.objectContaining({ Authorization: `Bearer ${TOKEN}` }) }),
-    );
   });
   test("saveElaborazioneCredentials", async () => {
     stubFetch(jsonResponse({ ok: true }));

@@ -2,6 +2,8 @@ import io
 import json
 from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -1329,3 +1331,295 @@ def test_vpn_access_devices_and_sessions_are_listed_and_device_status_can_change
     assert patch_response.status_code == 200
     assert patch_response.json()["status"] == "revoked"
     assert missing_response.status_code == 404
+
+
+def test_network_missing_resources_return_not_found() -> None:
+    headers = auth_headers()
+    requests = [
+        client.get("/network/devices/999999", headers=headers),
+        client.patch("/network/devices/999999", headers=headers, json={"notes": "missing"}),
+        client.post("/network/devices/bulk-update", headers=headers, json={"device_ids": [999999]}),
+        client.put(
+            "/network/devices/999999/position",
+            headers=headers,
+            json={"floor_plan_id": 1, "x": 1, "y": 2},
+        ),
+        client.put(
+            "/network/devices/1/position",
+            headers=headers,
+            json={"floor_plan_id": 999999, "x": 1, "y": 2},
+        ),
+        client.get("/network/scans/999999", headers=headers),
+        client.get("/network/scans/999999/diff/1", headers=headers),
+        client.get("/network/scans/1/diff/999999", headers=headers),
+        client.get("/network/floor-plans/999999", headers=headers),
+        client.get("/network/floor-plans/999999/devices", headers=headers),
+        client.get("/network/firewalls/999999/log-coverage", headers=headers),
+        client.patch("/network/alerts/999999", headers=headers, json={"status": "resolved"}),
+        client.patch(
+            "/network/alerts/1",
+            headers=headers,
+            json={"assigned_to_user_id": 999999},
+        ),
+        client.patch("/network/tracking/999999", headers=headers, json={"notes": "missing"}),
+        client.get("/network/tracking/999999/activities", headers=headers),
+        client.patch(
+            "/network/detection-watchlist/999999",
+            headers=headers,
+            json={"is_active": False},
+        ),
+    ]
+
+    assert all(response.status_code == 404 for response in requests)
+
+
+def test_network_device_update_edge_cases() -> None:
+    headers = auth_headers()
+
+    missing_assignee = client.patch(
+        "/network/devices/2",
+        headers=headers,
+        json={"assigned_user_id": 999999},
+    )
+    activated = client.patch(
+        "/network/devices/2",
+        headers=headers,
+        json={"lifecycle_state": "active"},
+    )
+    sparse_bulk = client.post(
+        "/network/devices/bulk-update",
+        headers=headers,
+        json={"device_ids": [1], "location_hint": "", "notes_append": "   "},
+    )
+
+    assert missing_assignee.status_code == 404
+    assert activated.status_code == 200
+    assert activated.json()["retired_at"] is None
+    assert sparse_bulk.status_code == 200
+    assert sparse_bulk.json()["items"][0]["location_hint"] is None
+
+
+def test_network_tracking_filters_existing_updates_and_errors() -> None:
+    headers = auth_headers()
+    db = TestingSessionLocal()
+    db.add(
+        NetworkTrackedSubject(
+            entity_type="domain",
+            normalized_value="inactive.example",
+            value="inactive.example",
+            label="Inactive target",
+            notes="searchable note",
+            is_active=False,
+        )
+    )
+    db.commit()
+    db.close()
+
+    filtered = client.get(
+        "/network/tracking?include_inactive=true&entity_type=domain&search=Inactive",
+        headers=headers,
+    )
+    missing_device = client.post(
+        "/network/tracking",
+        headers=headers,
+        json={"entity_type": "device", "device_id": 999999},
+    )
+    missing_value = client.post(
+        "/network/tracking",
+        headers=headers,
+        json={"entity_type": "domain"},
+    )
+    first = client.post(
+        "/network/tracking",
+        headers=headers,
+        json={"entity_type": "domain", "value": "EXAMPLE.TEST", "label": "First", "notes": "old"},
+    )
+    second = client.post(
+        "/network/tracking",
+        headers=headers,
+        json={"entity_type": "domain", "value": "example.test", "label": "Second", "notes": "new"},
+    )
+
+    assert filtered.status_code == 200
+    assert [item["value"] for item in filtered.json()] == ["inactive.example"]
+    assert missing_device.status_code == 404
+    assert missing_value.status_code == 422
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert second.json()["id"] == first.json()["id"]
+    assert second.json()["label"] == "Second"
+    assert second.json()["notes"] == "new"
+
+
+def test_network_watchlist_duplicate_is_updated() -> None:
+    headers = auth_headers()
+    payload = {
+        "category": "vpn",
+        "rule_mode": "detect",
+        "match_type": "domain",
+        "pattern": "duplicate.example",
+        "label": "First",
+        "notes": "old",
+    }
+    created = client.post("/network/detection-watchlist", headers=headers, json=payload)
+    updated = client.post(
+        "/network/detection-watchlist",
+        headers=headers,
+        json={**payload, "label": "Updated", "notes": "new", "is_active": False},
+    )
+
+    assert created.status_code == 201
+    assert updated.status_code == 201
+    assert updated.json()["id"] == created.json()["id"]
+    assert updated.json()["label"] == "Updated"
+    assert updated.json()["is_active"] is False
+
+
+def test_network_scan_diff_returns_changes() -> None:
+    db = TestingSessionLocal()
+    target = NetworkScan(
+        network_range="192.168.1.0/24",
+        scan_type="incremental",
+        status="completed",
+        started_at=datetime.now(UTC),
+        completed_at=datetime.now(UTC),
+    )
+    db.add(target)
+    db.flush()
+    db.add(
+        NetworkScanDevice(
+            scan_id=target.id,
+            ip_address="192.168.1.30",
+            mac_address="aa:bb:cc:dd:ee:30",
+            hostname="new-device",
+            status="online",
+            observed_at=datetime.now(UTC),
+        )
+    )
+    db.commit()
+    target_id = target.id
+    db.close()
+
+    response = client.get(f"/network/scans/1/diff/{target_id}", headers=auth_headers())
+
+    assert response.status_code == 200
+    assert response.json()["changes"]
+
+
+def test_network_route_remaining_success_branches() -> None:
+    headers = auth_headers()
+    scans_response = client.get("/network/scans", headers=headers)
+    bulk_response = client.post(
+        "/network/devices/bulk-update",
+        headers=headers,
+        json={"device_ids": [1]},
+    )
+    tracked = client.post(
+        "/network/tracking",
+        headers=headers,
+        json={"entity_type": "domain", "value": "patch.example"},
+    )
+    patched = client.patch(
+        f"/network/tracking/{tracked.json()['id']}",
+        headers=headers,
+        json={"label": "Patched", "notes": "Updated"},
+    )
+
+    assert scans_response.status_code == 200
+    assert scans_response.json()
+    assert bulk_response.status_code == 200
+    assert patched.status_code == 200
+    assert patched.json()["label"] == "Patched"
+
+
+def test_network_existing_device_subject_and_legacy_defaults() -> None:
+    headers = auth_headers()
+    first = client.post(
+        "/network/tracking",
+        headers=headers,
+        json={"entity_type": "device", "device_id": 1},
+    )
+    second = client.post(
+        "/network/tracking",
+        headers=headers,
+        json={"entity_type": "device", "device_id": 1},
+    )
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert second.json()["id"] == first.json()["id"]
+
+    db = TestingSessionLocal()
+    db.query(NetworkTrackedSubject).delete()
+    db.add(
+        NetworkTrackedSubject(
+            entity_type="ip",
+            normalized_value="192.168.1.10",
+            value="192.168.1.10",
+            is_active=False,
+        )
+    )
+    db.commit()
+    db.close()
+    reconciled = client.post(
+        "/network/tracking",
+        headers=headers,
+        json={"entity_type": "device", "device_id": 1, "notes": "Reconciled note"},
+    )
+    assert reconciled.status_code == 201
+    assert reconciled.json()["notes"] == "Reconciled note"
+
+
+def test_network_statistics_prefers_rollup(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.modules.network.router.routes import overview
+    from app.modules.network.schemas import NetworkStatisticsSummary
+
+    expected = NetworkStatisticsSummary(
+        generated_at=datetime.now(UTC),
+        total_devices=0,
+        active_devices=0,
+        retired_devices=0,
+        online_devices=0,
+        offline_devices=0,
+        known_devices=0,
+        unknown_devices=0,
+        monitored_devices=0,
+        assigned_devices=0,
+        unassigned_devices=0,
+        placeholder_profiles=0,
+        devices_with_traffic=0,
+        firewall_count=0,
+        open_alerts=0,
+    )
+    monkeypatch.setattr(overview, "build_network_statistics_summary_from_rollups", lambda *_args, **_kwargs: expected)
+
+    response = client.get("/network/statistics", headers=auth_headers())
+
+    assert response.status_code == 200
+    assert response.json()["total_devices"] == 0
+
+
+def test_vpn_summary_counts_every_detection_category(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.modules.network.router.routes import tracking as tracking_routes
+    from app.modules.network.schemas import NetworkTrackedSubjectActivitySummary
+
+    activity = NetworkTrackedSubjectActivitySummary(
+        window_hours=24,
+        suspicious_events=4,
+        vpn_suspected_events=1,
+        proxy_suspected_events=1,
+        tor_suspected_events=1,
+        encrypted_dns_events=1,
+    )
+    subject = SimpleNamespace(activity_summary=activity)
+    empty = SimpleNamespace(activity_summary=None)
+    monkeypatch.setattr(tracking_routes, "get_tracked_subjects", lambda **_kwargs: [subject, empty])
+    db = MagicMock()
+    db.scalar.return_value = 0
+    user = SimpleNamespace(module_rete=True, is_super_admin=False)
+
+    result = tracking_routes.get_vpn_bypass_summary(user, db, window_hours=24)
+
+    assert result.vpn_subjects == 1
+    assert result.proxy_subjects == 1
+    assert result.tor_subjects == 1
+    assert result.encrypted_dns_subjects == 1

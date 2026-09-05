@@ -1558,6 +1558,14 @@ def test_me_presenze_unmapped_status_and_daily_record_filters() -> None:
     assert filtered_records.status_code == 200
     assert filtered_records.json()["total"] == 1
 
+    unbounded_records = client.get(
+        "/me/presenze/daily-records",
+        headers={"Authorization": f"Bearer {viewer_token}"},
+        params={"collaborator_id": collab_id, "q": "Permesso"},
+    )
+    assert unbounded_records.status_code == 200
+    assert unbounded_records.json()["total"] == 1
+
 
 def test_presenze_module_routes_are_available() -> None:
     admin = _create_user("presenze_alias_admin")
@@ -1842,6 +1850,34 @@ def test_me_operazioni_and_assets_are_scoped_to_current_user() -> None:
     assignments = client.get("/me/assets/vehicle-assignments", headers={"Authorization": f"Bearer {token}"})
     assert assignments.status_code == 200
     assert assignments.json()["items"][0]["vehicle_name"] == "Porter operativo"
+
+    broad_period = "period_start=2026-01-01&period_end=2026-12-31"
+    broad_summary = client.get(
+        f"/me/summary?{broad_period}", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert broad_summary.status_code == 200
+    assert broad_summary.json()["assigned_cases_count"] == 1
+
+    broad_operations = client.get(
+        f"/me/operazioni/summary?{broad_period}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert broad_operations.status_code == 200
+    assert broad_operations.json()["assigned_cases_count"] == 1
+
+    broad_reports = client.get(
+        f"/me/operazioni/reports?{broad_period}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert broad_reports.status_code == 200
+    assert broad_reports.json()["total"] == 1
+
+    broad_cases = client.get(
+        f"/me/operazioni/cases?{broad_period}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert broad_cases.status_code == 200
+    assert broad_cases.json()["total"] == 1
 
 
 def test_me_operazioni_and_assets_require_module_flags() -> None:

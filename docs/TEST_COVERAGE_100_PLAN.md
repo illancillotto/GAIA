@@ -816,15 +816,74 @@ Fino alla chiusura completa del piano:
   - policy e scheduler nuovi: `104/104` statement e branch coverage `100%`;
   - complexity ratchet contro `a7d3823c`: passato senza finding.
 
+## API/router modularization - Presenze (2026-09-05)
+
+- `backend/app/modules/presenze/router.py` e stato sostituito da una facade
+  package con route e helper separati per responsabilita; i consumer legacy e
+  i monkeypatch continuano a usare `app.modules.presenze.router`.
+- Comando autorevole:
+  `COVERAGE_FILE=/tmp/.coverage-presenze-final PYTHONPATH=backend backend/.venv/bin/python -m coverage run --branch --source=app.modules.presenze.router -m pytest -q backend/tests/test_presenze_api.py backend/tests/test_presenze_router_helpers.py backend/tests/test_presenze_operai_rules.py backend/tests/test_gate_mobile_sync.py backend/tests/test_me_router_helpers.py`.
+- Esito: `241` test passati; `2.292/2.292` statement e `696/696` branch,
+  `100%` su tutti i 23 runtime della facade Presenze.
+- OpenAPI Presenze byte-identica: `64` path prima/dopo, SHA-256
+  `19da9c78abf3488310bca1c1ff29ac65969f4125d09d6c026e4225710a36b35c`.
+  Il documento globale era identico subito dopo la slice (`746` path, `876`
+  operazioni); il successivo `747/877` deriva esclusivamente dalla route
+  concorrente `/organigramma/sync/inaz/preview`.
+
+## API/router modularization - Me (2026-09-05)
+
+- `backend/app/modules/me/router.py` e stato sostituito da una facade package
+  con `common.py` e quattro gruppi route; import privati e monkeypatch legacy
+  continuano a usare `app.modules.me.router`.
+- Comando autorevole:
+  `COVERAGE_FILE=/tmp/.coverage-me-router-final backend/.venv/bin/coverage run --branch --source=app.modules.me.router -m pytest -q backend/tests/test_me_router_helpers.py backend/tests/test_me_router_facade.py backend/tests/test_presenze_api.py`.
+- Esito: `129` test passati; `369/369` statement e `70/70` branch, `100%` su
+  tutti i sette runtime del package Me.
+- OpenAPI Me byte-identica: `17` path e `17` operazioni prima/dopo, SHA-256
+  `cb6eb0146e45c4d6d7b5631f48c4ee84ce7babce22f2a59e42e3eb63ea3d6c61`;
+  anche l'ordine delle route e invariato.
+
+## API/router modularization - GIS Platform (2026-09-05)
+
+- `backend/app/modules/gis/router.py` e stato sostituito da una facade package
+  su sette gruppi route, mantenendo anche i child router Scheda e QGIS.
+- Comando autorevole:
+  `COVERAGE_FILE=/tmp/.coverage-gis-router-after backend/.venv/bin/coverage run --branch --source=app.modules.gis.router -m pytest -q backend/tests/test_gis_router_facade.py backend/tests/test_gis_platform_api.py backend/tests/test_gis_runtime_health.py backend/tests/test_gis_external_proxy.py backend/tests/test_gis_interrogazione_service.py`.
+- Esito: `111` test passati; `272/272` statement e `24/24` branch, `100%` sui
+  nove runtime nuovi. La suite GIS estesa `backend/tests/test_gis_*.py` passa
+  con `220` test.
+- OpenAPI GIS byte-identica: `47` path e `51` operazioni prima/dopo, SHA-256
+  `07d3eeae0e764aeff06e90d0b26704e0c976a8e53e8ea45717e39325f7ec2b95`;
+  ordine, nome e modulo dichiarato degli endpoint sono invariati.
+
+## API/router modularization - Catasto anagrafica (2026-09-05)
+
+- `backend/app/modules/catasto/routes/anagrafica.py` e stato sostituito da una
+  facade package con moduli separati per normalizzazione, export, upload,
+  persone, intestatari, matching, resolver live/autoritativi, execution e
+  route job/distretto.
+- Comando autorevole:
+  `cd backend && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 COVERAGE_FILE=/tmp/.coverage-catasto-anagrafica-final-5 .venv/bin/python -m pytest -p pytest_cov -q tests/test_catasto_phase1.py tests/test_catasto_anagrafica_coverage.py tests/test_catasto_anagrafica_facade.py tests/test_catasto_anagrafica_live.py --cov=app --cov-branch --cov-report=`.
+- Esito: `285` test passati; `1.791/1.791` statement e `634/634` branch,
+  `100%` sugli 11 moduli runtime del package.
+- OpenAPI isolata byte-identica: 11 path, SHA-256
+  `c71647faeb8d71d05aa65ca2847e4ede74a2c2e4a4521e5a8a23afa8e9ff4709`;
+  anche ordine, metodo, path, nome e modulo dichiarato delle 13 operazioni sono
+  invariati.
+
 ## Eccezioni temporanee aperte
 
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`
   Motivo: la pagina resta monolitica; la suite `presenze-collaboratore-detail` copre helper, tab `Cartellino`, tab `Riepilogo eventi`, rettifiche e flussi admin principali, ma il gate mirato Vitest misura ancora `98.21%` statement / `81.19%` branch / `100%` functions / `98.26%` lines.
   Rientro atteso: spezzare la page in componenti/helper testabili e chiudere i rami residui su redirect embedded, azioni admin edge e fallback di dettaglio.
 
-- `2026-07-06` - frontend `src/lib/api.ts`
-  Motivo: file aggregatore API molto ampio; la suite `api-*` (403 test) copre ~`86%` linee / ~`98.5%` functions ma restano rami condizionali (query params, cache, blob) non esercitati.
-  Rientro atteso: estendere `api-branches.test.ts` e test Presenze con parametri non vuoti, oppure split del client per dominio, prima del gate globale al `100%`.
+- `2026-07-06` - frontend `src/lib/api.ts` - chiusa il `2026-09-06`.
+  Il monolite e stato sostituito dalla facade `src/lib/api/index.ts` e da 15
+  moduli di responsabilita. La suite API finale passa con `811` test e copre i
+  16 runtime estratti al `100%`: `1.263/1.263` statement, `826/826` branch,
+  `420/420` funzioni e `1.195/1.195` linee. Non resta alcuna eccezione coverage
+  per il client API modularizzato.
 
 - `2026-08-07` - frontend `src/app/me/me-page-content.tsx`
   Motivo: contenitore self-service monolitico con tab overview/presenze/operativita/dotazioni/anomalie, export CSV/XLSX e modali dettaglio.

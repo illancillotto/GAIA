@@ -168,6 +168,59 @@ def test_rename_with_same_fingerprint_passes(tmp_path):
     assert run_tool("check", "--baseline", str(baseline), str(q)).returncode == 0
 
 
+def test_move_with_unique_qualified_name_and_changed_fingerprint_passes(tmp_path):
+    p = tmp_path / "backend/app/a.py"
+    write(p, "def moved(value):\n    return value.old_name\n")
+    baseline = tmp_path / "baseline.json"
+    assert run_tool("baseline", "--baseline", str(baseline), str(p)).returncode == 0
+
+    p.unlink()
+    q = tmp_path / "backend/app/b.py"
+    write(q, "def moved(value):\n    return value.new_name\n")
+
+    result = run_tool("check", "--baseline", str(baseline), str(q))
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_move_with_unique_qualified_name_still_rejects_metric_regression(tmp_path):
+    p = tmp_path / "backend/app/a.py"
+    write(p, "def moved(value):\n    return value.old_name\n")
+    baseline = tmp_path / "baseline.json"
+    assert run_tool("baseline", "--baseline", str(baseline), str(p)).returncode == 0
+
+    p.unlink()
+    q = tmp_path / "backend/app/b.py"
+    write(q, "def moved(value):\n    if value:\n        return value.new_name\n    return None\n")
+
+    result = run_tool("check", "--baseline", str(baseline), str(q))
+    assert result.returncode == 1
+    assert "legacy_metric_regression" in result.stdout
+
+
+def test_move_with_ambiguous_qualified_name_does_not_guess(tmp_path):
+    app = tmp_path / "backend/app"
+    p = app / "a.py"
+    q = app / "b.py"
+    write(p, "def moved(value):\n    return value.first\n")
+    write(q, "def moved(value):\n    return value.second\n")
+    baseline = tmp_path / "baseline.json"
+    assert run_tool("baseline", "--baseline", str(baseline), str(app)).returncode == 0
+
+    p.unlink()
+    q.unlink()
+    destination = app / "c.py"
+    write(
+        destination,
+        "def moved(value):\n"
+        + "\n".join([f"    if value == {index}:\n        value += {index}" for index in range(20)])
+        + "\n    return value.third\n",
+    )
+
+    result = run_tool("check", "--baseline", str(baseline), str(destination))
+    assert result.returncode == 1
+    assert "new_callable_violation" in result.stdout
+
+
 def test_new_file_reusing_existing_fingerprint_is_not_a_rename(tmp_path):
     source = "def same(x):\n    return x\n"
     app = tmp_path / "backend/app"

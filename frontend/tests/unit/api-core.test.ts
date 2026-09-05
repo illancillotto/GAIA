@@ -148,6 +148,31 @@ describe("api core helpers", () => {
     await expect(requestBlob("/broken")).rejects.toMatchObject({ message: "Server error", status: 500 });
   });
 
+  test("request and requestBlob retain default messages for malformed or incomplete errors", async () => {
+    const plainJson = new Response('{"ok":true}', { status: 200 });
+    plainJson.headers.delete("content-type");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: null }), { status: 400 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: { message: 7 } }), { status: 400 }))
+      .mockResolvedValueOnce(new Response("not-json", { status: 500, statusText: "" }))
+      .mockResolvedValueOnce(new Response(null, { status: 200 }))
+      .mockResolvedValueOnce(plainJson)
+      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: null }), { status: 500 }))
+      .mockResolvedValueOnce(new Response("not-json", { status: 500, statusText: "" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(request("/null-detail")).rejects.toMatchObject({ message: "Request failed" });
+    await expect(request("/numeric-message")).rejects.toMatchObject({
+      message: JSON.stringify({ message: 7 }),
+    });
+    await expect(request("/invalid-error")).rejects.toMatchObject({ message: "Request failed" });
+    await expect(request<void>("/empty-without-content-type")).resolves.toBeUndefined();
+    await expect(request<{ ok: boolean }>("/json-without-content-type")).resolves.toEqual({ ok: true });
+    await expect(requestBlob("/blob-null-detail")).rejects.toMatchObject({ message: "Request failed" });
+    await expect(requestBlob("/invalid-blob-error")).rejects.toMatchObject({ message: "Request failed" });
+  });
+
   test("requestFormDataWithUploadProgress resolves and rejects xhr outcomes", async () => {
     class MockXHR {
       static instances: MockXHR[] = [];
@@ -210,6 +235,21 @@ describe("api core helpers", () => {
     const network = requestFormDataWithUploadProgress("/import", formData, "token");
     MockXHR.instances.at(-1)!.errorHandler?.();
     await expect(network).rejects.toMatchObject({ message: "Errore di rete durante upload CSV" });
+
+    for (const [response, statusText, message] of [
+      [{ detail: "plain detail" }, "", "plain detail"],
+      [{ detail: { code: "invalid" } }, "", JSON.stringify({ code: "invalid" })],
+      [null, "Rejected", "Rejected"],
+      [null, "", "Request failed"],
+    ] as const) {
+      const rejected = requestFormDataWithUploadProgress("/import", formData, "token");
+      const rejectedXhr = MockXHR.instances.at(-1)!;
+      rejectedXhr.status = 400;
+      rejectedXhr.statusText = statusText;
+      rejectedXhr.response = response;
+      rejectedXhr.loadHandler?.();
+      await expect(rejected).rejects.toMatchObject({ message });
+    }
   });
 
   test("request timeout uses bootstrap timeout message", async () => {

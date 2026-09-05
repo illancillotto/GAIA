@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from datetime import date, datetime, time, timezone
 import asyncio
-import json
+import uuid
+from datetime import UTC, date, datetime, time
 from pathlib import Path
 from types import SimpleNamespace
-import uuid
 
 import pytest
 from fastapi import HTTPException
@@ -13,9 +12,9 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.modules.presenze import router
 from app.core.database import Base
 from app.models.application_user import ApplicationUser
+from app.modules.presenze import router
 from app.modules.presenze.models import (
     PresenzeCollaborator,
     PresenzeCollaboratorScheduleAssignment,
@@ -84,6 +83,19 @@ class _QueuedDb(_RecordingDb):
 
     def execute(self, _statement):
         return _ScalarRows(self.row_sets.pop(0))
+
+
+class _BranchDb(_QueuedDb):
+    def __init__(self, *row_sets, stored=None):
+        super().__init__(*row_sets)
+        self.stored = stored
+        self.deleted = []
+
+    def get(self, _model, _identifier):
+        return self.stored
+
+    def delete(self, item):
+        self.deleted.append(item)
 
 
 
@@ -942,8 +954,8 @@ def test_serialize_daily_record_exposes_detail_punch_rows() -> None:
         raw_weekday="V",
         raw_payload_json=payload,
         source_job_id=None,
-        created_at=datetime(2026, 6, 1, 8, 0, tzinfo=timezone.utc),
-        updated_at=datetime(2026, 6, 1, 8, 0, tzinfo=timezone.utc),
+        created_at=datetime(2026, 6, 1, 8, 0, tzinfo=UTC),
+        updated_at=datetime(2026, 6, 1, 8, 0, tzinfo=UTC),
     )
     punches = [
         SimpleNamespace(
@@ -1037,8 +1049,8 @@ def test_serialize_daily_record_exposes_inaz_detail_punch_rows_with_orario_verso
         raw_weekday="M",
         raw_payload_json=payload,
         source_job_id=None,
-        created_at=datetime(2026, 6, 3, 8, 0, tzinfo=timezone.utc),
-        updated_at=datetime(2026, 6, 3, 8, 0, tzinfo=timezone.utc),
+        created_at=datetime(2026, 6, 3, 8, 0, tzinfo=UTC),
+        updated_at=datetime(2026, 6, 3, 8, 0, tzinfo=UTC),
     )
     punches = [
         SimpleNamespace(
@@ -1565,3 +1577,253 @@ def test_bootstrap_preview_ignores_blank_schedule_codes(monkeypatch: pytest.Monk
         _QueuedDb([collaborator], [(collaborator_id, "  ")], [])
     )
     assert preview.collaborator_suggestions[0].schedule_codes == []
+
+
+def test_modular_router_facade_forwards_and_restores_legacy_attributes() -> None:
+    original = router._normalize_employee_codes
+
+    def replacement(_values):
+        return ["patched"]
+
+    router._normalize_employee_codes = replacement
+    assert router._normalize_employee_codes is replacement
+    delattr(router, "_normalize_employee_codes")
+    assert router._normalize_employee_codes is original
+
+    router.coverage_probe = 1
+    assert router.coverage_probe == 1
+    delattr(router, "coverage_probe")
+    router.__coverage_probe__ = 2
+    assert router.__coverage_probe__ == 2
+    delattr(router, "__coverage_probe__")
+    delattr(router, "never_set_probe")
+
+    with pytest.raises(AttributeError):
+        router.__getattr__("missing_legacy_symbol")
+
+
+def test_modular_schedule_helper_legacy_branches(monkeypatch: pytest.MonkeyPatch) -> None:
+    collaborator = SimpleNamespace(contract_kind=None, operai_group=None, standard_daily_minutes=0)
+    status, notes = router._resolve_schedule_configuration_status(
+        collaborator,
+        assigned_template_code="OPE0613",
+        suggested_template_code="OPE0613",
+    )
+    assert status == "legacy_review"
+    assert len(notes) == 3
+
+    definition = router._SystemScheduleTemplateDefinition(
+        code="OPE0613",
+        label="Operai",
+        company_code="53",
+        notes="Default",
+        rules=(router._BootstrapRuleDefinition(None, 0, "weekly", time(7), time(14)),),
+    )
+    existing = SimpleNamespace(code="OPE0613", notes="Already configured")
+    monkeypatch.setattr(router, "SYSTEM_SCHEDULE_TEMPLATE_DEFINITIONS", (definition,))
+    monkeypatch.setattr(router, "BOOTSTRAP_TEMPLATE_PRESETS", ())
+    monkeypatch.setattr(router, "_upsert_template_rules", lambda *_args: False)
+    db = _QueuedDb([existing])
+    assert router.ensure_system_schedule_templates(db) == [existing]
+    assert db.commits == 0
+
+
+def test_modular_daily_helper_empty_and_fallback_branches(monkeypatch: pytest.MonkeyPatch) -> None:
+    user = SimpleNamespace(id=7)
+    monkeypatch.setattr(router, "get_auto_sync_config", lambda _db: SimpleNamespace(credential_id=3))
+    monkeypatch.setattr(router, "get_credential", lambda *_args: SimpleNamespace(active=False))
+    with pytest.raises(HTTPException, match="Nessuna credenziale"):
+        router._resolve_refresh_credential_for_user(_QueuedDb([]), user)
+
+    monkeypatch.setattr(router, "build_schedule_context", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(router, "classify_daily_record", lambda collaborator, *_args: collaborator)
+    record = SimpleNamespace(collaborator_id=uuid.uuid4(), work_date=date(2026, 5, 1))
+    assert router._build_daily_record_classification(None, record, punches=[]).id == record.collaborator_id
+    assert router._build_daily_record_classification(_BranchDb(stored=None), record, punches=[]).id == record.collaborator_id
+    stored = SimpleNamespace(id=record.collaborator_id)
+    assert router._build_daily_record_classification(_BranchDb(stored=stored), record, punches=[]) is stored
+
+    monthly_record = SimpleNamespace(id=uuid.uuid4(), collaborator_id=uuid.uuid4(), work_date=date(2026, 5, 1))
+    monkeypatch.setattr(router, "_build_classification_map", lambda *_args, **_kwargs: {})
+    bonus = router._build_monthly_night_bonus_map(_QueuedDb([]), [monthly_record])
+    assert bonus[monthly_record.id]["monthly_night_shift_count"] == 0
+
+
+def test_modular_bank_and_recovery_helper_alternative_branches(monkeypatch: pytest.MonkeyPatch) -> None:
+    collaborator_id = uuid.uuid4()
+    assert router._load_bank_hours_context(_QueuedDb([], []), [collaborator_id], date_to=None) == ({}, {})
+
+    record = SimpleNamespace(id=uuid.uuid4(), ordinary_minutes=0, straordinario_minutes=0, mpe_minutes=0)
+    classification = SimpleNamespace(
+        night_minutes=0,
+        festive_minutes=0,
+        festive_night_minutes=0,
+        ordinary_night_minutes=0,
+        overtime_day_minutes=0,
+        overtime_night_minutes=0,
+        overtime_festive_minutes=0,
+        overtime_festive_night_minutes=0,
+        shift_festive_day_minutes=0,
+        shift_night_minutes=0,
+        shift_festive_night_minutes=0,
+    )
+    monkeypatch.setattr(router, "_build_classification_map", lambda *_args, **_kwargs: {record.id: classification})
+    monkeypatch.setattr(router, "_build_monthly_night_bonus_map", lambda *_args, **_kwargs: {})
+    summary = router._build_bank_hours_compensation_summary(
+        _QueuedDb([record], []), collaborator_id=collaborator_id, date_from=None, date_to=None
+    )
+    assert summary.worked_days_total == 0
+
+    config = SimpleNamespace(
+        allow_derived_profile=False,
+        include_overtime_day=False,
+        include_overtime_night=False,
+        include_overtime_festive=False,
+        include_overtime_festive_night=False,
+        min_suggested_minutes=0,
+    )
+    guidance = router._build_bank_hours_liquidation_guidance(
+        available_debit_minutes=0,
+        standard_daily_minutes=420,
+        contract_profile_source="explicit",
+        compensation_summary=PresenzeBankHoursCompensationSummaryResponse(),
+        guidance_config=config,
+    )
+    assert guidance.included_overtime_buckets == []
+    assert router._build_recovery_dashboard(_QueuedDb([]), date_from=None, date_to=None, q=None).items == []
+
+    collaborator = SimpleNamespace(
+        id=collaborator_id,
+        employee_code="1",
+        name="Recovery",
+        company_code="53",
+        application_user_id=None,
+    )
+    records = [
+        SimpleNamespace(
+            id=uuid.uuid4(),
+            collaborator_id=collaborator_id,
+            work_date=date(2026, 5, 1),
+            validation_status="validated",
+        )
+        for _ in range(2)
+    ]
+    monkeypatch.setattr(
+        router,
+        "_build_classification_map",
+        lambda *_args, **_kwargs: {
+            record.id: SimpleNamespace(grants_recovery_day=True) for record in records
+        },
+    )
+    monkeypatch.setattr(router, "_record_uses_recovery_day", lambda _record: True)
+    result = router._build_recovery_dashboard(
+        _QueuedDb([collaborator], records, []), date_from=None, date_to=None, q=None
+    )
+    assert result.matured_days_total == 2
+    assert result.used_days_total == 2
+
+
+def test_modular_route_optional_and_no_change_branches(monkeypatch: pytest.MonkeyPatch) -> None:
+    admin = SimpleNamespace(role="admin", is_super_admin=False, id=1)
+    monkeypatch.setattr(router, "_can_manage_supervisors", lambda _user: True)
+    assert router.list_supervisor_assignments(_QueuedDb([]), admin, None, supervisor_user_id=None) == []
+    monkeypatch.setattr(router, "_get_collaborator_or_404", lambda *_args: object())
+    assert router.update_supervisor_assignment(
+        uuid.uuid4(), SimpleNamespace(supervisor_user_id=None), _QueuedDb([]), admin, None
+    ) is None
+    monkeypatch.setattr(
+        router,
+        "PresenzeSupervisorAssignmentResponse",
+        SimpleNamespace(model_validate=lambda value: value),
+    )
+    assignment = SimpleNamespace(collaborator_id=uuid.uuid4(), supervisor_user_id=99)
+    serialized = router._serialize_supervisor_assignment(_BranchDb(stored=None), assignment)
+    assert serialized["supervisor"] is None
+    assert router.list_presenze_holidays(_QueuedDb([]), None, None, year=None) == []
+
+    monkeypatch.setattr(router, "delete_credential", lambda *_args: True)
+    assert router.delete_inaz_credential(1, admin, None, None) is None
+    assert router.list_recovery_adjustments(
+        _QueuedDb([]), admin, None, collaborator_id=None, approval_status=None
+    ) == []
+    assert router.list_bank_hours_adjustments(
+        _QueuedDb([]), admin, None, collaborator_id=None, approval_status=None
+    ) == []
+
+    recovery_item = SimpleNamespace(id=uuid.uuid4())
+    bank_item = SimpleNamespace(id=uuid.uuid4())
+    monkeypatch.setattr(router, "_serialize_recovery_adjustment", lambda _db, item: item)
+    monkeypatch.setattr(router, "_serialize_bank_hours_adjustment", lambda _db, item: item)
+    assert router.update_recovery_adjustment(
+        recovery_item.id, SimpleNamespace(model_dump=lambda **_kwargs: {}), _BranchDb(stored=recovery_item), admin, None
+    ) is recovery_item
+    assert router.update_bank_hours_adjustment(
+        bank_item.id, SimpleNamespace(model_dump=lambda **_kwargs: {}), _BranchDb(stored=bank_item), admin, None
+    ) is bank_item
+
+
+def test_modular_daily_route_empty_and_out_of_period_branches(monkeypatch: pytest.MonkeyPatch) -> None:
+    admin = SimpleNamespace(role="admin", is_super_admin=False)
+    monkeypatch.setattr(
+        router,
+        "_apply_daily_record_filters",
+        lambda _db, _user, *, stmt, count_stmt, **_kwargs: (stmt, count_stmt),
+    )
+    monkeypatch.setattr(router, "_resolve_recent_month_values", lambda **_kwargs: ["2026-05"])
+    monkeypatch.setattr(router, "_daily_record_has_anomaly", lambda _record: True)
+    result = router.get_anomalie_month_summary(
+        _QueuedDb([SimpleNamespace(work_date=date(2026, 4, 1))]), admin, None
+    )
+    assert result.items == []
+
+    monkeypatch.setattr(router, "load_operai_rule_configs", lambda _db: {})
+    assert router.list_giornaliere_matrix(
+        _QueuedDb([], [0]), admin, None, page=1, page_size=31
+    ).items == []
+
+    monkeypatch.setattr(router, "ensure_operai_rule_configs", lambda _db: None)
+    monkeypatch.setattr(router, "PresenzeOperaiRuleConfigResponse", SimpleNamespace(model_validate=lambda item: item))
+    item = SimpleNamespace(id=1)
+    result = router.update_operai_rule_config(
+        1,
+        SimpleNamespace(model_dump=lambda **_kwargs: {"label": "Updated"}),
+        _BranchDb(stored=item),
+        None,
+        None,
+    )
+    assert result.label == "Updated"
+
+
+def test_modular_bootstrap_and_dashboard_disabled_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        router,
+        "_build_schedule_bootstrap_preview",
+        lambda _db: SimpleNamespace(presets=[], collaborator_suggestions=[]),
+    )
+    result = router.apply_schedule_bootstrap(
+        SimpleNamespace(create_missing_templates=False, assign_unassigned_collaborators=False),
+        _QueuedDb([]),
+        None,
+        None,
+    )
+    assert result.created_templates == 0
+    assert result.created_assignments == 0
+
+    record = SimpleNamespace(
+        id=uuid.uuid4(), collaborator_id=uuid.uuid4(), ordinary_minutes=0, absence_minutes=0,
+        justified_minutes=0, override_straordinario_minutes=None, straordinario_minutes=0,
+        override_mpe_minutes=None, mpe_minutes=0, km_value=0, trasferta_minutes=0,
+        trasferta_montano=False, raw_payload_json=None, stato=None, resolved_absence_cause=None,
+        schedule_code=None, request_description=None, evidenze=None,
+    )
+    monkeypatch.setattr(router, "_build_classification_map", lambda *_args: {})
+    monkeypatch.setattr(router, "_record_uses_recovery_day", lambda _record: False)
+    dashboard = router.get_dashboard_summary(
+        _QueuedDb([1], [0], [1], [record]),
+        SimpleNamespace(role="admin", is_super_admin=False),
+        None,
+        period_start=date(2026, 5, 1),
+        period_end=date(2026, 5, 31),
+    )
+    assert dashboard.worked_days_total == 0
+    assert dashboard.schedule_stats == []

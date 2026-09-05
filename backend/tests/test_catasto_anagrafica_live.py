@@ -1,10 +1,13 @@
-import importlib.util
+import importlib
 import sys
 import types
-from pathlib import Path
 from uuid import uuid4
 
-from app.schemas.catasto_phase1 import CatAnagraficaMatch, CatAnagraficaUtenzaSummary, CatIntestatarioResponse
+from app.schemas.catasto_phase1 import (
+    CatAnagraficaMatch,
+    CatAnagraficaUtenzaSummary,
+    CatIntestatarioResponse,
+)
 
 if "shapely" not in sys.modules:
     shapely_module = types.ModuleType("shapely")
@@ -22,15 +25,14 @@ if "geoalchemy2" not in sys.modules:
     sys.modules["geoalchemy2"] = geoalchemy2_module
     sys.modules["geoalchemy2.shape"] = geoalchemy2_shape
 
-_MODULE_PATH = Path(__file__).resolve().parents[1] / "app/modules/catasto/routes/anagrafica.py"
-_SPEC = importlib.util.spec_from_file_location("catasto_anagrafica_route_under_test", _MODULE_PATH)
-assert _SPEC is not None and _SPEC.loader is not None
-_MODULE = importlib.util.module_from_spec(_SPEC)
-_SPEC.loader.exec_module(_MODULE)
-CapacitasLiveAuthoritativeSanitizer = _MODULE.CapacitasLiveAuthoritativeSanitizer
+CapacitasLiveAuthoritativeSanitizer = importlib.import_module(
+    "app.modules.catasto.routes.anagrafica.normalization"
+).CapacitasLiveAuthoritativeSanitizer
 
 
-def _build_match(*, cert_com: str | None, cert_pvc: str | None, cert_fra: str | None) -> CatAnagraficaMatch:
+def _build_match(
+    *, cert_com: str | None, cert_pvc: str | None, cert_fra: str | None
+) -> CatAnagraficaMatch:
     return CatAnagraficaMatch(
         particella_id=uuid4(),
         unit_id=None,

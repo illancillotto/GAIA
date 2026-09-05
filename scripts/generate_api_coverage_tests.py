@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate Vitest happy-path coverage tests for frontend/src/lib/api.ts exports."""
+"""Generate Vitest happy-path coverage tests for the frontend API facade."""
 
 from __future__ import annotations
 
@@ -8,8 +8,20 @@ from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-API_TS = ROOT / "frontend/src/lib/api.ts"
+API_TS = ROOT / "frontend/src/lib/api/index.ts"
 OUT_DIR = ROOT / "frontend/tests/unit"
+
+
+def api_source() -> str:
+    """Read the public API modules in facade order."""
+    facade = API_TS.read_text()
+    module_paths = re.findall(r'export \* from "(\./[^"]+)";', facade)
+    if not module_paths:
+        return facade
+    return "\n".join(
+        (API_TS.parent / f"{module_path}.ts").read_text() for module_path in module_paths
+    )
+
 
 SKIP = {
     "isAuthError",
@@ -112,31 +124,571 @@ def extract_functions(source: str) -> list[tuple[str, str, str, str]]:
 def domain_for(name: str) -> str:
     if any(name.startswith(prefix) for prefix in PRESENZE_PREFIXES):
         return "presenze"
-    if name.startswith(("getOrg", "createOrg", "updateOrg", "deleteOrg", "syncOrg", "exportOrganigramma", "importOrganigramma", "bootstrapOrg", "upsertOrg")):
+    if name.startswith(
+        (
+            "getOrg",
+            "createOrg",
+            "updateOrg",
+            "deleteOrg",
+            "syncOrg",
+            "exportOrganigramma",
+            "importOrganigramma",
+            "bootstrapOrg",
+            "upsertOrg",
+        )
+    ):
         return "organigramma"
-    if name.startswith(("getOperazioni", "listOperazioni", "createOperazioni", "updateOperazioni", "deleteOperazioni", "getOperator", "listOperator", "createOperator", "updateOperator", "deleteOperator", "getVehicle", "listVehicle", "createVehicle", "updateVehicle", "deleteVehicle", "getFuel", "listFuel", "createFuel", "updateFuel", "deleteFuel", "getReport", "listReport", "createReport", "updateReport", "deleteReport", "getCase", "listCase", "createCase", "updateCase", "deleteCase", "getActivity", "listActivity", "createActivity", "updateActivity", "deleteActivity", "getSegnalazione", "listSegnalazione", "createSegnalazione", "updateSegnalazione", "deleteSegnalazione", "getPratica", "listPratica", "createPratica", "updatePratica", "deletePratica", "getMiniapp", "listMiniapp", "getAttivita", "listAttivita", "inviteOperator", "getMobileSync")):
+    if name.startswith(
+        (
+            "getOperazioni",
+            "listOperazioni",
+            "createOperazioni",
+            "updateOperazioni",
+            "deleteOperazioni",
+            "getOperator",
+            "listOperator",
+            "createOperator",
+            "updateOperator",
+            "deleteOperator",
+            "getVehicle",
+            "listVehicle",
+            "createVehicle",
+            "updateVehicle",
+            "deleteVehicle",
+            "getFuel",
+            "listFuel",
+            "createFuel",
+            "updateFuel",
+            "deleteFuel",
+            "getReport",
+            "listReport",
+            "createReport",
+            "updateReport",
+            "deleteReport",
+            "getCase",
+            "listCase",
+            "createCase",
+            "updateCase",
+            "deleteCase",
+            "getActivity",
+            "listActivity",
+            "createActivity",
+            "updateActivity",
+            "deleteActivity",
+            "getSegnalazione",
+            "listSegnalazione",
+            "createSegnalazione",
+            "updateSegnalazione",
+            "deleteSegnalazione",
+            "getPratica",
+            "listPratica",
+            "createPratica",
+            "updatePratica",
+            "deletePratica",
+            "getMiniapp",
+            "listMiniapp",
+            "getAttivita",
+            "listAttivita",
+            "inviteOperator",
+            "getMobileSync",
+        )
+    ):
         return "operazioni"
-    if name.startswith(("getRiordino", "listRiordino", "createRiordino", "updateRiordino", "deleteRiordino", "getBlock", "listBlock", "createBlock", "updateBlock", "deleteBlock", "completeRiordino", "reviewRiordino", "ensureRiordino", "getPractice", "listPractice", "createPractice", "updatePractice", "deletePractice", "archivePractice", "getAppeal", "listAppeal", "createAppeal", "updateAppeal", "resolveAppeal", "getIssue", "listIssue", "createIssue", "closeIssue", "uploadDocument", "downloadDocument", "getWorkflow", "advanceWorkflow", "skipWorkflow", "reopenWorkflow", "getNotification", "listNotification", "markNotification", "getGisLayer", "listGisLayer", "createGisLayer", "updateGisLayer", "deleteGisLayer", "getLink", "listLink", "createLink", "deleteLink", "getConfig", "updateConfig", "exportRiordino", "importRiordino")):
+    if name.startswith(
+        (
+            "getRiordino",
+            "listRiordino",
+            "createRiordino",
+            "updateRiordino",
+            "deleteRiordino",
+            "getBlock",
+            "listBlock",
+            "createBlock",
+            "updateBlock",
+            "deleteBlock",
+            "completeRiordino",
+            "reviewRiordino",
+            "ensureRiordino",
+            "getPractice",
+            "listPractice",
+            "createPractice",
+            "updatePractice",
+            "deletePractice",
+            "archivePractice",
+            "getAppeal",
+            "listAppeal",
+            "createAppeal",
+            "updateAppeal",
+            "resolveAppeal",
+            "getIssue",
+            "listIssue",
+            "createIssue",
+            "closeIssue",
+            "uploadDocument",
+            "downloadDocument",
+            "getWorkflow",
+            "advanceWorkflow",
+            "skipWorkflow",
+            "reopenWorkflow",
+            "getNotification",
+            "listNotification",
+            "markNotification",
+            "getGisLayer",
+            "listGisLayer",
+            "createGisLayer",
+            "updateGisLayer",
+            "deleteGisLayer",
+            "getLink",
+            "listLink",
+            "createLink",
+            "deleteLink",
+            "getConfig",
+            "updateConfig",
+            "exportRiordino",
+            "importRiordino",
+        )
+    ):
         return "riordino"
-    if name.startswith(("getSync", "listSync", "createSync", "updateSync", "deleteSync", "runSync", "previewSync", "applySync", "cancelSync", "retrySync")):
+    if name.startswith(
+        (
+            "getSync",
+            "listSync",
+            "createSync",
+            "updateSync",
+            "deleteSync",
+            "runSync",
+            "previewSync",
+            "applySync",
+            "cancelSync",
+            "retrySync",
+        )
+    ):
         return "sync"
-    if name.startswith(("getInventory", "listInventory", "createInventory", "updateInventory", "deleteInventory", "getGisCatalog", "listGisCatalog", "getGis", "listGis")):
+    if name.startswith(
+        (
+            "getInventory",
+            "listInventory",
+            "createInventory",
+            "updateInventory",
+            "deleteInventory",
+            "getGisCatalog",
+            "listGisCatalog",
+            "getGis",
+            "listGis",
+        )
+    ):
         return "inventory"
-    if name.startswith(("getAnagrafica", "listAnagrafica", "createAnagrafica", "updateAnagrafica", "deleteAnagrafica", "importAnagrafica", "resetAnagrafica", "searchAnagrafica", "getUtenze", "listUtenze", "importUtenze", "startUtenze", "getXlsx", "listXlsx", "updateUtenze", "deleteUtenze", "createUtenze", "syncUtenze", "getAnpr", "listAnpr", "updateAnpr", "triggerAnpr", "previewAnpr", "runAnpr")):
+    if name.startswith(
+        (
+            "getAnagrafica",
+            "listAnagrafica",
+            "createAnagrafica",
+            "updateAnagrafica",
+            "deleteAnagrafica",
+            "importAnagrafica",
+            "resetAnagrafica",
+            "searchAnagrafica",
+            "getUtenze",
+            "listUtenze",
+            "importUtenze",
+            "startUtenze",
+            "getXlsx",
+            "listXlsx",
+            "updateUtenze",
+            "deleteUtenze",
+            "createUtenze",
+            "syncUtenze",
+            "getAnpr",
+            "listAnpr",
+            "updateAnpr",
+            "triggerAnpr",
+            "previewAnpr",
+            "runAnpr",
+        )
+    ):
         return "utenze"
-    if name.startswith(("getNetwork", "listNetwork", "createNetwork", "updateNetwork", "deleteNetwork", "triggerNetwork", "bulkUpdateNetwork", "getSophos", "updateSophos", "getFloorPlan", "createFloorPlan", "updateFloorPlan", "deleteFloorPlan", "getVpn", "listVpn", "getArp", "getFirewall", "listFirewall", "updateNetwork", "getDevice", "updateDevice", "listDevice", "assignNetwork", "getNetworkScan", "listNetworkScan", "getNetworkTracked", "createNetworkTracked", "updateNetworkTracked", "deleteNetworkTracked", "getNetworkIp", "getNetworkDetection", "createNetworkDetection", "updateNetworkDetection", "deleteNetworkDetection")):
+    if name.startswith(
+        (
+            "getNetwork",
+            "listNetwork",
+            "createNetwork",
+            "updateNetwork",
+            "deleteNetwork",
+            "triggerNetwork",
+            "bulkUpdateNetwork",
+            "getSophos",
+            "updateSophos",
+            "getFloorPlan",
+            "createFloorPlan",
+            "updateFloorPlan",
+            "deleteFloorPlan",
+            "getVpn",
+            "listVpn",
+            "getArp",
+            "getFirewall",
+            "listFirewall",
+            "updateNetwork",
+            "getDevice",
+            "updateDevice",
+            "listDevice",
+            "assignNetwork",
+            "getNetworkScan",
+            "listNetworkScan",
+            "getNetworkTracked",
+            "createNetworkTracked",
+            "updateNetworkTracked",
+            "deleteNetworkTracked",
+            "getNetworkIp",
+            "getNetworkDetection",
+            "createNetworkDetection",
+            "updateNetworkDetection",
+            "deleteNetworkDetection",
+        )
+    ):
         return "network"
-    if name.startswith(("getWiki", "listWiki", "createWiki", "updateWiki", "deleteWiki", "assignWiki", "submitWiki", "searchWiki", "sendWiki", "rateWiki", "duplicateWiki", "makeCanonical", "getSupport", "listSupport", "createSupport", "updateSupport", "deleteSupport", "getConversation", "listConversation", "updateConversation", "createConversation", "getTelemetry", "listTelemetry", "getAudit", "listAudit", "addWiki", "removeWiki", "getCluster", "getInsight", "getAnalytics", "getFeedback", "postFeedback", "getFamily", "listFamilies")):
+    if name.startswith(
+        (
+            "getWiki",
+            "listWiki",
+            "createWiki",
+            "updateWiki",
+            "deleteWiki",
+            "assignWiki",
+            "submitWiki",
+            "searchWiki",
+            "sendWiki",
+            "rateWiki",
+            "duplicateWiki",
+            "makeCanonical",
+            "getSupport",
+            "listSupport",
+            "createSupport",
+            "updateSupport",
+            "deleteSupport",
+            "getConversation",
+            "listConversation",
+            "updateConversation",
+            "createConversation",
+            "getTelemetry",
+            "listTelemetry",
+            "getAudit",
+            "listAudit",
+            "addWiki",
+            "removeWiki",
+            "getCluster",
+            "getInsight",
+            "getAnalytics",
+            "getFeedback",
+            "postFeedback",
+            "getFamily",
+            "listFamilies",
+        )
+    ):
         return "wiki"
-    if name.startswith(("getElaborazione", "listElaborazione", "createElaborazione", "updateElaborazione", "deleteElaborazione", "testElaborazione", "triggerElaborazione", "cancelElaborazione", "retryElaborazione", "downloadElaborazione", "uploadElaborazione", "startElaborazione", "getCapacitas", "listCapacitas", "createCapacitas", "updateCapacitas", "deleteCapacitas", "testCapacitas", "searchCapacitas", "resolveCapacitas", "refetchCapacitas", "harvestCapacitas", "syncCapacitas", "getBonifica", "listBonifica", "createBonifica", "updateBonifica", "deleteBonifica", "testBonifica", "runBonifica", "approveBonifica", "getPostaOnline", "listPostaOnline", "createPostaOnline", "updatePostaOnline", "deletePostaOnline", "testPostaOnline", "getGateMobile", "triggerGateMobile", "getRuoloAuto", "updateRuoloAuto", "getIncass", "listIncass", "createIncass", "updateIncass", "deleteIncass", "getVisure", "listVisure", "createVisure", "updateVisure", "deleteVisure", "getAutodoc", "listAutodoc", "createAutodoc", "updateAutodoc", "deleteAutodoc", "getAdeAlignment", "listAdeAlignment", "createAdeAlignment", "updateAdeAlignment", "deleteAdeAlignment", "getAnprSync", "updateAnprSync", "previewAnpr", "runAnpr", "getAutosync", "updateAutosync", "getBatch", "listBatch", "createBatch", "updateBatch", "deleteBatch", "getCredential", "listCredential", "createCredential", "updateCredential", "deleteCredential", "testCredential", "getRichiesta", "listRichiesta", "createRichiesta", "updateRichiesta", "deleteRichiesta", "getRuntimeMetrics", "getAutoJob", "updateAutoJob", "controlAutoJob", "getBonificaUser", "listBonificaUser", "approveBonificaUser", "bulkApproveBonificaUser")):
+    if name.startswith(
+        (
+            "getElaborazione",
+            "listElaborazione",
+            "createElaborazione",
+            "updateElaborazione",
+            "deleteElaborazione",
+            "testElaborazione",
+            "triggerElaborazione",
+            "cancelElaborazione",
+            "retryElaborazione",
+            "downloadElaborazione",
+            "uploadElaborazione",
+            "startElaborazione",
+            "getCapacitas",
+            "listCapacitas",
+            "createCapacitas",
+            "updateCapacitas",
+            "deleteCapacitas",
+            "testCapacitas",
+            "searchCapacitas",
+            "resolveCapacitas",
+            "refetchCapacitas",
+            "harvestCapacitas",
+            "syncCapacitas",
+            "getBonifica",
+            "listBonifica",
+            "createBonifica",
+            "updateBonifica",
+            "deleteBonifica",
+            "testBonifica",
+            "runBonifica",
+            "approveBonifica",
+            "getPostaOnline",
+            "listPostaOnline",
+            "createPostaOnline",
+            "updatePostaOnline",
+            "deletePostaOnline",
+            "testPostaOnline",
+            "getGateMobile",
+            "triggerGateMobile",
+            "getRuoloAuto",
+            "updateRuoloAuto",
+            "getIncass",
+            "listIncass",
+            "createIncass",
+            "updateIncass",
+            "deleteIncass",
+            "getVisure",
+            "listVisure",
+            "createVisure",
+            "updateVisure",
+            "deleteVisure",
+            "getAutodoc",
+            "listAutodoc",
+            "createAutodoc",
+            "updateAutodoc",
+            "deleteAutodoc",
+            "getAdeAlignment",
+            "listAdeAlignment",
+            "createAdeAlignment",
+            "updateAdeAlignment",
+            "deleteAdeAlignment",
+            "getAnprSync",
+            "updateAnprSync",
+            "previewAnpr",
+            "runAnpr",
+            "getAutosync",
+            "updateAutosync",
+            "getBatch",
+            "listBatch",
+            "createBatch",
+            "updateBatch",
+            "deleteBatch",
+            "getCredential",
+            "listCredential",
+            "createCredential",
+            "updateCredential",
+            "deleteCredential",
+            "testCredential",
+            "getRichiesta",
+            "listRichiesta",
+            "createRichiesta",
+            "updateRichiesta",
+            "deleteRichiesta",
+            "getRuntimeMetrics",
+            "getAutoJob",
+            "updateAutoJob",
+            "controlAutoJob",
+            "getBonificaUser",
+            "listBonificaUser",
+            "approveBonificaUser",
+            "bulkApproveBonificaUser",
+        )
+    ):
         return "elaborazioni"
-    if name.startswith(("getCatasto", "listCatasto", "createCatasto", "updateCatasto", "deleteCatasto", "importCatasto", "exportCatasto", "searchCatasto", "getCat", "listCat", "createCat", "updateCat", "deleteCat", "getDistretto", "listDistretto", "createDistretto", "updateDistretto", "deleteDistretto", "getParticella", "listParticella", "getDomanda", "listDomanda", "getDeliveryPoint", "listDeliveryPoint", "createDeliveryPoint", "updateDeliveryPoint", "deleteDeliveryPoint", "getMeterReading", "listMeterReading", "getGis", "listGis", "syncCatasto", "getAde", "listAde", "triggerAde", "getIrrigation", "listIrrigation", "previewIrrigation", "getAnomalie", "listAnomalie", "getWhiteCompany", "listWhiteCompany", "uploadCatasto", "downloadCatasto", "getArchive", "listArchive")):
+    if name.startswith(
+        (
+            "getCatasto",
+            "listCatasto",
+            "createCatasto",
+            "updateCatasto",
+            "deleteCatasto",
+            "importCatasto",
+            "exportCatasto",
+            "searchCatasto",
+            "getCat",
+            "listCat",
+            "createCat",
+            "updateCat",
+            "deleteCat",
+            "getDistretto",
+            "listDistretto",
+            "createDistretto",
+            "updateDistretto",
+            "deleteDistretto",
+            "getParticella",
+            "listParticella",
+            "getDomanda",
+            "listDomanda",
+            "getDeliveryPoint",
+            "listDeliveryPoint",
+            "createDeliveryPoint",
+            "updateDeliveryPoint",
+            "deleteDeliveryPoint",
+            "getMeterReading",
+            "listMeterReading",
+            "getGis",
+            "listGis",
+            "syncCatasto",
+            "getAde",
+            "listAde",
+            "triggerAde",
+            "getIrrigation",
+            "listIrrigation",
+            "previewIrrigation",
+            "getAnomalie",
+            "listAnomalie",
+            "getWhiteCompany",
+            "listWhiteCompany",
+            "uploadCatasto",
+            "downloadCatasto",
+            "getArchive",
+            "listArchive",
+        )
+    ):
         return "catasto"
-    if name.startswith(("getOperazioni", "listOperazioni", "createOperazioni", "updateOperazioni", "deleteOperazioni", "getOperator", "listOperator", "createOperator", "updateOperator", "deleteOperator", "getVehicle", "listVehicle", "createVehicle", "updateVehicle", "deleteVehicle", "getFuel", "listFuel", "createFuel", "updateFuel", "deleteFuel", "getReport", "listReport", "createReport", "updateReport", "deleteReport", "getCase", "listCase", "createCase", "updateCase", "deleteCase", "getActivity", "listActivity", "createActivity", "updateActivity", "deleteActivity", "getSegnalazione", "listSegnalazione", "createSegnalazione", "updateSegnalazione", "deleteSegnalazione", "getPratica", "listPratica", "createPratica", "updatePratica", "deletePratica", "getMiniapp", "listMiniapp", "getAttivita", "listAttivita", "inviteOperator", "getMobileSync")):
+    if name.startswith(
+        (
+            "getOperazioni",
+            "listOperazioni",
+            "createOperazioni",
+            "updateOperazioni",
+            "deleteOperazioni",
+            "getOperator",
+            "listOperator",
+            "createOperator",
+            "updateOperator",
+            "deleteOperator",
+            "getVehicle",
+            "listVehicle",
+            "createVehicle",
+            "updateVehicle",
+            "deleteVehicle",
+            "getFuel",
+            "listFuel",
+            "createFuel",
+            "updateFuel",
+            "deleteFuel",
+            "getReport",
+            "listReport",
+            "createReport",
+            "updateReport",
+            "deleteReport",
+            "getCase",
+            "listCase",
+            "createCase",
+            "updateCase",
+            "deleteCase",
+            "getActivity",
+            "listActivity",
+            "createActivity",
+            "updateActivity",
+            "deleteActivity",
+            "getSegnalazione",
+            "listSegnalazione",
+            "createSegnalazione",
+            "updateSegnalazione",
+            "deleteSegnalazione",
+            "getPratica",
+            "listPratica",
+            "createPratica",
+            "updatePratica",
+            "deletePratica",
+            "getMiniapp",
+            "listMiniapp",
+            "getAttivita",
+            "listAttivita",
+            "inviteOperator",
+            "getMobileSync",
+        )
+    ):
         return "operazioni"
-    if name.startswith(("getRiordino", "listRiordino", "createRiordino", "updateRiordino", "deleteRiordino", "getBlock", "listBlock", "createBlock", "updateBlock", "deleteBlock", "completeRiordino", "reviewRiordino", "ensureRiordino", "getPractice", "listPractice", "createPractice", "updatePractice", "deletePractice", "archivePractice", "getAppeal", "listAppeal", "createAppeal", "updateAppeal", "resolveAppeal", "getIssue", "listIssue", "createIssue", "closeIssue", "uploadDocument", "downloadDocument", "getWorkflow", "advanceWorkflow", "skipWorkflow", "reopenWorkflow", "getNotification", "listNotification", "markNotification", "getGisLayer", "listGisLayer", "createGisLayer", "updateGisLayer", "deleteGisLayer", "getLink", "listLink", "createLink", "deleteLink", "getConfig", "updateConfig", "exportRiordino", "importRiordino")):
+    if name.startswith(
+        (
+            "getRiordino",
+            "listRiordino",
+            "createRiordino",
+            "updateRiordino",
+            "deleteRiordino",
+            "getBlock",
+            "listBlock",
+            "createBlock",
+            "updateBlock",
+            "deleteBlock",
+            "completeRiordino",
+            "reviewRiordino",
+            "ensureRiordino",
+            "getPractice",
+            "listPractice",
+            "createPractice",
+            "updatePractice",
+            "deletePractice",
+            "archivePractice",
+            "getAppeal",
+            "listAppeal",
+            "createAppeal",
+            "updateAppeal",
+            "resolveAppeal",
+            "getIssue",
+            "listIssue",
+            "createIssue",
+            "closeIssue",
+            "uploadDocument",
+            "downloadDocument",
+            "getWorkflow",
+            "advanceWorkflow",
+            "skipWorkflow",
+            "reopenWorkflow",
+            "getNotification",
+            "listNotification",
+            "markNotification",
+            "getGisLayer",
+            "listGisLayer",
+            "createGisLayer",
+            "updateGisLayer",
+            "deleteGisLayer",
+            "getLink",
+            "listLink",
+            "createLink",
+            "deleteLink",
+            "getConfig",
+            "updateConfig",
+            "exportRiordino",
+            "importRiordino",
+        )
+    ):
         return "riordino"
-    if name.startswith(("getShare", "getNas", "listNas", "createNas", "updateNas", "deleteNas", "getReview", "listReview", "createReview", "updateReview", "deleteReview", "getSync", "listSync", "createSync", "updateSync", "deleteSync", "runSync", "previewSync", "applySync", "getEffective", "listEffective", "getPermission", "listPermission", "updatePermission", "deletePermission", "getDashboard", "getMyPermissions", "listApplication", "listAllApplication", "getApplication", "updateApplication", "deleteApplication", "inviteApplication", "createApplication", "listSection", "getInventory", "listInventory", "createInventory", "updateInventory", "deleteInventory", "getGisCatalog", "listGisCatalog")):
+    if name.startswith(
+        (
+            "getShare",
+            "getNas",
+            "listNas",
+            "createNas",
+            "updateNas",
+            "deleteNas",
+            "getReview",
+            "listReview",
+            "createReview",
+            "updateReview",
+            "deleteReview",
+            "getSync",
+            "listSync",
+            "createSync",
+            "updateSync",
+            "deleteSync",
+            "runSync",
+            "previewSync",
+            "applySync",
+            "getEffective",
+            "listEffective",
+            "getPermission",
+            "listPermission",
+            "updatePermission",
+            "deletePermission",
+            "getDashboard",
+            "getMyPermissions",
+            "listApplication",
+            "listAllApplication",
+            "getApplication",
+            "updateApplication",
+            "deleteApplication",
+            "inviteApplication",
+            "createApplication",
+            "listSection",
+            "getInventory",
+            "listInventory",
+            "createInventory",
+            "updateInventory",
+            "deleteInventory",
+            "getGisCatalog",
+            "listGisCatalog",
+        )
+    ):
         return "platform"
     if name.startswith("getMe") or name.startswith("listMe"):
         return "me"
@@ -202,14 +754,63 @@ def build_call(name: str, params: str, body: str) -> str:
             args.append("() => undefined")
         elif pname in {"onProgress"}:
             args.append("() => undefined")
-        elif pname.endswith("Id") or pname in {"batchId", "jobId", "recordId", "teamId", "userId", "sectionId", "deviceId", "firewallId", "subjectId", "avvisoId", "credentialId", "adjustmentId", "templateId", "ruleId", "assignmentId", "conversationId", "requestId", "artifactId", "unitId", "assignment_id", "holidayId", "alertId"}:
+        elif pname.endswith("Id") or pname in {
+            "batchId",
+            "jobId",
+            "recordId",
+            "teamId",
+            "userId",
+            "sectionId",
+            "deviceId",
+            "firewallId",
+            "subjectId",
+            "avvisoId",
+            "credentialId",
+            "adjustmentId",
+            "templateId",
+            "ruleId",
+            "assignmentId",
+            "conversationId",
+            "requestId",
+            "artifactId",
+            "unitId",
+            "assignment_id",
+            "holidayId",
+            "alertId",
+        }:
             if ": number" in part:
                 args.append("1")
             else:
                 args.append('"id-1"')
         elif pname.endswith("_id") or pname in {"id"}:
             args.append('"id-1"')
-        elif pname in {"path", "filename", "code", "state", "username", "password", "identifier", "periodStart", "periodEnd", "period_start", "period_end", "workDate", "isoDate", "year", "month", "status", "structureKind", "module", "query", "q", "kind", "mode", "intent", "toolName", "moduleKey"}:
+        elif pname in {
+            "path",
+            "filename",
+            "code",
+            "state",
+            "username",
+            "password",
+            "identifier",
+            "periodStart",
+            "periodEnd",
+            "period_start",
+            "period_end",
+            "workDate",
+            "isoDate",
+            "year",
+            "month",
+            "status",
+            "structureKind",
+            "module",
+            "query",
+            "q",
+            "kind",
+            "mode",
+            "intent",
+            "toolName",
+            "moduleKey",
+        }:
             if "?" in part or "OrgStructureKind" in part:
                 args.append('"organigramma"')
             elif pname in {"periodStart", "period_start"}:
@@ -224,7 +825,16 @@ def build_call(name: str, params: str, body: str) -> str:
                 args.append('"user"')
             elif pname in {"password"}:
                 args.append('"secret"')
-            elif pname in {"status", "mode", "intent", "toolName", "moduleKey", "kind", "q", "query"}:
+            elif pname in {
+                "status",
+                "mode",
+                "intent",
+                "toolName",
+                "moduleKey",
+                "kind",
+                "q",
+                "query",
+            }:
                 args.append('"x"')
             elif pname in {"structureKind"}:
                 args.append('"organigramma"')
@@ -232,7 +842,28 @@ def build_call(name: str, params: str, body: str) -> str:
                 args.append('"wiki"')
             else:
                 args.append('"value"')
-        elif pname in {"payload", "input", "body", "data", "request", "params", "options", "init", "update", "create", "values", "filters", "formData"} or "Input" in part or "Request" in part or "Update" in part or "Create" in part:
+        elif (
+            pname
+            in {
+                "payload",
+                "input",
+                "body",
+                "data",
+                "request",
+                "params",
+                "options",
+                "init",
+                "update",
+                "create",
+                "values",
+                "filters",
+                "formData",
+            }
+            or "Input" in part
+            or "Request" in part
+            or "Update" in part
+            or "Create" in part
+        ):
             if pname == "formData":
                 args.append("new FormData()")
             elif pname == "options":
@@ -254,15 +885,42 @@ def build_call(name: str, params: str, body: str) -> str:
                 args.append("{}")
         elif pname in {"file", "files"}:
             args.append("new File(['x'], 'file.csv')")
-        elif pname in {"text", "content", "notes", "reason", "message", "label", "name", "email", "subject", "detail", "description"}:
+        elif "[]" in part or "Array" in part:
+            args.append("[]")
+        elif pname in {
+            "text",
+            "content",
+            "notes",
+            "reason",
+            "message",
+            "label",
+            "name",
+            "email",
+            "subject",
+            "detail",
+            "description",
+        }:
             args.append('"text"')
-        elif pname in {"enabled", "active", "force", "unlinked", "bustCache", "activeOnly", "isActive"}:
+        elif pname in {
+            "enabled",
+            "active",
+            "force",
+            "unlinked",
+            "bustCache",
+            "activeOnly",
+            "isActive",
+        }:
             args.append("true")
         elif pname in {"page", "skip", "limit", "pageSize", "page_size"}:
             args.append("1")
         elif pname in {"anno", "count", "amount", "size"}:
             args.append("1")
-        elif "boolean" in part.lower() or pname.startswith("is") or pname.startswith("has") or pname.endswith("Only"):
+        elif (
+            "boolean" in part.lower()
+            or pname.startswith("is")
+            or pname.startswith("has")
+            or pname.endswith("Only")
+        ):
             args.append("false")
         elif "number" in part.lower():
             args.append("1")
@@ -270,8 +928,6 @@ def build_call(name: str, params: str, body: str) -> str:
             args.append('"value"')
         elif "Date" in part:
             args.append('"2026-08-01"')
-        elif "[]" in part or "Array" in part:
-            args.append("[]")
         elif "Record" in part or "object" in part.lower():
             args.append("{}")
         else:
@@ -411,7 +1067,7 @@ describe("api {domain} clients", () => {{
 
 
 def main() -> None:
-    source = API_TS.read_text()
+    source = api_source()
     functions = extract_functions(source)
     buckets: dict[str, list[str]] = defaultdict(list)
     func_map: dict[str, tuple[str, str, str]] = {}

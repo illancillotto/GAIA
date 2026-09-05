@@ -550,6 +550,17 @@ def resolve_baseline_callable(
         if callable_is_wholly_added(c, added_lines):
             return None, None, False
         return None, {"reason": "ambiguous_fingerprint", "path": c["path"], "symbol": c["name"]}, False
+
+    # A module split can require import aliases or equivalent attribute access,
+    # which changes the AST fingerprint. Treat a unique qualified name from a
+    # removed path as a move; metric comparison still rejects regressions.
+    moved_name_matches = [
+        bc
+        for bc in base.values()
+        if bc.get("name") == c.get("name") and bc.get("path") not in current_paths
+    ]
+    if len(moved_name_matches) == 1:
+        return moved_name_matches[0], None, False
     return None, None, False
 
 
