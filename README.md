@@ -196,7 +196,7 @@ GAIA/
 - `modules/` non e piu il contenitore dei moduli applicativi; resta disponibile solo per asset tecnici specifici, come `modules/elaborazioni/worker/`.
 - l'account NAS `svc_naap` resta un identificatore tecnico legacy ancora valido e non va rinominato durante i refactor del naming progetto.
 - `AGENTS.md` nella root contiene regole operative repository-level per gli agenti, incluse le policy Graphify.
-- `.codex/skills/gaia-graphify-maintenance/` contiene la skill locale per mantenere aggiornati i grafi Graphify nei corpus supportati.
+- `skills/` e' l'unica cartella di skill di progetto, condivisa tra tutti gli strumenti agentici (Codex, Hermes, ecc.) e referenziata da `AGENTS.md`; non va duplicata o installata nel profilo globale di un singolo strumento (es. `.codex/skills/`, `~/.hermes/skills`). Contiene, tra le altre, `gaia-graphify-maintenance/` (stub che rimanda alle policy Graphify di `AGENTS.md`), `gaia-complexity-reduction/`, `gaia-presenze-identity-mapping/` e `gate-mobile-sync-contract/`.
 
 ## Graphify
 
@@ -488,6 +488,13 @@ Maintenance mode:
 - `./scripts/maintenance-on.sh`: abilita la pagina statica "Deploy in corso" servita da `nginx`
 - `./scripts/maintenance-off.sh`: disabilita la pagina di maintenance e ripristina il routing normale
 - `DEPLOY_ACTION=deploy` abilita automaticamente la maintenance prima del restart dello stack e la disabilita prima degli smoke test finali
+
+Archiviazione e retention CED:
+
+- il filesystem persistente `/mnt/gaia-archive` ospita backup e release storiche, evitando che saturino la root del server;
+- `./scripts/archive-gaia-artifacts.sh` mostra le migrazioni candidate e non rimuove file;
+- `./scripts/archive-gaia-artifacts.sh --apply` conserva localmente il dump DB completo piu recente (dimensione minima predefinita `1 GiB`) e gli ultimi tre artefatti release per famiglia; dump parziali e metadati ausiliari vengono sempre archiviati. Ogni sorgente viene rimossa solo dopo copia e verifica SHA-256;
+- eseguire prima del deploy e almeno una volta al giorno tramite scheduler operativo del server, dopo aver verificato che `/mnt/gaia-archive` sia montato.
 
 Modello operativo:
 

@@ -17,6 +17,9 @@ Regole:
 - Per `make graphify-wiki-docs`, usa il target `make` dedicato: applica gia `GRAPHIFY_OPENAI_MODEL=gpt-5.4-mini`, `--max-concurrency 1` e `--api-timeout 60` per evitare l'hang osservato con `gpt-5.5` sul path docs di Graphify.
 - Per i target `*-docs`, il default operativo raccomandato e `gpt-5.4-mini`: su Graphify privilegiamo stabilita, costo e latenza rispetto alla massima qualita del modello, perche l'estrazione semantica dei corpus docs e un carico batch ripetitivo. Usa `gpt-5.4` solo se serve una qualita semantica piu alta su un corpus specifico e il profilo resta stabile; evita `gpt-5.5` sui target docs che hanno gia mostrato hang o timeout.
 - Per diagnosi del corpus wiki usa `make graphify-wiki-docs-debug`: salva il trace in `/tmp/graphify-wiki-docs-debug.log` con timeout corto e output non bufferizzato.
+- Non committare `graphify-out/`.
+- I target `graphify-inaz-*` sono alias legacy dei corrispondenti target `graphify-presenze-*`.
+- Se un refactoring strutturale rimuove import, simboli o route e il grafo incrementale mantiene edge stale, forza il pruning tramite lo stesso target `make` invece di invocare Graphify dalla root, ad esempio `make graphify-frontend GRAPHIFY_CODE_FLAGS=--force`.
 
 Target supportati:
 
@@ -52,13 +55,15 @@ Target supportati:
 
 Query:
 
-- Entra prima nella directory del corpus desiderato.
-- Poi usa `graphify query "..."` per domande architetturali o di impatto.
+- Ogni corpus con un target `make` ha anche un target `*-query` corrispondente (es. `make graphify-backend-query Q="..."`): preferiscilo a un `cd` manuale quando esiste.
+- In alternativa, entra prima nella directory del corpus desiderato e poi usa `graphify query "..."` per domande architetturali o di impatto.
 
 Configurazione locale:
 
 - Le credenziali Graphify locali vivono in `.env.graphify`, ignorato da git.
 - I target `make` lo caricano automaticamente se presente.
+
+Skill di riferimento (Codex): `skills/gaia-graphify-maintenance/SKILL.md` mantiene solo un rimando a questa sezione, che resta la fonte autorevole delle regole Graphify: non duplicare qui le regole nella skill.
 
 ## Mapping identita GAIA-INAZ
 
