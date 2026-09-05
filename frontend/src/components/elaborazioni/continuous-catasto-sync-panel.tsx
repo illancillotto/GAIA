@@ -248,7 +248,7 @@ function CredentialPool({ state, setState }: { state: SyncState; setState: React
           <button className="btn-secondary px-3 py-2 text-xs" disabled={state.busy || selectedIds.length === 0} onClick={() => setAll(false)} type="button">Disattiva tutte</button>
         </div>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
         {activeCredentials.map((credential) => {
           const profile = profiles[credential.id]!;
           const selected = profile.enabled;
@@ -257,17 +257,19 @@ function CredentialPool({ state, setState }: { state: SyncState; setState: React
             ...profiles, [credential.id]: { ...profile, ...patch },
           });
           return (
-            <div className={`rounded-[18px] border p-3 transition-colors ${selected ? "border-[#80a98b] bg-white ring-1 ring-[#d7e6da]" : "border-gray-200 bg-gray-50"}`} key={credential.id}>
-              <label className="flex min-h-10 cursor-pointer items-center gap-3">
-                <input checked={selected} className="h-5 w-5 shrink-0 accent-[#477a55]" disabled={state.busy} onChange={(event) => updateProfile({ enabled: event.target.checked })} type="checkbox" />
-                <span className="min-w-0 flex-1">
+            <div className={`rounded-[16px] border p-2 transition-colors ${selected ? "border-[#80a98b] bg-white ring-1 ring-[#d7e6da]" : "border-gray-200 bg-gray-50"}`} key={credential.id}>
+              <label className="flex min-h-9 cursor-pointer items-center gap-2">
+                <input checked={selected} className="h-4 w-4 shrink-0 accent-[#477a55]" disabled={state.busy} onChange={(event) => updateProfile({ enabled: event.target.checked })} type="checkbox" />
+                <span className="min-w-0 flex-1 leading-tight">
                   <span className="block truncate text-sm font-semibold text-gray-900">{credential.label}</span>
-                  <span className="mt-0.5 block truncate text-xs text-gray-500">{credential.sister_username}</span>
+                  <span className="block truncate text-xs text-gray-500">{credential.sister_username}</span>
                 </span>
-                <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-medium ${selected ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>AutoSync {selected ? "ON" : "OFF"}</span>
-                {selected ? <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-medium ${available ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{available ? "Disponibile" : "Fuori fascia / occupata"}</span> : null}
+                <span className="flex shrink-0 flex-col items-end gap-1">
+                  <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${selected ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>{selected ? "ON" : "OFF"}</span>
+                  {selected ? <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${available ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{available ? "Disponibile" : "Occupata"}</span> : null}
+                </span>
               </label>
-              {selected ? <div className="mt-3 border-t border-gray-100 pt-3"><SisterAvailabilityScheduleEditor enabled={profile.schedule_enabled} onEnabledChange={(schedule_enabled) => updateProfile({ schedule_enabled })} onScheduleChange={(availability_schedule) => updateProfile({ availability_schedule })} schedule={profile.availability_schedule ?? defaultSisterSchedule()} /></div> : null}
+              {selected ? <div className="mt-2 border-t border-gray-100 pt-2"><SisterAvailabilityScheduleEditor enabled={profile.schedule_enabled} onEnabledChange={(schedule_enabled) => updateProfile({ schedule_enabled })} onScheduleChange={(availability_schedule) => updateProfile({ availability_schedule })} schedule={profile.availability_schedule ?? defaultSisterSchedule()} /></div> : null}
             </div>
           );
         })}
@@ -352,11 +354,13 @@ export function ContinuousCatastoSyncPanel() {
         <div className="space-y-5 p-4 md:space-y-6 md:p-6" data-testid="autosync-configuration-content">
           <section aria-labelledby="autosync-configuration-title" className="space-y-4">
             <div><h2 className="text-lg font-semibold text-gray-950" id="autosync-configuration-title">Configurazione AutoSync</h2><p className="mt-1 text-sm text-gray-500">Credenziali e intervalli di aggiornamento della campagna a ruolo.</p></div>
-          <div className="grid gap-4 lg:grid-cols-[1.2fr,1fr]">
-            <div className="space-y-4 rounded-[24px] border border-gray-100 bg-gray-50 p-4">
-              <SyncConfiguration execute={execute} setDraft={setDraft} setState={setState} state={state} />
+          <div className="space-y-4 rounded-[24px] border border-gray-100 bg-gray-50 p-4">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-[16px] border border-[#d9dfd6] bg-white px-3 py-2 text-xs text-gray-500">
+              <span className="font-semibold text-gray-900">Ordine di esecuzione:</span>
+              <span>1. Particelle a ruolo → 2. Anagrafiche a ruolo</span>
+              <span className="text-gray-400">· gli elementi completati tornano in coda solo se nuovi o modificati</span>
             </div>
-            <div className="rounded-[24px] border border-gray-100 bg-gray-50 p-4"><p className="text-sm font-semibold text-gray-900">Ordine di esecuzione</p><ol className="mt-3 space-y-2 text-sm text-gray-600"><li><strong>1.</strong> Particelle a ruolo</li><li><strong>2.</strong> Anagrafiche a ruolo</li></ol><p className="mt-3 text-xs text-gray-500">Gli elementi completati tornano in coda soltanto se risultano nuovi o modificati.</p></div>
+            <SyncConfiguration execute={execute} setDraft={setDraft} setState={setState} state={state} />
           </div>
           </section>
           <RunningBatch status={state.status} />
