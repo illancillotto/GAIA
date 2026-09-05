@@ -493,7 +493,8 @@ Archiviazione e retention CED:
 
 - il filesystem persistente `/mnt/gaia-archive` ospita backup e release storiche, evitando che saturino la root del server;
 - `./scripts/archive-gaia-artifacts.sh` mostra le migrazioni candidate e non rimuove file;
-- `./scripts/archive-gaia-artifacts.sh --apply` conserva localmente il dump DB completo piu recente (dimensione minima predefinita `1 GiB`) e gli ultimi tre artefatti release per famiglia; dump parziali e metadati ausiliari vengono sempre archiviati. Ogni sorgente viene rimossa solo dopo copia e verifica SHA-256;
+- `./scripts/archive-gaia-artifacts.sh --apply` conserva localmente il dump DB completo piu recente (dimensione minima predefinita `1 GiB`) e gli ultimi tre artefatti release per famiglia; dump parziali, metadati ausiliari e artefatti release legacy vengono sempre archiviati. Ogni sorgente viene rimossa solo dopo copia e verifica SHA-256;
+- il log `logs/gate-mobile-sync-cron.log` viene ruotato coordinandosi con il lock del cron, archiviato con checksum e compresso sull'HDD; il cron puo continuare a scrivere sul nuovo file senza mantenere aperto quello storico;
 - eseguire prima del deploy e almeno una volta al giorno tramite scheduler operativo del server, dopo aver verificato che `/mnt/gaia-archive` sia montato.
 
 Modello operativo:
