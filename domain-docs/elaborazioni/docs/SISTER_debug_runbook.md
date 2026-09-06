@@ -93,19 +93,26 @@ del task interrompe il lavoro senza avviare il fallback.
 Il default e `gpt-5.4-mini` con effort `low`, presente nel catalogo locale
 `/v1/models`. La variante `gpt-5.4` restituisce invece HTTP 503,
 `no_plan_support_for_model`, ed e stata sostituita su richiesta dell'operatore.
-La verifica dal container con `gpt-5.4-mini`, effort `low` e immagine sintetica
-ha completato la chiamata, ma ha restituito `Mi dispiace, non posso aiutare a
-risolvere un CAPTCHA.` Il solver ha quindi restituito `None`, come previsto
-per un rifiuto. Il collegamento funziona, ma neanche Mini ha risolto il CAPTCHA
-nella prova; restano necessari gli altri canali gia disponibili.
 
-Verifica locale del 6 settembre 2026: `gpt-5.6-terra` compare nel catalogo del
-codex-lb installato e l'API legge correttamente un'immagine sintetica in una
-prova di trascrizione generica. Con il prompt CAPTCHA del solver, invece,
-Terra ha risposto `Non posso aiutare a risolvere CAPTCHA`. Il collegamento e
-quindi disponibile, ma questo modello non costituisce una garanzia di
-risoluzione CAPTCHA; il rifiuto e gestito come mancata soluzione, senza
-reinterpretarlo come codice da inviare a SISTER.
+Prompt del solver (identico per `agent` e per il fallback codex-lb): il testo
+non nomina piu "CAPTCHA" e chiede solo la trascrizione esatta del testo
+nell'immagine (`_PROMPT_TEMPLATE` in `llm_captcha_solver.py`). La versione
+precedente citava esplicitamente "CAPTCHA" nel prompt e questo faceva
+scattare il rifiuto di sicurezza di alcuni modelli anche su immagini reali,
+indipendentemente dal contenuto. Con il prompt neutro, verifica locale del 6
+settembre 2026 su 4 CAPTCHA reali (`data-example/capthas/`): `gpt-5.4-mini`
+(modello configurato in produzione) trascrive correttamente in 4/4 casi senza
+piu alcun rifiuto.
+
+`gpt-5.6-terra` compare nel catalogo del codex-lb installato e legge
+correttamente un'immagine sintetica in una prova di trascrizione generica, ma
+sulla stessa batch di 4 CAPTCHA reali rifiuta in 3/4 casi (`Mi dispiace, non
+posso aiutare a risolvere CAPTCHA`) anche con il prompt neutro: il rifiuto e
+quindi legato a un classificatore visivo del modello sul contenuto
+dell'immagine, non al wording della richiesta. Il collegamento a Terra e
+disponibile ma il modello non e adatto come fallback CAPTCHA; il rifiuto
+viene comunque gestito come mancata soluzione (`None`), senza reinterpretarlo
+come codice da inviare a SISTER.
 
 ## Telemetria operativa
 

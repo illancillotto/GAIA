@@ -14,7 +14,13 @@ if str(WORKER_ROOT) not in sys.path:
     sys.path.insert(0, str(WORKER_ROOT))
 
 # Standalone worker imports require WORKER_ROOT on sys.path.
-from llm_captcha_solver import LLMCaptchaSolver  # noqa: E402
+from llm_captcha_solver import LLMCaptchaSolver, _PROMPT_TEMPLATE  # noqa: E402
+
+
+def test_prompt_does_not_mention_captcha():
+    prompt = _PROMPT_TEMPLATE.format(image_path="x.png")
+    assert "captcha" not in prompt.lower()
+    assert "trascrivi" in prompt.lower()
 
 
 @pytest.fixture(autouse=True)

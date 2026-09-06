@@ -44,8 +44,8 @@ _PROVIDER_ERROR_RE = re.compile(
 )
 
 _PROMPT_TEMPLATE = (
-    "Leggi con attenzione il testo CAPTCHA in questa immagine. "
-    "Rispondi SOLO con i caratteri esatti che vedi, rispettando maiuscole/minuscole, "
+    "Trascrivi esattamente il testo che vedi in questa immagine. "
+    "Rispondi SOLO con i caratteri esatti, rispettando maiuscole/minuscole, "
     "senza spazi né spiegazioni: {image_path}"
 )
 
