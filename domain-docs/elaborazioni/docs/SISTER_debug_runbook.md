@@ -55,6 +55,51 @@ Comando utile per i log:
 docker compose logs -f elaborazioni-worker-visure
 ```
 
+## Fallback CAPTCHA agent -> codex-lb
+
+`LLMCaptchaSolver` prova prima la CLI Cursor `agent`. Se la CLI non parte,
+termina con errore, segnala quota/token esauriti, restituisce un risultato vuoto
+o inutilizzabile, oppure supera il timeout, invia la stessa immagine a
+`codex-lb` via `POST /v1/responses`, con modello predefinito `gpt-5.4-mini`
+e `reasoning.effort=low`.
+La richiesta contiene i byte PNG in base64, non un percorso del container.
+
+Configurazione in `.env` (caricato dai worker Compose):
+
+| Variabile | Default / comportamento |
+| --- | --- |
+| `CAPTCHA_LLM_AGENT_TIMEOUT_SECONDS` | `45`; timeout e cancellazione terminano anche i processi figli della CLI |
+| `CAPTCHA_CODEX_LB_FALLBACK_ENABLED` | `true`; `false` disabilita il secondo provider |
+| `CAPTCHA_CODEX_LB_URL` | Se vuota, eredita `CODEX_LB_URL`; altrimenti default locale `http://127.0.0.1:2455/v1` |
+| `CAPTCHA_CODEX_LB_API_KEY` | Se vuota, eredita `CODEX_LB_API_KEY`; senza chiave il fallback non parte |
+| `CAPTCHA_CODEX_LB_MODEL` | `gpt-5.4-mini` |
+| `CAPTCHA_CODEX_LB_TIMEOUT_SECONDS` | `45`, limite totale della chiamata HTTP |
+
+Nei container usare `http://host.docker.internal:2455/v1` per raggiungere il
+servizio sul PC. I worker visure, runtime, poste e autodoc hanno il mapping
+`host-gateway`. Per applicare codice e configurazione ricostruire e ricreare i
+worker interessati in una finestra compatibile con le elaborazioni in corso.
+
+Il fallback effettua un solo tentativo per chiamata al solver; non modifica il
+numero di tentativi LLM, il servizio CAPTCHA esterno o il flusso manuale. Se
+anche codex-lb fallisce, rifiuta la richiesta o non produce un singolo token
+alfanumerico di 4-12 caratteri, il solver restituisce `None`. La cancellazione
+del task interrompe il lavoro senza avviare il fallback.
+
+Il default e `gpt-5.4-mini` con effort `low`, presente nel catalogo locale
+`/v1/models`. La variante `gpt-5.4` restituisce invece HTTP 503,
+`no_plan_support_for_model`, ed e stata sostituita su richiesta dell'operatore.
+La verifica CAPTCHA seguente riguarda esclusivamente Terra e non dimostra
+l'esito di risoluzione con `gpt-5.4-mini`.
+
+Verifica locale del 6 settembre 2026: `gpt-5.6-terra` compare nel catalogo del
+codex-lb installato e l'API legge correttamente un'immagine sintetica in una
+prova di trascrizione generica. Con il prompt CAPTCHA del solver, invece,
+Terra ha risposto `Non posso aiutare a risolvere CAPTCHA`. Il collegamento e
+quindi disponibile, ma questo modello non costituisce una garanzia di
+risoluzione CAPTCHA; il rifiuto e gestito come mancata soluzione, senza
+reinterpretarlo come codice da inviare a SISTER.
+
 ## Telemetria operativa
 
 La superficie `/elaborazioni/portal-health` usa eventi strutturati append-only

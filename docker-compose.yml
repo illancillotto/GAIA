@@ -361,6 +361,8 @@ services:
       context: .
       dockerfile: ./modules/elaborazioni/worker/Dockerfile
     container_name: gaia-elaborazioni-worker-visure
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     command: python /app/worker/worker_runner.py
     init: true
@@ -562,6 +564,8 @@ services:
       context: .
       dockerfile: ./modules/elaborazioni/worker/Dockerfile
     container_name: gaia-elaborazioni-worker-autodoc
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     command: python /app/worker/worker_runner.py
     init: true
