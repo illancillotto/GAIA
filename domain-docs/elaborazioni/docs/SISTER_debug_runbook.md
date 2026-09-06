@@ -28,6 +28,10 @@ Componenti coinvolti:
 - worker browser: `modules/elaborazioni/worker`
 - frontend Catasto: `frontend/src/app/catasto`
 
+L'immagine worker usa Playwright `v1.55.0-noble` con Python 3.12. Il backend
+condiviso importato dal worker richiede Python >= 3.11 (`datetime.UTC`): la
+precedente base Jammy/Python 3.10 fallisce all'avvio dopo il rebuild.
+
 File principali del flusso:
 
 - `modules/elaborazioni/worker/worker.py`
@@ -89,8 +93,11 @@ del task interrompe il lavoro senza avviare il fallback.
 Il default e `gpt-5.4-mini` con effort `low`, presente nel catalogo locale
 `/v1/models`. La variante `gpt-5.4` restituisce invece HTTP 503,
 `no_plan_support_for_model`, ed e stata sostituita su richiesta dell'operatore.
-La verifica CAPTCHA seguente riguarda esclusivamente Terra e non dimostra
-l'esito di risoluzione con `gpt-5.4-mini`.
+La verifica dal container con `gpt-5.4-mini`, effort `low` e immagine sintetica
+ha completato la chiamata, ma ha restituito `Mi dispiace, non posso aiutare a
+risolvere un CAPTCHA.` Il solver ha quindi restituito `None`, come previsto
+per un rifiuto. Il collegamento funziona, ma neanche Mini ha risolto il CAPTCHA
+nella prova; restano necessari gli altri canali gia disponibili.
 
 Verifica locale del 6 settembre 2026: `gpt-5.6-terra` compare nel catalogo del
 codex-lb installato e l'API legge correttamente un'immagine sintetica in una

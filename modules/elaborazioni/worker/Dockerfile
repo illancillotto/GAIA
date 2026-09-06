@@ -1,4 +1,5 @@
-FROM mcr.microsoft.com/playwright/python:v1.55.0-jammy
+# Shared backend imports require Python >= 3.11 (for example datetime.UTC).
+FROM mcr.microsoft.com/playwright/python:v1.55.0-noble
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
