@@ -457,3 +457,79 @@ locale: il rilascio selettivo deve includere il mapping della route HTTP 409,
 senza sovrascrivere codice estraneo. La verifica del download di nuovi PDF
 dopo il deploy e ancora da eseguire; le evidenze precedenti di produzione non
 dimostrano il funzionamento della versione corretta.
+
+## Rilascio CED completato il 2026-09-06
+
+Commit applicativo: `621cb157`. Nessun push eseguito; il commit e il relativo
+format-patch sono conservati nel repository locale e nel bundle di rilascio.
+
+Rilascio selettivo in `/opt/gaia-releases/sister-621cb157` sul CED:
+
+- Backend e scheduler: `gaia-backend:sister-621cb157`, immagine
+  `sha256:d178f194bb6950cb49d59825f40390f4bd430d44281022b6ed9174aec187232a`.
+- Worker: `gaia-elaborazioni-worker-visure:sister-621cb157`, immagine
+  `sha256:63cb41df0ed708452a76e447ebe278cc58b02ea0c1451de06a7bbb5d5d581fb9`.
+- Le immagini derivano dalle immagini effettivamente in esecuzione prima
+  del rilascio, non dal checkout completo. Nel worker sono esclusi gli
+  sviluppi Capacitas e il fallback Simaxis presenti soltanto nel main locale;
+  gli overlay esatti sono archiviati nel bundle con SHA256SUMS e source.patch.
+- La route modulare AutoSync era gia nell'immagine backend di produzione:
+  verificata identica a HEAD prima della patch. Non e servito adattare la
+  vecchia route del checkout su disco.
+- Configurazione fissata in `compose.pinned.json`: ambiente, comandi e mount
+  verificati identici ai container precedenti. Il file contiene impostazioni
+  riservate ed e conservato solo sul CED con permessi 0600, non versionato.
+- Checkout `/opt/gaia` e modifiche Presenze estranee lasciati invariati.
+  Non eseguiti pull, build dell'intero stack o aggiornamenti delle immagini
+  condivise `latest`.
+
+Procedura e verifiche:
+
+1. Scheduler e worker fermati con SIGTERM e attesa fino a 120 secondi.
+   Entrambi terminati con exit code 0; nessuna richiesta attiva con token
+   durante la transizione. Salvato dump schema prima della migration.
+2. Migration applicata con Alembic: `20260905_0900 -> 20260905_1100`.
+   Subito dopo, zero date di primo invio valorizzate: nessun backfill storico.
+3. Backend avviato alle 09:29:42 UTC; scheduler e worker alle 09:30:35 UTC.
+   Tutti healthy e restart count 0; pagina `/elaborazioni/visure` HTTP 200.
+4. Smoke import delle immagini riuscito, incluso il worker Python 3.10.12.
+   Sulla variante selettiva: 159 test browser e 196 test worker passati.
+   Escluso un solo test di un helper Capacitas non presente nella versione
+   di produzione, `test_no_capacitas_recovery_is_a_noop`; le suite del commit
+   locale e i gate coverage restano quelli documentati sopra.
+5. AutoSync ha creato autonomamente il batch
+   `a00e393d-ccc4-4d68-9d02-ca14e4943b1d` alle 09:31:42 UTC, senza errore
+   di configurazione. Nove richieste con documento persistito gia osservate
+   dopo il deploy, non soltanto heartbeat o claim.
+6. PDF canary: richiesta `49978894-bb69-418a-ac6f-73ea17e180c2`, documento
+   `a639a3e0-c5da-4963-a118-96f9d9cef75f`, persistito alle 09:32:55 UTC.
+   File letto dal volume: 16879 byte, header `%PDF-`, SHA256
+   `8886b49976ca8612972f1ee1b4b6358962c3dc295d3db6a350363431cfd69458`.
+7. HTTP 501 SISTER osservato su una credenziale: richiesta differita con
+   `sister_server_error`, cooldown applicato, altri download proseguiti.
+   Diagnostica verificata sul volume: `error.txt`, `final-failed.html`,
+   `final-failed.png`. Nessun contenuto personale riportato nell'audit.
+8. Una richiesta storica con primo invio sconosciuto e stata fermata con
+   `sister_recovery_review_required`, senza nuovo invio. Le 549 richieste
+   storiche dell'inventario non sono dichiarate recuperate.
+9. Successiva riconciliazione automatica confermata: 14 elementi della
+   campagna risultano completed, 4 processing, 1 queued e 1 failed; almeno
+   15 documenti gia persistiti nel nuovo batch. Nessun errore nella config
+   AutoSync. Il scheduler condiviso ha segnalato un tick perso con ritardo
+   di 38 secondi; e poi tornato a riconciliare. Questo rilascio non include
+   le modifiche concorrenti al runner scheduler e non ne dichiara risolti
+   i ritardi globali.
+
+Rollback operativo: immagini precedenti conservate con tag
+`sister-base-621cb157`; usare `compose.rollback.pinned.json` nello stesso
+bundle con progetto `gaia`, solo i tre servizi interessati, `--no-deps
+--no-build`. Drenare prima il worker. La colonna additiva puo restare:
+non eseguire downgrade che elimini i timestamp acquisiti dopo il rilascio.
+Per riavvii successivi di questi servizi usare la configurazione pinned;
+un `up` indiscriminato dal vecchio checkout ripristinerebbe immagini vecchie.
+
+Log locali di verifica: `/tmp/sister-production-migration.log`,
+`/tmp/sister-image-{backend,worker}-smoke.log`,
+`/tmp/sister-release-{browser,worker}-tests.log` e
+`/tmp/sister-deploy-{backend,workers}.log`. I log raw SISTER restano locali,
+non versionati, perche possono contenere dati personali.
