@@ -328,6 +328,41 @@ BrowserSession LOC finale 1221 (prima del follow-up 1231); nessun nuovo finding
 del ratchet sul metodo informativa, baseline invariata. Il gate globale resta
 rosso per finding anteriori, inclusi i form e il file BrowserSession legacy.
 
+### Deploy finale menu-810fdeaa
+
+- Solo worker visure aggiornato, avvio 14:01:53 UTC (16:01:53 Europe/Rome).
+  Immagine `gaia-elaborazioni-worker-visure:menu-810fdeaa`, digest
+  `sha256:53f4a07f3d5976528a8e899b7b32cff86495816050d61d8cd9f377633af878ac`.
+- Overlay di due file su `stall-258d23fe`; include anche la navigazione di
+  `54183191`. Backend e scheduler restano sulle immagini del primo rilascio.
+- Bundle e rollback: `/opt/gaia-releases/menu-810fdeaa/`. Configurazioni
+  riservate 0600; confronto env/mount/command/entrypoint e hash sorgenti OK.
+- Smoke import candidato Python 3.10.12 riuscito. Vecchio worker fermato con
+  limite di 180 secondi, uscita 0 e zero execution token prima della
+  sostituzione; nessun intervento manuale sui dati.
+- Worker healthy, restart count 0; health API 200. Le cinque identita remote
+  originarie restano invariate. Prima di questo secondo rilascio il refill
+  aveva portato lo stesso batch a 65 righe, ma i PDF nuovi restavano uno:
+  il successo del refill non equivale a successo continuativo del download.
+- Canary secondo deploy alle 14:03:13 UTC: sei nuovi PDF dal riavvio, con
+  batch passato da 7 a 13 completati. Form pronti osservati su piu richieste
+  consecutive anche dopo il polling delle richieste originali; nessun timeout
+  menu nel primo intervallo osservato della nuova immagine.
+- Documento validato alle 14:03:11.859672 UTC:
+  `93dcaa30-e109-4e80-9450-89317846b2da`, richiesta
+  `3fdfc3b2-e328-4772-8777-36db3a43eb91`, 16987 byte, SHA256
+  `48cf64ff85cc243d580791cd89d0a28d9c0365d77a6d3261bf265a0da843fe3f`.
+  Verificati firma PDF, dimensione, hash e collegamenti/stato DB.
+- Le cinque richieste remote precedenti restano in recupero con identita
+  invariate: non e dimostrato il recupero di quei documenti. La risoluzione
+  osservata riguarda lo stallo della coda e i download delle nuove richieste;
+  eventuali documenti assenti dagli elenchi SISTER richiedono audit distinto.
+- Controllo esteso alle 14:03:53 UTC: nove PDF nuovi dopo il secondo deploy,
+  16 completati totali nel batch; ultimo file validato alle 14:03:35 UTC.
+  Scheduler: cicli 14:01:50 e 14:02:50 conclusi in circa 3-4 secondi.
+  Backend, scheduler, worker e frontend healthy con restart count 0;
+  pagina visure e health API HTTP 200.
+
 Rollback selettivo, dopo rilascio delle richieste attive:
 
 ```sh
