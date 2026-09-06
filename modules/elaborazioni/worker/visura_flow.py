@@ -3,8 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, replace
-from functools import wraps
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -19,21 +18,6 @@ if TYPE_CHECKING:
     from browser_session import BrowserSession
 
 logger = logging.getLogger(__name__)
-
-
-class ImmediateVisuraResubmit(RuntimeError):
-    """SISTER ha accodato il documento e la visura va richiesta di nuovo."""
-
-
-@dataclass(slots=True)
-class PendingDocumentResubmit:
-    attempts_remaining: int = 1
-
-    def consume(self) -> bool:
-        if self.attempts_remaining <= 0:
-            return False
-        self.attempts_remaining -= 1
-        return True
 
 
 @dataclass(slots=True)
@@ -62,7 +46,6 @@ class VisuraFlowCallbacks:
     update_operation: Callable[[str], None] | None = None
     update_remote_state: Callable[[str | None, str | None, str], None] | None = None
     update_correlation_baseline: Callable[[list[str]], None] | None = None
-    pending_document_resubmit: PendingDocumentResubmit | None = None
 
     def operation(self, value: str) -> None:
         if self.update_operation is not None:
@@ -75,30 +58,6 @@ class VisuraFlowCallbacks:
     def correlation_baseline(self, keys: list[str]) -> None:
         if self.update_correlation_baseline is not None:
             self.update_correlation_baseline(keys)
-
-    def request_pending_document_resubmit(self) -> None:
-        policy = self.pending_document_resubmit
-        if policy is None or not policy.consume():
-            return
-        self.operation("Documento in elaborazione SISTER, reinvio immediato della visura")
-        raise ImmediateVisuraResubmit("SISTER richiede un nuovo inoltro della stessa visura")
-
-
-def _resubmit_pending_document_once(execute):
-    @wraps(execute)
-    async def wrapped(*args, **kwargs):
-        callbacks = kwargs.get("callbacks") or VisuraFlowCallbacks()
-        if callbacks.pending_document_resubmit is None:
-            callbacks = replace(callbacks, pending_document_resubmit=PendingDocumentResubmit())
-        kwargs["callbacks"] = callbacks
-        try:
-            return await execute(*args, **kwargs)
-        except ImmediateVisuraResubmit:
-            logger.info("Documento SISTER in elaborazione, reinvio immediato della stessa visura")
-            return await execute(*args, **kwargs)
-
-    return wrapped
-
 
 @dataclass(frozen=True, slots=True)
 class CaptchaSubmission:
@@ -203,7 +162,6 @@ async def _submit_captcha_then_download(
     try:
         accepted = await _send_captcha(browser, submission, callbacks)
     except DocumentNotYetProducedError as exc:
-        callbacks.request_pending_document_resubmit()
         return await _poll_and_download(
             browser, document_path, submission, exc.richieste_url, callbacks, exc.remote_id,
             max_attempts=initial_remote_poll_attempts,
@@ -265,6 +223,7 @@ async def _resume_remote_request(
         remote_url,
         callbacks,
         getattr(request, "sister_remote_request_id", None),
+        max_attempts=1,
     )
 
 
@@ -281,7 +240,6 @@ async def _download_if_ready(
     try:
         next_step = await prepare()
     except DocumentNotYetProducedError as exc:
-        callbacks.request_pending_document_resubmit()
         return await _poll_and_download(
             browser,
             document_path,
@@ -289,6 +247,7 @@ async def _download_if_ready(
             exc.richieste_url,
             callbacks,
             exc.remote_id,
+            max_attempts=1,
         )
     if next_step != "download":
         return None
@@ -386,7 +345,6 @@ async def _prepare_request(
     return await _prepare_immobile_request(browser, request, document_path, callbacks)
 
 
-@_resubmit_pending_document_once
 async def execute_visura_flow(
     browser: BrowserSession,
     request,
@@ -406,8 +364,8 @@ async def execute_visura_flow(
     initial_remote_poll_attempts: se impostato, il polling ConsultazioneRichieste
     dopo il submit usa al massimo questo numero di tentativi. Se il documento non
     è pronto, restituisce status='queued_sister' invece di aspettare il timeout
-    completo. Le richieste queued_sister vengono riprese nella sessione successiva
-    con il numero completo di poll (RICHIESTE_POLL_ATTEMPTS).
+    completo. Le richieste queued_sister vengono riprese con un solo poll,
+    senza un nuovo invio; il repository persiste il ritardo e il budget di 24 ore.
     """
     callbacks = callbacks or VisuraFlowCallbacks()
     if max_manual_attempts is None:

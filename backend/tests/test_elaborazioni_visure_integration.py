@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 import sys
 import types
+from uuid import uuid4
 
 from cryptography.fernet import Fernet
 import pytest
@@ -247,10 +248,54 @@ def test_retry_failed_batch_requeues_old_failed_batches_without_stale_expiration
         assert batch.completed_at is None
         assert request.status == CatastoVisuraRequestStatus.PENDING.value
         assert request.current_operation == "Queued for retry"
-        assert request.error_message is None
-        assert request.last_error_code is None
+        assert request.error_message == "Errore test"
+        assert request.last_error_code == "flow_failed"
     finally:
         db.close()
+
+
+@pytest.mark.parametrize("unsafe", [False, True])
+def test_manual_retry_preserves_remote_budget_and_is_atomic(unsafe):
+    with TestingSessionLocal() as db:
+        user = db.query(ApplicationUser).filter_by(username="worker").one()
+        batch = CatastoBatch(user_id=user.id, name="Remote retry", status="failed", total_items=2)
+        db.add(batch)
+        db.flush()
+        now = datetime.now(UTC)
+        first = now - timedelta(hours=1)
+        credential_id = uuid4()
+        rows = [
+            CatastoVisuraRequest(
+                batch_id=batch.id, user_id=user.id, row_index=i, status="failed", attempts=3,
+                sister_remote_state="pending", sister_remote_request_id=f"REMOTE-{i}",
+                sister_remote_request_url="https://sister/requests", sister_credential_id=credential_id,
+                sister_first_submitted_at=first, error_message="Original timeout",
+                last_error_code="retry_exhausted", artifact_dir=f"/artifacts/{i}",
+            )
+            for i in (1, 2)
+        ]
+        if unsafe:
+            rows[1].sister_first_submitted_at = now - timedelta(days=2)
+        db.add_all(rows)
+        db.commit()
+        if unsafe:
+            with pytest.raises(BatchConflictError, match="riga 2"):
+                retry_failed_batch(db, user.id, batch.id)
+            # Commit deliberately: preflight must not have partially queued row 1.
+            db.commit()
+        else:
+            retry_failed_batch(db, user.id, batch.id)
+        for row in rows:
+            db.refresh(row)
+            assert row.status == ("failed" if unsafe else "pending")
+            assert row.attempts == 3
+            assert row.sister_remote_request_id == f"REMOTE-{row.row_index}"
+            assert row.sister_credential_id == credential_id
+            assert row.error_message == "Original timeout"
+            assert row.last_error_code == "retry_exhausted"
+            assert row.artifact_dir == f"/artifacts/{row.row_index}"
+        assert rows[0].sister_first_submitted_at == first.replace(tzinfo=None)
+        assert batch.status == ("failed" if unsafe else "pending")
 
 
 def test_persist_flow_result_uses_subject_specific_message_for_not_found(monkeypatch: pytest.MonkeyPatch) -> None:

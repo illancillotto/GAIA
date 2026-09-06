@@ -113,6 +113,8 @@ def test_next_request_id_resumes_remote_request_only_with_its_sister_credential(
         assert request is not None
         request.sister_credential_id = pinned_credential_id
         request.sister_remote_state = "submitted"
+        request.sister_first_submitted_at = datetime.now(timezone.utc)
+        request.sister_remote_request_url = "https://sister/requests"
         db.commit()
 
     wrong_credential = worker._request_repository().claim_next(

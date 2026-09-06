@@ -154,7 +154,10 @@ def test_find_correlated_row_requires_context_and_updates_remote_id(monkeypatch:
     session = make_session()
     with pytest.raises(SisterRequestCorrelationError, match="non inizializzata"):
         run(session._find_correlated_request_row())
-    correlation = SisterRequestCorrelation("local", frozenset(), ())
+    session._session_state.correlation = SisterRequestCorrelation("local", frozenset(), ())
+    with pytest.raises(SisterRequestCorrelationError, match="ID remoto certo"):
+        run(session._find_correlated_request_row())
+    correlation = SisterRequestCorrelation("local", frozenset(), (), remote_id="remote")
     session._session_state.correlation = correlation
     monkeypatch.setattr(session, "_extract_remote_request_rows", lambda _page: async_value([row()]))
     monkeypatch.setattr(browser_module, "correlate_remote_row", lambda *_args: row())

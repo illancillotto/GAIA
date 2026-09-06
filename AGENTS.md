@@ -34,6 +34,10 @@ Target supportati:
 - `make graphify-network-code`
 - `make graphify-network-docs`
 - `make graphify-operazioni-code`
+- `make graphify-elaborazioni-worker-code`
+- `make graphify-elaborazioni-worker-query`
+- `make graphify-elaborazioni-docs`
+- `make graphify-elaborazioni-docs-query`
 - `make graphify-operazioni-docs`
 - `make graphify-organigramma-code`
 - `make graphify-organigramma-docs`

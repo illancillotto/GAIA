@@ -26,6 +26,11 @@ from app.models.catasto import (
     CatastoVisuraRequestStatus,
 )
 from app.models.elaborazioni import ElaborazioneBatch
+from app.modules.elaborazioni.sister_autosync_guard import (
+    guard_campaign_items,
+    requires_original_request,
+    unsubmitted_stale_batches,
+)
 from app.modules.ruolo.models import RuoloParticella, RuoloPartita
 from app.schemas.catasto import (
     CatastoAutoSyncCredentialProfile,
@@ -516,6 +521,7 @@ def recover_stale_pending_ruolo_autosync_batches(db: Session, user_id: int) -> i
                 CatastoBatch.created_at < cutoff,
             )
             .order_by(CatastoBatch.created_at.asc())
+            .with_for_update()
         ).all()
     )
     if not pending_batches:
@@ -525,14 +531,7 @@ def recover_stale_pending_ruolo_autosync_batches(db: Session, user_id: int) -> i
     recovery_message = "Batch autosync pendente bonificato automaticamente dopo mancato avvio"
     request_error = "Richiesta rimessa in coda dopo bonifica automatica di un batch autosync mai partito."
 
-    for batch in pending_batches:
-        requests = list(
-            db.scalars(
-                select(CatastoVisuraRequest)
-                .where(CatastoVisuraRequest.batch_id == batch.id)
-                .order_by(CatastoVisuraRequest.row_index.asc())
-            ).all()
-        )
+    for batch, requests in unsubmitted_stale_batches(db, pending_batches):
         request_ids = [request.id for request in requests]
         item_statement = select(CatastoRuoloAutoSyncItem).where(
             CatastoRuoloAutoSyncItem.user_id == user_id,
@@ -576,6 +575,12 @@ def recover_stale_pending_ruolo_autosync_batches(db: Session, user_id: int) -> i
 
     db.commit()
     return recovered
+
+
+def _classify_request_failure(request: CatastoVisuraRequest) -> str:
+    if requires_original_request(request):
+        return CatastoRuoloAutoSyncItemStatus.BLOCKED_RUNTIME.value
+    return classify_ruolo_autosync_failure(request.error_message)
 
 
 def reconcile_ruolo_autosync_items(db: Session, user_id: int) -> None:
@@ -627,7 +632,7 @@ def reconcile_ruolo_autosync_items(db: Session, user_id: int) -> None:
             CatastoVisuraRequestStatus.SKIPPED.value,
         }:
             item.last_error_message = request.error_message
-            classified_status = classify_ruolo_autosync_failure(request.error_message)
+            classified_status = _classify_request_failure(request)
             item.status = classified_status
             item.retry_after = (
                 None
@@ -695,14 +700,15 @@ def ensure_ruolo_autosync_batch(db: Session, user_id: int) -> CatastoBatch | Non
             )
         ).all()
     )
-    runnable_items = [
+    runnable_items = guard_campaign_items(db, [
         item
         for item in due_items
         if item.comune and item.comune_codice and item.foglio and item.particella
         and (item.retry_after is None or item.retry_after <= now)
-    ][:AUTO_SYNC_BATCH_SIZE]
+    ])[:AUTO_SYNC_BATCH_SIZE]
 
     if not runnable_items:
+        db.commit()
         return None
 
     rows = [

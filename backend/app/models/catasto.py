@@ -7,7 +7,7 @@ from enum import Enum
 try:
     from enum import StrEnum
 except ImportError:  # pragma: no cover - GAIA runs on Python 3.12.
-    class StrEnum(str, Enum):
+    class StrEnum(str, Enum):  # noqa: UP042 - Shared models also run in the Python 3.10 worker.
         pass
 
 from sqlalchemy import (
@@ -317,6 +317,7 @@ class CatastoVisuraRequest(Base):
     sister_remote_request_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     sister_remote_request_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     sister_remote_state: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    sister_first_submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     sister_remote_baseline_keys: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     retry_not_before: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)

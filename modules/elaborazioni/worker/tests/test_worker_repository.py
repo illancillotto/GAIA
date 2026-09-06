@@ -91,11 +91,11 @@ def test_request_repository_reset_for_retry_handles_release_and_guards(worker_db
     with SessionLocal() as db:
         first = db.get(CatastoVisuraRequest, request_ids[0])
         assert first is not None
-        assert first.sister_credential_id is None
-        assert first.sister_remote_request_id is None
-        assert first.sister_remote_request_url is None
-        assert first.sister_remote_state is None
-        assert first.sister_remote_baseline_keys is None
+        assert first.sister_credential_id is not None
+        assert first.sister_remote_request_id == "STALE"
+        assert first.sister_remote_request_url == "https://sister/stale"
+        assert first.sister_remote_state == "submitted"
+        assert first.sister_remote_baseline_keys == ["STALE"]
 
     with SessionLocal() as db:
         batch = db.get(CatastoBatch, batch_id)
@@ -355,10 +355,10 @@ def test_request_repository_persists_queued_sister_for_retry(worker_db, tmp_path
         log = db.scalar(select(CatastoCaptchaLog).where(CatastoCaptchaLog.request_id == request_ids[0]))
         assert request is not None and log is not None
         assert request.status == CatastoVisuraRequestStatus.PENDING.value
-        assert request.current_operation == "In coda SISTER — riprova in corso"
+        assert request.current_operation == "In coda SISTER, prossimo recupero differito"
         assert request.sister_remote_request_id == "REMOTE-QUEUED"
         assert request.execution_token is None
-        assert request.retry_not_before is None
+        assert request.retry_not_before > datetime.now(timezone.utc).replace(tzinfo=None)
         assert request.captcha_manual_solution is None
         assert request.captcha_skip_requested is False
 

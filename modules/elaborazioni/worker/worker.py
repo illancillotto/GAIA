@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from dataclasses import dataclass
-from datetime import datetime, time, timedelta, timezone
-from functools import partial
 import logging
 import os
-from pathlib import Path
 import re
 import signal
 import traceback
+from dataclasses import dataclass
+from datetime import datetime, time, timedelta, timezone
+from functools import partial
+from pathlib import Path
 from typing import cast
 from uuid import UUID
 from zoneinfo import ZoneInfo
@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from anti_captcha_client import AntiCaptchaClient
 from app.models.capacitas import (
     CapacitasAnagraficaHistoryImportJob,
     CapacitasDomandeIrrigueSyncJob,
@@ -25,28 +26,60 @@ from app.models.capacitas import (
     CapacitasParticelleSyncJob,
     CapacitasTerreniSyncJob,
 )
-from app.models.posta_online import PostaOnlineRegisteredMailSyncJob
 from app.models.catasto import (
     CatastoBatch,
     CatastoBatchKind,
     CatastoBatchStatus,
+    CatastoConnectionTest,
+    CatastoConnectionTestStatus,
     CatastoCredential,
     CatastoDistrettoExportJob,
     CatastoElaborazioniMassiveJob,
     CatastoElaborazioniMassiveJobStatus,
-    CatastoConnectionTest,
-    CatastoConnectionTestStatus,
     CatastoVisuraRequest,
     CatastoVisuraRequestStatus,
 )
+from app.models.posta_online import PostaOnlineRegisteredMailSyncJob
 from app.models.wc_sync_job import WCSyncJob
+from app.modules.catasto.routes.anagrafica import (
+    prepare_bulk_search_jobs_for_recovery,
+    prepare_distretto_export_jobs_for_recovery,
+    run_bulk_search_job_by_id,
+    run_distretto_export_job_by_id,
+)
+from app.modules.catasto.services.ade_document_audit import (
+    audit_downloaded_document,
+    expected_document_request_type,
+)
+from app.modules.catasto.services.ade_historical_visura_parser import parse_historical_visura_pdf
+from app.modules.catasto.services.ade_status_scan import (
+    ADE_SCAN_PURPOSE,
+    persist_ade_status_scan_result,
+)
+from app.modules.catasto.services.ade_wfs import (
+    execute_ade_sync_run,
+    prepare_ade_sync_runs_for_recovery,
+)
 from app.modules.utenze.services.import_service import (
     prepare_registry_import_jobs_for_recovery,
     run_registry_bulk_import_job_by_id,
 )
+from app.services.elaborazioni_batches import (
+    RELEASE_REQUESTED_MESSAGE,
+    RELEASE_REQUESTED_OPERATION,
+)
+from app.services.elaborazioni_capacitas import has_available_credential
 from app.services.elaborazioni_capacitas_anagrafica_history import (
     expire_stale_anagrafica_history_jobs,
     prepare_anagrafica_history_jobs_for_recovery,
+)
+from app.services.elaborazioni_capacitas_domande_irrigue import (
+    expire_stale_domande_irrigue_sync_jobs,
+    prepare_domande_irrigue_sync_jobs_for_recovery,
+)
+from app.services.elaborazioni_capacitas_incass import (
+    expire_stale_incass_sync_jobs,
+    prepare_incass_sync_jobs_for_recovery,
 )
 from app.services.elaborazioni_capacitas_particelle_sync import (
     expire_stale_particelle_sync_jobs,
@@ -59,41 +92,25 @@ from app.services.elaborazioni_capacitas_runtime import (
     run_particelle_job_by_id,
     run_terreni_job_by_id,
 )
-from app.services.elaborazioni_capacitas import has_available_credential
 from app.services.elaborazioni_capacitas_terreni import (
     expire_stale_terreni_sync_jobs,
     prepare_terreni_sync_jobs_for_recovery,
 )
-from app.services.elaborazioni_capacitas_incass import (
-    expire_stale_incass_sync_jobs,
-    prepare_incass_sync_jobs_for_recovery,
-)
-from app.services.elaborazioni_capacitas_domande_irrigue import (
-    expire_stale_domande_irrigue_sync_jobs,
-    prepare_domande_irrigue_sync_jobs_for_recovery,
-)
 from app.services.elaborazioni_posta_online import (
     expire_stale_registered_mail_sync_jobs,
-    has_available_credential as has_available_posta_online_credential,
     prepare_registered_mail_sync_jobs_for_recovery,
 )
-from app.services.elaborazioni_batches import (
-    RELEASE_REQUESTED_MESSAGE,
-    RELEASE_REQUESTED_OPERATION,
-)
-from app.modules.catasto.services.ade_status_scan import ADE_SCAN_PURPOSE, persist_ade_status_scan_result
-from app.modules.catasto.services.ade_wfs import execute_ade_sync_run, prepare_ade_sync_runs_for_recovery
-from app.modules.catasto.services.ade_historical_visura_parser import parse_historical_visura_pdf
-from app.modules.catasto.services.ade_document_audit import audit_downloaded_document, expected_document_request_type
-from app.modules.catasto.routes.anagrafica import (
-    prepare_bulk_search_jobs_for_recovery,
-    prepare_distretto_export_jobs_for_recovery,
-    run_bulk_search_job_by_id,
-    run_distretto_export_job_by_id,
+from app.services.elaborazioni_posta_online import (
+    has_available_credential as has_available_posta_online_credential,
 )
 from autodoc_sync import AUTODOC_SYNC_ENTITY, run_autodoc_sync_job_by_id
-from anti_captcha_client import AntiCaptchaClient
 from browser_session import BrowserSession, BrowserSessionConfig
+from credential_vault import WorkerCredentialVault
+from llm_captcha_solver import LLMCaptchaSolver
+from posta_online_sync import run_posta_online_job_by_id
+from reporting import write_batch_report
+from runtime_policy import classify_terminal_status
+from sister_captcha_wait import SisterCaptchaClaim, SisterCaptchaWaitRepository
 from sister_credential_pool import (
     CredentialLeaseHeartbeat,
     CredentialRejectionContext,
@@ -108,14 +125,14 @@ from sister_credential_pool import (
     mark_batch_waiting_for_schedule,
     next_processable_batch_id,
     quarantine_rejected_credential,
-    release_credential_lease,
     refresh_shared_credential_pool,
+    release_credential_lease,
     run_dynamic_credential_pool,
     should_stop_credential_runner,
 )
 from sister_document_validation import reject_unexpected_document_type
 from sister_exceptions import SisterInvalidDocumentError, SisterServerError
-from sister_captcha_wait import SisterCaptchaClaim, SisterCaptchaWaitRepository
+from sister_observability import WorkerState, emit_pdf_parcel_status, instrument_sister_worker
 from sister_worker_reliability import (
     SisterRemoteStateUpdate,
     SisterRequestClaimCoordinator,
@@ -123,14 +140,12 @@ from sister_worker_reliability import (
     SisterRequestRetryCoordinator,
     is_recoverable_credential_error,
 )
-from sister_observability import WorkerState, emit_pdf_parcel_status, instrument_sister_worker
-from llm_captcha_solver import LLMCaptchaSolver
-from credential_vault import WorkerCredentialVault
-from reporting import write_batch_report
-from runtime_policy import classify_terminal_status
-from posta_online_sync import run_posta_online_job_by_id
-from visura_flow import ManualCaptchaDecision, VisuraFlowCallbacks, VisuraFlowResult, execute_visura_flow
-
+from visura_flow import (
+    ManualCaptchaDecision,
+    VisuraFlowCallbacks,
+    VisuraFlowResult,
+    execute_visura_flow,
+)
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg://gaia_app:change_me@postgres:5432/gaia")
 CREDENTIAL_MASTER_KEY = os.environ["CREDENTIAL_MASTER_KEY"]
@@ -197,6 +212,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 logger = logging.getLogger(__name__)
+UTC = timezone.utc  # noqa: UP017 - Production worker runs Python 3.10.
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -453,7 +469,7 @@ class CatastoWorker:
                     changed = True
                 continue
             job.status = "processing"
-            job.started_at = datetime.now(timezone.utc)
+            job.started_at = datetime.now(UTC)
             job.error_detail = None
             db.commit()
             return job_kind, job.id
@@ -495,7 +511,7 @@ class CatastoWorker:
                         pending_credential_updates = True
                     continue
                 job.status = "processing"
-                job.started_at = datetime.now(timezone.utc)
+                job.started_at = datetime.now(UTC)
                 job.error_detail = None
                 db.commit()
                 return job.id
@@ -547,7 +563,7 @@ class CatastoWorker:
             if job is None:
                 return None
             job.status = AnagraficaImportJobStatus.RUNNING.value
-            job.started_at = datetime.now(timezone.utc)
+            job.started_at = datetime.now(UTC)
             db.commit()
             return job.id
 
@@ -583,7 +599,7 @@ class CatastoWorker:
             if job is None:
                 return None
             job.status = CatastoElaborazioniMassiveJobStatus.PROCESSING.value
-            job.started_at = datetime.now(timezone.utc)
+            job.started_at = datetime.now(UTC)
             job.error_message = None
             db.commit()
             return str(job.id)
@@ -605,7 +621,7 @@ class CatastoWorker:
             if job is None:
                 return None
             job.status = CatastoElaborazioniMassiveJobStatus.PROCESSING.value
-            job.started_at = datetime.now(timezone.utc)
+            job.started_at = datetime.now(UTC)
             job.error_message = None
             db.commit()
             return str(job.id)
@@ -654,7 +670,7 @@ class CatastoWorker:
             if connection_test is None:
                 return
             connection_test.status = CatastoConnectionTestStatus.PROCESSING.value
-            connection_test.started_at = datetime.now(timezone.utc)
+            connection_test.started_at = datetime.now(UTC)
             connection_test.message = "Test credenziali SISTER in corso"
             db.commit()
 
@@ -690,7 +706,7 @@ class CatastoWorker:
                 connection_test.reachable = result.reachable
                 connection_test.authenticated = result.authenticated
                 connection_test.message = result.message
-                connection_test.completed_at = datetime.now(timezone.utc)
+                connection_test.completed_at = datetime.now(UTC)
 
                 if connection_test.persist_verification and connection_test.credential_id and result.authenticated:
                     credential = db.get(CatastoCredential, connection_test.credential_id)
@@ -708,7 +724,7 @@ class CatastoWorker:
                     connection_test.reachable = False
                     connection_test.authenticated = False
                     connection_test.message = f"Test connessione worker fallito: {exc}"
-                    connection_test.completed_at = datetime.now(timezone.utc)
+                    connection_test.completed_at = datetime.now(UTC)
                     db.commit()
         finally:
             await browser.stop()
@@ -761,7 +777,7 @@ class CatastoWorker:
     def _is_within_operating_window(now_utc: datetime | None = None) -> bool:
         if not OPERATION_WINDOW_ENABLED:
             return True
-        now_utc = now_utc or datetime.now(timezone.utc)
+        now_utc = now_utc or datetime.now(UTC)
         local_now = now_utc.astimezone(CatastoWorker._operation_window_zone())
         current_hour = local_now.hour
         start_hour = min(max(OPERATION_WINDOW_START_HOUR, 0), 23)
@@ -774,14 +790,14 @@ class CatastoWorker:
     def _next_operating_resume_at(now_utc: datetime | None = None) -> datetime | None:
         if not OPERATION_WINDOW_ENABLED:
             return None
-        now_utc = now_utc or datetime.now(timezone.utc)
+        now_utc = now_utc or datetime.now(UTC)
         zone = CatastoWorker._operation_window_zone()
         local_now = now_utc.astimezone(zone)
         start_hour = min(max(OPERATION_WINDOW_START_HOUR, 0), 23)
         resume_local = local_now.replace(hour=start_hour, minute=0, second=0, microsecond=0)
         if resume_local <= local_now:
             resume_local = resume_local + timedelta(days=1)
-        return resume_local.astimezone(timezone.utc)
+        return resume_local.astimezone(UTC)
 
     @staticmethod
     def _incass_autosync_window_zone() -> ZoneInfo:
@@ -794,9 +810,9 @@ class CatastoWorker:
     def _is_within_incass_autosync_window(now_utc: datetime | None = None) -> bool:
         if not INCASS_AUTOSYNC_WINDOW_ENABLED:
             return True
-        now_utc = now_utc or datetime.now(timezone.utc)
+        now_utc = now_utc or datetime.now(UTC)
         if now_utc.tzinfo is None:
-            now_utc = now_utc.replace(tzinfo=timezone.utc)
+            now_utc = now_utc.replace(tzinfo=UTC)
         local_now = now_utc.astimezone(CatastoWorker._incass_autosync_window_zone())
         current_time = local_now.time().replace(tzinfo=None)
         start_time = time(min(max(INCASS_AUTOSYNC_START_HOUR, 0), 23), 0)
@@ -956,7 +972,7 @@ class CatastoWorker:
         claim: SisterCaptchaClaim,
         image_path: Path,
     ) -> ManualCaptchaDecision:
-        deadline = datetime.now(timezone.utc) + timedelta(seconds=CAPTCHA_MANUAL_TIMEOUT_SEC)
+        deadline = datetime.now(UTC) + timedelta(seconds=CAPTCHA_MANUAL_TIMEOUT_SEC)
         logger.info("Richiesta %s in attesa di CAPTCHA manuale fino a %s", claim.request_id, deadline.isoformat())
 
         repository = self._captcha_wait_repository()
@@ -964,7 +980,7 @@ class CatastoWorker:
             logger.info("Richiesta %s non piu attiva prima dell'attesa CAPTCHA", claim.request_id)
             return ManualCaptchaDecision(text=None, skip=True)
 
-        while datetime.now(timezone.utc) < deadline and not self.state.stop_requested:
+        while datetime.now(UTC) < deadline and not self.state.stop_requested:
             wait_state = repository.state(claim.batch_id, claim.request_id, claim.execution_token)
             if not wait_state.active:
                 logger.info("Richiesta %s non piu attiva durante l'attesa CAPTCHA", claim.request_id)
@@ -1030,7 +1046,7 @@ class CatastoWorker:
                 batch.status = CatastoBatchStatus.PROCESSING.value
             else:
                 batch.status = CatastoBatchStatus.FAILED.value if batch.failed_items else CatastoBatchStatus.COMPLETED.value
-            batch.completed_at = datetime.now(timezone.utc)
+            batch.completed_at = datetime.now(UTC)
             batch.current_operation = "Batch terminato"
             report_json_path, report_md_path = write_batch_report(batch, requests, self._build_batch_report_dir(batch))
             batch.report_json_path = str(report_json_path)
@@ -1059,9 +1075,9 @@ class CatastoWorker:
         artifact_dir.mkdir(parents=True, exist_ok=True)
         error_path = artifact_dir / "error.txt"
         details = [
-            f"timestamp={datetime.now(timezone.utc).isoformat()}",
+            f"timestamp={datetime.now(UTC).isoformat()}",
             f"error_type={type(error).__name__}",
-            f"message={str(error)}",
+            f"message={error!s}",
             "",
             traceback.format_exc(),
         ]
@@ -1286,7 +1302,7 @@ class _SisterBatchRuntime:
         return True
 
     async def _wait_for_runtime_window(self, credential: CatastoCredential) -> bool:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if not self.worker._is_within_operating_window(now):
             await self._wait_for_operating_window(now)
             return True
@@ -1396,8 +1412,10 @@ class _SisterBatchRuntime:
                 request_id,
             )
         except SisterServerError as exc:
+            await self._capture_terminal_error(session.browser, selection, exc)
             await self._handle_sister_server_error(credential, session, selection, exc)
         except Exception as exc:
+            await self._capture_terminal_error(session.browser, selection, exc)
             await self._handle_request_error(credential, session, selection, exc)
         else:
             async with self.shared_state_lock:
@@ -1462,7 +1480,7 @@ class _SisterBatchRuntime:
         async with self.shared_state_lock:
             self.credential_server_error_counts[credential.id] = 0
             self.global_server_error_pause_until = None
-            self.credential_cooldowns[credential.id] = datetime.now(timezone.utc) + timedelta(
+            self.credential_cooldowns[credential.id] = datetime.now(UTC) + timedelta(
                 seconds=CREDENTIAL_LOCK_COOLDOWN_SEC
             )
         logger.warning(
@@ -1494,11 +1512,6 @@ class _SisterBatchRuntime:
             selection.request_id,
             credential.sister_username,
         )
-        await self._capture_terminal_error(
-            cast(BrowserSession, session.browser),
-            selection.request_id,
-            exc,
-        )
         self.request_repository.fail_request(
             self.batch_id,
             selection.request_id,
@@ -1509,17 +1522,14 @@ class _SisterBatchRuntime:
     async def _capture_terminal_error(
         self,
         browser: BrowserSession,
-        request_id: UUID,
+        selection,
         exc: Exception,
     ) -> None:
-        with SessionLocal() as db:
-            request = db.get(CatastoVisuraRequest, request_id)
-            if request is None or not request.artifact_dir:
-                return
-            artifact_dir = Path(request.artifact_dir)
-            self.worker._write_request_error_artifact(artifact_dir, exc)
-            with contextlib.suppress(Exception):
-                await browser.capture_debug_snapshot(artifact_dir, "final-failed")
+        from sister_request_diagnostics import capture_request_error
+
+        await capture_request_error(
+            SessionLocal, browser, selection, exc, self.worker._write_request_error_artifact
+        )
 
     async def _register_server_error(
         self,
@@ -1527,7 +1537,7 @@ class _SisterBatchRuntime:
         request_id: UUID,
         exc: SisterServerError,
     ) -> tuple[int, bool]:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         async with self.shared_state_lock:
             consecutive_errors = self.credential_server_error_counts.get(credential.id, 0) + 1
             self.credential_server_error_counts[credential.id] = consecutive_errors
@@ -1557,7 +1567,7 @@ class _SisterBatchRuntime:
         )
 
     async def _next_wait_seconds(self) -> int:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         async with self.shared_state_lock:
             candidates = [
                 value

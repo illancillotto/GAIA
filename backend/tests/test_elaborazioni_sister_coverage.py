@@ -43,7 +43,7 @@ class FakeDb:
     def commit(self):
         self.commits += 1
 
-    def refresh(self, value):
+    def refresh(self, value, **_kwargs):
         self.refreshes.append(value)
 
 

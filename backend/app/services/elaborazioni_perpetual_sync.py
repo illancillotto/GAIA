@@ -20,6 +20,10 @@ from app.models.catasto import (
     CatastoVisuraRequest,
     CatastoVisuraRequestStatus,
 )
+from app.modules.elaborazioni.sister_autosync_guard import (
+    guard_campaign_items,
+    requires_original_request,
+)
 from app.services.elaborazioni_batches import (
     BatchConflictError,
     ValidatedVisuraRow,
@@ -30,7 +34,7 @@ from app.services.elaborazioni_batches import (
 from app.services.elaborazioni_credential_schedule import credential_is_available
 from app.services.elaborazioni_perpetual_sources import PerpetualSourceTarget, iter_enabled_targets
 
-UTC = timezone.utc
+UTC = timezone.utc  # noqa: UP017 - Shared worker imports must support Python 3.10.
 RETRY_DELAY = timedelta(minutes=15)
 BLOCKED_RETRY_DELAY = timedelta(hours=6)
 MAX_AUTOSYNC_ATTEMPTS = 3
@@ -257,6 +261,9 @@ def _reconcile_item(
         _retry_item(item, request, now)
         return True
     if request_status == CatastoVisuraRequestStatus.SKIPPED.value:
+        if is_release_marker_request(request) and requires_original_request(request):
+            _retry_item(item, request, now)
+            return True
         if is_release_marker_request(request):
             item.status = "pending"
             item.retry_after = None
@@ -298,6 +305,11 @@ def _retry_item(
     item: CatastoPerpetualSyncItem, request: CatastoVisuraRequest, now: datetime
 ) -> None:
     item.last_error_message = request.error_message
+    if requires_original_request(request):
+        item.status = "failed"
+        item.retry_after = None
+        item.next_due_at = now
+        return
     if item.status == "pending" and item.retry_after is not None:
         return
     if item.attempt_count >= MAX_AUTOSYNC_ATTEMPTS:
@@ -404,11 +416,11 @@ def _due_items(
         )
         .with_for_update(skip_locked=True)
     )
-    return [
+    return guard_campaign_items(db, [
         item
         for item in db.scalars(statement).all()
         if _runnable(item)
-    ][: max(config.batch_size, 1)]
+    ])[: max(config.batch_size, 1)]
 
 
 def _scope_has_open_items(db: Session, user_id: int, scope: str) -> bool:
@@ -520,6 +532,7 @@ def ensure_perpetual_sync_batch(
         return None
     items = _due_items(db, config, now, scope)
     if not items:
+        db.commit()
         return None
     campaign_label = _campaign_label(scope)
     batch, requests = create_batch_from_validated_rows(
@@ -580,15 +593,13 @@ def retry_perpetual_sync_failures(db: Session, user_id: int, scope: str) -> int:
                 CatastoPerpetualSyncItem.user_id == user_id,
                 CatastoPerpetualSyncItem.scope == scope,
                 CatastoPerpetualSyncItem.status == "failed",
-            )
+            ).with_for_update().execution_options(populate_existing=True)
         ).all()
     )
+    guard_campaign_items(db, items, manual=True)
     now = datetime.now(UTC)
     for item in items:
         item.status = "pending"
-        item.attempt_count = 0
-        item.linked_batch_id = None
-        item.linked_request_id = None
         item.last_error_message = None
         item.retry_after = None
         item.next_due_at = now

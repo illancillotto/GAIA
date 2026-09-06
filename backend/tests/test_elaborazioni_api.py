@@ -2466,8 +2466,8 @@ def test_ruolo_autosync_reconcile_covers_missing_processing_completed_and_retrya
         request.error_message = "temporary transport failure"
         db.commit()
         reconcile_ruolo_autosync_items(db, user_id)
-        assert item.status == CatastoRuoloAutoSyncItemStatus.PENDING.value
-        assert item.retry_after is not None
+        assert item.status == CatastoRuoloAutoSyncItemStatus.BLOCKED_RUNTIME.value
+        assert item.retry_after is None
 
         item.linked_request_id = uuid4()
         item.status = CatastoRuoloAutoSyncItemStatus.QUEUED.value
@@ -3173,8 +3173,8 @@ def test_perpetual_reconcile_handles_request_states_and_missing_request() -> Non
         db.commit()
         reconcile_perpetual_sync_items(db, config)
         db.refresh(item)
-        assert item.status == "pending"
-        assert item.retry_after is not None
+        assert item.status == "failed"
+        assert item.retry_after is None
         first_retry_after = item.retry_after
         reconcile_perpetual_sync_items(db, config)
         db.refresh(item)
@@ -3194,9 +3194,9 @@ def test_perpetual_reconcile_handles_request_states_and_missing_request() -> Non
         db.commit()
         reconcile_perpetual_sync_items(db, config)
         db.refresh(item)
-        assert item.status == "pending"
-        assert item.linked_batch_id is None
-        assert item.linked_request_id is None
+        assert item.status == "failed"
+        assert item.linked_batch_id == request.batch_id
+        assert item.linked_request_id == request.id
 
         request.status = "custom_terminal_state"
         item.status = "processing"
@@ -3366,7 +3366,7 @@ def test_perpetual_secondary_scopes_remain_processable_after_role_campaigns() ->
         db.close()
 
 
-def test_perpetual_failures_stop_after_three_attempts_and_manual_retry_requeues() -> None:
+def test_perpetual_failures_preserve_attempts_and_manual_retry_rejects_replacement() -> None:
     user_id, credential_id = _seed_ruolo_autosync_fixture()
     db = TestingSessionLocal()
     try:
@@ -3402,14 +3402,14 @@ def test_perpetual_failures_stop_after_three_attempts_and_manual_retry_requeues(
             "/elaborazioni/ruolo-autosync/campaigns/ruolo_particella/retry-failed",
             headers=auth_headers(),
         )
-        assert response.status_code == 200
-        assert response.json()["message"].startswith("1 elementi falliti rimessi in coda")
+        assert response.status_code == 409
+        assert "Nessun elemento" in response.json()["detail"]
         db.refresh(item)
-        assert item.status == "pending"
-        assert item.attempt_count == 0
-        assert item.linked_batch_id is None
-        assert item.linked_request_id is None
-        assert item.last_error_message is None
+        assert item.status == "failed"
+        assert item.attempt_count == 3
+        assert item.linked_batch_id == batch.id
+        assert item.linked_request_id == request.id
+        assert item.last_error_message == "errore tecnico"
     finally:
         db.close()
 
@@ -3977,3 +3977,77 @@ def test_auto_job_controls_dashboard_updates_anpr_toggle() -> None:
         assert config.job_enabled is False
     finally:
         db.close()
+
+
+@pytest.mark.parametrize("hours", [1, 24, 25])
+def test_autosync_remote_review_never_creates_replacement_batch(hours) -> None:
+    user_id, credential_id = _seed_ruolo_autosync_fixture()
+    with TestingSessionLocal() as db:
+        config = CatastoRuoloAutoSyncConfig(
+            user_id=user_id, enabled=True, credential_ids=[credential_id],
+            primary_enabled=True, secondary_enabled=False,
+        )
+        db.add(config)
+        refresh_perpetual_sync_sources(db, config)
+        batch = ensure_perpetual_sync_batch(db, config)
+        item = db.query(CatastoPerpetualSyncItem).filter_by(linked_batch_id=batch.id).one()
+        request = db.get(CatastoVisuraRequest, item.linked_request_id)
+        batch.status = "failed"
+        request.status = "failed"
+        request.attempts = 1
+        request.sister_remote_state = "pending"
+        request.sister_remote_request_id = "ORIGINAL"
+        request.sister_remote_request_url = "https://sister/requests"
+        request.sister_first_submitted_at = datetime.now(UTC) - timedelta(hours=hours)
+        request.last_error_code = "sister_recovery_review_required"
+        item.status = "pending"
+        item.retry_after = datetime.now(UTC) - timedelta(hours=1)
+        db.commit()
+        original = request.id
+        submitted = request.sister_first_submitted_at
+        next_batch = ensure_perpetual_sync_batch(db, config)
+        assert next_batch is not None
+        assert next_batch.id != batch.id
+        assert item.status == "failed"
+        assert item.linked_request_id == original
+        assert request.sister_first_submitted_at == submitted
+        assert db.query(CatastoVisuraRequest).filter_by(
+            target_ruolo_particella_id=request.target_ruolo_particella_id,
+            search_mode=request.search_mode,
+        ).count() == 1
+        with pytest.raises(BatchConflictError):
+            retry_perpetual_sync_failures(db, user_id, "ruolo_particella")
+        assert item.attempt_count == 1
+        assert item.linked_request_id == original
+
+
+def test_autosync_manual_campaign_preflight_is_atomic_and_owner_scoped() -> None:
+    user_id, _ = _seed_ruolo_autosync_fixture()
+    with TestingSessionLocal() as db:
+        safe = CatastoPerpetualSyncItem(
+            user_id=user_id, scope="ruolo_particella", target_key="safe", status="failed",
+            next_due_at=datetime.now(UTC), attempt_count=0, priority=10, search_mode="immobile",
+        )
+        unsafe = CatastoPerpetualSyncItem(
+            user_id=user_id, scope="ruolo_particella", target_key="unsafe", status="failed",
+            next_due_at=datetime.now(UTC), attempt_count=1, priority=10, search_mode="immobile",
+        )
+        db.add_all([safe, unsafe])
+        db.commit()
+        with pytest.raises(BatchConflictError):
+            retry_perpetual_sync_failures(db, user_id, "ruolo_particella")
+        db.commit()
+        assert safe.status == unsafe.status == "failed"
+        unsafe.scope = "ruolo_soggetto"
+        db.commit()
+        response = client.post(
+            "/elaborazioni/ruolo-autosync/campaigns/ruolo_particella/retry-failed",
+            headers=auth_headers(),
+        )
+        assert response.status_code == 200
+        assert response.json()["message"].startswith("1 elementi")
+        db.refresh(safe)
+        db.refresh(unsafe)
+        assert safe.status == "pending"
+        assert unsafe.status == "failed"
+        assert unsafe.attempt_count == 1

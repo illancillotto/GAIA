@@ -84,7 +84,7 @@ class BatchSessionFactory:
             self.first = False
             return self.outer
         value = self.scripted_values.pop(0) if self.scripted_values else self.repeated_value
-        return FakeDb(get_values=[value])
+        return FakeDb(get_values=[value], scalar_values=[value] if hasattr(value, "artifact_dir") else [])
 
 
 def credential(user_id=1, *, username="user"):

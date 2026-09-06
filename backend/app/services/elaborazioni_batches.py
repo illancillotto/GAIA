@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import re
+import unicodedata
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
-import re
-import unicodedata
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -23,13 +23,14 @@ from app.models.elaborazioni import (
     ElaborazioneRichiesta,
     ElaborazioneRichiestaStatus,
 )
+from app.modules.elaborazioni.sister_manual_retry import BatchConflictError, retry_failed_requests
+from app.modules.elaborazioni.sister_manual_retry import queue_request as _queue_request
 from app.schemas.elaborazioni import ElaborazioneRichiestaCreateRequest
 from app.services.catasto_comuni import get_catasto_comuni_lookup
 from app.services.elaborazioni_batch_credentials import require_batch_credentials
 from app.services.elaborazioni_credentials import (
     ElaborazioneCredentialNotFoundError,
 )
-
 
 UPLOAD_COLUMN_ALIASES = {
     "search_mode": "search_mode",
@@ -67,7 +68,7 @@ ALLOWED_SEARCH_MODE = {"immobile", "soggetto"}
 ALLOWED_SUBJECT_KIND = {"PF", "PNF"}
 ALLOWED_REQUEST_TYPE = {"ATTUALITA", "STORICA"}
 IMMOBILE_REQUIRED_UPLOAD_COLUMNS = {"comune", "catasto", "foglio", "particella"}
-UTC = timezone.utc
+UTC = timezone.utc  # noqa: UP017 - Shared service imported by the Python 3.10 worker.
 
 CF_PF_RE = re.compile(r"^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$")
 PIVA_RE = re.compile(r"^\d{11}$")
@@ -84,10 +85,6 @@ class BatchValidationError(Exception):
 
 
 class BatchNotFoundError(Exception):
-    pass
-
-
-class BatchConflictError(Exception):
     pass
 
 
@@ -677,22 +674,6 @@ def ensure_no_processing_batch(db: Session, user_id: int, current_batch_id: UUID
         raise BatchConflictError("Only one processing batch per user is allowed")
 
 
-def _queue_request(request: ElaborazioneRichiesta, operation: str) -> None:
-    request.status = ElaborazioneRichiestaStatus.PENDING.value
-    request.current_operation = operation
-    request.error_message = None
-    request.processed_at = None
-    request.document_id = None
-    request.captcha_manual_solution = None
-    request.captcha_skip_requested = False
-    request.captcha_requested_at = None
-    request.captcha_expires_at = None
-    request.captcha_image_path = None
-    request.execution_token = None
-    request.retry_not_before = None
-    request.last_error_code = None
-
-
 def _skip_request(
     request: ElaborazioneRichiesta,
     operation: str,
@@ -817,19 +798,15 @@ def release_processing_batches_for_user(db: Session, user_id: int) -> tuple[int,
 def retry_failed_batch(db: Session, user_id: int, batch_id: UUID) -> ElaborazioneBatch:
     expire_stale_pending_batches(db, user_id)
     batch = get_batch_for_user(db, user_id, batch_id)
+    db.refresh(batch, with_for_update=True)
     if batch.status == ElaborazioneBatchStatus.PROCESSING.value:
         raise BatchConflictError("Cannot retry failed items while batch is processing")
 
-    requests = get_batch_requests(db, batch.id)
-    retried = False
+    requests = list(db.scalars(select(ElaborazioneRichiesta).where(
+        ElaborazioneRichiesta.batch_id == batch.id
+    ).order_by(ElaborazioneRichiesta.row_index).with_for_update()).all())
     retry_queued_at = datetime.now(UTC)
-    for request in requests:
-        if request.status == ElaborazioneRichiestaStatus.FAILED.value:
-            _queue_request(request, "Queued for retry")
-            retried = True
-
-    if not retried:
-        raise BatchConflictError("No failed requests available for retry")
+    retry_failed_requests(requests, retry_queued_at)
 
     batch.status = ElaborazioneBatchStatus.PENDING.value
     # Re-queued batches must not be expired immediately using the original creation timestamp.

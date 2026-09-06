@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-import logging
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -19,15 +20,30 @@ from app.models.catasto import (
     CatastoVisuraRequest,
     CatastoVisuraRequestStatus,
 )
-from sister_exceptions import SisterRequestCorrelationError
-from sister_cadastral_browser_session import install_cadastral_section_recovery
-from sister_retry_metadata import clear_remote_request_metadata, recoverable_retry_metadata
-from sister_worker_files import build_document_path, build_request_artifact_dir, document_values, sha256_file
-from sister_worker_types import ClaimedRequestSelection, PreparedSisterRequest, SisterRemoteStateUpdate
 from app.modules.catasto.services.ade_document_audit import apply_document_audit
-
+from sister_cadastral_browser_session import install_cadastral_section_recovery
+from sister_exceptions import SisterRequestCorrelationError
+from sister_recovery_policy import (
+    allow_execution,
+    is_remote_recovery,
+    queue_remote_poll,
+    record_first_submission,
+)
+from sister_retry_metadata import clear_remote_request_metadata, recoverable_retry_metadata
+from sister_worker_files import (
+    build_document_path,
+    build_request_artifact_dir,
+    document_values,
+    sha256_file,
+)
+from sister_worker_types import (
+    ClaimedRequestSelection,
+    PreparedSisterRequest,
+    SisterRemoteStateUpdate,
+)
 
 logger = logging.getLogger(__name__)
+UTC = timezone.utc  # noqa: UP017 - Production worker runs Python 3.10.
 
 ResetRequestCallback = Callable[[UUID, str, datetime | None, str | None, UUID | None], None]
 SessionFactory = Callable[[], Session]
@@ -105,7 +121,7 @@ class SisterRequestRetryCoordinator:
         operation: str,
         error_code: str,
     ) -> None:
-        retry_at = datetime.now(timezone.utc) + timedelta(seconds=seconds)
+        retry_at = datetime.now(UTC) + timedelta(seconds=seconds)
         async with self.lock:
             self.deferred_requests[request_id] = retry_at
         self.reset_request(request_id, operation, retry_at, error_code, execution_token)
@@ -130,7 +146,7 @@ class SisterRequestClaimCoordinator:
 
     async def claim_next(
         self,
-        repository: "SisterRequestRepository",
+        repository: SisterRequestRepository,
         batch_id: UUID,
         credential_id: UUID,
     ) -> ClaimedRequestSelection:
@@ -216,7 +232,7 @@ class SisterRequestRepository:
                 self._mark_request_failed(request, user_message, "Failed before visura execution")
             batch.status = CatastoBatchStatus.FAILED.value
             batch.current_operation = user_message
-            batch.completed_at = datetime.now(timezone.utc)
+            batch.completed_at = datetime.now(UTC)
             self.refresh_batch_counts(db, batch)
             db.commit()
 
@@ -267,8 +283,6 @@ class SisterRequestRepository:
             request.retry_not_before = retry_at
             request.last_error_code = error_code
             request.execution_token = None
-            if error_code in {"sister_invalid_document", "sister_correlation_error"}:
-                clear_remote_request_metadata(request, clear_baseline=True)
             db.commit()
 
     def claim_next(
@@ -282,7 +296,7 @@ class SisterRequestRepository:
         claimed_request_ids = claimed_request_ids if claimed_request_ids is not None else set()
         with self.session_factory() as db:
             requests = self._claimable_requests(db, batch_id)
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             scan = _ClaimScan()
             for request in requests:
                 if request.id in claimed_request_ids:
@@ -306,14 +320,16 @@ class SisterRequestRepository:
             batch = db.get(CatastoBatch, batch_id)
             if request is None or batch is None:
                 return None
+            if not allow_execution(request, datetime.now(UTC), self._max_attempts_for(request)):
+                db.commit()
+                return None
             if self._resolve_awaiting_captcha(db, batch, request):
                 return None
             if request.status == CatastoVisuraRequestStatus.AWAITING_CAPTCHA.value:
                 return None
             if request.status != CatastoVisuraRequestStatus.PROCESSING.value:
-                request.status = CatastoVisuraRequestStatus.PROCESSING.value
-                request.current_operation = "Presa in carico dal worker"
-                request.attempts += 1
+                if self._claim_request(db, request, datetime.now(UTC)) is None:
+                    return None
             request.execution_token = request.execution_token or uuid4()
             self._set_batch_processing_operation(batch, request)
             artifact_dir = build_request_artifact_dir(self.artifact_root, batch_id, request.id)
@@ -352,6 +368,7 @@ class SisterRequestRepository:
                 request.sister_remote_request_url = update.remote_url
             if update.credential_id is not None:
                 request.sister_credential_id = update.credential_id
+            record_first_submission(request, update.state)
             request.sister_remote_state = update.state
             db.commit()
 
@@ -394,14 +411,7 @@ class SisterRequestRepository:
                 # La richiesta è stata messa in coda da SISTER — salva la correlazione
                 # remota e reimposta lo stato in pending così il worker la riprende.
                 # Il sister_remote_state è già "pending" (aggiornato dai callbacks).
-                request.status = CatastoVisuraRequestStatus.PENDING.value
-                request.current_operation = "In coda SISTER — riprova in corso"
-                request.last_error_code = None
-                request.error_message = None
-                request.execution_token = None
-                request.retry_not_before = None
-                request.captcha_manual_solution = None
-                request.captcha_skip_requested = False
+                queue_remote_poll(request)
                 self._log_captcha_attempt(db, request_id, result)
                 self.refresh_batch_counts(db, batch)
                 db.commit()
@@ -477,14 +487,12 @@ class SisterRequestRepository:
         now: datetime,
     ) -> ClaimedRequestSelection | None:
         if request.status == CatastoVisuraRequestStatus.PENDING.value:
-            max_attempts = self._max_attempts_for(request)
-            if request.attempts >= max_attempts:
-                self._mark_retry_exhausted(request, now, max_attempts)
+            if not allow_execution(request, now, self._max_attempts_for(request)):
                 db.commit()
                 return None
             request.status = CatastoVisuraRequestStatus.PROCESSING.value
             request.current_operation = "Presa in carico dal worker"
-            request.attempts += 1
+            request.attempts += int(not is_remote_recovery(request))
         elif not _captcha_can_resume(request):
             return None
         request.execution_token = uuid4()
@@ -519,7 +527,7 @@ class SisterRequestRepository:
     @staticmethod
     def _finish_captcha_wait(batch: CatastoBatch, request: CatastoVisuraRequest, status: str) -> None:
         request.status = status
-        request.processed_at = datetime.now(timezone.utc)
+        request.processed_at = datetime.now(UTC)
         if status == CatastoVisuraRequestStatus.FAILED.value:
             request.current_operation = "Timeout CAPTCHA manuale"
             request.error_message = "Tempo massimo CAPTCHA manuale superato"
@@ -568,7 +576,7 @@ class SisterRequestRepository:
         request.status = CatastoVisuraRequestStatus.FAILED.value
         request.current_operation = operation
         request.error_message = message
-        request.processed_at = datetime.now(timezone.utc)
+        request.processed_at = datetime.now(UTC)
         request.captcha_manual_solution = None
         request.captcha_skip_requested = False
         request.execution_token = None
@@ -577,23 +585,12 @@ class SisterRequestRepository:
     def _preserve_release_request(self, request: CatastoVisuraRequest) -> None:
         request.status = CatastoVisuraRequestStatus.SKIPPED.value
         request.current_operation = self.release_requested_operation
-        request.processed_at = request.processed_at or datetime.now(timezone.utc)
+        request.processed_at = request.processed_at or datetime.now(UTC)
 
     def _max_attempts_for(self, request: CatastoVisuraRequest) -> int:
         if request.purpose == PERPETUAL_SYNC_PURPOSE:
             return min(self.max_attempts, PERPETUAL_SYNC_MAX_ATTEMPTS)
         return self.max_attempts
-
-    def _mark_retry_exhausted(
-        self, request: CatastoVisuraRequest, now: datetime, max_attempts: int
-    ) -> None:
-        request.status = CatastoVisuraRequestStatus.FAILED.value
-        request.current_operation = "Retry SISTER esauriti"
-        request.error_message = f"Numero massimo di tentativi SISTER raggiunto ({max_attempts})"
-        request.last_error_code = "retry_exhausted"
-        request.processed_at = now
-        request.retry_not_before = None
-        request.execution_token = None
 
     @staticmethod
     def _apply_result_metadata(request: CatastoVisuraRequest, result: Any) -> None:
@@ -612,7 +609,7 @@ class SisterRequestRepository:
             request.status = CatastoVisuraRequestStatus.PENDING.value
             request.current_operation = f"Non evadibile (tentativo {attempts}), in coda per nuovo tentativo"
             request.error_message = None
-            request.retry_not_before = datetime.now(timezone.utc) + timedelta(seconds=self.retry_defer_seconds)
+            request.retry_not_before = datetime.now(UTC) + timedelta(seconds=self.retry_defer_seconds)
             batch.current_operation = f"Non evadibile riga {request.row_index}, nuovo tentativo"
         else:
             self._persist_terminal_non_evadibile(db, batch, request, result)
@@ -626,7 +623,7 @@ class SisterRequestRepository:
         request.status = CatastoVisuraRequestStatus.FAILED.value
         request.current_operation = "Non evadibile dopo 3 tentativi"
         request.error_message = result.error_message or "Richiesta non evadibile da SISTER"
-        request.processed_at = datetime.now(timezone.utc)
+        request.processed_at = datetime.now(UTC)
         batch.current_operation = f"Non evadibile riga {request.row_index}"
         if request.purpose == self.ade_scan_purpose and request.target_ruolo_particella_id is not None:
             self.persist_ade_status(
@@ -686,7 +683,7 @@ class SisterRequestRepository:
             else "Visura storica AdE fallita"
         )
         context.request.error_message = context.result.error_message
-        context.request.processed_at = datetime.now(timezone.utc)
+        context.request.processed_at = datetime.now(UTC)
         context.batch.current_operation = (
             f"Visura storica AdE riga {context.request.row_index}: "
             f"{classification or context.terminal_status}"
@@ -744,7 +741,7 @@ class SisterRequestRepository:
         request.current_operation = "PDF scaricato"
         request.sister_remote_state = "downloaded"
         request.last_error_code = None
-        request.processed_at = datetime.now(timezone.utc)
+        request.processed_at = datetime.now(UTC)
         batch.current_operation = f"Completata riga {request.row_index}"
 
     @staticmethod
@@ -753,7 +750,7 @@ class SisterRequestRepository:
         request.current_operation = "Saltata"
         request.last_error_code = None
         request.error_message = result.error_message
-        request.processed_at = datetime.now(timezone.utc)
+        request.processed_at = datetime.now(UTC)
         batch.current_operation = f"Saltata riga {request.row_index}"
 
     @staticmethod
@@ -765,7 +762,7 @@ class SisterRequestRepository:
             else "Nessuna corrispondenza"
         )
         request.error_message = result.error_message
-        request.processed_at = datetime.now(timezone.utc)
+        request.processed_at = datetime.now(UTC)
         batch.current_operation = (
             f"Utente senza titolarità catastale riga {request.row_index}"
             if request.search_mode == "soggetto"
@@ -778,7 +775,7 @@ class SisterRequestRepository:
         request.current_operation = "Fallita"
         request.error_message = result.error_message or "Visura flow failed"
         request.last_error_code = "flow_failed"
-        request.processed_at = datetime.now(timezone.utc)
+        request.processed_at = datetime.now(UTC)
         batch.current_operation = f"Fallita riga {request.row_index}"
 
     @staticmethod
@@ -803,7 +800,7 @@ class SisterRequestRepository:
 def is_expired(deadline: datetime | None) -> bool:
     if deadline is None:
         return False
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if deadline.tzinfo is None:
         return deadline <= now.replace(tzinfo=None)
     return deadline <= now
@@ -831,7 +828,7 @@ def _future_retry_seconds(deadline: datetime | None, now: datetime) -> int | Non
     if deadline is None:
         return None
     if deadline.tzinfo is None:
-        deadline = deadline.replace(tzinfo=timezone.utc)
+        deadline = deadline.replace(tzinfo=UTC)
     if deadline <= now:
         return None
     return max(int((deadline - now).total_seconds()), 1)
@@ -854,7 +851,7 @@ def _request_accepts_update(
     return bool(
         request is not None
         and request.status in ACTIVE_REQUEST_STATUSES
-        and (not require_token or execution_token is not None and request.execution_token == execution_token)
+        and (not require_token or (execution_token is not None and request.execution_token == execution_token))
         and (execution_token is None or request.execution_token == execution_token)
     )
 

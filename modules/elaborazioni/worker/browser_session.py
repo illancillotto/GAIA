@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
 import logging
-from pathlib import Path
 import re
 import unicodedata
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from playwright.async_api import (
     Browser,
@@ -19,13 +19,6 @@ from playwright.async_api import (
     async_playwright,
 )
 
-from sister_exceptions import (
-    DocumentNonEvadibileError,
-    SisterConventionSelectionError,
-    SisterNotFoundError,
-    SisterRequestCorrelationError,
-    SisterServerError,
-)
 from sister_browser_reliability import (
     RemoteStateCallback,
     SisterSessionState,
@@ -33,6 +26,13 @@ from sister_browser_reliability import (
     download_valid_pdf,
     is_visura_area_ready,
     raise_if_sister_server_error,
+)
+from sister_exceptions import (
+    DocumentNonEvadibileError,
+    SisterConventionSelectionError,
+    SisterNotFoundError,
+    SisterRequestCorrelationError,
+    SisterServerError,
 )
 from sister_request_rows import (
     SisterRemoteRequestRow,
@@ -42,6 +42,7 @@ from sister_request_rows import (
     expected_request_tokens,
     parse_remote_rows,
 )
+from sister_requests_navigation import find_in_requests_category
 from sister_selectors import SisterSelectorsConfig
 from sister_visura_selection import (
     expected_request_type,
@@ -253,7 +254,7 @@ class BrowserSession:
         self._session_state.authenticate(
             username,
             self.selectors.convention_id,
-            datetime.now(timezone.utc) + timedelta(seconds=self.config.session_timeout_sec),
+            datetime.now(timezone.utc) + timedelta(seconds=self.config.session_timeout_sec),  # noqa: UP017 -- deployed worker uses Python 3.10.
         )
         logger.info("Login SISTER completato per %s", username)
         await self._trace_state("login-completed")
@@ -625,7 +626,6 @@ class BrowserSession:
         }
 
     async def _wait_for_visura_submission_state(self, request_id: str) -> None:
-        page = self.page
         for iteration in range(40):
             if await self._first_visible_count(self.selectors.tipo_visura_selector) > 0:
                 return
@@ -783,7 +783,7 @@ class BrowserSession:
         baseline_keys = frozenset(str(value) for value in (getattr(request, "sister_remote_baseline_keys", None) or []))
         if remote_state in {"submitted", "pending", "ready"}:
             self._session_state.correlation = SisterRequestCorrelation(
-                local_request_id=str(getattr(request, "id")),
+                local_request_id=str(request.id),
                 baseline_keys=baseline_keys,
                 expected_tokens=expected_request_tokens(request),
                 remote_id=str(remote_id) if remote_id else None,
@@ -878,24 +878,21 @@ class BrowserSession:
         return None
 
     async def _poll_correlated_tabs(self, upper_body: str, destination: Path) -> int | None:
-        non_evad = re.search(r"NON EVADIBIL[^0-9]*([0-9]+)", upper_body)
-        if non_evad and int(non_evad.group(1)) > 0:
-            result = await self._consume_correlated_row(
-                await self._find_correlated_row_in_tab("Non evadibili"), destination
-            )
-            if result is not None:
-                return result
-        espletate = re.search(r"ESPLETATE?[^0-9]*([0-9]+)", upper_body)
-        if espletate and int(espletate.group(1)) > 0:
-            row = await self._find_correlated_row_in_tab("Espletate")
+        result = await self._consume_correlated_row(
+            await self._find_correlated_row_in_tab("Non evadibili"), destination
+        )
+        if result is not None:
+            return result
+        for category in ("Espletate", "Prelevate"):
+            row = await self._find_correlated_row_in_tab(category)
             if row is not None:
                 return await self._download_correlated_row(row, destination)
         return None
 
     async def _find_correlated_request_row(self) -> SisterRemoteRequestRow | None:
         correlation = self._session_state.correlation
-        if correlation is None:
-            raise SisterRequestCorrelationError("Correlazione SISTER non inizializzata")
+        if correlation is None or not correlation.remote_id:
+            raise SisterRequestCorrelationError("Correlazione SISTER non inizializzata con ID remoto certo")
         rows = await self._extract_remote_request_rows(self.page)
         row = correlate_remote_row(rows, correlation)
         if row is not None and row.remote_id:
@@ -903,13 +900,7 @@ class BrowserSession:
         return row
 
     async def _find_correlated_row_in_tab(self, tab_text: str) -> SisterRemoteRequestRow | None:
-        tab = self.page.locator(f"a:has-text('{tab_text}'), td:has-text('{tab_text}')").first
-        if await tab.count() == 0 or not await tab.is_visible():
-            return None
-        await tab.click(timeout=5000)
-        await self.page.wait_for_load_state("domcontentloaded", timeout=5000)
-        await self.page.wait_for_timeout(500)
-        return await self._find_correlated_request_row()
+        return await find_in_requests_category(self.page, tab_text, self._find_correlated_request_row)
 
     async def _download_correlated_row(self, row: SisterRemoteRequestRow, destination: Path) -> int:
         if row.download_href:
@@ -1335,7 +1326,7 @@ class BrowserSession:
         return None
 
     async def _write_debug_artifacts(self, reason: str) -> list[str]:
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")  # noqa: UP017 -- deployed worker uses Python 3.10.
         target_dir = self.config.debug_artifacts_path / "connection-tests" / timestamp
         return await self._write_artifacts_to_dir(target_dir, reason)
 

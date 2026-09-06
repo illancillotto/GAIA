@@ -11,6 +11,7 @@ from app.api.deps import require_active_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.models.catasto import CatastoPerpetualSyncItem
+from app.modules.elaborazioni.sister_manual_retry import BatchConflictError
 from app.schemas.catasto import CatastoPerpetualSyncItemResponse
 from app.schemas.elaborazioni import ElaborazioneOperationResponse
 from app.services.elaborazioni_perpetual_sync import (
@@ -88,7 +89,10 @@ def retry_campaign_failures(
     db: Annotated[Session, Depends(get_db)],
 ) -> ElaborazioneOperationResponse:
     _validate_campaign_scope(scope)
-    retried = retry_perpetual_sync_failures(db, current_user.id, scope)
+    try:
+        retried = retry_perpetual_sync_failures(db, current_user.id, scope)
+    except BatchConflictError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return ElaborazioneOperationResponse(
         message=f"{retried} elementi falliti rimessi in coda per la campagna {scope}."
     )

@@ -13,7 +13,6 @@ from sister_exceptions import DocumentNonEvadibileError, DocumentNotYetProducedE
 from visura_flow import (
     CaptchaSubmission,
     ManualCaptchaDecision,
-    PendingDocumentResubmit,
     VisuraFlowCallbacks,
     _current_correlation,
     _download_if_ready,
@@ -1197,7 +1196,7 @@ def test_initial_poll_timeout_returns_queued_status() -> None:
     assert result.error_message is None or "pronto" in (result.error_message or "")
 
 
-def test_pending_document_repeats_full_request_and_downloads_without_polling() -> None:
+def test_pending_document_polls_without_duplicate_submission() -> None:
     class RepeatRequestBrowser(FakeBrowser):
         def __init__(self) -> None:
             super().__init__(correct_answer="ok")
@@ -1215,7 +1214,7 @@ def test_pending_document_repeats_full_request_and_downloads_without_polling() -
 
         async def poll_richieste_for_download(self, *args, **kwargs) -> int:
             self.poll_calls += 1
-            raise AssertionError("Il secondo inoltro pronto non deve usare ConsultazioneRichieste")
+            return await FakeBrowser.poll_richieste_for_download(self, *args, **kwargs)
 
     browser = RepeatRequestBrowser()
     operations: list[str] = []
@@ -1235,10 +1234,10 @@ def test_pending_document_repeats_full_request_and_downloads_without_polling() -
         )
 
     assert result.status == "completed"
-    assert browser.open_calls == 2
-    assert browser.submit_attempts == ["ok", "ok"]
-    assert browser.poll_calls == 0
-    assert any("reinvio immediato" in operation for operation in operations)
+    assert browser.open_calls == 1
+    assert browser.submit_attempts == ["ok"]
+    assert browser.poll_calls == 1
+    assert not any("reinvio immediato" in operation for operation in operations)
 
 
 def test_pending_document_second_response_falls_back_to_existing_polling() -> None:
@@ -1277,8 +1276,8 @@ def test_pending_document_second_response_falls_back_to_existing_polling() -> No
         )
 
     assert result.status == "completed"
-    assert browser.open_calls == 2
-    assert browser.submit_attempts == ["ok", "ok"]
+    assert browser.open_calls == 1
+    assert browser.submit_attempts == ["ok"]
     assert browser.poll_calls == 1
 
 
@@ -1310,14 +1309,14 @@ def test_pending_document_before_captcha_repeats_full_request_once() -> None:
         )
 
     assert result.status == "completed"
-    assert browser.open_calls == 2
-    assert browser.prepare_calls == 2
+    assert browser.open_calls == 1
+    assert browser.prepare_calls == 1
     assert browser.captcha_captures == 0
 
 
-def test_explicit_pending_resubmit_policy_is_preserved() -> None:
+def test_explicit_callbacks_are_preserved() -> None:
     browser = FakeBrowser(correct_answer="ok")
-    policy = PendingDocumentResubmit(attempts_remaining=0)
+    operations = []
 
     async def fake_llm(_bytes: bytes) -> str:
         return "ok"
@@ -1330,16 +1329,15 @@ def test_explicit_pending_resubmit_policy_is_preserved() -> None:
             captcha_dir=Path(tmp) / "captcha",
             get_manual_captcha_decision=_no_manual_async,
             solve_llm_captcha=fake_llm,
-            callbacks=VisuraFlowCallbacks(pending_document_resubmit=policy),
+            callbacks=VisuraFlowCallbacks(update_operation=operations.append),
         )
 
     assert result.status == "completed"
-    assert policy.attempts_remaining == 0
+    assert "Download PDF in corso" in operations
 
 
-def test_resume_queued_sister_uses_full_poll_attempts() -> None:
-    """Una richiesta con sister_remote_state='submitted' deve usare i poll
-    completi (non quelli ridotti del primo tentativo) e completarsi."""
+def test_resume_queued_sister_uses_bounded_poll_attempts() -> None:
+    """Resume yields after one poll rather than consuming a session timeout."""
 
     class QueuedRequest:
         id = "req-queued"
@@ -1384,5 +1382,4 @@ def test_resume_queued_sister_uses_full_poll_attempts() -> None:
         )
 
     assert result.status == "completed"
-    # Il resume deve usare max_attempts None (completo) non quello ridotto
-    assert browser.poll_max_attempts == [None]
+    assert browser.poll_max_attempts == [1]
