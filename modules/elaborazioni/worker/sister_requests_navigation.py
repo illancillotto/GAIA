@@ -33,8 +33,9 @@ async def open_portal_visure_menu(
     page: Page, selectors, trace: Callable[[str], Awaitable[None]]
 ) -> None:
     await restore_portal_menu(page, selectors.consultazioni_link_name)
-    await page.get_by_role("link", name=selectors.consultazioni_link_name).click()
-    await trace("menu-after-consultazioni-click")
+    if await page.get_by_role("link", name=selectors.visure_link_name).count() == 0:
+        await page.get_by_role("link", name=selectors.consultazioni_link_name).click()
+        await trace("menu-after-consultazioni-click")
     await page.get_by_role("link", name=selectors.visure_link_name).click()
     await trace("menu-after-visure-click")
 

@@ -1026,7 +1026,9 @@ class BrowserSession:
         with contextlib.suppress(Exception):
             body_text = await page.locator("body").inner_text(timeout=2000)
 
-        if "Informativa.do" not in page.url and self.selectors.conferma_lettura_button_name not in body_text:
+        if self.selectors.conferma_lettura_button_name not in body_text and (
+            "Informativa.do" not in page.url or await page.locator(self.selectors.territorio_selector).count() > 0
+        ):
             return
 
         logger.info("Informativa visure rilevata, click su '%s'", self.selectors.conferma_lettura_button_name)

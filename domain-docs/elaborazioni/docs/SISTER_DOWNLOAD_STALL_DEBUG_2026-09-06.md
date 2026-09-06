@@ -192,7 +192,7 @@ recupero massivo effettuato. Le evidenze sopra descrivono il codice precedente.
   metriche `/tmp/sister-stall-{before,final}.json`. Graphify backend e worker
   aggiornati tramite target dedicati; docs riallineate dopo la modifica.
 
-### Rilascio e canary ancora necessari
+### Criteri di rilascio e canary
 
 Distribuire worker e backend/scheduler con overlay selettivo coerente, senza
 pull indiscriminato sul checkout CED sporco. Conservare env, mount, comandi,
@@ -202,3 +202,122 @@ e il recupero di un ID originale. Solo il PDF validato e persistito conferma
 il successo end-to-end. Se un ID continua a non comparire, leggere i nuovi
 artifact per categoria/giorno: il fix non garantisce che SISTER produca il
 documento o renda accessibile un elemento nascosto dal proprio limite.
+
+## Rilascio selettivo 258d23fe
+
+Deploy del 6 settembre 2026, avvio container alle 11:49:48 UTC (13:49:48
+Europe/Rome), autorizzato dall'utente insieme al commit.
+
+- Commit funzionale: `258d23fe`.
+- Backend e platform-scheduler: `gaia-backend:stall-258d23fe`, digest
+  `sha256:9f3c5bc0f7c4b4ff5f4e8e028db42de5f764c4e4d956af555c13ebc29d48fd11`.
+- Worker visure: `gaia-elaborazioni-worker-visure:stall-258d23fe`, digest
+  `sha256:70a61008780158b3e48b035c50341fa1464b44074c820c01ac15ab438f179cbe`.
+- Overlay sulle immagini effettivamente attive `ui-f5ef8428` e
+  `sister-621cb157`: i quattro file runtime preesistenti sono stati
+  confrontati tramite Git blob hash e coincidono con il parent del commit.
+  Aggiunto il modulo refill anche nel backend incorporato nel worker.
+- Bundle CED `/opt/gaia-releases/stall-258d23fe`, con Dockerfile, sorgenti,
+  `compose.pinned.json`, `compose.rollback.pinned.json` e snapshot container.
+  Le configurazioni riservate restano sul server con permessi 0600.
+- Env (confronto per chiave), mount (per destinazione), entrypoint e command
+  verificati prima e dopo; SHA256 dei cinque runtime verificati nei container.
+  Frontend, altri servizi, checkout CED e database non modificati.
+- Smoke import delle immagini candidate: backend Python 3.11.16 e worker
+  Python 3.10.12, entrambi riusciti. Nessun loop worker avviato dallo smoke.
+- Scheduler arrestato con exit 0. Il vecchio worker ha eseguito logout e
+  rilasciato le richieste, ma non ha terminato entro 120 secondi: Docker lo ha
+  terminato con exit 137. Prima della sostituzione: zero execution token,
+  cinque identita remote invariate. Il lento shutdown resta da approfondire,
+  non e qualificato come arresto completamente graceful.
+- Tre container healthy e restart count 0. Health API e pagina
+  `/elaborazioni/visure`: HTTP 200.
+- Scheduler registrato a intervallo di un minuto; primo ciclo osservato
+  alle 11:50:50 UTC. Il worker ha ripreso lo stesso batch alle 11:49:51 UTC.
+- Nuovi artifact di ricerca JSON e snapshot HTML/PNG effettivamente presenti
+  dopo il primo polling. Le prime ricerche delle vecchie richieste non hanno
+  trovato gli ID, anche applicando filtri per singolo giorno. La presenza
+  degli artifact non dimostra che il documento sia stato prodotto da SISTER.
+- Refill automatico alle 11:52:27 UTC: stesso batch da 20 a 35 righe,
+  15 aggiunte e 20 richieste aperte complessive, conforme al cap configurato.
+  Le cinque identita originali restano identiche (confronto digest su ID,
+  URL remoto, credenziale e data primo invio). Nessuna mutazione manuale DB.
+  Prima nuova riga arrivata al form pronto alle 11:52:42 UTC.
+- Primo ciclo scheduler terminato con successo alle 11:52:31 UTC, durata
+  circa 100 secondi, con conseguente tick mancato. La manutenzione sincrona
+  lenta e un limite preesistente ancora osservabile, non risolto da questo
+  overlay. `last_error_message` del planner nullo.
+- Canary end-to-end persistito alle 11:53:09.385827 UTC (13:53 locali):
+  richiesta `3d8ace38-f3bf-4e11-9304-bbc4f6cd616a`, documento
+  `e93433ff-4e35-4a43-93c1-424708e557c4`, 16586 byte, SHA256
+  `45cbf3ebe66ecf27a25f1619b4a176b4a590cde6a5af380ce11de71267e24032`.
+  Verificati contenuto `%PDF-`, size/hash, link documento-richiesta e stato
+  completed tramite accesso read-only dal backend. E il primo documento
+  successivo allo stallo delle 09:39:49 UTC, non un semplice heartbeat.
+
+### Canary prolungato: esito parziale, non chiusura incidente
+
+Alle 11:56:25 UTC il nuovo PDF resta uno; i cinque recuperi originari non
+sono ancora conclusi e le loro identita sono invariate. I cicli scheduler
+successivi delle 11:52:50 e 11:53:50 terminano in circa 3 secondi senza errori.
+
+La richiesta successiva `6109ac51-a1d2-4515-a5ec-e6edc2cc3802`, aperta dopo
+il polling di una richiesta originale nella sessione riutilizzata, evidenzia
+due stati non coperti dal primo canary:
+
+1. Alle 11:54:46 UTC il menu Consultazioni e aperto, ma nel DOM dello snapshot
+   manca il link `Visure catastali`; timeout locator dopo 60 secondi.
+   Non basta quindi recuperare il link Consultazioni dalla home. La causa
+   della diversa risposta del menu resta da riprodurre prima di cambiare
+   ulteriormente la navigazione.
+2. Alle 11:54:49 UTC il retry raggiunge `Informativa.do`, ma il documento
+   visualizzato e gia `Scelta province`, senza alcun controllo Conferma.
+   `_confirm_visura_informativa_if_present` deduce la presenza dell'informativa
+   dal solo URL e cerca un pulsante inesistente. Lo snapshot dimostra che
+   URL e stato del form non sono equivalenti su una sessione riutilizzata.
+
+Il terzo retry torna al primo stato e la richiesta viene differita per errore
+recuperabile alle 11:55:53 UTC, senza documento e senza invio remoto nuovo.
+Snapshot riservati nel volume CED sotto
+`/data/catasto/debug/connection-tests/20260906T115446Z/` e
+`/data/catasto/debug/connection-tests/20260906T115450Z/`; non versionati.
+
+Il deploy risolve refill e primo download, ma **non dimostra ancora download
+continuativi stabili**. Non sono effettuati reset o retry manuali delle vecchie
+richieste. Prossima change da approvare: riprodurre questi due stati con test
+browser, rendere la navigazione idempotente rispetto al DOM realmente presente
+e riconoscere l'informativa dai suoi controlli, non dal solo URL. Richiesta una
+decisione prima di ampliare l'overlay in presenza della nuova failure, secondo
+la stop condition di progetto. Non qualificare il rilascio come tutto verde.
+
+### Follow-up autorizzato dopo il canary
+
+L'utente ha autorizzato di proseguire dopo la segnalazione della failure.
+Patch locale stretta, senza modificare submission, ownership o deadline:
+
+- Se il menu contiene gia `Visure catastali`, aprire direttamente quel link,
+  senza cliccare nuovamente Consultazioni. La fixture copre menu inizialmente
+  aperto e chiuso; non dimostra da sola che ogni risposta anomala del portale
+  derivi dal toggle del menu, quindi resta necessario il canary reale.
+- Se `Informativa.do` contiene gia il selettore delle province e non il testo
+  Conferma Lettura, non cercare il pulsante inesistente. Una pagina sconosciuta
+  senza selettore e senza conferma conserva il comportamento fail-closed.
+- Due regressioni Chrome falliscono prima del fix e passano dopo. Suite
+  browser completa: 147 test passati, 1112 statement e 332 branch coperti al
+  100%. Ruff/style sui tre file della slice e format del nuovo test passano.
+- Scope runtime locale: 2 file, 86 callable, 23 finding (2 error) prima/dopo;
+  BrowserSession LOC 1231 ->1233, comunque inferiore alle 1236 della base
+  pre-incidente. Nessun aggiornamento baseline/esclusioni. Il gate globale
+  resta distinto dai test e dallo style mirati.
+- Graphify worker aggiornato dal target dedicato: 1588 nodi, 3698 archi.
+
+Rollback selettivo, dopo rilascio delle richieste attive:
+
+```sh
+docker compose -p gaia \
+  -f /opt/gaia-releases/stall-258d23fe/compose.rollback.pinned.json \
+  up -d --no-deps --no-build backend platform-scheduler elaborazioni-worker-visure
+```
+
+Le modifiche locali estranee a coverage plan, report complessita e skill
+Graphify non sono incluse nel commit. Il checkout CED sporco e stato preservato.
