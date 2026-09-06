@@ -24,9 +24,14 @@ from app.modules.elaborazioni.sister_autosync_guard import (
     guard_campaign_items,
     requires_original_request,
 )
+from app.modules.elaborazioni.sister_autosync_refill import (
+    _link_items,
+    _validated_row,
+    append_validated_requests,
+    lock_refill_capacity,
+)
 from app.services.elaborazioni_batches import (
     BatchConflictError,
-    ValidatedVisuraRow,
     create_batch_from_validated_rows,
     is_release_marker_request,
     start_batch,
@@ -439,40 +444,6 @@ def _next_campaign_scope(db: Session, user_id: int) -> str | None:
     return None
 
 
-def _validated_row(index: int, item: CatastoPerpetualSyncItem) -> ValidatedVisuraRow:
-    return ValidatedVisuraRow(
-        row_index=index,
-        search_mode=item.search_mode,
-        comune=item.comune,
-        comune_codice=item.comune_codice,
-        catasto=item.catasto,
-        sezione=item.sezione,
-        foglio=item.foglio,
-        particella=item.particella,
-        subalterno=item.subalterno,
-        tipo_visura=item.tipo_visura,
-        purpose="perpetual_sync",
-        target_ruolo_particella_id=item.ruolo_particella_id,
-        subject_kind=item.subject_kind,
-        subject_id=item.subject_identifier,
-        request_type=item.request_type,
-        intestazione=item.intestazione,
-    )
-
-
-def _link_items(
-    items: Iterable[CatastoPerpetualSyncItem], batch: CatastoBatch,
-    requests: list[CatastoVisuraRequest], now: datetime,
-) -> None:
-    for item, request in zip(items, requests, strict=True):
-        item.status = "queued"
-        item.linked_batch_id = batch.id
-        item.linked_request_id = request.id
-        item.last_enqueued_at = now
-        item.retry_after = None
-        item.last_error_message = None
-
-
 def _active_perpetual_batch_exists(db: Session, user_id: int) -> bool:
     return db.scalar(
         select(CatastoBatch.id).where(
@@ -483,6 +454,28 @@ def _active_perpetual_batch_exists(db: Session, user_id: int) -> bool:
             ),
         )
     ) is not None
+
+
+def _refill_deferred_batch(db: Session, config: CatastoRuoloAutoSyncConfig) -> CatastoBatch | None:
+    batch = db.scalar(select(CatastoBatch).where(
+        CatastoBatch.user_id == config.user_id,
+        CatastoBatch.batch_kind == CatastoBatchKind.PERPETUAL_SYNC.value,
+        CatastoBatch.status == CatastoBatchStatus.PROCESSING.value,
+    ).with_for_update(skip_locked=True).execution_options(populate_existing=True))
+    if batch is None:
+        return None
+    now = datetime.now(UTC)
+    capacity = lock_refill_capacity(db, batch, config.batch_size, now)
+    scope = _next_campaign_scope(db, config.user_id) if capacity else None
+    items = _due_items(db, config, now, scope)[:capacity] if scope else []
+    if not items:
+        db.commit()
+        return None
+    requests = append_validated_requests(db, batch, [_validated_row(i, item) for i, item in enumerate(items, 1)])
+    _link_items(items, batch, requests, now)
+    config.last_planner_at = now
+    db.commit()
+    return batch
 
 
 def _campaign_label(scope: str) -> str:
@@ -522,7 +515,7 @@ def ensure_perpetual_sync_batch(
     if not config.enabled or not (config.primary_enabled or config.secondary_enabled):
         return None
     if _active_perpetual_batch_exists(db, config.user_id):
-        return None
+        return _refill_deferred_batch(db, config)
     credentials = available_perpetual_credentials(db, config)
     if not credentials:
         return None

@@ -1,4 +1,5 @@
 import asyncio
+import json
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -95,3 +96,51 @@ def test_unapplied_filter_fails_closed(checked, period):
     page.wait_for_load_state = AsyncMock()
     with pytest.raises(navigation.SisterRequestCorrelationError, match="non ha applicato"):
         asyncio.run(navigation.submit_requests_filter(page, "prelevate", "-"))
+
+
+@pytest.mark.parametrize("present", [False, True])
+def test_restore_menu_uses_same_page_authenticated_home_only_when_missing(present):
+    page = MagicMock()
+    link = AsyncMock()
+    link.count.return_value = int(present)
+    page.get_by_role.return_value = link
+    page.goto = AsyncMock()
+    asyncio.run(navigation.restore_portal_menu(page, "Consultazioni e Certificazioni"))
+    assert page.goto.await_count == int(not present)
+    assert link.wait_for.await_count == int(not present)
+
+
+@pytest.mark.parametrize(
+    "day,matched,snapshot",
+    [("-", False, True), ("06/09/2026", True, True), ("06/09/2026", False, False)],
+)
+def test_search_diagnostics_are_bounded_and_do_not_log_row_contents(
+    tmp_path, day, matched, snapshot
+):
+    page = MagicMock()
+    page.locator.return_value = AsyncMock(count=AsyncMock(return_value=12))
+    page.content = AsyncMock(return_value="<html>Requests</html>")
+    page.screenshot = AsyncMock()
+    for _ in range(2):
+        asyncio.run(
+            navigation.record_search_snapshot(page, "Espletate", day, matched, str(tmp_path))
+        )
+    files = list(tmp_path.glob("*.json"))
+    assert len(files) == 1
+    assert json.loads(files[0].read_text()) == {
+        "category": "Espletate",
+        "day": day,
+        "rows": 12,
+        "matched": matched,
+    }
+    assert page.screenshot.await_count == 2 * int(snapshot)
+    assert len(list(tmp_path.glob("*.html"))) == int(snapshot)
+
+
+def test_search_diagnostics_io_error_does_not_interrupt_recovery(tmp_path, caplog):
+    blocked = tmp_path / "file"
+    blocked.touch()
+    page = MagicMock()
+    page.locator.return_value = AsyncMock(count=AsyncMock(return_value=0))
+    asyncio.run(navigation.record_search_snapshot(page, "Espletate", "-", False, str(blocked)))
+    assert "Snapshot ricerca SISTER non salvato" in caplog.text

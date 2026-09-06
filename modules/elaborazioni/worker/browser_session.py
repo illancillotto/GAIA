@@ -42,7 +42,7 @@ from sister_request_rows import (
     expected_request_tokens,
     parse_remote_rows,
 )
-from sister_requests_navigation import find_in_requests_category
+from sister_requests_navigation import find_in_requests_category, open_portal_visure_menu
 from sister_selectors import SisterSelectorsConfig
 from sister_visura_selection import (
     expected_request_type,
@@ -778,6 +778,7 @@ class BrowserSession:
         return await download_valid_pdf(self.page, self.selectors.save_button_selector, destination)
 
     async def begin_request_correlation(self, request: object) -> None:
+        self._request_artifact_dir = getattr(request, "artifact_dir", None)
         remote_id = getattr(request, "sister_remote_request_id", None)
         remote_state = str(getattr(request, "sister_remote_state", "") or "").lower()
         baseline_keys = frozenset(str(value) for value in (getattr(request, "sister_remote_baseline_keys", None) or []))
@@ -790,7 +791,6 @@ class BrowserSession:
             )
             logger.info("Ripristinata correlazione SISTER %s per richiesta %s", remote_id, getattr(request, "id", "-"))
             return
-        rows: list[SisterRemoteRequestRow] = []
         try:
             rows = await self._snapshot_remote_request_rows()
         except SisterServerError:
@@ -900,7 +900,10 @@ class BrowserSession:
         return row
 
     async def _find_correlated_row_in_tab(self, tab_text: str) -> SisterRemoteRequestRow | None:
-        return await find_in_requests_category(self.page, tab_text, self._find_correlated_request_row)
+        return await find_in_requests_category(
+            self.page, tab_text, self._find_correlated_request_row,
+            artifact_dir=getattr(self, "_request_artifact_dir", None),
+        )
 
     async def _download_correlated_row(self, row: SisterRemoteRequestRow, destination: Path) -> int:
         if row.download_href:
@@ -972,15 +975,7 @@ class BrowserSession:
             raise error
 
     async def _goto_visura_menu(self) -> None:
-        page = self.page
-        logger.info("Navigazione verso menu visure SISTER")
-        logger.info("Click link '%s'", self.selectors.consultazioni_link_name)
-        await page.get_by_role("link", name=self.selectors.consultazioni_link_name).click()
-        logger.info("Link '%s' aperto", self.selectors.consultazioni_link_name)
-        await self._trace_state("menu-after-consultazioni-click")
-        logger.info("Click link '%s'", self.selectors.visure_link_name)
-        await page.get_by_role("link", name=self.selectors.visure_link_name).click()
-        await self._trace_state("menu-after-visure-click")
+        await open_portal_visure_menu(self.page, self.selectors, self._trace_state)
         await self._confirm_visura_informativa_if_present()
         await self._select_convention_if_present()
 

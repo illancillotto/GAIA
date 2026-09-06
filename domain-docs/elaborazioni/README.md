@@ -15,7 +15,8 @@ Ambito runtime attuale:
 - download PDF atomico con validazione firma e SHA-256
 - naming PDF delle visure per immobile privo di dati dell'operatore SISTER: `COMUNE_FOGLIO_PARTICELLA[_SUBALTERNO].pdf`; lo username non viene salvato nel filename ne nel campo `codice_fiscale` del documento
 - attesa CAPTCHA manuale protetta dallo stesso execution token usato per cancel, release e retry; il fallback manuale è disabilitato di default (`CAPTCHA_MANUAL_ATTEMPTS=0`) perché in produzione i CAPTCHA SISTER devono essere gestiti solo tramite Agent; se Agent esaurisce i tentativi, la richiesta fallisce in modo recuperabile/diagnosticabile invece di entrare in attesa manuale
-- gestione asincrona delle visure storiche/analitiche SISTER: al primo messaggio di documento in elaborazione il worker ripete immediatamente una sola volta l'intera richiesta, inclusi form, CAPTCHA e inoltro; se anche il secondo inoltro resta in elaborazione, usa i poll iniziali su `ConsultazioneRichieste`, salva la correlazione remota, marca la richiesta come `queued_sister`/`sister_remote_state=pending` e passa alla particella successiva; i giri successivi riprendono le richieste gia accodate dalla pagina `Richieste`/`Espletate`
+- gestione asincrona delle visure storiche/analitiche SISTER: nessun reinvio automatico di una richiesta gia inoltrata; correlazione, credenziale e primo invio persistiti, recupero entro 24 ore con ricerca per categoria e giorni disponibili; dopo il polling il browser ripristina la home autenticata prima di aprire un nuovo form
+- riempimento limitato del batch AutoSync: quando restano soltanto recuperi remoti rinviati, il planner aggiunge nuovo lavoro agli slot liberi dello stesso batch, senza sessioni o batch concorrenti; contratto e limiti in `docs/CATASTO_CONTINUOUS_SYNC.md`
 - diagnostica login Capacitas con dump HTML/metadata del tentativo quando il token SSO non viene estratto
 - provider `Bonifica Oristanese` con pool credenziali cifrato, test login HTTP su `https://login.bonificaoristanese.it/login`, helper DataTables condiviso, bootstrap `apps/registry.py` per le entity del portale e orchestratore di sync persistito su `wc_sync_job`
 - provider `Poste Online` per recupero worker-only delle raccomandate online 2022-2023 da `posta-online.it`, con credenziali cifrate, test login accodato e import verso `ruolo/tributi`
@@ -97,6 +98,7 @@ La pagina `/elaborazioni` usa una struttura a sezioni stabili:
 - `docs/`: documentazione canonica del modulo `elaborazioni`
 - `docs/RUOLO_VISURE_AUTOSYNC_PLAN.md`: piano di implementazione dell'autosync visure per le particelle presenti a ruolo
 - `docs/CATASTO_CONTINUOUS_SYNC.md`: contratto runtime, SLA, pool SISTER, API e rollback del planner perpetuo
+- `docs/SISTER_DOWNLOAD_STALL_DEBUG_2026-09-06.md`: diagnosi dello stallo, correzioni locali, test e procedura di verifica del rilascio
 - `capacitas/docs/CAPACITAS_DATA_RECOVERY.md`: guida operativa completa per recupero dati, storico anagrafico, Terreni e persistenza Capacitas
 - `GAIA_VISURE_PROMPT_1_ANALISI.md`
 - `GAIA_VISURE_PROMPT_2_IMPLEMENTAZIONE.md`

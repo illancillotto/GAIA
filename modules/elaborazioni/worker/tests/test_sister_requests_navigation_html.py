@@ -17,6 +17,46 @@ from sister_request_rows import SisterRequestCorrelation
 from sister_requests_navigation import find_in_requests_category, select_requests_category
 
 
+def test_next_request_returns_from_menu_less_requests_view_to_authenticated_home():
+    async def scenario():
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(
+                executable_path=shutil.which("google-chrome"), headless=True
+            )
+            try:
+                page = await browser.new_page()
+                visits = []
+
+                async def serve(route):
+                    path = route.request.url.split(".gov.it")[-1]
+                    visits.append(path)
+                    pages = {
+                        "/Servizi/ConsultazioneRichieste.do": "<body>Home dei Servizi - Richieste</body>",
+                        "/Servizi/": '<a href="/consultazioni">Consultazioni e Certificazioni</a>',
+                        "/consultazioni": '<a href="/Visure/SceltaServizio.do">Visure catastali</a>',
+                        "/Visure/SceltaServizio.do": '<select name="tipoCatasto"><option>Terreni</option></select>',
+                    }
+                    await route.fulfill(body=pages[path], content_type="text/html")
+
+                await page.route("**/*", serve)
+                await page.goto(
+                    "https://sister3.agenziaentrate.gov.it/Servizi/ConsultazioneRichieste.do"
+                )
+                session = make_session(page)
+                await session.open_visura_form()
+                assert visits == [
+                    "/Servizi/ConsultazioneRichieste.do",
+                    "/Servizi/",
+                    "/consultazioni",
+                    "/Visure/SceltaServizio.do",
+                ]
+                assert await session._is_visura_area_ready()
+            finally:
+                await browser.close()
+
+    asyncio.run(scenario())
+
+
 @pytest.mark.parametrize("target_visible", [True, False])
 def test_global_counters_do_not_skip_backlog_or_authorize_foreign_downloads(target_visible, caplog):
     async def scenario():

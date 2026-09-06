@@ -1,26 +1,29 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
 import sys
+from datetime import datetime, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-
-WORKER_ROOT = Path(__file__).resolve().parents[1]
-if str(WORKER_ROOT) not in sys.path:
-    sys.path.insert(0, str(WORKER_ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sister_browser_reliability import (
+    UTC,
     SisterSessionState,
+    _is_non_blocking_init_portale_error,
     document_not_yet_produced_error,
     download_valid_pdf,
     is_visura_area_ready,
     raise_if_sister_server_error,
 )
-from sister_exceptions import SisterInvalidDocumentError, SisterServerError
+from sister_exceptions import (
+    SisterInvalidDocumentError,
+    SisterRequestCorrelationError,
+    SisterServerError,
+)
 from sister_request_rows import SisterRequestCorrelation
 
 
@@ -120,7 +123,7 @@ def _response(status: int, url: str, resource_type: str = "document"):
 def test_session_state_authentication_submission_and_response_tracking() -> None:
     state = SisterSessionState()
     assert not state.is_authenticated("user", "1050380")
-    state.authenticate("user", "1050380", datetime.now(timezone.utc) + timedelta(minutes=5))
+    state.authenticate("user", "1050380", datetime.now(UTC) + timedelta(minutes=5))
     assert state.is_authenticated("user", "1050380")
     assert not state.is_authenticated("other", "1050380")
 
@@ -142,6 +145,49 @@ def test_session_state_authentication_submission_and_response_tracking() -> None
     state.track_response(_response(503, "https://agenziaentrate.gov.it/down", "xhr"), "https://requests")
     assert state.pop_server_error() == (503, "https://agenziaentrate.gov.it/down")
     assert state.pop_server_error() is None
+
+
+def test_submission_identity_is_updated_without_callback_and_after_empty_notification() -> None:
+    state = SisterSessionState(correlation=SisterRequestCorrelation("local", frozenset(), (), None))
+    state.mark_submitted("NO-CAPTCHA", "https://requests")
+    assert state.correlation.remote_id == "NO-CAPTCHA"
+    state.correlation = SisterRequestCorrelation("other", frozenset(), (), None)
+    calls = []
+    state.begin_submission(lambda *args: calls.append(args))
+    state.mark_submitted(None, "https://requests")
+    assert state.submission_callback is not None
+    state.mark_submitted("LATE-ID", "https://requests")
+    assert state.correlation.remote_id == "LATE-ID"
+    assert [call[0] for call in calls] == [None, "LATE-ID"]
+    assert state.submission_callback is None
+    state.mark_submitted(None, "https://requests")
+    assert state.correlation.remote_id == "LATE-ID"
+
+
+def test_submission_callback_can_run_without_correlation() -> None:
+    state = SisterSessionState()
+    calls = []
+    state.begin_submission(lambda *args: calls.append(args))
+    state.mark_submitted("ID", "https://requests")
+    assert calls == [("ID", "https://requests", "submitted")]
+
+
+def test_late_response_and_conflicting_identity_cannot_replace_current_request() -> None:
+    state = SisterSessionState(correlation=SisterRequestCorrelation("local", frozenset(), (), "ORIGINAL"))
+    state.track_response(_response(200, "https://sister3.agenziaentrate.gov.it/Visure/CheckRichiesta.do?idRichiesta=LATE"), "https://requests")
+    assert state.correlation.remote_id == "ORIGINAL"
+    state.mark_submitted("ORIGINAL", "https://requests")
+    with pytest.raises(SisterRequestCorrelationError, match="diverso"):
+        state.mark_submitted("OTHER", "https://requests")
+    assert state.correlation.remote_id == "ORIGINAL"
+
+
+def test_init_portale_error_cannot_be_ignored_off_home_or_with_unreadable_page() -> None:
+    endpoint = "https://sister3.agenziaentrate.gov.it/portale-rest/rs/initPortale"
+    assert not asyncio.run(_is_non_blocking_init_portale_error(_Page(), 501, endpoint))
+    assert not asyncio.run(_is_non_blocking_init_portale_error(
+        _Page(url="https://sister3.agenziaentrate.gov.it/Servizi/"), 501, endpoint,
+    ))
 
 
 def test_session_state_ignores_irrelevant_and_malformed_responses() -> None:

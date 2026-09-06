@@ -22,9 +22,12 @@ La UI mostra separatamente l'avanzamento delle due fasi e consente di modificare
 - `catasto_perpetual_sync_items` conserva scope, chiave deduplicata, priorita, prossimo aggiornamento, tentativi, batch/richiesta collegati ed errore.
 - Le fasi a ruolo sono elaborate in ordine rigido nella stessa campagna: prima `ruolo_particella`, poi `ruolo_soggetto`. Gli scope secondari restano successivi e distinti.
 - Un'esecuzione tecnica `perpetual_sync` già `pending` o `processing` impedisce di crearne un'altra.
+- Se il batch processing contiene soltanto recuperi remoti pending con retry futuro, il planner puo aggiungere richieste nuove allo stesso batch fino a `min(max(batch_size, 1), 100)` richieste aperte complessive. Il cap include i recuperi, non i terminali. Nessun nuovo batch viene creato e gli ID delle richieste originali non cambiano.
+- Il refill richiede ID, URL, credenziale, stato remoto e primo invio certi, deadline di 24 ore valida e assenza di execution token. Claim in corso, CAPTCHA, retry gia dovuto, record bloccato da un'altra transazione o batch concluso impediscono il refill. Se il limite e raggiunto, la coda resta in attesa: non e un bypass illimitato dell'arretrato.
+- I recuperi originali conservano row_index precedente e precedenza quando diventano dovuti; nuovi item mantengono scope, filtri di sorgente, ownership e protezioni anti-duplicazione. Il worker continua a verificare allowlist, calendario e lease prima dell'esecuzione.
 - Il lock advisory PostgreSQL per utente rende single-flight scheduler, refresh manuale e `run-now`.
 - `completed` e `not_found` sono terminali e tornano in coda soltanto se la sorgente cambia; `skipped` è terminale.
-- Gli errori tecnici usano backoff e massimo tre tentativi complessivi nel worker. Dopo il terzo tentativo l'item resta `failed` fino al retry manuale della campagna.
+- I nuovi invii conservano il budget di tre tentativi; i recuperi di richieste gia inviate non consumano tale budget e hanno deadline persistita di 24 ore dal primo invio. Primo invio sconosciuto o deadline esaurita richiedono revisione manuale, non un nuovo submit.
 
 ## Pool SISTER
 
@@ -45,11 +48,32 @@ Per le ricerche immobiliari, il flusso batch esistente per comune, foglio e part
 - `GET /elaborazioni/ruolo-autosync/campaigns/{scope}/items`: elenco completo owner-scoped della campagna richiesta, paginato con `limit`/`offset`, `total` e `has_more`.
 - `POST /elaborazioni/ruolo-autosync/refresh-source`: full refresh manuale; usa le quattro sorgenti quando e configurata l'allowlist continua.
 - `POST /elaborazioni/ruolo-autosync/run-now`: riconcilia e tenta l'avvio della prossima porzione della campagna attiva.
-- `POST /elaborazioni/ruolo-autosync/campaigns/{scope}/retry-failed`: rimette in coda soltanto gli item `failed` della campagna a ruolo richiesta e azzera il contatore dei tentativi manualmente riaperti.
+- `POST /elaborazioni/ruolo-autosync/campaigns/{scope}/retry-failed`: preflight atomico degli item failed; evidenze di un precedente invio impediscono la sostituzione della richiesta originale. Lo storico dei tentativi resta conservato; non e un reset indiscriminato dell'arretrato.
 
 La UI carica progressivamente le due liste con **Carica altri**. Il campione `perpetual_recent_items` resta un dato di osservabilita e non viene presentato come elenco completo della campagna.
 
 Per diagnosi verificare `last_source_refresh_at`, `last_planner_at`, `last_batch_started_at`, `last_error_message`, i conteggi `scope_counts` e l'esecuzione `perpetual_sync` più recente. Un `run-now` senza nuova esecuzione non è un errore: può indicare assenza di item dovuti, pool fuori orario/occupato o attività già in corso.
+
+Il refill aggiorna `last_planner_at` e `total_items` dello stesso batch, non
+`last_batch_started_at`. Il totale del batch puo quindi crescere mentre viene
+elaborato. I report finali comprendono anche le righe aggiunte; non interpretare
+un batch invariato come prova che il planner non stia caricando lavoro.
+
+### Diagnostica recupero SISTER
+
+La directory artifact della richiesta include `search-<categoria>-<giorno>.json`
+con categoria, giorno, numero righe DOM e presenza del matching esatto. Per
+Intero periodo e per un match positivo vengono salvati anche HTML e screenshot.
+I nomi stabili sovrascrivono il poll precedente, evitando crescita per tentativo;
+la retention resta quella degli artifact della richiesta. HTML e immagini
+contengono dati personali e devono usare gli accessi protetti gia previsti.
+Un errore di acquisizione diagnostica non interrompe il recupero.
+
+I contatori globali del portale non autorizzano associazioni per somiglianza,
+download estranei, cancellazioni o reinvii. Dopo il polling la home autenticata
+viene ripristinata sulla stessa pagina; poi il flusso rivalida area visure e
+convenzione. Le risposte tardive senza submission attiva non aggiornano la
+correlazione; un ID diverso da quello noto viene rifiutato.
 
 ### Dashboard operativa AutoSync
 
@@ -76,6 +100,13 @@ Il throughput usa le richieste completate nel periodo divise per l'intervallo re
   `20260901_1100`, che aggiunge i profili credenziale dedicati ad AutoSync.
 - Eseguire il round-trip della migrazione su PostgreSQL impostando `GAIA_TEST_POSTGRES_URL`; il test SQLite valida il contratto di base ma non sostituisce la prova sul database di produzione.
 - Eseguire il quality ratchet contro il merge-base prima dell'integrazione.
+- Per le correzioni dello stallo del 6 settembre, eseguire anche
+  `test_sister_autosync_refill.py`, `test_sister_autosync_refill_postgres.py`
+  e le regressioni browser/reliability/navigation. Servono test PostgreSQL reali:
+  SQLite non dimostra `FOR UPDATE SKIP LOCKED`.
+- Dopo il deploy verificare refill effettivo, priorita del recupero originale e
+  un PDF nuovo con firma `%PDF-`, dimensione e hash coerenti. Container healthy
+  o pagine HTTP200 da soli non dimostrano il download.
 
 ## Rollback
 

@@ -1,20 +1,26 @@
 from __future__ import annotations
 
 import contextlib
-from dataclasses import dataclass
-from datetime import datetime, timezone
 import logging
 import os
-from pathlib import Path
 import re
-from typing import Callable
-from urllib.parse import urlparse
 import uuid
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import urlparse
 
-from sister_exceptions import DocumentNotYetProducedError, SisterInvalidDocumentError, SisterServerError
+from sister_exceptions import (
+    DocumentNotYetProducedError,
+    SisterInvalidDocumentError,
+    SisterRequestCorrelationError,
+    SisterServerError,
+)
 from sister_request_rows import SisterRequestCorrelation, extract_remote_id
 
 logger = logging.getLogger(__name__)
+UTC = timezone.utc  # noqa: UP017 - Production worker uses Python 3.10.
 
 RemoteStateCallback = Callable[[str | None, str | None, str], None]
 
@@ -33,7 +39,7 @@ class SisterSessionState:
             self.username == username
             and self.convention_id == convention_id
             and self.authenticated_until is not None
-            and datetime.now(timezone.utc) < self.authenticated_until
+            and datetime.now(UTC) < self.authenticated_until
         )
 
     def authenticate(self, username: str, convention_id: str, authenticated_until: datetime) -> None:
@@ -48,13 +54,17 @@ class SisterSessionState:
         self.submission_callback = None
 
     def mark_submitted(self, remote_id: str | None, requests_url: str) -> None:
+        if self.correlation is not None:
+            known_id = self.correlation.remote_id
+            if remote_id and known_id and remote_id != known_id:
+                raise SisterRequestCorrelationError("ID remoto SISTER diverso dalla richiesta corrente")
+            self.correlation = self.correlation.with_remote_id(remote_id)
         callback = self.submission_callback
         if callback is None:
             return
-        if self.correlation is not None:
-            self.correlation = self.correlation.with_remote_id(remote_id)
         callback(remote_id, requests_url, "submitted")
-        self.submission_callback = None
+        if remote_id:
+            self.submission_callback = None
 
     def track_response(self, response, requests_url: str) -> None:
         try:
@@ -69,7 +79,12 @@ class SisterSessionState:
         is_sister = hostname == "agenziaentrate.gov.it" or hostname.endswith(".agenziaentrate.gov.it")
         if is_sister and 500 <= status <= 599 and resource_type in {"document", "xhr", "fetch"}:
             self.pending_server_error = (status, url)
-        if is_sister and "CHECKRICHIESTA.DO" in url.upper():
+        if is_sister:
+            self.observe_submission_response(url, requests_url)
+
+    def observe_submission_response(self, url: str, requests_url: str) -> None:
+        # Unarmed responses can belong to a previous request on this reused page.
+        if self.submission_callback is not None and "CHECKRICHIESTA.DO" in url.upper():
             self.mark_submitted(extract_remote_id((url,)), requests_url)
 
     def pop_server_error(self) -> tuple[int, str] | None:
