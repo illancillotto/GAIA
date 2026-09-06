@@ -311,6 +311,23 @@ Patch locale stretta, senza modificare submission, ownership o deadline:
   resta distinto dai test e dallo style mirati.
 - Graphify worker aggiornato dal target dedicato: 1588 nodi, 3698 archi.
 
+#### Variante finale del riconoscimento informativa
+
+Il primo follow-up `54183191` e stato committato e costruito, ma **non
+distribuito**: il ratchet ha evidenziato nuove regressioni nel metodo di
+riconoscimento. Sostituita quindi l'euristica URL/testo con un solo locator dei
+controlli reali `Conferma Lettura` (input, button o link). Nessun click generico
+su altri pulsanti Conferma. L'assenza del controllo non dichiara pronta l'area:
+i controlli di login/convenzione/form del chiamante restano invariati.
+
+Tre ulteriori test Chrome verificano i controlli reali e la mancata selezione
+di una conferma estranea. Suite finale: 150 passed, 1111 statement/332 branch,
+100%. Style gate passa sui quattro file della slice. Adeguati soltanto import,
+bootstrap del path e literal regex del test legacy toccato per superare Ruff.
+BrowserSession LOC finale 1221 (prima del follow-up 1231); nessun nuovo finding
+del ratchet sul metodo informativa, baseline invariata. Il gate globale resta
+rosso per finding anteriori, inclusi i form e il file BrowserSession legacy.
+
 Rollback selettivo, dopo rilascio delle richieste attive:
 
 ```sh

@@ -48,3 +48,33 @@ def test_reused_menu_does_not_toggle_closed_and_skips_already_accepted_notice(ex
                 await browser.close()
 
     asyncio.run(scenario())
+
+
+@pytest.mark.parametrize(
+    "control",
+    [
+        '<input type="submit" value="Conferma Lettura">',
+        "<button>Conferma Lettura</button>",
+        '<a href="#accepted">Conferma Lettura</a>',
+    ],
+)
+def test_notice_requires_real_confirmation_control(control):
+    async def scenario():
+        async with async_playwright() as playwright:
+            browser = await playwright.chromium.launch(
+                executable_path=shutil.which("google-chrome"), headless=True
+            )
+            try:
+                page = await browser.new_page()
+                await page.set_content(
+                    "<button onclick=\"throw Error('unrelated')\">Conferma</button>"
+                    + '<div id="notice" onclick="this.dataset.accepted=\'yes\'">'
+                    + control
+                    + "</div>"
+                )
+                await make_session(page)._confirm_visura_informativa_if_present()
+                assert await page.locator("#notice").get_attribute("data-accepted") == "yes"
+            finally:
+                await browser.close()
+
+    asyncio.run(scenario())

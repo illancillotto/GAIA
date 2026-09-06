@@ -1,13 +1,9 @@
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pytest
 
-
-WORKER_ROOT = Path(__file__).resolve().parents[1]
-
-if str(WORKER_ROOT) not in sys.path:
-    sys.path.insert(0, str(WORKER_ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from browser_session import BrowserSession
 from sister_browser_reliability import SisterSessionState
@@ -184,7 +180,7 @@ def test_visura_informativa_uses_input_submit_selector() -> None:
         url="https://sister3.agenziaentrate.gov.it/Visure/Informativa.do",
         body="Informativa del servizio Visure catastali Conferma Lettura",
     )
-    input_selector = "input[type='submit'][value='Conferma Lettura']"
+    input_selector = "input[value='Conferma Lettura'], button:has-text('Conferma Lettura'), a:has-text('Conferma Lettura')"
     page.locators[input_selector] = FakeLocator()
     session._page = page
     session.config = type("Config", (), {"debug_artifacts_path": None})()
@@ -200,6 +196,7 @@ def test_visura_informativa_uses_input_submit_selector() -> None:
 
 def test_recover_locked_session_prefers_chiudi_close_sessions_link(monkeypatch: pytest.MonkeyPatch) -> None:
     import asyncio
+
     import browser_session as browser_session_module
 
     session = BrowserSession.__new__(BrowserSession)
@@ -233,6 +230,7 @@ def test_recover_locked_session_prefers_chiudi_close_sessions_link(monkeypatch: 
 
 def test_recover_locked_session_falls_back_to_close_sessions_url(monkeypatch: pytest.MonkeyPatch) -> None:
     import asyncio
+
     import browser_session as browser_session_module
 
     session = BrowserSession.__new__(BrowserSession)
@@ -261,6 +259,7 @@ def test_recover_locked_session_falls_back_to_close_sessions_url(monkeypatch: py
 
 def test_recover_locked_session_does_not_click_header_esci(monkeypatch: pytest.MonkeyPatch) -> None:
     import asyncio
+
     import browser_session as browser_session_module
 
     session = BrowserSession.__new__(BrowserSession)
@@ -361,6 +360,7 @@ def test_connection_fails_when_final_logout_fails() -> None:
 
 def test_prepare_captcha_or_download_clicks_inoltra_before_captcha(monkeypatch: pytest.MonkeyPatch) -> None:
     import asyncio
+
     import browser_session as browser_session_module
 
     session = BrowserSession.__new__(BrowserSession)
@@ -420,6 +420,7 @@ def test_prepare_captcha_or_download_returns_download_without_click() -> None:
 
 def test_fill_visura_form_accepts_immediate_captcha_without_tipo_visura(monkeypatch: pytest.MonkeyPatch) -> None:
     import asyncio
+
     import browser_session as browser_session_module
 
     session = BrowserSession.__new__(BrowserSession)
@@ -476,6 +477,7 @@ def test_fill_visura_form_accepts_immediate_captcha_without_tipo_visura(monkeypa
 
 def test_fill_visura_form_raises_classified_error_when_submit_does_not_advance(monkeypatch: pytest.MonkeyPatch) -> None:
     import asyncio
+
     import browser_session as browser_session_module
 
     session = BrowserSession.__new__(BrowserSession)
@@ -650,7 +652,7 @@ def test_begin_correlation_fails_closed_when_baseline_snapshot_is_unavailable() 
 
     import asyncio
 
-    with pytest.raises(SisterRequestCorrelationError, match="baseline SISTER.*LOCAL-4"):
+    with pytest.raises(SisterRequestCorrelationError, match=r"baseline SISTER.*LOCAL-4"):
         asyncio.run(session.begin_request_correlation(request))
 
 
@@ -713,6 +715,7 @@ def test_convention_selection_fails_closed_for_wrong_label() -> None:
 
 def test_polling_downloads_only_the_correlated_ready_row(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     import asyncio
+
     import browser_session as browser_session_module
 
     session = BrowserSession.__new__(BrowserSession)
@@ -735,6 +738,7 @@ def test_polling_ignores_global_ready_count_without_correlated_row(
     tmp_path: Path,
 ) -> None:
     import asyncio
+
     import browser_session as browser_session_module
 
     session = BrowserSession.__new__(BrowserSession)

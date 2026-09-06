@@ -1022,29 +1022,15 @@ class BrowserSession:
 
     async def _confirm_visura_informativa_if_present(self) -> None:
         page = self.page
-        body_text = ""
-        with contextlib.suppress(Exception):
-            body_text = await page.locator("body").inner_text(timeout=2000)
-
-        if self.selectors.conferma_lettura_button_name not in body_text and (
-            "Informativa.do" not in page.url or await page.locator(self.selectors.territorio_selector).count() > 0
-        ):
+        name = self.selectors.conferma_lettura_button_name
+        confirmation = page.locator(
+            f"input[value='{name}'], button:has-text('{name}'), a:has-text('{name}')"
+        ).first
+        if await confirmation.count() == 0:
             return
-
-        logger.info("Informativa visure rilevata, click su '%s'", self.selectors.conferma_lettura_button_name)
+        logger.info("Informativa visure rilevata, click su '%s'", name)
         await self._trace_state("visura-informativa-detected")
-        await self._click_first_visible(
-            [
-                f"input[type='submit'][value='{self.selectors.conferma_lettura_button_name}']",
-                f"input[type='button'][value='{self.selectors.conferma_lettura_button_name}']",
-                f"input[value='{self.selectors.conferma_lettura_button_name}']",
-                f"button:has-text('{self.selectors.conferma_lettura_button_name}')",
-                f"a:has-text('{self.selectors.conferma_lettura_button_name}')",
-                f"text={self.selectors.conferma_lettura_button_name}",
-                "input[type='submit'][value*='Conferma']",
-                "button:has-text('Conferma')",
-            ]
-        )
+        await confirmation.click(timeout=15000)
         await page.wait_for_load_state("domcontentloaded")
         await self._trace_state("visura-informativa-confirmed")
 
