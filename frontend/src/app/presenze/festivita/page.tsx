@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -29,6 +29,11 @@ const EMPTY_FORM: HolidayFormState = {
   holidayKind: "ordinary",
 };
 
+const HOLIDAY_EDITOR_COPY =
+  "Usa il bootstrap per caricare il calendario base dell'anno e aggiungi eccezioni globali o per `company_code`.";
+const HOLIDAY_EDITOR_EDIT_COPY =
+  "I campi sotto sono compilati dalla voce selezionata. Salva o annulla per uscire dalla modifica.";
+
 function currentYearValue(): string {
   return String(new Date().getFullYear());
 }
@@ -48,7 +53,122 @@ function holidayKindLabel(value: PresenzeHoliday["holiday_kind"]): string {
   return "Festivita ordinaria";
 }
 
+function holidayFormFromItem(item: PresenzeHoliday): HolidayFormState {
+  return {
+    holidayDate: item.holiday_date.slice(0, 10),
+    label: item.label,
+    companyCode: item.company_code ?? "",
+    holidayKind: item.holiday_kind,
+  };
+}
+
+function holidayEditorTitle(isEditing: boolean): string {
+  return isEditing ? "Modifica festivita" : "Calendario festivita";
+}
+
+function holidayEditorCopy(isEditing: boolean): string {
+  return isEditing ? HOLIDAY_EDITOR_EDIT_COPY : HOLIDAY_EDITOR_COPY;
+}
+
+function holidayCardClassName(baseClassName: string, isEditing: boolean): string {
+  return isEditing ? `${baseClassName} ring-2 ring-[#1D4E35] ring-offset-2` : baseClassName;
+}
+
+function holidayEntryMeta(item: PresenzeHoliday, suffix?: string): string {
+  const base = `${formatHolidayScope(item)} · ${holidayKindLabel(item.holiday_kind)}`;
+  return suffix ? `${base} · ${suffix}` : base;
+}
+
+function HolidayEntryCard(props: {
+  item: PresenzeHoliday;
+  cardClassName: string;
+  metaClassName: string;
+  metaSuffix?: string;
+  isEditing: boolean;
+  deleteBusy: boolean;
+  onEdit: (item: PresenzeHoliday) => void;
+  onDelete: (holidayId: number) => void;
+}) {
+  return (
+    <div
+      className={`rounded-2xl border px-4 py-3 ${holidayCardClassName(props.cardClassName, props.isEditing)}`}
+      data-editing={props.isEditing ? "true" : undefined}
+    >
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="font-medium text-gray-900">
+            {props.item.holiday_date} · {props.item.label}
+          </p>
+          <p className={props.metaClassName}>{holidayEntryMeta(props.item, props.metaSuffix)}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-secondary" type="button" onClick={() => props.onEdit(props.item)}>
+            {props.isEditing ? "In modifica" : "Modifica"}
+          </button>
+          <button
+            className="rounded-2xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
+            type="button"
+            disabled={props.deleteBusy}
+            onClick={() => props.onDelete(props.item.id)}
+          >
+            {props.deleteBusy ? "Eliminazione..." : "Elimina"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HolidayKindColumn(props: {
+  title: string;
+  copy: string;
+  loadingLabel: string;
+  emptyTitle: string;
+  emptyDescription: string;
+  items: PresenzeHoliday[];
+  cardClassName: string;
+  metaClassName: string;
+  metaSuffix?: string;
+  editingId: number | null;
+  busyDeleteId: number | null;
+  loading: boolean;
+  onEdit: (item: PresenzeHoliday) => void;
+  onDelete: (holidayId: number) => void;
+}) {
+  return (
+    <article className="panel-card">
+      <div className="mb-4">
+        <p className="section-title">{props.title}</p>
+        <p className="section-copy">{props.copy}</p>
+      </div>
+      {props.loading ? (
+        <p className="text-sm text-gray-500">{props.loadingLabel}</p>
+      ) : props.items.length === 0 ? (
+        <EmptyState icon={CalendarIcon} title={props.emptyTitle} description={props.emptyDescription} />
+      ) : (
+        <div className="space-y-3">
+          {props.items.map((item) => (
+            <HolidayEntryCard
+              key={item.id}
+              item={item}
+              cardClassName={props.cardClassName}
+              metaClassName={props.metaClassName}
+              metaSuffix={props.metaSuffix}
+              isEditing={props.editingId === item.id}
+              deleteBusy={props.busyDeleteId === item.id}
+              onEdit={props.onEdit}
+              onDelete={props.onDelete}
+            />
+          ))}
+        </div>
+      )}
+    </article>
+  );
+}
+
 export default function PresenzeFestivitaPage() {
+  const formCardRef = useRef<HTMLElement>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
   const [year, setYear] = useState(currentYearValue());
   const [holidays, setHolidays] = useState<PresenzeHoliday[]>([]);
   const [form, setForm] = useState<HolidayFormState>(EMPTY_FORM);
@@ -80,7 +200,10 @@ export default function PresenzeFestivitaPage() {
 
   const festiveDays = useMemo(() => holidays.filter((item) => item.holiday_kind === "ordinary"), [holidays]);
   const suppressedDays = useMemo(() => holidays.filter((item) => item.holiday_kind === "suppressed"), [holidays]);
-  const workingOverrideDays = useMemo(() => holidays.filter((item) => item.holiday_kind === "working_override"), [holidays]);
+  const workingOverrideDays = useMemo(
+    () => holidays.filter((item) => item.holiday_kind === "working_override"),
+    [holidays],
+  );
 
   function resetForm() {
     setForm(EMPTY_FORM);
@@ -89,14 +212,11 @@ export default function PresenzeFestivitaPage() {
 
   function startEdit(item: PresenzeHoliday) {
     setEditingId(item.id);
-    setForm({
-      holidayDate: item.holiday_date,
-      label: item.label,
-      companyCode: item.company_code ?? "",
-      holidayKind: item.holiday_kind,
-    });
+    setForm(holidayFormFromItem(item));
     setError(null);
     setSuccess(null);
+    formCardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    dateInputRef.current?.focus();
   }
 
   async function handleSubmit() {
@@ -185,6 +305,8 @@ export default function PresenzeFestivitaPage() {
     }
   }
 
+  const isEditing = editingId != null;
+
   return (
     <ProtectedPage
       title="Festivita giornaliere"
@@ -196,11 +318,11 @@ export default function PresenzeFestivitaPage() {
         {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
         {success ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div> : null}
 
-        <article className="panel-card space-y-5">
+        <article className="panel-card scroll-mt-24 space-y-5" id="festivita-editor" ref={formCardRef}>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="section-title">Calendario festivita</p>
-              <p className="section-copy">Usa il bootstrap per caricare il calendario base dell&apos;anno e aggiungi eccezioni globali o per `company_code`.</p>
+              <p className="section-title">{holidayEditorTitle(isEditing)}</p>
+              <p className="section-copy">{holidayEditorCopy(isEditing)}</p>
             </div>
             <div className="flex flex-wrap items-end gap-3">
               <label className="block text-sm font-medium text-gray-700">
@@ -221,6 +343,7 @@ export default function PresenzeFestivitaPage() {
                 type="date"
                 value={form.holidayDate}
                 onChange={(event) => setForm((current) => ({ ...current, holidayDate: event.target.value }))}
+                ref={dateInputRef}
               />
             </label>
             <label className="block text-sm font-medium text-gray-700">
@@ -262,9 +385,9 @@ export default function PresenzeFestivitaPage() {
 
           <div className="flex flex-wrap gap-3">
             <button className="btn-primary" type="button" disabled={saving} onClick={() => void handleSubmit()}>
-              {saving ? "Salvataggio..." : editingId == null ? "Aggiungi voce" : "Salva modifica"}
+              {saving ? "Salvataggio..." : isEditing ? "Salva modifica" : "Aggiungi voce"}
             </button>
-            {editingId != null ? (
+            {isEditing ? (
               <button className="btn-secondary" type="button" onClick={resetForm}>
                 Annulla modifica
               </button>
@@ -273,133 +396,52 @@ export default function PresenzeFestivitaPage() {
         </article>
 
         <div className="grid gap-6 xl:grid-cols-3">
-          <article className="panel-card">
-            <div className="mb-4">
-              <p className="section-title">Giornate festive</p>
-              <p className="section-copy">Date considerate non lavorative per calcolo e classificazione giornaliere.</p>
-            </div>
-            {loading ? (
-              <p className="text-sm text-gray-500">Caricamento festivita...</p>
-            ) : festiveDays.length === 0 ? (
-              <EmptyState icon={CalendarIcon} title="Nessuna festivita configurata" description="Esegui il bootstrap dell'anno oppure inserisci una nuova giornata festiva." />
-            ) : (
-              <div className="space-y-3">
-                {festiveDays.map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {item.holiday_date} · {item.label}
-                        </p>
-                        <p className="text-xs text-gray-500">{formatHolidayScope(item)} · {holidayKindLabel(item.holiday_kind)}</p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button className="btn-secondary" type="button" onClick={() => startEdit(item)}>
-                          Modifica
-                        </button>
-                        <button
-                          className="rounded-2xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
-                          type="button"
-                          disabled={busyDeleteId === item.id}
-                          onClick={() => void handleDelete(item.id)}
-                        >
-                          {busyDeleteId === item.id ? "Eliminazione..." : "Elimina"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </article>
-
-          <article className="panel-card">
-            <div className="mb-4">
-              <p className="section-title">Festivita soppresse</p>
-              <p className="section-copy">Giornate che restano lavorative ma maturano diritto al recupero.</p>
-            </div>
-            {loading ? (
-              <p className="text-sm text-gray-500">Caricamento eccezioni...</p>
-            ) : suppressedDays.length === 0 ? (
-              <EmptyState
-                icon={CalendarIcon}
-                title="Nessuna festivita soppressa"
-                description="Aggiungi qui le festivita che restano lavorative ma danno diritto a un giorno di recupero."
-              />
-            ) : (
-              <div className="space-y-3">
-                {suppressedDays.map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-amber-100 bg-amber-50/70 px-4 py-3">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {item.holiday_date} · {item.label}
-                        </p>
-                        <p className="text-xs text-amber-700">{formatHolidayScope(item)} · {holidayKindLabel(item.holiday_kind)} · diritto a recupero</p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button className="btn-secondary" type="button" onClick={() => startEdit(item)}>
-                          Modifica
-                        </button>
-                        <button
-                          className="rounded-2xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
-                          type="button"
-                          disabled={busyDeleteId === item.id}
-                          onClick={() => void handleDelete(item.id)}
-                        >
-                          {busyDeleteId === item.id ? "Eliminazione..." : "Elimina"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </article>
-
-          <article className="panel-card">
-            <div className="mb-4">
-              <p className="section-title">Override lavorativi</p>
-              <p className="section-copy">Date che non devono essere trattate come festive, senza semantica di festivita soppressa.</p>
-            </div>
-            {loading ? (
-              <p className="text-sm text-gray-500">Caricamento override...</p>
-            ) : workingOverrideDays.length === 0 ? (
-              <EmptyState
-                icon={CalendarIcon}
-                title="Nessun override lavorativo"
-                description="Usa questa categoria solo per eccezioni lavorative che non devono generare straordinario festivo o recupero da festivita soppressa."
-              />
-            ) : (
-              <div className="space-y-3">
-                {workingOverrideDays.map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {item.holiday_date} · {item.label}
-                        </p>
-                        <p className="text-xs text-slate-600">{formatHolidayScope(item)} · {holidayKindLabel(item.holiday_kind)}</p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button className="btn-secondary" type="button" onClick={() => startEdit(item)}>
-                          Modifica
-                        </button>
-                        <button
-                          className="rounded-2xl border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50"
-                          type="button"
-                          disabled={busyDeleteId === item.id}
-                          onClick={() => void handleDelete(item.id)}
-                        >
-                          {busyDeleteId === item.id ? "Eliminazione..." : "Elimina"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </article>
+          <HolidayKindColumn
+            title="Giornate festive"
+            copy="Date considerate non lavorative per calcolo e classificazione giornaliere."
+            loadingLabel="Caricamento festivita..."
+            emptyTitle="Nessuna festivita configurata"
+            emptyDescription="Esegui il bootstrap dell'anno oppure inserisci una nuova giornata festiva."
+            items={festiveDays}
+            cardClassName="border-gray-100 bg-gray-50"
+            metaClassName="text-xs text-gray-500"
+            editingId={editingId}
+            busyDeleteId={busyDeleteId}
+            loading={loading}
+            onEdit={startEdit}
+            onDelete={handleDelete}
+          />
+          <HolidayKindColumn
+            title="Festivita soppresse"
+            copy="Giornate che restano lavorative ma maturano diritto al recupero."
+            loadingLabel="Caricamento eccezioni..."
+            emptyTitle="Nessuna festivita soppressa"
+            emptyDescription="Aggiungi qui le festivita che restano lavorative ma danno diritto a un giorno di recupero."
+            items={suppressedDays}
+            cardClassName="border-amber-100 bg-amber-50/70"
+            metaClassName="text-xs text-amber-700"
+            metaSuffix="diritto a recupero"
+            editingId={editingId}
+            busyDeleteId={busyDeleteId}
+            loading={loading}
+            onEdit={startEdit}
+            onDelete={handleDelete}
+          />
+          <HolidayKindColumn
+            title="Override lavorativi"
+            copy="Date che non devono essere trattate come festive, senza semantica di festivita soppressa."
+            loadingLabel="Caricamento override..."
+            emptyTitle="Nessun override lavorativo"
+            emptyDescription="Usa questa categoria solo per eccezioni lavorative che non devono generare straordinario festivo o recupero da festivita soppressa."
+            items={workingOverrideDays}
+            cardClassName="border-slate-200 bg-slate-50"
+            metaClassName="text-xs text-slate-600"
+            editingId={editingId}
+            busyDeleteId={busyDeleteId}
+            loading={loading}
+            onEdit={startEdit}
+            onDelete={handleDelete}
+          />
         </div>
       </div>
     </ProtectedPage>
