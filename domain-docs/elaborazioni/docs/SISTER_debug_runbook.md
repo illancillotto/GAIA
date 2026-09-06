@@ -79,10 +79,33 @@ Configurazione in `.env` (caricato dai worker Compose):
 | `CAPTCHA_CODEX_LB_MODEL` | `gpt-5.4-mini` |
 | `CAPTCHA_CODEX_LB_TIMEOUT_SECONDS` | `45`, limite totale della chiamata HTTP |
 
-Nei container usare `http://host.docker.internal:2455/v1` per raggiungere il
-servizio sul PC. I worker visure, runtime, poste e autodoc hanno il mapping
-`host-gateway`. Per applicare codice e configurazione ricostruire e ricreare i
-worker interessati in una finestra compatibile con le elaborazioni in corso.
+Nei container `host.docker.internal` (mapping `host-gateway` presente su
+visure, runtime, poste e autodoc) risolve all'host Docker locale, cioe alla
+macchina su cui gira il container. In locale coincide con il PC che esegue
+anche `codex-lb`, quindi `http://host.docker.internal:2455/v1` funziona. Sul
+server di produzione CED questo NON e vero: `codex-lb` gira solo sul PC
+dell'operatore (`192.168.1.83`), non sul server CED (`192.168.1.110`), quindi
+`host.docker.internal` la punta a un host senza nulla in ascolto sulla 2455 e
+il fallback fallisce con `ConnectError` silenzioso (loggato come warning, il
+solver passa a manuale). In produzione CED `CODEX_LB_URL` in `.env` e
+`.env.production` deve puntare esplicitamente all'IP LAN del PC operatore
+(`http://192.168.1.83:2455/v1`, verificato raggiungibile via `curl` dal
+container con risposta 401/200 a seconda dell'auth). Verifica del 6 settembre
+2026: con questo URL il fallback `_run_codex_lb` chiamato dal container
+`gaia-elaborazioni-worker-visure` ha trascritto correttamente un CAPTCHA reale.
+
+Limite noto: questa configurazione rende il fallback CAPTCHA in produzione
+dipendente dal PC dell'operatore acceso e raggiungibile in LAN, con
+`codex-lb` in esecuzione e IP stabile. Se il PC si spegne, cambia rete o
+ottiene un nuovo IP da DHCP, il fallback smette di funzionare senza preavviso
+finche non si aggiorna di nuovo `CODEX_LB_URL`. Per una soluzione duratura
+andrebbe installato ed eseguito `codex-lb` direttamente sul server CED, come
+gia avviene per la CLI `agent` (installata localmente in `/home/ced`).
+
+Per applicare codice e configurazione ricostruire e ricreare i worker
+interessati in una finestra compatibile con le elaborazioni in corso; un
+cambio del solo `CODEX_LB_URL` richiede invece solo `docker compose up -d
+--force-recreate` sui worker interessati, senza rebuild.
 
 Il fallback effettua un solo tentativo per chiamata al solver; non modifica il
 numero di tentativi LLM, il servizio CAPTCHA esterno o il flusso manuale. Se
