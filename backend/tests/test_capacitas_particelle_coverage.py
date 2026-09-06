@@ -100,6 +100,20 @@ def test_stale_and_recovery_empty_paths() -> None:
     assert "old" in stale.error_detail
     assert stale.result_json["current_label"] is None
 
+    stale_without_dict_result = _job("processing", result_json=[])
+    service._mark_stale_particelle_job(
+        stale_without_dict_result,
+        completed_at=datetime.now(UTC),
+        detail="stale",
+    )
+    assert stale_without_dict_result.result_json == []
+
+    incompatible = _job("pending", mode="unsupported", payload_json={"auto_resume": False})
+    db.reset_mock()
+    db.scalars.return_value.all.return_value = [incompatible]
+    assert service.prepare_particelle_sync_jobs_for_recovery(db) == []
+    db.commit.assert_not_called()
+
 
 def test_result_and_comune_helpers_cover_edges() -> None:
     result: dict[str, object] = {"recent_items": "invalid"}
@@ -191,6 +205,33 @@ async def test_sync_item_exception_after_deleted_parcel(monkeypatch: pytest.Monk
     )
 
     assert result["status"] == "failed"
+    db.rollback.assert_called_once()
+
+
+@pytest.mark.anyio
+async def test_sync_item_ambiguous_frazione_after_deleted_parcel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = MagicMock()
+    db.get.side_effect = [SimpleNamespace(), None]
+    error = service.CapacitasFrazioneAmbiguaError("ambigua", candidates=[])
+    monkeypatch.setattr(service, "sync_terreni_batch", AsyncMock(side_effect=error))
+
+    result = await service._sync_particella_item(
+        db,
+        SimpleNamespace(),
+        job_id=1,
+        credential_id=7,
+        payload=CapacitasParticelleSyncJobCreateRequest(),
+        item=_item(),
+    )
+
+    assert result == {
+        "particella_id": str(result["particella_id"]),
+        "label": "Uras 1/2",
+        "status": "anomalia",
+        "message": "ambigua",
+    }
     db.rollback.assert_called_once()
 
 
@@ -360,6 +401,34 @@ async def test_run_job_cancelled_before_sequential_item(monkeypatch: pytest.Monk
     monkeypatch.setattr(service, "_build_sync_items", build_items)
     result = await service.run_particelle_sync_job(db, SimpleNamespace(), job)
     assert result.status == "cancelled"
+
+
+@pytest.mark.anyio
+async def test_run_job_uses_default_throttle_if_live_job_disappears(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    job = _job(result_json={})
+    db = MagicMock()
+    db.get.side_effect = [None, job]
+    monkeypatch.setattr(
+        service,
+        "_select_particelle_for_job",
+        lambda *_args, **_kwargs: [SimpleNamespace(), SimpleNamespace()],
+    )
+    monkeypatch.setattr(service, "_build_sync_items", lambda *_args: [_item(), _item()])
+    monkeypatch.setattr(
+        service,
+        "_sync_particella_item",
+        AsyncMock(return_value={"status": "synced", "label": "Uras 1/2"}),
+    )
+    monkeypatch.setattr(service, "_apply_item_progress", lambda *_args, **_kwargs: job)
+    sleep = AsyncMock()
+    monkeypatch.setattr(service.asyncio, "sleep", sleep)
+
+    result = await service.run_particelle_sync_job(db, SimpleNamespace(), job)
+
+    assert result.status == "succeeded"
+    sleep.assert_awaited_once_with(service.compute_sync_policy().throttle_ms / 1000)
 
 
 @pytest.mark.anyio

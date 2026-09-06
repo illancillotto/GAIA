@@ -98,7 +98,7 @@ def create_particelle_sync_job(
 
 
 def list_particelle_sync_jobs(db: Session) -> list[CapacitasParticelleSyncJob]:
-    return list(db.scalars(select(CapacitasParticelleSyncJob).order_by(CapacitasParticelleSyncJob.id.desc())).all())
+    return list(db.scalars(select(CapacitasParticelleSyncJob).where(CapacitasParticelleSyncJob.id.in_(select(CapacitasParticelleSyncJob.id).order_by(CapacitasParticelleSyncJob.id.desc()).limit(50)) | CapacitasParticelleSyncJob.status.in_(("pending", "processing", "queued_resume", "cancelling"))).order_by(CapacitasParticelleSyncJob.id.desc())).all())
 
 
 def get_particelle_sync_job(db: Session, job_id: int) -> CapacitasParticelleSyncJob | None:
@@ -731,8 +731,7 @@ async def run_particelle_sync_job(
                 if job_now is not None and isinstance(job_now.result_json, dict):
                     effective_throttle = int(job_now.result_json.get("throttle_ms", policy.throttle_ms))
                 effective_throttle = max(MIN_THROTTLE_MS, effective_throttle)
-                if effective_throttle > 0:
-                    await asyncio.sleep(effective_throttle / 1000)
+                await asyncio.sleep(effective_throttle / 1000)
 
         job = db.get(CapacitasParticelleSyncJob, job.id)
         assert job is not None

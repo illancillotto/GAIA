@@ -329,6 +329,7 @@ Flusso applicativo aggiunto nel workspace `Elaborazioni / Capacitas`:
   - `capacitas_last_sync_error`
   - `capacitas_last_sync_job_id`
 - persiste il job in `capacitas_particelle_sync_jobs` con progressi incrementali in `result_json`
+- la lista `GET /involture/particelle/jobs` legge dal database al massimo i `50` job piu recenti e include comunque tutti i job ancora attivi (`pending`, `processing`, `queued_resume`, `cancelling`); il dettaglio di uno storico escluso dalla finestra resta disponibile tramite `GET /involture/particelle/jobs/{id}`
 - i job progressivi sono recoverable di default (`auto_resume=true`) e al restart backend vengono rimessi in coda come `queued_resume`
 
 Politica anti-aggressiva:
