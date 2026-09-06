@@ -124,13 +124,20 @@ async def test_runner_handles_signals_and_graceful_shutdown(
 
 def test_main_runs_async_scheduler(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[object] = []
+    logging_calls: list[None] = []
 
     def run(coroutine: object) -> None:
         calls.append(coroutine)
         coroutine.close()
 
     monkeypatch.setattr(platform_scheduler_runner.asyncio, "run", run)
+    monkeypatch.setattr(
+        platform_scheduler_runner,
+        "configure_logging",
+        lambda: logging_calls.append(None),
+    )
 
     platform_scheduler_runner.main()
 
     assert len(calls) == 1
+    assert len(logging_calls) == 1

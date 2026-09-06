@@ -6,6 +6,7 @@ import signal
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.core.database import get_db
+from app.core.logging import configure_logging
 from app.modules.catasto.ade_autosync_scheduler import (
     register_catasto_ade_autosync_scheduler,
 )
@@ -76,6 +77,7 @@ async def run_scheduler() -> None:
 
 
 def main() -> None:
+    configure_logging()
     asyncio.run(run_scheduler())
 
 
