@@ -26,6 +26,8 @@ function health(overrides: Partial<SisterPortalHealth> = {}): SisterPortalHealth
     totals: {
       events: 12,
       executions: 4,
+      operating_credentials: 2,
+      average_executions_per_credential: 2,
       successes: 3,
       errors: 2,
       retries: 1,
@@ -192,6 +194,10 @@ describe("SisterPortalHealthWorkspace", () => {
     expect(screen.getByText("Portale lento")).toBeInTheDocument();
     expect(screen.getAllByText("Profilo A")).toHaveLength(2);
     expect(screen.getByText("Visure scaricate")).toBeInTheDocument();
+    expect(screen.getByText("Credenziali attive")).toBeInTheDocument();
+    expect(screen.getByText("Media operazioni")).toBeInTheDocument();
+    expect(screen.getByText("con esecuzioni nella finestra")).toBeInTheDocument();
+    expect(screen.getByText("per credenziale attiva")).toBeInTheDocument();
     expect(screen.getByText((_, element) => element?.textContent === "4visure")).toBeInTheDocument();
     expect(screen.getByText("Completa 2 · Sintetica 4 · Attualità 4 · NON_CLASSIFICATA 1 · Storiche 1")).toBeInTheDocument();
     expect(screen.getByText("Non associata")).toBeInTheDocument();

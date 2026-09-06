@@ -5,6 +5,12 @@
 
 ## Scopo
 
+Audit CED del 5 settembre 2026 e correzione dei filtri ConsultazioneRichieste:
+[SISTER_RECOVERY_AUDIT_2026-09-05.md](SISTER_RECOVERY_AUDIT_2026-09-05.md).
+Il form osservato usa radio `radioCount` e il submit `Aggiorna`; il click
+sul testo della cella non applica la categoria. Per la ripresa di richieste
+di giorni precedenti va considerato il filtro `Intero periodo`.
+
 Questo documento raccoglie il comportamento reale osservato del portale SISTER durante l'automazione Catasto, le contromisure implementate nel worker e i prossimi punti da verificare.
 
 Va trattato come riferimento operativo permanente per:
@@ -113,6 +119,13 @@ La dashboard calcola stato `healthy`, `degraded`, `critical` o `unknown`, tempi
 medi/P95, errori raggruppati e alert per risposte `5xx` ripetute, tasso di
 errore elevato, P95 oltre 120 secondi e cooldown attivi. La risposta health
 include anche `downloads`, con `total`, `by_visura_type` e `by_request_type`.
+I totali includono `operating_credentials`, il numero di credenziali distinte
+con almeno un `run_id` nella finestra, e
+`average_executions_per_credential`, pari alle esecuzioni uniche attribuite
+divise per tali credenziali. Gli eventi privi di credenziale non alterano il
+denominatore. La dashboard li presenta come `Credenziali attive` e `Media
+operazioni`; entrambi seguono la finestra selezionata di 24 ore, 7 giorni o 30
+giorni.
 Il conteggio legge i documenti da `catasto_documents`, usa `created_at` per la
 finestra richiesta e applica lo scope del `current_user`; non e quindi un
 contatore globale né un'approssimazione ricavata dagli eventi. Ogni elemento

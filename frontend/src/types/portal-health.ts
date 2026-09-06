@@ -1,6 +1,8 @@
 export type SisterPortalTotals = {
   events: number;
   executions: number;
+  operating_credentials: number;
+  average_executions_per_credential: number;
   successes: number;
   errors: number;
   retries: number;

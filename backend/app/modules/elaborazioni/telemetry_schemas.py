@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 class SisterPortalTotals(BaseModel):
     events: int
     executions: int
+    operating_credentials: int
+    average_executions_per_credential: float
     successes: int
     errors: int
     retries: int

@@ -320,6 +320,17 @@ def _status(events: list[SisterPortalEvent], alerts: list[SisterPortalAlert]) ->
     return "healthy"
 
 
+def _credential_execution_totals(events: list[SisterPortalEvent]) -> tuple[int, float]:
+    executions = {
+        (event.credential_id, event.run_id)
+        for event in events
+        if event.credential_id is not None and event.run_id is not None
+    }
+    credentials = len({credential_id for credential_id, _ in executions})
+    average = round(len(executions) / credentials, 1) if credentials else 0.0
+    return credentials, average
+
+
 def get_portal_health(
     db: Session,
     *,
@@ -344,9 +355,12 @@ def get_portal_health(
     successes = sum(event.outcome in SUCCESS_OUTCOMES for event in events)
     errors = sum(event.outcome in ERROR_OUTCOMES for event in events)
     durations = [event.duration_ms for event in events if event.duration_ms is not None]
+    operating_credentials, average_executions = _credential_execution_totals(events)
     totals = SisterPortalTotals(
         events=len(events),
         executions=len({event.run_id for event in events if event.run_id is not None}),
+        operating_credentials=operating_credentials,
+        average_executions_per_credential=average_executions,
         successes=successes,
         errors=errors,
         retries=sum(event.event_type == "retry" for event in events),

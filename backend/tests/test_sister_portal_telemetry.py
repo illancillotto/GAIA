@@ -196,6 +196,8 @@ def test_portal_health_aggregates_metrics_alerts_and_user_scope() -> None:
 
     assert result.status == "critical"
     assert result.totals.events == 7
+    assert result.totals.operating_credentials == 2
+    assert result.totals.average_executions_per_credential == 1.5
     assert result.totals.successes == 2
     assert result.totals.errors == 3
     assert result.totals.retries == 1
@@ -246,6 +248,8 @@ def test_portal_health_covers_unknown_healthy_and_degraded_states() -> None:
 
     empty = get_portal_health(db, user_id=user.id, window_hours=24, now=now)
     assert empty.status == "unknown"
+    assert empty.totals.operating_credentials == 0
+    assert empty.totals.average_executions_per_credential == 0
     assert empty.totals.success_rate == 0
     assert empty.totals.average_duration_ms is None
     assert empty.totals.p95_duration_ms is None

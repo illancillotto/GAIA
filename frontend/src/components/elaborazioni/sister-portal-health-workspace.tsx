@@ -322,6 +322,24 @@ function DownloadKpi({ health }: { health: SisterPortalHealth | null }) {
 }
 
 
+function CredentialExecutionKpis({ health }: { health: SisterPortalHealth | null }) {
+  return (
+    <>
+      <ModuleWorkspaceKpiTile
+        label="Credenziali attive"
+        value={health?.totals.operating_credentials ?? 0}
+        hint="con esecuzioni nella finestra"
+      />
+      <ModuleWorkspaceKpiTile
+        label="Media operazioni"
+        value={health?.totals.average_executions_per_credential ?? 0}
+        hint="per credenziale attiva"
+      />
+    </>
+  );
+}
+
+
 function HealthHero({
   health,
   hours,
@@ -346,6 +364,7 @@ function HealthHero({
     >
       <ModuleWorkspaceKpiRow>
         <ModuleWorkspaceKpiTile label="Esecuzioni" value={totals?.executions ?? 0} hint={`${totals?.events ?? 0} eventi`} />
+        <CredentialExecutionKpis health={health} />
         <DownloadKpi health={health} />
         <ModuleWorkspaceKpiTile label="Successo" value={`${totals?.success_rate ?? 0}%`} hint={`${totals?.successes ?? 0} completate`} />
         <ModuleWorkspaceKpiTile label="Errori" value={totals?.errors ?? 0} hint="esiti terminali" variant={(totals?.errors ?? 0) > 0 ? "amber" : "default"} />
