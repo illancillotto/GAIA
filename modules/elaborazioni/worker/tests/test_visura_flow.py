@@ -9,6 +9,7 @@ WORKER_ROOT = Path(__file__).resolve().parents[1]
 if str(WORKER_ROOT) not in sys.path:
     sys.path.insert(0, str(WORKER_ROOT))
 
+from captcha_result import CaptchaSolveResult
 from sister_exceptions import DocumentNonEvadibileError, DocumentNotYetProducedError, SisterNotFoundError
 from visura_flow import (
     CaptchaSubmission,
@@ -285,8 +286,64 @@ def test_agent_only_mode_does_not_request_manual_captcha() -> None:
 
     assert result.status == "failed"
     assert result.captcha_method == "llm"
-    assert result.error_message == "Agent CAPTCHA exhausted; manual CAPTCHA disabled"
+    assert result.error_message == (
+        "CAPTCHA non risolto — Agent: 'wrong' rifiutato da SISTER ×2; "
+        "Anti-Captcha non configurato; CAPTCHA manuale disattivato"
+    )
     assert manual_called is False
+
+
+def test_error_message_names_the_model_refusal_reason() -> None:
+    """Il messaggio d'errore riporta il motivo specifico dell'esito del solver."""
+
+    async def refusing_llm(_b: bytes) -> CaptchaSolveResult:
+        return CaptchaSolveResult(None, "codex_lb_refusal", "codex-lb", "gpt-5.4-mini")
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=FakeBrowser(),
+            request=FakeRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=_never_manual,
+            solve_llm_captcha=refusing_llm,
+            solve_external_captcha=None,
+            max_llm_attempts=3,
+            max_external_attempts=0,
+            max_manual_attempts=0,
+        )
+
+    assert result.status == "failed"
+    assert result.error_message == (
+        "CAPTCHA non risolto — Agent: codex-lb rifiuto del modello (gpt-5.4-mini) ×3; "
+        "Anti-Captcha non configurato; CAPTCHA manuale disattivato"
+    )
+
+
+async def _never_manual(_image_path: Path) -> ManualCaptchaDecision:
+    raise AssertionError("manual CAPTCHA must not be requested")
+
+
+def test_error_message_when_no_solver_is_configured() -> None:
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=FakeBrowser(),
+            request=FakeRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=_never_manual,
+            solve_llm_captcha=None,
+            solve_external_captcha=None,
+            max_llm_attempts=0,
+            max_external_attempts=0,
+            max_manual_attempts=0,
+        )
+
+    assert result.status == "failed"
+    assert result.error_message == (
+        "CAPTCHA non risolto — nessun solver CAPTCHA automatico configurato; "
+        "CAPTCHA manuale disattivato"
+    )
 
 
 # ---------------------------------------------------------------------------

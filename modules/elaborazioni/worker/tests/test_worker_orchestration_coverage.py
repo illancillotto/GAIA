@@ -12,6 +12,7 @@ import pytest
 import test_worker as worker_test_support
 from test_worker import worker_db
 import worker as worker_module
+from captcha_result import CaptchaSolveResult
 
 
 CatastoWorker = worker_module.CatastoWorker
@@ -691,12 +692,25 @@ def test_manual_captcha_timeout_and_solver_delegates(monkeypatch: pytest.MonkeyP
     decision = run(worker._wait_for_manual_captcha(claim, Path("captcha.png")))
     assert decision.text is None and not decision.skip
 
-    assert run(worker._solve_llm_captcha(b"x")) is None
-    assert run(worker._solve_external_captcha(b"x")) is None
-    worker.llm_captcha_solver = SimpleNamespace(solve=lambda _image: async_value("LLM"))
+    assert run(worker._solve_llm_captcha(b"x")).reason == "disabled"
+    assert run(worker._solve_external_captcha(b"x")).reason == "disabled"
+    worker.llm_captcha_solver = SimpleNamespace(
+        solve=lambda _image: async_value("LLM"),
+        last_result=CaptchaSolveResult("LLM", "solved", "agent"),
+    )
     worker.anti_captcha_client = SimpleNamespace(solve_image_to_text=lambda _image: async_value("EXT"))
-    assert run(worker._solve_llm_captcha(b"x")) == "LLM"
-    assert run(worker._solve_external_captcha(b"x")) == "EXT"
+    assert run(worker._solve_llm_captcha(b"x")).text == "LLM"
+    assert run(worker._solve_external_captcha(b"x")).text == "EXT"
+
+    worker.anti_captcha_client = SimpleNamespace(solve_image_to_text=lambda _image: async_value(None))
+    assert run(worker._solve_external_captcha(b"x")).reason == "external_no_answer"
+
+    def _boom(_image):
+        raise RuntimeError("anti-captcha down")
+
+    worker.anti_captcha_client = SimpleNamespace(solve_image_to_text=_boom)
+    external = run(worker._solve_external_captcha(b"x"))
+    assert external.reason == "external_error" and external.detail == "RuntimeError"
 
     worker.state.stop_requested = False
     waiting = SimpleNamespace(active=True, skip_requested=False, solution=None)

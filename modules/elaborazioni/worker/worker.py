@@ -105,6 +105,7 @@ from app.services.elaborazioni_posta_online import (
 )
 from autodoc_sync import AUTODOC_SYNC_ENTITY, run_autodoc_sync_job_by_id
 from browser_session import BrowserSession, BrowserSessionConfig
+from captcha_result import CaptchaSolveResult
 from credential_vault import WorkerCredentialVault
 from llm_captcha_solver import LLMCaptchaSolver
 from posta_online_sync import run_posta_online_job_by_id
@@ -996,21 +997,31 @@ class CatastoWorker:
         logger.warning("Richiesta %s timeout CAPTCHA manuale", claim.request_id)
         return ManualCaptchaDecision(text=None, skip=False)
 
-    async def _solve_llm_captcha(self, image_bytes: bytes) -> str | None:
+    async def _solve_llm_captcha(self, image_bytes: bytes) -> CaptchaSolveResult:
         if self.llm_captcha_solver is None:
-            return None
+            return CaptchaSolveResult(None, "disabled", "none")
         logger.info("Invio CAPTCHA al solver LLM")
         text = await self.llm_captcha_solver.solve(image_bytes)
-        logger.info("Risposta ricevuta dal solver LLM: testo_presente=%s", bool(text))
-        return text
+        result = self.llm_captcha_solver.last_result
+        logger.info(
+            "Risposta solver LLM: provider=%s reason=%s testo_presente=%s detail=%s",
+            result.provider, result.reason, bool(text), result.detail,
+        )
+        return result
 
-    async def _solve_external_captcha(self, image_bytes: bytes) -> str | None:
+    async def _solve_external_captcha(self, image_bytes: bytes) -> CaptchaSolveResult:
         if self.anti_captcha_client is None:
-            return None
+            return CaptchaSolveResult(None, "disabled", "anti-captcha")
         logger.info("Invio CAPTCHA al servizio esterno Anti-Captcha")
-        text = await self.anti_captcha_client.solve_image_to_text(image_bytes)
+        try:
+            text = await self.anti_captcha_client.solve_image_to_text(image_bytes)
+        except Exception as exc:
+            logger.exception("Anti-Captcha ha sollevato un'eccezione")
+            return CaptchaSolveResult(None, "external_error", "anti-captcha", type(exc).__name__)
         logger.info("Risposta ricevuta da Anti-Captcha: testo_presente=%s", bool(text))
-        return text
+        if text:
+            return CaptchaSolveResult(text, "solved", "anti-captcha")
+        return CaptchaSolveResult(None, "external_no_answer", "anti-captcha")
 
     def _persist_flow_result(
         self,

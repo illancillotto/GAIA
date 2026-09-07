@@ -117,6 +117,35 @@ Il default e `gpt-5.4-mini` con effort `low`, presente nel catalogo locale
 `/v1/models`. La variante `gpt-5.4` restituisce invece HTTP 503,
 `no_plan_support_for_model`, ed e stata sostituita su richiesta dell'operatore.
 
+### Motivo dell'esito CAPTCHA nel messaggio d'errore
+
+`LLMCaptchaSolver.solve()` continua a restituire `str | None`, ma popola anche
+`solver.last_result` (`CaptchaSolveResult` in `captcha_result.py`) con un
+`reason` distinto per ogni tipo di risposta del provider. `visura_flow`
+raccoglie questi motivi e, quando la catena si esaurisce senza fallback
+manuale, produce un `error_message` del tipo:
+
+```
+CAPTCHA non risolto — Agent: codex-lb rifiuto del modello (gpt-5.4-mini) ×3; Anti-Captcha non configurato; CAPTCHA manuale disattivato
+```
+
+Codici `reason` principali (etichette in `REASON_LABELS_IT`):
+
+| reason | significato |
+| --- | --- |
+| `solved` | trascrizione ottenuta (provider in `.provider`) |
+| `agent_unavailable` / `agent_exit_error` | CLI `agent` non parte / esce con codice != 0 |
+| `agent_provider_error` | CLI `agent` segnala quota/auth esaurita |
+| `agent_no_candidate` | CLI `agent` risponde ma senza token utile |
+| `codex_lb_disabled` | fallback disattivato o senza API key |
+| `codex_lb_connect_error` / `codex_lb_timeout` | codex-lb irraggiungibile / oltre timeout |
+| `codex_lb_http_error` | HTTP >= 400 (il `detail` riporta il codice upstream, es. `no_plan_support_for_model`) |
+| `codex_lb_api_error` | HTTP 200 ma `error`/`status != completed` |
+| `codex_lb_refusal` | il modello rifiuta ("Mi dispiace, non posso...") |
+| `codex_lb_unparseable` | risposta presente ma non un token 4-12 alfanumerico |
+| `external_no_answer` / `external_error` | Anti-Captcha senza risposta / in errore |
+| `sister_rejected` | trascrizione inviata ma rifiutata dal portale |
+
 Prompt del solver (identico per `agent` e per il fallback codex-lb): il testo
 non nomina piu "CAPTCHA" e chiede solo la trascrizione esatta del testo
 nell'immagine (`_PROMPT_TEMPLATE` in `llm_captcha_solver.py`). La versione

@@ -335,12 +335,86 @@ def test_agent_success_does_not_call_codex(monkeypatch):
 def test_disabled_codex_does_not_call_provider(monkeypatch):
     monkeypatch.setenv("CODEX_LB_API_KEY", "test-key")
     monkeypatch.setenv("CAPTCHA_CODEX_LB_FALLBACK_ENABLED", "false")
+    solver = LLMCaptchaSolver()
     with (
         patch("asyncio.create_subprocess_exec", AsyncMock(side_effect=FileNotFoundError)),
         patch("llm_captcha_solver.httpx.AsyncClient") as client,
     ):
-        assert run(LLMCaptchaSolver().solve(b"image")) is None
+        assert run(solver.solve(b"image")) is None
         client.assert_not_called()
+    # codex-lb disattivato -> il motivo riportato è il fallimento dell'Agent
+    assert solver.last_result.reason == "agent_unavailable"
+    assert solver.last_result.provider == "agent"
+
+
+def test_last_result_records_codex_refusal(monkeypatch):
+    monkeypatch.setenv("CODEX_LB_API_KEY", "test-key")
+    solver = LLMCaptchaSolver()
+
+    async def respond(request):
+        return httpx.Response(200, json=_completed_response("Mi dispiace, non posso aiutare."))
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+    with (
+        patch("asyncio.create_subprocess_exec", AsyncMock(side_effect=OSError)),
+        patch("llm_captcha_solver.httpx.AsyncClient", return_value=client),
+    ):
+        assert run(solver.solve(b"image")) is None
+    assert solver.last_result.reason == "codex_lb_refusal"
+    assert solver.last_result.provider == "codex-lb"
+    assert solver.last_result.label() == "codex-lb rifiuto del modello (gpt-5.4-mini)"
+
+
+def test_last_result_records_upstream_http_error_code(monkeypatch):
+    monkeypatch.setenv("CODEX_LB_API_KEY", "test-key")
+    monkeypatch.setenv("CAPTCHA_CODEX_LB_MODEL", "gpt-5.4")
+    solver = LLMCaptchaSolver()
+
+    async def respond(request):
+        return httpx.Response(400, json={"error": {"code": "no_plan_support_for_model"}})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+    with (
+        patch("asyncio.create_subprocess_exec", AsyncMock(side_effect=OSError)),
+        patch("llm_captcha_solver.httpx.AsyncClient", return_value=client),
+    ):
+        assert run(solver.solve(b"image")) is None
+    assert solver.last_result.reason == "codex_lb_http_error"
+    assert solver.last_result.detail == "HTTP 400 no_plan_support_for_model"
+
+
+def test_last_result_http_error_without_structured_code(monkeypatch):
+    monkeypatch.setenv("CODEX_LB_API_KEY", "test-key")
+    solver = LLMCaptchaSolver()
+
+    async def respond(request):
+        # HTTP 503 con corpo JSON ma senza oggetto "error" strutturato
+        return httpx.Response(503, json={"message": "upstream unavailable"})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+    with (
+        patch("asyncio.create_subprocess_exec", AsyncMock(side_effect=OSError)),
+        patch("llm_captcha_solver.httpx.AsyncClient", return_value=client),
+    ):
+        assert run(solver.solve(b"image")) is None
+    assert solver.last_result.reason == "codex_lb_http_error"
+    assert solver.last_result.detail == "HTTP 503"
+
+
+def test_last_result_records_unparseable_answer(monkeypatch):
+    monkeypatch.setenv("CODEX_LB_API_KEY", "test-key")
+    solver = LLMCaptchaSolver()
+
+    async def respond(request):
+        return httpx.Response(200, json=_completed_response("qui c e una frase lunga non un token"))
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+    with (
+        patch("asyncio.create_subprocess_exec", AsyncMock(side_effect=OSError)),
+        patch("llm_captcha_solver.httpx.AsyncClient", return_value=client),
+    ):
+        assert run(solver.solve(b"image")) is None
+    assert solver.last_result.reason == "codex_lb_unparseable"
 
 
 @pytest.mark.parametrize("failure", [

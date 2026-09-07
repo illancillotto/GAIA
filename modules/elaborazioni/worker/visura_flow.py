@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from captcha_result import CaptchaSolveResult, as_result
 from sister_exceptions import (
     DocumentNonEvadibileError,
     DocumentNotYetProducedError,
@@ -64,6 +65,28 @@ class CaptchaSubmission:
     image_path: Path | None = None
     method: str | None = None
     text: str | None = None
+
+
+def _summarize_captcha_failure(
+    notes: list[str], *, llm_enabled: bool, external_enabled: bool
+) -> str:
+    """Riassume perché la catena CAPTCHA non ha prodotto una visura.
+
+    Raggruppa i motivi identici (``motivo ×N``) e segnala quali provider non
+    erano configurati e che il fallback manuale è disattivato.
+    """
+    parts: list[str] = []
+    if notes:
+        counts: dict[str, int] = {}
+        for note in notes:
+            counts[note] = counts.get(note, 0) + 1
+        parts.extend(f"{note} ×{count}" if count > 1 else note for note, count in counts.items())
+    if not llm_enabled and not external_enabled:
+        parts.append("nessun solver CAPTCHA automatico configurato")
+    elif not external_enabled:
+        parts.append("Anti-Captcha non configurato")
+    parts.append("CAPTCHA manuale disattivato")
+    return "; ".join(parts)
 
 
 def _current_correlation(browser: BrowserSession):
@@ -351,8 +374,8 @@ async def execute_visura_flow(
     document_path: Path,
     captcha_dir: Path,
     get_manual_captcha_decision: Callable[[Path], Awaitable[ManualCaptchaDecision]],
-    solve_external_captcha: Callable[[bytes], Awaitable[str | None]] | None = None,
-    solve_llm_captcha: Callable[[bytes], Awaitable[str | None]] | None = None,
+    solve_external_captcha: Callable[[bytes], Awaitable[CaptchaSolveResult | str | None]] | None = None,
+    solve_llm_captcha: Callable[[bytes], Awaitable[CaptchaSolveResult | str | None]] | None = None,
     max_llm_attempts: int = 3,
     max_external_attempts: int = 3,
     max_manual_attempts: int | None = None,
@@ -378,7 +401,11 @@ async def execute_visura_flow(
         return prepared
 
 
-    # Catena: Agent locale x N -> Anti-Captcha x M -> Manuale
+    # Catena: Agent locale x N -> Anti-Captcha x M -> Manuale.
+    # Ogni esito non risolto viene registrato con il suo motivo specifico, così
+    # il messaggio d'errore finale dice esattamente perché il CAPTCHA è fallito.
+    captcha_notes: list[str] = []
+
     if solve_llm_captcha is not None:
         for attempt in range(1, max_llm_attempts + 1):
             callbacks.operation(f"Tentativo CAPTCHA Agent ({attempt}/{max_llm_attempts})")
@@ -389,20 +416,24 @@ async def execute_visura_flow(
             captcha_path.write_bytes(captcha_bytes)
 
             try:
-                llm_text = await solve_llm_captcha(captcha_bytes)
+                llm_result = as_result(await solve_llm_captcha(captcha_bytes))
             except Exception:
                 logger.exception("Richiesta %s Agent CAPTCHA solver (%s) fallito", request.id, attempt)
+                captcha_notes.append("Agent: eccezione del solver")
                 if attempt < max_llm_attempts:
                     await browser.reload_captcha()
                 continue
-            if not llm_text:
-                logger.info("Richiesta %s Agent (%s) ha restituito testo vuoto", request.id, attempt)
+            if not llm_result.text:
+                logger.info(
+                    "Richiesta %s Agent (%s) non risolto: %s", request.id, attempt, llm_result.reason
+                )
+                captcha_notes.append(f"Agent: {llm_result.label()}")
                 if attempt < max_llm_attempts:
                     await browser.reload_captcha()
                 continue
             result = await _submit_captcha_then_download(
                 browser,
-                CaptchaSubmission(captcha_path, "llm", llm_text),
+                CaptchaSubmission(captcha_path, "llm", llm_result.text),
                 document_path,
                 callbacks,
                 initial_remote_poll_attempts=initial_remote_poll_attempts,
@@ -411,6 +442,7 @@ async def execute_visura_flow(
                 logger.info("Richiesta %s CAPTCHA Agent (%s) terminale status=%s", request.id, attempt, result.status)
                 return result
             logger.info("Richiesta %s CAPTCHA rifiutato dal portale dopo Agent (%s)", request.id, attempt)
+            captcha_notes.append(f"Agent: '{llm_result.text}' rifiutato da SISTER")
             if attempt < max_llm_attempts:
                 await browser.reload_captcha()
 
@@ -424,20 +456,25 @@ async def execute_visura_flow(
             captcha_path.write_bytes(captcha_bytes)
 
             try:
-                external_text = await solve_external_captcha(captcha_bytes)
+                external_result = as_result(await solve_external_captcha(captcha_bytes))
             except Exception:
                 logger.exception("Richiesta %s Anti-Captcha (%s) fallito", request.id, attempt)
+                captcha_notes.append("Anti-Captcha: eccezione del solver")
                 if attempt < max_external_attempts:
                     await browser.reload_captcha()
                 continue
-            if not external_text:
-                logger.info("Richiesta %s Anti-Captcha (%s) ha restituito testo vuoto", request.id, attempt)
+            if not external_result.text:
+                logger.info(
+                    "Richiesta %s Anti-Captcha (%s) non risolto: %s",
+                    request.id, attempt, external_result.reason,
+                )
+                captcha_notes.append(f"Anti-Captcha: {external_result.label()}")
                 if attempt < max_external_attempts:
                     await browser.reload_captcha()
                 continue
             result = await _submit_captcha_then_download(
                 browser,
-                CaptchaSubmission(captcha_path, "external", external_text),
+                CaptchaSubmission(captcha_path, "external", external_result.text),
                 document_path,
                 callbacks,
                 initial_remote_poll_attempts=initial_remote_poll_attempts,
@@ -446,17 +483,23 @@ async def execute_visura_flow(
                 logger.info("Richiesta %s CAPTCHA Anti-Captcha (%s) terminale status=%s", request.id, attempt, result.status)
                 return result
             logger.info("Richiesta %s CAPTCHA rifiutato dal portale dopo Anti-Captcha (%s)", request.id, attempt)
+            captcha_notes.append(f"Anti-Captcha: '{external_result.text}' rifiutato da SISTER")
             if attempt < max_external_attempts:
                 await browser.reload_captcha()
 
     if max_manual_attempts <= 0:
-        logger.warning("Richiesta %s CAPTCHA automatico esaurito; fallback manuale disabilitato", request.id)
+        detail = _summarize_captcha_failure(
+            captcha_notes,
+            llm_enabled=solve_llm_captcha is not None,
+            external_enabled=solve_external_captcha is not None,
+        )
+        logger.warning("Richiesta %s CAPTCHA non risolto senza fallback manuale — %s", request.id, detail)
         return VisuraFlowResult(
             status="failed",
             captcha_image_path=None,
             captcha_method="llm" if solve_llm_captcha is not None else "external",
             last_ocr_text=None,
-            error_message="Agent CAPTCHA exhausted; manual CAPTCHA disabled",
+            error_message=f"CAPTCHA non risolto — {detail}",
         )
 
     last_captcha_path: Path | None = None

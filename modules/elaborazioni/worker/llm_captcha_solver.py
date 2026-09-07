@@ -14,6 +14,8 @@ from pathlib import Path
 
 import httpx
 
+from captcha_result import CaptchaSolveResult
+
 logger = logging.getLogger(__name__)
 
 _EXPLANATION_MARKERS = {
@@ -36,6 +38,11 @@ _EXPLANATION_MARKERS = {
     "esatto",
 }
 _TOKEN_RE = re.compile(r"[A-Za-z0-9]{4,12}")
+_REFUSAL_RE = re.compile(
+    r"mi dispiace|non posso|non sono in grado|cannot|can't|can not|unable|i'?m sorry|"
+    r"i can'?t|non aiut|no puedo",
+    re.IGNORECASE,
+)
 _PROVIDER_ERROR_RE = re.compile(
     r"quota|rate.?limit|usage.?limit|token.?limit|insufficient|exhausted|"
     r"unauthorized|not authenticated|authentication|failed|error|timed out|"
@@ -53,6 +60,14 @@ _PROMPT_TEMPLATE = (
 class LLMCaptchaSolver:
     def __init__(self, agent_cmd: str = "agent") -> None:
         self._agent_cmd = agent_cmd
+        # Esito dell'ultima chiamata a solve()/solve_from_path(). Il worker lo
+        # legge per costruire un messaggio d'errore visura specifico. Le chiamate
+        # sono sequenziali (un tentativo per volta), quindi un attributo va bene.
+        self.last_result: CaptchaSolveResult = CaptchaSolveResult(None, "no_answer", "none")
+
+    def _record(self, text: str | None, reason: str, provider: str, detail: str = "") -> str | None:
+        self.last_result = CaptchaSolveResult(text or None, reason, provider, detail)
+        return text or None
 
     async def solve(self, image_bytes: bytes) -> str | None:
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
@@ -92,7 +107,7 @@ class LLMCaptchaSolver:
         enabled = os.getenv("CAPTCHA_CODEX_LB_FALLBACK_ENABLED", "true").strip().lower()
         api_key = os.getenv("CAPTCHA_CODEX_LB_API_KEY") or os.getenv("CODEX_LB_API_KEY")
         if enabled not in {"true", "1", "yes", "on"} or not api_key:
-            return None
+            return self._record(None, "codex_lb_disabled", "codex-lb")
         url = os.getenv("CAPTCHA_CODEX_LB_URL") or os.getenv("CODEX_LB_URL", "http://127.0.0.1:2455/v1")
         model = os.getenv("CAPTCHA_CODEX_LB_MODEL", "gpt-5.4-mini")
         timeout = self._timeout("CAPTCHA_CODEX_LB_TIMEOUT_SECONDS")
@@ -118,26 +133,66 @@ class LLMCaptchaSolver:
                     ),
                     timeout=timeout,
                 )
-                response.raise_for_status()
-                return self._codex_candidate(response.json())
+                if response.status_code >= 400:
+                    return self._record(
+                        None, "codex_lb_http_error", "codex-lb",
+                        f"HTTP {response.status_code} {self._upstream_error_code(response)}".strip(),
+                    )
+                text, reason, detail = self._codex_outcome(response.json())
+                return self._record(text, reason if not text else "solved", "codex-lb", detail or model)
+        except asyncio.CancelledError:
+            raise
+        except (TimeoutError, httpx.TimeoutException):
+            logger.warning("LLM CAPTCHA solver: fallback codex-lb timeout (%ss)", timeout)
+            return self._record(None, "codex_lb_timeout", "codex-lb", f"{timeout}s")
+        except httpx.ConnectError as exc:
+            logger.warning("LLM CAPTCHA solver: fallback codex-lb non raggiungibile (%s)", exc)
+            return self._record(None, "codex_lb_connect_error", "codex-lb", url)
         except Exception as exc:
             logger.warning("LLM CAPTCHA solver: fallback codex-lb fallito (%s)", type(exc).__name__)
-            return None
+            return self._record(None, "codex_lb_error", "codex-lb", type(exc).__name__)
 
     @staticmethod
-    def _codex_candidate(payload: dict) -> str | None:
-        if payload.get("error") or payload.get("status") != "completed":
-            return None
-        for item in payload.get("output", []):
-            if item.get("type") != "message":
-                continue
-            for part in item.get("content", []):
-                if part.get("type") != "output_text":
-                    continue
-                text = part.get("text", "").strip()
-                if _TOKEN_RE.fullmatch(text):
-                    return text
-        return None
+    def _upstream_error_code(response: httpx.Response) -> str:
+        try:
+            body = response.json()
+        except Exception:
+            return ""
+        error = body.get("error") if isinstance(body, dict) else None
+        if isinstance(error, dict):
+            return str(error.get("code") or error.get("type") or "")
+        return ""
+
+    @classmethod
+    def _codex_outcome(cls, payload: dict) -> tuple[str | None, str, str]:
+        """Ritorna (testo, reason, detail) per una risposta codex-lb 200."""
+        if payload.get("error"):
+            error = payload["error"]
+            code = error.get("code") if isinstance(error, dict) else None
+            return None, "codex_lb_api_error", str(code or error)[:80]
+        if payload.get("status") != "completed":
+            return None, "codex_lb_api_error", f"status={payload.get('status')}"
+        texts = [
+            part.get("text", "").strip()
+            for item in payload.get("output", [])
+            if item.get("type") == "message"
+            for part in item.get("content", [])
+            if part.get("type") == "output_text"
+        ]
+        texts = [text for text in texts if text]
+        if not texts:
+            return None, "codex_lb_no_answer", ""
+        for text in texts:
+            if _TOKEN_RE.fullmatch(text):
+                return text, "solved", ""
+        joined = " ".join(texts)
+        if _REFUSAL_RE.search(joined):
+            return None, "codex_lb_refusal", ""
+        return None, "codex_lb_unparseable", joined[:60]
+
+    @classmethod
+    def _codex_candidate(cls, payload: dict) -> str | None:
+        return cls._codex_outcome(payload)[0]
 
     async def _run_agent(self, image_path: Path) -> str | None:
         prompt = _PROMPT_TEMPLATE.format(image_path=image_path)
@@ -157,9 +212,11 @@ class LLMCaptchaSolver:
                 stderr=asyncio.subprocess.PIPE,
             )
             stdout, stderr = await self._communicate_agent(proc)
+        except asyncio.CancelledError:
+            raise
         except Exception:
             logger.exception("LLM CAPTCHA solver: impossibile avviare il processo agent")
-            return await self._run_codex_lb(image_path)
+            return await self._codex_fallback(image_path, "agent_unavailable")
 
         if proc.returncode != 0:
             logger.warning(
@@ -167,12 +224,23 @@ class LLMCaptchaSolver:
                 proc.returncode,
                 stderr.decode(errors="replace")[:200],
             )
-            return await self._run_codex_lb(image_path)
+            return await self._codex_fallback(image_path, "agent_exit_error", f"code {proc.returncode}")
 
         raw = self._decode_agent_stdout(stdout)
         if _PROVIDER_ERROR_RE.search(raw):
-            return await self._run_codex_lb(image_path)
-        return self._extract_candidate(str(raw)) or await self._run_codex_lb(image_path)
+            return await self._codex_fallback(image_path, "agent_provider_error")
+
+        candidate = self._extract_candidate(str(raw))
+        if candidate:
+            return self._record(candidate, "solved", "agent")
+        return await self._codex_fallback(image_path, "agent_no_candidate")
+
+    async def _codex_fallback(self, image_path: Path, agent_reason: str, agent_detail: str = "") -> str | None:
+        """Prova codex-lb; se è disattivato riporta il motivo del fallimento Agent."""
+        text = await self._run_codex_lb(image_path)
+        if text is None and self.last_result.reason == "codex_lb_disabled":
+            return self._record(None, agent_reason, "agent", agent_detail)
+        return text
 
     @staticmethod
     def _agent_environment() -> dict[str, str]:
