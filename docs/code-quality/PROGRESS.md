@@ -5,6 +5,129 @@ blocco verificato e prima di chiudere un goal.
 
 ## Stato generale
 
+### Catasto GIS - repeat dei gate (2026-09-07)
+
+- Working tree su `8ae046a3`; nessuna modifica runtime in questo repeat.
+- Suite mirata strumentata: `55 passed`; otto runtime GIS al `100%` per
+  statement `860/860`, branch `809/809`, funzioni `256/256`, righe `734/734`.
+  Report `/tmp/gaia-gis-recheck-coverage`; soglie ed esclusioni invariate.
+- `make quality-test`: `69 passed`. TypeScript ed ESLint mirato passano.
+- E2E Chromium ripetuti: `2 passed` in 30 secondi, API/tile simulate e
+  MapLibre reale; console desktop/mobile e misure con riavvio verificati.
+  Log `/tmp/gaia-gis-recheck-e2e.log`; server locale con watcher polling.
+- Graphify frontend aggiornato con pruning tramite target dedicato;
+  aggiornamento platform docs tramite `make graphify-platform-docs`.
+- Allineato `HOTSPOTS.md` al risultato finale della slice archivio: la coverage
+  full-file non e piu bloccata; il debito legacy e globale resta esplicito.
+
+### Catasto GIS - archivio rivisto e coverage completa (2026-09-07)
+
+- Follow-up autorizzato dopo la stop condition: stessa responsabilita archivio,
+  nessun secondo hotspot. `GisArchivePersistence` gestisce le operazioni API
+  con snapshot del render; l'hook possiede catalogo, autoload e preferenze di
+  visualizzazione. Contratti, payload e feedback preservati.
+- Eliminate le tre nuove violation dell'estrazione preliminare: persistenza max
+  cyc/cog `13/15`, hook `5/5`, nessuna nuova violation error-level. Restano
+  warning nei comandi di salvataggio e caricamento, senza eccezioni aggiunte.
+- Pagina prima/dopo estensione: cyc max `357 -> 302`, cog `404 -> 338`,
+  LOC `2416 -> 2187`. Aggregato pagina + archivio (tipi inclusi): sum cyc
+  `892 -> 845`, cog `786 -> 725`, LOC `2416 -> 2458`. Il lieve aumento delle
+  LOC totali esplicita i confini; le complessita aggregate diminuiscono.
+  Classificazione `IMPROVED`; restano le violation legacy della pagina.
+- Coverage finale degli otto runtime GIS nuovi/modificati: `55 passed`,
+  statement `860/860`, branch `809/809`, funzioni `256/256`, righe `734/734`,
+  tutto `100%`. Test di integrazione reali e contratti correnti dei pannelli,
+  senza accesso allo stato React interno, callback obsolete o coverage ignore.
+- TypeScript, ESLint mirato e diff check passano. Ratchet sul corpus GIS contro
+  baseline autorevole merge-base `8ae046a3`: `code: 0`, `findings: []`.
+  HEAD e avanzato per attivita concorrenti, preservate. Baseline invariata:
+  il limite globale di sincronizzazione gia documentato non e risolto qui.
+- E2E Chromium: `2 passed`, console e controlli desktop/mobile, misure e
+  riavvio misura con MapLibre reale e API/tile simulate. Il primo tentativo
+  si fermava prima del login per `EMFILE` del server dev; il repeat con
+  `WATCHPACK_POLLING=true` passa senza modifiche applicative.
+- Report coverage `/tmp/gaia-gis100-final-coverage`, metriche
+  `/tmp/gaia-gis100-metrics3.json`, ratchet
+  `/tmp/gaia-gis100-ratchet-final.log`. Graphify frontend rigenerato con pruning:
+  `6686` nodi, `16025` archi. Nessun commit, push o deploy eseguito.
+
+### Catasto GIS - estensione archivio e coverage (2026-09-07)
+
+- Richiesta esplicita: ampliare moderatamente il refactoring e raggiungere il
+  `100%` di coverage. Estratti stato e comandi archivio in `use-gis-archive.ts`,
+  con test del contratto tramite renderHook e integrazione pagina preservata.
+- Verifica attuale: `38 passed`; sul perimetro pagina + archivio statement
+  `732/735` (`99,59%`), branch `720/739` (`97,42%`), funzioni `214/214` e
+  righe `643/643` (`100%`). Archivio singolarmente al `100%` su tutte le metriche;
+  la pagina resta sotto soglia. TypeScript passa. Soglie e ignore invariati.
+- Metriche pagina prima/dopo questa estensione: max cyc `357 -> 302`, cog
+  `404 -> 338`, LOC file `2416 -> 2186`. Il nuovo `useGisArchive` introduce
+  pero tre violation error-level: cyc `48` (soglia `15`), cog `58` (soglia
+  `25`), LOC `190` (soglia `80`). La diminuzione della pagina non autorizza
+  il trasferimento del debito. Nessun aggiornamento baseline.
+- Esito `BLOCKED`: stop condition del programma sulla nuova failure di
+  complessita. L'estrazione resta una bozza nel working tree, non conforme.
+  Serve decidere se rivedere i confini del solo archivio (persistenza e stato
+  di visualizzazione) oppure ritirare questa estrazione mantenendo i test.
+- Evidenze: `/tmp/gaia-gis100-tests.log`,
+  `/tmp/gaia-gis100-coverage/coverage-final.json`,
+  `/tmp/gaia-gis100-metrics.json`, `/tmp/gaia-gis100-types.log`.
+  E2E non rieseguiti dopo questa estensione; quelli della slice precedente
+  non costituiscono verifica della nuova estrazione.
+
+### Catasto GIS - controlli condivisi e matching (2026-09-07)
+
+- Autorizzazione: follow-up utente sui gate GIS e valutazione del refactoring.
+- Base: `main@598b1762`; working tree con modifiche UI GIS del turno precedente
+  e modifiche estranee preservate. Durante il lavoro il worker e stato modificato
+  da un'altra attivita; i suoi finding non appartengono al perimetro GIS.
+- Slice: consolidare i controlli layer duplicati nelle due console e
+  caratterizzare i flussi della stessa pagina. Nessun secondo hotspot.
+- Invarianti: API, payload, autorizzazioni, calcoli geodetici, import/archivio,
+  selezione e comportamento delle due viste. Gli slider hanno ora label
+  accessibili e i toggle espongono `aria-pressed`.
+- Prima del refactoring: pagina max cyc `386`, cog `433`, LOC file `2619`,
+  sum cyc `959`, cog `829`. Dopo: max cyc `357`, cog `404`, LOC `2416`,
+  sum cyc `892`, cog `786`. Il nuovo `GisLayerControls` ha max cyc `3`,
+  cog `2`, LOC `49`, sum cyc `8`, cog `2`, nessuna violation.
+- Aggregato pagina + nuovo componente: cyc sum `959 -> 900`, cog sum
+  `829 -> 788`, LOC `2619 -> 2465`. Riduzione reale, senza trasferire debito;
+  restano le violation legacy della pagina (LOC, hook e callable principale).
+- Rimossi i rami tema scuro dei due render helper: tutti i call site passavano
+  `false`. Nessun cambiamento al tema effettivamente visualizzato.
+- Matching corretto: il fallback per nome di un modulo rimosso associava gli
+  effetti GIS a `WikiWelcomePopup.useEffect[0]<callback>`. Ora esclude nomi
+  sintetici e richiede unicita del nome anche nel report corrente. Tre test
+  nuovi verificano il caso reale e il mantenimento del blocco nuove violation.
+- `make quality-test`: `69 passed`; Ruff sui due file Python modificati verde.
+  I due file sono stati allineati al lint obbligatorio; nessun albero legacy
+  esterno e stato riformattato.
+- Test frontend mirati: `46 passed`; due E2E Chromium passano con API/tile
+  simulate, viewport desktop `1920x900`, `1280x720`, mobile `390x844`.
+  TypeScript, lint frontend mirato e `git diff --check` verdi.
+- Coverage: cinque componenti supporto al `100%`; pagina statement `98,10%`,
+  branch `94,18%`, funzioni `99,53%`, righe `99,84%`, ancora sotto il
+  `100%` full-file. Nessuna esclusione, ignore o modifica delle soglie.
+  Report `/tmp/gaia-gis-refactor-coverage`, log `/tmp/gaia-gis-refactor-tests.log`.
+- Ratchet contro baseline merge-base: verde dopo fix matching. Il repeat
+  globale include finding del worker concorrente; per il GIS si confronta lo
+  stesso report completo e la stessa baseline limitando i finding ai sei file
+  runtime della change, senza sostituire il gate globale.
+- `make complexity-baseline`: respinto per debito globale preesistente fuori
+  perimetro (tra gli altri `capacitas_routes.py` e `activity-center.tsx`).
+  Baseline invariata; `complexity-baseline-verify` non riproducibile.
+- Graphify frontend aggiornato tramite target dedicato con pruning.
+- Esito tecnico del refactoring: `IMPROVED`; esito complessivo change:
+  `BLOCKED` dalla coverage full-file e dalla baseline globale non sincronizzabile.
+  Non dichiarare la change conforme e non pubblicarla come verificata al 100%.
+- Prossimo perimetro: caratterizzazione del controller archivio/sessione e
+  rimozione dimostrata delle difese ridondanti della pagina, con metriche proprie.
+  Evitare test che manipolano stato React interno o invocano callback obsolete
+  soltanto per ottenere la percentuale. Il risanamento del debito globale
+  della baseline resta una change separata.
+
+### Stato del programma
+
 - Program status: `RATCHET_ACTIVE_ON_LOCAL_MAIN`
 - Current phase: `3 - ordinary ratchet applied to feature recovery`
 - Last verified commit: `31f875d4`

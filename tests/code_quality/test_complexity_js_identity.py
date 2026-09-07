@@ -1,14 +1,17 @@
-import json
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOL = ROOT / "tools/code_quality/complexity.py"
 
 
 def run_tool(*args):
-    return subprocess.run([sys.executable, str(TOOL), *args], cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    return subprocess.run(
+        [sys.executable, str(TOOL), *args], cwd=ROOT, text=True, capture_output=True
+    )
 
 
 def write(path: Path, text: str):
@@ -35,7 +38,9 @@ def load_tool_module():
 
 
 def callback_source(prefix=""):
-    return prefix + """
+    return (
+        prefix
+        + """
 import { useCallback, useEffect } from 'react';
 
 export function Comp({ rows, enabled, onClick }: { rows: number[]; enabled: boolean; onClick: () => void }) {
@@ -61,6 +66,7 @@ export function Comp({ rows, enabled, onClick }: { rows: number[]; enabled: bool
   return <button onClick={handler}>{mapped.length}</button>;
 }
 """
+    )
 
 
 def test_anonymous_callbacks_survive_line_shift_without_ambiguous_identity(tmp_path):
@@ -77,7 +83,13 @@ def test_callback_legacy_regression_still_fails(tmp_path):
     source = tmp_path / "frontend/src/Comp.tsx"
     write(source, callback_source())
     base = baseline(tmp_path / "baseline.json", source)
-    write(source, callback_source().replace("if (row > 10) return row * 2;", "if (row > 10) { if (row > 20) return row * 3; return row * 2; }"))
+    write(
+        source,
+        callback_source().replace(
+            "if (row > 10) return row * 2;",
+            "if (row > 10) { if (row > 20) return row * 3; return row * 2; }",
+        ),
+    )
     out = run_tool("check", "--baseline", str(base), str(source))
     assert out.returncode == 1, out.stdout + out.stderr
     assert "legacy_metric_regression" in out.stdout
@@ -148,7 +160,14 @@ def test_changed_callback_uses_only_entry_not_reserved_by_stable_siblings():
         )
     ]
     current_calls = [
-        {**baseline_calls[0], "line": 208, "end_line": 248, "cyclomatic": 8, "cognitive": 8, "fingerprint": "new-effect"},
+        {
+            **baseline_calls[0],
+            "line": 208,
+            "end_line": 248,
+            "cyclomatic": 8,
+            "cognitive": 8,
+            "fingerprint": "new-effect",
+        },
         {**baseline_calls[1], "line": 250, "end_line": 261},
         {**baseline_calls[2], "line": 263, "end_line": 276},
     ]
@@ -171,6 +190,77 @@ def test_changed_callback_uses_only_entry_not_reserved_by_stable_siblings():
 
     assert code == 0
     assert findings == []
+
+
+@pytest.mark.parametrize("name", ["useEffect[0]<callback>", "Program<anonymous>"])
+def test_synthetic_name_in_removed_module_does_not_identify_new_callback(name):
+    module = load_tool_module()
+    old = {
+        "path": "frontend/src/WikiWelcomePopup.tsx",
+        "name": name,
+        "line": 11,
+        "end_line": 16,
+        "fingerprint": "wiki-effect",
+        "cyclomatic": 3,
+        "cognitive": 2,
+        "loc": 5,
+        "nesting": 1,
+        "params": 0,
+        "violations": [],
+    }
+    new = {**old, "path": "frontend/src/GisWorkspace.tsx", "fingerprint": "gis-effect", "loc": 12}
+    baseline_data = {
+        "schema_version": module.SCHEMA_VERSION,
+        "engines": {},
+        "scope": {},
+        "files": {old["path"]: {"callables": 1}},
+        "callables": [old],
+    }
+    report = {
+        "parse_errors": [],
+        "exception_errors": [],
+        "files": {},
+        "callables": [new],
+        "violations": [],
+    }
+    assert module.compare(report, baseline_data) == (0, [])
+    new["violations"] = [{"severity": "error", "metric": "loc", "value": 81}]
+    code, findings = module.compare(report, baseline_data)
+    assert code == 1
+    assert findings[0]["reason"] == "new_callable_violation"
+
+
+def test_repeated_named_functions_cannot_both_inherit_one_removed_function():
+    module = load_tool_module()
+    old = {
+        "path": "frontend/src/removed.ts",
+        "name": "loadData",
+        "line": 1,
+        "end_line": 5,
+        "fingerprint": "old",
+        "cyclomatic": 3,
+        "cognitive": 2,
+        "loc": 5,
+        "nesting": 1,
+        "params": 0,
+        "violations": [],
+    }
+    baseline_data = {
+        "schema_version": module.SCHEMA_VERSION,
+        "engines": {},
+        "scope": {},
+        "files": {old["path"]: {"callables": 1}},
+        "callables": [old],
+    }
+    calls = [{**old, "path": path, "fingerprint": path, "loc": 12} for path in ("a.ts", "b.ts")]
+    report = {
+        "parse_errors": [],
+        "exception_errors": [],
+        "files": {},
+        "callables": calls,
+        "violations": [],
+    }
+    assert module.compare(report, baseline_data) == (0, [])
 
 
 def repeated_anonymous_data(module, *, violation=None):
@@ -294,7 +384,9 @@ diff --git a/frontend/src/deleted.tsx b/frontend/src/deleted.tsx
 
 def test_callback_debt_laundering_by_wrapper_or_rename_fails(tmp_path):
     source = tmp_path / "frontend/src/Comp.tsx"
-    write(source, """
+    write(
+        source,
+        """
 export function Comp({ rows }: { rows: number[] }) {
   const expensive = rows.map((row) => {
     if (row > 1) {
@@ -306,9 +398,12 @@ export function Comp({ rows }: { rows: number[] }) {
   });
   return <div>{expensive.length}</div>;
 }
-""")
+""",
+    )
     base = baseline(tmp_path / "baseline.json", source)
-    write(source, """
+    write(
+        source,
+        """
 export function Comp({ rows }: { rows: number[] }) {
   const renamedWrapper = (row: number) => {
     if (row > 1) {
@@ -321,7 +416,12 @@ export function Comp({ rows }: { rows: number[] }) {
   const expensive = rows.map((row) => renamedWrapper(row));
   return <div>{expensive.length}</div>;
 }
-""")
+""",
+    )
     out = run_tool("check", "--baseline", str(base), str(source))
     assert out.returncode in {1, 2}, out.stdout + out.stderr
-    assert "new_callable_violation" in out.stdout or "ambiguous" in out.stdout or "legacy_metric_regression" in out.stdout
+    assert (
+        "new_callable_violation" in out.stdout
+        or "ambiguous" in out.stdout
+        or "legacy_metric_regression" in out.stdout
+    )

@@ -100,7 +100,11 @@ Se due candidati sono equivalenti, uscita `2` e messaggio di configurazione.
 Non scegliere il candidato piu vicino in silenzio.
 
 Il fallback per nome qualificato tra path diversi si applica solo quando il
-path baseline non esiste piu nel report corrente e il candidato e unico. Se
+path baseline non esiste piu nel report corrente e il candidato e unico sia
+nella baseline sia nel report corrente. I nomi sintetici `<callback>` e
+`<anonymous>` non identificano ownership e non possono usare questo fallback:
+una nuova `useEffect[0]<callback>` GIS non e un move di una callback wiki rimossa.
+Il matching per fingerprint resta disponibile per move strutturalmente identici. Se
 piu path rimossi espongono lo stesso nome, il matcher non sceglie: il callable
 resta nuovo e le normali soglie error-level continuano ad applicarsi. Anche un
 move riconosciuto conserva il confronto completo delle metriche legacy, quindi

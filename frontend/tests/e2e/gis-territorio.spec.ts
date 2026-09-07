@@ -322,6 +322,43 @@ async function mockCatastoApis(page: Page) {
   });
 }
 
+test("GIS console and bottom tools fit desktop and mobile viewports", async ({ page }) => {
+  test.skip(!ENABLED, "Set PLAYWRIGHT_GIS_TERRITORIO_ENABLED=true to run the optional smoke.");
+  await installBrowserStubs(page);
+  await loginWithGis(page);
+  await mockTerritoryApis(page);
+  await mockCatastoApis(page);
+  await page.goto("/catasto/gis");
+  const consolePanel = page.getByRole("complementary", { name: "Console GIS" });
+  const canvas = page.locator("canvas.maplibregl-canvas");
+  for (const viewport of [{ width: 1920, height: 900 }, { width: 1280, height: 720 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    await expect(canvas).toBeVisible();
+    await expect(consolePanel).toBeHidden();
+    await expect(page.getByRole("button", { name: "Stampa mappa territoriale" })).toBeInViewport({ ratio: 1 });
+    await expect(page.getByRole("button", { name: "Interroga punto" })).toBeInViewport({ ratio: 1 });
+    await page.getByRole("button", { name: "Interroga punto" }).click({ trial: true });
+    await page.getByRole("button", { name: "Stampa mappa territoriale" }).click({ trial: true });
+    await page.getByRole("button", { name: "Apri Console GIS" }).click();
+    await expect(consolePanel).toBeVisible();
+    await expect(consolePanel.getByRole("button", { name: "Disegna area", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Chiudi strumenti GIS" }).click();
+    await expect(consolePanel).toBeHidden();
+  }
+  await page.getByRole("button", { name: "Distanza", exact: true }).click();
+  await clickMapCanvas(canvas, 0.4, 0.4);
+  await clickMapCanvas(canvas, 0.6, 0.4);
+  await expect(page.locator("output")).not.toBeEmpty();
+  await page.getByRole("button", { name: "Distanza", exact: true }).click();
+  await expect(page.locator("output")).toHaveCount(0);
+  await clickMapCanvas(canvas, 0.4, 0.4);
+  await clickMapCanvas(canvas, 0.6, 0.4);
+  await expect(page.locator("output")).not.toBeEmpty();
+  await page.screenshot({ path: "/tmp/gaia-gis-mobile.png" });
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.screenshot({ path: "/tmp/gaia-gis-desktop.png" });
+});
+
 test("territorio smokes map consultation, sheets, measurements, print and QGIS", async ({ page }) => {
   test.skip(!ENABLED, "Set PLAYWRIGHT_GIS_TERRITORIO_ENABLED=true to run the optional smoke.");
 

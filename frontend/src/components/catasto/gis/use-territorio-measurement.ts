@@ -27,7 +27,7 @@ function feature(points: GeoPoint[], mode: Exclude<MeasurementMode, null>) {
   const geometry = mode === "area" && points.length >= 3
     ? { type: "Polygon", coordinates: [[...coordinates, coordinates[0]]] }
     : { type: "LineString", coordinates };
-  return { type: "FeatureCollection", features: [{ type: "Feature", properties: {}, geometry }] };
+  return { type: "FeatureCollection", features: coordinates.length < 2 ? [] : [{ type: "Feature", properties: {}, geometry }] };
 }
 
 function removeOverlay(map: MeasurementMap) {
@@ -37,9 +37,9 @@ function removeOverlay(map: MeasurementMap) {
 }
 
 export function useTerritorioMeasurement(map: MeasurementMap | null) {
-  const [mode, setMode] = useState<MeasurementMode>(null);
+  const [measurement, setMeasurement] = useState<{ mode: MeasurementMode; finished: boolean }>({ mode: null, finished: false });
+  const { mode, finished } = measurement;
   const [points, setPoints] = useState<GeoPoint[]>([]);
-  const [finished, setFinished] = useState(false);
 
   useEffect(() => {
     if (!map || !mode || finished) return;
@@ -47,11 +47,11 @@ export function useTerritorioMeasurement(map: MeasurementMap | null) {
     map.addLayer({ id: LINE_ID, type: "line", source: SOURCE_ID, paint: { "line-color": "#b45309", "line-width": 3 } });
     map.addLayer({ id: FILL_ID, type: "fill", source: SOURCE_ID, paint: { "fill-color": "#f59e0b", "fill-opacity": 0.2 }, filter: ["==", "$type", "Polygon"] });
     const click = (event: MapClick) => setPoints((current) => [...current, { lon: event.lngLat.lng, lat: event.lngLat.lat }]);
-    const finish = (event: MapClick) => { event.preventDefault?.(); setFinished(true); };
+    const finish = (event: MapClick) => { event.preventDefault?.(); setMeasurement({ mode, finished: true }); };
     map.on("click", click);
     map.on("dblclick", finish);
     return () => { map.off("click", click); map.off("dblclick", finish); };
-  }, [finished, map, mode]);
+  }, [finished, map, mode, measurement]);
 
   useEffect(() => {
     if (!map || !mode) return;
@@ -64,7 +64,7 @@ export function useTerritorioMeasurement(map: MeasurementMap | null) {
   return {
     mode,
     result: points.length > (mode === "area" ? 2 : 1) && mode ? formatMeasurement(value, mode) : null,
-    setMode: (next: Exclude<MeasurementMode, null>) => { if (map) removeOverlay(map); setPoints([]); setFinished(false); setMode(next); },
-    clear: () => { if (map) removeOverlay(map); setPoints([]); setFinished(false); setMode(null); },
+    setMode: (next: Exclude<MeasurementMode, null>) => { if (map) removeOverlay(map); setPoints([]); setMeasurement({ mode: next, finished: false }); },
+    clear: () => { if (map) removeOverlay(map); setPoints([]); setMeasurement({ mode: null, finished: false }); },
   };
 }

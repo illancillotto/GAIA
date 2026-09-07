@@ -30,6 +30,35 @@ function mapMock() {
 }
 
 describe("territorio field tools", () => {
+  test("restarts the active tool and a completed measurement with a fresh source", () => {
+    const map = mapMock();
+    const view = render(<TerritorioFieldTools map={map as never} groups={[]} enabled={{}} />);
+    const distance = screen.getByRole("button", { name: "Distanza" });
+    fireEvent.click(distance);
+    expect(map.addSource).toHaveBeenLastCalledWith(expect.any(String), expect.objectContaining({ data: { type: "FeatureCollection", features: [] } }));
+    act(() => {
+      map.listeners.click({ lngLat: { lng: 0, lat: 0 } });
+      map.listeners.click({ lngLat: { lng: 1, lat: 0 } });
+    });
+    fireEvent.click(distance);
+    expect(screen.queryByText("111.20 km")).not.toBeInTheDocument();
+    expect(map.sources.size).toBe(1);
+    act(() => {
+      map.listeners.click({ lngLat: { lng: 0, lat: 0 } });
+      map.listeners.click({ lngLat: { lng: 1, lat: 0 } });
+      map.listeners.dblclick({ lngLat: { lng: 1, lat: 0 } });
+    });
+    expect(screen.getByText("111.20 km")).toBeInTheDocument();
+    expect(map.listeners.click).toBeUndefined();
+    fireEvent.click(distance);
+    expect(map.sources.size).toBe(1);
+    expect(map.listeners.click).toBeTypeOf("function");
+    fireEvent.click(screen.getByRole("button", { name: "Area" }));
+    expect(map.sources.size).toBe(1);
+    view.unmount();
+    expect(map.sources.size).toBe(0);
+    expect(map.listeners.click).toBeUndefined();
+  });
   test("measures clicks, completes on double click and clears the overlay", () => {
     const map = mapMock();
     render(<TerritorioFieldTools map={map as never} groups={[]} enabled={{}} />);

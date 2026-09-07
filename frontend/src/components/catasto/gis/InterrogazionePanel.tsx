@@ -75,7 +75,7 @@ type InterrogazionePanelProps = InterrogazioneState & {
 
 export default function InterrogazionePanel(state: InterrogazionePanelProps) {
   if (!state.open) {
-    return <button type="button" className="absolute bottom-4 right-4 z-20 rounded-full bg-[#173f32] px-5 py-3 text-sm font-bold text-white shadow-xl" onClick={state.arm}>Interroga punto</button>;
+    return <button type="button" data-gis-interrogate className="absolute bottom-4 right-4 z-20 rounded-full bg-[#173f32] px-5 py-3 text-sm font-bold text-white shadow-xl" onClick={state.arm}>Interroga punto</button>;
   }
   return (
     <aside aria-label="Interrogazione territoriale" className="absolute bottom-3 right-3 top-3 z-30 flex w-[min(28rem,calc(100%-1.5rem))] flex-col rounded-2xl border border-emerald-950/15 bg-[#fffdf6]/95 shadow-2xl backdrop-blur">

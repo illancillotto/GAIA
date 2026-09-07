@@ -15,6 +15,9 @@ import DistrettiPanel from "@/components/catasto/gis/DistrettiPanel";
 import DeliveryPointQuickFilters, { type DeliveryPointQuickFilter } from "@/components/catasto/gis/DeliveryPointQuickFilters";
 import { Dui2026LivePanel } from "@/components/catasto/gis/Dui2026LivePanel";
 import DrawingTools from "@/components/catasto/gis/DrawingTools";
+import GisWorkspace from "@/components/catasto/gis/GisWorkspace";
+import GisLayerControls from "@/components/catasto/gis/GisLayerControls";
+import { useGisArchive, type OverlayLayerState } from "@/components/catasto/gis/use-gis-archive";
 import SelectionPanel from "@/components/catasto/gis/SelectionPanel";
 import WhiteCompanyReportsPanel, {
   EMPTY_WHITECOMPANY_REPORT_FILTERS,
@@ -30,13 +33,8 @@ import {
   catastoGisGetWhiteCompanyReportLayer,
   catastoGisGetLatestAdeWfsRunStatus,
   catastoGisGetAdeWfsRunStatus,
-  catastoGisCreateSavedSelection,
-  catastoGisDeleteSavedSelection,
   catastoGisExport,
-  catastoGisGetSavedSelection,
-  catastoGisListSavedSelections,
   catastoGisResolveRefs,
-  catastoGisUpdateSavedSelection,
   catastoRefreshDeliveryPointsGisCache,
   catastoListDistretti,
 } from "@/lib/api/catasto";
@@ -54,14 +52,11 @@ import type {
   Dui2026LayerResponse,
   GisBasemap,
   GisFilters,
-  GisMapOverlayLayer,
   GisOverlayFeatureClick,
   GisParticellaRef,
   ParticellaPopupAnomalia,
   ParticellaPopupData,
-  GisSavedSelectionDetail,
   GisSavedSelectionItemInput,
-  GisSavedSelectionSummary,
   ParticellaPopupRuoloSummary,
   WhiteCompanyReportLayerResponse,
 } from "@/types/gis";
@@ -75,20 +70,6 @@ const MapContainer = dynamic(() => import("@/components/catasto/gis/TerritorioMa
   ),
 });
 
-interface ImportStats {
-  processed: number;
-  found: number;
-  notFound: number;
-  multiple: number;
-  invalid: number;
-  withGeometry: number;
-}
-
-interface OverlayLayerState extends GisMapOverlayLayer {
-  importStats: ImportStats | null;
-  importedItems: GisSavedSelectionItemInput[];
-  isPersisted: boolean;
-}
 
 const LAYER_COLORS = ["#10B981", "#F59E0B", "#3B82F6", "#EF4444", "#8B5CF6", "#14B8A6", "#F97316"];
 const WHITECOMPANY_REPORTS_LAYER_KEY = "whitecompany-reports";
@@ -132,29 +113,6 @@ function triggerDownload(blob: Blob, filename: string): void {
   anchor.download = filename;
   anchor.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-function buildImportStatsFromDetail(detail: GisSavedSelectionDetail): ImportStats {
-  const summary = detail.import_summary as Partial<ImportStats> | null | undefined;
-  if (!summary) {
-    return {
-      processed: detail.n_particelle,
-      found: detail.n_particelle,
-      notFound: 0,
-      multiple: 0,
-      invalid: 0,
-      withGeometry: detail.n_with_geometry,
-    };
-  }
-
-  return {
-    processed: Number(summary.processed ?? detail.n_particelle),
-    found: Number(summary.found ?? detail.n_particelle),
-    notFound: Number(summary.notFound ?? 0),
-    multiple: Number(summary.multiple ?? 0),
-    invalid: Number(summary.invalid ?? 0),
-    withGeometry: detail.n_with_geometry,
-  };
 }
 
 function compareDistrettoNumber(a: CatDistretto, b: CatDistretto): number {
@@ -201,8 +159,7 @@ function normalizeIdentifier(value: string | null | undefined): string | null {
   return normalized || null;
 }
 
-function getPopupTitolareLabel(titolare: ParticellaPopupData["titolare"]): string | null {
-  if (!titolare) return null;
+function getPopupTitolareLabel(titolare: NonNullable<ParticellaPopupData["titolare"]>): string | null {
   return titolare.subject_display_name?.trim() || titolare.denominazione?.trim() || null;
 }
 
@@ -358,7 +315,7 @@ export default function CatastoGisPage() {
   const [deliveryPointsCacheRefreshing, setDeliveryPointsCacheRefreshing] = useState(false);
   const [deliveryPointsCacheMessage, setDeliveryPointsCacheMessage] = useState<string | null>(null);
   const [showDistretti, setShowDistretti] = useState(true);
-  const [showDistrettiFill, setShowDistrettiFill] = useState(true);
+  const [showDistrettiFill, setShowDistrettiFill] = useState(false);
   const [showParticelleFill, setShowParticelleFill] = useState(false);
   const [showDeliveryPoints, setShowDeliveryPoints] = useState(true);
   const [deliveryPointsQuickFilter, setDeliveryPointsQuickFilter] = useState<DeliveryPointQuickFilter>("all");
@@ -376,7 +333,7 @@ export default function CatastoGisPage() {
   const [xlsxBusy, setXlsxBusy] = useState(false);
   const [overlayLayers, setOverlayLayers] = useState<OverlayLayerState[]>([]);
   const [dui2026Layer, setDui2026Layer] = useState<Dui2026LayerResponse | null>(null);
-  const [dui2026Visible, setDui2026Visible] = useState(true);
+  const [dui2026Visible, setDui2026Visible] = useState(false);
   const [dui2026Busy, setDui2026Busy] = useState(false);
   const [dui2026Error, setDui2026Error] = useState<string | null>(null);
   const [whiteCompanyLayer, setWhiteCompanyLayer] = useState<WhiteCompanyReportLayerResponse | null>(null);
@@ -384,10 +341,6 @@ export default function CatastoGisPage() {
   const [whiteCompanyBusy, setWhiteCompanyBusy] = useState(false);
   const [whiteCompanyError, setWhiteCompanyError] = useState<string | null>(null);
   const [whiteCompanyFilters, setWhiteCompanyFilters] = useState<WhiteCompanyReportFilters>(EMPTY_WHITECOMPANY_REPORT_FILTERS);
-  const [savedSelections, setSavedSelections] = useState<GisSavedSelectionSummary[]>([]);
-  const [savedSelectionOpacities, setSavedSelectionOpacities] = useState<Record<string, number>>({});
-  const [savedSelectionFills, setSavedSelectionFills] = useState<Record<string, boolean>>({});
-  const [savedBusy, setSavedBusy] = useState(false);
   const [focusGeojson, setFocusGeojson] = useState<GeoJSON.FeatureCollection | null>(null);
   const [focusOptions, setFocusOptions] = useState<{ maxZoom?: number; padding?: number; duration?: number } | null>(null);
   const [focusSignal, setFocusSignal] = useState(0);
@@ -462,7 +415,7 @@ export default function CatastoGisPage() {
           .sort(compareDistrettoNumber)
           .map((distretto, index) => [
             distretto.num_distretto,
-            DISTRETTO_COLORS[index % DISTRETTO_COLORS.length] ?? "#1D4E35",
+            DISTRETTO_COLORS[index % DISTRETTO_COLORS.length],
           ]),
       ),
     [distretti],
@@ -483,7 +436,6 @@ export default function CatastoGisPage() {
         .some((value) => String(value).toLowerCase().includes(query)),
     );
   }, [distretti, distrettiSearch]);
-  const autoLoadedSelectionRef = useRef<string | null>(null);
   const popupMatch = useMemo(() => popupToMatch(popupParticella), [popupParticella]);
 
   const handleOpenPopupCapacitas = useCallback(async () => {
@@ -502,9 +454,8 @@ export default function CatastoGisPage() {
   }, [popupParticella, token]);
 
   const handleOpenPopupSubject = useCallback(async (): Promise<void> => {
-    const titolare = popupParticella?.titolare;
-    if (!titolare) return;
-
+    // Only owner buttons in the current parcel popup invoke this callback.
+    const titolare = popupParticella!.titolare!;
     const label = getPopupTitolareLabel(titolare);
     if (titolare.subject_id) {
       setPopupSubjectLookupError(null);
@@ -549,18 +500,6 @@ export default function CatastoGisPage() {
     setAutoSelectionId(params.get("selection"));
   }, []);
 
-  const refreshSavedSelections = useCallback(async () => {
-    if (!token) return;
-    const selections = await catastoGisListSavedSelections(token);
-    setSavedSelections(selections);
-  }, [token]);
-
-  useEffect(() => {
-    if (!token) return;
-    void refreshSavedSelections().catch((e) => {
-      setGisError(e instanceof Error ? e.message : "Caricamento selezioni salvate fallito");
-    });
-  }, [refreshSavedSelections, token]);
 
   useEffect(() => {
     if (!token) return;
@@ -941,7 +880,7 @@ export default function CatastoGisPage() {
         layer_key: `draft-${nextLayerIndex}`,
         saved_selection_id: null,
         name: file.name.replace(/\.(xlsx|xls)$/i, ""),
-        color: LAYER_COLORS[nextLayerIndex % LAYER_COLORS.length] ?? "#10B981",
+        color: LAYER_COLORS[nextLayerIndex % LAYER_COLORS.length],
         opacity: 0.55,
         visible: true,
         source_filename: file.name,
@@ -982,192 +921,11 @@ export default function CatastoGisPage() {
     }
   }, [focusLayerGeojson, token]);
 
-  const handleSaveImportedLayer = useCallback(async (layerKey: string) => {
-    if (!token) return;
-    const layer = overlayLayers.find((item) => item.layer_key === layerKey);
-    if (!layer || layer.isPersisted || layer.importedItems.length === 0 || !layer.importStats) return;
-    const trimmedName = layer.name.trim();
-    if (!trimmedName) {
-      setGisError("Inserisci un nome per salvare il layer.");
-      return;
-    }
+  const { savedSelections, setSavedSelections, savedSelectionOpacities, savedSelectionFills, savedBusy, refreshSavedSelections, handleSaveImportedLayer, handleLoadSavedSelection, handleUpdatePersistedLayer, handleDeleteSavedSelection, handleUpdateArchivedSelectionColor, handleArchiveOpacityChange, handleArchiveFillChange } = useGisArchive({ token, autoSelectionId, overlayLayers, setOverlayLayers, setGisError, setGisInfo, focusLayerGeojson, updateOverlayLayer });
 
-    setSavedBusy(true);
-    setGisError(null);
-    setGisInfo(null);
-    try {
-      const saved = await catastoGisCreateSavedSelection(token, {
-        name: trimmedName,
-        color: layer.color,
-        source_filename: layer.source_filename ?? null,
-        import_summary: layer.importStats as unknown as Record<string, unknown>,
-        items: layer.importedItems,
-      });
-      setOverlayLayers((layers) =>
-        layers.map((item) =>
-          item.layer_key === layerKey
-            ? {
-                ...item,
-                layer_key: saved.id,
-                saved_selection_id: saved.id,
-                name: saved.name,
-                color: saved.color,
-                geojson: saved.geojson ?? item.geojson,
-                isPersisted: true,
-              }
-            : item,
-        ),
-      );
-      await refreshSavedSelections();
-      setGisInfo(`Layer salvato: ${saved.name} (${saved.n_particelle.toLocaleString("it-IT")} particelle).`);
-    } catch (e) {
-      setGisError(e instanceof Error ? e.message : "Salvataggio layer fallito");
-    } finally {
-      setSavedBusy(false);
-    }
-  }, [overlayLayers, refreshSavedSelections, token]);
-
-  const handleLoadSavedSelection = useCallback(async (
-    selectionId: string,
-    overrides?: { opacity?: number; showFill?: boolean },
-  ) => {
-    if (!token) return;
-
-    const existing = overlayLayers.find((layer) => layer.saved_selection_id === selectionId);
-    if (existing) {
-      updateOverlayLayer(existing.layer_key, (layer) => ({
-        ...layer,
-        visible: true,
-        opacity: overrides?.opacity ?? layer.opacity,
-        showFill: overrides?.showFill ?? layer.showFill,
-      }));
-      focusLayerGeojson(existing.geojson);
-      setGisInfo(`Layer già disponibile in mappa: ${existing.name}.`);
-      setGisError(null);
-      return;
-    }
-
-    setSavedBusy(true);
-    setGisError(null);
-    setGisInfo(null);
-    try {
-      const detail = await catastoGisGetSavedSelection(token, selectionId);
-      const loadedLayer: OverlayLayerState = {
-        layer_key: detail.id,
-        saved_selection_id: detail.id,
-        name: detail.name,
-        color: detail.color,
-        opacity: overrides?.opacity ?? savedSelectionOpacities[selectionId] ?? 0.55,
-        showFill: overrides?.showFill ?? savedSelectionFills[selectionId] ?? true,
-        visible: true,
-        source_filename: detail.source_filename ?? null,
-        geojson: detail.geojson ?? { type: "FeatureCollection", features: [] },
-        importStats: buildImportStatsFromDetail(detail),
-        importedItems: [],
-        isPersisted: true,
-      };
-      setOverlayLayers((layers) => [...layers, loadedLayer]);
-      focusLayerGeojson(loadedLayer.geojson);
-      setGisInfo(`Layer caricato: ${detail.name}.`);
-    } catch (e) {
-      setGisError(e instanceof Error ? e.message : "Caricamento layer fallito");
-    } finally {
-      setSavedBusy(false);
-    }
-  }, [focusLayerGeojson, overlayLayers, savedSelectionFills, savedSelectionOpacities, token, updateOverlayLayer]);
-
-  const handleUpdatePersistedLayer = useCallback(async (layerKey: string) => {
-    if (!token) return;
-    const layer = overlayLayers.find((item) => item.layer_key === layerKey);
-    if (!layer?.saved_selection_id) return;
-
-    setSavedBusy(true);
-    setGisError(null);
-    setGisInfo(null);
-    try {
-      const updated = await catastoGisUpdateSavedSelection(token, layer.saved_selection_id, {
-        name: layer.name.trim() || undefined,
-        color: layer.color,
-      });
-      setOverlayLayers((layers) =>
-        layers.map((item) =>
-          item.layer_key === layerKey
-            ? {
-                ...item,
-                name: updated.name,
-                color: updated.color,
-              }
-            : item,
-        ),
-      );
-      await refreshSavedSelections();
-      setGisInfo(`Layer aggiornato: ${updated.name}.`);
-    } catch (e) {
-      setGisError(e instanceof Error ? e.message : "Aggiornamento layer fallito");
-    } finally {
-      setSavedBusy(false);
-    }
-  }, [overlayLayers, refreshSavedSelections, token]);
-
-  const handleDeleteSavedSelection = useCallback(async (selectionId: string) => {
-    if (!token) return;
-    setSavedBusy(true);
-    setGisError(null);
-    setGisInfo(null);
-    try {
-      await catastoGisDeleteSavedSelection(token, selectionId);
-      setOverlayLayers((layers) => layers.filter((layer) => layer.saved_selection_id !== selectionId));
-      await refreshSavedSelections();
-      setGisInfo("Layer salvato eliminato.");
-    } catch (e) {
-      setGisError(e instanceof Error ? e.message : "Eliminazione layer fallita");
-    } finally {
-      setSavedBusy(false);
-    }
-  }, [refreshSavedSelections, token]);
-
-  const handleUpdateArchivedSelectionColor = useCallback(async (selectionId: string, color: string) => {
-    if (!token) return;
-    try {
-      await catastoGisUpdateSavedSelection(token, selectionId, { color });
-      setOverlayLayers((layers) => layers.map((l) => l.saved_selection_id === selectionId ? { ...l, color } : l));
-    } catch (e) {
-      setGisError(e instanceof Error ? e.message : "Aggiornamento colore fallito");
-    }
-  }, [token]);
-
-  const handleArchiveOpacityChange = useCallback(async (selectionId: string, opacity: number) => {
-    setSavedSelectionOpacities((prev) => ({ ...prev, [selectionId]: opacity }));
-    setOverlayLayers((layers) =>
-      layers.map((l) => l.saved_selection_id === selectionId ? { ...l, opacity } : l),
-    );
-    if (!overlayLayers.some((layer) => layer.saved_selection_id === selectionId)) {
-      await handleLoadSavedSelection(selectionId, { opacity });
-    }
-  }, [handleLoadSavedSelection, overlayLayers]);
-
-  const handleArchiveFillChange = useCallback(async (selectionId: string, showFill: boolean) => {
-    setSavedSelectionFills((prev) => ({ ...prev, [selectionId]: showFill }));
-    setOverlayLayers((layers) =>
-      layers.map((l) => l.saved_selection_id === selectionId ? { ...l, showFill } : l),
-    );
-    if (!overlayLayers.some((layer) => layer.saved_selection_id === selectionId)) {
-      await handleLoadSavedSelection(selectionId, { showFill });
-    }
-  }, [handleLoadSavedSelection, overlayLayers]);
-
-  useEffect(() => {
-    if (!token || !autoSelectionId) return;
-    if (autoLoadedSelectionRef.current === autoSelectionId) return;
-    autoLoadedSelectionRef.current = autoSelectionId;
-    void handleLoadSavedSelection(autoSelectionId).catch((e) => {
-      setGisError(e instanceof Error ? e.message : "Caricamento layer da URL fallito");
-    });
-  }, [autoSelectionId, handleLoadSavedSelection, token]);
-
-  const renderBasemapControl = (isDark: boolean) => (
-    <div className={`rounded-2xl border p-3 ${isDark ? "border-white/15 bg-white/10" : "border-gray-100 bg-gray-50"}`}>
-      <p className={`mb-2 text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>
+  const renderBasemapControl = () => (
+    <div className="rounded-2xl border p-3 border-gray-100 bg-gray-50">
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
         Sfondo mappa
       </p>
       <div className="grid grid-cols-3 gap-1.5">
@@ -1178,17 +936,13 @@ export default function CatastoGisPage() {
             <button
               key={option.id}
               type="button"
-              onClick={() => {
-                if (!disabled) setBasemap(option.id);
-              }}
+              onClick={() => setBasemap(option.id)}
               disabled={disabled}
               title={disabled ? "Configura NEXT_PUBLIC_GOOGLE_MAPS_API_KEY per usare Google Map Tiles." : option.label}
               className={`inline-flex min-w-0 items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-[11px] font-semibold transition ${
                 selected
                   ? "border-emerald-300 bg-white text-emerald-800 shadow-sm ring-1 ring-emerald-100"
-                  : isDark
-                    ? "border-white/15 bg-white/5 text-white/65 hover:bg-white/10"
-                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                  : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
               } ${disabled ? "cursor-not-allowed opacity-45" : ""}`}
             >
               <span className={`h-2 w-2 shrink-0 rounded-full ${option.swatch}`} />
@@ -1200,9 +954,9 @@ export default function CatastoGisPage() {
     </div>
   );
 
-  const renderParticelleQuickFilters = (isDark: boolean) => (
-    <div className={`mt-2 rounded-2xl border px-2.5 py-2 ${isDark ? "border-white/15 bg-white/5" : "border-indigo-100 bg-white/70"}`}>
-      <p className={`mb-2 text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-white/50" : "text-indigo-500"}`}>
+  const renderParticelleQuickFilters = () => (
+    <div className="mt-2 rounded-2xl border px-2.5 py-2 border-indigo-100 bg-white/70">
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-indigo-500">
         Filtro particelle sempre attive
       </p>
       <div className="flex flex-wrap gap-1.5">
@@ -1220,18 +974,16 @@ export default function CatastoGisPage() {
                     : option.id === "ruolo_inferito"
                       ? "border-amber-200 bg-amber-50 text-amber-700 shadow-sm"
                     : "border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm"
-                  : isDark
-                    ? "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
-                    : "border-gray-200 bg-white text-gray-500 hover:border-indigo-100 hover:text-indigo-700"
+                  : "border-gray-200 bg-white text-gray-500 hover:border-indigo-100 hover:text-indigo-700"
               }`}
             >
-              <span className={`h-1.5 w-1.5 rounded-full ${selected ? option.dot : isDark ? "bg-white/35" : "bg-gray-300"}`} />
+              <span className={`h-1.5 w-1.5 rounded-full ${selected ? option.dot : "bg-gray-300"}`} />
               {option.label}
             </button>
           );
         })}
       </div>
-      <div className={`mt-1 text-[11px] ${isDark ? "text-white/55" : "text-slate-500"}`}>
+      <div className="mt-1 text-[11px] text-slate-500">
         I contorni delle particelle restano sempre disponibili in mappa.
       </div>
     </div>
@@ -1331,7 +1083,7 @@ export default function CatastoGisPage() {
       (!popupParticella.codice_catastale || !popupParticella.foglio || !popupParticella.particella),
   );
   const popupTitle = popupParticella
-    ? popupParticella.cfm || (popupHasIncompleteKey ? "Particella GIS incompleta" : `${popupParticella.foglio ?? "-"} / ${popupParticella.particella ?? "-"}`)
+    ? popupParticella.cfm || (popupHasIncompleteKey ? "Particella GIS incompleta" : `${popupParticella.foglio} / ${popupParticella.particella}`)
     : "";
   const popupLocationLine = popupHasIncompleteKey
     ? "Riferimenti catastali non disponibili per questo poligono GIS."
@@ -1373,54 +1125,7 @@ export default function CatastoGisPage() {
       requiredModule="catasto"
       hideContentHeader
     >
-      <div className="relative -mx-4 -mb-4 -mt-4 flex h-[calc(100dvh-64px)] min-h-[620px] flex-col overflow-hidden border-y border-slate-200 bg-[#101b17] shadow-[0_24px_80px_rgba(15,23,42,0.18)] md:-mx-7 md:-mb-6 md:-mt-6 md:h-[calc(100vh-72px)] md:min-h-[760px]">
-        <div className="absolute left-3 right-3 top-3 z-20 flex flex-col gap-2 lg:left-6 lg:right-[452px] lg:max-w-none lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0 rounded-2xl border border-white/20 bg-white/95 p-2.5 shadow-2xl backdrop-blur md:p-3">
-            <div className="flex items-start gap-3">
-              <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1D4E35] text-white shadow-sm sm:flex">
-                <span className="material-symbols-outlined text-[22px]">map</span>
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <h2 className="truncate text-sm font-bold uppercase tracking-[0.18em] text-slate-950">GAIA GIS</h2>
-                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                    Catasto
-                  </span>
-                </div>
-                <p className="mt-1 hidden text-xs text-slate-500 sm:block">
-                  Distretti, particelle, selezioni e layer importati nel comprensorio consortile.
-                </p>
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/20 bg-white/95 p-2 shadow-2xl backdrop-blur">
-            <button
-              type="button"
-              onClick={openExpanded}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-950 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            >
-              <span className="material-symbols-outlined text-[16px]">open_in_full</span>
-              Vista
-            </button>
-            <button
-              type="button"
-              onClick={() => setMobilePanelOpen(true)}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 lg:hidden"
-            >
-              <span className="material-symbols-outlined text-[16px]">tune</span>
-              Strumenti
-            </button>
-            <div className="hidden sm:block">
-              <DrawingTools
-                onDrawPolygon={() => setDrawSignal((value) => value + 1)}
-                onClearDrawing={handleClearSelection}
-                isLoading={isLoading}
-                hasSelection={hasDrawing}
-                nParticelle={result?.n_particelle}
-              />
-            </div>
-          </div>
-        </div>
+      <GisWorkspace consoleOpen={mobilePanelOpen} onConsoleChange={setMobilePanelOpen} onExpand={openExpanded}>
 
         {error || exportError || gisError ? (
           <div className="absolute left-4 right-4 top-[118px] z-20 rounded-xl border border-red-200 bg-red-50/95 px-3 py-2 text-sm font-medium text-red-700 shadow-xl backdrop-blur lg:right-[452px]">
@@ -1432,7 +1137,7 @@ export default function CatastoGisPage() {
           </div>
         ) : null}
 
-        <div className={`grid min-h-0 flex-1 overflow-hidden ${isExpanded ? "lg:grid-cols-1" : "grid-rows-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_432px] lg:grid-rows-none"}`}>
+        <div className="gis-map-grid min-h-0 flex-1 overflow-hidden">
           <div
             className={
               isExpanded
@@ -2000,7 +1705,7 @@ export default function CatastoGisPage() {
                                   {popupParticella.ruolo_summary.source_note}
                                 </div>
                               ) : null}
-                              {popupRuoloHelp ? (
+                              {
                                 <button
                                   type="button"
                                   onClick={() => setPopupRuoloHelpOpen(true)}
@@ -2008,7 +1713,7 @@ export default function CatastoGisPage() {
                                 >
                                   Approfondisci come e stato determinato
                                 </button>
-                              ) : null}
+                              }
                             </div>
                             <div className="text-right text-[11px] text-emerald-900">
                               <div>{formatHectares(popupParticella.ruolo_summary.sup_irrigata_ha_totale)} irrigati</div>
@@ -2199,110 +1904,11 @@ export default function CatastoGisPage() {
                         </div>
                       )}
                     </div>
-                    {renderBasemapControl(false)}
+                    {renderBasemapControl()}
                     <div>
                       <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Layer e dettaglio particelle</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        <div className="group relative">
-                          <button
-                            type="button"
-                            onClick={() => setShowDistretti((v) => !v)}
-                            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
-                              showDistretti
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                : "border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-600"
-                            }`}
-                          >
-                            <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showDistretti ? "bg-emerald-500" : "bg-gray-300"}`} />
-                            Distretti
-                          </button>
-                          <div className="pointer-events-none absolute left-0 top-full z-10 w-52 translate-y-1 rounded-2xl border border-blue-100 bg-white/95 p-3 pt-5 opacity-0 shadow-xl ring-1 ring-black/5 backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
-                            <button
-                              type="button"
-                              onClick={() => setShowDistrettiFill((v) => !v)}
-                              className={`mb-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-all ${
-                                showDistrettiFill
-                                  ? "border-sky-200 bg-sky-50 text-sky-700"
-                                  : "border-gray-200 bg-white text-gray-500 hover:border-sky-100 hover:text-sky-700"
-                              }`}
-                            >
-                              <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showDistrettiFill ? "bg-sky-400" : "bg-gray-300"}`} />
-                              Aree colorate
-                            </button>
-                            <div className="flex items-center justify-between text-[11px]">
-                              <span className="font-medium text-emerald-900/75">Opacità aree distretto</span>
-                              <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
-                                {Math.round(distrettiOpacity * 100)}%
-                              </span>
-                            </div>
-                            <input
-                              type="range"
-                              min="0"
-                              max="1"
-                              step="0.05"
-                              value={distrettiOpacity}
-                              onChange={(e) => setDistrettiOpacity(Number(e.target.value))}
-                              className="mt-2 w-full accent-emerald-600"
-                            />
-                          </div>
-                        </div>
-                        <div className="group relative">
-                          <button
-                            type="button"
-                            onClick={() => setShowParticelleFill((v) => !v)}
-                            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
-                              showParticelleFill
-                                ? "border-indigo-200 bg-indigo-50 text-indigo-700"
-                                : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700"
-                            }`}
-                          >
-                            <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showParticelleFill ? "bg-indigo-400" : "bg-gray-300"}`} />
-                            Riempimento particelle
-                          </button>
-                          <div className="pointer-events-none absolute left-0 top-full z-10 w-52 translate-y-1 rounded-2xl border border-indigo-100 bg-white/95 p-3 pt-5 opacity-0 shadow-xl ring-1 ring-black/5 backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
-                            <div className="flex items-center justify-between text-[11px]">
-                              <span className="font-medium text-indigo-900/75">Opacità particelle</span>
-                              <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-semibold text-indigo-700">
-                                {Math.round(particelleOpacity * 100)}%
-                              </span>
-                            </div>
-                            <input
-                              type="range"
-                              min="0"
-                              max="1"
-                              step="0.05"
-                              value={particelleOpacity}
-                              onChange={(e) => setParticelleOpacity(Number(e.target.value))}
-                              className="w-full accent-indigo-600"
-                            />
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setShowDeliveryPoints((v) => !v)}
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
-                            showDeliveryPoints
-                              ? "border-teal-200 bg-teal-50 text-teal-700"
-                              : "border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-600"
-                          }`}
-                        >
-                          <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showDeliveryPoints ? "bg-teal-400" : "bg-gray-300"}`} />
-                          Punti consegna
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setHighlightSelected((v) => !v)}
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
-                            highlightSelected
-                              ? "border-amber-200 bg-amber-50 text-amber-700"
-                              : "border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-600"
-                          }`}
-                        >
-                          <span className={`h-1.5 w-1.5 rounded-full transition-colors ${highlightSelected ? "bg-amber-400" : "bg-gray-300"}`} />
-                          Evidenzia sel.
-                        </button>
-                      </div>
-                      {renderParticelleQuickFilters(false)}
+                      <GisLayerControls {...{ showDistretti, setShowDistretti, showDistrettiFill, setShowDistrettiFill, showParticelleFill, setShowParticelleFill, showDeliveryPoints, setShowDeliveryPoints, highlightSelected, setHighlightSelected, distrettiOpacity, setDistrettiOpacity, particelleOpacity, setParticelleOpacity }} />
+                      {renderParticelleQuickFilters()}
                       {renderDeliveryPointQuickFilters(false)}
                     </div>
                     {renderDistrettiPanel(false)}
@@ -2332,7 +1938,7 @@ export default function CatastoGisPage() {
           </div>
 
           {!isExpanded ? (
-            <aside className={`${mobilePanelOpen ? "fixed inset-x-0 bottom-0 top-24 z-40 flex rounded-t-[28px] shadow-[0_-24px_70px_rgba(15,23,42,0.28)]" : "hidden"} min-h-0 flex-col overflow-y-auto overscroll-contain border-t border-slate-200 bg-white/95 backdrop-blur lg:relative lg:inset-auto lg:z-10 lg:flex lg:h-full lg:rounded-none lg:border-l lg:border-t-0 lg:shadow-[-18px_0_50px_rgba(15,23,42,0.18)]`}>
+            <aside id="gis-console" aria-label="Console GIS" className="flex min-h-0 flex-col overflow-y-auto overscroll-contain border-l border-slate-200 bg-white backdrop-blur">
 
               {/* ── Controls ── */}
               <div className="shrink-0 border-b border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8faf7_100%)] px-4 py-4">
@@ -2340,7 +1946,7 @@ export default function CatastoGisPage() {
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Console GIS</p>
                     <h3 className="mt-1 text-base font-semibold text-slate-950">Layer e strumenti</h3>
-                    <p className="mt-1 hidden text-xs leading-5 text-slate-500 sm:block">Pannello operativo persistente, ispirato ai GIS web: layer, import, archivio e risultati restano sempre a destra.</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">Layer, selezione e risultati. Nascondi la console per dare spazio alla mappa.</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
@@ -2350,7 +1956,7 @@ export default function CatastoGisPage() {
                     <button
                       type="button"
                       onClick={() => setMobilePanelOpen(false)}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 lg:hidden"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500"
                       aria-label="Chiudi strumenti GIS"
                     >
                       <span className="material-symbols-outlined text-[18px]">close</span>
@@ -2360,109 +1966,18 @@ export default function CatastoGisPage() {
 
                 {/* Layer toggles */}
                 <div className="flex flex-col gap-4">
-                  {renderBasemapControl(false)}
+                  <DrawingTools
+                    orientation="vertical"
+                    onDrawPolygon={() => { setDrawSignal((value) => value + 1); setMobilePanelOpen(false); }}
+                    onClearDrawing={handleClearSelection}
+                    isLoading={isLoading}
+                    hasSelection={hasDrawing}
+                    nParticelle={result?.n_particelle}
+                  />
+                  {renderBasemapControl()}
                   <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Layer e dettaglio particelle</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    <div className="group relative">
-                      <button
-                        type="button"
-                        onClick={() => setShowDistretti((v) => !v)}
-                        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
-                          showDistretti
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                            : "border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-600"
-                        }`}
-                      >
-                        <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showDistretti ? "bg-emerald-500" : "bg-gray-300"}`} />
-                        Distretti
-                      </button>
-                      <div className="pointer-events-none absolute left-0 top-full z-10 w-52 translate-y-1 rounded-2xl border border-blue-100 bg-white/95 p-3 pt-5 opacity-0 shadow-xl ring-1 ring-black/5 backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
-                        <button
-                          type="button"
-                          onClick={() => setShowDistrettiFill((v) => !v)}
-                          className={`mb-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-all ${
-                            showDistrettiFill
-                              ? "border-sky-200 bg-sky-50 text-sky-700"
-                              : "border-gray-200 bg-white text-gray-500 hover:border-sky-100 hover:text-sky-700"
-                          }`}
-                        >
-                          <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showDistrettiFill ? "bg-sky-400" : "bg-gray-300"}`} />
-                          Aree colorate
-                        </button>
-                        <div className="flex items-center justify-between text-[11px]">
-                          <span className="font-medium text-emerald-900/75">Opacità aree distretto</span>
-                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
-                            {Math.round(distrettiOpacity * 100)}%
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.05"
-                          value={distrettiOpacity}
-                          onChange={(e) => setDistrettiOpacity(Number(e.target.value))}
-                          className="mt-2 w-full accent-emerald-600"
-                        />
-                      </div>
-                    </div>
-                    <div className="group relative">
-                      <button
-                        type="button"
-                        onClick={() => setShowParticelleFill((v) => !v)}
-                        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
-                          showParticelleFill
-                            ? "border-indigo-200 bg-indigo-50 text-indigo-700"
-                            : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700"
-                        }`}
-                      >
-                        <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showParticelleFill ? "bg-indigo-400" : "bg-gray-300"}`} />
-                        Riempimento particelle
-                      </button>
-                      <div className="pointer-events-none absolute left-0 top-full z-10 w-52 translate-y-1 rounded-2xl border border-indigo-100 bg-white/95 p-3 pt-5 opacity-0 shadow-xl ring-1 ring-black/5 backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
-                        <div className="flex items-center justify-between text-[11px]">
-                          <span className="font-medium text-indigo-900/75">Opacità particelle</span>
-                          <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-semibold text-indigo-700">
-                            {Math.round(particelleOpacity * 100)}%
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.05"
-                          value={particelleOpacity}
-                          onChange={(e) => setParticelleOpacity(Number(e.target.value))}
-                          className="w-full accent-indigo-600"
-                        />
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowDeliveryPoints((v) => !v)}
-                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
-                        showDeliveryPoints
-                          ? "border-teal-200 bg-teal-50 text-teal-700"
-                          : "border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-600"
-                      }`}
-                    >
-                      <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showDeliveryPoints ? "bg-teal-400" : "bg-gray-300"}`} />
-                      Punti consegna
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setHighlightSelected((v) => !v)}
-                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
-                        highlightSelected
-                          ? "border-amber-200 bg-amber-50 text-amber-700"
-                          : "border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-600"
-                      }`}
-                    >
-                      <span className={`h-1.5 w-1.5 rounded-full transition-colors ${highlightSelected ? "bg-amber-400" : "bg-gray-300"}`} />
-                      Evidenzia sel.
-                    </button>
-                  </div>
-                  {renderParticelleQuickFilters(false)}
+                  <GisLayerControls {...{ showDistretti, setShowDistretti, showDistrettiFill, setShowDistrettiFill, showParticelleFill, setShowParticelleFill, showDeliveryPoints, setShowDeliveryPoints, highlightSelected, setHighlightSelected, distrettiOpacity, setDistrettiOpacity, particelleOpacity, setParticelleOpacity }} />
+                  {renderParticelleQuickFilters()}
                   {renderDeliveryPointQuickFilters(false)}
                 </div>
 
@@ -2639,7 +2154,7 @@ export default function CatastoGisPage() {
                             <div className="flex items-center justify-between text-[11px] text-gray-500">
                               <span className="font-medium text-gray-600">Opacità</span>
                               <span className="rounded-full bg-white px-2 py-0.5 font-semibold text-gray-700 shadow-sm">
-                                {Math.round((layer.opacity ?? 0.55) * 100)}%
+                                {Math.round(layer.opacity * 100)}%
                               </span>
                             </div>
                             <input
@@ -2647,7 +2162,7 @@ export default function CatastoGisPage() {
                               min="5"
                               max="100"
                               step="5"
-                              value={Math.round((layer.opacity ?? 0.55) * 100)}
+                              value={Math.round(layer.opacity * 100)}
                               onChange={(e) =>
                                 updateOverlayLayer(layer.layer_key, (item) => ({
                                   ...item,
@@ -2700,7 +2215,7 @@ export default function CatastoGisPage() {
             </aside>
           ) : null}
         </div>
-      </div>
+      </GisWorkspace>
       <ParticellaDetailDialog open={popupDetailOpen} match={popupMatch} onClose={() => setPopupDetailOpen(false)} />
       {popupAnomalia ? (
         <CatastoAnomaliaExplainer

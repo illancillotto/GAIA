@@ -1,0 +1,46 @@
+.workspace {
+  height: calc(100dvh - var(--gis-top, 112px));
+}
+
+.workspace > :global(.gis-map-grid) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.workspace[data-console-open="false"] :global(#gis-console) {
+  display: none;
+}
+
+.workspace :global(#gis-console) {
+  position: absolute;
+  inset: 53px 0 0;
+  z-index: 40;
+}
+
+.workspace [data-gis-interrogate] {
+  right: 88px;
+}
+
+@media (max-width: 767px) {
+  .workspace [data-gis-field-tools] {
+    bottom: 80px;
+    max-height: 40%;
+    overflow-y: auto;
+  }
+
+  .workspace [data-gis-interrogate] {
+    left: 16px;
+    right: auto;
+  }
+}
+
+@media (min-width: 1024px) {
+  .workspace[data-console-open="true"] > :global(.gis-map-grid) {
+    grid-template-columns: minmax(0, 1fr) 380px;
+  }
+
+  .workspace :global(#gis-console) {
+    position: relative;
+    inset: auto;
+  }
+}

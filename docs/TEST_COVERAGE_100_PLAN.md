@@ -17,6 +17,27 @@ Il gate sui file cambiati a `100%` resta attivo come protezione immediata, ma no
 
 ## Stato di partenza
 
+### Verifica Catasto GIS - 2026-09-07
+
+Il consolidamento dei controlli layer aggiunge test di integrazione della pagina
+per viste normale/estesa, import e archivio, errori API, popup incompleti e polling
+AdE. `GisLayerControls`, `GisWorkspace`, `use-territorio-measurement`,
+`TerritorioFieldTools` e `InterrogazionePanel` raggiungono il 100% su statement,
+branch, funzioni e righe. Il follow-up sull'archivio porta anche la pagina
+`app/catasto/gis/page.tsx`, `use-gis-archive.ts` e
+`gis-archive-persistence.ts` al 100% full-file. Verifica cumulativa:
+55 test, 860 statement, 809 branch, 256 funzioni e 734 righe, tutti coperti.
+Il repeat sul working tree basato su `8ae046a3` conferma gli stessi conteggi;
+report `/tmp/gaia-gis-recheck-coverage`. Il 100% riguarda gli otto file runtime
+GIS della change, non l'intero frontend o repository.
+Nessuna esclusione o soglia ridotta. Le evidenze e il debito di complessita
+legacy residuo sono in `docs/code-quality/PROGRESS.md`.
+
+La correzione del matching del ratchet ha tre test di regressione dedicati:
+callback sintetiche di moduli rimossi non autorizzano nuovi callable omonimi,
+e due nuove funzioni non possono ereditare entrambe un unico simbolo rimosso.
+Il controllo delle nuove violation resta attivo.
+
 Il repository ha gia alcuni mattoni utili:
 
 - CI backend con `pytest --cov=app` e gate `100%` sui file backend runtime cambiati
