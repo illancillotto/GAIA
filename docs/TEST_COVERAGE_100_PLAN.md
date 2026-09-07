@@ -807,6 +807,54 @@ Fino alla chiusura completa del piano:
   - `cd frontend && VITEST_COVERAGE_INCLUDE='src/components/elaborazioni/sister-portal-health-workspace.tsx' npm run test:coverage -- --run tests/unit/sister-portal-health-workspace.test.tsx --coverage.reportsDirectory=/tmp/gaia-sister-portal-health-coverage` -> `5` test passati, `100%` statements / branches / functions / lines sul componente runtime modificato;
   - `cd frontend && npm run typecheck` -> passato.
 
+- `2026-09-05` - Modularizzazione del router Utenze
+  (`app/modules/utenze/router/`, `app/modules/utenze/routes/`)
+  La facade preserva import legacy, ordine route e schema OpenAPI; i nuovi
+  moduli separano import, Bonifica, soggetti, documenti e reporting.
+  Esito validato:
+  - `89` test passati;
+  - `870/870` statement e `220/220` branch, tutti al `100%`;
+  - snapshot OpenAPI byte-identico: `746` path e `876` operazioni;
+  - Ruff check/format e compileall: passati.
+
+- `2026-09-05` - Modularizzazione del router Network
+  (`app/modules/network/router/`)
+  La facade preserva 39 endpoint, ordine route, import e monkeypatch legacy;
+  route e helper sono separati per VPN, dispositivi/RDAP, tracking/inferenza,
+  traffico, Sophos, scansioni e planimetrie.
+  Esito validato:
+  - run finale mirato: `68` test API/helper passati;
+  - `1.405/1.405` statement e `452/452` branch, tutti al `100%`;
+  - snapshot OpenAPI byte-identico: `746` path, `876` operazioni, SHA-256
+    `2392ea45da9938cfcd0773e2d7e253023604e8e38697b922404c04c950510a4e`;
+  - Ruff check/format, compileall e quality tests: passati.
+
+- `2026-09-05` - Modularizzazione del client API frontend
+  (`frontend/src/lib/api/index.ts` e 15 moduli estratti)
+  La facciata `@/lib/api`, le firme TypeScript e tutti i `450` export pubblici
+  restano invariati. I test generati e manuali caratterizzano trasporto, payload
+  opzionali, query string e gestione degli errori di ogni modulo estratto.
+  Esito validato:
+  - suite API mirata: `811` test passati;
+  - coverage esplicita sui 16 file runtime della slice: `1.263/1.263`
+    statement, `826/826` branch, `420/420` funzioni e `1.195/1.195` linee,
+    tutte al `100%`;
+  - typecheck frontend globale ed ESLint mirato: passati.
+
+- `2026-09-05` - Portal Health SISTER: KPI credenziali attive e media operazioni
+  (`app/modules/elaborazioni/telemetry_schemas.py`,
+  `app/modules/elaborazioni/telemetry_service.py`,
+  `src/components/elaborazioni/sister-portal-health-workspace.tsx`,
+  `src/types/portal-health.ts`)
+  Il contratto restituisce le credenziali con almeno un'esecuzione attribuita e
+  la media delle esecuzioni uniche per tali credenziali nella finestra corrente;
+  gli eventi senza credenziale non partecipano al denominatore. La UI aggiorna
+  entrambi i KPI nelle finestre 24 ore, 7 giorni e 30 giorni.
+  Esito validato:
+  - `PYTHONPATH=backend backend/.venv/bin/pytest -q backend/tests/test_sister_portal_telemetry.py --cov=app.modules.elaborazioni.telemetry_schemas --cov=app.modules.elaborazioni.telemetry_service --cov-branch --cov-report=term-missing --cov-fail-under=100` -> `3` test passati, `100%` statement e branch sui due file runtime backend modificati;
+  - `cd frontend && npm run test:coverage -- sister-portal-health-workspace.test.tsx --coverage.include='src/components/elaborazioni/sister-portal-health-workspace.tsx' --coverage.reportsDirectory=/tmp/gaia-portal-health-coverage` -> `5` test passati, `100%` statement, branch, funzioni e linee sul componente runtime modificato;
+  - `cd frontend && npm run typecheck:from-root` -> passato.
+
 - `2026-09-04` - AutoSync notturno Capacitas domande irrigue
   (`app/modules/elaborazioni/domande_irrigue_autosync_scheduler.py`, servizi e
   modelli backend collegati, `modules/elaborazioni/worker/worker.py`)
