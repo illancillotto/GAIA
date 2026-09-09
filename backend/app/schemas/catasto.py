@@ -346,6 +346,7 @@ class CatastoBatchCredentialUsageResponse(BaseModel):
     sister_username: str | None
     request_count: int
     execution_count: int
+    completed_count: int
 
 
 class CatastoBatchStatisticsResponse(BaseModel):

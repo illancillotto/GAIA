@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
+from app.schemas.catasto import CatastoBatchStatisticsResponse
 from app.services.elaborazioni_batch_statistics import build_batch_statistics
 
 
@@ -90,6 +91,7 @@ def test_build_batch_statistics_reports_live_rates_eta_and_historical_credential
                 "sister_username": "USR-ALE",
                 "request_count": 1,
                 "execution_count": 2,
+                "completed_count": 1,
             },
             {
                 "credential_id": removed_credential_id,
@@ -97,6 +99,7 @@ def test_build_batch_statistics_reports_live_rates_eta_and_historical_credential
                 "sister_username": None,
                 "request_count": 1,
                 "execution_count": 2,
+                "completed_count": 0,
             },
         ],
     }
@@ -152,3 +155,24 @@ def test_build_batch_statistics_handles_empty_and_completed_batches() -> None:
     assert completed["progress_percent"] == 100.0
     assert completed["success_rate_percent"] == 0.0
     assert completed["estimated_remaining_seconds"] == 0
+
+
+def test_completed_visure_belong_only_to_final_credential() -> None:
+    now = datetime.now(UTC)
+    first, final = uuid4(), uuid4()
+    completed = request("completed", 3, final)
+    requests = [completed, request("failed", 1, first), request("not_found", 1, final),
+                request("pending", 0, first), request("completed", 1)]
+    result = build_batch_statistics(
+        FakeDb(events=[(first, completed.id, now), (final, completed.id, now)],
+               credentials=[SimpleNamespace(id=first, label="Prima", sister_username="A"),
+                            SimpleNamespace(id=final, label="Finale", sister_username="B")]),
+        batch(started_at=now), requests, now=now,
+    )
+    usage = {item["credential_id"]: item for item in result["credentials_used"]}
+    assert usage[first]["completed_count"] == 0
+    assert usage[final]["completed_count"] == 1
+    assert usage[first]["request_count"] == 3
+    assert usage[final]["request_count"] == 2
+    response = CatastoBatchStatisticsResponse.model_validate(result)
+    assert sum(item.completed_count for item in response.credentials_used) == 1

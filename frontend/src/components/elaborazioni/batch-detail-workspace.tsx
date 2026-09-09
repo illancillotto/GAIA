@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import { ElaborazioneBatchProgress } from "@/components/elaborazioni/batch-progress";
+import { batchRequestCredentialName, latestBatchRequests } from "@/components/elaborazioni/batch-statistics";
 import { ElaborazioneCaptchaDialog } from "@/components/elaborazioni/captcha-dialog";
 import {
   ElaborazioneHero,
@@ -440,13 +441,10 @@ export function ElaborazioneBatchDetailWorkspace({
       return;
     }
 
-    if (!request.document_id || request.status !== "completed") {
-      return;
-    }
-
     setArtifactPreviewLoadingIds((current) => ({ ...current, [request.id]: true }));
     try {
-      const blob = await downloadCatastoDocumentBlob(token, request.document_id);
+      // The uncached preview action is rendered only for completed requests with a document.
+      const blob = await downloadCatastoDocumentBlob(token, request.document_id!);
       const url = URL.createObjectURL(blob);
       setArtifactPreviewUrls((current) => {
         if (current[request.id]) {
@@ -547,7 +545,7 @@ export function ElaborazioneBatchDetailWorkspace({
     [batch?.requests],
   );
   const filteredRequests = useMemo(() => {
-    const requests = batch?.requests ?? [];
+    const requests = latestBatchRequests(batch?.requests ?? []);
     switch (requestQuickFilter) {
       case "active":
         return requests.filter((request) => ["pending", "processing"].includes(request.status));
@@ -685,7 +683,8 @@ export function ElaborazioneBatchDetailWorkspace({
                     <th>Riferimento</th>
                     <th>Stato</th>
                     <th>Operazione</th>
-                    <th>Eseguita</th>
+                    <th>Eseguita (piu recenti prima)</th>
+                    <th>Credenziale</th>
                     <th>Dettagli</th>
                   </tr>
                 </thead>
@@ -713,6 +712,7 @@ export function ElaborazioneBatchDetailWorkspace({
                               ? "In coda"
                               : "—"}
                       </td>
+                      <td className="text-xs text-gray-500">{batchRequestCredentialName(request.sister_credential_id, batch.statistics)}</td>
                       <td className="text-xs text-gray-500">
                         <ElaborazioneOperationMessage value={request.error_message} />
                         {request.artifact_dir ? (
@@ -738,20 +738,10 @@ export function ElaborazioneBatchDetailWorkspace({
                                   {request.status === "completed" ? "Preview PDF" : "Preview screenshot"}
                                 </button>
                               ) : null}
-                              {request.status === "completed" && request.document_id && !artifactPreviewUrls[request.id] ? (
-                                <button
-                                  className={getArtifactActionClassName(artifactPreviewLoadingIds[request.id])}
-                                  disabled={artifactPreviewLoadingIds[request.id]}
-                                  onClick={() => void handleOpenPreviewModal(request)}
-                                  type="button"
-                                >
-                                  {artifactPreviewLoadingIds[request.id] ? "Caricamento PDF..." : "Preview PDF"}
-                                </button>
-                              ) : null}
                             </div>
                           </div>
                         ) : null}
-                        {request.status === "completed" && request.document_id && !request.artifact_dir ? (
+                        {request.status === "completed" && request.document_id && (!request.artifact_dir || !artifactPreviewUrls[request.id]) ? (
                           <div className="mt-2">
                             <button
                               className={getArtifactActionClassName(artifactPreviewLoadingIds[request.id])}
@@ -768,7 +758,7 @@ export function ElaborazioneBatchDetailWorkspace({
                   ))}
                   {filteredRequests.length === 0 ? (
                     <tr>
-                      <td className="py-6 text-center text-sm text-gray-500" colSpan={7}>
+                      <td className="py-6 text-center text-sm text-gray-500" colSpan={8}>
                         Nessuna richiesta nel filtro selezionato.
                       </td>
                     </tr>

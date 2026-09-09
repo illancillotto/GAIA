@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -19,8 +19,8 @@ def _as_utc(value: datetime | None) -> datetime | None:
     if value is None:
         return None
     if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def _round_rate(value: float) -> float:
@@ -64,6 +64,9 @@ def _build_credential_usage(
     execution_counts: dict[UUID, int],
     request_ids_by_credential: dict[UUID, set[UUID]],
 ) -> list[dict[str, object]]:
+    completed_counts = Counter(
+        request.sister_credential_id for request in requests if request.status == "completed"
+    )
     for request in requests:
         if request.sister_credential_id is not None:
             request_ids_by_credential[request.sister_credential_id].add(request.id)
@@ -85,6 +88,7 @@ def _build_credential_usage(
                 "label": credential.label if credential is not None else "Credenziale rimossa",
                 "sister_username": credential.sister_username if credential is not None else None,
                 "request_count": len(request_ids_by_credential[credential_id]),
+                "completed_count": completed_counts[credential_id],
                 "execution_count": max(
                     execution_counts[credential_id],
                     len(request_ids_by_credential[credential_id]),
@@ -106,7 +110,7 @@ def _resolve_duration_seconds(
     if started_at is None:
         return 0
     completed_at = _as_utc(batch.completed_at) if batch.status in BATCH_TERMINAL_STATUSES else None
-    end_at = completed_at or _as_utc(now) or datetime.now(timezone.utc)
+    end_at = completed_at or _as_utc(now) or datetime.now(UTC)
     return max(round((end_at - started_at).total_seconds()), 0)
 
 

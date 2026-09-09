@@ -6,8 +6,10 @@ import {
   BatchStatisticsPanel,
   formatBatchDuration,
   shouldRetainBatchDetail,
+  latestBatchRequests,
+  batchRequestCredentialName,
 } from "@/components/elaborazioni/batch-statistics";
-import type { CatastoBatchStatistics } from "@/types/api";
+import type { CatastoBatchStatistics, ElaborazioneBatchDetail } from "@/types/api";
 
 
 function statistics(overrides: Partial<CatastoBatchStatistics> = {}): CatastoBatchStatistics {
@@ -29,6 +31,7 @@ function statistics(overrides: Partial<CatastoBatchStatistics> = {}): CatastoBat
         sister_username: "USR-ALE",
         request_count: 6,
         execution_count: 7,
+        completed_count: 5,
       },
       {
         credential_id: "credential-2",
@@ -36,6 +39,7 @@ function statistics(overrides: Partial<CatastoBatchStatistics> = {}): CatastoBat
         sister_username: null,
         request_count: 2,
         execution_count: 4,
+        completed_count: 0,
       },
     ],
     ...overrides,
@@ -44,6 +48,27 @@ function statistics(overrides: Partial<CatastoBatchStatistics> = {}): CatastoBat
 
 
 describe("batch statistics presentation", () => {
+  it("orders by latest processing date, falls back to creation and keeps input unchanged", () => {
+    const requests = [
+      { row_index: 1, processed_at: "2026-09-09T10:00:00Z", created_at: "2026-09-07T10:00:00Z" },
+      { row_index: 2, processed_at: "2026-09-09T12:00:00+02:00", created_at: "2026-09-07T10:00:00Z" },
+      { row_index: 3, processed_at: null, created_at: "2026-09-07T10:00:00Z" },
+      { row_index: 4, processed_at: "2026-09-09T11:00:00Z", created_at: "2026-09-07T10:00:00Z" },
+    ] as ElaborazioneBatchDetail["requests"];
+    expect(latestBatchRequests(requests).map((request) => request.row_index)).toEqual([4, 2, 1, 3]);
+    expect(requests.map((request) => request.row_index)).toEqual([1, 2, 3, 4]);
+    expect(latestBatchRequests([])).toEqual([]);
+    expect(latestBatchRequests([requests[2], requests[0]]).map((request) => request.row_index)).toEqual([1, 3]);
+  });
+
+  it("resolves credential names without exposing identifiers as names", () => {
+    expect(batchRequestCredentialName("credential-1", statistics())).toBe("Alessandro");
+    expect(batchRequestCredentialName("credential-2", statistics())).toBe("Credenziale rimossa");
+    expect(batchRequestCredentialName(null, statistics())).toBe("Non assegnata");
+    expect(batchRequestCredentialName("unknown", statistics())).toBe("Credenziale non disponibile");
+    expect(batchRequestCredentialName("credential-1")).toBe("Credenziale non disponibile");
+  });
+
   it("formats missing, negative, short, minute and hour durations", () => {
     expect(formatBatchDuration(undefined)).toBe("—");
     expect(formatBatchDuration(-2)).toBe("0s");
@@ -81,8 +106,8 @@ describe("batch statistics presentation", () => {
     expect(screen.getByText("Durata totale")).toBeInTheDocument();
     expect(screen.getByText("1h 02m")).toBeInTheDocument();
     expect(screen.getByText("75%")).toBeInTheDocument();
-    expect(screen.getByText("Alessandro").parentElement).toHaveTextContent("Alessandro · USR-ALE · 6 richieste · 7 esecuzioni");
-    expect(screen.getByText("Credenziale rimossa").parentElement).toHaveTextContent("Credenziale rimossa · 2 richieste · 4 esecuzioni");
+    expect(screen.getByText("Alessandro").parentElement).toHaveTextContent("Alessandro · USR-ALE · 6 richieste distinte · 7 avvii elaborazione · 5 visure completate");
+    expect(screen.getByText("Credenziale rimossa").parentElement).toHaveTextContent("Credenziale rimossa · 2 richieste distinte · 4 avvii elaborazione · 0 visure completate");
   });
 
   it("renders unavailable rates and an empty credential set", () => {
@@ -99,5 +124,12 @@ describe("batch statistics presentation", () => {
 
     expect(screen.getAllByText("—")).toHaveLength(3);
     expect(screen.getByText("Nessuna credenziale ancora utilizzata.")).toBeInTheDocument();
+  });
+
+  it("does not present a missing completed count from an older backend as zero", () => {
+    const legacy = statistics();
+    Reflect.deleteProperty(legacy.credentials_used[0], "completed_count");
+    render(<BatchStatisticsPanel statistics={legacy} />);
+    expect(screen.getByText("Alessandro").parentElement).toHaveTextContent("— visure completate");
   });
 });

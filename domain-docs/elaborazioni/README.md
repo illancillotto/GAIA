@@ -7,6 +7,7 @@ Ambito runtime attuale:
 - visure per soggetto PF/PNF
 - gestione CAPTCHA
 - report e artifact diagnostici batch/richiesta
+- dettaglio batch con credenziale finale per riga, ordine cronologico decrescente e contatori distinti di richieste, avvii e visure completate per credenziale (vedi `docs/BATCH_MONITORING.md`)
 - pool credenziali SISTER con profilo default per worker e test connessione
 - calendario settimanale opzionale per ogni credenziale SISTER, con disponibilita calcolata in `Europe/Rome`: il worker usa il profilo solo nelle fasce configurate, mentre i test manuali restano sempre eseguibili
 - lease globale per `sister_username`: un account SISTER puo alimentare un solo runner alla volta tra batch e worker, anche se presente sotto utenti GAIA differenti; il rinnovo ogni minuto conserva la proprieta durante richieste lente e il rilascio avviene al checkpoint di pausa, fuori fascia e fine runner

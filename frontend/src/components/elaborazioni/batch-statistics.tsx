@@ -23,6 +23,22 @@ export function shouldRetainBatchDetail(
   return detail !== undefined && !["pending", "processing"].includes(status);
 }
 
+export function latestBatchRequests(requests: ElaborazioneBatchDetail["requests"]) {
+  return [...requests].sort((a, b) =>
+    Date.parse(b.processed_at ?? b.created_at) - Date.parse(a.processed_at ?? a.created_at)
+    || b.row_index - a.row_index,
+  );
+}
+
+export function batchRequestCredentialName(
+  credentialId: string | null,
+  statistics?: CatastoBatchStatistics | null,
+): string {
+  if (!credentialId) return "Non assegnata";
+  return statistics?.credentials_used.find((credential) => credential.credential_id === credentialId)?.label
+    ?? "Credenziale non disponibile";
+}
+
 export function BatchStatisticsInline({ statistics }: { statistics?: CatastoBatchStatistics | null }) {
   if (!statistics) return <span className="text-xs text-gray-400">Calcolo statistiche...</span>;
   return (
@@ -58,12 +74,18 @@ export function BatchStatisticsPanel({ statistics }: { statistics?: CatastoBatch
           </div>
         ))}
       </div>
+      <p className="mt-4 text-sm font-semibold text-[#173f2c]">Credenziali utilizzate</p>
+      <p className="mt-1 text-xs text-gray-600">
+        Le richieste distinte sono le righe associate alla credenziale; gli avvii includono le ripartenze sulla stessa richiesta.
+        Le visure completate sono attribuite alla credenziale finale. Una richiesta passata tra credenziali puo comparire in piu conteggi di richieste e avvii.
+      </p>
       <div className="mt-4 flex flex-wrap gap-2">
         {statistics.credentials_used.length > 0 ? statistics.credentials_used.map((credential) => (
           <div className="rounded-full border border-[#cfe0d5] bg-white px-3 py-1.5 text-xs text-gray-600" key={credential.credential_id}>
             <span className="font-semibold text-[#1D4E35]">{credential.label}</span>
             {credential.sister_username ? ` · ${credential.sister_username}` : ""}
-            {` · ${credential.request_count} richieste · ${credential.execution_count} esecuzioni`}
+            {` · ${credential.request_count} richieste distinte · ${credential.execution_count} avvii elaborazione`}
+            {` · ${credential.completed_count ?? "—"} visure completate`}
           </div>
         )) : <span className="text-sm text-gray-500">Nessuna credenziale ancora utilizzata.</span>}
       </div>
