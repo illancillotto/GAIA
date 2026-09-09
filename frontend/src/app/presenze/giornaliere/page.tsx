@@ -844,8 +844,6 @@ export default function PresenzeGiornalierePage() {
   const [isContractProfileExpanded, setIsContractProfileExpanded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingRecordDetail, setIsLoadingRecordDetail] = useState(false);
-  const [hasLoaded, setHasLoaded] = useState(false);
-  const [dismissedMonth, setDismissedMonth] = useState<string | null>(null);
   const [visibleRowCount, setVisibleRowCount] = useState(INITIAL_VISIBLE_ROWS);
   const [dayFocusFilter, setDayFocusFilter] = useState<DayFocusFilter>(null);
   const [anomalyPanelFilter, setAnomalyPanelFilter] = useState<AnomalyPanelFilter>("all");
@@ -881,7 +879,6 @@ export default function PresenzeGiornalierePage() {
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento giornaliere"))
       .finally(() => {
         setIsLoading(false);
-        setHasLoaded(true);
       });
   }, [selectedMonth]);
 
@@ -3190,35 +3187,6 @@ export default function PresenzeGiornalierePage() {
           </div>
         );
       })() : null}
-
-      {hasLoaded && !isLoading && records.length === 0 && dismissedMonth !== selectedMonth ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/35 px-4">
-          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-gray-400">Cartellino vuoto</p>
-            <h3 className="mt-2 text-lg font-semibold text-gray-900">Nessuna giornaliera per {formatMonthLabel(selectedMonth)}</h3>
-            <p className="mt-3 text-sm leading-6 text-gray-600">
-              Non risultano giornaliere caricate per questo mese. Vuoi consultare {formatMonthLabel(shiftMonth(selectedMonth, -1))}?
-            </p>
-            <div className="mt-6 flex flex-wrap justify-end gap-2">
-              <button className="btn-secondary" type="button" onClick={() => setDismissedMonth(selectedMonth)}>
-                Resta su {formatMonthLabel(selectedMonth)}
-              </button>
-              <button
-                className="btn-primary"
-                type="button"
-                onClick={() => setSelectedMonth((current) => shiftMonth(current, -1))}
-              >
-                Carica {formatMonthLabel(shiftMonth(selectedMonth, -1))}
-              </button>
-            </div>
-            <div className="mt-3 text-center">
-              <Link className="text-xs font-medium text-gray-500 underline" href="/elaborazioni/presenze-sync">
-                Oppure avvia una sync giornaliere
-              </Link>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </ProtectedPage>
   );
 }
