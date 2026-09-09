@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date
-from typing import Iterable, Sequence
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -15,14 +15,18 @@ from app.modules.presenze.models import (
     PresenzeDailyRecord,
     PresenzeOperaiRuleConfig,
 )
-from app.modules.presenze.services.parser import extract_detail_payload, parse_schedule_code_from_detail
+from app.modules.presenze.services.parser import (
+    extract_detail_payload,
+    parse_schedule_code_from_detail,
+)
 
 VALID_PRESENZE_OPERAI_GROUPS = {
     PRESENZE_OPERAI_GROUP_AGRARIO,
     PRESENZE_OPERAI_GROUP_CATASTO_MAGAZZINO,
 }
-DEFAULT_MPE_REVIEW_THRESHOLD_MINUTES = 3 * 60
+DEFAULT_MPE_REVIEW_THRESHOLD_MINUTES = 5 * 60
 LEGACY_MPE_REVIEW_THRESHOLD_MINUTES = 2 * 60
+PREVIOUS_MPE_REVIEW_THRESHOLD_MINUTES = 3 * 60
 
 
 @dataclass(frozen=True)
@@ -147,7 +151,7 @@ def ensure_operai_rule_configs(db: Session) -> list[PresenzeOperaiRuleConfig]:
         default_payload = default_payloads_by_code.get(code)
         if default_payload is None:
             continue
-        if item.mpe_review_threshold_minutes != LEGACY_MPE_REVIEW_THRESHOLD_MINUTES:
+        if item.mpe_review_threshold_minutes not in (LEGACY_MPE_REVIEW_THRESHOLD_MINUTES, PREVIOUS_MPE_REVIEW_THRESHOLD_MINUTES):
             continue
         item.mpe_review_threshold_minutes = int(default_payload["mpe_review_threshold_minutes"])
         updated = True

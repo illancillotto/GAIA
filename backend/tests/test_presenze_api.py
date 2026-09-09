@@ -4953,7 +4953,7 @@ def test_gate_presenze_daily_records_follow_team_visibility_and_month_contract()
 
     months = client.get("/gate/presenze/months/available", headers={"Authorization": f"Bearer {supervisor_token}"})
     assert months.status_code == 200
-    assert months.json()["rules_version"] == "presenze-2026-07-extra-3h"
+    assert months.json()["rules_version"] == "presenze-2026-09-extra-5h-warning"
     assert months.json()["months"] == [{"month": "2026-07", "records_total": 1}]
 
     response = client.get(
@@ -4967,7 +4967,7 @@ def test_gate_presenze_daily_records_follow_team_visibility_and_month_contract()
     item = body["records"][0]
     assert item["collaborator_name"] == "GATE RECORD UNO"
     assert item["team_ids"] == [team_id]
-    assert item["extra_minutes"] == 120
+    assert item["extra_minutes"] == 180
     assert item["has_complete_punches"] is True
 
     filtered_response = client.get(
@@ -4993,13 +4993,13 @@ def test_gate_presenze_rules_endpoint_exposes_shared_operational_rules() -> None
 
     assert response.status_code == 200
     body = response.json()
-    assert body["rules_version"] == "presenze-2026-07-extra-3h"
+    assert body["rules_version"] == "presenze-2026-09-extra-5h-warning"
     assert body["export_rules_version"] == "presenze-xlsm-2026-08"
     assert [section["code"] for section in body["sections"]] == ["anomalie", "validazione", "export"]
     anomaly_rules = body["sections"][0]["rules"]
-    assert anomaly_rules[0]["code"] == "extra_over_3h"
+    assert anomaly_rules[0]["code"] == "extra_over_5h"
     assert anomaly_rules[0]["severity"] == "warning"
-    assert "180 minuti" in anomaly_rules[0]["description"]
+    assert "300 minuti" in anomaly_rules[0]["description"]
 
 
 def test_gate_presenze_daily_record_detail_validate_patch_and_audit() -> None:
@@ -5088,7 +5088,7 @@ def test_gate_presenze_anomalies_and_export_flow(monkeypatch: pytest.MonkeyPatch
             collaborator_id=collaborator.id,
             work_date=date(2026, 7, 3),
             ordinary_minutes=420,
-            straordinario_minutes=190,
+            straordinario_minutes=310,
             validation_status="pending",
         )
         db.add(record)
@@ -5102,7 +5102,7 @@ def test_gate_presenze_anomalies_and_export_flow(monkeypatch: pytest.MonkeyPatch
     assert anomalies.status_code == 200
     anomalies_body = anomalies.json()
     assert anomalies_body["anomalies"][0]["record_id"] == record_id
-    assert anomalies_body["anomalies"][0]["reasons"] == ["extra_over_3h"]
+    assert anomalies_body["anomalies"][0]["reasons"] == ["extra_over_5h"]
 
     preview = client.get("/gate/presenze/export/preview?month=2026-07", headers={"Authorization": f"Bearer {token}"})
     assert preview.status_code == 200

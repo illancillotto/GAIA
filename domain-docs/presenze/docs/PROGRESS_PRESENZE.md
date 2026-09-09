@@ -630,6 +630,13 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
 
 ## Gap aperti
 
+### Soglia MPE a cinque ore con avviso non bloccante - 2026-09-09
+
+- la soglia standard MPE/straordinario per le giornaliere operaie passa da 180 a 300 minuti sui due profili standard, senza modificare regole custom;
+- fino a 300 minuti il solo extra non genera anomalie; oltre 300 minuti GAIA usa `in_analysis` e GATE mostra `Da verificare` con severity `warning`;
+- minuti mancanti e altre cause realmente bloccanti restano `blocking` e continuano a produrre `Correggere subito`;
+- il payload verso GATE include l'MPE operativa calcolata dalle timbrature anche quando l'extra importato e assente, coprendo il caso 27/08/2026 con timbrature 05:30-17:00 e 270 minuti MPE.
+
 - UI frontend ancora essenziale:
   - cartellino mensile a matrice disponibile su `/presenze/giornaliere`, ma manca ancora un calendario per singolo collaboratore nel dettaglio;
   - niente preview differenziale/import duplicati avanzata;

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import time
-from typing import Sequence
 
 from app.modules.presenze.models import (
     PRESENZE_CONTRACT_KIND_OPERAIO,
@@ -14,9 +14,8 @@ from app.modules.presenze.models import (
 from app.modules.presenze.services.operai_rules import (
     OperaiRuleConfig,
     covered_operai_absence_minutes,
-    normalize_operai_schedule_code,
+    normalize_operai_schedule_code,  # noqa: F401 - compatibility re-export
     resolve_operai_rule,
-    resolve_operai_schedule_code,
 )
 from app.modules.presenze.services.parser import extract_detail_payload
 
@@ -106,7 +105,7 @@ def build_operai_operational_quality(
             worked_minutes=None,
             missing_minutes=expected_minutes if has_inaz_anomaly else 0,
             mpe_minutes=0,
-            notes=tuple(notes + ["Timbrature complete non disponibili"]),
+            notes=tuple([*notes, "Timbrature complete non disponibili"]),
         )
 
     worked_minutes_value = worked_minutes or 0
@@ -116,7 +115,7 @@ def build_operai_operational_quality(
     if missing_minutes > resolved_rule.rule.missing_tolerance_minutes:
         status = "blocking"
     elif mpe_minutes > resolved_rule.rule.mpe_review_threshold_minutes:
-        status = "blocking"
+        status = "in_analysis"
     elif covered_absence_minutes > 0 and missing_minutes == 0:
         status = "ok"
     else:

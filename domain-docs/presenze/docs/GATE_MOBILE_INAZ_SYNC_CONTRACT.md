@@ -55,7 +55,7 @@ Esempio anonimizzato di `giornaliere`:
   "schema_version": 1,
   "source": "gaia",
   "month": "2026-08",
-  "rules_version": "presenze-2026-07-extra-3h",
+  "rules_version": "presenze-2026-09-extra-5h-warning",
   "export_rules_version": "presenze-xlsm-2026-08",
   "synced_from_gaia_at": "2026-08-31T07:30:00Z",
   "records": [
@@ -83,7 +83,7 @@ Esempio anonimizzato di `anomalie`:
   "schema_version": 1,
   "source": "gaia",
   "month": "2026-08",
-  "rules_version": "presenze-2026-07-extra-3h",
+  "rules_version": "presenze-2026-09-extra-5h-warning",
   "synced_from_gaia_at": "2026-08-31T07:30:00Z",
   "anomalies": [
     {
@@ -91,7 +91,7 @@ Esempio anonimizzato di `anomalie`:
       "collaborator_id": "018f...002",
       "work_date": "2026-08-31",
       "severity": "warning",
-      "reasons": ["extra_over_3h"],
+      "reasons": ["extra_over_5h"],
       "operator_message": "Straordinario superiore alla soglia."
     }
   ],
@@ -105,7 +105,7 @@ Esempio anonimizzato di `months`:
 {
   "schema_version": 1,
   "source": "gaia",
-  "rules_version": "presenze-2026-07-extra-3h",
+  "rules_version": "presenze-2026-09-extra-5h-warning",
   "synced_from_gaia_at": "2026-08-31T07:30:00Z",
   "months": [
     {"month": "2026-07", "records_total": 2325},
@@ -130,7 +130,7 @@ Esempio di ultimo tentativo fallito con successo precedente:
   "schema_version": 1,
   "source": "gaia",
   "month": "2026-08",
-  "rules_version": "presenze-2026-07-extra-3h",
+  "rules_version": "presenze-2026-09-extra-5h-warning",
   "synced_from_gaia_at": "2026-08-31T07:30:00Z",
   "inaz_sync": {
     "status": "degraded",

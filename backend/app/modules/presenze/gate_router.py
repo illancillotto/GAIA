@@ -48,11 +48,11 @@ from app.modules.presenze.schemas import (
     OrganizationTeamSupervisorResponse,
     OrganizationTeamUpdate,
 )
-from app.modules.presenze.services.gate_mobile_payloads import weekday_label as _weekday_label
+from app.modules.presenze.services import gate_mobile_payloads
 
 router = APIRouter(prefix="/gate/presenze", tags=["gate-presenze"])
 RequirePresenzeModule = Depends(require_module("presenze"))
-RULES_VERSION = "presenze-2026-07-extra-3h"
+RULES_VERSION = "presenze-2026-09-extra-5h-warning"
 EXPORT_RULES_VERSION = "presenze-xlsm-2026-08"
 
 
@@ -581,7 +581,7 @@ def _build_rules_response() -> GatePresenzeRulesResponse:
     return GatePresenzeRulesResponse(
         rules_version=RULES_VERSION,
         export_rules_version=EXPORT_RULES_VERSION,
-        updated_at=datetime(2026, 7, 8, tzinfo=UTC),
+        updated_at=datetime(2026, 9, 9, tzinfo=UTC),
         summary=(
             "GAIA calcola giornaliere e anomalie come source of truth. GATE usa le stesse regole "
             "per mostrare agli operatori cosa correggere, cosa verificare e quando l'export puo essere generato."
@@ -593,11 +593,11 @@ def _build_rules_response() -> GatePresenzeRulesResponse:
                 description="Regole che determinano se una giornata entra nella coda di verifica.",
                 rules=[
                     GatePresenzeRuleItemResponse(
-                        code="extra_over_3h",
-                        title="Straordinario oltre 3 ore",
+                        code="extra_over_5h",
+                        title="Straordinario oltre 5 ore",
                         description=(
-                            "Una giornata con timbrature complete e solo extra/straordinario non e bloccante fino a 180 minuti. "
-                            "Oltre 180 minuti entra nella coda Da verificare."
+                            "Una giornata con timbrature complete e solo extra/straordinario non e bloccante fino a 300 minuti. "
+                            "Oltre 300 minuti entra nella coda Da verificare come avviso."
                         ),
                         severity="warning",
                         applies_to=["operai", "impiegati", "giornaliere", "anomalie"],
@@ -870,14 +870,14 @@ def _serialize_gate_record_item(
         employee_code=collaborator.employee_code if collaborator is not None else "",
         team_ids=team_ids,
         work_date=record.work_date,
-        weekday=_weekday_label(record.work_date),
+        weekday=gate_mobile_payloads.weekday_label(record.work_date),
         status=serialized.operational_status,
         review_status=record.validation_status,
         severity=analysis.severity,
         contract_kind=collaborator.contract_kind if collaborator is not None else None,
         schedule_code=record.schedule_code,
         ordinary_minutes=record.ordinary_minutes,
-        extra_minutes=serialized.effective_extra_minutes or 0,
+        extra_minutes=gate_mobile_payloads.presenze_extra_minutes(serialized),
         missing_minutes=serialized.operational_missing_minutes,
         absence_cause=serialized.resolved_absence_cause,
         has_request=bool(serialized.detail_requests or record.request_type or record.request_description),
@@ -908,10 +908,10 @@ def _gate_record_analysis_from_serialized(
     if serialized.operational_status == "blocking" or serialized.operational_missing_minutes > 0:
         severity = "blocking"
         reasons.append("missing_or_blocking_time")
-    if (serialized.effective_extra_minutes or 0) > 180:
+    if gate_mobile_payloads.presenze_extra_minutes(serialized) > 300:
         if severity != "blocking":
             severity = "warning"
-        reasons.append("extra_over_3h")
+        reasons.append("extra_over_5h")
     if serialized.detail_error or serialized.detail_anomalies:
         if severity != "blocking":
             severity = "warning"

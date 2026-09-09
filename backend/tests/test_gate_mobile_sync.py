@@ -83,8 +83,8 @@ class _FakeRecordItem:
 
 class _FakeAnalysis:
     severity = "warning"
-    reasons = ["extra_over_3h"]
-    operator_message = "Straordinario superiore a 3 ore."
+    reasons = ["extra_over_5h"]
+    operator_message = "Straordinario superiore a 5 ore."
 
 
 class _FakeCatalogResponse:
@@ -298,7 +298,7 @@ def test_build_presenze_teams_push_payload_serializes_teams_memberships_and_supe
         )
 
         assert payload["source"] == "gaia"
-        assert payload["rules_version"] == "presenze-2026-07-extra-3h"
+        assert payload["rules_version"] == "presenze-2026-09-extra-5h-warning"
         assert payload["synced_from_gaia_at"] == "2026-07-09T09:30:00Z"
         assert payload["teams"][0]["name"] == "Squadra Presenze Nord"
         assert payload["teams"][0]["personnel_area"] == "AGRARIO"
@@ -426,7 +426,7 @@ def test_build_presenze_rules_months_giornaliere_and_anomalie_payloads(monkeypat
 
         assert rules_payload["schema_version"] == 1
         assert rules_payload["export_rules_version"] == "presenze-xlsm-2026-08"
-        assert rules_payload["rules"]["rules_version"] == "presenze-2026-07-extra-3h"
+        assert rules_payload["rules"]["rules_version"] == "presenze-2026-09-extra-5h-warning"
         assert months_payload["months"] == [{"month": "2026-07", "records_total": 1}]
         assert months_payload["inaz_sync"]["status"] == "never"
         assert giornaliere_payload["records"][0]["record_id"] == str(daily_record_id)
@@ -445,10 +445,10 @@ def test_build_presenze_rules_months_giornaliere_and_anomalie_payloads(monkeypat
         assert giornaliere_payload["records"][0]["export_absence_code"] == "P"
         assert giornaliere_payload["records"][0]["export_special_day"] is False
         assert giornaliere_payload["records"][0]["export_ordinary_minutes"] == 420
-        assert giornaliere_payload["records"][0]["export_extra_minutes"] == 240
+        assert giornaliere_payload["records"][0]["export_extra_minutes"] == 360
         assert giornaliere_payload["giornaliere"] == giornaliere_payload["records"]
         assert giornaliere_payload["inaz_sync"]["status"] == "never"
-        assert anomalie_payload["anomalies"][0]["reasons"] == ["extra_over_3h"]
+        assert anomalie_payload["anomalies"][0]["reasons"] == ["extra_over_5h"]
         assert anomalie_payload["anomalies"][0]["gaia_user_id"] == "77"
         assert anomalie_payload["anomalie"] == anomalie_payload["anomalies"]
         assert anomalie_payload["inaz_sync"]["status"] == "never"
@@ -478,6 +478,43 @@ def test_build_presenze_rules_months_giornaliere_and_anomalie_payloads(monkeypat
         db.commit()
         missing_relation_payload = build_presenze_giornaliere_push_payload(db, month="2026-07")
         assert missing_relation_payload["records"][0]["gaia_user_id"] is None
+    finally:
+        db.close()
+
+
+def test_giornaliere_payload_includes_operational_mpe_from_complete_punches() -> None:
+    db = _build_session()
+    try:
+        _seed_presenze_team(db)
+        collaborator = db.scalar(select(PresenzeCollaborator))
+        assert collaborator is not None
+        collaborator.contract_kind = "operaio"
+        collaborator.operai_group = "agrario"
+        record = PresenzeDailyRecord(
+            collaborator_id=collaborator.id,
+            work_date=date(2026, 8, 27),
+            schedule_code="OPE0714",
+            ordinary_minutes=420,
+            raw_payload_json={"detail_anomalies": [{"anomaliagiornata": "OREM-Ore mancanti"}]},
+        )
+        db.add(record)
+        db.flush()
+        db.add(
+            PresenzeDailyPunch(
+                daily_record_id=record.id,
+                sequence=1,
+                entry_time=time(5, 30),
+                exit_time=time(17, 0),
+            )
+        )
+        db.commit()
+
+        payload = build_presenze_giornaliere_push_payload(db, month="2026-08")
+
+        item = payload["records"][0]
+        assert item["status"] == "ok"
+        assert item["missing_minutes"] == 0
+        assert item["extra_minutes"] == 270
     finally:
         db.close()
 
@@ -2773,7 +2810,7 @@ def _seed_presenze_daily_record(db: Session) -> uuid.UUID:
         teo_minutes=420,
         ordinary_minutes=420,
         justified_minutes=60,
-        straordinario_minutes=240,
+        straordinario_minutes=360,
         km_value=24,
         trasferta_minutes=180,
         reperibilita_unit="shifts",

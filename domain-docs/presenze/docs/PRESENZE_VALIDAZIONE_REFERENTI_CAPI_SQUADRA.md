@@ -42,17 +42,18 @@ Una giornata deve finire in anomalia quando succede almeno una di queste cose:
 - il dettaglio Inaz segnala un'anomalia tecnica
 - risultano extra molto alti che richiedono controllo
 
-## Regola sugli extra oltre 3 ore
+## Regola sugli extra oltre 5 ore
 
 Proposta attuale:
 
-- fino a `3 ore` di extra nella giornata, la giornata non entra in anomalia solo per questo motivo
-- oltre `3 ore`, la giornata va in `Da verificare`
+- fino a `5 ore` di extra nella giornata, la giornata non entra in anomalia solo per questo motivo
+- oltre `5 ore`, la giornata va in `Da verificare` con un avviso non bloccante
 
 Significato pratico:
 
 - non la consideriamo subito sbagliata
 - chiediamo pero un controllo del responsabile
+- il solo extra non blocca l'export
 
 ## Quando una giornata va in "Correggere subito"
 
@@ -71,7 +72,7 @@ Effetto operativo:
 
 Proposta attuale:
 
-- extra oltre `3 ore`
+- extra oltre `5 ore`
 - anomalia tecnica Inaz, ma senza veri buchi operativi
 - caso leggibile da GAIA ma che richiede conferma umana
 
@@ -221,7 +222,7 @@ Esito proposto:
 
 Chiediamo validazione esplicita su questi punti:
 
-1. La soglia `3 ore` per mandare una giornata in `Da verificare` e corretta?
+1. La soglia `5 ore` per mandare una giornata in `Da verificare` e corretta?
 2. Per gli operai, il teorico `7 ore` nei feriali e corretto?
 3. Per il gruppo `agrario`, il `1` e `3` sabato del mese con `6h30` e corretto?
 4. Per il gruppo `catasto_magazzino`, la logica dei sabati alternati con `6h` e corretta?

@@ -260,7 +260,7 @@ def build_presenze_mobile_record_payload(
         "severity": severity,
         "schedule_code": record.schedule_code,
         "ordinary_minutes": record.ordinary_minutes,
-        "extra_minutes": serialized.effective_extra_minutes or 0,
+        "extra_minutes": presenze_extra_minutes(serialized, classification),
         "missing_minutes": serialized.operational_missing_minutes,
         "absence_cause": serialized.resolved_absence_cause,
         "has_request": bool(
@@ -273,6 +273,16 @@ def build_presenze_mobile_record_payload(
         **_gate_record_feature_values(record),
         **_canonical_export_values(record, serialized, classification),
     }
+
+
+def presenze_extra_minutes(serialized: Any, classification: Any = None) -> int:
+    effective = getattr(serialized, "effective_extra_minutes", 0) or 0
+    if classification is not None:
+        return max(effective, classification.extra_minutes or 0)
+    calculated = (getattr(serialized, "effective_straordinario_minutes", 0) or 0) + (
+        getattr(serialized, "operational_mpe_minutes", 0) or 0
+    )
+    return max(effective, calculated)
 
 
 def canonical_record_gaia_user_id(

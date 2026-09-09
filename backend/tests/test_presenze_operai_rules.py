@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import date, time
 import uuid
+from datetime import date, time
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -18,7 +19,6 @@ from app.modules.presenze.models import (
     PresenzeScheduleTemplate,
 )
 from app.modules.presenze.router import _build_classification_map, _build_operational_quality_map
-from app.modules.presenze.services.operational_quality import build_non_operai_operational_quality
 from app.modules.presenze.services.operai_rules import (
     DEFAULT_MPE_REVIEW_THRESHOLD_MINUTES,
     covered_operai_absence_minutes,
@@ -26,12 +26,12 @@ from app.modules.presenze.services.operai_rules import (
     ensure_operai_rule_configs,
     load_operai_rule_configs,
     normalize_operai_group,
-    resolve_operai_schedule_code,
     resolve_operai_rule,
+    resolve_operai_schedule_code,
     saturday_ordinal_in_month,
     serialize_default_operai_rule_payloads,
 )
-
+from app.modules.presenze.services.operational_quality import build_non_operai_operational_quality
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
@@ -179,11 +179,12 @@ def test_operai_rule_configs_persist_defaults_and_reload_normalized_values() -> 
         db.close()
 
 
-def test_ensure_operai_rule_configs_upgrades_legacy_default_mpe_threshold() -> None:
+@pytest.mark.parametrize("previous_threshold", [120, 180])
+def test_ensure_operai_rule_configs_upgrades_legacy_default_mpe_threshold(previous_threshold: int) -> None:
     db = _db_session()
     try:
         created = ensure_operai_rule_configs(db)
-        created[0].mpe_review_threshold_minutes = 120
+        created[0].mpe_review_threshold_minutes = previous_threshold
         db.commit()
 
         second_pass = ensure_operai_rule_configs(db)

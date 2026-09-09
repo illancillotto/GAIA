@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, time
+from pathlib import Path
 
 import pytest
 from openpyxl import Workbook, load_workbook
@@ -21,30 +22,35 @@ from app.modules.presenze.models import (
     PresenzeScheduleTemplate,
 )
 from app.modules.presenze.services.import_jobs import import_collaborator_payload
+from app.modules.presenze.services.operational_quality import (
+    build_operai_operational_quality,
+    complete_punch_minutes,
+    normalize_operai_schedule_code,
+)
 from app.modules.presenze.services.parser import parse_import_payload
-from app.modules.presenze.services.operational_quality import build_operai_operational_quality
-from app.modules.presenze.services.operational_quality import complete_punch_minutes, normalize_operai_schedule_code
 from app.modules.presenze.services.schedule_engine import (
     ScheduleContext,
     build_schedule_context,
     classify_daily_record,
     compute_overlap_minutes,
     compute_punch_minutes,
-    default_holidays_for_year,
     day_occurrence_in_month,
+    default_holidays_for_year,
     resolve_assignment,
     resolve_holiday,
     rule_matches_date,
     scheduled_minutes_for_day,
-    seed_holidays_for_year,
     season_matches,
+    seed_holidays_for_year,
     template_matches_date,
 )
 from app.modules.presenze.services.xlsm_export import (
+    ARCHIVE2_CLEAR_SPEC,
     ExportTimesheetRow,
     build_archive_record_key,
-    build_period_label,
     build_operai_period_text,
+    build_period_label,
+    clear_sheet_rows,
     close_workbook_resources,
     compile_workbook,
     format_operai_date,
@@ -54,14 +60,11 @@ from app.modules.presenze.services.xlsm_export import (
     resolve_export_absence_code,
     resolve_export_reperibilita_value,
     resolve_export_trasferta_value,
-    upsert_archivio_row,
     upsert_archive2_row,
+    upsert_archivio_row,
     write_archive2_daily_values,
     write_archivio_summary_values,
-    clear_sheet_rows,
-    ARCHIVE2_CLEAR_SPEC,
 )
-
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
@@ -1494,7 +1497,7 @@ def test_operai_operational_quality_covers_fallbacks_and_accepted_requests() -> 
     assert overnight.mpe_minutes == 30
 
 
-def test_operai_operational_quality_marks_large_accepted_missing_exit_as_blocking() -> None:
+def test_operai_operational_quality_marks_large_accepted_extra_as_warning() -> None:
     collaborator = PresenzeCollaborator(
         id=uuid.uuid4(),
         employee_code="172",
@@ -1515,7 +1518,7 @@ def test_operai_operational_quality_marks_large_accepted_missing_exit_as_blockin
 
     quality = build_operai_operational_quality(collaborator, record, punches)
 
-    assert quality.status == "blocking"
+    assert quality.status == "in_analysis"
     assert quality.worked_minutes == 743
     assert quality.missing_minutes == 0
     assert quality.mpe_minutes == 323
@@ -1523,7 +1526,7 @@ def test_operai_operational_quality_marks_large_accepted_missing_exit_as_blockin
     assert "MPE oltre soglia giornaliera: 323 minuti" in quality.notes
 
 
-def test_operai_operational_quality_keeps_extra_within_three_hours_out_of_anomalies() -> None:
+def test_operai_operational_quality_keeps_extra_within_five_hours_out_of_anomalies() -> None:
     collaborator = PresenzeCollaborator(
         id=uuid.uuid4(),
         employee_code="172",
@@ -1538,17 +1541,34 @@ def test_operai_operational_quality_keeps_extra_within_three_hours_out_of_anomal
         schedule_code="OPE0714",
         stato="Giornata anomala",
     )
-    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(6, 0), exit_time=time(16, 0))]
+    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(5, 30), exit_time=time(17, 30))]
 
     quality = build_operai_operational_quality(collaborator, record, punches)
 
     assert quality.status == "ok"
-    assert quality.mpe_minutes == 180
+    assert quality.mpe_minutes == 300
     assert "INAZ segnala anomalia, ma la formula GAIA quadra le ore" in quality.notes
-    assert "MPE oltre soglia giornaliera: 180 minuti" not in quality.notes
+    assert "MPE oltre soglia giornaliera: 300 minuti" not in quality.notes
 
 
-def test_operai_operational_quality_marks_extra_over_three_hours_as_blocking() -> None:
+def test_zancudi_school_case_with_270_mpe_minutes_is_not_blocking() -> None:
+    collaborator = PresenzeCollaborator(
+        id=uuid.uuid4(), employee_code="1404", company_code="53", name="ZANCUDI ANTONELLO", contract_kind="operaio"
+    )
+    record = PresenzeDailyRecord(
+        id=uuid.uuid4(), collaborator_id=collaborator.id, work_date=date(2026, 8, 27), schedule_code="OPE0714",
+        stato="Giornata anomala", raw_payload_json={"detail_anomalies": [{"anomaliagiornata": "OREM-Ore mancanti"}]},
+    )
+    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(5, 30), exit_time=time(17, 0))]
+
+    quality = build_operai_operational_quality(collaborator, record, punches)
+
+    assert quality.status == "ok"
+    assert quality.missing_minutes == 0
+    assert quality.mpe_minutes == 270
+
+
+def test_operai_operational_quality_marks_extra_over_five_hours_as_warning() -> None:
     collaborator = PresenzeCollaborator(
         id=uuid.uuid4(),
         employee_code="172",
@@ -1562,13 +1582,13 @@ def test_operai_operational_quality_marks_extra_over_three_hours_as_blocking() -
         work_date=date(2026, 6, 16),
         schedule_code="OPE0714",
     )
-    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(6, 0), exit_time=time(16, 1))]
+    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(6, 0), exit_time=time(18, 1))]
 
     quality = build_operai_operational_quality(collaborator, record, punches)
 
-    assert quality.status == "blocking"
-    assert quality.mpe_minutes == 181
-    assert "MPE oltre soglia giornaliera: 181 minuti" in quality.notes
+    assert quality.status == "in_analysis"
+    assert quality.mpe_minutes == 301
+    assert "MPE oltre soglia giornaliera: 301 minuti" in quality.notes
 
 
 def test_operai_operational_quality_marks_missing_punches_with_inaz_status_as_blocking() -> None:
@@ -1614,7 +1634,7 @@ def test_operai_operational_quality_marks_unscheduled_saturday_note_for_configur
 
     quality = build_operai_operational_quality(collaborator, record, punches)
 
-    assert quality.status == "blocking"
+    assert quality.status == "in_analysis"
     assert quality.expected_minutes == 0
     assert quality.mpe_minutes == 390
     assert "Sabato non previsto per il gruppo operaio configurato" in quality.notes

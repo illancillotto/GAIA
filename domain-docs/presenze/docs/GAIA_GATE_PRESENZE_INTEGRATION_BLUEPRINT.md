@@ -74,8 +74,8 @@ GATE deve usare la stessa logica operativa di GAIA.
 
 Regola gia definita per le giornaliere:
 
-- se le timbrature sono coerenti e l'unica differenza e extra/straordinario entro `3 ore`, la giornata non e un'anomalia bloccante;
-- se extra/straordinario supera `3 ore`, la giornata deve entrare nella coda di verifica;
+- se le timbrature sono coerenti e l'unica differenza e extra/straordinario entro `5 ore`, la giornata non e un'anomalia bloccante;
+- se extra/straordinario supera `5 ore`, la giornata deve entrare nella coda di verifica con severity `warning`, senza bloccare l'export per il solo extra;
 - se mancano timbrature essenziali, teorico, causale o richiesta coerente, la giornata resta da correggere o verificare;
 - le anomalie tecniche Inaz residue non devono prevalere se GAIA ricostruisce una giornata coerente da timbrature, teorico e causali normalizzate.
 
@@ -224,7 +224,7 @@ Payload snapshot squadre inviato da GAIA:
 {
   "schema_version": 1,
   "source": "gaia",
-  "rules_version": "presenze-2026-07-extra-3h",
+  "rules_version": "presenze-2026-09-extra-5h-warning",
   "synced_from_gaia_at": "2026-07-09T09:30:00Z",
   "teams": [
     {
@@ -280,7 +280,7 @@ Snapshot rules implementato lato GAIA:
 {
   "schema_version": 1,
   "source": "gaia",
-  "rules_version": "presenze-2026-07-extra-3h",
+  "rules_version": "presenze-2026-09-extra-5h-warning",
   "export_rules_version": "presenze-xlsm-2026-08",
   "synced_from_gaia_at": "2026-07-10T08:00:00Z",
   "rules": {}
@@ -317,7 +317,7 @@ Payload minimo per elenco mensile:
 ```json
 {
   "month": "2026-07",
-  "rules_version": "presenze-2026-07-extra-3h",
+  "rules_version": "presenze-2026-09-extra-5h-warning",
   "export_rules_version": "presenze-xlsm-2026-08",
   "synced_from_gaia_at": "2026-07-08T12:00:00Z",
   "records": [
@@ -370,7 +370,7 @@ Payload dettaglio giornata:
 ```json
 {
   "record_id": "uuid",
-  "rules_version": "presenze-2026-07-extra-3h",
+  "rules_version": "presenze-2026-09-extra-5h-warning",
   "collaborator": {
     "id": "uuid",
     "name": "ROSSI MARIO",
@@ -382,7 +382,7 @@ Payload dettaglio giornata:
     "status": "da_verificare",
     "severity": "warning",
     "reasons": ["extra_over_threshold"],
-    "operator_message": "Straordinario superiore a 3 ore: verificare autorizzazione."
+    "operator_message": "Straordinario superiore a 5 ore: verificare autorizzazione."
   },
   "times": {
     "theoretical_minutes": 390,
@@ -547,7 +547,7 @@ Vincoli:
 - GAIA applica o rifiuta le pending action alla sync successiva;
 - dopo ogni ack/snapshot GATE aggiorna lo stato locale;
 - audit obbligatorio per validazioni, correzioni, chiusure anomalie e modifiche squadre;
-- le regole anomalie devono rispettare la logica GAIA, inclusa soglia extra/straordinario `> 3 ore`;
+- le regole anomalie devono rispettare la logica GAIA, inclusa soglia extra/straordinario `> 5 ore` con esito `warning`, mai `blocking` per il solo extra;
 - gli export GATE devono usare regole identiche a GAIA e dichiarare `export_rules_version`.
 
 Pagine richieste:
