@@ -263,15 +263,28 @@ def build_presenze_mobile_record_payload(
         "extra_minutes": presenze_extra_minutes(serialized, classification),
         "missing_minutes": serialized.operational_missing_minutes,
         "absence_cause": serialized.resolved_absence_cause,
-        "has_request": bool(
-            serialized.detail_requests or record.request_type or record.request_description
-        ),
+        **_record_request_values(serialized),
         "validated_at": json_datetime(record.validated_at)
         if record.validated_at is not None
         else None,
         "validated_by_user_id": record.validated_by_user_id,
         **_gate_record_feature_values(record),
-        **_canonical_export_values(record, serialized, classification),
+        **_canonical_export_values(record, classification),
+    }
+
+
+def _record_request_values(serialized: Any) -> dict[str, Any]:
+    return {
+        "request_type": serialized.request_type,
+        "request_description": serialized.request_description,
+        "request_status": serialized.request_status,
+        "request_authorized_by": serialized.request_authorized_by,
+        "has_request": bool(
+            serialized.detail_requests
+            or serialized.request_type
+            or serialized.request_description
+            or serialized.request_status
+        ),
     }
 
 
@@ -344,13 +357,12 @@ def _gate_record_feature_values(record: PresenzeDailyRecord) -> dict[str, Any]:
     }
 
 
-def _canonical_export_values(record: PresenzeDailyRecord, data: Any, export: Any) -> dict[str, Any]:
+def _canonical_export_values(record: PresenzeDailyRecord, export: Any) -> dict[str, Any]:
     return {
         "trasferta_minutes": record.trasferta_minutes,
         "trasferta_montano": record.trasferta_montano,
         "absence_minutes": record.absence_minutes,
         "justified_minutes": record.justified_minutes,
-        "request_description": data.request_description,
         "export_absence_code": resolve_export_absence_code(record),
         "export_special_day": export.special_day,
         "export_ordinary_minutes": export.ordinary_minutes,

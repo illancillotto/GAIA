@@ -331,6 +331,20 @@ def test_build_presenze_teams_push_payload_serializes_teams_memberships_and_supe
         db.close()
 
 
+def test_gate_mobile_team_payload_helpers_cover_nullable_operator_rows_and_name_fallback() -> None:
+    operator_without_user = type("Operator", (), {"gaia_user_id": None})()
+    scalar_result = type("ScalarResult", (), {"all": lambda self: [operator_without_user]})()
+    fake_db = type("Database", (), {"scalars": lambda self, _query: scalar_result})()
+
+    operators, ambiguous = gate_mobile_payloads._unique_wc_operators_by_user_id(fake_db, {77})
+    user = type("User", (), {"full_name": None, "username": "presenze.supervisor"})()
+    empty_name_operator = type("Operator", (), {"first_name": "", "last_name": None})()
+
+    assert operators == {}
+    assert ambiguous == set()
+    assert gate_mobile_payloads._membership_name(user, None, empty_name_operator) == "presenze.supervisor"
+
+
 def test_operator_and_membership_payloads_fail_closed_on_ambiguous_or_incoherent_identity() -> None:
     db = _build_session()
     try:
@@ -442,6 +456,10 @@ def test_build_presenze_rules_months_giornaliere_and_anomalie_payloads(monkeypat
         assert giornaliere_payload["records"][0]["reperibilita_unit"] == "shifts"
         assert giornaliere_payload["records"][0]["reperibilita_quantity"] == 1
         assert giornaliere_payload["records"][0]["justified_minutes"] == 60
+        assert giornaliere_payload["records"][0]["request_type"] is None
+        assert giornaliere_payload["records"][0]["request_description"] == "P. ORD - Permesso ordinario"
+        assert giornaliere_payload["records"][0]["request_status"] is None
+        assert giornaliere_payload["records"][0]["request_authorized_by"] is None
         assert giornaliere_payload["records"][0]["export_absence_code"] == "P"
         assert giornaliere_payload["records"][0]["export_special_day"] is False
         assert giornaliere_payload["records"][0]["export_ordinary_minutes"] == 420

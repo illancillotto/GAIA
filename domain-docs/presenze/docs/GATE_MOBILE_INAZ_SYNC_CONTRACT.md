@@ -40,6 +40,12 @@ ogni collaboratore esegue upsert su `presenze_collaborators`,
 sono calcolate dagli stessi record giornalieri e punch durante la costruzione
 dello snapshot.
 
+Ogni giornaliera pubblica anche `request_type`, `request_description`,
+`request_status` e `request_authorized_by`, insieme a `justified_minutes` e
+`absence_minutes`. GATE usa questi campi per rendere visibile il permesso che
+accompagna un'anomalia di ore mancanti, senza modificare il calcolo operativo
+di `missing_minutes` eseguito da GAIA.
+
 Il primo slot giornaliero include anche il mese precedente fino al giorno 10;
 gli altri slot aggiornano il mese corrente. Se il parallelismo e attivo, un
 tentativo puo essere composto da piu shard. Il resolver considera riuscito il

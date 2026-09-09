@@ -637,6 +637,12 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
 - minuti mancanti e altre cause realmente bloccanti restano `blocking` e continuano a produrre `Correggere subito`;
 - il payload verso GATE include l'MPE operativa calcolata dalle timbrature anche quando l'extra importato e assente, coprendo il caso 27/08/2026 con timbrature 05:30-17:00 e 270 minuti MPE.
 
+### Dettaglio permessi nelle anomalie GATE - 2026-09-09
+
+- il calcolo dei minuti mancanti resta invariato: il caso URRU ENRICO del 13/08/2026 mantiene i 30 minuti residui da verificare;
+- lo snapshot giornaliere espone tipo, descrizione, stato e autorizzatore della richiesta, oltre ai minuti giustificati e di assenza;
+- GATE puo quindi mostrare il permesso ordinario e la sua durata accanto all'anomalia, evitando il messaggio fuorviante `Nessuna richiesta registrata`.
+
 - UI frontend ancora essenziale:
   - cartellino mensile a matrice disponibile su `/presenze/giornaliere`, ma manca ancora un calendario per singolo collaboratore nel dettaglio;
   - niente preview differenziale/import duplicati avanzata;
