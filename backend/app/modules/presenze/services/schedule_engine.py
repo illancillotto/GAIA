@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 from datetime import date, time, timedelta
-import uuid
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -19,8 +19,14 @@ from app.modules.presenze.models import (
     PresenzeScheduleTemplate,
 )
 from app.modules.presenze.services.operai_rules import OperaiRuleConfig, load_operai_rule_configs
-from app.modules.presenze.services.parser import detail_has_authoritative_classification, detail_indicates_special_day
-from app.modules.presenze.services.operational_quality import build_operai_operational_quality
+from app.modules.presenze.services.operational_quality import (
+    OperaiOperationalQuality,
+    build_operai_operational_quality,
+)
+from app.modules.presenze.services.parser import (
+    detail_has_authoritative_classification,
+    detail_indicates_special_day,
+)
 
 RECURRENCE_WEEKLY = "weekly"
 RECURRENCE_FIRST_WEEKDAY = "first_weekday_of_month"
@@ -168,31 +174,12 @@ def classify_daily_record(
     if operai_quality.is_applicable and operai_quality.worked_minutes is not None:
         if holiday is None:
             special_day = False
-        ordinary_minutes = min(operai_quality.worked_minutes, operai_quality.expected_minutes or 0)
         worked_buckets = classify_worked_minute_buckets(
             punches,
             matched_rules,
             special_day=special_day,
         )
-        return DayClassification(
-            special_day=special_day,
-            ordinary_minutes=ordinary_minutes,
-            extra_minutes=operai_quality.mpe_minutes or None,
-            holiday_kind=holiday_kind,
-            grants_recovery_day=grants_recovery_day,
-            night_minutes=worked_buckets.night_minutes,
-            festive_minutes=worked_buckets.festive_minutes,
-            festive_night_minutes=worked_buckets.festive_night_minutes,
-            ordinary_night_minutes=worked_buckets.ordinary_night_minutes,
-            overtime_day_minutes=operai_quality.mpe_minutes,
-            overtime_night_minutes=0,
-            overtime_festive_minutes=0,
-            overtime_festive_night_minutes=0,
-            shift_festive_day_minutes=worked_buckets.shift_festive_day_minutes,
-            shift_night_minutes=worked_buckets.shift_night_minutes,
-            shift_festive_night_minutes=worked_buckets.shift_festive_night_minutes,
-            source="operai_formula",
-        )
+        return _classify_operai_day(operai_quality, worked_buckets, special_day, holiday_kind, grants_recovery_day)
 
     if raw_payload is not None and detail_has_authoritative_classification(raw_payload):
         worked_buckets = classify_worked_minute_buckets(
@@ -286,6 +273,38 @@ def classify_daily_record(
         shift_night_minutes=worked_buckets.shift_night_minutes,
         shift_festive_night_minutes=worked_buckets.shift_festive_night_minutes,
         source="template",
+    )
+
+
+def _classify_operai_day(
+    quality: OperaiOperationalQuality,
+    buckets: WorkedMinuteBuckets,
+    special_day: bool,
+    holiday_kind: str | None,
+    grants_recovery_day: bool,
+) -> DayClassification:
+    ordinary_minutes = min(quality.worked_minutes or 0, quality.expected_minutes or 0)
+    return DayClassification(
+        special_day=special_day,
+        ordinary_minutes=ordinary_minutes,
+        extra_minutes=quality.mpe_minutes or None,
+        holiday_kind=holiday_kind,
+        grants_recovery_day=grants_recovery_day,
+        night_minutes=buckets.night_minutes,
+        festive_minutes=buckets.festive_minutes,
+        festive_night_minutes=buckets.festive_night_minutes,
+        ordinary_night_minutes=buckets.ordinary_night_minutes,
+        overtime_day_minutes=0 if special_day else quality.mpe_minutes,
+        overtime_night_minutes=0,
+        overtime_festive_minutes=quality.mpe_minutes if special_day else 0,
+        overtime_festive_night_minutes=0,
+        shift_festive_day_minutes=(
+            max(0, ordinary_minutes - buckets.shift_festive_night_minutes)
+            if special_day else buckets.shift_festive_day_minutes
+        ),
+        shift_night_minutes=buckets.shift_night_minutes,
+        shift_festive_night_minutes=buckets.shift_festive_night_minutes,
+        source="operai_formula",
     )
 
 
@@ -542,10 +561,10 @@ def compute_easter_sunday(year: int) -> date:
     h = (19 * a + b - d - g + 15) % 30
     i = c // 4
     k = c % 4
-    l = (32 + 2 * e + 2 * i - h - k) % 7
-    m = (a + 11 * h + 22 * l) // 451
-    month = (h + l - 7 * m + 114) // 31
-    day = ((h + l - 7 * m + 114) % 31) + 1
+    weekday_offset = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * weekday_offset) // 451
+    month = (h + weekday_offset - 7 * m + 114) // 31
+    day = ((h + weekday_offset - 7 * m + 114) % 31) + 1
     return date(year, month, day)
 
 
