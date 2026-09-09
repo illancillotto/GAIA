@@ -1,5 +1,54 @@
 # Stato sincronizzazione INAZ negli snapshot GaTe Mobile
 
+## Classificazione minuti XLSM — aggiornamento 2026-09-09
+
+Nel ramo con dettaglio INAZ autorevole, `schedule_engine.classify_daily_record`
+usa `services/inaz_minute_buckets.py` per riconciliare le categorie con i totali
+contabilizzati. La durata lorda delle timbrature non crea ulteriori minuti
+retribuiti. Una ripartizione temporale e mantenuta solo quando ordinario ed extra
+coincidono con i totali INAZ; altrimenti sono conservati i totali senza inventare
+quote notturne. Le timbrature originali non sono modificate.
+
+Il sabato programmato di un operaio, con ordinario INAZ positivo e senza una
+festivita ordinaria, non diventa automaticamente festivo. Esempio di regressione:
+05:15–11:31 con ORD 360 e MPE 1 produce 360 minuti ordinari e 1 extra feriale,
+non 331 minuti festivi e 45 festivi notturni aggiuntivi.
+
+Il calendario preesistente resta invariato: 14 agosto `Vigilia Ferragosto`,
+15 `Ferragosto`, 16 `Recupero Ferragosto`, di tipo `ordinary` (festivita).
+Il tipo `ordinary` non significa feriale e non attiva `grants_recovery_day`,
+riservato al tipo `suppressed`. Il 16/08/2026 domenicale non lavorato e esportato
+da GATE come `RS`, salvo causale esplicita. Non vengono assegnati automaticamente
+minuti o un recupero aggiuntivo dal solo nome del giorno. Questi test fissano il
+comportamento corrente, non attestano una nuova regola contrattuale.
+
+GAIA resta autorevole per `export_ordinary_minutes` e `export_extra_minutes`:
+un null esplicito non autorizza il consumer a usare i minuti grezzi di una
+giornata non pubblicabile. GATE condivide la stessa ripartizione fra Archivio2
+e Archivio e rifiuta categorie incompatibili. Periodo esclusivo: primo–ultimo
+giorno del mese, conteggio in minuti interi.
+
+Verifiche ripetibili dalla directory `backend`:
+
+```bash
+.venv/bin/pytest tests/test_presenze_schedule_engine.py tests/test_presenze_inaz_minute_buckets.py --cov=app.modules.presenze.services.schedule_engine --cov=app.modules.presenze.services.inaz_minute_buckets --cov-branch --cov-fail-under=100
+.venv/bin/pytest tests/test_gate_mobile_sync.py tests/test_operazioni_mobile_sync_api.py
+```
+
+Coverage richiesta al 100% dei due file runtime modificati, non dell'intero
+backend. Il ratchet rispetto alla baseline di `9debc990` non rileva regressioni:
+classificatore principale ciclomatica 64→61, cognitiva 77→71, LOC 136→133.
+Nessuna modifica a baseline, schema DB, mapping identitari, auth o transazioni.
+
+Rilascio coordinato: aggiornare GAIA backend e outbound, verificare snapshot
+agosto e run riuscito, poi GATE sul VPS. Sul CED il backend usa un bind mount,
+il job outbound puo usare codice nell'immagine: verificarli entrambi. Il deploy
+deve conservare copie e immagini di rollback ed escludere modifiche estranee.
+La verifica read-only in produzione del 9 settembre ha riscontrato coincidenza
+GAIA/GATE per 1.085 giornate di 35 dipendenti, 252.893 minuti ordinari e 29.628
+extra pubblicabili, senza differenze fra le otto categorie daily/monthly.
+Nessuna validazione automatica o rettifica dei dati INAZ/KM/reperibilita.
+
 ## Decisione
 
 Il contratto precedente non era sufficiente: `synced_from_gaia_at` indicava solo

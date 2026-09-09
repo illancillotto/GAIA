@@ -18,6 +18,10 @@ from app.modules.presenze.models import (
     PresenzeScheduleRule,
     PresenzeScheduleTemplate,
 )
+from app.modules.presenze.services.inaz_minute_buckets import (
+    inaz_special_day,
+    reconcile_inaz_minute_buckets,
+)
 from app.modules.presenze.services.operai_rules import OperaiRuleConfig, load_operai_rule_configs
 from app.modules.presenze.services.operational_quality import (
     OperaiOperationalQuality,
@@ -182,14 +186,11 @@ def classify_daily_record(
         return _classify_operai_day(operai_quality, worked_buckets, special_day, holiday_kind, grants_recovery_day)
 
     if raw_payload is not None and detail_has_authoritative_classification(raw_payload):
-        worked_buckets = classify_worked_minute_buckets(
-            punches,
-            matched_rules,
-            special_day=special_day,
+        special_day = inaz_special_day(record, collaborator, special_day, holiday_kind)
+        worked_buckets = reconcile_inaz_minute_buckets(
+            classify_worked_minute_buckets(punches, matched_rules, special_day=special_day),
+            record.ordinary_minutes, imported_extra_value, special_day=special_day,
         )
-        overtime_day_minutes = worked_buckets.overtime_day_minutes
-        if not punches and imported_extra_value is not None:
-            overtime_day_minutes = imported_extra_value
         return DayClassification(
             special_day=special_day,
             ordinary_minutes=record.ordinary_minutes,
@@ -200,7 +201,7 @@ def classify_daily_record(
             festive_minutes=worked_buckets.festive_minutes,
             festive_night_minutes=worked_buckets.festive_night_minutes,
             ordinary_night_minutes=worked_buckets.ordinary_night_minutes,
-            overtime_day_minutes=overtime_day_minutes,
+            overtime_day_minutes=worked_buckets.overtime_day_minutes,
             overtime_night_minutes=worked_buckets.overtime_night_minutes,
             overtime_festive_minutes=worked_buckets.overtime_festive_minutes,
             overtime_festive_night_minutes=worked_buckets.overtime_festive_night_minutes,
