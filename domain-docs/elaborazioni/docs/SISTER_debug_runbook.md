@@ -76,7 +76,8 @@ Configurazione in `.env` (caricato dai worker Compose):
 | `CAPTCHA_CODEX_LB_FALLBACK_ENABLED` | `true`; `false` disabilita il secondo provider |
 | `CAPTCHA_CODEX_LB_URL` | Se vuota, eredita `CODEX_LB_URL`; altrimenti default locale `http://127.0.0.1:2455/v1` |
 | `CAPTCHA_CODEX_LB_API_KEY` | Se vuota, eredita `CODEX_LB_API_KEY`; senza chiave il fallback non parte |
-| `CAPTCHA_CODEX_LB_MODEL` | `gpt-5.4-mini` |
+| `CAPTCHA_CODEX_LB_MODEL` | `gpt-6-astra` (era `gpt-5.4-mini`, ritirato il 2026-09-09) |
+| `CAPTCHA_CODEX_LB_REASONING_EFFORT` | `medium`; una variabile vuota ricade sul default |
 | `CAPTCHA_CODEX_LB_TIMEOUT_SECONDS` | `45`, limite totale della chiamata HTTP |
 
 Nei container `host.docker.internal` (mapping `host-gateway` presente su
@@ -113,9 +114,11 @@ anche codex-lb fallisce, rifiuta la richiesta o non produce un singolo token
 alfanumerico di 4-12 caratteri, il solver restituisce `None`. La cancellazione
 del task interrompe il lavoro senza avviare il fallback.
 
-Il default e `gpt-5.4-mini` con effort `low`, presente nel catalogo locale
-`/v1/models`. La variante `gpt-5.4` restituisce invece HTTP 503,
-`no_plan_support_for_model`, ed e stata sostituita su richiesta dell'operatore.
+Dal 2026-09-09 il default e `gpt-6-astra` con effort `medium`. In precedenza
+era `gpt-5.4-mini` con effort `low`: il modello e stato ritirato dal catalogo
+e l'effort `low` produceva trascrizioni non riproducibili (dettagli nella
+sezione `2026-09-09` piu sotto). Anche la variante `gpt-5.4` restituiva HTTP
+503 `no_plan_support_for_model`.
 
 ### Motivo dell'esito CAPTCHA nel messaggio d'errore
 
@@ -154,7 +157,163 @@ scattare il rifiuto di sicurezza di alcuni modelli anche su immagini reali,
 indipendentemente dal contenuto. Con il prompt neutro, verifica locale del 6
 settembre 2026 su 4 CAPTCHA reali (`data-example/capthas/`): `gpt-5.4-mini`
 (modello configurato in produzione) trascrive correttamente in 4/4 casi senza
-piu alcun rifiuto.
+piu alcun rifiuto. **Superato dal 2026-09-09**: `gpt-5.4-mini` non e' piu'
+erogabile dal codex-lb, vedi la sezione dedicata piu' sotto.
+
+### 2026-09-09: `gpt-5.4-mini` non e' piu' erogabile dal codex-lb
+
+Verifica del 9 settembre 2026 sul codex-lb dell'operatore
+(`http://127.0.0.1:2455/v1`, lo stesso che il CED raggiunge su
+`192.168.1.83:2455`):
+
+```
+POST /v1/responses  model=gpt-5.4-mini  ->  HTTP 503
+{"code":"no_plan_support_for_model",
+ "message":"No accounts with a plan supporting model 'gpt-5.4-mini'"}
+```
+
+`gpt-5.4-mini` e' sparito da `/v1/models`. Il catalogo ora espone
+`gpt-6-astra`, `gpt-reserve`, `gpt-5.6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`,
+`gpt-5.5`, `codex-auto-review` — tutti con `supports_vision: true`. Poiche'
+`CAPTCHA_CODEX_LB_MODEL` ha default `gpt-5.4-mini` in
+`llm_captcha_solver.py` e in produzione non e' sovrascritto, **oggi ogni
+chiamata al fallback termina in `codex_lb_http_error`**: il fallback e'
+presente nel codice e configurato correttamente (URL e API key verificati), ma
+non produce trascrizioni. La rete di sicurezza reale in produzione resta
+Anti-Captcha, attivo perche' `ANTI_CAPTCHA_API_KEY` e' valorizzato
+(`worker.py:916` collega `solve_external_captcha` solo in quel caso).
+
+Bake-off del 9 settembre 2026 sugli stessi 4 CAPTCHA reali di
+`data-example/capthas/`, con il payload identico a `_run_codex_lb`
+(`reasoning.effort=low`, `detail=high`, prompt neutro):
+
+| modello | captcha_1 | captcha_2 | captcha_3 | captcha_4 |
+| --- | --- | --- | --- | --- |
+| `gpt-reserve` | `alfalfa` | `palesa` | `SUPREME` | `zuberuto` |
+| `gpt-5.6-luna` | `difficult` | `polesa` | `SUORPE` | `zuberuto` |
+| `gpt-6-astra` | `affaiwa` | `paesa` | `square` | `zubetto` |
+| `gpt-5.6-sol` | `affiliate` | `paesa` | rifiuto | rifiuto |
+| `gpt-5.5` | `dffgdlra` | rifiuto | rifiuto | `zubewto` |
+
+Nessun candidato si avvicina al 4/4 attribuito a `gpt-5.4-mini`, e i rifiuti di
+sicurezza ricompaiono su `gpt-5.6-sol` e `gpt-5.5` nonostante il prompt neutro
+— quindi il rifiuto dipende dal modello, non dal wording, come gia' osservato
+su `gpt-5.6-terra`. Sullo stesso input i modelli divergono radicalmente
+(`alfalfa` / `difficult` / `affaiwa`): un dato che da solo, indipendentemente
+da quale sia la trascrizione corretta, esclude l'affidabilita' come fallback.
+
+#### La causa vera non era il modello: era `reasoning.effort=low`
+
+Il bake-off sopra e' stato eseguito con `reasoning.effort=low`, il valore che
+`_run_codex_lb` aveva hardcoded. Ripetendo la stessa prova con `medium` il
+quadro cambia completamente:
+
+| | `low` #1 | `low` #2 | `medium` #1 | `medium` #2 | `medium` #3 | `medium` #4 |
+| --- | --- | --- | --- | --- | --- | --- |
+| captcha_1 | `affaiwa` | `सीढ़ियाँ` | `affettiva` | `affatiya` | `affatta` | `affettiva` |
+| captcha_2 | `paesa` | `qaesa` | `paesa` | `qaesa` | `qaesa` | `qaesa` |
+| captcha_3 | `square` | `square` | `suoare` | `suqare` | `suqare` | `SuQaPe` |
+| captcha_4 | `zubetto` | `zubetto` | `zuberto` | `zuberto` | `zuberto` | `zibetto` |
+
+**Nessuno dei due effort e' deterministico.** La differenza e' di grado, non di
+natura: con `low` il modello e' arrivato a rispondere in devanagari, con
+`medium` resta sempre nell'alfabeto latino e produce token plausibili, ma su
+captcha_1 e captcha_3 da' tre valori distinti in quattro run. Una prima
+misura aveva suggerito che `medium` fosse ripetibile: era un singolo run che
+per caso coincideva con quello della CLI, non una proprieta' del parametro.
+
+Questo e' il motivo per cui la scelta di `medium` come default va letta come
+"degrada meglio", non come "e' stabile". Il vero guadagno del solver non viene
+dalla singola trascrizione ma dalla ripetizione: `visura_flow` ricarica un
+CAPTCHA nuovo a ogni tentativo (`browser.reload_captcha()`), quindi con
+`CAPTCHA_LLM_ATTEMPTS` tentativi la probabilita' di successo si compone, e
+conta la probabilita' per tentativo, non la riproducibilita' sulla stessa
+immagine.
+
+Controprova sulla CLI: `codex exec --model gpt-6-astra -i <png>` sul CED
+(account ChatGPT del server, quindi rete e credenziali diverse dal codex-lb)
+ha restituito `affettiva` / `paesa` / `suoare` / `zuberto`, che coincide con
+il primo run HTTP a `medium`. Vista la varianza sopra, quella coincidenza non
+dimostra che i due path siano equivalenti; dimostra solo che l'ordine di
+grandenza della qualita' e' lo stesso e che il divario iniziale attribuito
+alla CLI era in realta' l'effort.
+
+Nota su `gpt-5.4-mini` via CLI: non e' raggiungibile nemmeno li'. Sul CED
+risponde HTTP 400 `The 'gpt-5.4-mini' model is not supported when using Codex
+with a ChatGPT account`; da un PC la cui CLI e' instradata su codex-lb
+(`base_url = .../backend-api/codex` in `~/.codex/config.toml`) risponde lo
+stesso 503 del path HTTP, perche' e' lo stesso pool di account.
+
+Da qui i due default attuali: `CAPTCHA_CODEX_LB_MODEL=gpt-6-astra` e
+`CAPTCHA_CODEX_LB_REASONING_EFFORT=medium`.
+
+#### Costo per CAPTCHA
+
+Misurato sul payload reale del solver (prompt neutro, `detail=high`),
+`gpt-6-astra` @ `medium`, 16 chiamate:
+
+| | input | output | di cui reasoning | totale |
+| --- | --- | --- | --- | --- |
+| media | 87 | ~180 | ~170 | **~250** |
+| range | 87 | 7-453 | 0-444 | 94-540 |
+
+L'input e' costante (87 token: il codex-lb non fattura i token immagine come
+input separati); il costo e' quasi interamente **reasoning tokens**, e varia
+di un fattore 5 tra una chiamata e l'altra. Alzare l'effort alza il costo con
+la stessa proporzione.
+
+Una visura che esaurisce la catena costa quindi `CAPTCHA_LLM_ATTEMPTS` volte
+questa cifra: con il valore di produzione `10`, circa **2.500-3.300 token**
+di codex per singola richiesta fallita, piu' 10 invocazioni della CLI `agent`
+(quota Cursor, non misurata).
+
+I ~3.300 token per singola immagine riportati dalla CLI `codex` sul CED non
+sono confrontabili: quella misura include il system prompt e lo scaffolding
+agentico della CLI. Per il solver la cifra di riferimento e' ~250.
+
+Nota per chi volesse ridurre il costo: lo short-circuit su
+`agent_provider_error` descritto altrove **non** riduce i token, perche'
+codex-lb viene comunque chiamato una volta per tentativo; risparmia
+invocazioni della CLI `agent` e wall-clock. La leva sui token e'
+`CAPTCHA_LLM_ATTEMPTS`.
+
+Attenzione: l'effort non e' un parametro "piu' e' meglio", agisce in direzioni
+opposte a seconda del modello. Su `gpt-6-astra`, che non rifiuta mai, alzarlo
+migliora la trascrizione; su un modello che rifiuta, alzarlo puo' solo
+peggiorare. Quindi un cambio di `CAPTCHA_CODEX_LB_MODEL` va sempre rivalidato
+insieme all'effort, non separatamente.
+
+`gpt-5.6-terra` e' escluso a **qualunque** effort. Rimisurato il 2026-09-09
+sugli stessi 4 CAPTCHA:
+
+| effort | esito |
+| --- | --- |
+| `low` (prova del 2026-09-06) | 3 rifiuti su 4 |
+| `low` (2026-09-09) | **4 rifiuti su 4** |
+| `medium` (2026-09-09) | **4 rifiuti su 4** |
+
+Il confronto con il 6 settembre indica che il classificatore di sicurezza del
+modello si e' irrigidito: allora un caso su quattro passava, oggi nessuno.
+Configurarlo comunque non manderebbe testo spazzatura a SISTER — il rifiuto e'
+una risposta HTTP 200 che `_REFUSAL_RE` intercetta come `codex_lb_refusal` e
+converte in `None` — ma produrrebbe un fallback che fallisce il 100% delle
+volte, cioe' l'equivalente funzionale del `gpt-5.4-mini` ritirato.
+
+Cautela sulla misura: le etichette vere dei 4 CAPTCHA di
+`data-example/capthas/` non sono note, quindi le tabelle sopra vanno lette
+come *stabilita' e plausibilita'*, non come accuratezza certificata — su
+`captcha_1` e `captcha_4` la lettura a occhio dell'operatore
+(`attativa`, `zubeuto`) diverge dal modello, e trattandosi di parole italiane
+(`affettiva` lo e') e' plausibile che sia la lettura umana a sbagliare.
+L'unico oracolo affidabile e' SISTER stesso: il flusso registra gia'
+`sister_rejected` quando il portale rifiuta una trascrizione, quindi il tasso
+di accettazione reale e' misurabile in produzione senza inventare label.
+
+Lo stesso pin `gpt-5.4-mini` e' usato da 5 target Graphify nel `Makefile`
+(`GRAPHIFY_WIKI_DOC_MODEL`, `GRAPHIFY_PRESENZE_DOC_MODEL`,
+`GRAPHIFY_UTENZE_DOC_MODEL`, `GRAPHIFY_PLATFORM_DOC_MODEL` e l'hardcode di
+`graphify-elaborazioni-docs`), che falliscono l'estrazione semantica con lo
+stesso 503 restituendo risultati parziali con exit code 0.
 
 `gpt-5.6-terra` compare nel catalogo del codex-lb installato e legge
 correttamente un'immagine sintetica in una prova di trascrizione generica, ma
@@ -164,7 +323,56 @@ quindi legato a un classificatore visivo del modello sul contenuto
 dell'immagine, non al wording della richiesta. Il collegamento a Terra e
 disponibile ma il modello non e adatto come fallback CAPTCHA; il rifiuto
 viene comunque gestito come mancata soluzione (`None`), senza reinterpretarlo
-come codice da inviare a SISTER.
+come codice da inviare a SISTER. **Aggiornamento 2026-09-09**: rimisurato, ora
+rifiuta 4/4 sia a `low` sia a `medium` — vedi la tabella nella sezione
+precedente.
+
+### Wording storici e classificazione dei fallimenti CAPTCHA
+
+Il messaggio di catena CAPTCHA esaurita ha cambiato testo piu' volte. Tutte e
+tre le forme sono ancora presenti sui record gia' falliti in produzione:
+
+| wording | introdotto | ultimo record CED |
+| --- | --- | --- |
+| `Manual CAPTCHA response missing` | pre-`112dee6a` | 2026-06-17 |
+| `Automatic CAPTCHA exhausted; manual CAPTCHA response missing` | pre-`112dee6a` | 2026-07-14 |
+| `Agent CAPTCHA exhausted; manual CAPTCHA disabled` | `112dee6a` (2026-08-24) | 2026-09-08 |
+| `CAPTCHA non risolto — <motivi>` | `8ae046a3` (2026-09-07) | wording attuale |
+
+Due conseguenze operative.
+
+**Il pannello non e' una fonte affidabile per datare un fallimento.**
+`catasto_perpetual_sync_items.last_error_message` e
+`catasto_ruolo_autosync_items.last_error_message` sono copie persistite di
+`catasto_visure_requests.error_message`, riscritte a ogni reconcile
+(`_retry_item` in `elaborazioni_perpetual_sync.py`, `reconcile_ruolo_autosync_items`
+in `elaborazioni_ruolo_autosync.py`). Dopo un deploy il pannello continua a
+mostrare il wording vecchio finche' l'item non fallisce di nuovo, quindi la
+stringa nella UI non dice quale codice era in esecuzione. Per datare il
+fallimento reale usare `catasto_visure_requests.processed_at`, e per sapere
+quale codice gira sul worker controllare l'immagine, non il messaggio:
+
+```
+docker inspect gaia-elaborazioni-worker-visure --format '{{.Created}}'
+docker exec gaia-elaborazioni-worker-visure grep -c "CAPTCHA non risolto" /app/worker/visura_flow.py
+```
+
+**Il wording e' un contratto verso il backend.**
+`classify_ruolo_autosync_failure` decide via `BLOCKED_RUNTIME_ERROR_MARKERS`
+(`elaborazioni_ruolo_autosync.py`) se un item va in `blocked_runtime` oppure
+torna `pending` con `retry_after = now + AUTO_SYNC_RETRY_DELAY`. Su quel
+percorso **non esiste un cap sui tentativi**: `blocked_runtime` e' l'unica
+uscita dal ciclo, quindi un wording non riconosciuto significa riaccodare la
+particella ogni 5 minuti a tempo indefinito, bruciando sessioni SISTER su un
+CAPTCHA che continuera' a fallire. Il perpetual sync non ha questo problema
+perche' limita a `MAX_AUTOSYNC_ATTEMPTS = 3` con backoff esponenziale da
+`RETRY_DELAY = 15 min`, indipendentemente dal messaggio.
+
+Regola: se cambia il testo prodotto da `_summarize_captcha_failure` o dai rami
+terminali di `visura_flow`, aggiungere il nuovo marker a
+`BLOCKED_RUNTIME_ERROR_MARKERS` nella stessa change. Backend e worker si
+aggiornano separatamente, quindi i marker storici vanno mantenuti: durante una
+finestra di deploy parziale il backend nuovo riceve messaggi dal worker vecchio.
 
 ## Telemetria operativa
 

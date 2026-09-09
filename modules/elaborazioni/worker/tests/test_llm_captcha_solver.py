@@ -14,7 +14,7 @@ if str(WORKER_ROOT) not in sys.path:
     sys.path.insert(0, str(WORKER_ROOT))
 
 # Standalone worker imports require WORKER_ROOT on sys.path.
-from llm_captcha_solver import LLMCaptchaSolver, _PROMPT_TEMPLATE  # noqa: E402
+from llm_captcha_solver import _PROMPT_TEMPLATE, LLMCaptchaSolver  # noqa: E402
 
 
 def test_prompt_does_not_mention_captcha():
@@ -292,7 +292,7 @@ def _completed_response(text="AbC123"):
     (b'{"type":"error","message":"unavailable"}', 0),
     (b"I cannot read the captcha image with confidence", 0),
 ])
-def test_agent_failure_calls_gpt54_mini_with_image(monkeypatch, stdout, exit_code):
+def test_agent_failure_calls_codex_default_model_with_image(monkeypatch, stdout, exit_code):
     import base64
 
     monkeypatch.setenv("CODEX_LB_API_KEY", "test-key")
@@ -313,8 +313,8 @@ def test_agent_failure_calls_gpt54_mini_with_image(monkeypatch, stdout, exit_cod
     assert str(request.url) == "http://host.docker.internal:2455/v1/responses"
     assert request.headers["Authorization"] == "Bearer test-key"
     payload = json.loads(request.content)
-    assert payload["model"] == "gpt-5.4-mini"
-    assert payload["reasoning"] == {"effort": "low"}
+    assert payload["model"] == "gpt-6-astra"
+    assert payload["reasoning"] == {"effort": "medium"}
     assert payload["store"] is False
     assert payload["stream"] is False
     image = payload["input"][0]["content"][1]
@@ -362,7 +362,7 @@ def test_last_result_records_codex_refusal(monkeypatch):
         assert run(solver.solve(b"image")) is None
     assert solver.last_result.reason == "codex_lb_refusal"
     assert solver.last_result.provider == "codex-lb"
-    assert solver.last_result.label() == "codex-lb rifiuto del modello (gpt-5.4-mini)"
+    assert solver.last_result.label() == "codex-lb rifiuto del modello (gpt-6-astra)"
 
 
 def test_last_result_records_upstream_http_error_code(monkeypatch):
@@ -465,6 +465,33 @@ def test_codex_overrides_and_path_preserved(monkeypatch, tmp_path):
         assert run(LLMCaptchaSolver().solve_from_path(image)) == "AbC123"
         factory.assert_called_once_with(timeout=12)
     assert image.read_bytes() == b"image"
+
+
+@pytest.mark.parametrize(
+    ("configured", "expected"),
+    [
+        ("high", "high"),
+        # Una variabile svuotata non deve produrre `{"effort": ""}`: codex-lb la
+        # rifiuterebbe. Si torna al default.
+        ("   ", "medium"),
+    ],
+)
+def test_codex_reasoning_effort_is_configurable(monkeypatch, configured, expected):
+    monkeypatch.setenv("CODEX_LB_API_KEY", "test-key")
+    monkeypatch.setenv("CAPTCHA_CODEX_LB_REASONING_EFFORT", configured)
+    captured = []
+
+    async def respond(request):
+        captured.append(json.loads(request.content))
+        return httpx.Response(200, json=_completed_response())
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
+    with (
+        patch("asyncio.create_subprocess_exec", AsyncMock(side_effect=OSError)),
+        patch("llm_captcha_solver.httpx.AsyncClient", return_value=client),
+    ):
+        assert run(LLMCaptchaSolver().solve(b"image")) == "AbC123"
+    assert captured[0]["reasoning"] == {"effort": expected}
 
 
 def test_codex_missing_image_returns_none(monkeypatch, tmp_path):

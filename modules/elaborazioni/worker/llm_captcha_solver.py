@@ -50,6 +50,14 @@ _PROVIDER_ERROR_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Il precedente default `gpt-5.4-mini` e' stato ritirato dal codex-lb e ogni
+# chiamata rispondeva HTTP 503 `no_plan_support_for_model` (verifica 2026-09-09).
+_DEFAULT_CODEX_LB_MODEL = "gpt-6-astra"
+# Con effort `low` la trascrizione e' instabile sulla stessa immagine (fino a
+# restituire un altro alfabeto); con `medium` diventa ripetibile e coincide con
+# l'esito della CLI `codex` sul CED. Vedi SISTER_debug_runbook.md.
+_DEFAULT_CODEX_LB_EFFORT = "medium"
+
 _PROMPT_TEMPLATE = (
     "Trascrivi esattamente il testo che vedi in questa immagine. "
     "Rispondi SOLO con i caratteri esatti, rispettando maiuscole/minuscole, "
@@ -109,14 +117,15 @@ class LLMCaptchaSolver:
         if enabled not in {"true", "1", "yes", "on"} or not api_key:
             return self._record(None, "codex_lb_disabled", "codex-lb")
         url = os.getenv("CAPTCHA_CODEX_LB_URL") or os.getenv("CODEX_LB_URL", "http://127.0.0.1:2455/v1")
-        model = os.getenv("CAPTCHA_CODEX_LB_MODEL", "gpt-5.4-mini")
+        model = os.getenv("CAPTCHA_CODEX_LB_MODEL", _DEFAULT_CODEX_LB_MODEL)
+        effort = os.getenv("CAPTCHA_CODEX_LB_REASONING_EFFORT", _DEFAULT_CODEX_LB_EFFORT).strip()
         timeout = self._timeout("CAPTCHA_CODEX_LB_TIMEOUT_SECONDS")
-        logger.info("LLM CAPTCHA solver: fallback codex-lb model=%s", model)
+        logger.info("LLM CAPTCHA solver: fallback codex-lb model=%s effort=%s", model, effort)
         try:
             encoded = base64.b64encode(image_path.read_bytes()).decode("ascii")
             payload = {
                 "model": model,
-                "reasoning": {"effort": "low"},
+                "reasoning": {"effort": effort or _DEFAULT_CODEX_LB_EFFORT},
                 "store": False,
                 "stream": False,
                 "input": [{"role": "user", "content": [

@@ -1,20 +1,30 @@
 COMPOSE = docker compose
 GRAPHIFY_ENV = if [ -f /home/cbo/CursorProjects/GAIA/.env.graphify ]; then set -a; . /home/cbo/CursorProjects/GAIA/.env.graphify; set +a; fi;
 GRAPHIFY_CODE_FLAGS ?=
-GRAPHIFY_WIKI_DOC_MODEL = gpt-5.4-mini
-GRAPHIFY_WIKI_DOC_FLAGS = --max-concurrency 1 --api-timeout 60
-GRAPHIFY_WIKI_DOC_TIMEOUT = timeout --foreground 180s
+# gpt-5.4-mini e' stato ritirato dal codex-lb il 2026-09-09: rispondeva HTTP 503
+# no_plan_support_for_model, e graphify degradava a "partial results" con exit 0,
+# cioe' un grafo aggiornato ma senza arricchimento semantico. gpt-reserve e' il
+# modello veloce del catalogo attuale, validato su elaborazioni, presenze e wiki
+# (quest'ultimo e' il corpus con l'hang storico su gpt-5.5: nessun hang).
+# I timeout sono allineati ai valori con cui la validazione e' passata.
+GRAPHIFY_DOC_MODEL ?= gpt-reserve
+GRAPHIFY_WIKI_DOC_MODEL = $(GRAPHIFY_DOC_MODEL)
+GRAPHIFY_WIKI_DOC_FLAGS = --max-concurrency 1 --api-timeout 180
+GRAPHIFY_WIKI_DOC_TIMEOUT = timeout --foreground 420s
 GRAPHIFY_WIKI_DOC_DEBUG_FLAGS = --max-concurrency 1 --api-timeout 30
 GRAPHIFY_WIKI_DOC_DEBUG_TIMEOUT = timeout --foreground 90s
 GRAPHIFY_WIKI_DOC_DEBUG_LOG = /tmp/graphify-wiki-docs-debug.log
-GRAPHIFY_PRESENZE_DOC_MODEL = gpt-5.4-mini
-GRAPHIFY_PRESENZE_DOC_FLAGS = --max-concurrency 1 --api-timeout 60
-GRAPHIFY_PRESENZE_DOC_TIMEOUT = timeout --foreground 180s
-GRAPHIFY_UTENZE_DOC_MODEL = gpt-5.4-mini
-GRAPHIFY_UTENZE_DOC_FLAGS = --max-concurrency 1 --api-timeout 60
-GRAPHIFY_UTENZE_DOC_TIMEOUT = timeout --foreground 180s
-GRAPHIFY_PLATFORM_DOC_MODEL = gpt-5.4-mini
-GRAPHIFY_PLATFORM_DOC_FLAGS = --max-concurrency 1 --api-timeout 60
+GRAPHIFY_PRESENZE_DOC_MODEL = $(GRAPHIFY_DOC_MODEL)
+GRAPHIFY_PRESENZE_DOC_FLAGS = --max-concurrency 1 --api-timeout 180
+GRAPHIFY_PRESENZE_DOC_TIMEOUT = timeout --foreground 420s
+GRAPHIFY_UTENZE_DOC_MODEL = $(GRAPHIFY_DOC_MODEL)
+GRAPHIFY_UTENZE_DOC_FLAGS = --max-concurrency 1 --api-timeout 180
+GRAPHIFY_UTENZE_DOC_TIMEOUT = timeout --foreground 420s
+GRAPHIFY_PLATFORM_DOC_MODEL = $(GRAPHIFY_DOC_MODEL)
+GRAPHIFY_PLATFORM_DOC_FLAGS = --max-concurrency 1 --api-timeout 180
+GRAPHIFY_ELABORAZIONI_DOC_MODEL = $(GRAPHIFY_DOC_MODEL)
+GRAPHIFY_ELABORAZIONI_DOC_FLAGS = --max-concurrency 1 --api-timeout 180
+GRAPHIFY_ELABORAZIONI_DOC_TIMEOUT = timeout --foreground 420s
 QUALITY_PYTHON ?= python3
 WORKER_PYTHON ?= backend/.venv/bin/python
 WORKER_COVERAGE_JSON ?= backend/coverage-worker.json
@@ -268,7 +278,7 @@ graphify-elaborazioni-worker-query:
 	cd modules/elaborazioni/worker && $(GRAPHIFY_ENV) graphify query "$(Q)"
 
 graphify-elaborazioni-docs:
-	cd domain-docs/elaborazioni && $(GRAPHIFY_ENV) GRAPHIFY_OPENAI_MODEL=gpt-5.4-mini timeout --foreground 180s graphify extract . --max-concurrency 1 --api-timeout 60
+	cd domain-docs/elaborazioni && $(GRAPHIFY_ENV) GRAPHIFY_OPENAI_MODEL=$(GRAPHIFY_ELABORAZIONI_DOC_MODEL) $(GRAPHIFY_ELABORAZIONI_DOC_TIMEOUT) graphify extract . $(GRAPHIFY_ELABORAZIONI_DOC_FLAGS)
 
 graphify-elaborazioni-docs-query:
 	@if [ -z "$(Q)" ]; then echo "Uso: make graphify-elaborazioni-docs-query Q=\"domanda\""; exit 1; fi

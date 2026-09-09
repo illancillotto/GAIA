@@ -1919,6 +1919,28 @@ def test_ruolo_autosync_failure_classifier_blocks_manual_captcha_missing() -> No
     assert status == CatastoRuoloAutoSyncItemStatus.BLOCKED_RUNTIME.value
 
 
+@pytest.mark.parametrize(
+    "error_message",
+    [
+        # wording attuale prodotto da visura_flow._summarize_captcha_failure
+        "CAPTCHA non risolto — Agent: codex-lb rifiuto del modello (gpt-5.4-mini);"
+        " Anti-Captcha non configurato; CAPTCHA manuale disattivato",
+        # wording ancora in produzione sui worker non aggiornati
+        "Agent CAPTCHA exhausted; manual CAPTCHA disabled",
+    ],
+)
+def test_ruolo_autosync_failure_classifier_blocks_every_captcha_wording(
+    error_message: str,
+) -> None:
+    status = classify_ruolo_autosync_failure(error_message)
+    assert status == CatastoRuoloAutoSyncItemStatus.BLOCKED_RUNTIME.value
+
+
+def test_ruolo_autosync_failure_classifier_retries_transient_errors() -> None:
+    status = classify_ruolo_autosync_failure("Timeout 60000ms exceeded.")
+    assert status == CatastoRuoloAutoSyncItemStatus.PENDING.value
+
+
 def test_ruolo_autosync_status_counts_runtime_anomalies_separately() -> None:
     user_id, credential_id = _seed_ruolo_autosync_fixture()
 

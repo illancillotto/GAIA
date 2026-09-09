@@ -67,6 +67,20 @@ from app.services.elaborazioni_perpetual_sync import (
 )
 
 UTC = UTC_TZ
+# Errori visura che non si risolvono ripetendo il ciclo: l'item va messo in
+# blocked_runtime e lasciato all'operatore, non riaccodato ogni 5 minuti.
+# La catena CAPTCHA ha cambiato wording piu' volte e i worker si aggiornano
+# separatamente dal backend, quindi vanno riconosciute anche le forme storiche
+# ancora presenti sui record gia' falliti.
+BLOCKED_RUNTIME_ERROR_MARKERS = (
+    "submit visura non avanzato",
+    # wording attuale, da visura_flow._summarize_captcha_failure
+    "captcha non risolto",
+    # wording storici della stessa condizione
+    "agent captcha exhausted",
+    "automatic captcha exhausted",
+    "manual captcha response missing",
+)
 AUTO_SYNC_RETRY_DELAY = timedelta(minutes=5)
 AUTO_SYNC_BATCH_SIZE = 20
 AUTO_SYNC_PENDING_BATCH_GRACE = timedelta(minutes=2)
@@ -170,11 +184,7 @@ def _ruolo_autosync_source_rows(*, refreshed_after: datetime | None):
 
 def classify_ruolo_autosync_failure(error_message: str | None) -> str:
     message = (error_message or "").strip().lower()
-    if (
-        "submit visura non avanzato" in message
-        or "manual captcha response missing" in message
-        or "automatic captcha exhausted" in message
-    ):
+    if any(marker in message for marker in BLOCKED_RUNTIME_ERROR_MARKERS):
         return CatastoRuoloAutoSyncItemStatus.BLOCKED_RUNTIME.value
     return CatastoRuoloAutoSyncItemStatus.PENDING.value
 
