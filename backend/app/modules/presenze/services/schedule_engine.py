@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, time, timedelta
 
 from sqlalchemy import select
@@ -22,10 +22,16 @@ from app.modules.presenze.services.inaz_minute_buckets import (
     inaz_special_day,
     reconcile_inaz_minute_buckets,
 )
-from app.modules.presenze.services.operai_rules import OperaiRuleConfig, load_operai_rule_configs
+from app.modules.presenze.services.operai_daily_policy import recognized_daily_minutes
+from app.modules.presenze.services.operai_recognized_minutes import RecognizedOperaiMinutes
+from app.modules.presenze.services.operai_rules import (
+    OperaiRuleConfig,
+    load_operai_rule_configs,
+    resolve_operai_rule,
+)
 from app.modules.presenze.services.operational_quality import (
     OperaiOperationalQuality,
-    build_operai_operational_quality,
+    evaluate_operai_operational_quality,
 )
 from app.modules.presenze.services.parser import (
     detail_has_authoritative_classification,
@@ -57,6 +63,7 @@ class DayClassification:
     shift_festive_day_minutes: int = 0
     shift_night_minutes: int = 0
     shift_festive_night_minutes: int = 0
+    recognized_minutes: RecognizedOperaiMinutes | None = None
 
 
 @dataclass(frozen=True)
@@ -169,11 +176,12 @@ def classify_daily_record(
         # A scheduled Saturday/weekday should be exported as ordinary ferial, not festive.
         special_day = False
 
-    operai_quality = build_operai_operational_quality(
+    operai_quality = evaluate_operai_operational_quality(
         collaborator,
         record,
         punches,
         operai_rule_configs=context.operai_rule_configs if context is not None else None,
+        recognized_minutes=_recognized_operai_minutes(collaborator, record, punches, matched_rules, context),
     )
     if operai_quality.is_applicable and operai_quality.worked_minutes is not None:
         if holiday is None:
@@ -284,11 +292,12 @@ def _classify_operai_day(
     holiday_kind: str | None,
     grants_recovery_day: bool,
 ) -> DayClassification:
-    ordinary_minutes = min(quality.worked_minutes or 0, quality.expected_minutes or 0)
+    ordinary_minutes = quality.recognized_minutes.ordinary_minutes if quality.recognized_minutes is not None else min(quality.worked_minutes or 0, quality.expected_minutes or 0)
+    buckets = _recognized_operai_buckets(quality, buckets, special_day)
     return DayClassification(
         special_day=special_day,
         ordinary_minutes=ordinary_minutes,
-        extra_minutes=quality.mpe_minutes or None,
+        extra_minutes=quality.mpe_minutes if quality.recognized_minutes is not None else quality.mpe_minutes or None,
         holiday_kind=holiday_kind,
         grants_recovery_day=grants_recovery_day,
         night_minutes=buckets.night_minutes,
@@ -306,6 +315,32 @@ def _classify_operai_day(
         shift_night_minutes=buckets.shift_night_minutes,
         shift_festive_night_minutes=buckets.shift_festive_night_minutes,
         source="operai_formula",
+        recognized_minutes=quality.recognized_minutes,
+    )
+
+
+def _recognized_operai_minutes(collaborator, record, punches, rules, context):
+    rule = resolve_operai_rule(collaborator, record, context.operai_rule_configs if context else None)
+    if rule is None:
+        return None
+    start = min((item.start_time for item in rules), default=None)
+    return recognized_daily_minutes(punches, rule, scheduled_start=start)
+
+
+def _recognized_operai_buckets(quality, buckets, festive):
+    recognized = quality.recognized_minutes
+    if recognized is None:
+        return buckets
+    night = recognized.ordinary_night_minutes
+    return replace(
+        buckets,
+        night_minutes=night,
+        festive_minutes=recognized.ordinary_minutes + quality.mpe_minutes - night if festive else 0,
+        festive_night_minutes=night if festive else 0,
+        ordinary_night_minutes=0 if festive else night,
+        shift_night_minutes=0 if festive else night,
+        shift_festive_night_minutes=night if festive else 0,
+        shift_festive_day_minutes=recognized.ordinary_minutes - night if festive else 0,
     )
 
 

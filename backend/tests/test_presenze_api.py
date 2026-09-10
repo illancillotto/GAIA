@@ -1955,9 +1955,9 @@ def test_presenze_export_generates_xlsm(tmp_path: Path) -> None:
         assert archive2.cell(6, 6).value == "D107"
         assert archive2.cell(6, 7).value == "01/01/2000"
         # giorno 16 => colonna 8 + 15, blocco ordinary_ferial. Il codice OPESAB classifica
-        # il collaboratore come operaio, quindi le ordinarie sono i 335 minuti timbrati
-        # (06:55-12:30) e non i 05:30 dichiarati da Inaz.
-        assert archive2.cell(6, 23).value == 335 / 60
+        # il collaboratore come operaio: i 5 minuti anticipati (06:55-07:00)
+        # sono esclusi; restano 330 minuti riconosciuti (07:00-12:30).
+        assert archive2.cell(6, 23).value == 330 / 60
         # giorno 16 => colonna 8 + 15, blocco KM AUTO +279
         assert archive2.cell(6, 302).value == 24
         # giorno 16 => colonna 8 + 15, blocco reperibilita +467
@@ -4953,7 +4953,7 @@ def test_gate_presenze_daily_records_follow_team_visibility_and_month_contract()
 
     months = client.get("/gate/presenze/months/available", headers={"Authorization": f"Bearer {supervisor_token}"})
     assert months.status_code == 200
-    assert months.json()["rules_version"] == "presenze-2026-09-extra-5h-warning"
+    assert months.json()["rules_version"] == "presenze-2026-09-10-operai-minuti-riconosciuti"
     assert months.json()["months"] == [{"month": "2026-07", "records_total": 1}]
 
     response = client.get(
@@ -4967,7 +4967,7 @@ def test_gate_presenze_daily_records_follow_team_visibility_and_month_contract()
     item = body["records"][0]
     assert item["collaborator_name"] == "GATE RECORD UNO"
     assert item["team_ids"] == [team_id]
-    assert item["extra_minutes"] == 180
+    assert item["extra_minutes"] == 0
     assert item["has_complete_punches"] is True
 
     filtered_response = client.get(
@@ -4993,7 +4993,7 @@ def test_gate_presenze_rules_endpoint_exposes_shared_operational_rules() -> None
 
     assert response.status_code == 200
     body = response.json()
-    assert body["rules_version"] == "presenze-2026-09-extra-5h-warning"
+    assert body["rules_version"] == "presenze-2026-09-10-operai-minuti-riconosciuti"
     assert body["export_rules_version"] == "presenze-xlsm-2026-08"
     assert [section["code"] for section in body["sections"]] == ["anomalie", "validazione", "export"]
     anomaly_rules = body["sections"][0]["rules"]

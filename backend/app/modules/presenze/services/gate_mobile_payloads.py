@@ -17,6 +17,7 @@ from app.modules.presenze.models import (
     PresenzeCollaborator,
     PresenzeDailyRecord,
 )
+from app.modules.presenze.services.operai_daily_policy import classified_extra_minutes
 from app.modules.presenze.services.xlsm_export import resolve_export_absence_code
 
 
@@ -259,7 +260,7 @@ def build_presenze_mobile_record_payload(
         "review_status": record.validation_status,
         "severity": severity,
         "schedule_code": record.schedule_code,
-        "ordinary_minutes": record.ordinary_minutes,
+        "ordinary_minutes": classification.ordinary_minutes,
         "extra_minutes": presenze_extra_minutes(serialized, classification),
         "missing_minutes": serialized.operational_missing_minutes,
         "absence_cause": serialized.resolved_absence_cause,
@@ -291,7 +292,7 @@ def _record_request_values(serialized: Any) -> dict[str, Any]:
 def presenze_extra_minutes(serialized: Any, classification: Any = None) -> int:
     effective = getattr(serialized, "effective_extra_minutes", 0) or 0
     if classification is not None:
-        return max(effective, classification.extra_minutes or 0)
+        return classified_extra_minutes(effective, classification)
     calculated = (getattr(serialized, "effective_straordinario_minutes", 0) or 0) + (
         getattr(serialized, "operational_mpe_minutes", 0) or 0
     )

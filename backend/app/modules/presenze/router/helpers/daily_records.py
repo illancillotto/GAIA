@@ -30,6 +30,7 @@ from app.modules.presenze.services.auto_sync import (
 from app.modules.presenze.services.credentials import (
     get_credential,
 )
+from app.modules.presenze.services.operai_daily_policy import effective_extra_values
 from app.modules.presenze.services.operational_quality import (
     build_daily_operational_quality,
     complete_punch_minutes,
@@ -109,12 +110,6 @@ def _serialize_daily_record(
                 "terminal_label": terminal_label,
             }
         )
-    effective_straordinario = (
-        record.override_straordinario_minutes
-        if record.override_straordinario_minutes is not None
-        else record.straordinario_minutes
-    )
-    effective_mpe = record.override_mpe_minutes if record.override_mpe_minutes is not None else record.mpe_minutes
     if classification is None:
         classification = _build_daily_record_classification(
             db,
@@ -146,15 +141,13 @@ def _serialize_daily_record(
         {
             **record.__dict__,
             "punches": serialized_punches,
-            "effective_straordinario_minutes": effective_straordinario,
-            "effective_mpe_minutes": effective_mpe,
-            "effective_extra_minutes": (effective_straordinario or 0) + (effective_mpe or 0) or None,
             "operational_status": operational_quality.status,
             "operational_formula_code": operational_quality.formula_code,
             "operational_expected_minutes": operational_quality.expected_minutes,
             "operational_worked_minutes": operational_quality.worked_minutes,
             "operational_missing_minutes": operational_quality.missing_minutes,
             "operational_mpe_minutes": operational_quality.mpe_minutes,
+            **effective_extra_values(record, classification),
             "operational_notes": list(operational_quality.notes),
             "night_minutes": classification.night_minutes,
             "festive_minutes": classification.festive_minutes,
@@ -315,6 +308,20 @@ def _serialize_anomaly_list_item(
         summary=_summarize_detail_values(detail.get("day_summary") or {}),
     )
 
+def _serialize_accounted_anomaly_items(db: Session, records: list[PresenzeDailyRecord]):
+    collaborators = _build_collaborator_snapshot_map(db, list({row.collaborator_id for row in records}))
+    classifications = _build_classification_map(db, records)
+    items = []
+    for record in records:
+        item = _serialize_anomaly_list_item(record, collaborator_map=collaborators)
+        classification = classifications[record.id]
+        values = effective_extra_values(record, classification)
+        items.append(item.model_copy(update={
+            "ordinary_minutes": values.get("ordinary_minutes", item.ordinary_minutes),
+            "effective_extra_minutes": values["effective_extra_minutes"] or 0,
+        }))
+    return items
+
 def _filter_anomaly_rows(
     rows: list[PresenzeDailyRecord],
     *,
@@ -359,12 +366,6 @@ def _serialize_daily_record_matrix(
     operai_rule_configs=None,
 ) -> PresenzeDailyRecordResponse:
     detail = extract_detail_payload(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else {}
-    effective_straordinario = (
-        record.override_straordinario_minutes
-        if record.override_straordinario_minutes is not None
-        else record.straordinario_minutes
-    )
-    effective_mpe = record.override_mpe_minutes if record.override_mpe_minutes is not None else record.mpe_minutes
     detail_anomalies = detail.get("anomalies") or []
     if classification is None:
         classification = _build_daily_record_classification(None, record, punches=[])
@@ -383,15 +384,13 @@ def _serialize_daily_record_matrix(
         {
             **record.__dict__,
             "punches": [],
-            "effective_straordinario_minutes": effective_straordinario,
-            "effective_mpe_minutes": effective_mpe,
-            "effective_extra_minutes": (effective_straordinario or 0) + (effective_mpe or 0) or None,
             "operational_status": operational_quality.status,
             "operational_formula_code": operational_quality.formula_code,
             "operational_expected_minutes": operational_quality.expected_minutes,
             "operational_worked_minutes": operational_quality.worked_minutes,
             "operational_missing_minutes": operational_quality.missing_minutes,
             "operational_mpe_minutes": operational_quality.mpe_minutes,
+            **effective_extra_values(record, classification),
             "operational_notes": list(operational_quality.notes),
             "night_minutes": classification.night_minutes,
             "festive_minutes": classification.festive_minutes,
