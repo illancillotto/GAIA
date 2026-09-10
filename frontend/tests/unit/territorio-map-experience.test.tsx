@@ -11,18 +11,13 @@ const mocks = vi.hoisted(() => ({
     open: false,
     gaia: [{ source_id: "particella", data: [{ id: "parcel-1" }] }],
   })),
-  mapListener: null as ((maps: Array<{ getContainer: () => HTMLElement }>) => void) | null,
+  mapReady: null as ((map: { getContainer: () => HTMLElement } | null) => void) | null,
 }));
 
 vi.mock("@/components/catasto/gis/TerritorioRegisteredMap", () => ({
-  default: () => <div data-testid="map-canvas">canvas GIS</div>,
-}));
-
-vi.mock("@/components/catasto/gis/territorio-map-registry", () => ({
-  subscribeTerritorioMaps: (listener: typeof mocks.mapListener) => {
-    mocks.mapListener = listener;
-    listener?.([]);
-    return vi.fn();
+  default: (props: { onMapReady?: typeof mocks.mapReady }) => {
+    mocks.mapReady = props.onMapReady ?? null;
+    return <div data-testid="map-canvas">canvas GIS</div>;
   },
 }));
 
@@ -86,7 +81,7 @@ describe("TerritorioMapExperience", () => {
     expect(screen.getByText("pannello interrogazione")).toBeInTheDocument();
     expect(screen.getByText("ricerca territorio")).toBeInTheDocument();
     act(() => {
-      mocks.mapListener?.([{ getContainer: () => screen.getByTestId("map-canvas") }]);
+      mocks.mapReady?.({ getContainer: () => screen.getByTestId("map-canvas") });
     });
     expect(mocks.useTerritorioLayers).toHaveBeenLastCalledWith(
       expect.objectContaining({ getContainer: expect.any(Function) }),

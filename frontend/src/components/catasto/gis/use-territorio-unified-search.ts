@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type maplibregl from "maplibre-gl";
+import type { Map as MapLibreMap } from "maplibre-gl";
 
 import {
   catastoGetDistrettoGeojson,
@@ -24,7 +24,7 @@ import {
   type TerritorioSearchResult,
 } from "./territorio-unified-search";
 
-type SearchMap = Pick<maplibregl.Map, "fitBounds" | "flyTo" | "querySourceFeatures">;
+type SearchMap = Pick<MapLibreMap, "fitBounds" | "flyTo" | "querySourceFeatures">;
 
 type SearchInput = {
   token: string;

@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import type maplibregl from "maplibre-gl";
+import { useState } from "react";
+import type { Map as MapLibreMap } from "maplibre-gl";
 
 import TerritorioRegisteredMap, { type TerritorioRegisteredMapProps } from "./TerritorioRegisteredMap";
-import { subscribeTerritorioMaps } from "./territorio-map-registry";
 import TerritorioLayerPanel from "@/components/catasto/gis/TerritorioLayerPanel";
 import InterrogazionePanel from "@/components/catasto/gis/InterrogazionePanel";
 import {
@@ -26,26 +25,14 @@ function parcelIdFromGaia(
 }
 
 export default function TerritorioMapExperience(props: TerritorioMapExperienceProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [map, setMap] = useState<maplibregl.Map | null>(null);
+  const [map, setMap] = useState<MapLibreMap | null>(null);
   const territorio = useTerritorioLayers(map as TerritorioMapAdapter | null, props.token);
   const interrogazione = useInterrogazione(map, props.token, territorio.groups);
   const { currentUser } = useAppShellContext();
 
-  useEffect(
-    () => subscribeTerritorioMaps((availableMaps) => {
-      const container = containerRef.current;
-      const ownedMap = [...availableMaps].reverse().find(
-        (candidate) => container?.contains(candidate.getContainer()),
-      );
-      setMap(ownedMap ?? null);
-    }),
-    [],
-  );
-
   return (
-    <div ref={containerRef} className="relative h-full w-full">
-      <TerritorioRegisteredMap {...props} />
+    <div className="relative h-full w-full">
+      <TerritorioRegisteredMap {...props} onMapReady={setMap} />
       <TerritorioUnifiedSearch
         token={props.token}
         map={map}

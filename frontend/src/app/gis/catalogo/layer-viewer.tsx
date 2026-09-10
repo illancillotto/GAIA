@@ -1,9 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import maplibregl from "maplibre-gl";
+import { Map as MapLibreMap, NavigationControl, ScaleControl } from "maplibre-gl";
+import type { LayerSpecification, StyleSpecification } from "@maplibre/maplibre-gl-style-spec";
 
 import { listGisLayerFeatures } from "@/lib/api/gis";
+import {
+  WEBGL2_REQUIRED_MESSAGE,
+  canCreateWebGL2Context,
+  mapInitializationErrorMessage,
+  registerMapGPUErrorHandler,
+} from "@/lib/maplibre-support";
 import type { GisCatalogLayer, GisCatalogLayerFeature } from "@/types/gis";
 
 const SOURCE_ID = "gaia-catalog-layer";
@@ -12,6 +19,7 @@ const MAX_FALLBACK_FEATURES = 1000;
 const DEFAULT_MIN_ZOOM = 7;
 const DEFAULT_MAX_ZOOM = 22;
 const CBO_MAP_CENTER: [number, number] = [8.6, 39.85];
+const GPU_RESTORE_ERROR = "Impossibile ripristinare la mappa WebGL2.";
 
 export type GisLayerMapData = {
   featureCollection: GeoJSON.FeatureCollection;
@@ -42,7 +50,7 @@ export function getMartinZoomRange(metadata: Record<string, unknown>): {
 export function buildGisLayerStyleLayers(
   geometryType: string | null | undefined,
   sourceLayer?: string,
-): maplibregl.LayerSpecification[] {
+): LayerSpecification[] {
   const normalizedType = String(geometryType ?? "").toUpperCase();
   const sourceLayerProperty = sourceLayer
     ? { "source-layer": sourceLayer }
@@ -143,7 +151,7 @@ export async function loadGisLayerMapData(
   };
 }
 
-const mapStyle: maplibregl.StyleSpecification = {
+const mapStyle: StyleSpecification = {
   version: 8,
   sources: {
     osm: {
@@ -155,6 +163,70 @@ const mapStyle: maplibregl.StyleSpecification = {
   },
   layers: [{ id: "osm", type: "raster", source: "osm" }],
 };
+
+type LayerMapLifecycle = {
+  container: HTMLDivElement;
+  token: string;
+  layer: GisCatalogLayer;
+  isCancelled: () => boolean;
+  setStatus: (status: "loading" | "ready" | "error") => void;
+  setError: (error: string | null) => void;
+  setTruncated: (truncated: boolean) => void;
+};
+
+async function openGisLayerMap({
+  container,
+  token,
+  layer,
+  isCancelled,
+  setStatus,
+  setError,
+  setTruncated,
+}: LayerMapLifecycle): Promise<MapLibreMap | null> {
+  setStatus("loading");
+  setError(null);
+  setTruncated(false);
+  try {
+    if (!canCreateWebGL2Context()) throw new Error(WEBGL2_REQUIRED_MESSAGE);
+    const martinZoom = getMartinZoomRange(layer.metadata);
+    const mapData = layer.martin_layer_id ? null : await loadGisLayerMapData(token, layer.id);
+    if (isCancelled()) return null;
+    setTruncated(mapData?.truncated ?? false);
+
+    const map = new MapLibreMap({
+      container,
+      style: mapStyle,
+      center: CBO_MAP_CENTER,
+      zoom: layer.martin_layer_id ? martinZoom.minzoom : DEFAULT_MIN_ZOOM,
+      attributionControl: {},
+    });
+    map.addControl(new NavigationControl(), "top-right");
+    map.addControl(new ScaleControl({ unit: "metric" }), "bottom-right");
+    registerMapGPUErrorHandler(map, (message) => { setError(message); setStatus("error"); }, GPU_RESTORE_ERROR);
+    map.on("load", () => {
+      if (isCancelled()) return;
+      map.addSource(SOURCE_ID, layer.martin_layer_id ? {
+        type: "vector",
+        tiles: [`${window.location.origin}/tiles/${encodeURIComponent(layer.martin_layer_id)}/{z}/{x}/{y}`],
+        minzoom: martinZoom.minzoom,
+        maxzoom: martinZoom.maxzoom,
+      } : {
+        type: "geojson",
+        data: mapData!.featureCollection,
+      });
+      for (const styleLayer of buildGisLayerStyleLayers(layer.geometry_type, layer.martin_layer_id ?? undefined)) {
+        map.addLayer(styleLayer);
+      }
+      setStatus("ready");
+    });
+    return map;
+  } catch (loadError) {
+    if (isCancelled()) return null;
+    setError(mapInitializationErrorMessage(loadError, "Mappa temporaneamente non disponibile"));
+    setStatus("error");
+    return null;
+  }
+}
 
 export function GisLayerViewer({
   token,
@@ -170,68 +242,21 @@ export function GisLayerViewer({
   const [error, setError] = useState<string | null>(null);
   const [truncated, setTruncated] = useState(false);
 
-  useEffect(() => {
+  useEffect(function synchronizeLayerMap() {
     let cancelled = false;
-    let map: maplibregl.Map | null = null;
-
-    async function openMap() {
-      setStatus("loading");
-      setError(null);
-      setTruncated(false);
-      try {
-        const martinZoom = getMartinZoomRange(layer.metadata);
-        const mapData = layer.martin_layer_id
-          ? null
-          : await loadGisLayerMapData(token, layer.id);
-        if (cancelled) return;
-        setTruncated(mapData?.truncated ?? false);
-
-        map = new maplibregl.Map({
-          container: containerRef.current as HTMLDivElement,
-          style: mapStyle,
-          center: CBO_MAP_CENTER,
-          zoom: layer.martin_layer_id ? martinZoom.minzoom : DEFAULT_MIN_ZOOM,
-          attributionControl: {},
-        });
-        map.addControl(new maplibregl.NavigationControl(), "top-right");
-        map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
-        map.on("load", () => {
-          if (cancelled || !map) return;
-          if (layer.martin_layer_id) {
-            map.addSource(SOURCE_ID, {
-              type: "vector",
-              tiles: [
-                `${window.location.origin}/tiles/${encodeURIComponent(layer.martin_layer_id)}/{z}/{x}/{y}`,
-              ],
-              minzoom: martinZoom.minzoom,
-              maxzoom: martinZoom.maxzoom,
-            });
-          } else {
-            map.addSource(SOURCE_ID, {
-              type: "geojson",
-              data: mapData!.featureCollection,
-            });
-          }
-          for (const styleLayer of buildGisLayerStyleLayers(
-            layer.geometry_type,
-            layer.martin_layer_id ?? undefined,
-          )) {
-            map.addLayer(styleLayer);
-          }
-          setStatus("ready");
-        });
-      } catch (loadError) {
-        if (cancelled) return;
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Mappa temporaneamente non disponibile",
-        );
-        setStatus("error");
-      }
-    }
-
-    void openMap();
+    let map: MapLibreMap | null = null;
+    void openGisLayerMap({
+      container: containerRef.current as HTMLDivElement,
+      token,
+      layer,
+      isCancelled: () => cancelled,
+      setStatus,
+      setError,
+      setTruncated,
+    }).then((createdMap) => {
+      if (cancelled) createdMap?.remove();
+      else map = createdMap;
+    });
     return () => {
       cancelled = true;
       map?.remove();

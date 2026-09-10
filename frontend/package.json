@@ -19,8 +19,7 @@
     "@tanstack/react-table": "8.21.3",
     "clsx": "2.1.1",
     "mammoth": "^1.12.0",
-    "maplibre-gl": "^4.7.1",
-    "maplibre-gl-draw": "^1.6.9",
+    "maplibre-gl": "^6.9.0",
     "next": "^15.5.23",
     "react": "18.3.1",
     "react-dom": "18.3.1",
@@ -28,10 +27,12 @@
     "react-hook-form": "^7.56.1",
     "recharts": "^3.8.1",
     "tailwind-merge": "2.5.2",
+    "terra-draw": "^1.33.0",
+    "terra-draw-maplibre-gl-adapter": "^1.4.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
-    "@maplibre/maplibre-gl-style-spec": "^20.4.0",
+    "@maplibre/maplibre-gl-style-spec": "^26.4.2",
     "@playwright/test": "^1.59.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",

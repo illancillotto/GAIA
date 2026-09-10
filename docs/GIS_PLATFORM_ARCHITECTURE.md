@@ -638,6 +638,22 @@ Pannello frontend M23b:
   compare quando termina senza attendere la piu lenta;
 - i visual-only non generano richieste.
 
+Runtime cartografico frontend:
+
+- il frontend usa `maplibre-gl@6.9.0`; MapLibre 6 richiede WebGL2 e le superfici
+  GIS mostrano un errore governato quando il browser o la sessione GPU non
+  riescono a creare il contesto;
+- il disegno particelle usa `terra-draw` con adapter MapLibre. Il controller
+  espone soltanto avvio poligono, cancellazione e teardown; la cancellazione
+  programmatica non ripubblica l'evento di selezione cancellata;
+- la mappa Catasto comunica l'istanza pronta al wrapper tramite `onMapReady`.
+  Non modifica il namespace ESM di MapLibre e non mantiene un registry globale;
+- le mappe Catasto, catalogo layer e tracce GPS condividono la gestione degli
+  errori GPU. Il CSS MapLibre e importato una sola volta dal layout applicativo;
+- dopo un aggiornamento del runtime cartografico vanno verificati caricamento,
+  popup particella, disegno e cancellazione poligono, misurazione, stampa del
+  canvas, refresh tile Martin, ricerca unificata e viewer tracce GPS.
+
 Catalogo incendi M26:
 
 - il seed Territorio passa da `21` a `40` layer aggiungendo la serie CFVA

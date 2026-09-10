@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import {
@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   listGisLayerFeatures: vi.fn(),
   mapConstructor: vi.fn(),
   mapInstances: [] as Array<Record<string, ReturnType<typeof vi.fn>>>,
+  errorHandler: null as null | ((event: { error: Error }) => void),
 }));
 
 vi.mock("@/lib/api/gis", () => ({
@@ -20,14 +21,18 @@ vi.mock("@/lib/api/gis", () => ({
 }));
 
 vi.mock("maplibre-gl", () => ({
-  default: {
-    Map: function Map(options: unknown) {
-      return mocks.mapConstructor(options);
-    },
-    NavigationControl: function NavigationControl() {},
-    ScaleControl: function ScaleControl() {},
+  Map: function Map(options: unknown) {
+    return mocks.mapConstructor(options);
+  },
+  NavigationControl: function NavigationControl() {},
+  ScaleControl: function ScaleControl() {},
+  GPUInitializationError: class extends Error {
+    statusMessage = null;
+    constructor() { super("catalog GPU lost"); }
   },
 }));
+
+import { GPUInitializationError } from "maplibre-gl";
 
 const layer = {
   id: "layer-1",
@@ -56,8 +61,9 @@ function createMapInstance() {
     addSource: vi.fn(),
     addLayer: vi.fn(),
     remove: vi.fn(),
-    on: vi.fn((event: string, callback: () => void) => {
+    on: vi.fn((event: string, callback: (event?: unknown) => void) => {
       if (event === "load") callback();
+      if (event === "error") mocks.errorHandler = callback as (event: { error: Error }) => void;
     }),
   };
   mocks.mapInstances.push(instance);
@@ -66,9 +72,14 @@ function createMapInstance() {
 
 describe("GIS layer viewer", () => {
   beforeEach(() => {
+    Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
+      configurable: true,
+      value: () => ({}),
+    });
     mocks.listGisLayerFeatures.mockReset();
     mocks.mapConstructor.mockReset();
     mocks.mapInstances.length = 0;
+    mocks.errorHandler = null;
     mocks.mapConstructor.mockImplementation(() => createMapInstance());
   });
 
@@ -189,6 +200,29 @@ describe("GIS layer viewer", () => {
     mocks.listGisLayerFeatures.mockResolvedValueOnce({ items: [], total: 0, limit: 50, offset: 0, has_more: false });
     render(<GisLayerViewer token="token" layer={{ ...layer, id: "layer-webgl" }} />);
     expect(await screen.findByText("Mappa temporaneamente non disponibile")).toBeInTheDocument();
+  });
+
+  test("reports missing WebGL2 and a lost GPU context", async () => {
+    Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
+      configurable: true,
+      value: () => null,
+    });
+    const unsupported = render(
+      <GisLayerViewer token="token" layer={{ ...layer, martin_layer_id: "webgl2" }} />,
+    );
+    expect(await screen.findByText(/richiede WebGL2 attivo/)).toBeInTheDocument();
+    unsupported.unmount();
+
+    Object.defineProperty(HTMLCanvasElement.prototype, "getContext", {
+      configurable: true,
+      value: () => ({}),
+    });
+    render(<GisLayerViewer token="token" layer={{ ...layer, martin_layer_id: "gpu-lost" }} />);
+    await waitFor(() => expect(mocks.errorHandler).not.toBeNull());
+    act(() => mocks.errorHandler?.({ error: new Error("unrelated source error") }));
+    expect(screen.queryByText("unrelated source error")).not.toBeInTheDocument();
+    act(() => mocks.errorHandler?.({ error: new GPUInitializationError({}, null) }));
+    expect(await screen.findByText("catalog GPU lost")).toBeInTheDocument();
   });
 
   test("ignores late data, map load and errors after unmount", async () => {

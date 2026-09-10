@@ -134,9 +134,17 @@ describe("catasto GIS particelle quick filters", () => {
   test("Overlay opacities are valid MapLibre paint expressions", () => {
     // Regression: a nested ["*", opacity, ["interpolate", ..., ["zoom"], ...]] is rejected
     // by MapLibre and makes addLayer fail silently, leaving overlay fills invisible.
-    const fill = createPropertyExpression(buildOverlayFillOpacity(0.7), latest.paint_fill["fill-opacity"]);
+    const fill = createPropertyExpression(
+      buildOverlayFillOpacity(0.7),
+      "fill-opacity",
+      latest.paint_fill["fill-opacity"],
+    );
     expect(fill.result).toBe("success");
-    const centroid = createPropertyExpression(buildOverlayCentroidOpacity(0.7), latest.paint_circle["circle-opacity"]);
+    const centroid = createPropertyExpression(
+      buildOverlayCentroidOpacity(0.7),
+      "circle-opacity",
+      latest.paint_circle["circle-opacity"],
+    );
     expect(centroid.result).toBe("success");
   });
 

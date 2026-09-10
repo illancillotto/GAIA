@@ -1,13 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import maplibregl from "maplibre-gl";
+import { useEffect, useRef, useState } from "react";
 
-type GpsPoint = {
-  latitude: number;
-  longitude: number;
-  timestamp?: string | null;
-};
+import { mountGpsTrackMap, type GpsTrackPoint } from "@/components/operazioni/gps-track-map";
 
 type GpsBounds = {
   min_latitude: number | null;
@@ -29,7 +24,7 @@ type GpsSummary = {
 type OperazioniGpsTrackViewerDialogProps = {
   open: boolean;
   title: string;
-  points: GpsPoint[];
+  points: GpsTrackPoint[];
   bounds: GpsBounds | null;
   summary: GpsSummary | null;
   viewerMode: string | null;
@@ -37,36 +32,11 @@ type OperazioniGpsTrackViewerDialogProps = {
   onClose: () => void;
 };
 
-const MAP_STYLE: maplibregl.StyleSpecification = {
-  version: 8,
-  sources: {
-    osm: {
-      type: "raster",
-      tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-      tileSize: 256,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    },
-  },
-  layers: [
-    {
-      id: "osm",
-      type: "raster",
-      source: "osm",
-    },
-  ],
-};
-
 function formatCoordinate(value: number | null | undefined) {
   if (value == null) {
     return "—";
   }
   return value.toFixed(6);
-}
-
-function createMarkerElement(toneClass: string) {
-  const element = document.createElement("div");
-  element.className = `gps-map-marker ${toneClass}`;
-  return element;
 }
 
 export function OperazioniGpsTrackViewerDialog({
@@ -80,83 +50,13 @@ export function OperazioniGpsTrackViewerDialog({
   onClose,
 }: OperazioniGpsTrackViewerDialogProps) {
   const mapRef = useRef<HTMLDivElement | null>(null);
+  const [mapError, setMapError] = useState<string | null>(null);
 
-  useEffect(() => {
+  useEffect(function synchronizeGpsTrackMap() {
     if (!open || !mapRef.current || points.length === 0) {
       return;
     }
-
-    const map = new maplibregl.Map({
-      container: mapRef.current,
-      style: MAP_STYLE,
-      attributionControl: {},
-    });
-
-    map.addControl(new maplibregl.NavigationControl({ showCompass: true, showZoom: true }), "top-right");
-
-    const coordinates = points.map((point) => [point.longitude, point.latitude] as [number, number]);
-
-    map.on("load", () => {
-      map.addSource("activity-track", {
-        type: "geojson",
-        data: {
-          type: "Feature",
-          geometry:
-            coordinates.length > 1
-              ? {
-                  type: "LineString",
-                  coordinates,
-                }
-              : {
-                  type: "Point",
-                  coordinates: coordinates[0],
-                },
-          properties: {},
-        },
-      });
-
-      if (coordinates.length > 1) {
-        map.addLayer({
-          id: "activity-track-line",
-          type: "line",
-          source: "activity-track",
-          paint: {
-            "line-color": "#1D4E35",
-            "line-width": 5,
-            "line-opacity": 0.88,
-          },
-          layout: {
-            "line-cap": "round",
-            "line-join": "round",
-          },
-        });
-      }
-
-      new maplibregl.Marker({ element: createMarkerElement("gps-map-marker-start") })
-        .setLngLat(coordinates[0])
-        .addTo(map);
-
-      if (coordinates.length > 1) {
-        new maplibregl.Marker({ element: createMarkerElement("gps-map-marker-end") })
-          .setLngLat(coordinates[coordinates.length - 1])
-          .addTo(map);
-      }
-
-      if (coordinates.length === 1) {
-        map.easeTo({ center: coordinates[0], zoom: 14 });
-        return;
-      }
-
-      const mapBounds = new maplibregl.LngLatBounds(coordinates[0], coordinates[0]);
-      for (const coordinate of coordinates.slice(1)) {
-        mapBounds.extend(coordinate);
-      }
-      map.fitBounds(mapBounds, { padding: 56, maxZoom: 15, duration: 0 });
-    });
-
-    return () => {
-      map.remove();
-    };
+    return mountGpsTrackMap(mapRef.current, points, setMapError);
   }, [open, points]);
 
   if (!open) {
@@ -194,6 +94,11 @@ export function OperazioniGpsTrackViewerDialog({
                   </p>
                 </div>
               )}
+              {mapError ? (
+                <p className="absolute inset-x-4 top-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700 shadow" role="alert">
+                  {mapError}
+                </p>
+              ) : null}
             </div>
           </div>
 

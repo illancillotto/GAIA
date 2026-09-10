@@ -1,8 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import maplibregl from "maplibre-gl";
-import MapboxDraw from "maplibre-gl-draw";
+import * as maplibregl from "maplibre-gl";
+import {
+  LngLatBounds,
+  Map as MapLibreMap,
+  NavigationControl,
+  ScaleControl,
+  type GeoJSONSource,
+  type VectorTileSource,
+} from "maplibre-gl";
+import type { ExpressionSpecification } from "@maplibre/maplibre-gl-style-spec";
 
 import {
   PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
@@ -16,6 +24,14 @@ import {
   shouldShowDeliveryPointLayer,
 } from "@/components/catasto/gis/map-filters";
 import type { ParticelleQuickFilter } from "@/components/catasto/gis/map-filters";
+import {
+  initializeTerritorioDraw,
+  type TerritorioDrawController,
+} from "@/components/catasto/gis/territorio-draw";
+import {
+  disposeTerritorioMap,
+  registerTerritorioPointerCursors,
+} from "@/components/catasto/gis/territorio-map-lifecycle";
 import { catastoGisGetDeliveryPointPopup, catastoGisGetPopup } from "@/lib/api/catasto";
 import {
   GIS_TILE_REVISION_STORAGE_KEY,
@@ -23,6 +39,11 @@ import {
   getStoredGisTileRevision,
 } from "@/lib/catasto-gis-cache";
 import type { DeliveryPointPopupData, GisBasemap, GisFilters, GisMapOverlayLayer, GisOverlayFeatureClick, ParticellaPopupData } from "@/types/gis";
+import {
+  canCreateWebGL2Context,
+  isGPUInitializationError,
+  mapInitializationErrorMessage,
+} from "@/lib/maplibre-support";
 
 interface MapContainerProps {
   token: string | null;
@@ -62,16 +83,8 @@ interface MapContainerProps {
   resizeSignal?: number;
   basemap?: GisBasemap;
   className?: string;
+  onMapReady?: (map: MapLibreMap | null) => void;
 }
-
-type DrawControl = InstanceType<typeof MapboxDraw> & {
-  changeMode: (mode: string) => void;
-  deleteAll: () => void;
-};
-
-type DrawEvent = {
-  features?: Array<GeoJSON.Feature<GeoJSON.Geometry>>;
-};
 
 type Position = [number, number] | [number, number, number];
 type LinearRing = Position[];
@@ -93,15 +106,6 @@ type GoogleTilesSession = {
   session?: string;
   expiry?: string;
 };
-
-function canCreateWebGLContext(): boolean {
-  try {
-    const canvas = window.document.createElement("canvas");
-    return Boolean(canvas.getContext("webgl2") ?? canvas.getContext("webgl") ?? canvas.getContext("experimental-webgl"));
-  } catch {
-    return false;
-  }
-}
 
 function getGeometryRings(geom: GeoJSON.Geometry): PolygonCoords {
   if (geom.type === "Polygon") return geom.coordinates as unknown as PolygonCoords;
@@ -213,7 +217,7 @@ export function buildOverlayFeatureClickPayload(
   return {
     layer_key: String(layerKey),
     layer_name: typeof feature.properties?.__overlayName === "string" ? feature.properties.__overlayName : null,
-    properties: { ...(feature.properties ?? {}) } as Record<string, unknown>,
+    properties: { ...feature.properties },
     geometry: feature.geometry ?? null,
   };
 }
@@ -245,7 +249,7 @@ export function buildClickableLayerIds(
   ].filter((layerId) => hasLayer(layerId));
 }
 
-function buildDistrettoColorExpression(colors: Record<string, string> | undefined): maplibregl.ExpressionSpecification | string {
+function buildDistrettoColorExpression(colors: Record<string, string> | undefined): ExpressionSpecification | string {
   const entries = Object.entries(colors ?? {});
   if (entries.length === 0) return "#1D4E35";
   const expression: unknown[] = ["match", ["get", "num_distretto"]];
@@ -253,7 +257,7 @@ function buildDistrettoColorExpression(colors: Record<string, string> | undefine
     expression.push(num, color);
   }
   expression.push("#1D4E35");
-  return expression as maplibregl.ExpressionSpecification;
+  return expression as ExpressionSpecification;
 }
 
 function buildParticelleTilesUrl(revision: string): string {
@@ -262,7 +266,7 @@ function buildParticelleTilesUrl(revision: string): string {
 
 function buildParticelleFillColorExpression(
   mode: "default" | "district_preview" | undefined,
-): maplibregl.ExpressionSpecification {
+): ExpressionSpecification {
   if (mode === "district_preview") {
     return [
       "case",
@@ -275,7 +279,7 @@ function buildParticelleFillColorExpression(
       ["==", ["get", "ha_ruolo_inferito"], true],
       "#F59E0B",
       "#FB923C",
-    ] as maplibregl.ExpressionSpecification;
+    ] as ExpressionSpecification;
   }
 
   return [
@@ -289,14 +293,14 @@ function buildParticelleFillColorExpression(
     ["==", ["get", "ha_ruolo_inferito"], true],
     "#F59E0B",
     "#6366F1",
-  ] as maplibregl.ExpressionSpecification;
+  ] as ExpressionSpecification;
 }
 
 function buildParticelleFillOpacityExpression(
   baseOpacity: number,
   quickFilter: ParticelleQuickFilter,
   mode: "default" | "district_preview" | undefined,
-): number | maplibregl.ExpressionSpecification {
+): number | ExpressionSpecification {
   if (mode !== "district_preview") {
     return buildParticelleFillOpacity(baseOpacity, quickFilter);
   }
@@ -311,7 +315,7 @@ function buildParticelleFillOpacityExpression(
       PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
       incompleteOpacity,
       regularOpacity,
-    ] as maplibregl.ExpressionSpecification;
+    ] as ExpressionSpecification;
   }
 
   return [
@@ -323,13 +327,13 @@ function buildParticelleFillOpacityExpression(
       : ["any", ["==", ["get", "ha_ruolo_inferito"], true], ["==", ["get", "ha_ruolo_inferito"], 1], ["==", ["get", "ha_ruolo_inferito"], "true"]],
     regularOpacity,
     inactiveOpacity,
-  ] as maplibregl.ExpressionSpecification;
+  ] as ExpressionSpecification;
 }
 
 function buildParticelleOutlineColorExpression(
   basemap: GisBasemap | null | undefined,
   mode: "default" | "district_preview" | undefined,
-): string | maplibregl.ExpressionSpecification {
+): string | ExpressionSpecification {
   if (mode === "district_preview") {
     return [
       "case",
@@ -338,7 +342,7 @@ function buildParticelleOutlineColorExpression(
       ["==", ["get", "ha_anomalie"], true],
       "#9A3412",
       "#C2410C",
-    ] as maplibregl.ExpressionSpecification;
+    ] as ExpressionSpecification;
   }
   return buildParticelleOutlineColor(basemap);
 }
@@ -364,7 +368,7 @@ function buildDui2026TilesUrl(revision: string): string {
 }
 
 function fitCollectionBounds(
-  map: maplibregl.Map,
+  map: MapLibreMap,
   collection: GeoJSON.FeatureCollection | null | undefined,
   options?: {
     maxZoom?: number;
@@ -375,7 +379,7 @@ function fitCollectionBounds(
   if (!collection || collection.features.length === 0) return;
 
   try {
-    const bounds = new maplibregl.LngLatBounds();
+    const bounds = new LngLatBounds();
     for (const feature of collection.features) {
       const geom = feature.geometry;
       if (!geom) continue;
@@ -396,12 +400,15 @@ function fitCollectionBounds(
   }
 }
 
-async function ensureGoogleSatelliteLayer(map: maplibregl.Map): Promise<boolean> {
+export async function ensureGoogleSatelliteLayerWithKey(
+  map: MapLibreMap,
+  apiKey: string,
+): Promise<boolean> {
   if (map.getLayer("google-satellite-tiles")) return true;
-  if (!GOOGLE_MAP_TILES_API_KEY) return false;
+  if (!apiKey) return false;
 
   const response = await fetch(
-    `https://tile.googleapis.com/v1/createSession?key=${encodeURIComponent(GOOGLE_MAP_TILES_API_KEY)}`,
+    `https://tile.googleapis.com/v1/createSession?key=${encodeURIComponent(apiKey)}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -421,7 +428,7 @@ async function ensureGoogleSatelliteLayer(map: maplibregl.Map): Promise<boolean>
     map.addSource("google-satellite", {
       type: "raster",
       tiles: [
-        `https://tile.googleapis.com/v1/2dtiles/{z}/{x}/{y}?session=${encodeURIComponent(payload.session)}&key=${encodeURIComponent(GOOGLE_MAP_TILES_API_KEY)}`,
+        `https://tile.googleapis.com/v1/2dtiles/{z}/{x}/{y}?session=${encodeURIComponent(payload.session)}&key=${encodeURIComponent(apiKey)}`,
       ],
       tileSize: 256,
       attribution: "Google",
@@ -439,6 +446,10 @@ async function ensureGoogleSatelliteLayer(map: maplibregl.Map): Promise<boolean>
     map.getLayer("distretti-fill") ? "distretti-fill" : undefined,
   );
   return true;
+}
+
+export async function ensureGoogleSatelliteLayer(map: MapLibreMap): Promise<boolean> {
+  return ensureGoogleSatelliteLayerWithKey(map, GOOGLE_MAP_TILES_API_KEY);
 }
 
 export default function MapContainer({
@@ -460,10 +471,11 @@ export default function MapContainer({
   resizeSignal,
   basemap,
   className,
+  onMapReady,
 }: MapContainerProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
-  const drawRef = useRef<DrawControl | null>(null);
+  const mapRef = useRef<MapLibreMap | null>(null);
+  const drawRef = useRef<TerritorioDrawController | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const handlersRef = useRef({
     onGeometryDrawn,
@@ -471,6 +483,8 @@ export default function MapContainer({
     onParticellaClick,
     onDeliveryPointClick,
     onOverlayFeatureClick,
+    onMapReady,
+    drawSignal,
     token,
   });
   const [mapError, setMapError] = useState<string | null>(null);
@@ -481,16 +495,18 @@ export default function MapContainer({
   const gisTilesRevisionRef = useRef<string>(getStoredGisTileRevision());
   const [gisTilesRevision, setGisTilesRevision] = useState(gisTilesRevisionRef.current);
 
-  useEffect(() => {
+  useEffect(function syncMapHandlers() {
     handlersRef.current = {
       onGeometryDrawn,
       onSelectionCleared,
       onParticellaClick,
       onDeliveryPointClick,
       onOverlayFeatureClick,
+      onMapReady,
+      drawSignal,
       token,
     };
-  }, [onDeliveryPointClick, onGeometryDrawn, onOverlayFeatureClick, onParticellaClick, onSelectionCleared, token]);
+  }, [drawSignal, onDeliveryPointClick, onGeometryDrawn, onMapReady, onOverlayFeatureClick, onParticellaClick, onSelectionCleared, token]);
 
   useEffect(() => {
     const updateRevision = (revision: string) => {
@@ -518,13 +534,13 @@ export default function MapContainer({
     };
   }, []);
 
-  useEffect(() => {
+  useEffect(function refreshVectorTileSources() {
     const map = mapRef.current;
     if (!map || mapReadyVersion === 0) return;
 
     const setVectorTiles = (sourceId: string, tilesUrl: string) => {
-      const source = map.getSource(sourceId) as (maplibregl.Source & { setTiles?: (tiles: string[]) => void }) | undefined;
-      source?.setTiles?.([tilesUrl]);
+      const source = map.getSource(sourceId) as VectorTileSource | undefined;
+      source?.setTiles([tilesUrl]);
     };
 
     setVectorTiles("distretti-source", buildDistrettiTilesUrl(gisTilesRevision));
@@ -537,17 +553,15 @@ export default function MapContainer({
   }, [gisTilesRevision, mapReadyVersion]);
 
   useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current) return;
-
-    if (!canCreateWebGLContext()) {
-      setMapError("WebGL non e disponibile in questo browser o in questa sessione. Il GIS richiede WebGL attivo.");
+    if (!canCreateWebGL2Context()) {
+      setMapError("WebGL2 non e disponibile in questo browser o in questa sessione. Il GIS richiede WebGL2 attivo.");
       return;
     }
 
-    let map: maplibregl.Map;
+    let map: MapLibreMap;
     try {
-      map = new maplibregl.Map({
-        container: mapContainerRef.current,
+      map = new MapLibreMap({
+        container: mapContainerRef.current as HTMLDivElement,
         style: {
           version: 8,
           sources: {
@@ -589,34 +603,26 @@ export default function MapContainer({
         },
       });
     } catch (error) {
-      setMapError(error instanceof Error ? error.message : "Impossibile inizializzare il GIS WebGL.");
+      setMapError(mapInitializationErrorMessage(error, "Impossibile inizializzare il GIS WebGL2."));
       return;
     }
 
-    map.on("error", (event) => {
-      const message = event.error?.message;
-      if (message?.toLowerCase().includes("webgl")) {
-        setMapError(message);
+    map.on("error", function handleMapGPUError(event) {
+      if (isGPUInitializationError(event.error)) {
+        setMapError(mapInitializationErrorMessage(event.error, "Impossibile ripristinare il GIS WebGL2."));
       }
     });
 
-    map.addControl(new maplibregl.NavigationControl(), "top-right");
-    map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
+    map.addControl(new NavigationControl(), "top-right");
+    map.addControl(new ScaleControl({ unit: "metric" }), "bottom-right");
 
     const refreshParticelleTiles = () => {
       const source = map.getSource("particelle-source") as
-        | (maplibregl.Source & { setTiles?: (tiles: string[]) => void })
+        | VectorTileSource
         | undefined;
-      source?.setTiles?.([buildParticelleTilesUrl(gisTilesRevisionRef.current)]);
+      source?.setTiles([buildParticelleTilesUrl(gisTilesRevisionRef.current)]);
       map.triggerRepaint();
     };
-
-    const draw = new MapboxDraw({
-      displayControlsDefault: false,
-      controls: {},
-    }) as DrawControl;
-    map.addControl(draw as unknown as maplibregl.IControl, "top-left");
-    drawRef.current = draw;
 
     map.on("load", () => {
       map.addSource("distretti-source", {
@@ -965,35 +971,19 @@ export default function MapContainer({
         }
       });
 
-      for (const layerId of [
+      registerTerritorioPointerCursors(map, [
         "particelle-hitbox",
         "particelle-fill",
         "distretti-fill",
         "delivery-points-with-meter",
         "delivery-points-without-meter",
         "dui-2026-fill",
-      ]) {
-        map.on("mouseenter", layerId, () => {
-          map.getCanvas().style.cursor = "pointer";
-        });
-        map.on("mouseleave", layerId, () => {
-          map.getCanvas().style.cursor = "";
-        });
-      }
+      ]);
+
+      drawRef.current = initializeTerritorioDraw(map, handlersRef);
 
       setMapReadyVersion((value) => value + 1);
     });
-
-    const drawEventTarget = map as unknown as {
-      on: (type: string, listener: (event: DrawEvent) => void) => void;
-    };
-    const handleDraw = (event: DrawEvent) => {
-      const geometry = event.features?.[0]?.geometry;
-      if (geometry) handlersRef.current.onGeometryDrawn(geometry);
-    };
-    drawEventTarget.on("draw.create", handleDraw);
-    drawEventTarget.on("draw.update", handleDraw);
-    drawEventTarget.on("draw.delete", () => handlersRef.current.onSelectionCleared());
 
     const handleWindowFocus = () => {
       refreshParticelleTiles();
@@ -1007,6 +997,7 @@ export default function MapContainer({
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     mapRef.current = map;
+    handlersRef.current.onMapReady?.(map);
 
     return () => {
       window.removeEventListener("focus", handleWindowFocus);
@@ -1016,7 +1007,7 @@ export default function MapContainer({
         resizeRafRef.current = null;
       }
       popupRef.current?.remove();
-      map.remove();
+      disposeTerritorioMap(map, drawRef.current, handlersRef.current.onMapReady);
       mapRef.current = null;
       drawRef.current = null;
     };
@@ -1048,14 +1039,14 @@ export default function MapContainer({
     };
   }, []);
 
-  useEffect(() => {
+  useEffect(function startPolygonDrawing() {
     if (drawSignal <= 0) return;
-    drawRef.current?.changeMode("draw_polygon");
+    drawRef.current?.startPolygon();
   }, [drawSignal]);
 
   useEffect(() => {
     if (clearSignal <= 0) return;
-    drawRef.current?.deleteAll();
+    drawRef.current?.clear();
     popupRef.current?.remove();
   }, [clearSignal]);
 
@@ -1277,12 +1268,12 @@ export default function MapContainer({
       if (!map.getSource(ids.sourceId)) {
         map.addSource(ids.sourceId, { type: "geojson", data: layerData });
       } else {
-        (map.getSource(ids.sourceId) as maplibregl.GeoJSONSource).setData(layerData);
+        (map.getSource(ids.sourceId) as GeoJSONSource).setData(layerData);
       }
       if (!map.getSource(ids.centroidSourceId)) {
         map.addSource(ids.centroidSourceId, { type: "geojson", data: centroidData });
       } else {
-        (map.getSource(ids.centroidSourceId) as maplibregl.GeoJSONSource).setData(centroidData);
+        (map.getSource(ids.centroidSourceId) as GeoJSONSource).setData(centroidData);
       }
 
       if (!map.getLayer(ids.fillId)) {

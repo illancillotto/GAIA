@@ -279,6 +279,14 @@ async function mockTerritoryApis(page: Page) {
 }
 
 async function mockCatastoApis(page: Page) {
+  await page.route("**/api/catasto/gis/select", (route) => json(route, {
+    n_particelle: 0,
+    superficie_ha: 0,
+    per_foglio: [],
+    per_distretto: [],
+    particelle: [],
+    truncated: false,
+  }));
   await page.route("**/api/catasto/gis/saved-selections", (route) => json(route, []));
   await page.route("**/api/catasto/distretti", (route) => json(route, [{
     id: "00000000-0000-0000-0000-000000000012",
@@ -386,6 +394,22 @@ test("territorio smokes map consultation, sheets, measurements, print and QGIS",
 
   const canvas = page.locator("canvas.maplibregl-canvas");
   await expect(canvas).toBeVisible();
+
+  await page.getByRole("button", { name: "Apri Console GIS" }).click();
+  await page.getByRole("button", { name: "Disegna area", exact: true }).click();
+  const drawBox = await canvas.boundingBox();
+  if (!drawBox) throw new Error("Map canvas has no bounding box for polygon drawing");
+  const firstVertex = { x: drawBox.width * 0.62, y: drawBox.height * 0.35 };
+  await canvas.click({ position: firstVertex });
+  await canvas.click({ position: { x: drawBox.width * 0.85, y: drawBox.height * 0.35 } });
+  await canvas.click({ position: { x: drawBox.width * 0.73, y: drawBox.height * 0.65 } });
+  await canvas.click({ position: firstVertex });
+  await page.getByRole("button", { name: "Apri Console GIS" }).click();
+  await expect(page.getByText("0 particelle selezionate")).toBeVisible();
+  await page.getByRole("button", { name: "Cancella selezione" }).click();
+  await expect(page.getByRole("button", { name: "Cancella selezione" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Chiudi strumenti GIS" }).click();
+
   await page.getByRole("button", { name: "Interroga punto" }).click();
   await expect(page.getByText(/Clicca un punto sulla mappa/)).toBeVisible();
   await page.waitForTimeout(100);

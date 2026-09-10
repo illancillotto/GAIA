@@ -1,29 +1,29 @@
-import type maplibregl from "maplibre-gl";
+import type { ExpressionSpecification, FilterSpecification } from "@maplibre/maplibre-gl-style-spec";
 
 export type ParticelleQuickFilter = "all" | "ruolo" | "ruolo_inferito";
 export type DeliveryPointQuickFilter = "all" | "with_meter" | "without_meter";
 
-const BOOLEAN_TRUE_EXPRESSION: (property: string) => maplibregl.ExpressionSpecification = (property) => [
+const BOOLEAN_TRUE_EXPRESSION: (property: string) => ExpressionSpecification = (property) => [
   "any",
   ["==", ["get", property], true],
   ["==", ["get", property], 1],
   ["==", ["get", property], "true"],
 ];
 
-const BOOLEAN_FALSE_EXPRESSION: (property: string) => maplibregl.ExpressionSpecification = (property) => [
+const BOOLEAN_FALSE_EXPRESSION: (property: string) => ExpressionSpecification = (property) => [
   "any",
   ["==", ["get", property], false],
   ["==", ["get", property], 0],
   ["==", ["get", property], "false"],
 ];
 
-const STRING_PROPERTY_MISSING_EXPRESSION: (property: string) => maplibregl.ExpressionSpecification = (property) => [
+const STRING_PROPERTY_MISSING_EXPRESSION: (property: string) => ExpressionSpecification = (property) => [
   "==",
   ["coalesce", ["to-string", ["get", property]], ""],
   "",
 ];
 
-export const PARTICELLA_INCOMPLETE_KEY_EXPRESSION: maplibregl.ExpressionSpecification = [
+export const PARTICELLA_INCOMPLETE_KEY_EXPRESSION: ExpressionSpecification = [
   "any",
   STRING_PROPERTY_MISSING_EXPRESSION("codice_catastale"),
   STRING_PROPERTY_MISSING_EXPRESSION("foglio"),
@@ -33,8 +33,8 @@ export const PARTICELLA_INCOMPLETE_KEY_EXPRESSION: maplibregl.ExpressionSpecific
 export function buildParticelleFilter(
   distretto: string | null,
   quickFilter: ParticelleQuickFilter,
-): maplibregl.FilterSpecification | null {
-  const clauses: maplibregl.ExpressionSpecification[] = [];
+): FilterSpecification | null {
+  const clauses: ExpressionSpecification[] = [];
   if (distretto) {
     clauses.push(["==", ["get", "num_distretto"], distretto]);
   }
@@ -45,13 +45,13 @@ export function buildParticelleFilter(
   }
 
   if (clauses.length === 0) return null;
-  if (clauses.length === 1) return clauses[0] as maplibregl.FilterSpecification;
-  return ["all", ...clauses] as maplibregl.FilterSpecification;
+  if (clauses.length === 1) return clauses[0] as FilterSpecification;
+  return ["all", ...clauses] as FilterSpecification;
 }
 
 export function buildDeliveryPointFilter(
   distretto: string | null,
-): maplibregl.FilterSpecification | null {
+): FilterSpecification | null {
   if (!distretto) return null;
   return ["==", ["get", "distretto_code"], distretto];
 }
@@ -59,11 +59,11 @@ export function buildDeliveryPointFilter(
 export function buildMeterVisibilityFilter(
   distretto: string | null,
   hasMeter: boolean,
-): maplibregl.FilterSpecification {
+): FilterSpecification {
   const meterClause = hasMeter ? BOOLEAN_TRUE_EXPRESSION("has_meter") : BOOLEAN_FALSE_EXPRESSION("has_meter");
   const distrettoClause = buildDeliveryPointFilter(distretto);
-  if (!distrettoClause) return meterClause as maplibregl.FilterSpecification;
-  return ["all", distrettoClause as maplibregl.ExpressionSpecification, meterClause] as maplibregl.FilterSpecification;
+  if (!distrettoClause) return meterClause as FilterSpecification;
+  return ["all", distrettoClause as ExpressionSpecification, meterClause] as FilterSpecification;
 }
 
 export function shouldShowDeliveryPointLayer(
@@ -77,8 +77,8 @@ export function shouldShowDeliveryPointLayer(
 export function buildParticelleFillOpacity(
   baseOpacity: number,
   quickFilter: ParticelleQuickFilter,
-): number | maplibregl.ExpressionSpecification {
-  const incompleteOpacityExpr: maplibregl.ExpressionSpecification = [
+): number | ExpressionSpecification {
+  const incompleteOpacityExpr: ExpressionSpecification = [
     "*",
     Math.min(baseOpacity, 0.22),
     0.45,
@@ -89,7 +89,7 @@ export function buildParticelleFillOpacity(
       PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
       incompleteOpacityExpr,
       baseOpacity,
-    ] as maplibregl.ExpressionSpecification;
+    ] as ExpressionSpecification;
   }
   return [
     "case",
@@ -98,13 +98,13 @@ export function buildParticelleFillOpacity(
     quickFilter === "ruolo" ? BOOLEAN_TRUE_EXPRESSION("ha_ruolo") : BOOLEAN_TRUE_EXPRESSION("ha_ruolo_inferito"),
     baseOpacity,
     0.05,
-  ] as maplibregl.ExpressionSpecification;
+  ] as ExpressionSpecification;
 }
 
 // Zoom-faded opacities for GeoJSON overlay layers. "zoom" is only valid as input to a
 // top-level "interpolate"/"step" expression (a nested ["*", opacity, [interpolate ...]]
 // makes addLayer fail silently), so the stops are pre-multiplied.
-export function buildOverlayFillOpacity(baseOpacity: number): maplibregl.ExpressionSpecification {
+export function buildOverlayFillOpacity(baseOpacity: number): ExpressionSpecification {
   return [
     "interpolate",
     ["linear"],
@@ -118,7 +118,7 @@ export function buildOverlayFillOpacity(baseOpacity: number): maplibregl.Express
   ];
 }
 
-export function buildOverlayCentroidOpacity(baseOpacity: number): maplibregl.ExpressionSpecification {
+export function buildOverlayCentroidOpacity(baseOpacity: number): ExpressionSpecification {
   return [
     "interpolate",
     ["linear"],
@@ -134,7 +134,7 @@ export function buildOverlayCentroidOpacity(baseOpacity: number): maplibregl.Exp
 
 export function buildParticelleOutlineColor(
   basemap: "osm" | "satellite" | "google_satellite" | null | undefined,
-): string | maplibregl.ExpressionSpecification {
+): string | ExpressionSpecification {
   const regularColor = basemap === "satellite" || basemap === "google_satellite" ? "#FACC15" : "#4F46E5";
   const incompleteColor = basemap === "satellite" || basemap === "google_satellite" ? "#EAB308" : "#C4008E";
   return [
@@ -142,5 +142,5 @@ export function buildParticelleOutlineColor(
     PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
     incompleteColor,
     regularColor,
-  ] as maplibregl.ExpressionSpecification;
+  ] as ExpressionSpecification;
 }

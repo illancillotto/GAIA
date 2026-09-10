@@ -12,13 +12,12 @@ vi.mock("next/dynamic", () => ({
     };
   },
 }));
-vi.mock("@/components/catasto/gis/territorio-map-registry", () => ({}));
 vi.mock("@/components/catasto/gis/MapContainer", () => ({ default: () => null }));
 
 import TerritorioRegisteredMap from "@/components/catasto/gis/TerritorioRegisteredMap";
 
 describe("TerritorioRegisteredMap", () => {
-  test("forwards the map contract after registry initialization", () => {
+  test("forwards the map contract to the client-only map", () => {
     render(
       <TerritorioRegisteredMap
         token="token"

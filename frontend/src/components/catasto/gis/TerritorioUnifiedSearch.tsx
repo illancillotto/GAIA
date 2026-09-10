@@ -1,11 +1,11 @@
 "use client";
 
-import type maplibregl from "maplibre-gl";
+import type { Map as MapLibreMap } from "maplibre-gl";
 
 import type { GisTerritorioLayerGroup } from "@/lib/api/territorio";
 import { useTerritorioUnifiedSearch } from "./use-territorio-unified-search";
 
-type SearchMap = Pick<maplibregl.Map, "fitBounds" | "flyTo" | "querySourceFeatures">;
+type SearchMap = Pick<MapLibreMap, "fitBounds" | "flyTo" | "querySourceFeatures">;
 
 export default function TerritorioUnifiedSearch({
   token,
