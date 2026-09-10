@@ -1401,7 +1401,10 @@ export default function CatastoGisPage() {
                   </div>
                 ) : null}
                 {popupParticella ? (
-                  <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-20 sm:w-[420px]">
+                  <div
+                    data-gis-parcel-panel
+                    className="pointer-events-none absolute inset-x-3 bottom-3 z-30 sm:inset-x-auto sm:bottom-4 sm:right-16 sm:top-3 sm:w-[420px]"
+                  >
                     <div
                       className="pointer-events-auto max-h-full overflow-y-auto rounded-2xl border border-white/70 bg-white/[0.88] p-4 shadow-2xl ring-1 ring-black/5 backdrop-blur-xl"
                       onClick={(event) => event.stopPropagation()}

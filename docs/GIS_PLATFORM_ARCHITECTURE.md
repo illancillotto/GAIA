@@ -663,7 +663,8 @@ Runtime cartografico frontend:
 - il click su una particella avvia anche l'interrogazione territoriale nelle
   coordinate selezionate; risultati GAIA, Catasto ufficiale e layer Territorio
   sono raccolti in una sezione espandibile dello stesso dettaglio particella,
-  senza un secondo comando flottante;
+  senza un secondo comando flottante. Su desktop la scheda e ancorata subito
+  sotto la toolbar e lascia libera la colonna destra dei controlli MapLibre;
 - la toolbar espone anche il selettore dello sfondo tra vista classica e
   satellitare; Google Earth compare solo quando e configurata la relativa API
   key;

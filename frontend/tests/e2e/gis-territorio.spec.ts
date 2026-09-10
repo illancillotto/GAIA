@@ -506,6 +506,11 @@ test("territorio smokes map consultation, sheets, measurements, print and QGIS",
     if (await closeParcel.count()) break;
   }
   await expect(closeParcel).toBeVisible();
+  const parcelPanelBox = await page.locator("[data-gis-parcel-panel]").boundingBox();
+  if (!parcelPanelBox) throw new Error("GIS parcel panel has no bounding box");
+  expect(parcelPanelBox.y - box.y).toBeGreaterThanOrEqual(0);
+  expect(parcelPanelBox.y - box.y).toBeLessThan(20);
+  expect(box.x + box.width - parcelPanelBox.x - parcelPanelBox.width).toBeGreaterThanOrEqual(55);
   await page.getByText("Dati territoriali sul punto").click();
 
   await expect(page.getByRole("heading", { name: "GAIA", exact: true })).toBeVisible();

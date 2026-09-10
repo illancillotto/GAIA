@@ -464,6 +464,7 @@ describe("CatastoGisPage", () => {
       await act(async () => { (mocks.mapProps.onParticellaClick as (value: unknown) => void)(parcel); });
       const close = screen.getByRole("button", { name: "Chiudi dettaglio particella GIS" });
       expect(close).toBeInTheDocument();
+      expect(close.closest(".pointer-events-none")).toHaveClass("sm:right-16", "sm:top-3");
       fireEvent.mouseDown(close.parentElement!);
       fireEvent.click(close.parentElement!);
       fireEvent.click(close);
