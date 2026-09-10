@@ -154,3 +154,25 @@ Non è necessario introdurre un secondo calcolo retributivo in GATE.
   proprio server, processo outbound e worker Presenze coerenti; GATE sul VPS.
   La verifica degli hash sul server conferma che i file da aggiornare
   corrispondono alla base attesa, senza drift da sovrascrivere.
+
+### Rilascio del 10 settembre 2026
+
+- Runtime committato in `5383e495f7d38625a18b6f6d4258e2db48803d11`.
+- API GAIA aggiornata preservando bind e configurazione; outbound distribuito
+  con immagine `gaia-backend:presenze-5383e495`. Nove hash verificati per
+  processo, health e API rules/months HTTP 200 con la nuova versione.
+- GATE VPS distribuito dal commit `4debb6e`; console e gateway HTTP 200.
+- Cicli outbound dopo il rilascio riusciti (10:10:12–10:12:36 e
+  10:15:03–10:17:43 UTC). Nuova versione ricevuta per gennaio–settembre.
+- Confronto completo agosto: 5.859 giornaliere GAIA/GATE, zero differenze
+  sui totali e sulle sette categorie canoniche; nessun record mancante.
+- Worker importazioni: cambio automatico predisposto alla prima finestra
+  senza job running, senza interrompere i job INAZ già attivi. Esito ancora
+  da verificare in `/opt/gaia/releases/presenze-5383e495/worker-idle-rollout.log`;
+  il marker `worker-deployed-at.txt` viene scritto solo dopo health e nove hash.
+- Backup, manifest, overlay compose e rollback sono conservati nella medesima
+  directory release. Nessuna riscrittura delle timbrature originali.
+- Smoke XLSM sul VPS: 143 giornaliere coerenti di agosto, 10 collaboratori,
+  otto categorie identiche ai payload nel dettaglio e nel riepilogo; macro VBA
+  preservate e ricalcolo Excel abilitato. Verifica campionaria, distinta dalla
+  revisione amministrativa delle giornate.
