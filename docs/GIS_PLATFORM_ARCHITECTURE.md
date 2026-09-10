@@ -643,11 +643,18 @@ Runtime cartografico frontend:
 - il frontend usa `maplibre-gl@6.9.0`; MapLibre 6 richiede WebGL2 e le superfici
   GIS mostrano un errore governato quando il browser o la sessione GPU non
   riescono a creare il contesto;
+- la build Webpack emette `maplibre-gl-worker.mjs` e il relativo
+  `maplibre-gl-shared.mjs` con nomi stabili e configura esplicitamente il worker:
+  senza questo passaggio `import.meta.url` risolverebbe al path del container e
+  le sorgenti vettoriali resterebbero in caricamento;
 - il disegno particelle usa `terra-draw` con adapter MapLibre. Il controller
   espone soltanto avvio poligono, cancellazione e teardown; la cancellazione
   programmatica non ripubblica l'evento di selezione cancellata;
 - la mappa Catasto comunica l'istanza pronta al wrapper tramite `onMapReady`.
   Non modifica il namespace ESM di MapLibre e non mantiene un registry globale;
+- riempimento e contorni delle particelle sono attivi per default; la mappa si
+  apre a zoom `14`, sopra la soglia minima MVT `13`, e il controllo consente di
+  nascondere il riempimento;
 - le mappe Catasto, catalogo layer e tracce GPS condividono la gestione degli
   errori GPU. Il CSS MapLibre e importato una sola volta dal layout applicativo;
 - dopo un aggiornamento del runtime cartografico vanno verificati caricamento,

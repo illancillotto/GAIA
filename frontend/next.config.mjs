@@ -7,6 +7,14 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url));
 const nextConfig = {
   output: "standalone",
   webpack(config, { webpack }) {
+    config.module.rules.push({
+      test: /maplibre-gl-(?:worker|shared)\.mjs$/,
+      resourceQuery: /maplibre-worker-asset/,
+      type: "asset/resource",
+      generator: {
+        filename: "static/media/[name][ext]",
+      },
+    });
     config.plugins.push(new webpack.NormalModuleReplacementPlugin(
       /^@\/components\/catasto\/gis\/MapContainer$/,
       path.join(rootDir, "src/components/catasto/gis/TerritorioMapExperience.tsx"),

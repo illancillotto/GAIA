@@ -316,7 +316,7 @@ export default function CatastoGisPage() {
   const [deliveryPointsCacheMessage, setDeliveryPointsCacheMessage] = useState<string | null>(null);
   const [showDistretti, setShowDistretti] = useState(true);
   const [showDistrettiFill, setShowDistrettiFill] = useState(false);
-  const [showParticelleFill, setShowParticelleFill] = useState(false);
+  const [showParticelleFill, setShowParticelleFill] = useState(true);
   const [showDeliveryPoints, setShowDeliveryPoints] = useState(true);
   const [deliveryPointsQuickFilter, setDeliveryPointsQuickFilter] = useState<DeliveryPointQuickFilter>("all");
   const [particelleQuickFilter, setParticelleQuickFilter] = useState<ParticelleQuickFilter>("all");

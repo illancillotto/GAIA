@@ -91,15 +91,13 @@ type LinearRing = Position[];
 type PolygonCoords = LinearRing[];
 type MultiPolygonCoords = PolygonCoords[];
 
-const CONSORZIO_BOUNDS: [[number, number], [number, number]] = [
-  [8.39, 39.62],
-  [8.93, 40.13],
-];
+const CONSORZIO_CENTER: [number, number] = [8.66, 39.875];
 const CONSORZIO_MAX_BOUNDS: [[number, number], [number, number]] = [
   [8.2, 39.45],
   [9.1, 40.25],
 ];
 const PARTICELLE_MIN_ZOOM = 13;
+const PARTICELLE_INITIAL_ZOOM = 14;
 const GOOGLE_MAP_TILES_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? "";
 
 type GoogleTilesSession = {
@@ -493,6 +491,7 @@ export default function MapContainer({
   const overlayMapKeysRef = useRef<Set<string>>(new Set());
   const lastParticelleQuickFilterRef = useRef<ParticelleQuickFilter>("all");
   const gisTilesRevisionRef = useRef<string>(getStoredGisTileRevision());
+  const appliedTilesRevisionRef = useRef(gisTilesRevisionRef.current);
   const [gisTilesRevision, setGisTilesRevision] = useState(gisTilesRevisionRef.current);
 
   useEffect(function syncMapHandlers() {
@@ -537,6 +536,7 @@ export default function MapContainer({
   useEffect(function refreshVectorTileSources() {
     const map = mapRef.current;
     if (!map || mapReadyVersion === 0) return;
+    if (appliedTilesRevisionRef.current === gisTilesRevision) return;
 
     const setVectorTiles = (sourceId: string, tilesUrl: string) => {
       const source = map.getSource(sourceId) as VectorTileSource | undefined;
@@ -549,6 +549,7 @@ export default function MapContainer({
     setVectorTiles("delivery-points-source", buildDeliveryPointsTilesUrl(gisTilesRevision));
     setVectorTiles("irrigation-canals-source", buildIrrigationCanalsTilesUrl(gisTilesRevision));
     setVectorTiles("dui-2026-source", buildDui2026TilesUrl(gisTilesRevision));
+    appliedTilesRevisionRef.current = gisTilesRevision;
     map.triggerRepaint();
   }, [gisTilesRevision, mapReadyVersion]);
 
@@ -596,11 +597,9 @@ export default function MapContainer({
             },
           ],
         },
-        bounds: CONSORZIO_BOUNDS,
+        center: CONSORZIO_CENTER,
+        zoom: PARTICELLE_INITIAL_ZOOM,
         maxBounds: CONSORZIO_MAX_BOUNDS,
-        fitBoundsOptions: {
-          padding: 28,
-        },
       });
     } catch (error) {
       setMapError(mapInitializationErrorMessage(error, "Impossibile inizializzare il GIS WebGL2."));

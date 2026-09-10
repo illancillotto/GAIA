@@ -7,7 +7,7 @@ const ADE_LAYER_ID = "00000000-0000-0000-0000-000000000102";
 const ORTHO_LAYER_ID = "00000000-0000-0000-0000-000000000103";
 const MUNICIPAL_LAYER_ID = "00000000-0000-0000-0000-000000000104";
 const TRANSPARENT_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAF/gL+XwL7WQAAAABJRU5ErkJggg==",
+  "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAYAAABccqhmAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAGYktHRAD/AP8A/6C9p5MAAAEVSURBVHja7cExAQAAAMKg9U/tawigAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB4AwE8AAHYKUMEAAAAAElFTkSuQmCC",
   "base64",
 );
 
@@ -336,9 +336,22 @@ test("GIS console and bottom tools fit desktop and mobile viewports", async ({ p
   await loginWithGis(page);
   await mockTerritoryApis(page);
   await mockCatastoApis(page);
+  const initialParcelTiles: string[] = [];
+  const browserMessages: string[] = [];
+  page.on("pageerror", (error) => browserMessages.push(`pageerror: ${error.message}`));
+  page.on("request", (request) => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.startsWith("/tiles/cat_particelle_current/")) {
+      initialParcelTiles.push(request.url());
+    }
+  });
+  page.on("console", (message) => browserMessages.push(`${message.type()}: ${message.text()}`));
   await page.goto("/catasto/gis");
   const consolePanel = page.getByRole("complementary", { name: "Console GIS" });
   const canvas = page.locator("canvas.maplibregl-canvas");
+  await expect.poll(() => initialParcelTiles.length, {
+    message: `MapLibre non ha richiesto le tile particelle. Console: ${browserMessages.join(" | ")}`,
+  }).toBeGreaterThan(0);
   for (const viewport of [{ width: 1920, height: 900 }, { width: 1280, height: 720 }, { width: 390, height: 844 }]) {
     await page.setViewportSize(viewport);
     await expect(canvas).toBeVisible();
@@ -349,6 +362,7 @@ test("GIS console and bottom tools fit desktop and mobile viewports", async ({ p
     await page.getByRole("button", { name: "Stampa mappa territoriale" }).click({ trial: true });
     await page.getByRole("button", { name: "Apri Console GIS" }).click();
     await expect(consolePanel).toBeVisible();
+    await expect(consolePanel.getByRole("button", { name: "Riempimento particelle" })).toHaveAttribute("aria-pressed", "true");
     await expect(consolePanel.getByRole("button", { name: "Disegna area", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Chiudi strumenti GIS" }).click();
     await expect(consolePanel).toBeHidden();

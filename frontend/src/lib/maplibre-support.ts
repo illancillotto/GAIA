@@ -1,4 +1,19 @@
-import { GPUInitializationError, type Map as MapLibreMap } from "maplibre-gl";
+import {
+  GPUInitializationError,
+  setWorkerUrl,
+  type Map as MapLibreMap,
+} from "maplibre-gl";
+
+const mapLibreWorkerUrl = new URL(
+  "maplibre-gl/dist/maplibre-gl-worker.mjs?maplibre-worker-asset",
+  import.meta.url,
+).toString();
+// The v6 worker imports this sibling module by its stable relative filename.
+new URL(
+  "maplibre-gl/dist/maplibre-gl-shared.mjs?maplibre-worker-asset",
+  import.meta.url,
+);
+setWorkerUrl(mapLibreWorkerUrl);
 
 export const WEBGL2_REQUIRED_MESSAGE =
   "WebGL2 non e disponibile in questo browser o in questa sessione. Il GIS richiede WebGL2 attivo.";

@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("maplibre-gl", () => ({
+  setWorkerUrl: vi.fn(),
   GPUInitializationError: class extends Error {
     statusMessage = null;
     constructor() { super("context lost"); }

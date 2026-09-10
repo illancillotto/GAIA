@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => {
     handlers = new Map<string, Array<(...args: any[]) => unknown>>();
     layerHandlers = new Map<string, Map<string, (...args: any[]) => unknown>>();
     layers = new Set<string>();
+    layerDefinitions = new Map<string, Record<string, unknown>>();
     sources = new Map<string, unknown>();
     renderedFeatures: Array<Record<string, any>> = [];
     canvas = { style: { cursor: "" } };
@@ -33,7 +34,7 @@ const mocks = vi.hoisted(() => {
     addControl() {}
     remove() {}
     resize() {}
-    triggerRepaint() {}
+    triggerRepaint = vi.fn();
     addSource(id: string, source: unknown) {
       this.sources.set(id, {
         ...(source as object),
@@ -44,8 +45,9 @@ const mocks = vi.hoisted(() => {
     getSource(id: string) {
       return this.sources.get(id) ?? null;
     }
-    addLayer(layer: { id: string }) {
+    addLayer(layer: { id: string } & Record<string, unknown>) {
       this.layers.add(layer.id);
+      this.layerDefinitions.set(layer.id, layer);
     }
     removeLayer(id: string) {
       this.layers.delete(id);
@@ -58,7 +60,7 @@ const mocks = vi.hoisted(() => {
     }
     setLayoutProperty() {}
     setPaintProperty() {}
-    setLayerZoomRange() {}
+    setLayerZoomRange = vi.fn();
     setFilter() {}
     getCanvas() {
       return this.canvas;
@@ -70,6 +72,7 @@ const mocks = vi.hoisted(() => {
 
   return {
     lastMap: null as MockMap | null,
+    lastMapOptions: null as Record<string, unknown> | null,
     constructorError: null as Error | null,
     lastDraw: null as null | {
       emit: (type: string, ...args: unknown[]) => void;
@@ -85,11 +88,13 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock("maplibre-gl", () => ({
+  setWorkerUrl: vi.fn(),
   Map: class extends mocks.MockMap {
-    constructor() {
+    constructor(options: Record<string, unknown>) {
       if (mocks.constructorError) throw mocks.constructorError;
       super();
       mocks.lastMap = this;
+      mocks.lastMapOptions = options;
     }
   },
   NavigationControl: class {},
@@ -167,6 +172,7 @@ describe("MapContainer overlay marker click", () => {
   afterEach(() => {
     vi.clearAllMocks();
     mocks.lastMap = null;
+    mocks.lastMapOptions = null;
     mocks.lastDraw = null;
     mocks.constructorError = null;
   });
@@ -214,13 +220,29 @@ describe("MapContainer overlay marker click", () => {
       />,
     );
     const map = mocks.lastMap!;
+    expect(mocks.lastMapOptions).toMatchObject({ center: [8.66, 39.875], zoom: 14 });
     await act(async () => { await map.emit("load"); });
     await waitFor(() => expect(map.fitBounds).toHaveBeenCalled());
+    expect(map.layerDefinitions.get("particelle-fill")).toMatchObject({ minzoom: 13 });
+    expect(map.layerDefinitions.get("particelle-outline")).toMatchObject({ minzoom: 14 });
+    expect(map.layerDefinitions.get("particelle-hitbox")).toMatchObject({ minzoom: 13 });
+    expect(map.setLayerZoomRange).toHaveBeenCalledWith("particelle-fill", 10, 24);
+    expect(map.setLayerZoomRange).toHaveBeenCalledWith("particelle-outline", 10, 24);
+    const particelleSource = map.getSource("particelle-source") as { setTiles: ReturnType<typeof vi.fn> };
+    expect(particelleSource.setTiles).not.toHaveBeenCalled();
 
     act(() => {
       window.dispatchEvent(new StorageEvent("storage", { key: "unrelated" }));
       window.dispatchEvent(new StorageEvent("storage", { key: GIS_TILE_REVISION_STORAGE_KEY }));
+    });
+    act(() => {
       window.dispatchEvent(new CustomEvent(GIS_TILE_REVISION_UPDATED_EVENT, { detail: { revision: "next" } }));
+    });
+    await waitFor(() => expect(particelleSource.setTiles).toHaveBeenCalledWith([
+      expect.stringContaining("/tiles/cat_particelle_current/{z}/{x}/{y}?v=next"),
+    ]));
+
+    act(() => {
       window.dispatchEvent(new CustomEvent(GIS_TILE_REVISION_UPDATED_EVENT));
       window.dispatchEvent(new Event("focus"));
       document.dispatchEvent(new Event("visibilitychange"));
@@ -282,8 +304,7 @@ describe("MapContainer overlay marker click", () => {
       />,
     );
 
-    const particelleSource = map.getSource("particelle-source") as { setTiles: ReturnType<typeof vi.fn> };
-    await waitFor(() => expect(particelleSource.setTiles).toHaveBeenCalled());
+    expect(map.triggerRepaint).toHaveBeenCalled();
   });
 
   test("renders WebGL2, constructor and restored GPU failures", async () => {
@@ -325,6 +346,7 @@ describe("MapContainer overlay marker click", () => {
     );
     const map = mocks.lastMap!;
     await act(async () => { await map.emit("load"); });
+    expect(map.getLayer("particelle-fill")).not.toBeNull();
     await act(async () => { await map.emit("click", { point: { x: 0, y: 0 } }); });
     expect(map.queryRenderedFeatures()).toEqual([]);
   });

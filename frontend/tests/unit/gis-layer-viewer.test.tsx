@@ -21,6 +21,7 @@ vi.mock("@/lib/api/gis", () => ({
 }));
 
 vi.mock("maplibre-gl", () => ({
+  setWorkerUrl: vi.fn(),
   Map: function Map(options: unknown) {
     return mocks.mapConstructor(options);
   },
