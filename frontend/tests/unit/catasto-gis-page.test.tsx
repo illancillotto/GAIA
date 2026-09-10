@@ -272,6 +272,7 @@ describe("CatastoGisPage", () => {
 
     fireEvent.click(screen.getByText("Map parcel rich"));
     expect(await screen.findByText("A001-1-10")).toBeInTheDocument();
+    expect(document.querySelector("#gis-particella-interrogation")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Apri dettaglio particella" }));
     expect(screen.getByRole("dialog")).toHaveTextContent("Parcel detail");
     fireEvent.click(screen.getByText("Close parcel detail"));
@@ -431,15 +432,16 @@ describe("CatastoGisPage", () => {
   test("keeps layer controls synchronized across normal and expanded consoles", async () => {
     render(<CatastoGisPage />);
     await waitFor(() => expect(mocks.catastoListDistretti).toHaveBeenCalled());
-    expect(mocks.mapProps.mapLayers).toMatchObject({ showParticelleFill: true });
-    expect(screen.getByRole("button", { name: "Riempimento particelle" })).toHaveAttribute("aria-pressed", "true");
+    expect(mocks.mapProps.mapLayers).toMatchObject({ showParticelleFill: false });
+    expect(screen.getByRole("button", { name: "Riempimento particelle" })).toHaveAttribute("aria-pressed", "false");
     for (const name of ["Distretti", "Aree colorate", "Riempimento particelle", "Punti consegna", "Evidenzia sel."]) {
       fireEvent.click(screen.getByRole("button", { name, exact: true }));
     }
     fireEvent.change(screen.getByRole("slider", { name: "Opacità aree distretto" }), { target: { value: "0.2" } });
     fireEvent.change(screen.getByRole("slider", { name: "Opacità particelle" }), { target: { value: "0.8" } });
-    expect(mocks.mapProps.mapLayers).toMatchObject({ showDistretti: false, showDistrettiFill: true, showParticelleFill: false, showDeliveryPoints: false, highlightSelected: false, distrettiOpacity: 0.2, particelleOpacity: 0.8 });
-    fireEvent.click(screen.getByRole("button", { name: "Satellite", exact: true }));
+    expect(mocks.mapProps.mapLayers).toMatchObject({ showDistretti: false, showDistrettiFill: true, showParticelleFill: true, showDeliveryPoints: false, highlightSelected: false, distrettiOpacity: 0.2, particelleOpacity: 0.8 });
+    fireEvent.click(screen.getByRole("button", { name: "Sfondo mappa" }));
+    fireEvent.click(screen.getByRole("button", { name: "Vista satellitare", exact: true }));
     expect(mocks.mapProps.basemap).toBe("satellite");
     for (const name of ["A ruolo", "Ruolo inferito", "Tutte"]) fireEvent.click(screen.getByRole("button", { name, exact: true }));
     expect(mocks.mapProps.mapLayers).toMatchObject({ particelleQuickFilter: "all" });
@@ -669,8 +671,8 @@ describe("CatastoGisPage", () => {
     render(<CatastoGisPage />);
     fireEvent.click(await screen.findByRole("button", { name: /Distretto A/ }));
     await waitFor(() => expect(mocks.catastoGetDistrettoGeojson).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("button", { name: "Nascondi riempimento particelle" }));
-    expect(mocks.mapProps.mapLayers).toMatchObject({ showParticelleFill: false });
+    fireEvent.click(screen.getByRole("button", { name: "Mostra riempimento particelle" }));
+    expect(mocks.mapProps.mapLayers).toMatchObject({ showParticelleFill: true });
     fireEvent.click(screen.getByRole("button", { name: /Distretti irrigui/ }));
     fireEvent.click(screen.getByRole("button", { name: /Distretti irrigui/ }));
     fireEvent.change(screen.getByPlaceholderText("Cerca per numero o nome"), { target: { value: "B" } });

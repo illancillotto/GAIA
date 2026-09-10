@@ -55,4 +55,24 @@ describe("TerritorioUnifiedSearch", () => {
     expect(mocks.clear).toHaveBeenCalled();
     expect(mocks.selectResult).toHaveBeenCalledWith(result);
   });
+
+  test("opens the compact toolbar search panel", () => {
+    const emptyView = render(<TerritorioUnifiedSearch compact token="token" map={null} groups={[]} enabled={{}} />);
+    expect(screen.getByRole("button", { name: "Ricerca nel comprensorio" }).className).toContain("bg-white");
+    emptyView.unmount();
+
+    mocks.state = { results: [{ id: "parcel:1", kind: "particella", label: "Fg. 1 Part. 2", detail: "Arborea", source: "GAIA" }] };
+    render(<TerritorioUnifiedSearch compact token="token" map={null} groups={[]} enabled={{}} />);
+    const toggle = screen.getByRole("button", { name: "Ricerca nel comprensorio" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle.className).toContain("bg-emerald-100");
+    expect(screen.queryByLabelText("Cerca nel GIS")).not.toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    const input = screen.getByLabelText("Cerca nel GIS");
+    expect(input).toBeVisible();
+    expect(input.closest("div.fixed")).toHaveClass("sm:left-[calc(var(--gis-left,0px)+0.75rem)]", "sm:right-auto");
+    fireEvent.click(toggle);
+    expect(screen.queryByLabelText("Cerca nel GIS")).not.toBeInTheDocument();
+  });
 });

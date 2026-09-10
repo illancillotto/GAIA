@@ -223,7 +223,7 @@ describe("MapContainer overlay marker click", () => {
     expect(mocks.lastMapOptions).toMatchObject({ center: [8.66, 39.875], zoom: 14 });
     await act(async () => { await map.emit("load"); });
     await waitFor(() => expect(map.fitBounds).toHaveBeenCalled());
-    expect(map.layerDefinitions.get("particelle-fill")).toMatchObject({ minzoom: 13 });
+    expect(map.layerDefinitions.get("particelle-fill")).toMatchObject({ minzoom: 13, layout: { visibility: "none" } });
     expect(map.layerDefinitions.get("particelle-outline")).toMatchObject({ minzoom: 14 });
     expect(map.layerDefinitions.get("particelle-hitbox")).toMatchObject({ minzoom: 13 });
     expect(map.setLayerZoomRange).toHaveBeenCalledWith("particelle-fill", 10, 24);
@@ -485,4 +485,5 @@ describe("MapContainer overlay marker click", () => {
       geometry: { type: "Point", coordinates: [8.6, 39.9] },
     });
   });
+
 });

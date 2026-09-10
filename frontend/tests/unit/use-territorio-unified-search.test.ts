@@ -59,6 +59,36 @@ describe("useTerritorioUnifiedSearch", () => {
     expect(api.catastoGisGetDeliveryPointPopup).toHaveBeenCalledWith("token", "dp1");
   });
 
+  test("publishes parcel results and the focused parcel for map highlighting", async () => {
+    const map = mapMock();
+    const onSearchResults = vi.fn();
+    const onResultFocus = vi.fn();
+    const feature = {
+      type: "Feature",
+      properties: { id: "parcel-1" },
+      geometry: { type: "Polygon", coordinates: [[[8.6, 39.9], [8.61, 39.9], [8.6, 39.91], [8.6, 39.9]]] },
+    };
+    api.catastoGisSearch.mockResolvedValueOnce({
+      results: [{ id: "parcel-1", nome_comune: "Arborea", foglio: "5", particella: "1181" }],
+      geojson: { type: "FeatureCollection", features: [feature] },
+    });
+    const { result } = renderHook(() => useTerritorioUnifiedSearch({
+      token: "token",
+      map: map as never,
+      municipalityLayer: null,
+      onSearchResults,
+      onResultFocus,
+    }));
+    act(() => result.current.setQuery("Arborea 5 1181"));
+    await act(() => result.current.runSearch());
+    const parcel = result.current.results.find((item) => item.kind === "particella")!;
+    expect(onSearchResults).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ kind: "particella", feature })]));
+    await act(() => result.current.selectResult(parcel));
+    expect(onResultFocus).toHaveBeenCalledWith(parcel);
+    act(() => result.current.clear());
+    expect(onSearchResults).toHaveBeenLastCalledWith([]);
+  });
+
   test("governs empty input, missing session, outside results and request failures", async () => {
     const map = mapMock();
     const missing = renderHook(() => useTerritorioUnifiedSearch({ token: null, map: map as never, municipalityLayer: null }));

@@ -117,7 +117,7 @@ describe("scheda territoriale", () => {
   });
 
   test("panel enables generation, shows progress, errors and download", () => {
-    const base: InterrogazioneState = { open: true, armed: false, point: null, gaia: [], catastoUfficiale: [], territorio: [], arm: vi.fn(), close: vi.fn() };
+    const base: InterrogazioneState = { point: { lon: 9, lat: 40 }, gaia: [], catastoUfficiale: [], territorio: [], interrogate: vi.fn(), clear: vi.fn() };
     api.create.mockResolvedValue(sheet("queued"));
     const props = { token: "token", particellaId: "parcel-1", currentUser: { enabled_modules: ["gis"], role: "viewer" } };
     const { rerender } = render(<InterrogazionePanel {...base} scheda={props} />);

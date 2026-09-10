@@ -97,10 +97,14 @@ export function useTerritorioUnifiedSearch({
   token,
   map,
   municipalityLayer,
+  onSearchResults,
+  onResultFocus,
 }: {
   token: string | null;
   map: SearchMap | null;
   municipalityLayer: GisTerritorioLayer | null;
+  onSearchResults?: (results: TerritorioSearchResult[]) => void;
+  onResultFocus?: (result: TerritorioSearchResult) => void;
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<TerritorioSearchResult[]>([]);
@@ -118,9 +122,11 @@ export function useTerritorioUnifiedSearch({
     try {
       const next = await searchAll({ token, value, map, municipalityLayer });
       setResults(next);
+      onSearchResults?.(next);
       setMessage(next.length ? null : `Nessun risultato nel comprensorio per “${value}”.`);
     } catch (error) {
       setResults([]);
+      onSearchResults?.([]);
       setMessage(error instanceof Error ? error.message : "Ricerca GIS non disponibile.");
     } finally {
       setBusy(false);
@@ -129,12 +135,15 @@ export function useTerritorioUnifiedSearch({
 
   async function selectResult(result: TerritorioSearchResult): Promise<void> {
     if (!map || !token) return;
-    setMessage(await focusResult(map, token, result));
+    const nextMessage = await focusResult(map, token, result);
+    setMessage(nextMessage);
+    if (!nextMessage) onResultFocus?.(result);
   }
 
   function clear(): void {
     setQuery("");
     setResults([]);
+    onSearchResults?.([]);
     setMessage(null);
   }
 

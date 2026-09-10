@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 
 import TerritorioFieldTools, { printTerritorioMap } from "@/components/catasto/gis/TerritorioFieldTools";
 import { buildTerritorioPrintHtml, mapScaleDenominator } from "@/components/catasto/gis/territorio-print";
@@ -30,6 +30,8 @@ function mapMock() {
 }
 
 describe("territorio field tools", () => {
+  afterEach(() => vi.restoreAllMocks());
+
   test("restarts the active tool and a completed measurement with a fresh source", () => {
     const map = mapMock();
     const view = render(<TerritorioFieldTools map={map as never} groups={[]} enabled={{}} />);
@@ -79,13 +81,38 @@ describe("territorio field tools", () => {
 
   test("builds and opens the printable layout with active sources", () => {
     const map = mapMock();
-    const popup = { document: { write: vi.fn(), close: vi.fn() }, print: vi.fn() };
-    vi.spyOn(window, "open").mockReturnValue(popup as never);
+    const popup = { opener: window, document: { write: vi.fn(), close: vi.fn() }, focus: vi.fn(), print: vi.fn() };
+    const open = vi.spyOn(window, "open").mockReturnValue(popup as never);
     render(<TerritorioFieldTools map={map as never} groups={[{ theme: "ortofoto", label: "Ortofoto", layers: [layer()] }]} enabled={{ ortho: true }} />);
     fireEvent.click(screen.getByRole("button", { name: "Stampa mappa territoriale" }));
+    expect(open).toHaveBeenCalledWith("", "_blank");
+    expect(popup.opener).toBeNull();
     expect(popup.document.write).toHaveBeenCalledWith(expect.stringContaining("Ortofoto &lt;1977&gt;"));
     expect(popup.document.write).toHaveBeenCalledWith(expect.stringContaining("RAS &amp; Sardegna"));
+    expect(popup.focus).toHaveBeenCalled();
     expect(popup.print).toHaveBeenCalled();
+  });
+
+  test("renders compact measurement and print commands", () => {
+    const map = mapMock();
+    const popup = { opener: window, document: { write: vi.fn(), close: vi.fn() }, focus: vi.fn(), print: vi.fn() };
+    vi.spyOn(window, "open").mockReturnValue(popup as never);
+    const view = render(<TerritorioFieldTools compact map={map as never} groups={[]} enabled={{}} />);
+    const measurementToggle = screen.getByRole("button", { name: "Misure sul terreno" });
+    expect(measurementToggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button", { name: "Distanza" })).not.toBeInTheDocument();
+    fireEvent.click(measurementToggle);
+    expect(measurementToggle).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Distanza" }));
+    expect(measurementToggle.className).toContain("bg-emerald-100");
+    fireEvent.click(screen.getByRole("button", { name: "Stampa mappa territoriale" }));
+    expect(popup.print).toHaveBeenCalledOnce();
+    fireEvent.click(measurementToggle);
+    expect(screen.queryByRole("button", { name: "Distanza" })).not.toBeInTheDocument();
+    view.unmount();
+
+    render(<TerritorioFieldTools compact map={null} groups={[]} enabled={{}} />);
+    expect(screen.getByRole("button", { name: "Stampa mappa territoriale" })).toBeDisabled();
   });
 
   test("measures a geodetic area and supports a map-free controller", () => {

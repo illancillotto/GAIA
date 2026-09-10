@@ -74,23 +74,27 @@ type InterrogazionePanelProps = InterrogazioneState & {
 };
 
 export default function InterrogazionePanel(state: InterrogazionePanelProps) {
-  if (!state.open) {
-    return <button type="button" data-gis-interrogate className="absolute bottom-4 right-4 z-20 rounded-full bg-[#173f32] px-5 py-3 text-sm font-bold text-white shadow-xl" onClick={state.arm}>Interroga punto</button>;
-  }
+  if (!state.point) return null;
+  const loading = [...state.gaia, ...state.catastoUfficiale, ...state.territorio]
+    .some((source) => source.status === "loading");
   return (
-    <aside aria-label="Interrogazione territoriale" className="absolute bottom-3 right-3 top-3 z-30 flex w-[min(28rem,calc(100%-1.5rem))] flex-col rounded-2xl border border-emerald-950/15 bg-[#fffdf6]/95 shadow-2xl backdrop-blur">
-      <header className="flex items-start justify-between border-b border-stone-200 p-4">
-        <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-emerald-800">Istruttoria territoriale</p><h2 className="text-lg font-bold text-slate-900">Cosa insiste sul punto</h2></div>
-        <button type="button" className="text-sm font-semibold text-slate-600" onClick={state.close}>Chiudi</button>
-      </header>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-        {state.armed ? <p className="rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">Clicca un punto sulla mappa per avviare l&apos;interrogazione.</p> : null}
-        {state.point ? <p className="text-xs text-slate-500">Punto {state.point.lat.toFixed(6)}, {state.point.lon.toFixed(6)}</p> : null}
+    <details aria-label="Dati territoriali sul punto" className="mt-3 rounded-2xl border border-emerald-900/15 bg-[#f4f8f1]/90 p-3">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-bold text-emerald-950">
+        <span className="inline-flex items-center gap-2">
+          <span aria-hidden="true" className="material-symbols-outlined text-[18px]">location_searching</span>
+          Dati territoriali sul punto
+        </span>
+        <span className="rounded-full bg-white/80 px-2 py-1 text-[10px] uppercase tracking-wide text-emerald-700">
+          {loading ? "Caricamento" : "Disponibili"}
+        </span>
+      </summary>
+      <div className="mt-3 space-y-3 border-t border-emerald-900/10 pt-3">
+        <p className="text-xs text-slate-500">Punto {state.point.lat.toFixed(6)}, {state.point.lon.toFixed(6)}</p>
         <section aria-label="GAIA" className="rounded-xl border border-emerald-900/15 bg-[#eef4ea] p-3"><h3 className="font-bold text-emerald-950">GAIA</h3><Sources items={state.gaia} /></section>
-        <details open className="rounded-xl border border-stone-200 bg-stone-50 p-3"><summary className="cursor-pointer font-bold text-slate-900">Catasto ufficiale</summary><Sources items={state.catastoUfficiale} /></details>
-        <details open className="rounded-xl border border-stone-200 bg-stone-50 p-3"><summary className="cursor-pointer font-bold text-slate-900">Territorio</summary><TerritorioSources items={state.territorio} /></details>
+        <details className="rounded-xl border border-stone-200 bg-stone-50 p-3"><summary className="cursor-pointer font-bold text-slate-900">Catasto ufficiale</summary><Sources items={state.catastoUfficiale} /></details>
+        <details className="rounded-xl border border-stone-200 bg-stone-50 p-3"><summary className="cursor-pointer font-bold text-slate-900">Territorio</summary><TerritorioSources items={state.territorio} /></details>
         <SchedaTerritorialeActions {...state.scheda} />
       </div>
-    </aside>
+    </details>
   );
 }

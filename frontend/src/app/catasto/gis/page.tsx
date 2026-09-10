@@ -15,7 +15,7 @@ import DistrettiPanel from "@/components/catasto/gis/DistrettiPanel";
 import DeliveryPointQuickFilters, { type DeliveryPointQuickFilter } from "@/components/catasto/gis/DeliveryPointQuickFilters";
 import { Dui2026LivePanel } from "@/components/catasto/gis/Dui2026LivePanel";
 import DrawingTools from "@/components/catasto/gis/DrawingTools";
-import GisWorkspace from "@/components/catasto/gis/GisWorkspace";
+import GisWorkspace, { GisBasemapControl } from "@/components/catasto/gis/GisWorkspace";
 import GisLayerControls from "@/components/catasto/gis/GisLayerControls";
 import { useGisArchive, type OverlayLayerState } from "@/components/catasto/gis/use-gis-archive";
 import SelectionPanel from "@/components/catasto/gis/SelectionPanel";
@@ -88,11 +88,6 @@ const DISTRETTO_COLORS = [
   "#AD1457",
 ];
 const GOOGLE_MAP_TILES_CONFIGURED = Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim());
-const BASEMAP_OPTIONS: Array<{ id: GisBasemap; label: string; swatch: string; requiresGoogleKey?: boolean }> = [
-  { id: "osm", label: "Mappa", swatch: "bg-slate-500" },
-  { id: "satellite", label: "Satellite", swatch: "bg-cyan-600" },
-  { id: "google_satellite", label: "Google Earth", swatch: "bg-lime-600", requiresGoogleKey: true },
-];
 type ParticelleQuickFilter = "all" | "ruolo" | "ruolo_inferito";
 const PARTICELLE_QUICK_FILTERS: Array<{ id: ParticelleQuickFilter; label: string; dot: string }> = [
   { id: "all", label: "Tutte", dot: "bg-indigo-400" },
@@ -316,7 +311,7 @@ export default function CatastoGisPage() {
   const [deliveryPointsCacheMessage, setDeliveryPointsCacheMessage] = useState<string | null>(null);
   const [showDistretti, setShowDistretti] = useState(true);
   const [showDistrettiFill, setShowDistrettiFill] = useState(false);
-  const [showParticelleFill, setShowParticelleFill] = useState(true);
+  const [showParticelleFill, setShowParticelleFill] = useState(false);
   const [showDeliveryPoints, setShowDeliveryPoints] = useState(true);
   const [deliveryPointsQuickFilter, setDeliveryPointsQuickFilter] = useState<DeliveryPointQuickFilter>("all");
   const [particelleQuickFilter, setParticelleQuickFilter] = useState<ParticelleQuickFilter>("all");
@@ -923,37 +918,6 @@ export default function CatastoGisPage() {
 
   const { savedSelections, setSavedSelections, savedSelectionOpacities, savedSelectionFills, savedBusy, refreshSavedSelections, handleSaveImportedLayer, handleLoadSavedSelection, handleUpdatePersistedLayer, handleDeleteSavedSelection, handleUpdateArchivedSelectionColor, handleArchiveOpacityChange, handleArchiveFillChange } = useGisArchive({ token, autoSelectionId, overlayLayers, setOverlayLayers, setGisError, setGisInfo, focusLayerGeojson, updateOverlayLayer });
 
-  const renderBasemapControl = () => (
-    <div className="rounded-2xl border p-3 border-gray-100 bg-gray-50">
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
-        Sfondo mappa
-      </p>
-      <div className="grid grid-cols-3 gap-1.5">
-        {BASEMAP_OPTIONS.map((option) => {
-          const disabled = option.requiresGoogleKey && !GOOGLE_MAP_TILES_CONFIGURED;
-          const selected = basemap === option.id;
-          return (
-            <button
-              key={option.id}
-              type="button"
-              onClick={() => setBasemap(option.id)}
-              disabled={disabled}
-              title={disabled ? "Configura NEXT_PUBLIC_GOOGLE_MAPS_API_KEY per usare Google Map Tiles." : option.label}
-              className={`inline-flex min-w-0 items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-[11px] font-semibold transition ${
-                selected
-                  ? "border-emerald-300 bg-white text-emerald-800 shadow-sm ring-1 ring-emerald-100"
-                  : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
-              } ${disabled ? "cursor-not-allowed opacity-45" : ""}`}
-            >
-              <span className={`h-2 w-2 shrink-0 rounded-full ${option.swatch}`} />
-              <span className="truncate">{option.label}</span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-
   const renderParticelleQuickFilters = () => (
     <div className="mt-2 rounded-2xl border px-2.5 py-2 border-indigo-100 bg-white/70">
       <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-indigo-500">
@@ -1125,7 +1089,14 @@ export default function CatastoGisPage() {
       requiredModule="catasto"
       hideContentHeader
     >
-      <GisWorkspace consoleOpen={mobilePanelOpen} onConsoleChange={setMobilePanelOpen} onExpand={openExpanded}>
+      <GisWorkspace
+        consoleOpen={mobilePanelOpen}
+        onConsoleChange={setMobilePanelOpen}
+        onExpand={openExpanded}
+        basemap={basemap}
+        onBasemapChange={setBasemap}
+        googleTilesConfigured={GOOGLE_MAP_TILES_CONFIGURED}
+      >
 
         {error || exportError || gisError ? (
           <div className="absolute left-4 right-4 top-[118px] z-20 rounded-xl border border-red-200 bg-red-50/95 px-3 py-2 text-sm font-medium text-red-700 shadow-xl backdrop-blur lg:right-[452px]">
@@ -1155,13 +1126,17 @@ export default function CatastoGisPage() {
                   <div className="text-sm font-semibold">Vista estesa GIS</div>
                   <div className="text-[11px] text-gray-500">Premi Esc per uscire</div>
                 </div>
-                <button
-                  type="button"
-                  onClick={closeExpanded}
-                  className="inline-flex items-center justify-center rounded-full border border-gray-200 bg-gray-50 px-3.5 py-1.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200"
-                >
-                  Chiudi
-                </button>
+                <div className="flex items-center gap-2">
+                  <div id="gis-expanded-toolbar-tools" className="flex items-center gap-1" />
+                  <GisBasemapControl basemap={basemap} onBasemapChange={setBasemap} googleTilesConfigured={GOOGLE_MAP_TILES_CONFIGURED} />
+                  <button
+                    type="button"
+                    onClick={closeExpanded}
+                    className="inline-flex items-center justify-center rounded-full border border-gray-200 bg-gray-50 px-3.5 py-1.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200"
+                  >
+                    Chiudi
+                  </button>
+                </div>
               </div>
             ) : null}
 
@@ -1353,7 +1328,7 @@ export default function CatastoGisPage() {
                   </div>
                 ) : null}
                 {popupWhiteCompanyFeature ? (
-                  <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-24 sm:w-[380px]">
+                  <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-20 sm:w-[380px]">
                     <div
                       className="pointer-events-auto rounded-2xl border border-white/70 bg-white/[0.92] p-4 shadow-2xl ring-1 ring-black/5 backdrop-blur-xl"
                       onClick={(event) => event.stopPropagation()}
@@ -1426,9 +1401,9 @@ export default function CatastoGisPage() {
                   </div>
                 ) : null}
                 {popupParticella ? (
-                  <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-24 sm:w-[380px]">
+                  <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-20 sm:w-[420px]">
                     <div
-                      className="pointer-events-auto rounded-2xl border border-white/70 bg-white/[0.88] p-4 shadow-2xl ring-1 ring-black/5 backdrop-blur-xl"
+                      className="pointer-events-auto max-h-full overflow-y-auto rounded-2xl border border-white/70 bg-white/[0.88] p-4 shadow-2xl ring-1 ring-black/5 backdrop-blur-xl"
                       onClick={(event) => event.stopPropagation()}
                       onMouseDown={(event) => event.stopPropagation()}
                     >
@@ -1762,6 +1737,8 @@ export default function CatastoGisPage() {
                         </div>
                       ) : null}
 
+                      <div id="gis-particella-interrogation" />
+
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button
                           type="button"
@@ -1857,6 +1834,7 @@ export default function CatastoGisPage() {
               {isExpanded ? (
                 <aside className="pointer-events-auto hidden w-[340px] shrink-0 overflow-y-auto rounded-2xl border border-gray-200 bg-white/95 p-4 text-gray-900 shadow-2xl ring-1 ring-black/5 lg:block backdrop-blur">
                   <div className="flex flex-col gap-4">
+                    <div id="gis-expanded-territorio-layers" />
                     <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
                       <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Disegna area</p>
                       <DrawingTools
@@ -1904,7 +1882,6 @@ export default function CatastoGisPage() {
                         </div>
                       )}
                     </div>
-                    {renderBasemapControl()}
                     <div>
                       <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Layer e dettaglio particelle</p>
                       <GisLayerControls {...{ showDistretti, setShowDistretti, showDistrettiFill, setShowDistrettiFill, showParticelleFill, setShowParticelleFill, showDeliveryPoints, setShowDeliveryPoints, highlightSelected, setHighlightSelected, distrettiOpacity, setDistrettiOpacity, particelleOpacity, setParticelleOpacity }} />
@@ -1966,6 +1943,7 @@ export default function CatastoGisPage() {
 
                 {/* Layer toggles */}
                 <div className="flex flex-col gap-4">
+                  <div id="gis-territorio-layers" />
                   <DrawingTools
                     orientation="vertical"
                     onDrawPolygon={() => { setDrawSignal((value) => value + 1); setMobilePanelOpen(false); }}
@@ -1974,7 +1952,6 @@ export default function CatastoGisPage() {
                     hasSelection={hasDrawing}
                     nParticelle={result?.n_particelle}
                   />
-                  {renderBasemapControl()}
                   <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Layer e dettaglio particelle</p>
                   <GisLayerControls {...{ showDistretti, setShowDistretti, showDistrettiFill, setShowDistrettiFill, showParticelleFill, setShowParticelleFill, showDeliveryPoints, setShowDeliveryPoints, highlightSelected, setHighlightSelected, distrettiOpacity, setDistrettiOpacity, particelleOpacity, setParticelleOpacity }} />
                   {renderParticelleQuickFilters()}

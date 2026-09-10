@@ -652,9 +652,24 @@ Runtime cartografico frontend:
   programmatica non ripubblica l'evento di selezione cancellata;
 - la mappa Catasto comunica l'istanza pronta al wrapper tramite `onMapReady`.
   Non modifica il namespace ESM di MapLibre e non mantiene un registry globale;
-- riempimento e contorni delle particelle sono attivi per default; la mappa si
-  apre a zoom `14`, sopra la soglia minima MVT `13`, e il controllo consente di
-  nascondere il riempimento;
+- i contorni delle particelle sono attivi per default, mentre il riempimento
+  resta disattivato ma attivabile dal controllo layer; la mappa si apre a zoom
+  `14`, sopra la soglia minima MVT `13`;
+- il catalogo Territorio viene montato nella Console GIS, non sopra la mappa;
+  ricerca nel comprensorio, misure geodetiche e stampa condividono la toolbar
+  superiore e restano raggiungibili anche su viewport mobile. Il pannello di
+  ricerca si apre sul lato sinistro della mappa; le geometrie delle particelle
+  trovate pulsano in giallo/arancio e quella scelta in magenta;
+- il click su una particella avvia anche l'interrogazione territoriale nelle
+  coordinate selezionate; risultati GAIA, Catasto ufficiale e layer Territorio
+  sono raccolti in una sezione espandibile dello stesso dettaglio particella,
+  senza un secondo comando flottante;
+- la toolbar espone anche il selettore dello sfondo tra vista classica e
+  satellitare; Google Earth compare solo quando e configurata la relativa API
+  key;
+- la stampa apre prima la finestra sincrona, azzera poi `window.opener` e infine
+  acquisisce il canvas: passare `noopener` direttamente a `window.open` puo
+  restituire un riferimento nullo e impedire la scrittura del layout;
 - le mappe Catasto, catalogo layer e tracce GPS condividono la gestione degli
   errori GPU. Il CSS MapLibre e importato una sola volta dal layout applicativo;
 - dopo un aggiornamento del runtime cartografico vanno verificati caricamento,

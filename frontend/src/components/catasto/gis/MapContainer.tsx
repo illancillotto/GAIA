@@ -708,6 +708,9 @@ export default function MapContainer({
         source: "particelle-source",
         "source-layer": "cat_particelle_current",
         minzoom: 13,
+        layout: {
+          visibility: "none",
+        },
         paint: {
           "fill-color": buildParticelleFillColorExpression("default"),
           "fill-opacity": buildParticelleFillOpacity(0.5, "all"),
@@ -1097,7 +1100,7 @@ export default function MapContainer({
     const showDistretti = mapLayers?.showDistretti ?? true;
     const showDistrettiFill = mapLayers?.showDistrettiFill ?? false;
     const showParticelleTiles = mapLayers?.showParticelleTiles ?? true;
-    const showParticelleFill = mapLayers?.showParticelleFill ?? true;
+    const showParticelleFill = mapLayers?.showParticelleFill ?? false;
     const showDeliveryPoints = mapLayers?.showDeliveryPoints ?? true;
     const showDui2026 = mapLayers?.showDui2026 ?? false;
     const deliveryPointsQuickFilter = mapLayers?.deliveryPointsQuickFilter ?? "all";

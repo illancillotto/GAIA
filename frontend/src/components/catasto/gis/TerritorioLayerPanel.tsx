@@ -11,6 +11,7 @@ import type { GisBasemap } from "@/types/gis";
 
 type TerritorioLayerPanelProps = TerritorioLayerState & {
   basemap: GisBasemap;
+  embedded?: boolean;
 };
 
 type LayerItemProps = Pick<TerritorioLayerState, "enabled" | "opacity" | "layerErrors" | "legendUrls" | "toggleLayer" | "setLayerOpacity"> & {
@@ -96,6 +97,7 @@ export default function TerritorioLayerPanel({
   toggleLayer,
   setLayerOpacity,
   basemap,
+  embedded = false,
 }: TerritorioLayerPanelProps) {
   const [open, setOpen] = useState(false);
   const ortofoto = groups.find((group) => group.theme === "ortofoto")?.layers ?? [];
@@ -106,7 +108,7 @@ export default function TerritorioLayerPanel({
     .filter((value, index, values) => values.indexOf(value) === index);
 
   return (
-    <aside className="absolute left-3 top-3 z-20 w-[min(23rem,calc(100%-1.5rem))] font-sans">
+    <aside className={embedded ? "w-full font-sans" : "absolute left-3 top-3 z-20 w-[min(23rem,calc(100%-1.5rem))] font-sans"}>
       <button
         type="button"
         aria-expanded={open}
@@ -121,7 +123,10 @@ export default function TerritorioLayerPanel({
       </button>
 
       {open ? (
-        <div className="mt-2 max-h-[70vh] space-y-3 overflow-y-auto rounded-2xl border border-emerald-900/10 bg-[#fffdf6]/95 p-3 shadow-xl backdrop-blur">
+        <div className={embedded
+          ? "mt-2 space-y-3 rounded-2xl border border-emerald-900/10 bg-[#fffdf6]/95 p-3"
+          : "mt-2 max-h-[70vh] space-y-3 overflow-y-auto rounded-2xl border border-emerald-900/10 bg-[#fffdf6]/95 p-3 shadow-xl backdrop-blur"}
+        >
           {loading ? <p className="p-2 text-sm text-slate-600">Caricamento strati...</p> : null}
           {catalogError ? (
             <p

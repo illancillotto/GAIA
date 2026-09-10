@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import {
   interrogaGisTerritorio,
@@ -17,21 +17,12 @@ export type InterrogazioneViewSource = Omit<GisInterrogazioneSource, "status"> &
 };
 
 export type InterrogazioneState = {
-  open: boolean;
-  armed: boolean;
   point: { lon: number; lat: number } | null;
   gaia: InterrogazioneViewSource[];
   catastoUfficiale: InterrogazioneViewSource[];
   territorio: InterrogazioneViewSource[];
-  arm: () => void;
-  close: () => void;
-};
-
-type MapClick = { lngLat: { lng: number; lat: number } };
-
-export type InterrogazioneMap = {
-  on: (event: "click", listener: (event: MapClick) => void) => void;
-  off: (event: "click", listener: (event: MapClick) => void) => void;
+  interrogate: (point: { lon: number; lat: number }) => void;
+  clear: () => void;
 };
 
 const GAIA_LOADING: InterrogazioneViewSource[] = [
@@ -94,60 +85,61 @@ async function runWithLimit<T>(items: T[], limit: number, task: (item: T) => Pro
 }
 
 export function useInterrogazione(
-  map: InterrogazioneMap | null,
   token: string | null,
   groups: GisTerritorioLayerGroup[],
 ): InterrogazioneState {
-  const [open, setOpen] = useState(false);
-  const [armed, setArmed] = useState(false);
   const [point, setPoint] = useState<{ lon: number; lat: number } | null>(null);
   const [gaia, setGaia] = useState<InterrogazioneViewSource[]>([]);
   const [catastoUfficiale, setCatastoUfficiale] = useState<InterrogazioneViewSource[]>([]);
   const [territorio, setTerritorio] = useState<InterrogazioneViewSource[]>([]);
+  const requestIdRef = useRef(0);
 
-  useEffect(() => {
-    if (!map || !armed || !token) return;
-    const onClick = ({ lngLat }: MapClick) => {
-      const selectedPoint = { lon: lngLat.lng, lat: lngLat.lat };
-      const placeholders = externalSources(groups);
-      setArmed(false);
-      setPoint(selectedPoint);
-      setGaia(GAIA_LOADING);
-      setCatastoUfficiale(placeholders.filter((source) => source.theme === "catasto_ufficiale"));
-      setTerritorio(placeholders.filter((source) => source.theme !== "catasto_ufficiale"));
+  const clear = useCallback(() => {
+    requestIdRef.current += 1;
+    setPoint(null);
+    setGaia([]);
+    setCatastoUfficiale([]);
+    setTerritorio([]);
+  }, []);
 
-      void interrogaGisTerritorio(token, { ...selectedPoint, layer_ids: [] })
-        .then((response) => setGaia(response.gaia.sources))
-        .catch((error: unknown) => setGaia(GAIA_LOADING.map((source) => failed(source, error))));
+  const interrogate = useCallback((selectedPoint: { lon: number; lat: number }) => {
+    if (!token) return;
+    const requestId = ++requestIdRef.current;
+    const placeholders = externalSources(groups);
+    const isCurrent = () => requestIdRef.current === requestId;
+    setPoint(selectedPoint);
+    setGaia(GAIA_LOADING);
+    setCatastoUfficiale(placeholders.filter((source) => source.theme === "catasto_ufficiale"));
+    setTerritorio(placeholders.filter((source) => source.theme !== "catasto_ufficiale"));
 
-      const queryable = groups.flatMap((group) => group.layers).filter((layer) => layer.queryable !== "wms_visual_only");
-      void runWithLimit(queryable, 4, async (layer) => {
-        const update = (source: InterrogazioneViewSource) => {
-          const setter = source.theme === "catasto_ufficiale" ? setCatastoUfficiale : setTerritorio;
-          setter((current) => current.map((item) => item.source_id === source.source_id ? source : item));
-        };
-        const current = placeholders.find((source) => source.source_id === layer.id)!;
-        try {
-          const response = await interrogaGisTerritorio(token, { ...selectedPoint, layer_ids: [layer.id] });
-          const result = [...response.catasto_ufficiale.sources, ...response.territorio.sources][0];
-          update(result ? enrich(result, current) : failed(current, "Risposta sorgente assente."));
-        } catch (error) {
-          update(failed(current, error));
-        }
-      });
-    };
-    map.on("click", onClick);
-    return () => map.off("click", onClick);
-  }, [armed, groups, map, token]);
+    void interrogaGisTerritorio(token, { ...selectedPoint, layer_ids: [] })
+      .then((response) => { if (isCurrent()) setGaia(response.gaia.sources); })
+      .catch((error: unknown) => { if (isCurrent()) setGaia(GAIA_LOADING.map((source) => failed(source, error))); });
+
+    const queryable = groups.flatMap((group) => group.layers).filter((layer) => layer.queryable !== "wms_visual_only");
+    void runWithLimit(queryable, 4, async (layer) => {
+      const update = (source: InterrogazioneViewSource) => {
+        if (!isCurrent()) return;
+        const setter = source.theme === "catasto_ufficiale" ? setCatastoUfficiale : setTerritorio;
+        setter((current) => current.map((item) => item.source_id === source.source_id ? source : item));
+      };
+      const current = placeholders.find((source) => source.source_id === layer.id)!;
+      try {
+        const response = await interrogaGisTerritorio(token, { ...selectedPoint, layer_ids: [layer.id] });
+        const result = [...response.catasto_ufficiale.sources, ...response.territorio.sources][0];
+        update(result ? enrich(result, current) : failed(current, "Risposta sorgente assente."));
+      } catch (error) {
+        update(failed(current, error));
+      }
+    });
+  }, [groups, token]);
 
   return {
-    open,
-    armed,
     point,
     gaia,
     catastoUfficiale,
     territorio,
-    arm: () => { setOpen(true); setArmed(true); },
-    close: () => { setOpen(false); setArmed(false); },
+    interrogate,
+    clear,
   };
 }

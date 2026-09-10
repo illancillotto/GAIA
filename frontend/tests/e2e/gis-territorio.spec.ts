@@ -81,6 +81,7 @@ async function installBrowserStubs(page: Page) {
         write: (html: string) => { host.__territorioPrintHtml = html; },
         close: () => undefined,
       },
+      focus: () => undefined,
       print: () => { host.__territorioPrintCalled = true; },
     }) as unknown as Window;
   });
@@ -298,13 +299,60 @@ async function mockCatastoApis(page: Page) {
     query: "Arborea",
     mode_requested: "auto",
     mode_resolved: "particella",
-    total: 0,
-    results: [],
-    geojson: { type: "FeatureCollection", features: [] },
+    total: 1,
+    results: [{
+      id: PARCEL_ID,
+      nome_comune: "Arborea",
+      codice_catastale: "A123",
+      foglio: "14",
+      particella: "82",
+      subalterno: null,
+      superficie_mq: 1200,
+      superficie_grafica_mq: 1198,
+      utenza_denominazione: "Azienda agricola mock",
+      utenza_cf: null,
+    }],
+    geojson: {
+      type: "FeatureCollection",
+      features: [{
+        type: "Feature",
+        properties: { id: PARCEL_ID },
+        geometry: {
+          type: "Polygon",
+          coordinates: [[[8.585, 39.905], [8.595, 39.905], [8.595, 39.915], [8.585, 39.905]]],
+        },
+      }],
+    },
   }));
   await page.route("**/api/catasto/gis/ade-wfs/runs/latest", (route) => json(route, { detail: "Nessun run" }, 404));
   await page.route("**/api/catasto/gis/dui/latest-layer", (route) => json(route, { detail: "Nessun layer" }, 404));
   await page.route("**/api/catasto/gis/whitecompany-reports/layer**", (route) => json(route, { detail: "Nessun report" }, 404));
+  await page.route("**/api/catasto/gis/particella/*/popup", (route) => json(route, {
+    id: PARCEL_ID,
+    cfm: "A123-14-82",
+    nome_comune: "Arborea",
+    codice_catastale: "A123",
+    cod_comune_capacitas: 165,
+    foglio: "14",
+    particella: "82",
+    subalterno: null,
+    superficie_mq: 1200,
+    superficie_grafica_mq: 1198,
+    num_distretto: "12",
+    nome_distretto: "Arborea",
+    is_current: true,
+    suppressed: false,
+    source_type: "catasto",
+    missing_reason: null,
+    missing_fields: [],
+    ha_ruolo: false,
+    ha_ruolo_inferito: false,
+    ruolo_summary: null,
+    titolare: null,
+    swapped_capacitas: null,
+    anomalie_aperte: [],
+    n_anomalie_aperte: 0,
+  }));
 
   await page.route(`**/api/catasto/particelle/${PARCEL_ID}**`, (route) => {
     const path = new URL(route.request().url()).pathname;
@@ -330,7 +378,7 @@ async function mockCatastoApis(page: Page) {
   });
 }
 
-test("GIS console and bottom tools fit desktop and mobile viewports", async ({ page }) => {
+test("GIS console and toolbar tools fit desktop and mobile viewports", async ({ page }) => {
   test.skip(!ENABLED, "Set PLAYWRIGHT_GIS_TERRITORIO_ENABLED=true to run the optional smoke.");
   await installBrowserStubs(page);
   await loginWithGis(page);
@@ -356,17 +404,24 @@ test("GIS console and bottom tools fit desktop and mobile viewports", async ({ p
     await page.setViewportSize(viewport);
     await expect(canvas).toBeVisible();
     await expect(consolePanel).toBeHidden();
+    await expect(page.getByRole("button", { name: "Ricerca nel comprensorio" })).toBeInViewport({ ratio: 1 });
+    await expect(page.getByRole("button", { name: "Misure sul terreno" })).toBeInViewport({ ratio: 1 });
     await expect(page.getByRole("button", { name: "Stampa mappa territoriale" })).toBeInViewport({ ratio: 1 });
-    await expect(page.getByRole("button", { name: "Interroga punto" })).toBeInViewport({ ratio: 1 });
-    await page.getByRole("button", { name: "Interroga punto" }).click({ trial: true });
+    await expect(page.getByRole("button", { name: "Sfondo mappa" })).toBeInViewport({ ratio: 1 });
+    await expect(page.getByRole("button", { name: "Interroga punto" })).toHaveCount(0);
     await page.getByRole("button", { name: "Stampa mappa territoriale" }).click({ trial: true });
     await page.getByRole("button", { name: "Apri Console GIS" }).click();
     await expect(consolePanel).toBeVisible();
-    await expect(consolePanel.getByRole("button", { name: "Riempimento particelle" })).toHaveAttribute("aria-pressed", "true");
+    await expect(consolePanel.getByRole("button", { name: /Territorio/ })).toBeVisible();
+    await expect(consolePanel.getByRole("button", { name: "Riempimento particelle" })).toHaveAttribute("aria-pressed", "false");
     await expect(consolePanel.getByRole("button", { name: "Disegna area", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Chiudi strumenti GIS" }).click();
     await expect(consolePanel).toBeHidden();
   }
+  await page.getByRole("button", { name: "Sfondo mappa" }).click();
+  await expect(page.getByRole("button", { name: "Vista classica" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Vista satellitare" }).click();
+  await page.getByRole("button", { name: "Misure sul terreno" }).click();
   await page.getByRole("button", { name: "Distanza", exact: true }).click();
   await clickMapCanvas(canvas, 0.4, 0.4);
   await clickMapCanvas(canvas, 0.6, 0.4);
@@ -391,6 +446,7 @@ test("territorio smokes map consultation, sheets, measurements, print and QGIS",
 
   await page.goto("/catasto/gis");
   await expect(page.getByRole("heading", { name: "GAIA GIS" })).toBeVisible();
+  await page.getByRole("button", { name: "Apri Console GIS" }).click();
   await page.getByRole("button", { name: /Territorio/ }).click();
 
   await page.getByRole("checkbox", { name: /Distretti irrigui RAS/ }).check();
@@ -400,13 +456,21 @@ test("territorio smokes map consultation, sheets, measurements, print and QGIS",
   await expect(page.getByText(/Una sola annata e oggi autorizzata/)).toBeVisible();
   await expect(page.getByRole("button", { name: /richiesta di modifica/i })).toHaveCount(0);
   await page.getByRole("button", { name: /Territorio/ }).click();
+  await page.getByRole("button", { name: "Chiudi strumenti GIS" }).click();
 
+  await page.getByRole("button", { name: "Ricerca nel comprensorio" }).click();
+  const searchPanel = page.getByRole("region", { name: "Ricerca unica GIS" });
+  const canvas = page.locator("canvas.maplibregl-canvas");
+  const [searchPanelBox, canvasBox] = await Promise.all([searchPanel.boundingBox(), canvas.boundingBox()]);
+  if (!searchPanelBox || !canvasBox) throw new Error("GIS search panel or map canvas has no bounding box");
+  expect(Math.abs(searchPanelBox.x - canvasBox.x)).toBeLessThan(40);
   await page.getByLabel("Cerca nel GIS").fill("Arborea");
   await page.getByRole("button", { name: "Cerca", exact: true }).click();
+  await expect(page.getByText("GAIA Catasto", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /Arborea - Fg\. 14, Part\. 82.*GAIA Catasto/ }).click();
   await expect(page.getByText("RAS SITR", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Arborea RAS SITR/ }).click();
 
-  const canvas = page.locator("canvas.maplibregl-canvas");
   await expect(canvas).toBeVisible();
 
   await page.getByRole("button", { name: "Apri Console GIS" }).click();
@@ -424,13 +488,25 @@ test("territorio smokes map consultation, sheets, measurements, print and QGIS",
   await expect(page.getByRole("button", { name: "Cancella selezione" })).toHaveCount(0);
   await page.getByRole("button", { name: "Chiudi strumenti GIS" }).click();
 
-  await page.getByRole("button", { name: "Interroga punto" }).click();
-  await expect(page.getByText(/Clicca un punto sulla mappa/)).toBeVisible();
-  await page.waitForTimeout(100);
   const box = await canvas.boundingBox();
   if (!box) throw new Error("Map canvas has no bounding box");
-  await clickMapCanvas(canvas, 0.5, 0.5);
-  await expect(page.getByText(/Clicca un punto sulla mappa/)).toBeHidden();
+  for (let index = 0; index < 4; index += 1) {
+    await page.locator(".maplibregl-ctrl-zoom-in").click();
+  }
+  await page.waitForTimeout(1_000);
+  const closeParcel = page.getByRole("button", { name: "Chiudi dettaglio particella GIS" });
+  const parcelCandidates = [
+    [0.5, 0.5], [0.45, 0.45], [0.55, 0.45], [0.45, 0.55], [0.55, 0.55],
+    [0.4, 0.5], [0.6, 0.5], [0.5, 0.4], [0.5, 0.6],
+    [0.75, 0.4], [0.85, 0.4], [0.9, 0.4], [0.75, 0.55], [0.85, 0.55], [0.9, 0.55],
+  ] as const;
+  for (const [xRatio, yRatio] of parcelCandidates) {
+    await clickMapCanvas(canvas, xRatio, yRatio);
+    await page.waitForTimeout(200);
+    if (await closeParcel.count()) break;
+  }
+  await expect(closeParcel).toBeVisible();
+  await page.getByText("Dati territoriali sul punto").click();
 
   await expect(page.getByRole("heading", { name: "GAIA", exact: true })).toBeVisible();
   await expect(page.getByText("Distretto GAIA 12")).toBeVisible();
@@ -445,6 +521,7 @@ test("territorio smokes map consultation, sheets, measurements, print and QGIS",
   await expect(page.getByRole("link", { name: "Scarica scheda territoriale PDF" })).toBeVisible();
   await page.getByRole("button", { name: "Chiudi" }).click();
 
+  await page.getByRole("button", { name: "Misure sul terreno" }).click();
   await page.getByRole("button", { name: "Distanza" }).click();
   await clickMapCanvas(canvas, 0.35, 0.45);
   await clickMapCanvas(canvas, 0.55, 0.45);

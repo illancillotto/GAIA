@@ -101,7 +101,8 @@ describe("TerritorioLayerPanel", () => {
   });
 
   test("collapses and reports loading state", () => {
-    render(<TerritorioLayerPanel {...state({ loading: true, enabled: {} })} basemap="osm" />);
+    const { container } = render(<TerritorioLayerPanel {...state({ loading: true, enabled: {} })} basemap="osm" embedded />);
+    expect(container.querySelector("aside")).toHaveClass("w-full");
     const button = screen.getByRole("button", { name: /Territorio/i });
     expect(button).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(button);

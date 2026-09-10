@@ -12,7 +12,6 @@ vi.mock("@/lib/api/territorio", async (importOriginal) => {
 import InterrogazionePanel from "@/components/catasto/gis/InterrogazionePanel";
 import {
   useInterrogazione,
-  type InterrogazioneMap,
   type InterrogazioneState,
   type InterrogazioneViewSource,
 } from "@/components/catasto/gis/use-interrogazione";
@@ -32,8 +31,6 @@ function source(overrides: Partial<InterrogazioneViewSource> = {}): Interrogazio
 
 function state(overrides: Partial<InterrogazioneState> = {}): InterrogazioneState {
   return {
-    open: true,
-    armed: false,
     point: { lon: 9, lat: 40 },
     gaia: [source()],
     catastoUfficiale: [source({ source_id: "ade", title: "Catasto AdE", status: "empty", data: [], message: "Nessun elemento trovato.", attribution: "Dati AdE" })],
@@ -43,8 +40,8 @@ function state(overrides: Partial<InterrogazioneState> = {}): InterrogazioneStat
       source({ source_id: "ras-skipped", title: "Ortofoto", status: "skipped", data: [], message: "Solo visualizzazione", theme: "ortofoto", themeLabel: "Ortofoto storiche" }),
       source({ source_id: "other", title: "Altro", status: "empty", data: [] }),
     ],
-    arm: vi.fn(),
-    close: vi.fn(),
+    interrogate: vi.fn(),
+    clear: vi.fn(),
     ...overrides,
   };
 }
@@ -75,27 +72,24 @@ describe("InterrogazionePanel", () => {
   test("keeps GAIA open and lets official and territory sections collapse", () => {
     render(<InterrogazionePanel {...state()} scheda={scheda} />);
     expect(screen.getByRole("region", { name: "GAIA" })).toBeInTheDocument();
+    const container = screen.getByText("Dati territoriali sul punto").closest("details");
     const official = screen.getByText("Catasto ufficiale").closest("details");
     const territory = screen.getByText("Territorio").closest("details");
-    expect(official).toHaveAttribute("open");
-    expect(territory).toHaveAttribute("open");
-    fireEvent.click(screen.getByText("Catasto ufficiale"));
-    fireEvent.click(screen.getByText("Territorio"));
+    expect(container).not.toHaveAttribute("open");
     expect(official).not.toHaveAttribute("open");
     expect(territory).not.toHaveAttribute("open");
+    fireEvent.click(screen.getByText("Dati territoriali sul punto"));
+    fireEvent.click(screen.getByText("Catasto ufficiale"));
+    fireEvent.click(screen.getByText("Territorio"));
+    expect(container).toHaveAttribute("open");
+    expect(official).toHaveAttribute("open");
+    expect(territory).toHaveAttribute("open");
   });
 
-  test("arms from the closed control, shows instructions and closes", () => {
-    const closed = state({ open: false });
-    const { rerender } = render(<InterrogazionePanel {...closed} scheda={scheda} />);
-    fireEvent.click(screen.getByRole("button", { name: "Interroga punto" }));
-    expect(closed.arm).toHaveBeenCalledOnce();
-    const armed = state({ armed: true, point: null, gaia: [], catastoUfficiale: [], territorio: [] });
-    rerender(<InterrogazionePanel {...armed} scheda={scheda} />);
-    expect(screen.getByText(/Clicca un punto/)).toBeInTheDocument();
-    expect(screen.getAllByText("Nessuna sorgente disponibile.")).toHaveLength(3);
-    fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
-    expect(armed.close).toHaveBeenCalledOnce();
+  test("renders only when a parcel click has supplied a point", () => {
+    const { container } = render(<InterrogazionePanel {...state({ point: null })} scheda={scheda} />);
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByRole("button", { name: "Interroga punto" })).not.toBeInTheDocument();
   });
 });
 
@@ -125,32 +119,23 @@ function response(layerId?: string): GisInterrogazioneResponse {
   };
 }
 
-class FakeMap implements InterrogazioneMap {
-  listener: ((event: { lngLat: { lng: number; lat: number } }) => void) | null = null;
-  on = vi.fn((event: "click", listener: NonNullable<FakeMap["listener"]>) => { this.listener = listener; });
-  off = vi.fn((event: "click", listener: NonNullable<FakeMap["listener"]>) => { if (this.listener === listener) this.listener = null; });
-}
-
-function Harness({ map, onState }: { map: FakeMap; onState: (value: InterrogazioneState) => void }) {
-  const value = useInterrogazione(map, "token", groups);
+function Harness({ token = "token", onState }: { token?: string | null; onState: (value: InterrogazioneState) => void }) {
+  const value = useInterrogazione(token, groups);
   useEffect(() => onState(value), [onState, value]);
-  return <button onClick={value.arm}>arm</button>;
+  return <><button onClick={() => value.interrogate({ lon: 9, lat: 40 })}>interrogate</button><button onClick={value.clear}>clear</button></>;
 }
 
 describe("useInterrogazione", () => {
   beforeEach(() => api.interroga.mockReset());
 
-  test("arms one map click and publishes local and remote responses progressively", async () => {
-    const map = new FakeMap();
+  test("publishes local and remote responses progressively for the parcel click", async () => {
     let current: InterrogazioneState | null = null;
     api.interroga.mockImplementation((...args: unknown[]) => {
       const body = args.find((item): item is { layer_ids: string[] } => typeof item === "object" && item !== null && "layer_ids" in item);
       return Promise.resolve(response(body?.layer_ids[0]));
     });
-    const { unmount } = render(<Harness map={map} onState={(value) => { current = value; }} />);
-    fireEvent.click(screen.getByText("arm"));
-    expect(current?.armed).toBe(true);
-    act(() => map.listener?.({ lngLat: { lng: 9, lat: 40 } }));
+    render(<Harness onState={(value) => { current = value; }} />);
+    fireEvent.click(screen.getByText("interrogate"));
     expect(current?.point).toEqual({ lon: 9, lat: 40 });
     expect(current?.territorio.map((item) => item.status)).toEqual(["loading", "skipped"]);
     await waitFor(() => expect(current?.gaia[0]?.status).toBe("ok"));
@@ -158,23 +143,57 @@ describe("useInterrogazione", () => {
     await waitFor(() => expect(current?.catastoUfficiale[0]?.status).toBe("ok"));
     expect(api.interroga).toHaveBeenCalledTimes(3);
     expect(api.interroga).not.toHaveBeenCalledWith("token", expect.objectContaining({ layer_ids: ["visual"] }));
-    act(() => current?.close());
-    expect(current?.open).toBe(false);
-    unmount();
-    expect(map.off).toHaveBeenCalled();
+    fireEvent.click(screen.getByText("clear"));
+    expect(current?.point).toBeNull();
+    expect(current?.gaia).toEqual([]);
   });
 
   test("maps local and remote failures without aborting remaining sources", async () => {
-    const map = new FakeMap();
     let current: InterrogazioneState | null = null;
     api.interroga.mockRejectedValueOnce(new Error("GAIA down"))
       .mockRejectedValueOnce(new Error("RAS down"))
       .mockResolvedValueOnce({ ...response(), catasto_ufficiale: { key: "catasto_ufficiale", sources: [] } });
-    render(<Harness map={map} onState={(value) => { current = value; }} />);
-    fireEvent.click(screen.getByText("arm"));
-    act(() => map.listener?.({ lngLat: { lng: 9, lat: 40 } }));
+    render(<Harness onState={(value) => { current = value; }} />);
+    fireEvent.click(screen.getByText("interrogate"));
     await waitFor(() => expect(current?.gaia.every((item) => item.status === "failed")).toBe(true));
     await waitFor(() => expect(current?.territorio[0]?.message).toBe("RAS down"));
     await waitFor(() => expect(current?.catastoUfficiale[0]?.status).toBe("failed"));
+  });
+
+  test("does not query without a token and ignores stale parcel responses", async () => {
+    let anonymous: InterrogazioneState | null = null;
+    const anonymousView = render(<Harness token={null} onState={(value) => { anonymous = value; }} />);
+    fireEvent.click(screen.getByText("interrogate"));
+    expect(anonymous?.point).toBeNull();
+    expect(api.interroga).not.toHaveBeenCalled();
+    anonymousView.unmount();
+
+    let resolveFirst: ((value: GisInterrogazioneResponse) => void) | null = null;
+    api.interroga
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockResolvedValue(response())
+      .mockResolvedValue(response())
+      .mockResolvedValue(response());
+    let current: InterrogazioneState | null = null;
+    render(<Harness onState={(value) => { current = value; }} />);
+    fireEvent.click(screen.getByText("interrogate"));
+    fireEvent.click(screen.getByText("clear"));
+    act(() => resolveFirst?.(response()));
+    await act(async () => { await Promise.resolve(); });
+    expect(current?.point).toBeNull();
+    expect(current?.gaia).toEqual([]);
+
+    let rejectNext: ((reason: Error) => void) | null = null;
+    api.interroga.mockReset();
+    api.interroga
+      .mockImplementationOnce(() => new Promise((_, reject) => { rejectNext = reject; }))
+      .mockResolvedValue(response())
+      .mockResolvedValue(response());
+    fireEvent.click(screen.getByText("interrogate"));
+    fireEvent.click(screen.getByText("clear"));
+    act(() => rejectNext?.(new Error("stale")));
+    await act(async () => { await Promise.resolve(); });
+    expect(current?.point).toBeNull();
+    expect(current?.gaia).toEqual([]);
   });
 });
