@@ -1582,7 +1582,7 @@ def test_operai_operational_quality_marks_extra_over_five_hours_as_warning() -> 
         work_date=date(2026, 6, 16),
         schedule_code="OPE0714",
     )
-    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(6, 0), exit_time=time(19, 31))]
+    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(7, 0), exit_time=time(19, 31))]
 
     quality = build_operai_operational_quality(collaborator, record, punches)
 

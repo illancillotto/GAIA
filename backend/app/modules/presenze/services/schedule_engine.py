@@ -22,7 +22,10 @@ from app.modules.presenze.services.inaz_minute_buckets import (
     inaz_special_day,
     reconcile_inaz_minute_buckets,
 )
-from app.modules.presenze.services.operai_daily_policy import recognized_daily_minutes
+from app.modules.presenze.services.operai_daily_policy import (
+    assigned_daily_start,
+    recognized_daily_minutes,
+)
 from app.modules.presenze.services.operai_recognized_minutes import RecognizedOperaiMinutes
 from app.modules.presenze.services.operai_rules import (
     OperaiRuleConfig,
@@ -323,7 +326,10 @@ def _recognized_operai_minutes(collaborator, record, punches, rules, context):
     rule = resolve_operai_rule(collaborator, record, context.operai_rule_configs if context else None)
     if rule is None:
         return None
-    start = min((item.start_time for item in rules), default=None)
+    # A template can list alternative shifts on the same day. Its earliest
+    # start is not the employee's assigned shift; use the daily INAZ code then.
+    starts = {item.start_time for item in rules}
+    start = assigned_daily_start(record, rule, starts)
     return recognized_daily_minutes(punches, rule, scheduled_start=start)
 
 

@@ -238,3 +238,100 @@ def test_overnight_work_keeps_existing_classification_without_a_daytime_lunch():
     assert result.source == "operai_formula"
     assert result.ordinary_minutes == 420
     assert result.extra_minutes == 30
+
+
+@pytest.mark.parametrize(
+    ("entry", "exit_time", "extra"),
+    [(time(5, 50), time(13, 10), 0), (time(5, 44), time(13), 0),
+     (time(5, 40), time(13, 14), 0), (time(5, 40), time(13, 15), 15),
+     (time(5, 40), time(13, 26), 26)],
+)
+def test_alternative_template_starts_do_not_authorize_early_overtime(entry, exit_time, extra):
+    collaborator, record, punches = _day("OPE0613", ((entry, exit_time),))
+    template = PresenzeScheduleTemplate(id=1, is_active=True)
+    assignment = PresenzeCollaboratorScheduleAssignment(
+        collaborator_id=collaborator.id, template_id=1
+    )
+    rules = [PresenzeScheduleRule(
+        start_time=start, end_time=end, weekday=3,
+        recurrence_kind="weekly", applies_on_holiday=False,
+    ) for start, end in [(time(5, 30), time(12, 30)), (time(7), time(14))]]
+    context = ScheduleContext({}, {str(collaborator.id): [assignment]}, {1: template}, {1: rules})
+    result = classify_daily_record(collaborator, record, punches, context)
+    quality = build_daily_operational_quality(collaborator, record, punches, classification=result)
+    assert result.ordinary_minutes == 420
+    assert result.ordinary_night_minutes == 0
+    assert result.extra_minutes == result.overtime_day_minutes == quality.mpe_minutes == extra
+    assert presenze_extra_minutes(SimpleNamespace(effective_extra_minutes=99), result) == extra
+
+
+@pytest.mark.parametrize("group", [None, "agrario", "catasto_magazzino"])
+@pytest.mark.parametrize(
+    ("code", "entry", "exit_time", "day", "ordinary", "extra", "night"),
+    [("OPEF0613", time(6, 4), time(13, 6), 6, 420, 0, 0),
+     ("OPEF0613", time(5, 45), time(13, 15), 6, 420, 15, 0),
+     ("OPESACE", time(5, 49), time(12), 29, 360, 0, 0),
+     ("OPESACE", time(5, 49), time(12, 15), 29, 360, 15, 0),
+     ("OPSABE", time(5, 45), time(12, 44), 29, 390, 0, 0),
+     ("OPSABE", time(5, 45), time(12, 45), 29, 390, 15, 0),
+     ("OSAB5.3_11.3", time(5, 15), time(11, 44), 8, 360, 0, 30),
+     ("OSAB5.3_11.3", time(5, 15), time(11, 45), 8, 360, 15, 30)],
+)
+def test_effective_summer_variants_use_daily_duration_and_same_overtime_policy(
+    group, code, entry, exit_time, day, ordinary, extra, night
+):
+    collaborator, record, punches = _day(code, ((entry, exit_time),))
+    collaborator.operai_group = group
+    record.work_date = date(2026, 8, day)
+    result = classify_daily_record(collaborator, record, punches, None)
+    assert result.ordinary_minutes == ordinary
+    assert result.extra_minutes == result.overtime_day_minutes == extra
+    assert result.ordinary_night_minutes == night
+    assert presenze_extra_minutes(SimpleNamespace(effective_extra_minutes=99), result) == extra
+
+
+@pytest.mark.parametrize(
+    ("entry", "exit_time", "ordinary", "extra"),
+    [(time(5, 35), time(17, 30), 420, 240),
+     (time(5, 59), time(13, 14), 420, 0),
+     (time(6), time(13, 15), 420, 15),
+     (time(5, 30), time(13), 360, 0),
+     (time(6, 1), time(14, 15), 420, 15),
+     (time(5, 45), time(12, 59), 359, 0),
+     (time(5, 45), time(22, 1), 420, 451)],
+)
+def test_confirmed_summer_switch_excludes_early_minutes(entry, exit_time, ordinary, extra):
+    collaborator, record, punches = _day("OPE0714", ((entry, exit_time),))
+    result = classify_daily_record(collaborator, record, punches, None)
+    assert result.ordinary_minutes == ordinary
+    assert result.ordinary_night_minutes == 0
+    assert result.extra_minutes == result.overtime_day_minutes == extra
+
+
+@pytest.mark.parametrize("effective", ["OPE0613 - NOFLEX", "OPE0714 - NOFLEX", "", None])
+def test_daily_effective_schedule_supersedes_generic_seasonal_template(effective):
+    collaborator, record, punches = _day("OPE0613", ((time(5, 50), time(13, 10)),))
+    record.raw_payload_json = {"detail_effective_schedule": effective}
+    template = PresenzeScheduleTemplate(id=1, is_active=True)
+    assignment = PresenzeCollaboratorScheduleAssignment(
+        collaborator_id=collaborator.id, template_id=1
+    )
+    rule = PresenzeScheduleRule(
+        start_time=time(5, 30), end_time=time(12, 30), weekday=3,
+        recurrence_kind="weekly", applies_on_holiday=False,
+    )
+    context = ScheduleContext({}, {str(collaborator.id): [assignment]}, {1: template}, {1: [rule]})
+    result = classify_daily_record(collaborator, record, punches, context)
+    assert result.extra_minutes == (0 if effective == "OPE0613 - NOFLEX" else 20)
+    assert result.ordinary_night_minutes == (0 if effective == "OPE0613 - NOFLEX" else 10)
+
+
+@pytest.mark.parametrize("code", ["OPE0613", "OPEF0613", "OP_5.3_12.3"])
+def test_explicit_seven_hour_shift_on_saturday_excludes_early_minutes(code):
+    entry, exit_time = (time(5, 10), time(12, 40)) if code == "OP_5.3_12.3" else (time(5, 40), time(13, 10))
+    collaborator, record, punches = _day(code, ((entry, exit_time),))
+    record.work_date = date(2026, 8, 8)
+    result = classify_daily_record(collaborator, record, punches, None)
+    assert result.ordinary_minutes == 420
+    assert result.extra_minutes == 0
+    assert result.recognized_minutes.excluded_early_minutes == 20

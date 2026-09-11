@@ -4967,7 +4967,7 @@ def test_gate_presenze_daily_records_follow_team_visibility_and_month_contract()
     item = body["records"][0]
     assert item["collaborator_name"] == "GATE RECORD UNO"
     assert item["team_ids"] == [team_id]
-    assert item["extra_minutes"] == 0
+    assert item["extra_minutes"] == 60
     assert item["has_complete_punches"] is True
 
     filtered_response = client.get(

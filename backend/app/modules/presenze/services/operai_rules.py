@@ -28,6 +28,16 @@ DEFAULT_MPE_REVIEW_THRESHOLD_MINUTES = 5 * 60
 LEGACY_MPE_REVIEW_THRESHOLD_MINUTES = 2 * 60
 PREVIOUS_MPE_REVIEW_THRESHOLD_MINUTES = 3 * 60
 
+# Effective INAZ variants use the existing group policy, including persisted
+# configurations. Explicit summer Saturday codes attest the day's duration.
+SCHEDULE_VARIANTS = {
+    "OPEF0613": "OPE0613",
+    "OPESACE": "OPESAB",
+    "OPSABE": "OPESAB",
+    "OSAB5.3_11.3": "OSAB5.3_12.3",
+}
+SUMMER_SATURDAY_MINUTES = {"OPESACE": 360, "OPSABE": 390, "OSAB5.3_11.3": 360}
+
 
 @dataclass(frozen=True)
 class OperaiRuleConfig:
@@ -183,21 +193,12 @@ def resolve_operai_rule(
     for rule in active_configs:
         if rule.operai_group is not None and rule.operai_group != normalized_group:
             continue
-        matched_codes = rule.saturday_schedule_codes if is_saturday else rule.weekday_schedule_codes
-        if schedule_code not in matched_codes:
+        matched_codes = rule.weekday_schedule_codes + rule.saturday_schedule_codes if is_saturday else rule.weekday_schedule_codes
+        if schedule_code not in matched_codes and SCHEDULE_VARIANTS.get(schedule_code) not in matched_codes:
             continue
-        if is_saturday:
-            if rule.operai_group == PRESENZE_OPERAI_GROUP_CATASTO_MAGAZZINO:
-                is_scheduled = True
-                expected_minutes = rule.saturday_expected_minutes
-            else:
-                ordinal = saturday_ordinal_in_month(record.work_date)
-                is_scheduled = ordinal in rule.saturday_week_ordinals
-                expected_minutes = rule.saturday_expected_minutes if is_scheduled else 0
-            return ResolvedOperaiRule(rule=rule, formula_code=schedule_code, expected_minutes=expected_minutes, saturday_is_scheduled=is_scheduled)
-        return ResolvedOperaiRule(rule=rule, formula_code=schedule_code, expected_minutes=rule.weekday_expected_minutes, saturday_is_scheduled=False)
+        return _resolved_schedule_rule(rule, schedule_code, record.work_date)
 
-    if normalized_group is None and schedule_code in {"OPE0714", "OPE0736", "OPE0613", "OP_5.3_12.3", "OPESAB", "OSAB5.3_12.3"}:
+    if normalized_group is None and SCHEDULE_VARIANTS.get(schedule_code, schedule_code) in {"OPE0714", "OPE0736", "OPE0613", "OP_5.3_12.3", "OPESAB", "OSAB5.3_12.3"}:
         fallback = OperaiRuleConfig(
             code="OPERAI_LEGACY_FALLBACK",
             label="Fallback legacy operai",
@@ -211,9 +212,22 @@ def resolve_operai_rule(
             mpe_review_threshold_minutes=DEFAULT_MPE_REVIEW_THRESHOLD_MINUTES,
             allowed_absence_causes=("ferie", "permesso"),
         )
-        expected_minutes = fallback.saturday_expected_minutes if is_saturday else fallback.weekday_expected_minutes
-        return ResolvedOperaiRule(rule=fallback, formula_code=schedule_code, expected_minutes=expected_minutes, saturday_is_scheduled=is_saturday)
+        return _resolved_schedule_rule(fallback, schedule_code, record.work_date)
     return None
+
+
+def _resolved_schedule_rule(rule, code, work_date):
+    if work_date.weekday() != 5 or SCHEDULE_VARIANTS.get(code, code) in rule.weekday_schedule_codes:
+        return ResolvedOperaiRule(rule, code, rule.weekday_expected_minutes, False)
+    if code in SUMMER_SATURDAY_MINUTES:
+        return ResolvedOperaiRule(rule, code, SUMMER_SATURDAY_MINUTES[code], True)
+    scheduled = (
+        rule.operai_group == PRESENZE_OPERAI_GROUP_CATASTO_MAGAZZINO
+        or saturday_ordinal_in_month(work_date) in rule.saturday_week_ordinals
+    )
+    return ResolvedOperaiRule(
+        rule, code, rule.saturday_expected_minutes if scheduled else 0, scheduled
+    )
 
 
 def saturday_ordinal_in_month(work_date: date) -> int:

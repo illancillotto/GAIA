@@ -50,7 +50,7 @@ def test_august_calendar_holidays_keep_existing_festive_classification(day, labe
     assert result.grants_recovery_day is False
 
 
-def test_murgia_scheduled_saturday_preserves_inaz_six_hours_and_one_mpe_minute():
+def test_murgia_scheduled_saturday_excludes_early_and_subthreshold_overtime():
     collaborator = PresenzeCollaborator(
         id=uuid4(), employee_code="135", name="Operaio", contract_kind="operaio"
     )
@@ -69,10 +69,11 @@ def test_murgia_scheduled_saturday_preserves_inaz_six_hours_and_one_mpe_minute()
         )
     ]
     result = classify_daily_record(collaborator, record, punches, None)
-    assert (result.ordinary_minutes, result.extra_minutes, result.special_day) == (360, 1, False)
-    assert result.overtime_day_minutes == 1
+    assert (result.ordinary_minutes, result.extra_minutes, result.special_day) == (360, 0, False)
+    assert result.overtime_day_minutes == 0
     assert result.overtime_festive_minutes == result.overtime_festive_night_minutes == 0
-    assert result.ordinary_night_minutes == result.overtime_night_minutes == 0
+    assert result.ordinary_night_minutes == 30
+    assert result.overtime_night_minutes == 0
 
 
 @pytest.mark.parametrize("special", [False, True])

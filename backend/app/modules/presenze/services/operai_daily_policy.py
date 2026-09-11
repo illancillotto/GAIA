@@ -11,17 +11,37 @@ from app.modules.presenze.services.operai_recognized_minutes import (
     recognize_operai_day,
 )
 from app.modules.presenze.services.operai_rules import ResolvedOperaiRule
+from app.modules.presenze.services.parser import (
+    extract_detail_payload,
+    parse_schedule_code_from_detail,
+)
 
-# Nominal starts from the INAZ schedule definitions. An assigned daily rule
-# takes precedence, including seasonal shifts. Duration comes from operai_group.
+# Nominal starts from the effective INAZ schedule. An unambiguous assignment
+# is used when the imported day does not attest its own effective schedule.
 SCHEDULE_STARTS = {
     "OPE0714": 420,
     "OPE0613": 360,
+    "OPEF0613": 360,
     "OPE0736": 380,
     "OP_5.3_12.3": 330,
     "OPESAB": 420,
     "OSAB5.3_12.3": 330,
+    "OPESACE": 360,
+    "OPSABE": 360,
+    "OSAB5.3_11.3": 330,
 }
+
+
+def assigned_daily_start(record, rule, starts):
+    # The effective schedule of this imported day supersedes a generic
+    # seasonal template (which may still contain the 05:30 summer shift).
+    payload = record.raw_payload_json
+    if isinstance(payload, dict):
+        detail = extract_detail_payload(payload)
+        effective_code = parse_schedule_code_from_detail(detail.get("effective_schedule"))
+        if effective_code == rule.formula_code:
+            return None
+    return next(iter(starts)) if len(starts) == 1 else None
 
 
 def recognized_daily_minutes(
@@ -37,8 +57,9 @@ def recognized_daily_minutes(
     )
     if start is None or rule.expected_minutes <= 0:
         return None
-    end = start + rule.expected_minutes
     pairs = _complete_day_pairs(punches)
+    start = _effective_summer_start(start, rule.formula_code, pairs)
+    end = start + rule.expected_minutes
     if not pairs or end > 1440:
         return None
     unpaid = _lunch_intervals(pairs, start, rule.expected_minutes)
@@ -48,6 +69,16 @@ def recognized_daily_minutes(
         overtime_step_minutes=1,
         unpaid_intervals=unpaid,
     )
+
+
+def _effective_summer_start(start, code, pairs):
+    # Operationally confirmed 07-14 -> 06-13 switch: the nominal INAZ code
+    # can remain unchanged, as in the summer cases confirmed by the operator.
+    if not pairs or code != "OPE0714" or start != 420:
+        return start
+    first = min(pair.start for pair in pairs)
+    last = max(pair.end for pair in pairs)
+    return 360 if 330 < first <= 360 and 780 <= last <= 1320 else start
 
 
 def _minute(value: time) -> int:
