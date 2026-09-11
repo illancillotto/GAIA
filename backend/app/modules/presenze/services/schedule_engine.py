@@ -23,6 +23,7 @@ from app.modules.presenze.services.inaz_minute_buckets import (
     reconcile_inaz_minute_buckets,
 )
 from app.modules.presenze.services.operai_daily_policy import (
+    PENDING_PUNCH_REQUEST_SOURCE,
     assigned_daily_start,
     recognized_daily_minutes,
 )
@@ -39,6 +40,8 @@ from app.modules.presenze.services.operational_quality import (
 from app.modules.presenze.services.parser import (
     detail_has_authoritative_classification,
     detail_indicates_special_day,
+    resolve_request_status,
+    resolve_request_type,
 )
 
 RECURRENCE_WEEKLY = "weekly"
@@ -196,6 +199,12 @@ def classify_daily_record(
         )
         return _classify_operai_day(operai_quality, worked_buckets, special_day, holiday_kind, grants_recovery_day)
 
+    pending = _pending_punch_buckets(record, raw_payload, punches, matched_rules, special_day)
+    if pending is not None:
+        return _pending_punch_classification(
+            record, pending, special_day, holiday_kind, grants_recovery_day
+        )
+
     if raw_payload is not None and detail_has_authoritative_classification(raw_payload):
         special_day = inaz_special_day(record, collaborator, special_day, holiday_kind)
         worked_buckets = reconcile_inaz_minute_buckets(
@@ -286,6 +295,66 @@ def classify_daily_record(
         shift_festive_night_minutes=worked_buckets.shift_festive_night_minutes,
         source="template",
     )
+
+
+def _pending_punch_buckets(
+    record: PresenzeDailyRecord,
+    raw_payload: dict | None,
+    punches: list[PresenzeDailyPunch],
+    rules: list[PresenzeScheduleRule],
+    special_day: bool,
+) -> WorkedMinuteBuckets | None:
+    # INAZ does not account a day while a punch insertion awaits approval (RIC).
+    # Complete punches still prove the work, so it must stay visible and exportable.
+    if _inaz_or_admin_accounted(record) or not _awaits_punch_approval(record, raw_payload):
+        return None
+    if not punches or any(punch.entry_time is None or punch.exit_time is None for punch in punches):
+        return None
+    buckets = classify_worked_minute_buckets(punches, rules, special_day=special_day)
+    return buckets if buckets.actual_minutes else None
+
+
+def _pending_punch_classification(
+    record: PresenzeDailyRecord,
+    buckets: WorkedMinuteBuckets,
+    special_day: bool,
+    holiday_kind: str | None,
+    grants_recovery_day: bool,
+) -> DayClassification:
+    return DayClassification(
+        special_day=special_day,
+        ordinary_minutes=buckets.ordinary_minutes or record.ordinary_minutes,
+        extra_minutes=buckets.extra_minutes,
+        holiday_kind=holiday_kind,
+        grants_recovery_day=grants_recovery_day,
+        night_minutes=buckets.night_minutes,
+        festive_minutes=buckets.festive_minutes,
+        festive_night_minutes=buckets.festive_night_minutes,
+        ordinary_night_minutes=buckets.ordinary_night_minutes,
+        overtime_day_minutes=buckets.overtime_day_minutes,
+        overtime_night_minutes=buckets.overtime_night_minutes,
+        overtime_festive_minutes=buckets.overtime_festive_minutes,
+        overtime_festive_night_minutes=buckets.overtime_festive_night_minutes,
+        shift_festive_day_minutes=buckets.shift_festive_day_minutes,
+        shift_night_minutes=buckets.shift_night_minutes,
+        shift_festive_night_minutes=buckets.shift_festive_night_minutes,
+        source=PENDING_PUNCH_REQUEST_SOURCE,
+    )
+
+
+def _inaz_or_admin_accounted(record: PresenzeDailyRecord) -> bool:
+    imported = record.ordinary_minutes or record.straordinario_minutes or record.mpe_minutes
+    overridden = (
+        record.override_straordinario_minutes is not None or record.override_mpe_minutes is not None
+    )
+    return bool(imported) or overridden
+
+
+def _awaits_punch_approval(record: PresenzeDailyRecord, raw_payload: dict | None) -> bool:
+    detail = raw_payload or {}
+    status = record.request_status or resolve_request_status(detail)
+    request_type = record.request_type or resolve_request_type(detail)
+    return (status or "").strip().upper() == "RIC" and "timbrat" in (request_type or "").casefold()
 
 
 def _classify_operai_day(

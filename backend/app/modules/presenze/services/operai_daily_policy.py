@@ -123,27 +123,40 @@ def recognized_extra_minutes(record: PresenzeDailyRecord, minutes: RecognizedOpe
     )
 
 
+# INAZ leaves a day unaccounted while a punch insertion awaits approval (RIC):
+# the complete punches then carry the worked minutes shown and exported.
+PENDING_PUNCH_REQUEST_SOURCE = "pending_punch_request"
+
+
 def effective_extra_values(record: PresenzeDailyRecord, classification: object) -> dict:
-    straordinario = (
-        record.straordinario_minutes
-        if record.override_straordinario_minutes is None
-        else record.override_straordinario_minutes
-    )
-    mpe = record.mpe_minutes if record.override_mpe_minutes is None else record.override_mpe_minutes
     if getattr(classification, "recognized_minutes", None) is not None:
-        extra = classification.extra_minutes
         straordinario = max(0, record.override_straordinario_minutes or 0)
-        mpe = extra - straordinario
-    else:
-        extra = (straordinario or 0) + (mpe or 0) or None
-    values = {
+        return _classified_extra_values(classification, straordinario, recognized=True)
+    straordinario = _adjusted(record.straordinario_minutes, record.override_straordinario_minutes)
+    if getattr(classification, "source", None) == PENDING_PUNCH_REQUEST_SOURCE:
+        return _classified_extra_values(classification, straordinario or 0, recognized=False)
+    mpe = _adjusted(record.mpe_minutes, record.override_mpe_minutes)
+    return {
         "effective_straordinario_minutes": straordinario,
         "effective_mpe_minutes": mpe,
-        "effective_extra_minutes": extra,
+        "effective_extra_minutes": (straordinario or 0) + (mpe or 0) or None,
     }
-    if getattr(classification, "recognized_minutes", None) is not None:
-        values["operational_mpe_minutes"] = mpe
-        values["ordinary_minutes"] = classification.ordinary_minutes
+
+
+def _adjusted(imported: int | None, override: int | None) -> int | None:
+    return imported if override is None else override
+
+
+def _classified_extra_values(classification: object, straordinario: int, *, recognized: bool) -> dict:
+    extra = classification.extra_minutes
+    values = {
+        "effective_straordinario_minutes": straordinario,
+        "effective_mpe_minutes": extra - straordinario,
+        "effective_extra_minutes": extra,
+        "ordinary_minutes": classification.ordinary_minutes,
+    }
+    if recognized:
+        values["operational_mpe_minutes"] = extra - straordinario
     return values
 
 
