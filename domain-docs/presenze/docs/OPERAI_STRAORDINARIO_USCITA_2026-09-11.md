@@ -28,9 +28,8 @@ turni diurni; impiegati e codici sconosciuti mantengono il percorso esistente.
 ## Verifiche
 
 - Regressione mirata: 184 test; tre runtime al 100% statement (511/511).
-- Suite estesa: 421 test passati; il solo test del contratto elenco è stato
-  corretto e ripetuto con esito positivo (campi export assenti da quella API).
-  Restano i warning JWT delle credenziali di test, nessun errore runtime.
+- Suite finale estesa: **422 test passati**, tre runtime al 100% statement
+  (511/511). Restano i warning JWT delle credenziali di test.
 - Casi 14/15 minuti, anticipo puro, anticipo più uscita breve, pausa, ritardo,
   rettifiche, festività, sabati, modello con alternative e turno effettivo.
 - Audit read-only su 1.054 giornate di 34 collaboratori presenti nell'export
@@ -51,3 +50,31 @@ Il campione copre le quote dell'audit, non certifica gli altri collaboratori o
 mesi. Il rilascio richiede gli stessi tre moduli su API GAIA, outbound e worker,
 poi confronto effettivo con cache GATE e compilatore XLSM installato sul VPS.
 GATE non necessita di un nuovo algoritmo: usa i minuti canonici ricevuti.
+
+## Rilascio verificato
+
+Runtime commit `30828445`, immagine `gaia-backend:extra-30828445`. API,
+outbound e worker Presenze sul server sorgente CED sono healthy e verificati
+con hash dei tre file identici al commit. Worker sostituito con zero importazioni
+running e lock sulle nuove acquisizioni. Manifest, backup, overlay e rollback:
+`/opt/gaia/releases/extra-30828445/`. Aggiornato anche il tag backend latest
+per mantenere il fix nelle ricreazioni ordinarie dei container.
+
+Ciclo outbound dopo il deploy riuscito: 2026-09-11 09:25:51–09:28:15 UTC.
+Snapshot GAIA 09:26:37 UTC confrontato con cache GATE ricevuta alle 09:27:47:
+5.859 giornaliere, nessun record mancante e zero differenze su totali, stato,
+minuti mancanti e categorie export. Nessun backfill delle timbrature.
+
+Verifica finale su tutti i **35 collaboratori e 1.085 giorni** del file utente:
+329 quote feriali positive precedenti, 164 dopo il fix, totale 313h02;
+239 quote cambiate. Nessuna quota feriale residua sotto 15 minuti.
+Il compilatore realmente installato sul VPS GATE (`88dee90`) ha generato
+`Giornaliere_2026_08_straordinari_corretti.xlsm` dalla cache aggiornata.
+Le 1.085 celle FG:GK e i 35 totali Archivio!L coincidono con i dati canonici;
+VBA identico al modello e 1.259 formule con valori memorizzati in Giornaliera2.
+SHA256 del file: `2c2180d70a0abffc8a84376eb615ec10452d9f5104ecc2bf05c4b7c120462383`.
+Nessuna variazione alla soglia buoni pasto fra le quote positive confrontate.
+
+GATE non ha richiesto modifiche runtime né un nuovo deploy: la correzione è
+nella sorgente e lo snapshot corretto è già arrivato sul VPS. Report e CSV con
+le timbrature sono nella cartella Downloads dell'operatore, fuori dal repository.
