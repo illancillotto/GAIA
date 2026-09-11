@@ -45,8 +45,8 @@ def test_august_calendar_holidays_keep_existing_festive_classification(day, labe
         None,
     )
     assert result.special_day is True
-    assert (result.ordinary_minutes, result.extra_minutes) == (420, 4)
-    assert (result.shift_festive_day_minutes, result.overtime_festive_minutes) == (420, 4)
+    assert (result.ordinary_minutes, result.extra_minutes) == (420, 0)
+    assert (result.shift_festive_day_minutes, result.overtime_festive_minutes) == (420, 0)
     assert result.grants_recovery_day is False
 
 

@@ -32,7 +32,6 @@ from app.modules.presenze.router.helpers.access import (
 from app.modules.presenze.router.helpers.collaborators import _serialize_collaborator
 from app.modules.presenze.router.helpers.daily_records import (
     _build_classification_map,
-    _build_collaborator_snapshot_map,
     _build_monthly_night_bonus_map,
     _build_operational_quality_map,
     _daily_record_has_anomaly,
@@ -42,7 +41,7 @@ from app.modules.presenze.router.helpers.daily_records import (
     _month_end,
     _resolve_recent_month_values,
     _resolve_refresh_credential_for_user,
-    _serialize_anomaly_list_item,
+    _serialize_accounted_anomaly_items,
     _serialize_daily_record,
     _serialize_daily_record_matrix,
 )
@@ -319,10 +318,8 @@ def list_anomalie_giornaliere(
     filtered_rows = _filter_anomaly_rows(rows, only_anomalies=only_anomalies, only_requests=only_requests)
     total = len(filtered_rows)
     page_rows = filtered_rows[(page - 1) * page_size : page * page_size]
-    collaborator_ids = list({row.collaborator_id for row in page_rows})
-    collaborator_map = _build_collaborator_snapshot_map(db, collaborator_ids)
     return PresenzeAnomalyListResponse(
-        items=[_serialize_anomaly_list_item(row, collaborator_map=collaborator_map) for row in page_rows],
+        items=_serialize_accounted_anomaly_items(db, page_rows),
         total=total,
         page=page,
         page_size=page_size,

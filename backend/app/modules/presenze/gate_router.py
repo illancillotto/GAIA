@@ -52,7 +52,7 @@ from app.modules.presenze.services import gate_mobile_payloads
 
 router = APIRouter(prefix="/gate/presenze", tags=["gate-presenze"])
 RequirePresenzeModule = Depends(require_module("presenze"))
-RULES_VERSION = "presenze-2026-09-extra-5h-warning"
+RULES_VERSION = "presenze-2026-09-10-operai-minuti-riconosciuti"
 EXPORT_RULES_VERSION = "presenze-xlsm-2026-08"
 
 
@@ -876,7 +876,7 @@ def _serialize_gate_record_item(
         severity=analysis.severity,
         contract_kind=collaborator.contract_kind if collaborator is not None else None,
         schedule_code=record.schedule_code,
-        ordinary_minutes=record.ordinary_minutes,
+        ordinary_minutes=serialized.ordinary_minutes,
         extra_minutes=gate_mobile_payloads.presenze_extra_minutes(serialized),
         missing_minutes=serialized.operational_missing_minutes,
         absence_cause=serialized.resolved_absence_cause,

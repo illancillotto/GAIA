@@ -298,7 +298,7 @@ def test_build_presenze_teams_push_payload_serializes_teams_memberships_and_supe
         )
 
         assert payload["source"] == "gaia"
-        assert payload["rules_version"] == "presenze-2026-09-extra-5h-warning"
+        assert payload["rules_version"] == "presenze-2026-09-10-operai-minuti-riconosciuti"
         assert payload["synced_from_gaia_at"] == "2026-07-09T09:30:00Z"
         assert payload["teams"][0]["name"] == "Squadra Presenze Nord"
         assert payload["teams"][0]["personnel_area"] == "AGRARIO"
@@ -440,7 +440,7 @@ def test_build_presenze_rules_months_giornaliere_and_anomalie_payloads(monkeypat
 
         assert rules_payload["schema_version"] == 1
         assert rules_payload["export_rules_version"] == "presenze-xlsm-2026-08"
-        assert rules_payload["rules"]["rules_version"] == "presenze-2026-09-extra-5h-warning"
+        assert rules_payload["rules"]["rules_version"] == "presenze-2026-09-10-operai-minuti-riconosciuti"
         assert months_payload["months"] == [{"month": "2026-07", "records_total": 1}]
         assert months_payload["inaz_sync"]["status"] == "never"
         assert giornaliere_payload["records"][0]["record_id"] == str(daily_record_id)
@@ -532,7 +532,7 @@ def test_giornaliere_payload_includes_operational_mpe_from_complete_punches() ->
         item = payload["records"][0]
         assert item["status"] == "ok"
         assert item["missing_minutes"] == 0
-        assert item["extra_minutes"] == 270
+        assert item["extra_minutes"] == 150
     finally:
         db.close()
 

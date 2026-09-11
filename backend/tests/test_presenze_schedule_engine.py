@@ -1217,7 +1217,7 @@ def test_classify_daily_record_without_matching_template_rule_falls_back_to_impo
     assert result.extra_minutes == 120
 
 
-def test_operai_formula_overrides_inaz_anomaly_when_punches_cover_the_day() -> None:
+def test_operai_formula_does_not_credit_unplanned_early_arrival() -> None:
     collaborator = PresenzeCollaborator(
         id=uuid.uuid4(),
         employee_code="172",
@@ -1240,15 +1240,15 @@ def test_operai_formula_overrides_inaz_anomaly_when_punches_cover_the_day() -> N
     quality = build_operai_operational_quality(collaborator, record, punches)
 
     assert result.source == "operai_formula"
-    assert result.ordinary_minutes == 420
-    assert result.extra_minutes == 33
-    assert quality.status == "ok"
-    assert quality.worked_minutes == 453
-    assert quality.mpe_minutes == 33
-    assert quality.missing_minutes == 0
+    assert result.ordinary_minutes == 360
+    assert result.extra_minutes == 0
+    assert quality.status == "blocking"
+    assert quality.worked_minutes == 360
+    assert quality.mpe_minutes == 0
+    assert quality.missing_minutes == 60
 
 
-def test_operai_operational_quality_treats_ope0736_weekday_as_seven_hours_ok() -> None:
+def test_operai_operational_quality_excludes_ope0736_early_minutes() -> None:
     collaborator = PresenzeCollaborator(
         id=uuid.uuid4(),
         employee_code="1854",
@@ -1269,11 +1269,11 @@ def test_operai_operational_quality_treats_ope0736_weekday_as_seven_hours_ok() -
 
     quality = build_operai_operational_quality(collaborator, record, punches)
 
-    assert quality.status == "ok"
+    assert quality.status == "blocking"
     assert quality.expected_minutes == 420
-    assert quality.worked_minutes == 426
-    assert quality.missing_minutes == 0
-    assert quality.mpe_minutes == 6
+    assert quality.worked_minutes == 402
+    assert quality.missing_minutes == 18
+    assert quality.mpe_minutes == 0
 
 
 def test_operai_operational_quality_treats_ope0613_validated_weekday_as_seven_hours_ok() -> None:
@@ -1300,9 +1300,9 @@ def test_operai_operational_quality_treats_ope0613_validated_weekday_as_seven_ho
 
     assert quality.status == "ok"
     assert quality.expected_minutes == 420
-    assert quality.worked_minutes == 487
+    assert quality.worked_minutes == 480
     assert quality.missing_minutes == 0
-    assert quality.mpe_minutes == 67
+    assert quality.mpe_minutes == 60
     assert "Richiesta INAZ accolta dal caposettore" in quality.notes
 
 
@@ -1329,10 +1329,10 @@ def test_operai_formula_marks_short_saturday_as_blocking() -> None:
     quality = build_operai_operational_quality(collaborator, record, punches)
 
     assert result.source == "operai_formula"
-    assert result.ordinary_minutes == 365
-    assert result.extra_minutes is None
+    assert result.ordinary_minutes == 273
+    assert result.extra_minutes == 0
     assert quality.status == "blocking"
-    assert quality.missing_minutes == 55
+    assert quality.missing_minutes == 147
 
 
 def test_operai_operational_quality_marks_agrario_first_saturday_ferie_as_ok() -> None:
@@ -1511,10 +1511,10 @@ def test_operai_operational_quality_marks_large_accepted_extra_as_warning() -> N
         work_date=date(2026, 6, 1),
         schedule_code="OPE0714",
         request_status="ACC",
-        request_description="Inserimento - 19:20 U",
+        request_description="Inserimento - 19:53 U",
         raw_payload_json={"detail_anomalies": [{"anomaliagiornata": "OREM-Ore mancanti"}, {"anomaliagiornata": "TMBU-Manca timbratura di uscita"}]},
     )
-    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(6, 57), exit_time=time(19, 20))]
+    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(6, 57), exit_time=time(19, 53))]
 
     quality = build_operai_operational_quality(collaborator, record, punches)
 
@@ -1541,7 +1541,7 @@ def test_operai_operational_quality_keeps_extra_within_five_hours_out_of_anomali
         schedule_code="OPE0714",
         stato="Giornata anomala",
     )
-    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(5, 30), exit_time=time(17, 30))]
+    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(5, 30), exit_time=time(19, 30))]
 
     quality = build_operai_operational_quality(collaborator, record, punches)
 
@@ -1551,7 +1551,7 @@ def test_operai_operational_quality_keeps_extra_within_five_hours_out_of_anomali
     assert "MPE oltre soglia giornaliera: 300 minuti" not in quality.notes
 
 
-def test_zancudi_school_case_with_270_mpe_minutes_is_not_blocking() -> None:
+def test_zancudi_school_case_excludes_early_minutes_and_lunch() -> None:
     collaborator = PresenzeCollaborator(
         id=uuid.uuid4(), employee_code="1404", company_code="53", name="ZANCUDI ANTONELLO", contract_kind="operaio"
     )
@@ -1565,7 +1565,7 @@ def test_zancudi_school_case_with_270_mpe_minutes_is_not_blocking() -> None:
 
     assert quality.status == "ok"
     assert quality.missing_minutes == 0
-    assert quality.mpe_minutes == 270
+    assert quality.mpe_minutes == 150
 
 
 def test_operai_operational_quality_marks_extra_over_five_hours_as_warning() -> None:
@@ -1582,7 +1582,7 @@ def test_operai_operational_quality_marks_extra_over_five_hours_as_warning() -> 
         work_date=date(2026, 6, 16),
         schedule_code="OPE0714",
     )
-    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(6, 0), exit_time=time(18, 1))]
+    punches = [PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(6, 0), exit_time=time(19, 31))]
 
     quality = build_operai_operational_quality(collaborator, record, punches)
 
