@@ -166,13 +166,25 @@ Non è necessario introdurre un secondo calcolo retributivo in GATE.
   10:15:03–10:17:43 UTC). Nuova versione ricevuta per gennaio–settembre.
 - Confronto completo agosto: 5.859 giornaliere GAIA/GATE, zero differenze
   sui totali e sulle sette categorie canoniche; nessun record mancante.
-- Worker importazioni: cambio automatico predisposto alla prima finestra
-  senza job running, senza interrompere i job INAZ già attivi. Esito ancora
-  da verificare in `/opt/gaia/releases/presenze-5383e495/worker-idle-rollout.log`;
-  il marker `worker-deployed-at.txt` viene scritto solo dopo health e nove hash.
+- Worker importazioni: cambio automatico completato alla prima finestra senza
+  job running, senza interrompere i job INAZ già attivi. Il marker
+  `worker-deployed-at.txt` registra `2026-09-10T12:04:03Z`; il log termina con
+  `WORKER_DEPLOYED_AND_VERIFIED`, il container è healthy e i nove hash runtime
+  coincidono.
 - Backup, manifest, overlay compose e rollback sono conservati nella medesima
   directory release. Nessuna riscrittura delle timbrature originali.
 - Smoke XLSM sul VPS: 143 giornaliere coerenti di agosto, 10 collaboratori,
   otto categorie identiche ai payload nel dettaglio e nel riepilogo; macro VBA
   preservate e ricalcolo Excel abilitato. Verifica campionaria, distinta dalla
   revisione amministrativa delle giornate.
+
+### Integrazione in main e deploy standard dell'11 settembre 2026
+
+- Hotfix revisionato e integrato in `main` dal merge `f44460b6`; ratchet senza
+  finding, otto file runtime al 100% (`1.494/1.494` statement) e i due moduli
+  nuovi al 100% anche sui branch (`94` statement, `26` branch).
+- Release CED standard `20260911-075930-f44460b6`: checkout pulito sullo SHA
+  atteso, build remota completata, maintenance disabilitata e smoke HTTP su
+  `gaia.lan` riusciti. Backend, frontend, Postgres, Martin, worker Presenze e
+  connector GaTe risultano healthy; gli hash Presenze nell'immagine backend
+  coincidono `9/9` con il checkout versionato.
