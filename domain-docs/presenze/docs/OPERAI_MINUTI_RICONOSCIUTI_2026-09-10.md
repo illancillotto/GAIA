@@ -5,6 +5,13 @@ classificazione alimenta le giornaliere, le anomalie, i payload GATE e le
 categorie dell'export XLSM. Versione delle regole:
 `presenze-2026-09-10-operai-minuti-riconosciuti`.
 
+> **Documento storico del rilascio del 10 settembre.** Le regole su precedenza
+> del turno assegnato e assenza di inferenza sono state aggiornate l’11 settembre:
+> prevale il codice effettivo giornaliero quando attestato; OPE0714 può seguire
+> il cambio operativo a 06–13 confermato; sono inclusi i codici estivi/sabato.
+> Vedere [la regola corrente](OPERAI_STRAORDINARIO_USCITA_2026-09-11.md), runtime
+> `30828445`. I paragrafi di verifica/deploy sotto mantengono la cronologia.
+
 ## Regole
 
 - L'anticipo rispetto all'inizio previsto non genera automaticamente ordinario,
