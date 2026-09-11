@@ -102,9 +102,22 @@ def test_pending_request_is_read_from_inaz_detail_when_record_fields_are_empty()
     assert (result.source, result.extra_minutes) == (PENDING_PUNCH_REQUEST_SOURCE, 360)
 
 
+def test_pending_insertion_on_worked_sunday_is_festive_overtime() -> None:
+    person = _operaio()
+    record = _unscheduled_saturday(person, work_date=date(2026, 7, 26), schedule_code="DOM")
+
+    result = classify_daily_record(
+        person, record, _punches(record, (time(7, 52), time(17, 30))), None
+    )
+
+    assert (result.source, result.special_day) == (PENDING_PUNCH_REQUEST_SOURCE, True)
+    assert (result.extra_minutes, result.overtime_festive_minutes) == (578, 578)
+
+
 @pytest.mark.parametrize(
     ("values", "pairs", "extra"),
     [
+        ({"work_date": date(2026, 8, 17), "schedule_code": "ADD_7"}, [(time(3), time(10))], None),
         ({"request_status": "ACC"}, [(time(6), time(12))], None),
         ({"request_type": "Eventi"}, [(time(6), time(12))], None),
         (

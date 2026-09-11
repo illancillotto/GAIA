@@ -304,8 +304,11 @@ def _pending_punch_buckets(
     rules: list[PresenzeScheduleRule],
     special_day: bool,
 ) -> WorkedMinuteBuckets | None:
-    # INAZ does not account a day while a punch insertion awaits approval (RIC).
-    # Complete punches still prove the work, so it must stay visible and exportable.
+    # INAZ does not account a rest day worked while a punch insertion awaits approval
+    # (RIC). Complete punches still prove the work, so it must stay visible and exportable.
+    # On scheduled days the punches alone cannot separate standard hours from overtime.
+    if (record.schedule_code or "").strip().upper() not in {"SAB", "DOM", "RIPTURN"}:
+        return None
     if _inaz_or_admin_accounted(record) or not _awaits_punch_approval(record, raw_payload):
         return None
     if not punches or any(punch.entry_time is None or punch.exit_time is None for punch in punches):
