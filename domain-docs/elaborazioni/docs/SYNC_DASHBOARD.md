@@ -18,6 +18,10 @@ I monitor nativi sono riutilizzati tramite `NativeWorkspaceRenderer`; quelli
 non nativi conservano il fallback iframe esistente. API, permessi e azioni
 operative dei monitor restano invariati.
 
+Le modali dei monitor occupano il viewport con 8 px di margine per lato,
+senza limite di larghezza a 1600 px. Il contenuto e gli iframe utilizzano
+l'altezza residua sotto la testata; dettagli e pianificazioni restano compatti.
+
 ## Catalogo e sorgenti
 
 I percorsi API seguenti sono relativi al prefisso `/api`.
