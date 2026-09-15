@@ -42,12 +42,12 @@ export function SyncDashboardDialog({ target, states, onClose, onOpen }: {
   }, []);
   return (
     <dialog ref={ref} aria-label={target.title} onKeyDown={trapFocus} onCancel={(event) => { event.preventDefault(); onClose(); }}
-      className={`fixed inset-0 m-auto max-h-[94dvh] w-[calc(100%-1.5rem)] overflow-hidden rounded-[24px] border border-stone-200 bg-[#f4f7f5] p-0 text-stone-800 shadow-2xl backdrop:bg-black/50 backdrop:backdrop-blur-sm ${target.kind === "workspace" ? "max-w-[1600px]" : "max-w-5xl"}`}>
-      <header className="flex items-center justify-between gap-4 border-b border-stone-200 bg-white px-5 py-4">
+      className={`fixed inset-0 m-auto overflow-hidden rounded-[20px] border border-stone-200 bg-[#f4f7f5] p-0 text-stone-800 shadow-2xl backdrop:bg-black/50 backdrop:backdrop-blur-sm ${target.kind === "workspace" ? "h-[calc(100dvh-1rem)] max-h-none w-[calc(100%-1rem)] max-w-none open:flex open:flex-col" : "max-h-[94dvh] w-[calc(100%-1.5rem)] max-w-5xl"}`}>
+      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-stone-200 bg-white px-5 py-3">
         <h2 className="text-lg font-semibold text-[#163524]">{target.title}</h2>
         <button type="button" className="btn-secondary shrink-0" onClick={onClose}>Chiudi</button>
       </header>
-      <div className="max-h-[calc(94dvh-5rem)] overflow-y-auto p-4 sm:p-6">
+      <div className={target.kind === "workspace" ? "min-h-0 flex-1 overflow-y-auto p-2 [&>iframe]:h-full [&>iframe]:min-h-0" : "max-h-[calc(94dvh-5rem)] overflow-y-auto p-4 sm:p-6"}>
         {target.kind === "details" ? <>
           <p className="mb-4 text-sm text-stone-600">{target.service.description} Per avviare una sincronizzazione o consultare lo storico, apri il monitor.</p>
           <SyncServiceDetails state={states[target.service.id]} />
