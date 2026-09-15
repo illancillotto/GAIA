@@ -216,6 +216,15 @@ describe("layout navigation helpers", () => {
       label: "Stato portale SISTER",
       match: "prefix",
     }));
+    expect(getModuleSections({ currentModuleKey: "gis", currentUserRole: "admin" }).flatMap((section) => section.items)).toContainEqual(
+      expect.objectContaining({ href: "/gis/amministrazione" }),
+    );
+    expect(getModuleSections({ currentModuleKey: "gis", currentUserRole: "super_admin" }).flatMap((section) => section.items)).toContainEqual(
+      expect.objectContaining({ href: "/gis/amministrazione" }),
+    );
+    expect(getModuleSections({ currentModuleKey: "gis", currentUserRole: "viewer" }).flatMap((section) => section.items)).not.toContainEqual(
+      expect.objectContaining({ href: "/gis/amministrazione" }),
+    );
   });
 
   test("applies conditional module permissions and badge fallbacks", () => {

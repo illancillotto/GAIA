@@ -78,6 +78,16 @@ function request(
 }
 
 describe("guided GIS workflow helpers", () => {
+  test.each(["POLYGON", "MULTIPOLYGON"])("closes %s rings differing only in Y without duplicating closed rings", (geometryType) => {
+    const selectedLayer = { ...layer, geometry_type: geometryType };
+    const expectedRing = [[1, 2], [3, 4], [1, 6], [1, 2]];
+    const coordinates = geometryType === "POLYGON" ? [expectedRing] : [[expectedRing]];
+    expect(geometryFromCoordinates("1,2\n3,4\n1,6", selectedLayer)).toEqual({
+      type: geometryType === "POLYGON" ? "Polygon" : "MultiPolygon", coordinates,
+    });
+    expect(geometryFromCoordinates("1,2\n3,4\n1,6\n1,2", selectedLayer)?.coordinates).toEqual(coordinates);
+  });
+
   test("formats supported and malformed geometries as coordinate rows", () => {
     expect(
       coordinatesTextFromGeometry({ type: "Point", coordinates: [8.4, 39.9] }),

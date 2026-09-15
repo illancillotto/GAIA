@@ -175,6 +175,10 @@ function item(
   return { href, icon, label, ...options };
 }
 
+function isAdministrativeRole(role: string | undefined): boolean {
+  return role === "admin" || role === "super_admin";
+}
+
 const sisterNavigationItems: NavigationItem[] = [
   item("/elaborazioni/visure", EyeIcon, "Visure Sister", { match: "prefix" }),
   item("/elaborazioni/portal-health", ServerIcon, "Stato portale SISTER", { match: "prefix" }),
@@ -260,10 +264,10 @@ export function getModuleSections({
   currentUserRole,
 }: ModuleNavigationOptions): NavigationSection[] {
   const canAccessUsersSection = grantedSectionKeys.includes("accessi.users");
-  const canAccessUtenzeAnprConfig = currentUserRole === "admin" || currentUserRole === "super_admin";
-  const canManageCatastoAdmin = currentUserRole === "admin" || currentUserRole === "super_admin";
-  const canManageGisAdmin = currentUserRole === "admin" || currentUserRole === "super_admin";
-  const canManageUtenzeAdmin = currentUserRole === "admin" || currentUserRole === "super_admin";
+  const canAccessUtenzeAnprConfig = isAdministrativeRole(currentUserRole);
+  const canManageCatastoAdmin = isAdministrativeRole(currentUserRole);
+  const canManageGisAdmin = isAdministrativeRole(currentUserRole);
+  const canManageUtenzeAdmin = isAdministrativeRole(currentUserRole);
   const canReadOrganigramma = grantedSectionKeys.includes("organigramma.read");
   const canManageOrganigramma = grantedSectionKeys.includes("organigramma.manage");
 

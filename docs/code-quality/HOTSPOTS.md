@@ -14,8 +14,12 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Audit baseline globale e ordine delle tranche:
+[BASELINE_RECOVERY.md](BASELINE_RECOVERY.md), 2026-09-15.
+
 | Stato | Percorso | Segnale iniziale | Nota |
 | --- | --- | --- | --- |
+| reduced | `frontend/src/app/gis/catalogo/guided-workflow.ts` | `geometryFromCoordinates` cyc `15 -> 10`, cog `23 -> 20`, LOC `31 -> 28` | `IMPROVED`; conversione Multi unificata, zero error nel file, 19 test e coverage full-file 100%; baseline globale ancora da recuperare |
 | reorganized | `backend/app/modules/presenze/router.py` | facade package; cognitive legacy sum/max `1.353/111`, cyclomatic legacy sum/max `1.139/64` | `REORGANIZED_AND_CHARACTERIZED`; 86 route e OpenAPI invariati, coverage 100%, file max LOC `718`; tre mismatch di identita contro baseline storica da risolvere separatamente |
 | reorganized | `backend/app/modules/me/router.py` | facade package; cognitive legacy sum/max `123/38`, cyclomatic legacy sum/max `130/24` | `REORGANIZED_AND_CHARACTERIZED`; 17 route e OpenAPI invariati, coverage 100%, tutti i 29 fingerprint legacy e le metriche callable preservati, file max LOC `336` |
 | reorganized | `backend/app/modules/gis/router.py` | facade package; cognitive legacy sum/max `6/2`, cyclomatic legacy sum/max `52/3` | `REORGANIZED_AND_CHARACTERIZED`; 51 operazioni e OpenAPI invariati, coverage 100%, tutti i 46 fingerprint legacy preservati, file max LOC `122` |

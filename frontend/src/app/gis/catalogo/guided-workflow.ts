@@ -103,28 +103,25 @@ export function geometryFromCoordinates(
   const pairs = coordinatePairs(value);
   if (!pairs?.length) return null;
   const type = baseGeometryType(layer, selectedFeature);
+  let geometry: { type: string; coordinates: number[] | number[][] | number[][][] };
   if (type.includes("POINT")) {
     if (pairs.length !== 1) return null;
-    return {
-      type: type.startsWith("MULTI") ? "MultiPoint" : "Point",
-      coordinates: type.startsWith("MULTI") ? pairs : pairs[0],
-    };
-  }
-  if (type.includes("POLYGON")) {
+    geometry = { type: "Point", coordinates: pairs[0] };
+  } else if (type.includes("POLYGON")) {
     if (pairs.length < 3) return null;
     const ring = [...pairs];
-    if (ring[0][0] !== ring.at(-1)?.[0] || ring[0][1] !== ring.at(-1)?.[1])
+    const last = ring[ring.length - 1];
+    if (ring[0][0] !== last[0] || ring[0][1] !== last[1])
       ring.push([...ring[0]]);
-    return {
-      type: type.startsWith("MULTI") ? "MultiPolygon" : "Polygon",
-      coordinates: type.startsWith("MULTI") ? [[ring]] : [ring],
-    };
+    geometry = { type: "Polygon", coordinates: [ring] };
+  } else {
+    if (pairs.length < 2) return null;
+    geometry = { type: "LineString", coordinates: pairs };
   }
-  if (pairs.length < 2) return null;
-  return {
-    type: type.startsWith("MULTI") ? "MultiLineString" : "LineString",
-    coordinates: type.startsWith("MULTI") ? [pairs] : pairs,
-  };
+  if (type.startsWith("MULTI")) {
+    return { type: `Multi${geometry.type}`, coordinates: [geometry.coordinates] };
+  }
+  return geometry;
 }
 
 export function parseGuidedValue(

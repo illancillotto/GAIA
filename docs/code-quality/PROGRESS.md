@@ -5,6 +5,39 @@ blocco verificato e prima di chiudere un goal.
 
 ## Stato generale
 
+### Baseline globale - audit e prima slice (2026-09-15)
+
+- Richiesta: affrontare il debito che impedisce la sincronizzazione globale.
+- Base `main@3596c36d`; preservata la change dashboard Elaborazioni gia
+  rilasciata e ancora non committata.
+- Audit read-only: il CLI limita i finding stampati ai primi 100; inventario
+  integrale acquisito tramite le stesse funzioni `scan`/`compare` del tool.
+- Prima slice: `geometryFromCoordinates` in
+  `frontend/src/app/gis/catalogo/guided-workflow.ts`, cyc/cog `15/23`, LOC `31`.
+  Una violation nuova cyclomatic raggiunge la soglia error `15`.
+- Invarianti: parsing coordinate, tipi GeoJSON, chiusura degli anelli,
+  rifiuto input invalidi e precedenza geometria selezionata/layer invariati.
+  Il ramo polygon entra soltanto con almeno tre coppie numeriche valide.
+- Prima: 7 test helper, coverage full-file 100% su statement `90/90`,
+  branch `124/124`, funzioni `18/18`, righe `78/78`.
+- Nessuna modifica a soglie, esclusioni, matching o baseline autorizzativa.
+- Inventario completo: 200 rilievi su 38 file, baseline sorgente `b1d4a988`.
+  Analisi e tranche in `BASELINE_RECOVERY.md`. I primi 100 del CLI nascondevano
+  parte dei client API, dei worker e delle regressioni file-level.
+- Esito slice `IMPROVED`: conversione Multi unificata nel medesimo callable;
+  cyc/cog `15/23 -> 10/20`, LOC `31 -> 28`; file LOC `236 -> 233`, sum cyc
+  `85 -> 80`, sum cog `93 -> 90`. Nessun trasferimento del debito.
+- 19 test helper/componenti passati, full-file 100%: statement `94/94`,
+  branch `114/114`, funzioni `18/18`, righe `82/82`. Aggiunta caratterizzazione
+  Polygon/MultiPolygon con ultimo punto che differisce soltanto nella Y.
+- TypeScript, ESLint mirato e `git diff --check` passano. Ratchet autorevole
+  contro `3596c36d` verde (`findings: []`); baseline globale invariata.
+- Graphify frontend aggiornato. Nessun deploy della slice GIS; la dashboard
+  Elaborazioni gia pubblicata non viene modificata da questo refactoring.
+- Repeat integrale: 199 rilievi su 37 file, rispetto a 200 su 38 prima;
+  nessun altro rilievo eliminato o assorbito. Graphify platform docs completato
+  con `chunk 1/1 done`, senza failure semantiche.
+
 ### Catasto GIS - repeat dei gate (2026-09-07)
 
 - Working tree su `8ae046a3`; nessuna modifica runtime in questo repeat.
