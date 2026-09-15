@@ -4,6 +4,7 @@ export * from "./organigramma";
 export * from "./presenze-people";
 export * from "./presenze-management";
 export * from "./presenze-jobs";
+export * from "./presenze-whatsapp";
 export * from "./wiki-requests";
 export * from "./wiki-analytics";
 export * from "./wiki-conversations";

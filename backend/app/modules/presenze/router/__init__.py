@@ -25,6 +25,8 @@ from app.modules.presenze.router.routes import (
     recovery,
     sync_config,
     sync_jobs,
+    whatsapp_admin,
+    whatsapp_webhook,
 )
 
 router = APIRouter(tags=["presenze"])
@@ -40,6 +42,8 @@ for child_router in (
     sync_jobs.router,
     exports.router,
     dashboard.router,
+    whatsapp_admin.router,
+    whatsapp_webhook.router,
 ):
     router.include_router(child_router)
 

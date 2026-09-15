@@ -147,6 +147,11 @@ describe("layout navigation helpers", () => {
         }),
       ]),
     );
+    expect(items).toContainEqual(expect.objectContaining({
+      href: "/presenze/whatsapp",
+      label: "Promemoria WhatsApp",
+      match: "prefix",
+    }));
   });
 
   test("exposes the operator straordinari request link from the self-service sidebar", () => {

@@ -1,28 +1,48 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from contextlib import suppress
-from typing import Any, Callable
+from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from app.core.config import settings
 from app.modules.presenze.services.auto_sync import trigger_auto_sync_job
+from app.modules.presenze.services.punch_reminder_job import (
+    build_dispatch_options_from_settings,
+    run_punch_reminder_job,
+)
+from app.modules.presenze.services.whatsapp_waha import build_whatsapp_sender_from_settings
 
 logger = logging.getLogger(__name__)
 
 
 def _run_job_wrapper(get_db: Callable[[], Any]) -> None:
+    _run_with_db(get_db, trigger_auto_sync_job, "Presenze automatic sync scheduler job failed")
+
+
+def _run_punch_reminder_wrapper(get_db: Callable[[], Any]) -> None:
+    _run_with_db(get_db, _run_punch_reminder_job, "Presenze WhatsApp punch reminder job failed")
+
+
+def _run_punch_reminder_job(db: Any) -> None:
+    sender = build_whatsapp_sender_from_settings()
+    if sender is not None:
+        run_punch_reminder_job(db, sender, build_dispatch_options_from_settings())
+
+
+def _run_with_db(get_db: Callable[[], Any], job: Callable[[Any], Any], failure_message: str) -> None:
     db, generator = get_db(), None
     if hasattr(db, "__next__"):
         generator = db
         db = next(generator)
 
     try:
-        trigger_auto_sync_job(db)
+        job(db)
     except Exception:
-        logger.exception("Presenze automatic sync scheduler job failed")
+        logger.exception(failure_message)
     finally:
         close = getattr(db, "close", None)
         if callable(close):
@@ -48,4 +68,26 @@ async def register_inaz_scheduler(scheduler: AsyncIOScheduler, get_db: Callable[
     )
 
 
-register_presenze_scheduler = register_inaz_scheduler
+def register_punch_reminder_scheduler(scheduler: AsyncIOScheduler, get_db: Callable[[], Any]) -> None:
+    if not settings.presenze_whatsapp_provider.strip():
+        return
+    scheduler.add_job(
+        _run_punch_reminder_wrapper,
+        trigger=CronTrigger.from_crontab(settings.presenze_whatsapp_reminder_cron, timezone="Europe/Rome"),
+        id="presenze_whatsapp_punch_reminders",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=3600,
+        kwargs={"get_db": get_db},
+    )
+    logger.info(
+        "Presenze WhatsApp punch reminders registered; provider=%s cron=%s",
+        settings.presenze_whatsapp_provider,
+        settings.presenze_whatsapp_reminder_cron,
+    )
+
+
+async def register_presenze_scheduler(scheduler: AsyncIOScheduler, get_db: Callable[[], Any]) -> None:
+    await register_inaz_scheduler(scheduler, get_db)
+    register_punch_reminder_scheduler(scheduler, get_db)

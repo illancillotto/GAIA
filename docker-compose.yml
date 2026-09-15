@@ -722,9 +722,35 @@ services:
     network_mode: host
     entrypoint: ["python", "-m", "app.scripts.arp_helper"]
 
+  # Gateway WhatsApp NON ufficiale per i promemoria timbrature Presenze
+  # (domain-docs/presenze/docs/PRESENZE_PROMEMORIA_WHATSAPP_TIMBRATURE.md).
+  # Non parte con `docker compose up`: avviarlo con `docker compose --profile whatsapp up -d waha`.
+  # Porta legata a localhost del server: dashboard e QR solo via tunnel SSH.
+  waha:
+    image: ${PRESENZE_WAHA_IMAGE:-devlikeapro/waha:latest}
+    container_name: gaia-waha
+    profiles: ["whatsapp"]
+    restart: unless-stopped
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    environment:
+      WAHA_API_KEY: ${PRESENZE_WHATSAPP_WAHA_API_KEY:-}
+      WHATSAPP_DEFAULT_ENGINE: ${PRESENZE_WAHA_ENGINE:-NOWEB}
+      WAHA_DASHBOARD_USERNAME: ${PRESENZE_WAHA_DASHBOARD_USERNAME:-admin}
+      WAHA_DASHBOARD_PASSWORD: ${PRESENZE_WAHA_DASHBOARD_PASSWORD:-}
+      WHATSAPP_HOOK_URL: http://backend:8000/presenze/whatsapp/webhook
+      WHATSAPP_HOOK_EVENTS: message,message.ack,session.status
+      WHATSAPP_HOOK_HMAC_KEY: ${PRESENZE_WHATSAPP_WAHA_HMAC_KEY:-}
+    volumes:
+      - waha-sessions:/app/.sessions
+    ports:
+      - "127.0.0.1:3100:3000"
+
 volumes:
   postgres_data:
     name: ${POSTGRES_VOLUME_NAME:-gaia_postgres_data}
   catasto-data:
   anagrafica-data:
   qgis-project:
+  waha-sessions:

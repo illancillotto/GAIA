@@ -628,6 +628,22 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
 - quality ratchet contro merge-base `729870fb` passato con `findings: []`; la rigenerazione baseline globale e `baseline-verify` restano bloccati da regressioni legacy non appartenenti alla change e non sono stati forzati;
 - Graphify aggiornato per Presenze, backend, frontend, documentazione Presenze e code map GATE.
 
+### Promemoria WhatsApp timbrature incomplete - 2026-09-15
+
+- nuovo job `presenze_whatsapp_punch_reminders` nel `platform-scheduler` (registrato solo con `PRESENZE_WHATSAPP_PROVIDER` valorizzato): seleziona uscite/ingressi mancanti e doppi ingressi delle giornate chiuse, esclude validate e assenze giustificate, risolve la persona solo via `application_user_id` e il telefono da `operator_profile.phone`;
+- invio tramite gateway WAHA self-hosted (canale non ufficiale, profilo compose `whatsapp`) con pause casuali, tetto per esecuzione, fascia oraria feriale, verifica numero e stop su sessione caduta; ack e opt-out STOP via webhook firmato HMAC `/presenze/whatsapp/webhook`;
+- nuove tabelle `presenze_whatsapp_messages`, `presenze_whatsapp_notified_days`, `presenze_whatsapp_opt_outs` (migration `20260915_1200` verificata su PostgreSQL 16 usa e getta: upgrade, vincolo di unicita e downgrade); le giornate si registrano come notificate solo con esito definitivo, il resto viene ricalcolato sui dati live;
+- coverage `100%` statement/branch sui file nuovi e modificati; style ratchet e complexity ratchet contro `HEAD` senza findings; suite `test_presenze_*`, `test_gate_mobile*` e platform scheduler verdi;
+- documentazione: `PRESENZE_PROMEMORIA_WHATSAPP_TIMBRATURE.md`; resta da completare l'attivazione (numero dedicato, QR, periodo `dry_run`).
+- dashboard amministrativa `/presenze/whatsapp` con stato provider/sessione,
+  prossima esecuzione, anteprima read-only, storico paginato per utente con
+  consegna/lettura/errori, gestione STOP, correzione di
+  `operator_profile.phone` e riconciliazione documentata degli esiti incerti;
+- pagina e nuove API riservate ad `admin` e `super_admin`, senza comando di
+  invio immediato; provider ancora spento;
+- test dedicati backend e frontend al 100% statement e branch sui nuovi
+  runtime e sulla navigazione toccata.
+
 ## Gap aperti
 
 ### Soglia MPE a cinque ore con avviso non bloccante - 2026-09-09

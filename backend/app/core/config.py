@@ -4,13 +4,13 @@ from pathlib import Path
 from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import SettingsConfigDict
 
-from app.core.capacitas_autosync_settings import CapacitasAutoSyncSettings
+from app.core.presenze_whatsapp_settings import PresenzeWhatsAppSettings
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ROOT_ENV_FILE = REPO_ROOT / ".env"
 
 
-class Settings(CapacitasAutoSyncSettings):
+class Settings(PresenzeWhatsAppSettings):
     project_name: str = "GAIA"
     app_version: str = "0.1.0"
     app_env: str = "development"

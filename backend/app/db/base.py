@@ -1,5 +1,3 @@
-# ruff: noqa: F401, I001, RUF022
-
 from app.core.database import Base
 from app.models.application_user import ApplicationUser
 from app.models.application_user_password_reset import ApplicationUserPasswordResetToken
@@ -71,6 +69,11 @@ from app.modules.presenze.models import (
     PresenzeImportJob,
     PresenzeSupervisorAssignment,
     PresenzeSyncJob,
+)
+from app.modules.presenze.whatsapp_models import (
+    PresenzeWhatsAppMessage,
+    PresenzeWhatsAppNotifiedDay,
+    PresenzeWhatsAppOptOut,
 )
 from app.modules.operazioni.models.wc_area import WCArea
 from app.modules.operazioni.models.wc_operator import WCOperator

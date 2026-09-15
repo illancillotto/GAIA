@@ -22,6 +22,8 @@ import {
 import { hasUserModuleAccess } from "@/lib/module-access";
 import type { CurrentUser } from "@/types/api";
 
+import { presenzeNavigationSections } from "./presenze-navigation";
+
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
 export type CurrentModuleKey =
@@ -491,30 +493,7 @@ export function getModuleSections({
         },
       ];
     case "presenze":
-      return [
-        {
-          label: "Panoramica",
-          items: [item("/presenze", GridIcon, "Dashboard")],
-        },
-        {
-          label: "Gestione",
-          items: [
-            item("/presenze/giornaliere", CalendarIcon, "Giornaliere", { match: "prefix" }),
-            item("/presenze/squadre", UsersIcon, "Squadre", { match: "prefix" }),
-            item("/presenze/collaboratori", UsersIcon, "Collaboratori", { match: "prefix" }),
-            item("/presenze/organigramma", UsersIcon, "Organigramma", { match: "prefix" }),
-            item("/presenze/assegnazione-territoriale", FolderIcon, "Assegnazione territoriale", { match: "prefix" }),
-            item("/presenze/anomalie", AlertTriangleIcon, "Anomalie", { match: "prefix" }),
-            item("/presenze/regole", DocumentIcon, "Regole", { match: "prefix" }),
-            item("/presenze/export", DocumentIcon, "Export", { match: "prefix" }),
-            item("/presenze/festivita", CalendarIcon, "Festivita", { match: "prefix" }),
-            item("/presenze/recuperi", CheckIcon, "Recuperi", { match: "prefix" }),
-            item("/presenze/banca-ore", DocumentIcon, "Banca ore", { match: "prefix" }),
-            item("/presenze/configurazione", LockIcon, "Configurazione", { match: "prefix" }),
-            item("/presenze/settings", DocumentIcon, "Settings", { match: "prefix" }),
-          ],
-        },
-      ];
+      return presenzeNavigationSections;
     case "organigramma":
       return [
         {
