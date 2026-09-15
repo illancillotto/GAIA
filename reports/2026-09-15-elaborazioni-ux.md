@@ -51,6 +51,8 @@ Log e coverage finali: `/tmp/gaia-ux-final-*`. Screenshot desktop/mobile:
 `/tmp/gaia-dashboard-1440.png`, `/tmp/gaia-dashboard-390.png` e
 `/tmp/gaia-dashboard-details-390.png`.
 
-Limiti: verifiche su server Next locale; non effettuati build di produzione
-o smoke sulle API reali CED. Il server dev segnala permessi della cache webpack
-preesistente; compilazione e test browser sono comunque riusciti.
+Rilascio completato: build Docker produzione e smoke API reali CED passati.
+Test browser ripetuti su immagine candidata e su `gaia.lan`, tutti passati.
+Dettagli in `2026-09-15-elaborazioni-ux-deploy.md`.
+Il server dev segnala permessi della cache webpack preesistente;
+compilazione e test browser sono comunque riusciti.
