@@ -5,13 +5,13 @@ import { formatWhatsAppDateTime, WHATSAPP_STATUS_OPTIONS, whatsappSessionLabel, 
 
 function channelMetrics(summary: PresenzeWhatsAppDashboardSummary | null) {
   if (!summary) {
-    return { channel: "Stato non disponibile", detail: "Configura PRESENZE_WHATSAPP_PROVIDER", healthy: false, nextRun: "Non pianificata", cron: "Caricamento", delivered: 0, readAndSent: "0 letti · 0 inviati", attention: 0, attentionDetail: "0 incerti · 0 STOP" };
+    return { channel: "Stato non disponibile", detail: "Caricamento del canale", healthy: false, nextRun: "Non pianificata", cron: "Caricamento", delivered: 0, readAndSent: "0 letti · 0 inviati", attention: 0, attentionDetail: "0 incerti · 0 STOP" };
   }
   const healthy = summary.session_status === "working" || summary.session_status === "dry_run";
   const providerDetail = summary.session_detail ? ` · ${summary.session_detail}` : "";
   return {
     channel: whatsappSessionLabel(summary.session_status),
-    detail: summary.provider_enabled ? `${summary.provider} · ${summary.send_window}${providerDetail}` : "Configura PRESENZE_WHATSAPP_PROVIDER",
+    detail: summary.provider_enabled ? `${summary.provider} · ${summary.send_window}${providerDetail}` : "Canale non attivo",
     healthy,
     nextRun: summary.next_run_at ? formatWhatsAppDateTime(summary.next_run_at) : "Non pianificata",
     cron: `Cron ${summary.cron}`,

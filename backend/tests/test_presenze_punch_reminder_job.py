@@ -327,9 +327,12 @@ def test_webhook_route_verifies_signature_and_applies_events(
     db: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     client = _client()
-    monkeypatch.setattr(settings, "presenze_whatsapp_waha_hmac_key", "")
+    config_path = "app.modules.presenze.router.routes.whatsapp_webhook.load_whatsapp_config"
+    monkeypatch.setattr(config_path, lambda db: type("Config", (), {"waha_hmac_key": ""})())
     assert client.post("/presenze/whatsapp/webhook", content=b"{}").status_code == 503
-    monkeypatch.setattr(settings, "presenze_whatsapp_waha_hmac_key", "secret")
+    monkeypatch.setattr(
+        config_path, lambda db: type("Config", (), {"waha_hmac_key": "secret"})()
+    )
     assert (
         client.post(
             "/presenze/whatsapp/webhook", content=b"{}", headers={"x-webhook-hmac": "bad"}

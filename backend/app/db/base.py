@@ -71,6 +71,7 @@ from app.modules.presenze.models import (
     PresenzeSyncJob,
 )
 from app.modules.presenze.whatsapp_models import (
+    PresenzeWhatsAppConfig,
     PresenzeWhatsAppMessage,
     PresenzeWhatsAppNotifiedDay,
     PresenzeWhatsAppOptOut,

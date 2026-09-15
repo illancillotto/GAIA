@@ -1,18 +1,21 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import PresenzeWhatsAppPage from "@/app/presenze/whatsapp/page";
+import { WhatsAppConfiguration } from "@/app/presenze/whatsapp/whatsapp-configuration";
 import { WhatsAppMessageDialog, WhatsAppPreviewDialog } from "@/app/presenze/whatsapp/whatsapp-dialogs";
 import { formatWhatsAppDateTime, whatsappSessionLabel, whatsappSkipLabel, whatsappStatusLabel, whatsappStatusTone } from "@/app/presenze/whatsapp/whatsapp-ui";
-import type { PresenzeWhatsAppMessage, PresenzeWhatsAppPreview } from "@/types/api";
+import type { PresenzeWhatsAppConfig, PresenzeWhatsAppMessage, PresenzeWhatsAppPreview } from "@/types/api";
 
 const mocks = vi.hoisted(() => ({
-  token: vi.fn(), dashboard: vi.fn(), messages: vi.fn(), preview: vi.fn(), optOuts: vi.fn(), restore: vi.fn(), phone: vi.fn(), reconcile: vi.fn(),
+  token: vi.fn(), role: vi.fn(), dashboard: vi.fn(), configuration: vi.fn(), saveConfiguration: vi.fn(), messages: vi.fn(), preview: vi.fn(), optOuts: vi.fn(), restore: vi.fn(), phone: vi.fn(), reconcile: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({ getStoredAccessToken: mocks.token }));
 vi.mock("@/lib/api", () => ({
   getPresenzeWhatsAppDashboard: mocks.dashboard,
+  getPresenzeWhatsAppConfiguration: mocks.configuration,
+  updatePresenzeWhatsAppConfiguration: mocks.saveConfiguration,
   listPresenzeWhatsAppMessages: mocks.messages,
   getPresenzeWhatsAppPreview: mocks.preview,
   listPresenzeWhatsAppOptOuts: mocks.optOuts,
@@ -20,6 +23,7 @@ vi.mock("@/lib/api", () => ({
   updatePresenzeWhatsAppPhone: mocks.phone,
   reconcilePresenzeWhatsAppMessage: mocks.reconcile,
 }));
+vi.mock("@/lib/use-session-bootstrap", () => ({ useSessionBootstrap: () => ({ currentUser: { role: mocks.role() } }) }));
 vi.mock("@/components/app/protected-page", () => ({ ProtectedPage: ({ children, title }: { children: React.ReactNode; title: string }) => <main><h1>{title}</h1>{children}</main> }));
 
 const message: PresenzeWhatsAppMessage = {
@@ -37,6 +41,14 @@ const preview: PresenzeWhatsAppPreview = {
     { collaborator_id: "c2", collaborator_name: "BIANCHI ANNA", application_user_id: 8, phone_e164: null, days: message.days, message_text: null, ready: false, reason: "phone_missing" },
     { collaborator_id: "c3", collaborator_name: "NERI LUCA", application_user_id: null, phone_e164: null, days: message.days, message_text: null, ready: false, reason: "operator_not_linked" },
   ],
+};
+
+const configuration: PresenzeWhatsAppConfig = {
+  provider: "", waha_url: "http://waha:3000", waha_session: "default",
+  api_key_configured: true, hmac_key_configured: true,
+  reminder_cron: "30 9 * * 1-5", lookback_days: 3, include_missing_punches: false,
+  max_per_run: 40, min_delay_seconds: 25, max_delay_seconds: 75,
+  send_start_hour: 8, send_end_hour: 19, updated_at: null, updated_by_user_id: null,
 };
 
 describe("Presenze WhatsApp UI helpers", () => {
@@ -97,10 +109,58 @@ describe("Presenze WhatsApp dialogs", () => {
   });
 });
 
+describe("Presenze WhatsApp configuration", () => {
+  test("edits every runtime option, clears secrets and closes the modal", async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const { rerender } = render(<WhatsAppConfiguration configuration={null} busy={false} onSave={save} />);
+    expect(screen.queryByRole("button", { name: "Configura WhatsApp" })).not.toBeInTheDocument();
+
+    rerender(<WhatsAppConfiguration configuration={configuration} busy={false} onSave={save} />);
+    fireEvent.click(screen.getByRole("button", { name: "Configura WhatsApp" }));
+    fireEvent.change(screen.getByLabelText("Stato del canale"), { target: { value: "waha" } });
+    fireEvent.change(screen.getByLabelText("URL WAHA"), { target: { value: "https://waha.example" } });
+    fireEvent.change(screen.getByLabelText("Sessione"), { target: { value: "gaia" } });
+    fireEvent.change(screen.getByLabelText("Cron (Europe/Rome)"), { target: { value: "0 10 * * 1-5" } });
+    for (const [label, value] of [
+      ["Giorni da controllare", "5"], ["Massimo per esecuzione", "20"],
+      ["Pausa minima (secondi)", "10"], ["Pausa massima (secondi)", "30"],
+      ["Invii dalle ore", "9"], ["Invii fino alle ore", "18"],
+    ]) fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    fireEvent.click(screen.getByLabelText("Includi giornate senza timbrature"));
+    fireEvent.click(screen.getAllByLabelText("Rimuovi il segreto salvato")[0]);
+    fireEvent.click(screen.getAllByLabelText("Rimuovi il segreto salvato")[1]);
+    fireEvent.click(screen.getByRole("button", { name: "Salva configurazione" }));
+    await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({
+      provider: "waha", waha_url: "https://waha.example", waha_session: "gaia",
+      reminder_cron: "0 10 * * 1-5", lookback_days: 5, max_per_run: 20,
+      min_delay_seconds: 10, max_delay_seconds: 30, send_start_hour: 9,
+      send_end_hour: 18, include_missing_punches: true,
+      clear_api_key: true, clear_hmac_key: true,
+    })));
+    expect(screen.queryByRole("dialog", { name: "Canale WhatsApp" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Configura WhatsApp" }));
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
+    expect(screen.queryByRole("dialog", { name: "Canale WhatsApp" })).not.toBeInTheDocument();
+  });
+
+  test("keeps the modal open when saving fails", async () => {
+    const save = vi.fn().mockRejectedValue(new Error("salvataggio fallito"));
+    const { rerender } = render(<WhatsAppConfiguration configuration={configuration} busy={true} onSave={save} />);
+    fireEvent.click(screen.getByRole("button", { name: "Configura WhatsApp" }));
+    expect(screen.getByRole("button", { name: "Salvataggio..." })).toBeDisabled();
+    rerender(<WhatsAppConfiguration configuration={configuration} busy={false} onSave={save} />);
+    fireEvent.click(screen.getByRole("button", { name: "Salva configurazione" }));
+    await waitFor(() => expect(save).toHaveBeenCalled());
+    expect(screen.getByRole("dialog", { name: "Canale WhatsApp" })).toBeInTheDocument();
+  });
+});
+
 describe("Presenze WhatsApp page", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.token.mockReturnValue("token");
+    mocks.role.mockReturnValue("admin");
     mocks.dashboard.mockResolvedValue({ provider_enabled: false, provider: null, session_status: "disabled", session_detail: null, cron: "30 9 * * 1-5", next_run_at: null, send_window: "08:00-19:00", max_per_run: 40, sent_total: 3, delivered_total: 2, read_total: 1, failed_total: 1, uncertain_total: 1, opted_out_total: 1 });
     mocks.messages.mockResolvedValue({ items: [message], total: 26, page: 1, page_size: 25 });
     mocks.optOuts.mockResolvedValue([]);
@@ -108,6 +168,8 @@ describe("Presenze WhatsApp page", () => {
     mocks.restore.mockResolvedValue(undefined);
     mocks.phone.mockResolvedValue({ application_user_id: 8, phone: "+39333" });
     mocks.reconcile.mockResolvedValue(undefined);
+    mocks.configuration.mockResolvedValue({ provider: "", waha_url: "http://waha:3000", waha_session: "default", api_key_configured: false, hmac_key_configured: false, reminder_cron: "30 9 * * 1-5", lookback_days: 3, include_missing_punches: false, max_per_run: 40, min_delay_seconds: 25, max_delay_seconds: 75, send_start_hour: 8, send_end_hour: 19, updated_at: null, updated_by_user_id: null });
+    mocks.saveConfiguration.mockImplementation(async (_token, payload) => ({ ...await mocks.configuration(), ...payload, api_key_configured: Boolean(payload.waha_api_key), hmac_key_configured: Boolean(payload.waha_hmac_key) }));
   });
 
   test("loads, filters, pages and opens both large modals", async () => {
@@ -124,6 +186,51 @@ describe("Presenze WhatsApp page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
     fireEvent.click(screen.getByRole("button", { name: "Apri anteprima" }));
     expect(await screen.findByRole("dialog", { name: "Prossimi promemoria" })).toBeInTheDocument();
+  });
+
+  test("shows and saves configuration only for super admins", async () => {
+    const { rerender } = render(<PresenzeWhatsAppPage />);
+    await screen.findByText("Mario Rossi");
+    expect(screen.queryByRole("button", { name: "Configura WhatsApp" })).not.toBeInTheDocument();
+    expect(mocks.configuration).not.toHaveBeenCalled();
+    mocks.role.mockReturnValue("super_admin");
+    rerender(<PresenzeWhatsAppPage />);
+    const open = await screen.findByRole("button", { name: "Configura WhatsApp" });
+    fireEvent.click(open);
+    expect(screen.getByRole("dialog", { name: "Canale WhatsApp" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Stato del canale"), { target: { value: "dry_run" } });
+    fireEvent.change(screen.getByLabelText("API key WAHA"), { target: { value: "api-secret" } });
+    fireEvent.change(screen.getByLabelText("Firma webhook HMAC"), { target: { value: "hmac-secret" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salva configurazione" }));
+    await waitFor(() => expect(mocks.saveConfiguration).toHaveBeenCalledWith("token", expect.objectContaining({ provider: "dry_run", waha_api_key: "api-secret", waha_hmac_key: "hmac-secret" })));
+    expect(screen.queryByRole("dialog", { name: "Canale WhatsApp" })).not.toBeInTheDocument();
+  });
+
+  test("shows configuration save errors and keeps the editor open", async () => {
+    mocks.role.mockReturnValue("super_admin");
+    mocks.saveConfiguration.mockRejectedValueOnce(new Error("WAHA non raggiungibile"));
+    const { unmount } = render(<PresenzeWhatsAppPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Configura WhatsApp" }));
+    fireEvent.click(screen.getByRole("button", { name: "Salva configurazione" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("WAHA non raggiungibile");
+    expect(screen.getByRole("dialog", { name: "Canale WhatsApp" })).toBeInTheDocument();
+    unmount();
+
+    mocks.saveConfiguration.mockRejectedValueOnce("errore generico");
+    render(<PresenzeWhatsAppPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Configura WhatsApp" }));
+    fireEvent.click(screen.getByRole("button", { name: "Salva configurazione" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Impossibile salvare la configurazione WhatsApp");
+  });
+
+  test("does not save configuration after the access token disappears", async () => {
+    mocks.role.mockReturnValue("super_admin");
+    render(<PresenzeWhatsAppPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Configura WhatsApp" }));
+    mocks.token.mockReturnValue(null);
+    fireEvent.click(screen.getByRole("button", { name: "Salva configurazione" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Canale WhatsApp" })).not.toBeInTheDocument());
+    expect(mocks.saveConfiguration).not.toHaveBeenCalled();
   });
 
   test("runs phone, STOP and reconciliation actions", async () => {

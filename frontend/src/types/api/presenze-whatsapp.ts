@@ -75,3 +75,31 @@ export type PresenzeWhatsAppOptOut = {
   source: string;
   created_at: string;
 };
+
+export type PresenzeWhatsAppConfig = {
+  provider: "" | "dry_run" | "waha";
+  waha_url: string;
+  waha_session: string;
+  api_key_configured: boolean;
+  hmac_key_configured: boolean;
+  reminder_cron: string;
+  lookback_days: number;
+  include_missing_punches: boolean;
+  max_per_run: number;
+  min_delay_seconds: number;
+  max_delay_seconds: number;
+  send_start_hour: number;
+  send_end_hour: number;
+  updated_at: string | null;
+  updated_by_user_id: number | null;
+};
+
+export type PresenzeWhatsAppConfigUpdate = Omit<
+  PresenzeWhatsAppConfig,
+  "api_key_configured" | "hmac_key_configured" | "updated_at" | "updated_by_user_id"
+> & {
+  waha_api_key?: string | null;
+  waha_hmac_key?: string | null;
+  clear_api_key?: boolean;
+  clear_hmac_key?: boolean;
+};

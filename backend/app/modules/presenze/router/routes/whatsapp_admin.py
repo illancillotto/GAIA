@@ -8,7 +8,11 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
-from app.modules.presenze.router.common import RequirePresenzeAdmin, RequirePresenzeModule
+from app.modules.presenze.router.common import (
+    RequirePresenzeAdmin,
+    RequirePresenzeModule,
+    RequirePresenzeSuperAdmin,
+)
 from app.modules.presenze.services.punch_reminder_job import reconcile_uncertain_attempt
 from app.modules.presenze.services.whatsapp_admin import (
     build_preview,
@@ -18,7 +22,14 @@ from app.modules.presenze.services.whatsapp_admin import (
     remove_opt_out,
     update_phone,
 )
+from app.modules.presenze.services.whatsapp_config import (
+    load_whatsapp_config,
+    serialize_whatsapp_config,
+    update_whatsapp_config,
+)
 from app.modules.presenze.whatsapp_admin_schemas import (
+    WhatsAppConfigResponse,
+    WhatsAppConfigUpdate,
     WhatsAppDashboardSummaryResponse,
     WhatsAppMessageListResponse,
     WhatsAppMessageQuery,
@@ -30,6 +41,25 @@ from app.modules.presenze.whatsapp_admin_schemas import (
 )
 
 router = APIRouter(prefix="/presenze/whatsapp")
+
+
+@router.get("/configuration", response_model=WhatsAppConfigResponse)
+def get_whatsapp_configuration(
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[ApplicationUser, RequirePresenzeSuperAdmin],
+    __: Annotated[ApplicationUser, RequirePresenzeModule],
+) -> dict[str, object]:
+    return serialize_whatsapp_config(load_whatsapp_config(db))
+
+
+@router.put("/configuration", response_model=WhatsAppConfigResponse)
+def put_whatsapp_configuration(
+    payload: WhatsAppConfigUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, RequirePresenzeSuperAdmin],
+    _: Annotated[ApplicationUser, RequirePresenzeModule],
+) -> dict[str, object]:
+    return serialize_whatsapp_config(update_whatsapp_config(db, payload, user_id=current_user.id))
 
 
 @router.get("/dashboard", response_model=WhatsAppDashboardSummaryResponse)

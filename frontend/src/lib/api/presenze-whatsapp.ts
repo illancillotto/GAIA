@@ -1,5 +1,7 @@
 import type {
   PresenzeWhatsAppDashboardSummary,
+  PresenzeWhatsAppConfig,
+  PresenzeWhatsAppConfigUpdate,
   PresenzeWhatsAppMessageList,
   PresenzeWhatsAppOptOut,
   PresenzeWhatsAppPreview,
@@ -12,6 +14,21 @@ const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 
 export function getPresenzeWhatsAppDashboard(token: string): Promise<PresenzeWhatsAppDashboardSummary> {
   return request(`${BASE}/dashboard`, { headers: auth(token) });
+}
+
+export function getPresenzeWhatsAppConfiguration(token: string): Promise<PresenzeWhatsAppConfig> {
+  return request(`${BASE}/configuration`, { headers: auth(token) });
+}
+
+export function updatePresenzeWhatsAppConfiguration(
+  token: string,
+  payload: PresenzeWhatsAppConfigUpdate,
+): Promise<PresenzeWhatsAppConfig> {
+  return request(`${BASE}/configuration`, {
+    method: "PUT",
+    headers: auth(token),
+    body: JSON.stringify(payload),
+  });
 }
 export function listPresenzeWhatsAppMessages(
   token: string,

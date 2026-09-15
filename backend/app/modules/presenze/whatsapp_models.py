@@ -5,6 +5,8 @@ from datetime import date, datetime
 
 from sqlalchemy import (
     JSON,
+    Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
@@ -115,3 +117,27 @@ class PresenzeWhatsAppReceipt(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     rank: Mapped[int] = mapped_column(Integer, nullable=False)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class PresenzeWhatsAppConfig(Base):
+    __tablename__ = "presenze_whatsapp_config"
+    __table_args__ = (CheckConstraint("id = 1", name="ck_presenze_whatsapp_config_singleton"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    provider: Mapped[str] = mapped_column(String(16), nullable=False, default="")
+    waha_url: Mapped[str] = mapped_column(String(500), nullable=False, default="http://waha:3000")
+    waha_session: Mapped[str] = mapped_column(String(100), nullable=False, default="default")
+    waha_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    waha_hmac_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reminder_cron: Mapped[str] = mapped_column(String(100), nullable=False, default="30 9 * * 1-5")
+    lookback_days: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    include_missing_punches: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    max_per_run: Mapped[int] = mapped_column(Integer, nullable=False, default=40)
+    min_delay_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=25)
+    max_delay_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=75)
+    send_start_hour: Mapped[int] = mapped_column(Integer, nullable=False, default=8)
+    send_end_hour: Mapped[int] = mapped_column(Integer, nullable=False, default=19)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True
+    )

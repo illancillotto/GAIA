@@ -2,12 +2,14 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
   getPresenzeWhatsAppDashboard,
+  getPresenzeWhatsAppConfiguration,
   getPresenzeWhatsAppPreview,
   listPresenzeWhatsAppMessages,
   listPresenzeWhatsAppOptOuts,
   reconcilePresenzeWhatsAppMessage,
   restorePresenzeWhatsAppUser,
   updatePresenzeWhatsAppPhone,
+  updatePresenzeWhatsAppConfiguration,
 } from "@/lib/api";
 
 function response(payload: unknown = null, status = 200): Response {
@@ -31,6 +33,22 @@ describe("Presenze WhatsApp API", () => {
       "/api/presenze/whatsapp/preview",
       "/api/presenze/whatsapp/opt-outs",
     ]);
+  });
+
+  test("reads and updates super-admin configuration", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ provider: "" }))
+      .mockResolvedValueOnce(response({ provider: "dry_run" }));
+    vi.stubGlobal("fetch", fetchMock);
+    await getPresenzeWhatsAppConfiguration("token");
+    await updatePresenzeWhatsAppConfiguration("token", {
+      provider: "dry_run", waha_url: "http://waha:3000", waha_session: "default",
+      reminder_cron: "30 9 * * 1-5", lookback_days: 3, include_missing_punches: false,
+      max_per_run: 40, min_delay_seconds: 25, max_delay_seconds: 75,
+      send_start_hour: 8, send_end_hour: 19,
+    });
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/presenze/whatsapp/configuration");
+    expect(fetchMock.mock.calls[1][1]).toEqual(expect.objectContaining({ method: "PUT" }));
   });
 
   test("builds optional history filters and supports an empty query", async () => {

@@ -630,7 +630,7 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
 
 ### Promemoria WhatsApp timbrature incomplete - 2026-09-15
 
-- nuovo job `presenze_whatsapp_punch_reminders` nel `platform-scheduler` (registrato solo con `PRESENZE_WHATSAPP_PROVIDER` valorizzato): seleziona uscite/ingressi mancanti e doppi ingressi delle giornate chiuse, esclude validate e assenze giustificate, risolve la persona solo via `application_user_id` e il telefono da `operator_profile.phone`;
+- nuovo job `presenze_whatsapp_punch_reminders` nel `platform-scheduler`: il watcher e registrato ogni minuto e applica provider e cron letti dalla configurazione PostgreSQL; seleziona uscite/ingressi mancanti e doppi ingressi delle giornate chiuse, esclude validate e assenze giustificate, risolve la persona solo via `application_user_id` e il telefono da `operator_profile.phone`;
 - invio tramite gateway WAHA self-hosted (canale non ufficiale, profilo compose `whatsapp`) con pause casuali, tetto per esecuzione, fascia oraria feriale, verifica numero e stop su sessione caduta; ack e opt-out STOP via webhook firmato HMAC `/presenze/whatsapp/webhook`;
 - nuove tabelle `presenze_whatsapp_messages`, `presenze_whatsapp_notified_days`, `presenze_whatsapp_opt_outs` (migration `20260915_1200` verificata su PostgreSQL 16 usa e getta: upgrade, vincolo di unicita e downgrade); le giornate si registrano come notificate solo con esito definitivo, il resto viene ricalcolato sui dati live;
 - coverage `100%` statement/branch sui file nuovi e modificati; style ratchet e complexity ratchet contro `HEAD` senza findings; suite `test_presenze_*`, `test_gate_mobile*` e platform scheduler verdi;
@@ -643,6 +643,12 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
   invio immediato; provider ancora spento;
 - test dedicati backend e frontend al 100% statement e branch sui nuovi
   runtime e sulla navigazione toccata.
+- configurazione runtime persistita dalla modal `/presenze/whatsapp` e
+  accessibile esclusivamente ai `super_admin`; API key e HMAC cifrate con
+  `CREDENTIAL_MASTER_KEY`, mai restituite in chiaro. Migration
+  `20260915_1400`; provider, cron e limiti diventano effettivi entro un minuto
+  senza restart. Bootstrap del container e QR restano fuori dalla web app per
+  non esporre accessi infrastrutturali.
 
 ## Gap aperti
 

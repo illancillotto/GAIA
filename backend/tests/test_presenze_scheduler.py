@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -154,21 +155,24 @@ def test_trigger_auto_sync_job_creates_pending_job(monkeypatch: pytest.MonkeyPat
         db.close()
 
 
-def test_punch_reminder_scheduler_registers_only_when_provider_is_configured(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from app.core.config import settings
+def test_punch_reminder_scheduler_registers_dynamic_watcher() -> None:
     from app.modules.presenze.scheduler import register_punch_reminder_scheduler
 
     scheduler = AsyncIOScheduler(timezone="UTC")
-    monkeypatch.setattr(settings, "presenze_whatsapp_provider", " ")
-    register_punch_reminder_scheduler(scheduler, lambda: None)
-    assert scheduler.get_job("presenze_whatsapp_punch_reminders") is None
-    monkeypatch.setattr(settings, "presenze_whatsapp_provider", "dry_run")
     register_punch_reminder_scheduler(scheduler, lambda: None)
     job = scheduler.get_job("presenze_whatsapp_punch_reminders")
     assert job is not None
     assert job.max_instances == 1
+
+
+def test_reminder_due_matches_the_configured_rome_minute() -> None:
+    from app.modules.presenze.scheduler import _reminder_is_due
+    from app.modules.presenze.services.whatsapp_config import environment_whatsapp_config
+
+    config = environment_whatsapp_config()
+    scheduled = datetime(2026, 9, 15, 7, 30, tzinfo=UTC)
+    assert _reminder_is_due(config, scheduled) is True
+    assert _reminder_is_due(config, scheduled.replace(minute=31)) is False
 
 
 def test_punch_reminder_wrapper_runs_job_only_with_a_sender(
@@ -182,19 +186,24 @@ def test_punch_reminder_wrapper_runs_job_only_with_a_sender(
         def close(self) -> None:
             events.append("closed")
 
-    monkeypatch.setattr(presenze_scheduler, "build_whatsapp_sender_from_settings", lambda: None)
+    config = SimpleNamespace(provider="", reminder_cron="30 9 * * 1-5")
+    monkeypatch.setattr(presenze_scheduler, "load_whatsapp_config", lambda db: config)
     presenze_scheduler._run_punch_reminder_wrapper(FakeDb)
-    monkeypatch.setattr(presenze_scheduler, "build_whatsapp_sender_from_settings", lambda: "sender")
+    config.provider = "dry_run"
+    monkeypatch.setattr(presenze_scheduler, "_reminder_is_due", lambda config: True)
+    monkeypatch.setattr(presenze_scheduler, "build_whatsapp_sender", lambda config: None)
+    presenze_scheduler._run_punch_reminder_wrapper(FakeDb)
+    monkeypatch.setattr(presenze_scheduler, "build_whatsapp_sender", lambda config: "sender")
     monkeypatch.setattr(
-        presenze_scheduler, "build_dispatch_options_from_settings", lambda: "options"
+        presenze_scheduler, "build_dispatch_options_from_settings", lambda config: "options"
     )
     monkeypatch.setattr(
         presenze_scheduler,
         "run_punch_reminder_job",
-        lambda db, sender, options: events.append(f"{sender}:{options}"),
+        lambda db, sender, options, config: events.append(f"{sender}:{options}"),
     )
     presenze_scheduler._run_punch_reminder_wrapper(FakeDb)
-    assert events == ["closed", "sender:options", "closed"]
+    assert events == ["closed", "closed", "sender:options", "closed"]
 
 
 def test_run_job_wrapper_tolerates_db_without_close(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -213,10 +222,8 @@ def test_run_job_wrapper_tolerates_db_without_close(monkeypatch: pytest.MonkeyPa
 async def test_register_presenze_scheduler_adds_sync_and_reminder_jobs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.core.config import settings
     from app.modules.presenze.scheduler import register_presenze_scheduler
 
-    monkeypatch.setattr(settings, "presenze_whatsapp_provider", "waha")
     scheduler = AsyncIOScheduler(timezone="UTC")
 
     await register_presenze_scheduler(scheduler, lambda: None)

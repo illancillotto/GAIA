@@ -20,7 +20,6 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.models.application_user import ApplicationUser
 from app.modules.operazioni.models.organizational import OperatorProfile
 from app.modules.presenze.models import (
@@ -53,6 +52,11 @@ from app.modules.presenze.services.punch_reminders import (
     ReminderSkip,
     select_punch_reminders,
 )
+from app.modules.presenze.services.whatsapp_config import (
+    WhatsAppRuntimeConfig,
+    environment_whatsapp_config,
+    load_whatsapp_config,
+)
 from app.modules.presenze.services.whatsapp_phone import normalize_whatsapp_phone
 from app.modules.presenze.services.whatsapp_receipts import matching_receipts, store_receipt
 from app.modules.presenze.services.whatsapp_waha import WhatsAppAck, WhatsAppOptOut, WhatsAppSender
@@ -80,29 +84,36 @@ class PunchReminderJobReport:
 
 
 def run_punch_reminder_job(
-    db: Session, sender: WhatsAppSender, options: DispatchOptions
+    db: Session,
+    sender: WhatsAppSender,
+    options: DispatchOptions,
+    config: WhatsAppRuntimeConfig | None = None,
 ) -> PunchReminderJobReport | None:
+    runtime = config or load_whatsapp_config(db)
     with _advisory_lock(db) as acquired:
-        return _run_locked(db, sender, options) if acquired else None
+        return _run_locked(db, sender, options, runtime) if acquired else None
 
 
 def _run_locked(
-    db: Session, sender: WhatsAppSender, options: DispatchOptions
+    db: Session,
+    sender: WhatsAppSender,
+    options: DispatchOptions,
+    config: WhatsAppRuntimeConfig,
 ) -> PunchReminderJobReport:
     replay_receipts(db)
     today = options.now().astimezone(ROME).date()
-    first_day = today - timedelta(days=max(1, settings.presenze_whatsapp_lookback_days))
+    first_day = today - timedelta(days=max(1, config.lookback_days))
     items = load_reminder_inputs(db, first_day, today)
     notified = load_notified_days(db, date.min)
     reconcile_pending(
         db,
         items,
-        include_missing=settings.presenze_whatsapp_include_missing_punches,
+        include_missing=config.include_missing_punches,
         notified=notified,
     )
     policy = ReminderPolicy(
         today=today,
-        include_missing_punches=settings.presenze_whatsapp_include_missing_punches,
+        include_missing_punches=config.include_missing_punches,
         notified=notified | blocked_days(db),
         opted_out_user_ids=load_opted_out_user_ids(db),
     )
@@ -114,7 +125,7 @@ def _run_locked(
         options,
         lambda outcome: record_dispatch_outcome(db, sender.provider, outcome),
         hooks=DispatchHooks(
-            refresh=lambda reminder: refresh_reminder(db, reminder, options.now()),
+            refresh=lambda reminder: refresh_reminder(db, reminder, options.now(), config),
             begin=lambda reminder, body: (
                 record_dispatch_outcome(
                     db, sender.provider, DispatchOutcome(reminder, body, "SENDING")
@@ -135,18 +146,20 @@ def _run_locked(
 
 
 def build_dispatch_options_from_settings(
+    config: WhatsAppRuntimeConfig | None = None,
     now: Callable[[], datetime] | None = None,
     sleep: Callable[[float], None] = time_module.sleep,
 ) -> DispatchOptions:
+    runtime = config or environment_whatsapp_config()
     return DispatchOptions(
         now=now or (lambda: datetime.now(UTC)),
         sleep=sleep,
         random=random.random,
-        min_delay_seconds=settings.presenze_whatsapp_min_delay_seconds,
-        max_delay_seconds=settings.presenze_whatsapp_max_delay_seconds,
-        max_per_run=settings.presenze_whatsapp_max_per_run,
-        start_hour=settings.presenze_whatsapp_send_start_hour,
-        end_hour=settings.presenze_whatsapp_send_end_hour,
+        min_delay_seconds=runtime.min_delay_seconds,
+        max_delay_seconds=runtime.max_delay_seconds,
+        max_per_run=runtime.max_per_run,
+        start_hour=runtime.send_start_hour,
+        end_hour=runtime.send_end_hour,
     )
 
 
@@ -172,7 +185,12 @@ def load_reminder_inputs(db: Session, first_day: date, today: date) -> list[Remi
     ]
 
 
-def refresh_reminder(db: Session, reminder: PunchReminder, now: datetime) -> PunchReminder | None:
+def refresh_reminder(
+    db: Session,
+    reminder: PunchReminder,
+    now: datetime,
+    config: WhatsAppRuntimeConfig | None = None,
+) -> PunchReminder | None:
     # End the previous read transaction and discard identity-map snapshots before sending.
     db.rollback()
     today = now.astimezone(ROME).date()
@@ -181,9 +199,10 @@ def refresh_reminder(db: Session, reminder: PunchReminder, now: datetime) -> Pun
         for item in load_reminder_inputs(db, today, today)
         if item.collaborator_id == reminder.collaborator_id
     ]
+    runtime = config or load_whatsapp_config(db)
     policy = ReminderPolicy(
         today=today,
-        include_missing_punches=settings.presenze_whatsapp_include_missing_punches,
+        include_missing_punches=runtime.include_missing_punches,
         notified=load_notified_days(db, date.min) | blocked_days(db),
         opted_out_user_ids=load_opted_out_user_ids(db),
     )

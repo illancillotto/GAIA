@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from contextlib import suppress
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -10,11 +11,16 @@ from apscheduler.triggers.cron import CronTrigger
 
 from app.core.config import settings
 from app.modules.presenze.services.auto_sync import trigger_auto_sync_job
+from app.modules.presenze.services.punch_reminder_dispatch import ROME
 from app.modules.presenze.services.punch_reminder_job import (
     build_dispatch_options_from_settings,
     run_punch_reminder_job,
 )
-from app.modules.presenze.services.whatsapp_waha import build_whatsapp_sender_from_settings
+from app.modules.presenze.services.whatsapp_config import (
+    WhatsAppRuntimeConfig,
+    load_whatsapp_config,
+)
+from app.modules.presenze.services.whatsapp_waha import build_whatsapp_sender
 
 logger = logging.getLogger(__name__)
 
@@ -28,12 +34,23 @@ def _run_punch_reminder_wrapper(get_db: Callable[[], Any]) -> None:
 
 
 def _run_punch_reminder_job(db: Any) -> None:
-    sender = build_whatsapp_sender_from_settings()
+    config = load_whatsapp_config(db)
+    if not config.provider or not _reminder_is_due(config):
+        return
+    sender = build_whatsapp_sender(config)
     if sender is not None:
-        run_punch_reminder_job(db, sender, build_dispatch_options_from_settings())
+        run_punch_reminder_job(db, sender, build_dispatch_options_from_settings(config), config)
 
 
-def _run_with_db(get_db: Callable[[], Any], job: Callable[[Any], Any], failure_message: str) -> None:
+def _reminder_is_due(config: WhatsAppRuntimeConfig, now: datetime | None = None) -> bool:
+    current = (now or datetime.now(UTC)).astimezone(ROME).replace(second=0, microsecond=0)
+    trigger = CronTrigger.from_crontab(config.reminder_cron, timezone=ROME)
+    return trigger.get_next_fire_time(None, current - timedelta(microseconds=1)) == current
+
+
+def _run_with_db(
+    get_db: Callable[[], Any], job: Callable[[Any], Any], failure_message: str
+) -> None:
     db, generator = get_db(), None
     if hasattr(db, "__next__"):
         generator = db
@@ -68,12 +85,12 @@ async def register_inaz_scheduler(scheduler: AsyncIOScheduler, get_db: Callable[
     )
 
 
-def register_punch_reminder_scheduler(scheduler: AsyncIOScheduler, get_db: Callable[[], Any]) -> None:
-    if not settings.presenze_whatsapp_provider.strip():
-        return
+def register_punch_reminder_scheduler(
+    scheduler: AsyncIOScheduler, get_db: Callable[[], Any]
+) -> None:
     scheduler.add_job(
         _run_punch_reminder_wrapper,
-        trigger=CronTrigger.from_crontab(settings.presenze_whatsapp_reminder_cron, timezone="Europe/Rome"),
+        trigger=CronTrigger.from_crontab("* * * * *", timezone=ROME),
         id="presenze_whatsapp_punch_reminders",
         replace_existing=True,
         max_instances=1,
@@ -82,12 +99,12 @@ def register_punch_reminder_scheduler(scheduler: AsyncIOScheduler, get_db: Calla
         kwargs={"get_db": get_db},
     )
     logger.info(
-        "Presenze WhatsApp punch reminders registered; provider=%s cron=%s",
-        settings.presenze_whatsapp_provider,
-        settings.presenze_whatsapp_reminder_cron,
+        "Presenze WhatsApp dynamic schedule watcher registered",
     )
 
 
-async def register_presenze_scheduler(scheduler: AsyncIOScheduler, get_db: Callable[[], Any]) -> None:
+async def register_presenze_scheduler(
+    scheduler: AsyncIOScheduler, get_db: Callable[[], Any]
+) -> None:
     await register_inaz_scheduler(scheduler, get_db)
     register_punch_reminder_scheduler(scheduler, get_db)

@@ -1,6 +1,6 @@
 # Promemoria WhatsApp per timbrature incomplete
 
-Stato al 2026-09-15: **implementato, disattivo** (`PRESENZE_WHATSAPP_PROVIDER` vuoto).
+Stato al 2026-09-15: **implementato, disattivo** (provider vuoto nella configurazione GAIA).
 Il motore vive in GAIA perché lavora sui dati Presenze live, sull'anagrafica di riferimento
 (collegamenti utente, profilo operatore, telefono) e sullo scheduler di piattaforma. GATE non
 ha logica WhatsApp.
@@ -32,7 +32,7 @@ Messaggio automatico GAIA. Rispondi STOP per non ricevere più questi avvisi.
 ## Flusso
 
 ```text
-platform-scheduler (PRESENZE_WHATSAPP_REMINDER_CRON, Europe/Rome)
+platform-scheduler (watcher ogni minuto; cron configurato in PostgreSQL, Europe/Rome)
   └─ punch_reminder_job.run_punch_reminder_job      advisory lock Postgres
        ├─ load_reminder_inputs        presenze_daily_records + presenze_daily_punches
        ├─ load_reminder_contacts      operator_profile.phone + application_users.is_active
@@ -93,7 +93,7 @@ Motivi di scarto: `operator_not_linked`, `operator_profile_missing`, `operator_d
 | Stop su errori consecutivi | — | 3, o subito su errore di sessione/API key |
 | Verifica numero | — | `check-exists` prima di ogni invio |
 
-## Tabelle (migration `20260915_1200` e `20260915_1300`)
+## Tabelle (migration `20260915_1200`, `20260915_1300` e `20260915_1400`)
 
 - `presenze_whatsapp_messages`: esito di ogni tentativo, testo inviato, giornate, id WAHA, ack.
 - `presenze_whatsapp_notified_days`: unicità `(kind, collaborator_id, work_date)`.
@@ -101,6 +101,9 @@ Motivi di scarto: `operator_not_linked`, `operator_profile_missing`, `operator_d
 - `presenze_whatsapp_pending_days`: chiave collaboratore/giornata e ultimo tentativo.
 - `presenze_whatsapp_receipts`: ricevuta WAHA monotona per ID messaggio, per
   non perdere callback anticipate o duplicate.
+- `presenze_whatsapp_config`: singleton con provider, collegamento WAHA, cron e
+  limiti runtime. API key e chiave HMAC sono cifrate con `CREDENTIAL_MASTER_KEY`;
+  le API restituiscono solo i flag di presenza e mai i segreti in chiaro.
 
 ## Recupero esiti incerti
 
@@ -148,10 +151,18 @@ invio immediato e l'anteprima non scrive sul database.
   promemoria.
 - Riconciliazione dei soli tentativi `SENDING`/`UNKNOWN`, con evidenza
   obbligatoria e ID WAHA obbligatorio quando l'invio viene confermato.
+- Configurazione completa del runtime dalla modal dedicata: provider spento,
+  `dry_run` o WAHA, URL e sessione, segreti, cron, lookback, anomalie senza
+  timbrature, batch, pause e fascia oraria. La sezione e le relative API sono
+  visibili esclusivamente al ruolo `super_admin`; gli `admin` mantengono le
+  funzioni operative e lo storico. Le modifiche sono lette dal watcher entro un
+  minuto e non richiedono il riavvio dello scheduler.
 
 | Metodo | Route | Uso |
 | --- | --- | --- |
 | `GET` | `/presenze/whatsapp/dashboard` | KPI, configurazione e stato sessione |
+| `GET` | `/presenze/whatsapp/configuration` | configurazione senza segreti (`super_admin`) |
+| `PUT` | `/presenze/whatsapp/configuration` | aggiorna configurazione e segreti (`super_admin`) |
 | `GET` | `/presenze/whatsapp/messages` | storico paginato e filtrabile |
 | `GET` | `/presenze/whatsapp/preview` | anteprima read-only |
 | `GET` | `/presenze/whatsapp/opt-outs` | elenco STOP |
@@ -166,14 +177,23 @@ collaboratore e il numero E.164 documentano destinatario e contatto effettivi.
 ## Attivazione
 
 1. Numero dedicato + telefono, account riscaldato.
-2. In `.env`: `PRESENZE_WHATSAPP_WAHA_API_KEY`, `PRESENZE_WHATSAPP_WAHA_HMAC_KEY`,
-   `PRESENZE_WAHA_DASHBOARD_PASSWORD` (valori casuali lunghi), `PRESENZE_WAHA_IMAGE` fissata.
+2. Verificare che `CREDENTIAL_MASTER_KEY` sia configurata. In `.env` impostare
+   il bootstrap infrastrutturale del container: `PRESENZE_WHATSAPP_WAHA_API_KEY`,
+   `PRESENZE_WHATSAPP_WAHA_HMAC_KEY`, `PRESENZE_WAHA_DASHBOARD_PASSWORD` (valori
+   casuali lunghi) e `PRESENZE_WAHA_IMAGE` fissata.
 3. `alembic upgrade head`.
 4. `docker compose --profile whatsapp up -d waha`, tunnel `ssh -L 3100:127.0.0.1:3100 <server>`,
    `http://localhost:3100/dashboard` → avvio sessione `default` → scansione QR.
-5. `PRESENZE_WHATSAPP_PROVIDER=dry_run` e riavvio di `platform-scheduler`: per una settimana i
-   messaggi finiscono in `presenze_whatsapp_messages` con stato `DRY_RUN` senza essere inviati.
-6. Verifica a campione dei `DRY_RUN`, poi `PRESENZE_WHATSAPP_PROVIDER=waha`.
+5. Come `super_admin`, aprire `/presenze/whatsapp` → `Configura WhatsApp`,
+   inserire la stessa API key e chiave HMAC del bootstrap, lasciare URL
+   `http://waha:3000` e sessione `default`, quindi scegliere `Prova senza invio`.
+6. Per una settimana i messaggi finiscono nello storico con stato `DRY_RUN`
+   senza essere inviati. Dopo la verifica a campione selezionare `WAHA, invio reale`.
+
+La UI configura tutto il runtime applicativo e non espone Docker. Creazione del
+container, aggiornamento dell'immagine e prima scansione QR restano operazioni
+infrastrutturali intenzionali; dare alla web app accesso al socket Docker o alla
+console WAHA aumenterebbe inutilmente i privilegi del backend.
 
 ## Copertura anagrafica (verifica 2026-09-15)
 

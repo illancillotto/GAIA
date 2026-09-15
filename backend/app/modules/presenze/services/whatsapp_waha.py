@@ -15,7 +15,10 @@ from typing import Any, Protocol
 
 import httpx
 
-from app.core.config import settings
+from app.modules.presenze.services.whatsapp_config import (
+    WhatsAppRuntimeConfig,
+    environment_whatsapp_config,
+)
 
 PROVIDER_WAHA = "waha"
 PROVIDER_DRY_RUN = "dry_run"
@@ -135,21 +138,26 @@ class DryRunWhatsAppSender:
         return WhatsAppSendResult("DRY_RUN", PROVIDER_DRY_RUN, None)
 
 
-def build_whatsapp_sender_from_settings() -> WhatsAppSender | None:
-    provider = settings.presenze_whatsapp_provider.strip().lower()
+def build_whatsapp_sender(config: WhatsAppRuntimeConfig) -> WhatsAppSender | None:
+    provider = config.provider.strip().lower()
     if provider == PROVIDER_DRY_RUN:
         return DryRunWhatsAppSender()
     if provider != PROVIDER_WAHA:
         return None
-    if not settings.presenze_whatsapp_waha_url or not settings.presenze_whatsapp_waha_api_key:
+    if not config.waha_url or not config.waha_api_key:
         raise ValueError(
             "PRESENZE_WHATSAPP_PROVIDER=waha richiede PRESENZE_WHATSAPP_WAHA_URL e PRESENZE_WHATSAPP_WAHA_API_KEY"
         )
     return WahaWhatsAppSender(
-        base_url=settings.presenze_whatsapp_waha_url,
-        api_key=settings.presenze_whatsapp_waha_api_key,
-        session=settings.presenze_whatsapp_waha_session or "default",
+        base_url=config.waha_url,
+        api_key=config.waha_api_key,
+        session=config.waha_session or "default",
     )
+
+
+def build_whatsapp_sender_from_settings() -> WhatsAppSender | None:
+    """Compatibility helper for environment-only callers and isolated tests."""
+    return build_whatsapp_sender(environment_whatsapp_config())
 
 
 def waha_chat_id(phone_e164: str) -> str:

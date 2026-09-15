@@ -4,17 +4,45 @@ import { useDeferredValue, useEffect, useState } from "react";
 
 import {
   getPresenzeWhatsAppDashboard,
+  getPresenzeWhatsAppConfiguration,
   getPresenzeWhatsAppPreview,
   listPresenzeWhatsAppMessages,
   listPresenzeWhatsAppOptOuts,
   reconcilePresenzeWhatsAppMessage,
   restorePresenzeWhatsAppUser,
   updatePresenzeWhatsAppPhone,
+  updatePresenzeWhatsAppConfiguration,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { PresenzeWhatsAppDashboardSummary, PresenzeWhatsAppMessage, PresenzeWhatsAppOptOut, PresenzeWhatsAppPreview } from "@/types/api";
+import type { PresenzeWhatsAppConfig, PresenzeWhatsAppConfigUpdate, PresenzeWhatsAppDashboardSummary, PresenzeWhatsAppMessage, PresenzeWhatsAppOptOut, PresenzeWhatsAppPreview } from "@/types/api";
 
-export function useWhatsAppDashboard() {
+type ConfigurationContext = {
+  setBusy: (value: boolean) => void;
+  setConfiguration: (value: PresenzeWhatsAppConfig) => void;
+  setError: (value: string | null) => void;
+  setSummary: (value: PresenzeWhatsAppDashboardSummary) => void;
+};
+
+async function saveDashboardConfiguration(
+  payload: PresenzeWhatsAppConfigUpdate,
+  context: ConfigurationContext,
+): Promise<void> {
+  const token = getStoredAccessToken();
+  if (!token) return;
+  context.setBusy(true);
+  try {
+    context.setConfiguration(await updatePresenzeWhatsAppConfiguration(token, payload));
+    context.setSummary(await getPresenzeWhatsAppDashboard(token));
+    context.setError(null);
+  } catch (reason) {
+    context.setError(reason instanceof Error ? reason.message : "Impossibile salvare la configurazione WhatsApp");
+    throw reason;
+  } finally {
+    context.setBusy(false);
+  }
+}
+
+export function useWhatsAppDashboard(isSuperAdmin = false) {
   const [summary, setSummary] = useState<PresenzeWhatsAppDashboardSummary | null>(null);
   const [messages, setMessages] = useState<PresenzeWhatsAppMessage[]>([]);
   const [total, setTotal] = useState(0);
@@ -27,6 +55,7 @@ export function useWhatsAppDashboard() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [configuration, setConfiguration] = useState<PresenzeWhatsAppConfig | null>(null);
   const deferredQuery = useDeferredValue(query);
 
   useEffect(() => {
@@ -37,14 +66,22 @@ export function useWhatsAppDashboard() {
       getPresenzeWhatsAppDashboard(token),
       listPresenzeWhatsAppMessages(token, { status, q: deferredQuery, page, pageSize: 25 }),
       listPresenzeWhatsAppOptOuts(token),
-    ]).then(([dashboard, history, stops]) => {
+      isSuperAdmin ? getPresenzeWhatsAppConfiguration(token) : Promise.resolve(null),
+    ]).then(([dashboard, history, stops, config]) => {
       setSummary(dashboard);
       setMessages(history.items);
       setTotal(history.total);
       setOptOuts(stops);
+      setConfiguration(config);
       setError(null);
     }).catch((reason) => setError(reason instanceof Error ? reason.message : "Impossibile caricare la dashboard WhatsApp")).finally(() => setLoading(false));
-  }, [deferredQuery, page, status]);
+  }, [deferredQuery, isSuperAdmin, page, status]);
+
+  async function saveConfiguration(payload: PresenzeWhatsAppConfigUpdate): Promise<void> {
+    return saveDashboardConfiguration(payload, {
+      setBusy, setConfiguration, setError, setSummary,
+    });
+  }
 
   async function openPreview(): Promise<void> {
     const token = getStoredAccessToken();
@@ -88,5 +125,5 @@ export function useWhatsAppDashboard() {
     }
   }
 
-  return { summary, messages, total, query, status, page, selected, preview, optOuts, loading, busy, error, setQuery, setStatus, setPage, setSelected, setPreview, openPreview, restoreUser, updatePhone, reconcile };
+  return { summary, messages, total, query, status, page, selected, preview, optOuts, configuration, loading, busy, error, setQuery, setStatus, setPage, setSelected, setPreview, openPreview, restoreUser, updatePhone, reconcile, saveConfiguration };
 }

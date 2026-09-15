@@ -8,7 +8,6 @@ from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.models.application_user import ApplicationUser
 from app.modules.operazioni.models.organizational import OperatorProfile
 from app.modules.presenze.models import PresenzeCollaborator
@@ -23,6 +22,10 @@ from app.modules.presenze.services.punch_reminders import (
     ReminderPolicy,
     build_punch_reminder_text,
     select_punch_reminders,
+)
+from app.modules.presenze.services.whatsapp_config import (
+    WhatsAppRuntimeConfig,
+    load_whatsapp_config,
 )
 from app.modules.presenze.whatsapp_models import (
     PresenzeWhatsAppMessage,
@@ -39,23 +42,19 @@ def dashboard_summary(db: Session, now: datetime | None = None) -> dict[str, obj
             )
         ).all()
     )
-    provider = settings.presenze_whatsapp_provider.strip()
-    session_status, session_detail = _session_status(provider)
-    trigger = CronTrigger.from_crontab(
-        settings.presenze_whatsapp_reminder_cron, timezone="Europe/Rome"
-    )
+    config = load_whatsapp_config(db)
+    provider = config.provider.strip()
+    session_status, session_detail = _session_status(config)
+    trigger = CronTrigger.from_crontab(config.reminder_cron, timezone="Europe/Rome")
     return {
         "provider_enabled": bool(provider),
         "provider": provider or None,
         "session_status": session_status,
         "session_detail": session_detail,
-        "cron": settings.presenze_whatsapp_reminder_cron,
+        "cron": config.reminder_cron,
         "next_run_at": trigger.get_next_fire_time(None, current) if provider else None,
-        "send_window": (
-            f"{settings.presenze_whatsapp_send_start_hour:02d}:00-"
-            f"{settings.presenze_whatsapp_send_end_hour:02d}:00"
-        ),
-        "max_per_run": settings.presenze_whatsapp_max_per_run,
+        "send_window": (f"{config.send_start_hour:02d}:00-{config.send_end_hour:02d}:00"),
+        "max_per_run": config.max_per_run,
         "sent_total": sum(statuses.get(key, 0) for key in ("SENT", "DELIVERED", "READ")),
         "delivered_total": statuses.get("DELIVERED", 0) + statuses.get("READ", 0),
         "read_total": statuses.get("READ", 0),
@@ -109,11 +108,12 @@ def list_messages(
 def build_preview(db: Session, now: datetime | None = None) -> dict[str, object]:
     current = now or datetime.now(UTC)
     today = current.astimezone(ZoneInfo("Europe/Rome")).date()
-    first_day = today - timedelta(days=max(1, settings.presenze_whatsapp_lookback_days))
+    config = load_whatsapp_config(db)
+    first_day = today - timedelta(days=max(1, config.lookback_days))
     items = load_reminder_inputs(db, first_day, today)
     policy = ReminderPolicy(
         today=today,
-        include_missing_punches=settings.presenze_whatsapp_include_missing_punches,
+        include_missing_punches=config.include_missing_punches,
         notified=load_notified_days(db, first_day) | blocked_days(db),
         opted_out_user_ids=load_opted_out_user_ids(db),
     )
@@ -228,27 +228,26 @@ def _user_label(user: ApplicationUser) -> str:
     return (user.full_name or "").strip() or user.username
 
 
-def _session_status(provider: str) -> tuple[str, str | None]:
-    normalized = provider.lower()
+def _session_status(config: WhatsAppRuntimeConfig) -> tuple[str, str | None]:
+    normalized = config.provider.lower()
     if not normalized:
         return "disabled", None
     if normalized == "dry_run":
         return "dry_run", "Nessun messaggio viene inviato"
     if normalized != "waha":
-        return "unsupported", f"Provider {provider} non supportato"
-    if not settings.presenze_whatsapp_waha_url or not settings.presenze_whatsapp_waha_api_key:
+        return "unsupported", f"Provider {config.provider} non supportato"
+    if not config.waha_url or not config.waha_api_key:
         return "misconfigured", "URL o API key WAHA assente"
-    return _configured_waha_status()
+    return _configured_waha_status(config)
 
 
-def _configured_waha_status() -> tuple[str, str | None]:
+def _configured_waha_status(config: WhatsAppRuntimeConfig) -> tuple[str, str | None]:
     try:
         response = httpx.get(
-            f"{settings.presenze_whatsapp_waha_url.rstrip('/')}/api/sessions/"
-            f"{settings.presenze_whatsapp_waha_session or 'default'}",
+            f"{config.waha_url.rstrip('/')}/api/sessions/{config.waha_session or 'default'}",
             headers={
                 "accept": "application/json",
-                "x-api-key": settings.presenze_whatsapp_waha_api_key,
+                "x-api-key": config.waha_api_key,
             },
             timeout=3.0,
         )

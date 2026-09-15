@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from datetime import UTC, date, datetime, time
 from types import SimpleNamespace
 
@@ -12,7 +13,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import hash_password
 from app.db.base import Base
@@ -22,17 +22,21 @@ from app.modules.operazioni.models.organizational import OperatorProfile
 from app.modules.presenze.models import PresenzeCollaborator
 from app.modules.presenze.router.routes import whatsapp_admin as routes
 from app.modules.presenze.services import whatsapp_admin as service
+from app.modules.presenze.services import whatsapp_config as config_service
 from app.modules.presenze.services.punch_reminders import (
     PunchPair,
     ReminderContact,
     ReminderDayInput,
 )
+from app.modules.presenze.services.whatsapp_config import environment_whatsapp_config
 from app.modules.presenze.whatsapp_admin_schemas import (
+    WhatsAppConfigUpdate,
     WhatsAppMessageQuery,
     WhatsAppPhoneUpdate,
     WhatsAppReconcileRequest,
 )
 from app.modules.presenze.whatsapp_models import (
+    PresenzeWhatsAppConfig,
     PresenzeWhatsAppMessage,
     PresenzeWhatsAppOptOut,
 )
@@ -109,8 +113,9 @@ def test_dashboard_summary_counts_and_provider_state(
     db.add(PresenzeWhatsAppOptOut(application_user_id=user.id, source="reply"))
     db.commit()
 
-    monkeypatch.setattr(settings, "presenze_whatsapp_provider", "waha")
-    monkeypatch.setattr(service, "_session_status", lambda provider: ("working", None))
+    config = replace(environment_whatsapp_config(), provider="waha")
+    monkeypatch.setattr(service, "load_whatsapp_config", lambda db: config)
+    monkeypatch.setattr(service, "_session_status", lambda config: ("working", None))
     result = service.dashboard_summary(db, datetime(2026, 9, 15, 8, 0, tzinfo=UTC))
     assert result["provider_enabled"] is True
     assert result["provider"] == "waha"
@@ -124,7 +129,9 @@ def test_dashboard_summary_counts_and_provider_state(
     assert result["opted_out_total"] == 1
     assert result["send_window"] == "08:00-19:00"
 
-    monkeypatch.setattr(settings, "presenze_whatsapp_provider", "  ")
+    monkeypatch.setattr(
+        service, "load_whatsapp_config", lambda db: replace(config, provider="")
+    )
     disabled = service.dashboard_summary(db)
     assert disabled["provider"] is None
     assert disabled["next_run_at"] is None
@@ -133,46 +140,45 @@ def test_dashboard_summary_counts_and_provider_state(
 def test_session_status_covers_configuration_and_waha_responses(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    assert service._session_status("") == ("disabled", None)
-    assert service._session_status("dry_run")[0] == "dry_run"
-    assert service._session_status("custom") == ("unsupported", "Provider custom non supportato")
-    monkeypatch.setattr(settings, "presenze_whatsapp_waha_url", "")
-    assert service._session_status("waha")[0] == "misconfigured"
-    monkeypatch.setattr(settings, "presenze_whatsapp_waha_url", "http://waha")
-    monkeypatch.setattr(settings, "presenze_whatsapp_waha_api_key", "secret")
+    base = environment_whatsapp_config()
+    assert service._session_status(replace(base, provider="")) == ("disabled", None)
+    assert service._session_status(replace(base, provider="dry_run"))[0] == "dry_run"
+    custom = replace(base, provider="custom")
+    assert service._session_status(custom) == ("unsupported", "Provider custom non supportato")
+    assert service._session_status(replace(base, provider="waha", waha_url=""))[0] == "misconfigured"
+    configured = replace(base, provider="waha", waha_url="http://waha", waha_api_key="secret")
 
     def network_error(*args, **kwargs):
         raise httpx.ConnectError("offline")
 
     monkeypatch.setattr(service.httpx, "get", network_error)
-    assert service._session_status("waha")[0] == "unavailable"
+    assert service._session_status(configured)[0] == "unavailable"
     monkeypatch.setattr(service.httpx, "get", lambda *args, **kwargs: httpx.Response(503))
-    assert service._session_status("waha") == ("unavailable", "WAHA HTTP 503")
+    assert service._session_status(configured) == ("unavailable", "WAHA HTTP 503")
     monkeypatch.setattr(
         service.httpx,
         "get",
         lambda *args, **kwargs: httpx.Response(200, content=b"not-json"),
     )
-    assert service._session_status("waha")[0] == "invalid_response"
+    assert service._session_status(configured)[0] == "invalid_response"
     monkeypatch.setattr(
         service.httpx,
         "get",
         lambda *args, **kwargs: httpx.Response(200, json=[]),
     )
-    assert service._session_status("waha")[1] == "Stato sessione WAHA assente"
+    assert service._session_status(configured)[1] == "Stato sessione WAHA assente"
     monkeypatch.setattr(
         service.httpx,
         "get",
         lambda *args, **kwargs: httpx.Response(200, json={"status": " "}),
     )
-    assert service._session_status("waha")[0] == "invalid_response"
-    monkeypatch.setattr(settings, "presenze_whatsapp_waha_session", "")
+    assert service._session_status(configured)[0] == "invalid_response"
     monkeypatch.setattr(
         service.httpx,
         "get",
         lambda url, **kwargs: httpx.Response(200, json={"status": " WORKING "}),
     )
-    assert service._session_status("waha") == ("working", None)
+    assert service._session_status(replace(configured, waha_session="")) == ("working", None)
 
 
 def test_message_history_filters_paginates_and_keeps_deleted_user(db: Session) -> None:
@@ -257,6 +263,19 @@ def test_admin_route_success_and_errors(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(routes, "list_messages", lambda db, **kwargs: kwargs)
     monkeypatch.setattr(routes, "build_preview", lambda db: {"preview": db})
     monkeypatch.setattr(routes, "list_opt_outs", lambda db: [{"db": db}])
+    monkeypatch.setattr(routes, "load_whatsapp_config", lambda db: "config")
+    monkeypatch.setattr(routes, "serialize_whatsapp_config", lambda config: {"value": config})
+    monkeypatch.setattr(routes, "update_whatsapp_config", lambda db, payload, user_id: user_id)
+    assert routes.get_whatsapp_configuration(fake_db, None, None) == {"value": "config"}
+    config_payload = WhatsAppConfigUpdate(
+        provider="", waha_url="http://waha:3000", waha_session="default",
+        reminder_cron="30 9 * * 1-5", lookback_days=3, include_missing_punches=False,
+        max_per_run=40, min_delay_seconds=25, max_delay_seconds=75,
+        send_start_hour=8, send_end_hour=19,
+    )
+    assert routes.put_whatsapp_configuration(
+        config_payload, fake_db, SimpleNamespace(id=7), None
+    ) == {"value": 7}
     monkeypatch.setattr(routes, "remove_opt_out", lambda db, user_id: user_id == 1)
     monkeypatch.setattr(
         routes,
@@ -319,6 +338,21 @@ def test_admin_endpoints_require_and_accept_real_authentication(db: Session) -> 
         )
         headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
         assert client.get("/presenze/whatsapp/dashboard", headers=headers).status_code == 200
+        assert client.get("/presenze/whatsapp/configuration", headers=headers).status_code == 403
+        user.role = "super_admin"
+        db.commit()
+        assert client.get("/presenze/whatsapp/configuration", headers=headers).status_code == 200
+        payload = {
+            "provider": "dry_run", "waha_url": "http://waha:3000/", "waha_session": "default",
+            "reminder_cron": "30 9 * * 1-5", "lookback_days": 3,
+            "include_missing_punches": False, "max_per_run": 40,
+            "min_delay_seconds": 25, "max_delay_seconds": 75,
+            "send_start_hour": 8, "send_end_hour": 19,
+        }
+        saved = client.put("/presenze/whatsapp/configuration", headers=headers, json=payload)
+        assert saved.status_code == 200
+        assert saved.json()["provider"] == "dry_run"
+        assert "waha_api_key" not in saved.json()
         assert client.get("/presenze/whatsapp/messages", headers=headers).json()["total"] == 0
         assert client.get("/presenze/whatsapp/preview", headers=headers).status_code == 200
         assert client.get("/presenze/whatsapp/opt-outs", headers=headers).json() == []
@@ -341,3 +375,59 @@ def test_admin_endpoints_require_and_accept_real_authentication(db: Session) -> 
         )
     finally:
         app.dependency_overrides.clear()
+
+
+def test_configuration_encrypts_secrets_and_validates_activation(db: Session) -> None:
+    payload = WhatsAppConfigUpdate(
+        provider="dry_run", waha_url="http://waha:3000/", waha_session="default",
+        waha_api_key="api-secret", waha_hmac_key="hmac-secret",
+        reminder_cron="30 9 * * 1-5", lookback_days=5, include_missing_punches=True,
+        max_per_run=20, min_delay_seconds=10, max_delay_seconds=20,
+        send_start_hour=8, send_end_hour=18,
+    )
+    result = config_service.update_whatsapp_config(db, payload, user_id=12)
+    row = db.get(PresenzeWhatsAppConfig, 1)
+    assert row is not None
+    assert row.waha_api_key_encrypted != "api-secret"
+    assert result.waha_api_key == "api-secret"
+    serialized = config_service.serialize_whatsapp_config(result)
+    assert serialized["api_key_configured"] is True
+    assert "waha_api_key" not in serialized
+
+    cleared = payload.model_copy(update={
+        "provider": "", "waha_api_key": None, "waha_hmac_key": None,
+        "clear_api_key": True, "clear_hmac_key": True,
+    })
+    assert config_service.update_whatsapp_config(db, cleared, user_id=12).waha_api_key == ""
+    with pytest.raises(HTTPException) as missing_secret:
+        config_service.update_whatsapp_config(
+            db, payload.model_copy(update={"provider": "waha", "waha_api_key": None, "waha_hmac_key": None}), user_id=12
+        )
+    assert missing_secret.value.status_code == 409
+    with pytest.raises(HTTPException) as bad_cron:
+        config_service.update_whatsapp_config(
+            db, payload.model_copy(update={"reminder_cron": "bad cron"}), user_id=12
+        )
+    assert bad_cron.value.status_code == 422
+
+
+def test_configuration_schema_rejects_inverted_ranges() -> None:
+    values = dict(
+        provider="", waha_url="http://waha", waha_session="default",
+        reminder_cron="30 9 * * 1-5", lookback_days=3, include_missing_punches=False,
+        max_per_run=40, min_delay_seconds=30, max_delay_seconds=20,
+        send_start_hour=8, send_end_hour=19,
+    )
+    with pytest.raises(ValueError, match="pausa massima"):
+        WhatsAppConfigUpdate(**values)
+    values.update(min_delay_seconds=10, max_delay_seconds=20, send_start_hour=19, send_end_hour=19)
+    with pytest.raises(ValueError, match="fine della fascia"):
+        WhatsAppConfigUpdate(**values)
+    values["send_end_hour"] = 20
+    for invalid in (
+        {"waha_url": "javascript:alert(1)"},
+        {"waha_session": "../admin"},
+        {"waha_session": "   "},
+    ):
+        with pytest.raises(ValueError):
+            WhatsAppConfigUpdate(**(values | invalid))

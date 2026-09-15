@@ -65,6 +65,7 @@ def migrations():
         for name in [
             "20260915_1200_presenze_whatsapp_reminders.py",
             "20260915_1300_presenze_whatsapp_pending.py",
+            "20260915_1400_presenze_whatsapp_config.py",
         ]
     ]
 
@@ -114,6 +115,9 @@ def test_migrations_and_persistence_on_postgres(pg_engine):
             """),
                 {"id": uuid4(), "collaborator": collaborator_id, "message": message.id},
             )
+        db.rollback()
+        with pytest.raises(IntegrityError), db.begin_nested():
+            db.execute(text("INSERT INTO presenze_whatsapp_config (id) VALUES (2)"))
         db.rollback()
     with pg_engine.begin() as connection:
         with Operations.context(MigrationContext.configure(connection)):
