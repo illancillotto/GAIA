@@ -649,6 +649,9 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
   `20260915_1400`; provider, cron e limiti diventano effettivi entro un minuto
   senza restart. Bootstrap del container e QR restano fuori dalla web app per
   non esporre accessi infrastrutturali.
+- WAHA entra nello stack standard con `restart: unless-stopped`; il deploy genera
+  automaticamente i tre segreti bootstrap mancanti e verifica che l'API anonima
+  sia negata. Il container attivo non abilita il provider né produce invii.
 
 ## Gap aperti
 

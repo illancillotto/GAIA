@@ -177,15 +177,14 @@ collaboratore e il numero E.164 documentano destinatario e contatto effettivi.
 ## Attivazione
 
 1. Numero dedicato + telefono, account riscaldato.
-2. Verificare che `CREDENTIAL_MASTER_KEY` sia configurata. In `.env` impostare
-   il bootstrap infrastrutturale del container: `PRESENZE_WHATSAPP_WAHA_API_KEY`,
-   `PRESENZE_WHATSAPP_WAHA_HMAC_KEY`, `PRESENZE_WAHA_DASHBOARD_PASSWORD` (valori
-   casuali lunghi) e `PRESENZE_WAHA_IMAGE` fissata.
+2. Verificare che `CREDENTIAL_MASTER_KEY` sia configurata. Il deploy standard
+   avvia WAHA e, se assenti, genera nel file produzione API key, chiave HMAC e
+   password dashboard. Fissare `PRESENZE_WAHA_IMAGE` prima dell'uso reale.
 3. `alembic upgrade head`.
-4. `docker compose --profile whatsapp up -d waha`, tunnel `ssh -L 3100:127.0.0.1:3100 <server>`,
+4. Dopo il deploy, tunnel `ssh -L 3100:127.0.0.1:3100 <server>`, quindi
    `http://localhost:3100/dashboard` → avvio sessione `default` → scansione QR.
 5. Come `super_admin`, aprire `/presenze/whatsapp` → `Configura WhatsApp`,
-   inserire la stessa API key e chiave HMAC del bootstrap, lasciare URL
+   verificare che API key e HMAC risultino configurate, lasciare URL
    `http://waha:3000` e sessione `default`, quindi scegliere `Prova senza invio`.
 6. Per una settimana i messaggi finiscono nello storico con stato `DRY_RUN`
    senza essere inviati. Dopo la verifica a campione selezionare `WAHA, invio reale`.

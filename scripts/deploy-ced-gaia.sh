@@ -79,6 +79,24 @@ require_exact_env_value() {
   fi
 }
 
+ensure_generated_env_secret() {
+  local env_file="$1"
+  local key="$2"
+  local value
+  value="$(read_env_value "$env_file" "$key" || true)"
+  if [[ -n "$value" ]]; then
+    return 0
+  fi
+
+  value="$(openssl rand -hex 32)"
+  if grep -qE "^${key}=" "$env_file"; then
+    sed -i "s|^${key}=.*|${key}=${value}|" "$env_file"
+  else
+    printf '\n%s=%s\n' "$key" "$value" >> "$env_file"
+  fi
+  echo "==> Generato segreto bootstrap WAHA: $key"
+}
+
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   usage
   exit 0
@@ -136,6 +154,7 @@ if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
   require_cmd scp
   require_cmd tar
   require_cmd gzip
+  require_cmd openssl
 
   if [[ "$DEPLOY_BUILD_MODE" == "archive" ]]; then
     require_cmd docker
@@ -203,6 +222,9 @@ if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
   require_nonempty_env "$ENV_FILE" "BOOTSTRAP_ADMIN_PASSWORD"
   require_nonempty_env "$ENV_FILE" "CREDENTIAL_MASTER_KEY"
   require_exact_env_value "$ENV_FILE" "NETWORK_SOPHOS_SNMP_COMMUNITY" "GAIA-prod"
+  ensure_generated_env_secret "$ENV_FILE" "PRESENZE_WHATSAPP_WAHA_API_KEY"
+  ensure_generated_env_secret "$ENV_FILE" "PRESENZE_WHATSAPP_WAHA_HMAC_KEY"
+  ensure_generated_env_secret "$ENV_FILE" "PRESENZE_WAHA_DASHBOARD_PASSWORD"
 
   app_env_value="$(read_env_value "$ENV_FILE" "APP_ENV" || true)"
   if [[ "$ALLOW_NON_PRODUCTION_ENV" != "yes" && "$app_env_value" != "production" ]]; then
@@ -397,7 +419,7 @@ postgres_volume_name_from_env() {
 compose_cmd() {
   local postgres_volume_name
   postgres_volume_name="$(postgres_volume_name_from_env)"
-  POSTGRES_VOLUME_NAME="$postgres_volume_name" COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" docker compose -f docker-compose.yml --env-file .env "$@"
+  POSTGRES_VOLUME_NAME="$postgres_volume_name" COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" docker compose -f docker-compose.yml --env-file .env --profile whatsapp "$@"
 }
 
 verify_postgres_volume_binding() {
@@ -585,6 +607,23 @@ run_smoke_tests() {
 
   echo "==> Attesa readiness frontend container"
   wait_for_container_health "gaia-frontend" "frontend health container"
+
+  echo "==> Attesa readiness WAHA"
+  wait_for_container_health "gaia-waha" "WAHA container"
+
+  echo "==> Verifica autenticazione API WAHA"
+  waha_status=""
+  for _attempt in $(seq 1 30); do
+    waha_status="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:3100/api/sessions || true)"
+    if [[ "$waha_status" == "401" || "$waha_status" == "403" ]]; then
+      break
+    fi
+    sleep 2
+  done
+  if [[ "$waha_status" != "401" && "$waha_status" != "403" ]]; then
+    echo "Errore: API WAHA senza chiave ha restituito HTTP ${waha_status:-<nessuna risposta>}." >&2
+    return 1
+  fi
 
   echo "==> Smoke test health stack su porta $GAIA_PROD_NGINX_PORT"
   wait_for_http "http://127.0.0.1:$GAIA_PROD_NGINX_PORT/api/health" "nginx -> backend /api/health"
@@ -787,7 +826,7 @@ if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
   echo "==> Pull immagini registry dipendenti"
   verify_postgres_volume_binding
 
-  compose_cmd pull postgres martin nginx || true
+  compose_cmd pull postgres martin nginx waha || true
 
   set_remote_maintenance_mode on
 

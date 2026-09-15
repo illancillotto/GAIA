@@ -506,6 +506,9 @@ Modello operativo:
 - `DEPLOY_BUILD_MODE=archive` resta disponibile come fallback se il server non puo buildare: build locale, copia archivio progetto e immagini, `docker load` remoto
 - il deploy CED usa esplicitamente solo `docker-compose.yml` e non carica `docker-compose.override.yml`
 - il server remoto avvia sempre lo stack con `docker compose up -d --no-build` dopo aver buildato localmente al server o caricato le immagini legacy
+- Il deploy CED abilita sempre il profilo WAHA; se API key, HMAC o password dashboard
+  sono vuote, il deploy le genera nel file locale selezionato da `ENV_FILE` prima
+  della copia. Questo non abilita gli invii, governati separatamente dalla UI GAIA.
 - il file locale `.env.production` viene copiato sul server sia come `.env` sia come `.env.production`
 - il deploy sovrascrive quindi ad ogni esecuzione il file env runtime remoto partendo da quello locale selezionato in `ENV_FILE`
 - sul server `.env` e il file runtime usato da Docker Compose; `.env.production` e la copia esplicita del file production

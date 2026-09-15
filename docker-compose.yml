@@ -724,7 +724,7 @@ services:
 
   # Gateway WhatsApp NON ufficiale per i promemoria timbrature Presenze
   # (domain-docs/presenze/docs/PRESENZE_PROMEMORIA_WHATSAPP_TIMBRATURE.md).
-  # Non parte con `docker compose up`: avviarlo con `docker compose --profile whatsapp up -d waha`.
+  # Il deploy CED abilita sempre il profilo; in sviluppo va richiesto esplicitamente.
   # Porta legata a localhost del server: dashboard e QR solo via tunnel SSH.
   waha:
     image: ${PRESENZE_WAHA_IMAGE:-devlikeapro/waha:latest}
