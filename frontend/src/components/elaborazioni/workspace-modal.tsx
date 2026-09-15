@@ -117,17 +117,17 @@ export function ElaborazioneWorkspaceModal({
   );
 }
 
-function NativeWorkspaceRenderer({
+export function NativeWorkspaceRenderer({
   href,
   onRendered,
   onNavigate,
 }: {
   href: string;
-  onRendered: () => void;
+  onRendered?: () => void;
   onNavigate: (href: string) => void;
 }) {
   useEffect(() => {
-    onRendered();
+    onRendered?.();
   }, [href, onRendered]);
 
   const capacitasSection = getCapacitasSectionFromHref(href);
@@ -186,16 +186,12 @@ function NativeWorkspaceRenderer({
 
   if (href.startsWith("/elaborazioni/batches/")) {
     const batchId = href.split("/").filter(Boolean).at(-1);
-    if (batchId) {
-      return <ElaborazioneBatchDetailWorkspace batchId={batchId} embedded />;
-    }
+    return <ElaborazioneBatchDetailWorkspace batchId={batchId!} embedded />;
   }
 
   if (href.startsWith("/catasto/documents/")) {
     const documentId = href.split("/").filter(Boolean).at(-1);
-    if (documentId) {
-      return <CatastoDocumentDetailWorkspace documentId={documentId} embedded />;
-    }
+    return <CatastoDocumentDetailWorkspace documentId={documentId!} embedded />;
   }
 
   return (

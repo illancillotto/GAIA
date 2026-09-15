@@ -24,10 +24,14 @@ Ambito runtime attuale:
 
 ## Dashboard operativa
 
-La pagina `/elaborazioni` usa una struttura a sezioni stabili:
+La pagina `/elaborazioni` espone il catalogo dei 15 servizi di sincronizzazione,
+ricerca per nome/ambito, stati e pianificazioni. Contratto, sorgenti e verifiche
+sono descritti in [Dashboard sincronizzazioni](docs/SYNC_DASHBOARD.md).
+
+Superfici operative del modulo:
 - il monitor `/elaborazioni/autosync` apre in alto il blocco `Sincronizzazione catastale continua` (ON/OFF, credenziali, intervalli), poi il monitor operativo e le campagne permanenti **Particelle a ruolo** e **Anagrafiche a ruolo** come elenchi distinti, completi e paginati; entrambe considerano soltanto l'ultimo Ruolo completato, mentre il caricamento progressivo non mescola gli scope e resta owner-scoped;
-- barra superiore con azioni rapide in linea
-- card rapide dedicate a `Visure` e `Pool operativo dedicato`, allineate visivamente agli altri ingressi del modulo
+- testata dashboard con accesso in modale a pianificazioni, credenziali e richieste; filtri con conteggi per tutti i servizi, attivi e da verificare
+- card responsive di dimensioni uniformi con stato e ultimo avvio; dettagli, contatori, errori e monitor dedicato si aprono in modale conservando ricerca e filtro
 - provider `Bonifica Oristanese` gestito nello stesso workspace `Credenziali`, con CRUD account e test autenticazione Laravel
 - il provider `Bonifica Oristanese` espone anche `POST /elaborazioni/bonifica/sync/run` e `GET /elaborazioni/bonifica/sync/status`; sul runtime attuale sono abilitate le entity `report_types`, `reports`, `vehicles`, `refuels`, `taken_charge`, `users` (solo ruoli operativi), `areas`, `warehouse_requests`, `org_charts` e `consorziati`
 - `GET /elaborazioni/bonifica/sync/status` restituisce anche il `params_json` dell'ultimo job per entity, usato dal frontend per mostrare range data e `source_total` letto dalla sorgente White
@@ -52,12 +56,12 @@ La pagina `/elaborazioni` usa una struttura a sezioni stabili:
 - `POSTA_ONLINE_STORAGE_STATE_PATH` puo salvare cookie/sessione Playwright tra run e `POSTA_ONLINE_CDP_URL` puo collegare il worker a un Chromium gia aperto per debug; in produzione il percorso normale resta headless con nuovo context Playwright, user-agent Chrome desktop, locale `it-IT` e viewport desktop
 - il worker Poste non usa codice fiscale dal portale Poste: il collegamento all'utenza viene demandato alla logica Tributi tramite normalizzazione nominativo/indirizzo e classificazione `matched`, `ambiguous`, `unmatched` o `error`
 - il workspace `Allineamento AdE` in `/elaborazioni/ade-alignment` governa il run comprensorio Agenzia Entrate fuori dal GIS; il backend accoda il run in `cat_ade_sync_runs` e il container `gaia-elaborazioni-worker-visure` esegue il download WFS aggiornando fase, messaggio operativo, `tiles_completed` e contatori live delle particelle/geometrie rilevate
-- il corpo della dashboard è stato semplificato: sotto le azioni rapide restano solo l'elenco dei batch recenti e una vista aggregata delle operazioni in corso (batch runtime + sync WhiteCompany attive)
-- nella tabella `Batch recenti` la dashboard mostra anche la sintesi esiti per lotto (`ok`, `ko`, `n.d.`, `skip`) cosi i batch grandi risultano leggibili senza aprire subito il dettaglio
+- la dashboard mostra solo l'ultimo job per flusso Capacitas, incluso inCass; storico batch e documenti restano nei workspace dedicati
+- WhiteCompany mantiene uno stato distinto per ogni entity restituita dall'API, con contatori di record sincronizzati, saltati ed errori
 - l'ingresso `Visure` sostituisce i due accessi separati `Visura singola` e `Import batch`: apre il workspace unico `ElaborazioneRequestWorkspace`, che gestisce entrambe le modalità
 - in `Scelta del flusso` le card sono in questo ordine: `AutoSync a ruolo`, `Batch recenti`, `Import batch`, `Visura singola`; la pagina `/elaborazioni/visure` si apre su `AutoSync a ruolo`
 - spazio riservato all'aggiunta futura di altri provider/processi senza rimescolare i flussi esistenti
-- i workspace rapidi della dashboard si aprono in modale, con fallback a pagina completa quando serve approfondire o condividere il link
+- i link `Apri monitor` della dashboard navigano alla pagina dedicata, anche alla scheda inCass tramite `?section=incass`
 - anche i punti di uscita frequenti nei workspace interni (`archivio batch/documenti`, `Capacitas`) riusano il pattern modale per ridurre i salti di pagina
 - i workspace principali (`nuova richiesta`, `archivio batch`, `dettaglio batch`, `Capacitas`) sono renderizzati nativamente in overlay React; l'`iframe` resta solo come fallback per percorsi non ancora convertiti
 - anche `Credenziali` e il viewer dei documenti catastali sono ora componenti nativi riusabili, quindi l'overlay non dipende piu dall'`iframe` nei percorsi operativi principali del modulo
@@ -84,10 +88,10 @@ La pagina `/elaborazioni` usa una struttura a sezioni stabili:
 - il riquadro `Pool credenziali` attribuisce a ogni profilo anche il numero di visure effettivamente persistite nella finestra, collegando `catasto_documents.request_id` alla credenziale della richiesta; i documenti privi di associazione restano nel totale generale ma non vengono assegnati a un profilo
 - `GET /elaborazioni/portal-health` restituisce gli aggregati per finestre da 1 a 720 ore; `GET /elaborazioni/portal-health/events` espone fino a 200 eventi recenti e applica lo stesso filtro sul `current_user`
 - gli eventi SISTER sono fail-open: un errore di persistenza della telemetria non interrompe il worker; URL completi, query string, password, CAPTCHA e dati catastali non vengono memorizzati
-- la dashboard `/elaborazioni` mostra KPI runtime aggregati letti da `GET /elaborazioni/metrics`: throughput ultime 24h, volumetria 7 giorni, success rate, tempo medio richiesta/batch, ultimo processato e stato finestra operativa
-- il polling della dashboard resta attivo anche con soli job Capacitas inCass in coda o in esecuzione, cosi la sezione `Situazione operativa` continua ad aggiornare i KPI visure senza ricaricare la pagina
-- il `Quadro lavorazioni` raggruppa le operazioni per area e mostra al massimo i primi 3 blocchi dello stesso tipo, con un riepilogo cliccabile per i rimanenti
-- in alto la dashboard espone la sezione `Autosync automatici`, che centralizza i toggle operativi per `Visure NAS`, `ANPR batch`, `AutoSync visure a ruolo`, `WhiteCompany daily` e `WhiteCompany Operazioni live`; il quadro `Operazioni in corso` espone l'azione `Apri monitor attività`, diretta a `/elaborazioni/autosync` anche quando non ci sono lavorazioni attive
+- la dashboard riepiloga gli stati dei servizi; i KPI di throughput e la diagnostica SISTER si consultano nei monitor dedicati, mentre `GET /elaborazioni/metrics` resta disponibile senza variazioni di contratto
+- il polling della dashboard avviene ogni 30 secondi quando la pagina e visibile, anche senza job attivi; una lettura fallita non oscura gli altri servizi
+- il catalogo e filtrabile per nome, descrizione e stato; `Aggiorna ora` rilegge gli stati senza avviare sincronizzazioni
+- la modale `Pianificazioni automatiche` mantiene i toggle restituiti da `GET /elaborazioni/auto-job-controls` e apre le rispettive configurazioni in modale; il monitor catastale continuo resta raggiungibile dalla scheda `SISTER autosync`
 - il workspace visure espone la sincronizzazione catastale continua: due campagne permanenti e separate per particelle a ruolo e anagrafiche a ruolo, elaborate in sequenza e con retry manuale dei fallimenti; il limite per ciclo resta un dettaglio tecnico di throughput, mentre la copertura secondaria di patrimonio consortile/anagrafe mantiene configurazione e priorità distinte
 - `GET /elaborazioni/auto-job-controls` restituisce l’elenco aggregato dei controlli automatici mostrati in dashboard, mentre `PUT /elaborazioni/auto-job-controls/{control_key}` permette agli admin di attivare o disattivare ogni job dalla stessa sezione
 - per `Visure NAS`, `WhiteCompany daily` e `WhiteCompany Operazioni live` il toggle dashboard viene persistito su tabella `elaborazione_auto_job_configs` e prevale sul default ambiente dopo il primo salvataggio, cosi il backend puo fermare o riattivare il job senza cambiare `.env`
@@ -97,6 +101,7 @@ La pagina `/elaborazioni` usa una struttura a sezioni stabili:
 ## Struttura
 
 - `docs/`: documentazione canonica del modulo `elaborazioni`
+- `docs/SYNC_DASHBOARD.md`: catalogo, selezione ultimo sync, stati, refresh e verifica della dashboard
 - `docs/RUOLO_VISURE_AUTOSYNC_PLAN.md`: piano di implementazione dell'autosync visure per le particelle presenti a ruolo
 - `docs/CATASTO_CONTINUOUS_SYNC.md`: contratto runtime, SLA, pool SISTER, API e rollback del planner perpetuo
 - `docs/SISTER_DOWNLOAD_STALL_DEBUG_2026-09-06.md`: diagnosi dello stallo, correzioni locali, test e procedura di verifica del rilascio
