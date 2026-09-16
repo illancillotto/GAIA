@@ -93,7 +93,7 @@ class WahaWhatsAppSender:
             # Una risposta persa o un errore server non prova che il messaggio non sia partito.
             exc.uncertain = exc.retryable and exc.code != "http_429"
             raise
-        message_id = waha_message_id(body.get("id"))
+        message_id = waha_message_id(body.get("id")) or noweb_message_id(body.get("key"))
         if message_id is None:
             raise WhatsAppSendError(
                 "Risposta WAHA sendText senza ID",
@@ -169,6 +169,33 @@ def waha_message_id(value: Any) -> str | None:
         return value
     serialized = value.get("_serialized") if isinstance(value, dict) else None
     return serialized if isinstance(serialized, str) and serialized else None
+
+
+def noweb_message_id(key: Any) -> str | None:
+    """Mirror NOWEB buildMessageId so send results match normalized webhook IDs."""
+    if not isinstance(key, dict):
+        return None
+    message_id = key.get("id")
+    remote = key.get("remoteJid")
+    if not isinstance(message_id, str) or not message_id.strip():
+        return None
+    if not isinstance(remote, str) or not remote.strip() or key.get("fromMe") is not True:
+        return None
+    parts = ["true", _noweb_chat_id(remote), message_id]
+    participant = key.get("participant")
+    if participant is not None:
+        if not isinstance(participant, str) or not participant.strip():
+            return None
+        parts.append(_noweb_chat_id(participant))
+    return "_".join(parts)
+
+
+def _noweb_chat_id(jid: str) -> str:
+    if jid.endswith(("@g.us", "@broadcast", "@newsletter")) or jid == "me":
+        return jid
+    if jid.endswith("@lid"):
+        return re.sub(r":\d+(?=@)", "", jid)
+    return jid.split("@")[0].split(":")[0] + "@c.us"
 
 
 def verify_waha_signature(raw_body: bytes, signature: str | None, hmac_key: str) -> bool:

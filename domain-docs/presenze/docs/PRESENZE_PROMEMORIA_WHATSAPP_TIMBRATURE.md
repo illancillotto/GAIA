@@ -134,6 +134,22 @@ reale; provider invariato e disattivo.
 
 ## Dashboard amministrativa
 
+### Compatibilita risposta sendText NOWEB
+
+La versione WAHA NOWEB installata puo restituire il messaggio Baileys grezzo:
+`key.id`, `key.remoteJid`, `key.fromMe` e opzionalmente `key.participant`, senza
+`id` al primo livello. Il sender accetta questo formato oltre a `id` stringa
+e `id._serialized`, ricostruendo lo stesso ID delle ricevute WAHA (inclusa
+normalizzazione JID telefono/device e LID). Un ID normalizzato ha precedenza.
+Chiavi incomplete o non riferite a un messaggio uscente restano `UNKNOWN`:
+nessun reinvio automatico e nessuna conferma inventata.
+
+Un tentativo gia registrato come `UNKNOWN` non viene corretto retroattivamente
+dal parser. Se il testo e arrivato, non reinviarlo: verificare il messaggio
+nella sessione WAHA e riconciliare l'invio con ID provider ed evidenza usando
+la funzione dello storico. La sola etichetta `invalid_response` non significa
+che la consegna sia fallita.
+
 ### Invio manuale da Giornaliere
 
 Dal dettaglio di una giornata passata non validata, gli amministratori con

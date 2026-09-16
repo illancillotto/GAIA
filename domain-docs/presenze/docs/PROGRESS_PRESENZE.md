@@ -1,5 +1,26 @@
 # Progress Presenze
 
+## Risposta WAHA NOWEB e riconciliazione identita - 2026-09-16
+
+- Il sender gestisce anche la risposta Baileys `key` di WAHA NOWEB,
+  normalizzando l'ID come i webhook. Il formato `id` esistente ha precedenza;
+  risposte incomplete restano incerte senza retry. Gli UNKNOWN storici
+  richiedono riconciliazione esplicita con evidenza provider, non reinvio.
+- Suite WAHA/reliability/manual: 70 test; runtime sender full-file 100%
+  (148 statement, 36 branch). Ruff e ratchet contro `13a24a8d` senza finding.
+  Baseline globale invariata per debito preesistente fuori perimetro.
+- Audit produzione: 12 collaboratori senza mapping, nessun duplicato o
+  riferimento orfano. Approvate esplicitamente nove coppie canoniche;
+  manifest nel registro privato, mai derivato automaticamente dai nomi.
+  Tre casi restano REVIEW_REQUIRED, inclusa una omonimia e un candidato
+  gia collegato. L'intervento parziale non risolve l'audit globale.
+- Applicazione subordinata a backup NAS verificato, dry-run e audit
+  post-intervento con idempotenza. Account, profili, telefoni, STOP e
+  configurazione invii non vengono modificati. WAHA e gia operativo:
+  nessuna attivazione massiva e nessun messaggio reale come test.
+- Rilascio del solo backend con sorgenti e immagine precedenti conservati;
+  evidenze operative in `/opt/gaia/releases/noweb-20260916/`.
+
 ## Numero WhatsApp inseribile dal dettaglio giornata - 2026-09-16
 
 - Gli errori profilo assente, telefono mancante o invalido restituiscono

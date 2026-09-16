@@ -78,6 +78,63 @@ def test_check_number_queries_contacts_endpoint() -> None:
         assert (exc.value.code, exc.value.uncertain) == ("invalid_response", False)
 
 
+@pytest.mark.parametrize(
+    "remote,participant,expected",
+    [
+        ("393331234567@s.whatsapp.net", None, "true_393331234567@c.us_ABC"),
+        ("123@lid", None, "true_123@lid_ABC"),
+        ("123:4@lid", None, "true_123@lid_ABC"),
+        ("393331234567:4@s.whatsapp.net", None, "true_393331234567@c.us_ABC"),
+        ("status@broadcast", None, "true_status@broadcast_ABC"),
+        ("123@newsletter", None, "true_123@newsletter_ABC"),
+        ("me", None, "true_me_ABC"),
+        ("123@g.us", "393339876543@s.whatsapp.net", "true_123@g.us_ABC_393339876543@c.us"),
+    ],
+)
+def test_noweb_raw_key_matches_receipt_id(remote, participant, expected):
+    body = {"key": {"id": "ABC", "remoteJid": remote, "fromMe": True, "participant": participant}}
+    result = _sender(lambda _: httpx.Response(201, json=body)).send_text("+393331234567", "Test")
+    assert result.provider_message_id == expected
+    assert parse_waha_webhook({"event": "message.ack", "payload": {"id": expected, "ack": 3}}) == [
+        WhatsAppAck(result.provider_message_id, "READ")
+    ]
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        None,
+        [],
+        {},
+        {"id": 1},
+        {"id": " "},
+        {"id": "ABC"},
+        {"id": "ABC", "remoteJid": " "},
+        {"id": "ABC", "remoteJid": "123@c.us", "fromMe": False},
+        {"id": "ABC", "remoteJid": "123@c.us", "fromMe": True, "participant": 1},
+        {"id": "ABC", "remoteJid": "123@c.us", "fromMe": True, "participant": " "},
+    ],
+)
+def test_malformed_noweb_key_remains_uncertain_without_retry(key):
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(201, json={"key": key})
+
+    with pytest.raises(WhatsAppSendError) as exc:
+        _sender(handler).send_text("+393331234567", "Test")
+    assert exc.value.uncertain and exc.value.code == "invalid_response"
+    assert len(calls) == 1
+
+
+def test_normalized_id_takes_precedence_over_raw_key():
+    result = _sender(
+        lambda _: httpx.Response(201, json={"id": "canonical", "key": {"id": "other"}})
+    ).send_text("+393331234567", "Test")
+    assert result.provider_message_id == "canonical"
+
+
 def test_waha_errors_are_classified() -> None:
     def failure(handler) -> WhatsAppSendError:
         with pytest.raises(WhatsAppSendError) as exc_info:
