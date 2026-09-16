@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, Response
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
@@ -29,6 +29,7 @@ from app.modules.presenze.services.punch_reminders import (
     ReminderDayInput,
 )
 from app.modules.presenze.services.whatsapp_config import environment_whatsapp_config
+from app.modules.presenze.services.whatsapp_session import WahaSessionError
 from app.modules.presenze.whatsapp_admin_schemas import (
     WhatsAppConfigUpdate,
     WhatsAppMessageQuery,
@@ -276,6 +277,27 @@ def test_admin_route_success_and_errors(monkeypatch: pytest.MonkeyPatch) -> None
     assert routes.put_whatsapp_configuration(
         config_payload, fake_db, SimpleNamespace(id=7), None
     ) == {"value": 7}
+    assert routes._session_manager(fake_db).config == "config"
+    session_manager = SimpleNamespace(
+        status=lambda: {"status": "working"},
+        start=lambda: {"status": "starting"},
+        qr_code=lambda: {"image_data_url": "data:image/png;base64,cXI="},
+        logout=lambda: {"status": "stopped"},
+    )
+    monkeypatch.setattr(routes, "_session_manager", lambda db: session_manager)
+    assert routes.get_whatsapp_session(fake_db, None, None)["status"] == "working"
+    assert routes.start_whatsapp_session(fake_db, None, None)["status"] == "starting"
+    response = Response()
+    assert routes.get_whatsapp_session_qr(response, fake_db, None, None)["image_data_url"]
+    assert response.headers["Cache-Control"] == "no-store"
+    assert routes.logout_whatsapp_session(fake_db, None, None)["status"] == "stopped"
+
+    def fail_session():
+        raise WahaSessionError("WAHA offline", status_code=503)
+
+    with pytest.raises(HTTPException) as session_error:
+        routes._session_action(fail_session)
+    assert session_error.value.status_code == 503
     monkeypatch.setattr(routes, "remove_opt_out", lambda db, user_id: user_id == 1)
     monkeypatch.setattr(
         routes,
@@ -339,6 +361,7 @@ def test_admin_endpoints_require_and_accept_real_authentication(db: Session) -> 
         headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
         assert client.get("/presenze/whatsapp/dashboard", headers=headers).status_code == 200
         assert client.get("/presenze/whatsapp/configuration", headers=headers).status_code == 403
+        assert client.get("/presenze/whatsapp/session", headers=headers).status_code == 403
         user.role = "super_admin"
         db.commit()
         assert client.get("/presenze/whatsapp/configuration", headers=headers).status_code == 200

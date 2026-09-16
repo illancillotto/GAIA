@@ -154,3 +154,14 @@ class WhatsAppConfigUpdate(BaseModel):
         if self.send_end_hour <= self.send_start_hour:
             raise ValueError("La fine della fascia deve essere successiva all'inizio")
         return self
+
+
+class WhatsAppSessionResponse(BaseModel):
+    name: str
+    status: str
+    phone: str | None
+    display_name: str | None
+
+
+class WhatsAppQrResponse(BaseModel):
+    image_data_url: str

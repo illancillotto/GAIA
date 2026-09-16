@@ -4,10 +4,14 @@ import {
   getPresenzeWhatsAppDashboard,
   getPresenzeWhatsAppConfiguration,
   getPresenzeWhatsAppPreview,
+  getPresenzeWhatsAppQr,
+  getPresenzeWhatsAppSession,
   listPresenzeWhatsAppMessages,
   listPresenzeWhatsAppOptOuts,
   reconcilePresenzeWhatsAppMessage,
+  logoutPresenzeWhatsAppSession,
   restorePresenzeWhatsAppUser,
+  startPresenzeWhatsAppSession,
   updatePresenzeWhatsAppPhone,
   updatePresenzeWhatsAppConfiguration,
 } from "@/lib/api";
@@ -49,6 +53,25 @@ describe("Presenze WhatsApp API", () => {
     });
     expect(fetchMock.mock.calls[0][0]).toBe("/api/presenze/whatsapp/configuration");
     expect(fetchMock.mock.calls[1][1]).toEqual(expect.objectContaining({ method: "PUT" }));
+  });
+
+  test("manages the protected WAHA session", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(response({ status: "working" }))
+      .mockResolvedValueOnce(response({ status: "starting" }))
+      .mockResolvedValueOnce(response({ image_data_url: "data:image/png;base64,cXI=" }))
+      .mockResolvedValueOnce(response({ status: "stopped" }));
+    vi.stubGlobal("fetch", fetchMock);
+    await getPresenzeWhatsAppSession("token");
+    await startPresenzeWhatsAppSession("token");
+    await getPresenzeWhatsAppQr("token");
+    await logoutPresenzeWhatsAppSession("token");
+    expect(fetchMock.mock.calls.map((call) => [call[0], call[1]?.method])).toEqual([
+      ["/api/presenze/whatsapp/session", undefined],
+      ["/api/presenze/whatsapp/session/start", "POST"],
+      ["/api/presenze/whatsapp/session/qr", undefined],
+      ["/api/presenze/whatsapp/session/logout", "POST"],
+    ]);
   });
 
   test("builds optional history filters and supports an empty query", async () => {

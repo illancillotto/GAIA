@@ -181,18 +181,20 @@ collaboratore e il numero E.164 documentano destinatario e contatto effettivi.
    avvia WAHA e, se assenti, genera nel file produzione API key, chiave HMAC e
    password dashboard. Fissare `PRESENZE_WAHA_IMAGE` prima dell'uso reale.
 3. `alembic upgrade head`.
-4. Dopo il deploy, tunnel `ssh -L 3100:127.0.0.1:3100 <server>`, quindi
-   `http://localhost:3100/dashboard` → avvio sessione `default` → scansione QR.
-5. Come `super_admin`, aprire `/presenze/whatsapp` → `Configura WhatsApp`,
+4. Come `super_admin`, aprire `/presenze/whatsapp` → `Gestisci collegamento`,
+   avviare la sessione `default` e scansionare il QR mostrato nella modal GAIA.
+   Stato, QR e logout passano dal backend: API key e password WAHA non sono mai
+   inviate al browser. Il tunnel SSH resta solo per diagnostica straordinaria.
+5. Aprire `Configura WhatsApp`,
    verificare che API key e HMAC risultino configurate, lasciare URL
    `http://waha:3000` e sessione `default`, quindi scegliere `Prova senza invio`.
 6. Per una settimana i messaggi finiscono nello storico con stato `DRY_RUN`
    senza essere inviati. Dopo la verifica a campione selezionare `WAHA, invio reale`.
 
-La UI configura tutto il runtime applicativo e non espone Docker. Creazione del
-container, aggiornamento dell'immagine e prima scansione QR restano operazioni
-infrastrutturali intenzionali; dare alla web app accesso al socket Docker o alla
-console WAHA aumenterebbe inutilmente i privilegi del backend.
+La UI configura il runtime applicativo e gestisce la sessione tramite le API
+WAHA strettamente necessarie. Creazione del container e aggiornamento
+dell'immagine restano operazioni infrastrutturali; GAIA non accede al socket
+Docker e non espone la console WAHA.
 
 ## Copertura anagrafica (verifica 2026-09-15)
 
@@ -214,6 +216,11 @@ dettaglio un avviso per le giornate passate non validate con punch incompleti e
 collegano alla dashboard WhatsApp. E un'indicazione potenziale: la selezione
 definitiva resta nel job e applica provider, mapping, telefono, STOP, validazione
 e assenza giustificata.
+
+La gestione della sessione e riservata al ruolo `super_admin`. La modal usa le
+route GAIA `GET /presenze/whatsapp/session`, `POST /session/start`,
+`GET /session/qr` e `POST /session/logout`; il QR usa `Cache-Control: no-store`.
+L'associazione della sessione non abilita il provider e non avvia invii.
 
 - Procurare il numero dedicato e scansionare il QR della sessione WAHA.
 - Eseguire una settimana con `PRESENZE_WHATSAPP_PROVIDER=dry_run` e revisionare

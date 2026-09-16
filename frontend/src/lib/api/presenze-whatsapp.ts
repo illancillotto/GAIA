@@ -5,6 +5,8 @@ import type {
   PresenzeWhatsAppMessageList,
   PresenzeWhatsAppOptOut,
   PresenzeWhatsAppPreview,
+  PresenzeWhatsAppQr,
+  PresenzeWhatsAppSession,
 } from "@/types/api";
 
 import { request } from "./core";
@@ -29,6 +31,22 @@ export function updatePresenzeWhatsAppConfiguration(
     headers: auth(token),
     body: JSON.stringify(payload),
   });
+}
+
+export function getPresenzeWhatsAppSession(token: string): Promise<PresenzeWhatsAppSession> {
+  return request(`${BASE}/session`, { headers: auth(token), cache: "no-store" });
+}
+
+export function startPresenzeWhatsAppSession(token: string): Promise<PresenzeWhatsAppSession> {
+  return request(`${BASE}/session/start`, { method: "POST", headers: auth(token) });
+}
+
+export function getPresenzeWhatsAppQr(token: string): Promise<PresenzeWhatsAppQr> {
+  return request(`${BASE}/session/qr`, { headers: auth(token), cache: "no-store" });
+}
+
+export function logoutPresenzeWhatsAppSession(token: string): Promise<PresenzeWhatsAppSession> {
+  return request(`${BASE}/session/logout`, { method: "POST", headers: auth(token) });
 }
 export function listPresenzeWhatsAppMessages(
   token: string,

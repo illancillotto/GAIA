@@ -27,6 +27,7 @@ from app.modules.presenze.services.whatsapp_config import (
     serialize_whatsapp_config,
     update_whatsapp_config,
 )
+from app.modules.presenze.services.whatsapp_session import WahaSessionError, WahaSessionManager
 from app.modules.presenze.whatsapp_admin_schemas import (
     WhatsAppConfigResponse,
     WhatsAppConfigUpdate,
@@ -37,10 +38,23 @@ from app.modules.presenze.whatsapp_admin_schemas import (
     WhatsAppPhoneResponse,
     WhatsAppPhoneUpdate,
     WhatsAppPreviewResponse,
+    WhatsAppQrResponse,
     WhatsAppReconcileRequest,
+    WhatsAppSessionResponse,
 )
 
 router = APIRouter(prefix="/presenze/whatsapp")
+
+
+def _session_manager(db: Session) -> WahaSessionManager:
+    return WahaSessionManager(load_whatsapp_config(db))
+
+
+def _session_action(action) -> dict[str, object]:
+    try:
+        return action()
+    except WahaSessionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
 
 
 @router.get("/configuration", response_model=WhatsAppConfigResponse)
@@ -60,6 +74,44 @@ def put_whatsapp_configuration(
     _: Annotated[ApplicationUser, RequirePresenzeModule],
 ) -> dict[str, object]:
     return serialize_whatsapp_config(update_whatsapp_config(db, payload, user_id=current_user.id))
+
+
+@router.get("/session", response_model=WhatsAppSessionResponse)
+def get_whatsapp_session(
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[ApplicationUser, RequirePresenzeSuperAdmin],
+    __: Annotated[ApplicationUser, RequirePresenzeModule],
+) -> dict[str, object]:
+    return _session_action(_session_manager(db).status)
+
+
+@router.post("/session/start", response_model=WhatsAppSessionResponse)
+def start_whatsapp_session(
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[ApplicationUser, RequirePresenzeSuperAdmin],
+    __: Annotated[ApplicationUser, RequirePresenzeModule],
+) -> dict[str, object]:
+    return _session_action(_session_manager(db).start)
+
+
+@router.get("/session/qr", response_model=WhatsAppQrResponse)
+def get_whatsapp_session_qr(
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[ApplicationUser, RequirePresenzeSuperAdmin],
+    __: Annotated[ApplicationUser, RequirePresenzeModule],
+) -> dict[str, object]:
+    response.headers["Cache-Control"] = "no-store"
+    return _session_action(_session_manager(db).qr_code)
+
+
+@router.post("/session/logout", response_model=WhatsAppSessionResponse)
+def logout_whatsapp_session(
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[ApplicationUser, RequirePresenzeSuperAdmin],
+    __: Annotated[ApplicationUser, RequirePresenzeModule],
+) -> dict[str, object]:
+    return _session_action(_session_manager(db).logout)
 
 
 @router.get("/dashboard", response_model=WhatsAppDashboardSummaryResponse)

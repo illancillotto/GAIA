@@ -8,7 +8,7 @@ import { formatWhatsAppDateTime, whatsappSessionLabel, whatsappSkipLabel, whatsa
 import type { PresenzeWhatsAppConfig, PresenzeWhatsAppMessage, PresenzeWhatsAppPreview } from "@/types/api";
 
 const mocks = vi.hoisted(() => ({
-  token: vi.fn(), role: vi.fn(), dashboard: vi.fn(), configuration: vi.fn(), saveConfiguration: vi.fn(), messages: vi.fn(), preview: vi.fn(), optOuts: vi.fn(), restore: vi.fn(), phone: vi.fn(), reconcile: vi.fn(),
+  token: vi.fn(), role: vi.fn(), dashboard: vi.fn(), configuration: vi.fn(), saveConfiguration: vi.fn(), messages: vi.fn(), preview: vi.fn(), optOuts: vi.fn(), restore: vi.fn(), phone: vi.fn(), reconcile: vi.fn(), session: vi.fn(), startSession: vi.fn(), sessionQr: vi.fn(), logoutSession: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({ getStoredAccessToken: mocks.token }));
@@ -22,6 +22,10 @@ vi.mock("@/lib/api", () => ({
   restorePresenzeWhatsAppUser: mocks.restore,
   updatePresenzeWhatsAppPhone: mocks.phone,
   reconcilePresenzeWhatsAppMessage: mocks.reconcile,
+  getPresenzeWhatsAppSession: mocks.session,
+  startPresenzeWhatsAppSession: mocks.startSession,
+  getPresenzeWhatsAppQr: mocks.sessionQr,
+  logoutPresenzeWhatsAppSession: mocks.logoutSession,
 }));
 vi.mock("@/lib/use-session-bootstrap", () => ({ useSessionBootstrap: () => ({ currentUser: { role: mocks.role() } }) }));
 vi.mock("@/components/app/protected-page", () => ({ ProtectedPage: ({ children, title }: { children: React.ReactNode; title: string }) => <main><h1>{title}</h1>{children}</main> }));
@@ -168,6 +172,10 @@ describe("Presenze WhatsApp page", () => {
     mocks.restore.mockResolvedValue(undefined);
     mocks.phone.mockResolvedValue({ application_user_id: 8, phone: "+39333" });
     mocks.reconcile.mockResolvedValue(undefined);
+    mocks.session.mockResolvedValue({ name: "default", status: "not_created", phone: null, display_name: null });
+    mocks.startSession.mockResolvedValue({ name: "default", status: "starting", phone: null, display_name: null });
+    mocks.sessionQr.mockResolvedValue({ image_data_url: "data:image/png;base64,cXI=" });
+    mocks.logoutSession.mockResolvedValue({ name: "default", status: "stopped", phone: null, display_name: null });
     mocks.configuration.mockResolvedValue({ provider: "", waha_url: "http://waha:3000", waha_session: "default", api_key_configured: false, hmac_key_configured: false, reminder_cron: "30 9 * * 1-5", lookback_days: 3, include_missing_punches: false, max_per_run: 40, min_delay_seconds: 25, max_delay_seconds: 75, send_start_hour: 8, send_end_hour: 19, updated_at: null, updated_by_user_id: null });
     mocks.saveConfiguration.mockImplementation(async (_token, payload) => ({ ...await mocks.configuration(), ...payload, api_key_configured: Boolean(payload.waha_api_key), hmac_key_configured: Boolean(payload.waha_hmac_key) }));
   });

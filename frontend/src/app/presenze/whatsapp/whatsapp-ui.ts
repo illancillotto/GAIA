@@ -62,6 +62,7 @@ export function whatsappSessionLabel(status: string | undefined): string {
     misconfigured: "Configurazione incompleta",
     unsupported: "Provider non supportato",
     invalid_response: "Risposta non valida",
+    not_created: "Non configurata",
   };
   return labels[status ?? ""] ?? status ?? "Stato non disponibile";
 }

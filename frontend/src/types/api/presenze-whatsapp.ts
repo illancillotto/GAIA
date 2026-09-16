@@ -103,3 +103,14 @@ export type PresenzeWhatsAppConfigUpdate = Omit<
   clear_api_key?: boolean;
   clear_hmac_key?: boolean;
 };
+
+export type PresenzeWhatsAppSession = {
+  name: string;
+  status: string;
+  phone: string | null;
+  display_name: string | null;
+};
+
+export type PresenzeWhatsAppQr = {
+  image_data_url: string;
+};

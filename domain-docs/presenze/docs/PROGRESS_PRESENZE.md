@@ -660,6 +660,10 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
   il telefono e valido. Il nuovo componente condiviso e coperto al `100%`
   statement/branch/function/line; le suite delle due pagine restano verdi senza
   introdurre esclusioni per il debito di coverage legacy della pagina anomalie.
+- gestione nativa della sessione WAHA nella dashboard GAIA, visibile solo ai
+  `super_admin`: stato, creazione/avvio, QR con polling e logout sono disponibili
+  in una modal senza esporre dashboard, password o API key WAHA al browser.
+  L'associazione del telefono resta separata dall'abilitazione del provider.
 
 ## Gap aperti
 
