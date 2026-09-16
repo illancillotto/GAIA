@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useSessionBootstrap } from "@/lib/use-session-bootstrap";
 import { previewManualWhatsApp, sendManualWhatsApp, type ManualWhatsAppPreview } from "@/lib/api/presenze-whatsapp-manual";
+import { recoverablePhoneContact, WhatsAppPhoneRecovery } from "./whatsapp-phone-recovery";
 
 const OUTCOMES: Record<string, string> = {
   SENT: "Messaggio inviato. Consegna e lettura sono consultabili nello storico WhatsApp.",
@@ -22,6 +23,7 @@ export function ManualMessageForm({ recordId, token }: { recordId: string; token
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
+  const [phoneContact, setPhoneContact] = useState<ReturnType<typeof recoverablePhoneContact>>(null);
   const pending = useRef(false);
 
   async function openPreview() {
@@ -29,11 +31,13 @@ export function ManualMessageForm({ recordId, token }: { recordId: string; token
     pending.current = true;
     setBusy(true);
     setNotice("");
+    setPhoneContact(null);
     try {
       const result = await previewManualWhatsApp(token, recordId);
       setPreview(result);
       setReason(result.reason);
     } catch (error) {
+      setPhoneContact(recoverablePhoneContact(error));
       setNotice(error instanceof Error ? error.message : "Anteprima non disponibile");
     } finally {
       pending.current = false;
@@ -74,5 +78,6 @@ export function ManualMessageForm({ recordId, token }: { recordId: string; token
       </div>
     </>}
     {notice ? <p className="mt-3 text-sm" role="status">{notice}</p> : null}
+    <WhatsAppPhoneRecovery contact={phoneContact} token={token} onSaved={openPreview} />
   </section>;
 }

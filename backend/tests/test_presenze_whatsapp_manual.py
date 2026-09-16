@@ -240,3 +240,25 @@ def test_manual_http_authorization_and_confirmation(db, sample):
         assert client.get(url + "/preview", headers=headers).status_code == 403
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.parametrize("state", ["profile_missing", "phone_missing", "phone_invalid"])
+def test_phone_recovery_returns_canonical_user_and_creates_profile(db, sample, state):
+    record, collaborator, user = sample
+    profile = db.scalar(select(OperatorProfile))
+    if state == "profile_missing":
+        db.delete(profile)
+    else:
+        profile.phone = None if state == "phone_missing" else "invalid"
+    db.commit()
+    with pytest.raises(HTTPException) as exc:
+        preview.manual_preview(db, record.id)
+    detail = exc.value.detail
+    assert detail["application_user_id"] == collaborator.application_user_id == user.id
+    assert detail["collaborator_name"] == collaborator.name
+    assert "Aggiungi" in detail["message"]
+    from app.modules.presenze.services.whatsapp_admin import update_phone
+
+    update_phone(db, detail["application_user_id"], "+393331234567")
+    assert preview.manual_preview(db, record.id)["phone_e164"] == "+393331234567"
+    assert db.scalar(select(PresenzeWhatsAppMessage)) is None

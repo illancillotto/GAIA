@@ -153,6 +153,15 @@ disponibile anche nel dettaglio Anomalie tramite il componente condiviso.
 5. Controllare esito, consegna e lettura nello storico WhatsApp. `SENT` indica
    l'accettazione del provider, non dimostra lettura o correzione in INAZ.
 
+Se manca il profilo operatore o il numero e assente/non valido, il riquadro
+mostra **Aggiungi numero WhatsApp**. Inserire il telefono del collaboratore
+(preferibilmente con prefisso `+39`) e scegliere **Salva numero e prepara
+messaggio**: viene aggiornato `operator_profile.phone` dell'utente GAIA
+canonico, creando il profilo se assente, e ricaricata l'anteprima. Il salvataggio
+non invia messaggi: serve ancora la conferma dell'anteprima. Senza mapping
+canonico non viene offerta questa azione; non e un modo per aggirare STOP o
+gli altri controlli di idoneita.
+
 Il manuale seleziona una sola giornata e ignora il lookback automatico, senza
 ampliarlo per gli altri collaboratori. Sono supportate timbrature incomplete,
 giornate lavorative attese senza timbrature e descrizioni INAZ disponibili

@@ -52,6 +52,16 @@ def manual_candidate(db: Session, record_id: UUID) -> PunchReminder:
         item.application_user_id, contacts.get(item.application_user_id), policy
     )
     if reason:
+        if reason in {"operator_profile_missing", "phone_missing", "phone_invalid"}:
+            raise HTTPException(
+                409,
+                {
+                    "message": "Numero WhatsApp mancante o non valido. Aggiungi il numero del collaboratore.",
+                    "code": reason,
+                    "application_user_id": item.application_user_id,
+                    "collaborator_name": collaborator.name,
+                },
+            )
         raise HTTPException(409, f"Destinatario non disponibile: {reason}")
     structural = reminder_day(item, include_missing_punches=True)
     reasons = anomaly_reasons(record.raw_payload_json)

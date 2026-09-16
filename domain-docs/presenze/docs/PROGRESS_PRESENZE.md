@@ -1,5 +1,28 @@
 # Progress Presenze
 
+## Numero WhatsApp inseribile dal dettaglio giornata - 2026-09-16
+
+- Gli errori profilo assente, telefono mancante o invalido restituiscono
+  metadata strutturati con ID GAIA canonico e nome del collaboratore.
+- Il dettaglio offre **Aggiungi numero WhatsApp** e **Salva numero e prepara
+  messaggio**; riusa l'API amministrativa di aggiornamento telefono, inclusa
+  creazione del profilo mancante. Nessun fallback di identita, invio implicito
+  o aggiramento STOP; il messaggio richiede una conferma separata.
+- 37 test backend passati; runtime preview full-file 100%, statement `65/65`,
+  branch `26/26`. 28 test frontend passati; due runtime full-file 100%,
+  statement `81/81`, branch `56/56`, funzioni `16/16`, righe `71/71`.
+- TypeScript, ESLint mirato, Ruff e whitespace verificati. Test per profilo
+  assente, numeri mancanti/invalidi, salvataggio e riapertura anteprima,
+  annullamento, errori e doppio clic. Nessun messaggio reale inviato.
+- Modifica locale successiva al rilascio `ee4c60a8`; nessun nuovo commit o
+  deploy eseguito nella prima implementazione di questa estensione.
+- Rilascio successivamente autorizzato: ripetere la suite WhatsApp completa,
+  coverage full-file, lint/TypeScript e ratchet contro `ee4c60a8`; distribuire
+  backend e frontend insieme, con immagini precedenti conservate per rollback.
+  Test nell'immagine Python 3.11 prima del riavvio e smoke HTTP/bundle dopo.
+  Provider e numeri reali invariati; nessun invio reale come prova di rilascio.
+  Manifest e log di rilascio in `/opt/gaia/releases/phone-recovery-*` sul CED.
+
 ## Promemoria manuale anomalie da Giornaliere - 2026-09-16
 
 - Aggiunti anteprima e invio confermato per una sola giornata, anche fuori
