@@ -5,7 +5,7 @@ import { getVehicleAutodocSyncStatus } from "@/features/operazioni/api/client";
 import { SYNC_JOB_SERVICES } from "./sync-dashboard-jobs";
 import { jobSnapshot, type SyncService } from "./sync-dashboard-model";
 
-export const SYNC_SERVICES: SyncService[] = [
+const SERVICES: SyncService[] = [
   ...SYNC_JOB_SERVICES,
   {
     id: "whitecompany", title: "WhiteCompany", description: "Stato di ogni flusso anagrafico e operativo.", href: "/elaborazioni/bonifica",
@@ -86,7 +86,8 @@ export const SYNC_SERVICES: SyncService[] = [
     id: "anpr", title: "ANPR", description: "Verifiche anagrafiche e consumo delle chiamate giornaliere.", href: "/elaborazioni/anpr",
     async load(token) {
       const data = await api.getElaborazioneAnprSummary(token);
-      const run = [...data.recent_runs].sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at))[0];
+      const recentRuns = Array.isArray(data.recent_runs) ? data.recent_runs : [];
+      const run = [...recentRuns].sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at))[0];
       return [{ status: run?.status ?? "idle", startedAt: run?.started_at, finishedAt: run?.completed_at,
         metrics: [{ label: "Chiamate oggi", value: `${data.calls_today} / ${data.effective_daily_limit}` },
           { label: "Deceduti trovati", value: data.total_deceased_found ?? 0 },
@@ -94,3 +95,8 @@ export const SYNC_SERVICES: SyncService[] = [
     },
   },
 ];
+
+const SERVICE_PRIORITY = new Map([["autosync", 0], ["anpr", 1], ["mobile", 2]]);
+
+export const SYNC_SERVICES = [...SERVICES].sort((left, right) =>
+  (SERVICE_PRIORITY.get(left.id) ?? Number.MAX_SAFE_INTEGER) - (SERVICE_PRIORITY.get(right.id) ?? Number.MAX_SAFE_INTEGER));

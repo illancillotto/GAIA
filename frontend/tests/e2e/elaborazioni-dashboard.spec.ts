@@ -16,6 +16,7 @@ for (const width of [1440, 390]) {
       if (path.endsWith("/auth/me")) body = { id: 1, username: "admin", role: "super_admin", is_active: true, enabled_modules: ["catasto", "elaborazioni"], module_catasto: true };
       else if (path.endsWith("/auth/my-permissions")) body = { sections: [], granted_keys: [] };
       else if (path.includes("notifications")) body = { items: [], unread_count: 0 };
+      else if (path.endsWith("/anagrafica/storico/jobs")) body = { items: [job] };
       else if (path.endsWith("/incass/avvisi/jobs")) body = [job, { ...job, id: 2, created_at: "2026-09-01", result_json: { notices_synced: 99999 } }];
       else if (path.endsWith("/bonifica/sync/status")) body = { entities: {
         mezzi: { entity: "Mezzi", status: "running", last_started_at: started, records_synced: 120, records_errors: 0 },
@@ -35,6 +36,9 @@ for (const width of [1440, 390]) {
     await expect(page.getByRole("button", { name: "Aggiorna ora" })).toBeEnabled();
     const catalog = page.getByRole("region", { name: "Servizi di sincronizzazione" });
     await expect(catalog.getByRole("article")).toHaveCount(15);
+    const firstCards = await catalog.getByRole("article").evaluateAll((cards) => cards.slice(0, 3).map((card) => card.getAttribute("aria-label")));
+    expect(firstCards).toEqual(["SISTER autosync", "ANPR", "GAIA Mobile Sync"]);
+    await expect(page.getByRole("article", { name: "Capacitas anagrafica", exact: true })).toContainText("Completato");
     const incass = page.getByRole("article", { name: "Capacitas inCass", exact: true });
     await expect(incass).toContainText("Completato");
     const sizes = await catalog.getByRole("article").evaluateAll((cards) => cards.map((card) => ({ width: card.getBoundingClientRect().width, height: card.getBoundingClientRect().height })));

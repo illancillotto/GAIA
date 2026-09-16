@@ -4,6 +4,9 @@ Aggiornamento: 2026-09-16.
 
 La pagina `/elaborazioni` raccoglie 15 servizi in un catalogo responsive,
 filtrabile per nome, descrizione e stato (tutti, da verificare, in corso/coda).
+L'ordine iniziale e intenzionale: `SISTER autosync`, `ANPR`, `GAIA Mobile
+Sync`, poi gli altri servizi. La priorita resta invariata anche quando le
+risposte API arrivano in ordine diverso.
 Le card hanno dimensioni uniformi e mostrano stato sintetico, numero di flussi
 e ultimo avvio. Gli errori hanno precedenza sullo stato attivo nel riepilogo;
 i filtri considerano tutti i flussi, quindi un servizio puo comparire in
@@ -54,6 +57,10 @@ nella relativa scheda, senza nascondere le letture riuscite.
 - Capacitas, inCass, Poste, Presenze, visure e NAS mostrano il job con `created_at`
   piu recente fra quelli restituiti. `updated_at` non determina l'ultimo sync:
   l'aggiornamento di un vecchio job non lo rende la sincronizzazione piu recente.
+- Gli endpoint job sono normalizzati sia nella forma lista canonica sia
+  nell'envelope `{ items: [...] }`; una risposta nulla o non iterabile viene
+  trattata come nessuna esecuzione e non genera l'errore JavaScript `is not
+  iterable` nella modale dettagli.
 - InCass richiede esplicitamente `limit=1`; nessuno storico viene renderizzato
   nella sua scheda. Le altre schede Capacitas applicano la selezione lato client.
 - WhiteCompany mostra l'ultimo stato di ogni entity. AUTODOC, Mobile e AdE
@@ -97,7 +104,14 @@ segnalata anche quando non esiste ancora un run.
 - `sync-service-details.tsx` e `sync-dashboard-dialog.tsx`: risultati completi
   e navigazione in modale con caricamento differito dei monitor.
 
-Verifica finale del 2026-09-15: 47 test unitari nelle suite dashboard e
+Verifica finale del 2026-09-16: 23 test unitari nella suite dashboard,
+coverage full-file dei runtime modificati al `100%` (statement `83/83`, branch
+`99/99`, funzioni `28/28`, righe `60/60`). I test caratterizzano l'ordine delle
+prime tre card e le risposte lista/envelope/non iterabili. La suite E2E esegue
+2 test Chromium su 1440px e 390px, sia sul sorgente locale sia su `gaia.lan`,
+con API simulate, senza pageerror.
+
+Verifica precedente del 2026-09-15: 47 test unitari nelle suite dashboard e
 workspace, con coverage full-file sui 10 runtime della dashboard e delle
 modali: statement `296/296`, branch `238/238`, funzioni `93/93`, righe
 `246/246`, tutto `100%`. Sono inclusi hook di polling, modello e adattatori

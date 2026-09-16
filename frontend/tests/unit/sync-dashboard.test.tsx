@@ -7,6 +7,7 @@ import { catastoGisGetLatestAdeWfsRunStatus } from "@/lib/api/catasto";
 import { getVehicleAutodocSyncStatus } from "@/features/operazioni/api/client";
 import { getStoredAccessToken } from "@/lib/auth";
 import { jobSnapshot, latestSync, matchesSyncFilter, resultMetrics, syncCounts, syncError, syncStatus, syncSummary } from "@/lib/sync-dashboard-model";
+import { SYNC_JOB_SERVICES } from "@/lib/sync-dashboard-jobs";
 import { SYNC_SERVICES } from "@/lib/sync-dashboard-services";
 import { SyncServiceCard } from "@/components/elaborazioni/sync-service-card";
 import { SyncServiceDetails } from "@/components/elaborazioni/sync-service-details";
@@ -98,6 +99,9 @@ describe("normalizzazione", () => {
     expect(latestSync(jobs)).toBe(job);
     expect(jobs[0]).toBe(old);
     expect(latestSync([])).toBeUndefined();
+    expect(latestSync({ items: jobs })).toBe(job);
+    expect(latestSync({})).toBeUndefined();
+    expect(latestSync(null)).toBeUndefined();
     expect(jobSnapshot(undefined)).toEqual([]);
     expect(jobSnapshot({ status: "pending", created_at: time })).toEqual([{ status: "pending", startedAt: time, finishedAt: undefined, error: undefined, metrics: [] }]);
     expect(jobSnapshot({ ...job, completed_at: null })[0].finishedAt).toBe(time);
@@ -123,12 +127,15 @@ describe("normalizzazione", () => {
 });
 
 describe("servizi", () => {
+  it("mostra prima SISTER autosync, ANPR e GAIA Mobile Sync", () => {
+    expect(SYNC_SERVICES.slice(0, 3).map((service) => service.title)).toEqual(["SISTER autosync", "ANPR", "GAIA Mobile Sync"]);
+  });
   it("gestisce tutti i servizi senza esecuzioni", async () => {
     for (const service of SYNC_SERVICES) expect(await service.load("token")).toBeInstanceOf(Array);
   });
   it("legge i job di ogni integrazione e limita inCass a uno", async () => {
     for (const name of listNames) resolveMock(name, [{ ...job, created_at: "2026-01-01T00:00:00Z" }, job]);
-    for (const service of SYNC_SERVICES.slice(0, listNames.length)) {
+    for (const service of SYNC_JOB_SERVICES) {
       const rows = await service.load("token");
       expect(rows).toHaveLength(1);
       expect(rows[0].startedAt).toBe(time);
@@ -183,6 +190,8 @@ describe("servizi", () => {
     expect((await load("anpr"))[0].metrics).toContainEqual({ label: "Deceduti trovati", value: 3 });
     resolveMock("getElaborazioneAnprSummary", { recent_runs: [], calls_today: 0, effective_daily_limit: 100 });
     expect((await load("anpr"))[0].metrics).toContainEqual({ label: "Deceduti trovati", value: 0 });
+    resolveMock("getElaborazioneAnprSummary", { recent_runs: null, calls_today: 0, effective_daily_limit: 100 });
+    expect((await load("anpr"))[0].status).toBe("idle");
   });
 });
 

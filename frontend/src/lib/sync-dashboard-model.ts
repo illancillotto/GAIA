@@ -72,8 +72,10 @@ type Job = {
   error_detail?: string | null;
 };
 
-export function latestSync<T extends Job>(jobs: T[]): T | undefined {
-  return [...jobs].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
+export function latestSync<T extends Job>(jobs: T[] | { items?: T[] } | null | undefined): T | undefined {
+  const items = Array.isArray(jobs) ? jobs : jobs?.items;
+  if (!Array.isArray(items)) return undefined;
+  return [...items].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
 }
 
 export function jobSnapshot(job: Job | undefined, metrics: SyncMetric[] = []): SyncSnapshot[] {
