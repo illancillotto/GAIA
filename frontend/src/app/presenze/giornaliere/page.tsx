@@ -6,6 +6,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import { Badge } from "@/components/ui/badge";
+import { WhatsAppReminderAlert } from "@/components/presenze/whatsapp-reminder-alert";
 import {
   ApiError,
   getCurrentUser,
@@ -2735,6 +2736,8 @@ export default function PresenzeGiornalierePage() {
                   </div>
                 </div>
               ) : null}
+
+              <WhatsAppReminderAlert record={selectedRecord} />
 
               {(selectedRecord.detail_anomalies.length > 0 || selectedRecord.detail_error) ? (
                 <div className="mt-4 rounded-2xl border border-red-200 bg-gradient-to-br from-red-50 via-white to-white p-4">

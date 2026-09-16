@@ -6,6 +6,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import { Badge } from "@/components/ui/badge";
+import { WhatsAppReminderAlert } from "@/components/presenze/whatsapp-reminder-alert";
 import { DataTable } from "@/components/table/data-table";
 import {
   getCurrentUser,
@@ -40,8 +41,7 @@ type DailyEditForm = {
 const MONTHS_TO_SCAN = 12;
 
 function formatHours(minutes: number | null): string {
-  if (minutes == null) return "—";
-  return `${(minutes / 60).toFixed(2)} h`;
+  return minutes == null ? "—" : `${(minutes / 60).toFixed(2)} h`;
 }
 
 function formatMinutesInput(minutes: number | null): string {
@@ -190,14 +190,10 @@ export default function PresenzeAnomaliePage() {
 
   const collaboratorMap = useMemo(() => new Map(collaborators.map((item) => [item.id, item])), [collaborators]);
 
-  const selectedRecord = useMemo(() => {
-    const explicit = selectedRecordId ? (recordDetails[selectedRecordId] ?? null) : null;
-    if (explicit) {
-      return explicit;
-    }
-    if (!selectedRecordId) return null;
-    return null;
-  }, [recordDetails, selectedRecordId]);
+  const selectedRecord = useMemo(
+    () => (selectedRecordId ? (recordDetails[selectedRecordId] ?? null) : null),
+    [recordDetails, selectedRecordId],
+  );
 
   const selectedRow = useMemo(
     () => (selectedRecordId ? records.find((record) => record.id === selectedRecordId) ?? null : null),
@@ -470,6 +466,8 @@ export default function PresenzeAnomaliePage() {
                     {selectedRecord.effective_extra_minutes ? <Badge variant="success">extra {formatHours(selectedRecord.effective_extra_minutes)}</Badge> : null}
                   </div>
                 </div>
+
+                <WhatsAppReminderAlert record={selectedRecord} />
 
                 {(selectedRecord.detail_anomalies.length > 0 || selectedRecord.detail_error) ? (
                   <div className="rounded-2xl border border-red-200 bg-red-50 p-4">

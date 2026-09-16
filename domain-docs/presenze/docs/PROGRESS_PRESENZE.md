@@ -652,6 +652,14 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
 - WAHA entra nello stack standard con `restart: unless-stopped`; il deploy genera
   automaticamente i tre segreti bootstrap mancanti e verifica che l'API anonima
   sia negata. Il container attivo non abilita il provider né produce invii.
+- dal `2026-09-16`, nelle viste `/presenze/giornaliere` e
+  `/presenze/anomalie`, il dettaglio di una giornata passata non validata con
+  ingresso/uscita incompleta mostra un avviso contestuale e il collegamento alla
+  gestione WhatsApp. L'avviso e informativo: l'invio avviene solo se la giornata
+  rientra nella selezione backend, il provider e attivo, l'utente e collegato e
+  il telefono e valido. Il nuovo componente condiviso e coperto al `100%`
+  statement/branch/function/line; le suite delle due pagine restano verdi senza
+  introdurre esclusioni per il debito di coverage legacy della pagina anomalie.
 
 ## Gap aperti
 

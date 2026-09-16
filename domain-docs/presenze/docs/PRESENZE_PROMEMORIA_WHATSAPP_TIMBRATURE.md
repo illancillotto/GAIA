@@ -209,6 +209,12 @@ giornata e timbratura mancante.
 
 ## Prima dell'attivazione reale
 
+Le pagine operative `/presenze/giornaliere` e `/presenze/anomalie` mostrano nel
+dettaglio un avviso per le giornate passate non validate con punch incompleti e
+collegano alla dashboard WhatsApp. E un'indicazione potenziale: la selezione
+definitiva resta nel job e applica provider, mapping, telefono, STOP, validazione
+e assenza giustificata.
+
 - Procurare il numero dedicato e scansionare il QR della sessione WAHA.
 - Eseguire una settimana con `PRESENZE_WHATSAPP_PROVIDER=dry_run` e revisionare
   anteprime e storico dalla dashboard.
