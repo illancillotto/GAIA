@@ -158,6 +158,14 @@ invio immediato e l'anteprima non scrive sul database.
   funzioni operative e lo storico. Le modifiche sono lette dal watcher entro un
   minuto e non richiedono il riavvio dello scheduler.
 
+La modal presenta prima le tre scelte operative con descrizioni esplicite:
+**Disattivato**, **Modalita di prova** (consigliata per iniziare, registra senza
+inviare) e **Invio attivo**. Nella vista principale restano soltanto periodo da
+controllare, limite per esecuzione, fascia oraria e inclusione delle giornate
+senza timbrature. Collegamento WAHA, segreti, cron e pause sono raccolti nella
+sezione richiudibile **Impostazioni avanzate**. Salvare non esegue un invio
+immediato: la nuova configurazione vale dal controllo successivo.
+
 | Metodo | Route | Uso |
 | --- | --- | --- |
 | `GET` | `/presenze/whatsapp/dashboard` | KPI, configurazione e stato sessione |

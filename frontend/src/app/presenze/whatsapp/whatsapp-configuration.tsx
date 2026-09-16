@@ -17,6 +17,25 @@ type UpdateForm = <K extends keyof PresenzeWhatsAppConfig>(
 
 const numberValue = (value: string): number => Number.parseInt(value, 10);
 
+const CHANNEL_OPTIONS = [
+  {
+    value: "",
+    title: "Disattivato",
+    description: "Non prepara e non invia messaggi.",
+  },
+  {
+    value: "dry_run",
+    title: "Modalita di prova",
+    description: "Prepara i messaggi e li registra, ma non li invia.",
+    badge: "Consigliato per iniziare",
+  },
+  {
+    value: "waha",
+    title: "Invio attivo",
+    description: "Invia davvero i promemoria tramite WhatsApp.",
+  },
+] as const;
+
 export function WhatsAppConfiguration({ configuration, busy, onSave }: Props) {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<PresenzeWhatsAppConfig | null>(configuration);
@@ -135,16 +154,14 @@ function ConfigurationDialog(props: DialogProps) {
       aria-labelledby="whatsapp-config-title"
     >
       <form
-        className="flex h-[calc(100vh-16px)] w-[calc(100vw-16px)] max-w-[1500px] flex-col overflow-hidden rounded-[30px] bg-[#f7faf7] shadow-2xl sm:h-[calc(100vh-32px)]"
+        className="flex max-h-[calc(100vh-16px)] w-[calc(100vw-16px)] max-w-6xl flex-col overflow-hidden rounded-[30px] bg-[#f7faf7] shadow-2xl sm:max-h-[calc(100vh-32px)]"
         onSubmit={props.onSubmit}
       >
         <DialogHeader onClose={props.onClose} />
-        <div className="flex-1 overflow-y-auto p-5 sm:p-8">
-          <div className="grid gap-5 lg:grid-cols-3">
-            <ModeSection form={props.form} update={props.update} />
-            <WahaSection {...props} />
-            <ScheduleSection form={props.form} update={props.update} />
-          </div>
+        <div className="flex-1 space-y-5 overflow-y-auto p-5 sm:p-7">
+          <ModeSection form={props.form} update={props.update} />
+          <ScheduleSection form={props.form} update={props.update} />
+          <AdvancedSection {...props} />
         </div>
         <DialogFooter busy={props.busy} />
       </form>
@@ -157,13 +174,13 @@ function DialogHeader({ onClose }: { onClose: () => void }) {
     <header className="flex items-start justify-between border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
       <div>
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-700">
-          Configurazione protetta
+          Solo super admin
         </p>
         <h2 id="whatsapp-config-title" className="mt-1 text-2xl font-semibold">
-          Canale WhatsApp
+          Configura i promemoria WhatsApp
         </h2>
         <p className="mt-1 text-sm text-slate-500">
-          I segreti salvati non vengono mai mostrati in chiaro.
+          Scegli prima se fare una prova o attivare gli invii reali.
         </p>
       </div>
       <button className="btn-secondary" type="button" onClick={onClose}>
@@ -175,60 +192,30 @@ function DialogHeader({ onClose }: { onClose: () => void }) {
 
 function ModeSection({ form, update }: { form: PresenzeWhatsAppConfig; update: UpdateForm }) {
   return (
-    <fieldset className="rounded-3xl border border-slate-200 bg-white p-5">
-      <legend className="px-2 font-semibold">1. Modalita</legend>
-      <label className="text-sm font-medium">
-        Stato del canale
-        <select
-          className="field mt-2 w-full"
-          value={form.provider}
-          onChange={(event) =>
-            update("provider", event.target.value as PresenzeWhatsAppConfig["provider"])
-          }
-        >
-          <option value="">Spento</option>
-          <option value="dry_run">Prova senza invio</option>
-          <option value="waha">WAHA, invio reale</option>
-        </select>
-      </label>
-      <p className="mt-3 text-xs leading-5 text-slate-500">
-        Usa prima &ldquo;Prova senza invio&rdquo; per verificare destinatari e testi nello storico.
-      </p>
-    </fieldset>
-  );
-}
-
-function WahaSection(props: DialogProps) {
-  return (
-    <fieldset className="rounded-3xl border border-slate-200 bg-white p-5 lg:col-span-2">
-      <legend className="px-2 font-semibold">2. Collegamento WAHA</legend>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <TextField
-          label="URL WAHA"
-          value={props.form.waha_url}
-          onValue={(value) => props.update("waha_url", value)}
-        />
-        <TextField
-          label="Sessione"
-          value={props.form.waha_session}
-          onValue={(value) => props.update("waha_session", value)}
-        />
-        <SecretField
-          label="API key WAHA"
-          configured={props.configuration.api_key_configured}
-          value={props.apiKey}
-          clear={props.clearApiKey}
-          onValue={props.setApiKey}
-          onClear={props.setClearApiKey}
-        />
-        <SecretField
-          label="Firma webhook HMAC"
-          configured={props.configuration.hmac_key_configured}
-          value={props.hmacKey}
-          clear={props.clearHmacKey}
-          onValue={props.setHmacKey}
-          onClear={props.setClearHmacKey}
-        />
+    <fieldset className="rounded-3xl border border-emerald-900/10 bg-white p-5">
+      <legend className="px-2 text-base font-semibold text-slate-900">1. Cosa vuoi fare?</legend>
+      <div className="grid gap-3 md:grid-cols-3">
+        {CHANNEL_OPTIONS.map((option) => (
+          <label
+            key={option.value}
+            className={`relative cursor-pointer rounded-2xl border p-4 transition ${form.provider === option.value ? "border-emerald-700 bg-emerald-50 ring-2 ring-emerald-700/10" : "border-slate-200 bg-white hover:border-emerald-700/40"}`}
+          >
+            <input
+              className="sr-only"
+              type="radio"
+              name="provider"
+              value={option.value}
+              checked={form.provider === option.value}
+              onChange={() => update("provider", option.value)}
+            />
+            <span className="flex items-center gap-2 font-semibold text-slate-900">
+              <span className={`h-3 w-3 rounded-full ${form.provider === option.value ? "bg-emerald-700" : "bg-slate-300"}`} />
+              {option.title}
+            </span>
+            <span className="mt-2 block text-sm leading-5 text-slate-600">{option.description}</span>
+            {"badge" in option ? <span className="mt-3 inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">{option.badge}</span> : null}
+          </label>
+        ))}
       </div>
     </fieldset>
   );
@@ -236,22 +223,47 @@ function WahaSection(props: DialogProps) {
 
 function ScheduleSection({ form, update }: { form: PresenzeWhatsAppConfig; update: UpdateForm }) {
   return (
-    <fieldset className="rounded-3xl border border-slate-200 bg-white p-5 lg:col-span-3">
-      <legend className="px-2 font-semibold">3. Pianificazione e limiti</legend>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <TextField label="Cron (Europe/Rome)" value={form.reminder_cron} onValue={(value) => update("reminder_cron", value)} />
-        <NumberField label="Giorni da controllare" value={form.lookback_days} min={1} max={31} onValue={(value) => update("lookback_days", value)} />
-        <NumberField label="Massimo per esecuzione" value={form.max_per_run} min={1} max={100} onValue={(value) => update("max_per_run", value)} />
-        <NumberField label="Pausa minima (secondi)" value={form.min_delay_seconds} min={0} max={3600} onValue={(value) => update("min_delay_seconds", value)} />
-        <NumberField label="Pausa massima (secondi)" value={form.max_delay_seconds} min={0} max={3600} onValue={(value) => update("max_delay_seconds", value)} />
-        <NumberField label="Invii dalle ore" value={form.send_start_hour} min={0} max={23} onValue={(value) => update("send_start_hour", value)} />
-        <NumberField label="Invii fino alle ore" value={form.send_end_hour} min={1} max={24} onValue={(value) => update("send_end_hour", value)} />
-        <label className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium">
-          <input type="checkbox" checked={form.include_missing_punches} onChange={(event) => update("include_missing_punches", event.target.checked)} />
-          Includi giornate senza timbrature
-        </label>
+    <fieldset className="rounded-3xl border border-emerald-900/10 bg-white p-5">
+      <legend className="px-2 text-base font-semibold text-slate-900">2. Quando e quanto inviare</legend>
+      <p className="mb-4 text-sm text-slate-600">GAIA controlla le giornate chiuse e invia solo nella fascia oraria scelta.</p>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <NumberField label="Controlla gli ultimi giorni" value={form.lookback_days} min={1} max={31} onValue={(value) => update("lookback_days", value)} />
+        <NumberField label="Massimo messaggi per volta" value={form.max_per_run} min={1} max={100} onValue={(value) => update("max_per_run", value)} />
+        <NumberField label="Non inviare prima delle" value={form.send_start_hour} min={0} max={23} onValue={(value) => update("send_start_hour", value)} />
+        <NumberField label="Non inviare dopo le" value={form.send_end_hour} min={1} max={24} onValue={(value) => update("send_end_hour", value)} />
       </div>
+      <label className="mt-4 flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+        <input className="mt-0.5" type="checkbox" checked={form.include_missing_punches} onChange={(event) => update("include_missing_punches", event.target.checked)} />
+        <span><strong className="block text-slate-900">Avvisa anche chi non ha nessuna timbratura</strong><span className="text-slate-600">Lascia disattivato se vuoi segnalare solo ingressi o uscite incomplete.</span></span>
+      </label>
     </fieldset>
+  );
+}
+
+function AdvancedSection(props: DialogProps) {
+  return (
+    <details className="group rounded-3xl border border-slate-200 bg-white">
+      <summary className="cursor-pointer list-none px-5 py-4 font-semibold text-slate-800 marker:hidden">
+        <span className="flex items-center justify-between gap-3">
+          <span><span className="block">Impostazioni avanzate</span><span className="mt-1 block text-sm font-normal text-slate-500">Collegamento tecnico, orario automatico e pause di sicurezza.</span></span>
+          <span aria-hidden="true" className="text-xl text-emerald-800 transition group-open:rotate-45">+</span>
+        </span>
+      </summary>
+      <div className="border-t border-slate-200 p-5">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <TextField label="Indirizzo del servizio WAHA" value={props.form.waha_url} onValue={(value) => props.update("waha_url", value)} />
+          <TextField label="Nome della sessione WhatsApp" value={props.form.waha_session} onValue={(value) => props.update("waha_session", value)} />
+          <TextField label="Programmazione automatica (cron)" value={props.form.reminder_cron} onValue={(value) => props.update("reminder_cron", value)} />
+          <SecretField label="Chiave di accesso WAHA" configured={props.configuration.api_key_configured} value={props.apiKey} clear={props.clearApiKey} onValue={props.setApiKey} onClear={props.setClearApiKey} />
+          <SecretField label="Chiave di sicurezza webhook" configured={props.configuration.hmac_key_configured} value={props.hmacKey} clear={props.clearHmacKey} onValue={props.setHmacKey} onClear={props.setClearHmacKey} />
+          <div className="grid grid-cols-2 gap-3">
+            <NumberField label="Pausa minima" value={props.form.min_delay_seconds} min={0} max={3600} suffix="secondi" onValue={(value) => props.update("min_delay_seconds", value)} />
+            <NumberField label="Pausa massima" value={props.form.max_delay_seconds} min={0} max={3600} suffix="secondi" onValue={(value) => props.update("max_delay_seconds", value)} />
+          </div>
+        </div>
+        <p className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-900">Non modificare questi valori se il collegamento funziona. Le chiavi salvate restano cifrate e non vengono mai mostrate.</p>
+      </div>
+    </details>
   );
 }
 
@@ -259,7 +271,7 @@ function DialogFooter({ busy }: { busy: boolean }) {
   return (
     <footer className="flex items-center justify-between gap-4 border-t border-slate-200 bg-white px-5 py-4 sm:px-8">
       <p className="text-xs text-slate-500">
-        Le modifiche diventano effettive entro un minuto, senza deploy.
+        Il salvataggio non invia messaggi subito. Le modifiche valgono dal prossimo controllo.
       </p>
       <button className="btn-primary" disabled={busy} type="submit">
         {busy ? "Salvataggio..." : "Salva configurazione"}
@@ -288,10 +300,11 @@ type NumberFieldProps = {
   value: number;
   min: number;
   max: number;
+  suffix?: string;
   onValue: (value: number) => void;
 };
 
-function NumberField({ label, value, min, max, onValue }: NumberFieldProps) {
+function NumberField({ label, value, min, max, suffix, onValue }: NumberFieldProps) {
   return (
     <label className="text-sm font-medium">
       {label}
@@ -303,6 +316,7 @@ function NumberField({ label, value, min, max, onValue }: NumberFieldProps) {
         value={value}
         onChange={(event) => onValue(numberValue(event.target.value))}
       />
+      {suffix ? <span className="mt-1 block text-xs font-normal text-slate-500">{suffix}</span> : null}
     </label>
   );
 }
