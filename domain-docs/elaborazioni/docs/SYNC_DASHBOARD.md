@@ -18,8 +18,8 @@ I monitor nativi sono riutilizzati tramite `NativeWorkspaceRenderer`; quelli
 non nativi conservano il fallback iframe esistente. API, permessi e azioni
 operative dei monitor restano invariati.
 
-Le modali dei monitor arrivano a `1472 px` di larghezza e `1035 px` di altezza,
-con margine orizzontale minimo di `16 px` per lato e limite al `96%` dell'altezza
+Le modali dei monitor arrivano a `1600 px` di larghezza e `1035 px` di altezza,
+con margine orizzontale minimo di `8 px` per lato e limite al `96%` dell'altezza
 visibile. Il contenuto e gli iframe utilizzano l'altezza residua sotto la
 testata; dettagli e pianificazioni restano compatti.
 

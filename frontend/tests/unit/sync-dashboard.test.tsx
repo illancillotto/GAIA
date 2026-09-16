@@ -263,7 +263,7 @@ describe("interfaccia e aggiornamento", () => {
     hidden.remove();
     fireEvent.click(lastButton);
     expect(await screen.findByText("Monitor: /elaborazioni/capacitas?section=incass")).toBeInTheDocument();
-    expect(screen.getByRole("dialog")).toHaveClass("h-[min(96dvh,1035px)]", "w-[min(calc(100%-2rem),1472px)]");
+    expect(screen.getByRole("dialog")).toHaveClass("h-[min(96dvh,1035px)]", "w-[min(calc(100%-1rem),1600px)]");
     fireEvent.click(screen.getByRole("button", { name: "Apri lavorazione" }));
     expect(await screen.findByText("Monitor: /elaborazioni/batches/123")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
