@@ -204,6 +204,27 @@ WAHA strettamente necessarie. Creazione del container e aggiornamento
 dell'immagine restano operazioni infrastrutturali; GAIA non accede al socket
 Docker e non espone la console WAHA.
 
+### Recupero della sessione dopo la scadenza del QR
+
+Se il QR non viene scansionato entro i tentativi consentiti da WAHA, il motore
+NOWEB puo registrare `QR refs attempts ended` e lasciare la sessione `FAILED`
+("In errore" nella modal). Il container puo restare sano e le API rispondere
+HTTP 200: questo non implica che la sessione WhatsApp sia utilizzabile.
+
+Dal 2026-09-16, `Avvia e genera QR` legge lo stato corrente e usa
+`POST /api/sessions/{session}/restart` soltanto per `FAILED`. Il normale
+`/start` in quello stato restituisce "sessione gia in esecuzione" senza
+recuperarla. Per sessioni assenti resta la creazione, per gli altri stati
+resta l'avvio ordinario. Il recupero non esegue logout e non cambia provider.
+
+Aprire `Gestisci collegamento`, premere `Avvia e genera QR` e scansionare il
+nuovo QR da WhatsApp, `Dispositivi collegati`. Il polling mostra il QR quando
+disponibile. La scadenza resta possibile; ripetere l'azione se necessario.
+Gli errori del gateway vengono restituiti senza cicli automatici di riavvio.
+
+Verifica in produzione: `FAILED -> STARTING -> SCAN_QR_CODE`, PNG disponibile,
+backend healthy e provider ancora `dry_run`, senza invii reali.
+
 ## Copertura anagrafica (verifica 2026-09-15)
 
 196 collaboratori attivi, 184 collegati a un utente GAIA, 12 senza collegamento; 15 collegati

@@ -93,6 +93,40 @@ def test_start_creates_or_starts_and_logout() -> None:
     assert logout_requests[0].read() == b"{}"
 
 
+@pytest.mark.parametrize("status", ["FAILED", " failed ", "STOPPED", "STARTING", "SCAN_QR_CODE", "WORKING"])
+def test_start_recovers_only_failed_sessions(status: str) -> None:
+    requests: list[tuple[str, str]] = []
+    action = "restart" if status.strip().upper() == "FAILED" else "start"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append((request.method, request.url.path))
+        assert request.headers["x-api-key"] == "secret"
+        if request.method == "GET":
+            return httpx.Response(200, json={"status": status})
+        return httpx.Response(201, json={"status": "SCAN_QR_CODE"})
+
+    assert manager(handler, waha_session="office").start()["status"] == "scan_qr_code"
+    assert requests == [
+        ("GET", "/api/sessions/office"),
+        ("POST", f"/api/sessions/office/{action}"),
+    ]
+
+
+def test_failed_session_recovery_propagates_gateway_failure_without_retry() -> None:
+    requests: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request.url.path)
+        if request.method == "GET":
+            return httpx.Response(200, json={"status": "FAILED"})
+        return httpx.Response(500, json={"message": "Restart failed"})
+
+    with pytest.raises(WahaSessionError, match="Restart failed") as failure:
+        manager(handler).start()
+    assert failure.value.status_code == 502
+    assert requests == ["/api/sessions/default", "/api/sessions/default/restart"]
+
+
 def test_qr_encodes_png_and_rejects_invalid_payloads() -> None:
     requests: list[httpx.Request] = []
 

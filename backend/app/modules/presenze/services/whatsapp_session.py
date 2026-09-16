@@ -37,7 +37,10 @@ class WahaSessionManager:
                 "POST", "/api/sessions", json={"name": self.session, "start": True}
             )
         else:
-            response = self._request("POST", f"/api/sessions/{self.session}/start")
+            status = _session_response(self.session, current)["status"]
+            # WAHA considers FAILED sessions running, so /start cannot recover them.
+            action = "restart" if status == "failed" else "start"
+            response = self._request("POST", f"/api/sessions/{self.session}/{action}")
         return _session_response(self.session, response)
 
     def logout(self) -> dict[str, str | None]:

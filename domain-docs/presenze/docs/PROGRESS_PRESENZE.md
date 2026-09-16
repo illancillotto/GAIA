@@ -665,6 +665,24 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
   in una modal senza esporre dashboard, password o API key WAHA al browser.
   L'associazione del telefono resta separata dall'abilitazione del provider.
 
+### Recupero sessioni WhatsApp fallite - 2026-09-16
+
+- corretto `Avvia e genera QR`: il backend usa il restart WAHA solo per
+  `FAILED`, evitando il no-op "sessione gia in esecuzione" dopo
+  `QR refs attempts ended`; creazione e avvio degli altri stati invariati;
+- test di regressione per stati, normalizzazione, sessione non predefinita e
+  propagazione degli errori senza retry; servizio `whatsapp_session.py` al
+  100% su 77 statement e 14 branch, suite WhatsApp di 47 test verde;
+- lint backend e ratchet contro `origin/main@16006b3a` verdi; `start` passa
+  da cyc/cog `2/1` a `3/3`, LOC `9 -> 11`, senza nuove violation.
+  La baseline globale resta invariata: sincronizzazione respinta per debito
+  esterno al fix e verifica di riproducibilita negativa;
+- rilascio mirato del backend sul CED con backup del sorgente e immagine
+  `gaia-backend:before-whatsapp-session-recovery-20260916`; 13 test della
+  sessione verdi anche nell'immagine Python 3.11, coverage 100%; verifica live
+  `FAILED -> STARTING -> SCAN_QR_CODE`, QR disponibile, health OK e `dry_run`;
+- runbook aggiornato in `PRESENZE_PROMEMORIA_WHATSAPP_TIMBRATURE.md`.
+
 ### Capi operai con sabati individuali alternati - 2026-09-16
 
 - la ricorrenza individuale `alternating_weeks` ogni 14 giorni prevale sul
