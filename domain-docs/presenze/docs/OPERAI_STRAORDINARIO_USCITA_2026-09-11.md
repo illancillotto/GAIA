@@ -14,8 +14,9 @@ STR/MPE importati non possono ripristinare minuti esclusi.
 
 Sono coperti anche OPEF0613 e i sabati estivi effettivi OPESACE (06:00–12:00),
 OPSABE (06:00–12:30), OSAB5.3_11.3 (05:30–11:30), usando le configurazioni
-persistite dei gruppi senza modificare il DB. Un codice feriale da sette ore
-esplicitamente lavorato al sabato conserva la propria durata. Il turno delle
+persistite dei gruppi senza modificare il DB. In assenza di una rotazione
+individuale, un codice feriale da sette ore esplicitamente lavorato al sabato
+conserva la propria durata. Il turno delle
 05:30 conserva l'ordinario notturno 05:30–06:00.
 
 Per OPE0714 rimasto nominalmente 07:00–14:00 viene applicato il cambio operativo
@@ -25,7 +26,18 @@ oltre 05:30 ed entro 06:00, ultima uscita fra 13:00 e 22:00 incluse. Il caso
 minuti anticipati. Le coppie incomplete/notturne non vengono trasformate in
 turni diurni; impiegati e codici sconosciuti mantengono il percorso esistente.
 
-## Verifiche
+## Estensione del 16 settembre: sabati dei capi operai
+
+La [rotazione individuale ogni 14 giorni](CAPI_OPERAI_SABATI_ALTERNATI.md)
+prevale sul calendario generico: il proprio sabato usa il teorico del sabato,
+mentre il lavoro fuori turno e straordinario. Questa precedenza vale anche
+quando INAZ riporta un codice feriale, estivo o di riposo supportato.
+L'estensione, attivata inizialmente con l'overlay `capi-20260916`, viene ora
+inclusa nel rilascio standard versionato; non fa parte del rilascio dell'11
+settembre riportato sotto. Le quattro assegnazioni decorrono dal 12 settembre,
+con primi sabati 12 e 19 settembre per i due gruppi.
+
+## Verifiche del rilascio dell'11 settembre
 
 - Regressione mirata: 184 test; tre runtime al 100% statement (511/511).
 - Suite finale estesa: **422 test passati**, tre runtime al 100% statement

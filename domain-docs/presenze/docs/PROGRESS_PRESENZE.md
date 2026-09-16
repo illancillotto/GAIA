@@ -665,6 +665,21 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
   in una modal senza esporre dashboard, password o API key WAHA al browser.
   L'associazione del telefono resta separata dall'abilitazione del provider.
 
+### Capi operai con sabati individuali alternati - 2026-09-16
+
+- la ricorrenza individuale `alternating_weeks` ogni 14 giorni prevale sul
+  calendario mensile del gruppo operaio in giornaliere, anomalie, export e
+  snapshot GATE; il sabato assegnato usa il teorico previsto, quello fuori turno
+  ha teorico zero e le timbrature complete diventano straordinario;
+- i template produzione `OPE_CAPI_A_20260912` e `OPE_CAPI_B_20260919` risultano
+  presenti su PostgreSQL con due assegnazioni e dodici regole ciascuno; nessuna
+  migration o modifica del mapping identita e necessaria;
+- suite mirata: 302 test, coverage per-file al 100% su 486 statement e 168 rami;
+  regressione `test_presenze_*`/`test_gate_mobile*`, test PostgreSQL, Ruff,
+  compilazione e complexity ratchet passano;
+- documentazione operativa: `CAPI_OPERAI_SABATI_ALTERNATI.md`; l'overlay iniziale
+  viene sostituito dal codice versionato e dal deploy standard.
+
 ## Gap aperti
 
 ### Soglia MPE a cinque ore con avviso non bloccante - 2026-09-09

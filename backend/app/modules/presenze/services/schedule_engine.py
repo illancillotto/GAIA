@@ -22,16 +22,17 @@ from app.modules.presenze.services.inaz_minute_buckets import (
     inaz_special_day,
     reconcile_inaz_minute_buckets,
 )
-from app.modules.presenze.services.operai_daily_policy import (
-    PENDING_PUNCH_REQUEST_SOURCE,
-    assigned_daily_start,
-    recognized_daily_minutes,
-)
+from app.modules.presenze.services.operai_daily_policy import PENDING_PUNCH_REQUEST_SOURCE
 from app.modules.presenze.services.operai_recognized_minutes import RecognizedOperaiMinutes
 from app.modules.presenze.services.operai_rules import (
     OperaiRuleConfig,
     load_operai_rule_configs,
-    resolve_operai_rule,
+)
+from app.modules.presenze.services.operai_schedule_policy import (
+    OperaiDayPolicy,
+    build_operai_day_policy,
+    has_individual_saturday,
+    resolve_individual_operai_rule,
 )
 from app.modules.presenze.services.operational_quality import (
     OperaiOperationalQuality,
@@ -70,6 +71,7 @@ class DayClassification:
     shift_night_minutes: int = 0
     shift_festive_night_minutes: int = 0
     recognized_minutes: RecognizedOperaiMinutes | None = None
+    operai_day_policy: OperaiDayPolicy | None = None
 
 
 @dataclass(frozen=True)
@@ -182,12 +184,17 @@ def classify_daily_record(
         # A scheduled Saturday/weekday should be exported as ordinary ferial, not festive.
         special_day = False
 
+    individual_saturday = has_individual_saturday(record, template, rules)
+    policy = build_operai_day_policy(
+        resolve_individual_operai_rule(collaborator, record, context.operai_rule_configs if context else None, individual_saturday),
+        record, punches, matched_rules, individual_saturday,
+    )
     operai_quality = evaluate_operai_operational_quality(
         collaborator,
         record,
         punches,
         operai_rule_configs=context.operai_rule_configs if context is not None else None,
-        recognized_minutes=_recognized_operai_minutes(collaborator, record, punches, matched_rules, context),
+        day_policy=policy,
     )
     if operai_quality.is_applicable and operai_quality.worked_minutes is not None:
         if holiday is None:
@@ -197,12 +204,16 @@ def classify_daily_record(
             matched_rules,
             special_day=special_day,
         )
-        return _classify_operai_day(operai_quality, worked_buckets, special_day, holiday_kind, grants_recovery_day)
+        return replace(
+            _classify_operai_day(operai_quality, worked_buckets, special_day, holiday_kind, grants_recovery_day),
+            operai_day_policy=policy,
+        )
 
     pending = _pending_punch_buckets(record, raw_payload, punches, matched_rules, special_day)
     if pending is not None:
-        return _pending_punch_classification(
-            record, pending, special_day, holiday_kind, grants_recovery_day
+        return replace(
+            _pending_punch_classification(record, pending, special_day, holiday_kind, grants_recovery_day),
+            operai_day_policy=policy,
         )
 
     if raw_payload is not None and detail_has_authoritative_classification(raw_payload):
@@ -229,9 +240,10 @@ def classify_daily_record(
             shift_night_minutes=worked_buckets.shift_night_minutes,
             shift_festive_night_minutes=worked_buckets.shift_festive_night_minutes,
             source="detail",
+            operai_day_policy=policy,
         )
 
-    if context is None or not punches:
+    if context is None or not punches or assignment is None or template is None or not template.is_active or not matched_rules:
         return DayClassification(
             special_day=special_day,
             ordinary_minutes=record.ordinary_minutes,
@@ -240,39 +252,7 @@ def classify_daily_record(
             grants_recovery_day=grants_recovery_day,
             overtime_day_minutes=imported_extra_value or 0,
             source="imported",
-        )
-
-    if assignment is None:
-        return DayClassification(
-            special_day=special_day,
-            ordinary_minutes=record.ordinary_minutes,
-            extra_minutes=imported_extra_value,
-            holiday_kind=holiday_kind,
-            grants_recovery_day=grants_recovery_day,
-            overtime_day_minutes=imported_extra_value or 0,
-            source="imported",
-        )
-
-    if template is None or not template.is_active:
-        return DayClassification(
-            special_day=special_day,
-            ordinary_minutes=record.ordinary_minutes,
-            extra_minutes=imported_extra_value,
-            holiday_kind=holiday_kind,
-            grants_recovery_day=grants_recovery_day,
-            overtime_day_minutes=imported_extra_value or 0,
-            source="imported",
-        )
-
-    if not matched_rules:
-        return DayClassification(
-            special_day=special_day,
-            ordinary_minutes=record.ordinary_minutes,
-            extra_minutes=imported_extra_value,
-            holiday_kind=holiday_kind,
-            grants_recovery_day=grants_recovery_day,
-            overtime_day_minutes=imported_extra_value or 0,
-            source="imported",
+            operai_day_policy=policy,
         )
 
     worked_buckets = classify_worked_minute_buckets(punches, matched_rules, special_day=special_day)
@@ -294,6 +274,7 @@ def classify_daily_record(
         shift_night_minutes=worked_buckets.shift_night_minutes,
         shift_festive_night_minutes=worked_buckets.shift_festive_night_minutes,
         source="template",
+        operai_day_policy=policy,
     )
 
 
@@ -392,17 +373,6 @@ def _classify_operai_day(
         source="operai_formula",
         recognized_minutes=quality.recognized_minutes,
     )
-
-
-def _recognized_operai_minutes(collaborator, record, punches, rules, context):
-    rule = resolve_operai_rule(collaborator, record, context.operai_rule_configs if context else None)
-    if rule is None:
-        return None
-    # A template can list alternative shifts on the same day. Its earliest
-    # start is not the employee's assigned shift; use the daily INAZ code then.
-    starts = {item.start_time for item in rules}
-    start = assigned_daily_start(record, rule, starts)
-    return recognized_daily_minutes(punches, rule, scheduled_start=start)
 
 
 def _recognized_operai_buckets(quality, buckets, festive):

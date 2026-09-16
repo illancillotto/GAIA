@@ -22,6 +22,7 @@ from app.modules.presenze.services.operai_rules import (
     normalize_operai_schedule_code,  # noqa: F401 - compatibility re-export
     resolve_operai_rule,
 )
+from app.modules.presenze.services.operai_schedule_policy import OperaiDayPolicy
 from app.modules.presenze.services.parser import extract_detail_payload
 
 
@@ -74,9 +75,10 @@ def evaluate_operai_operational_quality(
     *,
     operai_rule_configs: Sequence[OperaiRuleConfig] | None = None,
     catasto_month_saturday_coverage_count: int | None = None,
-    recognized_minutes: RecognizedOperaiMinutes | None = None,
+    day_policy: OperaiDayPolicy | None = None,
 ) -> OperaiOperationalQuality:
-    resolved_rule = resolve_operai_rule(collaborator, record, operai_rule_configs)
+    policy = day_policy or OperaiDayPolicy(resolve_operai_rule(collaborator, record, operai_rule_configs))
+    resolved_rule = policy.rule
     if resolved_rule is None:
         return OperaiOperationalQuality(
             status="unknown",
@@ -92,7 +94,7 @@ def evaluate_operai_operational_quality(
     has_inaz_anomaly = _record_has_inaz_anomaly(record)
     covered_absence_minutes = covered_operai_absence_minutes(record, resolved_rule)
     expected_minutes, notes = _operai_expected_minutes(
-        collaborator, record, resolved_rule, worked_minutes, covered_absence_minutes,
+        collaborator, record, policy, worked_minutes, covered_absence_minutes,
         catasto_month_saturday_coverage_count,
     )
 
@@ -108,7 +110,7 @@ def evaluate_operai_operational_quality(
         )
 
     worked_minutes_value = worked_minutes or 0
-    recognized_minutes = recognized_minutes or recognized_daily_minutes(punches, resolved_rule)
+    recognized_minutes = policy.recognized_minutes or recognized_daily_minutes(punches, resolved_rule)
     worked_minutes_value, missing_minutes, mpe_minutes = _operai_accounted_totals(
         record, recognized_minutes, worked_minutes_value, expected_minutes, covered_absence_minutes,
     )
@@ -125,27 +127,34 @@ def evaluate_operai_operational_quality(
     return _with_operai_notes(record, quality, resolved_rule, covered_absence_minutes)
 
 
-def _operai_expected_minutes(collaborator, record, rule, worked_minutes, absence, saturday_count):
+def _operai_expected_minutes(collaborator, record, policy, worked_minutes, absence, saturday_count):
+    rule = policy.rule
     expected_minutes = rule.expected_minutes
     formula_code = rule.formula_code
     notes: list[str] = [f"Formula operaio {formula_code}: teorico {expected_minutes // 60}h"]
     if getattr(collaborator, "operai_group", None):
         notes.append(f"Gruppo operaio: {collaborator.operai_group}")
-    if (
-        collaborator.operai_group == PRESENZE_OPERAI_GROUP_CATASTO_MAGAZZINO
-        and record.work_date.weekday() == 5
-        and expected_minutes > 0
-        and worked_minutes is None
-        and absence == 0
-        and (saturday_count or 0) >= 2
-    ):
+    if _catasto_month_covers_saturday(collaborator, record, policy, worked_minutes, absence, saturday_count):
         expected_minutes = 0
         notes[0] = f"Formula operaio {formula_code}: teorico 0h"
         notes.append("Sabato catasto coperto da altri due sabati lavorati/giustificati nel mese")
     if record.work_date.weekday() == 5 and expected_minutes == 0:
-        notes.append("Sabato non previsto per il gruppo operaio configurato")
+        calendar = "turno individuale" if policy.individual_saturday else "gruppo operaio configurato"
+        notes.append(f"Sabato non previsto per il {calendar}")
 
     return expected_minutes, notes
+
+
+def _catasto_month_covers_saturday(collaborator, record, policy, worked_minutes, absence, saturday_count):
+    return (
+        collaborator.operai_group == PRESENZE_OPERAI_GROUP_CATASTO_MAGAZZINO
+        and not policy.individual_saturday
+        and record.work_date.weekday() == 5
+        and policy.rule.expected_minutes > 0
+        and worked_minutes is None
+        and absence == 0
+        and (saturday_count or 0) >= 2
+    )
 
 
 def _operai_status(missing, extra, rule):
@@ -190,7 +199,7 @@ def build_daily_operational_quality(
             punches,
             operai_rule_configs=operai_rule_configs,
             catasto_month_saturday_coverage_count=catasto_month_saturday_coverage_count,
-            recognized_minutes=getattr(classification, "recognized_minutes", None),
+            day_policy=getattr(classification, "operai_day_policy", None),
         )
     return build_non_operai_operational_quality(
         collaborator,
