@@ -8,6 +8,7 @@ export function SyncServiceCard({ service, state, onDetails, onOpen }: {
   onOpen: () => void;
 }) {
   const summary = syncSummary(state);
+  const highlights = state?.snapshots.flatMap((snapshot) => snapshot.metrics).slice(0, 3) ?? [];
   return (
     <article aria-label={service.title} id={service.id} className="flex h-full min-w-0 flex-col rounded-[24px] border border-[#d9dfd6] bg-white p-5 shadow-sm transition-shadow hover:shadow-md sm:p-6">
       <div className="mb-4 flex items-center justify-between gap-2">
@@ -16,6 +17,15 @@ export function SyncServiceCard({ service, state, onDetails, onOpen }: {
       </div>
       <h3 className="text-lg font-semibold text-[#163524]">{service.title}</h3>
       <p className="mt-2 text-sm leading-6 text-stone-600">{service.description}</p>
+      <div className="mt-4 rounded-2xl bg-[#f4f7f5] px-3 py-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">In evidenza</p>
+        {highlights.length ? <div className="mt-2 grid grid-cols-3 gap-2">
+          {highlights.map((metric) => <div key={`${metric.label}-${metric.value}`} className="min-w-0">
+            <p className="truncate text-[11px] text-stone-500" title={metric.label}>{metric.label}</p>
+            <p className="mt-0.5 truncate text-sm font-semibold text-[#163524]" title={String(metric.value)}>{metric.value}</p>
+          </div>)}
+        </div> : <p className="mt-1 text-xs text-stone-500">Nessun dato disponibile</p>}
+      </div>
       <div className="mb-5 mt-auto pt-5">
         <p className="text-xs text-stone-500">Ultimo avvio</p>
         <p className="mt-1 text-sm font-medium text-stone-800">{summary.lastStarted ? formatDateTime(summary.lastStarted) : "Non disponibile"}</p>

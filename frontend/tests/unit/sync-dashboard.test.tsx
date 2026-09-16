@@ -201,8 +201,10 @@ describe("interfaccia e aggiornamento", () => {
     const onOpen = vi.fn();
     const { rerender } = render(<SyncServiceCard service={service} onDetails={onDetails} onOpen={onOpen} />);
     expect(screen.getByText("Caricamento stato...")).toBeInTheDocument();
-    rerender(<SyncServiceCard service={service} onDetails={onDetails} onOpen={onOpen} state={{ snapshots: [{ status: "failed", startedAt: time, metrics: [], error: "errore sync" }], updatedAt: time, error: null }} />);
+    rerender(<SyncServiceCard service={service} onDetails={onDetails} onOpen={onOpen} state={{ snapshots: [{ status: "failed", startedAt: time, metrics: [{ label: "Record importati", value: 12 }], error: "errore sync" }], updatedAt: time, error: null }} />);
     expect(screen.getByText("Da verificare")).toBeInTheDocument();
+    expect(screen.getByText("Record importati")).toBeInTheDocument();
+    expect(screen.getByText("12")).toBeInTheDocument();
     expect(screen.queryByText("errore sync")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Vedi dettagli" }));
     fireEvent.click(screen.getByRole("button", { name: "Apri monitor" }));
@@ -257,6 +259,7 @@ describe("interfaccia e aggiornamento", () => {
     hidden.remove();
     fireEvent.click(lastButton);
     expect(await screen.findByText("Monitor: /elaborazioni/capacitas?section=incass")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toHaveClass("h-[min(88dvh,900px)]", "w-[min(calc(100%-2rem),1280px)]");
     fireEvent.click(screen.getByRole("button", { name: "Apri lavorazione" }));
     expect(await screen.findByText("Monitor: /elaborazioni/batches/123")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
