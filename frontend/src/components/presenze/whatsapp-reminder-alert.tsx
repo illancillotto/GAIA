@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import type { PresenzeDailyRecord } from "@/types/api";
+import { WhatsAppManualMessage } from "./whatsapp-manual-message";
 
 function isPastWorkDate(value: string): boolean {
   const today = new Date();
@@ -17,8 +18,13 @@ export function isWhatsAppReminderCandidate(record: PresenzeDailyRecord): boolea
 }
 
 export function WhatsAppReminderAlert({ record }: { record: PresenzeDailyRecord }) {
-  if (!isWhatsAppReminderCandidate(record)) return null;
+  if (!isWhatsAppReminderCandidate(record)) {
+    if (!isPastWorkDate(record.work_date) || record.validation_status === "validated") return null;
+    if (!(record.detail_anomalies?.length || (!record.punches.length && (record.teo_minutes ?? 0) > 0))) return null;
+    return <WhatsAppManualMessage recordId={record.id} />;
+  }
   return (
+    <>
     <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sky-950" role="status">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -31,5 +37,7 @@ export function WhatsAppReminderAlert({ record }: { record: PresenzeDailyRecord 
         </Link>
       </div>
     </div>
+    <WhatsAppManualMessage recordId={record.id} />
+    </>
   );
 }

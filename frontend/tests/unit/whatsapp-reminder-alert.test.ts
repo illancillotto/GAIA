@@ -1,6 +1,8 @@
 import { createElement } from "react";
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("@/components/presenze/whatsapp-manual-message", () => ({ WhatsAppManualMessage: () => createElement("span", null, "Invio manuale") }));
 
 import {
   isWhatsAppReminderCandidate,
@@ -10,7 +12,7 @@ import type { PresenzeDailyRecord } from "@/types/api";
 
 function record(overrides: Partial<PresenzeDailyRecord> = {}): PresenzeDailyRecord {
   return {
-    work_date: "2026-09-15",
+    work_date: new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10),
     validation_status: "pending",
     punches: [{ entry_time: "08:00", exit_time: null }],
     ...overrides,
@@ -54,5 +56,14 @@ describe("WhatsApp reminder alert candidate", () => {
     );
 
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("offers manual anomalies and empty expected days but not validated days", () => {
+    const view = render(createElement(WhatsAppReminderAlert, { record: record({ punches: [], detail_anomalies: [{ col_1: "Ore mancanti" }] }) }));
+    expect(screen.getByText("Invio manuale")).toBeInTheDocument();
+    view.rerender(createElement(WhatsAppReminderAlert, { record: record({ punches: [], teo_minutes: 480 }) }));
+    expect(screen.getByText("Invio manuale")).toBeInTheDocument();
+    view.rerender(createElement(WhatsAppReminderAlert, { record: record({ validation_status: "validated" }) }));
+    expect(view.container).toBeEmptyDOMElement();
   });
 });

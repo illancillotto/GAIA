@@ -1,5 +1,57 @@
 # Progress Presenze
 
+## Promemoria manuale anomalie da Giornaliere - 2026-09-16
+
+- Aggiunti anteprima e invio confermato per una sola giornata, anche fuori
+  lookback; UI condivisa con Anomalie. Motivo modificabile e istruzioni per
+  verificare/correggere la giornata su INAZ, senza modificare il job automatico.
+- API protette admin/super_admin + modulo Presenze; destinatario risolto solo
+  dal mapping canonico. STOP, inattivi, numero invalido, giornate non chiuse,
+  validate/giustificate e tentativi gia notificati/incerti restano fail-closed.
+- Lock comune con scheduler, pausa minima e fascia oraria; snapshot anteprima
+  ricontrollato dopo preflight. Nessun retry automatico; `SENDING` persistito
+  prima del canale, esiti e autore registrati nello storico esistente.
+- Base: `b545845e`; working tree iniziale pulito. Nessun deploy, commit,
+  cambio provider o invio reale eseguito nella prima implementazione locale.
+- Backend: `coverage run --branch --source=app -m pytest` sui test manual,
+  admin, session, waha e reliability: **71 passed**. Tre runtime full-file
+  **100%**, statement `203/203`, branch `44/44`.
+- Frontend: Vitest sui test manual e reminder-alert: **20 passed**; tre
+  runtime full-file **100%**, statement `61/61`, branch `51/51`, funzioni
+  `17/17`, righe `52/52`. TypeScript, ESLint mirato e Ruff passano.
+- Ratchet autorevole contro `origin/main` (merge-base `b545845e`): nessun
+  finding prima/dopo. Sei file runtime, 40 callable, zero violation error;
+  warning visibili, nessuna esclusione nuova. Nuovi callable principali:
+  `manual_candidate` cyc/cog `13/14`, `send_manual` `9/9`, `_deliver` `9/13`,
+  `ManualMessageForm` `14/16`. Non e un refactoring hotspot.
+- La raccolta pytest-cov con source dotted importava prematuramente il router
+  durante discovery (errori SQLAlchemy/NumPy); la suite esistente senza quel
+  comando passa. Usato coverage standard su `app`, con report full-file dei
+  tre runtime: nessuna modifica alle dipendenze o alle esclusioni.
+- Runbook aggiornato in `PRESENZE_PROMEMORIA_WHATSAPP_TIMBRATURE.md`; Graphify
+  codice aggiornato nei corpus Presenze e frontend. Artefatti non versionati.
+- Graphify docs completato con `chunk 1/1 done`, senza failure semantiche.
+- Sincronizzazione globale `complexity-baseline` rifiutata per debito legacy
+  fuori scope (fra gli altri `presenze/collaboratori/page.tsx`); baseline
+  invariata. Il ratchet autorevole della change rimane verde.
+
+### Verifica di rilascio autorizzata - 2026-09-16
+
+- Ripetuti prima del commit: 71 test backend, 20 frontend; confermati i
+  conteggi full-file 100% sopra riportati. Ruff, TypeScript ed ESLint verdi.
+- Target: `serverCed`, `/opt/gaia`, dominio `gaia.lan`. Rilascio mirato ai
+  servizi backend e frontend; nessuna migration introdotta, nessun riavvio
+  WAHA/scheduler richiesto e nessuna modifica ai segreti.
+- Provider verificato prima del rilascio: `dry_run`, sessione `default`.
+  Il collegamento del telefono non attiva da solo gli invii reali.
+- Preservare i file dei rilasci precedenti gia modificati sul server. Salvare
+  sorgenti precedenti e tag delle immagini sotto la release prima della copia;
+  eseguire i test nell'immagine backend costruita prima di avviare i servizi.
+- Smoke post-deploy: health backend, pagina Giornaliere, protezione delle API
+  manuali e presenza del controllo nei bundle frontend. Non usare l'endpoint
+  di invio con dati reali come smoke test. Manifest operativo sotto
+  `/opt/gaia/releases/`, escluso dal repository.
+
 ## Profilo contrattuale dedotto dai codici orario INAZ - 2026-09-04
 
 - `resolve_contract_profile` deduce ora il profilo anche dai codici orario

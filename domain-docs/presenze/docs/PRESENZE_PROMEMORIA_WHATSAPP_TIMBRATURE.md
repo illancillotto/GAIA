@@ -134,6 +134,60 @@ reale; provider invariato e disattivo.
 
 ## Dashboard amministrativa
 
+### Invio manuale da Giornaliere
+
+Dal dettaglio di una giornata passata non validata, gli amministratori con
+accesso Presenze possono usare **Prepara messaggio WhatsApp**. Il comando e
+disponibile anche nel dettaglio Anomalie tramite il componente condiviso.
+
+1. Aprire il collaboratore e la giornata interessata.
+2. Premere **Prepara messaggio WhatsApp**: l'anteprima mostra destinatario,
+   numero canonico, data, motivo e testo completo. Questa operazione non invia.
+3. Verificare e, se necessario, chiarire il **Motivo dell'anomalia**. Il testo
+   invita ad aprire quella giornata su INAZ, verificare timbrature e
+   giustificativi e inserire la richiesta di correzione appropriata alle ore
+   effettivamente lavorate o all'assenza. Non inserire dati sanitari o altri
+   dettagli sensibili nel motivo.
+4. Premere **Conferma e invia WhatsApp**, oppure **Conferma simulazione** se il
+   provider e `dry_run`. Annullare o cambiare giornata non invia nulla.
+5. Controllare esito, consegna e lettura nello storico WhatsApp. `SENT` indica
+   l'accettazione del provider, non dimostra lettura o correzione in INAZ.
+
+Il manuale seleziona una sola giornata e ignora il lookback automatico, senza
+ampliarlo per gli altri collaboratori. Sono supportate timbrature incomplete,
+giornate lavorative attese senza timbrature e descrizioni INAZ disponibili
+nelle colonne `anomaliagiornata`, `Anomalia giornata` o `col_1`. Un errore
+tecnico di acquisizione o un generico stato rosso non viene trasformato in una
+causa inventata: senza motivo comunicabile l'anteprima viene rifiutata.
+
+Restano obbligatori mapping canonico, collaboratore e contatto attivi, numero
+valido, assenza di STOP, giornata chiusa non validata e non gia giustificata.
+Giornate gia notificate o con tentativi `SENDING`/`UNKNOWN` sono bloccate.
+Il manuale rispetta fascia oraria lun-ven e pausa minima configurate; condivide
+il lock PostgreSQL con il job automatico. I dati vengono ricontrollati dopo
+il preflight del numero; un'anteprima divenuta obsoleta richiede riapertura.
+Non ci sono retry automatici. Un esito incerto richiede verifica dello storico
+e riconciliazione prima di ogni nuovo invio.
+
+API, entrambe riservate ad `admin`/`super_admin` con modulo Presenze:
+
+- `GET /presenze/whatsapp/daily/{record_id}/preview`: anteprima read-only.
+- `POST /presenze/whatsapp/daily/{record_id}/send`: conferma con `fingerprint`
+  dell'anteprima e `reason` (5-1500 caratteri); restituisce `message_id` e
+  `status`. Nessun numero o identificativo destinatario e accettato dal client.
+
+Lo storico conserva il testo effettivo e una sola giornata; `days_json`
+registra anche `source=manual`, `record_id` e `requested_by_user_id`.
+Nessuna modifica al template o alla selezione del job automatico.
+
+Per il rilascio aggiornare sia backend sia frontend: distribuire solo uno dei
+due non rende disponibile il flusso completo. Il deploy non abilita il
+provider: se la console indica modalita di prova, anche il manuale rimane una
+simulazione. Per invii reali serve la scelta esplicita **Invio attivo** nella
+configurazione super_admin, con sessione WAHA collegata.
+
+### Console WhatsApp
+
 La pagina `/presenze/whatsapp`, disponibile dal menu Presenze ai soli ruoli
 `admin` e `super_admin`, e una console di controllo: non contiene un comando di
 invio immediato e l'anteprima non scrive sul database.

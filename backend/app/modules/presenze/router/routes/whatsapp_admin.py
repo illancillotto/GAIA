@@ -27,6 +27,8 @@ from app.modules.presenze.services.whatsapp_config import (
     serialize_whatsapp_config,
     update_whatsapp_config,
 )
+from app.modules.presenze.services.whatsapp_manual_preview import manual_preview
+from app.modules.presenze.services.whatsapp_manual_send import ManualSendRequest, send_manual
 from app.modules.presenze.services.whatsapp_session import WahaSessionError, WahaSessionManager
 from app.modules.presenze.whatsapp_admin_schemas import (
     WhatsAppConfigResponse,
@@ -44,6 +46,27 @@ from app.modules.presenze.whatsapp_admin_schemas import (
 )
 
 router = APIRouter(prefix="/presenze/whatsapp")
+
+
+@router.get("/daily/{record_id}/preview")
+def preview_manual_whatsapp(
+    record_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[ApplicationUser, RequirePresenzeAdmin],
+    __: Annotated[ApplicationUser, RequirePresenzeModule],
+) -> dict[str, object]:
+    return manual_preview(db, record_id)
+
+
+@router.post("/daily/{record_id}/send")
+def send_manual_whatsapp(
+    record_id: UUID,
+    payload: ManualSendRequest,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, RequirePresenzeAdmin],
+    _: Annotated[ApplicationUser, RequirePresenzeModule],
+) -> dict[str, str]:
+    return send_manual(db, record_id, payload, current_user.id)
 
 
 def _session_manager(db: Session) -> WahaSessionManager:
