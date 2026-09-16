@@ -61,8 +61,8 @@ beforeEach(() => {
   for (const name of listNames) resolveMock(name, []);
   resolveMock("getBonificaSyncStatus", { entities: {} });
   resolveMock("getGateMobileSyncStatus", { sync_enabled: false, gateway_configured: false, token_configured: false, last_run: null });
-  resolveMock("getElaborazioneRuoloAutoSyncStatus", { config: { enabled: false, batch_size: 10, last_planner_at: null, last_error_message: null }, running_batch: null, last_batch: null });
-  resolveMock("getElaborazioneAnprSummary", { recent_runs: [], calls_today: 0, effective_daily_limit: 100 });
+  resolveMock("getElaborazioneRuoloAutoSyncStatus", { config: { enabled: false, batch_size: 10, last_planner_at: null, last_error_message: null }, running_batch: null, last_batch: null, dashboard: { hourly: [] } });
+  resolveMock("getElaborazioneAnprSummary", { recent_runs: [], calls_today: 0, effective_daily_limit: 100, total_deceased_found: 0 });
   resolveMock("getElaborazioneAutoJobControls", []);
   vi.mocked(getVehicleAutodocSyncStatus).mockResolvedValue(null);
   vi.mocked(catastoGisGetLatestAdeWfsRunStatus).mockRejectedValue(new ApiError("Nessun run", null, 404));
@@ -163,8 +163,9 @@ describe("servizi", () => {
   });
   it("sceglie il batch autosync attivo e poi l'ultimo batch", async () => {
     const config = { enabled: true, last_planner_at: time, last_error_message: "planner", batch_size: 12 };
-    resolveMock("getElaborazioneRuoloAutoSyncStatus", { config, running_batch: job, last_batch: null });
+    resolveMock("getElaborazioneRuoloAutoSyncStatus", { config, running_batch: job, last_batch: null, dashboard: { hourly: [{ hour: time, completed: 7 }] } });
     expect((await load("autosync"))[0].status).toBe("completed");
+    expect((await load("autosync"))[0].metrics).toContainEqual({ label: "Visure ultime 24h", value: 7 });
     resolveMock("getElaborazioneRuoloAutoSyncStatus", { config, running_batch: null, last_batch: job });
     expect((await load("autosync"))[0].startedAt).toBe(time);
   });
@@ -177,8 +178,11 @@ describe("servizi", () => {
     await expect(load("ade")).rejects.toThrow("network");
   });
   it("seleziona il run ANPR piu recente", async () => {
-    resolveMock("getElaborazioneAnprSummary", { recent_runs: [{ started_at: "2026-01-01", status: "failed" }, { started_at: time, completed_at: time, status: "completed", subjects_processed: 4, errors: 0 }], calls_today: 2, effective_daily_limit: 100 });
+    resolveMock("getElaborazioneAnprSummary", { recent_runs: [{ started_at: "2026-01-01", status: "failed" }, { started_at: time, completed_at: time, status: "completed", subjects_processed: 4, errors: 0 }], calls_today: 2, effective_daily_limit: 100, total_deceased_found: 3 });
     expect((await load("anpr"))[0].status).toBe("completed");
+    expect((await load("anpr"))[0].metrics).toContainEqual({ label: "Deceduti trovati", value: 3 });
+    resolveMock("getElaborazioneAnprSummary", { recent_runs: [], calls_today: 0, effective_daily_limit: 100 });
+    expect((await load("anpr"))[0].metrics).toContainEqual({ label: "Deceduti trovati", value: 0 });
   });
 });
 
@@ -259,7 +263,7 @@ describe("interfaccia e aggiornamento", () => {
     hidden.remove();
     fireEvent.click(lastButton);
     expect(await screen.findByText("Monitor: /elaborazioni/capacitas?section=incass")).toBeInTheDocument();
-    expect(screen.getByRole("dialog")).toHaveClass("h-[min(88dvh,900px)]", "w-[min(calc(100%-2rem),1280px)]");
+    expect(screen.getByRole("dialog")).toHaveClass("h-[min(96dvh,1035px)]", "w-[min(calc(100%-2rem),1472px)]");
     fireEvent.click(screen.getByRole("button", { name: "Apri lavorazione" }));
     expect(await screen.findByText("Monitor: /elaborazioni/batches/123")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));

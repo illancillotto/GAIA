@@ -62,8 +62,8 @@ for (const width of [1440, 390]) {
     await incass.getByRole("button", { name: "Apri monitor" }).click();
     await expect(detail.getByRole("button", { name: "Avvisi pagamenti" })).toBeVisible();
     const monitorBounds = await detail.boundingBox();
-    expect(monitorBounds!.width).toBeGreaterThan(width * 0.95);
-    expect(monitorBounds!.height).toBeGreaterThan(900 * 0.95);
+    expect(monitorBounds!.width).toBeGreaterThanOrEqual(Math.min(width - 32, 1472));
+    expect(monitorBounds!.height).toBeGreaterThanOrEqual(900 * 0.96);
     await expect(page).toHaveURL(/\/elaborazioni$/);
     await detail.getByRole("button", { name: "Chiudi", exact: true }).click();
     await page.getByRole("button", { name: "Pianificazioni automatiche", exact: true }).click();

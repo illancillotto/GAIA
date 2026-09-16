@@ -62,7 +62,7 @@ export const SYNC_SERVICES: SyncService[] = [
         metrics: [
           { label: "Pianificazione", value: data.config.enabled ? "Attiva" : "Disattivata" },
           { label: "Ultimo planner", value: data.config.last_planner_at ?? "Mai eseguito" },
-          { label: "Dimensione batch", value: data.config.batch_size },
+          { label: "Visure ultime 24h", value: (data.dashboard?.hourly ?? []).reduce((total, hour) => total + hour.completed, 0) },
         ] }];
     },
   },
@@ -89,8 +89,8 @@ export const SYNC_SERVICES: SyncService[] = [
       const run = [...data.recent_runs].sort((a, b) => Date.parse(b.started_at) - Date.parse(a.started_at))[0];
       return [{ status: run?.status ?? "idle", startedAt: run?.started_at, finishedAt: run?.completed_at,
         metrics: [{ label: "Chiamate oggi", value: `${data.calls_today} / ${data.effective_daily_limit}` },
-          { label: "Soggetti ultimo run", value: run?.subjects_processed ?? "-" },
-          { label: "Errori ultimo run", value: run?.errors ?? "-" }] }];
+          { label: "Deceduti trovati", value: data.total_deceased_found ?? 0 },
+          { label: "Soggetti ultimo run", value: run?.subjects_processed ?? "-" }] }];
     },
   },
 ];

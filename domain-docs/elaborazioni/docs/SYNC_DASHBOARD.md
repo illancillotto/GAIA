@@ -1,6 +1,6 @@
 # Dashboard sincronizzazioni
 
-Aggiornamento: 2026-09-15.
+Aggiornamento: 2026-09-16.
 
 La pagina `/elaborazioni` raccoglie 15 servizi in un catalogo responsive,
 filtrabile per nome, descrizione e stato (tutti, da verificare, in corso/coda).
@@ -18,9 +18,10 @@ I monitor nativi sono riutilizzati tramite `NativeWorkspaceRenderer`; quelli
 non nativi conservano il fallback iframe esistente. API, permessi e azioni
 operative dei monitor restano invariati.
 
-Le modali dei monitor occupano il viewport con 8 px di margine per lato,
-senza limite di larghezza a 1600 px. Il contenuto e gli iframe utilizzano
-l'altezza residua sotto la testata; dettagli e pianificazioni restano compatti.
+Le modali dei monitor arrivano a `1472 px` di larghezza e `1035 px` di altezza,
+con margine orizzontale minimo di `16 px` per lato e limite al `96%` dell'altezza
+visibile. Il contenuto e gli iframe utilizzano l'altezza residua sotto la
+testata; dettagli e pianificazioni restano compatti.
 
 ## Catalogo e sorgenti
 
@@ -58,8 +59,10 @@ nella relativa scheda, senza nascondere le letture riuscite.
 - WhiteCompany mostra l'ultimo stato di ogni entity. AUTODOC, Mobile e AdE
   utilizzano il rispettivo stato corrente/ultimo run.
 - SISTER autosync privilegia `running_batch`, poi `last_batch`; include
-  abilitazione del planner ed eventuale errore di pianificazione.
-- ANPR seleziona l'ultimo `started_at` e mostra anche chiamate odierne/limite.
+  abilitazione del planner, eventuale errore di pianificazione e il totale delle
+  visure completate nelle 24 ore rappresentate da `dashboard.hourly`.
+- ANPR seleziona l'ultimo `started_at` e mostra chiamate odierne/limite e totale
+  dei deceduti trovati; il totale usa `0` come fallback per risposte legacy.
 - `In esecuzione / coda` conta i servizi con almeno uno stato mostrato attivo:
   non e il censimento di tutti i job pendenti nel database.
 - `Da verificare` conta errori di lettura, errori espliciti degli snapshot e
