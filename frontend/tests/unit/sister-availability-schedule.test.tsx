@@ -63,11 +63,7 @@ describe("SisterAvailabilityScheduleEditor", () => {
       },
     }} />);
 
-    expect(screen.getByRole("list", { name: "Fasce orarie settimanali SISTER" })).toHaveClass(
-      "grid-flow-col",
-      "overflow-x-auto",
-      "snap-x",
-    );
+    expect(screen.getByRole("list", { name: "Fasce orarie settimanali SISTER" })).toBeInTheDocument();
     expect(screen.getAllByRole("listitem")).toHaveLength(7);
     expect(screen.getAllByRole("listitem")[0]).toHaveClass("snap-start");
     expect(screen.getByLabelText("Lunedi dalle")).toHaveValue("08:00");
@@ -99,9 +95,11 @@ describe("SisterAvailabilityScheduleEditor", () => {
     initial.weekly["0"][0].start = "21:00";
     render(<EditorHarness initial={initial} />);
 
-    fireEvent.click(screen.getByRole("checkbox", { name: /Usa solo fuori dall/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Sempre disponibile" }));
     expect(screen.queryByLabelText("Lunedi dalle")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("checkbox", { name: /Usa solo fuori dall/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Fasce personalizzate" }));
+    expect(screen.getByLabelText("Lunedi dalle")).toHaveValue("21:00");
+    fireEvent.click(screen.getByRole("button", { name: "Sempre disponibile" }));
     fireEvent.click(screen.getByRole("button", { name: "Applica fuori orario ufficio" }));
 
     expect(screen.getByLabelText("Lunedi dalle")).toHaveValue("15:00");
@@ -211,7 +209,7 @@ describe("Sister availability schedule legacy characterization", () => {
     const { rerender } = render(
       <SisterAvailabilityScheduleEditor enabled={false} onEnabledChange={onEnabledChange} onScheduleChange={onScheduleChange} schedule={defaultSisterSchedule()} />,
     );
-    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: "Fasce personalizzate" }));
     fireEvent.click(screen.getByRole("button", { name: "Applica fuori orario ufficio" }));
     expect(onEnabledChange).toHaveBeenCalledWith(true);
     expect(onScheduleChange).toHaveBeenCalled();

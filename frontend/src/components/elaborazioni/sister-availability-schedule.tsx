@@ -289,16 +289,17 @@ export function SisterAvailabilityScheduleEditor(props: SisterAvailabilitySchedu
     replaceDay(day, props.schedule.weekly[String(day)].filter((_, currentIndex) => currentIndex !== index));
   }
 
-  return <section className="rounded-2xl border border-[#dbe6dc] bg-[#f6faf6] p-4 md:col-span-2 lg:col-span-3">
+  return <section className="min-w-0 rounded-xl border border-[#dbe6dc] bg-[#f6faf6] p-3 md:col-span-2 lg:col-span-3">
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <label className="flex max-w-xl items-start gap-3">
-        <input checked={props.enabled} className="mt-1 h-4 w-4 accent-[#1D4E35]" onChange={(event) => props.onEnabledChange(event.target.checked)} type="checkbox" />
-        <span><span className="block text-sm font-semibold text-gray-900">Usa solo fuori dall&apos;orario dell&apos;operatore</span><span className="mt-1 block text-xs leading-5 text-gray-600">Il worker avvia nuove sessioni soltanto nelle fasce indicate. I test manuali restano sempre disponibili.</span></span>
-      </label>
-      <button className="rounded-xl border border-[#b9cdbd] bg-white px-3 py-2 text-xs font-semibold text-[#1D4E35]" onClick={() => props.onScheduleChange(defaultSisterSchedule())} type="button">Applica fuori orario ufficio</button>
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Disponibilita automatica">
+        <span className="mr-2 text-xs font-semibold text-gray-700">Disponibilita automatica</span>
+        <button aria-pressed={!props.enabled} className="rounded-lg border border-[#b9cdbd] px-3 py-2 text-xs font-semibold aria-pressed:bg-[#1D4E35] aria-pressed:text-white" onClick={() => props.onEnabledChange(false)} type="button">Sempre disponibile</button>
+        <button aria-pressed={props.enabled} className="rounded-lg border border-[#b9cdbd] px-3 py-2 text-xs font-semibold aria-pressed:bg-[#1D4E35] aria-pressed:text-white" onClick={() => props.onEnabledChange(true)} type="button">Fasce personalizzate</button>
+      </div>
+      <button className="rounded-lg border border-[#b9cdbd] bg-white px-3 py-2 text-xs font-semibold text-[#1D4E35]" onClick={() => { props.onScheduleChange(defaultSisterSchedule()); props.onEnabledChange(true); }} type="button">Applica fuori orario ufficio</button>
     </div>
-    {props.enabled ? <div className="mt-4 border-t border-[#dbe6dc] pt-4">
-      <div aria-label="Fasce orarie settimanali SISTER" className="grid snap-x snap-mandatory grid-flow-col auto-cols-[minmax(min(20rem,calc(100vw-5rem)),20rem)] gap-2 overflow-x-auto overscroll-x-contain pb-2" role="list">{DAYS.map((label, day) => {
+    {props.enabled ? <div className="mt-3 border-t border-[#dbe6dc] pt-3">
+      <div aria-label="Fasce orarie settimanali SISTER" className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-2" role="list">{DAYS.map((label, day) => {
         const windows = props.schedule.weekly[String(day)] ?? [];
         return <div className="min-w-0 snap-start space-y-3 rounded-xl bg-white px-3 py-3" key={label} role="listitem">
           <label className="flex items-center gap-2 text-sm font-semibold text-gray-800"><input aria-label={`${label} disponibile`} checked={windows.length > 0} className="h-4 w-4 accent-[#1D4E35]" onChange={(event) => toggleDay(day, event.target.checked)} type="checkbox" />{label}</label>
@@ -306,15 +307,15 @@ export function SisterAvailabilityScheduleEditor(props: SisterAvailabilitySchedu
             {windows.map((window, index) => {
               const startLabel = index === 0 ? `${label} dalle` : `${label} fascia ${index + 1} dalle`;
               const endLabel = index === 0 ? `${label} alle` : `${label} fascia ${index + 1} alle`;
-              return <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600" key={`${index}-${window.start}-${window.end}`}>
-                <span className="w-14 font-semibold text-gray-500">Fascia {index + 1}</span>
-                <span>Dalle</span><input aria-label={startLabel} className="form-control max-w-28 py-1.5" onChange={(event) => updateWindow(day, index, "start", event.target.value)} type="time" value={window.start} />
-                <span>alle</span><input aria-label={endLabel} className="form-control max-w-28 py-1.5" onChange={(event) => updateWindow(day, index, "end", event.target.value)} type="time" value={window.end} />
+              return <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-1.5 text-xs text-gray-600" key={index}>
+                <span className="col-span-2 font-semibold text-gray-500">Fascia {index + 1}</span>
+                <span>Dalle</span><input aria-label={startLabel} className="form-control min-w-0 px-2 py-1" onChange={(event) => updateWindow(day, index, "start", event.target.value)} type="time" value={window.start} />
+                <span>Alle</span><input aria-label={endLabel} className="form-control min-w-0 px-2 py-1" onChange={(event) => updateWindow(day, index, "end", event.target.value)} type="time" value={window.end} />
                 {window.start === window.end ? <span className="font-semibold text-[#326447]">Tutto il giorno</span> : null}
                 <button aria-label={`Rimuovi fascia ${index + 1} ${label}`} className="rounded-lg border border-red-100 px-2 py-1 font-semibold text-red-600 transition hover:bg-red-50" onClick={() => removeWindow(day, index)} type="button">Rimuovi</button>
               </div>;
             })}
-            <button className="rounded-lg border border-[#b9cdbd] px-2.5 py-1.5 text-xs font-semibold text-[#1D4E35] disabled:cursor-not-allowed disabled:opacity-45" disabled={windows.length >= MAX_WINDOWS_PER_DAY} onClick={() => addWindow(day)} type="button">Aggiungi fascia {label}</button>
+            <button aria-label={`Aggiungi fascia ${label}`} className="rounded-lg border border-[#b9cdbd] px-2.5 py-1.5 text-xs font-semibold text-[#1D4E35] disabled:cursor-not-allowed disabled:opacity-45" disabled={windows.length >= MAX_WINDOWS_PER_DAY} onClick={() => addWindow(day)} type="button">+ Fascia</button>
           </div> : <span className="pt-2 text-xs text-gray-500">Nessun utilizzo automatico in questa giornata</span>}
         </div>;
       })}</div>

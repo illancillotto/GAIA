@@ -253,23 +253,23 @@ function CredentialPool({ state, setState }: { state: SyncState; setState: React
           const profile = profiles[credential.id]!;
           const selected = profile.enabled;
           const available = availableIds.includes(credential.id);
-          const updateProfile = (patch: Partial<AutoSyncCredentialProfile>) => updateProfiles({
-            ...profiles, [credential.id]: { ...profile, ...patch },
-          });
+          const updateProfile = (patch: Partial<AutoSyncCredentialProfile>) => setState((current) => ({
+            ...current, draft: { ...current.draft!, credentialProfiles: { ...current.draft!.credentialProfiles, [credential.id]: { ...current.draft!.credentialProfiles[credential.id]!, ...patch } } },
+          }));
           return (
-            <div className={`rounded-[16px] border p-3 transition-colors xl:grid xl:grid-cols-[minmax(14rem,0.3fr)_minmax(0,1fr)] xl:items-start xl:gap-3 ${selected ? "border-[#80a98b] bg-white ring-1 ring-[#d7e6da]" : "border-gray-200 bg-gray-50"}`} data-testid="autosync-credential-row" key={credential.id} role="listitem">
+            <div className={`min-w-0 rounded-[16px] border p-3 transition-colors ${selected ? "border-[#80a98b] bg-white ring-1 ring-[#d7e6da]" : "border-gray-200 bg-gray-50"}`} data-testid="autosync-credential-row" key={credential.id} role="listitem">
               <label className="flex min-h-9 cursor-pointer items-center gap-2">
                 <input checked={selected} className="h-4 w-4 shrink-0 accent-[#477a55]" disabled={state.busy} onChange={(event) => updateProfile({ enabled: event.target.checked })} type="checkbox" />
                 <span className="min-w-0 flex-1 leading-tight">
                   <span className="block truncate text-sm font-semibold text-gray-900">{credential.label}</span>
                   <span className="block truncate text-xs text-gray-500">{credential.sister_username}</span>
                 </span>
-                <span className="flex shrink-0 flex-col items-end gap-1">
+                <span className="flex shrink-0 items-center gap-2">
                   <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${selected ? "bg-emerald-100 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>{selected ? "ON" : "OFF"}</span>
                   {selected ? <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${available ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>{available ? "Disponibile" : "Occupata"}</span> : null}
                 </span>
               </label>
-              {selected ? <div className="mt-2 min-w-0 border-t border-gray-100 pt-2 xl:mt-0 xl:border-l xl:border-t-0 xl:pl-3 xl:pt-0"><SisterAvailabilityScheduleEditor enabled={profile.schedule_enabled} onEnabledChange={(schedule_enabled) => updateProfile({ schedule_enabled })} onScheduleChange={(availability_schedule) => updateProfile({ availability_schedule })} schedule={profile.availability_schedule ?? defaultSisterSchedule()} /></div> : null}
+              {selected ? <div className="mt-2 min-w-0"><SisterAvailabilityScheduleEditor enabled={profile.schedule_enabled} onEnabledChange={(schedule_enabled) => updateProfile({ schedule_enabled })} onScheduleChange={(availability_schedule) => updateProfile({ availability_schedule })} schedule={profile.availability_schedule ?? defaultSisterSchedule()} /></div> : null}
             </div>
           );
         })}

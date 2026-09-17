@@ -319,10 +319,6 @@ describe("ElaborazioneRequestWorkspace continuous sync", () => {
     expect(await screen.findByText("1 di 2 selezionate")).toBeInTheDocument();
     expect(screen.getByRole("list", { name: "Credenziali AutoSync SISTER" })).toHaveClass("space-y-2");
     expect(screen.getAllByTestId("autosync-credential-row")).toHaveLength(2);
-    expect(screen.getAllByTestId("autosync-credential-row")[0]).toHaveClass(
-      "xl:grid",
-      "xl:grid-cols-[minmax(14rem,0.3fr)_minmax(0,1fr)]",
-    );
     fireEvent.click(screen.getByRole("button", { name: "Attiva tutte" }));
     expect(screen.getByRole("checkbox", { name: /Alessandro/ })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: /Marika/ })).toBeChecked();
@@ -363,7 +359,7 @@ describe("ElaborazioneRequestWorkspace continuous sync", () => {
     render(<ContinuousCatastoSyncPanel />);
 
     await screen.findByRole("group", { name: "Pool credenziali SISTER" });
-    fireEvent.click(screen.getByText("Usa solo fuori dall'orario dell'operatore").closest("label")!.querySelector("input")!);
+    fireEvent.click(screen.getByRole("button", { name: "Applica fuori orario ufficio" }));
     fireEvent.change(screen.getByLabelText("Lunedi dalle"), { target: { value: "19:00" } });
     fireEvent.click(screen.getByRole("button", { name: "Salva configurazione" }));
 
@@ -405,7 +401,7 @@ describe("ElaborazioneRequestWorkspace continuous sync", () => {
     expect(screen.getByRole("checkbox", { name: /Marika/ })).not.toBeChecked();
     fireEvent.click(screen.getByRole("button", { name: "Attiva tutte" }));
     expect(screen.getByRole("checkbox", { name: /Marika/ })).toBeChecked();
-    expect(screen.getAllByText("Usa solo fuori dall'orario dell'operatore")).toHaveLength(2);
+    expect(screen.getAllByRole("group", { name: "Disponibilita automatica" })).toHaveLength(2);
   });
 
   test("configures a multi-credential pool and both priority levels", async () => {

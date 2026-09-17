@@ -53,6 +53,11 @@ di accesso al modulo Catasto; una risposta negata di un servizio viene mostrata
 nella relativa scheda, senza nascondere le letture riuscite.
 
 I due servizi SISTER condividono il workspace canonico `/elaborazioni/sister`.
+Nel pool AutoSync ogni credenziale occupa una riga, con intestazione compatta
+e fasce settimanali a tutta larghezza. `Sempre disponibile` sospende il vincolo
+orario conservando le fasce; `Fasce personalizzate` le riattiva.
+`Applica fuori orario ufficio` ripristina il preset e attiva il vincolo in un
+solo passaggio. Le modifiche si persistono con `Salva configurazione`.
 La vista iniziale contiene AutoSync, richieste e batch recenti; `Stato portale`
 apre `/elaborazioni/sister?view=health` ed e disponibile agli admin e agli
 utenti con accesso Catasto. Le vecchie route UI `visure`, `autosync` e
