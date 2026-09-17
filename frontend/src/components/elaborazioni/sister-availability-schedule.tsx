@@ -299,7 +299,7 @@ export function SisterAvailabilityScheduleEditor(props: SisterAvailabilitySchedu
       <button className="rounded-lg border border-[#b9cdbd] bg-white px-3 py-2 text-xs font-semibold text-[#1D4E35]" onClick={() => { props.onScheduleChange(defaultSisterSchedule()); props.onEnabledChange(true); }} type="button">Applica fuori orario ufficio</button>
     </div>
     {props.enabled ? <div className="mt-3 border-t border-[#dbe6dc] pt-3">
-      <div aria-label="Fasce orarie settimanali SISTER" className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,10rem),1fr))] gap-2" role="list">{DAYS.map((label, day) => {
+      <div aria-label="Fasce orarie settimanali SISTER" className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,12rem),1fr))] gap-2" role="list">{DAYS.map((label, day) => {
         const windows = props.schedule.weekly[String(day)] ?? [];
         return <div className="min-w-0 snap-start space-y-3 rounded-xl bg-white px-3 py-3" key={label} role="listitem">
           <label className="flex items-center gap-2 text-sm font-semibold text-gray-800"><input aria-label={`${label} disponibile`} checked={windows.length > 0} className="h-4 w-4 accent-[#1D4E35]" onChange={(event) => toggleDay(day, event.target.checked)} type="checkbox" />{label}</label>
