@@ -317,6 +317,12 @@ describe("ElaborazioneRequestWorkspace continuous sync", () => {
     render(<ContinuousCatastoSyncPanel />);
 
     expect(await screen.findByText("1 di 2 selezionate")).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Credenziali AutoSync SISTER" })).toHaveClass("space-y-2");
+    expect(screen.getAllByTestId("autosync-credential-row")).toHaveLength(2);
+    expect(screen.getAllByTestId("autosync-credential-row")[0]).toHaveClass(
+      "xl:grid",
+      "xl:grid-cols-[minmax(14rem,0.3fr)_minmax(0,1fr)]",
+    );
     fireEvent.click(screen.getByRole("button", { name: "Attiva tutte" }));
     expect(screen.getByRole("checkbox", { name: /Alessandro/ })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: /Marika/ })).toBeChecked();
