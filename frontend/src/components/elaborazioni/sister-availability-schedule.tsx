@@ -297,11 +297,11 @@ export function SisterAvailabilityScheduleEditor(props: SisterAvailabilitySchedu
       </label>
       <button className="rounded-xl border border-[#b9cdbd] bg-white px-3 py-2 text-xs font-semibold text-[#1D4E35]" onClick={() => props.onScheduleChange(defaultSisterSchedule())} type="button">Applica fuori orario ufficio</button>
     </div>
-    {props.enabled ? <div className="mt-4 space-y-2 border-t border-[#dbe6dc] pt-4">
-      {DAYS.map((label, day) => {
+    {props.enabled ? <div className="mt-4 border-t border-[#dbe6dc] pt-4">
+      <div aria-label="Fasce orarie settimanali SISTER" className="grid snap-x snap-mandatory grid-flow-col auto-cols-[minmax(min(20rem,calc(100vw-5rem)),20rem)] gap-2 overflow-x-auto overscroll-x-contain pb-2" role="list">{DAYS.map((label, day) => {
         const windows = props.schedule.weekly[String(day)] ?? [];
-        return <div className="grid items-start gap-3 rounded-xl bg-white px-3 py-3 sm:grid-cols-[120px_1fr]" key={label}>
-          <label className="flex items-center gap-2 pt-2 text-sm font-semibold text-gray-800"><input aria-label={`${label} disponibile`} checked={windows.length > 0} className="h-4 w-4 accent-[#1D4E35]" onChange={(event) => toggleDay(day, event.target.checked)} type="checkbox" />{label}</label>
+        return <div className="min-w-0 snap-start space-y-3 rounded-xl bg-white px-3 py-3" key={label} role="listitem">
+          <label className="flex items-center gap-2 text-sm font-semibold text-gray-800"><input aria-label={`${label} disponibile`} checked={windows.length > 0} className="h-4 w-4 accent-[#1D4E35]" onChange={(event) => toggleDay(day, event.target.checked)} type="checkbox" />{label}</label>
           {windows.length > 0 ? <div className="space-y-2">
             {windows.map((window, index) => {
               const startLabel = index === 0 ? `${label} dalle` : `${label} fascia ${index + 1} dalle`;
@@ -317,9 +317,9 @@ export function SisterAvailabilityScheduleEditor(props: SisterAvailabilitySchedu
             <button className="rounded-lg border border-[#b9cdbd] px-2.5 py-1.5 text-xs font-semibold text-[#1D4E35] disabled:cursor-not-allowed disabled:opacity-45" disabled={windows.length >= MAX_WINDOWS_PER_DAY} onClick={() => addWindow(day)} type="button">Aggiungi fascia {label}</button>
           </div> : <span className="pt-2 text-xs text-gray-500">Nessun utilizzo automatico in questa giornata</span>}
         </div>;
-      })}
-      <FirstSaturdayExceptionEditor onScheduleChange={props.onScheduleChange} schedule={props.schedule} />
-      <p className="pt-1 text-xs text-gray-500">Puoi impostare fino a quattro fasce per giorno. Se l&apos;ora finale e precedente a quella iniziale, la fascia continua durante la notte successiva. Il primo sabato del mese, se attivo, sostituisce le fasce del sabato.</p>
+      })}</div>
+      <div className="mt-2"><FirstSaturdayExceptionEditor onScheduleChange={props.onScheduleChange} schedule={props.schedule} /></div>
+      <p className="pt-2 text-xs text-gray-500">Puoi impostare fino a quattro fasce per giorno. Se l&apos;ora finale e precedente a quella iniziale, la fascia continua durante la notte successiva. Il primo sabato del mese, se attivo, sostituisce le fasce del sabato.</p>
     </div> : null}
   </section>;
 }

@@ -63,6 +63,13 @@ describe("SisterAvailabilityScheduleEditor", () => {
       },
     }} />);
 
+    expect(screen.getByRole("list", { name: "Fasce orarie settimanali SISTER" })).toHaveClass(
+      "grid-flow-col",
+      "overflow-x-auto",
+      "snap-x",
+    );
+    expect(screen.getAllByRole("listitem")).toHaveLength(7);
+    expect(screen.getAllByRole("listitem")[0]).toHaveClass("snap-start");
     expect(screen.getByLabelText("Lunedi dalle")).toHaveValue("08:00");
     expect(screen.getByLabelText("Lunedi fascia 2 dalle")).toHaveValue("14:00");
     expect(screen.getByText("Tutto il giorno")).toBeInTheDocument();

@@ -317,12 +317,6 @@ describe("ElaborazioneRequestWorkspace continuous sync", () => {
     render(<ContinuousCatastoSyncPanel />);
 
     expect(await screen.findByText("1 di 2 selezionate")).toBeInTheDocument();
-    expect(screen.getByRole("list", { name: "Profili credenziali AutoSync SISTER" })).toHaveClass(
-      "grid-flow-col",
-      "overflow-x-auto",
-      "snap-x",
-    );
-    expect(screen.getAllByRole("listitem")[0]).toHaveClass("snap-start");
     fireEvent.click(screen.getByRole("button", { name: "Attiva tutte" }));
     expect(screen.getByRole("checkbox", { name: /Alessandro/ })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: /Marika/ })).toBeChecked();

@@ -169,7 +169,7 @@ function CredentialCard(props: SisterCredentialPoolViewProps & { credential: Ela
   const isTesting = props.singleTestingId === props.credential.id || progress?.phase === "running";
   const terminal = progress && TERMINAL_PHASES.has(progress.phase) ? progress : null;
   const selected = props.selectedCredentialId === props.credential.id;
-  return <article aria-current={selected} className={`relative min-w-0 snap-start overflow-hidden rounded-[18px] border bg-white p-3 transition ${selected ? "border-[#4f8061] bg-[#f8fbf8] shadow-[0_10px_26px_-22px_rgba(29,78,53,0.9)]" : "border-[#e1e8df] hover:border-[#b9cbbd]"} ${props.credential.active ? "" : "opacity-75"}`} role="listitem">
+  return <article aria-current={selected} className={`relative overflow-hidden rounded-[18px] border bg-white p-3 transition ${selected ? "border-[#4f8061] bg-[#f8fbf8] shadow-[0_10px_26px_-22px_rgba(29,78,53,0.9)]" : "border-[#e1e8df] hover:border-[#b9cbbd]"} ${props.credential.active ? "" : "opacity-75"}`} role="listitem">
     <div className={`absolute inset-y-0 left-0 w-1 ${props.credential.is_default ? "bg-[#d9a628]" : props.credential.active ? "bg-[#4c8a64]" : "bg-gray-300"}`} />
     <div className="flex items-start justify-between gap-3 pl-1"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="truncate text-sm font-semibold text-gray-950">{props.credential.label}</h3>{props.credential.is_default ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-900">Default</span> : null}<span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${props.credential.active ? "bg-emerald-50 text-emerald-800" : "bg-gray-100 text-gray-600"}`}>{props.credential.active ? "Attiva" : "Disattiva"}</span></div><p className="mt-1.5 truncate font-mono text-xs text-gray-500">{props.credential.sister_username}</p></div><TestStateBadge progress={progress} /></div>
     <CredentialDetails credential={props.credential} />
@@ -180,7 +180,7 @@ function CredentialCard(props: SisterCredentialPoolViewProps & { credential: Ela
 
 function CredentialGrid(props: SisterCredentialPoolViewProps) {
   if (props.credentials.length === 0) return <div className={`${props.embedded ? "px-4 py-5" : "px-5 py-7"} text-center`}><div className="mx-auto flex h-10 w-10 items-center justify-center rounded-2xl bg-gray-100 text-gray-500"><AlertTriangleIcon className="h-5 w-5" /></div><p className="mt-3 text-sm font-semibold text-gray-800">Nessuna credenziale SISTER configurata</p><p className="mt-1 text-xs text-gray-500">Compila il form qui sopra per aggiungere il primo profilo operativo.</p></div>;
-  return <div aria-label="Elenco credenziali SISTER" className={`grid snap-x snap-mandatory grid-flow-col auto-cols-[minmax(min(19rem,calc(100vw-3.5rem)),1fr)] overflow-x-auto overscroll-x-contain ${props.embedded ? "gap-2.5 p-3" : "gap-3 p-4"}`} role="list">{props.credentials.map((credential) => <CredentialCard {...props} credential={credential} key={credential.id} />)}</div>;
+  return <div aria-label="Elenco credenziali SISTER" className={`grid max-h-[min(62rem,calc(100vh-12rem))] grid-cols-1 overflow-y-auto ${props.embedded ? "gap-2.5 p-3" : "gap-3 p-4"}`} role="list">{props.credentials.map((credential) => <CredentialCard {...props} credential={credential} key={credential.id} />)}</div>;
 }
 
 export function SisterCredentialPoolView(props: SisterCredentialPoolViewProps) {
