@@ -142,6 +142,12 @@ describe("SisterCredentialPool", () => {
     });
     render(<SisterCredentialPool {...callbacks} />);
 
+    expect(screen.getByRole("list", { name: "Elenco credenziali SISTER" })).toHaveClass(
+      "grid-flow-col",
+      "overflow-x-auto",
+      "snap-x",
+    );
+    expect(screen.getAllByRole("listitem")[0]).toHaveClass("snap-start");
     expect(screen.getByText("1/2 attive")).toBeInTheDocument();
     expect(screen.getByText("1 verificate")).toBeInTheDocument();
     expect(screen.getByText("2 batch in pausa dopo il rilascio delle sessioni SISTER.")).toBeInTheDocument();
