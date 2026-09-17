@@ -248,7 +248,7 @@ function CredentialPool({ state, setState }: { state: SyncState; setState: React
           <button className="btn-secondary px-3 py-2 text-xs" disabled={state.busy || selectedIds.length === 0} onClick={() => setAll(false)} type="button">Disattiva tutte</button>
         </div>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+      <div aria-label="Profili credenziali AutoSync SISTER" className="grid snap-x snap-mandatory grid-flow-col auto-cols-[minmax(min(34rem,calc(100vw-4rem)),34rem)] gap-2 overflow-x-auto overscroll-x-contain pb-2" role="list">
         {activeCredentials.map((credential) => {
           const profile = profiles[credential.id]!;
           const selected = profile.enabled;
@@ -257,7 +257,7 @@ function CredentialPool({ state, setState }: { state: SyncState; setState: React
             ...profiles, [credential.id]: { ...profile, ...patch },
           });
           return (
-            <div className={`rounded-[16px] border p-2 transition-colors ${selected ? "border-[#80a98b] bg-white ring-1 ring-[#d7e6da]" : "border-gray-200 bg-gray-50"}`} key={credential.id}>
+            <div className={`min-w-0 snap-start rounded-[16px] border p-2 transition-colors ${selected ? "border-[#80a98b] bg-white ring-1 ring-[#d7e6da]" : "border-gray-200 bg-gray-50"}`} key={credential.id} role="listitem">
               <label className="flex min-h-9 cursor-pointer items-center gap-2">
                 <input checked={selected} className="h-4 w-4 shrink-0 accent-[#477a55]" disabled={state.busy} onChange={(event) => updateProfile({ enabled: event.target.checked })} type="checkbox" />
                 <span className="min-w-0 flex-1 leading-tight">
