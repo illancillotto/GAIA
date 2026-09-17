@@ -58,7 +58,7 @@ export const SYNC_JOB_SERVICES: SyncService[] = [
     },
   },
   {
-    id: "visure", title: "SISTER visure", description: "Batch di richieste catastali e relativo avanzamento.", href: "/elaborazioni/visure",
+    id: "visure", title: "SISTER visure", description: "Batch di richieste catastali e relativo avanzamento.", href: "/elaborazioni/sister",
     async load(token) {
       const job = latestSync(await api.getElaborazioneBatches(token));
       if (!job) return [];

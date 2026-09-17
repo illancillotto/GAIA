@@ -1,14 +1,18 @@
-# Pagina Visure Elaborazioni
+# Workspace SISTER / Visure
 
 ## Scopo
 
-La pagina `/elaborazioni/visure` consente consultazione stato visure, esiti, scarti, retry e artefatti prodotti.
+La pagina canonica `/elaborazioni/sister` riunisce operativita delle visure e stato del portale SISTER senza mescolare i due flussi.
+La vista `Operativita visure` consente consultazione stato visure, esiti, scarti, retry e artefatti prodotti.
 In `Scelta del flusso` l'ordine delle modalità è `AutoSync a ruolo`, `Batch recenti`, `Import batch`, `Visura singola`.
 La pagina si apre su `AutoSync a ruolo`.
+La vista `Stato portale`, raggiungibile anche con `/elaborazioni/sister?view=health`, mostra disponibilita, alert, tempi per fase, pool credenziali ed eventi tecnici sanitizzati. E visibile agli admin e agli utenti con accesso al modulo Catasto.
+
+Le route `/elaborazioni/visure` e `/elaborazioni/autosync` reindirizzano alla vista operativa; `/elaborazioni/portal-health` reindirizza alla vista stato portale.
 
 ## Navigazione dettaglio
 
-L'azione `Apri` nella tabella dei batch recenti apre il dettaglio batch in modale workspace, senza uscire da `/elaborazioni/visure`.
+L'azione `Apri` nella tabella dei batch recenti apre il dettaglio batch in modale workspace, senza uscire da `/elaborazioni/sister`.
 La modale mantiene il contesto operativo della pagina e offre comunque il fallback `Apri pagina` per aprire il dettaglio completo in una nuova tab.
 
 ## Cosa puo fare l'operatore

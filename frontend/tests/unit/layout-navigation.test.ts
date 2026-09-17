@@ -182,7 +182,7 @@ describe("layout navigation helpers", () => {
     );
   });
 
-  test("builds every module section and exposes SISTER portal health", () => {
+  test("builds every module section and exposes the unified SISTER workspace", () => {
     const moduleKeys = [
       "nas_control",
       "catasto",
@@ -212,10 +212,12 @@ describe("layout navigation helpers", () => {
     const elaborazioniItems = getModuleSections({ currentModuleKey: "elaborazioni" })
       .flatMap((section) => section.items);
     expect(elaborazioniItems).toContainEqual(expect.objectContaining({
-      href: "/elaborazioni/portal-health",
-      label: "Stato portale SISTER",
+      href: "/elaborazioni/sister",
+      label: "SISTER / Visure",
       match: "prefix",
     }));
+    expect(elaborazioniItems).not.toContainEqual(expect.objectContaining({ href: "/elaborazioni/portal-health" }));
+    expect(elaborazioniItems).not.toContainEqual(expect.objectContaining({ href: "/elaborazioni/visure" }));
     expect(getModuleSections({ currentModuleKey: "gis", currentUserRole: "admin" }).flatMap((section) => section.items)).toContainEqual(
       expect.objectContaining({ href: "/gis/amministrazione" }),
     );

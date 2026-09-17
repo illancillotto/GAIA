@@ -29,7 +29,8 @@ ricerca per nome/ambito, stati e pianificazioni. Contratto, sorgenti e verifiche
 sono descritti in [Dashboard sincronizzazioni](docs/SYNC_DASHBOARD.md).
 
 Superfici operative del modulo:
-- il monitor `/elaborazioni/autosync` apre in alto il blocco `Sincronizzazione catastale continua` (ON/OFF, credenziali, intervalli), poi il monitor operativo e le campagne permanenti **Particelle a ruolo** e **Anagrafiche a ruolo** come elenchi distinti, completi e paginati; entrambe considerano soltanto l'ultimo Ruolo completato, mentre il caricamento progressivo non mescola gli scope e resta owner-scoped;
+- il workspace canonico `/elaborazioni/sister` riunisce `Operativita visure` e `Stato portale` in due viste distinte; la prima apre in alto il blocco `Sincronizzazione catastale continua` (ON/OFF, credenziali, intervalli), poi il monitor operativo e le campagne permanenti **Particelle a ruolo** e **Anagrafiche a ruolo** come elenchi distinti, completi e paginati; entrambe considerano soltanto l'ultimo Ruolo completato, mentre il caricamento progressivo non mescola gli scope e resta owner-scoped;
+- `/elaborazioni/visure` e `/elaborazioni/autosync` reindirizzano alla vista operativa canonica; `/elaborazioni/portal-health` reindirizza a `/elaborazioni/sister?view=health`;
 - testata dashboard con accesso in modale a pianificazioni, credenziali e richieste; filtri con conteggi per tutti i servizi, attivi e da verificare
 - card responsive di dimensioni uniformi con stato e ultimo avvio; dettagli, contatori, errori e monitor dedicato si aprono in modale conservando ricerca e filtro
 - provider `Bonifica Oristanese` gestito nello stesso workspace `Credenziali`, con CRUD account e test autenticazione Laravel
@@ -59,7 +60,7 @@ Superfici operative del modulo:
 - la dashboard mostra solo l'ultimo job per flusso Capacitas, incluso inCass; storico batch e documenti restano nei workspace dedicati
 - WhiteCompany mantiene uno stato distinto per ogni entity restituita dall'API, con contatori di record sincronizzati, saltati ed errori
 - l'ingresso `Visure` sostituisce i due accessi separati `Visura singola` e `Import batch`: apre il workspace unico `ElaborazioneRequestWorkspace`, che gestisce entrambe le modalità
-- in `Scelta del flusso` le card sono in questo ordine: `AutoSync a ruolo`, `Batch recenti`, `Import batch`, `Visura singola`; la pagina `/elaborazioni/visure` si apre su `AutoSync a ruolo`
+- in `Scelta del flusso` le card sono in questo ordine: `AutoSync a ruolo`, `Batch recenti`, `Import batch`, `Visura singola`; la vista `/elaborazioni/sister` si apre su `AutoSync a ruolo`
 - spazio riservato all'aggiunta futura di altri provider/processi senza rimescolare i flussi esistenti
 - i link `Apri monitor` della dashboard navigano alla pagina dedicata, anche alla scheda inCass tramite `?section=incass`
 - anche i punti di uscita frequenti nei workspace interni (`archivio batch/documenti`, `Capacitas`) riusano il pattern modale per ridurre i salti di pagina
@@ -82,7 +83,7 @@ Superfici operative del modulo:
 - la pausa di una singola credenziale non trasferisce a un altro account le richieste remote gia correlate: l'affinita SISTER resta vincolante e tali richieste vengono marcate non disponibili; se non restano credenziali attive o autenticabili, il batch viene rilasciato e puo essere ripreso dopo la riattivazione o l'aggiornamento del pool
 - gli errori transitori `SISTER_SESSION_LOCKED`, timeout login/menu e `HTTP 500` del portale non falliscono subito il lotto: la richiesta viene differita, la credenziale entra in cooldown e il runner passa alla richiesta successiva disponibile
 - un rifiuto esplicito `Credenziali SISTER rifiutate` / `Autenticazione fallita` segue la stessa protezione recuperabile: non deve produrre fallimenti in sequenza sulle particelle; per batch grandi si aggiorna e testa la password, quindi si riprende la batch rilasciata senza ricrearla
-- la pagina `/elaborazioni/portal-health` espone telemetria SISTER per utente: stato sintetico, tempi medi e P95 per fase, risposte HTTP 5xx, retry, cooldown, confronto tra credenziali, alert e ultimi eventi sanitizzati; ogni evento recente mostra anche l'etichetta della credenziale operativa, senza esporre username o password
+- la vista `/elaborazioni/sister?view=health`, disponibile agli admin e agli utenti con accesso Catasto, espone telemetria SISTER per utente: stato sintetico, tempi medi e P95 per fase, risposte HTTP 5xx, retry, cooldown, confronto tra credenziali, alert e ultimi eventi sanitizzati; ogni evento recente mostra anche l'etichetta della credenziale operativa, senza esporre username o password
 - accanto al KPI `Esecuzioni`, Portal Health mostra il totale delle visure scaricate nella finestra selezionata, ripartito per formato (`Sintetica`, `Analitica`, `Completa` o valore osservato) e temporalita (`ATTUALITA`, `STORICA` o valore osservato)
 - la testata mostra inoltre `Credenziali attive`, cioe le credenziali distinte con almeno un'esecuzione attribuita nella finestra, e `Media operazioni`, calcolata come esecuzioni uniche per credenziale attiva; gli eventi senza credenziale non entrano nel denominatore. Entrambi rispettano la finestra selezionata di 24 ore, 7 giorni o 30 giorni
 - il riquadro `Pool credenziali` attribuisce a ogni profilo anche il numero di visure effettivamente persistite nella finestra, collegando `catasto_documents.request_id` alla credenziale della richiesta; i documenti privi di associazione restano nel totale generale ma non vengono assegnati a un profilo

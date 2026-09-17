@@ -55,6 +55,10 @@ describe("resolvePresenceRouteMeta", () => {
       moduleKey: "elaborazioni",
       routeLabel: "Elaborazioni / Presenze INAZ Sync",
     });
+    expect(resolvePresenceRouteMeta("/elaborazioni/sister")).toEqual({
+      moduleKey: "elaborazioni",
+      routeLabel: "Elaborazioni / SISTER / Visure",
+    });
   });
 
   test("keeps fallback labels for unmapped paths", () => {

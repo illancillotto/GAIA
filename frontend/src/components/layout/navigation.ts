@@ -180,8 +180,7 @@ function isAdministrativeRole(role: string | undefined): boolean {
 }
 
 const sisterNavigationItems: NavigationItem[] = [
-  item("/elaborazioni/visure", EyeIcon, "Visure Sister", { match: "prefix" }),
-  item("/elaborazioni/portal-health", ServerIcon, "Stato portale SISTER", { match: "prefix" }),
+  item("/elaborazioni/sister", EyeIcon, "SISTER / Visure", { match: "prefix" }),
 ];
 
 export function getCurrentModuleKey(pathname: string): CurrentModuleKey {

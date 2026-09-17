@@ -46,7 +46,7 @@ const menuSearchRoutes: SearchRoute[] = [
   { label: "Elaborazioni · Dashboard", href: "/elaborazioni", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["batch"] },
   { label: "Elaborazioni · WhiteCompany Sync", href: "/elaborazioni/bonifica", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["white", "bonifica", "sync"] },
   { label: "Elaborazioni · Presenze INAZ Sync", href: "/elaborazioni/presenze-sync", moduleKey: "presenze", keywords: ["sync", "portale", "inaz", "giornaliere"] },
-  { label: "Elaborazioni · Visure", href: "/elaborazioni/visure", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["visure"] },
+  { label: "Elaborazioni · SISTER / Visure", href: "/elaborazioni/sister", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["sister", "visure"] },
   { label: "Elaborazioni · Capacitas", href: "/elaborazioni/capacitas", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["capacitas"] },
   { label: "Elaborazioni · Poste Online", href: "/elaborazioni/posta-online", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["poste", "posta online", "raccomandate"] },
   { label: "Elaborazioni · GAIA Mobile Sync", href: "/elaborazioni/gaia-mobile-sync", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["gaia mobile", "mobile sync", "gateway"] },

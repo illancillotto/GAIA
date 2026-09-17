@@ -53,7 +53,7 @@ const SERVICES: SyncService[] = [
     },
   },
   {
-    id: "autosync", title: "SISTER autosync", description: "Sincronizzazione continua di ruolo e comprensorio.", href: "/elaborazioni/autosync",
+    id: "autosync", title: "SISTER autosync", description: "Sincronizzazione continua di ruolo e comprensorio.", href: "/elaborazioni/sister",
     async load(token) {
       const data = await api.getElaborazioneRuoloAutoSyncStatus(token);
       const snapshots = jobSnapshot(data.running_batch ?? data.last_batch ?? undefined);

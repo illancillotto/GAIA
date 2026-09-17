@@ -20,7 +20,7 @@ Il modulo Elaborazioni gestisce job batch: visure, ANPR, Capacitas, allineamento
 
 ## Pagine principali
 
-- `/elaborazioni/visure`: visure singole e storico
+- `/elaborazioni/sister`: operativita visure, AutoSync e stato del portale SISTER
 - `/elaborazioni/batches`: batch
 - `/elaborazioni/presenze-sync`: console operativa per sync Presenze INAZ, autosync, storico job e artefatti diagnostici
 - `/elaborazioni/capacitas`, `/elaborazioni/anpr`, `/elaborazioni/autodoc`: processi dedicati

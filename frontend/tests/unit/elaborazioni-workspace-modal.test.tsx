@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NativeWorkspaceRenderer as ElaborazioneWorkspaceContent, ElaborazioneWorkspaceModal } from "@/components/elaborazioni/workspace-modal";
@@ -52,10 +52,13 @@ describe("monitor incorporati", () => {
     fireEvent.click(screen.getByRole("button", { name: `Richiesta ${mode}` }));
     expect(onNavigate).toHaveBeenCalledWith("/elaborazioni/batches/42");
   });
-  it("mantiene il fallback iframe per monitor non nativi e URL non interpretabili", () => {
-    const { rerender } = render(<ElaborazioneWorkspaceContent href="/elaborazioni/autosync" onNavigate={vi.fn()} />);
-    expect(screen.getByTitle("/elaborazioni/autosync")).toHaveAttribute("src", "/elaborazioni/autosync");
-    rerender(<ElaborazioneWorkspaceContent href="http://[" onNavigate={vi.fn()} />);
+  it.each(["/elaborazioni/autosync", "/elaborazioni/sister"])("incorpora AutoSync senza shell da %s", (href) => {
+    render(<ElaborazioneWorkspaceContent href={href} onNavigate={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Richiesta autosync" })).toBeInTheDocument();
+    expect(screen.queryByTitle(href)).not.toBeInTheDocument();
+  });
+  it("mantiene il fallback iframe per URL non interpretabili", () => {
+    render(<ElaborazioneWorkspaceContent href="http://[" onNavigate={vi.fn()} />);
     expect(screen.getByTitle("http://[")).toBeInTheDocument();
   });
   it("puo renderizzare il workspace senza window lato server", () => {
@@ -65,7 +68,7 @@ describe("monitor incorporati", () => {
 });
 
 describe("modale legacy", () => {
-  it("gestisce apertura, cambio destinazione, chiusura e ripristino dello scroll", () => {
+  it("gestisce apertura, cambio destinazione, chiusura e ripristino dello scroll", async () => {
     const onClose = vi.fn();
     const { rerender, unmount } = render(<ElaborazioneWorkspaceModal open={false} href={null} title="Monitor" onClose={onClose} />);
     expect(screen.queryByText("Monitor")).not.toBeInTheDocument();
@@ -83,8 +86,7 @@ describe("modale legacy", () => {
     fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
     expect(onClose).toHaveBeenCalledTimes(2);
     rerender(<ElaborazioneWorkspaceModal open href="/elaborazioni/autosync" title="Monitor" onClose={onClose} />);
-    fireEvent.load(screen.getByTitle("/elaborazioni/autosync"));
-    expect(screen.queryByText("Caricamento workspace.")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("Caricamento workspace.")).not.toBeInTheDocument());
     unmount();
     expect(document.body.style.overflow).toBe("");
     fireEvent.keyDown(window, { key: "Escape" });

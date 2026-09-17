@@ -12,7 +12,7 @@ describe("AutoSyncMonitorLink", () => {
     render(<AutoSyncMonitorLink />);
 
     const link = screen.getByRole("link", { name: "Apri monitor attività" });
-    expect(link).toHaveAttribute("href", "/elaborazioni/autosync");
+    expect(link).toHaveAttribute("href", "/elaborazioni/sister");
     expect(link).toHaveClass("btn-primary");
   });
 });

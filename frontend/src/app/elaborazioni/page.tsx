@@ -30,7 +30,7 @@ export default function ElaborazioniPage() {
         <div className="flex flex-wrap gap-3">
           <button type="button" className="btn-secondary" aria-haspopup="dialog" onClick={() => setTarget({ kind: "schedules", title: "Pianificazioni automatiche" })}>Pianificazioni automatiche</button>
           <button type="button" className="btn-secondary" aria-haspopup="dialog" onClick={() => openWorkspace("/elaborazioni/settings", "Credenziali e impostazioni")}>Credenziali e impostazioni</button>
-          <button type="button" className="btn-secondary" aria-haspopup="dialog" onClick={() => openWorkspace("/elaborazioni/visure", "Richieste e documenti")}>Richieste e documenti</button>
+          <button type="button" className="btn-secondary" aria-haspopup="dialog" onClick={() => openWorkspace("/elaborazioni/sister", "Richieste e documenti")}>Richieste e documenti</button>
         </div>
       </ElaborazioneHero>
       <section aria-label="Servizi di sincronizzazione" className="space-y-5">

@@ -26,6 +26,14 @@ type ElaborazioneWorkspaceModalProps = {
   onClose: () => void;
 };
 
+const REQUEST_WORKSPACE_MODES = {
+  "/elaborazioni/autosync": "autosync",
+  "/elaborazioni/new-batch": "batch",
+  "/elaborazioni/new-single": "single",
+  "/elaborazioni/sister": "autosync",
+  "/elaborazioni/visure": "single",
+} as const;
+
 export function ElaborazioneWorkspaceModal({
   open,
   href,
@@ -131,13 +139,10 @@ export function NativeWorkspaceRenderer({
   }, [href, onRendered]);
 
   const capacitasSection = getCapacitasSectionFromHref(href);
+  const requestMode = REQUEST_WORKSPACE_MODES[href as keyof typeof REQUEST_WORKSPACE_MODES];
 
-  if (href === "/elaborazioni/new-single" || href === "/elaborazioni/visure") {
-    return <ElaborazioneRequestWorkspace embedded initialMode="single" onOpenBatch={(batchId) => onNavigate(`/elaborazioni/batches/${batchId}`)} />;
-  }
-
-  if (href === "/elaborazioni/new-batch") {
-    return <ElaborazioneRequestWorkspace embedded initialMode="batch" onOpenBatch={(batchId) => onNavigate(`/elaborazioni/batches/${batchId}`)} />;
+  if (requestMode) {
+    return <ElaborazioneRequestWorkspace embedded initialMode={requestMode} onOpenBatch={(batchId) => onNavigate(`/elaborazioni/batches/${batchId}`)} />;
   }
 
   if (href === "/elaborazioni/batches") {

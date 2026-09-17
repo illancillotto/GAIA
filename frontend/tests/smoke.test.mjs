@@ -75,7 +75,7 @@ test("layout includes app shell, sidebar and topbar", () => {
   assert.match(navigation, /Sincronizzazione/);
   assert.match(navigation, /Review NAS/);
   assert.match(navigation, /Moduli Capacitas/);
-  assert.match(navigation, /Visure Sister/);
+  assert.match(navigation, /SISTER \/ Visure/);
   assert.match(navigation, /Elaborazione massiva/);
   assert.match(topbar, /StatusPill/);
   assert.match(topbar, /DesktopTopNavigation/);

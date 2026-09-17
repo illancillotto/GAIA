@@ -39,18 +39,25 @@ I percorsi API seguenti sono relativi al prefisso `/api`.
 | Capacitas inCass | `/elaborazioni/capacitas/incass/avvisi/jobs?limit=1` | `/elaborazioni/capacitas?section=incass` |
 | Poste Online | `/elaborazioni/posta-online/raccomandate/jobs` | `/elaborazioni/posta-online` |
 | Presenze INAZ | client `listPresenzeSyncJobs`, `limit=1` | `/elaborazioni/presenze-sync` |
-| SISTER visure | `/elaborazioni/batches` | `/elaborazioni/visure` |
+| SISTER visure | `/elaborazioni/batches` | `/elaborazioni/sister` |
 | NAS e directory | `/sync/jobs` | `/nas-control/sync` |
 | WhiteCompany | `/elaborazioni/bonifica/sync/status` | `/elaborazioni/bonifica` |
 | AUTODOC mezzi | `/operazioni/vehicles/autodoc-sync/status` | `/elaborazioni/autodoc` |
 | GAIA Mobile Sync | `/operazioni/mobile-gateway-sync/status` | `/elaborazioni/gaia-mobile-sync` |
-| SISTER autosync | `/elaborazioni/ruolo-autosync/status` | `/elaborazioni/autosync` |
+| SISTER autosync | `/elaborazioni/ruolo-autosync/status` | `/elaborazioni/sister` |
 | Allineamento AdE | `/catasto/gis/ade-wfs/runs/latest` | `/elaborazioni/ade-alignment` |
 | ANPR | `/elaborazioni/utenze-anpr/summary` | `/elaborazioni/anpr` |
 
 Le API applicano le autorizzazioni esistenti. La pagina mantiene il requisito
 di accesso al modulo Catasto; una risposta negata di un servizio viene mostrata
 nella relativa scheda, senza nascondere le letture riuscite.
+
+I due servizi SISTER condividono il workspace canonico `/elaborazioni/sister`.
+La vista iniziale contiene AutoSync, richieste e batch recenti; `Stato portale`
+apre `/elaborazioni/sister?view=health` ed e disponibile agli admin e agli
+utenti con accesso Catasto. Le vecchie route UI `visure`, `autosync` e
+`portal-health` restano redirect compatibili; gli endpoint API Portal Health
+non cambiano.
 
 ## Selezione e significato degli stati
 
