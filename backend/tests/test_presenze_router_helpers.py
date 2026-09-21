@@ -1516,6 +1516,52 @@ def test_matrix_serializer_builds_default_classification_and_quality(
     assert serialized["night_minutes"] == 0
 
 
+def test_catasto_saturday_coverage_loads_all_collaborators_in_two_queries() -> None:
+    first_collaborator_id = uuid.uuid4()
+    second_collaborator_id = uuid.uuid4()
+    worked_record = SimpleNamespace(
+        id=uuid.uuid4(),
+        collaborator_id=first_collaborator_id,
+        work_date=date(2026, 5, 2),
+        resolved_absence_cause=None,
+        justified_minutes=0,
+        absence_minutes=0,
+    )
+    justified_record = SimpleNamespace(
+        id=uuid.uuid4(),
+        collaborator_id=second_collaborator_id,
+        work_date=date(2026, 6, 6),
+        resolved_absence_cause="Permesso",
+        justified_minutes=420,
+        absence_minutes=0,
+    )
+    punch = SimpleNamespace(
+        daily_record_id=worked_record.id,
+        entry_time=time(7, 0),
+        exit_time=time(14, 0),
+    )
+    collaborator = SimpleNamespace(
+        contract_kind=router.PRESENZE_CONTRACT_KIND_OPERAIO,
+        operai_group=router.PRESENZE_OPERAI_GROUP_CATASTO_MAGAZZINO,
+    )
+    db = _QueuedDb([worked_record, justified_record], [punch])
+
+    counts = router._build_catasto_saturday_coverage_counts(
+        db,
+        [worked_record, justified_record],
+        {
+            first_collaborator_id: collaborator,
+            second_collaborator_id: collaborator,
+        },
+    )
+
+    assert counts == {
+        (first_collaborator_id, 2026, 5): 1,
+        (second_collaborator_id, 2026, 6): 1,
+    }
+    assert db.row_sets == []
+
+
 def test_mapping_helpers_cover_missing_related_rows_and_expired_assignment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1533,7 +1579,7 @@ def test_mapping_helpers_cover_missing_related_rows_and_expired_assignment(
         operai_group=router.PRESENZE_OPERAI_GROUP_CATASTO_MAGAZZINO,
     )
     counts = router._build_catasto_saturday_coverage_counts(
-        _QueuedDb([]), [record], {collaborator_id: catasto_collaborator}
+        _QueuedDb([], []), [record], {collaborator_id: catasto_collaborator}
     )
     assert counts[(collaborator_id, 2026, 5)] == 0
 

@@ -628,35 +628,35 @@ def _build_catasto_saturday_coverage_counts(
         return {}
 
     counts: dict[tuple[uuid.UUID, int, int], int] = {key: 0 for key in month_keys}
-    for collaborator_id, year, month in month_keys:
-        month_start = date(year, month, 1)
-        month_end = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
-        saturday_records = db.execute(
-            select(PresenzeDailyRecord)
-            .where(
-                PresenzeDailyRecord.collaborator_id == collaborator_id,
-                PresenzeDailyRecord.work_date >= month_start,
-                PresenzeDailyRecord.work_date < month_end,
-            )
-            .order_by(PresenzeDailyRecord.work_date.asc())
-        ).scalars().all()
-        saturday_records = [record for record in saturday_records if record.work_date.weekday() == 5]
-        if not saturday_records:
-            continue
-        punches = db.execute(
-            select(PresenzeDailyPunch)
-            .where(PresenzeDailyPunch.daily_record_id.in_([record.id for record in saturday_records]))
-            .order_by(PresenzeDailyPunch.daily_record_id.asc(), PresenzeDailyPunch.sequence.asc())
-        ).scalars().all()
-        punches_by_record_id: dict[uuid.UUID, list[PresenzeDailyPunch]] = {}
-        for punch in punches:
-            punches_by_record_id.setdefault(punch.daily_record_id, []).append(punch)
-        for record in saturday_records:
-            worked_minutes = complete_punch_minutes(punches_by_record_id.get(record.id, [])) or 0
-            cause = record.resolved_absence_cause.strip().lower() if isinstance(record.resolved_absence_cause, str) else None
-            justified_minutes = max(record.justified_minutes or 0, record.absence_minutes or 0)
-            if worked_minutes > 0 or (cause in {"ferie", "permesso"} and justified_minutes > 0):
-                counts[(collaborator_id, year, month)] += 1
+    month_starts = [date(year, month, 1) for _, year, month in month_keys]
+    range_end = (max(month_starts).replace(day=28) + timedelta(days=4)).replace(day=1)
+    coverage_records = db.execute(
+        select(PresenzeDailyRecord).where(
+            PresenzeDailyRecord.collaborator_id.in_({key[0] for key in month_keys}),
+            PresenzeDailyRecord.work_date >= min(month_starts),
+            PresenzeDailyRecord.work_date < range_end,
+        )
+    ).scalars().all()
+    saturday_records = [
+        record
+        for record in coverage_records
+        if record.work_date.weekday() == 5
+        and (record.collaborator_id, record.work_date.year, record.work_date.month) in counts
+    ]
+    punches = db.execute(
+        select(PresenzeDailyPunch)
+        .where(PresenzeDailyPunch.daily_record_id.in_([record.id for record in saturday_records]))
+        .order_by(PresenzeDailyPunch.daily_record_id.asc(), PresenzeDailyPunch.sequence.asc())
+    ).scalars().all()
+    punches_by_record_id: dict[uuid.UUID, list[PresenzeDailyPunch]] = {}
+    for punch in punches:
+        punches_by_record_id.setdefault(punch.daily_record_id, []).append(punch)
+    for record in saturday_records:
+        worked_minutes = complete_punch_minutes(punches_by_record_id.get(record.id, [])) or 0
+        cause = record.resolved_absence_cause.strip().lower() if isinstance(record.resolved_absence_cause, str) else None
+        absence_coverage = max(record.justified_minutes or 0, record.absence_minutes or 0) if cause in {"ferie", "permesso"} else 0
+        if max(worked_minutes, absence_coverage) > 0:
+            counts[(record.collaborator_id, record.work_date.year, record.work_date.month)] += 1
     return counts
 
 def _build_monthly_night_bonus_map(

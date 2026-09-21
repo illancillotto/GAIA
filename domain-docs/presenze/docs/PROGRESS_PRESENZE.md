@@ -482,6 +482,7 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
   - tab `Cartellino` ottimizzato con sezioni collassabili per `Riepilogo giornata`, `Totali giornata`, `Richieste` e `Anomalie`, con indicatori sintetici nel titolo (`n voci`, preview richiesta singola, stato `errore`) per ridurre l'altezza verticale della modale e rendere piu veloce la lettura dell'elenco giornate;
 - pagina `/presenze/giornaliere` rifatta come **cartellino mensile a matrice**:
   - collaboratori in verticale, giorni in orizzontale, con colonna collaboratore e header giorni "sticky";
+  - caricamento mensile tramite payload compatto `GET /presenze/giornaliere/matrix`, con timbrature e copertura sabati Catasto/Magazzino lette in bulk; il calcolo della copertura usa al massimo due query per l'intero intervallo invece di due query per ogni coppia collaboratore/mese;
   - perimetro dati filtrato sul responsabile che ha eseguito la sync (`owner_user_id`);
   - celle colorate per stato (lavorato / assenza / giorno speciale / anomalia) con indicatori compatti `▲` extra, `🚗` KM, `✉` richieste; weekend ombreggiati e giorno corrente evidenziato;
   - dettaglio giornata in **modale** con navigazione `precedente/successivo`, supporto tastiera `Esc`, `←`, `→` e badge stato coerente con l'analisi;
@@ -793,6 +794,21 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
   compilazione e complexity ratchet passano;
 - documentazione operativa: `CAPI_OPERAI_SABATI_ALTERNATI.md`; l'overlay iniziale
   viene sostituito dal codice versionato e dal deploy standard.
+
+### Ottimizzazione caricamento matrice giornaliere - 2026-09-21
+
+- eliminato l'N+1 nel calcolo della copertura dei sabati per gli operai
+  Catasto/Magazzino: giornaliere e timbrature dell'intervallo vengono caricate
+  con due query bulk indipendentemente dal numero di collaboratori e mesi;
+- invariati endpoint, payload, filtri di visibilita, classificazione giornaliera
+  e regole per sabati lavorati, ferie e permessi giustificati;
+- aggiunto un test di regressione con due collaboratori su mesi distinti che
+  vincola il caricamento a due result set e verifica entrambi i conteggi;
+- suite `backend/tests/test_presenze*.py` verde; coverage del file runtime
+  `router/helpers/daily_records.py` al `100%` statement e branch;
+- quality ratchet senza findings; `_build_catasto_saturday_coverage_counts`
+  passa da complessita cognitiva `47` a `29` e ciclomatica `26` a `24`, con
+  LOC del file invariata.
 
 ## Gap aperti
 
