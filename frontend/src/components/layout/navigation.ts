@@ -23,6 +23,7 @@ import { hasUserModuleAccess } from "@/lib/module-access";
 import type { CurrentUser } from "@/types/api";
 
 import { presenzeNavigationSections } from "./presenze-navigation";
+import { ruoloNavigationSections } from "./ruolo-navigation";
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -473,28 +474,7 @@ export function getModuleSections({
         },
       ];
     case "ruolo":
-      return [
-        {
-          label: "Panoramica",
-          items: [item("/ruolo", GridIcon, "Dashboard")],
-        },
-        {
-          label: "Dati",
-          items: [
-            item("/ruolo/avvisi", DocumentIcon, "Avvisi", { match: "prefix" }),
-            item("/ruolo/tributi", LockIcon, "Tributi", { match: "prefix" }),
-            item("/ruolo/raccomandate", DocumentIcon, "Raccomandate", { match: "prefix" }),
-            item("/ruolo/particelle", FolderIcon, "Particelle", { match: "prefix" }),
-            item("/ruolo/calcolo-gaia", SearchIcon, "Calcolo ruolo", { match: "prefix" }),
-            item("/ruolo/stats", SearchIcon, "Statistiche", { match: "prefix" }),
-            item("/ruolo/controlli-capacitas", AlertTriangleIcon, "Audit Capacitas", { match: "prefix" }),
-          ],
-        },
-        {
-          label: "Gestione",
-          items: [item("/ruolo/import", RefreshIcon, "Storico workflow", { match: "prefix" })],
-        },
-      ];
+      return ruoloNavigationSections;
     case "presenze":
       return presenzeNavigationSections;
     case "organigramma":

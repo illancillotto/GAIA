@@ -5,6 +5,68 @@ blocco verificato e prima di chiudere un goal.
 
 ## Stato generale
 
+### Ruolo - finalizzazione candidati solleciti (2026-09-21)
+
+- Semplificazione locale di `_collect_reminder_candidates` autorizzata dopo
+  il blocco LOC del registro avvisi; nessun secondo hotspot.
+- Prima: LOC `141`, cyclomatic `39`, cognitive `59`, nesting `2`, parametri
+  `8`; baseline autorevole al merge-base `ec5b1375`: LOC `139`.
+  Report acquisito in `/tmp/gaia-collect-before.json`.
+- Invarianti: query e filtri, gate storico 2022/2023, raggruppamento per CF,
+  importi Decimal, promozione soggetto, risoluzione NAS, payload e ordinamento.
+- Slice: rimuovere i default NAS sempre sovrascritti e finalizzare direttamente
+  la lista dei gruppi, senza lista incrementale duplicata. Nessuna estrazione,
+  compressione di layout o modifica di baseline/soglie/esclusioni.
+- Caratterizzazione: suite Tributi con fixture storiche verificate mediante
+  i comandi auditati del registro, non con bypass del gate di ammissibilita.
+  Prima del refactoring: `94 passed`, statement `1848/1848`, branch `696/720`.
+- Dopo: LOC callable `138`, file `3659 -> 3656`; cyclomatic `39` e cognitive
+  `59` invariati. Aggregati file: `177` callable, sum cyclomatic `1195`, sum
+  cognitive `1398`, invariati. Nessun helper aggiunto o debito trasferito.
+  Esito `IMPROVED` limitatamente alle LOC; restano le quattro violation legacy
+  callable e quella LOC file-level, senza peggioramenti.
+- `test_tributi_api.py` e `test_tributi_register_regressions.py`: `108 passed`,
+  statement `1847/1847`, branch `720/720`, full-file `100%`, nessuna nuova
+  esclusione. I 14 casi aggiunti coprono confini legacy, rollback condiviso
+  generazione/registro e cambio verifica STEP dopo selezione dei candidati.
+  Due fixture nuove inizialmente prive di campi anagrafici obbligatori sono
+  state completate; nessuna failure runtime residua.
+- Servizi eligibility/generation: `28 passed` su SQLite e PostgreSQL isolato,
+  statement `106/106`, branch `46/46`, entrambi al `100%`.
+- `make complexity-ratchet BASE_REF=ec5b1375
+  QUALITY_PYTHON=backend/.venv/bin/python`: `PASS`, `findings: []`.
+  `make lint-backend` e diff check verdi; quality tooling `76 passed`.
+  Baseline invariata; nessuna sincronizzazione eseguita per assorbire il debito.
+- Evidenze `/tmp/gaia-collect-{before,after}.json`,
+  `/tmp/gaia-collect-final-{tests.log,coverage.json}` e
+  `/tmp/gaia-collect-ratchet.log`. Nessun secondo hotspot, commit o deploy.
+
+### Matching duplicati rimossi - registro Ruolo (2026-09-18)
+
+- Follow-up esplicitamente autorizzato dopo lo stop `ambiguous_identity` su
+  `frontend/src/components/layout/navigation.ts`, baseline autorevole
+  `ec5b1375`. La riga di import del registro sposta le callback di una riga;
+  baseline: 11 `isVisible` con fingerprint `a0e8a20228335a32`, correnti: 10.
+  La rimozione era gia presente prima della feature; le metriche delle callback
+  sono tutte identiche, ma lo spostamento produce distanze a pari merito.
+- Correzione delimitata a `resolve_baseline_callable`: confronto multinsieme
+  delle tuple primarie per gruppi stesso path/nome/fingerprint, anche quando
+  diminuisce il numero di duplicati invariati. Nessuna scelta arbitraria di
+  ownership e nessuna assegnazione multipla della stessa occorrenza baseline.
+  Fallback fra path e controlli di regressione restano invariati.
+- Sette casi aggiunti: rimozioni, gruppo invariato, tuple eterogenee,
+  molteplicita eccedente, regressione e riuso indebito di una tupla baseline.
+  `make quality-test QUALITY_PYTHON=backend/.venv/bin/python`: 76 passed.
+  Ruff check e format-check dei due file tooling/test: passano.
+- Ratchet prima: exit 2 per ambiguita; dopo: exit 0, `findings: []` con
+  `make complexity-ratchet BASE_REF=ec5b1375
+  QUALITY_PYTHON=backend/.venv/bin/python`. Baseline, motori, scope, soglie ed
+  eccezioni non modificati. Nessuna riduzione di complessita runtime rivendicata.
+- Registro frontend: 45 test mirati, coverage 100% su 258 statement, 234 branch,
+  99 funzioni, 215 righe; regressione 138 test e tre E2E desktop/mobile/viewer
+  passati. Dettagli, metriche prima/dopo e limiti operativi nella documentazione
+  `domain-docs/ruolo/docs/REGISTRO_AVVISI_IMPLEMENTAZIONE.md`.
+
 ### Baseline globale - audit e prima slice (2026-09-15)
 
 - Richiesta: affrontare il debito che impedisce la sincronizzazione globale.

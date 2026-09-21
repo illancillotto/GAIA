@@ -135,6 +135,69 @@ def test_truly_indistinguishable_regressed_callbacks_exit_2():
     assert findings[0]["reason"] == "ambiguous_identity"
 
 
+@pytest.mark.parametrize(
+    ("baseline_metrics", "current_metrics", "expected_code"),
+    [
+        ([1, 1, 1], [1, 1], 0),
+        ([1, 1, 1], [1], 0),
+        ([1, 1, 1], [1, 1, 1], 0),
+        ([1, 2, 1], [1, 2], 0),
+        ([1, 2, 1], [2, 2], 2),
+        ([1, 1, 1], [1, 1, 1, 1], 2),
+        ([1, 1, 1], [1, 2], 2),
+    ],
+)
+def test_duplicate_group_requires_metric_identical_injective_matching(
+    baseline_metrics, current_metrics, expected_code
+):
+    module = load_tool_module()
+    path = "frontend/src/Navigation.ts"
+    call = {
+        "path": path,
+        "name": "isVisible",
+        "kind": "arrow_function",
+        "cyclomatic": 1,
+        "cognitive": 0,
+        "loc": 1,
+        "nesting": 0,
+        "params": 1,
+        "fingerprint": "same-fingerprint",
+        "violations": [],
+    }
+    baseline_calls = [
+        {**call, "line": 10 + index * 10, "end_line": 10 + index * 10, "loc": loc}
+        for index, loc in enumerate(baseline_metrics)
+    ]
+    # The first survivor is equidistant from two baseline entries. Source
+    # positions cannot identify ownership; metric multisets can prove non-regression.
+    current_calls = [
+        {**call, "line": 15 + index * 10, "end_line": 15 + index * 10, "loc": loc}
+        for index, loc in enumerate(current_metrics)
+    ]
+    baseline_data = {
+        "schema_version": module.SCHEMA_VERSION,
+        "engines": {},
+        "scope": {},
+        "files": {path: {"callables": len(baseline_calls)}},
+        "callables": baseline_calls,
+    }
+    report = {
+        "parse_errors": [],
+        "exception_errors": [],
+        "callables": current_calls,
+        "violations": [],
+        "files": {},
+    }
+
+    code, findings = module.compare(report, baseline_data)
+
+    assert code == expected_code
+    if expected_code == 0:
+        assert findings == []
+    else:
+        assert findings[0]["reason"] == "ambiguous_identity"
+
+
 def test_changed_callback_uses_only_entry_not_reserved_by_stable_siblings():
     module = load_tool_module()
     path = "frontend/src/Search.tsx"

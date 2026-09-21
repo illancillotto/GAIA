@@ -644,6 +644,18 @@ export type RuoloTributiReminderBatchListResponse = {
   page_size: number;
 };
 
+export type NoticeGenerationConfirmationResponse = {
+  id: string;
+  generation_id: string;
+  generation_kind: string;
+  review_digest: string;
+  input_basis: Record<string, unknown>;
+  identity_keys: string[];
+  notice_numbers: string[];
+  confirmed_by: number;
+  confirmed_at: string;
+};
+
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
 export type RuoloStatsByAnnoResponse = {

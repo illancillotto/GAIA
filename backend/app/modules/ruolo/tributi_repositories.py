@@ -1,19 +1,19 @@
 from __future__ import annotations
 
-from collections import defaultdict
-from contextlib import suppress
 import csv
 import hashlib
 import html
-from io import BytesIO, StringIO
-import uuid
-from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal, ROUND_HALF_UP
-from pathlib import Path
 import re
 import tempfile
-from typing import Any
 import unicodedata
+import uuid
+from collections import defaultdict
+from contextlib import suppress
+from datetime import UTC, date, datetime
+from decimal import ROUND_HALF_UP, Decimal
+from io import BytesIO, StringIO
+from pathlib import Path
+from typing import Any
 
 from openpyxl import load_workbook
 from sqlalchemy import String, and_, case, cast, desc, func, literal, or_, select
@@ -21,16 +21,16 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
 from app.modules.ruolo.enums import (
-    RuoloTributiRegisteredMailMatchStatus,
-    RuoloTributiRegisteredMailRecoveryStatus,
     RuoloTributiPaymentImportStatus,
     RuoloTributiPaymentRecordStatus,
     RuoloTributiPaymentStatus,
+    RuoloTributiRegisteredMailMatchStatus,
+    RuoloTributiRegisteredMailRecoveryStatus,
 )
 from app.modules.ruolo.models import (
     RuoloAvviso,
-    RuoloPartita,
     RuoloParticella,
+    RuoloPartita,
     RuoloTributiAvvisoStatus,
     RuoloTributiCalculationPolicy,
     RuoloTributiNote,
@@ -47,16 +47,9 @@ from app.modules.ruolo.models import (
     RuoloTributiYearManager,
 )
 from app.modules.ruolo.repositories import _get_subject_display_name
-from app.modules.ruolo.tributi_policy_repository import (
-    bollettino_policy_payload as _bollettino_policy_payload,
-    delete_calculation_policy,
-    get_calculation_policy_for_year,
-    list_calculation_policies,
-    upsert_calculation_policy,
-)
+from app.modules.ruolo.services import notice_drafts
 from app.modules.ruolo.services.capacitas_role_codes import (
     CAPACITAS_ROLE_ACCOUNTING_SCOPE_OUT_OF_ORDINARY,
-    CAPACITAS_ROLE_KIND_UNCLASSIFIED,
     CAPACITAS_ROLE_OPERATIONAL_POLICY_AUDIT_ONLY,
     CAPACITAS_SPECIAL_NOTICE_POLICY_NOTE,
     CAPACITAS_SPECIAL_NOTICE_STATUS_CANCELLED,
@@ -66,6 +59,13 @@ from app.modules.ruolo.services.capacitas_role_codes import (
     CAPACITAS_SPECIAL_NOTICE_STATUS_PARTIALLY_CANCELLED,
     CAPACITAS_SPECIAL_NOTICE_STATUS_TO_REVIEW,
     classify_capacitas_role_code,
+)
+from app.modules.ruolo.services.notice_draft_inputs import capture_inputs
+from app.modules.ruolo.services.notice_eligibility import generation_allowed
+from app.modules.ruolo.services.notice_generation import register_batch_item, register_reminder
+from app.modules.ruolo.services.tributi_notice_registry import (
+    build_notice_identity_key,
+    reserve_notice_number,
 )
 from app.modules.ruolo.services.tributi_reminder_service import (
     GAIA_PROPOSAL_TEMPLATE_KEY,
@@ -78,11 +78,31 @@ from app.modules.ruolo.services.tributi_reminder_service import (
     generate_reminder_docx,
     reminder_storage_dir,
 )
-from app.modules.ruolo.services.tributi_notice_registry import reserve_notice_number
-from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice, AnagraficaPerson, AnagraficaSubject
+from app.modules.ruolo.tributi_policy_repository import (
+    bollettino_policy_payload as _bollettino_policy_payload,
+)
+
+# Public compatibility exports used by the existing routes and integrations.
+from app.modules.ruolo.tributi_policy_repository import (
+    delete_calculation_policy as delete_calculation_policy,
+)
+from app.modules.ruolo.tributi_policy_repository import (
+    get_calculation_policy_for_year,
+)
+from app.modules.ruolo.tributi_policy_repository import (
+    list_calculation_policies as list_calculation_policies,
+)
+from app.modules.ruolo.tributi_policy_repository import (
+    upsert_calculation_policy as upsert_calculation_policy,
+)
+from app.modules.utenze.models import (
+    AnagraficaCompany,
+    AnagraficaPaymentNotice,
+    AnagraficaPerson,
+    AnagraficaSubject,
+)
 from app.modules.utenze.services.nas_path_service import canonical_subject_nas_folder_path
 from app.services.nas_connector import get_nas_client
-
 
 _CURRENCY_ZERO = Decimal("0.00")
 _ARCHIVE_FOLDER_NAME_MAX_LENGTH = 96
@@ -125,7 +145,6 @@ _POSTA_ONLINE_GENERIC_ADDRESS_TOKENS = {
     "VICO",
     "PIAZZA",
     "PZA",
-    "CORSO",
     "CORSO",
     "STRADA",
     "LOCALITA",
@@ -1497,7 +1516,7 @@ def void_special_allocation(
     if allocation.status != SPECIAL_ALLOCATION_STATUS_VOIDED:
         allocation.status = SPECIAL_ALLOCATION_STATUS_VOIDED
         allocation.voided_by = voided_by
-        allocation.voided_at = datetime.now(timezone.utc)
+        allocation.voided_at = datetime.now(UTC)
         db.flush()
         _refresh_special_notice_allocation_summary(db, special)
     return allocation
@@ -1947,7 +1966,7 @@ def _row_to_tributi_item(
         "calculation_policy": year_manager["calculation_policy"],
         "calculation_policy_rules_configured": _has_active_calculation_policies(db),
     }
-    item["reminder_enabled"] = _item_can_generate_reminder(item)
+    item["reminder_enabled"] = generation_allowed(db, item, _item_can_generate_reminder(item))
     return item
 
 
@@ -2151,7 +2170,7 @@ def import_capacitas_payments(
     mapping: dict[str, str] | None = None,
     triggered_by: int | None = None,
 ) -> RuoloTributiPaymentImportJob:
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
     job = RuoloTributiPaymentImportJob(
         filename=filename,
         source="capacitas_excel",
@@ -2213,7 +2232,7 @@ def import_capacitas_payments(
         job.records_unmatched = job.records_unmatched or 0
         job.records_errors = (job.records_errors or 0) + 1
 
-    job.finished_at = datetime.now(timezone.utc)
+    job.finished_at = datetime.now(UTC)
     db.flush()
     return job
 
@@ -2384,14 +2403,14 @@ def _parse_payment_date(value: object) -> datetime | None:
     if value is None or str(value).strip() == "":
         return None
     if isinstance(value, datetime):
-        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
     text = str(value).strip()
     for fmt in ("%d/%m/%Y", "%d/%m/%Y %H:%M:%S", "%Y-%m-%d", "%Y-%m-%d %H:%M:%S"):
         with suppress(ValueError):
-            return datetime.strptime(text, fmt).replace(tzinfo=timezone.utc)
+            return datetime.strptime(text, fmt).replace(tzinfo=UTC)
     with suppress(ValueError):
         parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
     raise ValueError("Data pagamento non valida")
 
 
@@ -2487,7 +2506,7 @@ def import_posta_online_registered_mails(
     triggered_by: int | None = None,
 ) -> RuoloTributiPostaOnlineImportJob:
     selected_years = _normalise_posta_online_years(annualita)
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
     job = RuoloTributiPostaOnlineImportJob(
         filename=filename,
         source="posta_online",
@@ -2550,7 +2569,7 @@ def import_posta_online_registered_mails(
         job.records_unmatched = job.records_unmatched or 0
         job.records_errors = (job.records_errors or 0) + 1
 
-    job.finished_at = datetime.now(timezone.utc)
+    job.finished_at = datetime.now(UTC)
     db.flush()
     return job
 
@@ -3012,11 +3031,11 @@ def _parse_posta_online_date(value: object) -> datetime | None:
     if value is None or str(value).strip() == "":
         return None
     if isinstance(value, datetime):
-        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
     text = str(value).strip()
     for fmt in ("%d/%m/%Y %H:%M", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y", "%Y-%m-%d", "%Y-%m-%d %H:%M:%S"):
         with suppress(ValueError):
-            return datetime.strptime(text, fmt).replace(tzinfo=timezone.utc)
+            return datetime.strptime(text, fmt).replace(tzinfo=UTC)
     return None
 
 
@@ -3283,6 +3302,7 @@ def get_reminder(db: Session, reminder_id: uuid.UUID) -> RuoloTributiReminder | 
     return db.get(RuoloTributiReminder, reminder_id)
 
 
+@capture_inputs
 def create_generated_reminder(
     db: Session,
     *,
@@ -3294,10 +3314,10 @@ def create_generated_reminder(
     tributi_item = get_tributi_avviso(db, avviso.id)
     if tributi_item is None:  # pragma: no cover - guarded by caller and DB FK.
         raise ValueError("Avviso tributi non trovato")
-    if not _item_can_generate_reminder(tributi_item):
+    if not tributi_item["reminder_enabled"]:
         raise ReminderUnavailableError("Avviso sollecito non disponibile per questa annualita")
 
-    generated_at = datetime.now(timezone.utc)
+    generated_at = datetime.now(UTC)
     payload = build_reminder_payload(
         avviso_id=avviso.id,
         codice_cnc=avviso.codice_cnc,
@@ -3332,10 +3352,9 @@ def create_generated_reminder(
         reminder_id=reminder.id,
     )
     output_path = reminder_storage_dir() / filename
-    generate_reminder_docx(payload, output_path=output_path)
-    reminder.generated_document_path = str(output_path)
+    notice_drafts.render_reminder(db, reminder, generate_reminder_docx, output_path)
     db.flush()
-    return reminder
+    return register_reminder(db, reminder)
 
 
 def list_reminder_candidates(
@@ -3365,6 +3384,7 @@ def list_reminder_candidates(
     return candidates[start : start + page_size], total
 
 
+@capture_inputs
 def create_reminder_batch(
     db: Session,
     *,
@@ -3401,7 +3421,7 @@ def create_reminder_batch(
     if not candidates:
         raise ValueError("Nessuna utenza morosa selezionabile per il batch")
 
-    generated_at = datetime.now(timezone.utc)
+    generated_at = datetime.now(UTC)
     batch = RuoloTributiReminderBatch(
         title=title,
         status="running",
@@ -3437,7 +3457,7 @@ def create_reminder_batch(
     else:
         batch.status = "partial_failed"
     db.flush()
-    return batch
+    return notice_drafts.finish_batch(batch)
 
 
 def list_reminder_batches(
@@ -3475,14 +3495,7 @@ def get_reminder_batch_item(db: Session, item_id: uuid.UUID) -> RuoloTributiRemi
 
 
 def reminder_batch_item_document_path(item: RuoloTributiReminderBatchItem) -> Path | None:
-    if not item.generated_document_path:
-        return None
-    path = Path(item.generated_document_path)
-    if not path.exists() or not path.is_file():
-        if _is_remote_nas_path(item.generated_document_path):
-            return path
-        return None
-    return path
+    return notice_drafts.published_document_path(item)
 
 
 def is_remote_reminder_document_path(path: Path | str) -> bool:
@@ -3553,7 +3566,7 @@ def _collect_reminder_candidates(
     grouped: dict[str, dict[str, Any]] = {}
     for row in db.execute(query).all():
         item = _row_to_tributi_item(db, row)
-        if not _item_can_generate_reminder(item):
+        if not item["reminder_enabled"]:
             continue
         avviso: RuoloAvviso = item["avviso"]
         tax_code = _normalise_tax_code(avviso.codice_fiscale_raw)
@@ -3571,8 +3584,6 @@ def _collect_reminder_candidates(
                 "paid_amount": Decimal("0.00"),
                 "saldo_amount": Decimal("0.00"),
                 "subject_id": avviso.subject_id,
-                "nas_folder_path": None,
-                "has_nas_folder": False,
                 "annuality_managers": set(),
                 "avvisi": [],
             },
@@ -3626,8 +3637,8 @@ def _collect_reminder_candidates(
             }
         )
 
-    candidates = []
-    for group in grouped.values():
+    candidates = list(grouped.values())
+    for group in candidates:
         subject_id, nas_folder_path = _resolve_subject_archive(db, group["codice_fiscale"], group["subject_id"])
         group["subject_id"] = subject_id
         group["nas_folder_path"] = nas_folder_path
@@ -3639,7 +3650,6 @@ def _collect_reminder_candidates(
         group["surcharge_amount"] = _money_float(group.get("surcharge_amount")) or 0.0
         group["interest_amount"] = _money_float(group.get("interest_amount")) or 0.0
         group["annuality_managers"] = sorted(group["annuality_managers"])
-        candidates.append(group)
 
     candidates.sort(key=lambda value: ((value["display_name"] or "").lower(), (value["comune"] or "").lower(), value["codice_fiscale"]))
     return candidates
@@ -3717,7 +3727,7 @@ def _prepare_batch_item(
     generated_at: datetime,
 ) -> RuoloTributiReminderBatchItem:
     avviso_ids = [str(avviso["id"]) for avviso in candidate["avvisi"]]
-    emission_year = generated_at.astimezone(timezone.utc).year
+    emission_year = generated_at.astimezone(UTC).year
     reference_years = sorted({int(year) for year in candidate["years"] if isinstance(year, int)})
     reservation = reserve_notice_number(
         db,
@@ -3766,6 +3776,7 @@ def _prepare_batch_items(
     candidates: list[dict[str, Any]],
     generated_at: datetime,
 ) -> list[tuple[RuoloTributiReminderBatchItem, dict[str, Any]]]:
+    notice_drafts.prepare_batch(batch, candidates)
     return [
         (
             _prepare_batch_item(
@@ -3789,7 +3800,6 @@ def _generate_prepared_batch_item(
     preview_only: bool,
 ) -> None:
     reservation = db.get(RuoloTributiNoticeNumber, item.notice_number_id)
-    payload = item.payload_json or {}
     output_path = _batch_item_output_path(item=item, candidate=candidate, preview_only=preview_only)
     if output_path is None:
         item.status = "failed"
@@ -3798,12 +3808,13 @@ def _generate_prepared_batch_item(
         db.flush()
         return
 
-    item.status, item.generated_document_path, item.error_detail = _generate_batch_document(
-        payload,
-        output_path=output_path,
+    item.status, item.generated_document_path, item.error_detail = notice_drafts.render_batch_item(
+        db, item, db.get(RuoloTributiReminderBatch, item.batch_id), _generate_batch_document, output_path,
     )
     _update_notice_reservation_status(reservation, item.status)
     db.flush()
+
+    register_batch_item(db, item, preview_only=preview_only)
 
 
 def _batch_item_output_path(
@@ -3813,7 +3824,7 @@ def _batch_item_output_path(
     preview_only: bool,
 ) -> Path | None:
     filename = build_batch_reminder_filename(codice_fiscale=candidate["codice_fiscale"], years=candidate["years"])
-    if preview_only:
+    if preview_only or candidate.get(notice_drafts.PRIVATE_BATCH_KEY):
         return reminder_storage_dir() / f"{item.id}_{filename}"
     if not candidate["nas_folder_path"]:
         return None
@@ -3928,6 +3939,7 @@ def _build_batch_item_payload(
         "notice_emission_year": notice_emission_year,
         "notice_progressive": notice_progressive,
         "notice_reference_years": notice_reference_years,
+        "notice_identity_key": build_notice_identity_key(candidate, emission_year=notice_emission_year, reference_years=notice_reference_years),
         "avvisi": _batch_avvisi_payload(db, candidate["avvisi"]),
     }
 
@@ -4091,11 +4103,4 @@ def _bool_filter(value: Any) -> bool:
 
 
 def reminder_document_path(reminder: RuoloTributiReminder) -> Path | None:
-    if not reminder.generated_document_path:
-        return None
-    path = Path(reminder.generated_document_path)
-    if not path.exists() or not path.is_file():
-        if _is_remote_nas_path(reminder.generated_document_path):
-            return path
-        return None
-    return path
+    return notice_drafts.published_document_path(reminder)

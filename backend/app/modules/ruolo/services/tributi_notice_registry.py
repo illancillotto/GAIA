@@ -36,7 +36,7 @@ def _candidate_identity(
     return tax_code, years, avviso_ids
 
 
-def _identity_key(
+def build_notice_identity_key(
     candidate: dict[str, Any],
     *,
     emission_year: int,
@@ -47,6 +47,10 @@ def _identity_key(
         (emission_year, *identity), ensure_ascii=True, separators=(",", ":")
     )
     return hashlib.sha256(encoded.encode("ascii")).hexdigest()
+
+
+# Kept as a private alias for callers/tests that still use the pre-public name.
+_identity_key = build_notice_identity_key
 
 
 def _normalise_tax_code(value: object) -> str:

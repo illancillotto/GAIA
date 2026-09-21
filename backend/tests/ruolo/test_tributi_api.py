@@ -1,20 +1,20 @@
 import asyncio
+import json
+import sys
 from collections.abc import Generator
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from io import BytesIO
-import json
 from pathlib import Path
-import sys
 from types import ModuleType, SimpleNamespace
-from xml.etree import ElementTree as ET
 from uuid import UUID, uuid4
+from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
-from openpyxl import Workbook
 import pytest
 from fastapi import HTTPException, UploadFile
 from fastapi.testclient import TestClient
+from openpyxl import Workbook
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -89,11 +89,6 @@ from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.section_permission import Section
 from app.modules.ruolo import tributi_repositories as tributi_repo
-from app.modules.ruolo.routes import tributi_routes
-from app.modules.ruolo.services import euribor as euribor_service
-from app.modules.ruolo.services import td896 as td896_service
-from app.modules.ruolo.services import tributi_reminder_service as reminder_service
-from app.modules.ruolo.services import tributi_notice_registry as notice_registry
 from app.modules.ruolo.models import (
     RuoloAvviso,
     RuoloImportJob,
@@ -103,7 +98,6 @@ from app.modules.ruolo.models import (
     RuoloTributiNoticeNumber,
     RuoloTributiPayment,
     RuoloTributiPaymentImportJob,
-    RuoloTributiPostaOnlineImportJob,
     RuoloTributiRegisteredMail,
     RuoloTributiReminder,
     RuoloTributiReminderBatch,
@@ -112,14 +106,25 @@ from app.modules.ruolo.models import (
     RuoloTributiSpecialNotice,
     RuoloTributiYearManager,
 )
+from app.modules.ruolo.routes import tributi_routes
 from app.modules.ruolo.schemas import RuoloImportJobResponse
+from app.modules.ruolo.services import euribor as euribor_service
+from app.modules.ruolo.services import td896 as td896_service
+from app.modules.ruolo.services import tributi_notice_registry as notice_registry
+from app.modules.ruolo.services import tributi_reminder_service as reminder_service
 from app.modules.ruolo.services.tributi_reminder_service import (
     convert_docx_to_pdf,
     generate_batch_reminder_docx,
     generate_batch_reminder_pdf,
 )
-from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice, AnagraficaPerson, AnagraficaSubject
+from app.modules.utenze.models import (
+    AnagraficaCompany,
+    AnagraficaPaymentNotice,
+    AnagraficaPerson,
+    AnagraficaSubject,
+)
 
+from .notice_history_fixtures import seed_verified_history
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
 engine = create_engine(
@@ -223,6 +228,7 @@ def seed_avviso(
     nominativo: str = "ROSSI MARIO",
     anno: int = 2024,
     subject_id: UUID | None = None,
+    verified_history: bool = False,
 ) -> str:
     db = TestingSessionLocal()
     job = RuoloImportJob(anno_tributario=anno, filename=f"ruolo_tributi_{anno}", status="completed")
@@ -242,6 +248,9 @@ def seed_avviso(
         importo_totale_0648=amount,
     )
     db.add(avviso)
+    if verified_history:
+        db.flush()
+        seed_verified_history(db, avviso)
     db.commit()
     avviso_id = str(avviso.id)
     db.close()
@@ -939,8 +948,8 @@ def test_tributi_archive_folder_helpers_and_subject_resolution_edges(monkeypatch
 
 
 def test_ruolo_import_job_response_duration_branches() -> None:
-    started_at = datetime(2026, 7, 22, 10, 0, tzinfo=timezone.utc)
-    finished_at = datetime(2026, 7, 22, 10, 0, 2, 250000, tzinfo=timezone.utc)
+    started_at = datetime(2026, 7, 22, 10, 0, tzinfo=UTC)
+    finished_at = datetime(2026, 7, 22, 10, 0, 2, 250000, tzinfo=UTC)
 
     completed = RuoloImportJobResponse(
         id=uuid4(),
@@ -980,7 +989,7 @@ def test_tributi_avviso_lifecycle_tracks_payments_status_notes_and_capacitas_lin
         headers=headers,
         json={
             "amount": 40.0,
-            "paid_at": datetime(2026, 7, 17, tzinfo=timezone.utc).isoformat(),
+            "paid_at": datetime(2026, 7, 17, tzinfo=UTC).isoformat(),
             "payment_reference": "PAY-001",
             "payment_method": "bonifico",
         },
@@ -1049,7 +1058,7 @@ def test_tributi_import_pagamenti_csv_matches_by_cnc_and_reports_unmatched() -> 
         f"{codice_cnc};2024;40,50;17/07/2026;PAY-CAP-001;PagoPA\n"
         "CNC-MISSING;2024;12,00;18/07/2026;PAY-CAP-002;PagoPA\n"
         f"{codice_cnc};2024;;19/07/2026;PAY-CAP-003;PagoPA\n"
-    ).encode("utf-8")
+    ).encode()
 
     response = client.post(
         "/ruolo/tributi/import-pagamenti",
@@ -1942,6 +1951,7 @@ def test_tributi_posta_online_repository_helpers_cover_edge_branches(monkeypatch
     assert jobs[0].id == ambiguous_job.id
     assert tributi_repo.get_posta_online_import_job(db, ambiguous_job.id) is not None
     filtered_by_job, total_by_job = tributi_repo.list_registered_mails(db, import_job_id=ambiguous_job.id)
+    assert len(filtered_by_job) == 1
     assert total_by_job == 1
     filtered_by_avviso, total_by_avviso = tributi_repo.list_registered_mails(db, avviso_id=UUID(first_id))
     assert filtered_by_avviso == []
@@ -2079,7 +2089,7 @@ def test_tributi_posta_online_repository_helpers_cover_edge_branches(monkeypatch
 
     assert tributi_repo._posta_online_join_address({"recipient_address": "VIA DIRETTA"}) == "VIA DIRETTA"
     assert tributi_repo._posta_online_join_address({"address": "VIA A", "zipcode": "09170", "city": "ORISTANO", "province": "OR"}) == "VIA A - 09170 - ORISTANO (OR)"
-    aware_now = datetime.now(timezone.utc)
+    aware_now = datetime.now(UTC)
     assert tributi_repo._parse_posta_online_date(aware_now) == aware_now
     assert tributi_repo._parse_posta_online_date("bad") is None
     assert tributi_repo._parse_optional_posta_online_amount(None) is None
@@ -2553,7 +2563,7 @@ def test_tributi_calculation_policy_crud_validates_active_year_ranges() -> None:
 
 
 def test_tributi_fetches_euribor_6m_rate_from_ecb(monkeypatch: pytest.MonkeyPatch) -> None:
-    fetched_at = datetime(2026, 8, 6, 12, 0, tzinfo=timezone.utc)
+    fetched_at = datetime(2026, 8, 6, 12, 0, tzinfo=UTC)
 
     def fake_fetch(*, year: int) -> euribor_service.EuriborRate:
         assert year == 2025
@@ -2638,7 +2648,7 @@ def test_tributi_euribor_service_validation_edges(monkeypatch: pytest.MonkeyPatc
         euribor_service.fetch_euribor_6m_average(year=1993)
 
     with pytest.raises(ValueError, match="non supportato"):
-        euribor_service.fetch_euribor_6m_average(year=datetime.now(timezone.utc).year + 1)
+        euribor_service.fetch_euribor_6m_average(year=datetime.now(UTC).year + 1)
 
     class EmptyResponse:
         def __enter__(self):
@@ -2822,7 +2832,7 @@ def test_tributi_calculation_policy_notification_mode_falls_back_to_fixed_date()
 
 def test_tributi_calculation_policy_notification_edges(monkeypatch: pytest.MonkeyPatch) -> None:
     assert tributi_repo._parse_policy_date(None) is None
-    assert tributi_repo._parse_policy_date(datetime(2026, 1, 2, 10, 30, tzinfo=timezone.utc)) == date(2026, 1, 2)
+    assert tributi_repo._parse_policy_date(datetime(2026, 1, 2, 10, 30, tzinfo=UTC)) == date(2026, 1, 2)
     assert tributi_repo._parse_policy_date(date(2026, 1, 3)) == date(2026, 1, 3)
     assert tributi_repo._parse_policy_date("") is None
     assert tributi_repo._parse_policy_date("2026-01-04T10:00:00+00:00") == date(2026, 1, 4)
@@ -3171,9 +3181,9 @@ def test_tributi_viewer_can_generate_and_download_reminder_docx() -> None:
 
 def test_tributi_reminder_batch_groups_candidates_generates_pdf_and_tracks_items(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     subject_id = seed_subject_with_nas(tmp_path)
-    first_avviso_id = seed_avviso(amount=100.0, anno=2022, subject_id=subject_id)
-    second_avviso_id = seed_avviso(amount=150.0, anno=2023, subject_id=subject_id)
-    orphan_avviso_id = seed_avviso(amount=80.0, tax_code="BNCLGU80A01H501Y", nominativo="BIANCHI LUIGI", anno=2023)
+    first_avviso_id = seed_avviso(amount=100.0, anno=2022, subject_id=subject_id, verified_history=True)
+    second_avviso_id = seed_avviso(amount=150.0, anno=2023, subject_id=subject_id, verified_history=True)
+    orphan_avviso_id = seed_avviso(amount=80.0, tax_code="BNCLGU80A01H501Y", nominativo="BIANCHI LUIGI", anno=2023, verified_history=True)
 
     db = TestingSessionLocal()
     first_avviso = db.get(RuoloAvviso, UUID(first_avviso_id))
@@ -3249,7 +3259,7 @@ def test_tributi_reminder_batch_groups_candidates_generates_pdf_and_tracks_items
         status="generated",
         template_path="/tmp/legacy.docx",
         generated_by=1,
-        generated_at=datetime(datetime.now(timezone.utc).year, 1, 2, tzinfo=timezone.utc),
+        generated_at=datetime(datetime.now(UTC).year, 1, 2, tzinfo=UTC),
     )
     db.add(legacy_batch)
     db.flush()
@@ -3259,7 +3269,7 @@ def test_tributi_reminder_batch_groups_candidates_generates_pdf_and_tracks_items
             codice_fiscale="RSSMRA80A01H501Z",
             paid_amount=0,
             status="generated",
-            payload_json={"notice_emission_year": datetime.now(timezone.utc).year - 1, "notice_progressive": 99},
+            payload_json={"notice_emission_year": datetime.now(UTC).year - 1, "notice_progressive": 99},
         )
     )
     db.commit()
@@ -3269,13 +3279,24 @@ def test_tributi_reminder_batch_groups_candidates_generates_pdf_and_tracks_items
     assert candidates_response.status_code == 200
     candidates_payload = candidates_response.json()
     assert candidates_payload["total"] == 2
+    assert [item["codice_fiscale"] for item in candidates_payload["items"]] == [
+        "BNCLGU80A01H501Y", "RSSMRA80A01H501Z"
+    ]
     linked_candidate = next(item for item in candidates_payload["items"] if item["codice_fiscale"] == "RSSMRA80A01H501Z")
     assert linked_candidate["years"] == [2022, 2023]
     assert linked_candidate["avvisi_count"] == 2
     assert linked_candidate["due_amount"] == 250.0
+    assert linked_candidate["paid_amount"] == 0.0
+    assert linked_candidate["saldo_amount"] == 250.0
+    assert linked_candidate["surcharge_amount"] == 0.0
+    assert linked_candidate["interest_amount"] == 0.0
+    assert linked_candidate["comune"] == "URAS"
+    assert linked_candidate["nas_folder_path"] == str(tmp_path / "archivio" / "RSSMRA80A01H501Z")
     assert linked_candidate["has_nas_folder"] is True
     orphan_candidate = next(item for item in candidates_payload["items"] if item["codice_fiscale"] == "BNCLGU80A01H501Y")
     assert orphan_candidate["has_nas_folder"] is False
+    assert orphan_candidate["nas_folder_path"] is None
+    assert orphan_candidate["subject_id"] is None
 
     create_response = client.post(
         "/ruolo/tributi/solleciti/batches",
@@ -3290,22 +3311,22 @@ def test_tributi_reminder_batch_groups_candidates_generates_pdf_and_tracks_items
     )
     assert create_response.status_code == 200
     batch_payload = create_response.json()
-    assert batch_payload["status"] == "generated"
+    assert batch_payload["status"] == "review_required"
     assert batch_payload["items_total"] == 1
-    assert batch_payload["items_generated"] == 1
-    assert batch_payload["items"][0]["status"] == "generated"
-    assert batch_payload["items"][0]["download_url"].endswith("/download")
+    assert batch_payload["items_generated"] == 0
+    assert batch_payload["items"][0]["status"] == "draft"
+    assert batch_payload["items"][0]["download_url"] is None
     assert batch_payload["items"][0]["years_json"] == [2022]
-    generated_path = Path(batch_payload["items"][0]["generated_document_path"])
-    assert generated_path.name == "RSSMRA80A01H501Z_avviso_sollecito_2022.pdf"
-    assert generated_path.exists()
+    assert batch_payload["items"][0]["generated_document_path"] is None
+    assert not (tmp_path / "archivio" / "RSSMRA80A01H501Z" / "solleciti").exists()
     first_payload = generated_payloads[0]
-    current_year = datetime.now(timezone.utc).year
+    current_year = datetime.now(UTC).year
     assert first_payload["codice_fiscale"] == "RSSMRA80A01H501Z"
     assert first_payload["years"] == [2022]
     assert first_payload["avvisi"][0]["partite"]
     assert first_payload["notice_emission_year"] == current_year
     assert first_payload["notice_reference_years"] == [2022]
+    assert len(first_payload["notice_identity_key"]) == 64
     assert first_payload["notice_progressive"] == 1
     assert first_payload["notice_number"] == f"1{current_year}2200001"
     assert first_payload["avvisi"][0]["partitario"]["info_text"].startswith("=" * 80)
@@ -3339,12 +3360,9 @@ def test_tributi_reminder_batch_groups_candidates_generates_pdf_and_tracks_items
     assert detail_response.status_code == 200
     assert detail_response.json()["items"][0]["codice_fiscale"] == "RSSMRA80A01H501Z"
 
-    download_response = client.get(batch_payload["items"][0]["download_url"], headers=headers)
-    assert download_response.status_code == 200
-    assert download_response.headers["content-type"].startswith("application/pdf")
-
-    generated_path.unlink()
-    missing_file_response = client.get(batch_payload["items"][0]["download_url"], headers=headers)
+    missing_file_response = client.get(
+        f"/ruolo/tributi/solleciti/items/{batch_payload['items'][0]['id']}/download", headers=headers
+    )
     assert missing_file_response.status_code == 404
     assert missing_file_response.json()["detail"] == "Documento sollecito non trovato"
 
@@ -3535,7 +3553,7 @@ def test_tributi_notice_registry_enforces_uniqueness_and_adopts_legacy_payload()
 
     legacy_batch = RuoloTributiReminderBatch(
         status="generated",
-        generated_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+        generated_at=datetime(2026, 1, 2, tzinfo=UTC),
     )
     db.add(legacy_batch)
     db.flush()
@@ -3613,13 +3631,28 @@ def test_tributi_notice_registry_canonicalizes_identity_and_scopes_it_by_emissio
     assert canonical.notice_number == "12026242500001"
     assert next_year.notice_number == "12027242500001"
     assert changed_notice_set.notice_number == "12026242500002"
+    assert notice_registry.build_notice_identity_key(
+        {
+            "codice_fiscale": " rssmra80a01h501z ",
+            "avvisi": [{"id": "avviso-a"}, {"id": "avviso-b"}],
+        },
+        emission_year=2026,
+        reference_years=[2025, 2024],
+    ) == notice_registry.build_notice_identity_key(
+        {
+            "codice_fiscale": "RSSMRA80A01H501Z",
+            "avvisi": [{"id": "avviso-b"}, {"id": "avviso-a"}],
+        },
+        emission_year=2026,
+        reference_years=[2024, 2025],
+    )
     assert len(db.scalars(select(RuoloTributiNoticeNumber)).all()) == 3
     db.close()
 
 
 def test_tributi_notice_reservation_rolls_back_with_outer_batch_transaction() -> None:
     db = TestingSessionLocal()
-    batch = RuoloTributiReminderBatch(status="running", generated_at=datetime(2026, 1, 2, tzinfo=timezone.utc))
+    batch = RuoloTributiReminderBatch(status="running", generated_at=datetime(2026, 1, 2, tzinfo=UTC))
     db.add(batch)
     db.flush()
     batch_id = batch.id
@@ -3670,7 +3703,7 @@ def test_tributi_notice_registry_handles_concurrent_identity_winners_and_retry_e
     assert notice_registry._payload_int({"value": "not-a-number"}, "value") is None
     tributi_repo._update_notice_reservation_status(None, "failed")
     db = TestingSessionLocal()
-    legacy_batch = RuoloTributiReminderBatch(status="generated", generated_at=datetime(2026, 1, 2, tzinfo=timezone.utc))
+    legacy_batch = RuoloTributiReminderBatch(status="generated", generated_at=datetime(2026, 1, 2, tzinfo=UTC))
     db.add(legacy_batch)
     db.flush()
     db.add_all(
@@ -4060,8 +4093,8 @@ def test_tributi_reminder_candidates_skip_non_normalisable_tax_code_and_promote_
     subject_id = seed_subject_with_nas(tmp_path, tax_code="MSTGNN80A01H501W")
     seed_avviso(amount=30.0, tax_code="!!!", nominativo="CODICE ERRATO", anno=2024)
     seed_avviso(amount=20.0, tax_code="MSTGNN80A01H501W", nominativo="MISTO GIOVANNI", anno=2021, subject_id=subject_id)
-    seed_avviso(amount=40.0, tax_code="MSTGNN80A01H501W", nominativo="MISTO GIOVANNI", anno=2022)
-    seed_avviso(amount=60.0, tax_code="MSTGNN80A01H501W", nominativo="MISTO GIOVANNI", anno=2023, subject_id=subject_id)
+    seed_avviso(amount=40.0, tax_code="MSTGNN80A01H501W", nominativo="MISTO GIOVANNI", anno=2022, verified_history=True)
+    seed_avviso(amount=60.0, tax_code="MSTGNN80A01H501W", nominativo="MISTO GIOVANNI", anno=2023, subject_id=subject_id, verified_history=True)
 
     response = client.get("/ruolo/tributi/solleciti/candidates", headers=auth_headers())
 
@@ -5067,7 +5100,7 @@ def test_tributi_reminder_service_helper_fallbacks(tmp_path: Path, monkeypatch: 
         selected_years=[2024],
         tax_codes=["RSSMRA80A01H501Z"],
     ) == [2024]
-    fallback_batch = RuoloTributiReminderBatch(title="Fallback preview", status="generated", generated_at=datetime.now(timezone.utc))
+    fallback_batch = RuoloTributiReminderBatch(title="Fallback preview", status="generated", generated_at=datetime.now(UTC))
     db.add(fallback_batch)
     db.flush()
     cached_preview_path = tmp_path / "cached-preview.pdf"
@@ -5108,7 +5141,7 @@ def test_tributi_reminder_service_helper_fallbacks(tmp_path: Path, monkeypatch: 
     db.flush()
     assert notice_registry.find_existing_notice_payload(
         db,
-        emission_year=datetime.now(timezone.utc).year,
+        emission_year=datetime.now(UTC).year,
         candidate={"codice_fiscale": "RSSMRA80A01H501Z", "avvisi": [{"id": "avviso-1"}]},
         reference_years=[2024],
     ) is None
@@ -5122,13 +5155,13 @@ def test_tributi_reminder_service_helper_fallbacks(tmp_path: Path, monkeypatch: 
 
 
 def test_tributi_reminder_batch_tracks_missing_nas_and_missing_resources() -> None:
-    seed_avviso(amount=80.0, tax_code="BNCLGU80A01H501Y", nominativo="BIANCHI LUIGI", anno=2023)
+    seed_avviso(amount=80.0, tax_code="BNCLGU80A01H501Y", nominativo="BIANCHI LUIGI", anno=2024)
     headers = auth_headers()
 
     create_response = client.post(
         "/ruolo/tributi/solleciti/batches",
         headers=headers,
-        json={"codice_fiscale": ["BNCLGU80A01H501Y"], "filters": {"anno_from": 2023, "anno_to": 2023}},
+        json={"codice_fiscale": ["BNCLGU80A01H501Y"], "filters": {"anno_from": 2024, "anno_to": 2024}},
     )
     assert create_response.status_code == 200
     payload = create_response.json()
@@ -5298,13 +5331,13 @@ def test_tributi_reminder_download_reads_remote_nas_document_and_handles_missing
         avviso_id=UUID(avviso_id),
         status="generated",
         generated_document_path=remote_path,
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
     )
     missing_reminder = RuoloTributiReminder(
         avviso_id=UUID(avviso_id),
         status="generated",
         generated_document_path=missing_remote_path,
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
     )
     db.add_all([reminder, missing_reminder])
     db.commit()
@@ -5577,7 +5610,7 @@ def test_tributi_repository_payment_import_helpers_cover_edge_branches(monkeypat
         fields={},
         avviso=avviso,
         amount=Decimal("25.00"),
-        paid_at=datetime(2026, 7, 22, tzinfo=timezone.utc),
+        paid_at=datetime(2026, 7, 22, tzinfo=UTC),
     )
     assert fingerprint.startswith("capacitas:")
     assert tributi_repo._payment_reference_exists(db, "PAY-HELPER") is True
@@ -5729,7 +5762,7 @@ def test_tributi_repository_summary_and_import_job_flows_cover_remaining_branche
     )
     assert postgres_result[postgres_avviso_id]["pec_recipient"] == "pg@example.it"
 
-    refresh_calls: list[uuid.UUID] = []
+    refresh_calls: list[UUID] = []
 
     def fake_refresh(_db: Session, touched_avviso: RuoloAvviso, updated_by: int | None = None) -> None:
         refresh_calls.append(touched_avviso.id)

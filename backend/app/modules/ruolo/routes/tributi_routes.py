@@ -569,6 +569,8 @@ def get_reminder_batch(
     return _batch_to_response(batch, repo.list_reminder_batch_items(db, batch.id))
 
 
+
+
 @router.get("/solleciti/items/{item_id}/download")
 def download_reminder_batch_item(
     item_id: uuid.UUID,

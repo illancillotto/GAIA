@@ -675,9 +675,11 @@ def resolve_baseline_callable(
             and rc.get("name") == c.get("name")
             and rc.get("fingerprint") == c.get("fingerprint")
         ]
-        base_metrics = sorted(metric_tuple(bc) for bc in same_identity_fp)
-        current_metrics = sorted(metric_tuple(rc) for rc in current_same_fp)
-        if len(current_same_fp) == len(same_identity_fp) and current_metrics == base_metrics:
+        base_metrics = Counter(metric_tuple(bc) for bc in same_identity_fp)
+        current_metrics = Counter(metric_tuple(rc) for rc in current_same_fp)
+        # Removing unchanged duplicates needs no positional guess. Multiplicities
+        # ensure each surviving callable has its own metric-identical baseline entry.
+        if current_metrics <= base_metrics:
             return None, None, True
         picked = unique_line_tiebreak(c, same_identity_fp)
         if picked:

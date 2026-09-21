@@ -99,6 +99,15 @@ scambiato per un rename quando le sorgenti originali esistono ancora.
 Se due candidati sono equivalenti, uscita `2` e messaggio di configurazione.
 Non scegliere il candidato piu vicino in silenzio.
 
+Per un gruppo con stesso path, nome e fingerprint, il confronto puo provare
+l'assenza di regressioni senza assegnare identita individuali: il multinsieme
+delle tuple di metriche correnti deve essere un sottoinsieme di quello baseline.
+Ogni occorrenza corrente consuma un'occorrenza distinta della stessa tupla:
+sono ammesse rimozioni di duplicati invariati, non il riuso della stessa voce
+per piu callable. Metriche diverse o molteplicita maggiori non godono di questa
+equivalenza; continuano il matching ordinario e la gestione delle ambiguita.
+Questa regola non abilita matching fra path o nomi diversi.
+
 Il fallback per nome qualificato tra path diversi si applica solo quando il
 path baseline non esiste piu nel report corrente e il candidato e unico sia
 nella baseline sia nel report corrente. I nomi sintetici `<callback>` e
