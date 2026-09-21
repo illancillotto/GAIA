@@ -45,7 +45,20 @@ describe("Manual WhatsApp", () => {
     fetchMock.mockResolvedValueOnce(response({ status: "SENT", message_id: "m1" }));
     fireEvent.click(screen.getByRole("button", { name: "Conferma e invia WhatsApp" }));
     expect(await screen.findByRole("status")).toHaveTextContent("Messaggio inviato");
-    expect(fetchMock.mock.calls[1][1]).toEqual(expect.objectContaining({ method: "POST", body: JSON.stringify({ fingerprint: preview.fingerprint, reason: "Ingresso mancante alle 08:00" }) }));
+    expect(fetchMock.mock.calls[1][1]).toEqual(expect.objectContaining({ method: "POST", body: JSON.stringify({ fingerprint: preview.fingerprint, reason: "Ingresso mancante alle 08:00", allow_outside_window: false }) }));
+  });
+
+  it("explicitly allows one manual send outside the window and resets on reopening", async () => {
+    await open();
+    const checkbox = screen.getByRole("checkbox", { name: /Invia anche fuori fascia/ });
+    expect(checkbox).not.toBeChecked();
+    fireEvent.click(checkbox);
+    fetchMock.mockResolvedValueOnce(response({ status: "SENT", message_id: "m1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Conferma e invia WhatsApp" }));
+    await screen.findByRole("status");
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body).allow_outside_window).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Prepara messaggio WhatsApp" }));
+    expect(await screen.findByRole("checkbox", { name: /Invia anche fuori fascia/ })).not.toBeChecked();
   });
 
   it("cancels without sending and resets when the selected day changes", async () => {

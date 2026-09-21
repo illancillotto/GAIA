@@ -83,7 +83,7 @@ export function WhatsAppConfiguration({ configuration, busy, onSave }: Props) {
           </p>
           <h2 className="mt-1 text-xl font-semibold">Configurazione canale</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Modalita, collegamento WAHA, pianificazione e protezioni di invio.
+            Fascia oraria: {form.send_start_hour}:00–{form.send_end_hour}:00, lun-ven (ora italiana). Modificala in Configura WhatsApp.
           </p>
         </div>
         <button className="btn-secondary" type="button" onClick={() => setOpen(true)}>
@@ -224,8 +224,8 @@ function ModeSection({ form, update }: { form: PresenzeWhatsAppConfig; update: U
 function ScheduleSection({ form, update }: { form: PresenzeWhatsAppConfig; update: UpdateForm }) {
   return (
     <fieldset className="rounded-3xl border border-emerald-900/10 bg-white p-5">
-      <legend className="px-2 text-base font-semibold text-slate-900">2. Quando e quanto inviare</legend>
-      <p className="mb-4 text-sm text-slate-600">GAIA controlla le giornate chiuse e invia solo nella fascia oraria scelta.</p>
+      <legend className="px-2 text-base font-semibold text-slate-900">2. Fascia oraria e limiti di invio</legend>
+      <p className="mb-4 text-sm text-slate-600">Orari italiani, dal lunedì al venerdì. Gli invii automatici rispettano sempre questa fascia. Per un messaggio manuale puoi selezionare nell&apos;anteprima l&apos;opzione per inviare anche fuori fascia e nel weekend.</p>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <NumberField label="Controlla gli ultimi giorni" value={form.lookback_days} min={1} max={31} onValue={(value) => update("lookback_days", value)} />
         <NumberField label="Massimo messaggi per volta" value={form.max_per_run} min={1} max={100} onValue={(value) => update("max_per_run", value)} />

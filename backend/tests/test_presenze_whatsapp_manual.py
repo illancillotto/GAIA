@@ -71,6 +71,32 @@ def test_preview_and_simulated_send(db, sample):
         sending.send_manual(db, record.id, request(db, record), user.id)
 
 
+@pytest.mark.parametrize("allow", [False, True])
+@pytest.mark.parametrize("instant", ["2026-09-18T21:00:00+00:00", "2026-09-19T10:00:00+00:00"])
+def test_explicit_outside_window_send(db, sample, monkeypatch, allow, instant):
+    from datetime import datetime
+
+    from app.modules.presenze.services.punch_reminder_dispatch import is_within_send_window
+
+    record, _, user = sample
+
+    class Clock:
+        @staticmethod
+        def now(_):
+            return datetime.fromisoformat(instant)
+
+    monkeypatch.setattr(sending, "datetime", Clock)
+    monkeypatch.setattr(sending, "is_within_send_window", is_within_send_window)
+    payload = request(db, record)
+    payload.allow_outside_window = allow
+    if allow:
+        assert sending.send_manual(db, record.id, payload, user.id)["status"] == "DRY_RUN"
+    else:
+        with pytest.raises(HTTPException, match="fascia oraria"):
+            sending.send_manual(db, record.id, payload, user.id)
+        assert db.scalar(select(PresenzeWhatsAppMessage)) is None
+
+
 @pytest.mark.parametrize(
     "mutation",
     ["future", "validated", "justified", "inactive", "unmapped", "phone", "stop", "no_anomaly"],
@@ -100,6 +126,28 @@ def test_ineligible(db, sample, mutation):
     db.commit()
     with pytest.raises(HTTPException):
         preview.manual_preview(db, record.id)
+
+
+@pytest.mark.parametrize("guard", ["stop", "stale", "delay"])
+def test_outside_window_override_preserves_guards(db, sample, monkeypatch, guard):
+    record, _, user = sample
+    payload = request(db, record)
+    payload.allow_outside_window = True
+    monkeypatch.setattr(sending, "is_within_send_window", lambda *args: False)
+    if guard == "stop":
+        db.add(PresenzeWhatsAppOptOut(
+            application_user_id=user.id, phone_e164="+393331234567", source="test"
+        ))
+        db.commit()
+    elif guard == "stale":
+        payload.fingerprint = "0" * 64
+    else:
+        assert sending.send_manual(db, record.id, payload, user.id)["status"] == "DRY_RUN"
+    with pytest.raises(HTTPException) as exc:
+        sending.send_manual(db, record.id, payload, user.id)
+    assert exc.value.status_code == (429 if guard == "delay" else 409)
+    messages = db.scalars(select(PresenzeWhatsAppMessage)).all()
+    assert len(messages) == (1 if guard == "delay" else 0)
 
 
 def test_missing_and_anomaly_descriptions(db, sample):

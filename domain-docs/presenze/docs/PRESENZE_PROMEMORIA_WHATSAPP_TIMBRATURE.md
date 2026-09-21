@@ -164,9 +164,13 @@ disponibile anche nel dettaglio Anomalie tramite il componente condiviso.
    giustificativi e inserire la richiesta di correzione appropriata alle ore
    effettivamente lavorate o all'assenza. Non inserire dati sanitari o altri
    dettagli sensibili nel motivo.
-4. Premere **Conferma e invia WhatsApp**, oppure **Conferma simulazione** se il
+4. Per inviare fuori fascia o nel weekend, selezionare **Invia anche fuori
+   fascia oraria e nel weekend (solo questo messaggio)**. La casella e
+   disattivata inizialmente e si azzera quando si riapre l'anteprima o si cambia
+   giornata. Non cambia la configurazione degli invii automatici.
+5. Premere **Conferma e invia WhatsApp**, oppure **Conferma simulazione** se il
    provider e `dry_run`. Annullare o cambiare giornata non invia nulla.
-5. Controllare esito, consegna e lettura nello storico WhatsApp. `SENT` indica
+6. Controllare esito, consegna e lettura nello storico WhatsApp. `SENT` indica
    l'accettazione del provider, non dimostra lettura o correzione in INAZ.
 
 Se manca il profilo operatore o il numero e assente/non valido, il riquadro
@@ -188,8 +192,11 @@ causa inventata: senza motivo comunicabile l'anteprima viene rifiutata.
 Restano obbligatori mapping canonico, collaboratore e contatto attivi, numero
 valido, assenza di STOP, giornata chiusa non validata e non gia giustificata.
 Giornate gia notificate o con tentativi `SENDING`/`UNKNOWN` sono bloccate.
-Il manuale rispetta fascia oraria lun-ven e pausa minima configurate; condivide
-il lock PostgreSQL con il job automatico. I dati vengono ricontrollati dopo
+Il manuale rispetta normalmente la fascia oraria lun-ven; la scelta esplicita
+nell'anteprima permette di ignorare soltanto il vincolo di ora e giorno della
+settimana per quel messaggio. Pausa minima e tutti gli altri controlli restano
+obbligatori. Il manuale condivide il lock PostgreSQL con il job automatico.
+I dati vengono ricontrollati dopo
 il preflight del numero; un'anteprima divenuta obsoleta richiede riapertura.
 Non ci sono retry automatici. Un esito incerto richiede verifica dello storico
 e riconciliazione prima di ogni nuovo invio.
@@ -198,7 +205,8 @@ API, entrambe riservate ad `admin`/`super_admin` con modulo Presenze:
 
 - `GET /presenze/whatsapp/daily/{record_id}/preview`: anteprima read-only.
 - `POST /presenze/whatsapp/daily/{record_id}/send`: conferma con `fingerprint`
-  dell'anteprima e `reason` (5-1500 caratteri); restituisce `message_id` e
+  dell'anteprima, `reason` (5-1500 caratteri) e `allow_outside_window`
+  (booleano opzionale, default `false`); restituisce `message_id` e
   `status`. Nessun numero o identificativo destinatario e accettato dal client.
 
 Lo storico conserva il testo effettivo e una sola giornata; `days_json`
@@ -212,6 +220,24 @@ simulazione. Per invii reali serve la scelta esplicita **Invio attivo** nella
 configurazione super_admin, con sessione WAHA collegata.
 
 ### Console WhatsApp
+
+#### Modificare la fascia oraria
+
+Come `super_admin`, aprire **Presenze > Promemoria WhatsApp > Configura
+WhatsApp > 2. Fascia oraria e limiti di invio**. Impostare **Non inviare prima
+delle** e **Non inviare dopo le**, quindi **Salva configurazione**. Sono ore
+intere nel fuso `Europe/Rome`: inizio incluso (0-23), fine esclusa (1-24), con
+inizio strettamente precedente alla fine. Per esempio 8 e 19 consentono gli
+invii dalle 08:00 alle 18:59, dal lunedi al venerdi.
+
+La scheda Configurazione canale mostra anche la fascia impostata. Il cron
+in **Impostazioni avanzate** stabilisce quando parte il controllo automatico;
+non sostituisce la fascia consentita. Per un singolo invio manuale fuori
+fascia non occorre cambiare questi orari: usare la casella nell'anteprima.
+Il ruolo `admin` puo usare l'invio manuale, ma la modifica della configurazione
+rimane riservata a `super_admin`.
+
+#### Funzioni della console
 
 La pagina `/presenze/whatsapp`, disponibile dal menu Presenze ai soli ruoli
 `admin` e `super_admin`, e una console di controllo: non contiene un comando di

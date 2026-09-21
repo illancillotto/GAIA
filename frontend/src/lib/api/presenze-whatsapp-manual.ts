@@ -17,9 +17,9 @@ export function previewManualWhatsApp(token: string, recordId: string): Promise<
   });
 }
 
-export function sendManualWhatsApp(token: string, preview: ManualWhatsAppPreview, reason: string): Promise<{ message_id: string; status: string }> {
+export function sendManualWhatsApp(token: string, preview: ManualWhatsAppPreview, reason: string, allowOutsideWindow = false): Promise<{ message_id: string; status: string }> {
   return request(`/presenze/whatsapp/daily/${preview.record_id}/send`, {
     method: "POST", headers: { Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ fingerprint: preview.fingerprint, reason }),
+    body: JSON.stringify({ fingerprint: preview.fingerprint, reason, allow_outside_window: allowOutsideWindow }),
   });
 }

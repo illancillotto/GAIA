@@ -27,6 +27,7 @@ from app.modules.presenze.whatsapp_models import PresenzeWhatsAppMessage
 class ManualSendRequest(BaseModel):
     fingerprint: str = Field(min_length=64, max_length=64)
     reason: str = Field(min_length=5, max_length=1500)
+    allow_outside_window: bool = False
 
 
 def send_manual(
@@ -43,7 +44,7 @@ def send_manual(
             raise HTTPException(422, "Specifica il motivo dell'anomalia")
         config = load_whatsapp_config(db)
         now = datetime.now(UTC)
-        if not is_within_send_window(now, config.send_start_hour, config.send_end_hour):
+        if not (payload.allow_outside_window or is_within_send_window(now, config.send_start_hour, config.send_end_hour)):
             raise HTTPException(
                 409, "Invio consentito solo nella fascia oraria configurata, lun-ven"
             )

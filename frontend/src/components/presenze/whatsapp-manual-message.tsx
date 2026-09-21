@@ -21,6 +21,7 @@ export function WhatsAppManualMessage({ recordId }: { recordId: string }) {
 export function ManualMessageForm({ recordId, token }: { recordId: string; token: string }) {
   const [preview, setPreview] = useState<ManualWhatsAppPreview | null>(null);
   const [reason, setReason] = useState("");
+  const [allowOutsideWindow, setAllowOutsideWindow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [phoneContact, setPhoneContact] = useState<ReturnType<typeof recoverablePhoneContact>>(null);
@@ -31,6 +32,7 @@ export function ManualMessageForm({ recordId, token }: { recordId: string; token
     pending.current = true;
     setBusy(true);
     setNotice("");
+    setAllowOutsideWindow(false);
     setPhoneContact(null);
     try {
       const result = await previewManualWhatsApp(token, recordId);
@@ -50,7 +52,7 @@ export function ManualMessageForm({ recordId, token }: { recordId: string; token
     pending.current = true;
     setBusy(true);
     try {
-      const result = await sendManualWhatsApp(token, preview, reason.trim());
+      const result = await sendManualWhatsApp(token, preview, reason.trim(), allowOutsideWindow);
       setNotice(OUTCOMES[result.status] ?? "Esito da verificare nello storico WhatsApp.");
     } catch (error) {
       setNotice(error instanceof Error ? `${error.message}. Verifica lo storico prima di riprovare.` : "Esito da verificare nello storico WhatsApp.");
@@ -73,6 +75,10 @@ export function ManualMessageForm({ recordId, token }: { recordId: string; token
       <p className="text-xs">Descrivi cosa deve verificare, senza inserire dati sanitari o altri dettagli sensibili.</p>
       <pre className="mt-3 whitespace-pre-wrap break-words rounded-lg bg-white p-3 font-sans text-sm" aria-label="Anteprima messaggio">{preview.text.replace(`\n${preview.reason}\n`, () => `\n${reason.trim()}\n`)}</pre>
       <div className="mt-3 flex flex-wrap gap-2">
+        <label className="flex w-full items-start gap-2 text-sm">
+          <input type="checkbox" checked={allowOutsideWindow} disabled={busy} onChange={(event) => setAllowOutsideWindow(event.target.checked)} />
+          Invia anche fuori fascia oraria e nel weekend (solo questo messaggio)
+        </label>
         <button type="button" className="btn-primary" disabled={busy || reason.trim().length < 5} onClick={() => void confirmSend()}>{preview.provider === "dry_run" ? "Conferma simulazione" : "Conferma e invia WhatsApp"}</button>
         <button type="button" className="btn-secondary" disabled={busy} onClick={() => setPreview(null)}>Annulla</button>
       </div>
