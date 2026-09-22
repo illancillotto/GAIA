@@ -131,7 +131,7 @@ it("loads the confirmed detail", async () => {
   mocks.get.mockResolvedValue(batch("confirmed"));
   render(<SollecitiPage />);
   fireEvent.click(await screen.findByRole("button", { name: /Import 2022/ }));
-  await screen.findByText(/export definitivo/);
+  await screen.findByRole("region", { name: "Export definitivo" });
 });
 
 it.each([{ token: null }, { currentUser: null }])("waits for incomplete session %j", (values) => {

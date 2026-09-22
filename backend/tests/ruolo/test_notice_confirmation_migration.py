@@ -5,7 +5,12 @@ from alembic.operations import Operations
 from alembic.util import load_python_file
 from sqlalchemy import Column, Integer, MetaData, Table, create_engine, inspect, select
 
-from app.modules.ruolo.notice_confirmation_models import NoticeGenerationConfirmation
+from app.modules.ruolo.notice_confirmation_models import (
+    NoticeExportClaim,
+    NoticeExportIdentity,
+    NoticeGenerationConfirmation,
+    NoticeGenerationExport,
+)
 
 from .test_notice_generation_concurrency import generation_engine as generation_engine
 
@@ -39,6 +44,9 @@ def test_postgres_confirmation_migration_roundtrip(generation_engine):
         "20260921_2000_notice_generation_confirmation.py",
     )
     with generation_engine.begin() as connection:
+        NoticeExportClaim.__table__.drop(connection)
+        NoticeExportIdentity.__table__.drop(connection)
+        NoticeGenerationExport.__table__.drop(connection)
         NoticeGenerationConfirmation.__table__.drop(connection)
         with Operations.context(MigrationContext.configure(connection)):
             migration.upgrade()

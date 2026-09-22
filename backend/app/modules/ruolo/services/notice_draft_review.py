@@ -65,7 +65,7 @@ def _basis(drafts) -> GenerationRevision:
         raise DraftReviewBlocked("Epoch di generazione non valida: rigenerare") from exc
 
 
-def _records(db, generation_id, batch):
+def _records(db, generation_id, batch, *, expected_status="review_required"):
     if not batch:
         record = db.scalar(
             select(RuoloTributiReminder)
@@ -91,7 +91,7 @@ def _records(db, generation_id, batch):
         )
     )
     if (
-        parent.status != "review_required"
+        parent.status != expected_status
         or parent.items_generated != 0
         or parent.items_failed != 0
         or not records
@@ -136,9 +136,9 @@ def _check_review_size(db, drafts):
         raise DraftReviewBlocked("Lotto oltre i limiti di revisione: suddividere la generazione")
 
 
-def _integrity(records, drafts) -> str:
+def _integrity(records, drafts, *, expected_status="draft") -> str:
     payloads = {record.id: record.payload_json for record in records}
-    if any(record.status != "draft" or record.generated_document_path for record in records):
+    if any(record.status != expected_status or record.generated_document_path for record in records):
         raise DraftReviewBlocked("Generazione non privata o stato non valido")
     manifest = []
     for draft in drafts:

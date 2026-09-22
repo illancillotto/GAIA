@@ -6,6 +6,7 @@ import { RuoloModulePage } from "@/components/ruolo/module-page";
 import { useSessionBootstrap } from "@/lib/use-session-bootstrap";
 import { getTributiReminderBatch, listTributiReminderBatches } from "@/lib/ruolo-api";
 import { confirmTributiReminderBatch } from "./client";
+import { NoticeExport, NoticePreview } from "./document-access";
 import type { NoticeGenerationConfirmationResponse, RuoloTributiReminderBatchResponse } from "@/types/ruolo";
 
 function statusLabel(status: string): string {
@@ -55,7 +56,7 @@ function SollecitiWorkspace({ token, canEdit }: { token: string; canEdit: boolea
             <BatchList loading={loading} batches={batches} selected={selected} busy={busy} selectBatch={selectBatch} />
           </section>
           <section className="rounded-[28px] border border-[#d8dfd3] bg-white p-5 shadow-panel">
-            <BatchDetail selected={selected} canEdit={canEdit} busy={busy} confirmSelected={confirmSelected} />
+            <BatchDetail token={token} selected={selected} canEdit={canEdit} busy={busy} confirmSelected={confirmSelected} />
           </section>
         </div>
       </div>
@@ -73,12 +74,6 @@ export function useSolleciti(token: string, canEdit: boolean) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  async function loadBatches(accessToken: string) {
-    const response = await listTributiReminderBatches(accessToken, page, 50);
-    setBatches(response.items);
-    setTotal(response.total);
-  }
 
   useEffect(() => {
     let cancelled = false;
@@ -111,7 +106,9 @@ export function useSolleciti(token: string, canEdit: boolean) {
     try {
       const result = await confirmTributiReminderBatch(token, selected.id);
       setConfirmation(result);
-      await loadBatches(token);
+      const response = await listTributiReminderBatches(token, page, 50);
+      setBatches(response.items);
+      setTotal(response.total);
       setSelected(await getTributiReminderBatch(token, selected.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Conferma non riuscita");
@@ -123,14 +120,14 @@ export function useSolleciti(token: string, canEdit: boolean) {
   return { page, setPage, total, batches, selected, confirmation, loading, busy, error, selectBatch, confirmSelected };
 }
 
-function NoticeItem({ item }: { item: RuoloTributiReminderBatchResponse["items"][number] }) {
-  return (<div className="rounded-2xl border border-slate-200 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-semibold text-slate-900">{item.display_name || item.codice_fiscale}</span><span className="text-xs font-semibold uppercase text-slate-500">{item.status}</span></div><p className="mt-1 text-sm text-slate-600">{item.codice_fiscale} · annualità {(item.years_json ?? []).join(", ") || "-"}</p>{typeof item.payload_json?.notice_identity_key === "string" && <p className="mt-2 break-all text-xs text-slate-500">Identità: {item.payload_json.notice_identity_key}</p>}</div>);
+function NoticeItem({ item, token, batchId }: { item: RuoloTributiReminderBatchResponse["items"][number]; token: string; batchId: string }) {
+  return (<div className="rounded-2xl border border-slate-200 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-semibold text-slate-900">{item.display_name || item.codice_fiscale}</span><span className="text-xs font-semibold uppercase text-slate-500">{item.status}</span></div><p className="mt-1 text-sm text-slate-600">{item.codice_fiscale} · annualità {(item.years_json ?? []).join(", ") || "-"}</p>{typeof item.payload_json?.notice_identity_key === "string" && <p className="mt-2 break-all text-xs text-slate-500">Identità: {item.payload_json.notice_identity_key}</p>}<NoticePreview key={`${batchId}:${item.id}:${token}`} token={token} batchId={batchId} itemId={item.id} status={item.status} /></div>);
 }
 
-function BatchDetail({ selected, canEdit, busy, confirmSelected }: {
-  selected: RuoloTributiReminderBatchResponse | null; canEdit: boolean; busy: boolean; confirmSelected: () => Promise<void>;
+function BatchDetail({ selected, canEdit, busy, confirmSelected, token }: {
+  selected: RuoloTributiReminderBatchResponse | null; canEdit: boolean; busy: boolean; confirmSelected: () => Promise<void>; token: string;
 }) {
-  return <>{!selected ? <p className="text-sm text-slate-500">Seleziona un lotto per visualizzare i dettagli.</p> : <><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs uppercase tracking-[0.18em] text-slate-500">Dettaglio lotto</p><h2 className="mt-1 text-2xl font-semibold text-slate-900">{selected.title || selected.id}</h2></div><span className={`rounded-full px-3 py-1 text-sm font-semibold ${statusClass(selected.status)}`}>{statusLabel(selected.status)}</span></div><div className="mt-5 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4"><div><p className="text-slate-500">Avvisi</p><p className="font-semibold">{selected.items_total}</p></div><div><p className="text-slate-500">Generati</p><p className="font-semibold">{selected.items_generated}</p></div><div><p className="text-slate-500">Errori</p><p className="font-semibold">{selected.items_failed}</p></div><div><p className="text-slate-500">Creato</p><p className="font-semibold">{dateLabel(selected.generated_at)}</p></div></div><div className="mt-6 space-y-2">{selected.items.map((item) => <NoticeItem key={item.id} item={item} />)}</div>{canEdit && selected.status === "review_required" && <div className="mt-6 border-t border-slate-200 pt-5"><p className="text-sm text-slate-600">Confermando dichiari di aver verificato destinatari, annualità, artefatti e anomalie del lotto.</p><button type="button" className="btn-primary mt-4" disabled={busy} onClick={() => void confirmSelected()}>{busy ? "Verifica e conferma..." : "Conferma lotto"}</button></div>}{selected.status === "confirmed" && <p className="mt-6 border-t border-emerald-100 pt-5 text-sm text-emerald-800">Lotto confermato. L&apos;export definitivo sarà disponibile in una fase successiva.</p>}</>}</>;
+  return <>{!selected ? <p className="text-sm text-slate-500">Seleziona un lotto per visualizzare i dettagli.</p> : <><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-xs uppercase tracking-[0.18em] text-slate-500">Dettaglio lotto</p><h2 className="mt-1 text-2xl font-semibold text-slate-900">{selected.title || selected.id}</h2></div><span className={`rounded-full px-3 py-1 text-sm font-semibold ${statusClass(selected.status)}`}>{statusLabel(selected.status)}</span></div><div className="mt-5 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4"><div><p className="text-slate-500">Avvisi</p><p className="font-semibold">{selected.items_total}</p></div><div><p className="text-slate-500">Generati</p><p className="font-semibold">{selected.items_generated}</p></div><div><p className="text-slate-500">Errori</p><p className="font-semibold">{selected.items_failed}</p></div><div><p className="text-slate-500">Creato</p><p className="font-semibold">{dateLabel(selected.generated_at)}</p></div></div><div className="mt-6 space-y-2">{selected.items.map((item) => <NoticeItem key={item.id} item={item} token={token} batchId={selected.id} />)}</div>{canEdit && selected.status === "review_required" && <div className="mt-6 border-t border-slate-200 pt-5"><p className="text-sm text-slate-600">Confermando dichiari di aver verificato destinatari, annualità, artefatti e anomalie del lotto.</p><button type="button" className="btn-primary mt-4" disabled={busy} onClick={() => void confirmSelected()}>{busy ? "Verifica e conferma..." : "Conferma lotto"}</button></div>}{selected.status === "confirmed" && <NoticeExport key={`${selected.id}:${token}`} token={token} batchId={selected.id} canEdit={canEdit} />}</>}</>;
 }
 
 function BatchList({ loading, batches, selected, busy, selectBatch }: {

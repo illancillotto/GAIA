@@ -1,4 +1,20 @@
-# Generazione 2022/2023: Confine Di Conferma
+# Generazione 2022/2023: Conferma Ed Export
+
+## Stato Al 2026-09-22
+
+Implementate anteprima PDF marcata di ogni documento e preparazione/download
+dello ZIP definitivo dopo conferma. L'export conserva i byte originali e
+ricontrolla revisione, integrita e numerazione prima del claim auditato.
+Il packaging avviene fuori dai lock; un secondo controllo chiude la finestra
+concorrente. Retry riusano lo stesso archivio, senza spedire o scrivere sul NAS.
+
+Procedura operatore, requisiti di migration, API e limiti sono descritti in
+[Anteprima ed export solleciti](ANTEPRIMA_EXPORT_SOLLECITI.md).
+Invio automatico Poste e import operativo STEP restano in standby.
+
+Le sezioni datate 2026-09-21 e successive in questo documento sono evidenze
+storiche delle tranche precedenti: i riferimenti a export/anteprima non ancora
+disponibili descrivono lo stato di allora.
 
 ## Stato Al 2026-09-21
 
