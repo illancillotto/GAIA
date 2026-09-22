@@ -7,6 +7,13 @@ import type { AnagraficaPaymentNotice } from "@/types/api";
 const getUtenzeSubjectPaymentNotices = vi.fn();
 const createCapacitasInCassSyncJob = vi.fn();
 const listCapacitasInCassSyncJobs = vi.fn();
+const ruoloAvvisiSection = vi.fn(({ subjectId, token }: { subjectId: string; token: string }) => (
+  <div data-testid="ruolo-avvisi-section">Ruoli {subjectId} {token}</div>
+));
+
+vi.mock("@/components/ruolo/ruolo-avvisi-section", () => ({
+  RuoloAvvisiSection: (props: { subjectId: string; token: string }) => ruoloAvvisiSection(props),
+}));
 
 vi.mock("@/lib/api", () => ({
   createCapacitasInCassSyncJob: (...args: unknown[]) => createCapacitasInCassSyncJob(...args),
@@ -63,6 +70,7 @@ describe("UtenzePaymentNoticesSection", () => {
     getUtenzeSubjectPaymentNotices.mockReset();
     createCapacitasInCassSyncJob.mockReset();
     listCapacitasInCassSyncJobs.mockReset();
+    ruoloAvvisiSection.mockClear();
     listCapacitasInCassSyncJobs.mockResolvedValue([]);
   });
 
@@ -89,6 +97,7 @@ describe("UtenzePaymentNoticesSection", () => {
     render(<UtenzePaymentNoticesSection subjectId="subject-1" token="token" />);
 
     expect(await screen.findByText("Avvisi di pagamento sincronizzati sul soggetto.")).toBeInTheDocument();
+    expect(screen.getByTestId("ruolo-avvisi-section")).toHaveTextContent("Ruoli subject-1 token");
     expect(screen.getAllByText(/113\.460,56/).length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText(/73\.744,37/).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("Rateizzazione inCASS")).toBeInTheDocument();
@@ -133,6 +142,7 @@ describe("UtenzePaymentNoticesSection", () => {
     render(<UtenzePaymentNoticesSection subjectId="subject-1" token="token" compact />);
 
     expect(await screen.findByText("Avvisi di pagamento")).toBeInTheDocument();
+    expect(screen.queryByTestId("ruolo-avvisi-section")).not.toBeInTheDocument();
     expect(screen.getByText("Intestatario non disponibile")).toBeInTheDocument();
     expect(screen.getByText("Lista — · Lista digitale")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Apri dettaglio/ })).toHaveAttribute("href", "https://incass.local/detail");

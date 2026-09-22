@@ -20,7 +20,7 @@ vi.mock("@/components/ruolo/module-page", () => ({
 }));
 
 vi.mock("@/components/ruolo/registered-mails-console", () => ({
-  RegisteredMailsConsole: () => <section>Console raccomandate mock</section>,
+  RegisteredMailsAccess: () => <section>Console raccomandate mock</section>,
 }));
 
 describe("RuoloRaccomandatePage", () => {

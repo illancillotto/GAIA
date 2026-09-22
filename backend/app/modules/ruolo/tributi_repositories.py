@@ -63,6 +63,10 @@ from app.modules.ruolo.services.capacitas_role_codes import (
 from app.modules.ruolo.services.notice_draft_inputs import capture_inputs
 from app.modules.ruolo.services.notice_eligibility import generation_allowed
 from app.modules.ruolo.services.notice_generation import register_batch_item, register_reminder
+from app.modules.ruolo.services.registered_mail_association import (
+    preserve_manual_association,
+    resolve_import_match,
+)
 from app.modules.ruolo.services.tributi_notice_registry import (
     build_notice_identity_key,
     reserve_notice_number,
@@ -2818,7 +2822,7 @@ def _upsert_posta_online_registered_mail(
     row: dict[str, Any],
     annualita: list[int],
 ) -> RuoloTributiRegisteredMail:
-    match = _match_registered_mail_avviso(db, row=row, annualita=annualita)
+    automatic_match = _match_registered_mail_avviso(db, row=row, annualita=annualita)
     source_shipment_id = _posta_online_limited_text(row.get("source_shipment_id"), 80) or "missing"
     existing = db.execute(
         select(RuoloTributiRegisteredMail).where(
@@ -2832,9 +2836,9 @@ def _upsert_posta_online_registered_mail(
         source_shipment_id=source_shipment_id,
         recipient_index=row["recipient_index"],
     )
-    if existing is None:
-        db.add(mail)
+    db.add(mail)
 
+    match = resolve_import_match(db, existing, automatic_match)
     avviso = match.get("avviso")
     mail.import_job_id = job.id
     mail.avviso_id = avviso.id if avviso is not None else None
@@ -2856,13 +2860,13 @@ def _upsert_posta_online_registered_mail(
     mail.match_reason = match.get("match_reason")
     mail.anomaly_key = None if mail.match_status == RuoloTributiRegisteredMailMatchStatus.MATCHED.value else match.get("anomaly_key")
     mail.recovery_status = _registered_mail_recovery_status(db, avviso=avviso)
-    mail.raw_payload_json = {
+    mail.raw_payload_json = preserve_manual_association({
         "normalised_recipient_name": _normalise_posta_online_text(row.get("recipient_name")),
         "normalised_recipient_address": _normalise_posta_online_address(row.get("recipient_address")),
         "normalised_recipient_city": _extract_posta_online_city(row.get("recipient_city"), row.get("recipient_address")),
         "raw": row.get("raw"),
-        "candidate_avviso_ids": [str(candidate.id) for candidate in match.get("candidates", [])],
-    }
+        "candidate_avviso_ids": [str(candidate.id) for candidate in automatic_match.get("candidates", [])],
+    }, existing)
     db.flush()
     return mail
 

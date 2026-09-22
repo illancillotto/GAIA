@@ -427,6 +427,11 @@ Nel dettaglio soggetto GAIA il frontend usa `GET /utenze/subjects/{subject_id}/p
 - elenco PDF disponibili
 - data/ora ultima sincronizzazione
 
+La stessa tab `Avvisi di pagamento` integra inoltre i ruoli storicizzati ottenuti da
+`GET /ruolo/soggetti/{subject_id}/avvisi`. Le notifiche PEC e le raccomandate sono presentate
+dentro il relativo ruolo; non vengono replicate come associazioni dirette del soggetto. Il
+legame autorevole e `ruolo_tributi_registered_mails.avviso_id -> ruolo_avvisi.subject_id`.
+
 #### 3.6.4 Legenda stati avviso derivati
 
 GAIA normalizza e salva gli stati leggibili usando la logica funzionale del portale `inCASS`. I valori oggi supportati sono:

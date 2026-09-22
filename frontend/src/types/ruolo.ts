@@ -491,6 +491,10 @@ export type RuoloTributiRegisteredMailResponse = {
   updated_at: string;
 };
 
+export type RuoloTributiRegisteredMailAssociationRequest = {
+  avviso_id: string | null;
+};
+
 export type RuoloTributiRegisteredMailListResponse = {
   items: RuoloTributiRegisteredMailResponse[];
   total: number;

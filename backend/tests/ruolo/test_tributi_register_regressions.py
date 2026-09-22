@@ -1,6 +1,7 @@
 """Legacy boundary cases and register integration, without weakening eligibility."""
 
 from datetime import date
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
@@ -10,6 +11,7 @@ from app.modules.ruolo import tributi_repositories as repo
 from app.modules.ruolo.models import (
     RuoloAvviso,
     RuoloTributiCalculationPolicy,
+    RuoloTributiPayment,
     RuoloTributiPaymentImportJob,
     RuoloTributiPostaOnlineImportJob,
     RuoloTributiRegisteredMail,
@@ -27,6 +29,7 @@ from app.modules.ruolo.notice_register_models import (
     NoticePosition,
     NoticeRecovery,
 )
+from app.modules.ruolo.services import registered_mail_association
 from app.modules.utenze.models import (
     AnagraficaCompany,
     AnagraficaPaymentNotice,
@@ -206,6 +209,91 @@ def test_poste_upsert_updates_same_source_without_duplicates():
         assert repeated.id == first.id
         assert repeated.tracking_number == "123"
         assert db.scalar(select(func.count()).select_from(RuoloTributiRegisteredMail)) == 1
+
+
+def test_registered_mail_manual_association_survives_reimport():
+    avviso_id = UUID(seed_avviso(anno=2022, nominativo="DESTINATARIO MANUALE"))
+    with TestingSessionLocal() as db:
+        job = RuoloTributiPostaOnlineImportJob(filename="manual.json", status="completed")
+        db.add(
+            RuoloTributiPayment(
+                avviso_id=avviso_id,
+                amount=Decimal("1.00"),
+                source="manual",
+                status="valid",
+            )
+        )
+        mail = RuoloTributiRegisteredMail(
+            source_shipment_id="MANUAL-1",
+            recipient_index=0,
+            match_status="unmatched",
+            recovery_status="pending",
+            raw_payload_json={"candidate_avviso_ids": []},
+        )
+        db.add_all([job, mail])
+        db.flush()
+        registered_mail_association.set_manual_association(
+            db,
+            mail=mail,
+            avviso=db.get(RuoloAvviso, avviso_id),
+            updated_by=17,
+        )
+
+        repeated = repo._upsert_posta_online_registered_mail(
+            db,
+            job=job,
+            row={
+                "source_shipment_id": "MANUAL-1",
+                "recipient_index": 0,
+                "recipient_name": "NESSUN MATCH",
+                "recipient_city": "ALTRO COMUNE",
+                "raw": {},
+            },
+            annualita=[2022],
+        )
+
+        assert repeated.avviso_id == avviso_id
+        assert repeated.match_status == "matched"
+        assert repeated.match_score == 100
+        assert repeated.recovery_status == "ready_on_payment"
+        assert repeated.raw_payload_json[registered_mail_association.MANUAL_ASSOCIATION_KEY]["updated_by"] == 17
+        assert repeated.raw_payload_json["candidate_avviso_ids"] == []
+
+
+def test_registered_mail_manual_unlink_and_stale_target_remain_fail_closed():
+    with TestingSessionLocal() as db:
+        job = RuoloTributiPostaOnlineImportJob(filename="manual-unlink.json", status="completed")
+        mail = RuoloTributiRegisteredMail(
+            source_shipment_id="MANUAL-UNLINK",
+            recipient_index=0,
+            match_status="matched",
+            recovery_status="pending",
+            raw_payload_json={},
+        )
+        db.add_all([job, mail])
+        db.flush()
+        registered_mail_association.set_manual_association(db, mail=mail, avviso=None, updated_by=18)
+
+        repeated = repo._upsert_posta_online_registered_mail(
+            db,
+            job=job,
+            row={"source_shipment_id": "MANUAL-UNLINK", "recipient_index": 0, "raw": {}},
+            annualita=[2022],
+        )
+        assert repeated.avviso_id is None
+        assert repeated.match_status == "unmatched"
+        assert repeated.anomaly_key == "manual_unlinked"
+        assert registered_mail_association.manual_match(db, {"avviso_id": "invalid"})["anomaly_key"] == "manual_target_missing"
+        assert registered_mail_association.manual_match(db, {"avviso_id": str(uuid4())})["anomaly_key"] == "manual_target_missing"
+        assert registered_mail_association.manual_match(db, None) is None
+        assert registered_mail_association.manual_association(None) is None
+        assert registered_mail_association.manual_association(
+            RuoloTributiRegisteredMail(
+                source_shipment_id="NO-PAYLOAD",
+                recipient_index=0,
+                raw_payload_json={registered_mail_association.MANUAL_ASSOCIATION_KEY: {"active": False}},
+            )
+        ) is None
 
 
 def test_candidate_invalid_cf_filter_and_missing_manager_label(monkeypatch):

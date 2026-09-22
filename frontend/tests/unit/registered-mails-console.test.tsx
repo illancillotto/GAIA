@@ -1,12 +1,16 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
-import { RegisteredMailsConsole } from "@/components/ruolo/registered-mails-console";
-import type { RuoloTributiRegisteredMailResponse } from "@/types/ruolo";
+import { RegisteredMailAssociationModal } from "@/components/ruolo/registered-mail-association-modal";
+import { RegisteredMailsAccess, RegisteredMailsConsole } from "@/components/ruolo/registered-mails-console";
+import type { RuoloTributiAvvisoListItemResponse, RuoloTributiRegisteredMailResponse } from "@/types/ruolo";
 
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
+  listTributiAvvisi: vi.fn(),
   listTributiRegisteredMails: vi.fn(),
+  updateTributiRegisteredMailAssociation: vi.fn(),
+  useSessionBootstrap: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -14,7 +18,16 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/ruolo-api", () => ({
+  listTributiAvvisi: mocks.listTributiAvvisi,
   listTributiRegisteredMails: mocks.listTributiRegisteredMails,
+}));
+
+vi.mock("@/lib/registered-mail-api", () => ({
+  updateTributiRegisteredMailAssociation: mocks.updateTributiRegisteredMailAssociation,
+}));
+
+vi.mock("@/lib/use-session-bootstrap", () => ({
+  useSessionBootstrap: mocks.useSessionBootstrap,
 }));
 
 function registeredMail(
@@ -53,6 +66,34 @@ function registeredMail(
   };
 }
 
+function avviso(overrides: Partial<RuoloTributiAvvisoListItemResponse> = {}): RuoloTributiAvvisoListItemResponse {
+  return {
+    id: "avviso-1",
+    codice_cnc: "CNC-1",
+    anno_tributario: 2022,
+    subject_id: "subject-1",
+    codice_fiscale_raw: "RSSMRA80A01H501Z",
+    nominativo_raw: "ROSSI MARIO",
+    codice_utenza: "UT-1",
+    importo_totale_euro: 100,
+    paid_amount: 0,
+    saldo_amount: 100,
+    payment_status: "unpaid",
+    workflow_status: null,
+    last_payment_at: null,
+    capacitas_url: null,
+    capacitas_avviso_code: null,
+    display_name: "ROSSI MARIO",
+    is_linked: true,
+    notes_count: 0,
+    annuality_manager_key: null,
+    annuality_manager_label: null,
+    calculation_policy: null,
+    reminder_enabled: false,
+    ...overrides,
+  };
+}
+
 async function flushDebounce(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 380));
 }
@@ -60,8 +101,17 @@ async function flushDebounce(): Promise<void> {
 describe("RegisteredMailsConsole", () => {
   beforeEach(() => {
     mocks.getStoredAccessToken.mockReset();
+    mocks.listTributiAvvisi.mockReset();
     mocks.listTributiRegisteredMails.mockReset();
+    mocks.updateTributiRegisteredMailAssociation.mockReset();
+    mocks.useSessionBootstrap.mockReset();
     mocks.getStoredAccessToken.mockReturnValue("token");
+    mocks.useSessionBootstrap.mockReturnValue({
+      status: "ready",
+      token: "token",
+      currentUser: { role: "admin", enabled_modules: ["ruolo"] },
+      grantedSectionKeys: ["ruolo.tributi.view", "ruolo.tributi.manage_status"],
+    });
   });
 
   test("loads registered mails, filters anomalies and paginates", async () => {
@@ -212,5 +262,172 @@ describe("RegisteredMailsConsole", () => {
     expect(await screen.findByText("custom_match")).toBeInTheDocument();
     expect(screen.getByText("custom_recovery")).toBeInTheDocument();
     expect(screen.getByText("Score 96 · nessuna nota")).toBeInTheDocument();
+  });
+
+  test("opens matching modal, associates a candidate and updates the row", async () => {
+    const unmatched = registeredMail({
+      avviso_id: null,
+      match_status: "ambiguous",
+      raw_payload_json: { candidate_avviso_ids: ["avviso-1", 42] },
+    });
+    mocks.listTributiRegisteredMails.mockResolvedValue({
+      items: [unmatched, registeredMail({ id: "mail-other", source_shipment_id: "SHP-OTHER" })],
+      total: 2,
+      page: 1,
+      page_size: 25,
+    });
+    mocks.listTributiAvvisi.mockResolvedValue({
+      items: [avviso(), avviso({ id: "avviso-2", display_name: null, nominativo_raw: null, codice_fiscale_raw: null, codice_utenza: null, importo_totale_euro: null })],
+      total: 2,
+      page: 1,
+      page_size: 20,
+    });
+    mocks.updateTributiRegisteredMailAssociation.mockResolvedValue(
+      registeredMail({ match_reason: "Associazione manuale impostata dall'operatore" }),
+    );
+
+    render(<RegisteredMailsConsole canEdit token="token" />);
+    await flushDebounce();
+    fireEvent.click(await screen.findByRole("button", { name: "Associa manualmente" }));
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    await waitFor(() => expect(mocks.listTributiAvvisi).toHaveBeenCalledWith("token", expect.objectContaining({ q: "ROSSI MARIO" })));
+    expect(screen.getByText("Candidato automatico")).toBeInTheDocument();
+    expect(screen.getByText("Nominativo assente")).toBeInTheDocument();
+    expect(screen.getByText(/CF assente/)).toBeInTheDocument();
+    expect(screen.getAllByText("-").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("radio", { name: /ROSSI MARIO/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Conferma associazione" }));
+    await waitFor(() =>
+      expect(mocks.updateTributiRegisteredMailAssociation).toHaveBeenCalledWith("token", "mail-1", { avviso_id: "avviso-1" }),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getAllByRole("button", { name: "Cambia associazione" })).toHaveLength(2);
+    expect(screen.getByText(/Associazione manuale impostata/)).toBeInTheDocument();
+  });
+
+  test("removes an existing association", async () => {
+    const matched = registeredMail();
+    mocks.listTributiRegisteredMails.mockResolvedValue({ items: [matched], total: 1, page: 1, page_size: 25 });
+    mocks.listTributiAvvisi.mockResolvedValue({ items: [avviso()], total: 1, page: 1, page_size: 20 });
+    mocks.updateTributiRegisteredMailAssociation.mockResolvedValue(
+      registeredMail({ avviso_id: null, match_status: "unmatched", anomaly_key: "manual_unlinked" }),
+    );
+
+    render(<RegisteredMailsConsole canEdit token="token" />);
+    await flushDebounce();
+    fireEvent.click(await screen.findByRole("button", { name: "Cambia associazione" }));
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cambia associazione" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rimuovi associazione" }));
+    await waitFor(() =>
+      expect(mocks.updateTributiRegisteredMailAssociation).toHaveBeenCalledWith("token", "mail-1", { avviso_id: null }),
+    );
+    expect(await screen.findByRole("button", { name: "Associa manualmente" })).toBeInTheDocument();
+  });
+
+  test("handles modal search, save errors and keyboard close", async () => {
+    const onClose = vi.fn();
+    const onSaved = vi.fn();
+    mocks.listTributiAvvisi
+      .mockRejectedValueOnce("bad search")
+      .mockResolvedValueOnce({ items: [], total: 0, page: 1, page_size: 20 })
+      .mockResolvedValueOnce({ items: [avviso()], total: 1, page: 1, page_size: 20 });
+    mocks.updateTributiRegisteredMailAssociation
+      .mockRejectedValueOnce("bad save")
+      .mockRejectedValueOnce(new Error("salvataggio fallito"));
+
+    const { rerender } = render(
+      <RegisteredMailAssociationModal mail={registeredMail({ avviso_id: null, recipient_name: null })} token="token" onClose={onClose} onSaved={onSaved} />,
+    );
+    expect(document.body.style.overflow).toBe("hidden");
+    expect(await screen.findByText("Errore ricerca avvisi")).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText("Nominativo, codice fiscale, CNC o utenza"), { target: { value: "" } });
+    expect(await screen.findByText("Nessun avviso trovato.")).toBeInTheDocument();
+    mocks.listTributiAvvisi.mockReset();
+    mocks.listTributiAvvisi.mockResolvedValue({ items: [avviso()], total: 1, page: 1, page_size: 20 });
+    fireEvent.change(screen.getByPlaceholderText("Nominativo, codice fiscale, CNC o utenza"), { target: { value: "Rossi" } });
+    await screen.findByRole("radio");
+    fireEvent.click(screen.getByRole("radio"));
+    fireEvent.click(screen.getByRole("button", { name: "Conferma associazione" }));
+    expect(await screen.findByText("Errore aggiornamento associazione")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Conferma associazione" }));
+    expect(await screen.findByText("salvataggio fallito")).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    rerender(<div />);
+    expect(document.body.style.overflow).toBe("");
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  test("ignores completed searches after cancellation", async () => {
+    let resolveSearch: (value: { items: RuoloTributiAvvisoListItemResponse[]; total: number; page: number; page_size: number }) => void = () => {};
+    const pendingSearch = new Promise<{ items: RuoloTributiAvvisoListItemResponse[]; total: number; page: number; page_size: number }>((resolve) => {
+      resolveSearch = resolve;
+    });
+    mocks.listTributiAvvisi
+      .mockReturnValueOnce(pendingSearch)
+      .mockRejectedValueOnce(new Error("ricerca fallita"));
+
+    render(
+      <RegisteredMailAssociationModal
+        mail={registeredMail({ recipient_name: null, shipment_name: null, raw_payload_json: { candidate_avviso_ids: "invalid" } })}
+        token="token"
+        onClose={vi.fn()}
+        onSaved={vi.fn()}
+      />,
+    );
+    await waitFor(() => expect(mocks.listTributiAvvisi).toHaveBeenCalledWith("token", expect.objectContaining({ q: undefined })));
+    fireEvent.change(screen.getByPlaceholderText("Nominativo, codice fiscale, CNC o utenza"), { target: { value: "Nuova ricerca" } });
+    resolveSearch({ items: [avviso()], total: 1, page: 1, page_size: 20 });
+    expect(await screen.findByText("ricerca fallita")).toBeInTheDocument();
+    expect(screen.getByText(/Destinatario non letto/)).toBeInTheDocument();
+  });
+
+  test("ignores rejected searches after unmount", async () => {
+    let rejectSearch: (error: Error) => void = () => {};
+    const pendingSearch = new Promise<never>((_resolve, reject) => {
+      rejectSearch = reject;
+    });
+    mocks.listTributiAvvisi.mockReturnValueOnce(pendingSearch);
+    const view = render(
+      <RegisteredMailAssociationModal mail={registeredMail()} token="token" onClose={vi.fn()} onSaved={vi.fn()} />,
+    );
+    await waitFor(() => expect(mocks.listTributiAvvisi).toHaveBeenCalledTimes(1));
+    view.unmount();
+    rejectSearch(new Error("late failure"));
+    await Promise.resolve();
+    expect(screen.queryByText("late failure")).not.toBeInTheDocument();
+  });
+
+  test("enforces access state before rendering the editable console", async () => {
+    mocks.useSessionBootstrap.mockReturnValueOnce({ status: "checking", token: null, currentUser: null, grantedSectionKeys: [] });
+    const { rerender } = render(<RegisteredMailsAccess />);
+    expect(screen.getByRole("status")).toHaveTextContent("Verifica accesso");
+
+    mocks.useSessionBootstrap.mockReturnValueOnce({
+      status: "ready",
+      token: "token",
+      currentUser: { role: "viewer", enabled_modules: [] },
+      grantedSectionKeys: ["ruolo.tributi.view"],
+    });
+    rerender(<RegisteredMailsAccess />);
+    expect(screen.getByRole("alert")).toHaveTextContent("non autorizzato");
+
+    mocks.listTributiRegisteredMails.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 25 });
+    mocks.useSessionBootstrap.mockReturnValueOnce({
+      status: "ready",
+      token: "token",
+      currentUser: { role: "super_admin", enabled_modules: [] },
+      grantedSectionKeys: ["ruolo.tributi.view", "ruolo.tributi.manage_status"],
+    });
+    rerender(<RegisteredMailsAccess />);
+    await flushDebounce();
+    expect(await screen.findByText("Nessuna raccomandata trovata")).toBeInTheDocument();
   });
 });

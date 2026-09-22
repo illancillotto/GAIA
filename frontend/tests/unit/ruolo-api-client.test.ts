@@ -49,6 +49,7 @@ import {
   updateTributiAvvisoStatus,
   updateTributiYearManager,
 } from "@/lib/ruolo-api";
+import { updateTributiRegisteredMailAssociation } from "@/lib/registered-mail-api";
 
 function jsonResponse(payload: unknown = {}): Response {
   return new Response(JSON.stringify(payload), {
@@ -442,6 +443,18 @@ describe("Ruolo API client", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(31, "/api/ruolo/tributi/solleciti/batches?page=3&page_size=5", expect.any(Object));
     expect(fetchMock).toHaveBeenNthCalledWith(32, "/api/ruolo/tributi/solleciti/batches/batch-1", expect.any(Object));
+  });
+
+  test("updates a registered mail manual association", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ id: "mail-1" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await updateTributiRegisteredMailAssociation("token", "mail-1", { avviso_id: "avviso-1" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/ruolo/tributi/raccomandate/mail-1/association",
+      expect.objectContaining({ method: "PATCH", body: JSON.stringify({ avviso_id: "avviso-1" }) }),
+    );
   });
 
   test("calls stats endpoints with default and explicit options", async () => {

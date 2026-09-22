@@ -9,6 +9,7 @@ import {
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
 import { DocumentIcon, FolderIcon } from "@/components/ui/icons";
+import { RuoloAvvisiSection } from "@/components/ruolo/ruolo-avvisi-section";
 import { createCapacitasInCassSyncJob, getUtenzeSubjectPaymentNotices, listCapacitasInCassSyncJobs } from "@/lib/api";
 import { isCapacitasInCassActiveJobStatus } from "@/lib/capacitas-incass-job-visibility";
 import { buildNoticeResidualNotes, extractNoticeDetailFields, extractNoticeRateDetails } from "@/lib/utenze-payment-notice-detail";
@@ -20,6 +21,30 @@ type Props = {
   token: string;
   compact?: boolean;
 };
+
+function SubjectRuoloSection({ compact, subjectId, token }: Props) {
+  if (compact) return null;
+  return <RuoloAvvisiSection subjectId={subjectId} token={token} />;
+}
+
+type RefreshButtonProps = {
+  monitoredJobId: number | null;
+  onRefresh: () => Promise<void>;
+  syncing: boolean;
+};
+
+function IncassRefreshButton({ monitoredJobId, onRefresh, syncing }: RefreshButtonProps) {
+  return (
+    <button
+      className="inline-flex items-center justify-center rounded-xl border border-[#1D4E35] bg-[#1D4E35] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#173f2b] disabled:cursor-not-allowed disabled:opacity-60"
+      type="button"
+      onClick={() => void onRefresh()}
+      disabled={syncing || monitoredJobId !== null}
+    >
+      {syncing ? "Accodo sync..." : monitoredJobId !== null ? "Sync in corso..." : "Aggiorna da inCASS"}
+    </button>
+  );
+}
 
 const INCASS_JOB_POLL_MS = 3000;
 
@@ -188,20 +213,12 @@ export function UtenzePaymentNoticesSection({ subjectId, token, compact = false 
 
   const summary = buildPaymentNoticeSummary(notices);
   const latestSync = notices[0]?.synced_at ?? null;
-  const refreshButton = (
-    <button
-      className="inline-flex items-center justify-center rounded-xl border border-[#1D4E35] bg-[#1D4E35] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#173f2b] disabled:cursor-not-allowed disabled:opacity-60"
-      type="button"
-      onClick={() => void handleRefreshFromInCass()}
-      disabled={syncing || monitoredJobId !== null}
-    >
-      {syncing ? "Accodo sync..." : monitoredJobId !== null ? "Sync in corso..." : "Aggiorna da inCASS"}
-    </button>
-  );
 
   return (
-    <section className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
-      <div className={compact ? "border-b border-[#edf1eb] px-5 py-4" : "border-b border-[#edf1eb] p-5"}>
+    <div className="space-y-5">
+      <SubjectRuoloSection compact={compact} subjectId={subjectId} token={token} />
+      <section className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
+        <div className={compact ? "border-b border-[#edf1eb] px-5 py-4" : "border-b border-[#edf1eb] p-5"}>
         {compact ? (
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
@@ -213,7 +230,7 @@ export function UtenzePaymentNoticesSection({ subjectId, token, compact = false 
               <p className="mt-1 text-sm text-gray-500">Storico sintetico del soggetto con stato e residuo.</p>
             </div>
             <div className="flex flex-wrap gap-2">
-              {refreshButton}
+              <IncassRefreshButton monitoredJobId={monitoredJobId} onRefresh={handleRefreshFromInCass} syncing={syncing} />
               <div className="rounded-2xl border border-sky-100 bg-sky-50/70 px-3 py-2 text-sm text-sky-900">
                 <p className="font-semibold">{latestSync ? `Ultima sync: ${new Date(latestSync).toLocaleString("it-IT")}` : "Sync disponibile"}</p>
                 <p className="mt-1 text-xs">{notices.length} avviso{notices.length !== 1 ? "i" : ""}</p>
@@ -237,7 +254,7 @@ export function UtenzePaymentNoticesSection({ subjectId, token, compact = false 
             description="Storico avvisi, stato sintetico, dettagli informativi e PDF recuperati da Capacitas."
             actions={
               <>
-                {refreshButton}
+                <IncassRefreshButton monitoredJobId={monitoredJobId} onRefresh={handleRefreshFromInCass} syncing={syncing} />
                 <ModuleWorkspaceNoticeCard
                   compact
                   title={latestSync ? `Ultima sync: ${new Date(latestSync).toLocaleString("it-IT")}` : "Sync disponibile"}
@@ -407,6 +424,7 @@ export function UtenzePaymentNoticesSection({ subjectId, token, compact = false 
           })}
         </div>
       </div>
-    </section>
+      </section>
+    </div>
   );
 }

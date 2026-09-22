@@ -14,7 +14,7 @@ import { catastoGetMeterReadingsBySubject, catastoListDistretti } from "@/lib/ap
 import { getUtenzeSubjectPaymentNotices } from "@/lib/api";
 import type { CatDistretto, CatMeterReading } from "@/types/catasto";
 import type { AnagraficaPaymentNotice } from "@/types/api";
-import type { RuoloAvvisoDetailResponse } from "@/types/ruolo";
+import type { RuoloAvvisoListItemResponse } from "@/types/ruolo";
 import { parseNumeric } from "./number-format";
 
 type Props = {
@@ -73,7 +73,7 @@ function formatPerCubicMeter(cost: number | null, consumption: number): string {
   return `${new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 2 }).format(cost / consumption)}/mc`;
 }
 
-function buildRoleCostByYear(avvisi: RuoloAvvisoDetailResponse[]): Map<number, number> {
+function buildRoleCostByYear(avvisi: RuoloAvvisoListItemResponse[]): Map<number, number> {
   const yearly = new Map<number, number>();
   for (const item of avvisi) {
     const amount = item.importo_totale_0985;
@@ -183,7 +183,7 @@ export function UtenzeMeterReadingsSection({ subjectId, token }: Props) {
   const [readings, setReadings] = useState<CatMeterReading[]>([]);
   const [distretti, setDistretti] = useState<CatDistretto[]>([]);
   const [paymentNotices, setPaymentNotices] = useState<AnagraficaPaymentNotice[]>([]);
-  const [ruoloAvvisi, setRuoloAvvisi] = useState<RuoloAvvisoDetailResponse[]>([]);
+  const [ruoloAvvisi, setRuoloAvvisi] = useState<RuoloAvvisoListItemResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [ruoloAccessMissing, setRuoloAccessMissing] = useState(false);

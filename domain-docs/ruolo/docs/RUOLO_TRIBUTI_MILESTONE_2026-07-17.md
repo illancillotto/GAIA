@@ -2,7 +2,56 @@
 
 Data: 2026-07-17
 
-Aggiornamento: 2026-07-22
+Aggiornamento: 2026-09-22
+
+## Aggiornamento 2026-09-22 - visibilita nella scheda soggetto
+
+La raccomandata associata manualmente o automaticamente non viene duplicata nel dominio Utenze.
+La pagina `/utenze/{subject_id}`, nella tab `Avvisi di pagamento`, carica i ruoli del soggetto e
+mostra la notifica sotto il relativo avviso. Il vincolo funzionale resta quindi esplicito:
+
+```text
+raccomandata Poste Online -> avviso Ruolo -> soggetto GAIA
+```
+
+`GET /ruolo/soggetti/{subject_id}/avvisi` include `digital_delivery` e `registered_mail`; la UI
+espone canale, stato, data e tracking e mantiene il link al dettaglio del ruolo. Una modifica del
+matching nella console `/ruolo/raccomandate` diventa visibile nella scheda soggetto tramite lo
+stesso read model, senza relazioni parallele o fallback per nominativo/codice fiscale.
+
+## Aggiornamento 2026-09-22 - associazione manuale raccomandata-avviso
+
+La pagina `/ruolo/raccomandate` integra ora nella colonna `Matching` una modal operativa per
+risolvere i casi ambigui o non associati. La ricerca riusa la lista avvisi Tributi e mostra gli
+eventuali candidati prodotti dal matching automatico senza selezionarli implicitamente.
+
+Contratto e autorizzazione:
+
+- `PATCH /ruolo/tributi/raccomandate/{mail_id}/association` accetta
+  `{ "avviso_id": UUID | null }`;
+- la lettura della console richiede `ruolo.tributi.view`, mentre la mutazione richiede anche
+  `ruolo.tributi.manage_status`;
+- `null` rimuove l'associazione e produce l'anomalia operativa `manual_unlinked`;
+- avviso o raccomandata inesistenti restituiscono `404` senza modifiche parziali.
+
+Persistenza e re-import:
+
+- non viene introdotta una nuova tabella: provenance, operatore, timestamp e target sono salvati
+  in `ruolo_tributi_registered_mails.raw_payload_json.manual_association`;
+- l'override manuale, inclusa la disassociazione, prevale sul matching automatico durante gli
+  upsert successivi dello stesso invio Poste Online;
+- un target manuale eliminato o non disponibile degrada a `manual_target_missing` e resta
+  fail-closed;
+- lo stato recupero viene ricalcolato sull'avviso scelto, incluso `ready_on_payment` quando esiste
+  gia un pagamento valido.
+
+Vincoli di regressione:
+
+- un re-import non deve sovrascrivere una decisione manuale attiva;
+- solo gli utenti autorizzati vedono le azioni di associazione e il backend applica comunque il
+  controllo section key;
+- dopo il salvataggio la riga deve aggiornarsi senza ricaricare l'intera console;
+- i runtime modificati devono mantenere statement e branch coverage al `100%`.
 
 ## Decisione architetturale
 

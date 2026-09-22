@@ -1,6 +1,6 @@
 "use client";
 
-import { RegisteredMailsConsole } from "@/components/ruolo/registered-mails-console";
+import { RegisteredMailsAccess } from "@/components/ruolo/registered-mails-console";
 import { RuoloModulePage } from "@/components/ruolo/module-page";
 
 export default function RuoloRaccomandatePage() {
@@ -11,7 +11,7 @@ export default function RuoloRaccomandatePage() {
       breadcrumb="Raccomandate"
       requiredSection="ruolo.tributi.view"
     >
-      <RegisteredMailsConsole />
+      <RegisteredMailsAccess />
     </RuoloModulePage>
   );
 }

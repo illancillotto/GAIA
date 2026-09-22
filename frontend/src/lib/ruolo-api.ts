@@ -1,6 +1,6 @@
 import { ApiError, getApiBaseUrl } from "@/lib/api";
 import type {
-  RuoloAvvisoDetailResponse,
+  RuoloAvvisoDetailResponse, RuoloAvvisoListItemResponse,
   RuoloAvvisoListResponse,
   RuoloCapacitasCalculationDetailResponse,
   RuoloCapacitasCheckResponse,
@@ -157,8 +157,8 @@ export async function getAvviso(token: string, avvisoId: string): Promise<RuoloA
 export async function getAvvisiBySubject(
   token: string,
   subjectId: string,
-): Promise<RuoloAvvisoDetailResponse[]> {
-  return ruoloRequest<RuoloAvvisoDetailResponse[]>(`/ruolo/soggetti/${subjectId}/avvisi`, token);
+): Promise<RuoloAvvisoListItemResponse[]> {
+  return ruoloRequest<RuoloAvvisoListItemResponse[]>(`/ruolo/soggetti/${subjectId}/avvisi`, token);
 }
 
 export type ListRuoloParticelleParams = {

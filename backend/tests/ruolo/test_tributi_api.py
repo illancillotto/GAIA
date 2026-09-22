@@ -1196,7 +1196,19 @@ def test_tributi_import_pagamenti_rejects_bad_mapping_and_empty_files() -> None:
 
 
 def test_tributi_import_posta_online_registered_mails_matches_avvisi_and_tracks_recovery() -> None:
-    matched_avviso_id = seed_avviso(amount=100.0, anno=2022, nominativo="ROSSI MARIO")
+    db = TestingSessionLocal()
+    subject = AnagraficaSubject(source_name_raw="ROSSI MARIO")
+    db.add(subject)
+    db.commit()
+    subject_id = subject.id
+    db.close()
+
+    matched_avviso_id = seed_avviso(
+        amount=100.0,
+        anno=2022,
+        nominativo="ROSSI MARIO",
+        subject_id=subject_id,
+    )
     db = TestingSessionLocal()
     matched_avviso = db.get(RuoloAvviso, UUID(matched_avviso_id))
     assert matched_avviso is not None
@@ -1290,6 +1302,11 @@ def test_tributi_import_posta_online_registered_mails_matches_avvisi_and_tracks_
     mails_response = client.get("/ruolo/tributi/raccomandate?match_status=matched", headers=headers)
     assert mails_response.status_code == 200
     assert mails_response.json()["total"] == 1
+    subject_response = client.get(f"/ruolo/soggetti/{subject_id}/avvisi", headers=headers)
+    assert subject_response.status_code == 200
+    subject_registered_mail = subject_response.json()[0]["registered_mail"]
+    assert subject_registered_mail["tracking_number"] == "619608197350"
+    assert subject_registered_mail["status_label"].startswith("Servizio erogato")
     anomalies_response = client.get("/ruolo/tributi/raccomandate?anomalies_only=true", headers=headers)
     assert anomalies_response.status_code == 200
     assert anomalies_response.json()["total"] == 0
@@ -1302,6 +1319,69 @@ def test_tributi_import_posta_online_registered_mails_matches_avvisi_and_tracks_
     assert payment_response.status_code == 200
     recovery_response = client.get(f"/ruolo/tributi/avvisi/{matched_avviso_id}", headers=headers)
     assert recovery_response.json()["registered_mails"][0]["recovery_status"] == "ready_on_payment"
+
+
+def test_tributi_registered_mail_manual_association_api() -> None:
+    avviso_id = seed_avviso(amount=125.0, anno=2022, nominativo="ASSOCIAZIONE MANUALE")
+    db = TestingSessionLocal()
+    mail = RuoloTributiRegisteredMail(
+        source_shipment_id="MANUAL-API",
+        recipient_index=0,
+        match_status="ambiguous",
+        recovery_status="pending",
+        raw_payload_json={"candidate_avviso_ids": [avviso_id]},
+    )
+    db.add(mail)
+    db.commit()
+    mail_id = str(mail.id)
+    db.close()
+
+    viewer_response = client.patch(
+        f"/ruolo/tributi/raccomandate/{mail_id}/association",
+        headers=auth_headers("ruolo-tributi-viewer"),
+        json={"avviso_id": avviso_id},
+    )
+    assert viewer_response.status_code == 403
+
+    headers = auth_headers()
+    associated = client.patch(
+        f"/ruolo/tributi/raccomandate/{mail_id}/association",
+        headers=headers,
+        json={"avviso_id": avviso_id},
+    )
+    assert associated.status_code == 200
+    payload = associated.json()
+    assert payload["avviso_id"] == avviso_id
+    assert payload["match_status"] == "matched"
+    assert payload["match_score"] == 100
+    assert payload["match_reason"] == "Associazione manuale impostata dall'operatore"
+    assert payload["raw_payload_json"]["manual_association"]["avviso_id"] == avviso_id
+    assert isinstance(payload["raw_payload_json"]["manual_association"]["updated_by"], int)
+
+    unlinked = client.patch(
+        f"/ruolo/tributi/raccomandate/{mail_id}/association",
+        headers=headers,
+        json={"avviso_id": None},
+    )
+    assert unlinked.status_code == 200
+    assert unlinked.json()["avviso_id"] is None
+    assert unlinked.json()["anomaly_key"] == "manual_unlinked"
+
+    missing_mail = client.patch(
+        f"/ruolo/tributi/raccomandate/{uuid4()}/association",
+        headers=headers,
+        json={"avviso_id": avviso_id},
+    )
+    assert missing_mail.status_code == 404
+    assert missing_mail.json()["detail"] == "Raccomandata non trovata"
+
+    missing_avviso = client.patch(
+        f"/ruolo/tributi/raccomandate/{mail_id}/association",
+        headers=headers,
+        json={"avviso_id": str(uuid4())},
+    )
+    assert missing_avviso.status_code == 404
+    assert missing_avviso.json()["detail"] == "Avviso non trovato"
 
 
 def test_tributi_detail_uses_incass_rateized_amounts_for_rateizzazione() -> None:

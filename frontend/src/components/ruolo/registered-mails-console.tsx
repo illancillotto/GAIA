@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { type Dispatch, type SetStateAction, useCallback, useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon, RefreshIcon, SearchIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
 import { listTributiRegisteredMails } from "@/lib/ruolo-api";
+import { useSessionBootstrap } from "@/lib/use-session-bootstrap";
 import type { RuoloTributiRegisteredMailListResponse, RuoloTributiRegisteredMailResponse } from "@/types/ruolo";
+import { RegisteredMailAssociationModal } from "./registered-mail-association-modal";
 
 const PAGE_SIZE = 25;
 
@@ -62,9 +64,121 @@ function isAnomaly(item: RuoloTributiRegisteredMailResponse): boolean {
 
 type RegisteredMailsConsoleProps = {
   className?: string;
+  token?: string | null;
+  canEdit?: boolean;
 };
 
-export function RegisteredMailsConsole({ className = "" }: RegisteredMailsConsoleProps) {
+type AssociationActionProps = {
+  canEdit: boolean;
+  mail: RuoloTributiRegisteredMailResponse;
+  onOpen: (mail: RuoloTributiRegisteredMailResponse) => void;
+};
+
+function AssociationAction({ canEdit, mail, onOpen }: AssociationActionProps) {
+  if (!canEdit) return null;
+  return (
+    <button className="mt-2 text-xs font-semibold text-[#1D4E35] hover:underline" onClick={() => onOpen(mail)} type="button">
+      {mail.avviso_id ? "Cambia associazione" : "Associa manualmente"}
+    </button>
+  );
+}
+
+function useMailAssociation(setResponse: Dispatch<SetStateAction<RuoloTributiRegisteredMailListResponse>>) {
+  const [mail, setMail] = useState<RuoloTributiRegisteredMailResponse | null>(null);
+  function save(updatedMail: RuoloTributiRegisteredMailResponse): void {
+    setResponse((current) => ({
+      ...current,
+      items: current.items.map((item) => (item.id === updatedMail.id ? updatedMail : item)),
+    }));
+    setMail(null);
+  }
+  return { mail, open: setMail, close: () => setMail(null), save };
+}
+
+function AssociationDialog({
+  association,
+  token,
+}: {
+  association: ReturnType<typeof useMailAssociation>;
+  token: string | null;
+}) {
+  if (!association.mail || !token) return null;
+  return (
+    <RegisteredMailAssociationModal
+      mail={association.mail}
+      onClose={association.close}
+      onSaved={association.save}
+      token={token}
+    />
+  );
+}
+
+function resolveAccessToken(token: string | null | undefined): string | null {
+  return token === undefined ? getStoredAccessToken() : token;
+}
+
+function RegisteredMailSummary({ response }: { response: RuoloTributiRegisteredMailListResponse }) {
+  const anomalyCount = response.items.filter(isAnomaly).length;
+  const matchedCount = response.items.filter((item) => item.match_status === "matched").length;
+  return (
+    <div className="grid gap-3 md:grid-cols-3">
+      <div className="rounded-2xl border border-[#e2e9df] bg-[#fbfcfb] p-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Risultati</p>
+        <p className="mt-1 text-2xl font-semibold text-gray-900">{response.total}</p>
+      </div>
+      <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Associati nella pagina</p>
+        <p className="mt-1 text-2xl font-semibold text-emerald-800">{matchedCount}</p>
+      </div>
+      <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Anomalie nella pagina</p>
+        <p className="mt-1 text-2xl font-semibold text-amber-800">{anomalyCount}</p>
+      </div>
+    </div>
+  );
+}
+
+function RegisteredMailRow({ canEdit, mail, onOpen }: AssociationActionProps) {
+  return (
+    <tr className={isAnomaly(mail) ? "bg-amber-50/35" : undefined}>
+      <td className="max-w-[320px] px-4 py-3">
+        <p className="font-medium text-gray-900">{mail.recipient_name ?? mail.shipment_name ?? "Destinatario non letto"}</p>
+        <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">
+          {mail.recipient_address ?? "-"} {mail.recipient_city ? `· ${mail.recipient_city}` : ""}
+        </p>
+      </td>
+      <td className="px-4 py-3 text-gray-600">
+        <p>{formatDate(mail.sent_at)}</p>
+        <p className="mt-1 text-xs text-gray-500">Tracking {mail.tracking_number ?? "-"}</p>
+        <p className="mt-1 text-xs text-gray-500">Invio {mail.source_shipment_id}</p>
+      </td>
+      <td className="px-4 py-3">
+        <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${matchStatusClassName(mail.match_status)}`}>
+          {matchStatusLabel(mail.match_status)}
+        </span>
+        <p className="mt-2 text-xs leading-5 text-gray-500">
+          Score {mail.match_score ?? "-"} · {mail.match_reason ?? mail.anomaly_key ?? "nessuna nota"}
+        </p>
+        <AssociationAction canEdit={canEdit} mail={mail} onOpen={onOpen} />
+      </td>
+      <td className="px-4 py-3 text-gray-600">
+        <p>{recoveryStatusLabel(mail.recovery_status)}</p>
+        <p className="mt-1 text-xs text-gray-500">{formatMoney(mail.price_amount)}</p>
+      </td>
+      <td className="px-4 py-3">
+        {mail.avviso_id ? (
+          <Link className="font-semibold text-[#1D4E35] hover:underline" href={`/ruolo/tributi?avviso=${mail.avviso_id}`}>
+            Apri avviso
+          </Link>
+        ) : (
+          <span className="text-sm text-gray-400">Non associato</span>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+export function RegisteredMailsConsole({ className = "", token, canEdit = false }: RegisteredMailsConsoleProps) {
   const [response, setResponse] = useState<RuoloTributiRegisteredMailListResponse>(EMPTY_RESPONSE);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,14 +187,15 @@ export function RegisteredMailsConsole({ className = "" }: RegisteredMailsConsol
   const [recoveryStatus, setRecoveryStatus] = useState("");
   const [anomaliesOnly, setAnomaliesOnly] = useState(true);
   const [page, setPage] = useState(1);
+  const accessToken = resolveAccessToken(token);
+  const association = useMailAssociation(setResponse);
 
-  async function loadData(nextPage = page): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token) return;
+  const loadData = useCallback(async (nextPage: number): Promise<void> => {
+    if (!accessToken) return;
     setLoading(true);
     try {
       const trimmedQuery = query.trim();
-      const data = await listTributiRegisteredMails(token, {
+      const data = await listTributiRegisteredMails(accessToken, {
         q: trimmedQuery.length >= 3 ? trimmedQuery : undefined,
         match_status: matchStatus || undefined,
         recovery_status: recoveryStatus || undefined,
@@ -95,7 +210,7 @@ export function RegisteredMailsConsole({ className = "" }: RegisteredMailsConsol
     } finally {
       setLoading(false);
     }
-  }
+  }, [accessToken, anomaliesOnly, matchStatus, query, recoveryStatus]);
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
@@ -103,10 +218,8 @@ export function RegisteredMailsConsole({ className = "" }: RegisteredMailsConsol
       void loadData(1);
     }, 350);
     return () => window.clearTimeout(handle);
-  }, [query, matchStatus, recoveryStatus, anomaliesOnly]);
+  }, [loadData]);
 
-  const anomalyCount = response.items.filter(isAnomaly).length;
-  const matchedCount = response.items.filter((item) => item.match_status === "matched").length;
   const canGoBack = page > 1;
   const canGoForward = page * response.page_size < response.total;
 
@@ -174,20 +287,7 @@ export function RegisteredMailsConsole({ className = "" }: RegisteredMailsConsol
           </label>
         </div>
 
-        <div className="grid gap-3 md:grid-cols-3">
-          <div className="rounded-2xl border border-[#e2e9df] bg-[#fbfcfb] p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Risultati</p>
-            <p className="mt-1 text-2xl font-semibold text-gray-900">{response.total}</p>
-          </div>
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Associati nella pagina</p>
-            <p className="mt-1 text-2xl font-semibold text-emerald-800">{matchedCount}</p>
-          </div>
-          <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Anomalie nella pagina</p>
-            <p className="mt-1 text-2xl font-semibold text-amber-800">{anomalyCount}</p>
-          </div>
-        </div>
+        <RegisteredMailSummary response={response} />
 
         {error ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
@@ -209,40 +309,7 @@ export function RegisteredMailsConsole({ className = "" }: RegisteredMailsConsol
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {response.items.map((item) => (
-                  <tr key={item.id} className={isAnomaly(item) ? "bg-amber-50/35" : undefined}>
-                    <td className="max-w-[320px] px-4 py-3">
-                      <p className="font-medium text-gray-900">{item.recipient_name ?? item.shipment_name ?? "Destinatario non letto"}</p>
-                      <p className="mt-1 line-clamp-2 text-xs leading-5 text-gray-500">
-                        {item.recipient_address ?? "-"} {item.recipient_city ? `· ${item.recipient_city}` : ""}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      <p>{formatDate(item.sent_at)}</p>
-                      <p className="mt-1 text-xs text-gray-500">Tracking {item.tracking_number ?? "-"}</p>
-                      <p className="mt-1 text-xs text-gray-500">Invio {item.source_shipment_id}</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${matchStatusClassName(item.match_status)}`}>
-                        {matchStatusLabel(item.match_status)}
-                      </span>
-                      <p className="mt-2 text-xs leading-5 text-gray-500">
-                        Score {item.match_score ?? "-"} · {item.match_reason ?? item.anomaly_key ?? "nessuna nota"}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      <p>{recoveryStatusLabel(item.recovery_status)}</p>
-                      <p className="mt-1 text-xs text-gray-500">{formatMoney(item.price_amount)}</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      {item.avviso_id ? (
-                        <Link className="font-semibold text-[#1D4E35] hover:underline" href={`/ruolo/tributi?avviso=${item.avviso_id}`}>
-                          Apri avviso
-                        </Link>
-                      ) : (
-                        <span className="text-sm text-gray-400">Non associato</span>
-                      )}
-                    </td>
-                  </tr>
+                  <RegisteredMailRow canEdit={canEdit} key={item.id} mail={item} onOpen={association.open} />
                 ))}
               </tbody>
             </table>
@@ -263,6 +330,25 @@ export function RegisteredMailsConsole({ className = "" }: RegisteredMailsConsol
           </div>
         </div>
       </div>
+      <AssociationDialog association={association} token={accessToken} />
     </section>
+  );
+}
+
+export function RegisteredMailsAccess() {
+  const session = useSessionBootstrap();
+  if (session.status !== "ready" || !session.token || !session.currentUser) {
+    return <p role="status">Verifica accesso alle raccomandate...</p>;
+  }
+  const hasModule = session.currentUser.role === "super_admin" || session.currentUser.enabled_modules.includes("ruolo");
+  if (!hasModule || !session.grantedSectionKeys.includes("ruolo.tributi.view")) {
+    return <p role="alert">Accesso alle raccomandate non autorizzato.</p>;
+  }
+  return (
+    <RegisteredMailsConsole
+      canEdit={session.grantedSectionKeys.includes("ruolo.tributi.manage_status")}
+      key={session.token}
+      token={session.token}
+    />
   );
 }

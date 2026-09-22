@@ -9,7 +9,47 @@
 - Modulo: Ruolo
 - Stato complessivo: **documento archiviato; implementazione storica completata M1–M5**
 - Owner: TBD
-- Ultimo aggiornamento: 2026-08-26
+- Ultimo aggiornamento: 2026-09-22
+
+---
+
+## Aggiornamento operativo 2026-09-22 - raccomandate nel dettaglio soggetto
+
+- `GET /ruolo/soggetti/{subject_id}/avvisi` espone ora per ogni ruolo gli stessi riepiloghi di
+  consegna digitale/PEC e raccomandata gia disponibili nell'elenco avvisi Ruolo.
+- Nel dettaglio `/utenze/{id}`, la tab `Avvisi di pagamento` presenta la raccomandata come canale
+  di notifica del ruolo associato, non come record anagrafico indipendente: la catena canonica
+  resta `raccomandata -> ruolo_avvisi.id -> ruolo_avvisi.subject_id`.
+- Ogni card ruolo mostra data, stato e tracking della raccomandata associata, oltre al riepilogo
+  PEC quando presente; il dettaglio ruolo resta il punto di accesso allo storico completo.
+- Quality gate mirato: backend route `129/129` statement e `14/14` branch; frontend runtime
+  eseguibile `389/389` statement, `402/402` branch, `85/85` funzioni e `305/305` linee.
+
+---
+
+## Aggiornamento operativo 2026-09-22 - matching manuale raccomandate
+
+- La console `/ruolo/raccomandate` consente agli utenti con section key
+  `ruolo.tributi.manage_status` di aprire dalla colonna `Matching` una modal per cercare un
+  avviso, riconoscere i candidati automatici, associare/cambiare l'avviso oppure rimuovere
+  esplicitamente l'associazione. Gli utenti con il solo permesso `ruolo.tributi.view` mantengono
+  la consultazione read-only.
+- Il comando usa `PATCH /ruolo/tributi/raccomandate/{mail_id}/association` con payload
+  `{ "avviso_id": UUID | null }`; raccomandata o avviso inesistenti restituiscono `404` e il
+  backend registra operatore e timestamp dell'azione.
+- L'override e conservato in `raw_payload_json.manual_association` senza migrazione DB. Un
+  `avviso_id` nullo rappresenta una disassociazione manuale persistente, non la riattivazione del
+  matching automatico.
+- L'associazione manuale prevale sui successivi re-import Poste Online. Se l'avviso collegato non
+  e piu disponibile il record resta fail-closed come non associato; i candidati automatici restano
+  nel payload per supportare la revisione operativa.
+- Quality gate: suite backend Ruolo interessata `112 passed`, statement e branch coverage
+  `100%` sui runtime backend modificati; suite frontend correlata `19 passed`, statement
+  `147/147`, branch `132/132`, funzioni `56/56` e linee `131/131`. TypeScript, ESLint, Ruff,
+  formatter e `git diff --check` passano. Il complexity ratchet non riporta finding nel perimetro
+  Ruolo/frontend della change.
+- Grafi codice Ruolo e frontend aggiornati; il grafo documentale Ruolo viene riallineato con il
+  presente aggiornamento.
 
 ---
 

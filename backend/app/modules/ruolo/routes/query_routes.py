@@ -9,12 +9,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_module
+from app.api.deps import require_module
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.models.catasto import CatastoParcel
 from app.modules.ruolo import repositories as repo
-from app.modules.ruolo.models import RuoloAvviso, RuoloPartita, RuoloParticella
+from app.modules.ruolo.models import RuoloAvviso, RuoloParticella, RuoloPartita
 from app.modules.ruolo.schemas import (
     CatastoParcelResponse,
     RuoloAvvisoDetailResponse,
@@ -24,10 +24,10 @@ from app.modules.ruolo.schemas import (
     RuoloCapacitasCalculationDetailResponse,
     RuoloCapacitasCalculationRowResponse,
     RuoloCapacitasCalculationSummaryResponse,
-    RuoloCapacitasCheckItemResponse,
-    RuoloCapacitasCheckResponse,
     RuoloCapacitasCheckComuneItemResponse,
     RuoloCapacitasCheckComuneResponse,
+    RuoloCapacitasCheckItemResponse,
+    RuoloCapacitasCheckResponse,
     RuoloCapacitasCheckSummaryResponse,
     RuoloGaiaCalculationItemResponse,
     RuoloGaiaCalculationResponse,
@@ -35,12 +35,12 @@ from app.modules.ruolo.schemas import (
     RuoloParticellaResponse,
     RuoloParticelleSummaryResponse,
     RuoloPartitaResponse,
-    RuoloStatsAnalyticsResponse,
     RuoloStatsAmountBreakdownItem,
+    RuoloStatsAnalyticsResponse,
     RuoloStatsByAnnoResponse,
-    RuoloStatsCountBreakdownItem,
     RuoloStatsComuneItem,
     RuoloStatsComuneResponse,
+    RuoloStatsCountBreakdownItem,
     RuoloStatsResponse,
     RuoloSubjectLandCropsResponse,
 )
@@ -273,10 +273,8 @@ def get_avvisi_by_subject(
 ) -> list[RuoloAvvisoListItemResponse]:
     avvisi = repo.list_avvisi_by_subject(db, subject_id)
     display_name = repo._get_subject_display_name(db, subject_id)
-    return [
-        _avviso_to_list_item(a, display_name, True)
-        for a in avvisi
-    ]
+    notification_summaries = repo._batch_load_avviso_notification_summaries(db, avvisi=avvisi)
+    return [_avviso_to_list_item(avviso, display_name, True, **notification_summaries[avviso.id]) for avviso in avvisi]
 
 
 @router.get("/soggetti/{subject_id}/terreni-colture", response_model=RuoloSubjectLandCropsResponse)
