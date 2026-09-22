@@ -5,6 +5,225 @@ blocco verificato e prima di chiudere un goal.
 
 ## Stato generale
 
+### Verifica finale e commit delle slice frontend (2026-09-22)
+
+- Commit esplicitamente richiesto dopo le cinque iterazioni descritte sotto;
+  nessun nuovo hotspot. Base verificata `cb09f4f4`.
+- Scope del commit: quattro runtime (`activity-center.tsx`, `guided-workflow.ts`,
+  `document-preview.ts`, `request-support-payload.ts`), quattro file di test e
+  i due registri code-quality. Modifiche concorrenti Utenze/worker/config/docs
+  escluse; nessun aggiornamento baseline, soglie, esclusioni o configurazione test.
+- Esecuzione combinata: otto suite e `97 passed`, con
+  `VITEST_COVERAGE_INCLUDE` limitato ai quattro runtime e
+  `--coverage.thresholds.perFile`. Ogni file raggiunge 100% statement, branch,
+  funzioni e righe, verificato anche dal JSON Istanbul (non solo dalla media).
+  Totale: 209/209 statement, 215/215 branch, 45/45 funzioni, 171/171 righe.
+  Log `/tmp/gaia-quality-final-tests.log`, report
+  `/tmp/gaia-quality-final-coverage/coverage-final.json`.
+- Typecheck frontend senza incremental, lint sugli otto file runtime/test,
+  diff whitespace e tutti i 76 test del quality tooling: passano.
+- Ratchet autorevole sui quattro runtime contro `origin/main`, merge-base
+  `cb09f4f4`: `findings: []`. Report finale: 45 callable, zero error e otto
+  warning legacy residui. Metriche prima/dopo e classificazioni delle singole
+  slice restano quelle documentate sotto, incluso `NO_SAFE_CHANGE`.
+- Il ratchet dell'intero working tree rileva cinque regressioni nelle sole
+  modifiche concorrenti `modules/elaborazioni/worker/worker.py`; nessuna nel
+  perimetro del commit. Baseline verify `false`: sincronizzazione non tentata,
+  non viene dichiarata conformita globale del repository.
+- Smoke frontend (`npm test`): 13 passati, cinque falliti. Riprodotti gli
+  stessi cinque fallimenti su un archivio Git isolato di `cb09f4f4` in
+  `/tmp/gaia-quality-base-aYyptA`, senza modifiche o dipendenze del working tree.
+  Evidenze `/tmp/gaia-quality-{final,base}-smoke.log`; nessun test indebolito.
+- Altri log `/tmp/gaia-quality-final-{types,lint,tooling,ratchet,global-ratchet,baseline-verify}.log`;
+  metriche `/tmp/gaia-quality-final-metrics.json`.
+- Graphify frontend aggiornato con target dedicato (topologia invariata).
+  Refresh platform docs tramite `make graphify-platform-docs`, log
+  `/tmp/gaia-quality-final-graphify-docs.log`; grafi e report temporanei non
+  inclusi nel commit. Build production ed E2E browser non eseguiti.
+- Pubblicazione remota non richiesta: solo commit locale, nessun push.
+
+### Wiki request payload - campi comuni (2026-09-22)
+
+- Unico hotspot autorizzato: `buildWikiRequestPayload`, base `cb09f4f4`;
+  modifiche precedenti e concorrenti preservate. Slice: costruire una sola
+  volta i campi comuni ai tre intent, senza nuovi helper o cambio di contratto.
+- Invarianti: ultima domanda utente trimata senza mutare messages, mapping
+  pathname, source channel, fallback nullish (stringa vuota preservata),
+  campi specifici e assenza di campi estranei per ogni intent, link supporto.
+- Prima: cognitive `13`, cyclomatic `10`, LOC `61`. La suite esistente ha
+  tre test verdi ma coverage file incompleta (statement 68,96%, branch 51,61%).
+  Aggiunta suite payload/URL/mapping; corretto un errore nella forma delle
+  fixture test.each (array espansi anziche passati come singolo argomento),
+  nessuna failure runtime nuova. Prima del refactoring: 27 test passati e
+  coverage full-file 100% (58 statement, 62 branch, 5 funzioni, 37 righe).
+- Dopo: cognitive `13 -> 5`, cyclomatic `10 -> 6`, LOC `61 -> 49`;
+  nessuna violation sul callable. Aggregati file: cognitive `35 -> 27`,
+  cyclomatic `36 -> 32`, LOC `116 -> 104`, cinque callable invariati.
+  Warning file `4 -> 2`, sui distinti mapping pathname e URL supporto.
+  Esito `IMPROVED`, senza estrazioni o trasferimento del debito.
+- Verifiche finali: 27 test passati, coverage 100% (58 statement, 54 branch,
+  5 funzioni, 37 righe), lint runtime/test e typecheck senza incremental verdi;
+  quality tooling 76 test passati. Diff whitespace pulito.
+- Ratchet mirato autorevole sul runtime, `--base-ref origin/main`: verde.
+  Globale: stessi cinque rilievi concorrenti in `worker.py`, nessuno wiki;
+  baseline verify `false`. Baseline, scope, soglie ed eccezioni invariate.
+- Evidenze `/tmp/gaia-wiki-payload-{before,after}.json`,
+  `/tmp/gaia-wiki-payload-after-coverage`,
+  `/tmp/gaia-wiki-payload-{ratchet,global-ratchet,baseline-verify,quality-tests}.log`.
+- Graphify frontend aggiornato tramite target dedicato; refresh platform docs
+  con log `/tmp/gaia-wiki-payload-graphify-docs.log`. Grafi non versionati.
+  Build production ed E2E non eseguiti. Nessun commit o secondo hotspot.
+- Prossima azione separata: valutare un altro hotspot; i due warning residui
+  del file non sono autorizzazione ad ampliare automaticamente questa slice.
+
+### Document preview - normalizzazione estensione (2026-09-22)
+
+- Successivo hotspot autorizzato dopo `guidedChangeValidation`, il cui esito
+  `NO_SAFE_CHANGE` rimane tracciato qui e nel backlog; non viene riaperto.
+- Base `main@cb09f4f4`; modifiche GIS precedenti e concorrenti Utenze/worker
+  preservate. Scope: `frontend/src/lib/document-preview.ts`, relativo test.
+- Target `getDocumentPreviewKind`: prima cognitive `15`, cyclomatic `12`,
+  LOC `23`, due warning. Tre controlli null ripetuti prima dei Set.
+- Slice: normalizzare l'assenza di estensione a stringa vuota, gia classificata
+  come download, eliminando i tre guard ridondanti. Nessun nuovo helper.
+  Invarianti: flag PDF prioritario, estensione esplicita anche vuota prioritaria
+  rispetto al filename, fallback solo nullish, casing e formati invariati.
+- Caratterizzazione: tre test iniziali, coverage full-file 100% (18 statement,
+  24 branch, 3 funzioni, 18 righe); aggiunti dieci casi di precedenza/nullish.
+  Tutti i 13 test passano anche prima della modifica runtime.
+- Dopo: cognitive `15 -> 9`, cyclomatic `12 -> 9`, LOC `23 -> 23`;
+  warning `2 -> 0`, nessuna violation residua nel file. Aggregati file:
+  cognitive `16 -> 10`, cyclomatic `15 -> 12`, LOC `34` e tre callable
+  invariati. Esito `IMPROVED`, senza debito trasferito.
+- Verifiche: 13 test passati; coverage full-file 100% su 18 statement,
+  18 branch, tre funzioni e 18 righe. Typecheck senza incremental e lint
+  runtime/test verdi. Ratchet mirato contro merge-base `origin/main` verde.
+- Report `/tmp/gaia-preview-{before,after}.json`, coverage
+  `/tmp/gaia-preview-after-coverage`, ratchet `/tmp/gaia-preview-ratchet.log`.
+  Baseline, scope e soglie invariati. Build production ed E2E non eseguiti.
+  Nessun commit o secondo hotspot in questa iterazione.
+- Quality tooling: 76 test passati. Ratchet globale contro `cb09f4f4`: cinque
+  rilievi nelle modifiche concorrenti `worker.py`, su `_solve_llm_captcha`
+  (LOC) e `_solve_external_captcha` (cyc/cog/LOC/nesting); nessuno riguarda
+  document-preview. Nessun intervento sul worker. Baseline verify `false`,
+  nessuna sincronizzazione tentata. Evidenze
+  `/tmp/gaia-preview-{global-ratchet,baseline-verify,quality-tests}.log`.
+- Graphify frontend rieseguito: topologia invariata. Refresh platform docs
+  tramite target dedicato, log `/tmp/gaia-preview-graphify-docs.log`;
+  grafi non versionati. Diff whitespace pulito.
+- Prossima azione: selezionare un nuovo hotspot indipendente; non riaprire
+  automaticamente la validazione GIS gia caratterizzata senza riduzione.
+
+### GIS guided validation - caratterizzazione e stop (2026-09-22)
+
+- Follow-up esplicito su `guidedChangeValidation`, base `main@cb09f4f4`.
+  Preservati i diff GIS delle due slice precedenti; nessun runtime modificato
+  da questa iterazione.
+- Verificati i guard esistenti: elemento, motivazione, attributi/dati
+  descrittivi, coordinate. I controlli specifici hanno condizioni distinte;
+  non e stata individuata una semplificazione locale convincente senza
+  spostare logica in helper o complicare il flusso. Nessun tentativo di
+  normalizzare diversamente i campi per abbassare le metriche.
+- Dieci casi aggiunti: precedenza degli errori sui quattro tipi, entrambi i
+  campi obbligatori, whitespace, descrizione prima delle coordinate, geometria
+  ignorata per attributi/eliminazione e priorita della geometria selezionata.
+- Esito `NO_SAFE_CHANGE` per il refactoring proposto; caratterizzazione utile,
+  ma nessuna riduzione di complessita rivendicata. Callable invariato a
+  cognitive `17`, cyclomatic `12`, LOC `29`; aggregati file cognitive `87`,
+  cyclomatic `78`, LOC `231`, 18 callable e quattro warning invariati.
+- Verifiche: 33 test helper/composer passati, coverage full-file 100%
+  (92 statement, 110 branch, 18 funzioni, 80 righe), lint runtime/test e
+  ratchet mirato contro la baseline merge-base di `origin/main` verdi.
+  Report `/tmp/gaia-validation-{before,after}.json`, coverage
+  `/tmp/gaia-validation-coverage`, ratchet `/tmp/gaia-validation-ratchet.log`.
+- Baseline non modificata. Typecheck, build, E2E e gate globali non rieseguiti
+  in questa iterazione solo-test. Graphify codice consultato e non rigenerato:
+  nessun cambiamento strutturale runtime. Refresh platform docs tramite target
+  dedicato, log `/tmp/gaia-validation-graphify-docs.log`.
+- Stop: nessun altro hotspot avviato. Prossima decisione: scegliere un
+  candidato diverso con duplicazione o annidamento realmente eliminabili.
+
+### GIS coordinate reader - hotspot dedicato (2026-09-22)
+
+- Richiesta: successivo singolo hotspot dopo activity center; base `7ee80d94`.
+  Modifiche precedenti e concorrenti preservate.
+- Target: `coordinatesFromGeometry` in `frontend/src/app/gis/catalogo/guided-workflow.ts`.
+  Prima: cognitive `13`, cyclomatic `11`, LOC `19`; un warning cyclomatic.
+- Slice: consolidare i rami identici Polygon/MultiLineString, che leggono
+  entrambi il primo gruppo. Nessun helper nuovo, modifica di geometrie,
+  validazione, payload, autorizzazioni o UI. Case-insensitivity, primo gruppo,
+  fallback nullish e assenza di mutazioni sono invarianti espliciti.
+- Caratterizzazione: casi parametrizzati per entrambi i tipi e casing,
+  gruppi multipli, primo gruppo vuoto/null, array vuoto e immutabilita.
+  I 13 test helper estesi passano prima della modifica runtime; prima della
+  caratterizzazione i 19 test helper/composer coprivano il file al 100%.
+- Dopo: cognitive `13 -> 10`, cyclomatic `11 -> 9`, LOC `19 -> 17`;
+  warning del callable eliminato. Aggregati file: cognitive `90 -> 87`,
+  cyclomatic `80 -> 78`, LOC `233 -> 231`, callable invariati `18`.
+  Warning file complessivi `5 -> 4`, error `0 -> 0`; nessun debito trasferito.
+  Esito `IMPROVED`; gli altri helper restano fuori da questa singola slice.
+- Verifiche: 23 test helper/composer, coverage full-file 100% su 92 statement,
+  110 branch, 18 funzioni e 80 righe. Typecheck senza incremental, lint sui due
+  file frontend e diff whitespace passano. Nessun test indebolito o esclusione.
+- Ratchet mirato autorevole: `backend/.venv/bin/python tools/code_quality/complexity.py
+  ratchet --base-ref origin/main frontend/src/app/gis/catalogo/guided-workflow.ts`
+  passa, `findings: []`, merge-base `3ee0e5ee`. Baseline non modificata.
+- Evidenze `/tmp/gaia-coordinate-{before,after}.json`,
+  `/tmp/gaia-coordinate-after-coverage`, `/tmp/gaia-coordinate-ratchet.log`.
+  Build production ed E2E browser non eseguiti; nessun commit o altro hotspot.
+- Quality tooling: `76 passed`. Ratchet globale: stessi due rilievi estranei
+  in `xlsm_export.py` della slice precedente, nessuno GIS. Baseline verify
+  ancora `false`; nessuna sincronizzazione tentata. Log in
+  `/tmp/gaia-coordinate-{global-ratchet,baseline-verify,quality-tests}.log`.
+- Graphify frontend aggiornato (7043 nodi, 16958 archi). Refresh documentale
+  tramite target platform docs, log `/tmp/gaia-coordinate-graphify-docs.log`;
+  gli artefatti dei grafi non sono versionati.
+- Prossima azione separata: valutare la validazione del draft guidato,
+  preservando precedenza degli errori e controlli specifici del tipo richiesta.
+
+### GIS activity center - hotspot dedicato (2026-09-22)
+
+- Base `main@7ee80d94`; modifiche concorrenti Ruolo/Utenze preservate.
+- Unica slice: separare lifecycle di caricamento e vista di
+  `frontend/src/app/gis/strumenti/activity-center.tsx` con un hook locale.
+- Invarianti: richieste parallele e limite 25, audit opzionale, dipendenze
+  reload/token/showAudit, cancellazione risposte obsolete, storico mantenuto
+  durante reload/errori, testi, DOM, callback e contratto pubblico invariati.
+- Prima: `GisActivityCenter` cognitive `14`, cyclomatic `15`, LOC `95`;
+  18 callable, due violation error-level. Cinque test esistenti passano con
+  coverage full-file 100% (39 statement, 33 branch, 18 funzioni, 34 righe).
+- Aggiunta caratterizzazione del cambio token con risposta obsoleta tardiva.
+  Metriche e coverage iniziali in `/tmp/gaia-activity-before*`.
+- Dopo: componente cognitive `9`, cyclomatic `10`, LOC `62`; hook locale
+  cognitive `5`, cyclomatic `6`, LOC `37`, nessuna violation propria.
+  Error-level `2 -> 0`; restano due warning sul componente (cyc e LOC).
+- Aggregati file: cognitive sum `29 -> 29`, cyclomatic sum `47 -> 48`,
+  callable `18 -> 19`, decision point normalizzati `29 -> 29`, LOC `141 -> 145`.
+  Esito `REORGANIZED_AND_CHARACTERIZED`: responsabilita separate e massimi
+  ridotti, ma nessuna riduzione complessiva delle decisioni viene rivendicata.
+- Il nuovo test passa anche prima dell'estrazione. Dopo: 6 test diretti,
+  24 test con workspace strumenti/amministrazione; coverage full-file 100%
+  (41 statement, 33 branch, 19 funzioni, 36 righe). Typecheck senza incremental
+  e lint dei due file frontend passano; quality tooling `76 passed`.
+- Ratchet mirato: `backend/.venv/bin/python tools/code_quality/complexity.py
+  ratchet --base-ref origin/main frontend/src/app/gis/strumenti/activity-center.tsx`
+  passa con `findings: []`, baseline autorevole merge-base `3ee0e5ee`.
+- Evidenze finali `/tmp/gaia-activity-after.json`,
+  `/tmp/gaia-activity-after-coverage`, `/tmp/gaia-activity-quality-tests.log`.
+  Baseline, soglie ed esclusioni invariate; nessun commit o secondo hotspot.
+- Graphify frontend aggiornato: 7043 nodi e 16958 archi; artefatti non versionati.
+- Graphify platform docs: refresh semantico completato (`chunk 1/1 done`,
+  nessun warning di chunk fallito); log `/tmp/gaia-activity-graphify-docs.log`.
+- Ratchet globale non verde: due rilievi estranei in `xlsm_export.py`
+  (parametri `count_operai_paid_rest_days` `1 -> 2`, LOC file `570 -> 575`),
+  file invariato rispetto a HEAD e gia modificato nei commit anteriori alla
+  slice. Nessun rilievo GIS. `complexity-baseline-verify` restituisce `false`;
+  nessuna sincronizzazione globale tentata. Log `/tmp/gaia-activity-global-ratchet.log`
+  e `/tmp/gaia-activity-baseline-verify.log`. Diff whitespace pulito.
+- Build production ed E2E browser non eseguiti per questa slice locale.
+- Prossima azione separata: scegliere un hotspot con decisioni ridondanti
+  eliminabili, senza estendere automaticamente questa estrazione.
+
 ### Ruolo - finalizzazione candidati solleciti (2026-09-21)
 
 - Semplificazione locale di `_collect_reminder_candidates` autorizzata dopo

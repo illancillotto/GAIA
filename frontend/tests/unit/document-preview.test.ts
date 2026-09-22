@@ -3,6 +3,21 @@ import { describe, expect, test } from "vitest";
 import { getDocumentPreviewKind, getExtensionFromFilename, isPdfFilename } from "@/lib/document-preview";
 
 describe("document preview helpers", () => {
+  test.each([
+    { document: { filename: "documento.pdf", extension: "" }, expected: "download" },
+    { document: { filename: "documento.pdf", extension: null }, expected: "pdf" },
+    { document: { filename: "documento.pdf", extension: undefined }, expected: "pdf" },
+    { document: { filename: "foto.png", extension: ".ZIP" }, expected: "download" },
+    { document: { filename: "documento.pdf", extension: ".PNG" }, expected: "image" },
+    { document: { filename: "senza-estensione" }, expected: "download" },
+    { document: { filename: "", extension: "" }, expected: "download" },
+    { document: { filename: "senza-estensione", extension: "", isPdf: true }, expected: "pdf" },
+    { document: { filename: "documento.bin", extension: ".png", isPdf: true }, expected: "pdf" },
+    { document: { filename: "documento.pdf", isPdf: false }, expected: "pdf" },
+  ])("preserves extension and PDF precedence: %j", ({ document, expected }) => {
+    expect(getDocumentPreviewKind(document)).toBe(expected);
+  });
+
   test("extracts lowercase filename extensions", () => {
     expect(getExtensionFromFilename("ricevuta.EML")).toBe(".eml");
     expect(getExtensionFromFilename("senza-estensione")).toBeNull();

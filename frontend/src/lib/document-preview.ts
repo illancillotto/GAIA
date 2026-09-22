@@ -18,13 +18,13 @@ export function getDocumentPreviewKind(document: {
   extension?: string | null;
   isPdf?: boolean | null;
 }): DocumentPreviewKind {
-  const extension = (document.extension ?? getExtensionFromFilename(document.filename))?.toLowerCase() ?? null;
+  const extension = (document.extension ?? getExtensionFromFilename(document.filename))?.toLowerCase() ?? "";
 
   if (document.isPdf === true || extension === ".pdf") {
     return "pdf";
   }
 
-  if (extension != null && IMAGE_EXTENSIONS.has(extension)) {
+  if (IMAGE_EXTENSIONS.has(extension)) {
     return "image";
   }
 
@@ -32,11 +32,11 @@ export function getDocumentPreviewKind(document: {
     return "docx";
   }
 
-  if (extension != null && SPREADSHEET_EXTENSIONS.has(extension)) {
+  if (SPREADSHEET_EXTENSIONS.has(extension)) {
     return "spreadsheet";
   }
 
-  if (extension != null && TEXT_EXTENSIONS.has(extension)) {
+  if (TEXT_EXTENSIONS.has(extension)) {
     return "text";
   }
 

@@ -29,21 +29,23 @@ export function buildWikiRequestPayload(params: {
 }): WikiRequestCreate {
   const lastUserQuestion =
     [...params.messages].reverse().find((message) => message.role === "user")?.content?.trim() ?? "";
-  const moduleKey = inferModuleKeyFromPath(params.pathname);
+  const common = {
+    user_question: lastUserQuestion,
+    agent_response: params.assistantAnswer,
+    module_key: inferModuleKeyFromPath(params.pathname),
+    page_path: params.pathname,
+    source_channel: params.sourceChannel,
+    severity: "medium",
+    conversation_id: params.conversationId ?? null,
+    context_article: params.contextArticle ?? null,
+  } satisfies Omit<WikiRequestCreate, "category">;
 
   if (params.intent === "bug_report") {
     return {
-      user_question: lastUserQuestion,
-      agent_response: params.assistantAnswer,
+      ...common,
       category: "bug_report",
       request_type: "bug_report",
-      module_key: moduleKey,
-      page_path: params.pathname,
-      source_channel: params.sourceChannel,
-      severity: "medium",
       impact_scope: "single_user",
-      conversation_id: params.conversationId ?? null,
-      context_article: params.contextArticle ?? null,
       observed_behavior: params.assistantAnswer,
       desired_outcome: "Capire e risolvere il problema segnalato dall'utente.",
     };
@@ -51,33 +53,19 @@ export function buildWikiRequestPayload(params: {
 
   if (params.intent === "help_request") {
     return {
-      user_question: lastUserQuestion,
-      agent_response: params.assistantAnswer,
+      ...common,
       category: "support_request",
       request_type: "help_request",
-      module_key: moduleKey,
-      page_path: params.pathname,
-      source_channel: params.sourceChannel,
-      severity: "medium",
       impact_scope: "single_user",
-      conversation_id: params.conversationId ?? null,
-      context_article: params.contextArticle ?? null,
       desired_outcome: "Ricevere supporto operativo sull'uso della funzione richiesta.",
     };
   }
 
   return {
-    user_question: lastUserQuestion,
-    agent_response: params.assistantAnswer,
+    ...common,
     category: "feature_request",
     request_type: "feature_request",
-    module_key: moduleKey,
-    page_path: params.pathname,
-    source_channel: params.sourceChannel,
-    severity: "medium",
     impact_scope: "team",
-    conversation_id: params.conversationId ?? null,
-    context_article: params.contextArticle ?? null,
     desired_outcome: "Introdurre o migliorare una funzionalità richiesta dall'utente.",
     expected_behavior: "Disponibilità di una funzione o di un flusso più adatto all'esigenza espressa.",
   };

@@ -33,17 +33,7 @@ function historyError(error: unknown): string {
   return error instanceof Error ? error.message : "Storico GIS non disponibile";
 }
 
-export function GisActivityCenter({
-  token,
-  layers,
-  showAudit = false,
-  onResumeImport,
-}: {
-  token: string;
-  layers: GisCatalogLayer[];
-  showAudit?: boolean;
-  onResumeImport?: (item: GisShapefileImport) => void;
-}) {
+function useGisActivityHistory(token: string, showAudit: boolean) {
   const [imports, setImports] = useState<GisShapefileImport[]>([]);
   const [exports, setExports] = useState<GisCatalogLayerExport[]>([]);
   const [audit, setAudit] = useState<GisAuditLog[]>([]);
@@ -79,6 +69,22 @@ export function GisActivityCenter({
       cancelled = true;
     };
   }, [reloadKey, showAudit, token]);
+
+  return { imports, exports, audit, loading, error, setReloadKey };
+}
+
+export function GisActivityCenter({
+  token,
+  layers,
+  showAudit = false,
+  onResumeImport,
+}: {
+  token: string;
+  layers: GisCatalogLayer[];
+  showAudit?: boolean;
+  onResumeImport?: (item: GisShapefileImport) => void;
+}) {
+  const { imports, exports, audit, loading, error, setReloadKey } = useGisActivityHistory(token, showAudit);
 
   function layerTitle(layerId: string): string {
     return layers.find((layer) => layer.id === layerId)?.title ?? "Mappa non disponibile";

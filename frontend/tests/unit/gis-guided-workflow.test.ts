@@ -78,6 +78,20 @@ function request(
 }
 
 describe("guided GIS workflow helpers", () => {
+  test.each(["Polygon", "MultiLineString", "POLYGON", "multilinestring"])(
+    "formats only the first coordinate group for %s without mutating it",
+    (type) => {
+      const coordinates = [[[1, 2], [3, 4]], [[9, 10], [11, 12]]];
+      const geometry = { type, coordinates };
+      const snapshot = structuredClone(geometry);
+      expect(coordinatesTextFromGeometry(geometry)).toBe("1, 2\n3, 4");
+      expect(geometry).toEqual(snapshot);
+      expect(coordinatesTextFromGeometry({ type, coordinates: [null, coordinates[1]] })).toBe("");
+      expect(coordinatesTextFromGeometry({ type, coordinates: [[], coordinates[1]] })).toBe("");
+      expect(coordinatesTextFromGeometry({ type, coordinates: [] })).toBe("");
+    },
+  );
+
   test.each(["POLYGON", "MULTIPOLYGON"])("closes %s rings differing only in Y without duplicating closed rings", (geometryType) => {
     const selectedLayer = { ...layer, geometry_type: geometryType };
     const expectedRing = [[1, 2], [3, 4], [1, 6], [1, 2]];
@@ -381,6 +395,49 @@ describe("guided GIS workflow helpers", () => {
         { ...layer, geometry_type: "POINT" },
       ),
     ).toBeNull();
+  });
+
+  test.each([
+    ["attribute_update", "Seleziona l'elemento della mappa da correggere."],
+    ["geometry_update", "Seleziona l'elemento della mappa da correggere."],
+    ["feature_delete", "Seleziona l'elemento della mappa da correggere."],
+    ["feature_create", "Spiega il motivo della richiesta prima di continuare."],
+  ] as const)("preserves the first missing requirement for %s", (changeType, expected) => {
+    expect(guidedChangeValidation(draft({ changeType }), layer)).toBe(expected);
+    expect(guidedChangeValidation(draft({ changeType, featureId: "pipe-1" }), layer))
+      .toBe("Spiega il motivo della richiesta prima di continuare.");
+  });
+
+  test.each([
+    { fieldName: "", newValue: "160" },
+    { fieldName: "diameter", newValue: " \t " },
+  ])("requires both attribute fields: %j", (fields) => {
+    expect(guidedChangeValidation(draft({ featureId: "pipe-1", justification: "Rilievo", ...fields }), layer))
+      .toBe("Scegli il campo e inserisci il nuovo valore.");
+  });
+
+  test.each([
+    { propertyName: " \t ", propertyValue: "Nuova" },
+    { propertyName: "name", propertyValue: " \t " },
+  ])("checks descriptive data before coordinates: %j", (properties) => {
+    const values = draft({ changeType: "feature_create", justification: "Rilievo", coordinates: "invalid", ...properties });
+    expect(guidedChangeValidation(values, layer))
+      .toBe("Inserisci almeno un dato descrittivo per il nuovo elemento.");
+    expect(guidedChangeValidation({ ...values, propertyName: "name", propertyValue: "Nuova" }, layer))
+      .toBe("Inserisci coordinate valide, una coppia X e Y per riga.");
+  });
+
+  test("does not validate geometry for attribute updates or deletions", () => {
+    const values = draft({ featureId: "pipe-1", justification: "Rilievo", fieldName: " ", newValue: "0", coordinates: "invalid" });
+    expect(guidedChangeValidation(values, layer)).toBeNull();
+    expect(guidedChangeValidation({ ...values, changeType: "feature_delete", fieldName: "", newValue: "" }, layer)).toBeNull();
+  });
+
+  test("validates coordinates using the selected feature before the layer type", () => {
+    const values = draft({ changeType: "geometry_update", featureId: "pipe-1", justification: "Rilievo", coordinates: "1,2" });
+    expect(guidedChangeValidation(values, layer))
+      .toBe("Inserisci coordinate valide, una coppia X e Y per riga.");
+    expect(guidedChangeValidation(values, layer, { ...feature, geometry: { type: "Point", coordinates: [1, 2] } })).toBeNull();
   });
 
   test("builds API inputs for all correction types", () => {

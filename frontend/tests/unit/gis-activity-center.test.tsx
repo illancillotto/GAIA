@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { GisActivityCenter } from "@/app/gis/strumenti/activity-center";
@@ -116,6 +116,25 @@ describe("GisActivityCenter", () => {
     const rejected = render(<GisActivityCenter token="token" layers={[]} />);
     rejected.unmount();
     await waitFor(() => expect(mocks.listGisShapefileImports).toHaveBeenCalled());
+  });
+
+  test("keeps current history when an obsolete token request finishes", async () => {
+    let resolveOld!: (value: unknown) => void;
+    mocks.listGisShapefileImports.mockReturnValueOnce(new Promise((resolve) => { resolveOld = resolve; }));
+    const view = render(<GisActivityCenter token="old-token" layers={[layer]} />);
+    expect(screen.getByRole("button", { name: "Aggiornamento..." })).toBeDisabled();
+
+    view.rerender(<GisActivityCenter token="new-token" layers={[layer]} showAudit />);
+    expect(await screen.findByText("Rete importata")).toBeInTheDocument();
+    expect(mocks.listGisShapefileImports).toHaveBeenLastCalledWith("new-token", { limit: 25 });
+    expect(mocks.listGisCatalogLayerExports).toHaveBeenLastCalledWith("new-token", { limit: 25 });
+    expect(mocks.listGisAuditLogs).toHaveBeenCalledExactlyOnceWith("new-token", { limit: 25 });
+
+    await act(async () => { resolveOld({ items: [{ ...importItem, target_layer_title: "Obsoleto" }] }); });
+    expect(screen.queryByText("Obsoleto")).not.toBeInTheDocument();
+    expect(screen.getByText("Rete importata")).toBeInTheDocument();
+    expect(screen.getByText("Consulta audit amministrativo (1)")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Aggiorna storico" })).toBeEnabled();
   });
 
   test("falls back to raw import status and generic audit target labels", async () => {

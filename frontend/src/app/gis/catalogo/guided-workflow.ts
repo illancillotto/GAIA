@@ -46,9 +46,7 @@ function coordinatesFromGeometry(
   if (!Array.isArray(coordinates)) return [];
   if (type === "point") return [coordinates as number[]];
   if (type === "linestring") return coordinates as number[][];
-  if (type === "polygon")
-    return (coordinates[0] as number[][] | undefined) ?? [];
-  if (type === "multilinestring")
+  if (["polygon", "multilinestring"].includes(type))
     return (coordinates[0] as number[][] | undefined) ?? [];
   if (type === "multipolygon")
     return (
