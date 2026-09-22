@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
 import mimetypes
 import os
-from pathlib import Path, PurePosixPath
 import re
 import shlex
-from typing import Protocol
 import uuid
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path, PurePosixPath
+from typing import Protocol
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -29,11 +29,15 @@ from app.modules.utenze.models import (
     AnagraficaSubjectStatus,
 )
 from app.modules.utenze.services.classify_service import classify_filename
-from app.modules.utenze.services.person_history_service import snapshot_person_if_changed
 from app.modules.utenze.services.parser_service import parse_folder_name
+from app.modules.utenze.services.person_history_service import snapshot_person_if_changed
+from app.modules.utenze.services.registry_import_service import (
+    RegistryDocumentPersistence,
+    persist_registry_subject_documents,
+    registry_job_has_valid_actor,
+    registry_job_metadata,
+)
 from app.services.nas_connector import NasConnectorError, get_nas_client
-
-UTC = timezone.utc
 
 
 class NasCommandRunner(Protocol):
@@ -193,8 +197,6 @@ class AnagraficaImportPreviewService:
         return self._preview_folders("ALL", self.discover_subject_folders())
 
     def discover_subject_folders(self, letter: str | None = None) -> list[DiscoveredSubjectFolder]:
-        errors: list[AnagraficaNASWarning] = []
-
         try:
             if letter:
                 normalized_letter = self._normalize_letter(letter)
@@ -803,8 +805,8 @@ def process_registry_bulk_import_job(db: Session, job_id: uuid.UUID, service: An
     if job is None or job.letter != "REGISTRY":
         return
 
-    user = db.get(ApplicationUser, job.requested_by_user_id) if job.requested_by_user_id is not None else None
-    if user is None:
+    job_log = job.log_json if isinstance(job.log_json, dict) else {}
+    if not registry_job_has_valid_actor(db, job):
         job.status = AnagraficaImportJobStatus.FAILED.value
         job.completed_at = datetime.now(UTC)
         prior_log = job.log_json if isinstance(job.log_json, dict) else {}
@@ -819,7 +821,7 @@ def process_registry_bulk_import_job(db: Session, job_id: uuid.UUID, service: An
         db.commit()
         return
 
-    mode = job.log_json.get("mode") if isinstance(job.log_json, dict) else None
+    mode = job_log.get("mode")
     resume_mode = mode == "registry_import_resume"
     skip_subject_ids = registry_job_completed_subject_ids(db, job_id) if resume_mode else None
 
@@ -832,7 +834,6 @@ def process_registry_bulk_import_job(db: Session, job_id: uuid.UUID, service: An
 
     _execute_registry_bulk_import(
         db,
-        user,
         job,
         service=service,
         resume_mode=resume_mode,
@@ -919,7 +920,6 @@ def delete_registry_import_job(db: Session, job_id: uuid.UUID) -> bool:
 
 def _execute_registry_bulk_import(
     db: Session,
-    current_user: ApplicationUser,
     job: AnagraficaImportJob,
     service: AnagraficaImportPreviewService | None = None,
     *,
@@ -927,7 +927,6 @@ def _execute_registry_bulk_import(
     skip_subject_ids: set[uuid.UUID] | None = None,
 ) -> None:
     resolved_service = service or AnagraficaImportPreviewService(get_nas_client())
-    started_at = job.started_at or datetime.now(UTC)
 
     try:
         subjects = db.scalars(
@@ -966,30 +965,16 @@ def _execute_registry_bulk_import(
                 matched_folder = resolved_service.match_existing_subject_folder(db, subject)
                 subject_preview = resolved_service.preview_subject_folder(matched_folder, strict=True)
                 with db.begin_nested():
-                    subject.nas_folder_path = matched_folder.nas_folder_path
-                    subject.nas_folder_letter = subject_preview.letter
-                    subject.requires_review = subject_preview.requires_review
-                    subject.imported_at = started_at
-                    db.add(subject)
-                    document_stats = _upsert_documents(
-                        db=db,
-                        connector=None,
-                        subject_id=subject.id,
-                        documents=subject_preview.documents,
-                        storage_mode=AnagraficaStorageType.NAS_LINK.value,
-                        imported_at=started_at,
-                    )
-                    _create_audit_log(
-                        db=db,
-                        subject_id=subject.id,
-                        changed_by_user_id=current_user.id,
-                        action="bulk_import_from_registry",
-                        diff_json={
-                            "job_id": str(job.id),
-                            "matched_folder_path": matched_folder.nas_folder_path,
-                            "created_documents": document_stats["created"],
-                            "updated_documents": document_stats["updated"],
-                        },
+                    document_stats = persist_registry_subject_documents(
+                        RegistryDocumentPersistence(
+                            db=db,
+                            subject=subject,
+                            subject_preview=subject_preview,
+                            matched_folder=matched_folder,
+                            job=job,
+                            upsert_documents=_upsert_documents,
+                            create_audit_log=_create_audit_log,
+                        )
                     )
 
                 item_warning_count = len(subject_preview.warnings) + sum(len(document.warnings) for document in subject_preview.documents)
@@ -1032,7 +1017,7 @@ def import_existing_registry_subjects(
     job = db.get(AnagraficaImportJob, job_id)
     if job is None:
         raise ValueError("Registry import job not found after creation")
-    _execute_registry_bulk_import(db, current_user, job, service=service)
+    _execute_registry_bulk_import(db, job, service=service)
     db.refresh(job)
 
     items = db.scalars(select(AnagraficaImportJobItem).where(AnagraficaImportJobItem.job_id == job_id)).all()
@@ -1361,11 +1346,8 @@ def _refresh_import_job_status(db: Session, job_id: uuid.UUID) -> None:
     )
     created_documents_total = sum(item.documents_created for item in items)
     updated_documents_total = sum(item.documents_updated for item in items)
-    prior_mode = None
-    if isinstance(job.log_json, dict):
-        prior_mode = job.log_json.get("mode")
     job.log_json = {
-        **({"mode": prior_mode} if prior_mode else {}),
+        **registry_job_metadata(job),
         "warnings": [],
         "errors": [
             {"folder_name": item.folder_name, "path": item.nas_folder_path, "message": item.last_error}

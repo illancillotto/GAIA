@@ -64,6 +64,9 @@ from app.modules.utenze.services.import_service import (
     prepare_registry_import_jobs_for_recovery,
     run_registry_bulk_import_job_by_id,
 )
+from app.modules.utenze.services.registry_import_service import (
+    claim_next_registry_import_job,
+)
 from app.services.elaborazioni_batches import (
     RELEASE_REQUESTED_MESSAGE,
     RELEASE_REQUESTED_OPERATION,
@@ -155,6 +158,9 @@ def env_value(primary: str, legacy: str, default: str) -> str:
 
 
 POLL_INTERVAL_SEC = int(env_value("ELABORAZIONI_POLL_INTERVAL_SEC", "CATASTO_POLL_INTERVAL_SEC", "3"))
+REGISTRY_AUTO_IMPORT_ENABLED = os.getenv("UTENZE_NAS_AUTO_IMPORT_ENABLED", "true").lower() != "false"
+REGISTRY_AUTO_IMPORT_TIME = time.fromisoformat(os.getenv("UTENZE_NAS_AUTO_IMPORT_TIME", "22:00"))
+REGISTRY_AUTO_IMPORT_TIMEZONE = ZoneInfo(os.getenv("UTENZE_NAS_AUTO_IMPORT_TIMEZONE", "Europe/Rome"))
 CAPTCHA_MANUAL_TIMEOUT_SEC = int(os.getenv("CAPTCHA_MANUAL_TIMEOUT_SEC", "300"))
 ANTI_CAPTCHA_API_KEY = os.getenv("ANTI_CAPTCHA_API_KEY", "").strip()
 ANTI_CAPTCHA_POLL_INTERVAL_SEC = int(os.getenv("ANTI_CAPTCHA_POLL_INTERVAL_SEC", "3"))
@@ -549,24 +555,13 @@ class CatastoWorker:
         )
 
     def _next_registry_import_job_id(self):
-        from app.modules.utenze.models import AnagraficaImportJob, AnagraficaImportJobStatus
-
         with SessionLocal() as db:
-            job = db.scalar(
-                select(AnagraficaImportJob)
-                .where(
-                    AnagraficaImportJob.letter == "REGISTRY",
-                    AnagraficaImportJob.status == AnagraficaImportJobStatus.PENDING.value,
-                )
-                .order_by(AnagraficaImportJob.created_at.asc())
-                .with_for_update(skip_locked=True)
+            return claim_next_registry_import_job(
+                db,
+                auto_import_enabled=REGISTRY_AUTO_IMPORT_ENABLED,
+                schedule_time=REGISTRY_AUTO_IMPORT_TIME,
+                schedule_timezone=REGISTRY_AUTO_IMPORT_TIMEZONE,
             )
-            if job is None:
-                return None
-            job.status = AnagraficaImportJobStatus.RUNNING.value
-            job.started_at = datetime.now(UTC)
-            db.commit()
-            return job.id
 
     async def _process_registry_import_job(self, job_id) -> None:
         await asyncio.to_thread(run_registry_bulk_import_job_by_id, job_id)

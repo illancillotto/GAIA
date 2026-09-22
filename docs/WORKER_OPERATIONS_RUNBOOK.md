@@ -23,6 +23,24 @@ I budget sono limiti di sicurezza iniziali, non valori di capacity planning
 definitivi. Possono essere modificati dalle variabili documentate in
 `.env.example` senza cambiare Compose.
 
+## Import automatico documenti NAS Utenze
+
+`elaborazioni-worker-runtime` controlla la coda REGISTRY a ogni polling e,
+quando non esiste gia un job attivo, accoda un solo sweep automatico giornaliero
+dopo l'orario configurato. Il default e `22:00` nel fuso `Europe/Rome`; lo sweep
+e incrementale sui `nas_path` e non riscrive i documenti gia importati. Gli
+operatori possono inoltre aggiornare subito i documenti del singolo soggetto
+dalla vista rapida o dalla pagina di dettaglio, senza scansionare tutto il registro.
+
+```dotenv
+UTENZE_NAS_AUTO_IMPORT_ENABLED=true
+UTENZE_NAS_AUTO_IMPORT_TIME=22:00
+UTENZE_NAS_AUTO_IMPORT_TIMEZONE=Europe/Rome
+```
+
+Impostare `UTENZE_NAS_AUTO_IMPORT_ENABLED=false` per il rollback operativo;
+i job manuali REGISTRY restano disponibili e continuano a essere elaborati.
+
 ## Single-flight Ruolo
 
 L'autosync Ruolo usa un advisory lock PostgreSQL per utente. Scheduler e

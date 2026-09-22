@@ -1,19 +1,17 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
-from pathlib import Path
 import runpy
+from datetime import UTC, datetime
+from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-
 import test_worker as worker_test_support
-from test_worker import worker_db
+
 import worker as worker_module
 from captcha_result import CaptchaSolveResult
-
 
 CatastoWorker = worker_module.CatastoWorker
 
@@ -24,6 +22,11 @@ def run(coro):
 
 async def async_value(value=None):
     return value
+
+
+@pytest.fixture
+def worker_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    yield from worker_test_support.worker_db.__wrapped__(tmp_path, monkeypatch)
 
 
 class ScalarRows:
@@ -223,7 +226,7 @@ def test_recovery_resets_all_enabled_job_types(monkeypatch: pytest.MonkeyPatch) 
         status="processing",
         current_operation="x",
         execution_token="token",
-        retry_not_before=datetime.now(timezone.utc),
+        retry_not_before=datetime.now(UTC),
     )
     db = FakeDb(scalars_values=([connection], [request]))
     monkeypatch.setattr(worker_module, "SessionLocal", SessionQueue(db))
@@ -280,7 +283,6 @@ def test_simple_next_id_queries(method: str, value, expected, monkeypatch: pytes
 @pytest.mark.parametrize(
     ("method", "status_value", "identifier"),
     [
-        ("_next_registry_import_job_id", worker_module.CatastoVisuraRequestStatus.PENDING.value, 21),
         ("_next_bulk_search_job_id", "pending", uuid4()),
         ("_next_distretto_export_job_id", "pending", uuid4()),
         ("_next_autodoc_sync_job_id", "queued", uuid4()),
@@ -361,10 +363,10 @@ def test_static_helpers_and_artifacts(tmp_path: Path, monkeypatch: pytest.Monkey
     monkeypatch.setattr(worker_module, "OPERATION_WINDOW_ENABLED", True)
     monkeypatch.setattr(worker_module, "OPERATION_WINDOW_TIMEZONE", "invalid")
     assert worker._operation_window_zone().key == "Europe/Rome"
-    now = datetime(2026, 1, 1, 1, tzinfo=timezone.utc)
+    now = datetime(2026, 1, 1, 1, tzinfo=UTC)
     monkeypatch.setattr(worker_module, "OPERATION_WINDOW_START_HOUR", 8)
     assert worker._next_operating_resume_at(now) > now
-    assert worker._next_operating_resume_at(datetime(2026, 1, 1, 10, tzinfo=timezone.utc)) > now
+    assert worker._next_operating_resume_at(datetime(2026, 1, 1, 10, tzinfo=UTC)) > now
 
     browser_marker = object()
     monkeypatch.setattr(worker_module, "BrowserSessionConfig", lambda **values: values)
@@ -390,7 +392,7 @@ def test_static_helpers_and_artifacts(tmp_path: Path, monkeypatch: pytest.Monkey
 
 
 class FakeBrowser:
-    instances: list["FakeBrowser"] = []
+    instances: list[FakeBrowser] = []
     result = SimpleNamespace(reachable=True, authenticated=True, message="ok")
     start_error: Exception | None = None
 

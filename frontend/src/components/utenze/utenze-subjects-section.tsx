@@ -10,6 +10,7 @@ import { TableFilters } from "@/components/table/table-filters";
 import { RuoloAvvisiSection } from "@/components/ruolo/ruolo-avvisi-section";
 import { UtenzePaymentNoticesSection } from "@/components/utenze/utenze-payment-notices-section";
 import { UtenzeCreateSubjectTrigger } from "@/components/utenze/utenze-create-subject-trigger";
+import { UtenzeSubjectDocumentsRefresh } from "@/components/utenze/utenze-subject-documents-refresh";
 import { downloadUtenzeDocumentBlob, downloadUtenzeExportBlob, getUtenzeSubject, getUtenzeSubjectAuditLog, getUtenzeSubjects, importUtenzeSubjectsCsv } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
 import type { UtenzeAuditLog, UtenzeCsvImportResult, UtenzeDocument, UtenzeSubjectDetail, UtenzeSubjectListItem } from "@/types/api";
@@ -32,10 +33,7 @@ const emptyFilters: FilterState = {
 
 type DocumentPreviewKind = "pdf" | "image" | "docx" | "spreadsheet" | "text" | "download";
 
-type SpreadsheetPreviewSheet = {
-  name: string;
-  rows: string[][];
-};
+type SpreadsheetPreviewSheet = { name: string; rows: string[][] };
 
 type SubjectModalTab = "scheda" | "avvisi";
 
@@ -128,7 +126,6 @@ export function UtenzeSubjectsSection({ token }: { token: string }) {
     if (selectedSubjectId == null) {
       setSelectedSubject(null);
       setSubjectModalError(null);
-      setSubjectModalTab("scheda");
       if (previewDocument || previewUrl) {
         if (previewUrl) {
           URL.revokeObjectURL(previewUrl);
@@ -761,6 +758,7 @@ export function UtenzeSubjectsSection({ token }: { token: string }) {
                 <h3 className="mt-1 text-xl font-medium text-gray-900">Vista rapida del registro</h3>
               </div>
               <div className="flex items-center gap-3">
+                <UtenzeSubjectDocumentsRefresh token={token} subjectId={selectedSubjectId} onRefreshed={setSelectedSubject} />
                 <Link className="text-sm font-medium text-[#1D4E35]" href={`/utenze/${selectedSubjectId}`}>
                   Apri pagina completa
                 </Link>

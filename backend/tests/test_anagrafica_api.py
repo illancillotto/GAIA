@@ -1,7 +1,8 @@
-from collections.abc import Generator
-from datetime import UTC, date, datetime
-from pathlib import Path
 import uuid
+from collections.abc import Generator
+from datetime import UTC, date, datetime, time, timedelta
+from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,8 +17,8 @@ from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.catasto import CatastoDocument
-from app.modules.utenze.router import get_anagrafica_import_service
 from app.modules.utenze.models import (
+    AnagraficaAuditLog,
     AnagraficaDocument,
     AnagraficaImportJob,
     AnagraficaImportJobItem,
@@ -27,12 +28,17 @@ from app.modules.utenze.models import (
     AnagraficaSubject,
     AnagraficaVisuraRoutingAnomaly,
 )
+from app.modules.utenze.router import get_anagrafica_import_service
 from app.modules.utenze.services.import_service import (
     AnagraficaImportPreviewService,
     prepare_registry_import_jobs_for_recovery,
     process_registry_bulk_import_job,
 )
-
+from app.modules.utenze.services.registry_import_service import (
+    _scheduled_registry_job_date,
+    claim_next_registry_import_job,
+    ensure_scheduled_registry_bulk_import_job,
+)
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
 TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
@@ -1373,6 +1379,188 @@ def test_bulk_import_from_existing_registry_and_reset(tmp_path) -> None:
         assert detail_payload["imported_at"] is None
     finally:
         settings.utenze_document_storage_path = original_storage_path
+
+
+def test_scheduled_registry_job_runs_once_per_local_day_after_configured_time() -> None:
+    timezone = ZoneInfo("Europe/Rome")
+    schedule_time = time(22)
+    before_schedule = datetime(2026, 9, 22, 19, 59, tzinfo=UTC)
+    now = datetime(2026, 9, 22, 20, 0, tzinfo=UTC)
+    db = TestingSessionLocal()
+    try:
+        assert ensure_scheduled_registry_bulk_import_job(
+            db,
+            schedule_time,
+            timezone,
+            now=before_schedule,
+        ) is None
+
+        first_job_id = ensure_scheduled_registry_bulk_import_job(db, schedule_time, timezone, now=now)
+        assert first_job_id is not None
+        first_job = db.get(AnagraficaImportJob, first_job_id)
+        assert first_job is not None
+        assert first_job.requested_by_user_id is None
+        assert first_job.log_json["trigger"] == "worker_schedule"
+
+        assert ensure_scheduled_registry_bulk_import_job(
+            db,
+            schedule_time,
+            timezone,
+            now=now + timedelta(hours=1),
+        ) is None
+        assert claim_next_registry_import_job(
+            db,
+            auto_import_enabled=False,
+            schedule_time=schedule_time,
+            schedule_timezone=timezone,
+        ) == first_job_id
+
+        first_job.status = AnagraficaImportJobStatus.COMPLETED.value
+        first_job.completed_at = now
+        db.add(first_job)
+        db.commit()
+
+        assert ensure_scheduled_registry_bulk_import_job(
+            db,
+            schedule_time,
+            timezone,
+            now=now + timedelta(minutes=30),
+        ) is None
+        assert ensure_scheduled_registry_bulk_import_job(
+            db,
+            schedule_time,
+            timezone,
+            now=before_schedule + timedelta(days=1),
+        ) is None
+        second_job_id = ensure_scheduled_registry_bulk_import_job(
+            db,
+            schedule_time,
+            timezone,
+            now=now + timedelta(days=1),
+        )
+        assert second_job_id is not None
+        assert second_job_id != first_job_id
+    finally:
+        db.close()
+
+
+def test_registry_claim_returns_none_when_auto_import_is_disabled_and_queue_is_empty() -> None:
+    db = TestingSessionLocal()
+    try:
+        assert claim_next_registry_import_job(
+            db,
+            auto_import_enabled=False,
+            schedule_time=time(22),
+            schedule_timezone=ZoneInfo("Europe/Rome"),
+        ) is None
+    finally:
+        db.close()
+
+
+def test_registry_claim_auto_schedules_and_reads_aware_scheduled_timestamp() -> None:
+    db = TestingSessionLocal()
+    try:
+        job_id = claim_next_registry_import_job(
+            db,
+            auto_import_enabled=True,
+            schedule_time=time(0),
+            schedule_timezone=ZoneInfo("UTC"),
+        )
+        assert job_id is not None
+        job = db.get(AnagraficaImportJob, job_id)
+        assert job is not None
+        assert job.status == AnagraficaImportJobStatus.RUNNING.value
+        assert job.log_json["trigger"] == "worker_schedule"
+
+        assert _scheduled_registry_job_date(job, ZoneInfo("Europe/Rome")) == job.created_at.date()
+        job.log_json = []
+        job.created_at = datetime(2026, 9, 22, 8, 0)
+        assert _scheduled_registry_job_date(job, ZoneInfo("UTC")) == date(2026, 9, 22)
+    finally:
+        db.close()
+
+
+def test_scheduled_registry_import_adds_only_new_nas_documents() -> None:
+    class IncrementalNasConnector(FakeNasConnector):
+        def run_command(self, command: str) -> str:
+            if command == "find '/archive/O/Obinu_Santina_BNOSTN34L64I743F' -type f 2>/dev/null | sort":
+                return "\n".join(
+                    [
+                        "/archive/O/Obinu_Santina_BNOSTN34L64I743F/INGIUNZIONE-2024.pdf",
+                        "/archive/O/Obinu_Santina_BNOSTN34L64I743F/NUOVO-DOCUMENTO-2026.pdf",
+                    ]
+                )
+            return super().run_command(command)
+
+    create_user("registry_auto", module_utenze=True)
+    token = login("registry_auto")
+    headers = {"Authorization": f"Bearer {token}"}
+    create_response = client.post(
+        "/utenze/subjects",
+        headers=headers,
+        json={
+            "subject_type": "person",
+            "source_name_raw": "Obinu_Santina_BNOSTN34L64I743F",
+            "person": {
+                "cognome": "Obinu",
+                "nome": "Santina",
+                "codice_fiscale": "BNOSTN34L64I743F",
+            },
+        },
+    )
+    subject_id = create_response.json()["id"]
+    assert client.post(f"/utenze/subjects/{subject_id}/import-from-nas", headers=headers).status_code == 200
+
+    db = TestingSessionLocal()
+    try:
+        first_job_id = ensure_scheduled_registry_bulk_import_job(
+            db,
+            time(0),
+            ZoneInfo("UTC"),
+            now=datetime(2026, 9, 22, 8, 0, tzinfo=UTC),
+        )
+        assert first_job_id is not None
+        service = AnagraficaImportPreviewService(IncrementalNasConnector(), archive_root="/archive")
+        process_registry_bulk_import_job(db, first_job_id, service=service)
+
+        documents = db.query(AnagraficaDocument).filter(AnagraficaDocument.subject_id == uuid.UUID(subject_id)).all()
+        assert {document.filename for document in documents} == {
+            "INGIUNZIONE-2024.pdf",
+            "NUOVO-DOCUMENTO-2026.pdf",
+        }
+        first_item = db.query(AnagraficaImportJobItem).filter(AnagraficaImportJobItem.job_id == first_job_id).one()
+        assert (first_item.documents_created, first_item.documents_updated) == (1, 0)
+        automatic_audits = db.query(AnagraficaAuditLog).filter(
+            AnagraficaAuditLog.action == "bulk_import_from_registry"
+        ).all()
+        assert len(automatic_audits) == 1
+        assert automatic_audits[0].changed_by_user_id is None
+        assert automatic_audits[0].diff_json["trigger"] == "worker_schedule"
+
+        completed_job = db.get(AnagraficaImportJob, first_job_id)
+        assert completed_job is not None
+        assert completed_job.completed_at is not None
+        second_job_id = ensure_scheduled_registry_bulk_import_job(
+            db,
+            time(0),
+            ZoneInfo("UTC"),
+            now=completed_job.completed_at.replace(tzinfo=UTC) + timedelta(days=1),
+        )
+        assert second_job_id is not None
+        process_registry_bulk_import_job(
+            db,
+            second_job_id,
+            service=AnagraficaImportPreviewService(IncrementalNasConnector(), archive_root="/archive"),
+        )
+        second_item = db.query(AnagraficaImportJobItem).filter(
+            AnagraficaImportJobItem.job_id == second_job_id
+        ).one()
+        assert (second_item.documents_created, second_item.documents_updated) == (0, 0)
+        assert db.query(AnagraficaAuditLog).filter(
+            AnagraficaAuditLog.action == "bulk_import_from_registry"
+        ).count() == 1
+    finally:
+        db.close()
 
 
 def test_prepare_registry_import_jobs_for_recovery_requeues_processing_items() -> None:

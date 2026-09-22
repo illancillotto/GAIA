@@ -959,7 +959,6 @@ function DetailContent({
     return new Date(item.created_at).getTime() > new Date(latest.created_at).getTime() ? item : latest;
   }, null);
   const canQuickImportFromNas = Boolean(
-    isEmbedded &&
     nasImportStatus?.can_import_from_nas &&
     (nasImportStatus.pending_files_in_nas ?? 0) > 0,
   );
@@ -1059,12 +1058,12 @@ function DetailContent({
           )}
           {isEditMode && nasImportStatus?.can_import_from_nas ? (
             <button className="btn-primary" type="button" onClick={() => void handleImportFromNas()} disabled={isImportingFromNas || isLoadingNasStatus}>
-              {isImportingFromNas ? "Import in corso..." : "Importa documenti da NAS"}
+              {isImportingFromNas ? "Aggiornamento..." : "Aggiorna documenti"}
             </button>
           ) : null}
           {!isEditMode && canQuickImportFromNas ? (
             <button className="btn-primary" type="button" onClick={() => void handleImportFromNas()} disabled={isImportingFromNas || isLoadingNasStatus}>
-              {isImportingFromNas ? "Import in corso..." : `Importa ${nasImportStatus?.pending_files_in_nas ?? 0} file da NAS`}
+              {isImportingFromNas ? "Aggiornamento..." : "Aggiorna documenti"}
             </button>
           ) : null}
           {isEditMode && !nasImportStatus?.can_import_from_nas ? (
@@ -1151,7 +1150,7 @@ function DetailContent({
               ) : null}
               {canQuickImportFromNas ? (
                 <button className="btn-primary !px-3 !py-2 text-xs" type="button" onClick={() => void handleImportFromNas()} disabled={isImportingFromNas || isLoadingNasStatus}>
-                  {isImportingFromNas ? "Import in corso..." : `Importa ora (${nasImportStatus.pending_files_in_nas})`}
+                  {isImportingFromNas ? "Aggiornamento..." : `Aggiorna documenti (${nasImportStatus.pending_files_in_nas})`}
                 </button>
               ) : null}
             </div>
