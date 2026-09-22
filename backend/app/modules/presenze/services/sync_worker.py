@@ -23,6 +23,7 @@ from app.modules.presenze.services.credentials import (
     mark_credential_used,
     pick_credential,
 )
+from app.modules.presenze.services.dashboard_projection import publish_dashboard_snapshot
 from app.modules.presenze.services.import_jobs import (
     create_import_job,
     finalize_import_job,
@@ -101,6 +102,20 @@ def _failed_employee_codes(error_items: object) -> list[str]:
         seen.add(code)
         codes.append(code)
     return codes
+
+
+def _publish_dashboard_snapshot_if_complete(db: Session, job: PresenzeSyncJob, scrape_result: dict) -> list[str]:
+    errors = scrape_result.get("errors")
+    failed_employee_codes = _failed_employee_codes(errors)
+    if errors or int(scrape_result.get("failed_collaborators") or 0) > 0:
+        return failed_employee_codes
+    publish_dashboard_snapshot(
+        db,
+        period_start=job.period_start,
+        period_end=job.period_end,
+        source_sync_job_id=job.id,
+    )
+    return []
 
 
 def _failed_employee_retry_attempt(job: PresenzeSyncJob) -> int:
@@ -451,8 +466,8 @@ def run_job_by_id(job_id: str) -> int:
         job.params_json = final_params
         clear_sync_job_lease(job)
         db.add(job)
+        failed_employee_codes = _publish_dashboard_snapshot_if_complete(db, job, scrape_result)
         db.commit()
-        failed_employee_codes = _failed_employee_codes(scrape_result.get("errors"))
         retry_jobs = _enqueue_failed_employee_retry_jobs(
             db,
             source_job=job,
@@ -505,7 +520,7 @@ def run_job_by_id(job_id: str) -> int:
         return 0
     except StaleDataError:
         return _report_stale_sync_job_lease(db, job_id)
-    except Exception as exc:  # noqa: BLE001 - process boundary must persist every failure
+    except Exception as exc:
         return _report_sync_job_failure(db, job_id, claimed_lease_token, exc)
     finally:
         db.close()

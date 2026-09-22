@@ -13,6 +13,9 @@ from app.modules.presenze.models import (
     PresenzeDailyRecord,
     PresenzeEventSummary,
 )
+from app.modules.presenze.services.dashboard_snapshot_store import (
+    invalidate_all_dashboard_snapshots,
+)
 
 MAPPING_UNIQUE_INDEX = "uq_presenze_collaborators_application_user_id"
 
@@ -40,6 +43,7 @@ def apply_collaborator_mapping(
     )
     if not changed:
         return False
+    invalidate_all_dashboard_snapshots(db)
     commit_staged_collaborator_mappings(db)
     return True
 

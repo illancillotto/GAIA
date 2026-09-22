@@ -47,6 +47,7 @@ import {
   getPresenzeCollaboratorSummary,
   getPresenzeDailyRecord,
   getPresenzeDashboardSummary,
+  getPresenzeDashboardWorkspace,
   getPresenzeImportJob,
   getPresenzeRecoveryDashboard,
   getPresenzeScheduleBootstrapPreview,
@@ -582,6 +583,16 @@ describe("api presenze clients", () => {
     await expect(getPresenzeDashboardSummary(TOKEN, { periodStart: "2026-08-01", periodEnd: "2026-08-31" })).resolves.toEqual(payload);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/presenze/dashboard/summary?period_start=2026-08-01&period_end=2026-08-31",
+      expect.objectContaining({ headers: expect.objectContaining(AUTH) }),
+    );
+  });
+
+  test("getPresenzeDashboardWorkspace", async () => {
+    const payload = { summary: {}, review_cases: [], recent_collaborators: [], sync_jobs: [] };
+    const fetchMock = stubFetch(jsonResponse(payload));
+    await expect(getPresenzeDashboardWorkspace(TOKEN, { periodStart: "2026-08-01", periodEnd: "2026-08-31" })).resolves.toEqual(payload);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/presenze/dashboard?period_start=2026-08-01&period_end=2026-08-31",
       expect.objectContaining({ headers: expect.objectContaining(AUTH) }),
     );
   });

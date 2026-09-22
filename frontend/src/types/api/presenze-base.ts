@@ -339,6 +339,42 @@ export type PresenzeDashboardSummaryResponse = {
   schedule_stats: Array<{ code: string; count: number }>;
 };
 
+export type PresenzeDashboardReviewCase = {
+  record_id: string;
+  collaborator_id: string;
+  collaborator_name: string;
+  work_date: string;
+  schedule_label: string | null;
+  kind: "anomaly" | "analysis";
+  reason: string;
+  missing_minutes: number;
+  extra_minutes: number;
+  request_description: string | null;
+};
+
+export type PresenzeDashboardCollaborator = {
+  id: string;
+  application_user_id: number | null;
+  employee_code: string;
+  company_code: string | null;
+  company_label: string | null;
+  name: string;
+  birth_date: string | null;
+};
+
+export type PresenzeDashboardWorkspaceResponse = {
+  summary: PresenzeDashboardSummaryResponse;
+  review_cases: PresenzeDashboardReviewCase[];
+  recent_collaborators: PresenzeDashboardCollaborator[];
+  sync_jobs: import("./presenze-operations").PresenzeSyncJob[];
+  snapshot: {
+    cached: boolean;
+    stale: boolean;
+    generated_at: string;
+    source_sync_job_id: string | null;
+  };
+};
+
 export type MePresenzeSummaryResponse = {
   period_start: string;
   period_end: string;

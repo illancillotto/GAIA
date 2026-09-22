@@ -74,6 +74,9 @@ from app.modules.presenze.services.collaborator_mapping import (
 from app.modules.presenze.services.contract_profile import (
     normalize_operai_group,
 )
+from app.modules.presenze.services.dashboard_snapshot_store import (
+    invalidate_all_dashboard_snapshots,
+)
 from app.modules.presenze.services.operai_rules import (
     ensure_operai_rule_configs,
     load_operai_rule_configs,
@@ -488,7 +491,7 @@ def update_giornaliera(
         else:
             record.validated_by_user_id = None
             record.validated_at = None
-    db.add(record)
+    invalidate_all_dashboard_snapshots(db)
     db.commit()
     db.refresh(record)
     return _serialize_daily_record(db, record)

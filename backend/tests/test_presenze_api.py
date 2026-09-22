@@ -50,7 +50,8 @@ from app.modules.presenze.models import (
     PresenzeSyncJob,
 )
 from app.modules.presenze.services import collaborator_mapping as collaborator_mapping_service
-from app.modules.presenze.services import straordinari_export_job
+from app.modules.presenze.services import dashboard_projection, straordinari_export_job
+from app.modules.presenze.services.dashboard_projection import publish_dashboard_snapshot
 from app.modules.presenze.services.import_jobs import run_import_job
 from app.modules.presenze.services.parser import load_json_payload, parse_import_payload
 from app.modules.presenze.services.straordinari_export_job import (
@@ -673,6 +674,149 @@ def test_presenze_daily_listing_and_dashboard_track_recovery_day_usage() -> None
     assert dashboard.json()["recovery_days_balance_total"] == -1
 
 
+def test_presenze_dashboard_workspace_publishes_reads_and_invalidates_snapshot() -> None:
+    admin = _create_user("dashboard_snapshot_admin")
+    token = _login(admin.username)
+    imported = client.post(
+        "/presenze/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    endpoint = "/presenze/dashboard?period_start=2026-05-01&period_end=2026-05-31"
+    live_response = client.get(endpoint, headers={"Authorization": f"Bearer {token}"})
+    assert live_response.status_code == 200
+    assert live_response.json()["snapshot"]["cached"] is False
+    assert live_response.json()["summary"]["daily_records_total"] == 1
+    assert len(live_response.json()["recent_collaborators"]) == 1
+
+    db = TestingSessionLocal()
+    try:
+        sync_job = PresenzeSyncJob(
+            requested_by_user_id=admin.id,
+            period_start=date(2026, 5, 1),
+            period_end=date(2026, 5, 31),
+            status="completed",
+            finished_at=datetime.now(UTC),
+        )
+        db.add(sync_job)
+        db.flush()
+        publish_dashboard_snapshot(
+            db,
+            period_start=sync_job.period_start,
+            period_end=sync_job.period_end,
+            source_sync_job_id=sync_job.id,
+        )
+        sync_job_id = str(sync_job.id)
+        db.commit()
+    finally:
+        db.close()
+
+    cached_response = client.get(endpoint, headers={"Authorization": f"Bearer {token}"})
+    assert cached_response.status_code == 200
+    assert cached_response.json()["snapshot"]["cached"] is True
+    assert cached_response.json()["snapshot"]["stale"] is False
+    assert cached_response.json()["snapshot"]["source_sync_job_id"] == sync_job_id
+    assert cached_response.json()["sync_jobs"][0]["id"] == sync_job_id
+
+    collaborator_id = cached_response.json()["recent_collaborators"][0]["id"]
+    updated = client.put(
+        f"/presenze/collaborators/{collaborator_id}/application-user",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"application_user_id": admin.id, "reason": "Forza invalidazione dashboard"},
+    )
+    assert updated.status_code == 200
+
+    invalidated_response = client.get(endpoint, headers={"Authorization": f"Bearer {token}"})
+    assert invalidated_response.status_code == 200
+    assert invalidated_response.json()["snapshot"]["cached"] is False
+
+
+def test_presenze_dashboard_projection_covers_filtered_and_fallback_branches() -> None:
+    admin = _create_user("dashboard_projection_admin")
+    db = TestingSessionLocal()
+    try:
+        run_import_job(
+            db,
+            parsed=parse_import_payload(load_json_payload(_sample_payload())),
+            requested_by_user_id=admin.id,
+            filename="giornaliere.json",
+            params_json={"format": "collaboratori-json"},
+        )
+        record = db.query(PresenzeDailyRecord).one()
+        record.schedule_code = None
+        record.resolved_absence_cause = "ferie"
+        db.add(record)
+        clean_collaborator = PresenzeCollaborator(
+            employee_code="DASH-CLEAN",
+            company_code="53",
+            name="Dashboard Clean",
+        )
+        db.add(clean_collaborator)
+        db.flush()
+        db.add(
+            PresenzeDailyRecord(
+                collaborator_id=clean_collaborator.id,
+                work_date=date(2026, 5, 2),
+                raw_payload_json={},
+            )
+        )
+        db.commit()
+
+        summary = dashboard_projection.build_dashboard_summary(
+            db,
+            period_start=date(2026, 5, 1),
+            period_end=date(2026, 5, 31),
+            collaborator_filter=PresenzeCollaborator.id.is_not(None),
+            record_filter=PresenzeDailyRecord.id.is_not(None),
+        )
+        assert summary.cause_stats == {"ferie": 1}
+        assert summary.schedule_stats
+
+        assert dashboard_projection.build_dashboard_review_cases(
+            db,
+            period_start=date(2027, 1, 1),
+            period_end=date(2027, 1, 31),
+            record_filter=PresenzeDailyRecord.id.is_not(None),
+        ) == []
+        assert len(
+            dashboard_projection.build_recent_collaborators(
+                db,
+                collaborator_filter=PresenzeCollaborator.id.is_not(None),
+            )
+        ) == 2
+
+        first_source = uuid.uuid4()
+        second_source = uuid.uuid4()
+        first = dashboard_projection.publish_dashboard_snapshot(
+            db,
+            period_start=date(2026, 5, 1),
+            period_end=date(2026, 5, 31),
+            source_sync_job_id=first_source,
+        )
+        second = dashboard_projection.publish_dashboard_snapshot(
+            db,
+            period_start=date(2026, 5, 1),
+            period_end=date(2026, 5, 31),
+            source_sync_job_id=second_source,
+        )
+        assert second.id == first.id
+        assert second.source_sync_job_id == second_source
+    finally:
+        db.rollback()
+        db.close()
+
+    record_stub = SimpleNamespace(stato=None)
+    assert dashboard_projection._review_case_kind("blocking", [], None) == "anomaly"
+    assert dashboard_projection._review_case_kind("in_analysis", [], None) == "analysis"
+    assert dashboard_projection._review_case_kind("unknown", [], "errore") == "anomaly"
+    assert dashboard_projection._review_case_kind("ok", [], None) is None
+    assert dashboard_projection._review_case_reason(record_stub, ("", "Nota operativa"), [], {}) == "Nota operativa"
+    assert dashboard_projection._review_case_reason(record_stub, (), ["testo"], {"status": "Solo stato"}) == "Solo stato"
+    assert dashboard_projection._review_case_reason(record_stub, (), [], {}) == "Caso da verificare"
+
+
 def test_presenze_recovery_adjustments_crud_and_dashboard() -> None:
     admin = _create_user("recovery_adjustments_admin")
     token = _login(admin.username)
@@ -1031,6 +1175,26 @@ def test_presenze_daily_record_manual_overrides_update_effective_values() -> Non
     assert listing.status_code == 200
     record_id = listing.json()["items"][0]["id"]
 
+    db = TestingSessionLocal()
+    try:
+        publish_dashboard_snapshot(
+            db,
+            period_start=date(2026, 5, 1),
+            period_end=date(2026, 5, 31),
+            source_sync_job_id=uuid.uuid4(),
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    dashboard_endpoint = "/presenze/dashboard?period_start=2026-05-01&period_end=2026-05-31"
+    cached_dashboard = client.get(
+        dashboard_endpoint,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert cached_dashboard.status_code == 200
+    assert cached_dashboard.json()["snapshot"]["cached"] is True
+
     updated = client.patch(
         f"/presenze/giornaliere/{record_id}",
         headers={"Authorization": f"Bearer {token}"},
@@ -1059,6 +1223,14 @@ def test_presenze_daily_record_manual_overrides_update_effective_values() -> Non
     assert body["effective_straordinario_minutes"] == 90
     assert body["effective_mpe_minutes"] == 15
     assert body["effective_extra_minutes"] == 105
+
+    refreshed_dashboard = client.get(
+        dashboard_endpoint,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert refreshed_dashboard.status_code == 200
+    assert refreshed_dashboard.json()["snapshot"]["cached"] is False
+    assert refreshed_dashboard.json()["summary"]["extra_minutes_total"] == 105
 
 
 def test_presenze_daily_record_detail_includes_raw_detail_punch_rows() -> None:
@@ -3447,6 +3619,15 @@ def test_presenze_canonical_hierarchy_manager_sees_mapped_subordinate_records() 
     assert manager_dashboard.status_code == 200
     assert manager_dashboard.json()["collaborators_total"] == 1
     assert manager_dashboard.json()["daily_records_total"] == 1
+
+    manager_workspace = client.get(
+        "/presenze/dashboard?period_start=2026-05-01&period_end=2026-05-31",
+        headers={"Authorization": f"Bearer {manager_token}"},
+    )
+    assert manager_workspace.status_code == 200
+    assert manager_workspace.json()["summary"]["collaborators_total"] == 1
+    assert manager_workspace.json()["summary"]["daily_records_total"] == 1
+    assert manager_workspace.json()["snapshot"]["cached"] is False
 
     access_context = client.get("/presenze/access-context", headers={"Authorization": f"Bearer {manager_token}"})
     assert access_context.status_code == 200

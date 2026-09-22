@@ -363,7 +363,11 @@ Pattern runtime rilevanti introdotti nei moduli operativi:
 - le route lista che possono includere collezioni figlie, come timbrature o eventi, devono prevedere flag espliciti tipo `include_*` per evitare payload e query inutili
 
 Caso applicato nel modulo `presenze`:
-- `/presenze/dashboard/summary` calcola lato backend i KPI del mese usati dalla dashboard `frontend/src/app/presenze/page.tsx`
+- `GET /presenze/dashboard` restituisce in una sola risposta KPI mensili, casi prioritari, collaboratori recenti, storico sync e metadati dello snapshot usati da `frontend/src/app/presenze/page.tsx`
+- per gli utenti con visibilita globale il workspace legge `presenze_dashboard_snapshots`, una proiezione mensile aggiornata dal worker soltanto dopo una sync INAZ completata senza errori o collaboratori falliti; una sync incompleta conserva l'ultimo snapshot valido e la risposta lo segnala come stale
+- mapping collaboratori e rettifiche manuali delle giornaliere invalidano gli snapshot nella stessa transazione della modifica; gli utenti con visibilita limitata non leggono mai lo snapshot globale e ricevono una proiezione live filtrata sul proprio perimetro
+- `/presenze/dashboard/summary` resta disponibile come endpoint legacy per il solo riepilogo mensile
+- la ricerca collaboratori della dashboard usa la lista paginata lato server con debounce, invece di scaricare l'intera anagrafica al primo rendering
 - `/presenze/giornaliere` supporta `include_punches=false` per il caricamento della matrice mensile
 - il dettaglio completo della singola giornata viene caricato on demand tramite `GET /presenze/giornaliere/{record_id}`
 - il backend pre-carica le timbrature in bulk solo quando richiesto, evitando query N+1 in serializzazione

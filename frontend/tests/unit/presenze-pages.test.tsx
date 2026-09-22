@@ -16,6 +16,7 @@ import { PRESENZE_COLLABORATOR_DETAIL_UPDATED_MESSAGE } from "@/lib/presenze-col
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
   getPresenzeDashboardSummary: vi.fn(),
+  getPresenzeDashboardWorkspace: vi.fn(),
   getCurrentUser: vi.fn(),
   listAllApplicationUsers: vi.fn(),
   listAllPresenzeCollaborators: vi.fn(),
@@ -59,6 +60,7 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/api", () => ({
   getPresenzeDashboardSummary: mocks.getPresenzeDashboardSummary,
+  getPresenzeDashboardWorkspace: mocks.getPresenzeDashboardWorkspace,
   getCurrentUser: mocks.getCurrentUser,
   listAllApplicationUsers: mocks.listAllApplicationUsers,
   listAllPresenzeCollaborators: mocks.listAllPresenzeCollaborators,
@@ -112,6 +114,61 @@ describe("Presenze pages", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     mocks.getStoredAccessToken.mockReturnValue("token");
+    mocks.getPresenzeDashboardWorkspace.mockImplementation(async (...args: unknown[]) => {
+      const [summary, syncJobs, matrix, collaborators] = await Promise.all([
+        mocks.getPresenzeDashboardSummary(...args),
+        mocks.listPresenzeSyncJobs("token", { limit: 6 }),
+        mocks.listPresenzeDailyMatrixRecords("token", expect.anything()),
+        mocks.listAllPresenzeCollaborators("token"),
+      ]);
+      return {
+        summary,
+        sync_jobs: syncJobs,
+        review_cases: matrix.items
+          .filter(
+            (record: { operational_status: string; detail_anomalies?: unknown[]; detail_error?: unknown }) =>
+              ["blocking", "in_analysis"].includes(record.operational_status) ||
+              (record.operational_status === "unknown" && Boolean(record.detail_anomalies?.length || record.detail_error)),
+          )
+          .slice(0, 5)
+          .map((record: Record<string, unknown>) => ({
+            record_id: record.id,
+            collaborator_id: record.collaborator_id,
+            collaborator_name:
+              collaborators.find((item: { id: unknown }) => item.id === record.collaborator_id)?.name ?? record.collaborator_id,
+            work_date: record.work_date,
+            schedule_label: record.detail_programmed_schedule ?? record.schedule_code ?? null,
+            kind: record.operational_status === "in_analysis" ? "analysis" : "anomaly",
+            reason: (() => {
+              const anomaly = (record.detail_anomalies as Array<Record<string, string>>)?.[0];
+              if (anomaly) {
+                return anomaly.anomaliagiornata ?? anomaly["Anomalia giornata"] ?? anomaly.col_1 ?? record.detail_status ?? record.stato ?? "Anomalia da verificare";
+              }
+              return (record.operational_notes as string[])?.find((note) => note.trim()) ?? record.detail_error ?? record.detail_status ?? record.stato ?? "Caso da verificare";
+            })(),
+            missing_minutes: record.operational_missing_minutes ?? 0,
+            extra_minutes: record.effective_extra_minutes ?? 0,
+            request_description: record.request_description ?? null,
+          })),
+        recent_collaborators: collaborators.slice(0, 6),
+        snapshot: { cached: true, stale: false, generated_at: "2026-05-29T09:00:00Z", source_sync_job_id: null },
+      };
+    });
+    mocks.listPresenzeCollaborators.mockImplementation(async (_token: string, params: { q?: string } = {}) => {
+      const items = await mocks.listAllPresenzeCollaborators();
+      const query = params.q?.trim().toLowerCase() ?? "";
+      const filtered = query
+        ? items.filter((item: Record<string, unknown>) =>
+            [item.name, item.employee_code, item.company_label].some((value) =>
+              (typeof value === "object" && value !== null
+                ? String((value as Record<string, unknown>).name ?? (value as Record<string, unknown>).employee_code ?? "")
+                : String(value ?? "")
+              ).toLowerCase().includes(query),
+            ),
+          )
+        : items;
+      return { items: filtered.slice(0, 10), total: filtered.length, page: 1, page_size: 10 };
+    });
     mocks.getCurrentUser.mockResolvedValue({
       id: 1,
       username: "admin",
@@ -2974,6 +3031,7 @@ describe("Presenze pages", () => {
     expect(fallbackCollaboratorButton?.textContent).toContain("Matricola n/d");
     expect(fallbackCollaboratorButton?.textContent).toContain("Data nascita n/d");
 
+    mocks.listPresenzeCollaborators.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 10 });
     fireEvent.change(screen.getByPlaceholderText("Cerca per nome, matricola o azienda"), {
       target: { value: "nessun-match" },
     });
@@ -3050,6 +3108,23 @@ describe("Presenze pages", () => {
     expect(screen.getByText(/Matricola ZX-01/)).toBeInTheDocument();
     expect(screen.getByText(/Data nascita n\/d/)).toBeInTheDocument();
 
+    mocks.listPresenzeCollaborators.mockResolvedValue({
+      items: [
+        {
+          id: "collab-weird-2",
+          application_user_id: 7,
+          employee_code: "ZX-02",
+          company_code: "88",
+          company_label: "88 - Searchable",
+          name: { name: "NOME OGGETTO" },
+          birth_date: "1980-01-01",
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 10,
+    });
+
     fireEvent.change(screen.getByPlaceholderText("Cerca per nome, matricola o azienda"), {
       target: { value: "searchable" },
     });
@@ -3075,21 +3150,67 @@ describe("Presenze pages", () => {
     expect(await screen.findByText("errore dashboard")).toBeInTheDocument();
   });
 
-  test("shows collaborator load error and cleans up idle callback on unmount", async () => {
-    const requestIdleCallback = vi.fn((callback: IdleRequestCallback) => {
-      callback({ didTimeout: false, timeRemaining: () => 1 } as IdleDeadline);
-      return 7;
-    });
-    const cancelIdleCallback = vi.fn();
-    Object.defineProperty(window, "requestIdleCallback", {
-      configurable: true,
-      value: requestIdleCallback,
-    });
-    Object.defineProperty(window, "cancelIdleCallback", {
-      configurable: true,
-      value: cancelIdleCallback,
+  test("shows remote collaborator search errors", async () => {
+    render(<PresenzePage />);
+    expect(await screen.findByText("AMADU SALVATORE")).toBeInTheDocument();
+    mocks.listPresenzeCollaborators.mockRejectedValue(new Error("ricerca collaboratori non disponibile"));
+
+    fireEvent.change(screen.getByPlaceholderText("Cerca per nome, matricola o azienda"), {
+      target: { value: "amadu" },
     });
 
+    expect(await screen.findByText("ricerca collaboratori non disponibile")).toBeInTheDocument();
+
+    mocks.listPresenzeCollaborators.mockRejectedValue("boom");
+    fireEvent.change(screen.getByPlaceholderText("Cerca per nome, matricola o azienda"), {
+      target: { value: "rossi" },
+    });
+    expect(await screen.findByText("Errore ricerca collaboratori giornaliere")).toBeInTheDocument();
+  });
+
+  test("ignores a remote collaborator response after unmount", async () => {
+    let resolveSearch: (value: { items: []; total: number; page: number; page_size: number }) => void = () => {
+      throw new Error("resolveSearch not captured");
+    };
+    const searchPromise = new Promise<{ items: []; total: number; page: number; page_size: number }>((resolve) => {
+      resolveSearch = resolve;
+    });
+
+    const { unmount } = render(<PresenzePage />);
+    expect(await screen.findByText("AMADU SALVATORE")).toBeInTheDocument();
+    mocks.listPresenzeCollaborators.mockReturnValue(searchPromise);
+    fireEvent.change(screen.getByPlaceholderText("Cerca per nome, matricola o azienda"), {
+      target: { value: "amadu" },
+    });
+    await waitFor(() => expect(mocks.listPresenzeCollaborators).toHaveBeenCalled());
+
+    unmount();
+    resolveSearch({ items: [], total: 0, page: 1, page_size: 10 });
+    await searchPromise;
+  });
+
+  test("ignores a remote collaborator error after unmount", async () => {
+    let rejectSearch: (reason?: unknown) => void = () => {
+      throw new Error("rejectSearch not captured");
+    };
+    const searchPromise = new Promise<never>((_resolve, reject) => {
+      rejectSearch = reject;
+    });
+
+    const { unmount } = render(<PresenzePage />);
+    expect(await screen.findByText("AMADU SALVATORE")).toBeInTheDocument();
+    mocks.listPresenzeCollaborators.mockReturnValue(searchPromise);
+    fireEvent.change(screen.getByPlaceholderText("Cerca per nome, matricola o azienda"), {
+      target: { value: "amadu" },
+    });
+    await waitFor(() => expect(mocks.listPresenzeCollaborators).toHaveBeenCalled());
+
+    unmount();
+    rejectSearch(new Error("late search failure"));
+    await expect(searchPromise).rejects.toThrow("late search failure");
+  });
+
+  test("shows a workspace error when initial collaborators cannot load", async () => {
     mocks.getPresenzeDashboardSummary.mockResolvedValue({
       collaborators_total: 0,
       mapped_collaborators_total: 0,
@@ -3124,16 +3245,9 @@ describe("Presenze pages", () => {
     });
     mocks.listAllPresenzeCollaborators.mockRejectedValue("boom");
 
-    const { unmount } = render(<PresenzePage />);
+    render(<PresenzePage />);
 
-    expect(await screen.findByText("Errore caricamento collaboratori giornaliere")).toBeInTheDocument();
-
-    unmount();
-    expect(requestIdleCallback).toHaveBeenCalled();
-    expect(cancelIdleCallback).toHaveBeenCalledWith(7);
-
-    Reflect.deleteProperty(window, "requestIdleCallback");
-    Reflect.deleteProperty(window, "cancelIdleCallback");
+    expect(await screen.findByText("Errore caricamento modulo Giornaliere")).toBeInTheDocument();
   });
 
   test("shows Error instance message when collaborator load fails", async () => {

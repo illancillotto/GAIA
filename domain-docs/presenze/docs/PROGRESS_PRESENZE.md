@@ -465,7 +465,8 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
   - distribuzione causali principali (`ferie`, `permesso`, `malattia`);
   - codici orario / turni prevalenti del mese;
   - sezione finale **`Casi da verificare`** con i casi prioritari del mese estratti dalle giornaliere, pensata come triage rapido per responsabili e operatori prima di entrare nel workspace completo `/presenze/anomalie`;
-  - caricamento con paginazione completa delle giornaliere del mese, non piu campione ridotto;
+  - caricamento tramite il workspace aggregato `GET /presenze/dashboard`, senza trasferire al browser tutte le giornaliere del mese;
+  - ricerca collaboratori on demand lato server, con debounce e massimo dieci risultati per richiesta;
 - pagina `/presenze/settings` per gestione credenziali Inaz;
 - lista `/presenze/collaboratori`;
 - lista `/presenze/collaboratori` con suggerimento automatico di mapping verso utenti GAIA;
@@ -810,6 +811,24 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
   passa da complessita cognitiva `47` a `29` e ciclomatica `26` a `24`, con
   LOC del file invariata.
 
+### Snapshot mensile dashboard Presenze - 2026-09-22
+
+- introdotto `GET /presenze/dashboard`, che restituisce in un unico payload KPI,
+  cinque casi prioritari, collaboratori recenti, storico sync e metadati cache;
+- la dashboard `/presenze` richiede soltanto il mese corrente e non scarica piu
+  fino a 5.000 giornaliere ne l'intera anagrafica collaboratori al primo render;
+- la proiezione globale e persistita in `presenze_dashboard_snapshots` e viene
+  pubblicata dal worker soltanto quando la sync INAZ termina senza errori e con
+  `failed_collaborators = 0`; una sync fallita mantiene disponibile l'ultimo
+  snapshot valido, marcato stale rispetto al job piu recente;
+- mapping collaboratori e PATCH manuali delle giornaliere invalidano gli
+  snapshot nella stessa transazione della modifica, evitando KPI non coerenti;
+- gli utenti con visibilita limitata non leggono mai lo snapshot globale: il
+  backend costruisce live la stessa proiezione applicando i filtri di accesso;
+- `GET /presenze/dashboard/summary` resta compatibile per i client legacy;
+- copertura backend e frontend del perimetro runtime modificato al `100%` su
+  statement, branch, funzioni e righe; quality ratchet senza findings.
+
 ## Gap aperti
 
 ### Soglia MPE a cinque ore con avviso non bloccante - 2026-09-09
@@ -833,7 +852,6 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
 - la banca ore e oggi modellata come workflow HR su snapshot/eventi importati `Banca ore*` + rettifiche manuali approvabili:
   - non e ancora stato implementato il contatore storico esterno usato da Carlo per la liquidazione;
   - restano da chiarire le eventuali regole CCNL aggiuntive su maturazione/decadenza oltre ai semplici vincoli di saldo e approvazione;
-- la dashboard macro mese e stata arricchita, ma i KPI sono ancora calcolati in frontend da tutte le giornaliere del mese; un endpoint aggregato backend dedicato resta un miglioramento utile per performance;
 - la UI dedicata per festivita e recuperi HR e ora presente; restano ancora migliorabili export/report e viste operative avanzate;
 - `Trasferte` sono ora esportate se presenti nel record GAIA (`trasferta_minutes`); resta ancora aperta l'estrazione affidabile automatica dal portale Inaz quando il dato non arriva gia strutturato nel payload;
 - il tracciato HR legacy di export ha una sola cella giornaliera per `N. ORE TRASFERTA / COMUNE MONTANO (X)`: per questo in export `trasferta_montano` ha priorita sul numero ore, mentre in GAIA i due dati restano distinti;

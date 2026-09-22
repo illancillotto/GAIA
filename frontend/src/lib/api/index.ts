@@ -3,6 +3,7 @@ export * from "./platform";
 export * from "./organigramma";
 export * from "./presenze-people";
 export * from "./presenze-management";
+export * from "./presenze-dashboard";
 export * from "./presenze-jobs";
 export * from "./presenze-whatsapp";
 export * from "./wiki-requests";

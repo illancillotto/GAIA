@@ -11,10 +11,14 @@ import {
   ModuleWorkspaceMiniStat,
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
-import { getPresenzeDashboardSummary, listAllPresenzeCollaborators, listPresenzeDailyMatrixRecords, listPresenzeSyncJobs } from "@/lib/api";
+import { getPresenzeDashboardWorkspace } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { getPresenzeCompanyLabel } from "@/lib/presenze-display";
-import type { PresenzeCollaborator, PresenzeDailyRecord, PresenzeDashboardSummaryResponse, PresenzeSyncJob } from "@/types/api";
+import type { PresenzeDashboardCollaborator, PresenzeDashboardWorkspaceResponse } from "@/types/api";
+
+import { useDashboardCollaborators } from "./use-dashboard-collaborators";
+
+const EMPTY_DASHBOARD_COLLABORATORS: PresenzeDashboardCollaborator[] = [];
 
 function currentMonthBounds(): { start: string; end: string } {
   const now = new Date();
@@ -50,118 +54,28 @@ function safeDisplay(value: unknown, fallback = "n/d"): string {
   return fallback;
 }
 
-type DashboardReviewCase = {
-  record: PresenzeDailyRecord;
-  collaboratorName: string;
-  kind: "anomaly" | "analysis";
-  reason: string;
-};
-
-function dashboardCaseKind(record: PresenzeDailyRecord): "anomaly" | "analysis" | null {
-  if (record.operational_status === "blocking") return "anomaly";
-  if (record.operational_status === "in_analysis") return "analysis";
-  if (record.operational_status === "unknown" && (record.detail_anomalies.length > 0 || record.detail_error)) return "anomaly";
-  return null;
-}
-
-function dashboardCaseReason(record: PresenzeDailyRecord): string {
-  const anomaly = record.detail_anomalies[0];
-  if (anomaly) {
-    return anomaly.anomaliagiornata ?? anomaly["Anomalia giornata"] ?? anomaly.col_1 ?? record.detail_status ?? record.stato ?? "Anomalia da verificare";
-  }
-  const operationalNote = record.operational_notes.find((note) => note.trim());
-  if (operationalNote) return operationalNote;
-  return record.detail_error ?? record.detail_status ?? record.stato ?? "Caso da verificare";
-}
-
-function dashboardCasePriority(record: PresenzeDailyRecord, kind: "anomaly" | "analysis"): number {
-  const severity = kind === "anomaly" ? 0 : 1;
-  const missingMinutes = record.operational_missing_minutes ?? 0;
-  const extraMinutes = record.effective_extra_minutes ?? 0;
-  return severity * 1000000 - (missingMinutes * 10 + extraMinutes);
-}
-
 export default function PresenzePage() {
-  const [summary, setSummary] = useState<PresenzeDashboardSummaryResponse | null>(null);
-  const [collaborators, setCollaborators] = useState<PresenzeCollaborator[]>([]);
-  const [reviewRecords, setReviewRecords] = useState<PresenzeDailyRecord[]>([]);
-  const [jobs, setJobs] = useState<PresenzeSyncJob[]>([]);
-  const [selectedCollaborator, setSelectedCollaborator] = useState<PresenzeCollaborator | null>(null);
-  const [collaboratorSearch, setCollaboratorSearch] = useState("");
-  const [isCollaboratorsLoading, setIsCollaboratorsLoading] = useState(false);
+  const [workspace, setWorkspace] = useState<PresenzeDashboardWorkspaceResponse | null>(null);
+  const [selectedCollaborator, setSelectedCollaborator] = useState<PresenzeDashboardCollaborator | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { collaboratorSearch, isCollaboratorsLoading, recentCollaborators, setCollaboratorSearch } =
+    useDashboardCollaborators(workspace?.recent_collaborators ?? EMPTY_DASHBOARD_COLLABORATORS, setError);
 
   useEffect(() => {
     const token = getStoredAccessToken();
     if (!token) return;
     const { start, end } = currentMonthBounds();
-    Promise.all([
-      getPresenzeDashboardSummary(token, { periodStart: start, periodEnd: end }),
-      listPresenzeSyncJobs(token, { limit: 6 }),
-      listPresenzeDailyMatrixRecords(token, { dateFrom: start, dateTo: end, page: 1, pageSize: 5000 }),
-    ])
-      .then(([dashboardSummary, jobsResponse, reviewResponse]) => {
-        setSummary(dashboardSummary);
-        setJobs(jobsResponse);
-        setReviewRecords(reviewResponse.items);
-      })
+    getPresenzeDashboardWorkspace(token, { periodStart: start, periodEnd: end })
+      .then(setWorkspace)
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento modulo Giornaliere"));
   }, []);
 
-  useEffect(() => {
-    const token = getStoredAccessToken();
-    if (!token) return;
-
-    let cancelled = false;
-    const loadCollaborators = () => {
-      setIsCollaboratorsLoading(true);
-      listAllPresenzeCollaborators(token)
-        .then((items) => {
-          if (!cancelled) {
-            setCollaborators(items);
-          }
-        })
-        .catch((loadError) => {
-          if (!cancelled) {
-            setError(loadError instanceof Error ? loadError.message : "Errore caricamento collaboratori giornaliere");
-          }
-        })
-        .finally(() => {
-          if (!cancelled) {
-            setIsCollaboratorsLoading(false);
-          }
-        });
-    };
-
-    const useIdleCallback = typeof window !== "undefined" && "requestIdleCallback" in window;
-    const handle = useIdleCallback ? window.requestIdleCallback(loadCollaborators, { timeout: 800 }) : window.setTimeout(loadCollaborators, 150);
-
-    return () => {
-      cancelled = true;
-      if (useIdleCallback && "cancelIdleCallback" in window) {
-        window.cancelIdleCallback(handle);
-      } else {
-        window.clearTimeout(handle);
-      }
-    };
-  }, []);
-
+  const summary = workspace?.summary ?? null;
+  const reviewCases = workspace?.review_cases ?? [];
+  const jobs = workspace?.sync_jobs ?? [];
   const mappedCount = summary?.mapped_collaborators_total ?? 0;
   const dashboardMonthLabel = useMemo(() => formatMonthLabelFromIso(currentMonthBounds().start), []);
-  const collaboratorNameById = useMemo(() => new Map(collaborators.map((item) => [item.id, item.name])), [collaborators]);
   const normalizedCollaboratorSearch = collaboratorSearch.trim().toLowerCase();
-  const recentCollaborators = useMemo(() => {
-    const baseItems = normalizedCollaboratorSearch
-      ? collaborators.filter((item) =>
-          [
-            safeDisplay(item.name, "").toLowerCase(),
-            safeDisplay(item.employee_code, "").toLowerCase(),
-            getPresenzeCompanyLabel(item.company_label, item.company_code, "").toLowerCase(),
-          ].some((value) => value.includes(normalizedCollaboratorSearch)),
-        )
-      : collaborators;
-    return baseItems.slice(0, normalizedCollaboratorSearch ? 10 : 6);
-  }, [collaborators, normalizedCollaboratorSearch]);
   const ordinaryMinutes = summary?.ordinary_minutes_total ?? 0;
   const absenceMinutes = summary?.absence_minutes_total ?? 0;
   const extraMinutes = summary?.extra_minutes_total ?? 0;
@@ -198,22 +112,6 @@ export default function PresenzePage() {
       ? `Avanzamento ${latestJobProgress.index}/${latestJobProgress.total} · completati ${latestJobProgress.completed_collaborators ?? 0} · falliti ${latestJobProgress.failed_collaborators ?? latestJob.records_errors}`
       : `Periodo ${latestJob.period_start} / ${latestJob.period_end} · importati ${latestJob.records_imported} · errori ${latestJob.records_errors}`
     : "Avvia una sync giornaliere per popolare il modulo.";
-  const dashboardReviewCases = useMemo(() => {
-    return reviewRecords
-      .map((record) => {
-        const kind = dashboardCaseKind(record);
-        if (!kind) return null;
-        return {
-          record,
-          collaboratorName: collaboratorNameById.get(record.collaborator_id) ?? record.collaborator_id,
-          kind,
-          reason: dashboardCaseReason(record),
-        } satisfies DashboardReviewCase;
-      })
-      .filter((item): item is DashboardReviewCase => item !== null)
-      .sort((left, right) => dashboardCasePriority(left.record, left.kind) - dashboardCasePriority(right.record, right.kind))
-      .slice(0, 5);
-  }, [collaboratorNameById, reviewRecords]);
 
   return (
     <ProtectedPage title="GAIA Giornaliere" description="Collaboratori, giornaliere e riepiloghi eventi del portale presenze." breadcrumb="Giornaliere" requiredModule="presenze">
@@ -356,32 +254,32 @@ export default function PresenzePage() {
                 Apri pagina anomalie
               </Link>
             </div>
-            {dashboardReviewCases.length > 0 ? (
+            {reviewCases.length > 0 ? (
               <div className="grid gap-3 xl:grid-cols-2">
-                {dashboardReviewCases.map(({ record, collaboratorName, kind, reason }) => (
-                  <div key={record.id} className={`rounded-2xl border px-4 py-4 ${kind === "anomaly" ? "border-red-200 bg-red-50/60" : "border-amber-200 bg-amber-50/60"}`}>
+                {reviewCases.map((reviewCase) => (
+                  <div key={reviewCase.record_id} className={`rounded-2xl border px-4 py-4 ${reviewCase.kind === "anomaly" ? "border-red-200 bg-red-50/60" : "border-amber-200 bg-amber-50/60"}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="font-semibold text-gray-950">{collaboratorName}</p>
-                        <p className="mt-1 text-xs text-gray-500">{record.work_date} · {record.detail_programmed_schedule ?? record.schedule_code ?? "Orario non disponibile"}</p>
+                        <p className="font-semibold text-gray-950">{reviewCase.collaborator_name}</p>
+                        <p className="mt-1 text-xs text-gray-500">{reviewCase.work_date} · {reviewCase.schedule_label ?? "Orario non disponibile"}</p>
                       </div>
-                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${kind === "anomaly" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>
-                        {kind === "anomaly" ? "Bloccante" : "Da verificare"}
+                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${reviewCase.kind === "anomaly" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>
+                        {reviewCase.kind === "anomaly" ? "Bloccante" : "Da verificare"}
                       </span>
                     </div>
-                    <p className="mt-3 text-sm font-medium text-gray-800">{reason}</p>
+                    <p className="mt-3 text-sm font-medium text-gray-800">{reviewCase.reason}</p>
                     <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-                      {record.operational_missing_minutes && record.operational_missing_minutes > 0 ? (
+                      {reviewCase.missing_minutes > 0 ? (
                         <span className="rounded-full bg-white px-2.5 py-1 font-medium text-red-700">
-                          Mancano {formatHours(record.operational_missing_minutes)}
+                          Mancano {formatHours(reviewCase.missing_minutes)}
                         </span>
                       ) : null}
-                      {record.effective_extra_minutes && record.effective_extra_minutes > 0 ? (
+                      {reviewCase.extra_minutes > 0 ? (
                         <span className="rounded-full bg-white px-2.5 py-1 font-medium text-emerald-700">
-                          Extra {formatHours(record.effective_extra_minutes)}
+                          Extra {formatHours(reviewCase.extra_minutes)}
                         </span>
                       ) : null}
-                      {record.request_description ? (
+                      {reviewCase.request_description ? (
                         <span className="rounded-full bg-white px-2.5 py-1 font-medium text-sky-700">
                           Richiesta presente
                         </span>
@@ -433,7 +331,7 @@ export default function PresenzePage() {
               ) : null}
             </div>
             <div className="space-y-3">
-              {isCollaboratorsLoading && collaborators.length === 0 ? <p className="text-sm text-gray-500">Caricamento collaboratori…</p> : null}
+              {isCollaboratorsLoading && recentCollaborators.length === 0 ? <p className="text-sm text-gray-500">Caricamento collaboratori…</p> : null}
               {recentCollaborators.map((item) => (
                 <button
                   key={item.id}

@@ -212,6 +212,39 @@ def test_failed_employee_retry_helpers_respect_guards(monkeypatch: pytest.Monkey
     assert sync_worker._enqueue_failed_employee_retry_jobs(_FakeDb(job=job), source_job=job, failed_codes=["A1"]) == []
 
 
+def test_dashboard_snapshot_is_published_only_without_failed_collaborators(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    job = _make_job()
+    published: list[tuple[date, date, object]] = []
+    monkeypatch.setattr(
+        sync_worker,
+        "publish_dashboard_snapshot",
+        lambda _db, *, period_start, period_end, source_sync_job_id: published.append(
+            (period_start, period_end, source_sync_job_id)
+        ),
+    )
+
+    assert sync_worker._publish_dashboard_snapshot_if_complete(object(), job, {"errors": []}) == []
+    assert published == [(job.period_start, job.period_end, job.id)]
+
+    published.clear()
+    assert sync_worker._publish_dashboard_snapshot_if_complete(
+        object(), job, {"errors": [{"employee_code": "A1"}]}
+    ) == ["A1"]
+    assert published == []
+
+    assert sync_worker._publish_dashboard_snapshot_if_complete(
+        object(), job, {"errors": [{"message": "Errore generale INAZ"}]}
+    ) == []
+    assert published == []
+
+    assert sync_worker._publish_dashboard_snapshot_if_complete(
+        object(), job, {"errors": [], "failed_collaborators": 1}
+    ) == []
+    assert published == []
+
+
 def test_handle_termination_leaves_job_for_lease_recovery() -> None:
     sync_worker.CURRENT_JOB_ID = None
     with pytest.raises(SystemExit, match="143"):
