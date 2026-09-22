@@ -1,5 +1,37 @@
 # Stato sincronizzazione INAZ negli snapshot GaTe Mobile
 
+## Formato ore.minuti negli export XLSM — 22 settembre 2026
+
+Il contratto di sincronizzazione non cambia: `export_ordinary_minutes`,
+`export_extra_minutes`, le categorie e `trasferta_minutes` sono minuti numerici.
+La route LAN `mobile_sync.presenze_giornaliere` e il job outbound usano lo stesso
+`build_presenze_giornaliere_push_payload`, con categorie serializzate da
+`gate_mobile_payloads._canonical_export_values`. Non inviare `6.30` come minuti.
+
+La conversione riguarda soltanto la scrittura del file Excel, sia nel
+compilatore GATE sia nell'export autonomo GAIA `services/xlsm_export.py`:
+
+| Durata | Archivio (decimale) | Archivio2 / dettaglio Giornaliera2 (ore.minuti) |
+| --- | --- | --- |
+| 390 minuti | 6,50 | 6,30 |
+| 20 minuti | 0,333… | 0,20 |
+| 59 minuti | 0,98333… | 0,59 |
+
+Le formule originali della scheda GAIA convertono il dettaglio ore.minuti nelle
+colonne di calcolo decimali; GATE ripristina questa conversione nel compilatore.
+Il totale giornaliero della scheda e ore.minuti; i totali mensili restano decimali.
+Anche la trasferta numerica segue la conversione: il totale AJ22 deve convertire
+le singole durate prima di sommarle (40 + 40 minuti = 1,333… ore, non 0,80).
+Il marcatore montano `X`, KM, quantita e codici restano distinti dalle durate.
+
+Nessuna migrazione DB, rielaborazione INAZ o risincronizzazione e necessaria.
+Gli export gia scaricati non cambiano automaticamente; vanno rigenerati o
+convertiti conservando formule, macro e il riepilogo decimale. Il rilascio
+riguarda i compilatori nei due progetti, non il payload di sincronizzazione.
+
+Evidenze test, copertura e limiti del ratchet:
+[XLSM_ORE_MINUTI_2026-09-22.md](XLSM_ORE_MINUTI_2026-09-22.md).
+
 ## Classificazione minuti XLSM — aggiornamento 2026-09-09
 
 Nel ramo con dettaglio INAZ autorevole, `schedule_engine.classify_daily_record`

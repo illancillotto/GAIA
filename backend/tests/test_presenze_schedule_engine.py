@@ -1662,8 +1662,8 @@ def test_write_archive2_daily_values_omits_absence_code_when_day_has_work_presen
         absence_code_col = 8 + (16 - 1) + 436
         ordinary_col = 8 + (16 - 1)
         extra_col = 8 + (16 - 1) + 155
-        assert ws.cell(5, ordinary_col).value == 5.5
-        assert ws.cell(5, extra_col).value == 1.25
+        assert ws.cell(5, ordinary_col).value == 5.30
+        assert ws.cell(5, extra_col).value == 1.15
         assert ws.cell(5, absence_code_col).value is None
     finally:
         close_workbook_resources(workbook)

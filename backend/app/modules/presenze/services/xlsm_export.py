@@ -8,10 +8,21 @@ from openpyxl import load_workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
 from app.core.config import settings
-from app.modules.presenze.models import PresenzeCollaborator, PresenzeDailyPunch, PresenzeDailyRecord
+from app.modules.presenze.models import (
+    PresenzeCollaborator,
+    PresenzeDailyPunch,
+    PresenzeDailyRecord,
+)
+from app.modules.presenze.services.contract_profile import (
+    PRESENZE_CONTRACT_KIND_OPERAIO,
+    resolve_contract_profile,
+)
 from app.modules.presenze.services.parser import detail_indicates_special_day
-from app.modules.presenze.services.contract_profile import PRESENZE_CONTRACT_KIND_OPERAIO, resolve_contract_profile
-from app.modules.presenze.services.schedule_engine import DayClassification, ScheduleContext, classify_daily_record
+from app.modules.presenze.services.schedule_engine import (
+    DayClassification,
+    ScheduleContext,
+    classify_daily_record,
+)
 
 MONTHS_IT = [
     "gennaio",
@@ -153,6 +164,12 @@ def minutes_to_excel_hours(value: int | None) -> float | None:
     return value / 60
 
 
+def minutes_to_excel_hours_minutes(value: int | None) -> float | None:
+    if value is None:
+        return None
+    return (value // 60 * 100 + value % 60) / 100
+
+
 def normalize_request_display_label(value: str | None) -> str | None:
     if value is None:
         return None
@@ -160,9 +177,7 @@ def normalize_request_display_label(value: str | None) -> str | None:
     if not normalized:
         return None
     if " - " in normalized:
-        _, right = normalized.split(" - ", 1)
-        if right.strip():
-            return right.strip()
+        return normalized.split(" - ", 1)[1].strip()
     return normalized
 
 
@@ -173,10 +188,7 @@ def normalize_request_prefix(value: str | None) -> str | None:
     if not normalized:
         return None
     if " - " in normalized:
-        left, _ = normalized.split(" - ", 1)
-        left = left.strip()
-        if left:
-            return left
+        return normalized.split(" - ", 1)[0].strip()
     return None
 
 
@@ -209,7 +221,7 @@ def resolve_export_trasferta_value(row: PresenzeDailyRecord) -> str | float | No
     # The legacy XLSM has a single cell per day for either trasferta hours or the montano marker.
     if row.trasferta_montano:
         return "X"
-    return minutes_to_excel_hours(row.trasferta_minutes)
+    return minutes_to_excel_hours_minutes(row.trasferta_minutes)
 
 
 def is_festive(row: PresenzeDailyRecord) -> bool:
@@ -520,8 +532,7 @@ def count_operai_paid_rest_days(export_row: ExportTimesheetRow) -> int:
                 continue
             weekday_minutes += effective_paid_weekday_minutes(current_row)
         carry_minutes += weekday_minutes
-        saturday_row = rows_by_date.get(saturday)
-        saturday_worked = saturday_row is not None and effective_worked_minutes(saturday_row) > 0
+        saturday_worked = effective_worked_minutes(rows_by_date[saturday]) > 0
         if not saturday_worked and carry_minutes >= weekly_threshold_minutes:
             recognized_days += 1
             carry_minutes -= weekly_threshold_minutes
@@ -548,34 +559,18 @@ def write_archive2_daily_values(
     for daily in export_row.daily_rows:
         col = ARCHIVE2_FIRST_DAY_COLUMN + daily.work_date.day - 1
         classification = resolve_day_classification(export_row, daily, schedule_context)
-        festive = classification.special_day
-        ordinary = minutes_to_excel_hours(classification.ordinary_minutes)
-        extra = minutes_to_excel_hours(classification.extra_minutes)
-        km_auto = daily.km_value
-        trasferta_value = resolve_export_trasferta_value(daily)
-
-        ws.cell(row_index, col + ARCHIVE2_OFFSETS["ordinary_ferial"]).value = None
-        ws.cell(row_index, col + ARCHIVE2_OFFSETS["ordinary_festive"]).value = None
-        ws.cell(row_index, col + ARCHIVE2_OFFSETS["straordinario_ferial"]).value = None
-        ws.cell(row_index, col + ARCHIVE2_OFFSETS["straordinario_festive"]).value = None
-        ws.cell(row_index, col + ARCHIVE2_OFFSETS["km_auto"]).value = None
-        ws.cell(row_index, col + ARCHIVE2_OFFSETS["absence_code"]).value = None
-        ws.cell(row_index, col + ARCHIVE2_OFFSETS["reperibilita"]).value = None
-        ws.cell(row_index, col + ARCHIVE2_OFFSETS["trasferta_hours"]).value = None
-        if ordinary is not None:
-            ws.cell(row_index, col + ARCHIVE2_OFFSETS["ordinary_festive" if festive else "ordinary_ferial"]).value = ordinary
-        if extra is not None:
-            ws.cell(row_index, col + ARCHIVE2_OFFSETS["straordinario_festive" if festive else "straordinario_ferial"]).value = extra
-        if km_auto is not None:
-            ws.cell(row_index, col + ARCHIVE2_OFFSETS["km_auto"]).value = km_auto
-        if trasferta_value is not None:
-            ws.cell(row_index, col + ARCHIVE2_OFFSETS["trasferta_hours"]).value = trasferta_value
-        absence_code = resolve_export_absence_code(daily)
-        if absence_code and (schedule_context is not None or not day_has_work_presence(classification)):
-            ws.cell(row_index, col + ARCHIVE2_OFFSETS["absence_code"]).value = absence_code
-        reperibilita_value = resolve_export_reperibilita_value(daily)
-        if reperibilita_value:
-            ws.cell(row_index, col + ARCHIVE2_OFFSETS["reperibilita"]).value = reperibilita_value
+        values = {
+            "ordinary_festive" if classification.special_day else "ordinary_ferial": minutes_to_excel_hours_minutes(classification.ordinary_minutes),
+            "straordinario_festive" if classification.special_day else "straordinario_ferial": minutes_to_excel_hours_minutes(classification.extra_minutes),
+            "km_auto": daily.km_value,
+            "trasferta_hours": resolve_export_trasferta_value(daily),
+            "absence_code": resolve_export_absence_code(daily) if schedule_context is not None or not day_has_work_presence(classification) else None,
+            "reperibilita": resolve_export_reperibilita_value(daily),
+        }
+        for field, offset in ARCHIVE2_OFFSETS.items():
+            cell = ws.cell(row_index, col + offset)
+            cell.value = values.get(field)
+            cell.number_format = "0.00"
 
 
 def build_period_label(period_start: date, employee_kind: str) -> str:
@@ -604,14 +599,14 @@ def compile_workbook(
         giornaliera["A3"] = period_start.month
         giornaliera["C3"] = period_start.year
         giornaliera["B2"] = employee_kind
-        period_label = build_period_label(period_start, employee_kind)
+        giornaliera["AJ22"] = "=SUMPRODUCT(IFERROR(INT(E22:AI22),0))+SUMPRODUCT(IFERROR(ROUND(MOD(E22:AI22,1)*100,0),0))/60"
         operai_metadata_by_employee = load_operai_metadata(operai) if operai is not None else {}
 
         for item in rows:
             row_index = upsert_archive2_row(
                 archive2,
                 item.collaborator,
-                period_label,
+                build_period_label(period_start, employee_kind),
                 period_start=period_start,
                 operai_metadata_by_employee=operai_metadata_by_employee,
             )

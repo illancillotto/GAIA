@@ -2129,7 +2129,8 @@ def test_presenze_export_generates_xlsm(tmp_path: Path) -> None:
         # giorno 16 => colonna 8 + 15, blocco ordinary_ferial. Il codice OPESAB classifica
         # il collaboratore come operaio: i 5 minuti anticipati (06:55-07:00)
         # sono esclusi; restano 330 minuti riconosciuti (07:00-12:30).
-        assert archive2.cell(6, 23).value == 330 / 60
+        assert archive2.cell(6, 23).value == 5.30
+        assert archive2.cell(6, 23).number_format == "0.00"
         # giorno 16 => colonna 8 + 15, blocco KM AUTO +279
         assert archive2.cell(6, 302).value == 24
         # giorno 16 => colonna 8 + 15, blocco reperibilita +467
