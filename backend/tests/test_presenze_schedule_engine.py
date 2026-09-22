@@ -572,7 +572,8 @@ def test_archivio_summary_writes_ccnl_breakdown_columns() -> None:
     assert ws.cell(row_index, 21).value == 12
     assert ws.cell(row_index, 24).value == 2
     assert ws.cell(row_index, 25).value == 2
-    assert ws.cell(row_index, 26).value == 3
+    # The partial justification belongs to an already worked date.
+    assert ws.cell(row_index, 26).value == 2
     assert ws.cell(row_index, 27).value == 1
     assert ws.cell(row_index, 28).value == 1
     assert ws.cell(row_index, 33).value == 0
@@ -608,7 +609,7 @@ def test_write_archivio_summary_values_keeps_banca_ore_columns_zero_for_giornali
     assert ws.cell(2, 33).value == 0
 
 
-def test_write_archivio_summary_values_counts_paid_rest_days_for_operai_with_weekly_carry() -> None:
+def test_write_archivio_summary_values_does_not_transfer_unvalidated_weekly_credit() -> None:
     collaborator = PresenzeCollaborator(
         id=uuid.uuid4(),
         employee_code="1854",
@@ -662,7 +663,7 @@ def test_write_archivio_summary_values_counts_paid_rest_days_for_operai_with_wee
     write_archivio_summary_values(ws, 2, export_row, period_start=date(2026, 1, 1), schedule_context=None)
 
     assert ws.cell(2, 25).value == 10
-    assert ws.cell(2, 26).value == 12
+    assert ws.cell(2, 26).value == 11
 
 
 def test_write_archivio_summary_values_does_not_add_paid_rest_days_without_saturdays() -> None:
@@ -739,7 +740,7 @@ def test_write_archivio_summary_values_handles_missing_weekday_rows_for_paid_res
     write_archivio_summary_values(ws, 2, export_row, period_start=date(2026, 1, 1), schedule_context=None)
 
     assert ws.cell(2, 25).value == 3
-    assert ws.cell(2, 26).value == 4
+    assert ws.cell(2, 26).value == 3
 
 
 def test_upsert_archivio_row_uses_operai_metadata_when_missing_source_row() -> None:

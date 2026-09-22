@@ -1,4 +1,5 @@
-from datetime import date
+import json
+from datetime import date, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
@@ -16,6 +17,89 @@ from app.modules.presenze.services.xlsm_export import (
     minutes_to_excel_hours_minutes,
     resolve_export_trasferta_value,
 )
+
+
+def test_weekly_ordinary_only_acceptance_cases_match_gate(tmp_path: Path):
+    cases = json.loads((Path(__file__).parent / "fixtures/paid-rest-days.json").read_text())
+    rows = []
+    for index, case in enumerate(cases):
+        collaborator = PresenzeCollaborator(
+            id=uuid4(), employee_code=str(9000 + index), name=case["name"],
+            contract_kind=case.get("contract_kind", "operaio"),
+        )
+        start = date.fromisoformat(case.get("start", "2026-09-07"))
+        weeks = [case["weeks"][0] + [0]] if case.get("sunday") else case["weeks"]
+        records = []
+        for week_index, week in enumerate(weeks):
+            for offset, ordinary in enumerate(week):
+                if ordinary is None:
+                    continue
+                work_date = start + timedelta(days=week_index * 7 + offset)
+                records.append(PresenzeDailyRecord(
+                    id=uuid4(), collaborator_id=collaborator.id, work_date=work_date,
+                    ordinary_minutes=ordinary,
+                    straordinario_minutes=case.get("extra", {}).get(work_date.isoformat(), 0),
+                    justified_minutes=case.get("justified", {}).get(work_date.isoformat(), 0),
+                ))
+        rows.append(ExportTimesheetRow(collaborator, records, {}))
+    template = tmp_path / "template.xlsx"
+    output = tmp_path / "result.xlsm"
+    workbook = Workbook()
+    workbook.active.title = "Archivio"
+    workbook.create_sheet("Archivio2")
+    workbook.create_sheet("Giornaliera2")
+    workbook.save(template)
+    workbook.close()
+    compile_workbook(template=template, output=output, rows=rows, period_start=date(2026, 9, 1))
+    result = load_workbook(output, keep_vba=True)
+    try:
+        for index, case in enumerate(cases):
+            assert result["Archivio"].cell(index + 2, 25).value == case["expected_worked"], case["name"]
+            assert result["Archivio"].cell(index + 2, 26).value == case["expected_paid"], case["name"]
+        for cell, column in (("C32", "Y"), ("AJ42", "Y"), ("C33", "Z"), ("AJ43", "Z")):
+            assert result["Giornaliera2"][cell].value == (
+                f"=SUMIF(Archivio!$C$2:$C$21,$B$12,Archivio!${column}$2:${column}$21)"
+            )
+    finally:
+        xlsm_export.close_workbook_resources(result)
+
+
+@pytest.mark.parametrize(("raw", "classified", "saturday_extra", "expected"), [
+    (456, 420, 0, 5), (420, 456, 0, 6), (456, 456, 60, 6),
+])
+def test_paid_rest_uses_the_same_classification_as_export(
+    monkeypatch, raw, classified, saturday_extra, expected,
+):
+    collaborator = PresenzeCollaborator(
+        id=uuid4(), employee_code="9000", name="Classified", contract_kind="operaio",
+    )
+    records = [PresenzeDailyRecord(
+        id=uuid4(), collaborator_id=collaborator.id,
+        work_date=date(2026, 9, day), ordinary_minutes=raw if day < 12 else 0,
+    ) for day in range(7, 13)]
+    context = object()
+
+    def classify(person, daily, punches, supplied_context):
+        assert person is collaborator
+        assert supplied_context is context
+        assert punches == []
+        return DayClassification(
+            ordinary_minutes=classified if daily.work_date.day < 12 else 0,
+            extra_minutes=0 if daily.work_date.day < 12 else saturday_extra,
+            special_day=False, holiday_kind=None, grants_recovery_day=False, source="test",
+        )
+
+    monkeypatch.setattr(xlsm_export, "classify_daily_record", classify)
+    workbook = Workbook()
+    try:
+        xlsm_export.write_archivio_summary_values(
+            workbook.active, 2, ExportTimesheetRow(collaborator, records, {}),
+            period_start=date(2026, 9, 1), schedule_context=context,
+        )
+        assert workbook.active.cell(2, 16).value == classified * 5 / 60
+        assert workbook.active.cell(2, 26).value == expected
+    finally:
+        workbook.close()
 
 
 @pytest.mark.parametrize(

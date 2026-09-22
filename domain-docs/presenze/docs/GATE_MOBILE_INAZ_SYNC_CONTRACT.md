@@ -1,5 +1,20 @@
 # Stato sincronizzazione INAZ negli snapshot GaTe Mobile
 
+## Soglia settimanale delle giornate aggiuntive — 22 settembre 2026
+
+Gli export GATE e GAIA riconoscono il sabato non lavorato soltanto con cinque
+giorni ordinari lunedì–venerdì e almeno 2.280 minuti ordinari nella settimana.
+Straordinari e giustificativi non completano la soglia; il vecchio saldo
+cumulativo è rimosso. La tipologia HR fisso/avventizio e il credito validato
+restano fuori dal payload corrente: questa fix conserva il perimetro `operaio`
+e non abilita compensazioni tra settimane o mesi.
+
+GAIA usa la classificazione dell'export anche per il conteggio e non duplica
+le date lavorate con un giustificativo parziale. I contatori della scheda
+`Giornaliera2` leggono quelli di `Archivio`, come GATE. Nessun cambio a payload,
+schema DB o trasporti; occorre rigenerare gli export per vedere la correzione.
+Dettagli e limiti in [XLSM_38_ORE_2026-09-22.md](XLSM_38_ORE_2026-09-22.md).
+
 ## Formato ore.minuti negli export XLSM — 22 settembre 2026
 
 Il contratto di sincronizzazione non cambia: `export_ordinary_minutes`,

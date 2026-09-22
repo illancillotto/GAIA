@@ -454,9 +454,9 @@ def write_archivio_summary_values(
         extra_festive_night_minutes += classification.overtime_festive_night_minutes
         km_total += daily.km_value or 0
         trasferta_total_minutes += daily.trasferta_minutes or 0
-        if (classification.ordinary_minutes or 0) > 0 or (classification.extra_minutes or 0) > 0:
+        if day_has_work_presence(classification):
             worked_days_total += 1
-        if (daily.justified_minutes or 0) > 0:
+        elif (daily.justified_minutes or 0) > 0:
             justified_days_total += 1
         if resolve_export_absence_code(daily) and not day_has_work_presence(classification):
             absence_days_total += 1
@@ -471,7 +471,7 @@ def write_archivio_summary_values(
     )
     total_extra_minutes = extra_ferial_minutes + extra_festive_minutes + extra_night_minutes + extra_festive_night_minutes
     total_worked_minutes = total_ordinary_minutes + total_extra_minutes
-    paid_days_total = worked_days_total + justified_days_total + count_operai_paid_rest_days(export_row)
+    paid_days_total = worked_days_total + justified_days_total + count_operai_paid_rest_days(export_row, schedule_context)
 
     values = {
         "month": period_start,
@@ -505,7 +505,9 @@ def write_archivio_summary_values(
             ws.cell(row_index, ARCHIVIO_COLUMNS[key]).value = value or 0
 
 
-def count_operai_paid_rest_days(export_row: ExportTimesheetRow) -> int:
+def count_operai_paid_rest_days(
+    export_row: ExportTimesheetRow, schedule_context: ScheduleContext | None = None,
+) -> int:
     profile = resolve_contract_profile(
         export_row.collaborator.contract_kind,
         export_row.collaborator.standard_daily_minutes,
@@ -513,41 +515,21 @@ def count_operai_paid_rest_days(export_row: ExportTimesheetRow) -> int:
     if profile.contract_kind != PRESENZE_CONTRACT_KIND_OPERAIO:
         return 0
 
-    rows_by_date = {row.work_date: row for row in export_row.daily_rows}
-    saturdays = sorted(day for day in rows_by_date if day.weekday() == 5)
-    if not saturdays:
-        return 0
-
-    carry_minutes = 0
+    days_by_date = {
+        row.work_date: resolve_day_classification(export_row, row, schedule_context)
+        for row in export_row.daily_rows
+    }
+    ordinary_by_date = {day: value.ordinary_minutes or 0 for day, value in days_by_date.items()}
     recognized_days = 0
-    weekly_threshold_minutes = 38 * 60
-
-    for saturday in saturdays:
-        week_start = saturday - timedelta(days=5)
-        weekday_minutes = 0
-        for offset in range(5):
-            current_day = week_start + timedelta(days=offset)
-            current_row = rows_by_date.get(current_day)
-            if current_row is None:
-                continue
-            weekday_minutes += effective_paid_weekday_minutes(current_row)
-        carry_minutes += weekday_minutes
-        saturday_worked = effective_worked_minutes(rows_by_date[saturday]) > 0
-        if not saturday_worked and carry_minutes >= weekly_threshold_minutes:
+    for saturday in (day for day in days_by_date if day.weekday() == 5):
+        ordinary_minutes = [
+            ordinary_by_date.get(saturday - timedelta(days=offset), 0) for offset in range(1, 6)
+        ]
+        # Only this week's classified ordinary work; no unvalidated carry credit.
+        if (not day_has_work_presence(days_by_date[saturday])
+                and min(ordinary_minutes) > 0 and sum(ordinary_minutes) >= 38 * 60):
             recognized_days += 1
-            carry_minutes -= weekly_threshold_minutes
-
     return recognized_days
-
-
-def effective_worked_minutes(row: PresenzeDailyRecord) -> int:
-    effective_straordinario = row.override_straordinario_minutes if row.override_straordinario_minutes is not None else row.straordinario_minutes
-    effective_mpe = row.override_mpe_minutes if row.override_mpe_minutes is not None else row.mpe_minutes
-    return (row.ordinary_minutes or 0) + (effective_straordinario or 0) + (effective_mpe or 0)
-
-
-def effective_paid_weekday_minutes(row: PresenzeDailyRecord) -> int:
-    return effective_worked_minutes(row) + (row.justified_minutes or 0)
 
 
 def write_archive2_daily_values(
@@ -578,6 +560,18 @@ def build_period_label(period_start: date, employee_kind: str) -> str:
     return f"{employee_kind}_{month_name}-{period_start.year}"
 
 
+def write_giornaliera_summary_formulas(giornaliera: Worksheet, archivio: Worksheet | None) -> None:
+    """Sum hours.minutes correctly and read exported counters for the selected worker."""
+    giornaliera["AJ22"] = "=SUMPRODUCT(IFERROR(INT(E22:AI22),0))+SUMPRODUCT(IFERROR(ROUND(MOD(E22:AI22,1)*100,0),0))/60"
+    if archivio is None:
+        return
+    for cell, column in (("C32", "Y"), ("AJ42", "Y"), ("C33", "Z"), ("AJ43", "Z")):
+        giornaliera[cell] = (
+            f"=SUMIF(Archivio!$C$2:$C${archivio.max_row},$B$12,"
+            f"Archivio!${column}$2:${column}${archivio.max_row})"
+        )
+
+
 def compile_workbook(
     *,
     template: Path,
@@ -599,7 +593,6 @@ def compile_workbook(
         giornaliera["A3"] = period_start.month
         giornaliera["C3"] = period_start.year
         giornaliera["B2"] = employee_kind
-        giornaliera["AJ22"] = "=SUMPRODUCT(IFERROR(INT(E22:AI22),0))+SUMPRODUCT(IFERROR(ROUND(MOD(E22:AI22,1)*100,0),0))/60"
         operai_metadata_by_employee = load_operai_metadata(operai) if operai is not None else {}
 
         for item in rows:
@@ -626,6 +619,7 @@ def compile_workbook(
                     schedule_context=schedule_context,
                 )
 
+        write_giornaliera_summary_formulas(giornaliera, archivio)
         workbook.save(output)
     finally:
         close_workbook_resources(workbook)

@@ -1,0 +1,338 @@
+[
+  {
+    "name": "35 ordinary hours",
+    "weeks": [
+      [
+        420,
+        420,
+        420,
+        420,
+        420,
+        0
+      ]
+    ],
+    "expected_worked": 5,
+    "expected_paid": 5
+  },
+  {
+    "name": "exactly 38 ordinary hours",
+    "weeks": [
+      [
+        456,
+        456,
+        456,
+        456,
+        456,
+        0
+      ]
+    ],
+    "expected_worked": 5,
+    "expected_paid": 6
+  },
+  {
+    "name": "40 ordinary hours",
+    "weeks": [
+      [
+        480,
+        480,
+        480,
+        480,
+        480,
+        0
+      ]
+    ],
+    "expected_worked": 5,
+    "expected_paid": 6
+  },
+  {
+    "name": "one minute below 38",
+    "weeks": [
+      [
+        456,
+        456,
+        456,
+        456,
+        455,
+        0
+      ]
+    ],
+    "expected_worked": 5,
+    "expected_paid": 5
+  },
+  {
+    "name": "one minute above 38",
+    "weeks": [
+      [
+        456,
+        456,
+        456,
+        456,
+        457,
+        0
+      ]
+    ],
+    "expected_worked": 5,
+    "expected_paid": 6
+  },
+  {
+    "name": "two weeks of 35 hours",
+    "weeks": [
+      [
+        420,
+        420,
+        420,
+        420,
+        420,
+        0
+      ],
+      [
+        420,
+        420,
+        420,
+        420,
+        420,
+        0
+      ]
+    ],
+    "expected_worked": 10,
+    "expected_paid": 10
+  },
+  {
+    "name": "surplus has no validated transfer policy",
+    "weeks": [
+      [
+        492,
+        492,
+        492,
+        492,
+        492,
+        0
+      ],
+      [
+        420,
+        420,
+        420,
+        420,
+        420,
+        0
+      ]
+    ],
+    "expected_worked": 10,
+    "expected_paid": 11
+  },
+  {
+    "name": "35 ordinary plus 3 overtime",
+    "weeks": [
+      [
+        420,
+        420,
+        420,
+        420,
+        420,
+        0
+      ]
+    ],
+    "expected_worked": 5,
+    "expected_paid": 5,
+    "extra": {
+      "2026-09-07": 180
+    }
+  },
+  {
+    "name": "35 ordinary plus 3 justified on worked day",
+    "weeks": [
+      [
+        420,
+        420,
+        420,
+        420,
+        420,
+        0
+      ]
+    ],
+    "expected_worked": 5,
+    "expected_paid": 5,
+    "justified": {
+      "2026-09-07": 180
+    }
+  },
+  {
+    "name": "six ordinary days",
+    "weeks": [
+      [
+        420,
+        420,
+        420,
+        420,
+        420,
+        180
+      ]
+    ],
+    "expected_worked": 6,
+    "expected_paid": 6
+  },
+  {
+    "name": "saturday only overtime",
+    "weeks": [
+      [
+        456,
+        456,
+        456,
+        456,
+        456,
+        0
+      ]
+    ],
+    "expected_worked": 6,
+    "expected_paid": 6,
+    "extra": {
+      "2026-09-12": 60
+    }
+  },
+  {
+    "name": "saturday already ordinary after full week",
+    "weeks": [
+      [
+        456,
+        456,
+        456,
+        456,
+        456,
+        60
+      ]
+    ],
+    "expected_worked": 6,
+    "expected_paid": 6
+  },
+  {
+    "name": "four ordinary days total 38",
+    "weeks": [
+      [
+        570,
+        570,
+        570,
+        570,
+        0,
+        0
+      ]
+    ],
+    "expected_worked": 4,
+    "expected_paid": 4
+  },
+  {
+    "name": "fifth day overtime only",
+    "weeks": [
+      [
+        570,
+        570,
+        570,
+        570,
+        0,
+        0
+      ]
+    ],
+    "expected_worked": 5,
+    "expected_paid": 5,
+    "extra": {
+      "2026-09-11": 180
+    }
+  },
+  {
+    "name": "missing fifth day",
+    "weeks": [
+      [
+        570,
+        570,
+        570,
+        570,
+        null,
+        0
+      ]
+    ],
+    "expected_worked": 4,
+    "expected_paid": 4
+  },
+  {
+    "name": "missing saturday",
+    "weeks": [
+      [
+        456,
+        456,
+        456,
+        456,
+        456,
+        null
+      ]
+    ],
+    "expected_worked": 5,
+    "expected_paid": 5
+  },
+  {
+    "name": "non operaio",
+    "weeks": [
+      [
+        456,
+        456,
+        456,
+        456,
+        456,
+        0
+      ]
+    ],
+    "expected_worked": 5,
+    "expected_paid": 5,
+    "contract_kind": "impiegato"
+  },
+  {
+    "name": "justified day cannot supply fifth ordinary day",
+    "weeks": [
+      [
+        570,
+        570,
+        570,
+        570,
+        0,
+        0
+      ]
+    ],
+    "expected_worked": 4,
+    "expected_paid": 5,
+    "justified": {
+      "2026-09-11": 180
+    }
+  },
+  {
+    "name": "sunday overtime cannot top up week",
+    "weeks": [
+      [
+        420,
+        420,
+        420,
+        420,
+        420,
+        0
+      ]
+    ],
+    "expected_worked": 6,
+    "expected_paid": 6,
+    "extra": {
+      "2026-09-13": 180
+    },
+    "sunday": true
+  },
+  {
+    "name": "missing weekdays across month boundary",
+    "weeks": [
+      [
+        570,
+        570,
+        570,
+        570,
+        0
+      ]
+    ],
+    "expected_worked": 4,
+    "expected_paid": 4,
+    "start": "2026-09-01"
+  }
+]
