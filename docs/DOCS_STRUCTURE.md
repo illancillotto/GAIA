@@ -135,6 +135,9 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 
 ### Presenze
 
+- `domain-docs/presenze/docs/GIORNALIERA_INDIVIDUALE.md`: analisi Giornaliera2, calcoli, coverage e rilascio GAIA/GaTe.
+- `frontend/src/app/presenze/giornaliera-individuale/`: pagina mensile individuale, tabella e hook di caricamento; `frontend/src/lib/presenze-monthly-sheet.ts` contiene i calcoli allineati a GaTe.
+
 - `domain-docs/presenze/docs/GAIA_GATE_PRESENZE_INTEGRATION_BLUEPRINT.md`
 - `domain-docs/presenze/docs/GAIA_PRESENZE_GIORNALIERE_MODULE_SPEC.md`
 - `domain-docs/presenze/docs/IMPLEMENTATION_PRESENZE_COLLABORATORI_GIORNALIERE.md`
