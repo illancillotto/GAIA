@@ -126,6 +126,7 @@ from sister_credential_pool import (
     finalize_credential_pool,
     isolate_rejected_credential_runner,
     load_active_credential_pool,
+    load_configured_credential_ids,
     mark_batch_waiting_for_schedule,
     next_processable_batch_id,
     quarantine_rejected_credential,
@@ -745,7 +746,12 @@ class CatastoWorker:
             logger.info("Batch %s preso in carico per utente %s", batch_id, batch.user_id)
 
         request_repository = self._request_repository()
-        request_repository.fail_unavailable_pinned_requests(batch_id, credential_pool.available_ids)
+        request_repository.fail_unavailable_pinned_requests(
+            batch_id,
+            load_configured_credential_ids(db, batch) | {
+                credential.id for credential in credential_pool.credentials
+            },
+        )
         runtime = _SisterBatchRuntime(
             self,
             batch,
@@ -1231,8 +1237,7 @@ class _SisterBatchRuntime:
                 self.batch_id,
                 f"Credenziale {credential.sister_username} fuori fascia, in attesa",
             )
-            await asyncio.sleep(min(POLL_INTERVAL_SEC, 60))
-            return "wait"
+            return "stop"
         if not session.lease_acquired and not self._acquire_lease(credential, session):
             await asyncio.sleep(POLL_INTERVAL_SEC)
             return "wait"

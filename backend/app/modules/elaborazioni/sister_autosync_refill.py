@@ -1,5 +1,6 @@
 """Bounded refill of a running campaign without replacing remote requests."""
 
+import logging
 from collections.abc import Iterable
 from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
@@ -13,6 +14,7 @@ from app.services.elaborazioni_batches import ValidatedVisuraRow
 OPEN_STATUSES = ("pending", "processing", "awaiting_captcha")
 MAX_OPEN_REQUESTS = 100
 UTC = timezone.utc  # noqa: UP017 - Shared worker imports must support Python 3.10.
+logger = logging.getLogger(__name__)
 
 
 def _validated_row(index: int, item: CatastoPerpetualSyncItem) -> ValidatedVisuraRow:
@@ -88,9 +90,16 @@ def lock_refill_capacity(db: Session, batch: CatastoBatch, limit: int, now: date
     # A locked/claimed row must not look like spare capacity to the planner.
     if not requests or len(requests) != count:
         return 0
-    if not all(_is_deferred_recovery(request, now) for request in requests):
-        return 0
-    return max(0, min(max(limit, 1), MAX_OPEN_REQUESTS) - len(requests))
+    capacity = max(0, min(max(limit, 1), MAX_OPEN_REQUESTS) - len(requests))
+    remote_protected = sum(bool(request.sister_remote_request_id) for request in requests)
+    logger.info(
+        "Autosync refill capacity batch=%s open=%d remote_protected=%d capacity=%d",
+        batch.id,
+        len(requests),
+        remote_protected,
+        capacity,
+    )
+    return capacity
 
 
 def append_validated_requests(

@@ -1182,3 +1182,20 @@ Alla data di questo documento:
 - la privacy notice è stata identificata e gestita
 - il link `Chiudi` per sessione attiva è stato identificato e gestito
 - resta da validare se il recovery automatico con attesa post-chiusura sia sufficiente a sbloccare il run successivo
+
+## Autosync: refill e pool credenziali (2026-09-23)
+
+- Il refill calcola la capacità sulle richieste aperte effettive, incluse quelle
+  già in lavorazione o associate a un identificativo remoto SISTER.
+- Il controllo delle richieste appuntate a credenziali non disponibili viene
+  eseguito all'avvio del batch usando le credenziali configurate abilitate,
+  anche se temporaneamente fuori fascia oraria.
+- Un aggiornamento del pool durante un batch può aggiungere credenziali senza
+  riavviare i runner già attivi. Il controllo delle richieste non viene ripetuto
+  usando il pool temporaneo, per evitare falsi failure durante l'espansione.
+- Un runner fuori fascia chiude la sessione e termina; il ciclo del pool può
+  quindi liberare lo slot e riattivare la credenziale nella fascia successiva.
+
+Durante un incidente verificare nei log strutturati `batch`, `open`,
+`remote_protected` e `capacity`, poi confrontare il numero di credenziali
+configurate con quelle effettivamente disponibili nel pool.

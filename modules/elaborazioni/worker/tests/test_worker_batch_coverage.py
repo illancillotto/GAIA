@@ -419,7 +419,10 @@ def test_running_shared_batch_adds_new_credentials_without_restarting_existing_r
 
     assert processed_by == ["added"]
     assert any(operation == "Pool visure aggiornato: 2 credenziali disponibili" for operation in operations)
-    assert repository.failed_unavailable[-1] == (item.id, {first.id, added.id})
+    # The unavailable-pinned check runs once at batch start.  The refreshed
+    # pool is used for claiming work, but is not fed back into this failure
+    # check after the runner has started.
+    assert repository.failed_unavailable == [(item.id, {first.id})]
     assert operations[-1] == "finalized"
 
 

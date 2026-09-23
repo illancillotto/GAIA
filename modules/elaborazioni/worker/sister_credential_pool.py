@@ -438,6 +438,20 @@ def load_active_credential_pool(
     return _load_shared_pool(db, batch, now)
 
 
+def load_configured_credential_ids(db: Session, batch: CatastoBatch) -> set[UUID]:
+    """Return enabled credentials regardless of their current time window."""
+    filters = (*_shared_pool_owner_filters(db, batch), *_shared_pool_allowlist_filter(batch))
+    credentials = db.scalars(
+        select(CatastoCredential).where(CatastoCredential.active.is_(True), *filters)
+    ).all()
+    result: set[UUID] = set()
+    for credential in credentials:
+        profile = _autosync_credential_profile(db, batch, credential.id)
+        if profile is None or profile.get("enabled"):
+            result.add(credential.id)
+    return result
+
+
 def refresh_shared_credential_pool(
     session_factory: Callable[[], Session],
     batch_id: UUID,
@@ -453,7 +467,11 @@ def refresh_shared_credential_pool(
         ):
             return ()
         refreshed_pool = load_active_credential_pool(db, batch)
-    return tuple(credential for credential in pool.merge(refreshed_pool) if credential.id not in started_ids)
+    pool.merge(refreshed_pool)
+    return tuple(
+        credential for credential in refreshed_pool.credentials
+        if credential.id not in started_ids and credential.id not in pool.rejected_ids
+    )
 
 
 async def run_dynamic_credential_pool(
@@ -490,6 +508,11 @@ async def run_dynamic_credential_pool(
         for task in done:
             if task.exception() is not None:
                 await task
+        if all(task.done() for task in runner_tasks.values()):
+            break
+        started_ids.difference_update(
+            credential_id for credential_id, task in runner_tasks.items() if task.done()
+        )
         if has_open_requests():
             added_credentials = refresh_credentials(started_ids)
             for credential in added_credentials:
@@ -508,7 +531,6 @@ def announce_expanded_credential_pool(
     repository: CredentialRejectionRepository,
     set_batch_operation: Callable[[UUID, str], None],
 ) -> None:
-    repository.fail_unavailable_pinned_requests(batch_id, pool.available_ids)
     set_batch_operation(
         batch_id,
         f"Pool visure aggiornato: {len(pool.available_ids)} credenziali disponibili",

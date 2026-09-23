@@ -94,8 +94,9 @@ def test_capacity_is_fail_closed_for_locked_rows_and_bounded():
     assert lock_refill_capacity(db, batch, 20, now) == 0
     db.scalar.return_value = 1
     db.scalars.return_value = [remote(now, status="processing")]
-    assert lock_refill_capacity(db, batch, 20, now) == 0
+    assert lock_refill_capacity(db, batch, 20, now) == 19
     db.scalars.return_value = [remote(now)]
+    assert lock_refill_capacity(db, batch, 20, now) == 19
     assert lock_refill_capacity(db, batch, 1000, now) == 99
     assert lock_refill_capacity(db, batch, 0, now) == 0
 
