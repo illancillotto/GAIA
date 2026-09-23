@@ -259,13 +259,14 @@ EOF
   if [[ "$DEPLOY_BUILD_MODE" == "archive" ]]; then
   echo "==> Build immagini Docker produzione GAIA"
   COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" docker compose "${LOCAL_COMPOSE_ARGS[@]}" --env-file "$ENV_FILE" build \
-    backend frontend elaborazioni-worker-visure elaborazioni-worker-runtime elaborazioni-worker-poste elaborazioni-worker-autodoc scanner arp-helper
+    backend frontend elaborazioni-worker-visure elaborazioni-worker-exports elaborazioni-worker-runtime elaborazioni-worker-poste elaborazioni-worker-autodoc scanner arp-helper
 
   echo "==> Salvataggio immagini in $IMAGES_ARCHIVE"
   docker save \
     "${COMPOSE_PROJECT_NAME}-backend:latest" \
     "${COMPOSE_PROJECT_NAME}-frontend:latest" \
     "${COMPOSE_PROJECT_NAME}-elaborazioni-worker-visure:latest" \
+    "${COMPOSE_PROJECT_NAME}-elaborazioni-worker-exports:latest" \
     "${COMPOSE_PROJECT_NAME}-elaborazioni-worker-runtime:latest" \
     "${COMPOSE_PROJECT_NAME}-elaborazioni-worker-poste:latest" \
     "${COMPOSE_PROJECT_NAME}-elaborazioni-worker-autodoc:latest" \
@@ -820,7 +821,7 @@ if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
     gzip -dc "releases/gaia-images-${RELEASE_ID}.tar.gz" | docker load
   else
     echo "==> Build immagini Docker produzione sul server"
-    compose_cmd build backend frontend elaborazioni-worker-visure elaborazioni-worker-runtime elaborazioni-worker-poste elaborazioni-worker-autodoc scanner arp-helper
+    compose_cmd build backend frontend elaborazioni-worker-visure elaborazioni-worker-exports elaborazioni-worker-runtime elaborazioni-worker-poste elaborazioni-worker-autodoc scanner arp-helper
   fi
 
   echo "==> Pull immagini registry dipendenti"

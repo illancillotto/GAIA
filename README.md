@@ -63,6 +63,8 @@ Stato: in sviluppo.
 ### GAIA Elaborazioni — job e automazioni
 Runtime operativo per lavorazioni massive e worker: SISTER/visure, Capacitas,
 allineamento AdE, inCASS, AUTODOC e processi lunghi monitorabili da dashboard.
+Gli export per distretto usano un worker dedicato, indipendente dai batch SISTER
+e dalle ricerche massive catastali.
 Stato: operativo avanzato.
 
 ### GAIA Catasto — territorio e GIS

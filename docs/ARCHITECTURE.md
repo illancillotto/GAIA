@@ -238,6 +238,7 @@ L’applicazione gira tramite Docker Compose con questi servizi:
 - `postgres`
 - `nginx`
 - `elaborazioni-worker-visure`
+- `elaborazioni-worker-exports`
 - `elaborazioni-worker-runtime`
 - `elaborazioni-worker-poste`
 - `elaborazioni-worker-autodoc`
@@ -304,6 +305,7 @@ li prelevano dal database, isolando le elaborazioni massive dai worker Uvicorn.
 La separazione minima corrente e:
 
 - `elaborazioni-worker-visure`: test connessione SISTER, run AdE, bulk search catastali e batch visure
+- `elaborazioni-worker-exports`: soli export per distretto, indipendenti da visure e ricerche massive
 - `elaborazioni-worker-runtime`: job Capacitas e import REGISTRY (`runtime`)
 - `elaborazioni-worker-poste`: soli job Poste Online e relativo scraping Playwright
 - `elaborazioni-worker-autodoc`: sync massiva AUTODOC mezzi

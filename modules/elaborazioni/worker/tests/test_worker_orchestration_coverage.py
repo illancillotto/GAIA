@@ -127,7 +127,6 @@ def _configure_run_worker(family: str) -> CatastoWorker:
         "_next_posta_online_job_id",
         "_next_registry_import_job_id",
         "_next_ade_sync_run_id",
-        "_next_distretto_export_job_id",
         "_next_bulk_search_job_id",
         "_next_autodoc_sync_job_id",
         "_next_batch_id",
@@ -145,7 +144,6 @@ def _configure_run_worker(family: str) -> CatastoWorker:
         ("posta_online", "_next_posta_online_job_id", "_process_posta_online_job", 3, (3,)),
         ("registry", "_next_registry_import_job_id", "_process_registry_import_job", 4, (4,)),
         ("ade_sync", "_next_ade_sync_run_id", "_process_ade_sync_run", "5", ("5",)),
-        ("bulk_search", "_next_distretto_export_job_id", "_process_distretto_export_job", "6", ("6",)),
         ("autodoc", "_next_autodoc_sync_job_id", "_process_autodoc_sync_job", "7", ("7",)),
         ("visure_batches", "_next_batch_id", "_process_batch", 8, (8,)),
     ],
@@ -240,7 +238,6 @@ def test_recovery_resets_all_enabled_job_types(monkeypatch: pytest.MonkeyPatch) 
         "prepare_particelle_sync_jobs_for_recovery": [4],
         "prepare_registered_mail_sync_jobs_for_recovery": [5],
         "prepare_bulk_search_jobs_for_recovery": 1,
-        "prepare_distretto_export_jobs_for_recovery": 1,
         "prepare_registry_import_jobs_for_recovery": [6],
         "prepare_ade_sync_runs_for_recovery": 1,
     }
@@ -284,7 +281,6 @@ def test_simple_next_id_queries(method: str, value, expected, monkeypatch: pytes
     ("method", "status_value", "identifier"),
     [
         ("_next_bulk_search_job_id", "pending", uuid4()),
-        ("_next_distretto_export_job_id", "pending", uuid4()),
         ("_next_autodoc_sync_job_id", "queued", uuid4()),
     ],
 )
@@ -337,14 +333,6 @@ def test_processing_delegates_and_failure_guards(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(worker_module, "run_bulk_search_job_by_id", async_recorder("bulk-fail"))
     run(worker._process_bulk_search_job("invalid"))
 
-    async def to_thread(function, value):
-        return function(value)
-
-    monkeypatch.setattr(worker_module.asyncio, "to_thread", to_thread)
-    monkeypatch.setattr(worker_module, "run_distretto_export_job_by_id", lambda value: calls.append(("distretto", value)))
-    run(worker._process_distretto_export_job(run_id))
-    run(worker._process_distretto_export_job("invalid"))
-
     monkeypatch.setattr(worker_module, "run_autodoc_sync_job_by_id", async_recorder("autodoc"))
     run(worker._process_autodoc_sync_job("job"))
 
@@ -353,7 +341,7 @@ def test_processing_delegates_and_failure_guards(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(worker_module, "run_autodoc_sync_job_by_id", fail)
     run(worker._process_autodoc_sync_job("job"))
-    assert {label for label, _value in calls} >= {"history", "incass", "terreni", "particelle", "ade", "bulk", "distretto", "autodoc"}
+    assert {label for label, _value in calls} >= {"history", "incass", "terreni", "particelle", "ade", "bulk", "autodoc"}
 
 
 def test_static_helpers_and_artifacts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

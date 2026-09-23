@@ -424,6 +424,7 @@ Comportamento attuale:
 - il dettaglio distretto embedded espone export diretti `CSV`, `XLS`, `PDF` sulla vista corrente e usa righe particella cliccabili per il drill-down
 - `/catasto/ricerca-anagrafica` include export CSV/XLSX dell'elaborazione massiva
 - `/catasto/elaborazioni-massive` separa visivamente `File ricerca anagrafica` da `Export intestatari per distretto`: il pulsante `Elabora righe file` resta nel blocco del file, mentre l'export distretto mostra stato job, spinner e ultimi download disponibili.
+- Gli export intestatari per distretto sono prelevati dal worker `elaborazioni-worker-exports`, indipendentemente dai batch SISTER e dalle ricerche massive del worker visure; gli export gia in coda restano persistiti e vengono prelevati all'avvio del servizio.
 - l'intera console `/catasto/anomalie` è riservata ad admin/super_admin anche lato API: lista, summary, workspace wizard, `ade-scan/*` e workflow mutativi (`PATCH` + `wizard/cf/apply` + `wizard/comune/apply` + `wizard/particella/apply`)
 - il flusso anagrafica e coperto anche da E2E browser dedicato oltre che da test backend e smoke frontend
 

@@ -436,6 +436,54 @@ services:
       retries: 3
       start_period: 20s
 
+  elaborazioni-worker-exports:
+    build:
+      context: .
+      dockerfile: ./modules/elaborazioni/worker/Dockerfile
+    container_name: gaia-elaborazioni-worker-exports
+    restart: unless-stopped
+    command: python /app/worker/distretto_export_runner.py
+    init: true
+    stop_grace_period: "30s"
+    cpus: ${ELABORAZIONI_EXPORTS_CPU_LIMIT:-2.0}
+    mem_limit: ${ELABORAZIONI_EXPORTS_MEMORY_LIMIT:-4g}
+    pids_limit: ${ELABORAZIONI_EXPORTS_PIDS_LIMIT:-256}
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      CREDENTIAL_MASTER_KEY: ${CREDENTIAL_MASTER_KEY}
+      ELABORAZIONI_LOG_LEVEL: ${ELABORAZIONI_LOG_LEVEL:-${CATASTO_LOG_LEVEL:-INFO}}
+      GAIA_WORKER_HEALTH_SERVICE: elaborazioni-worker-exports
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - catasto-data:/data/catasto
+      - ./runtime-data:/runtime-data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-m",
+          "app.worker_health",
+          "check",
+          "--service",
+          "elaborazioni-worker-exports",
+          "--max-age-seconds",
+          "90",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
   elaborazioni-worker-runtime:
     build:
       context: .
