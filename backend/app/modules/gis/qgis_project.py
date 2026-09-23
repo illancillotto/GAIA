@@ -13,7 +13,6 @@ from app.modules.gis.models import GisLayer
 
 PROJECT_FILENAME = "gaia-gis-platform.qgs"
 ARCHIVE_FILENAME = "gaia-gis-platform.qgz"
-CONNECTION_SERVICE = "gaia_gis"
 
 
 def _mapping(value: object) -> dict[str, Any]:
@@ -78,7 +77,15 @@ def _postgis_datasource(layer: GisLayer) -> str:
     geometry_column = _quote(layer.geometry_column or "geometry")
     feature_id_column = _quote(layer.feature_id_column or "id")
     geometry_type = _quote(layer.geometry_type or "")
-    return f"service='{CONNECTION_SERVICE}' key='{feature_id_column}' srid={layer.srid or 4326} type='{geometry_type}' table=\"{schema}\".\"{table}\" ({geometry_column}) sql="
+    host = _quote(settings.gis_qgis_desktop_pg_host)
+    port = settings.gis_qgis_desktop_pg_port
+    database = _quote(settings.gis_qgis_desktop_pg_database)
+    return (
+        f"host='{host}' port={port} dbname='{database}' "
+        f"key='{feature_id_column}' srid={layer.srid or 4326} "
+        f'type=\'{geometry_type}\' table="{schema}"."{table}" '
+        f"({geometry_column}) sql="
+    )
 
 
 def datasource(layer: GisLayer, proxy_base_url: str = "http://localhost:8000") -> str:
@@ -93,7 +100,11 @@ def manifest(
     return {
         "project": "GAIA GIS Platform",
         "generated_at": generated_at.astimezone(UTC).isoformat(),
-        "connection_service": CONNECTION_SERVICE,
+        "connection": {
+            "host": settings.gis_qgis_desktop_pg_host,
+            "port": settings.gis_qgis_desktop_pg_port,
+            "database": settings.gis_qgis_desktop_pg_database,
+        },
         "proxy_base_url": proxy_base_url,
         "policy": {
             "source": "postgis_and_gaia_proxy",
@@ -136,7 +147,9 @@ def build_xml(
     ET.SubElement(properties, "GeneratedAt").text = generated_at.astimezone(
         UTC
     ).isoformat()
-    ET.SubElement(properties, "ConnectionService").text = CONNECTION_SERVICE
+    ET.SubElement(properties, "PostgreSQLHost").text = settings.gis_qgis_desktop_pg_host
+    ET.SubElement(properties, "PostgreSQLPort").text = str(settings.gis_qgis_desktop_pg_port)
+    ET.SubElement(properties, "PostgreSQLDatabase").text = settings.gis_qgis_desktop_pg_database
     tree = ET.SubElement(
         root,
         "layer-tree-group",
@@ -204,7 +217,8 @@ def _readme(layer_count: int, generated_at: datetime) -> str:
     return (
         "GAIA GIS Platform - progetto QGIS unico\n\n"
         f"Generato: {generated_at.astimezone(UTC).isoformat()}\nLayer inclusi: {layer_count}\n"
-        f"Connessione PostGIS attesa: service={CONNECTION_SERVICE}\n\n"
+        "Connessione PostGIS: host, porta e database sono inclusi nel progetto;\n"
+        "inserire in QGIS le credenziali personali dell'utente qgis_* quando richiesto.\n\n"
         "Configurare in QGIS l'autenticazione gaia_oauth per il proxy HTTPS GAIA. Il progetto non contiene token.\n"
         "I layer territoriali sono WMS in sola lettura e puntano esclusivamente al proxy GAIA.\n"
     )

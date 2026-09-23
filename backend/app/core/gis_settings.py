@@ -103,6 +103,20 @@ class GisSettings(StorageSettings):
         default="http://localhost:8000",
         alias="GIS_QGIS_PROXY_BASE_URL",
     )
+    gis_qgis_desktop_pg_host: str = Field(
+        default="",
+        alias="GIS_QGIS_DESKTOP_PG_HOST",
+    )
+    gis_qgis_desktop_pg_port: int = Field(
+        default=5432,
+        gt=0,
+        le=65535,
+        alias="GIS_QGIS_DESKTOP_PG_PORT",
+    )
+    gis_qgis_desktop_pg_database: str = Field(
+        default="",
+        alias="GIS_QGIS_DESKTOP_PG_DATABASE",
+    )
     gis_interrogazione_enabled: bool = Field(
         default=False,
         alias="GIS_INTERROGAZIONE_ENABLED",

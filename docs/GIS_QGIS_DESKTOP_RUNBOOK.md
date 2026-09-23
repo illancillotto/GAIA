@@ -53,7 +53,9 @@ GRANT gaia_gis_qgis_editor TO qgis_nomeutente;
 
 ## Progetto QGIS Unico
 
-La GIS Platform genera un progetto `.qgz` unico per l'utente corrente:
+La GIS Platform genera un progetto `.qgz` unico per l'utente corrente. Host,
+porta e database PostGIS sono inclusi nel progetto; la password resta esclusa
+e QGIS richiede le credenziali personali dell'utente `qgis_*` quando necessario:
 
 ```http
 GET /gis/qgis/project
@@ -75,7 +77,7 @@ Regole di inclusione:
 - solo layer con colonna geometrica configurata;
 - esclusione di layer `postgis_staging`, registry applicativi e metadata
   `qgis.mode=not_published`;
-- connessione PostGIS tramite servizio client `gaia_gis`;
+- connessione PostGIS tramite host, porta e database configurati da GAIA;
 - layer Catasto read-only;
 - eventuali layer editabili solo se il dominio ha policy `controlled` e ruoli
   DB coerenti.
@@ -130,6 +132,11 @@ Docker usa il nome servizio `qgis-server`; non pubblicare una porta host del
 container. Se backend e QGIS Server sono separati, usare la rete VPN CED e una
 regola firewall che ammetta solo il backend GAIA. In entrambi i casi
 `GIS_QGIS_PROXY_BASE_URL` e la base HTTPS GAIA raggiungibile dai client QGIS.
+Configurare inoltre `GIS_QGIS_DESKTOP_PG_HOST`, `GIS_QGIS_DESKTOP_PG_PORT` e
+`GIS_QGIS_DESKTOP_PG_DATABASE` con l'indirizzo PostgreSQL raggiungibile dalle
+postazioni QGIS. Non usare il nome Docker `postgres` o l'host interno visibile
+solo dal backend. Il progetto scaricato usa questi parametri direttamente e
+non richiede una definizione locale `pg_service.conf`.
 
 Il progetto `.qgz` e le capabilities non devono contenere password, token,
 credenziali DB o l'URL interno QGIS Server. L'autenticazione client resta nella
@@ -232,7 +239,7 @@ Catasto.
 - Revisionare SQL generato.
 - Eseguire SQL in manutenzione controllata.
 - Creare ruoli LOGIN `qgis_*` separati.
-- Configurare sul PC QGIS il servizio PostgreSQL `gaia_gis`.
+- Verificare che host, porta e database PostgreSQL siano raggiungibili dal PC QGIS.
 - Configurare `gaia_oauth` per i layer territoriali via proxy GAIA.
 - Scaricare il progetto da `/gis/catalogo` o da `GET /gis/qgis/project`.
 - Testare accesso reader su view `gis_qgis`.

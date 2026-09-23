@@ -1234,9 +1234,9 @@ dell'interrogazione e corretto e non deve essere mascherato.
   sostituisce le change request per modifiche a layer ufficiali.
 - M15 legge la staging table per preview: se lo staging viene rimosso fuori dal
   workflow, l'endpoint risponde `409` e non tenta ricostruzioni implicite.
-- M16 genera il progetto QGIS con datasource `service=gaia_gis`: ogni PC deve
-  configurare quel servizio PostgreSQL con credenziali dedicate, altrimenti QGIS
-  aprira il progetto ma non potra connettersi al database.
+- M16 genera il progetto QGIS con datasource PostgreSQL esplicito; il server
+  configura host/porta/database raggiungibili dai client, che inseriscono le
+  credenziali personali dedicate senza `pg_service.conf` locale.
 - M17 crea change request `feature_create` da staging import: con M20 l'apply
   puo scrivere solo se il layer ufficiale target e non Catasto e ha opt-in
   controlled edit.

@@ -1273,7 +1273,12 @@ def test_qgis_governance_generates_read_only_views_and_controlled_edit_sql() -> 
     assert "archivio_shp" not in payload["sql"]
 
 
-def test_qgis_project_download_includes_only_visible_publishable_postgis_layers() -> None:
+def test_qgis_project_download_includes_only_visible_publishable_postgis_layers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "gis_qgis_desktop_pg_host", "gis-db.example.test")
+    monkeypatch.setattr(settings, "gis_qgis_desktop_pg_port", 5432)
+    monkeypatch.setattr(settings, "gis_qgis_desktop_pg_database", "gaia")
     admin_headers = auth_headers("gis-admin")
     viewer_headers = auth_headers("gis-viewer")
     visible_layer = create_layer(
@@ -1342,13 +1347,18 @@ def test_qgis_project_download_includes_only_visible_publishable_postgis_layers(
         manifest = json.loads(archive.read("manifest.json"))
         readme = archive.read("README_QGIS.txt").decode("utf-8")
 
-    assert "service='gaia_gis'" in project_xml
+    assert "service='gaia_gis'" not in project_xml
+    assert "host='gis-db.example.test' port=5432 dbname='gaia'" in project_xml
     assert "Rete condotte" in project_xml
     assert "Rete valvole" in project_xml
     assert "rete_upload" not in project_xml
     assert "rete_staging" not in project_xml
     assert hidden_layer["name"] not in project_xml
-    assert manifest["connection_service"] == "gaia_gis"
+    assert manifest["connection"] == {
+        "host": "gis-db.example.test",
+        "port": 5432,
+        "database": "gaia",
+    }
     assert manifest["policy"]["excluded"] == ["postgis_staging", "domain_registry", "qgis.mode=not_published"]
     assert [layer["name"] for layer in manifest["layers"]] == [
         "rete_condotte",
@@ -1360,6 +1370,9 @@ def test_qgis_project_download_includes_only_visible_publishable_postgis_layers(
 def test_qgis_project_includes_only_visible_territorio_layers_through_gaia_proxy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(settings, "gis_qgis_desktop_pg_host", "gis-db.example.test")
+    monkeypatch.setattr(settings, "gis_qgis_desktop_pg_port", 5432)
+    monkeypatch.setattr(settings, "gis_qgis_desktop_pg_database", "gaia")
     admin_headers = auth_headers("gis-admin")
     viewer_headers = auth_headers("gis-viewer")
     visible = _create_external_layer(admin_headers)

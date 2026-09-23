@@ -795,7 +795,7 @@ Runtime implementato:
   geometria configurata e `qgis.mode != not_published`;
 - esclusione implicita di `postgis_staging`, `domain_registry` e layer import
   shapefile non ufficiali;
-- datasource QGIS PostGIS tramite servizio client `gaia_gis`;
+- datasource QGIS PostGIS con host/porta/database client configurati;
 - errore `409` se l'utente non ha layer QGIS pubblicabili.
 
 Frontend implementato:
@@ -812,7 +812,7 @@ Regole:
   vede gia nel catalogo;
 - lo staging da import shapefile resta consultabile in GAIA ma non viene
   promosso a layer QGIS;
-- il PC QGIS deve configurare il servizio PostgreSQL `gaia_gis` con credenziali
+- il PC QGIS deve raggiungere l'host PostgreSQL configurato e usare credenziali
   DB dedicate;
 - nessuna modifica a `/catasto/gis`.
 

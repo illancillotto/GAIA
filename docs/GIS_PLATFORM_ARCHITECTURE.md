@@ -336,9 +336,9 @@ QGIS resta il client tecnico. L'uso raccomandato e:
 
 M16 rende operativo il progetto QGIS unico: `GET /gis/qgis/project` genera un
 `.qgz` per l'utente corrente, filtrato sui layer visibili e pubblicabili,
-raggruppato per workspace e collegato a PostGIS tramite servizio client
-`gaia_gis`. Il progetto esclude `postgis_staging`, registry applicativi e layer
-con `qgis.mode=not_published`.
+raggruppato per workspace e collegato a PostGIS con host, porta e database
+configurati per i client desktop. Il progetto esclude `postgis_staging`, registry
+applicativi e layer con `qgis.mode=not_published`.
 
 ### Governance QGIS Desktop M6
 

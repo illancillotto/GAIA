@@ -611,7 +611,7 @@ Deliverable:
 Implementato:
 
 - generazione XML QGIS con gruppi per workspace e datasource PostGIS tramite
-  servizio client `gaia_gis`;
+  parametri client host/porta/database espliciti, senza servizio `pg_service.conf`;
 - manifest deterministico con policy di inclusione/esclusione;
 - `409` quando l'utente non ha layer QGIS pubblicabili;
 - download browser `.qgz` da catalogo;
