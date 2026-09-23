@@ -335,6 +335,7 @@ class PresenzeCollaboratorResponse(BaseModel):
     company_label: str | None = None
     name: str
     birth_date: date | None = None
+    tax_code: str | None = None
     contract_kind: PresenzeContractKind | None = None
     operai_group: PresenzeOperaiGroup | None = None
     standard_daily_minutes: int | None = None

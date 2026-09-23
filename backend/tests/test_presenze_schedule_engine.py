@@ -48,13 +48,10 @@ from app.modules.presenze.services.xlsm_export import (
     ARCHIVE2_CLEAR_SPEC,
     ExportTimesheetRow,
     build_archive_record_key,
-    build_operai_period_text,
     build_period_label,
     clear_sheet_rows,
     close_workbook_resources,
     compile_workbook,
-    format_operai_date,
-    load_operai_metadata,
     normalize_request_display_label,
     normalize_request_prefix,
     resolve_export_absence_code,
@@ -64,6 +61,11 @@ from app.modules.presenze.services.xlsm_export import (
     upsert_archivio_row,
     write_archive2_daily_values,
     write_archivio_summary_values,
+)
+from app.modules.presenze.services.xlsm_metadata import (
+    build_operai_period_text,
+    format_operai_date,
+    load_operai_metadata,
 )
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -886,7 +888,7 @@ def test_load_operai_metadata_and_upsert_archive2_cover_source_and_fallback_path
         period_start=date(2026, 2, 1),
         operai_metadata_by_employee=metadata,
     )
-    assert archive2.cell(row_index_existing, 1).value == "2/2026-EXISTING"
+    assert archive2.cell(row_index_existing, 1).value == "2/2026-MDASVT67B26B314W"
     assert archive2.cell(row_index_existing, 5).value == "MANSIONE SRC"
 
     archive2_existing = workbook.create_sheet("Archivio2Existing")

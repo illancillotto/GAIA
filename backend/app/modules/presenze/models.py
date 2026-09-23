@@ -261,6 +261,7 @@ class PresenzeCollaborator(Base):
     company_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     birth_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    tax_code: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     contract_kind: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     operai_group: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     standard_daily_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)

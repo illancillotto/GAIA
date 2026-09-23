@@ -23,6 +23,11 @@ from app.modules.presenze.services.schedule_engine import (
     ScheduleContext,
     classify_daily_record,
 )
+from app.modules.presenze.services.xlsm_metadata import (
+    OperaiMetadata,
+    load_workbook_metadata,
+    resolve_archive_record_source,
+)
 
 MONTHS_IT = [
     "gennaio",
@@ -139,15 +144,6 @@ class ExportTimesheetRow:
 
 
 @dataclass(frozen=True)
-class OperaiMetadata:
-    tax_code: str | None
-    qualifica: str | None
-    mansione: str | None
-    inquadramento: str | None
-    period_text: str | None
-
-
-@dataclass(frozen=True)
 class SheetClearSpec:
     start_row: int
     key_columns: tuple[int, ...]
@@ -254,53 +250,6 @@ def find_metadata_source_row(ws: Worksheet, employee_code: int, *, exclude_row: 
     return None
 
 
-def format_operai_date(value: object | None) -> str:
-    if value is None:
-        return "--"
-    if hasattr(value, "strftime"):
-        return value.strftime("%d-%m-%y")
-    return str(value).strip() or "--"
-
-
-def build_operai_period_text(
-    dal: object | None,
-    al: object | None,
-    proroga: object | None,
-    riass1_dal: object | None,
-    riass1_al: object | None,
-) -> str | None:
-    values = [dal, al, proroga, riass1_dal, riass1_al]
-    if all(value in (None, "", "--") for value in values):
-        return None
-    return (
-        f"Dal {format_operai_date(dal)} al {format_operai_date(al)}"
-        f"        Proroga al {format_operai_date(proroga)}"
-        f"                            Riass.dal {format_operai_date(riass1_dal)} al {format_operai_date(riass1_al)}"
-    )
-
-
-def load_operai_metadata(ws: Worksheet) -> dict[int, OperaiMetadata]:
-    metadata: dict[int, OperaiMetadata] = {}
-    for row in range(2, ws.max_row + 1):
-        employee_code = ws.cell(row, 4).value
-        if not isinstance(employee_code, int):
-            continue
-        metadata[employee_code] = OperaiMetadata(
-            tax_code=str(ws.cell(row, 16).value).strip() if ws.cell(row, 16).value not in (None, "") else None,
-            qualifica=str(ws.cell(row, 5).value).strip() if ws.cell(row, 5).value not in (None, "") else None,
-            mansione=str(ws.cell(row, 6).value).strip() if ws.cell(row, 6).value not in (None, "") else None,
-            inquadramento=str(ws.cell(row, 7).value).strip() if ws.cell(row, 7).value not in (None, "") else None,
-            period_text=build_operai_period_text(
-                ws.cell(row, 8).value,
-                ws.cell(row, 9).value,
-                ws.cell(row, 10).value,
-                ws.cell(row, 11).value,
-                ws.cell(row, 12).value,
-            ),
-        )
-    return metadata
-
-
 def clear_sheet_rows(ws: Worksheet, spec: SheetClearSpec) -> None:
     for row in range(spec.start_row, ws.max_row + 1):
         if not any(ws.cell(row, col).value not in (None, "") for col in spec.key_columns):
@@ -334,11 +283,11 @@ def upsert_archive2_row(
         )
     source_row = find_metadata_source_row(ws, employee_code, exclude_row=existing_row)
     operai_metadata = (operai_metadata_by_employee or {}).get(employee_code)
-    source_record_key = ws.cell(source_row, 1).value if source_row is not None else operai_metadata.tax_code if operai_metadata else None
+    historical_key = ws.cell(source_row, 1).value if source_row is not None else None
+    source_record_key = resolve_archive_record_source(historical_key, collaborator, operai_metadata)
     ws.cell(existing_row, 1).value = build_archive_record_key(
         source_record_key,
-        period_start=period_start,
-        employee_code=collaborator.employee_code,
+        period_start=period_start, employee_code=collaborator.employee_code,
     )
     ws.cell(existing_row, 2).value = employee_code
     ws.cell(existing_row, 3).value = period_label
@@ -387,10 +336,9 @@ def upsert_archivio_row(
             break
 
     operai_metadata = (operai_metadata_by_employee or {}).get(employee_code)
-    source_record_key = (
-        ws.cell(source_row, ARCHIVIO_COLUMNS["record_key"]).value
-        if source_row is not None
-        else operai_metadata.tax_code if operai_metadata else None
+    source_record_key = resolve_archive_record_source(
+        ws.cell(source_row, ARCHIVIO_COLUMNS["record_key"]).value if source_row is not None else None,
+        collaborator, operai_metadata,
     )
     ws.cell(existing_row, ARCHIVIO_COLUMNS["index"]).value = (
         existing_row - 1 if existing_row == 2 else f"=+A{existing_row - 1}+1"
@@ -585,7 +533,6 @@ def compile_workbook(
     try:
         archivio = workbook["Archivio"] if "Archivio" in workbook.sheetnames else None
         archive2 = workbook["Archivio2"]
-        operai = workbook["Operai"] if "Operai" in workbook.sheetnames else None
         giornaliera = workbook["Giornaliera2"] if "Giornaliera2" in workbook.sheetnames else workbook["Giornaliera"]
         if archivio is not None:
             clear_sheet_rows(archive2, ARCHIVE2_CLEAR_SPEC)
@@ -593,7 +540,7 @@ def compile_workbook(
         giornaliera["A3"] = period_start.month
         giornaliera["C3"] = period_start.year
         giornaliera["B2"] = employee_kind
-        operai_metadata_by_employee = load_operai_metadata(operai) if operai is not None else {}
+        operai_metadata_by_employee = load_workbook_metadata(workbook)
 
         for item in rows:
             row_index = upsert_archive2_row(

@@ -317,6 +317,7 @@ def _record_collaborator_values(
         "gaia_user_id": canonical_record_gaia_user_id(record, collaborator),
         "collaborator_name": collaborator.name if collaborator else str(record.collaborator_id),
         "employee_code": collaborator.employee_code if collaborator else "",
+        "tax_code": collaborator.tax_code if collaborator else None,
         "contract_kind": collaborator.contract_kind if collaborator else None,
         "operai_group": collaborator.operai_group if collaborator else None,
         "standard_daily_minutes": collaborator.standard_daily_minutes if collaborator else None,
