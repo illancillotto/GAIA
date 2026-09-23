@@ -353,6 +353,48 @@ simile, tracking o flag matched. Il comando auditato descritto sotto trasferisce
 invii ed evidenze solo dopo il confronto dell'operatore. I conflitti di import
 non vengono marcati risolti automaticamente dopo una modifica del documento.
 
+### Anteprima Campagna Poste 2022-2023 (2026-09-23)
+
+Prima fase della correzione del matching singolo: endpoint di sola lettura
+`GET /ruolo/tributi/raccomandate/campaign-preview?created_before=<ISO-8601 con fuso>`.
+Richiede modulo Ruolo, `ruolo.tributi.view` e `ruolo.tributi.manage_status`.
+Il cutoff di creazione e obbligatorio e strettamente esclusivo: il chiamante deve
+identificare lo snapshot storico, senza estendere automaticamente la regola agli
+import futuri. Massimo 10000 spedizioni `posta_online`, altrimenti errore 422.
+
+La dichiarazione operativa della campagna e 2022-2023; `annualita_json` legacy
+non certifica il contenuto della busta e non viene usato come prova. Tutti gli
+stati di matching vengono esaminati, inclusi i record gia collegati a un solo
+avviso. Gli ID candidati legacy e il soggetto sono indizi da verificare, mai
+autorizzazioni all'associazione. Il nome non crea identita. Senza indizi di
+soggetto l'esito resta da verificare; questa fase non riesegue matching fuzzy.
+
+Esiti del report:
+
+- `proposed_pair`: un avviso per ciascun anno sul medesimo soggetto candidato;
+- `extend_single_link`: stessa coppia, con collegamento singolo legacy esistente;
+- `incomplete`: almeno un'annualita mancante;
+- `ambiguous`: piu avvisi nello stesso anno, senza sceglierne arbitrariamente uno;
+- `already_registered`: il Registro contiene esattamente la coppia proposta;
+- `review_required`: identita assente/conflittuale, indizi fuori campagna,
+  rimozione manuale o perimetro del Registro non coincidente.
+
+Ogni riga richiede conferma operatore, anche `already_registered` non e una
+certificazione della notifica. Il report espone documento canonico e avvisi
+collegati senza trasferire tentativi o cambiare posizioni. Non esegue flush,
+scritture, applicazioni massive, calcoli di interessi o recuperi di spese.
+L'API PATCH accetta `avviso_ids` e, dopo la conferma di piu avvisi, crea o
+aggiorna il documento cumulativo nel Registro con le relative posizioni e il
+tentativo raccomandata. Il primo avviso resta il riferimento legacy. Il costo
+della raccomandata e conservato una sola volta nel documento cumulativo, anche
+quando contiene piu posizioni annuali; non viene duplicato sulle posizioni.
+I consumatori principali di dettaglio, date di notifica e recupero considerano
+anche le posizioni secondarie.
+
+Verifiche locali: test del servizio e dell'API, inclusi autorizzazioni, cutoff,
+assenza di scritture, rimozioni manuali, duplicati e Registro gia riconciliato.
+Nessuna riconciliazione applicata a dati reali; nessun deployment implicito.
+
 ### Riconciliazione Manuale Poste
 
 - Dalla scheda Poste senza posizioni, ricerca per numero documento, riferimento
@@ -686,3 +728,13 @@ Prossimo blocco: pagina operativa del registro, form manuali e workflow anomalie
 Ancora esclusi import Excel/Poste, inserimento automatico dei nuovi avvisi GAIA,
 nuove campagne di invio e parser/connettore STEP. Il GET invii e pronto a leggere
 tentativi, ma il comando manuale di inserimento invio non fa parte di questo blocco.
+
+Per le raccomandate Poste e disponibile una preview storica (`GET
+/ruolo/tributi/raccomandate/campaign-preview`) filtrata da `created_before`.
+L'associazione manuale accetta anche `avviso_ids`: il primo resta il riferimento
+legacy `avviso_id`, mentre l'elenco completo viene conservato nell'audit della
+raccomandata e nel documento cumulativo del Registro, con una posizione per
+annualita e un `NoticeAttempt` collegato. Gli avvisi devono appartenere allo
+stesso contribuente e non possono ripetere l'annualita. La rimozione scollega le
+posizioni del Registro mantenendo l'audit. Questa fase non aggiorna ancora
+automaticamente notifiche, interessi o recupero spese.

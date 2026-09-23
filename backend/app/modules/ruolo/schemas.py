@@ -585,6 +585,7 @@ class RuoloTributiRegisteredMailResponse(BaseModel):
     id: uuid.UUID
     import_job_id: uuid.UUID | None = None
     avviso_id: uuid.UUID | None = None
+    avviso_ids: list[uuid.UUID] = Field(default_factory=list)
     subject_id: uuid.UUID | None = None
     source_system: str
     source_shipment_id: str

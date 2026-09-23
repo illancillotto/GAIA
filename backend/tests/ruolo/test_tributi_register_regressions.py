@@ -260,6 +260,106 @@ def test_registered_mail_manual_association_survives_reimport():
         assert repeated.raw_payload_json["candidate_avviso_ids"] == []
 
 
+def test_registered_mail_multi_association_publishes_cumulative_register():
+    with TestingSessionLocal() as db:
+        subject = AnagraficaSubject(source_name_raw="CONTRIBUENTE CUMULATIVO")
+        other_subject = AnagraficaSubject(source_name_raw="ALTRO CONTRIBUENTE")
+        db.add_all([subject, other_subject])
+        db.flush()
+        job = RuoloTributiPostaOnlineImportJob(filename="multi.json", status="completed")
+        db.add(job)
+        db.flush()
+        avvisi = [
+            RuoloAvviso(
+                import_job_id=job.id,
+                codice_cnc=f"MULTI-{year}",
+                anno_tributario=year,
+                subject_id=subject.id,
+                codice_fiscale_raw="RSSMRA80A01H501Z",
+                nominativo_raw="CONTRIBUENTE CUMULATIVO",
+            )
+            for year in (2022, 2023)
+        ]
+        other = RuoloAvviso(
+            import_job_id=job.id,
+            codice_cnc="MULTI-OTHER",
+            anno_tributario=2023,
+            subject_id=other_subject.id,
+        )
+        mail = RuoloTributiRegisteredMail(
+            source_shipment_id="MULTI-1",
+            recipient_index=0,
+            match_status="unmatched",
+            recovery_status="pending",
+            price_amount=Decimal("11.55"),
+        )
+        db.add_all([*avvisi, other, mail])
+        db.flush()
+
+        registered_mail_association.set_manual_association(
+            db, mail=mail, avvisi=avvisi, avviso=avvisi[0], updated_by=7
+        )
+        document = db.scalar(select(NoticeDocument))
+        assert document is not None
+        assert document.original_json["registered_mail_cost_amount"] == 11.55
+        assert len(list(db.scalars(select(NoticePosition)))) == 2
+        attempt = db.scalar(select(NoticeAttempt))
+        assert attempt is not None and attempt.registered_mail_id == mail.id
+        assert mail.raw_payload_json["manual_association"]["avviso_ids"] == [
+            str(item.id) for item in avvisi
+        ]
+
+        db.add(
+            RuoloTributiPayment(
+                avviso_id=avvisi[1].id,
+                amount=Decimal("3.00"),
+                source="manual",
+                status="valid",
+            )
+        )
+        db.flush()
+        repo.mark_registered_mail_recovery_on_payment(db, avviso_id=avvisi[1].id)
+        assert mail.recovery_status == "ready_on_payment"
+
+        replacement = [
+            RuoloAvviso(
+                import_job_id=job.id,
+                codice_cnc=f"MULTI-REPLACED-{year}",
+                anno_tributario=year,
+                subject_id=subject.id,
+                codice_fiscale_raw="RSSMRA80A01H501Z",
+                nominativo_raw="CONTRIBUENTE CUMULATIVO",
+            )
+            for year in (2024, 2025)
+        ]
+        db.add_all(replacement)
+        db.flush()
+        registered_mail_association.set_manual_association(
+            db, mail=mail, avvisi=replacement, avviso=replacement[0], updated_by=7
+        )
+        positions = list(
+            db.scalars(
+                select(NoticePosition)
+                .where(NoticePosition.document_id == document.id)
+                .order_by(NoticePosition.tax_year)
+            )
+        )
+        assert [(position.tax_year, position.avviso_id) for position in positions] == [
+            (2022, None),
+            (2023, None),
+            (2024, replacement[0].id),
+            (2025, replacement[1].id),
+        ]
+
+        with pytest.raises(ValueError, match="stesso contribuente"):
+            registered_mail_association.set_manual_association(
+                db, mail=mail, avvisi=[avvisi[0], other], avviso=avvisi[0], updated_by=7
+            )
+
+        registered_mail_association.set_manual_association(db, mail=mail, avviso=None, updated_by=7)
+        assert all(position.avviso_id is None for position in db.scalars(select(NoticePosition)))
+
+
 def test_registered_mail_manual_unlink_and_stale_target_remain_fail_closed():
     with TestingSessionLocal() as db:
         job = RuoloTributiPostaOnlineImportJob(filename="manual-unlink.json", status="completed")

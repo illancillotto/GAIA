@@ -21,6 +21,7 @@ from app.modules.ruolo.models import (
 )
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice, AnagraficaPerson, AnagraficaSubject
 from app.modules.utenze.services.subject_identity import normalize_tax_identifier
+from app.modules.ruolo.services.registered_mail_association import associated_avviso_ids
 
 
 # ---------------------------------------------------------------------------
@@ -195,25 +196,23 @@ def _batch_load_avviso_notification_summaries(
 
     registered_rows = db.execute(
         select(RuoloTributiRegisteredMail)
-        .where(
-            RuoloTributiRegisteredMail.avviso_id.in_(avviso_ids),
-            RuoloTributiRegisteredMail.match_status == "matched",
-        )
+        .where(RuoloTributiRegisteredMail.match_status == "matched")
         .order_by(
             RuoloTributiRegisteredMail.sent_at.desc().nullslast(),
             RuoloTributiRegisteredMail.created_at.desc(),
         )
     ).scalars().all()
     for mail in registered_rows:
-        if mail.avviso_id is None or summaries[mail.avviso_id]["registered_mail"] is not None:
-            continue
-        summaries[mail.avviso_id]["registered_mail"] = {
-            "source_shipment_id": mail.source_shipment_id,
-            "service": mail.service,
-            "status_label": mail.status_label,
-            "sent_at": mail.sent_at,
-            "tracking_number": mail.tracking_number,
-        }
+        for avviso_id in associated_avviso_ids(mail).intersection(avviso_ids):
+            if summaries[avviso_id]["registered_mail"] is not None:
+                continue
+            summaries[avviso_id]["registered_mail"] = {
+                "source_shipment_id": mail.source_shipment_id,
+                "service": mail.service,
+                "status_label": mail.status_label,
+                "sent_at": mail.sent_at,
+                "tracking_number": mail.tracking_number,
+            }
 
     return summaries
 

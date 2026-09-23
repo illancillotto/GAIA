@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Annotated
 import json
-from urllib.parse import quote
 import uuid
+from typing import Annotated
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, Response
@@ -14,18 +14,23 @@ from app.api.deps import require_module, require_section
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.modules.ruolo import tributi_repositories as repo
-from app.modules.ruolo.models import RuoloAvviso, RuoloTributiNote, RuoloTributiPayment, RuoloTributiReminder
+from app.modules.ruolo.models import (
+    RuoloAvviso,
+    RuoloTributiNote,
+    RuoloTributiPayment,
+    RuoloTributiReminder,
+)
 from app.modules.ruolo.schemas import (
     RuoloTributiAvvisoDetailResponse,
     RuoloTributiAvvisoListItemResponse,
     RuoloTributiAvvisoListResponse,
     RuoloTributiAvvisoStatusResponse,
     RuoloTributiAvvisoStatusUpdateRequest,
-    RuoloTributiIncassNoticeResponse,
     RuoloTributiCalculationPolicyListResponse,
     RuoloTributiCalculationPolicyResponse,
     RuoloTributiCalculationPolicyUpsertRequest,
     RuoloTributiEuriborRateResponse,
+    RuoloTributiIncassNoticeResponse,
     RuoloTributiNoteCreateRequest,
     RuoloTributiNoteResponse,
     RuoloTributiPaymentCreateRequest,
@@ -58,13 +63,13 @@ from app.modules.ruolo.schemas import (
     RuoloTributiYearManagerResponse,
     RuoloTributiYearManagerUpsertRequest,
 )
-from app.modules.ruolo.services.euribor import fetch_euribor_6m_average
 from app.modules.ruolo.services.capacitas_role_codes import (
     CAPACITAS_ROLE_ACCOUNTING_SCOPE_OUT_OF_ORDINARY,
     CAPACITAS_ROLE_OPERATIONAL_POLICY_AUDIT_ONLY,
     CAPACITAS_SPECIAL_NOTICE_POLICY_NOTE,
     CAPACITAS_SPECIAL_NOTICE_STATUS_TO_REVIEW,
 )
+from app.modules.ruolo.services.euribor import fetch_euribor_6m_average
 from app.modules.ruolo.services.tributi_reminder_service import DOCX_MEDIA_TYPE, PDF_MEDIA_TYPE
 
 router = APIRouter(
@@ -104,7 +109,15 @@ def _posta_online_import_job_to_response(job) -> RuoloTributiPostaOnlineImportJo
 
 
 def _registered_mail_to_response(mail) -> RuoloTributiRegisteredMailResponse:
-    return RuoloTributiRegisteredMailResponse.model_validate(mail)
+    result = RuoloTributiRegisteredMailResponse.model_validate(mail)
+    payload = mail.raw_payload_json if isinstance(mail.raw_payload_json, dict) else {}
+    association = payload.get("manual_association")
+    values = association.get("avviso_ids") if isinstance(association, dict) else None
+    if isinstance(values, list):
+        result.avviso_ids = [uuid.UUID(value) for value in values if isinstance(value, str)]
+    elif mail.avviso_id is not None:
+        result.avviso_ids = [mail.avviso_id]
+    return result
 
 
 def _note_to_response(note: RuoloTributiNote) -> RuoloTributiNoteResponse:

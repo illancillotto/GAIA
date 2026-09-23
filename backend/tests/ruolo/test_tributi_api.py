@@ -1358,6 +1358,13 @@ def test_tributi_registered_mail_manual_association_api() -> None:
     assert payload["raw_payload_json"]["manual_association"]["avviso_id"] == avviso_id
     assert isinstance(payload["raw_payload_json"]["manual_association"]["updated_by"], int)
 
+    duplicate_ids = client.patch(
+        f"/ruolo/tributi/raccomandate/{mail_id}/association",
+        headers=headers,
+        json={"avviso_ids": [avviso_id, avviso_id]},
+    )
+    assert duplicate_ids.status_code == 422
+
     unlinked = client.patch(
         f"/ruolo/tributi/raccomandate/{mail_id}/association",
         headers=headers,

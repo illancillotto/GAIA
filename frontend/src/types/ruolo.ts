@@ -464,6 +464,7 @@ export type RuoloTributiRegisteredMailResponse = {
   id: string;
   import_job_id: string | null;
   avviso_id: string | null;
+  avviso_ids: string[];
   subject_id: string | null;
   source_system: string;
   source_shipment_id: string;
@@ -492,7 +493,8 @@ export type RuoloTributiRegisteredMailResponse = {
 };
 
 export type RuoloTributiRegisteredMailAssociationRequest = {
-  avviso_id: string | null;
+  avviso_id?: string | null;
+  avviso_ids?: string[];
 };
 
 export type RuoloTributiRegisteredMailListResponse = {

@@ -26,10 +26,15 @@ function formatMoney(value: number | null): string {
   return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(value);
 }
 
+function toggleId(current: string[], id: string): string[] {
+  if (current.includes(id)) return current.filter((value) => value !== id);
+  return [...current, id];
+}
+
 function useAssociationModal({ mail, token, onClose, onSaved }: RegisteredMailAssociationModalProps) {
   const [query, setQuery] = useState(mail.recipient_name ?? mail.shipment_name ?? "");
   const [items, setItems] = useState<RuoloTributiAvvisoListItemResponse[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(mail.avviso_id);
+  const [selectedIds, setSelectedIds] = useState<string[]>(mail.avviso_ids?.length ? mail.avviso_ids : mail.avviso_id ? [mail.avviso_id] : []);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -74,11 +79,15 @@ function useAssociationModal({ mail, token, onClose, onSaved }: RegisteredMailAs
     };
   }, [query, token]);
 
-  async function saveAssociation(avvisoId: string | null): Promise<void> {
+  function toggleSelected(id: string): void {
+    setSelectedIds((current) => toggleId(current, id));
+  }
+
+  async function saveAssociation(ids: string[]): Promise<void> {
     setSaving(true);
     setError(null);
     try {
-      onSaved(await updateTributiRegisteredMailAssociation(token, mail.id, { avviso_id: avvisoId }));
+      onSaved(await updateTributiRegisteredMailAssociation(token, mail.id, { avviso_ids: ids }));
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Errore aggiornamento associazione");
     } finally {
@@ -94,9 +103,9 @@ function useAssociationModal({ mail, token, onClose, onSaved }: RegisteredMailAs
     query,
     saveAssociation,
     saving,
-    selectedId,
+    selectedIds,
     setQuery,
-    setSelectedId,
+    toggleSelected,
   };
 }
 
@@ -117,7 +126,7 @@ function AssociationHeader({
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Matching manuale</p>
           <h2 id="registered-mail-association-title" className="mt-2 text-2xl font-semibold text-gray-900">
-            Associa raccomandata ad avviso
+            Associa raccomandata ad avvisi
           </h2>
           <p className="mt-2 text-sm text-gray-600">
             {mail.recipient_name ?? mail.shipment_name ?? "Destinatario non letto"} · invio {mail.source_shipment_id}
@@ -149,7 +158,7 @@ function AssociationResult({
         isSelected ? "border-[#1D4E35] bg-[#edf5ef] shadow-sm" : "border-gray-200 bg-white hover:border-[#9db3a3]"
       }`}
       onClick={() => onSelect(item.id)}
-      role="radio"
+      role="checkbox"
       type="button"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -187,14 +196,14 @@ function AssociationSearch({ state }: { state: AssociationModalState }) {
       {state.loading ? <p className="py-8 text-center text-sm text-gray-500">Ricerca avvisi...</p> : null}
       {!state.loading && state.items.length === 0 ? <p className="py-8 text-center text-sm text-gray-500">Nessun avviso trovato.</p> : null}
       {!state.loading && state.items.length > 0 ? (
-        <div className="space-y-2" role="radiogroup" aria-label="Avvisi disponibili">
+        <div className="space-y-2" role="group" aria-label="Avvisi disponibili">
           {state.items.map((item) => (
             <AssociationResult
               isCandidate={state.automaticCandidates.has(item.id)}
-              isSelected={state.selectedId === item.id}
+              isSelected={state.selectedIds.includes(item.id)}
               item={item}
               key={item.id}
-              onSelect={state.setSelectedId}
+              onSelect={state.toggleSelected}
             />
           ))}
         </div>
@@ -209,18 +218,18 @@ function AssociationFooter({ mail, state }: { mail: RuoloTributiRegisteredMailRe
       <button
         className="btn-secondary text-red-700"
         disabled={state.saving || mail.avviso_id == null}
-        onClick={() => void state.saveAssociation(null)}
+        onClick={() => void state.saveAssociation([])}
         type="button"
       >
         Rimuovi associazione
       </button>
       <button
         className="btn-primary"
-        disabled={state.saving || state.selectedId == null}
-        onClick={() => void state.saveAssociation(state.selectedId)}
+        disabled={state.saving || state.selectedIds.length === 0}
+        onClick={() => void state.saveAssociation(state.selectedIds)}
         type="button"
       >
-        {state.saving ? "Salvataggio..." : "Conferma associazione"}
+        {state.saving ? "Salvataggio..." : `Conferma ${state.selectedIds.length} avvisi`}
       </button>
     </footer>
   );

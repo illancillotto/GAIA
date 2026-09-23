@@ -64,6 +64,8 @@ from app.modules.ruolo.services.notice_draft_inputs import capture_inputs
 from app.modules.ruolo.services.notice_eligibility import generation_allowed
 from app.modules.ruolo.services.notice_generation import register_batch_item, register_reminder
 from app.modules.ruolo.services.registered_mail_association import (
+    associated_avviso_ids,
+    manual_association,
     preserve_manual_association,
     resolve_import_match,
 )
@@ -942,7 +944,6 @@ def _batch_load_registered_mail_notification_dates(
     dates_by_avviso_id: dict[uuid.UUID, date] = {}
     rows = db.scalars(
         select(RuoloTributiRegisteredMail)
-        .where(RuoloTributiRegisteredMail.avviso_id.in_(avviso_ids))
         .order_by(
             RuoloTributiRegisteredMail.avviso_id,
             RuoloTributiRegisteredMail.sent_at.desc().nullslast(),
@@ -950,12 +951,12 @@ def _batch_load_registered_mail_notification_dates(
         )
     ).all()
     for mail in rows:
-        avviso_id = mail.avviso_id
-        if avviso_id is None or avviso_id in dates_by_avviso_id:
-            continue
         received_at = _registered_mail_received_date(mail)
-        if received_at is not None:
-            dates_by_avviso_id[avviso_id] = received_at
+        if received_at is None:
+            continue
+        for avviso_id in associated_avviso_ids(mail).intersection(avviso_ids):
+            if avviso_id not in dates_by_avviso_id:
+                dates_by_avviso_id[avviso_id] = received_at
     return dates_by_avviso_id
 
 
@@ -2607,8 +2608,6 @@ def list_registered_mails(
     page_size: int = 50,
 ) -> tuple[list[RuoloTributiRegisteredMail], int]:
     query = select(RuoloTributiRegisteredMail)
-    if avviso_id is not None:
-        query = query.where(RuoloTributiRegisteredMail.avviso_id == avviso_id)
     if import_job_id is not None:
         query = query.where(RuoloTributiRegisteredMail.import_job_id == import_job_id)
     if match_status:
@@ -2632,19 +2631,34 @@ def list_registered_mails(
         RuoloTributiRegisteredMail.sent_at.desc().nullslast(),
         RuoloTributiRegisteredMail.created_at.desc(),
     )
-    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
-    items = list(db.scalars(query.offset((page - 1) * page_size).limit(page_size)).all())
+    if avviso_id is not None:
+        all_items = list(db.scalars(query).all())
+        target = str(avviso_id)
+        items = [
+            mail
+            for mail in all_items
+            if mail.avviso_id == avviso_id
+            or target
+            in (
+                (mail.raw_payload_json or {})
+                .get("manual_association", {})
+                .get("avviso_ids", [])
+                if isinstance(mail.raw_payload_json, dict)
+                else []
+            )
+        ]
+        total = len(items)
+        start = (page - 1) * page_size
+        items = items[start : start + page_size]
+    else:
+        total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+        items = list(db.scalars(query.offset((page - 1) * page_size).limit(page_size)).all())
     return items, total
 
 
 def list_registered_mails_for_avviso(db: Session, avviso_id: uuid.UUID) -> list[RuoloTributiRegisteredMail]:
-    return list(
-        db.scalars(
-            select(RuoloTributiRegisteredMail)
-            .where(RuoloTributiRegisteredMail.avviso_id == avviso_id)
-            .order_by(RuoloTributiRegisteredMail.sent_at.desc().nullslast(), RuoloTributiRegisteredMail.created_at.desc())
-        ).all()
-    )
+    items, _ = list_registered_mails(db, avviso_id=avviso_id, page=1, page_size=10000)
+    return items
 
 
 def _normalise_posta_online_years(annualita: list[int] | None) -> list[int]:
@@ -2859,7 +2873,17 @@ def _upsert_posta_online_registered_mail(
     mail.match_score = match.get("match_score")
     mail.match_reason = match.get("match_reason")
     mail.anomaly_key = None if mail.match_status == RuoloTributiRegisteredMailMatchStatus.MATCHED.value else match.get("anomaly_key")
-    mail.recovery_status = _registered_mail_recovery_status(db, avviso=avviso)
+    association = manual_association(existing)
+    associated_ids: set[uuid.UUID] = set()
+    if isinstance(association, dict) and isinstance(association.get("avviso_ids"), list):
+        for value in association["avviso_ids"]:
+            try:
+                associated_ids.add(uuid.UUID(str(value)))
+            except (TypeError, ValueError):
+                continue
+    mail.recovery_status = _registered_mail_recovery_status(
+        db, avviso=avviso, avviso_ids=associated_ids
+    )
     mail.raw_payload_json = preserve_manual_association({
         "normalised_recipient_name": _normalise_posta_online_text(row.get("recipient_name")),
         "normalised_recipient_address": _normalise_posta_online_address(row.get("recipient_address")),
@@ -2871,13 +2895,19 @@ def _upsert_posta_online_registered_mail(
     return mail
 
 
-def _registered_mail_recovery_status(db: Session, *, avviso: RuoloAvviso | None) -> str:
+def _registered_mail_recovery_status(
+    db: Session,
+    *,
+    avviso: RuoloAvviso | None,
+    avviso_ids: set[uuid.UUID] | None = None,
+) -> str:
     if avviso is None:
         return RuoloTributiRegisteredMailRecoveryStatus.PENDING.value
+    linked_ids = avviso_ids or {avviso.id}
     paid_amount = _money_or_zero(
         db.scalar(
             select(func.coalesce(func.sum(RuoloTributiPayment.amount), 0)).where(
-                RuoloTributiPayment.avviso_id == avviso.id,
+                RuoloTributiPayment.avviso_id.in_(linked_ids),
                 RuoloTributiPayment.status == RuoloTributiPaymentRecordStatus.VALID.value,
             )
         )
@@ -2978,13 +3008,14 @@ def mark_registered_mail_recovery_on_payment(
     mails = list(
         db.scalars(
             select(RuoloTributiRegisteredMail).where(
-                RuoloTributiRegisteredMail.avviso_id == avviso_id,
                 RuoloTributiRegisteredMail.match_status == RuoloTributiRegisteredMailMatchStatus.MATCHED.value,
                 RuoloTributiRegisteredMail.recovery_status == RuoloTributiRegisteredMailRecoveryStatus.PENDING.value,
             )
         ).all()
     )
     for mail in mails:
+        if avviso_id not in associated_avviso_ids(mail):
+            continue
         mail.recovery_status = RuoloTributiRegisteredMailRecoveryStatus.READY_ON_PAYMENT.value
         mail.recovered_payment_id = payment_id
     if mails:
