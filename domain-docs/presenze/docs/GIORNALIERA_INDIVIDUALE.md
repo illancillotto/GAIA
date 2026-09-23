@@ -122,3 +122,37 @@ pulito e commit base, conservare l'immagine precedente per rollback, trasferire
 il commit e l'immagine, ricreare solo `frontend` e verificare readiness/route
 tramite il proxy. Questo non e un deploy di GaTe al CED. Nessuna migrazione DB,
 backfill o modifica a credenziali/configurazione di GAIA e necessaria.
+
+## Lettura guidata per i responsabili — aggiornamento UI
+
+La pagina apre con quattro riepiloghi (ore, giorni con ore, assenze e giorni da
+controllare) e schede giornaliere. Colori e parole sono sempre abbinati:
+verde per ore registrate, blu per assenza indicata (ferie, permesso, malattia),
+grigio per riposo o nessuna ora, giallo per dati/ore mancanti, rosso per assenza
+da giustificare. Gli straordinari positivi nel dettaglio sono viola.
+
+La data di riferimento usa Europe/Rome. I giorni futuri restano neutri, con
+“Da venire” oppure “Previsto: Ferie” e la causale disponibile. Non aumentano il
+contatore “Da controllare”. Oggi senza record mostra “In attesa di dati”. Una
+giornata a zero ore non viene interpretata automaticamente come assenza; un
+sabato/domenica senza record non viene interpretato come riposo. Ore e causale
+insieme restano visibili (“Ore + Permesso”). Nessuna indicazione attesta la
+presenza in tempo reale o l'approvazione definitiva della giornata.
+
+Le schede e i riepiloghi si espandono con mouse, tocco, Invio o Spazio, con aiuti
+anche senza passaggio del mouse. Il dettaglio tabellare conserva i valori e i
+totali originali, espande le sigle delle causali e distingue zero da “—”. La
+vista mobile mantiene lo scorrimento orizzontale nella sola tabella. Il nome e
+il mese restano visibili nel prospetto; GaTe disabilita la stampa durante il
+caricamento, dopo logout e dopo errori, evitando stampe di risultati precedenti.
+
+Calcolo paghe, autorizzazioni, identità e sincronizzazione restano invariati.
+Il modulo `presenze-monthly-presentation.ts` è mantenuto allineato fra i due
+repository; le fixture verificano anche i casi futuro/oggi, assenza parziale,
+causale sconosciuta e dati mancanti. Il gate coverage GaTe include ora anche
+questo modulo; la copertura del JS emesso è verificata separatamente da Istanbul.
+
+Validazione UI: 30 test GaTe e 16 test GAIA; 100% statement, branch, funzioni e
+righe del perimetro mensile verificato (non del monolite). GAIA: includere in
+`VITEST_COVERAGE_INCLUDE` modello, presentazione, page, table, overview e hook
+mensile ed eseguire le tre suite `presenze-monthly-*` con soglie per file.

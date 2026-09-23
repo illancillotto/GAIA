@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Page from "@/app/presenze/giornaliera-individuale/page";
+import { MonthlyOverview } from "@/app/presenze/giornaliera-individuale/overview";
 import { MonthlySheetTable } from "@/app/presenze/giornaliera-individuale/table";
 import { buildMonthlySheet } from "@/lib/presenze-monthly-sheet";
 import { presenzeNavigationSections } from "@/components/layout/presenze-navigation";
@@ -30,6 +31,21 @@ describe("monthly page", () => {
     fireEvent.change(screen.getByLabelText("Dipendente"), { target: { value: "" } });
     await waitFor(() => expect(screen.queryByRole("table")).toBeNull());
     fireEvent.change(screen.getByLabelText("Mese"), { target: { value: "" } });
+  });
+  it("shows worded day states and counts only days that need attention", () => {
+    const report = buildMonthlySheet("2026-09", [
+      { work_date: "2026-09-01", ordinary_minutes: 420 },
+      { work_date: "2026-09-02", ordinary_minutes: 0, absence_cause: "ferie" },
+      { work_date: "2026-09-03", ordinary_minutes: 0, absence_cause: "assenza_da_giustificare" },
+    ]);
+    const { container } = render(<MonthlyOverview report={report} today="2026-09-05" />);
+    expect(container.querySelectorAll(".monthly-day")).toHaveLength(30);
+    expect(screen.getByText("Ferie").closest("details")).toHaveClass("monthly-tone-absence");
+    expect(screen.getByText("Dati mancanti").closest("details")).toHaveClass("monthly-tone-warning");
+    expect(screen.getByText("In attesa di dati")).toBeInTheDocument();
+    expect(screen.getByText("Da controllare").closest("summary")).toHaveTextContent("2");
+    expect(container.querySelectorAll(".monthly-day.monthly-tone-future")).toHaveLength(25);
+    expect(screen.getByText("Ore e minuti: 7:30 significa 7 ore e 30 minuti.").closest("details")).toBeInTheDocument();
   });
   it("shows empty, unauthenticated, and directory failure states", async () => {
     mocks.token.mockReturnValue(null); const a = render(<Page />);
@@ -63,7 +79,7 @@ describe("monthly page", () => {
   it("renders present and missing dates, weekend shading and safe employee text", () => {
     render(<MonthlySheetTable report={buildMonthlySheet("2026-08", data.items)} name="<script>" code="135" />);
     expect(screen.getByRole("heading")).toHaveTextContent("<script>");
-    expect(screen.getAllByTitle("2026-08-01 · Dati non disponibili")[0]).toHaveClass("bg-slate-200");
-    expect(screen.getAllByTitle("2026-08-03")[0]).toHaveTextContent("7:00");
+    expect(screen.getAllByTitle(/2026-08-01 · Ordinario feriale: — · Dati mancanti/)[0]).toHaveClass("monthly-tone-missing");
+    expect(screen.getAllByTitle(/2026-08-03 · Ordinario feriale: 7:00 · Ore registrate/)[0]).toHaveTextContent("7:00");
   });
 });
