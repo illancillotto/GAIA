@@ -28,6 +28,10 @@ definitivi. Possono essere modificati dalle variabili documentate in
 gia `pending` al primo avvio e condivide `catasto-data` con il backend per il
 download dei file. Il worker visure non preleva questi job: un batch
 SISTER o una ricerca massiva lunga non blocca piu gli export distretto.
+Prima di avviare un'immagine worker nuova, verificare che Alembic sia a `head`:
+gli export includono dati SISTER e richiedono le tabelle delle estrazioni.
+Se il caricamento fallisce per una tabella mancante, allineare lo schema prima
+di rimettere in coda il job; non riavviare un altro export ancora in esecuzione.
 
 ## Import automatico documenti NAS Utenze
 

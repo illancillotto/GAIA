@@ -50,6 +50,18 @@ def claim_next_export() -> UUID | None:
         return job.id
 
 
+def mark_failed_export(job_id: UUID, error: Exception) -> None:
+    with SessionLocal() as db:
+        job = db.get(CatastoDistrettoExportJob, job_id)
+        if job is None or job.status != CatastoElaborazioniMassiveJobStatus.PROCESSING.value:
+            return
+        job.status = CatastoElaborazioniMassiveJobStatus.FAILED.value
+        job.error_message = str(error)
+        job.current_label = "Export fallito."
+        job.completed_at = datetime.now(UTC)
+        db.commit()
+
+
 def install_signal_handlers(stop_requested: asyncio.Event) -> None:
     loop = asyncio.get_running_loop()
     for signame in (signal.SIGINT, signal.SIGTERM):
@@ -67,8 +79,9 @@ async def run() -> None:
         if job_id is not None:
             try:
                 await asyncio.to_thread(run_distretto_export_job_by_id, job_id)
-            except Exception:
+            except Exception as exc:
                 logger.exception("Job export distretto catasto %s fallito", job_id)
+                mark_failed_export(job_id, exc)
             continue
         await asyncio.sleep(POLL_INTERVAL_SEC)
 

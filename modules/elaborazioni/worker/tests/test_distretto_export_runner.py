@@ -41,6 +41,35 @@ def test_claim_next_export_marks_oldest_pending_job(monkeypatch: pytest.MonkeyPa
     assert empty_db.commits == 0
 
 
+def test_mark_failed_export_uses_fresh_session(monkeypatch: pytest.MonkeyPatch) -> None:
+    job_id = uuid4()
+    job = SimpleNamespace(
+        status="processing", error_message=None, current_label=None, completed_at=None
+    )
+    db = support.FakeDb(get_values=[job])
+    monkeypatch.setattr(runner, "SessionLocal", support.SessionQueue(db))
+
+    runner.mark_failed_export(job_id, RuntimeError("database query failed"))
+
+    assert job.status == "failed"
+    assert job.error_message == "database query failed"
+    assert job.current_label == "Export fallito."
+    assert job.completed_at is not None
+    assert db.commits == 1
+
+
+@pytest.mark.parametrize("job", [None, SimpleNamespace(status="completed")])
+def test_mark_failed_export_does_not_overwrite_other_states(
+    monkeypatch: pytest.MonkeyPatch, job: object
+) -> None:
+    db = support.FakeDb(get_values=[job])
+    monkeypatch.setattr(runner, "SessionLocal", support.SessionQueue(db))
+
+    runner.mark_failed_export(uuid4(), RuntimeError("late failure"))
+
+    assert db.commits == 0
+
+
 def test_signal_handlers_request_shutdown(monkeypatch: pytest.MonkeyPatch) -> None:
     handlers = []
     loop = SimpleNamespace(
@@ -60,10 +89,14 @@ def test_run_processes_next_export_after_failure(monkeypatch: pytest.MonkeyPatch
     first_id, second_id = uuid4(), uuid4()
     jobs = iter((first_id, second_id, None))
     processed = []
+    failures = []
     stop_events = []
     monkeypatch.setattr(runner, "recover_exports", lambda: None)
     monkeypatch.setattr(runner, "claim_next_export", lambda: next(jobs))
     monkeypatch.setattr(runner, "install_signal_handlers", stop_events.append)
+    monkeypatch.setattr(
+        runner, "mark_failed_export", lambda job_id, error: failures.append((job_id, str(error)))
+    )
 
     async def process(_function, job_id):
         if job_id == first_id:
@@ -79,6 +112,7 @@ def test_run_processes_next_export_after_failure(monkeypatch: pytest.MonkeyPatch
     asyncio.run(runner.run())
 
     assert processed == [second_id]
+    assert failures == [(first_id, "export failed")]
 
 
 def test_main_uses_export_heartbeat(monkeypatch: pytest.MonkeyPatch) -> None:
