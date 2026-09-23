@@ -17,6 +17,7 @@ export const presenzeNavigationSections: NavigationSection[] = [
   {
     label: "Gestione",
     items: [
+      { href: "/presenze/giornaliera-individuale", icon: CalendarIcon, label: "Giornaliera individuale", match: "prefix" },
       { href: "/presenze/giornaliere", icon: CalendarIcon, label: "Giornaliere", match: "prefix" },
       { href: "/presenze/squadre", icon: UsersIcon, label: "Squadre", match: "prefix" },
       { href: "/presenze/collaboratori", icon: UsersIcon, label: "Collaboratori", match: "prefix" },
