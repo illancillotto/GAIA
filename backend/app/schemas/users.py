@@ -1,8 +1,8 @@
-from datetime import datetime
 import re
+from datetime import datetime
 
 from email_validator import EmailNotValidError, validate_email
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 LOCAL_EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.local$", re.IGNORECASE)
 
@@ -125,3 +125,13 @@ class ApplicationUserResponse(BaseModel):
 class ApplicationUserListResponse(BaseModel):
     items: list[ApplicationUserResponse]
     total: int = Field(ge=0)
+
+
+class QgisDesktopAccessStatusResponse(BaseModel):
+    enabled: bool
+    username: str
+    layer_count: int = Field(ge=0)
+
+
+class QgisDesktopCredentialsResponse(QgisDesktopAccessStatusResponse):
+    password: str = Field(min_length=1)

@@ -1,5 +1,5 @@
-from datetime import datetime, timedelta, timezone
 import hashlib
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_action_token
 from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.modules.gis import qgis_desktop_access
 from app.modules.operazioni.models.wc_operator import WCOperator
 from app.repositories.application_user import (
     create_application_user,
@@ -27,12 +28,13 @@ from app.schemas.users import (
     ApplicationUserListResponse,
     ApplicationUserResponse,
     ApplicationUserUpdate,
+    QgisDesktopAccessStatusResponse,
+    QgisDesktopCredentialsResponse,
 )
 from app.services.email import send_email
 
 router = APIRouter(prefix="/admin/users", tags=["admin — users"])
 RequireAccessiAdmin = Depends(require_module("accessi"))
-UTC = timezone.utc
 
 
 def _build_gate_mobile_console_map(
@@ -197,7 +199,64 @@ def update_user(
         raise HTTPException(status_code=404, detail="User not found")
     if user.is_super_admin and not current_user.is_super_admin:
         raise HTTPException(status_code=403, detail="Cannot modify super_admin")
-    return _serialize_application_user(update_application_user(db, user, payload))
+    return _serialize_application_user(_update_user_and_revoke_qgis_if_needed(db, user, payload))
+
+
+def _update_user_and_revoke_qgis_if_needed(
+    db: Session, user: ApplicationUser, payload: ApplicationUserUpdate
+) -> ApplicationUser:
+    if payload.module_gis is False or payload.is_active is False:
+        qgis_desktop_access.disable_access(db, user, commit=False)
+    return update_application_user(db, user, payload)
+
+
+@router.get(
+    "/{user_id}/qgis-desktop-access",
+    response_model=QgisDesktopAccessStatusResponse,
+    dependencies=[RequireAdmin, RequireAccessiAdmin],
+)
+def get_qgis_desktop_access(
+    user_id: int, db: Annotated[Session, Depends(get_db)]
+) -> QgisDesktopAccessStatusResponse:
+    user = get_application_user_by_id(db, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return QgisDesktopAccessStatusResponse.model_validate(
+        qgis_desktop_access.access_status(db, user)
+    )
+
+
+@router.post(
+    "/{user_id}/qgis-desktop-access",
+    response_model=QgisDesktopCredentialsResponse,
+    dependencies=[RequireAdmin, RequireAccessiAdmin],
+)
+def provision_qgis_desktop_access(
+    user_id: int, db: Annotated[Session, Depends(get_db)]
+) -> QgisDesktopCredentialsResponse:
+    user = get_application_user_by_id(db, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return QgisDesktopCredentialsResponse.model_validate(
+        qgis_desktop_access.provision_access(db, user)
+    )
+
+
+@router.delete(
+    "/{user_id}/qgis-desktop-access",
+    response_model=QgisDesktopAccessStatusResponse,
+    dependencies=[RequireAdmin, RequireAccessiAdmin],
+)
+def revoke_qgis_desktop_access(
+    user_id: int, db: Annotated[Session, Depends(get_db)]
+) -> QgisDesktopAccessStatusResponse:
+    user = get_application_user_by_id(db, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    qgis_desktop_access.disable_access(db, user)
+    return QgisDesktopAccessStatusResponse.model_validate(
+        qgis_desktop_access.access_status(db, user)
+    )
 
 
 @router.delete("/{user_id}", dependencies=[RequireSuperAdmin, RequireAccessiAdmin], status_code=status.HTTP_204_NO_CONTENT)
@@ -211,6 +270,7 @@ def delete_user(
     user = get_application_user_by_id(db, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
+    qgis_desktop_access.disable_access(db, user, commit=False)
     delete_application_user(db, user)
 
 
@@ -246,4 +306,6 @@ def patch_user_modules(
         module_presenze=module_presenze,
         module_organigramma=module_organigramma,
     )
+    if not module_gis:
+        qgis_desktop_access.disable_access(db, user, commit=False)
     return _serialize_application_user(update_application_user(db, user, payload))

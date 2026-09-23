@@ -6,14 +6,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.core.database import get_db
 from app.core.config import settings
+from app.core.database import get_db
 from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
-from app.modules.operazioni.models.wc_operator import WCOperator
 from app.modules.accessi.routes.admin_users import _build_gate_mobile_console_map
+from app.modules.gis import qgis_desktop_access
+from app.modules.operazioni.models.wc_operator import WCOperator
 from app.repositories.application_user import (
     delete_application_user,
     get_application_user_by_login_identifier,
@@ -119,6 +120,7 @@ def test_admin_users_lifecycle_and_module_flags() -> None:
     assert patch_resp.json()["module_presenze"] is True
     assert patch_resp.json()["enabled_modules"] == ["inventario", "catasto", "utenze", "ruolo", "presenze"]
 
+
     update_resp = client.put(
         f"/admin/users/{create_resp.json()['id']}",
         headers={"Authorization": f"Bearer {token}"},
@@ -141,6 +143,89 @@ def test_admin_users_lifecycle_and_module_flags() -> None:
     assert alice["last_login_at"] is not None
     assert alice["last_login_ip"]
     assert "gate_mobile_console" not in alice
+
+
+def test_qgis_desktop_access_admin_endpoints(monkeypatch: pytest.MonkeyPatch) -> None:
+    create_user("root", "super_admin")
+    target = create_user("gis-user", "viewer")
+    token = login("root")
+    monkeypatch.setattr(
+        qgis_desktop_access,
+        "access_status",
+        lambda _db, _user: {
+            "enabled": False,
+            "username": f"gaia_qgis_u_{target.id}",
+            "layer_count": 0,
+        },
+    )
+    monkeypatch.setattr(
+        qgis_desktop_access,
+        "provision_access",
+        lambda _db, _user: {
+            "enabled": True,
+            "username": f"gaia_qgis_u_{target.id}",
+            "password": "one-time-secret",
+            "layer_count": 2,
+        },
+    )
+    monkeypatch.setattr(qgis_desktop_access, "disable_access", lambda *_args, **_kwargs: None)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    missing = client.get("/admin/users/999/qgis-desktop-access", headers=headers)
+    missing_provision = client.post("/admin/users/999/qgis-desktop-access", headers=headers)
+    missing_revoke = client.delete("/admin/users/999/qgis-desktop-access", headers=headers)
+    status_response = client.get(
+        f"/admin/users/{target.id}/qgis-desktop-access", headers=headers
+    )
+    provisioned = client.post(
+        f"/admin/users/{target.id}/qgis-desktop-access", headers=headers
+    )
+    revoked = client.delete(
+        f"/admin/users/{target.id}/qgis-desktop-access", headers=headers
+    )
+
+    assert missing.status_code == 404
+    assert missing_provision.status_code == 404
+    assert missing_revoke.status_code == 404
+    assert status_response.json()["enabled"] is False
+    assert provisioned.json()["username"] == f"gaia_qgis_u_{target.id}"
+    assert provisioned.json()["password"] == "one-time-secret"
+    assert revoked.status_code == 200
+
+
+def test_qgis_desktop_access_revoked_when_gis_or_account_is_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_user("root", "super_admin")
+    first = create_user("gis-module-user", "viewer")
+    second = create_user("inactive-user", "viewer")
+    token = login("root")
+    revoked: list[tuple[int, bool]] = []
+    monkeypatch.setattr(
+        qgis_desktop_access,
+        "disable_access",
+        lambda _db, user, *, commit=True: revoked.append((user.id, commit)),
+    )
+    headers = {"Authorization": f"Bearer {token}"}
+
+    disabled_module = client.put(
+        f"/admin/users/{first.id}", headers=headers, json={"module_gis": False}
+    )
+    disabled_account = client.put(
+        f"/admin/users/{second.id}", headers=headers, json={"is_active": False}
+    )
+    modules_enabled = client.patch(
+        f"/admin/users/{first.id}/modules?module_accessi=true&module_rete=true"
+        "&module_inventario=true&module_gis=true&module_catasto=true"
+        "&module_utenze=true&module_operazioni=true&module_riordino=true"
+        "&module_ruolo=true&module_presenze=true",
+        headers=headers,
+    )
+
+    assert disabled_module.status_code == 200
+    assert disabled_account.status_code == 200
+    assert modules_enabled.status_code == 200
+    assert revoked == [(first.id, False), (second.id, False)]
 
 
 def test_admin_users_list_exposes_readonly_gate_mobile_console_summary() -> None:
@@ -271,6 +356,10 @@ def test_application_user_repository_filters_password_and_delete_paths() -> None
         updated = update_application_user(db, active, ApplicationUserUpdate(password="new-secret", module_presenze=True))
         assert updated.password_hash != old_hash
         assert updated.module_presenze is True
+        role_updated = update_application_user(
+            db, active, ApplicationUserUpdate(role=ApplicationUserRole.VIEWER.value)
+        )
+        assert role_updated.role == ApplicationUserRole.VIEWER.value
 
         delete_application_user(db, inactive)
         remaining, total = list_application_users(db)

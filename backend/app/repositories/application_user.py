@@ -1,5 +1,5 @@
-from datetime import datetime
 import secrets
+from datetime import datetime
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -93,6 +93,7 @@ def update_application_user(db: Session, user: ApplicationUser, payload: Applica
     data = payload.model_dump(exclude_unset=True)
     password = data.pop("password", None)
     module_presenze = data.pop("module_presenze", None)
+    role_changed = "role" in data and data["role"] != user.role
 
     # module_utenze is the sole source of truth.
 
@@ -104,6 +105,10 @@ def update_application_user(db: Session, user: ApplicationUser, payload: Applica
     if password:
         user.password_hash = hash_password(password)
     db.add(user)
+    if role_changed:
+        from app.modules.gis.qgis_desktop_access import sync_enabled_users
+
+        sync_enabled_users(db)
     db.commit()
     db.refresh(user)
     return user

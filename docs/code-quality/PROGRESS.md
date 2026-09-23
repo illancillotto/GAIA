@@ -3,6 +3,97 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Verifica integrata QGIS Desktop e gestione utenti (2026-09-23)
+
+- Backend: quattro suite GIS/Accessi passano; gli otto file runtime misurati
+  (`admin_users`, `qgis_desktop_access`, `qgis_governance`, `qgis_project`,
+  `qgis_server_bootstrap`, `services`, `application_user`, `schemas/users`)
+  hanno 100% statement e branch: 1758 statement e 470 branch coperti.
+- Frontend: il run mirato passa con 59 test, ma non copre da solo tutto il
+  client condiviso `platform.ts`. Il run esteso, escludendo quattro suite
+  estranee a QGIS fallite nel run completo, passa con 2562 test e raggiunge
+  100% statement, branch, funzioni e linee sui tre runtime in scope:
+  `gaia/users/page.tsx`, `user-qgis-desktop-access-panel.tsx`, `platform.ts`.
+  `types/api/platform.ts` e escluso dal gate runtime come file di tipi.
+- Il run frontend completo non e verde: 14 failure in quattro suite
+  (`elaborazioni-settings-sister`, `presenze-giornaliere-page`,
+  `registered-mails-console`, `ruolo-tributi-placeholder-pages`). Non sono
+  state modificate o disabilitate nei file di test. Nessun deployment o commit
+  eseguito in questa verifica.
+
+### QGIS project XML - separazione dei maplayer (2026-09-23)
+
+- Hotspot unico: `build_xml` in `qgis_project.py`. Slice: estratta in
+  `_append_map_layer` la costruzione completa di ciascun `<maplayer>`, senza
+  cambiare ordine degli elementi, chiamate al datasource o opzioni PostGIS/WMS.
+- Prima: `build_xml` ciclomatica `14`, cognitiva `21`, LOC `93` (violation LOC
+  error-level). Dopo: ciclomatica `5`, cognitiva `6`, LOC `65`; il nuovo helper
+  ha ciclomatica `10`, cognitiva `9`, LOC `35` e nessuna violation error-level.
+  Aggregati del file: cognitiva `69 -> 63`, ciclomatica `74 -> 75`, LOC
+  `275 -> 280`; il leggero aumento ciclomatico aggregato resta visibile.
+  Obiettivo cognitivo e LOC migliorati senza trasferire violation: `IMPROVED`.
+- Verifiche: test GIS piattaforma e bootstrap QGIS Server passano; coverage di
+  `qgis_project.py` 100% statement e branch (104 statement, 18 branch). Ruff
+  lint e format passano; `make quality-test`: 76 passed. Graphify backend
+  aggiornato e Graphify platform docs: `chunk 1/1 done`, senza warning
+  semantici. Ratchet mirato contro il merge-base di `origin/main`
+  senza finding; ratchet globale ancora rosso per regressioni in altri file
+  Accessi, Catasto, GIS services e frontend. Nessuna baseline aggiornata.
+- Prossima azione separata: risolvere i finding globali per singolo hotspot,
+  senza estendere questa slice.
+
+### QGIS PostGIS datasource - separazione connessione e tabella (2026-09-23)
+
+- Singolo callable selezionato dal ratchet nel generatore di progetto QGIS:
+  `_postgis_datasource`. Invarianti: precedenza tra view `gis_qgis` e tabella
+  sorgente, fallback di schema/tabella/geometria/chiave/SRID e identica sintassi
+  della connessione host/porta/database o `service`.
+- Prima: ciclomatica `16` (nuova violation error-level). Separati il riferimento
+  alla tabella governata/sorgente (`_postgis_table_reference`) e il descrittore
+  di connessione (`_postgres_connection`) dal formatter del datasource.
+- Dopo: `_postgis_datasource` ciclomatica `9`, cognitiva `8`, LOC `17`;
+  helper rispettivamente ciclomatica `6`/LOC `7` e `2`/LOC `7`, senza violation.
+  L'aggregato ciclomatico dei tre callable e `17`, contro `16` prima: esito
+  `REORGANIZED_AND_CHARACTERIZED`, non `IMPROVED`. La violation error-level di
+  `qgis_project.py` ora e solo `build_xml` (LOC `93`), non trattata in questa
+  slice.
+- Verifiche: suite GIS piattaforma e bootstrap QGIS Server passano; il runtime
+  `qgis_project.py` raggiunge 100% statement/branch/linee/funzioni. Ruff passa.
+  Ratchet mirato al file non ha rilievi su `_postgis_datasource`, ma resta rosso
+  per `build_xml`; nessuna baseline o eccezione aggiornata. Graphify backend da
+  aggiornare dopo la slice verificata.
+- Prossima azione separata: hotspot `_build_qgis_project_xml` / `build_xml`;
+  mantenere fuori scope le modifiche concorrenti Catasto/worker.
+
+### QGIS Desktop access panel - separazione stato e presentazione (2026-09-23)
+
+- Hotspot unico selezionato dal ratchet: `UserQgisDesktopAccessPanel` nel
+  pannello di abilitazione QGIS. Baseline del confronto `origin/main`, merge-
+  base `1b13ed03a4151426e2de640c0bc8e54ede833fd8`; modifiche concorrenti
+  Catasto e worker preservate.
+- Prima: callable a ciclomatica `20` e `140` LOC, entrambe oltre soglia
+  error-level. Slice: separati hook di stato/API, badge, azioni e presentazione
+  delle credenziali monouso; invariati autorizzazioni UI, conferma revoca,
+  rotazione, errori, cancellazione degli effetti obsoleti e password mostrata
+  una sola volta.
+- Dopo: callable principale a ciclomatica `9`, cognitiva `8`; nessuna
+  violation error-level nel file. `useQgisDesktopAccess` resta a `74` LOC,
+  warning sotto la soglia error-level di `80`; il file ha 16 callable,
+  ciclomatica massima `9`, cognitiva massima `8` e 46 punti ciclomatici
+  aggregati. Non essendo dimostrata una riduzione dell'aggregato, esito
+  `REORGANIZED_AND_CHARACTERIZED`, non `IMPROVED`.
+- Verifiche: test pannello `10 passed`, coverage file 100% (60 statement,
+  36 branch, 16 funzioni, 56 righe); typecheck frontend passato. Graphify
+  frontend aggiornato. Nessuna baseline o eccezione modificata.
+- Il ratchet globale resta non verde per callable nuovi sopra soglia in
+  `backend/app/modules/gis/qgis_project.py`, regressioni in handler/repository
+  e pagina utenti, oltre a rilievi Catasto concorrenti. Il ratchet mirato al
+  path segnala `ambiguous_fingerprint` su `Program<anonymous>` e non viene
+  usato come prova. Nessun ulteriore hotspot avviato in questa iterazione.
+- Prossima azione separata: selezionare un singolo hotspot di generazione
+  progetto QGIS (`_postgis_datasource` / `build_xml`), poi ripetere il ratchet
+  completo distinguendo i rilievi concorrenti.
+
 ## Stato generale
 
 ### Verifica finale e commit delle slice frontend (2026-09-22)

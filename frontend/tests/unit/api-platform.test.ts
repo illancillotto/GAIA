@@ -5,6 +5,7 @@ import {
   deleteApplicationUser,
   deleteApplicationUserPermissionOverride,
   getApplicationUserPermissions,
+  getApplicationUserQgisDesktopAccess,
   getDashboardSummary,
   getEffectivePermissions,
   getMyPermissions,
@@ -16,6 +17,8 @@ import {
   listAllApplicationUsers,
   listApplicationUsers,
   listSectionCatalog,
+  provisionApplicationUserQgisDesktopAccess,
+  revokeApplicationUserQgisDesktopAccess,
   updateApplicationUser,
   updateApplicationUserPermissions,
 } from "@/lib/api";
@@ -67,6 +70,25 @@ describe("api platform clients", () => {
   test("getApplicationUserPermissions", async () => {
     stubFetch(jsonResponse({ ok: true }));
     await expect(getApplicationUserPermissions(TOKEN, 1)).resolves.toBeDefined();
+  });
+  test("getApplicationUserQgisDesktopAccess", async () => {
+    stubFetch(jsonResponse({ enabled: false, username: "gaia_qgis_u_1", layer_count: 0 }));
+    await expect(getApplicationUserQgisDesktopAccess(TOKEN, 1)).resolves.toMatchObject({
+      enabled: false,
+      username: "gaia_qgis_u_1",
+    });
+  });
+  test("provisionApplicationUserQgisDesktopAccess", async () => {
+    stubFetch(jsonResponse({ enabled: true, username: "gaia_qgis_u_1", password: "once", layer_count: 1 }));
+    await expect(provisionApplicationUserQgisDesktopAccess(TOKEN, 1)).resolves.toMatchObject({
+      password: "once",
+    });
+  });
+  test("revokeApplicationUserQgisDesktopAccess", async () => {
+    stubFetch(jsonResponse({ enabled: false, username: "gaia_qgis_u_1", layer_count: 0 }));
+    await expect(revokeApplicationUserQgisDesktopAccess(TOKEN, 1)).resolves.toMatchObject({
+      enabled: false,
+    });
   });
   test("getDashboardSummary", async () => {
     stubFetch(jsonResponse({ ok: true }));

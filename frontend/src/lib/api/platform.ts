@@ -1,4 +1,4 @@
-import type { ApplicationUser, ApplicationUserCreateInput, ApplicationUserInviteResponse, ApplicationUserListResponse, ApplicationUserUpdateInput, AuthProvidersResponse, GatePresenzeTeam, GatePresenzeTeamCreateInput, GatePresenzeTeamMembership, GatePresenzeTeamMembershipCreateInput, GatePresenzeRulesResponse, GatePresenzeTeamSupervisor, GatePresenzeTeamSupervisorCreateInput, GatePresenzeTeamUpdateInput, CurrentUser, DashboardSummary, LoginResponse, MePresenzeStatusResponse, MeStraordinariExportRequest, MeStraordinariPreviewResponse, MePresenzeSummaryResponse, MeModuleStatusResponse, MeOperazioniActivityListResponse, MeOperazioniCaseListResponse, MeOperazioniReportListResponse, MeOperazioniSummaryResponse, MeSummaryResponse, MeAssignedDeviceListResponse, MeVehicleAssignmentListResponse, MeVehicleUsageSessionListResponse, MyPermissionsResponse, PresenzeDailyRecord, PresenzeDailyRecordListResponse, OrgStructureAssignment, OrgStructureAssignmentUpdateInput, OrgStructureBootstrapResult, OrgStructureWorkspace, UserPermissionsAdminView, UserPresenceHeartbeatInput, UserPresenceHeartbeatResponse, UserPresenceSummary, NasGroup, NasUser, SectionResponse, Share } from "@/types/api";
+import type { ApplicationUser, ApplicationUserCreateInput, ApplicationUserInviteResponse, ApplicationUserListResponse, ApplicationUserUpdateInput, AuthProvidersResponse, GatePresenzeTeam, GatePresenzeTeamCreateInput, GatePresenzeTeamMembership, GatePresenzeTeamMembershipCreateInput, GatePresenzeRulesResponse, GatePresenzeTeamSupervisor, GatePresenzeTeamSupervisorCreateInput, GatePresenzeTeamUpdateInput, CurrentUser, DashboardSummary, LoginResponse, MePresenzeStatusResponse, MeStraordinariExportRequest, MeStraordinariPreviewResponse, MePresenzeSummaryResponse, MeModuleStatusResponse, MeOperazioniActivityListResponse, MeOperazioniCaseListResponse, MeOperazioniReportListResponse, MeOperazioniSummaryResponse, MeSummaryResponse, MeAssignedDeviceListResponse, MeVehicleAssignmentListResponse, MeVehicleUsageSessionListResponse, MyPermissionsResponse, PresenzeDailyRecord, PresenzeDailyRecordListResponse, OrgStructureAssignment, OrgStructureAssignmentUpdateInput, OrgStructureBootstrapResult, OrgStructureWorkspace, UserPermissionsAdminView, UserPresenceHeartbeatInput, UserPresenceHeartbeatResponse, UserPresenceSummary, NasGroup, NasUser, SectionResponse, Share, QgisDesktopAccessStatus, QgisDesktopCredentials } from "@/types/api";
 import type { WikiArticleGroup } from "@/features/wiki/types";
 import { request, requestBlob } from "./core";
 
@@ -510,6 +510,26 @@ export async function updateApplicationUser(
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function getApplicationUserQgisDesktopAccess(token: string, userId: number): Promise<QgisDesktopAccessStatus> {
+  return request<QgisDesktopAccessStatus>(`/admin/users/${userId}/qgis-desktop-access`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function provisionApplicationUserQgisDesktopAccess(token: string, userId: number): Promise<QgisDesktopCredentials> {
+  return request<QgisDesktopCredentials>(`/admin/users/${userId}/qgis-desktop-access`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function revokeApplicationUserQgisDesktopAccess(token: string, userId: number): Promise<QgisDesktopAccessStatus> {
+  return request<QgisDesktopAccessStatus>(`/admin/users/${userId}/qgis-desktop-access`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
   });
 }
 

@@ -28,6 +28,7 @@ from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.gis import exporter as gis_exporter
 from app.modules.gis import external_proxy as gis_external_proxy
 from app.modules.gis import qgis_ogc_proxy as gis_qgis_ogc_proxy
+from app.modules.gis import qgis_project as gis_qgis_project
 from app.modules.gis import runtime_health as gis_runtime_health
 from app.modules.gis import services as gis_services
 from app.modules.gis.bootstrap import (
@@ -1349,6 +1350,8 @@ def test_qgis_project_download_includes_only_visible_publishable_postgis_layers(
 
     assert "service='gaia_gis'" not in project_xml
     assert "host='gis-db.example.test' port=5432 dbname='gaia'" in project_xml
+    assert 'table="gis_qgis".' in project_xml
+    assert 'table="public".' not in project_xml
     assert "Rete condotte" in project_xml
     assert "Rete valvole" in project_xml
     assert "rete_upload" not in project_xml
@@ -1364,7 +1367,57 @@ def test_qgis_project_download_includes_only_visible_publishable_postgis_layers(
         "rete_condotte",
         "rete_valvole",
     ]
+    assert all(layer["postgis_schema"] == "gis_qgis" for layer in manifest["layers"])
+    assert all(layer["postgis_table"].startswith("rete__") for layer in manifest["layers"])
     assert "Layer inclusi: 2" in readme
+
+
+def test_qgis_project_datasource_can_use_governed_postgres_service() -> None:
+    layer = GisLayer(
+        workspace="rete",
+        name="condotte",
+        title="Condotte",
+        source_type="postgis",
+        postgis_schema="network",
+        postgis_table="pipes",
+        geometry_column="geom",
+        feature_id_column="pipe_id",
+        geometry_type="LINESTRING",
+        is_active=True,
+    )
+
+    datasource = gis_qgis_project.datasource(
+        layer,
+        governed_view=True,
+        postgres_service="gaia_gis_server",
+    )
+
+    assert datasource.startswith("service='gaia_gis_server'")
+    assert 'table="gis_qgis".' in datasource
+    assert '"network"."pipes"' not in datasource
+
+
+def test_qgis_project_datasource_uses_configured_connection_and_source_table(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "gis_qgis_desktop_pg_host", "gis-db.example.test")
+    monkeypatch.setattr(settings, "gis_qgis_desktop_pg_port", 5432)
+    monkeypatch.setattr(settings, "gis_qgis_desktop_pg_database", "gaia")
+    layer = GisLayer(
+        workspace="rete",
+        name="condotte",
+        title="Condotte",
+        source_type="postgis",
+        postgis_schema="network",
+        postgis_table="pipes",
+        geometry_column="geom",
+        is_active=True,
+    )
+
+    datasource = gis_qgis_project.datasource(layer)
+
+    assert datasource.startswith("host='gis-db.example.test' port=5432 dbname='gaia'")
+    assert 'table="network"."pipes"' in datasource
 
 
 def test_qgis_project_includes_only_visible_territorio_layers_through_gaia_proxy(
@@ -1424,10 +1477,10 @@ def test_qgis_project_download_requires_visible_publishable_layers() -> None:
 
 
 def test_qgis_project_geometry_kind_mapping_covers_common_shapes() -> None:
-    assert gis_services._qgis_geometry_kind(GisLayer(geometry_type="POINT")) == "Point"  # noqa: SLF001
-    assert gis_services._qgis_geometry_kind(GisLayer(geometry_type="MULTILINESTRING")) == "Line"  # noqa: SLF001
-    assert gis_services._qgis_geometry_kind(GisLayer(geometry_type="POLYGON")) == "Polygon"  # noqa: SLF001
-    assert gis_services._qgis_geometry_kind(GisLayer(geometry_type=None)) == "UnknownGeometry"  # noqa: SLF001
+    assert gis_services._qgis_geometry_kind(GisLayer(geometry_type="POINT")) == "Point"
+    assert gis_services._qgis_geometry_kind(GisLayer(geometry_type="MULTILINESTRING")) == "Line"
+    assert gis_services._qgis_geometry_kind(GisLayer(geometry_type="POLYGON")) == "Polygon"
+    assert gis_services._qgis_geometry_kind(GisLayer(geometry_type=None)) == "UnknownGeometry"
 
 
 def test_ogc_poc_lists_visible_read_only_layers_without_wfs_transactions() -> None:
@@ -2120,13 +2173,13 @@ def test_publish_shapefile_import_translates_integrity_race_to_conflict() -> Non
     admin = ApplicationUser(id=1, username="admin", email="admin@example.local", password_hash="x", role="admin", is_active=True)
 
     class _FakeDb:
-        def get(self, model, key):  # noqa: ANN001
+        def get(self, model, key):
             return item if model is GisShapefileImport and key == import_id else None
 
-        def scalar(self, statement):  # noqa: ANN001
+        def scalar(self, statement):
             return None
 
-        def add(self, obj) -> None:  # noqa: ANN001
+        def add(self, obj) -> None:
             return None
 
         def flush(self) -> None:
@@ -2153,13 +2206,13 @@ def test_shapefile_staging_helpers_cover_schema_qualified_tables() -> None:
         def get_bind(self) -> _Bind:
             return _Bind()
 
-        def execute(self, statement, params=None):  # noqa: ANN001
+        def execute(self, statement, params=None):
             self.statements.append(str(statement))
 
     fake_db = _FakeDb()
     import_id = UUID("00000000-0000-0000-0000-000000000123")
-    schema_name, table_name = gis_services._staging_location(fake_db, import_id)  # noqa: SLF001
-    validated = gis_services.GisValidatedShapefile(  # noqa: SLF001
+    schema_name, table_name = gis_services._staging_location(fake_db, import_id)
+    validated = gis_services.GisValidatedShapefile(
         stem="shape/rete",
         feature_count=1,
         geometry_type="POINT",
@@ -2174,14 +2227,14 @@ def test_shapefile_staging_helpers_cover_schema_qualified_tables() -> None:
 
     assert schema_name == "gis_staging"
     assert table_name == "import_00000000000000000000000000000123"
-    gis_services._create_staging_table(  # noqa: SLF001
+    gis_services._create_staging_table(
         fake_db,
         schema_name=schema_name,
         table_name=table_name,
         validated=validated,
         source_srid=4326,
     )
-    gis_services._drop_staging_table(fake_db, schema_name=schema_name, table_name=table_name)  # noqa: SLF001
+    gis_services._drop_staging_table(fake_db, schema_name=schema_name, table_name=table_name)
 
     assert any('CREATE SCHEMA IF NOT EXISTS "gis_staging"' in statement for statement in fake_db.statements)
     assert any('CREATE TABLE "gis_staging"."import_00000000000000000000000000000123"' in statement for statement in fake_db.statements)

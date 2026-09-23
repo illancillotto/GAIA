@@ -189,7 +189,7 @@ def test_server_project_references_external_restricted_connection(
     monkeypatch.setattr(
         qgis_server_bootstrap,
         "_build_qgis_project_xml",
-        lambda layers, generated_at: (
+        lambda layers, generated_at, **_kwargs: (
             b"<QGIS><properties/><projectlayers><maplayer><id>rete-id</id>"
             b"<datasource>service='gaia_gis' table=network.rete_condotte</datasource>"
             b"</maplayer><maplayer><datasource /></maplayer></projectlayers></QGIS>"
@@ -245,7 +245,7 @@ def test_server_project_requires_properties_section(
     monkeypatch.setattr(
         qgis_server_bootstrap,
         "_build_qgis_project_xml",
-        lambda layers, generated_at: b"<QGIS />",
+        lambda layers, generated_at, **_kwargs: b"<QGIS />",
     )
 
     with pytest.raises(RuntimeError, match="no properties section"):

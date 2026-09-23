@@ -10,6 +10,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 from app.core.config import settings
 from app.modules.gis.models import GisLayer
+from app.modules.gis.qgis_governance import QGIS_SCHEMA, qgis_view_name
 
 PROJECT_FILENAME = "gaia-gis-platform.qgs"
 ARCHIVE_FILENAME = "gaia-gis-platform.qgz"
@@ -71,32 +72,60 @@ def _external_datasource(layer: GisLayer, proxy_base_url: str) -> str:
     )
 
 
-def _postgis_datasource(layer: GisLayer) -> str:
-    schema = _quote(layer.postgis_schema or "public")
-    table = _quote(layer.postgis_table or layer.name)
-    geometry_column = _quote(layer.geometry_column or "geometry")
-    feature_id_column = _quote(layer.feature_id_column or "id")
-    geometry_type = _quote(layer.geometry_type or "")
+def _postgis_table_reference(layer: GisLayer, governed_view: bool) -> tuple[str, str]:
+    if governed_view:
+        return _quote(QGIS_SCHEMA), _quote(qgis_view_name(layer))
+    return (
+        _quote(layer.postgis_schema or "public"),
+        _quote(layer.postgis_table or layer.name),
+    )
+
+
+def _postgres_connection(postgres_service: str | None) -> str:
+    if postgres_service:
+        return f"service='{_quote(postgres_service)}' "
     host = _quote(settings.gis_qgis_desktop_pg_host)
     port = settings.gis_qgis_desktop_pg_port
     database = _quote(settings.gis_qgis_desktop_pg_database)
+    return f"host='{host}' port={port} dbname='{database}' "
+
+
+def _postgis_datasource(
+    layer: GisLayer,
+    *,
+    governed_view: bool = False,
+    postgres_service: str | None = None,
+) -> str:
+    schema, table = _postgis_table_reference(layer, governed_view)
+    geometry_column = _quote(layer.geometry_column or "geometry")
+    feature_id_column = _quote(layer.feature_id_column or "id")
+    geometry_type = _quote(layer.geometry_type or "")
+    connection = _postgres_connection(postgres_service)
     return (
-        f"host='{host}' port={port} dbname='{database}' "
+        f"{connection}"
         f"key='{feature_id_column}' srid={layer.srid or 4326} "
         f'type=\'{geometry_type}\' table="{schema}"."{table}" '
         f"({geometry_column}) sql="
     )
 
 
-def datasource(layer: GisLayer, proxy_base_url: str = "http://localhost:8000") -> str:
+def datasource(
+    layer: GisLayer,
+    proxy_base_url: str = "http://localhost:8000",
+    *,
+    governed_view: bool = False,
+    postgres_service: str | None = None,
+) -> str:
     if layer.source_type in {"wms_external", "wfs_external"}:
         return _external_datasource(layer, proxy_base_url)
-    return _postgis_datasource(layer)
+    return _postgis_datasource(
+        layer,
+        governed_view=governed_view,
+        postgres_service=postgres_service,
+    )
 
 
-def manifest(
-    layers: list[GisLayer], generated_at: datetime, proxy_base_url: str
-) -> dict[str, Any]:
+def manifest(layers: list[GisLayer], generated_at: datetime, proxy_base_url: str) -> dict[str, Any]:
     return {
         "project": "GAIA GIS Platform",
         "generated_at": generated_at.astimezone(UTC).isoformat(),
@@ -119,8 +148,16 @@ def manifest(
                 "title": layer.title,
                 "domain_module": layer.domain_module,
                 "source_type": layer.source_type,
-                "postgis_schema": layer.postgis_schema or "public",
-                "postgis_table": layer.postgis_table or layer.name,
+                "postgis_schema": (
+                    QGIS_SCHEMA
+                    if layer.source_type == "postgis"
+                    else layer.postgis_schema or "public"
+                ),
+                "postgis_table": (
+                    qgis_view_name(layer)
+                    if layer.source_type == "postgis"
+                    else layer.postgis_table or layer.name
+                ),
                 "geometry_column": layer.geometry_column,
                 "geometry_type": layer.geometry_type,
                 "srid": layer.srid,
@@ -131,22 +168,58 @@ def manifest(
     }
 
 
+def _append_map_layer(
+    project_layers: ET.Element,
+    layer: GisLayer,
+    proxy_base_url: str,
+    *,
+    governed_views: bool,
+    postgres_service: str | None,
+) -> None:
+    external = layer.source_type in {"wms_external", "wfs_external"}
+    map_layer = ET.SubElement(
+        project_layers,
+        "maplayer",
+        attrib={
+            "type": "raster" if external else "vector",
+            "geometry": "UnknownGeometry" if external else geometry_kind(layer),
+            "styleCategories": "AllStyleCategories",
+        },
+    )
+    ET.SubElement(map_layer, "id").text = layer_id(layer)
+    ET.SubElement(map_layer, "datasource").text = datasource(
+        layer,
+        proxy_base_url,
+        governed_view=governed_views,
+        postgres_service=postgres_service,
+    )
+    ET.SubElement(map_layer, "layername").text = layer.title
+    ET.SubElement(map_layer, "provider", attrib={"encoding": "UTF-8"}).text = (
+        "wms" if external else "postgres"
+    )
+    ET.SubElement(map_layer, "abstract").text = layer.description or ""
+    ET.SubElement(
+        map_layer, "keywordList"
+    ).text = f"{layer.workspace},{layer.domain_module or ''},GAIA"
+    srs = ET.SubElement(map_layer, "srs")
+    ET.SubElement(srs, "spatialrefsys").text = f"EPSG:{layer.srid or 4326}"
+
+
 def build_xml(
     layers: list[GisLayer],
     generated_at: datetime,
     proxy_base_url: str = "http://localhost:8000",
+    *,
+    governed_views: bool = False,
+    postgres_service: str | None = None,
 ) -> bytes:
-    root = ET.Element(
-        "QGIS", attrib={"projectname": "GAIA GIS Platform", "version": "3.34.0"}
-    )
+    root = ET.Element("QGIS", attrib={"projectname": "GAIA GIS Platform", "version": "3.34.0"})
     ET.SubElement(root, "title").text = "GAIA GIS Platform"
     ET.SubElement(root, "autotransaction").text = "0"
     ET.SubElement(root, "evaluateDefaultValues").text = "0"
     ET.SubElement(root, "trust", attrib={"active": "0"})
     properties = ET.SubElement(root, "properties")
-    ET.SubElement(properties, "GeneratedAt").text = generated_at.astimezone(
-        UTC
-    ).isoformat()
+    ET.SubElement(properties, "GeneratedAt").text = generated_at.astimezone(UTC).isoformat()
     ET.SubElement(properties, "PostgreSQLHost").text = settings.gis_qgis_desktop_pg_host
     ET.SubElement(properties, "PostgreSQLPort").text = str(settings.gis_qgis_desktop_pg_port)
     ET.SubElement(properties, "PostgreSQLDatabase").text = settings.gis_qgis_desktop_pg_database
@@ -169,46 +242,32 @@ def build_xml(
             if layer.workspace not in groups
             else groups[layer.workspace]
         )
-        provider = (
-            "wms"
-            if layer.source_type in {"wms_external", "wfs_external"}
-            else "postgres"
-        )
+        provider = "wms" if layer.source_type in {"wms_external", "wfs_external"} else "postgres"
         ET.SubElement(
             group,
             "layer-tree-layer",
             attrib={
                 "id": layer_id(layer),
                 "name": layer.title,
-                "source": datasource(layer, proxy_base_url),
+                "source": datasource(
+                    layer,
+                    proxy_base_url,
+                    governed_view=governed_views,
+                    postgres_service=postgres_service,
+                ),
                 "providerKey": provider,
                 "checked": "Qt::Checked",
             },
         )
     project_layers = ET.SubElement(root, "projectlayers")
     for layer in layers:
-        external = layer.source_type in {"wms_external", "wfs_external"}
-        map_layer = ET.SubElement(
+        _append_map_layer(
             project_layers,
-            "maplayer",
-            attrib={
-                "type": "raster" if external else "vector",
-                "geometry": "UnknownGeometry" if external else geometry_kind(layer),
-                "styleCategories": "AllStyleCategories",
-            },
+            layer,
+            proxy_base_url,
+            governed_views=governed_views,
+            postgres_service=postgres_service,
         )
-        ET.SubElement(map_layer, "id").text = layer_id(layer)
-        ET.SubElement(map_layer, "datasource").text = datasource(layer, proxy_base_url)
-        ET.SubElement(map_layer, "layername").text = layer.title
-        ET.SubElement(map_layer, "provider", attrib={"encoding": "UTF-8"}).text = (
-            "wms" if external else "postgres"
-        )
-        ET.SubElement(map_layer, "abstract").text = layer.description or ""
-        ET.SubElement(
-            map_layer, "keywordList"
-        ).text = f"{layer.workspace},{layer.domain_module or ''},GAIA"
-        srs = ET.SubElement(map_layer, "srs")
-        ET.SubElement(srs, "spatialrefsys").text = f"EPSG:{layer.srid or 4326}"
     ET.indent(root, space="  ")
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
@@ -233,7 +292,13 @@ def build_archive(
     buffer = io.BytesIO()
     with ZipFile(buffer, mode="w", compression=ZIP_DEFLATED) as archive:
         archive.writestr(
-            PROJECT_FILENAME, build_xml(layers, generated_at, resolved_base_url)
+            PROJECT_FILENAME,
+            build_xml(
+                layers,
+                generated_at,
+                resolved_base_url,
+                governed_views=True,
+            ),
         )
         archive.writestr("README_QGIS.txt", _readme(len(layers), generated_at))
         archive.writestr(

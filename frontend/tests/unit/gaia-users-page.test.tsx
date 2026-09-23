@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({
   listSectionCatalog: vi.fn(),
   createApplicationUser: vi.fn(),
   updateApplicationUser: vi.fn(),
+  getApplicationUserQgisDesktopAccess: vi.fn(),
+  provisionApplicationUserQgisDesktopAccess: vi.fn(),
+  revokeApplicationUserQgisDesktopAccess: vi.fn(),
   sendApplicationUserInvite: vi.fn(),
   getApplicationUserPermissions: vi.fn(),
   updateApplicationUserPermissions: vi.fn(),
@@ -34,6 +37,9 @@ vi.mock("@/lib/api", async () => {
     listSectionCatalog: mocks.listSectionCatalog,
     createApplicationUser: mocks.createApplicationUser,
     updateApplicationUser: mocks.updateApplicationUser,
+    getApplicationUserQgisDesktopAccess: mocks.getApplicationUserQgisDesktopAccess,
+    provisionApplicationUserQgisDesktopAccess: mocks.provisionApplicationUserQgisDesktopAccess,
+    revokeApplicationUserQgisDesktopAccess: mocks.revokeApplicationUserQgisDesktopAccess,
     sendApplicationUserInvite: mocks.sendApplicationUserInvite,
     getApplicationUserPermissions: mocks.getApplicationUserPermissions,
     updateApplicationUserPermissions: mocks.updateApplicationUserPermissions,
@@ -263,6 +269,9 @@ describe("Gaia users page", () => {
     mocks.listSectionCatalog.mockReset();
     mocks.createApplicationUser.mockReset();
     mocks.updateApplicationUser.mockReset();
+    mocks.getApplicationUserQgisDesktopAccess.mockReset();
+    mocks.provisionApplicationUserQgisDesktopAccess.mockReset();
+    mocks.revokeApplicationUserQgisDesktopAccess.mockReset();
     mocks.sendApplicationUserInvite.mockReset();
     mocks.getApplicationUserPermissions.mockReset();
     mocks.updateApplicationUserPermissions.mockReset();
@@ -284,6 +293,22 @@ describe("Gaia users page", () => {
       buildUser({ id: 99, username: payload.username || "nuovo", email: payload.email || "nuovo@example.local", role: payload.role }),
     );
     mocks.updateApplicationUser.mockResolvedValue(buildUser());
+    mocks.getApplicationUserQgisDesktopAccess.mockResolvedValue({
+      enabled: false,
+      username: "gaia_qgis_u_7",
+      layer_count: 0,
+    });
+    mocks.provisionApplicationUserQgisDesktopAccess.mockResolvedValue({
+      enabled: true,
+      username: "gaia_qgis_u_7",
+      password: "qgis-once",
+      layer_count: 1,
+    });
+    mocks.revokeApplicationUserQgisDesktopAccess.mockResolvedValue({
+      enabled: false,
+      username: "gaia_qgis_u_7",
+      layer_count: 0,
+    });
     mocks.sendApplicationUserInvite.mockResolvedValue({
       user_id: 7,
       email: "mrossi@example.local",
@@ -492,6 +517,9 @@ describe("Gaia users page", () => {
       expect(screen.getByText("Modifica utente GAIA")).toBeInTheDocument();
     });
     expect(getModuleCheckbox("GIS Platform").checked).toBe(true);
+    expect(screen.getByText("QGIS Desktop / PostGIS")).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Abilita QGIS Desktop" }));
+    expect(await screen.findByText("qgis-once")).toBeInTheDocument();
   });
 
   test("creates a user, sends activation mail and opens the created account", async () => {
@@ -681,6 +709,7 @@ describe("Gaia users page", () => {
       .mockReturnValueOnce("token")
       .mockReturnValueOnce("token")
       .mockReturnValueOnce("token")
+      .mockReturnValueOnce("token")
       .mockReturnValueOnce(null)
       .mockReturnValue("token");
     mocks.listAllApplicationUsers.mockResolvedValue([buildUser({ username: "utente-invite-no-token" })]);
@@ -695,12 +724,7 @@ describe("Gaia users page", () => {
   });
 
   test("does not save section permissions when the token disappears", async () => {
-    mocks.getStoredAccessToken
-      .mockReturnValueOnce("token")
-      .mockReturnValueOnce("token")
-      .mockReturnValueOnce("token")
-      .mockReturnValueOnce(null)
-      .mockReturnValue("token");
+    mocks.getStoredAccessToken.mockReturnValue("token");
     mocks.getCurrentUser.mockResolvedValue({ ...buildCurrentUser(), role: "super_admin" });
     mocks.listSectionCatalog.mockResolvedValue([
       buildSection({ id: 101, module: "accessi", key: "accessi.users", label: "Utenti" }),
@@ -720,7 +744,8 @@ describe("Gaia users page", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Apri componenti (2)" }));
     const permissionSelects = await screen.findAllByLabelText("Permesso");
     fireEvent.change(permissionSelects[1], { target: { value: "grant" } });
-    fireEvent.click(screen.getAllByRole("button", { name: "Salva" }).find((button) => !(button as HTMLButtonElement).disabled)!);
+    mocks.getStoredAccessToken.mockReturnValueOnce(null);
+    fireEvent.click(screen.getAllByRole("button", { name: "Salva" }).at(-1)!);
 
     await waitFor(() => expect(mocks.updateApplicationUserPermissions).not.toHaveBeenCalled());
   });

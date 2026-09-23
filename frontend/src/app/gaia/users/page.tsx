@@ -34,6 +34,7 @@ import { getStoredAccessToken } from "@/lib/auth";
 import type { ApplicationUser, CurrentUser, SectionResponse, UserPermissionsAdminView, UserPresenceRecentRoute, UserPresenceSummary } from "@/types/api";
 import { clearPresenceAction, recordPresenceAction } from "@/lib/presence-actions";
 import { GaiaRoleField } from "@/components/accessi/gaia-role-field";
+import { UserQgisDesktopAccessPanel } from "@/components/app/user-qgis-desktop-access-panel";
 
 type GaiaUserRow = {
   id: number;
@@ -815,6 +816,9 @@ export default function GaiaUsersPage() {
         ) : null}
 
         <div className="grid gap-4 lg:grid-cols-12">
+          {isEditMode && selectedUser ? (
+            <UserQgisDesktopAccessPanel user={selectedUser} />
+          ) : null}
           <label className="block text-sm font-medium text-gray-700 lg:col-span-6">
             Username
             <input

@@ -139,7 +139,13 @@ def _configure_read_only_wfs(root: ET.Element) -> None:
 
 
 def _server_project_xml(layers: list[GisLayer], generated_at: datetime) -> bytes:
-    root = ET.fromstring(_build_qgis_project_xml(layers, generated_at))
+    root = ET.fromstring(
+        _build_qgis_project_xml(
+            layers,
+            generated_at,
+            postgres_service=SERVICE_NAME,
+        )
+    )
     _add_service_short_names(root, layers)
     _replace_project_connection(root)
     _configure_read_only_wfs(root)

@@ -40,10 +40,13 @@ from app.modules.gis.models import (
 from app.modules.gis.qgis_governance import build_qgis_governance
 from app.modules.gis.response_builders import (
     export_response as _export_response,
+)
+from app.modules.gis.response_builders import (
     layer_response,
+)
+from app.modules.gis.response_builders import (
     shapefile_import_response as _shapefile_import_response,
 )
-from app.modules.gis.service_support import default_export_path, feature_geometry as _feature_geometry
 from app.modules.gis.schemas import (
     GisAccessLevel,
     GisAnnotationCreate,
@@ -76,6 +79,14 @@ from app.modules.gis.schemas import (
     GisShapefileImportPreviewResponse,
     GisShapefileImportResponse,
     GisShapefileImportStatus,
+)
+
+# Keep the established module-level alias available to internal GIS callers.
+from app.modules.gis.service_support import (
+    default_export_path,
+)
+from app.modules.gis.service_support import (
+    feature_geometry as _feature_geometry,  # noqa: F401
 )
 
 GIS_ADMIN_ROLES = {
@@ -690,6 +701,9 @@ def create_layer(db: Session, body: GisLayerCreate, current_user: ApplicationUse
     except IntegrityError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="GIS layer already exists") from exc
     _write_audit(db, event_type="layer.created", actor=current_user, layer_id=layer.id, target_type="layer", target_id=layer.id)
+    from app.modules.gis.qgis_desktop_access import sync_enabled_users
+
+    sync_enabled_users(db)
     db.commit()
     db.refresh(layer)
     return _layer_response(layer, _admin_flags())
@@ -1053,6 +1067,9 @@ def update_layer_metadata(
         target_id=layer.id,
         payload={"changed_fields": changed_fields},
     )
+    from app.modules.gis.qgis_desktop_access import sync_enabled_users
+
+    sync_enabled_users(db)
     db.commit()
     db.refresh(layer)
     return _layer_response(layer, _admin_flags())
@@ -1097,6 +1114,9 @@ def set_layer_active(db: Session, layer_id: UUID, is_active: bool, current_user:
         target_id=layer.id,
         payload={"previous_is_active": previous_is_active, "is_active": layer.is_active},
     )
+    from app.modules.gis.qgis_desktop_access import sync_enabled_users
+
+    sync_enabled_users(db)
     db.commit()
     db.refresh(layer)
     return _layer_response(layer, _admin_flags())
@@ -1761,6 +1781,9 @@ def upsert_permission(
             "access_level": body.access_level.value,
         },
     )
+    from app.modules.gis.qgis_desktop_access import sync_enabled_users
+
+    sync_enabled_users(db)
     db.commit()
     db.refresh(permission)
     return _permission_response(permission)
@@ -1792,6 +1815,9 @@ def revoke_permission(
         target_id=permission.id,
         payload=payload,
     )
+    from app.modules.gis.qgis_desktop_access import sync_enabled_users
+
+    sync_enabled_users(db)
     db.commit()
 
 

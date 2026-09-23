@@ -27,26 +27,38 @@ L'endpoint e admin-only e restituisce:
   `edit_policy=controlled`;
 - SQL completo da revisionare ed eseguire sul database PostgreSQL.
 
-I ruoli LOGIN reali non vengono creati automaticamente da GAIA. Devono essere
-creati per ambiente e assegnati a uno dei ruoli gruppo:
+I ruoli LOGIN Desktop si gestiscono da `/gaia/users`: salvare prima il modulo
+GIS dell'utente, poi usare il pannello `QGIS Desktop / PostGIS` per creare o
+ruotare le credenziali. GAIA crea un ruolo `gaia_qgis_u_<user_id>` dedicato e
+mostra la password solo nella risposta di generazione; non viene salvata
+dall'applicazione né inclusa nel progetto.
 
-```sql
-CREATE ROLE qgis_nomeutente LOGIN PASSWORD '<password-temporanea>';
-GRANT gaia_gis_qgis_reader TO qgis_nomeutente;
-```
+Il ruolo Desktop e sempre `NOSUPERUSER`, `NOCREATEDB`, `NOCREATEROLE` e
+read-only. Riceve `SELECT` soltanto sulle view `gis_qgis` dei layer visibili
+all'utente in GAIA. La disabilitazione dal pannello o del modulo GIS imposta
+`NOLOGIN`, revoca i grant e termina le sessioni PostgreSQL aperte; le modifiche
+ai permessi dei layer, alla loro pubblicazione o al ruolo GAIA riallineano i
+grant. La cancellazione dell'utente revoca prima il login PostgreSQL.
 
-Per utenze operative autorizzate all'editing controllato:
+L'abilitazione richiede un account GAIA attivo, il modulo GIS salvato e almeno
+un layer PostGIS pubblicato e visibile all'utente. La gestione da `/gaia/users`
+richiede i privilegi amministrativi di Accessi. Se il backend non e collegato
+a PostgreSQL, lo stato viene riportato come disabilitato e la creazione delle
+credenziali risponde con `503`: non vengono create credenziali locali o
+simulazioni SQLite.
 
-```sql
-GRANT gaia_gis_qgis_editor TO qgis_nomeutente;
-```
+Conservare la password nel gestore credenziali QGIS della postazione. In caso
+di perdita usare `Ruota password QGIS` nella scheda utente e distribuire la
+nuova password tramite canale autorizzato. L'accesso Desktop supportato dalla
+pagina utenti e in sola lettura; l'editing controllato resta governato dal
+workflow SQL descritto sopra e non viene assegnato da questa interfaccia.
 
 ## Connessione QGIS
 
 1. Aprire QGIS Desktop.
 2. Creare una connessione PostgreSQL/PostGIS verso il database GAIA.
 3. Usare un ruolo LOGIN dedicato `qgis_*`, mai l'utente applicativo backend.
-4. Caricare i layer dallo schema `gis_qgis`.
+4. Caricare i layer dalle view read-only dello schema `gis_qgis`.
 5. Verificare che i layer Catasto risultino read-only.
 6. Salvare eventuali progetti `.qgz` in percorso controllato e referenziabile
    dal catalogo layer, non dentro export NAS shapefile.
@@ -55,7 +67,7 @@ GRANT gaia_gis_qgis_editor TO qgis_nomeutente;
 
 La GIS Platform genera un progetto `.qgz` unico per l'utente corrente. Host,
 porta e database PostGIS sono inclusi nel progetto; la password resta esclusa
-e QGIS richiede le credenziali personali dell'utente `qgis_*` quando necessario:
+e QGIS richiede le credenziali personali dell'utente `gaia_qgis_u_*` quando necessario:
 
 ```http
 GET /gis/qgis/project
@@ -137,6 +149,14 @@ Configurare inoltre `GIS_QGIS_DESKTOP_PG_HOST`, `GIS_QGIS_DESKTOP_PG_PORT` e
 postazioni QGIS. Non usare il nome Docker `postgres` o l'host interno visibile
 solo dal backend. Il progetto scaricato usa questi parametri direttamente e
 non richiede una definizione locale `pg_service.conf`.
+
+Per l'istanza `gaia.lan`, verificare prima del rilascio che il nome risolva
+all'indirizzo del server dalla postazione QGIS e che la porta PostgreSQL `5432`
+sia raggiungibile solo dalle reti e dagli utenti autorizzati. Il download del
+progetto non prova la connettivita PostGIS: aprire un layer con le credenziali
+personali appena abilitate da `/gaia/users`, poi revocare l'accesso e verificare
+che una nuova connessione sia rifiutata. Non esporre `5432` indiscriminatamente
+su Internet e non inserire password nel progetto o nel manifest.
 
 Il progetto `.qgz` e le capabilities non devono contenere password, token,
 credenziali DB o l'URL interno QGIS Server. L'autenticazione client resta nella

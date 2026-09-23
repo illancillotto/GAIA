@@ -403,6 +403,16 @@ export type ApplicationUserListResponse = {
   total: number;
 };
 
+export type QgisDesktopAccessStatus = {
+  enabled: boolean;
+  username: string;
+  layer_count: number;
+};
+
+export type QgisDesktopCredentials = QgisDesktopAccessStatus & {
+  password: string;
+};
+
 export type UserSectionPermissionResponse = {
   id: number;
   user_id: number;

@@ -7,7 +7,6 @@ from typing import Any
 
 from app.modules.gis.models import GisLayer
 
-
 QGIS_SCHEMA = "gis_qgis"
 QGIS_READER_ROLE = "gaia_gis_qgis_reader"
 QGIS_EDITOR_ROLE = "gaia_gis_qgis_editor"
@@ -36,9 +35,9 @@ def _slug(value: str) -> str:
     return cleaned or "layer"
 
 
-def _view_name(layer: GisLayer) -> str:
+def qgis_view_name(layer: GisLayer) -> str:
     base = _slug(f"{layer.workspace}__{layer.name}")
-    digest = hashlib.sha1(f"{layer.workspace}:{layer.name}".encode("utf-8")).hexdigest()[:8]
+    digest = hashlib.sha1(f"{layer.workspace}:{layer.name}".encode()).hexdigest()[:8]
     return f"{base[:54]}_{digest}"
 
 
@@ -77,7 +76,7 @@ def _layer_grant(layer: GisLayer) -> QgisLayerGrant:
         workspace=layer.workspace,
         layer_name=layer.name,
         source_table=_source_table(layer),
-        view_name=_view_name(layer),
+        view_name=qgis_view_name(layer),
         read_role=QGIS_READER_ROLE,
         edit_role=QGIS_EDITOR_ROLE if editable else None,
         editable=editable,
