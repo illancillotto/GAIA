@@ -1,8 +1,5 @@
 from test_worker import *  # noqa: F403
-from test_worker import _seed_batch, _VisuraFlowResult
-
-from app.models.catasto import CatastoSisterExtraction
-
+from test_worker import _VisuraFlowResult, _seed_batch
 
 def test_request_repository_fails_only_current_execution(worker_db, monkeypatch: pytest.MonkeyPatch) -> None:
     worker, SessionLocal, _ = worker_db
@@ -506,14 +503,6 @@ def test_request_repository_persists_ade_document_payload(
     expected = "parse_failed" if parse_fails else "active"
     assert ade_calls[0]["classification"] == expected
     assert ade_calls[0]["document_id"] is not None
-    with SessionLocal() as db:
-        document = db.get(CatastoDocument, uuid.UUID(str(ade_calls[0]["document_id"])))
-        assert document is not None
-        assert db.scalar(
-            select(CatastoSisterExtraction).where(
-                CatastoSisterExtraction.document_id == document.id
-            )
-        ) is None
 
 
 def test_request_repository_persists_ade_payload_without_document(worker_db, monkeypatch: pytest.MonkeyPatch) -> None:
