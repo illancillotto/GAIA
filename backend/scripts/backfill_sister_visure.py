@@ -7,7 +7,7 @@ from pathlib import Path
 from sqlalchemy import select
 
 from app.core.database import SessionLocal
-from app.models.catasto import CatastoDocument, CatastoSisterExtraction
+from app.models.catasto import CatastoDocument, CatastoSisterExtraction, CatastoVisuraRequest
 from app.services.sister_visura_extractions import persist_sister_visura
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,12 @@ def main() -> int:
     args = parser.parse_args()
     processed = skipped = failed = missing = 0
     with SessionLocal() as db:
-        statement = select(CatastoDocument).order_by(CatastoDocument.created_at, CatastoDocument.id)
+        statement = (
+            select(CatastoDocument)
+            .join(CatastoVisuraRequest, CatastoVisuraRequest.id == CatastoDocument.request_id)
+            .where(CatastoVisuraRequest.purpose.in_(("visura_pdf", "perpetual_sync")))
+            .order_by(CatastoDocument.created_at, CatastoDocument.id)
+        )
         if not args.include_failed:
             statement = statement.where(
                 ~CatastoDocument.id.in_(select(CatastoSisterExtraction.document_id))

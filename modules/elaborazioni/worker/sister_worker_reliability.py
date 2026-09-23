@@ -704,7 +704,6 @@ class SisterRequestRepository:
             return None, payload, classification
         document = self.create_document(db, request, codice_fiscale, result.file_path, result.file_size)
         apply_document_audit(document, result.document_audit_payload)
-        persist_sister_visura(db, document)
         request.document_id = document.id
         payload = self._parse_ade_document(request, result.file_path, document)
         classification = str(payload.get("classification") or "unknown") if isinstance(payload, dict) else "unknown"
@@ -738,6 +737,7 @@ class SisterRequestRepository:
     ) -> None:
         document = self.create_document(db, request, codice_fiscale, result.file_path, result.file_size)
         apply_document_audit(document, result.document_audit_payload)
+        persist_sister_visura(db, document)
         request.document_id = document.id
         request.status = CatastoVisuraRequestStatus.COMPLETED.value
         request.current_operation = "PDF scaricato"
