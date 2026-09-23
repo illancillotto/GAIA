@@ -27,6 +27,7 @@ from app.modules.catasto.routes.anagrafica.distretto_routes import (
 from app.modules.catasto.routes.anagrafica.execution import execute_bulk_search_payload
 from app.modules.catasto.routes.anagrafica.exports import (
     _build_bulk_export_rows,
+    _attach_sister_data,
     _bulk_job_row_label,
     _export_basename,
     _stream_bulk_export_csv,
@@ -336,6 +337,7 @@ def run_distretto_export_job_by_id(job_id: UUID) -> None:
             db.commit()
 
             rows = _build_bulk_export_rows("COMUNE_FOGLIO_PARTICELLA_INTESTATARI", results)
+            _attach_sister_data(db, rows)
             filename, output_path, content_type = _write_distretto_export_file(job, rows)
             job = db.get(CatastoDistrettoExportJob, job_id)
             if job is None:
@@ -444,6 +446,7 @@ async def download_bulk_search_job_export(
     raw_results = job.results_json.get("results") if isinstance(job.results_json, dict) else None
     results = [CatAnagraficaBulkSearchRowResult.model_validate(r) for r in (raw_results or [])]
     rows = _build_bulk_export_rows(job.kind, results)
+    _attach_sister_data(db, rows)
     basename = _export_basename(job.kind)
     if format == "xlsx":
         return _stream_bulk_export_xlsx(f"{basename}.xlsx", rows)

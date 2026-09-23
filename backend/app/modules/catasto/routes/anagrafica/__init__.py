@@ -21,7 +21,7 @@ from app.modules.catasto.routes.anagrafica import (
 
 router = APIRouter()
 
-_ROUTE_MODULES = (distretto_routes, job_routes)
+_ROUTE_MODULES = (distretto_routes, job_routes, exports)
 for route_module in _ROUTE_MODULES:
     for route in route_module.router.routes:
         route.endpoint.__module__ = __name__

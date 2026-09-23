@@ -21,6 +21,7 @@ from app.models.catasto import (
     CatastoVisuraRequestStatus,
 )
 from app.modules.catasto.services.ade_document_audit import apply_document_audit
+from app.services.sister_visura_extractions import persist_sister_visura
 from sister_cadastral_browser_session import install_cadastral_section_recovery
 from sister_exceptions import SisterRequestCorrelationError
 from sister_recovery_policy import (
@@ -703,6 +704,7 @@ class SisterRequestRepository:
             return None, payload, classification
         document = self.create_document(db, request, codice_fiscale, result.file_path, result.file_size)
         apply_document_audit(document, result.document_audit_payload)
+        persist_sister_visura(db, document)
         request.document_id = document.id
         payload = self._parse_ade_document(request, result.file_path, document)
         classification = str(payload.get("classification") or "unknown") if isinstance(payload, dict) else "unknown"

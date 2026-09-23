@@ -24,6 +24,7 @@ import type {
   CatAnomaliaParticellaWizardListResponse,
   CatDistrettiExcelAnalysisResponse,
   CatDistretto,
+  CatComuneExportOption,
   CatDistrettoKpi,
   CatDomandeIrrigueListResponse,
   CatDomandeIrrigueRuoloReconciliation,
@@ -674,6 +675,24 @@ export async function catastoListDistretti(token: string): Promise<CatDistretto[
   return request<CatDistretto[]>("/catasto/distretti", {
     headers: authHeaders(token),
   });
+}
+
+export async function catastoListComuniExport(token: string): Promise<CatComuneExportOption[]> {
+  return request<CatComuneExportOption[]>("/catasto/elaborazioni-massive/particelle/comuni", {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoDownloadComuneExport(
+  token: string,
+  comune: string,
+  format: "csv" | "xlsx",
+  source: "gaia" | "live",
+): Promise<Blob> {
+  return requestBlob(
+    `/catasto/elaborazioni-massive/particelle/comuni/${encodeURIComponent(comune)}/export?format=${format}&source=${source}`,
+    { headers: authHeaders(token) },
+  );
 }
 
 export async function catastoGetDistretto(token: string, id: UUID): Promise<CatDistretto> {

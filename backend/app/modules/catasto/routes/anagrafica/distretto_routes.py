@@ -25,6 +25,7 @@ from app.models.catasto_phase1 import (
 )
 from app.modules.catasto.routes.anagrafica.exports import (
     _build_bulk_export_rows,
+    _attach_sister_data,
     _render_bulk_export_csv_bytes,
     _render_bulk_export_xlsx_bytes,
     _stream_bulk_export_csv,
@@ -180,6 +181,7 @@ async def download_distretto_bulk_export(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nessuna particella corrente per il distretto")
 
     rows = _build_bulk_export_rows("COMUNE_FOGLIO_PARTICELLA_INTESTATARI", results)
+    _attach_sister_data(db, rows)
     safe_label = re.sub(r"[^A-Za-z0-9_-]+", "-", normalized_num).strip("-").lower() or "nd"
     basename = f"catasto-intestatari-distretto-{safe_label}"
     if distretto_label:

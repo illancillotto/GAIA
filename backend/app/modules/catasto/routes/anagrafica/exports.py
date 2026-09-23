@@ -1,15 +1,25 @@
 from __future__ import annotations
 
 import csv
+import json
 import logging
 import os
 from io import BytesIO, StringIO
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response, StreamingResponse
 from openpyxl import Workbook
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from app.api.deps import require_active_user
+from app.core.database import get_db
+from app.models.application_user import ApplicationUser
+from app.models.catasto import CatastoSisterExtraction, CatastoSisterOwner, CatastoSisterParcel
+from app.models.catasto_phase1 import CatParticella
+from app.modules.catasto.routes.anagrafica.matching import _build_match, _load_consorzio_presence_by_particella_ids
 
 from app.modules.catasto.routes.anagrafica.normalization import _LiveSearchHit, _norm_str, _safe_int
 from app.modules.elaborazioni.capacitas.client import InVoltureClient
@@ -19,10 +29,12 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasTerrenoRow,
 )
 from app.schemas.catasto_phase1 import (
+    CatAnagraficaBulkSearchRequest,
     CatAnagraficaBulkSearchRow,
     CatAnagraficaBulkSearchRowResult,
     CatAnagraficaMatch,
     CatIntestatarioResponse,
+    CatComuneExportOption,
 )
 from app.services.elaborazioni_capacitas_terreni import (
     _SECTION_LOOKUP_COMUNE_OVERRIDES,
@@ -380,6 +392,151 @@ def _build_bulk_export_rows(
                     }
                 )
     return rows
+
+
+def _attach_sister_data(db: Session, rows: list[dict[str, object]]) -> None:
+    sister_by_key: dict[tuple[str, str, str, str], list[dict[str, object]]] = {}
+    sister_history_by_key: dict[tuple[str, str, str, str], dict[str, object]] = {}
+    latest_extraction_by_key: dict[tuple[str, str, str, str], object] = {}
+    parcel_rows = db.execute(
+        select(CatastoSisterParcel, CatastoSisterOwner, CatastoSisterExtraction)
+        .join(CatastoSisterOwner, CatastoSisterParcel.id == CatastoSisterOwner.sister_parcel_id)
+        .join(CatastoSisterExtraction, CatastoSisterExtraction.id == CatastoSisterParcel.extraction_id)
+        .where(CatastoSisterExtraction.status == "completed")
+        .order_by(CatastoSisterExtraction.observed_at.desc().nullslast())
+    ).all()
+    for parcel, owner, _extraction in parcel_rows:
+        key = (
+            (parcel.comune_nome or "").strip().casefold(),
+            (parcel.foglio or "").strip(),
+            (parcel.particella or "").strip(),
+            (parcel.subalterno or "").strip(),
+        )
+        extraction_id = parcel.extraction_id
+        current_extraction_id = latest_extraction_by_key.get(key)
+        if current_extraction_id is None:
+            latest_extraction_by_key[key] = extraction_id
+        elif current_extraction_id != extraction_id:
+            continue
+        sister_by_key.setdefault(key, []).append(
+            {
+                "codice_fiscale": owner.codice_fiscale,
+                "denominazione": owner.denominazione,
+                "diritto": owner.diritto,
+                "quota": owner.quota,
+                "data_nascita": owner.data_nascita.isoformat() if owner.data_nascita else None,
+                "luogo_nascita": owner.luogo_nascita,
+            }
+        )
+    history_rows = db.execute(
+        select(CatastoSisterParcel, CatastoSisterExtraction)
+        .join(CatastoSisterExtraction, CatastoSisterExtraction.id == CatastoSisterParcel.extraction_id)
+        .where(CatastoSisterExtraction.status == "completed")
+        .order_by(CatastoSisterExtraction.observed_at.desc().nullslast())
+    ).all()
+    for parcel, extraction in history_rows:
+        key = (
+            (parcel.comune_nome or "").strip().casefold(),
+            (parcel.foglio or "").strip(),
+            (parcel.particella or "").strip(),
+            (parcel.subalterno or "").strip(),
+        )
+        if key not in sister_history_by_key:
+            sister_history_by_key[key] = {
+                "eventi": extraction.payload_json.get("history_events", []),
+                "particelle_collegate": extraction.payload_json.get("related_parcels", []),
+            }
+    for row in rows:
+        key = (
+            str(row.get("comune") or "").strip().casefold(),
+            str(row.get("foglio") or "").strip(),
+            str(row.get("particella") or "").strip(),
+            str(row.get("sub") or "").strip(),
+        )
+        data = sister_by_key.get(key)
+        history = sister_history_by_key.get(key)
+        row["sister_dati_presenti"] = "si" if data or history else ""
+        row["sister_dati"] = json.dumps(data, ensure_ascii=False, sort_keys=True) if data else ""
+        row["sister_storico"] = json.dumps(history, ensure_ascii=False, sort_keys=True) if history else ""
+
+
+@router.get("/comuni", response_model=list[CatComuneExportOption])
+async def list_comune_export_options(
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> list[CatComuneExportOption]:
+    rows = db.execute(
+        select(CatParticella.cod_comune_capacitas, func.coalesce(CatParticella.nome_comune, ""))
+        .where(CatParticella.is_current.is_(True), CatParticella.suppressed.is_(False))
+        .distinct()
+        .order_by(func.coalesce(CatParticella.nome_comune, ""))
+    ).all()
+    return [CatComuneExportOption(codice=str(code), nome=name or str(code)) for code, name in rows]
+
+
+@router.get("/comuni/{comune}/export", response_model=None)
+async def download_comune_bulk_export(
+    comune: str,
+    format: Literal["csv", "xlsx"] = Query(...),
+    source: Literal["gaia", "live"] = Query("gaia"),
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> StreamingResponse | Response:
+    value = comune.strip()
+    if not value:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Comune non valido")
+    query = select(CatParticella).where(CatParticella.is_current.is_(True), CatParticella.suppressed.is_(False))
+    if value.isdigit():
+        query = query.where(CatParticella.cod_comune_capacitas == int(value))
+    else:
+        query = query.where(func.lower(CatParticella.nome_comune) == value.casefold())
+    particelle = db.execute(query.order_by(CatParticella.foglio, CatParticella.particella, CatParticella.subalterno)).scalars().all()
+    if not particelle:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nessuna particella corrente per il comune")
+    if source == "live":
+        from app.modules.catasto.routes.anagrafica.execution import execute_bulk_search_payload
+
+        payload = CatAnagraficaBulkSearchRequest(
+            kind="COMUNE_FOGLIO_PARTICELLA_INTESTATARI",
+            include_capacitas_live=True,
+            rows=[
+                CatAnagraficaBulkSearchRow(
+                    row_index=index,
+                    comune=p.nome_comune or value,
+                    sezione=p.sezione_catastale,
+                    foglio=p.foglio,
+                    particella=p.particella,
+                    sub=p.subalterno,
+                )
+                for index, p in enumerate(particelle, start=1)
+            ],
+        )
+        results = (await execute_bulk_search_payload(payload, db)).results
+    else:
+        present_ids = _load_consorzio_presence_by_particella_ids(db, {p.id for p in particelle})
+        results = [
+            CatAnagraficaBulkSearchRowResult(
+                row_index=index,
+                comune_input=p.nome_comune or value,
+                sezione_input=p.sezione_catastale,
+                foglio_input=p.foglio,
+                particella_input=p.particella,
+                sub_input=p.subalterno,
+                esito="FOUND",
+                message="OK",
+                particella_id=p.id,
+                match=_build_match(db, p, presente_in_catasto_consorzio=p.id in present_ids),
+                matches_count=1,
+            )
+            for index, p in enumerate(particelle, start=1)
+        ]
+    rows = _build_bulk_export_rows("COMUNE_FOGLIO_PARTICELLA_INTESTATARI", results)
+    _attach_sister_data(db, rows)
+    label = (particelle[0].nome_comune or value).strip().lower().replace(" ", "-")
+    filename = f"catasto-intestatari-comune-{label}-{source}.{format}"
+    if format == "xlsx":
+        return _stream_bulk_export_xlsx(filename, rows)
+    return _stream_bulk_export_csv(filename, rows)
 
 
 def _stream_bulk_export_csv(filename: str, rows: list[dict[str, object]]) -> StreamingResponse:

@@ -1296,3 +1296,8 @@ class CatDistrettoExportJobResponse(BaseModel):
 
 class CatDistrettoExportJobListResponse(BaseModel):
     items: list[CatDistrettoExportJobResponse]
+
+
+class CatComuneExportOption(BaseModel):
+    codice: str
+    nome: str

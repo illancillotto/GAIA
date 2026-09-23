@@ -19,11 +19,13 @@ import {
   catastoDownloadElaborazioneMassivaJobExport,
   catastoGetElaborazioneMassivaJob,
   catastoListDistretti,
+  catastoListComuniExport,
+  catastoDownloadComuneExport,
   catastoListElaborazioniMassiveJobs,
   catastoUploadElaborazioneMassivaJob,
 } from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { CatAnagraficaBulkJobItem, CatAnagraficaBulkRowResult, CatDistretto, CatDistrettoExportJob, CatIntestatario } from "@/types/catasto";
+import type { CatAnagraficaBulkJobItem, CatAnagraficaBulkRowResult, CatComuneExportOption, CatDistretto, CatDistrettoExportJob, CatIntestatario } from "@/types/catasto";
 
 import { CatastoFilePicker } from "../file-picker";
 
@@ -191,7 +193,10 @@ export function AnagraficaBulkPanel() {
   const [distrettoExportJobs, setDistrettoExportJobs] = useState<CatDistrettoExportJob[]>([]);
   const [activeDistrettoExportJob, setActiveDistrettoExportJob] = useState<CatDistrettoExportJob | null>(null);
   const [distretti, setDistretti] = useState<CatDistretto[]>([]);
+  const [comuni, setComuni] = useState<CatComuneExportOption[]>([]);
   const [selectedDistretto, setSelectedDistretto] = useState("");
+  const [selectedComune, setSelectedComune] = useState("");
+  const [exportChoice, setExportChoice] = useState<{ comune: string; format: "csv" | "xlsx" } | null>(null);
   const [showDeleteHistoryConfirm, setShowDeleteHistoryConfirm] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<BulkProgressState>({
     open: false,
@@ -209,9 +214,10 @@ export function AnagraficaBulkPanel() {
     const token = getStoredAccessToken();
     if (!token) return;
     void (async () => {
-      const [bulkJobsResult, distrettiResult, distrettoExportsResult] = await Promise.allSettled([
+      const [bulkJobsResult, distrettiResult, comuniResult, distrettoExportsResult] = await Promise.allSettled([
         catastoListElaborazioniMassiveJobs(token, { limit: 5 }),
         catastoListDistretti(token),
+        catastoListComuniExport(token),
         catastoListElaborazioneMassivaDistrettoExportJobs(token, { limit: 5 }),
       ]);
 
@@ -227,6 +233,7 @@ export function AnagraficaBulkPanel() {
         setDistretti([]);
         setError("Errore caricamento distretti.");
       }
+      setComuni(comuniResult.status === "fulfilled" ? comuniResult.value : []);
 
       if (distrettoExportsResult.status === "fulfilled") {
         setDistrettoExportJobs(distrettoExportsResult.value.items);
@@ -500,6 +507,24 @@ export function AnagraficaBulkPanel() {
     }
   }
 
+  async function exportComune(source: "gaia" | "live"): Promise<void> {
+    if (!exportChoice) return;
+    const token = getStoredAccessToken();
+    if (!token) return;
+    setIsExporting(true);
+    try {
+      const blob = await catastoDownloadComuneExport(token, exportChoice.comune, exportChoice.format, source);
+      const label = comuni.find((item) => item.codice === exportChoice.comune)?.nome ?? exportChoice.comune;
+      triggerDownload(blob, `catasto-intestatari-comune-${label.toLowerCase().replace(/\s+/g, "-")}-${source}.${exportChoice.format}`);
+      setExportChoice(null);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Errore export comune");
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   const progressPercent =
     bulkProgress.total > 0 ? Math.round((bulkProgress.processed / bulkProgress.total) * 100) : 0;
   const canCloseProgress = bulkProgress.phase === "completed" || bulkProgress.phase === "error";
@@ -510,6 +535,20 @@ export function AnagraficaBulkPanel() {
         <AlertBanner variant="danger" title="Errore">
           {error}
         </AlertBanner>
+      ) : null}
+
+      {exportChoice ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+            <p className="text-lg font-semibold text-gray-900">Scegli la fonte dei dati</p>
+            <p className="mt-2 text-sm text-gray-600">Per il comune selezionato puoi usare il dato già presente in GAIA oppure interrogare Capacitas live.</p>
+            <div className="mt-5 grid gap-2">
+              <button type="button" className="btn-primary" disabled={busy} onClick={() => void exportComune("gaia")}>Esporta con dato GAIA</button>
+              <button type="button" className="btn-secondary" disabled={busy} onClick={() => void exportComune("live")}>Esporta live</button>
+              <button type="button" className="btn-secondary" disabled={busy} onClick={() => setExportChoice(null)}>Annulla</button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {showDeleteHistoryConfirm ? (
@@ -888,6 +927,22 @@ export function AnagraficaBulkPanel() {
               </div>
             </div>
           ) : null}
+        </div>
+
+        <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
+          <p className="text-sm font-medium text-gray-900">Export intestatari per comune</p>
+          <p className="mt-1 text-sm text-gray-600">Esporta tutte le particelle correnti di un comune scegliendo nella finestra se usare il dato GAIA o il dato live. Il file include anche l’indicazione e il dettaglio dei dati SISTER quando disponibili.</p>
+          <div className="mt-4 flex flex-wrap items-end gap-3">
+            <label className="min-w-64 flex-1 text-sm">
+              <span className="label-caption">Comune</span>
+              <select className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm" value={selectedComune} disabled={busy || comuni.length === 0} onChange={(event) => setSelectedComune(event.target.value)}>
+                <option value="">Seleziona comune</option>
+                {comuni.map((comune) => <option key={comune.codice} value={comune.codice}>{comune.nome} · {comune.codice}</option>)}
+              </select>
+            </label>
+            <button className="btn-secondary" type="button" disabled={busy || !selectedComune} onClick={() => setExportChoice({ comune: selectedComune, format: "csv" })}>Export CSV comune</button>
+            <button className="btn-secondary" type="button" disabled={busy || !selectedComune} onClick={() => setExportChoice({ comune: selectedComune, format: "xlsx" })}>Export Excel comune</button>
+          </div>
         </div>
 
       </article>

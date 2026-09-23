@@ -264,6 +264,69 @@ class CatastoDocument(Base):
     )
 
 
+class CatastoSisterExtraction(Base):
+    __tablename__ = "catasto_sister_extractions"
+    __table_args__ = (UniqueConstraint("document_id", name="uq_catasto_sister_extractions_document"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("catasto_documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    parser_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    pdf_sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    observed_at: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    payload_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class CatastoSisterParcel(Base):
+    __tablename__ = "catasto_sister_parcels"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    extraction_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("catasto_sister_extractions.id", ondelete="CASCADE"), nullable=False, index=True)
+    cat_particella_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("cat_particelle.id", ondelete="SET NULL"), nullable=True, index=True)
+    comune_nome: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    comune_codice: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
+    foglio: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    particella: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    subalterno: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    payload_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+
+class CatastoSisterOwner(Base):
+    __tablename__ = "catasto_sister_owners"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    sister_parcel_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("catasto_sister_parcels.id", ondelete="CASCADE"), nullable=False, index=True)
+    cat_intestatario_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("cat_intestatari.id", ondelete="SET NULL"), nullable=True, index=True)
+    codice_fiscale: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
+    denominazione: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    cognome: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    nome: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    data_nascita: Mapped[date | None] = mapped_column(Date, nullable=True)
+    luogo_nascita: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    diritto: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    quota: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    payload_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+
+class CatastoSisterHistoryEvent(Base):
+    __tablename__ = "catasto_sister_history_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    extraction_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("catasto_sister_extractions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    from_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    act_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    codice_fiscale: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
+    denominazione: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    diritto: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    quota: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    act_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    payload_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+
 class CatastoVisuraRequest(Base):
     __tablename__ = "catasto_visure_requests"
     __table_args__ = (UniqueConstraint("batch_id", "row_index", name="uq_catasto_visure_requests_batch_row"),)

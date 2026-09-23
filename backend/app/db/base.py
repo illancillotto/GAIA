@@ -161,6 +161,10 @@ from app.models.catasto import (
     CatastoCredential,
     CatastoCredentialLease,
     CatastoDocument,
+    CatastoSisterExtraction,
+    CatastoSisterHistoryEvent,
+    CatastoSisterOwner,
+    CatastoSisterParcel,
     CatastoVisuraRequest,
 )
 from app.models.effective_permission import EffectivePermission
@@ -265,6 +269,10 @@ __all__ = [
     "CatastoCredential",
     "CatastoCredentialLease",
     "CatastoDocument",
+    "CatastoSisterExtraction",
+    "CatastoSisterHistoryEvent",
+    "CatastoSisterOwner",
+    "CatastoSisterParcel",
     "CatastoVisuraRequest",
     "CatConsorzioOccupancy",
     "CatConsorzioUnit",

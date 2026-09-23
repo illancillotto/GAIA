@@ -1317,3 +1317,5 @@ export type CatDistrettoExportJob = {
 export type CatDistrettoExportJobListResponse = {
   items: CatDistrettoExportJob[];
 };
+
+export type CatComuneExportOption = { codice: string; nome: string };
