@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 import {
-  catastoCreateElaborazioneMassivaDistrettoExportJob,
+  catastoCreateElaborazioneMassivaScopeExportJob,
   catastoDownloadElaborazioneMassivaDistrettoExportJob,
   catastoGetElaborazioneMassivaDistrettoExportJob,
   catastoListElaborazioneMassivaDistrettoExportJobs,
@@ -38,7 +38,7 @@ describe("Catasto distretto export jobs API client", () => {
       .mockResolvedValueOnce(new Response(new Blob(["csv"], { type: "text/csv" }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(catastoCreateElaborazioneMassivaDistrettoExportJob("token", "01", "csv")).resolves.toEqual(jobPayload);
+    await expect(catastoCreateElaborazioneMassivaScopeExportJob("token", "distretti", ["01", "02"], "csv")).resolves.toEqual(jobPayload);
     await expect(catastoListElaborazioneMassivaDistrettoExportJobs("token", { limit: 5 })).resolves.toEqual({ items: [jobPayload] });
     await expect(catastoListElaborazioneMassivaDistrettoExportJobs("token")).resolves.toEqual({ items: [] });
     await expect(catastoGetElaborazioneMassivaDistrettoExportJob("token", "export-1")).resolves.toEqual(jobPayload);
@@ -46,8 +46,11 @@ describe("Catasto distretto export jobs API client", () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      "/api/catasto/elaborazioni-massive/particelle/distretti/01/exports?format=csv",
-      expect.objectContaining({ method: "POST" }),
+      "/api/catasto/elaborazioni-massive/particelle/exports",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ kind: "distretti", values: ["01", "02"], format: "csv" }),
+      }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,

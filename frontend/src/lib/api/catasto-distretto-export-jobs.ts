@@ -5,18 +5,17 @@ function authHeaders(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}` };
 }
 
-export async function catastoCreateElaborazioneMassivaDistrettoExportJob(
+export async function catastoCreateElaborazioneMassivaScopeExportJob(
   token: string,
-  numDistretto: string,
+  kind: "distretti" | "comuni",
+  values: string[],
   format: "csv" | "xlsx",
 ): Promise<CatDistrettoExportJob> {
-  return request<CatDistrettoExportJob>(
-    `/catasto/elaborazioni-massive/particelle/distretti/${encodeURIComponent(numDistretto)}/exports?format=${format}`,
-    {
-      method: "POST",
-      headers: authHeaders(token),
-    },
-  );
+  return request<CatDistrettoExportJob>("/catasto/elaborazioni-massive/particelle/exports", {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ kind, values, format }),
+  });
 }
 
 export async function catastoListElaborazioneMassivaDistrettoExportJobs(

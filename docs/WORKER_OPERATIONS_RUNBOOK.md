@@ -14,7 +14,7 @@ interventi in produzione.
 | `platform-scheduler` | tutti gli undici trigger APScheduler | 2 CPU, 2 GiB, 256 PID |
 | `presenze-worker` | claim e child delle sync Presenze | 3 CPU, 4 GiB, 512 PID |
 | `elaborazioni-worker-visure` | SISTER, AdE e bulk catastali | 6 CPU, 8 GiB, 1536 PID, 4 browser |
-| `elaborazioni-worker-exports` | soli export distretto | 2 CPU, 4 GiB, 256 PID |
+| `elaborazioni-worker-exports` | soli export distretto/comune | 2 CPU, 4 GiB, 256 PID |
 | `elaborazioni-worker-runtime` | Capacitas e import REGISTRY | 2 CPU, 2 GiB, 256 PID |
 | `elaborazioni-worker-poste` | Poste Online e relativo browser | 2 CPU, 3 GiB, 768 PID |
 | `elaborazioni-worker-autodoc` | AUTODOC e relativo browser | 2 CPU, 3 GiB, 768 PID |
@@ -27,7 +27,7 @@ definitivi. Possono essere modificati dalle variabili documentate in
 `elaborazioni-worker-exports` usa un runner dedicato. Preleva i job
 gia `pending` al primo avvio e condivide `catasto-data` con il backend per il
 download dei file. Il worker visure non preleva questi job: un batch
-SISTER o una ricerca massiva lunga non blocca piu gli export distretto.
+SISTER o una ricerca massiva lunga non blocca piu gli export distretto/comune.
 Prima di avviare un'immagine worker nuova, verificare che Alembic sia a `head`:
 gli export includono dati SISTER e richiedono le tabelle delle estrazioni.
 Se il caricamento fallisce per una tabella mancante, allineare lo schema prima

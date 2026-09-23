@@ -21,13 +21,14 @@ from app.models.catasto import (
     CatastoElaborazioniMassiveJobStatus,
 )
 from app.modules.catasto.routes.anagrafica.distretto_routes import (
+    _build_comuni_export_results,
     _build_distretto_export_results,
     _write_distretto_export_file,
 )
 from app.modules.catasto.routes.anagrafica.execution import execute_bulk_search_payload
 from app.modules.catasto.routes.anagrafica.exports import (
-    _build_bulk_export_rows,
     _attach_sister_data,
+    _build_bulk_export_rows,
     _bulk_job_row_label,
     _export_basename,
     _stream_bulk_export_csv,
@@ -317,15 +318,26 @@ def run_distretto_export_job_by_id(job_id: UUID) -> None:
         job.started_at = datetime.now(UTC)
         job.completed_at = None
         job.error_message = None
-        job.current_label = "Caricamento particelle del distretto..."
+        is_comuni = job.scope_kind == "comuni"
+        job.current_label = "Caricamento particelle dei comuni..." if is_comuni else "Caricamento particelle del distretto..."
         job.processed_rows = 0
         job.total_rows = 0
         db.commit()
 
         try:
-            results, distretto_label = _build_distretto_export_results(db, job.num_distretto)
+            scope_values = job.scope_values or [job.num_distretto]
+            if is_comuni:
+                results, distretto_label = _build_comuni_export_results(db, scope_values), None
+            else:
+                results, distretto_label = _build_distretto_export_results(
+                    db, scope_values if len(scope_values) > 1 else scope_values[0]
+                )
             if not results:
-                raise ValueError("Nessuna particella corrente per il distretto")
+                raise ValueError(
+                    "Nessuna particella corrente per i comuni selezionati"
+                    if is_comuni
+                    else "Nessuna particella corrente per il distretto"
+                )
             job = db.get(CatastoDistrettoExportJob, job_id)
             if job is None:
                 return

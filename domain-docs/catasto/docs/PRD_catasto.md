@@ -325,9 +325,11 @@ Note:
 - il browser non chunka più le richieste né salva lo storico localmente: il progresso vive in `catasto_elaborazioni_massive_jobs` e l'esecuzione viene prelevata dal worker `gaia-elaborazioni-worker-visure`
 - anche l'export dei risultati è backend-driven: il frontend richiama un endpoint download del job e non costruisce più il file `.csv/.xlsx` con logica locale
 - il frontend può fare solo una pre-validazione delle intestazioni per UX; il parsing reale del file e la costruzione delle righe input avvengono su `POST /catasto/elaborazioni-massive/particelle/jobs/upload`
-- l'export "intestatari per distretto" di `/catasto/elaborazioni-massive` non viene più preparato nella richiesta HTTP: `POST /catasto/elaborazioni-massive/particelle/distretti/{num_distretto}/exports` crea un record in `catasto_distretto_export_jobs`, il worker lo esegue e il frontend fa polling fino al download. Refresh o chiusura tab non interrompono il job.
-- i file prodotti da questo job sono salvati sul backend in `CATASTO_DISTRETTO_EXPORT_STORAGE_PATH` e scaricati da `/catasto/elaborazioni-massive/particelle/distretti/exports/{job_id}/download`.
-- la dropdown distretti del blocco export deve caricarsi indipendentemente dallo storico degli export: un errore su `/distretti/exports` non deve disabilitare la selezione del distretto.
+- gli export "intestatari per distretto" e "intestatari per comune" di `/catasto/elaborazioni-massive` non vengono preparati nella richiesta HTTP: `POST /catasto/elaborazioni-massive/particelle/exports` (body `{kind: "distretti"|"comuni", values: [...], format: "csv"|"xlsx"}`) crea un record in `catasto_distretto_export_jobs`, il worker lo esegue e il frontend fa polling fino al download. Un job puo coprire piu distretti o piu comuni e produce un unico file; i valori sono deduplicati (case-insensitive). Il vecchio `POST .../distretti/{num_distretto}/exports` resta come alias per un solo distretto. Refresh o chiusura tab non interrompono il job.
+- il job persiste `scope_kind` (`distretti`/`comuni`) e `scope_values` (lista); `num_distretto`/`nome_distretto` contengono le etichette leggibili (elenco separato da virgole). Per i comuni ogni valore e un codice Capacitas numerico oppure un nome comune. Nomi file: singolo distretto/comune `catasto-intestatari-distretto-<n>[-<nome>]` / `catasto-intestatari-comune-<nome>`, fino a 4 valori `catasto-intestatari-distretti-01-02`, oltre `catasto-intestatari-<N>-distretti|comuni`.
+- l'export comune sincrono `GET .../comuni/{comune}/export` resta usato solo per un singolo comune, perche e l'unico caso che permette la fonte `live` (Capacitas); con piu comuni la UI usa il job asincrono con dato GAIA.
+- i file prodotti da questi job sono salvati sul backend in `CATASTO_DISTRETTO_EXPORT_STORAGE_PATH` e scaricati da `/catasto/elaborazioni-massive/particelle/distretti/exports/{job_id}/download`.
+- le liste distretti e comuni del blocco export (checkbox con filtro, "Seleziona tutti"/"Deseleziona") devono caricarsi indipendentemente dallo storico degli export: un errore su `/distretti/exports` non deve disabilitare la selezione.
 
 ### UX AdE
 
@@ -423,8 +425,8 @@ Comportamento attuale:
 - nelle liste e nei dettagli particella il frontend distingue esplicitamente `Sup. catastale` e `Sup. grafica` per evitare di sovraccaricare l'unico dato storico `superficie_mq`
 - il dettaglio distretto embedded espone export diretti `CSV`, `XLS`, `PDF` sulla vista corrente e usa righe particella cliccabili per il drill-down
 - `/catasto/ricerca-anagrafica` include export CSV/XLSX dell'elaborazione massiva
-- `/catasto/elaborazioni-massive` separa visivamente `File ricerca anagrafica` da `Export intestatari per distretto`: il pulsante `Elabora righe file` resta nel blocco del file, mentre l'export distretto mostra stato job, spinner e ultimi download disponibili.
-- Gli export intestatari per distretto sono prelevati dal worker `elaborazioni-worker-exports`, indipendentemente dai batch SISTER e dalle ricerche massive del worker visure; gli export gia in coda restano persistiti e vengono prelevati all'avvio del servizio.
+- `/catasto/elaborazioni-massive` separa visivamente `File ricerca anagrafica` da `Export intestatari per distretto` ed `Export intestatari per comune` (entrambi a selezione multipla): il pulsante `Elabora righe file` resta nel blocco del file, mentre gli export mostrano stato job, spinner e un elenco unico `Ultimi export distretti e comuni` con i download disponibili.
+- Gli export intestatari per distretto/comune sono prelevati dal worker `elaborazioni-worker-exports`, indipendentemente dai batch SISTER e dalle ricerche massive del worker visure; gli export gia in coda restano persistiti e vengono prelevati all'avvio del servizio.
 - l'intera console `/catasto/anomalie` è riservata ad admin/super_admin anche lato API: lista, summary, workspace wizard, `ade-scan/*` e workflow mutativi (`PATCH` + `wizard/cf/apply` + `wizard/comune/apply` + `wizard/particella/apply`)
 - il flusso anagrafica e coperto anche da E2E browser dedicato oltre che da test backend e smoke frontend
 

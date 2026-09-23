@@ -935,6 +935,8 @@ def _distretto_job(**updates: object) -> SimpleNamespace:
         "completed_at": now,
         "num_distretto": "1",
         "nome_distretto": None,
+        "scope_kind": "distretti",
+        "scope_values": None,
         "format": "csv",
         "status": job_routes.CatastoElaborazioniMassiveJobStatus.COMPLETED.value,
         "total_rows": 1,
@@ -2252,3 +2254,169 @@ def test_final_sub_and_live_only_false_branches(monkeypatch: pytest.MonkeyPatch)
         )
 
     asyncio.run(exercise())
+
+
+def test_scope_export_basename_covers_single_and_multi_scopes() -> None:
+    basename = distretto_routes._build_scope_export_basename
+    assert basename(_distretto_job(num_distretto="1", nome_distretto="North West")).endswith("-1-north-west")
+    assert basename(
+        _distretto_job(scope_values=["01", "02"], num_distretto="01, 02")
+    ) == "catasto-intestatari-distretti-01-02"
+    assert basename(
+        _distretto_job(scope_values=[str(n) for n in range(6)], num_distretto="0..5")
+    ) == "catasto-intestatari-6-distretti"
+    assert basename(
+        _distretto_job(scope_kind="comuni", scope_values=["A357"], nome_distretto="Arborea")
+    ) == "catasto-intestatari-comune-arborea"
+    assert basename(
+        _distretto_job(scope_kind="comuni", scope_values=["A357", "G113"])
+    ) == "catasto-intestatari-comuni-a357-g113"
+
+
+def test_create_scope_export_job_dedupes_values_and_rejects_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        distretto_routes, "_scope_export_labels", lambda db, kind, values: (", ".join(values), None)
+    )
+    monkeypatch.setattr(distretto_routes, "_distretto_export_job_response", lambda job: job)
+    db = _DB()
+    db.refresh = lambda job: None  # type: ignore[attr-defined]
+    user = SimpleNamespace(id=1)
+
+    job = distretto_routes._create_scope_export_job(db, user, "comuni", ["A357", " a357 ", "G113", ""], "xlsx")
+    assert job.scope_values == ["A357", "G113"]
+    assert job.scope_kind == "comuni"
+    assert job.num_distretto == "A357, G113"
+
+    with pytest.raises(HTTPException) as error:
+        distretto_routes._create_scope_export_job(db, user, "distretti", [" ", ""], "csv")
+    assert error.value.status_code == 400
+
+
+def test_build_comuni_export_results_filters_by_code_and_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    p = _particella(id=uuid4(), subalterno="A")
+    monkeypatch.setattr(
+        distretto_routes, "_load_consorzio_presence_by_particella_ids", lambda db, ids: set()
+    )
+    monkeypatch.setattr(distretto_routes, "_build_match", lambda *args, **kwargs: _match())
+
+    db = _DB(results=[_Result(all_values=[p])])
+    results = distretto_routes._build_comuni_export_results(db, ["123", "Arborea", "arborea", " "])
+    assert len(results) == 1
+    assert distretto_routes._build_comuni_export_results(_DB(), ["123"]) == []
+    assert distretto_routes._build_comuni_export_results(_DB(), [" ", ""]) == []
+    assert distretto_routes._build_comuni_export_results(_DB(), ["Arborea"]) == []
+
+
+def test_distretto_results_accept_multiple_districts(monkeypatch: pytest.MonkeyPatch) -> None:
+    p = _particella(id=uuid4(), subalterno="A")
+    monkeypatch.setattr(
+        distretto_routes, "_load_consorzio_presence_by_particella_ids", lambda db, ids: set()
+    )
+    monkeypatch.setattr(distretto_routes, "_build_match", lambda *args, **kwargs: _match())
+
+    results, label = distretto_routes._build_distretto_export_results(
+        _DB(results=[_Result(all_values=[p])]), ["1", "2", "1"]
+    )
+    assert len(results) == 1 and label is None
+
+
+class _LabelResult:
+    def __init__(self, scalar: object = None, rows: list[object] | None = None) -> None:
+        self._scalar = scalar
+        self._rows = rows or []
+
+    def scalar(self) -> object:
+        return self._scalar
+
+    def scalars(self) -> _LabelResult:
+        return self
+
+    def all(self) -> list[object]:
+        return self._rows
+
+
+class _LabelDB:
+    def __init__(self, results: list[_LabelResult]) -> None:
+        self.results = list(results)
+
+    def execute(self, statement: object) -> _LabelResult:
+        return self.results.pop(0)
+
+
+def test_scope_export_labels_for_comuni_and_distretti() -> None:
+    labels = distretto_routes._scope_export_labels
+    db = _LabelDB([_LabelResult("Arborea"), _LabelResult(None)])
+    assert labels(db, "comuni", ["123", "Oristano"]) == ("123, Oristano", "Arborea, Oristano")
+
+    named = SimpleNamespace(nome_distretto="Sinis")
+    assert labels(_LabelDB([_LabelResult(rows=[named])]), "distretti", ["1"]) == ("1", "Sinis")
+    assert labels(_LabelDB([_LabelResult(rows=[])]), "distretti", ["1"]) == ("1", None)
+    assert labels(_LabelDB([_LabelResult(rows=[named, named])]), "distretti", ["1", "2"]) == (
+        "1, 2",
+        None,
+    )
+
+
+def test_create_scope_export_job_route_delegates(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_create(db: object, user: object, kind: str, values: object, fmt: str) -> str:
+        captured.update(kind=kind, values=values, fmt=fmt)
+        return "job"
+
+    monkeypatch.setattr(distretto_routes, "_create_scope_export_job", fake_create)
+    payload = SimpleNamespace(kind="comuni", values=["A357"], format="csv")
+
+    result = asyncio.run(
+        distretto_routes.create_scope_export_job(payload, db=_DB(), user=SimpleNamespace(id=1))
+    )
+
+    assert result == "job"
+    assert captured == {"kind": "comuni", "values": ["A357"], "fmt": "csv"}
+
+
+def test_run_comuni_and_multi_district_export_jobs(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core import database
+
+    job_id = uuid4()
+    result = CatAnagraficaBulkSearchRowResult(row_index=1, esito="FOUND", message="ok")
+    calls: list[object] = []
+
+    monkeypatch.setattr(job_routes, "_build_bulk_export_rows", lambda kind, results: [])
+    monkeypatch.setattr(
+        job_routes,
+        "_write_distretto_export_file",
+        lambda job, rows: ("out.csv", "/tmp/out", "text/csv"),
+    )
+    monkeypatch.setattr(
+        job_routes,
+        "_build_comuni_export_results",
+        lambda db, values: calls.append(("comuni", values)) or [result],
+    )
+    monkeypatch.setattr(
+        job_routes,
+        "_build_distretto_export_results",
+        lambda db, value: calls.append(("distretti", value)) or ([result], None),
+    )
+
+    comuni_job = _distretto_job(scope_kind="comuni", scope_values=["A357", "G113"])
+    monkeypatch.setattr(database, "SessionLocal", lambda: _QueuedGetDB([comuni_job, comuni_job, comuni_job]))
+    job_routes.run_distretto_export_job_by_id(job_id)
+    assert comuni_job.status == job_routes.CatastoElaborazioniMassiveJobStatus.COMPLETED.value
+    assert calls[-1] == ("comuni", ["A357", "G113"])
+
+    multi_job = _distretto_job(scope_values=["01", "02"])
+    monkeypatch.setattr(database, "SessionLocal", lambda: _QueuedGetDB([multi_job, multi_job, multi_job]))
+    job_routes.run_distretto_export_job_by_id(job_id)
+    assert calls[-1] == ("distretti", ["01", "02"])
+
+    monkeypatch.setattr(job_routes, "_build_comuni_export_results", lambda db, values: [])
+    empty_job = _distretto_job(scope_kind="comuni", scope_values=["A357"])
+    monkeypatch.setattr(database, "SessionLocal", lambda: _QueuedGetDB([empty_job, empty_job]))
+    job_routes.run_distretto_export_job_by_id(job_id)
+    assert empty_job.status == job_routes.CatastoElaborazioniMassiveJobStatus.FAILED.value
+    assert "comuni selezionati" in empty_job.error_message

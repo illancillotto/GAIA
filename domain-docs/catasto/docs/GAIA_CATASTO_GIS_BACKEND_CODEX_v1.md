@@ -103,7 +103,7 @@ GET  /catasto/elaborazioni-massive/particelle/distretti/exports/{job_id}
 GET  /catasto/elaborazioni-massive/particelle/distretti/exports/{job_id}/download
 ```
 
-Il backend crea un record `catasto_distretto_export_jobs`; il worker `modules/elaborazioni/worker/worker.py` lo preleva, genera il file su `CATASTO_DISTRETTO_EXPORT_STORAGE_PATH` e aggiorna stato/progresso. La richiesta HTTP non prepara il file direttamente, quindi refresh o chiusura tab non interrompono l'elaborazione.
+Il backend crea un record `catasto_distretto_export_jobs` (con `scope_kind`/`scope_values`: uno o piu distretti oppure uno o piu comuni, un unico file per job); il worker `modules/elaborazioni/worker/worker.py` lo preleva, genera il file su `CATASTO_DISTRETTO_EXPORT_STORAGE_PATH` e aggiorna stato/progresso. La richiesta HTTP non prepara il file direttamente, quindi refresh o chiusura tab non interrompono l'elaborazione.
 
 ---
 

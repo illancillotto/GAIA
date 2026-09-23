@@ -462,8 +462,10 @@ class CatastoDistrettoExportJob(Base):
         nullable=False,
         index=True,
     )
-    num_distretto: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    num_distretto: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     nome_distretto: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    scope_kind: Mapped[str] = mapped_column(String(16), default="distretti", server_default="distretti", nullable=False)
+    scope_values: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     format: Mapped[str] = mapped_column(String(8), nullable=False)
     status: Mapped[str] = mapped_column(
         String(32),

@@ -1304,6 +1304,8 @@ export type CatDistrettoExportJob = {
   completed_at: string | null;
   num_distretto: string;
   nome_distretto: string | null;
+  scope_kind?: "distretti" | "comuni";
+  scope_values?: string[] | null;
   format: "csv" | "xlsx";
   status: "pending" | "processing" | "completed" | "failed";
   total_rows: number;

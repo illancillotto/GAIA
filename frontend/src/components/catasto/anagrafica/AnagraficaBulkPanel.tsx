@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { DocumentIcon, RefreshIcon } from "@/components/ui/icons";
 import {
-  catastoCreateElaborazioneMassivaDistrettoExportJob,
+  catastoCreateElaborazioneMassivaScopeExportJob,
   catastoDownloadElaborazioneMassivaDistrettoExportJob,
   catastoGetElaborazioneMassivaDistrettoExportJob,
   catastoListElaborazioneMassivaDistrettoExportJobs,
@@ -28,6 +28,16 @@ import { getStoredAccessToken } from "@/lib/auth";
 import type { CatAnagraficaBulkJobItem, CatAnagraficaBulkRowResult, CatComuneExportOption, CatDistretto, CatDistrettoExportJob, CatIntestatario } from "@/types/catasto";
 
 import { CatastoFilePicker } from "../file-picker";
+import { MultiSelectChecklist } from "./MultiSelectChecklist";
+
+function describeExportJob(job: CatDistrettoExportJob): string {
+  const count = job.scope_values?.length ?? 1;
+  if (job.scope_kind === "comuni") {
+    return count > 1 ? `${count} comuni` : `Comune ${job.nome_distretto ?? job.num_distretto}`;
+  }
+  if (count > 1) return `${count} distretti (${job.num_distretto})`;
+  return `Distretto ${job.num_distretto}${job.nome_distretto ? ` · ${job.nome_distretto}` : ""}`;
+}
 
 function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
@@ -187,15 +197,15 @@ export function AnagraficaBulkPanel() {
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [exportingDistrettoFormat, setExportingDistrettoFormat] = useState<"csv" | "xlsx" | null>(null);
+  const [exportingScope, setExportingScope] = useState<{ kind: "distretti" | "comuni"; format: "csv" | "xlsx" } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [operationHistory, setOperationHistory] = useState<BulkOperationHistoryItem[]>([]);
   const [distrettoExportJobs, setDistrettoExportJobs] = useState<CatDistrettoExportJob[]>([]);
   const [activeDistrettoExportJob, setActiveDistrettoExportJob] = useState<CatDistrettoExportJob | null>(null);
   const [distretti, setDistretti] = useState<CatDistretto[]>([]);
   const [comuni, setComuni] = useState<CatComuneExportOption[]>([]);
-  const [selectedDistretto, setSelectedDistretto] = useState("");
-  const [selectedComune, setSelectedComune] = useState("");
+  const [selectedDistretti, setSelectedDistretti] = useState<string[]>([]);
+  const [selectedComuni, setSelectedComuni] = useState<string[]>([]);
   const [exportChoice, setExportChoice] = useState<{ comune: string; format: "csv" | "xlsx" } | null>(null);
   const [showDeleteHistoryConfirm, setShowDeleteHistoryConfirm] = useState(false);
   const [bulkProgress, setBulkProgress] = useState<BulkProgressState>({
@@ -208,6 +218,19 @@ export function AnagraficaBulkPanel() {
 
   const summary = useMemo(() => buildSummary(results), [results]);
   const isDistrettoExportRunning = activeDistrettoExportJob?.status === "pending" || activeDistrettoExportJob?.status === "processing";
+  const activeScopeKind = activeDistrettoExportJob?.scope_kind ?? "distretti";
+  const distrettiOptions = useMemo(
+    () =>
+      distretti.map((distretto) => ({
+        value: distretto.num_distretto,
+        label: `${distretto.num_distretto}${distretto.nome_distretto ? ` · ${distretto.nome_distretto}` : ""}`,
+      })),
+    [distretti],
+  );
+  const comuniOptions = useMemo(
+    () => comuni.map((comune) => ({ value: comune.codice, label: `${comune.nome} · ${comune.codice}` })),
+    [comuni],
+  );
   const busy = isProcessing || isExporting;
 
   useEffect(() => {
@@ -477,13 +500,13 @@ export function AnagraficaBulkPanel() {
     }
   }
 
-  async function exportDistretto(format: "csv" | "xlsx"): Promise<void> {
+  async function exportScope(kind: "distretti" | "comuni", values: string[], format: "csv" | "xlsx"): Promise<void> {
     const token = getStoredAccessToken();
-    if (!token || !selectedDistretto) return;
+    if (!token || values.length === 0) return;
     setIsExporting(true);
-    setExportingDistrettoFormat(format);
+    setExportingScope({ kind, format });
     try {
-      let job = await catastoCreateElaborazioneMassivaDistrettoExportJob(token, selectedDistretto, format);
+      let job = await catastoCreateElaborazioneMassivaScopeExportJob(token, kind, values, format);
       setActiveDistrettoExportJob(job);
       setDistrettoExportJobs((current) => [job, ...current.filter((item) => item.id !== job.id)].slice(0, 5));
       while (job.status === "pending" || job.status === "processing") {
@@ -493,18 +516,26 @@ export function AnagraficaBulkPanel() {
         setDistrettoExportJobs((current) => [job, ...current.filter((item) => item.id !== job.id)].slice(0, 5));
       }
       if (job.status === "failed") {
-        throw new Error(job.error_message ?? "Export distretto fallito");
+        throw new Error(job.error_message ?? "Export fallito");
       }
       const blob = await catastoDownloadElaborazioneMassivaDistrettoExportJob(token, job.id);
-      triggerDownload(blob, job.output_filename ?? `catasto-intestatari-distretto-${selectedDistretto}.${format}`);
+      triggerDownload(blob, job.output_filename ?? `catasto-intestatari-${kind}.${format}`);
       setActiveDistrettoExportJob(null);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Errore export distretto");
+      setError(e instanceof Error ? e.message : "Errore export");
     } finally {
-      setExportingDistrettoFormat(null);
+      setExportingScope(null);
       setIsExporting(false);
     }
+  }
+
+  function exportComuni(format: "csv" | "xlsx"): void {
+    if (selectedComuni.length === 1) {
+      setExportChoice({ comune: selectedComuni[0], format });
+      return;
+    }
+    void exportScope("comuni", selectedComuni, format);
   }
 
   async function exportComune(source: "gaia" | "live"): Promise<void> {
@@ -795,10 +826,10 @@ export function AnagraficaBulkPanel() {
             <div>
               <p className="text-sm font-medium text-gray-900">Export intestatari per distretto</p>
               <p className="mt-1 text-sm text-gray-600">
-                Scarica tutte le particelle correnti del distretto con intestatari, dati Capacitas, distretto e campi riordino.
+                Scarica le particelle correnti di uno o più distretti con intestatari, dati Capacitas, distretto e campi riordino. Con più distretti ottieni un unico file.
               </p>
             </div>
-            {exportingDistrettoFormat || isDistrettoExportRunning ? (
+            {exportingScope?.kind === "distretti" || (isDistrettoExportRunning && activeScopeKind === "distretti") ? (
               <div
                 className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-blue-700 shadow-sm"
                 role="status"
@@ -808,41 +839,30 @@ export function AnagraficaBulkPanel() {
                   <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" />
                   <path className="opacity-90" fill="currentColor" d="M21 12a9 9 0 0 0-9-9v3a6 6 0 0 1 6 6h3Z" />
                 </svg>
-                {exportingDistrettoFormat
-                  ? `Export ${exportingDistrettoFormat === "csv" ? "CSV" : "Excel"} in corso`
+                {exportingScope?.kind === "distretti"
+                  ? `Export ${exportingScope.format === "csv" ? "CSV" : "Excel"} in corso`
                   : "Export distretto in corso"}
               </div>
             ) : null}
           </div>
           <p className="mt-1 text-sm text-gray-600">
-            {exportingDistrettoFormat
+            {exportingScope?.kind === "distretti"
               ? "Sto preparando il file sul backend. Il download partirà automaticamente appena pronto."
-              : isDistrettoExportRunning
+              : isDistrettoExportRunning && activeScopeKind === "distretti"
                 ? "Sto preparando il file sul backend. Quando sarà pronto resterà disponibile negli ultimi export."
-              : activeDistrettoExportJob
-                ? activeDistrettoExportJob.current_label ?? "Export distretto in lavorazione."
-              : "Seleziona un distretto e scegli il formato da scaricare."}
+                : "Seleziona uno o più distretti e scegli il formato da scaricare."}
           </p>
           <div className="mt-4 flex flex-wrap items-end gap-3">
-            <label className="min-w-64 flex-1 text-sm">
-              <span className="label-caption">Distretto</span>
-              <select
-                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
-                value={selectedDistretto}
-                disabled={busy || distretti.length === 0}
-                onChange={(event) => setSelectedDistretto(event.target.value)}
-              >
-                <option value="">Seleziona distretto</option>
-                {distretti.map((distretto) => (
-                  <option key={distretto.id} value={distretto.num_distretto}>
-                    {distretto.num_distretto}
-                    {distretto.nome_distretto ? ` · ${distretto.nome_distretto}` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button className="btn-secondary" type="button" disabled={busy || !selectedDistretto} onClick={() => void exportDistretto("csv")}>
-              {exportingDistrettoFormat === "csv" ? (
+            <MultiSelectChecklist
+              label="Distretti"
+              options={distrettiOptions}
+              selected={selectedDistretti}
+              onChange={setSelectedDistretti}
+              disabled={busy || distrettiOptions.length === 0}
+              emptyMessage="Nessun distretto disponibile."
+            />
+            <button className="btn-secondary" type="button" disabled={busy || selectedDistretti.length === 0} onClick={() => void exportScope("distretti", selectedDistretti, "csv")}>
+              {exportingScope?.kind === "distretti" && exportingScope.format === "csv" ? (
                 <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" />
                   <path className="opacity-90" fill="currentColor" d="M21 12a9 9 0 0 0-9-9v3a6 6 0 0 1 6 6h3Z" />
@@ -850,10 +870,10 @@ export function AnagraficaBulkPanel() {
               ) : (
                 <DocumentIcon className="h-4 w-4" />
               )}
-              {exportingDistrettoFormat === "csv" ? "Export CSV in corso..." : "Export CSV distretto"}
+              {exportingScope?.kind === "distretti" && exportingScope.format === "csv" ? "Export CSV in corso..." : "Export CSV distretti"}
             </button>
-            <button className="btn-secondary" type="button" disabled={busy || !selectedDistretto} onClick={() => void exportDistretto("xlsx")}>
-              {exportingDistrettoFormat === "xlsx" ? (
+            <button className="btn-secondary" type="button" disabled={busy || selectedDistretti.length === 0} onClick={() => void exportScope("distretti", selectedDistretti, "xlsx")}>
+              {exportingScope?.kind === "distretti" && exportingScope.format === "xlsx" ? (
                 <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" />
                   <path className="opacity-90" fill="currentColor" d="M21 12a9 9 0 0 0-9-9v3a6 6 0 0 1 6 6h3Z" />
@@ -861,90 +881,138 @@ export function AnagraficaBulkPanel() {
               ) : (
                 <DocumentIcon className="h-4 w-4" />
               )}
-              {exportingDistrettoFormat === "xlsx" ? "Export Excel in corso..." : "Export Excel distretto"}
+              {exportingScope?.kind === "distretti" && exportingScope.format === "xlsx" ? "Export Excel in corso..." : "Export Excel distretti"}
             </button>
           </div>
-          {distrettoExportJobs.length > 0 ? (
-            <div className="mt-4 rounded-xl border border-blue-100 bg-white/70 p-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">Ultimi export distretto</p>
-              <div className="mt-2 space-y-2">
-                {distrettoExportJobs.map((job) => (
-                  <div key={job.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-100 bg-white px-3 py-2">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">
-                        Distretto {job.num_distretto}
-                        {job.nome_distretto ? ` · ${job.nome_distretto}` : ""} · {job.format.toUpperCase()}
-                      </p>
-                      <p className="mt-0.5 text-xs text-gray-500">
-                        {job.status === "completed"
-                          ? `${job.processed_rows} righe · pronto per il download`
-                          : job.status === "failed"
-                            ? job.error_message ?? "Export fallito"
-                            : job.current_label ?? "Export in coda"}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={[
-                          "rounded-full px-2.5 py-1 text-xs font-semibold",
-                          job.status === "completed"
-                            ? "bg-emerald-50 text-emerald-700"
-                            : job.status === "failed"
-                              ? "bg-red-50 text-red-700"
-                              : "bg-blue-50 text-blue-700",
-                        ].join(" ")}
-                      >
-                        {job.status.toUpperCase()}
-                      </span>
-                      {job.status === "completed" ? (
-                        <button
-                          type="button"
-                          className="btn-secondary"
-                          disabled={busy}
-                          onClick={() => {
-                            const token = getStoredAccessToken();
-                            if (!token) return;
-                            void (async () => {
-                              setIsExporting(true);
-                              try {
-                                const blob = await catastoDownloadElaborazioneMassivaDistrettoExportJob(token, job.id);
-                                triggerDownload(blob, job.output_filename ?? `catasto-intestatari-distretto-${job.num_distretto}.${job.format}`);
-                                setError(null);
-                              } catch (e) {
-                                setError(e instanceof Error ? e.message : "Errore download export distretto");
-                              } finally {
-                                setIsExporting(false);
-                              }
-                            })();
-                          }}
-                        >
-                          Scarica
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : null}
         </div>
-
         <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
-          <p className="text-sm font-medium text-gray-900">Export intestatari per comune</p>
-          <p className="mt-1 text-sm text-gray-600">Esporta tutte le particelle correnti di un comune scegliendo nella finestra se usare il dato GAIA o il dato live. Il file include anche l’indicazione e il dettaglio dei dati SISTER quando disponibili.</p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Export intestatari per comune</p>
+              <p className="mt-1 text-sm text-gray-600">
+                Esporta le particelle correnti di uno o più comuni in un unico file. Con un solo comune puoi scegliere tra dato GAIA e dato live Capacitas; con più comuni viene usato il dato GAIA. Il file include anche l’indicazione e il dettaglio dei dati SISTER quando disponibili.
+              </p>
+            </div>
+            {exportingScope?.kind === "comuni" || (isDistrettoExportRunning && activeScopeKind === "comuni") ? (
+              <div
+                className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-blue-700 shadow-sm"
+                role="status"
+                aria-live="polite"
+              >
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-90" fill="currentColor" d="M21 12a9 9 0 0 0-9-9v3a6 6 0 0 1 6 6h3Z" />
+                </svg>
+                {exportingScope?.kind === "comuni"
+                  ? `Export ${exportingScope.format === "csv" ? "CSV" : "Excel"} in corso`
+                  : "Export comuni in corso"}
+              </div>
+            ) : null}
+          </div>
+          <p className="mt-1 text-sm text-gray-600">
+            {exportingScope?.kind === "comuni"
+              ? "Sto preparando il file sul backend. Il download partirà automaticamente appena pronto."
+              : isDistrettoExportRunning && activeScopeKind === "comuni"
+                ? "Sto preparando il file sul backend. Quando sarà pronto resterà disponibile negli ultimi export."
+                : "Seleziona uno o più comuni e scegli il formato da scaricare."}
+          </p>
           <div className="mt-4 flex flex-wrap items-end gap-3">
-            <label className="min-w-64 flex-1 text-sm">
-              <span className="label-caption">Comune</span>
-              <select className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 shadow-sm" value={selectedComune} disabled={busy || comuni.length === 0} onChange={(event) => setSelectedComune(event.target.value)}>
-                <option value="">Seleziona comune</option>
-                {comuni.map((comune) => <option key={comune.codice} value={comune.codice}>{comune.nome} · {comune.codice}</option>)}
-              </select>
-            </label>
-            <button className="btn-secondary" type="button" disabled={busy || !selectedComune} onClick={() => setExportChoice({ comune: selectedComune, format: "csv" })}>Export CSV comune</button>
-            <button className="btn-secondary" type="button" disabled={busy || !selectedComune} onClick={() => setExportChoice({ comune: selectedComune, format: "xlsx" })}>Export Excel comune</button>
+            <MultiSelectChecklist
+              label="Comuni"
+              options={comuniOptions}
+              selected={selectedComuni}
+              onChange={setSelectedComuni}
+              disabled={busy || comuniOptions.length === 0}
+              emptyMessage="Nessun comune disponibile."
+            />
+            <button className="btn-secondary" type="button" disabled={busy || selectedComuni.length === 0} onClick={() => exportComuni("csv")}>
+              {exportingScope?.kind === "comuni" && exportingScope.format === "csv" ? (
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-90" fill="currentColor" d="M21 12a9 9 0 0 0-9-9v3a6 6 0 0 1 6 6h3Z" />
+                </svg>
+              ) : (
+                <DocumentIcon className="h-4 w-4" />
+              )}
+              {exportingScope?.kind === "comuni" && exportingScope.format === "csv" ? "Export CSV in corso..." : "Export CSV comuni"}
+            </button>
+            <button className="btn-secondary" type="button" disabled={busy || selectedComuni.length === 0} onClick={() => exportComuni("xlsx")}>
+              {exportingScope?.kind === "comuni" && exportingScope.format === "xlsx" ? (
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-90" fill="currentColor" d="M21 12a9 9 0 0 0-9-9v3a6 6 0 0 1 6 6h3Z" />
+                </svg>
+              ) : (
+                <DocumentIcon className="h-4 w-4" />
+              )}
+              {exportingScope?.kind === "comuni" && exportingScope.format === "xlsx" ? "Export Excel in corso..." : "Export Excel comuni"}
+            </button>
           </div>
         </div>
-
+        <div className="mt-4">
+        {distrettoExportJobs.length > 0 ? (
+          <div className="mt-4 rounded-xl border border-blue-100 bg-white/70 p-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-700">Ultimi export distretti e comuni</p>
+            <div className="mt-2 space-y-2">
+              {distrettoExportJobs.map((job) => (
+                <div key={job.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-100 bg-white px-3 py-2">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {describeExportJob(job)} · {job.format.toUpperCase()}
+                    </p>
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      {job.status === "completed"
+                        ? `${job.processed_rows} righe · pronto per il download`
+                        : job.status === "failed"
+                          ? job.error_message ?? "Export fallito"
+                          : job.current_label ?? "Export in coda"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={[
+                        "rounded-full px-2.5 py-1 text-xs font-semibold",
+                        job.status === "completed"
+                          ? "bg-emerald-50 text-emerald-700"
+                          : job.status === "failed"
+                            ? "bg-red-50 text-red-700"
+                            : "bg-blue-50 text-blue-700",
+                      ].join(" ")}
+                    >
+                      {job.status.toUpperCase()}
+                    </span>
+                    {job.status === "completed" ? (
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        disabled={busy}
+                        onClick={() => {
+                          const token = getStoredAccessToken();
+                          if (!token) return;
+                          void (async () => {
+                            setIsExporting(true);
+                            try {
+                              const blob = await catastoDownloadElaborazioneMassivaDistrettoExportJob(token, job.id);
+                              triggerDownload(blob, job.output_filename ?? `catasto-intestatari-${job.scope_kind ?? "distretti"}.${job.format}`);
+                              setError(null);
+                            } catch (e) {
+                              setError(e instanceof Error ? e.message : "Errore download export");
+                            } finally {
+                              setIsExporting(false);
+                            }
+                          })();
+                        }}
+                      >
+                        Scarica
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        </div>
       </article>
 
       <article className="panel-card">

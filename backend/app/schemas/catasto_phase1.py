@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.modules.utenze.schemas import AnagraficaPersonResponse, AnagraficaPersonSnapshotResponse
 
@@ -1284,6 +1284,8 @@ class CatDistrettoExportJobResponse(BaseModel):
     completed_at: datetime | None = None
     num_distretto: str
     nome_distretto: str | None = None
+    scope_kind: Literal["distretti", "comuni"] = "distretti"
+    scope_values: list[str] | None = None
     format: Literal["csv", "xlsx"]
     status: Literal["pending", "processing", "completed", "failed"]
     total_rows: int = 0
@@ -1292,6 +1294,12 @@ class CatDistrettoExportJobResponse(BaseModel):
     error_message: str | None = None
     output_filename: str | None = None
     download_url: str | None = None
+
+
+class CatScopeExportJobCreateRequest(BaseModel):
+    kind: Literal["distretti", "comuni"]
+    values: list[str] = Field(min_length=1, max_length=200)
+    format: Literal["csv", "xlsx"]
 
 
 class CatDistrettoExportJobListResponse(BaseModel):

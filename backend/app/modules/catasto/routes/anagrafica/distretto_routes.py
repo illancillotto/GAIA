@@ -3,13 +3,14 @@ from __future__ import annotations
 import logging
 import os
 import re
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse, StreamingResponse
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
@@ -24,8 +25,8 @@ from app.models.catasto_phase1 import (
     CatParticella,
 )
 from app.modules.catasto.routes.anagrafica.exports import (
-    _build_bulk_export_rows,
     _attach_sister_data,
+    _build_bulk_export_rows,
     _render_bulk_export_csv_bytes,
     _render_bulk_export_xlsx_bytes,
     _stream_bulk_export_csv,
@@ -41,6 +42,7 @@ from app.schemas.catasto_phase1 import (
     CatAnagraficaBulkSearchRowResult,
     CatDistrettoExportJobListResponse,
     CatDistrettoExportJobResponse,
+    CatScopeExportJobCreateRequest,
 )
 
 router = APIRouter(
@@ -54,38 +56,22 @@ CATASTO_DISTRETTO_EXPORT_STORAGE_PATH = Path(
 
 # fmt: off
 
-def _build_distretto_export_results(
+def _normalize_scope_values(values: Sequence[str]) -> list[str]:
+    seen: set[str] = set()
+    normalized: list[str] = []
+    for value in values:
+        cleaned = _norm_str(value)
+        if cleaned is None or cleaned.casefold() in seen:
+            continue
+        seen.add(cleaned.casefold())
+        normalized.append(cleaned)
+    return normalized
+
+
+def _build_export_results_from_particelle(
     db: Session,
-    num_distretto: str,
-) -> tuple[list[CatAnagraficaBulkSearchRowResult], str | None]:
-    distretto = (
-        db.execute(
-            select(CatDistretto)
-            .where(func.lower(CatDistretto.num_distretto) == num_distretto.strip().lower())
-            .limit(1)
-        )
-        .scalars()
-        .first()
-    )
-    distretto_label = distretto.nome_distretto if distretto is not None else None
-    particelle = (
-        db.execute(
-            select(CatParticella)
-            .where(
-                CatParticella.is_current.is_(True),
-                CatParticella.suppressed.is_(False),
-                func.lower(func.coalesce(CatParticella.num_distretto, "")) == num_distretto.strip().lower(),
-            )
-            .order_by(
-                CatParticella.nome_comune.asc().nulls_last(),
-                CatParticella.foglio.asc(),
-                CatParticella.particella.asc(),
-                CatParticella.subalterno.asc().nullsfirst(),
-            )
-        )
-        .scalars()
-        .all()
-    )
+    particelle: Sequence[CatParticella],
+) -> list[CatAnagraficaBulkSearchRowResult]:
     consorzio_present_ids = _load_consorzio_presence_by_particella_ids(db, {p.id for p in particelle if p.id is not None})
     results: list[CatAnagraficaBulkSearchRowResult] = []
     for index, particella in enumerate(particelle, start=1):
@@ -113,7 +99,82 @@ def _build_distretto_export_results(
                 matches_count=(len(sub_matches) if sub_matches else 1),
             )
         )
-    return results, distretto_label
+    return results
+
+
+def _build_distretto_export_results(
+    db: Session,
+    num_distretto: str | Sequence[str],
+) -> tuple[list[CatAnagraficaBulkSearchRowResult], str | None]:
+    nums = _normalize_scope_values([num_distretto] if isinstance(num_distretto, str) else num_distretto)
+    lowered = [value.lower() for value in nums]
+    distretto_label = None
+    if len(lowered) == 1:
+        distretto = (
+            db.execute(
+                select(CatDistretto)
+                .where(func.lower(CatDistretto.num_distretto) == lowered[0])
+                .limit(1)
+            )
+            .scalars()
+            .first()
+        )
+        distretto_label = distretto.nome_distretto if distretto is not None else None
+    particelle = (
+        db.execute(
+            select(CatParticella)
+            .where(
+                CatParticella.is_current.is_(True),
+                CatParticella.suppressed.is_(False),
+                func.lower(func.coalesce(CatParticella.num_distretto, "")).in_(lowered),
+            )
+            .order_by(
+                CatParticella.num_distretto.asc().nulls_last(),
+                CatParticella.nome_comune.asc().nulls_last(),
+                CatParticella.foglio.asc(),
+                CatParticella.particella.asc(),
+                CatParticella.subalterno.asc().nullsfirst(),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return _build_export_results_from_particelle(db, particelle), distretto_label
+
+
+def _build_comuni_export_results(
+    db: Session,
+    comuni: Sequence[str],
+) -> list[CatAnagraficaBulkSearchRowResult]:
+    values = _normalize_scope_values(comuni)
+    codes = [int(value) for value in values if value.isdigit()]
+    names = [value.casefold() for value in values if not value.isdigit()]
+    conditions = []
+    if codes:
+        conditions.append(CatParticella.cod_comune_capacitas.in_(codes))
+    if names:
+        conditions.append(func.lower(CatParticella.nome_comune).in_(names))
+    if not conditions:
+        return []
+    particelle = (
+        db.execute(
+            select(CatParticella)
+            .where(
+                CatParticella.is_current.is_(True),
+                CatParticella.suppressed.is_(False),
+                or_(*conditions),
+            )
+            .order_by(
+                CatParticella.nome_comune.asc().nulls_last(),
+                CatParticella.foglio.asc(),
+                CatParticella.particella.asc(),
+                CatParticella.subalterno.asc().nullsfirst(),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return _build_export_results_from_particelle(db, particelle)
 
 
 def _safe_distretto_export_label(value: str) -> str:
@@ -133,6 +194,8 @@ def _distretto_export_job_response(job: CatastoDistrettoExportJob) -> CatDistret
         completed_at=job.completed_at,
         num_distretto=job.num_distretto,
         nome_distretto=job.nome_distretto,
+        scope_kind=job.scope_kind or "distretti",  # type: ignore[arg-type]
+        scope_values=job.scope_values,
         format=job.format,  # type: ignore[arg-type]
         status=job.status,  # type: ignore[arg-type]
         total_rows=job.total_rows,
@@ -151,8 +214,21 @@ def _build_distretto_export_basename(num_distretto: str, distretto_label: str | 
     return basename
 
 
+def _build_scope_export_basename(job: CatastoDistrettoExportJob) -> str:
+    values = job.scope_values or [job.num_distretto]
+    if len(values) == 1 and job.scope_kind != "comuni":
+        return _build_distretto_export_basename(values[0], job.nome_distretto)
+    kind = "comuni" if job.scope_kind == "comuni" else "distretti"
+    if len(values) == 1:
+        return f"catasto-intestatari-comune-{_safe_distretto_export_label(job.nome_distretto or values[0])[:60]}"
+    if len(values) <= 4:
+        joined = "-".join(_safe_distretto_export_label(value)[:20] for value in values)
+        return f"catasto-intestatari-{kind}-{joined}"
+    return f"catasto-intestatari-{len(values)}-{kind}"
+
+
 def _write_distretto_export_file(job: CatastoDistrettoExportJob, rows: list[dict[str, object]]) -> tuple[str, str, str]:
-    filename = f"{_build_distretto_export_basename(job.num_distretto, job.nome_distretto)}.{job.format}"
+    filename = f"{_build_scope_export_basename(job)}.{job.format}"
     content_type = (
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         if job.format == "xlsx"
@@ -191,6 +267,58 @@ async def download_distretto_bulk_export(
     return _stream_bulk_export_csv(f"{basename}.csv", rows)
 
 
+def _scope_export_labels(db: Session, kind: str, values: list[str]) -> tuple[str, str | None]:
+    if kind == "comuni":
+        names: list[str] = []
+        for value in values:
+            query = select(func.max(CatParticella.nome_comune)).where(CatParticella.is_current.is_(True))
+            if value.isdigit():
+                query = query.where(CatParticella.cod_comune_capacitas == int(value))
+            else:
+                query = query.where(func.lower(CatParticella.nome_comune) == value.casefold())
+            names.append(db.execute(query).scalar() or value)
+        return ", ".join(values)[:255], ", ".join(names)[:200]
+    distretti = (
+        db.execute(select(CatDistretto).where(func.lower(CatDistretto.num_distretto).in_([v.lower() for v in values])))
+        .scalars()
+        .all()
+    )
+    label = ", ".join(values)[:255]
+    if len(values) == 1:
+        return label, distretti[0].nome_distretto if distretti else None
+    return label, None
+
+
+def _create_scope_export_job(
+    db: Session,
+    user: ApplicationUser,
+    kind: Literal["distretti", "comuni"],
+    values: Sequence[str],
+    format: Literal["csv", "xlsx"],
+) -> CatDistrettoExportJobResponse:
+    normalized = _normalize_scope_values(values)
+    if not normalized:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Distretto non valido" if kind == "distretti" else "Comune non valido",
+        )
+    label, nome = _scope_export_labels(db, kind, normalized)
+    job = CatastoDistrettoExportJob(
+        user_id=user.id,
+        num_distretto=label,
+        nome_distretto=nome,
+        scope_kind=kind,
+        scope_values=normalized,
+        format=format,
+        status=CatastoElaborazioniMassiveJobStatus.PENDING.value,
+        current_label="Export in coda.",
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return _distretto_export_job_response(job)
+
+
 @router.post("/distretti/{num_distretto}/exports", response_model=CatDistrettoExportJobResponse)
 async def create_distretto_export_job(
     num_distretto: str,
@@ -198,30 +326,16 @@ async def create_distretto_export_job(
     db: Session = Depends(get_db),
     user: ApplicationUser = Depends(require_active_user),
 ) -> CatDistrettoExportJobResponse:
-    normalized_num = _norm_str(num_distretto)
-    if normalized_num is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Distretto non valido")
-    distretto = (
-        db.execute(
-            select(CatDistretto)
-            .where(func.lower(CatDistretto.num_distretto) == normalized_num.lower())
-            .limit(1)
-        )
-        .scalars()
-        .first()
-    )
-    job = CatastoDistrettoExportJob(
-        user_id=user.id,
-        num_distretto=normalized_num,
-        nome_distretto=distretto.nome_distretto if distretto is not None else None,
-        format=format,
-        status=CatastoElaborazioniMassiveJobStatus.PENDING.value,
-        current_label="Export distretto in coda.",
-    )
-    db.add(job)
-    db.commit()
-    db.refresh(job)
-    return _distretto_export_job_response(job)
+    return _create_scope_export_job(db, user, "distretti", [num_distretto], format)
+
+
+@router.post("/exports", response_model=CatDistrettoExportJobResponse)
+async def create_scope_export_job(
+    payload: CatScopeExportJobCreateRequest,
+    db: Session = Depends(get_db),
+    user: ApplicationUser = Depends(require_active_user),
+) -> CatDistrettoExportJobResponse:
+    return _create_scope_export_job(db, user, payload.kind, payload.values, payload.format)
 
 
 @router.get("/distretti/exports", response_model=CatDistrettoExportJobListResponse)
