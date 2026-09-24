@@ -9,7 +9,16 @@
 - Modulo: Ruolo
 - Stato complessivo: **documento archiviato; implementazione storica completata M1–M5**
 - Owner: TBD
-- Ultimo aggiornamento: 2026-09-22
+- Ultimo aggiornamento: 2026-09-24
+
+---
+
+## Aggiornamento operativo 2026-09-24 - contatori globali raccomandate
+
+- La console `/ruolo/raccomandate` mostra `Associati totali` e `Anomalie totali` sull'intero archivio, indipendentemente da pagina, ricerca e filtri. Il riquadro `Risultati` continua invece a indicare il totale filtrato della lista.
+- `GET /ruolo/tributi/raccomandate/summary` restituisce `total`, `associated` e `anomalies`. E associata solo una raccomandata con `avviso_id` valorizzato, `match_status=matched` e `anomaly_key` nullo; ogni altro record conta come anomalia. L'endpoint resta protetto dai permessi di consultazione del modulo Ruolo.
+- I contatori vengono ricaricati dopo una modifica manuale dell'associazione. La query e di sola lettura e non modifica il matching degli avvisi.
+- Verifica sul database CED prima del deploy: `total=2307`, `associated=113`, `anomalies=2194`.
 
 ---
 

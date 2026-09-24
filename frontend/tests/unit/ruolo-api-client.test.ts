@@ -49,7 +49,7 @@ import {
   updateTributiAvvisoStatus,
   updateTributiYearManager,
 } from "@/lib/ruolo-api";
-import { updateTributiRegisteredMailAssociation } from "@/lib/registered-mail-api";
+import { getTributiRegisteredMailSummary, updateTributiRegisteredMailAssociation } from "@/lib/registered-mail-api";
 
 function jsonResponse(payload: unknown = {}): Response {
   return new Response(JSON.stringify(payload), {
@@ -454,6 +454,17 @@ describe("Ruolo API client", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/ruolo/tributi/raccomandate/mail-1/association",
       expect.objectContaining({ method: "PATCH", body: JSON.stringify({ avviso_id: "avviso-1" }) }),
+    );
+  });
+
+  test("loads global registered mail totals", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ total: 2307, associated: 113, anomalies: 2194 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    expect(await getTributiRegisteredMailSummary("token")).toEqual({ total: 2307, associated: 113, anomalies: 2194 });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/ruolo/tributi/raccomandate/summary",
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: "Bearer token" }) }),
     );
   });
 

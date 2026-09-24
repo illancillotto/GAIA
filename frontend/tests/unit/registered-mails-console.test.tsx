@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
   listTributiAvvisi: vi.fn(),
   listTributiRegisteredMails: vi.fn(),
+  getTributiRegisteredMailSummary: vi.fn(),
   updateTributiRegisteredMailAssociation: vi.fn(),
   useSessionBootstrap: vi.fn(),
 }));
@@ -23,6 +24,7 @@ vi.mock("@/lib/ruolo-api", () => ({
 }));
 
 vi.mock("@/lib/registered-mail-api", () => ({
+  getTributiRegisteredMailSummary: mocks.getTributiRegisteredMailSummary,
   updateTributiRegisteredMailAssociation: mocks.updateTributiRegisteredMailAssociation,
 }));
 
@@ -103,6 +105,8 @@ describe("RegisteredMailsConsole", () => {
     mocks.getStoredAccessToken.mockReset();
     mocks.listTributiAvvisi.mockReset();
     mocks.listTributiRegisteredMails.mockReset();
+    mocks.getTributiRegisteredMailSummary.mockReset();
+    mocks.getTributiRegisteredMailSummary.mockResolvedValue({ total: 2307, associated: 113, anomalies: 2194 });
     mocks.updateTributiRegisteredMailAssociation.mockReset();
     mocks.useSessionBootstrap.mockReset();
     mocks.getStoredAccessToken.mockReturnValue("token");
@@ -159,6 +163,8 @@ describe("RegisteredMailsConsole", () => {
     await flushDebounce();
 
     await screen.findByText("Pagina 1 · 3 elementi mostrati su 30");
+    expect(screen.getByText("Associati totali").nextElementSibling).toHaveTextContent("113");
+    expect(screen.getByText("Anomalie totali").nextElementSibling).toHaveTextContent("2194");
     expect(screen.getAllByText("ROSSI MARIO").length).toBeGreaterThan(0);
     expect(screen.getByText("Destinatario non letto")).toBeInTheDocument();
     expect(screen.getAllByText("Tracking TRK001").length).toBeGreaterThan(0);
@@ -180,6 +186,7 @@ describe("RegisteredMailsConsole", () => {
       expect(mocks.listTributiRegisteredMails).toHaveBeenLastCalledWith("token", expect.objectContaining({ page: 2 })),
     );
     await screen.findByText("Pagina 2 · 0 elementi mostrati su 30");
+    expect(screen.getByText("Associati totali").nextElementSibling).toHaveTextContent("113");
     fireEvent.click(screen.getByRole("button", { name: "Raccomandate precedente" }));
     await waitFor(() =>
       expect(mocks.listTributiRegisteredMails).toHaveBeenLastCalledWith("token", expect.objectContaining({ page: 1 })),
@@ -270,21 +277,27 @@ describe("RegisteredMailsConsole", () => {
       match_status: "ambiguous",
       raw_payload_json: { candidate_avviso_ids: ["avviso-1", 42] },
     });
-    mocks.listTributiRegisteredMails.mockResolvedValue({
-      items: [unmatched, registeredMail({ id: "mail-other", source_shipment_id: "SHP-OTHER" })],
-      total: 2,
-      page: 1,
-      page_size: 25,
-    });
+    const updated = registeredMail({ match_reason: "Associazione manuale impostata dall'operatore" });
+    mocks.listTributiRegisteredMails
+      .mockResolvedValueOnce({
+        items: [unmatched, registeredMail({ id: "mail-other", source_shipment_id: "SHP-OTHER" })],
+        total: 2,
+        page: 1,
+        page_size: 25,
+      })
+      .mockResolvedValue({
+        items: [updated, registeredMail({ id: "mail-other", source_shipment_id: "SHP-OTHER" })],
+        total: 2,
+        page: 1,
+        page_size: 25,
+      });
     mocks.listTributiAvvisi.mockResolvedValue({
       items: [avviso(), avviso({ id: "avviso-2", display_name: null, nominativo_raw: null, codice_fiscale_raw: null, codice_utenza: null, importo_totale_euro: null })],
       total: 2,
       page: 1,
       page_size: 20,
     });
-    mocks.updateTributiRegisteredMailAssociation.mockResolvedValue(
-      registeredMail({ match_reason: "Associazione manuale impostata dall'operatore" }),
-    );
+    mocks.updateTributiRegisteredMailAssociation.mockResolvedValue(updated);
 
     render(<RegisteredMailsConsole canEdit token="token" />);
     await flushDebounce();
@@ -297,23 +310,25 @@ describe("RegisteredMailsConsole", () => {
     expect(screen.getByText(/CF assente/)).toBeInTheDocument();
     expect(screen.getAllByText("-").length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole("radio", { name: /ROSSI MARIO/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Conferma associazione" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /ROSSI MARIO/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Conferma 1 avvisi" }));
     await waitFor(() =>
-      expect(mocks.updateTributiRegisteredMailAssociation).toHaveBeenCalledWith("token", "mail-1", { avviso_id: "avviso-1" }),
+      expect(mocks.updateTributiRegisteredMailAssociation).toHaveBeenCalledWith("token", "mail-1", { avviso_ids: ["avviso-1"] }),
     );
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(mocks.getTributiRegisteredMailSummary).toHaveBeenCalledTimes(2));
     expect(screen.getAllByRole("button", { name: "Cambia associazione" })).toHaveLength(2);
     expect(screen.getByText(/Associazione manuale impostata/)).toBeInTheDocument();
   });
 
   test("removes an existing association", async () => {
     const matched = registeredMail();
-    mocks.listTributiRegisteredMails.mockResolvedValue({ items: [matched], total: 1, page: 1, page_size: 25 });
+    const unlinked = registeredMail({ avviso_id: null, match_status: "unmatched", anomaly_key: "manual_unlinked" });
+    mocks.listTributiRegisteredMails
+      .mockResolvedValueOnce({ items: [matched], total: 1, page: 1, page_size: 25 })
+      .mockResolvedValue({ items: [unlinked], total: 1, page: 1, page_size: 25 });
     mocks.listTributiAvvisi.mockResolvedValue({ items: [avviso()], total: 1, page: 1, page_size: 20 });
-    mocks.updateTributiRegisteredMailAssociation.mockResolvedValue(
-      registeredMail({ avviso_id: null, match_status: "unmatched", anomaly_key: "manual_unlinked" }),
-    );
+    mocks.updateTributiRegisteredMailAssociation.mockResolvedValue(unlinked);
 
     render(<RegisteredMailsConsole canEdit token="token" />);
     await flushDebounce();
@@ -323,7 +338,7 @@ describe("RegisteredMailsConsole", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cambia associazione" }));
     fireEvent.click(screen.getByRole("button", { name: "Rimuovi associazione" }));
     await waitFor(() =>
-      expect(mocks.updateTributiRegisteredMailAssociation).toHaveBeenCalledWith("token", "mail-1", { avviso_id: null }),
+      expect(mocks.updateTributiRegisteredMailAssociation).toHaveBeenCalledWith("token", "mail-1", { avviso_ids: [] }),
     );
     expect(await screen.findByRole("button", { name: "Associa manualmente" })).toBeInTheDocument();
   });
@@ -349,11 +364,11 @@ describe("RegisteredMailsConsole", () => {
     mocks.listTributiAvvisi.mockReset();
     mocks.listTributiAvvisi.mockResolvedValue({ items: [avviso()], total: 1, page: 1, page_size: 20 });
     fireEvent.change(screen.getByPlaceholderText("Nominativo, codice fiscale, CNC o utenza"), { target: { value: "Rossi" } });
-    await screen.findByRole("radio");
-    fireEvent.click(screen.getByRole("radio"));
-    fireEvent.click(screen.getByRole("button", { name: "Conferma associazione" }));
+    await screen.findByRole("checkbox");
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: "Conferma 1 avvisi" }));
     expect(await screen.findByText("Errore aggiornamento associazione")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Conferma associazione" }));
+    fireEvent.click(screen.getByRole("button", { name: "Conferma 1 avvisi" }));
     expect(await screen.findByText("salvataggio fallito")).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: "Enter" });

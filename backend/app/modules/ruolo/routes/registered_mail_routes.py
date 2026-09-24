@@ -5,13 +5,17 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_module, require_section
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
-from app.modules.ruolo.models import RuoloAvviso
-from app.modules.ruolo.registered_mail_schemas import RuoloTributiRegisteredMailAssociationRequest
+from app.modules.ruolo.models import RuoloAvviso, RuoloTributiRegisteredMail
+from app.modules.ruolo.registered_mail_schemas import (
+    RuoloTributiRegisteredMailAssociationRequest,
+    RuoloTributiRegisteredMailSummaryResponse,
+)
 from app.modules.ruolo.schemas import RuoloTributiRegisteredMailResponse
 from app.modules.ruolo.services import registered_mail_association
 from app.modules.ruolo.services.registered_mail_campaign_preview import preview_campaign
@@ -25,6 +29,28 @@ router = APIRouter(
 Editor = Annotated[ApplicationUser, Depends(require_section("ruolo.tributi.manage_status"))]
 
 
+@router.get("/summary", response_model=RuoloTributiRegisteredMailSummaryResponse)
+def get_registered_mail_summary(
+    db: Session = Depends(get_db),
+) -> RuoloTributiRegisteredMailSummaryResponse:
+    associated_filter = and_(
+        RuoloTributiRegisteredMail.avviso_id.is_not(None),
+        RuoloTributiRegisteredMail.match_status == "matched",
+        RuoloTributiRegisteredMail.anomaly_key.is_(None),
+    )
+    total, associated = db.execute(
+        select(
+            func.count(RuoloTributiRegisteredMail.id),
+            func.count(RuoloTributiRegisteredMail.id).filter(associated_filter),
+        )
+    ).one()
+    return RuoloTributiRegisteredMailSummaryResponse(
+        total=total,
+        associated=associated,
+        anomalies=total - associated,
+    )
+
+
 @router.get("/campaign-preview")
 def get_registered_mail_campaign_preview(
     created_before: Annotated[datetime, Query()],
@@ -34,7 +60,9 @@ def get_registered_mail_campaign_preview(
     try:
         return preview_campaign(db, created_before=created_before)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
 
 
 @router.patch("/{mail_id}/association", response_model=RuoloTributiRegisteredMailResponse)
@@ -54,7 +82,9 @@ def update_registered_mail_association(
         ids = [payload.avviso_id]
     ids = ids or []
     if len(set(ids)) != len(ids):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Avvisi duplicati")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Avvisi duplicati"
+        )
     avvisi = [db.get(RuoloAvviso, item) for item in ids]
     if any(item is None for item in avvisi):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avviso non trovato")

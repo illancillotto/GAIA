@@ -6,9 +6,14 @@ import { type Dispatch, type SetStateAction, useCallback, useEffect, useState } 
 import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon, RefreshIcon, SearchIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
+import { getTributiRegisteredMailSummary } from "@/lib/registered-mail-api";
 import { listTributiRegisteredMails } from "@/lib/ruolo-api";
 import { useSessionBootstrap } from "@/lib/use-session-bootstrap";
-import type { RuoloTributiRegisteredMailListResponse, RuoloTributiRegisteredMailResponse } from "@/types/ruolo";
+import type {
+  RuoloTributiRegisteredMailListResponse,
+  RuoloTributiRegisteredMailResponse,
+  RuoloTributiRegisteredMailSummaryResponse,
+} from "@/types/ruolo";
 import { RegisteredMailAssociationModal } from "./registered-mail-association-modal";
 
 const PAGE_SIZE = 25;
@@ -98,16 +103,22 @@ function useMailAssociation(setResponse: Dispatch<SetStateAction<RuoloTributiReg
 function AssociationDialog({
   association,
   token,
+  onSaved,
 }: {
   association: ReturnType<typeof useMailAssociation>;
   token: string | null;
+  onSaved: () => void;
 }) {
   if (!association.mail || !token) return null;
+  function handleSaved(mail: RuoloTributiRegisteredMailResponse): void {
+    association.save(mail);
+    onSaved();
+  }
   return (
     <RegisteredMailAssociationModal
       mail={association.mail}
       onClose={association.close}
-      onSaved={association.save}
+      onSaved={handleSaved}
       token={token}
     />
   );
@@ -117,9 +128,13 @@ function resolveAccessToken(token: string | null | undefined): string | null {
   return token === undefined ? getStoredAccessToken() : token;
 }
 
-function RegisteredMailSummary({ response }: { response: RuoloTributiRegisteredMailListResponse }) {
-  const anomalyCount = response.items.filter(isAnomaly).length;
-  const matchedCount = response.items.filter((item) => item.match_status === "matched").length;
+function RegisteredMailSummary({
+  response,
+  summary,
+}: {
+  response: RuoloTributiRegisteredMailListResponse;
+  summary: RuoloTributiRegisteredMailSummaryResponse;
+}) {
   return (
     <div className="grid gap-3 md:grid-cols-3">
       <div className="rounded-2xl border border-[#e2e9df] bg-[#fbfcfb] p-4">
@@ -127,12 +142,12 @@ function RegisteredMailSummary({ response }: { response: RuoloTributiRegisteredM
         <p className="mt-1 text-2xl font-semibold text-gray-900">{response.total}</p>
       </div>
       <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Associati nella pagina</p>
-        <p className="mt-1 text-2xl font-semibold text-emerald-800">{matchedCount}</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Associati totali</p>
+        <p className="mt-1 text-2xl font-semibold text-emerald-800">{summary.associated}</p>
       </div>
       <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Anomalie nella pagina</p>
-        <p className="mt-1 text-2xl font-semibold text-amber-800">{anomalyCount}</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Anomalie totali</p>
+        <p className="mt-1 text-2xl font-semibold text-amber-800">{summary.anomalies}</p>
       </div>
     </div>
   );
@@ -180,6 +195,7 @@ function RegisteredMailRow({ canEdit, mail, onOpen }: AssociationActionProps) {
 
 export function RegisteredMailsConsole({ className = "", token, canEdit = false }: RegisteredMailsConsoleProps) {
   const [response, setResponse] = useState<RuoloTributiRegisteredMailListResponse>(EMPTY_RESPONSE);
+  const [summary, setSummary] = useState<RuoloTributiRegisteredMailSummaryResponse>({ total: 0, associated: 0, anomalies: 0 });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -195,15 +211,19 @@ export function RegisteredMailsConsole({ className = "", token, canEdit = false 
     setLoading(true);
     try {
       const trimmedQuery = query.trim();
-      const data = await listTributiRegisteredMails(accessToken, {
-        q: trimmedQuery.length >= 3 ? trimmedQuery : undefined,
-        match_status: matchStatus || undefined,
-        recovery_status: recoveryStatus || undefined,
-        anomalies_only: anomaliesOnly,
-        page: nextPage,
-        page_size: PAGE_SIZE,
-      });
+      const [data, totals] = await Promise.all([
+        listTributiRegisteredMails(accessToken, {
+          q: trimmedQuery.length >= 3 ? trimmedQuery : undefined,
+          match_status: matchStatus || undefined,
+          recovery_status: recoveryStatus || undefined,
+          anomalies_only: anomaliesOnly,
+          page: nextPage,
+          page_size: PAGE_SIZE,
+        }),
+        getTributiRegisteredMailSummary(accessToken),
+      ]);
       setResponse(data);
+      setSummary(totals);
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Errore caricamento raccomandate Poste Online");
@@ -287,7 +307,7 @@ export function RegisteredMailsConsole({ className = "", token, canEdit = false 
           </label>
         </div>
 
-        <RegisteredMailSummary response={response} />
+        <RegisteredMailSummary response={response} summary={summary} />
 
         {error ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
@@ -330,7 +350,7 @@ export function RegisteredMailsConsole({ className = "", token, canEdit = false 
           </div>
         </div>
       </div>
-      <AssociationDialog association={association} token={accessToken} />
+      <AssociationDialog association={association} token={accessToken} onSaved={() => void loadData(page)} />
     </section>
   );
 }

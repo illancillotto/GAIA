@@ -240,3 +240,35 @@ def test_campaign_preview_api_permissions_cutoff_and_legacy_links(api_fixture): 
     assert api_fixture.client.get(url, params={"created_before": "2026-09-24"}).status_code == 422
     assert api_fixture.client.get(url, params=params, headers=_headers(2)).status_code == 403
     assert api_fixture.client.get(url, params=params, headers=_headers(3)).status_code == 403
+
+
+def test_registered_mail_summary_counts_all_rows_and_requires_view_access(api_fixture):  # noqa: F811
+    url = "/ruolo/tributi/raccomandate/summary"
+    with api_fixture.session() as session:
+        notice = _avviso(session)
+        mail(session, avviso_id=notice.id, match_status="matched")
+        mail(session, match_status="matched")
+        mail(session, match_status="ambiguous", anomaly_key="ambiguous_match")
+        mail(session, avviso_id=notice.id, match_status="matched", anomaly_key="review_required")
+        session.commit()
+
+    assert api_fixture.client.get(url).json() == {"total": 4, "associated": 1, "anomalies": 3}
+    assert api_fixture.client.get(url, headers=_headers(2)).status_code == 200
+    assert api_fixture.client.get(url, headers=_headers(3)).status_code == 403
+    assert api_fixture.client.get(url, headers=_headers(4)).status_code == 401
+
+
+def test_manual_registered_mail_association_rejects_missing_subject(api_fixture):  # noqa: F811
+    with api_fixture.session() as session:
+        notices = [_avviso(session, year) for year in (2022, 2023)]
+        record = mail(session)
+        record_id = record.id
+        notice_ids = [str(item.id) for item in notices]
+        session.commit()
+
+    response = api_fixture.client.patch(
+        f"/ruolo/tributi/raccomandate/{record_id}/association",
+        json={"avviso_ids": notice_ids},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Gli avvisi devono appartenere allo stesso contribuente"

@@ -504,6 +504,12 @@ export type RuoloTributiRegisteredMailListResponse = {
   page_size: number;
 };
 
+export type RuoloTributiRegisteredMailSummaryResponse = {
+  total: number;
+  associated: number;
+  anomalies: number;
+};
+
 export type RuoloTributiIncassNoticeResponse = {
   detail_url: string | null;
   source_notice_id: string | null;
