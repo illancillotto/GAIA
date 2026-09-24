@@ -75,8 +75,10 @@ def _is_deferred_recovery(request: CatastoVisuraRequest, now: datetime) -> bool:
 
 
 def lock_refill_capacity(db: Session, batch: CatastoBatch, limit: int, now: datetime) -> int:
-    if batch.status != "processing" or batch.completed_at is not None:
+    if batch.status != "processing":
         return 0
+    # An older worker could mark an active batch as completed while requests remained pending.
+    batch.completed_at = None
     query = select(CatastoVisuraRequest).where(
         CatastoVisuraRequest.batch_id == batch.id,
         CatastoVisuraRequest.status.in_(OPEN_STATUSES),

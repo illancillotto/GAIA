@@ -58,6 +58,9 @@ Il refill aggiorna `last_planner_at` e `total_items` dello stesso batch, non
 `last_batch_started_at`. Il totale del batch puo quindi crescere mentre viene
 elaborato. I report finali comprendono anche le righe aggiunte; non interpretare
 un batch invariato come prova che il planner non stia caricando lavoro.
+Un batch ancora `processing` conserva `completed_at` nullo anche con richieste
+SISTER differite. Il planner ripulisce sotto lock eventuali timestamp storici
+errati prima del refill, senza sostituire o reinviare le richieste remote.
 
 ### Diagnostica recupero SISTER
 

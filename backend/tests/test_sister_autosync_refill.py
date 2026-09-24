@@ -69,7 +69,7 @@ def test_recovery_deadline_and_due_polls_take_precedence():
 
 
 @pytest.mark.parametrize(
-    "status,completed", [("pending", None), ("completed", None), ("processing", datetime.now(UTC))]
+    "status,completed", [("pending", None), ("completed", None)]
 )
 def test_batch_must_be_live_processing(status, completed):
     assert (
@@ -81,6 +81,17 @@ def test_batch_must_be_live_processing(status, completed):
         )
         == 0
     )
+
+
+def test_refill_recovers_processing_batch_with_stale_completed_at():
+    now = datetime.now(UTC)
+    batch = SimpleNamespace(id=uuid4(), status="processing", completed_at=now - timedelta(hours=1))
+    db = MagicMock()
+    db.scalar.return_value = 1
+    db.scalars.return_value = [remote(now)]
+
+    assert lock_refill_capacity(db, batch, 20, now) == 19
+    assert batch.completed_at is None
 
 
 def test_capacity_is_fail_closed_for_locked_rows_and_bounded():
@@ -138,7 +149,12 @@ def test_refill_keeps_one_batch_original_identity_and_finite_capacity(db):
     now = datetime.now(UTC)
     config = CatastoRuoloAutoSyncConfig(user_id=1, enabled=True, batch_size=3)
     batch = CatastoBatch(
-        user_id=1, name="Campaign", batch_kind="perpetual_sync", status="processing", total_items=2
+        user_id=1,
+        name="Campaign",
+        batch_kind="perpetual_sync",
+        status="processing",
+        total_items=2,
+        completed_at=now - timedelta(hours=1),
     )
     db.add_all([config, batch])
     db.flush()
@@ -159,6 +175,7 @@ def test_refill_keeps_one_batch_original_identity_and_finite_capacity(db):
     assert len(rows) == 4
     assert [r.row_index for r in rows] == [1, 2, 3, 4]
     assert batch.total_items == 4
+    assert batch.completed_at is None
     assert (
         original.id,
         original.sister_remote_request_id,

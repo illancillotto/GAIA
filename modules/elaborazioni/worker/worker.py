@@ -1007,9 +1007,8 @@ class CatastoWorker:
                 select(CatastoVisuraRequest).where(CatastoVisuraRequest.batch_id == batch_id),
             ).all()
             self._refresh_batch_counts(db, batch)
-            if all(item.status in {CatastoVisuraRequestStatus.COMPLETED.value, CatastoVisuraRequestStatus.SKIPPED.value} for item in requests):
-                batch.status = CatastoBatchStatus.COMPLETED.value
-            elif all(
+            batch.completed_at = datetime.now(UTC)
+            if all(
                 item.status
                 in {
                     CatastoVisuraRequestStatus.COMPLETED.value,
@@ -1021,9 +1020,9 @@ class CatastoWorker:
                 batch.status = CatastoBatchStatus.COMPLETED.value
             elif any(item.status == CatastoVisuraRequestStatus.PENDING.value for item in requests):
                 batch.status = CatastoBatchStatus.PROCESSING.value
+                batch.completed_at = None
             else:
                 batch.status = CatastoBatchStatus.FAILED.value if batch.failed_items else CatastoBatchStatus.COMPLETED.value
-            batch.completed_at = datetime.now(UTC)
             batch.current_operation = "Batch terminato"
             report_json_path, report_md_path = write_batch_report(batch, requests, self._build_batch_report_dir(batch))
             batch.report_json_path = str(report_json_path)
