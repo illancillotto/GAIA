@@ -420,6 +420,26 @@ describe("ElaborazioniSettingsWorkspace SISTER integration", () => {
     expect(await screen.findByText("Nessuna credenziale Capacitas configurata.")).toBeInTheDocument();
   });
 
+  test("allows reducing and expanding the SISTER credentials block", async () => {
+    render(<ElaborazioniSettingsWorkspace embedded />);
+    await screen.findAllByText("Profilo primary");
+
+    const toggle = screen.getByRole("button", { name: "Riduci" });
+    const content = screen.getByRole("group", { name: "Editor credenziale SISTER" });
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    const wrapper = document.getElementById("sister-credential-editor");
+    expect(wrapper).not.toHaveAttribute("hidden");
+
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "Espandi" })).toHaveAttribute("aria-expanded", "false");
+    expect(wrapper).toHaveAttribute("hidden");
+    expect(screen.getAllByText("Ultima verifica").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole("button", { name: "Espandi" }));
+    expect(screen.getByRole("button", { name: "Riduci" })).toHaveAttribute("aria-expanded", "true");
+    expect(wrapper).not.toHaveAttribute("hidden");
+  });
+
   test("creates, updates, tests and deletes Bonifica credentials", async () => {
     const item = bonificaCredential(7, { remember_me: true, last_used_at: "2026-08-20T09:00:00Z" });
     apiMocks.listBonificaOristaneseCredentials.mockResolvedValue([item]);
@@ -642,8 +662,7 @@ describe("ElaborazioniSettingsWorkspace SISTER integration", () => {
     await screen.findByText("Profilo primary");
 
     fireEvent.click(within(screen.getByText("Profilo primary").closest("article")!).getByRole("button", { name: "Modifica" }));
-    fireEvent.click(screen.getByRole("checkbox", { name: /Usa solo fuori dall/ }));
-    fireEvent.click(screen.getByRole("checkbox", { name: /Usa solo fuori dall/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Fasce personalizzate" }));
     fireEvent.change(await screen.findByLabelText("Lunedi dalle"), { target: { value: "19:00" } });
     fireEvent.click(screen.getByRole("button", { name: "Applica fuori orario ufficio" }));
     fireEvent.click(screen.getByRole("button", { name: "Aggiorna credenziale" }));

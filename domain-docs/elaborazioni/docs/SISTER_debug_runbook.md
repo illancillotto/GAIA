@@ -1,5 +1,12 @@
 # SISTER Debug Runbook
 
+## Interfaccia credenziali SISTER
+
+Nel workspace `/elaborazioni/sister`, il riquadro delle credenziali e riducibile
+con il pulsante **Riduci/Espandi**. La testata con lo stato e l'ultima verifica
+resta visibile mentre il contenuto operativo e nascosto; il blocco e aperto
+all'ingresso nella pagina.
+
 > Nota infrastrutturale
 > Il worker Catasto e un servizio tecnico separato, ma il dominio applicativo Catasto resta parte del backend monolite condiviso.
 

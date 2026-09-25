@@ -353,6 +353,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
   const [resumeReleasedBusy, setResumeReleasedBusy] = useState(false);
   const [testBusy, setTestBusy] = useState(false);
   const [poolTestBusy, setPoolTestBusy] = useState(false);
+  const [sisterCredentialBlockOpen, setSisterCredentialBlockOpen] = useState(true);
   const [testResult, setTestResult] = useState<ElaborazioneCredentialTestResult | null>(null);
   const testSocketRef = useRef<WebSocket | null>(null);
   const activeTestId = testResult?.id ?? null;
@@ -1249,16 +1250,32 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                         : "Vault cifrato condiviso tra backend e worker Playwright. Se la password e valorizzata il test usa il form corrente, altrimenti prova il profilo gia salvato."}
                     </p>
                   </div>
-                  <div className={`rounded-2xl border border-white/80 bg-white/80 text-right ${embedded ? "px-3 py-2.5" : "px-4 py-3"}`}>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Ultima verifica</p>
-                    <p className={`${embedded ? "mt-1.5 text-xs" : "mt-2 text-sm"} font-semibold text-gray-900`}>
-                      {formatDateTime(selectedCredential?.verified_at ?? null)}
-                    </p>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <div className={`rounded-2xl border border-white/80 bg-white/80 text-right ${embedded ? "px-3 py-2.5" : "px-4 py-3"}`}>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Ultima verifica</p>
+                      <p className={`${embedded ? "mt-1.5 text-xs" : "mt-2 text-sm"} font-semibold text-gray-900`}>
+                        {formatDateTime(selectedCredential?.verified_at ?? null)}
+                      </p>
+                    </div>
+                    <button
+                      aria-controls="sister-credential-editor"
+                      aria-expanded={sisterCredentialBlockOpen}
+                      className="btn-secondary"
+                      onClick={() => setSisterCredentialBlockOpen((isOpen) => !isOpen)}
+                      type="button"
+                    >
+                      {sisterCredentialBlockOpen ? "Riduci" : "Espandi"}
+                    </button>
                   </div>
                 </div>
               </div>
 
-              <div className={`grid items-start ${embedded ? "gap-4 p-4" : "gap-6 p-6"} xl:grid-cols-[minmax(300px,0.72fr),minmax(0,1.28fr)]`}>
+              <div
+                aria-hidden={!sisterCredentialBlockOpen}
+                className={`${sisterCredentialBlockOpen ? "grid" : "hidden"} items-start ${embedded ? "gap-4 p-4" : "gap-6 p-6"} xl:grid-cols-[minmax(300px,0.72fr),minmax(0,1.28fr)]`}
+                hidden={!sisterCredentialBlockOpen}
+                id="sister-credential-editor"
+              >
                 <div className="contents">
                   <div aria-label="Editor credenziale SISTER" className={`order-2 grid rounded-[24px] border border-[#e1e8df] bg-[#fbfcfa] ${embedded ? "gap-3 p-4 md:grid-cols-2" : "gap-4 p-5 md:grid-cols-2"} xl:col-start-2 xl:row-start-1`} role="group">
                     <div className="md:col-span-2">
