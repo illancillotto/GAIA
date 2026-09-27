@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.models.catasto import CatastoPerpetualSyncScope
@@ -73,14 +73,21 @@ def _latest_completed_import_id():
 def iter_ruolo_parcel_targets(db: Session) -> Iterator[PerpetualSourceTarget]:
     lookup = get_catasto_comuni_lookup(db)
     rows = db.execute(
-        select(RuoloParticella, RuoloPartita.comune_nome)
+        select(RuoloParticella, RuoloPartita.comune_nome, CatParticella.sezione_catastale)
         .join(RuoloPartita, RuoloPartita.id == RuoloParticella.partita_id)
         .join(RuoloAvviso, RuoloAvviso.id == RuoloPartita.avviso_id)
+        .outerjoin(
+            CatParticella,
+            and_(
+                CatParticella.id == RuoloParticella.cat_particella_id,
+                RuoloParticella.cat_particella_match_status == "matched",
+            ),
+        )
         .where(RuoloAvviso.import_job_id == _latest_completed_import_id())
         .order_by(RuoloParticella.anno_tributario.desc(), RuoloParticella.created_at.desc())
     ).yield_per(1_000)
     seen: set[str] = set()
-    for parcel, comune_nome in rows:
+    for parcel, comune_nome, linked_section in rows:
         key = _parcel_key(comune_nome, parcel.foglio, parcel.particella, parcel.subalterno)
         if key in seen:
             continue
@@ -97,6 +104,7 @@ def iter_ruolo_parcel_targets(db: Session) -> Iterator[PerpetualSourceTarget]:
             comune=comune.nome if comune else _clean(comune_nome),
             comune_codice=comune.codice_sister if comune else None,
             catasto="Terreni",
+            sezione=_clean(linked_section),
             foglio=_clean(parcel.foglio),
             particella=_clean(parcel.particella),
             subalterno=_clean(parcel.subalterno),
