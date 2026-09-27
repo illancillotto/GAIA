@@ -249,6 +249,15 @@ class BrowserSession:
                 raise RuntimeError(f"{issue_message} {debug_context}") from exc
             raise RuntimeError(f"Login timeout. {debug_context}") from exc
         except SisterServerError as exc:
+            if "HTTP 501" in str(exc) and "/portale-rest/rs/initPortale" in str(exc):
+                url, title, body_excerpt = await self._read_page_state()
+                issue_message = self._classify_login_issue(url, title, body_excerpt)
+                if self._is_session_locked_issue(issue_message):
+                    if allow_session_recovery:
+                        logger.warning("Sessione SISTER bloccata dopo initPortale 501, avvio unico recovery")
+                        await self._recover_locked_session()
+                        return await self.login(username, password, allow_session_recovery=False)
+                    await self._raise_locked_session_error("login-init-portale-locked", exc)
             if not await self._recover_init_portale_501(exc):
                 raise
         except Exception as exc:
