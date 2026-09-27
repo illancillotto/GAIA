@@ -248,6 +248,9 @@ class BrowserSession:
             if issue_message:
                 raise RuntimeError(f"{issue_message} {debug_context}") from exc
             raise RuntimeError(f"Login timeout. {debug_context}") from exc
+        except SisterServerError as exc:
+            if not await self._recover_init_portale_501(exc):
+                raise
         except Exception as exc:
             return await self._handle_login_exception(username, password, allow_session_recovery, exc)
 
@@ -261,6 +264,27 @@ class BrowserSession:
 
         if self.config.debug_pause:
             await page.pause()
+
+    async def _recover_init_portale_501(self, exc: SisterServerError) -> bool:
+        if "HTTP 501" not in str(exc) or "/portale-rest/rs/initPortale" not in str(exc):
+            return False
+        url, title, body_excerpt = await self._read_page_state()
+        if self._classify_login_issue(url, title, body_excerpt):
+            return False
+
+        logger.warning("SISTER initPortale 501 bloccante: provo un solo refresh della pagina corrente")
+        try:
+            await self.page.reload(wait_until="domcontentloaded", timeout=15000)
+        except TimeoutError:
+            logger.warning("Refresh dopo initPortale 501 scaduto; mantengo l'errore originale")
+            return False
+        post_login_state = await self._wait_for_post_login_state()
+        if post_login_state not in {"ready", "privacy"}:
+            logger.warning("Refresh dopo initPortale 501 non ha ripristinato la Home SISTER")
+            return False
+        await self._open_authenticated_visura_area()
+        logger.info("Login SISTER recuperato con refresh dopo initPortale 501")
+        return True
 
     async def _handle_login_exception(
         self,
