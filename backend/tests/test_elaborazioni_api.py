@@ -3868,6 +3868,36 @@ def test_perpetual_sources_deduplicate_parcels_and_credentials_stay_owner_scoped
         db.close()
 
 
+def test_perpetual_ruolo_source_uses_only_matched_cadastral_section() -> None:
+    _seed_ruolo_autosync_fixture()
+    db = TestingSessionLocal()
+    try:
+        parcel = db.query(RuoloParticella).one()
+        cadastral = CatParticella(
+            cod_comune_capacitas=1,
+            codice_catastale="G113",
+            nome_comune="Oristano",
+            sezione_catastale="A",
+            foglio="12",
+            particella="603",
+            is_current=True,
+            suppressed=False,
+        )
+        db.add(cadastral)
+        db.flush()
+        parcel.cat_particella_id = cadastral.id
+        parcel.cat_particella_match_status = "matched"
+        db.commit()
+
+        assert load_ruolo_parcel_targets(db)[0].sezione == "A"
+
+        parcel.cat_particella_match_status = "unmatched"
+        db.commit()
+        assert load_ruolo_parcel_targets(db)[0].sezione is None
+    finally:
+        db.close()
+
+
 def test_perpetual_config_validates_priority_and_non_super_admin_credential() -> None:
     import app.services.elaborazioni_ruolo_autosync as autosync_module
 

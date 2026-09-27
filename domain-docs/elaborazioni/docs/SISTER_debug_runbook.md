@@ -1206,3 +1206,27 @@ Alla data di questo documento:
 Durante un incidente verificare nei log strutturati `batch`, `open`,
 `remote_protected` e `capacity`, poi confrontare il numero di credenziali
 configurate con quelle effettivamente disponibili nel pool.
+
+## AutoSync Ruolo: sezione catastale nel submit (2026-09-27)
+
+Se SISTER risponde `La sezione e obbligatoria`, la richiesta puo restare sul
+form di ricerca e terminare con `Submit visura non avanzato` dopo l'attesa
+dello stato successivo. Gli artifact `final-failed.html` osservati mostravano
+due sezioni effettive (`A` e `B`): il worker non deve sceglierne una per
+tentativi. Il target AutoSync delle particelle Ruolo copia la sezione dalla
+`cat_particelle` collegata soltanto quando
+`ruolo_particelle.cat_particella_match_status = matched`. Il collegamento
+assente o non confermato resta senza sezione e richiede diagnosi del dato.
+
+Il refresh delle fonti aggiorna i target esistenti, ma non rimette in coda
+automaticamente gli item `failed`. Per un retry mirato selezionare solo
+richieste fallite su questo errore, con sezione canonica verificata, nessun
+identificativo/stato remoto SISTER, nessun documento o claim attivo e artifact
+che confermi il rifiuto del form prima dell'invio remoto. Aggiornare la
+sezione della **stessa richiesta** prima di rimetterla in coda; conservare ID,
+contatore tentativi e riferimento all'artifact. Escludere le richieste con
+evidenza remota o tentativi esauriti: richiedono il recupero o la verifica
+dell'originale. Il retry bulk della campagna non e adatto a questo incidente,
+perche valuta tutti gli item falliti dello scope e si blocca se uno richiede
+la richiesta originale. Eseguire prima un canary limitato e misurare esito,
+nuovi submit falliti e correlazione dei download.
