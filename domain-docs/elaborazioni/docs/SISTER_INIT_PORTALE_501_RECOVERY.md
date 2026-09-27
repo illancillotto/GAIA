@@ -10,9 +10,13 @@ seguenti casi:
   credenziali rifiutate, il worker aggiorna **una sola volta** la pagina. Prosegue
   solo se dopo il refresh la Home o l'informativa privacy sono pronte e l'area
   visure si apre correttamente.
-- Se il refresh scade, la pagina resta non pronta o appare una sessione bloccata,
-  resta valido l'errore originale: il normale cooldown/retry del worker decide
-  quando riprovare. Non viene inviata alcuna visura durante il recupero del login.
+- Se il `501` arriva sulla pagina `Utente bloccato / gia' in sessione`, non
+  viene fatto refresh: il worker usa il recupero sessione gia' esistente
+  (chiusura sessione, attesa e un solo nuovo login). Un secondo blocco fallisce
+  come `SISTER_SESSION_LOCKED`, senza ulteriori recovery.
+- Se il refresh scade o la pagina resta non pronta, resta valido l'errore
+  originale e il normale cooldown/retry del worker decide quando riprovare.
+  Non viene inviata alcuna visura durante il recupero del login.
 
 La prova controllata del 2026-09-27 ha osservato 15 login con `501` non
 bloccante; un refresh sulla Home ha mantenuto accessibile l'area visure. Non e
