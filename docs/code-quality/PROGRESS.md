@@ -1628,3 +1628,28 @@ restano escluse.
 - Classificazione conclusiva: `REORGANIZED_AND_CHARACTERIZED`. Contratti,
   facade e ordine route restano invariati; nessuna riduzione cognitiva o
   ciclomatica viene dichiarata.
+
+### 2026-09-28 - Hotspot selezione retry AutoSync SISTER
+
+- Slice autorizzata: eliminare lo stato derivato duplicato in `_ClaimScan`,
+  senza modificare query, priorita CAPTCHA, deadline, pinning, lock o claim.
+- Prima: `sister_worker_reliability.py` 800 LOC metriche e una violation
+  file-level error; `_ClaimScan.record_deferred` 5 LOC, cognitive 1,
+  cyclomatic 2. Baseline e altre modifiche del checkout restano invariate.
+- Caratterizzazione aggiunta prima del refactoring: assenza di retry,
+  minimo tra piu rinvii, zero valido e precedenza CAPTCHA in tutti i casi.
+- Dopo: file 798 LOC, nessuna violation error-level; `record_deferred`
+  4 LOC. Cognitive sum/max 199/16 e cyclomatic sum/max 213/11 invariati;
+  49 callable invariati, nessuna estrazione o trasferimento di debito.
+  Esito `IMPROVED` limitato a LOC e stato duplicato, non a cognitive/cyclomatic.
+- Ratchet mirato contro `origin/main` (merge-base `c42bea845`): PASS,
+  `findings: []`. Ratchet dei sei runtime SISTER: 15 -> 14 finding; restano
+  gli altri rilievi, incluso il classificatore login (+2 LOC), fuori da questa
+  singola slice. Baseline, eccezioni ed esclusioni non modificate.
+- Verifiche: nuova caratterizzazione 10 test verdi prima e dopo;
+  cinque file pytest isolati (`test_worker_repository`,
+  `test_worker_reliability`, `test_sister_auth_gate`, `test_sister_claim_scan`,
+  `test_sister_recovery_policy`) 151 test verdi, coverage del runtime
+  `sister_worker_reliability.py` 522/522 statement e 140/140 branch (100%).
+  Ruff runtime/test e formatter del nuovo test superati. Commit successivamente
+  richiesto con validazione isolata del contenuto staged; nessun deploy.

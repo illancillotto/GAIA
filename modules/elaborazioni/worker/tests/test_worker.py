@@ -107,6 +107,8 @@ _stub_module(
 )
 _stub_module(
     "sister_exceptions",
+    DocumentNotYetProducedError=type("DocumentNotYetProducedError", (RuntimeError,), {}),
+    SisterDocumentNotReadyError=type("SisterDocumentNotReadyError", (TimeoutError,), {}),
     SisterInvalidDocumentError=type("SisterInvalidDocumentError", (RuntimeError,), {}),
     SisterRequestCorrelationError=type("SisterRequestCorrelationError", (RuntimeError,), {}),
     SisterServerError=type("SisterServerError", (RuntimeError,), {}),

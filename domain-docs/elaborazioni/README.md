@@ -4,6 +4,8 @@ Area documentale dedicata al runtime operativo delle lavorazioni catastali.
 
 Analisi operativa: [errori SISTER, cooldown e piano di efficienza AutoSync (25 settembre 2026)](docs/SISTER_AUTOSYNC_EFFICIENCY_ANALYSIS_2026-09-25.md).
 
+Aggiornamento: [diagnosi account, controllo autenticazione e polling progressivo (28 settembre 2026)](docs/SISTER_AUTOSYNC_RELIABILITY_2026-09-28.md).
+
 Ambito runtime attuale:
 - visure per immobile
 - visure per soggetto PF/PNF

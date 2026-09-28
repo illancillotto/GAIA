@@ -1,24 +1,28 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from functools import wraps
 import logging
 import os
-from pathlib import Path
 import re
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass, field
+from functools import wraps
+from pathlib import Path
 from time import monotonic
-from typing import Any, Awaitable, Callable
+from typing import Any
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
-from sister_exceptions import SisterServerError
+from sister_exceptions import (
+    DocumentNotYetProducedError,
+    SisterDocumentNotReadyError,
+    SisterServerError,
+)
 from sister_retention import SisterRetentionConfig, SisterRetentionManager
 from sister_telemetry import (
     SisterTelemetryBinding,
     SisterTelemetryRecord,
     SisterTelemetryRecorder,
 )
-
 
 logger = logging.getLogger(__name__)
 AsyncMethod = Callable[..., Awaitable[Any]]
@@ -192,7 +196,7 @@ class SisterWorkerObservability:
         self._batch_bindings: dict[object, SisterTelemetryBinding] = {}
         self._server_error_counts: dict[object, int] = {}
 
-    def instrument_browser(self, browser: object) -> "BrowserTelemetryAdapter":
+    def instrument_browser(self, browser: object) -> BrowserTelemetryAdapter:
         adapter = self._browser_adapters.get(id(browser))
         if adapter is None:
             adapter = BrowserTelemetryAdapter(browser)
@@ -309,8 +313,8 @@ class BrowserTelemetryAdapter:
         if getattr(self.browser, "_gaia_sister_telemetry_installed", False):
             return
         try:
-            setattr(self.browser, "_gaia_sister_telemetry_installed", True)
-            setattr(self.browser, "_gaia_emit_sister_telemetry", self.emit)
+            self.browser._gaia_sister_telemetry_installed = True
+            self.browser._gaia_emit_sister_telemetry = self.emit
         except Exception:
             return
         for method_name, event_type, step in FLOW_METHODS:
@@ -340,6 +344,9 @@ class BrowserTelemetryAdapter:
             started_at = monotonic()
             try:
                 result = await original(*args, **kwargs)
+            except (DocumentNotYetProducedError, SisterDocumentNotReadyError):
+                self.emit(_timed_record(event_type, step, started_at, "waiting"))
+                raise
             except Exception:
                 self.emit(_timed_record(event_type, step, started_at, "error"))
                 raise
@@ -359,7 +366,7 @@ class BrowserTelemetryAdapter:
             self.emit(SisterTelemetryRecord("browser_trace", label, outcome="success"))
             return result
 
-        setattr(self.browser, "_trace_state", observed)
+        self.browser._trace_state = observed
 
     def _wrap_response(self) -> None:
         original = getattr(self.browser, "_track_response", None)
@@ -374,7 +381,7 @@ class BrowserTelemetryAdapter:
                 self.emit(record)
             return result
 
-        setattr(self.browser, "_track_response", observed)
+        self.browser._track_response = observed
 
 
 def _timed_record(event_type: str, step: str, started_at: float, outcome: str) -> SisterTelemetryRecord:
@@ -538,6 +545,6 @@ __all__ = [
     "SisterWorkerObservability",
     "WorkerRuntimeContext",
     "WorkerState",
-    "instrument_sister_worker",
     "emit_pdf_parcel_status",
+    "instrument_sister_worker",
 ]

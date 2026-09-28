@@ -85,12 +85,10 @@ class _ResultContext:
 
 @dataclass(slots=True)
 class _ClaimScan:
-    has_deferred_requests: bool = False
     next_retry_seconds: int | None = None
     has_waiting_captcha: bool = False
 
     def record_deferred(self, seconds: int) -> None:
-        self.has_deferred_requests = True
         self.next_retry_seconds = (
             seconds if self.next_retry_seconds is None else min(self.next_retry_seconds, seconds)
         )
@@ -98,7 +96,7 @@ class _ClaimScan:
     def selection(self) -> ClaimedRequestSelection:
         if self.has_waiting_captcha:
             return ClaimedRequestSelection(request_id=None, wait_reason="WAIT")
-        if self.has_deferred_requests:
+        if self.next_retry_seconds is not None:
             return ClaimedRequestSelection(
                 request_id=None,
                 wait_reason="RETRY_LATER",
@@ -476,7 +474,10 @@ class SisterRequestRepository:
                         [CatastoVisuraRequestStatus.PENDING.value, CatastoVisuraRequestStatus.AWAITING_CAPTCHA.value]
                     ),
                 )
-                .order_by(CatastoVisuraRequest.row_index.asc())
+                .order_by(
+                    CatastoVisuraRequest.sister_first_submitted_at.asc().nullslast(),
+                    CatastoVisuraRequest.row_index.asc(),
+                )
                 .with_for_update(skip_locked=True)
             ).all()
         )

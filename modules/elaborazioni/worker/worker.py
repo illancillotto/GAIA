@@ -111,6 +111,7 @@ from llm_captcha_solver import LLMCaptchaSolver
 from posta_online_sync import run_posta_online_job_by_id
 from reporting import write_batch_report
 from runtime_policy import classify_terminal_status
+from sister_auth_gate import SisterAuthenticationGate
 from sister_captcha_wait import SisterCaptchaClaim, SisterCaptchaWaitRepository
 from sister_credential_pool import (
     CredentialLeaseHeartbeat,
@@ -1109,6 +1110,7 @@ class _SisterBatchRuntime:
         self.batch_id = batch.id
         self.credential_pool = credential_pool
         self.request_repository = request_repository
+        self.authentication_gate = SisterAuthenticationGate(self, SessionLocal)
         self.shared_state_lock = asyncio.Lock()
         self.deferred_requests: dict[UUID, datetime] = {}
         self.credential_cooldowns: dict[UUID, datetime] = {}
@@ -1193,6 +1195,8 @@ class _SisterBatchRuntime:
     ) -> str:
         if session.lease_heartbeat is not None and session.lease_heartbeat.lost.is_set():
             await self._discard_lost_lease(session)
+        if self.authentication_gate.suspended(credential):
+            return "stop"
         if not credential_is_runnable(SessionLocal, credential.id, self.batch_id):
             await self._close_session(credential, session)
             if not credential_is_enabled_for_batch(SessionLocal, credential.id, self.batch_id):
@@ -1336,6 +1340,8 @@ class _SisterBatchRuntime:
         credential: CatastoCredential,
         session: _CredentialRuntimeSession,
     ) -> str:
+        if not await self.authentication_gate.ready(credential, session.browser):
+            return "stop"
         selection = await self.claim_coordinator.claim_next(
             self.request_repository,
             self.batch_id,

@@ -17,6 +17,15 @@ from sister_exceptions import (
 from sister_request_rows import SisterRemoteRequestRow, SisterRequestCorrelation
 
 
+def test_account_not_enabled_is_not_reported_as_changed_password():
+    issue = BrowserSession._classify_login_issue(
+        "https://sister/Servizi/login.jsp", "Uscita",
+        "Utente non abilitato, per accedere ai servizi occorre essere registrati.",
+    )
+    assert "Utente non abilitato" in issue
+    assert "password" not in issue.lower()
+
+
 class FakeLocator:
     def __init__(self, *, visible: bool = True, count: int = 1, text: str = "", on_click=None) -> None:
         self.visible = visible

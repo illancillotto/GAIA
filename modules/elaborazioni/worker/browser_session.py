@@ -1328,15 +1328,17 @@ class BrowserSession:
     @staticmethod
     def _classify_login_issue(url: str, title: str, body_excerpt: str) -> str | None:
         haystack = f"{url} {title} {body_excerpt}".lower()
-        if "gia' in sessione" in haystack or "già in sessione" in haystack or "altra postazione" in haystack:
+        if "utente non abilitato" in haystack:
+            return "Utente non abilitato ai servizi SISTER: verificare registrazione e abilitazioni."
+        if any(marker in haystack for marker in ("gia' in sessione", "già in sessione", "altra postazione")):
             return "Utente SISTER gia' in sessione su un'altra postazione o browser."
         if "error_locked.jsp" in haystack or "utente bloccato" in haystack:
             return (
                 "Utente SISTER bloccato sul portale Agenzia delle Entrate. "
                 "Verificare se esiste gia' una sessione attiva su un'altra postazione o browser."
             )
-        if "credenzial" in haystack and (
-            "errat" in haystack or "non valide" in haystack or "non sono valide" in haystack
+        if "credenzial" in haystack and any(
+            marker in haystack for marker in ("errat", "non valide", "non sono valide")
         ):
             return "Credenziali SISTER rifiutate dal portale Agenzia delle Entrate."
         return None

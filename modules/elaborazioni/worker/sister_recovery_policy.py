@@ -4,12 +4,27 @@ from datetime import datetime, timedelta, timezone
 
 from app.models.catasto import CatastoVisuraRequest
 from app.modules.elaborazioni.sister_recovery_contract import (
+    RECOVERY_WINDOW,
     REMOTE_STATES,
     is_remote_recovery,
     recovery_stop_reason,
 )
 
 POLL_DELAY = timedelta(minutes=5)
+
+
+def remote_poll_delay(request: CatastoVisuraRequest, now: datetime) -> timedelta:
+    submitted = request.sister_first_submitted_at
+    if submitted is None:
+        return POLL_DELAY
+    submitted = submitted.replace(tzinfo=submitted.tzinfo or timezone.utc)  # noqa: UP017 - Python 3.10.
+    age = max((now - submitted).total_seconds(), 0)
+    remaining = max((submitted + RECOVERY_WINDOW - now).total_seconds(), 0)
+    if remaining <= 3600:
+        seconds = min(300, remaining)
+    else:
+        seconds = min(300 * 2 ** min(int(age // 3600), 2), 1200)
+    return timedelta(seconds=seconds)
 
 
 def record_first_submission(request: CatastoVisuraRequest, state: str) -> None:
@@ -59,7 +74,8 @@ def queue_remote_poll(request: CatastoVisuraRequest) -> None:
     request.last_error_code = None
     request.error_message = None
     request.execution_token = None
-    request.retry_not_before = datetime.now(timezone.utc) + POLL_DELAY  # noqa: UP017 - Python 3.10.
+    now = datetime.now(timezone.utc)  # noqa: UP017 - Python 3.10.
+    request.retry_not_before = now + remote_poll_delay(request, now)
     request.captcha_manual_solution = None
     request.captcha_skip_requested = False
 

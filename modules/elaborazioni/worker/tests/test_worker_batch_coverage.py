@@ -131,6 +131,10 @@ def install_batch_runtime(
     worker._finalize_batch = lambda _batch_id: operations.append("finalized")
     worker._batch_has_open_requests = lambda _batch_id: False
     worker._build_browser_session = browser_factory or FakeBrowser
+    async def authenticated(*_args):
+        return True
+    monkeypatch.setattr(worker_module.SisterAuthenticationGate, "ready", authenticated)
+    monkeypatch.setattr(worker_module.SisterAuthenticationGate, "suspended", lambda *_args: False)
     if process is None:
         worker._process_request = lambda *_args: async_none()
     else:
