@@ -3,6 +3,56 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto - caratterizzazione AnagraficaBulkPanel (2026-09-28)
+
+- Audit separato del ratchet residuo: la baseline letta al merge-base
+  `c42bea84` dichiara `source_commit=b1d4a988` (2026-08-20), precedente ai
+  commit Catasto `4cccd69a` e `97a32f18`. Il codice `HEAD` non modificato
+  ha gia il primo `useEffect` a `8/9/33` e il file a LOC `1118`; il working
+  tree misura rispettivamente `8/9/33` e `1103`. Anche il callback storico
+  e le righe export segnalate sono presenti in `HEAD`: i 15 finding confrontano
+  funzionalita gia integrate con una baseline non sincronizzata, non una
+  regressione di questa slice. Nessun codice o baseline cambiati in questo
+  audit. Esito `NO_SAFE_CHANGE`: una riduzione artificiale fino alla baseline
+  di agosto violerebbe l'invariante UI; serve una decisione separata sulla
+  riconciliazione della baseline storica secondo la policy del ratchet.
+- Iterazione hotspot successiva: caratterizzati tutti i rami eseguibili con 40
+  test mirati e coverage `100%` statement/branch/funzioni/linee
+  (`387/374/90/334`). Rimossi controlli UI irraggiungibili e la fase `saving`
+  mai assegnata; unificato il rendering degli export distretti/comuni senza
+  toccare creazione, polling o download dei job.
+- Metriche prima della slice export: componente principale ciclomatica `191`,
+  cognitiva `217`; file LOC `1104`, somme ciclomatica `497`, cognitiva `503`.
+  Dopo: componente `155/181`; file LOC `1103`, somme `479/484`. La sezione
+  condivisa e a `14/13/74` (warning, nessun errore) e lo spinner a `1/0/8`:
+  riduzione aggregata senza trasferimento di errori, esito `IMPROVED`.
+- Typecheck e 40 test mirati verdi; ESLint senza errori, con un warning hook
+  preesistente. Ratchet contro `origin/main` (`c42bea84`) ancora rosso con
+  15 finding nel pannello, dovuti a callback/LOC delle feature gia presenti
+  prima della slice; baseline ed eccezioni non aggiornate. Prossima azione:
+  trattare separatamente quelle regressioni, senza allargare questa iterazione.
+- Hotspot selezionato: `AnagraficaBulkPanel` dopo il commit export multi-scope
+  `97a32f18`; base di confronto `5915305d`. Nessun file runtime modificato:
+  la copertura iniziale impediva un refactoring conforme alla policy GAIA.
+- Prima e dopo (invariati): callable principale ciclomatica `201`, cognitiva
+  `232`, LOC `955`; file LOC `1118`, ciclomatica aggregata `518`, cognitiva
+  aggregata `537`. Il ratchet conserva 13 finding nel file rispetto alla base.
+- Aggiunta una suite di caratterizzazione per upload CSV/XLSX, validazione
+  intestazioni, esecuzione e polling job, export veloce, storico, template,
+  errori e renderer delle colonne. Con la suite export esistente: 24 test
+  mirati passati. Coverage del pannello `39.13/42.11/42.69/40.47%` a
+  `93.09/86.93/97.75/96.42%` (statement/branch/funzioni/linee).
+- Typecheck frontend ed ESLint del nuovo test passano. La suite frontend
+  completa eseguita per orientamento ha 2640 test passati e 10 failure in
+  Presenze/Ruolo, non attribuite a questo file. Nessuna baseline o eccezione
+  modificata; diff baseline nullo.
+- Esito `REORGANIZED_AND_CHARACTERIZED` solo per la copertura e la
+  verificabilita, non `IMPROVED`: restano 12 righe e 58 esiti di branch
+  scoperti, compresi percorsi di parser, polling, storico e UI. La prossima
+  slice deve caratterizzare i rami eseguibili residui e valutare separatamente
+  quelli irraggiungibili; non abbassare la policy coverage o spostare il debito
+  in un componente adiacente. Nessun refactoring runtime avviato.
+
 ### Verifica integrata QGIS Desktop e gestione utenti (2026-09-23)
 
 - Backend: quattro suite GIS/Accessi passano; gli otto file runtime misurati

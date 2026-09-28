@@ -29,6 +29,7 @@ import type { CatAnagraficaBulkJobItem, CatAnagraficaBulkRowResult, CatComuneExp
 
 import { CatastoFilePicker } from "../file-picker";
 import { MultiSelectChecklist } from "./MultiSelectChecklist";
+import type { MultiSelectOption } from "./MultiSelectChecklist";
 
 function describeExportJob(job: CatDistrettoExportJob): string {
   const count = job.scope_values?.length ?? 1;
@@ -98,12 +99,123 @@ type BulkSummary = {
 type BulkOperationHistoryItem = CatAnagraficaBulkJobItem;
 const BULK_JOB_POLL_INTERVAL_MS = 1500;
 
+type ExportScopeKind = "distretti" | "comuni";
+type ExportFormat = "csv" | "xlsx";
+
+const EXPORT_SCOPE_CONTENT = {
+  distretti: {
+    title: "Export intestatari per distretto",
+    description: "Scarica le particelle correnti di uno o più distretti con intestatari, dati Capacitas, distretto e campi riordino. Con più distretti ottieni un unico file.",
+    runningLabel: "Export distretto in corso",
+    instruction: "Seleziona uno o più distretti e scegli il formato da scaricare.",
+    label: "Distretti",
+    emptyMessage: "Nessun distretto disponibile.",
+    suffix: "distretti",
+    className: "mt-4 rounded-xl border border-blue-100 bg-blue-50/50 p-4",
+  },
+  comuni: {
+    title: "Export intestatari per comune",
+    description: "Esporta le particelle correnti di uno o più comuni in un unico file. Con un solo comune puoi scegliere tra dato GAIA e dato live Capacitas; con più comuni viene usato il dato GAIA. Il file include anche l’indicazione e il dettaglio dei dati SISTER quando disponibili.",
+    runningLabel: "Export comuni in corso",
+    instruction: "Seleziona uno o più comuni e scegli il formato da scaricare.",
+    label: "Comuni",
+    emptyMessage: "Nessun comune disponibile.",
+    suffix: "comuni",
+    className: "mt-4 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4",
+  },
+} as const;
+
+function ExportSpinner() {
+  return (
+    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" />
+      <path className="opacity-90" fill="currentColor" d="M21 12a9 9 0 0 0-9-9v3a6 6 0 0 1 6 6h3Z" />
+    </svg>
+  );
+}
+
+function ExportScopeSection({
+  kind,
+  options,
+  selected,
+  onChange,
+  onExport,
+  busy,
+  exportingScope,
+  isJobRunning,
+}: {
+  kind: ExportScopeKind;
+  options: MultiSelectOption[];
+  selected: string[];
+  onChange: (values: string[]) => void;
+  onExport: (format: ExportFormat) => void;
+  busy: boolean;
+  exportingScope: { kind: ExportScopeKind; format: ExportFormat } | null;
+  isJobRunning: boolean;
+}) {
+  const content = EXPORT_SCOPE_CONTENT[kind];
+  const currentExport = exportingScope?.kind === kind ? exportingScope : null;
+  const pendingJob = isJobRunning && !currentExport;
+
+  return (
+    <div className={content.className}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-gray-900">{content.title}</p>
+          <p className="mt-1 text-sm text-gray-600">{content.description}</p>
+        </div>
+        {currentExport || isJobRunning ? (
+          <div
+            className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-blue-700 shadow-sm"
+            role="status"
+            aria-live="polite"
+          >
+            <ExportSpinner />
+            {currentExport ? `Export ${currentExport.format === "csv" ? "CSV" : "Excel"} in corso` : content.runningLabel}
+          </div>
+        ) : null}
+      </div>
+      <p className="mt-1 text-sm text-gray-600">
+        {currentExport
+          ? "Sto preparando il file sul backend. Il download partirà automaticamente appena pronto."
+          : pendingJob
+            ? "Sto preparando il file sul backend. Quando sarà pronto resterà disponibile negli ultimi export."
+            : content.instruction}
+      </p>
+      <div className="mt-4 flex flex-wrap items-end gap-3">
+        <MultiSelectChecklist
+          label={content.label}
+          options={options}
+          selected={selected}
+          onChange={onChange}
+          disabled={busy || options.length === 0}
+          emptyMessage={content.emptyMessage}
+        />
+        {(["csv", "xlsx"] as const).map((format) => {
+          const isExporting = currentExport?.format === format;
+          const formatLabel = format === "csv" ? "CSV" : "Excel";
+          return (
+            <button key={format} className="btn-secondary" type="button" disabled={busy || selected.length === 0} onClick={() => onExport(format)}>
+              {isExporting ? (
+                <ExportSpinner />
+              ) : (
+                <DocumentIcon className="h-4 w-4" />
+              )}
+              {isExporting ? `Export ${formatLabel} in corso...` : `Export ${formatLabel} ${content.suffix}`}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 type BulkProgressState = {
   open: boolean;
   processed: number;
   total: number;
   currentLabel: string;
-  phase: "idle" | "processing" | "saving" | "completed" | "error";
+  phase: "idle" | "processing" | "completed" | "error";
 };
 
 function buildSummary(results: CatAnagraficaBulkRowResult[]): BulkSummary {
@@ -141,7 +253,7 @@ function inferKindFromHeaders(headers: string[]): "CF_PIVA_PARTICELLE" | "COMUNE
 async function readFileHeadersOnly(
   file: File,
 ): Promise<{ kind: "CF_PIVA_PARTICELLE" | "COMUNE_FOGLIO_PARTICELLA_INTESTATARI" }> {
-  const ext = file.name.toLowerCase().split(".").pop() ?? "";
+  const ext = file.name.toLowerCase().split(".").pop();
 
   const toHeaderRow = (worksheet: XLSX.WorkSheet): unknown[] => {
     return XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: null, raw: false })[0] ?? [];
@@ -172,14 +284,7 @@ async function readFileHeadersOnly(
   const comuneKey = pickColumn(headers, ["comune", "codice_comune", "nome_comune"]);
   const foglioKey = pickColumn(headers, ["foglio"]);
   const particellaKey = pickColumn(headers, ["particella", "mappale"]);
-  const cfKey = pickColumn(headers, ["codice_fiscale", "cf"]);
-  const pivaKey = pickColumn(headers, ["partita_iva", "piva", "iva"]);
-
-  if (kind === "CF_PIVA_PARTICELLE") {
-    if (!cfKey && !pivaKey) {
-      throw new Error("Colonne minime mancanti. Richieste: codice_fiscale oppure partita_iva.");
-    }
-  } else {
+  if (kind !== "CF_PIVA_PARTICELLE") {
     if (!comuneKey || !foglioKey || !particellaKey) {
       throw new Error("Colonne minime mancanti. Richieste: comune, foglio, particella (opzionali: sezione, sub). Nel campo comune puoi usare nome comune, codice Capacitas numerico o codice catastale/Belfiore.");
     }
@@ -421,13 +526,9 @@ export function AnagraficaBulkPanel() {
     }
   }
 
-  async function runBulkSearch(): Promise<void> {
+  async function runBulkSearch(file: File): Promise<void> {
     const token = getStoredAccessToken();
     if (!token) return;
-    if (!sourceFile || !isFileValidated) {
-      setError("Carica un file e verifica che contenga righe valide.");
-      return;
-    }
     setIsProcessing(true);
     setResults([]);
     setActiveJobId(null);
@@ -439,7 +540,7 @@ export function AnagraficaBulkPanel() {
       phase: "processing",
     });
     try {
-      const job = await catastoUploadElaborazioneMassivaJob(token, sourceFile);
+      const job = await catastoUploadElaborazioneMassivaJob(token, file);
       setActiveJobId(job.id);
       setInferredKind(job.kind);
       setOperationHistory((prev) => [job, ...prev].slice(0, 5));
@@ -451,7 +552,7 @@ export function AnagraficaBulkPanel() {
           processed: currentJob.processed_rows,
           total: currentJob.total_rows,
           currentLabel: currentJob.current_label ?? "Elaborazione in coda...",
-          phase: currentJob.status === "failed" ? "error" : currentJob.status === "completed" ? "completed" : "processing",
+          phase: "processing",
         });
         setResults(currentJob.results);
         await new Promise((resolve) => window.setTimeout(resolve, BULK_JOB_POLL_INTERVAL_MS));
@@ -487,12 +588,11 @@ export function AnagraficaBulkPanel() {
   }
 
   async function exportVeloce(format: "csv" | "xlsx"): Promise<void> {
-    if (results.length === 0 || !inferredKind) return;
     const token = getStoredAccessToken();
-    if (!token || !activeJobId) return;
+    if (!token) return;
     setIsExporting(true);
     try {
-      const blob = await catastoDownloadElaborazioneMassivaJobExport(token, activeJobId, format);
+      const blob = await catastoDownloadElaborazioneMassivaJobExport(token, activeJobId!, format);
       triggerDownload(blob, `${inferredKind === "CF_PIVA_PARTICELLE" ? "catasto-intestatari-da-cf" : "catasto-intestatari"}.${format}`);
       setError(null);
     } finally {
@@ -538,15 +638,14 @@ export function AnagraficaBulkPanel() {
     void exportScope("comuni", selectedComuni, format);
   }
 
-  async function exportComune(source: "gaia" | "live"): Promise<void> {
-    if (!exportChoice) return;
+  async function exportComune(choice: NonNullable<typeof exportChoice>, source: "gaia" | "live"): Promise<void> {
     const token = getStoredAccessToken();
     if (!token) return;
     setIsExporting(true);
     try {
-      const blob = await catastoDownloadComuneExport(token, exportChoice.comune, exportChoice.format, source);
-      const label = comuni.find((item) => item.codice === exportChoice.comune)?.nome ?? exportChoice.comune;
-      triggerDownload(blob, `catasto-intestatari-comune-${label.toLowerCase().replace(/\s+/g, "-")}-${source}.${exportChoice.format}`);
+      const blob = await catastoDownloadComuneExport(token, choice.comune, choice.format, source);
+      const label = comuni.find((item) => item.codice === choice.comune)?.nome ?? choice.comune;
+      triggerDownload(blob, `catasto-intestatari-comune-${label.toLowerCase().replace(/\s+/g, "-")}-${source}.${choice.format}`);
       setExportChoice(null);
       setError(null);
     } catch (e) {
@@ -574,8 +673,8 @@ export function AnagraficaBulkPanel() {
             <p className="text-lg font-semibold text-gray-900">Scegli la fonte dei dati</p>
             <p className="mt-2 text-sm text-gray-600">Per il comune selezionato puoi usare il dato già presente in GAIA oppure interrogare Capacitas live.</p>
             <div className="mt-5 grid gap-2">
-              <button type="button" className="btn-primary" disabled={busy} onClick={() => void exportComune("gaia")}>Esporta con dato GAIA</button>
-              <button type="button" className="btn-secondary" disabled={busy} onClick={() => void exportComune("live")}>Esporta live</button>
+              <button type="button" className="btn-primary" disabled={busy} onClick={() => void exportComune(exportChoice, "gaia")}>Esporta con dato GAIA</button>
+              <button type="button" className="btn-secondary" disabled={busy} onClick={() => void exportComune(exportChoice, "live")}>Esporta live</button>
               <button type="button" className="btn-secondary" disabled={busy} onClick={() => setExportChoice(null)}>Annulla</button>
             </div>
           </div>
@@ -610,13 +709,11 @@ export function AnagraficaBulkPanel() {
                   {bulkProgress.phase === "completed" ? "Elaborazione completata" : bulkProgress.phase === "error" ? "Elaborazione interrotta" : "Elaborazione in corso"}
                 </p>
                 <p className="mt-1 text-sm text-gray-600">
-                  {bulkProgress.phase === "saving"
-                    ? "Salvataggio dei risultati nello storico."
-                    : bulkProgress.phase === "completed"
-                      ? "Elaborazione completata."
-                      : bulkProgress.phase === "error"
-                        ? "L'elaborazione si e interrotta."
-                        : "Sto processando le righe del file a blocchi."}
+                  {bulkProgress.phase === "completed"
+                    ? "Elaborazione completata."
+                    : bulkProgress.phase === "error"
+                      ? "L'elaborazione si e interrotta."
+                      : "Sto processando le righe del file a blocchi."}
                 </p>
               </div>
               <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-700">
@@ -629,7 +726,7 @@ export function AnagraficaBulkPanel() {
                 <span>
                   {bulkProgress.processed} di {bulkProgress.total} righe
                 </span>
-                <span>{bulkProgress.phase === "saving" ? "Salvataggio" : bulkProgress.phase === "completed" ? "Completato" : "Elaborazione"}</span>
+                <span>{bulkProgress.phase === "completed" ? "Completato" : "Elaborazione"}</span>
               </div>
               <div className="h-3 overflow-hidden rounded-full bg-slate-100">
                 <div
@@ -791,7 +888,7 @@ export function AnagraficaBulkPanel() {
             <p className="text-xs text-gray-500">
               Questa azione elabora il file caricato sopra e popola la preview con le righe trovate.
             </p>
-            <button className="btn-primary" type="button" disabled={isProcessing || !sourceFile || !isFileValidated} onClick={() => void runBulkSearch()}>
+            <button className="btn-primary" type="button" disabled={isProcessing || !sourceFile || !isFileValidated} onClick={() => void runBulkSearch(sourceFile!)}>
               <RefreshIcon className="h-4 w-4" />
               {isProcessing ? "Elaborazione file…" : "Elabora righe file"}
             </button>
@@ -821,134 +918,26 @@ export function AnagraficaBulkPanel() {
           </div>
         ) : null}
 
-        <div className="mt-4 rounded-xl border border-blue-100 bg-blue-50/50 p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium text-gray-900">Export intestatari per distretto</p>
-              <p className="mt-1 text-sm text-gray-600">
-                Scarica le particelle correnti di uno o più distretti con intestatari, dati Capacitas, distretto e campi riordino. Con più distretti ottieni un unico file.
-              </p>
-            </div>
-            {exportingScope?.kind === "distretti" || (isDistrettoExportRunning && activeScopeKind === "distretti") ? (
-              <div
-                className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-blue-700 shadow-sm"
-                role="status"
-                aria-live="polite"
-              >
-                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" />
-                  <path className="opacity-90" fill="currentColor" d="M21 12a9 9 0 0 0-9-9v3a6 6 0 0 1 6 6h3Z" />
-                </svg>
-                {exportingScope?.kind === "distretti"
-                  ? `Export ${exportingScope.format === "csv" ? "CSV" : "Excel"} in corso`
-                  : "Export distretto in corso"}
-              </div>
-            ) : null}
-          </div>
-          <p className="mt-1 text-sm text-gray-600">
-            {exportingScope?.kind === "distretti"
-              ? "Sto preparando il file sul backend. Il download partirà automaticamente appena pronto."
-              : isDistrettoExportRunning && activeScopeKind === "distretti"
-                ? "Sto preparando il file sul backend. Quando sarà pronto resterà disponibile negli ultimi export."
-                : "Seleziona uno o più distretti e scegli il formato da scaricare."}
-          </p>
-          <div className="mt-4 flex flex-wrap items-end gap-3">
-            <MultiSelectChecklist
-              label="Distretti"
-              options={distrettiOptions}
-              selected={selectedDistretti}
-              onChange={setSelectedDistretti}
-              disabled={busy || distrettiOptions.length === 0}
-              emptyMessage="Nessun distretto disponibile."
-            />
-            <button className="btn-secondary" type="button" disabled={busy || selectedDistretti.length === 0} onClick={() => void exportScope("distretti", selectedDistretti, "csv")}>
-              {exportingScope?.kind === "distretti" && exportingScope.format === "csv" ? (
-                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" />
-                  <path className="opacity-90" fill="currentColor" d="M21 12a9 9 0 0 0-9-9v3a6 6 0 0 1 6 6h3Z" />
-                </svg>
-              ) : (
-                <DocumentIcon className="h-4 w-4" />
-              )}
-              {exportingScope?.kind === "distretti" && exportingScope.format === "csv" ? "Export CSV in corso..." : "Export CSV distretti"}
-            </button>
-            <button className="btn-secondary" type="button" disabled={busy || selectedDistretti.length === 0} onClick={() => void exportScope("distretti", selectedDistretti, "xlsx")}>
-              {exportingScope?.kind === "distretti" && exportingScope.format === "xlsx" ? (
-                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" />
-                  <path className="opacity-90" fill="currentColor" d="M21 12a9 9 0 0 0-9-9v3a6 6 0 0 1 6 6h3Z" />
-                </svg>
-              ) : (
-                <DocumentIcon className="h-4 w-4" />
-              )}
-              {exportingScope?.kind === "distretti" && exportingScope.format === "xlsx" ? "Export Excel in corso..." : "Export Excel distretti"}
-            </button>
-          </div>
-        </div>
-        <div className="mt-4 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium text-gray-900">Export intestatari per comune</p>
-              <p className="mt-1 text-sm text-gray-600">
-                Esporta le particelle correnti di uno o più comuni in un unico file. Con un solo comune puoi scegliere tra dato GAIA e dato live Capacitas; con più comuni viene usato il dato GAIA. Il file include anche l’indicazione e il dettaglio dei dati SISTER quando disponibili.
-              </p>
-            </div>
-            {exportingScope?.kind === "comuni" || (isDistrettoExportRunning && activeScopeKind === "comuni") ? (
-              <div
-                className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-blue-700 shadow-sm"
-                role="status"
-                aria-live="polite"
-              >
-                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" />
-                  <path className="opacity-90" fill="currentColor" d="M21 12a9 9 0 0 0-9-9v3a6 6 0 0 1 6 6h3Z" />
-                </svg>
-                {exportingScope?.kind === "comuni"
-                  ? `Export ${exportingScope.format === "csv" ? "CSV" : "Excel"} in corso`
-                  : "Export comuni in corso"}
-              </div>
-            ) : null}
-          </div>
-          <p className="mt-1 text-sm text-gray-600">
-            {exportingScope?.kind === "comuni"
-              ? "Sto preparando il file sul backend. Il download partirà automaticamente appena pronto."
-              : isDistrettoExportRunning && activeScopeKind === "comuni"
-                ? "Sto preparando il file sul backend. Quando sarà pronto resterà disponibile negli ultimi export."
-                : "Seleziona uno o più comuni e scegli il formato da scaricare."}
-          </p>
-          <div className="mt-4 flex flex-wrap items-end gap-3">
-            <MultiSelectChecklist
-              label="Comuni"
-              options={comuniOptions}
-              selected={selectedComuni}
-              onChange={setSelectedComuni}
-              disabled={busy || comuniOptions.length === 0}
-              emptyMessage="Nessun comune disponibile."
-            />
-            <button className="btn-secondary" type="button" disabled={busy || selectedComuni.length === 0} onClick={() => exportComuni("csv")}>
-              {exportingScope?.kind === "comuni" && exportingScope.format === "csv" ? (
-                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" />
-                  <path className="opacity-90" fill="currentColor" d="M21 12a9 9 0 0 0-9-9v3a6 6 0 0 1 6 6h3Z" />
-                </svg>
-              ) : (
-                <DocumentIcon className="h-4 w-4" />
-              )}
-              {exportingScope?.kind === "comuni" && exportingScope.format === "csv" ? "Export CSV in corso..." : "Export CSV comuni"}
-            </button>
-            <button className="btn-secondary" type="button" disabled={busy || selectedComuni.length === 0} onClick={() => exportComuni("xlsx")}>
-              {exportingScope?.kind === "comuni" && exportingScope.format === "xlsx" ? (
-                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" />
-                  <path className="opacity-90" fill="currentColor" d="M21 12a9 9 0 0 0-9-9v3a6 6 0 0 1 6 6h3Z" />
-                </svg>
-              ) : (
-                <DocumentIcon className="h-4 w-4" />
-              )}
-              {exportingScope?.kind === "comuni" && exportingScope.format === "xlsx" ? "Export Excel in corso..." : "Export Excel comuni"}
-            </button>
-          </div>
-        </div>
+        <ExportScopeSection
+          kind="distretti"
+          options={distrettiOptions}
+          selected={selectedDistretti}
+          onChange={setSelectedDistretti}
+          onExport={(format) => void exportScope("distretti", selectedDistretti, format)}
+          busy={busy}
+          exportingScope={exportingScope}
+          isJobRunning={isDistrettoExportRunning && activeScopeKind === "distretti"}
+        />
+        <ExportScopeSection
+          kind="comuni"
+          options={comuniOptions}
+          selected={selectedComuni}
+          onChange={setSelectedComuni}
+          onExport={exportComuni}
+          busy={busy}
+          exportingScope={exportingScope}
+          isJobRunning={isDistrettoExportRunning && activeScopeKind === "comuni"}
+        />
         <div className="mt-4">
         {distrettoExportJobs.length > 0 ? (
           <div className="mt-4 rounded-xl border border-blue-100 bg-white/70 p-3">
