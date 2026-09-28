@@ -139,7 +139,7 @@ services:
       - anagrafica-data:/data/anagrafica
       - ./runtime-data:/runtime-data
       - ./secrets/pdnd:/app/secrets/pdnd:ro
-      - ${PRESENZE_SCRAPER_HOST_PATH:-/home/cbo/CursorProjects/inaz-scraper}:/opt/presenze-scraper:ro
+      - ${PRESENZE_SCRAPER_HOST_PATH:-/home/cbo/CursorProjects/presenze-scraper}:/opt/presenze-scraper:ro
       - ${WIKI_AGENT_HOST_HOME:-/home/cbo}/.local/bin:${WIKI_AGENT_HOST_HOME:-/home/cbo}/.local/bin:ro
       - ${WIKI_AGENT_HOST_HOME:-/home/cbo}/.local/share/cursor-agent:${WIKI_AGENT_HOST_HOME:-/home/cbo}/.local/share/cursor-agent:ro
       - ${WIKI_AGENT_HOST_HOME:-/home/cbo}/.config/cursor:${WIKI_AGENT_HOST_HOME:-/home/cbo}/.config/cursor:ro
@@ -189,7 +189,7 @@ services:
       - anagrafica-data:/data/anagrafica
       - ./runtime-data:/runtime-data
       - ./secrets/pdnd:/app/secrets/pdnd:ro
-      - ${PRESENZE_SCRAPER_HOST_PATH:-/home/cbo/CursorProjects/inaz-scraper}:/opt/presenze-scraper:ro
+      - ${PRESENZE_SCRAPER_HOST_PATH:-/home/cbo/CursorProjects/presenze-scraper}:/opt/presenze-scraper:ro
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       postgres:
@@ -280,7 +280,7 @@ services:
       - catasto-data:/data/catasto
       - anagrafica-data:/data/anagrafica
       - ./runtime-data:/runtime-data
-      - ${PRESENZE_SCRAPER_HOST_PATH:-/home/cbo/CursorProjects/inaz-scraper}:/opt/presenze-scraper:ro
+      - ${PRESENZE_SCRAPER_HOST_PATH:-/home/cbo/CursorProjects/presenze-scraper}:/opt/presenze-scraper:ro
     depends_on:
       postgres:
         condition: service_healthy
