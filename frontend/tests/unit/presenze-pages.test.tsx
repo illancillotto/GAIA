@@ -8,7 +8,7 @@ import ElaborazioniPresenzeSyncPage from "@/app/elaborazioni/presenze-sync/page"
 import PresenzeImportPage from "@/app/presenze/import/page";
 import PresenzePage from "@/app/presenze/page";
 import PresenzeRegolePage from "@/app/presenze/regole/page";
-import PresenzeSettingsPage from "@/app/presenze/settings/page";
+import { PresenzeCredentialVault } from "@/components/presenze/presenze-credential-vault";
 import PresenzeSquadrePage from "@/app/presenze/squadre/page";
 import PresenzeSyncPage from "@/app/presenze/sync/page";
 import { PRESENZE_COLLABORATOR_DETAIL_UPDATED_MESSAGE } from "@/lib/presenze-collaborator-mapping";
@@ -3658,7 +3658,7 @@ describe("Presenze pages", () => {
   });
 
   test("creates a presenze credential from settings", async () => {
-    render(<PresenzeSettingsPage />);
+    render(<PresenzeCredentialVault />);
 
     fireEvent.change(screen.getByLabelText("Label"), { target: { value: "Admin Presenze" } });
     fireEvent.change(screen.getByLabelText("Username portale"), { target: { value: "admin.inaz" } });
@@ -3692,7 +3692,7 @@ describe("Presenze pages", () => {
       },
     ]);
 
-    render(<PresenzeSettingsPage />);
+    render(<PresenzeCredentialVault />);
 
     expect(await screen.findByText("Disattiva")).toBeInTheDocument();
     expect(screen.getByText(/Non verra usata dalle sync/i)).toBeInTheDocument();

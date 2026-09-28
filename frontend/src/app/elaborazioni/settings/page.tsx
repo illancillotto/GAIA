@@ -1,5 +1,5 @@
-import { ElaborazioniSettingsWorkspace } from "@/components/elaborazioni/settings-workspace";
+import { ElaborazioniSettingsEntry } from "@/components/elaborazioni/elaborazioni-settings-entry";
 
 export default function ElaborazioniSettingsPage() {
-  return <ElaborazioniSettingsWorkspace />;
+  return <ElaborazioniSettingsEntry />;
 }

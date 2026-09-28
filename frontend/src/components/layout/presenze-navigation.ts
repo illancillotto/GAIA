@@ -31,7 +31,7 @@ export const presenzeNavigationSections: NavigationSection[] = [
       { href: "/presenze/banca-ore", icon: DocumentIcon, label: "Banca ore", match: "prefix" },
       { href: "/presenze/configurazione", icon: LockIcon, label: "Configurazione", match: "prefix" },
       { href: "/presenze/whatsapp", icon: BellIcon, label: "Promemoria WhatsApp", match: "prefix" },
-      { href: "/presenze/settings", icon: DocumentIcon, label: "Settings", match: "prefix" },
+      { href: "/elaborazioni/settings#credenziali-inaz", icon: DocumentIcon, label: "Credenziali INAZ" },
     ],
   },
 ];

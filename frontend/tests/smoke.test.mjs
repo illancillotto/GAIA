@@ -137,7 +137,9 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(elaborazioniDashboardPage, /\/elaborazioni\/ade-alignment/);
   assert.match(elaborazioniDashboardPage, /getGateMobileSyncStatus/);
   assert.match(read("src/components/elaborazioni/gaia-mobile-sync-workspace.tsx"), /GAIA Mobile Sync/);
-  assert.match(elaborazioniSettingsPage, /ElaborazioniSettingsWorkspace/);
+  assert.match(elaborazioniSettingsPage, /ElaborazioniSettingsEntry/);
+  assert.match(read("src/components/elaborazioni/elaborazioni-settings-entry.tsx"), /ElaborazioniSettingsWorkspace/);
+  assert.match(read("src/components/elaborazioni/elaborazioni-settings-entry.tsx"), /credenziali-inaz/);
   assert.match(read("src/components/elaborazioni/settings-workspace.tsx"), /createCapacitasCredential/);
   assert.match(read("src/components/elaborazioni/settings-workspace.tsx"), /updateCapacitasCredential/);
   assert.match(read("src/components/elaborazioni/settings-workspace.tsx"), /listCapacitasCredentials/);

@@ -24,7 +24,7 @@ Il modulo Elaborazioni gestisce job batch: visure, ANPR, Capacitas, allineamento
 - `/elaborazioni/batches`: batch
 - `/elaborazioni/presenze-sync`: console operativa per sync Presenze INAZ, autosync, storico job e artefatti diagnostici
 - `/elaborazioni/capacitas`, `/elaborazioni/anpr`, `/elaborazioni/autodoc`: processi dedicati
-- `/elaborazioni/settings`: credenziali
+- `/elaborazioni/settings`: credenziali SISTER, WhiteCompany, Capacitas e Presenze INAZ (`#credenziali-inaz`)
 
 ## Prossimi passi
 
