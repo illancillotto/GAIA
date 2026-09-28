@@ -3,6 +3,23 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Poste Online - aggregazione contatori import worker (2026-09-28)
+
+- Hotspot unico: `_persist_scrape_payload` in `posta_online_sync.py`, nella
+  change Poste non ancora committata. Invarianti: identici sei contatori nel
+  `result_json`, valori `None` trattati come zero, stesso ordine di import,
+  stato, checkpoint e commit. Caratterizzati due batch con contatori misti.
+- Prima: callable ciclomatica `59`, cognitiva `61`, LOC `66`; file LOC `503`,
+  somme ciclomatica `194`, cognitiva `226`, 18 callable. Dopo: callable
+  `45/47/65`; file `502/180/212`, 18 callable. Nessuna violation spostata o
+  introdotta: `IMPROVED` sulla metrica obiettivo e sugli aggregati.
+- 39 test worker mirati passati; coverage di `posta_online_sync.py` 100%
+  statement e branch (`311/311`, `70/70`); Ruff dei due file toccati passato.
+  Ratchet mirato contro `HEAD` ancora rosso con 12 finding nel file, ma i
+  valori di questo callable sono diminuiti. Baseline ed eccezioni invariate,
+  diff baseline nullo. Prossima azione separata: una slice sul workflow di
+  ripresa o persistenza restante, non una baseline che assorba il debito.
+
 ### Catasto - caratterizzazione AnagraficaBulkPanel (2026-09-28)
 
 - Audit separato del ratchet residuo: la baseline letta al merge-base
@@ -52,6 +69,193 @@ blocco verificato e prima di chiudere un goal.
   slice deve caratterizzare i rami eseguibili residui e valutare separatamente
   quelli irraggiungibili; non abbassare la policy coverage o spostare il debito
   in un componente adiacente. Nessun refactoring runtime avviato.
+
+### Accessi - lookup utente amministrativo (2026-09-28)
+
+- Hotspot unico: controllo utente esistente/404 ripetuto nei route handler di
+  `admin_users.py`; confronto con la baseline del merge-base `5915305d`.
+- Invarianti: stessi endpoint, autorizzazioni, `404 User not found`, ordine delle
+  verifiche, revoca QGIS e transazioni. Estratto `_get_existing_user` e riusato
+  dagli otto handler che duplicavano il lookup.
+- Prima: file LOC `272`, ciclomatica aggregata `43`, cognitiva aggregata `30`;
+  `delete_user` LOC `12`, `patch_user_modules` ciclomatica `3`, cognitiva `2`,
+  LOC `34`. Dopo: file LOC `261`, ciclomatica `37`, cognitiva `23`;
+  `delete_user` LOC `10`, `patch_user_modules` ciclomatica `2`, cognitiva `1`,
+  LOC `32`. Il nuovo helper e sotto soglia (`2/1/5`), senza debt transfer:
+  `IMPROVED`.
+- Test `test_user_management`, `test_gis_platform_api` e
+  `test_gis_qgis_desktop_access` passano prima e dopo; coverage del file
+  modificato `100%` statement e branch (dopo: 107/107 e 18/18).
+  Ruff `check` passa; il format-check completo rileva solo layout legacy
+  estraneo alla slice. Ratchet mirato al file contro `5915305d`: zero finding.
+  Baseline ed eccezioni invariate; diff baseline nullo.
+- Debito residuo: la violation legacy sui 13 parametri di
+  `patch_user_modules` resta invariata. Il ratchet globale non e attribuibile
+  a questa slice per le modifiche Catasto, GIS, Poste/Ruolo e worker concorrenti.
+  Nessun secondo hotspot avviato.
+
+### Poste Online - validazione tabella destinatario (2026-09-24)
+
+- Hotspot unico: `_has_registered_mail_detail_table` nel client worker Poste;
+  merge-base autorevole `5e4f57187f24ad2097ed36a627cec4d0732bea96`.
+- Prima: ciclomatica `9`, cognitiva `12`, LOC `9`, nesting `2`; file con 39
+  callable, somma ciclomatica `205`, cognitiva `267`, LOC `577`.
+- Invarianti: la prima tabella `id=destinatario` valida il dettaglio solo se
+  contiene una riga con almeno quattro celle, seconda cella diversa da
+  `servizio` e nome/indirizzo non vuoti; HTML entity e tag interni mantenuti.
+  Test `test_posta_online_client.py` caratterizzano il parser e il fetch.
+- Slice: scansione lazy delle righe tramite `any`, senza nuovo helper o
+  modifica del contratto di `fetch_detail_html`; caratterizzata anche la
+  riga intestazione seguita da un destinatario valido.
+- Dopo: ciclomatica `8`, cognitiva `7`, LOC `9`, nesting `1`; file con 39
+  callable, somma ciclomatica `204` (-1), cognitiva `262` (-5), LOC `577`
+  (invariata). Nessuna violation trasferita: `IMPROVED`.
+- Verifiche: 20 test client passati; coverage del runtime 100% statement
+  (425/425) e branch (130/130); Ruff lint del runtime e `git diff --check`
+  passati. Il file di test conserva rilievi Ruff preesistenti. Ratchet del
+  client contro il merge-base ancora rosso con 12 finding; questo callable
+  resta sopra la baseline `1/0/2/0` con `8/7/9/1`. Baseline ed eccezioni
+  invariate, diff baseline nullo. Nessun commit, deploy o avvio del job 9.
+- Prossima azione separata: un ulteriore singolo hotspot Poste dal ratchet;
+  non trattato in questa iterazione.
+
+### Poste Online - upsert raccomandata, hotspot dedicato (2026-09-24)
+
+- Perimetro unico: `_upsert_posta_online_registered_mail` in
+  `backend/app/modules/ruolo/tributi_repositories.py`; base autorevole
+  `5e4f57187f24ad2097ed36a627cec4d0732bea96` (`origin/main`).
+- Prima: callable ciclomatica `23`, cognitiva `34`, LOC `73`, nesting `4`,
+  parametri `5`; file con 177 callable, ciclomatica totale `1206`, cognitiva
+  totale `1424`, LOC `3695`. La violation file-level LOC e gia legacy.
+- Invarianti: nessun cambio di import, commit/flush, match automatico o
+  `preserve_associations`; gli `avviso_ids` della sola associazione manuale
+  sono accettati solo se lista, UUID invalidi ignorati, nessun fallback
+  aggiunto dall'`avviso_id` principale. Test di caratterizzazione Ruolo/Poste
+  gia presenti, incluso ID manuale invalido.
+- Slice: appiattito in-place il parsing degli UUID manuali con lo stesso
+  trattamento di `TypeError` e `ValueError`, senza nuovi helper.
+- Dopo: callable ciclomatica `20`, cognitiva `25`, LOC `72`, nesting `2`,
+  parametri `5`; file con 177 callable, ciclomatica totale `1203` (-3),
+  cognitiva totale `1415` (-9), LOC `3694` (-1). Nessuna violation trasferita:
+  `IMPROVED`, pur restando due violation error-level sul callable.
+- Verifiche: suite Poste e Ruolo passata; repository al 100% statement
+  (1862/1862) e branch (724/724). Ruff check del runtime passato;
+  `git diff --check` passato. Ratchet del file contro il merge-base ancora
+  rosso con 19 finding; questo callable e a `20/25/72/2/5` contro
+  `10/9/53/1/4` alla base. Baseline ed eccezioni invariate; diff baseline
+  nullo. Nessuna failure nuova, commit, deploy o avvio del job 9.
+- Prossima azione separata: scegliere un altro singolo hotspot dal ratchet
+  Poste; non estendere questa slice all'intero repository Ruolo.
+
+### Poste Online - validazione ID invii, hotspot dedicato (2026-09-24)
+
+- Perimetro unico: `PostaOnlineRegisteredMailSyncJobCreateRequest.validate_payload`
+  in `backend/app/modules/elaborazioni/posta_online/schemas.py`; base
+  `5e4f57187f24ad2097ed36a627cec4d0732bea96` (`origin/main`).
+- Prima: callable ciclomatica `16`, cognitiva `24`, LOC `13`, nesting `2`;
+  file con 4 callable, ciclomatica totale `28`, cognitiva totale `35`, LOC `95`.
+- Invarianti: annualita normalizzate prima del controllo delay e degli ID;
+  `shipment_ids=None` distinto da lista vuota; strip degli ID, almeno quattro
+  cifre secondo `str.isdigit`, univocita e identico messaggio d'errore.
+  Test in `test_elaborazioni_posta_online.py`, integrati con casi vuoto/corto.
+- Slice: estratta solo la normalizzazione pura degli ID, chiamata nello stesso
+  punto del model validator; caratterizzati anche input vuoto e ID corto.
+- Dopo: `validate_payload` ciclomatica `8`, cognitiva `8`, LOC `10`, nesting
+  `1`; `_normalize_shipment_ids` `9/11/9/1`, sotto soglia error-level. File
+  con 5 callable, ciclomatica totale `29` (+1), cognitiva totale `30` (-5),
+  LOC `101` (+6). La violation error-level del callable principale e rimossa;
+  la cognitiva aggregata cala senza trasferire violation: `IMPROVED`, con
+  lieve aumento ciclomatico aggregato esplicitamente visibile.
+- Verifiche: test di caratterizzazione passato prima della modifica; suite
+  Poste passata dopo, coverage dello schema 100% statement (97/97) e branch
+  (14/14). Ruff check di schema e relativo test passato; `git diff --check`
+  passato. Ratchet dello schema contro il merge-base ancora rosso con tre
+  finding (`8/8/10` contro `7/7/8`). Il format check dell'intero schema
+  resta rosso per righe legacy non riformattate; il nuovo helper e formattato.
+  Baseline ed eccezioni invariate, diff baseline nullo.
+- Debito residuo: tre finding dello schema e gli altri hotspot della feature
+  Poste; nessun commit, deploy o avvio del job 9. Prossima azione separata:
+  selezionare un solo ulteriore hotspot dal ratchet complessivo.
+
+### Poste Online - retry HTTP, hotspot dedicato (2026-09-24)
+
+- Perimetro unico: `PostaOnlineBrowserClient._request_with_backoff` in
+  `modules/elaborazioni/worker/posta_online_client.py`; base autorevole
+  `5e4f57187f24ad2097ed36a627cec4d0732bea96` (`origin/main`).
+- Prima: callable ciclomatica `11`, cognitiva `20`, LOC `22`, nesting `4`;
+  file con 39 callable, ciclomatica totale `208`, cognitiva totale `271`,
+  LOC `582`.
+- Invarianti: `max_retries + 1` tentativi, retry soltanto per timeout/429/5xx
+  previsti, `Retry-After` invariato, stesso tipo e testo degli errori,
+  chaining dell'ultimo timeout, nessuna richiesta aggiuntiva. Test esistenti
+  in `test_posta_online_client.py` e `test_posta_online_client_branch_closure.py`.
+- Slice: appiattiti i rami con uscita immediata per errori terminali; nessun
+  nuovo helper o cambio di politica di retry.
+- Dopo: callable ciclomatica `8`, cognitiva `16`, LOC `17`, nesting `4`;
+  file con 39 callable, ciclomatica totale `205` (-3), cognitiva totale
+  `267` (-4), LOC `577` (-5). Nessuna violation trasferita: `IMPROVED`.
+- Verifiche: 20 test client passati, coverage del file 100% statement
+  (429/429) e branch (134/134); Ruff check del file passato. Ratchet del
+  solo client contro il merge-base ancora rosso con 12 finding, di cui
+  questo callable resta a `8/16/17/4` contro `7/9/13/2` alla base.
+  Baseline ed eccezioni invariate; diff baseline nullo. I 64 finding della
+  feature complessiva e il gate di stile restano da risolvere in iterazioni
+  separate. Nessun commit, deploy o avvio del job 9.
+- Prossima azione separata: selezionare un ulteriore singolo hotspot Poste
+  dal ratchet, poi ripetere coverage e confronto autorevole.
+
+### Poste Online - gate di rilascio (2026-09-24)
+
+- `make test-worker` passato: 100% statement/branch su client Poste, sync e
+  `worker.py`; totale worker 99% per due file SISTER estranei.
+- Suite backend Poste e Ruolo passate: 100% statement/branch sui tre runtime
+  backend modificati, dopo due casi di test aggiunti per il job senza
+  credenziale esplicita e la raccomandata associata a un avviso diverso.
+  Per il run combinato si precarica il `pypdf` reale: gli stub delle suite
+  collidono se Pytest le colleziona senza preload.
+- Workspace Poste frontend: 12 test passati, 100% statement/branch/funzioni/
+  righe; typecheck passato. `git diff --check` passato.
+- Stop: ratchet mirato dei sette runtime Poste contro `origin/main` con 64
+  finding; `make lint-backend QUALITY_PYTHON=backend/.venv/bin/python` con 52
+  rilievi Ruff sui file cambiati. Non sono stati aggiornati baseline o
+  eccezioni. Il checkout include inoltre una modifica Catasto estranea:
+  nessun commit o deploy finche i gate non sono conformi e il rilascio non
+  isola la change Poste. Il job CED 9 resta inattivo.
+
+### Poste Online - persistenza scrape, hotspot dedicato (2026-09-24)
+
+- Perimetro unico: `_persist_scrape_payload` in `modules/elaborazioni/worker/posta_online_sync.py`.
+  Base autorevole `5e4f57187f24ad2097ed36a627cec4d0732bea96` (`origin/main`);
+  worktree Poste gia modificato e modifica Catasto estranea preservati.
+- Prima: callable ciclomatica `75`, cognitiva `86`, LOC `101`, parametri `7`;
+  file con 15 callable, somma ciclomatica `191`, somma cognitiva `229`, LOC `496`.
+- Invarianti: import dei dettagli in batch da 25 con commit per batch; contatti
+  importati solo quando mancano dettagli e `include_details` e falso; errori
+  di import fail-hard; conteggi, checkpoint, round, cooldown, status e formato
+  del risultato invariati; nessuna modifica ad associazioni, API o schema.
+- Test di caratterizzazione esistenti: `test_posta_online_sync_branch_closure.py`
+  e `test_worker.py`; slice prevista: separare import transazionale
+  e calcolo degli ID ancora da recuperare dalla finalizzazione del job.
+- Dopo: `_persist_scrape_payload` ciclomatica `59`, cognitiva `61`, LOC `66`;
+  i tre helper di import dettagli, import contatti e ID residui sono sotto
+  soglia error-level. File: 18 callable, ciclomatica totale `194` (+3),
+  cognitiva totale `226` (-3), LOC `503` (+7). Riduzione reale della metrica
+  cognitiva senza trasferire violation error-level: `IMPROVED`, pur con il
+  piccolo aumento ciclomatico aggregato esplicitamente visibile.
+- Verifiche: 37 test worker mirati passati; coverage `posta_online_sync.py`
+  100% statement (310/310) e branch (70/70); `make quality-test`: 76 passed;
+  Ruff lint sul file passato. Il format check del file non passa per molte
+  righe preesistenti non formattate; non e stato eseguito un format di massa.
+  `git diff --check` passato. Ratchet del file contro `origin/main` ancora
+  rosso per regressioni della feature Poste rispetto al merge-base, incluso
+  questo callable (`14/13/46` alla base), e non attribuibile alla sola slice.
+  Nessuna baseline o eccezione aggiornata; diff baseline nullo.
+- Graphify worker code aggiornato; Graphify platform docs completato con
+  `chunk 1/1 done` e senza warning semantici.
+- Debito residuo: funzione principale ancora sopra soglia ciclomatica e
+  cognitiva, piu altri finding Poste e modifica Catasto estranea nel worktree.
+  Prossima azione separata: affrontare un solo ulteriore hotspot Poste dopo
+  review di questa slice e ripetere il ratchet complessivo.
 
 ### Verifica integrata QGIS Desktop e gestione utenti (2026-09-23)
 

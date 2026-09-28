@@ -166,6 +166,8 @@ def enqueue_posta_online_registered_mail_job(
     job = get_registered_mail_sync_job(db, job_id)
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job Poste Online non trovato")
+    if job.status == "paused" and isinstance(job.result_json, dict):
+        job.result_json = {**job.result_json, "recovery_rounds": 0, "retry_not_before": None}
     job.status = "pending"
     job.started_at = None
     job.completed_at = None

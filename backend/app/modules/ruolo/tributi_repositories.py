@@ -2509,6 +2509,7 @@ def import_posta_online_registered_mails(
     content: bytes,
     annualita: list[int] | None = None,
     triggered_by: int | None = None,
+    preserve_associations: bool = False,
 ) -> RuoloTributiPostaOnlineImportJob:
     selected_years = _normalise_posta_online_years(annualita)
     started_at = datetime.now(UTC)
@@ -2542,6 +2543,7 @@ def import_posta_online_registered_mails(
                         job=job,
                         row=row,
                         annualita=selected_years,
+                        preserve_associations=preserve_associations,
                     )
             except Exception as exc:
                 errors += 1
@@ -2835,8 +2837,9 @@ def _upsert_posta_online_registered_mail(
     job: RuoloTributiPostaOnlineImportJob,
     row: dict[str, Any],
     annualita: list[int],
+    preserve_associations: bool = False,
 ) -> RuoloTributiRegisteredMail:
-    automatic_match = _match_registered_mail_avviso(db, row=row, annualita=annualita)
+    automatic_match = None if preserve_associations else _match_registered_mail_avviso(db, row=row, annualita=annualita)
     source_shipment_id = _posta_online_limited_text(row.get("source_shipment_id"), 80) or "missing"
     existing = db.execute(
         select(RuoloTributiRegisteredMail).where(
@@ -2852,11 +2855,12 @@ def _upsert_posta_online_registered_mail(
     )
     db.add(mail)
 
-    match = resolve_import_match(db, existing, automatic_match)
-    avviso = match.get("avviso")
     mail.import_job_id = job.id
-    mail.avviso_id = avviso.id if avviso is not None else None
-    mail.subject_id = avviso.subject_id if avviso is not None else None
+    if not preserve_associations:
+        match = resolve_import_match(db, existing, automatic_match)
+        avviso = match.get("avviso")
+        mail.avviso_id = avviso.id if avviso is not None else None
+        mail.subject_id = avviso.subject_id if avviso is not None else None
     mail.shipment_name = _posta_online_limited_text(row.get("shipment_name"), 300)
     mail.service = _posta_online_limited_text(row.get("service"), 120)
     mail.status_label = _posta_online_limited_text(row.get("status_label"), 120)
@@ -2869,27 +2873,34 @@ def _upsert_posta_online_registered_mail(
     mail.tracking_number = _posta_online_limited_text(row.get("tracking_number"), 40)
     mail.price_amount = row.get("price_amount")
     mail.annualita_json = annualita
-    mail.match_status = match["match_status"]
-    mail.match_score = match.get("match_score")
-    mail.match_reason = match.get("match_reason")
-    mail.anomaly_key = None if mail.match_status == RuoloTributiRegisteredMailMatchStatus.MATCHED.value else match.get("anomaly_key")
+    if not preserve_associations:
+        mail.match_status = match["match_status"]
+        mail.match_score = match.get("match_score")
+        mail.match_reason = match.get("match_reason")
+        mail.anomaly_key = None if mail.match_status == RuoloTributiRegisteredMailMatchStatus.MATCHED.value else match.get("anomaly_key")
+    elif existing is None:
+        mail.match_status = RuoloTributiRegisteredMailMatchStatus.UNMATCHED.value
+        mail.match_reason = "Associazione non valutata durante recupero Poste"
+        mail.anomaly_key = "association_not_evaluated"
     association = manual_association(existing)
     associated_ids: set[uuid.UUID] = set()
-    if isinstance(association, dict) and isinstance(association.get("avviso_ids"), list):
-        for value in association["avviso_ids"]:
-            try:
+    values = association.get("avviso_ids") if isinstance(association, dict) else None
+    if isinstance(values, list):
+        for value in values:
+            with suppress(TypeError, ValueError):
                 associated_ids.add(uuid.UUID(str(value)))
-            except (TypeError, ValueError):
-                continue
-    mail.recovery_status = _registered_mail_recovery_status(
-        db, avviso=avviso, avviso_ids=associated_ids
-    )
+    if not preserve_associations:
+        mail.recovery_status = _registered_mail_recovery_status(
+            db, avviso=avviso, avviso_ids=associated_ids
+        )
+    elif existing is None:
+        mail.recovery_status = RuoloTributiRegisteredMailRecoveryStatus.PENDING.value
     mail.raw_payload_json = preserve_manual_association({
         "normalised_recipient_name": _normalise_posta_online_text(row.get("recipient_name")),
         "normalised_recipient_address": _normalise_posta_online_address(row.get("recipient_address")),
         "normalised_recipient_city": _extract_posta_online_city(row.get("recipient_city"), row.get("recipient_address")),
         "raw": row.get("raw"),
-        "candidate_avviso_ids": [str(candidate.id) for candidate in automatic_match.get("candidates", [])],
+        "candidate_avviso_ids": [str(candidate.id) for candidate in (automatic_match or {}).get("candidates", [])],
     }, existing)
     db.flush()
     return mail

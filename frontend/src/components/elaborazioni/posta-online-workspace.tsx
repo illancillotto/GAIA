@@ -40,6 +40,7 @@ type CredentialForm = {
 function formatJobStatus(status: string): string {
   if (status === "pending") return "In coda";
   if (status === "queued_resume") return "Ripresa in coda";
+  if (status === "paused") return "Ripresa sospesa";
   if (status === "processing") return "In esecuzione";
   if (status === "succeeded") return "Completato";
   if (status === "completed_with_errors") return "Completato con anomalie";
@@ -49,7 +50,7 @@ function formatJobStatus(status: string): string {
 
 function jobStatusClassName(status: string): string {
   if (status === "succeeded") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (status === "completed_with_errors" || status === "queued_resume" || status === "processing" || status === "pending") {
+  if (status === "completed_with_errors" || status === "queued_resume" || status === "paused" || status === "processing" || status === "pending") {
     return "border-amber-200 bg-amber-50 text-amber-700";
   }
   if (status === "failed") return "border-red-200 bg-red-50 text-red-700";
@@ -443,7 +444,7 @@ export function ElaborazioniPostaOnlineWorkspace({ embedded = false }: PostaOnli
                           </td>
                           <td className="px-4 py-3 text-gray-500">{formatDateTime(job.updated_at)}</td>
                           <td className="px-4 py-3 text-right">
-                            {job.mode === "registered_mails" && ["failed", "completed_with_errors", "succeeded"].includes(job.status) ? (
+                            {job.mode === "registered_mails" && ["failed", "completed_with_errors", "succeeded", "paused"].includes(job.status) ? (
                               <button className="btn-secondary" disabled={busy === `rerun-${job.id}`} onClick={() => void handleRerunJob(job.id)} type="button">
                                 Rilancia
                               </button>

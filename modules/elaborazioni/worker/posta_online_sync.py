@@ -1,23 +1,29 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import json
 import logging
 import os
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from sqlalchemy.orm import sessionmaker
 
 from app.models.posta_online import PostaOnlineCredential, PostaOnlineRegisteredMailSyncJob
-from app.modules.elaborazioni.posta_online.schemas import PostaOnlineRegisteredMailSyncJobCreateRequest
+from app.modules.elaborazioni.posta_online.schemas import (
+    PostaOnlineRegisteredMailSyncJobCreateRequest,
+)
 from app.services.elaborazioni_posta_online import (
     decrypt_posta_online_password,
     mark_credential_error,
     mark_credential_used,
     pick_credential,
 )
-from posta_online_client import PostaOnlineBrowserClient, PostaOnlineScrapeConfig
+from posta_online_client import (
+    PostaOnlineBrowserClient,
+    PostaOnlineCircuitOpen,
+    PostaOnlineScrapeConfig,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +35,9 @@ POSTA_ONLINE_RESUME_STORAGE_PATH = Path(
 )
 _RESUME_STATE_KEY = "resume_state"
 _RESUMABLE_SCRAPE_STAGES = {"scraping", "scraped"}
+_POSTE_RECOVERY_COOLDOWN = timedelta(minutes=20)
+_POSTE_MAX_AUTOMATIC_ROUNDS = 3
+_POSTE_IMPORT_BATCH_SIZE = 25
 
 
 async def run_posta_online_job_by_id(
@@ -78,7 +87,7 @@ async def run_posta_online_credential_test_job_by_id(
         credential_id = int(payload.get("credential_id") or job.credential_id or 0)
         credential = db.get(PostaOnlineCredential, credential_id)
         if credential is None:
-            completed_at = datetime.now(timezone.utc)
+            completed_at = datetime.now(UTC)
             job.status = "failed"
             job.error_detail = "Credenziale Poste Online non trovata"
             job.completed_at = completed_at
@@ -90,7 +99,7 @@ async def run_posta_online_credential_test_job_by_id(
         min_delay_ms = int(payload.get("min_delay_ms") or credential.min_delay_ms)
         max_delay_ms = int(payload.get("max_delay_ms") or credential.max_delay_ms)
 
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
     try:
         config = PostaOnlineScrapeConfig(
             min_delay_ms=min_delay_ms,
@@ -105,7 +114,7 @@ async def run_posta_online_credential_test_job_by_id(
         async with _client_class(config) as client:
             await client.login(username, password)
 
-        completed_at = datetime.now(timezone.utc)
+        completed_at = datetime.now(UTC)
         with session_factory() as db:
             job = db.get(PostaOnlineRegisteredMailSyncJob, job_id)
             if job is not None:
@@ -121,7 +130,7 @@ async def run_posta_online_credential_test_job_by_id(
             mark_credential_used(db, credential_id)
             db.commit()
     except Exception as exc:
-        completed_at = datetime.now(timezone.utc)
+        completed_at = datetime.now(UTC)
         logger.exception("Job test Poste Online %s fallito", job_id)
         with session_factory() as db:
             job = db.get(PostaOnlineRegisteredMailSyncJob, job_id)
@@ -156,6 +165,10 @@ async def run_posta_online_registered_mail_job_by_id(
             logger.warning("Job Poste Online %s non trovato", job_id)
             return
         payload = PostaOnlineRegisteredMailSyncJobCreateRequest.model_validate(job.payload_json or {})
+        if getattr(payload, "shipment_ids", None) is None and resume_payload and resume_payload.get("archive_ids"):
+            payload.shipment_ids = list(resume_payload["archive_ids"])
+            job.payload_json = payload.model_dump(mode="json")
+            db.commit()
         if has_complete_scrape_checkpoint:
             credential_id = _resolved_credential_id(job, payload)
             username = ""
@@ -169,7 +182,7 @@ async def run_posta_online_registered_mail_job_by_id(
             max_delay_ms = payload.max_delay_ms or credential.max_delay_ms
             username = credential.username
 
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
     try:
         if has_complete_scrape_checkpoint:
             logger.info("Job Poste Online %s: riuso checkpoint scrape completo", job_id)
@@ -207,6 +220,13 @@ async def run_posta_online_registered_mail_job_by_id(
                 started_at=started_at,
             )
             resumed_from_checkpoint = resume_payload is not None
+    except PostaOnlineCircuitOpen as exc:
+        _, partial_payload = _load_resume_checkpoint(session_factory=session_factory, job_id=job_id)
+        if not partial_payload or not partial_payload.get("details"):
+            _pause_registered_mail_job(session_factory=session_factory, job_id=job_id, reason=str(exc))
+            return
+        scrape_payload = partial_payload
+        resumed_from_checkpoint = True
     except Exception as exc:
         logger.exception("Job Poste Online %s fallito durante login/scrape", job_id)
         with session_factory() as db:
@@ -214,7 +234,7 @@ async def run_posta_online_registered_mail_job_by_id(
             if job is not None:
                 job.status = "failed"
                 job.error_detail = str(exc)
-                job.completed_at = datetime.now(timezone.utc)
+                job.completed_at = datetime.now(UTC)
                 result_json = {
                     "error": str(exc),
                     "started_at": started_at.isoformat(),
@@ -246,7 +266,7 @@ async def run_posta_online_registered_mail_job_by_id(
             if job is not None:
                 job.status = "failed"
                 job.error_detail = str(exc)
-                job.completed_at = datetime.now(timezone.utc)
+                job.completed_at = datetime.now(UTC)
                 result_json = {
                     "error": str(exc),
                     "started_at": started_at.isoformat(),
@@ -276,6 +296,7 @@ async def _scrape_posta_online_payload(
         max_delay_ms=max_delay_ms,
         max_pages=payload.max_pages,
         max_details=payload.max_details,
+        shipment_ids=getattr(payload, "shipment_ids", None) or (resume_payload or {}).get("archive_ids") or None,
         include_contacts=payload.include_contacts,
         include_details=payload.include_details,
         continue_on_error=payload.continue_on_error,
@@ -300,38 +321,121 @@ def _persist_scrape_payload(
         job = db.get(PostaOnlineRegisteredMailSyncJob, job_id)
         if job is None:
             raise RuntimeError(f"Job Poste Online {job_id} non trovato durante persistenza")
-        import_job = _import_tributi_registered_mails(
-            db,
-            filename=f"posta-online-worker-job-{job_id}.json",
-            content=json.dumps(scrape_payload).encode("utf-8"),
-            annualita=requested_payload.get("annualita"),
-            triggered_by=job.requested_by_user_id,
+        details = scrape_payload.get("details") or []
+        contacts = scrape_payload.get("contacts") or []
+        import_jobs = _import_scraped_details(db, job_id, job.requested_by_user_id, requested_payload, details)
+        if not details and contacts and not requested_payload.get("include_details", True):
+            import_jobs.append(_import_scraped_contacts(db, job_id, job.requested_by_user_id, requested_payload, contacts))
+        if not details and not contacts and not scrape_payload.get("errors"):
+            raise RuntimeError("Job Poste senza dettagli validi e senza errori espliciti")
+        remaining_ids = _remaining_detail_ids(requested_payload, scrape_payload, details)
+        rounds = int(_result_json(job.result_json).get("recovery_rounds") or 0)
+        incomplete = bool(remaining_ids)
+        rounds += int(incomplete)
+        paused = incomplete and rounds >= _POSTE_MAX_AUTOMATIC_ROUNDS
+        completed_at = datetime.now(UTC)
+        status = ("paused" if paused else "queued_resume") if incomplete else (
+            "completed_with_errors" if scrape_payload.get("errors") or any(item.records_errors for item in import_jobs) else "succeeded"
         )
-        completed_at = datetime.now(timezone.utc)
-        status = "completed_with_errors" if scrape_payload.get("errors") or (import_job.records_errors or 0) > 0 else "succeeded"
         job.status = status
-        job.error_detail = None if status == "succeeded" else "Job completato con errori o anomalie"
-        job.completed_at = completed_at
+        job.error_detail = None if status == "succeeded" else "Dettagli Poste mancanti o anomalie di import"
+        job.completed_at = completed_at if not incomplete else None
+        resume_state = _result_resume_state(job.result_json)
+        record_counts = {
+            f"records_{kind}": sum(getattr(item, f"records_{kind}") or 0 for item in import_jobs)
+            for kind in ("total", "imported", "matched", "ambiguous", "unmatched", "errors")
+        }
         job.result_json = {
             "started_at": started_at.isoformat(),
             "completed_at": completed_at.isoformat(),
-            "tributi_import_job_id": str(import_job.id),
+            "tributi_import_job_id": str(import_jobs[-1].id) if import_jobs else None,
+            "tributi_import_job_ids": [str(item.id) for item in import_jobs],
             "archive_ids": scrape_payload.get("archive_ids", []),
             "details_scraped": len(scrape_payload.get("details") or []),
             "contacts_scraped": len(scrape_payload.get("contacts") or []),
             "scrape_errors": scrape_payload.get("errors", []),
             "resumed_from_checkpoint": resumed_from_checkpoint,
-            "records_total": import_job.records_total,
-            "records_imported": import_job.records_imported,
-            "records_matched": import_job.records_matched,
-            "records_ambiguous": import_job.records_ambiguous,
-            "records_unmatched": import_job.records_unmatched,
-            "records_errors": import_job.records_errors,
+            **record_counts,
+            "remaining_ids_count": len(remaining_ids),
+            "recovery_rounds": rounds,
+            "retry_not_before": (completed_at + _POSTE_RECOVERY_COOLDOWN).isoformat() if incomplete and not paused else None,
         }
-        mark_credential_used(db, credential_id)
+        if incomplete:
+            resume_state = resume_state or {
+                "stage": "scraped", "path": str(_resume_checkpoint_path(job_id))
+            }
+            resume_state["stage"] = "scraping"
+            job.result_json = {**job.result_json, _RESUME_STATE_KEY: resume_state}
+        else:
+            mark_credential_used(db, credential_id)
         db.commit()
-        _delete_resume_checkpoint(job_id)
+        if not incomplete:
+            _delete_resume_checkpoint(job_id)
         return dict(job.result_json or {})
+
+
+def _import_scraped_details(db, job_id, triggered_by, requested_payload, details):
+    import_jobs = []
+    for batch_index in range(0, len(details), _POSTE_IMPORT_BATCH_SIZE):
+        batch = details[batch_index : batch_index + _POSTE_IMPORT_BATCH_SIZE]
+        import_job = _import_tributi_registered_mails(
+            db,
+            filename=(
+                f"posta-online-worker-job-{job_id}.json" if len(details) <= _POSTE_IMPORT_BATCH_SIZE
+                else f"posta-online-worker-job-{job_id}-batch-{batch_index // _POSTE_IMPORT_BATCH_SIZE}.json"
+            ),
+            content=json.dumps({"details": batch}).encode("utf-8"),
+            annualita=requested_payload.get("annualita"),
+            triggered_by=triggered_by,
+            preserve_associations=requested_payload.get("preserve_associations", True),
+        )
+        if getattr(import_job, "status", "completed") == "failed":
+            raise RuntimeError(f"Import Poste batch {batch_index // _POSTE_IMPORT_BATCH_SIZE} fallito")
+        if (import_job.records_errors or 0) > 0:
+            raise RuntimeError(f"Import Poste batch {batch_index // _POSTE_IMPORT_BATCH_SIZE} incompleto")
+        import_jobs.append(import_job)
+        db.commit()
+    return import_jobs
+
+
+def _import_scraped_contacts(db, job_id, triggered_by, requested_payload, contacts):
+    import_job = _import_tributi_registered_mails(
+        db,
+        filename=f"posta-online-worker-job-{job_id}-contacts.json",
+        content=json.dumps({"contacts": contacts}).encode("utf-8"),
+        annualita=requested_payload.get("annualita"),
+        triggered_by=triggered_by,
+        preserve_associations=requested_payload.get("preserve_associations", True),
+    )
+    if getattr(import_job, "status", "completed") == "failed":
+        raise RuntimeError("Import contatti Poste fallito")
+    if (import_job.records_errors or 0) > 0:
+        raise RuntimeError("Import contatti Poste incompleto")
+    db.commit()
+    return import_job
+
+
+def _remaining_detail_ids(requested_payload, scrape_payload, details):
+    archive_ids = scrape_payload.get("archive_ids") or []
+    completed_ids = {str(item.get("idInvio")) for item in details if isinstance(item, dict)}
+    detail_ids = archive_ids[: requested_payload.get("max_details")] if requested_payload.get("max_details") else archive_ids
+    return [str(item) for item in detail_ids if str(item) not in completed_ids] if requested_payload.get("include_details", True) else []
+
+
+def _pause_registered_mail_job(*, session_factory: sessionmaker, job_id: int, reason: str) -> None:
+    with session_factory() as db:
+        job = db.get(PostaOnlineRegisteredMailSyncJob, job_id)
+        if job is None:
+            return
+        rounds = int(_result_json(job.result_json).get("recovery_rounds") or 0) + 1
+        result = _result_json(job.result_json)
+        result["recovery_rounds"] = rounds
+        result["retry_not_before"] = (datetime.now(UTC) + _POSTE_RECOVERY_COOLDOWN).isoformat()
+        job.result_json = result
+        job.status = "paused" if rounds >= _POSTE_MAX_AUTOMATIC_ROUNDS else "queued_resume"
+        job.error_detail = reason
+        job.started_at = None
+        db.commit()
 
 
 def _import_tributi_registered_mails(db, **kwargs):
@@ -402,7 +506,7 @@ def _write_resume_checkpoint(
     except OSError:
         logger.warning("Job Poste Online %s: checkpoint resume non scrivibile: %s", job_id, path, exc_info=True)
         return
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     details = scrape_payload.get("details") or []
     contacts = scrape_payload.get("contacts") or []
     archive_ids = scrape_payload.get("archive_ids") or []
@@ -424,6 +528,10 @@ def _write_resume_checkpoint(
         result_json.setdefault("started_at", started_at.isoformat())
         result_json[_RESUME_STATE_KEY] = state
         job.result_json = result_json
+        payload = _result_json(getattr(job, "payload_json", None))
+        if archive_ids and payload.get("shipment_ids") is None:
+            payload["shipment_ids"] = list(archive_ids)
+            job.payload_json = payload
         try:
             db.commit()
         except Exception:

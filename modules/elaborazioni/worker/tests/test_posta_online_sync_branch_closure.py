@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from types import SimpleNamespace
+from uuid import uuid4
+
+import pytest
 
 import posta_online_sync
+from posta_online_client import PostaOnlineCircuitOpen
 
 
 def run(coro):
@@ -206,3 +211,174 @@ def test_registered_persist_failure_with_missing_and_non_resumable_job(monkeypat
     assert final_job.status == "failed"
     assert final_job.result_json["error"] == "persist failed"
     assert "resume_state" not in final_job.result_json
+
+
+def test_partial_import_keeps_checkpoint_and_schedules_resume(monkeypatch) -> None:
+    job = _registered_job(result_json={"resume_state": {"stage": "scraping", "path": "/tmp/checkpoint"}})
+    job.requested_by_user_id = None
+    imported = []
+
+    class ImportJob:
+        id = uuid4()
+        status = "completed"
+        records_total = 1
+        records_imported = 1
+        records_matched = 0
+        records_ambiguous = 0
+        records_unmatched = 1
+        records_errors = 0
+
+    def fake_import(_db, **kwargs):
+        imported.append(kwargs)
+        return ImportJob()
+
+    monkeypatch.setattr(posta_online_sync, "_import_tributi_registered_mails", fake_import)
+    result = posta_online_sync._persist_scrape_payload(
+        session_factory=SessionFactory([FakeDb([job])]),
+        job_id=9,
+        credential_id=7,
+        requested_payload={"annualita": [2022, 2023]},
+        scrape_payload={"archive_ids": ["1234", "5678"], "details": [{"idInvio": "1234", "html": "valid"}]},
+        started_at=datetime.now(UTC),
+    )
+    assert job.status == "queued_resume"
+    assert result["remaining_ids_count"] == 1
+    assert result["resume_state"]["stage"] == "scraping"
+    assert imported[0]["preserve_associations"] is True
+
+    paused = _registered_job(result_json={"recovery_rounds": 2})
+    posta_online_sync._pause_registered_mail_job(
+        session_factory=SessionFactory([FakeDb([paused])]), job_id=9, reason="HTTP 500"
+    )
+    assert paused.status == "paused"
+    assert paused.result_json["recovery_rounds"] == 3
+
+
+def test_persist_scrape_payload_sums_import_batch_counters(monkeypatch) -> None:
+    job = _registered_job()
+    job.requested_by_user_id = None
+    batches = [
+        SimpleNamespace(id=uuid4(), records_total=2, records_imported=1, records_matched=None,
+                        records_ambiguous=1, records_unmatched=0, records_errors=None),
+        SimpleNamespace(id=uuid4(), records_total=3, records_imported=2, records_matched=2,
+                        records_ambiguous=0, records_unmatched=1, records_errors=0),
+    ]
+    monkeypatch.setattr(posta_online_sync, "_import_scraped_details", lambda *_args: batches)
+    monkeypatch.setattr(posta_online_sync, "mark_credential_used", lambda *_args: None)
+    monkeypatch.setattr(posta_online_sync, "_delete_resume_checkpoint", lambda *_args: None)
+
+    result = posta_online_sync._persist_scrape_payload(
+        session_factory=SessionFactory([FakeDb([job])]), job_id=9, credential_id=7,
+        requested_payload={}, scrape_payload={"details": [{"idInvio": "1234"}]},
+        started_at=datetime.now(UTC),
+    )
+
+    assert result["tributi_import_job_ids"] == [str(item.id) for item in batches]
+    assert {key: result[key] for key in (
+        "records_total", "records_imported", "records_matched", "records_ambiguous",
+        "records_unmatched", "records_errors",
+    )} == {
+        "records_total": 5, "records_imported": 3, "records_matched": 2,
+        "records_ambiguous": 1, "records_unmatched": 1, "records_errors": 0,
+    }
+
+
+def test_circuit_breaker_keeps_partial_progress(monkeypatch) -> None:
+    _prepare_registered_runner(monkeypatch)
+    payload = {"archive_ids": ["1234", "5678"], "details": [{"idInvio": "1234", "html": "valid"}]}
+    monkeypatch.setattr(posta_online_sync, "_load_resume_checkpoint", lambda **_kwargs: (None, payload))
+
+    async def stop_scrape(**_kwargs):
+        raise PostaOnlineCircuitOpen("Poste unavailable")
+
+    persisted = []
+    monkeypatch.setattr(posta_online_sync, "_scrape_posta_online_payload", stop_scrape)
+    monkeypatch.setattr(posta_online_sync, "_persist_scrape_payload", lambda **kwargs: persisted.append(kwargs))
+    job = _registered_job()
+    run(posta_online_sync.run_posta_online_registered_mail_job_by_id(
+        job_id=9, session_factory=SessionFactory([FakeDb([job])]), headless=True
+    ))
+    assert persisted[0]["scrape_payload"] == payload
+
+    monkeypatch.setattr(posta_online_sync, "_load_resume_checkpoint", lambda **_kwargs: (None, {"archive_ids": ["1234"]}))
+    paused = []
+    monkeypatch.setattr(posta_online_sync, "_pause_registered_mail_job", lambda **kwargs: paused.append(kwargs))
+    run(posta_online_sync.run_posta_online_registered_mail_job_by_id(
+        job_id=9, session_factory=SessionFactory([FakeDb([_registered_job()])]), headless=True
+    ))
+    assert paused[0]["job_id"] == 9
+
+
+def test_import_errors_and_contacts_only(monkeypatch) -> None:
+    job = _registered_job()
+    job.requested_by_user_id = None
+
+    class ImportJob:
+        id = uuid4()
+        status = "failed"
+        records_total = 0
+        records_imported = 0
+        records_matched = 0
+        records_ambiguous = 0
+        records_unmatched = 0
+        records_errors = 1
+
+    monkeypatch.setattr(posta_online_sync, "_import_tributi_registered_mails", lambda *_args, **_kwargs: ImportJob())
+    with pytest.raises(RuntimeError, match="batch 0 fallito"):
+        posta_online_sync._persist_scrape_payload(
+            session_factory=SessionFactory([FakeDb([job])]), job_id=9, credential_id=7,
+            requested_payload={}, scrape_payload={"details": [{"idInvio": "1234", "html": "valid"}]},
+            started_at=datetime.now(UTC),
+        )
+    ImportJob.status = "completed"
+    with pytest.raises(RuntimeError, match="batch 0 incompleto"):
+        posta_online_sync._persist_scrape_payload(
+            session_factory=SessionFactory([FakeDb([job])]), job_id=9, credential_id=7,
+            requested_payload={}, scrape_payload={"details": [{"idInvio": "1234", "html": "valid"}]},
+            started_at=datetime.now(UTC),
+        )
+    ImportJob.status = "failed"
+    with pytest.raises(RuntimeError, match="contatti Poste fallito"):
+        posta_online_sync._persist_scrape_payload(
+            session_factory=SessionFactory([FakeDb([job])]), job_id=9, credential_id=7,
+            requested_payload={"include_details": False}, scrape_payload={"contacts": [{"id": "c"}]},
+            started_at=datetime.now(UTC),
+        )
+    with pytest.raises(RuntimeError, match="senza dettagli validi"):
+        posta_online_sync._persist_scrape_payload(
+            session_factory=SessionFactory([FakeDb([job])]), job_id=9, credential_id=7,
+            requested_payload={}, scrape_payload={}, started_at=datetime.now(UTC),
+        )
+
+    ImportJob.status = "completed"
+    with pytest.raises(RuntimeError, match="contatti Poste incompleto"):
+        posta_online_sync._persist_scrape_payload(
+            session_factory=SessionFactory([FakeDb([job])]), job_id=9, credential_id=7,
+            requested_payload={"include_details": False}, scrape_payload={"contacts": [{"id": "c"}]},
+            started_at=datetime.now(UTC),
+        )
+    ImportJob.records_errors = 0
+    monkeypatch.setattr(posta_online_sync, "mark_credential_used", lambda *_args: None)
+    result = posta_online_sync._persist_scrape_payload(
+        session_factory=SessionFactory([FakeDb([job])]), job_id=9, credential_id=7,
+        requested_payload={"include_details": False}, scrape_payload={"contacts": [{"id": "c"}]},
+        started_at=datetime.now(UTC),
+    )
+    assert result["records_errors"] == 0
+
+    posta_online_sync._pause_registered_mail_job(
+        session_factory=SessionFactory([FakeDb([None])]), job_id=9, reason="HTTP 500"
+    )
+
+
+def test_checkpoint_copies_discovered_ids_into_job_payload(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(posta_online_sync, "POSTA_ONLINE_RESUME_STORAGE_PATH", tmp_path)
+    job = _registered_job()
+    db = FakeDb([job])
+    posta_online_sync._write_resume_checkpoint(
+        session_factory=SessionFactory([db]), job_id=9,
+        scrape_payload={"archive_ids": ["1234", "5678"], "details": []},
+        stage="scraping", started_at=datetime.now(UTC),
+    )
+    assert job.payload_json["shipment_ids"] == ["1234", "5678"]
+    assert job.result_json["resume_state"]["archive_ids_count"] == 2

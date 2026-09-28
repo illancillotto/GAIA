@@ -17,7 +17,7 @@ class PostaOnlineCredentialCreate(BaseModel):
     max_delay_ms: int = Field(default=9000, ge=1000, le=120000)
 
     @model_validator(mode="after")
-    def validate_delay_range(self) -> "PostaOnlineCredentialCreate":
+    def validate_delay_range(self) -> PostaOnlineCredentialCreate:
         if self.max_delay_ms < self.min_delay_ms:
             raise ValueError("max_delay_ms non puo essere minore di min_delay_ms")
         return self
@@ -34,7 +34,7 @@ class PostaOnlineCredentialUpdate(BaseModel):
     max_delay_ms: int | None = Field(default=None, ge=1000, le=120000)
 
     @model_validator(mode="after")
-    def validate_delay_range(self) -> "PostaOnlineCredentialUpdate":
+    def validate_delay_range(self) -> PostaOnlineCredentialUpdate:
         if self.min_delay_ms is not None and self.max_delay_ms is not None and self.max_delay_ms < self.min_delay_ms:
             raise ValueError("max_delay_ms non puo essere minore di min_delay_ms")
         return self
@@ -63,7 +63,7 @@ class PostaOnlineCredentialTestJobCreateRequest(BaseModel):
     max_delay_ms: int | None = Field(default=None, ge=1000, le=120000)
 
     @model_validator(mode="after")
-    def validate_delay_range(self) -> "PostaOnlineCredentialTestJobCreateRequest":
+    def validate_delay_range(self) -> PostaOnlineCredentialTestJobCreateRequest:
         if self.min_delay_ms is not None and self.max_delay_ms is not None and self.max_delay_ms < self.min_delay_ms:
             raise ValueError("max_delay_ms non puo essere minore di min_delay_ms")
         return self
@@ -79,16 +79,31 @@ class PostaOnlineRegisteredMailSyncJobCreateRequest(BaseModel):
     min_delay_ms: int | None = Field(default=None, ge=1000, le=60000)
     max_delay_ms: int | None = Field(default=None, ge=1000, le=120000)
     continue_on_error: bool = True
+    shipment_ids: list[str] | None = None
+    preserve_associations: bool = True
 
     @model_validator(mode="after")
-    def validate_payload(self) -> "PostaOnlineRegisteredMailSyncJobCreateRequest":
+    def validate_payload(self) -> PostaOnlineRegisteredMailSyncJobCreateRequest:
         years = sorted({int(year) for year in self.annualita if year in {2022, 2023}})
         if not years:
             raise ValueError("annualita deve includere almeno 2022 o 2023")
         self.annualita = years
         if self.min_delay_ms is not None and self.max_delay_ms is not None and self.max_delay_ms < self.min_delay_ms:
             raise ValueError("max_delay_ms non puo essere minore di min_delay_ms")
+        if self.shipment_ids is not None:
+            self.shipment_ids = _normalize_shipment_ids(self.shipment_ids)
         return self
+
+
+def _normalize_shipment_ids(values: list[str]) -> list[str]:
+    ids = [value.strip() for value in values]
+    if (
+        not ids
+        or any(not value.isdigit() or len(value) < 4 for value in ids)
+        or len(ids) != len(set(ids))
+    ):
+        raise ValueError("shipment_ids deve contenere ID Poste numerici univoci")
+    return ids
 
 
 class PostaOnlineRegisteredMailSyncJobOut(BaseModel):

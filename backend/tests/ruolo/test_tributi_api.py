@@ -1195,6 +1195,46 @@ def test_tributi_import_pagamenti_rejects_bad_mapping_and_empty_files() -> None:
     assert missing_unmatched_response.status_code == 404
 
 
+def test_poste_recovery_import_preserves_existing_associations() -> None:
+    avviso_id = UUID(seed_avviso(anno=2022))
+    db = TestingSessionLocal()
+    existing = RuoloTributiRegisteredMail(
+        source_system="posta_online",
+        source_shipment_id="11031602",
+        recipient_index=0,
+        avviso_id=avviso_id,
+        match_status="matched",
+        match_score=100,
+        match_reason="Associazione precedente",
+        recovery_status="ready_on_payment",
+        raw_payload_json={"manual_association": {"active": True, "avviso_id": str(avviso_id), "avviso_ids": [str(avviso_id), "invalid"]}},
+    )
+    db.add(existing)
+    db.commit()
+    previous_id = existing.id
+
+    content = json.dumps({"records": [
+        {"idInvio": "11031602", "recipient_name": "ROSSI MARIO", "recipient_address": "VIA NUOVA 1"},
+        {"idInvio": "11031610", "recipient_name": "ROSSI MARIO", "recipient_address": "VIA TEST 1"},
+    ]}).encode("utf-8")
+    job = tributi_repo.import_posta_online_registered_mails(
+        db, filename="recovery.json", content=content, annualita=[2022], preserve_associations=True
+    )
+    db.commit()
+    first = db.get(RuoloTributiRegisteredMail, previous_id)
+    second = db.scalar(select(RuoloTributiRegisteredMail).where(RuoloTributiRegisteredMail.source_shipment_id == "11031610"))
+    assert job.records_imported == 2
+    assert first.avviso_id == avviso_id
+    assert first.match_reason == "Associazione precedente"
+    assert first.recovery_status == "ready_on_payment"
+    assert first.raw_payload_json["manual_association"]["avviso_id"] == str(avviso_id)
+    assert first.recipient_address == "VIA NUOVA 1"
+    assert second.avviso_id is None
+    assert second.match_status == "unmatched"
+    assert second.anomaly_key == "association_not_evaluated"
+    db.close()
+
+
 def test_tributi_import_posta_online_registered_mails_matches_avvisi_and_tracks_recovery() -> None:
     db = TestingSessionLocal()
     subject = AnagraficaSubject(source_name_raw="ROSSI MARIO")

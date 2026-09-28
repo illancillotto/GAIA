@@ -159,7 +159,7 @@ class CatMeterReadingResponse(BaseModel):
     manual_corrections: dict[str, Any] | None = None
     manual_override_updated_at: datetime | None = None
     manual_override_updated_by: int | None = None
-    manual_audits: list["CatMeterReadingManualAuditResponse"] = []
+    manual_audits: list[CatMeterReadingManualAuditResponse] = []
     created_at: datetime
     updated_at: datetime
 

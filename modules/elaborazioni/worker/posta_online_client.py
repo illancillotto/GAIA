@@ -1,17 +1,26 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
 import html
 import logging
 import os
-from pathlib import Path
 import random
 import re
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from playwright.async_api import Browser, BrowserContext, Page, Playwright, TimeoutError, async_playwright
+from playwright.async_api import (
+    Browser,
+    BrowserContext,
+    Page,
+    Playwright,
+    async_playwright,
+)
+from playwright.async_api import (
+    TimeoutError as PlaywrightTimeoutError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -65,13 +74,14 @@ class PostaOnlineScrapeConfig:
     burst_pause_max_ms: int = 180000
     retry_base_delay_ms: int = 30000
     retry_max_delay_ms: int = 300000
-    max_retries: int = 4
+    max_retries: int = 1
     max_pages: int | None = None
     max_details: int | None = None
     include_contacts: bool = True
     include_details: bool = True
     continue_on_error: bool = True
     headless: bool = True
+    shipment_ids: list[str] | None = None
     storage_state_path: str | None = POSTA_ONLINE_STORAGE_STATE_PATH
     cdp_url: str | None = POSTA_ONLINE_CDP_URL
 
@@ -120,6 +130,14 @@ class PoliteThrottle:
         await asyncio.sleep(delay_ms / 1000)
 
 
+class PostaOnlineTransientError(RuntimeError):
+    """A remote failure that may clear after a cooldown."""
+
+
+class PostaOnlineCircuitOpen(RuntimeError):
+    """Stop this session while keeping its checkpoint available for resumption."""
+
+
 class PostaOnlineBrowserClient:
     def __init__(self, config: PostaOnlineScrapeConfig) -> None:
         self.config = config
@@ -150,7 +168,7 @@ class PostaOnlineBrowserClient:
             raise RuntimeError("Context Poste Online non inizializzato")
         return self._context
 
-    async def __aenter__(self) -> "PostaOnlineBrowserClient":
+    async def __aenter__(self) -> PostaOnlineBrowserClient:
         self._playwright = await async_playwright().start()
         if self.config.cdp_url:
             self._browser = await self._playwright.chromium.connect_over_cdp(self.config.cdp_url)
@@ -271,6 +289,10 @@ class PostaOnlineBrowserClient:
         contacts: list[dict[str, Any]] = [item for item in checkpoint.get("contacts") or [] if isinstance(item, dict)]
         errors: list[dict[str, str]] = [item for item in checkpoint.get("errors") or [] if isinstance(item, dict)]
         id_invii: list[str] = [str(item) for item in checkpoint.get("archive_ids") or [] if str(item).strip()]
+        if self.config.shipment_ids is not None:
+            if id_invii and id_invii != self.config.shipment_ids:
+                raise ValueError("Gli ID del checkpoint Poste non coincidono con quelli richiesti")
+            id_invii = list(self.config.shipment_ids)
         completed_scopes = {str(item) for item in checkpoint.get("completed_scopes") or []}
 
         if self.config.include_contacts:
@@ -304,6 +326,7 @@ class PostaOnlineBrowserClient:
         if self.config.include_details:
             detail_ids = id_invii if self.config.max_details is None else id_invii[: self.config.max_details]
             fetched_detail_ids = {str(item.get("idInvio") or item.get("id_invio")) for item in details if isinstance(item, dict)}
+            consecutive_transient_errors = 0
             for id_invio in detail_ids:
                 scope = f"detail:{id_invio}"
                 if id_invio in fetched_detail_ids or scope in completed_scopes:
@@ -313,10 +336,18 @@ class PostaOnlineBrowserClient:
                     details.append({"idInvio": id_invio, "html": html})
                     fetched_detail_ids.add(id_invio)
                     completed_scopes.add(scope)
+                    errors[:] = [item for item in errors if item.get("scope") != scope]
+                    consecutive_transient_errors = 0
                 except Exception as exc:
                     errors.append({"scope": f"detail:{id_invio}", "error": str(exc)})
                     if not self.config.continue_on_error:
                         raise
+                    if isinstance(exc, PostaOnlineTransientError):
+                        consecutive_transient_errors += 1
+                        self.throttle.min_delay_ms = min(30000, int(self.throttle.min_delay_ms * 1.5))
+                        self.throttle.max_delay_ms = min(45000, int(self.throttle.max_delay_ms * 1.5))
+                    else:
+                        consecutive_transient_errors = 0
                 await _emit_scrape_progress(
                     progress_callback,
                     details=details,
@@ -325,6 +356,8 @@ class PostaOnlineBrowserClient:
                     archive_ids=id_invii,
                     completed_scopes=completed_scopes,
                 )
+                if consecutive_transient_errors >= 2:
+                    raise PostaOnlineCircuitOpen("Poste Online indisponibile dopo due dettagli consecutivi")
 
         return {
             "source": "posta_online_worker",
@@ -392,26 +425,30 @@ class PostaOnlineBrowserClient:
         if _is_login_or_auth_html(text):
             raise RuntimeError(f"Poste Online detail {id_invio}: sessione non autenticata o pagina login ricevuta")
         if not _has_registered_mail_detail_table(text):
-            raise RuntimeError(f"Poste Online detail {id_invio}: tabella destinatario non trovata")
+            raise RuntimeError(f"Poste Online detail {id_invio}: tabella destinatario non trovata o incompleta")
         return text
 
     async def _request_with_backoff(self, label: str, factory):
-        last_error: Exception | None = None
         for attempt in range(1, self.config.max_retries + 2):
-            response = await factory()
+            try:
+                response = await factory()
+            except (TimeoutError, PlaywrightTimeoutError) as exc:
+                if attempt > self.config.max_retries:
+                    raise PostaOnlineTransientError(f"Poste Online {label}: timeout") from exc
+                await self.throttle.wait_retry(label, attempt)
+                continue
             if response.status < 400:
                 return response
-            last_error = RuntimeError(f"Poste Online {label} HTTP {response.status}")
             if response.status not in {429, 500, 502, 503, 504}:
-                break
+                raise RuntimeError(f"Poste Online {label} HTTP {response.status}")
             if attempt > self.config.max_retries:
-                break
+                raise PostaOnlineTransientError(f"Poste Online {label} HTTP {response.status}")
             await self.throttle.wait_retry(label, attempt, _retry_after_seconds(response))
-        raise last_error or RuntimeError(f"Poste Online {label} fallito")
+        raise RuntimeError(f"Poste Online {label} fallito")
 
     async def _goto_next_archive_page(self, page: Page) -> bool:
         for locator in (
-            page.locator("ul.pagination a").filter(has_text="›").last,
+            page.locator("ul.pagination a").filter(has_text="\u203a").last,
             page.locator("ul.pagination a").filter(has_text=">").last,
         ):
             try:
@@ -490,7 +527,7 @@ class PostaOnlineBrowserClient:
     async def _ensure_authenticated_archive(page: Page) -> None:
         url = page.url.lower()
         text = (await page.locator("body").inner_text(timeout=10000)).lower()
-        if "login" in url or "accedi" in text and "archivio" not in text:
+        if "login" in url or ("accedi" in text and "archivio" not in text):
             diagnostics = _diagnose_login_failure(page.url, text)
             raise RuntimeError(f"Archivio Poste Online non raggiunto dopo login: {diagnostics}")
 
@@ -522,7 +559,14 @@ def _is_login_or_auth_html(value: str) -> bool:
 
 
 def _has_registered_mail_detail_table(value: str) -> bool:
-    return bool(re.search(r'<table\b[^>]*id=["\']destinatario["\']', value, flags=re.IGNORECASE))
+    table = re.search(r'<table\b[^>]*id=["\']destinatario["\'][^>]*>(.*?)</table>', value, re.IGNORECASE | re.DOTALL)
+    if table is None:
+        return False
+    return any(
+        len(cells := [html.unescape(re.sub(r'<[^>]+>', ' ', cell)).strip() for cell in re.findall(r'<t[dh]\b[^>]*>(.*?)</t[dh]>', row, re.IGNORECASE | re.DOTALL)]) >= 4
+        and cells[1].lower() != "servizio" and cells[2] and cells[3]
+        for row in re.findall(r'<tr\b[^>]*>(.*?)</tr>', table.group(1), re.IGNORECASE | re.DOTALL)
+    )
 
 
 def _clean_text_excerpt(value: str, *, limit: int = 300) -> str:

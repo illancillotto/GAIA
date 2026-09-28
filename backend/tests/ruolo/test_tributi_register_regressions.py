@@ -318,8 +318,18 @@ def test_registered_mail_multi_association_publishes_cumulative_register():
             )
         )
         db.flush()
+        unrelated_mail = RuoloTributiRegisteredMail(
+            source_shipment_id="MULTI-OTHER-MAIL",
+            recipient_index=0,
+            avviso_id=other.id,
+            match_status="matched",
+            recovery_status="pending",
+        )
+        db.add(unrelated_mail)
+        db.flush()
         repo.mark_registered_mail_recovery_on_payment(db, avviso_id=avvisi[1].id)
         assert mail.recovery_status == "ready_on_payment"
+        assert unrelated_mail.recovery_status == "pending"
 
         replacement = [
             RuoloAvviso(

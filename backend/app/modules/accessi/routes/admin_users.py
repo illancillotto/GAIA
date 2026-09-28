@@ -68,6 +68,13 @@ def _serialize_application_user(
     return ApplicationUserResponse.model_validate(payload)
 
 
+def _get_existing_user(db: Session, user_id: int) -> ApplicationUser:
+    user = get_application_user_by_id(db, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
 def _password_fingerprint(password_hash: str) -> str:
     return hashlib.sha256(password_hash.encode("utf-8")).hexdigest()[:16]
 
@@ -143,9 +150,7 @@ def send_user_invite(
     request: Request,
     db: Annotated[Session, Depends(get_db)],
 ) -> ApplicationUserInviteResponse:
-    user = get_application_user_by_id(db, user_id)
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = _get_existing_user(db, user_id)
 
     _, expires_at, activation_url_path, activation_url = _build_activation_payload(user, request)
     full_name = user.full_name or user.username
@@ -180,9 +185,7 @@ def send_user_invite(
 
 @router.get("/{user_id}", response_model=ApplicationUserResponse, response_model_exclude_none=True, dependencies=[RequireAdmin, RequireAccessiAdmin])
 def get_user(user_id: int, db: Annotated[Session, Depends(get_db)]) -> ApplicationUserResponse:
-    user = get_application_user_by_id(db, user_id)
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = _get_existing_user(db, user_id)
     gate_mobile_console = _build_gate_mobile_console_map(db, user_ids=[user.id]).get(user.id)
     return _serialize_application_user(user, gate_mobile_console=gate_mobile_console)
 
@@ -194,9 +197,7 @@ def update_user(
     current_user: Annotated[ApplicationUser, RequireAccessiAdmin],
     db: Annotated[Session, Depends(get_db)],
 ) -> ApplicationUserResponse:
-    user = get_application_user_by_id(db, user_id)
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = _get_existing_user(db, user_id)
     if user.is_super_admin and not current_user.is_super_admin:
         raise HTTPException(status_code=403, detail="Cannot modify super_admin")
     return _serialize_application_user(_update_user_and_revoke_qgis_if_needed(db, user, payload))
@@ -218,9 +219,7 @@ def _update_user_and_revoke_qgis_if_needed(
 def get_qgis_desktop_access(
     user_id: int, db: Annotated[Session, Depends(get_db)]
 ) -> QgisDesktopAccessStatusResponse:
-    user = get_application_user_by_id(db, user_id)
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = _get_existing_user(db, user_id)
     return QgisDesktopAccessStatusResponse.model_validate(
         qgis_desktop_access.access_status(db, user)
     )
@@ -234,9 +233,7 @@ def get_qgis_desktop_access(
 def provision_qgis_desktop_access(
     user_id: int, db: Annotated[Session, Depends(get_db)]
 ) -> QgisDesktopCredentialsResponse:
-    user = get_application_user_by_id(db, user_id)
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = _get_existing_user(db, user_id)
     return QgisDesktopCredentialsResponse.model_validate(
         qgis_desktop_access.provision_access(db, user)
     )
@@ -250,9 +247,7 @@ def provision_qgis_desktop_access(
 def revoke_qgis_desktop_access(
     user_id: int, db: Annotated[Session, Depends(get_db)]
 ) -> QgisDesktopAccessStatusResponse:
-    user = get_application_user_by_id(db, user_id)
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = _get_existing_user(db, user_id)
     qgis_desktop_access.disable_access(db, user)
     return QgisDesktopAccessStatusResponse.model_validate(
         qgis_desktop_access.access_status(db, user)
@@ -267,9 +262,7 @@ def delete_user(
 ) -> None:
     if user_id == current_user.id:
         raise HTTPException(status_code=400, detail="Cannot delete own account")
-    user = get_application_user_by_id(db, user_id)
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = _get_existing_user(db, user_id)
     qgis_desktop_access.disable_access(db, user, commit=False)
     delete_application_user(db, user)
 
@@ -290,9 +283,7 @@ def patch_user_modules(
     module_presenze: bool = Query(...),
     module_organigramma: bool = Query(False),
 ) -> ApplicationUserResponse:
-    user = get_application_user_by_id(db, user_id)
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = _get_existing_user(db, user_id)
     payload = ApplicationUserUpdate(
         module_accessi=module_accessi,
         module_rete=module_rete,

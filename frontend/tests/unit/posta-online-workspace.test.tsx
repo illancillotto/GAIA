@@ -290,6 +290,11 @@ describe("ElaborazioniPostaOnlineWorkspace", () => {
         status: "queued_resume",
         mode: "credential_test",
       }),
+      createJob({
+        id: 36,
+        status: "paused",
+        mode: "registered_mails",
+      }),
     ]);
 
     render(<ElaborazioniPostaOnlineWorkspace embedded />);
@@ -298,6 +303,8 @@ describe("ElaborazioniPostaOnlineWorkspace", () => {
     expect(screen.getByText("other")).toBeInTheDocument();
     expect(screen.getByText("In coda")).toBeInTheDocument();
     expect(screen.getByText("Ripresa in coda")).toBeInTheDocument();
+    expect(screen.getByText("Ripresa sospesa")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Rilancia" }).length).toBeGreaterThan(1);
     expect(screen.getByText("5 match · 0 non associati · 0 ambigui")).toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });

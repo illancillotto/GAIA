@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 import sys
 import types
+from pathlib import Path
 
 import pytest
-
 
 WORKER_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = next((path for path in WORKER_ROOT.parents if (path / "backend").exists()), WORKER_ROOT.parents[-1])
@@ -28,19 +27,22 @@ playwright_module.async_api = playwright_async_api
 sys.modules["playwright"] = playwright_module
 sys.modules["playwright.async_api"] = playwright_async_api
 
-import posta_online_client
-from posta_online_client import (
-    POSTA_ONLINE_ARCHIVE_URL,
+# The client must load after the Playwright stub is installed.
+import posta_online_client  # noqa: E402
+from posta_online_client import (  # noqa: E402
     POSTA_ONLINE_ARCHIVE_ENTRY_URL,
+    POSTA_ONLINE_ARCHIVE_URL,
     POSTA_ONLINE_BROWSER_USER_AGENT,
-    POSTA_ONLINE_CORRESPONDENCE_HOME_URL,
     POSTA_ONLINE_CONTACTS_URL,
+    POSTA_ONLINE_CORRESPONDENCE_HOME_URL,
     POSTA_ONLINE_DETAIL_URL,
     POSTA_ONLINE_HOME_URL,
     POSTA_ONLINE_LOGIN_URL,
     PoliteThrottle,
     PostaOnlineBrowserClient,
+    PostaOnlineCircuitOpen,
     PostaOnlineScrapeConfig,
+    PostaOnlineTransientError,
     _diagnose_login_failure,
     _extract_invio_ids,
     _has_registered_mail_detail_table,
@@ -91,14 +93,14 @@ class FakeLocator:
         self.evaluated: list[str] = []
 
     @property
-    def first(self) -> "FakeLocator":
+    def first(self) -> FakeLocator:
         return self
 
     @property
-    def last(self) -> "FakeLocator":
+    def last(self) -> FakeLocator:
         return self
 
-    def filter(self, **_kwargs) -> "FakeLocator":
+    def filter(self, **_kwargs) -> FakeLocator:
         return self
 
     async def count(self) -> int:
@@ -558,7 +560,7 @@ def test_fetch_contacts_detail_and_backoff(monkeypatch: pytest.MonkeyPatch) -> N
     class FakeRequest:
         def __init__(self) -> None:
             self.calls: list[dict[str, object]] = []
-            self.detail_response = FakeResponse(200, text="<html><table id='destinatario'><tr><td>detail</td></tr></table></html>")
+            self.detail_response = FakeResponse(200, text="<html><table id='destinatario'><tr><td></td><td>AR</td><td>Mario Rossi</td><td>Via Roma 1</td></tr></table></html>")
 
         async def post(self, url: str, **kwargs):
             self.calls.append({"url": url, **kwargs})
@@ -575,12 +577,13 @@ def test_fetch_contacts_detail_and_backoff(monkeypatch: pytest.MonkeyPatch) -> N
             max_delay_ms=1000,
             retry_base_delay_ms=1000,
             retry_max_delay_ms=2000,
+            max_retries=2,
         )
     )
     client._context = types.SimpleNamespace(request=request)
 
     assert asyncio.run(client.fetch_contacts()) == [{"id": "1"}]
-    assert asyncio.run(client.fetch_detail_html("11280322")) == "<html><table id='destinatario'><tr><td>detail</td></tr></table></html>"
+    assert "Mario Rossi" in asyncio.run(client.fetch_detail_html("11280322"))
     assert request.calls[0]["url"] == POSTA_ONLINE_CONTACTS_URL
     assert request.calls[1]["url"] == POSTA_ONLINE_DETAIL_URL
     request.detail_response = FakeResponse(200, text="<html>Accedi o registrati username password</html>")
@@ -623,12 +626,70 @@ def test_fetch_contacts_returns_empty_for_non_list_payload() -> None:
     assert asyncio.run(client.fetch_contacts()) == []
 
 
+def test_timeout_retry_is_bounded_and_transient(monkeypatch: pytest.MonkeyPatch) -> None:
+    waits: list[int] = []
+    client = PostaOnlineBrowserClient(PostaOnlineScrapeConfig(max_retries=1))
+
+    async def wait_retry(_label, attempt, _retry_after=None):
+        waits.append(attempt)
+
+    client.throttle.wait_retry = wait_retry
+    attempts = 0
+
+    async def timed_out():
+        nonlocal attempts
+        attempts += 1
+        raise TimeoutError("Poste did not respond")
+
+    with pytest.raises(PostaOnlineTransientError, match="timeout"):
+        asyncio.run(client._request_with_backoff("detail:1234", timed_out))
+    assert attempts == 2
+    assert waits == [1]
+
+
+def test_negative_retry_limit_fails_without_request() -> None:
+    client = PostaOnlineBrowserClient(PostaOnlineScrapeConfig(max_retries=-1))
+
+    async def unexpected_request():
+        pytest.fail("No request should run with a negative retry limit")
+
+    with pytest.raises(RuntimeError, match="Poste Online detail fallito"):
+        asyncio.run(client._request_with_backoff("detail", unexpected_request))
+
+
+def test_exit_without_open_browser_resources() -> None:
+    client = PostaOnlineBrowserClient(PostaOnlineScrapeConfig())
+    asyncio.run(client.__aexit__(None, None, None))
+
+
+def test_target_ids_and_consecutive_transient_failures_stop_session() -> None:
+    class FailingClient(PostaOnlineBrowserClient):
+        async def fetch_detail_html(self, _id):
+            raise PostaOnlineTransientError("HTTP 500")
+
+    client = FailingClient(PostaOnlineScrapeConfig(include_contacts=False, shipment_ids=["1234", "5678", "9012"]))
+    progress: list[dict[str, object]] = []
+
+    async def record(payload):
+        progress.append(payload)
+
+    with pytest.raises(PostaOnlineCircuitOpen):
+        asyncio.run(client.scrape_registered_mails(progress_callback=record))
+    assert len(progress) == 2
+    assert progress[-1]["archive_ids"] == ["1234", "5678", "9012"]
+    assert len(progress[-1]["errors"]) == 2
+    assert client.throttle.min_delay_ms > 3500
+
+    with pytest.raises(ValueError, match="non coincidono"):
+        asyncio.run(client.scrape_registered_mails(resume_payload={"archive_ids": ["other"]}))
+
+
 def test_discover_archive_invii_and_pagination_branches() -> None:
     client = PostaOnlineBrowserClient(PostaOnlineScrapeConfig(max_pages=2, max_details=3))
     page = FakePage(
         html_pages=[
             "idInvio=1111 idInvio=1111 id_invio:2222",
-            "idInvio=3333 idInvio=4444",
+            "idInvio=1111 idInvio=3333 idInvio=4444",
         ]
     )
     page.locators["ul.pagination a"] = FakeLocator(href="/next")
@@ -653,6 +714,10 @@ def test_discover_archive_invii_and_pagination_branches() -> None:
     single_page_client._page = single_page
     single_page_client.throttle.wait = lambda _label: asyncio.sleep(0)
     assert asyncio.run(single_page_client.discover_archive_invii()) == ["9999"]
+
+    no_pages_client = PostaOnlineBrowserClient(PostaOnlineScrapeConfig(max_pages=0))
+    no_pages_client._page = FakePage()
+    assert asyncio.run(no_pages_client.discover_archive_invii()) == []
 
 
 def test_scrape_registered_mails_handles_success_and_errors() -> None:
@@ -742,7 +807,13 @@ def test_static_helpers_extract_ids_interactive_and_suppress_errors() -> None:
     assert _extract_invio_ids("idInvio=12345 idInvio=12345 id_invio xyz 67890") == ["12345", "67890"]
     assert _is_login_or_auth_html("<html>Accedi o registrati username password</html>") is True
     assert _is_login_or_auth_html("<html><table id='destinatario'></table></html>") is False
-    assert _has_registered_mail_detail_table("<table class='x' id=\"destinatario\"></table>") is True
+    assert _has_registered_mail_detail_table("<table class='x' id=\"destinatario\"></table>") is False
+    assert _has_registered_mail_detail_table("<table id='destinatario'><tr><td></td><td>AR</td><td></td><td>Via 1</td></tr></table>") is False
+    assert _has_registered_mail_detail_table("<table id='destinatario'><tr><td></td><td>AR</td><td>Mario</td><td>Via 1</td></tr></table>") is True
+    assert _has_registered_mail_detail_table(
+        "<table id='destinatario'><tr><td></td><td>Servizio</td><td>Nome</td><td>Indirizzo</td></tr>"
+        "<tr><td></td><td>AR</td><td>Mario</td><td>Via 1</td></tr></table>"
+    ) is True
     assert _has_registered_mail_detail_table("<table id='altro'></table>") is False
     assert _diagnose_login_failure("https://example.test/login", "Username Password Credenziali non valide") == (
         "url=https://example.test/login; segnali=redirect_login,messaggio_login,form_login_visibile; "

@@ -1,19 +1,18 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
 import json
 import os
 import sys
 import types
 import uuid
+from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from cryptography.fernet import Fernet
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
-
 
 WORKER_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = next((path for path in WORKER_ROOT.parents if (path / "backend").exists()), WORKER_ROOT.parents[-1])
@@ -183,9 +182,9 @@ _stub_module(
     run_distretto_export_job_by_id=lambda _job_id: None,
 )
 
-import worker as worker_module
-from sister_exceptions import SisterRequestCorrelationError
-from sister_captcha_wait import SisterCaptchaClaim
+# Worker imports must follow the test stubs; cleanup below restores shared modules.
+import worker as worker_module  # noqa: E402
+from sister_exceptions import SisterRequestCorrelationError  # noqa: E402
 
 for _module_name in (
     "anti_captcha_client",
@@ -204,9 +203,10 @@ for _module_name in (
     if _module_name in _STUBBED_MODULE_NAMES:
         sys.modules.pop(_module_name, None)
 
-from app.core.database import Base
-from app.models.application_user import ApplicationUser
-from app.models.capacitas import (
+# Import real models only after the temporary dependency stubs are removed.
+import posta_online_sync  # noqa: E402
+from app.models.application_user import ApplicationUser  # noqa: E402
+from app.models.capacitas import (  # noqa: E402
     CapacitasAnagraficaHistoryImportJob,
     CapacitasCredential,
     CapacitasDomandeIrrigueSyncJob,
@@ -214,18 +214,18 @@ from app.models.capacitas import (
     CapacitasParticelleSyncJob,
     CapacitasTerreniSyncJob,
 )
-from app.models.posta_online import PostaOnlineCredential, PostaOnlineRegisteredMailSyncJob
-from app.services.catasto_credentials import get_credential_fernet
-import posta_online_sync
-from app.models.catasto import (
+from app.models.catasto import (  # noqa: E402
     CatastoBatch,
     CatastoBatchStatus,
     CatastoCaptchaLog,
     CatastoDocument,
     CatastoVisuraRequest,
-    CatastoVisuraRequestStatus,
 )
-
+from app.models.posta_online import (  # noqa: E402
+    PostaOnlineCredential,
+    PostaOnlineRegisteredMailSyncJob,
+)
+from app.services.catasto_credentials import get_credential_fernet  # noqa: E402
 
 CatastoWorker = worker_module.CatastoWorker
 
@@ -354,7 +354,7 @@ def test_sister_server_error_cooldown_is_capped() -> None:
 
 def test_operating_window_allows_processing_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(worker_module, "OPERATION_WINDOW_ENABLED", False)
-    assert CatastoWorker._is_within_operating_window(datetime(2026, 5, 21, 2, 0, tzinfo=timezone.utc))
+    assert CatastoWorker._is_within_operating_window(datetime(2026, 5, 21, 2, 0, tzinfo=UTC))
 
 
 def test_operating_window_blocks_processing_outside_daily_window(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -363,12 +363,12 @@ def test_operating_window_blocks_processing_outside_daily_window(monkeypatch: py
     monkeypatch.setattr(worker_module, "OPERATION_WINDOW_END_HOUR", 18)
     monkeypatch.setattr(worker_module, "OPERATION_WINDOW_TIMEZONE", "Europe/Rome")
 
-    early_morning_utc = datetime(2026, 5, 21, 4, 30, tzinfo=timezone.utc)  # 06:30 Europe/Rome
+    early_morning_utc = datetime(2026, 5, 21, 4, 30, tzinfo=UTC)  # 06:30 Europe/Rome
     assert not CatastoWorker._is_within_operating_window(early_morning_utc)
 
     resume_at = CatastoWorker._next_operating_resume_at(early_morning_utc)
     assert resume_at is not None
-    assert resume_at.astimezone(timezone.utc).hour == 6
+    assert resume_at.astimezone(UTC).hour == 6
 
 
 def test_operating_window_supports_overnight_windows(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -377,8 +377,8 @@ def test_operating_window_supports_overnight_windows(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(worker_module, "OPERATION_WINDOW_END_HOUR", 5)
     monkeypatch.setattr(worker_module, "OPERATION_WINDOW_TIMEZONE", "Europe/Rome")
 
-    overnight_utc = datetime(2026, 5, 21, 1, 30, tzinfo=timezone.utc)  # 03:30 Europe/Rome
-    day_utc = datetime(2026, 5, 21, 10, 0, tzinfo=timezone.utc)  # 12:00 Europe/Rome
+    overnight_utc = datetime(2026, 5, 21, 1, 30, tzinfo=UTC)  # 03:30 Europe/Rome
+    day_utc = datetime(2026, 5, 21, 10, 0, tzinfo=UTC)  # 12:00 Europe/Rome
     assert CatastoWorker._is_within_operating_window(overnight_utc)
     assert not CatastoWorker._is_within_operating_window(day_utc)
 
@@ -389,28 +389,28 @@ def test_incass_autosync_window_supports_evening_to_morning_interval(monkeypatch
     monkeypatch.setattr(worker_module, "INCASS_AUTOSYNC_END_HOUR", 6)
     monkeypatch.setattr(worker_module, "INCASS_AUTOSYNC_TIMEZONE", "Europe/Rome")
 
-    assert not CatastoWorker._is_within_incass_autosync_window(datetime(2026, 1, 1, 18, 59, tzinfo=timezone.utc))
-    assert CatastoWorker._is_within_incass_autosync_window(datetime(2026, 1, 1, 19, 0, tzinfo=timezone.utc))
-    assert CatastoWorker._is_within_incass_autosync_window(datetime(2026, 1, 2, 4, 59, tzinfo=timezone.utc))
-    assert not CatastoWorker._is_within_incass_autosync_window(datetime(2026, 1, 2, 5, 0, tzinfo=timezone.utc))
+    assert not CatastoWorker._is_within_incass_autosync_window(datetime(2026, 1, 1, 18, 59, tzinfo=UTC))
+    assert CatastoWorker._is_within_incass_autosync_window(datetime(2026, 1, 1, 19, 0, tzinfo=UTC))
+    assert CatastoWorker._is_within_incass_autosync_window(datetime(2026, 1, 2, 4, 59, tzinfo=UTC))
+    assert not CatastoWorker._is_within_incass_autosync_window(datetime(2026, 1, 2, 5, 0, tzinfo=UTC))
     assert CatastoWorker._incass_autosync_window_label() == "20:00-06:00 Europe/Rome"
 
     monkeypatch.setattr(worker_module, "INCASS_AUTOSYNC_TIMEZONE", "Invalid/Timezone")
-    assert CatastoWorker._is_within_incass_autosync_window(datetime(2026, 1, 1, 19, 0, tzinfo=timezone.utc))
+    assert CatastoWorker._is_within_incass_autosync_window(datetime(2026, 1, 1, 19, 0, tzinfo=UTC))
 
     monkeypatch.setattr(worker_module, "INCASS_AUTOSYNC_TIMEZONE", "UTC")
     monkeypatch.setattr(worker_module, "INCASS_AUTOSYNC_START_HOUR", 8)
     monkeypatch.setattr(worker_module, "INCASS_AUTOSYNC_END_HOUR", 18)
     assert CatastoWorker._is_within_incass_autosync_window(datetime(2026, 1, 1, 12, 0))
-    assert not CatastoWorker._is_within_incass_autosync_window(datetime(2026, 1, 1, 20, 0, tzinfo=timezone.utc))
+    assert not CatastoWorker._is_within_incass_autosync_window(datetime(2026, 1, 1, 20, 0, tzinfo=UTC))
 
     monkeypatch.setattr(worker_module, "INCASS_AUTOSYNC_END_HOUR", 8)
-    assert CatastoWorker._is_within_incass_autosync_window(datetime(2026, 1, 1, 20, 0, tzinfo=timezone.utc))
+    assert CatastoWorker._is_within_incass_autosync_window(datetime(2026, 1, 1, 20, 0, tzinfo=UTC))
 
 
 def test_incass_autosync_window_allows_processing_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(worker_module, "INCASS_AUTOSYNC_WINDOW_ENABLED", False)
-    assert CatastoWorker._is_within_incass_autosync_window(datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc))
+    assert CatastoWorker._is_within_incass_autosync_window(datetime(2026, 1, 1, 12, 0, tzinfo=UTC))
 
 
 def test_parse_job_families_expands_aliases() -> None:
@@ -669,6 +669,43 @@ def test_next_posta_online_job_claims_when_credential_is_available(
     assert seen_credential_ids == [4]
 
 
+def test_next_posta_online_job_waits_for_cooldown(worker_db, monkeypatch: pytest.MonkeyPatch) -> None:
+    worker, SessionLocal, _ = worker_db
+    monkeypatch.setattr(worker_module, "has_available_posta_online_credential", lambda *_args: True)
+    with SessionLocal() as db:
+        job = PostaOnlineRegisteredMailSyncJob(
+            status="queued_resume",
+            mode="registered_mails",
+            result_json={"retry_not_before": "2999-01-01T00:00:00+00:00"},
+        )
+        db.add(job)
+        db.commit()
+        job_id = job.id
+    assert worker._next_posta_online_job_id() is None
+    with SessionLocal() as db:
+        job = db.get(PostaOnlineRegisteredMailSyncJob, job_id)
+        job.result_json = {"retry_not_before": "invalid"}
+        db.commit()
+    assert worker._next_posta_online_job_id() is None
+    with SessionLocal() as db:
+        job = db.get(PostaOnlineRegisteredMailSyncJob, job_id)
+        job.result_json = {"retry_not_before": "2000-01-01T00:00:00+00:00"}
+        db.commit()
+    assert worker._next_posta_online_job_id() == job_id
+
+
+def test_posta_online_retry_ready_rejects_naive_time(worker_db) -> None:
+    worker, _, _ = worker_db
+    job = types.SimpleNamespace(
+        id=9,
+        status="queued_resume",
+        result_json={"retry_not_before": "2000-01-01T00:00:00"},
+    )
+    assert worker._posta_online_retry_ready(job) is False
+    job.result_json = []
+    assert worker._posta_online_retry_ready(job) is True
+
+
 def test_next_posta_online_credential_test_job_bypasses_availability_check(
     worker_db,
     monkeypatch: pytest.MonkeyPatch,
@@ -889,7 +926,7 @@ def test_posta_online_sync_runner_reuses_completed_scrape_checkpoint(
             "resume_state": {
                 "stage": "scraped",
                 "path": str(checkpoint_path),
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
             }
         }
         db.commit()
@@ -926,7 +963,7 @@ def test_posta_online_sync_runner_reuses_completed_scrape_checkpoint(
         )
     )
 
-    assert json.loads(imported_payloads[0]["content"].decode("utf-8")) == checkpoint_payload
+    assert json.loads(imported_payloads[0]["content"].decode("utf-8")) == {"details": checkpoint_payload["details"]}
     assert not checkpoint_path.exists()
     with SessionLocal() as db:
         refreshed = db.get(PostaOnlineRegisteredMailSyncJob, job_id)
@@ -1146,7 +1183,7 @@ def test_posta_online_resume_checkpoint_helper_edges(
         job_id=999,
         scrape_payload={"archive_ids": []},
         stage="scraping",
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
     )
 
     class CommitFailJob:
@@ -1173,7 +1210,7 @@ def test_posta_online_resume_checkpoint_helper_edges(
         job_id=123,
         scrape_payload={"archive_ids": []},
         stage="scraping",
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
     )
 
     class UnlinkFailPath:
@@ -1559,20 +1596,15 @@ def test_posta_online_registered_runner_missing_failure_and_persist_helpers(
 
     original_import_wrapper = posta_online_sync._import_tributi_registered_mails
     monkeypatch.setattr(posta_online_sync, "_import_tributi_registered_mails", lambda _db, **_kwargs: FakeImportJob())
-    result = posta_online_sync._persist_scrape_payload(
-        session_factory=SessionLocal,
-        job_id=completed_with_errors_job_id,
-        credential_id=credential_id,
-        requested_payload={"annualita": [2022, 2023]},
-        scrape_payload={"errors": [{"scope": "detail", "error": "boom"}], "archive_ids": ["1"]},
-        started_at=datetime.now(timezone.utc),
-    )
-    assert result["records_errors"] == 1
-    with SessionLocal() as db:
-        refreshed = db.get(PostaOnlineRegisteredMailSyncJob, completed_with_errors_job_id)
-        assert refreshed is not None
-        assert refreshed.status == "completed_with_errors"
-        assert refreshed.error_detail == "Job completato con errori o anomalie"
+    with pytest.raises(RuntimeError, match="Import Poste batch 0 incompleto"):
+        posta_online_sync._persist_scrape_payload(
+            session_factory=SessionLocal,
+            job_id=completed_with_errors_job_id,
+            credential_id=credential_id,
+            requested_payload={"annualita": [2022, 2023]},
+            scrape_payload={"details": [{"idInvio": "1", "html": "<html>test</html>"}], "errors": [{"scope": "detail", "error": "boom"}], "archive_ids": ["1"]},
+            started_at=datetime.now(UTC),
+        )
 
     with pytest.raises(RuntimeError, match="non trovato durante persistenza"):
         posta_online_sync._persist_scrape_payload(
@@ -1581,7 +1613,7 @@ def test_posta_online_registered_runner_missing_failure_and_persist_helpers(
             credential_id=credential_id,
             requested_payload={},
             scrape_payload={},
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
         )
 
     debug_path = tmp_path / "debug" / "payload.json"

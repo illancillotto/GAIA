@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import sys
 from collections.abc import Generator
 from datetime import datetime, timedelta
-import sys
 from types import ModuleType
 
-from cryptography.fernet import Fernet
 import pytest
+from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -44,7 +44,9 @@ from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.posta_online import PostaOnlineRegisteredMailSyncJob
-from app.modules.elaborazioni.posta_online.schemas import PostaOnlineRegisteredMailSyncJobCreateRequest
+from app.modules.elaborazioni.posta_online.schemas import (
+    PostaOnlineRegisteredMailSyncJobCreateRequest,
+)
 from app.services.catasto_credentials import get_credential_fernet
 from app.services.elaborazioni_posta_online import (
     expire_stale_registered_mail_sync_jobs,
@@ -55,7 +57,6 @@ from app.services.elaborazioni_posta_online import (
     pick_credential,
     prepare_registered_mail_sync_jobs_for_recovery,
 )
-
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
 engine = create_engine(
@@ -72,6 +73,17 @@ def test_registered_mail_sync_payload_defaults_to_full_sync() -> None:
 
     assert payload.max_pages is None
     assert payload.max_details is None
+    assert payload.preserve_associations is True
+    assert payload.shipment_ids is None
+    assert PostaOnlineRegisteredMailSyncJobCreateRequest(shipment_ids=[" 11031602 ", "11031610"]).shipment_ids == ["11031602", "11031610"]
+    with pytest.raises(ValueError, match="shipment_ids"):
+        PostaOnlineRegisteredMailSyncJobCreateRequest(shipment_ids=["11031602", "11031602"])
+    with pytest.raises(ValueError, match="shipment_ids"):
+        PostaOnlineRegisteredMailSyncJobCreateRequest(shipment_ids=["bad"])
+    with pytest.raises(ValueError, match="shipment_ids"):
+        PostaOnlineRegisteredMailSyncJobCreateRequest(shipment_ids=[])
+    with pytest.raises(ValueError, match="shipment_ids"):
+        PostaOnlineRegisteredMailSyncJobCreateRequest(shipment_ids=["123"])
 
 
 def override_get_db() -> Generator[Session, None, None]:
@@ -258,6 +270,13 @@ def test_posta_online_credentials_and_jobs_api_flow() -> None:
     db = TestingSessionLocal()
     db_job = db.get(PostaOnlineRegisteredMailSyncJob, job["id"])
     assert db_job is not None
+    db_job.status = "paused"
+    db_job.result_json = {"recovery_rounds": 3, "retry_not_before": "2999-01-01T00:00:00+00:00"}
+    db.commit()
+    resumed = client.post(f"/elaborazioni/posta-online/raccomandate/jobs/{job['id']}/run", headers=headers)
+    assert resumed.status_code == 200
+    assert resumed.json()["result_json"]["recovery_rounds"] == 0
+    assert resumed.json()["result_json"]["retry_not_before"] is None
     db_job.status = "succeeded"
     db.commit()
     db.close()
@@ -269,6 +288,14 @@ def test_posta_online_credentials_and_jobs_api_flow() -> None:
     assert client.get("/elaborazioni/posta-online/credentials/999999", headers=headers).status_code == 404
     assert client.delete("/elaborazioni/posta-online/credentials/999999", headers=headers).status_code == 404
     assert client.delete(f"/elaborazioni/posta-online/credentials/{credential['id']}", headers=headers).status_code == 204
+
+    automatic_credential_job = client.post(
+        "/elaborazioni/posta-online/raccomandate/jobs",
+        headers=headers,
+        json={"max_details": 1},
+    )
+    assert automatic_credential_job.status_code == 202
+    assert automatic_credential_job.json()["payload_json"]["credential_id"] is None
 
 
 def test_posta_online_service_credential_selection_and_recovery() -> None:
