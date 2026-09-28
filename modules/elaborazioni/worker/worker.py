@@ -498,7 +498,7 @@ class CatastoWorker:
                 .with_for_update(skip_locked=True)
             ).all()
             pending_credential_updates = False
-            for job in jobs:
+            for job in filter(self._posta_online_retry_ready, jobs):
                 credential_id = self._posta_online_job_credential_id(job)
                 if job.mode != "credential_test" and not has_available_posta_online_credential(db, credential_id):
                     message = "In attesa di una credenziale Poste Online disponibile"
@@ -514,6 +514,21 @@ class CatastoWorker:
             if pending_credential_updates:
                 db.commit()
         return None
+
+    @staticmethod
+    def _posta_online_retry_ready(job) -> bool:
+        if getattr(job, "status", None) != "queued_resume":
+            return True
+        result = job.result_json if isinstance(job.result_json, dict) else {}
+        not_before = result.get("retry_not_before")
+        if not not_before:
+            return True
+        try:
+            retry_at = datetime.fromisoformat(str(not_before))
+        except ValueError:
+            logger.warning("Job Poste Online %s: retry_not_before non valido", job.id)
+            return False
+        return retry_at.tzinfo is not None and retry_at <= datetime.now(UTC)
 
     @staticmethod
     def _posta_online_job_credential_id(job) -> int | None:

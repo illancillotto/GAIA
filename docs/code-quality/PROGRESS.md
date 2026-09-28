@@ -1629,6 +1629,41 @@ restano escluse.
   facade e ordine route restano invariati; nessuna riduzione cognitiva o
   ciclomatica viene dichiarata.
 
+### 2026-09-28 - Hotspot cooldown job Poste Online
+
+- Scope: sola selezione del job in `CatastoWorker._next_posta_online_job_id`;
+  filtro lazy dei job pronti e predicato dedicato per `retry_not_before`.
+  Ordine FIFO, claim, credenziali, log e semantica dei timestamp invariati.
+- Baseline di confronto: `HEAD@2d8a0634` per isolare il worktree e merge-base
+  `origin/main` per il ratchet autorevole. Prima: metodo 15 cyclomatic,
+  38 cognitive, 40 LOC, nesting 5. Dopo: metodo 7/11/29/3; predicato nuovo
+  8/8/13/2. Cognitive aggregata della responsabilita 38 -> 19 e massimo
+  cyclomatic 15 -> 8; nessuna nuova violation nel predicato.
+- Il ratchet isolato `BASE_REF=HEAD` scende da 67 a 63 finding; quello
+  autorevole contro `origin/main` da 76 a 72. Le quattro regressioni del
+  metodo Poste sono rimosse. Baseline ed esclusioni non modificate; i finding
+  residui degli altri hotspot non sono attribuiti a questa estrazione.
+- Verifiche: test mirati del claim/cooldown `4 passed`; `make test-worker`
+  `PASS`, `worker.py` 882/882 statement e 240/240 branch (`100%`). Ruff sul
+  runtime `worker.py` passa. La suite worker globale e 99% per file SISTER
+  non toccati; il ratchet di stile del checkout resta rosso per 50 rilievi
+  preesistenti, inclusi test legacy nel perimetro Poste.
+- Riverifica sul checkout concorrente del 2026-09-28: `make test-worker` senza
+  root nel `PYTHONPATH` si ferma in collection su `test_sister_efficiency.py`
+  (modifica SISTER non tracciata). `PYTHONPATH="$PWD" make test-worker` passa;
+  `worker.py` 888/888 statement e 244/244 branch (`100%`). Il ratchet mirato
+  del file lascia cinque finding SISTER, nessuno nel claim Poste. Graphify
+  worker code e platform docs aggiornati. Il cooldown resta isolabile come
+  filtro dei job `queued_resume` gia inclusi nella query del worker; il resto
+  della feature Poste non e incluso nel commit di questo hotspot.
+- Commit isolato: caratterizzazione aggiuntiva in
+  `tests/test_posta_online_cooldown.py` (`7 passed`), senza includere nel
+  commit il file legacy `test_worker.py` che ha 35 rilievi Ruff preesistenti.
+  Lo snapshot staged e verificato separatamente dal worktree concorrente.
+- Classificazione: `IMPROVED` per la complessita cognitiva del cooldown.
+  Iterazione chiusa su un solo hotspot; restano altri rilievi Poste da
+  affrontare separatamente prima del commit della feature completa.
+
 ### 2026-09-28 - Hotspot selezione retry AutoSync SISTER
 
 - Slice autorizzata: eliminare lo stato derivato duplicato in `_ClaimScan`,
