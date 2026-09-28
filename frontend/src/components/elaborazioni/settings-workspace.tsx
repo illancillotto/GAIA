@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
+import {
+  ElaborazioniCredentialTabs,
+  useElaborazioniCredentialTab,
+  useOpenSection,
+} from "@/components/elaborazioni/elaborazioni-credential-tabs";
 import { SisterCredentialPool } from "@/components/elaborazioni/sister-credential-pool";
 import {
   AlertTriangleIcon,
@@ -343,7 +348,7 @@ export function CapacitasTestDialog({
 }
 
 export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?: boolean }) {
-  const [activeTab, setActiveTab] = useState<"sister" | "whitecompany" | "capacitas">("sister");
+  const [activeTab, setActiveTab] = useElaborazioniCredentialTab();
   const [credentialStatus, setCredentialStatus] = useState<ElaborazioneCredentialStatus | null>(null);
   const { formState, setFormState, resetForm: resetSisterForm, applyCredential: applyCredentialToForm } = useSisterCredentialForm();
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -353,7 +358,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
   const [resumeReleasedBusy, setResumeReleasedBusy] = useState(false);
   const [testBusy, setTestBusy] = useState(false);
   const [poolTestBusy, setPoolTestBusy] = useState(false);
-  const [sisterCredentialBlockOpen, setSisterCredentialBlockOpen] = useState(true);
+  const [sisterCredentialBlockOpen, toggleSisterCredentialBlock] = useOpenSection();
   const [testResult, setTestResult] = useState<ElaborazioneCredentialTestResult | null>(null);
   const testSocketRef = useRef<WebSocket | null>(null);
   const activeTestId = testResult?.id ?? null;
@@ -1197,39 +1202,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
         </div>
       </section>
 
-      <div
-        className={`flex flex-wrap rounded-[22px] border border-[#d9dfd6] bg-white shadow-panel ${
-          embedded ? "gap-2 p-2" : "gap-2.5 p-2.5"
-        }`}
-      >
-        <button
-          className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
-            activeTab === "sister" ? "bg-[#1D4E35] text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"
-          }`}
-          onClick={() => setActiveTab("sister")}
-          type="button"
-        >
-          SISTER
-        </button>
-        <button
-          className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
-            activeTab === "whitecompany" ? "bg-[#1D4E35] text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"
-          }`}
-          onClick={() => setActiveTab("whitecompany")}
-          type="button"
-        >
-          WhiteCompany
-        </button>
-        <button
-          className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
-            activeTab === "capacitas" ? "bg-[#1D4E35] text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"
-          }`}
-          onClick={() => setActiveTab("capacitas")}
-          type="button"
-        >
-          Capacitas
-        </button>
-      </div>
+      <ElaborazioniCredentialTabs activeTab={activeTab} embedded={embedded} onChange={setActiveTab} />
 
       <section className="space-y-4">
         {activeTab === "sister" ? (
@@ -1261,7 +1234,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                       aria-controls="sister-credential-editor"
                       aria-expanded={sisterCredentialBlockOpen}
                       className="btn-secondary"
-                      onClick={() => setSisterCredentialBlockOpen((isOpen) => !isOpen)}
+                      onClick={toggleSisterCredentialBlock}
                       type="button"
                     >
                       {sisterCredentialBlockOpen ? "Riduci" : "Espandi"}

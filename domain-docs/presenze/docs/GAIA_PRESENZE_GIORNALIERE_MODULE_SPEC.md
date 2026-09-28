@@ -502,8 +502,8 @@ Route principali:
 - `/presenze/import`: redirect tecnico alla console sync in Elaborazioni;
 - `/elaborazioni/presenze-sync`: avvio e monitor sync Inaz, autosync, retry e artefatti job;
 - `/presenze/sync`: wrapper legacy compatibile della stessa console;
-- `/elaborazioni/settings#credenziali-inaz`: credenziali INAZ, nella stessa console della sync;
-- `/presenze/settings`: redirect compatibile verso la sezione credenziali INAZ in Elaborazioni.
+- `/elaborazioni/settings#credenziali-inaz`: tab credenziali INAZ, insieme a SISTER, WhiteCompany e Capacitas;
+- `/presenze/settings`: redirect compatibile verso il tab credenziali INAZ in Elaborazioni.
 
 Componenti attesi:
 
