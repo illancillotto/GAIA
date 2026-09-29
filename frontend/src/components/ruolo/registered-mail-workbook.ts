@@ -21,6 +21,10 @@ export function normalizeIdentity(value: unknown): string {
   return cell(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
+function hasReference(value: string): boolean {
+  return value !== "" && !/^[-\u2013\u2014]+$/.test(value);
+}
+
 export function parseOperatorRows(cells: unknown[][]): OperatorWorkbookRow[] {
   return cells.flatMap((values, index) => {
     if (index === 0 || !/^202[23]$/.test(cell(values[56])) || !cell(values[21])) return [];
@@ -43,6 +47,6 @@ export function workbookEvidence(item: RegisteredMailCampaignItem, rows: Operato
   const taxCodes = new Set(notices.map((notice) => normalizeIdentity(notice.codice_fiscale)));
   if (taxCodes.size !== 1 || taxCodes.has("")) return null;
   const taxCode = [...taxCodes][0];
-  const matches = rows.filter((row) => normalizeIdentity(row.taxCode) === taxCode && row.ref2022 && row.ref2023);
+  const matches = rows.filter((row) => normalizeIdentity(row.taxCode) === taxCode && hasReference(row.ref2022) && hasReference(row.ref2023));
   return matches.length === 1 ? matches[0] : null;
 }

@@ -6,7 +6,9 @@ import { updateTributiRegisteredMailAssociation } from "@/lib/registered-mail-ap
 import { listTributiAvvisi } from "@/lib/ruolo-api";
 import type {
   RuoloTributiAvvisoListItemResponse,
+  RuoloTributiPaymentStatus,
   RuoloTributiRegisteredMailResponse,
+  RuoloTributiWorkflowStatus,
 } from "@/types/ruolo";
 
 type RegisteredMailAssociationModalProps = {
@@ -25,6 +27,23 @@ function formatMoney(value: number | null): string {
   if (value == null) return "-";
   return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(value);
 }
+
+const PAYMENT_BADGES: Record<RuoloTributiPaymentStatus, { label: string; style: string }> = {
+  unpaid: { label: "Non pagato", style: "bg-red-100 text-red-800" },
+  partial: { label: "Pagato in parte", style: "bg-amber-100 text-amber-800" },
+  paid: { label: "Pagato", style: "bg-emerald-100 text-emerald-800" },
+  overpaid: { label: "Eccedenza", style: "bg-sky-100 text-sky-800" },
+  to_review: { label: "Da verificare", style: "bg-gray-100 text-gray-700" },
+};
+
+const WORKFLOW_LABELS: Record<RuoloTributiWorkflowStatus, string> = {
+  moroso: "Moroso",
+  contestato: "Contestato",
+  sospeso: "Sospeso",
+  annullato: "Annullato",
+  non_dovuto: "Non dovuto",
+  rateizzato: "Rateizzato",
+};
 
 function toggleId(current: string[], id: string): string[] {
   if (current.includes(id)) return current.filter((value) => value !== id);
@@ -151,6 +170,8 @@ function AssociationResult({
   isSelected: boolean;
   onSelect: (id: string) => void;
 }) {
+  const payment = PAYMENT_BADGES[item.payment_status];
+  const rateized = item.workflow_status === "rateizzato" || item.calculation_policy_name === "inCASS rateizzazione";
   return (
     <button
       aria-checked={isSelected}
@@ -172,6 +193,11 @@ function AssociationResult({
           <p className="text-sm font-semibold text-gray-800">{item.anno_tributario}</p>
           <p className="mt-1 text-xs text-gray-500">{formatMoney(item.importo_totale_euro)}</p>
         </div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${payment.style}`}>{payment.label}</span>
+        {rateized ? <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800" title={item.calculation_policy_name === "inCASS rateizzazione" ? "Rateizzazione inCASS" : undefined}>Rateizzato</span> : null}
+        {item.workflow_status && item.workflow_status !== "rateizzato" ? <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{WORKFLOW_LABELS[item.workflow_status]}</span> : null}
       </div>
       {isCandidate ? <span className="mt-3 inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">Candidato automatico</span> : null}
     </button>

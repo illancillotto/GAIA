@@ -14,6 +14,14 @@ deve essere unica e contenere entrambi i riferimenti C/D. L'endpoint
 lettura che i riferimenti esistano in inCASS e concordino per soggetto e codice
 fiscale con gli avvisi candidati.
 
+Un segnaposto come `---` non e un riferimento annuale: la riga non costituisce
+evidenza per associare la coppia. Nella ricerca "Matching manuale" ogni avviso
+mostra separatamente lo stato del pagamento (pagato, parziale, non pagato,
+eccedenza o da verificare) e l'eventuale rateizzazione/stato gestionale. I
+badge derivano dallo stato di pagamento calcolato, dal workflow e dalla policy
+di rateizzazione inCASS gia esposti dall'API; non sono modificabili dalla
+modale e non dimostrano quali avvisi fossero contenuti nella busta Poste.
+
 Solo dopo tale verifica e la spunta esplicita dell'operatore si puo associare
 la coppia. Il `PATCH /association` ripete la verifica e controlla che gli
 avvisi selezionati coincidano con i candidati salvati. Nel payload della

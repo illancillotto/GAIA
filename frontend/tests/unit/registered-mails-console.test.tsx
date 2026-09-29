@@ -312,6 +312,7 @@ describe("RegisteredMailsConsole", () => {
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     await waitFor(() => expect(mocks.listTributiAvvisi).toHaveBeenCalledWith("token", expect.objectContaining({ q: "ROSSI MARIO" })));
     expect(screen.getByText("Candidato automatico")).toBeInTheDocument();
+    expect(screen.getAllByText("Non pagato")).toHaveLength(2);
     expect(screen.getByText("Nominativo assente")).toBeInTheDocument();
     expect(screen.getByText(/CF assente/)).toBeInTheDocument();
     expect(screen.getAllByText("-").length).toBeGreaterThan(0);
@@ -325,6 +326,43 @@ describe("RegisteredMailsConsole", () => {
     await waitFor(() => expect(mocks.getTributiRegisteredMailSummary).toHaveBeenCalledTimes(2));
     expect(screen.getAllByRole("button", { name: "Cambia associazione" })).toHaveLength(2);
     expect(screen.getByText(/Associazione manuale impostata/)).toBeInTheDocument();
+  });
+
+  test("shows payment and rateization statuses separately in manual matching", async () => {
+    mocks.listTributiAvvisi.mockResolvedValue({
+      items: [
+        avviso({ id: "paid", payment_status: "paid", calculation_policy_name: "inCASS rateizzazione" }),
+        avviso({ id: "partial", payment_status: "partial", workflow_status: "rateizzato" }),
+        avviso({ id: "overpaid", payment_status: "overpaid", workflow_status: "contestato" }),
+        avviso({ id: "review", payment_status: "to_review" }),
+      ],
+      total: 4,
+      page: 1,
+      page_size: 20,
+    });
+
+    render(<RegisteredMailAssociationModal mail={registeredMail()} token="token" onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    const [paid, partial, overpaid, review] = await screen.findAllByRole("checkbox");
+    expect(within(paid).getByText("Pagato")).toBeInTheDocument();
+    expect(within(paid).getByText("Rateizzato")).toHaveAttribute("title", "Rateizzazione inCASS");
+    expect(within(partial).getByText("Pagato in parte")).toBeInTheDocument();
+    expect(within(partial).getByText("Rateizzato")).toBeInTheDocument();
+    expect(within(overpaid).getByText("Eccedenza")).toBeInTheDocument();
+    expect(within(overpaid).getByText("Contestato")).toBeInTheDocument();
+    expect(within(review).getByText("Da verificare")).toBeInTheDocument();
+    expect(within(review).queryByText("Rateizzato")).not.toBeInTheDocument();
+  });
+
+  test("can deselect an existing annual notice without saving", async () => {
+    mocks.listTributiAvvisi.mockResolvedValue({ items: [avviso()], total: 1, page: 1, page_size: 20 });
+    render(<RegisteredMailAssociationModal mail={registeredMail({ avviso_id: null, avviso_ids: ["avviso-1"] })} token="token" onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    const result = await screen.findByRole("checkbox", { name: /ROSSI MARIO/ });
+    expect(result).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(result);
+    expect(result).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("button", { name: "Conferma 0 avvisi" })).toBeDisabled();
   });
 
   test("removes an existing association", async () => {

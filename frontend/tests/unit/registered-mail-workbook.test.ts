@@ -32,6 +32,8 @@ describe("registered mail workbook", () => {
   test("requires a unique row for a same-tax-code cross-year pair", () => {
     const rows = parseOperatorRows(cells());
     expect(workbookEvidence(pair, rows)).toEqual(rows[0]);
+    expect(workbookEvidence(pair, [{ ...rows[0], ref2022: "---" }])).toBeNull();
+    expect(workbookEvidence(pair, [{ ...rows[0], ref2023: "" }])).toBeNull();
     expect(workbookEvidence(pair, [...rows, rows[0]])).toBeNull();
     expect(workbookEvidence({ ...pair, candidate_notices: [pair.candidate_notices[0]] }, rows)).toBeNull();
     expect(workbookEvidence({ ...pair, candidate_notices: pair.candidate_notices.map((item) => ({ ...item, tax_year: 2022 })) }, rows)).toBeNull();
