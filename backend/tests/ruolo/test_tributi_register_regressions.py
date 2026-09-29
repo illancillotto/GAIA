@@ -29,7 +29,10 @@ from app.modules.ruolo.notice_register_models import (
     NoticePosition,
     NoticeRecovery,
 )
+from app.modules.ruolo.registered_mail_schemas import RegisteredMailReviewEvidence
 from app.modules.ruolo.services import registered_mail_association
+from app.modules.ruolo.services.registered_mail_reference_check import verify_workbook_references
+from app.modules.ruolo.services.registered_mail_review_evidence import record_review_evidence
 from app.modules.utenze.models import (
     AnagraficaCompany,
     AnagraficaPaymentNotice,
@@ -308,6 +311,13 @@ def test_registered_mail_multi_association_publishes_cumulative_register():
         assert mail.raw_payload_json["manual_association"]["avviso_ids"] == [
             str(item.id) for item in avvisi
         ]
+        evidence = RegisteredMailReviewEvidence(
+            source_sha256="a" * 64, sheet="Dati", row=42, ref_2022="02022", ref_2023="02023"
+        )
+        record_review_evidence(db, mail, previous_ids=[], ids=[item.id for item in avvisi], evidence=evidence)
+        assert mail.raw_payload_json["manual_association"]["history"][0]["review_evidence"] == evidence.model_dump()
+        audit = db.scalar(select(NoticeAudit).order_by(NoticeAudit.version.desc()))
+        assert audit.after_json["review_evidence"] == evidence.model_dump()
 
         db.add(
             RuoloTributiPayment(
@@ -368,6 +378,72 @@ def test_registered_mail_multi_association_publishes_cumulative_register():
 
         registered_mail_association.set_manual_association(db, mail=mail, avviso=None, updated_by=7)
         assert all(position.avviso_id is None for position in db.scalars(select(NoticePosition)))
+
+
+def test_workbook_reference_check_requires_two_coherent_incass_notices():
+    with TestingSessionLocal() as db:
+        subject = AnagraficaSubject(source_name_raw="ROSSI MARIO")
+        other = AnagraficaSubject(source_name_raw="ALTRO")
+        job = RuoloTributiPostaOnlineImportJob(filename="reference-check.json", status="completed")
+        db.add_all([subject, other, job])
+        db.flush()
+        notices = [RuoloAvviso(
+            import_job_id=job.id, codice_cnc=f"CNC-{year}", anno_tributario=year,
+            subject_id=subject.id, codice_fiscale_raw="RSSMRA80A01H501Z",
+        ) for year in (2022, 2023)]
+        db.add_all(notices)
+        db.flush()
+        mail = RuoloTributiRegisteredMail(
+            source_shipment_id="REF-CHECK", match_status="ambiguous",
+            raw_payload_json={"candidate_avviso_ids": [str(item.id) for item in notices]},
+        )
+        db.add(mail)
+        db.flush()
+        def check():
+            return verify_workbook_references(db, mail_id=mail.id, ref_2022="02022", ref_2023="02023")
+
+        assert verify_workbook_references(db, mail_id=uuid4(), ref_2022="02022", ref_2023="02023")["verified"] is False
+        mail.source_system = "other"
+        assert check()["verified"] is False
+        mail.source_system = "posta_online"
+        mail.avviso_id = notices[0].id
+        assert check()["verified"] is False
+        mail.avviso_id = None
+        mail.raw_payload_json = {}
+        assert check()["reason"] == "Coppia di candidati non univoca"
+        mail.raw_payload_json = {"candidate_avviso_ids": ["invalid", str(notices[1].id)]}
+        assert check()["reason"] == "Identificativo candidato non valido"
+        mail.raw_payload_json = {"candidate_avviso_ids": [str(uuid4()), str(notices[1].id)]}
+        assert check()["reason"] == "Avvisi annuali incompleti"
+        mail.raw_payload_json = {"candidate_avviso_ids": [str(item.id) for item in notices]}
+        notices[1].anno_tributario = 2022
+        assert check()["reason"] == "Avvisi annuali incompleti"
+        notices[1].anno_tributario = 2023
+        notices[1].subject_id = other.id
+        assert check()["reason"] == "Contribuente non coerente fra gli avvisi"
+        notices[1].subject_id = subject.id
+        notices[1].codice_fiscale_raw = None
+        assert check()["reason"] == "Contribuente non coerente fra gli avvisi"
+        notices[1].codice_fiscale_raw = "RSSMRA80A01H501Z"
+        assert check()["reason"] == "Riferimento inCASS 2022 non trovato"
+        incass = [AnagraficaPaymentNotice(
+            source_system="incass", source_notice_id=f"0202{year % 10}", anno=str(year),
+            subject_id=subject.id, codice_fiscale="RSSMRA80A01H501Z",
+        ) for year in (2022, 2023)]
+        incass[0].source_notice_id = "02022"
+        incass[1].source_notice_id = "02023"
+        db.add(incass[0])
+        db.flush()
+        assert check()["reason"] == "Riferimento inCASS 2023 non trovato"
+        db.add(incass[1])
+        db.flush()
+        incass[1].subject_id = other.id
+        assert check()["reason"] == "Contribuente inCASS 2023 non coerente"
+        incass[1].subject_id = subject.id
+        incass[1].codice_fiscale = "OTHER"
+        assert check()["reason"] == "Contribuente inCASS 2023 non coerente"
+        incass[1].codice_fiscale = "RSSMRA80A01H501Z"
+        assert check() == {"verified": True, "reason": "Riferimenti inCASS e contribuente coerenti"}
 
 
 def test_registered_mail_manual_unlink_and_stale_target_remain_fail_closed():

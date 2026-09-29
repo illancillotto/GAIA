@@ -1,4 +1,6 @@
 from datetime import UTC, datetime
+from types import SimpleNamespace
+from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
@@ -7,6 +9,12 @@ from sqlalchemy.orm import Session
 
 from app.modules.ruolo.models import RuoloTributiRegisteredMail
 from app.modules.ruolo.notice_register_models import NoticeAttempt, NoticeDocument, NoticePosition
+from app.modules.ruolo.registered_mail_schemas import (
+    RegisteredMailReviewEvidence,
+    RuoloTributiRegisteredMailAssociationRequest,
+)
+from app.modules.ruolo.routes import registered_mail_routes
+from app.modules.ruolo.services import registered_mail_association, registered_mail_review_evidence
 from app.modules.ruolo.services import registered_mail_campaign_preview as service
 
 from .test_notice_import import _metadata
@@ -272,3 +280,99 @@ def test_manual_registered_mail_association_rejects_missing_subject(api_fixture)
     )
     assert response.status_code == 422
     assert response.json()["detail"] == "Gli avvisi devono appartenere allo stesso contribuente"
+
+
+def test_manual_association_forwards_validated_workbook_evidence(api_fixture, monkeypatch):  # noqa: F811
+    with api_fixture.session() as session:
+        notice = _avviso(session, 2022)
+        record = mail(session, raw_payload_json={"candidate_avviso_ids": [str(notice.id)]})
+        record_id = record.id
+        notice_ids = [str(notice.id)]
+        session.commit()
+
+    url = f"/ruolo/tributi/raccomandate/{record_id}/association"
+    evidence = {
+        "source_sha256": "a" * 64,
+        "sheet": "Dati",
+        "row": 42,
+        "ref_2022": "02022",
+        "ref_2023": "02023",
+    }
+    assert api_fixture.client.patch(url, json={"avviso_ids": notice_ids, "review_evidence": {**evidence, "row": 1}}).status_code == 422
+    captured = {}
+
+    def fake_set_manual_association(db, **kwargs):
+        captured.update(kwargs)
+        return kwargs["mail"]
+
+    monkeypatch.setattr(registered_mail_association, "set_manual_association", fake_set_manual_association)
+    monkeypatch.setattr(registered_mail_review_evidence, "verify_workbook_references", lambda db, **kwargs: {"verified": False, "reason": "inCASS non coerente"})
+    rejected = api_fixture.client.patch(url, json={"avviso_ids": notice_ids, "review_evidence": evidence})
+    assert rejected.status_code == 422
+    assert rejected.json()["detail"] == "inCASS non coerente"
+    monkeypatch.setattr(registered_mail_review_evidence, "verify_workbook_references", lambda db, **kwargs: {"verified": True, "reason": "ok"})
+    mismatch = api_fixture.client.patch(url, json={"avviso_ids": [], "review_evidence": evidence})
+    assert mismatch.status_code == 422
+    assert mismatch.json()["detail"] == "Coppia selezionata diversa dai candidati verificati"
+    response = api_fixture.client.patch(url, json={"avviso_ids": notice_ids, "review_evidence": evidence})
+    assert response.status_code == 200, response.text
+    with api_fixture.session() as session:
+        stored = session.get(RuoloTributiRegisteredMail, record_id)
+        assert stored.raw_payload_json["manual_association"]["review_evidence"] == evidence
+        assert stored.raw_payload_json["manual_association"]["history"][0]["review_evidence"] == evidence
+
+
+def test_reference_check_requires_editor_and_forwards_references(api_fixture, monkeypatch):  # noqa: F811
+    with api_fixture.session() as session:
+        record = mail(session)
+        record_id = record.id
+        session.commit()
+    captured = {}
+
+    def fake_verify(db, **kwargs):
+        captured.update(kwargs)
+        return {"verified": False, "reason": "test"}
+
+    monkeypatch.setattr(registered_mail_routes, "verify_workbook_references", fake_verify)
+    url = f"/ruolo/tributi/raccomandate/{record_id}/reference-check"
+    payload = {"ref_2022": "02022", "ref_2023": "02023"}
+    assert api_fixture.client.post(url, json=payload, headers=_headers(2)).status_code == 403
+    assert api_fixture.client.post(url, json={**payload, "ref_2022": ""}).status_code == 422
+    response = api_fixture.client.post(url, json=payload)
+    assert response.json() == {"verified": False, "reason": "test"}
+    assert captured == {"mail_id": record_id, **payload}
+
+
+def test_manual_association_rejects_missing_mail_duplicate_and_unknown_notice(api_fixture):  # noqa: F811
+    url = "/ruolo/tributi/raccomandate"
+    assert api_fixture.client.patch(f"{url}/{uuid4()}/association", json={"avviso_ids": []}).status_code == 404
+    with api_fixture.session() as session:
+        record = mail(session)
+        record_id = record.id
+        session.commit()
+    assert api_fixture.client.patch(f"{url}/{record_id}/association", json={"avviso_ids": [str(uuid4()), str(uuid4())]}).status_code == 404
+    repeated = str(uuid4())
+    response = api_fixture.client.patch(f"{url}/{record_id}/association", json={"avviso_ids": [repeated, repeated]})
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Avvisi duplicati"
+    assert api_fixture.client.patch(f"{url}/{record_id}/association", json={"avviso_id": repeated}).status_code == 404
+
+
+def test_review_evidence_optional_helpers():
+    assert registered_mail_review_evidence.association_ids(RuoloTributiRegisteredMailAssociationRequest()) == []
+    record = RuoloTributiRegisteredMail(source_shipment_id="none")
+    registered_mail_review_evidence.record_review_evidence(None, record, previous_ids=[], ids=[], evidence=None)
+    assert record.raw_payload_json is None
+
+
+def test_review_evidence_can_record_without_existing_audit():
+    record = RuoloTributiRegisteredMail(id=uuid4(), source_shipment_id="auditless")
+    db = SimpleNamespace(scalar=Mock(side_effect=[SimpleNamespace(document_id=uuid4()), None]))
+    evidence = RegisteredMailReviewEvidence(
+        source_sha256="a" * 64, sheet="Dati", row=2, ref_2022="02022", ref_2023="02023"
+    )
+    registered_mail_review_evidence.record_review_evidence(
+        db, record, previous_ids=[], ids=[uuid4()], evidence=evidence
+    )
+    assert record.raw_payload_json["manual_association"]["history"][0]["review_evidence"] == evidence.model_dump()
+    assert db.scalar.call_count == 2

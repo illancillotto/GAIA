@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   listTributiAvvisi: vi.fn(),
   listTributiRegisteredMails: vi.fn(),
   getTributiRegisteredMailSummary: vi.fn(),
+  getRegisteredMailCampaignPreview: vi.fn(),
+  checkRegisteredMailReferences: vi.fn(),
   updateTributiRegisteredMailAssociation: vi.fn(),
   useSessionBootstrap: vi.fn(),
 }));
@@ -25,6 +27,8 @@ vi.mock("@/lib/ruolo-api", () => ({
 
 vi.mock("@/lib/registered-mail-api", () => ({
   getTributiRegisteredMailSummary: mocks.getTributiRegisteredMailSummary,
+  getRegisteredMailCampaignPreview: mocks.getRegisteredMailCampaignPreview,
+  checkRegisteredMailReferences: mocks.checkRegisteredMailReferences,
   updateTributiRegisteredMailAssociation: mocks.updateTributiRegisteredMailAssociation,
 }));
 
@@ -106,6 +110,8 @@ describe("RegisteredMailsConsole", () => {
     mocks.listTributiAvvisi.mockReset();
     mocks.listTributiRegisteredMails.mockReset();
     mocks.getTributiRegisteredMailSummary.mockReset();
+    mocks.getRegisteredMailCampaignPreview.mockReset();
+    mocks.getRegisteredMailCampaignPreview.mockResolvedValue({ campaign: "historical_poste_2022_2023", created_before: "", expected_years: [2022, 2023], read_only: true, total: 0, counts: {}, items: [] });
     mocks.getTributiRegisteredMailSummary.mockResolvedValue({ total: 2307, associated: 113, anomalies: 2194 });
     mocks.updateTributiRegisteredMailAssociation.mockReset();
     mocks.useSessionBootstrap.mockReset();

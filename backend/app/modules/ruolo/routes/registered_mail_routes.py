@@ -13,12 +13,19 @@ from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.modules.ruolo.models import RuoloAvviso, RuoloTributiRegisteredMail
 from app.modules.ruolo.registered_mail_schemas import (
+    RegisteredMailReferenceCheckRequest,
     RuoloTributiRegisteredMailAssociationRequest,
     RuoloTributiRegisteredMailSummaryResponse,
 )
 from app.modules.ruolo.schemas import RuoloTributiRegisteredMailResponse
 from app.modules.ruolo.services import registered_mail_association
 from app.modules.ruolo.services.registered_mail_campaign_preview import preview_campaign
+from app.modules.ruolo.services.registered_mail_reference_check import verify_workbook_references
+from app.modules.ruolo.services.registered_mail_review_evidence import (
+    association_ids,
+    record_review_evidence,
+    validate_review_evidence,
+)
 
 router = APIRouter(
     prefix="/tributi/raccomandate",
@@ -77,10 +84,7 @@ def update_registered_mail_association(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Raccomandata non trovata"
         )
-    ids = payload.avviso_ids
-    if ids is None and payload.avviso_id is not None:
-        ids = [payload.avviso_id]
-    ids = ids or []
+    ids = association_ids(payload)
     if len(set(ids)) != len(ids):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Avvisi duplicati"
@@ -88,6 +92,8 @@ def update_registered_mail_association(
     avvisi = [db.get(RuoloAvviso, item) for item in ids]
     if any(item is None for item in avvisi):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avviso non trovato")
+    validate_review_evidence(db, mail, ids, payload.review_evidence)
+    previous_ids = [str(item) for item in registered_mail_association.associated_avviso_ids(mail)]
     avviso = avvisi[0] if avvisi else None
     try:
         updated = registered_mail_association.set_manual_association(
@@ -101,8 +107,21 @@ def update_registered_mail_association(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
+    record_review_evidence(db, updated, previous_ids=previous_ids, ids=ids, evidence=payload.review_evidence)
     db.commit()
     db.refresh(updated)
     result = RuoloTributiRegisteredMailResponse.model_validate(updated)
     result.avviso_ids = ids
     return result
+
+
+@router.post("/{mail_id}/reference-check")
+def check_registered_mail_references(
+    mail_id: uuid.UUID,
+    payload: RegisteredMailReferenceCheckRequest,
+    current_user: Editor,
+    db: Session = Depends(get_db),
+) -> dict[str, str | bool]:
+    return verify_workbook_references(
+        db, mail_id=mail_id, ref_2022=payload.ref_2022, ref_2023=payload.ref_2023
+    )

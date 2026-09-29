@@ -7,7 +7,7 @@ export default function RuoloRaccomandatePage() {
   return (
     <RuoloModulePage
       title="Raccomandate Poste Online"
-      description="Console read-only per matching, anomalie e recupero operativo degli invii Poste collegati ai tributi."
+      description="Revisione delle associazioni tra invii Poste e avvisi, con conferma individuale dell'operatore."
       breadcrumb="Raccomandate"
       requiredSection="ruolo.tributi.view"
     >

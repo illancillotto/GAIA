@@ -15,6 +15,7 @@ import type {
   RuoloTributiRegisteredMailSummaryResponse,
 } from "@/types/ruolo";
 import { RegisteredMailAssociationModal } from "./registered-mail-association-modal";
+import { RegisteredMailReconciliation } from "./registered-mail-reconciliation";
 
 const PAGE_SIZE = 25;
 
@@ -364,11 +365,9 @@ export function RegisteredMailsAccess() {
   if (!hasModule || !session.grantedSectionKeys.includes("ruolo.tributi.view")) {
     return <p role="alert">Accesso alle raccomandate non autorizzato.</p>;
   }
-  return (
-    <RegisteredMailsConsole
-      canEdit={session.grantedSectionKeys.includes("ruolo.tributi.manage_status")}
-      key={session.token}
-      token={session.token}
-    />
-  );
+  const canEdit = session.grantedSectionKeys.includes("ruolo.tributi.manage_status");
+  return <>
+    <RegisteredMailReconciliation canEdit={canEdit} token={session.token} />
+    <RegisteredMailsConsole canEdit={canEdit} key={session.token} token={session.token} />
+  </>;
 }

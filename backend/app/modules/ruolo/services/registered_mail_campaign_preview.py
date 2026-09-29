@@ -41,6 +41,8 @@ def _notice(avviso: RuoloAvviso) -> dict:
         "subject_id": str(avviso.subject_id) if avviso.subject_id else None,
         "tax_year": avviso.anno_tributario,
         "codice_cnc": avviso.codice_cnc,
+        "codice_fiscale": avviso.codice_fiscale_raw,
+        "nominativo": avviso.nominativo_raw,
     }
 
 
@@ -78,6 +80,9 @@ def _proposal(mail: RuoloTributiRegisteredMail, by_id: dict, by_subject: dict) -
     return {
         "mail_id": str(mail.id),
         "source_shipment_id": mail.source_shipment_id,
+        "recipient_name": mail.recipient_name,
+        "recipient_address": mail.recipient_address,
+        "tracking_number": mail.tracking_number,
         "legacy_avviso_id": str(mail.avviso_id) if mail.avviso_id else None,
         "classification": classification,
         "reasons": reasons,
