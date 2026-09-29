@@ -1230,3 +1230,14 @@ dell'originale. Il retry bulk della campagna non e adatto a questo incidente,
 perche valuta tutti gli item falliti dello scope e si blocca se uno richiede
 la richiesta originale. Eseguire prima un canary limitato e misurare esito,
 nuovi submit falliti e correlazione dei download.
+
+Per le richieste storiche ancora nel batch `perpetual_sync` in lavorazione,
+`python -m app.scripts.recover_sister_sections <batch-id> --request-id <request-id> --limit 1`
+verifica in dry-run un canary entro la capacita libera del batch. Aggiungere
+`--apply` per mettere in coda la stessa richiesta, verificare l'esito SISTER e
+poi ripetere senza `--request-id` e con `--limit 20` per recuperi graduali. Il
+comando richiede il collegamento catastale `matched`,
+la sezione canonica presente nel menu dell'artifact `final-failed.html`, il
+messaggio di sezione obbligatoria e l'assenza di ID/stato remoto, documento o
+claim. Conserva ID, tentativi, errore e artifact; non crea una nuova richiesta.
+Le richieste senza artifact o con tentativi esauriti restano in revisione.
