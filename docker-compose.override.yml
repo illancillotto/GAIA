@@ -34,7 +34,7 @@ services:
       - catasto-data:/data/catasto
       - .:/app/docs:ro
       - ${HOME}:${HOME}
-      - /home/cbo/CursorProjects/presenze-scraper:/opt/presenze-scraper:ro
+      - ${PRESENZE_SCRAPER_HOST_PATH:-/home/cbo/CursorProjects/presenze-scraper}:/opt/presenze-scraper:ro
     ports:
       - "${BACKEND_PORT:-8000}:8000"
 
@@ -47,7 +47,7 @@ services:
     volumes:
       - ./backend:/app
       - catasto-data:/data/catasto
-      - /home/cbo/CursorProjects/presenze-scraper:/opt/presenze-scraper:ro
+      - ${PRESENZE_SCRAPER_HOST_PATH:-/home/cbo/CursorProjects/presenze-scraper}:/opt/presenze-scraper:ro
 
   frontend:
     command: sh /app/scripts/dev-entrypoint.sh
