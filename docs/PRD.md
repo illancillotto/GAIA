@@ -143,3 +143,14 @@ Fornire un unico punto di accesso operativo per:
 4. avanzamento del dominio Inventory con correlazione ai dati Network
 5. hardening operativo, permessi applicativi e documentazione trasversale
 6. convergenza frontend `GAIA CED` per i domini infrastrutturali NAS e Rete
+
+
+## Requisito Presenze completato — 2026-10-01
+
+- [x] Contratto booleano `meal_voucher_manual` in LAN e poll outbound.
+- [x] Persistenza con lock, audit idempotente, autore canonico e permessi esistenti.
+- [x] Compatibilità KM/reperibilità e conteggio manuale OR automatico.
+- [x] Test di comportamento e coverage statement/branch 100% nel perimetro modificato.
+
+Stato operativo, verifiche e residui: `domain-docs/presenze/docs/GATE_MEAL_VOUCHER_ENTRY.md`. Nessuna modifica al frontend GAIA;
+il comando mensile è nella console GATE.

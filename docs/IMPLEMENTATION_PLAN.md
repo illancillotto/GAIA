@@ -412,3 +412,14 @@ assegna al servizio singleton `platform-scheduler`. Le milestone successive
 ottimizzano Ruolo, introducono lease/fencing sulle code persistenti e applicano
 isolamento e limiti operativi per famiglia worker. Deploy e restart produzione
 non sono impliciti nell'implementazione locale.
+
+
+## Integrazione GATE completata — 2026-10-01
+
+- [x] Contratto booleano `meal_voucher_manual` in LAN e poll outbound.
+- [x] Persistenza con lock, audit idempotente, autore canonico e permessi esistenti.
+- [x] Compatibilità KM/reperibilità e conteggio manuale OR automatico.
+- [x] Test di comportamento e coverage statement/branch 100% nel perimetro modificato.
+
+Stato operativo, verifiche e residui: `domain-docs/presenze/docs/GATE_MEAL_VOUCHER_ENTRY.md`. Nessuna modifica al frontend GAIA;
+il comando mensile è nella console GATE.

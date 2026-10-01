@@ -334,3 +334,14 @@ implementazione, test concorrenza/migration, quality gate, documentazione/mappe,
 review e commit soltanto dopo gate soddisfatti. Stato verificabile in
 [PROGRESS_PRESENZE](PROGRESS_PRESENZE.md); specifica dettagliata nell'
 [implementazione Giornaliere](IMPLEMENTATION_PRESENZE_COLLABORATORI_GIORNALIERE.md).
+
+
+## Buono pasto manuale da GATE — 2026-10-01
+
+- [x] Contratto booleano `meal_voucher_manual` in LAN e poll outbound.
+- [x] Persistenza con lock, audit idempotente, autore canonico e permessi esistenti.
+- [x] Compatibilità KM/reperibilità e conteggio manuale OR automatico.
+- [x] Test di comportamento e coverage statement/branch 100% nel perimetro modificato.
+
+Stato operativo, verifiche e residui: `GATE_MEAL_VOUCHER_ENTRY.md`. Nessuna modifica al frontend GAIA;
+il comando mensile è nella console GATE.
