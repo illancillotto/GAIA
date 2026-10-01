@@ -997,3 +997,16 @@ con chunk semantici completati senza warning. Nessun push/deploy o sync INAZ liv
 - [ ] Deploy coordinato dopo backup/migration; collaudo reale.
 
 Dettagli: [GATE_MEAL_VOUCHER_ENTRY.md](GATE_MEAL_VOUCHER_ENTRY.md).
+
+
+### Rilascio buoni pasto GATE/GAIA — 2026-10-01
+
+- [x] Gate CI completo contro `f687c213`, baseline riproducibile e stile passati.
+- [x] Copertura statement/branch 100% dei runtime del contratto e della chiusura ratchet.
+- [x] Backup mirato della tabella modificata verificato, migration `20261001_1400` applicata.
+- [x] Backend e sync rilasciati con `meal-voucher-ffa557fe`, healthy; checkout/hotfix e altri servizi preservati.
+- [x] GATE VPS `105d9a5`, pulsante presente, auth 401, snapshot/settembre e record rappresentativo coerenti.
+- [x] Outbound post-deploy riuscito alle 14:55:30 UTC; Graphify codice e documenti aggiornati.
+- [ ] Collaudo operativo su una persona/giornata reale.
+
+Dettagli, backup, override operativo e matrice test: `GATE_MEAL_VOUCHER_ENTRY.md`.

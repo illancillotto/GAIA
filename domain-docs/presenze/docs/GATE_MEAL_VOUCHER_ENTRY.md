@@ -33,7 +33,30 @@ Frontend GAIA non modificato in questa integrazione: il comando è nella
 console GATE e usa il dialogo mensile esistente. Contratto, uso e matrice test
 sono documentati in GATE: `docs/PRESENZE_MEAL_VOUCHER_ENTRY.md`.
 
-Stato operativo: deploy in preparazione, da verificare dopo backup DB,
-migration `20261001_1400`, aggiornamento backend e servizio `gate-mobile-sync`.
-Preservare il checkout remoto e le hotfix preesistenti; aggiornare i due servizi con immagine e sorgente della release isolata,
-sostituendo il bind `/app` del backend senza modificare il checkout remoto. Il collaudo su una persona reale resta separato.
+Stato operativo: rilasciato il 2026-10-01. Immagine
+`gaia-backend:meal-voucher-ffa557fe`, sorgenti dello stesso commit in
+`/opt/gaia/releases/meal-voucher-ffa557fe/backend` per il bind `/app`.
+Migration `20261001_1400` applicata. Backup della tabella modificata
+`presenze_daily_records` verificato con `pg_restore --list` (289 MB), file
+`/opt/gaia/releases/meal-voucher-ffa557fe/presenze-daily-records-pre-deploy.dump`.
+Il tentativo di backup integrale, interrotto per gli archivi Catasto, non è
+considerato un backup; il dump incompleto è stato rimosso.
+
+Solo backend e `gate-mobile-sync` ricreati, entrambi healthy; gli altri servizi
+conservano gli ID precedenti. Checkout remoto e hotfix preservati, checksum
+Compose invariati. L'override operativo aggiunto è
+`/opt/gaia/docker-compose.meal-voucher.yml`: mantenerlo nei comandi Compose,
+insieme a `docker-compose.override.yml` per backend e a
+`docker-compose.team-delete.yml` per sync. Non sostituire il bind della release
+con quello del checkout remoto durante le operazioni successive.
+
+GATE VPS è alla release `105d9a5`, console
+https://static.186.92.233.167.clients.your-server.de/admin .
+Schema runtime, colonne e snapshot LAN verificati; settembre contiene 5670
+giornaliere con booleano manuale. Lo stesso campo è arrivato nella cache GATE
+e un record rappresentativo coincide in lettura. Il ciclo outbound post-deploy è riuscito: avvio 14:52:28 UTC,
+conclusione 14:55:30 UTC, senza errore. I 502 del riavvio VPS sono transitori.
+Il collaudo operativo su una persona/giornata reale resta separato.
+
+
+FINAL QUALITY GATE — PASS
