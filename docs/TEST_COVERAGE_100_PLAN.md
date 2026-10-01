@@ -17,6 +17,51 @@ Il gate sui file cambiati a `100%` resta attivo come protezione immediata, ma no
 
 ## Stato di partenza
 
+### Presenze giornaliere — chiusura coverage autorizzata - 2026-10-01
+
+La successiva richiesta di risolvere coverage e mese vuoto autorizza il runtime
+mirato. Il working tree contiene gia la guardia sul selettore, la rimozione dei
+rami ridondanti e l'aggiornamento condiviso degli editor chiusi; consolidati e
+verificati senza rimuovere modifiche concorrenti.
+Coverage diretta sul sorgente versionato, non su una copia: pagina e
+`presenze-editor-state.ts` raggiungono 100% statement, branch, funzioni e righe
+(1189/1189 statement, 1353/1353 branch, 310/310 funzioni, 979/979 righe).
+Il commento V8 file-wide della pagina e rimosso; nessuna nuova esclusione o
+soglia ridotta. 191 test mirati passati, inclusa una regressione dedicata al
+mese vuoto e due E2E con cancellazione del mese. I denominatori differiscono
+dalla caratterizzazione storica per la pulizia runtime e le modifiche UI
+concorrenti: non confrontare le percentuali come se il runtime fosse identico.
+I due impedimenti coverage/mese vuoto sono risolti. Riesame su `65f69cd5`:
+coverage diretta 100% con denominatori attuali 1187 statement, 1353 branch,
+309 funzioni e 978 righe. Ratchet pagina/editor contro `origin/main` passato;
+3058 unit, 18 smoke, 3 E2E, type-check, lint e build clean passati.
+Gate della tranche frontend PASS; evidenze e limiti nel report Presenze,
+sezione 11. Non equivale alla coverage 100% del repository o alla verifica
+delle change backend/GATE/Wiki concorrenti.
+
+### Presenze giornaliere test-only - 2026-10-01
+
+186 test pagina passati dopo il riesame dei residui. Misura reale full-file senza
+i commenti V8 che escludono la pagina: statement 1181/1185 (99,66%), branch
+1379/1417 (97,31%),
+funzioni 306/306 e linee 979/979 (100%). Il gate con quattro soglie a 100
+fallisce; non e una prova di copertura al 100% del repository.
+Runtime/configurazione/esclusioni versionate non modificati, per vincolo
+esplicito solo test. Alcuni rami sono irraggiungibili dall'interfaccia corrente;
+altri fallback difensivi richiedono valutazione ulteriore, senza test artificiali.
+La misura usa una copia verificata del runtime priva dei soli ignore file-wide.
+La guardia del rendering gia completo e ora coperta da un salvataggio KM reale;
+due branch del dettaglio sono coperti da autorizzazioni senza timbrature.
+Quattro statement e 38 esiti branch restano scoperti. I fallback per minuti
+operativi/righe dettaglio null sono fuori dal contratto API non-null; non vengono
+fabbricati payload incompatibili per raggiungere il 100%.
+Il riesame ha anche rilevato un errore runtime quando si cancella il mese:
+`formatMonthLabel` riceve una data invalida. Il difetto resta aperto nel vincolo
+solo test; l'evidenza negativa non viene presentata come test passato.
+Dettagli, linee residue e regression gate nel
+[report Presenze](../domain-docs/presenze/docs/PRESENZE_GIORNALIERE_FINAL_VALIDATION_2026-10-01.md).
+L'obiettivo resta aperto, senza riduzione soglie o nuova eccezione alla policy.
+
 ### Verifica Catasto GIS - 2026-09-07
 
 Il consolidamento dei controlli layer aggiunge test di integrazione della pagina

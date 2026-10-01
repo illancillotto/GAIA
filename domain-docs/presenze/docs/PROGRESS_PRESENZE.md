@@ -1,5 +1,83 @@
 # Progress Presenze
 
+## Riesame finale giornaliere - 2026-10-01
+
+- [x] Su `65f69cd5`: ratchet pagina/editor contro `origin/main` passato,
+  `findings: []`, senza modificare baseline o scanner nel riesame.
+- [x] Coverage diretta 100%: 1187 statement, 1353 branch, 309 funzioni,
+  978 righe; 191 test mirati. Nessuna esclusione file-wide.
+- [x] 248 file / 3058 unit, 18 smoke, type-check, lint, build clean isolato,
+  3 E2E Chromium e 83 test tooling passati.
+- [x] Report e piani riallineati; Graphify frontend verificato e docs aggiornati.
+- Residui separati: complessita/warning legacy e verifiche live INAZ/GATE/DB,
+  non gate della tranche frontend. Modifiche concorrenti preservate.
+  Esito della tranche: PASS; dettagli e matrice nella
+  [sezione 11 del report](PRESENZE_GIORNALIERE_FINAL_VALIDATION_2026-10-01.md#11-riesame-sul-checkout-corrente--2026-10-01).
+
+## Chiusura coverage e mese vuoto autorizzata - 2026-10-01
+
+- La richiesta successiva autorizza la risoluzione runtime dei due impedimenti.
+  Consolidati i cambi gia presenti nel working tree, senza rimuovere controlli
+  INAZ/buoni pasto o altri sviluppi concorrenti.
+- Coverage full-file diretta della pagina e di `presenze-editor-state.ts`:
+  100% su tutte le metriche, 1189 statement, 1353 branch, 310 funzioni,
+  979 righe; 191 test mirati passati. Nessun ignore V8 o soglia ridotta.
+- Mese vuoto ignorato conservando mese valido e dettaglio: regressione unitaria
+  dedicata e due E2E Chromium passati. Smoke, lint, type-check e build clean
+  isolato passati. Rimosso solo un describe vuoto in una suite concorrente,
+  senza eliminare test o assertion; regressione globale ripetuta.
+- Repeat globale: 248/248 file e 3058/3058 test passati. Graphify frontend e
+  corpus docs completati; chunk semantici verificati, nessuna failure.
+- I problemi 1 e 2 sono risolti, ma non viene dichiarato PASS del working tree:
+  ratchet origin/main rosso sui callback del diff misto; confronto HEAD segnala
+  anche il nuovo stato del refresh INAZ concorrente. Nessuna baseline modificata.
+  Evidenze nel [report finale](PRESENZE_GIORNALIERE_FINAL_VALIDATION_2026-10-01.md#10-risoluzione-runtime-autorizzata).
+
+## Riesame residui giornaliere test-only - 2026-10-01
+
+- Aggiunti quattro casi: ricalcolo matrice dopo espansione completa e salvataggio
+  KM, autorizzazione senza righe INAZ (entrata/uscita), risposta mensile
+  concorrente con editor KM. 186/186 test pagina passati.
+- Coverage reale: statement 1181/1185 (99,66%), branch 1379/1417 (97,31%),
+  funzioni/linee 100%, denominatori invariati. Coperti la guardia a 1210 e i
+  branch a 2797/2820. Restano 4 statement e 38 esiti branch scoperti.
+- Regression: 2866/2866 unit su 244 file, 18/18 smoke; lint mirato e type-check
+  passati. Runtime, complessita, configurazioni e soglie invariate.
+- Rilevato `RangeError` in `formatMonthLabel` cancellando il mese: evidenza
+  negativa e riproduttore conservati, nessuna correzione runtime autorizzata.
+  Gate integrale ancora FAIL; dettagli nel
+  [report](PRESENZE_GIORNALIERE_FINAL_VALIDATION_2026-10-01.md#8-riesame-residui-test-only).
+
+## Follow-up gate frontend test-only - 2026-10-01
+
+- Primo passo autorizzato completato: smoke riallineati ai moduli API,
+  registro servizi/dashboard e pannelli GIS; test Ruolo aggiornato al registro
+  solleciti read-only, senza runtime o configurazioni modificati.
+- Regression frontend: 18/18 smoke e 2862/2862 unit su 244 file; 27/27 prove
+  mirate import/solleciti. Lint mirato/globale, type-check e build clean isolato
+  passati. Warning legacy preservati, nessuna failure soppressa.
+- Le sei failure smoke iniziali erano quattro percorsi API obsoleti e due
+  assertion obsolete, non sei ENOENT. Diagnosi dettagliata e risultati nel
+  [report aggiornato](PRESENZE_GIORNALIERE_FINAL_VALIDATION_2026-10-01.md#7-follow-up-autorizzato--ripristino-gate-frontend).
+- Il gate integrale resta FAIL per coverage Presenze full-file sotto il 100%;
+  riesame residui e pulizia runtime non inclusi nel ripristino dei test globali.
+
+## Verifica finale giornaliere test-only - 2026-10-01
+
+- Caratterizzazione completata: 182 test pagina e 2 E2E gerarchici passati.
+  E2E resi deterministici selezionando il mese della fixture. Nessun runtime,
+  dipendenza, API o schema modificato; working tree concorrente preservato.
+- Coverage reale senza ignore V8 dell'intera pagina: statement 1180/1185
+  (99,57%), branch 1376/1417 (97,10%), funzioni 306/306 e linee 979/979.
+  Obiettivo full-file 100% residuo: vincolo esplicito solo test mantenuto.
+- Build pulito isolato, type-check, lint e ratchet mirato passati. Gate globale
+  rosso: 1 unit Ruolo e 6 smoke su percorso API obsoleto, fuori scope.
+- Matrice, linee scoperte, limiti e debito in
+  [report finale](PRESENZE_GIORNALIERE_FINAL_VALIDATION_2026-10-01.md).
+  Esito finale FAIL, nessun commit o rilascio.
+- Graphify frontend senza cambi di topologia; corpus docs Presenze/piattaforma
+  aggiornati con `gpt-reserve`, chunk 1/1 completato e nessuna failure semantica.
+
 ## Risposta WAHA NOWEB e riconciliazione identita - 2026-09-16
 
 - Il sender gestisce anche la risposta Baileys `key` di WAHA NOWEB,

@@ -27,7 +27,7 @@ test("frontend package exposes core scripts and redesign dependencies", () => {
 });
 
 test("frontend api client defaults to same-origin api base", () => {
-  const apiClient = read("src/lib/api.ts");
+  const apiClient = read("src/lib/api/core.ts");
 
   assert.match(apiClient, /const DEFAULT_API_BASE_URL = "\/api"/);
 });
@@ -88,6 +88,9 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   const catastoCapacitasPage = read("src/app/catasto/capacitas/page.tsx");
   const catastoPageWrapper = read("src/components/catasto/catasto-page.tsx");
   const elaborazioniDashboardPage = read("src/app/elaborazioni/page.tsx");
+  const syncDashboardServices = read("src/lib/sync-dashboard-services.ts");
+  const syncDashboardJobs = read("src/lib/sync-dashboard-jobs.ts");
+  const syncDashboardHook = read("src/components/elaborazioni/use-sync-dashboard.ts");
   const elaborazioniSettingsPage = read("src/app/elaborazioni/settings/page.tsx");
   const elaborazioniCapacitasPage = read("src/app/elaborazioni/capacitas/page.tsx");
   const newBatchPage = read("src/app/catasto/new-batch/page.tsx");
@@ -112,6 +115,8 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   const elaborazioniAdeAlignmentPage = read("src/app/elaborazioni/ade-alignment/page.tsx");
   const elaborazioniAdeAlignmentWorkspace = read("src/components/elaborazioni/ade-alignment-workspace.tsx");
   const gisPage = read("src/app/catasto/gis/page.tsx");
+  const deliveryPointQuickFilters = read("src/components/catasto/gis/DeliveryPointQuickFilters.tsx");
+  const adeAlignmentPanel = read("src/components/catasto/gis/AdeAlignmentPanel.tsx");
   const mapContainer = read("src/components/catasto/gis/MapContainer.tsx");
   const catastoApi = read("src/lib/api/catasto.ts");
   const catastoTypes = read("src/types/catasto.ts");
@@ -133,9 +138,13 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(catastoSettingsPage, /redirect\("\/elaborazioni\/settings"\)/);
   assert.match(catastoCapacitasPage, /redirect\("\/elaborazioni\/capacitas"\)/);
   assert.match(elaborazioniDashboardPage, /GAIA Elaborazioni/);
-  assert.match(elaborazioniDashboardPage, /\/elaborazioni\/capacitas/);
-  assert.match(elaborazioniDashboardPage, /\/elaborazioni\/ade-alignment/);
-  assert.match(elaborazioniDashboardPage, /getGateMobileSyncStatus/);
+  assert.match(elaborazioniDashboardPage, /SYNC_SERVICES/);
+  assert.match(elaborazioniDashboardPage, /useSyncDashboard/);
+  assert.match(syncDashboardServices, /SYNC_JOB_SERVICES/);
+  assert.match(syncDashboardJobs, /\/elaborazioni\/capacitas/);
+  assert.match(syncDashboardServices, /\/elaborazioni\/ade-alignment/);
+  assert.match(syncDashboardHook, /service\.load\(token\)/);
+  assert.match(syncDashboardServices, /getGateMobileSyncStatus/);
   assert.match(read("src/components/elaborazioni/gaia-mobile-sync-workspace.tsx"), /GAIA Mobile Sync/);
   assert.match(elaborazioniSettingsPage, /ElaborazioniSettingsWorkspace/);
   assert.match(read("src/components/elaborazioni/elaborazioni-credential-tabs.tsx"), /Presenze INAZ/);
@@ -238,10 +247,13 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(mapContainer, /id: "delivery-points-without-meter"/);
   assert.match(mapContainer, /id: "irrigation-canals-line"/);
   assert.match(gisPage, /catastoRefreshDeliveryPointsGisCache/);
-  assert.match(gisPage, /Aggiorna cache/);
-  assert.match(gisPage, /Stato allineamento AdE/);
-  assert.match(gisPage, /\/elaborazioni\/ade-alignment/);
-  assert.match(gisPage, /progress_message/);
+  assert.match(gisPage, /<DeliveryPointQuickFilters/);
+  assert.match(gisPage, /onRefreshCache=\{\(\) => void handleRefreshDeliveryPointsGisCache\(\)\}/);
+  assert.match(deliveryPointQuickFilters, /Aggiorna cache/);
+  assert.match(gisPage, /<AdeAlignmentPanel/);
+  assert.match(adeAlignmentPanel, /Stato allineamento AdE/);
+  assert.match(adeAlignmentPanel, /\/elaborazioni\/ade-alignment/);
+  assert.match(adeAlignmentPanel, /progress_message/);
   assert.match(requestWorkspace, /createElaborazioneBatch/);
   assert.match(requestWorkspace, /startElaborazioneBatch/);
   assert.match(requestWorkspace, /Scarica template CSV/);
@@ -325,7 +337,7 @@ test("effective permissions page keeps preview and persistent table", () => {
 
 test("utenze dashboard opens subject and document summaries in modal overlays", () => {
   const dashboardPage = read("src/app/utenze/page.tsx");
-  const apiClient = read("src/lib/api.ts");
+  const apiClient = read("src/lib/api/utenze.ts");
 
   assert.match(dashboardPage, /selectedSubject/);
   assert.match(dashboardPage, /<iframe/);
@@ -342,7 +354,7 @@ test("utenze dashboard opens subject and document summaries in modal overlays", 
 test("utenze subject detail exposes quick visura action wired to elaborazioni runtime", () => {
   const subjectDetailPage = read("src/app/utenze/[id]/page.tsx");
   const subjectVisuraCard = read("src/components/utenze/utenze-subject-visura-card.tsx");
-  const apiClient = read("src/lib/api.ts");
+  const apiClient = read("src/lib/api/elaborazioni-jobs.ts");
 
   assert.match(subjectVisuraCard, /Visura per soggetto/);
   assert.match(subjectDetailPage, /UtenzeSubjectVisuraCard/);
@@ -373,7 +385,9 @@ test("catasto anagrafica bulk export normalizes foglio+sezione and exposes ruolo
   assert.match(panel, /function inferKindFromHeaders/);
   assert.match(panel, /CF_PIVA_PARTICELLE/);
   assert.match(panel, /COMUNE_FOGLIO_PARTICELLA_INTESTATARI/);
-  assert.match(panel, /codice_fiscale oppure partita_iva/);
+  assert.match(panel, /pickColumn\(headers, \["codice_fiscale", "cf"\]\)/);
+  assert.match(panel, /pickColumn\(headers, \["partita_iva", "piva", "iva"\]\)/);
+  assert.match(panel, /hasTax && !hasCadastral/);
   assert.match(panel, /Richieste: comune, foglio, particella/);
   assert.match(panel, /catastoDownloadElaborazioneMassivaJobExport/);
 });
@@ -410,7 +424,7 @@ test("catasto particelle page exposes solo a ruolo toggle", () => {
 
 test("utenze detail page keeps preview modal and delete password flow", () => {
   const detailPage = read("src/app/utenze/[id]/page.tsx");
-  const apiClient = read("src/lib/api.ts");
+  const apiClient = read("src/lib/api/utenze.ts");
 
   assert.match(detailPage, /Anteprima documento/);
   assert.match(detailPage, /iframe className=/);

@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   importTributiPayments: vi.fn(),
   listTributiPaymentImportJobs: vi.fn(),
   listTributiPaymentImportUnmatched: vi.fn(),
+  useSessionBootstrap: vi.fn(),
+  listTributiReminderBatches: vi.fn(),
 }));
 
 function buildPaymentImportJob(overrides: Record<string, unknown> = {}) {
@@ -36,10 +38,15 @@ vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: mocks.getStoredAccessToken,
 }));
 
+vi.mock("@/lib/use-session-bootstrap", () => ({
+  useSessionBootstrap: mocks.useSessionBootstrap,
+}));
+
 vi.mock("@/lib/ruolo-api", () => ({
   importTributiPayments: mocks.importTributiPayments,
   listTributiPaymentImportJobs: mocks.listTributiPaymentImportJobs,
   listTributiPaymentImportUnmatched: mocks.listTributiPaymentImportUnmatched,
+  listTributiReminderBatches: mocks.listTributiReminderBatches,
 }));
 
 vi.mock("@/components/app/protected-page", () => ({
@@ -57,8 +64,17 @@ vi.mock("@/components/app/protected-page", () => ({
   ),
 }));
 
-describe("Ruolo tributi placeholder pages", () => {
+describe("Ruolo tributi import and reminders pages", () => {
   beforeEach(() => {
+    mocks.useSessionBootstrap.mockReset();
+    mocks.listTributiReminderBatches.mockReset();
+    mocks.useSessionBootstrap.mockReturnValue({
+      status: "ready",
+      token: "token",
+      currentUser: { role: "viewer", enabled_modules: ["ruolo"] },
+      grantedSectionKeys: ["ruolo.tributi.view"],
+    });
+    mocks.listTributiReminderBatches.mockResolvedValue({ items: [], total: 0 });
     mocks.getStoredAccessToken.mockReturnValue("token");
     mocks.importTributiPayments.mockReset();
     mocks.listTributiPaymentImportJobs.mockReset();
@@ -261,11 +277,16 @@ describe("Ruolo tributi placeholder pages", () => {
     expect(await screen.findByText("queued")).toBeInTheDocument();
   });
 
-  test("renders reminders placeholder", () => {
+  test("renders the empty reminders registry for a read-only operator", async () => {
     render(<RuoloTributiSollecitiPage />);
 
     expect(screen.getByRole("heading", { name: "Solleciti Tributi" })).toBeInTheDocument();
-    expect(screen.getByText("Generazione solleciti da implementare")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Torna ai tributi" })).toHaveAttribute("href", "/ruolo/tributi");
+    expect(screen.getByRole("heading", { name: "Lotti 2022/2023" })).toBeInTheDocument();
+    expect(screen.getByText("Accesso in sola lettura.")).toBeInTheDocument();
+    expect(await screen.findByText("Nessun lotto generato.")).toBeInTheDocument();
+    expect(mocks.listTributiReminderBatches).toHaveBeenCalledWith("token", 1, 50);
+    expect(screen.getByRole("button", { name: "Precedente" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Successiva" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Conferma lotto" })).not.toBeInTheDocument();
   });
 });

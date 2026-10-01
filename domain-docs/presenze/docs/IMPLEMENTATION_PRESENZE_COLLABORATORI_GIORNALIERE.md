@@ -4,6 +4,39 @@
 > Data riferimento: 2026-05-29.
 > Obiettivo: integrare in GAIA lo scraping dei cartellini collaboratori Inaz, il riepilogo eventi e la compilazione del file giornaliere `.xlsm`.
 
+Riesame finale su `65f69cd5`: tranche frontend giornaliere PASS. Coverage reale
+pagina/editor 100% su tutte le metriche; ratchet contro `origin/main`, 3058 unit,
+18 smoke, 3 E2E, type-check, lint e build clean passati. Nessuna nuova modifica
+runtime nel riesame. La [sezione 11 del report](PRESENZE_GIORNALIERE_FINAL_VALIDATION_2026-10-01.md#11-riesame-sul-checkout-corrente--2026-10-01)
+supersede gli esiti storici seguenti; non attesta gli sviluppi concorrenti o i
+flussi live backend/DB/INAZ/GATE.
+
+## Verifica test-only giornaliere - 2026-10-01
+
+Caratterizzazione frontend completata con 182 test pagina e due E2E gerarchici.
+Non vengono aggiunte feature o modificati runtime/API/database. La chiusura
+quality gate resta FAIL: coverage full-file statement 99,57%, branch 97,10%,
+funzioni/linee 100%; una failure unit e sei smoke globali fuori scope.
+Matrice, evidenze, attivita completate e residui sono nel
+[report finale](PRESENZE_GIORNALIERE_FINAL_VALIDATION_2026-10-01.md).
+Questo audit non dichiara completate le attivita storiche del piano seguente.
+
+Follow-up autorizzato: ripristino dei gate frontend completato con sole
+modifiche ai test; 18/18 smoke e 2862/2862 unit passati, lint/type-check/build
+clean passati. Rimane aperto il requisito coverage full-file Presenze al 100%.
+
+Riesame residui completato con quattro test pertinenti aggiuntivi: 186 test
+pagina e 2866 unit globali passati. Coverage statement 99,66%, branch 97,31%,
+funzioni/linee 100%; 4 statement e 38 esiti branch residui. Rilevato un crash
+cancellando il mese, documentato ma non corretto nel vincolo solo test.
+La chiusura integrale resta FAIL; nessun refactoring runtime avviato.
+
+Successiva risoluzione runtime autorizzata: coverage pagina/editor full-file
+100% reale su tutte le metriche e difetto del mese vuoto risolto, con test
+unitario dedicato e due E2E. Restano separati i finding del ratchet sul working
+tree misto; nessuna baseline o configurazione indebolita. La sezione 10 del
+report finale supersede i limiti test-only delle tranche precedenti.
+
 ## 1. Cosa e stato implementato nello scraper
 
 Nel repo `presenze-scraper` e stato aggiunto un flusso dedicato ai capisettore:
