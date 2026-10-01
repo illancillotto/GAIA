@@ -26,6 +26,20 @@ L'orchestrazione appartiene a **GAIA Wiki Agent**, non agli MCP.
 
 Gli MCP sono adapter di fonte.
 
+Runtime v1 verificato al 2026-10-01: i package Docs/Data/HTTP/client/agente
+vivono in `backend/app/modules/wiki/mcps/`, montati dal router Wiki del monolite.
+Il processo MCP separato e una modalita di avvio della stessa immagine backend,
+non un nuovo servizio di dominio. Nessuna nuova migration PostgreSQL operativa
+o pagina frontend; la replica sintetica usa SQLite dedicato e il corpus Docs
+usa FTS5 locale. Il diagramma sopra descrive le fonti del client interno.
+
+Il gateway autenticato `/wiki/mcp/token`, `/tools`, `/chat` abilita soltanto Data:
+`docs_url=None`, rimozione `docs.read`, blocco discovery/session/invocazioni Docs.
+L'agente usa `gpt-reserve` con URL/chiave codex-lb esistenti; nessuna fonte Docs,
+NAS, Trasparenza o cronologia legacy entra nei messaggi. La chat Wiki legacy
+mantiene le proprie route, configurazione e comportamento. Dettagli operativi
+in `RUNTIME_AND_VALIDATION.md`; audit finale in `FINAL_DEVELOPMENT_REVIEW.md`.
+
 ## Contratto comune degli output
 
 Ogni tool dovrebbe restituire una struttura equivalente a:

@@ -110,7 +110,23 @@ Input:
 
 Scope: `ruolo.read`
 
-## Tool rinviati
+## `get_role_lines_by_notice`
+
+Input: `notice_id` UUID, `limit` default 50/max 100, `cursor` facoltativo.
+Scope: `ruolo.read`. Restituisce soltanto righe dell'avviso con FK particella,
+importi e provenance; non espande automaticamente le particelle.
+Necessario al contratto di integrazione avviso → righe → particella.
+
+## Paginazione runtime v1
+
+Ogni tool di ricerca o relazione accetta un `cursor` facoltativo e restituisce
+`next_cursor`; ordinamento per UUID, scope/filtri/dataset/principal invarianti.
+I get atomici non sono paginati. Cursori fuori contesto sono `INVALID_ARGUMENT`.
+Gli omonimi restano liste di risultati da disambiguare dall'agente/utente:
+nessun matching automatico, quindi `AMBIGUOUS_MATCH` e riservato a futuri
+lookup univoci, non viene usato dalle ricerche v1.
+
+## Tool rinviati nel runtime
 
 Non introdurre inizialmente:
 - `execute_sql`;

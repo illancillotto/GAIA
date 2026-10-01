@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.modules.wiki.mcps.routes import router as mcp_router
 from app.modules.wiki.routes.articles import router as articles_router
 from app.modules.wiki.routes.audit import router as audit_router
 from app.modules.wiki.routes.chat import router as chat_router
@@ -18,3 +19,4 @@ router.include_router(telemetry_router)
 router.include_router(requests_router)
 router.include_router(support_analytics_router)
 router.include_router(index_router)
+router.include_router(mcp_router)

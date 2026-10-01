@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "path": "domain-docs/catasto/docs/PRD_catasto.md",
+      "domain": "catasto",
+      "category": "prd",
+      "status": "current",
+      "included": true,
+      "sha256": "4b0ae6065c4bcbaa1a7ac2e80f6a630048c20437f76e38560edbd67184ea7f1d",
+      "reason": "Freeze operativo 2026-09-30: fonte funzionale Catasto aggiornata, nessun identificativo personale o credenziale; alcune superfici tecniche legacy sono annotate nell'audit."
+    },
+    {
+      "path": "domain-docs/utenze/docs/PRD_anagrafica.md",
+      "domain": "utenze",
+      "category": "prd",
+      "status": "uncertain",
+      "included": false,
+      "reason": "Escluso dal primo freeze: sezioni anagrafica.* e module_anagrafica divergono dal runtime canonico utenze.*; richiede revisione documentale."
+    },
+    {
+      "path": "domain-docs/ruolo/docs/PRD_ruolo.md",
+      "domain": "ruolo",
+      "category": "prd",
+      "status": "uncertain",
+      "included": false,
+      "reason": "Escluso dal primo freeze: sezioni parser/import legacy e integrazioni inCASS pianificate convivono con runtime inCASS gia corrente; richiede revisione documentale."
+    },
+    {
+      "path": "domain-docs/wiki/docs/PRD_wiki.md",
+      "domain": "wiki",
+      "category": "prd",
+      "status": "current",
+      "included": true,
+      "sha256": "a5e442ecf98b9f45929f921a75e67f4ae4b3e6a7ffd3f480df0d03bba5140103",
+      "reason": "Freeze operativo 2026-09-30: fonte del Wiki esistente, contenuti di prodotto senza credenziali o dati personali; la nuova integrazione MCP e distinta dal legacy codex-lb descritto nel PRD."
+    }
+  ]
+}

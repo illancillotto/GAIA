@@ -1,0 +1,594 @@
+[
+  {
+    "id": "data-01",
+    "category": "lookup",
+    "question": "Dettaglio subjects sintetico 0",
+    "steps": [
+      {
+        "tool": "get_subject",
+        "arguments": {
+          "subject_id": "07cb42f5-ae1d-54ee-8b12-ede8ef730545"
+        }
+      }
+    ],
+    "expected_ids": [
+      "07cb42f5-ae1d-54ee-8b12-ede8ef730545"
+    ]
+  },
+  {
+    "id": "data-02",
+    "category": "lookup",
+    "question": "Dettaglio subjects sintetico 1",
+    "steps": [
+      {
+        "tool": "get_subject",
+        "arguments": {
+          "subject_id": "4a00bb81-2eb8-5fbc-81fe-98e6858033af"
+        }
+      }
+    ],
+    "expected_ids": [
+      "4a00bb81-2eb8-5fbc-81fe-98e6858033af"
+    ]
+  },
+  {
+    "id": "data-03",
+    "category": "lookup",
+    "question": "Dettaglio irrigation_accounts sintetico 0",
+    "steps": [
+      {
+        "tool": "get_irrigation_account",
+        "arguments": {
+          "account_id": "fc25f1fe-5c04-5107-9eea-29165c884ab6"
+        }
+      }
+    ],
+    "expected_ids": [
+      "fc25f1fe-5c04-5107-9eea-29165c884ab6"
+    ]
+  },
+  {
+    "id": "data-04",
+    "category": "lookup",
+    "question": "Dettaglio irrigation_accounts sintetico 1",
+    "steps": [
+      {
+        "tool": "get_irrigation_account",
+        "arguments": {
+          "account_id": "2900b295-2a6e-58b1-8810-7e31b133267c"
+        }
+      }
+    ],
+    "expected_ids": [
+      "2900b295-2a6e-58b1-8810-7e31b133267c"
+    ]
+  },
+  {
+    "id": "data-05",
+    "category": "lookup",
+    "question": "Dettaglio parcels sintetico 0",
+    "steps": [
+      {
+        "tool": "get_parcel",
+        "arguments": {
+          "parcel_id": "8b01fe88-593c-5cc5-962f-175102f29b6f"
+        }
+      }
+    ],
+    "expected_ids": [
+      "8b01fe88-593c-5cc5-962f-175102f29b6f"
+    ]
+  },
+  {
+    "id": "data-06",
+    "category": "lookup",
+    "question": "Dettaglio parcels sintetico 1",
+    "steps": [
+      {
+        "tool": "get_parcel",
+        "arguments": {
+          "parcel_id": "51c837a1-0171-5b0e-a292-1f8ac2e13bed"
+        }
+      }
+    ],
+    "expected_ids": [
+      "51c837a1-0171-5b0e-a292-1f8ac2e13bed"
+    ]
+  },
+  {
+    "id": "data-07",
+    "category": "lookup",
+    "question": "Dettaglio role_notices sintetico 0",
+    "steps": [
+      {
+        "tool": "get_role_notice",
+        "arguments": {
+          "notice_id": "a7f328bb-43e4-516a-8055-def8dcaffc54"
+        }
+      }
+    ],
+    "expected_ids": [
+      "a7f328bb-43e4-516a-8055-def8dcaffc54"
+    ]
+  },
+  {
+    "id": "data-08",
+    "category": "lookup",
+    "question": "Dettaglio role_notices sintetico 1",
+    "steps": [
+      {
+        "tool": "get_role_notice",
+        "arguments": {
+          "notice_id": "69c7e4ef-5128-583d-b58f-d8ae59c7ac77"
+        }
+      }
+    ],
+    "expected_ids": [
+      "69c7e4ef-5128-583d-b58f-d8ae59c7ac77"
+    ]
+  },
+  {
+    "id": "data-09",
+    "category": "relational",
+    "question": "Quali utenze ha il soggetto sintetico 0?",
+    "steps": [
+      {
+        "tool": "search_irrigation_accounts",
+        "arguments": {
+          "subject_id": "07cb42f5-ae1d-54ee-8b12-ede8ef730545",
+          "limit": 25
+        }
+      }
+    ],
+    "expected_ids": [
+      "fc25f1fe-5c04-5107-9eea-29165c884ab6",
+      "87512517-e483-5272-bade-690389374b2e"
+    ]
+  },
+  {
+    "id": "data-10",
+    "category": "relational",
+    "question": "Quali particelle usa l utenza sintetica 0 nell annualita 2024?",
+    "steps": [
+      {
+        "tool": "get_parcels_by_account",
+        "arguments": {
+          "account_id": "fc25f1fe-5c04-5107-9eea-29165c884ab6",
+          "year": 2024
+        }
+      }
+    ],
+    "expected_ids": [
+      "8b01fe88-593c-5cc5-962f-175102f29b6f",
+      "0156e7e2-34b6-56fa-af50-384b90883e06",
+      "856ce889-937f-5119-b740-eeabcadeb0de",
+      "2693a3a0-7171-52b6-aaf9-67efc297c7e7"
+    ]
+  },
+  {
+    "id": "data-11",
+    "category": "relational",
+    "question": "Quali utenze ha il soggetto sintetico 1?",
+    "steps": [
+      {
+        "tool": "search_irrigation_accounts",
+        "arguments": {
+          "subject_id": "4a00bb81-2eb8-5fbc-81fe-98e6858033af",
+          "limit": 25
+        }
+      }
+    ],
+    "expected_ids": [
+      "2900b295-2a6e-58b1-8810-7e31b133267c",
+      "7e9653b8-8d02-5101-9be4-5fee13beda38"
+    ]
+  },
+  {
+    "id": "data-12",
+    "category": "relational",
+    "question": "Quali particelle usa l utenza sintetica 1 nell annualita 2025?",
+    "steps": [
+      {
+        "tool": "get_parcels_by_account",
+        "arguments": {
+          "account_id": "2900b295-2a6e-58b1-8810-7e31b133267c",
+          "year": 2025
+        }
+      }
+    ],
+    "expected_ids": [
+      "51c837a1-0171-5b0e-a292-1f8ac2e13bed",
+      "2d8720f6-acb4-566f-8af7-11f3473fbd7a",
+      "af4ccd12-8424-5dc1-abe1-ee321962a44f",
+      "2f49dc11-6a18-5213-a9ea-5317a045d61a"
+    ]
+  },
+  {
+    "id": "data-13",
+    "category": "relational",
+    "question": "Chi usa la particella sintetica zero nel 2024?",
+    "steps": [
+      {
+        "tool": "get_accounts_by_parcel",
+        "arguments": {
+          "parcel_id": "8b01fe88-593c-5cc5-962f-175102f29b6f",
+          "year": 2024
+        }
+      }
+    ],
+    "expected_ids": [
+      "fc25f1fe-5c04-5107-9eea-29165c884ab6"
+    ]
+  },
+  {
+    "id": "data-14",
+    "category": "relational",
+    "question": "Chi usa la particella sintetica zero nel 2025?",
+    "steps": [
+      {
+        "tool": "get_accounts_by_parcel",
+        "arguments": {
+          "parcel_id": "8b01fe88-593c-5cc5-962f-175102f29b6f",
+          "year": 2025
+        }
+      }
+    ],
+    "expected_ids": [
+      "ce18827a-13c2-5808-b926-3e4e8c36d885"
+    ]
+  },
+  {
+    "id": "data-15",
+    "category": "relational",
+    "question": "Quali righe compongono l avviso sintetico zero?",
+    "steps": [
+      {
+        "tool": "get_role_lines_by_notice",
+        "arguments": {
+          "notice_id": "a7f328bb-43e4-516a-8055-def8dcaffc54"
+        }
+      }
+    ],
+    "expected_ids": [
+      "9c4fe1d9-e9dc-591e-982a-26854628ede9",
+      "2d40e431-7f5c-5352-8e7b-eb7f9b1ca561"
+    ]
+  },
+  {
+    "id": "data-16",
+    "category": "relational",
+    "question": "Quali pagamenti sono collegati all avviso sintetico uno?",
+    "steps": [
+      {
+        "tool": "get_payments_by_notice",
+        "arguments": {
+          "notice_id": "69c7e4ef-5128-583d-b58f-d8ae59c7ac77"
+        }
+      }
+    ],
+    "expected_ids": [
+      "2d991f1b-d27b-56b7-ad34-04b5b0a0282c"
+    ]
+  },
+  {
+    "id": "data-17",
+    "category": "multi_hop",
+    "question": "Dal soggetto 0, quali particelle usa la prima utenza nel 2024?",
+    "steps": [
+      {
+        "tool": "search_irrigation_accounts",
+        "arguments": {
+          "subject_id": "07cb42f5-ae1d-54ee-8b12-ede8ef730545"
+        }
+      },
+      {
+        "tool": "get_parcels_by_account",
+        "arguments": {
+          "account_id": "$0.results.0.id",
+          "year": 2024
+        }
+      }
+    ],
+    "expected_ids": [
+      "e6a098ea-ad0e-5a55-86c8-8e6b84a2fde7",
+      "0a783b6d-c88b-54c5-be99-9024d9b08ad6",
+      "4a31acc3-a4ab-5dfb-9876-aa68b561421f"
+    ]
+  },
+  {
+    "id": "data-18",
+    "category": "multi_hop",
+    "question": "Dettaglio particella dalla prima riga dell avviso sintetico 0",
+    "steps": [
+      {
+        "tool": "get_role_lines_by_notice",
+        "arguments": {
+          "notice_id": "a7f328bb-43e4-516a-8055-def8dcaffc54"
+        }
+      },
+      {
+        "tool": "get_parcel",
+        "arguments": {
+          "parcel_id": "$0.results.0.parcel_id"
+        }
+      }
+    ],
+    "expected_ids": [
+      "8b01fe88-593c-5cc5-962f-175102f29b6f"
+    ]
+  },
+  {
+    "id": "data-19",
+    "category": "multi_hop",
+    "question": "Dal soggetto 1, quali particelle usa la prima utenza nel 2025?",
+    "steps": [
+      {
+        "tool": "search_irrigation_accounts",
+        "arguments": {
+          "subject_id": "4a00bb81-2eb8-5fbc-81fe-98e6858033af"
+        }
+      },
+      {
+        "tool": "get_parcels_by_account",
+        "arguments": {
+          "account_id": "$0.results.0.id",
+          "year": 2025
+        }
+      }
+    ],
+    "expected_ids": [
+      "51c837a1-0171-5b0e-a292-1f8ac2e13bed",
+      "2d8720f6-acb4-566f-8af7-11f3473fbd7a",
+      "af4ccd12-8424-5dc1-abe1-ee321962a44f",
+      "2f49dc11-6a18-5213-a9ea-5317a045d61a"
+    ]
+  },
+  {
+    "id": "data-20",
+    "category": "multi_hop",
+    "question": "Dettaglio particella dalla prima riga dell avviso sintetico 1",
+    "steps": [
+      {
+        "tool": "get_role_lines_by_notice",
+        "arguments": {
+          "notice_id": "69c7e4ef-5128-583d-b58f-d8ae59c7ac77"
+        }
+      },
+      {
+        "tool": "get_parcel",
+        "arguments": {
+          "parcel_id": "$0.results.0.parcel_id"
+        }
+      }
+    ],
+    "expected_ids": [
+      "51c837a1-0171-5b0e-a292-1f8ac2e13bed"
+    ]
+  },
+  {
+    "id": "data-21",
+    "category": "multi_hop",
+    "question": "Dalla particella sintetica zero nel 2024, dettaglio della prima utenza",
+    "steps": [
+      {
+        "tool": "get_accounts_by_parcel",
+        "arguments": {
+          "parcel_id": "8b01fe88-593c-5cc5-962f-175102f29b6f",
+          "year": 2024
+        }
+      },
+      {
+        "tool": "get_irrigation_account",
+        "arguments": {
+          "account_id": "$0.results.0.id"
+        }
+      }
+    ],
+    "expected_ids": [
+      "fc25f1fe-5c04-5107-9eea-29165c884ab6"
+    ]
+  },
+  {
+    "id": "data-22",
+    "category": "multi_hop",
+    "question": "Dalla particella sintetica zero nel 2025, dettaglio della prima utenza",
+    "steps": [
+      {
+        "tool": "get_accounts_by_parcel",
+        "arguments": {
+          "parcel_id": "8b01fe88-593c-5cc5-962f-175102f29b6f",
+          "year": 2025
+        }
+      },
+      {
+        "tool": "get_irrigation_account",
+        "arguments": {
+          "account_id": "$0.results.0.id"
+        }
+      }
+    ],
+    "expected_ids": [
+      "ce18827a-13c2-5808-b926-3e4e8c36d885"
+    ]
+  },
+  {
+    "id": "data-23",
+    "category": "ambiguous",
+    "question": "Quali soggetti sintetici omonimi esistono senza sceglierne uno?",
+    "steps": [
+      {
+        "tool": "search_subjects",
+        "arguments": {
+          "query": "omonimo"
+        }
+      }
+    ],
+    "expected_ids": [
+      "07cb42f5-ae1d-54ee-8b12-ede8ef730545",
+      "4a00bb81-2eb8-5fbc-81fe-98e6858033af"
+    ]
+  },
+  {
+    "id": "data-24",
+    "category": "ambiguous",
+    "question": "Quali soggetti hanno il prefisso sintetico SYN-SUBJECT-000?",
+    "steps": [
+      {
+        "tool": "search_subjects",
+        "arguments": {
+          "query": "SYN-SUBJECT-000"
+        }
+      }
+    ],
+    "expected_ids": [
+      "07cb42f5-ae1d-54ee-8b12-ede8ef730545",
+      "4a00bb81-2eb8-5fbc-81fe-98e6858033af",
+      "b798afe7-95eb-53e6-a16a-29c803b68c1c",
+      "d22da326-8098-5406-8e59-f07931225b19",
+      "0184dd35-629e-5f01-b915-5c9df723674c",
+      "2847eebe-6841-51b1-b355-29ccd3d44477",
+      "69bd6845-9c91-548f-b956-81f9d9ca329f",
+      "8de8200e-6c71-5a90-887e-8dd5301078db",
+      "6d4aaa64-387c-5d53-82e2-90a9ab442d39",
+      "82daed65-e850-5d23-ad0f-66ac558a6ee7"
+    ]
+  },
+  {
+    "id": "data-25",
+    "category": "ambiguous",
+    "question": "Prime 25 utenze sintetiche del distretto SYN-D01",
+    "steps": [
+      {
+        "tool": "search_irrigation_accounts",
+        "arguments": {
+          "district_code": "SYN-D01",
+          "limit": 25
+        }
+      }
+    ],
+    "expected_ids": [
+      "05e2a005-c922-5141-95c3-6b3b1db7d117",
+      "0d01681d-eab4-5bc0-8a22-30fbd38f68b8",
+      "0d586ba4-b35d-5408-99b7-2faf8390cd25",
+      "116fd9c1-7410-5dca-8036-fe32a60d4ca2",
+      "13ec9d8b-b5bf-5735-9c98-bd86dd591875",
+      "18ead033-d3fd-5180-8956-e66feb33188c",
+      "1ffbfd57-16de-57a0-92c1-496b217b497f",
+      "2aaec516-1125-54ec-a19b-718b6835b75d",
+      "41505aac-39f0-5954-bd9b-290eae6e8f41",
+      "42b7d2b0-3eba-5ad5-a515-54b0cdd7e7a3",
+      "4491d573-c4fa-5ff8-bce0-8b81125649de",
+      "44a1a0e1-dc7f-5e75-a9cf-39e715f62f31",
+      "46e5b5c5-a080-579b-89f0-962af73dcb66",
+      "49e8f2cb-4529-579c-918a-722aa871b57d",
+      "577cd0c0-011c-5e3b-b54c-820c9ee821b1",
+      "5c96a690-9be0-50e6-ab8c-82dfa5ad7bcb",
+      "648ab0b6-3fc4-5c64-bb23-79c975f2e77c",
+      "6b7179d5-8096-562b-bc0c-1db67a6636e7",
+      "71b5ee15-56a9-5934-ab1b-975e2b6bac6d",
+      "72effbc1-b372-54ff-97d0-d5b8d90e2e38",
+      "76283168-b0e2-5fd6-b2e1-71a86ee81309",
+      "7c1d891c-2c93-5d5c-8eda-73205555e79b",
+      "7f869ee9-726d-5948-925e-10386061c700",
+      "8467e277-d61f-59b7-b2db-8148c9655947",
+      "87512517-e483-5272-bade-690389374b2e"
+    ]
+  },
+  {
+    "id": "data-26",
+    "category": "ambiguous",
+    "question": "Prime 25 particelle sintetiche del foglio uno",
+    "steps": [
+      {
+        "tool": "search_parcels",
+        "arguments": {
+          "sheet": "1",
+          "limit": 25
+        }
+      }
+    ],
+    "expected_ids": [
+      "00e73942-1de6-5a0a-b45c-1d561b03241a",
+      "02da8e6b-3712-5a7e-aaec-0531858c8d18",
+      "038b16da-00ac-54c8-bd67-0ca509a54f7c",
+      "058be357-2568-5f18-891a-6c7f9c0ba39f",
+      "0864cb39-1325-5718-bad7-ff22bebe0643",
+      "08be9356-e3bf-5321-93f8-40fb721bf46f",
+      "0ecfe685-9d6b-501a-82b1-e30d968f0d4b",
+      "14627d35-5e40-5851-84b0-5e26cb78191a",
+      "15623e24-eb28-5726-ab0b-053553b60f82",
+      "1764ba14-4d85-5de2-8e29-a1e4aa14f57d",
+      "1784e3e9-4771-50cc-b205-8e0fb5000f09",
+      "1c544f92-ddc6-524a-81c9-f065449d9ad3",
+      "1c93a661-c328-5b00-8b42-dde152a232a8",
+      "1f936931-390c-5743-ac91-f3f2f83f3c9b",
+      "21fad8c3-7d36-56c6-be74-608ad44b7666",
+      "225155a8-a5ff-5ed6-99bf-099aa7b30e5a",
+      "26461c0c-bdbf-5ee3-b500-2913629fbf2d",
+      "273084c8-3512-5ee5-9d76-d127bf8b7be9",
+      "2ad4ddc2-5f5d-514e-a3d4-e8718c26cf72",
+      "34e7f785-e932-533c-9d48-95c454b0170f",
+      "35b71ff4-34c3-5854-a907-219eb69593f1",
+      "364d34fa-a09d-5449-b06a-588d9c8d18b6",
+      "3acd3c9f-1595-53ae-adff-fa478cf02656",
+      "4a021695-b622-5d82-9698-3f0629475f82",
+      "4b6fc1ff-8c94-579c-b9d3-de7a0188bf6b"
+    ]
+  },
+  {
+    "id": "data-27",
+    "category": "no_answer",
+    "question": "Ricerca senza risultato tramite search_subjects",
+    "steps": [
+      {
+        "tool": "search_subjects",
+        "arguments": {
+          "query": "soggetto inesistente"
+        }
+      }
+    ],
+    "expected_ids": []
+  },
+  {
+    "id": "data-28",
+    "category": "no_answer",
+    "question": "Ricerca senza risultato tramite search_irrigation_accounts",
+    "steps": [
+      {
+        "tool": "search_irrigation_accounts",
+        "arguments": {
+          "account_code": "SYN-A9999"
+        }
+      }
+    ],
+    "expected_ids": []
+  },
+  {
+    "id": "data-29",
+    "category": "no_answer",
+    "question": "Ricerca senza risultato tramite search_parcels",
+    "steps": [
+      {
+        "tool": "search_parcels",
+        "arguments": {
+          "parcel_number": "SYN-P9999"
+        }
+      }
+    ],
+    "expected_ids": []
+  },
+  {
+    "id": "data-30",
+    "category": "no_answer",
+    "question": "Ricerca senza risultato tramite search_role_notices",
+    "steps": [
+      {
+        "tool": "search_role_notices",
+        "arguments": {
+          "account_code": "SYN-A9999"
+        }
+      }
+    ],
+    "expected_ids": []
+  }
+]

@@ -6,6 +6,12 @@ Alla data di redazione (agosto 2026), la revisione MCP pubblicata il 28 luglio 2
 
 Prima dell'implementazione finale il team deve verificare la revisione corrente della specifica e la versione dell'SDK scelta.
 
+Verifica runtime v1 (2026-09-30): SDK Python `mcp==2.0.0`, catalogo tipizzato,
+stdio e Streamable HTTP stateless. Il namespace tipi dell'SDK espone la
+revisione `2026-07-28`; l'handshake stdio usa `2025-11-25`. Test di contratto
+coprono anche HTTP tramite client SDK reale. Nessuna estensione di protocollo
+proprietaria, resources/prompts non necessari nella v1.
+
 Riferimenti ufficiali:
 - https://modelcontextprotocol.io/
 - https://blog.modelcontextprotocol.io/posts/2026-07-28/

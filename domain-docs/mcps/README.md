@@ -1,5 +1,22 @@
 # GAIA MCPs
 
+## Runtime v1 implementato
+
+Docs e Data MCP sono implementati nel package Wiki, con server stdio/HTTP,
+autorizzazione GAIA, corpus congelato, replica sintetica e integrazione agente.
+Avvio, contratti, limiti, audit e verifiche: `RUNTIME_AND_VALIDATION.md`.
+Test completi: `make test-mcp`; valutazione offline: `make mcp-evaluate`.
+Audit finale, matrice funzionalita/test e stato dei gate:
+`FINAL_DEVELOPMENT_REVIEW.md`.
+Inventario dei freeze tesi e del worktree Wiki mainline, componenti ancora
+separati e cinque modifiche pendenti: `CHECKOUT_INVENTORY_2026-10-01.md`.
+
+Dal 2026-10-01 il gateway `/wiki/mcp/*` usa `gpt-reserve` tramite codex-lb
+esclusivamente sulla replica sintetica Data. Docs e escluso lato server dal
+catalogo, dai token e dalle invocazioni dell'agente esterno; il server Docs
+separato e la chat Wiki legacy restano disponibili. Nessun documento reale
+deve essere inviato al modello esterno.
+
 Questa directory raccoglie la documentazione tecnica dei Model Context Protocol (MCP) utilizzati dalla nuova architettura agentica di **GAIA Wiki**.
 
 ## Obiettivo
@@ -30,6 +47,10 @@ Accesso alla documentazione interna di GAIA tramite un corpus controllato ricava
 Il corpus sperimentale non deve coincidere con l'intero indice della Wiki esistente.
 
 ## Separazione delle responsabilità
+
+Il diagramma seguente descrive il disegno sperimentale delle fonti. Nel runtime
+esterno attuale e abilitato soltanto il ramo Data; Docs richiede un client
+interno separato. NAS e Trasparenza non sono tool dell'agente MCP v1.
 
 ```text
 Utente

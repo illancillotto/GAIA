@@ -1,0 +1,39 @@
+services:
+  backend:
+    environment:
+      GAIA_MCP_SIGNING_SECRET: ${GAIA_MCP_SIGNING_SECRET:-}
+      GAIA_MCP_DATA_URL: http://gaia-mcp:8768/data/
+      GAIA_MCP_MODEL_BASE_URL: ${GAIA_MCP_MODEL_BASE_URL:-${CODEX_LB_URL:-}}
+      GAIA_MCP_MODEL_API_KEY: ${GAIA_MCP_MODEL_API_KEY:-${CODEX_LB_API_KEY:-}}
+      GAIA_MCP_MODEL: gpt-reserve
+
+  gaia-mcp:
+    image: ${COMPOSE_PROJECT_NAME:-gaia}-backend:latest
+    build:
+      context: ./backend
+    profiles: ["mcp"]
+    restart: unless-stopped
+    init: true
+    entrypoint: []
+    command:
+      - python
+      - -m
+      - app.modules.wiki.mcps
+      - --corpus
+      - /runtime-data/mcps/docs/corpus.json
+      - --database
+      - /runtime-data/mcps/data/gaia-mcp-synthetic-v1.sqlite
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8768"
+    environment:
+      GAIA_MCP_SIGNING_SECRET: ${GAIA_MCP_SIGNING_SECRET:-}
+    volumes:
+      - ./runtime-data/mcps:/runtime-data/mcps:ro
+    expose: ["8768"]
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]

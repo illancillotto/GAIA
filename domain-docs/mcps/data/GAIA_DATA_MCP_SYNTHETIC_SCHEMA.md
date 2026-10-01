@@ -1,6 +1,11 @@
 # GAIA Data MCP — schema sintetico proposto
 
-> Proposta iniziale. Validare contro `GAIA_DATA_MCP_ANALYSIS.md` prima di implementare.
+> Proposta validata sul runtime base `6b61fd27`. La v1 isolata usa SQLite
+> `data/schema.sql` con nomi senza prefisso `syn_`, UUID stringa, superfici
+> intere in mq e importi interi in centesimi. Nelle risposte gli importi sono
+> stringhe decimali. Migration locale `user_version=1`, FK e indici espliciti.
+> La proposta PostgreSQL storica `20260817_0200` resta invariata e inutilizzata
+> dalla v1. Motivazione e audit in `../RUNTIME_AND_VALIDATION.md`.
 
 ## Obiettivo
 

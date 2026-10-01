@@ -6,7 +6,7 @@ Input:
 ```json
 {
   "query":"string",
-  "domain":"catasto|utenze|ruolo|wiki|null",
+  "domain":"catasto|utenze|ruolo|wiki|platform|null",
   "category":"architecture|procedure|runbook|prd|workflow|null",
   "limit":5
 }

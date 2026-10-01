@@ -1,5 +1,12 @@
 # GAIA Data MCP
 
+## Runtime v1 implementato
+
+Dodici tool read-only, replica SQLite sintetica isolata e deterministica,
+input tipizzati, cap, cursori, scope, provenance e telemetria. Server stdio e
+HTTP interno, integrato con l'agente Wiki. Dettagli e motivazione dello schema
+isolato in `../RUNTIME_AND_VALIDATION.md`. Nessun accesso ai dati operativi.
+
 ## Missione
 
 Esporre all'agente principale un accesso **read-only, tipizzato e misurabile** ai dati strutturati utili alla tesi.

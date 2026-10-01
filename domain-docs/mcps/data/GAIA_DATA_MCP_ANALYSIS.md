@@ -1,6 +1,35 @@
 # GAIA Data MCP — analisi iniziale del runtime
 
-> Stato: pre-analisi. Deve essere completata dal team sul branch/commit usato per l'implementazione.
+> Stato: audit runtime completato su commit base `6b61fd27`, v1 implementata.
+
+## Decisioni verificate per la v1
+
+- `CatUtenzaIntestatario` in `backend/app/models/catasto_phase1.py` lega
+  esplicitamente `cat_utenze_irrigue` e `ana_subjects` tramite FK; non inferire
+  il legame dai nomi o dal legacy `cat_intestatari`.
+- `CatUtenzaIrrigua` contiene annualita, comune e FK particella; la replica
+  esplicita le relazioni M:N con validita annuale per i casi sperimentali.
+- `CatParticella` ha `comune_id`, riferimenti catastali, superficie mq e
+  `num_distretto`; il distretto operativo e un'entita distinta con geometria
+  propria. Replica senza geometrie, con FK distretto sintetico esplicita.
+- `RuoloAvviso`/`RuoloPartita`/`RuoloParticella` sono il read model consultato
+  dalle route `/ruolo/avvisi`; `RuoloParticella.cat_particella_id` e una FK
+  reale. Le righe sintetiche comprimono partita/particella conservando il link.
+- `RuoloTributiPayment.avviso_id` e `RuoloTributiAvvisoStatus.avviso_id` legano
+  pagamenti/stati al ruolo. `ana_payment_notices` e una superficie distinta
+  inCASS/avvisi speciali, non sostituisce automaticamente il ruolo consultato.
+- Le query live dei repository e le route legacy hanno payload, permessi e
+  dipendenze operative ampi: non sono riutilizzate dalla replica isolata.
+  Il service v1 implementa le stesse responsabilita minime con query fisse.
+- Moduli canonici `utenze`, `catasto`, `ruolo`; permission resolver GAIA
+  controlla anche le sezioni. La v1 aggiunge scope read-only al gateway,
+  non tratta i flag presenti in un argomento del modello come autorizzazioni.
+
+Divergenze: proposta originale in ettari vs runtime mq; nomi `syn_*` vs
+tabelle semplici del DB sintetico isolato; migration PostgreSQL sperimentale
+storica senza tutte le FK/status richieste vs nuovo schema locale completo.
+La v1 conserva il monolite e isola fisicamente il DB di esperimento, senza
+connessione o credenziali operative. Test automatici negano URL/DB reali.
 
 ## Obiettivo
 
@@ -89,27 +118,27 @@ Salvo necessità sperimentale:
 
 ## Questioni da verificare
 
-- [ ] relazione canonica Utenze ↔ CatUtenzaIrrigua;
-- [ ] chiave di collegamento soggetto ↔ intestatario;
-- [ ] relazione effettiva Utenza ↔ Particella;
-- [ ] relazione Distretto ↔ Particella/Utenza;
-- [ ] modello canonico degli avvisi attualmente usato dal frontend;
-- [ ] eventuale prevalenza di `ana_payment_notices` rispetto a tabelle legacy;
-- [ ] stato dei read model inCASS;
-- [ ] permission scope reali;
-- [ ] endpoint già riutilizzabili;
-- [ ] query già presenti che possono diventare service MCP.
+- [x] relazione canonica Utenze ↔ CatUtenzaIrrigua;
+- [x] chiave di collegamento soggetto ↔ intestatario;
+- [x] relazione effettiva Utenza ↔ Particella;
+- [x] relazione Distretto ↔ Particella/Utenza;
+- [x] modello canonico degli avvisi attualmente usato dal frontend;
+- [x] eventuale prevalenza di `ana_payment_notices` rispetto a tabelle legacy;
+- [x] stato dei read model inCASS;
+- [x] permission scope reali;
+- [x] endpoint già riutilizzabili;
+- [x] query già presenti che possono diventare service MCP.
 
 ## Valutazione Operazioni
 
 | Voce | Esito |
 |---|---|
-| Entità utili | TODO |
-| Relazioni con Catasto/Utenze | TODO |
-| Query aggiuntive | TODO |
-| Tool aggiuntivi | TODO |
-| Costo implementativo | TODO |
-| Raccomandazione | TODO |
+| Entità utili | `operator_activity`, `field_report` |
+| Relazioni con Catasto/Utenze | FK correnti verso utenti, team, veicoli/GPS; nessuna FK diretta particella nelle entita esaminate |
+| Query aggiuntive | Attivita/segnalazioni territoriali, richiedono matching spaziale e policy personale |
+| Tool aggiuntivi | Eventuale ricerca attivita/segnalazioni, fuori catalogo core |
+| Costo implementativo | Alto rispetto al core: GIS, personale, allegati e ulteriori scope |
+| Raccomandazione | Escludere v1; eventuale estensione richiede decisione separata |
 
 ## Decisione metodologica
 

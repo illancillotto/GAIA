@@ -1,5 +1,19 @@
 # GAIA Data MCP — piano di implementazione
 
+## Stato v1 al 2026-10-01
+
+Runtime implementato nel package Wiki: database sintetico separato SQLite,
+schema/migration v1, seed/reset atomico e manifest deterministico, query fisse,
+dodici tool read-only, stdio/HTTP interno e gateway autorizzato GAIA. Integrazione
+Wiki verificata tramite client SDK/HTTP con modello simulato e tramite gateway
+autenticato con `gpt-reserve` reale su soli dati sintetici: 30/30 query live.
+30 query strutturate con ground truth e test security/contract/coverage.
+Runbook, decisioni e limiti in `../RUNTIME_AND_VALIDATION.md`.
+Audit finale e matrice comportamento/test: `../FINAL_DEVELOPMENT_REVIEW.md`.
+Le fasi 1–8 del core sono completate; il dettaglio sotto mantiene il brief
+progettuale. Operazioni, deploy e ampliamento delle fonti restano fuori scope.
+Il gate finale complessivo resta FAIL per smoke/build frontend non superati.
+
 ## Fase 0 — freeze progettuale
 
 Approvare:
@@ -71,13 +85,13 @@ Dopo il core:
 
 ## Definition of Done
 
-- [ ] server avviabile;
-- [ ] tool list deterministica;
-- [ ] dataset riproducibile;
-- [ ] test passano;
-- [ ] no write tool;
-- [ ] no SQL libero;
-- [ ] provenance;
-- [ ] scope;
-- [ ] telemetry;
-- [ ] integrazione Wiki Agent verificata.
+- [x] server avviabile;
+- [x] tool list deterministica;
+- [x] dataset riproducibile;
+- [x] test passano;
+- [x] no write tool;
+- [x] no SQL libero;
+- [x] provenance;
+- [x] scope;
+- [x] telemetry;
+- [x] integrazione Wiki Agent verificata.

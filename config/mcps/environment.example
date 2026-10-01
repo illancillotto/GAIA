@@ -1,0 +1,8 @@
+GAIA_MCP_SIGNING_SECRET=
+GAIA_SYNTHETIC_SEED=gaia-v1
+GAIA_MCP_DATA_URL=http://127.0.0.1:8768/data/
+GAIA_MCP_MODEL=gpt-reserve
+# Use existing CODEX_LB_URL / CODEX_LB_API_KEY, or set dedicated overrides below.
+# No provider URL or key is supplied by default. Never commit credential values.
+GAIA_MCP_MODEL_BASE_URL=
+GAIA_MCP_MODEL_API_KEY=

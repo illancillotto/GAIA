@@ -4,6 +4,17 @@
 
 I vincoli di privacy sono requisiti architetturali.
 
+Contratto runtime v1: il gateway Wiki esterno usa solo Data sintetico e
+`gpt-reserve` tramite codex-lb. Docs non e configurato nel client del gateway;
+discovery e invocazioni sono bloccate prima della connessione, anche se il
+modello inventa una chiamata Docs. I token del gateway non contengono
+`docs.read`. Il server Docs separato rimane interno e autenticato.
+Nessun documento reale viene inviato al provider, neanche tramite Graphify docs.
+Le domande di esperimento devono essere sintetiche: non incollare documenti o
+dati reali nel testo libero. Il filtro delle fonti non e un classificatore DLP
+del testo scritto dall'utente. Le credenziali provider sono solo configurazione
+locale ignorata/env, mai corpus, tool output o report.
+
 - I dati personali dei consorziati restano on-premise.
 - I documenti reali dell'Ente non vengono inviati a servizi cloud.
 - Catasto, Ruolo e Utenze usati negli esperimenti cloud sono rappresentati da una replica sintetica.

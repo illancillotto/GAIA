@@ -1,5 +1,11 @@
 # GAIA Data MCP — piano di test
 
+Stato finale 2026-10-01: suite Data/HTTP/gateway/evaluation eseguite con coverage
+statement/branch 100% del runtime MCP; 30 query offline e 30 query gateway live
+su `gpt-reserve` verificate. Matrice dei test, risultati e residui del gate
+complessivo in `../FINAL_DEVELOPMENT_REVIEW.md`. Le sezioni sotto descrivono
+i requisiti coperti, non attivita di implementazione ancora da iniziare.
+
 ## Unit test
 
 Per ogni tool:

@@ -1,5 +1,11 @@
 # GAIA Docs MCP — piano di test
 
+Stato finale 2026-10-01: suite corpus/retrieval/CLI/stdio/HTTP eseguite, 32 query
+offline congelate e coverage statement/branch 100% del runtime MCP. Docs escluso
+dal gateway esterno, inclusi test che ne respingono discovery/invocazioni/evidenze.
+Nessun test cloud su documenti reali. Varianti embedding/hybrid/reranking non
+implementate; matrix e risultati in `../FINAL_DEVELOPMENT_REVIEW.md`.
+
 ## Corpus test
 
 Verificare:
