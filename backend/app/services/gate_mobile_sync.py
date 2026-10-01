@@ -24,12 +24,18 @@ from app.modules.presenze.gate_router import (
     RULES_VERSION,
     _append_gate_audit,
     _build_rules_response,
-    _collaborator_map,
-    _gate_record_analysis_from_serialized,
     _gate_record_snapshot,
     _get_gate_record_or_404,
     _month_period,
-    _team_ids_by_collaborator,
+)
+from app.modules.presenze.gate_router import (
+    _collaborator_map as _collaborator_map,
+)
+from app.modules.presenze.gate_router import (
+    _gate_record_analysis_from_serialized as _gate_record_analysis_from_serialized,
+)
+from app.modules.presenze.gate_router import (
+    _team_ids_by_collaborator as _team_ids_by_collaborator,
 )
 from app.modules.presenze.models import (
     PRESENZE_CONTRACT_KIND_IMPIEGATO,
@@ -41,9 +47,13 @@ from app.modules.presenze.models import (
     PresenzeDailyRecord,
 )
 from app.modules.presenze.router import (
-    _build_classification_map,
-    _build_operational_quality_map,
-    _serialize_daily_record_matrix,
+    _build_classification_map as _build_classification_map,
+)
+from app.modules.presenze.router import (
+    _build_operational_quality_map as _build_operational_quality_map,
+)
+from app.modules.presenze.router import (
+    _serialize_daily_record_matrix as _serialize_daily_record_matrix,
 )
 from app.modules.presenze.schemas import (
     GatePresenzeDailyRecordPatchRequest,
@@ -52,11 +62,13 @@ from app.modules.presenze.schemas import (
 )
 from app.modules.presenze.services.gate_mobile_payloads import (
     build_presenze_memberships_by_team,
-    build_presenze_mobile_record_payload,
     build_presenze_supervisors_by_team,
     build_presenze_team_payload,
     json_datetime,
     required_personnel_area,
+)
+from app.modules.presenze.services.gate_mobile_payloads import (
+    build_presenze_mobile_record_payload as build_presenze_mobile_record_payload,
 )
 from app.modules.presenze.services.gate_mobile_team_actions import (
     TEAM_ACTION_OPERATIONS,
@@ -64,7 +76,9 @@ from app.modules.presenze.services.gate_mobile_team_actions import (
     pending_action_gaia_user_id,
 )
 from app.modules.presenze.services.inaz_sync_status import build_presenze_snapshot_metadata
-from app.modules.presenze.services.operai_rules import load_operai_rule_configs
+from app.modules.presenze.services.operai_rules import (
+    load_operai_rule_configs as load_operai_rule_configs,
+)
 from app.schemas.users import normalize_email
 
 OPERATOR_UPDATE_ACTION_TYPE = "propose_operator_update"
@@ -321,20 +335,14 @@ def build_presenze_months_push_payload(db: Session, *, now: datetime | None = No
 
 
 def build_presenze_giornaliere_push_payload(db: Session, *, month: str, now: datetime | None = None) -> dict[str, Any]:
+    metadata = build_presenze_snapshot_metadata(db, rules_version=RULES_VERSION,
+        export_rules_version=EXPORT_RULES_VERSION, month=month, now=now)
     record_items, _ = _presenze_mobile_record_items_for_month(db, month=month)
-    return {
-        **build_presenze_snapshot_metadata(
-            db,
-            rules_version=RULES_VERSION,
-            export_rules_version=EXPORT_RULES_VERSION,
-            month=month, now=now,
-        ),
-        "records": record_items,
-        "giornaliere": record_items,
-    }
+    return {**metadata, "records": record_items, "giornaliere": record_items}
 
 
 def build_presenze_anomalie_push_payload(db: Session, *, month: str, now: datetime | None = None) -> dict[str, Any]:
+    metadata = build_presenze_snapshot_metadata(db, rules_version=RULES_VERSION, month=month, now=now)
     record_items, analyses_by_record_id = _presenze_mobile_record_items_for_month(db, month=month)
     anomalies: list[dict[str, Any]] = []
     for item in record_items:
@@ -351,7 +359,7 @@ def build_presenze_anomalie_push_payload(db: Session, *, month: str, now: dateti
             }
         )
     return {
-        **build_presenze_snapshot_metadata(db, rules_version=RULES_VERSION, month=month, now=now),
+        **metadata,
         "anomalies": anomalies,
         "anomalie": anomalies,
     }
@@ -362,57 +370,10 @@ def _presenze_mobile_record_items_for_month(
     *,
     month: str,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    from app.modules.presenze.services.gate_mobile_record_items import build_presenze_record_items
+
     period_start, period_end = _month_period(month)
-    records = _presenze_records_for_period(db, period_start=period_start, period_end=period_end)
-    if not records:
-        return [], {}
-
-    collaborators = _collaborator_map(db, [record.collaborator_id for record in records])
-    team_ids_by_collaborator = _team_ids_by_collaborator(
-        db,
-        [record.collaborator_id for record in records],
-        period_start=period_start,
-        period_end=period_end,
-    )
-    punches_by_record_id = _presenze_punches_by_record_id(db, records)
-    classification_by_record_id = _build_classification_map(db, records, punches_by_record_id=punches_by_record_id)
-    operai_rule_configs = load_operai_rule_configs(db)
-    operational_quality_by_record_id = _build_operational_quality_map(
-        db,
-        records,
-        punches_by_record_id=punches_by_record_id,
-        classifications=classification_by_record_id,
-        operai_rule_configs=operai_rule_configs,
-    )
-
-    record_items: list[dict[str, Any]] = []
-    analyses_by_record_id: dict[str, Any] = {}
-    for record in records:
-        collaborator = collaborators.get(record.collaborator_id)
-        serialized = _serialize_daily_record_matrix(
-            record,
-            classification=classification_by_record_id.get(record.id),
-            operational_quality=operational_quality_by_record_id.get(record.id),
-            operai_rule_configs=operai_rule_configs,
-        )
-        analysis = _gate_record_analysis_from_serialized(record, serialized)
-        record_id = str(record.id)
-        analyses_by_record_id[record_id] = analysis
-        record_items.append(
-            {
-                **build_presenze_mobile_record_payload(
-                    record,
-                    collaborator=collaborator,
-                    team_ids=team_ids_by_collaborator.get(record.collaborator_id, []),
-                    serialized=serialized,
-                    severity=analysis.severity,
-                    classification=classification_by_record_id[record.id],
-                ),
-                "has_complete_punches": _has_complete_punches(punches_by_record_id.get(record.id, [])),
-                "detail_punch_rows": _detail_punch_rows(punches_by_record_id.get(record.id, [])),
-            }
-        )
-    return record_items, analyses_by_record_id
+    return build_presenze_record_items(db, month=month, records=_presenze_records_for_period(db, period_start=period_start, period_end=period_end))
 
 
 def _presenze_punches_by_record_id(
@@ -823,7 +784,7 @@ def _apply_presenze_pending_action(db: Session, action: dict[str, Any]) -> dict[
         db.refresh(record)
         return _ack_payload("presenze_daily_record", record.id, action_id=action_id)
     if action_type in TEAM_ACTION_OPERATIONS:
-        team_id = apply_presenze_team_proposal(db, payload, actor=actor, action_type=action_type).team.id
+        team_id = apply_presenze_team_proposal(db, payload, actor=actor, action_type=action_type).team_id
         return _ack_payload("organization_team", team_id, action_id=action_id)
     raise ValueError(f"Tipo pending action non supportato: {action_type}")
 

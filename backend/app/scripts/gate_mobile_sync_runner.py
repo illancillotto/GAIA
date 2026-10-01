@@ -6,6 +6,7 @@ import signal
 import threading
 
 from app.scripts import gate_mobile_sync
+from app.scripts.gate_collaborator_refresh import start_refresh_polling
 from app.worker_health import WorkerHeartbeat
 
 logger = logging.getLogger("gaia.gate_mobile_sync_runner")
@@ -41,6 +42,7 @@ def main() -> int:
     _shutdown_event.clear()
     signal.signal(signal.SIGTERM, _handle_shutdown)
     signal.signal(signal.SIGINT, _handle_shutdown)
+    start_refresh_polling(_shutdown_event)
     interval = _interval_seconds()
     logger.info("gate-mobile sync runner started; interval_seconds=%s", interval)
 
@@ -59,6 +61,7 @@ def main() -> int:
             )
         if _shutdown_event.wait(interval):
             break
+    _shutdown_event.set()
     logger.info("gate-mobile sync runner stopped")
     return 0
 

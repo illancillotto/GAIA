@@ -4,7 +4,15 @@ import runpy
 import signal
 
 import pytest
+
 from app.scripts import gate_mobile_sync_runner
+
+
+@pytest.fixture(autouse=True)
+def isolate_background_refresh_polling(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Runner tests must never start a real poller or use local gateway credentials.
+    monkeypatch.setattr(gate_mobile_sync_runner, "start_refresh_polling", lambda _stop: None)
+    monkeypatch.setattr("app.scripts.gate_collaborator_refresh.start_refresh_polling", lambda _stop: None)
 
 
 def test_interval_uses_default_minimum_and_configured_value(
@@ -91,6 +99,9 @@ def test_handle_shutdown_sets_event(caplog: pytest.LogCaptureFixture) -> None:
 
 def test_module_main_guard(monkeypatch: pytest.MonkeyPatch) -> None:
     class AlreadyStoppedEvent:
+        def set(self) -> None:
+            return None
+
         def clear(self) -> None:
             return None
 

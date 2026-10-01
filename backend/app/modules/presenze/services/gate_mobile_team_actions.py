@@ -4,10 +4,11 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.models.application_user import ApplicationUser
+from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.modules.operazioni.models.wc_operator import WCOperator
 from app.modules.presenze.models import (
     OrganizationTeam,
     OrganizationTeamMembership,
@@ -20,6 +21,7 @@ TEAM_PERMISSION_SCOPES = {"view", "validate", "export", "manage_team"}
 TEAM_PERMISSION_SCOPE_ALIASES = {"team": "manage_team"}
 TEAM_ACTION_OPERATIONS = {
     "propose_team_create": {"create_team"},
+    "propose_team_delete": {"delete_team"},
     "propose_team_change": {"rename_team", "update_team", "upsert_team"},
     "propose_team_membership": {"update_team_memberships"},
     "propose_team_supervisor": {"update_team_supervisors"},
@@ -32,7 +34,8 @@ class TeamChangeApplyError(ValueError):
 
 @dataclass(frozen=True)
 class AppliedTeamChange:
-    team: OrganizationTeam
+    team: OrganizationTeam | None
+    team_id: uuid.UUID | str
 
 
 def apply_presenze_team_proposal(
@@ -43,6 +46,8 @@ def apply_presenze_team_proposal(
     action_type: str,
 ) -> AppliedTeamChange:
     _validate_action(payload, action_type)
+    if action_type == "propose_team_delete":
+        return _delete_team(db, payload, actor=actor)
     if action_type in {"propose_team_create", "propose_team_change"}:
         team = _apply_team_properties(
             db, payload, actor=actor, create=action_type == "propose_team_create"
@@ -55,7 +60,48 @@ def apply_presenze_team_proposal(
             _replace_supervisors(db, team, payload, actor=actor)
     db.commit()
     db.refresh(team)
-    return AppliedTeamChange(team=team)
+    return AppliedTeamChange(team=team, team_id=team.id)
+
+
+def _delete_team(
+    db: Session, payload: dict[str, Any], *, actor: ApplicationUser
+) -> AppliedTeamChange:
+    if not actor.is_active or not (
+        actor.is_super_admin
+        or (
+            actor.module_presenze
+            and (
+                actor.role in {ApplicationUserRole.ADMIN.value, ApplicationUserRole.HR_MANAGER.value}
+                or _has_console_admin_permission(db, actor.id)
+            )
+        )
+    ):
+        raise TeamChangeApplyError("Cancellazione squadra riservata agli amministratori Presenze")
+    team_payload = _team_payload(payload)
+    target_id = _required_text(team_payload, "team_id", max_length=255)
+    _personnel_area(team_payload)
+    team = _find_target_team(db, team_payload)
+    if team is None:
+        # A committed delete can be delivered again if GATE did not receive its ack.
+        return AppliedTeamChange(team=None, team_id=target_id)
+    _ensure_matching_area(team, team_payload)
+    team_id = team.id
+    db.execute(delete(OrganizationTeamMembership).where(OrganizationTeamMembership.team_id == team_id))
+    db.execute(
+        delete(OrganizationTeamSupervisorAssignment).where(OrganizationTeamSupervisorAssignment.team_id == team_id)
+    )
+    db.delete(team)
+    db.commit()
+    return AppliedTeamChange(team=None, team_id=team_id)
+
+
+def _has_console_admin_permission(db: Session, gaia_user_id: int) -> bool:
+    operators = db.scalars(select(WCOperator).where(WCOperator.gaia_user_id == gaia_user_id)).all()
+    return len(operators) == 1 and (
+        operators[0].enabled
+        and operators[0].gate_mobile_console_enabled
+        and operators[0].gate_mobile_console_role == "console_admin"
+    )
 
 
 def apply_presenze_team_change_proposal(

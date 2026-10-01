@@ -954,6 +954,22 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
 5. run end-to-end documentata su credenziale reale e validazione `.xlsm` su mese completo.
 
 
+## Verifica finale refresh GATE del collaboratore — 2026-10-01
+
+- [x] Controlli di import completo/checkpoint e identità canonica consolidati.
+- [x] Backend: 100% righe e branch dei cinque file coinvolti, retry senza ack anticipato verificato.
+- [x] Serializer mensile riusato; servizi di dominio mantenuti in `backend/app/modules/presenze/services/`.
+- [x] Test console, API e rollback PostgreSQL GATE eseguiti.
+- [x] Riesame GAIA: 136 test passati, sei runtime al 100% statement/branch,
+  style ratchet e complexity ratchet contro `origin/main` passati.
+- [ ] Quality gate cross-repository: residui del checkout GATE non inclusi
+  nella verifica e nel commit GAIA.
+- [ ] Collaudo produttivo e rilascio coordinato.
+
+Stato implementato: [GATE_COLLABORATOR_REFRESH.md](GATE_COLLABORATOR_REFRESH.md).
+Evidenze e limiti: `GaTe-mobile/docs/PRESENZE_COLLABORATOR_SYNC_FINAL_REPORT.md`.
+
+
 ## Buoni manuali e operazioni INAZ — 2026-10-01
 
 Implementati buono per collaboratore/data con audit e conteggio unico,
