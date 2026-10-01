@@ -54,10 +54,7 @@ def apply_presenze_team_proposal(
         )
     else:
         team = _required_target_team(db, _team_payload(payload))
-        if action_type == "propose_team_membership":
-            _replace_memberships(db, team, payload, actor=actor)
-        else:
-            _replace_supervisors(db, team, payload, actor=actor)
+        TEAM_ASSIGNMENT_HANDLERS[action_type](db, team, payload, actor=actor)
     db.commit()
     db.refresh(team)
     return AppliedTeamChange(team=team, team_id=team.id)
@@ -442,3 +439,9 @@ def _external_team_id(value: Any) -> str | None:
     if value is None or _parse_team_uuid(value) is not None:
         return None
     return _optional_text(value, "team_id", max_length=255)
+
+
+TEAM_ASSIGNMENT_HANDLERS = {
+    "propose_team_membership": _replace_memberships,
+    "propose_team_supervisor": _replace_supervisors,
+}

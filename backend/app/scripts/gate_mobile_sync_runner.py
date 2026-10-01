@@ -49,10 +49,7 @@ def main() -> int:
     while not _shutdown_event.is_set():
         GATE_MOBILE_HEARTBEAT.touch(status="cycle_running")
         exit_code = gate_mobile_sync.main()
-        GATE_MOBILE_HEARTBEAT.touch(
-            status="waiting",
-            details={"last_exit_code": exit_code},
-        )
+        GATE_MOBILE_HEARTBEAT.touch(status="waiting", details={"last_exit_code": exit_code})
         if exit_code != 0:
             logger.warning(
                 "gate-mobile sync cycle failed; exit_code=%s; retry_in_seconds=%s",

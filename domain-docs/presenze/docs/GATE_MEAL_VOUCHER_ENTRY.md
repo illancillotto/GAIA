@@ -21,8 +21,12 @@ Test: `test_gate_meal_vouchers.py` copre entrambi i trasporti, valori invalidi,
 autenticazione/record mancante, persistenza, audit idempotente, rollback,
 compatibilità KM/reperibilità e pubblicazione. La regressione di 9 file pytest
 passa: 237 test, 2108 statement e 358 branch nei 7 runtime modificati, 100%,
-nessuna riga esclusa. Ruff, format check dei moduli nuovi e ratchet del dominio
-contro `f687c213` passano. Il dizionario delle anomalie usa lo stesso formato
+nessuna riga esclusa. Ruff e format check dei moduli nuovi passano. Anche il ratchet completo
+contro `f687c213` passa, senza findings. Il dispatch delle appartenenze e
+dei supervisori usa una tabella esplicita dopo la validazione; heartbeat e
+transazioni mantengono il comportamento precedente. La regressione aggiuntiva
+di questi due runtime passa: 60 test, 288 statement e 108 branch, 100%,
+nessuna esclusione. Il dizionario delle anomalie usa lo stesso formato
 compatto del builder giornaliere; gli alias e il comportamento non cambiano.
 
 Frontend GAIA non modificato in questa integrazione: il comando è nella
@@ -31,5 +35,5 @@ sono documentati in GATE: `docs/PRESENZE_MEAL_VOUCHER_ENTRY.md`.
 
 Stato operativo: deploy in preparazione, da verificare dopo backup DB,
 migration `20261001_1400`, aggiornamento backend e servizio `gate-mobile-sync`.
-Preservare il checkout remoto e le hotfix preesistenti; aggiornare solo le
-immagini dei due servizi. Il collaudo su una persona reale resta separato.
+Preservare il checkout remoto e le hotfix preesistenti; aggiornare i due servizi con immagine e sorgente della release isolata,
+sostituendo il bind `/app` del backend senza modificare il checkout remoto. Il collaudo su una persona reale resta separato.
