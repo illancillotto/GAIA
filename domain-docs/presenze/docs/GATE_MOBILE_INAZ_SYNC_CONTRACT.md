@@ -325,3 +325,13 @@ meal_voucher_count (0/1), meal_voucher_sources. L'export XLSM GATE include il fl
 manuale nel medesimo conteggio OR della regola automatica preesistente; il totale
 non puo raddoppiare per la stessa giornata. L'audit resta persistito nella
 giornaliera GAIA. Trasporti, mapping identita e scope esistenti restano applicabili.
+
+
+## Buono pasto manuale da GATE — 2026-10-01
+
+`patch_daily_record` accetta il booleano esplicito `meal_voucher_manual` in entrambi
+i trasporti. Il valore omesso preserva il precedente; null, stringhe e numeri
+sono invalidi. L'aggiornamento blocca la giornaliera e registra audit idempotente
+con origine `gate_console_mobile`, prima del commit e della conferma. Gli snapshot
+pubblicano il valore canonico, conteggiato come manuale OR automatico.
+Dettagli, test e rilascio: `GATE_MEAL_VOUCHER_ENTRY.md`.

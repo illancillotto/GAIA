@@ -673,3 +673,14 @@ Riferimento Inaz:
 
 Implementazione e tabella preliminare nel
 [documento Giornaliere](IMPLEMENTATION_PRESENZE_COLLABORATORI_GIORNALIERE.md).
+
+
+## Integrazione buono manuale GATE — 2026-10-01
+
+Gli adapter LAN e outbound delegano a
+`backend/app/modules/presenze/services/gate_daily_record_patch.py`;
+`gate_daily_record_schemas.py` definisce il contratto booleano.
+`services/meal_voucher_audit.py` condivide la gestione di stato e audit con
+il servizio web esistente, senza duplicare le regole di conteggio. Il frontend
+GAIA conserva il servizio attuale; il dialogo mensile è nella console GATE.
+Vedi `GATE_MEAL_VOUCHER_ENTRY.md` per contratto e verifiche finali.
