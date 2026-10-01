@@ -49,6 +49,7 @@ from app.modules.presenze.schemas import (
     OrganizationTeamUpdate,
 )
 from app.modules.presenze.services import gate_mobile_payloads
+from app.modules.presenze.services.gate_daily_record_patch import apply_gate_daily_record_patch
 
 router = APIRouter(prefix="/gate/presenze", tags=["gate-presenze"])
 RequirePresenzeModule = Depends(require_module("presenze"))
@@ -177,10 +178,8 @@ def patch_gate_presenze_giornaliera(
     _: Annotated[ApplicationUser, RequirePresenzeModule],
 ) -> GatePresenzeDailyRecordDetailResponse:
     record = _get_gate_record_or_404(db, current_user, record_id)
-    patch_data = payload.model_dump(exclude_unset=True, exclude={"operator_note", "client_request_id"})
     before = _gate_record_snapshot(record)
-    for field, value in patch_data.items():
-        setattr(record, field, value)
+    apply_gate_daily_record_patch(db, record, payload, current_user.id)
     _append_gate_audit(
         record,
         action="patch",

@@ -60,6 +60,7 @@ from app.modules.presenze.schemas import (
     GatePresenzeDailyRecordValidateRequest,
     GatePresenzeResolveAnomalyRequest,
 )
+from app.modules.presenze.services.gate_daily_record_patch import apply_gate_daily_record_patch
 from app.modules.presenze.services.gate_mobile_payloads import (
     build_presenze_memberships_by_team,
     build_presenze_supervisors_by_team,
@@ -358,11 +359,7 @@ def build_presenze_anomalie_push_payload(db: Session, *, month: str, now: dateti
                 "operator_message": analysis.operator_message,
             }
         )
-    return {
-        **metadata,
-        "anomalies": anomalies,
-        "anomalie": anomalies,
-    }
+    return {**metadata, "anomalies": anomalies, "anomalie": anomalies}
 
 
 def _presenze_mobile_record_items_for_month(
@@ -746,9 +743,7 @@ def _apply_presenze_pending_action(db: Session, action: dict[str, Any]) -> dict[
         record = _pending_action_record(db, payload, actor)
         request = GatePresenzeDailyRecordPatchRequest.model_validate(payload)
         before = _gate_record_snapshot(record)
-        patch_data = request.model_dump(exclude_unset=True, exclude={"operator_note", "client_request_id"})
-        for field, value in patch_data.items():
-            setattr(record, field, value)
+        apply_gate_daily_record_patch(db, record, request, actor.id)
         _append_gate_audit(
             record,
             action="patch",

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.datetime_compat import UTC
 from app.modules.presenze.models import PresenzeDailyRecord
+from app.modules.presenze.services.meal_voucher_audit import record_manual_meal_voucher_change
 
 AUTOMATIC_MEAL_VOUCHER_START = date(2026, 8, 26)
 AUTOMATIC_MEAL_VOUCHER_EXTRA_MINUTES = 120
@@ -37,23 +37,16 @@ def apply_manual_meal_voucher(
 ) -> None:
     if enabled is None:
         return
-    locked = db.scalars(
+    locked = lock_manual_meal_voucher_record(db, record)
+    record_manual_meal_voucher_change(locked, enabled, actor_id, "gaia_web")
+
+
+def lock_manual_meal_voucher_record(
+    db: Session, record: PresenzeDailyRecord
+) -> PresenzeDailyRecord:
+    return db.scalars(
         select(PresenzeDailyRecord)
         .where(PresenzeDailyRecord.id == record.id)
         .with_for_update()
         .execution_options(populate_existing=True)
     ).one()
-    previous = bool(locked.meal_voucher_manual)
-    if previous == enabled:
-        return
-    locked.meal_voucher_manual = enabled
-    locked.meal_voucher_audit = [
-        *(locked.meal_voucher_audit or []),
-        {
-            "at": datetime.now(UTC).isoformat(),
-            "actor_user_id": actor_id,
-            "previous": previous,
-            "enabled": enabled,
-            "source": "gaia_web",
-        },
-    ]

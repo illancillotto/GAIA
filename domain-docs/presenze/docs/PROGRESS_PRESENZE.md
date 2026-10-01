@@ -989,3 +989,11 @@ passati. Suite frontend completa: 2881 passati e una failure preesistente
 Ruolo/Solleciti riprodotta anche sul checkout precedente, esclusa dall'intervento.
 Esito dettagliato XLSM GATE nel report finale. Graphify codice e docs aggiornati,
 con chunk semantici completati senza warning. Nessun push/deploy o sync INAZ live.
+
+## Buono pasto dalla console GATE — 2026-10-01
+
+- [x] Contratto, applicazione condivisa LAN/outbound, lock e audit idempotente.
+- [x] 237 test; coverage statement/branch 100% sui runtime modificati; Ruff e ratchet.
+- [ ] Deploy coordinato dopo backup/migration; collaudo reale.
+
+Dettagli: [GATE_MEAL_VOUCHER_ENTRY.md](GATE_MEAL_VOUCHER_ENTRY.md).

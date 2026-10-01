@@ -12,6 +12,9 @@ from app.modules.presenze.daily_record_schemas import (
 from app.modules.presenze.daily_record_schemas import (
     PresenzeDailyRecordMealVoucherFields,
 )
+from app.modules.presenze.gate_daily_record_schemas import (
+    GatePresenzeDailyRecordPatchRequest as GatePresenzeDailyRecordPatchRequest,
+)
 from app.modules.presenze.models import (
     PRESENZE_HOLIDAY_KIND_ORDINARY,
     PRESENZE_HOLIDAY_KIND_WORKING_OVERRIDE,
@@ -586,34 +589,6 @@ class GatePresenzeDailyRecordValidateRequest(BaseModel):
     validation_status: Literal["validated", "pending"] = "validated"
     operator_note: str | None = Field(default=None, max_length=1000)
     client_request_id: str | None = Field(default=None, max_length=120)
-
-
-class GatePresenzeDailyRecordPatchRequest(BaseModel):
-    km_value: int | None = Field(default=None, ge=0, le=5000)
-    trasferta_minutes: int | None = Field(default=None, ge=0, le=1440)
-    trasferta_montano: bool | None = None
-    reperibilita_unit: Literal["none", "hours", "days", "shifts"] | None = None
-    reperibilita_quantity: int | None = Field(default=None, ge=0, le=24)
-    override_straordinario_minutes: int | None = Field(default=None, ge=0, le=1440)
-    override_mpe_minutes: int | None = Field(default=None, ge=0, le=1440)
-    manual_note: str | None = Field(default=None, max_length=1000)
-    operator_note: str | None = Field(default=None, max_length=1000)
-    client_request_id: str | None = Field(default=None, max_length=120)
-
-    @model_validator(mode="after")
-    def validate_reperibilita(self) -> GatePresenzeDailyRecordPatchRequest:
-        if self.reperibilita_unit is None and self.reperibilita_quantity is None:
-            return self
-        unit = self.reperibilita_unit or "none"
-        quantity = self.reperibilita_quantity
-        if unit == "none":
-            if quantity not in (None, 0):
-                raise ValueError("reperibilita_quantity must be empty when reperibilita_unit is 'none'")
-            self.reperibilita_quantity = None
-            return self
-        if quantity is None or quantity <= 0:
-            raise ValueError("reperibilita_quantity must be greater than zero when reperibilita is set")
-        return self
 
 
 class GatePresenzeAnomalyItemResponse(GatePresenzeDailyRecordItemResponse):
