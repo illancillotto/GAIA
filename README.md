@@ -957,3 +957,11 @@ Componenti runtime del modulo Rete:
 3. `network` e `catasto` sono gia su namespace canonico di modulo.
 4. `accessi` usa gia route e entrypoint canonici di modulo, con wrapper legacy mantenuti.
 5. La directory fisica del backend e stata rinominata in `backend/`; i riferimenti storici vanno considerati obsoleti.
+
+
+## Presenze: buono pasto da GATE — 2026-10-01
+
+Il contratto dei due trasporti GATE accetta `meal_voucher_manual` e delega al
+servizio di dominio Presenze con lock e audit idempotente. Il comando mensile
+è nella console GATE; il frontend GAIA resta compatibile. Contratto, test e
+stato operativo: `domain-docs/presenze/docs/GATE_MEAL_VOUCHER_ENTRY.md`.

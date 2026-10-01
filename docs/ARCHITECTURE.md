@@ -734,3 +734,11 @@ Possibili estensioni:
     ├── nginx/
     ├── scripts/
     └── .github/
+
+
+## Integrazione Presenze GATE — 2026-10-01
+
+Il contratto dei due trasporti GATE accetta `meal_voucher_manual` e delega al
+servizio di dominio Presenze con lock e audit idempotente. Il comando mensile
+è nella console GATE; il frontend GAIA resta compatibile. Contratto, test e
+stato operativo: `domain-docs/presenze/docs/GATE_MEAL_VOUCHER_ENTRY.md`.
