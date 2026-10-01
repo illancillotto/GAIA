@@ -262,7 +262,7 @@ class PyVisitor(ast.NodeVisitor):
         )
         self.stack.append(name)
         for child in getattr(node, "body", []):
-            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
                 self.visit(child)
         self.stack.pop()
 
@@ -293,7 +293,7 @@ def py_complexities(node: ast.AST) -> tuple[int, int, int]:
     def walk(n: ast.AST, nesting: int = 0):
         nonlocal cyclo, cognitive, max_nesting
         inc_nest = isinstance(
-            n, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.Try, ast.ExceptHandler, ast.Match)
+            n, ast.If | ast.For | ast.AsyncFor | ast.While | ast.Try | ast.ExceptHandler | ast.Match
         )
         if isinstance(n, decision):
             cyclo += 1
@@ -320,7 +320,7 @@ def scan_python(path: Path) -> tuple[list[CallableMetric], dict[str, Any]]:
     tree = ast.parse(src, filename=rel(path))
     v = PyVisitor(path, src)
     v.visit(tree)
-    imports = sum(isinstance(n, (ast.Import, ast.ImportFrom)) for n in ast.walk(tree))
+    imports = sum(isinstance(n, ast.Import | ast.ImportFrom) for n in ast.walk(tree))
     return v.callables, {
         "imports": imports,
         "loc": effective_loc(src.splitlines(), 1, len(src.splitlines())),
@@ -1135,6 +1135,43 @@ def cmd_baseline(args):
     return 0
 
 
+def cmd_baseline_repair(args):
+    """Reproduce committed runtime only; never absorb an uncommitted feature."""
+    if args.paths:
+        print("baseline-repair requires the complete repository scope", file=sys.stderr)
+        return 2
+    changed = changed_files("HEAD")
+    protected = {
+        path
+        for path in changed
+        if is_runtime(ROOT / path) or path == DEFAULT_EXCEPTIONS.relative_to(ROOT).as_posix()
+    }
+    if protected:
+        print(
+            json.dumps(
+                {"error": "baseline_repair_requires_clean_runtime", "paths": sorted(protected)}
+            )
+        )
+        return 2
+    errors = validate_exceptions(load_exceptions())
+    if errors:
+        print(json.dumps({"error": "invalid_exceptions", "findings": errors}))
+        return 2
+    report = scan()
+    baseline = baseline_from_report(report)
+    path = Path(args.baseline)
+    if not path.exists():
+        print("baseline-repair requires an existing baseline", file=sys.stderr)
+        return 2
+    scope_errors = scope_policy_errors(load_json(path), baseline)
+    if scope_errors:
+        print(json.dumps({"error": "baseline_repair_scope_changed", "findings": scope_errors}))
+        return 2
+    path.write_text(json.dumps(baseline, indent=2, sort_keys=True) + "\n")
+    print(f"repaired {path} from unchanged runtime at {source_commit()}")
+    return 0
+
+
 def cmd_baseline_verify(args):
     bp = Path(args.baseline)
     if not bp.exists():
@@ -1210,6 +1247,9 @@ def main(argv=None) -> int:
         help="rewrite baseline after an explicit metrics-engine migration approval",
     )
     sp.set_defaults(func=cmd_baseline)
+    sp = sub.add_parser("baseline-repair")
+    common(sp)
+    sp.set_defaults(func=cmd_baseline_repair)
     sp = sub.add_parser("baseline-verify")
     common(sp)
     sp.set_defaults(func=cmd_baseline_verify)

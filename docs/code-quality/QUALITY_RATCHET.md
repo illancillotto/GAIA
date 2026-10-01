@@ -91,3 +91,15 @@ su righe e branch legacy richiede una decisione separata e l'aggiornamento di
 
 Lo stile di scrittura e un ratchet distinto, descritto in `docs/CODE_STYLE.md`.
 Non va usato per assorbire o sostituire coverage e complessita.
+
+
+## Riparazione baseline stale su HEAD — 2026-10-01
+
+`python tools/code_quality/complexity.py baseline-repair` e riservato a un
+checkout senza modifiche runtime o modifiche alle eccezioni. Richiede baseline
+esistente, scope invariato e eccezioni valide; rifiuta perimetri parziali.
+La baseline riproduce soltanto il codice gia committato a HEAD. Eseguire la
+riparazione e i test tooling in un worktree pulito, verificare baseline-verify
+e versionare il recupero separatamente. La feature viene poi confrontata con
+questo commit tramite il ratchet del merge-base. Il normale comando baseline
+continua a rifiutare regressioni; nessuna soglia o esclusione viene allargata.
