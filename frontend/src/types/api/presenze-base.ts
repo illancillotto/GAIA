@@ -167,6 +167,11 @@ export type PresenzeDetailPunchRow = {
 };
 
 export type PresenzeDailyRecord = {
+  meal_voucher_manual?: boolean;
+  meal_voucher_automatic?: boolean;
+  meal_voucher_count?: 0 | 1;
+  meal_voucher_sources?: Array<"automatic" | "manual">;
+  meal_voucher_audit?: Array<{ at: string; actor_user_id: number; previous: boolean; enabled: boolean; source: string }> | null;
   id: string;
   collaborator_id: string;
   owner_user_id: number | null;
@@ -254,6 +259,7 @@ export type PresenzeDailyRecord = {
 };
 
 export type PresenzeDailyRecordManualUpdateInput = {
+  meal_voucher_manual?: boolean;
   km_value?: number | null;
   trasferta_minutes?: number | null;
   trasferta_montano?: boolean | null;

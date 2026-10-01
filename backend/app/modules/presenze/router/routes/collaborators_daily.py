@@ -77,6 +77,7 @@ from app.modules.presenze.services.contract_profile import (
 from app.modules.presenze.services.dashboard_snapshot_store import (
     invalidate_all_dashboard_snapshots,
 )
+from app.modules.presenze.services.meal_vouchers import apply_manual_meal_voucher
 from app.modules.presenze.services.operai_rules import (
     ensure_operai_rule_configs,
     load_operai_rule_configs,
@@ -468,20 +469,11 @@ def update_giornaliera(
     record = _get_daily_record_or_404(db, record_id, current_user)
     payload_data = payload.model_dump(exclude_unset=True)
     validation_fields = {"validation_status", "validation_note"}
-    manual_edit_fields = {
-        "km_value",
-        "trasferta_minutes",
-        "trasferta_montano",
-        "reperibilita_unit",
-        "reperibilita_quantity",
-        "override_straordinario_minutes",
-        "override_mpe_minutes",
-        "manual_note",
-    }
-    if any(field in payload_data for field in manual_edit_fields) and not _can_edit_daily_record(current_user, record):
+    if payload_data.keys() - validation_fields and not _can_edit_daily_record(current_user, record):
         raise HTTPException(status_code=403, detail="Edit privileges required for this daily record")
     if any(field in payload_data for field in validation_fields) and not _can_validate_daily_record(db, current_user, record):
         raise HTTPException(status_code=403, detail="Validation privileges required for this daily record")
+    apply_manual_meal_voucher(db, record, payload_data.get("meal_voucher_manual"), current_user.id)
     for field, value in payload_data.items():
         setattr(record, field, value)
     if "validation_status" in payload_data:

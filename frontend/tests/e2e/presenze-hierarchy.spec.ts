@@ -175,6 +175,7 @@ async function openHierarchyDailyRecord(page: Page, canApprove: boolean) {
   await page.getByRole("button", { name: "Accedi alla piattaforma" }).click();
   await page.waitForURL("**/");
   await page.goto("/presenze/giornaliere");
+  await page.getByLabel("Mese operativo").fill("2026-08");
   await expect(page.getByText("SUBORDINATO ORGANIGRAMMA").first()).toBeVisible();
   await expect(page.getByText("PERSONALE NON ASSEGNATO")).toHaveCount(0);
   await page.getByTitle(/2026-08-16/).click();

@@ -659,3 +659,17 @@ Riferimento Inaz:
 - `frontend/src/components/layout/module-sidebar.tsx`
 - `frontend/src/app/presenze/*`
 - `backend/tests/test_presenze_*.py`
+
+
+## Requisiti operativi aggiuntivi — 2026-10-01
+
+- Buono manuale su collaboratore/data; automatico invariato, conteggio massimo 1,
+  audit delle rettifiche, riepiloghi e export comuni. Nessun turnista permanente.
+- Sincronizza da INAZ nelle viste operative: job esistente in background, stati,
+  ultima riuscita, protezione concorrenza e refresh dopo completamento.
+- Snapshot invalidati dopo import; unico algoritmo presenze/anomalie.
+- Permesso sindacale da codice strutturato e minuti giustificati, senza nascondere
+  timbrature mancanti o altre anomalie.
+
+Implementazione e tabella preliminare nel
+[documento Giornaliere](IMPLEMENTATION_PRESENZE_COLLABORATORI_GIORNALIERE.md).

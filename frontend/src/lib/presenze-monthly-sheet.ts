@@ -39,7 +39,7 @@ export function monthlyAbsence(record: MonthlyRecord): string | null {
     FERIE: "F", FERIECOLL: "F", INF: "I", MA7: "L.104", MA7HH: "L.104", MAL: "M", MALNOI: "M",
     MALOSP: "M", MB5G3: "L.104", "P. ORD": "P", "P. STR": "PST", "P.ORD": "P", PSERV: "PS", PSIEST: "PS", PSIRSA: "PS", SOSPD: "SD",
   };
-  const causes: Record<string, string> = { ferie: "F", malattia: "M", permesso: "P", riposo: "RS", assenza_da_giustificare: "AG" };
+  const causes: Record<string, string> = { ferie: "F", malattia: "M", permesso: "P", permesso_sindacale: "PS", riposo: "RS", assenza_da_giustificare: "AG" };
   const prefix = String(record.request_description ?? "").split(" - ")[0]!.trim().toUpperCase();
   return prefixes[prefix] ?? causes[String(record.absence_cause ?? record.resolved_absence_cause ?? "")] ?? null;
 }
@@ -97,7 +97,7 @@ export function buildMonthlySheet(month: string, records: MonthlyRecord[]) {
     if (!values.some(value => typeof value === "number")) return null;
     return values.reduce<number>((sum, value) => sum + (typeof value === "number" ? value : 0), 0);
   });
-  return { month, days, totals, ...monthlyCounts(days, records), missingDays: days.filter(day => !day.present).length };
+  return { month, days, totals, ...monthlyMealVouchers(records), ...monthlyCounts(days, records), missingDays: days.filter(day => !day.present).length };
 }
 export function monthlyCell(value: number | string | null, row: number): string {
   if (value === null) return "—";
@@ -131,4 +131,8 @@ export function monthlyPunchIntervals(punches: Array<{ entry_time?: string; exit
   }));
   if (times.some(([start, end]) => !Number.isFinite(start) || !Number.isFinite(end) || end! <= start! || end! > 1320)) return null;
   return times;
+}
+
+function monthlyMealVouchers(records: MonthlyRecord[]) {
+  return { mealVouchers: records.reduce((sum, record) => sum + Number(record.meal_voucher_count ?? 0), 0), mealVoucherDays: records.map(record => ({ id: String(record.id), date: String(record.work_date), count: Number(record.meal_voucher_count ?? 0), sources: (record.meal_voucher_sources as string[] | undefined) ?? [] })) };
 }

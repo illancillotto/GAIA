@@ -33,6 +33,7 @@ from app.modules.presenze.services.sync_runtime import (
     prepare_sync_job_artifacts,
     resolve_sync_artifact_path,
 )
+from app.modules.presenze.services.sync_start import ensure_sync_start_available
 from app.modules.presenze.services.xlsm_export import DEFAULT_TEMPLATE_PATH
 from app.modules.presenze.services.xlsm_export_job import (
     build_period_end,
@@ -89,6 +90,7 @@ def _create_sync_job_record(
     if not credential.active:
         raise HTTPException(status_code=409, detail="La credenziale Presenze selezionata non e attiva")
 
+    ensure_sync_start_available(db)
     period_start, period_end = build_period(year, month)
     if period_start_override is not None:
         period_start = period_start_override
@@ -102,8 +104,7 @@ def _create_sync_job_record(
         "trigger": trigger,
         "employee_codes": normalized_employee_codes,
     }
-    if params_overrides:
-        params_json.update(params_overrides)
+    params_json.update(params_overrides if params_overrides is not None else {})
     job = PresenzeSyncJob(
         status="pending",
         requested_by_user_id=requested_by_user_id,

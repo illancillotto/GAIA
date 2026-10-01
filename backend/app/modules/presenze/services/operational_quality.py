@@ -11,6 +11,7 @@ from app.modules.presenze.models import (
     PresenzeDailyPunch,
     PresenzeDailyRecord,
 )
+from app.modules.presenze.services.daily_details import normalized_daily_detail
 from app.modules.presenze.services.operai_daily_policy import (
     recognized_daily_minutes,
     recognized_extra_minutes,
@@ -23,7 +24,6 @@ from app.modules.presenze.services.operai_rules import (
     resolve_operai_rule,
 )
 from app.modules.presenze.services.operai_schedule_policy import OperaiDayPolicy
-from app.modules.presenze.services.parser import extract_detail_payload
 
 
 @dataclass(frozen=True)
@@ -279,7 +279,7 @@ def _operai_accounted_totals(record, recognized, worked, expected, absence):
 
 def _record_has_inaz_anomaly(record: PresenzeDailyRecord) -> bool:
     if isinstance(record.raw_payload_json, dict):
-        detail = extract_detail_payload(record.raw_payload_json)
+        detail = normalized_daily_detail(record)
         if detail.get("anomalies") or detail.get("error"):
             return True
     values = (record.stato, record.evidenze)

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
-from datetime import date, datetime, time
 import re
+from dataclasses import dataclass
+from datetime import date, datetime, time
 from typing import Any
 
 
@@ -128,9 +128,7 @@ def minutes_from_detail_maps(daily_row: dict[str, Any], *aliases: str) -> int | 
     for source in (detail["day_summary"], detail["day_totals"]):
         for key, value in source.items():
             if normalize_portal_key(key) in keys:
-                parsed = duration_to_minutes(value)
-                if parsed is not None:
-                    return parsed
+                return duration_to_minutes(value)
     return None
 
 
@@ -298,30 +296,17 @@ def resolve_request_authorized_by(daily_row: dict[str, Any]) -> str | None:
     return _request_value(request, "Autorizzato da", "Autorizzatoda", "Authorizedby", "Author", "col_9")
 
 
+def resolve_request_code(daily_row: dict[str, Any]) -> str | None:
+    from app.modules.presenze.services.inaz_absences import inaz_event_code
+
+    request = _first_request_row(daily_row)
+    return inaz_event_code(_request_value(request, "KEvento", "event_code", "codicecausale", "Codice", "col_3"))
+
+
 def resolve_absence_cause(daily_row: dict[str, Any]) -> str | None:
-    candidates = [
-        resolve_request_description(daily_row),
-        resolve_evidenze(daily_row),
-    ]
-    for value in candidates:
-        normalized = normalize_portal_key(value)
-        if not normalized:
-            continue
-        if "ferie" in normalized:
-            return "ferie"
-        if "permesso" in normalized:
-            return "permesso"
-        if "malattia" in normalized:
-            return "malattia"
-        if "riposo" in normalized:
-            return "riposo"
-        if "festivit" in normalized:
-            return "festivita"
-        if "banca ore" in normalized:
-            return "banca_ore"
-        if "giustific" in normalized:
-            return "assenza_da_giustificare"
-    return None
+    from app.modules.presenze.services.inaz_absences import normalized_absence_cause
+
+    return normalized_absence_cause(resolve_request_code(daily_row), resolve_request_description(daily_row), resolve_evidenze(daily_row))
 
 
 def detail_indicates_special_day(daily_row: dict[str, Any]) -> bool:

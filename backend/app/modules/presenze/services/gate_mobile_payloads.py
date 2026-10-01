@@ -17,6 +17,8 @@ from app.modules.presenze.models import (
     PresenzeCollaborator,
     PresenzeDailyRecord,
 )
+from app.modules.presenze.services.daily_details import classification_breakdown_values
+from app.modules.presenze.services.meal_vouchers import meal_voucher_values
 from app.modules.presenze.services.operai_daily_policy import classified_extra_minutes
 from app.modules.presenze.services.xlsm_export import resolve_export_absence_code
 
@@ -369,14 +371,8 @@ def _canonical_export_values(record: PresenzeDailyRecord, export: Any) -> dict[s
         "export_special_day": export.special_day,
         "export_ordinary_minutes": export.ordinary_minutes,
         "export_extra_minutes": export.extra_minutes,
-        "export_ordinary_night_minutes": export.ordinary_night_minutes,
-        "export_overtime_day_minutes": export.overtime_day_minutes,
-        "export_overtime_night_minutes": export.overtime_night_minutes,
-        "export_overtime_festive_minutes": export.overtime_festive_minutes,
-        "export_overtime_festive_night_minutes": export.overtime_festive_night_minutes,
-        "export_shift_festive_day_minutes": export.shift_festive_day_minutes,
-        "export_shift_night_minutes": export.shift_night_minutes,
-        "export_shift_festive_night_minutes": export.shift_festive_night_minutes,
+        **meal_voucher_values(record, export.extra_minutes),
+        **classification_breakdown_values(export, "export_"),
     }
 
 

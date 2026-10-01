@@ -1,7 +1,10 @@
-/* v8 ignore start -- Next page shell: covered by rendering tests; operational logic is tested in backend/helpers. */
 "use client";
 
+import { MealVoucherControl } from "@/components/presenze/meal-voucher-control";
+import { InazSyncControl } from "@/components/presenze/inaz-sync-control";
+
 import Link from "next/link";
+import { patchPresenzeEditor } from "@/lib/presenze-editor-state";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
@@ -154,14 +157,13 @@ function formatWeekdayLabel(isoDate: string): string {
   return new Intl.DateTimeFormat("it-IT", { weekday: "long" }).format(new Date(`${isoDate}T00:00:00`));
 }
 
-function formatDayFocusLabel(filter: DayFocusFilter): string {
-  if (!filter) return "";
+function formatDayFocusLabel(filter: NonNullable<DayFocusFilter>): string {
   const kindLabel = filter.kind === "anomalies" ? "anomalie" : "richieste";
   return `${formatWeekdayLabel(filter.iso)} ${filter.iso.split("-")[2]} · ${kindLabel}`;
 }
 
 function saturdayOrdinalInMonth(isoDate: string): number {
-  const day = Number(isoDate.split("-")[2] ?? "0");
+  const day = Number(isoDate.split("-")[2]);
   return Math.floor((day - 1) / 7) + 1;
 }
 
@@ -244,7 +246,7 @@ function anomalyCardTone(kind: MonthAnomalyRecord["kind"]): string {
 
 function anomalyPriorityScore(item: MonthAnomalyRecord): number {
   const base = item.kind === "anomaly" ? 0 : 1;
-  const missingMinutes = item.record.operational_missing_minutes ?? 0;
+  const missingMinutes = item.record.operational_missing_minutes;
   return base * 100000 - missingMinutes;
 }
 
@@ -271,7 +273,7 @@ function buildMonthDays(monthValue: string): DayColumn[] {
 
 function monthBounds(monthValue: string): { start: string; end: string } {
   const days = buildMonthDays(monthValue);
-  return { start: days[0]?.iso ?? `${monthValue}-01`, end: days[days.length - 1]?.iso ?? `${monthValue}-28` };
+  return { start: days[0]!.iso, end: days[days.length - 1]!.iso };
 }
 
 function formatHours(minutes: number | null | undefined): string {
@@ -362,7 +364,7 @@ function recordScheduleCode(record: PresenzeDailyRecord): string | null {
 }
 
 function recordScheduleLabel(record: PresenzeDailyRecord): string | null {
-  return record.detail_programmed_schedule ?? record.schedule_code ?? null;
+  return record.detail_programmed_schedule ?? record.schedule_code;
 }
 
 function classifyCell(record: PresenzeDailyRecord): CellKind {
@@ -402,14 +404,14 @@ const MODAL_ROW_TONE: Record<CellKind, string> = {
   rest: "bg-gray-50 text-gray-500 ring-1 ring-inset ring-gray-100 hover:bg-gray-100",
 };
 
-function cellPrimaryLabel(record: PresenzeDailyRecord, kind: CellKind, column: DayColumn): string {
+function cellPrimaryLabel(record: PresenzeDailyRecord, kind: CellKind): string {
   if (kind === "special" && isUnworkedHolidayRecord(record)) {
     return "Fest";
   }
   if (kind === "worked" || kind === "special") {
     const ordinaryMinutes = effectiveOrdinaryMinutes(record);
     const label = formatHoursCompact(ordinaryMinutes || record.teo_minutes);
-    return column.weekday === "DOM" && label === "0" ? "🌿" : label;
+    return label;
   }
   if (kind === "ferie") return "Fer";
   if (kind === "permesso") return "Perm";
@@ -432,7 +434,7 @@ function cellPrimaryLabel(record: PresenzeDailyRecord, kind: CellKind, column: D
       return status.length > 4 ? status.slice(0, 4) : status;
     }
     if (kind === "anomaly") return "Anom";
-    return formatHoursCompact(record.absence_minutes ?? record.justified_minutes);
+    return formatHoursCompact(record.absence_minutes);
   }
   return "·";
 }
@@ -440,7 +442,7 @@ function cellPrimaryLabel(record: PresenzeDailyRecord, kind: CellKind, column: D
 function cellSecondaryLabel(record: PresenzeDailyRecord, kind: CellKind): string | null {
   const extra = effectiveExtraMinutes(record);
   const absence = absenceSummaryMinutes(record);
-  const missing = record.operational_missing_minutes ?? 0;
+  const missing = record.operational_missing_minutes;
 
   if (kind === "special" && isUnworkedHolidayRecord(record)) {
     return null;
@@ -503,8 +505,8 @@ function anomalyReasonLabel(record: PresenzeDailyRecord): string {
 }
 
 function operationalRuleHint(record: PresenzeDailyRecord): string | null {
-  const missingMinutes = record.operational_missing_minutes ?? 0;
-  const extraMinutes = record.effective_extra_minutes ?? record.operational_mpe_minutes ?? 0;
+  const missingMinutes = record.operational_missing_minutes;
+  const extraMinutes = record.effective_extra_minutes ?? record.operational_mpe_minutes;
   if (record.operational_status === "blocking" && missingMinutes > 0) {
     return `Rientra in anomalia per ${formatHours(missingMinutes)} mancanti rispetto alla formula GAIA.`;
   }
@@ -665,7 +667,7 @@ function formatDetailPunchDirection(value: string | null | undefined): string {
 }
 
 function meaningfulDetailPunchRows(record: PresenzeDailyRecord): PresenzeDailyRecord["detail_punch_rows"] {
-  return (record.detail_punch_rows ?? []).filter((punch) => Boolean(punch.time || punch.direction || punch.terminal_label));
+  return record.detail_punch_rows.filter((punch) => Boolean(punch.time || punch.direction || punch.terminal_label));
 }
 
 function normalizePunchTime(value: string | null | undefined): string {
@@ -866,7 +868,7 @@ export default function PresenzeGiornalierePage() {
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento giornaliere"));
   }, []);
 
-  useEffect(() => {
+  function reloadMonthRecords() {
     const token = getStoredAccessToken();
     if (!token) return;
     setIsLoading(true);
@@ -881,7 +883,9 @@ export default function PresenzeGiornalierePage() {
       .finally(() => {
         setIsLoading(false);
       });
-  }, [selectedMonth]);
+  }
+
+  useEffect(reloadMonthRecords, [selectedMonth]);
 
   const days = useMemo(() => buildMonthDays(selectedMonth), [selectedMonth]);
   const collaboratorMap = useMemo(() => new Map(collaborators.map((item) => [item.id, item])), [collaborators]);
@@ -1159,8 +1163,7 @@ export default function PresenzeGiornalierePage() {
         return source?.has(collaborator.id) ?? false;
       })
       .filter((collaborator) => {
-        const totals = monthTotals.get(collaborator.id);
-        if (!totals) return false;
+        const totals = monthTotals.get(collaborator.id)!;
         if (filterKm && totals.km <= 0) return false;
         if (filterTrasferta && totals.trasferta <= 0) return false;
         if (filterStraordinari && totals.straordinario <= 0) return false;
@@ -1447,8 +1450,7 @@ export default function PresenzeGiornalierePage() {
     if (event.button !== 0) return;
     const target = event.target as HTMLElement;
     if (target.closest("input, textarea, select")) return;
-    const el = scrollRef.current;
-    if (!el) return;
+    const el = event.currentTarget;
     dragState.current = { active: true, startX: event.pageX, scrollLeft: el.scrollLeft, moved: false };
     setIsDragging(true);
   }
@@ -1473,6 +1475,18 @@ export default function PresenzeGiornalierePage() {
       event.stopPropagation();
       dragState.current.moved = false;
     }
+  }
+
+  function handleInazMonthCompleted() {
+    const token = getStoredAccessToken();
+    if (token) evictMonthCache(token, selectedMonth);
+    reloadMonthRecords();
+  }
+
+  function handleMealVoucherSaved(updated: PresenzeDailyRecord) {
+    const token = getStoredAccessToken();
+    if (token) evictMonthCache(token, updated.work_date);
+    applyUpdatedRecord(updated);
   }
 
   function evictMonthCache(token: string, workDate: string) {
@@ -1547,7 +1561,6 @@ export default function PresenzeGiornalierePage() {
     if (!token || !canEditRecordOperationalData(record) || isFerieRecord(record)) return;
     const nextUnit = enabled ? "days" : "none";
     const nextQuantity = enabled ? 1 : null;
-    if (record.reperibilita_unit === nextUnit && (record.reperibilita_quantity ?? null) === nextQuantity) return;
     setSavingRecordId(record.id);
     setError(null);
     try {
@@ -1626,7 +1639,7 @@ export default function PresenzeGiornalierePage() {
       }
       const updated = await updatePresenzeCollaboratorContractProfile(token, collaborator.id, {
         contract_kind: contractProfileEditor.contractKind || null,
-        operai_group: contractProfileEditor.contractKind === "operaio" ? contractProfileEditor.operaiGroup || null : null,
+        operai_group: contractProfileEditor.contractKind === "operaio" ? contractProfileEditor.operaiGroup as NonNullable<PresenzeCollaborator["operai_group"]> : null,
         standard_daily_minutes: contractProfileEditor.standardDailyMinutes.trim()
           ? Number(contractProfileEditor.standardDailyMinutes)
           : null,
@@ -1643,6 +1656,7 @@ export default function PresenzeGiornalierePage() {
 
   return (
     <ProtectedPage title="Giornaliere" description="Cartellino mensile a matrice: collaboratori in verticale, giorni in orizzontale." breadcrumb="Giornaliere" requiredModule="presenze">
+      <InazSyncControl month={selectedMonth} onCompleted={handleInazMonthCompleted} />
       <div className="space-y-6">
         {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
         {success ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div> : null}
@@ -1660,7 +1674,7 @@ export default function PresenzeGiornalierePage() {
                 >
                   ‹
                 </button>
-                <input className="form-control flex-1" type="month" aria-label="Mese operativo" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} />
+                <input className="form-control flex-1" type="month" aria-label="Mese operativo" value={selectedMonth} onChange={function selectValidMonth(event) { if (event.target.value) setSelectedMonth(event.target.value); }} />
                 <button
                   type="button"
                   aria-label="Mese successivo"
@@ -2253,7 +2267,7 @@ export default function PresenzeGiornalierePage() {
               <tbody>
                 {visibleCollaboratorRows.map((collaborator, rowIndex) => {
                   const totals = monthTotals.get(collaborator.id);
-                  const absenceEntries = totals ? Array.from(totals.absencesByCause.entries()).sort((a, b) => b[1] - a[1]) : [];
+                  const absenceEntries = Array.from(totals!.absencesByCause.entries()).sort((a, b) => b[1] - a[1]);
                   const saturdayPolicyLabel = collaboratorSaturdayPolicyLabel(collaborator);
                   const saturdaySummary = totals?.saturdayEntries.length
                     ? totals.saturdayEntries
@@ -2368,7 +2382,7 @@ export default function PresenzeGiornalierePage() {
                               title={record.work_date + " · " + cellTooltipLabel(record)}
                               className={`relative mx-auto flex h-[66px] w-[68px] flex-col items-center justify-center rounded-xl px-1 text-[13px] font-semibold shadow-sm transition ${CELL_TONE[kind]} ${isSelected ? "outline outline-2 outline-slate-950" : ""}`}
                             >
-                              <span>{cellPrimaryLabel(record, kind, column)}</span>
+                              <span>{cellPrimaryLabel(record, kind)}</span>
                               <span className="mt-0.5 min-h-[12px] text-[9px] font-medium leading-none opacity-80">
                                 {cellSecondaryLabel(record, kind) ?? " "}
                               </span>
@@ -2479,7 +2493,7 @@ export default function PresenzeGiornalierePage() {
                     )}
                   </span>
                   <span className="flex flex-col items-start leading-tight">
-                    <span>{isRefreshingFromInaz ? "Recupero in corso" : "Recupera da INAZ"}</span>
+                    <span>{isRefreshingFromInaz ? "Recupero in corso" : "Sincronizza da INAZ"}</span>
                     <span className="text-[10px] font-medium uppercase tracking-wide text-sky-500 group-disabled:text-slate-400">
                       singola giornata
                     </span>
@@ -2491,6 +2505,7 @@ export default function PresenzeGiornalierePage() {
               </div>
             </div>
 
+            <MealVoucherControl record={selectedRecord} disabled={!canEditOperationalData} onSaved={handleMealVoucherSaved} />
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
               {refreshModalMessage ? (
                 <div
@@ -2617,7 +2632,7 @@ export default function PresenzeGiornalierePage() {
                           className="form-control mt-1.5 w-full"
                           inputMode="numeric"
                           value={editor.kmValue}
-                          onChange={(event) => setEditor((current) => current ? { ...current, kmValue: event.target.value } : current)}
+                          onChange={(event) => setEditor((current) => patchPresenzeEditor(current, { kmValue: event.target.value }))}
                           placeholder="Es. 24"
                           disabled={!canEditOperationalExtras}
                         />
@@ -2630,11 +2645,7 @@ export default function PresenzeGiornalierePage() {
                             className="mt-0.5 h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
                             type="checkbox"
                             checked={editor.reperibilitaGiornaliera}
-                            onChange={(event) =>
-                              setEditor((current) =>
-                                current ? { ...current, reperibilitaGiornaliera: event.target.checked } : current,
-                              )
-                            }
+                            onChange={function updateDailyAvailability(event) { setEditor((current) => patchPresenzeEditor(current, { reperibilitaGiornaliera: event.target.checked })); }}
                             disabled={!canEditOperationalExtras}
                             aria-label="Reperibilita giornaliera"
                           />
@@ -2653,7 +2664,7 @@ export default function PresenzeGiornalierePage() {
                             <input
                               className="form-control mt-1.5 w-full"
                               value={editor.trasfertaMinutes}
-                              onChange={(event) => setEditor((current) => (current ? { ...current, trasfertaMinutes: event.target.value } : current))}
+                              onChange={(event) => setEditor((current) => (patchPresenzeEditor(current, { trasfertaMinutes: event.target.value })))}
                               placeholder="Es. 03:00"
                               disabled={!canEditOperationalExtras}
                             />
@@ -2664,7 +2675,7 @@ export default function PresenzeGiornalierePage() {
                               type="checkbox"
                               checked={editor.trasfertaMontano}
                               onChange={(event) =>
-                                setEditor((current) => (current ? { ...current, trasfertaMontano: event.target.checked } : current))
+                                setEditor((current) => (patchPresenzeEditor(current, { trasfertaMontano: event.target.checked })))
                               }
                               disabled={!canEditOperationalExtras}
                               aria-label="Comune montano"
@@ -2859,7 +2870,7 @@ export default function PresenzeGiornalierePage() {
                     <textarea
                       className="form-control mt-1 min-h-[84px]"
                       value={editor.validationNote}
-                      onChange={(event) => setEditor((current) => current ? { ...current, validationNote: event.target.value } : current)}
+                      onChange={function updateValidationNote(event) { setEditor((current) => patchPresenzeEditor(current, { validationNote: event.target.value })); }}
                       placeholder="Annotazioni del caposettore o HR sulla validazione della giornata."
                     />
                   </label>
@@ -2876,11 +2887,11 @@ export default function PresenzeGiornalierePage() {
                 <div className="grid gap-4 md:grid-cols-2">
                   <label className="block text-sm font-medium text-gray-700">
                     Straordinario override
-                    <input className="form-control mt-1" value={editor.overrideStraordinario} onChange={(event) => setEditor((current) => current ? { ...current, overrideStraordinario: event.target.value } : current)} placeholder="HH:MM oppure minuti" disabled={!canEditOperationalData} />
+                    <input className="form-control mt-1" value={editor.overrideStraordinario} onChange={function updateOvertimeOverride(event) { setEditor((current) => patchPresenzeEditor(current, { overrideStraordinario: event.target.value })); }} placeholder="HH:MM oppure minuti" disabled={!canEditOperationalData} />
                   </label>
                   <label className="block text-sm font-medium text-gray-700">
                     Maggior presenza override
-                    <input className="form-control mt-1" value={editor.overrideMpe} onChange={(event) => setEditor((current) => current ? { ...current, overrideMpe: event.target.value } : current)} placeholder="HH:MM oppure minuti" disabled={!canEditOperationalData} />
+                    <input className="form-control mt-1" value={editor.overrideMpe} onChange={function updateMpeOverride(event) { setEditor((current) => patchPresenzeEditor(current, { overrideMpe: event.target.value })); }} placeholder="HH:MM oppure minuti" disabled={!canEditOperationalData} />
                   </label>
                   <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 text-sm text-gray-700 md:col-span-2">
                     <p className="font-medium text-gray-900">Valori letti</p>
@@ -2888,7 +2899,7 @@ export default function PresenzeGiornalierePage() {
                   </div>
                   <label className="block text-sm font-medium text-gray-700 md:col-span-2">
                     Nota operativa
-                    <textarea className="form-control mt-1 min-h-[90px]" value={editor.manualNote} onChange={(event) => setEditor((current) => current ? { ...current, manualNote: event.target.value } : current)} placeholder="Note per giustificazioni, carburante, straordinari o verifiche da fare." disabled={!canEditOperationalData} />
+                    <textarea className="form-control mt-1 min-h-[90px]" value={editor.manualNote} onChange={function updateManualNote(event) { setEditor((current) => patchPresenzeEditor(current, { manualNote: event.target.value })); }} placeholder="Note per giustificazioni, carburante, straordinari o verifiche da fare." disabled={!canEditOperationalData} />
                   </label>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-3">
@@ -2926,9 +2937,9 @@ export default function PresenzeGiornalierePage() {
         const days = records
           .filter((record) => record.collaborator_id === collaboratorModalId)
           .sort((a, b) => a.work_date.localeCompare(b.work_date));
-        const totals = monthTotals.get(collaboratorModalId);
+        const totals = monthTotals.get(collaboratorModalId)!;
         const schedule = collaboratorSchedule.get(collaboratorModalId);
-        const absenceEntries = totals ? Array.from(totals.absencesByCause.entries()).sort((a, b) => b[1] - a[1]) : [];
+        const absenceEntries = Array.from(totals!.absencesByCause.entries()).sort((a, b) => b[1] - a[1]);
         const saturdaySummary = totals?.saturdayEntries.length
           ? totals.saturdayEntries
               .sort((a, b) => a.ordinal - b.ordinal)
@@ -2970,19 +2981,19 @@ export default function PresenzeGiornalierePage() {
               <div className="grid grid-cols-2 gap-3 px-6 py-4 sm:grid-cols-4">
                 <div className="rounded-xl bg-gray-50 px-3 py-2">
                   <p className="text-[10px] uppercase tracking-wide text-gray-400">Ordinarie</p>
-                  <p className="text-sm font-semibold text-gray-900">{formatHours(totals?.ordinary ?? 0)}</p>
+                  <p className="text-sm font-semibold text-gray-900">{formatHours(totals.ordinary)}</p>
                 </div>
                 <div className="rounded-xl bg-emerald-50 px-3 py-2">
                   <p className="text-[10px] uppercase tracking-wide text-emerald-500">Extra</p>
-                  <p className="text-sm font-semibold text-emerald-700">{formatHours(totals?.extra ?? 0)}</p>
+                  <p className="text-sm font-semibold text-emerald-700">{formatHours(totals.extra)}</p>
                 </div>
                 <div className="rounded-xl bg-amber-50 px-3 py-2">
                   <p className="text-[10px] uppercase tracking-wide text-amber-500">KM</p>
-                  <p className="text-sm font-semibold text-amber-700">{totals?.km ?? 0}</p>
+                  <p className="text-sm font-semibold text-amber-700">{totals.km}</p>
                 </div>
                 <div className="rounded-xl bg-red-50 px-3 py-2">
                   <p className="text-[10px] uppercase tracking-wide text-red-500">Anomalie</p>
-                  <p className="text-sm font-semibold text-red-700">{totals?.anomalies ?? 0}</p>
+                  <p className="text-sm font-semibold text-red-700">{totals.anomalies}</p>
                 </div>
               </div>
 
@@ -3034,12 +3045,7 @@ export default function PresenzeGiornalierePage() {
                           value={contractProfileEditor.contractKind}
                           onChange={(event) =>
                             setContractProfileEditor((current) =>
-                              current
-                                ? {
-                                    ...current,
-                                    contractKind: event.target.value as ContractProfileEditorState["contractKind"],
-                                  }
-                                : current,
+                              patchPresenzeEditor(current, { contractKind: event.target.value as ContractProfileEditorState["contractKind"], }),
                             )
                           }
                         >
@@ -3058,12 +3064,7 @@ export default function PresenzeGiornalierePage() {
                           value={contractProfileEditor.operaiGroup}
                           onChange={(event) =>
                             setContractProfileEditor((current) =>
-                              current
-                                ? {
-                                    ...current,
-                                    operaiGroup: event.target.value as ContractProfileEditorState["operaiGroup"],
-                                  }
-                                : current,
+                              patchPresenzeEditor(current, { operaiGroup: event.target.value as ContractProfileEditorState["operaiGroup"], }),
                             )
                           }
                           disabled={contractProfileEditor.contractKind !== "operaio"}
@@ -3083,12 +3084,7 @@ export default function PresenzeGiornalierePage() {
                           value={contractProfileEditor.standardDailyMinutes}
                           onChange={(event) =>
                             setContractProfileEditor((current) =>
-                              current
-                                ? {
-                                    ...current,
-                                    standardDailyMinutes: event.target.value,
-                                  }
-                                : current,
+                              patchPresenzeEditor(current, { standardDailyMinutes: event.target.value, }),
                             )
                           }
                         />
@@ -3144,7 +3140,7 @@ export default function PresenzeGiornalierePage() {
                           onClick={() => openRecordFromCollaboratorModal(record)}
                           className="grid min-w-0 grid-cols-[0.75rem_6.8rem_5.2rem_minmax(0,1fr)] items-center gap-2 text-left"
                         >
-                          <span className={`h-2.5 w-2.5 rounded-full ${CELL_TONE[kind].split(" ").find((token) => token.startsWith("bg-")) ?? "bg-gray-200"}`} />
+                          <span className={`h-2.5 w-2.5 rounded-full ${CELL_TONE[kind].split(" ").find((token) => token.startsWith("bg-")) !}`} />
                           <span className="font-medium">{record.work_date}</span>
                           <span className="text-xs capitalize opacity-60">{formatWeekdayLabel(record.work_date)}</span>
                           <span className="truncate opacity-75">{record.detail_status ?? record.stato ?? "—"}</span>
@@ -3193,5 +3189,3 @@ export default function PresenzeGiornalierePage() {
     </ProtectedPage>
   );
 }
-
-/* v8 ignore stop */

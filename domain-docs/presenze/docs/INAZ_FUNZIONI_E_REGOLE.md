@@ -297,3 +297,19 @@ presenze-collaboratori \
   --template Giornaliere/Giornaliere_2026_803_1.xlsm \
   --xlsx-output Giornaliere/Giornaliere_2026_803_1_compilato.xlsm
 ```
+
+
+## Avvio operativo e normalizzazione sindacale — 2026-10-01
+
+**Sincronizza da INAZ** in Giornaliere e Giornaliera individuale accoda la pipeline
+esistente: nessun import parallelo alternativo. Manuale, retry e scheduler
+condividono il lock PostgreSQL 760031001 e il controllo dei job incompatibili.
+La finalizzazione dell'import invalida gli snapshot dashboard; il completamento
+ricarica le viste operative. Stato persistente e ultima riuscita sono consultabili
+dopo refresh; i job parziali restano esplicitamente segnalati.
+
+Normalizzazione strutturata KEvento: PSIRSA, PSIEST, ASS.SIN. Copertura basata su
+stato valido e justified_minutes; absence_minutes puo riferirsi all'intera giornata.
+Solo OREM interamente coperto viene escluso dalle anomalie derivate; evidenza raw,
+altre anomalie ed errori restano. Dettagli e limiti nel documento di
+[implementazione](IMPLEMENTATION_PRESENZE_COLLABORATORI_GIORNALIERE.md).

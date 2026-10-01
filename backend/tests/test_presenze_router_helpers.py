@@ -486,7 +486,9 @@ def test_sync_job_error_contracts(monkeypatch: pytest.MonkeyPatch) -> None:
     job_id = uuid.uuid4()
     payload = SimpleNamespace(credential_id=1, year=2026, month=5, collaborator_limit=None, employee_codes=[])
 
-    monkeypatch.setattr(router, "has_running_sync_job", lambda _db: True)
+    def busy_guard(_db):
+        raise HTTPException(status_code=409, detail="Another Presenze sync job is already pending or running")
+    monkeypatch.setattr(router, "ensure_sync_start_available", busy_guard)
     with pytest.raises(HTTPException, match="Another Presenze sync"):
         router.create_sync_job(payload, None, admin, None)
     with pytest.raises(HTTPException, match="Another Presenze sync"):
@@ -494,7 +496,7 @@ def test_sync_job_error_contracts(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(HTTPException, match="Another Presenze sync"):
         router.retry_sync_job_selected(job_id, payload, None, admin, None)
 
-    monkeypatch.setattr(router, "has_running_sync_job", lambda _db: False)
+    monkeypatch.setattr(router, "ensure_sync_start_available", lambda _db: None)
     monkeypatch.setattr(router, "get_credential", lambda *_args: None)
     with pytest.raises(HTTPException, match="Credenziale Presenze"):
         router.create_sync_job(payload, None, admin, None)
@@ -1497,6 +1499,7 @@ def test_matrix_serializer_builds_default_classification_and_quality(
         SimpleNamespace(model_validate=lambda value: value),
     )
     record = SimpleNamespace(
+        work_date=date(2026, 10, 1),
         raw_payload_json=None,
         override_straordinario_minutes=None,
         straordinario_minutes=None,

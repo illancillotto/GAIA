@@ -874,3 +874,24 @@ Aggiornato il runtime della sync automatica Presenze da Inaz:
 3. export/report HR recuperi;
 4. preview differenziale e duplicate handling piu ricco lato giornaliere;
 5. run end-to-end documentata su credenziale reale e validazione `.xlsm` su mese completo.
+
+
+## Buoni manuali e operazioni INAZ — 2026-10-01
+
+Implementati buono per collaboratore/data con audit e conteggio unico,
+conteggi individuali/XLSM GAIA e GATE, comando per la pipeline INAZ esistente,
+lock condiviso con scheduler, invalidazione degli snapshot e normalizzazione
+sindacale KEvento. Nessuna nuova infrastruttura o attributo turnista permanente.
+Analisi preliminare, migration, inventario e report finale nel
+[documento di implementazione](IMPLEMENTATION_PRESENZE_COLLABORATORI_GIORNALIERE.md#buoni-pasto-manuali-sync-operativa-e-permessi-sindacali--2026-10-01).
+
+Intervento circoscritto sui blocchi autorizzato dopo il primo report: recupero
+baseline da runtime committed pulito in commit separati, ratchet feature passato
+in GAIA/GATE e baseline finali riproducibili, senza assorbire regressioni.
+Copertura per-file backend (17 runtime) e frontend modificato al 100%.
+Backend 985 casi verificati, compresi i 10 PostgreSQL rieseguiti con URL dedicati;
+frontend 215 pertinenti, 18 smoke e 3 E2E passati. Typecheck, lint e build pulita
+passati. Suite frontend completa: 2881 passati e una failure preesistente
+Ruolo/Solleciti riprodotta anche sul checkout precedente, esclusa dall'intervento.
+Esito dettagliato XLSM GATE nel report finale. Graphify codice e docs aggiornati,
+con chunk semantici completati senza warning. Nessun push/deploy o sync INAZ live.

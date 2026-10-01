@@ -30,6 +30,12 @@ from app.modules.presenze.services.auto_sync import (
 from app.modules.presenze.services.credentials import (
     get_credential,
 )
+from app.modules.presenze.services.daily_details import (
+    classification_breakdown_values,
+    normalized_daily_absence_cause,
+    normalized_daily_detail,
+)
+from app.modules.presenze.services.meal_vouchers import meal_voucher_values
 from app.modules.presenze.services.operai_daily_policy import effective_extra_values
 from app.modules.presenze.services.operational_quality import (
     build_daily_operational_quality,
@@ -38,9 +44,7 @@ from app.modules.presenze.services.operational_quality import (
 from app.modules.presenze.services.parser import (
     detail_indicates_recovery_usage,
     detail_indicates_special_day,
-    extract_detail_payload,
     extract_punch_terminal_labels,
-    resolve_absence_cause,
     resolve_request_authorized_by,
     resolve_request_description,
     resolve_request_status,
@@ -70,7 +74,7 @@ def _serialize_daily_record(
             .where(PresenzeDailyPunch.daily_record_id == record.id)
             .order_by(PresenzeDailyPunch.sequence.asc())
         ).scalars().all()
-    detail = extract_detail_payload(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else {}
+    detail = normalized_daily_detail(record)
     terminal_rows = extract_punch_terminal_labels(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else []
     detail_punch_rows = []
     for row in detail.get("punch_rows") or []:
@@ -148,18 +152,12 @@ def _serialize_daily_record(
             "operational_missing_minutes": operational_quality.missing_minutes,
             "operational_mpe_minutes": operational_quality.mpe_minutes,
             **effective_extra_values(record, classification),
+            **meal_voucher_values(record, effective_extra_values(record, classification)["effective_extra_minutes"]),
             "operational_notes": list(operational_quality.notes),
             "night_minutes": classification.night_minutes,
             "festive_minutes": classification.festive_minutes,
             "festive_night_minutes": classification.festive_night_minutes,
-            "ordinary_night_minutes": classification.ordinary_night_minutes,
-            "overtime_day_minutes": classification.overtime_day_minutes,
-            "overtime_night_minutes": classification.overtime_night_minutes,
-            "overtime_festive_minutes": classification.overtime_festive_minutes,
-            "overtime_festive_night_minutes": classification.overtime_festive_night_minutes,
-            "shift_festive_day_minutes": classification.shift_festive_day_minutes,
-            "shift_night_minutes": classification.shift_night_minutes,
-            "shift_festive_night_minutes": classification.shift_festive_night_minutes,
+            **classification_breakdown_values(classification, ""),
             "monthly_night_shift_count": monthly_night_bonus["monthly_night_shift_count"] if monthly_night_bonus is not None else 0,
             "ordinary_night_bonus_threshold_met": monthly_night_bonus["ordinary_night_bonus_threshold_met"] if monthly_night_bonus is not None else False,
             "ordinary_night_bonus_rate": monthly_night_bonus["ordinary_night_bonus_rate"] if monthly_night_bonus is not None else None,
@@ -210,7 +208,7 @@ def _build_collaborator_snapshot_map(
     return {row.id: row for row in rows}
 
 def _daily_record_detail(record: PresenzeDailyRecord) -> dict[str, object]:
-    return extract_detail_payload(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else {}
+    return normalized_daily_detail(record)
 
 def _daily_record_has_anomaly(record: PresenzeDailyRecord) -> bool:
     detail = _daily_record_detail(record)
@@ -252,9 +250,7 @@ def _classification_has_worked_time(classification) -> bool:
     return worked_minutes > 0
 
 def _resolved_absence_cause_for_response(record: PresenzeDailyRecord, classification) -> str | None:
-    explicit_cause = record.resolved_absence_cause or (
-        resolve_absence_cause(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None
-    )
+    explicit_cause = normalized_daily_absence_cause(record)
     if explicit_cause:
         return explicit_cause
     if classification.holiday_kind == "ordinary" and classification.special_day and not _classification_has_worked_time(classification):
@@ -365,7 +361,7 @@ def _serialize_daily_record_matrix(
     operational_quality=None,
     operai_rule_configs=None,
 ) -> PresenzeDailyRecordResponse:
-    detail = extract_detail_payload(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else {}
+    detail = normalized_daily_detail(record)
     detail_anomalies = detail.get("anomalies") or []
     if classification is None:
         classification = _build_daily_record_classification(None, record, punches=[])
@@ -391,18 +387,12 @@ def _serialize_daily_record_matrix(
             "operational_missing_minutes": operational_quality.missing_minutes,
             "operational_mpe_minutes": operational_quality.mpe_minutes,
             **effective_extra_values(record, classification),
+            **meal_voucher_values(record, effective_extra_values(record, classification)["effective_extra_minutes"]),
             "operational_notes": list(operational_quality.notes),
             "night_minutes": classification.night_minutes,
             "festive_minutes": classification.festive_minutes,
             "festive_night_minutes": classification.festive_night_minutes,
-            "ordinary_night_minutes": classification.ordinary_night_minutes,
-            "overtime_day_minutes": classification.overtime_day_minutes,
-            "overtime_night_minutes": classification.overtime_night_minutes,
-            "overtime_festive_minutes": classification.overtime_festive_minutes,
-            "overtime_festive_night_minutes": classification.overtime_festive_night_minutes,
-            "shift_festive_day_minutes": classification.shift_festive_day_minutes,
-            "shift_night_minutes": classification.shift_night_minutes,
-            "shift_festive_night_minutes": classification.shift_festive_night_minutes,
+            **classification_breakdown_values(classification, ""),
             "monthly_night_shift_count": 0,
             "ordinary_night_bonus_threshold_met": False,
             "ordinary_night_bonus_rate": None,

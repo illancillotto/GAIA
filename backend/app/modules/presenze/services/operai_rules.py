@@ -15,6 +15,7 @@ from app.modules.presenze.models import (
     PresenzeDailyRecord,
     PresenzeOperaiRuleConfig,
 )
+from app.modules.presenze.services.inaz_absences import covered_inaz_absence_minutes
 from app.modules.presenze.services.parser import (
     extract_detail_payload,
     parse_schedule_code_from_detail,
@@ -237,13 +238,7 @@ def saturday_ordinal_in_month(work_date: date) -> int:
 def covered_operai_absence_minutes(record: PresenzeDailyRecord, resolved_rule: ResolvedOperaiRule | None) -> int:
     if resolved_rule is None:
         return 0
-    cause = getattr(record, "resolved_absence_cause", None)
-    normalized_cause = cause.strip().lower() if isinstance(cause, str) else None
-    if normalized_cause not in resolved_rule.rule.allowed_absence_causes:
-        return 0
-    absence_minutes = record.absence_minutes or 0
-    justified_minutes = record.justified_minutes or 0
-    return max(absence_minutes, justified_minutes)
+    return covered_inaz_absence_minutes(record, resolved_rule.rule.allowed_absence_causes, resolved_rule.expected_minutes)
 
 
 def _normalize_codes(values: Iterable[str]) -> tuple[str, ...]:

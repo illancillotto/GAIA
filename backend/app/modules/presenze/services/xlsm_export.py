@@ -17,6 +17,7 @@ from app.modules.presenze.services.contract_profile import (
     PRESENZE_CONTRACT_KIND_OPERAIO,
     resolve_contract_profile,
 )
+from app.modules.presenze.services.meal_vouchers import meal_voucher_values
 from app.modules.presenze.services.parser import detail_indicates_special_day
 from app.modules.presenze.services.schedule_engine import (
     DayClassification,
@@ -52,6 +53,7 @@ ARCHIVE2_OFFSETS = {
     "straordinario_ferial": 155,
     "straordinario_festive": 186,
     "km_auto": 279,
+    "meal_vouchers": 341,
     "absence_code": 436,
     "reperibilita": 467,
     "trasferta_hours": 498,
@@ -76,6 +78,7 @@ ARCHIVIO_COLUMNS = {
     "total_extra": 17,
     "total_worked": 18,
     "km_auto": 21,
+    "meal_vouchers": 23,
     "trasferta": 24,
     "worked_days": 25,
     "paid_days": 26,
@@ -120,6 +123,7 @@ LEGACY_ABSENCE_CODE_BY_CAUSE = {
     "ferie": "F",
     "malattia": "M",
     "permesso": "P",
+    "permesso_sindacale": "PS",
     "riposo": "RS",
 }
 
@@ -368,14 +372,9 @@ def write_archivio_summary_values(
     period_start: date,
     schedule_context: ScheduleContext | None = None,
 ) -> None:
-    ordinary_ferial_minutes = 0
-    ordinary_festive_minutes = 0
-    ordinary_night_minutes = 0
-    ordinary_festive_night_minutes = 0
-    extra_ferial_minutes = 0
-    extra_festive_minutes = 0
-    extra_night_minutes = 0
-    extra_festive_night_minutes = 0
+    ordinary_ferial_minutes = ordinary_festive_minutes = ordinary_night_minutes = ordinary_festive_night_minutes = 0
+    extra_ferial_minutes = extra_festive_minutes = extra_night_minutes = extra_festive_night_minutes = 0
+    meal_vouchers_total = 0
     km_total = 0
     trasferta_total_minutes = 0
     worked_days_total = 0
@@ -400,6 +399,7 @@ def write_archivio_summary_values(
         extra_festive_minutes += classification.overtime_festive_minutes
         extra_night_minutes += classification.overtime_night_minutes
         extra_festive_night_minutes += classification.overtime_festive_night_minutes
+        meal_vouchers_total += meal_voucher_values(daily, classification.extra_minutes)["meal_voucher_count"]
         km_total += daily.km_value or 0
         trasferta_total_minutes += daily.trasferta_minutes or 0
         if day_has_work_presence(classification):
@@ -435,16 +435,14 @@ def write_archivio_summary_values(
         "total_extra": minutes_to_excel_hours(total_extra_minutes),
         "total_worked": minutes_to_excel_hours(total_worked_minutes),
         "km_auto": km_total,
+        "meal_vouchers": meal_vouchers_total,
         "trasferta": minutes_to_excel_hours(trasferta_total_minutes),
         "worked_days": worked_days_total,
         "paid_days": paid_days_total,
         "reperibilita_ferial": reperibilita_ferial_days,
         "reperibilita_festive": reperibilita_festive_days,
         "assenze_days": absence_days_total,
-        "bo_mm_pp": 0,
-        "bo_maturata": 0,
-        "bo_usata_mese": 0,
-        "bo_residue": 0,
+        **dict.fromkeys(("bo_mm_pp", "bo_maturata", "bo_usata_mese", "bo_residue"), 0),
     }
     for key, value in values.items():
         if key == "month":
@@ -487,18 +485,18 @@ def write_archive2_daily_values(
     schedule_context: ScheduleContext | None = None,
 ) -> None:
     for daily in export_row.daily_rows:
-        col = ARCHIVE2_FIRST_DAY_COLUMN + daily.work_date.day - 1
         classification = resolve_day_classification(export_row, daily, schedule_context)
         values = {
             "ordinary_festive" if classification.special_day else "ordinary_ferial": minutes_to_excel_hours_minutes(classification.ordinary_minutes),
             "straordinario_festive" if classification.special_day else "straordinario_ferial": minutes_to_excel_hours_minutes(classification.extra_minutes),
             "km_auto": daily.km_value,
+            "meal_vouchers": meal_voucher_values(daily, classification.extra_minutes)["meal_voucher_count"],
             "trasferta_hours": resolve_export_trasferta_value(daily),
             "absence_code": resolve_export_absence_code(daily) if schedule_context is not None or not day_has_work_presence(classification) else None,
             "reperibilita": resolve_export_reperibilita_value(daily),
         }
         for field, offset in ARCHIVE2_OFFSETS.items():
-            cell = ws.cell(row_index, col + offset)
+            cell = ws.cell(row_index, ARCHIVE2_FIRST_DAY_COLUMN + daily.work_date.day - 1 + offset)
             cell.value = values.get(field)
             cell.number_format = "0.00"
 

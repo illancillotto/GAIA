@@ -316,3 +316,12 @@ Il connector outbound resta un cron host separato ogni cinque minuti e non
 viene usato per derivare lo stato INAZ. Un ciclo end-to-end post-deploy ha
 pubblicato con HTTP `200` gli snapshot `months`, `giornaliere` e `anomalie` e
 si e concluso senza failure.
+
+
+## Buoni pasto nel payload giornaliero — 2026-10-01
+
+Il builder canonico GAIA espone meal_voucher_manual, meal_voucher_automatic,
+meal_voucher_count (0/1), meal_voucher_sources. L'export XLSM GATE include il flag
+manuale nel medesimo conteggio OR della regola automatica preesistente; il totale
+non puo raddoppiare per la stessa giornata. L'audit resta persistito nella
+giornaliera GAIA. Trasporti, mapping identita e scope esistenti restano applicabili.

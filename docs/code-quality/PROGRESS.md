@@ -1942,3 +1942,18 @@ restano escluse.
   `sister_worker_reliability.py` 522/522 statement e 140/140 branch (100%).
   Ruff runtime/test e formatter del nuovo test superati. Commit successivamente
   richiesto con validazione isolata del contenuto staged; nessun deploy.
+
+## 2026-10-01 — recupero baseline e operazioni Presenze
+
+Intervento circoscritto autorizzato dall'utente dopo il primo report di blocco.
+Baseline GAIA riparata dal runtime committed invariato, in commit separato
+`dc669728`, con comando `baseline-repair` fail-closed e 83 test tooling passati.
+GATE applica il proprio comando di recupero in `3baaed8` (36 test tooling).
+
+Il ratchet della feature confronta con quei commit, prima della sincronizzazione
+delle baseline. Nessuna nuova esclusione o regressione assorbita. Serializzazione
+condivisa dei bucket classificati, responsabilita esplicite per toolbar/riga
+buoni, riuso del caricamento mensile, contratti giornalieri e editor null-safe:
+`REORGANIZED_AND_CHARACTERIZED`, senza dichiarare riduzione di debito trasferito.
+Runtime Presenze modificato coperto al 100%; dettagli e metriche nel report
+`domain-docs/presenze/docs/IMPLEMENTATION_PRESENZE_COLLABORATORI_GIORNALIERE.md`.

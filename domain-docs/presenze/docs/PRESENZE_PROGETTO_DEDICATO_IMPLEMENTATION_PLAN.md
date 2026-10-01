@@ -321,3 +321,16 @@ Test integrazione manuale:
 - LibreOffice altera layout: mantenere template pulito e verificare PDF.
 - Richieste duplicate: controllo evento + orario prima di salvare.
 - Banca ore non coincide con righe Excel: tenere totali separati.
+
+
+## Ciclo operativo GAIA del 2026-10-01
+
+La realizzazione integrata resta nel monolite modulare GAIA. Implementati nel
+working tree: buono manuale sulla giornaliera con audit, conteggio unico ed export,
+comando UI per job INAZ esistenti, lock condiviso con scheduler, invalidazione
+snapshot dopo import e normalizzazione sindacale strutturata. Nessuna nuova
+infrastruttura o anagrafica turnista. Piano di esecuzione: analisi preliminare,
+implementazione, test concorrenza/migration, quality gate, documentazione/mappe,
+review e commit soltanto dopo gate soddisfatti. Stato verificabile in
+[PROGRESS_PRESENZE](PROGRESS_PRESENZE.md); specifica dettagliata nell'
+[implementazione Giornaliere](IMPLEMENTATION_PRESENZE_COLLABORATORI_GIORNALIERE.md).

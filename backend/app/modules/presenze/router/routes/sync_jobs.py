@@ -34,12 +34,12 @@ from app.modules.presenze.services.credentials import (
 )
 from app.modules.presenze.services.sync_runtime import (
     delete_sync_artifact_dir,
-    has_running_sync_job,
     prepare_sync_job_artifacts,
     reconcile_stale_sync_jobs,
     resolve_sync_artifact_path,
     stop_sync_worker,
 )
+from app.modules.presenze.services.sync_start import ensure_sync_start_available
 
 # Keep extracted callable formatting stable for complexity-baseline matching.
 # fmt: off
@@ -53,8 +53,7 @@ def create_sync_job(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     _: Annotated[ApplicationUser, RequirePresenzeModule],
 ) -> PresenzeSyncJobResponse:
-    if has_running_sync_job(db):
-        raise HTTPException(status_code=409, detail="Another Presenze sync job is already pending or running")
+    ensure_sync_start_available(db)
     credential = get_credential(db, payload.credential_id, current_user)
     if credential is None:
         raise HTTPException(status_code=404, detail="Credenziale Presenze non trovata")
@@ -111,8 +110,7 @@ def retry_sync_job(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     _: Annotated[ApplicationUser, RequirePresenzeModule],
 ) -> PresenzeSyncJobResponse:
-    if has_running_sync_job(db):
-        raise HTTPException(status_code=409, detail="Another Presenze sync job is already pending or running")
+    ensure_sync_start_available(db)
 
     job = db.get(PresenzeSyncJob, job_id)
     if job is None or (not _can_view_all_inaz_data(current_user) and job.requested_by_user_id != current_user.id):
@@ -146,8 +144,7 @@ def retry_sync_job_selected(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     _: Annotated[ApplicationUser, RequirePresenzeModule],
 ) -> PresenzeSyncJobResponse:
-    if has_running_sync_job(db):
-        raise HTTPException(status_code=409, detail="Another Presenze sync job is already pending or running")
+    ensure_sync_start_available(db)
 
     source_job = db.get(PresenzeSyncJob, job_id)
     if source_job is None or (not _can_view_all_inaz_data(current_user) and source_job.requested_by_user_id != current_user.id):

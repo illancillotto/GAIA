@@ -1,3 +1,4 @@
+vi.mock("@/components/presenze/inaz-sync-control", () => ({ InazSyncControl: ({ onCompleted }: { onCompleted: () => void }) => <button onClick={onCompleted}>Simula completamento INAZ</button> }));
 import { act, fireEvent, render, screen, waitFor, cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import Page from "@/app/presenze/giornaliera-individuale/page";
@@ -28,6 +29,7 @@ describe("monthly page", () => {
     expect(mocks.records).toHaveBeenLastCalledWith("token", expect.objectContaining({ collaboratorId: "one", dateFrom: "2026-08-01", dateTo: "2026-08-31", includePunches: true }));
     fireEvent.click(screen.getByText("Stampa / PDF")); expect(print).toHaveBeenCalled();
     fireEvent.click(screen.getByText("Aggiorna")); await screen.findByRole("table");
+    fireEvent.click(screen.getByText("Simula completamento INAZ")); await screen.findByRole("table");
     fireEvent.change(screen.getByLabelText("Dipendente"), { target: { value: "" } });
     await waitFor(() => expect(screen.queryByRole("table")).toBeNull());
     fireEvent.change(screen.getByLabelText("Mese"), { target: { value: "" } });

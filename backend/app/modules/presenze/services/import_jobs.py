@@ -21,15 +21,18 @@ from app.modules.presenze.schemas import (
     PresenzeImportPreviewResponse,
 )
 from app.modules.presenze.services.contract_profile import resolve_contract_profile
+from app.modules.presenze.services.dashboard_snapshot_store import (
+    invalidate_all_dashboard_snapshots,
+)
 from app.modules.presenze.services.parser import (
     ParsedCollaboratorPayload,
     ParsedImportPayload,
     duration_to_minutes,
+    extract_punch_terminal_labels,
     parse_clock,
     parse_portal_date,
-    extract_punch_terminal_labels,
-    resolve_absence_minutes,
     resolve_absence_cause,
+    resolve_absence_minutes,
     resolve_evidenze,
     resolve_justified_minutes,
     resolve_maggiorazione_minutes,
@@ -43,8 +46,8 @@ from app.modules.presenze.services.parser import (
     resolve_stato,
     resolve_straordinario_minutes,
     resolve_teo_minutes,
-    resolve_trasferta_montano,
     resolve_trasferta_minutes,
+    resolve_trasferta_montano,
 )
 
 
@@ -238,8 +241,8 @@ def finalize_import_job(
     status: str = "completed",
     error_detail: str | None = None,
 ) -> None:
-    job.status = status
-    job.error_detail = error_detail
+    job.status, job.error_detail = status, error_detail
+    invalidate_all_dashboard_snapshots(db)
     job.finished_at = datetime.now(UTC)
     db.add(job)
     db.flush()

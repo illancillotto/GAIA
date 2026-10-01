@@ -958,3 +958,34 @@ Fino alla chiusura completa del piano:
   Motivo: contenitore self-service monolitico con tab overview/presenze/operativita/dotazioni/anomalie, export CSV/XLSX e modali dettaglio.
   La change calendario ha spostato il runtime nuovo in `src/app/me/presenze-calendar.tsx`, coperto al `100%`, ma il file orchestratore resta sotto soglia se misurato integralmente.
   Rientro atteso: estrarre progressivamente tab Presenze/Operativita/Dotazioni/Anomalie in componenti dedicati e lasciare `me-page-content.tsx` come shell dati/navigazione minima.
+
+
+## Operazioni Presenze — 2026-10-01
+
+Rimossa l'esclusione V8 file-wide da Giornaliere. L'intervento circoscritto
+successivamente autorizzato chiude i residui di parser/matrice/export senza
+ridurre soglie o ignorare codice. Eliminati solo branch dimostrati irraggiungibili
+rispetto ai contratti API; i casi validi restano caratterizzati dai test.
+
+- Backend: 985 casi raccolti, 975 passati e 10 test PostgreSQL inizialmente
+  skipped; tutti i 10 passati separatamente con database dedicato. Tutti i 17
+  file runtime modificati raggiungono il 100% statement/branch, incluso parser.
+- Frontend pertinente: 215 passati. 1465/1465 statement, 1593/1593 branch,
+  395/395 funzioni e 1182/1182 linee (100%) sui file modificati. Compresi
+  Giornaliere, page/table/controls della Giornaliera Individuale, controlli e
+  stato INAZ/manuale, editor e report mensile; tipi API esclusi dal denominatore
+  con la configurazione preesistente.
+- Suite frontend completa: 2881 passati, una failure Ruolo/Solleciti preesistente
+  riprodotta nel checkout precedente. Nessuna modifica fuori scope.
+- Smoke: 18 passati. E2E Chromium: 3 passati sulla build pulita, comprese
+  rettifica buono, sync/refresh anomalie e gerarchia autorizzazioni.
+- GATE: 35 test XLSM/export/review; aggiunta caratterizzazione di directory
+  complete, metadati assenti, template parziali e codici fiscali discordanti.
+  Copertura aggregata dei run completo e directory corretta: 599/599 statement,
+  435/435 branch, 116/116 funzioni e 513/513 linee (100%). Aggregazione con
+  istanbul-lib-coverage sullo stesso runtime; verifica esplicita 100% per-file
+  per ogni metrica. Nessuna soglia ridotta o nuova esclusione.
+
+Ratchet passati contro le baseline riparate separatamente da runtime pulito.
+Baseline finali sincronizzate solo dopo verifica e senza assorbire regressioni.
+Report, inventario ed evidenze nell'implementazione Giornaliere.

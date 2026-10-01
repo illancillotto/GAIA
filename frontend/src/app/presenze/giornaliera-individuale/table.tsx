@@ -19,9 +19,17 @@ export function MonthlySheetTable({ report, name, code }: Props) {
           <th scope="row" className="sticky left-0 border bg-slate-100 p-2 text-left">{label}</th>
           {report.days.map(day => <td key={day.date} title={day.date + " · " + label + ": " + monthlyDisplayCell(day.values[index], index) + " · " + monthlyDayStatus(day, today).label} className={`border p-2 print:p-1 monthly-tone-${monthlyCellTone(day, index, today)}`}>{monthlyDisplayCell(day.values[index], index)}</td>)}
           <td className="border bg-slate-100 p-2 font-semibold">{monthlyCell(report.totals[index], index)}</td>
-        </tr>)}</tbody>
+        </tr>)}<MonthlyMealVoucherRow report={report} /></tbody>
       </table>
     </div>
     <p className="text-sm text-slate-600">Giorni contributivi calcolati: {report.paidDays}. I totali si riferiscono ai dati disponibili. Non disponibili: KM moto, indennità macchine, centro di costo, lavorazione, saldo banca ore. Reperibilità: numero giornate; M: trasferta montana; RS: riposo settimanale. —: dato non disponibile.</p>
   </div>;
+}
+
+function MonthlyMealVoucherRow({ report }: Pick<Props, "report">) {
+  return <tr><th scope="row" className="sticky left-0 border bg-slate-100 p-2 text-left">Buoni pasto</th>
+          {report.days.map(day => { const voucher = report.mealVoucherDays.find(item => item.date === day.date); return <td key={day.date} className="border p-2" title={voucher?.sources.join(" + ")}>
+            {voucher ? <span aria-label={"Buono pasto " + day.date}>{voucher.count}</span> : "—"}
+          </td>; })}<td className="border p-2 font-semibold">{report.mealVouchers}</td>
+        </tr>;
 }

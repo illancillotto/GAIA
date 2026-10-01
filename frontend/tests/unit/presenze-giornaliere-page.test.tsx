@@ -1,4 +1,6 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+vi.mock("@/components/presenze/whatsapp-manual-message", () => ({ WhatsAppManualMessage: () => null }));
+vi.mock("@/components/presenze/inaz-sync-control", () => ({ InazSyncControl: ({ onCompleted }: { onCompleted: () => void }) => <button onClick={onCompleted}>Simula completamento INAZ</button> }));
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import PresenzeGiornalierePage from "@/app/presenze/giornaliere/page";
@@ -867,7 +869,7 @@ describe("Presenze giornaliere workspace", () => {
     fireEvent.change(await screen.findByLabelText("Mese operativo"), { target: { value: "2026-05" } });
     fireEvent.click(await screen.findByTitle("2026-05-16 · GAIA: in analisi · INAZ: Giornata anomala"));
 
-    fireEvent.click(await screen.findByRole("button", { name: /Recupera da INAZ/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Sincronizza da INAZ/i }));
 
     await waitFor(() => {
       expect(mocks.refreshPresenzeDailyRecordFromInaz).toHaveBeenCalledWith(expect.stringMatching(/^token-/), "record-1");
@@ -884,7 +886,7 @@ describe("Presenze giornaliere workspace", () => {
     fireEvent.change(await screen.findByLabelText("Mese operativo"), { target: { value: "2026-05" } });
     fireEvent.click(await screen.findByTitle("2026-05-16 · GAIA: in analisi · INAZ: Giornata anomala"));
 
-    fireEvent.click(await screen.findByRole("button", { name: /Recupera da INAZ/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Sincronizza da INAZ/i }));
 
     expect(
       await screen.findByText(
@@ -922,7 +924,7 @@ describe("Presenze giornaliere workspace", () => {
 
     fireEvent.change(await screen.findByLabelText("Mese operativo"), { target: { value: "2026-05" } });
     fireEvent.click(await screen.findByTitle("2026-05-16 · GAIA: in analisi · INAZ: Giornata anomala"));
-    fireEvent.click(await screen.findByRole("button", { name: /Recupera da INAZ/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /Sincronizza da INAZ/i }));
 
     await waitFor(() => expect(mocks.getPresenzeSyncJob).toHaveBeenCalledWith(expect.stringMatching(/^token-/), "sync-job-1"), { timeout: 3500 });
 
@@ -981,4 +983,67 @@ describe("Presenze giornaliere workspace", () => {
     expect(screen.getByText("Qui vedi le timbrature lette da Inaz per la giornata.")).toBeInTheDocument();
     expect(screen.getByText("12:30 (uscita autorizzata)")).toBeInTheDocument();
   });
+});
+
+
+describe("operational voucher and sync integration", () => {
+  test("saves a manual voucher and refreshes the monthly matrix after INAZ", async () => {
+    vi.resetAllMocks();
+    mocks.getStoredAccessToken.mockReturnValue("operational-controls-token");
+    mocks.getCurrentUser.mockResolvedValue({ id: 12, role: "admin", module_presenze: true });
+    mocks.getPresenzeAccessContext.mockResolvedValue({ can_view_all_data: true, is_supervisor: false });
+    mocks.listAllPresenzeCollaborators.mockResolvedValue([{ id: "collab-1", name: "Persona test", employee_code: "1854", contract_kind: "operaio", operai_group: "agrario" }]);
+    const day = { ...baseDailyRecord, meal_voucher_manual: false, meal_voucher_count: 1, meal_voucher_automatic: true, meal_voucher_sources: ["automatic"] };
+    mocks.listPresenzeDailyMatrixRecords.mockResolvedValue({ items: [day], total: 1 });
+    mocks.getPresenzeDailyRecord.mockResolvedValue(day);
+    mocks.updatePresenzeDailyRecord.mockResolvedValue({ ...day, meal_voucher_manual: true, meal_voucher_sources: ["automatic", "manual"] });
+    const view = render(<PresenzeGiornalierePage />);
+    fireEvent.change(screen.getByLabelText("Mese operativo"), { target: { value: "2026-05" } });
+    await waitFor(() => expect(view.container.querySelector('button[title^="2026-05-16 · GAIA:"]')).not.toBeNull());
+    fireEvent.click(view.container.querySelector('button[title^="2026-05-16 · GAIA:"]')!);
+    await screen.findByLabelText("Buono pasto manuale");
+    await waitFor(() => expect(mocks.getPresenzeDailyRecord).toHaveBeenCalled());
+    await act(async () => {});
+    fireEvent.click(screen.getByLabelText("Buono pasto manuale"));
+    await waitFor(() => expect(screen.getByLabelText("Buono pasto manuale")).toBeChecked());
+    expect(mocks.updatePresenzeDailyRecord).toHaveBeenCalledWith("operational-controls-token", "record-1", { meal_voucher_manual: true });
+    expect(screen.getByText("Buono pasto: 1 · automatic + manual")).toBeInTheDocument();
+    const previous = mocks.listPresenzeDailyMatrixRecords.mock.calls.length;
+    fireEvent.click(screen.getByText("Simula completamento INAZ"));
+    await waitFor(() => expect(mocks.listPresenzeDailyMatrixRecords.mock.calls.length).toBeGreaterThan(previous));
+    const monthCalls = mocks.listPresenzeDailyMatrixRecords.mock.calls.length;
+    fireEvent.change(screen.getByLabelText("Mese operativo"), { target: { value: "" } });
+    expect(screen.getByLabelText("Mese operativo")).toHaveValue("2026-05");
+    await act(async () => {});
+    expect(mocks.listPresenzeDailyMatrixRecords).toHaveBeenCalledTimes(monthCalls);
+  });
+});
+
+
+test("does not reload protected data when the session expires during a voucher save", async () => {
+  vi.resetAllMocks();
+  mocks.getStoredAccessToken.mockReturnValue("expiry-voucher-token");
+  mocks.getCurrentUser.mockResolvedValue({ id: 12, role: "admin", module_presenze: true });
+  mocks.getPresenzeAccessContext.mockResolvedValue({ can_view_all_data: true });
+  mocks.listAllPresenzeCollaborators.mockResolvedValue([{ id: "collab-1", name: "Persona test", employee_code: "1854", contract_kind: "operaio", operai_group: "agrario" }]);
+  const day = { ...baseDailyRecord, meal_voucher_manual: false, meal_voucher_count: 0 };
+  mocks.listPresenzeDailyMatrixRecords.mockResolvedValue({ items: [day], total: 1 });
+  mocks.getPresenzeDailyRecord.mockResolvedValue(day);
+  let finish!: (record: PresenzeDailyRecord) => void;
+  mocks.updatePresenzeDailyRecord.mockReturnValue(new Promise<PresenzeDailyRecord>(resolve => { finish = resolve; }));
+  const view = render(<PresenzeGiornalierePage />);
+  fireEvent.change(screen.getByLabelText("Mese operativo"), { target: { value: "2026-05" } });
+  await waitFor(() => expect(view.container.querySelector('button[title^="2026-05-16 · GAIA:"]')).not.toBeNull());
+  fireEvent.click(view.container.querySelector('button[title^="2026-05-16 · GAIA:"]')!);
+  await waitFor(() => expect(mocks.getPresenzeDailyRecord).toHaveBeenCalled());
+  await act(async () => {});
+  fireEvent.click(screen.getByLabelText("Buono pasto manuale"));
+  expect(mocks.updatePresenzeDailyRecord).toHaveBeenCalledTimes(1);
+  mocks.getStoredAccessToken.mockReturnValue(null);
+  await act(async () => finish({ ...day, meal_voucher_manual: true, meal_voucher_count: 1 } as PresenzeDailyRecord));
+  expect(screen.getByLabelText("Buono pasto manuale")).toBeChecked();
+  const calls = mocks.listPresenzeDailyMatrixRecords.mock.calls.length;
+  fireEvent.click(screen.getByText("Simula completamento INAZ"));
+  await act(async () => {});
+  expect(mocks.listPresenzeDailyMatrixRecords).toHaveBeenCalledTimes(calls);
 });

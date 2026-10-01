@@ -5,7 +5,7 @@
 La schermata fornita rappresenta una persona per mese, con calendario orizzontale
 (non la matrice persone/giorni della pagina Giornaliere). Le righe separano lavoro
 ordinario e straordinario in feriale, festivo, notturno e festivo notturno;
-seguono totale ore, chilometri, indennita, codici assenza, reperibilita e trasferta.
+seguono totale ore, chilometri, buoni pasto, indennita, codici assenza, reperibilita e trasferta.
 Il riepilogo comprende giornate lavorate/contributive e banca ore.
 
 La schermata da sola non espone formule, macro o origine delle anagrafiche. Il
@@ -156,3 +156,14 @@ Validazione UI: 30 test GaTe e 16 test GAIA; 100% statement, branch, funzioni e
 righe del perimetro mensile verificato (non del monolite). GAIA: includere in
 `VITEST_COVERAGE_INCLUDE` modello, presentazione, page, table, overview e hook
 mensile ed eseguire le tre suite `presenze-monthly-*` con soglie per file.
+
+
+## Operazioni INAZ e buoni pasto — 2026-10-01
+
+GAIA mostra il comando **Sincronizza da INAZ** per il mese e dipendente selezionati,
+con stato del job e ultima sincronizzazione riuscita. Usa i worker esistenti e
+ricarica il prospetto al completamento. Il dettaglio in Giornaliere consente il
+riconoscimento manuale del buono per data; qui la riga Buoni pasto e il riepilogo
+mostrano il conteggio canonico 0/1, senza duplicare automatico e manuale.
+Causale normalizzata permesso_sindacale rappresentata con PS. Regole e migration:
+[implementazione Giornaliere](IMPLEMENTATION_PRESENZE_COLLABORATORI_GIORNALIERE.md#buoni-pasto-manuali-sync-operativa-e-permessi-sindacali--2026-10-01).
