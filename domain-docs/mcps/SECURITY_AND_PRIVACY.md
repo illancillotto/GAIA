@@ -15,6 +15,15 @@ dati reali nel testo libero. Il filtro delle fonti non e un classificatore DLP
 del testo scritto dall'utente. Le credenziali provider sono solo configurazione
 locale ignorata/env, mai corpus, tool output o report.
 
+La preview `/wiki/mcp` elimina l'input libero e gli allegati: solo preset
+sintetici. Il runner accetta unicamente la SQLite sintetica verificata e genera
+localmente le proprie domande; non accetta corpus Docs o file di query liberi.
+L'oracle resta locale. Cataloghi non `data__*` e dataset remoto diverso sono
+rigettati prima di inoltrare evidenze. Il journal non contiene token/API key:
+solo manifest, messaggi/evidenze sintetici, scoring e tipo dell'eventuale errore.
+Il gateway generale non diventa un DLP: il divieto di incollare dati reali
+continua a valere per client API diversi dalla preview.
+
 - I dati personali dei consorziati restano on-premise.
 - I documenti reali dell'Ente non vengono inviati a servizi cloud.
 - Catasto, Ruolo e Utenze usati negli esperimenti cloud sono rappresentati da una replica sintetica.

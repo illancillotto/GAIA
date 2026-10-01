@@ -65,14 +65,23 @@ class ParcelsByAccount(GetAccount):
 
 
 class SearchNotices(PageInput):
+    notice_code: Text | None = Field(
+        default=None,
+        description="Exact notice code (for example SYN-N0121), not an account code or UUID.",
+    )
     subject_id: Identifier | None = None
     tax_year: Year | None = None
     status: Text | None = None
-    account_code: Text | None = None
+    account_code: Text | None = Field(
+        default=None,
+        description="Exact irrigation account code (for example SYN-A0121), not a notice code.",
+    )
 
 
 class GetNotice(Input):
-    notice_id: Identifier
+    notice_id: Identifier = Field(
+        description="Notice UUID obtained from role_notices evidence; never derive it from a code."
+    )
 
 
 class PaymentsByNotice(GetNotice):

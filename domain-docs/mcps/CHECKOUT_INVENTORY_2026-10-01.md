@@ -117,6 +117,12 @@ Non viene reinterpretato come successo globale in base a modifiche concorrenti.
 
 ## Recupero residuo e decisioni
 
+Aggiornamento dopo il recupero autorizzato: runner/scoring/renderer e preview
+sono adattati selettivamente al contratto corrente, senza merge dei checkout.
+Stato: `SYNTHETIC_RECOVERY_PLAN.md` e `SYNTHETIC_RECOVERY_REPORT.md`.
+Le decisioni sui freeze e sui cinque pending change restano valide;
+nessun artifact storico e stato modificato.
+
 - Conservare i due freeze storici: nessuna pulizia/rimozione richiesta.
 - Conservare i cinque pending change mainline; commit/review nel loro branch
   richiedono un'attivita esplicita separata dal commit corrente.

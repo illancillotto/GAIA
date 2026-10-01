@@ -22,6 +22,12 @@
 
 ## Metriche
 
+Per il protocollo Data-only e il confronto Static/MCP implementato usare
+`SYNTHETIC_RECOVERY_PLAN.md`: oracle locale, JSON strutturato, trace delle
+evidenze inviate, manifest/hash e schedule seeded. Le metriche source-routing
+qui elencate descrivono il disegno multi-fonte storico, non il pilot Data-only.
+Il benchmark precedente UUID/provenance non dimostra da solo correttezza fattuale.
+
 - accuratezza rispetto al ground truth;
 - fonte corretta selezionata al primo tentativo;
 - numero di tool call;

@@ -1,5 +1,31 @@
 # GAIA MCP — runtime, avvio e validazione
 
+## Confronto sintetico riproducibile e preview
+
+Correzione multi-hop codice avviso: `MULTIHOP_NOTICE_CODE_REVIEW.md`.
+`search_role_notices` supporta il filtro esatto opzionale `notice_code`, distinto
+da `account_code`; l'UUID restituito alimenta `get_payments_by_notice`.
+I manifest nuovi includono hash del catalogo/query/server Data: non riprendere
+i journal precedenti dopo la modifica, usare un nuovo percorso di output.
+
+`make mcp-comparison-plan QUALITY_PYTHON=backend/.venv/bin/python` genera solo
+il piano locale, senza contattare il provider o scrivere il journal. Richiede
+la SQLite sintetica verificata indicata da `MCP_DATA_DATABASE`.
+`make mcp-comparison-live QUALITY_PYTHON=backend/.venv/bin/python` attiva
+esplicitamente il modello: configurare il provider/signing gia descritti qui
+e il server Data HTTP sullo stesso dataset. Dataset diverso o tool non Data
+sono rifiutati prima di inviare evidenze al modello. Nessun parametro Docs.
+Risultati ignorati da Git: `runtime-data/mcps/evaluation/comparison.jsonl`.
+Eseguire lo stesso comando per resume; per un protocollo/dataset/budget diverso
+usare un nuovo output, senza sovrascrivere il journal precedente. Opzioni CLI:
+`--repeats`, `--seed`, `--database`, `--output`, `--live`.
+
+Preview autenticata: `/wiki/mcp`, solo domande sintetiche predefinite, chiamata
+`POST /wiki/mcp/chat` tramite client API GAIA. Nessuna credenziale provider nel
+browser; nessun input libero/documento/allegato; chat legacy invariata.
+Piano, matrice e limiti: `SYNTHETIC_RECOVERY_PLAN.md`; risultati realmente
+misurati, distinti fra simulato e live: `SYNTHETIC_RECOVERY_REPORT.md`.
+
 Stato: implementazione v1, percorso Wiki Data-only aggiornato al 2026-10-01,
 commit base `6b61fd27`.
 Il package e parte del monolite `backend/app/modules/wiki/mcps/`.

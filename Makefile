@@ -112,7 +112,14 @@ mcp-http:
 	PYTHONPATH=backend $(QUALITY_PYTHON) -m app.modules.wiki.mcps --corpus "$(MCP_DOCS_OUTPUT)/corpus.json" --database "$(MCP_DATA_DATABASE)"
 
 test-mcp:
-	$(QUALITY_PYTHON) -m pytest backend/tests/test_wiki_docs_mcp.py backend/tests/test_wiki_data_mcp.py backend/tests/test_wiki_mcp_http.py backend/tests/test_wiki_mcp_integration.py backend/tests/test_wiki_mcp_evaluation.py --cov=app.modules.wiki.mcps --cov=app.modules.wiki.router --cov-branch --cov-report=term-missing:skip-covered --cov-report=json:backend/coverage-mcp.json --cov-fail-under=100
+	$(QUALITY_PYTHON) -m pytest backend/tests/test_wiki_docs_mcp.py backend/tests/test_wiki_data_mcp.py backend/tests/test_wiki_mcp_http.py backend/tests/test_wiki_mcp_integration.py backend/tests/test_wiki_mcp_evaluation.py backend/tests/test_wiki_mcp_experiment.py --cov=app.modules.wiki.mcps --cov=app.modules.wiki.router --cov-branch --cov-report=term-missing:skip-covered --cov-report=json:backend/coverage-mcp.json --cov-fail-under=100
+
+.PHONY: mcp-comparison-plan mcp-comparison-live
+mcp-comparison-plan:
+	PYTHONPATH=backend $(QUALITY_PYTHON) -m app.modules.wiki.mcps.experiment_cli --database "$(MCP_DATA_DATABASE)" --output runtime-data/mcps/evaluation/comparison.jsonl
+
+mcp-comparison-live:
+	PYTHONPATH=backend $(QUALITY_PYTHON) -m app.modules.wiki.mcps.experiment_cli --database "$(MCP_DATA_DATABASE)" --output runtime-data/mcps/evaluation/comparison.jsonl --live
 
 mcp-evaluate:
 	PYTHONPATH=backend $(QUALITY_PYTHON) -m app.modules.wiki.mcps.evaluation docs --artifact "$(MCP_DOCS_OUTPUT)/corpus.json" --queries config/mcps/docs-queries.json --output runtime-data/mcps/evaluation/docs.json

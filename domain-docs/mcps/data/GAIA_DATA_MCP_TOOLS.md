@@ -85,6 +85,7 @@ Scope: `catasto.read`
 ## `search_role_notices`
 
 Filtri:
+- `notice_code`: codice esatto dell'avviso (es. `SYN-N0121`), non codice utenza
 - `subject_id`
 - `tax_year`
 - `status`
@@ -92,6 +93,10 @@ Filtri:
 - `limit`
 
 Scope: `ruolo.read`
+
+I filtri di `search_role_notices` sono combinati con AND. `account_code`
+identifica un'utenza (es. `SYN-A0121`), non un avviso: non sostituire un campo
+con l'altro. Zero risultati valgono solo per i filtri effettivamente applicati.
 
 ## `get_role_notice`
 
@@ -102,6 +107,10 @@ Scope: `ruolo.read`
 Non espandere automaticamente tutti i record collegati.
 
 ## `get_payments_by_notice`
+
+Per una domanda basata sul codice avviso: chiamare `search_role_notices` con
+`notice_code`, poi usare l'`id` UUID del risultato come `notice_id`. Non dedurre
+UUID o codice utenza dal codice avviso; seguire `next_cursor` se presente.
 
 Input:
 ```json

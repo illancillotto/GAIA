@@ -346,6 +346,57 @@ def test_single_hop_and_multi_hop_ground_truth(service, dataset):
     )
 
 
+def test_notice_code_lookup_payment_chain_and_filter_identity(service, dataset):
+    payment = max(dataset["payments"], key=lambda row: row["notice_id"])
+    notice = next(row for row in dataset["role_notices"] if row["id"] == payment["notice_id"])
+    assert notice["id"] not in {
+        row["id"] for row in call(service, "search_role_notices", {"limit": 25})["results"]
+    }
+    response = call(service, "search_role_notices", {"notice_code": notice["notice_code"]})
+    assert [row["id"] for row in response["results"]] == [notice["id"]]
+    assert response["provenance"][0]["record_id"] == notice["id"]
+    payments = call(service, "get_payments_by_notice", {"notice_id": response["results"][0]["id"]})
+    assert payment["id"] in {row["id"] for row in payments["results"]}
+    assert all(row["notice_id"] == notice["id"] for row in payments["results"])
+    combined = call(
+        service,
+        "search_role_notices",
+        {"notice_code": notice["notice_code"], "account_code": notice["account_code"]},
+    )
+    assert combined["results"] == response["results"]
+    for arguments in (
+        {"notice_code": "SYN-N-NOT-EXISTENT"},
+        {"account_code": notice["notice_code"]},
+        {"notice_code": notice["account_code"]},
+        {"notice_code": notice["notice_code"], "account_code": "SYN-A-NOT-EXISTENT"},
+        {"notice_code": "' OR 1=1 --"},
+    ):
+        empty = call(service, "search_role_notices", arguments)
+        assert empty["results"] == [] and "error" not in empty
+    for invalid in ("", 42, "x" * 201, [notice["notice_code"]]):
+        assert (
+            call(service, "search_role_notices", {"notice_code": invalid})["error"]["code"]
+            == "INVALID_ARGUMENT"
+        )
+    denied = service.call(
+        "search_role_notices", {"notice_code": notice["notice_code"]}, context({"utenze.read"})
+    )
+    assert denied["error"]["code"] == "PERMISSION_DENIED" and denied["results"] == []
+    schema = INPUTS["search_role_notices"].model_json_schema()["properties"]
+    assert "not an account code" in schema["notice_code"]["description"]
+    assert "not a notice code" in schema["account_code"]["description"]
+    assert "notice_code" in server.TOOL_DESCRIPTIONS["search_role_notices"]
+    assert "returned id" in server.TOOL_DESCRIPTIONS["get_payments_by_notice"]
+    paid_notice_ids = {row["notice_id"] for row in dataset["payments"]}
+    unpaid_notice = next(row for row in dataset["role_notices"] if row["id"] not in paid_notice_ids)
+    existing = call(service, "search_role_notices", {"notice_code": unpaid_notice["notice_code"]})
+    assert existing["result_count"] == 1
+    empty_payments = call(
+        service, "get_payments_by_notice", {"notice_id": existing["results"][0]["id"]}
+    )
+    assert empty_payments["result_count"] == 0 and "error" not in empty_payments
+
+
 def test_every_filter_and_injection_is_parameterized(service, dataset):
     filters = {
         "search_irrigation_accounts": {

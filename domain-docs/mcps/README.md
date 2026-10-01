@@ -11,6 +11,13 @@ Audit finale, matrice funzionalita/test e stato dei gate:
 Inventario dei freeze tesi e del worktree Wiki mainline, componenti ancora
 separati e cinque modifiche pendenti: `CHECKOUT_INVENTORY_2026-10-01.md`.
 
+Recupero selettivo implementato: harness riproducibile Static RAG vs MCP,
+scoring strutturato e preview sintetica `/wiki/mcp`, senza modificare i freeze.
+Piano/progress/matrice test: `SYNTHETIC_RECOVERY_PLAN.md`.
+Evidenze finali e limiti: `SYNTHETIC_RECOVERY_REPORT.md`.
+Piano offline: `make mcp-comparison-plan`; prova esterna esplicita:
+`make mcp-comparison-live` (solo database sintetico verificato).
+
 Dal 2026-10-01 il gateway `/wiki/mcp/*` usa `gpt-reserve` tramite codex-lb
 esclusivamente sulla replica sintetica Data. Docs e escluso lato server dal
 catalogo, dai token e dalle invocazioni dell'agente esterno; il server Docs

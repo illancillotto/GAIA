@@ -29,7 +29,8 @@ PARCEL_FILTERS = {
 }
 PARCEL_FILTERS["district_code"] = "d.code=:district_code"
 NOTICE_FILTERS = {
-    name: f"t.{name}=:{name}" for name in ("subject_id", "tax_year", "status", "account_code")
+    name: f"t.{name}=:{name}"
+    for name in ("subject_id", "tax_year", "status", "account_code", "notice_code")
 }
 QUERIES = {
     "search_subjects": Query(
