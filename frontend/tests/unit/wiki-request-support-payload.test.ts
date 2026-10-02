@@ -6,7 +6,7 @@ import {
   buildWikiSupportHref,
   inferModuleKeyFromPath,
 } from "@/features/wiki/request-support-payload";
-import type { WikiChatMessage } from "@/features/wiki/types";
+import type { WikiChatMessage, WikiRequestCreate } from "@/features/wiki/types";
 
 const messages: WikiChatMessage[] = [
   { id: "u1", role: "user", content: "Prima", timestamp: new Date(0) },
@@ -15,6 +15,56 @@ const messages: WikiChatMessage[] = [
 ];
 
 describe("wiki request payload contract", () => {
+  test.each([
+    "module_key", "page_path", "context_article", "conversation_id",
+    "desired_outcome", "observed_behavior", "expected_behavior",
+  ] as const)("preserves omission and encoding for optional field %s", (field) => {
+    for (const value of [undefined, null, "", "   ", "0", "x & y"]) {
+      const payload: WikiRequestCreate = {
+        user_question: "question", category: "support_request", [field]: value,
+      };
+      const original = structuredClone(payload);
+      const href = buildSupportHrefFromPayload({ intent: "help_request", draftId: "draft" }, payload);
+      const expected = new URLSearchParams({
+        intent: "help_request", question: "question", answer: "",
+        category: "support_request", request_type: "help_request",
+      });
+      if (value) {
+        expected.set(field, value);
+      }
+      expected.set("draft_id", "draft");
+
+      expect(href).toBe(`/wiki/support?${expected.toString()}`);
+      expect(payload).toEqual(original);
+    }
+  });
+
+  test.each([undefined, null, "", "   ", "0", "draft & 1"])(
+    "preserves draft omission and query order for %s", (draftId) => {
+      const href = buildSupportHrefFromPayload({ intent: "help_request", draftId }, {
+        user_question: "question", category: "support_request", module_key: "wiki",
+      });
+      const expected = new URLSearchParams({
+        intent: "help_request", question: "question", answer: "",
+        category: "support_request", request_type: "help_request", module_key: "wiki",
+      });
+      if (draftId) {
+        expected.set("draft_id", draftId);
+      }
+      expect(href).toBe(`/wiki/support?${expected.toString()}`);
+    },
+  );
+
+  test("preserves the exact order of all query parameters", () => {
+    const href = buildSupportHrefFromPayload({ intent: "bug_report", draftId: "draft" }, {
+      user_question: "q", agent_response: "a", category: "bug_report", request_type: "bug_report",
+      module_key: "wiki", page_path: "/wiki", context_article: "article",
+      conversation_id: "conversation", desired_outcome: "desired", observed_behavior: "observed",
+      expected_behavior: "expected",
+    });
+    expect(href).toBe("/wiki/support?intent=bug_report&question=q&answer=a&category=bug_report&request_type=bug_report&module_key=wiki&page_path=%2Fwiki&context_article=article&conversation_id=conversation&desired_outcome=desired&observed_behavior=observed&expected_behavior=expected&draft_id=draft");
+  });
+
   test.each([
     ["network", "rete"], ["nas-control", "accessi"], ["catasto", "catasto"],
     ["elaborazioni", "elaborazioni"], ["presenze", "presenze"],

@@ -3,6 +3,35 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Wiki supporto - query opzionale del link (2026-10-02)
+
+- Hotspot unico: `buildSupportHrefFromPayload`, checkout `main@c4fa269c`,
+  file inizialmente pulito; mapper precedente e lavori concorrenti preservati.
+- Prima: cognitiva `10`, ciclomatica `11`, LOC `23`, nesting `1`;
+  file cognitiva `16`, ciclomatica `22`, sei callable, unico warning cyclomatic.
+- Invarianti: ordine e nomi query, default nullish dei campi obbligatori,
+  omissione dei valori falsy opzionali, whitespace e stringa zero conservati,
+  encoding URLSearchParams, draft ultimo, nessuna mutazione payload.
+- Slice: tabella readonly delle sette chiavi opzionali e serializzazione
+  comune con forEach; draft separato e ultimo. Quattordici nuovi test di
+  caratterizzazione verificano omissione, encoding, ordine e immutabilita.
+- Dopo: builder cognitiva `10 -> 4`, ciclomatica `11 -> 5`, LOC `23 -> 22`,
+  nesting `1` invariato; callback `1/2/6/1`, nessuna violation nuova.
+  File: cognitiva `16 -> 11`, ciclomatica `22 -> 18`, callable `6 -> 7`,
+  LOC `106 -> 114` per la tabella dichiarativa; warning `1 -> 0`, zero error.
+  Esito `IMPROVED`, riduzione reale anche includendo la callback.
+- Sessanta test di regressione supporto passati prima e dopo; full-file
+  100% statement (`27/27`), branch (`20/20`), funzioni (`7/7`), linee (`24/24`).
+  ESLint runtime/test, typecheck senza incremental e 90 test tooling verdi.
+  Ratchet mirato autorevole contro `origin/main`, merge-base `6b61fd27`,
+  PASS con `findings: []`; baseline, scope ed eccezioni invariati.
+- Evidenze `/tmp/gaia-wiki-href-{before,final}.json`, log characterization,
+  final, ratchet-final, lint-final, types-final, quality e Graphify con lo
+  stesso prefisso. Graphify frontend aggiornato tramite target dedicato;
+  refresh platform docs completato con `chunk 1/1 done`, senza warning di
+  chunk falliti. Diff whitespace verde; nessuna conformita globale dichiarata.
+  Un solo hotspot, commit isolato autorizzato dopo i gate; nessun push.
+
 ### Wiki supporto - mapping pathname/modulo (2026-10-02)
 
 - Hotspot unico: `inferModuleKeyFromPath` in `request-support-payload.ts`,

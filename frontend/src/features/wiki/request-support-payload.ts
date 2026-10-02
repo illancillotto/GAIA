@@ -17,6 +17,16 @@ const MODULE_PATH_PREFIXES = [
   ["/inventory", "inventario"],
 ] as const;
 
+const OPTIONAL_SUPPORT_FIELDS = [
+  "module_key",
+  "page_path",
+  "context_article",
+  "conversation_id",
+  "desired_outcome",
+  "observed_behavior",
+  "expected_behavior",
+] as const;
+
 export function inferModuleKeyFromPath(pathname: string): string | null {
   return MODULE_PATH_PREFIXES.find(([prefix]) => pathname.startsWith(prefix))?.[1] ?? null;
 }
@@ -87,13 +97,12 @@ export function buildSupportHrefFromPayload(
   query.set("answer", payload.agent_response ?? "");
   query.set("category", payload.category);
   query.set("request_type", payload.request_type ?? "help_request");
-  if (payload.module_key) query.set("module_key", payload.module_key);
-  if (payload.page_path) query.set("page_path", payload.page_path);
-  if (payload.context_article) query.set("context_article", payload.context_article);
-  if (payload.conversation_id) query.set("conversation_id", payload.conversation_id);
-  if (payload.desired_outcome) query.set("desired_outcome", payload.desired_outcome);
-  if (payload.observed_behavior) query.set("observed_behavior", payload.observed_behavior);
-  if (payload.expected_behavior) query.set("expected_behavior", payload.expected_behavior);
+  OPTIONAL_SUPPORT_FIELDS.forEach((key) => {
+    const value = payload[key];
+    if (value) {
+      query.set(key, value);
+    }
+  });
   if (params.draftId) query.set("draft_id", params.draftId);
   return `/wiki/support?${query.toString()}`;
 }
