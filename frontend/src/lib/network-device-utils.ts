@@ -22,12 +22,9 @@ export function getNetworkDeviceAdminUrl(device: Pick<NetworkDevice, "ip_address
     return `${scheme}://${device.ip_address}${refreshTarget}`;
   }
 
-  const httpSource = device.metadata_sources?.http;
-  if (httpSource) {
-    const [scheme, port] = httpSource.split(":");
-    if ((scheme === "http" || scheme === "https") && port) {
-      return `${scheme}://${device.ip_address}:${port}/`;
-    }
+  const [scheme, port] = (device.metadata_sources?.http || "").split(":");
+  if (port && ["http", "https"].includes(scheme)) {
+    return `${scheme}://${device.ip_address}:${port}/`;
   }
 
   if (hasPort(device.open_ports, 443)) {

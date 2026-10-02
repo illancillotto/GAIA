@@ -3,6 +3,37 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Network - parsing della sorgente HTTP amministrativa (2026-10-02)
+
+- Hotspot unico: `getNetworkDeviceAdminUrl`, checkout `main@3e4d6801`;
+  runtime e test puliti. Graphify frontend consultato; altri team esclusi.
+- Prima: cognitiva `18`, ciclomatica `12`, LOC `24`, nesting `2`;
+  nove callable e due warning nel file, nessun error.
+- Slice: parsing comune della sorgente HTTP assente/vuota e controllo
+  dichiarativo dei due schemi ammessi, eliminando il livello esterno.
+  Invarianti: precedenza target assoluto/relativo, sorgente HTTP, porte;
+  casing, porta non vuota ma non validata, suffix dopo il secondo segmento
+  ignorato, fallback 443 prima di 80, null e immutabilita preservati.
+- Caratterizzazione: 12 nuovi casi su sorgente assente/vuota, schema e porta
+  mancanti, casing/whitespace, porta zero/testuale e segmenti extra.
+  Suite prima/dopo: 42 test verdi e full-file 100%; nessun comportamento nuovo.
+- Dopo: cognitiva `18 -> 13`, ciclomatica `12 -> 11`, LOC `24 -> 21`,
+  nesting `2 -> 1`. Nessun nuovo callable; aggregati file cognitiva `44 -> 39`,
+  ciclomatica `39 -> 38`, LOC `80 -> 77`, nove callable invariati.
+  Esito `IMPROVED`; warning `2 -> 1`, zero error: cognitiva sotto soglia,
+  resta soltanto il warning cyclomatic del resolver.
+- Coverage dopo: statement `41/41`, branch `53/53`, funzioni `9/9`,
+  linee `41/41`. Ratchet mirato autorevole contro `origin/main` PASS prima
+  e dopo, merge-base `6b61fd27`, `findings: []`; baseline/scope invariati.
+  ESLint, typecheck senza incremental, 144 test tooling e diff whitespace verdi.
+- Graphify frontend aggiornato; refresh platform docs completato con
+  `chunk 1/1 done`, senza warning di chunk semantici falliti.
+  Evidenze `/tmp/gaia-network-source-{before,after}.{json,md}`, log
+  characterization/after/ratchet-before/ratchet-after/lint/types/quality e
+  Graphify con lo stesso prefisso. Nessuna conformita globale dichiarata.
+  Un solo hotspot, commit isolato dopo i gate secondo l'autorizzazione
+  vigente; nessun push, modifiche degli altri team preservate.
+
 ### Catasto - descrizione degli importi anomali (2026-10-02)
 
 - Hotspot unico: `describeCatastoAnomalia`, checkout `main@368731e9`;

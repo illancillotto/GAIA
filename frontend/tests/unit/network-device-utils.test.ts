@@ -12,6 +12,31 @@ import {
 
 describe("getNetworkDeviceAdminUrl", () => {
   test.each([
+    { source: undefined, expected: "https://10.0.0.5/" },
+    { source: "", expected: "https://10.0.0.5/" },
+    { source: "http", expected: "https://10.0.0.5/" },
+    { source: "http:", expected: "https://10.0.0.5/" },
+    { source: "https::8443", expected: "https://10.0.0.5/" },
+    { source: ":80", expected: "https://10.0.0.5/" },
+    { source: "HTTP:80", expected: "https://10.0.0.5/" },
+    { source: "https :443", expected: "https://10.0.0.5/" },
+    { source: "http:0", expected: "http://10.0.0.5:0/" },
+    { source: "https: ", expected: "https://10.0.0.5: /" },
+    { source: "http:not-a-port", expected: "http://10.0.0.5:not-a-port/" },
+    { source: "https:8443:ignored", expected: "https://10.0.0.5:8443/" },
+  ])("preserves source parsing and fallback for $source", ({ source, expected }) => {
+    const metadata: Record<string, string> = source === undefined ? {} : { http: source };
+    const device = {
+      ip_address: "10.0.0.5",
+      metadata_sources: metadata,
+      open_ports: "80,443",
+    };
+    const original = structuredClone(device);
+    expect(getNetworkDeviceAdminUrl(device)).toBe(expected);
+    expect(device).toEqual(original);
+  });
+
+  test.each([
     { target: "http://admin.local/path", source: "https:8443", expected: "http://admin.local/path" },
     { target: "https://admin.local/path", source: "http:8080", expected: "https://admin.local/path" },
     { target: "/admin", source: "https:8443", expected: "https://10.0.0.5/admin" },
