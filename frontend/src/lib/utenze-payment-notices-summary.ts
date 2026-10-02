@@ -64,7 +64,7 @@ export function buildPaymentNoticeSummary(notices: AnagraficaPaymentNotice[]): P
   const partialCount = statuses.filter((status) => status === "partial").length;
   const unpaidCount = statuses.filter((status) => status === "unpaid").length;
   const hasOpenDebt = totalResiduo > 0.005;
-  const status: PaymentNoticeStatus = !hasOpenDebt && notices.length > 0 ? "paid" : partialCount > 0 || paidCount > 0 ? "partial" : "unpaid";
+  const status: PaymentNoticeStatus = !hasOpenDebt && notices.length > 0 ? "paid" : partialCount + paidCount > 0 ? "partial" : "unpaid";
   const label = notices.length === 0 ? "Nessun avviso" : status === "paid" ? "Pagatore regolare" : status === "partial" ? "Pagamenti parziali" : "Non pagatore";
   const description = notices.length === 0
     ? "Nessun avviso inCASS sincronizzato."

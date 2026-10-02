@@ -3,6 +3,33 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Utenze - conteggi nel riepilogo avvisi (2026-10-02)
+
+- Hotspot unico `buildPaymentNoticeSummary`, checkout `main@8d89faf6`;
+  runtime/test puliti, Graphify consultato, lavori concorrenti preservati.
+- Prima: cognitiva/ciclomatica/LOC/nesting `10/11/25/0`.
+- Slice: somma dei conteggi paid/partial non negativi al posto della
+  disgiunzione dei due confronti. Invarianti: conteggi da lunghezze array,
+  soglia residuo stretta `0.005`, precedenza paid senza debito, lista vuota,
+  importi, label/descrizioni e immutabilita.
+- Dieci nuovi test caratterizzano conteggi vuoti/paid/partial/unpaid/misti
+  e residui sotto/sulla/sopra soglia. Suite prima/dopo: 28 test verdi;
+  full-file 100% statement `47/47`, branch `59/59`, funzioni `9/9`,
+  linee `38/38` dopo la slice.
+- Dopo: cognitiva `10 -> 9`, ciclomatica `11 -> 10`, LOC/nesting `25/0`
+  invariati. Aggregati file cognitiva `51 -> 50`, ciclomatica `44 -> 43`,
+  nove callable e LOC `76` invariati. Esito `IMPROVED`, nessun nuovo helper
+  o debito trasferito; tre warning legacy e zero error invariati, warning
+  ciclomatico del riepilogo ancora presente alla soglia `10`.
+- Ratchet mirato autorevole contro `origin/main` PASS prima/dopo con
+  `findings: []`, merge-base `6b61fd27`; baseline/scope invariati.
+  ESLint, typecheck senza incremental, 144 test tooling e whitespace verdi.
+  Graphify frontend aggiornato; refresh platform docs completato con
+  `chunk 1/1 done`, senza warning di chunk semantici falliti.
+  Evidenze `/tmp/gaia-payment-summary-` per metriche
+  before/after, characterization/after, ratchet-before/after e gate.
+  Un solo hotspot; commit isolato autorizzato dopo i gate, nessun push.
+
 ### Utenze - riconoscimento degli stati espliciti degli avvisi (2026-10-02)
 
 - Hotspot unico: `getPaymentNoticeStatus`, checkout `main@1e6e2677`;

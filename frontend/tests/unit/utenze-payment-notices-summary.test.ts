@@ -49,6 +49,37 @@ function notice(overrides: Partial<AnagraficaPaymentNotice>): AnagraficaPaymentN
 }
 
 describe("utenze payment notices summary", () => {
+  test.each([
+    [[], "unpaid", "Nessun avviso", "Nessun avviso inCASS sincronizzato."],
+    [["unpaid"], "unpaid", "Non pagatore", "1 non pagati, 0 parziali, 0 pagati."],
+    [["paid"], "partial", "Pagamenti parziali", "0 non pagati, 0 parziali, 1 pagati."],
+    [["partial"], "partial", "Pagamenti parziali", "0 non pagati, 1 parziali, 0 pagati."],
+    [["paid", "partial", "unpaid"], "partial", "Pagamenti parziali", "1 non pagati, 1 parziali, 1 pagati."],
+  ] as const)("preserves summary for explicit statuses %j", (statuses, status, label, description) => {
+    const items = statuses.map((payment_status) => notice({ payment_status, importo_residuo: "10" }));
+    const original = structuredClone(items);
+    const summary = buildPaymentNoticeSummary(items);
+    expect(summary).toEqual({
+      totalResiduo: statuses.length * 10,
+      paidCount: statuses.filter((value) => value === "paid").length,
+      partialCount: statuses.filter((value) => value === "partial").length,
+      unpaidCount: statuses.filter((value) => value === "unpaid").length,
+      noticesCount: statuses.length, status, label, description,
+    });
+    expect(items).toEqual(original);
+  });
+
+  test.each(["-1", "0", "0.0049", "0.005", "0.0051"])(
+    "preserves the strict residual threshold for %s", (residual) => {
+      const summary = buildPaymentNoticeSummary([notice({ payment_status: "unpaid", importo_residuo: residual })]);
+      const paid = Number(residual) <= 0.005;
+      expect(summary.status).toBe(paid ? "paid" : "unpaid");
+      expect(summary.totalResiduo).toBe(Number(residual));
+      expect(summary.label).toBe(paid ? "Pagatore regolare" : "Non pagatore");
+      expect(summary.description).toBe(paid ? "Nessun residuo aperto sugli avvisi sincronizzati." : "1 non pagati, 0 parziali, 0 pagati.");
+    },
+  );
+
   test.each(["paid", "partial", "unpaid"] as const)(
     "preserves explicit %s status over contradictory derived states", (status) => {
       for (const overrides of [
