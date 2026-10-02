@@ -297,6 +297,15 @@ export function explainCatastoAnomalia(anomalia: AnomaliaLike): CatastoAnomaliaE
     }
 }
 
+function describeImportAmounts(code: string, value: unknown): Array<string | null> {
+  if (!value || typeof value !== "object") return [];
+  const amounts = value as Record<string, unknown>;
+  return [
+    amounts.atteso != null ? `Per la voce ${code} il valore atteso e ${formatNumber(amounts.atteso, 4)}.` : null,
+    amounts.delta != null ? `Per la voce ${code} lo scostamento e ${formatNumber(amounts.delta, 4)}.` : null,
+  ];
+}
+
 export function describeCatastoAnomalia(anomalia: AnomaliaLike): string {
   const data = anomalia.dati_json ?? {};
 
@@ -337,17 +346,12 @@ export function describeCatastoAnomalia(anomalia: AnomaliaLike): string {
           : null,
         "In pratica: i numeri della riga importata non tornano con il calcolo teorico e la posizione va verificata.",
       ]);
-    case "VAL-07-importi": {
-      const v0648 = data.v07_648 && typeof data.v07_648 === "object" ? data.v07_648 as Record<string, unknown> : null;
-      const v0985 = data.v07_985 && typeof data.v07_985 === "object" ? data.v07_985 as Record<string, unknown> : null;
+    case "VAL-07-importi":
       return compactParts([
         "Gli importi del ruolo non coincidono con quelli che risultano dal calcolo su imponibile e aliquota.",
-        v0648?.atteso != null ? `Per la voce 0648 il valore atteso e ${formatNumber(v0648.atteso, 4)}.` : null,
-        v0648?.delta != null ? `Per la voce 0648 lo scostamento e ${formatNumber(v0648.delta, 4)}.` : null,
-        v0985?.atteso != null ? `Per la voce 0985 il valore atteso e ${formatNumber(v0985.atteso, 4)}.` : null,
-        v0985?.delta != null ? `Per la voce 0985 lo scostamento e ${formatNumber(v0985.delta, 4)}.` : null,
+        ...describeImportAmounts("0648", data.v07_648),
+        ...describeImportAmounts("0985", data.v07_985),
       ]);
-    }
     default:
       return anomalia.descrizione ?? "Anomalia ruolo senza dettaglio strutturato.";
   }

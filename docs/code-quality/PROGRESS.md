@@ -3,6 +3,42 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto - descrizione degli importi anomali (2026-10-02)
+
+- Hotspot unico: `describeCatastoAnomalia`, checkout `main@368731e9`;
+  runtime e test inizialmente puliti, altri lavori preservati.
+- Prima: cognitiva `60`, ciclomatica `32`, LOC `54`, nesting `1`.
+  Graphify frontend consultato per consumatori e impatto.
+- Slice: consolidare la descrizione delle voci 0648/0985 di VAL-07,
+  senza modificare explainCatastoAnomalia o gli altri tipi di anomalia.
+  Invarianti: testo esatto, ordine voce/atteso/delta, precisione quattro
+  decimali, omissione solo nullish dei campi, accettazione degli oggetti,
+  fallback e comportamento legacy sui numeri non validi.
+- Caratterizzazione: 15 nuovi casi per entrambe le voci, testo completo,
+  ordine e immutabilita; zero, stringhe numeriche, valori invalidi/non finiti,
+  nullish e oggetti vuoti preservati (anche il testo legacy `null`).
+  Suite prima/dopo: 35 test verdi, coverage full-file 100% su tutte le metriche.
+- Dopo: descrittore cognitiva `60 -> 44`, ciclomatica `32 -> 24`,
+  LOC `54 -> 49`, nesting `1` invariato. Helper privato condiviso delle
+  due voci cognitiva/ciclomatica/LOC/nesting `5/5/8/1`, nessuna violation.
+  Aggregati file: cognitiva `133 -> 122`, ciclomatica `88 -> 85`, callable
+  `15 -> 16`, LOC `337 -> 340`. Esito `IMPROVED`, debito non trasferito.
+  Violation `7 -> 6` (error `5` invariati, warning `2 -> 1`): warning LOC
+  del descrittore eliminato; resta il debito legacy dei due descrittori.
+- Coverage dopo: statement `97/97`, branch `123/123`, funzioni `16/16`,
+  linee `87/87`. Ratchet mirato autorevole contro `origin/main` PASS prima
+  e dopo, merge-base `6b61fd27`, `findings: []`; baseline/scope invariati.
+  ESLint senza errori: unico warning multiplierDigits preesistente,
+  riprodotto sul runtime HEAD. Typecheck senza incremental, 90 test tooling
+  e diff whitespace verdi. Nessuna conformita globale dichiarata.
+- Graphify frontend aggiornato; refresh platform docs completato con
+  `chunk 1/1 done`, senza warning di chunk semantici falliti.
+  Evidenze before `/tmp/gaia-next-catasto-metrics.{json,md}`, after e log
+  characterization/after/ratchet-before/ratchet-after/lint/lint-before/types/
+  quality/Graphify con prefisso `/tmp/gaia-catasto-description-`.
+  Un solo hotspot, commit isolato dopo i gate secondo l'autorizzazione
+  vigente; nessun push, nessuna modifica agli altri team.
+
 ### Wiki supporto - query opzionale del link (2026-10-02)
 
 - Hotspot unico: `buildSupportHrefFromPayload`, checkout `main@c4fa269c`,

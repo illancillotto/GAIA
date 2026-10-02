@@ -225,6 +225,33 @@ describe("explainCatastoAnomalia", () => {
 });
 
 describe("describeCatastoAnomalia", () => {
+  test.each([
+    [undefined, ""], [null, ""], ["bad", ""], [0, ""], [false, ""],
+    [[], ""], [{}, ""], [{ atteso: null, delta: undefined }, ""],
+    [{ atteso: 0, delta: 0 }, "il valore atteso e 0. lo scostamento e 0."],
+    [{ atteso: "12.34567", delta: -0.00015 }, "il valore atteso e 12,3457. lo scostamento e -0,0002."],
+    [{ atteso: "bad", delta: Infinity }, "il valore atteso e null. lo scostamento e null."],
+    [{ atteso: "", delta: false }, "il valore atteso e 0. lo scostamento e 0."],
+    [{ atteso: 2 }, "il valore atteso e 2."],
+    [{ delta: -2 }, "lo scostamento e -2."],
+  ])("preserves VAL-07 voice values and exact formatting for %j", (value, detail) => {
+    const summary = "Gli importi del ruolo non coincidono con quelli che risultano dal calcolo su imponibile e aliquota.";
+    for (const [key, code] of [["v07_648", "0648"], ["v07_985", "0985"]]) {
+      const anomalia = { tipo: "VAL-07-importi", dati_json: { [key]: value } };
+      const original = structuredClone(anomalia);
+      const suffix = detail ? ` Per la voce ${code} ${detail.replace(" lo scostamento", ` Per la voce ${code} lo scostamento`)}` : "";
+      expect(describeCatastoAnomalia(anomalia)).toBe(summary + suffix);
+      expect(anomalia).toEqual(original);
+    }
+  });
+
+  test("preserves VAL-07 voice and field order with all values", () => {
+    expect(describeCatastoAnomalia({
+      tipo: "VAL-07-importi",
+      dati_json: { v07_985: { delta: 4, atteso: 3 }, v07_648: { delta: 2, atteso: 1 } },
+    })).toBe("Gli importi del ruolo non coincidono con quelli che risultano dal calcolo su imponibile e aliquota. Per la voce 0648 il valore atteso e 1. Per la voce 0648 lo scostamento e 2. Per la voce 0985 il valore atteso e 3. Per la voce 0985 lo scostamento e 4.");
+  });
+
   test("describes VAL-01 with numeric details", () => {
     const description = describeCatastoAnomalia({
       tipo: "VAL-01-sup_eccede",

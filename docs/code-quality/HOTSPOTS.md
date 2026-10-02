@@ -19,6 +19,7 @@ Audit baseline globale e ordine delle tranche:
 
 | Stato | Percorso | Segnale iniziale | Nota |
 | --- | --- | --- | --- |
+| reduced | `frontend/src/lib/catasto-anomalie.ts` / descrizione importi | `describeCatastoAnomalia` cog/cyc `60/32 -> 44/24`, LOC `54 -> 49` | `IMPROVED` 2026-10-02: descrizione condivisa delle voci VAL-07, testo e ordine invariati; aggregati cog/cyc `133/88 -> 122/85`, 35 test e full-file 100%, ratchet mirato verde; warning LOC eliminato, debito legacy residuo |
 | reduced | `frontend/src/features/wiki/request-support-payload.ts` / query opzionale | `buildSupportHrefFromPayload` cog/cyc `10/11 -> 4/5`, LOC `23 -> 22` | `IMPROVED` 2026-10-02: chiavi ordinate e serializzazione comune preservano omissione, encoding e ordine; aggregati cog/cyc `16/22 -> 11/18`, zero violation nel file, 60 test e full-file 100%, ratchet mirato verde |
 | reduced | `frontend/src/features/wiki/request-support-payload.ts` / mapping pathname | `inferModuleKeyFromPath` cog/cyc `12/13 -> 1/2`, LOC `15 -> 3` | `IMPROVED` 2026-10-02: tabella ordinata conserva startsWith e alias; aggregati cog/cyc `27/32 -> 16/22`, warning mapper rimosso, full-file 100% e ratchet mirato verde |
 | reduced | `frontend/src/features/wiki/context-links.ts` | `buildWikiContextHref` cog `36 -> 23`, cyc `21` invariata, LOC `62 -> 61`, nesting `2 -> 1` | `IMPROVED` 2026-10-02: chiave assente normalizzata, guardia esterna eliminata; 29 test e full-file 100%, ratchet mirato verde; error cognitiva rimossa, ciclomatica legacy residua |
