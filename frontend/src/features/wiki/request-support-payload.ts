@@ -2,20 +2,23 @@ import type { WikiChatMessage, WikiRequestCreate } from "./types";
 
 export type WikiSupportIntent = "help_request" | "bug_report" | "feature_request";
 
+const MODULE_PATH_PREFIXES = [
+  ["/network", "rete"],
+  ["/nas-control", "accessi"],
+  ["/catasto", "catasto"],
+  ["/elaborazioni", "elaborazioni"],
+  ["/presenze", "presenze"],
+  ["/organigramma", "organigramma"],
+  ["/wiki", "wiki"],
+  ["/operazioni", "operazioni"],
+  ["/riordino", "riordino"],
+  ["/ruolo", "ruolo"],
+  ["/utenze", "utenze"],
+  ["/inventory", "inventario"],
+] as const;
+
 export function inferModuleKeyFromPath(pathname: string): string | null {
-  if (pathname.startsWith("/network")) return "rete";
-  if (pathname.startsWith("/nas-control")) return "accessi";
-  if (pathname.startsWith("/catasto")) return "catasto";
-  if (pathname.startsWith("/elaborazioni")) return "elaborazioni";
-  if (pathname.startsWith("/presenze")) return "presenze";
-  if (pathname.startsWith("/organigramma")) return "organigramma";
-  if (pathname.startsWith("/wiki")) return "wiki";
-  if (pathname.startsWith("/operazioni")) return "operazioni";
-  if (pathname.startsWith("/riordino")) return "riordino";
-  if (pathname.startsWith("/ruolo")) return "ruolo";
-  if (pathname.startsWith("/utenze")) return "utenze";
-  if (pathname.startsWith("/inventory")) return "inventario";
-  return null;
+  return MODULE_PATH_PREFIXES.find(([prefix]) => pathname.startsWith(prefix))?.[1] ?? null;
 }
 
 export function buildWikiRequestPayload(params: {

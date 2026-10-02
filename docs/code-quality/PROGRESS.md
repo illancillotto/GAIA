@@ -3,6 +3,38 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Wiki supporto - mapping pathname/modulo (2026-10-02)
+
+- Hotspot unico: `inferModuleKeyFromPath` in `request-support-payload.ts`,
+  checkout `main@6bddef61`; file inizialmente pulito. Lavori concorrenti,
+  Organigramma e giornaliere preservati. Graphify frontend consultato.
+- Prima: callable cognitiva/ciclomatica/LOC `12/13/15`, nesting `1`;
+  cinque callable e due warning nel file, zero error. Invarianti: ordine
+  dei prefissi, startsWith case-sensitive e permissivo, alias rete/inventario,
+  null sui path sconosciuti; payload e link supporto invariati.
+- Caratterizzazione: 19 nuovi casi sui dodici prefissi, suffix, casing,
+  slash iniziale, path sconosciuti e alias non validi; suite prima della
+  slice 43 test verdi e full-file 100%. Slice: tabella readonly ordinata,
+  ricerca del primo prefisso corrispondente senza normalizzazioni nuove.
+- Dopo: mapper cognitiva `12 -> 1`, ciclomatica `13 -> 2`, LOC `15 -> 3`,
+  nesting `1 -> 0`; callback find `0/1/1/0`, nessuna violation.
+  File: cognitiva `27 -> 16`, ciclomatica `32 -> 22`, callable `5 -> 6`,
+  LOC `104 -> 106` per la tabella dichiarativa. Warning `2 -> 1`, zero error;
+  resta solo il warning distinto di `buildSupportHrefFromPayload`.
+  Esito `IMPROVED`, decisioni e debito ridotti senza trasferire violation.
+- 43 test helper passati prima/dopo, full-file 100% statement (`36/36`),
+  branch (`32/32`), funzioni (`6/6`) e linee (`26/26`) dopo.
+  Ratchet mirato autorevole contro `origin/main`, merge-base `6b61fd27`,
+  PASS prima e dopo, `findings: []`. Baseline, scope ed eccezioni invariati.
+- Evidenze `/tmp/gaia-wiki-module-{before,after}.json`, log characterization/
+  after/final/ratchet/lint/types/quality/Graphify con lo stesso prefisso.
+  Regressione supporto 46 test passati, stesso full-file 100%; ESLint,
+  typecheck senza incremental, diff whitespace e 90 test tooling verdi.
+  Graphify frontend aggiornato; refresh platform docs completato con
+  `chunk 1/1 done` senza warning di chunk falliti.
+  Un solo hotspot, commit isolato dopo i gate mirati secondo
+  l'autorizzazione vigente. Nessun push.
+
 ### Wiki - resolver dei link contestuali (2026-10-02)
 
 - Hotspot unico successivo al commit `655c6e78`: `buildWikiContextHref` in

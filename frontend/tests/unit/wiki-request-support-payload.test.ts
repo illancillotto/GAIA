@@ -16,6 +16,27 @@ const messages: WikiChatMessage[] = [
 
 describe("wiki request payload contract", () => {
   test.each([
+    ["network", "rete"], ["nas-control", "accessi"], ["catasto", "catasto"],
+    ["elaborazioni", "elaborazioni"], ["presenze", "presenze"],
+    ["organigramma", "organigramma"], ["wiki", "wiki"],
+    ["operazioni", "operazioni"], ["riordino", "riordino"],
+    ["ruolo", "ruolo"], ["utenze", "utenze"], ["inventory", "inventario"],
+  ])("retains permissive, case-sensitive prefixes for %s", (prefix, moduleKey) => {
+    for (const suffix of ["", "/detail", "-extra", "?q=1", "#section", "/wiki"]) {
+      expect(inferModuleKeyFromPath(`/${prefix}${suffix}`)).toBe(moduleKey);
+    }
+    expect(inferModuleKeyFromPath(`/${prefix.toUpperCase()}`)).toBeNull();
+    expect(inferModuleKeyFromPath(prefix)).toBeNull();
+    expect(inferModuleKeyFromPath(`/other/${prefix}`)).toBeNull();
+  });
+
+  test.each(["", "/", "/unknown", " /wiki", "//network", "/inventario", "/rete"])(
+    "keeps unmatched pathname %s unmapped", (pathname) => {
+      expect(inferModuleKeyFromPath(pathname)).toBeNull();
+    },
+  );
+
+  test.each([
     ["/network", "rete"], ["/nas-control", "accessi"], ["/catasto", "catasto"],
     ["/elaborazioni", "elaborazioni"], ["/presenze", "presenze"],
     ["/organigramma", "organigramma"], ["/wiki", "wiki"],
