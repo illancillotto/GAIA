@@ -16,6 +16,13 @@ export type WikiAuditStats = {
   topDeniedTools: Array<{ key: string; count: number }>;
 };
 
+const MODE_COUNTERS = new Map<string, "docsCount" | "liveCount" | "logicCount" | "hybridCount">([
+  ["docs_only", "docsCount"],
+  ["live_data", "liveCount"],
+  ["logic", "logicCount"],
+  ["hybrid", "hybridCount"],
+]);
+
 export function buildWikiAuditStats(items: WikiToolAuditLog[]): WikiAuditStats {
   const toolCounts = new Map<string, number>();
   const moduleCounts = new Map<string, number>();
@@ -34,17 +41,9 @@ export function buildWikiAuditStats(items: WikiToolAuditLog[]): WikiAuditStats {
       if (!item.found) {
         acc.noMatchCount += 1;
       }
-      if (item.mode === "docs_only") {
-        acc.docsCount += 1;
-      }
-      if (item.mode === "live_data") {
-        acc.liveCount += 1;
-      }
-      if (item.mode === "logic") {
-        acc.logicCount += 1;
-      }
-      if (item.mode === "hybrid") {
-        acc.hybridCount += 1;
+      const modeCounter = MODE_COUNTERS.get(item.mode);
+      if (modeCounter) {
+        acc[modeCounter] += 1;
       }
       latencyTotal += item.latency_ms;
       toolCounts.set(item.tool_name, (toolCounts.get(item.tool_name) ?? 0) + 1);

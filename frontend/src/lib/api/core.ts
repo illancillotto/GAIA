@@ -41,6 +41,33 @@ export function getApiBaseUrl(): string {
   return value;
 }
 
+async function readResponseError(response: Response): Promise<ApiError> {
+  let detail = "Request failed";
+  let detailData: unknown;
+
+  try {
+    const payload = (await response.json()) as { detail?: unknown };
+    detailData = payload.detail;
+
+    if (typeof payload.detail === "string") {
+      detail = payload.detail;
+    } else if (
+      payload.detail &&
+      typeof payload.detail === "object" &&
+      "message" in payload.detail &&
+      typeof payload.detail.message === "string"
+    ) {
+      detail = payload.detail.message;
+    } else if (payload.detail != null) {
+      detail = JSON.stringify(payload.detail);
+    }
+  } catch {
+    detail = response.statusText || detail;
+  }
+
+  return new ApiError(detail, detailData, response.status);
+}
+
 export async function request<T>(path: string, init?: ApiRequestInit): Promise<T> {
   const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
   const { timeoutMs, signal, ...fetchInit } = init ?? {};
@@ -56,7 +83,7 @@ export async function request<T>(path: string, init?: ApiRequestInit): Promise<T
     }
   }
 
-  if (controller && timeoutMs) {
+  if (controller) {
     timeoutId = setTimeout(() => {
       timedOut = true;
       controller.abort(new Error(SESSION_BOOTSTRAP_TIMEOUT_MESSAGE));
@@ -76,44 +103,18 @@ export async function request<T>(path: string, init?: ApiRequestInit): Promise<T
       signal: controller?.signal ?? signal,
     });
   } catch (error) {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
     if (timedOut) {
       throw new ApiError(SESSION_BOOTSTRAP_TIMEOUT_MESSAGE);
     }
     throw error;
-  }
-
-  if (timeoutId) {
-    clearTimeout(timeoutId);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
   }
 
   if (!response.ok) {
-    let detail = "Request failed";
-    let detailData: unknown;
-
-    try {
-      const payload = (await response.json()) as { detail?: unknown };
-      detailData = payload.detail;
-
-      if (typeof payload.detail === "string") {
-        detail = payload.detail;
-      } else if (
-        payload.detail &&
-        typeof payload.detail === "object" &&
-        "message" in payload.detail &&
-        typeof payload.detail.message === "string"
-      ) {
-        detail = payload.detail.message;
-      } else if (payload.detail != null) {
-        detail = JSON.stringify(payload.detail);
-      }
-    } catch {
-      detail = response.statusText || detail;
-    }
-
-    throw new ApiError(detail, detailData, response.status);
+    throw await readResponseError(response);
   }
 
   if (response.status === 204 || response.status === 205) {

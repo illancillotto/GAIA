@@ -13,17 +13,13 @@ function hasPort(openPorts: string | null, port: number): boolean {
 }
 
 export function getNetworkDeviceAdminUrl(device: Pick<NetworkDevice, "ip_address" | "metadata_sources" | "open_ports">): string | null {
-  const refreshTarget = device.metadata_sources?.http_refresh_target;
-  if (refreshTarget) {
-    if (refreshTarget.startsWith("http://") || refreshTarget.startsWith("https://")) {
-      return refreshTarget;
-    }
-    if (refreshTarget.startsWith("/")) {
-      if (device.metadata_sources?.http?.startsWith("https:")) {
-        return `https://${device.ip_address}${refreshTarget}`;
-      }
-      return `http://${device.ip_address}${refreshTarget}`;
-    }
+  const refreshTarget = device.metadata_sources?.http_refresh_target ?? "";
+  if (refreshTarget.startsWith("http://") || refreshTarget.startsWith("https://")) {
+    return refreshTarget;
+  }
+  if (refreshTarget.startsWith("/")) {
+    const scheme = device.metadata_sources?.http?.startsWith("https:") ? "https" : "http";
+    return `${scheme}://${device.ip_address}${refreshTarget}`;
   }
 
   const httpSource = device.metadata_sources?.http;

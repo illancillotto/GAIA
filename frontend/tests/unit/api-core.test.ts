@@ -134,6 +134,72 @@ describe("api core helpers", () => {
     await expect(request("/auth/me")).rejects.toThrow("offline");
   });
 
+  test.each([
+    { detail: "Denied", message: "Denied" },
+    { detail: "", message: "" },
+    { detail: { message: "Denied", code: "forbidden" }, message: "Denied" },
+    { detail: { message: "", code: "forbidden" }, message: "" },
+    { detail: { message: 0 }, message: '{"message":0}' },
+    { detail: { message: null }, message: '{"message":null}' },
+    { detail: { code: "forbidden" }, message: '{"code":"forbidden"}' },
+    { detail: [{ loc: ["body", "name"], msg: "Required" }], message: '[{"loc":["body","name"],"msg":"Required"}]' },
+    { detail: [], message: "[]" },
+    { detail: 0, message: "0" },
+    { detail: false, message: "false" },
+    { detail: null, message: "Request failed" },
+    { detail: undefined, message: "Request failed" },
+  ])("preserves message and detailData for $detail", async ({ detail, message }) => {
+    const response = new Response(JSON.stringify({ detail }), {
+      status: 403,
+      statusText: "Forbidden",
+    });
+    const jsonSpy = vi.spyOn(response, "json");
+    const fetchMock = vi.fn().mockResolvedValue(response);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(request("/error")).rejects.toMatchObject({
+      name: "ApiError",
+      message,
+      status: 403,
+      detailData: detail,
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(jsonSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([
+    { body: "not-json", statusText: "Bad Gateway", message: "Bad Gateway" },
+    { body: "null", statusText: "Bad Gateway", message: "Bad Gateway" },
+    { body: "not-json", statusText: "", message: "Request failed" },
+    { body: "null", statusText: "", message: "Request failed" },
+  ])("retains the status fallback for $body / $statusText", async ({ body, statusText, message }) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body, {
+      status: 502,
+      statusText,
+    })));
+
+    await expect(request("/error")).rejects.toMatchObject({
+      name: "ApiError",
+      message,
+      status: 502,
+      detailData: undefined,
+    });
+  });
+
+  test("retains parsed detailData when serialization fails", async () => {
+    const detail = { code: "invalid", value: BigInt(1) };
+    const response = new Response(null, { status: 400, statusText: "Bad Request" });
+    vi.spyOn(response, "json").mockResolvedValue({ detail });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+
+    await expect(request("/error")).rejects.toMatchObject({
+      name: "ApiError",
+      message: "Bad Request",
+      status: 400,
+      detailData: detail,
+    });
+  });
+
   test("requestBlob returns blob and maps errors", async () => {
     const blob = new Blob(["pdf"]);
     const fetchMock = vi
@@ -267,5 +333,216 @@ describe("api core helpers", () => {
     await vi.advanceTimersByTimeAsync(25);
     await timeoutExpectation;
     vi.useRealTimers();
+  });
+});
+
+describe("request empty response precedence", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  test.each([204, 205])("skips headers and body for status %s", async (status) => {
+    const response = new Response(null, {
+      status,
+      headers: { "content-length": "12", "content-type": "application/json" },
+    });
+    const headersSpy = vi.spyOn(response.headers, "get");
+    const jsonSpy = vi.spyOn(response, "json");
+    const textSpy = vi.spyOn(response, "text");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+
+    await expect(request("/empty")).resolves.toBeUndefined();
+    expect(headersSpy).not.toHaveBeenCalled();
+    expect(jsonSpy).not.toHaveBeenCalled();
+    expect(textSpy).not.toHaveBeenCalled();
+  });
+
+  test.each([null, "application/json", "text/plain"])("skips body for exact zero length with content type %s", async (contentType) => {
+    const response = new Response("not-json", { headers: { "content-length": "0" } });
+    response.headers.delete("content-type");
+    if (contentType !== null) {
+      response.headers.set("content-type", contentType);
+    }
+    const headersSpy = vi.spyOn(response.headers, "get");
+    const jsonSpy = vi.spyOn(response, "json");
+    const textSpy = vi.spyOn(response, "text");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+
+    await expect(request("/empty")).resolves.toBeUndefined();
+    expect(headersSpy.mock.calls).toEqual([["content-length"]]);
+    expect(jsonSpy).not.toHaveBeenCalled();
+    expect(textSpy).not.toHaveBeenCalled();
+  });
+
+  test.each([null, "00", "0 ", " 0", "12"])("parses JSON for non-exact zero length %s", async (contentLength) => {
+    const response = new Response('{"ok":true}', { headers: { "content-type": "application/json" } });
+    vi.spyOn(response.headers, "get").mockImplementation((header) => (
+      header === "content-length" ? contentLength : "application/json"
+    ));
+    const jsonSpy = vi.spyOn(response, "json");
+    const textSpy = vi.spyOn(response, "text");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+
+    await expect(request("/json")).resolves.toEqual({ ok: true });
+    expect(jsonSpy).toHaveBeenCalledTimes(1);
+    expect(textSpy).not.toHaveBeenCalled();
+  });
+
+  test("decodes HTTP errors before applying the zero length rule", async () => {
+    const response = new Response('{"detail":"Forbidden"}', {
+      status: 403,
+      headers: { "content-length": "0", "content-type": "application/json" },
+    });
+    const headersSpy = vi.spyOn(response.headers, "get");
+    const jsonSpy = vi.spyOn(response, "json");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+
+    await expect(request("/forbidden")).rejects.toMatchObject({ message: "Forbidden", status: 403 });
+    expect(headersSpy).not.toHaveBeenCalled();
+    expect(jsonSpy).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([
+    { body: "", result: undefined },
+    { body: "null", result: null },
+    { body: "false", result: false },
+    { body: "0", result: 0 },
+  ])("preserves empty and falsy JSON bodies without content type: $body", async ({ body, result }) => {
+    const response = new Response(body);
+    response.headers.delete("content-type");
+    const textSpy = vi.spyOn(response, "text");
+    const jsonSpy = vi.spyOn(response, "json");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+
+    await expect(request("/body")).resolves.toBe(result);
+    expect(textSpy).toHaveBeenCalledTimes(1);
+    expect(jsonSpy).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { body: "", contentType: "application/json" },
+    { body: " ", contentType: null },
+    { body: "not-json", contentType: null },
+    { body: "not-json", contentType: "text/plain" },
+  ])("preserves parsing failures for $body / $contentType", async ({ body, contentType }) => {
+    const response = new Response(body);
+    response.headers.delete("content-type");
+    if (contentType !== null) {
+      response.headers.set("content-type", contentType);
+    }
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+
+    await expect(request("/invalid")).rejects.toBeInstanceOf(SyntaxError);
+  });
+});
+
+describe("request cancellation lifecycle", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  test.each([undefined, 0, Number.NaN])("forwards the original signal without a truthy timeout: %s", async (timeoutMs) => {
+    const external = new AbortController();
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(request("/empty", { timeoutMs, signal: external.signal })).resolves.toBeUndefined();
+    expect(fetchMock.mock.calls[0][1].signal).toBe(external.signal);
+    expect(external.signal.aborted).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  test.each([true, false])("preserves external abort reason and clears the timer (already aborted: %s)", async (alreadyAborted) => {
+    const external = new AbortController();
+    const reason = new Error("caller cancelled");
+    if (alreadyAborted) {
+      external.abort(reason);
+    }
+    const fetchMock = vi.fn().mockImplementation((_input: string, init: RequestInit) => {
+      const signal = init.signal!;
+      return new Promise((_resolve, reject) => {
+        if (signal.aborted) {
+          reject(signal.reason);
+        } else {
+          signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+        }
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pending = request("/pending", { timeoutMs: 25, signal: external.signal });
+    const rejection = expect(pending).rejects.toBe(reason);
+    external.abort(reason);
+    await rejection;
+
+    const forwardedSignal = fetchMock.mock.calls[0][1].signal;
+    expect(forwardedSignal).not.toBe(external.signal);
+    expect(forwardedSignal.reason).toBe(reason);
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(25);
+    expect(forwardedSignal.reason).toBe(reason);
+  });
+
+  test("aborts at the deadline and translates the fetch rejection into ApiError", async () => {
+    const fetchMock = vi.fn().mockImplementation((_input: string, init: RequestInit) => new Promise((_resolve, reject) => {
+      init.signal!.addEventListener("abort", () => reject(init.signal!.reason), { once: true });
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const external = new AbortController();
+    const pending = request("/pending", { timeoutMs: 25, signal: external.signal });
+    const rejection = expect(pending).rejects.toMatchObject({
+      name: "ApiError",
+      message: SESSION_BOOTSTRAP_TIMEOUT_MESSAGE,
+      status: undefined,
+    });
+    const forwardedSignal = fetchMock.mock.calls[0][1].signal;
+
+    await vi.advanceTimersByTimeAsync(24);
+    expect(forwardedSignal.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await rejection;
+    expect(forwardedSignal.reason).toBeInstanceOf(Error);
+    expect(forwardedSignal.reason.message).toBe(SESSION_BOOTSTRAP_TIMEOUT_MESSAGE);
+    expect(external.signal.aborted).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  test("preserves network errors and clears a pending timeout", async () => {
+    const reason = new Error("offline");
+    const fetchMock = vi.fn().mockRejectedValue(reason);
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(request("/offline", { timeoutMs: 25 })).rejects.toBe(reason);
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(25);
+    expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(false);
+  });
+
+  test.each([200, 403])("ends the timeout when fetch resolves, before decoding a delayed body: %s", async (status) => {
+    const response = new Response(null, { status, headers: { "content-type": "application/json" } });
+    let finishBody!: (payload: unknown) => void;
+    vi.spyOn(response, "json").mockImplementation(() => {
+      expect(vi.getTimerCount()).toBe(0);
+      return new Promise((resolve) => {
+        finishBody = resolve;
+      });
+    });
+    const fetchMock = vi.fn().mockResolvedValue(response);
+    vi.stubGlobal("fetch", fetchMock);
+    const pending = request("/delayed-body", { timeoutMs: 25 });
+    const outcome = status === 200
+      ? expect(pending).resolves.toEqual({ ok: true })
+      : expect(pending).rejects.toMatchObject({ message: "Forbidden", status: 403 });
+
+    await vi.advanceTimersByTimeAsync(50);
+    expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(false);
+    finishBody(status === 200 ? { ok: true } : { detail: "Forbidden" });
+    await outcome;
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

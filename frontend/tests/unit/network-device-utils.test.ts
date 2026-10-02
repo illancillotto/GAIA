@@ -11,6 +11,48 @@ import {
 } from "@/lib/network-device-utils";
 
 describe("getNetworkDeviceAdminUrl", () => {
+  test.each([
+    { target: "http://admin.local/path", source: "https:8443", expected: "http://admin.local/path" },
+    { target: "https://admin.local/path", source: "http:8080", expected: "https://admin.local/path" },
+    { target: "/admin", source: "https:8443", expected: "https://10.0.0.5/admin" },
+    { target: "/admin", source: "https:", expected: "https://10.0.0.5/admin" },
+    { target: "/admin", source: "http:8080", expected: "http://10.0.0.5/admin" },
+    { target: "/admin", source: "HTTPS:443", expected: "http://10.0.0.5/admin" },
+    { target: "/admin", source: "", expected: "http://10.0.0.5/admin" },
+    { target: "//admin.local/path", source: "", expected: "http://10.0.0.5//admin.local/path" },
+    { target: "admin-panel", source: "http:8080", expected: "http://10.0.0.5:8080/" },
+    { target: "HTTP://admin.local", source: "https:8443", expected: "https://10.0.0.5:8443/" },
+    { target: "", source: "https:8443", expected: "https://10.0.0.5:8443/" },
+    { target: "", source: "http:8080:ignored", expected: "http://10.0.0.5:8080/" },
+    { target: "", source: "http:", expected: "https://10.0.0.5/" },
+    { target: "", source: "https", expected: "https://10.0.0.5/" },
+    { target: "", source: "ftp:21", expected: "https://10.0.0.5/" },
+  ])("preserves target/source precedence for $target and $source", ({ target, source, expected }) => {
+    const device = {
+      ip_address: "10.0.0.5",
+      metadata_sources: { http_refresh_target: target, http: source },
+      open_ports: "80, 443",
+    };
+    const original = structuredClone(device);
+
+    expect(getNetworkDeviceAdminUrl(device)).toBe(expected);
+    expect(device).toEqual(original);
+  });
+
+  test.each([
+    { metadata: null, ports: "80, 443", expected: "https://10.0.0.5/" },
+    { metadata: {}, ports: " 22, 80 ", expected: "http://10.0.0.5/" },
+    { metadata: {}, ports: "8080,8443", expected: null },
+    { metadata: {}, ports: "", expected: null },
+    { metadata: null, ports: null, expected: null },
+  ])("uses exact ports with absent metadata: $ports", ({ metadata, ports, expected }) => {
+    expect(getNetworkDeviceAdminUrl({
+      ip_address: "10.0.0.5",
+      metadata_sources: metadata,
+      open_ports: ports,
+    })).toBe(expected);
+  });
+
   test("prefers absolute http refresh targets", () => {
     expect(
       getNetworkDeviceAdminUrl({

@@ -3,6 +3,236 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Wiki audit - aggregazione delle modalita (2026-10-02)
+
+- Hotspot unico: `buildWikiAuditStats` in `features/wiki/audit-utils.ts`,
+  checkout `main@af768d77`; file inizialmente pulito. Organigramma,
+  giornaliere e modifiche concorrenti preservati.
+- Primo tentativo di commit Network/API bloccato da `.git/index.lock:
+  File system in sola lettura`. Retry esplicitamente autorizzato dopo il
+  ripristino dei permessi; scope esteso alla presente slice Wiki verificata.
+- Prima: callable cognitiva/ciclomatica/LOC `15/15/59`; callback reducer
+  `13/13/28`. Suite iniziale due test verdi, coverage incompleta;
+  caratterizzazione portata a 13 test e full-file 100% prima della slice.
+- Invarianti: quattro modalita esatte, sconosciute ignorate (anche nomi
+  del prototipo), contatori/ranking/latency, fallback module nullish,
+  limite top tre e assenza di mutazioni invariati. Slice: mapping esplicito
+  delle modalita ai contatori con Map, senza helper o modifica dei contratti.
+- Dopo: aggregatore `12/12/51`, reducer `10/10/20`; cognitiva aggregata
+  `31 -> 25`, ciclomatica `37 -> 31`, LOC file `84 -> 82`, otto callable
+  invariati. Error `1 -> 0`, warning `3 -> 3`; `IMPROVED` senza nuovi
+  callable o trasferimento di violation. Le metriche aggregate includono
+  la callback sia nel padre sia come callable, secondo lo scanner vigente.
+- Validazione: 13 test helper passati prima/dopo; coverage full-file finale
+  100% statement (`29/29`), branch (`24/24`), funzioni (`8/8`), linee
+  (`29/29`). ESLint runtime/test, typecheck senza incremental e diff
+  whitespace passati. Tooling quality: 90 test passati, inclusi aggiornamenti
+  concorrenti non modificati da questa slice.
+  Regressione con pagina audit: 14 test passati, stesso full-file 100%.
+- Ratchet autorevole mirato contro `origin/main`, merge-base `6b61fd27`:
+  PASS, `findings: []`. Baseline, esclusioni e scope invariati; nessuna
+  sincronizzazione globale sul checkout concorrente.
+- Graphify frontend aggiornato tramite target dedicato; refresh platform
+  docs tramite `make graphify-platform-docs` tentato: chunk semantico fallito
+  per `Connection error` con warning partial results, pur con exit 0.
+  Arricchimento docs non verificato nell'ambiente a rete limitata.
+- Evidenze in `/tmp/gaia-wiki-stats-{before,after}.json`, log
+  `/tmp/gaia-wiki-stats-{characterization,after,final}.log`, directory
+  `/tmp/gaia-wiki-stats-final-coverage` e log lint/types/ratchet/quality/
+  Graphify con lo stesso prefisso. Restano tre warning, nessun error.
+- Iterazione chiusa su un hotspot; nessun secondo refactoring.
+  Retry commit: validazione combinata 18 suite, 905 test passati, coverage
+  per-file 100% sui tre runtime (190 statement, 179 branch, 33 funzioni,
+  189 linee); ESLint e ratchet autorevole mirato verdi. Index isolato:
+  tre runtime, tre test e sole sezioni Network/API/Wiki dei due registri.
+  Baseline e lavori degli altri team esclusi, nessun push autorizzato.
+
+### API core - precedenza risposte vuote (2026-10-02)
+
+- Slice unica successiva autorizzata: controlli dei risultati vuoti in
+  `request`, checkout `main@af768d77`; preservate le slice precedenti e
+  le modifiche concorrenti, Organigramma e giornaliere esclusi.
+- Prima: request cognitiva `24`, ciclomatica `20`, LOC `60`, nesting `2`;
+  aggregati core cognitiva `143`, ciclomatica `98`, LOC `207`, 16 callable.
+  Ratchet mirato contro `origin/main`, merge-base `6b61fd27`, PASS.
+- Invarianti: errori HTTP prima del controllo body; status 204/205 senza
+  leggere header o body; solo lunghezza esattamente `"0"` evita il parsing.
+  Parsing JSON, risultati falsy e rejection SyntaxError invariati.
+- Caratterizzazione: 19 nuovi casi di precedenza/status/header/body; tutti
+  passano prima della modifica. Slice minima: unificare i due return
+  undefined con valutazione short-circuit, senza helper o nuova policy.
+- Tentativo di unificazione respinto: cognitiva request `24 -> 25`,
+  aggregato `143 -> 144`, nuova violation cognitive error rispetto all'inizio
+  della slice. Ciclomatica `20` e LOC `60` invariate: nessuna riduzione
+  dimostrata. Ripristinati esclusivamente i controlli di questa slice;
+  refactoring precedenti preservati, nessuna modifica runtime netta.
+- Esito `NO_SAFE_CHANGE`: la guardia condivisa non soddisfa il quality
+  ratchet locale, anche se il confronto con la baseline storica resta verde.
+  Conservata la caratterizzazione, senza dichiarare riduzione di complessita.
+  Metriche finali identiche all'inizio: `24/20/60/2`, aggregati `143/98/207`,
+  16 callable; baseline, scope ed eccezioni invariati.
+- Validazione finale: 861 test API passati su 15 suite, core al 100%
+  statement (`118/118`), branch (`101/101`), funzioni (`16/16`) e linee
+  (`117/117`). Metriche/fingerprint/file finali identici al report iniziale;
+  ratchet autorevole mirato PASS, `findings: []`. ESLint runtime/test e
+  typecheck senza incremental e diff whitespace passati; baseline non
+  modificata. Nessuna failure nei test.
+- Graphify frontend consultato; nessun refresh codice necessario per una
+  slice senza modifiche runtime nette. `make graphify-platform-docs`
+  tentato: `chunk 1/1 failed: Connection error`, warning di risultati
+  parziali pur con exit 0; arricchimento documentale non verificato.
+- Evidenze in `/tmp/gaia-api-empty-{before,after,final}.json`,
+  `/tmp/gaia-api-empty-{characterization,tests-final}.log`, directory
+  `/tmp/gaia-api-empty-final-coverage` e log ratchet/lint/types/Graphify con
+  lo stesso prefisso. Nessun secondo hotspot, commit o push.
+- Prossima azione separata: scegliere un candidato diverso con riduzione
+  reale, evitando ulteriori estrazioni neutre di request.
+
+### API core - lifecycle timeout e abort (2026-10-02)
+
+- Hotspot unico autorizzato: lifecycle timeout/abort in `request`, checkout
+  `main@af768d77`; preservata la precedente estrazione `readResponseError`
+  e tutte le modifiche concorrenti, Organigramma e giornaliere esclusi.
+- Prima: request cognitiva `28`, ciclomatica `22`, LOC `62`, nesting `2`;
+  aggregati core cognitiva `147`, ciclomatica `100`, LOC `209`, 16 callable.
+  Suite API iniziale: 833 test verdi, coverage full-file 100%.
+  Ratchet mirato contro `origin/main`, merge-base `6b61fd27`, PASS.
+- Invarianti: timeout attivo solo per valori truthy; identita del segnale
+  senza timeout, propagazione della reason esterna, errore ApiError al
+  timeout, identita delle altre rejection e deadline limitata a fetch,
+  non alla decodifica del body. Nessun cambio di listener, policy o API.
+- Nove test di lifecycle aggiunti: timeout assente/zero/NaN, abort prima e
+  durante fetch, confine della deadline, errore rete e body ritardato sulle
+  risposte 200/403. Passano prima della slice, coverage core 100%.
+- Slice: cleanup del timer una sola volta in finally; guardia controller
+  sufficiente per schedulare il timeout gia truthy. Nessun helper nuovo.
+- Dopo: request cognitiva `28 -> 24`, ciclomatica `22 -> 20`, LOC `62 -> 60`,
+  nesting `2` invariato; file cognitiva `147 -> 143`, ciclomatica `100 -> 98`,
+  LOC `209 -> 207`, 16 callable invariati. Error `4 -> 3`, warning `10 -> 11`:
+  request scende sotto la soglia error cognitiva; resta error ciclomatica.
+  Nessun debito trasferito: `IMPROVED`.
+- Prima/dopo della slice: 842 test API verdi su 15 suite; core full-file
+  100% statement (`118/118`), branch (`101/101`), funzioni (`16/16`) e linee
+  (`117/117`) dopo. Nessun test rimosso o esclusione aggiunta.
+- Ratchet mirato contro lo stesso merge-base: PASS, `findings: []`;
+  `make quality-test QUALITY_PYTHON=backend/.venv/bin/python`: 83 passati.
+  ESLint runtime/test, typecheck senza incremental e diff whitespace passati.
+  Baseline, scope, eccezioni e modifiche non correlate preservati; diff della
+  baseline nullo. `make complexity-baseline-verify` restituisce ancora
+  `false` sul checkout modificato; nessuna conformita globale dichiarata.
+- Graphify frontend aggiornato tramite target dedicato: 7.244 nodi e
+  17.450 archi. Refresh platform docs tramite `make graphify-platform-docs`;
+  chunk semantico fallito per `Connection error` con warning di risultati
+  parziali, pur con exit 0. Arricchimento docs non verificato nell'ambiente
+  a rete limitata; il grafo codice e aggiornato, nessun refresh docs completo
+  dichiarato.
+- Evidenze `/tmp/gaia-api-timeout-{before,after}.json`,
+  `/tmp/gaia-api-timeout-characterization.log`,
+  `/tmp/gaia-api-timeout-tests-after.log`, directory
+  `/tmp/gaia-api-timeout-after-coverage` e log ratchet/lint/types/quality/
+  Graphify con lo stesso prefisso. Nessuna failure applicativa o tooling.
+- Iterazione chiusa su una sola slice. Debito residuo: request mantiene
+  ciclomatica error `20`, cognitiva warning `24` e LOC warning `60`;
+  eventuale semplificazione dei risultati vuoti richiede una nuova slice.
+  Nessun commit, push o secondo hotspot.
+
+### API core - decodifica errori HTTP (2026-10-02)
+
+- Hotspot unico autorizzato: `request` in `frontend/src/lib/api/core.ts`,
+  checkout `main@af768d77`; Organigramma e giornaliere riservati agli altri
+  team. File runtime inizialmente pulito, modifiche concorrenti preservate.
+- Prima: request cognitiva `54`, ciclomatica `30`, LOC `82`, nesting `4`;
+  file 15 callable, cognitiva aggregata `155`, ciclomatica `99`, LOC `206`,
+  cinque error e nove warning. Ratchet mirato contro `origin/main`,
+  merge-base `6b61fd27`: PASS, nessun finding.
+- Invarianti: stessi messaggi, status e detailData di ApiError; priorita
+  stringa/message/JSON/default e fallback statusText solo su eccezione;
+  fetch, header, token, timeout, abort, cleanup e risposte valide invariati.
+  Slice: decodifica della risposta HTTP non-2xx in un helper privato;
+  nessun riuso nei decoder Blob/XHR, che hanno contratti distinti.
+- Caratterizzazione iniziale: quattro suite API, 420 test verdi, coverage
+  full-file 100% (119 statement, 105 branch, 15 funzioni, 118 linee).
+  Aggiunti 18 casi su dettagli falsy/strutturati, messaggi vuoti, JSON
+  invalido/null, fallback e conservazione del detailData su stringify fallito.
+- Dopo: request cognitiva `28`, ciclomatica `22`, LOC `62`, nesting `2`;
+  helper privato `readResponseError` a `18/9/23/3`, sotto le soglie error.
+  Aggregati file: cognitiva `155 -> 147`, ciclomatica `99 -> 100`,
+  callable `15 -> 16`, LOC `206 -> 209`; error `5 -> 4`, warning `9 -> 10`.
+  L'aumento ciclomatico e il punto base del nuovo callable: decisioni
+  normalizzate invariate `84 -> 84`. Riduzione cognitiva reale senza
+  trasferimento di violation error-level: `IMPROVED`.
+- Prima della slice: 438 test verdi con la caratterizzazione aggiunta.
+  Dopo: stessi 438 test verdi; regressione estesa dei client API `833 passed`
+  su 15 suite. Core full-file al 100% statement (`120/120`), branch
+  (`105/105`), funzioni (`16/16`) e linee (`119/119`). Nessuna esclusione
+  coverage o test indebolito; i decoder Blob/XHR restano invariati.
+- Ratchet mirato dopo contro lo stesso merge-base: PASS, `findings: []`.
+  ESLint runtime/test, typecheck senza incremental, diff whitespace e
+  `make quality-test QUALITY_PYTHON=backend/.venv/bin/python` (83 test)
+  passati. Baseline, scope ed eccezioni invariati; nessuna sincronizzazione
+  globale sul checkout concorrente o dichiarazione di conformita globale.
+  `make complexity-baseline-verify` restituisce `false`, come nel controllo
+  precedente del checkout modificato; diff della baseline nullo.
+- Graphify frontend aggiornato (7.236 nodi, 17.418 archi); patch locale
+  `OPENAI_BASE_URL` verificata gia presente senza modificare l'installazione.
+  Refresh documentale tramite target dedicato `make graphify-platform-docs`
+  tentato: `chunk 1/1 failed: Connection error` e warning di risultati
+  parziali, pur con exit 0. Arricchimento semantico docs non verificato
+  nell'ambiente a rete limitata; non conteggiato come refresh riuscito.
+- Evidenze: `/tmp/gaia-api-request-{before,after}.json`,
+  `/tmp/gaia-api-request-characterization.log`,
+  `/tmp/gaia-api-request-regression.log`, directory
+  `/tmp/gaia-api-request-regression-coverage`,
+  `/tmp/gaia-api-request-ratchet-after.log` e log lint/types/quality/Graphify
+  con lo stesso prefisso. Nessuna failure applicativa o nel tooling.
+- Debito residuo: request conserva error cognitive/cyclomatic e warning LOC;
+  il nuovo decoder ha solo un warning cognitive. Iterazione chiusa su una
+  responsabilita; eventuale semplificazione successiva di timeout/abort
+  richiede una nuova slice. Nessun commit, push o secondo hotspot.
+
+### Network - URL amministrazione dispositivi (2026-10-01)
+
+- Hotspot unico: `getNetworkDeviceAdminUrl` in
+  `frontend/src/lib/network-device-utils.ts`, checkout `main@af768d77`.
+  Organigramma e giornaliere affidati agli altri team; modifiche concorrenti
+  preservate. Orientamento e impatto verificati con Graphify frontend.
+- Invarianti: target assoluto HTTP/HTTPS prioritario; path relativo usa HTTPS
+  solo con prefisso metadata `https:`; poi sorgente HTTP valida, porta 443,
+  porta 80, infine null. Casing, porte, path, assenza di mutazioni e helper
+  distinti invariati. Target assente normalizzato a stringa vuota e rami
+  appiattiti; nessun nuovo callable o contratto.
+- Prima/dopo: cognitiva `22 -> 18`, ciclomatica `12 -> 12`, LOC callable
+  `28 -> 24`, nesting `3 -> 2`. File: cognitiva aggregata `48 -> 44`,
+  ciclomatica `39 -> 39`, LOC `84 -> 80`, nove callable invariati.
+  Esito `IMPROVED` sulla cognitiva, senza trasferimento del debito.
+  Restano due warning sul resolver, zero error.
+- Caratterizzazione prima della modifica: 30 test passati, compresi 20 casi
+  aggiunti su precedenza, casing, metadata assenti/malformati, porte esatte e
+  immutabilita. Dopo: stessi 30 test verdi; coverage full-file 100% statement
+  (`43/43`), branch (`54/54`), funzioni (`9/9`) e linee (`43/43`).
+- Ratchet mirato autorevole contro `origin/main`, merge-base `6b61fd27`:
+  PASS prima e dopo, `findings: []`. ESLint runtime/test e typecheck senza
+  incremental passati. Baseline, scope ed eccezioni non modificati;
+  nessuna sincronizzazione globale sul checkout concorrente.
+- Quality tooling: `make quality-test QUALITY_PYTHON=backend/.venv/bin/python`
+  passa con 83 test; diff whitespace mirato pulito. `baseline-verify`
+  globale restituisce `false` sul runtime modificato, senza aggiornamenti
+  della baseline per assorbire il checkout concorrente. Nessuna failure
+  nei test o nel ratchet mirati; conformita globale non dichiarata.
+- Graphify frontend aggiornato tramite `make graphify-frontend` (7.233 nodi,
+  17.414 archi); patch `OPENAI_BASE_URL` verificata gia applicata. Refresh
+  documentale con il target dedicato `make graphify-platform-docs` e modello
+  `gpt-reserve`: `chunk 1/1 done`, nessun warning di chunk semantico fallito;
+  artefatti dei grafi non versionati.
+- Evidenze: `/tmp/gaia-network-url-{before,after}.json`,
+  `/tmp/gaia-network-url-characterization.log`,
+  `/tmp/gaia-network-url-tests-after.log`,
+  `/tmp/gaia-network-url-after-coverage/coverage-final.json` e
+  `/tmp/gaia-network-url-ratchet-after.log`.
+- Iterazione delimitata al resolver; prossima azione separata: selezionare
+  una responsabilita con caratterizzazione disponibile fuori dai perimetri
+  Organigramma e giornaliere. Nessun commit o secondo hotspot.
+
 ### Poste Online - aggregazione contatori import worker (2026-09-28)
 
 - Hotspot unico: `_persist_scrape_payload` in `posta_online_sync.py`, nella
