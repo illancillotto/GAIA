@@ -49,6 +49,36 @@ function notice(overrides: Partial<AnagraficaPaymentNotice>): AnagraficaPaymentN
 }
 
 describe("utenze payment notices summary", () => {
+  test.each(["paid", "partial", "unpaid"] as const)(
+    "preserves explicit %s status over contradictory derived states", (status) => {
+      for (const overrides of [
+        { importo_residuo: "0", data_pagamento: "2026-10-02", stato_label: "Pagato" },
+        { importo_carico: "100", importo_residuo: "60", importo_riscosso: "40" },
+        { importo_carico: "100", importo_residuo: "100", stato_label: "Non pagato" },
+      ]) {
+        const item = notice({ ...overrides, payment_status: status });
+        const original = structuredClone(item);
+        expect(getPaymentNoticeStatus(item)).toBe(status);
+        expect(item).toEqual(original);
+      }
+    },
+  );
+
+  test.each([undefined, null, "", "PAID", " paid", "pending", "toString", "__proto__"])(
+    "preserves derived classification for unrecognized explicit status %s", (status) => {
+      for (const [overrides, expected] of [
+        [{ importo_residuo: "0" }, "paid"],
+        [{ importo_carico: "100", importo_residuo: "60" }, "partial"],
+        [{ importo_carico: "100", importo_residuo: "100" }, "unpaid"],
+      ] as const) {
+        const item = notice({ ...overrides, payment_status: status as AnagraficaPaymentNotice["payment_status"] });
+        const original = structuredClone(item);
+        expect(getPaymentNoticeStatus(item)).toBe(expected);
+        expect(item).toEqual(original);
+      }
+    },
+  );
+
   test("parses decimal-dot amounts with long fractional tails as decimals", () => {
     expect(parseNoticeAmount("1499.7100000000000")).toBe(1499.71);
     expect(parseNoticeAmount("1.499,71")).toBe(1499.71);

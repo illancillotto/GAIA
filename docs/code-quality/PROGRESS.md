@@ -3,6 +3,39 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Utenze - riconoscimento degli stati espliciti degli avvisi (2026-10-02)
+
+- Hotspot unico: `getPaymentNoticeStatus`, checkout `main@1e6e2677`;
+  runtime/test puliti, Graphify frontend consultato, altri team esclusi.
+- Prima: cognitiva `22`, ciclomatica `14`, LOC `15`, nesting `1`;
+  otto callable e tre warning nel file, zero error. Suite iniziale sette
+  test verdi e full-file 100% su tutte le metriche.
+- Slice: lookup tipizzato dei tre stati espliciti ammessi, senza alterare
+  parsing degli importi, classificazione derivata, riepiloghi o soglie.
+  Invarianti: stato esplicito prioritario, matching esatto case-sensitive,
+  stato sconosciuto/nullish usa gli stessi fallback finanziari e label;
+  nessuna mutazione.
+- Caratterizzazione: 11 nuovi casi, tutti gli stati espliciti contro tre
+  classificazioni derivate contraddittorie, valori nullish/sconosciuti,
+  casing/whitespace e chiavi prototype; immutabilita verificata.
+  Suite prima/dopo 18 test verdi e full-file 100% su tutte le metriche.
+- Dopo: cognitiva `22 -> 18`, ciclomatica `14 -> 12`, LOC `15 -> 14`,
+  nesting `1` invariato. Callback find `0/1/1/0`, nessuna violation;
+  aggregati file cognitiva `55 -> 51`, ciclomatica `45 -> 44`, LOC `77 -> 76`,
+  callable `8 -> 9`. Esito `IMPROVED`, debito non trasferito; tre warning
+  legacy e zero error invariati (stato avvisi e riepilogo ancora sopra soglia).
+- Coverage dopo: statement `47/47`, branch `61/61`, funzioni `9/9`,
+  linee `38/38`. Ratchet mirato autorevole contro `origin/main` PASS prima
+  e dopo, merge-base `6b61fd27`, `findings: []`; baseline/scope invariati.
+  ESLint, typecheck senza incremental, 144 test tooling e diff whitespace verdi.
+- Graphify frontend aggiornato; refresh platform docs completato con
+  `chunk 1/1 done`, senza warning di chunk semantici falliti.
+  Evidenze `/tmp/gaia-payment-status-{before,after}.{json,md}`, log initial/
+  characterization/after/ratchet-before/ratchet-after/lint/types/quality e
+  Graphify con lo stesso prefisso. Nessuna conformita globale dichiarata.
+  Un solo hotspot, commit isolato dopo i gate secondo l'autorizzazione
+  vigente; nessun push, modifiche degli altri team preservate.
+
 ### Network - parsing della sorgente HTTP amministrativa (2026-10-02)
 
 - Hotspot unico: `getNetworkDeviceAdminUrl`, checkout `main@3e4d6801`;

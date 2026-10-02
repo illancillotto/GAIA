@@ -43,9 +43,8 @@ export function isPaidLikeStatus(value: string | null | undefined): boolean {
 }
 
 export function getPaymentNoticeStatus(notice: AnagraficaPaymentNotice): PaymentNoticeStatus {
-  if (notice.payment_status === "paid" || notice.payment_status === "partial" || notice.payment_status === "unpaid") {
-    return notice.payment_status;
-  }
+  const explicitStatus = (["paid", "partial", "unpaid"] as const).find((status) => status === notice.payment_status);
+  if (explicitStatus) return explicitStatus;
   const residuo = parseNoticeAmount(notice.importo_residuo);
   const riscosso = parseNoticeAmount(notice.importo_riscosso) ?? 0;
   const carico = parseNoticeAmount(notice.importo_carico);
