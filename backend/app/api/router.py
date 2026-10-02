@@ -1,28 +1,32 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.modules.accessi.router import router as accessi_router
-from app.modules.utenze.router import router as utenze_router
-from app.modules.utenze.anpr.routes import router as utenze_anpr_router
+from app.modules.accessi.user_management_policy import require_not_ced
 from app.modules.catasto.router import router as catasto_router
 from app.modules.core.router import router as core_router
 from app.modules.elaborazioni.router import router as elaborazioni_router
 from app.modules.gis.router import router as gis_router
 from app.modules.inventory.router import router as inventory_router
-from app.modules.presenze.gate_router import router as gate_presenze_router
-from app.modules.presenze.router import router as presenze_router
 from app.modules.me.router import router as me_router
 from app.modules.me.straordinari_period_router import router as me_straordinari_period_router
 from app.modules.network.router import router as network_router
 from app.modules.operazioni.router import router as operazioni_router
-from app.modules.organigramma.router import router as organigramma_router
 from app.modules.operazioni.routes.mobile_sync import router as mobile_sync_router
-from app.modules.operazioni.routes.operator_invitations import public_router as operator_invitations_public_router
+from app.modules.operazioni.routes.operator_invitations import (
+    public_router as operator_invitations_public_router,
+)
+from app.modules.organigramma.router import router as organigramma_router
+from app.modules.presenze.gate_router import router as gate_presenze_router
+from app.modules.presenze.router import router as presenze_router
 from app.modules.riordino.bootstrap import router as riordino_router
 from app.modules.ruolo.router import router as ruolo_router
-from app.modules.ruolo.routes.query_routes import catasto_router as catasto_parcels_router
+from app.modules.ruolo.routes.query_routes import (
+    catasto_router as catasto_parcels_router,
+)
 from app.modules.search.router import router as search_router
+from app.modules.utenze.anpr.routes import router as utenze_anpr_router
+from app.modules.utenze.router import router as utenze_router
 from app.modules.wiki.router import router as wiki_router
-
 
 api_router = APIRouter()
 api_router.include_router(core_router)
@@ -36,7 +40,7 @@ api_router.include_router(presenze_router)
 api_router.include_router(gate_presenze_router)
 api_router.include_router(me_router)
 api_router.include_router(me_straordinari_period_router)
-api_router.include_router(network_router)
+api_router.include_router(network_router, dependencies=[Depends(require_not_ced)])
 api_router.include_router(utenze_router, prefix="/utenze")
 api_router.include_router(utenze_anpr_router)
 api_router.include_router(operazioni_router)

@@ -379,6 +379,11 @@ La documentazione di dominio fa riferimento a `domain-docs/utenze/`.
 
 Il modulo `Utenti GAIA` supporta ora:
 
+- ruolo applicativo `ced` per gestione degli account standard e dei moduli
+  delegabili, senza accesso o assegnazione NAS/Rete e senza privilegi Admin;
+  contratto e verifica finale in
+  `domain-docs/accessi/docs/CED_USER_MANAGEMENT_VALIDATION.md`
+
 - creazione utente con invio mail di attivazione
 - attivazione password tramite link monouso
 - ripristino password self-service dalla pagina login

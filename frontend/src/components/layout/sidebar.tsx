@@ -10,23 +10,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { ModuleSidebar } from "@/components/layout/module-sidebar";
 import { PlatformSidebar } from "@/components/layout/platform-sidebar";
 import { ChevronRightIcon, CloseIcon, UserIcon } from "@/components/ui/icons";
-
-type CurrentModuleKey =
-  | "nas_control"
-  | "me"
-  | "network"
-  | "inventory"
-  | "gis"
-  | "catasto"
-  | "elaborazioni"
-  | "utenze"
-  | "gaia"
-  | "operazioni"
-  | "riordino"
-  | "ruolo"
-  | "presenze"
-  | "organigramma"
-  | "wiki";
+import { canManageGaiaUsers as canManageUsers, getCurrentModuleKey, getCurrentModuleLabel, type CurrentModuleKey } from "@/components/layout/navigation";
 
 type SidebarProps = {
   currentUser: CurrentUser;
@@ -47,52 +31,10 @@ type SidebarContentProps = SidebarProps & {
   canManageGaiaUsers: boolean;
 };
 
-function getCurrentModuleKey(pathname: string): CurrentModuleKey {
-  if (pathname.startsWith("/gaia/users")) return "gaia";
-  if (pathname.startsWith("/me")) return "me";
-  if (pathname.startsWith("/nas-control")) return "nas_control";
-  if (pathname.startsWith("/elaborazioni")) return "elaborazioni";
-  if (pathname.startsWith("/gis")) return "gis";
-  if (pathname.startsWith("/catasto")) return "catasto";
-  if (pathname.startsWith("/utenze") || pathname.startsWith("/anagrafica")) return "utenze";
-  if (pathname.startsWith("/network")) return "network";
-  if (pathname.startsWith("/inventory")) return "inventory";
-  if (pathname.startsWith("/operazioni")) return "operazioni";
-  if (pathname.startsWith("/riordino")) return "riordino";
-  if (pathname.startsWith("/ruolo")) return "ruolo";
-  if (pathname.startsWith("/presenze")) return "presenze";
-  if (pathname.startsWith("/organigramma")) return "organigramma";
-  if (pathname.startsWith("/wiki")) return "wiki";
-  return "nas_control";
-}
-
-function getCurrentModuleLabel(currentModuleKey: CurrentModuleKey): string {
-  const labels: Record<CurrentModuleKey, string> = {
-    gaia: "Utenti GAIA",
-    me: "La mia attività",
-    nas_control: "NAS Control",
-    elaborazioni: "Elaborazioni",
-    gis: "GIS Platform",
-    catasto: "Catasto",
-    utenze: "Utenze",
-    network: "Rete",
-    inventory: "Inventario",
-    operazioni: "Operazioni",
-    riordino: "Riordino",
-    ruolo: "Ruolo",
-    presenze: "Presenze",
-    organigramma: "Organigramma",
-    wiki: "Wiki",
-  };
-  return labels[currentModuleKey];
-}
-
 function getSidebarState(currentUser: CurrentUser, pathname: string) {
   const currentModuleKey = getCurrentModuleKey(pathname);
   const currentModuleLabel = getCurrentModuleLabel(currentModuleKey);
-  const canManageGaiaUsers =
-    (currentUser.role === "admin" || currentUser.role === "super_admin") &&
-    currentUser.enabled_modules.includes("accessi");
+  const canManageGaiaUsers = canManageUsers(currentUser);
   return { currentModuleKey, currentModuleLabel, canManageGaiaUsers };
 }
 

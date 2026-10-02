@@ -12,6 +12,12 @@ un backend monolitico modulare, un frontend condiviso e un database unico.
 
 ## 2. Obiettivo di prodotto
 
+La gestione account in `/gaia/users` supporta il ruolo applicativo `ced`,
+subordinato ad Admin e Super Admin e limitato a utenti standard e moduli
+delegabili. NAS/Rete, account privilegiati e override amministrativi restano
+esclusi. Requisiti ed evidenze nel dominio Accessi:
+`domain-docs/accessi/docs/CED_USER_MANAGEMENT_VALIDATION.md`.
+
 Fornire un unico punto di accesso operativo per:
 
 - audit e review degli accessi al NAS

@@ -6,6 +6,37 @@
 
 ## 1. Panoramica
 
+### Gestione delegata utenti GAIA: CED
+
+Il ruolo applicativo `ced` accede a `/gaia/users` senza richiedere il modulo
+`accessi`. Non eredita i privilegi di Admin o Super Admin: gestisce soltanto
+account con ruolo `viewer`, `reviewer`, `hr_manager` o `operator`, mai il proprio
+account o account CED/amministrativi. Admin e Super Admin possono assegnare CED;
+solo Super Admin puo assegnare `super_admin`, anche attraverso un aggiornamento.
+
+CED puo creare/modificare account standard, inviare inviti, cambiare il loro
+stato e assegnare i moduli `inventario`, `dotazioni`, `gis`, `catasto`, `utenze`,
+`operazioni`, `riordino`, `ruolo`, `presenze` e `organigramma`. L'elenco e esplicito:
+moduli futuri restano esclusi. Le abilitazioni gia presenti a NAS (`accessi`) e
+Rete (`rete`) devono restare invariate. CED non accede direttamente a NAS o Rete,
+anche in presenza di flag residui sul suo account.
+
+Gli override di sezione, le credenziali QGIS Desktop e l'eliminazione definitiva
+restano alle policy amministrative esistenti. Il catalogo e i permessi risolti
+sono consultabili; l'elenco API utenti resta consultabile, mentre l'interfaccia
+CED presenta solo gli account standard. La policy condivisa backend vive in
+`app/modules/accessi/user_management_policy.py`; copre create, update, inviti
+e PATCH moduli. Le API NAS e Network negano esplicitamente l'accesso a CED.
+I permessi di sezione CED usano il livello base viewer, senza ereditare HR/admin.
+
+Il campo persistito `application_users.role` e una stringa: l'introduzione di
+CED non richiede una migrazione o la creazione automatica di account.
+
+Il commit CED non introduce il modulo Dotazioni, le sue colonne o le sue
+route: la voce nella whitelist descrive la delega quando il modulo e
+disponibile. L'integrazione Dotazioni e un ciclo separato, non un prerequisito
+per gestire gli altri moduli standard.
+
 L'architettura adotta una separazione netta tra frontend, backend API, database relazionale e reverse proxy. Il design e pensato per un contesto enterprise interno con esposizione controllata su rete privata o VPN.
 
 ## 2. Componenti

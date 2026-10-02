@@ -35,6 +35,8 @@ import type { ApplicationUser, CurrentUser, SectionResponse, UserPermissionsAdmi
 import { clearPresenceAction, recordPresenceAction } from "@/lib/presence-actions";
 import { GaiaRoleField } from "@/components/accessi/gaia-role-field";
 import { UserQgisDesktopAccessPanel } from "@/components/app/user-qgis-desktop-access-panel";
+import { canManageGaiaUsers } from "@/components/layout/navigation";
+import { assignableRoles, canEditUserSectionPermissions, delegableModules, gaiaRoleOptions as roleOptions, managedUsers, userManagementAccess } from "@/lib/user-management-policy";
 
 type GaiaUserRow = {
   id: number;
@@ -116,15 +118,6 @@ const emptyFormState: UserFormState = {
   modulePresenze: false,
 };
 
-const roleOptions = [
-  { value: "operator", label: "Operatore" },
-  { value: "viewer", label: "Viewer" },
-  { value: "reviewer", label: "Reviewer" },
-  { value: "hr_manager", label: "HR Manager" },
-  { value: "admin", label: "Admin" },
-  { value: "super_admin", label: "Super Admin" },
-];
-
 const emptyPresenceSummary: UserPresenceSummary = {
   window_minutes: 15,
   active_users: 0,
@@ -176,55 +169,33 @@ function formatPresenceRecency(minutes: number): string {
 }
 
 function formatModules(user: ApplicationUser): string {
-  const labels: string[] = [];
-
-  if (user.module_accessi) {
-    labels.push("NAS Control");
-  }
-  if (user.module_rete) {
-    labels.push("Rete");
-  }
-  if (user.module_inventario) {
-    labels.push("Inventario");
-  }
-  if (user.module_gis) {
-    labels.push("GIS Platform");
-  }
-  if (user.module_catasto) {
-    labels.push("Catasto");
-  }
-  if (user.module_utenze) {
-    labels.push("Utenze");
-  }
-  if (user.module_operazioni) {
-    labels.push("Operazioni");
-  }
-  if (user.module_riordino) {
-    labels.push("Riordino");
-  }
-  if (user.module_ruolo) {
-    labels.push("Ruolo");
-  }
-  if (user.module_presenze) {
-    labels.push("Giornaliere");
-  }
-
-  return labels.length > 0 ? labels.join(", ") : "Nessun modulo";
+  const labels: [boolean | undefined, string][] = [
+    [user.module_accessi, "NAS Control"], [user.module_rete, "Rete"],
+    [user.module_inventario, "Inventario"], [user.module_gis, "GIS Platform"],
+    [user.module_catasto, "Catasto"], [user.module_utenze, "Utenze"],
+    [user.module_operazioni, "Operazioni"], [user.module_riordino, "Riordino"],
+    [user.module_ruolo, "Ruolo"], [user.module_presenze, "Giornaliere"],
+  ];
+  return labels.filter(([enabled]) => enabled).map(([, label]) => label).join(", ") || "Nessun modulo";
 }
 
 function countEnabledModules(user: ApplicationUser): number {
-  return [
-    user.module_accessi,
-    user.module_rete,
-    user.module_inventario,
-    user.module_gis,
-    user.module_catasto,
-    user.module_utenze,
-    user.module_operazioni,
-    user.module_riordino,
-    user.module_ruolo,
-    user.module_presenze,
-  ].filter(Boolean).length;
+  return moduleOptions.filter(({ moduleKey }) => user[`module_${moduleKey}` as keyof ApplicationUser]).length;
+}
+
+function buildModulePayload(formState: UserFormState) {
+  return {
+    module_accessi: formState.moduleAccessi,
+    module_rete: formState.moduleRete,
+    module_inventario: formState.moduleInventario,
+    module_gis: formState.moduleGis,
+    module_catasto: formState.moduleCatasto,
+    module_utenze: formState.moduleUtenze,
+    module_operazioni: formState.moduleOperazioni,
+    module_riordino: formState.moduleRiordino,
+    module_ruolo: formState.moduleRuolo,
+    module_presenze: formState.modulePresenze,
+  };
 }
 
 export default function GaiaUsersPage() {
@@ -256,6 +227,8 @@ export default function GaiaUsersPage() {
   const deferredSectionSearchTerm = useDeferredValue(sectionSearchTerm);
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? null;
   const isEditMode = selectedUser !== null;
+  const availableModuleOptions = delegableModules(moduleOptions, currentUser);
+  const managementAccess = userManagementAccess(currentUser);
   useEffect(() => {
     async function loadPage() {
       const token = getStoredAccessToken();
@@ -264,13 +237,13 @@ export default function GaiaUsersPage() {
       try {
         const sessionUser = await getCurrentUser(token);
         setCurrentUser(sessionUser);
-        if ((sessionUser.role === "admin" || sessionUser.role === "super_admin") && sessionUser.enabled_modules.includes("accessi")) {
+        if (canManageGaiaUsers(sessionUser)) {
           const [items, sections, presence] = await Promise.all([
             listAllApplicationUsers(token),
             listSectionCatalog(token, { activeOnly: true }),
             getPresenceSummary(token, { windowMinutes: 15 }).catch(() => emptyPresenceSummary),
           ]);
-          setUsers(items);
+          setUsers(managedUsers(items, sessionUser));
           setSectionCatalog(sections);
           setPresenceSummary(presence);
         } else {
@@ -508,12 +481,7 @@ export default function GaiaUsersPage() {
     () => new Map(groupSectionsByModule(visibleCatalogSections)),
     [visibleCatalogSections],
   );
-  const canEditSectionOverrides = Boolean(
-    currentUser
-    && selectedUser
-    && (currentUser.role === "super_admin" || selectedUser.role !== "super_admin")
-    && !(currentUser.role === "admin" && (selectedUser.role === "admin" || selectedUser.role === "super_admin")),
-  );
+  const canEditSectionOverrides = canEditUserSectionPermissions(currentUser, selectedUser);
   const activeComponentModule = useMemo(
     () => moduleOptions.find((option) => option.moduleKey === componentModalModuleKey) ?? null,
     [componentModalModuleKey],
@@ -653,7 +621,7 @@ export default function GaiaUsersPage() {
       listAllApplicationUsers(token),
       getPresenceSummary(token, { windowMinutes: 15 }).catch(() => emptyPresenceSummary),
     ]);
-    setUsers(items);
+    setUsers(managedUsers(items, currentUser));
     setPresenceSummary(presence);
   }
 
@@ -672,16 +640,7 @@ export default function GaiaUsersPage() {
           password: formState.password.trim().length > 0 ? formState.password : undefined,
           role: formState.role,
           is_active: formState.isActive,
-          module_accessi: formState.moduleAccessi,
-          module_rete: formState.moduleRete,
-          module_inventario: formState.moduleInventario,
-          module_gis: formState.moduleGis,
-          module_catasto: formState.moduleCatasto,
-          module_utenze: formState.moduleUtenze,
-          module_operazioni: formState.moduleOperazioni,
-          module_riordino: formState.moduleRiordino,
-          module_ruolo: formState.moduleRuolo,
-          module_presenze: formState.modulePresenze,
+          ...buildModulePayload(formState),
         });
         setSuccessMessage(`Utente ${selectedUser.username} aggiornato.`);
       } else {
@@ -691,16 +650,7 @@ export default function GaiaUsersPage() {
           password: formState.password.trim().length > 0 ? formState.password : undefined,
           role: formState.role,
           is_active: formState.isActive,
-          module_accessi: formState.moduleAccessi,
-          module_rete: formState.moduleRete,
-          module_inventario: formState.moduleInventario,
-          module_gis: formState.moduleGis,
-          module_catasto: formState.moduleCatasto,
-          module_utenze: formState.moduleUtenze,
-          module_operazioni: formState.moduleOperazioni,
-          module_riordino: formState.moduleRiordino,
-          module_ruolo: formState.moduleRuolo,
-          module_presenze: formState.modulePresenze,
+          ...buildModulePayload(formState),
         });
         if (formState.sendInviteEmail) {
           await sendApplicationUserInvite(token, createdUser.id);
@@ -816,7 +766,7 @@ export default function GaiaUsersPage() {
         ) : null}
 
         <div className="grid gap-4 lg:grid-cols-12">
-          {isEditMode && selectedUser ? (
+          {managementAccess.canManageQgis && selectedUser ? (
             <UserQgisDesktopAccessPanel user={selectedUser} />
           ) : null}
           <label className="block text-sm font-medium text-gray-700 lg:col-span-6">
@@ -868,7 +818,7 @@ export default function GaiaUsersPage() {
 
           <GaiaRoleField
             value={formState.role}
-            options={roleOptions}
+            options={assignableRoles(currentUser)}
             canAssignSuperAdmin={currentUser?.role === "super_admin"}
             onChange={(value) => updateFormState("role", value)}
           />
@@ -1115,7 +1065,7 @@ export default function GaiaUsersPage() {
             ) : null}
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {moduleOptions.map((option) => {
+              {availableModuleOptions.map((option) => {
                 const moduleSectionKeys = getModuleSectionKeys(option.moduleKey);
                 const moduleSections = moduleSectionKeys
                   .flatMap((moduleKey) => allCatalogSectionsByModule.get(moduleKey) ?? []);
@@ -1218,8 +1168,8 @@ export default function GaiaUsersPage() {
       title="Utenti GAIA"
       description="Gestione degli utenti applicativi di GAIA, con ruoli, stato account e moduli abilitati."
       breadcrumb="Amministrazione"
-      requiredModule="accessi"
-      requiredRoles={["admin", "super_admin"]}
+      requiredModule={managementAccess.requiredModule}
+      requiredRoles={["admin", "super_admin", "ced"]}
     >
       {toast ? (
         <div className="pointer-events-none fixed inset-x-0 top-1/2 z-[80] flex -translate-y-1/2 justify-center px-4">

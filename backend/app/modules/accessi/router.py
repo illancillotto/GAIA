@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.modules.accessi.routes.admin_users import router as admin_users_router
 from app.modules.accessi.routes.audit import router as audit_router
@@ -12,14 +12,15 @@ from app.modules.accessi.routes.section_permissions import (
     sections_router,
 )
 from app.modules.accessi.routes.sync import router as sync_router
+from app.modules.accessi.user_management_policy import require_not_ced
 
 router = APIRouter()
-router.include_router(audit_router)
+router.include_router(audit_router, dependencies=[Depends(require_not_ced)])
 router.include_router(auth_router)
 router.include_router(presence_router)
 router.include_router(org_structure_router)
-router.include_router(permissions_router)
-router.include_router(sync_router)
+router.include_router(permissions_router, dependencies=[Depends(require_not_ced)])
+router.include_router(sync_router, dependencies=[Depends(require_not_ced)])
 router.include_router(admin_users_router)
 router.include_router(auth_permissions_router)
 router.include_router(sections_router)

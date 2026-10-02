@@ -5,6 +5,17 @@
 
 ## 1. Obiettivo Operativo
 
+### Ciclo CED — 2026-10-02
+
+- [x] Policy backend centralizzata per gestione utenti standard e moduli delegabili.
+- [x] Blocco NAS/Rete, ruoli privilegiati, account CED e proprie abilitazioni.
+- [x] Integrazione pagina Utenti GAIA e navigazione, senza abilitare NAS Control.
+- [x] Test di API, persistenza, failure path, autorizzazione e regressione UI.
+- [x] Contratto tecnico e matrice di validazione documentati.
+- [ ] Chiusura del gate globale: vedere i controlli e i residui effettivi in
+  `CED_USER_MANAGEMENT_VALIDATION.md`; nessun PASS implicito.
+- [ ] Deploy e verifica operativa su `gaia.lan`, fuori dal ciclo locale.
+
 Creare una base di progetto ordinata e avviabile, pronta per uno sviluppo incrementale dei moduli di audit NAS, review e reporting.
 
 ## 2. Fasi

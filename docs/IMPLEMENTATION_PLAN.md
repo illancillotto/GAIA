@@ -6,6 +6,13 @@
 > Regola repository
 > Backend unico, moduli logici separati. Nuove implementazioni backend vanno in `backend/app/modules/<modulo>/`.
 
+## Ciclo CED — 2026-10-02
+
+Gestione delegata utenti standard implementata e caratterizzata. Nessuna
+migrazione, dipendenza nuova o architettura parallela. Consolidamento finale e
+residui: `domain-docs/accessi/docs/CED_USER_MANAGEMENT_VALIDATION.md`.
+Chiusura PASS e distribuzione restano subordinate ai controlli effettivi.
+
 ## 1. Obiettivo del progetto
 
 Realizzare una piattaforma web interna per il Consorzio di Bonifica dell'Oristanese che consenta di:

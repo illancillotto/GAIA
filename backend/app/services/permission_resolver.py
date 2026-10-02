@@ -7,6 +7,7 @@ from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.section_permission import RoleSectionPermission, Section, UserSectionPermission
 
 ROLE_HIERARCHY: dict[str, int] = {
+    ApplicationUserRole.CED.value: 1,
     ApplicationUserRole.OPERATOR.value: 1,
     ApplicationUserRole.VIEWER.value: 1,
     ApplicationUserRole.REVIEWER.value: 2,
@@ -107,10 +108,7 @@ def _resolved_priority(section: Section, resolved: ResolvedPermission) -> tuple[
 
 
 def resolve_user_permissions(db: Session, user: ApplicationUser) -> list[ResolvedPermission]:
-    if user.is_super_admin:
-        enabled_modules = ["accessi", "rete", "inventario", "gis", "catasto", "utenze", "operazioni", "riordino", "ruolo", "presenze", "organigramma"]
-    else:
-        enabled_modules = user.enabled_modules
+    enabled_modules = user.enabled_modules
 
     if not enabled_modules:
         return []

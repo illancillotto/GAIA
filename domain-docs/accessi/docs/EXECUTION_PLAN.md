@@ -5,6 +5,15 @@
 
 ## Obiettivo
 
+### Consolidamento CED — 2026-10-02
+
+Implementazione completata nel monolite modulare, senza nuove dipendenze o
+migrazioni. Verifica finale circoscritta a gestione utenti, permessi e navigazione;
+report autorevole: `CED_USER_MANAGEMENT_VALIDATION.md`. Le failure globali o i
+controlli non eseguibili restano espliciti e impediscono la chiusura PASS.
+Commit del perimetro CED autorizzato dopo la riverifica, mantenendo esplicito
+il gate FAIL. Distribuzione e refactoring di altri domini restano esclusi.
+
 Guidare l'implementazione del progetto in milestone piccole, verificabili e testabili in autonomia, mantenendo allineati codice, documentazione, CI e progress tracking.
 
 ## Principi Operativi

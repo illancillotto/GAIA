@@ -334,6 +334,27 @@ describe("Gaia users page", () => {
     expect(getModuleCheckbox("Operazioni").checked).toBe(false);
   });
 
+  test("CED manages standard users without NAS, Network or privileged roles", async () => {
+    mocks.getCurrentUser.mockResolvedValue({ ...buildCurrentUser(), role: "ced", enabled_modules: [] });
+    mocks.listAllApplicationUsers.mockResolvedValue([
+      buildUser(), buildUser({ id: 2, username: "root", role: "super_admin" }),
+      buildUser({ id: 3, username: "ced-peer", role: "ced" }),
+    ]);
+    render(<GaiaUsersPage />);
+    await screen.findByRole("button", { name: "mrossi" });
+    expect(screen.queryByRole("button", { name: "root" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "ced-peer" })).not.toBeInTheDocument();
+    const editor = (await screen.findByText("Nuovo utente GAIA")).closest("article") as HTMLElement;
+    expect(within(editor).queryByText("NAS Control")).not.toBeInTheDocument();
+    expect(within(editor).queryByText("Rete")).not.toBeInTheDocument();
+    expect(within(editor).queryByRole("option", { name: "Admin" })).not.toBeInTheDocument();
+    expect(within(editor).queryByRole("option", { name: "CED" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "mrossi" }));
+    await waitFor(() => expect(mocks.getApplicationUserPermissions).toHaveBeenCalled());
+    expect(mocks.getApplicationUserQgisDesktopAccess).not.toHaveBeenCalled();
+    expect(screen.queryByText("Permessi modificabili")).not.toBeInTheDocument();
+  });
+
   test("handles missing token, denied access and load failures", async () => {
     mocks.getStoredAccessToken.mockReturnValueOnce(null);
     const missingTokenView = render(<GaiaUsersPage />);

@@ -5,6 +5,17 @@
 
 ## 1. Visione
 
+### Gestione utenti GAIA delegata al CED — implementata
+
+Il ruolo `ced` gestisce account standard (`operator`, `viewer`, `reviewer`,
+`hr_manager`) e i loro moduli esplicitamente delegabili. Non modifica account
+CED/Admin/Super Admin o proprie abilitazioni; non accede a NAS/Rete e non ne
+cambia i flag degli utenti. Override di sezione, credenziali QGIS Desktop ed
+eliminazione definitiva restano riservati alle policy amministrative esistenti.
+L'accesso a `/gaia/users` e indipendente da NAS Control. Nessun account CED viene
+creato automaticamente. Contratto: `ARCHITECTURE.md`; evidenze e gate finale:
+`CED_USER_MANAGEMENT_VALIDATION.md`. La distribuzione su `gaia.lan` resta residua.
+
 NAS Access Audit Platform e una piattaforma interna per governare gli accessi al NAS Synology in modo verificabile, leggibile e compatibile con processi di audit amministrativo.
 
 ## 2. Problema

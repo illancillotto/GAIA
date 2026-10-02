@@ -86,6 +86,20 @@ class ApplicationUserUpdate(BaseModel):
         return value
 
 
+class ApplicationUserModulesUpdate(BaseModel):
+    module_accessi: bool
+    module_rete: bool
+    module_inventario: bool
+    module_gis: bool = False
+    module_catasto: bool
+    module_utenze: bool
+    module_operazioni: bool
+    module_riordino: bool
+    module_ruolo: bool
+    module_presenze: bool
+    module_organigramma: bool = False
+
+
 class ApplicationUserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

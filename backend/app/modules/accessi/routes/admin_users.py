@@ -10,7 +10,12 @@ from app.api.deps import RequireAdmin, RequireSuperAdmin, require_module
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_action_token
-from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.models.application_user import ApplicationUser
+from app.modules.accessi.user_management_policy import (
+    RequireUserManager,
+    check_managed_user,
+    check_user_payload,
+)
 from app.modules.gis import qgis_desktop_access
 from app.modules.operazioni.models.wc_operator import WCOperator
 from app.repositories.application_user import (
@@ -26,6 +31,7 @@ from app.schemas.auth import ApplicationUserInviteResponse
 from app.schemas.users import (
     ApplicationUserCreate,
     ApplicationUserListResponse,
+    ApplicationUserModulesUpdate,
     ApplicationUserResponse,
     ApplicationUserUpdate,
     QgisDesktopAccessStatusResponse,
@@ -75,6 +81,16 @@ def _get_existing_user(db: Session, user_id: int) -> ApplicationUser:
     return user
 
 
+def _get_managed_user(
+    user_id: int,
+    current_user: Annotated[ApplicationUser, RequireUserManager],
+    db: Annotated[Session, Depends(get_db)],
+) -> ApplicationUser:
+    user = _get_existing_user(db, user_id)
+    check_managed_user(current_user, user)
+    return user
+
+
 def _password_fingerprint(password_hash: str) -> str:
     return hashlib.sha256(password_hash.encode("utf-8")).hexdigest()[:16]
 
@@ -102,7 +118,7 @@ def _build_activation_payload(user: ApplicationUser, request: Request) -> tuple[
     return token, expires_at, activation_url_path, activation_url
 
 
-@router.get("", response_model=ApplicationUserListResponse, response_model_exclude_none=True, dependencies=[RequireAdmin, RequireAccessiAdmin])
+@router.get("", response_model=ApplicationUserListResponse, response_model_exclude_none=True, dependencies=[RequireUserManager])
 def list_users(
     db: Annotated[Session, Depends(get_db)],
     skip: int = 0,
@@ -124,14 +140,13 @@ def list_users(
     )
 
 
-@router.post("", response_model=ApplicationUserResponse, response_model_exclude_none=True, dependencies=[RequireAdmin], status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ApplicationUserResponse, response_model_exclude_none=True, status_code=status.HTTP_201_CREATED)
 def create_user(
     payload: ApplicationUserCreate,
-    current_user: Annotated[ApplicationUser, RequireAccessiAdmin],
+    current_user: Annotated[ApplicationUser, RequireUserManager],
     db: Annotated[Session, Depends(get_db)],
 ) -> ApplicationUserResponse:
-    if payload.role == ApplicationUserRole.SUPER_ADMIN.value and not current_user.is_super_admin:
-        raise HTTPException(status_code=403, detail="Only super_admin can create super_admin users")
+    check_user_payload(current_user, payload.model_dump())
     if get_application_user_by_username(db, payload.username):
         raise HTTPException(status_code=409, detail="Username already exists")
     if get_application_user_by_email(db, str(payload.email)):
@@ -143,15 +158,12 @@ def create_user(
 @router.post(
     "/{user_id}/send-invite",
     response_model=ApplicationUserInviteResponse,
-    dependencies=[RequireAdmin, RequireAccessiAdmin],
+    dependencies=[RequireUserManager],
 )
 def send_user_invite(
-    user_id: int,
+    user: Annotated[ApplicationUser, Depends(_get_managed_user)],
     request: Request,
-    db: Annotated[Session, Depends(get_db)],
 ) -> ApplicationUserInviteResponse:
-    user = _get_existing_user(db, user_id)
-
     _, expires_at, activation_url_path, activation_url = _build_activation_payload(user, request)
     full_name = user.full_name or user.username
     send_email(
@@ -183,23 +195,22 @@ def send_user_invite(
     )
 
 
-@router.get("/{user_id}", response_model=ApplicationUserResponse, response_model_exclude_none=True, dependencies=[RequireAdmin, RequireAccessiAdmin])
+@router.get("/{user_id}", response_model=ApplicationUserResponse, response_model_exclude_none=True, dependencies=[RequireUserManager])
 def get_user(user_id: int, db: Annotated[Session, Depends(get_db)]) -> ApplicationUserResponse:
     user = _get_existing_user(db, user_id)
     gate_mobile_console = _build_gate_mobile_console_map(db, user_ids=[user.id]).get(user.id)
     return _serialize_application_user(user, gate_mobile_console=gate_mobile_console)
 
 
-@router.put("/{user_id}", response_model=ApplicationUserResponse, response_model_exclude_none=True, dependencies=[RequireAdmin])
+@router.put("/{user_id}", response_model=ApplicationUserResponse, response_model_exclude_none=True)
 def update_user(
     user_id: int,
     payload: ApplicationUserUpdate,
-    current_user: Annotated[ApplicationUser, RequireAccessiAdmin],
+    current_user: Annotated[ApplicationUser, RequireUserManager],
     db: Annotated[Session, Depends(get_db)],
 ) -> ApplicationUserResponse:
     user = _get_existing_user(db, user_id)
-    if user.is_super_admin and not current_user.is_super_admin:
-        raise HTTPException(status_code=403, detail="Cannot modify super_admin")
+    check_user_payload(current_user, payload.model_dump(exclude_unset=True), user)
     return _serialize_application_user(_update_user_and_revoke_qgis_if_needed(db, user, payload))
 
 
@@ -267,36 +278,15 @@ def delete_user(
     delete_application_user(db, user)
 
 
-@router.patch("/{user_id}/modules", response_model=ApplicationUserResponse, response_model_exclude_none=True, dependencies=[RequireAdmin, RequireAccessiAdmin])
+@router.patch("/{user_id}/modules", response_model=ApplicationUserResponse, response_model_exclude_none=True)
 def patch_user_modules(
-    user_id: int,
+    user: Annotated[ApplicationUser, Depends(_get_managed_user)],
     db: Annotated[Session, Depends(get_db)],
-    module_accessi: bool = Query(...),
-    module_rete: bool = Query(...),
-    module_inventario: bool = Query(...),
-    module_gis: bool = Query(False),
-    module_catasto: bool = Query(...),
-    module_utenze: bool = Query(...),
-    module_operazioni: bool = Query(...),
-    module_riordino: bool = Query(...),
-    module_ruolo: bool = Query(...),
-    module_presenze: bool = Query(...),
-    module_organigramma: bool = Query(False),
+    modules: Annotated[ApplicationUserModulesUpdate, Query()],
+    current_user: Annotated[ApplicationUser, RequireUserManager],
 ) -> ApplicationUserResponse:
-    user = _get_existing_user(db, user_id)
-    payload = ApplicationUserUpdate(
-        module_accessi=module_accessi,
-        module_rete=module_rete,
-        module_inventario=module_inventario,
-        module_gis=module_gis,
-        module_catasto=module_catasto,
-        module_utenze=module_utenze,
-        module_operazioni=module_operazioni,
-        module_riordino=module_riordino,
-        module_ruolo=module_ruolo,
-        module_presenze=module_presenze,
-        module_organigramma=module_organigramma,
-    )
-    if not module_gis:
+    payload = ApplicationUserUpdate(**modules.model_dump())
+    check_user_payload(current_user, payload.model_dump(exclude_unset=True), user)
+    if not modules.module_gis:
         qgis_desktop_access.disable_access(db, user, commit=False)
     return _serialize_application_user(update_application_user(db, user, payload))

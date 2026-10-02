@@ -1,14 +1,6 @@
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING
-
-try:
-    from enum import StrEnum
-except ImportError:  # pragma: no cover
-
-    class StrEnum(str, Enum):
-        pass
-
 
 from sqlalchemy import Boolean, DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -22,6 +14,7 @@ if TYPE_CHECKING:
 class ApplicationUserRole(StrEnum):
     SUPER_ADMIN = "super_admin"
     ADMIN = "admin"
+    CED = "ced"
     HR_MANAGER = "hr_manager"
     REVIEWER = "reviewer"
     VIEWER = "viewer"
@@ -92,27 +85,9 @@ class ApplicationUser(Base):
         if self.is_super_admin:
             return ["accessi", "rete", "inventario", "gis", "catasto", "utenze", "operazioni", "riordino", "ruolo", "presenze", "organigramma"]
 
-        modules: list[str] = []
-        if self.module_accessi:
-            modules.append("accessi")
-        if self.module_rete:
-            modules.append("rete")
-        if self.module_inventario:
-            modules.append("inventario")
-        if self.module_gis:
-            modules.append("gis")
-        if self.module_catasto:
-            modules.append("catasto")
-        if self.module_utenze:
-            modules.append("utenze")
-        if self.module_operazioni:
-            modules.append("operazioni")
-        if self.module_riordino:
-            modules.append("riordino")
-        if self.module_ruolo:
-            modules.append("ruolo")
-        if self.module_presenze:
-            modules.append("presenze")
-        if self.module_organigramma:
-            modules.append("organigramma")
-        return modules
+        module_keys = (
+            "accessi", "rete", "inventario", "gis", "catasto", "utenze",
+            "operazioni", "riordino", "ruolo", "presenze", "organigramma",
+        )
+        forbidden = {"accessi", "rete"} if self.role == ApplicationUserRole.CED.value else set()
+        return [key for key in module_keys if key not in forbidden and getattr(self, f"module_{key}")]

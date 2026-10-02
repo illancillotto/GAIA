@@ -35,6 +35,14 @@ function buildUser(overrides: Partial<CurrentUser> = {}): CurrentUser {
 }
 
 describe("layout navigation helpers", () => {
+  test("CED can manage GAIA users without NAS or network access", () => {
+    const ced = buildUser({ role: "ced" });
+    expect(canManageGaiaUsers(ced)).toBe(true);
+    expect(getAdminNavigationItems(ced)[0].href).toBe("/gaia/users");
+    expect(getAdminNavigationItems(ced)[1].disabled).toBe(true);
+    expect(getVisiblePlatformModules(ced).map((module) => module.href)).not.toContain("/network");
+    expect(getVisiblePlatformModules(ced).map((module) => module.href)).not.toContain("/nas-control");
+  });
   test("maps every supported route to the expected current module key", () => {
     const cases = [
       ["/gaia/users", "gaia"],

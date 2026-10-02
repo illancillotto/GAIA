@@ -9,6 +9,25 @@
 
 ## Data Riferimento
 
+### 2026-10-02 — ciclo CED
+
+Completati ruolo applicativo CED, policy centralizzata, blocchi API e UI,
+caratterizzazione dei moduli delegabili e verifica della persistenza sui rifiuti.
+Riverifica senza sandbox: 171 test backend e 106 frontend mirati verdi;
+coverage dei runtime del ciclo al 100%, branch inclusi. Due E2E CED, build
+isolata e Graphify codice/documentazione superati. Suite frontend completa:
+3677 passati e un timeout fuori scope (suite isolata verde).
+`FINAL QUALITY GATE — FAIL`: lint backend globale, ratchet preesistente,
+timeout della suite completa e ownership della cache `.next` condivisa.
+Commit CED autorizzato senza dichiarare chiuso il quality gate; cambiamenti
+concorrenti di altri domini esclusi. Matrice ed evidenze nel report
+`CED_USER_MANAGEMENT_VALIDATION.md`. Nessun deploy.
+
+Selezione isolata per il commit CED: 169 test backend, 105 frontend e 2 E2E
+passati; coverage 100% statement/branch, typecheck, build pulita e Ruff mirato
+verdi. I test e le integrazioni Dotazioni/Wiki concorrenti non sono inclusi.
+I residui del gate globale restano invariati e documentati nel report.
+
 - ultima analisi repository: 2026-03-20
 
 ## Stato Generale

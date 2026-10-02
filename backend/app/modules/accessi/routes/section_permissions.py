@@ -6,12 +6,13 @@ from sqlalchemy.orm import Session
 from app.api.deps import RequireAdmin, RequireSuperAdmin, require_active_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
+from app.modules.accessi.user_management_policy import RequireUserManager
 from app.repositories.application_user import get_application_user_by_id
 from app.repositories.section_permission import (
-    canonicalize_section_key,
-    canonicalize_section_module,
     bulk_update_role_permissions,
     bulk_update_user_permissions,
+    canonicalize_section_key,
+    canonicalize_section_module,
     create_section,
     deactivate_section,
     delete_user_override,
@@ -67,7 +68,7 @@ def _serialize_section(section) -> SectionResponse:
     )
 
 
-@sections_router.get("", response_model=list[SectionResponse], dependencies=[RequireAdmin])
+@sections_router.get("", response_model=list[SectionResponse], dependencies=[RequireUserManager])
 def get_sections(db: Annotated[Session, Depends(get_db)], module: str | None = None, active_only: bool = False):
     return [_serialize_section(s) for s in list_sections(db, module=module, active_only=active_only)]
 
@@ -120,7 +121,7 @@ def put_section_role_permissions(
     return [RoleSectionPermissionResponse.model_validate(item) for item in updated]
 
 
-@admin_permissions_router.get("/{user_id}/permissions", response_model=UserPermissionsAdminView, dependencies=[RequireAdmin])
+@admin_permissions_router.get("/{user_id}/permissions", response_model=UserPermissionsAdminView, dependencies=[RequireUserManager])
 def get_user_permissions(user_id: int, db: Annotated[Session, Depends(get_db)]):
     user = get_application_user_by_id(db, user_id)
     if user is None:

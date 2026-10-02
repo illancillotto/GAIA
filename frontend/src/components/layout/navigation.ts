@@ -20,6 +20,7 @@ import {
   UsersIcon,
 } from "@/components/ui/icons";
 import { hasUserModuleAccess } from "@/lib/module-access";
+import { canManageUsers as canManageGaiaUsers } from "@/lib/user-management-policy";
 import type { CurrentUser } from "@/types/api";
 
 import { presenzeNavigationSections } from "./presenze-navigation";
@@ -185,34 +186,22 @@ const sisterNavigationItems: NavigationItem[] = [
 ];
 
 export function getCurrentModuleKey(pathname: string): CurrentModuleKey {
-  if (pathname.startsWith("/gaia/users")) return "gaia";
-  if (pathname.startsWith("/me")) return "me";
-  if (pathname.startsWith("/nas-control")) return "nas_control";
-  if (pathname.startsWith("/elaborazioni")) return "elaborazioni";
-  if (pathname.startsWith("/gis")) return "gis";
-  if (pathname.startsWith("/catasto")) return "catasto";
-  if (pathname.startsWith("/utenze") || pathname.startsWith("/anagrafica")) return "utenze";
-  if (pathname.startsWith("/network")) return "network";
-  if (pathname.startsWith("/inventory")) return "inventory";
-  if (pathname.startsWith("/operazioni")) return "operazioni";
-  if (pathname.startsWith("/riordino")) return "riordino";
-  if (pathname.startsWith("/ruolo")) return "ruolo";
-  if (pathname.startsWith("/presenze")) return "presenze";
-  if (pathname.startsWith("/organigramma")) return "organigramma";
-  if (pathname.startsWith("/wiki")) return "wiki";
-  return "nas_control";
+  const routes: [string, CurrentModuleKey][] = [
+    ["/gaia/users", "gaia"], ["/me", "me"], ["/nas-control", "nas_control"],
+    ["/elaborazioni", "elaborazioni"], ["/gis", "gis"], ["/catasto", "catasto"],
+    ["/utenze", "utenze"], ["/anagrafica", "utenze"], ["/network", "network"],
+    ["/inventory", "inventory"], ["/operazioni", "operazioni"],
+    ["/riordino", "riordino"], ["/ruolo", "ruolo"], ["/presenze", "presenze"],
+    ["/organigramma", "organigramma"], ["/wiki", "wiki"],
+  ];
+  return routes.find(([prefix]) => pathname.startsWith(prefix))?.[1] ?? "nas_control";
 }
 
 export function getCurrentModuleLabel(currentModuleKey: CurrentModuleKey): string {
   return currentModuleLabels[currentModuleKey];
 }
 
-export function canManageGaiaUsers(currentUser: CurrentUser): boolean {
-  return (
-    (currentUser.role === "admin" || currentUser.role === "super_admin") &&
-    currentUser.enabled_modules.includes("accessi")
-  );
-}
+export { canManageUsers as canManageGaiaUsers } from "@/lib/user-management-policy";
 
 export function canAccessOperatorDashboard(currentUser: CurrentUser): boolean {
   return (
@@ -242,7 +231,7 @@ export function getAdminNavigationItems(currentUser: CurrentUser): NavigationIte
 
   return [
     item("/gaia/users", UserIcon, "Utenti GAIA", { match: "prefix" }),
-    item("/gaia/users/operatori-cruscotto", UserIcon, "Cruscotto operatori", { match: "prefix" }),
+    item("/gaia/users/operatori-cruscotto", UserIcon, "Cruscotto operatori", { match: "prefix", disabled: currentUser.role === "ced" }),
   ];
 }
 

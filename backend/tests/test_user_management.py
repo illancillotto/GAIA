@@ -68,6 +68,90 @@ def super_admin_modules() -> list[str]:
     return ["accessi", "rete", "inventario", "gis", "catasto", "utenze", "operazioni", "riordino", "ruolo", "presenze", "organigramma"]
 
 
+def test_ced_user_management_api_boundaries(monkeypatch: pytest.MonkeyPatch) -> None:
+    ced = create_user("ced", "ced")
+    standard = create_user("standard", "viewer")
+    admin = create_user("admin", "admin")
+    root = create_user("root", "super_admin")
+    headers = {"Authorization": f"Bearer {login('ced')}"}
+    assert client.get("/admin/users", headers=headers).status_code == 200
+    assert client.get("/sections", headers=headers).status_code == 200
+    assert client.get(f"/admin/users/{standard.id}/permissions", headers=headers).status_code == 200
+    response = client.post("/admin/users", headers=headers, json={
+        "username": "ced-created", "email": "ced-created@example.local",
+        "password": "secret123", "role": "viewer", "module_accessi": False,
+        "module_gis": True,
+    })
+    assert response.status_code == 201
+    assert response.json()["enabled_modules"] == ["gis"]
+    assert client.put(f"/admin/users/{standard.id}", headers=headers, json={"module_catasto": True}).status_code == 200
+    monkeypatch.setattr("app.modules.accessi.routes.admin_users.send_email", lambda **kwargs: None)
+    assert client.post(f"/admin/users/{standard.id}/send-invite", headers=headers).status_code == 200
+    for target in (ced, admin, root):
+        assert client.put(f"/admin/users/{target.id}", headers=headers, json={"is_active": False}).status_code == 403
+        assert client.post(f"/admin/users/{target.id}/send-invite", headers=headers).status_code == 403
+    for field, value in (("module_rete", True), ("module_accessi", False)):
+        assert client.put(f"/admin/users/{standard.id}", headers=headers, json={field: value}).status_code == 403
+    for role in ("ced", "admin", "super_admin"):
+        assert client.put(f"/admin/users/{standard.id}", headers=headers, json={"role": role}).status_code == 403
+    for path in ("/network/dashboard", "/nas-users", "/nas-groups", "/shares", "/reviews", "/effective-permissions", "/sync/capabilities"):
+        assert client.get(path, headers=headers).status_code == 403
+    assert client.delete(f"/admin/users/{standard.id}", headers=headers).status_code == 403
+    assert client.put(f"/admin/users/{standard.id}/permissions", headers=headers, json={"permissions": []}).status_code == 403
+    assert client.post(f"/admin/users/{standard.id}/qgis-desktop-access", headers=headers).status_code == 403
+    modules = {
+        "module_accessi": True, "module_rete": False, "module_inventario": False,
+        "module_catasto": True, "module_utenze": False, "module_operazioni": False,
+        "module_riordino": False, "module_ruolo": False, "module_presenze": False,
+    }
+    assert client.patch(f"/admin/users/{standard.id}/modules", headers=headers, params=modules).status_code == 200
+    assert client.patch(f"/admin/users/{standard.id}/modules", headers=headers, params={**modules, "module_rete": True}).status_code == 403
+    assert client.patch(f"/admin/users/{admin.id}/modules", headers=headers, params=modules).status_code == 403
+    assert client.put(f"/admin/users/{standard.id}", headers=headers, json={"role": None}).status_code == 422
+
+
+def test_ced_denials_are_atomic_and_inactive_sessions_are_rejected() -> None:
+    ced = create_user("ced", "ced")
+    standard = create_user("standard", "viewer")
+    headers = {"Authorization": f"Bearer {login('ced')}"}
+    with TestingSessionLocal() as db:
+        actor = db.get(ApplicationUser, ced.id)
+        actor.module_rete = True
+        db.commit()
+    rejected = client.put(
+        f"/admin/users/{standard.id}", headers=headers,
+        json={"full_name": "Must not persist", "module_rete": True, "is_active": False},
+    )
+    assert rejected.status_code == 403
+    for role in ("admin", "ced", "super_admin", "unknown"):
+        assert client.post("/admin/users", headers=headers, json={
+            "username": "must-not-exist", "email": "must-not-exist@example.local",
+            "role": role, "module_accessi": False,
+        }).status_code in {403, 422}
+    assert client.get("/network/dashboard", headers=headers).status_code == 403
+    assert client.get("/nas-users", headers=headers).status_code == 403
+    assert client.get("/admin/users").status_code == 401
+    with TestingSessionLocal() as db:
+        target = db.get(ApplicationUser, standard.id)
+        assert target.full_name is None
+        assert target.is_active is True
+        assert target.module_rete is False
+        assert db.query(ApplicationUser).filter_by(username="must-not-exist").count() == 0
+        actor = db.get(ApplicationUser, ced.id)
+        actor.is_active = False
+        db.commit()
+    assert client.get("/admin/users", headers=headers).status_code == 401
+    assert client.get("/sections", headers=headers).status_code == 401
+
+
+def test_admin_cannot_promote_standard_user_to_super_admin() -> None:
+    create_user("admin", "admin")
+    standard = create_user("standard", "viewer")
+    headers = {"Authorization": f"Bearer {login('admin')}"}
+    assert client.put(f"/admin/users/{standard.id}", headers=headers, json={"role": "super_admin"}).status_code == 403
+    assert client.put(f"/admin/users/{standard.id}", headers=headers, json={"role": "ced"}).status_code == 200
+
+
 def login(username: str, password: str = "secret123") -> str:
     resp = client.post("/auth/login", json={"username": username, "password": password})
     assert resp.status_code == 200

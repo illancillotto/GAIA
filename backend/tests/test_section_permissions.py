@@ -119,6 +119,44 @@ def test_super_admin_receives_ruolo_sections_in_my_permissions() -> None:
     assert "ruolo.dashboard" in mine_admin.json()["granted_keys"]
 
 
+def test_section_management_preserves_admin_boundaries_for_ced() -> None:
+    root = create_user("root", "super_admin")
+    admin = create_user("admin", "admin")
+    standard = create_user("standard", "viewer")
+    create_user("ced", "ced")
+    root_headers = {"Authorization": f"Bearer {login('root')}"}
+    admin_headers = {"Authorization": f"Bearer {login('admin')}"}
+    ced_headers = {"Authorization": f"Bearer {login('ced')}"}
+    payload = {"module": "gis", "key": "gis.ced-policy-test", "label": "CED policy test", "min_role": "viewer"}
+    created = client.post("/sections", headers=root_headers, json=payload)
+    assert created.status_code == 201
+    section_id = created.json()["id"]
+    path = f"/sections/{section_id}"
+    assert client.post("/sections", headers=root_headers, json=payload).status_code == 409
+    assert client.get(path, headers=root_headers).status_code == 200
+    assert client.get("/sections/99999", headers=root_headers).status_code == 404
+    assert client.put(path, headers=root_headers, json={"label": "Updated"}).status_code == 200
+    assert client.put("/sections/99999", headers=root_headers, json={"label": "Updated"}).status_code == 404
+    assert client.delete("/sections/99999", headers=root_headers).status_code == 404
+    assert client.put(f"{path}/role-permissions", headers=root_headers, json={"permissions": [{"role": "ced", "is_granted": True}]}).status_code == 200
+    permissions = {"permissions": [{"section_id": section_id, "is_granted": True}]}
+    user_path = f"/admin/users/{standard.id}/permissions"
+    assert client.put(user_path, headers=admin_headers, json=permissions).status_code == 200
+    assert client.get(user_path, headers=ced_headers).status_code == 200
+    assert client.put(f"/admin/users/{admin.id}/permissions", headers=admin_headers, json=permissions).status_code == 403
+    assert client.put(f"/admin/users/{root.id}/permissions", headers=root_headers, json=permissions).status_code == 200
+    assert client.get("/admin/users/99999/permissions", headers=root_headers).status_code == 404
+    assert client.put("/admin/users/99999/permissions", headers=root_headers, json=permissions).status_code == 404
+    assert client.put(user_path, headers=ced_headers, json=permissions).status_code == 403
+    assert client.delete(f"{user_path}/{section_id}", headers=ced_headers).status_code == 403
+    assert client.delete(f"{user_path}/{section_id}", headers=admin_headers).status_code == 204
+    assert client.post("/sections", headers=ced_headers, json={**payload, "key": "gis.ced-denied"}).status_code == 403
+    assert client.put(path, headers=ced_headers, json={"label": "Denied"}).status_code == 403
+    assert client.delete(path, headers=ced_headers).status_code == 403
+    assert client.put(f"{path}/role-permissions", headers=ced_headers, json={"permissions": []}).status_code == 403
+    assert client.delete(path, headers=root_headers).status_code == 200
+
+
 def test_operator_role_is_seeded_and_receives_viewer_level_sections() -> None:
     create_user("root", "super_admin")
     create_user("operatore", "operator")
