@@ -73,7 +73,7 @@ export function computeTreeInclusion(
   const matchIds = new Set<string>();
   for (const n of flat) {
     const matchType = typeFilter === "all" || n.tipo === typeFilter;
-    const matchText = !q || n.nome.toLowerCase().includes(q);
+    const matchText = n.nome.toLowerCase().includes(q);
     if (matchType && matchText) matchIds.add(n.id);
   }
 

@@ -193,6 +193,276 @@ blocco verificato e prima di chiudere un goal.
 - Slice delimitata al resolver: nessun secondo hotspot. Commit isolato
   autorizzato solo dopo i gate mirati, senza includere altri lavori o push.
 
+### Organigramma - completamento coverage controller al 100% (2026-10-02)
+
+- L'utente autorizza esplicitamente la rimozione dei soli controlli interni
+  dimostrati ridondanti. Nessuna guardia auth, permessi, input o API rimossa;
+  nessuna esclusione o modifica della baseline. Giornalieri GATE invariati.
+- Controller layout con tre operazioni di realignment/layout/compattazione e
+  risoluzione del padre settore, 32 test pertinenti con geometria reale;
+  controller loading con loadCore/refreshStructure, 18 test su cataloghi,
+  selezione, token, auth/ruoli e failure atomiche della lettura. Viewport esteso
+  al lifecycle drag/focus: 16 test su listener, cleanup, pointer cancel,
+  persistence, sessione/edit e nodi eliminati da refresh concorrente.
+- Presentazione caratterizzata tramite i contratti nullable esistenti di
+  TreeNode, SchemaNodeCard e AssignmentInboxPanel: 7 test su metadata,
+  preview, summary parziali, provenance e leaf behavior. Pagina a 159 test,
+  includendo preferenze invalide/presentation, operatori senza full_name,
+  filtri/menu stale dopo refresh, scope/status null e ricerca senza risultati.
+- Invarianti delle rimozioni: tutti i layout assegnano posizioni a ogni ID
+  nella foresta, per entrambe le orientazioni e ogni densita; tre test
+  verificano totalita, coordinate finite e immutabilita. La coda e densa e
+  lo shift avviene solo se non vuota; ID univoci del dominio assicurano
+  discendenti non vuoti nel riallineamento. Metadata e nodo menu sono derivati
+  dalla stessa foresta; i bottoni subtree/lead verificano gia la disponibilita
+  prima della callback. La conferma import viene mostrata solo dopo il file.
+  Restano intatte le difese per parent mancanti, cataloghi parziali e ingressi
+  del controller, incluse le snapshot stale durante il drag.
+- Ultimo run: `434 passed` su 16 suite. Statement `1626/1626`, branch
+  `1339/1339`, funzioni `452/452`, linee `1448/1448`: 100% ciascuna.
+  Anche ogni singolo runtime modificato raggiunge il 100%: workspace
+  `968/968` statement, `952/952` branch, `348/348` funzioni. Gate completo
+  frontend VERDE, senza ignore, soglie ridotte, test saltati o mock di layout impossibili.
+- Risolta l'ambiguita di matching dopo l'autorizzazione dell'utente:
+  renderer `renderSchemaNodeCard` e azioni `selectSchemaSubtree` /
+  `openSchemaLeadDrawer` hanno nomi espliciti, senza wrapper o spostamenti
+  di responsabilita. Le coordinate del connector sono destrutturate dalla
+  stessa mappa totale invece di duplicare alias intermedi. Ratchet mirato
+  contro merge-base `main@c4fa269c` PASS, `findings: []`.
+  Baseline, eccezioni e scope invariati; nessuna regressione assorbita.
+- L'ultimo caso ordinamento e coperto da un catalogo reale con operatore non
+  assegnato prima dei due assegnati, verificando ordine e ricerca per username.
+  Rimossa la guardia ridondante del reset: l'unico ingresso e il pulsante di
+  SchemaBoard, renderizzato solo nella vista schema. Test nelle due
+  orientazioni verificano reset e persistenza delle preferenze canoniche,
+  senza scritture della struttura. Eliminata soltanto la dipendenza `view`
+  divenuta inutilizzata; le altre dipendenze hook restano invariate.
+- ESLint zero errori/due warning hook legacy; typecheck runtime senza
+  incremental passato; `make quality-test` 90 test verdi. Evidenze finali:
+  `/tmp/gaia-org-100.log` e directory coverage `/tmp/gaia-org-100`,
+  `/tmp/gaia-org-100-{ratchet,eslint,types,quality}.log` e
+  `/tmp/gaia-org-100-metrics.json`. Nessun commit, push o deploy.
+- Metriche pre-controller/attuali: workspace cog `477 -> 167`, cyc
+  `363 -> 147`, LOC `1779 -> 1086`; file LOC `4305 -> 3593`.
+  Aggregati workspace/sei controller: cog `1508 -> 1173`, cyc
+  `1619 -> 1411`, callable `404 -> 435`. Le estrazioni restano
+  `REORGANIZED_AND_CHARACTERIZED`: le somme cambiano anche per ownership
+  e nested counting, non sono una prova di riduzione del debito aggregato.
+  Le sole difese ridondanti eliminate sono descritte negli invarianti sopra.
+- Verifica AST finale: 26 corpi funzione dei controller mutazioni/snapshot/
+  selezione/caricamento e quattro componenti presentazione identici allo
+  snapshot originale, ignorando commenti/indentazione. Le sole semplificazioni
+  runtime intenzionali sono documentate negli invarianti di questa tranche.
+- Graphify frontend aggiornato con `--force`: 624 file AST, 7358 nodi e
+  17726 archi. Target docs dominio/piattaforma tentati; entrambi segnalano
+  `chunk 1/1 failed: Connection error` e risultati parziali, non refresh
+  semantico completo. Log `/tmp/gaia-org-100-graph-*.log`.
+
+#### Verifica finale e gate commit (2026-10-02)
+
+- Run finale: 434 test / 16 suite; coverage frontend full-file invariata al
+  100% su tutte le quattro metriche. Typecheck senza incremental, ESLint
+  (zero errori, due warning hook legacy), Ruff sui due file Python toccati,
+  formatter del nuovo test e diff whitespace passati. Ratchet mirato contro
+  `main@c4fa269c` passato, senza findings o modifiche della baseline.
+- Tooling: 90 test passati anche misurando i subprocess CLI con Coverage
+  `patch = subprocess` in una configurazione temporanea fuori repository.
+  La funzione modificata `added_lines_since` ha tutte le linee e i branch
+  coperti. Il file runtime `tools/code_quality/complexity.py`, pero, resta
+  a `600/703` statement (85,35%) e `210/272` branch (77,21%), 83,08%
+  combinato: 103 linee e 62 branch non coperti fuori dalla funzione modificata.
+  Il requisito full-file GAIA non e soddisfatto: il gate commit complessivo
+  era BLOCCATO in questo run, nonostante il gate frontend verde; risolto
+  dalla slice tooling successiva riportata sotto. Nessun test artificiale,
+  esclusione o abbassamento della soglia introdotto per aggirarlo.
+- Evidenze riproducibili: `/tmp/gaia-org-release-coverage.log`, report in
+  `/tmp/gaia-org-release-coverage`, log ratchet/eslint/types con lo stesso
+  prefisso; `/tmp/gaia-org-release-tooling-subprocess.log` e relativo JSON.
+  La sola misura in-process non includeva i test CLI ed e stata sostituita
+  dalla misura completa. Copertura live API/DB ed E2E non verificata in
+  questa tranche frontend: i test API dei controller usano i mock dei
+  contratti esistenti, non provano integrazioni con servizi esterni reali.
+- Graphify codice finale rigenerato con `make graphify-frontend
+  GRAPHIFY_CODE_FLAGS=--force`: 624 file, 7358 nodi, 17726 archi; HTML
+  omesso dal limite dimensionale del visualizzatore, JSON/report aggiornati.
+  Docs dominio: chunk semantico fallito per `Connection error`, risultati
+  parziali non equivalenti a refresh completo. Il target piattaforma
+  iniziale ha riutilizzato la cache; il refresh del documento aggiornato
+  fallisce anch'esso con `chunk 1/1 failed: Connection error`, risultati
+  parziali. Entrambi i grafi docs richiedono un retry con backend raggiungibile.
+  I log finali sono `/tmp/gaia-org-release-graph-{code,domain,platform}.log`.
+- Nessuna regressione osservata nelle suite eseguite; debito legacy di
+  complessita e due warning hook restano dichiarati. Non e stata verificata
+  l'intera working tree concorrente e nessun lavoro degli altri team e stato
+  incluso. Nessun commit eseguito in questo run: la caratterizzazione del
+  tooling e stata autorizzata come slice separata e completata sotto.
+
+#### Slice tooling - contratti e coverage full-file (2026-10-02)
+
+- Slice separata autorizzata dall'utente dopo il blocco full-file. Aggiunti
+  54 casi pertinenti in `test_complexity_contracts.py` e
+  `test_complexity_matching_contracts.py`: classi Python, parametri, bool e
+  comprehension, scope runtime, eccezioni, parser JS e dipendenze mancanti,
+  errori Git, baseline corrotta, comparazione limitata ai file cambiati,
+  drift di scope/engine, migrazione esplicitamente approvata, verifica
+  read-only e rifiuto di baseline locali non autorevoli. Matching coperto
+  per duplicati/rename/move, gruppi equivalenti, crescita, span ambigui,
+  tie-break univoco e callable interamente aggiunti senza ownership inventata.
+- Rimossa soltanto la guardia interna `child is not root` del traversal:
+  `ast.parse` produce alberi aciclici, `ast.iter_child_nodes` restituisce
+  esclusivamente figli, non antenati. Tre test su AST realmente parsati
+  dimostrano l'invariante e le metriche attese per funzioni semplici,
+  condizionali e annidate. Nessun AST ciclico sintetico, ignore coverage,
+  nuova soglia o baseline modificata; output dello scanner su sorgenti
+  valide invariato. Test degli errori esterni continuano a verificare il
+  fail-closed e l'assenza di riscritture dei dati.
+- Metriche prima/dopo della sola semplificazione: `py_complexities`
+  cog/cyc/LOC `8/7/37 -> 6/6/36`; callback `walk`
+  `8/7/20 -> 6/6/19`; `added_lines_since` invariata `14/11/26`.
+  Evidenze `/tmp/gaia-tooling-{before,after}.json`; nessun trasferimento
+  di responsabilita o nuovo callable runtime.
+- Suite completa: 144 test passati, coverage full-file
+  `702/702` statement e `270/270` branch, 100% senza esclusioni.
+  Coverage include i subprocess CLI tramite configurazione temporanea
+  `patch = subprocess`; nessuna configurazione CI/versionata modificata.
+  Report `/tmp/gaia-tooling-final.json`, log `/tmp/gaia-tooling-final.log`.
+  Ruff e format check dei nuovi test verdi, whitespace pulito; ratchet
+  Organigramma contro il merge-base corrente `main` verde, senza findings.
+  La slice frontend resta `REORGANIZED_AND_CHARACTERIZED`, senza debito
+  legacy dichiarato eliminato; i due warning hook legacy rimangono.
+- Superato il precedente blocco coverage del tooling; commit autorizzato
+  dopo la verifica conclusiva e solo per le modifiche Organigramma/tooling
+  e le rispettive sezioni dei documenti condivisi, escludendo altri team.
+  Graphify frontend aggiornato; docs dominio/piattaforma rieseguiti dopo
+  l'aggiornamento delle evidenze: entrambi falliscono il chunk semantico
+  per `Connection error`, con warning partial results. Il codice e
+  aggiornato; il refresh semantico docs resta incompleto per la rete.
+  Log `/tmp/gaia-tooling-graph-{code,domain,platform}.log`.
+- Verifica conclusiva combinata: 434 test frontend e 144 test tooling
+  passati, coverage 100% per-file sui runtime toccati. Ruff/formatter,
+  ESLint (due warning legacy), typecheck e ratchet mirato passati.
+  Nessuna regressione osservata; integrazioni API/DB live ed E2E non
+  rieseguite. Nessun commit o push di modifiche estranee autorizzato.
+- Commit finale tentato dopo i gate: `git add` dei soli quattro file
+  tooling rifiutato con `.git/index.lock: File system in sola lettura`.
+  Nessuna modifica all'index; commit non creato e nessun tentativo di
+  aggirare il sandbox. Il solo blocco locale al commit e il filesystem;
+  patch isolata Organigramma/tooling preparata in
+  `/tmp/gaia-organigramma-final.patch`, senza documenti degli altri team
+  o grafi generati. Il retry richiede un ambiente con Git scrivibile.
+- Retry autorizzato dall'utente con filesystem ora scrivibile: patch
+  rigenerata contro HEAD corrente per escludere le modifiche concorrenti
+  Utenze, Presenze e Dotazioni. Controlli conclusivi rieseguiti prima del
+  commit isolato; nessun push o integrazione live aggiuntiva autorizzata.
+
+### Organigramma - controller snapshot, viewport e selezione (2026-10-02)
+
+- Prosecuzione della slice controller autorizzata, stesso hotspot workspace.
+  Nessuna modifica alle giornaliere GATE, al backend, ai contratti REST,
+  alle esclusioni coverage o alla baseline. Working tree concorrente preservato;
+  nessun commit creato da questa sessione.
+- Estratti sette handler snapshot, quattro viewport e sei selezione con
+  contesti tipizzati e adapter che ricevono lo stato della render corrente.
+  Le dipendenze hook originali restano invariate. Verifica AST sullo snapshot
+  originale `af768d77`: 28 corpi funzione, incluse funzioni annidate dei quattro
+  controller, identici ignorando commenti/indentazione. Anche il corpo del
+  drawer esportato per test standalone resta identico.
+- Nuovi test controller: snapshot 32, viewport 23, selezione 35, tutti verdi.
+  Copertura full-file: snapshot `82/82` statement, `42/42` branch, `7/7`
+  funzioni e `72/72` linee; viewport `117/117`, `36/36`, `16/16`, `104/104`;
+  selezione `62/62`, `57/57`, `13/13`, `50/50` (100% ciascuna).
+  Il controller mutazioni conserva il 100%; contesti type-only senza runtime.
+- Quattordici test geometria coprono coordinate invalide, bounds, foreste
+  ramificate, immutabilita, snapshot parziali e collisioni sature nelle due
+  orientazioni. Suite pagina a 150 test: deep link, perdita/ripristino sessione,
+  auth override, risposte tardive detail/visibilita, nodo orfano, limite shortcut,
+  errori layout nelle due orientazioni, drop senza drag, permessi read-only,
+  gruppi grandi e drawer con sessione/dati parziali. I test non forzano output
+  impossibili dei layout per eseguire guardie interne.
+- Nove suite: `336 passed`. Gate completo ROSSO: statement `1614/1633`
+  (98,83%), branch `1310/1381` (94,85%), funzioni `444/444` (100%),
+  linee `1445/1451` (99,58%). Workspace `1150/1169` statement (98,37%),
+  `1024/1095` branch (93,51%), funzioni 100%, linee 99,42%.
+  Restano 19 statement e 71 esiti branch: obiettivo 100% non raggiunto e
+  change non ancora conforme alla policy runtime modificati.
+- Parte del residuo e irraggiungibile per costruzione: mappe posizione appena
+  costruite dagli stessi nodi, coda densa non vuota prima di `shift`, fallback
+  metadata completo. Chiesta decisione sulla rimozione delle sole difese
+  dimostrate ridondanti, invece di introdurre test artificiali o ignore.
+  Restano inoltre guardie negli ingressi layout/caricamento e lifecycle.
+- Metriche rispetto allo snapshot pre-controller: workspace cog `477 -> 269`,
+  cyc `363 -> 225`, LOC `1779 -> 1350`; file LOC `4305 -> 3864`.
+  Aggregati dei cinque runtime controller/workspace: cog `1508 -> 1300`,
+  cyc `1619 -> 1504`, callable `404 -> 427`. Tutti i corpi estratti invariati:
+  calo delle somme dovuto anche al conteggio annidato e ownership, non prova
+  di riduzione del debito. Esito `REORGANIZED_AND_CHARACTERIZED`.
+  Nessun nuovo error-level nei controller; baseline non aggiornata.
+- Ratchet mirato contro merge-base `main@c4fa269c` PASS (`findings: []`);
+  HEAD avanzato da altre attivita durante la sessione. Typecheck senza
+  incremental PASS; ESLint zero errori e due warning hook legacy invariati.
+  `make quality-test`: 90 test verdi; diff whitespace mirato pulito.
+  Evidenze: `/tmp/gaia-org-final-review.log` e relativa directory coverage,
+  `/tmp/gaia-org-final-metrics.json`, `/tmp/gaia-org-final-ratchet.log`,
+  `/tmp/gaia-org-final-{types,eslint}.log`.
+- Graphify frontend aggiornato con pruning tramite target dedicato `--force`:
+  618 file AST, 7321 nodi, 17609 archi. Target docs dominio/piattaforma tentati:
+  entrambi `chunk 1/1 failed: Connection error` e risultati parziali, pur con
+  exit 0. Nessun refresh semantico completo dichiarato. Log con prefisso
+  `/tmp/gaia-org-final-graph-`.
+
+### Organigramma - slice controller mutazioni (2026-10-02)
+
+- Slice controller autorizzata esplicitamente dopo la caratterizzazione dei
+  modal. Un solo hotspot workspace; giornaliere GATE e modifiche concorrenti
+  preservate. Nessun commit, nuova esclusione o modifica baseline.
+- Estratte sei operazioni in `organigramma-mutations.ts`: spostamento,
+  collegamento gerarchico, assegnazione utente, creazione unita, rimozione
+  assegnazione e cancellazione unita. Il contesto tipizzato espone soltanto
+  dipendenze esistenti; ciascuna operazione riceve il sottoinsieme necessario.
+  Gli adapter UI restituiscono la promise del controller direttamente.
+- Verifica AST contro `HEAD@af768d77`: tutti i sei corpi handler identici
+  ignorando commenti/indentazione. Token, permessi, edit mode, vincoli sui
+  discendenti, payload, kind organizzativo/territoriale, conferma e ordine
+  API/setter/refresh invariati. Nessun rollback, retry o lock introdotto.
+- 54 nuovi test controller: guardie non raggiungibili dalla UI, nodi/utenti
+  mancanti, cicli, responsabile occupato, assegnazioni esistenti, coordinate
+  assenti/zero, conferma cancellata, selezione funzionale, Error/non-Error,
+  fallimenti del refresh e delle operazioni successive, `territoriale`.
+  Controller standalone full-file: statement `115/115`, branch `102/102`,
+  funzioni `13/13`, linee `98/98` (100% ciascuna).
+- Integrazione UI/controller: 215 test verdi su cinque suite. Perimetro
+  workspace/controller/helper: statement `1564/1616` (96,78%), branch
+  `1250/1381` (90,51%), funzioni `427/427` (100%), linee `1426/1438`
+  (99,16%). Workspace 96,31% statement, 89,34% branch, 100% funzioni,
+  99,04% linee. Il gate 100% full-file workspace e ancora ROSSO: questa
+  estrazione non chiude l'obiettivo coverage e non e una change conforme
+  al requisito finale sui runtime modificati.
+- Metriche prima/dopo: componente workspace cog `477 -> 393`, cyc
+  `363 -> 303`, LOC `1779 -> 1650`; file LOC `4305 -> 4172`.
+  Aggregato workspace/controller cog `1508 -> 1424`, cyc `1619 -> 1565`,
+  callable `404 -> 410`. Controller cog max `18`, cyc max `14`, LOC `181`:
+  nessuna violation error-level nuova. I sei corpi non sono semplificati:
+  le somme dello scanner cambiano anche per il conteggio delle funzioni
+  annidate e l'ownership. Esito `REORGANIZED_AND_CHARACTERIZED`, non
+  `IMPROVED`; nessuna riduzione reale del debito viene dichiarata.
+- Ratchet mirato autorevole contro merge-base `main@af768d77`: PASS,
+  `findings: []`. ESLint zero errori/due warning hook legacy; typecheck
+  senza incremental e diff whitespace verificati. Baseline invariata.
+  Graphify frontend aggiornato tramite target dedicato con `--force`.
+- Refresh docs dominio e piattaforma tentati con i target dedicati: entrambi
+  hanno `chunk 1/1 failed: Connection error` e warning di risultati parziali
+  pur con exit 0. Nessun arricchimento semantico completo dichiarato.
+- Residui full-file: snapshot/sessione, controller viewport/layout,
+  fallback geometria e presentazione. Nessuna guardia eliminata per alzare
+  la coverage. La prossima slice deve restare nello stesso hotspot e
+  caratterizzare una responsabilita di questi ingressi; il 100% del solo
+  controller mutazioni non va presentato come il 100% del workspace.
+- Evidenze: `/tmp/gaia-controller-unit-final.log`, directory
+  `/tmp/gaia-controller-unit-final`, `/tmp/gaia-controller-final.log`,
+  directory `/tmp/gaia-controller-final`, `/tmp/gaia-controller-{before,after}.json`,
+  `/tmp/gaia-controller-ratchet.log`, log eslint/types/Graphify con lo stesso
+  prefisso. Documentazione dominio e struttura aggiornate.
+
 ### Wiki audit - aggregazione delle modalita (2026-10-02)
 
 - Hotspot unico: `buildWikiAuditStats` in `features/wiki/audit-utils.ts`,
@@ -326,6 +596,59 @@ blocco verificato e prima di chiudere un goal.
   eventuale semplificazione dei risultati vuoti richiede una nuova slice.
   Nessun commit, push o secondo hotspot.
 
+### Organigramma - coverage e correzione tooling (2026-10-02)
+
+- Richiesta esplicita: coverage 100%, estrazioni mirate behavior-preserving e
+  follow-up del blocco tooling. Giornalieri GATE e modifiche concorrenti
+  preservati; nessun commit, esclusione o aggiornamento baseline.
+- Suite UI estesa da 54 a 133 test: sessione, import/export/sync, preferenze,
+  filtri, pan/zoom, assegnazioni, gerarchie e errori. Mock resettati tra test.
+  Otto test standalone caratterizzano i modal, inclusi callback rifiutate,
+  cataloghi vuoti, nomi assenti, default aggiornati e padre mancante.
+- Il primo tentativo di split in tre file produceva `ambiguous_fingerprint`
+  e associazioni cross-file a simboli estranei. La correzione tooling include
+  i file non tracciati nel calcolo delle righe aggiunte; non cambia ordine o
+  semantica del matching. Dopo il fix restavano finding di move non riconosciuti.
+  Lo split e stato ritirato: i tre modal restano nel modulo e nella posizione
+  originale, con soli export per testarli direttamente. Nessuna validazione
+  spostata o modifica alla gestione degli errori.
+- `make quality-test`: 90 test verdi, inclusi sette nuovi casi sul calcolo
+  delle righe aggiunte: file tracked/untracked/ignorati, nomi con spazi,
+  file vuoti/binari, errori Git e input senza base/path. Le regressioni gia
+  esistenti verificano che callback nuove sopra soglia falliscano ancora
+  (exit 1) e matching parziale ambiguo rimanga fail-closed (exit 2).
+  Ruff check runtime/test e format check del nuovo test passano.
+- Ultima coverage full-file: 161 test verdi su quattro suite, workspace
+  statement `1454/1522` (95,53%), branch `1186/1332` (89,03%), funzioni
+  `402/402` (100%), linee `1331/1350` (98,59%). I tre modal sono interamente
+  coperti; `src/lib/organigramma.ts` resta al 100% su tutte le metriche.
+  Gate 100% workspace ancora ROSSO: non dichiarare obiettivo raggiunto.
+- Metriche callable workspace invariate: 404 callable, somma ciclomatica
+  1619 e cognitiva 1508; `OrganigrammaWorkspace` 363/477/1779.
+  Esito della caratterizzazione: `REORGANIZED_AND_CHARACTERIZED`, non
+  riduzione della complessita. Ratchet mirato contro merge-base `main`
+  (`af768d77`) verde, `findings: []`; baseline e scope invariati.
+- Il confronto con `origin/main` usa invece il commit piu vecchio `6b61fd27`
+  e segnala due metriche della callback `assignments.find` (cyc 1->2,
+  cog 0->1). Il diff runtime workspace corrente ha soltanto tre export:
+  quella callback e invariata rispetto a HEAD. Non assorbire i finding
+  sincronizzando la baseline remota nella change.
+- ESLint mirato: zero errori, due warning legacy sulle dipendenze hook;
+  typecheck senza incremental e diff whitespace passano.
+  `make lint-backend` si arresta nel compileall globale per permessi sui
+  bytecode Wiki concorrenti; non e una failure Ruff del perimetro modificato.
+- Residui: guardie auth/permessi negli handler, eliminazione vietata con
+  figli/assegnazioni, fallback geometrici e dati inconsistenti. La UI non
+  espone diversi ingressi difensivi. Il prossimo blocco deve isolare una
+  responsabilita del controller e i relativi test senza spostare il debito
+  o alterare contratti; il lavoro corrente non e conforme al gate full-file.
+- Graphify frontend aggiornato con pruning tramite target dedicato `--force`:
+  7252 nodi e 17472 archi. Refresh platform docs gia tentato con errore di
+  connessione semantico; risultato parziale, nessun refresh docs completo
+  dichiarato. Evidenze: `/tmp/gaia-org-retained-final.log`, directory
+  `/tmp/gaia-org-retained-final`, `/tmp/gaia-org-main-ratchet.log`,
+  `/tmp/gaia-org-quality-final.log`, `/tmp/gaia-org-graph-final.log`.
+
 ### API core - decodifica errori HTTP (2026-10-02)
 
 - Hotspot unico autorizzato: `request` in `frontend/src/lib/api/core.ts`,
@@ -380,6 +703,36 @@ blocco verificato e prima di chiudere un goal.
   responsabilita; eventuale semplificazione successiva di timeout/abort
   richiede una nuova slice. Nessun commit, push o secondo hotspot.
 
+### Organigramma workspace - visibilita, override e drawer (2026-10-02)
+
+- Tranche di caratterizzazione autorizzata, limitata alla suite UI esistente;
+  giornaliere riservate al team GATE e modifiche concorrenti preservate.
+- Prima: 40 test verdi, coverage full-file statement `1029/1522` (67,60%),
+  branch `819/1332` (61,48%), funzioni `270/402` (67,16%), linee `945/1350`
+  (70%). Il branch differisce di un esito rispetto al run del 2026-10-01.
+- Aggiunti 14 test: scelta viewer, visibilita gerarchica/override, perimetro
+  vuoto e recupero API, creazione override unita/persona e payload opzionali,
+  date e scope, errori API e annullamento, accesso read-only, rendering status
+  e fallback, drawer con assegnazioni/percorso e override pertinenti,
+  assegnazioni assenti/errori, risposte tardive dopo chiusura e unita sconosciuta.
+- Dopo: 54 test verdi; coverage full-file statement `1111/1522` (72,99%),
+  branch `952/1332` (71,47%), funzioni `309/402` (76,86%), linee `1015/1350`
+  (75,18%). ESLint della suite, typecheck senza incremental e diff check
+  passati. Il comando coverage esce 1 soltanto per il gate 100% ancora rosso.
+- Metriche callable identiche al report precedente: 404 callable, aggregati
+  ciclomatica `1619`, cognitiva `1508`; `OrganigrammaWorkspace` `363/477/1779`.
+  Runtime, baseline, eccezioni e configurazione coverage invariati.
+- Esito `REORGANIZED_AND_CHARACTERIZED`; refactoring runtime ancora `BLOCKED`
+  dal gate full-file. Restano 411 statement e 380 esiti branch scoperti.
+  Evidenze in `/tmp/gaia-org-visibility-{before,after}.log`, rispettive directory
+  coverage e `/tmp/gaia-org-visibility-metrics.json`.
+- Graphify: orientamento tramite query frontend; refresh platform docs tentato
+  con target dedicato, ma il chunk semantico fallisce con `Connection error`
+  e restituisce risultati parziali pur uscendo 0. Arricchimento documentale
+  non verificato; log `/tmp/gaia-org-visibility-graph-docs.log`.
+- Prossima azione separata: caratterizzare errori caricamento, esportazione,
+  sincronizzazione e gestione assegnazioni prima della slice runtime.
+
 ### Network - URL amministrazione dispositivi (2026-10-01)
 
 - Hotspot unico: `getNetworkDeviceAdminUrl` in
@@ -422,6 +775,59 @@ blocco verificato e prima di chiudere un goal.
 - Iterazione delimitata al resolver; prossima azione separata: selezionare
   una responsabilita con caratterizzazione disponibile fuori dai perimetri
   Organigramma e giornaliere. Nessun commit o secondo hotspot.
+### Organigramma workspace - caratterizzazione import JSON (2026-10-01)
+
+- Slice unica successiva autorizzata: import JSON del workspace; giornaliere
+  riservate al team GATE. Working tree concorrente preservato.
+- Prerequisiti: 25 test UI verdi; coverage reale full-file statement
+  `938/1522` (61,62%), branch `755/1332` (56,68%), funzioni `250/402`
+  (62,18%), linee `865/1350` (64,07%). Il gate 100% non consente di
+  modificare il runtime del workspace.
+- Aggiunti 15 test UI nella suite esistente: merge e contatori server,
+  conferma esatta replace, cancellazione, duplicati e troncamento messaggio,
+  parent/assegnazioni/override mancanti, warning non bloccanti, riferimenti
+  validi, errori di lettura in entrambe le modalita e fallimento API replace.
+  La funzione `analyzeOrganigrammaSnapshot` non ha statement o branch scoperti
+  nel report risultante; nessun export o seam runtime aggiunto per i test.
+- Dopo: 40 test verdi; coverage full-file statement `1029/1522` (67,60%),
+  branch `820/1332` (61,56%), funzioni `270/402` (67,16%), linee `945/1350`
+  (70%). ESLint della suite, typecheck e diff check passati.
+- Metriche prima/dopo invariate: `OrganigrammaWorkspace` ciclomatica `363`,
+  cognitiva `477`, LOC `1779`; `analyzeOrganigrammaSnapshot` `17/18/47`;
+  aggregati file ciclomatica `1619`, cognitiva `1508`, 404 callable.
+  Runtime, baseline, eccezioni e configurazione coverage invariati.
+- Esito caratterizzazione `REORGANIZED_AND_CHARACTERIZED`; refactoring
+  runtime `BLOCKED` dal gate full-file, con 493 statement e 512 esiti branch
+  ancora scoperti. Nessuna riduzione di complessita dichiarata.
+- Evidenze: `/tmp/gaia-organigramma-workspace-{before,after}.log`, rispettive
+  directory coverage e `/tmp/gaia-organigramma-workspace-metrics-before.json`.
+  Prossima decisione: tranche separata sui percorsi di visibilita/override e
+  drawer persona, mantenendo il requisito 100% prima del refactoring.
+
+### Organigramma - ricerca e inclusione albero (2026-10-01)
+
+- Hotspot unico: `computeTreeInclusion` in `frontend/src/lib/organigramma.ts`;
+  confronto autorevole con baseline a `HEAD@af768d77`. Le giornaliere restano
+  affidate al team GATE; modifiche concorrenti preservate.
+- Invarianti: normalizzazione della ricerca, filtro tipo, ordine dei match,
+  inclusione degli antenati e `includeIds=null` senza filtri. Eliminato il
+  controllo ridondante sulla ricerca vuota: `String.includes("")` e vero.
+  Nessuna estrazione, modifica dei contratti o nuovo callable.
+- Prima/dopo: ciclomatica `11 -> 10`, cognitiva `19 -> 17`, LOC `27` invariata;
+  aggregati file ciclomatica `55 -> 54`, cognitiva `58 -> 56`, 19 callable.
+  Restano due warning e zero error; esito `IMPROVED`.
+- Caratterizzazione prima della modifica: 20 test passati; dopo, stessi 20
+  test passati. Coverage full-file 100% statement (`88/88`), branch (`49/49`),
+  funzioni (`19/19`) e linee (`82/82`). ESLint mirato e typecheck passati.
+- `complexity.py ratchet --base-ref HEAD frontend/src/lib/organigramma.ts`:
+  PASS, zero finding. Il controllo globale precedente rilevava nove finding
+  nei file concorrenti inCASS/accessi/bootstrap; baseline ed eccezioni non
+  aggiornate, diff baseline nullo.
+- Evidenze in `/tmp/gaia-organigramma-{before,after}.json` e nei log
+  `/tmp/gaia-organigramma-tests-{before,after}.log`. Iterazione chiusa;
+  prossima azione separata: scegliere una responsabilita del workspace
+  Organigramma e verificarne la caratterizzazione prima di modificarla.
+
 
 ### Poste Online - aggregazione contatori import worker (2026-09-28)
 

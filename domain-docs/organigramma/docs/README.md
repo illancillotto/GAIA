@@ -6,6 +6,9 @@ Modulo canonico implementato su:
 
 - backend: `backend/app/modules/organigramma/`
 - frontend: `frontend/src/app/organigramma/page.tsx`
+- controller mutazioni frontend: `frontend/src/features/organigramma/organigramma-mutations.ts`
+- controller snapshot, viewport e selezione: `frontend/src/features/organigramma/organigramma-{snapshot,viewport,selection}-controller.ts`
+- controller layout/persistenza e caricamento: `frontend/src/features/organigramma/organigramma-{layout,loading}-controller.ts`
 - migration principale: `backend/alembic/versions/20260608_0134_organigramma_canonical_layer.py`
 
 ## Obiettivo
@@ -278,6 +281,29 @@ fallback e devono restare escluse finche non sono risolte esplicitamente.
 
 ## Test e verifica
 
+Il workspace delega spostamento/collegamento dei blocchi, assegnazioni,
+creazione e cancellazione al controller mutazioni. Il contesto tipizzato
+contiene il token, i permessi e lo stato della render corrente: non conserva
+snapshot persistenti e non introduce cache o retry. Le guardie rimangono nel
+controller anche quando la UI nasconde l'azione. Payload, `structureKind`,
+ordine delle chiamate API/refresh, messaggi, cleanup del drag e conferma di
+cancellazione restano invariati. La creazione con responsabile non introduce
+rollback dell'unita se l'assegnazione fallisce, come nel comportamento originale.
+
+Snapshot, import/export, sincronizzazione e override sono delegati al controller
+snapshot; pan, marquee e zoom al controller viewport; selezione, drag delle
+schede e avvio dei collegamenti al controller selection. I contesti sono solo
+tipi: gli adapter passano lo stato corrente, mantenendo dipendenze hook,
+listener DOM, cleanup e comportamento degli handler originali. Il drawer
+persona e testabile separatamente sul suo contratto di token nullable e dati
+persona/override parziali, senza duplicarne il rendering o modificarne il corpo.
+
+Layout, compattazione e riallineamento conservano la distinzione fra coordinate
+locali e salvataggio autorizzato; caricamento iniziale e refresh leggero mantengono
+la pubblicazione dei cataloghi solo dopo il successo delle letture parallele.
+Il lifecycle viewport conserva listener, cleanup e lettura della foresta corrente
+al rilascio: un nodo eliminato da refresh concorrente non viene salvato.
+
 Backend:
 
 - `backend/tests/organigramma/test_visibility_service.py`
@@ -291,6 +317,36 @@ Frontend:
 
 - `frontend/tests/unit/organigramma-helpers.test.ts`
 - `frontend/tests/unit/organigramma-page.test.tsx`
+- `frontend/tests/unit/organigramma-modals.test.tsx`
+- `frontend/tests/unit/organigramma-mutations.test.ts`
+- `frontend/tests/unit/organigramma-snapshot-controller.test.ts`
+- `frontend/tests/unit/organigramma-viewport-controller.test.ts`
+- `frontend/tests/unit/organigramma-selection-controller.test.ts`
+- `frontend/tests/unit/organigramma-geometry.test.ts`
+- `frontend/tests/unit/organigramma-layout-controller.test.ts`
+- `frontend/tests/unit/organigramma-loading-controller.test.ts`
+- `frontend/tests/unit/organigramma-viewport-lifecycle.test.ts`
+- `frontend/tests/unit/organigramma-presentation.test.tsx`
+- `frontend/tests/unit/organigramma-schema-fit.test.ts`
+
+Workspace, sei controller e helper in `src/lib/organigramma.ts` sono coperti
+al 100% su statement, branch, funzioni e linee, anche file per file.
+L'ultima verifica comprende 434 test pertinenti: `1626/1626` statement,
+`1339/1339` branch, `452/452` funzioni e `1448/1448` linee. Il gate full-file
+e verde senza esclusioni coverage o mock di stati impossibili. Ratchet
+contro `main`, typecheck ed ESLint passano; restano due warning hook legacy.
+Evidenze aggiornate in `docs/code-quality/PROGRESS.md`.
+
+Il gate verde riguarda il runtime frontend Organigramma, non l'intero
+repository. La slice tooling successivamente autorizzata porta anche
+`tools/code_quality/complexity.py` al 100% full-file: 702 statement e 270
+branch, includendo i test CLI in subprocess. I 144 test tooling passano;
+il precedente blocco coverage del commit e risolto.
+Restano due warning hook legacy; nessuna regressione osservata
+nelle suite eseguite. API/DB live ed E2E non sono stati rieseguiti in questa
+tranche: le API dei controller sono verificate tramite mock dei contratti.
+Graphify codice e aggiornato; l'arricchimento semantico della documentazione
+di dominio e parziale per un errore di connessione, non un refresh completo.
 
 Comandi usati per la verifica locale:
 

@@ -330,6 +330,20 @@ GAIA/
 │   │   │   ├── ruolo/
 │   │   │   └── riordino/
 │   │   ├── features/
+│   │   │   └── organigramma/
+│   │   │       ├── organigramma-workspace.tsx
+│   │   │       ├── organigramma-mutations.ts
+│   │   │       ├── organigramma-mutation-context.ts
+│   │   │       ├── organigramma-snapshot-controller.ts
+│   │   │       ├── organigramma-snapshot-context.ts
+│   │   │       ├── organigramma-viewport-controller.ts
+│   │   │       ├── organigramma-viewport-context.ts
+│   │   │       ├── organigramma-selection-controller.ts
+│   │   │       ├── organigramma-selection-context.ts
+│   │   │       ├── organigramma-layout-controller.ts
+│   │   │       ├── organigramma-layout-context.ts
+│   │   │       ├── organigramma-loading-controller.ts
+│   │   │       └── organigramma-loading-context.ts
 │   │   ├── hooks/
 │   │   ├── lib/
 │   │   ├── services/

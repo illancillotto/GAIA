@@ -1,6 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as mutationController from "@/features/organigramma/organigramma-mutations";
+import * as snapshotController from "@/features/organigramma/organigramma-snapshot-controller";
+import * as viewportController from "@/features/organigramma/organigramma-viewport-controller";
+import * as selectionController from "@/features/organigramma/organigramma-selection-controller";
+import * as layoutController from "@/features/organigramma/organigramma-layout-controller";
+import * as loadingController from "@/features/organigramma/organigramma-loading-controller";
+import type { ImportSnapshotAnalysis } from "@/features/organigramma/organigramma-snapshot-context";
 
 import { getOrgReference } from "@/app/organigramma/reference-data";
 import {
@@ -15,30 +22,15 @@ import {
   UsersIcon,
 } from "@/components/ui/icons";
 import {
-  createOrgOverride,
-  createOrgAssignment,
-  createOrgUnit,
-  deleteOrgAssignment,
-  deleteOrgUnit,
-  exportOrganigrammaSnapshot,
-  getCurrentUser,
   getOrgAssignments,
-  getOrgOverrides,
-  getOrgTree,
   getOrgUnit,
   getOrgVisibility,
-  importOrganigrammaSnapshot,
-  isAuthError,
-  listAllApplicationUsers,
-  syncOrgWhiteCompany,
-  updateOrgAssignment,
-  updateOrgUnit,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { computeAutoCollapsedIds, computeTreeInclusion, filterTreeByRootIds, fitScrollableContentToViewport, flattenTree, scheduleScrollableContentFit, unitPath } from "@/lib/organigramma";
 import { TYPE_FILTERS, TYPE_META } from "@/features/organigramma/organigramma-config";
-import { buildAssignmentPayload, isInvalidSectorParent, nextChildUnitType, resolveManagerUserIds, syncDirectReportManagers } from "@/features/organigramma/organigramma-assignment";
+import { isInvalidSectorParent, nextChildUnitType } from "@/features/organigramma/organigramma-assignment";
 import type {
   ApplicationUser,
   CurrentUser,
@@ -85,14 +77,6 @@ type OrganigrammaSchemaPreferences = {
   canvasMode: SchemaCanvasMode;
   guidedDensity: GuidedSchemaDensity;
   orientation: SchemaOrientation;
-};
-type ImportSnapshotAnalysis = {
-  units: number;
-  assignments: number;
-  overrides: number;
-  schemaVersion: number | null;
-  errors: string[];
-  warnings: string[];
 };
 
 const SCOPE_LABEL: Record<OrgOverrideScope, string> = { read: "Lettura", approve: "Approvazione", full: "Completo" };
@@ -193,8 +177,7 @@ function collectDescendantIds(node: OrgUnitTreeNode): Set<string> {
   const ids = new Set<string>([node.id]);
   const queue = [...node.children];
   while (queue.length) {
-    const current = queue.shift();
-    if (!current) continue;
+    const current = queue.shift()!;
     ids.add(current.id);
     queue.push(...current.children);
   }
@@ -240,7 +223,7 @@ function buildSchemaMeta(tree: OrgUnitTreeNode[], assignments: OrgAssignment[]):
   return meta;
 }
 
-function safeCanvasCoord(value: number | null | undefined): number {
+export function safeCanvasCoord(value: number | null | undefined): number {
   return Number.isFinite(value) ? Number(value) : 0;
 }
 
@@ -253,7 +236,7 @@ function pruneCollapsedTree(nodes: OrgUnitTreeNode[], collapsedIds: Set<string>)
   );
 }
 
-function computeSchemaDisplayPositions(flatNodes: OrgUnitTreeNode[]): Map<string, SchemaDisplayPosition> {
+export function computeSchemaDisplayPositions(flatNodes: OrgUnitTreeNode[]): Map<string, SchemaDisplayPosition> {
   return new Map(
     flatNodes.map((node) => [
       node.id,
@@ -262,7 +245,7 @@ function computeSchemaDisplayPositions(flatNodes: OrgUnitTreeNode[]): Map<string
   );
 }
 
-function computeSchemaCanvasBounds(
+export function computeSchemaCanvasBounds(
   flatNodes: OrgUnitTreeNode[],
   positions: Map<string, SchemaDisplayPosition>,
 ) {
@@ -290,7 +273,7 @@ function computeSchemaCanvasBounds(
   };
 }
 
-function computeHorizontalTreeLayout(tree: OrgUnitTreeNode[]): Map<string, { x: number; y: number }> {
+export function computeHorizontalTreeLayout(tree: OrgUnitTreeNode[]): Map<string, { x: number; y: number }> {
   const positions = new Map<string, { x: number; y: number }>();
   const rootSpacing = SCHEMA_NODE_HEIGHT + SCHEMA_LAYER_Y_GAP * 2;
   const verticalStep = SCHEMA_NODE_HEIGHT + SCHEMA_LAYER_Y_GAP;
@@ -336,7 +319,7 @@ function computeHorizontalTreeLayout(tree: OrgUnitTreeNode[]): Map<string, { x: 
   return positions;
 }
 
-function computeHorizontalGuidedLayout(
+export function computeHorizontalGuidedLayout(
   tree: OrgUnitTreeNode[],
   density: GuidedSchemaDensity,
 ): Map<string, { x: number; y: number }> {
@@ -387,7 +370,7 @@ function computeHorizontalGuidedLayout(
   return positions;
 }
 
-function computeVerticalTreeLayout(tree: OrgUnitTreeNode[]): Map<string, { x: number; y: number }> {
+export function computeVerticalTreeLayout(tree: OrgUnitTreeNode[]): Map<string, { x: number; y: number }> {
   const positions = new Map<string, { x: number; y: number }>();
   const rootSpacing = SCHEMA_NODE_WIDTH + SCHEMA_LAYER_X_GAP / 2;
   const horizontalStep = SCHEMA_NODE_WIDTH + SCHEMA_LAYER_X_GAP / 2;
@@ -434,7 +417,7 @@ function computeVerticalTreeLayout(tree: OrgUnitTreeNode[]): Map<string, { x: nu
   return positions;
 }
 
-function computeVerticalGuidedLayout(
+export function computeVerticalGuidedLayout(
   tree: OrgUnitTreeNode[],
   density: GuidedSchemaDensity,
 ): Map<string, { x: number; y: number }> {
@@ -485,7 +468,7 @@ function computeVerticalGuidedLayout(
   return positions;
 }
 
-function computeGuidedSchemaLayout(
+export function computeGuidedSchemaLayout(
   tree: OrgUnitTreeNode[],
   orientation: SchemaOrientation,
   density: GuidedSchemaDensity,
@@ -495,7 +478,7 @@ function computeGuidedSchemaLayout(
     : computeVerticalGuidedLayout(tree, density);
 }
 
-function updateTreeNodeInForest(
+export function updateTreeNodeInForest(
   nodes: OrgUnitTreeNode[],
   nodeId: string,
   patch: Partial<Pick<OrgUnitTreeNode, "parent_id" | "canvas_x" | "canvas_y">>,
@@ -514,7 +497,7 @@ function updateTreeNodeInForest(
   });
 }
 
-function applyCanvasPositionsToForest(
+export function applyCanvasPositionsToForest(
   nodes: OrgUnitTreeNode[],
   positions: Map<string, SchemaDisplayPosition>,
 ): OrgUnitTreeNode[] {
@@ -551,7 +534,7 @@ function rectsOverlap(
   );
 }
 
-function resolveSubtreeCollisionShift(
+export function resolveSubtreeCollisionShift(
   subtreePositions: Map<string, SchemaDisplayPosition>,
   occupiedPositions: SchemaDisplayPosition[],
   orientation: SchemaOrientation,
@@ -709,7 +692,7 @@ type TreeProps = {
   onAssignUser: (userId: number, unitId: string, mode: UserDropMode) => void;
 };
 
-function TreeNode({
+export function TreeNode({
   node,
   depth,
   expanded,
@@ -1201,12 +1184,8 @@ function SchemaBoard({
                   if (!node.parent_id) return null;
                   const parent = nodesById.get(node.parent_id);
                   if (!parent) return null;
-                  const parentPosition = displayPositions.get(parent.id);
-                  const nodePosition = displayPositions.get(node.id);
-                  const parentX = parentPosition?.x ?? safeCanvasCoord(parent.canvas_x);
-                  const parentY = parentPosition?.y ?? safeCanvasCoord(parent.canvas_y);
-                  const nodeX = nodePosition?.x ?? safeCanvasCoord(node.canvas_x);
-                  const nodeY = nodePosition?.y ?? safeCanvasCoord(node.canvas_y);
+                  const { x: parentX, y: parentY } = displayPositions.get(parent.id)!;
+                  const { x: nodeX, y: nodeY } = displayPositions.get(node.id)!;
                   const startX = orientation === "horizontal"
                     ? parentX + canvasBounds.offsetX + SCHEMA_NODE_WIDTH
                     : parentX + canvasBounds.offsetX + SCHEMA_NODE_WIDTH / 2;
@@ -1240,35 +1219,37 @@ function SchemaBoard({
                   );
                 })}
               </svg>
-              {flatNodes.map((node) => (
-                <SchemaNodeCard
-                  key={node.id}
-                  node={node}
-                  displayPosition={displayPositions.get(node.id) ?? { x: safeCanvasCoord(node.canvas_x), y: safeCanvasCoord(node.canvas_y) }}
-                  offsetX={canvasBounds.offsetX}
-                  offsetY={canvasBounds.offsetY}
-                  selectedId={selectedId}
-                  isMultiSelected={multiSelectedIds.has(node.id)}
-                  collapsed={collapsedIds.has(node.id)}
-                  collapsedChildNames={collapsedPreview.get(node.id)?.childNames ?? null}
-                  onToggleCollapse={onToggleCollapse}
-                  onSelect={onSelect}
-                  onOpenPerson={onOpenPerson}
-                  draggingUserId={draggingUserId}
-                  draggingNodeId={draggingNodeId}
-                  userDropMode={userDropMode}
-                  onCardPointerDown={onCardPointerDown}
-                  onCardContextMenu={onCardContextMenu}
-                  onConnectNode={onConnectNode}
-                  onDetachParent={onDetachParent}
-                  onBeginLink={onBeginLink}
-                  onAssignUser={onAssignUser}
-                  meta={meta}
-                  canManage={canManageCards}
-                  linkDraft={linkDraft}
-                  animated={canvasMode === "guided"}
-                />
-              ))}
+              {flatNodes.map(function renderSchemaNodeCard(node) {
+                return (
+                  <SchemaNodeCard
+                    key={node.id}
+                    node={node}
+                    displayPosition={displayPositions.get(node.id)!}
+                    offsetX={canvasBounds.offsetX}
+                    offsetY={canvasBounds.offsetY}
+                    selectedId={selectedId}
+                    isMultiSelected={multiSelectedIds.has(node.id)}
+                    collapsed={collapsedIds.has(node.id)}
+                    collapsedChildNames={collapsedPreview.get(node.id)?.childNames ?? null}
+                    onToggleCollapse={onToggleCollapse}
+                    onSelect={onSelect}
+                    onOpenPerson={onOpenPerson}
+                    draggingUserId={draggingUserId}
+                    draggingNodeId={draggingNodeId}
+                    userDropMode={userDropMode}
+                    onCardPointerDown={onCardPointerDown}
+                    onCardContextMenu={onCardContextMenu}
+                    onConnectNode={onConnectNode}
+                    onDetachParent={onDetachParent}
+                    onBeginLink={onBeginLink}
+                    onAssignUser={onAssignUser}
+                    meta={meta}
+                    canManage={canManageCards}
+                    linkDraft={linkDraft}
+                    animated={canvasMode === "guided"}
+                  />
+                );
+              })}
             </div>
           ) : (
             <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-[#d6dfef] bg-white px-8 py-10 text-[13px] text-[#5c6d82]">
@@ -1308,7 +1289,7 @@ type SchemaNodeCardProps = {
   animated: boolean;
 };
 
-function SchemaNodeCard({
+export function SchemaNodeCard({
   node,
   displayPosition,
   offsetX,
@@ -1661,41 +1642,7 @@ export function OrganigrammaWorkspace({
   }, []);
 
   const loadCore = useCallback(async () => {
-    if (!token) {
-      setError("Sessione non disponibile.");
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    try {
-      const [sessionUser, treeData, usersData, assignmentsData] = await Promise.all([
-        getCurrentUser(token),
-        getOrgTree(token, structureKind),
-        listAllApplicationUsers(token),
-        getOrgAssignments(token, { structureKind }),
-      ]);
-      setCurrentUser(sessionUser);
-      setTree(treeData);
-      setUsers(usersData);
-      setAllAssignments(assignmentsData);
-      const flat = flattenTree(treeData);
-      if (flat.length) {
-        setExpanded(new Set(flat.slice(0, 3).map((n) => n.id)));
-        setSelectedId((prev) => prev ?? flat[0].id);
-      }
-      // overrides are manage-gated; tolerate 403 for read-only users
-      try {
-        setOverrides(await getOrgOverrides(token, structureKind));
-      } catch (err) {
-        if (!isAuthError(err)) setOverrides([]);
-      }
-      setCanManage(sessionUser.role === "super_admin");
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Errore di caricamento");
-    } finally {
-      setLoading(false);
-    }
+    return loadingController.loadCore({ token, structureKind, setError, setLoading, setCurrentUser, setTree, setUsers, setAllAssignments, setExpanded, setSelectedId, setOverrides, setCanManage });
   }, [structureKind, token]);
 
   useEffect(() => {
@@ -1706,24 +1653,7 @@ export function OrganigrammaWorkspace({
   // the selected unit detail in place, without unmounting the workspace (no
   // loading screen, pan/zoom preserved).
   const refreshStructure = useCallback(async () => {
-    if (!token) return;
-    try {
-      const [treeData, assignmentsData] = await Promise.all([
-        getOrgTree(token, structureKind),
-        getOrgAssignments(token, { structureKind }),
-      ]);
-      setTree(treeData);
-      setAllAssignments(assignmentsData);
-      if (selectedId) {
-        try {
-          setDetail(await getOrgUnit(token, selectedId, structureKind));
-        } catch {
-          // the selected unit may no longer exist; the selection effect handles it
-        }
-      }
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Aggiornamento dati non riuscito");
-    }
+    return loadingController.refreshStructure({ token, structureKind, setTree, setAllAssignments, selectedId, setDetail, setNotice });
   }, [structureKind, token, selectedId]);
 
   // unit detail on selection
@@ -1912,267 +1842,60 @@ export function OrganigrammaWorkspace({
       return next;
     });
 
-  async function handleSync() {
-    if (!token) return;
-    setSyncing(true);
-    setNotice(null);
-    try {
-      const result = await syncOrgWhiteCompany(token);
-      setNotice(result.message);
-      await loadCore();
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Sync non riuscito");
-    } finally {
-      setSyncing(false);
-    }
+  function handleSync() {
+    return snapshotController.handleSync({ token, setSyncing, setNotice, loadCore });
   }
 
-  async function handleExportSnapshot() {
-    if (!token || !canModifyStructure) return;
-    setExportingSnapshot(true);
-    setNotice(null);
-    try {
-      const snapshot = await exportOrganigrammaSnapshot(token, structureKind);
-      const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      const timestamp = new Date().toISOString().replaceAll(":", "-");
-      link.href = url;
-      link.download = `${exportFilenamePrefix}-${timestamp}.json`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      setNotice("Snapshot JSON esportato.");
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Export JSON non riuscito");
-    } finally {
-      setExportingSnapshot(false);
-    }
+  function handleExportSnapshot() {
+    return snapshotController.handleExportSnapshot({ token, canModifyStructure, setExportingSnapshot, setNotice, structureKind, exportFilenamePrefix });
   }
 
   function handleOpenImportDialog() {
-    if (!canModifyStructure) return;
-    importFileInputRef.current?.click();
+    return snapshotController.handleOpenImportDialog({ canModifyStructure, importFileInputRef });
   }
 
   function closeReplaceImportConfirm() {
-    setShowReplaceImportConfirm(false);
-    setPendingImportFile(null);
-    setPendingImportSummary(null);
-    setReplaceImportConfirmText("");
-    if (importFileInputRef.current) importFileInputRef.current.value = "";
+    return snapshotController.closeReplaceImportConfirm({ setShowReplaceImportConfirm, setPendingImportFile, setPendingImportSummary, setReplaceImportConfirmText, importFileInputRef });
   }
 
-  async function handleImportFile(file: File | null) {
-    if (!file || !token || !canModifyStructure) return;
-    if (importMode === "replace") {
-      try {
-        const parsed = JSON.parse(await file.text()) as OrganigrammaSnapshot;
-        setPendingImportSummary(analyzeOrganigrammaSnapshot(parsed));
-      } catch (err) {
-        setNotice(err instanceof Error ? err.message : "JSON non valido");
-        if (importFileInputRef.current) importFileInputRef.current.value = "";
-        return;
-      }
-      setPendingImportFile(file);
-      setReplaceImportConfirmText("");
-      setShowReplaceImportConfirm(true);
-      return;
-    }
-    setImportingSnapshot(true);
-    setNotice(null);
-    try {
-      const parsed = JSON.parse(await file.text()) as OrganigrammaSnapshot;
-      const result = await importOrganigrammaSnapshot(token, parsed, importMode, structureKind);
-      await loadCore();
-      setNotice(
-        [
-          `Import ${result.mode} completato.`,
-          `Unità create ${result.units_created}, aggiornate ${result.units_updated}.`,
-          `Assegnazioni create ${result.assignments_created}, aggiornate ${result.assignments_updated}.`,
-          `Override create ${result.overrides_created}, aggiornate ${result.overrides_updated}.`,
-        ].join(" "),
-      );
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Import JSON non riuscito");
-    } finally {
-      if (importFileInputRef.current) importFileInputRef.current.value = "";
-      setImportingSnapshot(false);
-    }
+  function handleImportFile(file: File | null) {
+    return snapshotController.handleImportFile({ token, canModifyStructure, importMode, setPendingImportSummary, analyzeOrganigrammaSnapshot, setNotice, importFileInputRef, setPendingImportFile, setReplaceImportConfirmText, setShowReplaceImportConfirm, setImportingSnapshot, structureKind, loadCore }, file);
   }
 
-  async function handleConfirmReplaceImport() {
-    if (!pendingImportFile || !token || !canModifyStructure) return;
-    setImportingSnapshot(true);
-    setNotice(null);
-    try {
-      const parsed = JSON.parse(await pendingImportFile.text()) as OrganigrammaSnapshot;
-      const result = await importOrganigrammaSnapshot(token, parsed, "replace", structureKind);
-      await loadCore();
-      setNotice(
-        [
-          `Import ${result.mode} completato.`,
-          `Unità create ${result.units_created}, aggiornate ${result.units_updated}.`,
-          `Assegnazioni create ${result.assignments_created}, aggiornate ${result.assignments_updated}.`,
-          `Override create ${result.overrides_created}, aggiornate ${result.overrides_updated}.`,
-        ].join(" "),
-      );
-      closeReplaceImportConfirm();
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Import JSON non riuscito");
-    } finally {
-      if (importFileInputRef.current) importFileInputRef.current.value = "";
-      setImportingSnapshot(false);
-    }
+  function handleConfirmReplaceImport() {
+    return snapshotController.handleConfirmReplaceImport({ pendingImportFile, token, canModifyStructure, setImportingSnapshot, setNotice, structureKind, loadCore, closeReplaceImportConfirm, importFileInputRef });
   }
 
-  async function handleCreateOverride(payload: OrgVisibilityOverrideCreateInput) {
-    if (!token || !canModifyStructure) return;
-    await createOrgOverride(token, payload, structureKind);
-    setOverrides(await getOrgOverrides(token, structureKind));
-    setShowAddOverride(false);
+  function handleCreateOverride(payload: OrgVisibilityOverrideCreateInput) {
+    return snapshotController.handleCreateOverride({ token, canModifyStructure, structureKind, setOverrides, setShowAddOverride }, payload);
   }
 
-  async function handleMoveNode(nodeId: string, parentId: string | null) {
-    if (!token || !canModifyStructure || !schemaEditEnabled || nodeId === parentId) return;
-    const nodeMeta = schemaMeta.get(nodeId);
-    if (parentId && nodeMeta?.descendantIds.has(parentId)) {
-      setNotice("Operazione non valida: non puoi spostare un nodo dentro un suo discendente.");
-      return;
-    }
-    setNotice(null);
-    try {
-      await updateOrgUnit(token, nodeId, { parent_id: parentId }, structureKind);
-      setSelectedId(nodeId);
-      await refreshStructure();
-      setNotice(parentId ? "Gerarchia aggiornata." : "Nodo spostato in radice.");
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Aggiornamento gerarchia non riuscito");
-    } finally {
-      setDraggingNodeId(null);
-      setDraggingUserId(null);
-    }
+  function handleMoveNode(nodeId: string, parentId: string | null) {
+    return mutationController.handleMoveNode({ token, canModifyStructure, schemaEditEnabled, schemaMeta, setNotice, structureKind, setSelectedId, refreshStructure, setDraggingNodeId, setDraggingUserId }, nodeId, parentId);
   }
 
   function handleBeginSchemaLink(nodeId: string, mode: "above" | "below") {
-    if (!canModifyStructure || !schemaEditEnabled) return;
-    setSchemaLinkDraft((current) => {
-      if (current?.sourceId === nodeId && current.mode === mode) {
-        return null;
-      }
-      return { sourceId: nodeId, mode };
-    });
+    return selectionController.handleBeginSchemaLink({ canModifyStructure, schemaEditEnabled, setSchemaLinkDraft }, nodeId, mode);
   }
 
-  async function performSchemaLink(sourceId: string, targetId: string, mode: "above" | "below"): Promise<boolean> {
-    if (!token || !canModifyStructure || !schemaEditEnabled) return false;
-    if (sourceId === targetId) return false;
-
-    const sourceMeta = schemaMeta.get(sourceId);
-    const targetMeta = schemaMeta.get(targetId);
-    if (mode === "below" && sourceMeta?.descendantIds.has(targetId)) {
-      setNotice("Collegamento non valido: il blocco sorgente non può finire sotto un suo discendente.");
-      return false;
-    }
-    if (mode === "above" && targetMeta?.descendantIds.has(sourceId)) {
-      setNotice("Collegamento non valido: il blocco destinazione non può finire sotto un suo discendente.");
-      return false;
-    }
-
-    try {
-      if (mode === "below") {
-        await updateOrgUnit(token, sourceId, { parent_id: targetId }, structureKind);
-      } else {
-        await updateOrgUnit(token, targetId, { parent_id: sourceId }, structureKind);
-      }
-      // Keep the source block selected so multiple children can be linked in sequence.
-      setSelectedId(sourceId);
-      setNotice("Collegamento aggiornato.");
-      await refreshStructure();
-      return true;
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Aggiornamento collegamento non riuscito");
-      return false;
-    }
+  function performSchemaLink(sourceId: string, targetId: string, mode: "above" | "below"): Promise<boolean> {
+    return mutationController.performSchemaLink({ token, canModifyStructure, schemaEditEnabled, schemaMeta, setNotice, structureKind, setSelectedId, refreshStructure }, sourceId, targetId, mode);
   }
 
-  async function handleConnectSchemaNode(targetId: string) {
-    if (!schemaLinkDraft) return;
-    const { sourceId, mode } = schemaLinkDraft;
-    const ok = await performSchemaLink(sourceId, targetId, mode);
-    // "above" collects children: keep the draft alive so more blocks can be
-    // linked under the same source. "below" picks the single parent, so close it.
-    if (!ok || mode === "below") {
-      setSchemaLinkDraft(null);
-    }
+  function handleConnectSchemaNode(targetId: string) {
+    return selectionController.handleConnectSchemaNode({ schemaLinkDraft, performSchemaLink, setSchemaLinkDraft }, targetId);
   }
 
-  async function handleConnectSelectedNodeToTarget(targetId: string, mode: "above" | "below") {
-    if (!selectedId) return;
-    setSchemaLinkDraft(null);
-    await performSchemaLink(selectedId, targetId, mode);
+  function handleConnectSelectedNodeToTarget(targetId: string, mode: "above" | "below") {
+    return selectionController.handleConnectSelectedNodeToTarget({ selectedId, setSchemaLinkDraft, performSchemaLink }, targetId, mode);
   }
 
-  async function handleAssignUserToUnit(userId: number, unitId: string, mode: UserDropMode) {
-    if (!token || !canModifyStructure || !schemaEditEnabled) return;
-    const unitMeta = schemaMeta.get(unitId);
-    const unit = flatTree.find((entry) => entry.id === unitId);
-    const user = users.find((entry) => entry.id === userId);
-    if (!unit || !user) return;
-    if (assignedUserIds.has(userId)) {
-      setNotice("Questo utente risulta già assegnato a una unità.");
-      setDraggingUserId(null);
-      return;
-    }
-    if (mode === "lead" && unitMeta?.lead) {
-      setNotice("L'unità ha già un responsabile diretto. Spostalo o sostituiscilo prima di assegnarne un altro.");
-      setDraggingUserId(null);
-      return;
-    }
-
-    const payload = buildAssignmentPayload({ userId, unit, mode, ...resolveManagerUserIds(unit, schemaMeta) });
-
-    try {
-      await createOrgAssignment(token, payload, structureKind);
-      await syncDirectReportManagers(mode, allAssignments, unitId, userId, (assignmentId) =>
-        updateOrgAssignment(token, assignmentId, { manager_user_id: userId }, structureKind),
-      );
-      setNotice(
-        mode === "lead"
-          ? `${user.full_name ?? user.username} impostato come responsabile di ${unit.nome}.`
-          : `${user.full_name ?? user.username} assegnato a ${unit.nome}.`,
-      );
-      await refreshStructure();
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Assegnazione non riuscita");
-    } finally {
-      setDraggingUserId(null);
-    }
+  function handleAssignUserToUnit(userId: number, unitId: string, mode: UserDropMode) {
+    return mutationController.handleAssignUserToUnit({ token, canModifyStructure, schemaEditEnabled, schemaMeta, flatTree, users, assignedUserIds, setNotice, setDraggingUserId, allAssignments, structureKind, refreshStructure }, userId, unitId, mode);
   }
 
-  async function handleCreateUnit(payload: OrgUnitCreateInput, responsibleUserId: number | null) {
-    if (!token || !canModifyStructure) return;
-    try {
-      const parentUnit = payload.parent_id ? flatTree.find((entry) => entry.id === payload.parent_id) : null;
-      const seededPayload: OrgUnitCreateInput = {
-        ...payload,
-        canvas_x: payload.canvas_x ?? (parentUnit ? parentUnit.canvas_x + 320 : 120),
-        canvas_y: payload.canvas_y ?? (parentUnit ? parentUnit.canvas_y + 220 : 120 + flatTree.length * 40),
-      };
-      const created = await createOrgUnit(token, seededPayload, structureKind);
-      if (responsibleUserId != null) {
-        await createOrgAssignment(token, buildAssignmentPayload({
-          userId: responsibleUserId, unit: created, mode: "lead", unitLeadUserId: null, parentLeadUserId: null,
-        }), structureKind);
-      }
-      setCreateUnitPreset(null);
-      setSelectedId(created.id);
-      setNotice(`Unità ${created.nome} creata correttamente.`);
-      await refreshStructure();
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Creazione unità non riuscita");
-    }
+  function handleCreateUnit(payload: OrgUnitCreateInput, responsibleUserId: number | null) {
+    return mutationController.handleCreateUnit({ token, canModifyStructure, flatTree, structureKind, setCreateUnitPreset, setSelectedId, setNotice, refreshStructure }, payload, responsibleUserId);
   }
 
   function openCreateUnit(tipo: OrgUnitType, parentId: string | null = selectedId) {
@@ -2180,16 +1903,7 @@ export function OrganigrammaWorkspace({
   }
 
   function resolveSectorParentId(): string | null {
-    if (selectedNode?.tipo === "distretto" || selectedNode?.tipo === "direzione") {
-      return selectedNode.id;
-    }
-    if (selectedNode?.tipo === "settore") {
-      return selectedNode.parent_id;
-    }
-    if (selectedSector?.parent_id) {
-      return selectedSector.parent_id;
-    }
-    return selectedId;
+    return layoutController.resolveSectorParentId({ selectedNode, selectedSector, selectedId });
   }
 
   function snapCoordinate(value: number) {
@@ -2197,65 +1911,7 @@ export function OrganigrammaWorkspace({
   }
 
   const realignExpandedSubtree = useCallback(async (nodeId: string) => {
-    const expandedNode = flatTree.find((node) => node.id === nodeId);
-    if (!expandedNode || !expandedNode.children.length) return;
-    const subtreeRoot = expandedNode.parent_id
-      ? flatTree.find((node) => node.id === expandedNode.parent_id) ?? expandedNode
-      : expandedNode;
-    if (!subtreeRoot.children.length) return;
-
-    const layout = schemaOrientation === "horizontal"
-      ? computeHorizontalTreeLayout([subtreeRoot])
-      : computeVerticalTreeLayout([subtreeRoot]);
-    const rootLayout = layout.get(subtreeRoot.id);
-    if (!rootLayout) return;
-
-    const rootX = safeCanvasCoord(subtreeRoot.canvas_x);
-    const rootY = safeCanvasCoord(subtreeRoot.canvas_y);
-    const deltaX = rootX - rootLayout.x;
-    const deltaY = rootY - rootLayout.y;
-    const rawPositions = new Map<string, SchemaDisplayPosition>();
-
-    for (const [entryId, position] of layout.entries()) {
-      if (entryId === subtreeRoot.id) continue;
-      rawPositions.set(entryId, {
-        x: snapCoordinate(position.x + deltaX),
-        y: snapCoordinate(position.y + deltaY),
-      });
-    }
-
-    if (!rawPositions.size) return;
-
-    const subtreeIds = new Set(rawPositions.keys());
-    subtreeIds.add(subtreeRoot.id);
-    const occupiedPositions = flatTree
-      .filter((entry) => !subtreeIds.has(entry.id))
-      .map((entry) => ({
-        x: safeCanvasCoord(entry.canvas_x),
-        y: safeCanvasCoord(entry.canvas_y),
-      }));
-    const collisionShift = resolveSubtreeCollisionShift(rawPositions, occupiedPositions, schemaOrientation);
-    const nextPositions = new Map<string, SchemaDisplayPosition>();
-
-    for (const [entryId, position] of rawPositions.entries()) {
-      nextPositions.set(entryId, {
-        x: snapCoordinate(Math.max(0, position.x + collisionShift.x)),
-        y: snapCoordinate(Math.max(0, position.y + collisionShift.y)),
-      });
-    }
-
-    setTree((current) => applyCanvasPositionsToForest(current, nextPositions));
-
-    if (!token || !canModifyStructure) return;
-
-    await Promise.all(
-      [...nextPositions.entries()].map(([entryId, position]) =>
-        updateOrgUnit(token, entryId, {
-          canvas_x: position.x,
-          canvas_y: position.y,
-        }, structureKind),
-      ),
-    );
+    return layoutController.realignExpandedSubtree({ flatTree, schemaOrientation, safeCanvasCoord, computeHorizontalTreeLayout, computeVerticalTreeLayout, snapCoordinate, resolveSubtreeCollisionShift, setTree, applyCanvasPositionsToForest, token, canModifyStructure, structureKind }, nodeId);
   }, [canModifyStructure, flatTree, schemaOrientation, token]);
 
   const toggleSchemaCollapse = useCallback((nodeId: string) => {
@@ -2277,259 +1933,36 @@ export function OrganigrammaWorkspace({
     }
   }, [realignExpandedSubtree, schemaCanvasMode, schemaCollapsedIds]);
 
-  async function handleDetachAssignment(assignmentId: string) {
-    if (!token || !canModifyStructure || !schemaEditEnabled) return;
-    try {
-      await deleteOrgAssignment(token, assignmentId, structureKind);
-      setNotice(`Assegnazione rimossa da ${entityLabel}.`);
-      await refreshStructure();
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Rimozione assegnazione non riuscita");
-    }
+  function handleDetachAssignment(assignmentId: string) {
+    return mutationController.handleDetachAssignment({ token, canModifyStructure, schemaEditEnabled, structureKind, setNotice, entityLabel, refreshStructure }, assignmentId);
   }
 
-  async function handleDeleteUnit(nodeId: string) {
-    if (!token || !canModifyStructure || !schemaEditEnabled) return;
-    const node = flatTree.find((entry) => entry.id === nodeId);
-    const nodeSummary = schemaMeta.get(nodeId);
-    if (!node || !nodeSummary) return;
-    if (nodeSummary.descendantIds.size > 1) {
-      setNotice("Non puoi eliminare un blocco che contiene sotto-unità. Scollega o rimuovi prima i blocchi figli.");
-      return;
-    }
-    if (nodeSummary.directPeople > 0) {
-      setNotice("Non puoi eliminare un blocco con assegnazioni dirette. Rimuovi prima le persone assegnate.");
-      return;
-    }
-    const confirmed = window.confirm(`Eliminare definitivamente il blocco “${node.nome}”?`);
-    if (!confirmed) return;
-    try {
-      await deleteOrgUnit(token, nodeId, structureKind);
-      setSchemaContextMenu(null);
-      setDetail(null);
-      setSelectedId((current) => (current === nodeId ? null : current));
-      setMultiSelectedIds((prev) => {
-        if (!prev.has(nodeId)) return prev;
-        const next = new Set(prev);
-        next.delete(nodeId);
-        return next;
-      });
-      setNotice(`Blocco “${node.nome}” eliminato da ${entityLabel}.`);
-      await refreshStructure();
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Eliminazione blocco non riuscita");
-    }
+  function handleDeleteUnit(nodeId: string) {
+    return mutationController.handleDeleteUnit({ token, canModifyStructure, schemaEditEnabled, flatTree, schemaMeta, setNotice, structureKind, setSchemaContextMenu, setDetail, setSelectedId, setMultiSelectedIds, entityLabel, refreshStructure }, nodeId);
   }
 
-  async function handleApplyTreeLayout(orientation: SchemaOrientation) {
-    if (schemaCanvasMode === "guided") {
-      setSchemaOrientation(orientation);
-      setNotice(`Vista guidata ${orientation === "horizontal" ? "orizzontale" : "verticale"} applicata.`);
-      if (view === "schema") {
-        window.requestAnimationFrame(() => {
-          fitSchemaToViewport();
-        });
-      }
-      return;
-    }
-    if (!token || !canModifyStructure) return;
-    const layoutTree = scopedTree;
-    const nextPositions = orientation === "horizontal"
-      ? computeHorizontalTreeLayout(layoutTree)
-      : computeVerticalTreeLayout(layoutTree);
-    setTree((current) => {
-      let nextTree = current;
-      for (const [nodeId, position] of nextPositions) {
-        nextTree = updateTreeNodeInForest(nextTree, nodeId, {
-          canvas_x: position.x,
-          canvas_y: position.y,
-        });
-      }
-      return nextTree;
-    });
-    try {
-      await Promise.all(
-        Array.from(nextPositions.entries()).map(([nodeId, position]) =>
-          updateOrgUnit(token, nodeId, {
-            canvas_x: position.x,
-            canvas_y: position.y,
-          }, structureKind),
-        ),
-      );
-      setSchemaOrientation(orientation);
-      setNotice(`Layout ${orientation === "horizontal" ? "orizzontale" : "verticale"} applicato.`);
-      await refreshStructure();
-      if (view === "schema") {
-        window.requestAnimationFrame(() => {
-          fitSchemaToViewport();
-        });
-      }
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : `Applicazione layout ${orientation === "horizontal" ? "orizzontale" : "verticale"} non riuscita`);
-    }
+  function handleApplyTreeLayout(orientation: SchemaOrientation) {
+    return layoutController.handleApplyTreeLayout({ schemaCanvasMode, setSchemaOrientation, setNotice, view, fitSchemaToViewport, token, canModifyStructure, scopedTree, computeHorizontalTreeLayout, computeVerticalTreeLayout, setTree, updateTreeNodeInForest, structureKind, refreshStructure }, orientation);
   }
 
-  async function handleCompactVisibleArea() {
-    if (!token || !canModifyStructure) return;
-    const layoutTree = schemaRoots;
-    const visibleNodes = flattenTree(layoutTree);
-    if (!visibleNodes.length) return;
-
-    const baseLayout = schemaOrientation === "horizontal"
-      ? computeHorizontalTreeLayout(layoutTree)
-      : computeVerticalTreeLayout(layoutTree);
-    const currentMinX = Math.min(...visibleNodes.map((node) => safeCanvasCoord(node.canvas_x)));
-    const currentMinY = Math.min(...visibleNodes.map((node) => safeCanvasCoord(node.canvas_y)));
-    const layoutMinX = Math.min(...visibleNodes.map((node) => baseLayout.get(node.id)?.x ?? 0));
-    const layoutMinY = Math.min(...visibleNodes.map((node) => baseLayout.get(node.id)?.y ?? 0));
-    const offsetX = currentMinX - layoutMinX;
-    const offsetY = currentMinY - layoutMinY;
-    const nextPositions = new Map<string, SchemaDisplayPosition>();
-
-    for (const node of visibleNodes) {
-      const position = baseLayout.get(node.id);
-      if (!position) continue;
-      nextPositions.set(node.id, {
-        x: snapCoordinate(Math.max(0, position.x + offsetX)),
-        y: snapCoordinate(Math.max(0, position.y + offsetY)),
-      });
-    }
-
-    setTree((current) => applyCanvasPositionsToForest(current, nextPositions));
-    try {
-      await Promise.all(
-        [...nextPositions.entries()].map(([nodeId, position]) =>
-          updateOrgUnit(token, nodeId, {
-            canvas_x: position.x,
-            canvas_y: position.y,
-          }, structureKind),
-        ),
-      );
-      setNotice("Area visibile compattata.");
-      if (view === "schema") {
-        window.requestAnimationFrame(() => {
-          fitSchemaToViewport();
-        });
-      }
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Compattazione area visibile non riuscita");
-    }
+  function handleCompactVisibleArea() {
+    return layoutController.handleCompactVisibleArea({ token, canModifyStructure, schemaRoots, schemaOrientation, computeHorizontalTreeLayout, computeVerticalTreeLayout, safeCanvasCoord, snapCoordinate, setTree, applyCanvasPositionsToForest, structureKind, setNotice, view, fitSchemaToViewport });
   }
 
   function handleSchemaCardSelect(nodeId: string, event?: React.MouseEvent) {
-    if (event && (event.ctrlKey || event.metaKey || event.shiftKey)) {
-      const isToggleOff = (event.ctrlKey || event.metaKey) && multiSelectedIds.has(nodeId);
-      setMultiSelectedIds((prev) => {
-        const next = new Set(prev);
-        // Seed the multi-selection with the currently selected card on the first modifier click.
-        if (!next.size && selectedId && selectedId !== nodeId) next.add(selectedId);
-        if (isToggleOff) {
-          next.delete(nodeId);
-        } else {
-          next.add(nodeId);
-        }
-        return next;
-      });
-      if (!isToggleOff) setSelectedId(nodeId);
-      return;
-    }
-    setMultiSelectedIds(new Set());
-    setSelectedId(nodeId);
+    return selectionController.handleSchemaCardSelect({ multiSelectedIds, setMultiSelectedIds, selectedId, setSelectedId }, nodeId, event);
   }
 
   function handleSchemaCardPointerDown(nodeId: string, event: React.PointerEvent<HTMLDivElement>) {
-    if (!schemaEditEnabled || event.button !== 0) return;
-    // Modifier clicks are selection gestures (handled on click), not drag starts.
-    if (event.ctrlKey || event.metaKey || event.shiftKey) return;
-    const target = event.target as HTMLElement | null;
-    if (target?.closest("button, input, select, textarea, label, a")) return;
-    const node = flatTree.find((entry) => entry.id === nodeId);
-    if (!node) return;
-    if (typeof event.currentTarget.setPointerCapture === "function") {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    setSelectedId(nodeId);
-    const groupIds = multiSelectedIds.has(nodeId)
-      ? Array.from(new Set([nodeId, ...multiSelectedIds]))
-      : [nodeId];
-    if (!multiSelectedIds.has(nodeId) && multiSelectedIds.size) {
-      setMultiSelectedIds(new Set());
-    }
-    const dragNodes = groupIds
-      .map((id) => flatTree.find((entry) => entry.id === id))
-      .filter((entry): entry is OrgUnitTreeNode => Boolean(entry))
-      .map((entry) => ({
-        nodeId: entry.id,
-        originX: safeCanvasCoord(entry.canvas_x),
-        originY: safeCanvasCoord(entry.canvas_y),
-      }));
-    setSchemaDragging({
-      nodeId,
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      nodes: dragNodes,
-    });
+    return selectionController.handleSchemaCardPointerDown({ schemaEditEnabled, flatTree, multiSelectedIds, setSelectedId, setMultiSelectedIds, safeCanvasCoord, setSchemaDragging }, nodeId, event);
   }
 
   function handleSchemaCardContextMenu(nodeId: string, event: React.MouseEvent<HTMLDivElement>) {
-    if (!schemaEditEnabled) return;
-    event.preventDefault();
-    event.stopPropagation();
-    setSelectedId(nodeId);
-    setSchemaContextMenu({
-      nodeId,
-      x: event.clientX,
-      y: event.clientY,
-    });
+    return selectionController.handleSchemaCardContextMenu({ schemaEditEnabled, setSelectedId, setSchemaContextMenu }, nodeId, event);
   }
 
   useEffect(() => {
-    if (!schemaDragging || !token || !schemaEditEnabled) return;
-
-    const handlePointerMove = (event: PointerEvent) => {
-      if (event.pointerId !== schemaDragging.pointerId) return;
-      const deltaX = Math.round((event.clientX - schemaDragging.startX) / Math.max(schemaScale, 0.01));
-      const deltaY = Math.round((event.clientY - schemaDragging.startY) / Math.max(schemaScale, 0.01));
-      setTree((current) => {
-        let nextTree = current;
-        for (const dragNode of schemaDragging.nodes) {
-          const rawX = Math.max(0, dragNode.originX + deltaX);
-          const rawY = Math.max(0, dragNode.originY + deltaY);
-          const nextX = schemaSnapToGrid ? snapCoordinate(rawX) : rawX;
-          const nextY = schemaSnapToGrid ? snapCoordinate(rawY) : rawY;
-          nextTree = updateTreeNodeInForest(nextTree, dragNode.nodeId, { canvas_x: nextX, canvas_y: nextY });
-        }
-        return nextTree;
-      });
-    };
-
-    const handlePointerUp = (event: PointerEvent) => {
-      if (event.pointerId !== schemaDragging.pointerId) return;
-      const flat = flattenTree(treeRef.current);
-      setSchemaDragging(null);
-      for (const dragNode of schemaDragging.nodes) {
-        const movedNode = flat.find((entry) => entry.id === dragNode.nodeId);
-        if (!movedNode) continue;
-        void updateOrgUnit(token, dragNode.nodeId, {
-          canvas_x: movedNode.canvas_x,
-          canvas_y: movedNode.canvas_y,
-        }, structureKind).catch((err) => {
-          setNotice(err instanceof Error ? err.message : "Salvataggio posizione non riuscito");
-        });
-      }
-    };
-
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
-    window.addEventListener("pointercancel", handlePointerUp);
-    return () => {
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-      window.removeEventListener("pointercancel", handlePointerUp);
-    };
+    return viewportController.bindSchemaDrag({ schemaDragging, token, schemaEditEnabled, schemaScale, schemaSnapToGrid, setTree, snapCoordinate, updateTreeNodeInForest, treeRef, setSchemaDragging, structureKind, setNotice });
   }, [schemaDragging, token, schemaEditEnabled, schemaScale, schemaSnapToGrid]);
 
   const handleResetGuidedSchemaPreferences = useCallback(() => {
@@ -2541,12 +1974,10 @@ export function OrganigrammaWorkspace({
     setSchemaDragging(null);
     setSchemaContextMenu(null);
     setNotice("Vista guidata consigliata ripristinata.");
-    if (view === "schema") {
-      window.requestAnimationFrame(() => {
-        fitSchemaToViewport();
-      });
-    }
-  }, [fitSchemaToViewport, view]);
+    window.requestAnimationFrame(() => {
+      fitSchemaToViewport();
+    });
+  }, [fitSchemaToViewport]);
 
   useEffect(() => {
     if (view !== "schema" || loading || !roots.length || schemaAutoFitDoneRef.current) return;
@@ -2625,37 +2056,7 @@ export function OrganigrammaWorkspace({
   }, [guidedSchemaDensity, scheduleSchemaFitToViewport, schemaCanvasMode, schemaCollapsedIds, schemaOrientation, view]);
 
   useEffect(() => {
-    if (view !== "schema" || !schemaFocusNodeId) return;
-    const viewport = schemaViewportRef.current;
-    if (!viewport) return;
-    const visibleNodes = flattenTree(roots);
-    const targetNode = visibleNodes.find((node) => node.id === schemaFocusNodeId);
-    if (!targetNode) {
-      setSchemaFocusNodeId(null);
-      return;
-    }
-    const positions = schemaCanvasMode === "guided"
-      ? computeGuidedSchemaLayout(roots, schemaOrientation, guidedSchemaDensity)
-      : computeSchemaDisplayPositions(visibleNodes);
-    const bounds = computeSchemaCanvasBounds(visibleNodes, positions);
-    const widthRatio = (viewport.clientWidth - 32) / Math.max(bounds.width, 1);
-    const heightRatio = (viewport.clientHeight - 32) / Math.max(bounds.height, 1);
-    const nextScale = Math.max(0.45, Math.min(1.2, Math.min(widthRatio, heightRatio)));
-    setSchemaScale(nextScale);
-
-    const id = window.requestAnimationFrame(() => {
-      const targetPosition = positions.get(targetNode.id) ?? {
-        x: safeCanvasCoord(targetNode.canvas_x),
-        y: safeCanvasCoord(targetNode.canvas_y),
-      };
-      const targetX = (targetPosition.x + bounds.offsetX) * nextScale;
-      const targetY = (targetPosition.y + bounds.offsetY) * nextScale;
-      viewport.scrollLeft = Math.max(targetX - (viewport.clientWidth - SCHEMA_NODE_WIDTH * nextScale) / 2, 0);
-      viewport.scrollTop = Math.max(targetY - (viewport.clientHeight - SCHEMA_NODE_HEIGHT * nextScale) / 2, 0);
-      setSchemaFocusNodeId(null);
-    });
-
-    return () => window.cancelAnimationFrame(id);
+    return viewportController.focusSchemaNode({ view, schemaFocusNodeId, schemaViewportRef, roots, setSchemaFocusNodeId, schemaCanvasMode, computeGuidedSchemaLayout, schemaOrientation, guidedSchemaDensity, computeSchemaDisplayPositions, computeSchemaCanvasBounds, setSchemaScale, SCHEMA_NODE_WIDTH, SCHEMA_NODE_HEIGHT });
   }, [view, guidedSchemaDensity, schemaCanvasMode, schemaFocusNodeId, roots, schemaOrientation]);
 
   useEffect(() => {
@@ -2687,168 +2088,13 @@ export function OrganigrammaWorkspace({
     return () => window.removeEventListener("keydown", handleEscape);
   }, [schemaLinkDraft]);
 
-  const handleTreePanStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
-    const target = event.target as HTMLElement | null;
-    if (target?.closest("[role='treeitem'], button, input, select, textarea, label, a")) return;
-    const viewport = treeViewportRef.current;
-    if (!viewport) return;
+  const handleTreePanStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => viewportController.handleTreePanStart({ treeViewportRef, treePanStateRef }, event), []);
 
-    treePanStateRef.current = {
-      active: true,
-      startX: event.clientX,
-      startY: event.clientY,
-      scrollLeft: viewport.scrollLeft,
-      scrollTop: viewport.scrollTop,
-    };
-    viewport.style.cursor = "grabbing";
-    event.preventDefault();
+  const handleSchemaPanStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => viewportController.handleSchemaPanStart({ schemaViewportRef, schemaPanStateRef, schemaRoots, schemaScale, computeSchemaCanvasBounds, computeSchemaDisplayPositions, safeCanvasCoord, SCHEMA_NODE_WIDTH, SCHEMA_NODE_HEIGHT, setSchemaMarquee, setMultiSelectedIds, setSchemaLinkDraft }, event), [schemaRoots, schemaScale]);
 
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const current = treePanStateRef.current;
-      if (!current.active) return;
-      viewport.scrollLeft = current.scrollLeft - (moveEvent.clientX - current.startX);
-      viewport.scrollTop = current.scrollTop - (moveEvent.clientY - current.startY);
-    };
+  const handleTreeZoomWheel = useCallback((event: WheelEvent) => viewportController.handleTreeZoomWheel({ treeViewportRef, setTreeScale }, event), []);
 
-    const handleMouseUp = () => {
-      treePanStateRef.current.active = false;
-      viewport.style.cursor = "grab";
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-    };
-
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
-  }, []);
-
-  const handleSchemaPanStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
-    const target = event.target as HTMLElement | null;
-    if (target?.closest("[data-schema-node-card], button, input, select, textarea, label, a")) return;
-    const viewport = schemaViewportRef.current;
-    if (!viewport) return;
-
-    if (event.shiftKey) {
-      // Shift+drag on the background: marquee selection instead of panning.
-      event.preventDefault();
-      const visibleNodes = flattenTree(schemaRoots);
-      const bounds = computeSchemaCanvasBounds(visibleNodes, computeSchemaDisplayPositions(visibleNodes));
-      const scale = Math.max(schemaScale, 0.01);
-      const viewportRect = viewport.getBoundingClientRect();
-      const toCanvas = (clientX: number, clientY: number) => ({
-        x: (clientX - viewportRect.left + viewport.scrollLeft) / scale,
-        y: (clientY - viewportRect.top + viewport.scrollTop) / scale,
-      });
-      const start = toCanvas(event.clientX, event.clientY);
-
-      const updateSelection = (clientX: number, clientY: number) => {
-        const current = toCanvas(clientX, clientY);
-        const minX = Math.min(start.x, current.x);
-        const maxX = Math.max(start.x, current.x);
-        const minY = Math.min(start.y, current.y);
-        const maxY = Math.max(start.y, current.y);
-        setSchemaMarquee({ x: minX, y: minY, width: maxX - minX, height: maxY - minY });
-        const ids = new Set<string>();
-        for (const node of visibleNodes) {
-          const left = safeCanvasCoord(node.canvas_x) + bounds.offsetX;
-          const top = safeCanvasCoord(node.canvas_y) + bounds.offsetY;
-          if (left < maxX && left + SCHEMA_NODE_WIDTH > minX && top < maxY && top + SCHEMA_NODE_HEIGHT > minY) {
-            ids.add(node.id);
-          }
-        }
-        setMultiSelectedIds(ids);
-      };
-
-      const handleMarqueeMove = (moveEvent: MouseEvent) => {
-        updateSelection(moveEvent.clientX, moveEvent.clientY);
-      };
-      const handleMarqueeUp = (upEvent: MouseEvent) => {
-        updateSelection(upEvent.clientX, upEvent.clientY);
-        setSchemaMarquee(null);
-        window.removeEventListener("mousemove", handleMarqueeMove);
-        window.removeEventListener("mouseup", handleMarqueeUp);
-      };
-      window.addEventListener("mousemove", handleMarqueeMove);
-      window.addEventListener("mouseup", handleMarqueeUp);
-      return;
-    }
-
-    // Clicking the empty canvas exits link mode and clears the multi-selection.
-    setSchemaLinkDraft(null);
-    setMultiSelectedIds(new Set());
-
-    schemaPanStateRef.current = {
-      active: true,
-      startX: event.clientX,
-      startY: event.clientY,
-      scrollLeft: viewport.scrollLeft,
-      scrollTop: viewport.scrollTop,
-    };
-    viewport.style.cursor = "grabbing";
-    event.preventDefault();
-
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const current = schemaPanStateRef.current;
-      if (!current.active) return;
-      viewport.scrollLeft = current.scrollLeft - (moveEvent.clientX - current.startX);
-      viewport.scrollTop = current.scrollTop - (moveEvent.clientY - current.startY);
-    };
-
-    const handleMouseUp = () => {
-      schemaPanStateRef.current.active = false;
-      viewport.style.cursor = "grab";
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-    };
-
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
-  }, [schemaRoots, schemaScale]);
-
-  const handleTreeZoomWheel = useCallback((event: WheelEvent) => {
-    if (!event.ctrlKey) return;
-    event.preventDefault();
-    const viewport = treeViewportRef.current;
-    if (!viewport) return;
-
-    const rect = viewport.getBoundingClientRect();
-    const pointerX = event.clientX - rect.left + viewport.scrollLeft;
-    const pointerY = event.clientY - rect.top + viewport.scrollTop;
-
-    setTreeScale((current) => {
-      const delta = event.deltaY > 0 ? -0.08 : 0.08;
-      const next = Math.max(0.65, Math.min(1.6, Number((current + delta).toFixed(2))));
-      window.requestAnimationFrame(() => {
-        const ratio = next / current;
-        viewport.scrollLeft = Math.max(pointerX * ratio - (event.clientX - rect.left), 0);
-        viewport.scrollTop = Math.max(pointerY * ratio - (event.clientY - rect.top), 0);
-      });
-      return next;
-    });
-  }, []);
-
-  const handleSchemaZoomWheel = useCallback((event: WheelEvent) => {
-    if (!event.ctrlKey) return;
-    event.preventDefault();
-    const viewport = schemaViewportRef.current;
-    if (!viewport) return;
-
-    const rect = viewport.getBoundingClientRect();
-    const pointerX = event.clientX - rect.left + viewport.scrollLeft;
-    const pointerY = event.clientY - rect.top + viewport.scrollTop;
-
-    setSchemaScale((current) => {
-      const delta = event.deltaY > 0 ? -0.08 : 0.08;
-      const next = Math.max(0.5, Math.min(1.6, Number((current + delta).toFixed(2))));
-      window.requestAnimationFrame(() => {
-        const ratio = next / current;
-        viewport.scrollLeft = Math.max(pointerX * ratio - (event.clientX - rect.left), 0);
-        viewport.scrollTop = Math.max(pointerY * ratio - (event.clientY - rect.top), 0);
-      });
-      return next;
-    });
-  }, []);
+  const handleSchemaZoomWheel = useCallback((event: WheelEvent) => viewportController.handleSchemaZoomWheel({ schemaViewportRef, setSchemaScale }, event), []);
 
   // `loading` is a dependency because on first mount the workspace renders the
   // loading placeholder: the viewport refs only exist after loading completes.
@@ -3329,7 +2575,7 @@ export function OrganigrammaWorkspace({
       {showReplaceImportConfirm ? (
         <ReplaceImportConfirmModal
           entityLabel={entityLabel}
-          filename={pendingImportFile?.name ?? null}
+          filename={pendingImportFile!.name}
           summary={pendingImportSummary}
           confirmText={replaceImportConfirmText}
           busy={importingSnapshot}
@@ -3377,23 +2623,21 @@ export function OrganigrammaWorkspace({
                 Scollega da “{flatTree.find((node) => node.id === schemaContextNode.parent_id)?.nome ?? "padre"}”
               </button>
             ) : null}
-            {(schemaMeta.get(schemaContextNode.id)?.descendantIds.size ?? 0) > 1 ? (
+            {schemaMeta.get(schemaContextNode.id)!.descendantIds.size > 1 ? (
               <button
                 type="button"
-                onClick={() => {
-                  const subtreeIds = schemaMeta.get(schemaContextNode.id)?.descendantIds;
+                onClick={function selectSchemaSubtree() {
+                  const subtreeIds = schemaMeta.get(schemaContextNode.id)!.descendantIds;
                   setSchemaContextMenu(null);
-                  if (subtreeIds?.size) {
-                    setMultiSelectedIds(new Set(subtreeIds));
-                    setSelectedId(schemaContextNode.id);
-                  }
+                  setMultiSelectedIds(new Set(subtreeIds));
+                  setSelectedId(schemaContextNode.id);
                 }}
                 className="rounded-xl px-3 py-2 text-left text-[12.5px] font-medium text-[#0d7a66] hover:bg-[#e2f4f1]"
               >
                 Seleziona sottoalbero ({schemaMeta.get(schemaContextNode.id)?.descendantIds.size} blocchi)
               </button>
             ) : null}
-            {(schemaMeta.get(schemaContextNode.id)?.descendantIds.size ?? 0) > 1 || schemaCollapsedIds.has(schemaContextNode.id) ? (
+            {schemaMeta.get(schemaContextNode.id)!.descendantIds.size > 1 || schemaCollapsedIds.has(schemaContextNode.id) ? (
               <button
                 type="button"
                 onClick={() => {
@@ -3405,7 +2649,7 @@ export function OrganigrammaWorkspace({
               >
                 {schemaCollapsedIds.has(schemaContextNode.id)
                   ? "Esplodi sottoalbero"
-                  : `Raggruppa sottoalbero (${(schemaMeta.get(schemaContextNode.id)?.descendantIds.size ?? 1) - 1} blocchi)`}
+                  : `Raggruppa sottoalbero (${schemaMeta.get(schemaContextNode.id)!.descendantIds.size - 1} blocchi)`}
               </button>
             ) : null}
             <button
@@ -3431,20 +2675,18 @@ export function OrganigrammaWorkspace({
             {schemaMeta.get(schemaContextNode.id)?.lead?.user_id ? (
               <button
                 type="button"
-                onClick={() => {
-                  const leadUserId = schemaMeta.get(schemaContextNode.id)?.lead?.user_id;
+                onClick={function openSchemaLeadDrawer() {
+                  const leadUserId = schemaMeta.get(schemaContextNode.id)!.lead!.user_id;
                   setSchemaContextMenu(null);
-                  if (leadUserId != null) {
-                    setDrawerUserId(leadUserId);
-                  }
+                  setDrawerUserId(leadUserId);
                 }}
                 className="rounded-xl px-3 py-2 text-left text-[12.5px] font-medium text-[#1D4E35] hover:bg-[#edf5f0]"
               >
                 Apri scheda responsabile
               </button>
             ) : null}
-            {(schemaMeta.get(schemaContextNode.id)?.descendantIds.size ?? 0) === 1
-            && (schemaMeta.get(schemaContextNode.id)?.directPeople ?? 0) === 0 ? (
+            {schemaMeta.get(schemaContextNode.id)!.descendantIds.size === 1
+            && schemaMeta.get(schemaContextNode.id)!.directPeople === 0 ? (
               <button
                 type="button"
                 onClick={() => {
@@ -3642,7 +2884,7 @@ function UnitDetail({
 }
 
 // --------------------------------------------------------------------------- //
-function AssignmentInboxPanel({
+export function AssignmentInboxPanel({
   selectedNode,
   selectedSummary,
   linkableNodes,
@@ -3927,7 +3169,7 @@ function AssignmentInboxPanel({
   );
 }
 
-function CreateUnitModal({
+export function CreateUnitModal({
   units,
   unassignedUsers,
   defaultParentId,
@@ -4049,7 +3291,7 @@ function CreateUnitModal({
 }
 
 // --------------------------------------------------------------------------- //
-function ReplaceImportConfirmModal({
+export function ReplaceImportConfirmModal({
   entityLabel,
   filename,
   summary,
@@ -4336,7 +3578,7 @@ function Metric({ value, label, tone }: { value: number; label: string; tone: "g
 }
 
 // --------------------------------------------------------------------------- //
-function AddOverrideModal({
+export function AddOverrideModal({
   users,
   units,
   onClose,
@@ -4452,7 +3694,7 @@ function AddOverrideModal({
 }
 
 // --------------------------------------------------------------------------- //
-function PersonDrawer({
+export function PersonDrawer({
   token,
   userId,
   structureKind,

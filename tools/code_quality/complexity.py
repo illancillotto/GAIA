@@ -308,8 +308,7 @@ def py_complexities(node: ast.AST) -> tuple[int, int, int]:
             nesting += 1
             max_nesting = max(max_nesting, nesting)
         for c in ast.iter_child_nodes(n):
-            if c is not node:
-                walk(c, nesting)
+            walk(c, nesting)
 
     walk(node, 0)
     return cyclo, cognitive, max_nesting
@@ -935,7 +934,21 @@ def added_lines_since(base_commit: str | None, paths: Iterable[str]) -> dict[str
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
     )
-    return parse_added_lines(diff.stdout) if diff.returncode == 0 else {}
+    if diff.returncode != 0:
+        return {}
+    added = parse_added_lines(diff.stdout)
+    untracked = subprocess.run(
+        ["git", "ls-files", "--others", "--exclude-standard", "-z", "--", *repo_paths],
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+    if untracked.returncode == 0:
+        for path in untracked.stdout.split("\0"):
+            if path:
+                added[path] = set(range(1, len((ROOT / path).read_bytes().splitlines()) + 1))
+    return added
 
 
 def baseline_at_merge_base(base_ref: str, baseline_path: Path) -> tuple[str, dict[str, Any]]:

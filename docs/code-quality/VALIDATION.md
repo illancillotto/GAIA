@@ -27,6 +27,25 @@ Makefile corrente.
 `make quality-test` deve eseguire tutti i file sotto `tests/code_quality`, non
 un sottoinsieme nominato manualmente.
 
+### Coverage del tooling CLI
+
+I test CLI eseguono lo scanner in subprocess: una misura solo in-process
+non rappresenta il file completo. Per la verifica locale full-file creare
+una configurazione temporanea, senza cambiare scope o gate CI:
+
+```bash
+coverage_config=$(mktemp /tmp/gaia-quality-coverage.XXXXXX)
+printf '[run]\nbranch = True\nsource = tools/code_quality\npatch = subprocess\nparallel = True\n' > "$coverage_config"
+COVERAGE_FILE=/tmp/gaia-quality.coverage python3 -m pytest -q tests/code_quality \
+  --cov=tools/code_quality --cov-config="$coverage_config" --cov-branch \
+  --cov-report=term-missing --cov-report=json:/tmp/gaia-quality-coverage.json \
+  --cov-fail-under=100
+```
+
+Richiede pytest-cov e Coverage con supporto `patch = subprocess`. I report
+devono includere il runtime `complexity.py`, senza warning `no-data-collected`
+o `module-not-imported`; verificare sia statement sia branch nel JSON.
+
 ## Ratchet ordinario
 
 | Gate | Deve dimostrare |

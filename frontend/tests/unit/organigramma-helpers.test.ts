@@ -94,6 +94,30 @@ describe("computeTreeInclusion", () => {
     const { matchIds } = computeTreeInclusion(TREE, "idraulico", "settore");
     expect(matchIds).toEqual(new Set(["c"]));
   });
+
+  test("normalizes whitespace-only searches while preserving the type filter", () => {
+    expect(computeTreeInclusion(TREE, "   ", "all").includeIds).toBeNull();
+    const { includeIds, matchIds } = computeTreeInclusion(TREE, "   ", "settore");
+    expect(matchIds).toEqual(new Set(["c", "e"]));
+    expect(includeIds).toEqual(new Set(["a", "b", "c", "e"]));
+  });
+
+  test("normalizes case and surrounding spaces and includes ancestors", () => {
+    const { includeIds, matchIds } = computeTreeInclusion(TREE, "  IDRAULICO  ", "settore");
+    expect(matchIds).toEqual(new Set(["c"]));
+    expect(includeIds).toEqual(new Set(["a", "b", "c"]));
+  });
+
+  test("returns empty sets when the text or type has no matches", () => {
+    expect(computeTreeInclusion(TREE, "inesistente", "all")).toEqual({
+      includeIds: new Set(),
+      matchIds: new Set(),
+    });
+    expect(computeTreeInclusion(TREE, "idraulico", "squadra")).toEqual({
+      includeIds: new Set(),
+      matchIds: new Set(),
+    });
+  });
 });
 
 describe("unitPath", () => {

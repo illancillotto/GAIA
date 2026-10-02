@@ -96,6 +96,14 @@ candidati baseline il cui percorso di origine non e piu presente nel report
 corrente. Il riuso di una forma AST comune in un file nuovo non deve essere
 scambiato per un rename quando le sorgenti originali esistono ancora.
 
+Nel worktree locale, le righe aggiunte comprendono anche i file non tracciati
+restituiti da `git ls-files --others --exclude-standard`. `git diff` da solo
+non include quei file. Questo consente al matcher di classificare come nuovo
+un callable interamente aggiunto quando il matching resta ambiguo, senza
+indebolire le soglie: le sue violation error-level continuano a fallire.
+I file ignorati non entrano nel calcolo; il fallback non autorizza move o
+regressioni e non modifica la baseline.
+
 Se due candidati sono equivalenti, uscita `2` e messaggio di configurazione.
 Non scegliere il candidato piu vicino in silenzio.
 

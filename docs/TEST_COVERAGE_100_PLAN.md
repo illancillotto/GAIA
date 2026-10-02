@@ -1034,3 +1034,16 @@ rispetto ai contratti API; i casi validi restano caratterizzati dai test.
 Ratchet passati contro le baseline riparate separatamente da runtime pulito.
 Baseline finali sincronizzate solo dopo verifica e senza assorbire regressioni.
 Report, inventario ed evidenze nell'implementazione Giornaliere.
+
+## Tooling complessita - verifica full-file 2026-10-02
+
+`tools/code_quality/complexity.py` raggiunge il 100% statement (`702/702`)
+e branch (`270/270`) con 144 test del tooling. La misura include i subprocess
+CLI: il solo run in-process omette percorsi effettivamente testati.
+Procedura locale riproducibile in `docs/code-quality/VALIDATION.md`, con
+Coverage `patch = subprocess` e configurazione temporanea fuori repository;
+nessuna modifica alle soglie o allo scope CI. Casi pertinenti coprono parser,
+matching, baseline, policy, failure esterne e read-only; nessuna esclusione
+aggiunta. Rimosso soltanto un controllo interno impossibile negli AST
+prodotti da `ast.parse`, con invariante e metriche caratterizzati dai test.
+Questo esito non costituisce coverage 100% dell'intero repository.
