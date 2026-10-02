@@ -3,6 +3,35 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Wiki - resolver dei link contestuali (2026-10-02)
+
+- Hotspot unico successivo al commit `655c6e78`: `buildWikiContextHref` in
+  `features/wiki/context-links.ts`, file inizialmente pulito. Organigramma,
+  giornaliere e altri lavori concorrenti esclusi; nessun push.
+- Prima: cognitiva `36`, ciclomatica `21`, LOC `62`, nesting `2`, un callable,
+  due error e un warning. Invarianti: prefissi e precedenza entity/module,
+  suffix non codificato nei path, encoding delle query, lookup speciale,
+  fallback e null per moduli sconosciuti preservati.
+- Slice: normalizzazione nullish della chiave a stringa vuota, eliminando
+  la guardia esterna e il relativo annidamento, senza helper nuovi.
+- Caratterizzazione: 27 casi aggiunti di fallback, precedenza, encoding,
+  suffix vuoto/ripetuto e lookup; 29 test passati prima e dopo.
+- Dopo: cognitiva `36 -> 23`, ciclomatica `21 -> 21`, LOC `62 -> 61`,
+  nesting `2 -> 1`; un callable invariato. Error `2 -> 1`, warning `1 -> 2`:
+  eliminata la violation cognitive error; resta ciclomatica error legacy.
+  Esito `IMPROVED`, nessuna estrazione o trasferimento di debito.
+- Core del resolver al 100% statement (`43/43`), branch (`40/40`), funzioni
+  (`1/1`) e linee (`43/43`). Ratchet autorevole mirato contro `origin/main`,
+  merge-base `6b61fd27`: PASS prima e dopo, `findings: []`.
+  Baseline, scope ed eccezioni invariati; nessuna conformita globale dichiarata.
+- Graphify frontend aggiornato tramite target dedicato; refresh platform
+  docs completato con `chunk 1/1 done`, senza warning di chunk falliti.
+  ESLint runtime/test, typecheck senza incremental,
+  diff whitespace e 90 test quality tooling passati. Evidenze con prefisso
+  `/tmp/gaia-wiki-links-` (metriche before/after, coverage, test e ratchet).
+- Slice delimitata al resolver: nessun secondo hotspot. Commit isolato
+  autorizzato solo dopo i gate mirati, senza includere altri lavori o push.
+
 ### Wiki audit - aggregazione delle modalita (2026-10-02)
 
 - Hotspot unico: `buildWikiAuditStats` in `features/wiki/audit-utils.ts`,

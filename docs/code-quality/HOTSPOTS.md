@@ -19,6 +19,7 @@ Audit baseline globale e ordine delle tranche:
 
 | Stato | Percorso | Segnale iniziale | Nota |
 | --- | --- | --- | --- |
+| reduced | `frontend/src/features/wiki/context-links.ts` | `buildWikiContextHref` cog `36 -> 23`, cyc `21` invariata, LOC `62 -> 61`, nesting `2 -> 1` | `IMPROVED` 2026-10-02: chiave assente normalizzata, guardia esterna eliminata; 29 test e full-file 100%, ratchet mirato verde; error cognitiva rimossa, ciclomatica legacy residua |
 | reduced | `frontend/src/features/wiki/audit-utils.ts` | `buildWikiAuditStats` cog/cyc `15/15 -> 12/12`, LOC `59 -> 51` | `IMPROVED` 2026-10-02: Map delle modalita, sconosciute ignorate, nessun nuovo callable; aggregati cog/cyc `31/37 -> 25/31`, error `1 -> 0`, full-file 100%, ratchet mirato verde |
 | blocked | `frontend/src/lib/api/core.ts` / risposte vuote | `request` cog/cyc/LOC `24/20/60` invariati | `NO_SAFE_CHANGE` 2026-10-02: guardia condivisa aumentava la cognitiva a 25, ripristinata; conservati 19 test di precedenza/parsing, nessun delta runtime della slice; scegliere un candidato diverso |
 | reduced | `frontend/src/lib/api/core.ts` / lifecycle timeout-abort | `request` cog `28 -> 24`, cyc `22 -> 20`, LOC `62 -> 60` | `IMPROVED` 2026-10-02: cleanup in finally e guardia ridondante rimossa, nessun nuovo helper; 842 test API, full-file 100%, ratchet mirato verde; error cognitiva rimossa, ciclomatica legacy residua |
