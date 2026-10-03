@@ -33,6 +33,7 @@ export type CurrentModuleKey =
   | "me"
   | "network"
   | "inventory"
+  | "dotazioni"
   | "gis"
   | "catasto"
   | "elaborazioni"
@@ -88,6 +89,7 @@ const currentModuleLabels: Record<CurrentModuleKey, string> = {
   utenze: "Utenze",
   network: "Rete",
   inventory: "Inventario",
+  dotazioni: "Dotazioni",
   operazioni: "Operazioni",
   riordino: "Riordino",
   ruolo: "Ruolo",
@@ -97,6 +99,12 @@ const currentModuleLabels: Record<CurrentModuleKey, string> = {
 };
 
 const platformModules: PlatformModule[] = [
+  {
+    href: "/dotazioni",
+    label: "Dotazioni",
+    icon: SearchIcon,
+    isVisible: (currentUser) => hasUserModuleAccess(currentUser, "dotazioni"),
+  },
   { href: "/me", label: "La mia attività", icon: UserIcon },
   {
     href: "/nas-control",
@@ -190,7 +198,7 @@ export function getCurrentModuleKey(pathname: string): CurrentModuleKey {
     ["/gaia/users", "gaia"], ["/me", "me"], ["/nas-control", "nas_control"],
     ["/elaborazioni", "elaborazioni"], ["/gis", "gis"], ["/catasto", "catasto"],
     ["/utenze", "utenze"], ["/anagrafica", "utenze"], ["/network", "network"],
-    ["/inventory", "inventory"], ["/operazioni", "operazioni"],
+    ["/inventory", "inventory"], ["/dotazioni", "dotazioni"], ["/operazioni", "operazioni"],
     ["/riordino", "riordino"], ["/ruolo", "ruolo"], ["/presenze", "presenze"],
     ["/organigramma", "organigramma"], ["/wiki", "wiki"],
   ];
@@ -508,13 +516,12 @@ export function getModuleSections({
           ],
         },
       ];
-    case "inventory":
     default:
-      return [
-        {
-          label: "Panoramica",
-          items: [item("/inventory", SearchIcon, "Dashboard")],
-        },
-      ];
+      return standaloneModuleSections[currentModuleKey] ?? standaloneModuleSections.inventory;
   }
 }
+
+const standaloneModuleSections: Record<string, NavigationSection[]> = {
+  inventory: [{ label: "Panoramica", items: [item("/inventory", SearchIcon, "Dashboard")] }],
+  dotazioni: [{ label: "Dotazioni", items: [item("/dotazioni", SearchIcon, "Beni e custodie", { match: "prefix" })] }],
+};

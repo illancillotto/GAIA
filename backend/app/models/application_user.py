@@ -45,6 +45,7 @@ class ApplicationUser(Base):
         Boolean, default=False, nullable=False
     )
     module_gis: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    module_dotazioni: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     module_catasto: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     module_utenze: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     module_operazioni: Mapped[bool] = mapped_column(
@@ -83,11 +84,11 @@ class ApplicationUser(Base):
     @property
     def enabled_modules(self) -> list[str]:
         if self.is_super_admin:
-            return ["accessi", "rete", "inventario", "gis", "catasto", "utenze", "operazioni", "riordino", "ruolo", "presenze", "organigramma"]
+            return ["accessi", "rete", "inventario", "gis", "catasto", "utenze", "operazioni", "riordino", "ruolo", "presenze", "organigramma", "dotazioni"]
 
         module_keys = (
             "accessi", "rete", "inventario", "gis", "catasto", "utenze",
-            "operazioni", "riordino", "ruolo", "presenze", "organigramma",
+            "operazioni", "riordino", "ruolo", "presenze", "organigramma", "dotazioni",
         )
         forbidden = {"accessi", "rete"} if self.role == ApplicationUserRole.CED.value else set()
         return [key for key in module_keys if key not in forbidden and getattr(self, f"module_{key}")]

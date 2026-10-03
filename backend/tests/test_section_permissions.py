@@ -1,3 +1,4 @@
+import runpy
 from collections.abc import Generator
 
 import pytest
@@ -29,6 +30,30 @@ def override_get_db() -> Generator[Session, None, None]:
 
 
 client = TestClient(app)
+
+
+def test_dotazioni_sections_bootstrap_is_idempotent(monkeypatch, capsys) -> None:
+    monkeypatch.setattr("app.core.database.SessionLocal", TestingSessionLocal)
+    runpy.run_path(ensure_default_sections.__code__.co_filename, run_name="__main__")
+    with TestingSessionLocal() as db:
+        assert ensure_default_sections(db) == 0
+        sections = db.query(Section).filter(Section.module == "dotazioni").all()
+        assert {section.key for section in sections} == {
+            "dotazioni.view", "dotazioni.manage", "dotazioni.assign",
+            "dotazioni.custody", "dotazioni.history",
+        }
+        custody = next(section for section in sections if section.key == "dotazioni.custody")
+        permission = db.query(RoleSectionPermission).filter_by(section_id=custody.id, role="operator").one()
+        assert custody.min_role == "admin"
+        assert permission.is_granted is True
+        viewer_permission = db.query(RoleSectionPermission).filter_by(section_id=custody.id, role="viewer").one()
+        assert viewer_permission.is_granted is False
+        permission.is_granted = False
+        db.commit()
+        assert ensure_default_sections(db) == 0
+        db.refresh(permission)
+        assert permission.is_granted is False
+    assert "sections_bootstrap_created=" in capsys.readouterr().out
 
 
 @pytest.fixture(autouse=True)

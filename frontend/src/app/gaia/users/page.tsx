@@ -73,6 +73,7 @@ type UserFormState = {
   moduleAccessi: boolean;
   moduleRete: boolean;
   moduleInventario: boolean;
+  moduleDotazioni: boolean;
   moduleGis: boolean;
   moduleCatasto: boolean;
   moduleUtenze: boolean;
@@ -87,6 +88,7 @@ type ModuleOption = {
     | "moduleAccessi"
     | "moduleRete"
     | "moduleInventario"
+    | "moduleDotazioni"
     | "moduleGis"
     | "moduleCatasto"
     | "moduleUtenze"
@@ -109,6 +111,7 @@ const emptyFormState: UserFormState = {
   moduleAccessi: false,
   moduleRete: false,
   moduleInventario: false,
+  moduleDotazioni: false,
   moduleGis: false,
   moduleCatasto: false,
   moduleUtenze: false,
@@ -134,6 +137,7 @@ const moduleOptions: ModuleOption[] = [
   { key: "moduleAccessi", moduleKey: "accessi", label: "NAS Control", description: "Utenti, gruppi, share e permessi." },
   { key: "moduleRete", moduleKey: "rete", label: "Rete", description: "Dispositivi, alert e tracking di rete." },
   { key: "moduleInventario", moduleKey: "inventario", label: "Inventario", description: "Asset e schede inventariali." },
+  { key: "moduleDotazioni", moduleKey: "dotazioni", label: "Dotazioni", description: "Beni operativi, assegnazioni e custodie." },
   { key: "moduleGis", moduleKey: "gis", label: "GIS Platform", description: "Catalogo layer, permessi e governance geospaziale." },
   { key: "moduleCatasto", moduleKey: "catasto", label: "Catasto", description: "Particelle, anomalie, contatori e archivio." },
   { key: "moduleUtenze", moduleKey: "utenze", label: "Utenze", description: "Anagrafica soggetti e import." },
@@ -175,6 +179,7 @@ function formatModules(user: ApplicationUser): string {
     [user.module_catasto, "Catasto"], [user.module_utenze, "Utenze"],
     [user.module_operazioni, "Operazioni"], [user.module_riordino, "Riordino"],
     [user.module_ruolo, "Ruolo"], [user.module_presenze, "Giornaliere"],
+    [user.module_dotazioni, "Dotazioni"],
   ];
   return labels.filter(([enabled]) => enabled).map(([, label]) => label).join(", ") || "Nessun modulo";
 }
@@ -183,11 +188,34 @@ function countEnabledModules(user: ApplicationUser): number {
   return moduleOptions.filter(({ moduleKey }) => user[`module_${moduleKey}` as keyof ApplicationUser]).length;
 }
 
+function formStateForUser(user: ApplicationUser): UserFormState {
+  return {
+    ...emptyFormState,
+    username: user.username,
+    email: user.email,
+    role: user.role,
+    isActive: user.is_active,
+    sendInviteEmail: false,
+    moduleAccessi: user.module_accessi,
+    moduleRete: user.module_rete,
+    moduleInventario: user.module_inventario,
+    moduleDotazioni: Boolean(user.module_dotazioni),
+    moduleGis: user.module_gis,
+    moduleCatasto: user.module_catasto,
+    moduleUtenze: user.module_utenze,
+    moduleOperazioni: user.module_operazioni,
+    moduleRiordino: user.module_riordino,
+    moduleRuolo: user.module_ruolo,
+    modulePresenze: user.module_presenze,
+  };
+}
+
 function buildModulePayload(formState: UserFormState) {
   return {
     module_accessi: formState.moduleAccessi,
     module_rete: formState.moduleRete,
     module_inventario: formState.moduleInventario,
+    module_dotazioni: formState.moduleDotazioni,
     module_gis: formState.moduleGis,
     module_catasto: formState.moduleCatasto,
     module_utenze: formState.moduleUtenze,
@@ -300,24 +328,7 @@ export default function GaiaUsersPage() {
 
     recordPresenceAction(`Modifica utente GAIA: ${selectedUser.username}`);
 
-    setFormState({
-      username: selectedUser.username,
-      email: selectedUser.email,
-      password: "",
-      role: selectedUser.role,
-      isActive: selectedUser.is_active,
-      sendInviteEmail: false,
-      moduleAccessi: selectedUser.module_accessi,
-      moduleRete: selectedUser.module_rete,
-      moduleInventario: selectedUser.module_inventario,
-      moduleGis: selectedUser.module_gis,
-      moduleCatasto: selectedUser.module_catasto,
-      moduleUtenze: selectedUser.module_utenze,
-      moduleOperazioni: selectedUser.module_operazioni,
-      moduleRiordino: selectedUser.module_riordino,
-      moduleRuolo: selectedUser.module_ruolo,
-      modulePresenze: selectedUser.module_presenze,
-    });
+    setFormState(formStateForUser(selectedUser));
   }, [selectedUser]);
 
   useEffect(() => {

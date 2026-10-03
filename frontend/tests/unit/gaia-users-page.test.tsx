@@ -128,6 +128,7 @@ function buildUser(overrides: Partial<{
   module_operazioni: boolean;
   module_rete: boolean;
   module_inventario: boolean;
+  module_dotazioni: boolean;
   module_gis: boolean;
   module_catasto: boolean;
   module_utenze: boolean;
@@ -407,6 +408,7 @@ describe("Gaia users page", () => {
         module_accessi: true,
         module_rete: true,
         module_inventario: true,
+        module_dotazioni: true,
         module_gis: true,
         module_catasto: true,
         module_utenze: true,
@@ -493,7 +495,8 @@ describe("Gaia users page", () => {
     expect(screen.getAllByText("Attivo adesso").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Attivo 6 min fa").length).toBeGreaterThan(0);
     expect(screen.getAllByText("In background").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("10 moduli abilitati").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("11 moduli abilitati").length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Dotazioni/).length).toBeGreaterThan(0);
     expect(screen.getAllByText("custom_role").length).toBeGreaterThan(0);
 
     fireEvent.change(screen.getByLabelText("Stato"), { target: { value: "active" } });

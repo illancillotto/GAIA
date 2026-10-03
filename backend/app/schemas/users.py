@@ -29,6 +29,7 @@ class ApplicationUserCreate(BaseModel):
     module_accessi: bool = True
     module_rete: bool = False
     module_inventario: bool = False
+    module_dotazioni: bool = False
     module_gis: bool = False
     module_catasto: bool = False
     module_utenze: bool = False
@@ -62,6 +63,7 @@ class ApplicationUserUpdate(BaseModel):
     module_accessi: bool | None = None
     module_rete: bool | None = None
     module_inventario: bool | None = None
+    module_dotazioni: bool | None = None
     module_gis: bool | None = None
     module_catasto: bool | None = None
     module_utenze: bool | None = None
@@ -119,6 +121,7 @@ class ApplicationUserResponse(BaseModel):
     module_accessi: bool
     module_rete: bool
     module_inventario: bool
+    module_dotazioni: bool = False
     module_gis: bool
     module_catasto: bool
     module_utenze: bool

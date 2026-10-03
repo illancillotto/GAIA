@@ -60,6 +60,7 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 - `.github/workflows/`: pipeline CI/CD GitHub Actions.
 - `backend/app/MONOLITH_MODULAR.md`: note architetturali sul backend monolite modulare.
 - `backend/app/modules/inventory/`: modulo backend Inventory con router, modelli, schemi e servizi applicativi.
+- `backend/app/modules/dotazioni/`: beni operativi, custodie e audit; frontend in `frontend/src/app/dotazioni/` e documentazione in `domain-docs/dotazioni/docs/`.
 - `backend/app/modules/utenze/router/` e `backend/app/modules/utenze/routes/`: facade FastAPI compatibile e route Utenze separate per responsabilita.
 - `backend/app/modules/network/router/`: facade FastAPI Network, route HTTP e helper di correlazione/serializzazione separati per responsabilita.
 - `backend/app/modules/presenze/router/`: facade FastAPI Presenze, route di dominio e helper per scheduling, giornaliere, recovery, banca ore, sync ed export.

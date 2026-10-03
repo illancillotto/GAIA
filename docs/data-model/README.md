@@ -3,6 +3,11 @@
 Questa cartella contiene una vista divulgativa del modello dati GAIA.
 I file sono generati con `scripts/generate_data_model_docs.py` leggendo la metadata SQLAlchemy del backend.
 
+Il supplemento `DOTAZIONI_DATA_MODEL.md` descrive beni, custodie e audit del
+nuovo dominio Dotazioni. `DOTAZIONI_TABLE_DICTIONARY.md` e
+`DOTAZIONI_RELATIONSHIPS.csv` includono le nuove FK; i poster PDF e gli export
+globali storici non sono rigenerati in questa change.
+
 ## File principali
 
 - [Poster A0 HTML](GAIA_DATA_MODEL_A0_POSTER.html): versione pensata per stampa A0 orizzontale.

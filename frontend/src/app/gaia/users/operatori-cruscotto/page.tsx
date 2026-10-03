@@ -18,6 +18,7 @@ import {
   listPresenzeDailyRecords,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
+import { OperatorAssets } from "@/features/dotazioni/OperatorAssets";
 import type {
   ApplicationUser,
   CurrentUser,
@@ -53,7 +54,7 @@ type OperatorListItem = {
 };
 
 type SelectedOperatorBundle = {
-  detail: OperatorDetailResponse | null;
+  detail: OperatorDetailResponse;
   collaborator: PresenzeCollaborator | null;
   presenzeSummary: PresenzeEventSummary[];
   presenzeRecords: PresenzeDailyRecord[];
@@ -95,7 +96,7 @@ function initialsForOperator(operator: Pick<OperatorListItem, "first_name" | "la
   const parts = displayOperatorName(operator).split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "OP";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 }
 
 function formatDateTime(value: string | null | undefined): string {
@@ -124,11 +125,11 @@ function parseNumeric(value: string | null | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function formatNumeric(value: string | number | null | undefined, suffix?: string): string {
+function formatNumeric(value: string | number | null | undefined, suffix: string): string {
   const parsed = typeof value === "number" ? value : parseNumeric(value);
   if (parsed == null) return "—";
   const formatted = Number.isInteger(parsed) ? integerFormatter.format(parsed) : decimalFormatter.format(parsed);
-  return suffix ? `${formatted} ${suffix}` : formatted;
+  return `${formatted} ${suffix}`;
 }
 
 function formatMinutes(minutes: number | null | undefined): string {
@@ -412,9 +413,6 @@ function OperatorCruscottoContent() {
 
     const authToken = token;
     const operatorId = selectedOperatorId;
-    const selectedRow = healthRows.find((row) => row.operator.id === operatorId);
-    if (!selectedRow) return;
-
     let cancelled = false;
 
     async function loadSelected() {
@@ -517,13 +515,13 @@ function OperatorCruscottoContent() {
       },
       {
         label: "Ultimo rifornimento",
-        value: selectedBundle.detail?.recent_fuel_logs[0]?.fueled_at ?? null,
-        meta: selectedBundle.detail?.recent_fuel_logs[0]?.vehicle_label ?? "Nessun rifornimento",
+        value: selectedBundle.detail.recent_fuel_logs[0]?.fueled_at ?? null,
+        meta: selectedBundle.detail.recent_fuel_logs[0]?.vehicle_label ?? "Nessun rifornimento",
       },
       {
         label: "Ultima sessione mezzo",
-        value: selectedBundle.detail?.recent_usage_sessions[0]?.started_at ?? null,
-        meta: selectedBundle.detail?.recent_usage_sessions[0]?.vehicle_label ?? "Nessuna sessione mezzo",
+        value: selectedBundle.detail.recent_usage_sessions[0]?.started_at ?? null,
+        meta: selectedBundle.detail.recent_usage_sessions[0]?.vehicle_label ?? "Nessuna sessione mezzo",
       },
       {
         label: "Ultimo evento rete",
@@ -726,6 +724,7 @@ function OperatorCruscottoContent() {
                 <article className="panel-card text-sm text-gray-500">Caricamento scheda operatore.</article>
               ) : selectedBundle ? (
                 <>
+                  <OperatorAssets key={selectedBundle.detail.operator.id} userId={selectedBundle.detail.operator.gaia_user_id} />
                   <div className="grid gap-6 xl:grid-cols-2">
                     <article className="panel-card">
                       <div className="flex items-center justify-between gap-3">
@@ -916,13 +915,13 @@ function OperatorCruscottoContent() {
                       <div className="mt-4 grid gap-3 sm:grid-cols-2">
                         <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-sm">
                           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Sessioni mezzo</p>
-                          <p className="mt-2 font-medium text-gray-900">{selectedBundle.detail?.stats.usage_sessions_count ?? 0}</p>
-                          <p className="mt-1 text-gray-500">Totale km {formatNumeric(selectedBundle.detail?.stats.total_km_travelled, "km")}</p>
+                          <p className="mt-2 font-medium text-gray-900">{selectedBundle.detail.stats.usage_sessions_count ?? 0}</p>
+                          <p className="mt-1 text-gray-500">Totale km {formatNumeric(selectedBundle.detail.stats.total_km_travelled, "km")}</p>
                         </div>
                         <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4 text-sm">
                           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Rifornimenti</p>
-                          <p className="mt-2 font-medium text-gray-900">{selectedBundle.detail?.stats.fuel_logs_count ?? 0}</p>
-                          <p className="mt-1 text-gray-500">Totale litri {formatNumeric(selectedBundle.detail?.stats.total_liters, "L")}</p>
+                          <p className="mt-2 font-medium text-gray-900">{selectedBundle.detail.stats.fuel_logs_count ?? 0}</p>
+                          <p className="mt-1 text-gray-500">Totale litri {formatNumeric(selectedBundle.detail.stats.total_liters, "L")}</p>
                         </div>
                       </div>
 
@@ -931,7 +930,7 @@ function OperatorCruscottoContent() {
                           <p className="text-sm font-medium text-gray-900">Fuel card correnti</p>
                         </div>
                         <div className="flex flex-wrap gap-2 px-4 py-4">
-                          {selectedBundle.detail?.current_fuel_cards.length ? selectedBundle.detail.current_fuel_cards.map((card) => (
+                          {selectedBundle.detail.current_fuel_cards.length ? selectedBundle.detail.current_fuel_cards.map((card) => (
                             <span key={card.id} className="rounded-full border border-[#d5e2d8] bg-[#f8fbf8] px-3 py-1 text-xs font-semibold text-[#1D4E35]">
                               {card.codice || card.pan}
                             </span>
@@ -944,12 +943,12 @@ function OperatorCruscottoContent() {
                           <p className="text-sm font-medium text-gray-900">Ultime sessioni e rifornimenti</p>
                         </div>
                         <div className="divide-y divide-gray-100">
-                          {[...(selectedBundle.detail?.recent_usage_sessions ?? []).slice(0, 3).map((item) => ({
+                          {[...selectedBundle.detail.recent_usage_sessions.slice(0, 3).map((item) => ({
                             id: `session-${item.id}`,
                             title: item.vehicle_label,
                             meta: `Sessione mezzo · ${formatDateTime(item.started_at)}`,
                             extra: `${formatNumeric(item.km_travelled, "km")} · ${item.status}`,
-                          })), ...(selectedBundle.detail?.recent_fuel_logs ?? []).slice(0, 3).map((item) => ({
+                          })), ...selectedBundle.detail.recent_fuel_logs.slice(0, 3).map((item) => ({
                             id: `fuel-${item.id}`,
                             title: item.vehicle_label,
                             meta: `Rifornimento · ${formatDateTime(item.fueled_at)}`,
@@ -961,8 +960,8 @@ function OperatorCruscottoContent() {
                               <p className="mt-1 text-xs text-gray-600">{item.extra}</p>
                             </div>
                           ))}
-                          {(selectedBundle.detail?.recent_usage_sessions.length ?? 0) === 0 &&
-                          (selectedBundle.detail?.recent_fuel_logs.length ?? 0) === 0 ? (
+                          {selectedBundle.detail.recent_usage_sessions.length === 0 &&
+                          selectedBundle.detail.recent_fuel_logs.length === 0 ? (
                             <div className="px-4 py-6 text-sm text-gray-500">Nessun dato mezzi disponibile.</div>
                           ) : null}
                         </div>

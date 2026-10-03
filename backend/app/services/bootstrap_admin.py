@@ -7,47 +7,27 @@ from app.repositories.application_user import get_application_user_by_username
 
 
 def ensure_bootstrap_admin(db: Session) -> tuple[ApplicationUser, bool]:
-    existing_user = get_application_user_by_username(db, settings.bootstrap_admin_username)
-    if existing_user is not None:
-        existing_user.email = settings.bootstrap_admin_email
-        existing_user.password_hash = hash_password(settings.bootstrap_admin_password)
-        existing_user.role = ApplicationUserRole.SUPER_ADMIN.value
-        existing_user.is_active = True
-        existing_user.module_accessi = True
-        existing_user.module_rete = True
-        existing_user.module_inventario = True
-        existing_user.module_gis = True
-        existing_user.module_catasto = True
-        existing_user.module_utenze = True
-        existing_user.module_operazioni = True
-        existing_user.module_riordino = True
-        existing_user.module_ruolo = True
-        existing_user.module_presenze = True
-        existing_user.module_organigramma = True
-        db.add(existing_user)
-        db.commit()
-        db.refresh(existing_user)
-        return existing_user, False
-
-    user = ApplicationUser(
-        username=settings.bootstrap_admin_username,
-        email=settings.bootstrap_admin_email,
-        password_hash=hash_password(settings.bootstrap_admin_password),
-        role=ApplicationUserRole.SUPER_ADMIN.value,
-        is_active=True,
-        module_accessi=True,
-        module_rete=True,
-        module_inventario=True,
-        module_gis=True,
-        module_catasto=True,
-        module_utenze=True,
-        module_operazioni=True,
-        module_riordino=True,
-        module_ruolo=True,
-        module_presenze=True,
-        module_organigramma=True,
-    )
+    user = get_application_user_by_username(db, settings.bootstrap_admin_username)
+    created = user is None
+    if user is None:
+        user = ApplicationUser(username=settings.bootstrap_admin_username)
+    user.email = settings.bootstrap_admin_email
+    user.password_hash = hash_password(settings.bootstrap_admin_password)
+    user.role = ApplicationUserRole.SUPER_ADMIN.value
+    user.is_active = True
+    user.module_accessi = True
+    user.module_rete = True
+    user.module_inventario = True
+    user.module_dotazioni = True
+    user.module_gis = True
+    user.module_catasto = True
+    user.module_utenze = True
+    user.module_operazioni = True
+    user.module_riordino = True
+    user.module_ruolo = True
+    user.module_presenze = True
+    user.module_organigramma = True
     db.add(user)
     db.commit()
     db.refresh(user)
-    return user, True
+    return user, created

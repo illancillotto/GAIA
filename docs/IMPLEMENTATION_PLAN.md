@@ -6,6 +6,14 @@
 > Regola repository
 > Backend unico, moduli logici separati. Nuove implementazioni backend vanno in `backend/app/modules/<modulo>/`.
 
+## Ciclo Dotazioni — 2026-10-01
+
+MVP implementato nel monolite modulare, Inventory invariato. Piano/PROGRESS:
+`domain-docs/dotazioni/docs/IMPLEMENTATION_PLAN.md`. Verifica finale e matrice:
+`domain-docs/dotazioni/docs/GATE_CLOSURE_2026-10-03.md`: gate della change
+isolata PASS, commit autorizzato limitato a Dotazioni. Baseline globale Wiki/MCP
+da riconciliare separatamente; nessun deploy.
+
 ## Ciclo CED — 2026-10-02
 
 Gestione delegata utenti standard implementata e caratterizzata. Nessuna

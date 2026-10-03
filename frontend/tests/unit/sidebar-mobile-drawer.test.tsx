@@ -88,6 +88,7 @@ describe("Sidebar mobile drawer", () => {
       ["/anagrafica/anpr-config", "utenze", "Utenze"],
       ["/network", "network", "Rete"],
       ["/inventory", "inventory", "Inventario"],
+      ["/dotazioni/assets/1", "dotazioni", "Dotazioni"],
       ["/operazioni", "operazioni", "Operazioni"],
       ["/riordino", "riordino", "Riordino"],
       ["/ruolo", "ruolo", "Ruolo"],

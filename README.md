@@ -38,6 +38,12 @@ Il repository oggi copre un perimetro più ampio, descritto nella sezione aggior
 
 ## Moduli principali
 
+### GAIA Dotazioni
+Beni operativi del Consorzio, assegnazione a unita organizzative e custodia
+temporanea degli operatori, con storico e audit. Pagina `/dotazioni`, API
+`/api/dotazioni`; Inventory mantiene i flussi di magazzino esistenti.
+Contratto e limiti: `domain-docs/dotazioni/docs/README.md`.
+
 ### GAIA Accessi — NAS Audit
 Audit completo degli accessi al NAS Synology: utenti, gruppi, cartelle condivise,
 permessi effettivi e workflow di review per i responsabili di settore.
@@ -338,6 +344,7 @@ La struttura logica canonica del codice backend e invece:
 - `backend/app/modules/accessi`
 - `backend/app/modules/utenze`
 - `backend/app/modules/inventory`
+- `backend/app/modules/dotazioni`
 - `backend/app/modules/network`
 - `backend/app/modules/catasto`
 - `backend/app/modules/elaborazioni`

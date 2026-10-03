@@ -52,6 +52,9 @@ Target supportati:
 - `make graphify-wiki-code`
 - `make graphify-wiki-docs`
 - `make graphify-backend`
+- `make graphify-dotazioni-code`
+- `make graphify-dotazioni-docs`
+- `make graphify-dotazioni-query`
 - `make graphify-frontend`
 - `make graphify-docs`
 - `make graphify-platform-docs`

@@ -60,7 +60,6 @@ def list_application_users(
 
 
 def create_application_user(db: Session, payload: ApplicationUserCreate) -> ApplicationUser:
-    utenze_enabled = bool(payload.module_utenze)
     password = payload.password or secrets.token_urlsafe(24)
     user = ApplicationUser(
         username=payload.username,
@@ -74,9 +73,10 @@ def create_application_user(db: Session, payload: ApplicationUserCreate) -> Appl
         module_accessi=payload.module_accessi,
         module_rete=payload.module_rete,
         module_inventario=payload.module_inventario,
+        module_dotazioni=payload.module_dotazioni,
         module_gis=payload.module_gis,
         module_catasto=payload.module_catasto,
-        module_utenze=utenze_enabled,
+        module_utenze=payload.module_utenze,
         module_operazioni=payload.module_operazioni,
         module_riordino=payload.module_riordino,
         module_ruolo=payload.module_ruolo,

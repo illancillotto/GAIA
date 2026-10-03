@@ -416,6 +416,18 @@ graphify-wiki-query:
 graphify-backend: graphify-patch-force-pruning
 	cd backend/app && $(GRAPHIFY_ENV) graphify update . $(GRAPHIFY_CODE_FLAGS)
 
+.PHONY: graphify-dotazioni-code graphify-dotazioni-docs graphify-dotazioni-query
+
+graphify-dotazioni-code:
+	cd backend/app/modules/dotazioni && $(GRAPHIFY_ENV) graphify update . $(GRAPHIFY_CODE_FLAGS)
+
+graphify-dotazioni-docs:
+	cd domain-docs/dotazioni && $(GRAPHIFY_ENV) GRAPHIFY_OPENAI_MODEL=$(GRAPHIFY_DOC_MODEL) timeout --foreground 420s graphify extract . --max-concurrency 1 --api-timeout 180
+
+graphify-dotazioni-query:
+	@if [ -z "$(Q)" ]; then echo "Uso: make graphify-dotazioni-query Q=\"domanda\""; exit 1; fi
+	cd backend/app/modules/dotazioni && $(GRAPHIFY_ENV) graphify query "$(Q)"
+
 graphify-backend-query:
 	@if [ -z "$(Q)" ]; then echo "Uso: make graphify-backend-query Q=\"domanda\""; exit 1; fi
 	cd backend/app && $(GRAPHIFY_ENV) graphify query "$(Q)"

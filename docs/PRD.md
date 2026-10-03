@@ -55,6 +55,16 @@ Fornire un unico punto di accesso operativo per:
 - import dati e correlazione con apparati rilevati in rete
 - stato operativo, assegnazioni e garanzie
 
+### 3.3.1 Dotazioni operative
+
+- beni del Consorzio, assegnazione OrgUnit e custodia temporanea operatore
+- presa/restituzione/passaggio, storico, link Network/Vehicle e rotta QR
+- dominio distinto da Inventory, che resta invariato
+- MVP implementato, gate della change isolata superato: requisiti/residui in
+  `domain-docs/dotazioni/docs/IMPLEMENTATION_PLAN.md`, evidenze in
+  `domain-docs/dotazioni/docs/GATE_CLOSURE_2026-10-03.md`; baseline globale
+  Wiki/MCP da riconciliare separatamente, nessun deploy
+
 ### 3.4 Catasto
 
 - gestione credenziali SISTER

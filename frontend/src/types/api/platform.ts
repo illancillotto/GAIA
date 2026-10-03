@@ -24,20 +24,24 @@ export type PasswordResetConfirmResult = {
   message: string;
 };
 
-export type CurrentUser = {
+type PlatformModuleAccess = {
+  module_accessi: boolean;
+  module_rete: boolean;
+  module_inventario: boolean;
+  module_dotazioni?: boolean;
+  module_catasto: boolean;
+  module_utenze: boolean;
+  module_operazioni: boolean;
+  module_riordino: boolean;
+};
+
+export type CurrentUser = PlatformModuleAccess & {
   id: number;
   username: string;
   email: string;
   role: string;
   is_active: boolean;
-  module_accessi: boolean;
-  module_rete: boolean;
-  module_inventario: boolean;
   module_gis?: boolean;
-  module_catasto: boolean;
-  module_utenze: boolean;
-  module_operazioni: boolean;
-  module_riordino: boolean;
   module_ruolo: boolean;
   module_presenze: boolean;
   enabled_modules: string[];
@@ -366,7 +370,7 @@ export type MyPermissionsResponse = {
   granted_keys: string[];
 };
 
-export type ApplicationUser = {
+export type ApplicationUser = PlatformModuleAccess & {
   id: number;
   username: string;
   email: string;
@@ -375,14 +379,7 @@ export type ApplicationUser = {
   phone_extension: string | null;
   role: string;
   is_active: boolean;
-  module_accessi: boolean;
-  module_rete: boolean;
-  module_inventario: boolean;
   module_gis: boolean;
-  module_catasto: boolean;
-  module_utenze: boolean;
-  module_operazioni: boolean;
-  module_riordino: boolean;
   module_ruolo: boolean;
   module_presenze: boolean;
   enabled_modules: string[];
@@ -444,7 +441,7 @@ export type SectionResponse = {
   updated_at: string;
 };
 
-export type ApplicationUserCreateInput = {
+export type ApplicationUserCreateInput = PlatformModuleAccess & {
   username: string;
   email: string;
   full_name?: string | null;
@@ -453,14 +450,7 @@ export type ApplicationUserCreateInput = {
   password?: string | null;
   role: string;
   is_active: boolean;
-  module_accessi: boolean;
-  module_rete: boolean;
-  module_inventario: boolean;
   module_gis: boolean;
-  module_catasto: boolean;
-  module_utenze: boolean;
-  module_operazioni: boolean;
-  module_riordino: boolean;
   module_ruolo?: boolean;
   module_presenze?: boolean;
 };
@@ -474,7 +464,7 @@ export type ApplicationUserInviteResponse = {
   email_sent: boolean;
 };
 
-export type ApplicationUserUpdateInput = {
+export type ApplicationUserUpdateInput = Partial<PlatformModuleAccess> & {
   email?: string;
   full_name?: string | null;
   office_location?: string | null;
@@ -482,14 +472,7 @@ export type ApplicationUserUpdateInput = {
   password?: string;
   role?: string;
   is_active?: boolean;
-  module_accessi?: boolean;
-  module_rete?: boolean;
-  module_inventario?: boolean;
   module_gis?: boolean;
-  module_catasto?: boolean;
-  module_utenze?: boolean;
-  module_operazioni?: boolean;
-  module_riordino?: boolean;
   module_ruolo?: boolean;
   module_presenze?: boolean;
 };

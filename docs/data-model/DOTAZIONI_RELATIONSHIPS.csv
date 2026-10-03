@@ -1,0 +1,13 @@
+from_domain,from_table,from_column,to_domain,to_table,to_column,business_label
+Altro,dotazioni_assets,assigned_org_unit_id,Organigramma,org_unit,id,dotazioni_assets.assigned_org_unit_id collega a org_unit (assigned_org_unit)
+Altro,dotazioni_assets,created_by_user_id,Accessi e permessi,application_users,id,dotazioni_assets.created_by_user_id collega a application_users (created_by_user)
+Altro,dotazioni_assets,network_device_id,Rete e dispositivi,network_devices,id,dotazioni_assets.network_device_id collega a network_devices (network_device)
+Altro,dotazioni_assets,updated_by_user_id,Accessi e permessi,application_users,id,dotazioni_assets.updated_by_user_id collega a application_users (updated_by_user)
+Altro,dotazioni_assets,vehicle_id,Operazioni sul campo,vehicle,id,dotazioni_assets.vehicle_id collega a vehicle (vehicle)
+Altro,dotazioni_custodies,asset_id,Altro,dotazioni_assets,id,dotazioni_custodies.asset_id collega a dotazioni_assets (asset)
+Altro,dotazioni_custodies,handover_from_user_id,Accessi e permessi,application_users,id,dotazioni_custodies.handover_from_user_id collega a application_users (handover_from_user)
+Altro,dotazioni_custodies,holder_user_id,Accessi e permessi,application_users,id,dotazioni_custodies.holder_user_id collega a application_users (holder_user)
+Altro,dotazioni_custodies,recorded_by_user_id,Accessi e permessi,application_users,id,dotazioni_custodies.recorded_by_user_id collega a application_users (recorded_by_user)
+Altro,dotazioni_custodies,returned_by_user_id,Accessi e permessi,application_users,id,dotazioni_custodies.returned_by_user_id collega a application_users (returned_by_user)
+Altro,dotazioni_events,actor_user_id,Accessi e permessi,application_users,id,dotazioni_events.actor_user_id collega a application_users (actor_user)
+Altro,dotazioni_events,asset_id,Altro,dotazioni_assets,id,dotazioni_events.asset_id collega a dotazioni_assets (asset)

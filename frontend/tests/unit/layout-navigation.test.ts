@@ -43,6 +43,14 @@ describe("layout navigation helpers", () => {
     expect(getVisiblePlatformModules(ced).map((module) => module.href)).not.toContain("/network");
     expect(getVisiblePlatformModules(ced).map((module) => module.href)).not.toContain("/nas-control");
   });
+  test("shows Dotazioni only when the module is enabled", () => {
+    const user = buildUser({ enabled_modules: ["dotazioni"] });
+    expect(getVisiblePlatformModules(user).map((module) => module.label)).toContain("Dotazioni");
+    expect(getVisiblePlatformModules(buildUser()).map((module) => module.label)).not.toContain("Dotazioni");
+    expect(getActivePlatformModule("/dotazioni/assets/1", user)?.label).toBe("Dotazioni");
+    expect(getModuleSections({ currentModuleKey: "dotazioni" })[0].items[0].href).toBe("/dotazioni");
+    expect(getModuleSections({ currentModuleKey: "unknown" as "inventory" })[0].items[0].href).toBe("/inventory");
+  });
   test("maps every supported route to the expected current module key", () => {
     const cases = [
       ["/gaia/users", "gaia"],
@@ -55,6 +63,7 @@ describe("layout navigation helpers", () => {
       ["/anagrafica/anpr-config", "utenze"],
       ["/network", "network"],
       ["/inventory", "inventory"],
+      ["/dotazioni/assets/1", "dotazioni"],
       ["/operazioni", "operazioni"],
       ["/riordino", "riordino"],
       ["/ruolo", "ruolo"],
@@ -80,6 +89,7 @@ describe("layout navigation helpers", () => {
       ["utenze", "Utenze"],
       ["network", "Rete"],
       ["inventory", "Inventario"],
+      ["dotazioni", "Dotazioni"],
       ["operazioni", "Operazioni"],
       ["riordino", "Riordino"],
       ["ruolo", "Ruolo"],

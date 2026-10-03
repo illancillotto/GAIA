@@ -91,6 +91,15 @@ L'architettura adotta una separazione netta tra frontend, backend API, database 
 - composizione container-first per facilitare ambienti coerenti
 - health endpoint dedicato per monitoraggio base
 
+## Cruscotto operatori e Dotazioni — 2026-10-02
+
+`/gaia/users/operatori-cruscotto` consuma Dotazioni tramite `OperatorAssets`.
+La scheda usa solo `detail.operator.gaia_user_id` per le custodie e non
+interpreta device di rete assegnati come beni fisicamente in consegna.
+Mapping assente ed errori Dotazioni restano locali; dominio e permessi sono
+nel modulo canonico. Contratto e verifiche in
+`domain-docs/dotazioni/docs/CRUSCOTTO_VALIDATION.md`.
+
 ## 6. Evoluzioni Previste
 
 - autenticazione JWT e RBAC

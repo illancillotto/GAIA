@@ -6,10 +6,18 @@ from sqlalchemy.pool import StaticPool
 from app.core.database import Base as RuntimeBase
 from app.core.security import verify_password
 from app.db.base import Base
-from app.main import _ensure_bootstrap_admin_on_startup, _ensure_gis_catalog_on_startup, _ensure_sections_on_startup
+from app.main import (
+    _ensure_bootstrap_admin_on_startup,
+    _ensure_gis_catalog_on_startup,
+    _ensure_sections_on_startup,
+)
 from app.models.application_user import ApplicationUser
 from app.models.section_permission import Section
-from app.modules.gis.bootstrap import CATASTO_GIS_LAYER_DEFINITIONS, NETWORK_GIS_LAYER_DEFINITIONS, RIORDINO_GIS_LAYER_DEFINITIONS
+from app.modules.gis.bootstrap import (
+    CATASTO_GIS_LAYER_DEFINITIONS,
+    NETWORK_GIS_LAYER_DEFINITIONS,
+    RIORDINO_GIS_LAYER_DEFINITIONS,
+)
 from app.modules.gis.models import GisLayer, GisLayerPermission
 from app.modules.gis.territorio_bootstrap import TERRITORIO_GIS_LAYER_DEFINITIONS
 from app.services.bootstrap_admin import ensure_bootstrap_admin
@@ -49,7 +57,8 @@ def test_ensure_bootstrap_admin_creates_admin_once(monkeypatch) -> None:
     assert first_user.id == second_user.id
     assert first_user.username == "seedadmin"
     assert first_user.role == "super_admin"
-    assert first_user.enabled_modules == ["accessi", "rete", "inventario", "gis", "catasto", "utenze", "operazioni", "riordino", "ruolo", "presenze", "organigramma"]
+    assert first_user.enabled_modules == ["accessi", "rete", "inventario", "gis", "catasto", "utenze", "operazioni", "riordino", "ruolo", "presenze", "organigramma", "dotazioni"]
+    assert first_user.module_dotazioni is True
 
 
 def test_ensure_bootstrap_admin_updates_existing_admin(monkeypatch) -> None:
@@ -95,7 +104,8 @@ def test_ensure_bootstrap_admin_updates_existing_admin(monkeypatch) -> None:
     assert user.email == "new-admin@example.local"
     assert user.role == "super_admin"
     assert user.is_active is True
-    assert user.enabled_modules == ["accessi", "rete", "inventario", "gis", "catasto", "utenze", "operazioni", "riordino", "ruolo", "presenze", "organigramma"]
+    assert user.enabled_modules == ["accessi", "rete", "inventario", "gis", "catasto", "utenze", "operazioni", "riordino", "ruolo", "presenze", "organigramma", "dotazioni"]
+    assert user.module_dotazioni is True
     assert verify_password("new-secret", user.password_hash) is True
 
 

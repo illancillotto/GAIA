@@ -3,6 +3,17 @@
 # GAIA
 ## Architettura del sistema
 
+Il dominio Dotazioni vive in `backend/app/modules/dotazioni/` e nel frontend
+unico sotto `/dotazioni`. Gestisce beni operativi, assegnazione a `OrgUnit`,
+custodia su `ApplicationUser` e audit transazionale. Inventory mantiene i
+flussi di magazzino; Network resta autorevole sul monitoraggio e Operazioni
+sui mezzi. Contratto: `domain-docs/dotazioni/docs/README.md`.
+
+Il cruscotto operatori riutilizza le API Dotazioni per i beni in custodia,
+tramite il solo `detail.operator.gaia_user_id`, senza duplicare logica o
+inferire custodia dall'assegnazione tecnica Network. Verifiche in
+`domain-docs/dotazioni/docs/CRUSCOTTO_VALIDATION.md`.
+
 > Regola repository
 > Il backend GAIA e un monolite modulare. Nuovo codice backend di dominio va creato in `backend/app/modules/<modulo>/`.
 > I path legacy fuori da `app/modules/` sono compatibilita temporanea e non sono piu destinazione primaria per nuove feature.

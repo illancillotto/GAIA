@@ -65,7 +65,7 @@ def create_user(username: str = "root", role: str = "super_admin") -> Applicatio
 
 
 def super_admin_modules() -> list[str]:
-    return ["accessi", "rete", "inventario", "gis", "catasto", "utenze", "operazioni", "riordino", "ruolo", "presenze", "organigramma"]
+    return ["accessi", "rete", "inventario", "gis", "catasto", "utenze", "operazioni", "riordino", "ruolo", "presenze", "organigramma", "dotazioni"]
 
 
 def test_ced_user_management_api_boundaries(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -150,6 +150,34 @@ def test_admin_cannot_promote_standard_user_to_super_admin() -> None:
     headers = {"Authorization": f"Bearer {login('admin')}"}
     assert client.put(f"/admin/users/{standard.id}", headers=headers, json={"role": "super_admin"}).status_code == 403
     assert client.put(f"/admin/users/{standard.id}", headers=headers, json={"role": "ced"}).status_code == 200
+
+
+def test_dotazioni_module_can_be_enabled_without_inventory() -> None:
+    create_user()
+    token = login("root")
+    headers = {"Authorization": f"Bearer {token}"}
+    response = client.post(
+        "/admin/users",
+        headers=headers,
+        json={
+            "username": "dotazioni-user",
+            "email": "dotazioni@example.local",
+            "password": "secret123",
+            "module_accessi": False,
+            "module_dotazioni": True,
+        },
+    )
+    assert response.status_code == 201
+    assert response.json()["module_dotazioni"] is True
+    assert response.json()["module_inventario"] is False
+    assert response.json()["enabled_modules"] == ["dotazioni"]
+    updated = client.put(
+        f"/admin/users/{response.json()['id']}",
+        headers=headers,
+        json={"module_dotazioni": False},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["enabled_modules"] == []
 
 
 def login(username: str, password: str = "secret123") -> str:

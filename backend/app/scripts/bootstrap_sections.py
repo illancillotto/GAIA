@@ -1,5 +1,5 @@
 from app.core.database import SessionLocal
-from app.models.section_permission import Section
+from app.models.section_permission import RoleSectionPermission, Section
 from app.repositories.section_permission import create_section
 from app.schemas.permissions import SectionCreate
 
@@ -84,7 +84,22 @@ DEFAULT_SECTIONS = [
     ("presenze.gate.teams.manage", "GATE Presenze - Gestione squadre", "presenze", "admin"),
     ("organigramma.read", "Organigramma — Consultazione", "organigramma", "viewer"),
     ("organigramma.manage", "Organigramma — Gestione", "organigramma", "admin"),
+    ("dotazioni.view", "Dotazioni — Consultazione", "dotazioni", "viewer"),
+    ("dotazioni.manage", "Dotazioni — Gestione beni", "dotazioni", "admin"),
+    ("dotazioni.assign", "Dotazioni — Assegnazioni organizzative", "dotazioni", "admin"),
+    ("dotazioni.custody", "Dotazioni — Custodia personale", "dotazioni", "admin"),
+    ("dotazioni.history", "Dotazioni — Storico custodie", "dotazioni", "viewer"),
 ]
+
+
+def create_default_section(db, payload: SectionCreate) -> None:
+    section = create_section(db, payload, updated_by_id=None)
+    if payload.key == "dotazioni.custody":
+        permission = db.query(RoleSectionPermission).filter_by(
+            section_id=section.id, role="operator"
+        ).one()
+        permission.is_granted = True
+        db.commit()
 
 
 def ensure_default_sections(db) -> int:
@@ -93,10 +108,9 @@ def ensure_default_sections(db) -> int:
         existing = db.query(Section).filter(Section.key == key).one_or_none()
         if existing is not None:
             continue
-        create_section(
+        create_default_section(
             db,
             SectionCreate(module=module, key=key, label=label, min_role=min_role, sort_order=idx),
-            updated_by_id=None,
         )
         created += 1
     return created
