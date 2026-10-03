@@ -444,3 +444,24 @@ graphify-platform-docs-query:
 graphify-query:
 	@if [ -z "$(Q)" ]; then echo "Uso: make graphify-query Q=\"domanda\""; exit 1; fi
 	$(GRAPHIFY_ENV) graphify query "$(Q)"
+
+GO_BIN ?= go
+GOFMT_BIN ?= $(if $(findstring /,$(GO_BIN)),$(dir $(GO_BIN))gofmt,gofmt)
+MCP_CA_CERT ?=
+MCP_CA_BUNDLE ?= runtime-data/mcps/client-ca
+
+.PHONY: mcp-ca-bundle test-mcp-tls lint-mcp-tls
+mcp-ca-bundle:
+	GO_BIN="$(GO_BIN)" bash scripts/tls/build-client-bundle.sh "$(MCP_CA_CERT)" "$(MCP_CA_BUNDLE)"
+
+test-mcp-tls:
+	cd installer/windows && GOTOOLCHAIN=local GOPROXY=off "$(GO_BIN)" test -coverprofile=/tmp/gaia-mcp-ca-core.cover core.go core_test.go
+	"$(GO_BIN)" tool cover -func=/tmp/gaia-mcp-ca-core.cover > /tmp/gaia-mcp-ca-core-coverage.txt
+	cat /tmp/gaia-mcp-ca-core-coverage.txt
+	awk '/^total:/ { found=1; if ($$NF != "100.0%") exit 1 } END { if (!found) exit 1 }' /tmp/gaia-mcp-ca-core-coverage.txt
+	bash scripts/tls/test-client-installers.sh
+
+lint-mcp-tls:
+	unformatted="$$("$(GOFMT_BIN)" -l installer/windows/*.go)" && test -z "$$unformatted"
+	GOTOOLCHAIN=local GOPROXY=off "$(GO_BIN)" vet installer/windows/core.go installer/windows/core_test.go
+	for script in scripts/tls/*.sh; do bash -n "$$script" || exit; done

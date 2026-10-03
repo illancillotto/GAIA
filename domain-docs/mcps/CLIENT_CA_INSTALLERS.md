@@ -89,8 +89,11 @@ Verificare provenienza e checksum: SHA256SUMS non autentica il mittente.
 Core Go Windows: 100% statement con gate. Adapter Win32 escluso da questa
 percentuale: collaudo nativo ancora richiesto. CA/CSR OpenSSL reali;
 trust Windows/macOS/Linux simulati, nessuno store reale modificato.
-Lint mirato: gofmt, Go vet core, sintassi Bash. Graphify Wiki: AST locale,
-nessun invio documenti. Lint globale con backend/.venv fallisce su I001
+Lint mirato: gofmt, Go vet core, sintassi Bash. Il target `lint-mcp-tls`
+risolve gofmt dal PATH quando `GO_BIN=go`, oppure dalla directory del binario
+Go esplicito; `GOFMT_BIN` permette un override. L'assenza di gofmt o il suo
+fallimento fa fallire il target. Graphify Wiki: AST locale, nessun invio
+documenti. Lint globale con backend/.venv fallisce su I001
 preesistente in test_presenze_operations_postgres.py; ratchet globale
 fallisce su regressioni preesistenti non correlate. Log in
 `/tmp/gaia-ca-lint-venv.log`, `/tmp/gaia-ca-ratchet.log`.
