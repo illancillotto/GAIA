@@ -10,6 +10,26 @@ import {
 } from "@/lib/catasto-gis-coordinate-search";
 
 describe("catasto GIS coordinate search helpers", () => {
+  test.each([
+    ["N 39°; E 8°", 39, 8],
+    ["E 8°; N 39°", 39, 8],
+    ["S 39°; W 8°", -39, -8],
+    ["w 8°; s 39°", -39, -8],
+    ["8°E;39°N", 39, 8],
+    ["8°w;39°s", -39, -8],
+    ["N -39°;E -8°", -39, -8],
+    ["S -39°;W -8°", -39, -8],
+    ["90°N;180°E", 90, 180],
+  ] as const)("preserves hemisphere and coordinate order for %s", (input, lat, lon) => {
+    expect(parseCatastoGisCoordinateSearch(input)).toEqual({ lat, lon, source: "dms" });
+  });
+  test.each([
+    "N 39°;S 8°", "E 39°;W 8°", "39°N;8°S", "39°E;8°W",
+    "39°N", "39°N;8°E;1°N", "N 39°60';E 8°", '39°N;8°0\'60"E',
+  ])("preserves directional DMS rejection for %s", (input) => {
+    expect(parseCatastoGisCoordinateSearch(input)).toBeNull();
+  });
+
   test("preserves coordinate search response shape and invalid-input fallback", () => {
     expect(buildCatastoGisCoordinateSearchResponse("invalid")).toBeNull();
     const result = buildCatastoGisCoordinateSearchResponse("39°;8°");

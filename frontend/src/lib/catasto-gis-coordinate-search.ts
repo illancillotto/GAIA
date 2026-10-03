@@ -84,7 +84,7 @@ function parseDmsValues(
   degreesValue: string,
   minutesValue: string | undefined,
   secondsValue: string | undefined,
-): { value: number; direction?: string } | null {
+): { value: number; direction: string } | null {
   const direction = directionValue.toUpperCase();
   const degrees = parseRequiredNumber(degreesValue);
   const minutes = parseOptionalNumber(minutesValue);
@@ -94,7 +94,7 @@ function parseDmsValues(
 }
 
 function parseDirectionalDms(input: string): ParsedGisCoordinate | null {
-  const parts: Array<{ value: number; direction?: string }> = [];
+  const parts: Array<{ value: number; direction: string }> = [];
   const hasLeadingDirections = /\b[NS]\s*[+-]?\d/i.test(input) && /\b[EW]\s*[+-]?\d/i.test(input);
   const pattern = hasLeadingDirections ? LEADING_DIRECTION_DMS_PATTERN : TRAILING_DIRECTION_DMS_PATTERN;
   for (const match of input.matchAll(pattern)) {
@@ -105,8 +105,8 @@ function parseDirectionalDms(input: string): ParsedGisCoordinate | null {
   }
   if (parts.length !== 2) return null;
 
-  const latPart = parts.find((part) => part.direction && /[NS]/.test(part.direction));
-  const lonPart = parts.find((part) => part.direction && /[EW]/.test(part.direction));
+  const latPart = parts.find((part) => /[NS]/.test(part.direction));
+  const lonPart = parts.find((part) => /[EW]/.test(part.direction));
   if (!latPart || !lonPart) return null;
   return toCoordinate(latPart.value, lonPart.value, "dms");
 }

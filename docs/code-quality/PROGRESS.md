@@ -3,6 +3,34 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto GIS - lookup dei componenti DMS direzionali (2026-10-03)
+
+- Hotspot unico `parseDirectionalDms`, checkout `main@2bc93d66`;
+  runtime/test puliti, Graphify consultato, altri lavori preservati.
+- Prima: cognitiva/ciclomatica/LOC/nesting `13/11/16/2`.
+- Slice: dichiarare direction obbligatoria nel risultato del validatore
+  (sempre restituita dal runtime) e rimuovere le due guardie truthy nei
+  lookup NS/EW. Le regex gia rifiutano una stringa vuota; nessun cambio
+  funzionale, parsing, validazione numerica, segni e ordinamento invariati.
+- Diciassette nuovi casi su emisferi, ordine invertito, casing, gradi
+  negativi e limiti, direzioni duplicate, componenti mancanti/extra e valori
+  invalidi. Suite prima/dopo 48 test verdi, full-file 100% su tutte le metriche.
+- Dopo: cognitiva `13 -> 11`, ciclomatica `11 -> 9`, LOC/nesting `16/2`
+  invariati. Le due callback find passano da cog/cyc `1/2` a `0/1`, nessun
+  nuovo callable; aggregati file cognitiva `50 -> 46`, ciclomatica `59 -> 55`,
+  diciannove callable e LOC `196` invariati. Esito `IMPROVED`, debito non
+  trasferito; warning `1 -> 0`, zero error, nessuna violation nel file.
+- Coverage dopo: statement `89/89`, branch `64/64`, funzioni `19/19`,
+  linee `71/71`. Ratchet mirato autorevole contro `origin/main` PASS prima
+  e dopo, `findings: []`, merge-base `6b61fd27`; baseline/scope invariati.
+  ESLint, typecheck senza incremental, 144 test tooling e whitespace verdi.
+  Graphify frontend aggiornato; refresh platform docs completato con
+  `chunk 1/1 done`, senza warning di chunk semantici falliti.
+- Evidenze `/tmp/gaia-directional-dms-{before,after}.{json,md}`, log
+  characterization/after/ratchet-before/after/lint/types/quality e Graphify
+  con lo stesso prefisso. Un solo hotspot, commit isolato dopo i gate
+  secondo autorizzazione vigente; altri lavori preservati, nessun push.
+
 ### Catasto GIS - componenti DMS senza direzione (2026-10-03)
 
 - Hotspot unico `parseSignedDms`, checkout `main@bfc158cc`;
