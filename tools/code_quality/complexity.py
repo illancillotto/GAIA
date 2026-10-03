@@ -655,7 +655,7 @@ def resolve_baseline_callable(
     added_lines: dict[str, set[int]] | None = None,
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None, bool]:
     exact = base.get(callable_key(c))
-    if exact:
+    if exact and not callable_is_wholly_added(c, added_lines):
         return exact, None, False
 
     same_identity = [
@@ -679,7 +679,18 @@ def resolve_baseline_callable(
         # Removing unchanged duplicates needs no positional guess. Multiplicities
         # ensure each surviving callable has its own metric-identical baseline entry.
         if current_metrics <= base_metrics:
+            if exact:
+                return exact, None, False
             return None, None, True
+        surviving_metrics = Counter(
+            metric_tuple(rc)
+            for rc in current_same_fp
+            if not callable_is_wholly_added(rc, added_lines)
+        )
+        if len(current_same_fp) > len(same_identity_fp) and surviving_metrics == base_metrics:
+            return None, None, not callable_is_wholly_added(c, added_lines)
+        if exact:
+            return exact, None, False
         picked = unique_line_tiebreak(c, same_identity_fp)
         if picked:
             return picked, None, False

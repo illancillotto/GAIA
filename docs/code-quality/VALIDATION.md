@@ -35,9 +35,9 @@ una configurazione temporanea, senza cambiare scope o gate CI:
 
 ```bash
 coverage_config=$(mktemp /tmp/gaia-quality-coverage.XXXXXX)
-printf '[run]\nbranch = True\nsource = tools/code_quality\npatch = subprocess\nparallel = True\n' > "$coverage_config"
+printf '[run]\nbranch = True\nsource = tools/code_quality,scripts\npatch = subprocess\nparallel = True\n[report]\ninclude =\n    */tools/code_quality/*\n    */scripts/patch_graphify_force_pruning.py\n' > "$coverage_config"
 COVERAGE_FILE=/tmp/gaia-quality.coverage python3 -m pytest -q tests/code_quality \
-  --cov=tools/code_quality --cov-config="$coverage_config" --cov-branch \
+  --cov=tools/code_quality --cov=scripts --cov-config="$coverage_config" --cov-branch \
   --cov-report=term-missing --cov-report=json:/tmp/gaia-quality-coverage.json \
   --cov-fail-under=100
 ```
@@ -45,6 +45,10 @@ COVERAGE_FILE=/tmp/gaia-quality.coverage python3 -m pytest -q tests/code_quality
 Richiede pytest-cov e Coverage con supporto `patch = subprocess`. I report
 devono includere il runtime `complexity.py`, senza warning `no-data-collected`
 o `module-not-imported`; verificare sia statement sia branch nel JSON.
+Il perimetro include anche la patch locale `patch_graphify_force_pruning.py`;
+il filtro report temporaneo seleziona questi runtime, non cambia lo scope CI
+o la policy del repository. La suite contiene inoltre i contratti Make della
+cache bytecode isolata e la caratterizzazione del pruning senza API esterne.
 
 ## Ratchet ordinario
 

@@ -3,6 +3,67 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Tooling - sblocco gate condivisi e pruning Graphify (2026-10-03)
+
+- Tranche autorizzata sui tre blocchi globali, non un nuovo hotspot GIS.
+  Checkout iniziale `main@2bc93d66`, merge-base finale `main@b8929feb`.
+  Modifiche concorrenti preservate; nessun runtime applicativo modificato.
+- Ruff I001 risolto nei soli import di
+  `backend/tests/test_presenze_operations_postgres.py`; collection dei tre
+  test riuscita, corpi test invariati. PostgreSQL live non eseguito.
+  `lint-backend` usa ora una cache bytecode temporanea con cleanup anche
+  in caso di failure, evitando cache runtime non scrivibili create dai
+  container. Due contratti Make verificano successo, fallimento, cleanup
+  e mancato avvio del ratchet quando compileall fallisce.
+- Matcher: una nuova callback interamente aggiunta non rende ambigui i
+  duplicati invariati solo quando tutte le occorrenze non aggiunte
+  riproducono esattamente il multinsieme completo baseline. Le aggiunte
+  restano nuove e non ereditano debito, anche a coordinate coincidenti
+  con una voce baseline. Nove nuovi casi verificano
+  crescita legittima, survivor mancante, regressione legacy, aggiunta
+  parziale, violation nuova bloccante e riscritture legacy senza prova
+  di aggiunta. Matching ambiguo non dimostrabile
+  continua a fallire, nessuna soglia o esclusione cambiata.
+- Ratchet autorevole su `navigation.ts`: PASS, `findings: []`, senza
+  cambiare il frontend o rigenerare baseline. Il ratchet globale ora
+  completa il confronto (prima exit 2 per `isVisible`) ed esce 1 con
+  32 finding: 31 regressioni callable e una LOC file-level, nei lavori
+  concorrenti Wiki/accessi/Ruolo/frontend. Verificati gli stessi 32 finding
+  con il matcher originale sui medesimi path, escludendo solo navigation.
+  Non sono assorbiti dalla baseline
+  e non sono trattati come debito legacy approvato. Il loro recupero richiede
+  una change separata con ownership e test; nessun altro hotspot aperto.
+- Patch locale riproducibile `scripts/patch_graphify_force_pruning.py`:
+  `--force` rende autorevoli le sorgenti riestratte anche per i nodi
+  preesistenti assenti dalla nuova AST. Restano i nodi di altre sorgenti;
+  non e pruning generale di file cancellati. Target Make dedicato e
+  dipendenza automatica di `graphify-backend`; layout upstream sconosciuti/
+  ambigui, package/file assenti e installazioni non scrivibili fail-closed.
+  Quattordici contratti coprono pruning force/incrementale, preservazione,
+  idempotenza, discovery CLI e failure di installazione.
+- Suite quality tooling finale: `169 passed` (anche `make quality-test`). Full-file `complexity.py`
+  `709/709` statement e `276/276` branch; patch Graphify `27/27` e `6/6`,
+  100% per file, nessuna esclusione o test saltato. Config temporanea include
+  subprocess CLI e i due runtime: non cambia gate/scope CI repository.
+  Prima il matcher era `702/702`, `270/270`; nuovo script interamente
+  caratterizzato. Nessuna riduzione della complessita applicativa dichiarata.
+- Ruff mirato e formatter nuovi file verdi. `make lint-backend` senza
+  workaround esterni PASS su 145 file cambiati. Whitespace verde;
+  baseline, eccezioni e scope invariati, sincronizzazione non eseguita
+  per le 32 regressioni residue. Evidenze `/tmp/gaia-blockers-final-run-dir`,
+  final-ratchet, navigation-ratchet, lint-final, preexisting-proof e
+  graph-code log con prefisso `/tmp/gaia-blockers-`.
+- Graphify backend aggiornato tramite target con force e patch: 865 file
+  AST, 9670 nodi, 24634 archi e 530 community. Verificata assenza del vecchio
+  `gis_services_jsonable_record` e presenza del nuovo simbolo canonico;
+  HTML omesso dal limite previsto di 5000 nodi, JSON/report aggiornati.
+  Questo risolve il limite della tranche GIS precedente. Documentazione
+  piattaforma aggiornata tramite target dedicato: `chunk 1/1 done`, nessun
+  warning semantico; refresh finale dei registri dopo i 169 test. Grafi non
+  versionati. Commit isolato della sola manutenzione tooling successivamente
+  richiesto dall'utente; le 32 regressioni del working tree e le altre slice
+  non sono incluse. Nessun push.
+
 ### Catasto GIS - lookup dei componenti DMS direzionali (2026-10-03)
 
 - Hotspot unico `parseDirectionalDms`, checkout `main@2bc93d66`;

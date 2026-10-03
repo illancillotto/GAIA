@@ -68,6 +68,13 @@ semantico: per gli hotspot resta obbligatoria la review degli aggregati dei file
 coinvolti e del diff delle violation. Un totale globale invariato non e prova di
 miglioramento.
 
+La crescita di un gruppo di callback duplicate non richiede un'identita
+posizionale inventata: se il diff prova che tutte le nuove occorrenze sono
+aggiunte e gli invariati consumano esattamente l'intera baseline metric-identica,
+gli invariati sono equivalenti come gruppo e le aggiunte sono valutate come
+codice nuovo. Non e autorizzazione a regressioni o riuso di metriche legacy;
+vedi `METRICS_AND_BASELINE.md` e i contratti del matcher.
+
 ## Rollout
 
 Il rollout deve avvenire con change brevi e separate:

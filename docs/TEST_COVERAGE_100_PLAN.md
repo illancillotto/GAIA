@@ -1047,3 +1047,16 @@ matching, baseline, policy, failure esterne e read-only; nessuna esclusione
 aggiunta. Rimosso soltanto un controllo interno impossibile negli AST
 prodotti da `ast.parse`, con invariante e metriche caratterizzati dai test.
 Questo esito non costituisce coverage 100% dell'intero repository.
+
+Follow-up gate e Graphify del 2026-10-03: 169 test quality tooling passati,
+matcher full-file `709/709` statement e `276/276` branch; nuovo script
+`scripts/patch_graphify_force_pruning.py` `27/27` statement e `6/6` branch,
+100% per file senza esclusioni o test saltati. I contratti aggiunti coprono
+callback nuove fra duplicati senza ereditarne il debito, anche a coordinate
+coincidenti con la baseline, riscritture legacy senza prova d'aggiunta, regressioni/failure
+del matcher, pruning/idempotenza e failure installazione Graphify, cache
+bytecode Make e cleanup dopo errore. Il comando riproducibile in
+`docs/code-quality/VALIDATION.md` include entrambi i runtime e i subprocess
+CLI; il filtro report locale non modifica configurazione o gate CI.
+Il ratchet globale ha ancora 32 regressioni nei lavori concorrenti,
+separate dal gate coverage verde; nessuna baseline aggiornata per assorbirle.

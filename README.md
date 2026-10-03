@@ -210,6 +210,13 @@ Se usi Graphify contro `codex-lb` invece che contro OpenAI diretto, applica prim
 
 Questa patch rende il backend `openai` di Graphify compatibile con `OPENAI_BASE_URL`, cosi `.env.graphify` puo puntare a un proxy OpenAI-compatible come `codex-lb`.
 
+Per rimuovere simboli obsoleti dalle sorgenti riestratte con `--force`, usare
+`make graphify-patch-force-pruning` prima del target codice del corpus.
+`make graphify-backend` applica gia questa patch locale idempotente.
+La patch rifiuta layout upstream sconosciuti senza modificarli; il force
+rimpiazza anche i nodi inferiti delle sorgenti riestratte, mantenendo quelli
+di altre sorgenti. Non copre la rimozione di interi file dal corpus.
+
 Uso consigliato:
 
 - `make graphify-catasto-code`

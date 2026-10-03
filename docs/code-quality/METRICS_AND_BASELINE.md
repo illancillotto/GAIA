@@ -116,6 +116,15 @@ per piu callable. Metriche diverse o molteplicita maggiori non godono di questa
 equivalenza; continuano il matching ordinario e la gestione delle ambiguita.
 Questa regola non abilita matching fra path o nomi diversi.
 
+Un gruppo puo anche crescere per callable interamente aggiunti nel diff:
+in quel caso tutte le occorrenze non aggiunte devono riprodurre esattamente
+il multinsieme completo delle metriche baseline. Solo allora gli invariati
+sono equivalenti come gruppo e le aggiunte restano codice nuovo, senza
+ereditare metriche legacy, anche se path/nome/fingerprint/riga coincidono
+con una voce baseline. Aggiunte parziali, survivor mancanti o metriche
+diverse non beneficiano di questa estensione; proseguono nel matching
+ordinario. Le violation error-level del codice aggiunto continuano a fallire.
+
 Il fallback per nome qualificato tra path diversi si applica solo quando il
 path baseline non esiste piu nel report corrente e il candidato e unico sia
 nella baseline sia nel report corrente. I nomi sintetici `<callback>` e

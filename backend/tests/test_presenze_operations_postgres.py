@@ -7,14 +7,14 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+from alembic.migration import MigrationContext
+from alembic.operations import Operations
+from alembic.util import load_python_file
 from fastapi import HTTPException
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateSchema, DropSchema
 
-from alembic.migration import MigrationContext
-from alembic.operations import Operations
-from alembic.util import load_python_file
 from app.models.application_user import ApplicationUser
 from app.modules.presenze.models import (
     PresenzeCollaborator,

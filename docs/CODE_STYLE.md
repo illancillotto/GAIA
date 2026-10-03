@@ -99,6 +99,11 @@ riformattare il resto del modulo o dell'albero.
 Il Python del Make deve avere Ruff installato (`backend/requirements.txt`).
 Esempio locale: `make lint-backend QUALITY_PYTHON=backend/.venv/bin/python`.
 
+`lint-backend` compila usando una cache bytecode temporanea, rimossa anche
+in caso di errore. Non richiede permessi di scrittura sui `__pycache__`
+del runtime (che possono essere stati creati dai container); il ratchet Ruff
+parte solo se la compilazione passa. Nessun controllo di stile e bypassato.
+
 | Comando | Scopo |
 | --- | --- |
 | `make lint` | sintassi Python, ratchet Ruff, ESLint frontend |

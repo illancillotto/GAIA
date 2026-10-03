@@ -21,6 +21,7 @@ Regole:
 - Non committare `graphify-out/`.
 - I target `graphify-inaz-*` sono alias legacy dei corrispondenti target `graphify-presenze-*`.
 - Se un refactoring strutturale rimuove import, simboli o route e il grafo incrementale mantiene edge stale, forza il pruning tramite lo stesso target `make` invece di invocare Graphify dalla root, ad esempio `make graphify-frontend GRAPHIFY_CODE_FLAGS=--force`.
+- Prima del pruning forzato applica `make graphify-patch-force-pruning`: corregge la versione locale che conserva simboli rimossi dalle sorgenti riestratte anche con `--force`. `make graphify-backend` applica automaticamente questa patch idempotente; layout upstream sconosciuti o ambigui falliscono senza modifiche. Il force rende autorevole l'AST delle sorgenti riestratte, preservando nodi di altre sorgenti; non e un pruning generale di file eliminati dal corpus.
 
 Target supportati:
 

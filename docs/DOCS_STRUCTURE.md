@@ -16,6 +16,8 @@ La documentazione del progetto e distribuita principalmente in due aree:
 
 Nella root del repository resta solo `README.md` (entry point del progetto).
 Le procedure operative piu usate lato DevOps e dati vivono inoltre nei file `scripts/*.sh`, richiamati dal `README.md`.
+`scripts/patch_graphify_force_pruning.py` corregge il pruning forzato dei simboli
+nelle installazioni Graphify compatibili; target e regole sono in `AGENTS.md`.
 In root e presente anche `AGENTS.md` per le regole operative repository-level usate dagli agenti.
 
 ## Documentazione generale in docs/

@@ -196,7 +196,8 @@ restore-db-from-nas:
 lint: lint-backend lint-frontend
 
 lint-backend:
-	$(QUALITY_PYTHON) -m compileall -q backend/app backend/tests modules/elaborazioni/worker
+	@cache_dir=$$(mktemp -d); trap 'rm -rf "$$cache_dir"' EXIT; \
+		PYTHONPYCACHEPREFIX="$$cache_dir" $(QUALITY_PYTHON) -m compileall -q backend/app backend/tests modules/elaborazioni/worker
 	$(QUALITY_PYTHON) scripts/check_changed_python_style.py --base-ref $${BASE_REF:-origin/main}
 
 style-ratchet:
@@ -238,6 +239,10 @@ quality-test:
 
 graphify-patch-openai-base-url:
 	GRAPHIFY_BIN=$$(which graphify); PYTHON=$$(head -1 "$$GRAPHIFY_BIN" | tr -d '#!'); "$$PYTHON" scripts/patch_graphify_openai_base_url.py
+
+.PHONY: graphify-patch-force-pruning
+graphify-patch-force-pruning:
+	GRAPHIFY_BIN=$$(which graphify); PYTHON=$$(head -1 "$$GRAPHIFY_BIN" | tr -d '#!'); "$$PYTHON" scripts/patch_graphify_force_pruning.py
 
 graphify-refresh-core-code:
 	$(MAKE) graphify-catasto-code
@@ -385,7 +390,7 @@ graphify-wiki-query:
 	@if [ -z "$(Q)" ]; then echo "Uso: make graphify-wiki-query Q=\"domanda\""; exit 1; fi
 	cd backend/app/modules/wiki && $(GRAPHIFY_ENV) graphify query "$(Q)"
 
-graphify-backend:
+graphify-backend: graphify-patch-force-pruning
 	cd backend/app && $(GRAPHIFY_ENV) graphify update . $(GRAPHIFY_CODE_FLAGS)
 
 graphify-backend-query:
