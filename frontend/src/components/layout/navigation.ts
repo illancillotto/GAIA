@@ -490,6 +490,7 @@ export function getModuleSections({
           label: "Panoramica",
           items: [
             item("/wiki", DocumentIcon, "Wiki"),
+            item("/wiki/mcp", DocumentIcon, "MCP sintetico", { match: "prefix" }),
             item("/wiki/support", AlertTriangleIcon, "Supporto", { match: "prefix" }),
             item("/wiki/conversations", FolderIcon, "Conversazioni", { match: "prefix" }),
             item("/wiki/conversations/analytics", CalendarIcon, "Analytics conversazioni", { match: "prefix" }),

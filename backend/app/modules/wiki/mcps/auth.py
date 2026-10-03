@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import jwt
 
+from .audit import AUDIT_SCOPE
 from .context import CallContext
 
 ISSUER = "gaia-wiki"
@@ -64,7 +65,10 @@ def verify_token(secret: str, token: str) -> CallContext:
     scopes = claims.get("scopes")
     if claims.get("type") != "gaia_mcp" or not isinstance(scopes, list):
         raise jwt.InvalidTokenError("Invalid MCP credential")
-    if any(not isinstance(scope, str) or scope not in {*SCOPES, "docs.read"} for scope in scopes):
+    if any(
+        not isinstance(scope, str) or scope not in {*SCOPES, "docs.read", AUDIT_SCOPE}
+        for scope in scopes
+    ):
         raise jwt.InvalidTokenError("Invalid MCP scope")
     return CallContext(
         principal=claims["sub"],

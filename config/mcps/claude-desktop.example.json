@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "gaia-synthetic": {
+      "command": "/absolute/path/GAIA/backend/.venv/bin/python",
+      "args": [
+        "-m", "app.modules.wiki.mcps.data", "serve",
+        "--database", "/absolute/path/GAIA/runtime-data/mcps/data/gaia-mcp-synthetic-v1.sqlite",
+        "--audit-database", "/absolute/path/GAIA/runtime-data/mcps/audit/gaia-mcp-audit.sqlite",
+        "--scopes", "utenze.read,catasto.read,ruolo.read"
+      ],
+      "env": { "PYTHONPATH": "/absolute/path/GAIA/backend" }
+    }
+  }
+}

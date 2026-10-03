@@ -1,5 +1,12 @@
 # Architettura MCP per GAIA Wiki
 
+Aggiornamento 2026-10-03: il listener OAuth separato riusa il package Wiki
+e la stessa immagine backend, autenticazione GAIA e DataService/AuditStore.
+Solo dataset generato sintetico; nessuna route Docs/inspection. La UI consenso
+vive in `features/wiki`, con callback `/mcp/consent`; non sostituisce la chat
+Wiki legacy. Flag disattivate e rilascio non eseguito. Contratto e API:
+`CONNECTOR_RUNTIME_2026-10-03.md`; gate: `CONNECTOR_FINAL_REVIEW_2026-10-03.md`.
+
 ## Scopo
 
 Definire l'architettura dei due MCP interni a GAIA utilizzati dall'agente principale della tesi:

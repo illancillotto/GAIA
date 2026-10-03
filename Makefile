@@ -32,6 +32,7 @@ WORKER_COVERAGE_XML ?= backend/coverage-worker.xml
 MCP_DOCS_MANIFEST ?= config/mcps/docs-manifest.json
 MCP_DOCS_OUTPUT ?= runtime-data/mcps/docs
 MCP_DATA_DATABASE ?= runtime-data/mcps/data/gaia-mcp-synthetic-v1.sqlite
+MCP_AUDIT_DATABASE ?= runtime-data/mcps/audit/gaia-mcp-audit.sqlite
 GAIA_SYNTHETIC_SEED ?= gaia-v1
 PRESENZE_IDENTITY_MANIFEST ?= secrets/presenze/canonical-identities.json
 PRESENZE_IDENTITY_AUDIT_USER_ID ?= 1
@@ -39,6 +40,7 @@ PRESENZE_IDENTITY_AUDIT_USER_ID ?= 1
 .PHONY: test-ruolo-postgres test-presenze-postgres audit-presenze-identities
 .PHONY: mcp-docs-build mcp-docs-serve test-mcp-docs
 .PHONY: mcp-data-seed mcp-data-reset mcp-data-serve mcp-http test-mcp mcp-evaluate
+.PHONY: mcp-data-http
 .PHONY: graphify-elaborazioni-worker-code graphify-elaborazioni-worker-query graphify-elaborazioni-docs graphify-elaborazioni-docs-query
 
 .PHONY: up down logs rebuild backend-shell frontend-shell migrate bootstrap-admin bootstrap-domain bootstrap-sections purge-seed live-sync scheduled-live-sync local-gateway-up local-gateway-down wiki-index wiki-reindex test test-worker test-wiki coverage-wiki smoke-network-vpn-bypass backup-db-to-nas restore-db-from-nas lint lint-backend lint-backend-all style-ratchet format-backend lint-frontend complexity-report complexity-check complexity-changed complexity-ratchet complexity-baseline complexity-baseline-verify complexity-ci-gate quality-test graphify-patch-openai-base-url graphify-refresh-core-code graphify-refresh-core-docs graphify-refresh-core graphify-catasto-code graphify-catasto-docs graphify-catasto-query graphify-presenze-code graphify-presenze-docs graphify-presenze-query graphify-inaz-code graphify-inaz-docs graphify-inaz-query graphify-network-code graphify-network-docs graphify-network-query graphify-operazioni-code graphify-operazioni-docs graphify-operazioni-query graphify-organigramma-code graphify-organigramma-docs graphify-organigramma-query graphify-riordino-code graphify-riordino-docs graphify-riordino-query graphify-ruolo-code graphify-ruolo-docs graphify-ruolo-query graphify-utenze-code graphify-utenze-docs graphify-utenze-query graphify-wiki-code graphify-wiki-docs graphify-wiki-docs-debug graphify-wiki-query graphify-backend graphify-backend-query graphify-frontend graphify-frontend-query graphify-docs graphify-docs-query graphify-platform-docs graphify-platform-docs-query graphify-query
@@ -111,8 +113,29 @@ mcp-data-serve:
 mcp-http:
 	PYTHONPATH=backend $(QUALITY_PYTHON) -m app.modules.wiki.mcps --corpus "$(MCP_DOCS_OUTPUT)/corpus.json" --database "$(MCP_DATA_DATABASE)"
 
+mcp-data-http:
+	PYTHONPATH=backend $(QUALITY_PYTHON) -m app.modules.wiki.mcps --data-only --database "$(MCP_DATA_DATABASE)" --audit-database "$(MCP_AUDIT_DATABASE)"
+
 test-mcp:
-	$(QUALITY_PYTHON) -m pytest backend/tests/test_wiki_docs_mcp.py backend/tests/test_wiki_data_mcp.py backend/tests/test_wiki_mcp_http.py backend/tests/test_wiki_mcp_integration.py backend/tests/test_wiki_mcp_evaluation.py backend/tests/test_wiki_mcp_experiment.py --cov=app.modules.wiki.mcps --cov=app.modules.wiki.router --cov-branch --cov-report=term-missing:skip-covered --cov-report=json:backend/coverage-mcp.json --cov-fail-under=100
+	$(QUALITY_PYTHON) -m pytest backend/tests/test_wiki_docs_mcp.py backend/tests/test_wiki_data_mcp.py backend/tests/test_wiki_mcp_http.py backend/tests/test_wiki_mcp_integration.py backend/tests/test_wiki_mcp_evaluation.py backend/tests/test_wiki_mcp_experiment.py backend/tests/test_wiki_mcp_console.py backend/tests/test_wiki_mcp_discovery.py backend/tests/test_wiki_mcp_oauth.py backend/tests/test_wiki_mcp_connector.py --cov=app.modules.wiki.mcps --cov=app.modules.wiki.router --cov-branch --cov-report=term-missing:skip-covered --cov-report=json:backend/coverage-mcp.json --cov-fail-under=100
+
+.PHONY: test-mcp-oauth
+test-mcp-oauth:
+	$(QUALITY_PYTHON) -m pytest backend/tests/test_wiki_mcp_oauth.py --cov=app.modules.wiki.mcps.oauth_store --cov=app.modules.wiki.mcps.oauth_provider --cov=app.modules.wiki.mcps.oauth_http --cov=app.modules.wiki.mcps.oauth_gaia --cov-branch --cov-report=term-missing --cov-report=json:/tmp/gaia-mcp-oauth-coverage.json --cov-fail-under=100
+
+.PHONY: mcp-connector test-mcp-connector test-mcp-consent
+mcp-connector:
+	PYTHONPATH=backend $(QUALITY_PYTHON) -m uvicorn app.modules.wiki.mcps.connector:create_configured_app --factory --host 127.0.0.1 --port 8769 --no-access-log
+
+test-mcp-connector:
+	$(QUALITY_PYTHON) -m pytest backend/tests/test_wiki_mcp_connector.py backend/tests/test_wiki_mcp_oauth.py --cov=app.modules.wiki.mcps.connector --cov=app.modules.wiki.mcps.connector_config --cov=app.modules.wiki.mcps.connector_budget --cov=app.modules.wiki.mcps.oauth_provider --cov-branch --cov-report=term-missing --cov-report=json:/tmp/gaia-connector-coverage.json --cov-fail-under=100
+
+test-mcp-consent:
+	cd frontend && VITEST_COVERAGE_INCLUDE='src/features/wiki/mcp-consent.tsx,src/features/wiki/mcp-consent-api.ts,src/app/mcp/consent/page.tsx' npm run test:coverage -- tests/unit/mcp-consent.test.tsx --coverage.reportsDirectory=/tmp/gaia-mcp-consent-frontend-coverage
+
+.PHONY: test-mcp-discovery
+test-mcp-discovery:
+	$(QUALITY_PYTHON) -m pytest backend/tests/test_wiki_mcp_discovery.py backend/tests/test_wiki_data_mcp.py::test_sdk_handlers_and_stdio_runner --cov=app.modules.wiki.mcps.data.server --cov=app.modules.wiki.mcps.data.catalog --cov-branch --cov-report=term-missing --cov-fail-under=100
 
 .PHONY: mcp-comparison-plan mcp-comparison-live
 mcp-comparison-plan:

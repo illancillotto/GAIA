@@ -4,8 +4,10 @@ import argparse
 import json
 import logging
 import os
+from contextlib import ExitStack
 from pathlib import Path
 
+from ..audit import AuditStore
 from ..context import CallContext
 from ..docs.cli import EventFormatter
 from .database import seed_database
@@ -22,6 +24,7 @@ def main(argv: list[str] | None = None) -> None:
     serve = commands.add_parser("serve")
     serve.add_argument("--database", type=Path, required=True)
     serve.add_argument("--scopes", default="utenze.read,catasto.read,ruolo.read")
+    serve.add_argument("--audit-database", type=Path)
     args = parser.parse_args(argv)
     if args.command == "seed":
         manifest = seed_database(args.database, args.seed)
@@ -33,9 +36,11 @@ def main(argv: list[str] | None = None) -> None:
     handler.setFormatter(EventFormatter())
     logging.basicConfig(level=logging.INFO, handlers=[handler])
     scopes = frozenset(scope for scope in args.scopes.split(",") if scope)
-    service = DataService(args.database)
-    try:
+    with ExitStack() as stack:
+        audit = AuditStore(args.audit_database) if args.audit_database else None
+        if audit is not None:
+            stack.callback(audit.close)
+        service = DataService(args.database, audit=audit)
+        stack.callback(service.close)
         server = create_server(service, lambda: CallContext(principal="local-stdio", scopes=scopes))
         run_stdio(server)
-    finally:
-        service.close()

@@ -57,7 +57,8 @@ def decode_cursor(cursor: str | None, fingerprint: str) -> str | None:
 
 
 class DataService:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, audit=None):
+        self.audit = audit
         self.connection = open_readonly(path)
         try:
             self.manifest = read_manifest(self.connection)
@@ -185,4 +186,6 @@ class DataService:
             "dataset_or_corpus_version": response["dataset_version"],
         }
         logger.info("gaia_data_mcp_call", extra={"mcp_event": event})
+        if self.audit is not None:
+            self.audit.record(event, arguments, response)
         return response

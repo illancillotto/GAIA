@@ -6,3 +6,20 @@ GAIA_MCP_MODEL=gpt-reserve
 # No provider URL or key is supplied by default. Never commit credential values.
 GAIA_MCP_MODEL_BASE_URL=
 GAIA_MCP_MODEL_API_KEY=
+# HTTP CLI: --data-only --audit-database /mcp-audit/gaia-mcp-audit.sqlite
+# Claude Desktop: merge claude-desktop.example.json after replacing absolute paths.
+# No provider credentials are needed for the local stdio Data server.
+# Isolated connector listener, disabled by default and separate from legacy MCP.
+# Requires profile mcp-connector, approved HTTPS URLs and registered client callbacks.
+# See domain-docs/mcps/CONNECTOR_RUNTIME_2026-10-03.md before activation.
+GAIA_MCP_OAUTH_ENABLED=false
+GAIA_MCP_OAUTH_ISSUER=
+GAIA_MCP_OAUTH_RESOURCE=
+GAIA_MCP_OAUTH_CONSENT_URL=
+GAIA_MCP_OAUTH_CLIENTS_FILE=
+GAIA_MCP_OAUTH_DATABASE=
+GAIA_MCP_CONNECTOR_DATA_DATABASE=
+GAIA_MCP_CONNECTOR_AUDIT_DATABASE=
+GAIA_MCP_CONNECTOR_REQUESTS_PER_MINUTE=60
+GAIA_MCP_CONNECTOR_TOOLS_PER_MINUTE=20
+NEXT_PUBLIC_GAIA_MCP_CONNECTOR_ENABLED=false

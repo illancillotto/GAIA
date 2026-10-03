@@ -1,4 +1,44 @@
 services:
+  frontend:
+    build:
+      args:
+        NEXT_PUBLIC_GAIA_MCP_CONNECTOR_ENABLED: ${NEXT_PUBLIC_GAIA_MCP_CONNECTOR_ENABLED:-false}
+
+  gaia-mcp-connector:
+    image: ${COMPOSE_PROJECT_NAME:-gaia}-backend:latest
+    build:
+      context: ./backend
+    profiles: ["mcp-connector"]
+    restart: unless-stopped
+    init: true
+    entrypoint: []
+    command: ["uvicorn", "app.modules.wiki.mcps.connector:create_configured_app", "--factory", "--host", "0.0.0.0", "--port", "8769", "--no-access-log"]
+    env_file: [".env"]
+    environment:
+      GAIA_MCP_OAUTH_ENABLED: ${GAIA_MCP_OAUTH_ENABLED:-false}
+      GAIA_MCP_OAUTH_ISSUER: ${GAIA_MCP_OAUTH_ISSUER:-}
+      GAIA_MCP_OAUTH_RESOURCE: ${GAIA_MCP_OAUTH_RESOURCE:-}
+      GAIA_MCP_OAUTH_CONSENT_URL: ${GAIA_MCP_OAUTH_CONSENT_URL:-}
+      GAIA_MCP_OAUTH_CLIENTS_FILE: /mcp-config/approved-clients.json
+      GAIA_MCP_OAUTH_DATABASE: /mcp-oauth/gaia-mcp-oauth.sqlite
+      GAIA_MCP_CONNECTOR_DATA_DATABASE: /mcp-data/gaia-mcp-synthetic-v1.sqlite
+      GAIA_MCP_CONNECTOR_AUDIT_DATABASE: /mcp-audit/gaia-mcp-audit.sqlite
+      GAIA_MCP_CONNECTOR_REQUESTS_PER_MINUTE: ${GAIA_MCP_CONNECTOR_REQUESTS_PER_MINUTE:-60}
+      GAIA_MCP_CONNECTOR_TOOLS_PER_MINUTE: ${GAIA_MCP_CONNECTOR_TOOLS_PER_MINUTE:-20}
+    volumes:
+      - ./config/mcps:/mcp-config:ro
+      - ./runtime-data/mcps/data:/mcp-data:ro
+      - ./runtime-data/mcps/oauth:/mcp-oauth:rw
+      - ./runtime-data/mcps/audit:/mcp-audit:rw
+    expose: ["8769"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+
   backend:
     environment:
       GAIA_MCP_SIGNING_SECRET: ${GAIA_MCP_SIGNING_SECRET:-}
@@ -19,10 +59,11 @@ services:
       - python
       - -m
       - app.modules.wiki.mcps
-      - --corpus
-      - /runtime-data/mcps/docs/corpus.json
+      - --data-only
       - --database
       - /runtime-data/mcps/data/gaia-mcp-synthetic-v1.sqlite
+      - --audit-database
+      - /mcp-audit/gaia-mcp-audit.sqlite
       - --host
       - 0.0.0.0
       - --port
@@ -30,7 +71,8 @@ services:
     environment:
       GAIA_MCP_SIGNING_SECRET: ${GAIA_MCP_SIGNING_SECRET:-}
     volumes:
-      - ./runtime-data/mcps:/runtime-data/mcps:ro
+      - ./runtime-data/mcps/data:/runtime-data/mcps/data:ro
+      - ./runtime-data/mcps/audit:/mcp-audit:rw
     expose: ["8768"]
     read_only: true
     tmpfs:

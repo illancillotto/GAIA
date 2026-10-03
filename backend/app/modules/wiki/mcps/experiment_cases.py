@@ -10,6 +10,10 @@ ANSWER_CONTRACT = (
     '"records":[record richiesti con tutti i loro campi],'
     '"citations":[{"entity":"tabella","record_id":"UUID"}]}. '
     "Usa solo evidenze sintetiche; absent richiede una ricerca effettuata senza risultati."
+    " status riguarda soltanto i record richiesti, non le entita intermedie: "
+    "se un avviso esiste ma non ha pagamenti, per una domanda sui pagamenti usa absent. "
+    "citations deve contenere soltanto le citazioni dei record restituiti in records, "
+    "non quelle degli avvisi o di altre evidenze intermedie; se records e vuoto, citations e vuoto."
 )
 
 

@@ -5,6 +5,18 @@
 > Iniziato da: Claude Code (Sonnet 4.6)
 > Completato quasi interamente da Claude Code (2026-05-20)
 
+### MCP OAuth/consenso — progress 2026-10-03
+
+- [x] Fondazione OAuth PKCE con client preregistrati e autenticazione GAIA.
+- [x] Pagina consenso e listener isolato Data-only, metadata e budget/audit.
+- [x] Coverage completa dei dieci runtime della tranche e regressioni locali.
+- [ ] Gate finale complessivo: build/browser/suite MCP completa e ratchet globale.
+- [ ] Ingresso HTTPS approvato, configurazione Claude reale e prova sintetica live.
+
+Questa tranche preserva la Wiki legacy; nessun deploy effettuato.
+Matrice comportamento/test, comandi ed evidenze:
+`../../mcps/CONNECTOR_FINAL_REVIEW_2026-10-03.md`.
+
 ---
 
 ## Stato implementazione

@@ -5,6 +5,17 @@
 > Implementazione tecnica dettagliata in `IMPLEMENTATION_PLAN_wiki.md`.
 > Prompt operativo per Codex in `PROMPT_CODEX_wiki.md`.
 
+### Tranche MCP separata — stato 2026-10-03
+
+Il connettore esterno non sostituisce la chat documentale legacy descritta
+in questo PRD: accede esclusivamente a dati generati sintetici, readonly,
+con Docs escluso lato server. Implementati OAuth PKCE sul login GAIA,
+consenso esplicito, scope attuali, budget persistenti e audit/provenance.
+Flag disattivate per default; nessuna pubblicazione o prova Claude live.
+Requisiti implementati, matrice test e residui:
+`../../mcps/CONNECTOR_FINAL_REVIEW_2026-10-03.md`.
+Il gate complessivo resta FAIL; HTTPS/approvazione CED e client sono residui.
+
 ---
 
 ## 1. Visione

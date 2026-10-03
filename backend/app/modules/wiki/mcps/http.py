@@ -1,6 +1,6 @@
 """Authenticated stateless HTTP for the two independent internal sources."""
 
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from contextvars import ContextVar
 
 import jwt
@@ -14,6 +14,7 @@ from .auth import validate_secret, verify_token
 from .context import CallContext
 from .data.server import create_server as create_data_server
 from .docs.server import create_server as create_docs_server
+from .inspection import inspection_routes
 
 REQUEST_CONTEXT: ContextVar[CallContext] = ContextVar("gaia_mcp_request_context")
 
@@ -64,14 +65,18 @@ def create_http_app(docs_service, data_service, secret: str):
             "http://127.0.0.1:*",
         ],
     )
-    docs = create_docs_server(docs_service, context_factory=REQUEST_CONTEXT.get)
-    docs_app = docs.streamable_http_app(
-        streamable_http_path="/",
-        json_response=True,
-        stateless_http=True,
-        max_request_body_size=65536,
-        transport_security=security,
-    )
+    docs = None
+    routes = inspection_routes(data_service, REQUEST_CONTEXT.get)
+    if docs_service is not None:
+        docs = create_docs_server(docs_service, context_factory=REQUEST_CONTEXT.get)
+        docs_app = docs.streamable_http_app(
+            streamable_http_path="/",
+            json_response=True,
+            stateless_http=True,
+            max_request_body_size=65536,
+            transport_security=security,
+        )
+        routes.append(Mount("/docs", app=docs_app))
     data = create_data_server(data_service, REQUEST_CONTEXT.get)
     manager = StreamableHTTPSessionManager(
         data,
@@ -83,11 +88,15 @@ def create_http_app(docs_service, data_service, secret: str):
 
     @asynccontextmanager
     async def lifespan(_app):
-        async with docs.session_manager.run(), manager.run():
+        async with AsyncExitStack() as stack:
+            if docs is not None:
+                await stack.enter_async_context(docs.session_manager.run())
+            await stack.enter_async_context(manager.run())
             yield
 
+    routes.append(Mount("/data", app=manager.handle_request))
     application = Starlette(
-        routes=[Mount("/docs", app=docs_app), Mount("/data", app=manager.handle_request)],
+        routes=routes,
         lifespan=lifespan,
     )
     return BearerMiddleware(application, secret)

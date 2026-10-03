@@ -131,7 +131,7 @@ def test_authenticated_discovery_source_separation_and_error_handling(sources):
             )
             assert response.status_code == 401
             assert response.json() == {"error": "UNAUTHORIZED"}
-        for source, expected in [("docs", 4), ("data", 12)]:
+        for source, expected in [("docs", 4), ("data", 2)]:
             response = rpc(client, source, "tools/list", scopes=["docs.read", "utenze.read"])
             assert response.status_code == 200
             assert len(response.json()["result"]["tools"]) == expected

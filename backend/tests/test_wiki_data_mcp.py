@@ -584,7 +584,9 @@ def test_real_stdio_handshake_discovery_multi_hop_and_denied_scope(database_path
                 initialized = await session.initialize()
                 assert initialized.server_info.name == "GAIA Data MCP"
                 tools = await session.list_tools()
-                assert len(tools.tools) == 12
+                assert {tool.name for tool in tools.tools} == {
+                    name for name, query in QUERIES.items() if query.scope == "utenze.read"
+                }
                 response = await session.call_tool("search_subjects", {"query": "omonimo"})
                 assert response.structured_content["result_count"] == 2
                 subject_id = response.structured_content["results"][0]["id"]

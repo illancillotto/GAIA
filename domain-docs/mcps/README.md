@@ -1,5 +1,10 @@
 # GAIA MCPs
 
+Verifica finale corrente della tranche OAuth/consenso/connettore:
+`CONNECTOR_FINAL_REVIEW_2026-10-03.md`. Implementazione locale coperta al 100%;
+gate complessivo FAIL per build/browser/suite completa e ratchet globale.
+Il connettore rimane disattivato, senza deploy o nuova prova Claude live.
+
 ## Runtime v1 implementato
 
 Docs e Data MCP sono implementati nel package Wiki, con server stdio/HTTP,
@@ -15,6 +20,9 @@ Recupero selettivo implementato: harness riproducibile Static RAG vs MCP,
 scoring strutturato e preview sintetica `/wiki/mcp`, senza modificare i freeze.
 Piano/progress/matrice test: `SYNTHETIC_RECOVERY_PLAN.md`.
 Evidenze finali e limiti: `SYNTHETIC_RECOVERY_REPORT.md`.
+Verifiche successive al commit, pilot ampliato e browser con provider reale:
+`POST_COMMIT_VALIDATION_2026-10-01.md`. I report precedenti restano storici;
+il gate globale corrente non e verde.
 Piano offline: `make mcp-comparison-plan`; prova esterna esplicita:
 `make mcp-comparison-live` (solo database sintetico verificato).
 

@@ -6,6 +6,7 @@ import threading
 from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
+from uuid import NAMESPACE_URL, uuid5
 
 import pytest
 import uvicorn
@@ -14,10 +15,14 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from test_wiki_mcp_integration import SECRET, corpus_files
 
 from app.modules.wiki.mcps import experiment_cli
+from app.modules.wiki.mcps.agent import WikiMCPAgent
 from app.modules.wiki.mcps.client import WikiMCPClient
 from app.modules.wiki.mcps.context import CallContext
+from app.modules.wiki.mcps.data import database as synthetic_database
 from app.modules.wiki.mcps.data.database import seed_database
-from app.modules.wiki.mcps.data.service import DataService
+from app.modules.wiki.mcps.data.generator import generate_dataset
+from app.modules.wiki.mcps.data.inputs import INPUTS
+from app.modules.wiki.mcps.data.service import DataService, serialize_record
 from app.modules.wiki.mcps.docs.corpus import load_corpus
 from app.modules.wiki.mcps.docs.service import DocsService
 from app.modules.wiki.mcps.experiment_cases import ExperimentCase, synthetic_cases
@@ -31,7 +36,7 @@ from app.modules.wiki.mcps.experiment_runner import (
     run_comparison,
     schedule,
 )
-from app.modules.wiki.mcps.experiment_scoring import score_answer
+from app.modules.wiki.mcps.experiment_scoring import score_answer, verified_absence
 from app.modules.wiki.mcps.experiment_static import EXPERIMENT_SCOPES, SyntheticStaticCorpus
 from app.modules.wiki.mcps.http import create_http_app
 
@@ -367,6 +372,228 @@ def test_cli_plan_live_and_cleanup(service, tmp_path, monkeypatch, capsys):
     assert runner.call_args.args[2] == "data-only"
     with pytest.raises(SystemExit):
         experiment_cli.main([*arguments, "--docs", "real-documents"])
+
+
+@pytest.fixture
+def multiple_payments_service(tmp_path, monkeypatch):
+    dataset = generate_dataset("synthetic-pagination-test-v1")
+    original = dataset["payments"][0]
+    total = original["amount_cents"]
+    original["amount_cents"] = total // 3
+    for index in (1, 2):
+        dataset["payments"].append(
+            {
+                **original,
+                "id": str(uuid5(NAMESPACE_URL, f"synthetic-payment-page-{index}")),
+                "amount_cents": total // 3 if index == 1 else total - 2 * (total // 3),
+            }
+        )
+    monkeypatch.setattr(synthetic_database, "generate_dataset", lambda seed: dataset)
+    path = tmp_path / "gaia-mcp-synthetic-multiple-payments.sqlite"
+    seed_database(path, "synthetic-pagination-test-v1")
+    service = DataService(path)
+    yield service, original["notice_id"]
+    service.close()
+
+
+def data_sources(service):
+    return SimpleNamespace(
+        list_tools=AsyncMock(
+            return_value=[
+                {
+                    "name": f"data__{name}",
+                    "description": "Synthetic data",
+                    "input_schema": model.model_json_schema(),
+                }
+                for name, model in INPUTS.items()
+            ]
+        ),
+        call_tool=AsyncMock(
+            side_effect=lambda name, arguments, context: service.call(
+                name.removeprefix("data__"), arguments, context
+            )
+        ),
+    )
+
+
+def test_agent_multiple_payments_follows_real_cursors(multiple_payments_service, context):
+    service, notice_id = multiple_payments_service
+    notice = service.connection.execute(
+        "SELECT * FROM role_notices WHERE id=?", (notice_id,)
+    ).fetchone()
+    expected = [
+        serialize_record(row)
+        for row in service.connection.execute(
+            "SELECT * FROM payments WHERE notice_id=? ORDER BY id", (notice_id,)
+        )
+    ]
+    case = ExperimentCase(
+        "paginated", "Restituisci tutti i pagamenti sintetici", "payments", expected
+    )
+    sources = data_sources(service)
+
+    async def decide(**arguments):
+        tools = [
+            json.loads(message["content"])
+            for message in arguments["messages"]
+            if message["role"] == "tool"
+        ]
+        if not tools:
+            return completion(
+                tools=[
+                    tool_call("data__search_role_notices", {"notice_code": notice["notice_code"]})
+                ]
+            )
+        if tools[-1]["tool"] == "search_role_notices":
+            return completion(
+                tools=[
+                    tool_call(
+                        "data__get_payments_by_notice",
+                        {"notice_id": tools[-1]["results"][0]["id"], "limit": 1},
+                    )
+                ]
+            )
+        if tools[-1]["next_cursor"]:
+            return completion(
+                tools=[
+                    tool_call(
+                        "data__get_payments_by_notice",
+                        {"notice_id": notice_id, "limit": 1, "cursor": tools[-1]["next_cursor"]},
+                    )
+                ]
+            )
+        records = [row for response in tools[1:] for row in response["results"]]
+        return completion(answer_for(replace(case, expected=records)))
+
+    model = model_stub(decide)
+    traced = TracedModel(model)
+    result = asyncio.run(
+        WikiMCPAgent(sources, traced, "gpt-reserve").answer(case.question, context)
+    )
+    assert score_answer(case, result["answer"], traced.evidence())["passed"]
+    assert result["tool_calls"] == 4 and len(json.loads(result["answer"])["records"]) == 3
+    assert [response["truncated"] for response in traced.evidence()[1:]] == [True, True, False]
+    assert (
+        len(
+            {
+                source["record_id"]
+                for source in result["provenance"]
+                if source["entity"] == "payments"
+            }
+        )
+        == 3
+    )
+
+
+@pytest.mark.parametrize("corruption", ["segment-copy", "other-payment"])
+def test_model_payment_citation_corruption_is_preserved_and_rejected(
+    multiple_payments_service, context, corruption
+):
+    service, notice_id = multiple_payments_service
+    response = service.call("get_payments_by_notice", {"notice_id": notice_id}, context)
+    case = ExperimentCase(
+        "citation-regression", "Pagamenti sintetici", "payments", response["results"]
+    )
+    payload = json.loads(answer_for(case))
+    original_id = payload["citations"][0]["record_id"]
+    other_id = payload["citations"][1]["record_id"]
+    segments = original_id.split("-")
+    segments[2] = other_id.split("-")[2]
+    segments[3] = other_id.split("-")[3]
+    corrupted_id = "-".join(segments) if corruption == "segment-copy" else other_id
+    assert corrupted_id != original_id
+    payload["citations"][0]["record_id"] = corrupted_id
+    raw_answer = json.dumps(payload)
+
+    async def decide(**arguments):
+        if any(message["role"] == "tool" for message in arguments["messages"]):
+            return completion(raw_answer)
+        return completion(
+            tools=[tool_call("data__get_payments_by_notice", {"notice_id": notice_id})]
+        )
+
+    traced = TracedModel(model_stub(decide))
+    result = asyncio.run(
+        WikiMCPAgent(data_sources(service), traced, "gpt-reserve").answer(case.question, context)
+    )
+    assert result["answer"] == raw_answer
+    assert traced.evidence()[0]["results"] == case.expected
+    assert original_id in {source["record_id"] for source in result["provenance"]}
+    score = score_answer(case, result["answer"], traced.evidence())
+    assert score["identity_match"] and score["facts_match"] and score["fields_match"]
+    assert not score["citation_valid"] and not score["passed"]
+    assert json.loads(result["answer"])["citations"][0]["record_id"] == corrupted_id
+
+
+def test_no_payments_scoring_requires_terminal_entity(service, context):
+    notice = service.connection.execute(
+        "SELECT * FROM role_notices WHERE id NOT IN (SELECT notice_id FROM payments) ORDER BY id LIMIT 1"
+    ).fetchone()
+    parent = service.call("search_role_notices", {"notice_code": notice["notice_code"]}, context)
+    empty = service.call(
+        "get_payments_by_notice", {"notice_id": parent["results"][0]["id"]}, context
+    )
+    case = ExperimentCase("no-payments", "Pagamenti dell'avviso sintetico", "payments", [])
+    assert score_answer(case, answer_for(case), [parent, empty])["passed"]
+    assert not verified_absence("payments", [parent])
+    assert verified_absence("payments", [{"tool": "search_role_notices", "result_count": 0}])
+    assert not verified_absence("payments", [{"tool": "search_subjects", "result_count": 0}])
+    assert not verified_absence("payments", [parent, {"result_count": 0}])
+    for change in (
+        {"truncated": True},
+        {"next_cursor": "synthetic-cursor"},
+        {"error": {"code": "PERMISSION_DENIED"}},
+    ):
+        assert not score_answer(case, answer_for(case), [parent, {**empty, **change}])["passed"]
+    assert not verified_absence("payments", [{"error": {"code": "INVALID_ARGUMENT"}}, empty])
+    assert verified_absence("payments", [{"result_count": 0}])
+    invalid_status = json.loads(answer_for(case))
+    invalid_status["status"] = "found"
+    assert not score_answer(case, json.dumps(invalid_status), [parent, empty])["passed"]
+    cited_parent = json.loads(answer_for(case))
+    cited_parent["citations"] = [{"entity": "role_notices", "record_id": notice["id"]}]
+    assert not score_answer(case, json.dumps(cited_parent), [parent, empty])["citation_valid"]
+
+
+@pytest.mark.parametrize("budget", ["permissions", "calls", "tokens"])
+def test_agent_denial_and_exhaustion_do_not_become_valid_absence(service, context, budget):
+    case = synthetic_cases(service)[-2]
+    notice_id = case.expected[0]["notice_id"]
+    notice = service.connection.execute(
+        "SELECT * FROM role_notices WHERE id=?", (notice_id,)
+    ).fetchone()
+    sources = data_sources(service)
+    if budget == "permissions":
+        context = replace(context, scopes=frozenset({"utenze.read"}))
+    model = model_stub(
+        lambda **arguments: (
+            completion(answer_for(replace(case, expected=[])))
+            if any(message["role"] == "tool" for message in arguments["messages"])
+            else completion(
+                tools=[
+                    tool_call("data__search_role_notices", {"notice_code": notice["notice_code"]})
+                ]
+            )
+        )
+    )
+    traced = TracedModel(model)
+    agent = WikiMCPAgent(
+        sources,
+        traced,
+        "gpt-reserve",
+        max_calls=1 if budget == "calls" else 8,
+        max_evidence_tokens=100 if budget == "tokens" else 6000,
+    )
+    result = asyncio.run(agent.answer(case.question, context))
+    assert not score_answer(case, result["answer"], traced.evidence())["passed"]
+    assert not score_answer(replace(case, expected=[]), result["answer"], traced.evidence())[
+        "passed"
+    ]
+    if budget == "permissions":
+        assert traced.evidence()[0]["error"]["code"] == "PERMISSION_DENIED"
+    else:
+        assert model.chat.completions.create.call_args.kwargs["tool_choice"] == "none"
+    assert result["tool_calls"] == 1
 
 
 def test_comparison_uses_real_sdk_catalog_and_http_tools_without_docs(tmp_path, context):

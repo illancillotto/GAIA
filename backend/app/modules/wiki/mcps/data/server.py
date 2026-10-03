@@ -9,41 +9,27 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 
 from ..context import CallContext
+from .catalog import SERVER_INSTRUCTIONS, TOOL_DESCRIPTIONS
 from .inputs import INPUTS
 from .queries import QUERIES
 from .service import SERVER_VERSION, DataService
 
-TOOL_DESCRIPTIONS = {
-    "search_role_notices": (
-        "Search synthetic role notices using exact filters combined with AND. "
-        "Use notice_code for a notice code and account_code only for an irrigation account code. "
-        "The returned id is the notice UUID for payment and line tools. "
-        "Zero results prove absence only for the supplied filters, not for another identifier."
-    ),
-    "get_payments_by_notice": (
-        "Read synthetic payments for the notice UUID obtained from role notice evidence. "
-        "First resolve a supplied notice code with search_role_notices.notice_code; "
-        "then use the returned id here. Follow next_cursor to retrieve remaining payments."
-    ),
-}
-
 
 def create_server(service: DataService, context_factory: Callable[[], CallContext]) -> Server:
     async def list_tools(_context, _params):
+        context = context_factory()
         return types.ListToolsResult(
             tools=[
                 types.Tool(
                     name=name,
-                    description=TOOL_DESCRIPTIONS.get(
-                        name, f"Read synthetic {QUERIES[name].entity}."
-                    )
-                    + f" Requires {QUERIES[name].scope}.",
+                    description=TOOL_DESCRIPTIONS[name] + f" Requires {QUERIES[name].scope}.",
                     input_schema=model.model_json_schema(),
                     annotations=types.ToolAnnotations(
                         read_only_hint=True, destructive_hint=False, open_world_hint=False
                     ),
                 )
                 for name, model in sorted(INPUTS.items())
+                if QUERIES[name].scope in context.scopes
             ]
         )
 
@@ -56,7 +42,11 @@ def create_server(service: DataService, context_factory: Callable[[], CallContex
         )
 
     return Server(
-        "GAIA Data MCP", version=SERVER_VERSION, on_list_tools=list_tools, on_call_tool=call_tool
+        "GAIA Data MCP",
+        version=SERVER_VERSION,
+        instructions=SERVER_INSTRUCTIONS,
+        on_list_tools=list_tools,
+        on_call_tool=call_tool,
     )
 
 

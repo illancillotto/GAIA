@@ -1,5 +1,74 @@
 # GAIA MCP — runtime, avvio e validazione
 
+Stato corrente 2026-10-03: fondazione OAuth, consenso GAIA e listener remoto
+Data-only implementati ma disattivati. Contratto:
+`CONNECTOR_RUNTIME_2026-10-03.md`; verifica finale e matrice test:
+`CONNECTOR_FINAL_REVIEW_2026-10-03.md`. Gate complessivo FAIL; i risultati
+precedenti sotto sono evidenze storiche, non attestazioni del checkout attuale.
+
+Catalogo semantico per LLM: `DATA_TOOL_CATALOG.md`. Tutti i 12 tool hanno
+descrizioni complete; initialize espone istruzioni sintetiche, copertura,
+paginazione e provenance. Distretti/domande non sono tool dedicati:
+la console completa non equivale alla copertura completa del modello.
+
+Hardening successivo: `SERVER_SCOPE_DISCOVERY_2026-10-02.md`. Discovery Data
+filtrata lato server per scope, non solo nel gateway; test HTTP/ASGI con JWT
+e scope concorrenti senza socket. OAuth/ingresso remoto restano da completare.
+
+Valutazioni aggiuntive 2026-10-02: `VALIDATION_2026-10-02.md`.
+30/30 query sintetiche, test locali e frontend passati; suite completa/live
+bloccati dal sandbox. Confermato il gap di scope nella discovery del server
+grezzo, da risolvere prima di esporlo al connettore remoto Claude.
+
+Piano corrente di produzione e audit HTTPS Kiosk (2026-10-02):
+`PRODUCTION_CONNECTOR_PLAN.md`. Il rilascio richiesto ora e il connettore
+remoto Claude, distinto dalle prove locali/stdio documentate sotto.
+
+Console dati/richieste/log e collegamento locale Claude:
+`CONSOLE_AND_LOCAL_CLIENTS.md`. ChatGPT rimandato su scelta dell'utente.
+
+## Riverifica del percorso gpt-reserve Data-only (2026-10-01)
+
+Il recupero dal checkpoint conferma che il percorso richiesto e gia presente
+nel commit `4a9af231`: non occorre ripetere l'implementazione. Configurazione,
+gateway e test escludono Docs da discovery e invocazioni prima del trasporto;
+le evidenze documentali spurie ricevute dal trasporto Data sono respinte prima
+dei messaggi al modello. Server Docs separato e chat Wiki legacy preservati.
+
+Riverifica corrente: `make test-mcp QUALITY_PYTHON=backend/.venv/bin/python`
+passa con 193 test, 1351/1351 statement e 252/252 branch coperti (100%). Le
+sei suite Wiki di regressione passano con 122 test. Ruff check/format MCP,
+Compose `config --quiet` e `make graphify-wiki-code GRAPHIFY_CODE_FLAGS=--force`
+passano. Graphify codice usa solo AST; nessun corpus docs e inviato al provider.
+
+Prova live ripetuta con `/tmp/gaia-mcp-live.py`: credenziali esistenti di
+`.env.graphify` lette in memoria, provider raggiungibile e `gpt-reserve`
+disponibile. Agente e trasporto HTTP reali su DB e fixture Docs temporanei
+interamente sintetici: una chiamata Data, due provenance, 283 token stimati
+di evidenze e zero richieste Docs. Questa prova usa il modello reale; i test
+unitari di orchestrazione usano invece risposte simulate. Log minimizzato:
+`/tmp/gaia-mcp-recheck-live.log`. Nessun Ollama, documento reale o deploy.
+
+I gate globali `make lint-backend` e `make complexity-ratchet` sono eseguiti
+ma falliscono su modifiche estranee gia presenti nel checkout: stile in
+Elaborazioni, test Presenze e read model Ruolo; complessita in Presenze,
+Ruolo, gestione utenti ed Elaborazioni. Nessun finding del ratchet riguarda
+MCP. Log: `/tmp/gaia-mcp-recheck-lint.log` e
+`/tmp/gaia-mcp-recheck-ratchet.log`. Questi file estranei e la baseline sono
+preservati; i gate globali non sono dichiarati superati.
+
+Il ratchet mirato `backend/.venv/bin/python tools/code_quality/complexity.py
+ratchet --base-ref origin/main backend/app/modules/wiki/mcps
+backend/app/modules/wiki/router.py` passa con `findings: []`, usando la
+baseline del merge-base `6b61fd27`. Log:
+`/tmp/gaia-mcp-recheck-ratchet-scoped.log`. Nessuna modifica runtime durante
+questa riverifica: metriche prima/dopo invariate.
+
+Verifica successiva al commit: `POST_COMMIT_VALIDATION_2026-10-01.md`.
+Include il nuovo scorer di assenza multi-hop, 193 test MCP, pilot diagnostico
+ampliato e browser con login/provider reali. I risultati precedenti sotto sono
+storici: non sostituiscono lo stato corrente dei gate globali.
+
 ## Confronto sintetico riproducibile e preview
 
 Correzione multi-hop codice avviso: `MULTIHOP_NOTICE_CODE_REVIEW.md`.
@@ -333,3 +402,21 @@ token stimati, versione server e versione corpus/dataset. Nessun argomento,
 contenuto o record completo nei log applicativi. Stima deterministica dei
 token: `ceil(caratteri/4)` sul JSON restituito prima di aggiungere il campo
 di stima. Le evidenze MCP non generano risposte LLM, non chiamano altre fonti.
+# Installer HTTPS interno
+
+Per preparare gli installer della nuova CA GAIA richiesta dall'utente, vedere
+`CLIENT_CA_INSTALLERS.md` e `make mcp-ca-bundle` / `make test-mcp-tls`.
+Non confondere il trust interno `gaia.lan` con l'ingresso pubblico necessario
+al connettore remoto Claude: quest'ultimo resta da implementare e pubblicare.
+# Fondazione OAuth (2026-10-03)
+
+Il backend delega al login GAIA esistente, senza grant password al connettore.
+Componente verificato ma non montato/pubblicato; configurazione prenotata e
+disattivata. Contratto, limiti e gate residui:
+[OAUTH_FOUNDATION_2026-10-03.md](OAUTH_FOUNDATION_2026-10-03.md).
+Gate mirato: `make test-mcp-oauth QUALITY_PYTHON=backend/.venv/bin/python`.
+
+Tranche successiva: pagina `/mcp/consent` e listener OAuth Data-only separato,
+disattivati per default. Configurazione, proxy da revisionare e gate live:
+[CONNECTOR_RUNTIME_2026-10-03.md](CONNECTOR_RUNTIME_2026-10-03.md).
+Gate: `make test-mcp-connector` e `make test-mcp-consent`.

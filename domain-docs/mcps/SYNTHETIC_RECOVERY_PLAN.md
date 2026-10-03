@@ -41,8 +41,13 @@ Il modello riceve la domanda sintetica generata e il contratto JSON:
 L'oracle `expected` resta locale nel manifest, usato solo dallo scorer. I record
 richiesti devono avere esattamente i campi previsti e i relativi valori; citazioni
 uniche, note dalle evidenze e corrispondenti ai record della risposta. `absent`
-richiede ricerche riuscite tutte a zero risultati: errore, permesso negato,
-nessuna ricerca o record inventati non provano l'assenza.
+richiede evidenze senza errori e ricerca terminale riuscita a zero risultati,
+non troncata e senza cursore, sull'entita richiesta o sul suo parent diretto.
+Un avviso trovato seguito da zero pagamenti puo quindi provare l'assenza dei
+pagamenti. Per evidenze Static senza tool riconosciuto tutti i risultati devono
+essere vuoti. Errore, permesso negato, nessuna ricerca, entita non pertinente o
+record inventati non provano l'assenza. Lo scorer verifica il contratto strutturato,
+non dimostra da solo la correttezza semantica dei filtri scelti dal modello.
 
 La verifica citazioni non dimostra entailment semantico di prosa libera. Il
 protocollo misura correttezza strutturata dei fatti richiesti, non qualita generale
@@ -75,14 +80,21 @@ Test backend in `backend/tests/test_wiki_mcp_experiment.py`.
 | Retry/interruzioni | Resume senza ripetere successi, errori redatti, tentativi limitati | `test_paired_runner_retry_resume_and_exhaustion` |
 | CLI | Piano offline, opt-in live, cleanup, no input Docs | `test_cli_plan_live_and_cleanup` |
 | HTTP/SDK | Namespace effettivo, bearer, chiamata reale, zero Docs | `test_comparison_uses_real_sdk_catalog_and_http_tools_without_docs` |
+| Paginazione multi-hop | Lookup avviso e tre pagine con cursor reale e provenance distinta | `test_agent_multiple_payments_follows_real_cursors` |
+| Assenza multi-hop | Parent positivo ammesso, terminale pertinente e completo, citazioni rigorose | `test_no_payments_scoring_requires_terminal_entity` |
+| Budget e permessi | Diniego/esaurimento non diventano assenza verificata | `test_agent_denial_and_exhaustion_do_not_become_valid_absence` |
+| Citazione corrotta dal modello | UUID assemblato da due record o citazione duplicata respinti; risposta grezza preservata | `test_model_payment_citation_corruption_is_preserved_and_rejected` (due parametri) |
 | UI | Preset-only, auth, provenance, assenza/errori/reset | `frontend/tests/unit/wiki-mcp-preview.test.tsx` |
 | Browser | Pagina Next reale, preset, successo e 503 | `frontend/tests/e2e/wiki-mcp-preview.spec.ts` (API simulate) |
+| Browser live | Login GAIA reale, gateway, MCP HTTP e modello; UUID e assenza verificati | stesso file, test opt-in `live synthetic login to gateway to MCP to model` |
 
 ## Validazione e residui
 
 - [x] MCP coverage statement/branch 100%; preview coverage 100%.
 - [x] Regressioni Wiki backend/frontend e browser Chromium con API simulate.
 - [x] Pilot live: modello e HTTP/SDK/bearer reali, soltanto sintetico.
+- [x] Pilot diagnostico ampliato a tre seed, avvisi non iniziali, paginazione e zero pagamenti.
+- [x] Browser con login/auth reali su backend isolato sintetico e provider reale.
 - [x] Ruff/format e ratchet mirato senza nuovi errori, baseline invariata.
 - [x] Graphify codice Wiki/frontend tramite Make, nessuna estrazione docs remota.
 - [x] Gate globali eseguiti; failure concorrenti registrate senza fix fuori scope.
@@ -92,4 +104,6 @@ Test backend in `backend/tests/test_wiki_mcp_experiment.py`.
 - [ ] Eventuale review/commit separato dei cinque pending change retrieval-only.
 
 Questo recupero non certifica come completati i gate dei checkout esterni. Nessun
-commit, push, merge o deploy incluso. Evidenze: `SYNTHETIC_RECOVERY_REPORT.md`.
+commit, push, merge o deploy incluso nelle verifiche successive. Evidenze storiche:
+`SYNTHETIC_RECOVERY_REPORT.md`; stato corrente e residui:
+`POST_COMMIT_VALIDATION_2026-10-01.md`.

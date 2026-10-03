@@ -45,6 +45,7 @@ def experiment_manifest(
         "experiment_scoring.py",
         "experiment_runner.py",
         "data/inputs.py",
+        "data/catalog.py",
         "data/queries.py",
         "data/server.py",
         "data/service.py",

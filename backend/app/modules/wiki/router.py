@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.modules.wiki.mcps.console_routes import router as mcp_console_router
 from app.modules.wiki.mcps.routes import router as mcp_router
 from app.modules.wiki.routes.articles import router as articles_router
 from app.modules.wiki.routes.audit import router as audit_router
@@ -20,3 +21,4 @@ router.include_router(requests_router)
 router.include_router(support_analytics_router)
 router.include_router(index_router)
 router.include_router(mcp_router)
+router.include_router(mcp_console_router, prefix="/mcp")

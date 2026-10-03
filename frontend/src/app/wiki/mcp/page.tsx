@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import { request } from "@/lib/api/core";
@@ -53,6 +54,7 @@ export default function WikiMCPPreview() {
   return (
     <ProtectedPage title="Wiki MCP — preview sintetica" description="gpt-reserve via codex-lb, solo Data sintetici." breadcrumb="GAIA / Wiki / MCP">
       <p>Nessun documento reale. Nessun testo libero o allegato. La chat Wiki legacy resta separata.</p>
+      <Link href="/wiki/mcp/console" className="btn-secondary">Dati MCP, richieste e log</Link>
       <form onSubmit={submit}>
         <label htmlFor="synthetic-question">Domanda sintetica</label>
         <select id="synthetic-question" value={question} onChange={(event) => setQuestion(event.target.value)} disabled={busy}>
