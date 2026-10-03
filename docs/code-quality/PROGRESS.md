@@ -3,6 +3,36 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Elaborazioni - dispatch dei workspace statici (2026-10-03)
+
+- Hotspot unico `NativeWorkspaceRenderer`, checkout `main@b824e2f1`;
+  runtime/test puliti, Graphify consultato, lavori degli altri team esclusi.
+- Prima: cognitiva/ciclomatica/LOC/nesting `14/15/67/1`.
+- Slice: tabella locale delle dieci route esatte e relativi elementi JSX,
+  senza factory/helper nuovi. Elementi ricreati a ogni render, solo quello
+  selezionato montato. Request mode e Capacitas prioritari, route dinamiche,
+  ID, props embedded/view/isolatedView, callback e iframe invariati.
+- Dodici nuovi casi verificano matching esatto delle dieci route statiche,
+  fallback iframe e callback load, props view/isolatedView e unico archivio
+  montato; le dodici route native gia testate verificano ora embedded.
+  Suite prima/dopo 62 test verdi e full-file 100% su tutte le metriche.
+- Dopo: cognitiva `14 -> 5`, ciclomatica `15 -> 6`, LOC `67 -> 53`, nesting
+  `1` invariato. Aggregati file cognitiva `33 -> 24`, ciclomatica `41 -> 32`,
+  LOC `190 -> 176`, dodici callable invariati. Esito `IMPROVED`, nessun
+  trasferimento di debito. Error `1 -> 0`, due warning LOC residui.
+- Coverage finale: statement `57/57`, branch `30/30`, funzioni `12/12`,
+  linee `55/55`. Ratchet mirato autorevole contro `origin/main` PASS prima
+  e dopo, `findings: []`, merge-base `6b61fd27`; baseline/scope invariati.
+  La prima tabella JSX in tuple attivava jsx-key: convertita a proprieta
+  oggetto/Map senza aggiungere key che cambino la riconciliazione React.
+  ESLint finale, typecheck senza incremental, 144 test tooling e whitespace
+  verdi. Graphify frontend aggiornato; refresh platform docs completato
+  con `chunk 1/1 done`, senza warning di chunk semantici falliti.
+- Evidenze `/tmp/gaia-native-workspace-{before,final}.{json,md}`, log
+  characterization/final/ratchet-before/final/lint-final/types/quality e
+  Graphify con lo stesso prefisso. Un solo hotspot, commit isolato dopo
+  i gate secondo autorizzazione vigente; altri lavori preservati, nessun push.
+
 ### Elaborazioni - sezione Capacitas dal link (2026-10-03)
 
 - Hotspot unico `getCapacitasSectionFromHref`, checkout `main@9836f719`;

@@ -145,48 +145,25 @@ export function NativeWorkspaceRenderer({
     return <ElaborazioneRequestWorkspace embedded initialMode={requestMode} onOpenBatch={(batchId) => onNavigate(`/elaborazioni/batches/${batchId}`)} />;
   }
 
-  if (href === "/elaborazioni/batches") {
-    return <ElaborazioneArchiveWorkspaceContent embedded initialView="batches" isolatedView />;
-  }
-
   if (href.startsWith("/elaborazioni/capacitas")) {
     return <ElaborazioniCapacitasWorkspace embedded initialSection={capacitasSection} />;
   }
 
-  if (href === "/elaborazioni/settings") {
-    return <ElaborazioniSettingsWorkspace embedded />;
-  }
-
-  if (href === "/elaborazioni/bonifica") {
-    return <ElaborazioniBonificaSyncWorkspace embedded />;
-  }
-
-  if (href === "/elaborazioni/anpr") {
-    return <ElaborazioniAnprWorkspace embedded />;
-  }
-
-  if (href === "/elaborazioni/presenze-sync") {
-    return <PresenzeSyncWorkspace embedded />;
-  }
-
-  if (href === "/elaborazioni/ade-alignment") {
-    return <ElaborazioniAdeAlignmentWorkspace embedded />;
-  }
-
-  if (href === "/elaborazioni/autodoc") {
-    return <ElaborazioniAutodocWorkspace embedded />;
-  }
-
-  if (href === "/elaborazioni/gaia-mobile-sync") {
-    return <ElaborazioniGaiaMobileSyncWorkspace embedded />;
-  }
-
-  if (href === "/elaborazioni/posta-online") {
-    return <ElaborazioniPostaOnlineWorkspace embedded />;
-  }
-
-  if (href === "/catasto/archive?view=documents") {
-    return <CatastoArchiveWorkspaceContent embedded initialView="documents" isolatedView />;
+  const staticWorkspaces = new Map(Object.entries({
+    "/elaborazioni/batches": <ElaborazioneArchiveWorkspaceContent embedded initialView="batches" isolatedView />,
+    "/elaborazioni/settings": <ElaborazioniSettingsWorkspace embedded />,
+    "/elaborazioni/bonifica": <ElaborazioniBonificaSyncWorkspace embedded />,
+    "/elaborazioni/anpr": <ElaborazioniAnprWorkspace embedded />,
+    "/elaborazioni/presenze-sync": <PresenzeSyncWorkspace embedded />,
+    "/elaborazioni/ade-alignment": <ElaborazioniAdeAlignmentWorkspace embedded />,
+    "/elaborazioni/autodoc": <ElaborazioniAutodocWorkspace embedded />,
+    "/elaborazioni/gaia-mobile-sync": <ElaborazioniGaiaMobileSyncWorkspace embedded />,
+    "/elaborazioni/posta-online": <ElaborazioniPostaOnlineWorkspace embedded />,
+    "/catasto/archive?view=documents": <CatastoArchiveWorkspaceContent embedded initialView="documents" isolatedView />,
+  }));
+  const staticWorkspace = staticWorkspaces.get(href);
+  if (staticWorkspace) {
+    return staticWorkspace;
   }
 
   if (href.startsWith("/elaborazioni/batches/")) {

@@ -3,25 +3,50 @@ import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NativeWorkspaceRenderer as ElaborazioneWorkspaceContent, ElaborazioneWorkspaceModal } from "@/components/elaborazioni/workspace-modal";
 
-vi.mock("@/components/catasto/archive-workspace", () => ({ CatastoArchiveWorkspaceContent: () => <p>Archivio documenti</p> }));
-vi.mock("@/components/catasto/document-detail-workspace", () => ({ CatastoDocumentDetailWorkspace: ({ documentId }: { documentId: string }) => <p>Documento {documentId}</p> }));
-vi.mock("@/components/elaborazioni/archive-workspace", () => ({ ElaborazioneArchiveWorkspaceContent: () => <p>Archivio lavorazioni</p> }));
-vi.mock("@/components/elaborazioni/autodoc-workspace", () => ({ ElaborazioniAutodocWorkspace: () => <p>Autodoc</p> }));
-vi.mock("@/components/elaborazioni/batch-detail-workspace", () => ({ ElaborazioneBatchDetailWorkspace: ({ batchId }: { batchId: string }) => <p>Lavorazione {batchId}</p> }));
+vi.mock("@/components/catasto/archive-workspace", () => ({ CatastoArchiveWorkspaceContent: ({ embedded, initialView, isolatedView }: { embedded: boolean; initialView: string; isolatedView: boolean }) => <p data-embedded={embedded} data-view={initialView} data-isolated={isolatedView}>Archivio documenti</p> }));
+vi.mock("@/components/catasto/document-detail-workspace", () => ({ CatastoDocumentDetailWorkspace: ({ documentId, embedded }: { documentId: string; embedded: boolean }) => <p data-embedded={embedded}>Documento {documentId}</p> }));
+vi.mock("@/components/elaborazioni/archive-workspace", () => ({ ElaborazioneArchiveWorkspaceContent: ({ embedded, initialView, isolatedView }: { embedded: boolean; initialView: string; isolatedView: boolean }) => <p data-embedded={embedded} data-view={initialView} data-isolated={isolatedView}>Archivio lavorazioni</p> }));
+vi.mock("@/components/elaborazioni/autodoc-workspace", () => ({ ElaborazioniAutodocWorkspace: ({ embedded }: { embedded: boolean }) => <p data-embedded={embedded}>Autodoc</p> }));
+vi.mock("@/components/elaborazioni/batch-detail-workspace", () => ({ ElaborazioneBatchDetailWorkspace: ({ batchId, embedded }: { batchId: string; embedded: boolean }) => <p data-embedded={embedded}>Lavorazione {batchId}</p> }));
 vi.mock("@/components/elaborazioni/capacitas-workspace", () => ({ ElaborazioniCapacitasWorkspace: ({ initialSection }: { initialSection: string }) => <p>Capacitas {initialSection}</p> }));
-vi.mock("@/components/elaborazioni/ade-alignment-workspace", () => ({ ElaborazioniAdeAlignmentWorkspace: () => <p>AdE</p> }));
-vi.mock("@/components/elaborazioni/anpr-workspace", () => ({ ElaborazioniAnprWorkspace: () => <p>ANPR</p> }));
-vi.mock("@/components/elaborazioni/bonifica-sync-workspace", () => ({ ElaborazioniBonificaSyncWorkspace: () => <p>WhiteCompany</p> }));
-vi.mock("@/components/elaborazioni/gaia-mobile-sync-workspace", () => ({ ElaborazioniGaiaMobileSyncWorkspace: () => <p>Mobile</p> }));
-vi.mock("@/components/elaborazioni/posta-online-workspace", () => ({ ElaborazioniPostaOnlineWorkspace: () => <p>Posta</p> }));
-vi.mock("@/components/elaborazioni/settings-workspace", () => ({ ElaborazioniSettingsWorkspace: () => <p>Impostazioni</p> }));
-vi.mock("@/components/presenze/presenze-sync-workspace", () => ({ PresenzeSyncWorkspace: () => <p>Presenze</p> }));
+vi.mock("@/components/elaborazioni/ade-alignment-workspace", () => ({ ElaborazioniAdeAlignmentWorkspace: ({ embedded }: { embedded: boolean }) => <p data-embedded={embedded}>AdE</p> }));
+vi.mock("@/components/elaborazioni/anpr-workspace", () => ({ ElaborazioniAnprWorkspace: ({ embedded }: { embedded: boolean }) => <p data-embedded={embedded}>ANPR</p> }));
+vi.mock("@/components/elaborazioni/bonifica-sync-workspace", () => ({ ElaborazioniBonificaSyncWorkspace: ({ embedded }: { embedded: boolean }) => <p data-embedded={embedded}>WhiteCompany</p> }));
+vi.mock("@/components/elaborazioni/gaia-mobile-sync-workspace", () => ({ ElaborazioniGaiaMobileSyncWorkspace: ({ embedded }: { embedded: boolean }) => <p data-embedded={embedded}>Mobile</p> }));
+vi.mock("@/components/elaborazioni/posta-online-workspace", () => ({ ElaborazioniPostaOnlineWorkspace: ({ embedded }: { embedded: boolean }) => <p data-embedded={embedded}>Posta</p> }));
+vi.mock("@/components/elaborazioni/settings-workspace", () => ({ ElaborazioniSettingsWorkspace: ({ embedded }: { embedded: boolean }) => <p data-embedded={embedded}>Impostazioni</p> }));
+vi.mock("@/components/presenze/presenze-sync-workspace", () => ({ PresenzeSyncWorkspace: ({ embedded }: { embedded: boolean }) => <p data-embedded={embedded}>Presenze</p> }));
 vi.mock("@/components/elaborazioni/request-workspace", () => ({ ElaborazioneRequestWorkspace: ({ initialMode, onOpenBatch }: { initialMode: string; onOpenBatch: (id: string) => void }) =>
   <button onClick={() => onOpenBatch("42")}>Richiesta {initialMode}</button> }));
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("monitor incorporati", () => {
+  it.each([
+    "/elaborazioni/batches", "/elaborazioni/settings", "/elaborazioni/bonifica",
+    "/elaborazioni/anpr", "/elaborazioni/presenze-sync", "/elaborazioni/ade-alignment",
+    "/elaborazioni/autodoc", "/elaborazioni/gaia-mobile-sync", "/elaborazioni/posta-online",
+    "/catasto/archive?view=documents",
+  ])("mantiene il matching esatto della route statica %s", (href) => {
+    const extendedHref = `${href}${href.includes("?") ? "&" : "?"}extra=1`;
+    const onRendered = vi.fn();
+    render(<ElaborazioneWorkspaceContent href={extendedHref} onNavigate={vi.fn()} onRendered={onRendered} />);
+    const frame = screen.getByTitle(extendedHref);
+    expect(frame).toHaveAttribute("src", extendedHref);
+    expect(screen.queryByText("Archivio lavorazioni")).not.toBeInTheDocument();
+    expect(onRendered).toHaveBeenCalledOnce();
+    fireEvent.load(frame);
+    expect(onRendered).toHaveBeenCalledTimes(2);
+  });
+  it.each([
+    ["/elaborazioni/batches", "Archivio lavorazioni", "batches"],
+    ["/catasto/archive?view=documents", "Archivio documenti", "documents"],
+  ])("preserva le props dell'archivio %s", (href, content, view) => {
+    render(<ElaborazioneWorkspaceContent href={href} onNavigate={vi.fn()} />);
+    expect(screen.getByText(content)).toHaveAttribute("data-view", view);
+    expect(screen.getByText(content)).toHaveAttribute("data-isolated", "true");
+    expect(screen.getAllByText(/Archivio/)).toHaveLength(1);
+  });
   it.each(["particelle", "storico", "terreni", "certificati", "anomalie", "incass"])("mantiene la sezione hash %s", (section) => {
     render(<ElaborazioneWorkspaceContent href={`/elaborazioni/capacitas#${section}`} onNavigate={vi.fn()} />);
     expect(screen.getByText(`Capacitas ${section}`)).toBeInTheDocument();
@@ -60,6 +85,7 @@ describe("monitor incorporati", () => {
     const onRendered = vi.fn();
     render(<ElaborazioneWorkspaceContent href={href} onNavigate={vi.fn()} onRendered={onRendered} />);
     expect(screen.getByText(content)).toBeInTheDocument();
+    expect(screen.getByText(content)).toHaveAttribute("data-embedded", "true");
     expect(onRendered).toHaveBeenCalledOnce();
   });
   it.each(["particelle", "storico", "terreni", "certificati", "anomalie", "incass"])("mantiene la sezione Capacitas %s", (section) => {
