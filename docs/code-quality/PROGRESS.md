@@ -3,6 +3,38 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto GIS - componenti DMS senza direzione (2026-10-03)
+
+- Hotspot unico `parseSignedDms`, checkout `main@bfc158cc`;
+  runtime/test puliti, Graphify consultato, altri lavori esclusi.
+- Prima: cognitiva/ciclomatica/LOC/nesting `19/9/12/2`.
+- Slice finale: riuso di parseDmsValues gia condiviso, con direzione vuota
+  equivalente a nessuna direzione nel calcolo del segno; elimina parsing e
+  validazione duplicati nel solo parser signed, senza nuovi helper.
+  Invarianti: regex, segno e ordine lat/lon, limiti minuti/secondi
+  `[0,60)`, limiti geografici, esattamente due componenti, parser con
+  direzioni, overlay e URL invariati.
+- Diciassette nuovi casi DMS su omissioni, zero, segni, decimali e limiti,
+  conteggio componenti e rifiuti. Il gate iniziale aveva due helper mai
+  eseguiti (overlay/response): due test di caratterizzazione ne verificano
+  shape, fallback, identita GeoJSON e immutabilita; runtime non modificati.
+  Suite prima/finale 31 test verdi e full-file 100% su tutte le metriche.
+- Dopo: cognitiva `19 -> 4`, ciclomatica `9 -> 4`, LOC `12 -> 10`, nesting
+  `2` invariato. Aggregati file cognitiva `65 -> 50`, ciclomatica `64 -> 59`,
+  LOC `198 -> 196`, diciannove callable invariati; helper condiviso invariato
+  a `11/7/13/1`. Esito `IMPROVED`, nessuna violation trasferita, warning
+  `2 -> 1`, zero error; resta la ciclomatica del parser direzionale.
+- Coverage finale: statement `89/89`, branch `68/68`, funzioni `19/19`,
+  linee `71/71`. Ratchet mirato autorevole contro `origin/main` PASS prima
+  e finale, `findings: []`, merge-base `6b61fd27`; baseline/scope invariati.
+  ESLint finale, typecheck senza incremental, 144 test tooling e whitespace
+  verdi. Graphify frontend aggiornato; refresh platform docs completato
+  con `chunk 1/1 done`, senza warning di chunk semantici falliti.
+- Evidenze `/tmp/gaia-signed-dms-{before,final}.{json,md}`, log
+  characterization/final/ratchet-before/final/lint-final/types-final/quality
+  e Graphify con lo stesso prefisso. Un solo hotspot, commit isolato dopo
+  i gate secondo autorizzazione vigente; altri lavori preservati, nessun push.
+
 ### Elaborazioni - dispatch dei workspace statici (2026-10-03)
 
 - Hotspot unico `NativeWorkspaceRenderer`, checkout `main@b824e2f1`;

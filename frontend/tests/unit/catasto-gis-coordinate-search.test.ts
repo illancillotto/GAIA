@@ -3,11 +3,62 @@ import { describe, expect, test } from "vitest";
 import {
   buildCatastoGisCoordinateFeatureCollection,
   buildCatastoGisCoordinateHref,
+  buildCatastoGisCoordinateOverlay,
+  buildCatastoGisCoordinateSearchResponse,
   formatCatastoGisCoordinateLabel,
   parseCatastoGisCoordinateSearch,
 } from "@/lib/catasto-gis-coordinate-search";
 
 describe("catasto GIS coordinate search helpers", () => {
+  test("preserves coordinate search response shape and invalid-input fallback", () => {
+    expect(buildCatastoGisCoordinateSearchResponse("invalid")).toBeNull();
+    const result = buildCatastoGisCoordinateSearchResponse("39°;8°");
+    expect(result?.label).toBe("39.000000, 8.000000");
+    expect(result?.geojson).toEqual(buildCatastoGisCoordinateFeatureCollection({ lat: 39, lon: 8, source: "dms" }));
+    expect(result?.response).toEqual({
+      query: "39.000000, 8.000000", mode_requested: "auto", mode_resolved: "auto",
+      total: 1, results: [], geojson: result?.geojson,
+    });
+    expect(result?.response.geojson).toBe(result?.geojson);
+  });
+  test("preserves overlay styling, GeoJSON identity and immutability", () => {
+    const collection = buildCatastoGisCoordinateFeatureCollection({ lat: 39, lon: 8, source: "dms" });
+    const original = structuredClone(collection);
+    const overlay = buildCatastoGisCoordinateOverlay("coordinate", collection);
+    expect(overlay).toEqual({
+      label: "coordinate", geojson: collection,
+      layer: {
+        layer_key: "coordinate-search", saved_selection_id: null, name: "Waypoint coordinate",
+        color: "#0F766E", outlineColor: "#F97316", opacity: 0.86, outlineOpacity: 1,
+        outlineWidth: 3, showFill: true, showCentroids: true, visible: true,
+        source_filename: null, geojson: collection,
+      },
+    });
+    expect(overlay.geojson).toBe(collection);
+    expect(overlay.layer.geojson).toBe(collection);
+    expect(collection).toEqual(original);
+  });
+
+  test.each([
+    ["39°;8°", 39, 8],
+    ["-39°;-8°", -39, -8],
+    ["+39°;+8°", 39, 8],
+    ["-0°;0°", 0, 0],
+    ["39°0';8°0'", 39, 8],
+    ["39°30';-8°15'", 39.5, -8.25],
+    ['39°30\'30";8°15\'15"', 39 + 30 / 60 + 30 / 3600, 8 + 15 / 60 + 15 / 3600],
+    ["39°59,999';8°", 39 + 59.999 / 60, 8],
+    ['90°0\'0";180°0\'0"', 90, 180],
+  ] as const)("preserves signed DMS components for %s", (input, lat, lon) => {
+    expect(parseCatastoGisCoordinateSearch(input)).toEqual({ lat, lon, source: "dms" });
+  });
+  test.each([
+    "39°60';8°", "39°;8°60'", '39°0\'60";8°', '39°;8°0\'60"',
+    '90°0\'1";8°', '39°;180°0\'1"', "39°", "39°;8°;2°",
+  ])("preserves signed DMS rejection for %s", (input) => {
+    expect(parseCatastoGisCoordinateSearch(input)).toBeNull();
+  });
+
   test("parses decimal latitude and longitude with dot separator", () => {
     expect(parseCatastoGisCoordinateSearch("39.9042, 8.5917")).toEqual({
       lat: 39.9042,

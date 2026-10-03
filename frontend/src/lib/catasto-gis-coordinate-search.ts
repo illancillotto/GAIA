@@ -114,11 +114,9 @@ function parseDirectionalDms(input: string): ParsedGisCoordinate | null {
 function parseSignedDms(input: string): ParsedGisCoordinate | null {
   const values: number[] = [];
   for (const match of input.matchAll(SIGNED_DMS_PATTERN)) {
-    const degrees = parseRequiredNumber(match[1]);
-    const minutes = parseOptionalNumber(match[2]);
-    const seconds = parseOptionalNumber(match[3]);
-    if ((minutes != null && (minutes < 0 || minutes >= 60)) || (seconds != null && (seconds < 0 || seconds >= 60))) return null;
-    values.push(dmsToDecimal(degrees, minutes, seconds, null));
+    const part = parseDmsValues("", match[1], match[2], match[3]);
+    if (!part) return null;
+    values.push(part.value);
   }
   if (values.length !== 2) return null;
   return toCoordinate(values[0], values[1], "dms");
