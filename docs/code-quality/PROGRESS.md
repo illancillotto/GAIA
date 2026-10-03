@@ -3,6 +3,37 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Elaborazioni - sezione Capacitas dal link (2026-10-03)
+
+- Hotspot unico `getCapacitasSectionFromHref`, checkout `main@9836f719`;
+  runtime/test puliti, Graphify consultato, altri lavori preservati.
+- Prima: cognitiva/ciclomatica/LOC/nesting `22/10/14/2`.
+- Slice: lookup tipizzato delle sei sezioni, mantenendo URL parsing,
+  query prioritaria all'hash anche se vuota/sconosciuta, primo parametro
+  duplicato, matching esatto, fallback particelle, catch e SSR senza window.
+  UI, routing degli altri workspace e lifecycle modale invariati.
+- Ventitre nuovi casi verificano tutte le sezioni via hash/SSR, priorita
+  query, parametri duplicati, encoding, casing/whitespace e chiavi prototype.
+  Suite prima/dopo: 50 test verdi, full-file 100% su tutte le metriche.
+  Una prima asserzione SSR confrontava testo contiguo con HTML contenente
+  marker React: normalizzati i soli commenti nel test prima della slice.
+- Dopo: cognitiva `22 -> 7`, ciclomatica `10 -> 5`, LOC `14 -> 13`,
+  nesting `2` invariato. Callback find `0/1/1/0`, nessuna violation nuova.
+  Aggregati file cognitiva `48 -> 33`, ciclomatica `45 -> 41`, LOC `191 -> 190`,
+  callable `11 -> 12`. Esito `IMPROVED`, nessun debito trasferito; warning
+  `4 -> 2`, error `1` invariato. Target senza violation; restano debito
+  del renderer e LOC del componente modale, non toccati dalla slice.
+- Coverage dopo: statement `73/73`, branch `48/48`, funzioni `12/12`,
+  linee `71/71`. Ratchet mirato autorevole contro `origin/main` PASS prima
+  e dopo con `findings: []`, merge-base `6b61fd27`; baseline/scope invariati.
+  ESLint, typecheck senza incremental, 144 test tooling e whitespace verdi.
+  Graphify frontend aggiornato; refresh platform docs completato con
+  `chunk 1/1 done`, senza warning di chunk semantici falliti.
+- Evidenze `/tmp/gaia-capacitas-section-{before,after}.{json,md}`, log
+  characterization/after/ratchet-before/after/lint/types/quality e Graphify
+  con lo stesso prefisso. Un solo hotspot, commit isolato dopo i gate
+  secondo autorizzazione vigente; altri lavori preservati, nessun push.
+
 ### Utenze - conteggi nel riepilogo avvisi (2026-10-02)
 
 - Hotspot unico `buildPaymentNoticeSummary`, checkout `main@8d89faf6`;

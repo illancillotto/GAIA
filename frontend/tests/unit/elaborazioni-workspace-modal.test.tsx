@@ -22,6 +22,32 @@ vi.mock("@/components/elaborazioni/request-workspace", () => ({ ElaborazioneRequ
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("monitor incorporati", () => {
+  it.each(["particelle", "storico", "terreni", "certificati", "anomalie", "incass"])("mantiene la sezione hash %s", (section) => {
+    render(<ElaborazioneWorkspaceContent href={`/elaborazioni/capacitas#${section}`} onNavigate={vi.fn()} />);
+    expect(screen.getByText(`Capacitas ${section}`)).toBeInTheDocument();
+  });
+  it.each([
+    ["?section=storico#incass", "storico"],
+    ["?section=#incass", "particelle"],
+    ["?section=unknown#incass", "particelle"],
+    ["?section=storico&section=incass", "storico"],
+    ["?section=%74erreni", "terreni"],
+    ["#%74erreni", "particelle"],
+    ["?section=STORICO", "particelle"],
+    ["?section=+storico+", "particelle"],
+    ["?section=toString", "particelle"],
+    ["?section=__proto__", "particelle"],
+    ["", "particelle"],
+  ])("preserva precedenza e fallback per %s", (suffix, section) => {
+    render(<ElaborazioneWorkspaceContent href={`/elaborazioni/capacitas${suffix}`} onNavigate={vi.fn()} />);
+    expect(screen.getByText(`Capacitas ${section}`)).toBeInTheDocument();
+  });
+  it.each(["particelle", "storico", "terreni", "certificati", "anomalie", "incass"])("usa il fallback SSR anche con la sezione %s", (section) => {
+    vi.stubGlobal("window", undefined);
+    const markup = renderToString(<ElaborazioneWorkspaceContent href={`/elaborazioni/capacitas?section=${section}`} onNavigate={vi.fn()} />);
+    expect(markup.replace(/<!--.*?-->/g, "")).toContain("Capacitas particelle");
+  });
+
   it.each([
     ["/elaborazioni/batches", "Archivio lavorazioni"],
     ["/elaborazioni/settings", "Impostazioni"], ["/elaborazioni/bonifica", "WhiteCompany"],

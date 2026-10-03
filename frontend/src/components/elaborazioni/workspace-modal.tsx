@@ -214,9 +214,8 @@ function getCapacitasSectionFromHref(href: string): CapacitasSection {
     try {
       const url = new URL(href, window.location.origin);
       const rawSection = url.searchParams.get("section") ?? url.hash.replace(/^#/, "");
-      if (rawSection === "particelle" || rawSection === "storico" || rawSection === "terreni" || rawSection === "certificati" || rawSection === "anomalie" || rawSection === "incass") {
-        return rawSection;
-      }
+      const sections = ["particelle", "storico", "terreni", "certificati", "anomalie", "incass"] as const;
+      return sections.find((section) => section === rawSection) ?? "particelle";
     } catch {
       return "particelle";
     }
