@@ -6,6 +6,15 @@ Data-only implementati ma disattivati. Contratto:
 `CONNECTOR_FINAL_REVIEW_2026-10-03.md`. Gate complessivo FAIL; i risultati
 precedenti sotto sono evidenze storiche, non attestazioni del checkout attuale.
 
+Riverifica locale 2026-10-03 durante la preparazione dei commit: il manifest
+Docs e stato riallineato al PRD Wiki del commit `1995a1fc`, dopo revisione
+dell'aggiunta sul connettore sintetico. Il controllo hash rimane fail-closed.
+`COVERAGE_FILE=/tmp/gaia-review-mcp-isolated.coverage make test-mcp
+QUALITY_PYTHON=backend/.venv/bin/python` passa: 245 test, 1984/1984 statement
+e 424/424 branch, 100% dei 42 runtime misurati. Il file coverage isolato evita
+interferenze con le altre sessioni sul checkout. Il risultato chiude la suite
+MCP locale, non i gate globali di complessita, il collaudo HTTPS o Claude live.
+
 Catalogo semantico per LLM: `DATA_TOOL_CATALOG.md`. Tutti i 12 tool hanno
 descrizioni complete; initialize espone istruzioni sintetiche, copertura,
 paginazione e provenance. Distretti/domande non sono tool dedicati:

@@ -32,8 +32,8 @@
       "category": "prd",
       "status": "current",
       "included": true,
-      "sha256": "a5e442ecf98b9f45929f921a75e67f4ae4b3e6a7ffd3f480df0d03bba5140103",
-      "reason": "Freeze operativo 2026-09-30: fonte del Wiki esistente, contenuti di prodotto senza credenziali o dati personali; la nuova integrazione MCP e distinta dal legacy codex-lb descritto nel PRD."
+      "sha256": "67501f4ecbda816a98b0324d743039c5b5574e409229956e8ebf1de0a38c88e8",
+      "reason": "Revisione 2026-10-03 dopo il commit 1995a1fc: aggiunto lo stato del connettore sintetico opt-in, distinto dalla chat Wiki legacy; contenuti di prodotto senza credenziali o dati personali."
     }
   ]
 }
