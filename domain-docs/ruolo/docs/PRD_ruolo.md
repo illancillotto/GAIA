@@ -39,6 +39,12 @@ Nel perimetro attuale GAIA il flusso canonico non è più il file: il ruolo vien
 materializzato da `inCASS` dentro il read-model `ruolo_avvisi` / `ruolo_partite` /
 `ruolo_particelle`, mantenendo comunque lo storico annuale.
 
+Dal fix del 2026-10-01 la sincronizzazione inCASS materializza anche le testate
+mancanti durante il sync leggero, senza attendere il partitario. Le testate
+parziali non contengono partite o ripartizioni tributarie inventate; regole,
+provenienza e recupero dello storico sono descritti in
+`domain-docs/ruolo/docs/INCASS_HEADER_SYNC_2026-10-01.md`.
+
 ---
 
 ### 1.2 Tributi consortili

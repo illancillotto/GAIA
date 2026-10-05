@@ -1,20 +1,20 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
-from datetime import date, datetime, time, timezone
 import html
 import logging
 import mimetypes
-from pathlib import Path, PurePosixPath
 import re
+from dataclasses import dataclass
+from datetime import UTC, date, datetime, time
+from pathlib import Path, PurePosixPath
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import httpx
-from sqlalchemy import and_, exists, delete, or_, select
-from sqlalchemy.orm.attributes import flag_modified
+from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.core.config import settings
 from app.models.capacitas import CapacitasInCassSyncJob
@@ -29,7 +29,6 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasInCassMailingShipmentRow,
     CapacitasInCassNoticePdf,
     CapacitasInCassNoticeRow,
-    CapacitasObjManDocument,
     CapacitasInCassRuoloHarvestRequest,
     CapacitasInCassRuoloHarvestResponse,
     CapacitasInCassSyncItemResult,
@@ -37,11 +36,13 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasInCassSyncJobListItemOut,
     CapacitasInCassSyncJobOut,
     CapacitasInCassSyncJobResult,
+    CapacitasObjManDocument,
 )
 from app.modules.ruolo.models import RuoloAvviso
+from app.modules.ruolo.services.incass_read_model import materialize_incass_notice_header
 from app.modules.utenze.models import (
-    AnagraficaCompany,
     AnagraficaClassificationSource,
+    AnagraficaCompany,
     AnagraficaDocType,
     AnagraficaDocument,
     AnagraficaPaymentNotice,
@@ -51,7 +52,6 @@ from app.modules.utenze.models import (
 )
 from app.services.nas_connector import get_nas_client
 
-UTC = timezone.utc
 logger = logging.getLogger(__name__)
 TERMINAL_JOB_STATUSES = {"succeeded", "completed_with_errors", "failed", "cancelled"}
 ACTIVE_JOB_STATUSES = {"pending", "processing", "queued_resume"}
@@ -557,7 +557,7 @@ async def _sync_incass_subject(
         if should_fetch_details and row.avviso:
             detail = await _run_incass_retryable(
                 client,
-                lambda: client.fetch_notice_detail(row.avviso),
+                lambda avviso=row.avviso: client.fetch_notice_detail(avviso),
                 label=f"fetch_notice_detail:{row.avviso}",
             )
             detail_info_text = detail.info_text
@@ -575,7 +575,7 @@ async def _sync_incass_subject(
         if should_fetch_partitario and row.avviso:
             partitario = await _run_incass_retryable(
                 client,
-                lambda: client.fetch_notice_partitario(row.avviso),
+                lambda avviso=row.avviso: client.fetch_notice_partitario(avviso),
                 label=f"fetch_notice_partitario:{row.avviso}",
             )
             if partitario is not None:
@@ -1199,10 +1199,10 @@ def _upsert_payment_notice(
         existing.detail_info_html = detail_info_html
         existing.detail_info_text = detail_info_text
         existing.pdf_links_json = pdf_links_json or None
-    existing.raw_row_json = row.model_dump(mode="json", by_alias=True)
-    if not preserve_heavy_fields:
         existing.raw_detail_json = detail_payload
+    existing.raw_row_json = row.model_dump(mode="json", by_alias=True)
     existing.synced_at = datetime.now(UTC)
+    materialize_incass_notice_header(db, existing)
     current_status = classify_payment_notice(existing)
     return PaymentNoticeSyncStatus(
         status=current_status,
@@ -1219,9 +1219,7 @@ def _find_payment_notice_for_upsert(
     source_notice_id: str,
 ) -> AnagraficaPaymentNotice | None:
     pending = _find_pending_payment_notice(db, source_system=source_system, source_notice_id=source_notice_id)
-    if pending is not None:
-        return pending
-    return db.scalar(
+    return pending if pending is not None else db.scalar(
         select(AnagraficaPaymentNotice).where(
             AnagraficaPaymentNotice.source_system == source_system,
             AnagraficaPaymentNotice.source_notice_id == source_notice_id,
