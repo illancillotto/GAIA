@@ -90,7 +90,7 @@ function pushCalculationText(
   }
 }
 
-function formatFormula(left: unknown, multiplier: unknown, result: unknown, multiplierDigits = 4, resultDigits = 2): string | null {
+function formatFormula(left: unknown, multiplier: unknown, result: unknown, resultDigits = 2): string | null {
   const leftFormatted = formatSquareMeters(left);
   const multiplierFormatted = formatIndexEuroPerMq(multiplier);
   const resultFormatted = formatEuro(result, resultDigits);

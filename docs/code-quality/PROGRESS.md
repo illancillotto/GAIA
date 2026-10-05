@@ -3,6 +3,38 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto frontend — avvio parametro formula inutilizzato (2026-10-05)
+
+- Chiusura `IMPROVED` limitata ai parametri: rimosso `multiplierDigits`
+  inutilizzato. Params5 ->4, warning params eliminato e nessun warning ESLint
+  residuo; cinque violation error-level rimangono nei due export principali.
+  Cognitiva/ciclomatica/LOC/nesting helper5/4/7/1 e aggregati file invariati:
+  cognitive113/47, cyclomatic82/25, LOC344, diciassette callable/tre import.
+- 42 test prima/dopo, full-file100% sulle quattro metriche: statement98/98,
+  function17/17, line87/87, branch114/114 (prima115/115, default morto rimosso),
+  configurazione/scope invariati e nessuna esclusione. 686 input VAL-06
+  differenziali sul runtime pre-slice con entrambi gli export identici.
+- Ratchet mirato contro baseline merge-base `85b179b0`, ESLint runtime/test,
+  typecheck frontend no-emit e whitespace PASS. Nessuna baseline aggiornata
+  o modifica estranea. Slice VAL-07 e test/docs VAL-06 preservati.
+- Audit full corpus read-only sul merge-base aggiornato `85b179b0`: otto
+  finding Wiki MCP (auth1, cli2, data-cli1, http4), nessuno nel frontend.
+  I precedenti dieci finding non sono piu il conteggio corrente; riduzione
+  Wiki non attribuita a questa slice. Intervento Wiki resta separato.
+- Graphify frontend codice aggiornato (JSON/report, HTML sopra limite nodi),
+  docs dominio/backlog e grafi docs dedicati aggiornati. Nuova slice non
+  committata; nessun push. Stop al singolo hotspot; prossimo candidato
+  `describeCatastoAnomalia`, cinque error residui non dichiarati risolti.
+- Utente conferma percorso Catasto prima, audit Wiki separato. Singolo hotspot:
+  `formatFormula`, parametro `multiplierDigits` inutilizzato (warning params5).
+- Helper privato, due chiamate interne entrambe con tre argomenti; indice
+  sempre formattato da `formatIndexEuroPerMq` a quattro cifre. Rimuovere solo
+  il parametro morto, mantenendo default `resultDigits=2`, formato/errori/null.
+- Prima target cog/cyc/LOC/nesting/params5/4/7/1/5; file cognitive113/47,
+  cyclomatic82/25, LOC344, diciassette callable, sei violation.
+  Preservare slice VAL-07 e test/docs VAL-06 gia presenti e non committati.
+  Nessun commit/push richiesto; validare full-file100% e ratchet merge-base.
+
 ### Catasto frontend — avvio spiegazioni importi VAL-07 (2026-10-05)
 
 - Chiusura `IMPROVED`: helper dominio `pushImportAmountCalculations`

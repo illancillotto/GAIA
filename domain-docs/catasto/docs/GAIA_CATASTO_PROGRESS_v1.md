@@ -1,6 +1,18 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-05 — parametro formula inutilizzato rimosso
+
+- Rimosso `multiplierDigits` dal helper privato frontend: non influiva sulla
+  formula, indice sempre a quattro cifre e risultato a due. Entrambi i
+  caller passano tre argomenti; testo, null/errori e formato restano invariati.
+- Parametri5 ->4, warning params e warning ESLint eliminati; `IMPROVED`
+  limitato ai parametri, cognitiva/ciclomatica invariate. Restano cinque
+  violation error-level nei due export del file, nessun debito trasferito.
+- 42 test prima/dopo, full-file100% statement/branch/function/line, 686 input
+  differenziali identici; ratchet mirato, typecheck ed ESLint pulito PASS.
+  Baseline/config invariati; test/docs precedenti preservati.
+
 ### 2026-10-05 — spiegazioni importi VAL-07 condivise
 
 - Helper frontend di dominio per validazione voci e inserimento calcoli atteso/

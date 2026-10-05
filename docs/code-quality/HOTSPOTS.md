@@ -14,6 +14,13 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Catasto frontend formula, 2026-10-05: `formatFormula` `IMPROVED` limitato
+ai parametri5 ->4; rimosso parametro inutilizzato, warning params eliminato
+ed ESLint ora pulito. Cognitive/cyclomatic/LOC invariati, cinque error
+residui nei due export principali. 42 test, full-file100% su quattro
+metriche, 686 input equivalenti; ratchet mirato/typecheck/ESLint PASS.
+Baseline invariata, nessun altro hotspot runtime aperto in questa slice.
+
 Catasto frontend spiegazioni VAL-07, 2026-10-05: `explainCatastoAnomalia`
 `IMPROVED`, cog/cyc/LOC59/31/197 ->47/25/191, nesting2 invariato.
 Helper di dominio3/3/10/1, nessuna violation; cognitive file122 ->113,
