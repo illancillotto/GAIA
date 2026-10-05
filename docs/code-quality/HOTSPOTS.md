@@ -14,6 +14,17 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, SISTER raccolta riferimenti correlati, 2026-10-05:
+`_parse_history_events` `IMPROVED`, cog/cyc/LOC/nesting40/19/35/3 ->22/11/27/3.
+Stato related/append isolati nella stessa scansione, helper10/9/15/1 sotto soglia;
+continuazioni current/pending appiattite, reset/riavvio e duplicati invariati.
+File cognitive134 ->126, cyclomatic94 ->95, branching82 invariato, LOC218 ->225.
+Due error diventano due warning; tre error parser testo58/38/87/3 invariato,
+nessun debt transfer/versione parser/config/baseline/scope modificato.
+67 test/full-file100%, 45229 sequenze/start e 2000 payload equivalenti;
+ratchet/Ruff mirato PASS, lint globale UP038 InCass concorrente.
+Campagna non-MCP attiva; prossimo candidato warning storico22/11.
+
 Campagna non-MCP, SISTER dettagli eventi storici, 2026-10-05:
 `_parse_history_events` `IMPROVED`, cog/cyc/LOC/nesting59/27/49/4 ->40/19/35/3.
 CF/diritto condivisi con current owners15/9/21/2 ->11/7/15/2; dettagli atto

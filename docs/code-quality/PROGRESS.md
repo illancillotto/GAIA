@@ -3,6 +3,42 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### SISTER — raccolta riferimenti catastali correlati (2026-10-05)
+
+- Chiusura `IMPROVED`: aggiornamento stato related e append parcel isolati
+  nella stessa iterazione; continuazioni current/pending appiattite senza
+  cambiare effetti, ordine regex o dipendenze dalla riga precedente.
+- Target cog/cyc/LOC/nesting40/19/35/3 ->22/11/27/3; helper10/9/15/1
+  sotto soglia, parser testo58/38/87/3 invariato. Due error dello storico
+  diventano due warning; restano tre error nel parser testo. Non zero debito,
+  nessuna violation trasferita o nuova.
+- File cognitive sum/max134/58 ->126/58, cyclomatic94/38 ->95/38,
+  branching82 invariato, callable12 ->13, LOC218 ->225 sotto soglia file,
+  densita1.045872 ->0.982222/import7 invariati. Aumento ciclomatico strutturale
+  pari al nuovo callable, nessun branching aggiunto; baseline/config/scope invariati.
+- Quattro caratterizzazioni aggiunte prima del refactoring per reset/riavvio
+  sulla stessa riga e persistenza stato nella successiva. 23 test parser prima
+  full-file100% statement170/branch76; 67 parser/persistenza/backfill PASS dopo,
+  full-file100% statement173/branch76, zero missing/partial/esclusioni.
+- 45229 sequenze/start e 2000 testi differenziali contro `bac2865a`:
+  eventi, owner correnti, related e payload completi identici; input invariati.
+  Ratchet merge-base, Ruff mirato, format-check test e whitespace PASS;
+  lint globale compileall PASS, solo UP038 InCass concorrente fuori slice.
+- Graphify codice backend e docs Catasto/piattaforma richiesto prima del commit
+  separato; nessun push, change concorrenti preservate. Campagna non-MCP attiva,
+  prossimo candidato warning storico22/11, non completamento del programma.
+- Preflight `bac2865a`: singolo hotspot _parse_history_events40/19/35/3,
+  due error; parser testo58/38/87/3 invariato. File cognitive134/cyclomatic94,
+  branching82/LOC218/dodici callable/cinque error.
+- Isolare aggiornamento stato related e append riferimenti della stessa riga,
+  non una seconda scansione. Reset prima del marker variati/soppressi, marker
+  sulla stessa riga prevale; regex, duplicati e ordine restano invariati.
+- Appiattire continuazioni current/pending a fine ciclo mantenendo condizioni
+  e aggiornamenti identici. Non modificare eventi/data/owner o parser testo.
+- Caratterizzazione prima/dopo full-file100%, differenziali sequenze e testi,
+  aggregati/ratchet contro HEAD, Ruff/Graphify e commit separato autorizzato;
+  baseline/config/scope/change concorrenti invariati, campagna non-MCP attiva.
+
 ### SISTER — aggiornamento dettagli eventi storici (2026-10-05)
 
 - Chiusura `IMPROVED`: aggiornamento CF e diritto condiviso fra storico e

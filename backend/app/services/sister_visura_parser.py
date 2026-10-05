@@ -106,6 +106,23 @@ def _parse_current_owners(lines: list[str], start: int) -> list[dict[str, Any]]:
     return owners
 
 
+def _update_related_parcels(
+    related: list[dict[str, str]],
+    line: str,
+    in_related: bool,
+) -> bool:
+    if line.casefold().startswith("dati identificativi:") and "immobile attuale" in line.casefold():
+        in_related = False
+    if "sono stati inoltre variati/soppressi" in line.casefold():
+        in_related = True
+    if not in_related:
+        return False
+    match = _RELATED_PARCEL_RE.search(line)
+    if match and match.group("particella") not in {"/", "*"}:
+        related.append({"foglio": match.group("foglio"), "particella": match.group("particella")})
+    return in_related
+
+
 def _parse_history_events(lines: list[str], start: int) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     events: list[dict[str, Any]] = []
     related: list[dict[str, str]] = []
@@ -113,14 +130,7 @@ def _parse_history_events(lines: list[str], start: int) -> tuple[list[dict[str, 
     pending_owner: dict[str, Any] | None = None
     in_related = False
     for line in lines[start:]:
-        if line.casefold().startswith("dati identificativi:") and "immobile attuale" in line.casefold():
-            in_related = False
-        if "sono stati inoltre variati/soppressi" in line.casefold():
-            in_related = True
-        if in_related:
-            match = _RELATED_PARCEL_RE.search(line)
-            if match and match.group("particella") not in {"/", "*"}:
-                related.append({"foglio": match.group("foglio"), "particella": match.group("particella")})
+        in_related = _update_related_parcels(related, line, in_related)
         date_match = _HISTORY_DATE_RE.match(line)
         if date_match:
             current = {"from_date": _parse_date(date_match.group("date")), "owner": pending_owner or {}}
@@ -134,12 +144,11 @@ def _parse_history_events(lines: list[str], start: int) -> tuple[list[dict[str, 
             else:
                 current["owner"] = owner
             continue
-        if current is None:
-            if pending_owner is not None:
-                _update_owner_fiscal_code(pending_owner, line)
-            continue
-        _update_owner_details(current["owner"], line)
-        _update_history_act(current, line)
+        if current is not None:
+            _update_owner_details(current["owner"], line)
+            _update_history_act(current, line)
+        elif pending_owner is not None:
+            _update_owner_fiscal_code(pending_owner, line)
     return events, related
 
 

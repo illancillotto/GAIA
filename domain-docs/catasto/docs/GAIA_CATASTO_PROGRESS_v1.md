@@ -1,6 +1,22 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-05 — raccolta riferimenti catastali correlati SISTER
+
+- Aggiornamento stato related e append parcel isolati nella stessa scansione;
+  reset precede il marker variati/soppressi, anche sulla stessa riga. Ordine
+  riferimenti, duplicati, filtro / e *, parser-version e output invariati.
+  Continuazioni owner current/pending appiattite senza cambiare effetti.
+- Storico cog/cyc/LOC/nesting40/19/35/3 ->22/11/27/3, helper10/9/15/1 sotto
+  soglia; cognitive file134 ->126, branching82 invariato. Due error diventano
+  due warning, tre error parser testo residui; nessun debt transfer o cambio
+  API/schema/baseline/config/scope.
+- Quattro caratterizzazioni prima/dopo, 67 test parser/persistenza/backfill PASS,
+  full-file100% statement173/branch76 dopo; 45229 sequenze/start e 2000 testi
+  differenziali identici. Ratchet/Ruff mirato PASS; lint globale UP038 InCass
+  concorrente. Graphify backend codice e docs Catasto/piattaforma aggiornati
+  prima del commit; campagna non-MCP resta attiva.
+
 ### 2026-10-05 — aggiornamento dettagli eventi storici SISTER
 
 - CF/diritto condivisi fra current owners e storico, dettagli atto isolati e

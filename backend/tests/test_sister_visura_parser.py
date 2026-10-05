@@ -157,6 +157,27 @@ def test_history_related_duplicates_invalid_references_and_reset():
     assert related == [{"foglio": "1", "particella": "2"}] * 2
 
 
+@pytest.mark.parametrize("reset", [False, True])
+@pytest.mark.parametrize("restart", [False, True])
+def test_related_same_line_reset_restart_precedence(reset, restart):
+    line = "Dati identificativi: Immobile attuale " if reset else ""
+    if restart:
+        line += "sono stati inoltre variati/soppressi "
+    line += "Foglio 1 Particella 3"
+    lines = [
+        "Sono stati inoltre variati/soppressi",
+        "Foglio 1 Particella 2",
+        line,
+        "Foglio 1 Particella 4",
+    ]
+    events, related = runtime._parse_history_events(lines, 0)
+    expected = [{"foglio": "1", "particella": "2"}]
+    if restart or not reset:
+        expected.extend([{"foglio": "1", "particella": "3"}, {"foglio": "1", "particella": "4"}])
+    assert events == []
+    assert related == expected
+
+
 def test_legacy_owner_continuations_and_structured_fallback():
     payload = parse_sister_visura_text("""
         Visura attuale
