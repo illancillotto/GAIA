@@ -162,3 +162,48 @@ def test_build_anomalia_payload_calculates_expected_without_registered_amount() 
     }
     assert anomalia.dati_json == {"base": True}
     assert utenza.imponibile_sf is None
+
+
+def test_build_anomalia_payload_preserves_zero_values_and_field_order() -> None:
+    original_payload = {"imponibile_registrato": 99, "base": True}
+    anomalia = CatAnomalia(tipo="VAL-06-imponibile", dati_json=original_payload)
+    utenza = CatUtenzaIrrigua(
+        sup_irrigabile_mq=Decimal("0"),
+        sup_catastale_mq=Decimal("0"),
+        ind_spese_fisse=Decimal("0"),
+        imponibile_sf=Decimal("0"),
+    )
+
+    payload = build_anomalia_payload(anomalia, utenza)
+
+    expected = {
+        "imponibile_registrato": 0.0,
+        "base": True,
+        "sup_irrigabile_mq": 0.0,
+        "sup_catastale_mq": 0.0,
+        "ind_spese_fisse": 0.0,
+        "atteso": 0.0,
+        "delta": 0.0,
+        "atteso_catastale": 0.0,
+        "delta_vs_catastale": 0.0,
+        "coincide_con_catastale": True,
+    }
+    assert payload == expected
+    assert list(payload) == list(expected)
+    assert original_payload == {"imponibile_registrato": 99, "base": True}
+
+
+def test_build_anomalia_payload_keeps_original_fields_when_values_are_missing() -> None:
+    original_payload = {
+        "sup_irrigabile_mq": "original-irrigabile",
+        "sup_catastale_mq": "original-catastale",
+        "ind_spese_fisse": "original-indice",
+        "imponibile_registrato": "original-imponibile",
+    }
+    anomalia = CatAnomalia(tipo="VAL-06-imponibile", dati_json=original_payload)
+
+    payload = build_anomalia_payload(anomalia, CatUtenzaIrrigua())
+
+    assert payload == original_payload
+    assert list(payload) == list(original_payload)
+    assert payload is not original_payload

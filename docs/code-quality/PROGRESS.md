@@ -3,6 +3,36 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — avvio mapping campi VAL-06 (2026-10-05)
+
+- Chiusura `IMPROVED`: quattro guardie di serializzazione opzionale
+  sostituite da mapping ordinato e predicato unico `value is not None`.
+  Nessun helper, nuovo callable o trasferimento del debito.
+- Dopo target cog/cyc/LOC/nesting 29/22/31/2 (prima 30/24/31/2);
+  file cognitive sum/max 64/29 (65/30), cyclomatic 54/22 (56/24),
+  LOC 105, sette callable e quattro import invariati. Quattro violation
+  residue (due error, due warning), nessuna eliminazione dichiarata.
+- Sei test iniziali con full-file 100%; due nuove caratterizzazioni
+  (zero, overwrite/ordine, null che conserva campi originali) verdi prima
+  della modifica runtime; otto test verdi dopo. Coverage full-file dopo
+  94/94 statement e 48/48 branch, zero esclusioni, gate 100% superato.
+- 2500 casi differenziali (null, zero, decimali positivi/negativi, valori
+  invalidi, payload iniziali diversi): output, ordine chiavi e errori
+  identici al runtime `c75fe0a2`. Ratchet mirato merge-base PASS;
+  lint-backend/style, Ruff e whitespace PASS, baseline/config invariati.
+- Documentazione dominio e backlog aggiornati, Graphify con target Catasto
+  codice/docs e piattaforma. Stop al singolo hotspot, nessun secondo goal.
+- Prossimo singolo hotspot autorizzato dopo commit Utenze `c75fe0a2`:
+  `build_anomalia_payload`, runtime/test puliti; nessun altro hotspot ammesso.
+- Prima target cog/cyc/LOC/nesting 30/24/31/2, file cognitive 65/30,
+  cyclomatic 56/24, LOC 105 e sette callable. Coverage W1 full-file 100%.
+- Slice: serializzazione esplicita dei quattro valori numerici opzionali,
+  senza cambiare accessi/rounding, presenza di zero, ordine chiavi, payload
+  originale, attesi/delta, errori, flussi DIR o transazioni dei consumer.
+- Nessun helper artificiale o nuova esclusione; acquisire metriche/test
+  prima/dopo, rispettare non-regressione LOC e aggregati. Commit di questa
+  nuova slice non implicito nella richiesta di commit della precedente.
+
 ### Utenze — avvio guardia irraggiungibile (2026-10-05)
 
 - Chiusura `IMPROVED`: rimossi solo la guardia morta e i suoi due statement;

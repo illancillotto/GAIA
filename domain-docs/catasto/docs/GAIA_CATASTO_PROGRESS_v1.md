@@ -1,6 +1,18 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-05 — serializzazione payload anomalie VAL-06
+
+- Unificata la serializzazione dei quattro campi numerici opzionali con
+  mapping ordinato e controllo esplicito non-null. Zero, campi preesistenti,
+  ordine chiavi, arrotondamenti, attesi/delta e errori preservati.
+- `build_anomalia_payload`: cognitive 30 -> 29, cyclomatic 24 -> 22,
+  LOC 31 invariate; nessun helper o debito trasferito. Flussi DIR invariati.
+- Otto test verdi, coverage full-file 100% (94 statement, 48 branch),
+  2500 casi differenziali identici, ratchet mirato/Ruff PASS.
+- `IMPROVED`, quattro violation legacy residue; API, query, schema,
+  transazioni e baseline non modificati.
+
 ---
 
 ## Stato generale

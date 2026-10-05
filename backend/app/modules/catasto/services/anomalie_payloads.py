@@ -105,14 +105,14 @@ def build_anomalia_payload(anomalia: CatAnomalia, utenza: CatUtenzaIrrigua | Non
     indice_spese_fisse = _to_float(utenza.ind_spese_fisse, 4)
     imponibile_registrato = _to_float(utenza.imponibile_sf, 2)
 
-    if sup_irrigabile is not None:
-        payload["sup_irrigabile_mq"] = sup_irrigabile
-    if sup_catastale is not None:
-        payload["sup_catastale_mq"] = sup_catastale
-    if indice_spese_fisse is not None:
-        payload["ind_spese_fisse"] = indice_spese_fisse
-    if imponibile_registrato is not None:
-        payload["imponibile_registrato"] = imponibile_registrato
+    for field_name, value in {
+        "sup_irrigabile_mq": sup_irrigabile,
+        "sup_catastale_mq": sup_catastale,
+        "ind_spese_fisse": indice_spese_fisse,
+        "imponibile_registrato": imponibile_registrato,
+    }.items():
+        if value is not None:
+            payload[field_name] = value
 
     if sup_irrigabile is not None and indice_spese_fisse is not None:
         atteso_irrigabile = round(sup_irrigabile * indice_spese_fisse, 2)

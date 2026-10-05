@@ -14,6 +14,13 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Follow-up Catasto, 2026-10-05: `build_anomalia_payload` `IMPROVED`,
+serializzazione dei quattro campi numerici VAL-06 con mapping ordinato
+e predicato unico non-null. Target cog/cyc/LOC 30/24/31 -> 29/22/31;
+file cognitive 65 -> 64, cyclomatic 56 -> 54, sette callable invariati.
+Otto test, coverage full-file 100% e 2500 casi differenziali identici;
+quattro violation residue, nessun helper/debito trasferito, baseline invariata.
+
 Follow-up Utenze, 2026-10-05: `parse_folder_name` `IMPROVED` dopo il goal
 separato di rimozione della guardia `missing_nome` irraggiungibile.
 Target cog/cyc/LOC 30/21/79 -> 28/20/76, file cognitive 31 -> 29,
