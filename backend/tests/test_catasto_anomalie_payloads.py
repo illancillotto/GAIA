@@ -139,3 +139,26 @@ def test_build_anomalia_payload_preserves_generic_payloads_and_val06_enrichment(
         "coincide_con_catastale": False,
         "delta": 0.0,
     }
+
+
+def test_build_anomalia_payload_calculates_expected_without_registered_amount() -> None:
+    anomalia = CatAnomalia(tipo="VAL-06-imponibile", dati_json={"base": True})
+    utenza = CatUtenzaIrrigua(
+        sup_irrigabile_mq=Decimal("10.00"),
+        sup_catastale_mq=Decimal("12.00"),
+        ind_spese_fisse=Decimal("1.23456"),
+        imponibile_sf=None,
+    )
+
+    payload = build_anomalia_payload(anomalia, utenza)
+
+    assert payload == {
+        "base": True,
+        "sup_irrigabile_mq": 10.0,
+        "sup_catastale_mq": 12.0,
+        "ind_spese_fisse": 1.2346,
+        "atteso": 12.35,
+        "atteso_catastale": 14.82,
+    }
+    assert anomalia.dati_json == {"base": True}
+    assert utenza.imponibile_sf is None
