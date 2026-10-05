@@ -67,6 +67,28 @@ def _parse_owner_header(line: str) -> dict[str, Any] | None:
     }
 
 
+def _update_owner_fiscal_code(owner: dict[str, Any], line: str) -> None:
+    cf_match = re.search(r"\(CF\s+([A-Z0-9]{11,16})\*?\)", line, re.I)
+    if cf_match:
+        owner["codice_fiscale"] = cf_match.group(1).upper()
+
+
+def _update_owner_details(owner: dict[str, Any], line: str) -> None:
+    _update_owner_fiscal_code(owner, line)
+    right_match = re.search(r"Diritto di:\s*(.+?)(?:\s+per\s+(\d+\/\d+))?$", line, re.I)
+    if right_match:
+        owner["diritto"] = right_match.group(1).strip()
+        owner["quota"] = right_match.group(2)
+
+
+def _update_history_act(event: dict[str, Any], line: str) -> None:
+    if "atto amministrativo" in line.casefold() or "compravendita" in line.casefold():
+        event["act"] = line.strip()
+    act_date = _ACT_DATE_RE.search(line)
+    if act_date and "act_date" not in event:
+        event["act_date"] = _parse_date(act_date.group("date"))
+
+
 def _parse_current_owners(lines: list[str], start: int) -> list[dict[str, Any]]:
     owners: list[dict[str, Any]] = []
     pending: dict[str, Any] | None = None
@@ -80,13 +102,7 @@ def _parse_current_owners(lines: list[str], start: int) -> list[dict[str, Any]]:
             continue
         if pending is None:
             continue
-        cf_match = re.search(r"\(CF\s+([A-Z0-9]{11,16})\*?\)", line, re.I)
-        if cf_match:
-            pending["codice_fiscale"] = cf_match.group(1).upper()
-        right_match = re.search(r"Diritto di:\s*(.+?)(?:\s+per\s+(\d+\/\d+))?$", line, re.I)
-        if right_match:
-            pending["diritto"] = right_match.group(1).strip()
-            pending["quota"] = right_match.group(2)
+        _update_owner_details(pending, line)
     return owners
 
 
@@ -113,31 +129,17 @@ def _parse_history_events(lines: list[str], start: int) -> tuple[list[dict[str, 
             continue
         owner = _parse_owner_header(line)
         if owner:
-            if current is None:
-                pending_owner = owner
-            elif current["from_date"] is None:
+            if current is None or current["from_date"] is None:
                 pending_owner = owner
             else:
                 current["owner"] = owner
             continue
         if current is None:
             if pending_owner is not None:
-                cf_match = re.search(r"\(CF\s+([A-Z0-9]{11,16})\*?\)", line, re.I)
-                if cf_match:
-                    pending_owner["codice_fiscale"] = cf_match.group(1).upper()
+                _update_owner_fiscal_code(pending_owner, line)
             continue
-        cf_match = re.search(r"\(CF\s+([A-Z0-9]{11,16})\*?\)", line, re.I)
-        if cf_match:
-            current["owner"]["codice_fiscale"] = cf_match.group(1).upper()
-        right_match = re.search(r"Diritto di:\s*(.+?)(?:\s+per\s+(\d+\/\d+))?$", line, re.I)
-        if right_match:
-            current["owner"]["diritto"] = right_match.group(1).strip()
-            current["owner"]["quota"] = right_match.group(2)
-        if "atto amministrativo" in line.casefold() or "compravendita" in line.casefold():
-            current["act"] = line.strip()
-        act_date = _ACT_DATE_RE.search(line)
-        if act_date and "act_date" not in current:
-            current["act_date"] = _parse_date(act_date.group("date"))
+        _update_owner_details(current["owner"], line)
+        _update_history_act(current, line)
     return events, related
 
 

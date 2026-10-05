@@ -14,6 +14,17 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, SISTER dettagli eventi storici, 2026-10-05:
+`_parse_history_events` `IMPROVED`, cog/cyc/LOC/nesting59/27/49/4 ->40/19/35/3.
+CF/diritto condivisi con current owners15/9/21/2 ->11/7/15/2; dettagli atto
+separati e rami pending owner fattorizzati, helper sotto soglia.
+File cognitive147 ->134, cyclomatic93 ->94, branching84 ->82, LOC222 ->218.
+Due warning eliminati; restano cinque error, due storico e tre parser testo
+58/38/87/3 invariato. Nessun trasferimento di violation o cambio parser-version.
+63 test/full-file100%, 45229 sequenze/start e 2000 testi equivalenti;
+ratchet/Ruff mirato PASS, lint globale UP038 InCass concorrente.
+Inventory pre-slice non-MCP4299 violation, campagna attiva; prossimo storico40/19.
+
 Campagna non-MCP, SISTER stati del record estrazione, 2026-10-05:
 `persist_sister_visura` `IMPROVED`, cog/cyc/LOC/nesting18/13/26/2 ->12/9/16/2.
 Mapper metadati4/5/14/0 e registrazione failed0/1/10/0 sotto soglia, fallback

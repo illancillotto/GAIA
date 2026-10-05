@@ -1,6 +1,21 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-05 — aggiornamento dettagli eventi storici SISTER
+
+- CF/diritto condivisi fra current owners e storico, dettagli atto isolati e
+  rami pending owner identici fattorizzati. Ordine mutazioni, CF uppercase,
+  prima act_date anche None, ultimo act, related duplicati/reset invariati.
+- Storico cog/cyc/LOC/nesting59/27/49/4 ->40/19/35/3; current owners15/9/21/2
+  ->11/7/15/2; cognitive file147 ->134, branching84 ->82. Due warning eliminati,
+  cinque error residui nel parser, nessun debt transfer. Versione parser,
+  API/schema, baseline/config/scope e parser testo58/38/87/3 invariati.
+- Caratterizzazione full-file100% prima/dopo, 63 test parser/persistenza/backfill
+  PASS; statement170/branch76 dopo, 45229 sequenze/start e 2000 payload testi
+  differenziali identici. Ratchet/Ruff mirato PASS; lint globale UP038 InCass
+  concorrente. Graphify codice backend e docs Catasto/piattaforma aggiornati
+  prima del commit; campagna non-MCP ancora attiva.
+
 ### 2026-10-05 — stati del record estrazione SISTER
 
 - Mapper metadati successful e registrazione failed separati dal coordinatore.

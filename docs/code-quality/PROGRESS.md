@@ -3,6 +3,49 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### SISTER — aggiornamento dettagli eventi storici (2026-10-05)
+
+- Chiusura `IMPROVED`: aggiornamento CF e diritto condiviso fra storico e
+  current owners; dettagli act/act_date separati. Rami pending owner identici
+  fattorizzati con short-circuit, nessun cambiamento della macchina a stati.
+- Target cog/cyc/LOC/nesting59/27/49/4 ->40/19/35/3; current owners15/9/21/2
+  ->11/7/15/2 per deduplicazione, parser testo58/38/87/3 invariato.
+  Helper CF1/2/4/1, dettagli1/2/6/1, atto8/7/6/1 sotto soglia. Due warning
+  (nesting storico e cognitive current owners) eliminati; restano cinque error,
+  due storico e tre parser testo. Nessuna violation trasferita o nuova.
+- File cognitive sum/max147/59 ->134/58, cyclomatic93/38 ->94/38,
+  branching84 ->82, callable9 ->12, LOC222 ->218, densita1.081081 ->1.045872,
+  import7 invariati. Riduzione reale aggregata; baseline/config/scope invariati.
+- 16 caratterizzazioni aggiunte prima del refactoring: 19 test originali
+  full-file100% statement174/branch84; dopo 63 parser/persistenza/backfill PASS,
+  full-file100% statement170/branch76, zero missing/partial/esclusioni.
+  PDF pagine vuote, SHA multichunk, date invalide, CF/diritti continuati,
+  header atto non-owner, pending owner e related duplicati/reset coperti.
+- 45229 combinazioni sequenza/start confrontano storico e current owners;
+  2000 testi completi pseudocasuali confrontano intero payload con `2d10ef43`.
+  Risultati/input identici, inclusi prima act_date None e ultimo act.
+  Ratchet merge-base, Ruff mirato, format-check test e whitespace PASS;
+  lint globale solo UP038 InCass concorrente fuori slice, compileall PASS.
+- Graphify backend codice e docs Catasto/piattaforma richiesto prima del commit
+  separato; nessun push, change concorrenti preservate. Campagna non-MCP attiva,
+  prossimo candidato storico ancora40/19, non parser completo sotto soglia.
+- Preflight `2d10ef43`: persistenza sotto soglia; inventory globale corrente
+  4726 violation su1620 file (include MCP, non scope di questa campagna).
+  Filtro operativo non-MCP/Wiki4299 violation prima di questa slice, non una
+  modifica delle esclusioni dei gate o una prova di completamento globale.
+  Singolo hotspot _parse_history_events59/27/49/4; parser testo58/38/87/3
+  resta fuori slice. File cognitive147/cyclomatic93/LOC222/nove callable,
+  sette violation (cinque error/due warning); coverage esistente84%.
+- Completare caratterizzazione full-file prima del refactoring; condividere
+  aggiornamento CF/diritto fra proprietari attuali e storico, separare dettagli
+  atto storico, fattorizzare rami pending owner identici con short-circuit.
+- Preservare precedenza sezioni e owner, mutazioni dict/alias, CF uppercase,
+  date invalide, prima act_date anche None, ultimo act, ordine record e related
+  duplicati. Nessun cambio versione parser/API/schema o altre logiche legacy.
+- Test full-file100% prima/dopo, differenziale sequenze, metriche/aggregati,
+  ratchet contro HEAD pre-slice, Ruff/Graphify e commit separato autorizzato;
+  baseline/config/scope e change concorrenti invariati.
+
 ### SISTER — stati del record estrazione (2026-10-05)
 
 - Chiusura `IMPROVED`: mapper metadati e registrazione stato failed separati;
