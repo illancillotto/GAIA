@@ -3,6 +3,70 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### W1 — checkpoint finale dei tre goal (2026-10-05)
+
+- Patch integrate serialmente dopo review/hash/ownership, tutte a base
+  `bfc8e68f`. Nessun commit, branch nuovo o baseline update.
+- Catasto test-only: sei test, coverage full-file 99/99 statement e 52/52
+  branch, 100%; runtime e metriche invariati. Prerequisito chiuso.
+- Utenze test-only: 22 test, 56/58 statement e 15/16 branch; residuo unico
+  `missing_nome` dimostrato irraggiungibile. Runtime invariato, nessuna
+  esclusione. Rimozione autorizzata solo per il prossimo goal separato.
+- Organigramma `IMPROVED`: target cognitive 23 -> 16 e nesting 2 -> 1;
+  file cog sum/max 59/23 -> 52/16, cyc 50/12, LOC 95 e 13 callable invariati.
+  Nessun helper o trasferimento, quattro warning residue. 38 test verdi,
+  coverage 62/62 statement, 58/58 branch, 13/13 funzioni, 50/50 linee;
+  ESLint scoped e typecheck integrato PASS.
+- Ratchet completo isolato Organigramma PASS. Confronto corpus completo
+  integrato con baseline del merge-base sul perimetro W1 PASS. Scan parziale
+  del precedente split dava falsi matching move; risolto con corpus completo,
+  nessun fix tooling/baseline o firma runtime alterata per abbassare metriche.
+- Globali ancora rossi: 11 finding working tree (otto Wiki e tre test worker
+  concorrenti), 29 confronto integrale baseline. Nessuno sulle patch W1.
+  Tooling 169 passed, lint-backend PASS, whitespace PASS.
+- Report `PARALLEL_W1_RESULTS_2026-10-05.md`, backlog aggiornato;
+  Graphify frontend aggiornato. Tre goal chiusi, W2 non avviata.
+
+### W1 — avvio dei tre goal autorizzati (2026-10-05)
+
+- Ripresa autorizzata: confermata ownership e adattamento temporaneo Git
+  `core.excludesFile=/tmp/gaia-w1-local-git-excludes` nei subprocess degli
+  isolati, limitato al symlink `/frontend/node_modules`. Nessuna modifica
+  dello scope scanner, baseline o configurazione versionata.
+- Catasto test-only integrato dopo review: scenario VAL-06 imponibile nullo,
+  sei test, statement 99/99 e branch 52/52, zero esclusioni. Runtime invariato.
+- Utenze caratterizzazione integrata dopo review: 22 test, statement 56/58
+  e branch 15/16; residuo solo guardia `missing_nome` dimostrata irraggiungibile
+  per input `str` conformi. Runtime invariato. Rimozione approvata dall'utente
+  esclusivamente come prossimo goal separato, non eseguita in W1.
+- Organigramma preflight incontra sei finding parametri nel report parziale:
+  firme invariate, nessun path controller nella baseline; l'omissione di
+  sorgenti ancora esistenti nel corpus attiva erroneamente matching move.
+  Il confronto sul corpus completo prima restituisce zero finding controller.
+  Verifica full-corpus dopo obbligatoria prima dell'integrazione runtime.
+- Approvati Catasto test-only, audit/caratterizzazione Utenze e singolo
+  hotspot selezione Organigramma; nessun ulteriore hotspot ammesso.
+- Isolamento in tre worktree detached `/tmp/gaia-w1-{catasto,utenze,organigramma}`
+  al medesimo `bfc8e68fd6d4acf373b23b7cc15693c80bd75f18`. Nessun branch
+  o commit creato, nessuna change dirty Wiki/Presenze/SISTER trasferita.
+- Allowlist: A solo `test_catasto_anomalie_payloads.py`; B solo
+  `test_anagrafica_parser.py`; C controller selezione e relativo test unit.
+  Runtime backend read-only; dipendenze/config/baseline/docs single writer.
+  Hash dei sei file puliti acquisiti in `/tmp/gaia-w1-source-hashes.txt`.
+- Riproduzione gate negli isolati prima della change; patch da revisionare
+  e integrare serialmente soltanto con preflight hash e ownership stabili.
+  Richiesta conferma assenza di owner concorrenti prima dell'integrazione.
+- Stop pre-integrazione: il link locale `frontend/node_modules` degli
+  isolati viene enumerato come untracked e `added_lines_since` tenta di
+  leggerlo come file (`IsADirectoryError`). Causa identificata, nessun fix
+  tooling/scope/baseline. Richiesta decisione sull'esclusione Git temporanea
+  del solo link ambiente, oltre alla conferma ownership.
+- Prima dello stop: Catasto riproduce cinque test e branch 50/52, nessun
+  edit; Utenze caratterizzazione solo isolata 22 test, statement 56/58 e
+  branch 15/16, residuo `missing_nome`; Organigramma caratterizzazione
+  solo isolata 38 test con coverage full-file 100%, runtime invariato.
+  Nessuna patch integrata e nessun refactoring runtime applicato.
+
 ### W0 — readiness parallela verificata (2026-10-05)
 
 - Audit autorizzato, tre agenti in parallelo solo per misure. Nessun runtime,

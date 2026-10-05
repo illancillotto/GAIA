@@ -61,6 +61,37 @@ describe("schema selection", () => {
     expect(state.multiSelectedIds).toEqual(new Set(["unit", "other"]));
     expect(state.setSelectedId).not.toHaveBeenCalled();
   });
+
+  test.each([
+    [true, [], ["other"], false],
+    [false, ["unit", "queued"], ["unit", "queued"], true],
+  ] as const)("captures toggle=%s before the updater receives queued selection", (toggleOff, queuedIds, expectedIds, changesPrimary) => {
+    const state = context();
+    if (toggleOff) state.multiSelectedIds.add("unit");
+    const event = pointer({ ctrlKey: true });
+    handleSchemaCardSelect(state, "unit", event);
+    const update = state.setMultiSelectedIds.mock.calls[0]![0] as (previous: Set<string>) => Set<string>;
+    state.multiSelectedIds = new Set(toggleOff ? [] : ["unit"]);
+    event.ctrlKey = false;
+    const previous = new Set<string>(queuedIds);
+    const result = update(previous);
+    expect(Array.from(result)).toEqual(expectedIds);
+    expect(previous).toEqual(new Set(queuedIds));
+    expect(update(previous)).toEqual(result);
+    expect(state.setSelectedId).toHaveBeenCalledTimes(Number(changesPrimary));
+    if (changesPrimary) {
+      expect(state.setMultiSelectedIds.mock.invocationCallOrder[0]).toBeLessThan(state.setSelectedId.mock.invocationCallOrder[0]!);
+    }
+  });
+
+  test("shift selection retains an already selected card and its insertion order", () => {
+    const state = context();
+    state.multiSelectedIds = new Set(["unit", "other"]);
+    handleSchemaCardSelect(state, "unit", pointer({ shiftKey: true }));
+    const update = state.setMultiSelectedIds.mock.calls[0]![0] as (previous: Set<string>) => Set<string>;
+    expect(Array.from(update(state.multiSelectedIds))).toEqual(["unit", "other"]);
+    expect(state.setSelectedId).toHaveBeenCalledWith("unit");
+  });
 });
 
 describe("schema drag authorization and inputs", () => {

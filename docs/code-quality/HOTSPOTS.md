@@ -14,6 +14,20 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Checkpoint W1 parallelo, 2026-10-05:
+
+- Organigramma `handleSchemaCardSelect`: `IMPROVED`, cognitive 23 -> 16,
+  nesting 2 -> 1, cognitive file 59 -> 52; nessun helper o debito trasferito.
+  Restano quattro warning callable nel file. Singolo hotspot chiuso.
+- Catasto `build_anomalia_payload`: caratterizzazione completata full-file
+  100% (99 statement, 52 branch), runtime invariato 30/24/31/2.
+  Il refactoring runtime resta un goal futuro, non avviato da W1.
+- Utenze `parse_folder_name`: caratterizzazione 22 test; resta la guardia
+  irraggiungibile `missing_nome`, statement 56/58 e branch 15/16.
+  Rimozione approvata solo come prossimo goal separato; runtime invariato.
+
+Evidenze nel checkpoint W1 in `PROGRESS.md`; nessuna baseline aggiornata.
+
 Audit baseline globale e ordine delle tranche:
 [BASELINE_RECOVERY.md](BASELINE_RECOVERY.md), 2026-09-15.
 

@@ -33,6 +33,7 @@ evidenze dell'esperimento iniziale sono in `QUALITY_RATCHET.md`.
 | `PLAN.md` | Fasi, checkpoint e dipendenze |
 | `PARALLEL_REDUCTION_PLAN_2026-10-05.md` | Proposta di campagna per ondate, tre agenti indipendenti e gate d'integrazione; non autorizza refactoring massivi |
 | `PARALLEL_W0_READINESS_2026-10-05.md` | Audit W0: coverage reale, ownership proposta e prerequisiti prima del pilota |
+| `PARALLEL_W1_RESULTS_2026-10-05.md` | Risultati pilota: caratterizzazione Catasto/Utenze e riduzione selezione Organigramma |
 | `PROGRESS.md` | Stato persistente e diario delle iterazioni |
 | `INSTRUCTIONS.md` | Regole operative e stop condition |
 | `HERMES_GOAL_PHASE_1.md` | Comando `/goal` per audit, tooling e baseline |

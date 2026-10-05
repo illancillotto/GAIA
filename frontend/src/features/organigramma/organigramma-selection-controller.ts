@@ -37,24 +37,24 @@ export async function handleConnectSelectedNodeToTarget({ selectedId, setSchemaL
 type HandleSchemaCardSelectContext = Pick<OrganigrammaSelectionContext, "multiSelectedIds" | "setMultiSelectedIds" | "selectedId" | "setSelectedId">;
 
 export function handleSchemaCardSelect({ multiSelectedIds, setMultiSelectedIds, selectedId, setSelectedId }: HandleSchemaCardSelectContext, nodeId: string, event?: React.MouseEvent) {
-  if (event && (event.ctrlKey || event.metaKey || event.shiftKey)) {
-    const isToggleOff = (event.ctrlKey || event.metaKey) && multiSelectedIds.has(nodeId);
-    setMultiSelectedIds((prev) => {
-      const next = new Set(prev);
-      // Seed the multi-selection with the currently selected card on the first modifier click.
-      if (!next.size && selectedId && selectedId !== nodeId) next.add(selectedId);
-      if (isToggleOff) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
-      }
-      return next;
-    });
-    if (!isToggleOff) setSelectedId(nodeId);
+  if (!event || !(event.ctrlKey || event.metaKey || event.shiftKey)) {
+    setMultiSelectedIds(new Set());
+    setSelectedId(nodeId);
     return;
   }
-  setMultiSelectedIds(new Set());
-  setSelectedId(nodeId);
+  const isToggleOff = (event.ctrlKey || event.metaKey) && multiSelectedIds.has(nodeId);
+  setMultiSelectedIds((prev) => {
+    const next = new Set(prev);
+    // Seed the multi-selection with the currently selected card on the first modifier click.
+    if (!next.size && selectedId && selectedId !== nodeId) next.add(selectedId);
+    if (isToggleOff) {
+      next.delete(nodeId);
+    } else {
+      next.add(nodeId);
+    }
+    return next;
+  });
+  if (!isToggleOff) setSelectedId(nodeId);
 }
 
 type HandleSchemaCardPointerDownContext = Pick<OrganigrammaSelectionContext, "schemaEditEnabled" | "flatTree" | "multiSelectedIds" | "setSelectedId" | "setMultiSelectedIds" | "safeCanvasCoord" | "setSchemaDragging">;
