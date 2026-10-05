@@ -3,6 +3,38 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Ruolo — avvio layout parsing particelle (2026-10-05)
+
+- Chiusura `IMPROVED`: otto layout di colonne e quattro varianti testuali
+  dichiarativi sostituiscono la catena annidata. `_particella_columns` seleziona
+  solo sulla colonna ambigua originale, poi mappa campi; conversione comune
+  riusa il parser Decimal gia esistente, senza helper pass-through.
+- Target cog/cyc/LOC/nesting66/25/90/8 ->12/10/24/1; nuovo selettore5/5/7/1
+  sotto soglia. File cognitive sum/max75/66 ->25/12, cyclomatic37/25 ->25/10,
+  branching31 ->19, LOC144 ->140, sei callable/quattro import invariati.
+  Quattro error ->un warning ciclomatico sul target, nessun debito trasferito.
+- Sei nuove caratterizzazioni sul runtime originale, 23 test prima/dopo;
+  full-file100% dopo statement65/branch12, zero esclusioni/missing/partial.
+  20000 input differenziali su lunghezze0/18, varianti/colonne extra/numerici,
+  NaN/Infinity e equals: campi completi/eccezioni identici e input invariati.
+- Ratchet merge-base `d88b4370`, Ruff mirato e whitespace PASS;
+  baseline/config/scope invariati. Lint globale con .venv compileall PASS,
+  resta UP038 nel file InCass concorrente fuori slice, non modificato.
+  Nessuna nuova failure nel parser o nei test pertinenti.
+- Graphify Ruolo codice force/pruning per rimuovere safe_decimal e docs
+  Ruolo/piattaforma aggiornati; commit separato, nessun push. Campagna globale
+  non-MCP attiva, modifiche concorrenti preservate; warning target resta visibile.
+- Network `d88b4370` committato; campagna tutti hotspot non-MCP attiva.
+- Singolo hotspot `parse_particella_line`: cog/cyc/LOC/nesting66/25/90/8,
+  quattro error; file LOC144, sei callable, cognitive75/cyclomatic37.
+- Sostituire la catena per lunghezza con layout dichiarativi di colonne,
+  variante testuale scelta solo sulla colonna originale ambigua. Preservare
+  righe4/5/6/7/8/9/10/11+, subalterno/coltura e colonne ignorate, guardie
+  equals/foglio/particella, Decimal e zero catastale ->ettari None.
+- Conversione/assemblaggio comune senza helper pass-through; niente nuova
+  esclusione o modifica API/schema. Test originali piu casi limite prima
+  runtime, full-file100%, ratchet merge-base e aggregati; commit separato.
+
 ### Network — avvio detector watchlist (2026-10-05)
 
 - Chiusura `IMPROVED`: strategie matching lazy per keyword/domain/url/IP,

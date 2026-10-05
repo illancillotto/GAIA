@@ -68,100 +68,98 @@ def resolve_section_hint_for_ruolo_comune(comune_nome: str | None) -> str | None
     return ORISTANO_FRAZIONE_SECTION_HINTS.get(comune_norm)
 
 
+_PARTICELLA_LAYOUTS = {
+    4: {"foglio": 0, "particella": 1, "sup_catastale_are": 2, "importo_manut": 3},
+    5: {
+        "foglio": 0, "particella": 1, "sup_catastale_are": 2,
+        "sup_irrigata_ha": 3, "importo_manut": 4,
+    },
+    6: {
+        "distretto": 0, "foglio": 1, "particella": 2,
+        "sup_catastale_are": 3, "sup_irrigata_ha": 4, "importo_manut": 5,
+    },
+    7: {
+        "distretto": 0, "foglio": 1, "particella": 2,
+        "sup_catastale_are": 3, "sup_irrigata_ha": 4,
+        "importo_manut": 5, "importo_ist": 6,
+    },
+    8: {
+        "distretto": 0, "foglio": 1, "particella": 2,
+        "sup_catastale_are": 3, "sup_irrigata_ha": 4,
+        "importo_manut": 5, "importo_irrig": 6, "importo_ist": 7,
+    },
+    9: {
+        "distretto": 0, "foglio": 1, "particella": 2,
+        "sup_catastale_are": 3, "sup_irrigata_ha": 4,
+        "importo_manut": 6, "importo_irrig": 7, "importo_ist": 8,
+    },
+    10: {
+        "domanda_irrigua": 0, "distretto": 1, "foglio": 2, "particella": 3,
+        "sup_catastale_are": 4, "sup_irrigata_ha": 5,
+        "importo_manut": 6, "importo_irrig": 7, "importo_ist": 8,
+    },
+    11: {
+        "domanda_irrigua": 0, "distretto": 1, "foglio": 2, "particella": 3,
+        "subalterno": 4, "sup_catastale_are": 5, "sup_irrigata_ha": 6,
+        "importo_manut": 7, "importo_irrig": 8, "importo_ist": 9,
+    },
+}
+
+_PARTICELLA_TEXT_LAYOUTS = {
+    7: {
+        "distretto": 0, "foglio": 1, "particella": 2, "subalterno": 3,
+        "sup_catastale_are": 4, "sup_irrigata_ha": 5, "importo_manut": 6,
+    },
+    9: {
+        **_PARTICELLA_LAYOUTS[9],
+        "subalterno": 3, "sup_catastale_are": 4, "sup_irrigata_ha": 5,
+    },
+    10: {
+        **_PARTICELLA_LAYOUTS[10],
+        "coltura": 6, "importo_manut": 7, "importo_irrig": 8, "importo_ist": 9,
+    },
+    11: {
+        **_PARTICELLA_LAYOUTS[11],
+        "coltura": 7, "importo_manut": 8, "importo_irrig": 9, "importo_ist": 10,
+    },
+}
+
+_PARTICELLA_VARIANT_COLUMNS = {7: 3, 9: 3, 10: 6, 11: 7}
+
+
+def _particella_columns(values: list[str]) -> dict[str, str]:
+    column_count = min(len(values), 11)
+    variant_column = _PARTICELLA_VARIANT_COLUMNS.get(column_count)
+    layout = _PARTICELLA_LAYOUTS[column_count]
+    if variant_column is not None and not looks_like_number(values[variant_column]):
+        layout = _PARTICELLA_TEXT_LAYOUTS[column_count]
+    return {field: values[index] for field, index in layout.items()}
+
+
 def parse_particella_line(values: list[str]) -> ParsedParticella | None:
     if not values or len(values) < 4:
         return None
     if any("=" in value for value in values):
         return None
 
-    def safe_decimal(raw: str) -> Decimal | None:
-        return parse_italian_decimal(raw) if raw else None
-
-    n = len(values)
-
-    dom: str | None = None
-    dis: str | None = None
-    fog = ""
-    part = ""
-    sub: str | None = None
-    sup_cata_s = ""
-    sup_irr_s = ""
-    colt: str | None = None
-    manut_s = ""
-    irrig_s = ""
-    ist_s = ""
-
-    if n >= 11:
-        dom, dis, fog, part, sub = values[0], values[1], values[2], values[3], values[4]
-        sup_cata_s, sup_irr_s = values[5], values[6]
-        if not looks_like_number(values[7]):
-            colt = values[7]
-            manut_s, irrig_s, ist_s = values[8], values[9], values[10]
-        else:
-            manut_s, irrig_s, ist_s = values[7], values[8], values[9]
-    elif n == 10:
-        dom, dis, fog, part = values[0], values[1], values[2], values[3]
-        sup_cata_s, sup_irr_s = values[4], values[5]
-        if not looks_like_number(values[6]):
-            colt = values[6]
-            manut_s, irrig_s, ist_s = values[7], values[8], values[9]
-        else:
-            manut_s, irrig_s, ist_s = values[6], values[7], values[8]
-    elif n == 9:
-        dis, fog, part = values[0], values[1], values[2]
-        if not looks_like_number(values[3]):
-            sub = values[3]
-            sup_cata_s, sup_irr_s = values[4], values[5]
-            manut_s, irrig_s, ist_s = values[6], values[7], values[8]
-        else:
-            sup_cata_s, sup_irr_s = values[3], values[4]
-            manut_s, irrig_s, ist_s = values[6], values[7], values[8]
-    elif n == 8:
-        dis, fog, part = values[0], values[1], values[2]
-        sup_cata_s, sup_irr_s = values[3], values[4]
-        manut_s, irrig_s, ist_s = values[5], values[6], values[7]
-    elif n == 7:
-        dis, fog, part = values[0], values[1], values[2]
-        if not looks_like_number(values[3]):
-            sub = values[3]
-            sup_cata_s, sup_irr_s = values[4], values[5]
-            manut_s = values[6]
-        else:
-            sup_cata_s, sup_irr_s = values[3], values[4]
-            manut_s = values[5]
-            ist_s = values[6]
-    elif n == 6:
-        dis, fog, part = values[0], values[1], values[2]
-        sup_cata_s, sup_irr_s = values[3], values[4]
-        manut_s = values[5]
-    elif n == 5:
-        fog, part = values[0], values[1]
-        sup_cata_s, sup_irr_s = values[2], values[3]
-        manut_s = values[4]
-    elif n == 4:
-        fog, part = values[0], values[1]
-        sup_cata_s = values[2]
-        manut_s = values[3]
-    else:  # pragma: no cover - guarded by length checks above.
+    fields = _particella_columns(values)
+    if not fields["foglio"].isdigit() or not fields["particella"].isdigit():
         return None
 
-    if not fog.isdigit() or not part.isdigit():
-        return None
-
-    sup_cata = safe_decimal(sup_cata_s)
+    sup_cata = parse_italian_decimal(fields["sup_catastale_are"])
     sup_ha = (sup_cata / Decimal("100")) if sup_cata else None
 
     return ParsedParticella(
-        domanda_irrigua=dom,
-        distretto=dis,
-        foglio=fog,
-        particella=part,
-        subalterno=sub,
+        domanda_irrigua=fields.get("domanda_irrigua"),
+        distretto=fields.get("distretto"),
+        foglio=fields["foglio"],
+        particella=fields["particella"],
+        subalterno=fields.get("subalterno"),
         sup_catastale_are=sup_cata,
         sup_catastale_ha=sup_ha,
-        sup_irrigata_ha=safe_decimal(sup_irr_s),
-        coltura=colt,
-        importo_manut=safe_decimal(manut_s),
-        importo_irrig=safe_decimal(irrig_s) if irrig_s else None,
-        importo_ist=safe_decimal(ist_s) if ist_s else None,
+        sup_irrigata_ha=parse_italian_decimal(fields.get("sup_irrigata_ha", "")),
+        coltura=fields.get("coltura"),
+        importo_manut=parse_italian_decimal(fields["importo_manut"]),
+        importo_irrig=parse_italian_decimal(fields.get("importo_irrig", "")),
+        importo_ist=parse_italian_decimal(fields.get("importo_ist", "")),
     )

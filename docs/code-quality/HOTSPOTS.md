@@ -14,6 +14,15 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, Ruolo layout parsing particelle, 2026-10-05:
+`parse_particella_line` `IMPROVED`, cog/cyc/LOC/nesting66/25/90/8 ->12/10/24/1.
+Layout dichiarativi per lunghezza/variante testuale, selettore5/5/7/1 sotto
+soglia e conversione comune. File cognitive75 ->25, cyclomatic37 ->25,
+branching31 ->19, LOC144 ->140, callable6 invariati; quattro error ->un warning
+ciclomatico, nessun debito trasferito. 23 test/full-file100%, 20000 input
+equivalenti inclusi campi/eccezioni; ratchet/Ruff mirato PASS. Lint globale
+UP038 InCass concorrente fuori slice, baseline/config/scope invariati.
+
 Campagna non-MCP, Network detector watchlist, 2026-10-05:
 `event_detection_tags` `IMPROVED`, cog/cyc/LOC/nesting107/39/62/6 ->6/7/25/0.
 Matching lazy in registro, normalizzazione condivisa, guard clause watchlist

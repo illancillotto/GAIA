@@ -1,5 +1,19 @@
 # GAIA Ruolo — Product Requirements Document v1.0
 
+### Manutenzione parser particelle — 2026-10-05
+
+- Parser comune conserva i layout storici4/5/6/7/8/9/10/11+ colonne tramite
+  mapping dichiarativi, con varianti subalterno/coltura scelte sulla stessa
+  colonna ambigua. Colonne ignorate, guardie equals/foglio/particella, Decimal,
+  input e conversione superficie zero ->ettari None restano invariati.
+- `parse_particella_line` cog/cyc/LOC/nesting66/25/90/8 ->12/10/24/1;
+  cognitive file75 ->25, cyclomatic37 ->25, LOC144 ->140. Quattro error diventano
+  un warning ciclomatico; nessuna nuova esclusione o modifica API/schema.
+- Sei caratterizzazioni nuove, 23 test prima/dopo, coverage full-file100%
+  statement/branch senza esclusioni, 20000 input differenziali con campi ed
+  eccezioni identici. Ratchet/Ruff mirato PASS; lint globale resta UP038 InCass
+  concorrente, fuori perimetro. Graphify codice force/pruning e docs aggiornati.
+
 > **Regola repository**
 > GAIA Ruolo non introduce un backend separato. Usa il backend monolite modulare condiviso.
 

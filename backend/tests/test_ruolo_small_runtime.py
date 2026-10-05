@@ -330,3 +330,25 @@ def test_ruolo_parse_particella_line_rejects_invalid_rows() -> None:
     assert parse_particella_line(["foglio=1", "2", "3", "4"]) is None
     assert parse_particella_line(["foglio", "29", "20", "21,21"]) is None
     assert parse_particella_line(["1", "particella", "20", "21,21"]) is None
+
+
+@pytest.mark.parametrize("surface", ["0", "", "invalid", "-100", "1.234,56"])
+def test_ruolo_parcel_surface_edge_values_and_input_preserved(surface: str) -> None:
+    values = ["01", "002", surface, ""]
+    original = values.copy()
+    parsed = parse_particella_line(values)
+    assert parsed is not None
+    expected = parse_italian_decimal(surface)
+    assert parsed.sup_catastale_are == expected
+    assert parsed.sup_catastale_ha == (expected / Decimal("100") if expected else None)
+    assert parsed.foglio == "01"
+    assert parsed.particella == "002"
+    assert parsed.importo_manut is None
+    assert values == original
+
+
+def test_ruolo_parcel_extra_columns_ignored_but_equals_still_rejected() -> None:
+    values = ["DOM", "DIS", "1", "2", "SUB", "100", "0,5", "CROP", "1", "2", "3"]
+    expected = parse_particella_line(values)
+    assert parse_particella_line([*values, "extra", "more"]) == expected
+    assert parse_particella_line([*values, "ignored=column"]) is None
