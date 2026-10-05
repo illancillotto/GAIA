@@ -1,7 +1,7 @@
 """Persist manual shift assignments; GATE edits outrank GAIA and INAZ."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, object_session
@@ -53,8 +53,7 @@ def record_shift_assignment(
     assignments = _assignments(db, record.collaborator_id)
     if source == "gaia" and any(
         row.source == "gate"
-        and row.date_from <= request.date_to
-        and row.date_to >= request.date_from
+        and assignment_ranges_overlap(row, request)
         for row in assignments
     ):
         raise ShiftAssignmentConflict("Assegnazione gestita da GATE: modificarla da GATE")
@@ -94,7 +93,7 @@ def shift_assignment_values(record):
     key = record.collaborator_id
     if key not in cache:
         cache[key] = _assignments(db, key)
-    matching = [row for row in cache[key] if row.date_from <= record.work_date <= row.date_to]
+    matching = [row for row in cache[key] if assignment_covers_date(row, record.work_date)]
     winner = max(
         matching,
         key=lambda row: (
@@ -109,3 +108,14 @@ def shift_assignment_values(record):
         "shift_worker_source": winner.source if winner else None,
         "shift_rules_version": "shift-v1",
     }
+
+
+def assignment_covers_date(assignment, work_date: date) -> bool:
+    return assignment.date_from <= work_date <= (assignment.date_to or date.max)
+
+
+def assignment_ranges_overlap(left, right) -> bool:
+    return (
+        left.date_from <= (right.date_to or date.max)
+        and right.date_from <= (left.date_to or date.max)
+    )

@@ -1,4 +1,4 @@
-"""Explicit type and same-month validity for a shift worker assignment."""
+"""Explicit type and bounded or ongoing validity for a shift worker assignment."""
 
 from datetime import date, datetime
 from typing import Literal
@@ -11,14 +11,11 @@ ShiftWorkerType = Literal["none", "acquaiolo", "telecontrollo"]
 class ShiftWorkerAssignmentRequest(BaseModel):
     shift_worker_type: ShiftWorkerType
     date_from: date
-    date_to: date
+    date_to: date | None
 
     @model_validator(mode="after")
     def validate_dates(self):
-        if self.date_from > self.date_to:
-            raise ValueError("La data iniziale deve precedere quella finale")
-        if (self.date_from.year, self.date_from.month) != (self.date_to.year, self.date_to.month):
-            raise ValueError("Selezionare un intervallo nello stesso mese")
+        validate_shift_assignment_range(self.date_from, self.date_to)
         return self
 
 
@@ -39,3 +36,13 @@ class ShiftWorkerFields(BaseModel):
     shift_worker_type: ShiftWorkerType = "none"
     shift_worker_source: Literal["gate", "gaia"] | None = None
     shift_rules_version: str = "shift-v1"
+
+
+def validate_shift_assignment_range(date_from: date, date_to: date | None) -> None:
+    """An explicit null end means ongoing; bounded edits retain their monthly scope."""
+    if date_to is None:
+        return
+    if date_from > date_to:
+        raise ValueError("La data iniziale deve precedere quella finale")
+    if (date_from.year, date_from.month) != (date_to.year, date_to.month):
+        raise ValueError("Selezionare un intervallo nello stesso mese")

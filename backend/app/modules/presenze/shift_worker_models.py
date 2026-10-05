@@ -26,7 +26,7 @@ class PresenzeShiftAssignment(Base):
         ForeignKey("presenze_collaborators.id", ondelete="CASCADE"), nullable=False
     )
     date_from: Mapped[date] = mapped_column(Date, nullable=False)
-    date_to: Mapped[date] = mapped_column(Date, nullable=False)
+    date_to: Mapped[date | None] = mapped_column(Date, nullable=True)
     shift_worker_type: Mapped[str] = mapped_column(String(32), nullable=False)
     source: Mapped[str] = mapped_column(String(16), nullable=False)
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

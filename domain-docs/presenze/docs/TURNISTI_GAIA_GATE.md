@@ -1,6 +1,8 @@
 # Turnisti GAIA e GATE
 
-Implementazione locale, senza deploy né migrazioni di produzione.
+Per lo stato del rilascio precedente vedere il report operativo GATE
+`docs/TURNISTI_RELEASE_2026-10-05.md`. L'estensione senza scadenza descritta qui
+è verificata localmente e non è ancora applicata in produzione.
 
 Nelle Giornaliere GATE, **Gestisci turnisti** permette di selezionare collaboratore,
 tipologia e date. Le date iniziali coprono tutto il mese; due date uguali assegnano
@@ -61,6 +63,11 @@ GATE usa `POST /api/admin/presenze/pending-actions`, con `action_type` =
 `patch_daily_record`, `target_type` = `daily_record` e `target_id` della
  giornaliera autorizzata. Nel `payload`: `operation` = `set_shift_worker`,
 `shift_worker_type`, `date_from`, `date_to` (date ISO nello stesso mese).
+Per un'assegnazione senza scadenza inviare esplicitamente `date_to: null`:
+la decorrenza vale anche nei mesi e negli anni successivi. Il campo non può
+essere omesso. Gli intervalli con data finale restano ordinati nello stesso
+mese. I dialoghi esistenti continuano a proporre intervalli mensili; la durata
+senza scadenza è disponibile nel contratto API, non come nuovo controllo UI.
 Identità, timestamp e command ID vengono attestati dal server: i valori
 presentati dal client non possono cambiarli. Risposte: 201 salvato, 400 input
 non valido/target assente, 401 non autenticato, 403 fuori scope o ruolo
@@ -77,6 +84,17 @@ l’assegnazione della persona su un intervallo. UI e API applicano lo stesso li
 LAN e outbound applicano lo stesso servizio con metadati GATE attestati.
 I record restituiscono tipo, sorgente, versione delle regole e provenienza del
 buono; `shift_covered_absence_minutes` trasporta la copertura riconosciuta da GAIA.
+
+La migrazione aggiuntiva `20261005_1500`, dopo `20261003_1200`, rende nullable
+la data finale. Il downgrade rifiuta di procedere se esistono assegnazioni
+senza scadenza: occorre prima chiuderle esplicitamente, senza perdita silenziosa
+dei dati. Sovrapposizioni, revoche, precedenza GATE e retry conservano la
+semantica precedente anche con estremi aperti.
+
+La richiesta corrente è di assegnare nove acquaioli dal **01/09/2026**, senza
+scadenza. È ancora **PARTIAL**: implementazione verificata, inserimento reale
+pendente. Il dettaglio dei controlli è nel
+[report assegnazioni permanenti](TURNISTI_OPEN_ENDED_2026-10-05.md).
 
 ## Piano e residui
 
