@@ -3,6 +3,41 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto frontend — avvio registro descrizioni (2026-10-05)
+
+- Chiusura `IMPROVED`: selezione condizionale sostituita da registro Map
+  privato di testi/formatter completi per tipo; imponibile riusato direttamente.
+  Nessun wrapper triviale per il testo costante, nessuna ereditarieta prototype
+  nel lookup. Ordine/testo/conversioni e fallback vuoto/null restano invariati.
+- Target cog/cyc/LOC/nesting22/13/41/1 ->4/5/6/1, entrambi i warning eliminati.
+  Cinque formatter nuovi sotto soglia, massimo cog/cyc1/2; nessuna violation
+  trasferita. Restano due warning su `explainCatastoAnomalia`, zero error.
+- File cognitive sum/max75/22 ->58/20, cyclomatic73/13 ->71/12;
+  branching51 ->44, callable22 ->27, LOC365 ->374 sotto soglia file,
+  densita0.405479 ->0.34492. Riduzione del dispatch e degli aggregati reale;
+  nessun nuovo import/esclusione, baseline/config/scope invariati.
+- Dieci caratterizzazioni sul runtime originale per fallback prototype e
+  codice comune null/falsy/array/oggetto; 82 test prima/dopo. Full-file100%
+  dopo: statement111/branch82/function27/line100, contatori tutti positivi,
+  zero esclusioni. 22275 input differenziali per entrambi gli export:
+  output completo/ordine e input invariati rispetto al pre-slice `828f8cc6`.
+- Ratchet merge-base `828f8cc6`, ESLint, typecheck no-emit e whitespace PASS;
+  Graphify frontend codice e docs dedicate Catasto/piattaforma aggiornati.
+  Commit separato per passaggio, nessun push; campagna non-MCP attiva,
+  modifiche concorrenti preservate. Prossimo candidato: spiegazioni Catasto.
+- Passaggio precedente `828f8cc6` verificato e committato; campagna non-MCP
+  attiva, un hotspot revisionabile e commit separato per passaggio.
+- Target `describeCatastoAnomalia` cog/cyc/LOC/nesting22/13/41/1;
+  file cognitive75/max22, cyclomatic73/max13, LOC365, ventidue callable,
+  quattro warning e zero error. Il dispatch ripete la selezione per tipo.
+- Registro privato Map di descrizioni statiche o formatter di dominio;
+  responsabilita testuale completa per voce, helper imponibile riusato senza
+  wrapper. Preservare testi, spazi/ordine, conversioni, null/truthiness e
+  fallback anche per chiavi prototype. Nessun cambiamento API/UI/calcoli.
+- Acquisire caratterizzazioni sul runtime originale, full-file100%, metriche
+  aggregati/violation e ratchet merge-base; nessuna nuova esclusione/baseline
+  o modifica concorrente. Valutare solo riduzione reale del dispatch.
+
 ### Catasto frontend — avvio catalogo testi guida (2026-10-05)
 
 - Chiusura `IMPROVED`: catalogo privato tipizzato dei testi VAL-01/07 nello

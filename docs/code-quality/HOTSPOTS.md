@@ -14,6 +14,15 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, Catasto registro descrizioni, 2026-10-05:
+`describeCatastoAnomalia` `IMPROVED`, cog/cyc/LOC/nesting22/13/41/1
+->4/5/6/1. Registro Map di testo costante/formatter completi, cinque nuovi
+formatter sotto soglia (massimo cog/cyc1/2), nessun wrapper o trasferimento.
+File cognitive75 ->58, cyclomatic73 ->71, branching51 ->44, LOC365 ->374
+sotto soglia. Due warning eliminati; zero error/due warning residui sulle
+spiegazioni. 82 test, full-file100% su quattro metriche, 22275 input
+equivalenti; ratchet/typecheck/ESLint PASS, baseline/config/scope invariati.
+
 Campagna non-MCP, Catasto catalogo testi guida, 2026-10-05:
 `explainCatastoAnomalia` `IMPROVED`, cog/cyc/LOC/nesting24/14/152/1
 ->20/12/42/1. Catalogo privato tipizzato, copie liste e ordine preservati;

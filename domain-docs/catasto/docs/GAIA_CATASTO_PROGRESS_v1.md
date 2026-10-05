@@ -1,6 +1,20 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-05 — registro descrizioni anomalie
+
+- Registro Map privato di descrizioni statiche/formatter completi per tipo
+  sostituisce il dispatch condizionale; helper imponibile riusato senza wrapper.
+  Testi, ordine, spazi, conversioni e fallback null/vuoto/prototype invariati.
+- `describeCatastoAnomalia` cog/cyc/LOC/nesting22/13/41/1 ->4/5/6/1;
+  `IMPROVED`, cognitive file75 ->58, cyclomatic73 ->71, branching51 ->44.
+  Cinque formatter sotto soglia, nessun debito trasferito; LOC365 ->374 sotto
+  soglia file. Eliminati due warning: restano solo due warning sulle spiegazioni.
+- Dieci caratterizzazioni prima del runtime, 82 test prima/dopo, full-file100%
+  statement/branch/function/line; 22275 input equivalenti per entrambi gli
+  export, input e output completo/ordine invariati. Ratchet merge-base,
+  typecheck ed ESLint PASS, baseline/config/scope invariati.
+
 ### 2026-10-05 — catalogo testi guida anomalie
 
 - Testi VAL-01/07 separati dai calcoli in catalogo privato tipizzato nello

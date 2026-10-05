@@ -4,6 +4,24 @@ import { describeCatastoAnomalia, explainCatastoAnomalia } from "@/lib/catasto-a
 
 describe("source reference descriptions", () => {
   test.each([
+    ["__proto__", null, "Anomalia ruolo senza dettaglio strutturato."],
+    ["constructor", "", ""],
+    ["toString", "Personalizzata", "Personalizzata"],
+  ])("preserves unknown description fallback for %s", (tipo, descrizione, expected) => {
+    expect(describeCatastoAnomalia({ tipo, descrizione })).toBe(expected);
+  });
+
+  test.each([
+    [undefined, ""], [null, ""], [0, " Codice sorgente: 0."],
+    [false, " Codice sorgente: false."], ["", " Codice sorgente: ."],
+    [[], " Codice sorgente: ."], [{}, " Codice sorgente: [object Object]."],
+  ])("preserves municipality description for %j", (cod_istat, detail) => {
+    expect(describeCatastoAnomalia({ tipo: "VAL-04-comune_invalido", dati_json: { cod_istat } })).toBe(
+      `Il codice comune Capacitas della riga ruolo non e presente nel riferimento comuni GAIA.${detail}`,
+    );
+  });
+
+  test.each([
     [undefined, ""],
     ["bad", ""],
     [0, "Valore atteso dal calcolo: 0 €. Scostamento rilevato: 0 €."],

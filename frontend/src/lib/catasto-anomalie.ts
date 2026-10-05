@@ -348,45 +348,54 @@ function describeImponibile(data: Record<string, unknown>): string {
   ]);
 }
 
+const anomalyDescriptions = new Map<string, string | ((data: Record<string, unknown>) => string)>([
+  [
+    "VAL-01-sup_eccede",
+    (data) => compactParts([
+      "La superficie irrigabile supera quella catastale.",
+      describeSourceReference("Scostamento: ", formatNumber(data.delta_mq), " mq."),
+      describeSourceReference("Scostamento percentuale: ", formatPct(data.delta_pct)),
+    ]),
+  ],
+  [
+    "VAL-02-cf_invalido",
+    (data) => compactParts([
+      "Il codice fiscale o la partita IVA importata non supera i controlli formali.",
+      describeSourceReference("Valore sorgente: ", data.cf_raw),
+      describeSourceReference("Errore: ", data.error_code),
+    ]),
+  ],
+  ["VAL-03-cf_mancante", "Manca il codice fiscale o la partita IVA nella riga ruolo importata."],
+  [
+    "VAL-04-comune_invalido",
+    (data) => compactParts([
+      "Il codice comune Capacitas della riga ruolo non e presente nel riferimento comuni GAIA.",
+      data.cod_istat != null ? `Codice sorgente: ${String(data.cod_istat)}.` : null,
+    ]),
+  ],
+  [
+    "VAL-05-particella_assente",
+    (data) => compactParts([
+      "La riga ruolo non trova una particella corrente GAIA con lo stesso riferimento catastale.",
+      describeSourceReference("Foglio ", data.foglio),
+      describeSourceReference("Particella ", data.particella),
+      describeSourceReference("Sub ", data.subalterno),
+    ]),
+  ],
+  ["VAL-06-imponibile", describeImponibile],
+  [
+    "VAL-07-importi",
+    (data) => compactParts([
+      "Gli importi del ruolo non coincidono con quelli che risultano dal calcolo su imponibile e aliquota.",
+      ...describeImportAmounts("0648", data.v07_648),
+      ...describeImportAmounts("0985", data.v07_985),
+    ]),
+  ],
+]);
+
 export function describeCatastoAnomalia(anomalia: AnomaliaLike): string {
   const data = anomalia.dati_json ?? {};
-
-  switch (anomalia.tipo) {
-    case "VAL-01-sup_eccede":
-      return compactParts([
-        "La superficie irrigabile supera quella catastale.",
-        describeSourceReference("Scostamento: ", formatNumber(data.delta_mq), " mq."),
-        describeSourceReference("Scostamento percentuale: ", formatPct(data.delta_pct)),
-      ]);
-    case "VAL-02-cf_invalido":
-      return compactParts([
-        "Il codice fiscale o la partita IVA importata non supera i controlli formali.",
-        describeSourceReference("Valore sorgente: ", data.cf_raw),
-        describeSourceReference("Errore: ", data.error_code),
-      ]);
-    case "VAL-03-cf_mancante":
-      return "Manca il codice fiscale o la partita IVA nella riga ruolo importata.";
-    case "VAL-04-comune_invalido":
-      return compactParts([
-        "Il codice comune Capacitas della riga ruolo non e presente nel riferimento comuni GAIA.",
-        data.cod_istat != null ? `Codice sorgente: ${String(data.cod_istat)}.` : null,
-      ]);
-    case "VAL-05-particella_assente":
-      return compactParts([
-        "La riga ruolo non trova una particella corrente GAIA con lo stesso riferimento catastale.",
-        describeSourceReference("Foglio ", data.foglio),
-        describeSourceReference("Particella ", data.particella),
-        describeSourceReference("Sub ", data.subalterno),
-      ]);
-    case "VAL-06-imponibile":
-      return describeImponibile(data);
-    case "VAL-07-importi":
-      return compactParts([
-        "Gli importi del ruolo non coincidono con quelli che risultano dal calcolo su imponibile e aliquota.",
-        ...describeImportAmounts("0648", data.v07_648),
-        ...describeImportAmounts("0985", data.v07_985),
-      ]);
-    default:
-      return anomalia.descrizione ?? "Anomalia ruolo senza dettaglio strutturato.";
-  }
+  const description = anomalyDescriptions.get(anomalia.tipo);
+  if (typeof description === "function") return description(data);
+  return description ?? anomalia.descrizione ?? "Anomalia ruolo senza dettaglio strutturato.";
 }
