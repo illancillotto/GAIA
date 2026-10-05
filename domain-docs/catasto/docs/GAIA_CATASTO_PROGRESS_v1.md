@@ -1,6 +1,20 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-05 — stati del record estrazione SISTER
+
+- Mapper metadati successful e registrazione failed separati dal coordinatore.
+  Fallback costruito nel catch; identita existing, aggiornamenti parziali prima
+  di observed_at invalida, cache, SHA fuori try e ordine add/flush invariati.
+- Coordinatore cog/cyc/LOC/nesting18/13/26/2 ->12/9/16/2; mapper4/5/14/0
+  e registrazione failed0/1/10/0 sotto soglia. Cognitive file59 ->57,
+  branching48 invariato; zero violation nel file, nessun cambio API/schema/
+  transazioni/baseline/config/scope o debito trasferito.
+- 44 test prima/dopo, full-file100% statement91/branch18, 320 trace SQL/record/
+  failure equivalenti. Ratchet/Ruff mirato PASS; lint globale UP038 InCass
+  concorrente fuori slice. Graphify codice backend e docs Catasto/piattaforma
+  aggiornati prima del commit; campagna globale non-MCP ancora attiva.
+
 ### 2026-10-05 — sostituzione record collegati SISTER
 
 - Sostituzione figli isolata: delete parcel/history, add/flush parcel, owner

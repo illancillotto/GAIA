@@ -3,6 +3,39 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### SISTER — stati del record estrazione (2026-10-05)
+
+- Chiusura `IMPROVED`: mapper metadati e registrazione stato failed separati;
+  creazione fallback nel catch resta nel coordinatore, non anticipata.
+  Target cog/cyc/LOC/nesting18/13/26/2 ->12/9/16/2, mapper4/5/14/0,
+  registrazione failed0/1/10/0. Helper sotto soglia, zero violation nel file;
+  due warning eliminati senza trasferimento o nuovi wrapper artificiali.
+- File cognitive sum/max59/18 ->57/12, cyclomatic58/13 ->60/9,
+  branching48 invariato, callable10 ->12, LOC150 ->164 sotto soglia file;
+  densita0.78 ->0.713415/import8 invariati. Aumento ciclomatico pari ai due
+  nuovi callable, nessun branching aggiunto. Baseline/config/scope invariati.
+- Nuova caratterizzazione prima del refactoring: observed_at invalida conserva
+  parser_version/SHA gia aggiornati, vecchia data e identita existing; catch
+  svuota payload e registra failed senza flush. 44 test persistenza/backfill
+  PASS prima/dopo; full-file100% dopo statement91/branch18, zero missing,
+  partial o esclusioni. Ordine SQL/add/flush, cache e SHA fuori try invariati.
+- 320 casi differenziali contro `3673e60b`: SQL/parametri, ordine effetti,
+  record/stato failed e input identici. Sessione recording con modelli reali,
+  non test PostgreSQL. Ratchet merge-base, Ruff mirato, format-check test e
+  whitespace PASS; lint globale compileall PASS, solo UP038 InCass concorrente.
+- Aggiornamento Graphify codice backend e docs Catasto/piattaforma richiesto
+  prima del commit separato; nessun push, change concorrenti preservate.
+  Campagna globale non-MCP resta attiva, prossimo hotspot fuori da questo file.
+- Preflight `3673e60b`: singolo hotspot persist_sister_visura18/13/26/2,
+  due warning; file cognitive59/cyclomatic58/branching48/LOC150/dieci callable.
+- Separare mapping metadati successful e registrazione failed dal coordinatore;
+  costruzione e aggiornamenti restano nei rispettivi confini try/catch.
+  Preservare identita existing, ordine assegnazioni e stato parziale se data
+  osservazione invalida, cache e SHA fuori try, add/flush e transazioni.
+- Coverage full-file100% e caratterizzazioni prima/dopo, trace differenziali,
+  aggregati/ratchet contro HEAD pre-slice, baseline/config/scope invariati;
+  commit separato autorizzato, change concorrenti preservate.
+
 ### SISTER — sostituzione record collegati (2026-10-05)
 
 - Chiusura `IMPROVED`: responsabilita sostituzione figli isolata senza

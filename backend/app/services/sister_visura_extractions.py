@@ -144,6 +144,34 @@ def _replace_extraction_children(
         db.add(_build_sister_history_event(extraction, event))
 
 
+def _prepare_sister_extraction(
+    existing: CatastoSisterExtraction | None,
+    document: CatastoDocument,
+    pdf_sha256: str,
+    payload: dict[str, Any],
+) -> CatastoSisterExtraction:
+    extraction = existing or CatastoSisterExtraction(document_id=document.id, parser_version=PARSER_VERSION, pdf_sha256=pdf_sha256, payload_json={})
+    extraction.parser_version = PARSER_VERSION
+    extraction.pdf_sha256 = pdf_sha256
+    extraction.status = str(payload.get("status") or "review_required")
+    extraction.observed_at = _payload_date(payload, "observed_at")
+    extraction.payload_json = payload
+    extraction.error_message = None
+    return extraction
+
+
+def _persist_failed_extraction(
+    db: Session,
+    extraction: CatastoSisterExtraction,
+    error: Exception,
+) -> CatastoSisterExtraction:
+    extraction.status = "failed"
+    extraction.error_message = str(error)
+    extraction.payload_json = {}
+    db.add(extraction)
+    return extraction
+
+
 def persist_sister_visura(db: Session, document: CatastoDocument) -> CatastoSisterExtraction:
     existing = db.scalar(select(CatastoSisterExtraction).where(CatastoSisterExtraction.document_id == document.id))
     pdf_sha256 = sister_pdf_sha256(document.filepath)
@@ -152,24 +180,14 @@ def persist_sister_visura(db: Session, document: CatastoDocument) -> CatastoSist
     try:
         parsed = parse_sister_visura_pdf(document.filepath)
         payload = _jsonable(parsed)
-        extraction = existing or CatastoSisterExtraction(document_id=document.id, parser_version=PARSER_VERSION, pdf_sha256=pdf_sha256, payload_json={})
-        extraction.parser_version = PARSER_VERSION
-        extraction.pdf_sha256 = pdf_sha256
-        extraction.status = str(payload.get("status") or "review_required")
-        extraction.observed_at = _payload_date(payload, "observed_at")
-        extraction.payload_json = payload
-        extraction.error_message = None
+        extraction = _prepare_sister_extraction(existing, document, pdf_sha256, payload)
         db.add(extraction)
         db.flush()
         _replace_extraction_children(db, extraction, payload)
         return extraction
     except Exception as exc:
         extraction = existing or CatastoSisterExtraction(document_id=document.id, parser_version=PARSER_VERSION, pdf_sha256=pdf_sha256, payload_json={})
-        extraction.status = "failed"
-        extraction.error_message = str(exc)
-        extraction.payload_json = {}
-        db.add(extraction)
-        return extraction
+        return _persist_failed_extraction(db, extraction, exc)
 
 
 __all__ = ["persist_sister_visura"]

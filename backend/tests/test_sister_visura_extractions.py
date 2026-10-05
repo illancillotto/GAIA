@@ -299,6 +299,29 @@ def test_sha_failure_propagates_before_try(monkeypatch, document):
     assert not session.records
 
 
+def test_invalid_observed_date_preserves_partial_existing_metadata(document, parsed):
+    existing = runtime.CatastoSisterExtraction(
+        id=UUID(int=2),
+        document_id=document.id,
+        parser_version="old-version",
+        pdf_sha256="old-sha",
+        observed_at=date(2020, 1, 1),
+        payload_json={"old": True},
+    )
+    parsed["observed_at"] = "invalid"
+    session = RecordingSession(existing=existing)
+    result = runtime.persist_sister_visura(session, document)
+    assert result is existing
+    assert result.parser_version == runtime.PARSER_VERSION
+    assert result.pdf_sha256 == "current-sha"
+    assert result.observed_at == date(2020, 1, 1)
+    assert result.status == "failed"
+    assert result.payload_json == {}
+    assert "Invalid isoformat" in result.error_message
+    assert session.records == [existing]
+    assert session.flush_count == 0
+
+
 def test_recursive_jsonable_preserves_non_json_container():
     unchanged = (date(2026, 1, 1),)
     result = runtime._jsonable({1: [date(2026, 1, 2), {"tuple": unchanged}]})

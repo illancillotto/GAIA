@@ -14,6 +14,16 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, SISTER stati del record estrazione, 2026-10-05:
+`persist_sister_visura` `IMPROVED`, cog/cyc/LOC/nesting18/13/26/2 ->12/9/16/2.
+Mapper metadati4/5/14/0 e registrazione failed0/1/10/0 sotto soglia, fallback
+costruito nel catch come prima. Due warning eliminati: zero violation nel file.
+Cognitive file59 ->57, cyclomatic58 ->60 per callable10 ->12, branching48
+invariato, LOC150 ->164; nessun debt transfer o nuova esclusione/config/baseline.
+44 test/full-file100%, 320 trace equivalenti, ratchet/Ruff mirato PASS;
+lint globale UP038 InCass concorrente. Campagna non-MCP attiva, prossimo
+hotspot da inventory fuori da sister_visura_extractions.py.
+
 Campagna non-MCP, SISTER sostituzione record collegati, 2026-10-05:
 `persist_sister_visura` `IMPROVED`, cog/cyc/LOC/nesting30/19/34/2 ->18/13/26/2.
 Responsabilita delete/parcel/owner/history isolata, helper8/7/14/1 sotto soglia.
