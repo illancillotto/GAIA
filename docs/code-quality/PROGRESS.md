@@ -3,6 +3,39 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Utenze — avvio azienda con PIVA completa (2026-10-05)
+
+- Chiusura `IMPROVED`: `_parse_complete_company` concentra la validazione
+  ragione sociale per PIVA a 11 cifre, senza wrapper vuoti o duplicazioni.
+  Target cog/cyc/LOC/nesting 17/13/54/2 -> 15/12/37/1; helper 1/2/21/1,
+  tre parametri e nessuna violation. Cognitive file sum/max 19/17 -> 18/15.
+- Un warning LOC eliminato, restano due warning (cognitive/cyclomatic),
+  zero error. Sette callable (prima sei), cyclomatic file sum/max
+  20/13 -> 21/12: incremento della base del nuovo callable, branching
+  `sum(cyc-1)` invariato a 14. LOC file 107 -> 111, sotto soglia;
+  densita aggregata dello scanner 0.364486 -> 0.351351, quattro import invariati.
+- Nove nuove caratterizzazioni verdi sul runtime originale (Unicode, soli
+  identificatori/separatori, confine PIVA parziale, warning freschi/mutabili).
+  34 test verdi prima/dopo; full-file 100% dopo, 57/57 statement e 14/14 branch,
+  zero esclusioni. 8865 casi stringa identici al runtime `40851bbf`.
+- Ratchet mirato merge-base PASS; Ruff runtime/test, formatter del test,
+  whitespace e `BASE_REF=40851bbf make lint-backend
+  QUALITY_PYTHON=backend/.venv/bin/python` PASS. Ratchet full corpus read-only:
+  dieci finding Wiki MCP esterni, zero nel parser; nessun fix estraneo.
+  Baseline, scope, esclusioni e policy coverage invariati, nessun update.
+- Graphify codice Utenze aggiornato; documentazione dominio/backlog e
+  grafi docs Utenze/piattaforma aggiornati tramite target dedicati.
+  Nuova slice non committata; stop al singolo hotspot, nessun push.
+- Slice precedente committata `40851bbf`; prossimo singolo hotspot:
+  validazione ragione sociale completa/mancante nel ramo PIVA a 11 cifre.
+- Estrarre responsabilita di dominio in helper privato; preservare raw input,
+  token/normalizzazione, ordine CF/PIVA/PIVA parziale, tutti i campi,
+  warning e liste fresche. Nessuna modifica al ramo PIVA parziale.
+- Prima target cog/cyc/LOC/nesting 17/13/54/2; file cognitive sum/max
+  19/17, cyclomatic 20/13, LOC 107, sei callable e tre warning, zero error.
+  Caratterizzare azienda completa/mancante e confine parziale prima del runtime;
+  misurare aggregati, branching e nuove violation prima di dichiarare riduzione.
+
 ### Utenze — avvio validazione persona separata dal dispatch (2026-10-05)
 
 - Chiusura `IMPROVED` per complessita cognitiva: il dominio persona CF

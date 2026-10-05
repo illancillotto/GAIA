@@ -68,6 +68,30 @@ def _parse_person(folder_name: str, tokens: list[str], codice_fiscale: str) -> P
     )
 
 
+def _parse_complete_company(
+    folder_name: str, tokens: list[str], partita_iva: str
+) -> ParseResult:
+    ragione_sociale = " ".join(tokens[:-1]).replace("_", " ").strip()
+    if not ragione_sociale:
+        return ParseResult(
+            source_name_raw=folder_name,
+            subject_type=AnagraficaSubjectType.UNKNOWN.value,
+            requires_review=True,
+            confidence=0.3,
+            partita_iva=partita_iva,
+            warnings=["company_name_missing"],
+        )
+
+    return ParseResult(
+        source_name_raw=folder_name,
+        subject_type=AnagraficaSubjectType.COMPANY.value,
+        requires_review=False,
+        confidence=0.95,
+        ragione_sociale=ragione_sociale,
+        partita_iva=partita_iva,
+    )
+
+
 def parse_folder_name(folder_name: str) -> ParseResult:
     normalized_name = _normalize_folder_name(folder_name)
     tokens = _split_tokens(normalized_name)
@@ -87,25 +111,7 @@ def parse_folder_name(folder_name: str) -> ParseResult:
         return _parse_person(folder_name, tokens, last_token)
 
     if PARTITA_IVA_PATTERN.fullmatch(last_token):
-        ragione_sociale = " ".join(tokens[:-1]).replace("_", " ").strip()
-        if not ragione_sociale:
-            return ParseResult(
-                source_name_raw=folder_name,
-                subject_type=AnagraficaSubjectType.UNKNOWN.value,
-                requires_review=True,
-                confidence=0.3,
-                partita_iva=last_token,
-                warnings=["company_name_missing"],
-            )
-
-        return ParseResult(
-            source_name_raw=folder_name,
-            subject_type=AnagraficaSubjectType.COMPANY.value,
-            requires_review=False,
-            confidence=0.95,
-            ragione_sociale=ragione_sociale,
-            partita_iva=last_token,
-        )
+        return _parse_complete_company(folder_name, tokens, last_token)
 
     if PARTITA_IVA_PARTIAL_PATTERN.fullmatch(last_token):
         ragione_sociale = " ".join(tokens[:-1]).replace("_", " ").strip() or None

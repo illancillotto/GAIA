@@ -1,5 +1,19 @@
 # Progress
 
+## 2026-10-05 — validazione azienda con PIVA completa
+
+- Helper privato `_parse_complete_company` per ragione sociale presente/mancante
+  con PIVA a 11 cifre. Raw input, normalizzazione, payload, review/confidence
+  e warning freschi invariati; precedenza CF e ramo PIVA parziale preservati.
+- Target cog/cyc/LOC/nesting 17/13/54/2 -> 15/12/37/1; helper 1/2/21/1,
+  nessuna violation. Cognitive file 19 -> 18 (`IMPROVED`), sette callable,
+  branching aggregato invariato; cyclomatic 20 -> 21 per base del callable,
+  LOC file 107 -> 111. Warning LOC eliminato: due warning residui, zero error.
+- Nove nuove caratterizzazioni sul runtime originale, 34 test prima/dopo;
+  full-file 100% (57 statement, 14 branch), zero esclusioni e 8865 input
+  identici al commit `40851bbf`. Ratchet mirato/Ruff/lint PASS; dieci finding
+  Wiki MCP esterni nel ratchet globale, nessuno nel parser. Baseline invariata.
+
 ## 2026-10-05 — validazione persona separata dal dispatch
 
 - Il helper privato `_parse_person` gestisce nome completo/incompleto con CF;

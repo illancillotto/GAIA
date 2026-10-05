@@ -14,6 +14,14 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Utenze PIVA completa, 2026-10-05: `parse_folder_name` `IMPROVED`,
+cog/cyc/LOC/nesting 17/13/54/2 -> 15/12/37/1; helper azienda 1/2/21/1,
+nessuna violation. Cognitive file 19 -> 18; branching aggregato invariato,
+cyclomatic 20 -> 21 per base del settimo callable, LOC file 107 -> 111.
+Eliminato warning LOC; restano due warning, zero error. 34 test prima/dopo,
+full-file 100%, 8865 input equivalenti; ratchet mirato/Ruff/lint PASS.
+Ratchet globale con dieci finding Wiki MCP esterni; baseline invariata.
+
 Utenze dispatch persona, 2026-10-05: `parse_folder_name` `IMPROVED` cognitivo,
 19 -> 17; helper persona 1/2/22/1 (cog/cyc/LOC/nesting), nessuna violation.
 Cognitive file 20 -> 19; cyclomatic 19 -> 20 per base del sesto callable,

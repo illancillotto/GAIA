@@ -140,3 +140,62 @@ def test_complete_person_results_have_independent_warning_lists() -> None:
     assert first.requires_review is False
     assert second.requires_review is False
     assert first.confidence == second.confidence == 0.98
+
+
+@pytest.mark.parametrize(
+    ("folder_name", "expected_name", "partita_iva", "confidence", "warnings"),
+    [
+        ("Olati_Srl_14542661005", "Olati Srl", "14542661005", 0.95, []),
+        ("__Olati__Srl__14542661005__", "Olati Srl", "14542661005", 0.95, []),
+        (
+            " _Éva_\u00a0Società\u2003Agricola_14542661005_ ",
+            "Éva Società Agricola",
+            "14542661005",
+            0.95,
+            [],
+        ),
+        ("14542661005", None, "14542661005", 0.3, ["company_name_missing"]),
+        (" _ _14542661005_ ", None, "14542661005", 0.3, ["company_name_missing"]),
+        (
+            "Éva_Società_0123806095",
+            "Éva Società",
+            "0123806095",
+            0.45,
+            ["partita_iva_length_anomaly"],
+        ),
+        (" _ _0123806095_ ", None, "0123806095", 0.2, ["partita_iva_length_anomaly"]),
+    ],
+)
+def test_company_name_and_identifier_boundaries(
+    folder_name: str,
+    expected_name: str | None,
+    partita_iva: str,
+    confidence: float,
+    warnings: list[str],
+) -> None:
+    result = parse_folder_name(folder_name)
+
+    assert result.source_name_raw == folder_name
+    assert result.subject_type == ("company" if expected_name else "unknown")
+    assert result.ragione_sociale == expected_name
+    assert result.partita_iva == partita_iva
+    assert result.requires_review is bool(warnings)
+    assert result.confidence == confidence
+    assert result.warnings == warnings
+    assert result.codice_fiscale is None
+    assert result.cognome is None
+    assert result.nome is None
+
+
+@pytest.mark.parametrize("folder_name", ["Olati_Srl_14542661005", "14542661005"])
+def test_complete_piva_results_have_independent_warning_lists(folder_name: str) -> None:
+    first = parse_folder_name(folder_name)
+    second = parse_folder_name(folder_name)
+    original_warnings = list(second.warnings)
+    original_review = second.requires_review
+
+    assert first.warnings is not second.warnings
+    first.warnings.append("consumer_note")
+    assert second.warnings == original_warnings
+    assert first.requires_review is original_review
+    assert second.requires_review is original_review
