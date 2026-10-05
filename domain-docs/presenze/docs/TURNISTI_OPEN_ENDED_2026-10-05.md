@@ -8,10 +8,10 @@ quality e snapshot del rilascio precedente sono preservate e fuori da questa cha
 
 **DONE:** contratto, persistenza nullable, risoluzione delle assegnazioni,
 test di decorrenza/revoca/retry/permessi e migrazione PostgreSQL.
-**PARTIAL:** richiesta operativa dei nove acquaioli dal 01/09/2026 senza scadenza;
-richieste preparate localmente, nessuna assegnazione reale eseguita in questa verifica.
-**RESIDUAL:** rilascio mirato, migrazione di produzione e applicazione tramite API
-amministrativa autorizzata, seguiti dalla verifica dello snapshot settembre su GATE.
+**DONE operativo:** dopo il SI esplicito dell'utente, completati rilascio mirato,
+migrazione `20261005_1500` e assegnazione dei nove acquaioli dal 01/09/2026 senza
+scadenza. Snapshot settembre e ottobre verificati su GATE; agosto senza flag.
+**RESIDUAL funzionale:** nessuno per le nove assegnazioni richieste.
 **OUT OF SCOPE:** nuovi controlli UI, rotazione dei turni, modifica squadre e mapping
 identitari, codice degli altri team.
 
@@ -68,17 +68,39 @@ Il probe GET corrente conferma route turnista disponibile e 5670 giornaliere di
 settembre con `shift_worker_type`. Non prova che la durata senza scadenza sia
 rilasciata. Sono attestati gli ID canonici già presenti per i nove collaboratori:
 nessun mapping da creare o modificare. Le nove richieste API sono un artefatto
-locale non versionato, con stato `PREPARED_NOT_APPLIED`.
+locale non versionato: lo stato iniziale `PREPARED_NOT_APPLIED` è storico,
+superato dall'applicazione autorizzata documentata qui.
 
 L'applicazione prevista usa `POST /api/admin/presenze/pending-actions` GATE,
 con anchor settembre autorizzato, tipologia `acquaiolo`, decorrenza `2026-09-01`
-e `date_to: null`; autore e comando vengono attestati dal server. Non si cambia
-la squadra. Verificare ACK/errori e snapshot aggiornati per tutte le nove persone;
-prima della decorrenza lo stato precedente deve restare invariato.
+e `date_to: null`; autore e comando vengono attestati dal server. Il canale console
+ha rifiutato il secondo comando per scope (403): la prosecuzione ha usato l'API
+GAIA e l'amministratore configurato, autenticato con credenziali esistenti, autore
+canonico `1`. Nessun permesso, squadra o mapping modificato. Nove assegnazioni
+native salvate; il primo comando GATE è poi ACKED, con precedenza GATE conservata.
+I due eventi della prima persona hanno identico tipo e decorrenza, producono una
+sola assegnazione effettiva e non moltiplicano i buoni pasto.
 
 Il rilascio deve essere isolato dalle modifiche concorrenti, con backup verificato,
 GAIA migration e runtime compatibili prima dell'invio dei comandi GATE. Non usare
 SQL non auditato o identità amministrative inventate per applicare il roster.
+
+Release attiva `/opt/gaia/releases/turnisti-open-ended-44b0c4ac/backend`, montata
+su `/app` da backend, gate-mobile-sync e presenze-worker. Immagine
+`gaia-backend:turnisti-open-ended-44b0c4ac`; override finale
+`/opt/gaia/docker-compose.turnisti-open-ended.yml`, dopo gli override esistenti.
+Backup privati schema/tabelle interessate in
+`/opt/gaia/backups/turnisti-open-ended-44b0c4ac/`, verificati con lista TOC e
+lettura completa dell'archivio senza scritture DB. Aggiornata anche l'immagine VPS
+GATE, preservando le altre componenti e i dati esistenti.
+
+Run outbound `368d8a5e-c524-4c70-b015-7fe9e0aa5005`: **succeeded**, nessun errore.
+Verifica live cache e API paginata GATE: 9 persone, agosto 279 giornate senza flag,
+settembre 270 giornate tutte `acquaiolo`, ottobre 279 tutte `acquaiolo`.
+La persistenza GAIA conferma data finale NULL, autore `1`, decorrenza 01/09/2026
+e nessun effetto prima della decorrenza. Il resolver mantiene il diritto nel 2030.
+Questi numeri attestano il flag, non 549 giornate effettivamente lavorate o buoni
+automatici: timbrature e regole CCNL rimangono determinanti.
 
 Evidenze locali: `/tmp/turnisti-open-ended-20261005-_rf_2yh2/`.
 Graphify codice Presenze e frontend aggiornati tramite target dedicati; artefatti
@@ -89,4 +111,4 @@ stima tool $0.0065. Esiti GATE nel report coordinato
 
 Il gate globale resta **FINAL QUALITY GATE — FAIL** per le 8 regressioni Wiki
 contemporanee, fuori dalla change turnisti. Il perimetro tecnico di questa
-estensione è verificato; l'applicazione operativa resta pendente.
+estensione è verificato; l'applicazione operativa dei nove collaboratori è completata.

@@ -2,7 +2,7 @@
 
 Per lo stato del rilascio precedente vedere il report operativo GATE
 `docs/TURNISTI_RELEASE_2026-10-05.md`. L'estensione senza scadenza descritta qui
-è verificata localmente e non è ancora applicata in produzione.
+è ora applicata in produzione, dopo autorizzazione esplicita dell'utente.
 
 Nelle Giornaliere GATE, **Gestisci turnisti** permette di selezionare collaboratore,
 tipologia e date. Le date iniziali coprono tutto il mese; due date uguali assegnano
@@ -45,8 +45,9 @@ rimangono visibili. Dopo una revoca contro uno snapshot ancora turnista, GATE
 azzera il diritto automatico e invalida i conteggi fino al nuovo ricalcolo GAIA.
 
 La migrazione GAIA `20261003_1200` aggiunge `presenze_shift_assignments`; dipende
-attualmente dalla revisione locale `20261002_1030`. Verificare la catena completa
-prima di qualsiasi rilascio, perché il checkout contiene altre modifiche locali.
+dalla revisione `20261002_1030`. La catena è stata rilasciata, insieme alla nuova
+`20261005_1500` per la durata senza scadenza. Il checkout contiene altre modifiche
+locali: i rilasci mirati hanno preservato ed escluso il lavoro degli altri team.
 
 
 ## Verifica corrente
@@ -54,8 +55,11 @@ prima di qualsiasi rilascio, perché il checkout contiene altre modifiche locali
 Esiti, coverage full-file, matrice comportamento→test e problemi residui sono nel
 [report coordinato](TURNISTI_COORDINATED_VERIFICATION_2026-10-05.md).
 I risultati del report del 3 ottobre sono storici: non certificano il checkout
-attuale. La coverage GATE legacy è stata chiusa; GAIA presenta regressioni del
-ratchet nei file del ciclo. Non sono assorbite nella baseline.
+attuale. La coverage GATE legacy è stata chiusa; le regressioni del ciclo turnisti
+sono state risolte nel [report slice](TURNISTI_COMPLEXITY_SLICES_2026-10-05.md).
+Il gate globale osservato include regressioni Wiki dell'altro team, non assorbite
+nella baseline. La verifica e l'applicazione operative senza scadenza sono nel
+[report corrente](TURNISTI_OPEN_ENDED_2026-10-05.md).
 
 ## Contratto API
 
@@ -92,19 +96,20 @@ dei dati. Sovrapposizioni, revoche, precedenza GATE e retry conservano la
 semantica precedente anche con estremi aperti.
 
 La richiesta corrente è di assegnare nove acquaioli dal **01/09/2026**, senza
-scadenza. È ancora **PARTIAL**: implementazione verificata, inserimento reale
-pendente. Il dettaglio dei controlli è nel
+scadenza. È **DONE**: rilascio e inserimento reale completati, snapshot settembre
+e ottobre verificati e agosto senza flag. Il dettaglio dei controlli è nel
 [report assegnazioni permanenti](TURNISTI_OPEN_ENDED_2026-10-05.md).
 
 ## Piano e residui
 
-- [x] Modelli, API, regole, sincronizzazione, UI e test implementati localmente.
+- [x] Modelli, API, regole, sincronizzazione, UI e test implementati e rilasciati.
 - [x] Review architetturale: nessuna dipendenza applicativa nuova, nessuno stack parallelo.
 - [x] Verifica funzionale e coverage full-file completate.
-- [ ] Quality gate GAIA: regressioni del ratchet da risolvere prima del commit;
-  vedere [report corrente](TURNISTI_COORDINATED_VERIFICATION_2026-10-05.md).
-- [ ] Rilascio coordinato previa autorizzazione; includere la catena Alembic completa.
-- [ ] Verifica live dei dati citati nella telefonata: il codice non dimostra il recupero dei dati reali.
+- [ ] Quality gate globale GAIA: regressioni Wiki dell'altro team fuori scope;
+  il perimetro turnisti passa. Vedere il report corrente sulle assegnazioni permanenti.
+- [x] Rilascio coordinato autorizzato; catena Alembic applicata fino a `20261005_1500`.
+- [x] Verifica live dei nove collaboratori richiesti: flag settembre/ottobre presente,
+  agosto senza flag, decorrenza e scadenza NULL confermate nella persistenza GAIA.
 
 L'alternanza settimanale è una pratica comunicata, non un calendario attestato.
 Le eccezioni per tipologia e più turni nella stessa giornata non sono state
