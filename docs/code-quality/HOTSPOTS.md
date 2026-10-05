@@ -14,6 +14,15 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, frontend click hash navigazione, 2026-10-05:
+`handleClick` `IMPROVED`, cog/cyc/LOC/nesting21/11/27/3 ->5/4/6/1;
+filtro click e reset hash completi sotto soglia, senza violation trasferite.
+NavItem34/20/96/3 ->18/13/75/2; tre error eliminati, tre warning residui sul
+componente. File cognitive61 ->38, cyclomatic45 ->41, branching35 ->29,
+LOC127 ->128. 43 test/full-file100%, 2048 click e 10080 rendering equivalenti;
+ratchet/ESLint/typecheck PASS, baseline/config/scope invariati. Campagna non-MCP
+attiva, prossimo candidato tre warning NavItem, non zero debito di repository.
+
 Campagna non-MCP, frontend matching navigazione, 2026-10-05:
 `NavItem` `IMPROVED` limitato al matching, cog/cyc/LOC42/28/106 ->34/20/96,
 nesting3 invariato. Normalizzazione href e matching exact/prefix condivisi;

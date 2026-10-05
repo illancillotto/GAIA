@@ -94,6 +94,32 @@ describe("navigation path and hash matching", () => {
 });
 
 describe("navigation rendering and click contract", () => {
+  test("clears same query hash without changing search or scheduling fallback", () => {
+    window.history.replaceState(null, "", "/target?value=1#old");
+    render(<NavItem href="/target?value=1" icon={TestIcon} label="Target" />);
+    fireEvent.click(screen.getByRole("link"));
+    expect(window.location.search).toBe("?value=1");
+    expect(window.location.hash).toBe("");
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  test("preserves history scroll and popstate effect order", () => {
+    window.history.replaceState(null, "", "/target#old");
+    render(<NavItem href="/target" icon={TestIcon} label="Target" />);
+    const push = window.history.pushState.bind(window.history);
+    const effects: string[] = [];
+    vi.spyOn(window.history, "pushState").mockImplementation((...args) => {
+      effects.push("history");
+      push(...args);
+    });
+    vi.mocked(window.scrollTo).mockImplementation(() => { effects.push("scroll"); });
+    const listener = () => { effects.push("popstate"); };
+    window.addEventListener("popstate", listener);
+    fireEvent.click(screen.getByRole("link"));
+    expect(effects).toEqual(["history", "scroll", "popstate"]);
+    window.removeEventListener("popstate", listener);
+  });
+
   test.each(["danger", "warning"] as const)("renders zero badge with %s style and disabled content", (badgeVariant) => {
     const { rerender } = render(<NavItem href="/target" icon={TestIcon} label="Target" badge={0} badgeVariant={badgeVariant} />);
     expect(screen.getByText("0")).toHaveClass(badgeVariant === "danger" ? "bg-red-50" : "bg-amber-50");

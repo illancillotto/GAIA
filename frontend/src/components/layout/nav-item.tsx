@@ -36,6 +36,30 @@ function matchesNavigationPath(
   return targets.some((target) => pathname === target || (match === "prefix" && pathname.startsWith(`${target}/`)));
 }
 
+function isPlainNavigationClick(event: MouseEvent<HTMLAnchorElement>): boolean {
+  return !event.defaultPrevented && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
+}
+
+function clearCurrentNavigationHash(
+  event: MouseEvent<HTMLAnchorElement>,
+  href: string,
+  setHash: (hash: string) => void,
+): boolean {
+  const targetUrl = new URL(href, window.location.origin);
+  const targetPath = `${targetUrl.pathname}${targetUrl.search}`;
+  const currentPath = `${window.location.pathname}${window.location.search}`;
+  if (targetPath !== currentPath || !window.location.hash) return false;
+  event.preventDefault();
+  window.history.pushState(null, "", targetPath);
+  setHash("");
+  try {
+    window.scrollTo({ top: 0, left: 0 });
+  } catch {
+  }
+  window.dispatchEvent(new PopStateEvent("popstate"));
+  return true;
+}
+
 export function NavItem({
   href,
   aliases = [],
@@ -107,30 +131,8 @@ export function NavItem({
   }
 
   function handleClick(event: MouseEvent<HTMLAnchorElement>): void {
-    if (
-      !requiredHash &&
-      !event.defaultPrevented &&
-      event.button === 0 &&
-      !event.metaKey &&
-      !event.ctrlKey &&
-      !event.shiftKey &&
-      !event.altKey
-    ) {
-      const targetUrl = new URL(href, window.location.origin);
-      const targetPath = `${targetUrl.pathname}${targetUrl.search}`;
-      const currentPath = `${window.location.pathname}${window.location.search}`;
-      if (targetPath === currentPath && window.location.hash) {
-        event.preventDefault();
-        window.history.pushState(null, "", targetPath);
-        setLocHash("");
-        try {
-          window.scrollTo({ top: 0, left: 0 });
-        } catch {
-          // jsdom and older browsers can expose scrollTo without object support.
-        }
-        window.dispatchEvent(new PopStateEvent("popstate"));
-        return;
-      }
+    if (!requiredHash && isPlainNavigationClick(event) && clearCurrentNavigationHash(event, href, setLocHash)) {
+      return;
     }
     window.setTimeout(() => setLocHash(window.location.hash), 0);
   }

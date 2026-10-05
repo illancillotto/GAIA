@@ -3,6 +3,42 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Frontend layout — avvio click hash navigazione (2026-10-05)
+
+- Chiusura `IMPROVED`: filtro click ordinario condiviso, reset hash completa
+  responsabilita side-effect con guard clause. Handler conserva short-circuit
+  e fallback timeout unico; URL creato solo per click ammessi. Stesso ordine
+  prevent/history/state/scroll/popstate, stesso catch scroll e payload.
+- `handleClick` cog/cyc/LOC/nesting21/11/27/3 ->5/4/6/1; helper filtro5/6/3/0,
+  reset4/4/19/1, nessuna violation trasferita. `NavItem`34/20/96/3 ->18/13/75/2:
+  tre error eliminati, restano tre warning sul componente, non zero debito.
+- File cognitive sum/max61/34 ->38/18, cyclomatic45/20 ->41/13,
+  branching35 ->29, callable10 ->12, LOC127 ->128 sotto soglia file;
+  cinque import/uno state/uno effect invariati. Riduzione aggregata reale,
+  nessuna nuova esclusione/baseline/config/API o alterazione UI.
+- Due nuove caratterizzazioni sul runtime originale per query/ordine effetti;
+  28 test prima/dopo, 43 test NavItem/AppShell PASS. Full-file100% dopo
+  statement47/branch44/function12/line42, contatori positivi/zero esclusioni.
+- 2048 click differenziali, sedici combinazioni modifiers/button/prevented,
+  href/location/query/hash e scroll con/senza eccezione: ordine e payload
+  effetti, URL e stato prevented identici al pre-slice `44332843`.
+  10080 rendering differenziali completi identici; hook/eventi anche nella suite.
+- Ratchet merge-base `44332843`, ESLint, typecheck no-emit e whitespace PASS;
+  Graphify frontend codice e docs piattaforma aggiornati. Commit separato,
+  nessun push, change concorrenti preservate. Campagna non-MCP attiva;
+  NavItem ancora con tre warning, da trattare nella prossima unita revisionabile.
+- Matching `44332843` committato, campagna globale non-MCP attiva. Singolo
+  hotspot `handleClick` cog/cyc/LOC/nesting21/11/27/3, contenuto in NavItem
+ 34/20/96/3; file cognitive61/cyclomatic45/LOC127, cinque violation.
+- Separare filtro click ordinario dal reset hash stessa URL: short-circuit
+  identico, URL costruito solo per click ammessi, path+search e ordine effetti
+  preventDefault/history/state/scroll/popstate invariati, catch scroll invariato.
+- Handler resta chiusura state con fallback timeout unico, helper completi
+  senza duplicazioni/wrapper; nessun cambio API/UI o hook/listener/cleanup.
+- Test su runtime originale per query coincidente/ordine effetti e mancato
+  timer in reset; full-file100%, ratchet merge-base, metriche/aggregati,
+  ESLint/typecheck. Nessuna esclusione/baseline/config/change concorrente.
+
 ### Frontend layout — avvio matching navigazione (2026-10-05)
 
 - Chiusura `IMPROVED` limitata al matching: href/alias normalizzati dallo

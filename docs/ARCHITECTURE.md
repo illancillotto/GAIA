@@ -3,6 +3,19 @@
 # GAIA
 ## Architettura del sistema
 
+### Click e reset hash navigazione — 2026-10-05
+
+NavItem separa il filtro click ordinario dal reset hash per stessa URL path/search.
+Short-circuit preserva modifiers/defaultPrevented e costruzione URL lazy;
+preventDefault/history/state/scroll/popstate hanno lo stesso ordine e payload.
+Il catch scroll e il timeout fallback restano invariati; hook/listener/DOM non cambiano.
+
+`handleClick` cog/cyc/LOC21/11/27 ->5/4/6, helper completi sotto soglia;
+NavItem34/20/96 ->18/13/75. Tre error eliminati, tre warning residui sul componente;
+cognitive file61 ->38, cyclomatic45 ->41, nessuna violation trasferita. 43 test,
+full-file100% su quattro metriche, 2048 click e 10080 rendering differenziali
+identici; ratchet merge-base, ESLint e typecheck PASS, baseline/config/scope invariati.
+
 ### Matching navigazione frontend — 2026-10-05
 
 `frontend/src/components/layout/nav-item.tsx` condivide normalizzazione href/alias
