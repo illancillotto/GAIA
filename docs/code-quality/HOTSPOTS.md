@@ -14,6 +14,15 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, Catasto catalogo testi guida, 2026-10-05:
+`explainCatastoAnomalia` `IMPROVED`, cog/cyc/LOC/nesting24/14/152/1
+->20/12/42/1. Catalogo privato tipizzato, copie liste e ordine preservati;
+assemblaggio0/1/14/0 e fallback2/3/17/0 senza violation. File cognitive77
+->75, cyclomatic71 ->73 per due basi callable, branching51 invariato;
+LOC353 ->365 sotto soglia. Zero error/quattro warning residui, nessun
+debito trasferito. 72 test, full-file100% su quattro metriche, 22275 input
+equivalenti; ratchet/typecheck/ESLint PASS, baseline/config/scope invariati.
+
 Campagna non-MCP, Catasto spiegazioni/calcoli, 2026-10-05:
 `explainCatastoAnomalia` `IMPROVED`, cog/cyc/LOC/nesting47/25/191/2
 ->24/14/152/1. Helper dominio VAL-06 6/6/42/1 sotto soglia, inserimento

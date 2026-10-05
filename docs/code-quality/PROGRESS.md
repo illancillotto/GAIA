@@ -3,6 +3,39 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto frontend — avvio catalogo testi guida (2026-10-05)
+
+- Chiusura `IMPROVED`: catalogo privato tipizzato dei testi VAL-01/07 nello
+  stesso file; assemblaggio comune conserva ordine chiavi e copie delle liste.
+  Fallback ignoti separato, senza lookup di nomi prototype; testi/calcoli,
+  input, mutabilita e indipendenza dei risultati invariati.
+- Target cog/cyc/LOC/nesting24/14/152/1 ->20/12/42/1; assemblaggio0/1/14/0,
+  fallback2/3/17/0, imponibile6/6/26/1: nessuna violation nei nuovi helper.
+  Eliminato error LOC e relativo warning; zero error e quattro warning residui
+  nei due export, non zero debito. Nessuna nuova esclusione o import.
+- File cognitive sum/max77/24 ->75/22, cyclomatic71/14 ->73/13:
+  aumento di due basi callable, branching51 invariato; venti ->ventidue callable.
+  LOC353 ->365 per catalogo dichiarativo/assemblaggio, sotto soglia file;
+  riduzione LOC del target e cognitive aggregata, nessun debito trasferito.
+- Tre caratterizzazioni prima del runtime, 72 test prima/dopo; full-file100%
+  statement110/branch87/function22/line100, tutti contatori coperti e nessuna
+  esclusione. 22275 input differenziali per entrambi gli export, inclusi tipi
+  prototype/null/zero/invalidi/flag strict-true: output completo/ordine identici.
+- Ratchet merge-base `f73ff8f8`, typecheck no-emit, ESLint e whitespace PASS;
+  baseline/config/scope invariati. Graphify frontend codice aggiornato; docs
+  Catasto/piattaforma aggiornate con target dedicati. Commit separato, nessun
+  push; campagna non-MCP attiva, modifiche concorrenti preservate.
+- Campagna tutti gli hotspot non-MCP attiva; precedente passaggio `f73ff8f8`
+  progresso verificato, commit separato ad ogni passaggio.
+- Singolo hotspot `explainCatastoAnomalia`: prima cog/cyc/LOC/nesting24/14/152/1,
+  file cognitive77/24, cyclomatic71/14, LOC353, venti callable/tre import;
+  un error LOC e quattro warning. Separare testi guida dichiarativi dai calcoli.
+- Catalogo privato tipizzato solo per tipi noti, assemblaggio con copie delle
+  liste e chiavi nell'ordine originale; fallback ignoti/prototype invariato.
+  Preservare testi, calcoli, locale/precisione, input e mutabilita/indipendenza.
+  Nessuna nuova esclusione, import o wrapper artificiale; nessun debito
+  imperativo trasferito nel catalogo. Test prima/dopo e full-file100% richiesti.
+
 ### Catasto frontend — avvio spiegazione imponibile VAL-06 (2026-10-05)
 
 - Chiusura `IMPROVED`: helper di dominio `explainImponibile` contiene calcoli,

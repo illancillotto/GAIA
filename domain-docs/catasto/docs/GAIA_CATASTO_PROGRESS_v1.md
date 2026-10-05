@@ -1,6 +1,21 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-05 — catalogo testi guida anomalie
+
+- Testi VAL-01/07 separati dai calcoli in catalogo privato tipizzato nello
+  stesso file. Assemblaggio conserva ordine chiavi e copie delle liste;
+  fallback ignoti/prototype separato. Testi, calcoli, input e mutabilita
+  dei risultati restano invariati, nessuna nuova esclusione.
+- `explainCatastoAnomalia` cog/cyc/LOC/nesting24/14/152/1 ->20/12/42/1;
+  `IMPROVED`, cognitive file77 ->75. Cyclomatic71 ->73 per due basi callable,
+  branching51 invariato; LOC353 ->365 sotto soglia file. Eliminato error LOC:
+  zero error e quattro warning residui, non zero debito o debito trasferito.
+- Tre caratterizzazioni prima del runtime, 72 test prima/dopo; full-file100%
+  statement/branch/function/line, 22275 input equivalenti per i due export
+  inclusi nomi prototype. Ratchet merge-base/typecheck/ESLint PASS;
+  baseline/config/scope invariati, modifiche concorrenti preservate.
+
 ### 2026-10-05 — spiegazione imponibile e calcoli sorgente condivisi
 
 - Helper di dominio per spiegazione completa VAL-06; inserimento calcoli

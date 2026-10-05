@@ -48,6 +48,20 @@ describe("source reference descriptions", () => {
 
 describe("explainCatastoAnomalia", () => {
   test.each([
+    ["__proto__", null, "Anomalia dati", "Il sistema ha rilevato una incoerenza da verificare."],
+    ["constructor", "", "", ""],
+    ["toString", "Personalizzata", "Personalizzata", "Personalizzata"],
+  ])("keeps unknown type fallback for %s", (tipo, descrizione, title, summary) => {
+    const result = explainCatastoAnomalia({ tipo, descrizione });
+    expect(result.title).toBe(title);
+    expect(result.summary).toBe(summary);
+    expect(result.calculations).toEqual([]);
+    expect(Object.keys(result)).toEqual([
+      "title", "summary", "whyItHappened", "calculations", "checks", "resolutionTips",
+    ]);
+  });
+
+  test.each([
     "VAL-01-sup_eccede", "VAL-02-cf_invalido", "VAL-03-cf_mancante",
     "VAL-04-comune_invalido", "VAL-05-particella_assente", "VAL-06-imponibile",
     "VAL-07-importi", "unknown",
