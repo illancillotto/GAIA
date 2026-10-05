@@ -94,6 +94,21 @@ describe("navigation path and hash matching", () => {
 });
 
 describe("navigation rendering and click contract", () => {
+  test("preserves active and disabled precedence through rerenders", () => {
+    const props = { href: "/target", icon: TestIcon, label: "Target", badge: 2 };
+    const { rerender } = render(<NavItem {...props} disabled />);
+    expect(screen.getByTitle("Accesso non abilitato")).toHaveClass("cursor-not-allowed");
+    expect(screen.getByTitle("Accesso non abilitato")).not.toHaveClass("bg-[#EAF3E8]");
+    rerender(<NavItem {...props} />);
+    expect(screen.getByRole("link")).toHaveClass("bg-[#EAF3E8]");
+    expect(screen.queryByTitle("Accesso non abilitato")).not.toBeInTheDocument();
+    state.pathname = "/else";
+    rerender(<NavItem {...props} badgeVariant="danger" />);
+    expect(screen.getByRole("link")).toHaveClass("text-gray-500");
+    expect(screen.getByText("2")).toHaveClass("bg-red-50");
+    expect(screen.getAllByTestId("icon")).toHaveLength(1);
+  });
+
   test("clears same query hash without changing search or scheduling fallback", () => {
     window.history.replaceState(null, "", "/target?value=1#old");
     render(<NavItem href="/target?value=1" icon={TestIcon} label="Target" />);

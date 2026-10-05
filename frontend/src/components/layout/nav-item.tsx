@@ -60,42 +60,12 @@ function clearCurrentNavigationHash(
   return true;
 }
 
-export function NavItem({
-  href,
-  aliases = [],
-  icon: Icon,
-  label,
-  badge,
-  badgeVariant = "warning",
-  match = "exact",
-  disabled = false,
-  inactiveWhenHash,
-}: NavItemProps) {
-  const pathname = usePathname();
-  const [locHash, setLocHash] = useState("");
+type NavItemPresentationProps = Pick<NavItemProps, "href" | "icon" | "label" | "badge" | "badgeVariant" | "disabled"> & {
+  isActive: boolean;
+  onClick: (event: MouseEvent<HTMLAnchorElement>) => void;
+};
 
-  useEffect(() => {
-    const sync = () => setLocHash(window.location.hash);
-    sync();
-    window.addEventListener("popstate", sync);
-    window.addEventListener("hashchange", sync);
-    return () => {
-      window.removeEventListener("popstate", sync);
-      window.removeEventListener("hashchange", sync);
-    };
-  }, []);
-
-  const { base: baseHref, hash: requiredHash } = splitNavigationHref(href);
-  const aliasBases = aliases.map((alias) => splitNavigationHref(alias).base);
-  const pathMatches = matchesNavigationPath(pathname, [baseHref, ...aliasBases], match);
-
-  let isActive = pathMatches;
-  if (requiredHash) {
-    isActive = pathMatches && locHash === requiredHash;
-  } else if (inactiveWhenHash) {
-    isActive = pathMatches && locHash !== inactiveWhenHash;
-  }
-
+function NavItemPresentation({ href, icon: Icon, label, badge, badgeVariant, disabled, isActive, onClick }: NavItemPresentationProps) {
   const className = cn(
     "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
     disabled
@@ -130,6 +100,45 @@ export function NavItem({
     );
   }
 
+  return (
+    <Link href={href} className={className} onClick={onClick}>
+      {content}
+    </Link>
+  );
+}
+
+export function NavItem({
+  href,
+  aliases = [],
+  icon,
+  label,
+  badge,
+  badgeVariant = "warning",
+  match = "exact",
+  disabled = false,
+  inactiveWhenHash,
+}: NavItemProps) {
+  const pathname = usePathname();
+  const [locHash, setLocHash] = useState("");
+
+  useEffect(() => {
+    const sync = () => setLocHash(window.location.hash);
+    sync();
+    window.addEventListener("popstate", sync);
+    window.addEventListener("hashchange", sync);
+    return () => {
+      window.removeEventListener("popstate", sync);
+      window.removeEventListener("hashchange", sync);
+    };
+  }, []);
+
+  const { base: baseHref, hash: requiredHash } = splitNavigationHref(href);
+  const aliasBases = aliases.map((alias) => splitNavigationHref(alias).base);
+  const pathMatches = matchesNavigationPath(pathname, [baseHref, ...aliasBases], match);
+
+  const hashMatches = requiredHash ? locHash === requiredHash : !inactiveWhenHash || locHash !== inactiveWhenHash;
+  const isActive = pathMatches && hashMatches;
+
   function handleClick(event: MouseEvent<HTMLAnchorElement>): void {
     if (!requiredHash && isPlainNavigationClick(event) && clearCurrentNavigationHash(event, href, setLocHash)) {
       return;
@@ -138,8 +147,7 @@ export function NavItem({
   }
 
   return (
-    <Link href={href} className={className} onClick={handleClick}>
-      {content}
-    </Link>
+    <NavItemPresentation href={href} icon={icon} label={label} badge={badge} badgeVariant={badgeVariant}
+      disabled={disabled} isActive={isActive} onClick={handleClick} />
   );
 }

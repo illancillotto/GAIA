@@ -14,6 +14,16 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, frontend presentazione NavItem, 2026-10-05:
+`NavItem` `IMPROVED`, cog/cyc/LOC/nesting18/13/75/2 ->8/7/39/1;
+presentazione stateless5/6/38/1 sotto soglia, factoring path/hash elimina
+predicato duplicato. Sola estrazione neutra non conteggiata; file cognitive38
+->33, cyclomatic41 invariato, branching29 ->28, LOC128 ->134, nessun debito
+trasferito. Tre warning ->zero violation nel file. 44 test/full-file100%,
+10080 rendering DOM e 2048 click equivalenti; ratchet/ESLint/typecheck PASS,
+baseline/config/scope invariati. Campagna globale non-MCP attiva, prossimo
+candidato da inventory, senza restringere successo al componente sotto soglia.
+
 Campagna non-MCP, frontend click hash navigazione, 2026-10-05:
 `handleClick` `IMPROVED`, cog/cyc/LOC/nesting21/11/27/3 ->5/4/6/1;
 filtro click e reset hash completi sotto soglia, senza violation trasferite.

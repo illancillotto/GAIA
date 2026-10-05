@@ -3,6 +3,20 @@
 # GAIA
 ## Architettura del sistema
 
+### Presentazione stateless NavItem — 2026-10-05
+
+NavItem mantiene stato, listener hash/popstate e gestione click. Il componente
+privato NavItemPresentation cura classi, icona/label/badge e accessibilita di Link
+o span disabled senza introdurre nodi DOM aggiuntivi. Defaults e handler inoltrati;
+predicato attivo fattorizzato come path && hash, preservando precedenza hash.
+
+Target cog/cyc/LOC18/13/75 ->8/7/39, presentazione5/6/38 sotto soglia;
+file cognitive38 ->33, cyclomatic41 invariato, branching29 ->28. Tre warning
+eliminati senza trasferire debito; la sola estrazione neutra non e conteggiata
+come riduzione. 44 test/full-file100%, 10080 rendering DOM e 2048 click
+differenziali identici; ratchet, ESLint e typecheck PASS. Campagna repository
+non-MCP ancora aperta, baseline/config/scope invariati.
+
 ### Click e reset hash navigazione — 2026-10-05
 
 NavItem separa il filtro click ordinario dal reset hash per stessa URL path/search.

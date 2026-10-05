@@ -3,6 +3,43 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Frontend layout — avvio presentazione NavItem (2026-10-05)
+
+- Chiusura `IMPROVED`: componente privato stateless responsabile di classi,
+  icona/label/badge, accessibilita e Link/span disabled, senza nodo DOM extra.
+  Stato/listener/click restano nel pubblico; defaults e handler inoltrati.
+  Predicato pathMatches duplicato nei rami hash fattorizzato in path && hash.
+- La sola separazione aveva cognitive aggregata38 invariata: non dichiarata
+  riduzione. Il factoring path/hash porta riduzione aggregata reale38 ->33;
+  nessun debito trasferito. Target18/13/75/2 ->8/7/39/1, presentazione5/6/38/1,
+  tutti sotto soglia: eliminati tre warning, zero violation nel file.
+- File cognitive sum/max38/18 ->33/8, cyclomatic41/13 ->41/7,
+  branching29 ->28, callable12 ->13, LOC128 ->134 sotto soglia;
+  cinque import/uno state/uno effect invariati. Nessun cambiamento API/UI,
+  esclusione, baseline/config o comportamento click/ordine degli effetti.
+- Una nuova caratterizzazione sul runtime originale per transizioni
+  disabled/enabled/active; 29 test prima/dopo, 44 NavItem/AppShell PASS.
+  Full-file100% dopo statement45/branch42/function13/line40, contatori
+  positivi, zero esclusioni. Nessuna failure nuova.
+- 10080 rendering differenziali (espansione componente privato fino ai nodi
+  DOM) e 2048 click: albero/attributi, ordine/payload effetti, URL e prevented
+  identici al pre-slice `75062829`. Listener/cleanup/transizioni anche in suite.
+- Ratchet merge-base `75062829`, ESLint, typecheck no-emit e whitespace PASS;
+  Graphify frontend codice e docs piattaforma aggiornati. Commit separato,
+  nessun push, change concorrenti preservate. Campagna globale non-MCP attiva:
+  NavItem sotto soglia, prossimo candidato da inventory oltre questo componente.
+- Click hash `75062829` committato; campagna non-MCP attiva. Singolo hotspot
+  NavItem cog/cyc/LOC/nesting18/13/75/2; file cognitive38/cyclomatic41/LOC128,
+  tre warning. Separare presentazione stateless da stato/listener/click.
+- Componente privato responsabile di classi/accessibilita/icona/label/badge e
+  Link o span disabled; nessun hook o nuovo nodo DOM. Defaults restano nel
+  componente pubblico, eventi inoltrati, stessa precedenza disabled/active.
+- Preservare DOM/attributi/ordine, badge0 e varianti, href/hash/alias e click,
+  transizioni enabled/disabled/active, listener/cleanup. Full-file100% e
+  caratterizzazione prima/dopo, differenziali DOM/click, aggregati e ratchet.
+- Un hotspot revisionabile, nessuna API/config/baseline/esclusione o change
+  concorrente modificata; commit separato. Nessuna nuova violation nel componente.
+
 ### Frontend layout — avvio click hash navigazione (2026-10-05)
 
 - Chiusura `IMPROVED`: filtro click ordinario condiviso, reset hash completa
