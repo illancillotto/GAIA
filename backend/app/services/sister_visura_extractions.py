@@ -31,10 +31,24 @@ def _jsonable(value: Any) -> Any:
     return value
 
 
+def _sister_reference_text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _match_comune_candidates(
+    candidates: list[CatParticella],
+    reference: str,
+    field: str,
+) -> list[CatParticella]:
+    if not reference:
+        return []
+    return [item for item in candidates if (getattr(item, field) or "").casefold() == reference]
+
+
 def _resolve_particella(db: Session, payload: dict[str, Any]) -> CatParticella | None:
     parcel = payload.get("parcel") or {}
-    foglio = str(parcel.get("foglio") or "").strip()
-    particella = str(parcel.get("particella") or "").strip()
+    foglio = _sister_reference_text(parcel.get("foglio"))
+    particella = _sister_reference_text(parcel.get("particella"))
     if not foglio or not particella:
         return None
     query = select(CatParticella).where(
@@ -42,12 +56,12 @@ def _resolve_particella(db: Session, payload: dict[str, Any]) -> CatParticella |
         CatParticella.foglio == foglio,
         CatParticella.particella == particella,
     )
-    codice = str(payload.get("comune_codice") or "").strip().casefold()
-    nome = str(payload.get("comune_nome") or "").strip().casefold()
+    codice = _sister_reference_text(payload.get("comune_codice")).casefold()
+    nome = _sister_reference_text(payload.get("comune_nome")).casefold()
     candidates = db.execute(query).scalars().all()
-    matches = [item for item in candidates if codice and (item.codice_catastale or "").casefold() == codice]
-    if not matches and nome:
-        matches = [item for item in candidates if (item.nome_comune or "").casefold() == nome]
+    matches = _match_comune_candidates(candidates, codice, "codice_catastale")
+    if not matches:
+        matches = _match_comune_candidates(candidates, nome, "nome_comune")
     return matches[0] if len(matches) == 1 else None
 
 

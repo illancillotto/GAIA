@@ -1,6 +1,21 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-05 — matching particella canonica SISTER
+
+- Normalizzazione riferimenti payload e filtro comune codice/nome condivisi.
+  Codice conserva priorita anche quando ambiguo; nome solo in assenza di match
+  codice. Unico candidato richiesto, campi canonici casefold senza strip;
+  query is_current/foglio/particella e ordine accessi lazy invariati.
+- `_resolve_particella` cog/cyc/LOC/nesting29/26/18/1 ->8/8/18/1;
+  cognitive file78 ->63, cyclomatic67 ->57. Due error eliminati senza trasferire
+  debito, due error residui nella persistenza; nessun cambio API/schema/transazioni.
+- Otto caratterizzazioni nuove, 41 test persistenza/backfill PASS,
+  full-file100% statement84/branch18; 2352 input differenziali con risultato,
+  SQL/parametri e accessi lazy identici. Ratchet/Ruff mirato PASS; lint globale
+  UP038 InCass concorrente fuori slice. Baseline/config/scope invariati,
+  Graphify backend codice e docs Catasto/piattaforma aggiornati.
+
 ### 2026-10-05 — mapping persistenza visure SISTER
 
 - Mapper parcel/owner/history e conversione date condivisa isolano costruzione

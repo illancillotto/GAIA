@@ -3,6 +3,43 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### SISTER — avvio matching particella canonica (2026-10-05)
+
+- Chiusura `IMPROVED`: normalizzazione strip payload condivisa, filtro comune
+  unico per codice/nome, guardia riferimento vuoto fuori dall'iterazione.
+  Codice prioritario anche con due match; fallback nome solo senza match codice,
+  unico candidato richiesto. Campo canonico conserva casefold senza strip.
+- Target cog/cyc/LOC/nesting29/26/18/1 ->8/8/18/1; filtro4/5/8/1,
+  normalizzazione2/3/2/0, helper sotto soglia. Due error resolver eliminati;
+  restano due error in persist_sister_visura30/19/34/2 invariato.
+- File cognitive sum/max78/30 ->63/30, cyclomatic67/26 ->57/19,
+  branching60 ->48, callable7 ->9, LOC134 ->144 sotto soglia file;
+  import8 invariati, densita1.08209 ->0.833333. Riduzione aggregata reale,
+  nessuna violation trasferita o nuova esclusione/baseline/config/API.
+- Otto caratterizzazioni nuove sul runtime originale, 38 test prima/dopo;
+  41 persistenza/backfill PASS. Full-file100% dopo statement84/branch18,
+  zero esclusioni/missing/partial, nessuna nuova failure nel perimetro.
+- 2352 input differenziali con codice/nome normalizzati, numerici/blank,
+  missing foglio/particella e liste candidati ambigue: risultato, SQL/parametri
+  e ordine accessi lazy alle proprieta canoniche identici al pre-slice `cccc8290`.
+  Input invariati, sessione recording; nessuna prova PostgreSQL inventata.
+- Ratchet merge-base `cccc8290`, Ruff mirato, format-check test e whitespace
+  PASS. Lint globale .venv compileall PASS, UP038 InCass concorrente fuori
+  slice resta. Graphify backend codice e docs Catasto/piattaforma aggiornati;
+  commit separato, nessun push, change concorrenti preservate. Campagna
+  globale non-MCP attiva; prossimo candidato persistenza ancora con due error.
+- Mapping persistenza `cccc8290` committato; campagna non-MCP attiva.
+- Singolo hotspot `_resolve_particella` cog/cyc/LOC/nesting29/26/18/1;
+  file cognitive78/cyclomatic67/LOC134, sette callable/quattro error.
+- Condividere normalizzazione riferimenti payload e filtro candidati comune
+  per codice/nome. Codice ha priorita anche quando ambiguo; nome solo se
+  codice non produce candidati. Assenza/ambiguita restituisce None.
+- Query is_current/foglio/particella, strip/casefold distinti tra payload e
+  campi canonici, lazy attribute access e ordine candidati devono restare identici.
+- Test originali piu caratterizzazioni precedenza/ambiguita/whitespace/numerici;
+  full-file100%, differenziali SQL/risultati, aggregati/ratchet/Ruff.
+  Nessun intervento persistenza/transazioni/API/baseline/config/change concorrente.
+
 ### SISTER — avvio mapping persistenza visura (2026-10-05)
 
 - Chiusura `IMPROVED`: mapper completi parcel/owner/history e conversione date

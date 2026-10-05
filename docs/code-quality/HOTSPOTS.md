@@ -14,6 +14,16 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, SISTER matching particella canonica, 2026-10-05:
+`_resolve_particella` `IMPROVED`, cog/cyc/LOC/nesting29/26/18/1 ->8/8/18/1.
+Normalizzazione payload/filtro candidati condivisi, codice prioritario anche
+ambiguo, fallback nome solo senza codice matched; helper sotto soglia.
+File cognitive78 ->63, cyclomatic67 ->57, branching60 ->48, LOC134 ->144;
+due error resolver eliminati, due error persistenza residui, nessun trasferimento.
+41 test/full-file100%, 2352 input/trace accessi lazy equivalenti; ratchet/Ruff
+mirato PASS, lint globale UP038 InCass concorrente. Baseline/config/scope
+invariati, campagna non-MCP attiva; prossimo candidato persistenza SISTER.
+
 Campagna non-MCP, SISTER mapping persistenza visura, 2026-10-05:
 `persist_sister_visura` `IMPROVED`, cog/cyc/LOC/nesting73/40/71/2 ->30/19/34/2.
 Mapper completi/date comune sotto soglia; coordinatore conserva SQL/ordine,

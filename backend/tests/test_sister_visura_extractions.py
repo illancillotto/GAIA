@@ -200,6 +200,14 @@ def test_empty_fields_and_missing_canonical_records(monkeypatch, document, paylo
         ("", "", [(None, None)], None),
         ("a001", "comune", [("A001", "Comune"), ("a001", "Comune")], None),
         ("", "missing", [(None, None)], None),
+        (" A001 ", "Other", [("a001", "Comune"), ("X", "Other")], 0),
+        ("A001", "Other", [("A001", "Comune"), ("a001", "Comune"), ("X", "Other")], None),
+        ("missing", "Comune", [("X", "Comune"), ("Y", "COMUNE")], None),
+        ("A001", "", [(" A001 ", "Comune")], None),
+        ("", " Comune ", [(None, "COMUNE")], 0),
+        ("", "Comune", [(None, " Comune ")], None),
+        (0, 0, [(None, None)], None),
+        (12, "", [("12", None)], 0),
     ],
 )
 def test_canonical_parcel_matching(code, name, candidates, expected):
