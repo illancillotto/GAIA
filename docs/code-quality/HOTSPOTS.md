@@ -14,6 +14,16 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, Elaborazioni parser form Bonifica, 2026-10-05:
+`parse_form_fields` `IMPROVED`, cog/cyc/LOC/nesting51/21/36/4 ->12/7/14/3.
+Lettura select/checkbox e raccolta input separate, helper tutti sotto soglia;
+valori, ordine e sovrascritture invariati. File cognitive61 ->38, cyclomatic32
+->35 per tre basi callable, branching28 invariato, LOC65 ->68; tre violation
+->zero, nessuna violation trasferita. 34 test/full-file100%, 5000 documenti
+equivalenti; ratchet/Ruff mirato/format test PASS. Lint globale UP038 InCass
+concorrente; cinque test integrati PASS nel virtualenv, geoalchemy2 sistema
+mancante. Baseline/config/scope invariati, campagna non-MCP resta attiva.
+
 Campagna non-MCP, Ruolo layout parsing particelle, 2026-10-05:
 `parse_particella_line` `IMPROVED`, cog/cyc/LOC/nesting66/25/90/8 ->12/10/24/1.
 Layout dichiarativi per lunghezza/variante testuale, selettore5/5/7/1 sotto

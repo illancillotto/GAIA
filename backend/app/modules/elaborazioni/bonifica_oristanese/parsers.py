@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 
 def _normalize_markup(value: object | None) -> str | bytes:
@@ -36,6 +36,37 @@ def extract_href_id(value: object | None, marker: str) -> int | None:
     return None
 
 
+def _select_value(field: Tag, name: str) -> str | list[str]:
+    selected_options = field.find_all("option", selected=True)
+    selected_values = [option.get("value", "") for option in selected_options]
+    if field.has_attr("multiple") or name.endswith("[]"):
+        return selected_values
+    return selected_values[0] if selected_values else ""
+
+
+def _checkbox_value(field: Tag, name: str, previous: object) -> bool | list[str]:
+    if not name.endswith("[]"):
+        return field.has_attr("checked")
+    values = list(previous) if isinstance(previous, list) else []
+    if field.has_attr("checked"):
+        values.append(field.get("value", "on"))
+    return values
+
+
+def _collect_input_field(field: Tag, name: str, result: dict[str, str | list[str] | bool]) -> None:
+    input_type = (field.get("type") or "text").lower()
+    if input_type == "checkbox":
+        result[name] = _checkbox_value(field, name, result.get(name))
+        return
+    if input_type != "radio":
+        result[name] = field.get("value", "")
+        return
+    if field.has_attr("checked"):
+        result[name] = field.get("value", "")
+    elif name not in result:
+        result[name] = ""
+
+
 def parse_form_fields(html: object) -> dict[str, str | list[str] | bool]:
     soup = BeautifulSoup(_normalize_markup(html), "html.parser")
     result: dict[str, str | list[str] | bool] = {}
@@ -44,38 +75,11 @@ def parse_form_fields(html: object) -> dict[str, str | list[str] | bool]:
         name = field.get("name")
         if not name or name in {"_token", "_method"}:
             continue
-
         if field.name == "textarea":
             result[name] = field.get_text(strip=False).strip()
-            continue
-
-        if field.name == "select":
-            selected_options = field.find_all("option", selected=True)
-            selected_values = [option.get("value", "") for option in selected_options]
-            if field.has_attr("multiple") or name.endswith("[]"):
-                result[name] = selected_values
-            else:
-                result[name] = selected_values[0] if selected_values else ""
-            continue
-
-        input_type = (field.get("type") or "text").lower()
-        if input_type == "checkbox":
-            if name.endswith("[]"):
-                values = list(result.get(name, [])) if isinstance(result.get(name), list) else []
-                if field.has_attr("checked"):
-                    values.append(field.get("value", "on"))
-                result[name] = values
-            else:
-                result[name] = field.has_attr("checked")
-            continue
-
-        if input_type == "radio":
-            if field.has_attr("checked"):
-                result[name] = field.get("value", "")
-            elif name not in result:
-                result[name] = ""
-            continue
-
-        result[name] = field.get("value", "")
+        elif field.name == "select":
+            result[name] = _select_value(field, name)
+        else:
+            _collect_input_field(field, name, result)
 
     return result

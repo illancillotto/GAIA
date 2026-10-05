@@ -3,6 +3,44 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Elaborazioni — avvio parser form Bonifica (2026-10-05)
+
+- Chiusura `IMPROVED`: select e checkbox letti da helper con responsabilita
+  completa, raccolta input preserva checkbox/radio/default con guard clause;
+  scansione conserva textarea/skip e ordine. Nessun wrapper artificiale,
+  valore/ordine chiavi/sovrascritture e liste fresche invariati.
+- Target cog/cyc/LOC/nesting51/21/36/4 ->12/7/14/3; helper select6/6/6/1,
+  checkbox3/4/7/1 e raccolta input7/7/12/2, tutti sotto soglia. Tre violation
+  (due error/un warning) ->zero; nessuna violation trasferita.
+- File cognitive sum/max61/51 ->38/12, cyclomatic32/21 ->35/7:
+  tre basi callable aggiunte, branching28 invariato; callable4 ->7, LOC65 ->68
+  sotto soglia, import2 invariati. Riduzione cognitiva aggregata reale;
+  nesting del primo helper input ancora4 corretto con guard clause, non
+  assorbito in baseline. Nessuna nuova esclusione/baseline/config/API.
+- 34 nuove caratterizzazioni sul runtime originale, 34 test prima/dopo;
+  full-file100% dopo statement67/branch38, zero esclusioni/missing/partial.
+  5000 documenti differenziali con nomi duplicati/tipi misti/ordine casuale:
+  valori completi e ordine chiavi identici al pre-slice `45741085`.
+- Ratchet merge-base `45741085`, Ruff mirato, format-check nuovo test e
+  whitespace PASS. Lint globale .venv compileall PASS, UP038 InCass concorrente
+  fuori slice. Test integrazione Python sistema non collezionabile per
+  geoalchemy2 mancante; rieseguito nel virtualenv completo, cinque test pertinenti
+  PASS (36 deselezionati), nessuna nuova failure applicativa.
+- Graphify backend codice e docs Elaborazioni/piattaforma aggiornati tramite
+  target dedicati; commit separato, nessun push. Campagna globale non-MCP
+  attiva, modifiche concorrenti preservate; zero debito nel file, non nel repo.
+- Ruolo `45741085` verificato e committato; campagna tutti hotspot non-MCP
+  attiva. Singolo hotspot `parse_form_fields` cog/cyc/LOC/nesting51/21/36/4;
+  file LOC65, quattro callable, tre violation (due error/un warning).
+- Separare lettura select e raccolta input checkbox/radio dalla scansione
+  del documento, responsabilita complete senza wrapper artificiali.
+- Preservare normalizzazione markup, ordine chiavi/sovrascritture duplicate,
+  nomi[]/multiple, checkbox append/copia e defaulton, radio checked/primo vuoto,
+  disabled e campi hidden, trim textarea e campi token/method ignorati.
+- Caratterizzazioni sul runtime originale, full-file100%, metriche/aggregati
+  e ratchet merge-base, Ruff; nessuna nuova esclusione/baseline/API/config o
+  modifica concorrente. Commit separato per una sola unita revisionabile.
+
 ### Ruolo — avvio layout parsing particelle (2026-10-05)
 
 - Chiusura `IMPROVED`: otto layout di colonne e quattro varianti testuali
