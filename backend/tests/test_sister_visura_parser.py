@@ -42,6 +42,56 @@ def test_parse_review_required_when_cadastral_reference_is_missing() -> None:
     assert payload["owners"][0]["denominazione"] == "MANCA Grazia"
 
 
+@pytest.mark.parametrize(
+    "text,document_type,comune,parcel,status",
+    [
+        (
+            "Visura attuale\nVISURA STORICA\nComune di Comune (a001)\nFoglio 01 Particella 02 Subalterno: 03",
+            "storica",
+            ("Comune", "a001"),
+            {"foglio": "01", "particella": "02", "subalterno": "03"},
+            "completed",
+        ),
+        (
+            "Visura attuale\nComune di Nome\t Comune (A001)\nSituazione degli atti informatizzati al 31/02/2020",
+            "attuale",
+            ("Nome Comune", "A001"),
+            {"foglio": None, "particella": None, "subalterno": None},
+            "review_required",
+        ),
+        (
+            "Foglio 1 Particella 2",
+            "unknown",
+            (None, None),
+            {"foglio": "1", "particella": "2", "subalterno": None},
+            "review_required",
+        ),
+        (
+            " \n\t\n",
+            "unknown",
+            (None, None),
+            {"foglio": None, "particella": None, "subalterno": None},
+            "review_required",
+        ),
+    ],
+)
+def test_reference_metadata_precedence_missing_fields_and_fresh_collections(
+    text, document_type, comune, parcel, status
+):
+    payload = parse_sister_visura_text(text)
+    repeated = parse_sister_visura_text(text)
+    assert payload == repeated
+    assert payload["document_type"] == document_type
+    assert (payload["comune_nome"], payload["comune_codice"]) == comune
+    assert payload["parcel"] == parcel
+    assert payload["status"] == status
+    assert payload["observed_at"] is None
+    assert payload["source"] == "sister_pdf"
+    assert payload["parser_version"] == runtime.PARSER_VERSION
+    for field in ("owners", "history_events", "related_parcels", "raw_lines", "parcel"):
+        assert payload[field] is not repeated[field]
+
+
 def test_parse_sister_historical_layout_and_ownership_event() -> None:
     payload = parse_sister_visura_text(
         """

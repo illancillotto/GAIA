@@ -14,6 +14,17 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, SISTER metadati/riferimenti payload testo, 2026-10-05:
+`parse_sister_visura_text` `IMPROVED`, cog/cyc/LOC/nesting58/38/87/3 ->48/28/61/3.
+Payload2/3/28/0 e gruppo regex opzionale2/3/5/1 sotto soglia; condizioni match
+deduplicate, priorita document-type e output invariati. Errore LOC diventa
+warning, due error cognitiva/ciclomatica restano, nessuna violation trasferita.
+File cognitive120 ->114, cyclomatic97 ->93, branching82 ->76, LOC238 ->245;
+baseline/config/scope/versione parser invariati. 73 test/full-file100%,
+3600 metadati, 2000 testi e 45229 sequenze/start differenziali equivalenti.
+Ratchet/Ruff mirato PASS, lint globale UP038 InCass concorrente.
+Campagna non-MCP attiva; prossimo candidato mapping legacy owner nel parser48/28.
+
 Campagna non-MCP, SISTER transizioni owner/evento storico, 2026-10-05:
 `_parse_history_events` `IMPROVED`, cog/cyc/LOC/nesting22/11/27/3 ->10/6/22/3.
 Avvio evento2/3/9/0 e assegnazione owner4/4/9/1 sotto soglia; consumo pending,

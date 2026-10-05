@@ -3,6 +3,43 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### SISTER — metadati e riferimenti payload testo (2026-10-05)
+
+- Chiusura `IMPROVED`: costruzione payload iniziale isolata, lettura gruppo
+  regex opzionale condivisa per observed/comune/parcel. Riduzione reale da
+  deduplicazione condizioni, non dalla sola estrazione della struttura dict.
+- Target cog/cyc/LOC/nesting58/38/87/3 ->48/28/61/3, payload2/3/28/0 e
+  gruppo2/3/5/1 sotto soglia. Errore LOC diventa warning, due error cognitiva/
+  ciclomatica target restano. Nessuna violation trasferita o nuova.
+- File cognitive sum/max120/58 ->114/48, cyclomatic97/38 ->93/28,
+  branching82 ->76, callable15 ->17, LOC238 ->245 sotto soglia file,
+  densita0.911765 ->0.844898/import7 invariati. Baseline/config/scope invariati.
+- Quattro caratterizzazioni prima/dopo per precedence document-type, casing
+  comune/codice, riferimento parziale, subalterno, data invalida e contenitori
+  fresh. 29 parser full-file100% prima statement179/branch76; 73 parser/
+  persistenza/backfill PASS dopo, full-file100% statement186/branch78,
+  zero missing/partial/esclusioni. Nessuna nuova failure nel perimetro.
+- 3600 combinazioni metadati/whitespace, 2000 testi e 45229 sequenze/start
+  differenziali contro `409127c2`: payload completi/eventi/current owners/
+  related identici e input invariati. Primo match regex e priorita storica
+  preservati. Ratchet merge-base, Ruff mirato, format-check test/whitespace PASS;
+  lint globale compileall PASS, solo UP038 InCass concorrente fuori slice.
+- Graphify codice backend e docs Catasto/piattaforma richiesto prima del commit
+  separato; nessun push, change concorrenti preservate. Campagna non-MCP attiva,
+  prossimo candidato mapping owner legacy nel parser testo48/28, non zero debito.
+- Preflight `409127c2`: singolo hotspot parse_sister_visura_text58/38/87/3,
+  tre error; altre funzioni parser sotto soglia. File cognitive120/cyclomatic97,
+  branching82/LOC238/quindici callable.
+- Isolare costruzione payload iniziale e condividere lettura gruppo regex
+  opzionale/strip fra comune e parcel. La sola estrazione neutra non basta:
+  verificare riduzione aggregata da deduplicazione condizioni match.
+- Preservare normalizzazione raw_lines, ordine regex, priorita storica/attuale,
+  None gruppi mancanti, casing comune/codice, date invalide, contenitori nuovi.
+  Scansione legacy owner/sezioni/status e versione parser restano invariati.
+- Caratterizzazione originale full-file100%, differenziali metadati/testi,
+  aggregati/ratchet contro HEAD, Ruff/Graphify e commit separato autorizzato;
+  baseline/config/scope e change concorrenti invariati, campagna non-MCP attiva.
+
 ### SISTER — transizioni owner ed evento storico (2026-10-05)
 
 - Chiusura `IMPROVED`: transizioni avvio evento e assegnazione owner isolate,

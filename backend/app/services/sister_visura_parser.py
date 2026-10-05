@@ -169,14 +169,19 @@ def _parse_history_events(lines: list[str], start: int) -> tuple[list[dict[str, 
     return events, related
 
 
-def parse_sister_visura_text(text: str) -> dict[str, Any]:
-    lines = [re.sub(r"\s+", " ", line).strip() for line in text.splitlines()]
-    lines = [line for line in lines if line]
+def _sister_match_text(match: re.Match[str] | None, field: str | int) -> str | None:
+    if match is None:
+        return None
+    value = match.group(field)
+    return value.strip() if value is not None else None
+
+
+def _build_visura_payload(lines: list[str]) -> dict[str, Any]:
     joined = "\n".join(lines)
     comune_match = _COMUNE_RE.search(joined)
     parcel_match = _PARCEL_RE.search(joined)
     observed_match = re.search(r"Situazione degli atti informatizzati al\s+(\d{2}/\d{2}/\d{4})", joined, re.I)
-    result: dict[str, Any] = {
+    return {
         "parser_version": PARSER_VERSION,
         "source": "sister_pdf",
         "document_type": (
@@ -186,19 +191,25 @@ def parse_sister_visura_text(text: str) -> dict[str, Any]:
             if "visura attuale" in joined.casefold()
             else "unknown"
         ),
-        "observed_at": _parse_date(observed_match.group(1) if observed_match else None),
-        "comune_nome": comune_match.group("nome").strip() if comune_match else None,
-        "comune_codice": comune_match.group("codice").strip() if comune_match else None,
+        "observed_at": _parse_date(_sister_match_text(observed_match, 1)),
+        "comune_nome": _sister_match_text(comune_match, "nome"),
+        "comune_codice": _sister_match_text(comune_match, "codice"),
         "parcel": {
-            "foglio": parcel_match.group("foglio").strip() if parcel_match else None,
-            "particella": parcel_match.group("particella").strip() if parcel_match else None,
-            "subalterno": parcel_match.group("sub").strip() if parcel_match and parcel_match.group("sub") else None,
+            "foglio": _sister_match_text(parcel_match, "foglio"),
+            "particella": _sister_match_text(parcel_match, "particella"),
+            "subalterno": _sister_match_text(parcel_match, "sub"),
         },
         "owners": [],
         "history_events": [],
         "related_parcels": [],
         "raw_lines": lines,
     }
+
+
+def parse_sister_visura_text(text: str) -> dict[str, Any]:
+    lines = [re.sub(r"\s+", " ", line).strip() for line in text.splitlines()]
+    lines = [line for line in lines if line]
+    result = _build_visura_payload(lines)
     owners_started = False
     pending_owner: dict[str, Any] | None = None
     owner_start: int | None = None
