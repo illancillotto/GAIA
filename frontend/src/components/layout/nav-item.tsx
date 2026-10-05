@@ -20,6 +20,22 @@ type NavItemProps = {
   inactiveWhenHash?: string;
 };
 
+function splitNavigationHref(href: string): { base: string; hash: string | null } {
+  const hashIndex = href.indexOf("#");
+  return {
+    base: hashIndex >= 0 ? href.slice(0, hashIndex) : href,
+    hash: hashIndex >= 0 ? href.slice(hashIndex) : null,
+  };
+}
+
+function matchesNavigationPath(
+  pathname: string,
+  targets: string[],
+  match: NavItemProps["match"],
+): boolean {
+  return targets.some((target) => pathname === target || (match === "prefix" && pathname.startsWith(`${target}/`)));
+}
+
 export function NavItem({
   href,
   aliases = [],
@@ -45,20 +61,9 @@ export function NavItem({
     };
   }, []);
 
-  const hashIndex = href.indexOf("#");
-  const baseHref = hashIndex >= 0 ? href.slice(0, hashIndex) : href;
-  const requiredHash = hashIndex >= 0 ? href.slice(hashIndex) : null;
-  const aliasBases = aliases.map((alias) => {
-    const aliasHashIndex = alias.indexOf("#");
-    return aliasHashIndex >= 0 ? alias.slice(0, aliasHashIndex) : alias;
-  });
-
-  const pathMatches =
-    match === "prefix"
-      ? pathname === baseHref ||
-        pathname.startsWith(`${baseHref}/`) ||
-        aliasBases.some((aliasBase) => pathname === aliasBase || pathname.startsWith(`${aliasBase}/`))
-      : pathname === baseHref || aliasBases.includes(pathname);
+  const { base: baseHref, hash: requiredHash } = splitNavigationHref(href);
+  const aliasBases = aliases.map((alias) => splitNavigationHref(alias).base);
+  const pathMatches = matchesNavigationPath(pathname, [baseHref, ...aliasBases], match);
 
   let isActive = pathMatches;
   if (requiredHash) {

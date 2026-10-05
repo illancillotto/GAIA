@@ -3,6 +3,19 @@
 # GAIA
 ## Architettura del sistema
 
+### Matching navigazione frontend — 2026-10-05
+
+`frontend/src/components/layout/nav-item.tsx` condivide normalizzazione href/alias
+e predicato exact/prefix tra target principale e alias. Prefix conserva il confine
+slash; hash richiesto precede inactiveWhenHash, query restano parte del confronto
+originario. Nessuna modifica al click handler, hook/listener/cleanup o rendering.
+
+`NavItem` cog/cyc/LOC42/28/106 ->34/20/96; cognitive file65 ->61, cyclomatic47
+->45, nessuna violation trasferita. Il componente resta in debito (cinque violation):
+questa slice non dichiara concluso il refactoring. 41 test NavItem/AppShell,
+full-file100% su quattro metriche e 10080 rendering differenziali identici;
+ratchet merge-base, ESLint e typecheck PASS, baseline/config/scope invariati.
+
 Il dominio Dotazioni vive in `backend/app/modules/dotazioni/` e nel frontend
 unico sotto `/dotazioni`. Gestisce beni operativi, assegnazione a `OrgUnit`,
 custodia su `ApplicationUser` e audit transazionale. Inventory mantiene i

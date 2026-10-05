@@ -3,6 +3,43 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Frontend layout — avvio matching navigazione (2026-10-05)
+
+- Chiusura `IMPROVED` limitata al matching: href/alias normalizzati dallo
+  stesso helper, predicato exact/prefix condiviso per tutti i target senza
+  duplicazione. Hash precedence/inactive, query e click handler restano invariati;
+  hook, listener/cleanup e rendering non spostati o alterati.
+- Target cog/cyc/LOC/nesting42/28/106/3 ->34/20/96/3; helper split2/3/7/0 e
+  matching2/3/7/0, callback2/3/1/0, tutti sotto soglia, nessuna violation
+  trasferita. Restano cinque violation (tre error/due warning) nel file:
+  target ancora sopra soglia e handleClick21/11/27/3 invariato.
+- File cognitive sum/max65/42 ->61/34, cyclomatic47/28 ->45/20,
+  branching39 ->35, callable8 ->10, LOC123 ->127 sotto soglia file,
+  cinque import/uno state/uno effect invariati. Riduzione aggregata reale,
+  nessuna esclusione/baseline/config/API modificata, non zero debito.
+- 26 caratterizzazioni prima/dopo con Link mock che inoltra i click; hash,
+  alias/slash, query, modifiers/prevented, timeout/scroll eccezione, badge0 e
+  disabled verificati. 41 test NavItem/AppShell PASS; full-file100% dopo
+  statement44/branch42/function10/line40, contatori positivi/zero esclusioni.
+- 10080 rendering differenziali pre-slice `e20d355e`, combinazioni href/alias/
+  hash/match/badge/disabled: albero completo/props identici. Hook stub nel
+  differenziale, comportamento hook/eventi/click dimostrato dalla suite dedicata.
+- Ratchet merge-base `e20d355e`, ESLint, typecheck no-emit e whitespace PASS.
+  Graphify frontend codice force/pruning e docs piattaforma aggiornati;
+  commit separato, nessun push, change concorrenti preservate. Campagna globale
+  non-MCP attiva; prossimo candidato nello stesso componente ancora in debito.
+- Bonifica `e20d355e` committato; campagna non-MCP attiva. Singolo hotspot
+  `NavItem`, cog/cyc/LOC/nesting42/28/106/3, file LOC123/otto callable,
+  cinque violation (tre error/due warning); handleClick21/11/27/3 resta separato.
+- Condividere normalizzazione href/alias e matching path per target principale
+  e alias, eliminando predicati duplicati. Preservare exact/prefix con confine
+  slash, hash richiesto/inactive, query, ordine hook/listener/cleanup e DOM.
+- Caratterizzare click reali col mock Link che inoltra onClick: hash clearing,
+  modifiers/defaultPrevented, timer/scroll eccezione, badge/disabled e alias.
+  Coverage full-file100% prima/dopo, metriche aggregate e ratchet merge-base.
+- Un solo hotspot revisionabile, nessuna modifica API/UI/config/baseline o
+  esclusione, change concorrenti preservate; commit separato richiesto.
+
 ### Elaborazioni — avvio parser form Bonifica (2026-10-05)
 
 - Chiusura `IMPROVED`: select e checkbox letti da helper con responsabilita

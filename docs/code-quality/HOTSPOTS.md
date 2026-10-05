@@ -14,6 +14,16 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, frontend matching navigazione, 2026-10-05:
+`NavItem` `IMPROVED` limitato al matching, cog/cyc/LOC42/28/106 ->34/20/96,
+nesting3 invariato. Normalizzazione href e matching exact/prefix condivisi;
+helper sotto soglia, nessuna violation trasferita. File cognitive65 ->61,
+cyclomatic47 ->45, branching39 ->35, LOC123 ->127; restano cinque violation
+(tre error/due warning), incluso handleClick21/11/27/3 invariato. 41 test,
+full-file100% su quattro metriche, 10080 rendering equivalenti; ratchet/
+ESLint/typecheck PASS, baseline/config/scope invariati. Prossimo candidato:
+NavItem ancora in debito; campagna globale non-MCP resta attiva.
+
 Campagna non-MCP, Elaborazioni parser form Bonifica, 2026-10-05:
 `parse_form_fields` `IMPROVED`, cog/cyc/LOC/nesting51/21/36/4 ->12/7/14/3.
 Lettura select/checkbox e raccolta input separate, helper tutti sotto soglia;
