@@ -3,6 +3,37 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### SISTER — sostituzione record collegati (2026-10-05)
+
+- Chiusura `IMPROVED`: responsabilita sostituzione figli isolata senza
+  cambiare ordine delete/flush/owner/history o confini try/catch/transazioni.
+  Target cog/cyc/LOC/nesting30/19/34/2 ->18/13/26/2; helper8/7/14/1
+  sotto soglia. Due error diventano due warning nel coordinatore, non zero debito.
+- File cognitive sum/max63/30 ->59/18, cyclomatic57/19 ->58/13,
+  branching48 invariato, callable9 ->10, LOC144 ->150, densita0.833333 ->0.78.
+  Un punto ciclomatico strutturale per nuovo callable, nessun branching o debito
+  trasferito; import8 invariati. Baseline/config/scope/API invariati.
+- Due caratterizzazioni nuove prima del refactoring: molteplicita e ordine
+  figli, failure durante secondo evento con scritture parziali conservate.
+  43 test persistenza/backfill PASS prima/dopo; full-file100% dopo
+  statement86/branch18, zero missing/partial/esclusioni.
+- 320 casi differenziali contro `db400891`: SQL/parametri, ordine effetti,
+  campi record, stato failed e input invariati. Sessione recording con modelli
+  reali; nessuna prova PostgreSQL dichiarata. Ratchet merge-base, Ruff mirato,
+  format-check test e whitespace PASS; lint globale compileall PASS,
+  UP038 InCass concorrente fuori slice resta, nessuna nuova failure locale.
+- Graphify backend codice e docs Catasto/piattaforma da aggiornare prima del
+  commit separato autorizzato; nessun push, change concorrenti preservate.
+  Campagna non-MCP attiva: prossima slice distinta sui due warning residui.
+- Preflight su `db400891`: singolo hotspot persist_sister_visura
+  cog/cyc/LOC/nesting30/19/34/2, due error; file cognitive63/cyclomatic57,
+  branching48/LOC144/nove callable. Baseline/config/scope invariati.
+- Isolare responsabilita sostituzione figli: delete parcel/history, costruzione
+  e flush parcel, owner poi eventi. Chiamata dopo flush extraction dentro try;
+  SHA fuori try, cache, ordine SQL, catch e scritture parziali invariati.
+- Caratterizzazione prima/dopo, coverage full-file100%, differenziale trace,
+  aggregati e ratchet contro HEAD pre-slice; preservare change concorrenti.
+
 ### SISTER — avvio matching particella canonica (2026-10-05)
 
 - Chiusura `IMPROVED`: normalizzazione strip payload condivisa, filtro comune

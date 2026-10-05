@@ -128,6 +128,22 @@ def _build_sister_history_event(
     )
 
 
+def _replace_extraction_children(
+    db: Session,
+    extraction: CatastoSisterExtraction,
+    payload: dict[str, Any],
+) -> None:
+    db.execute(delete(CatastoSisterParcel).where(CatastoSisterParcel.extraction_id == extraction.id))
+    db.execute(delete(CatastoSisterHistoryEvent).where(CatastoSisterHistoryEvent.extraction_id == extraction.id))
+    parcel = _build_sister_parcel(db, extraction, payload)
+    db.add(parcel)
+    db.flush()
+    for owner_payload in payload.get("owners") or []:
+        db.add(_build_sister_owner(db, parcel, owner_payload))
+    for event in payload.get("history_events") or []:
+        db.add(_build_sister_history_event(extraction, event))
+
+
 def persist_sister_visura(db: Session, document: CatastoDocument) -> CatastoSisterExtraction:
     existing = db.scalar(select(CatastoSisterExtraction).where(CatastoSisterExtraction.document_id == document.id))
     pdf_sha256 = sister_pdf_sha256(document.filepath)
@@ -145,15 +161,7 @@ def persist_sister_visura(db: Session, document: CatastoDocument) -> CatastoSist
         extraction.error_message = None
         db.add(extraction)
         db.flush()
-        db.execute(delete(CatastoSisterParcel).where(CatastoSisterParcel.extraction_id == extraction.id))
-        db.execute(delete(CatastoSisterHistoryEvent).where(CatastoSisterHistoryEvent.extraction_id == extraction.id))
-        parcel = _build_sister_parcel(db, extraction, payload)
-        db.add(parcel)
-        db.flush()
-        for owner_payload in payload.get("owners") or []:
-            db.add(_build_sister_owner(db, parcel, owner_payload))
-        for event in payload.get("history_events") or []:
-            db.add(_build_sister_history_event(extraction, event))
+        _replace_extraction_children(db, extraction, payload)
         return extraction
     except Exception as exc:
         extraction = existing or CatastoSisterExtraction(document_id=document.id, parser_version=PARSER_VERSION, pdf_sha256=pdf_sha256, payload_json={})

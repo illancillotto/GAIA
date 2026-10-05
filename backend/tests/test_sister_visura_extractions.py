@@ -93,6 +93,34 @@ def parser_stubs(monkeypatch, parsed):
     monkeypatch.setattr(runtime, "parse_sister_visura_pdf", lambda _: parsed)
 
 
+@pytest.mark.parametrize("invalid_history", [False, True])
+def test_multiple_children_order_and_partial_history_failure(document, parsed, invalid_history):
+    parsed["owners"].append({"nome": "Secondo"})
+    parsed["history_events"].append(
+        {"act": "Secondo atto", "from_date": "invalid" if invalid_history else "2021-01-01"}
+    )
+    session = RecordingSession()
+    result = runtime.persist_sister_visura(session, document)
+    assert result.status == ("failed" if invalid_history else "ready")
+    assert [type(record).__name__ for record in session.records] == [
+        "CatastoSisterExtraction",
+        "CatastoSisterParcel",
+        "CatastoSisterOwner",
+        "CatastoSisterOwner",
+        "CatastoSisterHistoryEvent",
+        "CatastoSisterExtraction" if invalid_history else "CatastoSisterHistoryEvent",
+    ]
+    assert session.records[3].nome == "Secondo"
+    assert session.records[4].act_description == "Atto"
+    assert session.flush_count == 2
+    if invalid_history:
+        assert session.records[-1] is result
+        assert result.payload_json == {}
+        assert "Invalid isoformat" in result.error_message
+    else:
+        assert session.records[-1].act_description == "Secondo atto"
+
+
 @pytest.mark.parametrize(
     "sha,version,cached",
     [

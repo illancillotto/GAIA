@@ -14,6 +14,15 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, SISTER sostituzione record collegati, 2026-10-05:
+`persist_sister_visura` `IMPROVED`, cog/cyc/LOC/nesting30/19/34/2 ->18/13/26/2.
+Responsabilita delete/parcel/owner/history isolata, helper8/7/14/1 sotto soglia.
+Cognitive file63 ->59, cyclomatic57 ->58 per callable9 ->10, branching48
+invariato, LOC144 ->150; due error diventano due warning, nessun trasferimento.
+43 test/full-file100%, 320 trace differenziali equivalenti; ratchet/Ruff mirato
+PASS. Lint globale UP038 InCass concorrente; baseline/config/scope invariati.
+Campagna non-MCP attiva; prossima slice distinta sui warning coordinatore.
+
 Campagna non-MCP, SISTER matching particella canonica, 2026-10-05:
 `_resolve_particella` `IMPROVED`, cog/cyc/LOC/nesting29/26/18/1 ->8/8/18/1.
 Normalizzazione payload/filtro candidati condivisi, codice prioritario anche
