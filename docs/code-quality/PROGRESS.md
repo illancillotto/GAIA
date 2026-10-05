@@ -3,6 +3,39 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Utenze — avvio normalizzazione nomi persona (2026-10-05)
+
+- Chiusura `IMPROVED`: rimossi solo replace/strip duplicati sui token persona
+  e fallback `or None` impossibili. Stesso tokenizer, output e cinque callable;
+  nessun helper, wrapper o trasferimento del debito.
+- Target cognitive 28 -> 22, cyclomatic 20 -> 16, LOC 76 e nesting 2
+  invariati; file cognitive sum/max 29/28 -> 23/22, cyclomatic
+  25/20 -> 21/16, LOC 107, quattro import invariati. Error-level 2 -> 1:
+  cognitive ora warning, restano tre violation (un error, due warning).
+- Due casi nuovi (separatori ripetuti e whitespace Unicode) passano sul
+  runtime originale; 24 test verdi prima/dopo. Coverage full-file 100%
+  55/55 statement e 14/14 branch, zero esclusioni e denominatori invariati.
+- 8865 casi differenziali stringa conformi: payload dataclass identici a
+  `554c04af`; include input vuoti, Unicode, CF/PIVA e nomi multipli.
+  Ratchet mirato merge-base PASS, Ruff runtime/test e whitespace PASS;
+  baseline, soglie, scope, configurazioni coverage/CI invariati.
+- `make lint-backend` globale FAIL per import/format delle change Capacitas
+  concorrenti (`elaborazioni_capacitas_incass.py` e `recovery_ruolo.py`), non in questi due
+  file. Ratchet completo 12 finding esterni, nessuno nel parser; nessun gate
+  globale verde dichiarato e nessuna correzione opportunistica Capacitas.
+- Documentazione dominio/backlog e grafi Utenze/piattaforma aggiornati.
+  Stop al singolo hotspot. Nuova slice non committata; Catasto precedente
+  committato isolatamente in `554c04af`, nessun push.
+- Singolo hotspot successivo autorizzato dopo commit Catasto `554c04af`:
+  semplificare solo cognome/nome del percorso persona completa nel parser.
+- Token gia privi di underscore, trimmed e non vuoti; almeno tre token
+  garantiscono cognome e nome non vuoti. Rimozione di replace/strip duplicati
+  e fallback `or None` impossibili; nessun cambio al tokenizer o ai rami
+  persona incompleta, azienda e sconosciuto. Input/API/dati preservati.
+- Prima target cog/cyc/LOC/nesting 28/20/76/2; file cognitive 29/28,
+  cyclomatic 25/20, LOC 107 e cinque callable. Test/coverage prima e dopo,
+  ratchet merge-base e aggregati obbligatori; nessun commit del nuovo goal.
+
 ### Catasto — avvio mapping campi VAL-06 (2026-10-05)
 
 - Chiusura `IMPROVED`: quattro guardie di serializzazione opzionale

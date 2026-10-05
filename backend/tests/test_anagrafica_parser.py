@@ -111,6 +111,8 @@ def test_parse_unclassified_non_special_folder_name(folder_name: str) -> None:
         (" _Obinu_ _Santina_ _BNOSTN34L64I743F_ ", "Santina"),
         ("Obinu_\tSantina\nMaria_BNOSTN34L64I743F", "Santina Maria"),
         ("Obinu_Santina_Maria_BNOSTN34L64I743F", "Santina Maria"),
+        ("__Obinu__Santina__Maria__BNOSTN34L64I743F__", "Santina Maria"),
+        ("Obinu_\u00a0Santina\u2003Maria\u00a0_BNOSTN34L64I743F", "Santina Maria"),
     ],
 )
 def test_parse_complete_person_name_preserves_nonempty_name(

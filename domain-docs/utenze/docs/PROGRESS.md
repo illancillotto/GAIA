@@ -1,5 +1,16 @@
 # Progress
 
+## 2026-10-05 — nomi persona dai token normalizzati
+
+- Cognome/nome usano direttamente i token trimmed, senza underscore e non
+  vuoti; rimosse normalizzazioni duplicate e fallback null impossibili nel
+  solo percorso persona completa. Rami incompleti/azienda/unknown invariati.
+- `parse_folder_name`: cognitive 28 -> 22, cyclomatic 20 -> 16, LOC 76
+  invariate. Un errore cognitivo diventa warning; resta un errore legacy.
+- 24 test verdi prima/dopo, coverage full-file 100% (55 statement, 14 branch),
+  8865 input differenziali identici. Contratti/warning/confidence preservati;
+  ratchet mirato e Ruff PASS, nessuna esclusione o baseline update.
+
 ## 2026-10-05 — parser cartelle, guardia irraggiungibile
 
 - Rimossa la guardia `missing_nome` nel percorso persona completa: i token

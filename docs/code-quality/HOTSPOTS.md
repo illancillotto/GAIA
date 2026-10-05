@@ -14,6 +14,13 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Utenze nomi persona, 2026-10-05: `parse_folder_name` `IMPROVED`, rimossi
+normalizzazioni duplicate e fallback null impossibili sui token persona.
+Target cog/cyc/LOC 28/20/76 -> 22/16/76, file cognitive 29 -> 23,
+cyclomatic 25 -> 21, cinque callable invariati; error-level 2 -> 1
+(cognitive ora warning). 24 test, coverage full-file 100%, 8865 casi
+differenziali identici. Nessun helper/debito trasferito, baseline invariata.
+
 Follow-up Catasto, 2026-10-05: `build_anomalia_payload` `IMPROVED`,
 serializzazione dei quattro campi numerici VAL-06 con mapping ordinato
 e predicato unico non-null. Target cog/cyc/LOC 30/24/31 -> 29/22/31;

@@ -68,8 +68,8 @@ def parse_folder_name(folder_name: str) -> ParseResult:
                 warnings=["person_name_incomplete"],
             )
 
-        cognome = tokens[0].replace("_", " ").strip()
-        nome = " ".join(tokens[1:-1]).replace("_", " ").strip()
+        cognome = tokens[0]
+        nome = " ".join(tokens[1:-1])
         warnings: list[str] = []
         confidence = 0.98
 
@@ -78,8 +78,8 @@ def parse_folder_name(folder_name: str) -> ParseResult:
             subject_type=AnagraficaSubjectType.PERSON.value,
             requires_review=bool(warnings),
             confidence=confidence,
-            cognome=cognome or None,
-            nome=nome or None,
+            cognome=cognome,
+            nome=nome,
             codice_fiscale=last_token,
             warnings=warnings,
         )
