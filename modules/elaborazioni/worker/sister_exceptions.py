@@ -13,6 +13,10 @@ class SisterRequestCorrelationError(RuntimeError):
     """La richiesta remota non puo' essere correlata in modo sicuro alla richiesta locale."""
 
 
+class SisterNonEvadibileReviewRequiredError(RuntimeError):
+    """Richiesta non evadibile verificata, conservata per revisione senza retry."""
+
+
 class SisterNotFoundError(RuntimeError):
     """SISTER non ha trovato il soggetto o l'immobile richiesto."""
 
@@ -31,7 +35,7 @@ class DocumentNotYetProducedError(RuntimeError):
         self.richieste_url = richieste_url
 
     @classmethod
-    def correlated(cls, richieste_url: str | None, remote_id: str | None) -> "DocumentNotYetProducedError":
+    def correlated(cls, richieste_url: str | None, remote_id: str | None) -> DocumentNotYetProducedError:
         error = cls(richieste_url)
         error.remote_id = remote_id
         return error

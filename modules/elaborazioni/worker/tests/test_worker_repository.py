@@ -1,5 +1,27 @@
-from test_worker import *  # noqa: F403
-from test_worker import _VisuraFlowResult, _seed_batch
+import uuid
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
+import pytest
+import test_worker as worker_test_support
+from sqlalchemy import select
+from test_worker import _seed_batch, _VisuraFlowResult
+
+from app.models.catasto import (
+    CatastoBatch,
+    CatastoBatchStatus,
+    CatastoCaptchaLog,
+    CatastoDocument,
+    CatastoVisuraRequest,
+    CatastoVisuraRequestStatus,
+)
+
+worker_module = worker_test_support.worker_module
+
+
+@pytest.fixture
+def worker_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    yield from worker_test_support.worker_db.__wrapped__(tmp_path, monkeypatch)
 
 def test_request_repository_fails_only_current_execution(worker_db, monkeypatch: pytest.MonkeyPatch) -> None:
     worker, SessionLocal, _ = worker_db
@@ -42,7 +64,7 @@ def test_request_repository_reset_for_retry_handles_release_and_guards(worker_db
         ],
     )
     tokens = [uuid.uuid4(), uuid.uuid4()]
-    retry_at = datetime.now(timezone.utc) + timedelta(seconds=20)
+    retry_at = datetime.now(UTC) + timedelta(seconds=20)
     with SessionLocal() as db:
         first = db.get(CatastoVisuraRequest, request_ids[0])
         released = db.get(CatastoVisuraRequest, request_ids[1])
@@ -135,9 +157,9 @@ def test_prepare_execution_resolves_captcha_states(
         request.captcha_manual_solution = "1234" if captcha_mode == "manual" else None
         request.captcha_skip_requested = captcha_mode == "skip"
         request.captcha_expires_at = (
-            datetime.now(timezone.utc) - timedelta(seconds=1)
+            datetime.now(UTC) - timedelta(seconds=1)
             if captcha_mode == "expired"
-            else datetime.now(timezone.utc) + timedelta(minutes=5)
+            else datetime.now(UTC) + timedelta(minutes=5)
         )
         db.commit()
 
@@ -197,7 +219,7 @@ def test_prepare_execution_keeps_unresolved_captcha_waiting(
     with SessionLocal() as db:
         request = db.get(CatastoVisuraRequest, request_ids[0])
         assert request is not None
-        request.captcha_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+        request.captcha_expires_at = datetime.now(UTC) + timedelta(minutes=5)
         db.commit()
 
     prepared = worker._request_repository().prepare_execution(batch_id, request_ids[0])
@@ -343,7 +365,7 @@ def test_request_repository_persists_queued_sister_for_retry(worker_db, tmp_path
         request = db.get(CatastoVisuraRequest, request_ids[0])
         assert request is not None
         request.execution_token = token
-        request.retry_not_before = datetime.now(timezone.utc)
+        request.retry_not_before = datetime.now(UTC)
         request.captcha_manual_solution = "9999"
         request.captcha_skip_requested = True
         db.commit()
@@ -358,7 +380,7 @@ def test_request_repository_persists_queued_sister_for_retry(worker_db, tmp_path
         assert request.current_operation == "In coda SISTER, prossimo recupero differito"
         assert request.sister_remote_request_id == "REMOTE-QUEUED"
         assert request.execution_token is None
-        assert request.retry_not_before > datetime.now(timezone.utc).replace(tzinfo=None)
+        assert request.retry_not_before > datetime.now(UTC).replace(tzinfo=None)
         assert request.captcha_manual_solution is None
         assert request.captcha_skip_requested is False
 
@@ -538,7 +560,12 @@ def test_request_repository_persists_ade_payload_without_document(worker_db, mon
 
 
 def test_document_path_builders_cover_subject_and_immobile_fallbacks(worker_db, tmp_path: Path) -> None:
-    from sister_worker_reliability import _future_retry_seconds, build_document_path, is_expired, sha256_file
+    from sister_worker_reliability import (
+        _future_retry_seconds,
+        build_document_path,
+        is_expired,
+        sha256_file,
+    )
 
     _, SessionLocal, _ = worker_db
     _, _, request_ids = _seed_batch(
@@ -562,8 +589,8 @@ def test_document_path_builders_cover_subject_and_immobile_fallbacks(worker_db, 
     payload.write_bytes(b"abc")
     assert sha256_file(payload) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
     assert not is_expired(None)
-    assert is_expired(datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=1))
-    assert not is_expired(datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(seconds=30))
-    assert not is_expired(datetime.now(timezone.utc) + timedelta(seconds=30))
-    now = datetime.now(timezone.utc)
+    assert is_expired(datetime.now(UTC).replace(tzinfo=None) - timedelta(seconds=1))
+    assert not is_expired(datetime.now(UTC).replace(tzinfo=None) + timedelta(seconds=30))
+    assert not is_expired(datetime.now(UTC) + timedelta(seconds=30))
+    now = datetime.now(UTC)
     assert _future_retry_seconds(now - timedelta(seconds=1), now) is None

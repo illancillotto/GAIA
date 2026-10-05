@@ -1,12 +1,9 @@
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pytest
 
-
-WORKER_ROOT = Path(__file__).resolve().parents[1]
-if str(WORKER_ROOT) not in sys.path:
-    sys.path.insert(0, str(WORKER_ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sister_exceptions import SisterRequestCorrelationError
 from sister_request_rows import (
@@ -76,6 +73,19 @@ def test_extract_remote_id_supports_query_regex_and_missing_values() -> None:
     assert extract_remote_id(("onclick idRich='88'",)) == "88"
     assert extract_remote_id(("/x?unrelated=1", "onclick idRich='88'")) == "88"
     assert extract_remote_id(("/x?unrelated=1",)) is None
+
+
+@pytest.mark.parametrize("value", ["idElemento=2060784896", "/x?idElemento=2060784896"])
+def test_checkbox_identity_correlates_without_download_links(value):
+    rows = parse_remote_rows([{"text": "VISURA", "hrefs": [], "values": [value]}])
+    correlation = SisterRequestCorrelation("local", frozenset(), (), "2060784896")
+    assert correlate_remote_row(rows, correlation) is rows[0]
+    assert rows[0].state == "unknown"
+
+
+@pytest.mark.parametrize("value", ["otherElemento=2060784896", "prefix idElemento=2060784896", "idElemento=", "idElemento=123!invalid", "idElemento=123 trailing"])
+def test_checkbox_identity_does_not_guess_from_unrelated_values(value):
+    assert extract_remote_id((value,)) is None
 
 
 def test_build_and_restore_correlation() -> None:

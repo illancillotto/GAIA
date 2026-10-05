@@ -110,7 +110,7 @@ def test_global_counters_do_not_skip_backlog_or_authorize_foreign_downloads(targ
                 )
                 assert result == (123 if target_visible else None)
                 assert downloaded == (["TARGET"] if target_visible else [])
-                assert visits == [
+                assert visits == [("espletate", "-"), ("prelevate", "-")] + [
                     (category, day)
                     for category in ("nonEspletabili", "espletate", "prelevate")
                     for day in ("-", "05/09/2026", "04/09/2026")

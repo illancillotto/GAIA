@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
 import hashlib
 import re
 import unicodedata
+from dataclasses import dataclass, replace
 from urllib.parse import parse_qsl, urlparse
 
 from sister_exceptions import SisterRequestCorrelationError
-
 
 _REMOTE_ID_KEYS = {
     "id",
@@ -18,6 +17,7 @@ _REMOTE_ID_KEYS = {
     "progressivo",
     "protocollo",
     "requestid",
+    "idelemento",
 }
 
 MAX_EQUIVALENT_DUPLICATE_ROWS = 3
@@ -42,7 +42,7 @@ class SisterRequestCorrelation:
     expected_tokens: tuple[str, ...]
     remote_id: str | None = None
 
-    def with_remote_id(self, remote_id: str | None) -> "SisterRequestCorrelation":
+    def with_remote_id(self, remote_id: str | None) -> SisterRequestCorrelation:
         return replace(self, remote_id=remote_id or self.remote_id)
 
 
@@ -66,7 +66,7 @@ def expected_request_tokens(request: object) -> tuple[str, ...]:
 
 def build_correlation(request: object, rows: list[SisterRemoteRequestRow]) -> SisterRequestCorrelation:
     return SisterRequestCorrelation(
-        local_request_id=str(getattr(request, "id")),
+        local_request_id=str(request.id),
         baseline_keys=frozenset(row.key for row in rows),
         expected_tokens=expected_request_tokens(request),
     )
@@ -108,7 +108,7 @@ def extract_remote_id(values: tuple[str, ...]) -> str | None:
             if normalize_portal_text(key).replace(" ", "").lower() in _REMOTE_ID_KEYS and candidate:
                 return candidate.strip()
         match = re.search(
-            r"(?:idRichiesta|idRich|progRichiesta|protocollo|requestId)[=/:'\"\s]+([A-Za-z0-9._-]+)",
+            r"(?:^idElemento=(?=[A-Za-z0-9._-]+$)|(?:idRichiesta|idRich|progRichiesta|protocollo|requestId)[=/:'\"\s]+)([A-Za-z0-9._-]+)",
             value,
             re.IGNORECASE,
         )

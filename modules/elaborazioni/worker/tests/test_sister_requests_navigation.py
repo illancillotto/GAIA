@@ -2,6 +2,7 @@ import asyncio
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -9,6 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import sister_requests_navigation as navigation
+from sister_request_rows import parse_remote_rows
 from sister_requests_navigation import select_requests_category
 
 
@@ -144,3 +146,113 @@ def test_search_diagnostics_io_error_does_not_interrupt_recovery(tmp_path, caplo
     page.locator.return_value = AsyncMock(count=AsyncMock(return_value=0))
     asyncio.run(navigation.record_search_snapshot(page, "Espletate", "-", False, str(blocked)))
     assert "Snapshot ricerca SISTER non salvato" in caplog.text
+
+
+@pytest.mark.parametrize("ready_at", [0, 1, 2, 3, None])
+def test_ready_fast_path_searches_both_categories_before_history(monkeypatch, ready_at):
+    page = MagicMock()
+    today = navigation.datetime.now(navigation.ZoneInfo("Europe/Rome")).strftime("%d/%m/%Y")
+    page.locator.return_value = AsyncMock()
+    page.locator.return_value.evaluate_all.return_value = [today, "01/01/2020"]
+    select = AsyncMock(return_value=True)
+    monkeypatch.setattr(navigation, "select_requests_category", select)
+    monkeypatch.setattr(navigation, "record_search_snapshot", AsyncMock())
+    ready = SimpleNamespace(state="ready")
+    rows = [None] * 4
+    if ready_at is not None:
+        rows[ready_at] = ready
+    find = AsyncMock(side_effect=rows)
+    result = asyncio.run(navigation.find_ready_request(page, find, None))
+    assert result is (ready if ready_at is not None else None)
+    expected = [(page, "Espletate"), (page, "Espletate", today),
+                (page, "Prelevate"), (page, "Prelevate", today)]
+    assert [call.args for call in select.await_args_list] == expected[:find.await_count]
+
+
+@pytest.mark.parametrize("mode", ["unavailable", "missing_date", "date_unavailable", "not_ready"])
+def test_fast_path_uses_only_exposed_dates_and_ready_correlated_rows(monkeypatch, mode):
+    page = MagicMock()
+    today = navigation.datetime.now(navigation.ZoneInfo("Europe/Rome")).strftime("%d/%m/%Y")
+    page.locator.return_value = AsyncMock()
+    page.locator.return_value.evaluate_all.return_value = [] if mode == "missing_date" else [today]
+    outcomes = {"unavailable": [False, False], "date_unavailable": [True, False, True, False]}
+    select = AsyncMock(side_effect=outcomes.get(mode), return_value=True)
+    monkeypatch.setattr(navigation, "select_requests_category", select)
+    monkeypatch.setattr(navigation, "record_search_snapshot", AsyncMock())
+    find = AsyncMock(return_value=SimpleNamespace(state="pending"))
+    assert asyncio.run(navigation.find_ready_request(page, find, None)) is None
+    if mode == "unavailable":
+        find.assert_not_awaited()
+    if mode == "missing_date":
+        assert all(len(call.args) == 2 for call in select.await_args_list)
+
+
+@pytest.mark.parametrize("found", [True, False])
+def test_non_evadibili_retains_full_search_when_fast_path_misses(monkeypatch, found):
+    page = MagicMock()
+    ready = SimpleNamespace(state="ready")
+    historical = SimpleNamespace(state="non_evadibile")
+    fast = AsyncMock(return_value=ready if found else None)
+    monkeypatch.setattr(navigation, "find_ready_request", fast)
+    select = AsyncMock(return_value=True)
+    monkeypatch.setattr(navigation, "select_requests_category", select)
+    monkeypatch.setattr(navigation, "record_search_snapshot", AsyncMock())
+    find = AsyncMock(return_value=historical)
+    result = asyncio.run(navigation.find_in_requests_category(page, "Non evadibili", find))
+    assert result is (ready if found else historical)
+    assert select.await_count == int(not found)
+
+
+def test_fast_path_does_not_swallow_filter_timeouts(monkeypatch):
+    select = AsyncMock(side_effect=TimeoutError("filter timeout"))
+    monkeypatch.setattr(navigation, "select_requests_category", select)
+    with pytest.raises(TimeoutError, match="filter timeout"):
+        asyncio.run(navigation.find_ready_request(MagicMock(), AsyncMock(), None))
+
+
+@pytest.mark.parametrize("present", [False, True])
+def test_visure_menu_navigation_preserves_existing_menu_recovery(monkeypatch, present):
+    page = MagicMock()
+    consultazioni, visure = AsyncMock(), AsyncMock()
+    visure.count.return_value = int(present)
+    page.get_by_role.side_effect = lambda role, name: {
+        "Consultazioni": consultazioni, "Visure": visure
+    }[name]
+    restore = AsyncMock()
+    monkeypatch.setattr(navigation, "restore_portal_menu", restore)
+    selectors = SimpleNamespace(consultazioni_link_name="Consultazioni", visure_link_name="Visure")
+    trace = AsyncMock()
+    asyncio.run(navigation.open_portal_visure_menu(page, selectors, trace))
+    restore.assert_awaited_once_with(page, "Consultazioni")
+    assert consultazioni.click.await_count == int(not present)
+    visure.click.assert_awaited_once()
+    assert trace.await_count == 1 + int(not present)
+
+
+@pytest.mark.parametrize("label", ["Espletate", "Prelevate"])
+def test_verified_ready_category_supplies_state_when_row_has_no_status(label):
+    page = MagicMock()
+    page.locator.return_value = AsyncMock(count=AsyncMock(return_value=1))
+    row = parse_remote_rows([{"text": "VISURA PDF", "values": ["idElemento=123"]}])[0]
+    find = AsyncMock(return_value=row)
+    result = asyncio.run(navigation.read_correlated_category_row(page, label, find))
+    assert result.state == "ready"
+    assert result.remote_id == "123"
+    assert row.state == "unknown"
+
+
+@pytest.mark.parametrize("label,count", [("Tab", 1), ("Non evadibili", 0), ("Espletate", 2)])
+def test_unverified_category_does_not_manufacture_state(label, count):
+    page = MagicMock()
+    page.locator.return_value = AsyncMock(count=AsyncMock(return_value=count))
+    row = parse_remote_rows([{"text": "VISURA", "values": ["idElemento=123"]}])[0]
+    assert asyncio.run(navigation.read_correlated_category_row(page, label, AsyncMock(return_value=row))) is row
+
+
+def test_non_evadibile_checkbox_row_requires_review_without_delete_or_retry():
+    page = MagicMock()
+    page.locator.return_value = AsyncMock(count=AsyncMock(return_value=1))
+    row = parse_remote_rows([{"text": "VISURA", "values": ["idElemento=123"]}])[0]
+    with pytest.raises(navigation.SisterNonEvadibileReviewRequiredError, match=r"123 conservata.*verifica manuale"):
+        asyncio.run(navigation.read_correlated_category_row(page, "Non evadibili", AsyncMock(return_value=row)))
+    page.locator.return_value.click.assert_not_awaited()

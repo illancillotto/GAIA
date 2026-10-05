@@ -1,5 +1,27 @@
-from test_worker import *  # noqa: F403
-from test_worker import _VisuraFlowResult, _seed_batch
+import asyncio
+import types
+import uuid
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
+import pytest
+import test_worker as worker_test_support
+from test_worker import SisterRequestCorrelationError, _seed_batch, _VisuraFlowResult
+
+from app.models.catasto import (
+    CatastoBatch,
+    CatastoBatchStatus,
+    CatastoVisuraRequest,
+    CatastoVisuraRequestStatus,
+)
+from sister_captcha_wait import SisterCaptchaClaim
+
+worker_module = worker_test_support.worker_module
+
+
+@pytest.fixture
+def worker_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    yield from worker_test_support.worker_db.__wrapped__(tmp_path, monkeypatch)
 
 def test_next_request_id_claims_pending_request_and_marks_processing(worker_db) -> None:
     worker, SessionLocal, _ = worker_db
@@ -68,7 +90,7 @@ def test_next_request_id_uses_persisted_retry_deadline(worker_db) -> None:
     with SessionLocal() as db:
         request = db.get(CatastoVisuraRequest, request_ids[0])
         assert request is not None
-        request.retry_not_before = datetime.now(timezone.utc) + timedelta(seconds=90)
+        request.retry_not_before = datetime.now(UTC) + timedelta(seconds=90)
         db.commit()
 
     selection = worker._request_repository().claim_next(batch_id)
@@ -113,7 +135,7 @@ def test_next_request_id_resumes_remote_request_only_with_its_sister_credential(
         assert request is not None
         request.sister_credential_id = pinned_credential_id
         request.sister_remote_state = "submitted"
-        request.sister_first_submitted_at = datetime.now(timezone.utc)
+        request.sister_first_submitted_at = datetime.now(UTC)
         request.sister_remote_request_url = "https://sister/requests"
         db.commit()
 
@@ -133,7 +155,7 @@ def test_next_request_id_resumes_remote_request_only_with_its_sister_credential(
 def test_next_request_id_returns_retry_later_for_deferred_requests(worker_db) -> None:
     worker, SessionLocal, _ = worker_db
     _, batch_id, request_ids = _seed_batch(SessionLocal, request_statuses=[CatastoVisuraRequestStatus.PENDING.value])
-    deferred_until = datetime.now(timezone.utc) + timedelta(seconds=120)
+    deferred_until = datetime.now(UTC) + timedelta(seconds=120)
 
     selection = worker._request_repository().claim_next(batch_id, deferred_requests={request_ids[0]: deferred_until})
 
@@ -151,7 +173,7 @@ def test_next_request_id_returns_wait_for_unresolved_captcha(worker_db) -> None:
     with SessionLocal() as db:
         request = db.get(CatastoVisuraRequest, request_ids[0])
         assert request is not None
-        request.captcha_expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
+        request.captcha_expires_at = datetime.now(UTC) + timedelta(minutes=5)
         db.commit()
 
     selection = worker._request_repository().claim_next(batch_id)
@@ -183,7 +205,7 @@ def test_manual_captcha_wait_is_fenced_and_exposes_current_decision(worker_db) -
     )
     request_id = request_ids[0]
     token = uuid.uuid4()
-    deadline = datetime.now(timezone.utc) + timedelta(minutes=5)
+    deadline = datetime.now(UTC) + timedelta(minutes=5)
     image_path = tmp_path / "captcha.png"
     with SessionLocal() as db:
         request = db.get(CatastoVisuraRequest, request_id)
@@ -304,7 +326,7 @@ def test_batch_has_open_requests_reflects_terminal_state(worker_db) -> None:
 
 
 def test_finalize_batch_keeps_processing_when_pending_requests_remain(worker_db) -> None:
-    worker, SessionLocal, tmp_path = worker_db
+    worker, SessionLocal, _tmp_path = worker_db
     _, batch_id, _ = _seed_batch(
         SessionLocal,
         request_statuses=[
@@ -429,7 +451,7 @@ def test_stale_claim_cannot_reset_or_fail_new_execution(worker_db) -> None:
     worker._request_repository().reset_for_retry(
         request_ids[0],
         "retry obsoleto",
-        datetime.now(timezone.utc) + timedelta(seconds=30),
+        datetime.now(UTC) + timedelta(seconds=30),
         "stale_retry",
         stale_token,
     )
@@ -536,7 +558,7 @@ def test_retry_coordinator_persists_deadline_and_fencing_token() -> None:
     asyncio.run(coordinator.defer(request_id, execution_token, 30, "retry", "temporary"))
 
     assert request_id in deferred
-    assert deferred[request_id] > datetime.now(timezone.utc)
+    assert deferred[request_id] > datetime.now(UTC)
     assert calls[0][0:2] == (request_id, "retry")
     assert calls[0][3:] == ("temporary", execution_token)
     asyncio.run(
@@ -601,7 +623,7 @@ def test_request_repository_fails_active_batch_and_preserves_terminal_items(
         request.purpose = worker_module.ADE_SCAN_PURPOSE
         request.target_ruolo_particella_id = uuid.uuid4()
         request.execution_token = uuid.uuid4()
-        request.retry_not_before = datetime.now(timezone.utc)
+        request.retry_not_before = datetime.now(UTC)
         db.commit()
 
     worker._request_repository().fail_batch(batch_id, "SISTER_SESSION_LOCKED")

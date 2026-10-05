@@ -4,11 +4,14 @@ import json
 import logging
 import re
 from collections.abc import Awaitable, Callable
+from dataclasses import replace
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from playwright.async_api import Page
 
-from sister_exceptions import SisterRequestCorrelationError
+from sister_exceptions import SisterNonEvadibileReviewRequiredError, SisterRequestCorrelationError
 from sister_request_rows import SisterRemoteRequestRow
 
 logger = logging.getLogger(__name__)
@@ -103,6 +106,65 @@ async def submit_requests_filter(page: Page, category: str, day: str) -> None:
         raise SisterRequestCorrelationError(f"SISTER non ha applicato il periodo {day}")
 
 
+async def find_ready_request(
+    page: Page,
+    find_row: Callable[[], Awaitable[SisterRemoteRequestRow | None]],
+    artifact_dir: str | None,
+) -> SisterRemoteRequestRow | None:
+    for label in ("Espletate", "Prelevate"):
+        row = await find_ready_in_category(page, label, find_row, artifact_dir)
+        if row is not None:
+            return row
+    return None
+
+
+async def find_ready_in_category(
+    page: Page,
+    label: str,
+    find_row: Callable[[], Awaitable[SisterRemoteRequestRow | None]],
+    artifact_dir: str | None,
+) -> SisterRemoteRequestRow | None:
+    if not await select_requests_category(page, label):
+        return None
+    row = await read_correlated_category_row(page, label, find_row)
+    await record_search_snapshot(page, label, "-", row is not None, artifact_dir)
+    if getattr(row, "state", None) == "ready":
+        return row
+    days = await page.locator("select[name='comboGiorni'] option").evaluate_all(
+        "options => options.filter(o => !o.disabled).map(o => o.value)"
+    )
+    today = datetime.now(ZoneInfo("Europe/Rome")).strftime("%d/%m/%Y")
+    if today not in days or not await select_requests_category(page, label, today):
+        return None
+    row = await read_correlated_category_row(page, label, find_row)
+    await record_search_snapshot(page, label, today, row is not None, artifact_dir)
+    if getattr(row, "state", None) == "ready":
+        return row
+    return None
+
+
+async def read_correlated_category_row(
+    page: Page,
+    label: str,
+    find_row: Callable[[], Awaitable[SisterRemoteRequestRow | None]],
+) -> SisterRemoteRequestRow | None:
+    row = await find_row()
+    if getattr(row, "state", None) != "unknown":
+        return row
+    category = CATEGORY_VALUES.get(label)
+    if category is None:
+        return row
+    checked = page.locator(f"input[name='radioCount'][value='{category}']:checked")
+    if await checked.count() != 1:
+        return row
+    if label == "Non evadibili":
+        raise SisterNonEvadibileReviewRequiredError(
+            f"SISTER non evadibile: richiesta remota {row.remote_id} conservata; "
+            "verifica manuale necessaria, nessun reinvio o eliminazione automatica"
+        )
+    return replace(row, state="ready")
+
+
 async def find_in_requests_category(
     page: Page,
     label: str,
@@ -110,10 +172,23 @@ async def find_in_requests_category(
     *,
     artifact_dir: str | None = None,
 ) -> SisterRemoteRequestRow | None:
+    if label == "Non evadibili":
+        ready = await find_ready_request(page, find_row, artifact_dir)
+        if ready is not None:
+            return ready
+    return await find_request_in_full_history(page, label, find_row, artifact_dir)
+
+
+async def find_request_in_full_history(
+    page: Page,
+    label: str,
+    find_row: Callable[[], Awaitable[SisterRemoteRequestRow | None]],
+    artifact_dir: str | None,
+) -> SisterRemoteRequestRow | None:
     if not await select_requests_category(page, label):
         logger.warning("SISTER categoria %s non accessibile: ricerca incompleta", label)
         return None
-    row = await find_row()
+    row = await read_correlated_category_row(page, label, find_row)
     await record_search_snapshot(page, label, "-", row is not None, artifact_dir)
     if row is not None:
         return row
@@ -125,7 +200,7 @@ async def find_in_requests_category(
         logger.info("Ricerca richiesta SISTER: categoria=%s giorno=%s", label, day)
         if not await select_requests_category(page, label, day):
             break
-        row = await find_row()
+        row = await read_correlated_category_row(page, label, find_row)
         await record_search_snapshot(page, label, day, row is not None, artifact_dir)
         if row is not None:
             return row
