@@ -118,6 +118,25 @@ e rimasto integro, SHA-256
 La bonifica dei dati destinatario e completa; l'associazione dei nuovi dettagli
 agli avvisi e una verifica separata, non eseguita da questo recupero.
 
+## Associazione agli avvisi del 2026-09-28
+
+Eseguito un audit read-only sulle 438 righe destinatario dei 437 ID completati,
+usando lo stesso matcher deterministico del codice rilasciato e annualita
+`2022, 2023`. Il preflight ha verificato job 9 `cancelled`, stato di recupero
+completo senza errori, nessuna associazione manuale e nessuna modifica
+concorrente.
+
+L'aggiornamento atomico ha associato 37 righe a un solo avviso compatibile (34
+del 2023 e 3 del 2022), lasciato 314 righe in `ambiguous_match` con i candidati
+salvati per revisione manuale e 87 in `no_match`. Le 37 associazioni si
+aggiungono alle 114 gia presenti: totale `114 -> 151`. Le righe ambigue e senza
+match non hanno ricevuto un `avviso_id`.
+
+Prima del commit e stato creato il backup privato
+`/opt/gaia/runtime-data/poste-recovery-backup/poste-association-438-20260928.json`
+con permessi `0600`, SHA-256
+`7a4795afcbdf3b0ee0cf3f515d9f0a57a3d47740db4c9aa8ef55ef4074fcb8af`.
+
 ## Verifica pre-rilascio del 2026-09-24
 
 - Worker: `make test-worker` passato. I runtime modificati
