@@ -82,13 +82,12 @@ def _enrich_domande_irrigue_surface_payload(payload: dict[str, Any]) -> dict[str
     if domande:
         payload["domande"] = domande
 
-    if row_ids:
-        if len(row_ids) == 1:
-            payload["causa_superficie"] = "riga_singola"
-        elif len(domanda_ids) <= 1:
-            payload["causa_superficie"] = "piu_righe_stessa_domanda"
-        else:
-            payload["causa_superficie"] = "piu_domande"
+    if len(row_ids) == 1:
+        payload["causa_superficie"] = "riga_singola"
+    elif row_ids:
+        payload["causa_superficie"] = (
+            "piu_righe_stessa_domanda" if len(domanda_ids) <= 1 else "piu_domande"
+        )
 
     return payload
 

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+import pytest
+
 from app.models.catasto_phase1 import CatAnomalia, CatUtenzaIrrigua
 from app.modules.catasto.services.anomalie_payloads import build_anomalia_payload
 
@@ -207,3 +209,36 @@ def test_build_anomalia_payload_keeps_original_fields_when_values_are_missing() 
     assert payload == original_payload
     assert list(payload) == list(original_payload)
     assert payload is not original_payload
+
+
+@pytest.mark.parametrize("row_ids", [None, [], "non-lista"])
+def test_surface_payload_without_rows_keeps_enrichment_and_existing_cause(row_ids) -> None:
+    original_payload = {
+        "causa_superficie": "causa-originale",
+        "domanda_particella_ids": row_ids,
+        "sup_irrigata_mq": "120.00",
+        "superficie_riferimento_mq": "100.00",
+        "domande": [{"id": "dom-1"}, {"id": "dom-1"}, {"id": "dom-2"}],
+    }
+    anomalia = CatAnomalia(tipo="DIR-01-superficie_coltura_superata", dati_json=original_payload)
+
+    payload = build_anomalia_payload(anomalia)
+
+    expected = {
+        **original_payload,
+        "domande": [{"id": "dom-1"}, {"id": "dom-2"}],
+        "eccedenza_mq": "20.00",
+        "domanda_ids": ["dom-1", "dom-2"],
+        "domande_distinte_count": 2,
+    }
+    assert payload == expected
+    assert list(payload) == list(expected)
+    assert payload is not original_payload
+    assert anomalia.dati_json == original_payload
+    assert original_payload["domande"] == [{"id": "dom-1"}, {"id": "dom-1"}, {"id": "dom-2"}]
+
+
+def test_surface_payload_without_rows_and_data_remains_none() -> None:
+    assert build_anomalia_payload(
+        CatAnomalia(tipo="DIR-02-superficie_totale_da_verificare", dati_json={})
+    ) is None

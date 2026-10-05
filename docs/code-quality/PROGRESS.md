@@ -3,6 +3,42 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — avvio causa superficie senza righe (2026-10-05)
+
+- Chiusura `IMPROVED` **limitata ad annidamento e LOC**: classificazione
+  riga singola diretta, poi scelta della causa multi-riga solo con row_ids.
+  Nessun helper, nuovo callable o trasferimento del debito. Target
+  cog/cyc/LOC/nesting 16/13/26/3 -> 16/13/25/2; cognitive/cyclomatic invariati.
+- File cognitive sum/max 64/29 e cyclomatic 54/22 invariati, LOC 105 -> 104,
+  sette callable/quattro import. Quattro violation residue (due error,
+  due warning), nessuna eliminazione dichiarata; densita scanner
+  1.123810 -> 1.134615 per il minor denominatore LOC, non debito aggiunto.
+- Prima proposta con early-return respinta dal ratchet per LOC 26 -> 27;
+  sostituita prima della chiusura da classificazione piatta sotto le metriche
+  iniziali. Nessuna baseline aggiornata per assorbire il tentativo respinto.
+- Quattro nuove caratterizzazioni verdi prima del runtime, 12 test verdi
+  prima/dopo; full-file100% dopo 92/92 statement e 46/46 branch, zero esclusioni
+  (prima 94/94 e 48/48). 2880 payload differenziali identici al runtime
+  `753ef6dc`, incluso ordine chiavi e causa preesistente senza righe.
+- Ratchet mirato finale merge-base, Ruff runtime/test, whitespace e
+  `BASE_REF=753ef6dc make lint-backend QUALITY_PYTHON=backend/.venv/bin/python`
+  PASS; baseline/config/scope e VAL-06 invariati. Nessun fix estraneo.
+- Ratchet finale full corpus read-only contro `753ef6dc`: dieci finding
+  esterni nei file Wiki MCP, nessuno nel payload Catasto; non corretti o
+  assorbiti nella baseline di questa slice.
+- Graphify Catasto codice aggiornato; docs dominio/backlog e grafi docs
+  Catasto/piattaforma aggiornati tramite target dedicati. Nuova slice non
+  committata; stop al singolo hotspot, nessun push o secondo hotspot.
+- Slice Utenze committata `753ef6dc`; parser ora senza violation.
+  Prossimo singolo hotspot: `_enrich_domande_irrigue_surface_payload`.
+- Prima cog/cyc/LOC/nesting 16/13/26/3; file cognitive sum/max 64/29,
+  cyclomatic 54/22, LOC 105, sette callable, due error e due warning.
+- Guardia di uscita dopo tutti gli arricchimenti quando mancano row_ids:
+  appiattire solo la classificazione causa senza cambiare deduplica, rounding,
+  fallback domanda_ids, ordine chiavi, copie/null o causa preesistente.
+  VAL-06 e consumer/transazioni invariati. Test prima/dopo full-file100%,
+  metriche/aggregati e ratchet autorevole prima della classificazione.
+
 ### Utenze — avvio azienda con PIVA parziale (2026-10-05)
 
 - Chiusura `IMPROVED`: `_parse_partial_company` gestisce la classificazione

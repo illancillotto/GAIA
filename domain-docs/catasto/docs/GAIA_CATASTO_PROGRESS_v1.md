@@ -1,6 +1,20 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-05 — classificazione causa superficie senza annidamento esterno
+
+- Righe singole classificate direttamente; solo le righe multiple scelgono
+  fra stessa domanda e piu domande. Senza righe, causa preesistente e tutti
+  gli arricchimenti restano invariati. Deduplica/rounding/ordine preservati;
+  nessuna modifica a VAL-06, API, query, schema o transazioni.
+- `_enrich_domande_irrigue_surface_payload`: nesting3 ->2, LOC26 ->25;
+  cognitive16/cyclomatic13 invariati. `IMPROVED` limitato a nesting/LOC,
+  nessun helper o nuovo callable; quattro violation residue nel file.
+- Quattro nuove caratterizzazioni prima del runtime, 12 test prima/dopo;
+  coverage full-file100% (92 statement, 46 branch), zero esclusioni.
+  2880 payload differenziali identici con ordine chiavi; ratchet mirato,
+  Ruff e lint PASS. Baseline/config invariati, prossimo hotspot separato.
+
 ### 2026-10-05 — serializzazione payload anomalie VAL-06
 
 - Unificata la serializzazione dei quattro campi numerici opzionali con

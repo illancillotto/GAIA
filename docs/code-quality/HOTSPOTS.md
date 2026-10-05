@@ -14,6 +14,13 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Catasto causa superficie, 2026-10-05: `_enrich_domande_irrigue_surface_payload`
+`IMPROVED` limitato a nesting 3 -> 2 e LOC 26 -> 25; cognitive16 e
+cyclomatic13 invariati. Nessun helper/callable nuovo o trasferimento debito;
+file LOC105 ->104, cognitive64/cyclomatic54 invariati, quattro violation
+residue. 12 test prima/dopo, full-file100%, 2880 payload equivalenti con
+ordine chiavi preservato; ratchet mirato/Ruff/lint PASS, baseline invariata.
+
 Utenze PIVA parziale, 2026-10-05: `parse_folder_name` `IMPROVED`,
 cog/cyc/LOC/nesting 15/12/37/1 -> 8/8/28/1; helper dominio 4/5/13/0,
 nessuna violation. **Zero violation nell'intero parser**, entrambi i warning
