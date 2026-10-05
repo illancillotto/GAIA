@@ -33,10 +33,12 @@ from app.modules.ruolo.notice_register_models import (
     NoticePosition,
     NoticeRecovery,
 )
+from app.modules.ruolo.registered_mail_document_models import RegisteredMailDocument
 from app.modules.ruolo.services import notice_import as importer
 from app.modules.ruolo.services import notice_import_excel as parser
 from app.modules.ruolo.services import notice_import_poste as poste
 from app.modules.ruolo.services import notice_import_register as publisher
+from app.modules.utenze.models import AnagraficaDocument
 
 from .test_notice_register_api import _api_metadata, _headers, _seed_auth
 from .test_notice_register_api import api as api
@@ -50,6 +52,8 @@ def _metadata():
     for name in ("ruolo_tributi_posta_online_import_jobs", "ruolo_tributi_payments"):
         Table(name, metadata, Column("id", Uuid, primary_key=True))
     for model in (RuoloTributiRegisteredMail, NoticeImportBatch, NoticeImportRow):
+        model.__table__.to_metadata(metadata)
+    for model in (AnagraficaDocument, RegisteredMailDocument):
         model.__table__.to_metadata(metadata)
     return metadata
 

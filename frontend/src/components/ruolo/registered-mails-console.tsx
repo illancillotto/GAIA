@@ -15,6 +15,7 @@ import type {
   RuoloTributiRegisteredMailSummaryResponse,
 } from "@/types/ruolo";
 import { RegisteredMailAssociationModal } from "./registered-mail-association-modal";
+import { RegisteredMailCards } from "./registered-mail-cards";
 import { RegisteredMailReconciliation } from "./registered-mail-reconciliation";
 
 const PAGE_SIZE = 25;
@@ -154,7 +155,7 @@ function RegisteredMailSummary({
   );
 }
 
-function RegisteredMailRow({ canEdit, mail, onOpen }: AssociationActionProps) {
+function RegisteredMailRow({ canEdit, mail, onOpen, token }: AssociationActionProps & { token: string | null }) {
   return (
     <tr className={isAnomaly(mail) ? "bg-amber-50/35" : undefined}>
       <td className="max-w-[320px] px-4 py-3">
@@ -167,6 +168,7 @@ function RegisteredMailRow({ canEdit, mail, onOpen }: AssociationActionProps) {
         <p>{formatDate(mail.sent_at)}</p>
         <p className="mt-1 text-xs text-gray-500">Tracking {mail.tracking_number ?? "-"}</p>
         <p className="mt-1 text-xs text-gray-500">Invio {mail.source_shipment_id}</p>
+        <RegisteredMailCards canEdit={canEdit} mail={mail} token={token} />
       </td>
       <td className="px-4 py-3">
         <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${matchStatusClassName(mail.match_status)}`}>
@@ -330,7 +332,7 @@ export function RegisteredMailsConsole({ className = "", token, canEdit = false 
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {response.items.map((item) => (
-                  <RegisteredMailRow canEdit={canEdit} key={item.id} mail={item} onOpen={association.open} />
+                  <RegisteredMailRow canEdit={canEdit} key={item.id} mail={item} onOpen={association.open} token={accessToken} />
                 ))}
               </tbody>
             </table>

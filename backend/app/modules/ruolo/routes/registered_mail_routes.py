@@ -20,6 +20,7 @@ from app.modules.ruolo.registered_mail_schemas import (
 from app.modules.ruolo.schemas import RuoloTributiRegisteredMailResponse
 from app.modules.ruolo.services import registered_mail_association
 from app.modules.ruolo.services.registered_mail_campaign_preview import preview_campaign
+from app.modules.ruolo.services.registered_mail_documents import validate_subject_change
 from app.modules.ruolo.services.registered_mail_reference_check import verify_workbook_references
 from app.modules.ruolo.services.registered_mail_review_evidence import (
     association_ids,
@@ -95,6 +96,7 @@ def update_registered_mail_association(
     validate_review_evidence(db, mail, ids, payload.review_evidence)
     previous_ids = [str(item) for item in registered_mail_association.associated_avviso_ids(mail)]
     avviso = avvisi[0] if avvisi else None
+    validate_subject_change(db, mail.id, avvisi)
     try:
         updated = registered_mail_association.set_manual_association(
             db,

@@ -1,4 +1,5 @@
 from app.core.database import Base
+from app.modules.ruolo.registered_mail_document_models import RegisteredMailDocument
 from app.models.application_user import ApplicationUser
 from app.models.application_user_password_reset import ApplicationUserPasswordResetToken
 from app.models.user_presence import UserPresence
@@ -313,6 +314,7 @@ __all__ = [
     "PermissionEntry",
     "Review",
     "RuoloAvviso",
+    "RegisteredMailDocument",
     "RuoloImportJob",
     "RuoloParticella",
     "RuoloPartita",

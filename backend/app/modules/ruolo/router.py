@@ -8,6 +8,9 @@ from app.modules.ruolo.routes.notice_import_routes import router as notice_impor
 from app.modules.ruolo.routes.notice_register_routes import router as notice_register_router
 from app.modules.ruolo.routes.query_routes import catasto_router as catasto_router
 from app.modules.ruolo.routes.query_routes import router as query_router
+from app.modules.ruolo.routes.registered_mail_document_routes import (
+    router as registered_mail_document_router,
+)
 from app.modules.ruolo.routes.registered_mail_routes import router as registered_mail_router
 from app.modules.ruolo.routes.tributi_routes import router as tributi_router
 
@@ -20,3 +23,4 @@ router.include_router(notice_document_router)
 router.include_router(notice_import_router)
 router.include_router(notice_register_router)
 router.include_router(registered_mail_router)
+router.include_router(registered_mail_document_router)

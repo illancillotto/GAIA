@@ -38,6 +38,7 @@ from app.modules.utenze.services.content_classification_service import (
     classify_document_content_file,
     classify_document_content_text,
 )
+from app.modules.utenze.services.document_retention import ensure_cartolina_retention
 from app.modules.utenze.services.import_service import (
     reset_anagrafica_data,
 )
@@ -129,11 +130,11 @@ def delete_document(
     document = db.get(AnagraficaDocument, document_id)
     if document is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
-    subject_id = document.subject_id
+    ensure_cartolina_retention(db, document_id)
     db.delete(document)
     _create_subject_audit(
         db,
-        subject_id,
+        document.subject_id,
         current_user.id,
         "document_deleted",
         {"document_id": str(document_id)},
@@ -166,13 +167,13 @@ def post_reset_anagrafica(
     _: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
 ) -> AnagraficaResetResponse:
-    confirm_text = payload.confirm.strip().upper()
-    if confirm_text not in {"RESET UTENZE", "RESET ANAGRAFICA"}:
+    if payload.confirm.strip().upper() not in {"RESET UTENZE", "RESET ANAGRAFICA"}:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Conferma non valida. Usa esattamente 'RESET UTENZE'.",
         )
 
+    ensure_cartolina_retention(db)
     result = reset_anagrafica_data(db)
     return AnagraficaResetResponse(
         cleared_subject_links=result.cleared_subject_links,
