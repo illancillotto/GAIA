@@ -3,6 +3,41 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Utenze — avvio azienda con PIVA parziale (2026-10-05)
+
+- Chiusura `IMPROVED`: `_parse_partial_company` gestisce la classificazione
+  della ragione sociale e review per PIVA a dieci cifre. Target
+  cog/cyc/LOC/nesting 15/12/37/1 -> 8/8/28/1; helper 4/5/13/0,
+  tre parametri e nessuna violation. Cognitive file sum/max 18/15 -> 15/8.
+- **Zero violation nel file**, eliminati entrambi i warning residui senza
+  trasferirli nell'helper. Cyclomatic file sum/max 21/12 -> 22/8,
+  otto callable (prima sette): incremento della base del nuovo callable,
+  branching `sum(cyc-1)` invariato a 14. LOC file 111 -> 113, nessuna
+  violation file; densita scanner 0.351351 -> 0.327434, quattro import invariati.
+  Signature dei due helper azienda allineate al formatter, nessun altro
+  cambiamento nei rami esistenti; riduzione cognitiva non dipende dal wrapping.
+- Tre nuove caratterizzazioni verdi sul runtime originale: Unicode,
+  identificatore senza nome, nome numerico, warning indipendenti/mutabili.
+  37 test verdi prima/dopo; full-file 100% dopo (59/59 statement, 14/14 branch),
+  zero esclusioni. 8865 input stringa identici al runtime `9bc764e2`.
+- Ratchet mirato merge-base, Ruff, formatter runtime/test, whitespace e
+  `BASE_REF=9bc764e2 make lint-backend QUALITY_PYTHON=backend/.venv/bin/python`
+  PASS. Ratchet full corpus read-only: dieci finding Wiki MCP esterni,
+  zero nel parser; nessun fix estraneo o aggiornamento baseline/config/scope.
+- Graphify Utenze codice aggiornato; docs dominio/backlog e grafi Utenze/docs
+  piattaforma aggiornati con target dedicati. Nuova slice non committata,
+  nessun push; stop a questo singolo hotspot, non avviato un secondo.
+- Slice precedente committata `9bc764e2`; singolo hotspot autorizzato:
+  separare classificazione/review PIVA a dieci cifre dal dispatch cartella.
+- Prima target cog/cyc/LOC/nesting 15/12/37/1; file cognitive 18/15,
+  cyclomatic 21/12, LOC 111, sette callable, due warning e zero error.
+- Preservare normalizzazione, raw input, ordine CF/PIVA completa/parziale,
+  ragione sociale null vs presente, tipo soggetto/confidence e warning
+  mutabili indipendenti. Nessuna modifica ai rami persona/azienda completa.
+- Helper privato di dominio, nessuna nuova astrazione o duplicazione;
+  caratterizzazione prima del runtime, full-file 100%, confronto degli
+  aggregati e baseline merge-base prima di dichiarare miglioramento.
+
 ### Utenze — avvio azienda con PIVA completa (2026-10-05)
 
 - Chiusura `IMPROVED`: `_parse_complete_company` concentra la validazione

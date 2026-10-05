@@ -14,6 +14,15 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Utenze PIVA parziale, 2026-10-05: `parse_folder_name` `IMPROVED`,
+cog/cyc/LOC/nesting 15/12/37/1 -> 8/8/28/1; helper dominio 4/5/13/0,
+nessuna violation. **Zero violation nell'intero parser**, entrambi i warning
+residui eliminati; cognitive file 18 -> 15, branching aggregato invariato.
+Cyclomatic 21 -> 22 per base dell'ottavo callable, LOC file 111 -> 113.
+37 test prima/dopo, full-file 100%, 8865 input equivalenti; ratchet mirato,
+Ruff/formatter/lint PASS. Dieci finding globali Wiki MCP esterni,
+baseline invariata; nessun altro hotspot avviato.
+
 Utenze PIVA completa, 2026-10-05: `parse_folder_name` `IMPROVED`,
 cog/cyc/LOC/nesting 17/13/54/2 -> 15/12/37/1; helper azienda 1/2/21/1,
 nessuna violation. Cognitive file 19 -> 18; branching aggregato invariato,

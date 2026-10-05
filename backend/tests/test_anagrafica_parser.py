@@ -199,3 +199,33 @@ def test_complete_piva_results_have_independent_warning_lists(folder_name: str) 
     assert second.warnings == original_warnings
     assert first.requires_review is original_review
     assert second.requires_review is original_review
+
+
+@pytest.mark.parametrize(
+    ("folder_name", "expected_name"),
+    [
+        ("__Éva__\u00a0Società\u2003Agricola__0123806095__", "Éva Società Agricola"),
+        ("0123806095", None),
+        ("00710430950_0123806095", "00710430950"),
+    ],
+)
+def test_partial_piva_results_preserve_name_and_warning_independence(
+    folder_name: str, expected_name: str | None
+) -> None:
+    first = parse_folder_name(folder_name)
+    second = parse_folder_name(folder_name)
+
+    assert first.source_name_raw == folder_name
+    assert first.ragione_sociale == expected_name
+    assert first.subject_type == ("company" if expected_name else "unknown")
+    assert first.confidence == (0.45 if expected_name else 0.2)
+    assert first.partita_iva == "0123806095"
+    assert first.codice_fiscale is None
+    assert first.cognome is None
+    assert first.nome is None
+    assert first.warnings == ["partita_iva_length_anomaly"]
+    assert first.warnings is not second.warnings
+    first.warnings.clear()
+    assert second.warnings == ["partita_iva_length_anomaly"]
+    assert first.requires_review is True
+    assert second.requires_review is True

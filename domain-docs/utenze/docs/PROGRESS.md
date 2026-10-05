@@ -1,5 +1,19 @@
 # Progress
 
+## 2026-10-05 — validazione azienda con PIVA parziale
+
+- Helper privato `_parse_partial_company` per PIVA a dieci cifre: ragione
+  sociale null/presente, tipo soggetto/confidence e warning di anomalia
+  preservati. Raw input, ordine CF/PIVA e rami restanti invariati.
+- Target cog/cyc/LOC/nesting 15/12/37/1 -> 8/8/28/1, helper 4/5/13/0:
+  `IMPROVED`, cognitive file 18 -> 15. **Zero violation nel file**, eliminati
+  entrambi i warning senza trasferimento. Otto callable, branching aggregato
+  invariato; cyclomatic 21 -> 22 per base del callable, LOC file 111 -> 113.
+- Tre nuove caratterizzazioni sul runtime originale, 37 test prima/dopo;
+  full-file 100% (59 statement, 14 branch), zero esclusioni e 8865 input
+  identici al commit `9bc764e2`. Ratchet mirato/Ruff/formatter/lint PASS;
+  dieci finding globali Wiki MCP esterni, nessuno nel parser. Baseline invariata.
+
 ## 2026-10-05 — validazione azienda con PIVA completa
 
 - Helper privato `_parse_complete_company` per ragione sociale presente/mancante
