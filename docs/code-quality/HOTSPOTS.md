@@ -14,6 +14,13 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Follow-up Utenze, 2026-10-05: `parse_folder_name` `IMPROVED` dopo il goal
+separato di rimozione della guardia `missing_nome` irraggiungibile.
+Target cog/cyc/LOC 30/21/79 -> 28/20/76, file cognitive 31 -> 29,
+cinque callable invariati; coverage full-file 100%, 22 test e 5655 casi
+differenziali identici. Tre violation legacy residue, baseline invariata.
+Il blocco coverage registrato nel checkpoint W1 sotto e ora superato.
+
 Checkpoint W1 parallelo, 2026-10-05:
 
 - Organigramma `handleSchemaCardSelect`: `IMPROVED`, cognitive 23 -> 16,

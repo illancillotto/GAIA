@@ -1,5 +1,18 @@
 # Progress
 
+## 2026-10-05 — parser cartelle, guardia irraggiungibile
+
+- Rimossa la guardia `missing_nome` nel percorso persona completa: i token
+  normalizzati sono non vuoti e almeno tre, quindi il nome intermedio non
+  puo essere vuoto. Gli input senza nome restano `person_name_incomplete`.
+- Contratti `ParseResult`, warning, confidence e classificazione invariati
+  per input stringa conformi; 22 test e 5655 casi differenziali identici.
+- `parse_folder_name`: cognitive 30 -> 28, cyclomatic 21 -> 20,
+  LOC 79 -> 76; nessun helper o debito trasferito. Coverage full-file 100%
+  (55 statement, 14 branch), zero esclusioni; ratchet mirato e Ruff PASS.
+- Esito `IMPROVED`, tre violation legacy residue. Nessuna modifica
+  a import NAS, persistenza, API, schema o baseline; prossimo hotspot separato.
+
 ## Stato Modulo
 
 - milestone corrente: `Milestone 8 — Search, Export e Correlazioni`

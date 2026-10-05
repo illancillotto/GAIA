@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import re
+from dataclasses import dataclass, field
 
 from app.modules.utenze.models import AnagraficaSubjectType
 
@@ -72,10 +72,6 @@ def parse_folder_name(folder_name: str) -> ParseResult:
         nome = " ".join(tokens[1:-1]).replace("_", " ").strip()
         warnings: list[str] = []
         confidence = 0.98
-
-        if not nome:
-            warnings.append("missing_nome")
-            confidence = 0.6
 
         return ParseResult(
             source_name_raw=folder_name,

@@ -3,6 +3,35 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Utenze — avvio guardia irraggiungibile (2026-10-05)
+
+- Chiusura `IMPROVED`: rimossi solo la guardia morta e i suoi due statement;
+  ordinati gli import per correggere I001 del runtime ora toccato. Nessun
+  helper, spostamento, nuovo callable o modifica ai test/contratti.
+- Dopo target cog/cyc/LOC/nesting 28/20/76/2 (prima 30/21/79/2);
+  file cognitive sum/max 29/28 (31/30), cyclomatic 25/20 (26/21),
+  LOC 107 (110), cinque callable e quattro import invariati. Tre violation
+  legacy residue (due error, un warning); nessuna eliminazione dichiarata.
+- Prima/dopo 22 test verdi; full-file dopo 55/55 statement e 14/14 branch,
+  100%, zero esclusioni. Prima 56/58 e 15/16; denominatore ridotto dal
+  codice realmente irraggiungibile rimosso, non da configurazioni coverage.
+- 5655 input `str` (vuoti, separatori, whitespace, Unicode, CF/PIVA e token
+  multipli) confrontati con il runtime HEAD: payload dataclass identici.
+  Ratchet mirato autorevole contro `8f59ad9a` PASS, `findings=[]`;
+  lint-backend/style e Ruff runtime PASS. Baseline/scope/soglie invariati.
+- Graphify Utenze codice aggiornato tramite target dedicato; docs dominio
+  e piattaforma aggiornate. Stop al singolo hotspot; nessun commit/push.
+- Goal runtime separato autorizzato dopo W1: sola rimozione di `if not nome`
+  in `parse_folder_name`, base `8f59ad9a`; runtime/test candidati puliti.
+- Invariante: token non vuoti dopo strip e almeno tre token nel percorso
+  persona completa garantiscono un nome non vuoto. Input senza nome resta
+  nel ramo `person_name_incomplete`. Nessun monkeypatch o esclusione coverage.
+- Prima target cog/cyc/LOC/nesting 30/21/79/2; file cognitive 31/30,
+  cyclomatic 26/21, LOC 110, cinque callable. Caratterizzazione W1 22 test,
+  statement 56/58 e branch 15/16; nuove misure in `/tmp/gaia-utenze-guard-*`.
+- Nessun ulteriore hotspot, baseline update, commit o push autorizzato;
+  preservare le change concorrenti Wiki/Presenze/worker/infrastruttura.
+
 ### W1 — checkpoint finale dei tre goal (2026-10-05)
 
 - Patch integrate serialmente dopo review/hash/ownership, tutte a base
