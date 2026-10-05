@@ -242,3 +242,61 @@ def test_surface_payload_without_rows_and_data_remains_none() -> None:
     assert build_anomalia_payload(
         CatAnomalia(tipo="DIR-02-superficie_totale_da_verificare", dati_json={})
     ) is None
+
+
+@pytest.mark.parametrize(
+    ("irrigabile", "catastale", "indice", "registrato", "derived"),
+    [
+        (10, None, 2, 20, {"atteso": 20.0, "delta": 0.0}),
+        (
+            None,
+            10,
+            2,
+            20,
+            {"atteso_catastale": 20.0, "delta_vs_catastale": 0.0, "coincide_con_catastale": True},
+        ),
+        (10, 20, None, 20, {}),
+        (10, 20, 2, None, {"atteso": 20.0, "atteso_catastale": 40.0}),
+        (None, None, 0, 0, {}),
+        (
+            -10,
+            -20,
+            0.5,
+            -5,
+            {
+                "atteso": -5.0,
+                "delta": 0.0,
+                "atteso_catastale": -10.0,
+                "delta_vs_catastale": 5.0,
+                "coincide_con_catastale": False,
+            },
+        ),
+    ],
+)
+def test_val06_expected_amounts_preserve_missing_values_and_order(
+    irrigabile, catastale, indice, registrato, derived
+) -> None:
+    original_payload = {"coincide_con_catastale": "originale", "base": True}
+    anomalia = CatAnomalia(tipo="VAL-06-imponibile", dati_json=original_payload)
+    utenza = CatUtenzaIrrigua(
+        sup_irrigabile_mq=irrigabile,
+        sup_catastale_mq=catastale,
+        ind_spese_fisse=indice,
+        imponibile_sf=registrato,
+    )
+
+    payload = build_anomalia_payload(anomalia, utenza)
+
+    expected = dict(original_payload)
+    for field_name, value in {
+        "sup_irrigabile_mq": irrigabile,
+        "sup_catastale_mq": catastale,
+        "ind_spese_fisse": indice,
+        "imponibile_registrato": registrato,
+    }.items():
+        if value is not None:
+            expected[field_name] = float(value)
+    expected.update(derived)
+    assert payload == expected
+    assert list(payload) == list(expected)
+    assert original_payload == {"coincide_con_catastale": "originale", "base": True}

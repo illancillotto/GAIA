@@ -3,6 +3,36 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — avvio attesi e delta VAL-06 (2026-10-05)
+
+- Chiusura `NO_SAFE_CHANGE` per la proposta runtime: ciclo comune attesi/delta
+  riduceva cog/cyc 29/22 -> 28/20 ma aumentava LOC target 31 -> 33
+  (file 104 -> 106). Ratchet merge-base respinto; proposta rimossa integralmente,
+  runtime byte-identico a `9b5357b8`. Nessuna compressione artificiale o
+  aggiornamento baseline per aggirare la regressione; non dichiarare riduzione.
+- Restano sei nuove caratterizzazioni dei valori mancanti/zero/negativi,
+  flag catastale preesistente e ordine chiavi. 18 test verdi prima/finale,
+  coverage full-file100% (92/92 statement, 46/46 branch), zero esclusioni.
+- Metriche finali identiche a prima: target29/22/31/2, file cognitive64/29,
+  cyclomatic54/22, LOC104, sette callable/quattro import, quattro violation
+  (due error e due warning). Ratchet mirato finale, Ruff test e whitespace
+  PASS; lint-backend bloccato solo dal formatter del nuovo file concorrente
+  `backend/app/modules/elaborazioni/domande_irrigue_parallel.py`, non corretto
+  qui. Baseline/config/scope invariati; nessun fix estraneo.
+- Documentazione e grafi Catasto/piattaforma aggiornati; codice invariato,
+  nessun aggiornamento strutturale codice necessario. Test/docs non committati,
+  nessun push. Stop: attendere decisione su un hotspot diverso, non aprirlo qui.
+- Slice precedente committata `9b5357b8`; singolo hotspot autorizzato:
+  calcoli atteso/delta irrigabile e catastale di `build_anomalia_payload`.
+- Prima cog/cyc/LOC/nesting 29/22/31/2; file cognitive sum/max 64/29,
+  cyclomatic 54/22, LOC 104, sette callable, due error e due warning.
+- Unificare i due calcoli con descrittori ordinati e guardie per valori
+  mancanti; preservare letture/conversioni, rounding, zero, chiavi preesistenti,
+  ordine inserimento, errori e flag catastale (solo quando calcolabile).
+  Rami DIR/generici e dati originali invariati; nessun helper o nuovo callable.
+- Caratterizzazioni sul runtime originale, full-file100%, metriche prima/dopo
+  e aggregati; nessun aggiornamento baseline per assorbire regressioni.
+
 ### Catasto — avvio causa superficie senza righe (2026-10-05)
 
 - Chiusura `IMPROVED` **limitata ad annidamento e LOC**: classificazione

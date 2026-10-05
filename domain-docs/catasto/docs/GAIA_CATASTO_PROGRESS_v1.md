@@ -1,6 +1,19 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-05 — caratterizzazione attesi/delta VAL-06
+
+- Sei caratterizzazioni aggiunte per superfici/indice/importo mancanti,
+  valori zero/negativi, ordine chiavi e conservazione del flag catastale
+  preesistente quando non calcolabile. 18 test verdi, full-file100%
+  (92 statement, 46 branch), nessuna esclusione; Ruff PASS. Lint globale
+  bloccato dal formatter del file concorrente `domande_irrigue_parallel.py`,
+  fuori perimetro e non modificato qui.
+- Runtime invariato a `9b5357b8`: ciclo comune respinto dal ratchet per LOC
+  31 ->33, pur riducendo cog/cyc29/22 ->28/20. Esito `NO_SAFE_CHANGE`,
+  nessuna riduzione dichiarata o baseline aggiornata. API, calcoli,
+  rounding, payload, dati originali e transazioni restano invariati.
+
 ### 2026-10-05 — classificazione causa superficie senza annidamento esterno
 
 - Righe singole classificate direttamente; solo le righe multiple scelgono

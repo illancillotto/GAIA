@@ -14,6 +14,14 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Catasto attesi/delta VAL-06, 2026-10-05: `NO_SAFE_CHANGE` per unificazione
+del calcolo. Il ciclo proposto riduceva cog/cyc29/22 ->28/20 ma aumentava
+LOC31 ->33; respinto dal ratchet e rimosso. Runtime invariato, baseline
+invariata: nessuna riduzione dichiarata. Sei nuove caratterizzazioni,
+18 test, full-file100%; ratchet finale/Ruff PASS. Lint globale bloccato
+dal formatter del file concorrente `domande_irrigue_parallel.py`. Prossima scelta
+di hotspot richiede decisione separata, non avviata automaticamente.
+
 Catasto causa superficie, 2026-10-05: `_enrich_domande_irrigue_surface_payload`
 `IMPROVED` limitato a nesting 3 -> 2 e LOC 26 -> 25; cognitive16 e
 cyclomatic13 invariati. Nessun helper/callable nuovo o trasferimento debito;
