@@ -3,6 +3,52 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### W0 — readiness parallela verificata (2026-10-05)
+
+- Audit autorizzato, tre agenti in parallelo solo per misure. Nessun runtime,
+  test, baseline o configurazione modificati; nessun branch/worktree/commit.
+- Snapshot `main@bfc8e68f`: 1604 file, 19714 callable, 4742 violation
+  (2041 error/2701 warning). Checkout concorrente: non attribuire il delta
+  rispetto al piano a W0. Finding globale 26, ratchet working tree otto Wiki;
+  ratchet scoped tre candidati PASS, nessun finding.
+- Tooling 169 passed; lint-backend/style ratchet PASS su 26 file cambiati.
+  Organigramma: 35 test, statement 62/62, branch 57/57, funzioni 13/13,
+  linee 50/50; ESLint scoped e typecheck PASS.
+- Catasto: cinque test verdi, statement 99/99 ma branch 50/52; runtime
+  bloccato fino alla caratterizzazione di imponibile nullo con superfici.
+  Utenze: cinque test verdi, statement 52/58, branch 12/16; serve audit
+  della guardia apparentemente irraggiungibile `missing_nome`, niente fake
+  impossibili o esclusioni per ottenere 100%.
+- Registro, classificazione completa dei 26 finding e isolamento proposto in
+  `PARALLEL_W0_READINESS_2026-10-05.md`. W0 conclusa come audit, non via libera
+  a tre refactoring; W1 non iniziata. Proposta: Catasto test-only, Utenze
+  audit/caratterizzazione, Organigramma hotspot dopo ownership/isolation gate.
+- Graphify platform docs aggiornato con target dedicato: chunk 1/1 completo,
+  nessun warning semantico; evidenza `/tmp/gaia-w0-graph-docs.log`.
+
+### Pianificazione riduzione estesa multi-agente (2026-10-05)
+
+- Richiesto un piano completo, con agenti paralleli. Tre agenti hanno
+  analizzato backend, frontend/worker e governance in sola lettura;
+  nessuna implementazione runtime, branch/worktree o commit avviato.
+- Snapshot fresco `main@bfc8e68f`: 1603 file, 19713 callable, 4741 violation
+  (2041 error/2700 warning); backend/frontend/worker 2745/1775/221.
+  Confronto integrale baseline: 26 finding, ratchet working tree: otto
+  Wiki ereditati. Scope worker test invariato, nessuna baseline update.
+- Proposta in `PARALLEL_REDUCTION_PLAN_2026-10-05.md`: coordinatore e tre
+  implementatori, un hotspot per goal, ownership runtime/test/fixture
+  esclusiva, isolamento futuro da autorizzare, gate slice/ondata/globale,
+  characterization full-file prima dei monoliti e single writer baseline/grafi.
+- W0 stabilizza base/ownership/coverage e classifica i finding; W1 propone
+  Catasto anomalie, parser Utenze e selezione Organigramma indipendenti.
+  W2/W3 introducono IO/worker e confini condivisi solo dopo checkpoint.
+  W4 richiede test-only per i grandi monoliti; nessun refactoring massivo
+  in una singola change o nuova deroga alle policy.
+- Artefatti snapshot `/tmp/gaia-mass-plan-*`; obiettivi pilota sul paniere
+  selezionato, non promesse di riduzione del totale repository o rilascio.
+  Prima decisione proposta: W0 e predisposizione isolata. README aggiornato;
+  Graphify platform docs tramite target dedicato con controllo chunk.
+
 ### Baseline - riduzione reale Wiki/MCP, prima slice (2026-10-03)
 
 - Richiesta esplicita: ridurre il codice prima di aggiornare la baseline, non
