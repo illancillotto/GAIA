@@ -1,5 +1,15 @@
 # Progress
 
+## 2026-10-05 — guardia input vuoto senza controllo duplicato
+
+- Stringa normalizzata vuota implica token vuoti; il controllo `not tokens`
+  conserva anche i casi di soli separatori. Rimossa la condizione duplicata,
+  payload `empty_folder_name` e tutti gli altri rami invariati.
+- `parse_folder_name`: cognitive 22 -> 19, cyclomatic 16 -> 14, LOC 76
+  invariate; zero error-level e tre warning residui. Nessun nuovo callable.
+- 24 test, coverage full-file 100% (55 statement, 14 branch), 8865 casi
+  differenziali identici; ratchet mirato/Ruff PASS, baseline invariata.
+
 ## 2026-10-05 — nomi persona dai token normalizzati
 
 - Cognome/nome usano direttamente i token trimmed, senza underscore e non

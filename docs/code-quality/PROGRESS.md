@@ -3,6 +3,37 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Utenze — avvio guardia input vuoto (2026-10-05)
+
+- Chiusura `IMPROVED`: guardia iniziale `if not tokens`, rimosso soltanto
+  il controllo di stringa vuota gia implicato dal tokenizer. Nessun helper,
+  modifica ai test, spostamento o trasferimento del debito.
+- Target cog/cyc/LOC/nesting 22/16/76/2 -> 19/14/76/2; file cognitive
+  sum/max 23/22 -> 20/19, cyclomatic 21/16 -> 19/14, LOC 107, cinque
+  callable e quattro import invariati. Error-level 1 -> 0; restano tre
+  warning (cognitive, cyclomatic, LOC), non dichiarati eliminati.
+- 24 test verdi prima/dopo; coverage full-file 100%, 55/55 statement,
+  14/14 branch, zero esclusioni, denominatori invariati. 8865 input stringa
+  differenziali identici a `6241b4ca`, compresi vuoti/soli separatori/Unicode.
+- Ratchet mirato merge-base e Ruff runtime PASS; scope/baseline/config
+  invariati. Lint globale bloccato dalle change Capacitas concorrenti
+  `recovery_service.py` e `capacitas_full_recovery.py`, non corrette qui.
+- Commit precedente `6241b4ca` fatto con indice alternativo: staging dei
+  18 file MCP concorrenti preservato byte-identico, poi committato dall'owner
+  in `16476689`. HEAD cambiato esternamente, perimetro parser ricontrollato
+  e ratchet mirato ripetuto senza finding; nessuna patch estranea incorporata.
+- Docs dominio/backlog e grafi aggiornati. Stop al singolo goal;
+  nuova slice non committata, nessun push o aggiornamento baseline.
+- Prossimo singolo goal autorizzato dopo commit `6241b4ca`: rimuovere
+  `not normalized_name` duplicato nella guardia iniziale del parser.
+- Invariante: nome normalizzato vuoto implica lista token vuota; viceversa
+  la lista vuota comprende anche nomi di soli separatori. `not tokens`
+  conserva quindi esattamente il ramo `empty_folder_name`, senza leggere
+  `tokens[-1]` sugli input vuoti. Tokenizer e tutti i payload invariati.
+- Prima target cog/cyc/LOC/nesting 22/16/76/2; file cognitive 23/22,
+  cyclomatic 21/16, LOC 107, cinque callable. Test W1 e casi Unicode
+  gia caratterizzano i due stati. Nessun nuovo hotspot o commit implicito.
+
 ### Utenze — avvio normalizzazione nomi persona (2026-10-05)
 
 - Chiusura `IMPROVED`: rimossi solo replace/strip duplicati sui token persona

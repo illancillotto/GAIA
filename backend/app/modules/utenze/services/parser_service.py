@@ -46,7 +46,7 @@ def parse_folder_name(folder_name: str) -> ParseResult:
     normalized_name = _normalize_folder_name(folder_name)
     tokens = _split_tokens(normalized_name)
 
-    if not normalized_name or not tokens:
+    if not tokens:
         return ParseResult(
             source_name_raw=folder_name,
             subject_type=AnagraficaSubjectType.UNKNOWN.value,

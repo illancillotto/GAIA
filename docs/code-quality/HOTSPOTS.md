@@ -14,6 +14,12 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Utenze guardia vuoto, 2026-10-05: `parse_folder_name` `IMPROVED`, controllo
+di input vuoto basato soltanto sui token. Target cog/cyc/LOC 22/16/76 ->
+19/14/76; file cognitive 23 -> 20, cyclomatic 21 -> 19, cinque callable
+invariati. **Zero error-level**, tre warning residui; 24 test, full-file 100%
+e 8865 input equivalenti. Nessun helper/debito trasferito o baseline update.
+
 Utenze nomi persona, 2026-10-05: `parse_folder_name` `IMPROVED`, rimossi
 normalizzazioni duplicate e fallback null impossibili sui token persona.
 Target cog/cyc/LOC 28/20/76 -> 22/16/76, file cognitive 29 -> 23,
