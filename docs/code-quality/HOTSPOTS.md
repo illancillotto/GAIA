@@ -14,6 +14,16 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, Catasto registro spiegazioni, 2026-10-05:
+`explainCatastoAnomalia` `IMPROVED`, cog/cyc/LOC/nesting20/12/42/1
+->2/3/6/1. Definizioni tipizzate con testi/calcoli, lookup Map e assemblaggio
+comune; sei strategie nuove sotto soglia (massimo cog/cyc1/2), imponibile
+6/6/26/1 invariato. File cognitive58 ->41, cyclomatic71 ->69, branching44
+->36, LOC374 invariato: zero error/zero warning nel file, non nel repository.
+89 test, full-file100% su quattro metriche, 22275 input equivalenti;
+ratchet/typecheck/ESLint PASS, baseline/config/scope invariati. Campagna
+globale non-MCP attiva: prossimo candidato da inventory, senza restringere scope.
+
 Campagna non-MCP, Catasto registro descrizioni, 2026-10-05:
 `describeCatastoAnomalia` `IMPROVED`, cog/cyc/LOC/nesting22/13/41/1
 ->4/5/6/1. Registro Map di testo costante/formatter completi, cinque nuovi

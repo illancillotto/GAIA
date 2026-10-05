@@ -66,6 +66,15 @@ describe("source reference descriptions", () => {
 
 describe("explainCatastoAnomalia", () => {
   test.each([
+    [undefined, []], [null, []], [0, ["0"]], [false, ["false"]],
+    ["", [""]], [[], [""]], [{}, ["[object Object]"]],
+  ])("preserves municipality calculation for %j", (cod_istat, expected) => {
+    expect(explainCatastoAnomalia({ tipo: "VAL-04-comune_invalido", dati_json: { cod_istat } }).calculations).toEqual(
+      expected.map((value) => ({ label: "Codice comune sorgente", value })),
+    );
+  });
+
+  test.each([
     ["__proto__", null, "Anomalia dati", "Il sistema ha rilevato una incoerenza da verificare."],
     ["constructor", "", "", ""],
     ["toString", "Personalizzata", "Personalizzata", "Personalizzata"],

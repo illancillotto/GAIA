@@ -13,6 +13,10 @@ export type CatastoAnomaliaExplanation = {
   resolutionTips: string[];
 };
 
+type AnomalyDefinition = Omit<CatastoAnomaliaExplanation, "calculations"> & {
+  calculate: (data: Record<string, unknown>) => CatastoAnomaliaExplanation["calculations"];
+};
+
 function formatNumber(value: unknown, fractionDigits = 2): string | null {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return null;
@@ -109,8 +113,14 @@ function pushImportAmountCalculations(
   pushCalculation(rows, `Voce ${code} - scostamento`, amounts.delta, 4);
 }
 
-const anomalyGuidance = {
+const anomalyDefinitions = {
   "VAL-01-sup_eccede": {
+    calculate: (data) => {
+      const calculations: CatastoAnomaliaExplanation["calculations"] = [];
+      pushCalculation(calculations, "Scostamento in metri quadri", data.delta_mq);
+      pushCalculationText(calculations, "Scostamento percentuale", formatPct(data.delta_pct));
+      return calculations;
+    },
     "title": "Superficie irrigabile superiore al catastale",
     "summary": "La superficie usata per il ruolo risulta piu alta della superficie catastale disponibile.",
     "whyItHappened": "Il controllo confronta la superficie irrigabile della riga importata con la superficie catastale registrata in GAIA. Se la superficie irrigabile supera il limite catastale oltre la tolleranza prevista, la riga viene segnalata.",
@@ -126,6 +136,12 @@ const anomalyGuidance = {
     ]
   },
   "VAL-02-cf_invalido": {
+    calculate: (data) => {
+      const calculations: CatastoAnomaliaExplanation["calculations"] = [];
+      pushCalculationText(calculations, "Valore sorgente", data.cf_raw);
+      pushCalculationText(calculations, "Esito controllo", data.error_code);
+      return calculations;
+    },
     "title": "Codice fiscale o partita IVA formalmente non valido",
     "summary": "Il valore importato non rispetta il formato atteso.",
     "whyItHappened": "La riga contiene un codice fiscale o una partita IVA che non supera i controlli formali minimi. Non significa per forza che il soggetto non esista, ma che il dato importato va corretto o confermato.",
@@ -141,6 +157,7 @@ const anomalyGuidance = {
     ]
   },
   "VAL-03-cf_mancante": {
+    calculate: () => [],
     "title": "Codice fiscale o partita IVA mancante",
     "summary": "La riga ruolo e priva del riferimento fiscale del soggetto.",
     "whyItHappened": "Il flusso di import ha trovato la posizione senza codice fiscale o partita IVA. Senza questo dato diventa piu difficile collegare correttamente la posizione al soggetto.",
@@ -156,6 +173,9 @@ const anomalyGuidance = {
     ]
   },
   "VAL-04-comune_invalido": {
+    calculate: (data) => [
+      ...(data.cod_istat != null ? [{ label: "Codice comune sorgente", value: String(data.cod_istat) }] : []),
+    ],
     "title": "Comune non riconosciuto nel riferimento GAIA",
     "summary": "Il codice comune presente nella riga importata non trova un corrispondente valido in GAIA.",
     "whyItHappened": "Il valore del comune proveniente dalla sorgente non coincide con quelli gestiti nel riferimento comuni del sistema, quindi la riga non puo essere agganciata in modo affidabile.",
@@ -171,6 +191,13 @@ const anomalyGuidance = {
     ]
   },
   "VAL-05-particella_assente": {
+    calculate: (data) => {
+      const calculations: CatastoAnomaliaExplanation["calculations"] = [];
+      pushCalculationText(calculations, "Foglio", data.foglio);
+      pushCalculationText(calculations, "Particella", data.particella);
+      pushCalculationText(calculations, "Subalterno", data.subalterno);
+      return calculations;
+    },
     "title": "Particella non trovata in anagrafica",
     "summary": "La riga ruolo non riesce a collegarsi a una particella corrente di GAIA.",
     "whyItHappened": "Il controllo cerca una particella con gli stessi riferimenti catastali della riga importata. Se non trova un match attendibile, la posizione resta scollegata e viene segnalata.",
@@ -186,6 +213,7 @@ const anomalyGuidance = {
     ]
   },
   "VAL-06-imponibile": {
+    calculate: calculateImponibile,
     "title": "Imponibile non coerente con il calcolo teorico",
     "summary": "L'importo imponibile registrato non coincide con quello che risulta dal calcolo automatico.",
     "whyItHappened": "Il sistema ricalcola l'imponibile usando la formula superficie irrigabile x indice spese fisse. Se il valore importato si discosta oltre la tolleranza prevista, la riga viene marcata come anomala.",
@@ -201,6 +229,14 @@ const anomalyGuidance = {
     ]
   },
   "VAL-07-importi": {
+    calculate: (data) => {
+      const calculations: CatastoAnomaliaExplanation["calculations"] = [];
+      const v0648 = data.v07_648;
+      const v0985 = data.v07_985;
+      pushImportAmountCalculations(calculations, "0648", v0648);
+      pushImportAmountCalculations(calculations, "0985", v0985);
+      return calculations;
+    },
     "title": "Importi del ruolo non coerenti",
     "summary": "Almeno uno degli importi di ruolo non coincide con il risultato atteso del calcolo.",
     "whyItHappened": "Il sistema ricalcola gli importi delle voci di ruolo partendo da imponibile e aliquota. Se una delle voci non rientra nella tolleranza, la posizione viene segnalata.",
@@ -215,13 +251,15 @@ const anomalyGuidance = {
       "Chiudere l'anomalia solo quando gli importi tornano nei limiti di tolleranza del controllo."
     ]
   }
-} satisfies Record<string, Omit<CatastoAnomaliaExplanation, "calculations">>;
+} satisfies Record<string, AnomalyDefinition>;
+
+const anomalyExplanations = new Map<string, AnomalyDefinition>(Object.entries(anomalyDefinitions));
 
 function buildAnomaliaExplanation(
-  tipo: keyof typeof anomalyGuidance,
-  calculations: CatastoAnomaliaExplanation["calculations"],
+  guidance: AnomalyDefinition,
+  data: Record<string, unknown>,
 ): CatastoAnomaliaExplanation {
-  const guidance = anomalyGuidance[tipo];
+  const calculations = guidance.calculate(data);
   return {
     title: guidance.title,
     summary: guidance.summary,
@@ -233,7 +271,7 @@ function buildAnomaliaExplanation(
 }
 
 
-function explainImponibile(data: Record<string, unknown>): CatastoAnomaliaExplanation {
+function calculateImponibile(data: Record<string, unknown>): CatastoAnomaliaExplanation["calculations"] {
   const calculations: Array<{ label: string; value: string }> = [];
   pushCalculationText(calculations, "Superficie irrigabile", formatSquareMeters(data.sup_irrigabile_mq));
   pushCalculationText(calculations, "Superficie irrigabile in ettari", formatHectaresFromMq(data.sup_irrigabile_mq));
@@ -257,7 +295,7 @@ function explainImponibile(data: Record<string, unknown>): CatastoAnomaliaExplan
   if (data.coincide_con_catastale === true && formulaCatastale) {
     calculations.push({ label: "Nota", value: "L'imponibile registrato coincide con il calcolo su superficie catastale." });
   }
-  return buildAnomaliaExplanation("VAL-06-imponibile", calculations);
+  return calculations;
 }
 
 function explainUnknownAnomalia(descrizione: AnomaliaLike["descrizione"]): CatastoAnomaliaExplanation {
@@ -281,46 +319,9 @@ function explainUnknownAnomalia(descrizione: AnomaliaLike["descrizione"]): Catas
 
 export function explainCatastoAnomalia(anomalia: AnomaliaLike): CatastoAnomaliaExplanation {
   const data = anomalia.dati_json ?? {};
-
-  switch (anomalia.tipo) {
-    case "VAL-01-sup_eccede": {
-      const calculations: Array<{ label: string; value: string }> = [];
-      pushCalculation(calculations, "Scostamento in metri quadri", data.delta_mq);
-      pushCalculationText(calculations, "Scostamento percentuale", formatPct(data.delta_pct));
-      return buildAnomaliaExplanation("VAL-01-sup_eccede", calculations);
-    }
-    case "VAL-02-cf_invalido": {
-      const calculations: Array<{ label: string; value: string }> = [];
-      pushCalculationText(calculations, "Valore sorgente", data.cf_raw);
-      pushCalculationText(calculations, "Esito controllo", data.error_code);
-      return buildAnomaliaExplanation("VAL-02-cf_invalido", calculations);
-    }
-    case "VAL-03-cf_mancante":
-      return buildAnomaliaExplanation("VAL-03-cf_mancante", []);
-    case "VAL-04-comune_invalido":
-      return buildAnomaliaExplanation("VAL-04-comune_invalido", [
-        ...(data.cod_istat != null ? [{ label: "Codice comune sorgente", value: String(data.cod_istat) }] : []),
-      ]);
-    case "VAL-05-particella_assente": {
-      const calculations: Array<{ label: string; value: string }> = [];
-      pushCalculationText(calculations, "Foglio", data.foglio);
-      pushCalculationText(calculations, "Particella", data.particella);
-      pushCalculationText(calculations, "Subalterno", data.subalterno);
-      return buildAnomaliaExplanation("VAL-05-particella_assente", calculations);
-    }
-    case "VAL-06-imponibile":
-      return explainImponibile(data);
-    case "VAL-07-importi": {
-      const calculations: Array<{ label: string; value: string }> = [];
-      const v0648 = data.v07_648;
-      const v0985 = data.v07_985;
-      pushImportAmountCalculations(calculations, "0648", v0648);
-      pushImportAmountCalculations(calculations, "0985", v0985);
-      return buildAnomaliaExplanation("VAL-07-importi", calculations);
-    }
-    default:
-      return explainUnknownAnomalia(anomalia.descrizione);
-    }
+  const guidance = anomalyExplanations.get(anomalia.tipo);
+  if (!guidance) return explainUnknownAnomalia(anomalia.descrizione);
+  return buildAnomaliaExplanation(guidance, data);
 }
 
 function describeImportAmounts(code: string, value: unknown): Array<string | null> {

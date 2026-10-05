@@ -3,6 +3,43 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto frontend — avvio registro spiegazioni (2026-10-05)
+
+- Chiusura `IMPROVED`: definizioni tipizzate con testi guida e strategia di
+  calcolo nello stesso catalogo; lookup Map elimina i sette case di dispatch.
+  Assemblaggio comune conserva ordine chiavi e copie delle liste; strategia
+  imponibile produce direttamente calcoli, senza wrapper/violation trasferite.
+  La strategia VAL-03 alloca una lista vuota nuova per ciascuna spiegazione.
+- Target cog/cyc/LOC/nesting20/12/42/1 ->2/3/6/1; sei nuove strategie sotto
+  soglia (massimo cog/cyc1/2), imponibile6/6/26/1 invariato nelle metriche.
+  Eliminati entrambi i warning: zero error/zero warning nel file, non nel repo.
+- File cognitive sum/max58/20 ->41/6, cyclomatic71/12 ->69/6,
+  branching44 ->36, callable27 ->33, LOC374 invariato, tre import invariati;
+  densita0.34492 ->0.294118. Riduzione reale del dispatch e aggregati,
+  nessun debito trasferito o nuova esclusione/baseline/config.
+- Sette caratterizzazioni sul runtime originale per calcoli codice comune
+  null/falsy/array/oggetto; 89 test prima/dopo. Full-file100% dopo:
+  statement113/branch76/function33/line101, contatori tutti positivi e zero
+  esclusioni. 22275 input differenziali, due export/output completo/ordine
+  e input invariati rispetto al pre-slice `4bd2805b`.
+- Ratchet merge-base `4bd2805b`, ESLint, typecheck no-emit e whitespace PASS.
+  Graphify frontend codice aggiornato con patch pruning e force per rimuovere
+  simbolo privato rinominato; docs dedicate Catasto/piattaforma aggiornate.
+  Commit separato, nessun push; campagna tutti gli hotspot non-MCP attiva,
+  modifiche concorrenti preservate. Il prossimo hotspot va scelto dall'inventory
+  globale, senza restringere la campagna a questo file ora sotto soglia.
+- Passaggio `4bd2805b` verificato e committato; campagna non-MCP attiva,
+  singolo hotspot `explainCatastoAnomalia`, commit separato richiesto.
+- Prima cog/cyc/LOC/nesting20/12/42/1; file cognitive58/max20,
+  cyclomatic71/max12, LOC374, ventisette callable/tre import; due warning.
+- Unire testi guida e strategie di calcolo nello stesso catalogo tipizzato,
+  lookup Map privato senza chiavi prototype; assemblaggio comune e liste
+  sempre fresche. Calcoli imponibile riusati direttamente, niente wrapper.
+- Preservare ordine, testo, locale/precisione, truthiness/null, array-oggetto,
+  flag strict-true, fallback e indipendenza/mutabilita dei risultati e input.
+  Test sul runtime originale, full-file100%, ratchet merge-base e aggregati;
+  nessuna esclusione, modifica baseline/config o intervento su change parallele.
+
 ### Catasto frontend — avvio registro descrizioni (2026-10-05)
 
 - Chiusura `IMPROVED`: selezione condizionale sostituita da registro Map

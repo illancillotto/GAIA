@@ -1,6 +1,21 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-05 — registro spiegazioni anomalie
+
+- Definizioni tipizzate riuniscono testi guida e strategie di calcolo; lookup
+  Map senza chiavi prototype sostituisce il dispatch. Assemblaggio comune
+  conserva ordine chiavi, liste nuove mutabili e input immutati; strategia
+  imponibile riusata direttamente, senza wrapper o debito trasferito.
+- `explainCatastoAnomalia` cog/cyc/LOC/nesting20/12/42/1 ->2/3/6/1;
+  `IMPROVED`, cognitive file58 ->41, cyclomatic71 ->69, branching44 ->36,
+  LOC374 invariato. Strategie tutte sotto soglia: zero warning/error nel file
+  frontend anomalie, senza dichiarare concluso il programma di repository.
+- Sette caratterizzazioni prima del runtime, 89 test prima/dopo;
+  full-file100% statement/branch/function/line, 22275 input equivalenti per
+  entrambi gli export e ordine invariato. Ratchet merge-base, typecheck ed
+  ESLint PASS, baseline/config/scope invariati; Graphify codice force/pruning.
+
 ### 2026-10-05 — registro descrizioni anomalie
 
 - Registro Map privato di descrizioni statiche/formatter completi per tipo
