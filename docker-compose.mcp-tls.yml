@@ -1,0 +1,15 @@
+services:
+  nginx:
+    environment:
+      GAIA_MCP_HTTPS_ORIGIN: ${GAIA_MCP_HTTPS_ORIGIN:?Set GAIA_MCP_HTTPS_ORIGIN to the canonical HTTPS origin}
+      NGINX_ENVSUBST_OUTPUT_DIR: /etc/nginx/gaia
+      NGINX_ENVSUBST_FILTER: ^GAIA_MCP_HTTPS_ORIGIN$$
+    ports:
+      - "${GAIA_HTTPS_PORT:-8443}:443"
+    volumes:
+      - ./nginx/mcp-tls.conf:/etc/nginx/conf.d/mcp-tls.conf:ro
+      - ./nginx/mcp-http-redirect.conf.template:/etc/nginx/templates/mcp-http-redirect.conf.template:ro
+      - ./nginx/mcp-connector-http.example.conf:/etc/nginx/gaia/mcp-http.conf:ro
+      - ./nginx/mcp-connector-server.example.conf:/etc/nginx/gaia/mcp-server.conf:ro
+      - ${GAIA_TLS_CERTIFICATE:?Set GAIA_TLS_CERTIFICATE to the PEM certificate chain}:/etc/nginx/tls/fullchain.pem:ro
+      - ${GAIA_TLS_PRIVATE_KEY:?Set GAIA_TLS_PRIVATE_KEY to the PEM private key}:/etc/nginx/tls/privkey.pem:ro

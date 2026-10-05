@@ -448,6 +448,15 @@ Fa da reverse proxy:
 - proxy API backend
 - gestisce headers e timeouts
 
+`nginx/server-routes.conf` condivide il routing applicativo. Lo stack base
+resta HTTP; l'override opzionale `docker-compose.mcp-tls.yml` aggiunge HTTPS
+con certificato/chiave PEM esterni e TLS 1.2/1.3. Le route MCP, i metadata
+OAuth e la pagina consenso su HTTP reindirizzano con `308` all'origin
+`GAIA_MCP_HTTPS_ORIGIN`; il traffico GAIA ordinario resta disponibile su
+entrambi gli schemi. Il proxy HTTPS inoltra i path connector senza il rewrite
+API generico, al listener interno `gaia-mcp-connector:8769`.
+Configurazione, matrice test e limiti: `domain-docs/mcps/HTTP_HTTPS_GATEWAY.md`.
+
 ### scanner
 Esegue la scansione LAN del modulo GAIA Rete e persiste snapshot, dispositivi e alert.
 

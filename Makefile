@@ -463,6 +463,10 @@ MCP_CA_CERT ?=
 MCP_CA_BUNDLE ?= runtime-data/mcps/client-ca
 
 .PHONY: mcp-ca-bundle test-mcp-tls lint-mcp-tls
+.PHONY: test-mcp-gateway
+test-mcp-gateway:
+	$(QUALITY_PYTHON) -m pytest -q tests/infrastructure/test_mcp_tls_gateway.py
+
 mcp-ca-bundle:
 	GO_BIN="$(GO_BIN)" bash scripts/tls/build-client-bundle.sh "$(MCP_CA_CERT)" "$(MCP_CA_BUNDLE)"
 

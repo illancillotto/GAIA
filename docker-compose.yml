@@ -350,6 +350,7 @@ services:
       - "${NGINX_PORT:-8080}:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/server-routes.conf:/etc/nginx/gaia/server-routes.conf:ro
       - ./nginx/maintenance:/usr/share/nginx/html/maintenance:ro
       - ./runtime-data/nginx-maintenance:/var/lib/gaia-nginx-maintenance
     healthcheck:

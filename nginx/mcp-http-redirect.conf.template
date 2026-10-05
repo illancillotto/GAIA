@@ -1,0 +1,9 @@
+location ~ ^/(api/wiki/mcp/connector/(data|oauth/(authorize|consent|token|revoke))|\\.well-known/(oauth-authorization-server/api/wiki/mcp/connector/oauth|oauth-protected-resource/api/wiki/mcp/connector/data)|mcp/consent)$ {
+  if ($maintenance_mode = 1) {
+    return 503;
+  }
+  access_log off;
+  add_header Cache-Control "no-store" always;
+  add_header Referrer-Policy "no-referrer" always;
+  return 308 ${GAIA_MCP_HTTPS_ORIGIN}$request_uri;
+}

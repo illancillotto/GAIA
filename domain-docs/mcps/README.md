@@ -1,5 +1,12 @@
 # GAIA MCPs
 
+Gateway HTTP/HTTPS corrente: `HTTP_HTTPS_GATEWAY.md`. Override Compose TLS
+opzionale, redirect HTTP `308` delle route MCP all'origin HTTPS canonico,
+suite persistente `make test-mcp-gateway`. Nessuna attivazione o prova client
+cloud effettuata; OAuth conserva i propri URL HTTPS e i client preregistrati.
+Verifica finale e limiti dei gate globali:
+`GATEWAY_FINAL_VALIDATION_2026-10-05.md`.
+
 Chiusura corrente: `FINAL_CLOSURE_2026-10-03.md`. Suite MCP/coverage e build
 pulita anche nel checkout passate; ratchet globale e rilascio Claude restano
 pendenti. Il connettore e ancora disattivato, nessun deploy.

@@ -17,6 +17,18 @@ Il gate sui file cambiati a `100%` resta attivo come protezione immediata, ma no
 
 ## Stato di partenza
 
+### Gateway MCP HTTP/HTTPS — 2026-10-05
+
+`make test-mcp-gateway` esercita Nginx e l'entry point Compose reale in
+container isolati, coprendo routing, redirect, TLS/trust, limiti body/IP,
+headers, log e maintenance. Matrice e prerequisiti:
+`domain-docs/mcps/HTTP_HTTPS_GATEWAY.md`. Le configurazioni Nginx/Compose non
+vengono conteggiate come statement Python, ne si misura la coverage del
+test per attribuirla al gateway. `make test-mcp-connector` verifica il runtime
+OAuth reale con target 100% statement/branch. Questa change non modifica
+runtime Python/TypeScript/worker, baseline o soglie di coverage; il requisito
+100% del codice runtime strumentabile e la copertura globale restano invariati.
+
 ### Presenze giornaliere — chiusura coverage autorizzata - 2026-10-01
 
 La successiva richiesta di risolvere coverage e mese vuoto autorizza il runtime

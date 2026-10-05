@@ -82,6 +82,10 @@ e il connettore esterno a ricevere le sole risposte sintetiche autorizzate.
 
 ## Configurazione, senza attivare
 
+Per aggiungere HTTPS allo stack conservando HTTP, usare l'override opzionale
+e la procedura in `HTTP_HTTPS_GATEWAY.md`. Con l'override le route MCP su HTTP
+reindirizzano all'origin HTTPS canonico; OAuth continua a richiedere HTTPS.
+
 `config/mcps/environment.example` documenta le variabili. Il backend richiede
 `GAIA_MCP_OAUTH_ENABLED=true`; qualsiasi altro valore tranne `false` fallisce.
 `false` (default) restituisce 404 senza aprire database o sessioni GAIA.
@@ -120,6 +124,9 @@ Cambiare soltanto un env runtime del container frontend non cambia il bundle.
   body 64k, rate limit IP, buffering off, token/query non in access log.
   Consenso ha no-referrer/no-store e protezione framing; completare CSP
   compatibile con il frontend durante il rilascio.
+  Lo snippet server usa `$maintenance_mode`, definito dal routing condiviso
+  `nginx/server-routes.conf`: su un altro virtual host definire la stessa
+  variabile e la gestione maintenance prima di includerlo.
 - Esempi **non inclusi** in `nginx.conf`: integrarli soltanto nel virtual
   host HTTPS approvato, preservando host/origin e path senza rewrite `/api`.
   Sul bordo Internet esporre solo route MCP/metadata, non tutte le API GAIA.

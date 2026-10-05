@@ -217,6 +217,8 @@ Documentazione tecnica dei Model Context Protocol usati dall'agente Wiki. Non e 
 
 - `domain-docs/mcps/README.md`
 - `domain-docs/mcps/ARCHITECTURE.md`
+- `domain-docs/mcps/HTTP_HTTPS_GATEWAY.md`: override TLS e matrice test del gateway
+- `domain-docs/mcps/GATEWAY_FINAL_VALIDATION_2026-10-05.md`: gate finali e residui
 - `domain-docs/mcps/MCP_PROTOCOL_BASELINE.md`
 - `domain-docs/mcps/OBSERVABILITY_AND_EVALUATION.md`
 - `domain-docs/mcps/SECURITY_AND_PRIVACY.md`
@@ -224,6 +226,11 @@ Documentazione tecnica dei Model Context Protocol usati dall'agente Wiki. Non e 
 - `domain-docs/mcps/data/GAIA_DATA_MCP_TOOLS.md`
 - `domain-docs/mcps/docs/README.md`
 - `domain-docs/mcps/docs/GAIA_DOCS_MCP_TOOLS.md`
+
+Configurazione gateway: `docker-compose.mcp-tls.yml`,
+`nginx/server-routes.conf`, `nginx/mcp-tls.conf` e
+`nginx/mcp-http-redirect.conf.template`. Suite di integrazione Docker:
+`tests/infrastructure/test_mcp_tls_gateway.py` (`make test-mcp-gateway`).
 
 ### Wiki Agent (Milestone 9)
 

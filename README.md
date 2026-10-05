@@ -504,6 +504,11 @@ Variabili operative principali:
 - `CONFIGURE_HOST_NGINX`: `auto|yes|no`
 - `POSTGRES_VOLUME_NAME`: volume Docker da usare per i dati Postgres sul server CED; se assente usa `gaia_postgres_data`
 
+HTTPS e connector MCP: l'override opzionale `docker-compose.mcp-tls.yml`
+aggiunge HTTPS mantenendo GAIA in HTTP e reindirizza le route MCP HTTP a
+HTTPS (`308`). Certificati, origin e avvio sono descritti in
+[`HTTP_HTTPS_GATEWAY.md`](domain-docs/mcps/HTTP_HTTPS_GATEWAY.md).
+
 Maintenance mode:
 
 - `./scripts/maintenance-on.sh`: abilita la pagina statica "Deploy in corso" servita da `nginx`
