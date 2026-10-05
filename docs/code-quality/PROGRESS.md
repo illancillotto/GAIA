@@ -3,6 +3,45 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### SISTER — mapping proprietari legacy (2026-10-05)
+
+- Chiusura `IMPROVED`: mapper proprietario/continuazioni separati, assegnazioni
+  diritto/quota condivise. Guardia pending duplicata eliminata; CF continuato
+  conserva short-circuit prima della ricerca diritto, remainder search distinto
+  dal match continuazione. Scansione sezioni/precedenza structured owners invariata.
+- Target cog/cyc/LOC/nesting48/28/61/3 ->33/22/40/2; mapper1/2/15/1,
+  continuazione1/2/5/1 e diritto1/2/5/1 sotto soglia. Warning LOC eliminato,
+  due error cognitiva/ciclomatica target restano; nessuna violation trasferita.
+- File cognitive sum/max114/48 ->102/33, cyclomatic93/28 ->93/22,
+  branching76 ->73, callable17 ->20, LOC245 ->249 sotto soglia file,
+  densita0.844898 ->0.783133/import7 invariati. Riduzione aggregata reale,
+  baseline/config/scope/versione parser invariati.
+- Quattro caratterizzazioni prima/dopo per search remainder, match continuato,
+  CF sovrascritto uppercase, data invalida e assenza chiavi opzionali.
+  33 parser full-file100% prima statement186/branch78; 77 parser/persistenza/
+  backfill PASS dopo, full-file100% statement190/branch76, zero missing/partial/
+  esclusioni. Nessuna nuova failure nel perimetro.
+- 3600 layout legacy/remainder/continuazioni/terminatori/whitespace, 3600
+  metadati, 2000 testi e 45229 sequenze/start differenziali contro `b51a8228`:
+  payload completi/eventi/current owners/related identici e input invariati.
+  Ratchet merge-base, Ruff mirato, format-check test/whitespace PASS;
+  lint globale compileall PASS, solo UP038 InCass concorrente fuori slice.
+- Graphify backend codice e docs Catasto/piattaforma richiesto prima del commit
+  separato; nessun push, change concorrenti preservate. Campagna non-MCP attiva,
+  prossimo candidato scansione sezioni/owner nel parser33/22, non zero debito.
+- Preflight `b51a8228`: singolo hotspot parse_sister_visura_text48/28/61/3,
+  due error/un warning; file cognitive114/cyclomatic93/branching76/LOC245,
+  diciassette callable. Altre responsabilita parser restano fuori slice.
+- Isolare mapper proprietario legacy e aggiornamento continuazioni; condividere
+  assegnazioni right/share da match. CF nel remainder usa search, CF continuato
+  match full-line prima del diritto; diritto remainder search, continuazione match.
+- Preservare ordine nome/place/data/CF/right, CF uppercase/rstrip asterisco,
+  assenza chiavi opzionali, mutazioni pending e append stesso owner; nessun cambio
+  scansione header/sezioni/status, versione parser/API/schema/baseline/config/scope.
+- Caratterizzazione originale full-file100%, differenziali remainder/continuazioni
+  e testi, aggregati/ratchet contro HEAD, Ruff/Graphify e commit autorizzato;
+  change concorrenti preservate, campagna non-MCP attiva.
+
 ### SISTER — metadati e riferimenti payload testo (2026-10-05)
 
 - Chiusura `IMPROVED`: costruzione payload iniziale isolata, lettura gruppo

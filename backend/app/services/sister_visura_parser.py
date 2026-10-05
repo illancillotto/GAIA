@@ -206,6 +206,37 @@ def _build_visura_payload(lines: list[str]) -> dict[str, Any]:
     }
 
 
+def _update_legacy_owner_right(owner: dict[str, Any], match: re.Match[str] | None) -> None:
+    if match is None:
+        return
+    owner["diritto"] = match.group("right").strip()
+    owner["quota"] = match.group("share")
+
+
+def _build_legacy_owner(match: re.Match[str], line: str) -> dict[str, Any]:
+    display, surname, given = _owner_name_parts(match.group("name"))
+    owner = {
+        "denominazione": display,
+        "cognome": surname,
+        "nome": given,
+        "luogo_nascita": match.group("place").strip(),
+        "data_nascita": _parse_date(match.group("date")),
+    }
+    remainder = line[match.end() :]
+    cf_match = re.search(r"\b([A-Z0-9]{11,16})\*?\b", remainder, re.I)
+    if cf_match:
+        owner["codice_fiscale"] = cf_match.group(1).upper()
+    _update_legacy_owner_right(owner, _RIGHT_RE.search(remainder))
+    return owner
+
+
+def _update_legacy_owner_continuation(owner: dict[str, Any], line: str) -> None:
+    if _CF_RE.match(line):
+        owner["codice_fiscale"] = line.rstrip("*").upper()
+        return
+    _update_legacy_owner_right(owner, _RIGHT_RE.match(line))
+
+
 def parse_sister_visura_text(text: str) -> dict[str, Any]:
     lines = [re.sub(r"\s+", " ", line).strip() for line in text.splitlines()]
     lines = [line for line in lines if line]
@@ -228,32 +259,11 @@ def parse_sister_visura_text(text: str) -> dict[str, Any]:
             break
         owner_match = _OWNER_RE.search(line)
         if owner_match:
-            display, surname, given = _owner_name_parts(owner_match.group("name"))
-            pending_owner = {
-                "denominazione": display,
-                "cognome": surname,
-                "nome": given,
-                "luogo_nascita": owner_match.group("place").strip(),
-                "data_nascita": _parse_date(owner_match.group("date")),
-            }
-            remainder = line[owner_match.end() :]
-            cf_match = re.search(r"\b([A-Z0-9]{11,16})\*?\b", remainder, re.I)
-            if cf_match:
-                pending_owner["codice_fiscale"] = cf_match.group(1).upper()
-            right_match = _RIGHT_RE.search(remainder)
-            if right_match:
-                pending_owner["diritto"] = right_match.group("right").strip()
-                pending_owner["quota"] = right_match.group("share")
+            pending_owner = _build_legacy_owner(owner_match, line)
             result["owners"].append(pending_owner)
             continue
-        if pending_owner is not None and _CF_RE.match(line):
-            pending_owner["codice_fiscale"] = line.rstrip("*").upper()
-            continue
         if pending_owner is not None:
-            right_match = _RIGHT_RE.match(line)
-            if right_match:
-                pending_owner["diritto"] = right_match.group("right").strip()
-                pending_owner["quota"] = right_match.group("share")
+            _update_legacy_owner_continuation(pending_owner, line)
     if owner_start is not None:
         structured_owners = _parse_current_owners(lines, owner_start)
         if structured_owners:

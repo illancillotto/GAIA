@@ -281,6 +281,52 @@ def test_legacy_owner_continuations_and_structured_fallback():
     assert "codice_fiscale" not in payload["owners"][1]
 
 
+@pytest.mark.parametrize(
+    "remainder,continuations,birth,optional",
+    [
+        (
+            "rssmra80a01h501u* (1) Proprieta 1/2",
+            [],
+            "01/01/1980",
+            {"codice_fiscale": "RSSMRA80A01H501U", "diritto": "Proprieta", "quota": "1/2"},
+        ),
+        (
+            "prefix (1) Usufrutto 1/3",
+            [],
+            "01/01/1980",
+            {"diritto": "Usufrutto", "quota": "1/3"},
+        ),
+        (
+            "rssmra80a01h501u* (1) Proprieta 1/2",
+            ["abcdefghijk*", "prefix (1) Ignored 1/4", "(1) Usufrutto 1/3"],
+            "01/01/1980",
+            {"codice_fiscale": "ABCDEFGHIJK", "diritto": "Usufrutto", "quota": "1/3"},
+        ),
+        (
+            "",
+            ["abcdefghijklmnopqrst", "prefix (1) Ignored 1/4"],
+            "31/02/1980",
+            {},
+        ),
+    ],
+)
+def test_legacy_owner_remainder_search_continuation_match_and_optional_keys(
+    remainder, continuations, birth, optional
+):
+    text = "\n".join(
+        ["INTESTATI", f"1 Rossi Mario nato a Roma (RM) il {birth} {remainder}", *continuations]
+    )
+    expected = {
+        "denominazione": "Rossi Mario",
+        "cognome": "Rossi",
+        "nome": "Mario",
+        "luogo_nascita": "Roma",
+        "data_nascita": date(1980, 1, 1) if birth == "01/01/1980" else None,
+        **optional,
+    }
+    assert parse_sister_visura_text(text)["owners"] == [expected]
+
+
 def test_pdf_pages_and_parse_adapter(monkeypatch):
     from types import SimpleNamespace
 

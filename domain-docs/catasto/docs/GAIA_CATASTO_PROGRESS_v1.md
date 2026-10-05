@@ -1,6 +1,22 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-05 — mapping proprietari legacy SISTER
+
+- Mapper proprietario e continuazioni separati, diritto/quota condivisi;
+  guardia pending duplicata eliminata. CF remainder search e continuazione
+  full-line match/short-circuit, diritto search/match distinti preservati.
+  Ordine aggiornamenti/append, chiavi opzionali e precedenza structured owners invariati.
+- Parser testo cog/cyc/LOC/nesting48/28/61/3 ->33/22/40/2, helper sotto soglia;
+  cognitive file114 ->102, branching76 ->73. Warning LOC eliminato, due error
+  complessita residui; nessun debt transfer o cambio API/schema/versione parser/
+  baseline/config/scope/scansione sezioni/status.
+- Quattro caratterizzazioni prima/dopo, 77 test parser/persistenza/backfill PASS,
+  full-file100% statement190/branch76; 3600 legacy, 3600 metadati, 2000 testi
+  e 45229 sequenze/start differenziali identici. Ratchet/Ruff mirato PASS;
+  lint globale UP038 InCass concorrente. Graphify backend codice e docs Catasto/
+  piattaforma aggiornati prima del commit; campagna non-MCP ancora attiva.
+
 ### 2026-10-05 — metadati e riferimenti payload testo SISTER
 
 - Payload iniziale isolato, gruppo regex opzionale/strip condiviso per data,
