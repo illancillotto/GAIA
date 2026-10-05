@@ -311,6 +311,10 @@ function describeImportAmounts(code: string, value: unknown): Array<string | nul
   ];
 }
 
+function describeSourceReference(prefix: string, value: unknown): string | null {
+  return value ? `${prefix}${String(value)}.` : null;
+}
+
 export function describeCatastoAnomalia(anomalia: AnomaliaLike): string {
   const data = anomalia.dati_json ?? {};
 
@@ -324,8 +328,8 @@ export function describeCatastoAnomalia(anomalia: AnomaliaLike): string {
     case "VAL-02-cf_invalido":
       return compactParts([
         "Il codice fiscale o la partita IVA importata non supera i controlli formali.",
-        data.cf_raw ? `Valore sorgente: ${String(data.cf_raw)}.` : null,
-        data.error_code ? `Errore: ${String(data.error_code)}.` : null,
+        describeSourceReference("Valore sorgente: ", data.cf_raw),
+        describeSourceReference("Errore: ", data.error_code),
       ]);
     case "VAL-03-cf_mancante":
       return "Manca il codice fiscale o la partita IVA nella riga ruolo importata.";
@@ -337,9 +341,9 @@ export function describeCatastoAnomalia(anomalia: AnomaliaLike): string {
     case "VAL-05-particella_assente":
       return compactParts([
         "La riga ruolo non trova una particella corrente GAIA con lo stesso riferimento catastale.",
-        data.foglio ? `Foglio ${String(data.foglio)}.` : null,
-        data.particella ? `Particella ${String(data.particella)}.` : null,
-        data.subalterno ? `Sub ${String(data.subalterno)}.` : null,
+        describeSourceReference("Foglio ", data.foglio),
+        describeSourceReference("Particella ", data.particella),
+        describeSourceReference("Sub ", data.subalterno),
       ]);
     case "VAL-06-imponibile":
       return compactParts([

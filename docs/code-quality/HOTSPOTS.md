@@ -14,6 +14,14 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, Catasto riferimenti sorgente, 2026-10-05:
+`describeCatastoAnomalia` `IMPROVED`, cog/cyc44/24 ->34/19; helper
+condiviso1/2/3/0, zero violation. Cognitive file113 ->104, cyclomatic82 ->79,
+LOC344 ->347, nessun debito trasferito; cinque error residui nel file.
+51 test, full-file100% su quattro metriche, 3600 input equivalenti;
+ratchet mirato/typecheck/ESLint PASS. Campagna tutti gli hotspot attiva,
+MCP escluso operativamente senza alterare baseline/config/scope dei gate.
+
 Catasto frontend formula, 2026-10-05: `formatFormula` `IMPROVED` limitato
 ai parametri5 ->4; rimosso parametro inutilizzato, warning params eliminato
 ed ESLint ora pulito. Cognitive/cyclomatic/LOC invariati, cinque error

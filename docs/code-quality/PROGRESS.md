@@ -3,6 +3,38 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Campagna tutti gli hotspot non-MCP — avvio (2026-10-05)
+
+- Passaggio riferimenti sorgente `IMPROVED`: `describeSourceReference` contiene
+  il predicato truthy e la conversione/testo condivisi da cinque campi.
+  Target cog/cyc/LOC/nesting44/24/49/1 ->34/19/49/1; helper1/2/3/0,
+  due parametri e zero violation. File cognitive113 ->104, cyclomatic82 ->79,
+  branching65 ->61, LOC344 ->347, diciotto callable/tre import.
+  Restano cinque error nel file, nessun trasferimento del debito.
+- Nove caratterizzazioni sul runtime originale, 51 test prima/dopo;
+  full-file100% statement99/branch106/function18/line88 dopo, zero esclusioni.
+  3600 input differenziali con due export/otto tipi/ordine chiavi invertito,
+  output identici alla copia pre-slice. Ratchet merge-base `ad1fd588`, ESLint,
+  typecheck no-emit e whitespace PASS. Baseline/config/scope invariati.
+- Graphify frontend codice e docs Catasto/piattaforma aggiornati tramite
+  target dedicati; commit di questo passaggio separato, nessun push.
+  La campagna resta attiva: le violation residue non sono dichiarate risolte.
+- Goal esplicito: proseguire tutti gli hotspot, commit ad ogni passaggio,
+  MCP escluso da questa fase. Esclusione operativa, non modifica di scope/
+  baseline/gate; preservare anche le change parallele non correlate.
+- Snapshot read-only su `85b179b0`: 4714 violation non-MCP in 778 file,
+  filtrando soltanto `/wiki/mcps/`; inventory completa in report AST locale.
+  Warning/error e candidati del backlog restano nel perimetro, non solo Catasto.
+  Il goal resta attivo finche il perimetro non e verificato completo.
+- Consolidate tre slice gia validate con commit separati: `f1887649`
+  (caratterizzazione VAL-06, runtime invariato), `9838c415` (spiegazioni VAL-07)
+  e `ad1fd588` (parametro formula). Test backend18/frontend42, full-file100%.
+- Prossimo singolo hotspot: descrizioni riferimenti sorgente in
+  `describeCatastoAnomalia`, base `ad1fd588`, cog/cyc/LOC/nesting44/24/49/1.
+  Preservare truthiness (zero/false omessi), String(), testo/punteggiatura,
+  ordine fiscale/particella e campo comune non-null. Helper condiviso non
+  duplicato, test prima/dopo, full-file100%, ratchet e aggregati obbligatori.
+
 ### Catasto frontend — avvio parametro formula inutilizzato (2026-10-05)
 
 - Chiusura `IMPROVED` limitata ai parametri: rimosso `multiplierDigits`

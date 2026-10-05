@@ -2,6 +2,30 @@ import { describe, expect, test } from "vitest";
 
 import { describeCatastoAnomalia, explainCatastoAnomalia } from "@/lib/catasto-anomalie";
 
+describe("source reference descriptions", () => {
+  test.each([
+    [undefined, ""],
+    [null, ""],
+    [false, ""],
+    [0, ""],
+    ["", ""],
+    ["ABC", "ABC"],
+    [12, "12"],
+    [[], ""],
+    [{}, "[object Object]"],
+  ])("preserves source truthiness and string conversion for %j", (value, text) => {
+    const fiscal = "Il codice fiscale o la partita IVA importata non supera i controlli formali.";
+    const parcel = "La riga ruolo non trova una particella corrente GAIA con lo stesso riferimento catastale.";
+    const included = Boolean(value);
+    expect(describeCatastoAnomalia({
+      tipo: "VAL-02-cf_invalido", dati_json: { cf_raw: value, error_code: value },
+    })).toBe(included ? `${fiscal} Valore sorgente: ${text}. Errore: ${text}.` : fiscal);
+    expect(describeCatastoAnomalia({
+      tipo: "VAL-05-particella_assente", dati_json: { foglio: value, particella: value, subalterno: value },
+    })).toBe(included ? `${parcel} Foglio ${text}. Particella ${text}. Sub ${text}.` : parcel);
+  });
+});
+
 describe("explainCatastoAnomalia", () => {
   test.each([
     [null, []],

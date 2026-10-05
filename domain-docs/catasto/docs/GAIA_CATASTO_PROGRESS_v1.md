@@ -1,6 +1,18 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-05 — descrizioni riferimenti sorgente condivise
+
+- Predicate truthy/String/testo condivisi per codice fiscale, errore,
+  foglio/particella/subalterno. Zero/false omessi, array/oggetti convertiti
+  come prima, ordine e punteggiatura invariati; comune conserva non-null.
+- `describeCatastoAnomalia` cog/cyc44/24 ->34/19, LOC49/nesting1 invariati;
+  helper1/2/3/0 sotto soglia. `IMPROVED`, cognitive file113 ->104,
+  cyclomatic82 ->79 senza trasferire debito; cinque error residui nel file.
+- Nove caratterizzazioni prima del runtime, 51 test prima/dopo,
+  full-file100% su quattro metriche, 3600 input equivalenti per entrambi
+  gli export. Ratchet merge-base/typecheck/ESLint PASS, baseline invariata.
+
 ### 2026-10-05 — parametro formula inutilizzato rimosso
 
 - Rimosso `multiplierDigits` dal helper privato frontend: non influiva sulla
