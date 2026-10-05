@@ -3,6 +3,46 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### SISTER — avvio mapping persistenza visura (2026-10-05)
+
+- Chiusura `IMPROVED`: mapper completi parcel/owner/history e conversione date
+  condivisa; normalizzazione parcel non duplicata. Coordinatore conserva cache,
+  add/flush/delete e loop/catch, senza commit/rollback o cambi di transazione.
+- Target cog/cyc/LOC/nesting73/40/71/2 ->30/19/34/2; mapper parcel3/4/17/0,
+  owner6/7/20/0, history2/3/16/0 e data1/2/2/0 sotto soglia. Nessuna violation
+  trasferita. Warning LOC eliminato, restano quattro error nel file:
+  due target e due resolver canonico29/26/18/1 invariato, non zero debito.
+- File cognitive sum/max109/73 ->78/30, cyclomatic72/40 ->67/26,
+  branching69 ->60, callable3 ->7, LOC112 ->134 sotto soglia file;
+  import8 invariati, densita1.616071 ->1.08209. Riduzione aggregata reale,
+  baseline/config/scope invariati. Import e isinstance(date) allineati a Ruff
+  nel file modificato, senza cambio funzionale o nuove esclusioni.
+- 30 caratterizzazioni nuove prima/dopo, 33 test persistenza/backfill PASS;
+  full-file100% statement78/branch16, zero esclusioni/missing/partial.
+  Cache SHA/version, stato failed, query/deduplica, CF/date e matching canonico,
+  SHA fuori try e scritture parziali prima del catch dimostrati dai trace.
+- 320 input differenziali con owner/date/canonici/existing e failure inject:
+  SQL e ordine/payload side-effect, campi record e stato errore identici al
+  pre-slice `078c3ec5`, input invariati. Test usano sessione recording e modelli
+  reali; non dichiarare un test PostgreSQL non eseguito.
+- Ratchet merge-base `078c3ec5`, Ruff mirato, format-check nuovo test e
+  whitespace PASS. Lint globale .venv compileall PASS; UP038 InCass concorrente
+  fuori slice resta, nessuna nuova failure nel perimetro. Graphify backend
+  codice e docs Catasto/piattaforma aggiornati; commit separato, nessun push.
+  Campagna globale non-MCP attiva, change concorrenti preservate.
+- NavItem `078c3ec5` sotto soglia e committato; campagna non-MCP attiva.
+- Singolo hotspot `persist_sister_visura` cog/cyc/LOC/nesting73/40/71/2;
+  `_resolve_particella`29/26/18/1 resta fuori refactoring, file LOC112,
+  tre callable/cinque violation (quattro error/un warning).
+- Separare costruzione record parcel/owner/history e conversione date comune;
+  mantenere nel coordinatore cache, add/flush/delete, loop e try/catch.
+- Preservare SHA fuori try, cache parser-version, query/ordine SQL, matching
+  canonico, normalization CF, stato/payload ed errori, anche scritture parziali
+  prima del catch. Nessun commit/rollback aggiunto, transazioni/API/schema intatti.
+- Test di caratterizzazione full-file prima/dopo e trace SQL/side-effect,
+  metriche/aggregati e ratchet merge-base, Ruff. Nessuna nuova esclusione,
+  baseline/config o intervento su change concorrenti; commit separato.
+
 ### Frontend layout — avvio presentazione NavItem (2026-10-05)
 
 - Chiusura `IMPROVED`: componente privato stateless responsabile di classi,

@@ -1,6 +1,22 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-05 — mapping persistenza visure SISTER
+
+- Mapper parcel/owner/history e conversione date condivisa isolano costruzione
+  dei record; coordinatore conserva cache SHA/version, query e ordine add/
+  flush/delete, loop e catch. Canonici/CF, payload/stati e scritture parziali
+  prima del catch invariati; nessun commit/rollback o cambio API/schema.
+- `persist_sister_visura` cog/cyc/LOC/nesting73/40/71/2 ->30/19/34/2;
+  cognitive file109 ->78, cyclomatic72 ->67, branching69 ->60. Mapper sotto
+  soglia, warning LOC eliminato; restano quattro error target/resolver canonico.
+  Nessun debito trasferito o nuova esclusione/baseline/config.
+- 30 caratterizzazioni prima/dopo, 33 test persistenza/backfill PASS;
+  full-file100% statement78/branch16, 320 trace SQL/side-effect/record/stati
+  differenziali identici. Sessione recording con modelli reali, non un test
+  PostgreSQL. Ratchet/Ruff mirato PASS; lint globale UP038 InCass concorrente
+  fuori slice. Graphify backend codice e docs Catasto/piattaforma aggiornati.
+
 ### 2026-10-05 — registro spiegazioni anomalie
 
 - Definizioni tipizzate riuniscono testi guida e strategie di calcolo; lookup

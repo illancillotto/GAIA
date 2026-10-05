@@ -14,11 +14,15 @@ from app.models.catasto import (
     CatastoSisterParcel,
 )
 from app.models.catasto_phase1 import CatIntestatario, CatParticella
-from app.services.sister_visura_parser import PARSER_VERSION, parse_sister_visura_pdf, sister_pdf_sha256
+from app.services.sister_visura_parser import (
+    PARSER_VERSION,
+    parse_sister_visura_pdf,
+    sister_pdf_sha256,
+)
 
 
 def _jsonable(value: Any) -> Any:
-    if isinstance(value, (date,)):
+    if isinstance(value, date):
         return value.isoformat()
     if isinstance(value, dict):
         return {str(key): _jsonable(item) for key, item in value.items()}
@@ -47,6 +51,69 @@ def _resolve_particella(db: Session, payload: dict[str, Any]) -> CatParticella |
     return matches[0] if len(matches) == 1 else None
 
 
+def _payload_date(payload: dict[str, Any], field: str) -> date | None:
+    return date.fromisoformat(payload[field]) if payload.get(field) else None
+
+
+def _build_sister_parcel(
+    db: Session,
+    extraction: CatastoSisterExtraction,
+    payload: dict[str, Any],
+) -> CatastoSisterParcel:
+    canonical_particella = _resolve_particella(db, payload)
+    parcel_payload = payload.get("parcel") or {}
+    return CatastoSisterParcel(
+        extraction_id=extraction.id,
+        comune_nome=payload.get("comune_nome"),
+        comune_codice=payload.get("comune_codice"),
+        foglio=parcel_payload.get("foglio"),
+        particella=parcel_payload.get("particella"),
+        subalterno=parcel_payload.get("subalterno"),
+        payload_json=parcel_payload,
+        cat_particella_id=canonical_particella.id if canonical_particella else None,
+    )
+
+
+def _build_sister_owner(
+    db: Session,
+    parcel: CatastoSisterParcel,
+    owner_payload: dict[str, Any],
+) -> CatastoSisterOwner:
+    cf = str(owner_payload.get("codice_fiscale") or "").strip().upper() or None
+    canonical = db.scalar(select(CatIntestatario).where(func.upper(CatIntestatario.codice_fiscale) == cf)) if cf else None
+    return CatastoSisterOwner(
+        sister_parcel_id=parcel.id,
+        cat_intestatario_id=canonical.id if canonical else None,
+        codice_fiscale=cf,
+        denominazione=owner_payload.get("denominazione"),
+        cognome=owner_payload.get("cognome"),
+        nome=owner_payload.get("nome"),
+        data_nascita=_payload_date(owner_payload, "data_nascita"),
+        luogo_nascita=owner_payload.get("luogo_nascita"),
+        diritto=owner_payload.get("diritto"),
+        quota=owner_payload.get("quota"),
+        payload_json=owner_payload,
+    )
+
+
+def _build_sister_history_event(
+    extraction: CatastoSisterExtraction,
+    event: dict[str, Any],
+) -> CatastoSisterHistoryEvent:
+    owner = event.get("owner") or {}
+    return CatastoSisterHistoryEvent(
+        extraction_id=extraction.id,
+        from_date=_payload_date(event, "from_date"),
+        act_date=_payload_date(event, "act_date"),
+        codice_fiscale=owner.get("codice_fiscale"),
+        denominazione=owner.get("denominazione"),
+        diritto=owner.get("diritto"),
+        quota=owner.get("quota"),
+        act_description=event.get("act"),
+        payload_json=event,
+    )
+
+
 def persist_sister_visura(db: Session, document: CatastoDocument) -> CatastoSisterExtraction:
     existing = db.scalar(select(CatastoSisterExtraction).where(CatastoSisterExtraction.document_id == document.id))
     pdf_sha256 = sister_pdf_sha256(document.filepath)
@@ -59,57 +126,20 @@ def persist_sister_visura(db: Session, document: CatastoDocument) -> CatastoSist
         extraction.parser_version = PARSER_VERSION
         extraction.pdf_sha256 = pdf_sha256
         extraction.status = str(payload.get("status") or "review_required")
-        extraction.observed_at = date.fromisoformat(payload["observed_at"]) if payload.get("observed_at") else None
+        extraction.observed_at = _payload_date(payload, "observed_at")
         extraction.payload_json = payload
         extraction.error_message = None
         db.add(extraction)
         db.flush()
         db.execute(delete(CatastoSisterParcel).where(CatastoSisterParcel.extraction_id == extraction.id))
         db.execute(delete(CatastoSisterHistoryEvent).where(CatastoSisterHistoryEvent.extraction_id == extraction.id))
-        canonical_particella = _resolve_particella(db, payload)
-        parcel = CatastoSisterParcel(
-            extraction_id=extraction.id,
-            comune_nome=payload.get("comune_nome"),
-            comune_codice=payload.get("comune_codice"),
-            foglio=(payload.get("parcel") or {}).get("foglio"),
-            particella=(payload.get("parcel") or {}).get("particella"),
-            subalterno=(payload.get("parcel") or {}).get("subalterno"),
-            payload_json=payload.get("parcel") or {},
-            cat_particella_id=canonical_particella.id if canonical_particella else None,
-        )
+        parcel = _build_sister_parcel(db, extraction, payload)
         db.add(parcel)
         db.flush()
         for owner_payload in payload.get("owners") or []:
-            cf = str(owner_payload.get("codice_fiscale") or "").strip().upper() or None
-            canonical = db.scalar(select(CatIntestatario).where(func.upper(CatIntestatario.codice_fiscale) == cf)) if cf else None
-            db.add(CatastoSisterOwner(
-                sister_parcel_id=parcel.id,
-                cat_intestatario_id=canonical.id if canonical else None,
-                codice_fiscale=cf,
-                denominazione=owner_payload.get("denominazione"),
-                cognome=owner_payload.get("cognome"),
-                nome=owner_payload.get("nome"),
-                data_nascita=date.fromisoformat(owner_payload["data_nascita"]) if owner_payload.get("data_nascita") else None,
-                luogo_nascita=owner_payload.get("luogo_nascita"),
-                diritto=owner_payload.get("diritto"),
-                quota=owner_payload.get("quota"),
-                payload_json=owner_payload,
-            ))
+            db.add(_build_sister_owner(db, parcel, owner_payload))
         for event in payload.get("history_events") or []:
-            owner = event.get("owner") or {}
-            db.add(
-                CatastoSisterHistoryEvent(
-                    extraction_id=extraction.id,
-                    from_date=date.fromisoformat(event["from_date"]) if event.get("from_date") else None,
-                    act_date=date.fromisoformat(event["act_date"]) if event.get("act_date") else None,
-                    codice_fiscale=owner.get("codice_fiscale"),
-                    denominazione=owner.get("denominazione"),
-                    diritto=owner.get("diritto"),
-                    quota=owner.get("quota"),
-                    act_description=event.get("act"),
-                    payload_json=event,
-                )
-            )
+            db.add(_build_sister_history_event(extraction, event))
         return extraction
     except Exception as exc:
         extraction = existing or CatastoSisterExtraction(document_id=document.id, parser_version=PARSER_VERSION, pdf_sha256=pdf_sha256, payload_json={})

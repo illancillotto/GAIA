@@ -14,6 +14,16 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, SISTER mapping persistenza visura, 2026-10-05:
+`persist_sister_visura` `IMPROVED`, cog/cyc/LOC/nesting73/40/71/2 ->30/19/34/2.
+Mapper completi/date comune sotto soglia; coordinatore conserva SQL/ordine,
+cache e catch con scritture parziali, nessun cambiamento transazionale.
+File cognitive109 ->78, cyclomatic72 ->67, branching69 ->60, LOC112 ->134;
+cinque violation ->quattro error residui su target/resolver, warning LOC
+eliminato, nessuna violation trasferita. 33 test/full-file100%, 320 trace
+equivalenti; ratchet/Ruff mirato PASS, lint globale UP038 InCass concorrente.
+Baseline/config/scope invariati, campagna non-MCP resta attiva.
+
 Campagna non-MCP, frontend presentazione NavItem, 2026-10-05:
 `NavItem` `IMPROVED`, cog/cyc/LOC/nesting18/13/75/2 ->8/7/39/1;
 presentazione stateless5/6/38/1 sotto soglia, factoring path/hash elimina
