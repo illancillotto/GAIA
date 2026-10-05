@@ -1835,6 +1835,43 @@ def test_shapefile_import_rejects_invalid_archives_and_tracks_warnings() -> None
     assert missing_import.status_code == 404
 
 
+@pytest.mark.parametrize(
+    "include_cpg,cpg_text,encoding,expected_encoding,expected_warnings",
+    [
+        (True, "UTF-8", None, "UTF-8", []),
+        (True, "UTF-8", " utf-8 ", "utf-8", []),
+        (True, "ISO-8859-1", "utf-8", "utf-8", ["encoding_overridden"]),
+        (True, "", None, "utf-8", []),
+        (True, "", " ISO-8859-1 ", "ISO-8859-1", []),
+        (True, "uTf-8", "UTF-8", "UTF-8", []),
+        (True, "   ", " UTF-8 ", "UTF-8", []),
+        (False, "", None, "utf-8", ["cpg_missing"]),
+        (False, "", " ISO-8859-1 ", "ISO-8859-1", ["cpg_missing"]),
+    ],
+)
+def test_shapefile_validation_encoding_precedence_and_warning_contract(
+    include_cpg: bool,
+    cpg_text: str,
+    encoding: str | None,
+    expected_encoding: str,
+    expected_warnings: list[str],
+) -> None:
+    archive = build_point_shapefile_zip(include_cpg=include_cpg, cpg_text=cpg_text)
+    validated = gis_services._validate_shapefile_zip(
+        archive, encoding=encoding, source_srid=4326
+    )
+
+    assert validated.encoding == expected_encoding
+    assert validated.validation_report["warnings"] == expected_warnings
+    assert validated.validation_report["source_srid_source"] == "form"
+    assert validated.feature_count == 2
+    assert validated.bbox == [8.4, 39.9, 8.5, 40.0]
+    assert validated.records[0][0] == {
+        "name": "feature-1", "active": True, "when": "2026-07-14"
+    }
+    assert validated.records[0][1] == {"type": "Point", "coordinates": (8.4, 39.9)}
+
+
 def test_shapefile_import_preview_reports_missing_staging_table() -> None:
     admin_headers = auth_headers("gis-admin")
     created = client.post(

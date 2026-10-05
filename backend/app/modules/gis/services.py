@@ -13,7 +13,6 @@ from typing import Any
 from uuid import UUID
 from zipfile import BadZipFile, ZipFile
 
-import shapefile
 from fastapi import HTTPException, status
 from sqlalchemy import nullslast, select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -88,6 +87,14 @@ from app.modules.gis.service_support import (
 from app.modules.gis.service_support import (
     feature_geometry as _feature_geometry,  # noqa: F401
 )
+from app.modules.gis.shapefile_validation import (
+    SHAPEFILE_REQUIRED_SUFFIXES,
+    read_shapefile,
+    require_shapefile_stem,
+)
+from app.modules.gis.shapefile_validation import (
+    jsonable_record as _jsonable_record,
+)
 
 GIS_ADMIN_ROLES = {
     ApplicationUserRole.SUPER_ADMIN.value,
@@ -110,7 +117,6 @@ ChangeRequestValidator = Callable[
     [GisLayer, GisChangeRequestType, str | None, dict[str, Any]], None
 ]
 CHANGE_REQUEST_VALIDATORS: dict[str, ChangeRequestValidator] = {}
-SHAPEFILE_REQUIRED_SUFFIXES = (".shp", ".shx", ".dbf", ".prj")
 QGIS_PROJECT_ARCHIVE_FILENAME = "gaia-gis-platform.qgz"
 _qgis_geometry_kind = qgis_project.geometry_kind
 
@@ -402,12 +408,6 @@ def _zip_components(zip_bytes: bytes) -> dict[tuple[str, str], tuple[str, bytes]
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS shapefile import requires a valid ZIP") from exc
 
 
-def _jsonable_record(value: Any) -> Any:
-    if value is None or isinstance(value, (str, int, float, bool)):
-        return value
-    return str(value)
-
-
 def _coerce_source_srid(source_srid: int | str | None) -> int | None:
     cleaned = _clean(str(source_srid)) if source_srid is not None else None
     if not cleaned:
@@ -439,49 +439,18 @@ def _resolve_source_srid(source_srid: int | str | None, prj_bytes: bytes) -> tup
 
 def _validate_shapefile_zip(zip_bytes: bytes, *, encoding: str | None, source_srid: int | str | None) -> GisValidatedShapefile:
     components = _zip_components(zip_bytes)
-    stems = {stem for stem, suffix in components if suffix == ".shp"}
-    if len(stems) != 1:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS shapefile import requires exactly one .shp")
-    stem = next(iter(stems))
-    missing = [suffix for suffix in SHAPEFILE_REQUIRED_SUFFIXES if (stem, suffix) not in components]
-    if missing:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"GIS shapefile import missing components: {', '.join(missing)}",
-        )
+    stem = require_shapefile_stem(components)
 
     component_names = {suffix.lstrip("."): components[(stem, suffix)][0] for suffix in SHAPEFILE_REQUIRED_SUFFIXES}
     resolved_source_srid, source_srid_source = _resolve_source_srid(source_srid, components[(stem, ".prj")][1])
     cpg_encoding = components.get((stem, ".cpg"), ("", b""))[1].decode("ascii", errors="ignore").strip()
     selected_encoding = _clean(encoding) or cpg_encoding or "utf-8"
-    try:
-        reader = shapefile.Reader(
-            shp=io.BytesIO(components[(stem, ".shp")][1]),
-            shx=io.BytesIO(components[(stem, ".shx")][1]),
-            dbf=io.BytesIO(components[(stem, ".dbf")][1]),
-            encoding=selected_encoding,
-        )
-        shape_records = list(reader.iterShapeRecords())
-    except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"GIS shapefile validation failed: {exc}") from exc
-    if not shape_records:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="GIS shapefile import contains no features")
+    reader, fields, records = read_shapefile(components, stem, selected_encoding)
 
-    fields = [
-        {"name": field[0], "type": field[1], "size": field[2], "decimal": field[3]}
-        for field in reader.fields[1:]
-    ]
-    records: list[tuple[dict[str, Any], dict[str, Any] | None]] = []
-    for item in shape_records:
-        attributes = {key: _jsonable_record(value) for key, value in item.record.as_dict().items()}
-        geometry = None if item.shape.shapeType == shapefile.NULL else dict(item.shape.__geo_interface__)
-        records.append((attributes, geometry))
-
-    warnings = []
-    if (stem, ".cpg") not in components:
-        warnings.append("cpg_missing")
-    if cpg_encoding and cpg_encoding.lower() != selected_encoding.lower():
-        warnings.append("encoding_overridden")
+    warnings = [warning for warning, enabled in (
+        ("cpg_missing", (stem, ".cpg") not in components),
+        ("encoding_overridden", cpg_encoding.lower() not in {"", selected_encoding.lower()}),
+    ) if enabled]
     validation_report = {
         "is_valid": True,
         "component_names": component_names,
@@ -493,7 +462,7 @@ def _validate_shapefile_zip(zip_bytes: bytes, *, encoding: str | None, source_sr
     bbox = [float(value) for value in reader.bbox] if getattr(reader, "bbox", None) else None
     return GisValidatedShapefile(
         stem=stem,
-        feature_count=len(shape_records),
+        feature_count=len(records),
         geometry_type=reader.shapeTypeName,
         bbox=bbox,
         fields=fields,

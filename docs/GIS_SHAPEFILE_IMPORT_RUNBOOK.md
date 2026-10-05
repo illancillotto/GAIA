@@ -212,6 +212,97 @@ Campi opzionali:
 - `encoding`; se omesso o inviato vuoto, il validatore usa `.cpg` se presente e
   poi fallback `utf-8`.
 
+L'encoding esplicito viene ripulito dagli spazi e prevale sul CPG; un CPG
+vuoto ricade su `utf-8`. Il report include `cpg_missing` solo quando manca
+il componente, non quando e presente ma vuoto. Include `encoding_overridden`
+solo se il CPG non vuoto differisce dall'encoding selezionato, confrontando
+senza distinguere maiuscole/minuscole. I warning non bloccano l'import.
+La caratterizzazione del 2026-10-02 verifica questi contratti su ZIP reali;
+non introduce cambi alla validazione, agli errori o ai permessi.
+
+### Caratterizzazione del servizio
+
+La tranche del 2026-10-03 mantiene il runtime invariato e aggiunge contratti
+su lifecycle annotazioni/change request, isolamento dei layer, input invalidi,
+persistenza e audit. Le patch che ripropongono gli stessi valori non devono
+inventare campi cambiati nell'audit; un reset nullable degli allegati viene
+registrato come modifica e persiste una lista vuota. Gli stati terminali e
+i target mancanti continuano
+a rifiutare le operazioni. Una richiesta emendata torna `submitted` e azzera
+il precedente review; una failure di apply non deve registrare successo.
+I test usano sessioni SQLite reali e controllano i dati dopo commit/rollback,
+non certificano l'integrazione live con PostGIS o QGIS Desktop.
+
+Per misurare i file completi `app.modules.gis.services` e
+`app.modules.gis.shapefile_validation`, eseguire il corpus GIS e
+Catasto GIS insieme, non soltanto `test_gis_platform_api.py`:
+
+```bash
+run_dir=$(mktemp -d /tmp/gaia-gis-coverage.XXXXXX)
+PYTHONPATH=backend COVERAGE_FILE="$run_dir/.coverage" backend/.venv/bin/python -m pytest \
+  -q -o addopts='' backend/tests/test_gis*.py backend/tests/test_catasto_gis*.py \
+  --cov=app.modules.gis.services --cov=app.modules.gis.shapefile_validation \
+  --cov-branch --cov-fail-under=100 \
+  --cov-report=term-missing --cov-report=json:"$run_dir/coverage.json"
+```
+
+Verificare l'exit code dei test e i branch nel JSON: la percentuale di coverage
+da sola non dimostra che tutte le asserzioni siano passate. Evidenze e stato
+del gate sono registrati in `docs/code-quality/PROGRESS.md`.
+
+Esito della sola caratterizzazione del 2026-10-03: 287 test passati, statement `1076/1076` e
+branch `328/328` del servizio (100% full-file), senza esclusioni.
+Il requisito inizialmente bloccato dalla misura API parziale e soddisfatto
+dal corpus completo; in quella tranche nessuna semplificazione runtime e
+stata applicata.
+
+La successiva slice ZIP del 2026-10-03 costruisce i warning con due condizioni
+ordinate nella stessa funzione, senza helper e senza cambiare i contratti
+descritti sopra. La validazione, i failure HTTP, le autorizzazioni e lo staging
+rimangono invariati. Il corpus finale comprende ancora 287 test passati e
+coverage full-file 100%: statement `1072/1072`, branch `324/324`.
+La cognitiva del validatore scende da 25 a 23, la ciclomatica da 22 a 21;
+resta debito legacy, non e un risanamento dell'intero servizio.
+
+La seconda slice ZIP consolida il solo confronto `encoding_overridden`:
+un CPG normalizzato appartenente ai valori ammessi (vuoto o encoding
+selezionato normalizzato) non genera il warning; gli altri lo generano.
+La matrice di nove ZIP reali verifica anche CPG vuoto con ISO-8859-1
+esplicito e casing misto del CPG. Nove test passano prima e dopo.
+Stato dopo la seconda slice: cognitiva `21`, ciclomatica `19`, LOC `62`; nessun helper,
+guardia rimossa o cambio funzionale. Il corpus finale e di 289 test passati,
+con statement `1072/1072` e branch `324/324` (100% full-file).
+Resta debito legacy ciclomatico, non dichiarato chiuso.
+
+La successiva riorganizzazione separa due responsabilita in
+`shapefile_validation.py`: selezione di un unico stem completo e lettura/
+normalizzazione dei record pyshp. Il serializzatore JSON condiviso conserva
+l'alias `_jsonable_record` nel servizio. L'orchestratore conserva ordine degli
+errori, precedenza SRID/encoding, warning, bbox, report e checksum. Nessun
+controllo sugli input e rimosso. Il conteggio delle feature usa i record
+normalizzati, mantenendo anche quelli con geometria NULL.
+
+Gli 11 casi aggiuntivi su ZIP reali caratterizzano cardinalita, componenti
+appartenenti a stem diversi, ordine dei componenti mancanti, DBF Latin-1,
+date/numeri/null, geometrie miste o tutte NULL, header corrotto, errori di
+decodifica, codec sconosciuto e shapefile vuoto. Passano anche sul validatore
+originale. Per shapefile tutti NULL, pyshp restituisce una bbox di quattro
+zeri: questo comportamento e preservato, non trasformato in bbox assente.
+
+Le tre responsabilita hanno cognitiva/ciclomatica/LOC rispettivamente
+`7/8/33` (orchestratore), `4/5/15` (componenti), `10/8/35` (lettura).
+Nessuna supera le soglie. E una `REORGANIZED_AND_CHARACTERIZED`: le decisioni
+di dominio non sono eliminate e gli aggregati cognitivi restano invariati.
+Il resto del debito legacy del servizio e fuori da questa slice.
+
+Gate finale della riorganizzazione: 300 test passati, servizio al 100%
+statement `1050/1050` e branch `314/314`, modulo estratto al 100%
+statement `34/34` e branch `10/10`. Nessuna esclusione o test saltato.
+Ratchet e Ruff mirati verdi; i gate globali sul checkout condiviso restano
+bloccati fuori GIS, come registrato in `docs/code-quality/PROGRESS.md`.
+
+### Accesso e lifecycle
+
 L'endpoint e admin-only. Se la validazione passa, il record torna in stato
 `validated` e contiene staging table, feature count, geometry type, bbox, campi,
 report e checksum.

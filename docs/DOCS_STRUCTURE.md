@@ -66,6 +66,7 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 - `backend/app/modules/presenze/router/`: facade FastAPI Presenze, route di dominio e helper per scheduling, giornaliere, recovery, banca ore, sync ed export.
 - `backend/app/modules/me/router/`: facade FastAPI self-service, helper comuni e route separate per stato/Presenze, riepilogo, Operazioni e asset.
 - `backend/app/modules/gis/router/`: facade GIS Platform e route separate per catalogo, interrogazione/proxy, import, layer, annotazioni, change request ed export/audit.
+- `backend/app/modules/gis/shapefile_validation.py`: controllo dei componenti dello shapefile, lettura pyshp e normalizzazione JSON; `services.py` conserva l'orchestrazione ZIP/SRID/encoding/report e l'alias del serializzatore condiviso.
 - `backend/app/modules/catasto/routes/anagrafica/`: facade Catasto per elaborazioni massive, con matching, resolver, export, upload e route job/distretto separati per responsabilita.
 - `frontend/src/types/api/`: contratti TypeScript condivisi separati per dominio; `frontend/src/types/api.ts` resta la facciata pubblica compatibile.
 - `frontend/src/lib/api/`: client HTTP condivisi separati per responsabilita; `index.ts` conserva la facciata pubblica `@/lib/api` e `core.ts` concentra il trasporto comune.

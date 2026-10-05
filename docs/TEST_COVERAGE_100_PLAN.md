@@ -1060,3 +1060,37 @@ bytecode Make e cleanup dopo errore. Il comando riproducibile in
 CLI; il filtro report locale non modifica configurazione o gate CI.
 Il ratchet globale ha ancora 32 regressioni nei lavori concorrenti,
 separate dal gate coverage verde; nessuna baseline aggiornata per assorbirle.
+
+## Servizio GIS - caratterizzazione full-file 2026-10-03
+
+`backend/app/modules/gis/services.py` e coperto al 100% statement
+(`1076/1076`) e branch (`328/328`) dal corpus GIS e Catasto GIS, con
+287 test passati. La sola suite API non rappresentava tutto il corpus;
+il precedente report parziale non richiede esclusioni o soglie ridotte.
+Aggiunti 34 contratti pertinenti su lifecycle, patch/no-op, input invalidi,
+isolamento, persistenza e audit; runtime invariato. Misura finale isolata
+con dati coverage nuovi ed exit code verde, senza test saltati.
+Comando riproducibile in `docs/GIS_SHAPEFILE_IMPORT_RUNBOOK.md`.
+L'esito non certifica PostGIS/QGIS live, E2E o coverage globale repository.
+
+Successiva slice ZIP dello stesso giorno: dopo la sola costruzione warning
+rifattorizzata, il corpus di 287 test passa e il file rimane al 100%
+statement (`1072/1072`) e branch (`324/324`). I denominatori riflettono
+il runtime finale, non una modifica dello scope coverage. Nessun helper,
+esclusione o test artificiale introdotto; contratti e guardie invariati.
+
+Seconda slice ZIP: due ulteriori casi reali su CPG vuoto con encoding
+esplicito ISO-8859-1 e casing misto equivalente. La matrice di nove ZIP
+passa prima/dopo il confronto consolidato; il corpus finale di 289 test
+passa con coverage full-file invariata: `1072/1072` statement,
+`324/324` branch. Nessuna esclusione, soglia o perimetro modificato.
+
+Riorganizzazione finale del validatore ZIP: il perimetro runtime include
+anche `backend/app/modules/gis/shapefile_validation.py`, senza rimuovere
+`services.py` dalla misura. Undici contratti aggiuntivi su archivi reali
+passano sul validatore originale e su quello riorganizzato. Corpus finale:
+300 test verdi; servizio `1050/1050` statement e `314/314` branch, modulo
+estratto `34/34` statement e `10/10` branch (100% per file), nessuna
+esclusione o test saltato. Comando aggiornato nel runbook GIS. Questo gate
+locale non risolve le failure globali di stile/identita del ratchet su
+modifiche concorrenti e non certifica PostGIS/QGIS live o E2E.
