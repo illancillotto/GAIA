@@ -1,6 +1,20 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-05 — spiegazione imponibile e calcoli sorgente condivisi
+
+- Helper di dominio per spiegazione completa VAL-06; inserimento calcoli
+  percentuale e riferimenti sorgente riusa truthiness/String. Ordine, testo,
+  guardie, precisione/locale e flag catastale preservati; risultati/liste
+  freschi e mutabili, input invariato, campo comune conserva non-null.
+- `explainCatastoAnomalia` cog/cyc/LOC/nesting47/25/191/2 ->24/14/152/1;
+  helper6/6/42/1 sotto soglia. `IMPROVED`, cognitive file94 ->77,
+  cyclomatic76 ->71, nessun trasferimento. File ancora un error LOC e quattro
+  warning: due error cognitivi/ciclomatici ridotti a warning, non eliminati.
+- Otto caratterizzazioni prima del runtime, 69 test prima/dopo; full-file100%
+  su quattro metriche, 5400 input equivalenti per i due export. Ratchet
+  merge-base/typecheck/ESLint PASS, baseline/config invariati.
+
 ### 2026-10-05 — descrizioni misure e imponibile condivise
 
 - Riferimenti formattati riusano il predicato e supportano il suffisso unita;

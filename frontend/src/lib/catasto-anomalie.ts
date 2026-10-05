@@ -83,10 +83,10 @@ function formatIndexEuroPerMq(value: unknown): string | null {
 function pushCalculationText(
   rows: Array<{ label: string; value: string }>,
   label: string,
-  value: string | null,
+  value: unknown,
 ): void {
   if (value) {
-    rows.push({ label, value });
+    rows.push({ label, value: String(value) });
   }
 }
 
@@ -109,6 +109,49 @@ function pushImportAmountCalculations(
   pushCalculation(rows, `Voce ${code} - scostamento`, amounts.delta, 4);
 }
 
+function explainImponibile(data: Record<string, unknown>): CatastoAnomaliaExplanation {
+  const calculations: Array<{ label: string; value: string }> = [];
+  pushCalculationText(calculations, "Superficie irrigabile", formatSquareMeters(data.sup_irrigabile_mq));
+  pushCalculationText(calculations, "Superficie irrigabile in ettari", formatHectaresFromMq(data.sup_irrigabile_mq));
+  pushCalculationText(calculations, "Superficie catastale", formatSquareMeters(data.sup_catastale_mq));
+  pushCalculationText(calculations, "Superficie catastale in ettari", formatHectaresFromMq(data.sup_catastale_mq));
+  pushCalculationText(calculations, "Indice spese fisse", formatIndexEuroPerMq(data.ind_spese_fisse));
+  pushCalculationText(calculations, "Imponibile registrato", formatEuro(data.imponibile_registrato));
+  pushCalculationText(calculations, "Valore atteso dal calcolo", formatEuro(data.atteso));
+  pushCalculationText(calculations, "Scostamento rilevato", formatEuro(data.delta, 4));
+  const formulaIrrigabile = formatFormula(data.sup_irrigabile_mq, data.ind_spese_fisse, data.atteso);
+  if (formulaIrrigabile) {
+    calculations.push({ label: "Calcolo teorico", value: formulaIrrigabile });
+  }
+  const formulaCatastale = formatFormula(data.sup_catastale_mq, data.ind_spese_fisse, data.atteso_catastale);
+  if (formulaCatastale) {
+    calculations.push({ label: "Verifica con catastale", value: formulaCatastale });
+  }
+  if (readNumber(data.delta_vs_catastale) != null) {
+    pushCalculationText(calculations, "Scostamento su catastale", formatEuro(data.delta_vs_catastale, 4));
+  }
+  if (data.coincide_con_catastale === true && formulaCatastale) {
+    calculations.push({ label: "Nota", value: "L'imponibile registrato coincide con il calcolo su superficie catastale." });
+  }
+  return {
+    title: "Imponibile non coerente con il calcolo teorico",
+    summary: "L'importo imponibile registrato non coincide con quello che risulta dal calcolo automatico.",
+    whyItHappened:
+      "Il sistema ricalcola l'imponibile usando la formula superficie irrigabile x indice spese fisse. Se il valore importato si discosta oltre la tolleranza prevista, la riga viene marcata come anomala.",
+    calculations,
+    checks: [
+      "Controllare la superficie irrigabile usata nella riga importata.",
+      "Verificare che l'indice spese fisse applicato sia quello corretto.",
+      "Confrontare il valore imponibile della riga con il risultato atteso del calcolo.",
+    ],
+    resolutionTips: [
+      "Se la superficie irrigabile o l'indice sono errati, correggere il dato di origine e ripetere il controllo.",
+      "Se il calcolo atteso e corretto, aggiornare l'imponibile della riga o rigenerare il caricamento.",
+      "Chiudere l'anomalia solo quando imponibile registrato e imponibile atteso coincidono entro tolleranza.",
+    ],
+  };
+}
+
 export function explainCatastoAnomalia(anomalia: AnomaliaLike): CatastoAnomaliaExplanation {
   const data = anomalia.dati_json ?? {};
 
@@ -116,8 +159,7 @@ export function explainCatastoAnomalia(anomalia: AnomaliaLike): CatastoAnomaliaE
     case "VAL-01-sup_eccede": {
       const calculations: Array<{ label: string; value: string }> = [];
       pushCalculation(calculations, "Scostamento in metri quadri", data.delta_mq);
-      const pct = formatPct(data.delta_pct);
-      if (pct) calculations.push({ label: "Scostamento percentuale", value: pct });
+      pushCalculationText(calculations, "Scostamento percentuale", formatPct(data.delta_pct));
       return {
         title: "Superficie irrigabile superiore al catastale",
         summary: "La superficie usata per il ruolo risulta piu alta della superficie catastale disponibile.",
@@ -136,16 +178,16 @@ export function explainCatastoAnomalia(anomalia: AnomaliaLike): CatastoAnomaliaE
         ],
       };
     }
-    case "VAL-02-cf_invalido":
+    case "VAL-02-cf_invalido": {
+      const calculations: Array<{ label: string; value: string }> = [];
+      pushCalculationText(calculations, "Valore sorgente", data.cf_raw);
+      pushCalculationText(calculations, "Esito controllo", data.error_code);
       return {
         title: "Codice fiscale o partita IVA formalmente non valido",
         summary: "Il valore importato non rispetta il formato atteso.",
         whyItHappened:
           "La riga contiene un codice fiscale o una partita IVA che non supera i controlli formali minimi. Non significa per forza che il soggetto non esista, ma che il dato importato va corretto o confermato.",
-        calculations: [
-          ...(data.cf_raw ? [{ label: "Valore sorgente", value: String(data.cf_raw) }] : []),
-          ...(data.error_code ? [{ label: "Esito controllo", value: String(data.error_code) }] : []),
-        ],
+        calculations,
         checks: [
           "Controllare eventuali caratteri mancanti o extra.",
           "Verificare se il campo contiene una partita IVA al posto del codice fiscale, o viceversa.",
@@ -157,6 +199,7 @@ export function explainCatastoAnomalia(anomalia: AnomaliaLike): CatastoAnomaliaE
           "Rieseguire la verifica e chiudere l'anomalia solo dopo che il controllo formale risulta superato.",
         ],
       };
+    }
     case "VAL-03-cf_mancante":
       return {
         title: "Codice fiscale o partita IVA mancante",
@@ -195,17 +238,17 @@ export function explainCatastoAnomalia(anomalia: AnomaliaLike): CatastoAnomaliaE
           "Richiudere l'anomalia dopo avere verificato che la riga punti al comune giusto.",
         ],
       };
-    case "VAL-05-particella_assente":
+    case "VAL-05-particella_assente": {
+      const calculations: Array<{ label: string; value: string }> = [];
+      pushCalculationText(calculations, "Foglio", data.foglio);
+      pushCalculationText(calculations, "Particella", data.particella);
+      pushCalculationText(calculations, "Subalterno", data.subalterno);
       return {
         title: "Particella non trovata in anagrafica",
         summary: "La riga ruolo non riesce a collegarsi a una particella corrente di GAIA.",
         whyItHappened:
           "Il controllo cerca una particella con gli stessi riferimenti catastali della riga importata. Se non trova un match attendibile, la posizione resta scollegata e viene segnalata.",
-        calculations: [
-          ...(data.foglio ? [{ label: "Foglio", value: String(data.foglio) }] : []),
-          ...(data.particella ? [{ label: "Particella", value: String(data.particella) }] : []),
-          ...(data.subalterno ? [{ label: "Subalterno", value: String(data.subalterno) }] : []),
-        ],
+        calculations,
         checks: [
           "Verificare che foglio, particella e subalterno siano corretti nella sorgente.",
           "Controllare se la particella esiste in GAIA con una variante storica o un comune diverso.",
@@ -217,48 +260,9 @@ export function explainCatastoAnomalia(anomalia: AnomaliaLike): CatastoAnomaliaE
           "Chiudere l'anomalia solo quando la riga ruolo e agganciata a una particella attendibile.",
         ],
       };
-    case "VAL-06-imponibile": {
-      const calculations: Array<{ label: string; value: string }> = [];
-      pushCalculationText(calculations, "Superficie irrigabile", formatSquareMeters(data.sup_irrigabile_mq));
-      pushCalculationText(calculations, "Superficie irrigabile in ettari", formatHectaresFromMq(data.sup_irrigabile_mq));
-      pushCalculationText(calculations, "Superficie catastale", formatSquareMeters(data.sup_catastale_mq));
-      pushCalculationText(calculations, "Superficie catastale in ettari", formatHectaresFromMq(data.sup_catastale_mq));
-      pushCalculationText(calculations, "Indice spese fisse", formatIndexEuroPerMq(data.ind_spese_fisse));
-      pushCalculationText(calculations, "Imponibile registrato", formatEuro(data.imponibile_registrato));
-      pushCalculationText(calculations, "Valore atteso dal calcolo", formatEuro(data.atteso));
-      pushCalculationText(calculations, "Scostamento rilevato", formatEuro(data.delta, 4));
-      const formulaIrrigabile = formatFormula(data.sup_irrigabile_mq, data.ind_spese_fisse, data.atteso);
-      if (formulaIrrigabile) {
-        calculations.push({ label: "Calcolo teorico", value: formulaIrrigabile });
-      }
-      const formulaCatastale = formatFormula(data.sup_catastale_mq, data.ind_spese_fisse, data.atteso_catastale);
-      if (formulaCatastale) {
-        calculations.push({ label: "Verifica con catastale", value: formulaCatastale });
-      }
-      if (readNumber(data.delta_vs_catastale) != null) {
-        pushCalculationText(calculations, "Scostamento su catastale", formatEuro(data.delta_vs_catastale, 4));
-      }
-      if (data.coincide_con_catastale === true && formulaCatastale) {
-        calculations.push({ label: "Nota", value: "L'imponibile registrato coincide con il calcolo su superficie catastale." });
-      }
-      return {
-        title: "Imponibile non coerente con il calcolo teorico",
-        summary: "L'importo imponibile registrato non coincide con quello che risulta dal calcolo automatico.",
-        whyItHappened:
-          "Il sistema ricalcola l'imponibile usando la formula superficie irrigabile x indice spese fisse. Se il valore importato si discosta oltre la tolleranza prevista, la riga viene marcata come anomala.",
-        calculations,
-        checks: [
-          "Controllare la superficie irrigabile usata nella riga importata.",
-          "Verificare che l'indice spese fisse applicato sia quello corretto.",
-          "Confrontare il valore imponibile della riga con il risultato atteso del calcolo.",
-        ],
-        resolutionTips: [
-          "Se la superficie irrigabile o l'indice sono errati, correggere il dato di origine e ripetere il controllo.",
-          "Se il calcolo atteso e corretto, aggiornare l'imponibile della riga o rigenerare il caricamento.",
-          "Chiudere l'anomalia solo quando imponibile registrato e imponibile atteso coincidono entro tolleranza.",
-        ],
-      };
     }
+    case "VAL-06-imponibile":
+      return explainImponibile(data);
     case "VAL-07-importi": {
       const calculations: Array<{ label: string; value: string }> = [];
       const v0648 = data.v07_648;

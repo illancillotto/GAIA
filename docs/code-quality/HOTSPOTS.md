@@ -14,6 +14,14 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, Catasto spiegazioni/calcoli, 2026-10-05:
+`explainCatastoAnomalia` `IMPROVED`, cog/cyc/LOC/nesting47/25/191/2
+->24/14/152/1. Helper dominio VAL-06 6/6/42/1 sotto soglia, inserimento
+calcoli sorgente/percentuale condiviso. File cognitive94 ->77, cyclomatic76
+->71, branching57 ->51, LOC350 ->353. Due error diventano warning; restano
+un error LOC/quattro warning, nessun debito trasferito. 69 test, full-file100%
+su quattro metriche, 5400 input equivalenti; ratchet/typecheck/ESLint PASS.
+
 Campagna non-MCP, Catasto misure/imponibile, 2026-10-05:
 `describeCatastoAnomalia` `IMPROVED`, cog/cyc/LOC34/19/49 ->22/13/41.
 Helper imponibile2/3/11/0 sotto soglia, predicato valori formattati condiviso;

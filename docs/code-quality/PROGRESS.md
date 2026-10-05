@@ -3,6 +3,38 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto frontend — avvio spiegazione imponibile VAL-06 (2026-10-05)
+
+- Chiusura `IMPROVED`: helper di dominio `explainImponibile` contiene calcoli,
+  formule e istruzioni VAL-06; `pushCalculationText` riusato per percentuale
+  e cinque riferimenti sorgente, con truthiness/String identici per dati JSON.
+  Nessun helper vuoto o nuovo predicato duplicato; campo comune resta non-null.
+- Target cog/cyc/LOC/nesting47/25/191/2 ->24/14/152/1; helper6/6/42/1,
+  un parametro e zero violation. Due error (cognitive/cyclomatic) diventano
+  warning; file ancora un error LOC e quattro warning, non zero debito.
+- File cognitive sum/max94/47 ->77/24, cyclomatic76/25 ->71/14,
+  branching57 ->51, LOC350 ->353, venti callable/tre import;
+  densita scanner0.485714 ->0.419263. Riduzione aggregata reale, non trasferita.
+- Otto nuove caratterizzazioni sul runtime originale: mutabilita/indipendenza
+  risultati e liste per tutti gli otto tipi, input invariato. 69 test prima/dopo;
+  full-file100% dopo: statement106/branch87/function20/line96 contatori coperti,
+  zero esclusioni. 5400 input differenziali, due export completi/otto tipi,
+  testo/ordine identici al runtime pre-slice `6acc9feb`.
+- Ratchet merge-base `6acc9feb`, typecheck no-emit, ESLint e whitespace PASS;
+  baseline/config/scope invariati. Graphify frontend codice e docs dedicati
+  Catasto/piattaforma aggiornati; commit separato, nessun push. Campagna attiva
+  tutti gli hotspot non-MCP; change concorrenti preservate.
+- Campagna tutti gli hotspot non-MCP attiva, commit ad ogni passaggio;
+  precedente passaggio `6acc9feb` progresso verificato.
+- Singolo hotspot `explainCatastoAnomalia`: prima cog/cyc/LOC/nesting47/25/191/2,
+  file cognitive94/47, cyclomatic76/25, LOC350, diciannove callable/tre import.
+- Separare spiegazione completa imponibile (calcoli/formule/nota e istruzioni)
+  dal dispatch. Preservare ordine, etichette/testo/locale/precisione, guardie,
+  flag strict-true, null/invalidi, oggetti/array freschi e input immutati.
+  Helper di dominio non vuoto, senza spostare violation, altri casi invariati.
+- Test sul runtime originale, full-file100%, ratchet merge-base e aggregati;
+  nessuna modifica baseline/config/scope o change parallela/MCP.
+
 ### Catasto frontend — avvio descrizioni misure e imponibile (2026-10-05)
 
 - Chiusura `IMPROVED`: riferimenti formattati riusano il predicato condiviso

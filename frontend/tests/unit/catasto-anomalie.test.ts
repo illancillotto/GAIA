@@ -48,6 +48,27 @@ describe("source reference descriptions", () => {
 
 describe("explainCatastoAnomalia", () => {
   test.each([
+    "VAL-01-sup_eccede", "VAL-02-cf_invalido", "VAL-03-cf_mancante",
+    "VAL-04-comune_invalido", "VAL-05-particella_assente", "VAL-06-imponibile",
+    "VAL-07-importi", "unknown",
+  ])("returns independent mutable explanations for %s", (tipo) => {
+    const input = { tipo, dati_json: { sup_irrigabile_mq: 1, ind_spese_fisse: 2, atteso: 2 } };
+    const first = explainCatastoAnomalia(input);
+    const second = explainCatastoAnomalia(input);
+    const expected = structuredClone(second);
+    expect(first).not.toBe(second);
+    expect(first.calculations).not.toBe(second.calculations);
+    expect(first.checks).not.toBe(second.checks);
+    expect(first.resolutionTips).not.toBe(second.resolutionTips);
+    first.calculations.push({ label: "consumer", value: "note" });
+    first.checks.length = 0;
+    first.resolutionTips.push("consumer note");
+    expect(second).toEqual(expected);
+    expect(explainCatastoAnomalia(input)).toEqual(expected);
+    expect(input.dati_json).toEqual({ sup_irrigabile_mq: 1, ind_spese_fisse: 2, atteso: 2 });
+  });
+
+  test.each([
     [null, []],
     [false, []],
     ["bad", []],
