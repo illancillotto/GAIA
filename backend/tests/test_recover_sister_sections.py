@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import runpy
 import sys
 from datetime import UTC, datetime
@@ -10,7 +11,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
-from sqlalchemy.schema import CreateTable
+from sqlalchemy.schema import CreateTable, DropTable
 
 from app.models.catasto import (
     CatastoBatch,
@@ -29,20 +30,26 @@ from app.scripts.recover_sister_sections import (
 
 @pytest.fixture
 def db():
-    engine = create_engine("sqlite://")
+    engine = create_engine(os.getenv("GAIA_TEST_POSTGRES_URL", "sqlite://"))
+    models = (
+        CatastoBatch,
+        CatastoVisuraRequest,
+        CatastoPerpetualSyncItem,
+        CatastoRuoloAutoSyncConfig,
+        RuoloParticella,
+        CatParticella,
+    )
     with engine.begin() as connection:
-        for model in (
-            CatastoBatch,
-            CatastoVisuraRequest,
-            CatastoPerpetualSyncItem,
-            CatastoRuoloAutoSyncConfig,
-            RuoloParticella,
-            CatParticella,
-        ):
+        for model in models:
             connection.execute(CreateTable(model.__table__, include_foreign_key_constraints=[]))
-    with Session(engine) as session:
-        yield session
-    engine.dispose()
+    try:
+        with Session(engine) as session:
+            yield session
+    finally:
+        with engine.begin() as connection:
+            for model in reversed(models):
+                connection.execute(DropTable(model.__table__))
+        engine.dispose()
 
 
 def _seed(db: Session, root: Path):
@@ -147,6 +154,31 @@ def test_dry_run_and_apply_reuse_original_request(db, tmp_path):
 def test_limit_is_bounded(db, tmp_path, limit):
     with pytest.raises(ValueError, match="limit"):
         recover_required_sections(db, uuid4(), limit=limit, debug_root=tmp_path)
+
+
+def test_section_rejection_with_previous_session_error_reuses_original_request(db, tmp_path):
+    batch_id, request_id, item_id = _seed(db, tmp_path)
+    request = db.get(CatastoVisuraRequest, request_id)
+    request.last_error_code = "session_recovery"
+    request.attempts = 2
+    db.commit()
+
+    assert recover_required_sections(db, batch_id, limit=1, debug_root=tmp_path) == [request_id]
+    assert recover_required_sections(
+        db, batch_id, limit=1, debug_root=tmp_path, apply=True
+    ) == [request_id]
+    db.expire_all()
+    request = db.get(CatastoVisuraRequest, request_id)
+    assert (request.status, request.sezione, request.attempts) == ("pending", "D", 2)
+    assert request.last_error_code == "session_recovery"
+    assert db.get(CatastoPerpetualSyncItem, item_id).linked_request_id == request_id
+
+
+def test_recovery_exhausts_candidates_before_reaching_capacity(db, tmp_path):
+    batch_id, request_id, _ = _seed(db, tmp_path)
+    db.scalar(select(CatastoRuoloAutoSyncConfig)).batch_size = 20
+    db.commit()
+    assert recover_required_sections(db, batch_id, limit=20, debug_root=tmp_path) == [request_id]
 
 
 def test_batch_and_config_are_required(db, tmp_path):

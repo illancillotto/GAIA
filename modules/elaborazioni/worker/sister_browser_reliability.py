@@ -201,7 +201,7 @@ async def is_visura_area_ready(page, selectors) -> bool:
     if "Visure/SceltaServizio.do" in page.url or "Visure/SelezioneConvenzione.do" in page.url:
         return True
     if "Informativa.do" in page.url or "SelezioneConvenzione.do" in page.url:
-        return False
+        return await page.locator("form[action='/Visure/DataRichiesta.do'] select[name='listacom']").is_visible()
     if await page.locator(selectors.catasto_selector).count() > 0:
         return True
     if "SceltaLink.do" in page.url or "RicercaIMM.do" in page.url:

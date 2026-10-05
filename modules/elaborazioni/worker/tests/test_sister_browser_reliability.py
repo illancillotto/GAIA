@@ -51,6 +51,9 @@ class _Locator:
     async def count(self) -> int:
         return self._count
 
+    async def is_visible(self) -> bool:
+        return self._count > 0
+
 
 class _Page:
     def __init__(
@@ -63,9 +66,12 @@ class _Page:
         self.body = _Locator(text=options.get("body", ""), error=options.get("body_error"))
         self.link = _Locator(href=options.get("href"), error=options.get("link_error"))
         self.catasto = _Locator(count=options.get("catasto_count", 0))
+        self.province = _Locator(count=options.get("province_count", 0))
         self.immobile = _Locator(count=options.get("immobile_count", 0))
 
     def locator(self, selector: str) -> _Locator:
+        if selector == "form[action='/Visure/DataRichiesta.do'] select[name='listacom']":
+            return self.province
         if selector == "body":
             return self.body
         if "ConsultazioneRichieste" in selector:
@@ -74,6 +80,9 @@ class _Page:
 
     def get_by_role(self, _role: str, name: str) -> _Locator:
         return self.immobile
+
+    async def title(self) -> str:
+        return "Home dei servizi"
 
 
 class _Download:
@@ -186,8 +195,22 @@ def test_init_portale_error_cannot_be_ignored_off_home_or_with_unreadable_page()
     endpoint = "https://sister3.agenziaentrate.gov.it/portale-rest/rs/initPortale"
     assert not asyncio.run(_is_non_blocking_init_portale_error(_Page(), 501, endpoint))
     assert not asyncio.run(_is_non_blocking_init_portale_error(
-        _Page(url="https://sister3.agenziaentrate.gov.it/Servizi/"), 501, endpoint,
+        _Page(url="https://sister3.agenziaentrate.gov.it/Servizi/", body_error=RuntimeError("detached")), 501, endpoint,
     ))
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [("Consultazioni e Certificazioni", True), ("Utente bloccato", False), ("Other", False)],
+)
+def test_init_portale_501_validates_home_before_ignoring_http_error(body, expected):
+    page = _Page(url="https://sister3.agenziaentrate.gov.it/Servizi/", body=body)
+    endpoint = "https://sister3.agenziaentrate.gov.it/portale-rest/rs/initPortale"
+    assert asyncio.run(_is_non_blocking_init_portale_error(page, 501, endpoint)) is expected
+    if expected:
+        state = SisterSessionState(pending_server_error=(501, endpoint))
+        asyncio.run(raise_if_sister_server_error(page, state))
+        assert state.pending_server_error is None
 
 
 def test_session_state_ignores_irrelevant_and_malformed_responses() -> None:
@@ -319,6 +342,9 @@ def test_document_not_yet_produced_handles_absolute_missing_and_broken_links() -
     ("page", "ready"),
     [
         (_Page(url="https://sister/Informativa.do"), False),
+        (_Page(url="https://sister/Visure/Informativa.do", province_count=1), True),
+        (_Page(url="https://sister/Visure/Informativa.do"), False),
+        (_Page(url="https://sister/Informativa.do", province_count=1), True),
         (_Page(url="https://sister/SelezioneConvenzione.do"), False),
         (_Page(url="https://sister/Visure/SelezioneConvenzione.do"), True),
         (_Page(catasto_count=1), True),

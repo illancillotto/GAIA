@@ -27,7 +27,15 @@ def test_reused_menu_does_not_toggle_closed_and_skips_already_accepted_notice(ex
                     visits.append(path)
                     if path == "/Visure/Informativa.do":
                         # SISTER keeps Informativa.do in the URL after prior acceptance.
-                        body = '<title>Scelta province</title><select name="listacom"><option value="OR">OR</option></select>'
+                        body = (
+                            '<title>Scelta province</title>'
+                            '<form method="post" action="/Visure/DataRichiesta.do">'
+                            '<select name="listacom">'
+                            '<option value="ORISTANO Territorio-OR">ORISTANO</option></select>'
+                            '<input type="submit" value="Applica"></form>'
+                        )
+                    elif path == "/Visure/DataRichiesta.do":
+                        body = '<select name="tipoCatasto"><option>Terreni</option></select>'
                     else:
                         if path == "/consultazioni":
                             menu_open = not menu_open
@@ -39,11 +47,14 @@ def test_reused_menu_does_not_toggle_closed_and_skips_already_accepted_notice(ex
                 await page.route("**/*", serve)
                 await page.goto("https://sister3.agenziaentrate.gov.it/Servizi/")
                 session = make_session(page)
-                await session._goto_visura_menu()
+                await session._open_authenticated_visura_area()
                 assert visits == ["/Servizi/"] + ([] if expanded else ["/consultazioni"]) + [
                     "/Visure/Informativa.do"
                 ]
                 assert await page.locator(session.selectors.territorio_selector).count() == 1
+                await session.open_visura_form()
+                assert visits[-1] == "/Visure/DataRichiesta.do"
+                assert await page.locator(session.selectors.catasto_selector).is_visible()
             finally:
                 await browser.close()
 

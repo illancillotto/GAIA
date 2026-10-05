@@ -90,7 +90,7 @@ def _eligible(
         return False
     if any(getattr(request, field) is not None for field in _REMOTE_EVIDENCE_FIELDS):
         return False
-    if request.last_error_code is not None:
+    if request.last_error_code not in {None, "session_recovery"}:
         return False
     if (request.comune, request.foglio, request.particella) != (
         item.comune,
