@@ -1,6 +1,19 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-05 — descrizioni misure e imponibile condivise
+
+- Riferimenti formattati riusano il predicato e supportano il suffisso unita;
+  paragrafo imponibile isolato per responsabilita di dominio. Valuta, locale,
+  precisione, zero/null/invalidi, flag strict-true, testo e ordine preservati.
+- `describeCatastoAnomalia` cog/cyc/LOC34/19/49 ->22/13/41, nesting1;
+  helper imponibile2/3/11/0 sotto soglia. `IMPROVED`, cognitive file104 ->94,
+  cyclomatic79 ->76, nessun trasferimento; due error target diventano warning.
+  File ancora con tre error/due warning, non dichiarati eliminati.
+- Dieci nuove caratterizzazioni prima del runtime, 61 test prima/dopo,
+  full-file100% su quattro metriche e 5400 input identici per entrambi gli
+  export. Ratchet merge-base/typecheck/ESLint PASS, baseline invariata.
+
 ### 2026-10-05 — descrizioni riferimenti sorgente condivise
 
 - Predicate truthy/String/testo condivisi per codice fiscale, errore,

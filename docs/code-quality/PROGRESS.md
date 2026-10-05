@@ -3,6 +3,37 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto frontend — avvio descrizioni misure e imponibile (2026-10-05)
+
+- Chiusura `IMPROVED`: riferimenti formattati riusano il predicato condiviso
+  con suffisso per unita; `describeImponibile` gestisce il paragrafo completo
+  VAL-06 senza duplicazioni. Target cog/cyc/LOC/nesting34/19/49/1 ->22/13/41/1;
+  helper imponibile2/3/11/0, nessuna violation. Helper riferimenti sotto soglia,
+  tre parametri per suffisso default. Due error target diventano warning,
+  file ora tre error e due warning (cinque violation totali), non zero debito.
+- File cognitive sum/max104/47 ->94/47, cyclomatic79/25 ->76/25,
+  branching61 ->57, LOC347 ->350; diciannove callable/tre import.
+  Densita scanner0.527378 ->0.485714, nessun trasferimento del debito.
+- Dieci caratterizzazioni aggiunte sul runtime originale, 61 test prima/dopo;
+  full-file100% dopo: statement100/branch99/function19/line89 contatori tutti
+  coperti, zero esclusioni. 5400 input differenziali per due export/otto tipi,
+  inclusi flag strict-true e valori null/zero/invalidi, identici al pre-slice.
+- Ratchet merge-base `1b0d72bd`, typecheck no-emit, ESLint e whitespace PASS.
+  Baseline/config/scope invariati, altre change preservate, MCP non toccato.
+  Graphify frontend codice e docs Catasto/piattaforma aggiornati; commit
+  separato ad ogni passaggio come richiesto, nessun push. Goal campagna attivo.
+- Campagna tutti gli hotspot non-MCP attiva, commit ad ogni passaggio;
+  precedente passaggio `1b0d72bd`, classificato progresso verificato.
+- Singolo hotspot `describeCatastoAnomalia`: prima cog/cyc/LOC/nesting34/19/49/1,
+  file cognitive104/47, cyclomatic79/25, LOC347, diciotto callable/tre import.
+- Riutilizzare descrizione riferimenti per valori formattati/unità e isolare
+  il paragrafo imponibile come responsabilita di dominio. Preservare valuta,
+  precisione/locale, zero/null/invalidi, flag catastale strict-true, testo/ordine
+  e altri export. Valori `dati_json` conformi al contratto JSON, nessuna nuova
+  astrazione generale, wrapper vuoto o duplicazione dei predicati.
+- Caratterizzare prima del runtime, full-file100%, metriche/aggregati e ratchet
+  merge-base; nessuna modifica baseline/config/scope o change parallela.
+
 ### Campagna tutti gli hotspot non-MCP — avvio (2026-10-05)
 
 - Passaggio riferimenti sorgente `IMPROVED`: `describeSourceReference` contiene

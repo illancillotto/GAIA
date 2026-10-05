@@ -5,6 +5,26 @@ import { describeCatastoAnomalia, explainCatastoAnomalia } from "@/lib/catasto-a
 describe("source reference descriptions", () => {
   test.each([
     [undefined, ""],
+    ["bad", ""],
+    [0, "Valore atteso dal calcolo: 0 €. Scostamento rilevato: 0 €."],
+    [null, "Valore atteso dal calcolo: 0 €. Scostamento rilevato: 0 €."],
+    [1.23456, "Valore atteso dal calcolo: 1,23 €. Scostamento rilevato: 1,2346 €."],
+  ])("preserves formatted amount text for %j", (value, detail) => {
+    const intro = "L'importo imponibile registrato non corrisponde al valore che ci si aspetta calcolando superficie irrigabile e indice spese fisse.";
+    const conclusion = "In pratica: i numeri della riga importata non tornano con il calcolo teorico e la posizione va verificata.";
+    expect(describeCatastoAnomalia({
+      tipo: "VAL-06-imponibile", dati_json: { atteso: value, delta: value },
+    })).toBe([intro, detail, conclusion].filter(Boolean).join(" "));
+  });
+
+  test.each([false, "true", 1, null, undefined])("preserves strict cadastral match flag %j", (flag) => {
+    expect(describeCatastoAnomalia({
+      tipo: "VAL-06-imponibile", dati_json: { coincide_con_catastale: flag, atteso_catastale: 0 },
+    })).not.toContain("coincide invece");
+  });
+
+  test.each([
+    [undefined, ""],
     [null, ""],
     [false, ""],
     [0, ""],

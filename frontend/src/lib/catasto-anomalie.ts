@@ -311,8 +311,20 @@ function describeImportAmounts(code: string, value: unknown): Array<string | nul
   ];
 }
 
-function describeSourceReference(prefix: string, value: unknown): string | null {
-  return value ? `${prefix}${String(value)}.` : null;
+function describeSourceReference(prefix: string, value: unknown, suffix = "."): string | null {
+  return value ? `${prefix}${String(value)}${suffix}` : null;
+}
+
+function describeImponibile(data: Record<string, unknown>): string {
+  return compactParts([
+    "L'importo imponibile registrato non corrisponde al valore che ci si aspetta calcolando superficie irrigabile e indice spese fisse.",
+    describeSourceReference("Valore atteso dal calcolo: ", formatEuro(data.atteso)),
+    describeSourceReference("Scostamento rilevato: ", formatEuro(data.delta, 4)),
+    data.coincide_con_catastale === true && formatEuro(data.atteso_catastale)
+      ? `Il valore registrato coincide invece con il calcolo su superficie catastale: ${formatEuro(data.atteso_catastale)}.`
+      : null,
+    "In pratica: i numeri della riga importata non tornano con il calcolo teorico e la posizione va verificata.",
+  ]);
 }
 
 export function describeCatastoAnomalia(anomalia: AnomaliaLike): string {
@@ -322,8 +334,8 @@ export function describeCatastoAnomalia(anomalia: AnomaliaLike): string {
     case "VAL-01-sup_eccede":
       return compactParts([
         "La superficie irrigabile supera quella catastale.",
-        formatNumber(data.delta_mq) ? `Scostamento: ${formatNumber(data.delta_mq)} mq.` : null,
-        formatPct(data.delta_pct) ? `Scostamento percentuale: ${formatPct(data.delta_pct)}.` : null,
+        describeSourceReference("Scostamento: ", formatNumber(data.delta_mq), " mq."),
+        describeSourceReference("Scostamento percentuale: ", formatPct(data.delta_pct)),
       ]);
     case "VAL-02-cf_invalido":
       return compactParts([
@@ -346,15 +358,7 @@ export function describeCatastoAnomalia(anomalia: AnomaliaLike): string {
         describeSourceReference("Sub ", data.subalterno),
       ]);
     case "VAL-06-imponibile":
-      return compactParts([
-        "L'importo imponibile registrato non corrisponde al valore che ci si aspetta calcolando superficie irrigabile e indice spese fisse.",
-        formatEuro(data.atteso) ? `Valore atteso dal calcolo: ${formatEuro(data.atteso)}.` : null,
-        formatEuro(data.delta, 4) ? `Scostamento rilevato: ${formatEuro(data.delta, 4)}.` : null,
-        data.coincide_con_catastale === true && formatEuro(data.atteso_catastale)
-          ? `Il valore registrato coincide invece con il calcolo su superficie catastale: ${formatEuro(data.atteso_catastale)}.`
-          : null,
-        "In pratica: i numeri della riga importata non tornano con il calcolo teorico e la posizione va verificata.",
-      ]);
+      return describeImponibile(data);
     case "VAL-07-importi":
       return compactParts([
         "Gli importi del ruolo non coincidono con quelli che risultano dal calcolo su imponibile e aliquota.",

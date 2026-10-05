@@ -14,6 +14,14 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, Catasto misure/imponibile, 2026-10-05:
+`describeCatastoAnomalia` `IMPROVED`, cog/cyc/LOC34/19/49 ->22/13/41.
+Helper imponibile2/3/11/0 sotto soglia, predicato valori formattati condiviso;
+file cognitive104 ->94, cyclomatic79 ->76, branching61 ->57, LOC347 ->350.
+Due error target diventano warning; tre error/due warning file residui,
+nessun debito trasferito. 61 test, full-file100% su quattro metriche,
+5400 input equivalenti; ratchet/typecheck/ESLint PASS, baseline invariata.
+
 Campagna non-MCP, Catasto riferimenti sorgente, 2026-10-05:
 `describeCatastoAnomalia` `IMPROVED`, cog/cyc44/24 ->34/19; helper
 condiviso1/2/3/0, zero violation. Cognitive file113 ->104, cyclomatic82 ->79,
