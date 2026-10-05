@@ -3,6 +3,44 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Utenze — avvio validazione persona separata dal dispatch (2026-10-05)
+
+- Chiusura `IMPROVED` per complessita cognitiva: il dominio persona CF
+  completo/incompleto e nel solo helper `_parse_person`, senza duplicazioni.
+  Target cog/cyc/LOC/nesting 19/14/74/2 -> 17/13/54/2; helper 1/2/22/1,
+  tre parametri e nessuna violation. Cognitive file sum/max 20/19 -> 19/17.
+- Sei callable (prima cinque); cyclomatic file sum/max 19/14 -> 20/13:
+  l'unita aggiunta e la base del nuovo callable, branching `sum(cyc-1)`
+  invariato a 14. LOC file 105 -> 107, nessuna violation file; densita
+  cognitive/LOC 20/105 -> 19/107. Zero error e tre warning invariati,
+  nessuna eliminazione di violation o trasferimento del debito dichiarato.
+- 25 test prima/dopo; full-file dopo 55/55 statement e 14/14 branch,
+  100%, zero esclusioni. 8865 input stringa identici al runtime `a2a66269`.
+  Ratchet mirato contro baseline del merge-base, Ruff runtime/test e
+  whitespace PASS; baseline, configurazione coverage e scope invariati.
+- `BASE_REF=a2a66269 make lint-backend QUALITY_PYTHON=backend/.venv/bin/python`
+  bloccato soltanto dal formatter del test concorrente
+  `backend/tests/test_capacitas_full_recovery.py`, fuori slice; non corretto.
+  Il parser legacy non e format-clean, ma non e un nuovo file e passa Ruff.
+- Ratchet full corpus read-only contro `a2a66269`: dieci finding esterni
+  nei file Wiki MCP auth/cli/data-cli/experiment_runner/http; zero finding
+  nel parser Utenze. Non classificati come regressioni di questa slice,
+  non corretti e non assorbiti con aggiornamenti della baseline.
+- Graphify Utenze codice aggiornato tramite target dedicato; estrazioni
+  documentali Utenze/piattaforma verificate separatamente prima della chiusura.
+- Commit precedente `a2a66269`; questa nuova slice resta non committata.
+  Stop al singolo hotspot; nessun push o secondo hotspot avviato.
+- Prossimo singolo hotspot autorizzato dopo commit `a2a66269`: separare
+  il parsing persona CF (nome incompleto/completo) dal dispatch della cartella.
+- Helper privato con responsabilita di dominio e tre input espliciti;
+  nessuna nuova astrazione generale, wrapper vuoto o duplicazione. Preservare
+  ordine classificazione CF/PIVA, raw input, token, payload/errori e liste.
+- Prima target cog/cyc/LOC/nesting 19/14/74/2; file cognitive 20/19,
+  cyclomatic 19/14, LOC 105 e cinque callable. Coverage full-file 100%,
+  25 test di caratterizzazione esistenti. Valutare sum/max origine/helper,
+  nuovi warning e branching aggregato: se non migliora, non dichiarare
+  riduzione o aprire automaticamente un altro hotspot.
+
 ### Utenze — avvio stato di revisione persona (2026-10-05)
 
 - Chiusura `IMPROVED` **limitata a LOC e stato derivato**, non alla

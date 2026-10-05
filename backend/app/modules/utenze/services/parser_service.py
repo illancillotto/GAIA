@@ -42,6 +42,32 @@ def _split_tokens(folder_name: str) -> list[str]:
     return [token.strip() for token in folder_name.split("_") if token.strip()]
 
 
+def _parse_person(folder_name: str, tokens: list[str], codice_fiscale: str) -> ParseResult:
+    if len(tokens) < 3:
+        return ParseResult(
+            source_name_raw=folder_name,
+            subject_type=AnagraficaSubjectType.UNKNOWN.value,
+            requires_review=True,
+            confidence=0.2,
+            codice_fiscale=codice_fiscale,
+            warnings=["person_name_incomplete"],
+        )
+
+    cognome = tokens[0]
+    nome = " ".join(tokens[1:-1])
+
+    return ParseResult(
+        source_name_raw=folder_name,
+        subject_type=AnagraficaSubjectType.PERSON.value,
+        requires_review=False,
+        confidence=0.98,
+        cognome=cognome,
+        nome=nome,
+        codice_fiscale=codice_fiscale,
+        warnings=[],
+    )
+
+
 def parse_folder_name(folder_name: str) -> ParseResult:
     normalized_name = _normalize_folder_name(folder_name)
     tokens = _split_tokens(normalized_name)
@@ -58,29 +84,7 @@ def parse_folder_name(folder_name: str) -> ParseResult:
     last_token = tokens[-1].upper()
 
     if CODICE_FISCALE_PATTERN.fullmatch(last_token):
-        if len(tokens) < 3:
-            return ParseResult(
-                source_name_raw=folder_name,
-                subject_type=AnagraficaSubjectType.UNKNOWN.value,
-                requires_review=True,
-                confidence=0.2,
-                codice_fiscale=last_token,
-                warnings=["person_name_incomplete"],
-            )
-
-        cognome = tokens[0]
-        nome = " ".join(tokens[1:-1])
-
-        return ParseResult(
-            source_name_raw=folder_name,
-            subject_type=AnagraficaSubjectType.PERSON.value,
-            requires_review=False,
-            confidence=0.98,
-            cognome=cognome,
-            nome=nome,
-            codice_fiscale=last_token,
-            warnings=[],
-        )
+        return _parse_person(folder_name, tokens, last_token)
 
     if PARTITA_IVA_PATTERN.fullmatch(last_token):
         ragione_sociale = " ".join(tokens[:-1]).replace("_", " ").strip()

@@ -14,6 +14,14 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Utenze dispatch persona, 2026-10-05: `parse_folder_name` `IMPROVED` cognitivo,
+19 -> 17; helper persona 1/2/22/1 (cog/cyc/LOC/nesting), nessuna violation.
+Cognitive file 20 -> 19; cyclomatic 19 -> 20 per base del sesto callable,
+branching aggregato invariato a 14. LOC file 105 -> 107, tre warning
+invariati, zero error. 25 test, full-file 100%, 8865 input equivalenti;
+ratchet mirato PASS, baseline invariata. Lint globale bloccato da formatter
+del test concorrente Capacitas, non incluso nella slice.
+
 Utenze review persona, 2026-10-05: `parse_folder_name` `IMPROVED` solo per
 LOC/stato derivato, eliminati alias warnings/confidence e bool della lista
 vuota. LOC target 76 -> 74, file 107 -> 105; cognitive 19 e cyclomatic 14

@@ -1,5 +1,19 @@
 # Progress
 
+## 2026-10-05 — validazione persona separata dal dispatch
+
+- Il helper privato `_parse_person` gestisce nome completo/incompleto con CF;
+  il dispatch conserva precedenza CF/PIVA, raw input e token normalizzati.
+  Payload, review, confidence, warning e liste fresche invariati.
+- `parse_folder_name` cog/cyc/LOC 19/14/74 -> 17/13/54; helper 1/2/22.
+  Cognitive file 20 -> 19 (`IMPROVED`); sei callable, branching aggregato
+  invariato, cyclomatic totale 19 -> 20 per base del nuovo callable.
+  LOC file 105 -> 107; zero error e tre warning invariati.
+- 25 test prima/dopo; coverage full-file 100% (55 statement, 14 branch),
+  zero esclusioni e 8865 casi identici al runtime `a2a66269`. Ratchet mirato
+  e Ruff PASS; baseline invariata. Lint globale bloccato dal formatter
+  del test concorrente Capacitas, fuori perimetro e non modificato.
+
 ## 2026-10-05 — risultato persona senza stato derivato
 
 - Il percorso persona completa valorizza direttamente review False,
