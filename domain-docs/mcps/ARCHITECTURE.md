@@ -54,6 +54,19 @@ solo dal database sintetico verificato; il runner delega tool calling all'agente
 corrente. Nessun modello ORM, tabella operativa o migration nuova. Piano e
 contratti: `SYNTHETIC_RECOVERY_PLAN.md`.
 
+L'API Python interna e `run_comparison(cases, executor, output)`, con
+`executor: ComparisonExecutor` costruito dalla CLI usando fonti, modello,
+corpus e configurazione. Il runner usa corpus/config dell'executor anche per
+manifest e schedule, senza duplicare questi parametri o crearne un altro.
+Nel runner, `run_comparison` gestisce manifest, schedule e ciclo di vita del
+journal; `ComparisonExecutor.execute_item` gestisce la ripresa e i retry del
+singolo elemento. Un elemento gia completato non viene rieseguito; i tentativi
+condividono il contesto e vengono persistiti prima di aggiornare i record in
+memoria. Il limite di retry resta quello della configurazione dell'esperimento.
+Il journal distingue lifecycle/lock nel costruttore da lettura e validazione
+in `_read_rows`: controlla prima tutte le newline, poi JSON e manifest;
+qualsiasi errore preserva il contenuto e rilascia file e lock.
+
 ## Contratto comune degli output
 
 Ogni tool dovrebbe restituire una struttura equivalente a:

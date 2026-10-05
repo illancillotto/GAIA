@@ -64,6 +64,12 @@ Prima dello sviluppo questi file non esistevano: nessun debito legacy trasferito
 Nessuna baseline/eccezione aggiornata; nessun refactor fuori scope. Controllo AST
 dei corpi funzione nuovi con almeno tre statement: zero duplicati esatti.
 
+Le metriche sopra descrivono lo sviluppo iniziale. Aggiornamento 2026-10-05:
+le slice successive hanno eliminato i warning del runner/CLI; l'API Python
+interna e ora `run_comparison(cases, executor, output)`. CLI e HTTP invariati,
+304 test MCP verdi e coverage statement/branch 100%. Metriche prima/dopo,
+compatibilita journal e limiti globali in `RUNNER_COMPLEXITY_REVIEW_2026-10-05.md`.
+
 ## Pilot live reale, distinto dai test simulati
 
 5 casi generati dalla replica verificata `gaia-v1`: 3 lookup UUID, 1 multi-hop

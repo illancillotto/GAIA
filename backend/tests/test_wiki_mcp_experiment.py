@@ -1,4 +1,5 @@
 import asyncio
+import fcntl
 import json
 import runpy
 import socket
@@ -229,6 +230,57 @@ def test_journal_append_resume_lock_and_corruption(tmp_path):
         ResultJournal(path, manifest)
 
 
+@pytest.mark.parametrize(
+    ("content", "error_message"),
+    [
+        ('{"manifest": {"experiment_id": "same"}}', "Incomplete"),
+        ('invalid\n{"incomplete":true}', "Incomplete"),
+        ("invalid\n", "Expecting value"),
+        ('{"manifest": {"experiment_id": "other"}}\n', "different experiment"),
+    ],
+)
+def test_journal_validation_failure_preserves_bytes_and_releases_lock(
+    tmp_path, content, error_message
+):
+    path = tmp_path / "rejected.jsonl"
+    path.write_text(content)
+    original = path.read_bytes()
+
+    with pytest.raises(ValueError, match=error_message):
+        ResultJournal(path, {"experiment_id": "same"})
+
+    assert path.read_bytes() == original
+    with path.open("a+") as reopened:
+        fcntl.flock(reopened, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
+def test_journal_initial_write_failure_closes_file_and_releases_lock(tmp_path, monkeypatch):
+    path = tmp_path / "unavailable.jsonl"
+    manifest = {"experiment_id": "same"}
+    attempted = []
+    original_append = ResultJournal.append
+
+    def unavailable_append(self, row):
+        attempted.append((self, row))
+        raise OSError("Journal unavailable")
+
+    monkeypatch.setattr(ResultJournal, "append", unavailable_append)
+    with pytest.raises(OSError, match="Journal unavailable"):
+        ResultJournal(path, manifest)
+
+    journal, row = attempted[0]
+    assert row == {"manifest": manifest}
+    assert journal.file.closed
+    assert path.read_bytes() == b""
+    monkeypatch.setattr(ResultJournal, "append", original_append)
+    reopened = ResultJournal(path, manifest)
+    try:
+        assert reopened.records == []
+        assert json.loads(path.read_text()) == {"manifest": manifest}
+    finally:
+        reopened.close()
+
+
 def test_verified_sources_reject_docs_before_invocation_and_wrong_dataset(context):
     sources = SimpleNamespace(
         list_tools=AsyncMock(return_value=[{"name": "data__get_subject"}]),
@@ -325,23 +377,119 @@ def test_paired_runner_retry_resume_and_exhaustion(service, corpus, tmp_path, mo
     monkeypatch.setattr(ComparisonExecutor, "execute", executor)
     config = ExperimentConfig(repeats=1)
     path = tmp_path / "results.jsonl"
-    records = asyncio.run(run_comparison(cases, corpus, None, None, config, path))
+    comparison = ComparisonExecutor(None, None, corpus, config)
+    records = asyncio.run(run_comparison(cases, comparison, path))
     assert [row["status"] for row in records] == ["failed", "completed", "completed"]
     assert records[0]["error_type"] == "TimeoutError" and "secret" not in path.read_text()
-    assert asyncio.run(run_comparison(cases, corpus, None, None, config, path)) == records
+    assert asyncio.run(run_comparison(cases, comparison, path)) == records
     assert executor.await_count == 3
     executor.side_effect = TimeoutError()
     path = tmp_path / "failed.jsonl"
-    assert len(asyncio.run(run_comparison(cases, corpus, None, None, config, path))) == 4
-    assert len(asyncio.run(run_comparison(cases, corpus, None, None, config, path))) == 4
+    assert len(asyncio.run(run_comparison(cases, comparison, path))) == 4
+    assert len(asyncio.run(run_comparison(cases, comparison, path))) == 4
     executor.side_effect = [KeyboardInterrupt()]
     with pytest.raises(KeyboardInterrupt):
-        asyncio.run(
-            run_comparison(cases, corpus, None, None, config, tmp_path / "interrupted.jsonl")
+        asyncio.run(run_comparison(cases, comparison, tmp_path / "interrupted.jsonl"))
+
+
+def test_paired_runner_partial_resume_preserves_attempts_and_context(
+    service, corpus, tmp_path, monkeypatch
+):
+    cases = synthetic_cases(service)[:1]
+    config = ExperimentConfig(repeats=1, max_attempts=3)
+    manifest = experiment_manifest(cases, corpus.version, config)
+    pending, completed = schedule(cases, config)
+    path = tmp_path / "partial.jsonl"
+    previous = [
+        {"item": pending, "attempt": 1, "status": "failed"},
+        {"item": completed, "attempt": 1, "status": "completed"},
+    ]
+    journal = ResultJournal(path, manifest)
+    for row in previous:
+        journal.append(row)
+    journal.close()
+    executor = AsyncMock(side_effect=[TimeoutError(), {"score": {"passed": True}}])
+    monkeypatch.setattr(ComparisonExecutor, "execute", executor)
+
+    comparison = ComparisonExecutor(None, None, corpus, config)
+    records = asyncio.run(run_comparison(cases, comparison, path))
+
+    assert records[:2] == previous
+    assert [(row["attempt"], row["status"]) for row in records[2:]] == [
+        (2, "failed"),
+        (3, "completed"),
+    ]
+    assert [json.loads(line) for line in path.read_text().splitlines()][1:] == records
+    assert executor.await_count == 2
+    first_call, retry_call = executor.await_args_list
+    assert first_call.args[:2] == (cases[0], pending["condition"])
+    assert first_call.args[2] is retry_call.args[2]
+    resumed_context = first_call.args[2]
+    assert resumed_context.principal == "synthetic-comparison"
+    assert resumed_context.scopes == EXPERIMENT_SCOPES
+    assert resumed_context.experiment_run_id == str(
+        uuid5(
+            NAMESPACE_URL,
+            manifest["experiment_id"]
+            + json.dumps(pending, sort_keys=True, separators=(",", ":"), ensure_ascii=False),
         )
+    )
+    assert asyncio.run(run_comparison(cases, comparison, path)) == records
+    assert executor.await_count == 2
 
 
-def test_cli_plan_live_and_cleanup(service, tmp_path, monkeypatch, capsys):
+@pytest.mark.parametrize("failure", ["cancelled", "journal-write"])
+def test_paired_runner_releases_journal_on_abort(service, corpus, tmp_path, monkeypatch, failure):
+    cases = synthetic_cases(service)[:1]
+    config = ExperimentConfig(repeats=1)
+    manifest = experiment_manifest(cases, corpus.version, config)
+    path = tmp_path / "aborted.jsonl"
+    executor = AsyncMock(return_value={"score": {"passed": True}})
+    monkeypatch.setattr(ComparisonExecutor, "execute", executor)
+    error = asyncio.CancelledError if failure == "cancelled" else OSError
+    if failure == "cancelled":
+        executor.side_effect = asyncio.CancelledError()
+    else:
+        original_append = ResultJournal.append
+
+        def unavailable_append(self, row):
+            if "item" in row:
+                raise OSError("Journal unavailable")
+            original_append(self, row)
+
+        monkeypatch.setattr(ResultJournal, "append", unavailable_append)
+
+    with pytest.raises(error):
+        asyncio.run(run_comparison(cases, ComparisonExecutor(None, None, corpus, config), path))
+
+    reopened = ResultJournal(path, manifest)
+    try:
+        assert reopened.manifest == manifest
+        assert reopened.records == []
+    finally:
+        reopened.close()
+    assert executor.await_count == 1
+
+
+def test_cli_live_failure_closes_model(tmp_path, monkeypatch):
+    model = Mock()
+    model.__aenter__ = AsyncMock(return_value=model)
+    model.__aexit__ = AsyncMock(return_value=False)
+    monkeypatch.setattr(experiment_cli, "model_client", lambda: model)
+    monkeypatch.setattr(experiment_cli, "source_client", lambda: "data-only")
+    runner = AsyncMock(side_effect=OSError("Journal unavailable"))
+    monkeypatch.setattr(experiment_cli, "run_comparison", runner)
+
+    with pytest.raises(OSError, match="Journal unavailable"):
+        asyncio.run(experiment_cli.live([], None, None, tmp_path / "failed.jsonl"))
+
+    runner.assert_awaited_once()
+    model.__aenter__.assert_awaited_once()
+    model.__aexit__.assert_awaited_once()
+    assert model.__aexit__.await_args.args[0] is OSError
+
+
+def test_cli_plan_live_and_cleanup(service, corpus, tmp_path, monkeypatch, capsys):
     path = tmp_path / "gaia-mcp-synthetic-cli.sqlite"
     seed_database(path, "cli-tests")
     arguments = ["--database", str(path), "--output", str(tmp_path / "output.jsonl")]
@@ -368,8 +516,16 @@ def test_cli_plan_live_and_cleanup(service, tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(experiment_cli, "source_client", lambda: "data-only")
     runner = AsyncMock(return_value=[])
     monkeypatch.setattr(experiment_cli, "run_comparison", runner)
-    assert asyncio.run(experiment_cli.live([], None, None, tmp_path)) == []
-    assert runner.call_args.args[2] == "data-only"
+    cases = synthetic_cases(service)[:1]
+    config = ExperimentConfig(repeats=1, max_attempts=3)
+    assert asyncio.run(experiment_cli.live(cases, corpus, config, tmp_path)) == []
+    passed_cases, passed_executor, passed_output = runner.call_args.args
+    assert passed_cases is cases and passed_output == tmp_path
+    assert passed_executor.sources == "data-only"
+    assert passed_executor.model is model
+    assert passed_executor.corpus is corpus
+    assert passed_executor.config is config
+    model.__aexit__.assert_awaited_once()
     with pytest.raises(SystemExit):
         experiment_cli.main([*arguments, "--docs", "real-documents"])
 

@@ -3718,3 +3718,115 @@ Metriche prima/dopo, test e stato finale nel report
 `domain-docs/presenze/docs/TURNISTI_COMPLEXITY_SLICES_2026-10-05.md`.
 Ratchet mirato ciclo PASS; ratchet globale conserva finding Wiki concorrenti.
 Gli interventi Wiki precedenti in questo documento sono preservati.
+
+## 2026-10-05 — hotspot MCP runner sintetico
+
+- Slice richiesta dall'utente: `experiment_runner.py::run_comparison`, il
+  massimo cognitivo MCP corrente (21/9/34/4 cognitive/cyclomatic/LOC/nesting).
+  Snapshot iniziale HEAD `6997dbab`; working tree concorrente preservato.
+- Invarianti: schedule seeded, skip completed, conteggio retry per item,
+  stesso contesto per i retry e UUID esperimento deterministico, append/fsync
+  prima dell'aggiornamento in memoria, close e rilascio lock su abort.
+  Nessuna modifica OAuth/HTTP/HTTPS, API, DB, budget o scoring.
+- Baseline pre-change: 28 test experiment verdi, runner 139/139 statement e
+  30/30 branch (100%). Slice: separare orchestration dell'esperimento da
+  esecuzione resumable del singolo item, senza nuovi file runtime.
+- Caratterizzazione: tre casi aggiuntivi verdi prima del refactoring (resume
+  parziale e due abort); 31 test experiment verdi dopo. Prima prova coverage
+  concorrente non valida: sorgente formattata durante il test e dati di un altro
+  processo nel file coverage condiviso. Riverifica isolata con `COVERAGE_FILE`
+  dedicato: runner 142/142 statement e 30/30 branch (100%).
+- Dopo: `run_comparison` 4/4/11/2; `ComparisonExecutor.execute_item`
+  7/6/19/2, quattro parametri incluso self, nessuna violation. Il manifest
+  validato resta nel journal e determina l'UUID; non e ripassato come stato
+  duplicato. Costruttore journal +1 LOC, cognitive/cyclomatic invariati.
+- Aggregati file: cognitive sum/max 81/21 -> 71/18; cyclomatic sum/max
+  63/10 -> 64/10, solo la base del nuovo callable (decisioni 48 -> 48);
+  file LOC 210 -> 207; warning 5 -> 3, nessun error o warning trasferito.
+  `IMPROVED` per cognitive/nesting, non per numero di decisioni.
+- Ratchet mirato: PASS, `findings: []`, baseline del merge-base `6b61fd27`;
+  scan dell'intero repository, filtro sul solo runtime dopo il matching.
+  Evidenze `/tmp/gaia-runner-{before,after}.json`,
+  `/tmp/gaia-runner-full-final.json`, `/tmp/gaia-runner-ratchet-scoped.json`.
+  Ruff check e format check runtime/test verdi; `git diff --check` verde.
+- Gate globali non verdi: ratchet 24 finding estranei al runner; lint-backend
+  bloccato dal formatter di `presenze/services/{daily_details,shift_assignments}.py`.
+  Nessun tentativo di correggere quei lavori concorrenti. Baseline, report
+  versionati, esclusioni e soglie invariati; nessuna sincronizzazione globale
+  della baseline e nessun commit/push di questa tranche.
+- Documentazione dominio aggiornata su ownership e compatibilita manifest;
+  dettagli di test, Graphify e debito residuo in
+  `domain-docs/mcps/RUNNER_COMPLEXITY_REVIEW_2026-10-05.md`.
+
+  Stop dopo questo singolo hotspot.
+
+## 2026-10-05 — hotspot MCP validazione journal
+
+- Richiesta successiva: eliminare i warning legacy del runner. Una sola slice:
+  `ResultJournal.__init__` cognitive/cyclomatic/LOC/nesting 18/10/19/2.
+  Snapshot HEAD `40851bbf`; le modifiche precedenti e concorrenti restano.
+- Invarianti: flock non bloccante prima della lettura, verifica di tutte le
+  newline prima del parsing JSON, manifest identico, nessuna scrittura su
+  contenuto rifiutato, rilascio file/lock su errore, append/flush/fsync invariati.
+  Separazione prevista: lifecycle nel costruttore, lettura/validazione in
+  un metodo coeso, senza trasferire warning.
+- Cinque caratterizzazioni aggiunte: file incompleto, precedenza incomplete
+  su JSON invalido, JSON invalido completo, manifest diverso e prima scrittura
+  fallita. Verificano byte preservati e lock realmente riacquisibile.
+- Il warning dei sei parametri `run_comparison` riguarda una seconda slice;
+  richiesta decisione esplicita sull'API Python interna, nessun wrapper
+  artificiale o cambiamento CLI/HTTP per aggirare la metrica.
+- Prima/dopo: 36 test experiment verdi, full-file 142 -> 145 statement e
+  30 branch coperti al 100%. Suite MCP finale: 303 test verdi, 1996 statement
+  e 420 branch al 100% sui 42 runtime MCP/router. Coverage file isolati.
+- Costruttore 18/10/19/2 -> 5/4/13/2; `_read_rows` 8/7/9/1, sotto soglia.
+  File cognitive sum/max 71/18 -> 66/8, cyclomatic sum/max 64/10 -> 65/7,
+  decisioni 48 -> 48, LOC 207 -> 210, warning 3 -> 1, zero error. Esito
+  `IMPROVED`, nessuna violation trasferita; un solo hotspot trattato.
+- Ruff/check-format e diff-check PASS; ratchet target PASS dopo scan completo,
+  baseline merge-base `6b61fd27`, `findings: []`. Evidenze
+  `/tmp/gaia-journal-{before,after}.json`,
+  `/tmp/gaia-journal-ratchet-scoped.json`, `/tmp/gaia-journal-mcp-suite.log`.
+- Ratchet globale ancora 24 finding estranei; lint globale ancora due
+  formatter Presenze. Baseline, report versionati, soglie ed esclusioni
+  invariati, nessuna sincronizzazione globale o commit/push. Documentazione
+  dominio e Graphify aggiornati con i target dedicati; dettagli nella review
+  `domain-docs/mcps/RUNNER_COMPLEXITY_REVIEW_2026-10-05.md`.
+
+## 2026-10-05 — API interna runner MCP autorizzata
+
+- L'utente autorizza la modifica della firma Python per eliminare l'ultimo
+  warning legacy. Una sola slice: `run_comparison`, parametri 6 -> 3 mediante
+  l'oggetto `ComparisonExecutor` gia esistente, non un wrapper nuovo.
+  Snapshot iniziale HEAD `753ef6dc`; working tree concorrente preservato.
+- Invarianti: stessa configurazione per manifest/schedule/esecuzione,
+  ownership del modello nel context manager CLI, ciclo di vita journal,
+  retry/resume/scoring immutati; nessuna modifica a CLI o HTTP pubblici.
+- Perimetro: runner, CLI interna e relativi test. Baseline e soglie invariate.
+  Il vecchio contratto Python a sei argomenti viene sostituito esplicitamente,
+  senza shim variadic o alias finalizzati ad aggirare le metriche.
+- Baseline pre-change: 36 test, entrambi i runtime al 100%; nuovo caso cleanup
+  CLI su errore del runner verde prima del cambio. Test di wiring aggiornato
+  per verificare identita di corpus/config/modello e fonte nell'executor.
+- Dopo: firma `run_comparison(cases, executor, output)`, tre parametri; zero
+  warning/error in runner e CLI, nessuna esclusione o wrapper aggiunto.
+  Cognitive/cyclomatic aggregate dei due runtime invariati (74/71), 19
+  callable invariati. LOC runner 210 -> 211 e CLI 52 -> 59 per firma
+  tipizzata/import esplicito. `IMPROVED` limitato a parametri e debito firma.
+- 37 test experiment verdi; runner 144/144 statement e 30/30 branch, CLI
+  37/37 statement e 4/4 branch (100%). Suite MCP completa: 304 test verdi,
+  1996 statement e 420 branch al 100% sui 42 runtime MCP/router.
+- Ruff/check-format/diff-check PASS; ratchet mirato sui due file PASS con
+  `findings: []`, full scan contro baseline del merge-base `6b61fd27`.
+  Evidenze `/tmp/gaia-api-{before,after}.json`,
+  `/tmp/gaia-api-ratchet-scoped.json`, `/tmp/gaia-mcp-api-final-coverage.json`,
+  `/tmp/gaia-api-mcp-suite.log`. Baseline e report versionati invariati.
+- Restano estranei al perimetro 24 finding globali e due formatter Presenze;
+  niente correzioni opportunistiche, sincronizzazione baseline o commit/push.
+  Documentazione e Graphify aggiornati con target dedicati; AST Wiki forzato
+  dopo la patch pruning idempotente per rimuovere le relazioni stale dovute
+  allo spostamento della costruzione executor nella CLI. Stop dopo questa slice.
+- Commit isolato successivamente richiesto dall'utente: include solo runner,
+  CLI, test e documentazione di queste tre slice, non gli altri refactoring
+  MCP o i lavori concorrenti. Le sezioni dei documenti condivisi sono staged
+  selettivamente. Nessun push; i gate globali estranei restano dichiarati.

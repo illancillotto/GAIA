@@ -107,6 +107,32 @@ Eseguire lo stesso comando per resume; per un protocollo/dataset/budget diverso
 usare un nuovo output, senza sovrascrivere il journal precedente. Opzioni CLI:
 `--repeats`, `--seed`, `--database`, `--output`, `--live`.
 
+Il refactoring del runner del 2026-10-05 separa orchestration e retry per
+elemento, senza cambiare ordine, limiti o formato JSONL. L'hash di
+`experiment_runner.py` fa parte del manifest: anche per questo aggiornamento
+usare un output nuovo per gli esperimenti avviati con il codice precedente;
+il rifiuto di un manifest diverso resta intenzionale e i journal storici non
+vanno riscritti. Cancellazione e failure di scrittura propagano l'errore e
+rilasciano il lock del journal. La caratterizzazione include resume parziale,
+isolamento dei tentativi per elemento e contesto stabile fra retry.
+La successiva slice del journal preserva anche la precedenza dell'errore
+`Incomplete` sul parsing JSON e l'assenza di scritture su file rifiutati.
+Errori JSON, manifest diverso e failure della prima scrittura rilasciano il
+lock; non viene tentata alcuna riparazione automatica dei journal corrotti.
+
+API Python interna aggiornata con autorizzazione esplicita:
+
+```python
+executor = ComparisonExecutor(sources, model, corpus, config)
+records = await run_comparison(cases, executor, output)
+```
+
+La firma precedente a sei argomenti non e piu supportata; i chiamanti interni
+e i test sono aggiornati. La CLI conserva gli stessi flag e crea l'executor
+all'interno del context manager del modello, chiuso anche su errore del runner.
+Nessun cambio alle API HTTP, ai risultati o al formato journal. L'hash del
+runner cambia ancora: usare un nuovo output per journal creati prima del cambio.
+
 Preview autenticata: `/wiki/mcp`, solo domande sintetiche predefinite, chiamata
 `POST /wiki/mcp/chat` tramite client API GAIA. Nessuna credenziale provider nel
 browser; nessun input libero/documento/allegato; chat legacy invariata.

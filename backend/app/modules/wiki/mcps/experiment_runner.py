@@ -82,19 +82,24 @@ class ResultJournal:
         self.file = path.open("a+", encoding="utf-8")
         try:
             fcntl.flock(self.file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            self.file.seek(0)
-            lines = list(self.file)
-            if any(not line.endswith("\n") for line in lines):
-                raise ValueError("Incomplete journal; preserve it for inspection")
-            rows = [json.loads(line) for line in lines]
-            if rows and rows[0] != {"manifest": manifest}:
-                raise ValueError("Journal belongs to a different experiment")
+            rows = self._read_rows(manifest)
+            self.manifest = manifest
             self.records = rows[1:]
             if not rows:
                 self.append({"manifest": manifest})
         except Exception:
             self.file.close()
             raise
+
+    def _read_rows(self, manifest: dict) -> list[dict]:
+        self.file.seek(0)
+        lines = list(self.file)
+        if any(not line.endswith("\n") for line in lines):
+            raise ValueError("Incomplete journal; preserve it for inspection")
+        rows = [json.loads(line) for line in lines]
+        if rows and rows[0] != {"manifest": manifest}:
+            raise ValueError("Journal belongs to a different experiment")
+        return rows
 
     def append(self, row: dict):
         self.file.write(canonical_json(row) + "\n")
@@ -153,6 +158,26 @@ class ComparisonExecutor:
     corpus: SyntheticStaticCorpus
     config: ExperimentConfig
 
+    async def execute_item(self, case: ExperimentCase, item: dict, journal: ResultJournal) -> None:
+        previous = [row for row in journal.records if row["item"] == item]
+        if any(row["status"] == "completed" for row in previous):
+            return
+        context = CallContext(
+            principal="synthetic-comparison",
+            scopes=EXPERIMENT_SCOPES,
+            experiment_run_id=str(
+                uuid5(NAMESPACE_URL, journal.manifest["experiment_id"] + canonical_json(item))
+            ),
+        )
+        for attempt in range(len(previous) + 1, self.config.max_attempts + 1):
+            row = await attempt_result(
+                item, attempt, self.execute(case, item["condition"], context)
+            )
+            journal.append(row)
+            journal.records.append(row)
+            if row["status"] == "completed":
+                break
+
     async def execute(self, case: ExperimentCase, condition: str, context: CallContext) -> dict:
         sources, model, corpus, config = self.sources, self.model, self.corpus, self.config
         traced = TracedModel(model)
@@ -203,37 +228,15 @@ async def attempt_result(item: dict, attempt: int, operation) -> dict:
     return row
 
 
-async def run_comparison(cases, corpus, sources, model, config, output: Path) -> list[dict]:
-    manifest = experiment_manifest(cases, corpus.version, config)
+async def run_comparison(
+    cases: list[ExperimentCase], executor: ComparisonExecutor, output: Path
+) -> list[dict]:
+    manifest = experiment_manifest(cases, executor.corpus.version, executor.config)
     journal = ResultJournal(output, manifest)
     case_map = {case.id: case for case in cases}
-    executor = ComparisonExecutor(sources, model, corpus, config)
     try:
-        for item in schedule(cases, config):
-            previous = [row for row in journal.records if row["item"] == item]
-            if any(row["status"] == "completed" for row in previous):
-                continue
-            context = CallContext(
-                principal="synthetic-comparison",
-                scopes=EXPERIMENT_SCOPES,
-                experiment_run_id=str(
-                    uuid5(NAMESPACE_URL, manifest["experiment_id"] + canonical_json(item))
-                ),
-            )
-            for attempt in range(len(previous) + 1, config.max_attempts + 1):
-                row = await attempt_result(
-                    item,
-                    attempt,
-                    executor.execute(
-                        case_map[item["case_id"]],
-                        item["condition"],
-                        context,
-                    ),
-                )
-                journal.append(row)
-                journal.records.append(row)
-                if row["status"] == "completed":
-                    break
+        for item in schedule(cases, executor.config):
+            await executor.execute_item(case_map[item["case_id"]], item, journal)
         return journal.records
     finally:
         journal.close()

@@ -7,14 +7,21 @@ from pathlib import Path
 from .context import CallContext
 from .data.service import DataService
 from .experiment_cases import synthetic_cases
-from .experiment_runner import ExperimentConfig, experiment_manifest, run_comparison, schedule
+from .experiment_runner import (
+    ComparisonExecutor,
+    ExperimentConfig,
+    experiment_manifest,
+    run_comparison,
+    schedule,
+)
 from .experiment_static import EXPERIMENT_SCOPES, SyntheticStaticCorpus
 from .routes import model_client, source_client
 
 
 async def live(cases, corpus, config, output):
     async with model_client() as model:
-        return await run_comparison(cases, corpus, source_client(), model, config, output)
+        executor = ComparisonExecutor(source_client(), model, corpus, config)
+        return await run_comparison(cases, executor, output)
 
 
 def main(argv: list[str] | None = None):
