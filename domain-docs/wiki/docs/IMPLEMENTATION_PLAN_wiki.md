@@ -1,11 +1,25 @@
 # IMPLEMENTATION PLAN — GAIA Wiki Agent
 ## Milestone 9
 
+### Riduzione complessita Data MCP — 2026-10-03
+
+Prima slice su `DataService.call`: risposta query/provenance/errori separati
+da telemetria e audit, senza cambiare API, scope o propagazione degli errori
+audit. Target e helper sotto soglia, test full-file al 100%. Riconciliazione
+baseline non ancora chiusa: evidenze e finding ereditati in
+`docs/code-quality/BASELINE_REDUCTION_2026-10-03.md`.
+
 > Stato: OPERATIVO — streaming frontend, hardening client, fallback locale e widget operativo contestuale completati al 2026-06-23
 > Iniziato da: Claude Code (Sonnet 4.6)
 > Completato quasi interamente da Claude Code (2026-05-20)
 
 ### MCP OAuth/consenso — progress 2026-10-03
+
+- [x] Suite MCP completa con trasporto TCP OAuth reale e coverage100%.
+- [x] Build pulita nel checkout e preview browser sul bundle standalone.
+- [ ] Ratchet globale e verifica Claude/HTTPS di produzione.
+
+Report di chiusura: `../../mcps/FINAL_CLOSURE_2026-10-03.md`.
 
 - [x] Fondazione OAuth PKCE con client preregistrati e autenticazione GAIA.
 - [x] Pagina consenso e listener isolato Data-only, metadata e budget/audit.

@@ -1,5 +1,14 @@
 # GAIA MCP — runtime, avvio e validazione
 
+Chiusura corrente: `FINAL_CLOSURE_2026-10-03.md`. Coverage MCP completo100%,
+build pulita locale e standalone/E2E preview passati. Gate complessivo ancora
+FAIL per ratchet globale e verifiche di rilascio mancanti. Note seguenti storiche.
+
+Riverifica dopo lo sblocco sandbox: `RECHECK_2026-10-03.md`. Suite MCP completa,
+build isolata, E2E preview e gpt-reserve live con soli sintetici passati;
+proxy di test HTTPS validato, non il dominio pubblico/Claude. Ratchet globale
+ancora rosso, build in-place bloccata dai permessi. Nessuna attivazione.
+
 Stato corrente 2026-10-03: fondazione OAuth, consenso GAIA e listener remoto
 Data-only implementati ma disattivati. Contratto:
 `CONNECTOR_RUNTIME_2026-10-03.md`; verifica finale e matrice test:

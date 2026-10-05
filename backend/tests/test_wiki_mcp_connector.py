@@ -3,7 +3,9 @@ import base64
 import hashlib
 import json
 import logging
+import socket
 import sqlite3
+import threading
 from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -11,6 +13,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import httpx
 import pytest
+import uvicorn
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from starlette.requests import Request
@@ -251,6 +254,65 @@ def test_real_gaia_login_oauth_data_tools_audit_permissions_and_revocation(runti
             REQUEST_CONTEXT.get()
 
     asyncio.run(exercise())
+
+
+def test_real_tcp_oauth_connector_tool_call_and_revocation(runtime):
+    config, sessions, _ = runtime
+    session = gaia_login(sessions)
+    application = create_connector_app(config, sessions)
+    listener = socket.socket()
+    listener.bind(("127.0.0.1", 0))
+    port = listener.getsockname()[1]
+    server = uvicorn.Server(
+        uvicorn.Config(application, log_level="error", access_log=False, ws="none")
+    )
+    thread = threading.Thread(
+        target=lambda: asyncio.run(server.serve(sockets=[listener])), daemon=True
+    )
+    thread.start()
+
+    async def exercise():
+        for _attempt in range(200):
+            if server.started:
+                break
+            await asyncio.sleep(0.01)
+        assert server.started
+        async with httpx.AsyncClient(
+            base_url=f"http://127.0.0.1:{port}", headers={"Host": "synthetic.example"}
+        ) as http:
+            tokens = await delegate(http, config, session)
+            access = tokens["access_token"]
+            tools = (await rpc(http, access)).json()["result"]["tools"]
+            assert {tool["name"] for tool in tools} == {"search_subjects", "get_subject"}
+            result = (
+                await rpc(
+                    http,
+                    access,
+                    "tools/call",
+                    {"name": "search_subjects", "arguments": {"query": "omonimo"}},
+                )
+            ).json()["result"]["structuredContent"]
+            assert result["source"] == "gaia_synthetic_db" and result["provenance"]
+            assert (await http.get("/docs")).status_code == 404
+            denied = (
+                await rpc(http, access, "tools/call", {"name": "search_docs", "arguments": {}})
+            ).json()["result"]["structuredContent"]
+            assert denied["error"]["code"] == "INVALID_ARGUMENT"
+            response = await http.post(
+                OAUTH_PATH + "/revoke",
+                data={"client_id": "synthetic-approved", "token": tokens["refresh_token"]},
+            )
+            assert response.status_code == 200
+            assert (await rpc(http, access)).status_code == 401
+
+    try:
+        asyncio.run(exercise())
+    finally:
+        server.should_exit = True
+        thread.join(timeout=10)
+        listener.close()
+    assert not thread.is_alive()
+    assert application.router.routes == []
 
 
 def test_transport_security_and_persisted_grants_survive_gateway_restart(runtime):

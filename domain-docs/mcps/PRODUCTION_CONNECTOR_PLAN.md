@@ -1,5 +1,10 @@
 # MCP in produzione — connettore remoto Claude
 
+Chiusura corrente: `FINAL_CLOSURE_2026-10-03.md`. Suite completa, coverage,
+build locale/standalone e preview browser verificati. Ingresso pubblico,
+callbackClaude, hardeningOAuth e gate globale restano residui; flagsfalse.
+Le precedenti note build/browser/suite bloccati descrivono gli audit storici.
+
 Verifica finale 2026-10-03: `CONNECTOR_FINAL_REVIEW_2026-10-03.md`.
 OAuth/consenso/gateway e budget implementati; gate completo e pubblicazione
 restano pendenti. Build non completata, browser/suite socket bloccati e

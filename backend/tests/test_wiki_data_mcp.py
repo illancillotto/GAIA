@@ -502,6 +502,99 @@ def test_database_and_internal_errors_are_minimized(service, monkeypatch, caplog
     )
 
 
+@pytest.mark.parametrize(
+    ("tool", "arguments", "scopes", "error_code", "result_count", "truncated"),
+    [
+        ("search_subjects", {"query": "sintetico", "limit": 1}, ["utenze.read"], None, 1, True),
+        (
+            "search_subjects",
+            {"query": "no-matching-synthetic-person"},
+            ["utenze.read"],
+            None,
+            0,
+            False,
+        ),
+        ("unknown", {}, ["utenze.read"], "INVALID_ARGUMENT", 0, False),
+        ("search_subjects", {"query": "sintetico"}, [], "PERMISSION_DENIED", 0, False),
+        (
+            "search_subjects",
+            {"query": "sintetico", "limit": 999},
+            ["utenze.read"],
+            "RESULT_LIMIT_EXCEEDED",
+            0,
+            False,
+        ),
+    ],
+)
+def test_call_response_and_audit_contract(
+    service, monkeypatch, caplog, tool, arguments, scopes, error_code, result_count, truncated
+):
+    caplog.set_level(logging.INFO)
+    recorded = []
+    audit = SimpleNamespace(record=lambda *values: recorded.append(values))
+    monkeypatch.setattr(service, "audit", audit)
+    request = context(scopes, conversation_id="conversation", experiment_run_id="experiment")
+    response = service.call(tool, arguments, request)
+    expected_keys = {
+        "tool",
+        "source",
+        "results",
+        "provenance",
+        "result_count",
+        "truncated",
+        "next_cursor",
+        "request_id",
+        "dataset_version",
+        "server_version",
+        "estimated_tokens",
+    }
+    if error_code is not None:
+        expected_keys.add("error")
+        assert response["error"] == {"code": error_code}
+    assert set(response) == expected_keys
+    assert response["tool"] == (tool if tool in QUERIES else "unknown")
+    assert response["source"] == "gaia_synthetic_db"
+    assert response["request_id"] == request.request_id
+    assert response["result_count"] == len(response["results"]) == result_count
+    assert response["truncated"] is truncated
+    assert (response["next_cursor"] is not None) is truncated
+    assert len(response["provenance"]) == result_count
+    for record, provenance in zip(response["results"], response["provenance"], strict=True):
+        assert provenance == {
+            "source": "gaia_synthetic_db",
+            "entity": QUERIES[tool].entity,
+            "record_id": record["id"],
+            "dataset_version": response["dataset_version"],
+        }
+    event = caplog.records[-1].mcp_event
+    assert len(recorded) == 1
+    assert recorded[0][0] is event
+    assert recorded[0][1] is arguments
+    assert recorded[0][2] is response
+    assert event["status"] == ("error" if error_code is not None else "ok")
+    assert event["error"] == response.get("error")
+    assert event["permission_scope"] == (QUERIES[tool].scope if tool in QUERIES else None)
+    assert event["result_count"] == result_count
+    assert event["estimated_output_tokens"] == response["estimated_tokens"]
+    assert event["conversation_id"] == "conversation"
+    assert event["experiment_run_id"] == "experiment"
+    assert "arguments" not in event and "results" not in event
+
+
+def test_call_preserves_audit_failure_after_telemetry(service, monkeypatch, caplog):
+    caplog.set_level(logging.INFO)
+
+    def fail_audit(event, arguments, response):
+        assert event["status"] == "ok"
+        assert response["result_count"] > 0
+        raise RuntimeError("audit storage unavailable")
+
+    monkeypatch.setattr(service, "audit", SimpleNamespace(record=fail_audit))
+    with pytest.raises(RuntimeError, match="audit storage unavailable"):
+        call(service, "search_subjects", {"query": "sintetico"})
+    assert caplog.records[-1].mcp_event["status"] == "ok"
+
+
 def test_sdk_handlers_and_stdio_runner(service, monkeypatch):
     async def exercise():
         instance = server.create_server(service, context)

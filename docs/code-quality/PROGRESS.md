@@ -3,6 +3,45 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Baseline - riduzione reale Wiki/MCP, prima slice (2026-10-03)
+
+- Richiesta esplicita: ridurre il codice prima di aggiornare la baseline, non
+  riallineare il JSON assorbendo peggioramenti. Unico hotspot di questa slice:
+  `DataService.call`, checkout `main@fccd06b0`; runtime/test target inizialmente
+  puliti, altre modifiche preservate. Nessun commit o push autorizzato qui.
+- Audit completo del solo codice committato in worktree detached: 1580 file,
+  19591 callable, 4731 violation (2043 error, 2688 warning). Non sono 4731
+  funzioni distinte. Il rispetto delle soglie dell'intero progetto non si
+  ottiene aggiornando una baseline, ne con un refactoring massivo.
+- Prima: target cog/cyc/LOC/nesting `13/10/60/2`; file cog/cyc sum `58/48`,
+  9 callable, 172 LOC, 5 warning e zero error. Baseline del target
+  `12/9/58`; due ulteriori finding ereditati nel costruttore per il parametro
+  audit gia committato. Non rimuovere la funzionalita audit per ripristinare
+  quei numeri. Graphify Wiki consultato per ownership e impatto.
+- Invarianti: schema risposta e provenance, paginazione, scope e validazione,
+  classi/errori minimizzati, stima token, correlazione e principal redatto,
+  log prima della scrittura audit; errore audit resta propagato.
+- Sei nuovi casi di caratterizzazione superati prima e dopo. Prima: 90 test,
+  106/106 statement e 22/22 branch. Dopo: 129 test con HTTP/integrazione,
+  109/109 statement e 22/22 branch; full-file 100%, nessuna esclusione.
+- Dopo: target cog/cyc/LOC/nesting `2/3/25/1`, nuovo `_call_response`
+  `10/7/38/2`; entrambi sotto ogni soglia warning. File cognitiva `58 -> 57`,
+  ciclomatica `48` invariata, LOC `172 -> 175`, callable `9 -> 10`, warning
+  `5 -> 3`, zero error. `IMPROVED`, senza attribuire alla riduzione globale
+  l'intero calo del target dovuto alla separazione delle responsabilita.
+- Ruff, lint-backend isolato e whitespace verdi. Scanner completo isolato
+  contro baseline del merge-base: due finding ereditati del costruttore,
+  nessun finding nuovo; ratchet exit 1, non certificato PASS. Check completo:
+  finding baseline `23 -> 20`, violation globali `4731 -> 4729`, nessun error
+  eliminato. Baseline non aggiornata dopo un ratchet ancora bloccato.
+- Audit e scope del costruttore restano invariati: rimuovere il parametro
+  audit per recuperare il vecchio numero richiederebbe cambiare API.
+  Non si nasconde in kwargs, non si assorbono i 20 finding residui.
+- Graphify Wiki aggiornato con force e patch: 115 file AST, 985 nodi,
+  2361 archi; grafi ignorati. Report e limiti in
+  `BASELINE_REDUCTION_2026-10-03.md`. Stop al singolo hotspot; nessuna seconda
+  slice o commit eseguiti. `_execute` e solo una proposta per il seguito.
+
 ### Tooling - sblocco gate condivisi e pruning Graphify (2026-10-03)
 
 - Tranche autorizzata sui tre blocchi globali, non un nuovo hotspot GIS.
@@ -92,6 +131,62 @@ blocco verificato e prima di chiudere un goal.
   con lo stesso prefisso. Un solo hotspot, commit isolato dopo i gate
   secondo autorizzazione vigente; altri lavori preservati, nessun push.
 
+### GIS - validatore ZIP sotto soglia (2026-10-03)
+
+- Unico hotspot `_validate_shapefile_zip`; ripresa su `main@bfc158cc`,
+  HEAD concorrente `2bc93d66` durante i gate. Conservate le due slice
+  precedenti e tutti i lavori estranei. Nessuna modifica a GATE.
+- Responsabilita di dominio in `shapefile_validation.py`: selezione dello
+  stem completo, lettura/normalizzazione pyshp e serializzazione JSON
+  condivisa. Alias `_jsonable_record` e costante disponibili in `services`;
+  orchestrazione ZIP/SRID/encoding/report/checksum nel servizio.
+  Ordine errori, guardie input/auth, API, schema, transazioni, audit,
+  staging, concorrenza e dati invariati. Una feature NULL resta un record.
+- Prima cog/cyc/LOC del validatore `21/19/62`; dopo `7/8/33`.
+  Componenti `4/5/15`, lettura `10/8/35`, serializzatore `4/4/4`.
+  Zero violation sul validatore e sui tre callable del modulo estratto;
+  nessuna violation trasferita. Perimetro aggregato: cog `490 -> 490`,
+  cyc `503 -> 505`, callable `109 -> 111`, LOC `2202 -> 2235`.
+  LOC servizio `2202 -> 2175`; violation `39 -> 36` (error `15 -> 14`,
+  warning `24 -> 22`). Classificazione `REORGANIZED_AND_CHARACTERIZED`,
+  non riduzione delle decisioni di dominio o azzeramento globale.
+- Undici casi pertinenti su archivi reali: cardinalita/stem, componenti
+  mancanti ordinati, precedenza errori, DBF Latin-1/date/numeri/null,
+  geometrie miste/tutte NULL, header corrotto, codec/decodifica e zero
+  feature. Passano anche eseguendo la funzione originale di `bfc158cc`.
+  L'aspettativa iniziale bbox NULL assente era errata anche prima del
+  refactoring: caratterizzata la bbox reale pyshp `[0,0,0,0]`, senza
+  modifica runtime. Nessun mock artificiale o controllo esterno rimosso.
+- Corpus GIS/Catasto GIS: `300 passed`, `102` warning PyJWT preesistenti,
+  nessun test saltato. Fresh coverage full-file: servizio `1050/1050`
+  statement e `314/314` branch; modulo `34/34` e `10/10` (100% ciascuno),
+  nessuna linea/branch mancante o esclusa. Dati isolati nella directory
+  indicata da `/tmp/gaia-gis-zero-final-run-dir`.
+- Ruff su runtime e test GIS toccati, formatter dei file nuovi, whitespace,
+  ratchet mirato autorevole contro `main@2bc93d66` (`findings: []`) e
+  `make quality-test` (`144 passed`) verdi. AST delle altre 110 unita
+  top-level invariato; solo serializzatore spostato e validatore cambiato.
+  Evidenze `/tmp/gaia-gis-zero-{before,after}.json`, AST invariants,
+  characterization, final-ratchet, lint e quality log con lo stesso prefisso.
+- Gate globali NON verdi: `make lint-backend` incontra cache bytecode
+  non scrivibili fuori GIS; ripetuto con `PYTHONPYCACHEPREFIX` temporaneo,
+  compila ma segnala I001 in `test_presenze_operations_postgres.py`.
+  Ratchet globale si ferma con `ambiguous_identity` per `isVisible` in
+  `frontend/src/components/layout/navigation.ts`. Problemi esterni non
+  corretti ne assorbiti; baseline/scope/soglie/esclusioni invariati.
+  Sincronizzazione baseline globale non eseguita per questa ambiguita.
+- Graphify backend aggiornato: 865 file AST, 9958 nodi, 25304 archi,
+  529 community; HTML omesso dal limite previsto di 5000 nodi, JSON/report
+  aggiornati. Il vecchio nodo `gis_services_jsonable_record` resta stale
+  dopo `make graphify-backend GRAPHIFY_CODE_FLAGS=--force`: questa versione
+  conserva i nodi preesistenti non presenti nella nuova AST anche con force.
+  Non alterati manualmente i grafi o il tooling per nascondere il limite.
+  Docs piattaforma: `chunk 1/1 done`, nessun chunk fallito; refresh finale
+  dopo la registrazione di questo limite. Grafi non versionati.
+  PostGIS/QGIS live ed E2E non
+  eseguiti; restano 36 violation legacy nel perimetro, fuori dal validatore.
+  Nessun commit/push: i controlli globali bloccanti non sono tutti superati.
+
 ### Catasto GIS - componenti DMS senza direzione (2026-10-03)
 
 - Hotspot unico `parseSignedDms`, checkout `main@bfc158cc`;
@@ -154,6 +249,150 @@ blocco verificato e prima di chiudere un goal.
   Graphify con lo stesso prefisso. Un solo hotspot, commit isolato dopo
   i gate secondo autorizzazione vigente; altri lavori preservati, nessun push.
 
+### GIS - ZIP, confronto encoding del warning (2026-10-03)
+
+- Seconda slice ZIP autorizzata dopo la costruzione ordinata dei warning;
+  checkout `main@b824e2f1`, preservata la prima slice non committata e tutti
+  i lavori concorrenti. Unica responsabilita toccata: predicato
+  `encoding_overridden` nel validatore, nessun altro hotspot aperto.
+- Invariante: il CPG vuoto non genera override; un CPG non vuoto
+  equivalente all'encoding selezionato senza distinguere maiuscole/minuscole
+  non genera override; ogni altro CPG non vuoto lo genera. Il confronto
+  usa stringhe gia normalizzate, senza effetti collaterali. Condizioni
+  di input, precedenza encoding, errori HTTP, auth, dati, audit/staging,
+  transazioni e concorrenza restano invariati.
+- Due nuovi casi con ZIP reali: CPG vuoto ed encoding ISO-8859-1 esplicito,
+  CPG a casing misto equivalente all'encoding UTF-8 esplicito. La matrice
+  ora contiene nove casi: tutti passano prima e dopo la modifica.
+  Nessun mock di input impossibili o test destinato alla sola percentuale.
+- Slice: confronto del CPG normalizzato con i due valori ammessi senza
+  warning (vuoto o encoding selezionato), anziche guardia piu confronto
+  separati. Nessun helper, wrapper, duplicazione o guardia esterna rimossa.
+- Metriche prima/dopo: target cog `23 -> 21`, cyc `21 -> 19`, LOC `62`
+  invariata; somme runtime cog `492 -> 490`, cyc `505 -> 503`;
+  file LOC `2202`, 109 callable e numero violation invariati.
+  `IMPROVED`: riduzione aggregata senza spostare debito. Rimane debito
+  legacy: ciclomatica `19` ancora error-level, cognitiva `21` e LOC `62`
+  warning-level. Nessuna dichiarazione di chiusura di tutto il servizio.
+- Ruff runtime/test, whitespace e ratchet autorevole mirato contro
+  merge-base `main` passati senza findings. Baseline, eccezioni, scope e
+  soglie invariati. AST di 108 funzioni top-level invariato; anche tutto
+  il validatore fuori dal singolo predicato e identico alla prima slice.
+  Evidenze `/tmp/gaia-gis-zip2-{before,after}.json`,
+  `/tmp/gaia-gis-zip2-ast-invariants.json` e log characterization/
+  target-after/ratchet con lo stesso prefisso. `make quality-test`: 144
+  test passati.
+- Gate corpus completo GIS/Catasto GIS: 289 test passati, fresh full-file
+  100% statement `1072/1072` e branch `324/324`, nessuna linea/branch
+  mancante o esclusa, nessun test saltato. Exit code e asserzioni passati,
+  non usati i soli nove casi ZIP come prova del gate. Directory indicata
+  da `/tmp/gaia-gis-zip2-final-run-dir`. Restano 102 warning PyJWT sulla
+  chiave HMAC del fixture preesistente; nessuna regressione osservata.
+- Graphify backend aggiornato tramite target dedicato: 861 file AST,
+  nessun cambio di topologia rilevato, output lasciati coerentemente
+  invariati. Docs piattaforma riallineati dopo il gate tramite target
+  dedicato; verificare chunk completati, non soltanto l'exit code.
+  PostGIS/QGIS live ed E2E non eseguiti; nessun commit o push autorizzato
+  in questa slice.
+
+### GIS - validazione ZIP, costruzione warning (2026-10-03)
+
+- Ripresa della sola slice `_validate_shapefile_zip` autorizzata dopo
+  la caratterizzazione full-file; checkout `main@b824e2f1`. Preservati
+  tutti i lavori concorrenti e i test GIS della tranche precedente.
+- Invarianti: encoding esplicito/CPG/default, confronto case-insensitive,
+  assenza versus CPG vuoto, ordine warning, errori HTTP, SRID, checksum,
+  geometrie e attributi invariati. Nessuna guardia auth o input eliminata;
+  schema, endpoint, staging, transazioni e concorrenza non modificati.
+- Slice minima: costruire la lista warning da due condizioni ordinate,
+  senza helper o wrapper. Valori stringa vuoti mantengono lo stesso
+  short-circuit e truthiness; non e una nuova policy di validazione.
+  Sette test ZIP reali gia caratterizzati passano dopo il cambiamento.
+- Metriche prima/dopo: target cog `25 -> 23`, cyc `22 -> 21`, LOC
+  `63 -> 62`; somme runtime cog `494 -> 492`, cyc `506 -> 505`,
+  file LOC `2203 -> 2202`, 109 callable invariati. Error-level
+  `16 -> 15`, warning `23 -> 24` per il downgrade della sola cognitiva.
+  Classificazione `IMPROVED`: riduzione aggregata senza trasferire debito.
+  Rimangono la ciclomatica error-level `21`, LOC warning `62` e gli altri
+  debiti legacy del servizio, non dichiarati eliminati.
+- Ratchet autorevole mirato contro merge-base `main` passato senza
+  findings, Ruff runtime/test e whitespace verdi. Baseline, scope,
+  eccezioni e soglie invariati. AST di 108 funzioni top-level identico;
+  anche tutto il validatore fuori dal blocco warning e identico.
+  Evidenze `/tmp/gaia-gis-zip-{before,after}.json`,
+  `/tmp/gaia-gis-zip-ast-invariants.json` e ratchet/target-tests log
+  con lo stesso prefisso. `make quality-test`: 144 test passati.
+- Gate conclusivo corpus GIS/Catasto GIS: 287 test passati, coverage
+  fresh full-file 100% statement `1072/1072` e branch `324/324`,
+  nessuna linea/branch esclusa o mancante, nessun test saltato.
+  Report/log nella directory indicata da
+  `/tmp/gaia-gis-zip-final-run-dir`; i denominatori cambiano rispetto
+  alla caratterizzazione per la sola costruzione warning rifattorizzata.
+  Nessuna regressione osservata; restano 102 warning PyJWT preesistenti
+  sulla chiave HMAC del fixture. I sette test mirati non sostituiscono
+  questa verifica full-file; asserzioni ed exit code del corpus passati.
+- Graphify backend aggiornato (9933 nodi, 25242 archi); HTML non generato
+  per limite dimensionale, JSON/report aggiornati. Docs piattaforma
+  riallineati dopo il gate finale tramite target dedicato. Nessun secondo hotspot aperto,
+  nessun commit o push autorizzato in questa tranche. PostGIS/QGIS live
+  ed E2E non eseguiti; i test usano i contratti e il DB SQLite esistenti.
+
+### GIS - caratterizzazione full-file del servizio (2026-10-03)
+
+- Tranche di soli test autorizzata dopo il blocco del run API isolato;
+  checkout `main@9836f719`, runtime GIS pulito e mantenuto byte-identico
+  a HEAD. Nessuna modifica a API, schema, autenticazione, autorizzazione,
+  transazioni, concorrenza o comportamento. GATE, Capacitas e altri team
+  esclusi; nessuna nuova esclusione coverage o sincronizzazione baseline.
+- Il corpus GIS/Catasto GIS esistente, misurato insieme, copre gia il
+  servizio full-file: non serviva inventare casi per colmare il report
+  della sola suite API. Aggiunti comunque 34 contratti pertinenti in
+  `backend/tests/test_gis_services_contracts.py`, oltre ai sette ZIP/encoding
+  conservati dalla tranche precedente: patch annotate no-op e reali,
+  input null/invalidi, isolamento layer, stati terminali, metadata,
+  review/reset, listing senza leakage, apply con target assente e audit.
+- I test usano il fixture DB API esistente e sessioni SQLite reali:
+  verificano valori dopo commit/rollback, campi cambiati nell'audit,
+  nessun audit di successo dopo failure, actor e timestamp review.
+  La tabella sorgente di test viene rimossa dal teardown; nessun mock
+  sostituisce persistenza o dominio. Gli errori iniziali di setup (tabella
+  custom non rimossa) e payload attachment (stringa invece di oggetto)
+  erano difetti del nuovo test, corretti prima del gate finale.
+- Run finale isolato, senza riuso di dati coverage: `287 passed`, nessun
+  test saltato; `services.py` statement `1076/1076`, branch `328/328`,
+  100% full-file, zero linee/branch mancanti o esclusi. Verificate tutte
+  le asserzioni e l'exit code, non solo la percentuale. Il primo run
+  combinato includeva ancora il payload test errato ed era rosso pur
+  mostrando 100% coverage: non e usato come prova del gate superato.
+  Suite nuova separata: 34 passati. Restano 102 warning PyJWT sulla
+  chiave HMAC breve del fixture preesistente.
+- Comando riproducibile in `docs/GIS_SHAPEFILE_IMPORT_RUNBOOK.md`;
+  ultimo report/log nella directory indicata da
+  `/tmp/gaia-gis-characterized-run-dir`, misura fresh con `mktemp` e
+  `--cov-fail-under=100`. JSON controllato per statement/branch completi.
+  Il run limitato del 2026-10-02 resta evidenza storica parziale, non lo
+  stato finale del corpus. Gate coverage full-file ora VERDE.
+- Ruff sui due file test, formatter del nuovo file, diff whitespace e
+  `make quality-test` (144 test) passati. Ratchet mirato contro merge-base
+  `main` passato senza findings; metriche runtime invariate: validatore
+  cog/cyc/LOC `25/22/63`, file LOC `2203`, 109 callable, somme `494/506`.
+  Verificata anche la coerenza delle linee tra AST sorgente e bytecode
+  caricato; nessun risultato basato su una sorgente runtime diversa.
+- Non e un refactoring `IMPROVED` o una nuova estrazione: e una tranche
+  di caratterizzazione. Backlog passa da blocked a ready. Nessuna
+  semplificazione runtime applicata e nessun commit autorizzato in questa
+  tranche; riprendere il validatore richiede la successiva slice.
+- Graphify backend aggiornato (9916 nodi, 25219 archi), HTML non generato
+  per limite dimensionale; JSON/report aggiornati. Docs piattaforma
+  riallineati tramite target dedicato dopo le evidenze finali, con
+  `chunk 1/1 done`, nessun warning di chunk falliti; log
+  `/tmp/gaia-gis-characterized-graph-docs.log`. Target rieseguito dopo
+  l'ultima precisazione sui reset nullable, senza dichiarare riusciti
+  refresh semantici sulla sola base dell'exit code.
+  PostGIS/QGIS live, network e E2E non eseguiti: i test SQL di adattatore
+  non sostituiscono una verifica live. Nessuna regressione osservata
+  nel corpus eseguito, nessuna dichiarazione di coverage globale repository.
+
 ### Elaborazioni - sezione Capacitas dal link (2026-10-03)
 
 - Hotspot unico `getCapacitasSectionFromHref`, checkout `main@9836f719`;
@@ -211,6 +450,52 @@ blocco verificato e prima di chiudere un goal.
   Evidenze `/tmp/gaia-payment-summary-` per metriche
   before/after, characterization/after, ratchet-before/after e gate.
   Un solo hotspot; commit isolato autorizzato dopo i gate, nessun push.
+
+### GIS - audit validazione ZIP e caratterizzazione encoding (2026-10-02)
+
+- Slice autorizzata sul solo `_validate_shapefile_zip` in
+  `backend/app/modules/gis/services.py`, checkout `main@8d89faf6`;
+  nessuna modifica concorrente nel perimetro GIS. Auth, permessi, errori
+  HTTP, checksum, staging e transazioni sono invarianti non modificabili.
+- Prima: cognitiva `25`, ciclomatica `22`, LOC `63`; file `2203` LOC,
+  109 callable, somme cog/cyc `494/506`. Test esistenti API verificano
+  import valido, 403 viewer, archivi incompleti/corrotti/insicuri, SRID,
+  report, persistenza nello staging e lifecycle. Sette nuovi casi reali
+  coprono priorita encoding esplicito/CPG/default, spazi, case-insensitive,
+  CPG vuoto/presente/assente, warning e contenuto geometrico/DBF invariato.
+  Tutti passano sul codice originale; nessun mock di shapefile impossibili.
+- Valutata una sola semplificazione dichiarativa dei warning, senza helper:
+  cog/cyc/LOC del target `25/22/63 -> 23/21/62`, somme `492/505`,
+  109 callable invariati. Ratchet contro merge-base `HEAD@8d89faf6`
+  passato senza findings; baseline, soglie ed esclusioni invariati.
+- Il run completo `test_gis_platform_api.py` passa, ma il runtime full-file
+  non soddisfa la policy: statement `952/1072` (88,81%), branch `152/324`
+  (46,91%), combinato 79,08%; 120 linee e 172 branch non coperti,
+  tutti fuori dal validatore, che e gia coperto interamente. Warning
+  dipendenza PyJWT su chiave HMAC breve nell'ambiente di test.
+  Evidenze `/tmp/gaia-gis-before-coverage.json` e `/tmp/gaia-gis-before.log`.
+- Stop condition: caratterizzare il resto delle responsabilita di questo
+  servizio supererebbe la singola slice autorizzata. Runtime ripristinato
+  integralmente; conservati solo i sette test pertinenti. Metriche finali
+  identiche a prima, nessun nuovo runtime scoperto, nessuna regressione
+  osservata nei test eseguiti. Classificazione `BLOCKED` per requisito
+  full-file, non `IMPROVED`; proposta non applicata ne committata.
+- Ruff su servizi/test e whitespace passati. Log dei nuovi test prima/dopo
+  e finali `/tmp/gaia-gis-{characterization,after-target,final-target}.log`;
+  metriche della proposta `/tmp/gaia-gis-{before,after}.json`.
+  Runbook chiarisce i warning implementati, Graphify backend/piattaforma
+  aggiornati tramite target dedicati. API/DB reali PostGIS ed E2E non
+  verificati: i test API impiegano il database SQLite di caratterizzazione.
+- Regressione finale mirata: nove test passati, sette nuovi encoding e due
+  API su import/persistenza/403 e invalidi; 63 deselected, quattro warning
+  PyJWT preesistenti. Log `/tmp/gaia-gis-final-regression.log`. Graphify
+  backend aggiornato (9885 nodi, 25175 archi); docs completato con
+  `chunk 1/1 done`, senza chunk falliti, poi riallineato ai registri finali.
+- Decisione richiesta alla chiusura del 2026-10-02: autorizzare una tranche dedicata di caratterizzazione
+  full-file GIS prima del refactoring, oppure scegliere un hotspot gia
+  coperto al 100%. Tranche autorizzata e completata il 2026-10-03 come
+  riportato sopra: il blocco coverage e risolto, runtime ancora invariato.
+  GATE e lavori concorrenti restano esclusi, nessun commit.
 
 ### Utenze - riconoscimento degli stati espliciti degli avvisi (2026-10-02)
 
@@ -984,6 +1269,7 @@ blocco verificato e prima di chiudere un goal.
 - Iterazione delimitata al resolver; prossima azione separata: selezionare
   una responsabilita con caratterizzazione disponibile fuori dai perimetri
   Organigramma e giornaliere. Nessun commit o secondo hotspot.
+
 ### Organigramma workspace - caratterizzazione import JSON (2026-10-01)
 
 - Slice unica successiva autorizzata: import JSON del workspace; giornaliere
@@ -1037,6 +1323,33 @@ blocco verificato e prima di chiudere un goal.
   prossima azione separata: scegliere una responsabilita del workspace
   Organigramma e verificarne la caratterizzazione prima di modificarla.
 
+### Presenze giornaliere - verifica prerequisiti hotspot (2026-09-30)
+
+- Hotspot autorizzato: `PresenzeGiornalierePage` in
+  `frontend/src/app/presenze/giornaliere/page.tsx`; checkout `main@6b61fd27`.
+  Modifiche MCP e documentazione concorrenti preservate.
+- Metriche runtime prima/dopo invariate: cognitiva `573`, ciclomatica `478`,
+  LOC callable `2284`, nesting `3`. Nessun refactoring runtime applicato;
+  baseline, eccezioni e configurazione coverage invariate.
+- Suite iniziale: 5 test passati e 9 falliti per `useRouter` del componente
+  WhatsApp senza App Router montato. Isolato il confine
+  `WhatsAppReminderAlert` nella suite della pagina, senza rimuovere assertion.
+  I componenti WhatsApp hanno suite dedicate; verifica pagina: 14 test passati.
+- Diagnosi coverage: rimossa temporaneamente e poi ripristinata integralmente
+  l'esclusione `v8 ignore` dell'intera pagina. Il run con
+  `VITEST_COVERAGE_INCLUDE=src/app/presenze/giornaliere/page.tsx` misura
+  statement `840/1185` (70,88%), branch `808/1417` (57,02%), funzioni
+  `233/306` (76,14%), linee `742/979` (75,79%). Il gate 100% fallisce;
+  restano 345 statement e 609 esiti branch scoperti. Non usare l'esclusione
+  preesistente come prova di coverage del refactoring.
+- Evidenze locali: `/tmp/gaia-presenze-giornaliere-tests-before.log`,
+  `/tmp/gaia-presenze-giornaliere-coverage.log` e
+  `/tmp/gaia-presenze-giornaliere-coverage/coverage-summary.json`.
+- Esito `BLOCKED` dalla coverage full-file richiesta. La caratterizzazione
+  residua richiede una fase separata prima della slice runtime; nessuna
+  riduzione di complessita dichiarata. Prossima decisione: delimitare una
+  tranche di caratterizzazione dei filtri e dei riepiloghi mensili, quindi
+  proseguire con modali, salvataggi e polling, mantenendo il requisito 100%.
 
 ### Poste Online - aggregazione contatori import worker (2026-09-28)
 

@@ -7,6 +7,9 @@
 
 ### Tranche MCP separata — stato 2026-10-03
 
+Chiusura verifiche: `../../mcps/FINAL_CLOSURE_2026-10-03.md`.
+Coverage completo e build pulita locale verificati; rilascio ancora non attivo.
+
 Il connettore esterno non sostituisce la chat documentale legacy descritta
 in questo PRD: accede esclusivamente a dati generati sintetici, readonly,
 con Docs escluso lato server. Implementati OAuth PKCE sul login GAIA,

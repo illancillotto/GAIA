@@ -129,8 +129,7 @@ class DataService:
         )
         return self._read(query, validated, fingerprint)
 
-    def call(self, tool_name: str, arguments: dict, context: CallContext) -> dict:
-        started = perf_counter()
+    def _call_response(self, tool_name: str, arguments: dict, context: CallContext) -> dict:
         response = {
             "tool": tool_name if tool_name in QUERIES else "unknown",
             "source": "gaia_synthetic_db",
@@ -167,6 +166,11 @@ class DataService:
         except Exception:
             response["error"] = {"code": "INTERNAL_ERROR"}
         response["estimated_tokens"] = estimated_tokens(canonical_json(response))
+        return response
+
+    def call(self, tool_name: str, arguments: dict, context: CallContext) -> dict:
+        started = perf_counter()
+        response = self._call_response(tool_name, arguments, context)
         event = {
             "timestamp": datetime.now(UTC).isoformat(),
             "request_id": context.request_id,
@@ -181,7 +185,7 @@ class DataService:
             "result_count": response["result_count"],
             "truncated": response["truncated"],
             "estimated_output_tokens": response["estimated_tokens"],
-            "permission_scope": QUERIES[tool_name].scope if tool_name in QUERIES else None,
+            "permission_scope": getattr(QUERIES.get(tool_name), "scope", None),
             "server_version": SERVER_VERSION,
             "dataset_or_corpus_version": response["dataset_version"],
         }

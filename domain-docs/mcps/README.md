@@ -1,9 +1,14 @@
 # GAIA MCPs
 
-Verifica finale corrente della tranche OAuth/consenso/connettore:
-`CONNECTOR_FINAL_REVIEW_2026-10-03.md`. Implementazione locale coperta al 100%;
-gate complessivo FAIL per build/browser/suite completa e ratchet globale.
-Il connettore rimane disattivato, senza deploy o nuova prova Claude live.
+Chiusura corrente: `FINAL_CLOSURE_2026-10-03.md`. Suite MCP/coverage e build
+pulita anche nel checkout passate; ratchet globale e rilascio Claude restano
+pendenti. Il connettore e ancora disattivato, nessun deploy.
+
+Riverifica corrente: `RECHECK_2026-10-03.md`. Suite MCP completa al 100%,
+build isolata, browser preview, proxy HTTPS di test e gpt-reserve live sintetico
+verificati. Il limite build in-place e risolto nella chiusura sopra; connettore
+disattivato, nessun deploy o prova Claude live. Audit precedente e matrice:
+`CONNECTOR_FINAL_REVIEW_2026-10-03.md`.
 
 ## Runtime v1 implementato
 
