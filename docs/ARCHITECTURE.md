@@ -594,6 +594,11 @@ L’accesso alla piattaforma è consentito solo ad utenti autenticati.
 
 Ruoli:
 - **admin**: pieno accesso
+- **ced**: gestione delegata degli account standard in `/gaia/users`, con elenco
+  esplicito di moduli assegnabili; nessun accesso o delega NAS/Rete, nessuna
+  gestione di account CED/amministrativi, override di sezione o credenziali QGIS.
+  L'accesso alla gestione utenti e indipendente da `module_accessi`. Il contratto
+  completo e in `domain-docs/accessi/docs/ARCHITECTURE.md`.
 - **reviewer**: consultazione + review
 - **viewer**: sola consultazione
 
@@ -753,3 +758,26 @@ Il contratto dei due trasporti GATE accetta `meal_voucher_manual` e delega al
 servizio di dominio Presenze con lock e audit idempotente. Il comando mensile
 è nella console GATE; il frontend GAIA resta compatibile. Contratto, test e
 stato operativo: `domain-docs/presenze/docs/GATE_MEAL_VOUCHER_ENTRY.md`.
+
+
+## Turnisti Presenze — implementazione locale 2026-10-03
+
+Il modello `PresenzeShiftAssignment` e i servizi di assegnazione/calcolo appartengono a
+`backend/app/modules/presenze/`; la route è nella facade Presenze e la migrazione
+in Alembic. La pagina `frontend/src/app/presenze/giornaliere/` usa componenti
+Presenze e l'API tipizzata esistente. Nessun servizio o stack parallelo. GATE
+conserva i comandi nel registro esistente e li invia mediante LAN/outbound.
+Regole, API e priorità in `domain-docs/presenze/docs/TURNISTI_GAIA_GATE.md`;
+matrice test e residui in `domain-docs/presenze/docs/TURNISTI_COORDINATED_VERIFICATION_2026-10-05.md`.
+Nessun deploy eseguito.
+
+
+### Turnisti — confini dopo le slice di qualità
+
+`services/day_classification.py` possiede il risultato immutabile condiviso
+da classificazione ordinaria e turni; `schedule_engine` ne mantiene il re-export.
+Le assegnazioni sono registrate dalla registry canonica `app.db.base`.
+`DailyOperationalControls` coordina buono giornaliero e range turnista mantenendo
+permessi distinti e callback di aggiornamento record/mese. Maturazione e audit
+restano nei servizi Presenze; nessun contratto di trasporto cambiato.
+Evidenze: `domain-docs/presenze/docs/TURNISTI_COMPLEXITY_SLICES_2026-10-05.md`.

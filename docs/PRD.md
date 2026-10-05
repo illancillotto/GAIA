@@ -170,3 +170,15 @@ Fornire un unico punto di accesso operativo per:
 
 Stato operativo, verifiche e residui: `domain-docs/presenze/docs/GATE_MEAL_VOUCHER_ENTRY.md`. Nessuna modifica al frontend GAIA;
 il comando mensile è nella console GATE.
+
+
+## Turnisti GAIA/GATE — ciclo locale 2026-10-03
+
+- [x] Assegnazioni persistenti per giorno/intervallo/mese: acquaiolo, telecontrollo, revoca.
+- [x] Teorico locale 420 minuti; buono da almeno 420 minuti ordinari effettivi dal 26/08/2026, senza duplicazione manuale.
+- [x] Precedenza GATE, import futuri, API LAN/outbound e controlli di accesso.
+- [x] UI giornaliere GAIA, badge e protezione delle assegnazioni GATE.
+- [ ] Rilascio autorizzato e collaudo produzione; nessun deploy nel ciclo corrente.
+
+Specifica: `domain-docs/presenze/docs/TURNISTI_GAIA_GATE.md`.
+Verifiche, matrice test e residui: `domain-docs/presenze/docs/TURNISTI_COORDINATED_VERIFICATION_2026-10-05.md`.

@@ -34,6 +34,7 @@ from app.modules.presenze.models import (
     PresenzeSyncJob,
 )
 from app.modules.presenze.services import gate_mobile_payloads, gate_mobile_team_actions
+from app.modules.presenze.shift_worker_models import PresenzeShiftAssignment
 from app.services import gate_mobile_sync as gate_mobile_sync_service
 from app.services.gate_mobile_sync import (
     build_mobile_catalog_push_payloads,
@@ -2723,6 +2724,7 @@ def _build_session() -> Session:
             PresenzeSyncJob.__table__,
             PresenzeDailyRecord.__table__,
             PresenzeDailyPunch.__table__,
+            PresenzeShiftAssignment.__table__,
             OrganizationTeam.__table__,
             OrganizationTeamMembership.__table__,
             OrganizationTeamSupervisorAssignment.__table__,

@@ -5,6 +5,18 @@ from typing import Any
 from app.modules.presenze.models import PresenzeDailyRecord
 from app.modules.presenze.services.inaz_absences import union_leave_covers_day
 from app.modules.presenze.services.parser import extract_detail_payload
+from app.modules.presenze.services.shift_ccnl import shift_classification_values
+
+CLASSIFIED_MINUTE_FIELDS = (
+    "ordinary_night_minutes",
+    "overtime_day_minutes",
+    "overtime_night_minutes",
+    "overtime_festive_minutes",
+    "overtime_festive_night_minutes",
+    "shift_festive_day_minutes",
+    "shift_night_minutes",
+    "shift_festive_night_minutes",
+)
 
 
 def normalized_daily_detail(record: PresenzeDailyRecord) -> dict[str, Any]:
@@ -34,16 +46,9 @@ def normalized_daily_absence_cause(record: PresenzeDailyRecord) -> str | None:
     return record.resolved_absence_cause or imported
 
 
-def classification_breakdown_values(classification: object, prefix: str = "") -> dict[str, int]:
+def classification_breakdown_values(classification: object, prefix: str = "") -> dict[str, Any]:
     """Shared classified time buckets for daily API and canonical GATE export."""
-    fields = (
-        "ordinary_night_minutes",
-        "overtime_day_minutes",
-        "overtime_night_minutes",
-        "overtime_festive_minutes",
-        "overtime_festive_night_minutes",
-        "shift_festive_day_minutes",
-        "shift_night_minutes",
-        "shift_festive_night_minutes",
-    )
-    return {f"{prefix}{field}": getattr(classification, field) for field in fields}
+    return {
+        **{f"{prefix}{field}": getattr(classification, field) for field in CLASSIFIED_MINUTE_FIELDS},
+        **shift_classification_values(classification, prefix),
+    }

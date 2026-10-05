@@ -57,6 +57,7 @@ from app.modules.dotazioni.models import DotazioneAsset, DotazioneCustody, Dotaz
 from app.modules.elaborazioni.telemetry_models import SisterPortalEvent
 from app.modules.presenze.mapping_audit import PresenzeCollaboratorMappingAudit
 from app.modules.presenze.dashboard_models import PresenzeDashboardSnapshot
+from app.modules.presenze.shift_worker_models import PresenzeShiftAssignment
 from app.modules.presenze.models import (
     OrganizationTeam,
     OrganizationTeamMembership,
@@ -232,6 +233,7 @@ __all__ = [
     "PresenzeImportJob",
     "PresenzeSupervisorAssignment",
     "PresenzeSyncJob",
+    "PresenzeShiftAssignment",
     "AnagraficaAuditLog",
     "AnagraficaCompany",
     "AnagraficaDocument",

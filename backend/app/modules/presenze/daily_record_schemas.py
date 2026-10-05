@@ -6,12 +6,17 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.modules.presenze.shift_worker_schemas import ShiftWorkerFields
 
-class PresenzeDailyRecordMealVoucherFields(BaseModel):
+
+class PresenzeDailyRecordMealVoucherFields(ShiftWorkerFields):
+    meal_voucher_shift: bool = False
     meal_voucher_manual: bool = False
     meal_voucher_automatic: bool = False
     meal_voucher_count: Literal[0, 1] = 0
-    meal_voucher_sources: list[Literal["automatic", "manual"]] = Field(default_factory=list)
+    meal_voucher_sources: list[Literal["automatic", "manual", "shift"]] = Field(
+        default_factory=list
+    )
     meal_voucher_audit: list[dict] | None = None
 
 

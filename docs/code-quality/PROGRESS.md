@@ -3305,3 +3305,14 @@ buoni, riuso del caricamento mensile, contratti giornalieri e editor null-safe:
 `REORGANIZED_AND_CHARACTERIZED`, senza dichiarare riduzione di debito trasferito.
 Runtime Presenze modificato coperto al 100%; dettagli e metriche nel report
 `domain-docs/presenze/docs/IMPLEMENTATION_PRESENZE_COLLABORATORI_GIORNALIERE.md`.
+
+
+## 2026-10-05 — slice autorizzate del ciclo turnisti
+
+Rimosse19regressioni del ciclo tramite slice mirate su maturazione buono,
+export CCNL, audit condiviso GATE/GAIA, interpretazione override, registry modello
+e controlli operativi UI. Nessuna baseline/scanner/soglia modificata.
+Metriche prima/dopo, test e stato finale nel report
+`domain-docs/presenze/docs/TURNISTI_COMPLEXITY_SLICES_2026-10-05.md`.
+Ratchet mirato ciclo PASS; ratchet globale conserva finding Wiki concorrenti.
+Gli interventi Wiki precedenti in questo documento sono preservati.

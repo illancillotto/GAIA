@@ -18,18 +18,17 @@ from app.modules.presenze.models import (
     PresenzeScheduleRule,
     PresenzeScheduleTemplate,
 )
+from app.modules.presenze.services.day_classification import DayClassification
 from app.modules.presenze.services.inaz_minute_buckets import (
     inaz_special_day,
     reconcile_inaz_minute_buckets,
 )
 from app.modules.presenze.services.operai_daily_policy import PENDING_PUNCH_REQUEST_SOURCE
-from app.modules.presenze.services.operai_recognized_minutes import RecognizedOperaiMinutes
 from app.modules.presenze.services.operai_rules import (
     OperaiRuleConfig,
     load_operai_rule_configs,
 )
 from app.modules.presenze.services.operai_schedule_policy import (
-    OperaiDayPolicy,
     build_operai_day_policy,
     has_individual_saturday,
     resolve_individual_operai_rule,
@@ -44,34 +43,12 @@ from app.modules.presenze.services.parser import (
     resolve_request_status,
     resolve_request_type,
 )
+from app.modules.presenze.services.shift_worker_rules import shift_classification, shift_worker_type
 
 RECURRENCE_WEEKLY = "weekly"
 RECURRENCE_FIRST_WEEKDAY = "first_weekday_of_month"
 RECURRENCE_NTH_WEEKDAY = "nth_weekday_of_month"
 RECURRENCE_ALTERNATING = "alternating_weeks"
-
-
-@dataclass(frozen=True)
-class DayClassification:
-    special_day: bool
-    ordinary_minutes: int | None
-    extra_minutes: int | None
-    holiday_kind: str | None
-    grants_recovery_day: bool
-    source: str
-    night_minutes: int = 0
-    festive_minutes: int = 0
-    festive_night_minutes: int = 0
-    ordinary_night_minutes: int = 0
-    overtime_day_minutes: int = 0
-    overtime_night_minutes: int = 0
-    overtime_festive_minutes: int = 0
-    overtime_festive_night_minutes: int = 0
-    shift_festive_day_minutes: int = 0
-    shift_night_minutes: int = 0
-    shift_festive_night_minutes: int = 0
-    recognized_minutes: RecognizedOperaiMinutes | None = None
-    operai_day_policy: OperaiDayPolicy | None = None
 
 
 @dataclass(frozen=True)
@@ -109,7 +86,7 @@ def build_schedule_context(
     date_to: date,
 ) -> ScheduleContext:
     holiday_rows = db.execute(
-        select(PresenzeHoliday).where(PresenzeHoliday.holiday_date >= date_from, PresenzeHoliday.holiday_date <= date_to)
+        select(PresenzeHoliday).where(PresenzeHoliday.holiday_date >= date_from, PresenzeHoliday.holiday_date <= date_to + timedelta(days=1))
     ).scalars().all()
     assignments = db.execute(
         select(PresenzeCollaboratorScheduleAssignment).where(
@@ -148,6 +125,19 @@ def build_schedule_context(
     )
 
 
+def effective_imported_extra_minutes(record: PresenzeDailyRecord) -> int | None:
+    """Manual overtime/MPE values override INAZ independently, including zero."""
+    values = (
+        record.override_straordinario_minutes
+        if record.override_straordinario_minutes is not None
+        else record.straordinario_minutes,
+        record.override_mpe_minutes
+        if record.override_mpe_minutes is not None
+        else record.mpe_minutes,
+    )
+    return sum(value or 0 for value in values) or None
+
+
 def classify_daily_record(
     collaborator: PresenzeCollaborator,
     record: PresenzeDailyRecord,
@@ -164,14 +154,15 @@ def classify_daily_record(
         # The imported source already marked this Saturday as a scheduled workday for the collaborator.
         special_day = False
     grants_recovery_day = holiday_kind == PRESENZE_HOLIDAY_KIND_SUPPRESSED
-    effective_straordinario = (
-        record.override_straordinario_minutes
-        if record.override_straordinario_minutes is not None
-        else record.straordinario_minutes
-    )
-    effective_mpe = record.override_mpe_minutes if record.override_mpe_minutes is not None else record.mpe_minutes
-    imported_extra = (effective_straordinario or 0) + (effective_mpe or 0)
-    imported_extra_value = imported_extra or None
+    if shift_worker_type(record):
+        from app.modules.presenze.services.shift_ccnl import shift_calendar
+
+        return shift_classification(
+            record, punches, special_day=special_day, holiday_kind=holiday_kind,
+            grants_recovery_day=grants_recovery_day,
+            calendar=shift_calendar(record.work_date, collaborator, context),
+        )
+    imported_extra_value = effective_imported_extra_minutes(record)
     assignment = resolve_assignment(collaborator, record.work_date, context) if context is not None else None
     template = context.templates_by_id.get(assignment.template_id) if assignment is not None and context is not None else None
     rules = context.rules_by_template_id.get(template.id, []) if template is not None and context is not None else []

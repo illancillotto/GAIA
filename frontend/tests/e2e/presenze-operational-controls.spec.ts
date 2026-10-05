@@ -63,3 +63,79 @@ test("manual voucher and background INAZ correction survive refresh without doub
   await expect(page.getByLabel("Buono pasto manuale")).toBeChecked();
   await expect(page.getByText(/Buono pasto: 1/)).toBeVisible();
 });
+
+test("shift assignment reports conflicts, refreshes the month and respects GATE ownership", async ({ page }) => {
+  let record = { ...dailyRecord, work_date: "2026-08-26", shift_worker_type: "none", shift_worker_source: null as string | null, meal_voucher_count: 0, meal_voucher_sources: [] as string[] };
+  let rejectSave = true;
+  await page.addInitScript(() => window.localStorage.setItem("gaia.access_token", "shift-test-session"));
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname.replace(/^\/api/, "");
+    let body: unknown = {};
+    if (path === "/auth/me") body = { id: 12, role: "admin", username: "test-admin", is_active: true, module_presenze: true, enabled_modules: ["presenze"] };
+    else if (path === "/auth/my-permissions") body = { sections: [], granted_keys: ["presenze.giornaliere", "presenze.giornaliera-individuale"] };
+    else if (path === "/presenze/access-context") body = { can_view_all_data: true, is_supervisor: false };
+    else if (path === "/presenze/collaborators") body = { items: [collaborator], total: 1, page: 1, page_size: 200 };
+    else if (path === "/presenze/credentials") body = [];
+    else if (path === "/presenze/sync/jobs") body = { items: [], total: 0 };
+    else if (path.endsWith("/turnista")) {
+      expect(route.request().method()).toBe("POST");
+      expect(route.request().postDataJSON()).toEqual({ shift_worker_type: "acquaiolo", date_from: "2026-08-01", date_to: "2026-08-31" });
+      if (rejectSave) {
+        rejectSave = false;
+        await route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ detail: "Assegnazione gestita da GATE" }) });
+        return;
+      }
+      record = { ...record, shift_worker_type: "acquaiolo", shift_worker_source: "gaia", meal_voucher_count: 1, meal_voucher_sources: ["shift"] };
+      body = record;
+    } else if (path === "/presenze/giornaliere/matrix" || path === "/presenze/giornaliere") body = { items: [record], total: 1, page: 1, page_size: 5000 };
+    else if (path === "/presenze/giornaliere/" + record.id) body = record;
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("/presenze/giornaliere");
+  await page.getByLabel("Mese operativo").fill("2026-08");
+  await page.getByTitle(/2026-08-26 · GAIA:/).click();
+  await page.getByLabel("Tipologia turnista").selectOption("acquaiolo");
+  await page.getByRole("button", { name: "Tutto il mese", exact: true }).click();
+  await page.getByRole("button", { name: "Salva turnista" }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Assegnazione gestita da GATE" })).toHaveText("Assegnazione gestita da GATE");
+  await expect(page.getByRole("button", { name: "Salva turnista" })).toBeEnabled();
+  await page.getByRole("button", { name: "Salva turnista" }).click();
+  await expect(page.getByTitle("Turnista acquaiolo")).toBeVisible();
+  await expect(page.getByLabel("Tipologia turnista")).toHaveCount(0);
+  await page.getByTitle(/2026-08-26 · GAIA:/).click();
+  await expect(page.getByText("Buono pasto: 1 · shift")).toBeVisible();
+  record = { ...record, shift_worker_source: "gate" };
+  await page.reload();
+  await page.getByLabel("Mese operativo").fill("2026-08");
+  await page.getByTitle(/2026-08-26 · GAIA:/).click();
+  await expect(page.getByLabel("Tipologia turnista")).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Salva turnista" })).toBeDisabled();
+});
+
+
+test("an owner without global scope cannot submit employee-wide shift assignments", async ({ page }) => {
+  const record = { ...dailyRecord, work_date: "2026-08-26", owner_user_id: 12, shift_worker_type: "none" };
+  let submissions = 0;
+  await page.addInitScript(() => window.localStorage.setItem("gaia.access_token", "owner-test-session"));
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname.replace(/^\/api/, "");
+    let body: unknown = {};
+    if (path === "/auth/me") body = { id: 12, role: "operator", username: "test-owner", is_active: true, module_presenze: true, enabled_modules: ["presenze"] };
+    else if (path === "/auth/my-permissions") body = { sections: [], granted_keys: ["presenze.giornaliere", "presenze.giornaliera-individuale"] };
+    else if (path === "/presenze/access-context") body = { can_view_all_data: false, is_supervisor: false };
+    else if (path === "/presenze/collaborators") body = { items: [collaborator], total: 1, page: 1, page_size: 200 };
+    else if (path === "/presenze/credentials") body = [];
+    else if (path === "/presenze/sync/jobs") body = { items: [], total: 0 };
+    else if (path.endsWith("/turnista")) { submissions += 1; body = record; }
+    else if (path === "/presenze/giornaliere/matrix" || path === "/presenze/giornaliere") body = { items: [record], total: 1, page: 1, page_size: 5000 };
+    else if (path === "/presenze/giornaliere/" + record.id) body = record;
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+  });
+  await page.goto("/presenze/giornaliere");
+  await page.getByLabel("Mese operativo").fill("2026-08");
+  await page.getByTitle(/2026-08-26 · GAIA:/).click();
+  await expect(page.getByRole("button", { name: "Salva turnista", exact: true })).toBeDisabled();
+  await expect(page.getByLabel("Tipologia turnista")).toBeDisabled();
+  await expect(page.getByLabel("Buono pasto manuale")).toBeEnabled();
+  expect(submissions).toBe(0);
+});

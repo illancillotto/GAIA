@@ -91,6 +91,7 @@ const baseDailyRecord = {
 };
 
 const mocks = vi.hoisted(() => ({
+  assignPresenzeShiftWorker: vi.fn(),
   getStoredAccessToken: vi.fn(),
   getCurrentUser: vi.fn(),
   getPresenzeAccessContext: vi.fn(),
@@ -101,6 +102,10 @@ const mocks = vi.hoisted(() => ({
   refreshPresenzeDailyRecordFromInaz: vi.fn(),
   updatePresenzeCollaboratorContractProfile: vi.fn(),
   updatePresenzeDailyRecord: vi.fn(),
+}));
+
+vi.mock("@/lib/api/presenze-shift-workers", () => ({
+  assignPresenzeShiftWorker: mocks.assignPresenzeShiftWorker,
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -2304,4 +2309,61 @@ test("does not reload protected data when the session expires during a voucher s
   fireEvent.click(screen.getByText("Simula completamento INAZ"));
   await act(async () => {});
   expect(mocks.listPresenzeDailyMatrixRecords).toHaveBeenCalledTimes(calls);
+});
+
+
+test("saves a shift assignment and refreshes the monthly matrix with the updated record", async () => {
+  vi.resetAllMocks();
+  mocks.getStoredAccessToken.mockReturnValue("shift-assignment-token");
+  mocks.getCurrentUser.mockResolvedValue({ id: 12, role: "admin", module_presenze: true });
+  mocks.getPresenzeAccessContext.mockResolvedValue({ can_view_all_data: true });
+  mocks.listAllPresenzeCollaborators.mockResolvedValue([{ id: "collab-1", name: "Persona test", employee_code: "1854", contract_kind: "operaio", operai_group: "agrario" }]);
+  const day = { ...baseDailyRecord, shift_worker_type: "none", meal_voucher_count: 0 };
+  const updated = { ...day, shift_worker_type: "telecontrollo", shift_worker_source: "gaia", meal_voucher_count: 1, meal_voucher_sources: ["shift"] };
+  mocks.listPresenzeDailyMatrixRecords.mockResolvedValue({ items: [day], total: 1 });
+  mocks.getPresenzeDailyRecord.mockResolvedValue(day);
+  mocks.assignPresenzeShiftWorker.mockImplementation(async () => {
+    mocks.listPresenzeDailyMatrixRecords.mockResolvedValue({ items: [updated], total: 1 });
+    mocks.getPresenzeDailyRecord.mockResolvedValue(updated);
+    return updated;
+  });
+  const view = render(<PresenzeGiornalierePage />);
+  fireEvent.change(screen.getByLabelText("Mese operativo"), { target: { value: "2026-05" } });
+  await waitFor(() => expect(view.container.querySelector('button[title^="2026-05-16 · GAIA:"]')).not.toBeNull());
+  fireEvent.click(view.container.querySelector('button[title^="2026-05-16 · GAIA:"]')!);
+  await screen.findByLabelText("Tipologia turnista");
+  await act(async () => {});
+  fireEvent.change(screen.getByLabelText("Tipologia turnista"), { target: { value: "telecontrollo" } });
+  fireEvent.click(screen.getByText("Tutto il mese"));
+  const previous = mocks.listPresenzeDailyMatrixRecords.mock.calls.length;
+  fireEvent.click(screen.getByText("Salva turnista"));
+  await waitFor(() => expect(mocks.listPresenzeDailyMatrixRecords.mock.calls.length).toBeGreaterThan(previous));
+  expect(mocks.assignPresenzeShiftWorker).toHaveBeenCalledWith("shift-assignment-token", "record-1", {
+    shift_worker_type: "telecontrollo", date_from: "2026-05-01", date_to: "2026-05-31",
+  });
+  await screen.findByTitle("Turnista telecontrollo");
+  await waitFor(() => expect(screen.queryByLabelText("Tipologia turnista")).not.toBeInTheDocument());
+  fireEvent.click(view.container.querySelector('button[title^="2026-05-16 · GAIA:"]')!);
+  await screen.findByText("Buono pasto: 1 · shift");
+  expect(screen.getByLabelText("Tipologia turnista")).toHaveValue("telecontrollo");
+});
+
+
+test("keeps employee-wide shift assignment disabled for an owner without global scope", async () => {
+  vi.resetAllMocks();
+  mocks.getStoredAccessToken.mockReturnValue("shift-owner-token");
+  mocks.getCurrentUser.mockResolvedValue({ id: 12, role: "operator", module_presenze: true });
+  mocks.getPresenzeAccessContext.mockResolvedValue({ can_view_all_data: false });
+  mocks.listAllPresenzeCollaborators.mockResolvedValue([{ id: "collab-1", name: "Persona test", employee_code: "1854", contract_kind: "operaio", operai_group: "agrario" }]);
+  const day = { ...baseDailyRecord, owner_user_id: 12, shift_worker_type: "none" };
+  mocks.listPresenzeDailyMatrixRecords.mockResolvedValue({ items: [day], total: 1 });
+  mocks.getPresenzeDailyRecord.mockResolvedValue(day);
+  const view = render(<PresenzeGiornalierePage />);
+  fireEvent.change(screen.getByLabelText("Mese operativo"), { target: { value: "2026-05" } });
+  await waitFor(() => expect(view.container.querySelector('button[title^="2026-05-16 · GAIA:"]')).not.toBeNull());
+  fireEvent.click(view.container.querySelector('button[title^="2026-05-16 · GAIA:"]')!);
+  await waitFor(() => expect(screen.getByText("Salva turnista")).toBeDisabled());
+  expect(screen.getByLabelText("Buono pasto manuale")).not.toBeDisabled();
+  fireEvent.click(screen.getByText("Salva turnista"));
+  expect(mocks.assignPresenzeShiftWorker).not.toHaveBeenCalled();
 });

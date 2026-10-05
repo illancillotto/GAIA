@@ -1,6 +1,7 @@
 "use client";
 
-import { MealVoucherControl } from "@/components/presenze/meal-voucher-control";
+import { ShiftWorkerBadge } from "@/components/presenze/shift-worker-badge";
+import { DailyOperationalControls } from "@/components/presenze/daily-operational-controls";
 import { InazSyncControl } from "@/components/presenze/inaz-sync-control";
 
 import Link from "next/link";
@@ -410,8 +411,7 @@ function cellPrimaryLabel(record: PresenzeDailyRecord, kind: CellKind): string {
   }
   if (kind === "worked" || kind === "special") {
     const ordinaryMinutes = effectiveOrdinaryMinutes(record);
-    const label = formatHoursCompact(ordinaryMinutes || record.teo_minutes);
-    return label;
+    return formatHoursCompact(ordinaryMinutes || record.teo_minutes);
   }
   if (kind === "ferie") return "Fer";
   if (kind === "permesso") return "Perm";
@@ -2382,7 +2382,7 @@ export default function PresenzeGiornalierePage() {
                               title={record.work_date + " · " + cellTooltipLabel(record)}
                               className={`relative mx-auto flex h-[66px] w-[68px] flex-col items-center justify-center rounded-xl px-1 text-[13px] font-semibold shadow-sm transition ${CELL_TONE[kind]} ${isSelected ? "outline outline-2 outline-slate-950" : ""}`}
                             >
-                              <span>{cellPrimaryLabel(record, kind)}</span>
+                              <span>{cellPrimaryLabel(record, kind)}<ShiftWorkerBadge record={record} /></span>
                               <span className="mt-0.5 min-h-[12px] text-[9px] font-medium leading-none opacity-80">
                                 {cellSecondaryLabel(record, kind) ?? " "}
                               </span>
@@ -2505,7 +2505,7 @@ export default function PresenzeGiornalierePage() {
               </div>
             </div>
 
-            <MealVoucherControl record={selectedRecord} disabled={!canEditOperationalData} onSaved={handleMealVoucherSaved} />
+            <DailyOperationalControls record={selectedRecord} canEdit={canEditOperationalData} canViewAll={accessContext?.can_view_all_data} onSaved={handleMealVoucherSaved} onRangeSaved={reloadMonthRecords} />
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
               {refreshModalMessage ? (
                 <div

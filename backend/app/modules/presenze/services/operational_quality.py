@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import time
+from functools import partial
 
 from app.modules.presenze.models import (
     PRESENZE_CONTRACT_KIND_OPERAIO,
@@ -24,6 +25,7 @@ from app.modules.presenze.services.operai_rules import (
     resolve_operai_rule,
 )
 from app.modules.presenze.services.operai_schedule_policy import OperaiDayPolicy
+from app.modules.presenze.services.shift_worker_rules import daily_quality_kind, shift_quality
 
 
 @dataclass(frozen=True)
@@ -192,21 +194,21 @@ def build_daily_operational_quality(
     operai_rule_configs: Sequence[OperaiRuleConfig] | None = None,
     catasto_month_saturday_coverage_count: int | None = None,
 ) -> OperaiOperationalQuality:
-    if collaborator is None or collaborator.contract_kind == PRESENZE_CONTRACT_KIND_OPERAIO:
-        return evaluate_operai_operational_quality(
+    return {
+        "shift": partial(shift_quality, record, punches),
+        "operaio": partial(
+            evaluate_operai_operational_quality,
             collaborator,
             record,
             punches,
             operai_rule_configs=operai_rule_configs,
             catasto_month_saturday_coverage_count=catasto_month_saturday_coverage_count,
             day_policy=getattr(classification, "operai_day_policy", None),
-        )
-    return build_non_operai_operational_quality(
-        collaborator,
-        record,
-        punches,
+        ),
+    }.get(daily_quality_kind(collaborator, record), partial(
+        build_non_operai_operational_quality, collaborator, record, punches,
         classification=classification,
-    )
+    ))()
 
 
 def build_non_operai_operational_quality(

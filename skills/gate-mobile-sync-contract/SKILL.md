@@ -7,7 +7,9 @@ metadata:
 
 # GATE Mobile Sync Contract (lato GAIA)
 
-GAIA e la source of truth di GaTe Mobile. Il connector `gaia-lan-1` gira sulla
+GAIA è la sorgente delle timbrature e dei dati importati. Le assegnazioni turnista
+e i valori manuali salvati in GATE sono autorevoli e non devono essere cancellati
+dagli snapshot GAIA; vedi `domain-docs/presenze/docs/TURNISTI_GAIA_GATE.md`. Il connector `gaia-lan-1` gira sulla
 LAN GAIA, legge gli endpoint `mobile-sync` e replica il payload **verbatim**
 nella cache di GaTe Mobile. Il consumatore non trasforma nulla: se il dato e
 sbagliato o vecchio su GATE, e sbagliato o vecchio qui.

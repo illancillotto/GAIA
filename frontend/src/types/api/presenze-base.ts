@@ -167,10 +167,14 @@ export type PresenzeDetailPunchRow = {
 };
 
 export type PresenzeDailyRecord = {
+  shift_worker_type?: "none" | "acquaiolo" | "telecontrollo";
+  shift_worker_source?: "gate" | "gaia" | null;
+  shift_rules_version?: string;
+  meal_voucher_shift?: boolean;
   meal_voucher_manual?: boolean;
   meal_voucher_automatic?: boolean;
   meal_voucher_count?: 0 | 1;
-  meal_voucher_sources?: Array<"automatic" | "manual">;
+  meal_voucher_sources?: Array<"automatic" | "manual" | "shift">;
   meal_voucher_audit?: Array<{ at: string; actor_user_id: number; previous: boolean; enabled: boolean; source: string }> | null;
   id: string;
   collaborator_id: string;

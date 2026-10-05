@@ -1,0 +1,300 @@
+[
+  {
+    "name": "feriale_diurno",
+    "intervals": [
+      [
+        360,
+        780
+      ]
+    ],
+    "calendar": [
+      false,
+      false
+    ],
+    "expected": [
+      420,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "name": "sabato_ordinario",
+    "intervals": [
+      [
+        360,
+        780
+      ]
+    ],
+    "calendar": [
+      false,
+      true
+    ],
+    "expected": [
+      420,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "name": "domenica_diurna",
+    "intervals": [
+      [
+        360,
+        780
+      ]
+    ],
+    "calendar": [
+      true,
+      false
+    ],
+    "expected": [
+      0,
+      420,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "name": "notte_feriale",
+    "intervals": [
+      [
+        1320,
+        1800
+      ]
+    ],
+    "calendar": [
+      false,
+      false
+    ],
+    "expected": [
+      0,
+      0,
+      420,
+      0,
+      0,
+      0,
+      60,
+      0
+    ]
+  },
+  {
+    "name": "sabato_domenica",
+    "intervals": [
+      [
+        1320,
+        1800
+      ]
+    ],
+    "calendar": [
+      false,
+      true
+    ],
+    "expected": [
+      0,
+      0,
+      120,
+      300,
+      0,
+      0,
+      0,
+      60
+    ]
+  },
+  {
+    "name": "domenica_lunedi",
+    "intervals": [
+      [
+        1320,
+        1800
+      ]
+    ],
+    "calendar": [
+      true,
+      false
+    ],
+    "expected": [
+      0,
+      0,
+      300,
+      120,
+      0,
+      0,
+      60,
+      0
+    ]
+  },
+  {
+    "name": "vigilia_festivita",
+    "intervals": [
+      [
+        1200,
+        1680
+      ]
+    ],
+    "calendar": [
+      false,
+      true
+    ],
+    "expected": [
+      120,
+      0,
+      120,
+      180,
+      0,
+      0,
+      0,
+      60
+    ]
+  },
+  {
+    "name": "notte_spezzata",
+    "intervals": [
+      [
+        1320,
+        1500
+      ],
+      [
+        1560,
+        1800
+      ]
+    ],
+    "calendar": [
+      false,
+      true
+    ],
+    "expected": [
+      0,
+      0,
+      120,
+      300,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "name": "notturno_due_minuti",
+    "intervals": [
+      [
+        358,
+        778
+      ]
+    ],
+    "calendar": [
+      false,
+      false
+    ],
+    "expected": [
+      418,
+      0,
+      2,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "name": "confine_22",
+    "intervals": [
+      [
+        1260,
+        1740
+      ]
+    ],
+    "calendar": [
+      false,
+      false
+    ],
+    "expected": [
+      60,
+      0,
+      360,
+      0,
+      0,
+      0,
+      60,
+      0
+    ]
+  },
+  {
+    "name": "nessun_lavoro",
+    "intervals": [],
+    "calendar": [
+      false,
+      false
+    ],
+    "expected": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  {
+    "name": "festivo_straordinario_diurno",
+    "intervals": [
+      [
+        360,
+        840
+      ]
+    ],
+    "calendar": [
+      true,
+      false
+    ],
+    "expected": [
+      0,
+      420,
+      0,
+      0,
+      0,
+      60,
+      0,
+      0
+    ]
+  },
+  {
+    "name": "feriale_straordinario_diurno",
+    "intervals": [
+      [
+        360,
+        840
+      ]
+    ],
+    "calendar": [
+      false,
+      false
+    ],
+    "expected": [
+      420,
+      0,
+      0,
+      0,
+      60,
+      0,
+      0,
+      0
+    ]
+  }
+]

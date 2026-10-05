@@ -1,4 +1,26 @@
+## Stato corrente dopo le slice turnisti — 2026-10-05
+
+Ciclo turnisti: ratchet0finding;1097backend,3829frontend e3Chromium PASS;
+coverage100% sui runtime modificati. Gate globale ancoraFAIL per8finding Wiki
+unrelated; nessun commit/deploy. [Report slice](TURNISTI_COMPLEXITY_SLICES_2026-10-05.md).
+
+## Verifica coordinata turnisti — 2026-10-05
+
+- DONE: fix scope globale GAIA, test API/UI/browser, parità builder→GATE,
+  migration/retry PostgreSQL e build locale.
+- PARTIAL: ciclo locale non consolidato; quality gate FAIL.
+- RESIDUAL BLOCKING:19regressioni del ratchet nel ciclo;4finding Wiki unrelated
+  preservati. Rerun:1083backend,3829frontend,coverage100% sui runtime modificati.
+- OUT OF SCOPE nel gate locale: rilascio produttivo; sonde precedenti non
+  certificano nuove route/campi live o ultimo run. Nessun deploy eseguito.
+- Evidenze e comandi: [report corrente](TURNISTI_COORDINATED_VERIFICATION_2026-10-05.md).
+
 # Progress Presenze
+
+## Turnisti GAIA/GATE — verifica finale 2026-10-03
+
+Implementazione locale completata: due tipologie, intervalli persistenti, 7 ore, buono per turno e precedenza GATE. Test/API e UI consolidati; rilascio non autorizzato. Stato dei gate e attività residue nel [report finale](TURNISTI_FINAL_REPORT.md).
+
 
 ## Riesame finale giornaliere - 2026-10-01
 
@@ -1010,3 +1032,10 @@ Dettagli: [GATE_MEAL_VOUCHER_ENTRY.md](GATE_MEAL_VOUCHER_ENTRY.md).
 - [ ] Collaudo operativo su una persona/giornata reale.
 
 Dettagli, backup, override operativo e matrice test: `GATE_MEAL_VOUCHER_ENTRY.md`.
+
+
+## Correzione slice successiva
+
+Il 2026-10-05 sono state rimosse le19regressioni del ciclo, senza cambiare
+baseline/soglie. Risultati e stato corrente: [report slice](TURNISTI_COMPLEXITY_SLICES_2026-10-05.md).
+Gli esiti precedenti restano storici; il gate globale include lavoro Wiki unrelated.
