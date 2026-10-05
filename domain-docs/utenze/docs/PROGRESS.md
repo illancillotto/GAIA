@@ -1,5 +1,16 @@
 # Progress
 
+## 2026-10-05 — risultato persona senza stato derivato
+
+- Il percorso persona completa valorizza direttamente review False,
+  confidence 0.98 e warning vuoti, senza alias locali delle costanti.
+  Lista fresca e mutabile per ciascun risultato; snapshot review preservato.
+- LOC `parse_folder_name` 76 -> 74, file 107 -> 105; cognitive 19 e
+  cyclomatic 14 invariati. `IMPROVED` limitato a LOC/stato, zero error
+  e tre warning invariati, nessun helper o debito trasferito.
+- 25 test prima/dopo, full-file 100% (53 statement, 14 branch), 8865 casi
+  equivalenti; ratchet mirato/Ruff PASS, baseline e configurazioni invariati.
+
 ## 2026-10-05 — guardia input vuoto senza controllo duplicato
 
 - Stringa normalizzata vuota implica token vuoti; il controllo `not tokens`

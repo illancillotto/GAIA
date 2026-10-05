@@ -70,18 +70,16 @@ def parse_folder_name(folder_name: str) -> ParseResult:
 
         cognome = tokens[0]
         nome = " ".join(tokens[1:-1])
-        warnings: list[str] = []
-        confidence = 0.98
 
         return ParseResult(
             source_name_raw=folder_name,
             subject_type=AnagraficaSubjectType.PERSON.value,
-            requires_review=bool(warnings),
-            confidence=confidence,
+            requires_review=False,
+            confidence=0.98,
             cognome=cognome,
             nome=nome,
             codice_fiscale=last_token,
-            warnings=warnings,
+            warnings=[],
         )
 
     if PARTITA_IVA_PATTERN.fullmatch(last_token):

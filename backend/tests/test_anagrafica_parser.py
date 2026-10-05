@@ -128,3 +128,15 @@ def test_parse_complete_person_name_preserves_nonempty_name(
     assert result.requires_review is False
     assert result.confidence == 0.98
     assert result.warnings == []
+
+
+def test_complete_person_results_have_independent_warning_lists() -> None:
+    first = parse_folder_name("Obinu_Santina_BNOSTN34L64I743F")
+    second = parse_folder_name("Obinu_Santina_BNOSTN34L64I743F")
+
+    assert first.warnings is not second.warnings
+    first.warnings.append("consumer_note")
+    assert second.warnings == []
+    assert first.requires_review is False
+    assert second.requires_review is False
+    assert first.confidence == second.confidence == 0.98

@@ -3,6 +3,33 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Utenze — avvio stato di revisione persona (2026-10-05)
+
+- Chiusura `IMPROVED` **limitata a LOC e stato derivato**, non alla
+  complessita cognitiva/ciclomatica. Eliminati due alias di costanti e
+  `bool` della lista vuota; campi review/confidence/warnings espliciti.
+- Target LOC 76 -> 74, file 107 -> 105; cognitive target/file sum/max
+  19/20/19 e cyclomatic 14/19/14 invariati. Cinque callable, zero error
+  e tre warning invariati; nessun helper o trasferimento del debito.
+- Nuova caratterizzazione dell'indipendenza/mutabilita delle liste warning
+  e snapshot review passa sul runtime originale; 25 test verdi prima/dopo.
+  Coverage dopo full-file 100%, 53/53 statement e 14/14 branch, zero
+  esclusioni; due statement realmente eliminati, configurazione invariata.
+- 8865 input stringa differenziali identici a `6997dbab`, stesso risultato
+  dataclass. Ratchet mirato merge-base, Ruff runtime/test e whitespace PASS;
+  baseline/scope/policy invariati. Documentazione e grafi aggiornati.
+- Slice precedente committata `6997dbab`. Stop a questo singolo goal;
+  nuova slice non committata, nessun push o secondo hotspot avviato.
+- Singolo goal successivo autorizzato dopo commit `6997dbab`: eliminare
+  le variabili locali derivate `warnings`/`confidence` nel ramo persona
+  completa, valorizzando direttamente il risultato con False/0.98/lista vuota.
+- Sono costanti dal precedente recupero della guardia irraggiungibile;
+  mantenere lista warning fresca per ogni chiamata, snapshot di review,
+  mutabilita, campi e ordine del risultato. Nessun altro ramo modificato.
+- Prima target cog/cyc/LOC/nesting 19/14/76/2; file cognitive 20/19,
+  cyclomatic 19/14, LOC 107 e cinque callable. Obiettivo LOC/stato derivato,
+  non promettere riduzione cognitiva o eliminazione di warning.
+
 ### Utenze — avvio guardia input vuoto (2026-10-05)
 
 - Chiusura `IMPROVED`: guardia iniziale `if not tokens`, rimosso soltanto

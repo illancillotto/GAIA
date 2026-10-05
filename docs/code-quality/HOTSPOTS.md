@@ -14,6 +14,12 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Utenze review persona, 2026-10-05: `parse_folder_name` `IMPROVED` solo per
+LOC/stato derivato, eliminati alias warnings/confidence e bool della lista
+vuota. LOC target 76 -> 74, file 107 -> 105; cognitive 19 e cyclomatic 14
+invariati, zero error/tre warning. 25 test, full-file 100%, 8865 input
+equivalenti, nessun helper/debito trasferito o baseline update.
+
 Utenze guardia vuoto, 2026-10-05: `parse_folder_name` `IMPROVED`, controllo
 di input vuoto basato soltanto sui token. Target cog/cyc/LOC 22/16/76 ->
 19/14/76; file cognitive 23 -> 20, cyclomatic 21 -> 19, cinque callable
