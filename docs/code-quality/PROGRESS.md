@@ -3,6 +3,48 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Network — avvio detector watchlist (2026-10-05)
+
+- Chiusura `IMPROVED`: strategie matching lazy per keyword/domain/url/IP,
+  normalizzazione campi condivisa, watchlist con guard clause, normalizzazione
+  porta separata dall'applicazione dei tag. Ordine/deduplica e allow finale
+  preservati. Eliminato solo append encrypted_dns provatamente irraggiungibile.
+- Target cog/cyc/LOC/nesting107/39/62/6 ->6/7/25/0, cinque parametri invariati.
+  File cognitive sum/max111/107 ->39/12, cyclomatic44/39 ->39/7,
+  branching42 ->31, callable2 ->8, LOC136 ->161 sotto soglia, import3 invariati.
+  Tre lambda di matching senza branching nel registro; nessun debito imperativo
+  nascosto, nuovi helper sotto soglia, zero violation trasferite.
+- Cinque violation (tre error/due warning) ->un warning legacy sui cinque
+  parametri pubblici. Zero error, API non alterata per eliminare questo warning.
+  La prima estrazione aveva nuovo helper ciclomatico15: respinta dal ratchet,
+  sostituita da registro lazy/normalizzazione condivisa, non assorbita in baseline.
+- 64 test di caratterizzazione prima/dopo. Prima98% per singolo ramo morto;
+  dopo full-file100% statement65/branch26, zero esclusioni/missing/partial.
+  2940 input differenziali: tag e ordine identici, default watchlist identici
+  e input invariati. 43 test dei chiamanti services/router helpers PASS.
+- Ratchet merge-base `0d6346de`, Ruff mirato e format-check nuovo test PASS;
+  whitespace PASS, baseline/config/scope invariati. `make lint-backend` con
+  python sistema manca Ruff; con QUALITY_PYTHON=.venv/bin/python compileall PASS,
+  lint globale fallisce solo UP038 nel file concorrente
+  `backend/app/services/elaborazioni_capacitas_incass.py:1041`, fuori slice.
+  Nessuna nuova failure nel detector/test; non modificare la change concorrente.
+- Graphify Network codice e docs/piattaforma aggiornati con target dedicati;
+  commit separato, nessun push. Campagna non-MCP attiva, altri file preservati.
+- Passaggio Catasto `0d6346de` committato, file sotto soglia; campagna tutti
+  gli hotspot non-MCP resta attiva. Inventory working tree aggiornata: 4319
+  violation in 708 file, filtro operativo wiki/MCP senza cambiare scope dei gate.
+- Singolo hotspot `event_detection_tags`, cog/cyc/LOC/nesting107/39/62/6,
+  cinque parametri; file LOC136, due callable, cinque violation (tre error).
+- Separare normalizzazione/matching watchlist e tagging porte, mantenendo
+  ordine/deduplica e allow applicato per ultimo. Preservare precedence fallback
+  porte, input non-stringa, categorie ignote, mode non-allow e matching lazy.
+- Il secondo append encrypted_dns e irraggiungibile: sotto la stessa guardia
+  port_tag e gia stato inserito in tags; se e encrypted_dns, not-in e falso.
+  Documentare la prova e rimuovere solo questo ramo senza effetti osservabili.
+- Test di caratterizzazione prima del runtime e full-file100% dopo; metriche,
+  aggregati, ratchet merge-base e Ruff. Nessuna nuova esclusione/baseline/config
+  o modifica concorrente; commit separato per una sola unita revisionabile.
+
 ### Catasto frontend — avvio registro spiegazioni (2026-10-05)
 
 - Chiusura `IMPROVED`: definizioni tipizzate con testi guida e strategia di

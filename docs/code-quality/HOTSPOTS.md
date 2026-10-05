@@ -14,6 +14,16 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, Network detector watchlist, 2026-10-05:
+`event_detection_tags` `IMPROVED`, cog/cyc/LOC/nesting107/39/62/6 ->6/7/25/0.
+Matching lazy in registro, normalizzazione condivisa, guard clause watchlist
+e separazione normalizzazione/tagging porte; ramo encrypted_dns morto rimosso.
+File cognitive111 ->39, cyclomatic44 ->39, branching42 ->31, LOC136 ->161;
+cinque violation ->un warning legacy params, nessuna violation trasferita.
+64 test/full-file100%, 2940 input equivalenti, 43 test chiamanti PASS;
+ratchet/Ruff mirato PASS. Lint globale UP038 su InCass concorrente fuori slice,
+baseline/config/scope invariati. Campagna non-MCP resta attiva.
+
 Campagna non-MCP, Catasto registro spiegazioni, 2026-10-05:
 `explainCatastoAnomalia` `IMPROVED`, cog/cyc/LOC/nesting20/12/42/1
 ->2/3/6/1. Definizioni tipizzate con testi/calcoli, lookup Map e assemblaggio

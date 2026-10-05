@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 from typing import Any
 
-
 VPN_PROVIDER_KEYWORDS = (
     "nordvpn",
     "surfshark",
@@ -69,6 +68,13 @@ SUSPICIOUS_PORTS = {
     "853": "encrypted_dns",
 }
 
+CATEGORY_TAGS = {
+    "vpn": "vpn_suspected",
+    "proxy": "proxy_suspected",
+    "tor": "tor_suspected",
+    "encrypted_dns": "encrypted_dns",
+}
+
 
 def default_watchlist_items() -> list[dict[str, str]]:
     items: list[dict[str, str]] = []
@@ -81,6 +87,76 @@ def default_watchlist_items() -> list[dict[str, str]]:
     for keyword in ENCRYPTED_DNS_KEYWORDS:
         items.append({"category": "encrypted_dns", "rule_mode": "detect", "match_type": "keyword", "pattern": keyword, "label": keyword})
     return items
+
+
+def _normalized_event_field(parsed: dict[str, Any], field: str) -> str:
+    return str(parsed.get(field) or "").lower()
+
+
+def _domain_matches(pattern: str, haystack: str, parsed: dict[str, Any]) -> bool:
+    domain = _normalized_event_field(parsed, "domain")
+    return domain == pattern or domain.endswith(f".{pattern}")
+
+
+WATCHLIST_MATCHERS = {
+    "keyword": lambda pattern, haystack, parsed: pattern in haystack,
+    "domain": _domain_matches,
+    "url": lambda pattern, haystack, parsed: pattern in _normalized_event_field(parsed, "url"),
+    "ip": lambda pattern, haystack, parsed: pattern in {
+        _normalized_event_field(parsed, "src_ip"),
+        _normalized_event_field(parsed, "dst_ip"),
+    },
+}
+
+
+def _watchlist_matches(
+    match_type: str,
+    pattern: str,
+    haystack: str,
+    parsed: dict[str, Any],
+) -> bool:
+    matcher = WATCHLIST_MATCHERS.get(match_type)
+    return matcher(pattern, haystack, parsed) if matcher else False
+
+
+def _watchlist_detection(
+    haystack: str,
+    parsed: dict[str, Any],
+    entries: list[tuple[str, str, str, str]],
+) -> tuple[list[str], set[str]]:
+    tags: list[str] = []
+    allowed_tags: set[str] = set()
+    for category, rule_mode, match_type, pattern in entries:
+        normalized_pattern = pattern.strip().lower()
+        if not normalized_pattern:
+            continue
+        if not _watchlist_matches(match_type, normalized_pattern, haystack, parsed):
+            continue
+        tag = CATEGORY_TAGS.get(category)
+        if not tag:
+            continue
+        if rule_mode == "allow":
+            allowed_tags.add(tag)
+        elif tag not in tags:
+            tags.append(tag)
+    return tags, allowed_tags
+
+
+def _port_detection_tag(parsed: dict[str, Any]) -> str | None:
+    dst_port = parsed.get("dst_port") or parsed.get("destination_port") or parsed.get("server_port")
+    if not isinstance(dst_port, str):
+        return None
+    normalized_port = re.sub(r"[^0-9]", "", dst_port)
+    return SUSPICIOUS_PORTS.get(normalized_port)
+
+
+def _append_port_detection(tags: list[str], parsed: dict[str, Any]) -> None:
+    port_tag = _port_detection_tag(parsed)
+    if not port_tag or port_tag in tags:
+        return
+    tags.append(port_tag)
+    if port_tag in {"vpn_port", "wireguard_port"} and "vpn_suspected" not in tags:
+        tags.append("vpn_suspected")
 
 
 def event_detection_tags(
@@ -105,46 +181,6 @@ def event_detection_tags(
         parsed.get("hostname"),
     ]
     haystack = " ".join(str(part).lower() for part in text_parts if isinstance(part, str) and part.strip())
-    tags: list[str] = []
-    allowed_tags: set[str] = set()
-
-    if watchlist_entries:
-        for category, rule_mode, match_type, pattern in watchlist_entries:
-            normalized_pattern = pattern.strip().lower()
-            if not normalized_pattern:
-                continue
-            matched = False
-            if match_type == "keyword":
-                matched = normalized_pattern in haystack
-            elif match_type == "domain":
-                domain = str(parsed.get("domain") or "").lower()
-                matched = domain == normalized_pattern or domain.endswith(f".{normalized_pattern}")
-            elif match_type == "url":
-                matched = normalized_pattern in str(parsed.get("url") or "").lower()
-            elif match_type == "ip":
-                matched = normalized_pattern in {str(parsed.get("src_ip") or "").lower(), str(parsed.get("dst_ip") or "").lower()}
-            if matched:
-                tag = {
-                    "vpn": "vpn_suspected",
-                    "proxy": "proxy_suspected",
-                    "tor": "tor_suspected",
-                    "encrypted_dns": "encrypted_dns",
-                }.get(category)
-                if tag:
-                    if rule_mode == "allow":
-                        allowed_tags.add(tag)
-                    elif tag not in tags:
-                        tags.append(tag)
-
-    dst_port = parsed.get("dst_port") or parsed.get("destination_port") or parsed.get("server_port")
-    if isinstance(dst_port, str):
-        normalized_port = re.sub(r"[^0-9]", "", dst_port)
-        port_tag = SUSPICIOUS_PORTS.get(normalized_port)
-        if port_tag and port_tag not in tags:
-            tags.append(port_tag)
-            if port_tag in {"vpn_port", "wireguard_port"} and "vpn_suspected" not in tags:
-                tags.append("vpn_suspected")
-            if port_tag == "encrypted_dns" and "encrypted_dns" not in tags:
-                tags.append("encrypted_dns")
-
+    tags, allowed_tags = _watchlist_detection(haystack, parsed, watchlist_entries or [])
+    _append_port_detection(tags, parsed)
     return [tag for tag in tags if tag not in allowed_tags]

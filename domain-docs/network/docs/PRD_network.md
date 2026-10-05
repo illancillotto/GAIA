@@ -1,6 +1,22 @@
 # GAIA Rete — Network Monitor
 ## Product Requirements Document v1.0
 
+### Manutenzione detector — 2026-10-05
+
+- Matching watchlist keyword/domain/url/IP separato dal tagging porte, con
+  normalizzazione condivisa e strategie lazy. Ordine e deduplica dei tag,
+  precedence dst_port/destination_port/server_port e filtro allow finale
+  restano invariati; nessuna modifica API, auth, dati o regole di rilevamento.
+- Eliminato append encrypted_dns morto: il tag era gia stato inserito nella
+  stessa lista, quindi la successiva guardia not-in non poteva essere vera.
+- `event_detection_tags` cog/cyc/LOC/nesting107/39/62/6 ->6/7/25/0;
+  file cognitive111 ->39, cyclomatic44 ->39. Nuovi helper sotto soglia,
+  zero error/un warning residuo sui cinque parametri pubblici invariati.
+- 64 caratterizzazioni prima/dopo, coverage full-file100% statement/branch,
+  2940 input differenziali identici, 43 test dei chiamanti PASS. Ratchet e
+  Ruff mirato PASS; lint globale resta bloccato da UP038 InCass concorrente,
+  fuori perimetro. Nessuna esclusione/baseline/config modificata.
+
 > Regola repository
 > Il modulo Rete appartiene al backend monolite modulare GAIA. Nuovo codice backend Rete va in `app/modules/network/`.
 
