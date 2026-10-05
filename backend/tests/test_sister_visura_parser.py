@@ -178,6 +178,38 @@ def test_related_same_line_reset_restart_precedence(reset, restart):
     assert related == expected
 
 
+@pytest.mark.parametrize("first_date", ["01/01/2020", "31/02/2020"])
+def test_history_owner_identity_pending_consumption_and_detail_precedence(monkeypatch, first_date):
+    first_owner = {"nome": "Primo"}
+    second_owner = {"nome": "Secondo"}
+    headers = {"first": first_owner, "second": second_owner}
+    monkeypatch.setattr(runtime, "_parse_owner_header", headers.get)
+    events, related = runtime._parse_history_events(
+        [
+            "first",
+            f"dal {first_date}",
+            "second",
+            "(CF abcdefghijk)",
+            "dal 02/02/2022",
+            "dal 03/03/2023",
+        ],
+        0,
+    )
+    assert related == []
+    if first_date == "31/02/2020":
+        assert events[0]["owner"] is first_owner
+        assert first_owner["codice_fiscale"] == "ABCDEFGHIJK"
+        assert events[1]["owner"] is second_owner
+        assert "codice_fiscale" not in second_owner
+    else:
+        assert events[0]["owner"] is second_owner
+        assert second_owner["codice_fiscale"] == "ABCDEFGHIJK"
+        assert "codice_fiscale" not in first_owner
+        assert events[1]["owner"] == {}
+    assert events[2]["owner"] == {}
+    assert events[2]["owner"] is not events[1]["owner"]
+
+
 def test_legacy_owner_continuations_and_structured_fallback():
     payload = parse_sister_visura_text("""
         Visura attuale

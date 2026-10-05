@@ -123,6 +123,28 @@ def _update_related_parcels(
     return in_related
 
 
+def _start_history_event(
+    events: list[dict[str, Any]],
+    pending_owner: dict[str, Any] | None,
+    from_date: str,
+) -> tuple[dict[str, Any], None]:
+    current = {"from_date": _parse_date(from_date), "owner": pending_owner or {}}
+    pending_owner = None
+    events.append(current)
+    return current, pending_owner
+
+
+def _assign_history_owner(
+    current: dict[str, Any] | None,
+    pending_owner: dict[str, Any] | None,
+    owner: dict[str, Any],
+) -> dict[str, Any] | None:
+    if current is None or current["from_date"] is None:
+        return owner
+    current["owner"] = owner
+    return pending_owner
+
+
 def _parse_history_events(lines: list[str], start: int) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     events: list[dict[str, Any]] = []
     related: list[dict[str, str]] = []
@@ -133,16 +155,11 @@ def _parse_history_events(lines: list[str], start: int) -> tuple[list[dict[str, 
         in_related = _update_related_parcels(related, line, in_related)
         date_match = _HISTORY_DATE_RE.match(line)
         if date_match:
-            current = {"from_date": _parse_date(date_match.group("date")), "owner": pending_owner or {}}
-            pending_owner = None
-            events.append(current)
+            current, pending_owner = _start_history_event(events, pending_owner, date_match.group("date"))
             continue
         owner = _parse_owner_header(line)
         if owner:
-            if current is None or current["from_date"] is None:
-                pending_owner = owner
-            else:
-                current["owner"] = owner
+            pending_owner = _assign_history_owner(current, pending_owner, owner)
             continue
         if current is not None:
             _update_owner_details(current["owner"], line)

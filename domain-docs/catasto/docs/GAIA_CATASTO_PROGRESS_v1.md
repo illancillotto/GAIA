@@ -1,6 +1,22 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-05 — transizioni owner ed evento storico SISTER
+
+- Transizioni avvio evento/assegnazione owner isolate: owner pending consumato
+  dopo creazione evento e prima append, owner corrente mutato solo con data
+  valida; data invalida lascia nuovo owner pending, CF aggiorna ancora corrente.
+  Alias, dict vuoti distinti, ordine risultati e parser-version invariati.
+- Storico cog/cyc/LOC/nesting22/11/27/3 ->10/6/22/3, helper2/3/9/0 e4/4/9/1
+  sotto soglia; cognitive file126 ->120, branching82 invariato. Due warning
+  eliminati, tre error parser testo residui; nessun debt transfer o cambio
+  API/schema/baseline/config/scope.
+- Due caratterizzazioni identita owner prima/dopo, 69 test parser/persistenza/
+  backfill PASS, full-file100% statement179/branch76 dopo; 45229 sequenze/start
+  e 2000 payload testi differenziali identici. Ratchet/Ruff mirato PASS;
+  lint globale UP038 InCass concorrente. Graphify backend codice e docs Catasto/
+  piattaforma aggiornati prima del commit; campagna non-MCP ancora attiva.
+
 ### 2026-10-05 — raccolta riferimenti catastali correlati SISTER
 
 - Aggiornamento stato related e append parcel isolati nella stessa scansione;

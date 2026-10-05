@@ -3,6 +3,40 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### SISTER — transizioni owner ed evento storico (2026-10-05)
+
+- Chiusura `IMPROVED`: transizioni avvio evento e assegnazione owner isolate,
+  mantenendo consumo pending, append stesso oggetto e mutation owner corrente.
+  Target cog/cyc/LOC/nesting22/11/27/3 ->10/6/22/3; avvio2/3/9/0 e
+  assegnazione4/4/9/1 sotto soglia. Due warning eliminati; storico sotto soglia,
+  tre error parser testo58/38/87/3 invariato restano. Nessun debt transfer.
+- File cognitive sum/max126/58 ->120/58, cyclomatic95/38 ->97/38,
+  branching82 invariato, callable13 ->15, LOC225 ->238 sotto soglia file,
+  densita0.982222 ->0.911765/import7 invariati. Aumento ciclomatico pari ai due
+  callable nuovi, nessun branching aggiunto; baseline/config/scope invariati.
+- Due caratterizzazioni nuove prima/dopo confrontano identita owner con data
+  valida/invalida, consumo pending, precedenza CF corrente e dict vuoti distinti.
+  25 parser full-file100% prima statement173/branch76; 69 parser/persistenza/
+  backfill PASS dopo, full-file100% statement179/branch76, zero missing/partial/
+  esclusioni. Nessuna nuova failure nel perimetro.
+- 45229 sequenze/start e 2000 testi differenziali contro `b72ed4b9`: eventi,
+  current owners, related e payload completi identici, input invariati.
+  Ratchet merge-base, Ruff mirato, format-check test e whitespace PASS;
+  lint globale compileall PASS, solo UP038 InCass concorrente fuori slice.
+- Graphify backend codice e docs Catasto/piattaforma richiesto prima del commit
+  separato; nessun push, change concorrenti preservate. Campagna non-MCP attiva,
+  prossimo candidato parser testo58/38 con tre error, non fine programma.
+- Preflight `b72ed4b9`: singolo hotspot _parse_history_events22/11/27/3,
+  due warning; parser testo58/38/87/3 invariato. File cognitive126/cyclomatic95,
+  branching82/LOC225/tredici callable/tre error piu due warning.
+- Separare avvio evento (data, riuso owner pending, append stesso oggetto) e
+  assegnazione owner (pending se nessun evento/data invalida, corrente altrimenti).
+  Consumo pending resta dopo creazione e prima append; ordine alias/mutazioni
+  e precedenza details current rispetto a pending devono restare invariati.
+- Caratterizzazione identita owner prima/dopo, full-file100%, differenziali
+  sequenze/testi, metriche/aggregati/ratchet contro HEAD, Ruff/Graphify e commit
+  separato autorizzato. Baseline/config/scope/change concorrenti invariati.
+
 ### SISTER — raccolta riferimenti catastali correlati (2026-10-05)
 
 - Chiusura `IMPROVED`: aggiornamento stato related e append parcel isolati

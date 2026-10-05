@@ -14,6 +14,17 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, SISTER transizioni owner/evento storico, 2026-10-05:
+`_parse_history_events` `IMPROVED`, cog/cyc/LOC/nesting22/11/27/3 ->10/6/22/3.
+Avvio evento2/3/9/0 e assegnazione owner4/4/9/1 sotto soglia; consumo pending,
+append/alias e precedenza CF corrente preservati. Due warning eliminati:
+storico sotto soglia, tre error parser testo58/38/87/3 invariato restano.
+File cognitive126 ->120, cyclomatic95 ->97, branching82 invariato, LOC225 ->238;
+nessun transfer o cambio versione parser/baseline/config/scope.
+69 test/full-file100%, 45229 sequenze/start e 2000 payload equivalenti;
+ratchet/Ruff mirato PASS, lint globale UP038 InCass concorrente.
+Campagna non-MCP attiva; prossimo candidato parser testo58/38.
+
 Campagna non-MCP, SISTER raccolta riferimenti correlati, 2026-10-05:
 `_parse_history_events` `IMPROVED`, cog/cyc/LOC/nesting40/19/35/3 ->22/11/27/3.
 Stato related/append isolati nella stessa scansione, helper10/9/15/1 sotto soglia;
