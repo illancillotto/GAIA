@@ -14,6 +14,15 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Catasto frontend spiegazioni VAL-07, 2026-10-05: `explainCatastoAnomalia`
+`IMPROVED`, cog/cyc/LOC59/31/197 ->47/25/191, nesting2 invariato.
+Helper di dominio3/3/10/1, nessuna violation; cognitive file122 ->113,
+cyclomatic85 ->82, branching69 ->65, diciassette callable, LOC340 ->344.
+Sei violation residue invariati, nessun debito trasferito. 42 test,
+full-file100% su quattro metriche, 3600 input equivalenti; ratchet mirato,
+typecheck/ESLint PASS (solo warning ESLint legacy). Baseline invariata;
+dieci finding globali Wiki MCP esterni, test/docs VAL-06 preservati.
+
 Catasto attesi/delta VAL-06, 2026-10-05: `NO_SAFE_CHANGE` per unificazione
 del calcolo. Il ciclo proposto riduceva cog/cyc29/22 ->28/20 ma aumentava
 LOC31 ->33; respinto dal ratchet e rimosso. Runtime invariato, baseline

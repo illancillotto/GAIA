@@ -3,6 +3,32 @@ import { describe, expect, test } from "vitest";
 import { describeCatastoAnomalia, explainCatastoAnomalia } from "@/lib/catasto-anomalie";
 
 describe("explainCatastoAnomalia", () => {
+  test.each([
+    [null, []],
+    [false, []],
+    ["bad", []],
+    [[], []],
+    [{ atteso: 0, delta: -2 }, [{ label: "Voce 0648 - valore atteso", value: "0" }, { label: "Voce 0648 - scostamento", value: "-2" }]],
+    [{ atteso: "bad", delta: null }, [{ label: "Voce 0648 - scostamento", value: "0" }]],
+  ])("preserves VAL-07 calculation values for %j", (value, expected) => {
+    expect(explainCatastoAnomalia({
+      tipo: "VAL-07-importi",
+      dati_json: { v07_648: value },
+    }).calculations).toEqual(expected);
+  });
+
+  test("preserves VAL-07 calculation order independently of source key order", () => {
+    expect(explainCatastoAnomalia({
+      tipo: "VAL-07-importi",
+      dati_json: { v07_985: { delta: 4, atteso: 3 }, v07_648: { delta: 2, atteso: 1 } },
+    }).calculations).toEqual([
+      { label: "Voce 0648 - valore atteso", value: "1" },
+      { label: "Voce 0648 - scostamento", value: "2" },
+      { label: "Voce 0985 - valore atteso", value: "3" },
+      { label: "Voce 0985 - scostamento", value: "4" },
+    ]);
+  });
+
   test("explains VAL-01 surface excess with calculations", () => {
     const explanation = explainCatastoAnomalia({
       tipo: "VAL-01-sup_eccede",

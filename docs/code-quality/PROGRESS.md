@@ -3,6 +3,42 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto frontend — avvio spiegazioni importi VAL-07 (2026-10-05)
+
+- Chiusura `IMPROVED`: helper dominio `pushImportAmountCalculations`
+  valida il valore-oggetto e aggiunge atteso/scostamento formattati per voce.
+  Target cog/cyc/LOC/nesting59/31/197/2 ->47/25/191/2; helper3/3/10/1,
+  tre parametri e nessuna violation. Cognitive file sum/max122/59 ->113/47,
+  cyclomatic85/31 ->82/25; branching `sum(cyc-1)`69 ->65.
+- File LOC340 ->344, diciassette callable (prima sedici), tre import invariati;
+  densita scanner0.608824 ->0.566860. Sei violation residue invariati (cinque
+  error/un warning), nessun debito trasferito; wrapper vuoti o duplicazioni
+  assenti. Prima proposta ciclo respinta per nesting2 ->3, sostituita.
+- Sette caratterizzazioni aggiunte prima del runtime, 42 test verdi prima/dopo.
+  Full-file100% statement/branch/function/line: dopo98/115/17/87 contatori
+  coperti, prima97/123/16/87; scope e configurazione invariati, nessuna esclusione.
+  3600 input differenziali (due export, otto tipi anomalia, ordine sorgente
+  invertito, voci null/zero/invalidi/array): output e ordine identici a `9b5357b8`.
+- Ratchet mirato merge-base, typecheck frontend no-emit e whitespace PASS.
+  ESLint runtime/test exit0 con solo warning legacy `multiplierDigits` inutilizzato,
+  non modificato; nessun nuovo warning. Ratchet full corpus read-only contro
+  `9b5357b8`: dieci finding Wiki MCP esterni, zero nel runtime frontend toccato.
+  Baseline/config/scope invariati. HEAD concorrente `85b179b0` preservato,
+  ratchet mirato ripetuto; nessun commit di questa slice o push.
+- Graphify frontend codice aggiornato, HTML omesso per limite5000nodi
+  (6487nodi): JSON/report presenti. Docs Catasto/backlog e grafi docs dedicati
+  aggiornati; test/docs VAL-06 precedenti preservati. Stop al singolo hotspot.
+- Dopo `NO_SAFE_CHANGE` VAL-06, autorizzato un hotspot diverso:
+  ciclo ordinato per spiegare importi 0648/0985 in `explainCatastoAnomalia`.
+  Preservare i test/docs VAL-06 non committati, nessun commit richiesto qui.
+- Base `9b5357b8`; prima target cog/cyc/LOC/nesting59/31/197/2,
+  sei violation file (cinque error/un warning). Preservare testo, formattazione,
+  ordine voci/atteso/delta, valori zero/null/invalidi e array-oggetto;
+  nessuna modifica a descrizioni sintetiche, altri casi o rendering consumer.
+- Acquisire aggregati, caratterizzazioni/full-file100%, lint/typecheck e ratchet
+  contro merge-base. Nessun helper artificiale; eventuali nuovi callable
+  devono rispettare soglie e aggregati, senza trasferimento del debito.
+
 ### Catasto — avvio attesi e delta VAL-06 (2026-10-05)
 
 - Chiusura `NO_SAFE_CHANGE` per la proposta runtime: ciclo comune attesi/delta

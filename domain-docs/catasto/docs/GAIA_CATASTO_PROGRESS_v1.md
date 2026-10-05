@@ -1,6 +1,19 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-05 — spiegazioni importi VAL-07 condivise
+
+- Helper frontend di dominio per validazione voci e inserimento calcoli atteso/
+  scostamento. Voci0648/0985, testo, formato, ordine, null/zero/invalidi e
+  valori array-oggetto preservati; altri casi/esportazioni/UI invariati.
+- `explainCatastoAnomalia` cog/cyc/LOC59/31/197 ->47/25/191, nesting2
+  invariato; helper3/3/10/1 sotto soglia. `IMPROVED`, cognitive file122 ->113,
+  cyclomatic85 ->82, nessun debito trasferito; sei violation residue invariati.
+- Sette nuove caratterizzazioni sul runtime originale, 42 test prima/dopo;
+  full-file100% statement/branch/function/line, 3600 input equivalenti per
+  entrambi gli export. Ratchet mirato/typecheck PASS, ESLint exit0 con solo
+  warning legacy. Baseline invariata; test/docs VAL-06 precedenti preservati.
+
 ### 2026-10-05 — caratterizzazione attesi/delta VAL-06
 
 - Sei caratterizzazioni aggiunte per superfici/indice/importo mancanti,

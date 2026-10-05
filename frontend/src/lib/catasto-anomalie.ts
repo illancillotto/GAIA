@@ -98,6 +98,17 @@ function formatFormula(left: unknown, multiplier: unknown, result: unknown, mult
   return `${leftFormatted} x ${multiplierFormatted} = ${resultFormatted}`;
 }
 
+function pushImportAmountCalculations(
+  rows: Array<{ label: string; value: string }>,
+  code: string,
+  value: unknown,
+): void {
+  if (!value || typeof value !== "object") return;
+  const amounts = value as Record<string, unknown>;
+  pushCalculation(rows, `Voce ${code} - valore atteso`, amounts.atteso, 4);
+  pushCalculation(rows, `Voce ${code} - scostamento`, amounts.delta, 4);
+}
+
 export function explainCatastoAnomalia(anomalia: AnomaliaLike): CatastoAnomaliaExplanation {
   const data = anomalia.dati_json ?? {};
 
@@ -250,16 +261,10 @@ export function explainCatastoAnomalia(anomalia: AnomaliaLike): CatastoAnomaliaE
     }
     case "VAL-07-importi": {
       const calculations: Array<{ label: string; value: string }> = [];
-      const v0648 = data.v07_648 && typeof data.v07_648 === "object" ? (data.v07_648 as Record<string, unknown>) : null;
-      const v0985 = data.v07_985 && typeof data.v07_985 === "object" ? (data.v07_985 as Record<string, unknown>) : null;
-      if (v0648) {
-        pushCalculation(calculations, "Voce 0648 - valore atteso", v0648.atteso, 4);
-        pushCalculation(calculations, "Voce 0648 - scostamento", v0648.delta, 4);
-      }
-      if (v0985) {
-        pushCalculation(calculations, "Voce 0985 - valore atteso", v0985.atteso, 4);
-        pushCalculation(calculations, "Voce 0985 - scostamento", v0985.delta, 4);
-      }
+      const v0648 = data.v07_648;
+      const v0985 = data.v07_985;
+      pushImportAmountCalculations(calculations, "0648", v0648);
+      pushImportAmountCalculations(calculations, "0985", v0985);
       return {
         title: "Importi del ruolo non coerenti",
         summary: "Almeno uno degli importi di ruolo non coincide con il risultato atteso del calcolo.",
