@@ -3,6 +3,16 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — costruzione match base (2026-10-06)
+
+- Slice `IMPROVED`: il CCO risolto viene calcolato una sola volta e riusato
+  per contesto e stato; il flag di presenza mantiene la stessa precedenza.
+- Metriche `_build_match` cognitive/cyclomatic/LOC `48/38/126 -> 42/32/123`;
+  aggregati `matching.py` `337/223 -> 331/217`, LOC file `712 -> 709`.
+- Suite Catasto PASS; `matching.py` full-file 100% (`266/266` statement,
+  `106/106` branch). Ruff, format e ratchet contro `HEAD` (`41a70a82`) PASS.
+  Graphify Catasto aggiornato; MCP/Wiki esclusi.
+
 ### Catasto — gate iniziale arricchimento live (2026-10-06)
 
 - Slice `IMPROVED`: il gate combinato su utenza assente e sincronizzazione non

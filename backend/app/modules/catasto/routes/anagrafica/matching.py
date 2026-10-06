@@ -477,21 +477,18 @@ def _build_match(
     # Oltre all'anagrafe unità consortili (CatConsorzioUnit), conta come "presente"
     # anche una utenza di campagna o intestatari già noti: altrimenti l'export mostra
     # "non presente" pur avendo CF/particella/intestatari da database o live Capacitas.
-    presente_eff = (
-        presente_in_catasto_consorzio
-        or (latest_utenza is not None)
-        or bool(intestatari)
+    presente_eff = presente_in_catasto_consorzio or latest_utenza is not None or bool(intestatari)
+    cco = latest_utenza.cco if latest_utenza is not None else (
+        latest_occupancy.cco if latest_occupancy is not None else None
     )
     cert_com, cert_pvc, cert_fra, cert_ccs = _resolve_particella_cert_context(
         db,
         p,
-        (latest_utenza.cco if latest_utenza is not None else None) or (latest_occupancy.cco if latest_occupancy is not None else None),
+        cco,
         latest_utenza,
         latest_occupancy,
     )
-    status_cco = (
-        (latest_utenza.cco if latest_utenza is not None else None) or (latest_occupancy.cco if latest_occupancy is not None else None)
-    ) if all([cert_com, cert_pvc, cert_fra]) else None
+    status_cco = cco if all([cert_com, cert_pvc, cert_fra]) else None
     stato_ruolo, stato_cnc = (
         _load_cert_status_from_context(
             db,
