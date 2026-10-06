@@ -3,6 +3,16 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — lookup intestatario locale (2026-10-06)
+
+- Slice `IMPROVED`: la validazione finale richiede ora la presenza simultanea
+  di persona e subject tramite `all(...)`, mantenendo il fallback `None`.
+- Metriche `_find_local_intestatario` cognitive/cyclomatic/LOC `13/10/20 ->
+  10/8/20`; aggregati `authoritative.py` `73/63 -> 70/61`, LOC invariato.
+- Suite Catasto PASS; `authoritative.py` full-file 100% (`96/96` statement,
+  `38/38` branch). Ruff, format e ratchet contro `HEAD` (`933f582d`) PASS.
+  Graphify Catasto aggiornato; file concorrenti preservati; MCP/Wiki esclusi.
+
 ### Catasto — upsert intestatario live (2026-10-06)
 
 - Slice `IMPROVED`: l’identificativo esterno Capacitas viene calcolato una sola

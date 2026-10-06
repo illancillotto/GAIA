@@ -100,7 +100,7 @@ class _CapacitasAuthoritativeResolver(_CapacitasLiveResolver):
             if subject is not None:
                 person = self._db.get(AnagraficaPerson, subject.id)
 
-        if person is None or subject is None:
+        if not all((person, subject)):
             return None
         return _person_response_from_db(person, subject, deceduto=intestatario.deceduto)
 
