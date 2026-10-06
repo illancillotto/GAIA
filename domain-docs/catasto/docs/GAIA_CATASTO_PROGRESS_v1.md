@@ -1,6 +1,24 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-06 — modulo rendering CSV/XLSX export
+
+- CSV/XLSX rendering e response nel modulo export_rendering della stessa area
+  route, quattro callable re-esportati con identita invariata. Gestione
+  hyperlink separata, early-return su indici mancanti/link vuoto; header,
+  formule, append/save/close, media type e Content-Disposition invariati.
+- Renderer18/9/21/4 ->11/7/17/2, helper2/3/13/1/4 sotto soglia; modulo zero
+  violation. Cognitive aggregate295 ->290, cyclomatic235 ->236/callable25 ->26,
+  branching210 invariato, LOC493 ->517 (455/62); violation19 ->17, due warning
+  renderer eliminati senza transfer. Mapper bulk79/38 invariato/aperto.
+- 282 test coverage/caratterizzazione/API/facade PASS, full-file100% exports
+  statement188/branch56 e rendering statement46/branch12, zero esclusioni.
+  Re-export e workbook reali caratterizzati;393 differenziali controaa52d41e
+  equivalenti per bytes CSV e sheet/coordinate/valori/tipi formula XLSX.
+  Ratchet/Ruff PASS, format nuovo modulo/test PASS; lint globale UP038 InCass
+  concorrente, Graphify codice con pruning/docs aggiornati. API/schema/baseline/
+  config/scope invariati, campagna non completa: restano mapper e altri hotspot.
+
 ### 2026-10-06 — guardia hyperlink XLSX export
 
 - Guardia unica di presenza None nella coppia indici colonna link/apri;

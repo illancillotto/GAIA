@@ -3,6 +3,40 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — rendering CSV/XLSX export bulk (2026-10-06)
+
+- Chiusura `IMPROVED`: modulo rendering con gestione hyperlink separata,
+  early-return per indici mancanti/link vuoto; quattro re-export identici.
+  Renderer18/9/21/4 ->11/7/17/2, helper2/3/13/1/4 sotto soglia; modulo completo
+  zero violation. Aggregati dei due file cognitive295 ->290, cyclomatic235
+  ->236/callable25 ->26, branching210 invariato, LOC493 ->517 (455/62),
+  import26 ->33. Miglioramento cognitivo reale5, non riduzione del branching
+  o solo trasferimento; violation19 ->17 (8 error/9 warning), due warning
+  renderer eliminati senza trasferirli. Mapper bulk79/38 resta invariato/aperto.
+- Un nuovo caso persistente verifica identita dei quattro re-export; workbook
+  reali gia caratterizzati per header mancanti/invertiti e link vuoto/formula.
+  282 test coverage/caratterizzazione/API/facade PASS, full-file100% exports
+  statement188/branch56 e rendering statement46/branch12, zero missing/partial/
+  esclusioni.393 differenziali controaa52d41e equivalenti per bytes CSV e
+  sheet/coordinate/valori/tipi formula XLSX (non bytes ZIP con timestamp).
+- Ratchet merge-baseaa52d41e e Ruff tre file PASS, format nuovo modulo/test
+  PASS; lint globale compileall PASS, solo UP038 InCass concorrente. Graphify
+  codice Catasto force con patch pruning e docs Catasto/piattaforma aggiornati
+  prima del commit separato. Evidenze /tmp/gaia-export-rendering-*; baseline/
+  config/scope/MCP e change concorrenti preservati, nessuna API remota o
+  PostgreSQL dichiarata. Goal globale non completo; prossimo candidato mapper.
+- Preflight `aa52d41e`: precedente passaggio progresso committato, runtime
+  Catasto pulito, indice vuoto. Renderer XLSX18/9/21/4; file cognitive295/
+  cyclomatic235/LOC493,19 violation/25 callable. Mapper bulk79/38 ancora aperto.
+- Isolare responsabilita rendering/response CSV/XLSX in modulo della stessa
+  area route, re-export compatibili dei quattro callable. Gestione hyperlink
+  separata con early-return su indici assenti e link vuoto; stessi accessi
+  worksheet/coordinate/formula, append/save/close e contenuti/headers HTTP.
+- Verificare tutti i nuovi callable sotto soglia e aggregati reali su entrambi
+  i runtime; full-file100%, workbook differenziale, ratchet/Ruff/Graphify e
+  commit separato. Niente cambio API/schema/baseline/config/scope/MCP o change
+  concorrenti; non classificare come miglioramento un semplice spostamento.
+
 ### Catasto — guardia colonne hyperlink XLSX (2026-10-06)
 
 - Chiusura `IMPROVED`: guardia idiomatica unica sulla presenza None nella

@@ -14,7 +14,7 @@ from fastapi import HTTPException
 from openpyxl import load_workbook
 
 from app.models.catasto import CatastoSisterParcel
-from app.modules.catasto.routes.anagrafica import execution, exports
+from app.modules.catasto.routes.anagrafica import execution, export_rendering, exports
 from app.modules.catasto.services import bulk_export_sister
 from app.modules.elaborazioni.capacitas.models import CapacitasLookupOption, CapacitasTerrenoRow
 from app.schemas.catasto_phase1 import (
@@ -66,6 +66,16 @@ def test_bulk_xlsx_hyperlink_columns_presence_order_and_empty_links(rows, expect
     assert workbook.sheetnames == ["intestatari"]
     assert [list(row) for row in workbook.active.iter_rows(values_only=True)] == expected
     workbook.close()
+
+
+def test_bulk_rendering_reexports_preserve_callable_identity():
+    for name in (
+        "_render_bulk_export_csv_bytes",
+        "_render_bulk_export_xlsx_bytes",
+        "_stream_bulk_export_csv",
+        "_stream_bulk_export_xlsx",
+    ):
+        assert getattr(exports, name) is getattr(export_rendering, name)
 
 
 def parcel(**updates):

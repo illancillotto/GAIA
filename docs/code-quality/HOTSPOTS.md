@@ -14,6 +14,16 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, modulo rendering CSV/XLSX export, 2026-10-06:
+`_render_bulk_export_xlsx_bytes` `IMPROVED`, cog/cyc/LOC/nesting18/9/21/4
+->11/7/17/2; helper hyperlink2/3/13/1/4 sotto soglia e rendering zero violation.
+Re-export compatibili, early-return/ordine accessi e workbook invariati.
+Aggregati route/rendering cognitive295 ->290, cyclomatic235 ->236/callable25
+->26, branching210 invariato, LOC493 ->517 (455/62); violation19 ->17,
+due warning eliminati senza transfer.282 test/full-file100% su entrambi i file,
+393 CSV/workbook differenziali equivalenti; ratchet/Ruff PASS, lint globale
+UP038 InCass concorrente. Mapper79/38 ancora aperto, MCP/Wiki esclusi operativamente.
+
 Campagna non-MCP, guardia hyperlink XLSX export, 2026-10-06:
 `_render_bulk_export_xlsx_bytes` `IMPROVED`, cog/cyc23/11 ->18/9, LOC21/nesting4
 invariati. Guardia unica presenza None negli indici colonna, niente helper.
