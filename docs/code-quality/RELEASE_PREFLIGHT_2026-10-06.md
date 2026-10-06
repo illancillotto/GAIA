@@ -85,3 +85,61 @@ Prima del rilascio occorrono:
 Artefatti audit locali: `/tmp/gaia-release-audit-20261006/`;
 checkpoint `/tmp/gaia-release-context-checkpoint-20261006.md`.
 Il programma di complessita resta incompleto e non viene dichiarato concluso.
+
+## Verifica aggiuntiva delle immagini attive
+
+Successivo audit read-only, senza modifiche a runtime, env o dati:
+
+- Nel container backend attivo, gli AST di `gate_mobile_team_actions.py`,
+  `gate_mobile_sync.py`, `elaborazioni_capacitas_incass.py` e
+  `incass_read_model.py` sono identici a main. Le differenze osservate nel
+  checkout root non rappresentano questi quattro sorgenti realmente eseguiti.
+- Nell'immagine worker runtime, `runtime_runner.py`, `capacitas_lane_gate.py`,
+  `domande_irrigue_parallel.py`, `ordered_prefetch.py` e `registry_prefetch.py`
+  hanno AST identico a main. Parallelismo default quattro worker invariato.
+- Il worker conserva una versione precedente del read model/inCass: main
+  accetta anche il prefisso ordinario `1`, impedisce cambio proprietario
+  dell'avviso e separa la ripresa dei job con `recovery_task_key` dal recupero
+  legacy. Il resolver soggetti e delegato al servizio recovery; il loader
+  resta esportato tramite import, non e una API eliminata.
+- Confronto env tramite digest, senza esporre valori: nessuna chiave condivisa
+  differisce; `APP_ENV`, database, password Postgres, JWT, master key credenziali,
+  volume Postgres e API base coincidono. L'unica chiave presente solo nel file
+  locale e `ELABORAZIONI_RUNTIME_PARALLEL_WORKERS`, gia quattro nel default
+  del runtime e nell'overlay remoto. Nessuna copia env eseguita.
+
+### Test di regressione sul main pubblicato
+
+| Suite | Test verdi |
+| --- | ---: |
+| Cancellazione squadre, read model inCass, Gate mobile sync | 90 |
+| SISTER navigation/HTML/correlazione e runtime runner | 106 |
+| Recupero Capacitas, sorgenti parallele, scheduler irrigue, inCass | 129 |
+| Totale aggiuntivo | 325 |
+
+Comandi mirati, nessuna esclusione o modifica ai test:
+
+```bash
+.venv/bin/python -m pytest -q backend/tests/test_gate_mobile_team_delete.py \
+  backend/tests/ruolo/test_incass_read_model.py backend/tests/test_gate_mobile_sync.py
+.venv/bin/python -m pytest -q \
+  modules/elaborazioni/worker/tests/test_sister_requests_navigation.py \
+  modules/elaborazioni/worker/tests/test_sister_requests_navigation_html.py \
+  modules/elaborazioni/worker/tests/test_sister_request_rows.py \
+  modules/elaborazioni/worker/tests/test_runtime_runner.py
+.venv/bin/python -m pytest -q backend/tests/test_capacitas_full_recovery.py \
+  backend/tests/test_runtime_parallel_sources.py \
+  backend/tests/test_domande_irrigue_autosync_scheduler.py \
+  backend/tests/test_elaborazioni_capacitas.py -k 'incass or recovery or parallel or domande'
+```
+
+La terza suite emette un RuntimeWarning nel test `test_cli_module_entrypoint`
+per il modulo gia caricato in `sys.modules` prima di `runpy`; non e una failure
+di test. Nessun runtime e stato modificato in questo audit, nessuna suppression
+introdotta. Questi test non sostituiscono il gate globale ancora rosso e non
+dimostrano l'equivalenza dell'intero filesystem delle immagini.
+
+Log e snapshot sanitizzati sotto `/tmp/gaia-release-audit-20261006/`:
+`hotfix-backend-tests.log`, `hotfix-worker-tests.log`, `incass-parallel-tests.log`,
+`backend-active.tar.gz`, `worker-active.tar.gz`, `env-comparison.json`.
+Il deploy resta non eseguito, in attesa della decisione sui prerequisiti globali.
