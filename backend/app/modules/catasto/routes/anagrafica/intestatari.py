@@ -292,11 +292,7 @@ def _is_usable_certificato_snapshot(snapshot: CatCapacitasCertificato) -> bool:
     raw_text = str(payload.get("raw_text") or "").casefold()
     if "deadlock" in raw_text or "ripetere la transazione" in raw_text:
         return False
-    if payload.get("partita_code") or payload.get("utenza_code"):
-        return True
-    if payload.get("intestatari") or payload.get("terreni"):
-        return True
-    return False
+    return any(payload.get(key) for key in ("partita_code", "utenza_code", "intestatari", "terreni"))
 
 
 def _load_intestatari_from_cert_context(

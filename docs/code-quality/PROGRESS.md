@@ -3,6 +3,19 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — validazione snapshot certificato (2026-10-06)
+
+- Chiusura `IMPROVED`: `_is_usable_certificato_snapshot` conserva il rifiuto
+  dei payload non-dict/deadlock e unifica i quattro segnali di contenuto in un
+  unico risultato booleano; nessun cambio di priorità o schema.
+- Target cognitive/cyclomatic/LOC `17/15/12 -> 10/10/8`: warning cognitivo
+  eliminato e l'errore ciclomatico ridotto a warning, senza regressione LOC.
+  Aggregati file cognitive/cyclomatic `142/135 -> 135/130`, nessuna nuova
+  violation.
+- Suite Catasto completa PASS; `intestatari.py` full-file 100% (`175/175`
+  statement, `78/78` branch), zero esclusioni. Ruff/format, ratchet contro
+  `HEAD` (`b80117c1`) e Graphify Catasto PASS. MCP/Wiki esclusi.
+
 ### Backend — prefisso share NAS (2026-10-06)
 
 - Chiusura `IMPROVED`: `removeprefix` gestisce direttamente il prefisso
