@@ -3,6 +3,17 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Backend — prefisso share NAS (2026-10-06)
+
+- Chiusura `IMPROVED`: `removeprefix` gestisce direttamente il prefisso
+  `/volume1/`; il caso esatto `/volume1` resta protetto dalla guardia precedente
+  e i nomi non prefissati restano invariati.
+- `_normalize_share_name` cognitive/cyclomatic/LOC `11/10/14 -> 10/9/13`,
+  nessuna violation nuova. Test NAS/re-export PASS; file runtime 100%
+  (`87/87` statement, `48/48` branch), zero esclusioni. Ruff/format PASS.
+- Ratchet contro `HEAD` (`f8837f5d`) e Graphify backend aggiornati; MCP/Wiki
+  esclusi e baseline/config/scope invariati.
+
 ### Backend — normalizzazione share NAS (2026-10-06)
 
 - Chiusura `IMPROVED`: le guardie per segmenti `@/#` sono state consolidate in

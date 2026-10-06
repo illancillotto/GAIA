@@ -141,8 +141,7 @@ def _normalize_share_name(raw_name: str) -> str | None:
     normalized = normalized.rstrip("/")
     if normalized == "/volume1":
         return None
-    if normalized.startswith("/volume1/"):
-        normalized = normalized.removeprefix("/volume1/")
+    normalized = normalized.removeprefix("/volume1/")
     if any(segment.startswith(("@", "#")) for segment in normalized.split("/")):
         return None
     return normalized
