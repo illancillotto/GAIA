@@ -188,3 +188,72 @@ Evidenze `/tmp/gaia-browser-full-ratchet.json`,
 `/tmp/gaia-browser-coverage.json`, `/tmp/gaia-browser-base-integration.log`.
 Il deploy resta non eseguito: oltre ai finding globali, la failure preesistente
 di isolamento dei test combinati deve essere considerata nella verifica CI.
+
+## Riconciliazione estesa dei sorgenti attivi
+
+Audit successivo sul main applicativo `1c8456fb`, confermato anche con
+`git ls-remote origin refs/heads/main`. Il CED resta sul checkout `6b61fd27`,
+con gli stessi sette file tracciati modificati e gli overlay non tracciati.
+Nessun file remoto e stato modificato e nessun servizio e stato riavviato.
+
+Il confronto ora copre tutti i file Python presenti nei seguenti perimetri,
+letti dai container e confrontati tramite AST senza attributi posizionali:
+
+| Container / perimetro | AST identico a main | AST diverso | File solo remoti |
+| --- | ---: | ---: | ---: |
+| `gaia-backend`, `/app/app` | 843 | 39 | 0 |
+| `gaia-elaborazioni-worker-runtime`, `/app/worker` e `/app/backend/app` | 817 | 70 | 0 |
+| `gaia-elaborazioni-worker-visure`, `/app/worker` | 75 | 9 | 0 |
+
+Per tutti i 70 file differenti del runtime worker, tutti i 9 del worker
+visure e 38 dei 39 del backend, l'AST remoto coincide esattamente con una
+versione nella storia di main. La ricerca ha considerato fino a 40 commit
+per file. L'unica eccezione, `gate_mobile_payloads.py`, differisce soltanto
+nella composizione del dizionario in `_gate_record_feature_values`:
+il runtime usa `{**shift_record_values(record), ...}`, main usa
+`shift_record_values(record) | {...}`. Il servizio restituisce un dizionario;
+restano invariati valori e precedenza delle chiavi a destra. Non e un hotfix
+funzionale da recuperare. Questo controllo identifica versioni pregresse,
+non dimostra da solo l'equivalenza comportamentale di tutti i cambi successivi.
+
+Gli hotfix SISTER del checkout sono AST-identici a main; quelli realmente
+attivi nel worker visure sono gia rappresentati nella storia di main.
+Le differenze Gate/inCass del checkout restano quelle analizzate sopra,
+senza nuovi simboli remoti da recuperare; il loader inCass resta importato
+ed esportato in main. Anche `frontend/package-lock.json` del checkout CED
+e identico al file locale. `portal_probe.py` nell'hotfix irrigue e uno script
+diagnostico esterno al runtime, non va importato ne eseguito per il rilascio.
+
+La riconciliazione dei sorgenti applicativi verificati non richiede quindi
+di copiare hotfix in main. Non copre dipendenze installate, binari, frontend
+compilato, altri container o tutti i file delle immagini. Le label compose
+confermano inoltre stack sovrapposti: backend, scheduler, Presenze, Gate e
+runtime worker non sono stati creati tutti con lo stesso insieme di override.
+Non usarle come prova che un singolo comando compose riproduca lo stack attivo.
+
+Il ratchet globale rieseguito contro `6b61fd27` conferma **22 finding**,
+exit code 1. Non sono state cambiate baseline, soglie o esclusioni.
+I 325 test mirati riportati sopra restano evidenza dell'audit precedente:
+non sono stati rieseguiti in questo passaggio read-only/documentale.
+
+### Sequenza di rilascio ancora necessaria
+
+1. Chiudere i finding globali in slice separate e verificare i gate CI,
+   inclusa la failure di isolamento della suite SISTER combinata.
+2. Prima di modificare il checkout CED, conservare un backup esterno di
+   patch, file non tracciati, compose, configurazione e riferimenti immagine;
+   verificare che sia leggibile e sufficiente al rollback, senza esporre segreti.
+3. Preparare una release pulita dello SHA approvato senza sovrascrivere
+   il checkout sporco; riconciliare esplicitamente i compose effettivi,
+   mantenendo volumi, segreti, mount e parallelismo quattro del worker.
+4. Verificare le immagini costruite e la catena migration rispetto al DB
+   attivo prima del cambio runtime. Poi eseguire deploy e smoke test,
+   con rollback delle immagini/configurazioni predisposto.
+
+Artefatti aggiuntivi in `/tmp/gaia-release-audit-20261006/reconcile/`:
+`checkout-comparison.json`, `backend-full-ast.json`, `worker-full-ast.json`,
+`visure-full-ast.json`, `runtime-history-matches.json`,
+`gate-mobile-payloads-active.diff` e `full-ratchet.json`.
+Gli archivi sono snapshot di sorgenti, non backup completi di produzione.
+Il deploy resta **NON eseguito**: l'autorizzazione a riconciliare gli hotfix
+non autorizza a ignorare gate rossi o a eliminare overlay non verificati.
