@@ -1501,7 +1501,7 @@ function DetailContent({
           </div>
           {saveError ? <p className="mb-3 text-sm text-red-600">{saveError}</p> : null}
           {saveMessage ? <p className="mb-3 text-sm text-[#1D4E35]">{saveMessage}</p> : null}
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-x-4 gap-y-3 md:grid-cols-2 xl:grid-cols-4 [&>div]:min-w-0 [&_.form-control]:h-9">
             {showAnprCard ? (
               <AnprStatusCard subjectId={subjectId} initialStatus={initialAnprStatus} onStatusUpdated={handleAnprStatusUpdated} />
             ) : null}
@@ -1515,7 +1515,7 @@ function DetailContent({
               onRequest={() => void handleRequestSubjectVisura()}
               onPreviewLatest={(document) => void handlePreviewCatastoDocument(document)}
             />
-            <label className="block text-sm font-medium text-gray-700 md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 md:col-span-2 xl:col-start-1">
               Source name raw
               <input className={cn("form-control mt-1", readOnlyControlClassName)} value={sourceNameRaw} onChange={(event) => setSourceNameRaw(event.target.value)} readOnly={!isEditMode} />
             </label>
@@ -1527,7 +1527,7 @@ function DetailContent({
               {subject.person ? "Nome" : "Forma giuridica"}
               <input className={cn("form-control mt-1", readOnlyControlClassName)} value={displayTwo} onChange={(event) => setDisplayTwo(event.target.value)} readOnly={!isEditMode} />
             </label>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 xl:col-span-2">
               {subject.person ? "Codice fiscale" : "Partita IVA"}
               <input className={cn("form-control mt-1", readOnlyControlClassName)} value={identifier} onChange={(event) => setIdentifier(event.target.value)} readOnly={!isEditMode} />
             </label>
@@ -1539,7 +1539,7 @@ function DetailContent({
                 <option value="duplicate">Duplicate</option>
               </select>
             </label>
-            <label className="flex items-center gap-3 text-sm font-medium text-gray-700 md:col-span-2">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 md:col-span-2 xl:col-span-1 xl:self-end xl:pb-2">
               <input checked={requiresReview} onChange={(event) => setRequiresReview(event.target.checked)} type="checkbox" disabled={!isEditMode} />
               Richiede revisione
             </label>
@@ -1611,8 +1611,8 @@ function DetailContent({
                     readOnly={!isEditMode}
                   />
                 </label>
-                <div className="rounded-2xl border border-[#d8e2d8] bg-[#f8fbf7] p-4 md:col-span-2">
-                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="rounded-2xl border border-[#d8e2d8] bg-[#f8fbf7] p-3 md:col-span-2 xl:col-span-4">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
                       <p className="text-sm font-semibold text-[#1D4E35]">Decesso manuale</p>
                       <p className="mt-1 text-sm text-gray-600">
@@ -1636,7 +1636,7 @@ function DetailContent({
                       Soggetto deceduto
                     </label>
                   </div>
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <label className="block text-sm font-medium text-gray-700">
                       Data decesso
                       <input
@@ -1662,10 +1662,10 @@ function DetailContent({
                     </label>
                   </div>
                 </div>
-                <label className="block text-sm font-medium text-gray-700 md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 md:col-span-2 xl:col-span-4">
                   Note
                   <textarea
-                    className={cn("form-textarea mt-1 min-h-24", !isEditMode ? "bg-gray-50 text-gray-500" : "")}
+                    className={cn("form-textarea mt-1 min-h-16", !isEditMode ? "bg-gray-50 text-gray-500" : "")}
                     value={personDetails.note}
                     onChange={(event) => setPersonDetails((current) => ({ ...current, note: event.target.value }))}
                     readOnly={!isEditMode}
@@ -1731,10 +1731,10 @@ function DetailContent({
                     readOnly={!isEditMode}
                   />
                 </label>
-                <label className="block text-sm font-medium text-gray-700 md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 md:col-span-2 xl:col-span-4">
                   Note
                   <textarea
-                    className={cn("form-textarea mt-1 min-h-24", !isEditMode ? "bg-gray-50 text-gray-500" : "")}
+                    className={cn("form-textarea mt-1 min-h-16", !isEditMode ? "bg-gray-50 text-gray-500" : "")}
                     value={companyDetails.note}
                     onChange={(event) => setCompanyDetails((current) => ({ ...current, note: event.target.value }))}
                     readOnly={!isEditMode}

@@ -176,11 +176,11 @@ export function AnprStatusCard({ subjectId, initialStatus, onStatusUpdated }: An
   }
 
   return (
-    <div className="rounded-2xl border border-[#d8e2d8] bg-[#f8fbf7] p-4 md:col-span-2">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+    <div className="rounded-2xl border border-[#d8e2d8] bg-[#f8fbf7] p-3 md:col-span-2">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-[#1D4E35]">Verifica ANPR</p>
-          <p className="mt-1 text-sm text-gray-600">Stato di riscontro anagrafico su PDND/ANPR per il soggetto selezionato.</p>
+          <p className="mt-1 text-xs leading-5 text-gray-600">Stato di riscontro anagrafico su PDND/ANPR per il soggetto selezionato.</p>
         </div>
         {canSync ? (
           <div className="flex flex-wrap gap-2">
@@ -204,7 +204,7 @@ export function AnprStatusCard({ subjectId, initialStatus, onStatusUpdated }: An
         ) : null}
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         <Badge variant={statusMeta.variant}>
           {status?.stato_anpr === "deceased" ? "⚠️ " : ""}
           {statusMeta.label}
@@ -212,14 +212,14 @@ export function AnprStatusCard({ subjectId, initialStatus, onStatusUpdated }: An
         {status?.anpr_id ? <span className="text-xs font-medium uppercase tracking-[0.14em] text-gray-500">idANPR {status.anpr_id}</span> : null}
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <div className="rounded-xl border border-white/70 bg-white px-4 py-3">
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <div className="rounded-xl border border-white/70 bg-white px-3 py-2">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Ultimo controllo</p>
           <p className="mt-1 text-sm text-gray-800">
             {loadingStatus ? "Caricamento..." : lastCheckAt ? formatDateTime(lastCheckAt) : "Mai verificato"}
           </p>
         </div>
-        <div className="rounded-xl border border-white/70 bg-white px-4 py-3">
+        <div className="rounded-xl border border-white/70 bg-white px-3 py-2">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Esito decesso</p>
           <p className="mt-1 text-sm text-gray-800">
             {getDeathOutcomeText(status, loadingStatus)}

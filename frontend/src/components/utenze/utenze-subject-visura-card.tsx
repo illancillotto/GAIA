@@ -59,7 +59,7 @@ export function UtenzeSubjectVisuraCard({
   }
 
   return (
-    <div className="rounded-2xl border border-[#d8e2d8] bg-[#f8fbf7] p-4 md:col-span-2">
+    <div className="rounded-2xl border border-[#d8e2d8] bg-[#f8fbf7] p-3 md:col-span-2">
       {confirmOpen && latestVisura ? (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="recent-visura-confirm-title">
@@ -79,10 +79,10 @@ export function UtenzeSubjectVisuraCard({
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-[#1D4E35]">Visura per soggetto</p>
-          <p className="mt-1 text-sm text-gray-600">
+          <p className="mt-1 text-xs leading-5 text-gray-600">
             Invia una richiesta rapida al runtime SISTER usando i dati anagrafici del soggetto aperto.
           </p>
         </div>
@@ -115,18 +115,18 @@ export function UtenzeSubjectVisuraCard({
         </div>
       ) : null}
 
-      <div className="mt-4 grid gap-3 md:grid-cols-3">
-        <div className="rounded-xl border border-white/70 bg-white px-4 py-3">
+      <div className="mt-3 grid gap-2 sm:grid-cols-[auto_minmax(0,1fr)] 2xl:grid-cols-[auto_minmax(0,1fr)_auto]">
+        <div className="rounded-xl border border-white/70 bg-white px-3 py-2">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Tipo soggetto</p>
           <p className="mt-1 text-sm text-gray-800">{requestState?.subjectKind ?? "Non disponibile"}</p>
         </div>
-        <div className="rounded-xl border border-white/70 bg-white px-4 py-3">
+        <div className="min-w-0 rounded-xl border border-white/70 bg-white px-3 py-2">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Identificativo</p>
-          <p className="mt-1 text-sm text-gray-800">
+          <p className="mt-1 break-words text-sm text-gray-800">
             {requestState ? `${requestState.identifierLabel}: ${requestState.identifier}` : "Codice fiscale o partita IVA mancanti"}
           </p>
         </div>
-        <div className="rounded-xl border border-white/70 bg-white px-4 py-3">
+        <div className="rounded-xl border border-white/70 bg-white px-3 py-2 sm:col-span-2 2xl:col-span-1">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Profilo richiesta</p>
           <p className="mt-1 text-sm text-gray-800">Attualita · Sintetica</p>
         </div>
