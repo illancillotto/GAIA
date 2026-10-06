@@ -336,6 +336,75 @@ describe("api core helpers", () => {
   });
 });
 
+describe("upload error detail contract", () => {
+  class MockUploadXHR {
+    static current: MockUploadXHR;
+    upload = { addEventListener: vi.fn() };
+    status = 422;
+    statusText = "Unprocessable Entity";
+    response: unknown;
+    open = vi.fn();
+    setRequestHeader = vi.fn();
+    send = vi.fn();
+    loadHandler!: () => void;
+
+    constructor() {
+      MockUploadXHR.current = this;
+    }
+
+    addEventListener(event: string, handler: () => void) {
+      if (event === "load") {
+        this.loadHandler = handler;
+      }
+    }
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal("XMLHttpRequest", MockUploadXHR);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  test.each([
+    { detail: "Denied", message: "Denied" },
+    { detail: "", message: "" },
+    { detail: { message: "Denied", code: "invalid" }, message: "Denied" },
+    { detail: { message: "" }, message: "" },
+    { detail: { message: 0 }, message: '{"message":0}' },
+    { detail: { message: null }, message: '{"message":null}' },
+    { detail: { code: "invalid" }, message: '{"code":"invalid"}' },
+    { detail: [{ msg: "Required" }], message: '[{"msg":"Required"}]' },
+    { detail: [], message: "[]" },
+    { detail: 0, message: "0" },
+    { detail: false, message: "false" },
+    { detail: null, message: "Unprocessable Entity" },
+    { detail: undefined, message: "Unprocessable Entity" },
+  ])("preserves upload message and detailData for $detail", async ({ detail, message }) => {
+    const pending = requestFormDataWithUploadProgress("/upload", new FormData(), "token");
+    MockUploadXHR.current.response = { detail };
+    MockUploadXHR.current.loadHandler();
+
+    await expect(pending).rejects.toMatchObject({ name: "ApiError", message, detailData: detail, status: 422 });
+  });
+
+  test.each([null, undefined, "not-json", 0, false, []])("falls back to statusText for response %s", async (response) => {
+    const pending = requestFormDataWithUploadProgress("/upload", new FormData(), "token");
+    MockUploadXHR.current.response = response;
+    MockUploadXHR.current.loadHandler();
+
+    await expect(pending).rejects.toMatchObject({ message: "Unprocessable Entity", detailData: undefined, status: 422 });
+  });
+
+  test("does not swallow serialization errors from an upload detail", () => {
+    void requestFormDataWithUploadProgress("/upload", new FormData(), "token");
+    MockUploadXHR.current.response = { detail: { value: BigInt(1) } };
+
+    expect(() => MockUploadXHR.current.loadHandler()).toThrow(TypeError);
+  });
+});
+
 describe("request empty response precedence", () => {
   afterEach(() => {
     vi.unstubAllGlobals();

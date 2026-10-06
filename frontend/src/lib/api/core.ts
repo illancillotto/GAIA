@@ -166,6 +166,21 @@ export async function requestBlob(path: string, init?: RequestInit): Promise<Blo
   return response.blob();
 }
 
+function formatUploadErrorDetail(detail: unknown): string {
+  if (typeof detail === "string") {
+    return detail;
+  }
+  if (
+    detail !== null &&
+    typeof detail === "object" &&
+    "message" in detail &&
+    typeof detail.message === "string"
+  ) {
+    return detail.message;
+  }
+  return JSON.stringify(detail);
+}
+
 export async function requestFormDataWithUploadProgress<T>(
   path: string,
   formData: FormData,
@@ -198,17 +213,8 @@ export async function requestFormDataWithUploadProgress<T>(
       let detail = "Request failed";
       const detailData: unknown = payload?.detail;
 
-      if (typeof payload?.detail === "string") {
-        detail = payload.detail;
-      } else if (
-        payload?.detail &&
-        typeof payload.detail === "object" &&
-        "message" in payload.detail &&
-        typeof payload.detail.message === "string"
-      ) {
-        detail = payload.detail.message;
-      } else if (payload?.detail != null) {
-        detail = JSON.stringify(payload.detail);
+      if (detailData != null) {
+        detail = formatUploadErrorDetail(detailData);
       } else if (xhr.statusText) {
         detail = xhr.statusText;
       }

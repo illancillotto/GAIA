@@ -3,6 +3,44 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Frontend API — dettaglio errore upload XHR (2026-10-06)
+
+- Slice `IMPROVED`, snapshot `679d02f3`, MPC/MCP escluso. Il formatter
+  `formatUploadErrorDetail` separa la presentazione del dettaglio JSON dal
+  lifecycle XHR. L'handler conserva status HTTP, lettura response, fallback
+  statusText, `detailData` e reject; il formatter non introduce wrapper,
+  fallback nuovi o eccezioni catturate. HTTP fetch non modificato.
+- Contratto invariato per responseType JSON: stringhe incluse quelle vuote,
+  messaggi oggetto stringa, dettagli strutturati/array/falsy, risposta
+  primitiva/null, statusText e default. La serializzazione che fallisce
+  continua a sollevare nell'evento load, non viene convertita in un reject.
+  POST, token, FormData, progress, rete e intervallo status 2xx invariati.
+- Venti caratterizzazioni aggiunte e verdi sul runtime precedente e su
+  quello modificato. Suite mirata 81 PASS; full-file coverage prima
+  119 statement / 99 branch / 17 funzioni, dopo 120 / 99 / 18, tutti 100%.
+  Suite frontend completa: 277 file e 3982 test PASS; sette diagnostiche
+  jsdom di navigazione non implementata, nessuna failure o suppression.
+- Upload cognitive/cyclomatic/LOC/nesting `25/13/50/4 -> 9/8/41/2`;
+  callback load `24/12/26/4 -> 8/7/17/2`; formatter `8/6/14/1`, un parametro,
+  nessuna violation. Aggregati scanner del file cognitive `141 -> 101`,
+  cyclomatic `98 -> 89`, max cognitive `25 -> 18`, LOC `210 -> 215`.
+  Error `2 -> 0`, warning `11 -> 3`, violation `13 -> 3`;
+  resta debito warning in readResponseError/request, non nel formatter.
+- Coverage: `VITEST_COVERAGE_INCLUDE=src/lib/api/core.ts npm run
+  test:coverage -- tests/unit/api-core.test.ts tests/unit/api-request.test.ts`.
+  PASS anche `npm run test:unit`, `npm run typecheck:from-root`, ESLint runtime
+  e test, `git diff --check`. Ratchet full-scan base `6b61fd27`: zero finding
+  sul runtime, 21 globali invariati; questa slice elimina debito legacy,
+  non un finding differenziale. Baseline, soglie ed esclusioni invariati.
+- `make graphify-frontend` PASS: 6551 nodi, 15669 archi, 222 community;
+  HTML saltato per il limite 5000 nodi, JSON e report aggiornati.
+  Evidenze `/tmp/gaia-upload-{before,after}.json`,
+  `/tmp/gaia-upload-characterization.log`, `/tmp/gaia-upload-final-tests.log`,
+  `/tmp/gaia-upload-full-unit.log`, `/tmp/gaia-upload-typecheck.log`,
+  `/tmp/gaia-upload-lint.log`, `/tmp/gaia-upload-full-ratchet.json`,
+  `/tmp/gaia-upload-scoped-ratchet.json`, `/tmp/gaia-upload-graphify.log`.
+  Modifiche concorrenti preservate; stop dopo la slice, deploy non eseguito.
+
 ### Frontend API — decodifica della risposta request (2026-10-06)
 
 - Slice `IMPROVED`, snapshot `7868b734`, fuori dal perimetro MPC/MCP.
