@@ -1,6 +1,20 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-06 — colonne distretto export bulk
+
+- Proiezione distretto/riordino/superficie separata dalla composizione riga;
+  helper4/5/10/0/1 sotto soglia. None esportato vuoto, zero preservato,
+  ordine colonne e doppia lettura guardia/valore invariati, nessun cambio API.
+- Mapper cog/cyc/LOC122/60/74 ->115/56/66; file cognitive326 ->323,
+  cyclomatic239 ->240/callable22 ->23, branching217 invariato, LOC472 ->474.
+  20 violation residue, nessun nuovo debito o trasferimento di violation.
+- 244 test coverage/caratterizzazione/API/facade PASS; full-file exports100%
+  statement219/branch68, zero esclusioni.42 casi persistenti sui campi opzionali
+  e4000 differenziali controb68bb1b0 equivalenti per output/ordine/accessi.
+  Ratchet/Ruff mirato PASS, lint globale UP038 InCass concorrente; Graphify
+  codice/docs aggiornati, baseline/config/scope invariati. Mapper ancora aperto.
+
 ### 2026-10-06 — identita owner export bulk
 
 - Proiezione identita/rank distinta dai dettagli contatto; helper8/9/19/0/3

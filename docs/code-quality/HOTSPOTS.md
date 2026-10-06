@@ -14,6 +14,16 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, colonne distretto export bulk, 2026-10-06:
+`_build_bulk_export_rows` `IMPROVED`, cog/cyc/LOC122/60/74 ->115/56/66,
+nesting3 invariato. Proiezione distretto/riordino/superficie4/5/10/0/1 sotto
+soglia; None/zero e ordine colonne/accessi invariati. File cognitive326 ->323,
+cyclomatic239 ->240/callable22 ->23, branching217 invariato, LOC472 ->474;
+20 violation residue, nessuna nuova violation o trasferimento del debito.
+244 test/full-file100%,4000 differenziali equivalenti; ratchet/Ruff mirato PASS,
+lint globale UP038 InCass concorrente. Mapper115/56 e campagna ancora aperti,
+MCP/Wiki esclusi operativamente, baseline/config/scope invariati.
+
 Campagna non-MCP, identita owner export bulk, 2026-10-06:
 `_build_bulk_export_rows` `IMPROVED`, cog/cyc/LOC145/68/83 ->122/60/74,
 nesting3 invariato. Helper identita/rank8/9/19/0/3 sotto soglia, distinto dai

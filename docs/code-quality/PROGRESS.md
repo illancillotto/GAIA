@@ -3,6 +3,30 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — colonne distretto export bulk (2026-10-06)
+
+- Chiusura `IMPROVED`:244 test coverage/caratterizzazione/API/facade PASS,
+  full-file exports100% statement219/branch68, zero missing/partial/esclusioni.
+  Suite persistente include42 casi per i sette campi opzionali nelle due
+  modalita (None/vuoti/zero/presenti) e ordine colonne.4000 casi differenziali
+  controb68bb1b0 equivalenti per output/ordine/accessi, nessun test indebolito.
+- Ratchet merge-baseb68bb1b0 e Ruff runtime PASS; lint globale compileall PASS,
+  solo UP038 InCass concorrente. Graphify codice e docs Catasto/piattaforma
+  aggiornati prima del commit separato; evidenze /tmp/gaia-export-district-*.
+  Nessuna API remota/PostgreSQL dichiarata, baseline/config/scope invariati.
+  Mapper115/56 resta sopra soglia e campagna globale non completa.
+- Preflight `b68bb1b0`: precedente passaggio progresso committato, runtime
+  Catasto pulito e indice vuoto. Mapper122/60/74/3, file cognitive326/
+  cyclomatic239/LOC472,20 violation/22 callable; goal non-MCP aperto.
+- Isolare la proiezione distretto/riordino/superficie dalla composizione riga,
+  con politica None -> stringa vuota e zero preservato; ordine colonne e
+  doppia lettura guardia/valore invariati. Nessun cambio API/schema/baseline.
+- Misura dopo: target115/56/66/3, helper4/5/10/0/1 sotto soglia. File cognitive
+  326 ->323, cyclomatic239 ->240/callable22 ->23, branching217 invariato,
+  LOC472 ->474/import26 invariati;20 violation residue senza debt transfer.
+  Non dichiarare riduzione del branching. Validare full-file100%, differenziale,
+  ratchet/Ruff/Graphify e commit separato; MCP/Wiki e change concorrenti preservati.
+
 ### Catasto — identita owner export bulk (2026-10-06)
 
 - Chiusura `IMPROVED`: proiezione identita/rank separata dai dettagli contatto;

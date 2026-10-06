@@ -320,6 +320,18 @@ def _bulk_export_owner_details(
     }
 
 
+def _bulk_export_district_columns(match: CatAnagraficaMatch | None) -> dict[str, object]:
+    return {
+        field: getattr(match, field)
+        if match is not None and getattr(match, field) is not None
+        else ""
+        for field in (
+            "num_distretto", "nome_distretto", "riordino_code", "riordino_maglia",
+            "riordino_lotto", "superficie_mq", "superficie_grafica_mq",
+        )
+    }
+
+
 def _build_bulk_export_rows(
     kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"],
     export_results: list[CatAnagraficaBulkSearchRowResult],
@@ -348,15 +360,7 @@ def _build_bulk_export_rows(
                     "sub": match.subalterno if match is not None and match.subalterno is not None else (_result.sub_input or ""),
                 }
             base.update({
-                **{
-                    field: getattr(match, field)
-                    if match is not None and getattr(match, field) is not None
-                    else ""
-                    for field in (
-                        "num_distretto", "nome_distretto", "riordino_code", "riordino_maglia",
-                        "riordino_lotto", "superficie_mq", "superficie_grafica_mq",
-                    )
-                },
+                **_bulk_export_district_columns(match),
                 "esito": _format_esito_for_export(_result.esito),
                 "trovato in esito consorzio": _format_consorzio_esito_for_export(
                     bool(match.presente_in_catasto_consorzio) if match is not None else False
