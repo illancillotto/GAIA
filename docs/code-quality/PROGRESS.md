@@ -15,6 +15,17 @@ blocco verificato e prima di chiudere un goal.
   PASS. Ratchet contro `HEAD` (`f8e0b864`) PASS; MCP/Wiki e file concorrenti
   esclusi.
 
+### Catasto — sincronizzazione terreni live (2026-10-06)
+
+- Slice `IMPROVED`: la sincronizzazione delle frazioni selezionate e la policy
+  di rollback/logging per singola richiesta sono isolate, mantenendo deduplica,
+  dirty flag e gestione degli errori invariati.
+- Metriche `_sync_particella_from_live_terreni` cognitive/cyclomatic/LOC
+  `34/19/95 -> 8/8/54`; helper selezione `5/4/9` e helper richiesta
+  `16/10/23`; LOC file `579 -> 570`, nessuna nuova violation.
+- Suite Catasto e coverage `resolvers.py` 100% (`321/321` statement,
+  `114/114` branch); Ruff, format, ratchet e Graphify PASS. MCP/Wiki esclusi.
+
 ### Catasto — fallback contesto certificato live (2026-10-06)
 
 - Slice `IMPROVED`: il fallback di `_resolve_cert_params` è isolato,

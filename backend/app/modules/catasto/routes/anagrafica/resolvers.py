@@ -441,48 +441,41 @@ class _CapacitasLiveResolver:
             )
             return False
 
+        return await self._sync_selected_live_fractions(p, client, selected_hits)
+
+    async def _sync_selected_live_fractions(self, p, client, selected_hits) -> bool:
         synced_fraction_ids: set[str] = set()
         for hit in selected_hits:
             if hit.frazione_id in synced_fraction_ids:
                 continue
             synced_fraction_ids.add(hit.frazione_id)
-            request = CapacitasTerreniSearchRequest(
-                frazione_id=hit.frazione_id,
-                sezione=p.sezione_catastale or "",
-                foglio=p.foglio,
-                particella=p.particella,
-                sub=p.subalterno or "",
-            )
-            try:
-                await sync_terreni_for_request(
-                    self._db,
-                    client,
-                    request,
-                    fetch_certificati=True,
-                    fetch_details=False,
-                )
-                self.dirty = True
-            except RuntimeError as exc:
-                self._db.rollback()
-                normalized = str(exc).casefold()
-                if not any(token in normalized for token in ("non trov", "nessun", "no result")):
-                    logger.info(
-                        "Capacitas live terreni sync interrotta: particella_id=%s frazione=%s err=%s",
-                        p.id,
-                        hit.frazione_id,
-                        exc,
-                    )
-                    return False
-            except Exception as exc:
-                self._db.rollback()
-                logger.warning(
-                    "Capacitas live terreni sync fallita: particella_id=%s frazione=%s err=%s",
-                    p.id,
-                    hit.frazione_id,
-                    exc,
-                )
+            if not await self._sync_live_fraction(p, client, hit):
                 return False
         return bool(synced_fraction_ids)
+
+    async def _sync_live_fraction(self, p, client, hit) -> bool:
+        request = CapacitasTerreniSearchRequest(
+            frazione_id=hit.frazione_id,
+            sezione=p.sezione_catastale or "",
+            foglio=p.foglio,
+            particella=p.particella,
+            sub=p.subalterno or "",
+        )
+        try:
+            await sync_terreni_for_request(self._db, client, request, fetch_certificati=True, fetch_details=False)
+            self.dirty = True
+        except RuntimeError as exc:
+            self._db.rollback()
+            normalized = str(exc).casefold()
+            if any(token in normalized for token in ("non trov", "nessun", "no result")):
+                return True
+            logger.info("Capacitas live terreni sync interrotta: particella_id=%s frazione=%s err=%s", p.id, hit.frazione_id, exc)
+            return False
+        except Exception as exc:
+            self._db.rollback()
+            logger.warning("Capacitas live terreni sync fallita: particella_id=%s frazione=%s err=%s", p.id, hit.frazione_id, exc)
+            return False
+        return True
 
     async def _hydrate_live_match_from_row(
         self,
