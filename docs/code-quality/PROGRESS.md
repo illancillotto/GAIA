@@ -3,6 +3,20 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — risultati export per comune (2026-10-06)
+
+- Chiusura `IMPROVED`: costruzione risultati GAIA/live estratta in
+  `_build_comune_export_results`; query particelle, ordinamento, rendering,
+  filename, presenza consorzio e payload live restano invariati.
+- Target `download_comune_bulk_export` cognitive/cyclomatic/LOC `19/15/61 ->
+  6/7/26`; helper `10/9/31` sotto soglia. File exports LOC `499 -> 495`,
+  cognitive/cyclomatic `201/203 -> 198/204`, nessuna nuova violation oltre al
+  warning parametri già presente sull’endpoint.
+- Suite Catasto mirata PASS; `exports.py` full-file 100% (`202/202` statement,
+  `52/52` branch), zero esclusioni. Ruff/format e ratchet contro `HEAD`
+  (`cbd9c479`) PASS; Graphify Catasto da eseguire prima del commit. MCP/Wiki
+  esclusi.
+
 ### Catasto — label job export bulk (2026-10-06)
 
 - Chiusura `IMPROVED`: `_bulk_job_row_label` usa `filter(None, parts)` al posto

@@ -509,6 +509,41 @@ async def list_comune_export_options(
     return [CatComuneExportOption(codice=str(code), nome=name or str(code)) for code, name in rows]
 
 
+async def _build_comune_export_results(
+    db: Session,
+    particelle: list[CatParticella],
+    comune: str,
+    source: Literal["gaia", "live"],
+) -> list[CatAnagraficaBulkSearchRowResult]:
+    if source == "live":
+        from app.modules.catasto.routes.anagrafica.execution import execute_bulk_search_payload
+
+        payload = CatAnagraficaBulkSearchRequest(
+            kind="COMUNE_FOGLIO_PARTICELLA_INTESTATARI",
+            include_capacitas_live=True,
+            rows=[CatAnagraficaBulkSearchRow(row_index=index, comune=p.nome_comune or comune, sezione=p.sezione_catastale, foglio=p.foglio, particella=p.particella, sub=p.subalterno) for index, p in enumerate(particelle, start=1)],
+        )
+        return (await execute_bulk_search_payload(payload, db)).results
+
+    present_ids = _load_consorzio_presence_by_particella_ids(db, {p.id for p in particelle})
+    return [
+        CatAnagraficaBulkSearchRowResult(
+            row_index=index,
+            comune_input=p.nome_comune or comune,
+            sezione_input=p.sezione_catastale,
+            foglio_input=p.foglio,
+            particella_input=p.particella,
+            sub_input=p.subalterno,
+            esito="FOUND",
+            message="OK",
+            particella_id=p.id,
+            match=_build_match(db, p, presente_in_catasto_consorzio=p.id in present_ids),
+            matches_count=1,
+        )
+        for index, p in enumerate(particelle, start=1)
+    ]
+
+
 @router.get("/comuni/{comune}/export", response_model=None)
 async def download_comune_bulk_export(
     comune: str,
@@ -528,43 +563,7 @@ async def download_comune_bulk_export(
     particelle = db.execute(query.order_by(CatParticella.foglio, CatParticella.particella, CatParticella.subalterno)).scalars().all()
     if not particelle:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Nessuna particella corrente per il comune")
-    if source == "live":
-        from app.modules.catasto.routes.anagrafica.execution import execute_bulk_search_payload
-
-        payload = CatAnagraficaBulkSearchRequest(
-            kind="COMUNE_FOGLIO_PARTICELLA_INTESTATARI",
-            include_capacitas_live=True,
-            rows=[
-                CatAnagraficaBulkSearchRow(
-                    row_index=index,
-                    comune=p.nome_comune or value,
-                    sezione=p.sezione_catastale,
-                    foglio=p.foglio,
-                    particella=p.particella,
-                    sub=p.subalterno,
-                )
-                for index, p in enumerate(particelle, start=1)
-            ],
-        )
-        results = (await execute_bulk_search_payload(payload, db)).results
-    else:
-        present_ids = _load_consorzio_presence_by_particella_ids(db, {p.id for p in particelle})
-        results = [
-            CatAnagraficaBulkSearchRowResult(
-                row_index=index,
-                comune_input=p.nome_comune or value,
-                sezione_input=p.sezione_catastale,
-                foglio_input=p.foglio,
-                particella_input=p.particella,
-                sub_input=p.subalterno,
-                esito="FOUND",
-                message="OK",
-                particella_id=p.id,
-                match=_build_match(db, p, presente_in_catasto_consorzio=p.id in present_ids),
-                matches_count=1,
-            )
-            for index, p in enumerate(particelle, start=1)
-        ]
+    results = await _build_comune_export_results(db, particelle, value, source)
     rows = _build_bulk_export_rows("COMUNE_FOGLIO_PARTICELLA_INTESTATARI", results)
     _attach_sister_data(db, rows)
     label = (particelle[0].nome_comune or value).strip().lower().replace(" ", "-")
