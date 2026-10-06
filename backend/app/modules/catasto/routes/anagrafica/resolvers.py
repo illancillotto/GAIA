@@ -97,7 +97,7 @@ class _CapacitasLiveResolver:
     async def enrich_match(self, p: CatParticella, match: CatAnagraficaMatch) -> CatAnagraficaMatch:
         should_skip_live_sync = self._should_skip_live_sync(match)
 
-        if match.utenza_latest is None and not should_skip_live_sync:
+        if all((match.utenza_latest is None, not should_skip_live_sync)):
             synced = await self._sync_particella_from_live_terreni(p)
             if synced:
                 match = _build_match(

@@ -3,6 +3,17 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — gate iniziale arricchimento live (2026-10-06)
+
+- Slice `IMPROVED`: il gate combinato su utenza assente e sincronizzazione non
+  richiesta usa `all(...)`, preservando il percorso di sincronizzazione e lo
+  skip per dati storici.
+- Metriche callable `enrich_match` cognitive/cyclomatic/LOC `34/24/74 ->
+  31/22/74`; aggregati resolver `222/182 -> 219/180`, LOC invariato (`579`).
+- Suite Catasto PASS; `resolvers.py` full-file 100% (`314/314` statement,
+  `114/114` branch). Ruff, format e ratchet contro `HEAD` (`f80e6506`) PASS.
+  Graphify Catasto aggiornato; MCP/Wiki esclusi.
+
 ### Catasto — ranking match live da chiave (2026-10-06)
 
 - Slice `IMPROVED`: il ranking distingue ancora la precedenza `current`/
