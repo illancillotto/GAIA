@@ -3,6 +3,29 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — caratterizzazione full-file export bulk (2026-10-06)
+
+- Chiusura `CHARACTERIZED`: 78 test PASS, full-file exports100% statement
+  236/236 e branch80/80, zero missing/partial/esclusioni. Ruff check e format
+  check del nuovo test PASS. Runtime e metriche invariati: nessuna riduzione
+  della complessita dichiarata e nessuna modifica concorrente inclusa.
+- Verifica con test_catasto_anagrafica_coverage.py e
+  test_catasto_bulk_exports_characterization.py, sorgente Coverage directory
+  backend/app/modules/catasto/routes/anagrafica; report JSON e log in
+  /tmp/gaia-bulk-export-characterization-*. Nessun preload runtime.
+- Commit separato di test e registro; Graphify piattaforma aggiornato.
+  Prossima unita candidata: mapping colonne base di _build_bulk_export_rows,
+  preservando ordine colonne e fallback. Campagna complessita non completa.
+- Preflight `2ffd423d`: sola caratterizzazione runtime invariato exports.py,
+  _build_bulk_export_rows281/135/114/3; file24 violation/21 callable.
+  Coverage directory full-file67.405%, statement162/236, branch51/80.
+- Coprire mapper owner/URL/rank, lookup/live retry ed errori, selezione SISTER
+  latest, opzioni/download gaia/live e renderer; usare recording session e
+  modelli schema reali, nessuna prova PostgreSQL o API remota dichiarata.
+- Nuovo test dedicato, conservare suite esistente; verificare statement/branch
+  completi con sorgente directory senza preload runtime, zero esclusioni.
+  Nessun cambio gate/config/scope/baseline/MCP o refactoring in questo passaggio.
+
 ### Catasto — diagnosi sorgente Coverage export bulk (2026-10-06)
 
 - Audit precedente `59ef6d0f` produce progresso: failure spiegata, runtime
