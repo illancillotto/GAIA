@@ -495,7 +495,7 @@ class _CapacitasLiveResolver:
         cert_pvc = _normalize_pvc(row.pvc)
         cert_fra = _normalize_fra(row.fra)
         cert_ccs = _normalize_ccs(row.ccs)
-        if not cco or not cert_com or not cert_pvc or cert_fra is None:
+        if not all((cco, cert_com, cert_pvc, cert_fra is not None)):
             return match
 
         match.cert_com = cert_com

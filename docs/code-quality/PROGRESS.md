@@ -3,6 +3,19 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — idratazione match live (2026-10-06)
+
+- Slice `IMPROVED`: la validazione del contesto certificato in
+  `_hydrate_live_match_from_row` usa un predicato aggregato; `cert_fra=None`
+  resta distinto dal valore vuoto valido e non cambia fetch, fallback o payload.
+- Metriche callable cognitive/cyclomatic/LOC `23/20/38 -> 18/16/38`;
+  il file scende `262/197 -> 257/193` (sum cognitive/cyclomatic), senza
+  spostamento di violation.
+- Aggiunta caratterizzazione per ciascun campo di contesto mancante; suite
+  Catasto PASS e `resolvers.py` full-file 100% (`309/309` statement,
+  `114/114` branch). Ruff, format e ratchet contro `HEAD` (`117b262a`) PASS.
+  Graphify Catasto aggiornato; MCP/Wiki esclusi.
+
 ### Catasto — contesto certificato particella (2026-10-06)
 
 - Slice `IMPROVED`: `_CapacitasLiveResolver._resolve_cert_params` usa un

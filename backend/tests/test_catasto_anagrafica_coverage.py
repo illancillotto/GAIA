@@ -1243,6 +1243,27 @@ def test_live_sync_failure_and_success_variants(monkeypatch: pytest.MonkeyPatch)
     asyncio.run(exercise())
 
 
+@pytest.mark.parametrize("missing_field", ["CCO", "COM", "PVC", "FRA"])
+def test_live_hydration_rejects_incomplete_context(
+    monkeypatch: pytest.MonkeyPatch, missing_field: str
+) -> None:
+    async def exercise() -> None:
+        resolver = resolvers._CapacitasLiveResolver(_DB())
+        match = _match()
+        original = match.model_dump()
+        values = {"CCO": "1", "COM": "1", "PVC": "2", "FRA": "3"}
+        values.pop(missing_field)
+
+        async def unexpected_fetch(*args: object) -> None:
+            pytest.fail("An incomplete context must not fetch a certificate")
+
+        monkeypatch.setattr(resolver, "_fetch_certificato", unexpected_fetch)
+        assert await resolver._hydrate_live_match_from_row(match, _row(**values)) is match
+        assert match.model_dump() == original
+
+    asyncio.run(exercise())
+
+
 def test_live_hydration_fetch_and_client_failures(monkeypatch: pytest.MonkeyPatch) -> None:
     async def exercise() -> None:
         resolver = resolvers._CapacitasLiveResolver(_DB())
