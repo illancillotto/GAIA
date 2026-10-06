@@ -264,17 +264,17 @@ def _occupancy_rank(occupancy: CatConsorzioOccupancy | None) -> tuple[int, str, 
 
 def _build_summary(results: list[CatAnagraficaBulkSearchRowResult]) -> dict[str, int]:
     s = {"total": len(results), "found": 0, "notFound": 0, "multiple": 0, "invalid": 0, "error": 0}
+    counters = {
+        "FOUND": "found",
+        "NOT_FOUND": "notFound",
+        "MULTIPLE_MATCHES": "multiple",
+        "INVALID_ROW": "invalid",
+        "ERROR": "error",
+    }
     for r in results:
-        if r.esito == "FOUND":
-            s["found"] += 1
-        elif r.esito == "NOT_FOUND":
-            s["notFound"] += 1
-        elif r.esito == "MULTIPLE_MATCHES":
-            s["multiple"] += 1
-        elif r.esito == "INVALID_ROW":
-            s["invalid"] += 1
-        elif r.esito == "ERROR":
-            s["error"] += 1
+        counter = counters.get(r.esito)
+        if counter is not None:
+            s[counter] += 1
     return s
 
 

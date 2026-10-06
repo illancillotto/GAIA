@@ -3,6 +3,18 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — riepilogo risultati bulk (2026-10-06)
+
+- Chiusura `IMPROVED`: `_build_summary` usa una mappa esplicita degli esiti e
+  incrementa solo i contatori conosciuti; totale, denominatori e ignoramento
+  degli esiti sconosciuti restano invariati.
+- Target cognitive/cyclomatic/nesting `21/7/6 -> 3/3/2`, LOC invariato; file
+  normalization cognitive sum `80` dopo la slice, zero violation. Suite Catasto
+  completa PASS; `normalization.py` full-file 100% (`151/151` statement,
+  `50/50` branch), zero esclusioni.
+- Ruff/format e ratchet contro `HEAD` (`efa16799`) PASS; Graphify Catasto da
+  aggiornare prima del commit. MCP/Wiki esclusi.
+
 ### Catasto — inferenza tipo payload bulk (2026-10-06)
 
 - Chiusura `IMPROVED`: dopo il controllo del `kind` esplicito, ogni payload con
