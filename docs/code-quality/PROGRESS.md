@@ -3,6 +3,17 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — dettaglio intestatario live (2026-10-06)
+
+- Slice `IMPROVED`: `_resolve_intestatario` delega il recupero/cache del
+  dettaglio a `_fetch_intestatario_detail`, mantenendo lookup locale, cache,
+  client disabilitato, logging degli errori e upsert invariati.
+- Metriche callable cognitive/cyclomatic/LOC `19/9/22 -> 1/2/6`, con helper
+  `6/6/16`; aggregati file `257/193 -> 245/192`, LOC invariato a `581`.
+- Suite Catasto PASS; `resolvers.py` full-file 100% (`312/312` statement,
+  `114/114` branch). Ruff, format e ratchet contro `HEAD` (`861ebe2f`) PASS.
+  Graphify Catasto aggiornato; MCP/Wiki esclusi.
+
 ### Catasto — idratazione match live (2026-10-06)
 
 - Slice `IMPROVED`: la validazione del contesto certificato in

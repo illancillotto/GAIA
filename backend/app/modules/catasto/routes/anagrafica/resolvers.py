@@ -612,22 +612,22 @@ class _CapacitasLiveResolver:
         if local is not None:
             return local
 
-        detail: CapacitasAnagraficaDetail | None = None
-        if intestatario.idxana and intestatario.idxesa:
-            cache_key = (intestatario.idxana, intestatario.idxesa)
-            detail = self._detail_cache.get(cache_key)
-            if detail is None:
-                client = await self._ensure_client()
-                if client is not None:
-                    try:
-                        detail = await client.fetch_current_anagrafica_detail(idxana=intestatario.idxana, idxesa=intestatario.idxesa)
-                        self._detail_cache[cache_key] = detail
-                    except Exception as exc:
-                        logger.warning(
-                            "Capacitas live dettaglio anagrafica fallito: idxana=%s idxesa=%s err=%s",
-                            intestatario.idxana,
-                            intestatario.idxesa,
-                            exc,
-                        )
-
+        detail = await self._fetch_intestatario_detail(intestatario)
         return self._upsert_live_intestatario(intestatario, detail)
+
+    async def _fetch_intestatario_detail(
+        self, intestatario: CapacitasIntestatario
+    ) -> CapacitasAnagraficaDetail | None:
+        if not all((intestatario.idxana, intestatario.idxesa)):
+            return None
+        if (cached := self._detail_cache.get((intestatario.idxana, intestatario.idxesa))) is not None:
+            return cached
+        if (client := await self._ensure_client()) is None:
+            return None
+        try:
+            detail = await client.fetch_current_anagrafica_detail(idxana=intestatario.idxana, idxesa=intestatario.idxesa)
+        except Exception as exc:
+            logger.warning("Capacitas live dettaglio anagrafica fallito: idxana=%s idxesa=%s err=%s", intestatario.idxana, intestatario.idxesa, exc)
+            return None
+        self._detail_cache[(intestatario.idxana, intestatario.idxesa)] = detail
+        return detail
