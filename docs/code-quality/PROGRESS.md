@@ -15,6 +15,17 @@ blocco verificato e prima di chiudere un goal.
   PASS. Ratchet contro `HEAD` (`f8e0b864`) PASS; MCP/Wiki e file concorrenti
   esclusi.
 
+### Catasto — refresh match senza unità (2026-10-06)
+
+- Slice `IMPROVED`: il ramo di refresh per match privi di unità è isolato in
+  un helper dedicato, mantenendo lookup, contesto certificato, stato e flag di
+  presenza invariati.
+- Metriche aggregate del refresh `119/67 -> 82/48` cognitive/cyclomatic;
+  il file `matching.py` scende da `712` a `710` LOC senza nuove violation.
+- Suite Catasto e coverage `matching.py` 100% (`262/262` statement, `102/102`
+  branch); Ruff, format, ratchet contro `HEAD` (`4e89db98`) e Graphify PASS.
+  MCP/Wiki e file concorrenti esclusi.
+
 ### Catasto — contesto storico nell’arricchimento authoritative (2026-10-06)
 
 - Slice `IMPROVED`: il recupero del contesto certificato storico è isolato in

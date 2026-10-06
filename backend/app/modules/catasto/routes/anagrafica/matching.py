@@ -587,6 +587,76 @@ def _load_intestatari_by_particella_ids(
     return dict(items)
 
 
+def _refresh_match_without_unit(
+    db: Session,
+    match: CatAnagraficaMatch,
+    intestatari_by_particella: dict[UUID, list[CatIntestatarioResponse]],
+    consorzio_unit_ids: set[UUID],
+    particelle_con_utenza: set[UUID],
+    live_authoritative: bool,
+) -> CatAnagraficaMatch:
+    intestatari = intestatari_by_particella.get(match.particella_id)
+    match.intestatari = {True: intestatari, False: match.intestatari}[bool(intestatari)]
+    particella = db.get(CatParticella, match.particella_id)
+    if particella is not None:
+        latest_utenza = db.execute(
+            select(CatUtenzaIrrigua)
+            .where(CatUtenzaIrrigua.particella_id == match.particella_id)
+            .order_by(desc(CatUtenzaIrrigua.anno_campagna))
+            .limit(1)
+        ).scalars().first()
+        latest_occupancy = db.execute(
+            select(CatConsorzioOccupancy)
+            .join(CatConsorzioUnit, CatConsorzioUnit.id == CatConsorzioOccupancy.unit_id)
+            .where(_particella_unit_match_clause(particella), CatConsorzioOccupancy.cco.is_not(None))
+            .order_by(
+                desc(CatConsorzioOccupancy.is_current),
+                desc(CatConsorzioOccupancy.valid_from),
+                desc(CatConsorzioOccupancy.updated_at),
+            )
+            .limit(1)
+        ).scalars().first()
+        cco = next(
+            filter(
+                None,
+                (
+                    getattr(latest_utenza, "cco", None),
+                    getattr(latest_occupancy, "cco", None),
+                    getattr(match.utenza_latest, "cco", None),
+                ),
+            ),
+            None,
+        )
+        cert_com, cert_pvc, cert_fra, cert_ccs = _resolve_particella_cert_context(
+            db,
+            particella,
+            cco,
+            latest_utenza,
+            latest_occupancy,
+        )
+        match.cert_com, match.cert_pvc, match.cert_fra, match.cert_ccs = cert_com, cert_pvc, cert_fra, cert_ccs
+        match.stato_ruolo, match.stato_cnc = (
+            (None, None)
+            if live_authoritative
+            else _load_cert_status_from_context(
+                db,
+                cco=cco if all(filter(None, (cert_com, cert_pvc, cert_fra))) else None,
+                com=cert_com,
+                pvc=cert_pvc,
+                fra=cert_fra,
+                ccs=cert_ccs,
+            )
+        )
+        refreshed_utenza = _utenza_summary_from_record(latest_utenza) or _utenza_summary_from_occupancy(latest_occupancy)
+        match.utenza_latest = {True: refreshed_utenza, False: match.utenza_latest}[bool(refreshed_utenza)]
+    match.presente_in_catasto_consorzio = (
+        match.particella_id in consorzio_unit_ids
+        or match.particella_id in particelle_con_utenza
+        or bool(match.intestatari)
+    )
+    return match
+
+
 def _refresh_saved_particelle_matches(
     db: Session,
     results: list[CatAnagraficaBulkSearchRowResult],
@@ -671,77 +741,14 @@ def _refresh_saved_particelle_matches(
             match.cert_ccs = cert_ccs
             match.presente_in_catasto_consorzio = True
             return match
-        intestatari = intestatari_by_particella.get(match.particella_id)
-        if intestatari:
-            match.intestatari = intestatari
-        pid = match.particella_id
-        particella = db.get(CatParticella, pid)
-        if particella is not None:
-            latest_utenza = (
-                db.execute(
-                    select(CatUtenzaIrrigua)
-                    .where(CatUtenzaIrrigua.particella_id == pid)
-                    .order_by(desc(CatUtenzaIrrigua.anno_campagna))
-                    .limit(1)
-                )
-                .scalars()
-                .first()
-            )
-            latest_occupancy = (
-                db.execute(
-                    select(CatConsorzioOccupancy)
-                    .join(CatConsorzioUnit, CatConsorzioUnit.id == CatConsorzioOccupancy.unit_id)
-                    .where(
-                        _particella_unit_match_clause(particella),
-                        CatConsorzioOccupancy.cco.is_not(None),
-                    )
-                    .order_by(
-                        desc(CatConsorzioOccupancy.is_current),
-                        desc(CatConsorzioOccupancy.valid_from),
-                        desc(CatConsorzioOccupancy.updated_at),
-                    )
-                    .limit(1)
-                )
-                .scalars()
-                .first()
-            )
-            cco = (
-                (latest_utenza.cco if latest_utenza is not None else None)
-                or (latest_occupancy.cco if latest_occupancy is not None else None)
-                or (match.utenza_latest.cco if match.utenza_latest is not None else None)
-            )
-            cert_com, cert_pvc, cert_fra, cert_ccs = _resolve_particella_cert_context(
-                db,
-                particella,
-                cco,
-                latest_utenza,
-                latest_occupancy,
-            )
-            match.cert_com = cert_com
-            match.cert_pvc = cert_pvc
-            match.cert_fra = cert_fra
-            match.cert_ccs = cert_ccs
-            match.stato_ruolo, match.stato_cnc = (
-                (None, None)
-                if live_authoritative
-                else _load_cert_status_from_context(
-                    db,
-                    cco=cco if all([cert_com, cert_pvc, cert_fra]) else None,
-                    com=cert_com,
-                    pvc=cert_pvc,
-                    fra=cert_fra,
-                    ccs=cert_ccs,
-                )
-            )
-            refreshed_utenza = _utenza_summary_from_record(latest_utenza) or _utenza_summary_from_occupancy(latest_occupancy)
-            if refreshed_utenza is not None:
-                match.utenza_latest = refreshed_utenza
-        match.presente_in_catasto_consorzio = (
-            pid in consorzio_unit_ids
-            or pid in particelle_con_utenza
-            or bool(match.intestatari)
+        return _refresh_match_without_unit(
+            db,
+            match,
+            intestatari_by_particella,
+            consorzio_unit_ids,
+            particelle_con_utenza,
+            live_authoritative,
         )
-        return match
 
     for row in results:
         if row.match is not None:
