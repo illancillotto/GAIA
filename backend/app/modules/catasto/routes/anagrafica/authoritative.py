@@ -45,13 +45,7 @@ class _CapacitasAuthoritativeResolver(_CapacitasLiveResolver):
 
     async def enrich_match(self, p, match: CatAnagraficaMatch) -> CatAnagraficaMatch:
         original_match = match.model_copy(deep=True)
-        historical_sub_note = (original_match.note or "").strip().casefold()
-        if match.unit_id is not None and historical_sub_note.startswith("presenti dati non aggiornati/storici del sub:"):
-            occupancy = _best_occupancy_for_unit(self._db, match.unit_id)
-            cert_context = _context_from_occupancy(occupancy)
-            if occupancy is not None and not occupancy.is_current and occupancy.cco and all(cert_context[:3]):
-                match.utenza_latest = _utenza_summary_from_occupancy(occupancy)
-                match.cert_com, match.cert_pvc, match.cert_fra, match.cert_ccs = cert_context
+        self._restore_historical_cert_context(match)
         # Strip any DB-cached owners/status before handing off to the live path.
         # The only valid output is: ricerca terreni → cert context → certificato.
         # If the live path cannot complete that chain, sanitize() will blank the match.
@@ -63,6 +57,16 @@ class _CapacitasAuthoritativeResolver(_CapacitasLiveResolver):
         if self._disabled and _has_rpt_certificato_context(original_match):
             return original_match
         return sanitized
+
+    def _restore_historical_cert_context(self, match: CatAnagraficaMatch) -> None:
+        historical_sub_note = (match.note or "").strip().casefold()
+        if not all((match.unit_id is not None, historical_sub_note.startswith("presenti dati non aggiornati/storici del sub:"))):
+            return
+        occupancy = _best_occupancy_for_unit(self._db, match.unit_id)
+        cert_context = _context_from_occupancy(occupancy)
+        if occupancy is not None and not occupancy.is_current and all((occupancy.cco, *cert_context[:3])):
+            match.utenza_latest = _utenza_summary_from_occupancy(occupancy)
+            match.cert_com, match.cert_pvc, match.cert_fra, match.cert_ccs = cert_context
 
     async def find_live_only_matches(
         self,

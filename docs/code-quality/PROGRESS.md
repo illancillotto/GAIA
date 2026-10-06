@@ -3,6 +3,18 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — contesto storico nell’arricchimento authoritative (2026-10-06)
+
+- Slice `IMPROVED`: il recupero del contesto certificato storico è isolato in
+  una responsabilità locale, mantenendo short-circuit, precedenza e dati
+  restituiti dal resolver authoritative.
+- Metriche `enrich_match` cognitive/cyclomatic/LOC `18/14/17 -> 4/4/11`;
+  aggregati `authoritative.py` `70/61 -> 64/59`, con helper caratterizzato
+  `8/8/9` e nessun debito trasferito.
+- Suite Catasto e coverage full-file 100%; Ruff, format, ratchet contro
+  `HEAD` (`ada389f8`) e Graphify Catasto aggiornati. MCP/Wiki e file
+  concorrenti esclusi.
+
 ### Catasto — lookup intestatario locale (2026-10-06)
 
 - Slice `IMPROVED`: la validazione finale richiede ora la presenza simultanea

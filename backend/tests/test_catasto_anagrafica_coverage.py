@@ -43,6 +43,52 @@ from app.schemas.catasto_phase1 import (
 
 
 @pytest.mark.parametrize(
+    ("has_unit", "note", "occupancy", "context", "restored"),
+    [
+        (False, "Presenti dati non aggiornati/storici del sub:", None, ("1", "2", "3", None), False),
+        (True, None, None, ("1", "2", "3", None), False),
+        (True, "current", None, ("1", "2", "3", None), False),
+        (True, "Presenti dati non aggiornati/storici del sub:", None, ("1", "2", "3", None), False),
+        (True, "Presenti dati non aggiornati/storici del sub:", SimpleNamespace(is_current=True), ("1", "2", "3", None), False),
+        (True, "Presenti dati non aggiornati/storici del sub:", SimpleNamespace(is_current=False, cco=""), ("1", "2", "3", None), False),
+        (True, "Presenti dati non aggiornati/storici del sub:", SimpleNamespace(is_current=False, cco="1"), (None, "2", "3", None), False),
+        (True, "Presenti dati non aggiornati/storici del sub:", SimpleNamespace(is_current=False, cco="1"), ("1", None, "3", None), False),
+        (True, "Presenti dati non aggiornati/storici del sub:", SimpleNamespace(is_current=False, cco="1"), ("1", "2", None, None), False),
+        (True, "  PRESENTI DATI NON AGGIORNATI/STORICI DEL SUB: old  ", SimpleNamespace(is_current=False, cco="1"), ("1", "2", "3", None), True),
+    ],
+)
+def test_authoritative_historical_context_eligibility(
+    monkeypatch: pytest.MonkeyPatch,
+    has_unit: bool,
+    note: str | None,
+    occupancy: object,
+    context: tuple[str | None, ...],
+    restored: bool,
+) -> None:
+    target = _match(unit_id=uuid4() if has_unit else None)
+    target.note = note
+    original_context = (target.cert_com, target.cert_pvc, target.cert_fra, target.cert_ccs)
+    original_summary = target.utenza_latest
+    summary = CatAnagraficaUtenzaSummary(id=uuid4(), cco="1")
+    lookup = MagicMock(return_value=occupancy)
+    summarize = MagicMock(return_value=summary)
+    monkeypatch.setattr(authoritative, "_best_occupancy_for_unit", lookup)
+    monkeypatch.setattr(authoritative, "_context_from_occupancy", lambda value: context)
+    monkeypatch.setattr(authoritative, "_utenza_summary_from_occupancy", summarize)
+
+    authoritative._CapacitasAuthoritativeResolver(_DB())._restore_historical_cert_context(target)
+
+    assert (target.cert_com, target.cert_pvc, target.cert_fra, target.cert_ccs) == (
+        context if restored else original_context
+    )
+    assert target.utenza_latest is (summary if restored else original_summary)
+    assert summarize.call_count == int(restored)
+    assert lookup.call_count == int(
+        has_unit and (note or "").strip().casefold().startswith("presenti dati non aggiornati/storici del sub:")
+    )
+
+
+@pytest.mark.parametrize(
     ("value", "expected"),
     [(None, None), (3, 3), ("", None), (" 7 ", 7), ("x", None)],
 )
