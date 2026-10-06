@@ -3,6 +3,18 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — costruzione match live (2026-10-06)
+
+- Slice `IMPROVED`: la risoluzione del comune associato al match live è isolata
+  in `_resolve_live_comune`; precedenza particella/unità/codici Capacitas e
+  mapping del payload restano invariati.
+- Metriche `_build_live_only_match_from_row` cognitive/cyclomatic/LOC
+  `67/49/104 -> 45/39/92`; helper `7/7/10`; aggregati file `239/187 ->
+  224/184`, LOC `581 -> 579`.
+- Suite Catasto PASS; `resolvers.py` full-file 100% (`314/314` statement,
+  `114/114` branch). Ruff, format e ratchet contro `HEAD` (`7260d766`) PASS.
+  Graphify Catasto aggiornato; MCP/Wiki esclusi.
+
 ### Catasto — sincronizzazione particella live (2026-10-06)
 
 - Slice `IMPROVED`: i predicati di contesto e di errore usano aggregatori

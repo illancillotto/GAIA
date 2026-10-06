@@ -286,19 +286,7 @@ class _CapacitasLiveResolver:
         unit_id = getattr(row, "unit_id", None)
         unit = self._db.get(CatConsorzioUnit, unit_id) if unit_id else None
         particella_record = self._db.get(CatParticella, unit.particella_id) if unit and unit.particella_id else None
-        comune_record: CatComune | None = None
-        if particella_record is not None and particella_record.comune_id is not None:
-            comune_record = self._db.get(CatComune, particella_record.comune_id)
-        elif unit is not None and unit.comune_id is not None:
-            comune_record = self._db.get(CatComune, unit.comune_id)
-        elif row.com and row.com.isdigit():
-            comune_record = self._db.execute(
-                select(CatComune).where(CatComune.cod_comune_capacitas == int(row.com)).limit(1)
-            ).scalars().first()
-        elif row.belfiore:
-            comune_record = self._db.execute(
-                select(CatComune).where(CatComune.codice_catastale == row.belfiore).limit(1)
-            ).scalars().first()
+        comune_record = self._resolve_live_comune(row, unit, particella_record)
 
         superficie_mq = getattr(row, "superficie_mq", None)
         if superficie_mq is None and getattr(row, "superficie", None) is not None:
@@ -383,6 +371,17 @@ class _CapacitasLiveResolver:
             anomalie_top=[],
             note=note,
         )
+
+    def _resolve_live_comune(self, row, unit, particella_record) -> CatComune | None:
+        if getattr(particella_record, "comune_id", None) is not None:
+            return self._db.get(CatComune, particella_record.comune_id)
+        if getattr(unit, "comune_id", None) is not None:
+            return self._db.get(CatComune, unit.comune_id)
+        if row.com and row.com.isdigit():
+            return self._db.scalar(select(CatComune).where(CatComune.cod_comune_capacitas == int(row.com)).limit(1))
+        if row.belfiore:
+            return self._db.scalar(select(CatComune).where(CatComune.codice_catastale == row.belfiore).limit(1))
+        return None
 
     async def _sync_particella_from_live_terreni(self, p: CatParticella) -> bool:
         if p.id in self._sync_attempted_particelle:
