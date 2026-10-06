@@ -3,6 +3,27 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Presenze — persistenza riepiloghi importazione (2026-10-06)
+
+- Slice `IMPROVED`, snapshot `b14c0842`, MPC/MCP escluso. La cancellazione e
+  ricostruzione di `PresenzeEventSummary` passa a `_replace_event_summaries`;
+  parsing, date, durate, ownership, `source_job_id` e ordine delle operazioni
+  restano identici. Il percorso giornaliero, punch, profilo contrattuale e
+  contatori del job non sono stati modificati.
+- `import_collaborator_payload` cognitive/cyclomatic/LOC `28/16/126 -> 22/12/96`;
+  helper `6/5/37`, quattro parametri e sotto soglia. Nessuna nuova violation
+  e nessun debito trasferito al callable principale.
+- Suite mirata import/schedule/meal-voucher PASS; coverage full-file
+  `import_jobs.py`: 127 statement e 18 branch al 100%. Ruff check,
+  lint-backend con interpreter backend e diff-check PASS; warning JWT di test
+  preesistenti.
+- Ratchet full-scan contro merge-base `6b61fd27`: `11 -> 10` finding, zero nel
+  file Presenze modificato. Baseline, soglie ed esclusioni invariati.
+  Graphify Presenze aggiornato: 1395 nodi / 4251 archi / 55 community.
+  Evidenze `/tmp/gaia-import-{before,after}.json`,
+  `/tmp/gaia-import-{tests,coverage,lint,ratchet,graphify}.log/json`.
+  Modifiche concorrenti preservate; deploy non eseguito.
+
 ### Backend GIS — sync utenti QGIS nei servizi permessi (2026-10-06)
 
 - Slice `IMPROVED`, snapshot `a1d97395`, MPC/MCP escluso. I servizi GIS di

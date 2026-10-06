@@ -184,6 +184,32 @@ def import_collaborator_payload(
                 )
             )
 
+    _replace_event_summaries(db, collaborator, job, payload)
+
+    # Senza assegnazione di orario il profilo resterebbe vuoto e il collaboratore
+    # verrebbe valutato con le regole non operaio: lo si deduce dai codici importati.
+    profile = resolve_contract_profile(
+        collaborator.contract_kind,
+        collaborator.standard_daily_minutes,
+        schedule_codes=imported_schedule_codes,
+    )
+    collaborator.contract_kind = profile.contract_kind
+    collaborator.standard_daily_minutes = profile.standard_daily_minutes
+    db.add(collaborator)
+
+    job.records_imported += imported_count
+    job.records_skipped += skipped_count
+    job.records_errors += error_count
+    db.add(job)
+    return imported_count, skipped_count, error_count
+
+
+def _replace_event_summaries(
+    db: Session,
+    collaborator: PresenzeCollaborator,
+    job: PresenzeImportJob,
+    payload: ParsedCollaboratorPayload,
+) -> None:
     db.query(PresenzeEventSummary).filter(
         PresenzeEventSummary.collaborator_id == collaborator.id,
         PresenzeEventSummary.period_start == payload.period_start,
@@ -215,23 +241,6 @@ def import_collaborator_payload(
                 source_job_id=job.id,
             )
         )
-
-    # Senza assegnazione di orario il profilo resterebbe vuoto e il collaboratore
-    # verrebbe valutato con le regole non operaio: lo si deduce dai codici importati.
-    profile = resolve_contract_profile(
-        collaborator.contract_kind,
-        collaborator.standard_daily_minutes,
-        schedule_codes=imported_schedule_codes,
-    )
-    collaborator.contract_kind = profile.contract_kind
-    collaborator.standard_daily_minutes = profile.standard_daily_minutes
-    db.add(collaborator)
-
-    job.records_imported += imported_count
-    job.records_skipped += skipped_count
-    job.records_errors += error_count
-    db.add(job)
-    return imported_count, skipped_count, error_count
 
 
 def finalize_import_job(
