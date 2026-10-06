@@ -3,6 +3,17 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — filtro righe live per frazione (2026-10-06)
+
+- Slice `IMPROVED`: il filtro di `_search_live_rows_for_fraction` aggrega i
+  tre criteri di identità della particella, mantenendo normalizzazione,
+  gestione del subalterno vuoto e righe restituite invariati.
+- Metriche callable cognitive/cyclomatic/LOC `18/19/27 -> 15/16/31`;
+  aggregati `exports.py` `198/204 -> 195/201`, senza nuove violation.
+- Suite Catasto PASS; `exports.py` full-file 100% (`202/202` statement,
+  `52/52` branch). Ruff, format e ratchet contro `HEAD` (`7d67fadc`) PASS.
+  Graphify Catasto aggiornato; MCP/Wiki esclusi.
+
 ### Catasto — costruzione match live (2026-10-06)
 
 - Slice `IMPROVED`: la risoluzione del comune associato al match live è isolata

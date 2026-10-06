@@ -216,9 +216,13 @@ async def _search_live_rows_for_fraction(
     return [
         row
         for row in rows
-        if (row.foglio or "").strip() == normalized_foglio
-        and (row.particella or "").strip() == normalized_particella
-        and (not normalized_sub or (row.sub or "").strip() == normalized_sub)
+        if all(
+            (
+                (row.foglio or "").strip() == normalized_foglio,
+                (row.particella or "").strip() == normalized_particella,
+                not normalized_sub or (row.sub or "").strip() == normalized_sub,
+            )
+        )
     ]
 
 
