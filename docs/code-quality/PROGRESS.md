@@ -3,6 +3,36 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — chiave particella per export SISTER (2026-10-06)
+
+- Chiusura `IMPROVED`: chiave condivisa owner/history, nessuna duplicazione
+  delle guardie e helper sotto soglia5/6/5/0/1 (cog/cyc/LOC/nesting/parametri).
+  Target57/37/64/3 ->33/21/54/3; file cognitive410 ->391, cyclomatic274 ->264,
+  LOC513 ->508, callable21 ->22, import25 invariati.24 violation residue,
+  nessuna nuova violation o debt transfer; mapper bulk163/74 invariato.
+- 625 combinazioni persistenti su modelli ORM reali coprono None, vuoti, zero,
+  strip e casefold Unicode, distinti per comune e coordinate.216 test
+  coverage/caratterizzazione/API/facade PASS; full-file exports100% statement
+  240/240 e branch80/80, zero missing/partial/esclusioni.1200 casi differenziali
+  contro21b9dded equivalenti per output/ordine chiavi, SQL e accessi particella.
+- Ratchet merge-base21b9dded e Ruff runtime/test/format test PASS; lint globale
+  compileall PASS, solo UP038 InCass concorrente1041. Graphify codice e docs
+  Catasto/piattaforma aggiornati prima del commit separato autorizzato.
+  Evidenze prima /tmp/gaia-export-status-before.*, dopo /tmp/gaia-export-key-*.
+  Nessun test PostgreSQL/API remota dichiarato, baseline/config/scope invariati;
+  campagna non-MCP non completa, residuo SISTER33/21 e altri hotspot restano.
+- Preflight `21b9dded`: ultimo passaggio progresso committato, runtime/test
+  Catasto puliti. Una sola nuova unita: _attach_sister_data57/37/64/3;
+  exports file cognitive410/cyclomatic274/LOC513,24 violation/21 callable.
+  Mapper bulk163/74 ancora sopra soglia, non dichiarato completato.
+- Deduplicare la chiave particella delle due scansioni owner/storico SISTER,
+  con helper tipizzato sotto soglia e normalizzazione ordinata. Comune ha
+  casefold, altri campi soltanto strip; None/valori vuoti e ordine accessi
+  identici, query/latest extraction/JSON e chiave row (str) non modificati.
+- Test caratterizzazione full-file100%, differenziale sul join owner/history,
+  metriche aggregate/ratchet/Ruff/Graphify e commit separato; MCP/Wiki fuori
+  scope operativo, baseline/config/schema/API e change concorrenti invariati.
+
 ### Catasto — mapping intestatario export bulk (2026-10-06)
 
 - Chiusura `IMPROVED`: proiezione inline dei gruppi identita/contatti con

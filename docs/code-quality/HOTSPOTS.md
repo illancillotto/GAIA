@@ -14,6 +14,15 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, chiave particella export SISTER, 2026-10-06:
+`_attach_sister_data` `IMPROVED`, cog/cyc/LOC57/37/64 ->33/21/54,
+nesting3 invariato. Helper chiave5/6/5/0/1 sotto soglia, condiviso fra owner e
+history con ordine accessi/strip/casefold invariati; nessun debt transfer.
+File cognitive410 ->391, cyclomatic274 ->264, LOC513 ->508, callable21 ->22;
+24 violation residue.216 test/full-file100%,625 combinazioni chiave persistenti,
+1200 casi differenziali equivalenti. Ratchet/Ruff mirato PASS, lint globale
+UP038 InCass concorrente; mapper bulk163/74 resta, MCP/Wiki fuori scope operativo.
+
 Campagna non-MCP, mapping intestatario export Catasto, 2026-10-06:
 `_build_bulk_export_rows` `IMPROVED`, cog/cyc/LOC190/86/100 ->163/74/91,
 nesting3 invariato. Normalizzazione identita/contatti e default vuoti condivisi,

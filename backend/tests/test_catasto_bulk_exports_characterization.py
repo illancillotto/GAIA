@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import date
+from itertools import product
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import UUID
@@ -301,6 +302,20 @@ def test_live_retry_clears_section_and_collect_skips_failure(monkeypatch):
         )
     )
     assert len(hits) == 1 and hits[0].row is row and hits[0].frazione_id == "1"
+
+
+def test_sister_parcel_key_normalization_matches_legacy():
+    values = (None, "", "0", " Comune ", " Straße ")
+    for comune, foglio, particella, subalterno in product(values, repeat=4):
+        model = exports.CatastoSisterParcel(
+            comune_nome=comune, foglio=foglio, particella=particella, subalterno=subalterno
+        )
+        assert exports._sister_export_parcel_key(model) == (
+            (comune or "").strip().casefold(),
+            (foglio or "").strip(),
+            (particella or "").strip(),
+            (subalterno or "").strip(),
+        )
 
 
 def test_sister_latest_extraction_selection_json_and_empty_rows():
