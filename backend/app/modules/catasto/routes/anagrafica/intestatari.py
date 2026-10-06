@@ -331,40 +331,48 @@ def _load_intestatari_from_cert_context(
     if items:
         return items
 
+    return _append_snapshot_intestatari(cert, items, seen)
+
+
+def _append_snapshot_intestatari(cert, items, seen):
     payload = cert.parsed_json or {}
     raw_intestatari = payload.get("intestatari") if isinstance(payload, dict) else None
     if not isinstance(raw_intestatari, list):
         return []
     for raw in raw_intestatari:
-        if not isinstance(raw, dict):
-            continue
-        codice_fiscale = _normalize_cf(raw.get("codice_fiscale")) or "UNKNOWN"
-        key = codice_fiscale or str(raw.get("idxana") or raw.get("denominazione") or uuid4())
-        if key in seen:
-            continue
-        seen.add(key)
-        items.append(
-            CatIntestatarioResponse(
-                id=uuid4(),
-                codice_fiscale=codice_fiscale,
-                denominazione=_norm_str(raw.get("denominazione")),
-                tipo=_norm_str(raw.get("tipo")),
-                cognome=_norm_str(raw.get("cognome")),
-                nome=_norm_str(raw.get("nome")),
-                data_nascita=None,
-                luogo_nascita=_norm_str(raw.get("luogo_nascita")),
-                indirizzo=_norm_str(raw.get("indirizzo")),
-                comune_residenza=_norm_str(raw.get("comune_residenza")),
-                cap=_norm_str(raw.get("cap")),
-                email=_norm_str(raw.get("email")),
-                telefono=_norm_str(raw.get("telefono")),
-                ragione_sociale=_norm_str(raw.get("ragione_sociale")),
-                source="capacitas_certificato_snapshot",
-                last_verified_at=cert.collected_at,
-                deceduto=None,
-            )
-        )
+        item = _snapshot_intestatario_or_none(raw, cert, seen)
+        if item is not None:
+            items.append(item)
     return items
+
+
+def _snapshot_intestatario_or_none(raw, cert, seen):
+    if not isinstance(raw, dict):
+        return None
+    codice_fiscale = _normalize_cf(raw.get("codice_fiscale")) or "UNKNOWN"
+    key = codice_fiscale or str(raw.get("idxana") or raw.get("denominazione") or uuid4())
+    if key in seen:
+        return None
+    seen.add(key)
+    return CatIntestatarioResponse(
+        id=uuid4(),
+        codice_fiscale=codice_fiscale,
+        denominazione=_norm_str(raw.get("denominazione")),
+        tipo=_norm_str(raw.get("tipo")),
+        cognome=_norm_str(raw.get("cognome")),
+        nome=_norm_str(raw.get("nome")),
+        data_nascita=None,
+        luogo_nascita=_norm_str(raw.get("luogo_nascita")),
+        indirizzo=_norm_str(raw.get("indirizzo")),
+        comune_residenza=_norm_str(raw.get("comune_residenza")),
+        cap=_norm_str(raw.get("cap")),
+        email=_norm_str(raw.get("email")),
+        telefono=_norm_str(raw.get("telefono")),
+        ragione_sociale=_norm_str(raw.get("ragione_sociale")),
+        source="capacitas_certificato_snapshot",
+        last_verified_at=cert.collected_at,
+        deceduto=None,
+    )
 
 
 def _context_from_occupancy(occupancy: CatConsorzioOccupancy | None) -> tuple[str | None, str | None, str | None, str | None]:

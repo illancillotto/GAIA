@@ -15,6 +15,17 @@ blocco verificato e prima di chiudere un goal.
   PASS. Ratchet contro `HEAD` (`f8e0b864`) PASS; MCP/Wiki e file concorrenti
   esclusi.
 
+### Catasto — fallback intestatari da snapshot (2026-10-06)
+
+- Slice `IMPROVED`: il parsing delle righe grezze dello snapshot è isolato,
+  mantenendo filtraggio dei valori non-dict, deduplica per codice/identità e
+  costruzione della risposta invariati.
+- Metriche aggregate del caricamento `22/18 -> 3/4`; helper di iterazione
+  `7/7` e conversione riga `9/10`; LOC file `443 -> 447`, ratchet senza
+  findings.
+- Suite Catasto e coverage `intestatari.py` 100% (`179/179` statement,
+  `76/76` branch); Ruff, format e Graphify PASS. MCP/Wiki esclusi.
+
 ### Catasto — normalizzazione superficie live (2026-10-06)
 
 - Slice `IMPROVED`: la conversione della superficie Capacitas è isolata in una
