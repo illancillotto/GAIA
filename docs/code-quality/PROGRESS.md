@@ -3,6 +3,16 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Presenze — classificazione recovery null-safe (2026-10-06)
+
+- Slice `IMPROVED`: la classificazione dei record senza classification usa un
+  default booleano null-safe, preservando i conteggi e riducendo i rami.
+- Metriche `_apply_recovery_records` cognitive/cyclomatic/LOC `10/8/25 ->
+  7/6/25`; aggregato recovery invariato o migliorato, nessuna violation nuova.
+- Suite router/API Presenze PASS; coverage `recovery.py` 100% (`118/118`
+  statement, `36/36` branch). Ruff, format, ratchet contro `HEAD` (`c25b78a5`)
+  e Graphify Presenze PASS. MPC/MCP e lavori concorrenti esclusi.
+
 ### Presenze — aggregazione record recovery (2026-10-06)
 
 - Slice `IMPROVED`: l’aggiornamento degli aggregati dai record giornalieri è

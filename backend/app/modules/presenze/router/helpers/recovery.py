@@ -120,7 +120,7 @@ def _apply_recovery_records(
         )
         classification = classification_by_record_id.get(record.id)
         uses_recovery = _record_uses_recovery_day(record)
-        grants_recovery = classification is not None and classification.grants_recovery_day
+        grants_recovery = bool(getattr(classification, "grants_recovery_day", False))
         bucket["matured_days"] = int(bucket["matured_days"]) + int(grants_recovery)
         bucket["used_days"] = int(bucket["used_days"]) + int(uses_recovery)
         _update_recovery_last_dates(bucket, record, grants_recovery, uses_recovery)
