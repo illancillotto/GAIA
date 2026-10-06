@@ -1565,6 +1565,14 @@ describe("Ruolo pages", () => {
     expect(await screen.findByText("Arborea")).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole("button", { name: /Apri/ })[0]);
     expect(screen.getByText(/Co-intestatari:/)).toBeInTheDocument();
+    mocks.searchUtenzeSubjects.mockResolvedValue({
+      items: [{ id: "co-subject-1", display_name: "Romanet Alessandro" }],
+      total: 1,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Romanet Alessandro" }));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByTitle("Dettaglio soggetto")).toHaveAttribute("src", "/utenze/co-subject-1?embedded=1");
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
     expect(screen.getByText(/Foglio 12 · Particella 34 · Sub 1/)).toBeInTheDocument();
     expect(screen.getByText(/Coltura Seminativo/)).toBeInTheDocument();
     expect(screen.getByText(/Foglio 13 · Particella 35/)).toBeInTheDocument();

@@ -12,6 +12,7 @@ import {
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
 import { RuoloModulePage } from "@/components/ruolo/module-page";
+import { RuoloCoIntestatari } from "@/components/ruolo/co-intestatari";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon, FolderIcon, LockIcon } from "@/components/ui/icons";
 import { createCapacitasInCassSyncJob } from "@/lib/api";
@@ -70,11 +71,7 @@ function PartitaCard({ partita }: { partita: RuoloPartitaResponse }) {
 
       {expanded ? (
         <div className="border-t border-[#edf1eb] px-5 py-5">
-          {partita.co_intestati_raw ? (
-            <div className="mb-4 rounded-2xl border border-[#e3e9e0] bg-[#fbfcfb] px-4 py-3 text-sm text-gray-600">
-              <span className="font-semibold text-gray-900">Co-intestatari:</span> {partita.co_intestati_raw}
-            </div>
-          ) : null}
+          <RuoloCoIntestatari names={partita.co_intestati_raw} />
           {partita.particelle.length === 0 ? (
             <EmptyState
               icon={FolderIcon}
