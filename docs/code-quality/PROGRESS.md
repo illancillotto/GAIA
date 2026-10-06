@@ -3,6 +3,36 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — chiave riga per export SISTER (2026-10-06)
+
+- Chiusura `IMPROVED`: proiezione coordinate row dichiarativa, distinta dal
+  mapping ORM. Helper cog/cyc/LOC/nesting/parametri5/6/5/0/1 sotto soglia;
+  target33/21/54/3 ->21/13/49/3. File cognitive391 ->384, cyclomatic264 ->262,
+  LOC508 invariata, callable22 ->23/import25 invariati.23 violation (9 error/
+  14 warning): due error degradati a warning e warning LOC eliminato; nessuna
+  nuova violation o debt transfer. Mapper bulk163/74 invariato, programma aperto.
+- 1296 combinazioni persistenti piu casi missing/numerici/booleani verificano
+  conversione str, fallback zero e casefold Unicode.217 test coverage/
+  caratterizzazione/API/facade PASS; full-file exports100% statement242/branch80,
+  zero missing/partial/esclusioni.1200 casi differenziali contro47bf097b
+  equivalenti per output/ordine chiavi/SQL e trace accessi particella/get row.
+- Ratchet mirato merge-base47bf097b e Ruff runtime/test/format test PASS;
+  lint globale compileall PASS, solo UP038 InCass concorrente1041. Graphify
+  codice Catasto e docs Catasto/piattaforma aggiornati prima del commit separato.
+  Evidenze /tmp/gaia-export-row-key-* e differential verificato; nessun test
+  PostgreSQL/API remota dichiarato, baseline/config/scope invariati.
+  MCP/Wiki esclusi operativamente; residuo SISTER21/13 resta da ridurre.
+- Preflight `47bf097b`: passaggio precedente progresso committato, runtime/test
+  Catasto puliti, indice vuoto. _attach_sister_data33/21/54/3; file cognitive
+  391/cyclomatic264/LOC508,24 violation/22 callable. Campagna non-MCP attiva.
+- Proiezione dichiarativa della chiave row, con helper tipizzato sotto soglia:
+  str dopo fallback truthy, strip coordinate, casefold soltanto comune.
+  Tenerla distinta dalla chiave ORM (che non converte in str); mantenere ordine
+  get, lookup/mutazioni, SQL/JSON/latest e mapper bulk invariati.
+- Combinazioni persistenti, differenziale contro HEAD, full-file100%, metriche
+  aggregate/ratchet/Ruff/Graphify prima del commit; baseline/config/scope/API
+  invariati, MCP/Wiki e change concorrenti preservati.
+
 ### Catasto — chiave particella per export SISTER (2026-10-06)
 
 - Chiusura `IMPROVED`: chiave condivisa owner/history, nessuna duplicazione

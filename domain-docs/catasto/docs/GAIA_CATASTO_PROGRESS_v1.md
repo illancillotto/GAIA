@@ -1,6 +1,21 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-06 — chiave riga export SISTER
+
+- Mapping dichiarativo della chiave row con fallback truthy e str, casefold
+  soltanto comune; distinto dal mapping particella ORM. Ordine lookup/get/
+  mutazioni, selezione latest, query e JSON invariati, nessun cambio API/schema.
+- _attach_sister_data cog/cyc/LOC33/21/54 ->21/13/49, helper5/6/5 sotto soglia.
+  File cognitive391 ->384, cyclomatic264 ->262, LOC508 invariata;23 violation
+  residue, due error diventano warning e warning LOC eliminato, nessun transfer.
+- 1296 combinazioni persistenti piu missing/numerici;217 test coverage/
+  caratterizzazione/API/facade PASS, full-file exports100% statement242/branch80,
+  zero missing/esclusioni.1200 casi differenziali contro47bf097b equivalenti per
+  output/ordine/SQL/accessi particella e get row. Ratchet/Ruff mirato PASS;
+  lint globale UP038 InCass concorrente, Graphify codice/docs aggiornati.
+  Baseline/config/scope invariati; SISTER e mapper bulk ancora sopra soglia.
+
 ### 2026-10-06 — chiave particella export SISTER
 
 - Chiave particella condivisa per owner/history SISTER: casefold del comune,

@@ -318,6 +318,25 @@ def test_sister_parcel_key_normalization_matches_legacy():
         )
 
 
+def test_sister_export_row_key_preserves_coercion_and_missing_values():
+    values = (None, "", "0", 0, " Comune ", " Straße ")
+    for comune, foglio, particella, sub in product(values, repeat=4):
+        row = {"comune": comune, "foglio": foglio, "particella": particella, "sub": sub}
+        assert exports._sister_export_row_key(row) == (
+            str(comune or "").strip().casefold(),
+            str(foglio or "").strip(),
+            str(particella or "").strip(),
+            str(sub or "").strip(),
+        )
+    assert exports._sister_export_row_key({}) == ("", "", "", "")
+    assert exports._sister_export_row_key({"comune": 42, "foglio": 1.5, "sub": False}) == (
+        "42",
+        "1.5",
+        "",
+        "",
+    )
+
+
 def test_sister_latest_extraction_selection_json_and_empty_rows():
     first = parcel(comune_nome="Nome Comune", extraction_id=UUID(int=10))
     older = parcel(comune_nome="Nome Comune", extraction_id=UUID(int=11))

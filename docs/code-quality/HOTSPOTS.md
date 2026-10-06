@@ -14,6 +14,16 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, chiave row export SISTER, 2026-10-06:
+`_attach_sister_data` `IMPROVED`, cog/cyc/LOC33/21/54 ->21/13/49,
+nesting3 invariato. Helper5/6/5/0/1 sotto soglia, mapping row con str distinto
+da ORM; ordine lookup/get/conversioni invariato. File cognitive391 ->384,
+cyclomatic264 ->262, LOC508 invariata;23 violation (9 error/14 warning), due
+error diventano warning e warning LOC eliminato, nessun debt transfer.
+217 test/full-file100%,1296 combinazioni persistenti e1200 casi differenziali
+equivalenti. Ratchet/Ruff mirato PASS, lint globale UP038 InCass concorrente;
+SISTER21/13 e mapper bulk163/74 restano, MCP/Wiki fuori scope operativo.
+
 Campagna non-MCP, chiave particella export SISTER, 2026-10-06:
 `_attach_sister_data` `IMPROVED`, cog/cyc/LOC57/37/64 ->33/21/54,
 nesting3 invariato. Helper chiave5/6/5/0/1 sotto soglia, condiviso fra owner e

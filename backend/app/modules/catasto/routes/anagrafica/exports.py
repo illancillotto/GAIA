@@ -380,6 +380,13 @@ def _sister_export_parcel_key(parcel: CatastoSisterParcel) -> tuple[str, str, st
     )
 
 
+def _sister_export_row_key(row: dict[str, object]) -> tuple[str, str, str, str]:
+    return (
+        str(row.get("comune") or "").strip().casefold(),
+        *(str(row.get(field) or "").strip() for field in ("foglio", "particella", "sub")),
+    )
+
+
 def _attach_sister_data(db: Session, rows: list[dict[str, object]]) -> None:
     sister_by_key: dict[tuple[str, str, str, str], list[dict[str, object]]] = {}
     sister_history_by_key: dict[tuple[str, str, str, str], dict[str, object]] = {}
@@ -423,12 +430,7 @@ def _attach_sister_data(db: Session, rows: list[dict[str, object]]) -> None:
                 "particelle_collegate": extraction.payload_json.get("related_parcels", []),
             }
     for row in rows:
-        key = (
-            str(row.get("comune") or "").strip().casefold(),
-            str(row.get("foglio") or "").strip(),
-            str(row.get("particella") or "").strip(),
-            str(row.get("sub") or "").strip(),
-        )
+        key = _sister_export_row_key(row)
         data = sister_by_key.get(key)
         history = sister_history_by_key.get(key)
         row["sister_dati_presenti"] = "si" if data or history else ""
