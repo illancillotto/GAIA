@@ -1,9 +1,37 @@
+from app.schemas.sync import ParsedAclEntry
 from app.services.nas_parsers import (
+    _is_human_user,
+    _normalize_share_name,
     parse_acl_output,
     parse_group_output,
     parse_passwd_output,
     parse_share_listing,
 )
+
+
+def test_nas_parsers_reject_malformed_and_internal_values() -> None:
+    assert parse_passwd_output("\n# comment\nshort\nuser:x:not-a-uid:1::/home/user:x\n") == []
+    assert parse_passwd_output("user:x:1001:1::/home/user:x")[0].full_name is None
+    assert parse_group_output("\n# comment\nshort\nname:x:not-a-gid:a,b\nname:x:2000:a,,b\n")[
+        0
+    ].members == [
+        "a",
+        "b",
+    ]
+
+    assert _is_human_user("999", "/home/user") is False
+    assert _is_human_user("1000", "/tmp/user") is False
+    assert _is_human_user("1000", "/home/user") is True
+    assert _normalize_share_name("  ") is None
+    assert _normalize_share_name("/volume1") is None
+    assert _normalize_share_name("/volume1/") is None
+    assert _normalize_share_name("/volume1/@eaDir") is None
+    assert _normalize_share_name("folder/#recycle") is None
+
+    assert parse_share_listing("\n# comment\n/volume1\n") == []
+    assert parse_acl_output(
+        "\n# comment\nunknown: value\nallow: missing-colon\nuser:foo:read\n"
+    ) == [ParsedAclEntry(subject="user:foo", permissions="read", effect="allow")]
 
 
 def test_parse_passwd_output_extracts_users() -> None:

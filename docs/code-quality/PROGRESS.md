@@ -3,6 +3,21 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Backend — normalizzazione share NAS (2026-10-06)
+
+- Chiusura `IMPROVED`: le guardie per segmenti `@/#` sono state consolidate in
+  una sola verifica equivalente; rimosso anche un guard morto dopo `rstrip` e
+  `removeprefix` (nessun input stringa conforme poteva raggiungerlo). Parsing,
+  ordine e valori delle share restano invariati.
+- `_normalize_share_name` cognitive/cyclomatic/LOC `19/16/18 -> 11/10/14`;
+  file cognitive/cyclomatic `73/51 -> 72/50`, zero errori e nessun nuovo
+  warning. Aggiunta caratterizzazione per input malformati, path interni,
+  ACL e utenti/gruppi; test mirati PASS, file runtime 100% (`88/88` statement,
+  `50/50` branch), zero esclusioni.
+- Ruff/format e ratchet contro `HEAD` (`d5dc0bc4`) PASS; Graphify backend
+  aggiornato tramite target Make. Corretto anche il blank import già segnalato
+  da Ruff nel file toccato; MCP/Wiki esclusi.
+
 ### Catasto — creazione intestatario authoritative (2026-10-06)
 
 - Chiusura `IMPROVED`: il ramo di creazione soggetto/persona è isolato in

@@ -2,7 +2,6 @@ import re
 
 from app.schemas.sync import ParsedAclEntry, ParsedNasGroup, ParsedNasUser, ParsedShare
 
-
 ACL_ENTRY_PATTERN = re.compile(
     r"^\[\d+\]\s+"
     r"(?P<subject_type>user|group):"
@@ -144,10 +143,6 @@ def _normalize_share_name(raw_name: str) -> str | None:
         return None
     if normalized.startswith("/volume1/"):
         normalized = normalized.removeprefix("/volume1/")
-    if not normalized:
-        return None
-    if normalized.startswith("@") or normalized.startswith("#"):
-        return None
-    if any(segment.startswith("@") or segment.startswith("#") for segment in normalized.split("/")):
+    if any(segment.startswith(("@", "#")) for segment in normalized.split("/")):
         return None
     return normalized
