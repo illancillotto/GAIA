@@ -18,7 +18,12 @@ senza ulteriori evidenze. La query corrisponde alla superficie preview
 geometrie distretti del modulo Catasto: il crash PostGIS richiede un audit
 separato, non e corretto da questa slice.
 
-## Fix predisposta, non deployata
+## Fix committata, rilascio annullato
+
+Commit 63291539. Il tentativo di rilascio del 2026-10-06 ha evidenziato
+un'incompatibilita con i sync AdE sincroni nel loop del worker: vedere la
+sezione operativa finale. La fix NON e attiva sul CED e non va ridistribuita
+prima di risolvere questa incompatibilita.
 
 worker_runner.py avvia il worker mediante run_supervised, nello stesso processo.
 sister_worker_watchdog.py osserva da un thread indipendente il file heartbeat
@@ -94,4 +99,43 @@ estrazione semantica chunk 1/1 completata senza risultati parziali.
   dipendenza resta indisponibile. Non introdotte retry transazionali arbitrarie.
 - Il worker resta nella struttura runtime esistente modules/elaborazioni/worker;
   nessuna modifica frontend, API, schema o architettura parallela.
-- Autorizzazione deploy e verifica restart sul CED sono attivita separate.
+- Il deploy autorizzato e stato annullato: occorre una decisione sul trattamento
+  dei sync AdE prima di proseguire.
+
+## Tentativo di rilascio e rollback del 2026-10-06
+
+Immagine candidata gaia-elaborazioni-worker-visure:sister-63291539 costruita
+dall'immagine CED attiva sostituendo soltanto runner e watchdog. I 20 test
+watchdog nell'immagine candidata e pip check sono superati; nessuna richiesta
+visura risultava processing/queued_sister/waiting_captcha al preflight.
+Il vecchio worker bloccato ha richiesto arresto forzato dopo 60 secondi (137).
+Il nuovo container e partito alle 17:03:52 Europe/Rome, inizialmente healthy;
+ambiente, volumi e altri container verificati invariati.
+
+Durante la verifica live il worker ha prelevato il sync AdE
+7fe00f00-5d13-449c-959b-0bf64282d5b4 e ha continuato chiamate WFS con HTTP 200,
+ma il heartbeat non avanzava. _process_ade_sync_run in worker.py esegue
+execute_ade_sync_run direttamente nel loop async con SessionLocal sincrona.
+Un sync lungo blocca quindi il loop pur continuando lavoro utile: il watchdog
+lo avrebbe interrotto erroneamente dopo 120 secondi. Questo scenario non era
+coperto dalla prima matrice; i test di loop sano non simulavano un sync reale.
+
+Rollback applicato alle 17:05:07 prima della scadenza watchdog, dopo arresto
+con finestra di 10 secondi. Ripristinati runner e immagine precedente
+sha256:828866450855c3402a244d212246ebbd7b4faf26efc1759687e41f63bf8e7dbf;
+watchdog rimosso dalla copia delle sorgenti CED. Il worker precedente e tornato
+healthy e ha ripreso il sync, ma il problema originario resta irrisolto.
+Non si dichiara il rollout riuscito o la produzione protetta dalla fix.
+
+Evidenze remote riservate in /opt/gaia/releases/sister-20261006-63291539/:
+build.log, predeploy-tests.log, deploy.log, rollback-applied.txt e manifest.
+Il rollback puo interrompere una transazione del sync: nessun dato corretto
+o run rischedulato manualmente; lo stato finale del sync va verificato.
+
+Prima di un nuovo rilascio occorre eseguire il sync fuori dal loop async con
+sessione creata/chiusa nello stesso thread, oppure separarne la famiglia dal
+worker visure usando il layout runtime esistente. Preservare transazioni,
+claim e shutdown: non passare sessioni ORM tra thread, non aumentare il
+timeout per mascherare il blocco. Servono test di heartbeat durante sync lento
+e failure/cancellazione reali. Questa estensione richiede una decisione prima
+di modificare il percorso di esecuzione AdE.
