@@ -68,6 +68,32 @@ async function readResponseError(response: Response): Promise<ApiError> {
   return new ApiError(detail, detailData, response.status);
 }
 
+async function readResponseData<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    throw await readResponseError(response);
+  }
+
+  if ([204, 205].includes(response.status)) {
+    return undefined as T;
+  }
+
+  const contentLength = response.headers.get("content-length");
+  if (contentLength === "0") {
+    return undefined as T;
+  }
+
+  const contentType = response.headers.get("content-type");
+  if (!contentType) {
+    const text = await response.text();
+    if (!text) {
+      return undefined as T;
+    }
+    return JSON.parse(text) as T;
+  }
+
+  return (await response.json()) as T;
+}
+
 export async function request<T>(path: string, init?: ApiRequestInit): Promise<T> {
   const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
   const { timeoutMs, signal, ...fetchInit } = init ?? {};
@@ -113,29 +139,7 @@ export async function request<T>(path: string, init?: ApiRequestInit): Promise<T
     }
   }
 
-  if (!response.ok) {
-    throw await readResponseError(response);
-  }
-
-  if (response.status === 204 || response.status === 205) {
-    return undefined as T;
-  }
-
-  const contentLength = response.headers.get("content-length");
-  if (contentLength === "0") {
-    return undefined as T;
-  }
-
-  const contentType = response.headers.get("content-type");
-  if (!contentType) {
-    const text = await response.text();
-    if (!text) {
-      return undefined as T;
-    }
-    return JSON.parse(text) as T;
-  }
-
-  return (await response.json()) as T;
+  return readResponseData<T>(response);
 }
 
 export async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {

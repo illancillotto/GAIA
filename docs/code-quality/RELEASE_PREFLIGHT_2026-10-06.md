@@ -257,3 +257,22 @@ Artefatti aggiuntivi in `/tmp/gaia-release-audit-20261006/reconcile/`:
 Gli archivi sono snapshot di sorgenti, non backup completi di produzione.
 Il deploy resta **NON eseguito**: l'autorizzazione a riconciliare gli hotfix
 non autorizza a ignorare gate rossi o a eliminare overlay non verificati.
+
+## Terzo finding chiuso — decoder del client API frontend
+
+Sul main applicativo `7868b734`, una slice separa la decodifica HTTP da
+fetch/timeout in `frontend/src/lib/api/core.ts`. Gli errori restano precedenti
+a status 204/205, content-length esattamente zero e parsing del body.
+Timeout, signal esterno, FormData, header, URL e messaggi restano invariati.
+
+- `request`: cognitive/cyclomatic/LOC `24/20/60 -> 16/14/42`;
+  decoder `6/6/21`, sotto soglia, nessuna violation trasferita.
+- 61 test mirati verdi prima e dopo, coverage full-file 100%:
+  119 statement, 99 branch e 17 funzioni dopo la modifica.
+- Suite frontend completa: 277 file e 3962 test verdi, senza suppression.
+- Typecheck, ESLint e diff-check PASS. Ratchet globale contro `6b61fd27`
+  `22 -> 21` finding, nessuno sul runtime toccato; baseline invariata.
+- Graphify frontend aggiornato; metriche e comandi in `PROGRESS.md`.
+  MPC/MCP e le modifiche concorrenti restano fuori dalla slice.
+
+Questo risultato non chiude il gate globale e non costituisce un deploy.

@@ -3,6 +3,44 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Frontend API — decodifica della risposta request (2026-10-06)
+
+- Slice `IMPROVED`, snapshot `7868b734`, fuori dal perimetro MPC/MCP.
+  `request` mantiene fetch, header FormData/JSON, cache, signal, deadline,
+  traduzione del timeout e cleanup; `readResponseData` possiede la decodifica
+  HTTP, con errori prima delle risposte vuote e del parsing JSON.
+  Gli status senza body sono riconosciuti con `[204, 205].includes`.
+- Nessun cambiamento a API pubbliche, payload, autenticazione, URL, errori,
+  precedenza dei controlli o lifecycle abort. Content-length vuoto solo se
+  esattamente `"0"`; assenza di content-type conserva text/JSON.parse,
+  body vuoto e valori JSON falsy. Il timeout termina alla risoluzione fetch,
+  prima della lettura body, anche per una risposta di errore ritardata.
+- Le caratterizzazioni gia versionate passano prima e dopo: 61 test in
+  `api-core.test.ts` e `api-request.test.ts`. Coverage full-file prima
+  118 statement / 101 branch / 16 funzioni, dopo 119 / 99 / 17, tutto 100%.
+  Nessun test, esclusione, suppression o configurazione coverage modificato.
+- `request` cognitive/cyclomatic/LOC `24/20/60 -> 16/14/42`;
+  decoder `6/6/21`, un parametro e nessuna violation. Cognitive aggregate
+  `143 -> 141`, cyclomatic aggregate `98 -> 98`, decisioni `82 -> 81`;
+  cyclomatic max `20 -> 14`, LOC file `207 -> 210`. Error `3 -> 2`,
+  violation `14 -> 13`, warning 11 invariati. Nessun debito trasferito.
+- Comandi PASS: `VITEST_COVERAGE_INCLUDE=src/lib/api/core.ts npm run
+  test:coverage -- tests/unit/api-core.test.ts tests/unit/api-request.test.ts`,
+  `npm run typecheck:from-root`, ESLint sul runtime e `git diff --check`.
+  Suite frontend completa `npm run test:unit`: 277 file e 3962 test PASS;
+  jsdom emette sette diagnostiche di navigazione non implementata, senza
+  failure o suppression. Log `/tmp/gaia-core-full-unit.log`.
+  Ratchet full-scan contro merge-base `6b61fd27`: `22 -> 21` finding globali,
+  zero sul file toccato. Baseline, report versionati, soglie ed esclusioni
+  invariati; nessuna sincronizzazione globale per assorbire i finding residui.
+- `make graphify-frontend` PASS: 6550 nodi, 15668 archi, 221 community.
+  HTML non rigenerato per il limite dimensionale 5000 nodi; grafo JSON e
+  report aggiornati. Evidenze `/tmp/gaia-core-{before,after}.json`,
+  `/tmp/gaia-core-{before,final}-tests.log`, `/tmp/gaia-core-final-typecheck.log`,
+  `/tmp/gaia-core-final-lint.log`, `/tmp/gaia-core-full-ratchet.json`,
+  `/tmp/gaia-core-scoped-ratchet.json`, `/tmp/gaia-core-graphify.log`.
+  Modifiche documentali concorrenti preservate, deploy non eseguito.
+
 ### Worker SISTER — messaggi di sessione bloccata (2026-10-06)
 
 - Slice `IMPROVED`, snapshot `75c008cd`: i tre messaggi gia riconosciuti
