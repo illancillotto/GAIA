@@ -107,11 +107,19 @@ def list_incass_sync_jobs(
     limit: int = INCASS_LIST_DEFAULT_LIMIT,
     statuses: set[str] | None = None,
 ) -> list[CapacitasInCassSyncJob]:
+    stmt = _incass_sync_jobs_statement(statuses, limit)
+    return list(db.scalars(stmt).all())
+
+
+def _incass_sync_jobs_statement(
+    statuses: set[str] | None,
+    limit: int,
+):
     stmt = select(CapacitasInCassSyncJob).order_by(CapacitasInCassSyncJob.id.desc())
     if statuses:
         stmt = stmt.where(CapacitasInCassSyncJob.status.in_(statuses))
     stmt = stmt.limit(max(1, min(limit, INCASS_LIST_MAX_LIMIT)))
-    return list(db.scalars(stmt).all())
+    return stmt
 
 
 def _incass_payload_subject_count(payload_json: object) -> int | None:

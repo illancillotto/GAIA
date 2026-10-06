@@ -3,6 +3,33 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Capacitas inCass — query lista job (2026-10-06)
+
+- Slice `REORGANIZED_AND_CHARACTERIZED`, snapshot `61fec20f`, MPC/MCP escluso.
+  `list_incass_sync_jobs` delega costruzione SQL a `_incass_sync_jobs_statement`;
+  firma pubblica, filtro statuses, clamp 1..1000, ordine id discendente e
+  risultato list restano identici. Non si elimina la funzionalita per
+  riportare artificialmente la firma a un parametro.
+- Test lista/serializzazione PASS; suite Capacitas inCass/recovery/domande
+  PASS. Prima verifica coverage 98%, poi quattro test aggiunti su policy
+  autosync, defer fuori finestra, importi decimali e ricerca notice pendente:
+  coverage full-file finale 620 statement e 216 branch al 100%, gate
+  `--cov-fail-under=100` PASS. Nessuna exclusion o suppression introdotta.
+- Metriche: lista cognitive/cyclomatic/LOC `1/2/11 -> 0/1/8`; builder
+  `1/2/9`, due parametri e nessuna violation. Cognitive aggregate 467
+  invariata, cyclomatic `352 -> 353` per il callable aggiunto, LOC file
+  `1116 -> 1122`. Esito riorganizzazione, non riduzione aggregata.
+- Ruff e lint-backend PASS; ratchet full-scan base `6b61fd27`: `10 -> 7`
+  finding, inCass `5 -> 2` (LOC e parametri pubblici restano residui).
+  Baseline, soglie ed esclusioni invariati; Graphify backend aggiornato.
+  Evidenze `/tmp/gaia-incass-{before3,after4}.json`,
+  `/tmp/gaia-incass-coverage-full4.log`, `/tmp/gaia-incass-lint4.log`,
+  `/tmp/gaia-incass-ratchet4.json`, `/tmp/gaia-incass-graphify4.log`.
+  Verifica finale: `/tmp/gaia-incass-final-coverage.log` e
+  `/tmp/gaia-incass-final-lint.log`; lint sui due file modificati PASS.
+  Nessun deploy; modifiche concorrenti preservate. Restano sette finding
+  globali e molti hotspot legacy: il programma non e completo.
+
 ### Presenze — persistenza riepiloghi importazione (2026-10-06)
 
 - Slice `IMPROVED`, snapshot `b14c0842`, MPC/MCP escluso. La cancellazione e

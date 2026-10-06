@@ -19,7 +19,7 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasInCassSearchResult,
     CapacitasInCassSyncJobCreateRequest,
 )
-from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson
+from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice, AnagraficaPerson
 from app.services import elaborazioni_capacitas_incass as incass
 
 
@@ -243,3 +243,50 @@ def test_existing_nas_file_without_close_method(
     result = upload(SimpleNamespace(nas_folder_path="/archive"), "existing.pdf", b"data")
     assert result.endswith("/existing.pdf")
     connector.upload_file.assert_not_called()
+
+
+def test_incass_autosync_defers_without_resolving_subjects(monkeypatch: pytest.MonkeyPatch) -> None:
+    db = Mock()
+    job = CapacitasInCassSyncJob(requested_by_user_id=None, payload_json={})
+    monkeypatch.setattr(incass, "is_incass_autosync_within_operation_window", lambda: False)
+    resolver = Mock(side_effect=AssertionError("subjects must not be resolved outside window"))
+    monkeypatch.setattr(incass, "_resolve_subjects", resolver)
+
+    result = asyncio.run(incass.run_incass_sync_job(db, Mock(), job))
+
+    assert result is job
+    assert job.status == "queued_resume"
+    assert job.started_at is None
+    assert job.completed_at is None
+    assert job.error_detail.startswith("Autosync inCASS fuori finestra oraria")
+    db.commit.assert_called_once_with()
+    db.refresh.assert_called_once_with(job)
+    resolver.assert_not_called()
+
+
+def test_incass_autosync_policy_overrides_requested_details() -> None:
+    job = CapacitasInCassSyncJob(requested_by_user_id=None)
+    payload = CapacitasInCassSyncJobCreateRequest(include_mailing_list=True)
+
+    result = incass._apply_autosync_status_refresh_policy(job, payload)
+
+    assert result is not payload
+    assert result.include_details == incass.settings.capacitas_incass_autosync_include_details
+    assert result.include_partitario == incass.settings.capacitas_incass_autosync_include_partitario
+    assert result.include_mailing_list is False
+    assert result.download_mailing_receipts is False
+    assert payload.include_mailing_list is True
+
+
+def test_incass_amount_with_one_decimal_separator() -> None:
+    assert incass._parse_notice_amount("123.45") == 123.45
+
+
+def test_pending_notice_search_continues_after_a_different_notice() -> None:
+    other = AnagraficaPaymentNotice(source_system="other", source_notice_id="different")
+    target = AnagraficaPaymentNotice(source_system="incass", source_notice_id="target")
+    db = SimpleNamespace(new=[other, target])
+
+    assert incass._find_pending_payment_notice(
+        db, source_system="incass", source_notice_id="target"
+    ) is target
