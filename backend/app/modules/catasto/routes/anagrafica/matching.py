@@ -139,6 +139,26 @@ def _current_base_match_data(
     return utenza_summary, intestatari, cert_context, status_context
 
 
+def _resolve_sub_unit_context(db, occupancy, base_summary, base_context, base_status, live_authoritative):
+    cco = occupancy.cco if occupancy else None
+    is_stale = bool(occupancy and not occupancy.is_current)
+    cert_context = _context_from_occupancy(occupancy)
+    status = _load_cert_status_from_context(db, cco=cco, com=cert_context[0], pvc=cert_context[1], fra=cert_context[2], ccs=cert_context[3])
+    owners = []
+    summary = _utenza_summary_from_occupancy(occupancy) if occupancy else None
+    if cco and _is_sentinel_cco(cco):
+        note = "CCO provvisorio Capacitas: dati intestatario non disponibili"
+    elif cco and not is_stale:
+        owners = [] if live_authoritative else _load_intestatari_from_cert_context(db, cco=cco, com=cert_context[0], pvc=cert_context[1], fra=cert_context[2], ccs=cert_context[3])
+        note = None
+    elif base_summary is not None:
+        summary, cert_context, status = base_summary, base_context, base_status
+        note = "Presenti dati non aggiornati/storici del sub: intestatario corrente non disponibile"
+    else:
+        note = "Presenti dati non aggiornati/storici del sub: intestatario corrente non disponibile"
+    return summary, cert_context, status, owners, note
+
+
 def _build_consorzio_sub_matches(db: Session, p: CatParticella, *, live_authoritative: bool = False) -> list[CatAnagraficaMatch]:
     """Returns one CatAnagraficaMatch per sub-level CatConsorzioUnit for the given particella.
 
@@ -174,34 +194,9 @@ def _build_consorzio_sub_matches(db: Session, p: CatParticella, *, live_authorit
     for unit in sub_units:
         occupancy = _best_occupancy_for_unit(db, unit.id)
         riordino_code, riordino_maglia, riordino_lotto = _load_riordino_fields_for_particella(db, p, unit.id)
-        cco = occupancy.cco if occupancy else None
-        is_stale = bool(occupancy and not occupancy.is_current)
-        cert_com, cert_pvc, cert_fra, cert_ccs = _context_from_occupancy(occupancy)
-        stato_ruolo, stato_cnc = _load_cert_status_from_context(
-            db, cco=cco, com=cert_com, pvc=cert_pvc, fra=cert_fra, ccs=cert_ccs
+        utenza_summary, (cert_com, cert_pvc, cert_fra, cert_ccs), (stato_ruolo, stato_cnc), intestatari, note = _resolve_sub_unit_context(
+            db, occupancy, base_utenza_summary, base_cert_context, base_status_context, live_authoritative
         )
-        intestatari: list[CatIntestatarioResponse] = []
-        utenza_summary = _utenza_summary_from_occupancy(occupancy) if occupancy else None
-        if cco and _is_sentinel_cco(cco):
-            note = "CCO provvisorio Capacitas: dati intestatario non disponibili"
-        elif cco and not is_stale:
-            intestatari = _load_intestatari_from_cert_context(
-                db,
-                cco=cco,
-                com=cert_com,
-                pvc=cert_pvc,
-                fra=cert_fra,
-                ccs=cert_ccs,
-            )
-            note = None
-        elif base_utenza_summary is not None:
-            utenza_summary = base_utenza_summary
-            cert_com, cert_pvc, cert_fra, cert_ccs = base_cert_context
-            stato_ruolo, stato_cnc = base_status_context
-            intestatari = []
-            note = "Presenti dati non aggiornati/storici del sub: intestatario corrente non disponibile"
-        else:
-            note = "Presenti dati non aggiornati/storici del sub: intestatario corrente non disponibile"
 
         matches.append(
             CatAnagraficaMatch(

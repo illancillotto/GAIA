@@ -15,6 +15,17 @@ blocco verificato e prima di chiudere un goal.
   PASS. Ratchet contro `HEAD` (`f8e0b864`) PASS; MCP/Wiki e file concorrenti
   esclusi.
 
+### Catasto — contesto unità subalterno (2026-10-06)
+
+- Slice `IMPROVED`: la risoluzione di occupancy, certificato, intestatari e
+  fallback storico per ogni unità subalterno è isolata, mantenendo sentinel,
+  stato e precedenza del contesto base.
+- Metriche `_build_consorzio_sub_matches` cognitive/cyclomatic/LOC `39/22/91
+  -> 14/11/66`; helper contesto `20/13/18`; LOC file `712 -> 704`, ratchet
+  senza findings.
+- Suite Catasto e coverage `matching.py` 100% (`267/267` statement,
+  `102/102` branch); Ruff, format e Graphify PASS. MCP/Wiki esclusi.
+
 ### Catasto — fallback identità nel contesto base (2026-10-06)
 
 - Slice `IMPROVED`: il recupero intestatari da utenza e codice fiscale nel
