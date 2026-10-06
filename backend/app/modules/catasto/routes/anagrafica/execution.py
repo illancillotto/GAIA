@@ -149,6 +149,32 @@ async def _enrich_sub_matches(
     return [await live_resolver.enrich_match(particella, sub_match) for sub_match in sub_matches]
 
 
+async def _resolve_sub_match(
+    db: Session,
+    lookup: tuple[str, str, str, str],
+    live_resolver: _CapacitasLiveResolver | _CapacitasAuthoritativeResolver | None,
+    *,
+    live_authoritative: bool,
+) -> CatAnagraficaMatch | None:
+    comune_norm, foglio_norm, particella_norm, sub_norm = lookup
+    sub_match: CatAnagraficaMatch | None = None
+    if sub_norm and foglio_norm and particella_norm and comune_norm:
+        sub_match = _find_consorzio_sub_match(
+            db,
+            foglio_norm,
+            particella_norm,
+            sub_norm,
+            comune_norm,
+            live_authoritative=live_authoritative,
+        )
+    if sub_match is None or live_resolver is None:
+        return sub_match
+    particella_ref = db.get(CatParticella, sub_match.particella_id)
+    if particella_ref is not None:
+        sub_match = await live_resolver.enrich_match(particella_ref, sub_match)
+    return sub_match
+
+
 # fmt: off
 
 async def execute_bulk_search_payload(
@@ -279,20 +305,12 @@ async def execute_bulk_search_payload(
                             sub_norm=sub_norm,
                         )
                         if len(items) == 0:
-                            sub_match: CatAnagraficaMatch | None = None
-                            if sub_norm and foglio_norm and particella_norm and comune_norm:
-                                sub_match = _find_consorzio_sub_match(
-                                    db,
-                                    foglio_norm,
-                                    particella_norm,
-                                    sub_norm,
-                                    comune_norm,
-                                    live_authoritative=live_authoritative,
-                                )
-                            if sub_match is not None and live_resolver is not None:
-                                particella_ref = db.get(CatParticella, sub_match.particella_id)
-                                if particella_ref is not None:
-                                    sub_match = await live_resolver.enrich_match(particella_ref, sub_match)
+                            sub_match = await _resolve_sub_match(
+                                db,
+                                (comune_norm, foglio_norm, particella_norm, sub_norm),
+                                live_resolver,
+                                live_authoritative=live_authoritative,
+                            )
                             if sub_match is not None:
                                 results.append(
                                     CatAnagraficaBulkSearchRowResult(
