@@ -3,6 +3,18 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — contesto certificato particella (2026-10-06)
+
+- Slice `IMPROVED`: `_CapacitasLiveResolver._resolve_cert_params` usa un
+  controllo aggregato con `all(...)`, mantenendo invariati fallback, valori
+  certificato e ordine del payload.
+- Metriche callable cognitive/cyclomatic/LOC `21/20/31 -> 17/17/31`;
+  nessun debito trasferito e nessuna esclusione aggiunta.
+- Ruff, format e ratchet contro `HEAD` (`971c3183`) PASS (`findings: []`).
+  Suite Catasto PASS; `resolvers.py` full-file 100% (`309/309` statement,
+  `114/114` branch). Graphify
+  Catasto aggiornato con `make graphify-catasto-code`. MCP/Wiki esclusi.
+
 ### Catasto — riepilogo risultati bulk (2026-10-06)
 
 - Chiusura `IMPROVED`: `_build_summary` usa una mappa esplicita degli esiti e

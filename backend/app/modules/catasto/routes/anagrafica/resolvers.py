@@ -539,7 +539,7 @@ class _CapacitasLiveResolver:
         if not cco:
             return None
 
-        if match.cert_com and match.cert_pvc and match.cert_fra:
+        if all((match.cert_com, match.cert_pvc, match.cert_fra)):
             return (
                 cco,
                 match.cert_com,
