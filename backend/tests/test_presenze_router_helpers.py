@@ -1249,6 +1249,71 @@ def test_refresh_credential_resolution_prefers_auto_sync_and_rejects_missing(
         router._resolve_refresh_credential_for_user(_RecordingDb(), user)
 
 
+@pytest.mark.parametrize(
+    ("filter_mask", "expected_names", "expected_totals"),
+    [
+        (0, ["Gamma", "Alpha", "Beta", "Empty"], (70, -15, 55, 20, 2, 1)),
+        (1, ["Beta"], (-30, 5, -25, 0, 0, 1)),
+        (2, ["Gamma", "Alpha"], (100, -20, 80, 20, 2, 0)),
+        (3, [], (0, 0, 0, 0, 0, 0)),
+        (4, ["Gamma", "Alpha", "Beta"], (70, -15, 55, 20, 2, 1)),
+        (5, ["Beta"], (-30, 5, -25, 0, 0, 1)),
+        (6, ["Gamma", "Alpha"], (100, -20, 80, 20, 2, 0)),
+        (7, [], (0, 0, 0, 0, 0, 0)),
+    ],
+)
+def test_bank_hours_dashboard_totals_follow_filtered_items(
+    monkeypatch: pytest.MonkeyPatch, filter_mask: int, expected_names, expected_totals
+) -> None:
+    collaborators = [
+        SimpleNamespace(
+            id=uuid.uuid4(), employee_code=name, name=name, company_code="53", application_user_id=None
+        )
+        for name in ("Alpha", "Beta", "Gamma", "Empty")
+    ]
+    snapshots = {
+        collaborator.id: [SimpleNamespace(
+            period_start=date(2026, 5, 1), period_end=date(2026, 5, 31),
+            residuo_prec_minutes=0, spettante_minutes=0, fruito_minutes=0, saldo_totale_minutes=balance,
+        )]
+        for collaborator, balance in zip(collaborators, (100, -30, 0), strict=False)
+    }
+    adjustments = {
+        collaborators[0].id: [
+            SimpleNamespace(approval_status="approved", adjustment_date=date(2026, 5, 20), delta_minutes=-20, kind="liquidation"),
+            SimpleNamespace(approval_status="pending", adjustment_date=date(2026, 5, 19), delta_minutes=10, kind="correction"),
+        ],
+        collaborators[1].id: [
+            SimpleNamespace(approval_status="approved", adjustment_date=date(2026, 5, 20), delta_minutes=5, kind="correction"),
+        ],
+        collaborators[2].id: [
+            SimpleNamespace(approval_status="pending", adjustment_date=date(2026, 5, 20), delta_minutes=10, kind="correction"),
+        ],
+    }
+    monkeypatch.setattr(router, "_load_latest_template_codes_by_collaborator", lambda *_args: {})
+    monkeypatch.setattr(router, "_load_bank_hours_context", lambda *_args, **_kwargs: (snapshots, adjustments))
+    monkeypatch.setattr(
+        router, "_resolve_collaborator_contract_profile",
+        lambda *_args, **_kwargs: (SimpleNamespace(contract_kind="operaio", standard_daily_minutes=420), "explicit"),
+    )
+
+    dashboard = router._build_bank_hours_dashboard(
+        _QueuedDb(collaborators), date_from=date(2026, 5, 1), date_to=date(2026, 5, 31), q=None,
+        negative_only=bool(filter_mask & 1), pending_adjustments_only=bool(filter_mask & 2),
+        manual_adjustments_only=bool(filter_mask & 4),
+    )
+
+    assert [item.collaborator_name for item in dashboard.items] == expected_names
+    assert dashboard.collaborators_total == len(expected_names)
+    assert (
+        dashboard.imported_balance_total_minutes, dashboard.approved_adjustment_total_minutes,
+        dashboard.effective_balance_total_minutes, dashboard.liquidation_total_minutes,
+        dashboard.pending_adjustments_total, dashboard.negative_balance_total,
+    ) == expected_totals
+    assert dashboard.date_from == date(2026, 5, 1)
+    assert dashboard.date_to == date(2026, 5, 31)
+
+
 def test_recovery_and_bank_hours_dashboard_filter_and_aggregate_paths(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

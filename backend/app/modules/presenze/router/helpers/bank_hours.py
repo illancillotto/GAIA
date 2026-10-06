@@ -112,13 +112,17 @@ def _build_bank_hours_dashboard(
         date_to=date_to,
     )
 
-    items: list[PresenzeBankHoursBalanceItemResponse] = []
-    imported_balance_total_minutes = 0
-    approved_adjustment_total_minutes = 0
-    effective_balance_total_minutes = 0
-    liquidation_total_minutes = 0
-    pending_adjustments_total = 0
-    negative_balance_total = 0
+    dashboard = PresenzeBankHoursDashboardResponse(
+        date_from=date_from,
+        date_to=date_to,
+        collaborators_total=0,
+        imported_balance_total_minutes=0,
+        approved_adjustment_total_minutes=0,
+        effective_balance_total_minutes=0,
+        liquidation_total_minutes=0,
+        pending_adjustments_total=0,
+        negative_balance_total=0,
+    )
     for collaborator in collaborators:
         profile, profile_source = _resolve_collaborator_contract_profile(
             db,
@@ -180,34 +184,23 @@ def _build_bank_hours_dashboard(
             not manual_adjustments_only or manual_adjustment_count > 0,
         )))
         if include_item:
-            items.append(item)
-            imported_balance_total_minutes += imported_balance_minutes
-            approved_adjustment_total_minutes += approved_adjustment_minutes
-            effective_balance_total_minutes += effective_balance_minutes
-            liquidation_total_minutes += liquidation_minutes_total
-            pending_adjustments_total += pending_adjustment_count
-            if effective_balance_minutes < 0:
-                negative_balance_total += 1
+            dashboard.items.append(item)
+            dashboard.imported_balance_total_minutes += imported_balance_minutes
+            dashboard.approved_adjustment_total_minutes += approved_adjustment_minutes
+            dashboard.effective_balance_total_minutes += effective_balance_minutes
+            dashboard.liquidation_total_minutes += liquidation_minutes_total
+            dashboard.pending_adjustments_total += pending_adjustment_count
+            dashboard.negative_balance_total += int(effective_balance_minutes < 0)
 
-    items.sort(
+    dashboard.items.sort(
         key=lambda item: (
             -item.pending_adjustment_count,
             item.effective_balance_minutes,
             item.collaborator_name,
         )
     )
-    return PresenzeBankHoursDashboardResponse(
-        date_from=date_from,
-        date_to=date_to,
-        collaborators_total=len(items),
-        imported_balance_total_minutes=imported_balance_total_minutes,
-        approved_adjustment_total_minutes=approved_adjustment_total_minutes,
-        effective_balance_total_minutes=effective_balance_total_minutes,
-        liquidation_total_minutes=liquidation_total_minutes,
-        pending_adjustments_total=pending_adjustments_total,
-        negative_balance_total=negative_balance_total,
-        items=items,
-    )
+    dashboard.collaborators_total = len(dashboard.items)
+    return dashboard
 
 def _build_bank_hours_collaborator_detail(
     db: Session,

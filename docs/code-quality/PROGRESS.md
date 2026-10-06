@@ -3,6 +3,39 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Presenze — aggregati dashboard Bank Hours (2026-10-06)
+
+- Slice `IMPROVED`, base `916ed94a`: il response dashboard esistente possiede
+  items e totali, eliminando lo stato locale duplicato e il mapping finale.
+  Il saldo negativo incrementa dal predicato esistente. Nessun nuovo helper,
+  modello, query o variazione a filtri, ordinamento e contratto HTTP.
+- Otto caratterizzazioni verdi prima e dopo: tutte le combinazioni dei tre
+  filtri, quattro collaboratori con saldo positivo/negativo/zero e senza
+  contesto, rettifiche approved/pending e liquidation. Totali solo sugli
+  elementi inclusi e ordine pending/balance/name verificati esplicitamente.
+- `_build_bank_hours_dashboard` cognitive/cyclomatic/LOC/nesting
+  `90/56/123/3 -> 87/55/116/2`; aggregati file cognitive `225 -> 222`,
+  cyclomatic `179 -> 178`, LOC `534 -> 527`, 14 callable e 16 violation
+  invariati. Nessun debito trasferito; dashboard ancora sopra soglia.
+- Suite router/API Presenze: 227 test verdi; coverage full-file
+  `bank_hours.py` 100%, `221/221` statement e `72/72` branch, nessuna
+  linea esclusa. Ruff check, format runtime, lint-backend contro `916ed94a`,
+  diff-check e ratchet mirato sul merge-base PASS (`findings: []`).
+  Graphify codice Presenze aggiornato: 1393 nodi, 4243 archi, 59 community.
+  Baseline, soglie, esclusioni e report versionati invariati.
+- Evidenze `/tmp/gaia-bank-totals-{before,after}.json`,
+  `/tmp/gaia-bank-totals-before.log`, `/tmp/gaia-bank-totals-suite.log`,
+  `/tmp/gaia-bank-totals-coverage.json`, `/tmp/gaia-bank-totals-ratchet.json`,
+  `/tmp/gaia-bank-totals-lint.log`, `/tmp/gaia-bank-totals-graphify.log`.
+  Review dominio in `domain-docs/presenze/docs/BANK_HOURS_COMPLEXITY_VALIDATION_2026-10-06.md`.
+- Richiesta successiva: chiudere i passaggi, documentare, commit/push/deploy.
+  Preflight CED read-only: checkout `6b61fd27`, sette runtime/lockfile
+  modificati e hotfix/override non tracciati; servizi con healthcheck healthy.
+  Nessun reset/stash/restart o deploy eseguito su questi hotfix; richiesta
+  una strategia di riconciliazione prima del rilascio. Modifiche documentali
+  concorrenti locali e MPC/MCP esclusi dal commit di questa slice.
+  Stop dopo questa slice; il programma globale resta incompleto.
+
 ### Presenze — conteggi record compensi Bank Hours (2026-10-06)
 
 - Slice `IMPROVED`, base `6209b30b`: il conteggio giornate lavorate usa
