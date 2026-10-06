@@ -1,6 +1,24 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-06 — servizio arricchimento export SISTER
+
+- Query completed/ordinamento e lookup owner/history separati dalle route in
+  services/bulk_export_sister.py; tre callable re-esportati con identita invariata.
+  JSON dei due payload con ciclo comune e scritture sequenziali: stesso ordine,
+  ensure_ascii/sort_keys e mutazioni parziali prima di un errore propagato.
+- _attach_sister_data18/12/48/2 ->9/7/43/2, nuovo servizio zero violation.
+  Cognitive aggregate381 ->378; branching238 invariato (cyclomatic261 ->263,
+  callable23 ->25). LOC507 ->533, distribuite route456/servizio77; violation
+  23 ->20, due warning SISTER e file LOC eliminati senza debt transfer.
+- 225 test coverage/caratterizzazione/API/facade PASS; full-file100% exports
+  statement213/branch68 e servizio statement38/branch12, zero esclusioni.
+  Errori JSON al primo/secondo payload e re-export caratterizzati;1200 confronti
+  controa0eba126 equivalenti per output/ordine/SQL/accessi. Ratchet/Ruff PASS,
+  format nuovo servizio/test PASS; lint globale UP038 InCass concorrente.
+  Graphify codice con pruning e docs aggiornati; baseline/config/scope/API
+  invariati. Mapper bulk163/74 e altri hotspot rimangono, campagna non completa.
+
 ### 2026-10-06 — selezione owner latest export SISTER
 
 - Guardia unica di scarto per estrazione diversa dall'ID selezionato non-None;

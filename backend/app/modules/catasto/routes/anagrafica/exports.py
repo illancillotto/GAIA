@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import csv
-import json
 import logging
 import os
 from io import BytesIO, StringIO
@@ -17,13 +16,21 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_active_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
-from app.models.catasto import CatastoSisterExtraction, CatastoSisterOwner, CatastoSisterParcel
 from app.models.catasto_phase1 import CatParticella
 from app.modules.catasto.routes.anagrafica.matching import (
     _build_match,
     _load_consorzio_presence_by_particella_ids,
 )
 from app.modules.catasto.routes.anagrafica.normalization import _LiveSearchHit, _norm_str, _safe_int
+from app.modules.catasto.services.bulk_export_sister import (
+    _attach_sister_data as _attach_sister_data,
+)
+from app.modules.catasto.services.bulk_export_sister import (
+    _sister_export_parcel_key as _sister_export_parcel_key,
+)
+from app.modules.catasto.services.bulk_export_sister import (
+    _sister_export_row_key as _sister_export_row_key,
+)
 from app.modules.elaborazioni.capacitas.client import InVoltureClient
 from app.modules.elaborazioni.capacitas.models import (
     CapacitasLookupOption,
@@ -373,68 +380,6 @@ def _build_bulk_export_rows(
     return rows
 
 
-def _sister_export_parcel_key(parcel: CatastoSisterParcel) -> tuple[str, str, str, str]:
-    return (
-        (parcel.comune_nome or "").strip().casefold(),
-        *((getattr(parcel, field) or "").strip() for field in ("foglio", "particella", "subalterno")),
-    )
-
-
-def _sister_export_row_key(row: dict[str, object]) -> tuple[str, str, str, str]:
-    return (
-        str(row.get("comune") or "").strip().casefold(),
-        *(str(row.get(field) or "").strip() for field in ("foglio", "particella", "sub")),
-    )
-
-
-def _attach_sister_data(db: Session, rows: list[dict[str, object]]) -> None:
-    sister_by_key: dict[tuple[str, str, str, str], list[dict[str, object]]] = {}
-    sister_history_by_key: dict[tuple[str, str, str, str], dict[str, object]] = {}
-    latest_extraction_by_key: dict[tuple[str, str, str, str], object] = {}
-    parcel_rows = db.execute(
-        select(CatastoSisterParcel, CatastoSisterOwner, CatastoSisterExtraction)
-        .join(CatastoSisterOwner, CatastoSisterParcel.id == CatastoSisterOwner.sister_parcel_id)
-        .join(CatastoSisterExtraction, CatastoSisterExtraction.id == CatastoSisterParcel.extraction_id)
-        .where(CatastoSisterExtraction.status == "completed")
-        .order_by(CatastoSisterExtraction.observed_at.desc().nullslast())
-    ).all()
-    for parcel, owner, _extraction in parcel_rows:
-        key = _sister_export_parcel_key(parcel)
-        extraction_id = parcel.extraction_id
-        current_extraction_id = latest_extraction_by_key.get(key)
-        if current_extraction_id not in (None, extraction_id):
-            continue
-        latest_extraction_by_key[key] = extraction_id
-        sister_by_key.setdefault(key, []).append(
-            {
-                "codice_fiscale": owner.codice_fiscale,
-                "denominazione": owner.denominazione,
-                "diritto": owner.diritto,
-                "quota": owner.quota,
-                "data_nascita": owner.data_nascita.isoformat() if owner.data_nascita else None,
-                "luogo_nascita": owner.luogo_nascita,
-            }
-        )
-    history_rows = db.execute(
-        select(CatastoSisterParcel, CatastoSisterExtraction)
-        .join(CatastoSisterExtraction, CatastoSisterExtraction.id == CatastoSisterParcel.extraction_id)
-        .where(CatastoSisterExtraction.status == "completed")
-        .order_by(CatastoSisterExtraction.observed_at.desc().nullslast())
-    ).all()
-    for parcel, extraction in history_rows:
-        key = _sister_export_parcel_key(parcel)
-        if key not in sister_history_by_key:
-            sister_history_by_key[key] = {
-                "eventi": extraction.payload_json.get("history_events", []),
-                "particelle_collegate": extraction.payload_json.get("related_parcels", []),
-            }
-    for row in rows:
-        key = _sister_export_row_key(row)
-        data = sister_by_key.get(key)
-        history = sister_history_by_key.get(key)
-        row["sister_dati_presenti"] = "si" if data or history else ""
-        row["sister_dati"] = json.dumps(data, ensure_ascii=False, sort_keys=True) if data else ""
-        row["sister_storico"] = json.dumps(history, ensure_ascii=False, sort_keys=True) if history else ""
 
 
 @router.get("/comuni", response_model=list[CatComuneExportOption])

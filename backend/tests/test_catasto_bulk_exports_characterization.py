@@ -11,7 +11,9 @@ from uuid import UUID
 import pytest
 from fastapi import HTTPException
 
+from app.models.catasto import CatastoSisterParcel
 from app.modules.catasto.routes.anagrafica import execution, exports
+from app.modules.catasto.services import bulk_export_sister
 from app.modules.elaborazioni.capacitas.models import CapacitasLookupOption, CapacitasTerrenoRow
 from app.schemas.catasto_phase1 import (
     CatAnagraficaBulkSearchRowResult,
@@ -304,10 +306,45 @@ def test_live_retry_clears_section_and_collect_skips_failure(monkeypatch):
     assert len(hits) == 1 and hits[0].row is row and hits[0].frazione_id == "1"
 
 
+@pytest.mark.parametrize("failure_index", [0, 1])
+def test_sister_serialization_failure_preserves_partial_row_mutations(monkeypatch, failure_index):
+    calls = []
+
+    def render(payload, **options):
+        calls.append((payload, options))
+        if len(calls) - 1 == failure_index:
+            raise ValueError("serialization failed")
+        return "rendered"
+
+    monkeypatch.setattr(bulk_export_sister.json, "dumps", render)
+    row = {
+        "sister_dati_presenti": "old",
+        "sister_dati": "old data",
+        "sister_storico": "old history",
+    }
+    data = [{"denominazione": "Straße"}]
+    history = {"eventi": ["Atto"]}
+    with pytest.raises(ValueError, match="serialization failed"):
+        bulk_export_sister._write_sister_export_columns(row, data, history)
+    assert row == {
+        "sister_dati_presenti": "si",
+        "sister_dati": "old data" if failure_index == 0 else "rendered",
+        "sister_storico": "old history",
+    }
+    assert [payload for payload, options in calls] == [data, history][: failure_index + 1]
+    assert all(options == {"ensure_ascii": False, "sort_keys": True} for payload, options in calls)
+
+
+def test_sister_export_reexports_preserve_callable_identity():
+    assert exports._attach_sister_data is bulk_export_sister._attach_sister_data
+    assert exports._sister_export_parcel_key is bulk_export_sister._sister_export_parcel_key
+    assert exports._sister_export_row_key is bulk_export_sister._sister_export_row_key
+
+
 def test_sister_parcel_key_normalization_matches_legacy():
     values = (None, "", "0", " Comune ", " Straße ")
     for comune, foglio, particella, subalterno in product(values, repeat=4):
-        model = exports.CatastoSisterParcel(
+        model = CatastoSisterParcel(
             comune_nome=comune, foglio=foglio, particella=particella, subalterno=subalterno
         )
         assert exports._sister_export_parcel_key(model) == (

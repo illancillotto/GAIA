@@ -3,6 +3,43 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — servizio arricchimento export SISTER (2026-10-06)
+
+- Chiusura `IMPROVED`: servizio di dominio per query completed/ordinamento,
+  chiavi ORM/row, lookup latest e scritture JSON; route mantengono re-export
+  espliciti dei tre callable. Serializzazione dei due payload deduplicata con
+  scritture sequenziali, inclusa propagazione errori e mutazioni parziali.
+- Target18/12/48/2 ->9/7/43/2; servizio completo zero violation, serializer
+  6/6/8/1/3 e query0/1/8/0/1 sotto soglia. Confronto aggregato dei due file:
+  cognitive381 ->378, cyclomatic261 ->263 per i due callable aggiunti, branching
+  (cyclomatic - callable)238 invariato, callable23 ->25/import25 ->31,
+  LOC507 ->533 (route456/servizio77). Non dichiarare riduzione del branching;
+  miglioramento cognitivo reale3, non soltanto trasferimento del target.
+  Violation23 ->20 (9 error/11 warning): due warning SISTER e file LOC eliminati,
+  nessuna violation trasferita; mapper bulk163/74 invariato, campagna aperta.
+- Tre nuovi casi persistenti: errore JSON al primo/secondo payload conserva
+  le mutazioni storiche, re-export identici.225 test coverage/caratterizzazione/
+  API/facade PASS, full-file100% per exports (statement213/branch68) e nuovo
+  servizio (statement38/branch12), zero missing/partial/esclusioni. Sorgenti
+  Coverage directory anagrafica e services, nessun cambio config/gate/policy.
+- 1200 casi differenziali controa0eba126 equivalenti per output/ordine/SQL/
+  accessi/get row; ratchet merge-base e Ruff dei tre file PASS, format nuovo
+  servizio/test PASS. Lint globale compileall PASS, solo UP038 InCass1041
+  concorrente. Graphify Catasto force con patch pruning idempotente applicata,
+  docs Catasto/piattaforma aggiornati; evidenze /tmp/gaia-export-service-*.
+  Nessuna API remota/PostgreSQL dichiarata, baseline/config/scope/MCP invariati.
+- Preflight `a0eba126`: passaggio precedente progresso committato, runtime/test
+  Catasto puliti, indice vuoto. _attach_sister_data18/12/48/2; file cognitive
+  381/cyclomatic261/LOC507,23 violation/23 callable. Non-MCP ancora incompleto.
+- Unita SISTER: separare query/lookup/proiezioni dalle route in servizio di
+  dominio, mantenendo i tre simboli compatibili tramite re-export espliciti.
+  Deduplicare la serializzazione dei due payload con scritture sequenziali,
+  preservando mutazioni parziali in caso di errore JSON, ordine SQL e latest.
+- Tutti i callable nuovi sotto soglia; misurare aggregati e branching su
+  entrambi i file, non chiamare IMPROVED un semplice spostamento. Full-file100%
+  su entrambi i runtime, differenziale/errore JSON, ratchet/Ruff/Graphify prima
+  del commit; baseline/config/scope/API/MCP/Wiki e change concorrenti invariati.
+
 ### Catasto — selezione estrazione owner export SISTER (2026-10-06)
 
 - Chiusura `IMPROVED`: guardia di scarto unica per ID estrazione diverso

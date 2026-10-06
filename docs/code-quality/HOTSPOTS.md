@@ -14,6 +14,17 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, servizio arricchimento export SISTER, 2026-10-06:
+`_attach_sister_data` `IMPROVED`, cog/cyc/LOC/nesting18/12/48/2 ->9/7/43/2.
+Servizio SISTER zero violation, query e serializzazione sotto soglia; re-export
+compatibili e scritture parziali in errore preservati. Aggregati route/servizio:
+cognitive381 ->378, cyclomatic261 ->263/callable23 ->25, branching238 invariato,
+LOC507 ->533 (456/77); miglioramento cognitivo3, non riduzione del branching.
+Violation23 ->20, due warning SISTER e file LOC eliminati senza trasferimento.
+225 test/full-file100% su entrambi i runtime,1200 casi differenziali equivalenti.
+Ratchet/Ruff mirato PASS, lint globale UP038 InCass concorrente; mapper bulk
+163/74 e altri hotspot restano. MCP/Wiki esclusi operativamente, scope invariato.
+
 Campagna non-MCP, selezione owner latest SISTER, 2026-10-06:
 `_attach_sister_data` `IMPROVED`, cog/cyc/LOC/nesting21/13/49/3 ->18/12/48/2.
 Guardia unica di scarto per ID diverso da None/corrente, duplicati e ordine
