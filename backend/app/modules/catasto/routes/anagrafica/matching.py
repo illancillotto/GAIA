@@ -104,7 +104,7 @@ def _current_base_match_data(
     if not live_authoritative:
         utenza_ids: list[UUID] = [latest_utenza.id] if latest_utenza is not None else []
         intestatari = _load_intestatari_by_utenza_ids(db, utenza_ids) if utenza_ids else []
-        if not intestatari and latest_utenza is not None and latest_utenza.codice_fiscale:
+        if not intestatari and getattr(latest_utenza, "codice_fiscale", None):
             intestatari_by_cf = _load_intestatari_by_cf(db, {_normalize_cf(latest_utenza.codice_fiscale) or ""})
             intestatari = [item for item in intestatari_by_cf.values()]
         if not intestatari and cco and not _is_sentinel_cco(cco):

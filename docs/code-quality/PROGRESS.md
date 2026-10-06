@@ -3,6 +3,17 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — fallback intestatario da utenza (2026-10-06)
+
+- Slice `IMPROVED`: il fallback controlla il codice fiscale tramite accesso
+  nullo-safe, mantenendo identico il percorso quando l’utenza manca o il dato
+  è vuoto.
+- Metriche `_current_base_match_data` cognitive/cyclomatic/LOC `43/27/73 ->
+  42/26/73`; aggregati `matching.py` `319/211 -> 318/210`, LOC invariato.
+- Suite Catasto PASS; `matching.py` full-file 100% (`266/266` statement,
+  `106/106` branch). Ruff, format e ratchet contro `HEAD` (`e0708d59`) PASS.
+  Graphify Catasto aggiornato; file concorrenti preservati; MCP/Wiki esclusi.
+
 ### Catasto — fallback match subalterno (2026-10-06)
 
 - Slice `IMPROVED`: il ramo di caricamento intestatari per CCO attivo e non
