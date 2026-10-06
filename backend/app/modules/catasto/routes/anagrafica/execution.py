@@ -95,6 +95,50 @@ def _commit_live_changes(
         live_resolver.dirty = False
 
 
+def _build_live_search_result(
+    row: CatAnagraficaBulkSearchRow,
+    live_matches: list[CatAnagraficaMatch],
+) -> CatAnagraficaBulkSearchRowResult:
+    if len(live_matches) == 1:
+        live_match = live_matches[0]
+        return CatAnagraficaBulkSearchRowResult(
+            row_index=row.row_index,
+            comune_input=row.comune,
+            sezione_input=row.sezione,
+            foglio_input=row.foglio,
+            particella_input=row.particella,
+            sub_input=row.sub,
+            esito="FOUND",
+            message="OK",
+            particella_id=live_match.particella_id,
+            match=live_match,
+            matches_count=1,
+        )
+    if len(live_matches) > 1:
+        return CatAnagraficaBulkSearchRowResult(
+            row_index=row.row_index,
+            comune_input=row.comune,
+            sezione_input=row.sezione,
+            foglio_input=row.foglio,
+            particella_input=row.particella,
+            sub_input=row.sub,
+            esito="MULTIPLE_MATCHES",
+            message=f"Trovati {len(live_matches)} esiti live Capacitas. Verifica il comune/frazione corretti.",
+            matches_count=len(live_matches),
+            matches=live_matches,
+        )
+    return CatAnagraficaBulkSearchRowResult(
+        row_index=row.row_index,
+        comune_input=row.comune,
+        sezione_input=row.sezione,
+        foglio_input=row.foglio,
+        particella_input=row.particella,
+        sub_input=row.sub,
+        esito="NOT_FOUND",
+        message="Nessuna particella trovata.",
+    )
+
+
 # fmt: off
 
 async def execute_bulk_search_payload(
@@ -262,51 +306,7 @@ async def execute_bulk_search_payload(
                                     particella=particella_norm,
                                     sub=sub_norm,
                                 )
-                                if len(live_matches) == 1:
-                                    live_match = live_matches[0]
-                                    results.append(
-                                        CatAnagraficaBulkSearchRowResult(
-                                            row_index=row.row_index,
-                                            comune_input=row.comune,
-                                            sezione_input=row.sezione,
-                                            foglio_input=row.foglio,
-                                            particella_input=row.particella,
-                                            sub_input=row.sub,
-                                            esito="FOUND",
-                                            message="OK",
-                                            particella_id=live_match.particella_id,
-                                            match=live_match,
-                                            matches_count=1,
-                                        )
-                                    )
-                                elif len(live_matches) > 1:
-                                    results.append(
-                                        CatAnagraficaBulkSearchRowResult(
-                                            row_index=row.row_index,
-                                            comune_input=row.comune,
-                                            sezione_input=row.sezione,
-                                            foglio_input=row.foglio,
-                                            particella_input=row.particella,
-                                            sub_input=row.sub,
-                                            esito="MULTIPLE_MATCHES",
-                                            message=f"Trovati {len(live_matches)} esiti live Capacitas. Verifica il comune/frazione corretti.",
-                                            matches_count=len(live_matches),
-                                            matches=live_matches,
-                                        )
-                                    )
-                                else:
-                                    results.append(
-                                        CatAnagraficaBulkSearchRowResult(
-                                            row_index=row.row_index,
-                                            comune_input=row.comune,
-                                            sezione_input=row.sezione,
-                                            foglio_input=row.foglio,
-                                            particella_input=row.particella,
-                                            sub_input=row.sub,
-                                            esito="NOT_FOUND",
-                                            message="Nessuna particella trovata.",
-                                        )
-                                    )
+                                results.append(_build_live_search_result(row, live_matches))
                                 _commit_live_changes(db, live_resolver)
                             else:
                                 results.append(

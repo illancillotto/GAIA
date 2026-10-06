@@ -3,6 +3,17 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — risultati ricerca live (2026-10-06)
+
+- Slice `IMPROVED`: la costruzione della risposta per zero, uno o più match
+  live è isolata in `_build_live_search_result`, preservando payload, messaggi,
+  conteggi e precedenza del resolver.
+- Metriche `execute_bulk_search_payload` cognitive/cyclomatic/LOC `274/54/308
+  -> 255/52/264`; helper `2/3/42`, senza violation o debito trasferito.
+- Suite Catasto PASS; coverage `execution.py` 100% (`116/116` statement,
+  `50/50` branch). Ruff, format, ratchet contro `HEAD` (`2dce7953`) e
+  Graphify Catasto PASS; MCP/Wiki esclusi.
+
 ### Catasto — commit dei cambiamenti live (2026-10-06)
 
 - Slice `IMPROVED`: il commit del resolver live è centralizzato in
