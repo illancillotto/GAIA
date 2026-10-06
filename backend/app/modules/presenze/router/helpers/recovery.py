@@ -248,14 +248,17 @@ def _build_recovery_dashboard(
             last_adjustment_status=last_adjustment_status_by_collaborator.get(collaborator.id),
         )
         include_item = matured_days or used_days or manual_delta_days or pending_validation_count or manual_adjustment_count or not q
-        if negative_only and balance_days >= 0:
-            include_item = False
-        if pending_validation_only and pending_validation_count <= 0:
-            include_item = False
-        if pending_adjustments_only and pending_adjustment_count <= 0:
-            include_item = False
-        if manual_adjustments_only and manual_adjustment_count <= 0:
-            include_item = False
+        include_item = bool(
+            include_item
+            and all(
+                (
+                    not negative_only or balance_days < 0,
+                    not pending_validation_only or pending_validation_count > 0,
+                    not pending_adjustments_only or pending_adjustment_count > 0,
+                    not manual_adjustments_only or manual_adjustment_count > 0,
+                )
+            )
+        )
         if include_item:
             items.append(item)
             matured_total += matured_days

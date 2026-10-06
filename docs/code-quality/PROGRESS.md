@@ -3,6 +3,16 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Presenze — filtro dashboard recovery (2026-10-06)
+
+- Slice `IMPROVED`: i quattro filtri opzionali del dashboard sono consolidati
+  in una condizione booleana equivalente, preservando inclusioni ed esclusioni.
+- Metriche `_build_recovery_dashboard` cognitive/cyclomatic/LOC `57/36/134
+  -> 48/34/137`, senza nuove violation o debito trasferito.
+- Suite router/API Presenze PASS; coverage `recovery.py` 100% (`111/111`
+  statement, `28/28` branch). Ruff, format e ratchet contro `HEAD` (`6c20d0ba`)
+  PASS; Graphify invariato. MPC/MCP e lavori concorrenti esclusi.
+
 ### Presenze — classificazione recovery null-safe (2026-10-06)
 
 - Slice `IMPROVED`: la classificazione dei record senza classification usa un
