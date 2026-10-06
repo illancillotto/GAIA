@@ -3,6 +3,39 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — mapping intestatario export bulk (2026-10-06)
+
+- Chiusura `IMPROVED`: proiezione inline dei gruppi identita/contatti con
+  normalizzazione truthy condivisa; default owner vuoti con dict.fromkeys,
+  ordine invariato e n_intestatari numerico distinto. Nessun helper aggiunto.
+  Target cog/cyc/LOC/nesting190/86/100/3 ->163/74/91/3; file cognitive437 ->410,
+  cyclomatic286 ->274, LOC522 ->513, callable21/import25 invariati.24 violation
+  residue (11 error/13 warning): mapper e campagna restano sopra soglia.
+- Candidato helper provato e scartato prima dei gate finali: introduceva
+  warning ciclomatico13 e crescita LOC538. Variante finale non trasferisce
+  debito e non aggiunge violation; nessuna baseline aggiornata per aggirare
+  la regressione. L'estrazione non e inclusa nel commit.
+- 58 nuovi casi persistenti:54 per valori owner None/stringa vuota/zero-stringa
+  e4 per shape/ordine/note senza owner o senza match.215 test coverage/
+  caratterizzazione/API/facade PASS, full-file exports100% statement238/branch80,
+  zero missing/partial/esclusioni.4000 casi differenziali controd87347cd
+  equivalenti per valori, ordine colonne e accessi attributo, incluso note.
+- Ratchet mirato merge-based87347cd, Ruff runtime/test e format test PASS.
+  Lint globale compileall PASS, solo UP038 InCass concorrente1041. Graphify
+  codice Catasto e docs Catasto/piattaforma aggiornati prima del commit.
+  Evidenze /tmp/gaia-export-owner-*; nessun test PostgreSQL/API remota dichiarato.
+  Baseline/config/scope invariati, MCP/Wiki e change concorrenti preservati.
+- Preflight `d87347cd`: passaggio precedente progresso committato, runtime/test
+  Catasto puliti, indice vuoto. Mapper cog/cyc/LOC/nesting190/86/100/3;
+  file cognitive437/cyclomatic286/LOC522,24 violation/21 callable.
+- Proiezione owner (rank, identita, contatti, data/deceduto/note): deduplicare
+  normalizzazione truthy dei campi omogenei e default vuoti ordinati. Nessun
+  helper, ordine colonne e letture invariati; note letto dopo owner come
+  prima, zeri/stringhe/None e fallback denominazione preservati.
+- Differenziale contro HEAD, test persistenti/full-file100%, metriche
+  aggregate/ratchet/Ruff/Graphify prima del commit. MCP/Wiki e change
+  concorrenti esclusi, nessun cambio baseline/config/API/schema.
+
 ### Catasto — campi opzionali base export bulk (2026-10-06)
 
 - Chiusura `IMPROVED`: mapping dichiarativo dei sette campi opzionali,

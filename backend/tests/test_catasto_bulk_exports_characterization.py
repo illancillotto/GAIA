@@ -175,6 +175,86 @@ def test_bulk_optional_match_columns_preserve_values(kind, field, value):
     assert row[field] == ("" if value is None else getattr(match, field))
 
 
+@pytest.mark.parametrize("kind", ["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"])
+@pytest.mark.parametrize("value", [None, "", "0"])
+@pytest.mark.parametrize(
+    "field",
+    [
+        "tipo",
+        "cognome",
+        "nome",
+        "luogo_nascita",
+        "comune_residenza",
+        "indirizzo",
+        "cap",
+        "telefono",
+        "email",
+    ],
+)
+def test_bulk_owner_text_columns_preserve_values(kind, field, value):
+    optional = {
+        name: None
+        for name in (
+            "tipo",
+            "cognome",
+            "nome",
+            "luogo_nascita",
+            "ragione_sociale",
+            "source",
+            "last_verified_at",
+        )
+    }
+    optional[field] = value
+    owner = CatIntestatarioResponse(
+        **optional,
+        id=UUID(int=2),
+        codice_fiscale="CF",
+        denominazione=None,
+        data_nascita=None,
+        deceduto=False,
+    )
+    match = CatAnagraficaMatch(
+        particella_id=UUID(int=1), foglio="1", particella="2", intestatari=[owner]
+    )
+    result = CatAnagraficaBulkSearchRowResult(row_index=1, esito="FOUND", message="OK", match=match)
+    row = exports._build_bulk_export_rows(kind, [result])[0]
+    assert row[field] == (value or "")
+    assert row["rank"] == "1/1" and row["n_intestatari"] == 1
+
+
+@pytest.mark.parametrize("kind", ["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"])
+@pytest.mark.parametrize("matched", [False, True])
+def test_bulk_empty_owner_column_order_and_note(kind, matched):
+    match = CatAnagraficaMatch(particella_id=UUID(int=1), foglio="1", particella="2", note="Nota")
+    result = CatAnagraficaBulkSearchRowResult(
+        row_index=1, esito="NOT_FOUND", message="OK", match=match if matched else None
+    )
+    row = exports._build_bulk_export_rows(kind, [result])[0]
+    columns = [
+        "n_intestatari",
+        "rank",
+        "cf",
+        "tipo",
+        "cognome",
+        "nome",
+        "denominazione",
+        "ragione_sociale",
+        "data_nascita",
+        "luogo_nascita",
+        "comune_residenza",
+        "indirizzo",
+        "cap",
+        "telefono",
+        "email",
+        "deceduto",
+        "note",
+    ]
+    assert list(row)[-len(columns) :] == columns
+    assert row["n_intestatari"] == 0
+    assert all(row[column] == "" for column in columns[1:-1])
+    assert row["note"] == ("Nota" if matched else "")
+
+
 @pytest.mark.parametrize("display", ["Comune", "Comune - Frazione", "Other"])
 def test_live_fraction_resolution_order_and_cache(monkeypatch, display):
     option = CapacitasLookupOption(id="1", display=display)

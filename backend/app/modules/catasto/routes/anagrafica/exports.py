@@ -327,22 +327,11 @@ def _build_bulk_export_rows(
 
         empty_intestatario = {
             "n_intestatari": 0,
-            "rank": "",
-            "cf": "",
-            "tipo": "",
-            "cognome": "",
-            "nome": "",
-            "denominazione": "",
-            "ragione_sociale": "",
-            "data_nascita": "",
-            "luogo_nascita": "",
-            "comune_residenza": "",
-            "indirizzo": "",
-            "cap": "",
-            "telefono": "",
-            "email": "",
-            "deceduto": "",
-            "note": "",
+            **dict.fromkeys((
+                "rank", "cf", "tipo", "cognome", "nome", "denominazione", "ragione_sociale",
+                "data_nascita", "luogo_nascita", "comune_residenza", "indirizzo", "cap",
+                "telefono", "email", "deceduto", "note",
+            ), ""),
         }
 
         if not matches:
@@ -363,18 +352,20 @@ def _build_bulk_export_rows(
                         "n_intestatari": n_intestatari,
                         "rank": f"{index}/{n_intestatari}",
                         "cf": intestatario.codice_fiscale or "",
-                        "tipo": intestatario.tipo or "",
-                        "cognome": intestatario.cognome or "",
-                        "nome": intestatario.nome or "",
+                        **{
+                            field: getattr(intestatario, field) or ""
+                            for field in ("tipo", "cognome", "nome")
+                        },
                         "denominazione": _intestatario_display_name(intestatario),
                         "ragione_sociale": intestatario.ragione_sociale or "",
                         "data_nascita": intestatario.data_nascita.isoformat() if intestatario.data_nascita is not None else "",
-                        "luogo_nascita": intestatario.luogo_nascita or "",
-                        "comune_residenza": intestatario.comune_residenza or "",
-                        "indirizzo": intestatario.indirizzo or "",
-                        "cap": intestatario.cap or "",
-                        "telefono": intestatario.telefono or "",
-                        "email": intestatario.email or "",
+                        **{
+                            field: getattr(intestatario, field) or ""
+                            for field in (
+                                "luogo_nascita", "comune_residenza", "indirizzo",
+                                "cap", "telefono", "email",
+                            )
+                        },
                         "deceduto": "si" if intestatario.deceduto else "",
                         "note": match.note or "",
                     }

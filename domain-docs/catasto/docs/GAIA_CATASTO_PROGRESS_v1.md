@@ -1,6 +1,20 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-06 — mapping intestatario export bulk
+
+- Proiezione inline dei campi owner identita/contatti, normalizzazione truthy
+  condivisa; default vuoti ordinati con dict.fromkeys e count numerico distinto.
+  Nessun helper aggiunto, ordine colonne/accessi/rank/note invariati.
+- Mapper cognitive/cyclomatic/LOC190/86/100 ->163/74/91; file cognitive
+  437 ->410, cyclomatic286 ->274, LOC522 ->513.24 violation residue;
+  candidato helper scartato per nuova violation e crescita LOC, non committato.
+- 58 nuovi casi persistenti,215 test coverage/caratterizzazione/API/facade
+  PASS, full-file exports100% statement238/branch80, zero missing/esclusioni.
+  4000 casi differenziali controd87347cd equivalenti per valori/ordine/accessi.
+  Ratchet/Ruff mirato PASS; lint globale UP038 InCass concorrente. Graphify
+  codice/docs aggiornati, nessun cambio API/schema/baseline/config/scope.
+
 ### 2026-10-06 — campi opzionali export bulk
 
 - Mapping dichiarativo dei sette campi distretto/riordino/superficie, None

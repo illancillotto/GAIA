@@ -14,6 +14,15 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, mapping intestatario export Catasto, 2026-10-06:
+`_build_bulk_export_rows` `IMPROVED`, cog/cyc/LOC190/86/100 ->163/74/91,
+nesting3 invariato. Normalizzazione identita/contatti e default vuoti condivisi,
+ordine/valori/accessi preservati, nessun helper o nuova violation. File
+cognitive437 ->410, cyclomatic286 ->274, LOC522 ->513, callable21 invariati;
+24 violation residue.215 test/full-file100%,4000 casi differenziali equivalenti.
+Ratchet/Ruff mirato PASS; lint globale UP038 InCass concorrente. Mapper ancora
+sopra soglia; MCP/Wiki esclusi operativamente, baseline/config/scope invariati.
+
 Campagna non-MCP, campi opzionali export Catasto, 2026-10-06:
 `_build_bulk_export_rows` `IMPROVED`, cog/cyc218/103 ->190/86,
 LOC100/nesting3 invariati. Mapping distretto/riordino/superficie dichiarativo,
