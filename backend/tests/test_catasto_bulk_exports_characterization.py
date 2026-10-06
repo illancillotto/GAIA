@@ -102,6 +102,53 @@ def test_owner_export_columns_rank_dates_and_certificate():
     assert exports._export_basename("CF_PIVA_PARTICELLE") == "catasto-intestatari-da-cf"
 
 
+@pytest.mark.parametrize("kind", ["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"])
+def test_bulk_base_column_order_zero_values_and_input_fallback(kind):
+    match = CatAnagraficaMatch(
+        particella_id=UUID(int=1),
+        foglio="1",
+        particella="2",
+        num_distretto="0",
+        superficie_mq=0,
+        superficie_grafica_mq=0,
+    )
+    result = CatAnagraficaBulkSearchRowResult(
+        row_index=1,
+        esito="FOUND",
+        message="OK",
+        comune_input="Comune input",
+        sezione_input="Sezione input",
+        sub_input="Sub input",
+        match=match,
+    )
+    row = exports._build_bulk_export_rows(kind, [result])[0]
+    prefix = (
+        ["cf_input", "piva_input", "comune", "foglio", "particella", "sub"]
+        if kind == "CF_PIVA_PARTICELLE"
+        else ["comune", "sezione", "foglio", "particella", "sub"]
+    )
+    common = {
+        "num_distretto": "0",
+        "nome_distretto": "",
+        "riordino_code": "",
+        "riordino_maglia": "",
+        "riordino_lotto": "",
+        "superficie_mq": 0,
+        "superficie_grafica_mq": 0,
+        "esito": "Presente in Catasto",
+        "trovato in esito consorzio": "Particella non presente in Catasto Consorzio",
+        "cco": "",
+        "link_involture": "",
+        "apri_involture": "",
+        "stato_ruolo": "",
+        "stato_cnc": "",
+    }
+    assert list(row)[: len(prefix) + len(common)] == prefix + list(common)
+    assert {key: row[key] for key in common} == common
+    assert row["comune"] == ("" if kind == "CF_PIVA_PARTICELLE" else "Comune input")
+    assert row["sub"] == ("" if kind == "CF_PIVA_PARTICELLE" else "Sub input")
+
+
 @pytest.mark.parametrize("display", ["Comune", "Comune - Frazione", "Other"])
 def test_live_fraction_resolution_order_and_cache(monkeypatch, display):
     option = CapacitasLookupOption(id="1", display=display)

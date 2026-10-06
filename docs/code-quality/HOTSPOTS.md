@@ -14,6 +14,15 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, mapping colonne export Catasto, 2026-10-06:
+`_build_bulk_export_rows` `IMPROVED`, cog/cyc/LOC/nesting281/135/114/3
+->218/103/100/3. Colonne comuni deduplicate senza helper, ordine/accessi e
+fallback invariati. File cognitive528 ->465, cyclomatic335 ->303, LOC533 ->522,
+callable21/import25 invariati;24 violation residue, nessun debt transfer.
+4000 casi differenziali equivalenti; ratchet/Ruff mirato PASS, lint globale
+UP038 InCass concorrente. Prossima slice resta nel mapper, non in MCP/Wiki.
+115 test PASS, full-file exports100% statement238/branch80, zero esclusioni.
+
 Campagna non-MCP, SISTER filtro righe vuote, 2026-10-06:
 `parse_sister_visura_text` `IMPROVED`, cognitive/cyclomatic10/10 ->9/9.
 Filtro idiomatico delle stringhe normalizzate, nessun helper o debt transfer.

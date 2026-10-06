@@ -19,8 +19,10 @@ from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.models.catasto import CatastoSisterExtraction, CatastoSisterOwner, CatastoSisterParcel
 from app.models.catasto_phase1 import CatParticella
-from app.modules.catasto.routes.anagrafica.matching import _build_match, _load_consorzio_presence_by_particella_ids
-
+from app.modules.catasto.routes.anagrafica.matching import (
+    _build_match,
+    _load_consorzio_presence_by_particella_ids,
+)
 from app.modules.catasto.routes.anagrafica.normalization import _LiveSearchHit, _norm_str, _safe_int
 from app.modules.elaborazioni.capacitas.client import InVoltureClient
 from app.modules.elaborazioni.capacitas.models import (
@@ -33,8 +35,8 @@ from app.schemas.catasto_phase1 import (
     CatAnagraficaBulkSearchRow,
     CatAnagraficaBulkSearchRowResult,
     CatAnagraficaMatch,
-    CatIntestatarioResponse,
     CatComuneExportOption,
+    CatIntestatarioResponse,
 )
 from app.services.elaborazioni_capacitas_terreni import (
     _SECTION_LOOKUP_COMUNE_OVERRIDES,
@@ -285,38 +287,23 @@ def _build_bulk_export_rows(
         def build_base(match: CatAnagraficaMatch | None = None, *, _result: CatAnagraficaBulkSearchRowResult = result) -> dict[str, object]:
             link_value = _build_rpt_certificato_url(match) if match is not None else ""
             if kind == "CF_PIVA_PARTICELLE":
-                return {
+                base = {
                     "cf_input": _result.codice_fiscale_input or "",
                     "piva_input": _result.partita_iva_input or "",
                     "comune": match.comune if match is not None and match.comune is not None else "",
                     "foglio": match.foglio if match is not None else "",
                     "particella": match.particella if match is not None else "",
                     "sub": match.subalterno if match is not None and match.subalterno is not None else "",
-                    "num_distretto": match.num_distretto if match is not None and match.num_distretto is not None else "",
-                    "nome_distretto": match.nome_distretto if match is not None and match.nome_distretto is not None else "",
-                    "riordino_code": match.riordino_code if match is not None and match.riordino_code is not None else "",
-                    "riordino_maglia": match.riordino_maglia if match is not None and match.riordino_maglia is not None else "",
-                    "riordino_lotto": match.riordino_lotto if match is not None and match.riordino_lotto is not None else "",
-                    "superficie_mq": match.superficie_mq if match is not None and match.superficie_mq is not None else "",
-                    "superficie_grafica_mq": (
-                        match.superficie_grafica_mq if match is not None and match.superficie_grafica_mq is not None else ""
-                    ),
-                    "esito": _format_esito_for_export(_result.esito),
-                    "trovato in esito consorzio": _format_consorzio_esito_for_export(
-                        bool(match.presente_in_catasto_consorzio) if match is not None else False
-                    ),
-                    "cco": match.utenza_latest.cco if match is not None and match.utenza_latest is not None and match.utenza_latest.cco is not None else "",
-                    "link_involture": link_value,
-                    "apri_involture": "",
-                    "stato_ruolo": match.stato_ruolo if match is not None and match.stato_ruolo is not None else "",
-                    "stato_cnc": match.stato_cnc if match is not None and match.stato_cnc is not None else "",
                 }
-            return {
-                "comune": match.comune if match is not None and match.comune is not None else (_result.comune_input or ""),
-                "sezione": _result.sezione_input or "",
-                "foglio": match.foglio if match is not None else (_result.foglio_input or ""),
-                "particella": match.particella if match is not None else (_result.particella_input or ""),
-                "sub": match.subalterno if match is not None and match.subalterno is not None else (_result.sub_input or ""),
+            else:
+                base = {
+                    "comune": match.comune if match is not None and match.comune is not None else (_result.comune_input or ""),
+                    "sezione": _result.sezione_input or "",
+                    "foglio": match.foglio if match is not None else (_result.foglio_input or ""),
+                    "particella": match.particella if match is not None else (_result.particella_input or ""),
+                    "sub": match.subalterno if match is not None and match.subalterno is not None else (_result.sub_input or ""),
+                }
+            base.update({
                 "num_distretto": match.num_distretto if match is not None and match.num_distretto is not None else "",
                 "nome_distretto": match.nome_distretto if match is not None and match.nome_distretto is not None else "",
                 "riordino_code": match.riordino_code if match is not None and match.riordino_code is not None else "",
@@ -335,7 +322,8 @@ def _build_bulk_export_rows(
                 "apri_involture": "",
                 "stato_ruolo": match.stato_ruolo if match is not None and match.stato_ruolo is not None else "",
                 "stato_cnc": match.stato_cnc if match is not None and match.stato_cnc is not None else "",
-            }
+            })
+            return base
 
         empty_intestatario = {
             "n_intestatari": 0,

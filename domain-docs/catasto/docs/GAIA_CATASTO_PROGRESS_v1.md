@@ -1,6 +1,20 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-06 — colonne comuni export bulk
+
+- 115 test coverage/caratterizzazione/API/facade PASS; full-file exports100%
+  statement238/238 e branch80/80, zero missing/partial/esclusioni.
+- Deduplicato il suffisso comune delle colonne export; prefissi CF/PIVA e
+  comune/sezione distinti, ordine CSV/XLSX e accessi attributo invariati.
+  Nessun cambio API/schema/fallback input, semantica None/zero, URL o owners.
+- Mapper cog/cyc/LOC/nesting281/135/114/3 ->218/103/100/3; cognitive file
+  528 ->465, cyclomatic335 ->303, LOC533 ->522, nessun helper aggiunto.
+  24 violation residue, hotspot ancora da ridurre; baseline/config invariati.
+- 4000 casi differenziali contro37440327 equivalenti per valori, ordine
+  colonne e accessi; due casi persistenti di regressione. Ratchet/Ruff mirato
+  PASS, lint globale UP038 InCass concorrente; Graphify codice/docs aggiornati.
+
 ### 2026-10-06 — filtro righe vuote SISTER
 
 - Filtro idiomatico delle righe normalizzate con filter(None, lines): ordine,

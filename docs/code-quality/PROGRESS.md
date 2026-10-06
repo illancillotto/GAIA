@@ -3,6 +3,38 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — mapping condiviso colonne export bulk (2026-10-06)
+
+- Chiusura `IMPROVED`: suffisso delle colonne comuni definito una sola volta,
+  prefissi delle due modalita distinti. Nessun helper aggiunto o debt transfer.
+  Target cog/cyc/LOC/nesting281/135/114/3 ->218/103/100/3; file cognitive
+  528 ->465, cyclomatic335 ->303, LOC533 ->522, callable21/import25 invariati.
+  Violation24 (11 error/13 warning) restano: hotspot non ancora sotto soglia.
+- Suite coverage/caratterizzazione/API/facade115 test PASS, full-file exports
+  100% statement238/238 e branch80/80, zero missing/partial/esclusioni.
+  Comando pytest --cov directory senza preload; report e log finali in
+  /tmp/gaia-export-map-final-*. Nessun test PostgreSQL o servizio remoto.
+- Due nuovi casi persistenti proteggono ordine colonne, zeri e fallback input.
+  4000 casi differenziali contro37440327 equivalenti per valori, ordine chiavi
+  e trace accessi attributo. Fixture iniziali corrette ai contratti Pydantic
+  (particella_id obbligatorio, num_distretto stringa) e label esito esistenti;
+  nessuna correzione runtime introdotta per adattare i test.
+- Ratchet mirato merge-base37440327 e Ruff runtime/test PASS; format del test
+  PASS. Lint globale: compileall PASS, solo UP038 InCass concorrente1041.
+  Baseline/config/scope invariati, runtime e change MCP/Wiki non toccati.
+- Graphify codice Catasto e docs Catasto/piattaforma aggiornati prima del
+  commit separato. Campagna globale non completa; residuo nel mapper218/103.
+- Preflight `37440327`: caratterizzazione78 test/full-file100% disponibile;
+  runtime exports.py pulito. _build_bulk_export_rows cog/cyc/LOC/nesting
+  281/135/114/3, file24 violation/21 callable. Passaggio precedente progresso:
+  test e commit verificati, nessuna riduzione ancora dichiarata.
+- Deduplicare soltanto le colonne base comuni alle due modalita export,
+  mantenendo prefissi distinti, ordine chiavi, URL prima dei campi, accessi
+  schema, fallback input/None/zero, owners/rank e formato CSV/XLSX invariati.
+  Nessuna estrazione artificiale, cambio baseline/config o inclusione MCP/Wiki.
+- Verificare differenziale contro HEAD, coverage statement/branch100%,
+  metriche aggregate, ratchet merge-base/Ruff e Graphify prima del commit.
+
 ### Catasto — caratterizzazione full-file export bulk (2026-10-06)
 
 - Chiusura `CHARACTERIZED`: 78 test PASS, full-file exports100% statement
