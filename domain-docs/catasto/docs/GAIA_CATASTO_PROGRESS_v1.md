@@ -1,6 +1,20 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-06 — fallback comune/sub export bulk
+
+- Fallback comune/subalterno separati e tipizzati: match non-None prioritario
+  anche vuoto, input letto solo in modalità comune. Ordine chiavi/accessi,
+  None/vuoti/zero/spazi invariati, nessun cambio API/schema.
+- Mapper cog/cyc/LOC79/38/60 ->43/22/60, helper7/7/7 sotto soglia; file
+  cognitive273 ->251, cyclomatic220 ->218/callable21 ->23, branching199 ->195,
+  LOC455 ->469.17 violation residue, nessun nuovo debito o transfer.
+- Sedici casi persistenti,298 test coverage/caratterizzazione/API/facade PASS;
+  full-file exports100% statement196/branch60, zero esclusioni.4000 confronti
+  controbf328bcb equivalenti per output/ordine/accessi. Ratchet/Ruff mirato PASS,
+  lint globale UP038 InCass concorrente; Graphify codice/docs aggiornati.
+  Baseline/config/scope invariati, mapper43/22 e campagna ancora aperti.
+
 ### 2026-10-06 — modulo rendering CSV/XLSX export
 
 - CSV/XLSX rendering e response nel modulo export_rendering della stessa area

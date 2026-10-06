@@ -14,6 +14,15 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, fallback comune/sub export bulk, 2026-10-06:
+`_build_bulk_export_rows` `IMPROVED`, cog/cyc/LOC79/38/60 ->43/22/60,
+nesting3 invariato. Helper comune/sub7/7/7/1/2 sotto soglia; priorita match,
+lazy input e valori vuoti preservati. File cognitive273 ->251, cyclomatic220
+->218/callable21 ->23, branching199 ->195, LOC455 ->469;17 violation residue,
+nessuna nuova violation/debt transfer.298 test/full-file100%,4000 differenziali
+equivalenti; ratchet/Ruff mirato PASS, lint globale UP038 InCass concorrente.
+Mapper43/22 e campagna ancora aperti; MCP/Wiki esclusi operativamente.
+
 Campagna non-MCP, modulo rendering CSV/XLSX export, 2026-10-06:
 `_render_bulk_export_xlsx_bytes` `IMPROVED`, cog/cyc/LOC/nesting18/9/21/4
 ->11/7/17/2; helper hyperlink2/3/13/1/4 sotto soglia e rendering zero violation.

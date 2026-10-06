@@ -370,6 +370,24 @@ def _bulk_export_parcel_coordinates(
     }
 
 
+def _bulk_export_comune(
+    match: CatAnagraficaMatch | None,
+    fallback: CatAnagraficaBulkSearchRowResult | None = None,
+) -> str:
+    if match is not None and match.comune is not None:
+        return match.comune
+    return (fallback.comune_input or "") if fallback is not None else ""
+
+
+def _bulk_export_subalterno(
+    match: CatAnagraficaMatch | None,
+    fallback: CatAnagraficaBulkSearchRowResult | None = None,
+) -> str:
+    if match is not None and match.subalterno is not None:
+        return match.subalterno
+    return (fallback.sub_input or "") if fallback is not None else ""
+
+
 def _build_bulk_export_rows(
     kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"],
     export_results: list[CatAnagraficaBulkSearchRowResult],
@@ -384,16 +402,16 @@ def _build_bulk_export_rows(
                 base = {
                     "cf_input": _result.codice_fiscale_input or "",
                     "piva_input": _result.partita_iva_input or "",
-                    "comune": match.comune if match is not None and match.comune is not None else "",
+                    "comune": _bulk_export_comune(match),
                     **_bulk_export_parcel_coordinates(match),
-                    "sub": match.subalterno if match is not None and match.subalterno is not None else "",
+                    "sub": _bulk_export_subalterno(match),
                 }
             else:
                 base = {
-                    "comune": match.comune if match is not None and match.comune is not None else (_result.comune_input or ""),
+                    "comune": _bulk_export_comune(match, _result),
                     "sezione": _result.sezione_input or "",
                     **_bulk_export_parcel_coordinates(match, _result),
-                    "sub": match.subalterno if match is not None and match.subalterno is not None else (_result.sub_input or ""),
+                    "sub": _bulk_export_subalterno(match, _result),
                 }
             base.update({
                 **_bulk_export_district_columns(match),

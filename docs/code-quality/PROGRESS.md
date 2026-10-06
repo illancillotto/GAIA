@@ -3,6 +3,24 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — fallback comune e sub export bulk (2026-10-06)
+
+- Preflight `bf328bcb`: precedente passaggio progresso committato, runtime
+  Catasto pulito e indice vuoto. Mapper79/38/60/3; exports cognitive273/
+  cyclomatic220/LOC455,17 violation/21 callable. Rendering e SISTER sotto soglia.
+- Condividere fallback comune/subalterno delle due modalita: valore match
+  presente non-None ha priorita anche se vuoto; input letto soltanto quando
+  serve in modalita comune, CF/PIVA senza valore resta vuoto. Helper distinti
+  per campi/schema dominio, tipizzati sotto soglia, ordine/doppie letture invariati.
+- Full-file100%, differenziale contro HEAD, metriche aggregate/ratchet/Ruff/
+  Graphify prima del commit separato; nessun cambio API/schema/baseline/config/
+  scope/MCP, modifiche concorrenti preservate e goal globale ancora aperto.
+- Chiusura `IMPROVED`: helper comune/sub7/7/7/1/2 sotto soglia; mapper
+  79/38/60/3 ->43/22/60/3. File cognitive273 ->251, cyclomatic220 ->218,
+  callable21 ->23, branching199 ->195, LOC455 ->469;17 violation residue,
+  nessuna nuova violation o trasferimento. 298 test PASS, full-file exports
+  100% statement196/branch60 e 4000 differenziali equivalenti controbf328bcb.
+
 ### Catasto — rendering CSV/XLSX export bulk (2026-10-06)
 
 - Chiusura `IMPROVED`: modulo rendering con gestione hyperlink separata,

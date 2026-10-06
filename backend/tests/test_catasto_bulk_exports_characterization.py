@@ -147,6 +147,26 @@ def test_owner_export_columns_rank_dates_and_certificate():
     assert exports._export_basename("CF_PIVA_PARTICELLE") == "catasto-intestatari-da-cf"
 
 
+@pytest.mark.parametrize("use_input", [False, True])
+@pytest.mark.parametrize("value", [None, "", "0", " Comune "])
+def test_bulk_location_fallbacks_preserve_empty_match_and_lazy_input(use_input, value):
+    match = CatAnagraficaMatch(
+        particella_id=UUID(int=1), foglio="1", particella="2", comune=value, subalterno=value
+    )
+    result = CatAnagraficaBulkSearchRowResult(
+        row_index=1, esito="NOT_FOUND", message="OK", comune_input="Input", sub_input="Input"
+    )
+    fallback = result if use_input else None
+    expected = value if value is not None else "Input" if use_input else ""
+    assert exports._bulk_export_comune(match, fallback) == expected
+    assert exports._bulk_export_subalterno(match, fallback) == expected
+    assert exports._bulk_export_comune(None, fallback) == ("Input" if use_input else "")
+    assert exports._bulk_export_subalterno(None, fallback) == ("Input" if use_input else "")
+    empty_input = result.model_copy(update={"comune_input": None, "sub_input": ""})
+    assert exports._bulk_export_comune(None, empty_input) == ""
+    assert exports._bulk_export_subalterno(None, empty_input) == ""
+
+
 @pytest.mark.parametrize("matched", [False, True])
 @pytest.mark.parametrize("use_input", [False, True])
 @pytest.mark.parametrize("value", [None, "", "0", " 1 "])
