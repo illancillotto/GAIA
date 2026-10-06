@@ -3,6 +3,18 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — caricamento intestatari da snapshot (2026-10-06)
+
+- Slice `IMPROVED`: la lettura e deduplicazione delle righe certificate è
+  isolata in `_load_certified_intestatari_rows`; la precedenza delle righe DB
+  sul fallback JSON e l’ordine dei risultati restano invariati.
+- Metriche callable `_load_intestatari_from_cert_context` cognitive/cyclomatic/
+  LOC `29/23/63 -> 22/18/51`; helper `2/3/16`. Aggregati file `130/125 ->
+  125/123`, LOC invariato (`443`).
+- Suite Catasto PASS; `intestatari.py` full-file 100% (`173/173` statement,
+  `74/74` branch). Ruff, format e ratchet contro `HEAD` (`17340b05`) PASS.
+  Graphify Catasto aggiornato; MCP/Wiki esclusi.
+
 ### Catasto — guardia contesto certificato RPT (2026-10-06)
 
 - Slice `IMPROVED`: `_has_rpt_certificato_context` normalizza i quattro valori

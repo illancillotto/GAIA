@@ -295,6 +295,24 @@ def _is_usable_certificato_snapshot(snapshot: CatCapacitasCertificato) -> bool:
     return any(payload.get(key) for key in ("partita_code", "utenza_code", "intestatari", "terreni"))
 
 
+def _load_certified_intestatari_rows(
+    db: Session, cert: CatCapacitasCertificato
+) -> tuple[list[CatIntestatarioResponse], set[str]]:
+    rows = db.execute(
+        select(CatCapacitasIntestatario)
+        .where(CatCapacitasIntestatario.certificato_id == cert.id)
+        .order_by(CatCapacitasIntestatario.denominazione)
+    ).scalars().all()
+    rows_by_key: dict[str, CatCapacitasIntestatario] = {}
+    for row in rows:
+        key = next(filter(None, (_normalize_cf(row.codice_fiscale), row.idxana, str(row.id))))
+        rows_by_key.setdefault(key, row)
+    return (
+        [_intestatario_response_from_capacitas_row(row) for row in rows_by_key.values()],
+        set(rows_by_key),
+    )
+
+
 def _load_intestatari_from_cert_context(
     db: Session,
     *,
@@ -309,19 +327,7 @@ def _load_intestatari_from_cert_context(
     cert = _find_certificato_snapshot(db, cco=cco, com=com, pvc=pvc, fra=fra, ccs=ccs)
     if cert is None:
         return []
-    rows = db.execute(
-        select(CatCapacitasIntestatario)
-        .where(CatCapacitasIntestatario.certificato_id == cert.id)
-        .order_by(CatCapacitasIntestatario.denominazione)
-    ).scalars().all()
-    seen: set[str] = set()
-    items: list[CatIntestatarioResponse] = []
-    for row in rows:
-        key = _normalize_cf(row.codice_fiscale) or row.idxana or str(row.id)
-        if key in seen:
-            continue
-        seen.add(key)
-        items.append(_intestatario_response_from_capacitas_row(row))
+    items, seen = _load_certified_intestatari_rows(db, cert)
     if items:
         return items
 
