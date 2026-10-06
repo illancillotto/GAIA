@@ -58,6 +58,15 @@ CATASTO_DISTRETTO_EXPORT_STORAGE_PATH = Path(
 
 # fmt: off
 
+def _load_base_intestatari_by_identity(db, latest_utenza):
+    if latest_utenza is None:
+        return []
+    intestatari = _load_intestatari_by_utenza_ids(db, [latest_utenza.id])
+    if not intestatari and getattr(latest_utenza, "codice_fiscale", None):
+        intestatari = list(_load_intestatari_by_cf(db, {_normalize_cf(latest_utenza.codice_fiscale) or ""}).values())
+    return intestatari
+
+
 def _current_base_match_data(
     db: Session,
     p: CatParticella,
@@ -69,16 +78,12 @@ def _current_base_match_data(
     tuple[str | None, str | None, str | None, str | None],
     tuple[str | None, str | None],
 ]:
-    latest_utenza = (
-        db.execute(
-            select(CatUtenzaIrrigua)
-            .where(CatUtenzaIrrigua.particella_id == p.id)
-            .order_by(desc(CatUtenzaIrrigua.anno_campagna))
-            .limit(1)
-        )
-        .scalars()
-        .first()
-    )
+    latest_utenza = db.execute(
+        select(CatUtenzaIrrigua)
+        .where(CatUtenzaIrrigua.particella_id == p.id)
+        .order_by(desc(CatUtenzaIrrigua.anno_campagna))
+        .limit(1)
+    ).scalars().first()
 
     current_occupancy = (
         db.execute(
@@ -102,11 +107,7 @@ def _current_base_match_data(
 
     intestatari: list[CatIntestatarioResponse] = []
     if not live_authoritative:
-        utenza_ids: list[UUID] = [latest_utenza.id] if latest_utenza is not None else []
-        intestatari = _load_intestatari_by_utenza_ids(db, utenza_ids) if utenza_ids else []
-        if not intestatari and getattr(latest_utenza, "codice_fiscale", None):
-            intestatari_by_cf = _load_intestatari_by_cf(db, {_normalize_cf(latest_utenza.codice_fiscale) or ""})
-            intestatari = [item for item in intestatari_by_cf.values()]
+        intestatari = _load_base_intestatari_by_identity(db, latest_utenza)
         if not intestatari and cco and not _is_sentinel_cco(cco):
             cert_com, cert_pvc, cert_fra, cert_ccs = cert_context
             intestatari = _load_intestatari_from_cert_context(

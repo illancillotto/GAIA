@@ -266,6 +266,7 @@ def test_final_matching_branch_combinations(monkeypatch: pytest.MonkeyPatch) -> 
         superficie_mq=None,
         superficie_grafica_mq=None,
     )
+    assert matching._load_base_intestatari_by_identity(_DB(), None) == []
     latest = SimpleNamespace(id=uuid4(), cco=None, codice_fiscale=None)
     for name, value in {
         "_utenza_summary_from_record": lambda value: None,
