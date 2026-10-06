@@ -12,8 +12,8 @@ import { getStoredAccessToken } from "@/lib/auth";
 import { controlCommand, parcelControlRequest } from "@/lib/parcel-control-api";
 import type { ControlCase, ControlPage, ControlProposal, ControlRow, ControlView } from "@/types/parcel-control";
 
-const VIEWS = { all: "Storico 2020–2025", missing: "Non rilevate nel 2025", cf: "CF anomali",
-  cases: "Pratiche aperte", visure: "Pratiche con visure", recovered: "Immobili recuperati",
+const VIEWS = { all: "Storico 2011–2025", missing: "Non rilevate nel 2025", cf: "CF anomali",
+  cases: "Pratiche aperte", visure: "Pratiche con visure", recovered: "Particelle recuperate",
   proposals: "Proposte", closed: "Concluse / escluse", annuale: "Consultazione annuale" };
 
 export function ParcelControlWorkspace({ annualView }: { annualView: ReactNode }) {
@@ -102,7 +102,7 @@ function ControlContent({ view }: { view: ControlView }) {
   const editable = currentUser?.role === "super_admin" || grantedSectionKeys.includes("ruolo.tributi.manage_status");
   const { result, proposalRows, practice, busy, error, search, page, searchRows, open, execute, refresh } = useControlWorkspace(view);
 
-  return <RuoloModulePage title="Particelle — storico e recupero posizioni" description="Controllo persistente dello storico 2020–2025. Ruolo corrente: 2025." requiredSection="ruolo.avvisi">
+  return <RuoloModulePage title="Particelle — storico e recupero posizioni" description="Controllo persistente dello storico 2011–2025. Ruolo corrente: 2025." requiredSection="ruolo.avvisi">
     <div className="space-y-5">
       <p className="rounded-xl bg-amber-50 p-4">Un&apos;assenza non dimostra un&apos;omissione. Catasto, titolarità e territorio richiedono verifiche separate.</p>
       {error && <p role="alert" className="text-red-700">{error}</p>}
@@ -158,7 +158,7 @@ function CoverageForm({ busy, save }: { busy: boolean; save: (path: string, reas
   return <details className="rounded-xl border bg-white p-4"><summary>Attesta completezza di un&apos;annualità</summary>
     <p>Attestare solo dopo aver verificato la copertura dell&apos;intero ruolo e il dettaglio delle particelle.</p>
     <form onSubmit={submit} className="mt-3 grid gap-3 md:grid-cols-2">
-      <label>Annualità<input name="year" type="number" min="2020" max="2025" defaultValue="2025" required className="form-control" /></label>
+      <label>Annualità<input name="year" type="number" min="2011" max="2025" defaultValue="2025" required className="form-control" /></label>
       <label>Fonte e versione verificata<input name="source" required className="form-control" /></label>
       <label>Motivazione<input name="reason" required minLength={3} className="form-control" /></label>
       <button disabled={busy} className="btn-secondary">Registra attestazione</button>

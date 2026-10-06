@@ -4,14 +4,14 @@
 
 Il controllo riusa `/ruolo/particelle`, senza una seconda pagina o un secondo
 servizio. L'universo storico comprende le particelle importate per il periodo
-2020–2025; l'annualita corrente concordata e **2025**. La consultazione annuale
+2011–2025; l'annualita corrente concordata e **2025**. La consultazione annuale
 precedente resta disponibile con `?vista=annuale`; i vecchi URL con filtri
 annuali continuano ad aprire quella vista.
 
 Le altre viste comprendono storico, particelle non rilevate nel 2025, avvisi
-con CF anomalo, pratiche aperte, pratiche con visure, immobili recuperati,
+con CF anomalo, pratiche aperte, pratiche con visure, particelle recuperate,
 proposte e pratiche concluse/escluse. Le ultime due viste di approfondimento
-elencano le pratiche: gli immobili e gli esiti delle visure sono nel dettaglio.
+elencano le pratiche: le particelle e gli esiti delle visure sono nel dettaglio.
 
 ## Fonti e significato delle annualita
 
@@ -52,7 +52,7 @@ Aprire una pratica dalla particella o dall'avviso anomalo. Nel dettaglio:
 - registrare abbinamenti proposti o confermati con CF, tipo soggetto, diritto,
   quota, periodo ed evidenza di supporto;
 - mantenere separati stato pratica, richieste SISTER ed esiti dei singoli
-  immobili acquisiti;
+  particelle acquisite;
 - preparare proposte e registrare conferma, esclusione motivata o approfondimento.
 
 La validazione CF distingue mancante, incompleto, formalmente errato e
@@ -65,7 +65,7 @@ e dagli abbinamenti. Nessun comando modifica avvisi storici, anagrafiche o ruolo
 Trasferimenti, omonimie, quote e derivazioni catastali richiedono evidenze
 documentali; una visura attuale non prova la titolarita nelle annualita pregresse.
 
-## SISTER e immobili recuperati
+## SISTER e particelle recuperate
 
 Le richieste riusano `CatastoBatch`, `CatastoVisuraRequest`, documenti ed
 estrazioni esistenti. **Prepara richiesta SISTER** crea un batch pending:
@@ -79,12 +79,34 @@ senza risultati o l'assenza nell'archivio locale non attestano una soppressione.
 
 **Limite attuale:** il parser SISTER restituisce un solo riferimento catastale
 principale. Il pulsante di acquisizione registra quel riferimento e gli
-intestatari estratti, non tutti gli immobili del documento. Per gli altri
-immobili occorre consultare il documento completo; la ricerca non viene
-dichiarata esaustiva. Il confronto Ruolo di un immobile recuperato e manuale
+intestatari estratti, non tutte le particelle del documento. Per le altre
+particelle occorre consultare il documento completo; la ricerca non viene
+dichiarata esaustiva. Il confronto Ruolo di una particella recuperata e manuale
 con evidenza `role_check`, non un matching automatico fra i due namespace.
 
 ## Proposte e salvaguardie
+
+La coda di recupero e limitata alle particelle gia a ruolo almeno una volta
+nel **2011–2025**. Una particella senza presenza storica documentata non puo
+generare una proposta, nemmeno con una visura attuale positiva. Per i riferimenti
+SISTER, separati dal namespace Ruolo, occorre registrare un'evidenza
+`role_check` con `result=present`, particella e annualita storica supportata,
+oltre al confronto dell'annualita proposta. Il controllo viene ripetuto alla
+conferma, anche per proposte preparate prima di questa regola.
+
+Le particelle storiche dentro o parzialmente dentro un centro abitato restano
+in istruttoria: l'evidenza territoriale non chiude o esclude automaticamente
+la pratica. La presenza storica non supera pero i requisiti di conferma e non
+autorizza il reinserimento. L'esito `partially_inside_town` e registrabile
+separatamente; anche il solo contatto fra distretti non e causa di esclusione.
+
+Le zone **FD e FD_1–FD_7** impediscono la conferma delle proposte di recupero. Il codice
+distretto e registrabile nell'evidenza territoriale: una conferma con l'ultima
+verifica positiva riferita a tali codici viene rifiutata. Il controllo e al
+momento documentale/manuale, non un'attribuzione geometrica automatica.
+Lo shapefile `Distretti_Irrigui_3003_r1.shp` descrive distretti irrigui, non
+centri abitati, e non e intercambiabile con le geometrie operative PostGIS.
+Nessuna geometria operativa viene sostituita da questo ciclo.
 
 Le proposte sono deduplicate per riferimento, annualita, CF verificato,
 diritto, quota, componente tributaria e tipo. Una proposta di inserimento per
@@ -133,7 +155,7 @@ PostgreSQL. Vincoli univoci proteggono origini delle pratiche e proposte.
 
 ## Verifiche del ciclo
 
-Test mirati: 43 casi backend e 27 frontend; coverage statement/branch al 100%
+Test mirati: 52 casi backend e 27 frontend; coverage statement/branch al 100%
 dei nuovi runtime e dei file runtime modificati nel ciclo, inclusa la pagina
 Particelle esistente. Verificati Ruff, ESLint e typecheck. La migration ha
 roundtrip/schema test in SQLite e generazione SQL nel contesto Alembic
@@ -151,9 +173,24 @@ esclusioni o baseline. I report temporanei vivono in `/tmp/gaia-control-*`.
 La scansione parziale non e autorevole per il matching inter-file: puo scambiare
 funzioni nuove per simboli di sorgenti non incluse nello scan.
 
-Metriche dei 14 runtime nuovi: 120 callable, 27 warning e **zero error-level**;
+Metriche dei 14 runtime del flusso: 120 -> 122 callable, 27 warning invariati e **zero error-level**;
 ratchet completo senza finding nel ciclo. I runtime legacy toccati non
 introducono regressioni. Baseline invariata per non includere modifiche
 concorrenti estranee; nessun refactoring hotspot o riduzione dichiarata.
 Graphify Ruolo codice/docs, frontend e backend aggiornati attraverso i target
 dedicati; gli artefatti generati non entrano nel commit.
+
+## Disponibilita dello storico e attivazione
+
+Verifica in sola lettura del database operativo del 6 ottobre 2026: sono
+presenti righe particella per tutte le annualita 2011–2025. Il periodo
+2011–2019 contiene 600.883 righe, con due import `completed` per ciascun anno;
+questi conteggi non certificano completezza, correttezza o assenza di duplicati.
+L'intero periodo contiene 1.192.948 righe: non e stato avviato un ricalcolo
+massivo operativo. Valutare tempi, memoria e necessita di elaborazione asincrona
+nel collaudo prima dell'attivazione.
+
+Dopo il deployment occorre aggiornare l'analisi per acquisire le annualita
+aggiunte; le attestazioni delle annualita con firme cambiate vanno rivalutate.
+Le annualita aggiunte non sono certificate automaticamente e le attestazioni
+con firme invariate restano valide. Nessuna attestazione viene creata dal ciclo.

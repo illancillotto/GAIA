@@ -29,7 +29,7 @@ export function ParcelControlForms({ practice, busy, save }: Props) {
     <label>Azione<select value={action} onChange={event => setAction(event.target.value)} className="form-control">
       <option value="evidence">Registra evidenza</option><option value="match">Verifica intestatario</option>
       <option value="proposal">Prepara proposta</option><option value="status">Aggiorna stato pratica</option>
-      <option value="parcel_status">Aggiorna esito di un immobile</option>
+      <option value="parcel_status">Aggiorna esito di una particella</option>
     </select></label>
     <form key={action} onSubmit={submit} className="mt-3 grid gap-3 md:grid-cols-2">
       {action === "evidence" && <>
@@ -43,10 +43,13 @@ export function ParcelControlForms({ practice, busy, save }: Props) {
         <label>Data evidenza<input name="observed_at" type="date" required className="form-control" /></label>
         <label>Versione della fonte<input name="version" className="form-control" /></label>
         <label>Ambito verificato<input name="scope" className="form-control" /></label>
+        <label>Codice distretto<input name="district_code" className="form-control" placeholder="FD e FD_1–FD_7 esclusi dalle proposte" /></label>
         <label>Esito<select name="result" className="form-control"><option value="verification_required">Da verificare</option>
           <option value="existing">Esistente</option><option value="suppressed">Soppressa con evidenza</option>
           <option value="inside_outside_town">Nel consorzio e fuori centro abitato</option>
           <option value="outside">Fuori consorzio</option><option value="inside_town">In centro abitato</option>
+          <option value="partially_inside_town">Parzialmente in centro abitato</option>
+          <option value="present">Presenza documentata nel ruolo</option>
           <option value="absent">Assenza verificata dal ruolo</option></select></label>
         <label>Annualità verificate, separate da virgola<input name="years" defaultValue="2025" className="form-control" /></label>
       </>}
@@ -67,16 +70,16 @@ export function ParcelControlForms({ practice, busy, save }: Props) {
           {practice.parcels.map(parcel => <option key={parcel.id} value={parcel.id}>{parcel.reference.comune_nome} {parcel.reference.foglio}/{parcel.reference.particella}</option>)}</select></label>
         <label>Intestatario verificato<select name="match_id" required className="form-control"><option value="">Seleziona</option>
           {practice.matches.filter(match => match.status === "confirmed").map(match => <option key={match.id} value={match.id}>{match.name} · {match.tax_code}</option>)}</select></label>
-        <label>Annualità<input name="year" type="number" min="2020" max="2025" defaultValue="2025" required className="form-control" /></label>
+        <label>Annualità<input name="year" type="number" min="2011" max="2025" defaultValue="2025" required className="form-control" /></label>
         <label>Tipo proposta<select name="kind" className="form-control"><option value="insertion">Inserimento ruolo 2025</option><option value="rectification">Rettifica posizione</option><option value="historical_review">Valutazione annualità pregresse</option></select></label>
         <label>Componente tributaria<input name="component" required className="form-control" /></label>
         <label>Regola tributaria applicata<input name="eligibility_rule" required className="form-control" /></label>
         <label>Dubbi residui<input name="residual_doubts" className="form-control" /></label>
       </>}
       {action === "status" && <label>Stato<select name="status" className="form-control"><option value="open">Aperta</option><option value="investigating">Da approfondire</option><option value="closed">Conclusa</option><option value="excluded">Esclusa</option></select></label>}
-      {action === "parcel_status" && <><label>Immobile<select name="parcel_id" className="form-control">
+      {action === "parcel_status" && <><label>Particella<select name="parcel_id" className="form-control">
         {practice.parcels.map(parcel => <option key={parcel.id} value={parcel.id}>{parcel.reference.foglio}/{parcel.reference.particella}</option>)}</select></label>
-        <label>Esito immobile<select name="status" className="form-control"><option value="investigating">Da approfondire</option><option value="verified">Verificato</option><option value="excluded">Escluso</option></select></label></>}
+        <label>Esito particella<select name="status" className="form-control"><option value="investigating">Da approfondire</option><option value="verified">Verificato</option><option value="excluded">Escluso</option></select></label></>}
       <label>Motivazione<textarea name="reason" minLength={3} required className="form-control" /></label>
       <button type="submit" disabled={busy} className="btn-primary">Salva nella pratica</button>
     </form>

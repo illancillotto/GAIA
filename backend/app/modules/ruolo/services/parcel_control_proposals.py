@@ -9,7 +9,7 @@ from app.modules.ruolo.parcel_control_models import (
     ParcelControlProposal,
     ParcelControlState,
 )
-from app.modules.ruolo.services.parcel_control_identity import YEARS, digest
+from app.modules.ruolo.services.parcel_control_identity import EXCLUDED_DISTRICTS, YEARS, digest
 from app.modules.ruolo.services.parcel_control_index import collect_index
 
 
@@ -46,8 +46,22 @@ def proposal_parcel(db, case, data, evidence):
     if item.original["reference"].get("namespace") == "sister" and not any(
         data["year"] in entry.get("years", []) for entry in role_checks
     ):
-        raise ValueError("Immobile recuperato: confronto con lo storico ruolo da verificare")
+        raise ValueError("Particella recuperata: confronto con lo storico ruolo da verificare")
+    verify_historical_presence(item, evidence)
     return item
+
+
+def verify_historical_presence(item, evidence):
+    if any(row["year"] in YEARS for row in item.original["occurrences"]):
+        return
+    checks = [
+        entry
+        for entry in evidence
+        if (entry["kind"], entry.get("parcel_id"), entry.get("result"))
+        == ("role_check", str(item.id), "present")
+    ]
+    if not any(year in YEARS for entry in checks for year in entry.get("years", [])):
+        raise ValueError("Documentare una presenza a ruolo nel 2011-2025 prima della proposta")
 
 
 def create_proposal(db, case, data):
@@ -135,6 +149,7 @@ def validate_confirmation(db, proposal):
     }
     if current_ids != {entry["id"] for entry in evidence}:
         raise ValueError("Nuove evidenze: preparare nuovamente la proposta prima della conferma")
+    verify_historical_presence(db.get(ParcelControlIndex, UUID(payload["parcel_id"])), evidence)
     verify_territory(evidence)
     if not any(
         entry["kind"] == "cadastre" and entry.get("result") == "existing" for entry in evidence
@@ -150,6 +165,8 @@ def verify_territory(evidence):
     territorial = [entry for entry in evidence if entry["kind"] == "territory"]
     if not territorial or territorial[-1].get("result") != "inside_outside_town":
         raise ValueError("Verifica territoriale necessaria")
+    if str(territorial[-1].get("district_code", "")).strip().upper() in EXCLUDED_DISTRICTS:
+        raise ValueError("Distretto FD escluso dalle proposte di recupero")
 
 
 def verify_historical_title(evidence, year):

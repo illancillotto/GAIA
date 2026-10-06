@@ -2,6 +2,14 @@
 
 ## Controllo storico particelle — 2026-10-06
 
+- Estensione successiva concordata: periodo 2011–2025, terminologia particella
+  catastale, proposte solo con presenza storica documentata. Le particelle
+  storiche interferenti con centri abitati restano in istruttoria; nessuna
+  esclusione o reinserimento automatico. Conferme in zone FD/FD_1–FD_7 bloccate.
+- 52 test backend e 27 frontend, coverage runtime 100%; ratchet completo
+  contro HEAD senza finding, 27 warning invariati e zero error-level.
+  Dati 2011–2019 verificati in sola lettura, senza attestazioni automatiche,
+  reimport o ricalcolo operativo. Fonti territoriali ancora da integrare.
 - Estesa `/ruolo/particelle` con storico 2020–2025, corrente 2025 concordato,
   avvisi CF anomali, pratiche persistenti, visure esistenti e coda proposte.
 - Conservazione dati originali, attestazioni di completezza, evidenze,

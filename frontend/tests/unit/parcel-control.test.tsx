@@ -51,6 +51,11 @@ beforeEach(() => {
 test("workspace defaults to all parcels and preserves annual links", async () => {
   const component = render(<ParcelControlWorkspace annualView={<p>Archivio annuale</p>} />);
   expect(await screen.findByText("ORISTANO · 1/100")).toBeInTheDocument();
+  expect(screen.getByRole("columnheader", { name: "2011" })).toBeInTheDocument();
+  expect(screen.getByRole("columnheader", { name: "2019" })).toBeInTheDocument();
+  expect(screen.getByRole("columnheader", { name: "2025" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Storico 2011–2025" })).toBeInTheDocument();
+  expect(screen.getByLabelText("Annualità")).toHaveAttribute("min", "2011");
   expect(mocks.request).toHaveBeenCalledWith("token", "?view=all&page=1&search=");
   expect(screen.getByRole("link", { name: "Successiva" })).toHaveAttribute("href", expect.stringContaining("pagina=2"));
   fireEvent.change(screen.getByLabelText("Cerca particella"), { target: { value: "1/100" } });
@@ -173,7 +178,7 @@ test("operator forms preserve separate evidence, proposed matches and decisions"
 test("SISTER requests, recovery and proposal decisions use saved practice", async () => {
   const save = vi.fn().mockResolvedValue(undefined);
   const component = render(<ParcelControlDetail practice={practice()} editable busy={false} save={save} />);
-  fireEvent.click(screen.getByText("Acquisisci immobile estratto"));
+  fireEvent.click(screen.getByText("Acquisisci particella estratta"));
   expect(save).toHaveBeenCalledWith("recover", { evidence_id: "e2" }, expect.any(String));
   fireEvent.change(screen.getByLabelText("Ambito effettivo della ricerca"), { target: { value: "Oristano" } });
   fireEvent.change(screen.getAllByLabelText("Motivazione")[0], { target: { value: "Visura" } });
@@ -229,12 +234,13 @@ test("individual parcel outcome is saved independently from practice status", as
   const save = vi.fn().mockResolvedValue(undefined);
   render(<ParcelControlForms practice={{ ...practice(), parcel_id: null }} busy={false} save={save} />);
   fireEvent.change(screen.getByLabelText("Azione"), { target: { value: "parcel_status" } });
-  fireEvent.change(screen.getByLabelText("Esito immobile"), { target: { value: "excluded" } });
+  fireEvent.change(screen.getByLabelText("Esito particella"), { target: { value: "excluded" } });
   fireEvent.change(screen.getByLabelText("Motivazione"), { target: { value: "Immobile escluso" } });
   fireEvent.submit(screen.getByText("Salva nella pratica").closest("form")!);
   await waitFor(() => expect(save).toHaveBeenCalledWith("parcel_status", { parcel_id: "recovered-1", status: "excluded" }, "Immobile escluso"));
   fireEvent.change(screen.getByLabelText("Azione"), { target: { value: "proposal" } });
   expect(screen.getByLabelText("Particella")).toBeInTheDocument();
+  expect(screen.getByLabelText("Annualità")).toHaveAttribute("min", "2011");
 });
 
 test("recovery retains the link to its originating request", () => {
@@ -243,7 +249,7 @@ test("recovery retains the link to its originating request", () => {
   value.evidence = [];
   value.visure[0].extraction = {};
   render(<ParcelControlDetail practice={value} editable busy={false} save={save} />);
-  fireEvent.click(screen.getByText("Acquisisci immobile estratto"));
+  fireEvent.click(screen.getByText("Acquisisci particella estratta"));
   expect(save).toHaveBeenCalledWith("recover", { evidence_id: undefined }, expect.any(String));
 });
 

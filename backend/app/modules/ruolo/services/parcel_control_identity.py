@@ -5,7 +5,8 @@ import re
 from app.modules.catasto.services.validation import _is_valid_cf_checksum, validate_codice_fiscale
 from app.modules.ruolo.services.parsing_common import resolve_section_hint_for_ruolo_comune
 
-YEARS = tuple(range(2020, 2026))
+YEARS = tuple(range(2011, 2026))
+EXCLUDED_DISTRICTS = {"FD", *(f"FD_{number}" for number in range(1, 8))}
 PF_FORMAT = re.compile(
     r"^[A-Z]{6}[0-9LMNPQRSTUV]{2}[ABCDEHLMPRST][0-9LMNPQRSTUV]{2}[A-Z][0-9LMNPQRSTUV]{3}[A-Z]$"
 )

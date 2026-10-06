@@ -385,7 +385,7 @@ def test_already_in_role_keeps_cf_correction(workspace):
         ("match", {"tax_code": "123"}),
         ("match", {"tax_code": VALID_CF}),
         ("link_visura", {"request_id": str(uuid4())}),
-        ("proposal", {"year": 2019}),
+        ("proposal", {"year": 2010}),
         ("proposal", {"year": 2025}),
         ("decision", {"proposal_id": str(uuid4())}),
     ],
@@ -755,12 +755,62 @@ def test_territorial_exclusion_and_recovered_role_check(workspace):
         "evidence",
         evidence("role_check", parcel_id=recovered_id, result="absent", years=[2025]),
     )
+    rejected = client.post(
+        f"{PREFIX}/pratiche/{case['id']}/proposal",
+        json=command(proposal_data(case, parcel_id=recovered_id), case["version"]),
+    )
+    assert rejected.status_code == 422 and "2011-2025" in rejected.json()["detail"]
+    case = change(
+        client,
+        case,
+        "evidence",
+        evidence("role_check", parcel_id=recovered_id, result="present", years=[2011]),
+    )
     case = change(client, case, "proposal", proposal_data(case, parcel_id=recovered_id))
     assert len(case["proposals"]) == 1
     with pytest.raises(ValueError, match="Verifica territoriale"):
         proposals.verify_territory([evidence("territory", result="inside_town")])
     with pytest.raises(ValueError, match="Verifica territoriale"):
         proposals.verify_territory([evidence("territory", result="outside")])
+
+
+@pytest.mark.parametrize("code", ["FD", " FD_1 ", "fd_2", "FD_3", "FD_4", "FD_5", "FD_6", "FD_7"])
+def test_fd_districts_cannot_be_confirmed(code):
+    with pytest.raises(ValueError, match="FD escluso"):
+        proposals.verify_territory(
+            [evidence("territory", result="inside_outside_town", district_code=code)]
+        )
+
+
+def test_history_starts_in_2011_and_missing_years_are_unknown(workspace):
+    db, _user, client = workspace
+    seed(db, 2010, parcel="999")
+    seed(db, 2011)
+    seed(db, 2019)
+    result = analyze(client)
+    assert result["total"] == 1
+    item = result["items"][0]
+    assert set(item["years"]) == {str(year) for year in range(2011, 2026)}
+    assert item["first_year"] == 2011 and item["last_year"] == 2019
+    assert item["years"]["2011"] == item["years"]["2019"] == "present"
+    assert item["years"]["2012"] == "not_verifiable"
+    assert (
+        client.post(
+            f"{PREFIX}/annualita/2011/certificazione",
+            json=command({"source": "Ruolo 2011 verificato"}),
+        ).status_code
+        == 200
+    )
+    case = client.post(f"{PREFIX}/{item['id']}/pratica", json=command()).json()
+    for result in ("inside_town", "partially_inside_town"):
+        case = change(
+            client,
+            case,
+            "evidence",
+            evidence("territory", result=result, scope="Centro abitato", version="ufficiale"),
+        )
+        assert case["status"] == "open"
+        assert case["current"]["first_year"] == 2011
 
 
 def test_missing_sources_and_visure_guards(workspace):

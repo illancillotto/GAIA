@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import type { ControlRow } from "@/types/parcel-control";
 
-export const CONTROL_YEARS = [2020, 2021, 2022, 2023, 2024, 2025];
+export const CONTROL_YEARS = Array.from({ length: 15 }, (_, index) => 2011 + index);
 export const CONTROL_LABELS: Record<string, string> = {
   present: "Presente", absent: "Assente", not_verifiable: "Non verificabile",
   open: "Aperta", investigating: "Da approfondire", closed: "Conclusa", excluded: "Esclusa",
