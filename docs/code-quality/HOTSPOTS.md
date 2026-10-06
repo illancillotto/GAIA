@@ -14,6 +14,15 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, guardia hyperlink XLSX export, 2026-10-06:
+`_render_bulk_export_xlsx_bytes` `IMPROVED`, cog/cyc23/11 ->18/9, LOC21/nesting4
+invariati. Guardia unica presenza None negli indici colonna, niente helper.
+File cognitive300 ->295, cyclomatic237 ->235, branching212 ->210,
+LOC493/callable25 invariati; violation20 ->19, warning ciclomatico eliminato.
+281 test/full-file100%,393 workbook differenziali equivalenti; ratchet/Ruff
+mirato PASS, lint globale UP038 InCass concorrente. Renderer18/9/nesting4 e
+mapper79/38 ancora sopra soglia, MCP/Wiki esclusi operativamente, scope invariato.
+
 Campagna non-MCP, coordinate particella export bulk, 2026-10-06:
 `_build_bulk_export_rows` `IMPROVED`, cog/cyc/LOC99/46/62 ->79/38/60,
 nesting3 invariato. Helper foglio/particella5/6/10/0/2 sotto soglia, fallback

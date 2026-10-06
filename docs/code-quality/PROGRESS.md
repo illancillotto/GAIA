@@ -3,6 +3,36 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — guardia colonne hyperlink XLSX (2026-10-06)
+
+- Chiusura `IMPROVED`: guardia idiomatica unica sulla presenza None nella
+  coppia degli indici locali, nessun helper o nuova astrazione. Renderer
+  cog/cyc/LOC/nesting23/11/21/4 ->18/9/21/4; file cognitive300 ->295,
+  cyclomatic237 ->235, branching212 ->210, LOC493/callable25/import26 invariati.
+  Violation20 ->19 (8 error/11 warning), warning ciclomatico eliminato; restano
+  warning cognitivo/nesting del renderer, mapper bulk79/38 ancora aperto.
+- Cinque casi persistenti aprono workbook reali e verificano sheet/header/
+  formule, colonne mancanti/invertite, link vuoto e valore apri preservato.
+  281 test coverage/caratterizzazione/API/facade PASS; full-file exports100%
+  statement223/branch68, zero missing/partial/esclusioni.393 workbook
+  differenziali controbb907b16 equivalenti per sheet/coordinate/valori/tipi
+  formula, senza confrontare byte ZIP dipendenti dai timestamp.
+- Ratchet merge-basebb907b16 e Ruff runtime/test/format test PASS; lint globale
+  compileall PASS, solo UP038 InCass concorrente. Graphify codice aggiornato
+  senza cambi topologia e docs Catasto/piattaforma aggiornati prima del commit.
+  Evidenze /tmp/gaia-export-xlsx-*; baseline/config/scope/MCP e change
+  concorrenti preservati. Nessuna API remota/PostgreSQL dichiarata; goal aperto.
+- Preflight `bb907b16`: precedente passaggio progresso committato, runtime
+  Catasto pulito, indice vuoto. Nuova singola unita renderer XLSX23/11/21/4;
+  file cognitive300/cyclomatic237/LOC493,20 violation/25 callable. Mapper79/38
+  ancora aperto; nessuna nuova astrazione che faccia crescere LOC sopra soglia.
+- Guardia unica di assenza None nella coppia di indici colonna: entrambi sono
+  int positivi o None. Valutazione dei valori locali senza accessi esterni;
+  workbook/header/append/formula/salvataggio/close invariati.
+- Caratterizzazione dei workbook reali, full-file100%, metriche/ratchet/Ruff/
+  Graphify e commit separato; niente cambio API/schema/baseline/config/scope,
+  MCP/Wiki e change concorrenti preservati.
+
 ### Catasto — coordinate particella export bulk (2026-10-06)
 
 - Chiusura `IMPROVED`: coordinate condivise con fallback input esplicito per

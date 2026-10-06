@@ -1,6 +1,20 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-06 — guardia hyperlink XLSX export
+
+- Guardia unica di presenza None nella coppia indici colonna link/apri;
+  indici positivi o None, nessun cambio workbook/formula/append/save/close.
+- Renderer cognitive/cyclomatic23/11 ->18/9, LOC21/nesting4 invariati; file
+  cognitive300 ->295, cyclomatic237 ->235, branching212 ->210. Violation
+  20 ->19, warning ciclomatico eliminato senza helper o debt transfer.
+- Cinque workbook persistenti verificano formule/link vuoti/colonne mancanti
+  o invertite;281 test coverage/caratterizzazione/API/facade PASS, full-file
+  exports100% statement223/branch68.393 workbook differenziali controbb907b16
+  equivalenti per sheet/coordinate/valori/tipi formula, non byte ZIP timestamp.
+  Ratchet/Ruff PASS; lint globale UP038 InCass concorrente, Graphify codice/docs
+  aggiornati. Baseline/config/scope invariati, renderer e mapper ancora aperti.
+
 ### 2026-10-06 — coordinate particella export bulk
 
 - Proiezione foglio/particella condivisa, fallback input esplicito soltanto

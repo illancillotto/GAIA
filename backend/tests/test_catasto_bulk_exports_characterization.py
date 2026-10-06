@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import date
+from io import BytesIO
 from itertools import product
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -10,6 +11,7 @@ from uuid import UUID
 
 import pytest
 from fastapi import HTTPException
+from openpyxl import load_workbook
 
 from app.models.catasto import CatastoSisterParcel
 from app.modules.catasto.routes.anagrafica import execution, exports
@@ -34,6 +36,36 @@ class RecordingDatabase:
         return SimpleNamespace(
             all=lambda: values, scalars=lambda: SimpleNamespace(all=lambda: values)
         )
+
+
+@pytest.mark.parametrize(
+    "rows, expected",
+    [
+        ([], []),
+        ([{"link_involture": "URL"}], [["link_involture"], ["URL"]]),
+        ([{"apri_involture": "Keep"}], [["apri_involture"], ["Keep"]]),
+        (
+            [
+                {"link_involture": "URL", "apri_involture": ""},
+                {"link_involture": "", "apri_involture": "Keep"},
+            ],
+            [
+                ["link_involture", "apri_involture"],
+                ["URL", '=HYPERLINK(A2,"Clicca qui")'],
+                [None, "Keep"],
+            ],
+        ),
+        (
+            [{"apri_involture": "", "link_involture": "URL"}],
+            [["apri_involture", "link_involture"], ['=HYPERLINK(B2,"Clicca qui")', "URL"]],
+        ),
+    ],
+)
+def test_bulk_xlsx_hyperlink_columns_presence_order_and_empty_links(rows, expected):
+    workbook = load_workbook(BytesIO(exports._render_bulk_export_xlsx_bytes(rows)))
+    assert workbook.sheetnames == ["intestatari"]
+    assert [list(row) for row in workbook.active.iter_rows(values_only=True)] == expected
+    workbook.close()
 
 
 def parcel(**updates):

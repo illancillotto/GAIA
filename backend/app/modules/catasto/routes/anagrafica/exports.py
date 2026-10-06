@@ -551,7 +551,7 @@ def _render_bulk_export_xlsx_bytes(rows: list[dict[str, object]]) -> bytes:
         apri_col = headers.index("apri_involture") + 1 if "apri_involture" in headers else None
         for row_idx, row in enumerate(rows, start=2):
             sheet.append([row.get(header, "") for header in headers])
-            if link_col is not None and apri_col is not None:
+            if None not in (link_col, apri_col):
                 link_value = sheet.cell(row=row_idx, column=link_col).value
                 if link_value:
                     link_cell = sheet.cell(row=row_idx, column=link_col).coordinate
