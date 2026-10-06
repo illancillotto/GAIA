@@ -312,34 +312,16 @@ export default function GaiaUsersPage() {
   const availableModuleOptions = delegableModules(moduleOptions, currentUser);
   const managementAccess = userManagementAccess(currentUser);
   useEffect(() => {
-    async function loadPage() {
-      const token = getStoredAccessToken();
-      if (!token) return;
+    const token = getStoredAccessToken();
+    if (!token) return;
 
-      try {
-        const sessionUser = await getCurrentUser(token);
-        setCurrentUser(sessionUser);
-        if (canManageGaiaUsers(sessionUser)) {
-          const [items, sections, presence] = await Promise.all([
-            listAllApplicationUsers(token),
-            listSectionCatalog(token, { activeOnly: true }),
-            getPresenceSummary(token, { windowMinutes: 15 }).catch(() => emptyPresenceSummary),
-          ]);
-          setUsers(managedUsers(items, sessionUser));
-          setSectionCatalog(sections);
-          setPresenceSummary(presence);
-        } else {
-          setUsers([]);
-          setSectionCatalog([]);
-          setPresenceSummary(emptyPresenceSummary);
-        }
-        setError(null);
-      } catch (loadError) {
-        setError(loadError instanceof Error ? loadError.message : "Errore caricamento utenti GAIA");
-      }
-    }
-
-    void loadPage();
+    void loadUsersPage(token, {
+      setCurrentUser,
+      setUsers,
+      setSectionCatalog,
+      setPresenceSummary,
+      setError,
+    });
   }, []);
 
   useEffect(() => {
@@ -1379,6 +1361,47 @@ export default function GaiaUsersPage() {
       ) : null}
     </ProtectedPage>
   );
+}
+
+type UsersPageData = {
+  sessionUser: CurrentUser;
+  users: ApplicationUser[];
+  sections: SectionResponse[];
+  presence: UserPresenceSummary;
+};
+
+type UsersPageActions = {
+  setCurrentUser: (user: CurrentUser) => void;
+  setUsers: (users: ApplicationUser[]) => void;
+  setSectionCatalog: (sections: SectionResponse[]) => void;
+  setPresenceSummary: (presence: UserPresenceSummary) => void;
+  setError: (error: string | null) => void;
+};
+
+async function loadUsersPageData(token: string): Promise<UsersPageData> {
+  const sessionUser = await getCurrentUser(token);
+  if (!canManageGaiaUsers(sessionUser)) {
+    return { sessionUser, users: [], sections: [], presence: emptyPresenceSummary };
+  }
+  const [items, sections, presence] = await Promise.all([
+    listAllApplicationUsers(token),
+    listSectionCatalog(token, { activeOnly: true }),
+    getPresenceSummary(token, { windowMinutes: 15 }).catch(() => emptyPresenceSummary),
+  ]);
+  return { sessionUser, users: managedUsers(items, sessionUser), sections, presence };
+}
+
+async function loadUsersPage(token: string, actions: UsersPageActions): Promise<void> {
+  try {
+    const { sessionUser, users, sections, presence } = await loadUsersPageData(token);
+    actions.setCurrentUser(sessionUser);
+    actions.setUsers(users);
+    actions.setSectionCatalog(sections);
+    actions.setPresenceSummary(presence);
+    actions.setError(null);
+  } catch (loadError) {
+    actions.setError(loadError instanceof Error ? loadError.message : "Errore caricamento utenti GAIA");
+  }
 }
 
 function UserEditorModal({

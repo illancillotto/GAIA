@@ -7015,3 +7015,19 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   Organigramma). Esito `IMPROVED`; baseline, soglie ed esclusioni invariati.
 - Evidenze: `/tmp/gaia-users-before.json`, `/tmp/gaia-users-after.json`,
   `/tmp/gaia-users-after-coverage`.
+
+## 2026-10-06 — caricamento iniziale utenti GAIA
+
+- Seconda slice sullo stesso hotspot: estratti `loadUsersPageData` e
+  `loadUsersPage` dal primo `useEffect`, preservando error handling, fallback
+  presenza, filtro utenti e aggiornamenti di stato.
+- Il callback React passa da cyclomatic/cognitive `5/5` a `2/2`; gli helper
+  restano sotto soglia. Il primo tentativo con callback `.then/.catch` è stato
+  scartato perché introduceva regressioni ratchet; nessuna di quelle modifiche
+  è stata committata.
+- 30 test pagina verdi, coverage file 100% (362 statement, 379 branch,
+  142 funzioni, 317 linee), typecheck frontend verde.
+- Ratchet contro `6b61fd27` conferma solo i quattro finding legacy residui
+  (xlsm, inCASS e due metriche Organigramma). Esito `IMPROVED`; baseline e
+  soglie invariate. Evidenze: `/tmp/gaia-users-loader-relocated.json` e
+  `/tmp/gaia-users-loader-relocated-coverage`.
