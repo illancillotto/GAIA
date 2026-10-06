@@ -276,3 +276,22 @@ Timeout, signal esterno, FormData, header, URL e messaggi restano invariati.
   MPC/MCP e le modifiche concorrenti restano fuori dalla slice.
 
 Questo risultato non chiude il gate globale e non costituisce un deploy.
+
+## Quattro finding chiusi — fixture browser SISTER
+
+Una slice successiva sullo snapshot `644928ce` separa soltanto la costruzione
+dell'HTML sintetico dai test browser. Nessun runtime e modificato e tutte
+le asserzioni originali su visite, correlazione e download sono preservate.
+
+- Test principale cognitive/cyclomatic `27/16 -> 17/11`, scenario
+  `26/15 -> 16/10`; fixture `6/6`, sotto soglia e senza debito trasferito.
+- HTML byte-identico nelle 18 combinazioni dello scenario; sette casi browser
+  verdi prima e 13 test verdi dopo, inclusi sei nuovi casi della fixture.
+  Suite browser/DOM separata dagli stub worker: 117 test verdi.
+- Ruff 0.16.0, lint-backend e diff-check PASS. Ratchet globale contro
+  `6b61fd27` `21 -> 17` finding, zero nel file modificato; baseline invariata.
+- Graphify worker aggiornato; dettagli e comandi in `PROGRESS.md`.
+
+La failure di isolamento della suite combinata con `test_worker.py` non e
+stata corretta da questo refactoring. Restano gate globali e overlay da
+chiudere; nessun deploy o cambiamento al runtime di produzione eseguito.

@@ -57,6 +57,35 @@ def test_next_request_returns_from_menu_less_requests_view_to_authenticated_home
     asyncio.run(scenario())
 
 
+def global_counter_request_rows(category: str, day: str, target_visible: bool) -> str:
+    rows = "".join(
+        f'<tr><td>Estranea {row_index}</td><td><a href="/CheckRichiesta.do?idRichiesta=OTHER-{row_index}">apri</a></td></tr>'
+        for row_index in range(40)
+    )
+    if target_visible and (category, day) == ("prelevate", "04/09/2026"):
+        rows += '<tr><td>Visura richiesta</td><td><a href="/CheckRichiesta.do?idRichiesta=TARGET">apri</a></td></tr>'
+    if day == "05/09/2026":
+        rows = ""
+    return rows
+
+
+@pytest.mark.parametrize(
+    "category,day,target_visible,foreign_count,contains_target",
+    [
+        ("prelevate", "05/09/2026", True, 0, False),
+        ("espletate", "05/09/2026", False, 0, False),
+        ("prelevate", "04/09/2026", True, 40, True),
+        ("prelevate", "04/09/2026", False, 40, False),
+        ("espletate", "04/09/2026", True, 40, False),
+        ("nonEspletabili", "-", True, 40, False),
+    ],
+)
+def test_global_counter_request_rows(category, day, target_visible, foreign_count, contains_target):
+    rows = global_counter_request_rows(category, day, target_visible)
+    assert rows.count("idRichiesta=OTHER-") == foreign_count
+    assert ("idRichiesta=TARGET" in rows) is contains_target
+
+
 @pytest.mark.parametrize("target_visible", [True, False])
 def test_global_counters_do_not_skip_backlog_or_authorize_foreign_downloads(target_visible, caplog):
     async def scenario():
@@ -78,15 +107,7 @@ def test_global_counters_do_not_skip_backlog_or_authorize_foreign_downloads(targ
                     day = params.get("comboGiorni", ["05/09/2026"])[0]
                     if params:
                         visits.append((category, day))
-                    rows = "".join(
-                        f'<tr><td>Estranea {i}</td><td><a href="/CheckRichiesta.do?idRichiesta=OTHER-{i}">apri</a></td></tr>'
-                        for i in range(40)
-                    )
-                    if target_visible and (category, day) == ("prelevate", "04/09/2026"):
-                        rows += '<tr><td>Visura richiesta</td><td><a href="/CheckRichiesta.do?idRichiesta=TARGET">apri</a></td></tr>'
-                    # Counters stay unchanged across days, including the empty current day.
-                    if day == "05/09/2026":
-                        rows = ""
+                    rows = global_counter_request_rows(category, day, target_visible)
                     await route.fulfill(
                         body=filtered_form(category, day) + "<table>" + rows + "</table>",
                         content_type="text/html",

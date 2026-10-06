@@ -3,6 +3,46 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Worker SISTER — fixture HTML dei contatori globali (2026-10-06)
+
+- Slice `IMPROVED`, snapshot `644928ce`, MPC/MCP escluso. Il costruttore
+  puro `global_counter_request_rows` possiede le righe HTML sintetiche:
+  quaranta richieste estranee, TARGET soltanto nella categoria/giorno previsto,
+  giorno corrente vuoto nonostante i contatori globali. Il test browser
+  mantiene route, sequenza delle visite, poll, correlazione e download.
+- Nessuna asserzione originale rimossa o indebolita, nessun runtime modificato.
+  I sette casi browser precedenti passano prima del refactoring. Sei test
+  della fixture aggiunti; dopo, 13 test del file PASS. Confronto via AST dei
+  blocchi prima/dopo: HTML byte-identico per tutte le 18 combinazioni di
+  categoria, giorno e visibilita TARGET usate nello scenario.
+- Test principale cognitive/cyclomatic/LOC `27/16/59 -> 17/11/52`;
+  scenario `26/15/55 -> 16/10/48`; helper `6/6/10`, tre parametri, sotto
+  soglia. Aggregati file cognitive `87 -> 73`, cyclomatic `60 -> 57`,
+  LOC `194 -> 212` per helper e nuovi test; error `4 -> 0`, warning `2 -> 6`.
+  I warning residui appartengono ai test legacy, non al nuovo costruttore.
+- Suite browser/DOM isolata dagli stub di test_worker: 117 PASS con
+  test_sister_browser_reliability, test_sister_request_rows,
+  test_sister_requests_navigation, test_sister_requests_navigation_html e
+  test_sister_reused_menu_html. La nota precedente sulla suite combinata
+  con test_worker resta valida; non e stata corretta o nascosta in questa slice.
+  Coverage runtime non applicabile: modificati esclusivamente test e docs.
+- Ruff 0.16.0 check/format PASS sul file; `make lint-backend
+  QUALITY_PYTHON=backend/.venv/bin/python BASE_REF=HEAD` e diff-check PASS.
+  Il primo tentativo con Python di sistema non trovava Ruff: risolto usando
+  l'interprete del progetto, senza installazioni o suppression.
+  Ratchet full-scan base `6b61fd27`: `21 -> 17` finding, zero sul test
+  toccato. Baseline, report versionati, soglie ed esclusioni invariati.
+- Graphify worker aggiornato: 1680 nodi / 3906 archi / 89 community.
+  Evidenze `/tmp/gaia-sister-fixture-{before,after}.json`,
+  `/tmp/gaia-sister-fixture-{before,final}-tests.log`,
+  `/tmp/gaia-sister-fixture-equivalence.log`,
+  `/tmp/gaia-sister-fixture-browser-suite.log`,
+  `/tmp/gaia-sister-fixture-lint-policy.log`,
+  `/tmp/gaia-sister-fixture-full-ratchet.json`,
+  `/tmp/gaia-sister-fixture-scoped-ratchet.json`,
+  `/tmp/gaia-sister-fixture-graphify.log`. Modifiche concorrenti preservate.
+  Stop dopo la slice; deploy non eseguito e programma globale incompleto.
+
 ### Frontend API — normalizzazione errori HTTP (2026-10-06)
 
 - Slice `IMPROVED`, snapshot `2852ec70`, MPC/MCP escluso. Il formatter
