@@ -1,6 +1,6 @@
 """Authenticated stateless HTTP for the two independent internal sources."""
 
-from contextlib import AsyncExitStack, asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 from contextvars import ContextVar
 
 import jwt
@@ -65,7 +65,7 @@ def create_http_app(docs_service, data_service, secret: str):
             "http://127.0.0.1:*",
         ],
     )
-    docs = None
+    docs_lifespan = nullcontext
     routes = inspection_routes(data_service, REQUEST_CONTEXT.get)
     if docs_service is not None:
         docs = create_docs_server(docs_service, context_factory=REQUEST_CONTEXT.get)
@@ -77,6 +77,7 @@ def create_http_app(docs_service, data_service, secret: str):
             transport_security=security,
         )
         routes.append(Mount("/docs", app=docs_app))
+        docs_lifespan = docs.session_manager.run
     data = create_data_server(data_service, REQUEST_CONTEXT.get)
     manager = StreamableHTTPSessionManager(
         data,
@@ -88,10 +89,7 @@ def create_http_app(docs_service, data_service, secret: str):
 
     @asynccontextmanager
     async def lifespan(_app):
-        async with AsyncExitStack() as stack:
-            if docs is not None:
-                await stack.enter_async_context(docs.session_manager.run())
-            await stack.enter_async_context(manager.run())
+        async with docs_lifespan(), manager.run():
             yield
 
     routes.append(Mount("/data", app=manager.handle_request))

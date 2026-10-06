@@ -508,6 +508,11 @@ HTTPS e connector MCP: l'override opzionale `docker-compose.mcp-tls.yml`
 aggiunge HTTPS mantenendo GAIA in HTTP e reindirizza le route MCP HTTP a
 HTTPS (`308`). Certificati, origin e avvio sono descritti in
 [`HTTP_HTTPS_GATEWAY.md`](domain-docs/mcps/HTTP_HTTPS_GATEWAY.md).
+Il rilascio richiesto resta solo LAN (`gaia.lan`), con Claude Desktop locale;
+ChatGPT da valutare. Limiti grant, sessione assoluta, cleanup periodico e revoca
+amministrativa interna sono descritti in
+[`OAUTH_HARDENING_2026-10-05.md`](domain-docs/mcps/OAUTH_HARDENING_2026-10-05.md).
+NAS/Trasparenza non sono esposti dal connector sintetico.
 
 Maintenance mode:
 

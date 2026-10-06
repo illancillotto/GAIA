@@ -2,6 +2,7 @@ import asyncio
 import base64
 import hashlib
 from contextlib import nullcontext
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from urllib.parse import parse_qs, urlsplit
@@ -19,8 +20,9 @@ from app.modules.wiki.mcps.data.database import seed_database
 from app.modules.wiki.mcps.data.server import create_server
 from app.modules.wiki.mcps.data.service import DataService
 from app.modules.wiki.mcps.oauth_http import create_oauth_app
+from app.modules.wiki.mcps.oauth_policy import OAuthPolicy
 from app.modules.wiki.mcps.oauth_provider import GAIAOAuthProvider, https_url
-from app.modules.wiki.mcps.oauth_store import OAuthStore, token_hash
+from app.modules.wiki.mcps.oauth_store import GrantCapacityError, OAuthStore, token_hash
 
 RESOURCE = "https://synthetic.example/mcp"
 ISSUER = "https://synthetic.example/oauth"
@@ -29,6 +31,97 @@ VERIFIER = "synthetic-verifier-" + "x" * 48
 CHALLENGE = (
     base64.urlsafe_b64encode(hashlib.sha256(VERIFIER.encode()).digest()).decode().rstrip("=")
 )
+
+
+@pytest.mark.parametrize("value", [0, -1, True, 1.5, "60"])
+def test_policy_rejects_invalid_limits(value):
+    with pytest.raises(ValueError):
+        OAuthPolicy(cleanup_seconds=value)
+
+
+def test_policy_environment_and_client_limit():
+    assert OAuthPolicy.from_environment({}) == OAuthPolicy()
+    assert (
+        OAuthPolicy.from_environment({"GAIA_MCP_OAUTH_SESSION_SECONDS": "3600"}).session_seconds
+        == 3600
+    )
+    with pytest.raises(ValueError):
+        OAuthPolicy(max_grants=1, max_client_grants=2)
+    with pytest.raises(ValueError):
+        OAuthPolicy.from_environment({"GAIA_MCP_OAUTH_MAX_GRANTS": "invalid"})
+
+
+def test_store_caps_preserve_valid_grants_and_replay_records(tmp_path):
+    store = OAuthStore(
+        tmp_path / "gaia-mcp-oauth.sqlite", policy=OAuthPolicy(max_grants=3, max_client_grants=2)
+    )
+    try:
+        first = store.put("refresh", {"client_id": "first"}, lifetime=60)
+        store.consume("refresh", first)
+        second = store.put("access", {"client_id": "first"}, lifetime=60)
+        with pytest.raises(GrantCapacityError):
+            store.put("pending", {"client_id": "first"}, lifetime=60)
+        other = store.put("access", {"client_id": "other"}, lifetime=60)
+        with pytest.raises(GrantCapacityError):
+            store.put("access", {}, lifetime=60)
+        assert store.get("access", second)
+        assert store.get("access", other)
+        assert store.get("used_refresh", first)
+        store.connection.execute("UPDATE grants SET expires=0 WHERE hash=?", (token_hash(first),))
+        assert store.put("pending", {"client_id": "first"}, lifetime=60)
+        assert store.get("used_refresh", first) is None
+    finally:
+        store.close()
+
+
+def test_capacity_serializes_separate_connections(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+
+    path = tmp_path / "gaia-mcp-oauth.sqlite"
+    policy = OAuthPolicy(max_grants=1, max_client_grants=1)
+    initial = OAuthStore(path, policy=policy)
+    initial.close()
+
+    def insert():
+        store = OAuthStore(path, policy=policy)
+        try:
+            return store.put("pending", {"client_id": "first"}, lifetime=60)
+        except GrantCapacityError:
+            return None
+        finally:
+            store.close()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(lambda _: insert(), range(2)))
+    assert sum(result is not None for result in results) == 1
+
+
+def test_admin_revocation_selectors_intersect_preserve_other_users_and_tombstones(foundation):
+    store, _, _, _ = foundation
+    with pytest.raises(ValueError):
+        store.revoke_authorizations()
+    tokens = {
+        (subject, client_id): store.put(
+            "refresh", {"subject": subject, "client_id": client_id}, lifetime=60
+        )
+        for subject in ["1", "2"]
+        for client_id in ["first", "other"]
+    }
+    selected = tokens[("1", "first")]
+    grant = store.consume("refresh", selected)
+    access = store.put(
+        "access", {"subject": "1", "client_id": "first"}, lifetime=60, family=grant["family"]
+    )
+    assert store.revoke_authorizations(subject="1", client_id="first") == 1
+    assert store.get("access", access) is None
+    assert store.get("used_refresh", selected)
+    assert store.get("refresh", tokens[("1", "other")])
+    assert store.get("refresh", tokens[("2", "first")])
+    assert store.revoke_authorizations(client_id="first") == 1
+    assert store.get("refresh", tokens[("2", "first")]) is None
+    assert store.revoke_authorizations(subject="1") == 1
+    assert store.get("refresh", tokens[("2", "other")])
+    assert store.revoke_authorizations(subject="absent") == 0
 
 
 def client(client_id="approved", **changes):
@@ -467,6 +560,159 @@ def test_consumption_races_and_atomic_pair_rollback(foundation, monkeypatch):
             await provider.exchange_refresh_token(approved, refresh, refresh.scopes)
 
     asyncio.run(exercise())
+
+
+def test_absolute_session_deadline_rotation_restart_and_legacy(foundation, monkeypatch):
+    from app.modules.wiki.mcps import oauth_provider, oauth_store
+
+    store, _, approved, provider = foundation
+    clock = [100000.0]
+    monkeypatch.setattr(oauth_provider, "time", lambda: clock[0])
+    monkeypatch.setattr(oauth_store, "time", lambda: clock[0])
+    store.policy = OAuthPolicy(session_seconds=600)
+
+    async def exercise():
+        code = await issue_code(provider, approved)
+        loaded = await provider.load_authorization_code(approved, code)
+        tokens = await provider.exchange_authorization_code(approved, loaded)
+        deadline = store.get("refresh", tokens.refresh_token)["session_expires_at"]
+        assert deadline == clock[0] + 600
+        clock[0] += 500
+        refresh = await provider.load_refresh_token(approved, tokens.refresh_token)
+        rotated = await provider.exchange_refresh_token(approved, refresh, refresh.scopes)
+        assert rotated.expires_in == 100
+        assert store.get("refresh", rotated.refresh_token)["session_expires_at"] == deadline
+        path = store.connection.execute("PRAGMA database_list").fetchone()[2]
+        reopened = OAuthStore(Path(path))
+        try:
+            restarted = GAIAOAuthProvider(
+                reopened,
+                provider.clients,
+                provider.user_scopes,
+                resource=RESOURCE,
+                consent_url=provider.consent_url,
+            )
+            assert await restarted.load_access_token(rotated.access_token)
+            clock[0] = deadline
+            assert await restarted.load_access_token(rotated.access_token) is None
+            assert await restarted.load_refresh_token(approved, rotated.refresh_token) is None
+            with pytest.raises(TokenError):
+                provider.tokens({"session_expires_at": deadline}, {"utenze.read"})
+        finally:
+            reopened.close()
+        legacy = store.put(
+            "refresh",
+            {
+                "client_id": approved.client_id,
+                "subject": "1",
+                "scopes": ["utenze.read"],
+                "resource": RESOURCE,
+            },
+            lifetime=28800,
+        )
+        assert await provider.load_refresh_token(approved, legacy) is None
+        legacy_access = store.put(
+            "access",
+            {
+                "client_id": approved.client_id,
+                "subject": "1",
+                "scopes": ["utenze.read"],
+                "resource": RESOURCE,
+            },
+            lifetime=300,
+        )
+        assert await provider.load_access_token(legacy_access) is None
+
+    asyncio.run(exercise())
+
+
+def test_capacity_http_errors_and_atomic_consent_token_rollback(foundation):
+    store, _, approved, provider = foundation
+    app = create_oauth_app(provider, ISSUER, AsyncMock(return_value="1"))
+
+    async def exercise():
+        target = await provider.authorize(approved, params())
+        request_id = parse_qs(urlsplit(target).query)["request_id"][0]
+        store.policy = OAuthPolicy(max_grants=1, max_client_grants=1)
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="https://synthetic.example"
+        ) as http:
+            response = await http.post(
+                "/consent",
+                headers={"Authorization": "Bearer session"},
+                json={"request_id": request_id, "allowed": True},
+            )
+            assert response.status_code == 503
+            assert response.json() == {"error": "temporarily_unavailable"}
+            assert response.headers["cache-control"] == "no-store"
+            assert response.headers["retry-after"] == "60"
+            assert store.get("pending", request_id)
+            store.policy = OAuthPolicy()
+            code = parse_qs(urlsplit(provider.consent(request_id, "1", True)).query)["code"][0]
+            store.policy = OAuthPolicy(max_grants=3, max_client_grants=3)
+            response = await http.post(
+                "/token",
+                data={
+                    "grant_type": "authorization_code",
+                    "client_id": approved.client_id,
+                    "code": code,
+                    "code_verifier": VERIFIER,
+                    "redirect_uri": REDIRECT,
+                    "resource": RESOURCE,
+                },
+            )
+            assert response.status_code == 503
+            assert store.get("code", code)
+            assert (
+                store.connection.execute(
+                    "SELECT COUNT(*) FROM grants WHERE kind='access'"
+                ).fetchone()[0]
+                == 0
+            )
+
+    asyncio.run(exercise())
+
+
+def test_refresh_cap_failure_keeps_previous_pair_and_replay_detection(foundation):
+    store, _, approved, provider = foundation
+
+    async def exercise():
+        code = await issue_code(provider, approved)
+        loaded = await provider.load_authorization_code(approved, code)
+        tokens = await provider.exchange_authorization_code(approved, loaded)
+        refresh = await provider.load_refresh_token(approved, tokens.refresh_token)
+        store.policy = OAuthPolicy(max_grants=4, max_client_grants=4)
+        with pytest.raises(GrantCapacityError):
+            await provider.exchange_refresh_token(approved, refresh, refresh.scopes)
+        assert await provider.load_access_token(tokens.access_token)
+        assert await provider.load_refresh_token(approved, tokens.refresh_token)
+        assert store.get("used_refresh", tokens.refresh_token) is None
+        store.policy = OAuthPolicy()
+        rotated = await provider.exchange_refresh_token(approved, refresh, refresh.scopes)
+        assert await provider.load_refresh_token(approved, tokens.refresh_token) is None
+        assert await provider.load_access_token(rotated.access_token) is None
+
+    asyncio.run(exercise())
+
+
+def test_subsecond_deadline_is_enforced_even_when_storage_clock_advances(foundation, monkeypatch):
+    from app.modules.wiki.mcps import oauth_provider, oauth_store
+
+    store, _, approved, provider = foundation
+    monkeypatch.setattr(oauth_provider, "time", lambda: 100.75)
+    monkeypatch.setattr(oauth_store, "time", lambda: 100.8)
+    grant = {
+        "client_id": approved.client_id,
+        "subject": "1",
+        "family": "synthetic-family",
+        "session_expires_at": 101.0,
+    }
+    tokens = provider.tokens(grant, {"utenze.read"})
+    assert tokens.expires_in == 1
+    assert store.get("access", tokens.access_token)["expires_at"] == 101.0
+    assert store.get("refresh", tokens.refresh_token)["expires_at"] == 101.0
+    monkeypatch.setattr(oauth_store, "time", lambda: 101.0)
+    assert store.get("access", tokens.access_token) is None
 
 
 def test_delegated_scopes_keep_discovery_calls_and_provenance_data_only(foundation, tmp_path):

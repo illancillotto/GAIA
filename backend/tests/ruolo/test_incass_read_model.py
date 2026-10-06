@@ -102,7 +102,7 @@ def test_ardu_cristian_without_partitario_is_visible_in_role(db: Session) -> Non
         {"anno": "2022"},
         {"source_notice_id": ""},
         {"source_notice_id": "AVV-1"},
-        {"source_notice_id": "120230024242890"},
+        {"source_notice_id": "220230024242890"},
         {"subject_id": None},
     ],
 )

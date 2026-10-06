@@ -20,6 +20,14 @@ def percentiles(values: list[float]) -> dict:
     }
 
 
+def _relevant_doc_ranks(results: list[dict], target: str | None, section: str) -> list[int]:
+    return [
+        index + 1
+        for index, row in enumerate(results)
+        if row["source_path"] == target and section in (row["section"] or "").casefold()
+    ]
+
+
 def evaluate_docs(service: DocsService, queries: list[dict]) -> dict:
     if not queries:
         raise ValueError("A nonempty reviewed documentation query set is required")
@@ -30,11 +38,7 @@ def evaluate_docs(service: DocsService, queries: list[dict]) -> dict:
         durations.append(round((perf_counter() - started) * 1000, 3))
         target = query.get("expected_source_path")
         section = query.get("expected_section_contains", "").casefold()
-        relevant = [
-            index + 1
-            for index, row in enumerate(response["results"])
-            if row["source_path"] == target and section in (row["section"] or "").casefold()
-        ]
+        relevant = _relevant_doc_ranks(response["results"], target, section)
         passed = bool(relevant) if target else not response["results"]
         scores.append(int(passed))
         if target:

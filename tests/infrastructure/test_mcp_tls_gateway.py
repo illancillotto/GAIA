@@ -317,6 +317,21 @@ def test_mcp_proxy_preserves_authorization_and_json_rpc(tls_gateway):
     assert payload["method"] == "POST"
 
 
+def test_admin_revocation_is_not_forwarded_to_connector(tls_gateway):
+    path = OAUTH_PATH + "/admin/revoke"
+    for secure in [False, True]:
+        with tls_gateway.request(
+            path,
+            secure=secure,
+            method="POST",
+            body=b'{"subject":"1"}',
+            headers={"Authorization": "Bearer synthetic-admin", "Content-Type": "application/json"},
+        ) as response:
+            payload = json.load(response)
+        assert payload["source"] == "backend"
+        assert payload["path"] == path.removeprefix("/api")
+
+
 def test_mcp_proxy_rejects_oversized_body(tls_gateway):
     with tls_gateway.request(DATA_PATH, method="POST", body=b"x" * 65537) as response:
         assert response.status == 413

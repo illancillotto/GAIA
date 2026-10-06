@@ -12,7 +12,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 import httpx
-from sqlalchemy import and_, exists, or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -38,7 +38,11 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasInCassSyncJobResult,
     CapacitasObjManDocument,
 )
-from app.modules.ruolo.models import RuoloAvviso
+from app.modules.elaborazioni.capacitas.recovery_identity import (
+    assert_notice_owner,
+    load_incass_ruolo_subject_ids,
+    resolve_recovery_subjects,
+)
 from app.modules.ruolo.services.incass_read_model import materialize_incass_notice_header
 from app.modules.utenze.models import (
     AnagraficaClassificationSource,
@@ -167,44 +171,6 @@ def serialize_incass_sync_job(job: CapacitasInCassSyncJob) -> CapacitasInCassSyn
     return CapacitasInCassSyncJobOut.model_validate(job)
 
 
-def load_incass_ruolo_subject_ids(
-    db: Session,
-    *,
-    anno: int | None,
-    limit_subjects: int | None,
-    exclude_synced_subjects: bool,
-    stale_synced_before: datetime | None = None,
-) -> list[UUID]:
-    stmt = (
-        select(RuoloAvviso.subject_id)
-        .where(RuoloAvviso.subject_id.is_not(None))
-        .group_by(RuoloAvviso.subject_id)
-        .order_by(RuoloAvviso.subject_id)
-    )
-    if anno is not None:
-        stmt = stmt.where(RuoloAvviso.anno_tributario == anno)
-    if exclude_synced_subjects:
-        synced_notice_exists = exists(
-            select(AnagraficaPaymentNotice.id).where(
-                AnagraficaPaymentNotice.subject_id == RuoloAvviso.subject_id,
-                AnagraficaPaymentNotice.source_system == "incass",
-            )
-        )
-        stmt = stmt.where(~synced_notice_exists)
-    if stale_synced_before is not None:
-        fresh_notice_exists = exists(
-            select(AnagraficaPaymentNotice.id).where(
-                AnagraficaPaymentNotice.subject_id == RuoloAvviso.subject_id,
-                AnagraficaPaymentNotice.source_system == "incass",
-                AnagraficaPaymentNotice.synced_at >= stale_synced_before,
-            )
-        )
-        stmt = stmt.where(~fresh_notice_exists)
-    if limit_subjects is not None:
-        stmt = stmt.limit(limit_subjects)
-    return [value for value in db.scalars(stmt).all() if value is not None]
-
-
 def create_incass_ruolo_harvest_jobs(
     db: Session,
     *,
@@ -264,7 +230,8 @@ def prepare_incass_sync_jobs_for_recovery(db: Session) -> list[int]:
                     CapacitasInCassSyncJob.completed_at.is_(None),
                 ),
                 CapacitasInCassSyncJob.status == "failed",
-            )
+            ),
+            CapacitasInCassSyncJob.payload_json["recovery_task_key"].as_string().is_(None),
         )
     ).all()
     recovered: list[int] = []
@@ -277,11 +244,7 @@ def prepare_incass_sync_jobs_for_recovery(db: Session) -> list[int]:
         job.error_detail = "Recuperato dopo riavvio worker o credenziale temporaneamente non disponibile"
         if isinstance(job.result_json, dict):
             resume_count = int(job.result_json.get("resume_count", 0) or 0) + 1
-            job.result_json = {
-                **job.result_json,
-                "resume_reason": "backend_restart",
-                "resume_count": resume_count,
-            }
+            job.result_json = {**job.result_json, "resume_reason": "backend_restart", "resume_count": resume_count}
         recovered.append(job.id)
     return recovered
 
@@ -1098,49 +1061,7 @@ def _resolve_subjects(
     db: Session,
     payload: CapacitasInCassSyncJobCreateRequest,
 ) -> list[tuple[AnagraficaSubject, str, str]]:
-    subject_ids = [UUID(str(value)) for value in payload.subject_ids]
-    rows: list[tuple[AnagraficaSubject, AnagraficaPerson | None, AnagraficaCompany | None]] = []
-    if subject_ids:
-        rows = list(
-            db.execute(
-                select(AnagraficaSubject, AnagraficaPerson, AnagraficaCompany)
-                .outerjoin(AnagraficaPerson, AnagraficaPerson.subject_id == AnagraficaSubject.id)
-                .outerjoin(AnagraficaCompany, AnagraficaCompany.subject_id == AnagraficaSubject.id)
-                .where(AnagraficaSubject.id.in_(subject_ids))
-                .order_by(AnagraficaSubject.updated_at.desc())
-            ).all()
-        )
-    else:
-        stmt = (
-            select(AnagraficaSubject, AnagraficaPerson, AnagraficaCompany)
-            .outerjoin(AnagraficaPerson, AnagraficaPerson.subject_id == AnagraficaSubject.id)
-            .outerjoin(AnagraficaCompany, AnagraficaCompany.subject_id == AnagraficaSubject.id)
-            .where(
-                or_(
-                    AnagraficaPerson.codice_fiscale.is_not(None),
-                    AnagraficaCompany.partita_iva.is_not(None),
-                    AnagraficaCompany.codice_fiscale.is_not(None),
-                )
-            )
-            .order_by(AnagraficaSubject.updated_at.desc())
-        )
-        if payload.limit is not None:
-            stmt = stmt.limit(payload.limit)
-        rows = list(db.execute(stmt).all())
-
-    resolved: list[tuple[AnagraficaSubject, str, str]] = []
-    for subject, person, company in rows:
-        identifier = None
-        display_name = subject.source_name_raw
-        if company is not None:
-            identifier = (company.partita_iva or company.codice_fiscale or "").strip().upper()
-            display_name = company.ragione_sociale or display_name
-        elif person is not None:
-            identifier = (person.codice_fiscale or "").strip().upper()
-            display_name = f"{person.cognome} {person.nome}".strip() or display_name
-        if identifier:
-            resolved.append((subject, identifier, display_name))
-    return resolved
+    return resolve_recovery_subjects(db, payload.subject_ids, payload.limit)
 
 
 def _upsert_payment_notice(
@@ -1159,11 +1080,8 @@ def _upsert_payment_notice(
 ) -> PaymentNoticeSyncStatus | None:
     if not row.avviso:
         return None
-    existing = existing or _find_payment_notice_for_upsert(
-        db,
-        source_system="incass",
-        source_notice_id=row.avviso,
-    )
+    existing = existing or _find_payment_notice_for_upsert(db, source_system="incass", source_notice_id=row.avviso)
+    assert_notice_owner(existing, subject_id)
     previous_status = classify_payment_notice(existing) if existing is not None else None
     if existing is None:
         existing = AnagraficaPaymentNotice(source_system="incass", source_notice_id=row.avviso)

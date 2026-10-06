@@ -65,10 +65,8 @@ def verify_token(secret: str, token: str) -> CallContext:
     scopes = claims.get("scopes")
     if claims.get("type") != "gaia_mcp" or not isinstance(scopes, list):
         raise jwt.InvalidTokenError("Invalid MCP credential")
-    if any(
-        not isinstance(scope, str) or scope not in {*SCOPES, "docs.read", AUDIT_SCOPE}
-        for scope in scopes
-    ):
+    allowed_scopes = {*SCOPES, "docs.read", AUDIT_SCOPE}
+    if any(not isinstance(scope, str) or scope not in allowed_scopes for scope in scopes):
         raise jwt.InvalidTokenError("Invalid MCP scope")
     return CallContext(
         principal=claims["sub"],

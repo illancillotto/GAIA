@@ -4,7 +4,7 @@ import argparse
 import json
 import logging
 import os
-from contextlib import ExitStack
+from contextlib import ExitStack, closing
 from pathlib import Path
 
 from ..audit import AuditStore
@@ -37,10 +37,10 @@ def main(argv: list[str] | None = None) -> None:
     logging.basicConfig(level=logging.INFO, handlers=[handler])
     scopes = frozenset(scope for scope in args.scopes.split(",") if scope)
     with ExitStack() as stack:
-        audit = AuditStore(args.audit_database) if args.audit_database else None
-        if audit is not None:
+        audit = None
+        if args.audit_database:
+            audit = AuditStore(args.audit_database)
             stack.callback(audit.close)
-        service = DataService(args.database, audit=audit)
-        stack.callback(service.close)
+        service = stack.enter_context(closing(DataService(args.database, audit=audit)))
         server = create_server(service, lambda: CallContext(principal="local-stdio", scopes=scopes))
         run_stdio(server)

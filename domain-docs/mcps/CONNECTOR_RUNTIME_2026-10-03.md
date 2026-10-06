@@ -1,5 +1,10 @@
 # Consenso GAIA e gateway MCP Data-only
 
+Stato corrente 2026-10-05: `OAUTH_HARDENING_2026-10-05.md` descrive cap grant,
+sessione assoluta, cleanup periodico e revoca amministrativa interna implementati.
+Rilascio previsto solo LAN `gaia.lan`, Claude Desktop locale; ChatGPT da valutare.
+Le evidenze numeriche seguenti sono lo snapshot storico 2026-10-03.
+
 Verifica finale corrente: `CONNECTOR_FINAL_REVIEW_2026-10-03.md`.
 26 test OAuth/connector, sette runtime backend al 100% statement/branch;
 23 test consenso frontend al 100%. Il lint backend globale e passato alla
@@ -76,9 +81,9 @@ e il connettore esterno a ricevere le sole risposte sintetiche autorizzate.
   nei log strutturati del listener, non nello storico tool della console.
   La factory configura il logger MCP INFO con EventFormatter JSON e senza
   propagazione duplicata; nessun access log Uvicorn con token/query OAuth.
-- OAuth store e counter scaduti vengono ripuliti alle richieste Data ammesse;
-  prima del rilascio serve anche cleanup periodico indipendente dal traffico.
-  I refresh restano rolling 8 h, non una sessione con scadenza assoluta.
+- OAuth store e counter scaduti vengono ripuliti all'avvio, ogni 60 secondi
+  e alle richieste Data ammesse. Sessione assoluta 8 h, cap globali/per-client
+  e revoca amministrativa interna: `OAUTH_HARDENING_2026-10-05.md`.
 
 ## Configurazione, senza attivare
 
@@ -165,7 +170,7 @@ Graphify Wiki/frontend aggiornati via Make, AST-only; nessun documento reale
 inviato a un LLM per Graphify. Log e coverage mirati `/tmp/gaia-consent-*`,
 `/tmp/gaia-connector-*`, `/tmp/gaia-mcp-consent-frontend-*`.
 
-Prima dell'attivazione: hostname/tunnel e callback reali approvati, nuova CA
-interna CED/trust remoto, proxy HTTPS con negative test pubblici, cleanup/cap
-grants OAuth e scadenza assoluta/revoca amministrativa, test interfaccia e
-connettore Claude live solo sul dataset sintetico, rollback delle feature flag.
+Prima dell'attivazione corrente: certificati CED/trust locale per `gaia.lan`,
+prova Claude Desktop locale solo sul dataset sintetico e rollback dei flag.
+Nessun ingresso Internet autorizzato. Hardening OAuth ora implementato:
+`OAUTH_HARDENING_2026-10-05.md`; NAS/Trasparenza richiedono prerequisiti separati.

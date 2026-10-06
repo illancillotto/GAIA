@@ -25,7 +25,7 @@ from app.models.application_user import ApplicationUser
 from app.models.network import NetworkVpnDevice, NetworkVpnSession
 from app.models.section_permission import RoleSectionPermission, Section, UserSectionPermission
 from app.modules.accessi.routes.auth import login
-from app.modules.wiki.mcps import connector, connector_budget
+from app.modules.wiki.mcps import connector, connector_budget, oauth_maintenance
 from app.modules.wiki.mcps.audit import AuditStore
 from app.modules.wiki.mcps.connector import ConnectorBearer, create_connector_app, read_body
 from app.modules.wiki.mcps.connector_budget import PrincipalBudget
@@ -47,6 +47,146 @@ VERIFIER = "synthetic-connector-verifier-" + "x" * 48
 CHALLENGE = (
     base64.urlsafe_b64encode(hashlib.sha256(VERIFIER.encode()).digest()).decode().rstrip("=")
 )
+
+
+def test_maintenance_without_traffic_retries_and_stops(tmp_path, monkeypatch, caplog):
+    store = OAuthStore(tmp_path / "gaia-mcp-oauth.sqlite")
+    budget = PrincipalBudget(store, 60, 20)
+    stale = store.put("pending", {"client_id": "first"}, lifetime=-1)
+    store.connection.execute("INSERT INTO connector_budget VALUES ('stale', -1, 1, 1)")
+    original_cleanup = store.cleanup
+
+    async def exercise():
+        tick = asyncio.Event()
+        waiting = asyncio.Event()
+
+        async def sleep(seconds):
+            assert seconds == 60
+            waiting.set()
+            await tick.wait()
+            tick.clear()
+
+        monkeypatch.setattr(oauth_maintenance.asyncio, "sleep", sleep)
+        async with oauth_maintenance.maintenance(store, budget):
+            assert store.get("pending", stale) is None
+            assert (
+                store.connection.execute("SELECT COUNT(*) FROM connector_budget").fetchone()[0] == 0
+            )
+            await waiting.wait()
+            waiting.clear()
+            monkeypatch.setattr(
+                store,
+                "cleanup",
+                lambda: (_ for _ in ()).throw(sqlite3.OperationalError("secret detail")),
+            )
+            tick.set()
+            await waiting.wait()
+            assert "gaia_mcp_oauth_cleanup_failed" in caplog.text
+            assert "secret detail" not in caplog.text
+            waiting.clear()
+            monkeypatch.setattr(store, "cleanup", original_cleanup)
+            store.put("pending", {"client_id": "first"}, lifetime=-1)
+            tick.set()
+            await waiting.wait()
+            assert store.connection.execute("SELECT COUNT(*) FROM grants").fetchone()[0] == 0
+        assert not any(task.get_name() == "gaia-mcp-oauth-cleanup" for task in asyncio.all_tasks())
+        assert store.put("pending", {"client_id": "first"}, lifetime=60)
+
+    try:
+        asyncio.run(exercise())
+    finally:
+        store.close()
+
+
+def test_maintenance_startup_failure_does_not_launch_task(tmp_path, monkeypatch):
+    store = OAuthStore(tmp_path / "gaia-mcp-oauth.sqlite")
+    budget = PrincipalBudget(store, 60, 20)
+    monkeypatch.setattr(
+        store, "cleanup", lambda: (_ for _ in ()).throw(sqlite3.OperationalError("startup"))
+    )
+
+    async def exercise():
+        with pytest.raises(sqlite3.OperationalError):
+            async with oauth_maintenance.maintenance(store, budget):
+                pytest.fail("Failed maintenance must prevent startup")
+        assert not any(task.get_name() == "gaia-mcp-oauth-cleanup" for task in asyncio.all_tasks())
+
+    try:
+        asyncio.run(exercise())
+    finally:
+        store.close()
+
+
+def test_internal_admin_revocation_uses_current_real_gaia_role(runtime, monkeypatch, caplog):
+    from app.modules.wiki.mcps.oauth_store import token_hash
+
+    config, sessions, _ = runtime
+    session = gaia_login(sessions)
+    app = create_connector_app(config, sessions)
+    path = OAUTH_PATH + "/admin/revoke"
+
+    async def exercise():
+        async with (
+            app.router.lifespan_context(app),
+            httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url=ORIGIN) as http,
+        ):
+            assert (await http.post(path, json={"subject": "1"})).status_code == 401
+            headers = {"Authorization": "Bearer " + session}
+            assert (
+                await http.post(
+                    path, headers={"Authorization": "Bearer invalid"}, json={"subject": "1"}
+                )
+            ).status_code == 401
+            assert (
+                await http.post(path, headers=headers, json={"subject": "1"})
+            ).status_code == 403
+            tokens = await delegate(http, config, session)
+            with sessions() as database:
+                user = database.query(ApplicationUser).filter_by(username="synthetic-one").one()
+                user.role = "admin"
+                database.commit()
+            for invalid in [{}, {"subject": ""}, {"subject": 1}, {"subject": "1", "unknown": True}]:
+                assert (await http.post(path, headers=headers, json=invalid)).status_code == 400
+            assert (await http.post(path, headers=headers, content="not-json")).status_code == 400
+            preflight = await http.options(path)
+            assert preflight.status_code == 404
+            assert "access-control-allow-origin" not in preflight.headers
+            assert (await http.get(path)).status_code == 404
+            handler = next(route.endpoint.__self__ for route in app.routes if route.path == path)
+            revoke = handler.store.revoke_authorizations
+
+            def unavailable(**selectors):
+                raise sqlite3.OperationalError("secret storage failure")
+
+            monkeypatch.setattr(handler.store, "revoke_authorizations", unavailable)
+            response = await http.post(path, headers=headers, json={"subject": "1"})
+            assert response.status_code == 503
+            assert "secret" not in response.text
+            monkeypatch.setattr(handler.store, "revoke_authorizations", revoke)
+            caplog.set_level(logging.INFO)
+            response = await http.post(path, headers=headers, json={"subject": "1"})
+            assert response.status_code == 200
+            assert response.json() == {"revoked_grants": 2}
+            assert response.headers["cache-control"] == "no-store"
+            assert handler.store.get("access", tokens["access_token"]) is None
+            event = next(
+                record.mcp_event
+                for record in caplog.records
+                if record.message == "gaia_mcp_oauth_admin_revocation"
+            )
+            assert event["principal"] == token_hash("1")
+            assert event["selectors"] == {"subject": token_hash("1")}
+            assert session not in caplog.text and tokens["access_token"] not in caplog.text
+            with sessions() as database:
+                user = database.query(ApplicationUser).filter_by(username="synthetic-one").one()
+                user.is_active = False
+                database.commit()
+            assert (await http.post(path, headers=headers, json={"subject": "1"})).status_code in {
+                401,
+                403,
+            }
+
+    asyncio.run(exercise())
 
 
 @pytest.fixture

@@ -1,5 +1,10 @@
 # Console MCP e client locali
 
+Stato operativo 2026-10-05: Claude Desktop locale configurato e avviato con
+`gaia-synthetic`; handshake e discovery `tools/list` verificati nei log del
+client reale. La chiamata tool da una chat Desktop resta da confermare.
+Host LAN e gate HTTPS: `LAN_DESKTOP_READINESS_2026-10-05.md`.
+
 La pagina `/wiki/mcp/console`, raggiungibile dalla preview `/wiki/mcp` e dal
 menu Wiki, permette di consultare le dieci entita del dataset sintetico,
 incluse le tabelle di relazione. Non invoca il modello per visualizzare dati
@@ -80,11 +85,18 @@ Per Claude Desktop, integra soltanto la voce `gaia-synthetic` di
 `config/mcps/claude-desktop.example.json` nel file di configurazione del
 client, sostituendo i path assoluti. Non sovrascrivere altre voci. Su questa
 macchina la configurazione con path gia risolti e disponibile in
-`runtime-data/mcps/claude-desktop-config.json`, ignorata da Git; Desktop non
-e stato avviato. Non occorrono credenziali codex-lb o GAIA per lo stdio.
+`runtime-data/mcps/claude-desktop-config.json`, ignorata da Git. La stessa voce
+e ora integrata nel profilo Desktop privato, con backup 0600 e verifica che
+l'inserimento preservi preferenze e altre impostazioni prima dell'avvio.
+Desktop e stato avviato;
+ha inizializzato il server e richiesto `tools/list` con successo.
+Non occorrono credenziali codex-lb o GAIA per lo stdio.
 Il collegamento espone solo tool Data, senza Docs o API operative.
-La connessione di Claude Code e stata verificata; la chiamata tool reale e
-stata eseguita con SDK stdio, senza avviare un modello Claude nel repository.
+La connessione di Claude Code e stata verificata; la chiamata tool precedente
+e stata eseguita con SDK stdio, senza avviare un modello Claude nel repository.
+La nuova connessione Desktop non dimostra ancora una chiamata tool dal modello:
+eseguire in una nuova chat «Usa gaia-synthetic per cercare i soggetti sintetici
+omonimi e mostrami la provenance». Non utilizzare documenti NAS reali.
 
 ## ChatGPT successivamente
 

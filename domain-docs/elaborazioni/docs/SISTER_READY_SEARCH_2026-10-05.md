@@ -2,7 +2,9 @@
 
 ## Perimetro
 
-Implementazione locale, non ancora rilasciata sul CED. Nessuna modifica a
+Implementazione rilasciata sul CED il 2026-10-05 alle 16:14 Europe/Rome.
+Dettagli e rollback in [SISTER_DEPLOY_2026-10-05.md](SISTER_DEPLOY_2026-10-05.md).
+Nessuna modifica a
 calendari, account, proprieta, ID remoti, durata di recupero o cooldown.
 
 Prima della ricerca completa in Non evadibili, il worker verifica Espletate e
@@ -82,7 +84,7 @@ worker, con 100% statement/branch su navigation, request_rows ed exceptions.
 Ruff e formato del nuovo test verificati. Ratchet contro origin/main senza
 finding: extract_remote_id cog/cyc/LOC 13/7/14 invariato; funzioni di ricerca
 invariate; nuovo helper 4/5/20 sotto soglia. Nessuna baseline modificata.
-Implementazione locale, non rilasciata in produzione; nessun dato corretto,
+Al momento della validazione locale non era rilasciata in produzione; nessun dato corretto,
 account modificato o richiesta remota cancellata.
 
 ## Chiusura del ciclo
@@ -92,4 +94,5 @@ Verifica finale e matrice comportamenti/test in
 148 test mirati e coverage al 100%; build e smoke container superati.
 Gate generale chiuso dopo la slice autorizzata sugli import dei test worker:
 make test-worker supera 677 test in 49 file; nessuna asserzione indebolita.
-Non dichiarare il rilascio o l'ottimizzazione produttiva completati.
+Rilascio completato separatamente dopo la validazione. Non dichiarare
+l'ottimizzazione prestazionale produttiva completata senza misure successive.

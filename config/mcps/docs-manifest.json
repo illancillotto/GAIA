@@ -32,8 +32,8 @@
       "category": "prd",
       "status": "current",
       "included": true,
-      "sha256": "67501f4ecbda816a98b0324d743039c5b5574e409229956e8ebf1de0a38c88e8",
-      "reason": "Revisione 2026-10-03 dopo il commit 1995a1fc: aggiunto lo stato del connettore sintetico opt-in, distinto dalla chat Wiki legacy; contenuti di prodotto senza credenziali o dati personali."
+      "sha256": "2b1938422cb60cb2b383b2a41186deaf21d3c5f7ef037f49eb5978a028f5aea4",
+      "reason": "Revisione autorizzata 2026-10-05 del delta 1995a1fc..080cbdd6: tre righe di rimando alla chiusura e verifiche locali storiche, rilascio non attivo; nessun nuovo dato personale o credenziale. Evidenza: domain-docs/wiki/docs/DOCS_FREEZE_REVIEW_2026-10-05.md."
     }
   ]
 }

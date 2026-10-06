@@ -83,7 +83,7 @@ def validate_source_path(source_path: str) -> PurePosixPath:
         raise ValueError("Invalid document path")
     if path.as_posix() != source_path or path.suffix != ".md":
         raise ValueError("Expected a canonical Markdown path")
-    if not path.parts or path.parts[0] not in {"docs", "domain-docs"}:
+    if path.parts[0] not in {"docs", "domain-docs"}:
         raise ValueError("Document outside the allowed corpus roots")
     return path
 
@@ -115,9 +115,9 @@ def markdown_sections(content: str) -> list[tuple[str | None, str]]:
             delimiter = marker.group(1)
             if fence is None:
                 fence = delimiter
-            elif delimiter[0] == fence[0] and len(delimiter) >= len(fence):
+            elif delimiter.startswith(fence):
                 fence = None
-        heading = HEADING.match(line) if fence is None and marker is None else None
+        heading = HEADING.match(line) if fence is None else None
         if heading:
             sections.append((section, "\n".join(lines).strip()))
             section = heading.group(2)[:300]
@@ -216,14 +216,13 @@ def load_corpus(path: Path) -> Corpus:
     if corpus.corpus_version != corpus_digest(corpus.manifest, corpus.chunks):
         raise ValueError("Frozen corpus integrity check failed")
     approved = {}
-    for entry in corpus.manifest.entries:
-        if entry.included:
-            if policy_reason(entry) or entry.path in approved:
-                raise ValueError("Frozen corpus violates the manifest policy")
-            approved[entry.path] = entry.sha256
+    for entry in (item for item in corpus.manifest.entries if item.included):
+        if policy_reason(entry) or entry.path in approved:
+            raise ValueError("Frozen corpus violates the manifest policy")
+        approved[entry.path] = entry.sha256
     identities = set()
     for chunk in corpus.chunks:
-        if chunk.source_path not in approved or approved[chunk.source_path] != chunk.document_hash:
+        if approved.get(chunk.source_path) != chunk.document_hash:
             raise ValueError("Chunk outside the approved manifest")
         if chunk.chunk_id in identities:
             raise ValueError("Duplicate chunk ID")

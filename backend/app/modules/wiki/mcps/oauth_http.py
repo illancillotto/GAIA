@@ -12,6 +12,15 @@ from starlette.routing import Route
 
 from .auth import SCOPES
 from .oauth_provider import https_url
+from .oauth_store import GrantCapacityError
+
+
+async def capacity_error(request, exception):
+    return JSONResponse(
+        {"error": "temporarily_unavailable"},
+        status_code=503,
+        headers={"Cache-Control": "no-store", "Retry-After": "60"},
+    )
 
 
 class ConsentDecision(BaseModel):
@@ -109,4 +118,4 @@ def create_oauth_app(provider, issuer, authenticate):
                 methods=["POST", "OPTIONS"],
             )
     routes.append(Route("/consent", handlers.consent, methods=["GET", "POST"]))
-    return Starlette(routes=routes)
+    return Starlette(routes=routes, exception_handlers={GrantCapacityError: capacity_error})

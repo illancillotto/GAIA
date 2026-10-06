@@ -1884,6 +1884,531 @@ blocco verificato e prima di chiudere un goal.
   Prima decisione proposta: W0 e predisposizione isolata. README aggiornato;
   Graphify platform docs tramite target dedicato con controllo chunk.
 
+### Wiki - revisione esplicita del freeze PRD (2026-10-05)
+
+- Follow-up autorizzato dopo la slice evaluate_docs: revisione del PRD Wiki
+  rispetto al blob approvato in `1995a1fc`, avvio `main@44b0c4ac`.
+  Il solo delta in `080cbdd6` aggiunge tre righe di rimando alla chiusura,
+  coverage/build storiche e rilascio non attivo. Report di chiusura coerente,
+  nessun nuovo dato personale/secret o risposta costruita per il ground truth.
+- Aggiornati soltanto sha256 e reason dell'entry Wiki in docs-manifest;
+  PRD invariato, due documenti inclusi e 32 query immutate. Altre entry,
+  status, included, policy/guardie hash e baseline complessita invariati.
+  Review in `domain-docs/wiki/docs/DOCS_FREEZE_REVIEW_2026-10-05.md`.
+- Vecchio corpus ricostruito da blob revisionato e manifest originale in
+  directory temporanea, senza bypass del freeze; nuovo corpus verificato.
+  Entrambi 59 chunk: 32 esiti/rank/result_count identici, success/recall@10
+  `1.0`, MRR `0.9833333333333333`, precision@10 `0.13873015873015873`.
+  Corpus_version cambia da `6403a59b...` a `424d100f...` come richiesto.
+  Token non congelati: delta da -1 a +37, somma +108; primo confronto
+  troppo stretto dei token scartato, senza cambiare dati o scoring.
+- Suite evaluation/contract: 12 passed, full-file 100%, le due failure
+  freeze preesistenti risolte. `make test-mcp QUALITY_PYTHON=backend/.venv/bin/python`:
+  295 passed, 42 runtime full-file 100% (1990/1990 statement, 420/420 branch),
+  zero righe escluse. JSON manifest e whitespace verdi; nessun test rimosso,
+  skip, nuovo scope coverage o sorgente runtime modificato da questo follow-up.
+- Questa e una revisione del corpus, non una nuova riduzione di complessita:
+  nessuna metrica/finding eliminata rivendicata e nessun gate globale verde.
+  Evidenze `/tmp/gaia-wiki-freeze-*`; Graphify Wiki docs e platform docs tramite
+  target dedicati, con controllo chunk semantici e assenza warning.
+  Nessun commit/push/deploy o flag attivato; lavori concorrenti preservati.
+
+### Wiki - rank rilevanti nella valutazione Docs (2026-10-05)
+
+- Prossimo hotspot autorizzato: solo `evaluate_docs`, `main@1279e3ce`;
+  preservate slice precedenti e modifiche Presenze/worker concorrenti.
+- Prima: target cog/cyc/LOC/nesting `20/13/40/2`, aggregati file cog/cyc
+  `52/36`, 119 LOC callable, cinque callable e due warning target.
+- Invarianti: stessa sequenza search_docs/limit 10, timing limitato alla
+  chiamata source, relevant rank 1-based nell'ordine originale, matching
+  path e casefold Unicode della section, short-circuit su path diverso,
+  abstention per target falsy, metriche aggregate e denominatori, payload
+  casi, percentili nearest-rank, propagazione errori e nessuna mutazione.
+- Baseline test: due failure preesistenti prima di chiamare evaluate_docs,
+  `Reviewed document hash has changed`, per `domain-docs/wiki/docs/PRD_wiki.md`
+  rispetto al manifest revisionato. Drift verificato anche nei blob HEAD,
+  non introdotto dalla slice; manifest e guardia freeze non modificati.
+- Otto test nuovi passano sul runtime originale: golden report con rank
+  multipli/Unicode/null section/abstention/target falsy, timing deterministico,
+  denominatori vuoti, errori source/row, queryset vuoto e CLI con corpus
+  sintetico revisionato. Suite completa prima: 10 passed, due failure freeze
+  note; evaluation full-file 100% (`74/74` statement, `20/20` branch).
+- Slice applicata: helper puro `_relevant_doc_ranks` per il matching delle
+  evidenze, senza spostare timing, scoring, richieste o normalizzazione della
+  query. Tre parametri e metriche sotto soglia; nessuna copia del matcher.
+- Dopo: target cog/cyc/LOC/nesting `12/8/36/2`, helper `5/6/6/0`, tre
+  parametri e zero violation. File cognitive `52 -> 49`, sei callable,
+  LOC callable `119 -> 121`, warning `2 -> 0`. `IMPROVED` cognitivo senza
+  trasferimento del debito; AST fuori scope identico a HEAD. Cyclomatic
+  aggregate `36 -> 37` per la base del nuovo callable; branching
+  `sum(cyc - 1) = 31` invariato, nessuna riduzione ciclomatica globale dichiarata.
+- Suite completa dopo: 10 passed, esattamente le stesse due failure freeze
+  gia presenti prima. Full-file 100% (`76/76` statement, `20/20` branch),
+  zero esclusioni. Comando backend: `pytest tests/test_wiki_mcp_evaluation.py
+  tests/test_wiki_docs_evaluation_contract.py
+  --cov=app.modules.wiki.mcps.evaluation --cov-branch --cov-fail-under=100`.
+  Suite mirata con otto nuovi test e i due test Data verdi: 10 passed,
+  full-file 100%; i due test bloccati non sono rimossi, marcati skip o indeboliti.
+  Differenziale con funzione originale: 1020 input con scoring/errori e
+  report latenza deterministici identici. I 32 casi docs reali restano
+  bloccati dall'hash drift: nessun successo benchmark reale rivendicato.
+- Ratchet mirato autorevole contro merge-base HEAD, Ruff runtime/test,
+  format nuovo test, lint-backend BASE_REF=HEAD e whitespace verdi.
+  Baseline, manifest freeze, scope e soglie invariati; nessuna nuova failure.
+- Scanner globale: 1602 file, 19704 callable, 4741 violation (2041 error,
+  2700 warning), 26 finding baseline e otto working-tree Wiki preesistenti,
+  nessuno in evaluation. Due warning eliminati dalla slice; nessun gate
+  globale dichiarato verde o baseline sincronizzata.
+- Graphify Wiki codice force con patch pruning: 115 file AST, grafo
+  987 nodi/2366 edge. Evidenze metriche/test/coverage/differential/ratchet,
+  lint e grafi sotto `/tmp/gaia-evaluate-docs-*`; refresh platform docs tramite
+  target dedicato, log `/tmp/gaia-evaluate-docs-graph-docs.log`, con verifica
+  chunk semantici e assenza warning.
+- Stop al singolo hotspot, nessun commit/push. Prossima decisione proposta:
+  revisione esplicita del PRD Wiki e del relativo freeze, prima di aggiornare
+  l'hash nel manifest; nessun aggiornamento automatico per rendere verdi i test.
+
+### Wiki/Docs - risposta tool e lifecycle telemetria (2026-10-05)
+
+- Prossimo hotspot autorizzato: solo `DocsService.call`, `main@1279e3ce`;
+  slice precedenti e lavori Presenze/worker concorrenti preservati.
+- Prima: call cog/cyc/LOC/nesting `14/10/68/2`, aggregati file cog/cyc
+  `28/31`, 152 LOC callable, otto callable, tre warning (due nel target).
+- Invarianti: default context locale, autorizzazione prima di nome/input,
+  validation strict, dispatch, ordine risultati/provenance, payload e
+  stima token senza escape Unicode, correlation ID/versioni, errore
+  originale rilanciato, un log finale con default error prima del successo,
+  principal hashato e nessun payload/query/testo errore nella telemetria.
+- Prima: 116 test Docs/HTTP/SDK integration verdi, service full-file 100%
+  (`93/93` statement, `10/10` branch). Otto nuovi test passano sul runtime
+  originale: envelope/provenance/evento per ogni tool, risultati vuoti e
+  default context, precedenza permission-denied, failure esecuzione e
+  serializzazione senza aggiornare prematuramente lo stato telemetria.
+- Slice applicata: separato `_call_response` (autorizzazione, esecuzione e
+  envelope) dal lifecycle logging in `call`, come nel servizio Data.
+  Catch/finally restano nel metodo pubblico; helper con quattro parametri
+  sotto soglia, senza copiare regole o spostare warning.
+- Dopo: call cog/cyc/LOC/nesting `6/6/35/2`; helper `4/5/34/1`, quattro
+  parametri, zero violation. Aggregati file cognitive `28 -> 24`, warning
+  `3 -> 1`: eliminate entrambe le violation target, resta solo il warning
+  parametri di search_docs. `IMPROVED` sulla metrica cognitiva senza
+  trasferire debito; AST fuori dalla responsabilita coincide con HEAD.
+  Cyclomatic aggregate `31 -> 32` per la base del nuovo callable, branching
+  normalizzato `sum(cyc - 1) = 23` invariato: non si dichiara una riduzione
+  ciclomatica globale. LOC file `188 -> 189`, callable `152 -> 153`, otto
+  callable diventano nove; nessuna compressione artificiale del layout.
+- Dopo: 124 test Docs/contract/HTTP/SDK integration verdi, full-file
+  100% (`96/96` statement, `10/10` branch), zero esclusioni. Comando backend:
+  `pytest tests/test_wiki_docs_mcp.py tests/test_wiki_docs_call_contract.py
+  tests/test_wiki_mcp_http.py tests/test_wiki_mcp_integration.py
+  --cov=app.modules.wiki.mcps.docs.service --cov-branch --cov-fail-under=100`.
+  Confronto differenziale con call originale: 48 combinazioni tool/input/scope
+  con risposta/errore e telemetria identici, esclusi timestamp/durata variabili.
+- Ratchet mirato autorevole contro merge-base HEAD PASS; Ruff runtime/test,
+  format nuovo test, lint-backend BASE_REF=HEAD e whitespace verdi.
+  Nessuna nuova failure, modifica baseline, scope, soglie o esclusione.
+- Scanner globale: 1602 file, 19703 callable, 4743 violation (2041 error,
+  2702 warning); 26 finding baseline e otto working-tree Wiki ereditati,
+  nessuno nel service Docs. La riduzione di due warning e attribuibile
+  alla slice; variazioni callable Presenze concorrenti non sono risultati
+  del refactoring. Nessun gate globale dichiarato verde.
+- Graphify Wiki codice aggiornato con patch pruning e target force:
+  115 file AST, grafo 986 nodi/2364 edge. Evidenze metriche, test, coverage,
+  differential, ratchet, lint e grafi sotto `/tmp/gaia-docs-call-*`.
+  Refresh platform docs tramite target dedicato, log
+  `/tmp/gaia-docs-call-graph-docs.log`, con verifica chunk semantici senza
+  affidarsi soltanto all'exit code.
+- Stop a questa responsabilita, nessun commit/push; prossimo candidato
+  da analizzare separatamente: `evaluate_docs` (cognitive/cyclomatic), senza
+  alterare scoring, dataset, richieste o misure del benchmark.
+
+### Wiki/Docs - audit build_corpus e stop condition (2026-10-05)
+
+- Prossimo hotspot autorizzato: solo `build_corpus`, `main@1279e3ce`.
+  Preservate tutte le slice precedenti e il lavoro worker concorrente.
+- Prima/dopo: cog/cyc/LOC/nesting `15/9/31/2`, aggregati file cog/cyc
+  `85/66`, LOC `143`, 11 callable, sette warning invariati. Nessuna modifica
+  runtime applicata; AST di `build_corpus` identico a HEAD.
+- Invarianti: policy valutata prima dei duplicati, ordine lessicografico dei
+  path, duplicati rilevati anche per entry escluse, esclusioni conservate
+  nel manifest senza lettura dei file, hash revisionati, budget byte
+  cumulativo, chunk prodotti solo dopo il controllo budget, freeze e digest.
+- Tentativo locale scartato, confinato a `/tmp`: unificare l'append del
+  manifest tramite ramo else riduce LOC `31 -> 29`, ma aumenta cognitive
+  `15 -> 16` e nesting `2 -> 3`; cyclomatic resta `9`. Non e una riduzione
+  conforme e non viene applicata. Rimuovere guardie o anticipare controlli
+  cambierebbe gli invarianti; wrapper/copie del ramo esclusioni solo per
+  abbassare metriche non sono ammessi. Nessuna slice minima conforme e
+  emersa dall'audit; non si apre una responsabilita adiacente senza decisione.
+- Esito `NO_SAFE_CHANGE`, non `IMPROVED`: raggiunta la stop condition sulla
+  riduzione dimostrabile nella slice esaminata. Un warning cognitivo resta
+  alla soglia `15`, senza regressione o trasferimento del debito.
+- Verifica: 394 test Docs/Markdown/frozen-corpus/source-path verdi,
+  full-file 100% (`164/164` statement, `60/60` branch), zero esclusioni;
+  ratchet mirato contro merge-base HEAD PASS. Non rieseguiti lint runtime
+  o integrazione aggiuntiva: nessun sorgente o test modificato da questo
+  audit. Baseline, scope e soglie invariati; nessun commit/push.
+- Evidenze `/tmp/gaia-build-corpus-before.{json,md}`, audit-tests,
+  audit-coverage e audit-ratchet; proposta scartata in
+  `/tmp/gaia-build-corpus-rejected-proposal.py`. Orientamento con target
+  Graphify Wiki query; nessun refresh codice necessario in assenza di
+  modifiche runtime. Refresh platform docs tramite target dedicato, log
+  `/tmp/gaia-build-corpus-graph-docs.log`, con verifica chunk semantici.
+- Decisione richiesta: autorizzare un nuovo hotspot, candidato
+  `DocsService.call`, oppure mantenere questo debito locale. Nessuna
+  seconda slice avviata automaticamente e nessuna riduzione globale rivendicata.
+
+### Wiki/Docs - guardia componenti del percorso (2026-10-05)
+
+- Prossimo hotspot autorizzato: solo `validate_source_path`,
+  `main@1279e3ce`; slice precedenti e lavori worker concorrenti preservati.
+- Prima: target cog/cyc/LOC/nesting `14/12/9/1`, aggregati file cog/cyc
+  `88/68`, 11 callable, sette warning; un warning ciclomatico nel target.
+- Invarianti: rifiuto assoluti, traversal, backslash e NUL, canonicalita
+  POSIX, suffisso Markdown case-sensitive, root docs/domain-docs, ordine e
+  messaggi degli errori. Nessun nuovo vincolo su nomi o profondita path.
+- Prima: 355 test Docs/Markdown/frozen-corpus verdi, full-file 100%
+  (`164/164` statement, `60/60` branch). Altri 39 casi passano sul runtime
+  originale: percorsi vuoti/punto, suffissi, separatori, canonicalita,
+  traversal, Windows/NUL, root e path validi anche insoliti.
+- Slice applicata: rimosso soltanto `not path.parts` dalla guardia root.
+  Il controllo precedente richiede `path.suffix == ".md"`, quindi il path
+  ha necessariamente un nome e almeno una componente; path vuoti/punto
+  sono gia rifiutati prima di indicizzare. Nessun helper o nuovo callable.
+- Dopo: target cog/cyc/LOC/nesting `11/10/9/1`, aggregati file cog/cyc
+  `88/68 -> 85/66`, LOC `143` e 11 callable invariati. `IMPROVED`, nessun
+  trasferimento debito: warning target alla soglia `10` e sette warning file
+  restano. Nessuna eliminazione di finding o compressione layout dichiarata.
+  AST fuori target identico alla slice load_corpus gia completata.
+- Suite Docs/Markdown/frozen-corpus/source-path: 394 passed, full-file
+  100% prima/dopo (`164/164` statement, `60/60` branch), zero esclusioni.
+  Comando backend: `pytest tests/test_wiki_docs_mcp.py
+  tests/test_wiki_markdown_sections.py tests/test_wiki_frozen_corpus_validation.py
+  tests/test_wiki_source_path_validation.py
+  --cov=app.modules.wiki.mcps.docs.corpus --cov-branch --cov-fail-under=100`.
+  Ulteriori 94 test experiment/SDK integration/HTTP verdi. Differenziale
+  con validatore originale: 67863 percorsi con risultati/errori identici,
+  inclusa precedenza delle failure; nessuna copia legacy versionata.
+- Ratchet mirato contro merge-base HEAD, Ruff runtime/test, format nuovo
+  test, lint-backend BASE_REF=HEAD e whitespace verdi. Baseline, scope,
+  soglie e policy immutati; nessuna nuova failure runtime.
+- Snapshot globale invariato: 1602 file, 19699 callable, 4745 violation
+  (2041 error, 2704 warning), 26 finding baseline e otto working-tree Wiki
+  preesistenti, nessuno nel corpus. Nessun gate globale dichiarato verde.
+- Graphify Wiki force con patch pruning: 115 file AST, nessun cambio di
+  topologia. Evidenze metriche/test/coverage/differential/ratchet/lint e
+  graph-code sotto `/tmp/gaia-source-path-*`; refresh platform docs tramite
+  target dedicato con log `/tmp/gaia-source-path-graph-docs.log`, verificando
+  completamento chunk semantici e assenza warning, non solo exit code.
+- Stop al singolo hotspot, nessun commit/push. Prossimo candidato da
+  analizzare separatamente: `build_corpus`, preservando policy, freeze,
+  ordinamento e budget cumulativo dei documenti.
+
+### Wiki/Docs - validazione corpus congelato (2026-10-05)
+
+- Prossimo hotspot autorizzato: solo `load_corpus`, `main@1279e3ce`.
+  Slice precedenti e lavori worker concorrenti preservati; nessun commit.
+- Prima: target cog/cyc/LOC/nesting `22/13/20/3`, aggregati file cog/cyc
+  `94/70`, 11 callable, sette warning. Due warning nel target.
+- Invarianti: limite dimensione, validazione JSON/Pydantic, digest globale,
+  policy delle sole entry incluse, unicita path inclusi, autorizzazione
+  source_path/hash di ciascun chunk, unicita globale chunk ID, ordine e
+  messaggi delle failure, contenuto del Corpus restituito.
+- Prima: 344 test Docs/Markdown verdi, corpus full-file 100%
+  (`165/165` statement, `62/62` branch). Undici nuovi casi passano prima
+  della modifica: entry escluse anche con path invalido/duplicato, hash
+  approvati None/vuoto/diverso, path chunk ignoto con hash valido, ID
+  duplicato tra documenti, precedenza integrita/policy/hash/identita.
+- Slice applicata: filtro lazy delle entry incluse nell'iterazione, senza
+  cambiare ordine; lookup unico `approved.get` per il controllo hash.
+  Un path ignoto produce None, mai uguale a `Chunk.document_hash` che dopo
+  validazione Pydantic e una stringa obbligatoria: fail-closed preservato.
+  Nessun helper, materializzazione anticipata o nuovo callable.
+- Dopo: target cog/cyc/LOC/nesting `16/11/19/2`, aggregati file cog/cyc
+  `94/70 -> 88/68`, LOC `144 -> 143`, 11 callable invariati. `IMPROVED`
+  senza trasferire debito; due warning target e sette file restano, nessuna
+  eliminazione di finding dichiarata. AST fuori target identico alla slice
+  Markdown gia completata.
+- Suite Docs/Markdown/validation: 355 passed, corpus full-file 100%
+  (`164/164` statement, `60/60` branch), zero esclusioni. Comando backend:
+  `pytest tests/test_wiki_docs_mcp.py tests/test_wiki_markdown_sections.py
+  tests/test_wiki_frozen_corpus_validation.py
+  --cov=app.modules.wiki.mcps.docs.corpus --cov-branch --cov-fail-under=100`.
+  Ulteriori 94 test experiment/SDK integration/HTTP verdi. Confronto
+  differenziale con loader originale: 1806 corpus restituiscono dati o
+  errori identici, inclusi ordine delle failure e messaggi.
+- Ratchet mirato contro merge-base HEAD PASS; Ruff runtime/test, nuovo
+  test format, lint-backend BASE_REF=HEAD e whitespace verdi. Baseline,
+  policy coverage, scope e soglie invariati; nessuna nuova failure runtime.
+- Snapshot globale: 1602 file, 19699 callable, 4745 violation (2041 error,
+  2704 warning), 26 finding baseline e otto finding working-tree Wiki
+  preesistenti; nessun finding corpus. I due warning eliminati globalmente
+  appartengono al lavoro worker concorrente in `find_ready_request`, non
+  a questa slice; qui i warning restano invariati, calano le metriche.
+  Nessun gate globale dichiarato verde.
+- Graphify Wiki codice force con patch pruning: 115 file AST, nessun cambio
+  topologico. Log metriche, test, coverage, differential, ratchet, lint e
+  graph-code sotto `/tmp/gaia-load-corpus-*`; refresh platform docs con
+  target dedicato, log `/tmp/gaia-load-corpus-graph-docs.log` e verifica chunk
+  semantici completati, senza affidarsi soltanto all'exit code.
+- Stop a questo hotspot, nessun commit/push. Prossimo candidato separato:
+  `validate_source_path`, mantenendo tutti i controlli anti-traversal.
+
+### Wiki/Docs - guardie fence nel parser Markdown (2026-10-05)
+
+- Prossimo hotspot autorizzato: solo `markdown_sections` in `docs/corpus.py`,
+  `main@1279e3ce`. Slice precedenti Wiki/Ruolo preservate, nessun commit.
+- Prima: target cog/cyc/LOC/nesting `24/12/22/4`, aggregati file cog/cyc
+  `103/74`, 11 callable, otto warning. Il parser e un hotspot cognitivo
+  effettivo; non si comprimono righe per nascondere finding LOC adiacenti.
+- Invarianti: regole esistenti per fence backtick/tilde, delimitatori piu
+  corti o di tipo diverso, indentazione e suffix, heading letterali dentro
+  fence, ordine sezioni, strip, normalizzazione newline, titolo troncato,
+  chunk deterministici e hash del corpus. Nessun cambio di policy documenti.
+- Prima: 50 test Docs verdi, corpus runtime full-file 100%
+  (`165/165` statement, `62/62` branch). Altri 294 casi passano sul runtime
+  originale: matrice delimitatore/lunghezza/tipo/indentazione/suffix e
+  confini sezioni. Nuovo test isolato, senza duplicare il parser legacy.
+- Slice applicata: `delimiter.startswith(fence)` equivale alla guardia
+  tipo/lunghezza per i soli delimitatori omogenei estratti da `FENCE`;
+  una linea fence non puo corrispondere a `HEADING`, quindi la guardia
+  aggiuntiva `marker is None` e ridondante. Nessun helper o nuovo callable.
+- Dopo: target cog/cyc/LOC/nesting `15/8/22/4`, aggregati file cog/cyc
+  `103/74 -> 94/70`, LOC aggregate `144` invariate, 11 callable invariati.
+  Warning target `3 -> 2`, file `8 -> 7`: eliminato il warning ciclomatico;
+  restano cognitive alla soglia `15` e nesting `4`. `IMPROVED` senza
+  trasferire debito o comprimere layout; AST fuori target identico a HEAD.
+- Suite Docs e caratterizzazione: 344 passed, corpus full-file 100%
+  prima/dopo (`165/165` statement, `62/62` branch), zero esclusioni.
+  Comando dal backend: `pytest tests/test_wiki_docs_mcp.py
+  tests/test_wiki_markdown_sections.py --cov=app.modules.wiki.mcps.docs.corpus
+  --cov-branch --cov-fail-under=100`. Ulteriori 94 test experiment/SDK
+  integration/HTTP verdi. Confronto differenziale temporaneo con il parser
+  originale: 111111 sequenze di linee con risultato identico; nessuna copia
+  del parser legacy introdotta nei sorgenti o nei test versionati.
+- Ratchet mirato autorevole contro merge-base HEAD PASS; Ruff runtime/test,
+  format nuovo test, `make lint-backend BASE_REF=HEAD
+  QUALITY_PYTHON=backend/.venv/bin/python` e whitespace verdi.
+  Nessuna sincronizzazione baseline, modifica a soglie/scope o nuova failure.
+- Snapshot globale: 1602 file, 19698 callable, 4747 violation (2041 error,
+  2706 warning), 26 finding baseline e otto finding working-tree ratchet
+  Wiki preesistenti, nessuno in corpus. L'aumento globale di un warning
+  non e causato dalla slice: lavoro worker concorrente aggiunge due warning
+  in `find_ready_request`, mentre il parser elimina un warning ciclomatico.
+  Nessuna riduzione di finding dichiarata e nessun gate globale verde.
+- Graphify Wiki codice aggiornato con patch pruning e target force:
+  115 file AST, nessun cambio di topologia. Evidenze metriche/test/coverage,
+  ratchet, lint e graph-code sotto `/tmp/gaia-markdown-*`; refresh platform
+  docs tramite target dedicato con log `/tmp/gaia-markdown-graph-docs.log`,
+  verificando completamento dei chunk semantici e assenza warning.
+- Stop a questa responsabilita; candidato successivo da valutare soltanto
+  dopo autorizzazione: `load_corpus`, warning cognitivi/ciclomatici, senza
+  indebolire policy, integrita o controlli di identita. Nessun commit o push.
+
+### Ruolo - selezione autorevole associazione raccomandata (2026-10-05)
+
+- Slice autorizzata sul solo `update_registered_mail_association`,
+  `main@17242e81`; modifiche Wiki e Presenze preesistenti preservate.
+- Prima: target cog/cyc/LOC/nesting `11/10/41/2`, quattro callable,
+  un warning ciclomatico e un finding LOC contro baseline `40`.
+- Invarianti: lock, autorizzazioni, ordine e codici delle guardie,
+  evidenze workbook, proprieta dei documenti, transazione e risposta.
+  La lista validata `avvisi` resta autorevole nel servizio; il parametro
+  legacy `avviso` e ignorato quando quella lista e presente, anche vuota.
+- Caratterizzazione prima della modifica: suite originale 54 passed,
+  6 skipped PostgreSQL senza `GAIA_TEST_POSTGRES_URL`; route full-file
+  100% (`59/59` statement, `6/6` branch). Cinque nuovi casi SQLite reali
+  passano: rimozione, singolo, cumulativo, ordine invertito e payload legacy.
+  Fixture dedicata completa le tabelle pagamenti mancanti nel corpus import,
+  senza mock del servizio o modifiche alle fixture condivise.
+- Slice applicata: rimossa la selezione duplicata del primario nella route
+  passando `avviso=None`, mantenendo `avvisi=avvisi`. Nessun nuovo helper,
+  cambio di contratto del servizio, baseline, soglia o esclusione.
+- Dopo: target cog/cyc/LOC/nesting `10/9/40/2`, aggregati file cog/cyc
+  `14/15 -> 13/14`, quattro callable invariati, warning `1 -> 0`.
+  Finding LOC `1 -> 0`, ratchet mirato autorevole contro merge-base HEAD
+  PASS. `IMPROVED`: nessun trasferimento del debito; AST fuori dal target
+  identico a HEAD. Nessuna sincronizzazione della baseline globale.
+- Verifica dopo: 59 passed, 6 skipped PostgreSQL; route full-file 100%
+  (`58/58` statement, `6/6` branch), zero esclusioni. Comando dal backend:
+  `pytest tests/ruolo/test_registered_mail_campaign_preview.py
+  tests/ruolo/test_registered_mail_documents.py
+  tests/ruolo/test_registered_mail_association_selection.py
+  --cov=app.modules.ruolo.routes.registered_mail_routes --cov-branch
+  --cov-fail-under=100`. Warning HMAC fixture preesistenti, nessuna nuova
+  failure dopo il completamento dello schema della fixture dedicata.
+- Ruff runtime/test, format del nuovo test, `make lint-backend BASE_REF=HEAD
+  QUALITY_PYTHON=backend/.venv/bin/python` e `git diff --check` verdi.
+- Graphify Ruolo codice aggiornato con patch pruning e target force:
+  1043 nodi, 2803 edge; evidenza `/tmp/gaia-ruolo-association-graph-code.log`.
+  Evidenze metriche/test/coverage/lint/ratchet sotto
+  `/tmp/gaia-ruolo-association-*`, caratterizzazione originale nel log
+  `/tmp/gaia-ruolo-selection-before.log`.
+- Snapshot globale dopo: 1602 file, 19691 callable, 4746 violation
+  (2041 error, 2705 warning); confronto baseline corrente exit 1,
+  26 finding. Durante la verifica il lavoro Presenze esterno e stato
+  committato in `1279e3ce`; nessun commit eseguito da questa slice.
+  Ratchet working tree contro il nuovo HEAD: 8 finding Wiki, nessuno Ruolo
+  o Presenze. Ratchet Ruolo rieseguito anche contro il nuovo merge-base: PASS.
+  La sola riduzione attribuibile alla slice e un warning ciclomatico e un
+  finding LOC; i cambi globali concorrenti non sono risultati del refactoring.
+  Baseline invariata anche tra i due HEAD, gate globali non dichiarati verdi.
+- Refresh Graphify platform docs tramite target dedicato; evidenza
+  `/tmp/gaia-ruolo-association-graph-docs.log`; verifica richiesta sul
+  completamento dei chunk semantici, non soltanto sull'exit code.
+- Stop al singolo hotspot, senza commit, push o avvio di un secondo target.
+
+### Wiki/MCP auth - scope ammessi per credential (2026-10-05)
+
+- Slice autorizzata sul solo `verify_token`, `main@17242e81`; HTTP/CLI e
+  lavori Presenze concorrenti preservati. Un finding LOC ereditato:
+  target cog/cyc/LOC `10/8/24`, baseline LOC `21`; zero violation nel file.
+- Invarianti: secret minimo, algoritmo HS256, firma, issuer/audience,
+  scadenza/iat, claim obbligatori, tipo credential, lista scope e stringhe
+  ammesse, errori jwt e metadata CallContext. Audit scope resta ammesso;
+  registry SCOPES letto a ogni verifica, non congelato al caricamento modulo.
+- Prima: 74 test HTTP/integration/console verdi, auth full-file 100%
+  (`33/33` statement, `12/12` branch). Venti nuovi casi caratterizzano scope
+  validi/duplicati, invalidi anche non hashable, claim mancanti e registry
+  aggiornato tra verifiche, prima della modifica runtime.
+- Slice applicata: costruire l'insieme scope ammessi una volta per credential,
+  anziche a ogni elemento della lista, mantenendo la guardia sul tipo stringa.
+  Nessun helper o nuovo callable; baseline/scope/soglie/eccezioni invariati.
+- Dopo: target cog/cyc/LOC `10/8/22`, file LOC `66 -> 64`, quattro callable
+  invariati, somme cog/cyc `22/18` invariate. `IMPROVED` limitatamente a LOC
+  e costruzione ripetuta dell'insieme ammesso, senza dichiarare riduzione
+  cognitiva/ciclomatica. Non e compressione di layout o spostamento del debito.
+  L'AST fuori da `verify_token` coincide con HEAD; le guardie restano identiche.
+- I venti nuovi casi passano sul runtime originale e dopo la modifica;
+  suite HTTP/integration/console: 94 test verdi prima/dopo, inclusa
+  integrazione SDK HTTP TCP. Coverage auth full-file prima `33/33` statement
+  e `12/12` branch, dopo `34/34` e `12/12`, 100%, zero esclusioni.
+  Comando dal backend con Python `.venv`: `pytest tests/test_wiki_mcp_http.py
+  tests/test_wiki_mcp_integration.py tests/test_wiki_mcp_console.py
+  --cov=app.modules.wiki.mcps.auth --cov-branch --cov-fail-under=100`.
+- Ruff runtime/test, `make lint-backend BASE_REF=HEAD
+  QUALITY_PYTHON=backend/.venv/bin/python` e whitespace verdi;
+  confronto con runtime iniziale PASS senza nuove regressioni.
+  Ratchet autorevole del target contro merge-base HEAD ancora exit 1:
+  un finding LOC prima/dopo, delta `+3 -> +1` rispetto a baseline `21`.
+  Nessuna sincronizzazione baseline e nessun finding dichiarato eliminato.
+- Scanner globale corrente: 1600 file, 19687 callable, 4746 violation
+  (2041 error, 2705 warning), 43 finding e ratchet working tree 24 finding.
+  Il calo globale `46 -> 43` appartiene ai tre finding `meal_voucher_values`
+  rimossi dai lavori Presenze concorrenti, non a questa slice. Anche
+  `shift_worker_rules.py` cambia fuori scope; entrambi i file preservati.
+  I totali globali nuovi non sono attribuiti al refactoring auth.
+- Graphify Wiki codice aggiornato tramite target con force e patch pruning:
+  115 file AST, nessun cambio di topologia. Refresh platform docs tramite
+  target dedicato, evidenza `/tmp/gaia-mcp-auth-graph-docs.log`; grafi ignorati.
+  Metriche `/tmp/gaia-mcp-auth-{before,after}.json`, test/coverage
+  characterization/after, before/after-comparison, lint, global-after/check,
+  graph-code. Baseline, scope, soglie ed eccezioni invariati.
+- Stop al singolo target. Prossimo candidato da analizzare separatamente:
+  finding LOC `update_registered_mail_association`, con invarianti Ruolo.
+  Nessun commit, push o modifica dei lavori Presenze.
+
+### Wiki/MCP CLI - audit opzionale e cleanup DataService (2026-10-05)
+
+- Slice autorizzata dopo il lifecycle HTTP: unica responsabilita condivisa
+  di gestione audit opzionale e DataService nelle CLI HTTP e stdio,
+  `main@17242e81`. Conservate slice HTTP e modifiche Presenze concorrenti.
+- Prima: `mcps/cli.py` main cog/cyc/LOC `4/5/28`, `mcps/data/cli.py`
+  `4/5/29`; aggregati cog/cyc `8/10`, due callable, zero violation.
+  Sei finding ereditati rispetto alla baseline del merge-base HEAD.
+- Invarianti: comandi/opzioni/default/errori argparse, seed/manifest/scopes,
+  validazione secret, Docs opzionale e impostazioni HTTP, audit istanziato
+  solo se richiesto, ordine audit/Docs/Data e cleanup inverso, failure
+  di costruzione/server/trasporto propagate e connessioni realmente chiuse.
+- Suite prima: 123 test verdi, full-file 100% su entrambe le CLI.
+  Sedici nuovi contratti caratterizzano audit on/off, HTTP/stdio e failure
+  service/server/trasporto prima della modifica runtime.
+- Slice applicata: unica guardia sul path audit; DataService registrato con
+  `ExitStack.enter_context(closing(...))`. Nessun nuovo helper o callable,
+  nessuna modifica della baseline.
+- Dopo: main HTTP cog/cyc/LOC `3/4/28`, main stdio `3/4/29`;
+  aggregati cog `8 -> 6` (-25%), cyc `10 -> 8` (-20%), due callable e
+  84 LOC file aggregati invariati. Zero violation prima/dopo, nessuna
+  duplicazione o trasferimento di debito. Classificazione `IMPROVED`.
+- I sedici nuovi casi passano prima/dopo con AuditStore e DataService reali;
+  verificano ordine apertura/chiusura, istanza audit condivisa e connessioni
+  SQLite chiuse anche dopo failure. Suite integration/data/console: 139
+  test verdi prima/dopo, inclusi HTTP SDK TCP e stdio reale.
+  Coverage full-file invariata: HTTP `41/41` statement e `6/6` branch,
+  stdio `41/41` e `4/4`, 100% ciascuno, zero esclusioni.
+  Comando dal backend con Python `.venv`: `pytest
+  tests/test_wiki_mcp_integration.py tests/test_wiki_data_mcp.py
+  tests/test_wiki_mcp_console.py --cov=app.modules.wiki.mcps.cli
+  --cov=app.modules.wiki.mcps.data.cli --cov-branch --cov-fail-under=100`.
+- Ruff e `make lint-backend BASE_REF=HEAD
+  QUALITY_PYTHON=backend/.venv/bin/python` verdi, whitespace pulito;
+  confronto con runtime iniziale PASS senza nuovi finding.
+  Ratchet autorevole dei due file contro merge-base HEAD ancora exit 1:
+  finding `6 -> 3`. Restano HTTP cyc `4` contro `3`, LOC `28` contro `22`,
+  stdio LOC `29` contro `26`, ereditati dalle estensioni audit/data-only.
+  Nessuna compressione di layout, rimozione funzionale o baseline update.
+- Scanner globale: 1600 file, 19685 callable, 4747 violation (2041 error,
+  2706 warning), totali invariati; finding `49 -> 46`. Ratchet working tree
+  contro HEAD: 26 finding (3 CLI, 4 HTTP della slice precedente, 19 Presenze).
+  Gate globali ancora rossi, sincronizzazione baseline non eseguita.
+- Graphify Wiki codice aggiornato tramite target con force e patch pruning:
+  115 file AST, nessun cambio di topologia; refresh platform docs tramite
+  target dedicato, evidenza nel log `/tmp/gaia-mcp-cli-graph-docs.log`.
+  Grafi ignorati. Altre evidenze `/tmp/gaia-mcp-cli-{before,after}.json`,
+  characterization/after test e coverage, before/after-comparison, lint,
+  global-after/global-check e graph-code. Scope, soglie ed eccezioni invariati.
+- Stop alla responsabilita audit/cleanup delle due CLI. Prossimo candidato
+  da analizzare separatamente: finding LOC `verify_token`, senza modificare
+  i controlli auth. Nessun commit, push o modifica dei lavori Presenze.
+
+### Wiki/MCP HTTP - lifecycle dei trasporti (2026-10-05)
+
+- Avvio autorizzato dopo l'audit globale: singola responsabilita lifecycle
+  in `backend/app/modules/wiki/mcps/http.py`, base `main@17242e81`.
+  Preservati i lavori Presenze concorrenti; nessun commit o push richiesto.
+- Prima: `create_http_app` cog/cyc/LOC/nesting `2/3/52/1`, lifespan
+  `1/2/6/1`; aggregati file cog/cyc `10/12`, 91 LOC, quattro callable,
+  un warning LOC, zero error. Otto finding ereditati rispetto alla baseline.
+- Invarianti: Docs opzionale, sole route Data/inspection in data-only,
+  autenticazione e isolamento contesto, DNS rebinding e limite payload;
+  avvio Docs prima di Data, cleanup inverso anche su failure startup/body,
+  nessun trasporto avviato durante la costruzione dell'applicazione.
+- Sette nuovi contratti lifecycle passano sul runtime originale; regressioni
+  HTTP, integrazione TCP SDK e discovery incluse nella coverage full-file.
+  Slice: contesto Docs opzionale mediante `nullcontext`, composizione diretta
+  dei due contesti asincroni; nessun helper o callable nuovo.
+- Dopo: `create_http_app` cog/cyc/LOC/nesting `1/2/50/1`, lifespan
+  `0/1/3/0`; aggregati file cog/cyc `10/12 -> 8/10` (-20% entrambe),
+  LOC `91 -> 89`, quattro callable invariati. Esito `IMPROVED`: nessun
+  helper, duplicazione o trasferimento di debito; il warning LOC a 50 resta.
+- HTTP/integrazione/discovery prima e dopo: 60 test verdi, inclusi i sette
+  nuovi casi sul runtime originale e quello modificato, piu SDK TCP reale.
+  Coverage full-file prima `56/56` statement e `8/8` branch; dopo `54/54`
+  e `6/6`, 100%, nessuna esclusione. Comando dal backend con Python `.venv`:
+  `pytest tests/test_wiki_mcp_http.py tests/test_wiki_mcp_integration.py
+  tests/test_wiki_mcp_discovery.py --cov=app.modules.wiki.mcps.http
+  --cov-branch --cov-fail-under=100`; coverage fresh separata in `/tmp`.
+- Ruff runtime/test, `make lint-backend BASE_REF=HEAD
+  QUALITY_PYTHON=backend/.venv/bin/python` e whitespace verdi.
+  Confronto contro il runtime iniziale: PASS, zero finding nuovi.
+  Confronto completo del target con baseline del merge-base HEAD:
+  otto finding prima, quattro dopo; ratchet autorevole ancora exit 1.
+  Restano cog/cyc/LOC/nesting del factory rispetto al contratto storico,
+  precedente al supporto Docs opzionale e alle route inspection.
+  Non si rimuovono funzionalita ne si aggiorna la baseline per assorbirli.
+- Scanner globale dopo: 1600 file, 19685 callable, 4747 violation
+  (2041 error, 2706 warning), totali invariati. Finding globali `53 -> 49`;
+  ratchet del working tree contro HEAD: 23 finding, quattro HTTP e 19 dei
+  lavori Presenze concorrenti. Nessun gate globale dichiarato PASS.
+- Graphify Wiki aggiornato tramite target codice con force e patch pruning:
+  115 file AST, nessun cambio di topologia, grafi ignorati. Refresh documenti
+  piattaforma completato: `chunk 1/1 done`, nessun warning semantico;
+  2433 nodi, 5619 archi, 169 community. Evidenze `/tmp/gaia-mcp-http-{before,after}.json`,
+  characterization/after coverage e test log, baseline-comparison, lint,
+  global-after/global-check e graph-code. Baseline/scope/soglie/eccezioni
+  invariati; sincronizzazione non eseguita. Stop al singolo hotspot;
+  nessun commit, push o modifica dei lavori Presenze.
+
 ### Baseline - riduzione reale Wiki/MCP, prima slice (2026-10-03)
 
 - Richiesta esplicita: ridurre il codice prima di aggiornare la baseline, non

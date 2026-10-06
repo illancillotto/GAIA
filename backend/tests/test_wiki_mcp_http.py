@@ -1,15 +1,18 @@
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager, nullcontext
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import anyio
 import jwt
 import pytest
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from starlette.testclient import TestClient
 
 from app.modules.wiki.mcps.auth import (
     AUDIENCE,
     ISSUER,
+    SCOPES,
     effective_scopes,
     issue_token,
     validate_secret,
@@ -119,6 +122,53 @@ def test_tokens_validate_signature_audience_issuer_expiry_and_scope():
             verify_token(SECRET, jwt.encode(dict(claims, **changes), SECRET, algorithm="HS256"))
     with pytest.raises(ValueError):
         validate_secret("short")
+
+
+@pytest.mark.parametrize(
+    "scopes",
+    [
+        [],
+        ["mcp.audit.read"],
+        ["docs.read", "utenze.read", "catasto.read", "ruolo.read"],
+        ["utenze.read", "utenze.read", "mcp.audit.read"],
+    ],
+)
+def test_token_scope_validation_preserves_allowed_scopes_and_duplicates(scopes):
+    original = CallContext("gaia:7", frozenset(scopes))
+    token = issue_token(SECRET, original)
+    claims = jwt.decode(token, SECRET, algorithms=["HS256"], issuer=ISSUER, audience=AUDIENCE)
+    claims["scopes"] = scopes
+    verified = verify_token(SECRET, jwt.encode(claims, SECRET, algorithm="HS256"))
+    assert verified.principal == original.principal
+    assert verified.scopes == frozenset(scopes)
+    assert verified.conversation_id is None
+    assert verified.experiment_run_id is None
+
+
+@pytest.mark.parametrize("scopes", [[None], [False], [0], [{}], [[]], ["docs.read", []], ["admin"]])
+def test_token_invalid_scope_values_fail_with_credential_error(scopes):
+    token = issue_token(SECRET, CallContext("gaia:7", frozenset()))
+    claims = jwt.decode(token, SECRET, algorithms=["HS256"], issuer=ISSUER, audience=AUDIENCE)
+    claims["scopes"] = scopes
+    with pytest.raises(jwt.InvalidTokenError, match=r"^Invalid MCP scope$"):
+        verify_token(SECRET, jwt.encode(claims, SECRET, algorithm="HS256"))
+
+
+@pytest.mark.parametrize("claim", ["exp", "iat", "sub", "iss", "aud", "jti", "type", "scopes"])
+def test_token_missing_required_claims_are_rejected(claim):
+    token = issue_token(SECRET, CallContext("gaia:7", frozenset()))
+    claims = jwt.decode(token, SECRET, algorithms=["HS256"], issuer=ISSUER, audience=AUDIENCE)
+    del claims[claim]
+    with pytest.raises(jwt.InvalidTokenError):
+        verify_token(SECRET, jwt.encode(claims, SECRET, algorithm="HS256"))
+
+
+def test_token_validation_uses_current_domain_scope_registry(monkeypatch):
+    token = issue_token(SECRET, CallContext("gaia:7", frozenset({"extension.read"})))
+    with pytest.raises(jwt.InvalidTokenError, match=r"^Invalid MCP scope$"):
+        verify_token(SECRET, token)
+    monkeypatch.setitem(SCOPES, "extension.read", ("extension", ("extension.view",)))
+    assert verify_token(SECRET, token).scopes == frozenset({"extension.read"})
 
 
 def test_authenticated_discovery_source_separation_and_error_handling(sources):
@@ -237,3 +287,50 @@ def test_non_http_passthrough():
     middleware = BearerMiddleware(app, SECRET)
     anyio.run(middleware, {"type": "lifespan"}, None, None)
     assert received == ["lifespan"]
+
+
+@pytest.mark.parametrize(
+    ("with_docs", "failure", "expected"),
+    [
+        (True, None, ["docs:enter", "data:enter", "ready", "data:exit", "docs:exit"]),
+        (False, None, ["data:enter", "ready", "data:exit"]),
+        (True, "docs", ["docs:enter"]),
+        (True, "data", ["docs:enter", "data:enter", "docs:exit"]),
+        (False, "data", ["data:enter"]),
+        (True, "body", ["docs:enter", "data:enter", "ready", "data:exit", "docs:exit"]),
+        (False, "body", ["data:enter", "ready", "data:exit"]),
+    ],
+)
+def test_http_transport_lifecycle_order_and_failure_cleanup(
+    sources, monkeypatch, with_docs, failure, expected
+):
+    events = []
+
+    @asynccontextmanager
+    async def observed_run(manager):
+        source = {"GAIA Docs MCP": "docs", "GAIA Data MCP": "data"}[manager.app.name]
+        events.append(f"{source}:enter")
+        if failure == source:
+            raise RuntimeError(source)
+        try:
+            yield
+        finally:
+            events.append(f"{source}:exit")
+
+    monkeypatch.setattr(StreamableHTTPSessionManager, "run", observed_run)
+    docs, data = sources
+    application = create_http_app(docs if with_docs else None, data, SECRET)
+    assert events == []
+
+    async def exercise():
+        expectation = (
+            pytest.raises(RuntimeError, match=f"^{failure}$") if failure else nullcontext()
+        )
+        with expectation:
+            async with application.app.router.lifespan_context(application.app):
+                events.append("ready")
+                if failure == "body":
+                    raise RuntimeError("body")
+
+    anyio.run(exercise)
+    assert events == expected

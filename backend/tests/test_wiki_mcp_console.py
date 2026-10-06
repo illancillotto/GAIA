@@ -242,3 +242,89 @@ def test_http_and_stdio_audit_cli_cleanup_and_data_only(inspected, monkeypatch, 
     data_cli.main(["serve", "--database", str(path), "--audit-database", str(audit_path)])
     with pytest.raises(sqlite3.ProgrammingError):
         instances[0].audit.connection.execute("SELECT 1")
+
+
+@pytest.mark.parametrize("transport", ["http", "stdio"])
+@pytest.mark.parametrize("audit_enabled", [False, True])
+@pytest.mark.parametrize("failure", [None, "service", "server", "transport"])
+def test_cli_optional_audit_and_service_cleanup(
+    inspected, monkeypatch, tmp_path, transport, audit_enabled, failure
+):
+    _, _, _, database = inspected
+    module = cli if transport == "http" else data_cli
+    arguments = ["--data-only"] if transport == "http" else ["serve"]
+    arguments.extend(["--database", str(database)])
+    audit_path = tmp_path / "lifecycle" / "gaia-mcp-audit.sqlite"
+    if audit_enabled:
+        arguments.extend(["--audit-database", str(audit_path)])
+    monkeypatch.setenv("GAIA_MCP_SIGNING_SECRET", SECRET)
+    events = []
+    resources = {}
+
+    def open_audit(path):
+        audit = AuditStore(path)
+        resources["audit"] = audit
+        original_close = audit.close
+
+        def close():
+            events.append("audit:close")
+            original_close()
+
+        audit.close = close
+        events.append("audit:open")
+        return audit
+
+    def open_service(path, *, audit):
+        events.append("service:open")
+        assert audit is resources.get("audit")
+        if failure == "service":
+            raise RuntimeError("service")
+        service = DataService(path, audit=audit)
+        resources["service"] = service
+        original_close = service.close
+
+        def close():
+            events.append("service:close")
+            original_close()
+
+        service.close = close
+        return service
+
+    def create(*arguments):
+        events.append("server:create")
+        if failure == "server":
+            raise RuntimeError("server")
+        return "server"
+
+    def run(server, **options):
+        assert server == "server"
+        events.append("transport:run")
+        if failure == "transport":
+            raise RuntimeError("transport")
+
+    monkeypatch.setattr(module, "AuditStore", open_audit)
+    monkeypatch.setattr(module, "DataService", open_service)
+    if transport == "http":
+        monkeypatch.setattr(module, "create_http_app", create)
+        monkeypatch.setattr(module.uvicorn, "run", run)
+    else:
+        monkeypatch.setattr(module, "create_server", create)
+        monkeypatch.setattr(module, "run_stdio", run)
+    if failure:
+        with pytest.raises(RuntimeError, match=f"^{failure}$"):
+            module.main(arguments)
+    else:
+        module.main(arguments)
+    expected = ["audit:open"] if audit_enabled else []
+    expected.append("service:open")
+    if failure != "service":
+        expected.append("server:create")
+        if failure != "server":
+            expected.append("transport:run")
+        expected.append("service:close")
+    if audit_enabled:
+        expected.append("audit:close")
+    assert events == expected
+    for resource in resources.values():
+        with pytest.raises(sqlite3.ProgrammingError):
+            resource.connection.execute("SELECT 1")

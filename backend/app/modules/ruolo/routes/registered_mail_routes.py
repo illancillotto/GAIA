@@ -95,13 +95,12 @@ def update_registered_mail_association(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avviso non trovato")
     validate_review_evidence(db, mail, ids, payload.review_evidence)
     previous_ids = [str(item) for item in registered_mail_association.associated_avviso_ids(mail)]
-    avviso = avvisi[0] if avvisi else None
     validate_subject_change(db, mail.id, avvisi)
     try:
         updated = registered_mail_association.set_manual_association(
             db,
             mail=mail,
-            avviso=avviso,
+            avviso=None,
             avvisi=avvisi,
             updated_by=current_user.id,
         )

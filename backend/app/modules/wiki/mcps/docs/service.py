@@ -142,6 +142,41 @@ class DocsService:
             for domain in sorted(documents)
         ], False
 
+    def _call_response(self, tool_name: str, arguments: dict, context: CallContext) -> dict:
+        if "docs.read" not in context.scopes:
+            raise PermissionError("PERMISSION_DENIED")
+        if tool_name not in INPUTS:
+            raise ValueError("Unknown documentation tool")
+        validated = INPUTS[tool_name].model_validate(arguments)
+        results, truncated = getattr(self, tool_name)(**validated.model_dump())
+        provenance = [
+            {
+                key: result[key]
+                for key in (
+                    "source_path",
+                    "chunk_id",
+                    "section",
+                    "document_hash",
+                    "corpus_version",
+                )
+                if key in result
+            }
+            for result in results
+        ]
+        response = {
+            "tool": tool_name,
+            "source": "gaia_docs",
+            "results": results,
+            "provenance": provenance,
+            "result_count": len(results),
+            "truncated": truncated,
+            "request_id": context.request_id,
+            "corpus_version": self.corpus.corpus_version,
+            "server_version": SERVER_VERSION,
+        }
+        response["estimated_tokens"] = estimated_tokens(json.dumps(response, ensure_ascii=False))
+        return response
+
     def call(self, tool_name: str, arguments: dict, *, context: CallContext | None = None) -> dict:
         context = context or CallContext(principal="local-stdio", scopes=frozenset({"docs.read"}))
         request_id = context.request_id
@@ -163,44 +198,11 @@ class DocsService:
             "estimated_output_tokens": 0,
         }
         try:
-            if "docs.read" not in context.scopes:
-                raise PermissionError("PERMISSION_DENIED")
-            if tool_name not in INPUTS:
-                raise ValueError("Unknown documentation tool")
-            validated = INPUTS[tool_name].model_validate(arguments)
-            results, truncated = getattr(self, tool_name)(**validated.model_dump())
-            provenance = [
-                {
-                    key: result[key]
-                    for key in (
-                        "source_path",
-                        "chunk_id",
-                        "section",
-                        "document_hash",
-                        "corpus_version",
-                    )
-                    if key in result
-                }
-                for result in results
-            ]
-            response = {
-                "tool": tool_name,
-                "source": "gaia_docs",
-                "results": results,
-                "provenance": provenance,
-                "result_count": len(results),
-                "truncated": truncated,
-                "request_id": request_id,
-                "corpus_version": self.corpus.corpus_version,
-                "server_version": SERVER_VERSION,
-            }
-            response["estimated_tokens"] = estimated_tokens(
-                json.dumps(response, ensure_ascii=False)
-            )
+            response = self._call_response(tool_name, arguments, context)
             event.update(
                 status="ok",
-                result_count=len(results),
-                truncated=truncated,
+                result_count=response["result_count"],
+                truncated=response["truncated"],
                 estimated_output_tokens=response["estimated_tokens"],
             )
             return response

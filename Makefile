@@ -121,14 +121,14 @@ test-mcp:
 
 .PHONY: test-mcp-oauth
 test-mcp-oauth:
-	$(QUALITY_PYTHON) -m pytest backend/tests/test_wiki_mcp_oauth.py --cov=app.modules.wiki.mcps.oauth_store --cov=app.modules.wiki.mcps.oauth_provider --cov=app.modules.wiki.mcps.oauth_http --cov=app.modules.wiki.mcps.oauth_gaia --cov-branch --cov-report=term-missing --cov-report=json:/tmp/gaia-mcp-oauth-coverage.json --cov-fail-under=100
+	$(QUALITY_PYTHON) -m pytest backend/tests/test_wiki_mcp_oauth.py --cov=app.modules.wiki.mcps.oauth_store --cov=app.modules.wiki.mcps.oauth_policy --cov=app.modules.wiki.mcps.oauth_provider --cov=app.modules.wiki.mcps.oauth_http --cov=app.modules.wiki.mcps.oauth_gaia --cov-branch --cov-report=term-missing --cov-report=json:/tmp/gaia-mcp-oauth-coverage.json --cov-fail-under=100
 
 .PHONY: mcp-connector test-mcp-connector test-mcp-consent
 mcp-connector:
 	PYTHONPATH=backend $(QUALITY_PYTHON) -m uvicorn app.modules.wiki.mcps.connector:create_configured_app --factory --host 127.0.0.1 --port 8769 --no-access-log
 
 test-mcp-connector:
-	$(QUALITY_PYTHON) -m pytest backend/tests/test_wiki_mcp_connector.py backend/tests/test_wiki_mcp_oauth.py --cov=app.modules.wiki.mcps.connector --cov=app.modules.wiki.mcps.connector_config --cov=app.modules.wiki.mcps.connector_budget --cov=app.modules.wiki.mcps.oauth_provider --cov-branch --cov-report=term-missing --cov-report=json:/tmp/gaia-connector-coverage.json --cov-fail-under=100
+	$(QUALITY_PYTHON) -m pytest backend/tests/test_wiki_mcp_connector.py backend/tests/test_wiki_mcp_oauth.py --cov=app.modules.wiki.mcps.connector --cov=app.modules.wiki.mcps.connector_config --cov=app.modules.wiki.mcps.connector_budget --cov=app.modules.wiki.mcps.oauth_provider --cov=app.modules.wiki.mcps.oauth_policy --cov=app.modules.wiki.mcps.oauth_maintenance --cov=app.modules.wiki.mcps.oauth_admin --cov-branch --cov-report=term-missing --cov-report=json:/tmp/gaia-connector-coverage.json --cov-fail-under=100
 
 test-mcp-consent:
 	cd frontend && VITEST_COVERAGE_INCLUDE='src/features/wiki/mcp-consent.tsx,src/features/wiki/mcp-consent-api.ts,src/app/mcp/consent/page.tsx' npm run test:coverage -- tests/unit/mcp-consent.test.tsx --coverage.reportsDirectory=/tmp/gaia-mcp-consent-frontend-coverage

@@ -1,5 +1,10 @@
 # Testate Ruolo dal sync inCASS — 2026-10-01
 
+Aggiornamento 2026-10-05: ammessi anche riferimenti ordinari storici con
+prefisso `1` oltre a `0`, verificati per CADONI nelle annualità 2016–2018.
+La scansione completa dall'anagrafica e la riconciliazione del partitario sono
+descritte in `domain-docs/elaborazioni/docs/CAPACITAS_FULL_RECOVERY_2026-10-05.md`.
+
 ## Bug verificato
 
 Per ARDU CRISTIAN (`RDACST79D30G113S`) Capacitas restituisce l'avviso 2023

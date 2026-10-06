@@ -24,7 +24,7 @@ def _ordinary_notice_year(notice: AnagraficaPaymentNotice) -> int | None:
     if (
         notice.source_system != "incass"
         or not classification.is_ordinary_role
-        or not re.fullmatch(r"0\d{14}", reference)
+        or not re.fullmatch(r"[01]\d{14}", reference)
         or reference[1:5] != str(classification.ordinary_year)
         or notice.subject_id is None
     ):

@@ -1,5 +1,9 @@
 # Architettura MCP per GAIA Wiki
 
+Aggiornamento 2026-10-05: `OAUTH_HARDENING_2026-10-05.md` descrive policy
+retention/sessione, manutenzione lifespan e revoca admin interna. Host solo LAN
+`gaia.lan`, client Claude Desktop locale. NAS/Trasparenza non esposti.
+
 Aggiornamento 2026-10-03: il listener OAuth separato riusa il package Wiki
 e la stessa immagine backend, autenticazione GAIA e DataService/AuditStore.
 Solo dataset generato sintetico; nessuna route Docs/inspection. La UI consenso

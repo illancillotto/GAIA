@@ -1,13 +1,14 @@
 """Explicit opt-in settings for the isolated synthetic connector listener."""
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
 
 from mcp.shared.auth import OAuthClientInformationFull
 
 from .auth import SCOPES
+from .oauth_policy import OAuthPolicy
 from .oauth_provider import https_url
 
 OAUTH_PATH = "/api/wiki/mcp/connector/oauth"
@@ -38,6 +39,7 @@ class ConnectorConfig:
     audit_database: Path
     requests_per_minute: int = 60
     tools_per_minute: int = 20
+    oauth_policy: OAuthPolicy = field(default_factory=OAuthPolicy)
 
     def __post_init__(self):
         issuer = urlsplit(https_url(self.issuer))
@@ -84,4 +86,5 @@ def configuration(environ):
         audit_database=Path(environ["GAIA_MCP_CONNECTOR_AUDIT_DATABASE"]),
         requests_per_minute=int(environ.get("GAIA_MCP_CONNECTOR_REQUESTS_PER_MINUTE", "60")),
         tools_per_minute=int(environ.get("GAIA_MCP_CONNECTOR_TOOLS_PER_MINUTE", "20")),
+        oauth_policy=OAuthPolicy.from_environment(environ),
     )

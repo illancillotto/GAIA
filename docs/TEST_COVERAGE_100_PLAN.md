@@ -1,5 +1,10 @@
 # Test Coverage 100% Plan
 
+Aggiornamento MCP 2026-10-05: i target OAuth/connector includono anche policy
+retention, manutenzione periodica e revoca admin interna. Nessuna esclusione o
+riduzione soglia: full-file statement/branch 100% per tutti i runtime toccati.
+Contratto e prerequisiti: `domain-docs/mcps/OAUTH_HARDENING_2026-10-05.md`.
+
 Data di adozione: `2026-06-19`
 
 ## Obiettivo

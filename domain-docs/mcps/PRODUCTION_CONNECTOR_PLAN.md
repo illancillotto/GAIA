@@ -1,5 +1,11 @@
 # MCP in produzione — connettore remoto Claude
 
+Decisione corrente 2026-10-05: **solo LAN `gaia.lan`, Claude Desktop locale
+stdio/bridge**, ChatGPT da valutare. Nessun ingresso Internet autorizzato.
+Hardening OAuth implementato: `OAUTH_HARDENING_2026-10-05.md`. Certificati CED,
+prova Desktop e mapping ACL NAS/catalogo Trasparenza restano prerequisiti.
+Il piano remoto e le evidenze seguenti sono cronologia, non rilascio eseguito.
+
 Chiusura corrente: `FINAL_CLOSURE_2026-10-03.md`. Suite completa, coverage,
 build locale/standalone e preview browser verificati. Ingresso pubblico,
 callbackClaude, hardeningOAuth e gate globale restano residui; flagsfalse.

@@ -1,5 +1,7 @@
 """MCP SDK authorization provider delegating to current GAIA user permissions."""
 
+from math import ceil
+from time import time
 from urllib.parse import urlencode, urlsplit
 
 from mcp.server.auth.provider import (
@@ -82,6 +84,10 @@ class GAIAOAuthProvider:
 
     def consent(self, request_id, user_id, allowed):
         self.consent_details(request_id)
+        with self.store.transaction():
+            return self._consent(request_id, user_id, allowed)
+
+    def _consent(self, request_id, user_id, allowed):
         pending = self.store.consume("pending", request_id)
         if pending is None:
             raise ValueError("Invalid consent request")
@@ -106,19 +112,26 @@ class GAIAOAuthProvider:
         return set(grant["scopes"]) & self.user_scopes(grant["subject"]) & SCOPES.keys()
 
     def tokens(self, grant, scopes):
+        now = time()
+        deadline = grant.get("session_expires_at", now + self.store.policy.session_seconds)
+        remaining = deadline - now
+        if remaining <= 0:
+            raise TokenError("invalid_grant")
         payload = {
             "client_id": grant["client_id"],
             "subject": grant["subject"],
             "scopes": sorted(scopes),
             "resource": self.resource,
+            "session_expires_at": deadline,
         }
-        access = self.store.put("access", payload, lifetime=300, family=grant["family"])
-        refresh = self.store.put("refresh", payload, lifetime=28800, family=grant["family"])
+        access_lifetime = min(300, remaining)
+        access = self.store.put("access", payload, lifetime=access_lifetime, family=grant["family"])
+        refresh = self.store.put("refresh", payload, lifetime=remaining, family=grant["family"])
         return OAuthToken(
             access_token=access,
             refresh_token=refresh,
             token_type="Bearer",
-            expires_in=300,
+            expires_in=ceil(access_lifetime),
             scope=" ".join(sorted(scopes)),
         )
 
@@ -140,7 +153,7 @@ class GAIAOAuthProvider:
         if reused is not None and reused["client_id"] == client.client_id:
             self.store.revoke_by_family(reused["family"])
             return None
-        grant = self.store.get("refresh", refresh_token)
+        grant = self.session_grant("refresh", refresh_token)
         if grant is None or grant["client_id"] != client.client_id:
             return None
         return RefreshToken(
@@ -148,7 +161,7 @@ class GAIAOAuthProvider:
         )
 
     async def exchange_refresh_token(self, client, refresh_token, scopes):
-        grant = self.store.get("refresh", refresh_token.token)
+        grant = self.session_grant("refresh", refresh_token.token)
         if grant is None or grant["client_id"] != client.client_id:
             raise TokenError("invalid_grant")
         requested = set(scopes)
@@ -165,7 +178,7 @@ class GAIAOAuthProvider:
             return self.tokens(grant, current)
 
     async def load_access_token(self, token):
-        grant = self.store.get("access", token)
+        grant = self.session_grant("access", token)
         if grant is None or grant["resource"] != self.resource:
             return None
         scopes = self.current_scopes(grant)
@@ -182,3 +195,9 @@ class GAIAOAuthProvider:
 
     async def revoke_token(self, token):
         self.store.revoke(token.token)
+
+    def session_grant(self, kind, token):
+        grant = self.store.get(kind, token)
+        if grant is None or grant.get("session_expires_at", 0) <= time():
+            return None
+        return grant

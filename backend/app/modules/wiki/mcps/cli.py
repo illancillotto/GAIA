@@ -3,7 +3,7 @@
 import argparse
 import logging
 import os
-from contextlib import ExitStack
+from contextlib import ExitStack, closing
 from pathlib import Path
 
 import uvicorn
@@ -34,14 +34,14 @@ def main(argv: list[str] | None = None) -> None:
     handler.setFormatter(EventFormatter())
     logging.basicConfig(level=logging.INFO, handlers=[handler])
     with ExitStack() as stack:
-        audit = AuditStore(args.audit_database) if args.audit_database else None
-        if audit is not None:
+        audit = None
+        if args.audit_database:
+            audit = AuditStore(args.audit_database)
             stack.callback(audit.close)
         docs = None
         if not args.data_only:
             docs = DocsService(load_corpus(args.corpus))
             stack.callback(docs.close)
-        data = DataService(args.database, audit=audit)
-        stack.callback(data.close)
+        data = stack.enter_context(closing(DataService(args.database, audit=audit)))
         app = create_http_app(docs, data, secret)
         uvicorn.run(app, host=args.host, port=args.port, access_log=False)

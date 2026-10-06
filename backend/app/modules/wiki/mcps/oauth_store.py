@@ -8,6 +8,12 @@ import sqlite3
 from pathlib import Path
 from time import time
 
+from .oauth_policy import OAuthPolicy
+
+
+class GrantCapacityError(Exception):
+    pass
+
 
 def token_hash(token):
     return hashlib.sha256(token.encode()).hexdigest()
@@ -30,7 +36,8 @@ class GrantTransaction:
 
 
 class OAuthStore:
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, *, policy=None):
+        self.policy = policy or OAuthPolicy()
         if path.name != "gaia-mcp-oauth.sqlite" or path.is_symlink():
             raise ValueError("Dedicated OAuth database required")
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -52,18 +59,30 @@ class OAuthStore:
         return GrantTransaction(self.connection)
 
     def put(self, kind, payload, *, lifetime, family=None):
-        token = secrets.token_urlsafe(32)
-        self.connection.execute(
-            "INSERT INTO grants VALUES (?, ?, ?, ?, ?)",
-            (
-                token_hash(token),
-                kind,
-                family or secrets.token_hex(16),
-                time() + lifetime,
-                json.dumps(payload),
-            ),
-        )
-        return token
+        with self.transaction():
+            self.cleanup()
+            self.check_capacity(payload.get("client_id"))
+            token = secrets.token_urlsafe(32)
+            self.connection.execute(
+                "INSERT INTO grants VALUES (?, ?, ?, ?, ?)",
+                (
+                    token_hash(token),
+                    kind,
+                    family or secrets.token_hex(16),
+                    min(time() + lifetime, payload.get("session_expires_at", float("inf"))),
+                    json.dumps(payload),
+                ),
+            )
+            return token
+
+    def check_capacity(self, client_id):
+        total, client_total = self.connection.execute(
+            "SELECT COUNT(*), COALESCE(SUM(json_extract(payload, '$.client_id') = ?), 0) "
+            "FROM grants",
+            (client_id,),
+        ).fetchone()
+        if total >= self.policy.max_grants or client_total >= self.policy.max_client_grants:
+            raise GrantCapacityError("OAuth grant capacity reached")
 
     def get(self, kind, token):
         row = self.connection.execute(
@@ -99,3 +118,15 @@ class OAuthStore:
 
     def cleanup(self):
         self.connection.execute("DELETE FROM grants WHERE expires<=?", (time(),))
+
+    def revoke_authorizations(self, *, subject=None, client_id=None):
+        if subject is None and client_id is None:
+            raise ValueError("Explicit revocation selector required")
+        with self.transaction():
+            return self.connection.execute(
+                "DELETE FROM grants WHERE kind NOT LIKE 'used_%' AND family IN "
+                "(SELECT family FROM grants WHERE "
+                "(? IS NULL OR json_extract(payload, '$.subject')=?) AND "
+                "(? IS NULL OR json_extract(payload, '$.client_id')=?))",
+                (subject, subject, client_id, client_id),
+            ).rowcount

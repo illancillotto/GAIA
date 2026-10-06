@@ -9,7 +9,9 @@
 - [x] Coverage statement/branch dei tre file runtime al 100%.
 - [x] Lint, complessita, build Docker ufficiale, import smoke senza rete.
 - [x] Regression gate generale worker: import dei due test bloccanti corretti.
-- [ ] Rilascio sul CED e misura dell'efficienza reale dopo il rilascio.
+- [x] Rilascio mirato sul CED il 2026-10-05, dopo questa validazione;
+  evidenze in SISTER_DEPLOY_2026-10-05.md.
+- [ ] Misura dell'efficienza reale dopo il rilascio.
 - [ ] Verifica sorgente del subalterno del canary prima di eventuali recuperi.
 
 Il ciclo comprende soltanto i tre runtime sister_request_rows.py,

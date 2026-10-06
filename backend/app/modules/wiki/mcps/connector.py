@@ -26,8 +26,10 @@ from .data.server import create_server
 from .data.service import DataService
 from .docs.cli import EventFormatter
 from .http import REQUEST_CONTEXT
+from .oauth_admin import admin_route
 from .oauth_gaia import gaia_oauth_callbacks
 from .oauth_http import create_oauth_app
+from .oauth_maintenance import maintenance
 from .oauth_provider import GAIAOAuthProvider
 from .oauth_store import OAuthStore, token_hash
 
@@ -154,6 +156,25 @@ def connector_routes(config, provider, authenticate, manager, budget):
     return routes
 
 
+def connector_manager(config, service):
+    origins = {
+        config.resource.removesuffix(urlsplit(config.resource).path),
+        config.consent_url.removesuffix("/mcp/consent"),
+    }
+    security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=sorted({urlsplit(origin).netloc for origin in origins}),
+        allowed_origins=sorted(origins),
+    )
+    return StreamableHTTPSessionManager(
+        create_server(service, REQUEST_CONTEXT.get),
+        json_response=True,
+        stateless=True,
+        max_request_body_size=MAX_BODY,
+        security_settings=security,
+    )
+
+
 def create_connector_app(config, session_factory):
     if config is None:
         return Starlette()
@@ -162,7 +183,7 @@ def create_connector_app(config, session_factory):
     @asynccontextmanager
     async def lifespan(_app):
         async with AsyncExitStack() as stack:
-            store = OAuthStore(config.oauth_database)
+            store = OAuthStore(config.oauth_database, policy=config.oauth_policy)
             stack.callback(store.close)
             audit = AuditStore(config.audit_database)
             stack.callback(audit.close)
@@ -181,25 +202,14 @@ def create_connector_app(config, session_factory):
                 resource=config.resource,
                 consent_url=config.consent_url,
             )
-            origins = {
-                config.resource.removesuffix(urlsplit(config.resource).path),
-                config.consent_url.removesuffix("/mcp/consent"),
-            }
-            security = TransportSecuritySettings(
-                enable_dns_rebinding_protection=True,
-                allowed_hosts=sorted({urlsplit(origin).netloc for origin in origins}),
-                allowed_origins=sorted(origins),
-            )
-            manager = StreamableHTTPSessionManager(
-                create_server(service, REQUEST_CONTEXT.get),
-                json_response=True,
-                stateless=True,
-                max_request_body_size=MAX_BODY,
-                security_settings=security,
-            )
+            manager = connector_manager(config, service)
             budget = PrincipalBudget(store, config.requests_per_minute, config.tools_per_minute)
+            await stack.enter_async_context(maintenance(store, budget))
             application.router.routes = connector_routes(
                 config, provider, authenticate, manager, budget
+            )
+            application.router.routes.insert(
+                0, admin_route(urlsplit(config.issuer).path, store, session_factory)
             )
             try:
                 async with manager.run():

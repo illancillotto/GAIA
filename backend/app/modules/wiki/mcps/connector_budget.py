@@ -33,3 +33,8 @@ class PrincipalBudget:
             )
             self.store.cleanup()
             return True
+
+    def cleanup(self):
+        self.store.connection.execute(
+            "DELETE FROM connector_budget WHERE window<>?", (int(time() // 60),)
+        )

@@ -1,5 +1,9 @@
 # Fondazione OAuth MCP — login GAIA
 
+Stato corrente: `OAUTH_HARDENING_2026-10-05.md`. Cap grant, cleanup periodico,
+sessione assoluta e revoca amministrativa interna sono ora implementati;
+le limitazioni descritte sotto appartengono alla tranche storica.
+
 Tranche successiva: [consenso e gateway isolato](CONNECTOR_RUNTIME_2026-10-03.md)
 ora implementati e verificati, sempre disattivati e non pubblicati.
 Le note sotto descrivono lo stato precedente della sola fondazione.

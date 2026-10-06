@@ -493,7 +493,7 @@ services:
       dockerfile: ./modules/elaborazioni/worker/Dockerfile
     container_name: gaia-elaborazioni-worker-runtime
     restart: unless-stopped
-    command: python /app/worker/worker_runner.py
+    command: python /app/worker/runtime_runner.py
     init: true
     stop_grace_period: "30s"
     cpus: ${ELABORAZIONI_RUNTIME_CPU_LIMIT:-2.0}
