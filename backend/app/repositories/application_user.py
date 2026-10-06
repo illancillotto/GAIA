@@ -92,26 +92,37 @@ def create_application_user(db: Session, payload: ApplicationUserCreate) -> Appl
 def update_application_user(db: Session, user: ApplicationUser, payload: ApplicationUserUpdate) -> ApplicationUser:
     data = payload.model_dump(exclude_unset=True)
     password = data.pop("password", None)
-    module_presenze = data.pop("module_presenze", None)
     role_changed = "role" in data and data["role"] != user.role
 
     # module_utenze is the sole source of truth.
 
+    module_presenze = data.pop("module_presenze", None)
     if module_presenze is not None:
         data["module_presenze"] = module_presenze
 
+    _apply_application_user_changes(user, data, password)
+    db.add(user)
+    _sync_qgis_users_after_role_change(db, role_changed)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def _apply_application_user_changes(
+    user: ApplicationUser, data: dict[str, object], password: str | None
+) -> None:
     for key, value in data.items():
         setattr(user, key, value)
     if password:
         user.password_hash = hash_password(password)
-    db.add(user)
-    if role_changed:
-        from app.modules.gis.qgis_desktop_access import sync_enabled_users
 
-        sync_enabled_users(db)
-    db.commit()
-    db.refresh(user)
-    return user
+
+def _sync_qgis_users_after_role_change(db: Session, role_changed: bool) -> None:
+    if not role_changed:
+        return
+    from app.modules.gis.qgis_desktop_access import sync_enabled_users
+
+    sync_enabled_users(db)
 
 
 def record_application_user_login(db: Session, user: ApplicationUser, client_ip: str | None) -> ApplicationUser:

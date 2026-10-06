@@ -3,6 +3,30 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Backend utenti — aggiornamento applicazione utente (2026-10-06)
+
+- Slice `IMPROVED`, snapshot `cd50f00f`, MPC/MCP escluso. `update_application_user`
+  mantiene dump `exclude_unset`, semantica `module_presenze=None`, assegnazione
+  dinamica dei campi, hashing password, sincronizzazione QGIS solo al cambio
+  ruolo, commit e refresh. Le responsabilita di applicazione campi e sync
+  QGIS sono isolate in helper coesi; nessuna API o transazione cambia.
+- `update_application_user` cognitive/cyclomatic/LOC `6/7/18 -> 3/4/13`,
+  sotto le metriche baseline `3/4/14`. `_apply_application_user_changes`
+  `2/3/7`; `_sync_qgis_users_after_role_change` `1/2/5`, entrambi senza
+  violation. Nessun debt trasferito e nessun file adiacente toccato.
+- `backend/tests/test_user_management.py` e `test_gis_qgis_desktop_access.py`
+  verdi; coverage full-file `application_user.py`: 76 statement e 14 branch,
+  100%. Le warning JWT su chiave breve sono preesistenti e non modificate.
+  Ruff check e `make lint-backend QUALITY_PYTHON=backend/.venv/bin/python
+  BASE_REF=HEAD` PASS; format-check legacy non applicato a righe estranee.
+- Ratchet full-scan contro merge-base `6b61fd27`: `17 -> 14` finding, zero
+  in `application_user.py`. Baseline, soglie ed esclusioni invariati.
+  Graphify backend aggiornato: 10059 nodi / 25528 archi / 549 community;
+  HTML saltato per limite 5000. Evidenze `/tmp/gaia-user-update-{before,after,after2}.json`,
+  `/tmp/gaia-user-update-coverage2.log`, `/tmp/gaia-user-update-lint2.log`,
+  `/tmp/gaia-user-update-ratchet2.json`, `/tmp/gaia-user-update-graphify.log`.
+  Modifiche concorrenti preservate; deploy non eseguito.
+
 ### Frontend API — lifecycle timeout e abort (2026-10-06)
 
 - Slice `IMPROVED`, snapshot `02802a32`, MPC/MCP escluso. `request` delega
