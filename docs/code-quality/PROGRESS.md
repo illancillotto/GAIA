@@ -3,6 +3,44 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Presenze — conteggi record compensi Bank Hours (2026-10-06)
+
+- Slice `IMPROVED`, base `6209b30b`: il conteggio giornate lavorate usa
+  `any` sulla stessa regola minuti positivi, non la somma dei minuti; il
+  conteggio turni notturni incrementa direttamente dal predicato esistente.
+  Null, negativi, short-circuit del predicato, straordinari candidati,
+  classificazioni mancanti, bonus mensili e tutti gli altri totali invariati.
+- Otto caratterizzazioni verdi sul codice precedente e finale: tutti i
+  bucket di compenso hanno valori distinti, null e negativi sono espliciti,
+  il massimo fra import/classificazione/timbrature e verificato anche per
+  intervallo oltre mezzanotte; import extra non positivo non abilita le
+  timbrature. Una voce positiva compensata da una negativa conta comunque
+  come giornata lavorata. Suite router/API finale: 219 test verdi.
+- Coverage full-file `bank_hours.py` 100%, `227/227` statement e `74/74`
+  branch, nessuna linea esclusa. `_build_bank_hours_compensation_summary`
+  cognitive/cyclomatic/LOC/nesting `37/24/49/2 -> 21/16/47/2`;
+  errore cognitive declassato a warning, errore cyclomatic ancora presente.
+- Aggregati file cognitive `241 -> 225`, cyclomatic `187 -> 179`,
+  LOC `536 -> 534`, 14 callable invariati, 16 violation invariate
+  (error `10 -> 9`, warning `6 -> 7`). Nessun helper o debito trasferito.
+- Tentativo di estrazione precedente scartato: aumentava LOC file
+  `536 -> 553` e introduceva due warning nell'accumulatore. Il ratchet
+  contro la baseline storica era verde, ma non dimostrava la conformita
+  rispetto allo snapshot immediatamente precedente. Nessun codice di quel
+  tentativo e conservato nel diff finale.
+- Ratchet finale mirato contro baseline del merge-base `6209b30b`: PASS,
+  `findings: []`. Ruff check, format runtime, `make lint-backend
+  BASE_REF=6209b30b QUALITY_PYTHON=.venv/bin/python` e diff-check PASS.
+  Graphify Presenze aggiornato: 1393 nodi, 4243 archi, 59 community.
+  Baseline, report versionati, esclusioni e soglie invariati.
+- Evidenze `/tmp/gaia-comp-record-{before,final}.json`,
+  `/tmp/gaia-comp-record-before.log`, `/tmp/gaia-comp-record-final-suite.log`,
+  `/tmp/gaia-comp-record-final-coverage.json`,
+  `/tmp/gaia-comp-record-final-ratchet.json`,
+  `/tmp/gaia-comp-record-lint.log`, `/tmp/gaia-comp-record-graphify.log`.
+  MPC/MCP e lavori concorrenti documentali/Utenze esclusi e preservati.
+  Stop dopo questa slice; il programma globale resta incompleto.
+
 ### Presenze — aggregazione bonus notturno Bank Hours (2026-10-06)
 
 - Slice `IMPROVED`, base `0cae111e`: il response compensi esistente diventa

@@ -1410,6 +1410,73 @@ def test_bank_hours_compensation_monthly_bonus_aggregation(
     ).model_dump()
 
 
+@pytest.mark.parametrize(
+    ("ordinary", "extra", "mpe", "classified_extra", "punch_minutes", "expected_extra", "worked_days"),
+    [
+        (None, None, None, 30, 120, 30, 0),
+        (60, 0, 0, 30, 120, 30, 1),
+        (0, 20, 10, 10, 120, 120, 1),
+        (0, 100, 50, 10, 120, 150, 1),
+        (0, 10, 0, 180, 120, 180, 1),
+        (0, -10, 0, 5, 120, 5, 0),
+        (0, 10, -10, 5, 120, 5, 1),
+        (0, 0, 20, 0, 0, 20, 1),
+    ],
+)
+def test_bank_hours_compensation_record_totals(
+    monkeypatch: pytest.MonkeyPatch,
+    ordinary: int | None,
+    extra: int | None,
+    mpe: int | None,
+    classified_extra: int,
+    punch_minutes: int,
+    expected_extra: int,
+    worked_days: int,
+) -> None:
+    record = SimpleNamespace(
+        id=uuid.uuid4(), ordinary_minutes=ordinary, straordinario_minutes=extra, mpe_minutes=mpe
+    )
+    classification = SimpleNamespace(
+        night_minutes=1,
+        festive_minutes=2,
+        festive_night_minutes=3,
+        ordinary_night_minutes=4,
+        overtime_day_minutes=classified_extra,
+        overtime_night_minutes=5,
+        overtime_festive_minutes=6,
+        overtime_festive_night_minutes=7,
+        shift_festive_day_minutes=8,
+        shift_night_minutes=9,
+        shift_festive_night_minutes=10,
+    )
+    punches = [
+        SimpleNamespace(daily_record_id=record.id, entry_time=time(23), exit_time=time(1))
+    ] if punch_minutes else []
+    monkeypatch.setattr(router, "_build_classification_map", lambda *_args, **_kwargs: {record.id: classification})
+    monkeypatch.setattr(router, "_build_monthly_night_bonus_map", lambda *_args, **_kwargs: {})
+
+    summary = router._build_bank_hours_compensation_summary(
+        _QueuedDb([record], punches), collaborator_id=uuid.uuid4(), date_from=None, date_to=None
+    )
+
+    assert summary.model_dump() == PresenzeBankHoursCompensationSummaryResponse(
+        records_total=1,
+        worked_days_total=worked_days,
+        night_minutes_total=1,
+        festive_minutes_total=2,
+        festive_night_minutes_total=3,
+        ordinary_night_minutes_total=4,
+        overtime_day_minutes_total=expected_extra,
+        overtime_night_minutes_total=5,
+        overtime_festive_minutes_total=6,
+        overtime_festive_night_minutes_total=7,
+        shift_festive_day_minutes_total=8,
+        shift_night_minutes_total=9,
+        shift_festive_night_minutes_total=10,
+        night_shift_days_total=1,
+    ).model_dump()
+
+
 def test_bank_hours_compensation_and_balance_fallbacks(monkeypatch: pytest.MonkeyPatch) -> None:
     collaborator_id = uuid.uuid4()
     assert router._build_bank_hours_compensation_summary(

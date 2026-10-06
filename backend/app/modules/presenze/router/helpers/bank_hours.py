@@ -347,8 +347,7 @@ def _build_bank_hours_compensation_summary(
             continue
         imported_extra_minutes = (record.straordinario_minutes or 0) + (record.mpe_minutes or 0)
         punch_candidate_minutes = _complete_punch_minutes(punches_by_record_id.get(record.id, [])) if imported_extra_minutes > 0 else 0
-        if (record.ordinary_minutes or 0) > 0 or (record.straordinario_minutes or 0) > 0 or (record.mpe_minutes or 0) > 0:
-            summary.worked_days_total += 1
+        summary.worked_days_total += any((minutes or 0) > 0 for minutes in (record.ordinary_minutes, record.straordinario_minutes, record.mpe_minutes))
         summary.night_minutes_total += classification.night_minutes
         summary.festive_minutes_total += classification.festive_minutes
         summary.festive_night_minutes_total += classification.festive_night_minutes
@@ -360,8 +359,7 @@ def _build_bank_hours_compensation_summary(
         summary.shift_festive_day_minutes_total += classification.shift_festive_day_minutes
         summary.shift_night_minutes_total += classification.shift_night_minutes
         summary.shift_festive_night_minutes_total += classification.shift_festive_night_minutes
-        if classification.ordinary_night_minutes + classification.shift_night_minutes + classification.shift_festive_night_minutes > 0:
-            summary.night_shift_days_total += 1
+        summary.night_shift_days_total += int(classification.ordinary_night_minutes + classification.shift_night_minutes + classification.shift_festive_night_minutes > 0)
         _apply_bank_hours_night_bonus(summary, monthly_night_bonus.get(record.id))
 
     return summary
