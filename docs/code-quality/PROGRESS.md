@@ -3,6 +3,17 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — righe export per risultato (2026-10-06)
+
+- Slice `IMPROVED`: la costruzione delle righe export per singolo risultato è
+  isolata in `_build_bulk_export_result_rows`, preservando righe vuote,
+  intestatari multipli e ordinamento.
+- Metriche `_build_bulk_export_rows` cognitive/cyclomatic/LOC `14/9/23 ->
+  1/2/8`; helper `8/8/21`, senza violation o debito trasferito.
+- Suite Catasto PASS; coverage `exports.py` 100% (`206/206` statement,
+  `52/52` branch). Ruff, format, ratchet contro `HEAD` (`e583f2ed`) e
+  Graphify Catasto PASS. Modifiche concorrenti PKI/Ruolo/MCP preservate ed escluse.
+
 ### Catasto — costruzione match singolo (2026-10-06)
 
 - Slice `IMPROVED`: la costruzione e l'arricchimento del risultato per un

@@ -465,31 +465,37 @@ def _bulk_export_match_rows(
     return rows
 
 
+def _build_bulk_export_result_rows(
+    kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"],
+    result: CatAnagraficaBulkSearchRowResult,
+) -> list[dict[str, object]]:
+    matches = result.matches or ([result.match] if result.match is not None else [])
+    empty_intestatario = {
+        "n_intestatari": 0,
+        **dict.fromkeys((
+            "rank", "cf", "tipo", "cognome", "nome", "denominazione", "ragione_sociale",
+            "data_nascita", "luogo_nascita", "comune_residenza", "indirizzo", "cap",
+            "telefono", "email", "deceduto", "note",
+        ), ""),
+    }
+    if not matches:
+        return [{**_bulk_export_base_row(kind, result, None), **empty_intestatario}]
+
+    rows: list[dict[str, object]] = []
+    for match in matches:
+        intestatari = match.intestatari or []
+        base = _bulk_export_base_row(kind, result, match)
+        rows.extend(_bulk_export_match_rows(base, match, intestatari, empty_intestatario))
+    return rows
+
+
 def _build_bulk_export_rows(
     kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"],
     export_results: list[CatAnagraficaBulkSearchRowResult],
 ) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
     for result in export_results:
-        matches = result.matches or ([result.match] if result.match is not None else [])
-
-        empty_intestatario = {
-            "n_intestatari": 0,
-            **dict.fromkeys((
-                "rank", "cf", "tipo", "cognome", "nome", "denominazione", "ragione_sociale",
-                "data_nascita", "luogo_nascita", "comune_residenza", "indirizzo", "cap",
-                "telefono", "email", "deceduto", "note",
-            ), ""),
-        }
-
-        if not matches:
-            rows.append({**_bulk_export_base_row(kind, result, None), **empty_intestatario})
-            continue
-
-        for match in matches:
-            intestatari = match.intestatari or []
-            base = _bulk_export_base_row(kind, result, match)
-            rows.extend(_bulk_export_match_rows(base, match, intestatari, empty_intestatario))
+        rows.extend(_build_bulk_export_result_rows(kind, result))
     return rows
 
 
