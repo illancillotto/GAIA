@@ -105,6 +105,36 @@ def test_owner_export_columns_rank_dates_and_certificate():
     assert exports._export_basename("CF_PIVA_PARTICELLE") == "catasto-intestatari-da-cf"
 
 
+@pytest.mark.parametrize("cco", [None, "", "0", "001"])
+@pytest.mark.parametrize("state", [None, "", "0", "Attivo"])
+def test_bulk_account_column_order_none_and_zero_string(cco, state):
+    match = CatAnagraficaMatch(
+        particella_id=UUID(int=1),
+        foglio="1",
+        particella="2",
+        utenza_latest=CatAnagraficaUtenzaSummary(id=UUID(int=2), cco=cco),
+        stato_ruolo=state,
+        stato_cnc=state,
+    )
+    expected = {
+        "cco": "" if cco is None else cco,
+        "link_involture": "Link",
+        "apri_involture": "",
+        "stato_ruolo": "" if state is None else state,
+        "stato_cnc": "" if state is None else state,
+    }
+    actual = exports._bulk_export_account_columns(match, "Link")
+    assert actual == expected
+    assert list(actual) == list(expected)
+    assert exports._bulk_export_account_columns(None, "")["cco"] == ""
+    assert (
+        exports._bulk_export_account_columns(match.model_copy(update={"utenza_latest": None}), "")[
+            "cco"
+        ]
+        == ""
+    )
+
+
 @pytest.mark.parametrize("birth_date", [None, date(1980, 1, 1)])
 @pytest.mark.parametrize(
     "denominazione, ragione_sociale, cognome, nome, display",

@@ -332,6 +332,23 @@ def _bulk_export_district_columns(match: CatAnagraficaMatch | None) -> dict[str,
     }
 
 
+def _bulk_export_account_columns(
+    match: CatAnagraficaMatch | None,
+    link_value: str,
+) -> dict[str, object]:
+    return {
+        "cco": match.utenza_latest.cco if match is not None and match.utenza_latest is not None and match.utenza_latest.cco is not None else "",
+        "link_involture": link_value,
+        "apri_involture": "",
+        **{
+            field: getattr(match, field)
+            if match is not None and getattr(match, field) is not None
+            else ""
+            for field in ("stato_ruolo", "stato_cnc")
+        },
+    }
+
+
 def _build_bulk_export_rows(
     kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"],
     export_results: list[CatAnagraficaBulkSearchRowResult],
@@ -365,11 +382,7 @@ def _build_bulk_export_rows(
                 "trovato in esito consorzio": _format_consorzio_esito_for_export(
                     bool(match.presente_in_catasto_consorzio) if match is not None else False
                 ),
-                "cco": match.utenza_latest.cco if match is not None and match.utenza_latest is not None and match.utenza_latest.cco is not None else "",
-                "link_involture": link_value,
-                "apri_involture": "",
-                "stato_ruolo": match.stato_ruolo if match is not None and match.stato_ruolo is not None else "",
-                "stato_cnc": match.stato_cnc if match is not None and match.stato_cnc is not None else "",
+                **_bulk_export_account_columns(match, link_value),
             })
             return base
 

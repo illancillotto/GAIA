@@ -3,6 +3,34 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — colonne utenza e stato export bulk (2026-10-06)
+
+- Chiusura `IMPROVED`: colonne CCO/certificato/stati ruolo isolate; proiezione
+  dichiarativa stati con guardie None condivise, nessuna nuova violation.
+  Target115/56/66/3 ->99/46/62/3; helper8/9/15/0/2 sotto soglia. File cognitive
+  323 ->315, cyclomatic240 ->239, callable23 ->24, branching217 ->215,
+  LOC474 ->485/import26 invariati.20 violation residue (8 error/12 warning),
+  nessun debt transfer; mapper ancora sopra soglia e campagna non completa.
+- Sedici casi persistenti proteggono CCO/stati None/vuoti/zero-stringa/presenti,
+  match/utenza assenti e ordine colonne.260 test coverage/caratterizzazione/API/
+  facade PASS; full-file exports100% statement221/branch68, zero missing/
+  partial/esclusioni.4000 differenziali contro69254dc8 equivalenti per valori,
+  ordine colonne e accessi attributo, inclusi guardie CCO e doppie letture stati.
+- Ratchet merge-base69254dc8 e Ruff runtime/test/format test PASS; lint globale
+  compileall PASS, solo UP038 InCass concorrente. Graphify codice e docs
+  Catasto/piattaforma aggiornati prima del commit separato; evidenze
+  /tmp/gaia-export-account-*. Baseline/config/scope/MCP e change concorrenti
+  preservati, nessuna API remota/PostgreSQL dichiarata. Residuo mapper99/46.
+- Preflight `69254dc8`: precedente passaggio progresso committato, runtime
+  Catasto pulito e indice vuoto. Mapper115/56/66/3; file cognitive323/
+  cyclomatic240/LOC474,20 violation/23 callable. Goal non-MCP aperto.
+- Isolare CCO/link/apri e stati ruolo/CNC dalla composizione riga, mantenendo
+  URL calcolato prima dei campi e guardie CCO, None distinto da zero/stringa
+  vuota. Stati omogenei con proiezione dichiarativa, ordine/accessi invariati.
+- Helper sotto soglia, full-file100%, differenziale contro HEAD e metriche
+  aggregate/ratchet/Ruff/Graphify prima del commit separato; nessun cambio
+  API/schema/baseline/config/scope/MCP o inclusione change concorrenti.
+
 ### Catasto — colonne distretto export bulk (2026-10-06)
 
 - Chiusura `IMPROVED`:244 test coverage/caratterizzazione/API/facade PASS,
