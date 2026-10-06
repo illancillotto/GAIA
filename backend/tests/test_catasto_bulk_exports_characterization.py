@@ -105,6 +105,26 @@ def test_owner_export_columns_rank_dates_and_certificate():
     assert exports._export_basename("CF_PIVA_PARTICELLE") == "catasto-intestatari-da-cf"
 
 
+@pytest.mark.parametrize("matched", [False, True])
+@pytest.mark.parametrize("use_input", [False, True])
+@pytest.mark.parametrize("value", [None, "", "0", " 1 "])
+def test_bulk_parcel_coordinates_preserve_none_and_input_fallback(matched, use_input, value):
+    match = (
+        CatAnagraficaMatch(particella_id=UUID(int=1), foglio="1", particella="2").model_copy(
+            update={"foglio": value, "particella": value}
+        )
+        if matched
+        else None
+    )
+    result = CatAnagraficaBulkSearchRowResult(
+        row_index=1, esito="NOT_FOUND", message="OK", foglio_input="Input", particella_input="Input"
+    )
+    actual = exports._bulk_export_parcel_coordinates(match, result if use_input else None)
+    expected_value = value if matched else "Input" if use_input else ""
+    assert actual == {"foglio": expected_value, "particella": expected_value}
+    assert list(actual) == ["foglio", "particella"]
+
+
 @pytest.mark.parametrize("cco", [None, "", "0", "001"])
 @pytest.mark.parametrize("state", [None, "", "0", "Attivo"])
 def test_bulk_account_column_order_none_and_zero_string(cco, state):

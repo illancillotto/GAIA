@@ -349,6 +349,18 @@ def _bulk_export_account_columns(
     }
 
 
+def _bulk_export_parcel_coordinates(
+    match: CatAnagraficaMatch | None,
+    fallback: CatAnagraficaBulkSearchRowResult | None = None,
+) -> dict[str, object]:
+    return {
+        field: getattr(match, field)
+        if match is not None
+        else (getattr(fallback, f"{field}_input") or "") if fallback is not None else ""
+        for field in ("foglio", "particella")
+    }
+
+
 def _build_bulk_export_rows(
     kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"],
     export_results: list[CatAnagraficaBulkSearchRowResult],
@@ -364,16 +376,14 @@ def _build_bulk_export_rows(
                     "cf_input": _result.codice_fiscale_input or "",
                     "piva_input": _result.partita_iva_input or "",
                     "comune": match.comune if match is not None and match.comune is not None else "",
-                    "foglio": match.foglio if match is not None else "",
-                    "particella": match.particella if match is not None else "",
+                    **_bulk_export_parcel_coordinates(match),
                     "sub": match.subalterno if match is not None and match.subalterno is not None else "",
                 }
             else:
                 base = {
                     "comune": match.comune if match is not None and match.comune is not None else (_result.comune_input or ""),
                     "sezione": _result.sezione_input or "",
-                    "foglio": match.foglio if match is not None else (_result.foglio_input or ""),
-                    "particella": match.particella if match is not None else (_result.particella_input or ""),
+                    **_bulk_export_parcel_coordinates(match, _result),
                     "sub": match.subalterno if match is not None and match.subalterno is not None else (_result.sub_input or ""),
                 }
             base.update({

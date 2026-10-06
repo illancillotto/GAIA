@@ -3,6 +3,35 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — coordinate particella export bulk (2026-10-06)
+
+- Chiusura `IMPROVED`: coordinate condivise con fallback input esplicito per
+  modalita comune, CF/PIVA vuoto senza match. Helper5/6/10/0/2 sotto soglia;
+  target99/46/62/3 ->79/38/60/3. File cognitive315 ->300, cyclomatic239 ->237,
+  callable24 ->25, branching215 ->212, LOC485 ->493/import26 invariati.
+  20 violation residue (8 error/12 warning), nessuna nuova violation o transfer.
+- Sedici casi persistenti proteggono match/input assenti/presenti e valori
+  None/vuoti/zero-stringa/spazi. None nel match caratterizzato tramite model_copy
+  senza modificare lo schema che richiede stringhe, per preservare anche la
+  semantica storica del mapper.276 test coverage/caratterizzazione/API/facade
+  PASS; full-file exports100% statement223/branch68, zero missing/partial/
+  esclusioni.4000 differenziali controe6f9ec09 equivalenti per valori/ordine/accessi.
+- Ratchet merge-basee6f9ec09 e Ruff runtime/test/format test PASS; lint globale
+  compileall PASS, solo UP038 InCass concorrente. Graphify codice e docs
+  Catasto/piattaforma aggiornati prima del commit separato; evidenze
+  /tmp/gaia-export-coordinates-*. Baseline/config/scope/MCP e change concorrenti
+  preservati, nessuna API remota/PostgreSQL dichiarata; mapper79/38 resta aperto.
+- Preflight `e6f9ec09`: precedente passaggio progresso committato, runtime
+  Catasto pulito, indice vuoto. Mapper99/46/62/3; file cognitive315/
+  cyclomatic239/LOC485,20 violation/24 callable. Campagna non-MCP aperta.
+- Condividere proiezione foglio/particella: match presente esporta il valore
+  senza fallback None; match assente usa input solo in modalita comune,
+  CF/PIVA resta vuoto. Ordine colonne/accessi invariati, helper di coordinate
+  catastali tipizzato sotto soglia; niente cambio API/schema/policy fallback.
+- Differenziale contro HEAD, full-file100%, metriche aggregate/ratchet/Ruff/
+  Graphify prima del commit. Baseline/config/scope/MCP e change concorrenti
+  invariati; nessuna nuova violation o trasferimento del debito ammessi.
+
 ### Catasto — colonne utenza e stato export bulk (2026-10-06)
 
 - Chiusura `IMPROVED`: colonne CCO/certificato/stati ruolo isolate; proiezione
