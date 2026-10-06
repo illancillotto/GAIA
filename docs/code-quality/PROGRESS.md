@@ -3,6 +3,17 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — sincronizzazione particella live (2026-10-06)
+
+- Slice `IMPROVED`: i predicati di contesto e di errore usano aggregatori
+  espliciti, mantenendo invariati guardie, logging, rollback, deduplicazione e
+  risultati della sincronizzazione.
+- Metriche `_sync_particella_from_live_terreni` cognitive/cyclomatic/LOC
+  `40/24/95 -> 34/19/95`; aggregati file `245/192 -> 239/187`, LOC invariato.
+- Suite Catasto PASS; `resolvers.py` full-file 100% (`312/312` statement,
+  `114/114` branch). Ruff, format e ratchet contro `HEAD` (`84e89d9c`) PASS.
+  Graphify Catasto aggiornato; MCP/Wiki esclusi.
+
 ### Catasto — dettaglio intestatario live (2026-10-06)
 
 - Slice `IMPROVED`: `_resolve_intestatario` delega il recupero/cache del

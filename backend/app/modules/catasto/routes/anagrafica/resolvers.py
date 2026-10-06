@@ -390,7 +390,7 @@ class _CapacitasLiveResolver:
         self._sync_attempted_particelle.add(p.id)
 
         comune_value = _norm_str(p.nome_comune)
-        if not comune_value or not p.foglio or not p.particella:
+        if not all((comune_value, p.foglio, p.particella)):
             return False
 
         client = await self._ensure_client()
@@ -466,7 +466,7 @@ class _CapacitasLiveResolver:
             except RuntimeError as exc:
                 self._db.rollback()
                 normalized = str(exc).casefold()
-                if "non trov" not in normalized and "nessun" not in normalized and "no result" not in normalized:
+                if not any(token in normalized for token in ("non trov", "nessun", "no result")):
                     logger.info(
                         "Capacitas live terreni sync interrotta: particella_id=%s frazione=%s err=%s",
                         p.id,
