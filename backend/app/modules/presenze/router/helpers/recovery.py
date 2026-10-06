@@ -72,6 +72,36 @@ def _serialize_recovery_adjustment(
 ) -> PresenzeRecoveryAdjustmentResponse:
     return _serialize_recovery_adjustments(db, [item])[0]
 
+
+def _aggregate_recovery_adjustments(
+    adjustments: list[PresenzeRecoveryAdjustment],
+) -> tuple[
+    dict[uuid.UUID, int],
+    dict[uuid.UUID, date],
+    dict[uuid.UUID, str],
+    dict[uuid.UUID, int],
+    dict[uuid.UUID, int],
+]:
+    totals: dict[uuid.UUID, int] = {}
+    last_dates: dict[uuid.UUID, date] = {}
+    last_statuses: dict[uuid.UUID, str] = {}
+    counts: dict[uuid.UUID, int] = {}
+    pending_counts: dict[uuid.UUID, int] = {}
+    for item in adjustments:
+        collaborator_id = item.collaborator_id
+        counts[collaborator_id] = counts.get(collaborator_id, 0) + 1
+        totals[collaborator_id] = totals.get(collaborator_id, 0) + item.delta_days * int(
+            item.approval_status == "approved"
+        )
+        pending_counts[collaborator_id] = pending_counts.get(collaborator_id, 0) + int(
+            item.approval_status == "pending"
+        )
+        if collaborator_id not in last_dates:
+            last_dates[collaborator_id] = item.adjustment_date
+            last_statuses[collaborator_id] = item.approval_status
+    return totals, last_dates, last_statuses, counts, pending_counts
+
+
 def _build_recovery_dashboard(
     db: Session,
     *,
@@ -115,20 +145,13 @@ def _build_recovery_dashboard(
         ).scalars().all()
 
     classification_by_record_id = _build_classification_map(db, records)
-    adjustment_totals_by_collaborator: dict[uuid.UUID, int] = {}
-    last_adjustment_date_by_collaborator: dict[uuid.UUID, date] = {}
-    last_adjustment_status_by_collaborator: dict[uuid.UUID, str] = {}
-    adjustment_count_by_collaborator: dict[uuid.UUID, int] = {}
-    pending_adjustment_count_by_collaborator: dict[uuid.UUID, int] = {}
-    for item in adjustments:
-        adjustment_count_by_collaborator[item.collaborator_id] = adjustment_count_by_collaborator.get(item.collaborator_id, 0) + 1
-        if item.approval_status == "approved":
-            adjustment_totals_by_collaborator[item.collaborator_id] = adjustment_totals_by_collaborator.get(item.collaborator_id, 0) + item.delta_days
-        if item.approval_status == "pending":
-            pending_adjustment_count_by_collaborator[item.collaborator_id] = pending_adjustment_count_by_collaborator.get(item.collaborator_id, 0) + 1
-        if item.collaborator_id not in last_adjustment_date_by_collaborator:
-            last_adjustment_date_by_collaborator[item.collaborator_id] = item.adjustment_date
-            last_adjustment_status_by_collaborator[item.collaborator_id] = item.approval_status
+    (
+        adjustment_totals_by_collaborator,
+        last_adjustment_date_by_collaborator,
+        last_adjustment_status_by_collaborator,
+        adjustment_count_by_collaborator,
+        pending_adjustment_count_by_collaborator,
+    ) = _aggregate_recovery_adjustments(adjustments)
 
     aggregates: dict[uuid.UUID, dict[str, int | date | None]] = {
         item.id: {

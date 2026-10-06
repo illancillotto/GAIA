@@ -3,6 +3,18 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Presenze — aggregazione aggiustamenti recovery (2026-10-06)
+
+- Slice `IMPROVED`: l'aggregazione di totali, conteggi e ultimo stato degli
+  aggiustamenti è isolata in `_aggregate_recovery_adjustments`; i conteggi
+  booleani preservano i valori esposti per stati approved/pending.
+- Metriche aggregate `_build_recovery_dashboard` + helper cognitive/cyclomatic
+  `103/58 -> 99/57`; dashboard `96/54/156`, helper `3/3/27`, senza violation
+  nuove o debito trasferito.
+- Suite router/API Presenze PASS; coverage `recovery.py` 100% (`112/112`
+  statement, `40/40` branch). Ruff, format, ratchet contro `HEAD` (`e030fca9`)
+  e Graphify Presenze PASS. MPC/MCP e lavori concorrenti esclusi.
+
 ### Catasto — ramo senza candidati (2026-10-06)
 
 - Slice `IMPROVED`: la precedenza tra sub-match consortile, ricerca live-only
