@@ -805,6 +805,43 @@ def test_ensure_system_schedule_templates_realigns_existing_operai_bootstrap_tem
         )
 
 
+@pytest.mark.parametrize("bucket_mask", range(16))
+@pytest.mark.parametrize("zero_minutes", [False, True])
+def test_bank_hours_liquidation_bucket_selection(bucket_mask: int, zero_minutes: bool) -> None:
+    buckets = ("overtime_day", "overtime_night", "overtime_festive", "overtime_festive_night")
+    config = SimpleNamespace(
+        allow_derived_profile=False,
+        min_suggested_minutes=0,
+        **{
+            f"include_{bucket}": bool(bucket_mask & (1 << index))
+            for index, bucket in enumerate(buckets)
+        },
+    )
+    summary = PresenzeBankHoursCompensationSummaryResponse(
+        **{
+            f"{bucket}_minutes_total": 0 if zero_minutes else 10 * (1 << index)
+            for index, bucket in enumerate(buckets)
+        }
+    )
+
+    guidance = router._build_bank_hours_liquidation_guidance(
+        available_debit_minutes=200,
+        standard_daily_minutes=420,
+        contract_profile_source="explicit",
+        compensation_summary=summary,
+        guidance_config=config,
+    )
+
+    expected_minutes = 0 if zero_minutes else bucket_mask * 10
+    assert guidance.included_overtime_buckets == [
+        bucket for index, bucket in enumerate(buckets) if bucket_mask & (1 << index)
+    ]
+    assert guidance.candidate_minutes_from_overtime == expected_minutes
+    assert guidance.liquidable_minutes == expected_minutes
+    assert guidance.keep_in_bank_minutes == 200 - expected_minutes
+    assert guidance.reason_code == ("no_overtime_candidate" if expected_minutes == 0 else "ok")
+
+
 def test_build_bank_hours_liquidation_guidance_covers_no_balance_and_no_overtime_cases() -> None:
     config = SimpleNamespace(
         allow_derived_profile=False,

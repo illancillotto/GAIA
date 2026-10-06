@@ -3,6 +3,34 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Presenze — selezione bucket liquidazione Bank Hours (2026-10-06)
+
+- Slice `IMPROVED`, base `9e5f2033`: i quattro rami identici che includono
+  gli straordinari nella proposta sono sostituiti da una sequenza ordinata
+  di bucket e un unico ciclo. Nessun helper, wrapper o nuova esclusione.
+  Ordine day/night/festive/festive-night, bucket inclusi anche con minuti zero,
+  somma candidata, precedenza reason code, soglie e note HR invariati.
+- Caratterizzazione: 32 casi (tutte le 16 configurazioni, minuti distinti
+  oppure tutti zero) verdi sul codice precedente e sul codice finale.
+  Suite router/API Presenze: 206 test verdi. Coverage full-file `bank_hours.py`
+  `243/243` statement e `78/78` branch, 100%, nessuna linea esclusa.
+- `_build_bank_hours_liquidation_guidance` cognitive/cyclomatic/LOC/nesting
+  `31/24/85/4 -> 30/22/82/4`. Aggregati file cognitive `247 -> 246`,
+  cyclomatic `188 -> 186`, LOC `568 -> 565`; 13 callable e 17 violation
+  invariati. Nessun debito trasferito; restano i tre errori della guida.
+- Ratchet mirato contro la baseline del merge-base `9e5f2033`: PASS,
+  `findings: []`. Ruff check, format runtime, `make lint-backend
+  BASE_REF=9e5f2033 QUALITY_PYTHON=.venv/bin/python` e diff-check PASS.
+  Graphify Presenze aggiornato: 1392 nodi, 4241 archi, 67 community.
+  Baseline, soglie e report versionati invariati; nessun gate globale
+  dichiarato sulla base del solo perimetro mirato.
+- Evidenze `/tmp/bank-current.json`, `/tmp/gaia-bucket-after.json`,
+  `/tmp/gaia-bucket-before.log`, `/tmp/gaia-bucket-suite.log`,
+  `/tmp/gaia-bucket-coverage.json`, `/tmp/gaia-bucket-ratchet.json`,
+  `/tmp/gaia-bucket-lint.log`, `/tmp/gaia-bucket-graphify.log`.
+  MPC/MCP e modifiche concorrenti documentali/Ruolo preservati ed esclusi.
+  Stop dopo questa slice; il programma globale resta incompleto.
+
 ### Presenze — filtro dashboard Bank Hours (2026-10-06)
 
 - Slice `IMPROVED`: i tre filtri opzionali del dashboard Bank Hours sono

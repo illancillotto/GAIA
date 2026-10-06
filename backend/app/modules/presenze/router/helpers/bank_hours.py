@@ -430,18 +430,15 @@ def _build_bank_hours_liquidation_guidance(
 ) -> PresenzeBankHoursLiquidationGuidanceResponse:
     included_overtime_buckets: list[str] = []
     candidate_minutes_from_overtime = 0
-    if guidance_config.include_overtime_day:
-        candidate_minutes_from_overtime += compensation_summary.overtime_day_minutes_total
-        included_overtime_buckets.append("overtime_day")
-    if guidance_config.include_overtime_night:
-        candidate_minutes_from_overtime += compensation_summary.overtime_night_minutes_total
-        included_overtime_buckets.append("overtime_night")
-    if guidance_config.include_overtime_festive:
-        candidate_minutes_from_overtime += compensation_summary.overtime_festive_minutes_total
-        included_overtime_buckets.append("overtime_festive")
-    if guidance_config.include_overtime_festive_night:
-        candidate_minutes_from_overtime += compensation_summary.overtime_festive_night_minutes_total
-        included_overtime_buckets.append("overtime_festive_night")
+    for bucket, included, minutes in (
+        ("overtime_day", guidance_config.include_overtime_day, compensation_summary.overtime_day_minutes_total),
+        ("overtime_night", guidance_config.include_overtime_night, compensation_summary.overtime_night_minutes_total),
+        ("overtime_festive", guidance_config.include_overtime_festive, compensation_summary.overtime_festive_minutes_total),
+        ("overtime_festive_night", guidance_config.include_overtime_festive_night, compensation_summary.overtime_festive_night_minutes_total),
+    ):
+        if included:
+            candidate_minutes_from_overtime += minutes
+            included_overtime_buckets.append(bucket)
     requires_profile_review = contract_profile_source == "missing" or (
         contract_profile_source == "derived" and not guidance_config.allow_derived_profile
     )
