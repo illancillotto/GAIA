@@ -16,7 +16,7 @@ con `chunk 1/1 done`, senza warning di chunk semantici falliti.
 
 ## Gate globale
 
-Il confronto dell'intero repository contro il merge-base del push
+Snapshot iniziale sul commit `9a11320d`: il confronto dell'intero repository contro il merge-base del push
 `6b61fd27` NON e verde: 24 finding, 17 `legacy_metric_regression` e
 7 `new_callable_violation`. Non sono attribuiti alla sola slice banca ore.
 Nessuna baseline, esclusione o soglia e stata aggiornata per assorbirli.
@@ -75,7 +75,8 @@ implicitamente hotfix e configurazioni di produzione non riconciliati.
 
 Prima del rilascio occorrono:
 
-1. Chiudere o decidere esplicitamente i 24 finding globali in slice revisionabili.
+1. Chiudere o decidere esplicitamente i finding globali in slice revisionabili
+   (24 nello snapshot iniziale, 23 dopo la slice retry sotto).
 2. Verificare le regressioni degli hotfix e le immagini realmente attive,
    conservando backup e possibilita di rollback prima di qualsiasi mutazione.
 3. Confrontare overlay ed env senza pubblicare segreti, preservando volumi,
@@ -143,3 +144,22 @@ Log e snapshot sanitizzati sotto `/tmp/gaia-release-audit-20261006/`:
 `hotfix-backend-tests.log`, `hotfix-worker-tests.log`, `incass-parallel-tests.log`,
 `backend-active.tar.gz`, `worker-active.tar.gz`, `env-comparison.json`.
 Il deploy resta non eseguito, in attesa della decisione sui prerequisiti globali.
+
+## Primo finding chiuso — retry sync Presenze
+
+Una slice successiva isola parsing legacy e formato del checkpoint in
+`_has_sync_job_resume_checkpoint`, nello stesso file della route. Nessuna
+variazione a HTTP, auth, stato, limite tentativi, artefatti o transazioni.
+
+- `retry_sync_job`: cognitive/cyclomatic/LOC 19/17/29 -> 13/11/27.
+- Helper 5/6/6, un parametro e zero violation; cognitive aggregate 98 -> 97,
+  cyclomatic aggregate 88 -> 88. Nessun trasferimento di violation.
+- 22 nuove caratterizzazioni verdi prima e dopo; suite router/API 249 test.
+- Coverage full-file `router/routes/sync_jobs.py`: 144 statement e 42 branch
+  al 100%, zero esclusioni. Ruff, format runtime, lint e ratchet mirato verdi.
+- Ratchet globale contro `6b61fd27`: 24 -> 23 finding, nessuno nel file
+  modificato. Gate globale ancora non verde; baseline e soglie invariate.
+
+Evidenze `/tmp/gaia-retry-full-ratchet.json` e `/tmp/gaia-retry-coverage.json`;
+metriche e comandi in `PROGRESS.md`. Questa verifica non autorizza a saltare
+gli altri prerequisiti e non costituisce un deploy. MPC/MCP esclusi dalla slice.

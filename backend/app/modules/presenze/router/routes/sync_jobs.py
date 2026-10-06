@@ -119,9 +119,7 @@ def retry_sync_job(
         raise HTTPException(status_code=409, detail="Sync job is not retryable in the current state")
     if job.credential_id is None:
         raise HTTPException(status_code=409, detail="Questo job usa una configurazione legacy. Crea una nuova sync con una credenziale Presenze salvata.")
-    checkpoint = dict((job.params_json or {}).get("checkpoint") or {})
-    completed_employee_codes = checkpoint.get("completed_employee_codes")
-    has_resume_checkpoint = isinstance(completed_employee_codes, list) and len(completed_employee_codes) > 0
+    has_resume_checkpoint = _has_sync_job_resume_checkpoint(job)
     if job.attempt_count >= job.max_attempts and not has_resume_checkpoint:
         raise HTTPException(status_code=409, detail="Sync job reached the configured max attempts")
 
@@ -135,6 +133,13 @@ def retry_sync_job(
     db.commit()
     db.refresh(job)
     return PresenzeSyncJobResponse.model_validate(job)
+
+def _has_sync_job_resume_checkpoint(job: PresenzeSyncJob) -> bool:
+    checkpoint = dict((job.params_json or {}).get("checkpoint") or {})
+    completed_employee_codes = checkpoint.get("completed_employee_codes")
+    if not isinstance(completed_employee_codes, list):
+        return False
+    return len(completed_employee_codes) > 0
 
 @router.post("/sync/jobs/{job_id}/retry-selected", response_model=PresenzeSyncJobResponse)
 def retry_sync_job_selected(

@@ -3,6 +3,39 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Presenze — checkpoint del retry sync (2026-10-06)
+
+- Slice `IMPROVED`, snapshot `7ab50fdb`, prerequisito del rilascio:
+  `_has_sync_job_resume_checkpoint` possiede conversione del checkpoint
+  legacy e controllo lista non vuota. La guardia di tipo precede `len`;
+  nessuna normalizzazione o modifica dei valori accettati.
+  Auth/404, precedenza stato/credenziale/limite, disponibilita sync, preparazione
+  artefatti, commit/refresh e reset degli stessi campi restano invariati.
+- 22 caratterizzazioni verdi prima e dopo: dieci formati checkpoint, tentativi
+  sotto/al limite, liste vuote/non vuote anche con None, tuple/stringhe,
+  conversione da coppie e due formati invalidi. Parsing ancora eseguito prima
+  del controllo tentativi, anche sotto soglia; failure senza scritture.
+- `retry_sync_job` cognitive/cyclomatic/LOC/nesting `19/17/29/1 ->
+  13/11/27/1`; helper `5/6/6/1`, un parametro e zero violation. Errore
+  cyclomatic eliminato, warning cyclomatic residuo. Il primo tentativo di
+  estrazione con `and` era neutro; la guardia esplicita del formato porta
+  cognitive aggregate file `98 -> 97`, cyclomatic `88 -> 88`, decisioni
+  `80 -> 79`, callable `8 -> 9`, LOC `238 -> 242` (sotto soglia).
+  Violation `8 -> 7`, error `3 -> 2`; nessun debito trasferito all'helper.
+- Suite router/API Presenze: 249 test verdi. Coverage full-file
+  `router/routes/sync_jobs.py` 100%, `144/144` statement e `42/42` branch,
+  nessuna linea esclusa. Ruff check, format runtime, lint-backend contro
+  `7ab50fdb` e diff-check PASS. Ratchet mirato sul merge-base `6b61fd27`
+  PASS; ratchet globale stesso merge-base `24 -> 23` finding, zero sul file.
+  Non dichiarati verdi i gate globali; baseline/soglie/esclusioni invariati.
+- Graphify codice Presenze aggiornato: 1394 nodi, 4245 archi, 50 community.
+  Evidenze `/tmp/gaia-retry-{before,after}.json`,
+  `/tmp/gaia-retry-characterization.log`, `/tmp/gaia-retry-suite.log`,
+  `/tmp/gaia-retry-coverage.json`, `/tmp/gaia-retry-ratchet.json`,
+  `/tmp/gaia-retry-full-ratchet.json`, `/tmp/gaia-retry-lint.log`,
+  `/tmp/gaia-retry-graphify.log`. MPC/MCP e lavori concorrenti preservati.
+  Stop dopo questa slice; deploy non eseguito, programma globale incompleto.
+
 ### Presenze — aggregati dashboard Bank Hours (2026-10-06)
 
 - Slice `IMPROVED`, base `916ed94a`: il response dashboard esistente possiede

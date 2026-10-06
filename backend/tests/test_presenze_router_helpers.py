@@ -546,6 +546,75 @@ def test_sync_job_error_contracts(monkeypatch: pytest.MonkeyPatch) -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("params", "can_resume"),
+    [
+        (None, False),
+        ({}, False),
+        ({"checkpoint": None}, False),
+        ({"checkpoint": {}}, False),
+        ({"checkpoint": {"completed_employee_codes": []}}, False),
+        ({"checkpoint": {"completed_employee_codes": "1854"}}, False),
+        ({"checkpoint": {"completed_employee_codes": ("1854",)}}, False),
+        ({"checkpoint": {"completed_employee_codes": ["1854"]}}, True),
+        ({"checkpoint": {"completed_employee_codes": [None]}}, True),
+        ({"checkpoint": [("completed_employee_codes", ["1854"])]}, True),
+    ],
+)
+@pytest.mark.parametrize("attempt_count", [2, 3])
+def test_sync_job_retry_checkpoint_shapes(
+    monkeypatch: pytest.MonkeyPatch, params, can_resume: bool, attempt_count: int
+) -> None:
+    admin = SimpleNamespace(id=1, role="admin", is_super_admin=False)
+    job = SimpleNamespace(
+        status="failed", requested_by_user_id=admin.id, credential_id=1,
+        params_json=params, attempt_count=attempt_count, max_attempts=3,
+        error_detail="failed", started_at=object(), finished_at=object(), worker_pid=42,
+    )
+    db = _RecordingDb()
+    db.get = lambda *_args: job
+    prepared = []
+    monkeypatch.setattr(router, "ensure_sync_start_available", lambda _db: None)
+    monkeypatch.setattr(router, "prepare_sync_job_artifacts", lambda item: prepared.append(item))
+    monkeypatch.setattr(router, "PresenzeSyncJobResponse", SimpleNamespace(model_validate=lambda item: item))
+
+    if attempt_count >= 3 and not can_resume:
+        with pytest.raises(HTTPException, match="max attempts") as failure:
+            router.retry_sync_job(uuid.uuid4(), db, admin, None)
+        assert failure.value.status_code == 409
+        assert job.status == "failed"
+        assert db.added == []
+        assert db.commits == 0
+        assert prepared == []
+    else:
+        assert router.retry_sync_job(uuid.uuid4(), db, admin, None) is job
+        assert job.status == "pending"
+        assert (job.error_detail, job.started_at, job.finished_at, job.worker_pid) == (None, None, None, None)
+        assert db.added == [job]
+        assert db.commits == 1
+        assert prepared == [job]
+    assert job.params_json is params
+
+
+@pytest.mark.parametrize("checkpoint", [1, "invalid"])
+def test_sync_job_retry_parses_checkpoint_before_attempt_limit(
+    monkeypatch: pytest.MonkeyPatch, checkpoint
+) -> None:
+    admin = SimpleNamespace(id=1, role="admin", is_super_admin=False)
+    job = SimpleNamespace(
+        status="failed", requested_by_user_id=admin.id, credential_id=1,
+        params_json={"checkpoint": checkpoint}, attempt_count=0, max_attempts=3,
+    )
+    db = _RecordingDb()
+    db.get = lambda *_args: job
+    monkeypatch.setattr(router, "ensure_sync_start_available", lambda _db: None)
+
+    with pytest.raises((TypeError, ValueError)):
+        router.retry_sync_job(uuid.uuid4(), db, admin, None)
+    assert db.added == []
+    assert db.commits == 0
+
+
 def test_sync_job_record_rejects_missing_and_inactive_credentials() -> None:
     with pytest.raises(HTTPException) as missing:
         router._create_sync_job_record(
