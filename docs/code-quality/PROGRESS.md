@@ -3,6 +3,18 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — deduplicazione intestatari per particella (2026-10-06)
+
+- Slice `IMPROVED`: la chiave di deduplicazione usa la prima identità utile
+  (subject, codice fiscale, indice anagrafico o id), con stesso ordine e
+  precedenza dei dati.
+- Metriche `_load_intestatari_by_particella_ids` cognitive/cyclomatic/LOC
+  `20/14/49 -> 16/11/45`; aggregati `matching.py` `318/210 -> 314/207`,
+  LOC file `709 -> 705`.
+- Suite Catasto PASS; `matching.py` full-file 100% (`266/266` statement,
+  `106/106` branch). Ruff, format e ratchet contro `HEAD` (`cf9eaee7`) PASS.
+  Graphify Catasto aggiornato; file concorrenti preservati; MCP/Wiki esclusi.
+
 ### Catasto — fallback intestatario da utenza (2026-10-06)
 
 - Slice `IMPROVED`: il fallback controlla il codice fiscale tramite accesso

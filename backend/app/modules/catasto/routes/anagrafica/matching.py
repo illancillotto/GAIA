@@ -578,11 +578,7 @@ def _load_intestatari_by_particella_ids(
         particella_id = utenza_to_particella.get(row.utenza_id)
         if particella_id is None:
             continue
-        key = (
-            str(row.subject_id)
-            if row.subject_id
-            else _normalize_cf(row.codice_fiscale) or row.idxana or str(row.id)
-        )
+        key = next(filter(None, (str(row.subject_id) if row.subject_id else None, _normalize_cf(row.codice_fiscale), row.idxana, str(row.id))))
         if key in seen_by_particella[particella_id]:
             continue
         seen_by_particella[particella_id].add(key)
