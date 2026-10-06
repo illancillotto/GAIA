@@ -3,6 +3,22 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — ricerca righe Capacitas live e filtro (2026-10-06)
+
+- Chiusura `IMPROVED`: `_search_live_rows_for_fraction` mantiene costruzione
+  request, retry con sezione vuota e ordine/accessi del filtro; il retry è in
+  `_search_live_rows_with_section_retry`, mentre il filtro usa normalizzazioni
+  precomputate e una proiezione equivalente. Nessun cambio API/schema o policy.
+- Target cognitive/cyclomatic/LOC `45/28/32 -> 18/19/27`; helper `10/8/12`
+  senza violation. Aggregati `exports.py` cognitive/cyclomatic `219/205 ->
+  202/204`, tre errori diventano due: riduzione reale senza nuovo debito.
+- Suite Catasto mirata: 299 test PASS; `exports.py` full-file 100%
+  (`200/200` statement, `52/52` branch), zero esclusioni. Ruff/format e
+  ratchet contro `HEAD` (`b7d6d1dc`) PASS; Graphify Catasto codice aggiornato.
+- MCP/Wiki esclusi; baseline/config/scope invariati. Prossimo hotspot
+  candidato: `_collect_live_search_hits` o un altro modulo non-MCP, da aprire
+  in una slice separata.
+
 ### Catasto — chiave deduplicazione righe Capacitas live (2026-10-06)
 
 - Chiusura `IMPROVED`: `_live_row_dedupe_key` proietta gli otto campi in una

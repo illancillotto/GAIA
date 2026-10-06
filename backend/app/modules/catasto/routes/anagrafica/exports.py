@@ -178,6 +178,20 @@ def _live_row_rank(row: CapacitasTerrenoRow) -> tuple[int, int, str]:
     return (bucket, _safe_int(row.anno), row.external_row_id or "")
 
 
+async def _search_live_rows_with_section_retry(
+    client: InVoltureClient,
+    request: CapacitasTerreniSearchRequest,
+    sezione: str | None,
+) -> list[CapacitasTerrenoRow]:
+    result = await client.search_terreni(request)
+    rows = result.rows if result else []
+    if not rows and (sezione or "").strip():
+        retry_request = request.model_copy(update={"sezione": ""})
+        result = await client.search_terreni(retry_request)
+        rows = result.rows if result else []
+    return rows
+
+
 async def _search_live_rows_for_fraction(
     client: InVoltureClient,
     *,
@@ -194,23 +208,18 @@ async def _search_live_rows_for_fraction(
         particella=particella,
         sub=sub or "",
     )
-    result = await client.search_terreni(request)
-    rows = result.rows if result else []
-    if not rows and (sezione or "").strip():
-        retry_request = request.model_copy(update={"sezione": ""})
-        result = await client.search_terreni(retry_request)
-        rows = result.rows if result else []
+    rows = await _search_live_rows_with_section_retry(client, request, sezione)
 
-    filtered: list[CapacitasTerrenoRow] = []
-    for row in rows:
-        if (row.foglio or "").strip() != foglio.strip():
-            continue
-        if (row.particella or "").strip() != particella.strip():
-            continue
-        if (sub or "").strip() and (row.sub or "").strip() != (sub or "").strip():
-            continue
-        filtered.append(row)
-    return filtered
+    normalized_foglio = foglio.strip()
+    normalized_particella = particella.strip()
+    normalized_sub = (sub or "").strip()
+    return [
+        row
+        for row in rows
+        if (row.foglio or "").strip() == normalized_foglio
+        and (row.particella or "").strip() == normalized_particella
+        and (not normalized_sub or (row.sub or "").strip() == normalized_sub)
+    ]
 
 
 async def _collect_live_search_hits(
