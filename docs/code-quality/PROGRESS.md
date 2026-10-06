@@ -3,6 +3,17 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — arricchimento sub-match live (2026-10-06)
+
+- Slice `IMPROVED`: l'arricchimento live dei sub-match è isolato in
+  `_enrich_sub_matches`, preservando short-circuit senza resolver, ordine e
+  associazione alla particella.
+- Metriche `execute_bulk_search_payload` cognitive/cyclomatic/LOC `255/52/264
+  -> 225/48/267`; helper `5/5/8`, senza violation o debito trasferito.
+- Suite Catasto PASS; coverage `execution.py` 100% (`119/119` statement,
+  `50/50` branch). Ruff, format, ratchet contro `HEAD` (`a6602be8`) e
+  Graphify Catasto PASS. Modifiche concorrenti PKI/MCP preservate ed escluse.
+
 ### Catasto — risultati ricerca live (2026-10-06)
 
 - Slice `IMPROVED`: la costruzione della risposta per zero, uno o più match

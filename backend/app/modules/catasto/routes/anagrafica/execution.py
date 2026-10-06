@@ -139,6 +139,16 @@ def _build_live_search_result(
     )
 
 
+async def _enrich_sub_matches(
+    live_resolver: _CapacitasLiveResolver | _CapacitasAuthoritativeResolver | None,
+    particella: CatParticella,
+    sub_matches: list[CatAnagraficaMatch] | None,
+) -> list[CatAnagraficaMatch] | None:
+    if not sub_matches or live_resolver is None:
+        return sub_matches
+    return [await live_resolver.enrich_match(particella, sub_match) for sub_match in sub_matches]
+
+
 # fmt: off
 
 async def execute_bulk_search_payload(
@@ -367,8 +377,11 @@ async def execute_bulk_search_payload(
                                     items[0],
                                     live_authoritative=live_authoritative,
                                 ) or None
-                                if sub_matches and live_resolver is not None:
-                                    sub_matches = [await live_resolver.enrich_match(items[0], sub_match) for sub_match in sub_matches]
+                                sub_matches = await _enrich_sub_matches(
+                                    live_resolver,
+                                    items[0],
+                                    sub_matches,
+                                )
 
                             results.append(
                                 CatAnagraficaBulkSearchRowResult(
