@@ -1068,6 +1068,13 @@ def _layer_metadata_updates(
     return updates
 
 
+def _sync_and_commit_gis_users(db: Session) -> None:
+    from app.modules.gis.qgis_desktop_access import sync_enabled_users
+
+    sync_enabled_users(db)
+    db.commit()
+
+
 def set_layer_active(db: Session, layer_id: UUID, is_active: bool, current_user: ApplicationUser) -> GisLayerResponse:
     layer = _get_manageable_layer(db, layer_id, current_user)
     previous_is_active = layer.is_active
@@ -1083,10 +1090,7 @@ def set_layer_active(db: Session, layer_id: UUID, is_active: bool, current_user:
         target_id=layer.id,
         payload={"previous_is_active": previous_is_active, "is_active": layer.is_active},
     )
-    from app.modules.gis.qgis_desktop_access import sync_enabled_users
-
-    sync_enabled_users(db)
-    db.commit()
+    _sync_and_commit_gis_users(db)
     db.refresh(layer)
     return _layer_response(layer, _admin_flags())
 
@@ -1750,10 +1754,7 @@ def upsert_permission(
             "access_level": body.access_level.value,
         },
     )
-    from app.modules.gis.qgis_desktop_access import sync_enabled_users
-
-    sync_enabled_users(db)
-    db.commit()
+    _sync_and_commit_gis_users(db)
     db.refresh(permission)
     return _permission_response(permission)
 
@@ -1784,10 +1785,7 @@ def revoke_permission(
         target_id=permission.id,
         payload=payload,
     )
-    from app.modules.gis.qgis_desktop_access import sync_enabled_users
-
-    sync_enabled_users(db)
-    db.commit()
+    _sync_and_commit_gis_users(db)
 
 
 def create_change_request(

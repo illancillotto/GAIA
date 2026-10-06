@@ -3,6 +3,29 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Backend GIS — sync utenti QGIS nei servizi permessi (2026-10-06)
+
+- Slice `IMPROVED`, snapshot `a1d97395`, MPC/MCP escluso. I servizi GIS di
+  attivazione layer, upsert e revoca permessi usano `_sync_and_commit_gis_users`
+  per il side effect QGIS condiviso; ordine invariato: audit/flush, sync,
+  commit, refresh dove previsto. Nessuna autorizzazione, payload o transazione
+  cambia. La modifica elimina solo duplicazione di import/chiamata/commit.
+- `set_layer_active` LOC `20 -> 18`, `upsert_permission` `62 -> 60`,
+  `revoke_permission` `29 -> 27`, rientrando nelle rispettive baseline.
+  Il helper ha 2 cognitive / 3 cyclomatic / 6 LOC, senza violation.
+  Nessun debito trasferito; gli altri percorsi GIS restano invariati.
+- Suite `test_gis_platform_api.py` + `test_gis_qgis_desktop_access.py` PASS.
+  Coverage full-file `app.modules.gis.services`: 1048 statement e 314 branch,
+  100%. Ruff e lint-backend con interpreter backend PASS; warning JWT di test
+  preesistenti. Diff-check PASS.
+- Ratchet full-scan contro merge-base `6b61fd27`: `14 -> 11` finding, zero in
+  `services.py`. Baseline, soglie ed esclusioni invariati. Graphify backend
+  aggiornato: 10060 nodi / 25533 archi / 546 community; HTML saltato per 5000.
+  Evidenze `/tmp/gaia-gis-{before,after,after2,final}.json`,
+  `/tmp/gaia-gis-{tests2,final-tests,final-coverage,final-lint}.log`,
+  `/tmp/gaia-gis-final-ratchet.json`, `/tmp/gaia-gis-final-graphify.log`.
+  Modifiche concorrenti preservate; deploy non eseguito.
+
 ### Backend utenti — aggiornamento applicazione utente (2026-10-06)
 
 - Slice `IMPROVED`, snapshot `cd50f00f`, MPC/MCP escluso. `update_application_user`
