@@ -133,6 +133,7 @@ class _CapacitasAuthoritativeResolver(_CapacitasLiveResolver):
         detail: CapacitasAnagraficaDetail | None,
     ) -> CatIntestatarioResponse | None:
         normalized_cf = _normalize_cf((detail.codice_fiscale if detail else None) or intestatario.codice_fiscale)
+        source_external_id = (detail.idxana if detail else None) or intestatario.idxana
         person: AnagraficaPerson | None = None
         subject: AnagraficaSubject | None = None
 
@@ -141,11 +142,11 @@ class _CapacitasAuthoritativeResolver(_CapacitasLiveResolver):
             if person is not None:
                 subject = self._db.get(AnagraficaSubject, person.subject_id)
 
-        if person is None and (detail.idxana if detail else intestatario.idxana):
+        if person is None and source_external_id:
             subject = self._db.scalar(
                 select(AnagraficaSubject).where(
                     AnagraficaSubject.source_system == "capacitas",
-                    AnagraficaSubject.source_external_id == ((detail.idxana if detail else None) or intestatario.idxana),
+                    AnagraficaSubject.source_external_id == source_external_id,
                 )
             )
             if subject is not None:
@@ -170,13 +171,13 @@ class _CapacitasAuthoritativeResolver(_CapacitasLiveResolver):
             person,
             person_data,
             source_system="capacitas",
-            source_ref=(detail.idxana if detail else None) or intestatario.idxana,
+            source_ref=source_external_id,
             collected_at=collected_at,
         )
         for key, value in person_data.items():
             setattr(person, key, value)
-        if ((detail.idxana if detail else None) or intestatario.idxana) and subject.source_external_id is None:
-            subject.source_external_id = (detail.idxana if detail else None) or intestatario.idxana
+        if source_external_id and subject.source_external_id is None:
+            subject.source_external_id = source_external_id
         if not subject.source_name_raw:
             subject.source_name_raw = (detail.denominazione if detail else None) or intestatario.denominazione or normalized_cf
         self._db.flush()

@@ -3,6 +3,17 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — upsert intestatario live (2026-10-06)
+
+- Slice `IMPROVED`: l’identificativo esterno Capacitas viene calcolato una sola
+  volta e riusato in lookup, snapshot e aggiornamento subject, preservando
+  precedenza dettaglio/utenza e flusso create/update.
+- Metriche `_upsert_live_intestatario` cognitive/cyclomatic/LOC `51/38/48 ->
+  34/28/49`; aggregati `authoritative.py` `90/73 -> 73/63`, LOC `159 -> 160`.
+- Suite Catasto PASS; `authoritative.py` full-file 100% (`96/96` statement,
+  `38/38` branch). Ruff, format e ratchet contro `HEAD` (`45c0862b`) PASS.
+  Graphify Catasto aggiornato; file concorrenti preservati; MCP/Wiki esclusi.
+
 ### Catasto — deduplicazione intestatari per particella (2026-10-06)
 
 - Slice `IMPROVED`: la chiave di deduplicazione usa la prima identità utile
