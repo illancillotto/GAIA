@@ -14,6 +14,15 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, selezione owner latest SISTER, 2026-10-06:
+`_attach_sister_data` `IMPROVED`, cog/cyc/LOC/nesting21/13/49/3 ->18/12/48/2.
+Guardia unica di scarto per ID diverso da None/corrente, duplicati e ordine
+preservati; nessun helper nuovo o debt transfer. File cognitive384 ->381,
+cyclomatic262 ->261, LOC508 ->507, callable23 invariati;23 violation residue.
+222 test/full-file100%, cinque scenari persistenti con UUID/None e1200 casi
+differenziali equivalenti. Ratchet/Ruff mirato PASS, lint globale UP038 InCass
+concorrente; SISTER18/12 e mapper bulk163/74 restano, MCP/Wiki esclusi operativamente.
+
 Campagna non-MCP, chiave row export SISTER, 2026-10-06:
 `_attach_sister_data` `IMPROVED`, cog/cyc/LOC33/21/54 ->21/13/49,
 nesting3 invariato. Helper5/6/5/0/1 sotto soglia, mapping row con str distinto

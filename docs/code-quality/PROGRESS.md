@@ -3,6 +3,35 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — selezione estrazione owner export SISTER (2026-10-06)
+
+- Chiusura `IMPROVED`: guardia di scarto unica per ID estrazione diverso
+  da None/corrente, scrittura del solo ID accettato; nessun helper aggiunto.
+  Target cog/cyc/LOC/nesting21/13/49/3 ->18/12/48/2; file cognitive384 ->381,
+  cyclomatic262 ->261, LOC508 ->507, callable23/import25 invariati.23 violation
+  residue (9 error/14 warning), nessuna nuova violation o debt transfer.
+- Cinque scenari persistenti verificano UUID duplicati, estrazioni diverse,
+  None prima/dopo selezione e assenza owner, inclusi ordine e note vuote.
+  222 test coverage/caratterizzazione/API/facade PASS, full-file exports100%
+  statement241/branch78, zero missing/partial/esclusioni.1200 casi differenziali
+  controca64a522 con UUID/None equivalenti per output/ordine/SQL/accessi/get row.
+- Ratchet merge-baseca64a522 e Ruff runtime/test/format test PASS; lint globale
+  compileall PASS, solo UP038 InCass concorrente1041. Graphify codice e docs
+  Catasto/piattaforma aggiornati prima del commit separato autorizzato.
+  Evidenze /tmp/gaia-export-latest-*; nessuna API remota o PostgreSQL dichiarata.
+  Baseline/config/scope invariati, MCP/Wiki e change concorrenti preservati;
+  residuo SISTER18/12 e mapper bulk163/74, campagna ancora incompleta.
+- Preflight `ca64a522`: passaggio precedente progresso committato, runtime/test
+  Catasto puliti, indice vuoto. _attach_sister_data21/13/49/3; file cognitive
+  384/cyclomatic262/LOC508,23 violation/23 callable. Campagna non-MCP attiva.
+- Semplificare la selezione owner latest: saltare solo ID differente dal
+  corrente non-None, poi memorizzare l'ID accettato. Comparazione di ID scalari
+  ORM invariata; None mantiene il comportamento storico di valore non fissato.
+  Scrittura privata ripetuta per ID equivalente non cambia il payload.
+- Verificare ordine/duplicati/latest/None con test persistenti e differenziale
+  contro HEAD, full-file100%, metriche/ratchet/Ruff/Graphify e commit separato.
+  Nessun helper nuovo, cambio query/API/schema/baseline/config/scope o MCP/Wiki.
+
 ### Catasto — chiave riga per export SISTER (2026-10-06)
 
 - Chiusura `IMPROVED`: proiezione coordinate row dichiarativa, distinta dal

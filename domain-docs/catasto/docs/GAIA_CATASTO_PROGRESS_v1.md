@@ -1,6 +1,20 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-06 — selezione owner latest export SISTER
+
+- Guardia unica di scarto per estrazione diversa dall'ID selezionato non-None;
+  ID accettato memorizzato, duplicati mantenuti. None conserva il comportamento
+  storico; query, ordine owner/latest, lookup, JSON e payload invariati.
+- _attach_sister_data cog/cyc/LOC/nesting21/13/49/3 ->18/12/48/2; file
+  cognitive384 ->381, cyclomatic262 ->261, LOC508 ->507, nessun helper nuovo.
+  23 violation residue, nessun debt transfer o cambio API/schema/baseline.
+- Cinque scenari persistenti UUID/None;222 test coverage/caratterizzazione/API/
+  facade PASS, full-file exports100% statement241/branch78, zero esclusioni.
+  1200 casi differenziali controca64a522 equivalenti per output/ordine/SQL/accessi.
+  Ratchet/Ruff mirato PASS, lint globale UP038 InCass concorrente; Graphify
+  codice/docs aggiornati. SISTER18/12 e mapper bulk163/74 restano sopra soglia.
+
 ### 2026-10-06 — chiave riga export SISTER
 
 - Mapping dichiarativo della chiave row con fallback truthy e str, casefold

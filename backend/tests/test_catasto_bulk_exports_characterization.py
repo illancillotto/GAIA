@@ -337,6 +337,44 @@ def test_sister_export_row_key_preserves_coercion_and_missing_values():
     )
 
 
+@pytest.mark.parametrize(
+    "identities, expected_indices",
+    [
+        ([None, None, 10, 11, 10], [0, 1, 2, 4]),
+        ([10, 10, 11, None, 10], [0, 1, 4]),
+        ([None, 11, 11, None], [0, 1, 2]),
+        ([10, None, 10], [0, 2]),
+        ([], []),
+    ],
+)
+def test_sister_owner_extraction_selection_preserves_duplicates_and_none(
+    identities, expected_indices
+):
+    values = []
+    for index, identity in enumerate(identities):
+        model = parcel(
+            comune_nome="Nome Comune",
+            extraction_id=None if identity is None else UUID(int=identity),
+        )
+        owner = SimpleNamespace(
+            codice_fiscale=f"CF{index}",
+            denominazione="Owner",
+            diritto="D",
+            quota="1/1",
+            data_nascita=None,
+            luogo_nascita=None,
+        )
+        values.append((model, owner, None))
+    row = {"comune": "Nome Comune", "foglio": "1", "particella": "2"}
+    exports._attach_sister_data(RecordingDatabase([values, []]), [row])
+    actual = json.loads(row["sister_dati"]) if expected_indices else []
+    assert [owner["codice_fiscale"] for owner in actual] == [
+        f"CF{index}" for index in expected_indices
+    ]
+    assert row["sister_dati_presenti"] == ("si" if expected_indices else "")
+    assert row["sister_storico"] == ""
+
+
 def test_sister_latest_extraction_selection_json_and_empty_rows():
     first = parcel(comune_nome="Nome Comune", extraction_id=UUID(int=10))
     older = parcel(comune_nome="Nome Comune", extraction_id=UUID(int=11))

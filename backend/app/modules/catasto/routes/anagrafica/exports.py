@@ -402,10 +402,9 @@ def _attach_sister_data(db: Session, rows: list[dict[str, object]]) -> None:
         key = _sister_export_parcel_key(parcel)
         extraction_id = parcel.extraction_id
         current_extraction_id = latest_extraction_by_key.get(key)
-        if current_extraction_id is None:
-            latest_extraction_by_key[key] = extraction_id
-        elif current_extraction_id != extraction_id:
+        if current_extraction_id not in (None, extraction_id):
             continue
+        latest_extraction_by_key[key] = extraction_id
         sister_by_key.setdefault(key, []).append(
             {
                 "codice_fiscale": owner.codice_fiscale,
