@@ -1,0 +1,45 @@
+INSTALLAZIONE CERTIFICATO RADICE GAIA
+
+CA: @CA_COMMON_NAME@
+SHA-256: @CA_SHA256@
+
+Prima dell'installazione confrontare questa impronta con quella comunicata
+dal CED tramite un canale indipendente. La pagina di login e SHA256SUMS non
+autenticano da soli un download, soprattutto se avviene tramite HTTP.
+Non disabilitare TLS, SmartScreen, antivirus o policy aziendali.
+
+WINDOWS
+Scaricare CBO-CA-GAIA-Windows-amd64.exe per PC Intel/AMD a 64 bit,
+oppure CBO-CA-GAIA-Windows-arm64.exe per Windows ARM64.
+Avviare l'EXE, confrontare l'impronta mostrata, confermare e accettare UAC.
+La CA viene installata in ROOT LocalMachine. Riavviare il browser.
+Gli EXE non sono firmati Authenticode: prima di una distribuzione gestita
+richiedere firma code-signing aziendale e collaudo nativo Windows al CED.
+Non usare la CA TLS per firmare gli EXE.
+
+LINUX E MACOS
+Scaricare l'archivio GAIA-CA-client.tar.gz ed estrarlo completamente.
+Aprire un terminale nella cartella estratta: script, certificato pubblico
+e validate-ca.sh devono restare nella stessa cartella.
+
+Linux, verifica prima di installare:
+  bash installa-ca-linux.sh --verify
+  sudo bash installa-ca-linux.sh --install --sha256 '@CA_SHA256@'
+
+Supportati Debian/Ubuntu (update-ca-certificates) e RHEL/Fedora
+(update-ca-trust). Lo script controlla la CA prima di modificare il trust.
+
+macOS, verifica prima di installare:
+  bash Installa-CA-macOS.command --verify
+  sudo bash Installa-CA-macOS.command --install --sha256 '@CA_SHA256@'
+
+Su macOS l'installazione usa il portachiavi Sistema; serve un amministratore.
+Il doppio clic senza argomenti esegue solo la verifica, non installa.
+Per distribuzione MDM richiedere un profilo approvato al CED.
+
+DOPO L'INSTALLAZIONE
+Riavviare browser e client. Firefox, JVM e container possono avere store
+separati: usare le rispettive policy aziendali. L'installer non configura
+DNS, Sophos, MCP o il certificato del server, e non attiva HTTPS su GAIA.
+La chiave privata della CA non e inclusa e non deve essere distribuita.
+Non rimuovere la vecchia CA Kiosk: serve al servizio Kiosk distinto.

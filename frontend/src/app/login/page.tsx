@@ -4,6 +4,7 @@ import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { AlertBanner } from "@/components/ui/alert-banner";
+import { LoginHelpLinks } from "@/components/auth/login-help-links";
 import { getApiBaseUrl, getAuthProviders, login } from "@/lib/api";
 import { getClientDeviceLabel, getStoredAccessToken, getStoredClientDeviceId, setStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
@@ -285,14 +286,7 @@ function LoginPageContent() {
                 {passwordHasError ? (
                   <p className="text-sm text-error">Inserisci la password.</p>
                 ) : null}
-                <div className="flex justify-end">
-                  <a
-                    className="text-base font-semibold uppercase tracking-[0.11em] text-primary transition hover:opacity-80 sm:text-xs sm:tracking-[0.16em]"
-                    href="/auth/password-dimenticata"
-                  >
-                    Password dimenticata?
-                  </a>
-                </div>
+                <LoginHelpLinks />
               </div>
 
               <button

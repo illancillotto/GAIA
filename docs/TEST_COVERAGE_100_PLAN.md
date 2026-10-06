@@ -1,5 +1,34 @@
 # Test Coverage 100% Plan
 
+Download CA dalla login 2026-10-06: 19 test pertinenti nel corpus
+`password-reset-pages.test.tsx` e `login-help-links.test.tsx`, coverage
+full-file 100% statement (78/78), branch (50/50), funzioni (22/22),
+linee (76/76) su `src/app/login/page.tsx`,
+`src/components/auth/login-help-links.tsx` e `src/lib/gaia-ca.ts`.
+Inclusi manifest valido/assente/non valido, errori rete/JSON, cleanup
+e link pubblici sulla login; recupero password e autenticazione preservati.
+Esecuzione da `frontend`:
+
+```bash
+VITEST_COVERAGE_INCLUDE=src/app/login/page.tsx,src/components/auth/login-help-links.tsx,src/lib/gaia-ca.ts \
+node_modules/.bin/vitest run tests/unit/password-reset-pages.test.tsx \
+tests/unit/login-help-links.test.tsx --coverage \
+--coverage.reportsDirectory=/tmp/gaia-ca-login-coverage
+```
+
+Otto test infrastruttura PKI/bundle verificano OpenSSL reale, cross-build
+Windows amd64/ARM64, pubblicazione e checksum, pin errati e output incompleti.
+Core Go Windows mantiene 100% statement; adapter Win32 e store reali
+richiedono collaudo nativo, non incluso nella percentuale del core.
+Nessuna soglia o esclusione coverage modificata. Procedura e limiti in
+`domain-docs/mcps/CLIENT_CA_INSTALLERS.md`.
+
+Preparazione PKI GAIA 2026-10-06: `make test-mcp-pki` verifica con OpenSSL
+reale la configurazione CA/leaf, cifratura, hostname/EKU, seriali e CRL.
+Nessun nuovo runtime Python e nessuna esclusione/soglia coverage modificata;
+non attribuire coverage Python alla configurazione OpenSSL. Il gate
+`test-mcp-tls` degli installer resta invariato e mantiene il core Go al 100%.
+
 Aggiornamento MCP 2026-10-05: i target OAuth/connector includono anche policy
 retention, manutenzione periodica e revoca admin interna. Nessuna esclusione o
 riduzione soglia: full-file statement/branch 100% per tutti i runtime toccati.

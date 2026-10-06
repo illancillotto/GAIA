@@ -29,6 +29,8 @@ sed -e "s/@CA_SHA256@/$expected/" -e "s/@CA_COMMON_NAME@/$name/" \
   "$here/install-cbo-ca.sh" > "$work/bundle/Installa-CA-macOS.command"
 cp "$work/bundle/Installa-CA-macOS.command" "$work/bundle/installa-ca-linux.sh"
 cp "$root/domain-docs/mcps/CLIENT_CA_INSTALLERS.md" "$work/bundle/ISTRUZIONI.md"
+sed -e "s/@CA_SHA256@/$expected/g" -e "s/@CA_COMMON_NAME@/$name/g" \
+  "$root/config/mcps/CA_CLIENT_GUIDE.txt" > "$work/bundle/GUIDA-CLIENT.txt"
 chmod 0755 "$work/bundle/"*.sh "$work/bundle/"*.command
 printf '%s\n' "$expected" > "$work/bundle/CA-SHA256.txt"
 (cd "$work/bundle"; sha256sum ./* > "$work/SHA256SUMS")

@@ -1,0 +1,49 @@
+[ ca ]
+default_ca = gaia_ca
+
+[ gaia_ca ]
+dir = $ENV::GAIA_CA_DIR
+database = $dir/index.txt
+new_certs_dir = $dir/issued
+certificate = $dir/gaia-root.crt
+private_key = $dir/private/gaia-root.key.pem
+serial = $dir/serial
+crlnumber = $dir/crlnumber
+default_md = sha256
+default_days = 90
+default_crl_days = 7
+policy = gaia_subject
+unique_subject = no
+copy_extensions = none
+x509_extensions = gaia_server
+crl_extensions = gaia_crl
+
+[ gaia_subject ]
+commonName = supplied
+
+[ req ]
+prompt = no
+default_md = sha256
+distinguished_name = gaia_root_subject
+x509_extensions = gaia_root
+
+[ gaia_root_subject ]
+O = Consorzio di Bonifica dell'Oristanese
+CN = CBO GAIA Root CA
+
+[ gaia_root ]
+basicConstraints = critical,CA:TRUE,pathlen:0
+keyUsage = critical,keyCertSign,cRLSign
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always
+
+[ gaia_server ]
+basicConstraints = critical,CA:FALSE
+keyUsage = critical,digitalSignature
+extendedKeyUsage = serverAuth
+subjectAltName = DNS:gaia.lan
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid,issuer
+
+[ gaia_crl ]
+authorityKeyIdentifier = keyid:always

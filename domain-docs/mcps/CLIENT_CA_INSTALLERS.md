@@ -1,7 +1,14 @@
 # Nuova CA GAIA e installer client
 
+Preparazione 2026-10-06: il PC corrente e scelto come custode. Configurazione
+OpenSSL e procedura testata: `GAIA_CA_CREATION_2026-10-06.md`. L'utente ha
+generato la nuova CA fuori dal repository, con passphrase locale. Certificato
+pubblico e permessi verificati; nessun trust installato o deploy eseguito.
+Distribuzione/backup approvati CED e certificato server restano gate necessari.
+
 2026-10-02. Decisione utente: **nuova CA, procedura da concordare con il CED**.
-Non e stata creata una CA nuova e nessuno store client e stato modificato.
+La nota storica iniziale precede la creazione del 2026-10-06; nessuno store
+client e stato modificato.
 I pacchetti precedentemente generati in `runtime-data/mcps/client-ca*`
 usano la vecchia CA Kiosk: **SOSPESI, NON DISTRIBUIRE**, archivi inclusi.
 Non rimuovere la CA Kiosk dai PC: resta necessaria a quel servizio.
@@ -41,6 +48,39 @@ Go >=1.22, Bash, OpenSSL, tar, sha256sum; zip opzionale. Build offline senza
 dipendenze Go esterne. Richiede nome e pin; rifiuta CA Kiosk precedente e
 output esistente. Output ignorato da Git. Solo CA pubblica incorporata:
 nessuna chiave, token o documento nel pacchetto.
+
+## Download dalla pagina di login (2026-10-06)
+
+Creati gli EXE della nuova CA GAIA per Windows amd64 e ARM64, il pacchetto
+Linux/macOS e `GUIDA-CLIENT.txt` con l'impronta reale. La pagina `/login`
+mostra quattro link pubblici senza autenticazione solo quando
+`/gaia-ca/manifest.json` dichiara la CA prevista dal frontend. Manifest
+assente, non valido o irraggiungibile: link nascosti, login e recupero
+password restano disponibili. Il manifest non e una firma dei download.
+
+Impronta SHA-256 della CA verificata localmente:
+`DA38A8715DAB864B526193BE42B60279C4C9E1F8DBF03F1E0598C30BF69B2E69`.
+Confrontarla con il CED tramite canale indipendente prima di installare;
+pagina HTTP e checksum non autenticano il mittente. Non aggirare errori TLS.
+
+Pubblicazione prima della build/deploy frontend, dopo approvazione CED:
+
+```bash
+export MCP_CA_SHA256=DA38A8715DAB864B526193BE42B60279C4C9E1F8DBF03F1E0598C30BF69B2E69
+export MCP_CA_COMMON_NAME='CBO GAIA Root CA'
+make mcp-ca-login-assets MCP_CA_BUNDLE=runtime-data/mcps/gaia-ca-20261006-v1
+```
+
+Il target verifica certificato, pin canonico e file necessari, rifiuta
+directory versionate esistenti e pubblica il manifest per ultimo. Copia
+solo materiale pubblico in `frontend/public/gaia-ca/<SHA256>/`.
+Bundle e asset sono ignorati da Git: dopo un clone pulito rigenerare il
+bundle con il certificato pubblico approvato e pubblicare gli asset prima
+della build frontend. Il Dockerfile include `public` nella nuova immagine;
+un container gia avviato non riceve questi file automaticamente.
+Per rotazione CA aggiornare anche `frontend/src/lib/gaia-ca.ts` e test.
+Nessuna chiave privata deve entrare nel contesto Docker o nella directory
+pubblica. La firma Authenticode e il collaudo nativo Windows restano pendenti.
 
 ## Windows
 
@@ -92,11 +132,30 @@ trust Windows/macOS/Linux simulati, nessuno store reale modificato.
 Lint mirato: gofmt, Go vet core, sintassi Bash. Il target `lint-mcp-tls`
 risolve gofmt dal PATH quando `GO_BIN=go`, oppure dalla directory del binario
 Go esplicito; `GOFMT_BIN` permette un override. L'assenza di gofmt o il suo
-fallimento fa fallire il target. Graphify Wiki: AST locale, nessun invio
-documenti. Lint globale con backend/.venv fallisce su I001
-preesistente in test_presenze_operations_postgres.py; ratchet globale
-fallisce su regressioni preesistenti non correlate. Log in
-`/tmp/gaia-ca-lint-venv.log`, `/tmp/gaia-ca-ratchet.log`.
+fallimento fa fallire il target.
+
+Verifica download/login del 2026-10-06: 19 test frontend, coverage full-file
+100% statement/branch/funzioni/linee sui tre file runtime modificati;
+otto test infrastruttura PKI/bundle, checksum dei pacchetti reali, ESLint,
+TypeScript, Ruff/check-format dei nuovi test e `test-mcp-tls lint-mcp-tls`
+PASS. Nessuna chiave privata copiata o distribuita.
+`LoginPageContent` mantiene cognitiva 26 e ciclomatica 25, LOC 285 -> 278;
+il componente download ha cognitiva 2 e ciclomatica 3, sotto soglia.
+Nessuna baseline abbassata per assorbire debito.
+Confronto autorevole con merge-base `origin/main`, scan completo e selezione
+dei tre file runtime login/download: PASS, zero finding
+(`/tmp/gaia-ca-final-target-ratchet.log`).
+
+I gate globali non sono verdi: lint backend nel virtualenv rileva problemi
+non correlati (tra cui UP017 in Accessi e formattazione Presenze); ratchet
+globale segnala debito/regressioni esterni al download/login. Log locali:
+`/tmp/gaia-ca-final-backend-lint-venv.log`,
+`/tmp/gaia-ca-final-ratchet.log`. Il Python di sistema non ha Ruff;
+usare `QUALITY_PYTHON=backend/.venv/bin/python` per il gate.
+Graphify frontend aggiornato AST-only; HTML omesso per limite 5000 nodi.
+Target docs dominio/piattaforma tentati: API irraggiungibile, warning
+`semantic chunk(s) failed` e risultati parziali nonostante exit 0.
+Rieseguire i target docs quando l'API e disponibile.
 
 ## Claude remoto
 

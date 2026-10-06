@@ -10,6 +10,9 @@ OAuth mantiene issuer, resource e callback HTTPS.
 
 ## Configurazione
 
+Nuova CA dedicata, custode sul PC scelto e firma CSR del server:
+`GAIA_CA_CREATION_2026-10-06.md`. Non riutilizzare la CA/pacchetti Kiosk sospesi.
+
 Fornire una certificate chain PEM e la relativa chiave privata PEM per
 l'hostname scelto. Il client deve fidarsi della CA; per la CA CED seguire
 `CLIENT_CA_INSTALLERS.md`. Non versionare chiavi o certificati locali.

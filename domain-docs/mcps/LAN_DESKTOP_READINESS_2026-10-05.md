@@ -1,5 +1,14 @@
 # Readiness LAN e Claude Desktop
 
+Aggiornamento 2026-10-06: nuova CA creata dall'utente sul PC custode,
+certificato pubblico/autofirma/vincoli e permessi verificati. Impronta e
+procedura: `GAIA_CA_CREATION_2026-10-06.md`. CSR/chiave ora creati sul server
+`192.168.1.110`, certificato firmato dall'utente, catena/hostname/serverAuth
+e key match verificati. Certificati pubblici copiati sul server; restano
+trust e deploy HTTPS. Checkout server arretrato con hotfix locali e senza
+file gateway MCP: nessun aggiornamento indiscriminato effettuato. Le rilevazioni
+di rete e Desktop sotto sono lo snapshot 2026-10-05, non una prova TLS nuova.
+
 ## Perimetro approvato
 
 Host `gaia.lan`, solo LAN. Claude Desktop locale, stdio/bridge;
@@ -39,9 +48,9 @@ Confermare la chiamata reale nel log del server e la risposta/provenance
 nell'app, senza leggere o copiare chat personali non pertinenti. Lo stdio usa
 il principal `local-stdio`, non una delega OAuth di un utente GAIA.
 
-Per HTTPS operativo servono ancora percorsi certificato/chiave e accesso di
-deploy approvati CED sul server LAN. Non riutilizzare la CA precedentemente
-sospesa; nessun certificato nuovo viene creato qui. Con lo stack attivato
+Per HTTPS operativo usare i percorsi verificati nel report CA del 2026-10-06
+e pianificare il rilascio mirato sul server LAN preservando gli hotfix.
+Non riutilizzare la CA precedentemente sospesa. Con lo stack attivato
 verificare trust, discovery, HTTP308 e protezione Data401, quindi consenso
 e chiamata OAuth con un client/callback approvato se richiesto dal bridge.
 

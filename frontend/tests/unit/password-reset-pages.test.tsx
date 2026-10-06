@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import ForgotPasswordPage from "@/app/auth/password-dimenticata/page";
 import ResetPasswordPage from "@/app/auth/reset-password/[token]/page";
 import LoginPage from "@/app/login/page";
+import { GAIA_CA_DOWNLOAD_BASE, GAIA_CA_SHA256 } from "@/lib/gaia-ca";
 
 const mocks = vi.hoisted(() => ({
   confirmPasswordReset: vi.fn(),
@@ -108,6 +109,30 @@ describe("password reset pages", () => {
       "href",
       "/api/auth/google/start?device_id=browser-1&device_label=Linux+%C2%B7+it-IT",
     );
+  });
+
+  test("google login remains usable when client device information is absent", async () => {
+    mocks.getStoredAccessToken.mockReturnValue(null);
+    mocks.getStoredClientDeviceId.mockReturnValue(null);
+    mocks.getClientDeviceLabel.mockReturnValue("");
+    mocks.getAuthProviders.mockResolvedValue({ password: true, google: true });
+    render(<LoginPage />);
+    expect(await screen.findByRole("link", { name: /Accedi con Google/ })).toHaveAttribute("href", "/api/auth/google/start");
+  });
+
+  test("login renders the available installer without requiring authentication", async () => {
+    mocks.getStoredAccessToken.mockReturnValue(null);
+    mocks.getAuthProviders.mockResolvedValue({ password: true, google: false });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ sha256: GAIA_CA_SHA256 }) }));
+    try {
+      render(<LoginPage />);
+      expect(await screen.findByRole("link", { name: "Windows Intel/AMD (.exe)" })).toHaveAttribute("href", `${GAIA_CA_DOWNLOAD_BASE}/CBO-CA-GAIA-Windows-amd64.exe`);
+      expect(screen.getByRole("button", { name: "Accedi alla piattaforma" })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "Password dimenticata?" })).toBeInTheDocument();
+    } finally {
+      cleanup();
+      vi.unstubAllGlobals();
+    }
   });
 
   test("submits login form and handles validation and failures", async () => {

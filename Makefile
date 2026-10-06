@@ -33,6 +33,7 @@ MCP_DOCS_MANIFEST ?= config/mcps/docs-manifest.json
 MCP_DOCS_OUTPUT ?= runtime-data/mcps/docs
 MCP_DATA_DATABASE ?= runtime-data/mcps/data/gaia-mcp-synthetic-v1.sqlite
 MCP_AUDIT_DATABASE ?= runtime-data/mcps/audit/gaia-mcp-audit.sqlite
+MCP_CA_PUBLIC_DIRECTORY ?= frontend/public/gaia-ca
 GAIA_SYNTHETIC_SEED ?= gaia-v1
 PRESENZE_IDENTITY_MANIFEST ?= secrets/presenze/canonical-identities.json
 PRESENZE_IDENTITY_AUDIT_USER_ID ?= 1
@@ -463,12 +464,31 @@ MCP_CA_CERT ?=
 MCP_CA_BUNDLE ?= runtime-data/mcps/client-ca
 
 .PHONY: mcp-ca-bundle test-mcp-tls lint-mcp-tls
+.PHONY: test-mcp-pki
+test-mcp-pki:
+	$(QUALITY_PYTHON) -m pytest -q tests/infrastructure/test_gaia_pki.py
+
 .PHONY: test-mcp-gateway
 test-mcp-gateway:
 	$(QUALITY_PYTHON) -m pytest -q tests/infrastructure/test_mcp_tls_gateway.py
 
 mcp-ca-bundle:
 	GO_BIN="$(GO_BIN)" bash scripts/tls/build-client-bundle.sh "$(MCP_CA_CERT)" "$(MCP_CA_BUNDLE)"
+
+.PHONY: mcp-ca-login-assets
+mcp-ca-login-assets:
+	bash scripts/tls/validate-ca.sh "$(MCP_CA_BUNDLE)/CBO-GAIA-Root-CA.crt" "$(MCP_CA_SHA256)" "$(MCP_CA_COMMON_NAME)"
+	@test -n "$(MCP_CA_SHA256)" && test "$$(printf '%s' '$(MCP_CA_SHA256)' | tr -cd 'A-F0-9')" = "$(MCP_CA_SHA256)"
+	@for name in CBO-CA-GAIA-Windows-amd64.exe CBO-CA-GAIA-Windows-arm64.exe GUIDA-CLIENT.txt; do test -f "$(MCP_CA_BUNDLE)/$$name" || exit 1; done
+	@test -f "$(MCP_CA_BUNDLE).tar.gz"
+	@test ! -e "$(MCP_CA_PUBLIC_DIRECTORY)/$(MCP_CA_SHA256)"
+	mkdir -p "$(MCP_CA_PUBLIC_DIRECTORY)"
+	mkdir "$(MCP_CA_PUBLIC_DIRECTORY)/$(MCP_CA_SHA256)"
+	cp "$(MCP_CA_BUNDLE)/CBO-CA-GAIA-Windows-amd64.exe" "$(MCP_CA_BUNDLE)/CBO-CA-GAIA-Windows-arm64.exe" "$(MCP_CA_BUNDLE)/GUIDA-CLIENT.txt" "$(MCP_CA_BUNDLE)/CBO-GAIA-Root-CA.crt" "$(MCP_CA_PUBLIC_DIRECTORY)/$(MCP_CA_SHA256)/"
+	cp "$(MCP_CA_BUNDLE).tar.gz" "$(MCP_CA_PUBLIC_DIRECTORY)/$(MCP_CA_SHA256)/GAIA-CA-client.tar.gz"
+	cd "$(MCP_CA_PUBLIC_DIRECTORY)/$(MCP_CA_SHA256)" && sha256sum ./* > SHA256SUMS
+	printf '{"sha256":"%s"}\n' "$(MCP_CA_SHA256)" > "$(MCP_CA_PUBLIC_DIRECTORY)/manifest.pending.json"
+	mv "$(MCP_CA_PUBLIC_DIRECTORY)/manifest.pending.json" "$(MCP_CA_PUBLIC_DIRECTORY)/manifest.json"
 
 test-mcp-tls:
 	cd installer/windows && GOTOOLCHAIN=local GOPROXY=off "$(GO_BIN)" test -coverprofile=/tmp/gaia-mcp-ca-core.cover core.go core_test.go

@@ -1,5 +1,10 @@
 # GAIA MCPs
 
+Installer della nuova CA GAIA e download nella pagina di login:
+`CLIENT_CA_INSTALLERS.md`. EXE Windows amd64/ARM64 e guida Linux/macOS
+generati localmente; asset pubblici da includere nella prossima build
+frontend. Nessun deploy o trust reale installato automaticamente.
+
 Gateway HTTP/HTTPS corrente: `HTTP_HTTPS_GATEWAY.md`. Override Compose TLS
 opzionale, redirect HTTP `308` delle route MCP all'origin HTTPS canonico,
 suite persistente `make test-mcp-gateway`. Nessuna attivazione o prova client
