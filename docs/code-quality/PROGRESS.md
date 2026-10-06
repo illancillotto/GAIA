@@ -3,6 +3,16 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — guardia contesto certificato RPT (2026-10-06)
+
+- Slice `IMPROVED`: `_has_rpt_certificato_context` normalizza i quattro valori
+  richiesti tramite `all(...)`, mantenendo il fail-closed della URL RPT.
+- Metriche callable cognitive/cyclomatic/LOC `5/6/7 -> 2/3/3`; aggregati
+  `exports.py` `195/201 -> 192/198`, LOC invariato.
+- Suite Catasto PASS; `exports.py` full-file 100% (`203/203` statement,
+  `52/52` branch). Ruff, format e ratchet contro `HEAD` (`dc71102d`) PASS.
+  Graphify Catasto aggiornato; MCP/Wiki esclusi.
+
 ### Catasto — filtro righe live per frazione (2026-10-06)
 
 - Slice `IMPROVED`: il filtro di `_search_live_rows_for_fraction` aggrega i

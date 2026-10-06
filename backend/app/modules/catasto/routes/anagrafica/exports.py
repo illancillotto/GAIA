@@ -290,12 +290,8 @@ def _classify_live_search_hits(hits: list[_LiveSearchHit]) -> tuple[str, str, li
 
 
 def _has_rpt_certificato_context(match: CatAnagraficaMatch) -> bool:
-    return bool(
-        _norm_str(match.utenza_latest.cco if match.utenza_latest is not None else None)
-        and _norm_str(match.cert_com)
-        and _norm_str(match.cert_pvc)
-        and _norm_str(match.cert_fra)
-    )
+    cco = match.utenza_latest.cco if match.utenza_latest is not None else None
+    return all(_norm_str(value) for value in (cco, match.cert_com, match.cert_pvc, match.cert_fra))
 
 
 def _build_rpt_certificato_url(match: CatAnagraficaMatch) -> str:
