@@ -101,14 +101,8 @@ INCASS_LIST_MAX_LIMIT = 1000
 INCASS_LIST_RECENT_ITEMS = 15
 
 
-def list_incass_sync_jobs(
-    db: Session,
-    *,
-    limit: int = INCASS_LIST_DEFAULT_LIMIT,
-    statuses: set[str] | None = None,
-) -> list[CapacitasInCassSyncJob]:
-    stmt = _incass_sync_jobs_statement(statuses, limit)
-    return list(db.scalars(stmt).all())
+def list_incass_sync_jobs(db: Session, *, limit: int = INCASS_LIST_DEFAULT_LIMIT, statuses: set[str] | None = None) -> list[CapacitasInCassSyncJob]:
+    return list(db.scalars(_incass_sync_jobs_statement(statuses, limit)).all())
 
 
 def _incass_sync_jobs_statement(

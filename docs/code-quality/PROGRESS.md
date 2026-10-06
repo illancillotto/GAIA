@@ -25,9 +25,12 @@ blocco verificato e prima di chiudere un goal.
   Evidenze `/tmp/gaia-incass-{before3,after4}.json`,
   `/tmp/gaia-incass-coverage-full4.log`, `/tmp/gaia-incass-lint4.log`,
   `/tmp/gaia-incass-ratchet4.json`, `/tmp/gaia-incass-graphify4.log`.
-  Verifica finale: `/tmp/gaia-incass-final-coverage.log` e
+  La firma a tre parametri resta un residuo legacy intenzionale: limit e
+  statuses sono parte del contratto route e non vengono compressi in un
+  wrapper artificiale. La LOC torna alla baseline. Verifica finale:
+  `/tmp/gaia-incass-final-coverage.log` e
   `/tmp/gaia-incass-final-lint.log`; lint sui due file modificati PASS.
-  Nessun deploy; modifiche concorrenti preservate. Restano sette finding
+  Nessun deploy; modifiche concorrenti preservate. Restano sei finding
   globali e molti hotspot legacy: il programma non e completo.
 
 ### Presenze — persistenza riepiloghi importazione (2026-10-06)
