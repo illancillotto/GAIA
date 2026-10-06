@@ -3,6 +3,17 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — costruzione match singolo (2026-10-06)
+
+- Slice `IMPROVED`: la costruzione e l'arricchimento del risultato per un
+  singolo candidato sono isolati in `_build_single_candidate_result`,
+  preservando presenza consortile, resolver live e sub-match.
+- Metriche `execute_bulk_search_payload` cognitive/cyclomatic/LOC `183/39/259
+  -> 141/33/226`; helper `7/7/45`, senza violation o debito trasferito.
+- Suite Catasto PASS; coverage `execution.py` 100% (`128/128` statement,
+  `50/50` branch). Ruff, format, ratchet contro `HEAD` (`82fee200`) e
+  Graphify Catasto PASS. Modifiche concorrenti Ruolo/PKI/MCP preservate ed escluse.
+
 ### Catasto — risoluzione sub-match (2026-10-06)
 
 - Slice `IMPROVED`: la ricerca del sub-match consortile e il relativo

@@ -175,6 +175,54 @@ async def _resolve_sub_match(
     return sub_match
 
 
+async def _build_single_candidate_result(
+    db: Session,
+    context: tuple[CatAnagraficaBulkSearchRow, CatParticella],
+    live_resolver: _CapacitasLiveResolver | _CapacitasAuthoritativeResolver | None,
+    options: tuple[bool, bool],
+) -> CatAnagraficaBulkSearchRowResult:
+    row, item = context
+    live_authoritative, include_submatches = options
+    consorzio_present_ids = _load_consorzio_presence_by_particella_ids(
+        db,
+        {item.id} if item.id is not None else set(),
+    )
+    match = _build_match(
+        db,
+        item,
+        presente_in_catasto_consorzio=(item.id in consorzio_present_ids),
+        live_authoritative=live_authoritative,
+    )
+    if live_resolver is not None:
+        match = await live_resolver.enrich_match(item, match)
+
+    sub_matches: list[CatAnagraficaMatch] | None = None
+    if include_submatches:
+        sub_matches = (
+            _build_consorzio_sub_matches(
+                db,
+                item,
+                live_authoritative=live_authoritative,
+            )
+            or None
+        )
+        sub_matches = await _enrich_sub_matches(live_resolver, item, sub_matches)
+    return CatAnagraficaBulkSearchRowResult(
+        row_index=row.row_index,
+        comune_input=row.comune,
+        sezione_input=row.sezione,
+        foglio_input=row.foglio,
+        particella_input=row.particella,
+        sub_input=row.sub,
+        esito="FOUND",
+        message="OK",
+        particella_id=match.particella_id,
+        match=match,
+        matches=sub_matches,
+        matches_count=(len(sub_matches) if sub_matches else 1),
+    )
+
+
 # fmt: off
 
 async def execute_bulk_search_payload(
@@ -376,47 +424,12 @@ async def execute_bulk_search_payload(
                             )
                             _commit_live_changes(db, live_resolver)
                         else:
-                            consorzio_present_ids = _load_consorzio_presence_by_particella_ids(
-                                db, {items[0].id} if items[0].id is not None else set()
-                            )
-                            match = _build_match(
+                            results.append(await _build_single_candidate_result(
                                 db,
-                                items[0],
-                                presente_in_catasto_consorzio=(items[0].id in consorzio_present_ids),
-                                live_authoritative=live_authoritative,
-                            )
-                            if live_resolver is not None:
-                                match = await live_resolver.enrich_match(items[0], match)
-
-                            sub_matches: list[CatAnagraficaMatch] | None = None
-                            if not sub_norm:
-                                sub_matches = _build_consorzio_sub_matches(
-                                    db,
-                                    items[0],
-                                    live_authoritative=live_authoritative,
-                                ) or None
-                                sub_matches = await _enrich_sub_matches(
-                                    live_resolver,
-                                    items[0],
-                                    sub_matches,
-                                )
-
-                            results.append(
-                                CatAnagraficaBulkSearchRowResult(
-                                    row_index=row.row_index,
-                                    comune_input=row.comune,
-                                    sezione_input=row.sezione,
-                                    foglio_input=row.foglio,
-                                    particella_input=row.particella,
-                                    sub_input=row.sub,
-                                    esito="FOUND",
-                                    message="OK",
-                                    particella_id=match.particella_id,
-                                    match=match,
-                                    matches=sub_matches,
-                                    matches_count=(len(sub_matches) if sub_matches else 1),
-                                )
-                            )
+                                (row, items[0]),
+                                live_resolver,
+                                (live_authoritative, not sub_norm),
+                            ))
                             _commit_live_changes(db, live_resolver)
             except Exception as exc:
                 if live_resolver is not None and live_resolver.dirty:
