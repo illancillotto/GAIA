@@ -317,7 +317,7 @@ def _find_consorzio_sub_match(
     )
     if cco and _is_sentinel_cco(cco):
         note = "CCO provvisorio Capacitas: dati intestatario non disponibili"
-    elif cco and not is_stale:
+    elif all((cco, not is_stale)):
         intestatari = _load_intestatari_from_cert_context(
             db,
             cco=cco,

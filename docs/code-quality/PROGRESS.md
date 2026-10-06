@@ -3,6 +3,17 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — fallback match subalterno (2026-10-06)
+
+- Slice `IMPROVED`: il ramo di caricamento intestatari per CCO attivo e non
+  obsoleto usa un predicato aggregato, preservando sentinel, fallback storico
+  e dati del subalterno.
+- Metriche `_find_consorzio_sub_match` cognitive/cyclomatic/LOC `39/33/119 ->
+  35/31/119`; aggregati `matching.py` `323/213 -> 319/211`, LOC invariato.
+- Suite Catasto PASS; `matching.py` full-file 100% (`266/266` statement,
+  `106/106` branch). Ruff, format e ratchet contro `HEAD` (`371e6fbe`) PASS.
+  Graphify Catasto aggiornato; file concorrenti non inclusi; MCP/Wiki esclusi.
+
 ### Catasto — refresh match salvati (2026-10-06)
 
 - Slice `IMPROVED`: il ramo di occupazione corrente usa un predicato aggregato
