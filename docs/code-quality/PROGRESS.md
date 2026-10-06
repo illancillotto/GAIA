@@ -19,6 +19,22 @@ blocco verificato e prima di chiudere un goal.
   valori con spazi e accessi nell'ordine canonico; API/schema e comportamento
   invariati. Commit separato dopo staging selettivo.
 
+### Catasto — ordinamento frazioni Capacitas live (2026-10-06)
+
+- Chiusura `REORGANIZED_AND_CHARACTERIZED`: la sola selezione prioritaria
+  exact/comune/frazione è stata estratta in `_order_live_frazione_options`.
+  Cache, override, ordine delle tre scansioni, accessi ai display e fallback
+  `options` restano invariati; nessuna chiamata API o modifica di schema.
+- Target `_resolve_live_frazione_options` cognitive/cyclomatic/LOC `18/19/31
+  -> 11/12/27`; helper `7/8/17`, sotto soglia. Il file passa da 12 a 11
+  violation (un errore ciclomatico diventa warning); la cognitiva aggregata
+  resta `219` per trasferimento neutro, quindi non dichiaro `IMPROVED`.
+- Suite Catasto mirata: 299 test PASS; `exports.py` full-file 100%
+  (`203/203` statement, `60/60` branch), zero esclusioni. Ruff, format e
+  ratchet contro `HEAD` (`a7a76293`) PASS; Graphify Catasto codice aggiornato.
+- MCP/Wiki esclusi; nessuna modifica a baseline/config/scope. Il prossimo
+  hotspot resta `_search_live_rows_for_fraction`, da affrontare separatamente.
+
 ### Catasto — base riga export bulk (2026-10-06)
 
 - Chiusura `IMPROVED`: costruzione base estratta in helper tipizzato, con URL

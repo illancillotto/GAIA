@@ -112,6 +112,25 @@ def _format_consorzio_esito_for_export(presente_in_consorzio: bool) -> str:
     )
 
 
+def _order_live_frazione_options(
+    lookup_comune: str,
+    options: list[CapacitasLookupOption],
+) -> list[CapacitasLookupOption]:
+    lookup_key = _normalize_lookup_label(lookup_comune)
+    exact_matches = [option for option in options if _normalize_lookup_label(option.display) == lookup_key]
+    comune_matches = [
+        option
+        for option in options
+        if _normalize_lookup_label(_extract_lookup_comune(option.display)) == lookup_key
+    ]
+    frazione_matches = [
+        option
+        for option in options
+        if _normalize_lookup_label(_extract_lookup_frazione(option.display)) == lookup_key
+    ]
+    return exact_matches or comune_matches or frazione_matches or options
+
+
 async def _resolve_live_frazione_options(
     client: InVoltureClient,
     comune: str,
@@ -132,11 +151,7 @@ async def _resolve_live_frazione_options(
     if not options:
         raise RuntimeError(f"Nessuna frazione Capacitas trovata per comune '{lookup_comune}'.")
 
-    lookup_key = _normalize_lookup_label(lookup_comune)
-    exact_matches = [option for option in options if _normalize_lookup_label(option.display) == lookup_key]
-    comune_matches = [option for option in options if _normalize_lookup_label(_extract_lookup_comune(option.display)) == lookup_key]
-    frazione_matches = [option for option in options if _normalize_lookup_label(_extract_lookup_frazione(option.display)) == lookup_key]
-    ordered = exact_matches or comune_matches or frazione_matches or options
+    ordered = _order_live_frazione_options(lookup_comune, options)
 
     preferred_ids = _apply_section_frazione_hints(
         comune,
