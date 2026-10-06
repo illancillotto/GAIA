@@ -3,6 +3,18 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — ramo senza candidati (2026-10-06)
+
+- Slice `IMPROVED`: la precedenza tra sub-match consortile, ricerca live-only
+  e `NOT_FOUND` è isolata in `_build_no_candidate_result`, mantenendo il commit
+  live esclusivamente sul percorso live-only.
+- Metriche `execute_bulk_search_payload` cognitive/cyclomatic/LOC `141/33/227
+  -> 126/31/188`; helper `2/3/40` e resolver `0/1/16`, senza violation o debito
+  trasferito.
+- Suite Catasto PASS; coverage `execution.py` 100% (`135/135` statement,
+  `50/50` branch). Ruff, format, ratchet contro `HEAD` (`252aeec8`) e
+  Graphify Catasto PASS. Modifiche concorrenti Elaborazioni/PKI/MCP preservate.
+
 ### Catasto — righe export per risultato (2026-10-06)
 
 - Slice `IMPROVED`: la costruzione delle righe export per singolo risultato è

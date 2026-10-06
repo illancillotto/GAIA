@@ -223,6 +223,66 @@ async def _build_single_candidate_result(
     )
 
 
+async def _resolve_live_only_result(
+    db: Session,
+    row: CatAnagraficaBulkSearchRow,
+    lookup: tuple[str, str, str, str],
+    live_resolver: _CapacitasLiveResolver | _CapacitasAuthoritativeResolver,
+) -> CatAnagraficaBulkSearchRowResult:
+    comune_norm, foglio_norm, particella_norm, sub_norm = lookup
+    live_matches = await live_resolver.find_live_only_matches(
+        comune=comune_norm,
+        foglio=foglio_norm,
+        particella=particella_norm,
+        sub=sub_norm,
+    )
+    result = _build_live_search_result(row, live_matches)
+    _commit_live_changes(db, live_resolver)
+    return result
+
+
+async def _build_no_candidate_result(
+    context: tuple[Session, CatAnagraficaBulkSearchRow],
+    lookup: tuple[str, str, str, str],
+    live_resolver: _CapacitasLiveResolver | _CapacitasAuthoritativeResolver | None,
+    *,
+    live_authoritative: bool,
+) -> CatAnagraficaBulkSearchRowResult:
+    db, row = context
+    sub_match = await _resolve_sub_match(
+        db,
+        lookup,
+        live_resolver,
+        live_authoritative=live_authoritative,
+    )
+    if sub_match is not None:
+        return CatAnagraficaBulkSearchRowResult(
+            row_index=row.row_index,
+            comune_input=row.comune,
+            sezione_input=row.sezione,
+            foglio_input=row.foglio,
+            particella_input=row.particella,
+            sub_input=row.sub,
+            esito="FOUND",
+            message="OK",
+            particella_id=sub_match.particella_id,
+            match=sub_match,
+            matches_count=1,
+        )
+    if live_resolver is not None:
+        return await _resolve_live_only_result(db, row, lookup, live_resolver)
+    return CatAnagraficaBulkSearchRowResult(
+        row_index=row.row_index,
+        comune_input=row.comune,
+        sezione_input=row.sezione,
+        foglio_input=row.foglio,
+        particella_input=row.particella,
+        sub_input=row.sub,
+        esito="NOT_FOUND",
+        message="Nessuna particella trovata.",
+    )
+
+
 # fmt: off
 
 async def execute_bulk_search_payload(
@@ -353,50 +413,12 @@ async def execute_bulk_search_payload(
                             sub_norm=sub_norm,
                         )
                         if len(items) == 0:
-                            sub_match = await _resolve_sub_match(
-                                db,
+                            results.append(await _build_no_candidate_result(
+                                (db, row),
                                 (comune_norm, foglio_norm, particella_norm, sub_norm),
                                 live_resolver,
                                 live_authoritative=live_authoritative,
-                            )
-                            if sub_match is not None:
-                                results.append(
-                                    CatAnagraficaBulkSearchRowResult(
-                                        row_index=row.row_index,
-                                        comune_input=row.comune,
-                                        sezione_input=row.sezione,
-                                        foglio_input=row.foglio,
-                                        particella_input=row.particella,
-                                        sub_input=row.sub,
-                                        esito="FOUND",
-                                        message="OK",
-                                        particella_id=sub_match.particella_id,
-                                        match=sub_match,
-                                        matches_count=1,
-                                    )
-                                )
-                            elif live_resolver is not None:
-                                live_matches = await live_resolver.find_live_only_matches(
-                                    comune=comune_norm,
-                                    foglio=foglio_norm,
-                                    particella=particella_norm,
-                                    sub=sub_norm,
-                                )
-                                results.append(_build_live_search_result(row, live_matches))
-                                _commit_live_changes(db, live_resolver)
-                            else:
-                                results.append(
-                                    CatAnagraficaBulkSearchRowResult(
-                                        row_index=row.row_index,
-                                        comune_input=row.comune,
-                                        sezione_input=row.sezione,
-                                        foglio_input=row.foglio,
-                                        particella_input=row.particella,
-                                        sub_input=row.sub,
-                                        esito="NOT_FOUND",
-                                        message="Nessuna particella trovata.",
-                                    )
-                                )
+                            ))
                         elif len(items) > 1:
                             consorzio_present_ids = _load_consorzio_presence_by_particella_ids(
                                 db, {p.id for p in items if p.id is not None}
