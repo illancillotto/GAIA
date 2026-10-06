@@ -3,6 +3,18 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — refresh match salvati (2026-10-06)
+
+- Slice `IMPROVED`: il ramo di occupazione corrente usa un predicato aggregato
+  per CCO e storicità, preservando fallback, stato, intestatari e note.
+- Metriche `_refresh_saved_particelle_matches` cognitive/cyclomatic/LOC
+  `72/40/159 -> 68/38/159`; helper `refresh_match` `55/31/136 -> 51/29/136`;
+  aggregati `matching.py` `331/217 -> 323/213`, LOC invariato (`709`).
+- Suite Catasto PASS; `matching.py` full-file 100% (`266/266` statement,
+  `106/106` branch). Ruff, format e ratchet contro `HEAD` (`cc1642fe`) PASS.
+  Graphify Catasto aggiornato; file concorrenti `ruolo/parcel_control_*`
+  preservati e non inclusi nel commit; MCP/Wiki esclusi.
+
 ### Catasto — costruzione match base (2026-10-06)
 
 - Slice `IMPROVED`: il CCO risolto viene calcolato una sola volta e riusato

@@ -622,7 +622,7 @@ def _refresh_saved_particelle_matches(
             is_stale = bool(occupancy and not occupancy.is_current)
             cert_com, cert_pvc, cert_fra, cert_ccs = _context_from_occupancy(occupancy)
             base_particella = db.get(CatParticella, match.particella_id)
-            if cco and not is_stale:
+            if all((cco, not is_stale)):
                 match.intestatari = (
                     []
                     if live_authoritative
