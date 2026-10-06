@@ -78,6 +78,41 @@ def test_bulk_rendering_reexports_preserve_callable_identity():
         assert getattr(exports, name) is getattr(export_rendering, name)
 
 
+def test_bulk_match_rows_expansion_preserves_empty_and_ranked_owner_rows():
+    match = CatAnagraficaMatch(particella_id=UUID(int=1), foglio="1", particella="2", note="N")
+    empty = {"n_intestatari": 0, "rank": "", "note": ""}
+    assert exports._bulk_export_match_rows({"base": "x"}, match, [], empty) == [
+        {"base": "x", "n_intestatari": 0, "rank": "", "note": "N"}
+    ]
+    owner = SimpleNamespace(
+        id=UUID(int=2),
+        codice_fiscale="CF",
+        denominazione="D",
+        tipo=None,
+        cognome=None,
+        nome=None,
+        data_nascita=None,
+        luogo_nascita=None,
+        ragione_sociale=None,
+        source=None,
+        last_verified_at=None,
+        deceduto=False,
+        comune_residenza=None,
+        indirizzo=None,
+        cap=None,
+        telefono=None,
+        email=None,
+    )
+    ranked = exports._bulk_export_match_rows(
+        {"base": "x"},
+        match.model_copy(update={"intestatari": [owner, owner]}),
+        [owner, owner],
+        empty,
+    )
+    assert [row["rank"] for row in ranked] == ["1/2", "2/2"]
+    assert [row["n_intestatari"] for row in ranked] == [2, 2]
+
+
 def parcel(**updates):
     values = dict(
         id=UUID(int=1),

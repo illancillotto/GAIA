@@ -1,6 +1,20 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-06 — espansione match/intestatari export bulk
+
+- Espansione match owner separata e lista intestatari acquisita prima della
+  proiezione base; no-match/empty owner, count/rank/note e ordine accessi
+  invariati, nessun cambio API/schema.
+- Mapper cog/cyc/LOC43/22/60 ->32/18/49, helper7/7/18/1/3 sotto soglia;
+  file cognitive251 ->243, cyclomatic218 ->219/callable23 ->24,
+  branching195 invariato, LOC469 ->475.16 violation residue, nessun transfer.
+- 299 test coverage/caratterizzazione/API/facade PASS, full-file exports100%
+  statement198/branch60, zero esclusioni.4000 differenziali controa4d65c1c
+  equivalenti per valori/ordine/accessi. Ratchet/Ruff mirato PASS, lint globale
+  UP038 InCass concorrente; Graphify codice/docs aggiornati. Mapper32/18 e
+  campagna ancora aperti, baseline/config/scope invariati.
+
 ### 2026-10-06 — fallback comune/sub export bulk
 
 - Fallback comune/subalterno separati e tipizzati: match non-None prioritario

@@ -3,6 +3,32 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — espansione match/intestatari export bulk (2026-10-06)
+
+- Chiusura `IMPROVED`: espansione match owner pura, lista intestatari acquisita
+  prima della proiezione base per preservare access trace; no-match/empty owner
+  e rank multipli invariati. Helper7/7/18/1/3 sotto soglia; mapper43/22/60/3
+  ->32/18/49/2. File cognitive251 ->243, cyclomatic218 ->219, callable23 ->24,
+  branching195 invariato, LOC469 ->475;16 violation residue (8 error/8 warning),
+  nessuna nuova violation o debt transfer.
+- Caratterizzazione diretta di righe vuote e due owner rankati; 299 test
+  coverage/caratterizzazione/API/facade PASS, full-file exports100% statement
+  198/branch60, zero missing/partial/esclusioni.4000 differenziali controa4d65c1c
+  equivalenti per valori/ordine/accessi, inclusa acquisizione intestatari prima
+  della base. Ratchet/Ruff mirato PASS; lint globale UP038 InCass concorrente.
+  Graphify Catasto aggiornato; baseline/config/scope/MCP e change concorrenti
+  preservati, mapper32/18 e campagna globale ancora aperti.
+- Preflight `a4d65c1c`: fallback location committati, runtime/test puliti,
+  indice vuoto. _build_bulk_export_rows43/22/60/3; file cognitive251/
+  cyclomatic218/LOC469,17 violation/23 callable. Obiettivo non-MCP ancora aperto.
+- Estrarre la sola espansione di un match in righe owner: no-match e match senza
+  owner producono una riga vuota, owner multipli mantengono count/rank/ordine.
+  Helper puro riceve base/empty e non tocca query, URL o fallback. Preservare
+  inserimento dict e note dopo la proiezione, nessun cambio API/schema.
+- Verificare differenziale full-file100%, metriche aggregate/branching,
+  ratchet/Ruff/Graphify e commit separato; baseline/config/scope/MCP e change
+  concorrenti invariati.
+
 ### Catasto — fallback comune e sub export bulk (2026-10-06)
 
 - Preflight `bf328bcb`: precedente passaggio progresso committato, runtime

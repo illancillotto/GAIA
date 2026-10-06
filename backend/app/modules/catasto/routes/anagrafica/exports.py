@@ -388,6 +388,26 @@ def _bulk_export_subalterno(
     return (fallback.sub_input or "") if fallback is not None else ""
 
 
+def _bulk_export_match_rows(
+    base: dict[str, object],
+    match: CatAnagraficaMatch,
+    intestatari: list[CatIntestatarioResponse],
+    empty_intestatario: dict[str, object],
+) -> list[dict[str, object]]:
+    if not intestatari:
+        return [{**base, **empty_intestatario, "note": match.note or ""}]
+    rows: list[dict[str, object]] = []
+    for index, intestatario in enumerate(intestatari, start=1):
+        rows.append(
+            {
+                **base,
+                **_bulk_export_owner_identity(intestatario, index, len(intestatari)),
+                **_bulk_export_owner_details(intestatario, match),
+            }
+        )
+    return rows
+
+
 def _build_bulk_export_rows(
     kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"],
     export_results: list[CatAnagraficaBulkSearchRowResult],
@@ -438,19 +458,8 @@ def _build_bulk_export_rows(
 
         for match in matches:
             intestatari = match.intestatari or []
-            n_intestatari = len(intestatari)
             base = build_base(match)
-            if not intestatari:
-                rows.append({**base, **empty_intestatario, "note": match.note or ""})
-                continue
-            for index, intestatario in enumerate(intestatari, start=1):
-                rows.append(
-                    {
-                        **base,
-                        **_bulk_export_owner_identity(intestatario, index, n_intestatari),
-                        **_bulk_export_owner_details(intestatario, match),
-                    }
-                )
+            rows.extend(_bulk_export_match_rows(base, match, intestatari, empty_intestatario))
     return rows
 
 
