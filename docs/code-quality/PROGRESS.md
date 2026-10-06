@@ -3,6 +3,32 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — diagnosi sorgente Coverage export bulk (2026-10-06)
+
+- Audit precedente `59ef6d0f` produce progresso: failure spiegata, runtime
+  invariato. Coverage7.14.1 InOrOut usa file_and_path_for_module/find_spec
+  per source dotted dentro sys_modules_saved. Risolvere il nome del modulo
+  importa i parent con side-effect; ripristinare sys.modules non annulla le
+  registrazioni SQLAlchemy o lo stato delle estensioni NumPy.
+- Nessuna patch delle dipendenze o preload del runtime: sorgente directory
+  evita la risoluzione/import preliminare. Comando diagnostico verificato:
+  .venv/bin/python -m pytest -q backend/tests/test_catasto_anagrafica_coverage.py
+  backend/tests/test_anagrafica_api.py backend/tests/test_catasto_anagrafica_facade.py
+  --cov=backend/app --cov-branch
+  --cov-report=json:/tmp/gaia-bulk-export-directory-coverage.json.
+- 102 test PASS, collection regolare e zero import mancanti nel file exports;
+  misura reale statement162/236 (68.64%), branch51/80 (63.75%), totale67.405%.
+  Nessuna esclusione,74 statement mancanti/29 branch mancanti. Conferma isolata
+  67 test con --cov=backend/app/modules/catasto/routes/anagrafica produce gli
+  stessi contatori. Non scambiare questa misura per100% o per coverage globale.
+- Nessuna modifica a gate/config/policy coverage o scope baseline: scelta
+  sorgente locale diagnostica, report completo JSON. Evidenze /tmp/gaia-bulk-
+  export-directory-*. Stop di strumentazione risolto, non blocker del goal.
+- Prossima singola unita: caratterizzazione full-file exports prima di ridurre
+  _build_bulk_export_rows281/135, includendo fallback live, SISTER e download/
+  renderer. Rimangono fuori scope MCP/Wiki e change concorrenti; nessun runtime
+  modificato in questa diagnosi. Commit separato, Graphify piattaforma aggiornato.
+
 ### Catasto — audit export bulk e stop coverage (2026-10-06)
 
 - Dopo SISTER `dfc2464d`, prossimo candidato non-MCP verificato:
