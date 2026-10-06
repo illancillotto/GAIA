@@ -81,12 +81,8 @@ def _infer_bulk_kind(
         return payload.kind
     has_particella_keys = any((r.comune or r.foglio or r.particella or r.sub or r.sezione) for r in payload.rows)
     has_tax_keys = any((r.codice_fiscale or r.partita_iva) for r in payload.rows)
-    if has_particella_keys and not has_tax_keys:
-        return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
     if has_tax_keys and not has_particella_keys:
         return "CF_PIVA_PARTICELLE"
-    if has_tax_keys and has_particella_keys:
-        return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
     return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
 
 

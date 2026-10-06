@@ -3,6 +3,17 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — inferenza tipo payload bulk (2026-10-06)
+
+- Chiusura `IMPROVED`: dopo il controllo del `kind` esplicito, ogni payload con
+  sole chiavi fiscali resta CF/PIVA; tutti gli altri casi restano comune,
+  preservando gli esiti caratterizzati e l’attivazione live.
+- `_infer_bulk_kind` cognitive/cyclomatic/LOC `22/20/14 -> 14/14/10`;
+  nessuna nuova violation. Suite Catasto completa PASS; `normalization.py`
+  full-file 100% (`157/157` statement, `58/58` branch), zero esclusioni.
+- Ruff/format e ratchet contro `HEAD` (`ba719849`) PASS; Graphify Catasto da
+  aggiornare prima del commit. MCP/Wiki esclusi.
+
 ### Accessi — serializzazione albero organizzativo (2026-10-06)
 
 - Chiusura `IMPROVED`: profondità e conteggio discendenti sono helper ricorsivi
