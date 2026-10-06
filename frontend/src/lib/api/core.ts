@@ -18,8 +18,45 @@ type ApiRequestInit = RequestInit & {
   timeoutMs?: number;
 };
 
+type RequestCancellation = {
+  signal?: AbortSignal;
+  timedOut: () => boolean;
+  cleanup: () => void;
+};
+
 export function isAuthError(error: unknown): error is ApiError {
   return error instanceof ApiError && (error.status === 401 || error.status === 403);
+}
+
+function setupRequestCancellation(timeoutMs: number | undefined, signal?: AbortSignal): RequestCancellation {
+  const controller = timeoutMs ? new AbortController() : null;
+  let timedOut = false;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  if (controller && signal) {
+    if (signal.aborted) {
+      controller.abort(signal.reason);
+    } else {
+      signal.addEventListener("abort", () => controller.abort(signal.reason), { once: true });
+    }
+  }
+
+  if (controller) {
+    timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort(new Error(SESSION_BOOTSTRAP_TIMEOUT_MESSAGE));
+    }, timeoutMs);
+  }
+
+  return {
+    signal: controller?.signal ?? signal,
+    timedOut: () => timedOut,
+    cleanup: () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    },
+  };
 }
 
 export function getApiBaseUrl(): string {
@@ -88,24 +125,7 @@ async function readResponseData<T>(response: Response): Promise<T> {
 export async function request<T>(path: string, init?: ApiRequestInit): Promise<T> {
   const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
   const { timeoutMs, signal, ...fetchInit } = init ?? {};
-  const controller = timeoutMs ? new AbortController() : null;
-  let timedOut = false;
-  let timeoutId: ReturnType<typeof setTimeout> | null = null;
-
-  if (controller && signal) {
-    if (signal.aborted) {
-      controller.abort(signal.reason);
-    } else {
-      signal.addEventListener("abort", () => controller.abort(signal.reason), { once: true });
-    }
-  }
-
-  if (controller) {
-    timeoutId = setTimeout(() => {
-      timedOut = true;
-      controller.abort(new Error(SESSION_BOOTSTRAP_TIMEOUT_MESSAGE));
-    }, timeoutMs);
-  }
+  const cancellation = setupRequestCancellation(timeoutMs, signal ?? undefined);
 
   let response: Response;
 
@@ -117,17 +137,15 @@ export async function request<T>(path: string, init?: ApiRequestInit): Promise<T
         ...(fetchInit.headers ?? {}),
       },
       cache: "no-store",
-      signal: controller?.signal ?? signal,
+      signal: cancellation.signal,
     });
   } catch (error) {
-    if (timedOut) {
+    if (cancellation.timedOut()) {
       throw new ApiError(SESSION_BOOTSTRAP_TIMEOUT_MESSAGE);
     }
     throw error;
   } finally {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
+    cancellation.cleanup();
   }
 
   return readResponseData<T>(response);

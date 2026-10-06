@@ -3,6 +3,36 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Frontend API — lifecycle timeout e abort (2026-10-06)
+
+- Slice `IMPROVED`, snapshot `02802a32`, MPC/MCP escluso. `request` delega
+  setup, forwarding del signal, deadline e cleanup a `setupRequestCancellation`;
+  fetch, header, decoder, errori e cache non cambiano. Il valore nullable di
+  `RequestInit.signal` viene normalizzato a `undefined` senza cambiare il
+  signal inoltrato quando non c'e timeout.
+- Invarianti caratterizzati: abort gia avviato e successivo conservano la
+  stessa reason; il timeout produce `ApiError` col messaggio esistente;
+  errori rete restano la stessa istanza; il timer e cancellato quando fetch
+  risolve, prima di decodificare un body lento; `timeoutMs` falsy (undefined,
+  0, NaN) non crea controller o timer. Nessuna modifica API o UI.
+- Suite mirata 84 PASS prima e dopo, coverage full-file dopo 120 statement,
+  93 branch e 21 funzioni al 100%. Suite frontend completa: 277 file / 3985
+  test PASS; sette diagnostiche jsdom di navigazione non implementata,
+  nessuna failure o suppression. Typecheck, ESLint, diff-check PASS.
+- `request` cognitive/cyclomatic/LOC `16/14/42 -> 8/8/25`;
+  `setupRequestCancellation` `9/8/27`, sotto soglia e senza violation.
+  File: cognitive sum `87 -> 90` e cyclomatic `84 -> 86` per la nuova
+  responsabilita caratterizzata, ma error/warning restano zero sul file;
+  il ratchet non rileva regressioni e il debito non viene trasferito.
+  Esito `IMPROVED` per il callable obiettivo e lifecycle reso revisionabile.
+- Ratchet full-scan base `6b61fd27`: 17 finding globali, zero nel core.
+  Graphify frontend aggiornato: 6553 nodi / 15673 archi / 216 community;
+  HTML saltato per il limite 5000. Evidenze `/tmp/gaia-cancellation-{before,after,final}.json`,
+  `/tmp/gaia-cancellation-{before,tests,tests-final,full-unit}.log`,
+  `/tmp/gaia-cancellation-{typecheck-final,lint-final}.log`,
+  `/tmp/gaia-cancellation-ratchet.json`, `/tmp/gaia-cancellation-graphify.log`.
+  Modifiche concorrenti preservate; stop dopo la slice, deploy non eseguito.
+
 ### Worker SISTER — fixture HTML dei contatori globali (2026-10-06)
 
 - Slice `IMPROVED`, snapshot `644928ce`, MPC/MCP escluso. Il costruttore
