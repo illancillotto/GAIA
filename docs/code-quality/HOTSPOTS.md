@@ -14,6 +14,16 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, identita owner export bulk, 2026-10-06:
+`_build_bulk_export_rows` `IMPROVED`, cog/cyc/LOC145/68/83 ->122/60/74,
+nesting3 invariato. Helper identita/rank8/9/19/0/3 sotto soglia, distinto dai
+contatti; precedenza display/date e ordine/accessi invariati. File cognitive
+341 ->326, cyclomatic238 ->239/callable21 ->22, branching217 invariato,
+LOC462 ->472;20 violation (8 error/12 warning), errore LOC diventa warning.
+244 test/full-file100%,4000 casi differenziali equivalenti; ratchet/Ruff mirato
+PASS, lint globale UP038 InCass concorrente. Mapper122/60 ancora sopra soglia,
+MCP/Wiki esclusi operativamente, nessun debt transfer o cambio baseline/scope.
+
 Campagna non-MCP, dettagli contatto owner export bulk, 2026-10-06:
 `_build_bulk_export_rows` `IMPROVED`, cog/cyc/LOC163/74/91 ->145/68/83,
 nesting3 invariato. Helper contatti/stato/note6/7/14/0/2 sotto soglia, identita

@@ -105,6 +105,50 @@ def test_owner_export_columns_rank_dates_and_certificate():
     assert exports._export_basename("CF_PIVA_PARTICELLE") == "catasto-intestatari-da-cf"
 
 
+@pytest.mark.parametrize("birth_date", [None, date(1980, 1, 1)])
+@pytest.mark.parametrize(
+    "denominazione, ragione_sociale, cognome, nome, display",
+    [
+        (None, None, "Rossi", "Mario", "Rossi Mario"),
+        ("Ente", "Societa", "Rossi", "Mario", "Ente"),
+        ("", "Societa", None, None, "Societa"),
+        (None, None, None, None, ""),
+        (" ", "Societa", None, None, " "),
+    ],
+)
+def test_bulk_owner_identity_order_rank_display_and_date(
+    birth_date, denominazione, ragione_sociale, cognome, nome, display
+):
+    owner = CatIntestatarioResponse(
+        id=UUID(int=2),
+        codice_fiscale="0",
+        denominazione=denominazione,
+        tipo="0",
+        cognome=cognome,
+        nome=nome,
+        data_nascita=birth_date,
+        luogo_nascita=None,
+        ragione_sociale=ragione_sociale,
+        source=None,
+        last_verified_at=None,
+        deceduto=False,
+    )
+    expected = {
+        "n_intestatari": 2,
+        "rank": "2/2",
+        "cf": "0",
+        "tipo": "0",
+        "cognome": cognome or "",
+        "nome": nome or "",
+        "denominazione": display,
+        "ragione_sociale": ragione_sociale or "",
+        "data_nascita": birth_date.isoformat() if birth_date is not None else "",
+    }
+    actual = exports._bulk_export_owner_identity(owner, 2, 2)
+    assert actual == expected
+    assert list(actual) == list(expected)
+
+
 @pytest.mark.parametrize("deceduto", [None, False, True])
 @pytest.mark.parametrize("note", [None, "", "Nota"])
 def test_bulk_owner_details_column_order_status_and_context(deceduto, note):

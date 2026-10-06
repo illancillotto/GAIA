@@ -3,6 +3,36 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — identita owner export bulk (2026-10-06)
+
+- Chiusura `IMPROVED`: proiezione identita/rank separata dai dettagli contatto;
+  helper cog/cyc/LOC/nesting/parametri8/9/19/0/3 sotto soglia. Target
+  145/68/83/3 ->122/60/74/3; file cognitive341 ->326, cyclomatic238 ->239
+  per un callable aggiunto (21 ->22), branching217 invariato, LOC462 ->472,
+  import26 invariati.20 violation (8 error/12 warning): errore LOC del mapper
+  diventa warning, nessuna nuova violation o trasferimento del debito.
+- Dieci casi persistenti proteggono precedenza denominazione/ragione sociale/
+  nomi, spazi/zero-stringa, ordine colonne/rank e data presente/None.244 test
+  coverage/caratterizzazione/API/facade PASS, full-file exports100% statement
+  217/branch68, zero missing/partial/esclusioni; SISTER invariato ancora100%.
+  4000 differenziali contro93764bf2 equivalenti per valori/ordine/accessi.
+- Ratchet merge-base93764bf2 e Ruff runtime/test/format test PASS; lint globale
+  compileall PASS, solo UP038 InCass concorrente. Graphify codice e docs
+  Catasto/piattaforma aggiornati prima del commit separato autorizzato.
+  Evidenze /tmp/gaia-export-identity-*; nessuna API remota/PostgreSQL dichiarata.
+  Baseline/config/scope/MCP invariati, change concorrenti preservate; mapper
+  122/60 ancora sopra soglia, campagna globale non completa.
+- Preflight `93764bf2`: precedente passaggio progresso committato, runtime/test
+  Catasto puliti, indice vuoto. Mapper cog/cyc/LOC/nesting145/68/83/3; exports
+  cognitive341/cyclomatic238/LOC462,20 violation/21 callable. Goal aperto.
+- Separare identita/rank owner dalla proiezione contatti gia isolata: count,
+  rank, CF/tipo/nomi, denominazione, ragione sociale e data nascita. Helper
+  tipizzato sotto soglia, stessa precedenza display/normalizzazione/date,
+  ordine chiavi e accessi (due letture data non-None) invariato.
+- Coverage full-file100%, differenziale contro HEAD, metriche aggregate e
+  branching/ratchet/Ruff/Graphify prima del commit; nessun cambio funzionale,
+  API/schema/baseline/config/scope/MCP o inclusione change concorrenti.
+
 ### Catasto — dettagli contatto owner export bulk (2026-10-06)
 
 - Chiusura `IMPROVED`: proiezione contatti/stato owner/context note separata
