@@ -1341,6 +1341,75 @@ def test_recovery_and_bank_hours_dashboard_filter_and_aggregate_paths(
     assert bank_filtered.items == []
 
 
+@pytest.mark.parametrize(
+    ("bonus_rows", "expected_count", "expected_threshold", "expected_rate"),
+    [
+        ([None], 0, False, None),
+        ([(None, False, None)], 0, False, None),
+        ([(12, False, 10), (20, True, 15), (5, False, 10)], 20, True, 15),
+        ([(20, True, 15), (None, False, None), None], 20, True, 15),
+        ([(0, False, 0), (-1, False, -5)], 0, False, 0),
+    ],
+)
+def test_bank_hours_compensation_monthly_bonus_aggregation(
+    monkeypatch: pytest.MonkeyPatch,
+    bonus_rows,
+    expected_count: int,
+    expected_threshold: bool,
+    expected_rate: int | None,
+) -> None:
+    records = [
+        SimpleNamespace(id=uuid.uuid4(), ordinary_minutes=60, straordinario_minutes=0, mpe_minutes=0)
+        for _ in range(len(bonus_rows) + 1)
+    ]
+    classification = SimpleNamespace(
+        night_minutes=0,
+        festive_minutes=0,
+        festive_night_minutes=0,
+        ordinary_night_minutes=0,
+        overtime_day_minutes=0,
+        overtime_night_minutes=0,
+        overtime_festive_minutes=0,
+        overtime_festive_night_minutes=0,
+        shift_festive_day_minutes=0,
+        shift_night_minutes=0,
+        shift_festive_night_minutes=0,
+    )
+    bonuses = {
+        record.id: dict(
+            zip(
+                ("monthly_night_shift_count", "ordinary_night_bonus_threshold_met", "ordinary_night_bonus_rate"),
+                values,
+                strict=True,
+            )
+        )
+        for record, values in zip(records, bonus_rows, strict=False)
+        if values is not None
+    }
+    bonuses[records[-1].id] = {
+        "monthly_night_shift_count": 99,
+        "ordinary_night_bonus_threshold_met": True,
+        "ordinary_night_bonus_rate": 99,
+    }
+    monkeypatch.setattr(
+        router, "_build_classification_map",
+        lambda *_args, **_kwargs: {record.id: classification for record in records[:-1]},
+    )
+    monkeypatch.setattr(router, "_build_monthly_night_bonus_map", lambda *_args, **_kwargs: bonuses)
+
+    summary = router._build_bank_hours_compensation_summary(
+        _QueuedDb(records, []), collaborator_id=uuid.uuid4(), date_from=None, date_to=None
+    )
+
+    assert summary.model_dump() == PresenzeBankHoursCompensationSummaryResponse(
+        records_total=len(records),
+        worked_days_total=len(bonus_rows),
+        max_monthly_night_shift_count=expected_count,
+        ordinary_night_bonus_threshold_met=expected_threshold,
+        ordinary_night_bonus_rate=expected_rate,
+    ).model_dump()
+
+
 def test_bank_hours_compensation_and_balance_fallbacks(monkeypatch: pytest.MonkeyPatch) -> None:
     collaborator_id = uuid.uuid4()
     assert router._build_bank_hours_compensation_summary(

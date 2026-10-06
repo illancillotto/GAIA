@@ -3,6 +3,40 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Presenze — aggregazione bonus notturno Bank Hours (2026-10-06)
+
+- Slice `IMPROVED`, base `0cae111e`: il response compensi esistente diventa
+  l'accumulatore dei totali, eliminando il doppio elenco di inizializzazioni
+  e mapping finale. `_apply_bank_hours_night_bonus` possiede l'aggregazione
+  mensile: massimo conteggio, soglia persistente e massimo aliquota.
+  Nessun nuovo modello, wrapper, esclusione o modifica a query e classificazione.
+- Cinque caratterizzazioni verdi prima e dopo: bonus assente/null, massimi
+  crescenti e decrescenti, soglia true che non torna false, valori zero/negativi
+  e bonus ignorato per record non classificato. Suite router/API Presenze:
+  211 test verdi. Coverage full-file `bank_hours.py` 100%, `229/229` statement
+  e `78/78` branch, nessuna linea esclusa.
+- `_build_bank_hours_compensation_summary` cognitive/cyclomatic/LOC/nesting
+  `50/31/91/2 -> 37/24/49/2`; helper `8/8/13/1`, due parametri e nessuna
+  violation. Eliminato l'errore LOC del riepilogo; cognitive/cyclomatic
+  restano sopra soglia e non sono dichiarati risolti.
+- File cognitive sum `246 -> 241`, cyclomatic sum `186 -> 187`, callable
+  `13 -> 14`: l'unico incremento ciclomatico e la base del nuovo callable,
+  decisioni invariate `173 -> 173`. LOC file `565 -> 536`, violation
+  `17 -> 16` (error `11 -> 10`). Densita `0.764602 -> 0.798507` per
+  eliminazione del mapping ripetuto; riduzione dichiarata su cognitive e LOC,
+  non sul numero di decisioni. Nessun debito trasferito al nuovo helper.
+- Ratchet mirato contro baseline del merge-base `0cae111e`: PASS,
+  `findings: []`. Ruff check, format runtime, `make lint-backend
+  BASE_REF=0cae111e QUALITY_PYTHON=.venv/bin/python` e diff-check PASS.
+  Graphify Presenze aggiornato: 1393 nodi, 4243 archi, 60 community.
+  Baseline, soglie e report versionati invariati; nessun claim sui gate globali.
+- Evidenze `/tmp/gaia-night-{before,after}.json`,
+  `/tmp/gaia-night-before.log`, `/tmp/gaia-night-suite.log`,
+  `/tmp/gaia-night-coverage.json`, `/tmp/gaia-night-ratchet.json`,
+  `/tmp/gaia-night-lint.log`, `/tmp/gaia-night-graphify.log`.
+  MPC/MCP e lavori concorrenti documentali/UI esclusi e preservati.
+  Stop dopo questa slice; il programma globale resta incompleto.
+
 ### Presenze — selezione bucket liquidazione Bank Hours (2026-10-06)
 
 - Slice `IMPROVED`, base `9e5f2033`: i quattro rami identici che includono

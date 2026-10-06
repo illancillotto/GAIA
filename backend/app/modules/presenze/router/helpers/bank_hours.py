@@ -339,22 +339,7 @@ def _build_bank_hours_compensation_summary(
     classifications = _build_classification_map(db, records, punches_by_record_id=punches_by_record_id)
     monthly_night_bonus = _build_monthly_night_bonus_map(db, records, classifications=classifications)
 
-    worked_days_total = 0
-    night_shift_days_total = 0
-    night_minutes_total = 0
-    festive_minutes_total = 0
-    festive_night_minutes_total = 0
-    ordinary_night_minutes_total = 0
-    overtime_day_minutes_total = 0
-    overtime_night_minutes_total = 0
-    overtime_festive_minutes_total = 0
-    overtime_festive_night_minutes_total = 0
-    shift_festive_day_minutes_total = 0
-    shift_night_minutes_total = 0
-    shift_festive_night_minutes_total = 0
-    max_monthly_night_shift_count = 0
-    ordinary_night_bonus_threshold_met = False
-    ordinary_night_bonus_rate: int | None = None
+    summary = PresenzeBankHoursCompensationSummaryResponse(records_total=len(records))
 
     for record in records:
         classification = classifications.get(record.id)
@@ -363,50 +348,37 @@ def _build_bank_hours_compensation_summary(
         imported_extra_minutes = (record.straordinario_minutes or 0) + (record.mpe_minutes or 0)
         punch_candidate_minutes = _complete_punch_minutes(punches_by_record_id.get(record.id, [])) if imported_extra_minutes > 0 else 0
         if (record.ordinary_minutes or 0) > 0 or (record.straordinario_minutes or 0) > 0 or (record.mpe_minutes or 0) > 0:
-            worked_days_total += 1
-        night_minutes_total += classification.night_minutes
-        festive_minutes_total += classification.festive_minutes
-        festive_night_minutes_total += classification.festive_night_minutes
-        ordinary_night_minutes_total += classification.ordinary_night_minutes
-        overtime_day_minutes_total += max(classification.overtime_day_minutes, imported_extra_minutes, punch_candidate_minutes)
-        overtime_night_minutes_total += classification.overtime_night_minutes
-        overtime_festive_minutes_total += classification.overtime_festive_minutes
-        overtime_festive_night_minutes_total += classification.overtime_festive_night_minutes
-        shift_festive_day_minutes_total += classification.shift_festive_day_minutes
-        shift_night_minutes_total += classification.shift_night_minutes
-        shift_festive_night_minutes_total += classification.shift_festive_night_minutes
+            summary.worked_days_total += 1
+        summary.night_minutes_total += classification.night_minutes
+        summary.festive_minutes_total += classification.festive_minutes
+        summary.festive_night_minutes_total += classification.festive_night_minutes
+        summary.ordinary_night_minutes_total += classification.ordinary_night_minutes
+        summary.overtime_day_minutes_total += max(classification.overtime_day_minutes, imported_extra_minutes, punch_candidate_minutes)
+        summary.overtime_night_minutes_total += classification.overtime_night_minutes
+        summary.overtime_festive_minutes_total += classification.overtime_festive_minutes
+        summary.overtime_festive_night_minutes_total += classification.overtime_festive_night_minutes
+        summary.shift_festive_day_minutes_total += classification.shift_festive_day_minutes
+        summary.shift_night_minutes_total += classification.shift_night_minutes
+        summary.shift_festive_night_minutes_total += classification.shift_festive_night_minutes
         if classification.ordinary_night_minutes + classification.shift_night_minutes + classification.shift_festive_night_minutes > 0:
-            night_shift_days_total += 1
-        night_bonus = monthly_night_bonus.get(record.id)
-        if night_bonus is None:
-            continue
-        monthly_count = int(night_bonus["monthly_night_shift_count"] or 0)
-        max_monthly_night_shift_count = max(max_monthly_night_shift_count, monthly_count)
-        if bool(night_bonus["ordinary_night_bonus_threshold_met"]):
-            ordinary_night_bonus_threshold_met = True
-        bonus_rate = night_bonus["ordinary_night_bonus_rate"]
-        if bonus_rate is not None:
-            ordinary_night_bonus_rate = max(ordinary_night_bonus_rate or 0, int(bonus_rate))
+            summary.night_shift_days_total += 1
+        _apply_bank_hours_night_bonus(summary, monthly_night_bonus.get(record.id))
 
-    return PresenzeBankHoursCompensationSummaryResponse(
-        records_total=len(records),
-        worked_days_total=worked_days_total,
-        night_minutes_total=night_minutes_total,
-        festive_minutes_total=festive_minutes_total,
-        festive_night_minutes_total=festive_night_minutes_total,
-        ordinary_night_minutes_total=ordinary_night_minutes_total,
-        overtime_day_minutes_total=overtime_day_minutes_total,
-        overtime_night_minutes_total=overtime_night_minutes_total,
-        overtime_festive_minutes_total=overtime_festive_minutes_total,
-        overtime_festive_night_minutes_total=overtime_festive_night_minutes_total,
-        shift_festive_day_minutes_total=shift_festive_day_minutes_total,
-        shift_night_minutes_total=shift_night_minutes_total,
-        shift_festive_night_minutes_total=shift_festive_night_minutes_total,
-        night_shift_days_total=night_shift_days_total,
-        max_monthly_night_shift_count=max_monthly_night_shift_count,
-        ordinary_night_bonus_threshold_met=ordinary_night_bonus_threshold_met,
-        ordinary_night_bonus_rate=ordinary_night_bonus_rate,
-    )
+    return summary
+
+def _apply_bank_hours_night_bonus(
+    summary: PresenzeBankHoursCompensationSummaryResponse,
+    night_bonus: dict[str, int | bool | None] | None,
+) -> None:
+    if night_bonus is None:
+        return
+    monthly_count = int(night_bonus["monthly_night_shift_count"] or 0)
+    summary.max_monthly_night_shift_count = max(summary.max_monthly_night_shift_count, monthly_count)
+    if bool(night_bonus["ordinary_night_bonus_threshold_met"]):
+        summary.ordinary_night_bonus_threshold_met = True
+    bonus_rate = night_bonus["ordinary_night_bonus_rate"]
+    if bonus_rate is not None:
+        summary.ordinary_night_bonus_rate = max(summary.ordinary_night_bonus_rate or 0, int(bonus_rate))
 
 def _complete_punch_minutes(punches: list[PresenzeDailyPunch]) -> int:
     worked_minutes = 0
