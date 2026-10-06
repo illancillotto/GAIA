@@ -3,6 +3,16 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — validità snapshot certificato (2026-10-06)
+
+- Slice `IMPROVED`: il controllo dei marcatori di transazione non valida usa
+  `any(...)`, mantenendo il rifiuto di snapshot con deadlock o retry richiesto.
+- Metriche callable `_is_usable_certificato_snapshot` cognitive/cyclomatic/LOC
+  `10/10/8 -> 9/9/8`; aggregati file `121/121 -> 120/120`, LOC invariato.
+- Suite Catasto PASS; `intestatari.py` full-file 100% (`173/173` statement,
+  `74/74` branch). Ruff, format e ratchet contro `HEAD` (`adf891c5`) PASS.
+  Graphify Catasto aggiornato; MCP/Wiki esclusi.
+
 ### Catasto — mapping intestatario utenza (2026-10-06)
 
 - Slice `IMPROVED`: il controllo di presenza del soggetto e della persona usa

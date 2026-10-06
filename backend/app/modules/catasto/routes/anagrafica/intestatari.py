@@ -290,7 +290,7 @@ def _is_usable_certificato_snapshot(snapshot: CatCapacitasCertificato) -> bool:
     if not isinstance(payload, dict):
         return False
     raw_text = str(payload.get("raw_text") or "").casefold()
-    if "deadlock" in raw_text or "ripetere la transazione" in raw_text:
+    if any(marker in raw_text for marker in ("deadlock", "ripetere la transazione")):
         return False
     return any(payload.get(key) for key in ("partita_code", "utenza_code", "intestatari", "terreni"))
 
