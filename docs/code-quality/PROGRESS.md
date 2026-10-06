@@ -3,6 +3,21 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Accessi — serializzazione albero organizzativo (2026-10-06)
+
+- Chiusura `IMPROVED`: profondità e conteggio discendenti sono helper ricorsivi
+  memoizzati, con stesso ordine, gestione radici/cicli già validata e payload
+  invariato. `_serialize_workspace_items` cognitive/cyclomatic `16/15 -> 9/9`;
+  helper `5/5` e `2/3`, tutti sotto soglia.
+- Aggregati `org_structure.py` cognitive/cyclomatic `102/90 -> 95/84`, errori
+  complessità `3 -> 2`, nessuna nuova violation. Ratchet contro `HEAD`
+  (`0d88f7c8`) PASS; Ruff segnala soltanto i due `UP017` preesistenti nel file.
+- Test `test_org_structure_api.py` e `test_more_tiny_modules.py` PASS; le
+  nuove ricorsioni risultano coperte. Il report file completo resta limitato
+  da rami legacy non toccati (coverage globale accessi 68%), senza modificare
+  gate o esclusioni. Graphify backend da aggiornare prima del commit; MCP/Wiki
+  esclusi.
+
 ### Catasto — risultati export per comune (2026-10-06)
 
 - Chiusura `IMPROVED`: costruzione risultati GAIA/live estratta in

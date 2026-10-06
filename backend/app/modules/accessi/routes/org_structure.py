@@ -228,6 +228,36 @@ def _build_suggestions(
     return suggestions
 
 
+def _assignment_depth(
+    user_id: int,
+    assignments_by_user: dict[int, OrgStructureAssignment],
+    memo_depth: dict[int, int],
+) -> int:
+    if user_id in memo_depth:
+        return memo_depth[user_id]
+    assignment = assignments_by_user.get(user_id)
+    if assignment is None or assignment.manager_user_id is None:
+        memo_depth[user_id] = 0
+        return 0
+    memo_depth[user_id] = _assignment_depth(assignment.manager_user_id, assignments_by_user, memo_depth) + 1
+    return memo_depth[user_id]
+
+
+def _assignment_descendants(
+    user_id: int,
+    manager_children: dict[int, list[int]],
+    memo_descendants: dict[int, int],
+) -> int:
+    if user_id in memo_descendants:
+        return memo_descendants[user_id]
+    total = sum(
+        1 + _assignment_descendants(child_id, manager_children, memo_descendants)
+        for child_id in manager_children.get(user_id, [])
+    )
+    memo_descendants[user_id] = total
+    return total
+
+
 def _serialize_workspace_items(
     db: Session,
     users: list[ApplicationUser],
@@ -243,33 +273,14 @@ def _serialize_workspace_items(
     memo_depth: dict[int, int] = {}
     memo_descendants: dict[int, int] = {}
 
-    def depth_for(user_id: int) -> int:
-        if user_id in memo_depth:
-            return memo_depth[user_id]
-        assignment = assignments_by_user.get(user_id)
-        if assignment is None or assignment.manager_user_id is None:
-            memo_depth[user_id] = 0
-            return 0
-        memo_depth[user_id] = depth_for(assignment.manager_user_id) + 1
-        return memo_depth[user_id]
-
-    def descendants_for(user_id: int) -> int:
-        if user_id in memo_descendants:
-            return memo_descendants[user_id]
-        total = 0
-        for child_id in manager_children.get(user_id, []):
-            total += 1 + descendants_for(child_id)
-        memo_descendants[user_id] = total
-        return total
-
     items = [
         OrgStructureAssignmentResponse(
             **assignment.__dict__,
             user=_serialize_user_summary(users_by_id[assignment.application_user_id]),
             manager=_serialize_user_summary(users_by_id[assignment.manager_user_id]) if assignment.manager_user_id in users_by_id else None,
             direct_reports_count=len(manager_children.get(assignment.application_user_id, [])),
-            descendants_count=descendants_for(assignment.application_user_id),
-            depth=depth_for(assignment.application_user_id),
+            descendants_count=_assignment_descendants(assignment.application_user_id, manager_children, memo_descendants),
+            depth=_assignment_depth(assignment.application_user_id, assignments_by_user, memo_depth),
         )
         for assignment in assignments
         if assignment.application_user_id in users_by_id
