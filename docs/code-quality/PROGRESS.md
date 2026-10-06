@@ -3,6 +3,17 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — lookup unità subalterno (2026-10-06)
+
+- Slice `IMPROVED`: la query dell'unità subalterno è isolata, preservando
+  filtri, normalizzazione del comune, limite e comportamento in assenza di match.
+- Metriche `_find_consorzio_sub_match` cognitive/cyclomatic/LOC `35/31/119
+  -> 34/30/107`; helper `_find_sub_unit` `1/2/12`; LOC file invariata (`704`),
+  ratchet contro `HEAD` (`7014a303`) senza findings e nessun debito trasferito.
+- Suite Catasto PASS; coverage `matching.py` 100% (`269/269` statement,
+  `102/102` branch). Ruff, format e Graphify Catasto PASS; baseline invariata,
+  report generati e MCP/Wiki esclusi dal commit.
+
 ### Catasto — upsert authoritative di intestatario live (2026-10-06)
 
 - Slice `IMPROVED`: lookup persona/subject, risoluzione subject e aggiornamento

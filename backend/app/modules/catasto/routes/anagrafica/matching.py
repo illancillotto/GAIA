@@ -234,6 +234,20 @@ def _build_consorzio_sub_matches(db: Session, p: CatParticella, *, live_authorit
     return matches
 
 
+def _find_sub_unit(db, foglio, particella, sub_value, comune_norm):
+    unit_query = select(CatConsorzioUnit).where(
+        CatConsorzioUnit.foglio == foglio,
+        CatConsorzioUnit.particella == particella,
+        CatConsorzioUnit.subalterno == sub_value,
+        CatConsorzioUnit.is_active.is_(True),
+    )
+    if _looks_like_int(comune_norm):
+        unit_query = unit_query.where(CatConsorzioUnit.cod_comune_capacitas == int(comune_norm))
+    else:
+        unit_query = unit_query.where(func.lower(func.coalesce(CatConsorzioUnit.source_comune_label, "")) == comune_norm.lower())
+    return db.execute(unit_query.limit(1)).scalars().first()
+
+
 def _find_consorzio_sub_match(
     db: Session,
     foglio: str,
@@ -249,20 +263,7 @@ def _find_consorzio_sub_match(
     (particella_id=None) and not in CatParticella.
     """
     sub_value = sub.strip()
-    unit_query = select(CatConsorzioUnit).where(
-        CatConsorzioUnit.foglio == foglio,
-        CatConsorzioUnit.particella == particella,
-        CatConsorzioUnit.subalterno == sub_value,
-        CatConsorzioUnit.is_active.is_(True),
-    )
-    if _looks_like_int(comune_norm):
-        unit_query = unit_query.where(CatConsorzioUnit.cod_comune_capacitas == int(comune_norm))
-    else:
-        unit_query = unit_query.where(
-            func.lower(func.coalesce(CatConsorzioUnit.source_comune_label, "")) == comune_norm.lower()
-        )
-
-    unit = db.execute(unit_query.limit(1)).scalars().first()
+    unit = _find_sub_unit(db, foglio, particella, sub_value, comune_norm)
     if unit is None:
         return None
     occupancy = _best_occupancy_for_unit(db, unit.id)
