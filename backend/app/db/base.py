@@ -1,4 +1,11 @@
 from app.core.database import Base
+from app.modules.ruolo.parcel_control_models import (
+    ParcelControlAudit,
+    ParcelControlCase,
+    ParcelControlIndex,
+    ParcelControlProposal,
+    ParcelControlState,
+)
 from app.modules.ruolo.registered_mail_document_models import RegisteredMailDocument
 from app.models.application_user import ApplicationUser
 from app.models.application_user_password_reset import ApplicationUserPasswordResetToken
@@ -316,6 +323,11 @@ __all__ = [
     "PermissionEntry",
     "Review",
     "RuoloAvviso",
+    "ParcelControlAudit",
+    "ParcelControlCase",
+    "ParcelControlIndex",
+    "ParcelControlProposal",
+    "ParcelControlState",
     "RegisteredMailDocument",
     "RuoloImportJob",
     "RuoloParticella",

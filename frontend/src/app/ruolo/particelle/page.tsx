@@ -11,6 +11,7 @@ import {
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
 import { RuoloModulePage } from "@/components/ruolo/module-page";
+import { ParcelControlWorkspace } from "@/components/ruolo/parcel-control-workspace";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LockIcon, SearchIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -67,7 +68,7 @@ function RuoloParticellePageFallback() {
 export default function RuoloParticellePage() {
   return (
     <Suspense fallback={<RuoloParticellePageFallback />}>
-      <RuoloParticellePageContent />
+      <ParcelControlWorkspace annualView={<RuoloParticellePageContent />} />
     </Suspense>
   );
 }
@@ -134,7 +135,7 @@ function RuoloParticellePageContent() {
   }, [anno, comune, foglio, matchReason, matchStatus, page, particella, token, unmatchedOnly]);
 
   function applyFilters(): void {
-    const qs = new URLSearchParams();
+    const qs = new URLSearchParams({ vista: "annuale" });
     if (filterComune.trim()) qs.set("comune", filterComune.trim());
     if (filterFoglio.trim()) qs.set("foglio", filterFoglio.trim());
     if (filterParticella.trim()) qs.set("particella", filterParticella.trim());
@@ -411,7 +412,7 @@ function RuoloParticellePageContent() {
                   setFilterMatchStatus("");
                   setFilterMatchReason("");
                   setFilterUnmatchedOnly(true);
-                  router.push("/ruolo/particelle");
+                  router.push("/ruolo/particelle?vista=annuale");
                 }}
               >
                 Reset

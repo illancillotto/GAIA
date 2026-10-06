@@ -1,5 +1,13 @@
 # GAIA Ruolo — Product Requirements Document v1.0
 
+### Controllo storico particelle — 2026-10-06
+
+Il workspace `/ruolo/particelle` riusa la pagina esistente per il controllo
+persistente 2020–2025, con ruolo corrente **2025** e consultazione annuale
+preservata. Specifica operativa, salvaguardie e limiti di integrazione in
+[CONTROLLO_PARTICELLE.md](CONTROLLO_PARTICELLE.md). Le proposte confermate
+restano istruttorie GAIA: non inseriscono automaticamente immobili nel ruolo.
+
 ### Manutenzione parser particelle — 2026-10-05
 
 - Parser comune conserva i layout storici4/5/6/7/8/9/10/11+ colonne tramite

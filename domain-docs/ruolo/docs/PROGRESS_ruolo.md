@@ -1,5 +1,19 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## Controllo storico particelle — 2026-10-06
+
+- Estesa `/ruolo/particelle` con storico 2020–2025, corrente 2025 concordato,
+  avvisi CF anomali, pratiche persistenti, visure esistenti e coda proposte.
+- Conservazione dati originali, attestazioni di completezza, evidenze,
+  matching manuale, audit, idempotenza e controllo versioni/concorrenza.
+- Nessuna modifica automatica di anagrafiche o ruoli. Perimetro territoriale,
+  regole tributarie e destinazione di formazione ruolo restano da definire;
+  parser soggetto limitato a un riferimento. Non e una ricerca esaustiva.
+- 43 test backend e 27 frontend verdi, coverage 100% statement/branch nel
+  perimetro runtime del ciclo; Ruff, ESLint e typecheck verdi. Migration
+  verificata tramite roundtrip/schema e SQL Alembic, non applicata in produzione.
+- Specifica e limiti: [CONTROLLO_PARTICELLE.md](CONTROLLO_PARTICELLE.md).
+
 > Stato documento: archivio storico di delivery.
 > Traccia milestone e test anche del vecchio import file-based, oggi rimosso dal runtime.
 > Per lo stato corrente del dominio fare riferimento al codice attivo e al PRD Ruolo aggiornato.
