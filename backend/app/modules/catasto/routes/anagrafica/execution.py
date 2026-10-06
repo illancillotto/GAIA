@@ -64,6 +64,28 @@ async def _build_tax_matches(
     return matches
 
 
+async def _build_candidate_matches(
+    db: Session,
+    items: list[CatParticella],
+    consorzio_present_ids: set,
+    live_resolver: _CapacitasLiveResolver | _CapacitasAuthoritativeResolver | None,
+    *,
+    live_authoritative: bool,
+) -> list[CatAnagraficaMatch]:
+    matches: list[CatAnagraficaMatch] = []
+    for item in items:
+        candidate = _build_match(
+            db,
+            item,
+            presente_in_catasto_consorzio=(item.id in consorzio_present_ids),
+            live_authoritative=live_authoritative,
+        )
+        if live_resolver is not None:
+            candidate = await live_resolver.enrich_match(item, candidate)
+        matches.append(candidate)
+    return matches
+
+
 # fmt: off
 
 async def execute_bulk_search_payload(
@@ -298,17 +320,13 @@ async def execute_bulk_search_payload(
                             consorzio_present_ids = _load_consorzio_presence_by_particella_ids(
                                 db, {p.id for p in items if p.id is not None}
                             )
-                            matches = []
-                            for item in items:
-                                candidate = _build_match(
-                                    db,
-                                    item,
-                                    presente_in_catasto_consorzio=(item.id in consorzio_present_ids),
-                                    live_authoritative=live_authoritative,
-                                )
-                                if live_resolver is not None:
-                                    candidate = await live_resolver.enrich_match(item, candidate)
-                                matches.append(candidate)
+                            matches = await _build_candidate_matches(
+                                db,
+                                items,
+                                consorzio_present_ids,
+                                live_resolver,
+                                live_authoritative=live_authoritative,
+                            )
                             results.append(
                                 CatAnagraficaBulkSearchRowResult(
                                     row_index=row.row_index,

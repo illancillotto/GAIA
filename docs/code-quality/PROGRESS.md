@@ -3,6 +3,17 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — arricchimento candidati multipli (2026-10-06)
+
+- Slice `IMPROVED`: il loop di costruzione dei candidati multipli è isolato in
+  `_build_candidate_matches`, preservando ordine, flag authoritative e resolver
+  live per ogni particella.
+- Metriche `execute_bulk_search_payload` cognitive/cyclomatic/LOC `348/66/320
+  -> 331/64/316`; helper `3/3/20` con cinque parametri e nessuna violation.
+- Suite Catasto PASS; coverage `execution.py` 100% (`118/118` statement,
+  `56/56` branch). Ruff, format, ratchet contro `HEAD` (`6ec233e9`) e
+  Graphify Catasto PASS; MCP/Wiki esclusi.
+
 ### Catasto — arricchimento ricerca CF/P.IVA (2026-10-06)
 
 - Slice `IMPROVED`: il loop di costruzione e arricchimento dei match fiscali è
