@@ -3,6 +3,17 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — mapping intestatario utenza (2026-10-06)
+
+- Slice `IMPROVED`: il controllo di presenza del soggetto e della persona usa
+  un predicato aggregato, mantenendo il fallback Capacitas e il mapping DB.
+- Metriche callable `_intestatario_response_from_utenza_row` cognitive/
+  cyclomatic/LOC `20/18/30 -> 16/16/30`; aggregati file `129/123 -> 121/121`,
+  LOC invariato (`443`).
+- Suite Catasto PASS; `intestatari.py` full-file 100% (`173/173` statement,
+  `74/74` branch). Ruff, format e ratchet contro `HEAD` (`813cb7a8`) PASS.
+  Graphify Catasto aggiornato; MCP/Wiki esclusi.
+
 ### Catasto — caricamento intestatari da snapshot (2026-10-06)
 
 - Slice `IMPROVED`: la lettura e deduplicazione delle righe certificate è

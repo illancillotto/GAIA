@@ -93,7 +93,7 @@ def _intestatario_response_from_utenza_row(
     if row.subject_id is not None:
         subject = db.get(AnagraficaSubject, row.subject_id)
         person = db.get(AnagraficaPerson, row.subject_id)
-        if subject is not None and person is not None:
+        if all((subject is not None, person is not None)):
             return _person_response_from_db(person, subject, deceduto=row.deceduto)
 
     cognome, nome = _split_denominazione(row.denominazione)
