@@ -172,6 +172,60 @@ function formatPresenceRecency(minutes: number): string {
   return `Attivo ${minutes} min fa`;
 }
 
+function UserPresenceActivityCard({ selectedUser, selectedRow }: { selectedUser: ApplicationUser; selectedRow?: GaiaUserRow }) {
+  return (
+    <div className="rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4 lg:col-span-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-sm font-medium text-gray-800">Attività GAIA recente</p>
+          <p className="mt-1 text-xs leading-5 text-gray-500">Presenza applicativa basata su heartbeat negli ultimi 15 minuti.</p>
+        </div>
+        {selectedRow?.presenceMinutesSinceLastSeen != null ? (
+          <Badge variant={selectedRow.presenceVisible ? "success" : "neutral"}>
+            {selectedRow.presenceVisible ? "Scheda visibile" : "In background"}
+          </Badge>
+        ) : (
+          <Badge variant="neutral">Nessun segnale recente</Badge>
+        )}
+      </div>
+      {selectedRow?.presenceMinutesSinceLastSeen == null ? (
+        <p className="mt-4 text-sm text-gray-500">L&apos;utente non risulta attivo nella finestra corrente.</p>
+      ) : (
+        <div className="mt-4 space-y-3 text-sm text-gray-600">
+          <p><span className="font-medium text-gray-900">Recenza:</span> {formatPresenceRecency(selectedRow.presenceMinutesSinceLastSeen)}</p>
+          <p><span className="font-medium text-gray-900">Modulo:</span> {selectedRow.presenceModule || "n/d"}</p>
+          <p><span className="font-medium text-gray-900">Pagina:</span> {selectedRow.presenceRouteLabel || selectedRow.presencePath || "n/d"}</p>
+          <p><span className="font-medium text-gray-900">Azione:</span> {selectedRow.presenceActionLabel || "Nessuna azione esplicita"}</p>
+          {selectedRow.presencePath ? (
+            <div className="flex flex-wrap gap-2">
+              <a className="btn-secondary" href={selectedRow.presencePath}>Apri pagina corrente</a>
+              {selectedRow.presenceModule === "operazioni" ? (
+                <a className="btn-secondary" href={`/operazioni/attivita?operator_user_id=${selectedUser.id}`}>Vedi attività operatore</a>
+              ) : null}
+            </div>
+          ) : null}
+          {selectedRow.recentRoutes.length > 0 ? (
+            <div className="rounded-2xl border border-white bg-white px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">Ultimi passaggi</p>
+              <div className="mt-3 space-y-2">
+                {selectedRow.recentRoutes.slice(0, 4).map((route) => (
+                  <div key={`${route.path}-${route.seen_at}`} className="flex items-start justify-between gap-3 text-xs">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-gray-800">{route.route_label || route.path}</p>
+                      <p className="truncate text-gray-500">{route.path}</p>
+                    </div>
+                    <span className="shrink-0 text-gray-400">{formatDateTimeLabel(route.seen_at)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function formatModules(user: ApplicationUser): string {
   const labels: [boolean | undefined, string][] = [
     [user.module_accessi, "NAS Control"], [user.module_rete, "Rete"],
@@ -877,76 +931,7 @@ export default function GaiaUsersPage() {
           ) : null}
 
           {isEditMode && selectedUser ? (
-            <div className="rounded-2xl border border-[#dfe7dc] bg-[#f8fbf8] p-4 lg:col-span-6">
-              {(() => {
-                const selectedRow = rows.find((row) => row.id === selectedUser.id);
-                return (
-                  <>
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-gray-800">Attività GAIA recente</p>
-                        <p className="mt-1 text-xs leading-5 text-gray-500">
-                          Presenza applicativa basata su heartbeat negli ultimi 15 minuti.
-                        </p>
-                      </div>
-                      {selectedRow?.presenceMinutesSinceLastSeen != null ? (
-                        <Badge variant={selectedRow.presenceVisible ? "success" : "neutral"}>
-                          {selectedRow.presenceVisible ? "Scheda visibile" : "In background"}
-                        </Badge>
-                      ) : (
-                        <Badge variant="neutral">Nessun segnale recente</Badge>
-                      )}
-                    </div>
-                    {selectedRow?.presenceMinutesSinceLastSeen == null ? (
-                      <p className="mt-4 text-sm text-gray-500">L&apos;utente non risulta attivo nella finestra corrente.</p>
-                    ) : (
-                      <div className="mt-4 space-y-3 text-sm text-gray-600">
-                        <p>
-                          <span className="font-medium text-gray-900">Recenza:</span> {formatPresenceRecency(selectedRow.presenceMinutesSinceLastSeen)}
-                        </p>
-                        <p>
-                          <span className="font-medium text-gray-900">Modulo:</span> {selectedRow.presenceModule || "n/d"}
-                        </p>
-                        <p>
-                          <span className="font-medium text-gray-900">Pagina:</span> {selectedRow.presenceRouteLabel || selectedRow.presencePath || "n/d"}
-                        </p>
-                        <p>
-                          <span className="font-medium text-gray-900">Azione:</span> {selectedRow.presenceActionLabel || "Nessuna azione esplicita"}
-                        </p>
-                        {selectedRow.presencePath ? (
-                          <div className="flex flex-wrap gap-2">
-                            <a className="btn-secondary" href={selectedRow.presencePath}>
-                              Apri pagina corrente
-                            </a>
-                            {selectedRow.presenceModule === "operazioni" ? (
-                              <a className="btn-secondary" href={`/operazioni/attivita?operator_user_id=${selectedUser.id}`}>
-                                Vedi attività operatore
-                              </a>
-                            ) : null}
-                          </div>
-                        ) : null}
-                        {selectedRow.recentRoutes.length > 0 ? (
-                          <div className="rounded-2xl border border-white bg-white px-4 py-3">
-                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">Ultimi passaggi</p>
-                            <div className="mt-3 space-y-2">
-                              {selectedRow.recentRoutes.slice(0, 4).map((route) => (
-                                <div key={`${route.path}-${route.seen_at}`} className="flex items-start justify-between gap-3 text-xs">
-                                  <div className="min-w-0">
-                                    <p className="truncate font-medium text-gray-800">{route.route_label || route.path}</p>
-                                    <p className="truncate text-gray-500">{route.path}</p>
-                                  </div>
-                                  <span className="shrink-0 text-gray-400">{formatDateTimeLabel(route.seen_at)}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
+            <UserPresenceActivityCard selectedUser={selectedUser} selectedRow={rows.find((row) => row.id === selectedUser.id)} />
           ) : null}
 
           {isEditMode && selectedUser ? (

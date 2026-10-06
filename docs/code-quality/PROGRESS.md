@@ -6996,3 +6996,22 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   CLI, test e documentazione di queste tre slice, non gli altri refactoring
   MCP o i lavori concorrenti. Le sezioni dei documenti condivisi sono staged
   selettivamente. Nessun push; i gate globali estranei restano dichiarati.
+
+## 2026-10-06 — pannello attività utenti GAIA
+
+- Una sola slice sull'hotspot `renderUserEditor` in
+  `frontend/src/app/gaia/users/page.tsx`: estratto il pannello readonly
+  “Attività GAIA recente” nel componente `UserPresenceActivityCard`, senza
+  modificare API, stato, routing o comportamento UI.
+- Metriche callable: `renderUserEditor` cognitive/cyclomatic/LOC 64/65/425
+  -> 52/53/356. Il nuovo componente mantiene i rami del pannello e resta
+  caratterizzato dai test pagina esistenti; il debito non viene trasferito a
+  un nuovo error-level finding.
+- Verifica: 30 test pagina verdi; coverage isolata del file 362/362
+  statement, 379/379 branch, 141/141 funzioni, 317/317 linee (100%);
+  `npm run typecheck:from-root` verde; `git diff --check` verde.
+- Ratchet completo contro merge-base `6b61fd27`: nessun finding nuovo; restano
+  i sei finding legacy gia noti (parametri inCASS/xlsm, hook utenti e callback
+  Organigramma). Esito `IMPROVED`; baseline, soglie ed esclusioni invariati.
+- Evidenze: `/tmp/gaia-users-before.json`, `/tmp/gaia-users-after.json`,
+  `/tmp/gaia-users-after-coverage`.
