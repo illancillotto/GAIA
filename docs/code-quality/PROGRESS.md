@@ -3,6 +3,45 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Frontend API — normalizzazione errori HTTP (2026-10-06)
+
+- Slice `IMPROVED`, snapshot `2852ec70`, MPC/MCP escluso. Il formatter
+  upload esistente diventa `formatResponseErrorDetail` ed e riusato dal
+  decoder HTTP, eliminando la duplicazione per dettagli non-null. Nessun
+  helper aggiunto: il parsing JSON, status HTTP, detailData e catch restano
+  responsabilita di `readResponseError`; i fallback restano nei due trasporti.
+- Contratto invariato: null/undefined con JSON valido mantiene Request failed
+  per fetch, mentre upload mantiene il proprio statusText; parsing o
+  serializzazione falliti usano statusText nel catch HTTP. Stringa vuota,
+  messaggio oggetto vuoto, dettagli strutturati e falsy restano invariati.
+  Nessuna modifica al decoder blob o al lifecycle fetch/XHR.
+- Tre nuove caratterizzazioni PASS prima e dopo: serializzazione fallita
+  senza statusText e serializzazione di simbolo/funzione che restituisce
+  undefined senza introdurre un fallback. 84 test mirati PASS; coverage
+  full-file prima 120 statement / 99 branch, dopo 116 / 91, tutti 100%,
+  18 funzioni invariate al 100%. Nessuna exclusion o suppression.
+- `readResponseError` cognitive/cyclomatic/LOC/nesting
+  `18/9/23/3 -> 4/4/14/1`; formatter invariato `8/6/14/1`, nessuna violation.
+  Aggregati cognitive `101 -> 87`, cyclomatic `89 -> 84`, max cognitive
+  `18 -> 16`, LOC `215 -> 206`; warning `3 -> 2`, error zero invariati.
+  Restano solo i due warning di request; nessun debito trasferito.
+- Suite frontend completa `npm run test:unit`: 277 file / 3985 test PASS,
+  sette diagnostiche jsdom sulla navigazione non implementata, nessuna failure.
+  Coverage con `VITEST_COVERAGE_INCLUDE=src/lib/api/core.ts npm run
+  test:coverage -- tests/unit/api-core.test.ts tests/unit/api-request.test.ts`;
+  typecheck, ESLint runtime/test e diff-check PASS. Ratchet full-scan contro
+  `6b61fd27`: 21 finding globali invariati, zero nel runtime modificato.
+  Baseline, report versionati, soglie ed esclusioni invariati.
+- Graphify frontend forzato tramite target dopo la patch pruning idempotente:
+  6551 nodi / 15670 archi / 218 community; HTML saltato per il limite 5000.
+  Verificati zero nodi col nome del formatter precedente e il nuovo simbolo.
+  Evidenze `/tmp/gaia-http-error-{before,after}.json`,
+  `/tmp/gaia-http-error-characterization.log`, `/tmp/gaia-http-error-final-tests.log`,
+  `/tmp/gaia-http-error-full-unit.log`, `/tmp/gaia-http-error-typecheck.log`,
+  `/tmp/gaia-http-error-lint.log`, `/tmp/gaia-http-error-full-ratchet.json`,
+  `/tmp/gaia-http-error-scoped-ratchet.json`, `/tmp/gaia-http-error-graphify.log`.
+  Modifiche concorrenti preservate; stop dopo la slice, deploy non eseguito.
+
 ### Frontend API — dettaglio errore upload XHR (2026-10-06)
 
 - Slice `IMPROVED`, snapshot `679d02f3`, MPC/MCP escluso. Il formatter

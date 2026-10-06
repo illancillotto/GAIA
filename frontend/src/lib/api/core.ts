@@ -49,17 +49,8 @@ async function readResponseError(response: Response): Promise<ApiError> {
     const payload = (await response.json()) as { detail?: unknown };
     detailData = payload.detail;
 
-    if (typeof payload.detail === "string") {
-      detail = payload.detail;
-    } else if (
-      payload.detail &&
-      typeof payload.detail === "object" &&
-      "message" in payload.detail &&
-      typeof payload.detail.message === "string"
-    ) {
-      detail = payload.detail.message;
-    } else if (payload.detail != null) {
-      detail = JSON.stringify(payload.detail);
+    if (payload.detail != null) {
+      detail = formatResponseErrorDetail(payload.detail);
     }
   } catch {
     detail = response.statusText || detail;
@@ -166,7 +157,7 @@ export async function requestBlob(path: string, init?: RequestInit): Promise<Blo
   return response.blob();
 }
 
-function formatUploadErrorDetail(detail: unknown): string {
+function formatResponseErrorDetail(detail: unknown): string {
   if (typeof detail === "string") {
     return detail;
   }
@@ -214,7 +205,7 @@ export async function requestFormDataWithUploadProgress<T>(
       const detailData: unknown = payload?.detail;
 
       if (detailData != null) {
-        detail = formatUploadErrorDetail(detailData);
+        detail = formatResponseErrorDetail(detailData);
       } else if (xhr.statusText) {
         detail = xhr.statusText;
       }

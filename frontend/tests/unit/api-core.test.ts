@@ -214,6 +214,34 @@ describe("api core helpers", () => {
     await expect(requestBlob("/broken")).rejects.toMatchObject({ message: "Server error", status: 500 });
   });
 
+  test("retains default detail when serialization fails without status text", async () => {
+    const detail = { value: BigInt(1) };
+    const response = new Response(null, { status: 400 });
+    vi.spyOn(response, "json").mockResolvedValue({ detail });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+
+    await expect(request("/error")).rejects.toMatchObject({
+      message: "Request failed",
+      status: 400,
+      detailData: detail,
+    });
+  });
+
+  test.each([
+    { label: "symbol", detail: Symbol("invalid") },
+    { label: "function", detail: () => undefined },
+  ])("does not add a fallback when serialization returns undefined: $label", async ({ detail }) => {
+    const response = new Response(null, { status: 400, statusText: "Bad Request" });
+    vi.spyOn(response, "json").mockResolvedValue({ detail });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+
+    await expect(request("/error")).rejects.toMatchObject({
+      message: "",
+      status: 400,
+      detailData: detail,
+    });
+  });
+
   test("request and requestBlob retain default messages for malformed or incomplete errors", async () => {
     const plainJson = new Response('{"ok":true}', { status: 200 });
     plainJson.headers.delete("content-type");
