@@ -3,6 +3,44 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Worker SISTER — messaggi di sessione bloccata (2026-10-06)
+
+- Slice `IMPROVED`, snapshot `75c008cd`: i tre messaggi gia riconosciuti
+  sono una sequenza immutabile `_BLOCKED_SESSION_MARKERS`, interrogata con
+  `any`. Stessi messaggi, ordine e substring; nessun nuovo helper o variazione
+  a status 501, URL initPortale, homepage richiesta, letture browser/log,
+  correlazione, callback, PDF o retry. Sessione bloccata resta fail-closed.
+- Dieci nuove caratterizzazioni verdi prima e dopo: messaggi nel titolo
+  oppure nel corpo, maiuscole, apostrofo/accento e whitespace normalizzato;
+  i messaggi bloccano anche una pagina con entrambe le indicazioni di home
+  pronta. Il chiamante continua a sollevare SisterServerError HTTP 501.
+- `_is_non_blocking_init_portale_error` cognitive/cyclomatic/LOC/nesting
+  `17/15/16/2 -> 15/13/16/2`; aggregati file cognitive `87 -> 85`,
+  cyclomatic `85 -> 83`, LOC `177 -> 178` per la costante, sotto soglia.
+  15 callable invariati, violation 4 invariate, error `1 -> 0`, warning
+  `3 -> 4`; restano i warning, senza trasferimento a callable nuovi.
+- 40 test mirati PASS; full-file coverage `sister_browser_reliability.py`
+  `149/149` statement e `40/40` branch, 100%, nessuna linea esclusa.
+  Browser/DOM in processo separato: 86 PASS; worker reliability isolato:
+  23 PASS. La combinazione con lo stub Playwright di `test_worker.py` fallisce:
+  7 failure HTML e 102 PASS, TypeError async context manager. Stesse sette
+  failure e conteggi riprodotti caricando in memoria il runtime del commit
+  `75c008cd`, senza modificare il checkout. Failure preesistente d'isolamento
+  dei test, non corretta o nascosta da questa slice; nessuna suppression.
+- Ruff check, lint-backend contro `75c008cd`, diff-check e ratchet mirato
+  contro merge-base `6b61fd27` PASS. File legacy non riformattati.
+  Ratchet globale stesso merge-base `23 -> 22` finding, zero sul runtime
+  toccato; baseline, soglie ed esclusioni invariati. Gate globali ancora rossi.
+  Graphify worker aggiornato: 1678 nodi, 3903 archi, 90 community.
+- Evidenze `/tmp/gaia-browser-{before,after}.json`,
+  `/tmp/gaia-browser-characterization.log`, `/tmp/gaia-browser-suite.log`,
+  `/tmp/gaia-browser-coverage.json`, `/tmp/gaia-browser-integration.log`,
+  `/tmp/gaia-browser-base-integration.log`, `/tmp/gaia-browser-real-dom.log`,
+  `/tmp/gaia-browser-worker-isolated.log`, `/tmp/gaia-browser-ratchet.json`,
+  `/tmp/gaia-browser-full-ratchet.json`, `/tmp/gaia-browser-lint.log`,
+  `/tmp/gaia-browser-graphify.log`. MPC/MCP e modifiche concorrenti preservati.
+  Stop dopo questa slice; deploy non eseguito, programma globale incompleto.
+
 ### Presenze — checkpoint del retry sync (2026-10-06)
 
 - Slice `IMPROVED`, snapshot `7ab50fdb`, prerequisito del rilascio:

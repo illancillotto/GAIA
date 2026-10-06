@@ -5,6 +5,7 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -249,6 +250,26 @@ def test_download_valid_pdf_is_atomic_and_validates_signature(
         assert not destination.exists()
     assert page.clicks == ["#save"]
     assert not list(destination.parent.glob("*.part"))
+
+
+@pytest.mark.parametrize(
+    "message",
+    ["utente bloccato", "Gia' in sessione", "Già in sessione", "utente\nbloccato", "Già\tin   sessione"],
+)
+@pytest.mark.parametrize("in_title", [False, True])
+def test_init_portale_session_blocking_messages_override_ready_home(message: str, in_title: bool) -> None:
+    endpoint = "https://sister3.agenziaentrate.gov.it/portale-rest/rs/initPortale"
+    page = _Page(
+        url="https://sister3.agenziaentrate.gov.it/Servizi/",
+        body="Consultazioni e certificazioni" + (" " + message if not in_title else ""),
+    )
+    page.title = AsyncMock(return_value="Home dei servizi" + (" " + message if in_title else ""))
+
+    assert not asyncio.run(_is_non_blocking_init_portale_error(page, 501, endpoint))
+    state = SisterSessionState(pending_server_error=(501, endpoint))
+    with pytest.raises(SisterServerError, match="HTTP 501"):
+        asyncio.run(raise_if_sister_server_error(page, state))
+    assert state.pending_server_error is None
 
 
 def test_raise_if_sister_server_error_prefers_captured_http_error() -> None:

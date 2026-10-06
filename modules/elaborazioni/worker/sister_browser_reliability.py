@@ -22,6 +22,8 @@ from sister_request_rows import SisterRequestCorrelation, extract_remote_id
 logger = logging.getLogger(__name__)
 UTC = timezone.utc  # noqa: UP017 - Production worker uses Python 3.10.
 
+_BLOCKED_SESSION_MARKERS = ("UTENTE BLOCCATO", "GIA' IN SESSIONE", "GIÀ IN SESSIONE")
+
 RemoteStateCallback = Callable[[str | None, str | None, str], None]
 
 
@@ -156,7 +158,7 @@ async def _is_non_blocking_init_portale_error(page, status: int, response_url: s
         logger.debug("Impossibile validare initPortale 501 non bloccante: %s", exc)
         return False
     upper = re.sub(r"\s+", " ", f"{title} {body_text}").upper()
-    if "UTENTE BLOCCATO" in upper or "GIA' IN SESSIONE" in upper or "GIÀ IN SESSIONE" in upper:
+    if any(marker in upper for marker in _BLOCKED_SESSION_MARKERS):
         return False
     return "HOME DEI SERVIZI" in upper and "CONSULTAZIONI E CERTIFICAZIONI" in upper
 

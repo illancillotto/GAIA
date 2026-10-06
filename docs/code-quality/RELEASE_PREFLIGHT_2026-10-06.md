@@ -76,7 +76,7 @@ implicitamente hotfix e configurazioni di produzione non riconciliati.
 Prima del rilascio occorrono:
 
 1. Chiudere o decidere esplicitamente i finding globali in slice revisionabili
-   (24 nello snapshot iniziale, 23 dopo la slice retry sotto).
+   (24 nello snapshot iniziale, 23 dopo retry, 22 dopo la slice SISTER sotto).
 2. Verificare le regressioni degli hotfix e le immagini realmente attive,
    conservando backup e possibilita di rollback prima di qualsiasi mutazione.
 3. Confrontare overlay ed env senza pubblicare segreti, preservando volumi,
@@ -163,3 +163,28 @@ variazione a HTTP, auth, stato, limite tentativi, artefatti o transazioni.
 Evidenze `/tmp/gaia-retry-full-ratchet.json` e `/tmp/gaia-retry-coverage.json`;
 metriche e comandi in `PROGRESS.md`. Questa verifica non autorizza a saltare
 gli altri prerequisiti e non costituisce un deploy. MPC/MCP esclusi dalla slice.
+
+## Secondo finding chiuso — classificazione 501 SISTER
+
+La regola dei tre messaggi di sessione bloccata usa una sequenza immutabile
+e `any`, con gli stessi match e la stessa precedenza. Un messaggio bloccante
+resta terminale anche se titolo/corpo contengono le indicazioni di home pronta.
+Nessuna modifica a navigazione, timeout, correlazione, callback o retry.
+
+- `_is_non_blocking_init_portale_error`: cognitive/cyclomatic 17/15 -> 15/13,
+  LOC 16 invariata; nessun helper introdotto. Errore cyclomatic eliminato,
+  warning residui. Cognitive/cyclomatic aggregate diminuiscono entrambe di 2.
+- 10 nuove caratterizzazioni verdi prima e dopo; 40 test mirati e full-file
+  coverage 149 statement e 40 branch al 100%, zero esclusioni.
+- 86 test browser/DOM e 23 worker passano in processi isolati. L'esecuzione
+  combinata produce 7 failure HTML per lo stub `async_playwright` di
+  `test_worker.py`: riprodotte identiche anche sul runtime `75c008cd`.
+  Nessuna modifica a test estranei o suppression; la suite combinata non e verde.
+- Ruff/lint, diff-check e ratchet mirato verdi; ratchet globale contro
+  `6b61fd27` 23 -> 22 finding, nessuno sul runtime toccato. Graphify worker
+  aggiornato con il target dedicato. Baseline e soglie restano invariate.
+
+Evidenze `/tmp/gaia-browser-full-ratchet.json`,
+`/tmp/gaia-browser-coverage.json`, `/tmp/gaia-browser-base-integration.log`.
+Il deploy resta non eseguito: oltre ai finding globali, la failure preesistente
+di isolamento dei test combinati deve essere considerata nella verifica CI.
