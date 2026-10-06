@@ -1,6 +1,23 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-05 — scansione proprietari e sezioni SISTER
+
+- Scan legacy owner/indici sezioni isolato, header intestato/intestati
+  classificato una volta; INTESTAT uppercase distinto da header catastali.
+  Ultimo marker raggiunto prima break, ordine/start e alias raw_lines invariati;
+  structured owners sostituisce solo non-empty, history mantiene due scansioni.
+- Parser testo cog/cyc/LOC/nesting33/22/40/2 ->10/10/18/2, helper sotto soglia;
+  cognitive file102 ->93, branching73 ->70. Due error eliminati, resta warning
+  ciclomatico10 pubblico; nessun debt transfer o cambio API/schema/parser-version/
+  baseline/config/scope/precedenza sezioni/status.
+- Sei caratterizzazioni prima/dopo, 83 test parser/persistenza/backfill PASS,
+  full-file100% statement203/branch78; 12288 layout marker/terminatori con trace
+  ordine/start equivalenti, 3600 legacy/3600 metadati/2000 testi/45229 sequenze
+  identici. Ratchet/Ruff mirato PASS; lint globale UP038 InCass concorrente.
+  Graphify backend codice e docs Catasto/piattaforma aggiornati prima del commit;
+  campagna non-MCP resta attiva.
+
 ### 2026-10-05 — mapping proprietari legacy SISTER
 
 - Mapper proprietario e continuazioni separati, diritto/quota condivisi;

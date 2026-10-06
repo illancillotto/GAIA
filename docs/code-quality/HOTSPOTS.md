@@ -14,6 +14,18 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, SISTER scansione proprietari/sezioni, 2026-10-05:
+`parse_sister_visura_text` `IMPROVED`, cog/cyc/LOC/nesting33/22/40/2 ->10/10/18/2.
+Scan11/7/21/2, lettura riga owner2/3/13/1 e header1/2/9/1 sotto soglia;
+classificazione intestato/intestati deduplicata, INTESTAT uppercase preservato.
+File cognitive102 ->93, cyclomatic93 invariato, branching73 ->70, LOC249 ->270;
+due error eliminati, resta warning ciclomatico10 nel pubblico, nessun transfer.
+83 test/full-file100%, 12288 layout marker con ordine/start sezioni equivalenti,
+3600 legacy, 3600 metadati, 2000 testi e 45229 sequenze/start invariati.
+Ratchet/Ruff mirato PASS, lint globale UP038 InCass concorrente;
+baseline/config/scope/versione parser invariati, campagna non-MCP attiva.
+Prossimo candidato warning pubblico10, non completamento programma.
+
 Campagna non-MCP, SISTER mapping proprietari legacy, 2026-10-05:
 `parse_sister_visura_text` `IMPROVED`, cog/cyc/LOC/nesting48/28/61/3 ->33/22/40/2.
 Mapper1/2/15/1, continuazione1/2/5/1, diritto1/2/5/1 sotto soglia; guardia

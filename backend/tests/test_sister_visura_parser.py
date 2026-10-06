@@ -327,6 +327,68 @@ def test_legacy_owner_remainder_search_continuation_match_and_optional_keys(
     assert parse_sister_visura_text(text)["owners"] == [expected]
 
 
+@pytest.mark.parametrize(
+    "header,count",
+    [
+        ("Intestati catastali", 0),
+        ("INTESTATI CATASTALI", 1),
+        ("intestati", 1),
+        ("INTESTAT other", 1),
+    ],
+)
+def test_section_header_case_sensitive_legacy_start(header, count):
+    payload = parse_sister_visura_text(f"{header}\n1 Rossi Mario nato a Roma (RM) il 01/01/1980")
+    assert len(payload["owners"]) == count
+
+
+@pytest.mark.parametrize("structured", [False, True])
+def test_section_indices_last_reached_marker_and_termination(monkeypatch, structured):
+    calls = []
+    structured_owners = [{"denominazione": "Structured"}] if structured else []
+    events = [{"act": "History"}]
+    related = [{"foglio": "1", "particella": "2"}]
+
+    def current_parser(lines, start):
+        calls.append(("current", lines, start))
+        return structured_owners
+
+    def history_parser(lines, start):
+        calls.append(("history", lines, start))
+        return events, related
+
+    monkeypatch.setattr(runtime, "_parse_current_owners", current_parser)
+    monkeypatch.setattr(runtime, "_parse_history_events", history_parser)
+    payload = parse_sister_visura_text(
+        "\n".join(
+            [
+                "intestati",
+                "ignored",
+                "Intestati catastali",
+                "ignored",
+                "Storia degli intestati",
+                "INTESTATI",
+                "1 Rossi Mario nato a Roma (RM) il 01/01/1980",
+                "Situazione degli intestati dal 01/01/2020",
+                "Intestati catastali",
+                "Storia degli intestati",
+                "1. Ignored Owner",
+            ]
+        )
+    )
+    assert [(name, start) for name, _, start in calls] == [
+        ("current", 6),
+        ("history", 5),
+        ("history", 0),
+    ]
+    assert all(lines is payload["raw_lines"] for _, lines, _ in calls)
+    assert payload["history_events"] is events
+    assert payload["related_parcels"] is related
+    if structured:
+        assert payload["owners"] is structured_owners
+    else:
+        assert payload["owners"][0]["denominazione"] == "Rossi Mario"
+
+
 def test_pdf_pages_and_parse_adapter(monkeypatch):
     from types import SimpleNamespace
 

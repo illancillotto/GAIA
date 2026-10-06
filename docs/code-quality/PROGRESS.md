@@ -3,6 +3,45 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### SISTER — scansione proprietari e sezioni (2026-10-05)
+
+- Chiusura `IMPROVED`: scansione owner/indici sezioni isolata, classificazione
+  header unica senza i due OR duplicati; intestato/intestati riconosciuto una
+  volta e flag INTESTAT uppercase distinto. Lettura owner completa separata.
+- Target cog/cyc/LOC/nesting33/22/40/2 ->10/10/18/2; scan11/7/21/2,
+  riga owner2/3/13/1, header1/2/9/1 tutti sotto soglia. Due error eliminati,
+  resta un warning ciclomatico10 nel pubblico; nessuna violation trasferita.
+- File cognitive sum/max102/33 ->93/11, cyclomatic93/22 ->93/10,
+  branching73 ->70, callable20 ->23, LOC249 ->270 sotto soglia file,
+  densita0.783133 ->0.688889/import7 invariati. Riduzione aggregata reale;
+  baseline/config/scope/versione parser invariati.
+- Sei caratterizzazioni nuove prima/dopo per casing header, ultimo indice
+  raggiunto prima break, ordine/current6/history5/history0 e alias raw_lines,
+  sostituzione structured solo non-empty. 39 parser full-file100% prima
+  statement190/branch76; 83 parser/persistenza/backfill PASS dopo,
+  full-file100% statement203/branch78, zero missing/partial/esclusioni.
+- 12288 combinazioni marker/terminatori/casing/whitespace confrontano payload,
+  ordine e start chiamate parser sezioni contro `fd7e0c48`; anche 3600 layout
+  legacy, 3600 metadati, 2000 testi e 45229 sequenze/start identici, input invariati.
+  Ratchet merge-base, Ruff mirato, format-check test/whitespace PASS;
+  lint globale compileall PASS, solo UP038 InCass concorrente fuori slice.
+- Graphify backend codice e docs Catasto/piattaforma richiesto prima del commit
+  separato; nessun push, change concorrenti preservate. Campagna non-MCP attiva,
+  prossimo candidato warning ciclomatico pubblico10, non zero debito globale.
+- Preflight `fd7e0c48`: singolo hotspot parse_sister_visura_text33/22/40/2,
+  due error; file cognitive102/cyclomatic93/branching73/LOC249/venti callable.
+- Isolare scansione legacy proprietari e indici sezioni, classificando header
+  una volta: intestato/intestati implica sia owner section sia start legacy,
+  INTESTAT uppercase resta distinto da intestati catastali case-insensitive.
+- Lettura riga owner completa (match, append, continuazione) separata dallo
+  scan; nessun helper sopra soglia ammesso, no estrazione neutra/debt transfer.
+  Aggiornare indici prima del continue/break, conservare ultimo marker raggiunto;
+  header dopo terminatore restano ignorati, structured owners sostituisce solo
+  se non vuoto, history mantiene due scansioni/start originali.
+- Caratterizzazione originale full-file100%, differenziali header/sezioni e
+  testi, aggregati/ratchet contro HEAD, Ruff/Graphify e commit autorizzato;
+  baseline/config/scope/parser-version/change concorrenti invariati.
+
 ### SISTER — mapping proprietari legacy (2026-10-05)
 
 - Chiusura `IMPROVED`: mapper proprietario/continuazioni separati, assegnazioni

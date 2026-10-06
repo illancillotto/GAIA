@@ -237,33 +237,60 @@ def _update_legacy_owner_continuation(owner: dict[str, Any], line: str) -> None:
     _update_legacy_owner_right(owner, _RIGHT_RE.match(line))
 
 
-def parse_sister_visura_text(text: str) -> dict[str, Any]:
-    lines = [re.sub(r"\s+", " ", line).strip() for line in text.splitlines()]
-    lines = [line for line in lines if line]
-    result = _build_visura_payload(lines)
+def _visura_section_flags(line: str) -> tuple[bool, bool, bool]:
+    folded = line.casefold()
+    if folded in {"intestato", "intestati"}:
+        return True, False, True
+    return (
+        folded.startswith("intestati catastali"),
+        folded.startswith("storia degli intestati"),
+        line.startswith("INTESTAT"),
+    )
+
+
+def _consume_legacy_owner_line(
+    owners: list[dict[str, Any]],
+    pending_owner: dict[str, Any] | None,
+    line: str,
+) -> dict[str, Any] | None:
+    match = _OWNER_RE.search(line)
+    if match:
+        pending_owner = _build_legacy_owner(match, line)
+        owners.append(pending_owner)
+        return pending_owner
+    if pending_owner is not None:
+        _update_legacy_owner_continuation(pending_owner, line)
+    return pending_owner
+
+
+def _scan_visura_ownership(lines: list[str]) -> tuple[list[dict[str, Any]], int | None, int | None]:
+    owners: list[dict[str, Any]] = []
     owners_started = False
     pending_owner: dict[str, Any] | None = None
     owner_start: int | None = None
     history_start: int | None = None
     for index, line in enumerate(lines):
-        if line.casefold().startswith("intestati catastali") or line.casefold() in {"intestato", "intestati"}:
+        owner_header, history_header, starts_legacy = _visura_section_flags(line)
+        if owner_header:
             owner_start = index + 1
-        if line.casefold().startswith("storia degli intestati"):
+        if history_header:
             history_start = index + 1
-        if line.casefold() in {"intestato", "intestati"} or line.startswith("INTESTAT"):
+        if starts_legacy:
             owners_started = True
             continue
         if not owners_started:
             continue
         if line.casefold().startswith("situazione degli intestati"):
             break
-        owner_match = _OWNER_RE.search(line)
-        if owner_match:
-            pending_owner = _build_legacy_owner(owner_match, line)
-            result["owners"].append(pending_owner)
-            continue
-        if pending_owner is not None:
-            _update_legacy_owner_continuation(pending_owner, line)
+        pending_owner = _consume_legacy_owner_line(owners, pending_owner, line)
+    return owners, owner_start, history_start
+
+
+def parse_sister_visura_text(text: str) -> dict[str, Any]:
+    lines = [re.sub(r"\s+", " ", line).strip() for line in text.splitlines()]
+    lines = [line for line in lines if line]
+    result = _build_visura_payload(lines)
+    result["owners"], owner_start, history_start = _scan_visura_ownership(lines)
     if owner_start is not None:
         structured_owners = _parse_current_owners(lines, owner_start)
         if structured_owners:
