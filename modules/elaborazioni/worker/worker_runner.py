@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import asyncio
 import os
 
-from app.worker_health import WorkerHeartbeat, run_with_heartbeat
-
 import worker as worker_module
+from app.worker_health import WorkerHeartbeat, run_with_heartbeat
+from sister_worker_watchdog import run_supervised
 
 
 async def run_worker(worker: worker_module.CatastoWorker) -> None:
@@ -23,4 +22,7 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_supervised(
+        main,
+        WorkerHeartbeat(os.getenv("GAIA_WORKER_HEALTH_SERVICE", "elaborazioni-worker")).path,
+    )
