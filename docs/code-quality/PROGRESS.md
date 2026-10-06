@@ -15,6 +15,17 @@ blocco verificato e prima di chiudere un goal.
   PASS. Ratchet contro `HEAD` (`f8e0b864`) PASS; MCP/Wiki e file concorrenti
   esclusi.
 
+### Catasto — fallback contesto certificato live (2026-10-06)
+
+- Slice `IMPROVED`: il fallback di `_resolve_cert_params` è isolato,
+  mantenendo precedenza del contesto diretto, lookup utenza/occupancy e
+  sentinel `None` invariati.
+- Metriche `_resolve_cert_params` cognitive/cyclomatic/LOC `17/17/31 ->
+  6/6/18`; helper `10/11/13`; LOC file invariato (`579`) e ratchet senza
+  findings.
+- Suite Catasto e coverage `resolvers.py` 100% (`314/314` statement,
+  `112/112` branch); Ruff, format e Graphify PASS. MCP/Wiki esclusi.
+
 ### Catasto — parsing upload bulk (2026-10-06)
 
 - Slice `IMPROVED`: il caricamento CSV/XLSX è isolato dal mapping delle righe,

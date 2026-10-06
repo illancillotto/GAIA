@@ -547,17 +547,18 @@ class _CapacitasLiveResolver:
                 match.cert_ccs or "00000",
             )
 
-        latest_utenza = self._db.get(CatUtenzaIrrigua, utenza.id) if utenza is not None else None
-        latest_occupancy = None
-        if match.unit_id is not None:
-            latest_occupancy = _best_occupancy_for_unit(self._db, match.unit_id)
-        cert_context = _resolve_particella_cert_context(
-            self._db,
-            p,
-            cco,
-            latest_utenza,
-            latest_occupancy,
-        )
+        return self._resolve_cert_params_fallback(p, match, utenza, cco)
+
+    def _resolve_cert_params_fallback(
+        self,
+        p: CatParticella,
+        match: CatAnagraficaMatch,
+        utenza: CatAnagraficaUtenzaSummary,
+        cco: str,
+    ) -> tuple[str, str, str, str, str] | None:
+        latest_utenza = self._db.get(CatUtenzaIrrigua, utenza.id)
+        latest_occupancy = _best_occupancy_for_unit(self._db, match.unit_id) if match.unit_id is not None else None
+        cert_context = _resolve_particella_cert_context(self._db, p, cco, latest_utenza, latest_occupancy)
         if not all(cert_context[:3]):
             return None
         return (cco, cert_context[0] or "", cert_context[1] or "", cert_context[2] or "", cert_context[3] or "00000")
