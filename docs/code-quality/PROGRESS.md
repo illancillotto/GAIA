@@ -15,6 +15,16 @@ blocco verificato e prima di chiudere un goal.
   PASS. Ratchet contro `HEAD` (`f8e0b864`) PASS; MCP/Wiki e file concorrenti
   esclusi.
 
+### Catasto — normalizzazione superficie live (2026-10-06)
+
+- Slice `IMPROVED`: la conversione della superficie Capacitas è isolata in una
+  funzione null-safe, mantenendo precedenza del valore numerico e fallback
+  non numerico a `None`.
+- Metriche `_build_live_only_match_from_row` cognitive/cyclomatic/LOC
+  `45/39/92 -> 36/34/87`; LOC file `570 -> 574`, ratchet senza findings.
+- Suite Catasto e coverage `resolvers.py` 100% (`325/325` statement,
+  `114/114` branch); Ruff, format e Graphify PASS. MCP/Wiki esclusi.
+
 ### Catasto — sincronizzazione terreni live (2026-10-06)
 
 - Slice `IMPROVED`: la sincronizzazione delle frazioni selezionate e la policy

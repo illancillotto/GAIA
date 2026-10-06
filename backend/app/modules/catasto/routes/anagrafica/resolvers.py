@@ -75,6 +75,17 @@ CATASTO_DISTRETTO_EXPORT_STORAGE_PATH = Path(
 
 # fmt: off
 
+def _normalize_live_surface(row) -> float | None:
+    superficie_mq = getattr(row, "superficie_mq", None)
+    raw_surface = getattr(row, "superficie", None)
+    if superficie_mq is not None or raw_surface is None:
+        return superficie_mq
+    try:
+        return float(str(raw_surface))
+    except (TypeError, ValueError):
+        return None
+
+
 class _CapacitasLiveResolver:
     def __init__(self, db: Session) -> None:
         self._db = db
@@ -288,12 +299,7 @@ class _CapacitasLiveResolver:
         particella_record = self._db.get(CatParticella, unit.particella_id) if unit and unit.particella_id else None
         comune_record = self._resolve_live_comune(row, unit, particella_record)
 
-        superficie_mq = getattr(row, "superficie_mq", None)
-        if superficie_mq is None and getattr(row, "superficie", None) is not None:
-            try:
-                superficie_mq = float(str(row.superficie))
-            except (TypeError, ValueError):
-                superficie_mq = None
+        superficie_mq = _normalize_live_surface(row)
 
         cert_com = _normalize_com(row.com)
         cert_pvc = _normalize_pvc(row.pvc)
