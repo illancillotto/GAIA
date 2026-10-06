@@ -3,6 +3,22 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — chiave deduplicazione righe Capacitas live (2026-10-06)
+
+- Chiusura `IMPROVED`: `_live_row_dedupe_key` proietta gli otto campi in una
+  sequenza dichiarativa unica, mantenendo ordine di accesso, `None` come stringa
+  vuota e trim. Metriche target cognitive/cyclomatic/LOC `16/17/6 -> 3/4/6`,
+  zero violation e nessun debito trasferito; il filtro live resta invariato.
+- Aggiunta caratterizzazione persistente per ordine e normalizzazione di tutti
+  i campi. Suite Catasto mirata: 299 test PASS; `exports.py` full-file 100%
+  (`201/201` statement, `60/60` branch), zero esclusioni. Ruff e format PASS.
+- Ratchet contro `HEAD` (`32849087`) PASS, nessuna nuova failure; report
+  globale rigenerato solo come evidenza e non incluso nel commit. Graphify
+  Catasto codice aggiornato tramite target Make; MCP/Wiki esclusi.
+- Differenziale concettuale coperto dalla caratterizzazione: stessa tupla per
+  valori con spazi e accessi nell'ordine canonico; API/schema e comportamento
+  invariati. Commit separato dopo staging selettivo.
+
 ### Catasto — base riga export bulk (2026-10-06)
 
 - Chiusura `IMPROVED`: costruzione base estratta in helper tipizzato, con URL

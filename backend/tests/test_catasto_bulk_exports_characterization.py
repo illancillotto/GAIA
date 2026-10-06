@@ -535,6 +535,32 @@ def test_live_retry_clears_section_and_collect_skips_failure(monkeypatch):
     assert len(hits) == 1 and hits[0].row is row and hits[0].frazione_id == "1"
 
 
+def test_live_row_dedupe_key_preserves_field_order_and_normalization():
+    row = CapacitasTerrenoRow.model_validate(
+        {
+            "CCO": " CCO ",
+            "COM": " COM ",
+            "PVC": " PVC ",
+            "FRA": " FRA ",
+            "CCS": " CCS ",
+            "Foglio": " Foglio ",
+            "Partic": " Partic ",
+            "Sub": " Sub ",
+        }
+    )
+
+    assert exports._live_row_dedupe_key(row) == (
+        "CCO",
+        "COM",
+        "PVC",
+        "FRA",
+        "CCS",
+        "Foglio",
+        "Partic",
+        "Sub",
+    )
+
+
 @pytest.mark.parametrize("failure_index", [0, 1])
 def test_sister_serialization_failure_preserves_partial_row_mutations(monkeypatch, failure_index):
     calls = []

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response, StreamingResponse
@@ -150,15 +150,10 @@ async def _resolve_live_frazione_options(
 
 
 def _live_row_dedupe_key(row: CapacitasTerrenoRow) -> tuple[str, str, str, str, str, str, str, str]:
-    return (
-        (row.cco or "").strip(),
-        (row.com or "").strip(),
-        (row.pvc or "").strip(),
-        (row.fra or "").strip(),
-        (row.ccs or "").strip(),
-        (row.foglio or "").strip(),
-        (row.particella or "").strip(),
-        (row.sub or "").strip(),
+    fields = ("cco", "com", "pvc", "fra", "ccs", "foglio", "particella", "sub")
+    return cast(
+        tuple[str, str, str, str, str, str, str, str],
+        tuple((getattr(row, field) or "").strip() for field in fields),
     )
 
 
