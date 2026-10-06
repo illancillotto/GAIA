@@ -7031,3 +7031,17 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   (xlsm, inCASS e due metriche Organigramma). Esito `IMPROVED`; baseline e
   soglie invariate. Evidenze: `/tmp/gaia-users-loader-relocated.json` e
   `/tmp/gaia-users-loader-relocated-coverage`.
+
+## 2026-10-06 — selezione lead Organigramma
+
+- Semplificata `pickLeadAssignment` in
+  `frontend/src/features/organigramma/organigramma-workspace.tsx`: i
+  predicati dei due `find` sono funzioni nominate, con semantica e priorità
+  invariate.
+- Il callback `assignments.find[0]` non produce più regressioni cyclomatic o
+  cognitive; la logica resta sotto soglia senza wrapper o esclusioni.
+- Suite Organigramma completa: 437 test verdi; coverage file 100% (970
+  statement, 954 branch, 350 funzioni, 877 linee).
+- Ratchet contro `6b61fd27`: rimangono solo i due finding parametri backend
+  funzionali (`xlsm_export`, `inCASS`). Esito `IMPROVED`; evidenze in
+  `/tmp/gaia-organigramma-after.json` e `/tmp/gaia-organigramma-all-coverage`.

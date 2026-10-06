@@ -202,10 +202,16 @@ function isLeadershipTitle(title: string | null | undefined): boolean {
     || normalized.includes("capo ");
 }
 
+function isPositionedLeadAssignment(assignment: OrgAssignment): boolean {
+  return assignment.position_code != null && assignment.position_code !== "collaboratore";
+}
+
+function hasLeadershipTitle(assignment: OrgAssignment): boolean {
+  return isLeadershipTitle(assignment.title);
+}
+
 function pickLeadAssignment(assignments: OrgAssignment[]): OrgAssignment | null {
-  return assignments.find(
-    (assignment) => assignment.position_code != null && assignment.position_code !== "collaboratore",
-  ) ?? assignments.find((assignment) => isLeadershipTitle(assignment.title)) ?? null;
+  return assignments.find(isPositionedLeadAssignment) ?? assignments.find(hasLeadershipTitle) ?? null;
 }
 
 function buildSchemaMeta(tree: OrgUnitTreeNode[], assignments: OrgAssignment[]): Map<string, SchemaNodeMeta> {
