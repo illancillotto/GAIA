@@ -174,12 +174,11 @@ def _build_bank_hours_dashboard(
             last_adjustment_status=scoped_adjustments[0].approval_status if scoped_adjustments else None,
         )
         include_item = bool(scoped_snapshots or scoped_adjustments or not q)
-        if negative_only and effective_balance_minutes >= 0:
-            include_item = False
-        if pending_adjustments_only and pending_adjustment_count <= 0:
-            include_item = False
-        if manual_adjustments_only and manual_adjustment_count <= 0:
-            include_item = False
+        include_item = bool(include_item and all((
+            not negative_only or effective_balance_minutes < 0,
+            not pending_adjustments_only or pending_adjustment_count > 0,
+            not manual_adjustments_only or manual_adjustment_count > 0,
+        )))
         if include_item:
             items.append(item)
             imported_balance_total_minutes += imported_balance_minutes

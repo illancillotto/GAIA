@@ -3,6 +3,17 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Presenze — filtro dashboard Bank Hours (2026-10-06)
+
+- Slice `IMPROVED`: i tre filtri opzionali del dashboard Bank Hours sono
+  consolidati in una condizione booleana equivalente, preservando inclusioni,
+  conteggi e saldo negativo.
+- Metriche `_build_bank_hours_dashboard` cognitive/cyclomatic/LOC `96/57/124
+  -> 90/56/123`, senza violation o debito trasferito.
+- Suite router/API Presenze PASS; coverage `bank_hours.py` 100% (`251/251`
+  statement, `82/82` branch). Ruff, format, ratchet contro `HEAD` (`c9bc17a0`)
+  e Graphify Presenze PASS. MPC/MCP e lavori concorrenti esclusi.
+
 ### Presenze — filtro dashboard recovery (2026-10-06)
 
 - Slice `IMPROVED`: i quattro filtri opzionali del dashboard sono consolidati
