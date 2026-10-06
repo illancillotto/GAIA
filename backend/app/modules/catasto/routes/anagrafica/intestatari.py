@@ -440,9 +440,8 @@ def _resolve_particella_cert_context(
     cco_norm = _norm_str(cco)
     if not cco_norm:
         return (None, None, None, None)
-    latest_utenza_com = _normalize_com(latest_utenza.cod_comune_capacitas) if latest_utenza and latest_utenza.cod_comune_capacitas is not None else None
-    latest_utenza_fra = _normalize_fra(latest_utenza.cod_frazione) if latest_utenza and latest_utenza.cod_frazione is not None else None
-
+    latest_utenza_com = _normalize_com(latest_utenza.cod_comune_capacitas if latest_utenza is not None else None)
+    latest_utenza_fra = _normalize_fra(latest_utenza.cod_frazione if latest_utenza is not None else None)
     if latest_occupancy is not None and _norm_str(latest_occupancy.cco) == cco_norm:
         return _context_from_occupancy(latest_occupancy)
 
@@ -472,8 +471,6 @@ def _resolve_particella_cert_context(
         cert = _find_certificato_snapshot(db, cco=cco_norm, com=latest_utenza_com, fra=latest_utenza_fra)
         if cert is not None:
             return _context_from_values(cert.com, cert.pvc, cert.fra, cert.ccs)
-
-    if latest_utenza is not None:
         row = (
             db.execute(
                 select(CatCapacitasTerrenoRow)

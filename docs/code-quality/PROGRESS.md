@@ -3,6 +3,18 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — risoluzione contesto certificato particella (2026-10-06)
+
+- Chiusura `IMPROVED`: normalizzazioni `com/fra` ora delegano direttamente i
+  valori opzionali e le due ricerche fallback sono nello stesso ramo, senza
+  cambiare priorità occupancy → snapshot → row, query, ordine o fallback CCO.
+- Target `_resolve_particella_cert_context` cognitive/cyclomatic/LOC `18/16/58
+  -> 13/11/57`; warning LOC/params già esistenti restano, nessuna nuova
+  categoria. Aggregati file cognitive/cyclomatic `138/133 -> 130/125`.
+- Suite Catasto completa PASS; `intestatari.py` full-file 100% (`174/174`
+  statement, `76/76` branch), zero esclusioni. Ruff/format PASS; ratchet e
+  Graphify Catasto aggiornati; MCP/Wiki esclusi.
+
 ### Catasto — validazione snapshot certificato (2026-10-06)
 
 - Chiusura `IMPROVED`: `_is_usable_certificato_snapshot` conserva il rifiuto
