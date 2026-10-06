@@ -15,6 +15,16 @@ blocco verificato e prima di chiudere un goal.
   PASS. Ratchet contro `HEAD` (`f8e0b864`) PASS; MCP/Wiki e file concorrenti
   esclusi.
 
+### Catasto — fallback intestatari nel match (2026-10-06)
+
+- Slice `IMPROVED`: i fallback da utenza e codice fiscale per la costruzione
+  del match sono separati, preservando precedenza, deduplica e fallback
+  dell’ultima utenza.
+- Metriche `_build_match` cognitive/cyclomatic/LOC `42/32/123 -> 26/25/118`;
+  helper fallback `3/4` e `5/5`; LOC file `712 -> 712`, ratchet senza findings.
+- Suite Catasto e coverage `matching.py` 100% (`264/264` statement, `100/100`
+  branch); Ruff, format e Graphify PASS. MCP/Wiki esclusi.
+
 ### Catasto — fallback intestatari da snapshot (2026-10-06)
 
 - Slice `IMPROVED`: il parsing delle righe grezze dello snapshot è isolato,

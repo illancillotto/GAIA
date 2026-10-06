@@ -400,6 +400,17 @@ def _particelle_with_utenza_irrigua(db: Session, particella_ids: set[UUID]) -> s
     return {pid for pid in rows if pid is not None}
 
 
+def _load_match_intestatari_by_cf(db, utenze):
+    return list(_load_intestatari_by_cf(db, {u.codice_fiscale.strip().upper() for u in utenze if u.codice_fiscale and u.codice_fiscale.strip()}).values())
+
+
+def _prefer_latest_intestatario(current, latest_utenza):
+    if current or latest_utenza is None:
+        return current
+    fallback_owner = _intestatario_response_from_utenza_record(latest_utenza)
+    return [fallback_owner] if fallback_owner is not None else current
+
+
 def _build_match(
     db: Session,
     p: CatParticella,
@@ -449,13 +460,8 @@ def _build_match(
         utenza_ids = [u.id for u in utenze]
         intestatari = _load_intestatari_by_utenza_ids(db, utenza_ids)
         if not intestatari:
-            cfs = {u.codice_fiscale.strip().upper() for u in utenze if u.codice_fiscale and u.codice_fiscale.strip()}
-            intestatari_by_cf = _load_intestatari_by_cf(db, cfs)
-            intestatari = list(intestatari_by_cf.values())
-        if not intestatari and latest_utenza is not None:
-            fallback_owner = _intestatario_response_from_utenza_record(latest_utenza)
-            if fallback_owner is not None:
-                intestatari = [fallback_owner]
+            intestatari = _load_match_intestatari_by_cf(db, utenze)
+        intestatari = _prefer_latest_intestatario(intestatari, latest_utenza)
 
     anomalie_count = db.execute(
         select(func.count())
