@@ -3,6 +3,21 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — creazione intestatario authoritative (2026-10-06)
+
+- Chiusura `IMPROVED`: il ramo di creazione soggetto/persona è isolato in
+  `_create_live_intestatario`; flush, `dirty`, source fields e risposta restano
+  nello stesso ordine. Il ramo update e lookup non cambiano.
+- Target `_upsert_live_intestatario` cognitive/cyclomatic/LOC `62/45/63 ->
+  51/38/48`; helper `7/8/22` sotto soglia. File authoritative cognitive sum
+  `94 -> 90`, cyclomatic `72 -> 73`; il warning LOC del target è eliminato e
+  non vengono introdotte nuove violation.
+- Suite Catasto coverage completa PASS; `authoritative.py` full-file 100%
+  (`95/95` statement, `38/38` branch), zero esclusioni. Ruff/format PASS;
+  ratchet contro `HEAD` e Graphify Catasto codice aggiornati.
+- MCP/Wiki esclusi; baseline/config/scope invariati. Prossimo hotspot resta
+  nel perimetro Catasto o altro runtime non-MCP, da aprire separatamente.
+
 ### Catasto — ricerca righe Capacitas live e filtro (2026-10-06)
 
 - Chiusura `IMPROVED`: `_search_live_rows_for_fraction` mantiene costruzione

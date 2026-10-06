@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import cast
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -103,6 +104,29 @@ class _CapacitasAuthoritativeResolver(_CapacitasLiveResolver):
             return None
         return _person_response_from_db(person, subject, deceduto=intestatario.deceduto)
 
+    def _create_live_intestatario(
+        self,
+        intestatario: CapacitasIntestatario,
+        detail: CapacitasAnagraficaDetail | None,
+        person_data: dict[str, object | None],
+    ) -> CatIntestatarioResponse:
+        normalized_cf = cast(str, person_data["codice_fiscale"])
+        subject = AnagraficaSubject(
+            subject_type=AnagraficaSubjectType.PERSON.value,
+            status=AnagraficaSubjectStatus.ACTIVE.value,
+            source_system="capacitas",
+            source_external_id=(detail.idxana if detail else None) or intestatario.idxana,
+            source_name_raw=(detail.denominazione if detail else None) or intestatario.denominazione or normalized_cf,
+            requires_review=False,
+        )
+        self._db.add(subject)
+        self._db.flush()
+        person = AnagraficaPerson(subject_id=subject.id, **person_data)
+        self._db.add(person)
+        self._db.flush()
+        self.dirty = True
+        return _person_response_from_db(person, subject, deceduto=intestatario.deceduto)
+
     def _upsert_live_intestatario(
         self,
         intestatario: CapacitasIntestatario,
@@ -134,22 +158,7 @@ class _CapacitasAuthoritativeResolver(_CapacitasLiveResolver):
         collected_at = datetime.now(UTC)
 
         if person is None:
-            assert normalized_cf is not None
-            subject = AnagraficaSubject(
-                subject_type=AnagraficaSubjectType.PERSON.value,
-                status=AnagraficaSubjectStatus.ACTIVE.value,
-                source_system="capacitas",
-                source_external_id=(detail.idxana if detail else None) or intestatario.idxana,
-                source_name_raw=(detail.denominazione if detail else None) or intestatario.denominazione or normalized_cf,
-                requires_review=False,
-            )
-            self._db.add(subject)
-            self._db.flush()
-            person = AnagraficaPerson(subject_id=subject.id, **person_data)
-            self._db.add(person)
-            self._db.flush()
-            self.dirty = True
-            return _person_response_from_db(person, subject, deceduto=intestatario.deceduto)
+            return self._create_live_intestatario(intestatario, detail, person_data)
 
         if subject is None:
             subject = self._db.get(AnagraficaSubject, person.subject_id)
