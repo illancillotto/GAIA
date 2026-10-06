@@ -29,6 +29,8 @@ export type ControlNotice = { id: string; year: number; codice_cnc: string; name
 export type ControlEvidence = {
   id: string; kind: string; source?: string; reference?: string; result?: string;
   request_id?: string; scope?: string; version?: string; years?: number[];
+  parcel_area_m2?: number | null; intersection_area_m2?: number | null;
+  intersection_percent?: number | null;
 };
 export type ControlMatch = {
   id: string; status: string; name: string; tax_code: string; subject_kind: string;

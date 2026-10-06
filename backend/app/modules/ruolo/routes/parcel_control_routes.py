@@ -16,6 +16,7 @@ from app.modules.ruolo.services import parcel_control_index as index
 from app.modules.ruolo.services import parcel_control_notices as notices
 from app.modules.ruolo.services import parcel_control_proposals as proposals
 from app.modules.ruolo.services import parcel_control_queries as queries
+from app.modules.ruolo.services import parcel_control_spatial as spatial
 from app.modules.ruolo.services import parcel_control_visure as visure
 from app.services.elaborazioni_batches import BatchValidationError
 
@@ -113,6 +114,7 @@ def change(
         "decision",
         "recover",
         "parcel_status",
+        "spatial_check",
     ],
     payload: ControlCommand,
     db: Database,
@@ -136,6 +138,8 @@ def mutate(db, case, action, data, actor_id):
         proposals.decide_proposal(db, case, data)
     elif action == "recover":
         visure.recover_parcel(db, case, data)
+    elif action == "spatial_check":
+        spatial.spatial_check(db, case, data, actor_id)
     else:
         cases.update_case(db, case, action, data, actor_id)
 

@@ -30,6 +30,7 @@ from app.modules.ruolo.services import parcel_control_identity as identity
 from app.modules.ruolo.services import parcel_control_index as index
 from app.modules.ruolo.services import parcel_control_proposals as proposals
 from app.modules.ruolo.services import parcel_control_queries as queries
+from app.modules.ruolo.services import parcel_control_spatial as spatial
 from app.modules.ruolo.services import parcel_control_visure as visure
 from app.services.permission_resolver import Section
 
@@ -906,6 +907,185 @@ def test_changing_sources_cannot_publish_a_mixed_analysis(workspace, monkeypatch
     stamps = iter(["before", "after"])
     response = client.post(f"{PREFIX}/analisi", json=command())
     assert response.status_code == 422 and "cambiati durante" in response.json()["detail"]
+
+
+@pytest.mark.parametrize("value", [None, "bad;table", "schema.table"])
+def test_spatial_identifiers_fail_closed(value):
+    with pytest.raises(ValueError, match="Identificativo GIS"):
+        spatial.quoted(value)
+
+
+@pytest.mark.parametrize(
+    "updates, expected",
+    [
+        ({}, "inside"),
+        ({"covered": False, "intersection_area_m2": 50}, "partial"),
+        ({"covered": False, "intersection_area_m2": 0}, "touching"),
+        ({"covered": False, "intersection_area_m2": 0, "intersects": False}, "outside"),
+        ({"invalid": 1}, "not_verifiable"),
+        ({"total": 0}, "not_verifiable"),
+        ({"parcel_area_m2": None}, "not_verifiable"),
+        ({"parcel_area_m2": 0}, "not_verifiable"),
+        ({"intersection_area_m2": None}, "not_verifiable"),
+    ],
+)
+def test_spatial_measurement_states(updates, expected):
+    row = {
+        "total": 2,
+        "invalid": 0,
+        "parcel_area_m2": 100,
+        "intersection_area_m2": 100,
+        "covered": True,
+        "intersects": True,
+    }
+    result = spatial.measurement_result({**row, **updates})
+    assert result["result"] == expected
+    if expected == "partial":
+        assert result["intersection_percent"] == 50
+
+
+def test_spatial_layer_registry_permissions_and_columns(workspace, monkeypatch):
+    from app.modules.gis.models import GisLayer
+
+    db, user, _client = workspace
+    data = {"layer_id": str(uuid4()), "scope_kind": "districts"}
+    with pytest.raises(ValueError, match="non disponibile"):
+        spatial.layer_source(db, data, user.id)
+    layer = GisLayer(
+        name="district-check",
+        title="Distretti originali",
+        workspace="catasto",
+        source_type="postgis",
+        postgis_table="districts",
+        geometry_column="geometry",
+        is_active=False,
+    )
+    db.add(layer)
+    db.commit()
+    data["layer_id"] = str(layer.id)
+    with pytest.raises(ValueError, match="non disponibile"):
+        spatial.layer_source(db, data, user.id)
+    layer.is_active = True
+    layer.source_type = "wms_external"
+    with pytest.raises(ValueError, match="WMS"):
+        spatial.layer_source(db, data, user.id)
+    layer.source_type = "postgis"
+    columns = []
+    monkeypatch.setattr(
+        spatial, "inspect", lambda _bind: SimpleNamespace(get_columns=lambda *_args: columns)
+    )
+    with pytest.raises(ValueError, match="Geometria"):
+        spatial.layer_source(db, data, user.id)
+    columns.append({"name": "geometry"})
+    with pytest.raises(ValueError, match="colonna"):
+        spatial.layer_source(db, data, user.id)
+    columns.append({"name": "NUM_DIST"})
+    data["district_column"] = "NUM_DIST"
+    result = spatial.layer_source(db, data, user.id)
+    assert '"NUM_DIST"' in result[3] and ":excluded" in result[3]
+    data["scope_kind"] = "municipality"
+    layer.postgis_schema = None
+    with pytest.raises(ValueError, match="comune"):
+        spatial.layer_source(db, data, user.id)
+    data.update(feature_column="NUM_DIST", feature_value="ORISTANO")
+    assert ":feature_value" in spatial.layer_source(db, data, user.id)[3]
+    assert spatial.feature_selection({"scope_kind": "settlements"}, set()) == "TRUE"
+    user.role = "user"
+    with pytest.raises(routes.HTTPException) as denied:
+        spatial.layer_source(db, data, user.id)
+    assert denied.value.status_code == 403
+
+
+def test_spatial_check_evidence_and_route_replay(workspace, monkeypatch):
+    db, user, client = workspace
+    case = practice(db, user, client)
+    stored = db.get(ParcelControlCase, UUID(case["id"]))
+    data = {
+        "scope_kind": "districts",
+        "source_version": "r1 2024",
+        "coverage": "Perimetro completo",
+    }
+    for incomplete in ({}, {"scope_kind": "districts"}, data):
+        with pytest.raises(ValueError):
+            spatial.spatial_check(db, stored, incomplete, user.id)
+    parcel_id = UUID(case["parcel_id"])
+    with pytest.raises(ValueError, match="non appartenente"):
+        spatial.parcel_geometry_id(db, stored, {"parcel_id": str(uuid4())})
+    with pytest.raises(ValueError, match="ambiguo"):
+        spatial.parcel_geometry_id(db, stored, {})
+    item = db.get(ParcelControlIndex, parcel_id)
+    geometry_id = uuid4()
+    original = item.original
+    original["occurrences"][0]["cat_particella_id"] = str(geometry_id)
+    item.original = {**original}
+    assert spatial.parcel_geometry_id(db, stored, {}) == (parcel_id, geometry_id)
+    assert spatial.parcel_geometry_id(db, stored, {"parcel_id": str(parcel_id)}) == (
+        parcel_id,
+        geometry_id,
+    )
+    monkeypatch.setattr(
+        db,
+        "get_bind",
+        lambda **_kwargs: SimpleNamespace(dialect=SimpleNamespace(name="postgresql")),
+    )
+    layer = SimpleNamespace(title="Distretti", id=uuid4(), updated_at="2026-10-06")
+    monkeypatch.setattr(
+        spatial,
+        "layer_source",
+        lambda *_args: (layer, '"public"."districts"', '"geometry"', "TRUE"),
+    )
+    monkeypatch.setattr(
+        spatial, "measure", lambda *_args: {"result": "partial", "intersection_percent": 25}
+    )
+    spatial.spatial_check(db, stored, data, user.id)
+    assert stored.evidence[-1]["scope"] == "districts"
+    assert "FD" in stored.evidence[-1]["excluded_districts"]
+    spatial.spatial_check(db, stored, {**data, "scope_kind": "municipality"}, user.id)
+    assert stored.evidence[-1]["excluded_districts"] == []
+    monkeypatch.undo()
+    db.rollback()
+
+    def checked(_db, practice, _data, actor_id):
+        practice.evidence = [
+            *practice.evidence,
+            {"id": str(uuid4()), "kind": "spatial_check", "actor_id": actor_id},
+        ]
+
+    monkeypatch.setattr(spatial, "spatial_check", checked)
+    payload = command(data, case["version"])
+    url = f"{PREFIX}/pratiche/{case['id']}/spatial_check"
+    result = client.post(url, json=payload)
+    assert result.status_code == 200
+    assert result.json()["status"] == "open"
+    assert client.post(url, json=payload).json()["version"] == result.json()["version"]
+
+
+@pytest.mark.parametrize("predicate", ["TRUE", 'upper("code") NOT IN :excluded'])
+def test_spatial_sql_union_metrics_and_bound_parameters(predicate):
+    captured = []
+    row = {
+        "total": 1,
+        "invalid": 0,
+        "parcel_area_m2": 100,
+        "intersection_area_m2": 100,
+        "covered": True,
+        "intersects": True,
+    }
+
+    def execute(statement, parameters):
+        captured.append((str(statement), parameters))
+        return SimpleNamespace(mappings=lambda: SimpleNamespace(one=lambda: row))
+
+    result = spatial.measure(
+        SimpleNamespace(execute=execute),
+        uuid4(),
+        ('"districts"', '"geometry"', predicate),
+        {"scope_kind": "districts", "district_column": "code"} if ":excluded" in predicate else {},
+    )
+    assert result["intersection_percent"] == 100
+    assert "ST_UnaryUnion" in captured[0][0] and "ST_Covers" in captured[0][0]
+    assert "ST_Centroid" not in captured[0][0]
+    assert "FD_7" in captured[0][1]["excluded"]
 
 
 def test_migration_roundtrip_matches_runtime_schema():

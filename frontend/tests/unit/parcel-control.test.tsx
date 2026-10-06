@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, expect, test, vi } from "vitest";
 
 import { ParcelControlDetail } from "@/components/ruolo/parcel-control-detail";
@@ -241,6 +241,26 @@ test("individual parcel outcome is saved independently from practice status", as
   fireEvent.change(screen.getByLabelText("Azione"), { target: { value: "proposal" } });
   expect(screen.getByLabelText("Particella")).toBeInTheDocument();
   expect(screen.getByLabelText("Annualità")).toHaveAttribute("min", "2011");
+});
+
+test("spatial checks keep scope and source separate and display persisted measurements", async () => {
+  const save = vi.fn().mockResolvedValue(undefined);
+  const item = practice();
+  item.evidence.push(
+    { id: "spatial-1", kind: "spatial_check", scope: "districts", version: "r1", parcel_area_m2: 100, intersection_area_m2: 25, intersection_percent: 25 },
+    { id: "spatial-2", kind: "spatial_check", scope: "municipality", version: "CTR" },
+  );
+  render(<ParcelControlDetail practice={item} editable busy={false} save={save} />);
+  expect(screen.getByText(/superficie particella 100 m²/)).toBeInTheDocument();
+  expect(screen.getByText(/superficie particella non verificabile m²/)).toBeInTheDocument();
+  const spatialForm = within(screen.getByRole("region", { name: "Confronto geometrico PostGIS" }));
+  fireEvent.change(screen.getByLabelText("ID layer GIS"), { target: { value: "layer-1" } });
+  fireEvent.change(spatialForm.getByLabelText("Versione della fonte"), { target: { value: "r1 2024" } });
+  fireEvent.change(screen.getByLabelText("Copertura verificata"), { target: { value: "Intero comprensorio" } });
+  fireEvent.change(screen.getByLabelText("Colonna codice distretto"), { target: { value: "NUM_DIST" } });
+  fireEvent.change(spatialForm.getByLabelText("Motivazione confronto geometrico"), { target: { value: "Confronto documentato" } });
+  fireEvent.submit(screen.getByText("Calcola e salva confronto").closest("form")!);
+  await waitFor(() => expect(save).toHaveBeenCalledWith("spatial_check", expect.objectContaining({ scope_kind: "districts", layer_id: "layer-1", district_column: "NUM_DIST", source_version: "r1 2024" }), "Confronto documentato"));
 });
 
 test("recovery retains the link to its originating request", () => {

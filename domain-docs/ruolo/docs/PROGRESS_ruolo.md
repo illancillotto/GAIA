@@ -2,6 +2,15 @@
 
 ## Controllo storico particelle — 2026-10-06
 
+- Confronto geometrico persistente per singola pratica su layer poligonali
+  PostGIS autorizzati: unione distretti senza FD, selezione comune esplicita,
+  insediamenti preliminari; superficie/percentuale/hash salvati come evidenza.
+  Nessuna modifica automatica al ruolo o alle geometrie operative. Attivazione
+  subordinata alla pubblicazione del layer NAS; integrazione WFS RAS separata.
+- 68 test backend e 28 frontend, coverage runtime 100%; SQL esercitato su
+  PostGIS reale con sole tabelle temporanee e rollback. Specifica e limiti in
+  [CONTROLLO_GEOMETRICO.md](CONTROLLO_GEOMETRICO.md).
+
 - Estensione successiva concordata: periodo 2011–2025, terminologia particella
   catastale, proposte solo con presenza storica documentata. Le particelle
   storiche interferenti con centri abitati restano in istruttoria; nessuna

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { type FormEvent } from "react";
 
 import { ParcelControlForms } from "@/components/ruolo/parcel-control-forms";
+import { ParcelSpatialPanel } from "@/components/ruolo/parcel-control-spatial";
 import { CONTROL_LABELS } from "@/components/ruolo/parcel-control-table";
 import type { ControlCase } from "@/types/parcel-control";
 
@@ -41,6 +42,7 @@ export function ParcelControlDetail({ practice, busy, editable, save }: Props) {
       <p>Una particella mai a ruolo non entra nella coda di recupero. Prima della proposta occorre documentare almeno una presenza nel 2011–2025.</p>
       {practice.parcels.map(parcel => <p key={parcel.id}>{parcel.reference.comune_nome} · {parcel.reference.foglio}/{parcel.reference.particella} · {parcel.status} · Verifica territoriale e confronto ruolo necessari</p>)}
     </section>
+    <ParcelSpatialPanel practice={practice} busy={busy} editable={editable} save={save} />
     {editable && <ParcelControlForms practice={practice} busy={busy} save={save} />}
     <section className="rounded-xl border bg-white p-4"><h3 className="font-semibold">Proposte da verificare</h3>
       {practice.proposals.map(proposal => <div key={proposal.id} className="mt-3 border-t pt-3">

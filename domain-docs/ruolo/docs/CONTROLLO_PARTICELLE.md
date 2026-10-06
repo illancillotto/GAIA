@@ -1,5 +1,10 @@
 # Controllo particelle e recupero posizioni
 
+Il confronto geometrico persistente e documentato in
+[CONTROLLO_GEOMETRICO.md](CONTROLLO_GEOMETRICO.md): distretti, comuni e
+insediamenti restano verifiche separate; i layer esterni RAS non sono copiati
+automaticamente nel database.
+
 ## Ambito
 
 Il controllo riusa `/ruolo/particelle`, senza una seconda pagina o un secondo
