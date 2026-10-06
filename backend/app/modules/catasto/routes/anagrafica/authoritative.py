@@ -138,23 +138,7 @@ class _CapacitasAuthoritativeResolver(_CapacitasLiveResolver):
     ) -> CatIntestatarioResponse | None:
         normalized_cf = _normalize_cf((detail.codice_fiscale if detail else None) or intestatario.codice_fiscale)
         source_external_id = (detail.idxana if detail else None) or intestatario.idxana
-        person: AnagraficaPerson | None = None
-        subject: AnagraficaSubject | None = None
-
-        if normalized_cf:
-            person = self._db.scalar(select(AnagraficaPerson).where(AnagraficaPerson.codice_fiscale == normalized_cf))
-            if person is not None:
-                subject = self._db.get(AnagraficaSubject, person.subject_id)
-
-        if person is None and source_external_id:
-            subject = self._db.scalar(
-                select(AnagraficaSubject).where(
-                    AnagraficaSubject.source_system == "capacitas",
-                    AnagraficaSubject.source_external_id == source_external_id,
-                )
-            )
-            if subject is not None:
-                person = self._db.get(AnagraficaPerson, subject.id)
+        person, subject = self._find_live_person_subject(normalized_cf, source_external_id)
 
         if person is None and not normalized_cf:
             return None
@@ -165,8 +149,7 @@ class _CapacitasAuthoritativeResolver(_CapacitasLiveResolver):
         if person is None:
             return self._create_live_intestatario(intestatario, detail, person_data)
 
-        if subject is None:
-            subject = self._db.get(AnagraficaSubject, person.subject_id)
+        subject = self._ensure_live_subject(person, subject)
         if subject is None:
             return None
 
@@ -180,10 +163,47 @@ class _CapacitasAuthoritativeResolver(_CapacitasLiveResolver):
         )
         for key, value in person_data.items():
             setattr(person, key, value)
+        self._update_live_subject(subject, detail, intestatario, normalized_cf, source_external_id)
+        self._db.flush()
+        self.dirty = True
+        return _person_response_from_db(person, subject, deceduto=intestatario.deceduto)
+
+    def _ensure_live_subject(
+        self, person: AnagraficaPerson, subject: AnagraficaSubject | None
+    ) -> AnagraficaSubject | None:
+        return subject or self._db.get(AnagraficaSubject, person.subject_id)
+
+    def _update_live_subject(
+        self,
+        subject: AnagraficaSubject,
+        detail: CapacitasAnagraficaDetail | None,
+        intestatario: CapacitasIntestatario,
+        normalized_cf: str,
+        source_external_id: str | None,
+    ) -> None:
         if source_external_id and subject.source_external_id is None:
             subject.source_external_id = source_external_id
         if not subject.source_name_raw:
             subject.source_name_raw = (detail.denominazione if detail else None) or intestatario.denominazione or normalized_cf
-        self._db.flush()
-        self.dirty = True
-        return _person_response_from_db(person, subject, deceduto=intestatario.deceduto)
+
+    def _find_live_person_subject(
+        self,
+        normalized_cf: str | None,
+        source_external_id: str | None,
+    ) -> tuple[AnagraficaPerson | None, AnagraficaSubject | None]:
+        person: AnagraficaPerson | None = None
+        subject: AnagraficaSubject | None = None
+        if normalized_cf:
+            person = self._db.scalar(select(AnagraficaPerson).where(AnagraficaPerson.codice_fiscale == normalized_cf))
+            if person is not None:
+                subject = self._db.get(AnagraficaSubject, person.subject_id)
+        if person is None and source_external_id:
+            subject = self._db.scalar(
+                select(AnagraficaSubject).where(
+                    AnagraficaSubject.source_system == "capacitas",
+                    AnagraficaSubject.source_external_id == source_external_id,
+                )
+            )
+            if subject is not None:
+                person = self._db.get(AnagraficaPerson, subject.id)
+        return person, subject

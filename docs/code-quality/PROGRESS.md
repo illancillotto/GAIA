@@ -3,6 +3,18 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — upsert authoritative di intestatario live (2026-10-06)
+
+- Slice `IMPROVED`: lookup persona/subject, risoluzione subject e aggiornamento
+  dei metadati sono separati in responsabilità locali, preservando precedenza
+  CF/idxana, snapshot, flush e risposta.
+- Metriche `_upsert_live_intestatario` cognitive/cyclomatic/LOC `34/28/49 ->
+  13/13/31`; aggregati `authoritative.py` `64/59 -> 64/66`, senza error-level
+  violation; i nuovi helper restano caratterizzati e coperti.
+- Suite Catasto e coverage full-file 100%; Ruff, format e Graphify Catasto
+  PASS. Ratchet contro `HEAD` (`f8e0b864`) PASS; MCP/Wiki e file concorrenti
+  esclusi.
+
 ### Catasto — contesto storico nell’arricchimento authoritative (2026-10-06)
 
 - Slice `IMPROVED`: il recupero del contesto certificato storico è isolato in
