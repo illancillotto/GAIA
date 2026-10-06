@@ -3,6 +3,18 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — ranking match live da chiave (2026-10-06)
+
+- Slice `IMPROVED`: il ranking distingue ancora la precedenza `current`/
+  `black`/default, con la stessa deduplicazione per subalterno e ordine dei
+  match.
+- Metriche callable `_build_live_matches_from_search_key` cognitive/cyclomatic/
+  LOC `19/16/39 -> 18/15/39`; aggregati file `224/184 -> 222/182`, LOC
+  invariato (`579`).
+- Suite Catasto PASS; `resolvers.py` full-file 100% (`314/314` statement,
+  `114/114` branch). Ruff, format e ratchet contro `HEAD` (`6e247925`) PASS.
+  Graphify Catasto aggiornato; MCP/Wiki esclusi.
+
 ### Catasto — validità snapshot certificato (2026-10-06)
 
 - Slice `IMPROVED`: il controllo dei marcatori di transazione non valida usa

@@ -259,7 +259,7 @@ class _CapacitasLiveResolver:
         def rank(row: CatCapacitasTerrenoRow) -> tuple[int, int, str]:
             state = (row.row_visual_state or "").strip().casefold()
             return (
-                2 if "current" in state else 1 if "black" in state else 0,
+                2 if "current" in state else int("black" in state),
                 _safe_int(row.anno),
                 row.collected_at.isoformat() if row.collected_at else "",
             )
