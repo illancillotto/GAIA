@@ -3,6 +3,29 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — base riga export bulk (2026-10-06)
+
+- Chiusura `IMPROVED`: costruzione base estratta in helper tipizzato, con URL
+  calcolato prima, prefissi/fallback/None e ordine accessi invariati. Helper
+  base3/4/32/1/3 e text2/3/2/0/1 sotto soglia; mapper32/18/49/2 ->14/9/23/2.
+  File cognitive243 ->235, cyclomatic219 ->220, callable24 ->26, branching195
+  invariato, LOC475 ->487;16 ->14 violation (6 error/8 warning), nessuna nuova
+  violation o trasferimento. Mapper non è più hotspot sopra soglia.
+- 299 test coverage/caratterizzazione/API/facade PASS, full-file exports100%
+  statement200/branch60, zero missing/partial/esclusioni.4000 differenziali
+  controd779dfcc equivalenti per output/ordine/accessi; ratchet/Ruff mirato
+  PASS, lint globale UP038 InCass concorrente. Graphify codice/docs aggiornati
+  prima del commit; baseline/config/scope/MCP e change concorrenti preservati.
+- Preflight `d779dfcc`: espansione owner committata, runtime/test puliti,
+  indice vuoto. Mapper32/18/49/2; file cognitive243/cyclomatic219/LOC475,
+  16 violation/24 callable. Rendering/SISTER sotto soglia.
+- Estrarre la costruzione base (prefisso input, coordinate, distretto, esito,
+  consorzio, CCO/link/stati) in helper tipizzato; preservare ordine accessi,
+  URL prima delle colonne, fallback e match None. Nessun cambio API/schema.
+- Verificare differenziale full-file100%, metriche aggregate/branching,
+  ratchet/Ruff/Graphify e commit separato; baseline/config/scope/MCP e change
+  concorrenti invariati.
+
 ### Catasto — espansione match/intestatari export bulk (2026-10-06)
 
 - Chiusura `IMPROVED`: espansione match owner pura, lista intestatari acquisita

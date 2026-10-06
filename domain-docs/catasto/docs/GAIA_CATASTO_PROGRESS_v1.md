@@ -1,6 +1,19 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-06 — base riga export bulk
+
+- Costruzione base riga estratta in helper tipizzato; URL calcolato prima,
+  prefissi CF/PIVA/comune, fallback, None e ordine accessi invariati.
+- Mapper cog/cyc/LOC32/18/49 ->14/9/23, helper base3/4/32/1/3 e text2/3/2
+  sotto soglia. File cognitive243 ->235, cyclomatic219 ->220/callable24 ->26,
+  branching195 invariato, LOC475 ->487; violation16 ->14 senza transfer.
+- 299 test coverage/caratterizzazione/API/facade PASS, full-file exports100%
+  statement200/branch60, zero esclusioni.4000 confronti controd779dfcc
+  equivalenti per output/ordine/accessi; ratchet/Ruff mirato PASS, lint globale
+  UP038 InCass concorrente. Graphify codice/docs aggiornati, baseline/config/
+  scope invariati. Mapper sotto soglia; campagna non-MCP prosegue sugli altri hotspot.
+
 ### 2026-10-06 — espansione match/intestatari export bulk
 
 - Espansione match owner separata e lista intestatari acquisita prima della

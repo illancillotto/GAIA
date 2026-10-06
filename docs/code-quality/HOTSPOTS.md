@@ -14,6 +14,16 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, base riga export bulk, 2026-10-06:
+`_build_bulk_export_rows` `IMPROVED`, cog/cyc/LOC32/18/49 ->14/9/23,
+nesting2 invariato. Helper base3/4/32/1/3 e text2/3/2/0/1 sotto soglia;
+URL/fallback/None/ordine accessi invariati. File cognitive243 ->235,
+cyclomatic219 ->220/callable24 ->26, branching195 invariato, LOC475 ->487;
+violation16 ->14, nessuna nuova violation o debt transfer.299 test/full-file100%,
+4000 differenziali equivalenti; ratchet/Ruff mirato PASS, lint globale UP038
+InCass concorrente. Mapper non è più hotspot sopra soglia; MCP/Wiki esclusi
+operativamente, altri hotspot restano.
+
 Campagna non-MCP, espansione match/intestatari export bulk, 2026-10-06:
 `_build_bulk_export_rows` `IMPROVED`, cog/cyc/LOC43/22/60 ->32/18/49,
 nesting3 ->2. Helper owner7/7/18/1/3 sotto soglia; ordine accessi, righe vuote,

@@ -388,6 +388,44 @@ def _bulk_export_subalterno(
     return (fallback.sub_input or "") if fallback is not None else ""
 
 
+def _bulk_export_text(value: str | None) -> str:
+    return value or ""
+
+
+def _bulk_export_base_row(
+    kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"],
+    result: CatAnagraficaBulkSearchRowResult,
+    match: CatAnagraficaMatch | None,
+) -> dict[str, object]:
+    link_value = _build_rpt_certificato_url(match) if match is not None else ""
+    if kind == "CF_PIVA_PARTICELLE":
+        base = {
+            "cf_input": _bulk_export_text(result.codice_fiscale_input),
+            "piva_input": _bulk_export_text(result.partita_iva_input),
+            "comune": _bulk_export_comune(match),
+            **_bulk_export_parcel_coordinates(match),
+            "sub": _bulk_export_subalterno(match),
+        }
+    else:
+        base = {
+            "comune": _bulk_export_comune(match, result),
+            "sezione": _bulk_export_text(result.sezione_input),
+            **_bulk_export_parcel_coordinates(match, result),
+            "sub": _bulk_export_subalterno(match, result),
+        }
+    base.update(
+        {
+            **_bulk_export_district_columns(match),
+            "esito": _format_esito_for_export(result.esito),
+            "trovato in esito consorzio": _format_consorzio_esito_for_export(
+                bool(match.presente_in_catasto_consorzio) if match is not None else False
+            ),
+            **_bulk_export_account_columns(match, link_value),
+        }
+    )
+    return base
+
+
 def _bulk_export_match_rows(
     base: dict[str, object],
     match: CatAnagraficaMatch,
@@ -416,33 +454,6 @@ def _build_bulk_export_rows(
     for result in export_results:
         matches = result.matches or ([result.match] if result.match is not None else [])
 
-        def build_base(match: CatAnagraficaMatch | None = None, *, _result: CatAnagraficaBulkSearchRowResult = result) -> dict[str, object]:
-            link_value = _build_rpt_certificato_url(match) if match is not None else ""
-            if kind == "CF_PIVA_PARTICELLE":
-                base = {
-                    "cf_input": _result.codice_fiscale_input or "",
-                    "piva_input": _result.partita_iva_input or "",
-                    "comune": _bulk_export_comune(match),
-                    **_bulk_export_parcel_coordinates(match),
-                    "sub": _bulk_export_subalterno(match),
-                }
-            else:
-                base = {
-                    "comune": _bulk_export_comune(match, _result),
-                    "sezione": _result.sezione_input or "",
-                    **_bulk_export_parcel_coordinates(match, _result),
-                    "sub": _bulk_export_subalterno(match, _result),
-                }
-            base.update({
-                **_bulk_export_district_columns(match),
-                "esito": _format_esito_for_export(_result.esito),
-                "trovato in esito consorzio": _format_consorzio_esito_for_export(
-                    bool(match.presente_in_catasto_consorzio) if match is not None else False
-                ),
-                **_bulk_export_account_columns(match, link_value),
-            })
-            return base
-
         empty_intestatario = {
             "n_intestatari": 0,
             **dict.fromkeys((
@@ -453,12 +464,12 @@ def _build_bulk_export_rows(
         }
 
         if not matches:
-            rows.append({**build_base(), **empty_intestatario})
+            rows.append({**_bulk_export_base_row(kind, result, None), **empty_intestatario})
             continue
 
         for match in matches:
             intestatari = match.intestatari or []
-            base = build_base(match)
+            base = _bulk_export_base_row(kind, result, match)
             rows.extend(_bulk_export_match_rows(base, match, intestatari, empty_intestatario))
     return rows
 
