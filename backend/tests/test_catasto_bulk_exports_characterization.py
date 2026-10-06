@@ -149,6 +149,32 @@ def test_bulk_base_column_order_zero_values_and_input_fallback(kind):
     assert row["sub"] == ("" if kind == "CF_PIVA_PARTICELLE" else "Sub input")
 
 
+@pytest.mark.parametrize("kind", ["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"])
+@pytest.mark.parametrize(
+    "field, value",
+    [
+        (field, value)
+        for field in (
+            "num_distretto",
+            "nome_distretto",
+            "riordino_code",
+            "riordino_maglia",
+            "riordino_lotto",
+            "superficie_mq",
+            "superficie_grafica_mq",
+        )
+        for value in ((None, 0, 12) if field.startswith("superficie") else (None, "", "0"))
+    ],
+)
+def test_bulk_optional_match_columns_preserve_values(kind, field, value):
+    match = CatAnagraficaMatch(
+        particella_id=UUID(int=1), foglio="1", particella="2", **{field: value}
+    )
+    result = CatAnagraficaBulkSearchRowResult(row_index=1, esito="FOUND", message="OK", match=match)
+    row = exports._build_bulk_export_rows(kind, [result])[0]
+    assert row[field] == ("" if value is None else getattr(match, field))
+
+
 @pytest.mark.parametrize("display", ["Comune", "Comune - Frazione", "Other"])
 def test_live_fraction_resolution_order_and_cache(monkeypatch, display):
     option = CapacitasLookupOption(id="1", display=display)

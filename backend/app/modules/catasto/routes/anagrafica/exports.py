@@ -304,15 +304,15 @@ def _build_bulk_export_rows(
                     "sub": match.subalterno if match is not None and match.subalterno is not None else (_result.sub_input or ""),
                 }
             base.update({
-                "num_distretto": match.num_distretto if match is not None and match.num_distretto is not None else "",
-                "nome_distretto": match.nome_distretto if match is not None and match.nome_distretto is not None else "",
-                "riordino_code": match.riordino_code if match is not None and match.riordino_code is not None else "",
-                "riordino_maglia": match.riordino_maglia if match is not None and match.riordino_maglia is not None else "",
-                "riordino_lotto": match.riordino_lotto if match is not None and match.riordino_lotto is not None else "",
-                "superficie_mq": match.superficie_mq if match is not None and match.superficie_mq is not None else "",
-                "superficie_grafica_mq": (
-                    match.superficie_grafica_mq if match is not None and match.superficie_grafica_mq is not None else ""
-                ),
+                **{
+                    field: getattr(match, field)
+                    if match is not None and getattr(match, field) is not None
+                    else ""
+                    for field in (
+                        "num_distretto", "nome_distretto", "riordino_code", "riordino_maglia",
+                        "riordino_lotto", "superficie_mq", "superficie_grafica_mq",
+                    )
+                },
                 "esito": _format_esito_for_export(_result.esito),
                 "trovato in esito consorzio": _format_consorzio_esito_for_export(
                     bool(match.presente_in_catasto_consorzio) if match is not None else False

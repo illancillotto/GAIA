@@ -1,6 +1,19 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-06 — campi opzionali export bulk
+
+- Mapping dichiarativo dei sette campi distretto/riordino/superficie, None
+  esportato come stringa vuota e zero preservato. Ordine colonne/accessi e
+  contratti CSV/XLSX invariati, nessun helper o cambio API/schema/baseline.
+- Mapper cognitive/cyclomatic218/103 ->190/86; file465/303 ->437/286,
+  LOC522/callable21 invariati.24 violation residue: hotspot non completo.
+- 42 nuovi casi persistenti;157 test coverage/caratterizzazione/API/facade
+  PASS, full-file exports100% statement238/branch80, zero missing/esclusioni.
+  4000 casi differenziali contro6f68f891 equivalenti per valori e ordine
+  colonne/accessi. Ratchet/Ruff mirato PASS, lint globale UP038 InCass
+  concorrente; Graphify codice e docs aggiornati prima del commit separato.
+
 ### 2026-10-06 — colonne comuni export bulk
 
 - 115 test coverage/caratterizzazione/API/facade PASS; full-file exports100%

@@ -14,6 +14,15 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, campi opzionali export Catasto, 2026-10-06:
+`_build_bulk_export_rows` `IMPROVED`, cog/cyc218/103 ->190/86,
+LOC100/nesting3 invariati. Mapping distretto/riordino/superficie dichiarativo,
+None/zero e ordine colonne/accessi preservati; nessun helper o debt transfer.
+File cognitive465 ->437, cyclomatic303 ->286, LOC522/callable21 invariati;
+24 violation residue.157 test/full-file100%,4000 casi differenziali equivalenti.
+Ratchet/Ruff mirato PASS; lint globale UP038 InCass concorrente. MCP/Wiki esclusi
+solo operativamente, baseline/config/scope invariati. Mapper ancora sopra soglia.
+
 Campagna non-MCP, mapping colonne export Catasto, 2026-10-06:
 `_build_bulk_export_rows` `IMPROVED`, cog/cyc/LOC/nesting281/135/114/3
 ->218/103/100/3. Colonne comuni deduplicate senza helper, ordine/accessi e

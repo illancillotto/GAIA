@@ -3,6 +3,35 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — campi opzionali base export bulk (2026-10-06)
+
+- Chiusura `IMPROVED`: mapping dichiarativo dei sette campi opzionali,
+  politica None condivisa, nessun helper o nuova violation. Target
+  cog/cyc/LOC/nesting218/103/100/3 ->190/86/100/3; file cognitive465 ->437,
+  cyclomatic303 ->286, LOC522/callable21/import25 invariati. Violation24
+  (11 error/13 warning) residue: mapper e campagna ancora da completare.
+- 42 casi persistenti sulle due modalita verificano ciascun campo con None,
+  zero/stringa vuota e valori presenti. Suite coverage/caratterizzazione/API/
+  facade157 test PASS, full-file exports100% statement238/branch80, zero
+  missing/partial/esclusioni. 4000 casi differenziali contro6f68f891 equivalenti
+  per valori, ordine colonne e trace accessi attributo (guardia/valore inclusi).
+- Ratchet mirato merge-base6f68f891 e Ruff runtime/test/format test PASS.
+  Lint globale compileall PASS, solo UP038 InCass concorrente1041. Baseline,
+  configurazione e scope invariati; nessuna API remota o PostgreSQL dichiarata.
+  Evidenze /tmp/gaia-export-optionals-* e differential script verificato.
+- Graphify codice Catasto aggiornato (nessun cambio topologia), docs Catasto/
+  piattaforma aggiornati; commit separato autorizzato, change concorrenti
+  preservate. Prossima slice candidata: mapping base e owner ancora ripetuti.
+- Preflight `6f68f891`, passaggio precedente `IMPROVED` committato: runtime/test
+  Catasto puliti, indice vuoto. Mapper cog/cyc/LOC/nesting218/103/100/3;
+  file cognitive465/cyclomatic303/LOC522,24 violation/21 callable.
+- Rendere dichiarativo il mapping dei sette campi distretto/riordino/superficie,
+  con identica politica None -> stringa vuota, zero preservato. Conservare
+  ordine colonne e accessi attributo (lettura di guardia prima del valore),
+  URL e campi successivi. Nessun helper, cambio API o esclusione baseline.
+- Verificare caratterizzazione full-file100%, differenziale contro HEAD,
+  metriche/ratchet/Ruff e Graphify; commit separato, MCP/Wiki fuori scope.
+
 ### Catasto — mapping condiviso colonne export bulk (2026-10-06)
 
 - Chiusura `IMPROVED`: suffisso delle colonne comuni definito una sola volta,
