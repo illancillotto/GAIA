@@ -14,6 +14,14 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, SISTER filtro righe vuote, 2026-10-06:
+`parse_sister_visura_text` `IMPROVED`, cognitive/cyclomatic10/10 ->9/9.
+Filtro idiomatico delle stringhe normalizzate, nessun helper o debt transfer.
+File cognitive93 ->92, cyclomatic93 ->92, branching70 ->69, LOC270 invariata;
+zero violation nel parser, baseline/config/scope invariati. 83 test/full-file100%,
+66717 casi differenziali equivalenti; ratchet/Ruff mirato PASS, lint globale
+UP038 InCass concorrente. Campagna non-MCP resta attiva fuori dal parser SISTER.
+
 Campagna non-MCP, SISTER scansione proprietari/sezioni, 2026-10-05:
 `parse_sister_visura_text` `IMPROVED`, cog/cyc/LOC/nesting33/22/40/2 ->10/10/18/2.
 Scan11/7/21/2, lettura riga owner2/3/13/1 e header1/2/9/1 sotto soglia;

@@ -1,6 +1,18 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-06 — filtro righe vuote SISTER
+
+- Filtro idiomatico delle righe normalizzate con filter(None, lines): ordine,
+  contenuto della lista e alias raw_lines invariati, nessun helper aggiunto.
+- Pubblico cognitive/cyclomatic10/10 ->9/9; file93/93 ->92/92, branching70 ->69,
+  LOC270 invariata. Ultimo warning eliminato: parser interamente sotto soglia,
+  nessun cambio funzionale/API/versione/config/baseline/scope o debt transfer.
+- 83 test parser/persistenza/backfill PASS, full-file100% statement203/branch78;
+  66717 casi differenziali equivalenti. Ratchet/Ruff mirato PASS; lint globale
+  UP038 InCass concorrente. Graphify backend codice e docs Catasto/piattaforma
+  aggiornati prima del commit; campagna non-MCP prosegue sugli altri hotspot.
+
 ### 2026-10-05 — scansione proprietari e sezioni SISTER
 
 - Scan legacy owner/indici sezioni isolato, header intestato/intestati

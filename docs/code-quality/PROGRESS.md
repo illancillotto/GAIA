@@ -3,6 +3,31 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### SISTER — filtro righe vuote (2026-10-06)
+
+- Chiusura `IMPROVED`: filtro idiomatico filter(None, lines) mantiene stringhe
+  non vuote normalizzate, ordine e lista materializzata. Nessuna estrazione,
+  wrapper, esclusione o trasferimento del branching ad altro runtime.
+- Pubblico cog/cyc10/10 ->9/9; file cognitive93 ->92, cyclomatic93 ->92,
+  branching70 ->69, LOC270/callable23/import7 invariati. Zero violation nel
+  parser completo; baseline/config/scope invariati. Campagna globale non-MCP
+  non completa, gli altri hotspot restano fuori da questo passaggio.
+- 83 test parser/persistenza/backfill PASS, full-file100% statement203/branch78,
+  zero missing/partial/esclusioni. 45229 sequenze/start, 12288 layout sezioni,
+  3600 legacy, 3600 metadati e 2000 testi differenziali contro `28cea048`
+  equivalenti, inclusi ordine/start chiamate e alias raw_lines.
+- Ratchet merge-base, Ruff mirato e whitespace PASS; lint globale resta
+  UP038 InCass concorrente1041, compileall PASS. Graphify backend codice e
+  docs Catasto/piattaforma aggiornati prima del commit separato autorizzato;
+  nessun push, change concorrenti preservate.
+- Preflight `28cea048`: unico warning ciclomatico10 nel parser pubblico,
+  cognitive10/LOC18; file cognitive93/cyclomatic93/branching70/LOC270.
+- Sostituire la comprehension di filtro truthy con filter(None, lines),
+  idiomatico per stringhe normalizzate. Stessa lista materializzata, ordine,
+  contenuto e alias raw_lines; nessun helper, esclusione o modifica dei gate.
+- Test full-file100%, differenziali testo/ordine sezioni e ratchet contro HEAD,
+  aggregati/Ruff/Graphify prima del commit autorizzato; change concorrenti intatte.
+
 ### SISTER — scansione proprietari e sezioni (2026-10-05)
 
 - Chiusura `IMPROVED`: scansione owner/indici sezioni isolata, classificazione

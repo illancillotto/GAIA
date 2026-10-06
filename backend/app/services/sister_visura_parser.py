@@ -288,7 +288,7 @@ def _scan_visura_ownership(lines: list[str]) -> tuple[list[dict[str, Any]], int 
 
 def parse_sister_visura_text(text: str) -> dict[str, Any]:
     lines = [re.sub(r"\s+", " ", line).strip() for line in text.splitlines()]
-    lines = [line for line in lines if line]
+    lines = list(filter(None, lines))
     result = _build_visura_payload(lines)
     result["owners"], owner_start, history_start = _scan_visura_ownership(lines)
     if owner_start is not None:
