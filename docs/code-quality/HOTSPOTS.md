@@ -14,6 +14,16 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Campagna non-MCP, dettagli contatto owner export bulk, 2026-10-06:
+`_build_bulk_export_rows` `IMPROVED`, cog/cyc/LOC163/74/91 ->145/68/83,
+nesting3 invariato. Helper contatti/stato/note6/7/14/0/2 sotto soglia, identita
+e rank distinti; ordine/valori/accessi preservati. File cognitive353 ->341,
+cyclomatic237 ->238/callable20 ->21, branching217 invariato, LOC456 ->462;
+20 violation residue, nessuna nuova violation o debt transfer.234 test/
+full-file100%,4000 casi differenziali equivalenti. Ratchet/Ruff mirato PASS,
+lint globale UP038 InCass concorrente; candidata identita owner, mapper ancora
+sopra soglia. SISTER resta senza violation, MCP/Wiki esclusi operativamente.
+
 Campagna non-MCP, servizio arricchimento export SISTER, 2026-10-06:
 `_attach_sister_data` `IMPROVED`, cog/cyc/LOC/nesting18/12/48/2 ->9/7/43/2.
 Servizio SISTER zero violation, query e serializzazione sotto soglia; re-export

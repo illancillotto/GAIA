@@ -1,6 +1,21 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-06 — dettagli contatto owner export bulk
+
+- Proiezione contatti/stato owner e note contestuali separata da identita/rank;
+  helper6/7/14/0/2 sotto soglia, ordine colonne/accessi e normalizzazione truthy
+  invariati, campi identity/date non modificati. Nessun cambio API/schema.
+- Mapper cog/cyc/LOC163/74/91 ->145/68/83; file cognitive353 ->341,
+  cyclomatic237 ->238/callable20 ->21, branching217 invariato, LOC456 ->462.
+  20 violation residue, nessuna nuova violation o trasferimento del debito.
+- Nove caratterizzazioni persistenti;234 test coverage/caratterizzazione/API/
+  facade PASS, full-file exports100% statement215/branch68, zero esclusioni.
+  4000 differenziali contro0ecb6a15 equivalenti per output/ordine/accessi;
+  servizio SISTER invariato/sotto soglia. Ratchet/Ruff mirato PASS, lint globale
+  UP038 InCass concorrente; Graphify codice/docs aggiornati prima del commit.
+  Baseline/config/scope invariati; mapper ancora da ridurre, campagna aperta.
+
 ### 2026-10-06 — servizio arricchimento export SISTER
 
 - Query completed/ordinamento e lookup owner/history separati dalle route in

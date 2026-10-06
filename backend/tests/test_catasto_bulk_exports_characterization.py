@@ -105,6 +105,44 @@ def test_owner_export_columns_rank_dates_and_certificate():
     assert exports._export_basename("CF_PIVA_PARTICELLE") == "catasto-intestatari-da-cf"
 
 
+@pytest.mark.parametrize("deceduto", [None, False, True])
+@pytest.mark.parametrize("note", [None, "", "Nota"])
+def test_bulk_owner_details_column_order_status_and_context(deceduto, note):
+    owner = CatIntestatarioResponse(
+        id=UUID(int=2),
+        codice_fiscale="CF",
+        denominazione=None,
+        tipo=None,
+        cognome=None,
+        nome=None,
+        data_nascita=None,
+        luogo_nascita=" Roma ",
+        comune_residenza="0",
+        indirizzo="Via",
+        cap="00100",
+        telefono=None,
+        email="",
+        ragione_sociale=None,
+        source=None,
+        last_verified_at=None,
+        deceduto=deceduto,
+    )
+    match = CatAnagraficaMatch(particella_id=UUID(int=1), foglio="1", particella="2", note=note)
+    expected = {
+        "luogo_nascita": " Roma ",
+        "comune_residenza": "0",
+        "indirizzo": "Via",
+        "cap": "00100",
+        "telefono": "",
+        "email": "",
+        "deceduto": "si" if deceduto else "",
+        "note": note or "",
+    }
+    actual = exports._bulk_export_owner_details(owner, match)
+    assert actual == expected
+    assert list(actual) == list(expected)
+
+
 @pytest.mark.parametrize("kind", ["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"])
 def test_bulk_base_column_order_zero_values_and_input_fallback(kind):
     match = CatAnagraficaMatch(

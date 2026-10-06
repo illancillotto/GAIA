@@ -3,6 +3,36 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — dettagli contatto owner export bulk (2026-10-06)
+
+- Chiusura `IMPROVED`: proiezione contatti/stato owner/context note separata
+  dall'identita/rank. Helper cog/cyc/LOC/nesting/parametri6/7/14/0/2 sotto soglia;
+  target163/74/91/3 ->145/68/83/3. File cognitive353 ->341, cyclomatic237 ->238
+  per un callable aggiunto (20 ->21), branching217 invariato, LOC456 ->462,
+  import26 invariati.20 violation residue (9 error/11 warning), nessuna nuova
+  violation o debt transfer; non dichiarare riduzione del branching.
+- Nove casi persistenti verificano colonne ordinate, spazi/zero-stringa, contatti
+  None/vuoti, deceduto None/False/True e note None/vuota/presente.234 test
+  coverage/caratterizzazione/API/facade PASS; full-file exports100% statement
+  215/branch68, zero missing/partial/esclusioni. SISTER invariato e ancora100%.
+  4000 casi differenziali contro0ecb6a15 equivalenti per output/ordine/accessi.
+- Ratchet merge-base0ecb6a15 e Ruff runtime/test/format test PASS; lint globale
+  compileall PASS, solo UP038 InCass concorrente. Graphify codice e docs
+  Catasto/piattaforma aggiornati prima del commit separato autorizzato.
+  Evidenze /tmp/gaia-export-contact-*; baseline/config/scope/MCP invariati,
+  nessun test PostgreSQL/API remota dichiarato. Campagna non completa;
+  mapper145/68 resta sopra soglia, candidata successiva proiezione identita owner.
+- Preflight `0ecb6a15`: servizio SISTER zero violation committato, runtime/test
+  Catasto puliti, indice vuoto; passaggio precedente progresso verificato.
+  Mapper cog/cyc/LOC/nesting163/74/91/3; exports cognitive353/cyclomatic237/
+  LOC456,20 violation/20 callable. Goal non-MCP ancora aperto.
+- Isolare la proiezione dei dettagli owner (contatti, deceduto, note contestuali)
+  dall'identita/rank. Helper tipizzato sotto soglia; stessa normalizzazione
+  truthy, ordine colonne/accessi, note letto dopo owner e count/date invariati.
+- Coverage full-file100%, differenziale contro HEAD, metriche aggregate e
+  branching, ratchet/Ruff/Graphify e commit separato. Nessun nuovo debito,
+  cambio API/schema/baseline/config/scope/MCP o inclusione change concorrenti.
+
 ### Catasto — servizio arricchimento export SISTER (2026-10-06)
 
 - Chiusura `IMPROVED`: servizio di dominio per query completed/ordinamento,

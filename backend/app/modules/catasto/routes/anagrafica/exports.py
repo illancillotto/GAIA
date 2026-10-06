@@ -283,6 +283,22 @@ def _export_basename(kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICEL
     return "catasto-intestatari-da-cf" if kind == "CF_PIVA_PARTICELLE" else "catasto-intestatari"
 
 
+def _bulk_export_owner_details(
+    intestatario: CatIntestatarioResponse,
+    match: CatAnagraficaMatch,
+) -> dict[str, object]:
+    return {
+        **{
+            field: getattr(intestatario, field) or ""
+            for field in (
+                "luogo_nascita", "comune_residenza", "indirizzo", "cap", "telefono", "email"
+            )
+        },
+        "deceduto": "si" if intestatario.deceduto else "",
+        "note": match.note or "",
+    }
+
+
 def _build_bulk_export_rows(
     kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"],
     export_results: list[CatAnagraficaBulkSearchRowResult],
@@ -366,15 +382,7 @@ def _build_bulk_export_rows(
                         "denominazione": _intestatario_display_name(intestatario),
                         "ragione_sociale": intestatario.ragione_sociale or "",
                         "data_nascita": intestatario.data_nascita.isoformat() if intestatario.data_nascita is not None else "",
-                        **{
-                            field: getattr(intestatario, field) or ""
-                            for field in (
-                                "luogo_nascita", "comune_residenza", "indirizzo",
-                                "cap", "telefono", "email",
-                            )
-                        },
-                        "deceduto": "si" if intestatario.deceduto else "",
-                        "note": match.note or "",
+                        **_bulk_export_owner_details(intestatario, match),
                     }
                 )
     return rows
