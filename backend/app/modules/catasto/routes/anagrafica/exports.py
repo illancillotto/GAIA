@@ -85,7 +85,7 @@ def _bulk_job_row_label(
         f"Part. {row.particella}" if row.particella else None,
         f"Sub. {row.sub}" if row.sub else None,
     ]
-    return " · ".join(part for part in parts if part)
+    return " · ".join(filter(None, parts))
 
 
 def _intestatario_display_name(intestatario: CatIntestatarioResponse) -> str:

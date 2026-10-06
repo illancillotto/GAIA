@@ -3,6 +3,17 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — label job export bulk (2026-10-06)
+
+- Chiusura `IMPROVED`: `_bulk_job_row_label` usa `filter(None, parts)` al posto
+  della comprehension equivalente; testo, ordine, fallback e valori falsy restano
+  invariati.
+- Target cognitive/cyclomatic `11/11 -> 10/10`, nessun nuovo warning; aggregati
+  `exports.py` cognitive/cyclomatic `202/204 -> 201/203`. Suite Catasto mirata
+  PASS; `exports.py` full-file 100% (`200/200` statement, `52/52` branch).
+- Ruff/format PASS; ratchet e Graphify Catasto da eseguire prima del commit.
+  MCP/Wiki esclusi, baseline/config/scope invariati.
+
 ### Catasto — risoluzione contesto certificato particella (2026-10-06)
 
 - Chiusura `IMPROVED`: normalizzazioni `com/fra` ora delegano direttamente i
