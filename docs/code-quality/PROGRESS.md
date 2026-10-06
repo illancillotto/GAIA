@@ -15,6 +15,16 @@ blocco verificato e prima di chiudere un goal.
   PASS. Ratchet contro `HEAD` (`f8e0b864`) PASS; MCP/Wiki e file concorrenti
   esclusi.
 
+### Catasto — parsing upload bulk (2026-10-06)
+
+- Slice `IMPROVED`: il caricamento CSV/XLSX è isolato dal mapping delle righe,
+  mantenendo formati supportati, errori HTTP e gestione di file vuoti/header.
+- Metriche `_parse_bulk_upload_file` cognitive/cyclomatic/LOC `129/65/87 ->
+  93/52/66`; aggregati del file migliorati senza nuove violation.
+- Suite Catasto e coverage `uploads.py` 100% (`148/148` statement, `48/48`
+  branch); Ruff, format, ratchet contro `HEAD` (`ea4fcbab`) e Graphify PASS.
+  MCP/Wiki e file concorrenti esclusi.
+
 ### Catasto — refresh match senza unità (2026-10-06)
 
 - Slice `IMPROVED`: il ramo di refresh per match privi di unità è isolato in

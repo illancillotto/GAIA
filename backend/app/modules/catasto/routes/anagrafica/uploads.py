@@ -141,28 +141,7 @@ def _parse_bulk_upload_file(
     filename: str,
 ) -> tuple[Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"], list[CatAnagraficaBulkSearchRow], int]:
     ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
-    records: list[dict[str, object]] = []
-    if ext == "csv":
-        text = file_bytes.decode("utf-8-sig")
-        reader = csv.DictReader(StringIO(text))
-        records = [dict(row) for row in reader]
-    elif ext in {"xlsx", "xlsm"}:
-        workbook = load_workbook(BytesIO(file_bytes), read_only=True, data_only=True)
-        if not workbook.sheetnames:
-            return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI", [], 0
-        sheet = workbook[workbook.sheetnames[0]]
-        iter_rows = sheet.iter_rows(values_only=True)
-        raw_headers = next(iter_rows, None)
-        if not raw_headers:
-            return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI", [], 0
-        headers = [str(value or "") for value in raw_headers]
-        for row_values in iter_rows:
-            record: dict[str, object] = {}
-            for index, header in enumerate(headers):
-                record[header] = row_values[index] if row_values and index < len(row_values) else None
-            records.append(record)
-    else:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Formato file non supportato. Usa .xlsx o .csv.")
+    records = _load_upload_records(file_bytes, ext)
 
     if not records:
         return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI", [], 0
@@ -230,6 +209,32 @@ def _parse_bulk_upload_file(
         )
 
     return kind, rows, skipped
+
+
+def _load_upload_records(file_bytes: bytes, ext: str) -> list[dict[str, object]]:
+    if ext == "csv":
+        text = file_bytes.decode("utf-8-sig")
+        return [dict(row) for row in csv.DictReader(StringIO(text))]
+    if ext not in {"xlsx", "xlsm"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Formato file non supportato. Usa .xlsx o .csv.")
+    workbook = load_workbook(BytesIO(file_bytes), read_only=True, data_only=True)
+    if not workbook.sheetnames:
+        return []
+    sheet = workbook[workbook.sheetnames[0]]
+    iter_rows = sheet.iter_rows(values_only=True)
+    raw_headers = next(iter_rows, None)
+    if not raw_headers:
+        return []
+    headers = [str(value or "") for value in raw_headers]
+    records: list[dict[str, object]] = []
+    for row_values in iter_rows:
+        records.append(
+            {
+                header: row_values[index] if row_values and index < len(row_values) else None
+                for index, header in enumerate(headers)
+            }
+        )
+    return records
 
 
 def _bulk_job_detail_from_model(
