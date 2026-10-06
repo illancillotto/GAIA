@@ -3,6 +3,17 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — arricchimento ricerca CF/P.IVA (2026-10-06)
+
+- Slice `IMPROVED`: il loop di costruzione e arricchimento dei match fiscali è
+  isolato in `_build_tax_matches`, preservando ordine, deduplica, resolver live
+  e gestione del dirty state nel chiamante.
+- Metriche `execute_bulk_search_payload` cognitive/cyclomatic/LOC `363/68/320
+  -> 348/66/320`; helper `3/3/17`, sotto soglia, senza debito trasferito.
+- Suite Catasto PASS; coverage `execution.py` 100% (`115/115` statement,
+  `56/56` branch). Ruff, format, ratchet contro `HEAD` (`6c44996f`) e
+  Graphify Catasto PASS; MCP/Wiki esclusi.
+
 ### Catasto — lookup unità subalterno (2026-10-06)
 
 - Slice `IMPROVED`: la query dell'unità subalterno è isolata, preservando

@@ -45,6 +45,25 @@ CATASTO_DISTRETTO_EXPORT_STORAGE_PATH = Path(
 )
 
 
+async def _build_tax_matches(
+    db: Session,
+    particelle: list[CatParticella],
+    consorzio_present_ids: set,
+    live_resolver: _CapacitasLiveResolver | _CapacitasAuthoritativeResolver | None,
+) -> list[CatAnagraficaMatch]:
+    matches: list[CatAnagraficaMatch] = []
+    for particella in particelle:
+        match = _build_match(
+            db,
+            particella,
+            presente_in_catasto_consorzio=(particella.id in consorzio_present_ids),
+        )
+        if live_resolver is not None:
+            match = await live_resolver.enrich_match(particella, match)
+        matches.append(match)
+    return matches
+
+
 # fmt: off
 
 async def execute_bulk_search_payload(
@@ -122,12 +141,12 @@ async def execute_bulk_search_payload(
                             consorzio_present_ids = _load_consorzio_presence_by_particella_ids(
                                 db, {p.id for p in particelle if p.id is not None}
                             )
-                            matches: list[CatAnagraficaMatch] = []
-                            for p in particelle:
-                                match = _build_match(db, p, presente_in_catasto_consorzio=(p.id in consorzio_present_ids))
-                                if live_resolver is not None:
-                                    match = await live_resolver.enrich_match(p, match)
-                                matches.append(match)
+                            matches = await _build_tax_matches(
+                                db,
+                                particelle,
+                                consorzio_present_ids,
+                                live_resolver,
+                            )
 
                             results.append(
                                 CatAnagraficaBulkSearchRowResult(
