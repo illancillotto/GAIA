@@ -3,6 +3,30 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — audit export bulk e stop coverage (2026-10-06)
+
+- Dopo SISTER `dfc2464d`, prossimo candidato non-MCP verificato:
+  backend/app/modules/catasto/routes/anagrafica/exports.py,
+  _build_bulk_export_rows cog/cyc/LOC/nesting281/135/114/3. File21 callable,
+  24 violation (11 error/13 warning). Runtime e test non modificati.
+- Graphify Catasto query conferma utilizzo in export comuni/distretti/job.
+  Responsabilita candidata: mapping colonne base ripetuto per i due tipi
+  export, preservando ordine colonne, None versus zero, fallback input,
+  URL certificato, owners/rank e ordine righe. Nessuna esclusione MCP nei gate.
+- Suite test_catasto_anagrafica_coverage senza coverage PASS (67 test).
+  Con --cov sul modulo o package: collection fallisce con SQLAlchemy
+  Type object already registered; precaricando SQLAlchemy, failure NumPy
+  cannot load module more than once per process. Import ordinario exports PASS.
+- Precaricare exports prima di attivare coverage permette i test ma misura
+  solo52% e perde import/definizioni: NON prova full-file100%, non usare come
+  scorciatoia. Log /tmp/gaia-bulk-export-*, nessuna modifica delle dipendenze,
+  della configurazione coverage o del runtime per aggirare queste failure.
+- Stop condition applicata: nuova failure di strumentazione non ancora spiegata,
+  requisito100% non dimostrato. Prima del refactoring occorre diagnosticare
+  avvio Coverage/import ricorsivi e poi completare caratterizzazione del file.
+  Chiedere decisione per questa diagnosi separata; non dichiarare blocked il
+  goal globale al primo audit e non dichiarare completata la campagna.
+
 ### SISTER — filtro righe vuote (2026-10-06)
 
 - Chiusura `IMPROVED`: filtro idiomatico filter(None, lines) mantiene stringhe
