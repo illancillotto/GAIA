@@ -102,6 +102,53 @@ def _aggregate_recovery_adjustments(
     return totals, last_dates, last_statuses, counts, pending_counts
 
 
+def _apply_recovery_records(
+    aggregates: dict[uuid.UUID, dict[str, int | date | None]],
+    records: list[PresenzeDailyRecord],
+    classification_by_record_id: dict[uuid.UUID, object],
+) -> None:
+    for record in records:
+        bucket = aggregates.setdefault(
+            record.collaborator_id,
+            {
+                "matured_days": 0,
+                "used_days": 0,
+                "pending_validation_count": 0,
+                "last_matured_date": None,
+                "last_used_date": None,
+            },
+        )
+        classification = classification_by_record_id.get(record.id)
+        uses_recovery = _record_uses_recovery_day(record)
+        grants_recovery = classification is not None and classification.grants_recovery_day
+        bucket["matured_days"] = int(bucket["matured_days"]) + int(grants_recovery)
+        bucket["used_days"] = int(bucket["used_days"]) + int(uses_recovery)
+        _update_recovery_last_dates(bucket, record, grants_recovery, uses_recovery)
+        bucket["pending_validation_count"] = int(bucket["pending_validation_count"]) + int(
+            record.validation_status != "validated" and (grants_recovery or uses_recovery)
+        )
+
+
+def _update_recovery_last_dates(
+    bucket: dict[str, int | date | None],
+    record: PresenzeDailyRecord,
+    grants_recovery: bool,
+    uses_recovery: bool,
+) -> None:
+    if grants_recovery:
+        bucket["last_matured_date"] = _latest_recovery_date(
+            bucket["last_matured_date"], record.work_date
+        )
+    if uses_recovery:
+        bucket["last_used_date"] = _latest_recovery_date(bucket["last_used_date"], record.work_date)
+
+
+def _latest_recovery_date(current: int | date | None, candidate: date) -> date:
+    if current is None or candidate > current:
+        return candidate
+    return current  # type: ignore[return-value]
+
+
 def _build_recovery_dashboard(
     db: Session,
     *,
@@ -163,29 +210,7 @@ def _build_recovery_dashboard(
         }
         for item in collaborators
     }
-    for record in records:
-        bucket = aggregates.setdefault(
-            record.collaborator_id,
-            {
-                "matured_days": 0,
-                "used_days": 0,
-                "pending_validation_count": 0,
-                "last_matured_date": None,
-                "last_used_date": None,
-            },
-        )
-        classification = classification_by_record_id.get(record.id)
-        uses_recovery = _record_uses_recovery_day(record)
-        if classification is not None and classification.grants_recovery_day:
-            bucket["matured_days"] = int(bucket["matured_days"]) + 1
-            if bucket["last_matured_date"] is None or record.work_date > bucket["last_matured_date"]:
-                bucket["last_matured_date"] = record.work_date
-        if uses_recovery:
-            bucket["used_days"] = int(bucket["used_days"]) + 1
-            if bucket["last_used_date"] is None or record.work_date > bucket["last_used_date"]:
-                bucket["last_used_date"] = record.work_date
-        if record.validation_status != "validated" and ((classification is not None and classification.grants_recovery_day) or uses_recovery):
-            bucket["pending_validation_count"] = int(bucket["pending_validation_count"]) + 1
+    _apply_recovery_records(aggregates, records, classification_by_record_id)
 
     items: list[PresenzeRecoveryBalanceItemResponse] = []
     matured_total = 0

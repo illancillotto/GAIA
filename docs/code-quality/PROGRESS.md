@@ -3,6 +3,18 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Presenze — aggregazione record recovery (2026-10-06)
+
+- Slice `IMPROVED`: l’aggiornamento degli aggregati dai record giornalieri è
+  isolato in `_apply_recovery_records`, con aggiornamento date separato e
+  conteggi booleani equivalenti.
+- Metriche aggregate del dashboard e helper cognitive/cyclomatic `103/58 ->
+  73/51`; dashboard `57/36/134`, helper `10/8/25`, `_update_recovery_last_dates`
+  `2/3/12` e `_latest_recovery_date` `4/4/4`, senza violation nuove.
+- Suite router/API Presenze PASS; coverage `recovery.py` 100% (`118/118`
+  statement, `36/36` branch). Ruff, format, ratchet contro `HEAD` (`b10c5954`)
+  e Graphify Presenze PASS. MPC/MCP e lavori concorrenti esclusi.
+
 ### Presenze — aggregazione aggiustamenti recovery (2026-10-06)
 
 - Slice `IMPROVED`: l'aggregazione di totali, conteggi e ultimo stato degli
