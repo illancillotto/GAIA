@@ -86,6 +86,15 @@ async def _build_candidate_matches(
     return matches
 
 
+def _commit_live_changes(
+    db: Session,
+    live_resolver: _CapacitasLiveResolver | _CapacitasAuthoritativeResolver | None,
+) -> None:
+    if live_resolver is not None and live_resolver.dirty:
+        db.commit()
+        live_resolver.dirty = False
+
+
 # fmt: off
 
 async def execute_bulk_search_payload(
@@ -183,9 +192,7 @@ async def execute_bulk_search_payload(
                                     particella_id=matches[0].particella_id if matches else None,
                                 )
                             )
-                    if live_resolver is not None and live_resolver.dirty:
-                        db.commit()
-                        live_resolver.dirty = False
+                    _commit_live_changes(db, live_resolver)
                 else:
                     comune_norm, sezione_norm, foglio_norm = _normalize_bulk_particella_inputs(
                         row.comune,
@@ -300,9 +307,7 @@ async def execute_bulk_search_payload(
                                             message="Nessuna particella trovata.",
                                         )
                                     )
-                                if live_resolver.dirty:
-                                    db.commit()
-                                    live_resolver.dirty = False
+                                _commit_live_changes(db, live_resolver)
                             else:
                                 results.append(
                                     CatAnagraficaBulkSearchRowResult(
@@ -341,9 +346,7 @@ async def execute_bulk_search_payload(
                                     matches=matches,
                                 )
                             )
-                            if live_resolver is not None and live_resolver.dirty:
-                                db.commit()
-                                live_resolver.dirty = False
+                            _commit_live_changes(db, live_resolver)
                         else:
                             consorzio_present_ids = _load_consorzio_presence_by_particella_ids(
                                 db, {items[0].id} if items[0].id is not None else set()
@@ -383,9 +386,7 @@ async def execute_bulk_search_payload(
                                     matches_count=(len(sub_matches) if sub_matches else 1),
                                 )
                             )
-                            if live_resolver is not None and live_resolver.dirty:
-                                db.commit()
-                                live_resolver.dirty = False
+                            _commit_live_changes(db, live_resolver)
             except Exception as exc:
                 if live_resolver is not None and live_resolver.dirty:
                     db.rollback()

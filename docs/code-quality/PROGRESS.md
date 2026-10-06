@@ -3,6 +3,17 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Catasto — commit dei cambiamenti live (2026-10-06)
+
+- Slice `IMPROVED`: il commit del resolver live è centralizzato in
+  `_commit_live_changes`, preservando commit, reset del dirty flag e rollback
+  distinto sul percorso d'errore.
+- Metriche `execute_bulk_search_payload` cognitive/cyclomatic/LOC `331/64/316
+  -> 274/54/308`; helper `4/4/7`, sotto soglia, senza debito trasferito.
+- Suite Catasto PASS; coverage `execution.py` 100% (`114/114` statement,
+  `50/50` branch). Ruff, format, ratchet contro `HEAD` (`aa0b78e2`) e
+  Graphify Catasto PASS; MCP/Wiki esclusi.
+
 ### Catasto — arricchimento candidati multipli (2026-10-06)
 
 - Slice `IMPROVED`: il loop di costruzione dei candidati multipli è isolato in
