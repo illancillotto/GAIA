@@ -348,7 +348,9 @@ def test_opesac_uses_confirmed_six_and_half_hours_without_changing_inaz():
         (date(2026, 10, 3), SimpleNamespace(is_active=True, valid_from=None, valid_to=None), True),
         (
             date(2026, 10, 3),
-            SimpleNamespace(is_active=True, valid_from=date(2026, 1, 1), valid_to=date(2026, 9, 30)),
+            SimpleNamespace(
+                is_active=True, valid_from=date(2026, 1, 1), valid_to=date(2026, 9, 30)
+            ),
             False,
         ),
         (

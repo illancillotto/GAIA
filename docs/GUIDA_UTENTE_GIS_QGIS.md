@@ -1,6 +1,6 @@
 # Guida utente GIS e QGIS
 
-**GAIA · Consorzio di Bonifica dell'Oristanese**  
+**GAIA · Consorzio di Bonifica dell'Oristanese**<br>
 Versione 1.0 · 7 ottobre 2026
 
 Questa guida accompagna l'operatore nella consultazione delle mappe GAIA e
@@ -100,22 +100,22 @@ Non modificare gli shapefile sul NAS. Non importare direttamente in una tabella 
 
 ## 10. Problemi comuni
 
-**Non vedo GIS Platform**  
+**Non vedo GIS Platform**<br>
 Chiedi all'amministratore di abilitare il modulo GIS sul tuo account.
 
-**Vedo la mappa ma non i dati**  
+**Vedo la mappa ma non i dati**<br>
 Controlla il banner di health, la connessione di rete e il permesso effettivo della scheda. Non cambiare URL remoti nel progetto QGIS.
 
-**QGIS chiede una password**  
+**QGIS chiede una password**<br>
 Usa la credenziale personale assegnata. La password non è nel progetto e non deve essere condivisa.
 
-**Un layer esterno è `unreachable`**  
+**Un layer esterno è `unreachable`**<br>
 Riprova più tardi e segnala la sorgente indicata. Continua a usare i risultati GAIA disponibili.
 
-**Il progetto QGIS non apre i layer territoriali**  
+**Il progetto QGIS non apre i layer territoriali**<br>
 Verifica `gaia_oauth`, raggiungibilità HTTPS di GAIA e accesso al modulo GIS.
 
-**Una condotta non appare**  
+**Una condotta non appare**<br>
 Verifica che il dato sia stato approvato e pubblicato. I file NAS non sono automaticamente dati ufficiali GAIA.
 
 ## Assistenza
