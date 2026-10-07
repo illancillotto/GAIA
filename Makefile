@@ -118,7 +118,14 @@ mcp-data-http:
 	PYTHONPATH=backend $(QUALITY_PYTHON) -m app.modules.wiki.mcps --data-only --database "$(MCP_DATA_DATABASE)" --audit-database "$(MCP_AUDIT_DATABASE)"
 
 test-mcp:
-	$(QUALITY_PYTHON) -m pytest backend/tests/test_wiki_docs_mcp.py backend/tests/test_wiki_data_mcp.py backend/tests/test_wiki_mcp_http.py backend/tests/test_wiki_mcp_integration.py backend/tests/test_wiki_mcp_evaluation.py backend/tests/test_wiki_mcp_experiment.py backend/tests/test_wiki_mcp_console.py backend/tests/test_wiki_mcp_discovery.py backend/tests/test_wiki_mcp_oauth.py backend/tests/test_wiki_mcp_connector.py --cov=app.modules.wiki.mcps --cov=app.modules.wiki.router --cov-branch --cov-report=term-missing:skip-covered --cov-report=json:backend/coverage-mcp.json --cov-fail-under=100
+	$(QUALITY_PYTHON) -m pytest backend/tests/test_wiki_docs_mcp.py backend/tests/test_wiki_data_mcp.py backend/tests/test_wiki_mcp_http.py backend/tests/test_wiki_mcp_integration.py backend/tests/test_wiki_mcp_evaluation.py backend/tests/test_wiki_mcp_experiment.py backend/tests/test_wiki_mcp_console.py backend/tests/test_wiki_mcp_discovery.py backend/tests/test_wiki_mcp_oauth.py backend/tests/test_wiki_mcp_connector.py backend/tests/test_wiki_mcp_live.py backend/tests/test_wiki_mcp_live_integration.py --cov=app.modules.wiki.mcps --cov=app.modules.wiki.router --cov-branch --cov-report=term-missing:skip-covered --cov-report=json:backend/coverage-mcp.json --cov-fail-under=100
+
+.PHONY: mcp-live test-mcp-live
+mcp-live:
+	PYTHONPATH=backend $(QUALITY_PYTHON) -m app.modules.wiki.mcps.live
+
+test-mcp-live:
+	$(QUALITY_PYTHON) -m pytest -q backend/tests/test_wiki_mcp_live.py backend/tests/test_wiki_mcp_live_integration.py --cov=app.modules.wiki.mcps.live --cov-branch --cov-report=term-missing --cov-report=json:/tmp/gaia-mcp-live-coverage.json --cov-fail-under=100
 
 .PHONY: test-mcp-oauth
 test-mcp-oauth:
@@ -467,6 +474,10 @@ MCP_CA_BUNDLE ?= runtime-data/mcps/client-ca
 .PHONY: test-mcp-pki
 test-mcp-pki:
 	$(QUALITY_PYTHON) -m pytest -q tests/infrastructure/test_gaia_pki.py
+
+.PHONY: test-mcp-lan-release
+test-mcp-lan-release:
+	$(QUALITY_PYTHON) -m pytest -q tests/infrastructure/test_mcp_lan_release.py
 
 .PHONY: test-mcp-gateway
 test-mcp-gateway:

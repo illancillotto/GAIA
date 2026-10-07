@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, model_validator
 
-ShiftWorkerType = Literal["none", "acquaiolo", "telecontrollo"]
+ShiftWorkerType = Literal["none", "acquaiolo", "telecontrollo", "tecnico_turnista"]
 
 
 class ShiftWorkerAssignmentRequest(BaseModel):

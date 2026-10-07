@@ -1,0 +1,27 @@
+services:
+  connector:
+    image: ${GAIA_MCP_RELEASE_IMAGE:?Set an immutable dedicated MCP release image}
+    restart: unless-stopped
+    init: true
+    entrypoint: []
+    command: ["uvicorn", "app.modules.wiki.mcps.connector:create_configured_app", "--factory", "--host", "0.0.0.0", "--port", "8769", "--no-access-log"]
+    env_file:
+      - ${GAIA_MCP_BACKEND_ENV_FILE:?Set the existing backend environment file}
+      - ./connector.env
+    ports:
+      - "127.0.0.1:8769:8769"
+    volumes:
+      - ./config:/mcp-config:ro
+      - ./data:/mcp-data:ro
+      - ./oauth:/mcp-oauth:rw
+      - ./audit:/mcp-audit:rw
+    networks: [gaia]
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+
+networks:
+  gaia:
+    external: true
+    name: ${GAIA_MCP_NETWORK:?Set the existing GAIA Docker network}

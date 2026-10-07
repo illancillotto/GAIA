@@ -12,7 +12,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.modules.riordino.models import RiordinoPractice
+from app.modules.riordino.models import RiordinoDocument, RiordinoPractice
 from app.modules.riordino.repositories import PracticeRepository
 
 
@@ -90,6 +90,23 @@ def export_practice_summary_csv(db: Session, practice_id: UUID) -> tuple[bytes, 
     return buffer.getvalue().encode("utf-8"), filename
 
 
+def _dossier_document_arcname(
+    document: RiordinoDocument,
+    phase_codes: dict[str, str],
+    step_codes: dict[str, tuple[str, str]],
+) -> str:
+    if document.step_id is not None and str(document.step_id) in step_codes:
+        phase_code, step_code = step_codes[str(document.step_id)]
+        return f"documents/{phase_code}/{step_code}/{document.original_filename}"
+    if document.appeal_id is not None:
+        return f"documents/appeals/{document.appeal_id}/{document.original_filename}"
+    if document.issue_id is not None:
+        return f"documents/issues/{document.issue_id}/{document.original_filename}"
+    if document.phase_id is not None and str(document.phase_id) in phase_codes:
+        return f"documents/{phase_codes[str(document.phase_id)]}/_general/{document.original_filename}"
+    return f"documents/_general/{document.original_filename}"
+
+
 def export_practice_dossier_zip(db: Session, practice_id: UUID) -> tuple[BytesIO, str]:
     practice = _get_practice(db, practice_id)
     summary_content, _ = export_practice_summary_csv(db, practice_id)
@@ -128,18 +145,7 @@ def export_practice_dossier_zip(db: Session, practice_id: UUID) -> tuple[BytesIO
             if not path.exists():
                 continue
 
-            if document.step_id is not None and str(document.step_id) in step_codes:
-                phase_code, step_code = step_codes[str(document.step_id)]
-                arcname = f"documents/{phase_code}/{step_code}/{document.original_filename}"
-            elif document.appeal_id is not None:
-                arcname = f"documents/appeals/{document.appeal_id}/{document.original_filename}"
-            elif document.issue_id is not None:
-                arcname = f"documents/issues/{document.issue_id}/{document.original_filename}"
-            elif document.phase_id is not None and str(document.phase_id) in phase_codes:
-                arcname = f"documents/{phase_codes[str(document.phase_id)]}/_general/{document.original_filename}"
-            else:
-                arcname = f"documents/_general/{document.original_filename}"
-
+            arcname = _dossier_document_arcname(document, phase_codes, step_codes)
             archive.write(path, arcname=arcname)
 
     archive_buffer.seek(0)

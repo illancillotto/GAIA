@@ -464,3 +464,7 @@ Tranche successiva: pagina `/mcp/consent` e listener OAuth Data-only separato,
 disattivati per default. Configurazione, proxy da revisionare e gate live:
 [CONNECTOR_RUNTIME_2026-10-03.md](CONNECTOR_RUNTIME_2026-10-03.md).
 Gate: `make test-mcp-connector` e `make test-mcp-consent`.
+Runtime aggiuntivo 2026-10-07: `live/` espone 17 letture API GAIA tramite
+stdio, opt-in separato. Avvio, test e vincoli in `LIVE_READS_2026-10-07.md`.
+I server sintetici e il loro connector descritti qui restano invariati;
+nessun loro token OAuth abilita implicitamente accesso al catalogo live.

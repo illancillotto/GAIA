@@ -7,6 +7,7 @@ from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
+from unittest.mock import Mock
 from uuid import UUID, uuid4
 from xml.etree import ElementTree as ET
 from zipfile import ZipFile
@@ -698,6 +699,51 @@ def test_tributi_special_notice_operational_status_mapping() -> None:
     )
 
 
+def test_tributi_special_notice_status_preserves_label_precedence_and_balance_edges() -> None:
+    cases = [
+        ("Non pagato", None, None, None, None, "paid"),
+        ("Pagato in parte", None, None, None, None, "partial"),
+        ("Da pagare", None, None, None, None, "open"),
+        ("Pagato annullato", Decimal("100"), None, None, Decimal("10"), "partially_cancelled"),
+        ("Annullato", None, None, None, None, "cancelled"),
+        ("Annullato", Decimal("100"), None, None, Decimal("0"), "cancelled"),
+        (None, None, None, Decimal("0"), None, "paid"),
+        (None, Decimal("0"), None, Decimal("0"), None, "to_review"),
+        (None, Decimal("-1"), None, Decimal("-1"), None, "to_review"),
+        (None, Decimal("100"), Decimal("10"), None, None, "paid"),
+        (None, Decimal("100"), Decimal("10"), Decimal("-1"), None, "paid"),
+        (None, Decimal("100"), Decimal("0"), Decimal("10"), None, "open"),
+        (None, Decimal("100"), Decimal("-1"), None, None, "to_review"),
+    ]
+    for label, carico, riscosso, residuo, annullato, expected in cases:
+        assert tributi_repo._special_notice_operational_status(
+            stato_label=label,
+            carico=carico,
+            riscosso_abs=riscosso,
+            residuo=residuo,
+            annullato=annullato,
+        ) == expected
+
+
+def test_tributi_incass_amount_parser_preserves_separator_order_rounding_and_invalid_values() -> None:
+    cases = [
+        (None, None),
+        ("  ", None),
+        ("  EUR 1.234.567,895 € ", Decimal("1234567.90")),
+        ("1,234,567.895", Decimal("1234567.90")),
+        ("-1.234,565", Decimal("-1234.57")),
+        ("1234.565", Decimal("1234.57")),
+        ("1,2,3", None),
+        ("1.2.3", None),
+        ("1,234.567,89", None),
+        ("12 eur", None),
+        ("EUR", None),
+        (0, Decimal("0.00")),
+    ]
+    for raw, expected in cases:
+        assert tributi_repo._parse_incass_amount(raw) == expected
+
+
 def test_tributi_special_notice_repository_allocation_edge_branches() -> None:
     db = TestingSessionLocal()
     subject = AnagraficaSubject(source_name_raw="AFFITTUARIO ALLOCAZIONI")
@@ -790,6 +836,12 @@ def test_tributi_special_notice_repository_allocation_edge_branches() -> None:
     voided_allocation = tributi_repo.void_special_allocation(db, special=special, allocation_id=allocation.id, voided_by=1)
     db.commit()
     assert voided_allocation.status == "voided"
+    voided_at = voided_allocation.voided_at
+    assert tributi_repo.void_special_allocation(
+        db, special=special, allocation_id=allocation.id, voided_by=None
+    ) is voided_allocation
+    assert voided_allocation.voided_at == voided_at
+    assert voided_allocation.voided_by == 1
     assert tributi_repo.list_special_allocations(db, special.id) == []
     assert [item.id for item in tributi_repo.list_special_allocations(db, special.id, include_voided=True)] == [
         allocation.id
@@ -945,6 +997,151 @@ def test_tributi_archive_folder_helpers_and_subject_resolution_edges(monkeypatch
     monkeypatch.setattr("app.modules.ruolo.tributi_repositories.canonical_subject_nas_folder_path", lambda **_kwargs: None)
     assert tributi_repo._ensure_subject_archive_path(db, unknown_subject, "123") is None
     db.close()
+
+
+def test_tributi_notification_dates_fall_back_after_invalid_pec_dates() -> None:
+    avviso_id = uuid4()
+    delivery = {"accepted_at": "invalid", "delivered_at": "invalid"}
+    expected = (date(2026, 1, 4), "registered_mail_received_at")
+    assert tributi_repo._effective_notification_interest_start(
+        avviso_id=avviso_id,
+        mailing_delivery=delivery,
+        registered_mail_dates={avviso_id: expected[0]},
+    ) == expected
+    with TestingSessionLocal() as db:
+        db.add(RuoloTributiRegisteredMail(
+            avviso_id=None,
+            source_shipment_id="INVALID-DATE",
+            raw_payload_json={"received_at": "invalid", "delivered_at": "2026-01-04"},
+        ))
+        db.flush()
+        mail = db.scalar(select(RuoloTributiRegisteredMail))
+        assert tributi_repo._registered_mail_received_date(mail) == expected[0]
+        assert tributi_repo._notification_interest_start_for_avviso(
+            db, avviso_id=avviso_id, mailing_delivery=delivery
+        ) == (None, None)
+
+
+@pytest.mark.parametrize("annullato", [Decimal("0.00"), Decimal("-1.00")])
+def test_tributi_nonpositive_cancellation_preserves_open_notice(annullato: Decimal) -> None:
+    assert tributi_repo._special_notice_operational_status(
+        stato_label="Da pagare",
+        carico=Decimal("100.00"),
+        riscosso_abs=Decimal("0.00"),
+        residuo=Decimal("100.00"),
+        annullato=annullato,
+    ) == "open"
+
+
+def test_tributi_import_metadata_ignores_invalid_containers_and_unknown_columns() -> None:
+    job = RuoloTributiPaymentImportJob(mapping_json={"unmatched": None, "errors": "bad"})
+    assert tributi_repo.payment_import_unmatched_items(job) == []
+    assert tributi_repo._resolve_payment_import_mapping(
+        ["Importo"], {"custom": "Missing column"}
+    ) == {"amount": "Importo"}
+    with TestingSessionLocal() as db:
+        assert tributi_repo._match_payment_import_avviso(
+            db, {"codice_utenza": "MISSING", "anno_tributario": 2024}
+        ) == (None, "Avviso non trovato con codice CNC o codice utenza/anno")
+
+
+def test_tributi_posta_online_text_skips_empty_regex_groups_and_province_only_city() -> None:
+    assert tributi_repo._first_regex("Mario", r"(Dr\.)?(Mario)") == "Mario"
+    assert tributi_repo._first_regex("Mario", r"(Dr\.)?Mario") == "Mario"
+    assert tributi_repo._extract_posta_online_city("OR", "09170 Oristano (OR)") == "ORISTANO"
+
+
+def test_tributi_unbounded_year_filters_and_nonmatching_policy_suffix() -> None:
+    avviso_id = UUID(seed_avviso())
+    with TestingSessionLocal() as db:
+        db.add(RuoloTributiYearManager(
+            manager_key="all", manager_label="All", year_from=None, year_to=None,
+            calculation_policy="external", is_active=True,
+        ))
+        db.flush()
+        clauses = tributi_repo._year_filter_for_manager(db, "all")
+        assert list(db.scalars(select(RuoloAvviso.id).where(*clauses))) == [avviso_id]
+        policy = RuoloTributiCalculationPolicy(name="General", year_from=None, year_to=None)
+        assert list(db.scalars(select(RuoloAvviso.id).where(
+            tributi_repo._policy_year_filter(policy)
+        ))) == [avviso_id]
+        policy.year_from = policy.year_to = 2024
+        assert tributi_repo._calculation_policy_group_key(policy) == "General"
+
+
+def test_tributi_recovery_ignores_unrelated_mail_and_invalid_payment() -> None:
+    avviso_id = UUID(seed_avviso())
+    other_id = UUID(seed_avviso(tax_code="VRDLGI80A01H501X"))
+    with TestingSessionLocal() as db:
+        unrelated_mail = RuoloTributiRegisteredMail(
+            avviso_id=other_id, source_shipment_id="OTHER-NOTICE", match_status="matched",
+            recovery_status="pending",
+        )
+        db.add(unrelated_mail)
+        db.flush()
+        tributi_repo.mark_registered_mail_recovery_on_payment(db, avviso_id=avviso_id)
+        assert unrelated_mail.recovery_status == "pending"
+        assert unrelated_mail.recovered_payment_id is None
+        avviso = db.get(RuoloAvviso, avviso_id)
+        payment = tributi_repo.create_payment(db, avviso=avviso, amount=100.0, status="voided")
+        assert payment.status == "voided"
+        detail = tributi_repo.get_tributi_avviso(db, avviso_id)
+        assert detail["payment_status"] == "unpaid"
+        assert detail["paid_amount"] == 0.0
+        assert detail["saldo_amount"] == 100.0
+
+
+def test_tributi_paid_summary_does_not_count_unsent_notice_as_sendable() -> None:
+    avviso_id = UUID(seed_avviso())
+    with TestingSessionLocal() as db:
+        tributi_repo.create_payment(db, avviso=db.get(RuoloAvviso, avviso_id), amount=100.0)
+        summary = tributi_repo.get_tributi_summary(db)
+        assert summary["total_count"] == 1
+        assert summary["to_send_count"] == summary["sent_count"] == 0
+
+
+def test_tributi_preferred_incass_notice_wins_over_newer_notice() -> None:
+    avviso_id = UUID(seed_avviso())
+    with TestingSessionLocal() as db:
+        for notice_id, day in (("PREFERRED", 1), ("NEWER", 2)):
+            db.add(AnagraficaPaymentNotice(
+                source_system="incass", source_notice_id=notice_id,
+                codice_fiscale="RSSMRA80A01H501Z", anno="2024",
+                detail_url=f"https://incass.local/{notice_id}",
+                updated_at=datetime(2026, 1, day, tzinfo=UTC),
+            ))
+        db.flush()
+        notice = tributi_repo._load_incass_notice_link(
+            db, db.get(RuoloAvviso, avviso_id), preferred_notice_id="PREFERRED"
+        )
+        assert notice["source_notice_id"] == "PREFERRED"
+
+
+def test_tributi_reminder_candidates_ignore_blank_tax_filter_and_empty_manager_label() -> None:
+    seed_avviso(verified_history=True)
+    with TestingSessionLocal() as db:
+        db.add(RuoloTributiYearManager(
+            manager_key="gaia", manager_label="", year_from=2024, year_to=2024,
+            calculation_policy="internal_gaia", is_active=True,
+        ))
+        db.flush()
+        candidates, total = tributi_repo.list_reminder_candidates(db, codice_fiscale=[" "])
+        assert total == 1
+        assert candidates[0]["annuality_managers"] == []
+        assert candidates[0]["codice_fiscale"] == "RSSMRA80A01H501Z"
+
+
+@pytest.mark.parametrize("person_exists,company_exists", [(True, False), (False, True), (True, True)])
+def test_tributi_archive_resolution_tolerates_dangling_subject_references(
+    person_exists: bool, company_exists: bool,
+) -> None:
+    subject_id = uuid4()
+    db = Mock(spec=Session)
+    db.get.return_value = None
+    db.scalar.side_effect = [uuid4() if person_exists else None, uuid4() if company_exists else None]
+    assert tributi_repo._resolve_subject_archive(db, "RSSMRA80A01H501Z", subject_id) == (subject_id, None)
+    assert db.get.call_count == 1 + person_exists + company_exists
+    db.flush.assert_not_called()
 
 
 def test_ruolo_import_job_response_duration_branches() -> None:

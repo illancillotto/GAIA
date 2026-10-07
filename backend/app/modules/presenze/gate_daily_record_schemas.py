@@ -11,7 +11,7 @@ from app.modules.presenze.shift_worker_schemas import GateShiftWorkerAssignmentR
 
 
 class GatePresenzeDailyRecordPatchRequest(BaseModel):
-    shift_worker_type: Literal["none", "acquaiolo", "telecontrollo"] | None = None
+    shift_worker_type: Literal["none", "acquaiolo", "telecontrollo", "tecnico_turnista"] | None = None
     date_from: date | None = None
     date_to: date | None = None
     gate_shift_requested_at: datetime | None = None

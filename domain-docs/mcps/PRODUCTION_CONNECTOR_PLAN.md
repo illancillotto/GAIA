@@ -1,5 +1,10 @@
 # MCP in produzione — connettore remoto Claude
 
+Riepilogo operativo autorevole: `CURRENT_STATUS_2026-10-06.md`. La nuova
+CA dedicata e il certificato server `gaia.lan` sono stati creati, verificati
+e i certificati pubblici copiati sul CED `192.168.1.110`; HTTPS non attivato.
+Il piano remoto qui sotto rimane storico: nessun ingresso Internet approvato.
+
 Decisione corrente 2026-10-05: **solo LAN `gaia.lan`, Claude Desktop locale
 stdio/bridge**, ChatGPT da valutare. Nessun ingresso Internet autorizzato.
 Hardening OAuth implementato: `OAUTH_HARDENING_2026-10-05.md`. Certificati CED,
@@ -281,3 +286,8 @@ audit e piano sono completi. Un rilascio solo su HTTPS interno puo servire
 client LAN ma non supera l'accettazione del connettore remoto Claude.
 Non pubblicare un URL di esempio come se fosse operativo. HTTPS interno CBO
 resta riusabile, ma non sostituisce raggiungibilita e trust TLS del remoto.
+Sviluppo live 2026-10-07: `LIVE_READS_2026-10-07.md` documenta il catalogo
+stdio implementato e separato dal connector OAuth sintetico. Le letture
+live non vengono abilitate dal piano di rilascio: restano necessari HTTPS
+CED verificato, sessione utente, allowlist e approvazione perimetro dati.
+NAS/Trasparenza e batch GET con side effect non sono esposti.

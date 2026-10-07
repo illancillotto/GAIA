@@ -3,6 +3,15 @@
 # GAIA
 ## Architettura del sistema
 
+### MCP live read-only — 2026-10-07
+
+`backend/app/modules/wiki/mcps/live/` e un server stdio opt-in separato
+dal connector sintetico. Le 17 capability usano soltanto API HTTPS GAIA,
+bearer utente effimero, autorizzazioni rivalidate, proiezione allowlisted,
+budget e audit sanitizzato. Nessuna route HTTP live e montata e nessun
+deploy CED e incluso. NAS/Trasparenza e GET batch con sincronizzazione
+restano esclusi. Contratti: `domain-docs/mcps/LIVE_READS_2026-10-07.md`.
+
 ### Presentazione stateless NavItem — 2026-10-05
 
 NavItem mantiene stato, listener hash/popstate e gestione click. Il componente
@@ -496,6 +505,32 @@ OAuth e la pagina consenso su HTTP reindirizzano con `308` all'origin
 entrambi gli schemi. Il proxy HTTPS inoltra i path connector senza il rewrite
 API generico, al listener interno `gaia-mcp-connector:8769`.
 Configurazione, matrice test e limiti: `domain-docs/mcps/HTTP_HTTPS_GATEWAY.md`.
+
+Stato CED verificato al 2026-10-06: `gaia.lan` su `192.168.1.110` e
+Nginx host HTTP 80 verso il container su 8080; nessun listener 443/8443.
+CA dedicata e certificato server verificati, chiave conservata soltanto sul
+server. Gateway Compose non distribuito: il checkout contiene hotfix da
+preservare e non ha client OAuth/dataset sintetico nei percorsi previsti.
+Nginx host serve anche TETI e GaTe Mobile: un rilascio mirato deve rispettare
+tali virtual host e richiede test/reload con sudo. Stato e gate:
+`domain-docs/mcps/CURRENT_STATUS_2026-10-06.md`.
+
+La login monta `LoginHelpLinks`, che mostra download della CA solo se il
+manifest pubblico corrisponde al pin previsto in `frontend/src/lib/gaia-ca.ts`.
+Gli asset di `frontend/public/gaia-ca/` sono generati e ignorati da Git,
+inclusi nella build frontend, senza chiavi private. Errori manifest/rete
+nascondono solo i download, non alterano login o recupero password.
+Il manifest e i checksum non sostituiscono la verifica indipendente CED.
+
+La successiva release MCP separata non modifica i container GAIA:
+`config/mcps/lan-release/compose.yml` avvia soltanto il connector su
+loopback 8769, con rete Docker GAIA esterna e immagine fissata per ID.
+L'env backend e letto sul server e sovrascritto dai default OAuth false;
+config/dataset readonly, directory OAuth/audit separate, nessuna migration.
+La nuova immagine contiene lo snapshot app versionato e l'hardening assente
+nell'immagine backend operativa. Stato 404 e isolamento verificati sul CED;
+HTTPS/consenso/client ancora da completare. Procedura e rollback dedicati:
+`domain-docs/mcps/LAN_ISOLATED_RELEASE_2026-10-06.md`.
 
 ### scanner
 Esegue la scansione LAN del modulo GAIA Rete e persiste snapshot, dispositivi e alert.

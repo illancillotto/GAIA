@@ -124,11 +124,10 @@ async def raise_if_sister_server_error(page, state: SisterSessionState) -> None:
     if pending_error is not None:
         status, response_url = pending_error
         if await _is_non_blocking_init_portale_error(page, status, response_url):
-            logger.warning(
-                "Errore HTTP SISTER initPortale non bloccante ignorato: status=%s url=%s page=%s",
+            logger.debug(
+                "SISTER initPortale non bloccante: status=%s endpoint=%s",
                 status,
-                response_url,
-                page.url,
+                urlparse(response_url).path,
             )
             return
         logger.error("Errore HTTP SISTER rilevato: status=%s url=%s", status, response_url)

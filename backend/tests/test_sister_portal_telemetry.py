@@ -17,6 +17,52 @@ from app.modules.elaborazioni.telemetry_routes import (
 from app.modules.elaborazioni.telemetry_service import get_portal_health, list_portal_events
 
 
+def test_confirmed_non_blocking_init_portale_responses_do_not_raise_server_alerts():
+    db = _session()
+    now = datetime.now(UTC)
+    user = _user(db)
+    events = []
+    for _index in range(3):
+        event = _event(user.id, now, event_type="http_warning", outcome="non_blocking", http_status=501)
+        event.endpoint = "/portale-rest/rs/initPortale"
+        event.severity = "warning"
+        events.append(event)
+    db.add_all(events)
+    db.commit()
+    health = get_portal_health(db, user_id=user.id, window_hours=24, now=now)
+    assert health.totals.errors == 0
+    assert health.status == "healthy"
+    assert not health.errors
+    assert "sister-http-5xx" not in {alert.id for alert in health.alerts}
+    for event in events:
+        event.event_type = "http_error"
+        event.outcome = "error"
+    db.commit()
+    health = get_portal_health(db, user_id=user.id, window_hours=24, now=now)
+    assert health.totals.errors == 3
+    assert "sister-http-5xx" in {alert.id for alert in health.alerts}
+    db.close()
+
+
+def test_soft_warning_filter_does_not_suppress_other_endpoints_or_statuses():
+    from app.modules.elaborazioni.telemetry_service import _is_operational_server_error
+
+    now = datetime.now(UTC)
+    event = _event(1, now, http_status=501, event_type="http_warning", outcome="non_blocking")
+    assert _is_operational_server_error(event)
+    event.endpoint = "/portale-rest/rs/initPortale"
+    assert not _is_operational_server_error(event)
+    event.http_status = 500
+    assert _is_operational_server_error(event)
+    event.http_status = 400
+    assert not _is_operational_server_error(event)
+    event.http_status = None
+    assert not _is_operational_server_error(event)
+    event.http_status = 501
+    event.outcome = "error"
+    assert _is_operational_server_error(event)
+
+
 def _session():
     engine = create_engine(
         "sqlite://",

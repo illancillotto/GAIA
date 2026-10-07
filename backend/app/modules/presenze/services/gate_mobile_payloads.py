@@ -20,6 +20,7 @@ from app.modules.presenze.models import (
 from app.modules.presenze.services.daily_details import classification_breakdown_values
 from app.modules.presenze.services.meal_vouchers import meal_voucher_values
 from app.modules.presenze.services.operai_daily_policy import classified_extra_minutes
+from app.modules.presenze.services.personnel_profiles import personnel_profile_values
 from app.modules.presenze.services.shift_worker_rules import shift_record_values
 from app.modules.presenze.services.xlsm_export import resolve_export_absence_code
 
@@ -355,8 +356,8 @@ def _supervisor_collaborator_fields(
 
 
 def _gate_record_feature_values(record: PresenzeDailyRecord) -> dict[str, Any]:
-    return shift_record_values(record) | {
-        "km_value": record.km_value,
+    return shift_record_values(record) | personnel_profile_values(record) | {
+        "teo_minutes": record.teo_minutes, "km_value": record.km_value,
         "reperibilita_unit": record.reperibilita_unit,
         "reperibilita_quantity": record.reperibilita_quantity,
     }

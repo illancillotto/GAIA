@@ -4,7 +4,7 @@ import logging
 import os
 import re
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import wraps
 from pathlib import Path
 from time import monotonic
@@ -308,6 +308,7 @@ class BrowserTelemetryAdapter:
     browser: object
     binding: SisterTelemetryBinding | None = None
     pending: list[SisterTelemetryRecord] = field(default_factory=list)
+    _login_responses: list[SisterTelemetryRecord] | None = None
 
     def install(self) -> None:
         if getattr(self.browser, "_gaia_sister_telemetry_installed", False):
@@ -338,22 +339,51 @@ class BrowserTelemetryAdapter:
         original = getattr(self.browser, method_name, None)
         if not callable(original):
             return
-
         @wraps(original)
         async def observed(*args, **kwargs):
-            started_at = monotonic()
-            try:
-                result = await original(*args, **kwargs)
-            except (DocumentNotYetProducedError, SisterDocumentNotReadyError):
-                self.emit(_timed_record(event_type, step, started_at, "waiting"))
-                raise
-            except Exception:
-                self.emit(_timed_record(event_type, step, started_at, "error"))
-                raise
-            self.emit(_timed_record(event_type, step, started_at, "success"))
-            return result
+            return await self._observe_call(original, event_type, step, args, kwargs)
 
         setattr(self.browser, method_name, observed)
+
+    async def _observe_call(
+        self, original: AsyncMethod, event_type: str, step: str,
+        args: tuple[Any, ...], kwargs: dict[str, Any],
+    ) -> Any:
+        if event_type == "login":
+            original = self._observe_login(original)
+        started_at = monotonic()
+        try:
+            result = await original(*args, **kwargs)
+        except (DocumentNotYetProducedError, SisterDocumentNotReadyError):
+            self.emit(_timed_record(event_type, step, started_at, "waiting"))
+            raise
+        except Exception:
+            self.emit(_timed_record(event_type, step, started_at, "error"))
+            raise
+        self.emit(_timed_record(event_type, step, started_at, "success"))
+        return result
+
+    def _observe_login(self, original: AsyncMethod) -> AsyncMethod:
+        @wraps(original)
+        async def observed(*args, **kwargs):
+            responses: list[SisterTelemetryRecord] = []
+            self._login_responses = responses
+            succeeded = False
+            try:
+                result = await original(*args, **kwargs)
+                succeeded = True
+                return result
+            finally:
+                self._login_responses = None
+                for record in responses:
+                    self.emit(replace(
+                        record,
+                        event_type="http_warning" if succeeded else "http_error",
+                        outcome="non_blocking" if succeeded else "error",
+                        severity="warning" if succeeded else "error",
+                    ))
+
+        return observed
 
     def _wrap_trace(self) -> None:
         original = getattr(self.browser, "_trace_state", None)
@@ -376,12 +406,19 @@ class BrowserTelemetryAdapter:
         @wraps(original)
         def observed(response):
             result = original(response)
-            record = _response_error_record(response)
-            if record is not None:
-                self.emit(record)
+            self._observe_response(response)
             return result
 
         self.browser._track_response = observed
+
+    def _observe_response(self, response: object) -> None:
+        record = _response_error_record(response)
+        if record is None:
+            return
+        if self._login_responses is not None and _is_init_portale_501(record):
+            self._login_responses.append(record)
+        else:
+            self.emit(record)
 
 
 def _timed_record(event_type: str, step: str, started_at: float, outcome: str) -> SisterTelemetryRecord:
@@ -398,16 +435,36 @@ def _response_error_record(response: object) -> SisterTelemetryRecord | None:
     response_values = _response_values(response)
     if response_values is None or not _is_sister_server_error(response_values):
         return None
+    return _http_error_record(response, response_values)
+
+
+def _http_error_record(response: object, response_values: tuple[int, str, str]) -> SisterTelemetryRecord:
     status, endpoint, resource_type = response_values
     return SisterTelemetryRecord(
         "http_error",
         "portal_response",
         outcome="error",
         severity="error",
+        duration_ms=_response_duration_ms(response),
         http_status=status,
         endpoint=endpoint,
         context={"resource_type": resource_type},
     )
+
+
+def _is_init_portale_501(record: SisterTelemetryRecord) -> bool:
+    return record.http_status == 501 and urlsplit(record.endpoint or "").path == "/portale-rest/rs/initPortale"
+
+
+def _response_duration_ms(response: object) -> int | None:
+    try:
+        timing = response.request.timing
+        started, ended = float(timing["requestStart"]), float(timing["responseStart"])
+    except Exception:
+        return None
+    if not 0 <= started <= ended < float("inf"):
+        return None
+    return round(ended - started)
 
 
 def _response_values(response: object) -> tuple[int, str, str] | None:

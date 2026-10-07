@@ -104,9 +104,12 @@ test("admin opens catasto import detail page for a completed batch", async ({ pa
   await expect(page.getByText("Sintesi batch")).toBeVisible();
   await expect(page.getByText("Distretti rilevati")).toBeVisible();
   await expect(page.getByText("Arborea, Cabras")).toBeVisible();
-  await expect(page.getByText("Preview (prime 50)")).toBeVisible();
-  await expect(page.getByText("Lista anomalie")).toBeVisible();
-  await expect(page.getByRole("cell", { name: "VAL-02-cf_invalido" }).first()).toBeVisible();
+  await expect(page.getByText("Contatori anomalie", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /VAL-02-cf_invalido/ })).toContainText("1");
+  await expect(page.getByRole("button", { name: /VAL-04-comune_invalido/ })).toContainText("1");
+  const anomalyRow = page.getByRole("row").filter({ has: page.getByRole("cell", { name: "VAL-02-cf_invalido", exact: true }) });
+  await expect(anomalyRow.getByRole("cell", { name: "CF non valido", exact: true })).toBeVisible();
+  await expect(anomalyRow.getByRole("cell", { name: "2025", exact: true })).toBeVisible();
 });
 
 test("admin opens catasto import detail page for a distretti batch", async ({ page }) => {
@@ -161,5 +164,6 @@ test("admin opens catasto import detail page for a distretti batch", async ({ pa
   await expect(page.getByText("Sintesi batch")).toBeVisible();
   await expect(page.getByText("Righe totali")).toBeVisible();
   await expect(page.getByText("Nessun contatore disponibile")).toBeVisible();
-  await expect(page.getByText("Nessuna preview")).toBeVisible();
+  await expect(page.getByText("Nessuna anomalia", { exact: true })).toBeVisible();
+  await expect(page.getByText("Non ci sono anomalie per i filtri correnti.", { exact: true })).toBeVisible();
 });

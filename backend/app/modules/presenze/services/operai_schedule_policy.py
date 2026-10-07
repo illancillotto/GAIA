@@ -15,6 +15,7 @@ from app.modules.presenze.services.operai_rules import (
     resolve_operai_rule,
     resolve_operai_schedule_code,
 )
+from app.modules.presenze.services.technician_operai_rules import individual_saturday_eligible
 
 
 @dataclass(frozen=True)
@@ -25,13 +26,9 @@ class OperaiDayPolicy:
 
 
 def has_individual_saturday(record, template, rules):
-    if record.work_date.weekday() != 5 or template is None or not template.is_active:
-        return False
-    if template.valid_from and record.work_date < template.valid_from:
-        return False
-    if template.valid_to and record.work_date > template.valid_to:
-        return False
-    return any(_is_biweekly_saturday(rule) for rule in rules)
+    return individual_saturday_eligible(record, template) and any(
+        _is_biweekly_saturday(rule) for rule in rules
+    )
 
 
 def _is_biweekly_saturday(rule):

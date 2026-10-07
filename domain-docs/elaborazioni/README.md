@@ -6,6 +6,8 @@ Analisi operativa: [errori SISTER, cooldown e piano di efficienza AutoSync (25 s
 
 Aggiornamento: [diagnosi account, controllo autenticazione e polling progressivo (28 settembre 2026)](docs/SISTER_AUTOSYNC_RELIABILITY_2026-09-28.md).
 
+Verifica locale 7 ottobre 2026: [501 initPortale, classificazione soft, misure e report orario](docs/SISTER_INIT_PORTALE_501_RECOVERY.md). Rilascio CED non eseguito da questo intervento.
+
 Ambito runtime attuale:
 - visure per immobile
 - visure per soggetto PF/PNF
@@ -111,6 +113,7 @@ Superfici operative del modulo:
 - `docs/CATASTO_CONTINUOUS_SYNC.md`: contratto runtime, SLA, pool SISTER, API e rollback del planner perpetuo
 - `docs/SISTER_DOWNLOAD_STALL_DEBUG_2026-09-06.md`: diagnosi dello stallo, correzioni locali, test e procedura di verifica del rilascio
 - `capacitas/docs/CAPACITAS_DATA_RECOVERY.md`: guida operativa completa per recupero dati, storico anagrafico, Terreni e persistenza Capacitas
+- `docs/CAPACITAS_POLITE_SYNC_2026-10-07.md`: limiti HTTP condivisi, cooldown, keep-alive e heartbeat dei sync Capacitas
 - `GAIA_VISURE_PROMPT_1_ANALISI.md`
 - `GAIA_VISURE_PROMPT_2_IMPLEMENTAZIONE.md`
 - `GAIA_VISURE_PROMPT_3_REVIEW.md`

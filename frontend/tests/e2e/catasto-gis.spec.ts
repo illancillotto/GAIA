@@ -22,8 +22,29 @@ function buildWorkbookBuffer(): Buffer {
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
 }
 
-test("catasto gis imports xlsx and manages saved selections", async ({ page }) => {
+async function setupGisWorkspace(page: Page) {
   await loginAsAdmin(page);
+
+  await page.route("**/api/catasto/distretti", async (route) => {
+    await route.fulfill({ json: [{
+      id: "00000000-0000-0000-0000-000000004401",
+      num_distretto: "12",
+      nome_distretto: "Distretto test",
+      decreto_istitutivo: null,
+      data_decreto: null,
+      attivo: true,
+      note: null,
+      created_at: "2026-04-30T09:10:00Z",
+      updated_at: "2026-04-30T09:10:00Z",
+    }] });
+  });
+  await page.route("**/api/catasto/distretti/*/geojson", async (route) => {
+    await route.fulfill({ json: {
+      type: "Feature",
+      properties: { num_distretto: "12" },
+      geometry: { type: "Polygon", coordinates: [[[8.55, 39.88], [8.56, 39.88], [8.56, 39.89], [8.55, 39.89], [8.55, 39.88]]] },
+    } });
+  });
 
   const savedSelections: Array<{
     id: string;
@@ -237,6 +258,10 @@ test("catasto gis imports xlsx and manages saved selections", async ({ page }) =
   });
 
   await page.route("**/api/catasto/gis/particella/*/popup", async (route) => {
+    if (!route.request().url().endsWith("/00000000-0000-0000-0000-000000004201/popup")) {
+      await route.continue();
+      return;
+    }
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -269,57 +294,95 @@ test("catasto gis imports xlsx and manages saved selections", async ({ page }) =
       }),
     });
   });
+}
 
+test("catasto gis imports xlsx and manages saved selections", async ({ page }) => {
+  await setupGisWorkspace(page);
   await page.goto("/catasto/gis");
+  await page.getByRole("button", { name: "Apri Console GIS" }).click();
 
-  await expect(page.getByText("Catasto GIS")).toBeVisible();
-  await expect(page.getByText("Ricerca smart GIS")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Distretti" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Particelle" })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Console GIS" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Distretti", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Riempimento particelle", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Evidenzia sel." })).toBeVisible();
-  await expect(page.getByPlaceholder("es. 03")).toBeVisible();
+  await expect(page.getByPlaceholder("Cerca per numero o nome")).toBeVisible();
   await expect(page.getByText("Nessuna selezione salvata.")).toBeVisible();
 
-  await page.getByPlaceholder("Es. Arborea 14 82, RSSMRA80..., Consorzio...").fill("RSSMRA80A01H501Z");
-  await page.getByRole("button", { name: "Cerca" }).click();
-  await expect(page.getByText("Ricerca Codice fiscale: 1 risultati.")).toBeVisible();
-  await expect(page.getByText("Azienda Agricola Rossi")).toBeVisible();
-  await page.getByRole("button", { name: "Centra e apri" }).click();
-  await expect(page.getByText("A ruolo")).toBeVisible();
+  await page.getByPlaceholder("Cerca per numero o nome").fill("12");
+  await expect(page.getByPlaceholder("Cerca per numero o nome")).toHaveValue("12");
+  await page.getByRole("button", { name: "Distretto 12 Distretto test", exact: true }).click();
+  await expect(page.getByText("Filtro attivo: distretto 12")).toBeVisible();
+  const districtPanel = page.getByRole("button", { name: /Distretti irrigui Filtro attivo/ }).locator("..");
+  await districtPanel.getByRole("button", { name: "Tutti", exact: true }).click();
+  await expect(page.getByText("Filtro attivo: distretto 12")).toHaveCount(0);
+  await page.getByRole("button", { name: "Pulisci filtro distretti" }).click();
+  await expect(page.getByPlaceholder("Cerca per numero o nome")).toHaveValue("");
 
-  await page.getByPlaceholder("es. 03").fill("12");
-  await expect(page.getByPlaceholder("es. 03")).toHaveValue("12");
-  await page.getByTitle("Rimuovi filtro").click();
-  await expect(page.getByPlaceholder("es. 03")).toHaveValue("");
-
+  const resolveRequest = page.waitForRequest((request) => request.url().endsWith("/api/catasto/gis/resolve-refs"));
   await page.locator('input[type="file"]').setInputFiles({
     name: "gis-selezione.xlsx",
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer: buildWorkbookBuffer(),
   });
+  expect((await resolveRequest).postDataJSON()).toEqual({
+    include_geometry: true,
+    items: [
+      { row_index: 2, comune: "Arborea", sezione: null, foglio: "14", particella: "82", sub: "A" },
+      { row_index: 3, comune: "Cabras", sezione: null, foglio: "9", particella: "999", sub: null },
+    ],
+  });
 
-  await expect(page.getByText("gis-selezione.xlsx")).toBeVisible();
+  await expect(page.locator("label").filter({ has: page.locator('input[type="file"]') }).getByText("gis-selezione.xlsx", { exact: true })).toBeVisible();
   await expect(page.getByText("Import completato: trovate 1/2. Non trovate: 1.")).toBeVisible();
-  await expect(page.locator('input[placeholder="Nome selezione"]')).toHaveValue("gis-selezione");
-  await expect(page.getByText("trovate", { exact: true })).toBeVisible();
-  await expect(page.getByText("in mappa", { exact: true })).toBeVisible();
-  await expect(page.getByText("scarti", { exact: true })).toBeVisible();
+  await expect(page.getByPlaceholder("Nome layer")).toHaveValue("gis-selezione");
+  const importedLayer = page.getByPlaceholder("Nome layer").locator("../..");
+  await expect(importedLayer.getByText("trovate", { exact: true }).locator("..")).toHaveText(/^1\s*trovate$/);
+  await expect(importedLayer.getByText("in mappa", { exact: true }).locator("..")).toHaveText(/^1\s*in mappa$/);
+  await expect(importedLayer.getByText("scarti", { exact: true }).locator("..")).toHaveText(/^1\s*scarti$/);
 
-  await page.getByRole("button", { name: "Salva selezione" }).click();
-  await expect(page.getByText("Selezione salvata: gis-selezione (1 particelle).")).toBeVisible();
+  await page.getByRole("button", { name: "Salva permanentemente" }).click();
+  await expect(page.getByText("Layer salvato: gis-selezione (1 particelle).")).toBeVisible();
   await expect(page.getByText("1 particelle · 1 in mappa")).toBeVisible();
 
-  await page.locator('input[type="color"]').fill("#EF4444");
-  await page.getByRole("button", { name: "Aggiorna" }).first().click();
-  await expect(page.getByText("Selezione salvata aggiornata.")).toBeVisible();
+  await page.getByTitle("Colore layer", { exact: true }).fill("#EF4444");
+  const updateRequest = page.waitForRequest((request) => request.method() === "PATCH" && request.url().includes("/api/catasto/gis/saved-selections/"));
+  await page.getByRole("button", { name: "Aggiorna metadati salvati" }).click();
+  expect((await updateRequest).postDataJSON()).toMatchObject({ color: "#EF4444" });
+  await expect(page.getByText("Layer aggiornato: gis-selezione.")).toBeVisible();
 
-  await page.getByRole("button", { name: "Rimuovi" }).click();
-  await expect(page.getByRole("button", { name: "Carica in mappa" })).toBeVisible();
-  await page.getByRole("button", { name: "Carica in mappa" }).click();
-  await expect(page.getByText("Selezione caricata: gis-selezione.")).toBeVisible();
+  await page.getByRole("button", { name: "Rimuovi", exact: true }).click();
+  await expect(page.getByPlaceholder("Nome layer")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Aggiungi in mappa" })).toBeVisible();
+  await page.getByRole("button", { name: "Aggiungi in mappa" }).click();
+  await expect(page.getByText("Layer caricato: gis-selezione.")).toBeVisible();
+  await expect(page.getByTitle("Colore layer", { exact: true })).toHaveValue("#ef4444");
 
   await page.getByRole("button", { name: "Elimina" }).click();
   await expect(page.getByText("Nessuna selezione salvata.")).toBeVisible();
+  await expect(page.getByPlaceholder("Nome layer")).toHaveCount(0);
+});
+
+test("catasto gis fiscal search opens parcel role details", async ({ page }) => {
+  await setupGisWorkspace(page);
+  await page.goto("/catasto/gis");
+  await page.getByRole("button", { name: "Ricerca nel comprensorio" }).click();
+  const search = page.getByRole("region", { name: "Ricerca unica GIS" });
+  await search.getByRole("searchbox", { name: "Cerca nel GIS" }).fill("RSSMRA80A01H501Z");
+  const searchRequest = page.waitForRequest((request) => request.url().endsWith("/api/catasto/gis/search"));
+  await search.getByRole("button", { name: "Cerca", exact: true }).click();
+  expect((await searchRequest).postDataJSON()).toMatchObject({ query: "RSSMRA80A01H501Z", mode: "auto" });
+  await expect(search.getByRole("listitem")).toHaveCount(1);
+  await expect(search.getByText("Azienda Agricola Rossi")).toBeVisible();
+  await search.getByRole("button", { name: /Arborea - Fg\. 14, Part\. 82/ }).click();
+  await page.getByRole("button", { name: "Ricerca nel comprensorio" }).click();
+  const popupRequest = page.waitForRequest((request) => request.url().endsWith("/api/catasto/gis/particella/00000000-0000-0000-0000-000000004201/popup"));
+  const parcelPanel = page.locator("[data-gis-parcel-panel]");
+  await expect(async () => {
+    await page.locator("canvas.maplibregl-canvas").click({ timeout: 5000 });
+    await expect(parcelPanel.getByText("A ruolo", { exact: true })).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 10000, intervals: [250, 500, 1000] });
+  await popupRequest;
+  await expect(parcelPanel.getByText("CFM-4201", { exact: true })).toBeVisible();
 });
 
 test("catasto gis shows graceful fallback when WebGL is unavailable", async ({ page }) => {
@@ -349,8 +412,12 @@ test("catasto gis shows graceful fallback when WebGL is unavailable", async ({ p
   await page.goto("/catasto/gis");
 
   await expect(page.getByText("GIS non disponibile")).toBeVisible();
+  expect(await page.evaluate(() => ({
+    webgl2Unavailable: document.createElement("canvas").getContext("webgl2") === null,
+    canvas2dAvailable: document.createElement("canvas").getContext("2d") !== null,
+  }))).toEqual({ webgl2Unavailable: true, canvas2dAvailable: true });
   await expect(
-    page.getByText("WebGL non e disponibile in questo browser o in questa sessione. Il GIS richiede WebGL attivo."),
+    page.getByText("WebGL2 non e disponibile in questo browser o in questa sessione. Il GIS richiede WebGL2 attivo."),
   ).toBeVisible();
   await expect(page.getByText(/MapLibre non puo renderizzare senza WebGL/)).toBeVisible();
 });

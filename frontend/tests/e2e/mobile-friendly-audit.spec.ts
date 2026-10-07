@@ -38,6 +38,7 @@ test.describe("mobile friendly smoke audit", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/login");
     await expect(page.getByRole("button", { name: "Accedi alla piattaforma" })).toBeVisible();
+    await page.evaluate(() => document.fonts.ready.then(() => undefined));
     const metrics = await page.evaluate(() => ({
       innerWidth: window.innerWidth,
       scrollWidth: document.documentElement.scrollWidth,

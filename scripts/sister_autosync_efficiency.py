@@ -12,6 +12,7 @@ from uuid import UUID
 from sqlalchemy import select, text
 
 from app.models.catasto import CatastoBatch, CatastoCredential, CatastoRuoloAutoSyncConfig
+from app.modules.elaborazioni.sister_http_health import init_portale_hourly_health
 from app.modules.elaborazioni.telemetry_models import SisterPortalEvent
 from app.services.elaborazioni_credential_schedule import credential_is_available
 
@@ -132,6 +133,9 @@ def report(db, user_id, start, end):
                 "label": account.label,
                 "active": account.active,
                 **summarize(profile, events, start, end),
+                "init_portale_hourly": init_portale_hourly_health(
+                    events, start, end, _merged_schedule(profile, start, end)
+                ),
             }
         )
     return {
@@ -142,6 +146,16 @@ def report(db, user_id, start, end):
         "note": "Durate unificate per categoria, non sommabili. Attesa remota osservata solo con nuovi eventi waiting; null significa non misurabile.",
         "accounts": rows,
     }
+
+
+def _merged_schedule(profile, start, end):
+    merged = []
+    for left, right in scheduled_intervals(profile, start, end):
+        if merged and merged[-1][1] == left:
+            merged[-1] = (merged[-1][0], right)
+        else:
+            merged.append((left, right))
+    return merged
 
 
 def main():

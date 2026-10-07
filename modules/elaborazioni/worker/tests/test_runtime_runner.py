@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import runpy
-from contextlib import nullcontext
+from contextlib import asynccontextmanager, nullcontext
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -12,6 +12,16 @@ import test_worker as worker_test_support  # noqa: F401 - installs isolated work
 
 import capacitas_lane_gate as gate_module
 import runtime_runner
+
+
+@pytest.fixture(autouse=True)
+def isolate_lane_heartbeat(monkeypatch):
+    @asynccontextmanager
+    async def heartbeat(*args):
+        yield
+
+    monkeypatch.setattr(runtime_runner, "job_heartbeat", heartbeat)
+    monkeypatch.setenv("ELABORAZIONI_CAPACITAS_PARALLEL_WORKERS", "4")
 
 
 @pytest.mark.parametrize(
@@ -30,6 +40,7 @@ def test_production_window_uses_rome_timezone(monkeypatch, timestamp, expected) 
 
     settings = domande_irrigue_autosync_scheduler.settings
     monkeypatch.setattr(settings, "capacitas_domande_irrigue_autosync_window_enabled", True)
+    monkeypatch.setattr(settings, "capacitas_domande_irrigue_autosync_windows", "")
     monkeypatch.setattr(settings, "capacitas_domande_irrigue_autosync_start_hour", 18)
     monkeypatch.setattr(settings, "capacitas_domande_irrigue_autosync_end_hour", 7)
     monkeypatch.setattr(settings, "capacitas_domande_irrigue_autosync_timezone", "Europe/Rome")
@@ -158,6 +169,7 @@ def test_runtime_lanes_run_concurrently_with_single_recovery(monkeypatch) -> Non
                     "families": ["capacitas", "registry"],
                     "parallel_tasks": 6,
                     "workers_per_lane": 4,
+                    "capacitas_workers_per_lane": 4,
                 }
             },
         )
@@ -407,3 +419,76 @@ def test_invalid_payload_is_handled_by_existing_processor(monkeypatch) -> None:
     monkeypatch.setattr(runtime_runner, "job_scope", invalid_scope)
     asyncio.run(runtime_runner.process_job(worker, "incass", 1, 4, None))
     worker._process_capacitas_job.assert_awaited_once_with("incass", 1)
+
+
+def test_polite_capacitas_default_does_not_reduce_registry_parallelism(monkeypatch):
+    monkeypatch.delenv("ELABORAZIONI_CAPACITAS_PARALLEL_WORKERS")
+    monkeypatch.setenv("ELABORAZIONI_RUNTIME_PARALLEL_WORKERS", "4")
+    calls = []
+
+    async def lane(worker, specs, workers, gate):
+        calls.append(workers)
+
+    async def run():
+        pass
+
+    async def heartbeat(operation, _heartbeat):
+        await operation
+
+    worker = SimpleNamespace(
+        job_families={"registry", "capacitas"}, run=run, _recover_capacitas_jobs=MagicMock()
+    )
+    monkeypatch.setattr(runtime_runner, "run_lane", lane)
+    monkeypatch.setattr(runtime_runner, "run_with_heartbeat", heartbeat)
+    monkeypatch.setattr(runtime_runner, "WorkerHeartbeat", MagicMock())
+    monkeypatch.setattr(
+        runtime_runner.worker_module, "SessionLocal", lambda: nullcontext(MagicMock())
+    )
+    asyncio.run(runtime_runner.run_runtime(worker))
+    assert calls == [1, 1]
+    assert worker._process_registry_import_job.keywords == {"workers": 4}
+
+
+def test_job_heartbeat_runs_through_cooldown_and_cleans_up(monkeypatch):
+    touches = []
+
+    async def scenario():
+        pulsed = asyncio.Event()
+
+        async def sleep(seconds):
+            assert seconds == 60
+            pulsed.set()
+            await asyncio.Event().wait()
+
+        monkeypatch.setattr(gate_module.asyncio, "sleep", sleep)
+        monkeypatch.setattr(
+            gate_module,
+            "touch_waiting_job",
+            lambda model, job_id: touches.append((model, job_id)) or True,
+        )
+        async with gate_module.job_heartbeat("domande_irrigue", 113):
+            await pulsed.wait()
+        assert not [task for task in asyncio.all_tasks() if task is not asyncio.current_task()]
+
+    asyncio.run(scenario())
+    assert touches == [(gate_module.JOB_MODELS["domande_irrigue"], 113)]
+
+
+def test_job_heartbeat_stops_for_terminal_job(monkeypatch):
+    monkeypatch.setattr(gate_module, "touch_waiting_job", lambda *args: False)
+    asyncio.run(gate_module.maintain_job_heartbeat("model", 1))
+
+
+def test_job_heartbeat_failure_cancels_work_and_propagates(monkeypatch):
+    def failed_heartbeat(*args):
+        raise RuntimeError("heartbeat failed")
+
+    async def scenario():
+        async with gate_module.job_heartbeat("domande_irrigue", 113):
+            await asyncio.Event().wait()
+
+    monkeypatch.setattr(gate_module, "touch_waiting_job", failed_heartbeat)
+    with pytest.raises(ExceptionGroup) as raised:
+        asyncio.run(scenario())
+    assert isinstance(raised.value.exceptions[0], RuntimeError)
+    assert str(raised.value.exceptions[0]) == "heartbeat failed"

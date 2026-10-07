@@ -7,20 +7,19 @@ import math
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Annotated, Any
-from typing import Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import String, and_, cast, func, or_, select
+from sqlalchemy import String, cast, false, func, or_, select, true
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_mobile_connector
-from app.core.datetime_compat import UTC
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.datetime_compat import UTC
 from app.models.application_user import ApplicationUser
 from app.models.catasto_phase1 import (
     CatDeliveryPoint,
@@ -48,13 +47,13 @@ from app.modules.operazioni.models.reports import (
     InternalCaseEvent,
 )
 from app.modules.operazioni.models.vehicles import Vehicle, VehicleAssignment
+from app.modules.operazioni.models.wc_operator import WCOperator
+from app.modules.operazioni.schemas.operators import GateMobileConsoleRole
 from app.modules.operazioni.services.attachment_service import (
     build_storage_path,
     compute_checksum,
     create_attachment_record,
 )
-from app.modules.operazioni.schemas.operators import GateMobileConsoleRole
-from app.modules.operazioni.models.wc_operator import WCOperator
 
 logger = logging.getLogger(__name__)
 
@@ -371,6 +370,15 @@ def _mobile_meter_code(value: str | None) -> str | None:
     return normalized
 
 
+def _source_delivery_point_coordinates(points: list[CatDeliveryPoint]) -> DeliveryPointCoordinates:
+    coordinates: DeliveryPointCoordinates = {}
+    for point in points:
+        source_coordinates = (_as_float(point.source_y), _as_float(point.source_x))
+        if _valid_wgs84_point(*source_coordinates):
+            coordinates[point.id] = source_coordinates
+    return coordinates
+
+
 def _delivery_point_coordinates(db: Session, points: list[CatDeliveryPoint]) -> DeliveryPointCoordinates:
     if not points:
         return {}
@@ -392,13 +400,7 @@ def _delivery_point_coordinates(db: Session, points: list[CatDeliveryPoint]) -> 
             if _valid_wgs84_point(float(row.lat) if row.lat is not None else None, float(row.lng) if row.lng is not None else None)
         }
 
-    coordinates: DeliveryPointCoordinates = {}
-    for point in points:
-        lat = _as_float(point.source_y)
-        lng = _as_float(point.source_x)
-        if _valid_wgs84_point(lat, lng):
-            coordinates[point.id] = (lat, lng)
-    return coordinates
+    return _source_delivery_point_coordinates(points)
 
 
 def _meter_parcel_coordinates(db: Session, meters: list[CatMeterReading]) -> dict[UUID, tuple[float, float]]:
@@ -418,8 +420,8 @@ def _meter_parcel_coordinates(db: Session, meters: list[CatMeterReading]) -> dic
         .where(
             CatMeterReading.id.in_([meter.id for meter in meters]),
             CatParticella.geometry.is_not(None),
-            CatParticella.is_current == True,
-            CatParticella.suppressed == False,
+            CatParticella.is_current == true(),
+            CatParticella.suppressed == false(),
         )
         .order_by(CatUtenzaIntestatario.anno_riferimento.desc().nullslast(), CatUtenzaIntestatario.collected_at.desc())
     ).all()
@@ -667,7 +669,7 @@ def _resolve_report_severity(db: Session, severity_ref: str | None) -> FieldRepo
     if severity is None:
         severity = db.scalar(
             select(FieldReportSeverity)
-            .where(FieldReportSeverity.is_active == True)
+            .where(FieldReportSeverity.is_active == true())
             .order_by(FieldReportSeverity.rank_order.asc(), FieldReportSeverity.name.asc())
         )
     if severity is None or not severity.is_active:
@@ -685,7 +687,7 @@ def _resolve_teti_category(db: Session) -> FieldReportCategory:
         category = db.scalar(
             select(FieldReportCategory).where(
                 FieldReportCategory.code == code,
-                FieldReportCategory.is_active == True,
+                FieldReportCategory.is_active == true(),
             )
         )
         if category is not None:
@@ -693,7 +695,7 @@ def _resolve_teti_category(db: Session) -> FieldReportCategory:
 
     category = db.scalar(
         select(FieldReportCategory)
-        .where(FieldReportCategory.is_active == True)
+        .where(FieldReportCategory.is_active == true())
         .order_by(FieldReportCategory.sort_order.asc(), FieldReportCategory.name.asc())
     )
     if category is None:
@@ -710,7 +712,7 @@ def _resolve_teti_severity(db: Session, severity_code: str) -> FieldReportSeveri
     direct = db.scalar(
         select(FieldReportSeverity).where(
             FieldReportSeverity.code == severity_code,
-            FieldReportSeverity.is_active == True,
+            FieldReportSeverity.is_active == true(),
         )
     )
     if direct is not None:
@@ -718,7 +720,7 @@ def _resolve_teti_severity(db: Session, severity_code: str) -> FieldReportSeveri
 
     severities = db.scalars(
         select(FieldReportSeverity)
-        .where(FieldReportSeverity.is_active == True)
+        .where(FieldReportSeverity.is_active == true())
         .order_by(FieldReportSeverity.rank_order.asc(), FieldReportSeverity.name.asc())
     ).all()
     if not severities:
@@ -845,7 +847,7 @@ def _fetch_mobile_uploaded_attachments(
     rows = db.scalars(
         select(Attachment).where(
             Attachment.source_context == "mobile_sync_attachment",
-            Attachment.is_deleted == False,
+            Attachment.is_deleted == false(),
         )
     ).all()
 
@@ -906,13 +908,13 @@ def _decode_mobile_attachment_content(attachment: MobileSyncAttachmentRef) -> by
         )
     try:
         file_bytes = base64.b64decode(attachment.content_base64, validate=True)
-    except (ValueError, binascii.Error):
+    except (ValueError, binascii.Error) as exc:
         raise _mobile_error(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             error_code="GAIA_VALIDATION_ERROR",
             message="content_base64 allegato non valido",
             details={"field": "attachments"},
-        )
+        ) from exc
     if attachment.size_bytes is not None and len(file_bytes) != attachment.size_bytes:
         raise _mobile_error(
             status_code=status.HTTP_409_CONFLICT,
@@ -941,7 +943,7 @@ def _create_inline_mobile_attachment(
     existing_rows = db.scalars(
         select(Attachment).where(
             Attachment.source_context == "mobile_sync_attachment",
-            Attachment.is_deleted == False,
+            Attachment.is_deleted == false(),
         )
     ).all()
     existing = _resolve_existing_mobile_attachment(
@@ -1173,7 +1175,7 @@ async def upload_mobile_attachment(
         existing_rows = db.scalars(
             select(Attachment).where(
                 Attachment.source_context == "mobile_sync_attachment",
-                Attachment.is_deleted == False,
+                Attachment.is_deleted == false(),
             )
         ).all()
         for existing in existing_rows:
@@ -1293,29 +1295,29 @@ def get_mobile_catalogs(
 ):
     activities = db.scalars(
         select(ActivityCatalog)
-        .where(ActivityCatalog.is_active == True)
+        .where(ActivityCatalog.is_active == true())
         .order_by(ActivityCatalog.sort_order.asc(), ActivityCatalog.name.asc())
     ).all()
     categories = db.scalars(
         select(FieldReportCategory)
-        .where(FieldReportCategory.is_active == True)
+        .where(FieldReportCategory.is_active == true())
         .order_by(FieldReportCategory.sort_order.asc(), FieldReportCategory.name.asc())
     ).all()
     severities = db.scalars(
         select(FieldReportSeverity)
-        .where(FieldReportSeverity.is_active == True)
+        .where(FieldReportSeverity.is_active == true())
         .order_by(FieldReportSeverity.rank_order.asc(), FieldReportSeverity.name.asc())
     ).all()
     vehicles = db.scalars(
         select(Vehicle)
-        .where(Vehicle.is_active == True)
+        .where(Vehicle.is_active == true())
         .order_by(Vehicle.code.asc(), Vehicle.name.asc())
     ).all()
     delivery_points = db.scalars(
         select(CatDeliveryPoint)
         .where(
-            CatDeliveryPoint.is_active == True,
-            CatDeliveryPoint.has_meter == True,
+            CatDeliveryPoint.is_active == true(),
+            CatDeliveryPoint.has_meter == true(),
         )
         .order_by(CatDeliveryPoint.distretto_code.asc(), CatDeliveryPoint.punto_consegna_code.asc())
     ).all()

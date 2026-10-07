@@ -1,5 +1,11 @@
 # Architettura MCP per GAIA Wiki
 
+Aggiornamento 2026-10-07: il server stdio `live/` e separato da Data
+sintetico, Docs e connector OAuth. Espone 17 letture via API HTTPS GAIA
+con sessione utente, allowlist, rivalidazione permessi, proiezione, audit e
+budget. Non monta nuove route HTTP, non modifica lo schema DB e non attiva
+client esterni. Catalogo e vincoli: `LIVE_READS_2026-10-07.md`.
+
 Aggiornamento 2026-10-05: `OAUTH_HARDENING_2026-10-05.md` descrive policy
 retention/sessione, manutenzione lifespan e revoca admin interna. Host solo LAN
 `gaia.lan`, client Claude Desktop locale. NAS/Trasparenza non esposti.

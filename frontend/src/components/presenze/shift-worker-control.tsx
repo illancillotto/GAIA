@@ -9,10 +9,10 @@ export function ShiftWorkerControl({ record, disabled, onSaved }: Props) {
   const { kind, setKind, from, setFrom, to, setTo, error, saving, first, last, locked, save } = useShiftWorkerAssignment(record, disabled, onSaved);
   return <fieldset className="rounded border p-2 text-sm" disabled={disabled || saving || locked}>
     <legend>Turnista</legend>
-    <p>Teorico di 7 ore; buono pasto con almeno 7 ore ordinarie effettive dal 26/08/2026. Orari dalle timbrature INAZ.</p>
+    <p>Tecnico/Turnista: teorico del codice INAZ; giornate OPE con calendario ordinario. Acquaiolo e Telecontrollo: 7 ore; buono pasto con almeno 7 ore ordinarie effettive dal 26/08/2026. Orari dalle timbrature INAZ.</p>
     {locked && <p>Assegnazione gestita da GATE: modificarla da GATE.</p>}
     <label>Tipologia <select aria-label="Tipologia turnista" value={kind} onChange={event => setKind(event.target.value as ShiftWorkerType)}>
-      <option value="none">Non turnista</option><option value="acquaiolo">Acquaiolo</option><option value="telecontrollo">Telecontrollo</option>
+      <option value="none">Non turnista</option><option value="acquaiolo">Acquaiolo</option><option value="telecontrollo">Telecontrollo</option><option value="tecnico_turnista">Tecnico/Turnista</option>
     </select></label>
     <label>Dal <input aria-label="Turnista dal" type="date" min={first} max={last} value={from} onChange={event => setFrom(event.target.value)} /></label>
     <label>Al <input aria-label="Turnista al" type="date" min={first} max={last} value={to} onChange={event => setTo(event.target.value)} /></label>

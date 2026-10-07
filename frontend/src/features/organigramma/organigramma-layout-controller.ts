@@ -83,15 +83,30 @@ export async function realignExpandedSubtree({ flatTree, schemaOrientation, safe
 
 type HandleApplyTreeLayoutContext = Pick<OrganigrammaLayoutContext, "schemaCanvasMode" | "setSchemaOrientation" | "setNotice" | "view" | "fitSchemaToViewport" | "token" | "canModifyStructure" | "scopedTree" | "computeHorizontalTreeLayout" | "computeVerticalTreeLayout" | "setTree" | "updateTreeNodeInForest" | "structureKind" | "refreshStructure">;
 
+type GuidedTreeLayoutContext = Pick<HandleApplyTreeLayoutContext, "setSchemaOrientation" | "setNotice" | "fitSchemaToViewport">;
+
+const ORIENTATION_LABEL: Record<SchemaOrientation, string> = {
+  horizontal: "orizzontale",
+  vertical: "verticale",
+};
+
+function applyGuidedTreeLayout(
+  { setSchemaOrientation, setNotice, fitSchemaToViewport }: GuidedTreeLayoutContext,
+  orientation: SchemaOrientation,
+  view: OrganigrammaLayoutContext["view"],
+) {
+  setSchemaOrientation(orientation);
+  setNotice(`Vista guidata ${ORIENTATION_LABEL[orientation]} applicata.`);
+  if (view === "schema") {
+    window.requestAnimationFrame(() => {
+      fitSchemaToViewport();
+    });
+  }
+}
+
 export async function handleApplyTreeLayout({ schemaCanvasMode, setSchemaOrientation, setNotice, view, fitSchemaToViewport, token, canModifyStructure, scopedTree, computeHorizontalTreeLayout, computeVerticalTreeLayout, setTree, updateTreeNodeInForest, structureKind, refreshStructure }: HandleApplyTreeLayoutContext, orientation: SchemaOrientation) {
   if (schemaCanvasMode === "guided") {
-    setSchemaOrientation(orientation);
-    setNotice(`Vista guidata ${orientation === "horizontal" ? "orizzontale" : "verticale"} applicata.`);
-    if (view === "schema") {
-      window.requestAnimationFrame(() => {
-        fitSchemaToViewport();
-      });
-    }
+    applyGuidedTreeLayout({ setSchemaOrientation, setNotice, fitSchemaToViewport }, orientation, view);
     return;
   }
   if (!token || !canModifyStructure) return;

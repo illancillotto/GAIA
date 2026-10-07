@@ -17,6 +17,7 @@ def _settings(monkeypatch: pytest.MonkeyPatch) -> None:
         "capacitas_domande_irrigue_autosync_credential_id": 7,
         "capacitas_domande_irrigue_autosync_chunk_size": 2,
         "capacitas_domande_irrigue_autosync_window_enabled": True,
+        "capacitas_domande_irrigue_autosync_windows": "",
         "capacitas_domande_irrigue_autosync_start_hour": 20,
         "capacitas_domande_irrigue_autosync_end_hour": 6,
         "capacitas_domande_irrigue_autosync_timezone": "UTC",
@@ -298,3 +299,32 @@ async def test_register_scheduler_skips_when_disabled(monkeypatch: pytest.Monkey
     await scheduler_module.register_domande_irrigue_autosync_scheduler(scheduler, lambda: None)
 
     assert scheduler.get_job("capacitas_domande_irrigue_autosync") is None
+
+
+def test_existing_state_and_first_identifier_chunk(monkeypatch):
+    _settings(monkeypatch)
+    db = MagicMock()
+    state = _state()
+    db.get.return_value = state
+    assert scheduler_module._load_state(db) is state
+    db.add.assert_not_called()
+    db.execute.return_value.scalars.return_value.all.return_value = ["AAA"]
+    assert scheduler_module._next_identifiers(db, None) == ["AAA"]
+
+
+def test_second_chunk_preserves_daily_progress(monkeypatch):
+    _settings(monkeypatch)
+    state = _state(cycle_key="2026-10-07", processed_identifiers=100)
+    db = MagicMock()
+    monkeypatch.setattr(scheduler_module, "create_domande_irrigue_sync_job",
+                        lambda *args, **kwargs: SimpleNamespace(id=12))
+    assert scheduler_module._enqueue_chunk(db, state, ["BBB"], cycle_key="2026-10-07",
+                                          credential_id=7, now=datetime(2026, 10, 7, tzinfo=UTC)) == 12
+    assert state.processed_identifiers == 100
+    assert state.pending_cursor == "BBB"
+
+
+@pytest.mark.anyio
+async def test_wrapper_without_close_method(monkeypatch):
+    monkeypatch.setattr(scheduler_module, "run_domande_irrigue_autosync", lambda db: 0)
+    await scheduler_module._run_job_wrapper(lambda: SimpleNamespace())

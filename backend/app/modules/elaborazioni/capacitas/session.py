@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
 import html
 import json
 import logging
-from pathlib import Path
 import re
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
 from urllib.parse import quote, unquote_plus
 from uuid import uuid4
 
@@ -16,6 +16,7 @@ import httpx
 from app.core.config import settings
 from app.modules.elaborazioni.capacitas.apps import get_app_hosts, get_capacitas_app
 from app.modules.elaborazioni.capacitas.decoder import decode_response
+from app.modules.elaborazioni.capacitas.request_policy import polite_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ SSO_BASE = "https://sso.servizicapacitas.com"
 LOGIN_URL = f"{SSO_BASE}/pages/login.aspx"
 SSO_TILES_URL = f"{SSO_BASE}/pages/ajax/ajaxTiles.aspx"
 KEEP_ALIVE_PATH = "/pages/handler/handlerKeepSessionAlive.ashx"
-KEEP_ALIVE_INTERVAL = 25
+KEEP_ALIVE_INTERVAL = 120
 SSO_MAIN_URL_TEMPLATE = f"{SSO_BASE}/pages/main.aspx?token={{token}}&app=&tenant="
 
 APP_HOSTS = get_app_hosts()
@@ -33,7 +34,7 @@ APP_HOSTS = get_app_hosts()
 class CapacitasSession:
     token: str
     app_cookies: dict[str, list[dict[str, str]]] = field(default_factory=dict)
-    authenticated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    authenticated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     last_keepalive: dict[str, datetime] = field(default_factory=dict)
 
     def is_alive(self) -> bool:
@@ -50,7 +51,7 @@ class CapacitasSessionManager:
         self._debug_dir: Path | None = None
         self._last_login_page: str | None = None
 
-    async def __aenter__(self) -> "CapacitasSessionManager":
+    async def __aenter__(self) -> CapacitasSessionManager:
         await self.login()
         return self
 
@@ -58,18 +59,10 @@ class CapacitasSessionManager:
         await self.close()
 
     async def login(self) -> CapacitasSession:
-        self._http = httpx.AsyncClient(
-            follow_redirects=True,
-            timeout=30.0,
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (X11; Linux x86_64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/148.0.0.0 Safari/537.36"
-                ),
-                "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
-            },
-        )
+        await self.close()
+        await asyncio.gather(*self._keepalive_tasks.values(), return_exceptions=True)
+        self._keepalive_tasks.clear()
+        self._http = polite_http_client()
 
         login_url = self._build_login_url()
         logger.info("Capacitas login: GET %s", login_url)
@@ -220,7 +213,7 @@ class CapacitasSessionManager:
             try:
                 response = await self._http.post(url, headers={"X-Requested-With": "XMLHttpRequest"})
                 if response.status_code == 200:
-                    self._session.last_keepalive[app] = datetime.now(timezone.utc)
+                    self._session.last_keepalive[app] = datetime.now(UTC)
             except Exception as exc:  # pragma: no cover - external network
                 logger.warning("Capacitas keep-alive error: app=%s err=%s", app, exc)
 
@@ -377,7 +370,7 @@ class CapacitasSessionManager:
     def _write_login_debug_artifacts(self, response: httpx.Response, diagnostics: str) -> str | None:
         try:
             base_dir = Path(settings.capacitas_debug_storage_path)
-            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+            timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
             safe_username = re.sub(r"[^a-zA-Z0-9._-]+", "_", self.username)[:80] or "credential"
             debug_dir = base_dir / f"{timestamp}-{safe_username}-{uuid4().hex[:8]}"
             debug_dir.mkdir(parents=True, exist_ok=True)

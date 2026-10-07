@@ -1,5 +1,7 @@
 # Creazione della CA dedicata GAIA su questo PC
 
+Stato completo MCP e rilascio: `CURRENT_STATUS_2026-10-06.md`.
+
 ## Stato e custodia
 
 Il PC corrente e stato scelto dall'utente come custode. La configurazione
@@ -47,6 +49,10 @@ approvati e dataset sintetico non presenti nei percorsi previsti.
 Non eseguire un aggiornamento indiscriminato o un `compose up --build`
 che possa sostituire immagini/hotfix attivi. Serve pianificare un rilascio
 mirato e preservare il routing Nginx host; nessun reload/deploy effettuato.
+Il modulo connector e importabile nell'immagine backend attiva, ma non
+certifica un gateway aggiornato o configurato. Nginx host gestisce anche
+`teti.lan` e `gaia-mobile.lan`; sudo richiede password, quindi il controllo
+privilegiato `nginx -t` non e stato eseguito dalla sessione SSH.
 
 Nome dedicato: `CBO GAIA Root CA`, distinto dalla vecchia CA Kiosk. Nessuno
 store di trust e stato modificato e nessun certificato Kiosk verra sostituito.

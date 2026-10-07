@@ -35,6 +35,15 @@ function buildCapacitasWorkbookBuffer(): Buffer {
   return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
 }
 
+function buildDistrettiWorkbookBuffer(): Buffer {
+  const worksheet = XLSX.utils.json_to_sheet([
+    { ANNO: 2025, N_DISTRETTO: 10, DISTRETTO: "Distretto 10", COMUNE: "Arborea", SEZIONE: "", FOGLIO: "5", PARTIC: "120", SUB: "1" },
+  ]);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Distretti");
+  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
+}
+
 async function loginAsAdmin(page: Page) {
   const username = process.env.PLAYWRIGHT_ADMIN_USERNAME ?? "admin";
   const password = process.env.PLAYWRIGHT_ADMIN_PASSWORD ?? "#0r1st4n3s1";
@@ -44,6 +53,26 @@ async function loginAsAdmin(page: Page) {
   await page.locator("input#password").fill(password);
   await page.getByRole("button", { name: "Accedi alla piattaforma" }).click();
   await page.waitForURL("**/");
+}
+
+async function mockCapacitasPreview(page: Page, filename: string) {
+  await page.route("**/api/catasto/import/capacitas/preview", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        filename,
+        anno_campagna: 2025,
+        file_hash: "mock-preview-hash-123456",
+        is_exact_duplicate: false,
+        duplicate_batch: null,
+        active_batch: null,
+        summary: { nuove: 1, modificate: 0, invariate: 0, rimosse: 0 },
+        preview_items: [],
+        warnings: [],
+      }),
+    });
+  });
 }
 
 test("admin completes catasto import wizard through report step", async ({ page }) => {
@@ -252,6 +281,7 @@ test("admin completes catasto import wizard through report step", async ({ page 
 
 test("catasto import wizard shows empty report state when batch has no anomalies", async ({ page }) => {
   await loginAsAdmin(page);
+  await mockCapacitasPreview(page, "capacitas-empty.xlsx");
 
   await page.route("**/api/catasto/import/summary**", async (route) => {
     await route.fulfill({
@@ -353,12 +383,14 @@ test("catasto import wizard shows empty report state when batch has no anomalies
   await expect(page.getByText("Nessuno storico disponibile")).toBeVisible();
   await page.getByLabel("Stato").selectOption("");
   await expect(page.getByText("capacitas-history.xlsx")).toBeVisible();
-  await page.getByLabel("File Excel").setInputFiles({
+  await page.locator("#catasto-import-capacitas-file").setInputFiles({
     name: "capacitas-empty.xlsx",
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer: buildCapacitasWorkbookBuffer(),
   });
-  await page.getByRole("button", { name: "Avvia import" }).click();
+  await page.getByRole("button", { name: "Analizza file" }).click();
+  await expect(page.getByText("Preview import Capacitas", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Conferma nuovo snapshot" }).click();
 
   await expect(page.getByText("Sintesi batch")).toBeVisible();
   await expect(page.getByText("Anno campagna")).toBeVisible();
@@ -371,6 +403,7 @@ test("catasto import wizard shows empty report state when batch has no anomalies
 
 test("catasto import wizard shows batch failure details", async ({ page }) => {
   await loginAsAdmin(page);
+  await mockCapacitasPreview(page, "capacitas-failed.xlsx");
 
   await page.route("**/api/catasto/import/capacitas", async (route) => {
     await route.fulfill({
@@ -410,19 +443,21 @@ test("catasto import wizard shows batch failure details", async ({ page }) => {
   });
 
   await page.goto("/catasto/import");
-  await page.getByLabel("File Excel").setInputFiles({
+  await page.locator("#catasto-import-capacitas-file").setInputFiles({
     name: "capacitas-failed.xlsx",
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer: buildCapacitasWorkbookBuffer(),
   });
-  await page.getByRole("button", { name: "Avvia import" }).click();
+  await page.getByRole("button", { name: "Analizza file" }).click();
+  await expect(page.getByText("Preview import Capacitas", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Conferma nuovo snapshot" }).click();
 
   await expect(page.getByText("Import fallito")).toBeVisible();
   await expect(page.getByText("Workbook non valido o foglio Ruoli mancante")).toBeVisible();
   await expect(page.getByText("Nessun contatore disponibile")).toBeVisible();
 });
 
-test("catasto import wizard handles autonomous distretti shapefile flow", async ({ page }) => {
+test("catasto import wizard handles autonomous distretti Excel flow", async ({ page }) => {
   await loginAsAdmin(page);
 
   await page.route("**/api/catasto/import/summary**", async (route) => {
@@ -431,9 +466,9 @@ test("catasto import wizard handles autonomous distretti shapefile flow", async 
       status: 200,
       contentType: "application/json",
       body: JSON.stringify(
-        tipo === "shapefile_distretti"
+        tipo === "distretti_excel"
           ? {
-              tipo: "shapefile_distretti",
+              tipo: "distretti_excel",
               totale_batch: 3,
               processing_batch: 0,
               completed_batch: 2,
@@ -459,12 +494,12 @@ test("catasto import wizard handles autonomous distretti shapefile flow", async 
       status: 200,
       contentType: "application/json",
       body: JSON.stringify(
-        tipo === "shapefile_distretti"
+        tipo === "distretti_excel"
           ? [
               {
                 id: "00000000-0000-0000-0000-000000000441",
-                filename: "distretti-history.zip",
-                tipo: "shapefile_distretti",
+                filename: "distretti-history.xlsx",
+                tipo: "distretti_excel",
                 anno_campagna: null,
                 hash_file: null,
                 righe_totali: 44,
@@ -482,7 +517,9 @@ test("catasto import wizard handles autonomous distretti shapefile flow", async 
       ),
     });
   });
-  await page.route("**/api/catasto/import/distretti/upload**", async (route) => {
+  await page.route("**/api/catasto/import/distretti/excel", async (route) => {
+    expect(route.request().method()).toBe("POST");
+    expect(route.request().postDataBuffer()?.toString("latin1")).toContain('filename="distretti.xlsx"');
     await route.fulfill({
       status: 202,
       contentType: "application/json",
@@ -495,8 +532,8 @@ test("catasto import wizard handles autonomous distretti shapefile flow", async 
       contentType: "application/json",
       body: JSON.stringify({
         id: "00000000-0000-0000-0000-000000000444",
-        filename: "distretti-aggiornati.zip",
-        tipo: "shapefile_distretti",
+        filename: "distretti-aggiornati.xlsx",
+        tipo: "distretti_excel",
         anno_campagna: null,
         hash_file: null,
         righe_totali: 44,
@@ -504,19 +541,14 @@ test("catasto import wizard handles autonomous distretti shapefile flow", async 
         righe_anomalie: 2,
         status: "completed",
         report_json: {
-          righe_staging: 44,
-          distretti_validi: 42,
-          distretti_inseriti: 1,
-          distretti_aggiornati: 4,
-          distretti_invariati: 37,
-          distretti_versionati: 5,
-          distretti_assenti_nello_snapshot: 2,
-          righe_scartate_senza_numero: 1,
-          righe_scartate_senza_geometria: 1,
-          steps: [
-            { ts: "09:11:00", msg: "Staging distretti completato — distretti.shp" },
-            { ts: "09:11:02", msg: "Distretti [4/4]: upsert distretti e scrittura storico geometrie…" },
-          ],
+          righe_totali: 44,
+          righe_univoche: 42,
+          particelle_aggiornate: 4,
+          righe_senza_match_particella: 2,
+          history_written: 5,
+          distretti_creati: 1,
+          righe_scartate_comune_non_risolto: 1,
+          righe_duplicate_conflitto: 1,
         },
         errore: null,
         created_at: "2026-04-29T09:10:30Z",
@@ -534,22 +566,23 @@ test("catasto import wizard handles autonomous distretti shapefile flow", async 
   });
 
   await page.goto("/catasto/import");
-  await page.getByRole("button", { name: "Distretti (ZIP)" }).click();
-  await expect(page.getByText("distretti-history.zip")).toBeVisible();
+  await page.getByRole("button", { name: "Aggiorna distretti (Excel)" }).click();
+  await expect(page.getByText("distretti-history.xlsx")).toBeVisible();
   await expect(page.getByText("Ultimo completato")).toBeVisible();
 
-  await page.getByLabel("Archivio ZIP").setInputFiles({
-    name: "distretti.zip",
-    mimeType: "application/zip",
-    buffer: Buffer.from("PK\x03\x04playwright-dist", "utf8"),
+  await page.locator("#catasto-import-distretti-file").setInputFiles({
+    name: "distretti.xlsx",
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    buffer: buildDistrettiWorkbookBuffer(),
   });
   await page.getByRole("button", { name: "Avvia import" }).click();
 
-  await expect(page.getByText("Risultato import distretti")).toBeVisible();
-  await expect(page.getByText("Distretti validi")).toBeVisible();
-  await expect(page.getByText("Versionati")).toBeVisible();
-  await expect(page.getByText("Assenti nello snapshot")).toBeVisible();
-  await expect(page.getByText("distretti-aggiornati.zip")).toBeVisible();
+  await expect(page.getByText("Risultato aggiornamento distretti")).toBeVisible();
+  await expect(page.getByText("Chiavi univoche", { exact: true }).locator("..")).toContainText("42");
+  await expect(page.getByText("Particelle aggiornate", { exact: true }).locator("..")).toContainText("4");
+  await expect(page.locator("p").filter({ hasText: /^Senza match$/ }).locator("..")).toContainText("2");
+  await expect(page.getByText("Storico scritto", { exact: true }).locator("..")).toContainText("5");
+  await expect(page.getByText("distretti-aggiornati.xlsx")).toBeVisible();
 });
 
 test("catasto import wizard reopens historical distretti batch report from history", async ({ page }) => {
@@ -561,7 +594,7 @@ test("catasto import wizard reopens historical distretti batch report from histo
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        tipo: tipo ?? "shapefile_distretti",
+        tipo: tipo ?? "distretti_excel",
         totale_batch: 5,
         processing_batch: 0,
         completed_batch: 4,
@@ -577,12 +610,12 @@ test("catasto import wizard reopens historical distretti batch report from histo
       status: 200,
       contentType: "application/json",
       body: JSON.stringify(
-        tipo === "shapefile_distretti"
+        tipo === "distretti_excel"
           ? [
               {
                 id: "00000000-0000-0000-0000-000000000551",
-                filename: "distretti-storico.zip",
-                tipo: "shapefile_distretti",
+                filename: "distretti-storico.xlsx",
+                tipo: "distretti_excel",
                 anno_campagna: null,
                 hash_file: null,
                 righe_totali: 44,
@@ -590,15 +623,13 @@ test("catasto import wizard reopens historical distretti batch report from histo
                 righe_anomalie: 2,
                 status: "completed",
                 report_json: {
-                  distretti_validi: 42,
-                  distretti_inseriti: 0,
-                  distretti_aggiornati: 3,
-                  distretti_invariati: 39,
-                  distretti_versionati: 3,
-                  distretti_assenti_nello_snapshot: 1,
-                  righe_scartate_senza_numero: 1,
-                  righe_scartate_senza_geometria: 1,
-                  steps: [{ ts: "10:14:00", msg: "Distretti [4/4]: upsert distretti e scrittura storico geometrie…" }],
+                  righe_totali: 44,
+                  righe_univoche: 42,
+                  particelle_aggiornate: 3,
+                  righe_senza_match_particella: 1,
+                  history_written: 3,
+                  righe_scartate_comune_non_risolto: 1,
+                  righe_duplicate_conflitto: 1,
                 },
                 errore: null,
                 created_at: "2026-04-29T10:10:00Z",
@@ -619,14 +650,15 @@ test("catasto import wizard reopens historical distretti batch report from histo
   });
 
   await page.goto("/catasto/import");
-  await page.getByRole("button", { name: "Distretti (ZIP)" }).click();
-  await expect(page.getByRole("cell", { name: "distretti-storico.zip" })).toBeVisible();
+  await page.getByRole("button", { name: "Aggiorna distretti (Excel)" }).click();
+  await expect(page.getByRole("cell", { name: "distretti-storico.xlsx" })).toBeVisible();
 
   await page.getByRole("button", { name: "Apri report" }).click();
 
-  await expect(page.getByText("Risultato import distretti")).toBeVisible();
-  await expect(page.locator("p").filter({ hasText: "distretti-storico.zip" })).toBeVisible();
-  await expect(page.getByText("Distretti validi")).toBeVisible();
-  await expect(page.getByText("Assenti nello snapshot")).toBeVisible();
-  await expect(page.getByText("Versionati")).toBeVisible();
+  await expect(page.getByText("Risultato aggiornamento distretti")).toBeVisible();
+  await expect(page.locator("p").filter({ hasText: "distretti-storico.xlsx" })).toBeVisible();
+  await expect(page.getByText("Chiavi univoche", { exact: true }).locator("..")).toContainText("42");
+  await expect(page.locator("p").filter({ hasText: /^Senza match$/ }).locator("..")).toContainText("1");
+  await expect(page.getByText("Storico scritto", { exact: true }).locator("..")).toContainText("3");
+  await expect(page.getByText("Particelle aggiornate", { exact: true }).locator("..")).toContainText("3");
 });

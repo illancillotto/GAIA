@@ -236,15 +236,11 @@ def _parse_incass_amount(value: object) -> Decimal | None:
     if isinstance(value, int | float | Decimal):
         return _money(value)
     text = str(value).strip().replace("€", "").replace("EUR", "").replace(" ", "")
-    if "," in text and "." in text:
-        comma_index = text.rfind(",")
-        dot_index = text.rfind(".")
-        if comma_index > dot_index:
-            text = text.replace(".", "").replace(",", ".")
-        else:
+    if "," in text:
+        if "." in text and text.rfind(".") > text.rfind(","):
             text = text.replace(",", "")
-    elif "," in text:
-        text = text.replace(",", ".")
+        else:
+            text = text.replace(".", "").replace(",", ".")
     with suppress(Exception):
         return Decimal(text).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     return None
@@ -1176,6 +1172,10 @@ def _special_notice_policy_payload() -> dict[str, Any]:
     }
 
 
+def _is_positive_special_notice_amount(value: Decimal | None) -> bool:
+    return value is not None and value > _CURRENCY_ZERO
+
+
 def _special_notice_operational_status(
     *,
     stato_label: object,
@@ -1185,21 +1185,21 @@ def _special_notice_operational_status(
     annullato: Decimal | None,
 ) -> str:
     normalised_status = _normalise_payment_header(stato_label)
-    if "annull" in normalised_status or (annullato is not None and annullato > _CURRENCY_ZERO):
+    if "annull" in normalised_status or _is_positive_special_notice_amount(annullato):
         if carico is not None and annullato is not None and _CURRENCY_ZERO < annullato < carico:
             return CAPACITAS_SPECIAL_NOTICE_STATUS_PARTIALLY_CANCELLED
         return CAPACITAS_SPECIAL_NOTICE_STATUS_CANCELLED
-    if "pagato" in normalised_status and "parte" not in normalised_status and "parzial" not in normalised_status:
+    if "pagato" in normalised_status and not any(token in normalised_status for token in ("parte", "parzial")):
         return CAPACITAS_SPECIAL_NOTICE_STATUS_PAID
     if "parzial" in normalised_status or "inparte" in normalised_status:
         return CAPACITAS_SPECIAL_NOTICE_STATUS_PARTIAL
-    if "aperto" in normalised_status or "nonpagato" in normalised_status or "dapagare" in normalised_status:
+    if any(token in normalised_status for token in ("aperto", "nonpagato", "dapagare")):
         return CAPACITAS_SPECIAL_NOTICE_STATUS_OPEN
     if residuo is not None and residuo <= _CURRENCY_ZERO and (carico is None or carico > _CURRENCY_ZERO):
         return CAPACITAS_SPECIAL_NOTICE_STATUS_PAID
-    if riscosso_abs is not None and riscosso_abs > _CURRENCY_ZERO:
-        return CAPACITAS_SPECIAL_NOTICE_STATUS_PARTIAL if residuo and residuo > _CURRENCY_ZERO else CAPACITAS_SPECIAL_NOTICE_STATUS_PAID
-    if residuo is not None and residuo > _CURRENCY_ZERO:
+    if _is_positive_special_notice_amount(riscosso_abs):
+        return CAPACITAS_SPECIAL_NOTICE_STATUS_PARTIAL if _is_positive_special_notice_amount(residuo) else CAPACITAS_SPECIAL_NOTICE_STATUS_PAID
+    if _is_positive_special_notice_amount(residuo):
         return CAPACITAS_SPECIAL_NOTICE_STATUS_OPEN
     return CAPACITAS_SPECIAL_NOTICE_STATUS_TO_REVIEW
 

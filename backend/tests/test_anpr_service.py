@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -10,19 +10,20 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.datetime_compat import UTC
 from app.db.base import Base
+from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob
 from app.modules.utenze import router as utenze_router
 from app.modules.utenze.anpr.client import C004Result, C030Result
 from app.modules.utenze.anpr.models import AnprCheckLog, AnprJobRun, AnprSyncConfig
-from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob
 from app.modules.utenze.anpr.schemas import AnprSyncConfigUpdate
 from app.modules.utenze.anpr.service import (
-    AnprJobSummary,
-    AnprCapacitasCandidate,
-    AnprQueueItem,
     ANPR_DEATH_INFERENCE_MANUAL_MAX_CALLS,
-    _count_calls_for_local_day,
+    AnprCapacitasCandidate,
+    AnprJobSummary,
+    AnprQueueItem,
     _build_result_message,
+    _count_calls_for_local_day,
     _infer_death_date_by_exclusion,
     _is_capacitas_deceduto_value,
     _local_day_bounds_utc,
@@ -31,8 +32,8 @@ from app.modules.utenze.anpr.service import (
     _persist_unexpected_subject_error,
     _record_job_run,
     _resolve_ruolo_year,
-    build_capacitas_candidates,
     build_capacitas_candidate_query,
+    build_capacitas_candidates,
     build_check_queue,
     lookup_anpr_by_codice_fiscale,
     refresh_capacitas_deceased_flags,
@@ -43,9 +44,7 @@ from app.modules.utenze.anpr.service import (
     verify_single_subject_death_date,
 )
 from app.modules.utenze.models import AnagraficaPerson, AnagraficaSubject
-
-
-UTC = timezone.utc
+from app.modules.utenze.routes import support as utenze_router_support
 
 
 @pytest.fixture
@@ -1932,7 +1931,7 @@ async def test_run_daily_job_continues_after_unexpected_subject_exception(
 
 
 def test_get_stats_reports_deceased_kpis(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(utenze_router.settings, "anpr_job_timezone", "Europe/Rome")
+    monkeypatch.setattr(utenze_router_support.settings, "anpr_job_timezone", "Europe/Rome")
 
     alive_subject = _create_person_subject(db_session, "STATSALV0000001", data_nascita=date(1960, 1, 1))
     recent_subject = _create_person_subject(db_session, "STATSREC0000001", data_nascita=date(1950, 1, 1))

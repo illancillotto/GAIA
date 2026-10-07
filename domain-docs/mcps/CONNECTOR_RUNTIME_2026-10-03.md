@@ -1,5 +1,10 @@
 # Consenso GAIA e gateway MCP Data-only
 
+Stato operativo aggiornato: `CURRENT_STATUS_2026-10-06.md`. CA e certificato
+server preparati e verificati, ma il gateway CED non e configurato/attivato.
+Il modulo connector e presente nell'immagine backend attiva: la sola
+importabilita non certifica la versione, i prerequisiti o il rilascio.
+
 Stato corrente 2026-10-05: `OAUTH_HARDENING_2026-10-05.md` descrive cap grant,
 sessione assoluta, cleanup periodico e revoca amministrativa interna implementati.
 Rilascio previsto solo LAN `gaia.lan`, Claude Desktop locale; ChatGPT da valutare.

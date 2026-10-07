@@ -1,5 +1,12 @@
 # Readiness LAN e Claude Desktop
 
+Riepilogo operativo e gate residui: `CURRENT_STATUS_2026-10-06.md`.
+Preparazione successiva: `LAN_ISOLATED_RELEASE_2026-10-06.md`. Codex ora
+configurato stdio, Claude Code/Desktop gia configurati; smoke SDK
+tools/call/provenance PASS, non ancora prova dal modello nelle app.
+Container CED dedicato avviato solo su loopback, OAuth false e 404 verificati;
+nessun proxy TLS o tunnel ChatGPT attivato.
+
 Aggiornamento 2026-10-06: nuova CA creata dall'utente sul PC custode,
 certificato pubblico/autofirma/vincoli e permessi verificati. Impronta e
 procedura: `GAIA_CA_CREATION_2026-10-06.md`. CSR/chiave ora creati sul server
@@ -11,7 +18,7 @@ di rete e Desktop sotto sono lo snapshot 2026-10-05, non una prova TLS nuova.
 
 ## Perimetro approvato
 
-Host `gaia.lan`, solo LAN. Claude Desktop locale, stdio/bridge;
+Host `gaia.lan` sul server `192.168.1.110`, solo LAN. Claude Desktop locale, stdio/bridge;
 ChatGPT da valutare. Nessuna apertura Internet, nuova CA o lettura documenti
 NAS autorizzata implicitamente. Hardening: `OAUTH_HARDENING_2026-10-05.md`.
 

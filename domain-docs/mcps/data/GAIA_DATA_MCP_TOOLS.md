@@ -1,5 +1,8 @@
 # GAIA Data MCP — catalogo tool v1
 
+Questo catalogo resta sintetico. Le 17 letture API GAIA live sono in un
+server stdio opt-in separato: `../LIVE_READS_2026-10-07.md`.
+
 ## Principi
 
 - tool atomici;

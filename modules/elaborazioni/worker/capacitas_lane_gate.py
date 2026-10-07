@@ -1,20 +1,24 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
 import worker as worker_module
 from app.modules.elaborazioni.capacitas.models import CapacitasInCassSyncJobCreateRequest
 from app.services.elaborazioni_capacitas_incass import _resolve_subjects
 
+JOB_MODELS = {
+    "incass": worker_module.CapacitasInCassSyncJob,
+    "terreni": worker_module.CapacitasTerreniSyncJob,
+    "particelle": worker_module.CapacitasParticelleSyncJob,
+    "anagrafica_history": worker_module.CapacitasAnagraficaHistoryImportJob,
+    "domande_irrigue": worker_module.CapacitasDomandeIrrigueSyncJob,
+}
+
 
 def job_scope(job_kind, job_id):
-    model = {
-        "incass": worker_module.CapacitasInCassSyncJob,
-        "terreni": worker_module.CapacitasTerreniSyncJob,
-        "particelle": worker_module.CapacitasParticelleSyncJob,
-        "anagrafica_history": worker_module.CapacitasAnagraficaHistoryImportJob,
-    }[job_kind]
+    model = JOB_MODELS[job_kind]
     with worker_module.SessionLocal() as db:
         job = db.get(model, job_id)
         if job is None:
@@ -38,6 +42,21 @@ def touch_waiting_job(model, job_id) -> bool:
         job.updated_at = datetime.now(UTC)
         db.commit()
     return True
+
+
+async def maintain_job_heartbeat(model, job_id) -> None:
+    while touch_waiting_job(model, job_id):
+        await asyncio.sleep(60)
+
+
+@asynccontextmanager
+async def job_heartbeat(job_kind, job_id):
+    async with asyncio.TaskGroup() as tasks:
+        task = tasks.create_task(maintain_job_heartbeat(JOB_MODELS[job_kind], job_id))
+        try:
+            yield
+        finally:
+            task.cancel()
 
 
 class LaneGate:

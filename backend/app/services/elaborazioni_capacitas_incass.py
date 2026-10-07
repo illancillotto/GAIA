@@ -769,6 +769,30 @@ def _apply_mailing_contact_to_subject(
             person.telefono = contact.phone
 
 
+def _serialize_mailing_receipts(
+    mailing_data: CapacitasInCassMailingData,
+    shipments: list[CapacitasInCassMailingShipmentRow],
+) -> tuple[dict[str, list[dict[str, object]]], dict[str, list[dict[str, object]]]]:
+    shipment_ids = {shipment.external_id for shipment in shipments}
+    receipt_parents_by_shipment_id = {
+        shipment_id: [parent.model_dump(mode="json") for parent in parents]
+        for shipment_id, parents in mailing_data.receipt_parents_by_shipment_id.items()
+        if shipment_id in shipment_ids
+    }
+    receipt_parent_ids = {
+        parent["parent_id"]
+        for parents in receipt_parents_by_shipment_id.values()
+        for parent in parents
+        if parent.get("parent_id")
+    }
+    receipt_documents_by_parent_id = {
+        parent_id: [document.model_dump(mode="json") for document in documents]
+        for parent_id, documents in mailing_data.receipt_documents_by_parent_id.items()
+        if parent_id in receipt_parent_ids
+    }
+    return receipt_parents_by_shipment_id, receipt_documents_by_parent_id
+
+
 def _merge_mailing_data_into_payment_notices(
     db: Session,
     *,
@@ -792,26 +816,14 @@ def _merge_mailing_data_into_payment_notices(
         if notice is None:
             continue
         raw_detail = notice.raw_detail_json if isinstance(notice.raw_detail_json, dict) else {}
-        receipt_parents_by_shipment_id = {
-            shipment_id: [parent.model_dump(mode="json") for parent in parents]
-            for shipment_id, parents in mailing_data.receipt_parents_by_shipment_id.items()
-            if any(shipment.external_id == shipment_id for shipment in shipments)
-        }
-        receipt_parent_ids = {
-            parent["parent_id"]
-            for parents in receipt_parents_by_shipment_id.values()
-            for parent in parents
-            if parent.get("parent_id")
-        }
+        receipt_parents_by_shipment_id, receipt_documents_by_parent_id = _serialize_mailing_receipts(
+            mailing_data, shipments
+        )
         mailing_payload = {
             "contacts": contacts_payload,
             "shipments": [shipment.model_dump(mode="json") for shipment in shipments],
             "receipt_parents_by_shipment_id": receipt_parents_by_shipment_id,
-            "receipt_documents_by_parent_id": {
-                parent_id: [document.model_dump(mode="json") for document in documents]
-                for parent_id, documents in mailing_data.receipt_documents_by_parent_id.items()
-                if parent_id in receipt_parent_ids
-            },
+            "receipt_documents_by_parent_id": receipt_documents_by_parent_id,
         }
         notice.raw_detail_json = {**raw_detail, "mailing_list": mailing_payload}
         flag_modified(notice, "raw_detail_json")

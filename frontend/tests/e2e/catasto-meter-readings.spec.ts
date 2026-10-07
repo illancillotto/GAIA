@@ -76,6 +76,13 @@ test("catasto meter readings page shows list and opens detail drawer", async ({ 
             sync_status: null,
             device_id: null,
             mobile_operator_id: null,
+            record_type: "CONT_NO_TES",
+            record_kind: "meter_reading",
+            operational_state: "active",
+            manual_corrections: null,
+            manual_override_updated_at: null,
+            manual_override_updated_by: null,
+            manual_audits: [],
             created_at: "2026-05-15T10:00:00Z",
             updated_at: "2026-05-15T10:00:00Z",
           },
@@ -135,6 +142,13 @@ test("catasto meter readings page shows list and opens detail drawer", async ({ 
         sync_status: null,
         device_id: null,
         mobile_operator_id: null,
+        record_type: "CONT_NO_TES",
+        record_kind: "meter_reading",
+        operational_state: "active",
+        manual_corrections: null,
+        manual_override_updated_at: null,
+        manual_override_updated_by: null,
+        manual_audits: [],
         created_at: "2026-05-15T10:00:00Z",
         updated_at: "2026-05-15T10:00:00Z",
       }),
@@ -149,8 +163,8 @@ test("catasto meter readings page shows list and opens detail drawer", async ({ 
 
   await page.getByText("PC-001").click();
   await expect(page.getByText("Dettaglio lettura")).toBeVisible();
-  await expect(page.getByText("Operatore A")).toBeVisible();
-  await expect(page.getByText("Mais")).toBeVisible();
+  await expect(page.locator("aside").getByText("Operatore A", { exact: true })).toBeVisible();
+  await expect(page.locator("aside").getByText("Mais", { exact: true })).toBeVisible();
 });
 
 test("catasto meter readings detail validates warning reading with confirmation", async ({ page }) => {
@@ -352,7 +366,7 @@ test("catasto meter readings import page validates and imports workbook", async 
 
   await expect(page.getByText("Import Excel letture")).toBeVisible();
 
-  await page.getByLabel("File Excel").setInputFiles({
+  await page.locator("input#catasto-meter-readings-file").setInputFiles({
     name: "D01-Sinis 2025.xlsx",
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer: buildMeterReadingsWorkbookBuffer(),
@@ -360,10 +374,10 @@ test("catasto meter readings import page validates and imports workbook", async 
 
   await page.getByRole("button", { name: "Valida file" }).click();
   await expect(page.getByText("Report validazione")).toBeVisible();
-  await expect(page.getByText("D01-Sinis 2025.xlsx")).toBeVisible();
+  await expect(page.getByText("D01-Sinis 2025.xlsx · D1 · Sinis", { exact: true })).toBeVisible();
   await expect(page.locator("div.rounded-xl.bg-emerald-50").getByText("Valide")).toBeVisible();
   await expect(page.locator("div.rounded-xl.bg-emerald-50").getByText("1")).toBeVisible();
 
   await page.getByRole("button", { name: "Importa letture" }).click();
-  await expect(page.getByText("Import completato: 1 righe salvate, 0 con warning, 0 scartate.")).toBeVisible();
+  await expect(page.getByText("D01-Sinis 2025.xlsx: 1 righe salvate, 0 con warning, 0 scartate.", { exact: true })).toBeVisible();
 });

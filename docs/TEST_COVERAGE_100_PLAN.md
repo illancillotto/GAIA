@@ -1,5 +1,42 @@
 # Test Coverage 100% Plan
 
+Riverifica finale MCP live 2026-10-07: 117 test live e 437 test della suite
+MCP completa PASS dopo consolidamento del decoder JSON patologico.
+Live 187/187 statement, 40/40 branch; suite 2319/2319 statement,
+478/478 branch, zero righe escluse. I conteggi iniziali sotto sono storici.
+Matrice comportamento/test e gate globali FAIL separati dal coverage:
+`domain-docs/mcps/FINAL_VALIDATION_2026-10-07.md`.
+
+MCP live 2026-10-07: `make test-mcp-live` misura l'intero package runtime
+`app.modules.wiki.mcps.live` con statement e branch e gate 100%; le due
+suite live sono incluse anche nel gate `make test-mcp`. Nessuna esclusione
+nuova o soglia indebolita. Test per tutte le 17 fonti, SDK MCP e vere route
+GAIA/JWT/resolver permessi su SQLite sintetico; nessun accesso a dati reali.
+Contratti e limiti: `domain-docs/mcps/LIVE_READS_2026-10-07.md`.
+Esito finale: 82 test live e 402 test MCP complessivi PASS; live 187
+statement/40 branch e suite 2319 statement/478 branch al 100%.
+Ruff/format e ratchet live PASS; il lint backend globale resta distinto
+per failure in modifiche concorrenti non MCP, documentate nella guida.
+
+Release MCP LAN isolata 2026-10-06: quattro test con Docker Compose reale
+su default disattivato, override dell'env backend, bind loopback,
+isolamento volumi/network e rifiuto input deployment mancanti. Target:
+`make test-mcp-lan-release QUALITY_PYTHON=backend/.venv/bin/python`.
+Nessun runtime Python modificato; file Compose/env/Dockerfile non hanno
+coverage Python. Gate OAuth 31 e connector 43 test PASS, entrambi al
+100% sui file misurati, inclusa prova TCP/revoca prima bloccata dal sandbox.
+Preflight sul CED e Data/discovery 404 non equivalgono ad accettazione OAuth
+attivata. Evidenze: `domain-docs/mcps/LAN_ISOLATED_RELEASE_2026-10-06.md`.
+Gateway HTTP/HTTPS riverificato senza sandbox: 67 test PASS con Docker reale.
+Smoke SDK sul profilo stdio locale: initialize/discovery/tool call e
+provenance verificati, senza attribuirli a una chiamata del modello esterno.
+
+Stato operativo MCP e distinzione tra coverage locale e accettazione CED:
+`domain-docs/mcps/CURRENT_STATUS_2026-10-06.md`. La preparazione del
+certificato sul server non certifica un endpoint HTTPS attivo. I risultati
+di test sotto non sostituiscono tool calling e revoca dal client effettivo;
+nessuna policy di coverage modificata dall'aggiornamento documentale.
+
 Download CA dalla login 2026-10-06: 19 test pertinenti nel corpus
 `password-reset-pages.test.tsx` e `login-help-links.test.tsx`, coverage
 full-file 100% statement (78/78), branch (50/50), funzioni (22/22),

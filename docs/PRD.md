@@ -65,6 +65,27 @@ Fornire un unico punto di accesso operativo per:
   `domain-docs/dotazioni/docs/GATE_CLOSURE_2026-10-03.md`; baseline globale
   Wiki/MCP da riconciliare separatamente, nessun deploy
 
+### MCP LAN e distribuzione trust HTTPS
+
+- Perimetro corrente: `gaia.lan` / `192.168.1.110`, solo LAN, Claude Desktop
+  locale; ChatGPT e connettori cloud da valutare senza pubblicazione Internet.
+- Richiesti anche Claude Code e Codex, configurati localmente in stdio con
+  dati sintetici; tool calling dal modello da collaudare. ChatGPT puo
+  richiedere endpoint pubblico o Secure MCP Tunnel approvato, non attivato.
+- Installer della CA dedicata per Windows amd64/ARM64 e guida Linux/macOS,
+  link download sulla login solo con manifest corrispondente al pin atteso.
+- Verifica impronta con il CED tramite canale indipendente; nessun bypass
+  TLS/SmartScreen, nessuna chiave privata nei pacchetti, firma Authenticode
+  e collaudo nativo richiesti prima della distribuzione gestita.
+- Certificato server firmato e verificato; HTTPS/gateway non ancora rilasciati.
+  Accettazione richiede trust/SAN, HTTP 308, discovery, Data 401 senza token,
+  consenso/tool calling/revoca dal client approvato e hotfix preservati.
+- NAS usa permessi reali con mapping/freshness ACL approvati; Trasparenza
+  richiede fonte/catalogo approvato. Nessuna esposizione reale gia attiva.
+- Stato, evidenze e gate: `domain-docs/mcps/CURRENT_STATUS_2026-10-06.md`.
+- Letture MCP live sviluppate al 2026-10-07: `domain-docs/mcps/LIVE_READS_2026-10-07.md`; catalogo stdio opt-in separato, nessun rilascio CED o accesso NAS/Trasparenza incluso.
+- Verifica/consolidamento completati, gate globale FAIL: `domain-docs/mcps/FINAL_VALIDATION_2026-10-07.md` e `domain-docs/mcps/PROGRESS.md`; nessuna nuova feature introdotta nella chiusura.
+
 ### 3.4 Catasto
 
 - gestione credenziali SISTER

@@ -14,7 +14,7 @@ class PresenzeShiftAssignment(Base):
     __table_args__ = (
         CheckConstraint("date_from <= date_to", name="ck_shift_assignment_dates"),
         CheckConstraint(
-            "shift_worker_type IN ('none', 'acquaiolo', 'telecontrollo')",
+            "shift_worker_type IN ('none', 'acquaiolo', 'telecontrollo', 'tecnico_turnista')",
             name="ck_shift_assignment_type",
         ),
         CheckConstraint("source IN ('gate', 'gaia')", name="ck_shift_assignment_source"),

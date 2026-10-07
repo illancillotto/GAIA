@@ -451,8 +451,14 @@ def write_archivio_summary_values(
             ws.cell(row_index, ARCHIVIO_COLUMNS[key]).value = value or 0
 
 
+def _has_qualifying_workweek(ordinary_by_date: dict[date, int], saturday: date) -> bool:
+    ordinary_minutes = [ordinary_by_date.get(saturday - timedelta(days=offset), 0) for offset in range(1, 6)]
+    return min(ordinary_minutes) > 0 and sum(ordinary_minutes) >= 38 * 60
+
+
 def count_operai_paid_rest_days(
-    export_row: ExportTimesheetRow, schedule_context: ScheduleContext | None = None,
+    export_row: ExportTimesheetRow,
+    schedule_context: ScheduleContext | None = None,
 ) -> int:
     profile = resolve_contract_profile(
         export_row.collaborator.contract_kind,
@@ -466,16 +472,11 @@ def count_operai_paid_rest_days(
         for row in export_row.daily_rows
     }
     ordinary_by_date = {day: value.ordinary_minutes or 0 for day, value in days_by_date.items()}
-    recognized_days = 0
-    for saturday in (day for day in days_by_date if day.weekday() == 5):
-        ordinary_minutes = [
-            ordinary_by_date.get(saturday - timedelta(days=offset), 0) for offset in range(1, 6)
-        ]
-        # Only this week's classified ordinary work; no unvalidated carry credit.
-        if (not day_has_work_presence(days_by_date[saturday])
-                and min(ordinary_minutes) > 0 and sum(ordinary_minutes) >= 38 * 60):
-            recognized_days += 1
-    return recognized_days
+    return sum(
+        _has_qualifying_workweek(ordinary_by_date, saturday)
+        for saturday, classification in days_by_date.items()
+        if saturday.weekday() == 5 and not day_has_work_presence(classification)
+    )
 
 
 def write_archive2_daily_values(

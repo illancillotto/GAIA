@@ -33,6 +33,7 @@ from app.modules.presenze.models import (
     PresenzeScheduleTemplate,
     PresenzeSyncJob,
 )
+from app.modules.presenze.personnel_profile_models import PresenzePersonnelProfile
 from app.modules.presenze.services import gate_mobile_payloads, gate_mobile_team_actions
 from app.modules.presenze.shift_worker_models import PresenzeShiftAssignment
 from app.services import gate_mobile_sync as gate_mobile_sync_service
@@ -2725,6 +2726,7 @@ def _build_session() -> Session:
             PresenzeDailyRecord.__table__,
             PresenzeDailyPunch.__table__,
             PresenzeShiftAssignment.__table__,
+            PresenzePersonnelProfile.__table__,
             OrganizationTeam.__table__,
             OrganizationTeamMembership.__table__,
             OrganizationTeamSupervisorAssignment.__table__,

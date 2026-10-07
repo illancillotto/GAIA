@@ -25,6 +25,9 @@ Evoluzione pianificata:
 
 ## Documentazione
 
+- MCP live opt-in, catalogo letture e verifiche: `domain-docs/mcps/LIVE_READS_2026-10-07.md`; nessun deploy live automatico.
+- Chiusura sviluppo MCP, matrice test e gate globali residui: `domain-docs/mcps/FINAL_VALIDATION_2026-10-07.md`.
+
 - `docs/` contiene la documentazione di piattaforma.
 - `docs/CODE_STYLE.md` definisce lint, formatter e ratchet di stile sui file toccati.
 - `docs/FRONTEND_SESSION_BOOTSTRAP.md` descrive cache, rivalidazione e test della sessione frontend condivisa.
@@ -513,6 +516,27 @@ ChatGPT da valutare. Limiti grant, sessione assoluta, cleanup periodico e revoca
 amministrativa interna sono descritti in
 [`OAUTH_HARDENING_2026-10-05.md`](domain-docs/mcps/OAUTH_HARDENING_2026-10-05.md).
 NAS/Trasparenza non sono esposti dal connector sintetico.
+
+Preparazione CED isolata del 2026-10-06:
+[`LAN_ISOLATED_RELEASE_2026-10-06.md`](domain-docs/mcps/LAN_ISOLATED_RELEASE_2026-10-06.md).
+Container dedicato su `127.0.0.1:8769`, OAuth disattivato e risposte 404
+verificate; immagine aggiornata separata e soli dati sintetici, senza
+riavviare backend/frontend/Nginx o sostituire hotfix. Client/callback e
+ingresso HTTPS effettivo restano da completare. ChatGPT richiede un percorso
+supportato (HTTPS pubblico o Secure MCP Tunnel approvato), non il solo
+hostname LAN. Nessun tunnel e stato attivato.
+
+Stato operativo MCP al 2026-10-06:
+[`CURRENT_STATUS_2026-10-06.md`](domain-docs/mcps/CURRENT_STATUS_2026-10-06.md).
+Server `192.168.1.110`, hostname `gaia.lan`: CA dedicata e certificato server
+firmati/verificati, certificati pubblici copiati sul CED; HTTPS non ancora
+attivo. EXE Windows amd64/ARM64 e guida Linux/macOS pronti, link implementati
+nella login. Asset pubblici ignorati da Git: generarli/pubblicarli prima
+della build frontend con `make mcp-ca-bundle` e `make mcp-ca-login-assets`
+secondo [`CLIENT_CA_INSTALLERS.md`](domain-docs/mcps/CLIENT_CA_INSTALLERS.md).
+Nessun trust, rebuild o deploy automatico; hotfix e immagini server vanno
+preservati. Gli EXE non sono firmati Authenticode. Non confondere la CA
+GAIA con i vecchi pacchetti Kiosk sospesi per questo uso.
 
 Maintenance mode:
 

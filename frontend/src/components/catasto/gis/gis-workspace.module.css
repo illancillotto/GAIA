@@ -17,6 +17,10 @@
   z-index: 40;
 }
 
+.workspace :global(#gis-console) > div {
+  flex: none;
+}
+
 @media (max-width: 767px) {
   .workspace [data-gis-field-tools="overlay"] {
     bottom: 80px;

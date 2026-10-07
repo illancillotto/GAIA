@@ -1,5 +1,9 @@
 # GAIA Data MCP
 
+Il catalogo operativo live sviluppato al 2026-10-07 appartiene al server
+stdio separato `live/`, non a questo Data MCP sintetico. Contratti e
+abilitazione esplicita: `../LIVE_READS_2026-10-07.md`.
+
 ## Runtime v1 implementato
 
 Dodici tool read-only, replica SQLite sintetica isolata e deterministica,

@@ -226,14 +226,10 @@ def _empty_flags() -> dict[str, bool]:
 
 
 def _merge_permission_rows(rows: list[GisLayerPermission]) -> dict[str, bool]:
-    flags = _empty_flags()
-    for row in rows:
-        flags["can_view"] = flags["can_view"] or row.can_view
-        flags["can_annotate"] = flags["can_annotate"] or row.can_annotate
-        flags["can_edit"] = flags["can_edit"] or row.can_edit
-        flags["can_approve"] = flags["can_approve"] or row.can_approve
-        flags["can_manage"] = flags["can_manage"] or row.can_manage
-    return flags
+    return {
+        flag: any(getattr(row, flag) for row in rows)
+        for flag in _empty_flags()
+    }
 
 
 def _permission_flags(db: Session, layer_id: UUID, user: ApplicationUser) -> dict[str, bool]:

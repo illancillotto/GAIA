@@ -51,6 +51,7 @@ it("shows a T badge with the selected type only on shift days", () => {
  const view = render(<ShiftWorkerBadge record={record} />); expect(screen.queryByText("T")).toBeNull();
  view.rerender(<ShiftWorkerBadge record={{...record, shift_worker_type: "acquaiolo"}} />); expect(screen.getByText("T")).toHaveAttribute("title", "Turnista acquaiolo");
  view.rerender(<ShiftWorkerBadge record={{...record, shift_worker_type: "telecontrollo"}} />); expect(screen.getByText("T")).toHaveAttribute("title", "Turnista telecontrollo");
+ view.rerender(<ShiftWorkerBadge record={{...record, shift_worker_type: "tecnico_turnista"}} />); expect(screen.getByText("T")).toHaveAttribute("title", "Tecnico/Turnista");
 });
 it("defaults records from an older snapshot to non-turnista", () => {
  render(<ShiftWorkerControl record={{id: "old", work_date: "2026-10-03"} as PresenzeDailyRecord} disabled={false} onSaved={vi.fn()} />);

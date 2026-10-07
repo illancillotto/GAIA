@@ -248,7 +248,7 @@ def _alerts(
 
 def _server_error_alert(events: list[SisterPortalEvent]) -> SisterPortalAlert | None:
     server_errors = [
-        event for event in events if event.http_status is not None and event.http_status >= 500
+        event for event in events if _is_operational_server_error(event)
     ]
     if len(server_errors) < 3:
         return None
@@ -258,6 +258,17 @@ def _server_error_alert(events: list[SisterPortalEvent]) -> SisterPortalAlert | 
         title="Errori server SISTER ripetuti",
         detail=f"{len(server_errors)} risposte HTTP 5xx nella finestra selezionata.",
         active_since=min(_as_utc(event.occurred_at) for event in server_errors),
+    )
+
+
+def _is_operational_server_error(event: SisterPortalEvent) -> bool:
+    if event.http_status is None or event.http_status < 500:
+        return False
+    return not (
+        event.http_status == 501
+        and event.endpoint == "/portale-rest/rs/initPortale"
+        and event.event_type == "http_warning"
+        and event.outcome == "non_blocking"
     )
 
 

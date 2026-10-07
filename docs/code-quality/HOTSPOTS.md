@@ -14,6 +14,20 @@ Snapshot di preparazione: `main` a
 
 ## Candidati iniziali
 
+Ripresa singolo hotspot, dossier ZIP Riordino, 2026-10-07:
+`backend/app/modules/riordino/services/export_service.py` /
+`export_practice_dossier_zip` `IMPROVED`, cognitive/cyclomatic/LOC
+35/17/49→10/9/39, nesting5→2. Percorso documento separato in helper
+10/9/15/1, nessuna nuova violation: file cognitive65→50, finding5→2,
+error4→1; cyclomatic35→36 per un callable aggiunto, decisioni31→31,
+LOC129→134 dichiarate. Priorita step/appeal/issue/phase/general, contenuti,
+ordine e file mancanti/cancellati preservati.41 test prima/dopo,53 API dopo,
+servizio full-file statement/branch100%,147 archivi/CSV differenziali
+equivalenti, controtest routing alterato respinto. Ratchet scoped/globale
+main PASS, Ruff scoped PASS; lint globale segnala test Presenze concorrente.
+Baseline/soglie/esclusioni intatte. Residuo summary rows27/13: non avviato;
+singola slice conclusa, team Capacitas/Presenze/MCP preservati.
+
 Campagna non-MCP, base riga export bulk, 2026-10-06:
 `_build_bulk_export_rows` `IMPROVED`, cog/cyc/LOC32/18/49 ->14/9/23,
 nesting2 invariato. Helper base3/4/32/1/3 e text2/3/2/0/1 sotto soglia;

@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-import re
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
-from fastapi import HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import String, asc, cast, desc, func, or_, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_active_user, require_admin_user
+from app.api.deps import require_admin_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.models.catasto_phase1 import CatAnomalia, CatComune, CatParticella, CatUtenzaIrrigua
@@ -18,25 +16,28 @@ from app.modules.catasto.services.ade_status_scan import (
     get_ade_status_scan_summary,
     list_ade_status_scan_candidates,
 )
+from app.modules.catasto.services.anomalie_matching import (
+    normalize_lookup_text as _normalize_lookup_text,
+)
+from app.modules.catasto.services.anomalie_matching import score_comune_candidate
 from app.modules.catasto.services.anomalie_payloads import build_anomalia_payload
 from app.modules.catasto.services.import_capacitas import ANOMALIA_TYPES
 from app.modules.catasto.services.validation import validate_codice_fiscale
-from app.services.elaborazioni_credentials import ElaborazioneCredentialNotFoundError
 from app.schemas.catasto_phase1 import (
     CatAdeStatusScanCandidateListResponse,
     CatAdeStatusScanCandidateResponse,
     CatAdeStatusScanRunInput,
     CatAdeStatusScanRunResponse,
     CatAdeStatusScanSummaryResponse,
+    CatAnomaliaCfWizardApplyInput,
+    CatAnomaliaCfWizardApplyResponse,
+    CatAnomaliaCfWizardItemResponse,
+    CatAnomaliaCfWizardListResponse,
     CatAnomaliaComuneCandidateResponse,
     CatAnomaliaComuneWizardApplyInput,
     CatAnomaliaComuneWizardApplyResponse,
     CatAnomaliaComuneWizardItemResponse,
     CatAnomaliaComuneWizardListResponse,
-    CatAnomaliaCfWizardApplyInput,
-    CatAnomaliaCfWizardApplyResponse,
-    CatAnomaliaCfWizardItemResponse,
-    CatAnomaliaCfWizardListResponse,
     CatAnomaliaListResponse,
     CatAnomaliaParticellaCandidateResponse,
     CatAnomaliaParticellaWizardApplyInput,
@@ -48,6 +49,7 @@ from app.schemas.catasto_phase1 import (
     CatAnomaliaSummaryResponse,
     CatAnomaliaUpdateInput,
 )
+from app.services.elaborazioni_credentials import ElaborazioneCredentialNotFoundError
 
 router = APIRouter(prefix="/catasto/anomalie", tags=["catasto-anomalie"])
 
@@ -139,12 +141,6 @@ def _apply_anomalie_sort(query, *, sort_by: str, sort_dir: str):
     return query.order_by(direction(column), desc(CatAnomalia.created_at))
 
 
-def _normalize_lookup_text(value: str | None) -> str:
-    if not value:
-        return ""
-    return re.sub(r"[^a-z0-9]+", "", value.strip().lower())
-
-
 def _extract_source_comune_code(anomalia: CatAnomalia, utenza: CatUtenzaIrrigua) -> int | None:
     dati_json = anomalia.dati_json if isinstance(anomalia.dati_json, dict) else {}
     raw_value = dati_json.get("cod_istat")
@@ -167,24 +163,7 @@ def _build_comune_candidates(
     rows = db.execute(select(CatComune).order_by(CatComune.nome_comune.asc()).limit(500)).scalars().all()
     candidates: list[CatAnomaliaComuneCandidateResponse] = []
     for row in rows:
-        score = 0
-        if source_code is not None and row.cod_comune_capacitas == source_code:
-            score += 8
-        if source_code is not None and row.codice_comune_formato_numerico == source_code:
-            score += 6
-        if source_code is not None and row.codice_comune_numerico_2017_2025 == source_code:
-            score += 6
-
-        row_name = _normalize_lookup_text(row.nome_comune)
-        row_legacy_name = _normalize_lookup_text(row.nome_comune_legacy)
-        if source_name and source_name == row_name:
-            score += 8
-        elif source_name and source_name == row_legacy_name:
-            score += 7
-        elif source_name and (source_name in row_name or row_name in source_name):
-            score += 4
-        elif source_name and row_legacy_name and (source_name in row_legacy_name or row_legacy_name in source_name):
-            score += 3
+        score = score_comune_candidate(row, source_code, source_name)
 
         if score <= 0:
             continue

@@ -1,5 +1,13 @@
 # GAIA MCPs
 
+**Stato operativo corrente:** `CURRENT_STATUS_2026-10-06.md`.
+Release separata avviata solo su loopback con OAuth disattivato, immagine
+dedicata aggiornata e dati sintetici: `LAN_ISOLATED_RELEASE_2026-10-06.md`.
+Server `192.168.1.110` / `gaia.lan`; certificato server firmato, verificato
+e copiato sul CED, ma HTTPS/gateway non attivati. Il checkout server contiene
+hotfix da preservare; client OAuth e collaudo tool calling restano pendenti.
+Le chiusure e riverifiche datate sotto sono evidenze storiche, non rilascio.
+
 Installer della nuova CA GAIA e download nella pagina di login:
 `CLIENT_CA_INSTALLERS.md`. EXE Windows amd64/ARM64 e guida Linux/macOS
 generati localmente; asset pubblici da includere nella prossima build
@@ -12,11 +20,11 @@ cloud effettuata; OAuth conserva i propri URL HTTPS e i client preregistrati.
 Verifica finale e limiti dei gate globali:
 `GATEWAY_FINAL_VALIDATION_2026-10-05.md`.
 
-Chiusura corrente: `FINAL_CLOSURE_2026-10-03.md`. Suite MCP/coverage e build
+Chiusura locale del 2026-10-03: `FINAL_CLOSURE_2026-10-03.md`. Suite MCP/coverage e build
 pulita anche nel checkout passate; ratchet globale e rilascio Claude restano
 pendenti. Il connettore e ancora disattivato, nessun deploy.
 
-Riverifica corrente: `RECHECK_2026-10-03.md`. Suite MCP completa al 100%,
+Riverifica locale del 2026-10-03: `RECHECK_2026-10-03.md`. Suite MCP completa al 100%,
 build isolata, browser preview, proxy HTTPS di test e gpt-reserve live sintetico
 verificati. Il limite build in-place e risolto nella chiusura sopra; connettore
 disattivato, nessun deploy o prova Claude live. Audit precedente e matrice:
@@ -116,3 +124,11 @@ L'agente principale decide quale fonte interrogare, in quale ordine, con quale b
 8. La replica sintetica deve essere riproducibile tramite seed.
 9. Il corpus Docs usato negli esperimenti deve essere congelato e versionato.
 10. Le modifiche che cambiano il comportamento sperimentale devono essere tracciate.
+Stato sviluppo live 2026-10-07: `LIVE_READS_2026-10-07.md` descrive il
+catalogo stdio separato con 17 letture GAIA autorizzate, opt-in, audit e
+limiti. Nessun deploy o invio di dati reali a client esterni. NAS,
+Trasparenza e batch con side effect restano esclusi.
+Verifica finale del ciclo live: `FINAL_VALIDATION_2026-10-07.md` e
+`PROGRESS.md`. Matrice capability/comportamenti/test, gate realmente
+eseguiti, residui e distinzione dal rilascio operativo. Stato globale FAIL:
+lint legacy e ratchet nelle modifiche concorrenti non MCP.

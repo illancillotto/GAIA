@@ -20,6 +20,7 @@ from app.modules.presenze.services.parser import (
     extract_detail_payload,
     parse_schedule_code_from_detail,
 )
+from app.modules.presenze.services.technician_operai_rules import resolve_technician_operai_rule
 
 VALID_PRESENZE_OPERAI_GROUPS = {
     PRESENZE_OPERAI_GROUP_AGRARIO,
@@ -185,19 +186,17 @@ def resolve_operai_rule(
 ) -> ResolvedOperaiRule | None:
     if collaborator is None or collaborator.contract_kind != PRESENZE_CONTRACT_KIND_OPERAIO:
         return None
+    technician_rule = resolve_technician_operai_rule(record)
+    if technician_rule is not None:
+        return technician_rule
     schedule_code = resolve_operai_schedule_code(record)
     if schedule_code is None:
         return None
     normalized_group = normalize_operai_group(getattr(collaborator, "operai_group", None))
     active_configs = tuple(item for item in (configs or default_operai_rule_configs()) if item.is_active)
-    is_saturday = record.work_date.weekday() == 5
-    for rule in active_configs:
-        if rule.operai_group is not None and rule.operai_group != normalized_group:
-            continue
-        matched_codes = rule.weekday_schedule_codes + rule.saturday_schedule_codes if is_saturday else rule.weekday_schedule_codes
-        if schedule_code not in matched_codes and SCHEDULE_VARIANTS.get(schedule_code) not in matched_codes:
-            continue
-        return _resolved_schedule_rule(rule, schedule_code, record.work_date)
+    matched = _match_operai_config(active_configs, normalized_group, schedule_code, record.work_date)
+    if matched is not None:
+        return matched
 
     if normalized_group is None and SCHEDULE_VARIANTS.get(schedule_code, schedule_code) in {"OPE0714", "OPE0736", "OPE0613", "OP_5.3_12.3", "OPESAB", "OSAB5.3_12.3"}:
         fallback = OperaiRuleConfig(
@@ -214,6 +213,18 @@ def resolve_operai_rule(
             allowed_absence_causes=("ferie", "permesso"),
         )
         return _resolved_schedule_rule(fallback, schedule_code, record.work_date)
+    return None
+
+
+def _match_operai_config(configs, group, code, work_date):
+    for rule in configs:
+        if rule.operai_group is not None and rule.operai_group != group:
+            continue
+        codes = rule.weekday_schedule_codes
+        if work_date.weekday() == 5:
+            codes += rule.saturday_schedule_codes
+        if code in codes or SCHEDULE_VARIANTS.get(code) in codes:
+            return _resolved_schedule_rule(rule, code, work_date)
     return None
 
 

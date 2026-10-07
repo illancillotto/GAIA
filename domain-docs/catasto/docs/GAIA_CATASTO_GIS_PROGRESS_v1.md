@@ -5,6 +5,17 @@
 
 ## Stato generale
 
+### Aggiornamento 2026-10-07 - Scroll console GIS e regressione browser
+
+- Correzione circoscritta al CSS del workspace: i blocchi diretti della console
+  mantengono altezza naturale e usano lo scroll esterno gia presente. A
+  1280×720 i controlli non comprimono piu a zero l'area layer, rendendo
+  raggiungibile `Salva permanentemente` senza click forzati.
+- Stato React, query, payload e persistenza invariati. Test browser aggiornati
+  ai controlli correnti, preservando import Excel, archivio e dettaglio ruolo.
+- Evidenze e limiti della verifica isolata:
+  `docs/code-quality/ANPR_E2E_FOLLOWUP_2026-10-07.md` dalla root repository.
+
 ### Aggiornamento 2026-08-21 - Ricerca GIS per coordinate
 
 - La ricerca globale riconosce coordinate decimali e DMS solo per utenti con accesso al modulo Catasto.

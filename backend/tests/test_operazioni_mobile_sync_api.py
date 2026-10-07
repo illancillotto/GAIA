@@ -1875,6 +1875,21 @@ def test_mobile_sync_activity_stop_rejects_missing_foreign_or_closed_activity() 
     assert invalid_start_event.status_code == 422
     assert invalid_start_event.json()["details"] == {"field": "gaia_activity_id"}
 
+    missing_start_event = client.post(
+        "/api/mobile-sync/activity-stops",
+        headers=headers,
+        json=base_payload
+        | {
+            "client_event_id": str(uuid4()),
+            "payload": {
+                "client_started_event_id": str(uuid4()),
+                "stopped_at_device": "2026-05-18T09:15:00Z",
+            },
+        },
+    )
+    assert missing_start_event.status_code == 422
+    assert missing_start_event.json()["details"] == {"field": "gaia_activity_id"}
+
     foreign = client.post(
         "/api/mobile-sync/activity-stops",
         headers=headers,
@@ -1950,6 +1965,67 @@ def test_mobile_sync_activity_stop_returns_retryable_on_unexpected_error(monkeyp
 
     assert response.status_code == 500
     assert response.json()["retryable"] is True
+
+
+def test_mobile_sync_activity_stop_without_start_timestamp_skips_duration() -> None:
+    operator = WCOperator(id=uuid4(), username="field.operator", enabled=True)
+    gaia_user = ApplicationUser(
+        id=101,
+        username="field.operator",
+        email="field.operator@example.local",
+        password_hash="unused",
+        is_active=True,
+    )
+    activity = OperatorActivity(
+        id=uuid4(),
+        operator_user_id=gaia_user.id,
+        status="in_progress",
+        started_at=None,
+    )
+    request = mobile_sync_routes.MobileActivityStopRequest(
+        client_event_id=uuid4(),
+        operator_id=operator.id,
+        device_id=str(uuid4()),
+        payload_hash="a" * 64,
+        payload={
+            "gaia_activity_id": activity.id,
+            "stopped_at_device": "2026-05-18T09:15:00Z",
+        },
+    )
+
+    class FakeDB:
+        def get(self, model, _id):
+            return activity if model is OperatorActivity else None
+
+        def scalar(self, _query):
+            return None
+
+        def add(self, _item):
+            return None
+
+        def commit(self):
+            return None
+
+        def refresh(self, _item):
+            return None
+
+        def rollback(self):
+            return None
+
+    monkeypatch = pytest.MonkeyPatch()
+    try:
+        monkeypatch.setattr(mobile_sync_routes, "_resolve_mobile_event", lambda *_args, **_kwargs: None)
+        monkeypatch.setattr(mobile_sync_routes, "_resolve_mobile_operator", lambda *_args, **_kwargs: (operator, gaia_user, None))
+        monkeypatch.setattr(mobile_sync_routes, "_create_mobile_event", lambda *_args, **_kwargs: object())
+        monkeypatch.setattr(mobile_sync_routes, "_serialize_response", lambda _event: {"status": "created"})
+
+        response = mobile_sync_routes.create_mobile_activity_stop(request, FakeDB())
+    finally:
+        monkeypatch.undo()
+
+    assert response == {"status": "created"}
+    assert activity.status == "submitted"
+    assert activity.duration_minutes_calculated is None
 
 
 def test_mobile_sync_teti_fault_work_request_requires_connector_token() -> None:

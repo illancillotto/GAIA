@@ -10,6 +10,7 @@ from sqlalchemy.dialects import postgresql
 from app.models.capacitas import CapacitasInCassSyncJob
 from app.modules.elaborazioni.capacitas.models import (
     CapacitasInCassMailingContactRow,
+    CapacitasInCassMailingData,
     CapacitasInCassMailingReceiptParent,
     CapacitasInCassMailingShipmentRow,
     CapacitasInCassMailingSubjectRow,
@@ -18,6 +19,7 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasInCassPartitarioDetail,
     CapacitasInCassSearchResult,
     CapacitasInCassSyncJobCreateRequest,
+    CapacitasObjManDocument,
 )
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice, AnagraficaPerson
 from app.services import elaborazioni_capacitas_incass as incass
@@ -290,3 +292,56 @@ def test_pending_notice_search_continues_after_a_different_notice() -> None:
     assert incass._find_pending_payment_notice(
         db, source_system="incass", source_notice_id="target"
     ) is target
+
+
+@pytest.mark.parametrize("raw_detail", [None, [], {"existing": "preserved"}])
+def test_mailing_merge_preserves_payload_order_and_limits_receipts_to_notice(raw_detail) -> None:
+    notice = AnagraficaPaymentNotice(raw_detail_json=raw_detail)
+    parent = CapacitasInCassMailingReceiptParent(parent_id="parent", group="CONSEGNA")
+    document = CapacitasObjManDocument(object_id="document", parent_id="parent")
+    shipments = [
+        CapacitasInCassMailingShipmentRow(avviso="notice", external_id="second"),
+        CapacitasInCassMailingShipmentRow(avviso="notice", external_id="first"),
+        CapacitasInCassMailingShipmentRow(avviso="notice", external_id="first"),
+    ]
+    contact = CapacitasInCassMailingContactRow(email="owner@example.org")
+    mailing_data = CapacitasInCassMailingData(
+        contacts=[contact],
+        shipments=shipments,
+        receipt_parents_by_shipment_id={
+            "first": [parent],
+            "unrelated": [CapacitasInCassMailingReceiptParent(parent_id="unrelated")],
+            "second": [CapacitasInCassMailingReceiptParent(parent_id="")],
+        },
+        receipt_documents_by_parent_id={
+            "unrelated": [CapacitasObjManDocument(object_id="unrelated")],
+            "parent": [document, document],
+            "": [CapacitasObjManDocument(object_id="empty")],
+        },
+    )
+    original_data = mailing_data.model_dump(mode="json")
+    db = Mock()
+    db.scalar.return_value = notice
+
+    incass._merge_mailing_data_into_payment_notices(
+        db, subject_id=uuid.uuid4(), mailing_data=mailing_data
+    )
+
+    payload = notice.raw_detail_json["mailing_list"]
+    assert payload["contacts"] == [contact.model_dump(mode="json")]
+    assert payload["shipments"] == [shipment.model_dump(mode="json") for shipment in shipments]
+    assert list(payload["receipt_parents_by_shipment_id"]) == ["first", "second"]
+    assert payload["receipt_documents_by_parent_id"] == {
+        "parent": [document.model_dump(mode="json"), document.model_dump(mode="json")]
+    }
+    assert notice.raw_detail_json.get("existing") == (
+        "preserved" if isinstance(raw_detail, dict) else None
+    )
+    assert notice.synced_at.tzinfo is UTC
+    assert mailing_data.model_dump(mode="json") == original_data
+    db.scalar.assert_called_once()
+    assert db.scalar.call_args.args[0].compile().params == {
+        "source_system_1": "incass",
+        "source_notice_id_1": "notice",
+    }
+    db.commit.assert_not_called()

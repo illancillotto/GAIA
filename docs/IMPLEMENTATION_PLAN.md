@@ -3,6 +3,41 @@
 # NAS Access Audit Platform
 ## Piano di implementazione
 
+## Ciclo MCP LAN e PKI — 2026-10-06
+
+Consolidamento live 2026-10-07: completate matrice funzionalita/test,
+verifiche failure/edge case, frontend regressione e build isolata.
+Chiusura del quality gate globale non completata: lint legacy e finding
+ratchet nelle modifiche concorrenti; nessun deploy o commit. Progress:
+`domain-docs/mcps/PROGRESS.md`; report:
+`domain-docs/mcps/FINAL_VALIDATION_2026-10-07.md`.
+
+Sviluppo successivo 2026-10-07: catalogo live stdio separato con 17 letture
+API GAIA, opt-in e fail-closed. Test source-specific, SDK e integrazione
+route/JWT/permessi; nessun deploy o attivazione client live. NAS e
+Trasparenza richiedono ancora ACL/cataloghi approvati; batch GET con side
+effect esclusi. Dettagli: `domain-docs/mcps/LIVE_READS_2026-10-07.md`.
+
+Preparazione successiva completata: release separata sul CED e container
+dedicato su loopback, OAuth disattivato e 404 verificati, dataset sintetico
+e immagine aggiornata senza sostituire gli hotfix. Test release/OAuth/
+connector PASS, incluso TCP; procedura e rollback in
+`domain-docs/mcps/LAN_ISOLATED_RELEASE_2026-10-06.md`.
+
+Stato verificato: `domain-docs/mcps/CURRENT_STATUS_2026-10-06.md`.
+Implementati gateway HTTP/HTTPS, OAuth/consenso/hardening, installer della
+CA dedicata e download condizionali sulla login. Chiave/CSR server creati
+sul CED `192.168.1.110`, certificato `gaia.lan` firmato e verificato,
+certificati pubblici trasferiti; nessun deploy HTTPS o trust automatico.
+
+Restano rilascio mirato con backup/rollback e hotfix preservati, gestione
+Nginx host con sudo, client_id/callback reali approvati, dataset sintetico,
+build frontend con asset pubblici e flag coerenti, accettazione
+redirect/discovery/401/consenso/tool calling/revoca sul client effettivo.
+Firma Authenticode, collaudo nativo e rinnovo leaf prima del 2027-01-04
+sono gate operativi. NAS/Trasparenza restano fail-closed; nessun ingresso
+Internet per Claude cloud/ChatGPT e autorizzato.
+
 > Regola repository
 > Backend unico, moduli logici separati. Nuove implementazioni backend vanno in `backend/app/modules/<modulo>/`.
 

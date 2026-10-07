@@ -1,5 +1,17 @@
 # Gateway HTTP e HTTPS per MCP
 
+Release CED separata preparata e avviata disattivata su loopback:
+`LAN_ISOLATED_RELEASE_2026-10-06.md`. Non modifica il proxy o attiva TLS;
+le configurazioni Nginx Docker sotto non sono un drop-in per il Nginx host.
+
+Stato CED 2026-10-06: `CURRENT_STATUS_2026-10-06.md`. Certificato `gaia.lan`
+verificato sul server `192.168.1.110`, nessun listener HTTPS ancora attivo.
+Nginx host e container sono entrambi presenti; la procedura Compose sotto
+descrive l'implementazione disponibile, non una configurazione gia distribuita.
+Sul CED non eseguirla senza un piano mirato che preservi gli hotfix,
+le immagini attive e i virtual host degli altri servizi. Test/reload Nginx
+host richiedono sudo con password locale, non comunicata all'assistente.
+
 Lo stack base serve GAIA via HTTP sulla porta `NGINX_PORT` (default `8080`).
 L'override `docker-compose.mcp-tls.yml` aggiunge HTTPS sulla porta
 `GAIA_HTTPS_PORT` (default `8443`), usando lo stesso routing applicativo.

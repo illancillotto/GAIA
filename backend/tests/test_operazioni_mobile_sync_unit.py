@@ -45,7 +45,6 @@ from app.modules.operazioni.models.vehicles import Vehicle, VehicleAssignment
 from app.modules.operazioni.models.wc_operator import WCOperator
 from app.modules.operazioni.routes import mobile_sync as mobile_sync_routes
 
-
 SQLALCHEMY_DATABASE_URL = "sqlite://"
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
@@ -687,6 +686,71 @@ def test_mobile_sync_worksets_skips_operator_without_gaia_user_in_loop() -> None
     assert response.worksets == []
 
 
+def test_mobile_sync_worksets_skip_missing_team_and_unlinked_meter() -> None:
+    operator = WCOperator(id=uuid4(), gaia_user_id=1, username="operator", enabled=True)
+    membership = SimpleNamespace(team_id=uuid4(), user_id=1)
+    meter = SimpleNamespace(mobile_operator_id=None)
+
+    class FakeScalarResult:
+        def __init__(self, values):
+            self._values = values
+
+        def all(self):
+            return self._values
+
+    class FakeDB:
+        def scalars(self, statement):
+            entity = statement.column_descriptions[0]["entity"]
+            values = {
+                WCOperator: [operator],
+                TeamMembership: [membership],
+                Team: [],
+                OperatorActivity: [],
+                ActivityCatalog: [],
+                VehicleAssignment: [],
+                Vehicle: [],
+                CatMeterReading: [meter],
+            }.get(entity, [])
+            return FakeScalarResult(values)
+
+    response = mobile_sync_routes.get_mobile_worksets(FakeDB(), operator_id=None)
+
+    assert len(response.worksets) == 5
+    assert all(not workset.items for workset in response.worksets)
+
+
+def test_mobile_sync_helper_characterizes_non_datetime_and_missing_meter_fallbacks() -> None:
+    timestamp = datetime(2026, 1, 2, tzinfo=UTC)
+    assert mobile_sync_routes._version_from_items(
+        [SimpleNamespace(updated_at="not-a-datetime"), SimpleNamespace(updated_at=timestamp)],
+        "updated_at",
+    ) == timestamp.isoformat()
+
+    operator = WCOperator(id=uuid4(), username="operator", first_name="Mario", last_name="Rossi")
+    activity = OperatorActivity(id=uuid4())
+    request = mobile_sync_routes.MobileActivityStartRequest(
+        client_event_id=uuid4(),
+        operator_id=operator.id,
+        device_id="device-1",
+        payload_hash="a" * 64,
+        payload={
+            "activity_catalog_id": uuid4(),
+            "meter_number": None,
+            "started_at_device": "2026-01-02T08:00:00Z",
+        },
+    )
+
+    reading = mobile_sync_routes._build_mobile_meter_reading(
+        operator=operator,
+        activity=activity,
+        data=request,
+        attachments=[],
+    )
+
+    assert reading.matricola is None
+    assert reading.punto_consegna == f"MOBILE-{activity.id}"
+
+
 def test_mobile_sync_field_report_error_branches(monkeypatch) -> None:
     headers = _connector_headers()
     db = TestingSessionLocal()
@@ -812,7 +876,7 @@ def test_mobile_sync_activity_stop_error_branches(monkeypatch) -> None:
     db = TestingSessionLocal()
     operator, user = _seed_mobile_operator(db)
     operator_id = str(operator.id)
-    other_operator, other_user = _seed_mobile_operator(db, username="other.operator", wc_id=102)
+    _other_operator, other_user = _seed_mobile_operator(db, username="other.operator", wc_id=102)
     assert user is not None and other_user is not None
     catalog = ActivityCatalog(code="ACT", name="Activity", category="rete", is_active=True)
     db.add(catalog)

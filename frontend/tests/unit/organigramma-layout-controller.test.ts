@@ -62,6 +62,15 @@ describe("layout persistence", () => {
     expect(state.fitSchemaToViewport).toHaveBeenCalledTimes(view === "schema" ? 1 : 0);
   });
 
+  test("guided horizontal layout reports its orientation", async () => {
+    const state = { ...context(), schemaCanvasMode: "guided" as const, token: null, canModifyStructure: false };
+    await handleApplyTreeLayout(state, "horizontal");
+    expect(state.setSchemaOrientation).toHaveBeenCalledWith("horizontal");
+    expect(state.setNotice).toHaveBeenCalledWith("Vista guidata orizzontale applicata.");
+    expect(state.fitSchemaToViewport).toHaveBeenCalledOnce();
+    expect(state.setTree).not.toHaveBeenCalled();
+  });
+
   test.each([{ token: null }, { canModifyStructure: false }])("requires a session and permission before changing a free layout (%j)", async patch => {
     const state = { ...context(), ...patch };
     await handleApplyTreeLayout(state, "horizontal");

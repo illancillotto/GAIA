@@ -1,5 +1,17 @@
 # Sicurezza e privacy degli MCP GAIA
 
+## Catalogo live separato — 2026-10-07
+
+`live/` non usa i token OAuth o il dataset del connector sintetico: avvio
+stdio opt-in, sessione utente GAIA in memoria, HTTPS verificato, allowlist
+esplicita, permessi freschi e audit metadata-only. Accesso self-service
+con identita canonica, proiezione per fonte e nessuna scrittura/download.
+Il risultato contiene comunque dati reali e non anonimizzati; usare un
+client locale non autorizza implicitamente l'invio al suo modello cloud.
+Nessun client live viene attivato da questo ciclo. NAS/Trasparenza e batch
+con side effect restano esclusi. Contratti e limiti:
+`LIVE_READS_2026-10-07.md`.
+
 ## Principi
 
 I vincoli di privacy sono requisiti architetturali.

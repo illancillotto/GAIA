@@ -4,7 +4,7 @@ import inspect
 import logging
 from collections.abc import Callable, Generator
 from contextlib import suppress
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -21,6 +21,7 @@ from app.models.capacitas import (
 )
 from app.models.catasto_phase1 import CatUtenzaIrrigua
 from app.modules.catasto.services.domande_irrigue import scan_domande_irrigue_anomalies
+from app.modules.elaborazioni.autosync_windows import window_context
 from app.modules.elaborazioni.capacitas.models import (
     CapacitasDomandeIrrigueAnagraficaSearch,
     CapacitasDomandeIrrigueSyncJobCreateRequest,
@@ -51,15 +52,13 @@ def _window_zone() -> ZoneInfo:
 
 def _window_context(now_utc: datetime | None = None) -> tuple[bool, str]:
     local_now = (now_utc or datetime.now(UTC)).astimezone(_window_zone())
-    start = settings.capacitas_domande_irrigue_autosync_start_hour
-    end = settings.capacitas_domande_irrigue_autosync_end_hour
-    if not settings.capacitas_domande_irrigue_autosync_window_enabled or start == end:
+    if not settings.capacitas_domande_irrigue_autosync_window_enabled:
         return True, local_now.date().isoformat()
-    if start < end:
-        return start <= local_now.hour < end, local_now.date().isoformat()
-    within_window = local_now.hour >= start or local_now.hour < end
-    cycle_date = local_now.date() - timedelta(days=1) if local_now.hour < end else local_now.date()
-    return within_window, cycle_date.isoformat()
+    windows = settings.capacitas_domande_irrigue_autosync_windows or (
+        f"{settings.capacitas_domande_irrigue_autosync_start_hour:02d}:00-"
+        f"{settings.capacitas_domande_irrigue_autosync_end_hour:02d}:00"
+    )
+    return window_context(local_now, windows)
 
 
 def _load_state(db: Session) -> CapacitasDomandeIrrigueAutoSyncState:

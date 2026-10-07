@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
-from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
 import ipaddress
 import json
-from urllib.parse import quote
 import re
 import shutil
 import socket
 import subprocess
+from collections.abc import Iterable
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import quote
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -58,7 +58,6 @@ try:
 except ImportError:  # pragma: no cover
     CommunityData = ContextData = ObjectIdentity = ObjectType = SnmpEngine = UdpTransportTarget = get_cmd = None
 
-UTC = timezone.utc
 _TRANSIENT_BYPASS_LOOKBACK_HOURS = 6
 _TRANSIENT_BYPASS_OFFLINE_WINDOW_HOURS = 12
 _TRANSIENT_BYPASS_ALERT_TYPE = "VPN_BYPASS_TRANSIENT_DEVICE"
@@ -454,35 +453,37 @@ def _snmp_communities() -> list[str]:
     return [item.strip() for item in settings.network_snmp_communities.split(",") if item.strip()]
 
 
+def _profile_network_contains(cidr: str, ip_address: str) -> bool:
+    try:
+        return ipaddress.ip_address(ip_address) in ipaddress.ip_network(cidr, strict=False)
+    except ValueError:
+        return False
+
+
+def _profile_communities(profile: dict[str, object], ip_address: str) -> list[str]:
+    cidr = profile.get("cidr")
+    values = profile.get("communities")
+    if not isinstance(cidr, str) or not isinstance(values, list):
+        return []
+    if not _profile_network_contains(cidr, ip_address):
+        return []
+    return [item.strip() for item in values if isinstance(item, str) and item.strip()]
+
+
 def _snmp_profile_communities(ip_address: str) -> list[str]:
-    communities: list[str] = []
     try:
         profiles = json.loads(settings.network_snmp_community_profiles)
     except json.JSONDecodeError:
         profiles = []
 
-    for profile in profiles if isinstance(profiles, list) else []:
-        if not isinstance(profile, dict):
-            continue
-        cidr = profile.get("cidr")
-        profile_communities = profile.get("communities")
-        if not isinstance(cidr, str) or not isinstance(profile_communities, list):
-            continue
-        try:
-            network = ipaddress.ip_network(cidr, strict=False)
-            address = ipaddress.ip_address(ip_address)
-        except ValueError:
-            continue
-        if address not in network:
-            continue
-        for item in profile_communities:
-            if isinstance(item, str) and item.strip():
-                communities.append(item.strip())
-
-    for item in _snmp_communities():
-        if item not in communities:
-            communities.append(item)
-    return communities
+    profile_items = profiles if isinstance(profiles, list) else []
+    communities = [
+        item
+        for profile in profile_items
+        if isinstance(profile, dict)
+        for item in _profile_communities(profile, ip_address)
+    ]
+    return communities + [item for item in dict.fromkeys(_snmp_communities()) if item not in communities]
 
 
 def _classify_snmp_descr(sys_descr: str | None) -> tuple[str | None, str | None, str | None]:
@@ -1191,7 +1192,6 @@ def run_network_scan(
 
     for host in discovered:
         device = devices_by_ip.get(host.ip_address)
-        is_new = device is None
         now = datetime.now(UTC)
         enrichment = _collect_enrichment(host.ip_address, host.open_ports or [])
 

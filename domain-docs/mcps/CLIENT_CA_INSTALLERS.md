@@ -4,7 +4,9 @@ Preparazione 2026-10-06: il PC corrente e scelto come custode. Configurazione
 OpenSSL e procedura testata: `GAIA_CA_CREATION_2026-10-06.md`. L'utente ha
 generato la nuova CA fuori dal repository, con passphrase locale. Certificato
 pubblico e permessi verificati; nessun trust installato o deploy eseguito.
-Distribuzione/backup approvati CED e certificato server restano gate necessari.
+Certificato server ora firmato, verificato e copiato sul CED; distribuzione,
+backup approvati, trust e deploy restano gate necessari. Stato completo:
+`CURRENT_STATUS_2026-10-06.md`.
 
 2026-10-02. Decisione utente: **nuova CA, procedura da concordare con il CED**.
 La nota storica iniziale precede la creazione del 2026-10-06; nessuno store
@@ -28,8 +30,11 @@ Non rimuovere la CA Kiosk dai PC: resta necessaria a quel servizio.
 6. Costruire gli installer, collaudarli su PC di test Windows/macOS/Linux,
    poi approvare distribuzione gestita. Nessun deploy automatico.
 
-CSR locale: `runtime-data/mcps/tls/pending-gaia/gaia.lan.csr`; chiave 0600,
-directory 0700. Rigenerarla sul server finale, non trasferire la chiave locale.
+CSR operativo gia creato sul server finale:
+`/home/ced/gaia-tls/gaia-lan-20261006/gaia.lan.csr`; chiave 0600,
+directory 0700. Non rigenerare o sovrascrivere la chiave. Il CSR storico
+locale in `runtime-data/mcps/tls/pending-gaia/` non e usato per il rilascio.
+Per una nuova emissione in una directory nuova:
 
 ```bash
 bash scripts/tls/server-csr.sh /percorso/privato/nuovo-pending-gaia

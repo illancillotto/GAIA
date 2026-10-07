@@ -10,7 +10,7 @@ from app.modules.elaborazioni.domande_irrigue_autosync_scheduler import _window_
 from app.modules.elaborazioni.domande_irrigue_parallel import run_parallel_domande_job
 from app.modules.utenze.services.registry_prefetch import run_parallel_registry_job
 from app.worker_health import WorkerHeartbeat, run_with_heartbeat
-from capacitas_lane_gate import LaneGate, job_scope, touch_waiting_job
+from capacitas_lane_gate import LaneGate, job_heartbeat, job_scope, touch_waiting_job
 
 logger = logging.getLogger(__name__)
 
@@ -90,26 +90,28 @@ async def run_lane(
             continue
         job_kind, job_id = job
         logger.info("Corsia Capacitas %s: job %s prelevato", job_kind, job_id)
-        if gate is None:
-            await worker._process_capacitas_job(job_kind, job_id)
-        else:
-            await process_job(worker, job_kind, job_id, workers, gate)
+        async with job_heartbeat(job_kind, job_id):
+            if gate is None:
+                await worker._process_capacitas_job(job_kind, job_id)
+            else:
+                await process_job(worker, job_kind, job_id, workers, gate)
 
 
 async def run_registry_job(job_id, *, workers) -> None:
     await asyncio.to_thread(run_parallel_registry_job, job_id, workers)
 
 
-def parallel_workers() -> int:
-    workers = int(os.getenv("ELABORAZIONI_RUNTIME_PARALLEL_WORKERS", "4"))
+def parallel_workers(name="ELABORAZIONI_RUNTIME_PARALLEL_WORKERS", default="4") -> int:
+    workers = int(os.getenv(name, default))
     if not 1 <= workers <= 4:
-        raise ValueError("ELABORAZIONI_RUNTIME_PARALLEL_WORKERS must be between 1 and 4")
+        raise ValueError(f"{name} must be between 1 and 4")
     return workers
 
 
 async def run_runtime(worker: worker_module.CatastoWorker) -> None:
     families = sorted(worker.job_families)
     workers = parallel_workers()
+    capacitas_workers = parallel_workers("ELABORAZIONI_CAPACITAS_PARALLEL_WORKERS", "1")
     gate = LaneGate()
     operations = [worker.run]
     if "registry" in worker.job_families:
@@ -119,9 +121,10 @@ async def run_runtime(worker: worker_module.CatastoWorker) -> None:
             worker._recover_capacitas_jobs(db)
             db.commit()
         worker.job_families = worker.job_families - {"capacitas"}
-        operations.append(lambda: run_lane(worker, DOMANDE_JOBS, workers, gate))
+        operations.append(lambda: run_lane(worker, DOMANDE_JOBS, capacitas_workers, gate))
         operations.extend(
-            partial(run_lane, worker, OTHER_JOBS, workers, gate) for _ in range(workers)
+            partial(run_lane, worker, OTHER_JOBS, capacitas_workers, gate)
+            for _ in range(capacitas_workers)
         )
     heartbeat = WorkerHeartbeat(
         os.getenv("GAIA_WORKER_HEALTH_SERVICE", "elaborazioni-worker-runtime"),
@@ -129,6 +132,7 @@ async def run_runtime(worker: worker_module.CatastoWorker) -> None:
             "families": families,
             "parallel_tasks": len(operations),
             "workers_per_lane": workers,
+            "capacitas_workers_per_lane": capacitas_workers,
         },
     )
     async with asyncio.TaskGroup() as tasks:

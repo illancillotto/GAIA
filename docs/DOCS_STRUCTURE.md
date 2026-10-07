@@ -19,6 +19,17 @@ Le procedure operative piu usate lato DevOps e dati vivono inoltre nei file `scr
 Gli installer della CA GAIA vivono in `installer/windows/` e `scripts/tls/`;
 build, verifica e limiti sono documentati in
 `domain-docs/mcps/CLIENT_CA_INSTALLERS.md`.
+Stato operativo corrente: `domain-docs/mcps/CURRENT_STATUS_2026-10-06.md`;
+cerimonia CA/certificato server: `domain-docs/mcps/GAIA_CA_CREATION_2026-10-06.md`.
+Configurazione PKI pubblica: `config/mcps/pki/gaia-ca.cnf`; guida bundle:
+`config/mcps/CA_CLIENT_GUIDE.txt`. Download nella login:
+`frontend/src/components/auth/login-help-links.tsx`, pin in
+`frontend/src/lib/gaia-ca.ts`. Bundle in `runtime-data/mcps/` e asset in
+`frontend/public/gaia-ca/` sono generati, ignorati da Git e privi di chiavi.
+Release MCP isolata: `config/mcps/lan-release/` (Dockerfile, Compose e
+default disattivato); procedura e stato server in
+`domain-docs/mcps/LAN_ISOLATED_RELEASE_2026-10-06.md`. Test config reale:
+`tests/infrastructure/test_mcp_lan_release.py`, target `test-mcp-lan-release`.
 `scripts/patch_graphify_force_pruning.py` corregge il pruning forzato dei simboli
 nelle installazioni Graphify compatibili; target e regole sono in `AGENTS.md`.
 In root e presente anche `AGENTS.md` per le regole operative repository-level usate dagli agenti.
@@ -41,6 +52,7 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 - `docs/GIS_PLATFORM_TERRITORIO_PROMPTS.md`: prompt operativi eseguibili per M21-M25.
 - `docs/GIS_TERRITORIO_ENABLEMENT_RUNBOOK.md`: attivazione per ambiente, smoke, degradazione e rollback della consultazione territoriale.
 - `docs/GIS_TERRITORIO_UX_VALIDATION.md`: protocollo osservato da 45-60 minuti e smoke Playwright opzionale dei flussi Territorio.
+- `docs/GUIDA_UTENTE_GIS_QGIS.md`: guida illustrata per utenti GIS e QGIS, con schermate GAIA e istruzioni operative.
 - `docs/FRONTEND_SESSION_BOOTSTRAP.md`: cache, rivalidazione, rendering non bloccante e test del bootstrap sessione frontend.
 - `docs/data-model/`: poster A0, diagrammi ERD e dizionario relazioni generati dai modelli SQLAlchemy.
 - `docs/TEST_COVERAGE_100_PLAN.md`: policy e piano operativo per portare il codice runtime a coverage totale.
@@ -216,6 +228,9 @@ al PRD aggiornato, ai report inCASS recenti e al codice runtime.
 Documentazione tecnica dei Model Context Protocol usati dall'agente Wiki. Non e un modulo runtime: non ha backend/frontend dedicati sotto `modules/` o `frontend/src/app/`.
 
 - `domain-docs/mcps/README.md`
+- `domain-docs/mcps/LIVE_READS_2026-10-07.md`: catalogo stdio live, autorizzazioni, limiti, avvio e verifiche; separato dalla release sintetica.
+- `domain-docs/mcps/FINAL_VALIDATION_2026-10-07.md`: matrice comportamento/test, regressioni, gate finali e residui.
+- `domain-docs/mcps/PROGRESS.md`: attivita live concluse e attivita residue, senza confondere sviluppo e deploy.
 - `domain-docs/mcps/ARCHITECTURE.md`
 - `domain-docs/mcps/HTTP_HTTPS_GATEWAY.md`: override TLS e matrice test del gateway
 - `domain-docs/mcps/GATEWAY_FINAL_VALIDATION_2026-10-05.md`: gate finali e residui

@@ -167,7 +167,7 @@ export type PresenzeDetailPunchRow = {
 };
 
 export type PresenzeDailyRecord = {
-  shift_worker_type?: "none" | "acquaiolo" | "telecontrollo";
+  shift_worker_type?: "none" | "acquaiolo" | "telecontrollo" | "tecnico_turnista";
   shift_worker_source?: "gate" | "gaia" | null;
   shift_rules_version?: string;
   meal_voucher_shift?: boolean;

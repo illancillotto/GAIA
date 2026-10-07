@@ -94,13 +94,15 @@ test("catasto distretti page shows imported-year fallback and opens detail", asy
   await expect(
     page.getByText(`L'anno corrente (${currentYear}) non risulta ancora caricato. Mostro i dati dell'anno ${importedYear}.`),
   ).toBeVisible();
-  await expect(page.getByText("Distretto Nord")).toBeVisible();
-  await expect(page.getByText("Distretto Sud")).toBeVisible();
-  await expect(page.getByText("15.50 ha")).toBeVisible();
-  await expect(page.getByText(/5567,89/)).toBeVisible();
+  await expect(page.getByRole("table").getByText("Distretto Nord", { exact: true })).toBeVisible();
+  await expect(page.getByRole("table").getByText("Distretto Sud", { exact: true })).toBeVisible();
+  await expect(page.getByText("15.5 ha", { exact: true })).toBeVisible();
+  await expect(page.getByText("0648 5568 € · 0985 1127 €", { exact: true })).toBeVisible();
 
   await page.locator("table.data-table tbody tr").first().click();
-  await page.waitForURL("**/catasto/distretti/00000000-0000-0000-0000-000000000901");
+  const detailFrame = page.locator('iframe[title="Distretto 12"]');
+  await expect(detailFrame).toBeVisible();
+  await expect(detailFrame).toHaveAttribute("src", /\/catasto\/distretti\/00000000-0000-0000-0000-000000000901(?:\?|$)/);
 });
 
 test("catasto distretto detail supports year fallback, tab switch and exports", async ({ page }) => {

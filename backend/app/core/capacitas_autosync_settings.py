@@ -4,6 +4,18 @@ from app.core.gis_settings import GisSettings
 
 
 class CapacitasAutoSyncSettings(GisSettings):
+    capacitas_request_policy_path: str = Field(
+        default="/runtime-data/capacitas/request-policy.json", alias="CAPACITAS_REQUEST_POLICY_PATH"
+    )
+    capacitas_request_interval_seconds: float = Field(
+        default=3.0, ge=1, le=60, alias="CAPACITAS_REQUEST_INTERVAL_SECONDS"
+    )
+    capacitas_request_cooldown_seconds: float = Field(
+        default=60.0, ge=30, le=900, alias="CAPACITAS_REQUEST_COOLDOWN_SECONDS"
+    )
+    capacitas_request_max_cooldown_seconds: float = Field(
+        default=900.0, ge=900, le=3600, alias="CAPACITAS_REQUEST_MAX_COOLDOWN_SECONDS"
+    )
     capacitas_domande_irrigue_autosync_enabled: bool = Field(
         default=False,
         alias="CAPACITAS_DOMANDE_IRRIGUE_AUTOSYNC_ENABLED",
@@ -28,6 +40,11 @@ class CapacitasAutoSyncSettings(GisSettings):
     capacitas_domande_irrigue_autosync_window_enabled: bool = Field(
         default=True,
         alias="CAPACITAS_DOMANDE_IRRIGUE_AUTOSYNC_WINDOW_ENABLED",
+    )
+    capacitas_domande_irrigue_autosync_windows: str = Field(
+        default="",
+        pattern=r"^(?:|(?:[01][0-9]|2[0-3]):[0-5][0-9]-(?:[01][0-9]|2[0-3]):[0-5][0-9](?:,(?:[01][0-9]|2[0-3]):[0-5][0-9]-(?:[01][0-9]|2[0-3]):[0-5][0-9])*)$",
+        alias="CAPACITAS_DOMANDE_IRRIGUE_AUTOSYNC_WINDOWS",
     )
     capacitas_domande_irrigue_autosync_start_hour: int = Field(
         default=20,

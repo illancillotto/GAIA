@@ -2,20 +2,10 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-import sys
 from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-
-
-WORKER_ROOT = Path(__file__).resolve().parents[1]
-REPO_ROOT = next((path for path in WORKER_ROOT.parents if (path / "backend").exists()), WORKER_ROOT.parents[-1])
-BACKEND_ROOT = REPO_ROOT / "backend"
-for path in (WORKER_ROOT, BACKEND_ROOT):
-    if str(path) not in sys.path:
-        sys.path.insert(0, str(path))
-
 
 import sister_observability as observability_module
 from sister_observability import (
@@ -32,6 +22,128 @@ from sister_telemetry import SisterTelemetryRecord
 
 def run(coro):
     return asyncio.run(coro)
+
+
+@pytest.mark.parametrize("fails", [False, True])
+def test_init_portale_501_is_classified_after_login_without_retry(fails):
+    from sister_telemetry import SisterTelemetryBinding
+
+    response = SimpleNamespace(
+        status=501,
+        url="https://sister3.agenziaentrate.gov.it/portale-rest/rs/initPortale?secret=1",
+        request=SimpleNamespace(resource_type="xhr", timing={"requestStart": 10, "responseStart": 35}),
+    )
+
+    class Browser:
+        attempts = 0
+
+        def _track_response(self, response):
+            return response.status
+
+        async def ensure_authenticated(self):
+            self.attempts += 1
+            assert self._track_response(response) == 501
+            if fails:
+                raise RuntimeError("login failed")
+            return "authenticated"
+
+    captured = []
+    recorder = SimpleNamespace(record=lambda record, scope: captured.append((record, scope)))
+    binding = SisterTelemetryBinding(recorder, 7, uuid4(), uuid4())
+    request_id = uuid4()
+    binding.begin_request(request_id, uuid4())
+    browser = Browser()
+    adapter = BrowserTelemetryAdapter(browser)
+    adapter.install()
+    adapter.set_binding(binding)
+    if fails:
+        with pytest.raises(RuntimeError, match="login failed"):
+            run(browser.ensure_authenticated())
+    else:
+        assert run(browser.ensure_authenticated()) == "authenticated"
+    assert browser.attempts == 1
+    record, scope = next((record, scope) for record, scope in captured if record.http_status == 501)
+    assert record.event_type == ("http_error" if fails else "http_warning")
+    assert record.outcome == ("error" if fails else "non_blocking")
+    assert record.severity == ("error" if fails else "warning")
+    assert record.duration_ms == 25
+    assert scope.request_id == request_id
+    assert scope.session_id == binding.session_id
+    assert scope.credential_id == binding.credential_id
+    assert adapter._login_responses is None
+    browser._track_response(response)
+    assert captured[-1][0].event_type == "http_error"
+
+
+@pytest.mark.parametrize(
+    "timing, expected",
+    [
+        ({"requestStart": 1, "responseStart": 1}, 0),
+        ({"requestStart": -1, "responseStart": 20}, None),
+        ({"requestStart": 20, "responseStart": 10}, None),
+        ({"requestStart": 0, "responseStart": float("inf")}, None),
+        ({"requestStart": float("nan"), "responseStart": 10}, None),
+        ({"requestStart": "invalid", "responseStart": 10}, None),
+        ({"requestStart": None, "responseStart": 10}, None),
+        ({}, None),
+    ],
+)
+def test_response_duration_does_not_invent_missing_or_invalid_timings(timing, expected):
+    response = SimpleNamespace(request=SimpleNamespace(timing=timing))
+    assert observability_module._response_duration_ms(response) == expected
+
+
+@pytest.mark.parametrize(
+    "status, endpoint, expected",
+    [(501, "/portale-rest/rs/initPortale", True), (500, "/portale-rest/rs/initPortale", False),
+     (501, None, False), (501, "/portale-rest/rs/initPortale/other", False)],
+)
+def test_soft_warning_is_limited_to_exact_init_portale_endpoint(status, endpoint, expected):
+    record = SisterTelemetryRecord("http_error", "portal_response", http_status=status, endpoint=endpoint)
+    assert observability_module._is_init_portale_501(record) is expected
+
+
+def test_successful_login_does_not_hide_other_http_failures():
+    class Browser:
+        def _track_response(self, _response):
+            return None
+
+        async def ensure_authenticated(self):
+            for status, path in [(500, "/portale-rest/rs/initPortale"), (501, "/other")]:
+                self._track_response(SimpleNamespace(
+                    status=status, url="https://sister3.agenziaentrate.gov.it" + path,
+                    request=SimpleNamespace(resource_type="xhr"),
+                ))
+
+    browser = Browser()
+    adapter = BrowserTelemetryAdapter(browser)
+    adapter.install()
+    run(browser.ensure_authenticated())
+    assert [(record.event_type, record.http_status) for record in adapter.pending] == [
+        ("http_error", 500), ("http_error", 501), ("login", None)]
+
+
+def test_verified_home_501_has_no_warning_or_sensitive_url_in_logs(caplog):
+    import logging
+    from unittest.mock import AsyncMock
+
+    from sister_browser_reliability import SisterSessionState, raise_if_sister_server_error
+
+    page = SimpleNamespace(
+        url="https://sister3.agenziaentrate.gov.it/Servizi/?token=SECRET",
+        title=AsyncMock(return_value="Home dei Servizi"),
+        locator=lambda _selector: SimpleNamespace(
+            inner_text=AsyncMock(return_value="Consultazioni e Certificazioni")
+        ),
+    )
+    state = SisterSessionState(pending_server_error=(
+        501, "https://sister3.agenziaentrate.gov.it/portale-rest/rs/initPortale?token=SECRET"
+    ))
+    with caplog.at_level(logging.DEBUG, logger="sister_browser_reliability"):
+        run(raise_if_sister_server_error(page, state))
+    assert state.pending_server_error is None
+    assert "SECRET" not in caplog.text
+    assert all(record.levelno < logging.WARNING for record in caplog.records)
 
 
 class RecordingBinding:
@@ -183,12 +295,11 @@ def test_observability_initializes_recorder_and_retention(monkeypatch) -> None:
         def __init__(self, retention_config, purge):
             created["retention"] = (retention_config, purge)
 
-    factory = lambda: FakeDb()
     monkeypatch.setattr(observability_module, "SisterTelemetryRecorder", Recorder)
     monkeypatch.setattr(observability_module, "SisterRetentionManager", Retention)
-    instance = SisterWorkerObservability(context(factory))
+    instance = SisterWorkerObservability(context(FakeDb))
 
-    assert created["recorder"] == (factory, True)
+    assert created["recorder"] == (FakeDb, True)
     retention_config, purge = created["retention"]
     assert retention_config.artifact_retention_days == 14
     assert retention_config.event_retention_days == 30

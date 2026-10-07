@@ -7045,3 +7045,301 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
 - Ratchet contro `6b61fd27`: rimangono solo i due finding parametri backend
   funzionali (`xlsm_export`, `inCASS`). Esito `IMPROVED`; evidenze in
   `/tmp/gaia-organigramma-after.json` e `/tmp/gaia-organigramma-all-coverage`.
+
+## 2026-10-07 — campagna swarm, checkpoint integrazione
+
+- Campagna esplicitamente richiesta dall'utente, organizzata in slice con
+  ownership esclusiva; tre specialisti concorrenti oltre al coordinator.
+  HEAD iniziale `703f8411`, confronto storico `6b61fd27`; nessun commit o
+  aggiornamento baseline/soglie/esclusioni. Working tree concorrente preservato.
+- Report di avanzamento: `GLOBAL_CAMPAIGN_2026-10-07.md`. Non e un report di
+  accettazione: wave successive e gate globali restano aperti.
+- Ruolo: caratterizzazione aggiuntiva, 109 test verdi, coverage full-file
+  1879/1879 statement e 730/730 branch. Operazioni: 57 test verdi, coverage
+  791/791 statement e 208/208 branch; pulizia Ruff mirata in rivalidazione.
+- Operazioni: estrazione coordinate classificata
+  `REORGANIZED_AND_CHARACTERIZED`, non riduzione cognitiva aggregata.
+- Network e Catasto ritirati prematuramente durante integrazione per gate
+  coverage non superati; l'utente sceglie successivamente di completare
+  coverage e gate delle slice correnti, non di ampliare le wave.
+  Gli owner caratterizzano prima di reintegrare runtime verificato.
+- Frontend unit suite: 3986 test/277 file verdi; smoke verde. Ratchet storico
+  globale non verde: 21 finding preesistenti, inclusi registered-mail Ruolo.
+  Non confondere una lista scoped con l'esito globale.
+- Integrazione ancora aperta: build, suite backend completa limitata a 600s,
+  coverage/ratchet delle slice correnti e review finale. Evidenze in `/tmp/gaia-*`.
+
+### Correzione coordinamento — prosecuzione richiesta
+
+- La scelta utente resta completare coverage e gate, non escludere le slice.
+  I ripristini ripetuti Catasto/Network sono stati errori di coordinamento,
+  non perdite causate da Graphify. Ownership dei due agenti resa esclusiva e
+  stabile; nessun ulteriore restore del coordinator sui loro file.
+- Ruolo e Operazioni hanno raggiunto coverage full-file 100%; Operazioni
+  finale: 790 statement/208 branch, 57 test verdi dopo Ruff. Build Next verde;
+  full backend timeout 600s con una failure ancora da identificare. E2E non
+  eseguibile utilmente senza server locale 8080 (connection refused).
+- In corso: characterization completa Catasto/Network e diagnosi read-only
+  dei 21 finding storici. Nessuna accettazione coverage differenziale, nessuna
+  modifica baseline per rendere verdi i controlli. Campagna non completata.
+
+### Gate delle slice correnti — verifica consolidata
+
+- Completata la scelta utente di proseguire la caratterizzazione: tutti i nove
+  runtime della campagna hanno coverage full-file statement/branch 100%.
+  Network: 253 test, 807 statement/290 branch. Catasto: 305 test, route
+  337 statement/124 branch e helper 34 statement/18 branch. Nessun ulteriore
+  restore dei file degli owner; conservate modifiche e test verificati.
+- Report consolidato `GLOBAL_CAMPAIGN_2026-10-07.md`: corregge checkpoint
+  contraddittori, separa risultati di campagna e working tree concorrente e
+  distingue riduzione misurata da accettazione. Operazioni resta
+  `REORGANIZED_AND_CHARACTERIZED`. Review indipendente finale in
+  `/tmp/gaia-campaign-integration-final.md`.
+- Audit globale: 1656 file, 20216 callable, 1959 error, 2747 warning,
+  4706 finding; rispetto al sorgente -9 error/+5 warning. Solo campagna:
+  153→144 error, 166→158 warning, cognitive 4075→3951, cyclomatic 3319→3294,
+  LOC 11804→11904. Target globali -50%/-25% non raggiunti.
+- Corretto l'overwrite accidentale del JSON report versionato con un audit
+  Catasto parziale: verificata rigenerazione globale tramite target standard,
+  poi ripristinato solo quel JSON allo stato iniziale non modificato per evitare
+  churn generato estraneo. Artefatti globali finali in `/tmp`; Markdown
+  concorrente preservato. Baseline/soglie/esclusioni restano intatte.
+- **Ratchet storico FAIL**: 21 mismatch gia presenti tra sorgente e metadati
+  al commit `6b61fd27`, dimostrati dalla diagnosi read-only. Non correggere le
+  firme pubbliche per inseguire metadati stale; nessuna riparazione baseline
+  autorizzata o eseguita.
+- **Ratchet merge-base corrente FAIL**: `BASE_REF=main` confronta `703f8411`
+  e rivela tre regressioni LOC reali della campagna, non visibili nel risultato
+  storico: Ruolo 3694→3749, XLSM 528→533, mobile sync 1907→1909. Quarto finding
+  estraneo: LOC test worker 18→19. Non dichiarare zero nuove regressioni.
+  Evidenza `/tmp/gaia-campaign-current-base-ratchet.log`; richiesta decisione
+  su correzione strutturale circoscritta senza code golf o cambio baseline.
+- Frontend smoke, 3986 unit test e build PASS; tooling 169 test PASS;
+  lint-backend/diff-check PASS. Worker target PASS con PYTHONPATH root,
+  coverage worker circa 99% non spacciata per 100%. Backend completo timeout
+  600s; failure ANPR riprodotta (`utenze_router.settings` assente), test/router
+  invariati rispetto ai riferimenti. E2E connection refused su porta 8080.
+- Graphify moduli, backend e platform docs aggiornati; estrazione docs
+  `chunk 1/1 done` senza warning semantici. Artefatti ignorati non committati.
+  Campagna **non completata e non accettata**. Nessuna nuova wave, runtime
+  change, commit o baseline update in attesa della decisione sui gate.
+
+### Correzione regressioni LOC — autorizzazione e prima slice
+
+- L'utente autorizza il punto 1: correggere le tre regressioni reali contro
+  `main`, senza intervenire sulla baseline storica. Ordine: Ruolo, poi
+  Presenze/Operazioni dopo verifica della slice precedente. Nessuna nuova wave.
+- Prima slice: ownership esclusiva Ruolo assegnata allo specialista
+  `/root/elaborazioni_refactor` (ruolo riutilizzato); coordinator limitato a
+  review, gate e documentazione. Runtime/test degli altri owner restano intatti.
+- Baseline corrente Ruolo: LOC 3749 contro 3694 al merge-base `703f8411`,
+  cognitive 1391, cyclomatic 1195, error/warning 57/58, coverage 100%.
+  Obiettivo: eliminare frammentazione superflua dei soli parser/status gia
+  modificati, senza compensare con modifiche a responsabilita estranee.
+- Invarianti: precedenza annullamento/pagamento, formati importo e rounding,
+  valori null/zero, firme, query e transazioni invariate. Test di riferimento:
+  `backend/tests/ruolo/test_tributi_api.py`; mantenere tutte le caratterizzazioni
+  aggiunte e rieseguire coverage full-file, Ruff e ratchet contro `main`.
+
+### Punto 1 completato — tre regressioni LOC eliminate
+
+- Slice sequenziali con ownership esclusiva; nessuna nuova wave o modifica
+  baseline/soglie/esclusioni. Ruolo e Presenze implementati dagli specialisti;
+  Operazioni proposta dallo specialista read-only e applicata come minima
+  correzione d'integrazione dal coordinator. Test preesistenti mantenuti.
+- Ruolo: LOC 3749→3692, contro 3694 su main; consolidati gli helper di stato
+  e unificati rami duplicati del parser. Rispetto a main cognitive 1415→1403,
+  cyclomatic 1203→1195, error 59→59, warning 59→58. Si rinuncia esplicitamente
+  ai due errori eliminati nella trial non conforme, non si nasconde il tradeoff.
+  111 test PASS, 1860 statement/722 branch al 100%; due esclusioni legacy
+  invariate. Differenziale: 28812 combinazioni stato e 1107 valori importo.
+- Presenze: LOC 533→528 (=main), cognitive/cyclomatic file 207/161 invariati
+  rispetto alla trial. Helper solo per i cinque giorni e soglia 2280 minuti;
+  filtro sabato/presenza nel conteggio. 83 test PASS, 276 statement/114 branch
+  al 100%; 6250 combinazioni equivalenti, firma pubblica invariata.
+- Operazioni: LOC 1909→1907 (=main); coppia coordinate esplicita e guard
+  positiva eliminano la continuazione superflua. 57 test PASS, 788 statement
+  e 208 branch al 100%; 169 casi differenziali contro HEAD, inclusi duplicati
+  ID, None, limiti geografici, Decimal e valori non finiti. Nessun cambiamento
+  alle query PostGIS, route, payload o autorizzazioni.
+- Ratchet scoped contro main PASS per ciascuno dei tre runtime. Ratchet
+  globale `BASE_REF=main make complexity-ratchet`: FAIL solo per test worker
+  estraneo `test_observability_initializes_recorder_and_retention` LOC 18→19;
+  nessun finding residuo delle tre slice. Storico `BASE_REF=6b61fd27`:
+  confermati 21 mismatch preesistenti, non dichiarato PASS.
+- Audit finale `/tmp/gaia-loc-final-audit.json`: 1656 file, 20211 callable,
+  1961 error, 2747 warning, 4708 finding. Solo campagna rispetto audit iniziale:
+  error 153→146, warning 166→158, cognitive 4075→3963, cyclomatic 3319→3294,
+  LOC 11804→11840; incrementi aggregati residui delle altre slice dichiarati.
+- `BASE_REF=main make lint-backend QUALITY_PYTHON=backend/.venv/bin/python`
+  PASS; diff-check PASS. Graphify Ruolo/Presenze/Operazioni force-pruned.
+  Report consolidato aggiornato in `GLOBAL_CAMPAIGN_2026-10-07.md`.
+- Artefatti principali: `/tmp/gaia-{ruolo,presenze}-loc-correction.md`,
+  `/tmp/gaia-operazioni-loc-final-{tests.log,coverage.json}`,
+  `/tmp/gaia-loc-final-{main,historical}-ratchet.log`.
+- Stop dopo il punto 1 autorizzato. Campagna globale ancora non completata:
+  worker estraneo, baseline storica e suite backend/E2E restano separati.
+  Nessun commit, riparazione baseline o modifica al worker.
+
+### Gate globale corrente — finding worker risolto, verifica estesa avviata
+
+- Richiesta successiva: risolvere il gate residuo ed eseguire verifiche complete
+  e controtest dell'intero lavoro. Scope aggiuntivo limitato al test worker
+  `test_observability_initializes_recorder_and_retention`.
+- Sostituita la factory locale che chiamava soltanto `FakeDb()` con `FakeDb`
+  passato direttamente come costruttore callable. Tutte le asserzioni su
+  recorder/retention restano, incluso controllo identita della factory.
+  Nessun runtime worker modificato, nessun test rimosso o escluso.
+- Baseline test 34 PASS; dopo 34 PASS. LOC callable 19→17 (baseline main18),
+  cognitive/cyclomatic 0/1 invariati. Ruff/diff-check PASS; Graphify worker
+  force-pruned. Altre modifiche worker gia presenti preservate.
+- `BASE_REF=main make complexity-ratchet` **PASS**, `findings=[]`, merge-base
+  `703f8411`; evidenza `/tmp/gaia-complete-main-ratchet.log`. Il confronto
+  storico usa un'altra baseline e non viene implicitamente dichiarato verde.
+- Verifica estesa in corso: intera suite backend con limite 2400s, tutte le
+  suite worker nel target isolato, frontend smoke/unit/build/lint, tooling e
+  test root. Specialisti read-only rieseguono coverage delle nove slice con
+  artefatti e database isolati, e confronti differenziali contro HEAD.
+- Frontend smoke, 3986 unit test/277 file, build e lint PASS (warning legacy
+  dichiarati). Tooling 169 PASS. Per E2E avviato solo Next locale su 127.0.0.1:8080,
+  login page HTTP200: niente scritture su deployment o DB di produzione.
+  Scenari con API mock possono essere validati; quelli che richiedono login
+  backend reale restano dipendenti dall'ambiente. Non nascondere tali failure.
+- Nessuna riparazione della baseline storica nel checkout dirty, nessun
+  commit o nuova wave di refactoring. Stato finale delle suite ancora aperto.
+
+### Verifica completa e controtest — esiti finali
+
+- Gate corrente confermato due volte: `BASE_REF=main make complexity-ratchet`
+  PASS, zero finding. Storico `6b61fd27` resta FAIL con 21 mismatch documentati;
+  baseline/soglie/esclusioni intatte. Nessun commit.
+- Nove runtime rieseguiti a coverage full-file statement/branch 100%, hash
+  sorgenti invariati: Ruolo111, inCASS209, Catasto305, Presenze83, GIS88,
+  Organigramma33, Network253, Operazioni57 test PASS. Esclusioni gia presenti:
+  Ruolo2 e inCASS3 righe, nessuna nuova.
+- Controtest HEAD/corrente PASS: stato Ruolo28812, parser1107, inCASS384,
+  Catasto4320, XLSM15690, GIS33825, Organigramma256 sequenze effetti,
+  Network390, coordinate515 e SQL32. AST: 161 firme pubbliche/decorator
+  Python identici. Nessuna modifica schema o migrazione.
+- Suite backend completa FINITA (non timeout): 6360 PASS, 448 skipped,
+  1 FAIL in 1268.58s. Unico errore ANPR noto `utenze_router.settings`, riprodotto
+  isolatamente e sorgenti non modificati. Non corretto opportunisticamente.
+- Worker completo: 774 PASS, 1 skipped, 52 file; coverage circa99%, cinque
+  statement mancanti in runtime invariato. Test worker modificato:34 PASS
+  prima/dopo; rimosso solo wrapper factory ridondante, asserzioni preservate.
+- Frontend smoke,3986 unit/277file,build,typecheck,lint PASS (warning legacy).
+  Tooling169 PASS; suite root256 PASS dopo PYTHONPATH backend+worker+root.
+  Lint backend e diff-check PASS. Primi tentativi collection senza import roots
+  falliti e documentati, non contati come passaggi riusciti.
+- E2E completo finale:32 PASS,19 FAIL,7 skipped,475s; tutte le failure al login,
+  API auth HTTP404 sul Next temporaneo senza backend. Controtest mock isolato:
+  15 PASS,2 skipped. Primo run aveva collisione directory artifact con un
+  controtest: scartata quell'evidenza e ripetuta intera suite con output/JSON
+  dedicati in /tmp. Server Next fermato; nessun deployment modificato.
+- Controtest ratchet parziale Organigramma: exit2 ambiguous fingerprint su
+  callback invariato. Full scan PASS e record metriche identici: il partial
+  omette path ancora esistenti e li interpreta come candidati rimossi. Limite
+  del contesto scoped documentato, nessuna modifica matcher per nasconderlo.
+- Report finale `VERIFICATION_2026-10-07.md`; aggiornato report globale.
+  Artefatti `/tmp/gaia-complete-*`, incluso audit1656file/20210callable,
+  1961error/2747warning. Graphify worker/platform aggiornati con Make dedicati.
+- Verifica richiesta conclusa, NON dichiarazione di campagna completa o suite
+  tutte verdi. Restano ANPR legacy, ambiente E2E, skip e baseline storica.
+
+### Mismatch storici — provenienza riconciliata senza rigenerare baseline
+
+- Richiesta utente: risolvere i mismatch. Verifica puntuale e review indipendente
+  dimostrano che tutti i 21 valori erano gia corretti nel commit `dc669728`,
+  antenato del merge-base corrente `703f8411`; main conserva quelle correzioni.
+  Superata quindi la precedente raccomandazione di preparare un nuovo repair
+  per questi finding. Nessuna modifica runtime, baseline, soglie o esclusioni.
+- Otto callable identificati per path e nome; 21 confronti tra baseline
+  storica, sorgente storico, baseline riparata, baseline HEAD e sorgente corrente
+  tutti coerenti. Anche il sorgente committed HEAD conferma i valori.
+- Ratchet corrente PASS, zero finding; confronto immutabile `6b61fd27` resta
+  FAIL con gli stessi 21 mismatch, non riscritto ne dichiarato verde.
+- Tooling 169 PASS. Controtest: report corrente accettato, 21 aumenti singoli
+  di metrica in memoria tutti respinti dal matcher come regressioni. Baseline
+  su disco immutata, nessun abbassamento dei gate.
+- Evidenza persistente in `HISTORICAL_MISMATCH_RECONCILIATION_2026-10-07.md`;
+  aggiornati i due report di campagna/verifica. Questo esito non dimostra
+  freschezza di ogni altro record baseline e non conta come riduzione ulteriore.
+- Nessun commit o nuova wave. Restano separati ANPR legacy, ambiente E2E,
+  skip e target quantitativi non raggiunti; suite applicative gia eseguite
+  nella verifica completa, non rieseguite per questa riconciliazione docs-only.
+
+### Follow-up autorizzato ANPR/E2E e layout GIS — verifiche completate
+
+- Corretto il test ANPR: settings patch nel modulo support canonico, clock e
+  KPI invariati. 48 test PASS e tre controtest KPI respinti. Suite backend
+  completa 6361 PASS, 448 skipped, zero failure, 1458.13s; non semplice rerun
+  del solo test prima fallito. L'ultimo riordino import/UTC e verificato anche
+  sul file finale; suite completa aveva gia raccolto la correzione semantica.
+- Backend E2E con sorgente corrente read-only, SQLite/tmpfs, rete Docker
+  interna senza accesso esterno, credenziali sintetiche e proxy loopback.
+  Login reale HTTP200. Identita browser stabile nel solo config temporaneo
+  evita di esaurire il limite20 device; enforcement auth invariato.
+- Utente autorizza test obsoleti: adattati sette spec senza aggiungere skip,
+  mantenendo intenti e aumentando verifiche payload/conteggi/dettaglio.
+  Misura mobile attende font caricati, tolleranza sempre2px; controtest600px
+  rileva ancora overflow. Review indipendente senza indebolimenti bloccanti.
+- Ulteriore autorizzazione esplicita per difetto layout GIS reale: quattro
+  righe CSS (`flex: none` nei blocchi diretti console), nessun cambio TS/React,
+  API o dati. Lifecycle nativo PASS a1280×720 e390×844; eliminazione della sola
+  regola riproduce il blocco salva. Regola aggiunta usata nel coverage CSS
+  browser; non spacciato per coverage V8 o intero foglio. Componente adiacente
+  GisWorkspace invariato: 27 statement/12 branch/11 funzioni/22righe100%.
+- Build clean PASS; finale E2E59 scenari:52 PASS,7 skip preesistenti,0failure,
+  49.7s. Unit frontend3986/277file PASS con2worker; tentativo parallelismo
+  default8timeout conservato come evidenza, nessuna soglia modificata.
+  Smoke18, tooling169, typecheck, lint e ratchet main PASS; baseline intatta.
+- Report `ANPR_E2E_FOLLOWUP_2026-10-07.md`; aggiornati checkpoint precedenti e
+  progress dominio. Graphify frontend aggiornato; risorse temporanee fermate
+  e rimosse senza compose/volumi di produzione. Nessun commit o nuova wave.
+- Skip dipendenti da PostGIS/dati/provider restano non verificati. Nessuna
+  dichiarazione di completamento globale o raggiungimento target percentuali.
+
+### Ripresa — hotspot export dossier Riordino
+
+- Prosecuzione autorizzata dopo recupero del checkpoint; singola slice su
+  `backend/app/modules/riordino/services/export_service.py`, inizialmente pulito
+  contro HEAD/main `703f8411`. Lavoro concorrente Capacitas/Presenze/MCP escluso.
+- Obiettivo: separare la selezione del percorso documento nel dossier ZIP dalla
+  confezione dell'archivio. Metriche iniziali dossier cognitive/cyclomatic/LOC
+  35/17/49; file cognitive 65, cyclomatic 35, LOC 129, 4 error e 1 warning.
+- Invarianti: priorita step valido, appeal, issue, phase valida, generale;
+  fallback dei riferimenti sconosciuti, ordine documenti, esclusione cancellati
+  e file mancanti, manifest, CSV, nomi download, eccezioni e firme pubbliche.
+- Prima della modifica runtime: caratterizzazione full-file del servizio e
+  test API export esistenti, con database/report isolati in `/tmp`.
+- Esito `IMPROVED`: dossier cognitive/cyclomatic/LOC 35/17/49→10/9/39,
+  nesting 5→2. Helper percorso 10/9/15, nesting 1, sotto tutte le soglie.
+  File cognitive 65→50 (-23,08%), cyclomatic 35→36, callable 4→5:
+  decisioni aggregate `sum(cyclomatic-1)` 31→31. LOC 129→134 dichiarate;
+  finding 5→2 (error 4→1, warning 1 invariato), nessuna nuova violation.
+- Caratterizzazione prima/dopo 41 PASS; servizio full-file statement/branch
+  100% prima 63/22, dopo 65/22, zero esclusioni, missing o partial branch.
+  Test API export originali prima 2 PASS; intera suite API Riordino dopo
+  53 PASS. Nessun test esistente rimosso o modificato.
+- Confronto originale HEAD/corrente: 147 archivi/CSV equivalenti per contenuti
+  e ordine, riferimenti, file mancanti/cancellati e pratiche vuote. Controtest
+  routing alterato solo in memoria: 32 failure attese, quattro fallback generali
+  ancora verdi; caratterizzazione respinge la regressione senza mutare sorgenti.
+- Ratchet mirato e globale contro main PASS, zero finding al momento della
+  verifica. Baseline/soglie/esclusioni intatte: nessuna sincronizzazione della
+  baseline condivisa nel checkout concorrente. Non dichiarato baseline-verify.
+- Ruff runtime/test e format-check del test nuovo PASS; diff-check e hash finali
+  PASS. Lint-backend globale e sua ripetizione FAIL per I001 nel test Presenze concorrente
+  `test_presenze_personnel_profiles_postgres.py`, fuori ownership della slice.
+- Primo tentativo pytest-cov con source dotted fallito in collection SQLAlchemy
+  (`Type object is already registered`), prima di modificare runtime. Esecuzione
+  con `coverage run --branch` dal backend riuscita, identica prima/dopo; non
+  confondere quel tentativo con una verifica passata. Nessun gate indebolito.
+- Graphify codice Riordino aggiornato tramite target dedicato. Artefatti
+  `/tmp/gaia-riordino-export-{before,after}.json`, `*-coverage.json`,
+  `*-tests.log`, `*-api-after.log`, `*-differential.log`, `*-mutation.log`,
+  `*-scoped-ratchet.log`, `*-global-ratchet.log`, `*-final.sha256`.
+- Singola slice completata; resta debito in `build_practice_summary_rows`
+  (cognitive/cyclomatic 27/13). Nessuna seconda slice o commit avviato;
+  modifiche concorrenti preservate. Prossima azione: review del delta prima
+  di selezionare un altro hotspot con ownership libera.

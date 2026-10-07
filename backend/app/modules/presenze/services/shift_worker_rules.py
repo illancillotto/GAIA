@@ -7,16 +7,24 @@ from sqlalchemy.orm import object_session
 
 from app.modules.presenze.models import PresenzeDailyPunch, PresenzeDailyRecord
 from app.modules.presenze.services.inaz_absences import covered_inaz_absence_minutes
+from app.modules.presenze.services.personnel_profiles import technician_shift_type
 from app.modules.presenze.services.shift_assignments import shift_assignment_values
 from app.modules.presenze.services.shift_ccnl import shift_ccnl_assessment, shift_ccnl_breakdown
+from app.modules.presenze.services.shift_daily_policy import (
+    shift_countable_limit,
+    shift_ordinary_limit,
+    shift_quality_values,
+    shift_voucher_worked_minutes,
+    shift_work_totals,
+)
 
-SHIFT_WORKER_TYPES = {"acquaiolo", "telecontrollo"}
+SHIFT_WORKER_TYPES = {"acquaiolo", "telecontrollo", "tecnico_turnista"}
 SHIFT_EXPECTED_MINUTES = 420
 REST_CODES = {"SAB", "DOM", "RIPTURN", "SMONTO"}
 
 
 def shift_worker_type(record):
-    value = shift_assignment_values(record)["shift_worker_type"]
+    value = technician_shift_type(record, shift_assignment_values(record))
     return value if value in SHIFT_WORKER_TYPES else None
 
 
@@ -69,7 +77,7 @@ def shift_meal_voucher(record):
     return (
         shift_worker_type(record) is not None
         and record.work_date >= date(2026, 8, 26)
-        and (shift_punch_minutes(record_shift_punches(record)) or 0) >= SHIFT_EXPECTED_MINUTES
+        and shift_voucher_worked_minutes(record) >= SHIFT_EXPECTED_MINUTES
         and not shift_voucher_travel_review(record)
     )
 
@@ -83,28 +91,7 @@ def shift_voucher_travel_review(record):
 def shift_quality(record, punches):
     from app.modules.presenze.services.operational_quality import OperaiOperationalQuality
 
-    kind = shift_worker_type(record)
-    worked = shift_punch_minutes(punches)
-    expected = shift_expected_minutes(record, punches)
-    rest = expected == 0
-    covered = min(expected, shift_covered_absence_minutes(record))
-    missing = max(0, expected - (worked or 0) - covered)
-    status = shift_status(punches, worked, missing)
-    notes = [f"Turnista {kind}: 7 ore per turno, orari da timbrature INAZ"]
-    notes.extend(shift_punch_notes(worked, rest))
-    if record.work_date >= date(2026, 9, 7):
-        notes.append("Nessuna flessibilita in ingresso per i turnisti (accordo art. 7)")
-    if shift_voucher_travel_review(record):
-        notes.append("Buono da verificare: accertare rimborso vitto in trasferta (accordo art. 5)")
-    return OperaiOperationalQuality(
-        status=status,
-        formula_code="TURNISTA_7H",
-        expected_minutes=expected,
-        worked_minutes=worked,
-        missing_minutes=missing,
-        mpe_minutes=max(0, (worked or 0) - expected),
-        notes=tuple(notes),
-    )
+    return OperaiOperationalQuality(**shift_quality_values(record, punches))
 
 
 def shift_classification(
@@ -112,14 +99,10 @@ def shift_classification(
 ):
     from app.modules.presenze.services.day_classification import DayClassification
 
-    worked = shift_punch_minutes(punches)
-    if shift_expected_minutes(record, punches) == 0:
-        worked = 0
-    ordinary = min(worked, SHIFT_EXPECTED_MINUTES) if worked is not None else None
-    extra = max(0, worked - SHIFT_EXPECTED_MINUTES) if worked is not None else None
-    intervals = shift_punch_intervals(punches) or []
+    worked, ordinary, extra, limit = shift_work_totals(record, punches)
+    intervals = (shift_punch_intervals(punches) or []) if worked is not None else []
     days = calendar if calendar is not None else [special_day, special_day]
-    counts = shift_ccnl_breakdown(intervals, days, SHIFT_EXPECTED_MINUTES)
+    counts = shift_ccnl_breakdown(intervals, days, limit)
     (
         _day,
         festive,
@@ -156,13 +139,16 @@ def shift_classification(
 
 
 def shift_covered_absence_minutes(record):
-    return covered_inaz_absence_minutes(record, ("ferie", "permesso"), SHIFT_EXPECTED_MINUTES)
+    return covered_inaz_absence_minutes(record, ("ferie", "permesso"), shift_countable_limit(record))
 
 
 def shift_record_values(record):
     """Assignment and absence diagnostics shared by daily API and GATE snapshots."""
+    assignment = shift_assignment_values(record)
+    effective_type = technician_shift_type(record, assignment)
     return {
-        **shift_assignment_values(record),
+        **assignment,
+        "shift_worker_type": effective_type,
         "shift_covered_absence_minutes": shift_covered_absence_minutes(record)
         if isinstance(record, PresenzeDailyRecord)
         else 0,
@@ -173,7 +159,7 @@ def shift_expected_minutes(record, punches):
     return (
         0
         if not punches and (record.schedule_code or "").upper() in REST_CODES
-        else SHIFT_EXPECTED_MINUTES
+        else shift_ordinary_limit(record)
     )
 
 
