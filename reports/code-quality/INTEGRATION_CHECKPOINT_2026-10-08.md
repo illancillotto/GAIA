@@ -545,3 +545,101 @@ APP_ENV=test DATABASE_URL=sqlite:////tmp/gaia-integration-b5-api.db \
 
 Nessuna modifica a PROGRESS, report finale, main, baseline, soglie o esclusioni.
 Suite globali e certificazione finale rimangono affidate al verifier.
+
+## Follow-up Wave 3 — C2 GIS Excel references
+
+Review indipendente approva il candidato
+`bf28b1d4ab079ff9da822b8e15cb0964e9377e61`, cherry-picked come
+`1cf26e0359fa57fea4381ca3fac140683b6b9821` sulla branch integration.
+HEAD al gate `c32bd54118314b99aa2953f37014226d3ec8d3a4` include anche
+readiness W4 report-only, senza sovrapposizione runtime. Merge-base autorevole
+invariato: `55a1b1d35911451e018b662c2acc450bf5994ea2`.
+
+Ownership esclusiva: pagina GIS, nuovo helper Excel adiacente, test della pagina
+e report C2. Nessun backend GIS/Catasto, shared lib/hook/UI, baseline, soglia o
+tooling modificato. Il checkout main e il lavoro concorrente restano intatti.
+
+### Review di invarianti C2
+
+- Primo worksheet, conversione `sheet_to_json({defval:null})`, limite5000,
+  ordine righe e `row_index=index+2` sono preservati.
+- Alias comune/sezione/foglio/particella e sub/subalterno conservano ordine,
+  primo valore non-nullish e accesso lazy alle proprietà. Sono validi anche
+  `0`, `false` e stringa vuota; trim a vuoto restituisce null senza tentare
+  un alias successivo. Test Proxy verifica lo short-circuit dei getter.
+- Token, riferimenti, `includeGeometry:true`, resolver e composizione layer
+  sono invariati. Busy, catch/finally, error/success, focus, persistenza e
+  comportamento async restano nella pagina, senza nuove effect dependency.
+- Normalizzazione pura locale elimina le catene duplicate degli alias;
+  nessun JSX trasferito, mega-hook, wrapper artificiale o nuova API.
+  Il vecchio formatter privato inutilizzato viene rimosso.
+
+### Metriche C2 indipendenti
+
+Report AST integration `/tmp/gaia-integration-c2-before.json` e
+`/tmp/gaia-integration-c2-after.json`. L'aggregato include il nuovo helper:
+nessun trasferimento di debito escluso dal confronto.
+
+| Metrica | Prima | Dopo | Delta |
+| --- | ---: | ---: | ---: |
+| CatastoGisPage cognitive | 334 | 317 | -17 |
+| CatastoGisPage cyclomatic | 298 | 281 | -17 |
+| CatastoGisPage callable LOC | 1896 | 1889 | -7 |
+| handleImportXlsx cognitive | 43 | 26 | -17 |
+| handleImportXlsx cyclomatic | 31 | 14 | -17 |
+| handleImportXlsx callable LOC | 81 | 74 | -7 |
+| Cognitive sum pagina+helper | 621 | 574 | -47 |
+| Cyclomatic sum pagina+helper | 712 | 663 | -49 |
+| Callable count pagina+helper | 176 | 177 | +1 |
+| Effective LOC pagina+helper | 2167 | 2183 | +16 |
+| Error / warning finding | 13/8 | 10/9 | -3/+1 |
+
+Classificazione **IMPROVED**: cognitive aggregata -7,57% e cyclomatic -6,88%.
+LOC aumenta di16 per la tabella tipizzata esplicita; l'helper resta sotto tutte
+le soglie, senza finding. Il warning aggiuntivo sostituisce l'error LOC81
+dell'handler, ora74: nessuna regressione nascosta. Pagina317 e handler26
+restano debito significativo; nessun claim di risoluzione completa dell'hotspot.
+
+### Gate integration C2
+
+- Due file di suite GIS: **37 PASS, zero skipped**;
+  `/tmp/gaia-integration-c2-tests.log`.
+- Coverage full-file pagina: **587/587 statement, 613/613 branch,
+  174/174 funzioni**, nessuna coverage ignore/exclusion aggiunta.
+- Coverage full-file helper: **9/9 statement, 4/4 branch, 3/3 funzioni**.
+  Totale **596/596 statement e617/617 branch**, 100%; verifica JSON V8
+  `/tmp/gaia-integration-c2-coverage/coverage-final.json`.
+- ESLint pagina/helper/test PASS; `/tmp/gaia-integration-c2-lint.log`.
+  Diff-check PASS. Runtime identico al candidato approvato.
+- Ratchet completo post-integrazione **PASS, zero finding** contro main,
+  merge-base55a1b1d; `/tmp/gaia-integration-c2-ratchet.log`.
+- Graphify del candidato aggiornato dal proprietario tramite target dedicato,
+  evidenze nel report C2. Output ignorato, non usato come prova delle metriche.
+
+Comandi riproducibili dalla root integration, salvo dove indicato:
+
+```bash
+make complexity-report REPORT_JSON=/tmp/gaia-integration-c2-after.json \
+  REPORT_MD=/tmp/gaia-integration-c2-after.md
+make complexity-ratchet BASE_REF=main
+git diff --check
+```
+
+Dalla directory frontend:
+
+```bash
+VITEST_COVERAGE_INCLUDE=src/app/catasto/gis/page.tsx,src/app/catasto/gis/excel-references.ts \
+  npm run test:unit -- tests/unit/catasto-gis-page.test.tsx \
+  tests/unit/catasto-gis-coordinate-page.test.tsx --maxWorkers=2 --coverage \
+  --coverage.reportsDirectory=/tmp/gaia-integration-c2-coverage
+./node_modules/.bin/eslint src/app/catasto/gis/page.tsx \
+  src/app/catasto/gis/excel-references.ts tests/unit/catasto-gis-page.test.tsx
+```
+
+SHA-256 pagina: `b5f14eabccbd42b5dcc922d66f54ab675380e69057400435413b22a723445fc5`;
+helper: `993166640a00ae787403484fd6ae691f8ef9a1c1eb463cca6bd2dc1cce7a817a`.
+
+**Checkpoint C2 GREEN / GO_FINAL_GATE**: registro C2 MERGED, ownership
+integration restituita al Coordinator. Nessun altro hotspot avviato.
+Suite globali già attive non duplicate né interrotte; questo checkpoint non
+certifica build, E2E, backend completo o frontend completo ancora in verifica.
