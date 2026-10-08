@@ -2,6 +2,13 @@
 
 ## 2026-10-08 — Capacitas test-only checkpoint, missione aperta
 
+- Integration3 interimC5a6e6313ba/C2b67fce218:210testsPASS0skip, eachratchet0,
+  actualcoverage795/857s720/929arms227/251f700/748linesFAIL100; awaitingC4.
+  Fresh globalreport1938error2749warning4687finding1668file20280callables;
+  file/callable AST objects exactly equal R3. GlobalcheckFAIL30 identical
+  findingobjectsR3, makeexit2/scanner1. Protectedconfigdiff empty. No reduction
+  attributed to characterization; no unresolved finding hidden or absorbed.
+
 - Integration2 report99baa6c0: C8b994dcf1/C18862d20d/C2aedba523c/
   C3cfc5025f accepted after independentreview.155testsPASS0skip, ratchet0
   aftereach, explicit4specTypeScript/scopedlintPASS. Fullfile678/857s,

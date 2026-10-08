@@ -2,6 +2,21 @@
 
 ## Capacitas characterization checkpoint
 
+New independent Integration2 report99baa6c0 acceptsC8/C1/correctedC2a/C3:
+155testsPASS0skip, ratchet0 aftereach. Cumulativecoverage678/857statements,
+640/929arms,172/251functions,609/748linesFAIL100. Initial impossible speed/stop
+returned-ID fixtures rejected and removed before one coherent integration.
+Integration3 interimC5a6e6313ba/C2b67fce218:210PASS, coverage795/857statements,
+720/929arms,227/251functions,700/748linesFAIL100; C4review pending.
+
+Fresh fullreport`/tmp/gaia-capacitas-characterization-complexity.json` preserves
+R3 metrics1938error2749warning4687finding,1668file20280callables, and identical
+file/callable objects. New globalcheckFAIL30 (makeexit2/scannerexit1) findings
+are byte-serialized identical to R3, no campaign divergence or absorption.
+Baseline/config/tooling/scope/threshold diffs empty. Defensivebranchprovenance
+records15 unreachable arms conditional on JSconstruction/installedSheetJS,
+five modalracearmsUNKNOWN; no exclusion or runtime removal authorized.
+
 Independent integration report`e6f659dd`:C6/C7/C0 test-only sources reviewed
 and integrated sequentially with ratchet0.67testsPASS0skip; explicit test
 TypeScript/scopedESLintPASS. Cumulative full-file coverage401/857statements,
