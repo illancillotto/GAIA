@@ -9,6 +9,31 @@ Baseline, soglie, esclusioni e tooling complexity sono read-only.
 
 ## Ownership attiva e sequenza
 
+### Capacitas characterization continuation — runtime held
+
+Previous goal turn produced integrated R3 evidence and plans, not completion.
+R3 backend6608PASS449skip, frontend4099PASS, worker778PASS1skip; browser
+confirmation52PASS7skip after initial GISFAIL. UNKNOWN residual-risk decision
+still pending. This continuation authorizes only test-only characterization,
+not another runtime wave, baseline absorption or implicit GIS risk acceptance.
+New worktrees from39dbcc40; all runtime read-only, owners exclusive new specs.
+
+| Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| C0 (capacitas_ui) | Capacitas UI tests | frontend/tests/unit/campaign-capacitas-credentials.test.tsx; reports/code-quality/SLICE_CAPACITAS_C0_2026-10-08.md | Credential selection/refresh, section navigation, embedded shell/settings modal; real workspace, API boundaries only | GAIA-campaign-20261008-c0-tests | refactor/complexity-capacitas-credentials-tests | ACTIVE |
+| C6 (analytics) | Capacitas UI tests | frontend/tests/unit/campaign-capacitas-certificati.test.tsx; reports/code-quality/SLICE_CAPACITAS_C6_2026-10-08.md | Certificati re-fetch payload, pending/old-result lifecycle, error/retry and token boundaries | GAIA-campaign-20261008-c6-tests | refactor/complexity-capacitas-certificati-tests | ACTIVE |
+| C7 (r2_presenze) | Capacitas UI tests | frontend/tests/unit/campaign-capacitas-anomalie.test.tsx; reports/code-quality/SLICE_CAPACITAS_C7_2026-10-08.md | Anomaly list and resolution dialog, exact payload, ordering/removal/error paths and async close behavior | GAIA-campaign-20261008-c7-tests | refactor/complexity-capacitas-anomalie-tests | ACTIVE |
+
+No owner writes the common capacitas runtime or existing batch tests, fixtures,
+smoke/config/tooling/shared files. Isolated API mocks in new specs are test
+boundaries, not runtime duplication. A slice stops after its behavioral matrix,
+test PASS and honest full-file coverage evidence (expected FAIL100 until all
+sections are characterized). No full-suite/build/E2E re-run per micro-slice.
+Source commits authorized for coherent test-only slices; integration only
+after independent review/ratchet, one cherry-pick at a time. Runtime complexity
+must stay identical; classification NO_CHANGE, not IMPROVED. Never fake branch
+coverage with private closures, malformed impossible mocks or ignore additions.
+
 ### Continuazione del goal globale (Round 2)
 
 Il goal dell'allegato e49b8632 resta ACTIVE: il checkpoint iniziale con cinque
