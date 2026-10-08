@@ -3,6 +3,25 @@
 Global goal remains **ACTIVE / INCOMPLETE**. This checkpoint records progress,
 not completion or an authorization for broad refactoring.
 
+## Frozen backend suite completed
+
+The pending backend status below is historical. The full suite on frozen
+backend runtime `bf4c9a2643bf57852893475597a40f106dfa63e0` has finished
+**exit0: 6589 PASS, 449 SKIPPED, 2272 warnings, 1502.26 seconds**.
+Log `/tmp/gaia-r2-backend-full-tests.log`; command from integration/backend:
+
+```bash
+APP_ENV=test DATABASE_URL=sqlite:////tmp/gaia-r2-backend-full.db \
+.venv/bin/python -m pytest -q -o addopts='' \
+-o cache_dir=/tmp/gaia-r2-backend-full-cache --tb=short
+```
+
+No backend mutation occurred during collection/execution. Later integration
+commits changed governance documents and R3 Presenze frontend only. The 449
+skipped cases remain unverified; warnings are recorded, not suppressed.
+Coordinator releases the R2 backend freeze for independently reviewed R3 P3
+integration. This PASS is not inherited by the new backend runtime.
+
 ## Integrated backend follow-up
 
 The pending P3 status below is historical: source6909abd7 independently

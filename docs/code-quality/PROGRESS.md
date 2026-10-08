@@ -54,6 +54,11 @@ blocco verificato e prima di chiudere un goal.
 
 ### Campagna globale — Round 2 attivo (2026-10-08)
 
+- Suite backend congelata Round2 conclusa:6589PASS449skip2272warnings,
+  exit0/1502,26s sul runtime `bf4c9a26`, log
+  `/tmp/gaia-r2-backend-full-tests.log`. Freeze rilasciato dal Coordinator:
+  R3 analytics richiede review e nuovi gate, non eredita questo PASS.
+
 - R1 e un checkpoint storico, non il completamento della missione originale:
   restano 1944 error, 2751 warning, 8 callable cognitive>300 e 17>200.
   Il goal globale rimane ACTIVE; audit dei requisiti in
