@@ -52,6 +52,21 @@
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
+### Campagna globale — Round 2 attivo (2026-10-08)
+
+- R1 e un checkpoint storico, non il completamento della missione originale:
+  restano 1944 error, 2751 warning, 8 callable cognitive>300 e 17>200.
+  Il goal globale rimane ACTIVE; audit dei requisiti in
+  `CAMPAIGN_GLOBAL_GOAL_2026-10-08.md`.
+- Tre ownership indipendenti assegnate preventivamente: modello derivato
+  Presenze, riepilogo configurazione provider Settings, characterization
+  full-file prima della prima fase fuel analytics. Worktree R2 dedicate da
+  `5a56f05c`; merge-base autorevole `55a1b1d3`, main dirty preservata.
+- Nessun PASS R1 vale automaticamente per il runtime R2. Ogni integrazione
+  richiede review indipendente, metriche aggregate, coverage full-file100%,
+  ratchet PASS e Graphify del corpus corretto. Baseline/soglie/esclusioni
+  immutate; le 30 divergenze storiche restano problema separato.
+
 ### Capacitas inCass — query lista job (2026-10-06)
 
 - Slice `REORGANIZED_AND_CHARACTERIZED`, snapshot `61fec20f`, MPC/MCP escluso.
