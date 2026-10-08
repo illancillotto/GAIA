@@ -33,6 +33,12 @@ i vincoli, inclusi full-file100%, equivalenza, ratchet e baseline read-only.
 
 Ownership R1 conclusa: gli owner delle righe storiche non scrivono i percorsi R2.
 
+### Pianificazione successiva, nessuna autorizzazione runtime prima del checkpoint
+
+| Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| R4 planning (r2_presenze) | Presenze UI | Runtime R3 read-only; reports/code-quality/PLAN_R4_P1_2026-10-08.md esclusivo | Proposta di una responsabilità mensile residua, invarianti e stima anti-laundering; nessun runtime/test edit o integrazione | GAIA-campaign-20261008-r3-presenze | refactor/complexity-r3-presenze-monthly-model | PLANNED |
+
 Round2 runtime integrated and independently GREEN at65097ce2: P1/P6/P3
 ratchet PASS0, 573 focused tests PASS, five modified R2 runtime full-file100%.
 R2 frontend4074PASS/buildPASS/browser52PASS7skip; complete backend suite is
