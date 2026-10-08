@@ -9,6 +9,26 @@ Baseline, soglie, esclusioni e tooling complexity sono read-only.
 
 ## Ownership attiva e sequenza
 
+### Continuazione del goal globale (Round 2)
+
+Il goal dell'allegato e49b8632 resta ACTIVE: il checkpoint iniziale con cinque
+slice non completa la missione globale. Runtime di partenza R2:
+`5a56f05cbd41e92cae247d8a4b25376a173ed36a`; merge-base main55a invariato.
+Misura attuale1944error/2751warning,8callable>300,17>200. Si mantengono tutti
+i vincoli, inclusi full-file100%, equivalenza, ratchet e baseline read-only.
+
+| Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| R2 Coordinator | Governance | Registry, PROGRESS, rapporto cumulativo e checkpoint globale | Riapertura e mantenimento goal originale | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
+| R2 P1 | Presenze UI | frontend/src/app/presenze/giornaliere/page.tsx; helper nuovi privati nella stessa directory; test giornaliere esclusivi; SLICE_R2_P1_2026-10-08.md | Una responsabilità coerente filter/selection/derived model; no semplice move JSX | GAIA-campaign-20261008-r2-presenze | refactor/complexity-r2-presenze-model | PLANNED |
+| R2 P6 | Settings UI | frontend/src/components/elaborazioni/settings-workspace.tsx; helper/component privati elaborazioni; test settings esclusivi; SLICE_R2_P6_2026-10-08.md | Una responsabilità configurazione provider; dedup reale e local reasoning | GAIA-campaign-20261008-r2-settings | refactor/complexity-r2-settings-provider | PLANNED |
+| R2 P3 | Operazioni analytics | backend/app/modules/operazioni/routes/analytics.py; test_operazioni_analytics_characterization.py e nuovo test r2 esclusivo; SLICE_R2_P3_2026-10-08.md | Chiudere coverage full-file, poi una fase fuel_analytics; non anomalies simultaneo | GAIA-campaign-20261008-r2-analytics | refactor/complexity-r2-fuel-analytics | PLANNED |
+
+Ownership R1 conclusa: gli owner delle righe storiche non scrivono i percorsi R2.
+Integration e Final Verification vengono assegnati dopo slice READY_FOR_REVIEW,
+non scrivono nei file runtime degli agenti attivi. Stop per singola unità,
+non un falso completamento del goal globale. Nessuna nuova delega shared.
+
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | Coordinator | Governance | Questo registro, progress e report finale | Sequencing e gate conclusi; main preservata | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | MERGED |

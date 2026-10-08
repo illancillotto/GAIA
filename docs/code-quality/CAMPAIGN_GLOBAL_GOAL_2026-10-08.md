@@ -1,0 +1,52 @@
+# GAIA — Goal globale persistente
+
+Fonte: allegato utente `/home/cbo/.codex/attachments/e49b8632-971c-489a-a541-e527356a2d9b/pasted-text-1.txt`.
+Stato: ACTIVE. Il checkpoint R1 certifica cinque slice, non l'intera missione.
+Il turno precedente produceva progresso verificato; non dimostrava completamento.
+
+## Missione invariata
+
+Semplificare strutturalmente l'intero backend, frontend e worker senza alterare
+comportamento, API, schema dati, autenticazione, autorizzazione, transazioni,
+concorrenza, portali esterni o UI. Priorità alle metriche estreme e al rischio
+reale, non al conteggio dei finding o al semplice spostamento di codice.
+
+Baseline audit8/10:1665file,20261callable,1956error,2758warning,4714finding.
+Snapshot Git operativo iniziale55a1b1d3; stato clean/R1 distinto dall'audit dirty.
+Avanzamento R1:1944error,2751warning,4695finding;8callable>300,17>200 ancora aperti.
+
+## Requisiti e prove di completamento
+
+| Requisito originale | Evidenza autorevole richiesta | Stato al riavvio |
+| --- | --- | --- |
+| 0 regressioni complexity | Ratchet completo su ogni slice e integrazione contro merge-base55a | R1 PASS, ogni R2 da verificare |
+| 0 regressioni funzionali | Invarianti, characterization prima/dopo, suite finali contro codice finale | R1 verificato nel perimetro testato; R2 aperto |
+| Error -50% o migliore | Audit AST globale comparabile; target978 o meno senza inflation | INCOMPLETE,1944 |
+| Warning -25% o migliore | Audit AST globale comparabile; target2068 o meno senza inflation | INCOMPLETE,2751 |
+| Cognitive>300→0 | Ranking completo tutti runtime, nessun trasferimento debito | INCOMPLETE,8 |
+| Cognitive>200→0 | Ranking completo tutti runtime, nessun trasferimento debito | INCOMPLETE,17 |
+| Cognitive>100 fortemente ridotti | Confronto coda/distribuzione e rischio degli hotspot | INCOMPLETE,55 |
+| Callable grandi/cyclomatic/nesting/params | Metriche prima/dopo e aggregate inclusi nuovi helper/file | R1 progresso locale, obiettivo globale aperto |
+| Full coverage modificati | 100% full-file statement/branch secondo tooling invariato | R1 sei runtime PASS; nuovi R2 da verificare |
+| Moduli localmente comprensibili | Review responsabilità, layering, API, dipendenze e interleaving | Mega-callable residui, INCOMPLETE |
+| Nessun laundering | Somme/max/findings/LOC e review diff, non move o wrapper artificiali | R1 verificato, gate permanente |
+| Soglie/scope/esclusioni immutati | Diff/hash dei file protetti rispetto snapshot55a | R1 verificato, gate permanente |
+| Baseline non gonfiata | Diff/hash baseline, nessun baseline/repair per rendere verde | R1 verificato, gate permanente |
+| Suite finali PASS | Backend/frontend/worker/build/E2E sul runtime definitivo, skip registrati | R1 PASS, da ripetere al nuovo checkpoint |
+| Audit globale migliore | Report completo reproducibile e domini/delta/percentuali | R1 delta-19finding insufficiente al goal globale |
+| Provenance30 divergenze storiche | Report per callable/metric/commit e nuova verifica non attribuita a R2 | R1 classificato, nessun assorbimento |
+| Ownership/branch/worktree/commit | Registry preventivo esclusivo, integrazione revisionata per slice | Permanente, R2 pianificato |
+| Graphify/domanda architetturale | Query/refresh tramite target modulo e docs, risultati verificati | Da mantenere per ogni topology change |
+
+Le percentuali non giustificano refactoring insicuri. La correttezza prevale
+sulla metrica e la reviewability sulla velocità. Nessun traguardo locale
+ridefinisce la North Star: aree critiche modificabili senza comprendere
+simultaneamente migliaia di righe o centinaia di decisioni.
+
+## Prossima unità di progresso
+
+Tre slice indipendenti: modello derivato Presenze, configurazione provider
+Settings, characterization completa prima della prima fase fuel analytics.
+Una responsabilità revisionabile per agente; integration dopo gates verdi.
+Se una slice è bloccata, scegliere una prossima azione sicura sul goal globale,
+non dichiarare conclusa la campagna per la sola difficoltà di quella slice.
