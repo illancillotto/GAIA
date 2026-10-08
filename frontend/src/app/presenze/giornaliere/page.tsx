@@ -245,6 +245,74 @@ function anomalyCardTone(kind: MonthAnomalyRecord["kind"]): string {
     : "border-amber-200 bg-white hover:border-amber-300";
 }
 
+function AnomalyCardBadges({ record, profile, scheduleCode }: {
+  record: PresenzeDailyRecord;
+  profile: string | null;
+  scheduleCode: string | undefined;
+}) {
+  return (
+    <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+      {profile ? <span className="rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-700">{profile}</span> : null}
+      {scheduleCode ? <span className="rounded-full bg-indigo-50 px-2.5 py-1 font-medium text-indigo-700">Orario {scheduleCode}</span> : null}
+      {record.operational_missing_minutes && record.operational_missing_minutes > 0 ? (
+        <span className="rounded-full bg-red-50 px-2.5 py-1 font-medium text-red-700">
+          Mancano {formatHours(record.operational_missing_minutes)}
+        </span>
+      ) : null}
+      {record.detail_requests.length > 0 || record.request_description ? (
+        <span className="rounded-full bg-sky-50 px-2.5 py-1 font-medium text-sky-700">Richiesta presente</span>
+      ) : null}
+    </div>
+  );
+}
+
+function MonthlyAnomalyCard({
+  item: { record, kind, reason },
+  collaborator,
+  schedule,
+  grouping,
+  onOpen,
+}: {
+  item: MonthAnomalyRecord;
+  collaborator: PresenzeCollaborator | undefined;
+  schedule: { code: string; label: string } | undefined;
+  grouping: AnomalyPanelGrouping;
+  onOpen: () => void;
+}) {
+  const profile = collaborator ? collaboratorProfileBadgeLabel(collaborator) : null;
+  const dateLabel = `${record.work_date} · ${formatWeekdayLabel(record.work_date)}`;
+  const heading = grouping === "day" ? collaborator?.name ?? record.collaborator_id : dateLabel;
+  const subheading = grouping === "day" ? dateLabel : schedule?.code ? `Orario ${schedule.code}` : "Orario non disponibile";
+  const ruleHint = operationalRuleHint(record);
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={`rounded-3xl border px-4 py-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${anomalyCardTone(kind)}`}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-base font-semibold text-slate-950">{heading}</p>
+          <p className="mt-1 text-xs font-medium text-slate-500">{subheading}</p>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${kind === "anomaly" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"}`}>
+            {anomalyCardBadgeLabel(kind)}
+          </span>
+          <span className="text-[11px] font-semibold text-slate-400">Apri</span>
+        </div>
+      </div>
+      <p className="mt-3 text-sm font-medium text-slate-800">{reason}</p>
+      <p className="mt-1 text-xs text-slate-500">{record.detail_status ?? record.stato ?? "Stato INAZ non disponibile"}</p>
+      <AnomalyCardBadges record={record} profile={profile} scheduleCode={grouping === "day" ? schedule?.code : undefined} />
+      {ruleHint ? <p className="mt-2 text-[11px] font-medium text-slate-500">{ruleHint}</p> : null}
+      <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
+        {kind === "anomaly" ? "Da correggere subito" : "Da verificare prima di chiudere"}
+      </p>
+    </button>
+  );
+}
+
 function anomalyPriorityScore(item: MonthAnomalyRecord): number {
   const base = item.kind === "anomaly" ? 0 : 1;
   const missingMinutes = item.record.operational_missing_minutes;
@@ -2016,61 +2084,19 @@ export default function PresenzeGiornalierePage() {
                         </div>
 
                         <div className="mt-3 grid gap-3 xl:grid-cols-2">
-                          {group.items.map(({ record, kind, reason }) => {
-                            const collaborator = collaboratorMap.get(record.collaborator_id);
-                            const schedule = collaboratorSchedule.get(record.collaborator_id);
-                            const profile = collaborator ? collaboratorProfileBadgeLabel(collaborator) : null;
-                            return (
-                              <button
-                                key={record.id}
-                                type="button"
-                                onClick={() => {
-                                  setReturnToCollaboratorModalId("");
-                                  setSelectedRecordId(record.id);
-                                }}
-                                className={`rounded-3xl border px-4 py-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${anomalyCardTone(kind)}`}
-                              >
-                                <div className="flex items-start justify-between gap-4">
-                                  <div className="min-w-0">
-                                    <p className="text-base font-semibold text-slate-950">{collaborator?.name ?? record.collaborator_id}</p>
-                                    <p className="mt-1 text-xs font-medium text-slate-500">
-                                      {record.work_date} · {formatWeekdayLabel(record.work_date)}
-                                    </p>
-                                  </div>
-                                  <div className="flex shrink-0 flex-col items-end gap-2">
-                                    <span
-                                      className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
-                                        kind === "anomaly" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"
-                                      }`}
-                                    >
-                                      {anomalyCardBadgeLabel(kind)}
-                                    </span>
-                                    <span className="text-[11px] font-semibold text-slate-400">Apri</span>
-                                  </div>
-                                </div>
-                                <p className="mt-3 text-sm font-medium text-slate-800">{reason}</p>
-                                <p className="mt-1 text-xs text-slate-500">{record.detail_status ?? record.stato ?? "Stato INAZ non disponibile"}</p>
-                                <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-                                  {profile ? <span className="rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-700">{profile}</span> : null}
-                                  {schedule?.code ? <span className="rounded-full bg-indigo-50 px-2.5 py-1 font-medium text-indigo-700">Orario {schedule.code}</span> : null}
-                                  {record.operational_missing_minutes && record.operational_missing_minutes > 0 ? (
-                                    <span className="rounded-full bg-red-50 px-2.5 py-1 font-medium text-red-700">
-                                      Mancano {formatHours(record.operational_missing_minutes)}
-                                    </span>
-                                  ) : null}
-                                  {record.detail_requests.length > 0 || record.request_description ? (
-                                    <span className="rounded-full bg-sky-50 px-2.5 py-1 font-medium text-sky-700">Richiesta presente</span>
-                                  ) : null}
-                                </div>
-                                {operationalRuleHint(record) ? (
-                                  <p className="mt-2 text-[11px] font-medium text-slate-500">{operationalRuleHint(record)}</p>
-                                ) : null}
-                                <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
-                                  {kind === "anomaly" ? "Da correggere subito" : "Da verificare prima di chiudere"}
-                                </p>
-                              </button>
-                            );
-                          })}
+                          {group.items.map((item) => (
+                            <MonthlyAnomalyCard
+                              key={item.record.id}
+                              item={item}
+                              collaborator={collaboratorMap.get(item.record.collaborator_id)}
+                              schedule={collaboratorSchedule.get(item.record.collaborator_id)}
+                              grouping={anomalyPanelGrouping}
+                              onOpen={() => {
+                                setReturnToCollaboratorModalId("");
+                                setSelectedRecordId(item.record.id);
+                              }}
+                            />
+                          ))}
                         </div>
                       </section>
                     )) : anomalyPanelCollaboratorGroups.map((group) => (
@@ -2100,58 +2126,19 @@ export default function PresenzeGiornalierePage() {
                         </div>
 
                         <div className="mt-3 grid gap-3 xl:grid-cols-2">
-                          {group.items.map(({ record, kind, reason }) => {
-                            const collaborator = collaboratorMap.get(record.collaborator_id);
-                            const schedule = collaboratorSchedule.get(record.collaborator_id);
-                            const profile = collaborator ? collaboratorProfileBadgeLabel(collaborator) : null;
-                            return (
-                              <button
-                                key={record.id}
-                                type="button"
-                                onClick={() => {
-                                  setReturnToCollaboratorModalId("");
-                                  setSelectedRecordId(record.id);
-                                }}
-                                className={`rounded-3xl border px-4 py-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${anomalyCardTone(kind)}`}
-                              >
-                                <div className="flex items-start justify-between gap-4">
-                                  <div className="min-w-0">
-                                    <p className="text-base font-semibold text-slate-950">{record.work_date} · {formatWeekdayLabel(record.work_date)}</p>
-                                    <p className="mt-1 text-xs font-medium text-slate-500">{schedule?.code ? `Orario ${schedule.code}` : "Orario non disponibile"}</p>
-                                  </div>
-                                  <div className="flex shrink-0 flex-col items-end gap-2">
-                                    <span
-                                      className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
-                                        kind === "anomaly" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-800"
-                                      }`}
-                                    >
-                                      {anomalyCardBadgeLabel(kind)}
-                                    </span>
-                                    <span className="text-[11px] font-semibold text-slate-400">Apri</span>
-                                  </div>
-                                </div>
-                                <p className="mt-3 text-sm font-medium text-slate-800">{reason}</p>
-                                <p className="mt-1 text-xs text-slate-500">{record.detail_status ?? record.stato ?? "Stato INAZ non disponibile"}</p>
-                                <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-                                  {profile ? <span className="rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-700">{profile}</span> : null}
-                                  {record.operational_missing_minutes && record.operational_missing_minutes > 0 ? (
-                                    <span className="rounded-full bg-red-50 px-2.5 py-1 font-medium text-red-700">
-                                      Mancano {formatHours(record.operational_missing_minutes)}
-                                    </span>
-                                  ) : null}
-                                  {record.detail_requests.length > 0 || record.request_description ? (
-                                    <span className="rounded-full bg-sky-50 px-2.5 py-1 font-medium text-sky-700">Richiesta presente</span>
-                                  ) : null}
-                                </div>
-                                {operationalRuleHint(record) ? (
-                                  <p className="mt-2 text-[11px] font-medium text-slate-500">{operationalRuleHint(record)}</p>
-                                ) : null}
-                                <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
-                                  {kind === "anomaly" ? "Da correggere subito" : "Da verificare prima di chiudere"}
-                                </p>
-                              </button>
-                            );
-                          })}
+                          {group.items.map((item) => (
+                            <MonthlyAnomalyCard
+                              key={item.record.id}
+                              item={item}
+                              collaborator={collaboratorMap.get(item.record.collaborator_id)}
+                              schedule={collaboratorSchedule.get(item.record.collaborator_id)}
+                              grouping={anomalyPanelGrouping}
+                              onOpen={() => {
+                                setReturnToCollaboratorModalId("");
+                                setSelectedRecordId(item.record.id);
+                              }}
+                            />
+                          ))}
                         </div>
                       </section>
                     ))}

@@ -549,6 +549,33 @@ describe("Presenze giornaliere workspace", () => {
     await screen.findByText("Rettifiche operative");
   }
 
+  test.each(["Giorno", "Collaboratore"])("preserves anomaly card content and navigation when grouped by %s", async (grouping) => {
+    await renderMayMatrix([matrixRecord({
+      operational_status: "blocking",
+      operational_missing_minutes: 60,
+      detail_anomalies: [{ anomaliagiornata: "Campaign missing hour" }],
+      request_description: "Campaign request",
+    })]);
+    fireEvent.click(screen.getByRole("button", { name: "Vedi anomalie mese (1)" }));
+    fireEvent.click(screen.getByRole("button", { name: grouping, exact: true }));
+    const card = screen.getByText("Campaign missing hour").closest("button")!;
+    const content = within(card);
+    expect(content.getByText("2026-05-18 · lunedì")).toBeInTheDocument();
+    expect(content.getByText("Bloccante")).toBeInTheDocument();
+    expect(content.getByText("Operaio agrario")).toBeInTheDocument();
+    expect(content.getByText("Orario OPESAB")).toBeInTheDocument();
+    expect(content.getByText("Mancano 1.00 h")).toBeInTheDocument();
+    expect(content.getByText("Richiesta presente")).toBeInTheDocument();
+    expect(content.getByText("Da correggere subito")).toBeInTheDocument();
+    if (grouping === "Giorno") expect(content.getByText("AMADU SALVATORE")).toBeInTheDocument();
+    else expect(content.queryByText("AMADU SALVATORE")).not.toBeInTheDocument();
+    fireEvent.click(card);
+    await screen.findByText("Rettifiche operative");
+    expect(mocks.getPresenzeDailyRecord).toHaveBeenCalledWith(expect.any(String), "record-1");
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi ✕" }));
+    expect(screen.queryByRole("heading", { name: "AMADU SALVATORE" })).not.toBeInTheDocument();
+  });
+
   test("changes months across year boundaries and requests their actual date bounds", async () => {
     await renderMayMatrix();
     fireEvent.change(screen.getByLabelText("Mese operativo"), { target: { value: "2026-01" } });
