@@ -39,7 +39,7 @@ Ownership R1 conclusa: gli owner delle righe storiche non scrivono i percorsi R2
 | --- | --- | --- | --- | --- | --- | --- |
 | R4 planning (r2_presenze) | Presenze UI | Runtime R3 read-only; reports/code-quality/PLAN_R4_P1_2026-10-08.md esclusivo | Proposta di una responsabilità mensile residua, invarianti e stima anti-laundering; nessun runtime/test edit o integrazione | GAIA-campaign-20261008-r3-presenze | refactor/complexity-r3-presenze-monthly-model | PLANNED |
 | R4 planning (capacitas_ui) | Catasto GIS UI | Runtime GIS R1 read-only; reports/code-quality/PLAN_R4_C2_2026-10-08.md esclusivo | Proposta di una responsabilità reale che riduca il principal317 e il debito aggregato; nessun MapContainer censurato, runtime/test edit o integrazione | GAIA-campaign-20261008-gis-readiness | refactor/complexity-gis-readiness | PLANNED |
-| R3 Final Verification (analytics) | Verification | reports/code-quality/ROUND3_VERIFICATION_2026-10-08.md; runtime and protected files read-only | Run complete scanner/ratchet/globalcheck after R3 integration; compare exact30 provenance, inspect full-file evidence, certify only executed gates | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | PLANNED |
+| R3 Final Verification (analytics) | Verification | reports/code-quality/ROUND3_VERIFICATION_2026-10-08.md; runtime and protected files read-only | Run complete scanner/ratchet/globalcheck after R3 integration; compare exact30 provenance, inspect full-file evidence, certify only executed gates | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
 
 Round2 runtime integrated and independently GREEN at65097ce2: P1/P6/P3
 ratchet PASS0, 573 focused tests PASS, five modified R2 runtime full-file100%.
