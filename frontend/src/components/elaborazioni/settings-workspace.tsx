@@ -9,11 +9,10 @@ import {
   useOpenSection,
 } from "@/components/elaborazioni/elaborazioni-credential-tabs";
 import { SisterCredentialPool } from "@/components/elaborazioni/sister-credential-pool";
+import { SettingsProviderPoolMonitor, summarizeProviderPool } from "@/components/elaborazioni/settings-provider-pool";
 import {
-  AlertTriangleIcon,
   LockIcon,
   RefreshIcon,
-  SearchIcon,
   ServerIcon,
   UsersIcon,
 } from "@/components/ui/icons";
@@ -41,7 +40,7 @@ import {
   updateElaborazioneCredential,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import { buildBonificaDiagnosis, buildCapacitasDiagnosis } from "@/lib/elaborazioni-credential-diagnostics";
+import { buildCapacitasDiagnosis } from "@/lib/elaborazioni-credential-diagnostics";
 import { formatDateTime } from "@/lib/presentation";
 import { shouldRefreshSisterCredentialAfterTest } from "@/lib/sister-credential-tests";
 import type {
@@ -1065,23 +1064,13 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
     null;
   const hasSisterCredentials = Boolean(credentialStatus?.configured);
   const activeSisterCount = sisterCredentials.filter((credential) => credential.active).length;
-  const activeBonificaCount = bonificaCredentials.filter((credential) => credential.active).length;
-  const bonificaWarningCount = bonificaCredentials.filter((credential) => Boolean(credential.last_error)).length;
-  const latestBonificaUsage = bonificaCredentials
-    .map((credential) => credential.last_used_at)
-    .filter((value): value is string => Boolean(value))
-    .sort()
-    .at(-1);
+  const bonificaPool = summarizeProviderPool(bonificaCredentials);
+  const { active: activeBonificaCount, latestUsage: latestBonificaUsage } = bonificaPool;
   const selectedBonificaCredential =
     (bonificaForm.id ? bonificaCredentials.find((credential) => credential.id === bonificaForm.id) : null) ?? null;
   const latestBonificaIssue = bonificaCredentials.find((credential) => Boolean(credential.last_error))?.last_error ?? null;
-  const activeCapacitasCount = capacitasCredentials.filter((credential) => credential.active).length;
-  const capacitasWarningCount = capacitasCredentials.filter((credential) => Boolean(credential.last_error)).length;
-  const latestCapacitasUsage = capacitasCredentials
-    .map((credential) => credential.last_used_at)
-    .filter((value): value is string => Boolean(value))
-    .sort()
-    .at(-1);
+  const capacitasPool = summarizeProviderPool(capacitasCredentials);
+  const { active: activeCapacitasCount, latestUsage: latestCapacitasUsage } = capacitasPool;
   const sisterStateLabel = hasSisterCredentials ? "Operativo" : "Non configurato";
   const sisterStateDescription = hasSisterCredentials
     ? `${activeSisterCount}/${sisterCredentials.length} attive · default ${credentialStatus?.default_credential?.label ?? "non impostato"}`
@@ -1132,23 +1121,15 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                 compact={embedded}
                 eyebrow="Pool Bonifica"
                 value={`${activeBonificaCount}/${bonificaCredentials.length}`}
-                description={
-                  bonificaCredentials.length > 0
-                    ? `${bonificaWarningCount} warning recenti${latestBonificaUsage ? ` · ultimo uso ${formatDateTime(latestBonificaUsage)}` : ""}`
-                    : "Nessun account ancora configurato"
-                }
-                tone={bonificaWarningCount > 0 ? "warning" : activeBonificaCount > 0 ? "success" : "default"}
+                description={bonificaPool.description}
+                tone={bonificaPool.tone}
               />
               <StatCard
                 compact={embedded}
                 eyebrow="Pool Capacitas"
                 value={`${activeCapacitasCount}/${capacitasCredentials.length}`}
-                description={
-                  capacitasCredentials.length > 0
-                    ? `${capacitasWarningCount} warning recenti${latestCapacitasUsage ? ` · ultimo uso ${formatDateTime(latestCapacitasUsage)}` : ""}`
-                    : "Nessun account ancora configurato"
-                }
-                tone={capacitasWarningCount > 0 ? "warning" : activeCapacitasCount > 0 ? "success" : "default"}
+                description={capacitasPool.description}
+                tone={capacitasPool.tone}
               />
               {!embedded ? (
                 <StatCard
@@ -1537,58 +1518,12 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                 </div>
               </article>
 
-              <article className={`rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel ${embedded ? "p-5" : "p-6"}`}>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Monitor operativo</p>
-                <div className={`grid gap-3 ${embedded ? "mt-3 md:grid-cols-3" : "mt-4"}`}>
-                  <div className={`rounded-2xl border border-[#dfe7dd] bg-[#f8faf8] ${embedded ? "p-3" : "p-4"}`}>
-                    <div className="flex items-start gap-3">
-                      <div className="rounded-xl bg-white p-2 text-[#1D4E35]">
-                        <UsersIcon className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">Distribuzione account</p>
-                        <p className={`mt-1 text-sm text-gray-600 ${embedded ? "leading-5" : "leading-6"}`}>
-                          {bonificaCredentials.length > 0
-                            ? `${activeBonificaCount} account attivi, ${bonificaCredentials.length - activeBonificaCount} disattivi.`
-                            : "Nessun account disponibile nel pool."}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className={`rounded-2xl border border-[#f1e0af] bg-[#fff9e8] ${embedded ? "p-3" : "p-4"}`}>
-                    <div className="flex items-start gap-3">
-                      <div className="rounded-xl bg-white p-2 text-[#a36900]">
-                        <AlertTriangleIcon className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">Warning recenti</p>
-                        <p className={`mt-1 text-sm text-gray-600 ${embedded ? "leading-5" : "leading-6"}`}>
-                          {bonificaWarningCount > 0
-                            ? `${bonificaWarningCount} account richiedono controllo o nuovo test.`
-                            : "Nessun errore recente registrato sul provider."}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className={`rounded-2xl border border-[#e4e9f6] bg-[#f6f8ff] ${embedded ? "p-3" : "p-4"}`}>
-                    <div className="flex items-start gap-3">
-                      <div className="rounded-xl bg-white p-2 text-[#3056d3]">
-                        <RefreshIcon className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">Diagnosi corrente</p>
-                        <p className={`mt-1 text-sm text-gray-600 ${embedded ? "leading-5" : "leading-6"}`}>
-                          {latestBonificaIssue
-                            ? buildBonificaDiagnosis(latestBonificaIssue, null) ?? latestBonificaIssue
-                            : "Nessuna anomalia aperta sul flusso di login Laravel."}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </article>
+              <SettingsProviderPoolMonitor
+                provider="bonifica"
+                summary={bonificaPool}
+                latestIssue={latestBonificaIssue}
+                embedded={embedded}
+              />
             </section>
 
             <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
@@ -1810,58 +1745,12 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                 </div>
               </article>
 
-              <article className={`rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel ${embedded ? "p-5" : "p-6"}`}>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Monitor operativo</p>
-                <div className={`grid gap-3 ${embedded ? "mt-3 md:grid-cols-3" : "mt-4"}`}>
-                  <div className={`rounded-2xl border border-[#e4e9f6] bg-[#f6f8ff] ${embedded ? "p-3" : "p-4"}`}>
-                    <div className="flex items-start gap-3">
-                      <div className="rounded-xl bg-white p-2 text-[#3056d3]">
-                        <UsersIcon className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">Distribuzione account</p>
-                        <p className={`mt-1 text-sm text-gray-600 ${embedded ? "leading-5" : "leading-6"}`}>
-                          {capacitasCredentials.length > 0
-                            ? `${activeCapacitasCount} account attivi, ${capacitasCredentials.length - activeCapacitasCount} disattivi.`
-                            : "Nessun account disponibile nel pool."}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className={`rounded-2xl border border-[#f1e0af] bg-[#fff9e8] ${embedded ? "p-3" : "p-4"}`}>
-                    <div className="flex items-start gap-3">
-                      <div className="rounded-xl bg-white p-2 text-[#a36900]">
-                        <AlertTriangleIcon className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">Warning recenti</p>
-                        <p className={`mt-1 text-sm text-gray-600 ${embedded ? "leading-5" : "leading-6"}`}>
-                          {capacitasWarningCount > 0
-                            ? `${capacitasWarningCount} account richiedono controllo o nuovo test di connessione.`
-                            : "Nessun errore recente registrato sul pool."}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className={`rounded-2xl border border-[#dfe7dd] bg-[#f8faf8] ${embedded ? "p-3" : "p-4"}`}>
-                    <div className="flex items-start gap-3">
-                      <div className="rounded-xl bg-white p-2 text-[#1D4E35]">
-                        <SearchIcon className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-900">Ultimo utilizzo</p>
-                        <p className={`mt-1 text-sm text-gray-600 ${embedded ? "leading-5" : "leading-6"}`}>
-                          {latestCapacitasUsage
-                            ? `Pool utilizzato l'ultima volta ${formatDateTime(latestCapacitasUsage)}.`
-                            : "Nessun utilizzo registrato finora."}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </article>
+              <SettingsProviderPoolMonitor
+                provider="capacitas"
+                summary={capacitasPool}
+                latestIssue={null}
+                embedded={embedded}
+              />
             </section>
 
             <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">

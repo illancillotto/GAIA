@@ -13,6 +13,8 @@ import {
   type ConfirmDeleteDialogState,
 } from "@/components/elaborazioni/settings-workspace";
 import { ApiError } from "@/lib/api";
+import * as credentialDiagnostics from "@/lib/elaborazioni-credential-diagnostics";
+import { formatDateTime } from "@/lib/presentation";
 import type {
   BonificaOristaneseCredential,
   CapacitasCredential,
@@ -168,6 +170,87 @@ describe("ElaborazioniSettingsWorkspace SISTER integration", () => {
     apiMocks.testElaborazioneCredentials.mockImplementation(async (_token: string, payload: { credential_id: string }) =>
       testResult(`test-${payload.credential_id}`, payload.credential_id),
     );
+  });
+
+  test.each([false, true])("preserves provider pool summaries and monitor details, embedded=%s", async (embedded) => {
+    const earliest = "2026-08-18T09:00:00Z";
+    const latest = "2026-08-21T09:00:00Z";
+    apiMocks.listBonificaOristaneseCredentials.mockResolvedValue([
+      bonificaCredential(1, { active: false, last_error: "Errore non classificato", last_used_at: latest }),
+      bonificaCredential(2, { last_error: "Secondo errore", last_used_at: earliest }),
+      bonificaCredential(3),
+    ]);
+    apiMocks.listCapacitasCredentials.mockResolvedValue([
+      capacitasCredential(1, { active: false, last_used_at: earliest }),
+      capacitasCredential(2, { last_error: "Errore Capacitas", last_used_at: latest }),
+      capacitasCredential(3, { last_used_at: "" }),
+    ]);
+    render(<ElaborazioniSettingsWorkspace embedded={embedded} />);
+    await screen.findByText(`2 warning recenti · ultimo uso ${formatDateTime(latest)}`);
+    expect(screen.getAllByText("2/3")).toHaveLength(2);
+    const bonificaSummary = screen.getByText("Pool Bonifica").closest("div")!;
+    expect(bonificaSummary).toHaveClass("border-amber-200/80", embedded ? "p-3" : "p-4");
+    expect(screen.getByText(`1 warning recenti · ultimo uso ${formatDateTime(latest)}`)).toBeInTheDocument();
+    expect(screen.queryByText("Ultima attivita") !== null).toBe(!embedded);
+
+    fireEvent.click(screen.getByRole("button", { name: "WhiteCompany" }));
+    let monitor = screen.getByText("Monitor operativo").closest("article")!;
+    expect(monitor).toHaveClass(embedded ? "p-5" : "p-6");
+    expect(within(monitor).getAllByText(/Distribuzione account|Warning recenti|Diagnosi corrente/).map((title) => title.textContent))
+      .toEqual(["Distribuzione account", "Warning recenti", "Diagnosi corrente"]);
+    expect(within(monitor).getByText("2 account attivi, 1 disattivi.")).toBeInTheDocument();
+    expect(within(monitor).getByText("2 account richiedono controllo o nuovo test.")).toBeInTheDocument();
+    expect(within(monitor).getByText("Errore non classificato")).toBeInTheDocument();
+    expect(within(monitor).getByText("Distribuzione account").closest(".rounded-2xl"))
+      .toHaveClass("border-[#dfe7dd]", "bg-[#f8faf8]", embedded ? "p-3" : "p-4");
+
+    fireEvent.click(screen.getByRole("button", { name: "Capacitas" }));
+    monitor = screen.getByText("Monitor operativo").closest("article")!;
+    expect(within(monitor).getAllByText(/Distribuzione account|Warning recenti|Ultimo utilizzo/).map((title) => title.textContent))
+      .toEqual(["Distribuzione account", "Warning recenti", "Ultimo utilizzo"]);
+    expect(within(monitor).getByText("2 account attivi, 1 disattivi.")).toBeInTheDocument();
+    expect(within(monitor).getByText("1 account richiedono controllo o nuovo test di connessione.")).toBeInTheDocument();
+    expect(within(monitor).getByText(`Pool utilizzato l'ultima volta ${formatDateTime(latest)}.`)).toBeInTheDocument();
+    expect(within(monitor).getByText("Distribuzione account").closest(".rounded-2xl"))
+      .toHaveClass("border-[#e4e9f6]", "bg-[#f6f8ff]");
+  });
+
+  test.each([false, true])("preserves empty provider monitor fallbacks, embedded=%s", async (embedded) => {
+    render(<ElaborazioniSettingsWorkspace embedded={embedded} />);
+    await screen.findByText("Profilo primary");
+    expect(screen.getAllByText("Nessun account ancora configurato")).toHaveLength(2);
+    expect(screen.getByText("Pool Bonifica").closest("div")).toHaveClass("border-white/70");
+    fireEvent.click(screen.getByRole("button", { name: "WhiteCompany" }));
+    let monitor = screen.getByText("Monitor operativo").closest("article")!;
+    expect(within(monitor).getByText("Nessun account disponibile nel pool.")).toBeInTheDocument();
+    expect(within(monitor).getByText("Nessun errore recente registrato sul provider.")).toBeInTheDocument();
+    expect(within(monitor).getByText("Nessuna anomalia aperta sul flusso di login Laravel.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Capacitas" }));
+    monitor = screen.getByText("Monitor operativo").closest("article")!;
+    expect(within(monitor).getByText("Nessun errore recente registrato sul pool.")).toBeInTheDocument();
+    expect(within(monitor).getByText("Nessun utilizzo registrato finora.")).toBeInTheDocument();
+  });
+
+  test("computes Bonifica diagnosis only while its provider tab is selected", async () => {
+    apiMocks.listBonificaOristaneseCredentials.mockResolvedValue([
+      bonificaCredential(1, { last_error: "Errore non classificato" }),
+    ]);
+    const diagnosis = vi.spyOn(credentialDiagnostics, "buildBonificaDiagnosis");
+    try {
+      render(<ElaborazioniSettingsWorkspace embedded />);
+      await screen.findByText("1 warning recenti");
+      expect(diagnosis).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: "Capacitas" }));
+      expect(diagnosis).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: "WhiteCompany" }));
+      await screen.findByText("Diagnosi corrente");
+      expect(diagnosis).toHaveBeenCalledWith("Errore non classificato", null);
+      const callsWhileSelected = diagnosis.mock.calls.length;
+      fireEvent.click(screen.getByRole("button", { name: "SISTER" }));
+      expect(diagnosis).toHaveBeenCalledTimes(callsWhileSelected);
+    } finally {
+      diagnosis.mockRestore();
+    }
   });
 
   test("covers the reusable status and dialog presentations", () => {
