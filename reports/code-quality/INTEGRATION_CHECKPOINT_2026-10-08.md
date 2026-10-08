@@ -218,3 +218,86 @@ VITEST_COVERAGE_INCLUDE=src/app/presenze/giornaliere/page.tsx,src/components/ela
 npm test
 npm run typecheck
 ```
+
+## Follow-up — Characterization P3/P4/P5 integrata
+
+Review indipendente e cherry-pick sequenziali dei tre candidati **test-only**.
+Nessuno modifica runtime, configurazioni, matcher, soglie o baseline.
+Il checkpoint runtime P1/P6 resta valido per gli stessi blob già verificati;
+non viene rieseguita la loro coverage dopo aggiunte che non li modificano.
+
+| Agent | Commit candidato | Commit integration | Classificazione runtime |
+| --- | --- | --- | --- |
+| P3 | `48de12ef5f0baf1068c1f9df8e3fca5c8dde1918` | `5efac219ef5f930cc221c361d35d271642c6531e` | NO_CHANGE / BLOCKED_COVERAGE |
+| P4 | `764d31586f4e10c218adc6a8eeb39c0f2a6194e9` | `a205a50879a77295b681e11ef292c23e1053e3c3` | NO_CHANGE / BLOCKED_COVERAGE |
+| P5 | `3cb1b6e379dadc4df84d08d957afaf8f2ea75843` | `71b817b9c03c09411857359b43f8832c7be3a651` | NO_CHANGE / BLOCKED_COVERAGE |
+
+Ownership dei test disgiunta: un file nuovo backend analytics, un file nuovo
+frontend anomalie e un file nuovo frontend dettaglio Utenze; report dedicati.
+Nessun test esistente rimosso, skipped o indebolito. Nessun callable runtime
+trasferito e nessuna riduzione metrica attribuita alle caratterizzazioni.
+
+P3 usa SQLAlchemy con database SQLite in-memory isolato per verificare risultati
+delle route reali: precedenza classificazione veicoli, coefficienti/rounding,
+attribuzione operatori, fallback, storni, costi null e periodi/date. Gli helper
+fixture originali sono riusati, senza sostituire il comportamento con mock
+dell'algoritmo. Il rerun usa un processo e database diversi da quelli della
+suite completa del Coordinator, senza interferire col suo engine.
+
+P4 importa la pagina reale e mocka solo API/navigation e confini esterni.
+Verifica URL/paginazione, selezione/draft, filtri locali/backend, token assente,
+ordine creazione report→collegamento→refresh, busy durante promise pendenti,
+failure parziali e retry. Il contratto props di accesso è verificato, senza
+spacciarlo per enforcement autorizzativo live. I wizard non caratterizzati
+rimangono esplicitamente fuori dalla prontezza runtime.
+
+P5 importa la pagina reale e verifica caricamento/autorizzazione, modalità
+lettura/modifica, payload e fallback di salvataggio, errori API, identità/token
+delegati alle sezioni e comportamento persona/azienda. Le sezioni figlie mockate
+non sono dichiarate coperte. Documenti, preview e comandi NAS/race restano
+responsabilità non ancora caratterizzate al 100%.
+
+### Verifiche nel checkout integration
+
+- P3: originali + nuovi **50 PASS**, zero skip; JSON indipendente
+  `/tmp/gaia-integration-p3-coverage.json` conferma 600/688 statement e
+  253/332 branch (83,63% combinata), quattro esclusioni legacy invariate.
+  Il comando pytest con reporting coverage passa; ciò **non è PASS del gate
+  coverage100%**, che resta non raggiunto e blocca il refactor runtime.
+- P4: nuova suite + utility originale **116 PASS**, due file, zero skip;
+  `/tmp/gaia-integration-p4-tests.log`.
+- P5: nuova suite **21 PASS**, un file, zero skip;
+  `/tmp/gaia-integration-p5-tests.log`.
+- Ruff del nuovo test backend PASS; ESLint dei due test frontend PASS, nessun
+  warning/error nel log `/tmp/gaia-integration-gap-eslint.log`.
+- Ratchet completo dopo P3 e dopo P4 **PASS, zero finding**, entrambi contro
+  `55a1b1d35911451e018b662c2acc450bf5994ea2`. Log
+  `/tmp/gaia-integration-p3-ratchet-2026-10-08.log` e
+  `/tmp/gaia-integration-p4-ratchet-2026-10-08.log`.
+- Ratchet completo dopo P5 **PASS, zero finding**, stessa baseline autorevole;
+  `/tmp/gaia-integration-p5-ratchet-2026-10-08.log`.
+- Typecheck finale dopo i tre cherry-pick PASS, smoke finale **18 PASS**,
+  zero skipped; `/tmp/gaia-integration-gap-typecheck.log` e
+  `/tmp/gaia-integration-gap-smoke.log`.
+- Diff check PASS; nessun diff runtime introdotto dopo `72228cce` e baseline/
+  tooling invariati contro main. Working tree contiene soltanto gli aggiornamenti
+  di questo report e registro prima del commit documentale.
+
+I JSON coverage dei candidati P4/P5 sono stati controllati direttamente e
+confermano i gap full-file: P4 380/643 statement, 261/645 branch; P5 209/576
+statement, 229/610 branch. Non sono rieseguiti qui con gate abbassati: sono
+evidenze della readiness insufficiente, non copertura conforme. Tutti i tre
+runtime restano byte-identici rispetto al checkpoint P1/P6 precedente.
+
+Registro ownership integration sincronizzato dalla copia aggiornata dal
+Coordinator nel checkout principale, senza scrivere quel checkout. P1/P6
+MERGED, P2–P5 runtime BLOCKED; B4 Network e B5 Wiki ACTIVE in worktree isolate,
+B3 Terreni/B6 Bonifica BLOCKED secondo le misure di readiness. Le integrazioni
+test-only sono esplicitamente distinte dagli stati dei refactor runtime.
+Nessun runtime Wave 2 viene integrato da questo follow-up.
+
+**Checkpoint test-only GREEN**: review, test pertinenti e tre ratchet sequenziali
+completati. Questo esito non supera i gate coverage mancanti dei runtime né
+certifica le suite finali della campagna. La suite backend completa iniziale del
+Coordinator è ancora attiva (circa 72% nel log osservato) con almeno una failure
+già visibile; nessun tentativo di correggere quella failure non correlata.

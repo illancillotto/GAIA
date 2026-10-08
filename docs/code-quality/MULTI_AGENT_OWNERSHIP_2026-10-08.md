@@ -12,15 +12,19 @@ Baseline, soglie, esclusioni e tooling complexity sono read-only.
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | Coordinator | Governance | Questo registro, progress e report finale | Sequencing e gate | GAIA | main | ACTIVE |
-| BASELINE | Provenance | reports/code-quality/BASELINE_PROVENANCE_2026-10-08.md | 30 divergenze; sorgenti read-only | GAIA-campaign-20261008-baseline | refactor/complexity-baseline-provenance | ACTIVE |
-| P1 | Presenze UI | frontend/src/app/presenze/giornaliere/page.tsx; helper locali nuovi e test Presenze esclusivi | Filtri/selezione/transizioni: una responsabilità; target cognitiva <250 o -50% | GAIA-campaign-20261008-presenze | refactor/complexity-presenze-ui | ACTIVE |
-| P2 | Capacitas UI | frontend/src/components/elaborazioni/capacitas-workspace.tsx; helper locali nuovi e test Capacitas esclusivi | Controller/modello batch coerente | GAIA-campaign-20261008-capacitas | refactor/complexity-capacitas-ui | ACTIVE |
-| P3 | Operazioni | backend/app/modules/operazioni/routes/analytics.py; helper analytics locali nuovi; backend/tests/test_operazioni_analytics.py e test nuovi esclusivi | fuel_analytics aggregazione; poi anomalies soltanto dopo gate | GAIA-campaign-20261008-analytics | refactor/complexity-operazioni-analytics | ACTIVE |
-| P4 | Catasto UI | frontend/src/app/catasto/anomalie/page.tsx; helper locali nuovi e test anomalie esclusivi | Modello lista/azioni coerente | GAIA-campaign-20261008-catasto-ui | refactor/complexity-catasto-anomalie-ui | PLANNED |
-| P5 | Utenze UI | frontend/src/app/utenze/[id]/page.tsx; helper locali nuovi e test detail esclusivi | Modello derivato/azioni dettaglio | GAIA-campaign-20261008-utenze-ui | refactor/complexity-utenze-detail-ui | PLANNED |
-| P6 | Elaborazioni UI | frontend/src/components/elaborazioni/settings-workspace.tsx; helper locali nuovi e test settings esclusivi | Validazione/configurazione coerente | GAIA-campaign-20261008-settings-ui | refactor/complexity-elaborazioni-settings-ui | ACTIVE |
-| INTEGRATION | Integration | Branch integration, report integration esclusivo; runtime read-only per review | Review e merge sequenziali di slice verdi | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | PLANNED |
+| BASELINE | Provenance | reports/code-quality/BASELINE_PROVENANCE_2026-10-08.md | 30 divergenze; sorgenti read-only | GAIA-campaign-20261008-baseline | refactor/complexity-baseline-provenance | MERGED |
+| P1 | Presenze UI | frontend/src/app/presenze/giornaliere/page.tsx; helper locali nuovi e test Presenze esclusivi | Consolidamento card anomalie; target estremo residuo | GAIA-campaign-20261008-presenze | refactor/complexity-presenze-ui | MERGED |
+| P2 | Capacitas UI | frontend/src/components/elaborazioni/capacitas-workspace.tsx; helper locali nuovi e test Capacitas esclusivi | Controller/modello batch coerente | GAIA-campaign-20261008-capacitas | refactor/complexity-capacitas-ui | BLOCKED |
+| P3 | Operazioni | backend/app/modules/operazioni/routes/analytics.py; helper analytics locali nuovi; backend/tests/test_operazioni_analytics.py e test nuovi esclusivi | fuel_analytics aggregazione; poi anomalies soltanto dopo gate | GAIA-campaign-20261008-analytics | refactor/complexity-operazioni-analytics | BLOCKED |
+| P4 | Catasto UI | frontend/src/app/catasto/anomalie/page.tsx; helper locali nuovi e test anomalie esclusivi | Runtime BLOCKED_COVERAGE; test-only pronto | GAIA-campaign-20261008-catasto-ui | refactor/complexity-catasto-anomalie-ui | BLOCKED |
+| P5 | Utenze UI | frontend/src/app/utenze/[id]/page.tsx; helper locali nuovi e test detail esclusivi | Runtime BLOCKED_COVERAGE; test-only pronto | GAIA-campaign-20261008-utenze-ui | refactor/complexity-utenze-detail-ui | BLOCKED |
+| P6 | Elaborazioni UI | frontend/src/components/elaborazioni/settings-workspace.tsx; helper locali nuovi e test settings esclusivi | Consolidamento credenziali HTTP/WebSocket | GAIA-campaign-20261008-settings-ui | refactor/complexity-elaborazioni-settings-ui | MERGED |
+| INTEGRATION | Integration | Branch integration, report integration esclusivo; runtime read-only per review | Review e merge sequenziali di slice verdi | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
 | FINAL | Verification | Report final verification esclusivo; runtime read-only | Suite e gate finali | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | PLANNED |
+| B4 | Network | backend/app/modules/network/router/helpers/traffic.py; backend/tests/test_network_traffic_campaign.py | Statistiche: normalizzazione bytes; readiness full-file 100% | GAIA-campaign-20261008-network | refactor/complexity-network-statistics | ACTIVE |
+| B5 | Wiki | backend/app/modules/wiki/services/conversation_metrics.py; backend/tests/test_wiki_metrics_campaign.py | Refresh metriche: caratterizzazione, poi una aggregazione locale | GAIA-campaign-20261008-wiki | refactor/complexity-wiki-metrics | ACTIVE |
+| B3 readiness | Capacitas Terreni | backend/app/services/elaborazioni_capacitas_terreni.py read-only | 130 test; coverage 76,98% statement / 62,95% branch, runtime non autorizzato | GAIA-campaign-20261008-terreni | refactor/complexity-capacitas-terreni | BLOCKED |
+| B6 readiness | Bonifica | backend/app/services/elaborazioni_bonifica_sync.py read-only | 14 test; coverage 34,34% statement / 28,13% branch, runtime non autorizzato | GAIA-campaign-20261008-bonifica | refactor/complexity-bonifica-orchestration | BLOCKED |
 
 Capacità disponibile: quattro agenti inclusa root. BASELINE parte prima;
 gli agenti successivi sono avviati in batch, massimo tre child simultanei.
@@ -94,6 +98,29 @@ dal brief corrente, esclusivamente nelle worktree/branch dello swarm.
   Ownership temporanea Coordinator fino al passaggio esplicito all'agent P3.
 - P6: readiness coverage delle tre suite settings/modal in corso dal Coordinator;
   nessuna modifica runtime prima del gate di caratterizzazione.
+- P6: readiness PASS, full-file statement472/branch682/function126/line418 al100%.
+- P3: readiness analytics 30 PASS, coverage full-file66,08% combinata,
+  statement494/688 e branch180/332; servono test aggiuntivi prima dell'integrazione.
+- P2: NO_CHANGE/BLOCKED_COVERAGE; runtime invariato. Commit60d44529 conserva
+  19test nuovi significativi; coverage workspace35,58%statement/28,31%branch.
+- P4: suite utility esistente non importa la pagina: coverage pagina0%.
+  Agent P2 riassegnato a P4 per UI characterization; runtime solo con full-file100%.
+- P3: commit48de12ef test-only; 50PASS e full-file600/688statement253/332branch.
+  Gate100%FAILesplicito; runtime invariato, non integrabile come refactor.
 - Provenance preliminare: 30 valori baseline corrispondono alla sorgente storica;
   regressioni metriche runtime e divergenze test introdotte in commit successivi,
   non dal lavoro corrente. Il report BASELINE conserva commit e dettagli.
+- Symlink dipendenze dei worktree esclusi tramite git common info/exclude locale,
+  non una exclusion dello scanner o una modifica versionata. Evita che il diff
+  tenti di leggere directory come file nei gate.
+- Checkpoint P1/P6 GREEN: 479 test e coverage full-file 100%; cognitive aggregata
+  -155, cyclomatic -111. Target estremo P1 non raggiunto, nessun claim -50%.
+- P4 e P5 test-only pronti alla review; coverage pagina rispettivamente
+  59,09%/40,46% e 36,28%/37,54% statement/branch. Runtime invariati.
+- B4 assegnato dopo checkpoint GREEN. La suite traffico raggiunge 283/283
+  statement e 92/92 branch con 19 test; autorizzata una slice di normalizzazione
+  locale, non il refactor monolitico di run_network_scan.
+- Follow-up integration test-only: P3 `5efac219`, P4 `a205a508`, P5 `71b817b9`
+  cherry-picked dopo review; ratchet PASS0 dopo ciascuno. Test pertinenti
+  50/116/21 PASS; runtime dei tre domini invariati e ancora BLOCKED_COVERAGE.
+  Nessuna riduzione metrica attribuita alle caratterizzazioni.
