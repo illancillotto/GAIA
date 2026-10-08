@@ -3,9 +3,9 @@
 ## Status
 
 **Scoped integration GREEN; global goal ACTIVE / INCOMPLETE.**
-Evidence cut-off updated: `2026-10-08 17:34 UTC` (19:34 Europe/Rome).
+Evidence cut-off updated: `2026-10-08 17:46 UTC` (19:46 Europe/Rome).
 R3 has real, modest reductions and zero change-ratchet regressions. The full
-backend suite remains RUNNING. Fresh R3 browser confirmation passes after an
+backend suite completed6608PASS449skip/exit0. Fresh R3 browser confirmation passes after an
 initial failed full run; the intermittent GIS risk is unresolved. This is an evidence
 checkpoint, not global campaign completion or authorization for another slice.
 
@@ -211,7 +211,7 @@ No threshold inflation, wider exclusions, baseline absorption or tooling edits.
 | Full frontend unit suite | 4099 PASS, 283 files, exit0 | Coordinator executed on frozen R3 UI; inspected `/tmp/gaia-r3-frontend-full-tests.log` |
 | Clean frontend build | PASS, exit0 | Coordinator session18097; `/tmp/gaia-r3-frontend-clean-build.log` |
 | Worker full suite | 778 PASS, 1 skip, 52 test-file executions, exit0 | Coordinator executed; independently summed `/tmp/gaia-r3-worker-tests2.log` |
-| Full backend suite | RUNNING, no PASS yet | Coordinator session30021, frozen0b1a0d37; `/tmp/gaia-r3-backend-full-tests.log` |
+| Full backend suite | 6608 PASS,449 skipped,2272 warnings,1554.96s,exit0 | Coordinator session30021 completed, frozen0b1a0d37 unchanged; `/tmp/gaia-r3-backend-full-tests.log` |
 | R3 browser/E2E initial full run | FAIL, exit1: 51 PASS / 7 skip / 1 failure | `/tmp/gaia-r3-e2e.{json,log}`; GIS timeout |
 | R3 unchanged GIS diagnostic | PASS, exit0: 1 PASS / 0 skip | `/tmp/gaia-r3-gis-diagnostic.{json,log}`; no test/runtime change |
 | R3 unchanged full confirmation | PASS, exit0: 52 PASS / 7 skip / 0 failure | `/tmp/gaia-r3-e2e-confirmation.{json,log}`; initial FAIL remains recorded |
