@@ -63,6 +63,19 @@ UI characterization test or a contribution to workspace coverage.
 
 ## Race-dependent modal arms remain unresolved
 
+Updated source `1d8c8411`, accepted as `b0a4ac2a`, supersedes the five-arm
+UNKNOWN statement below. Real native keyboard navigation reaches a background
+row's enabled Risolvi control, replaces the busy modal, then closes the new
+non-busy modal before the old API Promise settles. Six real-browser cases
+(normal/StrictMode × success/failure/rejection) and precise V8 range coverage
+prove null-arm execution at3214/3217/3220. These three defenses are necessary
+and must remain. Only3166/3206 are still UNKNOWN. Independently reproduced
+audit: `/tmp/gaia-modal-probe/coordinator-audit.log`, six witnesses/nine null
+executions. Official union coverage still903/929 until C12 is independently
+integrated; browser evidence is not added to Vitest counters. See
+`CAPACITAS_MODAL_REACHABILITY_2026-10-08.md`. Historical line-number spellings
+in the paragraph below do not replace current source locations.
+
 C4 sourcee9577559 adds an additional construction-impossible arm at2056:
 after `Array.isArray(job.payload_json?.items)` succeeds, the same plain JSON
 array is synchronously reread as `items?.length ?? 0`. Its length is defined,
