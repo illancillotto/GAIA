@@ -373,6 +373,9 @@ Refresh documentazione piattaforma verificato separatamente per risultati parzia
 Primo refresh piattaforma PASS: `chunk10/10 done`, nessun semantic-chunk failure,
 233 nodi/225 edge/55 community; token989329 input/37011 output, costo stimato
 Graphify$0,4549. Modello `gpt-reserve`, API locale caricata senza esporre credenziali.
+Refresh piattaforma conclusivo PASS: `chunk2/2 done`, nessun semantic-chunk failure,
+131file cached/20riestratti, 262nodi/247edge/63community; token148799input/4863output,
+costo stimato$0,0673. Evidenza `/tmp/gaia-campaign-graphify-platform-docs-final.log`.
 
 ## Risks
 
@@ -463,3 +466,8 @@ I report slice forniscono comandi coverage, matrice comportamenti e rischi resid
 I servizi E2E creati dalla campagna vengono fermati/rimossi alla consegna;
 le worktree e branch revisionabili vengono conservate. Nessun servizio concorrente
 o artefatto preesistente viene rimosso.
+Cleanup verificato: entrambi i container `gaia-complexity-e2e-*-20261008`,
+la rete internal della campagna e il relativo processo Next sono rimossi/fermati;
+porte8080/13000 libere, file ambiente sintetico eliminato. I servizi concorrenti
+release e gate-quality rimangono attivi. Working tree integration pulito alla
+consegna; root registry sincronizzato senza alterare le modifiche altrui.
