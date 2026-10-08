@@ -8,7 +8,7 @@ Il turno precedente produceva progresso verificato; non dimostrava completamento
 
 Tre nuove slice integrate e revisionate indipendentemente a `c7d79229`:
 Presenze `fbd4172d`, Settings `b0dd9228`, fuel `0b1a0d37`.
-617 test mirati PASS, cinque runtime full-file statement/branch100%, ratchet0
+617 test mirati PASS, sei runtime full-file statement/branch100%, ratchet0
 dopo ogni integrazione. Cognitive aggregata Round3−166, cyclomatic−60,
 error−5, warning0, LOC+27 dichiarate. Cumulativo clean55a:1938error,
 2749warning,4687finding; cognitive81400,cyclomatic83377. Coda7>300/17>200/

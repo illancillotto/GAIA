@@ -17,7 +17,7 @@ prerequisiti test-only e obiettivi strategici ancora aperti.
 ### Aggiornamento autorevole Round3
 
 Independent integration `c7d79229`: Presenze`fbd4172d`, Settings`b0dd9228`,
-fuel`0b1a0d37`.617focusedPASS, cinque runtime full-file100%, ratchetmain0
+fuel`0b1a0d37`.617focusedPASS, sei runtime full-file100%, ratchetmain0
 dopo ogni cherry-pick; protected baseline/soglie/esclusioni/tooling immutati.
 Round3 real aggregate delta−166cognitive/−60cyclomatic/−5error/0warning,
 LOC+27. Non dedurre il miglioramento dal solo callable principale.

@@ -56,7 +56,7 @@ blocco verificato e prima di chiudere un goal.
 
 - Round3 integrato e review indipendenteGREEN: Presenze`fbd4172d`,
   Settings`b0dd9228`, fuel`0b1a0d37`, report`c7d79229`.617testPASS,
-  cinque runtime full-file100%, ratchet0 dopo ogni integrazione.
+  sei runtime full-file100%, ratchet0 dopo ogni integrazione.
   Cognitive aggregata−166/cyclomatic−60/error−5/warning0/LOC+27.
 - Scansione globale R3:1668file20280callable1938error2749warning4687finding,
   cognitive81400/cyclomatic83377. Cumulativo clean55a−531cognitive/−289cyc,

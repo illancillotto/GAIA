@@ -313,7 +313,7 @@ new helper finding or rejected regression. Runtime frozen at
 | P3 vehicle fuel model | 399825ab | 0b1a0d37 | IMPROVED |
 
 Total scoped postintegration tests **617 PASS**, zero skips (388+131+98);
-smoke 18 PASS separate, not double-counted. All five changed/new runtime files
+smoke 18 PASS separate, not double-counted. All six changed/new runtime files
 full-file statement/branch 100%, with existing analytics exclusions disclosed.
 
 | Aggregate delta versus Round2 in the three disjoint reviewed scopes | Delta |
