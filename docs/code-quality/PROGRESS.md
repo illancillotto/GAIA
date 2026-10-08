@@ -2,6 +2,18 @@
 
 ## 2026-10-08 — Capacitas test-only checkpoint, missione aperta
 
+- Integration2 report99baa6c0: C8b994dcf1/C18862d20d/C2aedba523c/
+  C3cfc5025f accepted after independentreview.155testsPASS0skip, ratchet0
+  aftereach, explicit4specTypeScript/scopedlintPASS. Fullfile678/857s,
+  640/929arms,172/251f,609/748lines: gate100FAIL, principal472 unchanged.
+  Two impossible responseID fixtures rejected; corrected atomic finaltree
+  accepted, no invalid intermediate integration. Source report preserves failure.
+- Defensivebranchprovenance report2563f60f: nine construction-impossible
+  arms plus six installedSheetJS0.20.3 contract-impossible arms, no exemptions.
+  Five modalrace nullarms remainUNKNOWN. Reader guards unchanged; no runtime
+  cleanup authorized by provenance. Graphifyplatformdocs last run313nodes/
+  315edges71communities, chunk1/1done/no semanticfailure; later docs refresh due.
+
 - Independent review/integrationC6/C7/C0 report`e6f659dd`: source7bc9ec17/
   bc312caf/14615c27 integrateda7e21e9e/c8ba3972/b52ab0af.67testPASS0skip,
   ratchet0 aftereach, scopedlint and explicit new-specTypeScriptPASS.
