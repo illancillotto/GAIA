@@ -261,6 +261,13 @@ def _traffic_map_to_items(
     return items
 
 
+def _parse_event_byte_count(parsed: dict[str, Any], field: str) -> int:
+    try:
+        return max(int(str(parsed.get(field, 0)).strip()), 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _build_network_statistics_summary(db: Session, *, window_hours: int = 24) -> NetworkStatisticsSummary:
     now = datetime.now(UTC)
     window_start = now - timedelta(hours=window_hours)
@@ -360,14 +367,8 @@ def _build_network_statistics_summary(db: Session, *, window_hours: int = 24) ->
         source_device = device_by_ip.get(src_ip or "")
         source_label = None
         if source_device and source_device.lifecycle_state == "active":
-            try:
-                bytes_sent = max(int(str(parsed.get("bytes_sent", 0)).strip()), 0)
-            except (TypeError, ValueError):
-                bytes_sent = 0
-            try:
-                bytes_received = max(int(str(parsed.get("bytes_received", 0)).strip()), 0)
-            except (TypeError, ValueError):
-                bytes_received = 0
+            bytes_sent = _parse_event_byte_count(parsed, "bytes_sent")
+            bytes_received = _parse_event_byte_count(parsed, "bytes_received")
             if src_ip == source_device.ip_address:
                 bytes_in, bytes_out = bytes_received, bytes_sent
             elif dst_ip == source_device.ip_address:
@@ -375,14 +376,8 @@ def _build_network_statistics_summary(db: Session, *, window_hours: int = 24) ->
             source_label = _resolve_device_label(source_device)[0]
             source_devices_with_traffic.add(source_device.id)
         else:
-            try:
-                bytes_out = max(int(str(parsed.get("bytes_sent", 0)).strip()), 0)
-            except (TypeError, ValueError):
-                bytes_out = 0
-            try:
-                bytes_in = max(int(str(parsed.get("bytes_received", 0)).strip()), 0)
-            except (TypeError, ValueError):
-                bytes_in = 0
+            bytes_out = _parse_event_byte_count(parsed, "bytes_sent")
+            bytes_in = _parse_event_byte_count(parsed, "bytes_received")
 
         total_bytes_in += bytes_in
         total_bytes_out += bytes_out
