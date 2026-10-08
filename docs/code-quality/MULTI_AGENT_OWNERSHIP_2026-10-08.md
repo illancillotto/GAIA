@@ -11,7 +11,7 @@ Baseline, soglie, esclusioni e tooling complexity sono read-only.
 
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| Coordinator | Governance | Questo registro, progress e report finale | Sequencing e gate | GAIA | main | ACTIVE |
+| Coordinator | Governance | Questo registro, progress e report finale | Sequencing e gate conclusi; main preservata | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | MERGED |
 | BASELINE | Provenance | reports/code-quality/BASELINE_PROVENANCE_2026-10-08.md | 30 divergenze; sorgenti read-only | GAIA-campaign-20261008-baseline | refactor/complexity-baseline-provenance | MERGED |
 | P1 | Presenze UI | frontend/src/app/presenze/giornaliere/page.tsx; helper locali nuovi e test Presenze esclusivi | Consolidamento card anomalie; target estremo residuo | GAIA-campaign-20261008-presenze | refactor/complexity-presenze-ui | MERGED |
 | P2 | Capacitas UI | frontend/src/components/elaborazioni/capacitas-workspace.tsx; helper locali nuovi e test Capacitas esclusivi | Controller/modello batch coerente | GAIA-campaign-20261008-capacitas | refactor/complexity-capacitas-ui | BLOCKED |
@@ -19,15 +19,15 @@ Baseline, soglie, esclusioni e tooling complexity sono read-only.
 | P4 | Catasto UI | frontend/src/app/catasto/anomalie/page.tsx; helper locali nuovi e test anomalie esclusivi | Runtime BLOCKED_COVERAGE; test-only pronto | GAIA-campaign-20261008-catasto-ui | refactor/complexity-catasto-anomalie-ui | BLOCKED |
 | P5 | Utenze UI | frontend/src/app/utenze/[id]/page.tsx; helper locali nuovi e test detail esclusivi | Runtime BLOCKED_COVERAGE; test-only pronto | GAIA-campaign-20261008-utenze-ui | refactor/complexity-utenze-detail-ui | BLOCKED |
 | P6 | Elaborazioni UI | frontend/src/components/elaborazioni/settings-workspace.tsx; helper locali nuovi e test settings esclusivi | Consolidamento credenziali HTTP/WebSocket | GAIA-campaign-20261008-settings-ui | refactor/complexity-elaborazioni-settings-ui | MERGED |
-| INTEGRATION (baseline, poi capacitas_ui per C2) | Integration | Branch integration, report integration esclusivo; runtime read-only per review | Review e merge sequenziali di slice verdi | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
-| FINAL | Verification | reports/code-quality/FINAL_VERIFICATION_2026-10-08.md; runtime read-only | Suite e gate finali, nessuna modifica a runtime/registry/progress | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
+| INTEGRATION (baseline, poi capacitas_ui per C2) | Integration | Branch integration, report integration esclusivo; runtime read-only per review | Cinque slice runtime e test-only integrati, overlap zero | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | MERGED |
+| FINAL | Verification | reports/code-quality/FINAL_VERIFICATION_2026-10-08.md; runtime read-only | Suite finali PASS con skip dichiarati; ratchet0/globalcheck30storici | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | MERGED |
 | B4 | Network | backend/app/modules/network/router/helpers/traffic.py; backend/tests/test_network_traffic_campaign.py | Statistiche: normalizzazione bytes; integrazione verificata nel checkpoint | GAIA-campaign-20261008-network | refactor/complexity-network-statistics | MERGED |
 | B5 | Wiki | backend/app/modules/wiki/services/conversation_metrics.py; backend/tests/test_wiki_metrics_campaign.py | Refresh eventi/ranking: integrazione verificata, full-file 100%, cognitive -37 | GAIA-campaign-20261008-wiki | refactor/complexity-wiki-metrics | MERGED |
 | B3 readiness | Capacitas Terreni | backend/app/services/elaborazioni_capacitas_terreni.py read-only | 130 test; coverage 76,98% statement / 62,95% branch, runtime non autorizzato | GAIA-campaign-20261008-terreni | refactor/complexity-capacitas-terreni | BLOCKED |
 | B6 readiness | Bonifica | backend/app/services/elaborazioni_bonifica_sync.py read-only | 14 test; coverage 34,34% statement / 28,13% branch, runtime non autorizzato | GAIA-campaign-20261008-bonifica | refactor/complexity-bonifica-orchestration | BLOCKED |
 | C1 readiness | Catasto backend | backend/app/modules/catasto/services/ade_wfs.py read-only; reports/code-quality/WAVE3_READINESS_2026-10-08.md | ADE WFS BLOCKED_COVERAGE: 8 skip PostGIS | GAIA-campaign-20261008-catasto-backend | refactor/complexity-catasto-ade-readiness | BLOCKED |
 | C2 | GIS frontend | frontend/src/app/catasto/gis/page.tsx; excel-references.ts locale; test GIS esclusivi; reports/code-quality/SLICE_C2_2026-10-08.md | Normalizzazione Excel: page334→317, aggregata621→574, full-file100% | GAIA-campaign-20261008-gis-readiness | refactor/complexity-gis-readiness | MERGED |
-| W4 readiness | Worker/altri domini | reports/code-quality/WAVE4_READINESS_2026-10-08.md; runtime read-only | Ranking e readiness worker da JSON suite completa; nessuna implementazione | GAIA-campaign-20261008-catasto-backend | refactor/complexity-catasto-ade-readiness | ACTIVE |
+| W4 readiness | Worker/altri domini | reports/code-quality/WAVE4_READINESS_2026-10-08.md; runtime read-only | Report-only integrato; cinque candidati worker100%, altri NOT_MEASURED | GAIA-campaign-20261008-catasto-backend | refactor/complexity-catasto-ade-readiness | MERGED |
 
 Capacità disponibile: quattro agenti inclusa root. BASELINE parte prima;
 gli agenti successivi sono avviati in batch, massimo tre child simultanei.
@@ -92,6 +92,13 @@ esistenti non vengono riutilizzate né integrate. Commit e merge sono autorizzat
 dal brief corrente, esclusivamente nelle worktree/branch dello swarm.
 
 ## Decisioni slice iniziali
+
+Chiusura: cinque slice runtime IMPROVED, sei file runtime full-file100%,
+ratchet finale PASS0. Error1956→1944/warning2758→2751; cognitive-264,
+cyclomatic-174. Backend6560PASS449skip, frontend4059PASS, worker778PASS1skip,
+E2E52PASS7skip. Nessuna ulteriore ownership runtime attiva. Gli stati BLOCKED
+si riferiscono al refactoring runtime, anche quando characterization/report
+sono già integrati. Il target strategico della coda estrema resta aperto.
 
 - P1: characterization esistente full-file 100% PASS. Prima slice approvata:
   consolidamento duplicazione card anomalie nelle due viste, presenter sotto

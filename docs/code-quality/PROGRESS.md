@@ -31,6 +31,15 @@
 - Readiness ADE WFS bloccata:8test PostGIS skipped, statement20,15%/branch0%.
   Readiness worker cinque hotspot full-file100% verificata, ma runtime invariato;
   gli altri domini Wave4 restano NOT_MEASURED. Nessun refactor portali avviato.
+- Verifica finale sul runtime congelato: error1956→1944, warning2758→2751,
+  finding4714→4695; cognitive aggregata-264, cyclomatic-174. Ratchet PASS0;
+  complexity-check conserva30divergenze storiche, baseline byte-identica.
+- Suite finale backend6560PASS449skip, frontend4059PASS/281file, worker778PASS
+  1skip, tooling169PASS; clean build PASS, browser seriale52PASS7skip.
+  Tentativi iniziali falliti e cause restano documentati, non contati PASS.
+- Cinque slice revisionabili consegnate, tutti i sei file runtime toccati con
+  full-file100%; obiettivo strategico/P1-50% non raggiunto. Non estendere il
+  claim alle dipendenze live, agli skip o all'intera coverage repository.
 - P2/P3/P4/P5: caratterizzazione test-only integrata; runtime invariato e
   `BLOCKED_COVERAGE`. Capacitas Terreni e Bonifica non autorizzati al runtime
   per coverage insufficiente; Ruolo tributi bloccato dal lavoro concorrente.
