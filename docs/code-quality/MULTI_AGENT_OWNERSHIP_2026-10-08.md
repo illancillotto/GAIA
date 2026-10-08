@@ -26,6 +26,15 @@ i vincoli, inclusi full-file100%, equivalenza, ratchet e baseline read-only.
 | R2 Integration (baseline) | Integration | reports/code-quality/INTEGRATION_ROUND2_2026-10-08.md; integration runtime only through approved cherry-pick | Independent review, one ready slice at a time, ratchet after each integration | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | PLANNED |
 
 Ownership R1 conclusa: gli owner delle righe storiche non scrivono i percorsi R2.
+
+P3 prerequisite review: 79 real-database characterization cases PASS and
+runtime full-file670/670 statement310/310 branch after invariant guard cleanup.
+Coordinator authorizes minimal Ruff closure in this same owned file because
+CODE_STYLE requires full-file lint for modified Python: local renames/import
+cleanup, UTC alias, redundant parentheses/f-string/cast only when equivalent,
+loop-closure binding preserving synchronous sorting, en-dash escaped without
+changing response text. No ignore, broad format, new feature or aggregation
+refactor. Stop and reject runtime on behavioral ambiguity or ratchet regression.
 Integration e Final Verification vengono assegnati dopo slice READY_FOR_REVIEW,
 non scrivono nei file runtime degli agenti attivi. Stop per singola unità,
 non un falso completamento del goal globale. Nessuna nuova delega shared.
