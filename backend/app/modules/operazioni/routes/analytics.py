@@ -25,6 +25,10 @@ from app.modules.operazioni.models.vehicles import (
     WCRefuelEvent,
 )
 from app.modules.operazioni.models.wc_operator import WCOperator
+from app.modules.operazioni.routes._fuel_vehicle_metrics import (
+    _judgement_from_coeff,
+    vehicle_fuel_consumption,
+)
 from app.schemas.operazioni_analytics import (
     AnalyticsSummary,
     AnomaliesResponse,
@@ -451,15 +455,6 @@ def fuel_analytics(
             return 15.0
         return None
 
-    def _judgement_from_coeff(coeff: float | None) -> str | None:
-        if coeff is None:
-            return None
-        if coeff <= 1.10:
-            return "OK"
-        if coeff <= 1.30:
-            return "Alto"
-        return "Molto alto"
-
     # Time series
     liters_by_period: dict[str, float] = defaultdict(float)
     cost_by_period: dict[str, float] = defaultdict(float)
@@ -496,8 +491,17 @@ def fuel_analytics(
         logs_by_vehicle[log.vehicle_id].append(log)
 
     top_vehicles = sorted(liters_by_vehicle, key=liters_by_vehicle.__getitem__, reverse=True)
-    top_vehicles_out = [
-        FuelTopItem(
+    top_vehicles_out = []
+    for vid in top_vehicles:
+        vehicle_logs = logs_by_vehicle[vid]
+        positive_liters = sum(max(0.0, _safe_float(log.liters)) for log in vehicle_logs)
+        consumption = vehicle_fuel_consumption(
+            positive_liters,
+            km_by_vehicle_from_sessions.get(vid),
+            _target_consumption_l_per_100km(vehicles_map.get(vid)),
+        )
+        avg_price, avg_refuel_cost, avg_liters = _metrics_for_logs(vehicle_logs)
+        top_vehicles_out.append(FuelTopItem(
             id=str(vid),
             label=getattr(vehicles_map.get(vid), "plate_number", None)
                   or getattr(vehicles_map.get(vid), "name", None)
@@ -506,54 +510,15 @@ def fuel_analytics(
             total_cost=round(cost_by_vehicle[vid], 2),
             refuel_count=count_by_vehicle[vid],
             total_km=round(km_by_vehicle_from_sessions[vid], 1) if vid in km_by_vehicle_from_sessions else None,
-            avg_consumption_l_per_100km=(
-                round(
-                    (
-                        sum(max(0.0, _safe_float(log.liters)) for log in logs_by_vehicle[vid])
-                        / km_by_vehicle_from_sessions[vid]
-                        * 100
-                    ),
-                    2,
-                )
-                if km_by_vehicle_from_sessions.get(vid, 0.0) > 0
-                and sum(max(0.0, _safe_float(log.liters)) for log in logs_by_vehicle[vid]) > 0
-                else None
-            ),
-            consumption_coefficient=(
-                (
-                    (
-                        sum(max(0.0, _safe_float(log.liters)) for log in logs_by_vehicle[vid])
-                        / km_by_vehicle_from_sessions[vid]
-                        * 100
-                    )
-                    / _target_consumption_l_per_100km(vehicles_map.get(vid))
-                )
-                if km_by_vehicle_from_sessions.get(vid, 0.0) > 0
-                and _target_consumption_l_per_100km(vehicles_map.get(vid)) is not None
-                and sum(max(0.0, _safe_float(log.liters)) for log in logs_by_vehicle[vid]) > 0
-                else None
-            ),
-            consumption_judgement=None,
-            avg_price_per_liter=(
-                (lambda m: round(m, 4) if m is not None else None)(_metrics_for_logs(logs_by_vehicle[vid])[0])
-            ),
-            avg_refuel_cost=(
-                (lambda m: round(m, 2) if m is not None else None)(_metrics_for_logs(logs_by_vehicle[vid])[1])
-            ),
-            avg_liters_per_refuel=(
-                (lambda m: round(m, 2) if m is not None else None)(_metrics_for_logs(logs_by_vehicle[vid])[2])
-            ),
-            top_stations=_top_stations_for_logs(logs_by_vehicle[vid], limit=5),
+            avg_consumption_l_per_100km=consumption.consumption,
+            consumption_coefficient=consumption.coefficient,
+            consumption_judgement=consumption.judgement,
+            avg_price_per_liter=round(avg_price, 4) if avg_price is not None else None,
+            avg_refuel_cost=round(avg_refuel_cost, 2) if avg_refuel_cost is not None else None,
+            avg_liters_per_refuel=round(avg_liters, 2) if avg_liters is not None else None,
+            top_stations=_top_stations_for_logs(vehicle_logs, limit=5),
             related=[],
-        )
-        for vid in top_vehicles
-    ]
-
-    # fill judgement (needs coefficient computed)
-    for item in top_vehicles_out:
-        item.consumption_judgement = _judgement_from_coeff(item.consumption_coefficient)
-        if item.consumption_coefficient is not None:
-            item.consumption_coefficient = round(float(item.consumption_coefficient), 3)
+        ))
 
     # Top operators — primary key is wc_operator_id (UUID); falls back to
     # operator_name string for logs not yet associated to a WCOperator.
