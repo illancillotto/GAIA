@@ -418,3 +418,130 @@ APP_ENV=test DATABASE_URL=sqlite:////tmp/gaia-integration-b4-api.db \
 Nessuna suite globale è duplicata dall'Integration Agent; i rispettivi esiti
 sono di responsabilità del verifier. B5 rimane isolata, non viene cherry-picked
 prima della review e dei suoi gate completi.
+
+## Follow-up Wave 2 — B5 Wiki conversation metrics
+
+Review indipendente approva il candidato
+`4df202e70ddb74a0a4ced0a0a9dcaa86105b0487`, integrato come
+`6ee6fdf8` sulla branch della campagna dopo HEAD iniziale
+`04860439256853af4b346fc2e46af87f8a44a5ec`. Merge-base invariato
+`55a1b1d35911451e018b662c2acc450bf5994ea2`.
+File esclusivi: servizio conversation metrics, nuovo test campaign Wiki e report
+B5. Nessun overlap con B4, MCP, orchestrator o file condivisi. Nessun altro
+runtime modificato da questa integrazione.
+
+### Review di invarianti
+
+- Query SQL, filtri, DELETE limitato alle date, SELECT degli eventi e relativo
+  ordinamento ascendente sono invariati. Advisory lock transazionale rimane
+  prima del DELETE; nessuna chiamata DB aggiunta o anticipata.
+- Governance e relativo eventuale commit anticipato restano nel punto originale.
+  Commit finale, responsabilità caller del rollback e propagazione delle
+  eccezioni non cambiano. Nessun nuovo rollback automatico o transazione.
+- Nel ciclo eventi la guard esclude i non-status dopo il conteggio assignment.
+  Le due tipologie sono mutualmente esclusive sui record persistiti: non cambiano
+  conteggi, ordine dei timestamp, continue per null, break per futuro, né campioni
+  di primo/ultimo review o waiting. I test includono un evento estraneo con campi
+  from/to status valorizzati per verificare che resti escluso.
+- Il ramo ranking status rimosso era identico al ramo generale: la somma
+  open/in_review/waiting_user/resolved rimane uguale; review_reason mantiene
+  needs_review e i closed non sono sommati due volte. Tie-break count/key invariato.
+- Gli alias locali delle liste non avevano altre utilizzazioni: accessi diretti
+  preservano la stessa lista e append nello stesso punto. Nessun nuovo callable,
+  wrapper o trasferimento di complessità.
+- `round(float)` senza ndigits restituisce già int in Python; i nove `int`
+  ridondanti rimossi non cambiano il valore delle divisioni numeriche builtin
+  del servizio, inclusi half-to-even e clamp zero. Import inutilizzato e ordine
+  import sistemati secondo Ruff; nessuna nuova dipendenza.
+
+Caratterizzazione significativa: database SQLite con tabelle reali per snapshot,
+eventi/audit/governance e prove di DELETE limitato, idempotenza, ranking, date
+inclusive, medie, thread distinti e rollback dopo commit fallito. Mock limitati
+ai confini PostgreSQL/advisory e alle sorgenti null non persistibili. La coverage
+non viene ottenuta duplicando l'algoritmo nei test. Nessun test preesistente
+rimosso, indebolito o skipped; non si dichiara test concorrente del lock su un
+server PostgreSQL reale.
+
+### Metriche indipendenti
+
+Report AST integration `/tmp/gaia-integration-b5-complexity.json` e `.md`:
+record file/callable identici al JSON dell'owner approvato.
+
+| Metrica | Prima | Dopo | Delta |
+| --- | ---: | ---: | ---: |
+| Refresh cognitive | 188 | 178 | -10 |
+| Refresh cyclomatic | 49 | 49 | 0 |
+| Refresh nesting | 7 | 6 | -1 |
+| Refresh LOC | 155 | 153 | -2 |
+| Ranking cognitive | 50 | 23 | -27 |
+| Ranking cyclomatic | 22 | 13 | -9 |
+| Ranking nesting | 3 | 2 | -1 |
+| Ranking LOC | 25 | 23 | -2 |
+| Cognitive file sum | 312 | 275 | -37 |
+| Cyclomatic file sum | 145 | 136 | -9 |
+| Decisioni `sum(cyclomatic-1)` | 131 | 122 | -9 |
+| Callable count | 14 | 14 | 0 |
+| Effective file LOC | 496 | 498 | +2 |
+| Error / warning finding | 10/4 | 8/6 | -2/+2 |
+
+Il file cresce di due LOC per gli import multiline richiesti dal ratchet stile:
+resta sotto warning500, senza nuova violation. Due finding error del ranking
+diventano warning; il totale finding14 non cambia. Cognitive, cyclomatic e
+nesting diminuiscono senza move o nuovi helper: **IMPROVED**. Il refresh178/
+nesting6 resta debito elevato, non si dichiara risolta l'intera responsabilità.
+
+Aggregato quattro runtime integrati P1/P6/B4/B5: cognitive2882→2665
+(-217; -7,53%), cyclomatic2541→2416 (-125; -4,92%), file LOC5848→5810
+(-38; -0,65%), error53→44 (-9), warning53→45 (-8), finding106→89 (-17).
+Sono delta scoped sullo stesso snapshot committed, non delta globali né
+misure di problemi indipendenti. Le caratterizzazioni test-only non aggiungono
+riduzioni runtime al conteggio.
+
+### Gate integration Wiki
+
+- Suite campaign mirata **15 PASS**, zero skipped:
+  `/tmp/gaia-integration-b5-tests.log`.
+- Coverage full-file **265/265 statement e102/102 branch**, zero esclusioni,
+  missing o partial branch; `/tmp/gaia-integration-b5-coverage.json` verificato
+  direttamente. `coverage report --fail-under=100` PASS.
+- Test endpoint summary e series originale **1 PASS**, zero skipped;
+  filtro seleziona il test che verifica entrambi gli endpoint, non tutta la suite
+  chat API. `/tmp/gaia-integration-b5-api-tests.log`; warning JWT legacy conservati.
+- Ruff del servizio e nuovo test PASS; format-check nuovo test PASS.
+- Diff-check, matching delle metriche e integrità baseline/tooling PASS.
+- Ratchet completo post-integrazione **PASS, zero finding**, baseline
+  `55a1b1d35911451e018b662c2acc450bf5994ea2`;
+  `/tmp/gaia-integration-b5-ratchet.log`.
+
+**Checkpoint B5 GREEN / GO_FINAL_GATE**: tutti i candidati runtime ammessi sono
+integrati, con review, test pertinenti, coverage full-file100% e ratchet completo
+conformi. Il registro B5 è MERGED. L'ownership scrittura integration è restituita
+al Coordinator/verifier; non si avviano ulteriori slice da questo checkpoint.
+Questo esito non rende verdi suite globali non completate o failure preesistenti.
+
+La suite completa locale owner107 PASS resta evidenza distinta del candidato;
+non viene rieseguita dall'Integration Agent per duplicare la verifica globale.
+Graphify Wiki del candidato è aggiornato col target Make dedicato, output
+ignorato. L'integration mantiene lo stesso blob runtime approvato:
+SHA-256 `56ff6500bfb402a93ce3d2ffd8fa428b80852dd111b67b6ae995f15c973c954e`.
+
+Comandi mirati dal backend:
+
+```bash
+APP_ENV=test DATABASE_URL=sqlite:////tmp/gaia-integration-b5.db \
+  COVERAGE_FILE=/tmp/gaia-integration-b5.coverage \
+  .venv/bin/python -m coverage run --branch --source=app/modules/wiki/services \
+  -m pytest -q tests/test_wiki_metrics_campaign.py \
+  -o cache_dir=/tmp/gaia-integration-b5-cache
+.venv/bin/python -m coverage json --data-file=/tmp/gaia-integration-b5.coverage \
+  --include='*/conversation_metrics.py' -o /tmp/gaia-integration-b5-coverage.json
+.venv/bin/python -m coverage report --data-file=/tmp/gaia-integration-b5.coverage \
+  --include='*/conversation_metrics.py' --fail-under=100
+APP_ENV=test DATABASE_URL=sqlite:////tmp/gaia-integration-b5-api.db \
+  .venv/bin/python -m pytest -q tests/test_wiki_chat_api.py \
+  -k 'metrics_summary or metrics_series' \
+  -o cache_dir=/tmp/gaia-integration-b5-api-cache
+```
+
+Nessuna modifica a PROGRESS, report finale, main, baseline, soglie o esclusioni.
+Suite globali e certificazione finale rimangono affidate al verifier.
