@@ -4,12 +4,18 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
-from sqlalchemy import delete, desc, func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.datetime_compat import UTC
-from app.modules.wiki.models import WikiConversation, WikiConversationDailyMetric, WikiConversationEvent
-from app.modules.wiki.services.conversation_governance import get_or_create_wiki_conversation_governance_config
+from app.modules.wiki.models import (
+    WikiConversation,
+    WikiConversationDailyMetric,
+    WikiConversationEvent,
+)
+from app.modules.wiki.services.conversation_governance import (
+    get_or_create_wiki_conversation_governance_config,
+)
 from app.modules.wiki.services.conversations import (
     _build_conversation_audit_stats,
     _derive_review_reason_with_config,
@@ -83,7 +89,7 @@ class WikiConversationMetricsSeriesPointReadModel:
 def _average_hours(values: list[int]) -> int:
     if not values:
         return 0
-    return int(round(sum(values) / len(values)))
+    return round(sum(values) / len(values))
 
 
 def _to_utc(dt: datetime | None) -> datetime | None:
@@ -144,7 +150,7 @@ def _hours_between(start: datetime | None, end: datetime | None) -> int:
     end = _to_utc(end)
     if start is None or end is None:
         return 0
-    return max(int(round((end - start).total_seconds() / 3600)), 0)
+    return max(round((end - start).total_seconds() / 3600), 0)
 
 
 def refresh_wiki_conversation_daily_metrics(
@@ -239,29 +245,27 @@ def refresh_wiki_conversation_daily_metrics(
                         continue
                     if event_created_at > day_end:
                         break
-                    if event.event_type == "status_changed":
-                        if event.to_status == "in_review":
-                            if open_review_started_at is None:
-                                open_review_started_at = event_created_at
-                            latest_in_review_started_at = event_created_at
-                            if day_start <= event_created_at <= day_end:
-                                bucket["review_entered_count"] += 1
-                        if event.from_status == "resolved" and event.to_status == "open" and day_start <= event_created_at <= day_end:
-                            bucket["reopened_count"] += 1
-                        if event.to_status == "waiting_user":
-                            waiting_started_at = event_created_at
-                        elif event.from_status == "waiting_user" and waiting_started_at is not None:
-                            cast_waiting = bucket["waiting_user_samples"]
-                            cast_waiting.append(_hours_between(waiting_started_at, event_created_at))
-                            waiting_started_at = None
-                        if event.to_status == "resolved" and latest_in_review_started_at is not None:
-                            cast_review = bucket["review_to_resolve_samples"]
-                            cast_review.append(_hours_between(latest_in_review_started_at, event_created_at))
                     if event.event_type == "assignment_changed" and day_start <= event_created_at <= day_end:
                         bucket["reassigned_count"] += 1
+                    if event.event_type != "status_changed":
+                        continue
+                    if event.to_status == "in_review":
+                        if open_review_started_at is None:
+                            open_review_started_at = event_created_at
+                        latest_in_review_started_at = event_created_at
+                        if day_start <= event_created_at <= day_end:
+                            bucket["review_entered_count"] += 1
+                    if event.from_status == "resolved" and event.to_status == "open" and day_start <= event_created_at <= day_end:
+                        bucket["reopened_count"] += 1
+                    if event.to_status == "waiting_user":
+                        waiting_started_at = event_created_at
+                    elif event.from_status == "waiting_user" and waiting_started_at is not None:
+                        bucket["waiting_user_samples"].append(_hours_between(waiting_started_at, event_created_at))
+                        waiting_started_at = None
+                    if event.to_status == "resolved" and latest_in_review_started_at is not None:
+                        bucket["review_to_resolve_samples"].append(_hours_between(latest_in_review_started_at, event_created_at))
                 if open_review_started_at is not None:
-                    cast_open_review = bucket["open_to_review_samples"]
-                    cast_open_review.append(_hours_between(created_at, open_review_started_at))
+                    bucket["open_to_review_samples"].append(_hours_between(created_at, open_review_started_at))
 
                 is_visible_in_snapshot = resolved_at is None or resolved_at > day_end or conversation.status == "resolved"
                 if not is_visible_in_snapshot:
@@ -299,8 +303,8 @@ def refresh_wiki_conversation_daily_metrics(
                         review_entered_count=bucket["review_entered_count"],
                         reassigned_count=bucket["reassigned_count"],
                         reopened_count=bucket["reopened_count"],
-                        avg_time_to_review_hours=int(round(bucket["review_hours_total"] / bucket["review_hours_samples"])) if bucket["review_hours_samples"] else 0,
-                        avg_time_to_resolve_hours=int(round(bucket["resolve_hours_total"] / bucket["resolve_hours_samples"])) if bucket["resolve_hours_samples"] else 0,
+                        avg_time_to_review_hours=round(bucket["review_hours_total"] / bucket["review_hours_samples"]) if bucket["review_hours_samples"] else 0,
+                        avg_time_to_resolve_hours=round(bucket["resolve_hours_total"] / bucket["resolve_hours_samples"]) if bucket["resolve_hours_samples"] else 0,
                         avg_open_to_review_hours=_average_hours(bucket["open_to_review_samples"]),
                         avg_review_to_resolve_hours=_average_hours(bucket["review_to_resolve_samples"]),
                         avg_waiting_user_hours=_average_hours(bucket["waiting_user_samples"]),
@@ -335,8 +339,6 @@ def _latest_dimension_counts(db: Session, *, dimension_type: str, metric_date: d
     for row in rows:
         if dimension_type == "review_reason":
             value = int(row.needs_review_count or 0)
-        elif dimension_type == "status":
-            value = int((row.open_count or 0) + (row.in_review_count or 0) + (row.waiting_user_count or 0) + (row.resolved_count or 0))
         else:
             value = int((row.open_count or 0) + (row.in_review_count or 0) + (row.waiting_user_count or 0) + (row.resolved_count or 0))
         counts.append(WikiConversationMetricCountReadModel(key=row.key, count=value))
@@ -531,11 +533,11 @@ def get_wiki_conversation_metrics_series(
             review_entered_count=bucket["review_entered_count"],
             reassigned_count=bucket["reassigned_count"],
             reopened_count=bucket["reopened_count"],
-            avg_time_to_review_hours=int(round(bucket["review_total"] / bucket["review_samples"])) if bucket["review_samples"] else 0,
-            avg_time_to_resolve_hours=int(round(bucket["resolve_total"] / bucket["resolve_samples"])) if bucket["resolve_samples"] else 0,
-            avg_open_to_review_hours=int(round(bucket["open_review_total"] / bucket["open_review_samples"])) if bucket["open_review_samples"] else 0,
-            avg_review_to_resolve_hours=int(round(bucket["review_resolve_total"] / bucket["review_resolve_samples"])) if bucket["review_resolve_samples"] else 0,
-            avg_waiting_user_hours=int(round(bucket["waiting_total"] / bucket["waiting_samples"])) if bucket["waiting_samples"] else 0,
+            avg_time_to_review_hours=round(bucket["review_total"] / bucket["review_samples"]) if bucket["review_samples"] else 0,
+            avg_time_to_resolve_hours=round(bucket["resolve_total"] / bucket["resolve_samples"]) if bucket["resolve_samples"] else 0,
+            avg_open_to_review_hours=round(bucket["open_review_total"] / bucket["open_review_samples"]) if bucket["open_review_samples"] else 0,
+            avg_review_to_resolve_hours=round(bucket["review_resolve_total"] / bucket["review_resolve_samples"]) if bucket["review_resolve_samples"] else 0,
+            avg_waiting_user_hours=round(bucket["waiting_total"] / bucket["waiting_samples"]) if bucket["waiting_samples"] else 0,
         )
         for period_start, bucket in sorted(grouped.items(), key=lambda item: item[0])
     ]
