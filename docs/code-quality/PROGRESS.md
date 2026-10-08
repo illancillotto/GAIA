@@ -23,6 +23,14 @@
   deduplicato; refresh cognitive 188→178/nesting 7→6, ranking 50→23.
   Cognitive file 312→275, cyclomatic 145→136; 107 test PASS e full-file
   265/265 statement, 102/102 branch. Query e transazioni preservate.
+- Slice C2 `IMPROVED`, dopo readiness GIS: alias delle righe Excel consolidati
+  con precedenza/nullish/falsy invariati. CatastoGisPage334→317; aggregata
+  pagina+helper621→574 cognitive e712→663 cyclomatic. 37 test PASS, full-file
+  pagina587/587 statement613/613 branch, helper9/9 statement4/4 branch.
+  LOC aggregata +16 dichiarata; nessuna nuova violation/helper sopra soglia.
+- Readiness ADE WFS bloccata:8test PostGIS skipped, statement20,15%/branch0%.
+  Readiness worker cinque hotspot full-file100% verificata, ma runtime invariato;
+  gli altri domini Wave4 restano NOT_MEASURED. Nessun refactor portali avviato.
 - P2/P3/P4/P5: caratterizzazione test-only integrata; runtime invariato e
   `BLOCKED_COVERAGE`. Capacitas Terreni e Bonifica non autorizzati al runtime
   per coverage insufficiente; Ruolo tributi bloccato dal lavoro concorrente.
