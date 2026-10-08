@@ -71,6 +71,15 @@ revisionate, nessuna wave indiscriminata. Fonte fresca: `/tmp/gaia-capacitas-cha
 
 ## Capacitas characterization checkpoint
 
+Stato autorevole Integration4 `ae440459`: 294 test PASS/13 spec/zero skip,
+coverage effettiva857/857statement890/929branch251/251funzioni748/748linee.
+Branch95,80%, gate full-file100% FAIL,39 arms residui. Dodici nuove slice
+test-only integrate; C10/C11 raggiungibili ora assegnate, non ancora accettate.
+Runtime Capacitas identico/cognitive472 e metriche R3 invariate; classificazione
+NO_CHANGE — CHARACTERIZATION_ONLY. Le sezioni precedenti conservano la storia.
+La decisione GIS richiesta all'utente è ancora pendente: nessun consenso
+implicito né nuova wave runtime. Main dirty preservata e non integrata.
+
 New independent Integration2 report99baa6c0 acceptsC8/C1/correctedC2a/C3:
 155testsPASS0skip, ratchet0 aftereach. Cumulativecoverage678/857statements,
 640/929arms,172/251functions,609/748linesFAIL100. Initial impossible speed/stop

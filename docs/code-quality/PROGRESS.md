@@ -2,6 +2,15 @@
 
 ## 2026-10-08 — Capacitas test-only checkpoint, missione aperta
 
+- Checkpoint autorevole Integration4 `ae440459`: C5b `a79b36d1` e C9
+  `8a12533a` integrate dopo review indipendente; 294 test PASS/13 spec/zero skip.
+  Coverage combinata857/857s890/929arms251/251f748/748lines, branch95,80%,
+  gate full-file100% FAIL. Residui39:21 candidati condizionalmente impossibili,
+  5 modal arms UNKNOWN,13 raggiungibili assegnati a C10/C11 test-only.
+  Runtime immutato, cognitive472; nessuna nuova runtime wave autorizzata.
+  Registry Integration5 `bcf46233`; missione ACTIVE/INCOMPLETE.
+  I checkpoint Integration2/3 sottostanti restano storia, non stato corrente.
+
 - Integration3 interimC5a6e6313ba/C2b67fce218:210testsPASS0skip, eachratchet0,
   actualcoverage795/857s720/929arms227/251f700/748linesFAIL100; awaitingC4.
   Fresh globalreport1938error2749warning4687finding1668file20280callables;

@@ -6,6 +6,16 @@ Il turno precedente produceva progresso verificato; non dimostrava completamento
 
 ## Stato corrente Round3
 
+Aggiornamento autorevole Integration4 `ae440459`: dodici nuove slice test-only
+integrate, 294 test PASS/13 spec/zero skip. Coverage reale combinata: statement
+857/857, branch 890/929 (95,80%), funzioni 251/251, linee 748/748. Gate full-file
+100% FAIL: 39 branch arms residui, 21 candidati condizionalmente irraggiungibili,
+5 modal arms UNKNOWN e 13 arms raggiungibili assegnati a C10/C11. Runtime
+Capacitas byte-identico/cognitive472; nessuna riduzione attribuita ai test.
+Le due slice test-only sono ACTIVE; Integration5 indipendente prenotata.
+Runtime wave sospesa per decisione GIS ancora pendente. Backend R3 già
+concluso: i riferimenti RUNNING più avanti sono esclusivamente storici.
+
 Test-only continuation integratedC6/C7/C0 with independent67PASS0skip,
 ratchet0 and frozen runtime; coverage401/857statements371/929arms, gate100FAIL.
 Capacitas472 unchanged; C1/C8/C2a/C3 characterization next, not another runtime
