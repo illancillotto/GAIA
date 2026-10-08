@@ -11,15 +11,20 @@ import {
 import { SisterCredentialPool } from "@/components/elaborazioni/sister-credential-pool";
 import { SettingsProviderPoolMonitor, summarizeProviderPool } from "@/components/elaborazioni/settings-provider-pool";
 import {
+  capacitasProbeCompletion,
+  capacitasProbeFailure,
+  providerCommandError,
+  providerSaveMessage,
+  saveBonificaCredentialForm,
+  saveCapacitasCredentialForm,
+} from "@/components/elaborazioni/settings-provider-commands";
+import {
   LockIcon,
   RefreshIcon,
   ServerIcon,
   UsersIcon,
 } from "@/components/ui/icons";
 import {
-  ApiError,
-  createBonificaOristaneseCredential,
-  createCapacitasCredential,
   createElaborazioneCredentialTestWebSocket,
   deleteBonificaOristaneseCredential,
   deleteElaborazioneCredential,
@@ -35,8 +40,6 @@ import {
   testCapacitasCredential,
   testElaborazioneCredentials,
   startElaborazioneBatch,
-  updateBonificaOristaneseCredential,
-  updateCapacitasCredential,
   updateElaborazioneCredential,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -740,30 +743,13 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
 
     setBonificaBusy(true);
     try {
-      if (bonificaForm.id == null) {
-        await createBonificaOristaneseCredential(token, {
-          label: bonificaForm.label.trim(),
-          login_identifier: bonificaForm.login_identifier.trim(),
-          password: bonificaForm.password,
-          remember_me: bonificaForm.remember_me,
-          active: bonificaForm.active,
-        });
-        setBonificaStatusMessage("Credenziale Bonifica creata.");
-      } else {
-        await updateBonificaOristaneseCredential(token, bonificaForm.id, {
-          label: bonificaForm.label.trim(),
-          login_identifier: bonificaForm.login_identifier.trim(),
-          password: bonificaForm.password.trim().length > 0 ? bonificaForm.password : undefined,
-          remember_me: bonificaForm.remember_me,
-          active: bonificaForm.active,
-        });
-        setBonificaStatusMessage("Credenziale Bonifica aggiornata.");
-      }
+      await saveBonificaCredentialForm(token, bonificaForm);
+      setBonificaStatusMessage(providerSaveMessage("Bonifica", bonificaForm.id != null));
       await loadBonificaCredentials();
       resetBonificaForm();
       setBonificaError(null);
     } catch (saveError) {
-      setBonificaError(saveError instanceof Error ? saveError.message : "Errore salvataggio credenziale Bonifica");
+      setBonificaError(providerCommandError(saveError, "Errore salvataggio credenziale Bonifica"));
       setBonificaStatusMessage(null);
     } finally {
       setBonificaBusy(false);
@@ -784,7 +770,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
       setBonificaStatusMessage("Credenziale Bonifica rimossa.");
       setBonificaError(null);
     } catch (deleteError) {
-      setBonificaError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione credenziale Bonifica");
+      setBonificaError(providerCommandError(deleteError, "Errore eliminazione credenziale Bonifica"));
       setBonificaStatusMessage(null);
     } finally {
       setBonificaBusy(false);
@@ -809,11 +795,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
         setBonificaStatusMessage(null);
       }
     } catch (testError) {
-      let message = testError instanceof Error ? testError.message : "Errore test credenziale Bonifica";
-      if (testError instanceof ApiError && testError.status === 502) {
-        message = testError.message;
-      }
-      setBonificaError(message);
+      setBonificaError(providerCommandError(testError, "Errore test credenziale Bonifica"));
       setBonificaStatusMessage(null);
     } finally {
       setBonificaTestingId(null);
@@ -826,32 +808,13 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
 
     setCapacitasBusy(true);
     try {
-      if (capacitasForm.id == null) {
-        await createCapacitasCredential(token, {
-          label: capacitasForm.label.trim(),
-          username: capacitasForm.username.trim(),
-          password: capacitasForm.password,
-          active: capacitasForm.active,
-          allowed_hours_start: capacitasForm.allowed_hours_start,
-          allowed_hours_end: capacitasForm.allowed_hours_end,
-        });
-        setCapacitasStatusMessage("Credenziale Capacitas creata.");
-      } else {
-        await updateCapacitasCredential(token, capacitasForm.id, {
-          label: capacitasForm.label.trim(),
-          username: capacitasForm.username.trim(),
-          password: capacitasForm.password.trim().length > 0 ? capacitasForm.password : undefined,
-          active: capacitasForm.active,
-          allowed_hours_start: capacitasForm.allowed_hours_start,
-          allowed_hours_end: capacitasForm.allowed_hours_end,
-        });
-        setCapacitasStatusMessage("Credenziale Capacitas aggiornata.");
-      }
+      await saveCapacitasCredentialForm(token, capacitasForm);
+      setCapacitasStatusMessage(providerSaveMessage("Capacitas", capacitasForm.id != null));
       await loadCapacitasCredentials();
       resetCapacitasForm();
       setCapacitasError(null);
     } catch (saveError) {
-      setCapacitasError(saveError instanceof Error ? saveError.message : "Errore salvataggio credenziale Capacitas");
+      setCapacitasError(providerCommandError(saveError, "Errore salvataggio credenziale Capacitas"));
       setCapacitasStatusMessage(null);
     } finally {
       setCapacitasBusy(false);
@@ -872,7 +835,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
       setCapacitasStatusMessage("Credenziale Capacitas rimossa.");
       setCapacitasError(null);
     } catch (deleteError) {
-      setCapacitasError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione credenziale Capacitas");
+      setCapacitasError(providerCommandError(deleteError, "Errore eliminazione credenziale Capacitas"));
       setCapacitasStatusMessage(null);
     } finally {
       setCapacitasBusy(false);
@@ -902,46 +865,23 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
     try {
       const result = await testCapacitasCredential(token, credentialId);
       await loadCapacitasCredentials();
-      if (result.ok) {
+      const success = result.ok;
+      if (success) {
         setCapacitasStatusMessage(`Connessione Capacitas confermata${result.token ? ` · token ${result.token}` : ""}.`);
         setCapacitasError(null);
-        setCapacitasTestDialog((current) => ({
-          ...current,
-          phase: "success",
-          finishedAt: new Date().toISOString(),
-          statusCode: 200,
-          title: "Test Capacitas completato",
-          summary: "Autenticazione completata con successo e sessione rilevata dal backend.",
-          backendDetail: result.error ?? "Login completato senza errori.",
-          tokenPreview: result.token,
-          diagnosis: "Il backend ha ottenuto una sessione valida. Puoi usare questa credenziale per ricerca e diagnostica inVOLTURE.",
-        }));
       } else {
         setCapacitasError(result.error ?? "Test Capacitas fallito");
         setCapacitasStatusMessage(null);
-        setCapacitasTestDialog((current) => ({
-          ...current,
-          phase: "error",
-          finishedAt: new Date().toISOString(),
-          statusCode: 200,
-          title: "Test Capacitas fallito",
-          summary: "Il backend ha risposto, ma il test non ha restituito una sessione valida.",
-          backendDetail: result.error ?? null,
-          tokenPreview: result.token,
-          diagnosis: buildCapacitasDiagnosis(result.error ?? null, 200),
-        }));
       }
+      setCapacitasTestDialog((current) => ({
+        ...current,
+        finishedAt: new Date().toISOString(),
+        statusCode: 200,
+        tokenPreview: result.token,
+        ...capacitasProbeCompletion(result, success),
+      }));
     } catch (testError) {
-      const message = testError instanceof Error ? testError.message : "Errore test credenziale Capacitas";
-      const statusCode = testError instanceof ApiError ? testError.status ?? null : null;
-      const backendDetail =
-        testError instanceof ApiError
-          ? typeof testError.detailData === "string"
-            ? testError.detailData
-            : testError.detailData != null
-              ? JSON.stringify(testError.detailData, null, 2)
-              : message
-          : message;
+      const { message, statusCode, backendDetail } = capacitasProbeFailure(testError);
 
       setCapacitasError(message);
       setCapacitasStatusMessage(null);

@@ -14,6 +14,7 @@ import {
 } from "@/components/elaborazioni/settings-workspace";
 import { ApiError } from "@/lib/api";
 import * as credentialDiagnostics from "@/lib/elaborazioni-credential-diagnostics";
+import { saveBonificaCredentialForm, saveCapacitasCredentialForm } from "@/components/elaborazioni/settings-provider-commands";
 import { formatDateTime } from "@/lib/presentation";
 import type {
   BonificaOristaneseCredential,
@@ -251,6 +252,140 @@ describe("ElaborazioniSettingsWorkspace SISTER integration", () => {
     } finally {
       diagnosis.mockRestore();
     }
+  });
+
+  test.each(["bonifica", "capacitas"] as const)("preserves %s save, feedback, reload and reset ordering", async (provider) => {
+    const save = deferred<BonificaOristaneseCredential | CapacitasCredential>();
+    const reload = deferred<BonificaOristaneseCredential[] | CapacitasCredential[]>();
+    const isBonifica = provider === "bonifica";
+    const existing = isBonifica ? bonificaCredential(1) : capacitasCredential(1);
+    const list = isBonifica ? apiMocks.listBonificaOristaneseCredentials : apiMocks.listCapacitasCredentials;
+    const update = isBonifica ? apiMocks.updateBonificaOristaneseCredential : apiMocks.updateCapacitasCredential;
+    list.mockResolvedValueOnce([existing]).mockReturnValueOnce(reload.promise);
+    update.mockReturnValue(save.promise);
+    render(<ElaborazioniSettingsWorkspace embedded />);
+    await screen.findByText("Profilo primary");
+    fireEvent.click(screen.getByRole("button", { name: isBonifica ? "WhiteCompany" : "Capacitas" }));
+    fireEvent.click(within(screen.getByText(existing.label).closest("tr")!).getByRole("button", { name: "Modifica" }));
+    const label = screen.getByPlaceholderText(isBonifica ? "Account Bonifica primario" : "Account principale");
+    fireEvent.change(label, { target: { value: " Saved label " } });
+    fireEvent.change(screen.getByPlaceholderText("Lascia vuoto per non cambiarla"), { target: { value: " raw password " } });
+    fireEvent.click(screen.getByRole("button", { name: "Aggiorna account" }));
+    expect(update).toHaveBeenCalledWith("token", 1, expect.objectContaining({ label: "Saved label", password: " raw password " }));
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Salvataggio..." })).toBeDisabled();
+    fireEvent.change(label, { target: { value: "Edited while saving" } });
+    await act(async () => save.resolve(existing));
+    expect(list).toHaveBeenCalledTimes(2);
+    const savedMessage = isBonifica ? "Credenziale Bonifica aggiornata." : "Credenziale Capacitas aggiornata.";
+    expect(screen.getByText(savedMessage)).toBeInTheDocument();
+    expect(label).toHaveValue("Edited while saving");
+    expect(screen.getByRole("button", { name: "Salvataggio..." })).toBeDisabled();
+    await act(async () => reload.resolve([existing]));
+    expect(label).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Aggiungi account" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reset form" })).toBeEnabled();
+  });
+
+  test.each(["bonifica", "capacitas"] as const)("updates %s id zero and omits whitespace-only replacement passwords", async (provider) => {
+    const isBonifica = provider === "bonifica";
+    const existing = isBonifica ? bonificaCredential(0) : capacitasCredential(0);
+    const list = isBonifica ? apiMocks.listBonificaOristaneseCredentials : apiMocks.listCapacitasCredentials;
+    const update = isBonifica ? apiMocks.updateBonificaOristaneseCredential : apiMocks.updateCapacitasCredential;
+    const create = isBonifica ? apiMocks.createBonificaOristaneseCredential : apiMocks.createCapacitasCredential;
+    list.mockResolvedValue([existing]);
+    update.mockResolvedValue(existing);
+    render(<ElaborazioniSettingsWorkspace embedded />);
+    await screen.findByText("Profilo primary");
+    fireEvent.click(screen.getByRole("button", { name: isBonifica ? "WhiteCompany" : "Capacitas" }));
+    fireEvent.click(within(screen.getByText(existing.label).closest("tr")!).getByRole("button", { name: "Modifica" }));
+    fireEvent.change(screen.getByPlaceholderText("Lascia vuoto per non cambiarla"), { target: { value: "  \t  " } });
+    fireEvent.click(screen.getByRole("button", { name: "Aggiorna account" }));
+    await waitFor(() => expect(update).toHaveBeenCalledWith("token", 0, expect.objectContaining({ password: undefined })));
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  test.each(["bonifica", "capacitas"] as const)("keeps %s successful-save semantics when reload fails", async (provider) => {
+    const isBonifica = provider === "bonifica";
+    const existing = isBonifica ? bonificaCredential(1) : capacitasCredential(1);
+    const list = isBonifica ? apiMocks.listBonificaOristaneseCredentials : apiMocks.listCapacitasCredentials;
+    const update = isBonifica ? apiMocks.updateBonificaOristaneseCredential : apiMocks.updateCapacitasCredential;
+    list.mockResolvedValueOnce([existing]).mockRejectedValueOnce(new Error("failed reload must be cleared"));
+    update.mockResolvedValue(existing);
+    render(<ElaborazioniSettingsWorkspace embedded />);
+    await screen.findByText("Profilo primary");
+    fireEvent.click(screen.getByRole("button", { name: isBonifica ? "WhiteCompany" : "Capacitas" }));
+    fireEvent.click(within(screen.getByText(existing.label).closest("tr")!).getByRole("button", { name: "Modifica" }));
+    fireEvent.click(screen.getByRole("button", { name: "Aggiorna account" }));
+    const label = screen.getByPlaceholderText(isBonifica ? "Account Bonifica primario" : "Account principale");
+    await waitFor(() => expect(label).toHaveValue(""));
+    expect(list).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(isBonifica ? "Credenziale Bonifica aggiornata." : "Credenziale Capacitas aggiornata.")).toBeInTheDocument();
+    expect(screen.queryByText("failed reload must be cleared")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reset form" })).toBeEnabled();
+  });
+
+  test.each(["bonifica", "capacitas"] as const)("preserves %s raw password on creation", async (provider) => {
+    const isBonifica = provider === "bonifica";
+    const create = isBonifica ? apiMocks.createBonificaOristaneseCredential : apiMocks.createCapacitasCredential;
+    create.mockResolvedValue(isBonifica ? bonificaCredential(1) : capacitasCredential(1));
+    render(<ElaborazioniSettingsWorkspace embedded />);
+    await screen.findByText("Profilo primary");
+    fireEvent.click(screen.getByRole("button", { name: isBonifica ? "WhiteCompany" : "Capacitas" }));
+    fireEvent.change(screen.getByPlaceholderText(isBonifica ? "Account Bonifica primario" : "Account principale"), { target: { value: " Label " } });
+    fireEvent.change(screen.getByPlaceholderText(isBonifica ? "utente@example.local" : "capacitas-user"), { target: { value: " login " } });
+    fireEvent.change(screen.getByPlaceholderText(isBonifica ? "Password Bonifica" : "Password Capacitas"), { target: { value: " raw secret " } });
+    fireEvent.click(screen.getByRole("button", { name: "Aggiungi account" }));
+    await waitFor(() => expect(create).toHaveBeenCalledWith("token", expect.objectContaining({ label: "Label", password: " raw secret " })));
+    expect(create.mock.calls[0][1][isBonifica ? "login_identifier" : "username"]).toBe("login");
+  });
+
+  test.each([true, false])("preserves a closed running Capacitas dialog through completion, ok=%s", async (ok) => {
+    const probe = deferred<{ ok: boolean; token: string | null; error: string | null }>();
+    const reload = deferred<CapacitasCredential[]>();
+    const existing = capacitasCredential(1);
+    apiMocks.listCapacitasCredentials.mockResolvedValueOnce([existing]).mockReturnValueOnce(reload.promise);
+    apiMocks.testCapacitasCredential.mockReturnValue(probe.promise);
+    render(<ElaborazioniSettingsWorkspace embedded />);
+    await screen.findByText("Profilo primary");
+    fireEvent.click(screen.getByRole("button", { name: "Capacitas" }));
+    fireEvent.click(within(screen.getByText(existing.label).closest("tr")!).getByRole("button", { name: "Test" }));
+    expect(await screen.findByText("Test Capacitas in corso")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
+    expect(screen.queryByText("Test credenziale Capacitas")).not.toBeInTheDocument();
+    await act(async () => probe.resolve({ ok, token: ok ? "session" : null, error: ok ? null : "rejected login" }));
+    expect(apiMocks.listCapacitasCredentials).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText("Connessione Capacitas confermata · token session.")).not.toBeInTheDocument();
+    await act(async () => reload.resolve([existing]));
+    expect(screen.queryByText("Test credenziale Capacitas")).not.toBeInTheDocument();
+    expect(screen.getByText(ok ? "Connessione Capacitas confermata · token session." : "rejected login")).toBeInTheDocument();
+    expect(within(screen.getByText(existing.label).closest("tr")!).getByRole("button", { name: "Test" })).toBeEnabled();
+  });
+
+  test.each(["bonifica", "capacitas"] as const)("returns the original %s API promise without adding an await or mutating the form", (provider) => {
+    const isBonifica = provider === "bonifica";
+    const create = isBonifica ? apiMocks.createBonificaOristaneseCredential : apiMocks.createCapacitasCredential;
+    const update = isBonifica ? apiMocks.updateBonificaOristaneseCredential : apiMocks.updateCapacitasCredential;
+    const bonificaForm = { ...bonificaCredential(1), id: null as number | null, password: " raw secret " };
+    const capacitasForm = { ...capacitasCredential(1), id: null as number | null, password: " raw secret " };
+    const selectedForm = isBonifica ? bonificaForm : capacitasForm;
+    const persist = () => isBonifica
+      ? saveBonificaCredentialForm("token", bonificaForm)
+      : saveCapacitasCredentialForm("token", capacitasForm);
+    const apiPromise = Promise.resolve(isBonifica ? bonificaCredential(1) : capacitasCredential(1));
+    create.mockReturnValue(apiPromise);
+    update.mockReturnValue(apiPromise);
+    expect(persist()).toBe(apiPromise);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(update).not.toHaveBeenCalled();
+    selectedForm.id = 0;
+    selectedForm.password = "  \t  ";
+    expect(persist()).toBe(apiPromise);
+    expect(update).toHaveBeenCalledWith("token", 0, expect.objectContaining({ password: undefined }));
+    expect(selectedForm.password).toBe("  \t  ");
+    const sameError = new Error("synchronous API boundary failure");
+    update.mockImplementation(() => { throw sameError; });
+    expect(persist).toThrow(sameError);
   });
 
   test("covers the reusable status and dialog presentations", () => {

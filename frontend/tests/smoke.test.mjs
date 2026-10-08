@@ -149,8 +149,9 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(elaborazioniSettingsPage, /ElaborazioniSettingsWorkspace/);
   assert.match(read("src/components/elaborazioni/elaborazioni-credential-tabs.tsx"), /Presenze INAZ/);
   assert.match(read("src/components/elaborazioni/elaborazioni-credential-tabs.tsx"), /credenziali-inaz/);
-  assert.match(read("src/components/elaborazioni/settings-workspace.tsx"), /createCapacitasCredential/);
-  assert.match(read("src/components/elaborazioni/settings-workspace.tsx"), /updateCapacitasCredential/);
+  assert.match(read("src/components/elaborazioni/settings-provider-commands.ts"), /return createCapacitasCredential\(token, payload\)/);
+  assert.match(read("src/components/elaborazioni/settings-provider-commands.ts"), /return updateCapacitasCredential\(token, form\.id, \{ \.\.\.payload, password: replacementPassword\(form\.password\) \}\)/);
+  assert.match(read("src/components/elaborazioni/settings-workspace.tsx"), /await saveCapacitasCredentialForm\(token, capacitasForm\)/);
   assert.match(read("src/components/elaborazioni/settings-workspace.tsx"), /listCapacitasCredentials/);
   assert.match(elaborazioniCapacitasPage, /ElaborazioniCapacitasWorkspace/);
   assert.match(elaborazioniAdeAlignmentPage, /ElaborazioniAdeAlignmentWorkspace/);
