@@ -144,6 +144,22 @@ al codice o gate resa necessaria da questi errori di invocazione.
 
 ## Stato globale e limiti
 
+Stato delle altre slice comunicato dal Coordinator al checkpoint; non sono
+review o gate eseguiti dall'Integration Agent:
+
+| Agent | Stato | Evidenza e limite |
+| --- | --- | --- |
+| P2 Capacitas | BLOCKED_COVERAGE runtime; characterization integrata | 28 test pertinenti PASS; coverage full-file branch 28,31%; nessuna riduzione runtime |
+| P3 Analytics | Characterization pronta; runtime non integrato | Commit test-only `48de12ef`; attesa suite backend iniziale prima di eventuale cherry-pick |
+| P4 Catasto anomalie | BLOCKED_COVERAGE runtime; characterization pronta | 27 nuovi test UI significativi; coverage circa 59% statement / 40% branch |
+| P5 Utenze detail | Characterization in corso | Nessun runtime candidato approvato al checkpoint |
+| B4 Network traffic | Readiness per slice isolata Wave 2 | Coordinator: 19 test PASS; 283 statement e 92 branch al 100%; non ancora refactor integrato |
+| B6 Bonifica | BLOCKED_COVERAGE runtime | Coordinator: 14 test PASS; coverage circa 34% statement / 28% branch |
+| B5 Wiki | Readiness in corso | Nessun runtime approvato al checkpoint |
+
+I numeri parziali non equivalgono a coverage conforme. Non vengono integrate
+slice runtime prive di 100% full-file, né dichiarati risolti gli hotspot intatti.
+
 La provenance già integrata documenta 30 divergenze globali preesistenti:
 15 aumenti runtime storici e 15 finding nei test worker. Non sono introdotti
 da P1/P6 e non sono assorbiti nella baseline. L'attività integration non
