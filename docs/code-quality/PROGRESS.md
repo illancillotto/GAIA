@@ -79,6 +79,18 @@ blocco verificato e prima di chiudere un goal.
   95testPASS, gate coverageFAIL. Export0/0 per ignore whole-file e MapContainer
   mapping terminato prima di887 non sono prova full-file100%. Nessuna nuova
   exclusion o rimozione opportunistica per mascherare questo limite.
+- P3 prerequisito integrato `bf4c9a26`, report indipendente `65097ce2`:
+  79 test PASS/full-file669statement310branch100%, lint-backend PASS,
+  ratchet PASS0; cognitive file1034→991, fuel366→332. Guardie rimosse solo
+  dopo prova SQL/schema/gruppi, stile full-file chiuso senza ignore.
+- Round2 integrato:1943error2749warning4692finding; cognitive81566,
+  cyclomatic83437. Cumulativo da clean55a:-365cognitive/-229cyclomatic,
+  -13error/-9warning/-22finding; coda estrema ancora8>300/17>200/55>100.
+  Backend completo in corso sul runtime congelato `bf4c9a26`, non ancora PASS.
+- Round3 assegnato in worktree nuove indipendenti da `65097ce2`: modello
+  mensile Presenze, commands provider Settings e prima computazione veicoli
+  fuel. Proposta/characterization prima runtime, una unità per owner; nessuna
+  nuova integrazione backend durante la suite sul checkpoint Round2.
 
 ### Capacitas inCass — query lista job (2026-10-06)
 
