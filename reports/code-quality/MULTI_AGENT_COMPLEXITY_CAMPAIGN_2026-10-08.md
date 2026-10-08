@@ -71,6 +71,33 @@ revisionate, nessuna wave indiscriminata. Fonte fresca: `/tmp/gaia-capacitas-cha
 
 ## Capacitas characterization checkpoint
 
+### Verifica finale della continuazione test-only
+
+Report indipendente source `7f0c6f0a` revisionato e integrato dal Coordinator:
+`reports/code-quality/VERIFICATION_CAPACITAS_CHARACTERIZATION_2026-10-08.md`.
+306 test/15 spec PASS; statement/funzioni/linee100%, branch903/92997,20%,
+gate full-file **FAIL**. Residui26:21 candidati condizionalmente irraggiungibili,
+5 modal UNKNOWN. Ratchet **PASS0**; globalcheck **FAIL30** identico a R3,
+nessuno attribuibile alla campagna; interi AST files/callables/findings/summary
+e file protetti invariati. Nessuna baseline inflation o nuova runtime change.
+
+Coordinator ha eseguito la suite frontend completa sul tree congelato1ddc7041:
+**4386 PASS/297 spec**,exit0/192,73s, più **18 smoke PASS/zero skip**.
+Log `/tmp/gaia-capacitas-characterization-final-unit.log` e
+`/tmp/gaia-capacitas-characterization-final-smoke.log`. Vitest stampa tutti i
+4386 test PASS, nessun conteggio skip separato; non inferire esecuzioni live.
+Backend/worker/build/E2E non rilanciati in questo segmento: suite R3 precedenti
+riferite allo stesso runtime, non nuove esecuzioni. Primo E2E GIS fallito e
+successiva replica verde restano entrambi registrati; causa originale UNKNOWN.
+
+Classificazione quattordici nuove slice test-only: **NO_CHANGE — CHARACTERIZATION_ONLY**.
+287 test aggiunti rispetto ai19 batch esistenti; nessuna riduzione di cognitive472
+attribuita alla characterization. Main dirty non integrata; tutta la campagna
+è sulla branch/worktree dedicata. Missione globale **ACTIVE/INCOMPLETE**.
+Prima della prossima wave servono le decisioni richieste su rischio GIS e
+eventuale slice separata delle difese ridondanti; silenzio non è consenso.
+I checkpoint con verifier/suite in esecuzione sottostanti sono storici.
+
 Ultimo checkpoint: Integration5 `7c7dcc0c`, C10 `ffeafafd`/C11 `df86527b`,
 306 test PASS/15 spec/zero skip. Ratchet0 dopo ogni integrazione; coverage
 857/857 statement903/929 branch251/251 funzioni748/748linee. Branch97,20%,

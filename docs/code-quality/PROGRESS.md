@@ -2,6 +2,18 @@
 
 ## 2026-10-08 — Capacitas test-only checkpoint, missione aperta
 
+- Verifica finale indipendente source7f0c6f0a accettata:306 PASS/15 spec,
+ 903/929branch97,20%, gate100% FAIL; ratchet PASS0, globalcheck30 storici
+ esattamente identici a R3, AST/protetti invariati. Ledger26 completo:
+ 21 candidati condizionali,5 modal UNKNOWN,nessuna esenzione autorizzata.
+ Coordinator: suite frontend completa4386 PASS/297 spec,exit0/192,73s;
+ smoke18 PASS/zero skip. Artifact `/tmp/gaia-capacitas-characterization-final-unit.log`
+ e `/tmp/gaia-capacitas-characterization-final-smoke.log`; source frozen df86527b.
+ Backend/worker/build/E2E non rilanciati in questo segmento test-only: prove
+ R3 mantenute come precedenti, runtime byte-identico. Missione INCOMPLETE;
+ decisioni utente GIS e cleanup difese pendenti, nessuna wave runtime.
+ I riferimenti a suite in esecuzione e verifier attivo più avanti sono storici.
+
 - Stato più recente Integration5 `7c7dcc0c`: C10 `ffeafafd` e C11 `df86527b`
   integrate dopo review indipendente;306 PASS/15 spec/zero skip, ratchet0
   dopo ciascuna. Coverage857/857s903/929arms251/251f748/748lines:branch97,20%,

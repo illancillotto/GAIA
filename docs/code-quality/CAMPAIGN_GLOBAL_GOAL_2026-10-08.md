@@ -6,6 +6,17 @@ Il turno precedente produceva progresso verificato; non dimostrava completamento
 
 ## Stato corrente Round3
 
+Verifica indipendente conclusa: report source `7f0c6f0a`,306 PASS/15 spec,
+903/929 branch (97,20%), gate100% FAIL; ratchet PASS0, globalcheck30 finding
+storici esattamente identici a R3, AST/protetti invariati. Coordinator ha
+eseguito la nuova suite frontend completa:4386 PASS/297 spec,exit0; smoke18
+PASS/zero skip. Log `/tmp/gaia-capacitas-characterization-final-unit.log` e
+`/tmp/gaia-capacitas-characterization-final-smoke.log`. Nessuna nuova suite
+backend/worker/build/E2E dichiarata: le prove R3 riguardano runtime invariato.
+Test-only continuation verificata, non completa la campagna globale.
+Decisioni GIS e cleanup difese ancora pendenti; nessuna nuova wave runtime.
+Le diciture in esecuzione/attivo nei checkpoint sottostanti sono storiche.
+
 Ultimo checkpoint: Integration5 `7c7dcc0c`, source congelata `df86527b`,
 frontend tree `1ddc7041881a24259e30dd81491aafba44fdb104`. C10/C11 integrate
 come `ffeafafd`/`df86527b`; 306 test PASS/15 spec/zero skip, ratchet0 dopo
