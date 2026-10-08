@@ -3,6 +3,29 @@
 Global goal remains **ACTIVE / INCOMPLETE**. This checkpoint records progress,
 not completion or an authorization for broad refactoring.
 
+## Integrated backend follow-up
+
+The pending P3 status below is historical: source6909abd7 independently
+reviewed and integrated asbf4c9a26. Report `INTEGRATION_R2_P3_2026-10-08.md`
+committed65097ce2;79casesPASS,full-file669/669statement310/310branch100%,
+lint-backend and ratchetmainPASS0. Runtime frozen for full backend suite
+`/tmp/gaia-r2-backend-full-tests.log` (in progress, not yet PASS).
+Round3 works privately from65097ce2 without altering that frozen source.
+
+Complete post-P3 scanner `/tmp/gaia-r2-integrated-complexity.json`:
+1665files/20266callables/1943error/2749warning/4692finding,
+cognitive81566/cyclomatic83437/fileLOC332206. Cumulative cognitive−365,
+cyclomatic−229, error−13, warning−9; tail8>300/17>200/55>100 unchanged from
+the UI checkpoint. Application excluding worker tests1611files/18945callables,
+318801effectiveLOC. Source-branch results are no longer merely proposed.
+
+Globalcheck after P3 FAIL30: finding objects exactly identical to R1,
+`/tmp/gaia-r2-integrated-global-check.log`. Baseline/tooling diff empty.
+Tooling fullsuite169PASS, `/tmp/gaia-r2-quality-tests.log`.
+Platform Graphify docs refresh PASS, chunk1/1done, no failed semantic chunk:
+268nodes250edges68communities, `/tmp/gaia-r2-platform-docs.log`.
+No generated graph committed. These do not constitute global goal completion.
+
 ## Snapshot
 
 Authoritative merge-base `55a1b1d35911451e018b662c2acc450bf5994ea2`.
