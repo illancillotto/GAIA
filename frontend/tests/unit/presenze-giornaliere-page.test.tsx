@@ -1635,6 +1635,30 @@ describe("Presenze giornaliere workspace", () => {
   });
 
   test.each([
+    ["KM carburanti", "km_value"],
+    ["Trasferte", "trasferta_minutes"],
+    ["Straordinari", "effective_straordinario_minutes"],
+    ["Reperibilita", "reperibilita_quantity"],
+  ] as const)("excludes zero and negative totals from %s without changing row order", async (filter, field) => {
+    const common = { reperibilita_unit: "days" as const };
+    await renderMayMatrix([
+      matrixRecord({ id: "zedda", collaborator_id: "collab-3", ...common, [field]: -1 }),
+      matrixRecord({ id: "podda", collaborator_id: "collab-2", ...common, [field]: 0 }),
+      matrixRecord({ ...common, [field]: 1 }),
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: filter, exact: true }));
+    await expectMatrixCollaborators(["AMADU SALVATORE"]);
+    fireEvent.click(screen.getByRole("button", { name: filter, exact: true }));
+    await expectMatrixCollaborators(["AMADU SALVATORE", "PODDA RAIMONDO", "ZEDDA MARIO"]);
+    const names = within(screen.getByRole("table")).getAllByRole("button", {
+      name: /^(AMADU SALVATORE|PODDA RAIMONDO|ZEDDA MARIO)$/,
+    });
+    expect(names.map((button) => button.textContent)).toEqual([
+      "AMADU SALVATORE", "PODDA RAIMONDO", "ZEDDA MARIO",
+    ]);
+  });
+
+  test.each([
     ["  aMaDu  ", ["AMADU SALVATORE"]],
     ["1855", ["PODDA RAIMONDO"]],
     ["cbo", ["AMADU SALVATORE", "PODDA RAIMONDO", "ZEDDA MARIO"]],

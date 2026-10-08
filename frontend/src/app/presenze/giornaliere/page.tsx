@@ -32,6 +32,8 @@ import type {
   PresenzeDailyRecord,
   PresenzeSyncJob,
 } from "@/types/api";
+import { collaboratorProfileFilterKey, selectMonthlyCollaboratorRows } from "./collaborator-rows";
+import type { DayFocusFilter, ProfileFilterKey } from "./collaborator-rows";
 
 type DailyEditForm = {
   kmValue: string;
@@ -72,16 +74,6 @@ type CollaboratorMonthTotals = {
   absencesByCause: Map<string, number>;
   saturdayEntries: Array<{ ordinal: number; label: string }>;
 };
-type DayFocusFilter = {
-  iso: string;
-  kind: "anomalies" | "requests";
-} | null;
-type ProfileFilterKey =
-  | "impiegati"
-  | "operai_agrario"
-  | "operai_catasto_magazzino"
-  | "operai_da_classificare"
-  | "non_impostato";
 type ContractProfileEditorState = {
   contractKind: NonNullable<PresenzeCollaborator["contract_kind"]> | "";
   operaiGroup: NonNullable<PresenzeCollaborator["operai_group"]> | "";
@@ -195,16 +187,6 @@ function operaiGroupBadgeVariant(value: PresenzeCollaborator["operai_group"] | n
   if (value === "agrario") return "success";
   if (value === "catasto_magazzino") return "info";
   return "neutral";
-}
-
-function collaboratorProfileFilterKey(collaborator: PresenzeCollaborator): ProfileFilterKey {
-  if (collaborator.contract_kind === "impiegato") return "impiegati";
-  if (collaborator.contract_kind === "operaio") {
-    if (collaborator.operai_group === "agrario") return "operai_agrario";
-    if (collaborator.operai_group === "catasto_magazzino") return "operai_catasto_magazzino";
-    return "operai_da_classificare";
-  }
-  return "non_impostato";
 }
 
 function defaultContractProfileEditorState(collaborator: PresenzeCollaborator): ContractProfileEditorState {
@@ -1216,38 +1198,26 @@ export default function PresenzeGiornalierePage() {
   }, [collaborators, recordInsights.presentIds]);
 
   const collaboratorRows = useMemo(() => {
-    const normalizedSearch = deferredSearch.trim().toLowerCase();
-    return collaborators
-      .filter((collaborator) => recordInsights.presentIds.has(collaborator.id))
-      .filter((collaborator) => !scheduleFilter || collaboratorSchedule.get(collaborator.id)?.code === scheduleFilter)
-      .filter((collaborator) => !profileFilter || collaboratorProfileFilterKey(collaborator) === profileFilter)
-      .filter((collaborator) => !filterAnomalies || anomalyCollaboratorIds.has(collaborator.id))
-      .filter((collaborator) => {
-        if (!dayFocusFilter) return true;
-        const source =
-          dayFocusFilter.kind === "anomalies"
-            ? dayAnomalyCollaboratorIds.get(dayFocusFilter.iso)
-            : dayRequestCollaboratorIds.get(dayFocusFilter.iso);
-        return source?.has(collaborator.id) ?? false;
-      })
-      .filter((collaborator) => {
-        const totals = monthTotals.get(collaborator.id)!;
-        if (filterKm && totals.km <= 0) return false;
-        if (filterTrasferta && totals.trasferta <= 0) return false;
-        if (filterStraordinari && totals.straordinario <= 0) return false;
-        if (filterReperibilita && totals.reperibilita <= 0) return false;
-        return true;
-      })
-      .filter((collaborator) => {
-        const company = getPresenzeCompanyLabel(collaborator.company_label, collaborator.company_code, "");
-        return (
-          !normalizedSearch ||
-          [collaborator.name, collaborator.employee_code, company].some((value) =>
-            value.toLowerCase().includes(normalizedSearch),
-          )
-        );
-      })
-      .sort((a, b) => a.name.localeCompare(b.name));
+    return selectMonthlyCollaboratorRows({
+      collaborators,
+      presentIds: recordInsights.presentIds,
+      collaboratorSchedule,
+      anomalyCollaboratorIds,
+      dayAnomalyCollaboratorIds,
+      dayRequestCollaboratorIds,
+      monthTotals,
+      filters: {
+        search: deferredSearch,
+        schedule: scheduleFilter,
+        profile: profileFilter,
+        anomalies: filterAnomalies,
+        dayFocus: dayFocusFilter,
+        km: filterKm,
+        trasferta: filterTrasferta,
+        straordinario: filterStraordinari,
+        reperibilita: filterReperibilita,
+      },
+    });
   }, [collaborators, dayAnomalyCollaboratorIds, dayFocusFilter, dayRequestCollaboratorIds, deferredSearch, scheduleFilter, profileFilter, collaboratorSchedule, recordInsights.presentIds, monthTotals, filterKm, filterTrasferta, filterStraordinari, filterReperibilita, filterAnomalies, anomalyCollaboratorIds]);
 
   const visibleCollaboratorRows = useMemo(
