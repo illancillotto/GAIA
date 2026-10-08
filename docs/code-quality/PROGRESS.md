@@ -66,6 +66,19 @@ blocco verificato e prima di chiudere un goal.
   richiede review indipendente, metriche aggregate, coverage full-file100%,
   ratchet PASS e Graphify del corpus corretto. Baseline/soglie/esclusioni
   immutate; le 30 divergenze storiche restano problema separato.
+- P1/P6 integrate dopo review indipendente: `87efd9bb` e `3f9863fb`.
+  Principal Presenze525→506, Settings366→335; cognitive aggregata-58,
+  cyclomatic-42, LOC+70 dichiarate. 494 test pertinenti e quattro runtime
+  full-file100%; ratchet PASS0 dopo ciascuna integrazione. Report integration
+  `INTEGRATION_ROUND2_2026-10-08.md`, commit `59fa4e42`.
+- Suite frontend completa R2:4074PASS/282file; clean build PASS sul frontend
+  `3f9863fb`. E2E reale isolato in corso, non ancora PASS. P3 resta fuori
+  integrazione finché characterization, prerequisito invarianti e stile
+  full-file non superano tutti i gate. Nessuna certificazione globale nuova.
+- Readiness coda estrema in `ROUND2_EXTREME_READINESS_2026-10-08.md`:
+  95testPASS, gate coverageFAIL. Export0/0 per ignore whole-file e MapContainer
+  mapping terminato prima di887 non sono prova full-file100%. Nessuna nuova
+  exclusion o rimozione opportunistica per mascherare questo limite.
 
 ### Capacitas inCass — query lista job (2026-10-06)
 
