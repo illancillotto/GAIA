@@ -2,6 +2,15 @@
 
 ## 2026-10-08 — continuazione: prove causali reali, runtime invariato
 
+- Verifica C12 indipendente conclusa, source9ea8f4fe accettato:312PASS/16spec
+  0skip,906/929arms97,52%FAIL100,23residui0lost; ratchetmain55aPASS0,
+  globalcheck30objects identiciR3, runtime/AST/protetti invariati. Types/lint
+  PASS, raw-browserV8audit6witnesses9nullexecutionsPASS. Root4392PASS/298spec
+  e18smoke restano prove eseguite dal Coordinator, non rerun indipendente.
+  Tutti gli agenti di questa continuazione terminati, nessun overlap attivo.
+  Coverage full-file e missione globale restano aperte; domande runtime nonGIS
+  e cleanup separato attendono decisione esplicita, nessun consenso dal silenzio.
+
 - C12 source53e9405b integratoacdc9515 dopo review indipendente; report
   Integration6f8c4f670.6nuovi/312unionPASS16spec0skip,906/929arms97,52%,
   gate100%FAIL. Tre nullarms reali coperti,23residui/22linee0unlocated0lost:

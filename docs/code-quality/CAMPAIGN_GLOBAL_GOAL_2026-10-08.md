@@ -6,6 +6,13 @@ Il turno precedente produceva progresso verificato; non dimostrava completamento
 
 ## Stato corrente Round3
 
+Verifier C12 concluso source9ea8f4fe:312PASS/16spec0skip,906/929arms97,52%,
+gate100%FAIL; ratchet0/global30R3esatti/ASTprotetti invariati. Tutti gli agenti
+di questa continuazione terminati senza overlap. Root4392PASS/298spec e18smoke
+conclusi; nessuna nuova riduzione complexity o runtimeacceptance. Decisioni
+utente richieste restano pendenti; goal ACTIVE/INCOMPLETE, non concluso.
+I riferimenti a verifier in corso sottostanti sono storici.
+
 C12 test-only source53e9405b accettataacdc9515,Integration6f8c4f670:
 312PASS/16spec0skip,906/929branch97,52%,gate100%FAIL,23residui (21conditional
 candidate+2modalUNKNOWN). Tre guard async necessari ora caratterizzati, non

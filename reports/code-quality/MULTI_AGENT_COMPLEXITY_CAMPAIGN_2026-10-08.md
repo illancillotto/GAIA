@@ -71,6 +71,44 @@ revisionate, nessuna wave indiscriminata. Fonte fresca: `/tmp/gaia-capacitas-cha
 
 ## Capacitas characterization checkpoint
 
+### Continuazione C12 e diagnosi applicativa GIS
+
+Ultime evidenze autorevoli: C12 source `53e9405b` integrato `acdc9515`,
+Integration6 `f8c4f670`, verifier indipendente source `9ea8f4fe` revisionato
+e integrato. Actual union **312 PASS/16 spec/zero skip**, coverage full-file
+statement857/857,branch906/929(**97,52% — FAIL100**),funzioni251/251,linee748/748.
+Tre guard async3214/3217/3220 provati necessari tramite keyboard browser nativa
+e ora caratterizzati;23 arms residui:21 candidati condizionali JS/SheetJS,
+2 guard modali3166/3206 UNKNOWN. Nessun guard rimosso, fake setter o esenzione.
+Sei nuovi test preservano anche la race esistente che aggiorna il modal
+sostitutivo con la risposta della richiesta precedente: comportamento non corretto.
+
+Nuova suite completa Coordinator **4392 PASS/298 spec**,exit0/187,69s; smoke
+**18 PASS/zero skip**. Log `/tmp/gaia-capacitas-c12-final-unit.log` e
+`/tmp/gaia-capacitas-c12-final-smoke.log`. Frozen sourceacdc9515/frontend
+tree `14de55bb9d5eb2bc34d97d7411281969b6fda44e`. Verifier indipendente312PASS,
+ratchet **PASS0**,globalcheck **FAIL30** esattamenteR3,interi AST/protetti
+invariati. Quindici nuove slice test-only/293test aggiunti rispetto ai19 esistenti.
+**NO_CHANGE — CHARACTERIZATION_ONLY**,non nuova riduzione cognitive472.
+
+GIS report source `febc7bfb`,integrato `46c6f872`: confronto app reale clean55a
+vs runtime70ae035d con stesse dipendenze/browser/fixture. Entrambi:2/2gesture
+anticipate interrompono camera (208–254ms invece700ms),zero popup/panel;
+2/2controlli dopo moveend aprono panel. Callback originale PASS dopo readiness
+su entrambi; login502 baseline prima backendready conservato come setupfailure,
+non GISfailure. Entrambe buildproduction PASS. Coordinator ha rieseguito
+verifier raw-event-order/finalgeometry/requestcount:PASS. Meccanismo **dimostrato
+preesistente**,attribution storica R3 ancora **UNKNOWN** per cameraevents assenti.
+Nessun runtime/E2E/timeout/retry modificato;stack/probe propri puliti,porte libere.
+
+Backend/worker/E2E completi non rieseguiti in questo segmento test-only; prove
+R3 conservate senza attribuire nuovi PASS. Runtime globale1938error2749warning/
+4687finding/cognitive81400 invariato; nessuna baseline inflation o main merge.
+Missione **ACTIVE/INCOMPLETE**. Decisioni su ripresa nonGIS e cleanup separato
+chieste all'utente con le nuove prove,non ancora registrate. Non classificare
+«continua» o il silenzio come deroga coverage/rimozione dei guard/rischio accettato.
+I checkpoint Integration5 e precedenti sottostanti conservano la storia.
+
 ### Verifica finale della continuazione test-only
 
 Report indipendente source `7f0c6f0a` revisionato e integrato dal Coordinator:
