@@ -9,6 +9,19 @@ Baseline, soglie, esclusioni e tooling complexity sono read-only.
 
 ## Ownership attiva e sequenza
 
+### Continuazione richiesta — diagnosi per sbloccare la wave runtime
+
+Il messaggio «continua» autorizza progresso verso il goal, non accettazione
+implicita del rischio GIS né deroga coverage. Il turno precedente ha prodotto
+progresso verificato (C10/C11, verifica indipendente e suite4386PASS), non solo
+attesa. Nuova diagnosi applicativa controllata e provenance modale read-only;
+nessun runtime/test/config modifica autorizzata in questa fase.
+
+| Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| GIS causality investigator | GIS browser diagnosis | reports/code-quality/GIS_APPLICATION_CAUSALITY_2026-10-08.md only; disposable own stack/probes in /tmp | Compare clean55a and frozen70ae035d in real application with camera events, native gesture and exact test flow; no runtime/E2E changes or implicit risk acceptance | GAIA-campaign-20261008-gis-causality | refactor/complexity-gis-causality | ACTIVE |
+| Modal reachability investigator | Capacitas characterization provenance | reports/code-quality/CAPACITAS_MODAL_REACHABILITY_2026-10-08.md only; disposable probes in /tmp | Resolve five updater-null arms from real React/event/API lifecycle, exhaustive setter/callsite analysis; keep UNKNOWN when proof insufficient, no guard removal or fake setters | GAIA-campaign-20261008-modal-provenance | refactor/complexity-modal-provenance | ACTIVE |
+
 ### Capacitas characterization continuation — runtime held
 
 Previous goal turn produced integrated R3 evidence and plans, not completion.
