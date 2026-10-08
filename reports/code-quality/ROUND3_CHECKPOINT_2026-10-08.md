@@ -41,6 +41,11 @@ Browser risk: initial center-click missed a shifted polygon; no popup request.
 Unchanged diagnostic and second full run passed, but root cause is not proven.
 Do not call it a clean first-run PASS or assume unavailable Martin/PostGIS/
 provider/live cases are verified. Browser report owner records cleanup/limits.
+Coordinator does not silently accept UNKNOWN attribution as a GREEN wave.
+A decision has been requested: separate investigation before the next runtime
+wave, or explicit acceptance of the documented intermittent risk. While that
+decision is pending, complete backend verification and read-only planning
+continue; no additional runtime refactoring is authorized.
 Worker first invocation failed missing test JWT, corrected synthetic environment
 passed; original log retained. Combined worker repository coverage remains
 below100% (unchanged runtime), not misreported as full-project100%.
