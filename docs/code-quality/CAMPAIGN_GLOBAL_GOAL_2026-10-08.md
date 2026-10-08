@@ -6,6 +6,17 @@ Il turno precedente produceva progresso verificato; non dimostrava completamento
 
 ## Stato corrente Round3
 
+Ultimo checkpoint: Integration5 `7c7dcc0c`, source congelata `df86527b`,
+frontend tree `1ddc7041881a24259e30dd81491aafba44fdb104`. C10/C11 integrate
+come `ffeafafd`/`df86527b`; 306 test PASS/15 spec/zero skip, ratchet0 dopo
+ciascuna. Coverage combinata:857/857 statement,903/929 branch (97,20%),
+251/251 funzioni,748/748 linee. Restano26 arms:21 candidati condizionalmente
+irraggiungibili e5 modal arms UNKNOWN. Gate100% FAIL, runtime immutato.
+Verifier indipendente attivo; suite frontend completa in esecuzione sul tree
+congelato. Nessuna wave runtime autorizzata: decisioni GIS e difese ridondanti
+richieste all'utente, nessuna risposta/accettazione implicita registrata.
+Gli aggiornamenti Integration4 e precedenti sottostanti sono storia.
+
 Aggiornamento autorevole Integration4 `ae440459`: dodici nuove slice test-only
 integrate, 294 test PASS/13 spec/zero skip. Coverage reale combinata: statement
 857/857, branch 890/929 (95,80%), funzioni 251/251, linee 748/748. Gate full-file

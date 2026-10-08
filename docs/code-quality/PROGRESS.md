@@ -2,6 +2,17 @@
 
 ## 2026-10-08 — Capacitas test-only checkpoint, missione aperta
 
+- Stato più recente Integration5 `7c7dcc0c`: C10 `ffeafafd` e C11 `df86527b`
+  integrate dopo review indipendente;306 PASS/15 spec/zero skip, ratchet0
+  dopo ciascuna. Coverage857/857s903/929arms251/251f748/748lines:branch97,20%,
+  gate100% FAIL. Tutti13 arms raggiungibili assegnati chiusi, nessun arm perso;
+  ledger26arms/25linee/zero senza posizione. Runtime/AST/protetti invariati.
+  Frozen frontend tree1ddc7041; Final Characterization Verifier indipendente
+  attivo in worktree dedicata, suite frontend completa in esecuzione.
+  Nessuna nuova riduzione: NO_CHANGE — CHARACTERIZATION_ONLY.
+  Decisioni GIS e pulizia difese ridondanti richieste, non accettate implicitamente.
+  Missione ACTIVE/INCOMPLETE; Integration4 e paragrafi seguenti storici.
+
 - Checkpoint autorevole Integration4 `ae440459`: C5b `a79b36d1` e C9
   `8a12533a` integrate dopo review indipendente; 294 test PASS/13 spec/zero skip.
   Coverage combinata857/857s890/929arms251/251f748/748lines, branch95,80%,

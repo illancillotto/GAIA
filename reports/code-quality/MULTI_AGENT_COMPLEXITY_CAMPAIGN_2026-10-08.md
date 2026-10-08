@@ -71,6 +71,17 @@ revisionate, nessuna wave indiscriminata. Fonte fresca: `/tmp/gaia-capacitas-cha
 
 ## Capacitas characterization checkpoint
 
+Ultimo checkpoint: Integration5 `7c7dcc0c`, C10 `ffeafafd`/C11 `df86527b`,
+306 test PASS/15 spec/zero skip. Ratchet0 dopo ogni integrazione; coverage
+857/857 statement903/929 branch251/251 funzioni748/748linee. Branch97,20%,
+gate100% FAIL:26 arms residui,21 candidati condizionalmente impossibili e5
+modal UNKNOWN. Nessun arm precedentemente coperto perso,13 assegnati chiusi.
+Frozen frontend tree `1ddc7041881a24259e30dd81491aafba44fdb104`; verifier
+indipendente attivo e nuova suite frontend completa in esecuzione.
+Quattordici nuove slice test-only integrate; runtime byte-identico e cognitive472.
+Nessuna autorizzazione runtime o deroga coverage deriva da questo checkpoint.
+Le sezioni Integration4/3/2 sottostanti conservano la storia.
+
 Stato autorevole Integration4 `ae440459`: 294 test PASS/13 spec/zero skip,
 coverage effettiva857/857statement890/929branch251/251funzioni748/748linee.
 Branch95,80%, gate full-file100% FAIL,39 arms residui. Dodici nuove slice
