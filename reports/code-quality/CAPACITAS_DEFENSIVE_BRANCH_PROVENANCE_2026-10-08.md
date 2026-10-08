@@ -84,8 +84,17 @@ Five `setResolveModal(prev => prev ? ... : null)` false arms at3166,3203,
 - C7 characterizes real close/busy transitions and retains these five arms;
   no artificial updater execution or full coverage claim.
 
-Also do not infer missing-sheet guards285/382 are unreachable from this proof:
-empty or corrupt workbook formats need their own actual parser evidence.
+Missing-sheet guards285/382 are **REACHABLE** with actual no-sheet OOXML
+bytes. Root disposable probe serializes a real workbook, rewrites its
+`xl/workbook.xml` sheet collection to `<sheets/>` through actual CFB ZIP
+serialization, then parses the bytes with unmockedSheetJS0.20.3:SheetNames[].
+Original15887bytes versus modified15834bytes; `/tmp/capacitas-empty-workbook.xlsx`
+SHA256`e183290b3d727164c295d684b6098419d164ae4821734bd2ab9f04d346836da8`.
+This is a malformed upload accepted by the parser, not a fabricated parser
+return. `/tmp/capacitas-empty-workbook-probe-corrected.log` exit0; first attempts
+failed CFB relative-path lookup/update, corrected archive paths only. C9 owns
+two real UI upload characterization cases separately; it must be reviewed
+before integration. This evidence does not remove either guard.
 There may be additional uncovered defensive arms outside this initial ledger.
 
 ## Decision boundary
