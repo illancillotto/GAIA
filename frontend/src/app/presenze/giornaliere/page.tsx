@@ -34,6 +34,8 @@ import type {
 } from "@/types/api";
 import { collaboratorProfileFilterKey, selectMonthlyCollaboratorRows } from "./collaborator-rows";
 import type { DayFocusFilter, ProfileFilterKey } from "./collaborator-rows";
+import { buildMonthlyRecordInsights } from "./monthly-record-insights";
+import type { DayOperationalSummary, MonthlyRecordFacts } from "./monthly-record-insights";
 
 type DailyEditForm = {
   kmValue: string;
@@ -55,25 +57,7 @@ type DayColumn = {
 };
 
 type CellKind = "anomaly" | "analysis" | "special" | "ferie" | "permesso" | "malattia" | "absence" | "worked" | "rest";
-type DayOperationalSummary = {
-  extra: number;
-  km: number;
-  trasferta: number;
-  anomalies: number;
-  requests: number;
-};
 type DisplayedPunchRow = { time: string | null; direction: string | null; terminal_label: string | null };
-type CollaboratorMonthTotals = {
-  ordinary: number;
-  extra: number;
-  km: number;
-  trasferta: number;
-  anomalies: number;
-  straordinario: number;
-  reperibilita: number;
-  absencesByCause: Map<string, number>;
-  saturdayEntries: Array<{ ordinal: number; label: string }>;
-};
 type ContractProfileEditorState = {
   contractKind: NonNullable<PresenzeCollaborator["contract_kind"]> | "";
   operaiGroup: NonNullable<PresenzeCollaborator["operai_group"]> | "";
@@ -646,6 +630,18 @@ function saturdayEntryLabel(record: PresenzeDailyRecord): string | null {
   return null;
 }
 
+function readMonthlyRecordFacts(record: PresenzeDailyRecord): MonthlyRecordFacts {
+  const extra = effectiveExtraMinutes(record);
+  const ordinary = effectiveOrdinaryMinutes(record);
+  const absence = absenceSummaryEntry(record);
+  const saturdayLabel = saturdayEntryLabel(record);
+  const saturday = saturdayLabel ? { ordinal: saturdayOrdinalInMonth(record.work_date), label: saturdayLabel } : null;
+  const kind = classifyCell(record);
+  const code = recordScheduleCode(record);
+  const schedule = code ? { code, label: recordScheduleLabel(record) } : null;
+  return { extra, ordinary, absence, saturday, kind, schedule };
+}
+
 function requestBadgeLabel(record: PresenzeDailyRecord): string | null {
   if (record.resolved_absence_cause) {
     return formatAbsenceCause(record.resolved_absence_cause);
@@ -950,115 +946,7 @@ export default function PresenzeGiornalierePage() {
   }, [records]);
 
   const recordInsights = useMemo(() => {
-    const monthTotals = new Map<string, CollaboratorMonthTotals>();
-    const dayTotals = new Map<string, DayOperationalSummary>();
-    const dayAnomalyCollaboratorIds = new Map<string, Set<string>>();
-    const dayRequestCollaboratorIds = new Map<string, Set<string>>();
-    const presentIds = new Set<string>();
-    const scheduleCounts = new Map<string, Map<string, number>>();
-    const scheduleLabels = new Map<string, string>();
-    let anomalies = 0;
-    let km = 0;
-    let extra = 0;
-    let trasferta = 0;
-
-    for (const record of records) {
-      presentIds.add(record.collaborator_id);
-
-      const currentTotals = monthTotals.get(record.collaborator_id) ?? {
-        ordinary: 0,
-        extra: 0,
-        km: 0,
-        trasferta: 0,
-        anomalies: 0,
-        straordinario: 0,
-        reperibilita: 0,
-        absencesByCause: new Map<string, number>(),
-        saturdayEntries: [],
-      };
-      const currentDayTotals = dayTotals.get(record.work_date) ?? { extra: 0, km: 0, trasferta: 0, anomalies: 0, requests: 0 };
-      const recordExtra = effectiveExtraMinutes(record);
-      const recordOrdinary = effectiveOrdinaryMinutes(record);
-      const absenceEntry = absenceSummaryEntry(record);
-      currentTotals.ordinary += recordOrdinary;
-      currentTotals.extra += recordExtra;
-      currentTotals.km += record.km_value ?? 0;
-      currentTotals.trasferta += record.trasferta_minutes ?? 0;
-      currentTotals.straordinario += record.effective_straordinario_minutes ?? record.straordinario_minutes ?? 0;
-      currentTotals.reperibilita += record.reperibilita_unit !== "none" ? record.reperibilita_quantity ?? 1 : 0;
-      const saturdayLabel = saturdayEntryLabel(record);
-      if (saturdayLabel) {
-        currentTotals.saturdayEntries.push({
-          ordinal: saturdayOrdinalInMonth(record.work_date),
-          label: saturdayLabel,
-        });
-      }
-      if (absenceEntry) {
-        currentTotals.absencesByCause.set(
-          absenceEntry.cause,
-          (currentTotals.absencesByCause.get(absenceEntry.cause) ?? 0) + absenceEntry.minutes,
-        );
-      }
-      currentDayTotals.extra += recordExtra;
-      currentDayTotals.km += record.km_value ?? 0;
-      currentDayTotals.trasferta += record.trasferta_minutes ?? 0;
-      if (record.detail_requests.length > 0 || record.request_description) {
-        currentDayTotals.requests += 1;
-        const requestIds = dayRequestCollaboratorIds.get(record.work_date) ?? new Set<string>();
-        requestIds.add(record.collaborator_id);
-        dayRequestCollaboratorIds.set(record.work_date, requestIds);
-      }
-      const cellKind = classifyCell(record);
-      if (cellKind === "anomaly" || cellKind === "analysis") {
-        currentDayTotals.anomalies += 1;
-        const anomalyIds = dayAnomalyCollaboratorIds.get(record.work_date) ?? new Set<string>();
-        anomalyIds.add(record.collaborator_id);
-        dayAnomalyCollaboratorIds.set(record.work_date, anomalyIds);
-      }
-      if (cellKind === "anomaly") {
-        currentTotals.anomalies += 1;
-        anomalies += 1;
-      }
-      monthTotals.set(record.collaborator_id, currentTotals);
-      dayTotals.set(record.work_date, currentDayTotals);
-
-      km += record.km_value ?? 0;
-      extra += recordExtra;
-      trasferta += record.trasferta_minutes ?? 0;
-
-      const code = recordScheduleCode(record);
-      if (!code) continue;
-      const perCollab = scheduleCounts.get(record.collaborator_id) ?? new Map<string, number>();
-      perCollab.set(code, (perCollab.get(code) ?? 0) + 1);
-      scheduleCounts.set(record.collaborator_id, perCollab);
-      if (!scheduleLabels.has(code)) {
-        const label = recordScheduleLabel(record);
-        if (label) scheduleLabels.set(code, label);
-      }
-    }
-
-    const collaboratorSchedule = new Map<string, { code: string; label: string }>();
-    for (const [collabId, perCollab] of scheduleCounts) {
-      let bestCode = "";
-      let best = -1;
-      for (const [code, occurrences] of perCollab) {
-        if (occurrences > best) {
-          best = occurrences;
-          bestCode = code;
-        }
-      }
-      collaboratorSchedule.set(collabId, { code: bestCode, label: scheduleLabels.get(bestCode) ?? bestCode });
-    }
-
-    return {
-      collaboratorSchedule,
-      dayAnomalyCollaboratorIds,
-      dayRequestCollaboratorIds,
-      dayTotals,
-      monthTotals,
-      presentIds,
-      summary: { anomalies, km, extra, trasferta },
-    };
+    return buildMonthlyRecordInsights(records, readMonthlyRecordFacts);
   }, [records]);
 
   const collaboratorSchedule = recordInsights.collaboratorSchedule;

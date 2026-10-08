@@ -1746,6 +1746,60 @@ describe("Presenze giornaliere workspace", () => {
     expect(within(summary).getByText("1.5h")).toBeInTheDocument();
   });
 
+  test("retains the first nonempty global schedule label and the first code in a frequency tie", async () => {
+    await renderMayMatrix([
+      matrixRecord({ schedule_code: "FIRST", detail_programmed_schedule: "" }),
+      matrixRecord({ id: "other", work_date: "2026-05-19", schedule_code: "SECOND", detail_programmed_schedule: "SECOND - Different" }),
+      matrixRecord({ id: "podda", collaborator_id: "collab-2", schedule_code: "FIRST", detail_programmed_schedule: "FIRST - Shared label" }),
+      matrixRecord({ id: "zedda", collaborator_id: "collab-3", schedule_code: "FIRST", detail_programmed_schedule: "FIRST - Later label" }),
+    ]);
+    expect(screen.getByRole("button", { name: "FIRST (3)" })).toHaveAttribute("title", "FIRST - Shared label");
+    expect(screen.queryByRole("button", { name: "SECOND (1)" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "FIRST (3)" }));
+    await expectMatrixCollaborators(["AMADU SALVATORE", "PODDA RAIMONDO", "ZEDDA MARIO"]);
+  });
+
+  test("counts daily attention per record but filters distinct collaborators and counts only blocking monthly anomalies", async () => {
+    await renderMayMatrix([
+      matrixRecord({ operational_status: "in_analysis", request_description: "Permesso" }),
+      matrixRecord({ id: "duplicate", operational_status: "blocking", operational_missing_minutes: 60, detail_requests: [{ Descrizione: "Richiesta" }] }),
+      matrixRecord({ id: "podda", collaborator_id: "collab-2", operational_status: "in_analysis" }),
+    ]);
+    expect(screen.getByText("1 anomalie")).toBeInTheDocument();
+    const anomalyFocus = screen.getByTitle("2026-05-18 · 3 anomalie");
+    const requestFocus = screen.getByTitle("2026-05-18 · 2 richieste");
+    fireEvent.click(anomalyFocus);
+    await expectMatrixCollaborators(["AMADU SALVATORE", "PODDA RAIMONDO"]);
+    fireEvent.click(requestFocus);
+    await expectMatrixCollaborators(["AMADU SALVATORE"]);
+  });
+
+  test("preserves nullish and signed arithmetic and leaves frozen source records untouched", async () => {
+    const items = [
+      matrixRecord({ km_value: null, trasferta_minutes: null, effective_extra_minutes: 0, effective_straordinario_minutes: 0, straordinario_minutes: 120, reperibilita_unit: "days", reperibilita_quantity: 0 }),
+      matrixRecord({ id: "signed", work_date: "2026-05-19", km_value: -5, trasferta_minutes: -60, effective_extra_minutes: null, effective_straordinario_minutes: null, straordinario_minutes: -30, effective_mpe_minutes: null, mpe_minutes: -30 }),
+    ];
+    const original = structuredClone(items);
+    items.forEach(Object.freeze);
+    Object.freeze(items);
+    await renderMayMatrix(items);
+    expect(screen.getByText("-5 KM")).toBeInTheDocument();
+    expect(screen.getByText("Extra -1.00 h")).toBeInTheDocument();
+    expect(screen.getByText("Trasferta -1.00 h")).toBeInTheDocument();
+    expect(items).toEqual(original);
+    expect(Object.isFrozen(items)).toBe(true);
+  });
+
+  test("retains NaN in month arithmetic instead of replacing it with zero", async () => {
+    await renderMayMatrix([
+      matrixRecord({ km_value: Number.NaN, trasferta_minutes: Number.NaN, effective_extra_minutes: Number.NaN }),
+      matrixRecord({ id: "later", work_date: "2026-05-19", km_value: 5, trasferta_minutes: 60, effective_extra_minutes: 60 }),
+    ]);
+    expect(screen.getByText("NaN KM")).toBeInTheDocument();
+    expect(screen.getByText("Extra NaN h")).toBeInTheDocument();
+    expect(screen.getByText("Trasferta NaN h")).toBeInTheDocument();
+  });
+
   test("sorts monthly Saturdays chronologically and retains each absence cause", async () => {
     await renderMayMatrix([
       matrixRecord({ id: "third", work_date: "2026-05-16", resolved_absence_cause: "malattia", absence_minutes: 120 }),
