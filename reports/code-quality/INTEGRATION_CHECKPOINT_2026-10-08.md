@@ -301,3 +301,120 @@ completati. Questo esito non supera i gate coverage mancanti dei runtime né
 certifica le suite finali della campagna. La suite backend completa iniziale del
 Coordinator è ancora attiva (circa 72% nel log osservato) con almeno una failure
 già visibile; nessun tentativo di correggere quella failure non correlata.
+
+## Follow-up Wave 2 — B4 Network statistics
+
+Review indipendente del candidato `664df72fed88bc803032532179b9cb4148855908`;
+cherry-pick sulla branch integration come
+`69c15454af84d2b474c73ae4a88093cec44594c2`, dopo HEAD iniziale
+`2b2190c167de72bff3cb383686d4fa02ac935871`. Merge-base autorevole invariato:
+`55a1b1d35911451e018b662c2acc450bf5994ea2`.
+
+Ownership esclusiva: `backend/app/modules/network/router/helpers/traffic.py`,
+nuovo `backend/tests/test_network_traffic_campaign.py`, report B4. Nessun overlap
+con le slice frontend, test-only o B5 Wiki ancora isolata. Nessun file core/shared,
+API route, configurazione, soglia, esclusione, baseline o tooling modificato.
+Il registro integration segna B4 MERGED; main non viene modificato.
+
+### Equivalenza e review architetturale
+
+La slice sostituisce quattro conversioni identiche con un helper locale puro
+di cinque LOC. L'espressione `max(int(str(parsed.get(field, 0)).strip()), 0)`
+e le eccezioni `TypeError`/`ValueError` sono identiche all'originale; il getter
+resta dentro il try. Le due letture sent/received rimangono nei due rami active/
+non-active e nello stesso ordine rispetto a lookup, lifecycle e confronti IP.
+Non si anticipa una lettura IP né si crea uno snapshot che alteri i fallback.
+Query, iterazione, filtri, ordinamenti, aggregazioni, payload e side effect DB
+non cambiano. Nessun nuovo import o dipendenza: assenti import ciclici,
+component explosion e astrazioni generiche.
+
+I test di caratterizzazione sono significativi: matrice di byte validi/invalidi
+su sorgente active/retired/assente, propagazione ai totali/top/timeline, contatori
+non-zero con proprietà IP dinamica e ordine degli accessi, eventi assenti.
+Non modificano i test originali né introducono skip o suppressioni. I mock
+simulano il risultato delle query ai confini; il parser e l'aggregatore reali
+sono eseguiti. I test di ordine proteggono un'invariante già caratterizzata
+dalla suite storica, senza introdurre seam nel runtime.
+
+### Metriche indipendenti dopo integrazione
+
+Lo scanner del checkout integration riproduce esattamente `files` e `callables`
+del JSON B4 approvato. Sono confrontati gli aggregati comprendenti il helper,
+non soltanto il callable principale.
+
+| Metrica | Prima | Dopo | Delta |
+| --- | ---: | ---: | ---: |
+| Statistics cognitive | 209 | 181 | -28 (-13,40%) |
+| Statistics cyclomatic | 109 | 101 | -8 |
+| Statistics callable LOC | 226 | 214 | -12 |
+| File cognitive sum | 322 | 297 | -25 |
+| File cyclomatic sum | 181 | 176 | -5 |
+| Decisioni aggregate `sum(cyclomatic-1)` | 175 | 169 | -6 |
+| File effective LOC | 456 | 449 | -7 |
+| Callable count | 6 | 7 | +1 |
+| Error/warning finding | 8/4 | 8/4 | 0/0 |
+
+Nuovo helper: cognitive3, cyclomatic3, LOC5, nesting2, params2, nessun finding.
+Dipendenze/import invariati a20. I finding invariati non nascondono il calo reale
+delle metriche: è eliminata la duplicazione e diminuisce anche il debito aggregato.
+Classificazione **IMPROVED**; statistics passa sotto cognitive200 ma rimane
+181, sopra la soglia25. `run_network_scan` rimane invariato e non è risolto.
+
+Perimetro runtime integrato P1/P6/B4: cognitive sum2570→2390 (-180; -7,00%),
+cyclomatic sum2396→2280 (-116; -4,84%), effective LOC5352→5312 (-40; -0,75%),
+error43→36 (-7), warning49→39 (-10). Questi sono delta scoped sulle tre slice,
+non percentuali globali del repository né metriche di problemi indipendenti.
+
+### Verifiche integration B4
+
+- Suite helper/nuova caratterizzazione rieseguita **45 PASS**, zero skipped:
+  `/tmp/gaia-integration-b4-tests.log`.
+- Coverage full-file reale `traffic.py`: **276/276 statement e92/92 branch**,
+  zero missing, partial branch o excluded statement. JSON indipendente
+  `/tmp/gaia-integration-b4-coverage.json`, verificato direttamente per percorso.
+  `coverage report --fail-under=100` PASS.
+- Ruff runtime e nuovo test PASS; Ruff format-check nuovo test PASS.
+- Scanner indipendente PASS: `/tmp/gaia-integration-b4-complexity.json` e `.md`.
+- Diff-check e integrità baseline/tooling PASS; nessun altro runtime modificato
+  in questo follow-up.
+- Suite API Network indipendente **50 PASS**, zero skipped;
+  `/tmp/gaia-integration-b4-api-tests.log`. Insieme ai45 helper sono95 test
+  pertinenti rieseguiti senza duplicare le suite complete globali. I98 warning
+  JWT test-key già esistenti sono conservati, nessuna failure.
+- Ratchet completo post-cherry-pick **PASS, zero finding**, baseline autorevole
+  `55a1b1d35911451e018b662c2acc450bf5994ea2`;
+  `/tmp/gaia-integration-b4-ratchet.log`.
+
+**Checkpoint B4 GREEN** per la slice integrata: review, test95, coverage100%,
+misure indipendenti e ratchet completo conformi. Non certifica il completamento
+di Network o il successo delle suite globali ancora in verifica.
+
+Il file misurato è quello completo nell'integration, non un report copiato
+dalla worktree B4. La source-directory di Coverage evita l'eager-import dotted
+già diagnosticato senza restringere righe/branch o modificare policy/config.
+Graphify Network del candidato è aggiornato mediante target Make dedicato;
+il blob runtime integrato è identico e non introduce ulteriori relazioni.
+Grafi generati non versionati. SHA-256 runtime:
+`50f514858de2b3a997496648932416c67342c5c358e079626ed43cb0c86fd717`.
+
+Comandi dal backend per coverage e regressione API separata:
+
+```bash
+COVERAGE_FILE=/tmp/gaia-integration-b4.coverage APP_ENV=test \
+  DATABASE_URL=sqlite:////tmp/gaia-integration-b4.db \
+  .venv/bin/python -m coverage run --branch \
+  --source=app/modules/network/router/helpers -m pytest -q \
+  tests/test_network_router_helpers.py tests/test_network_traffic_campaign.py \
+  -o cache_dir=/tmp/gaia-integration-b4-cache
+COVERAGE_FILE=/tmp/gaia-integration-b4.coverage .venv/bin/python -m coverage json \
+  --include='*/traffic.py' -o /tmp/gaia-integration-b4-coverage.json
+COVERAGE_FILE=/tmp/gaia-integration-b4.coverage .venv/bin/python -m coverage report \
+  --include='*/traffic.py' --fail-under=100
+APP_ENV=test DATABASE_URL=sqlite:////tmp/gaia-integration-b4-api.db \
+  .venv/bin/python -m pytest -q tests/test_network_api.py \
+  -o cache_dir=/tmp/gaia-integration-b4-api-cache
+```
+
+Nessuna suite globale è duplicata dall'Integration Agent; i rispettivi esiti
+sono di responsabilità del verifier. B5 rimane isolata, non viene cherry-picked
+prima della review e dei suoi gate completi.
