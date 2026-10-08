@@ -1,5 +1,74 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## Risultati cumulativi autorevoli al checkpoint R3
+
+Il runtime rimane quello R3: la continuazione Capacitas modifica soltanto test
+e report. Questa tabella aggiorna i risultati; le sezioni R1/R2 successive
+conservano la storia, non sostituiscono questi numeri. Campagna INCOMPLETE.
+
+| Metrica | Snapshot Git clean55a | Corrente | Delta | Delta % |
+| --- | ---: | ---: | ---: | ---: |
+| File | 1662 | 1668 | +6 | +0,36% |
+| Callable | 20257 | 20280 | +23 | +0,11% |
+| Error | 1956 | 1938 | -18 | -0,92% |
+| Warning | 2758 | 2749 | -9 | -0,33% |
+| Segnalazioni | 4714 | 4687 | -27 | -0,57% |
+| Cognitive aggregata | 81931 | 81400 | -531 | -0,65% |
+| Cyclomatic aggregata | 83666 | 83377 | -289 | -0,35% |
+| File LOC effettive | 332181 | 332233 | +52 | +0,016% |
+| Callable cognitive>300 | 8 | 7 | -1 | -12,50% |
+| Callable cognitive>200 | 18 | 17 | -1 | -5,56% |
+| Callable cognitive>100 | 55 | 55 | 0 | 0% |
+
+Audit dirty ufficiale:1665file20261callable. Tre file concorrenti/quattro
+callable non appartenenti allo snapshot Git spiegano la differenza iniziale;
+non sono eliminazioni della campagna. Totali finding uguali nel confronto
+clean, ma non equivalgono a problemi indipendenti. LOC è aumentata, non ridotta.
+Target strategici e coda estrema non raggiunti; nessuna pressione sulla
+sicurezza per inseguire percentuali. Complessità Capacitas472 ancora invariata.
+
+### Domain results — runtime corrente
+
+| Domain | Error before | Error after | Warning before | Warning after |
+| --- | ---: | ---: | ---: | ---: |
+| Backend complessivo | 1035 | 1033 | 1688 | 1689 |
+| Backend Catasto | 186 | 186 | 233 | 233 |
+| Backend Ruolo | 117 | 117 | 230 | 230 |
+| Backend Presenze | 93 | 93 | 240 | 240 |
+| Backend Wiki | 108 | 106 | 193 | 195 |
+| Backend Operazioni | 103 | 103 | 107 | 106 |
+| Backend Network | 75 | 75 | 65 | 65 |
+| Backend legacy services | 144 | 144 | 204 | 204 |
+| Frontend complessivo | 878 | 862 | 881 | 871 |
+| Worker runtime | 35 | 35 | 134 | 134 |
+| Worker tests, separati dal runtime | 8 | 8 | 55 | 55 |
+
+Le righe Backend di dominio sono sottoinsiemi del complessivo, non additive.
+Services include anche servizi non-elaborazioni; non confrontare144/204 con
+il sottogruppo legacy elaborazioni120/156. Wiki trasforma error in warning:
+il +2warning non è un peggioramento nascosto, le metriche obiettivo e il ratchet
+sono migliorati. La riduzione fuel non fa sparire gli error-level threshold
+ancora superati: il numero finding non misura da solo il rischio ridotto.
+
+### Extreme hotspot — principali callable modificati
+
+| Callable | Before cognitive | After cognitive | Delta |
+| --- | ---: | ---: | ---: |
+| PresenzeGiornalierePage | 550 | 437 | -113 |
+| ElaborazioniSettingsWorkspace | 402 | 296 | -106 |
+| fuel_analytics | 366 | 322 | -44 |
+| anomalies_analytics, prerequisite guards only | 365 | 361 | -4 |
+| CatastoGisPage | 334 | 317 | -17 |
+| _build_network_statistics_summary | 209 | 181 | -28 |
+| refresh_wiki_conversation_daily_metrics | 188 | 178 | -10 |
+| ElaborazioniCapacitasWorkspace, test-only | 472 | 472 | 0 |
+
+Le riduzioni principali non si sommano direttamente agli aggregati: questi
+includono callback/helper e nuove responsabilità; la review verifica assenza
+di trasferimento del debito. Presenze non ha raggiunto -50%/<250 nella prima
+slice; milestone esplicitamente aperta. Undici slice runtime cumulative
+revisionate, nessuna wave indiscriminata. Fonte fresca: `/tmp/gaia-capacitas-characterization-complexity.json`.
+
 ## Capacitas characterization checkpoint
 
 New independent Integration2 report99baa6c0 acceptsC8/C1/correctedC2a/C3:
