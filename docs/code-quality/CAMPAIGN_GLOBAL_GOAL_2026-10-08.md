@@ -6,6 +6,12 @@ Il turno precedente produceva progresso verificato; non dimostrava completamento
 
 ## Stato corrente Round3
 
+Aggiornamento finale gatebackend:6608PASS449skip2272warnings/exit0/1554,96s
+su runtime0b1a0d37. Browser confirmation52PASS7skip dopo primoFAIL51/7/1:
+rootcauseGISUNKNOWN, decisione richiesta prima prossima runtimewave.
+La campagna globale rimaneACTIVE/INCOMPLETE; nessun blocco attribuito alle
+30divergenze baseline storiche. StatoIN_PROGRESS sottostante e storico.
+
 Tre nuove slice integrate e revisionate indipendentemente a `c7d79229`:
 Presenze `fbd4172d`, Settings `b0dd9228`, fuel `0b1a0d37`.
 617 test mirati PASS, sei runtime full-file statement/branch100%, ratchet0

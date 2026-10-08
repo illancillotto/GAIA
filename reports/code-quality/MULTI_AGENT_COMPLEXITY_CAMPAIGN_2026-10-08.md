@@ -1,5 +1,19 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## Checkpoint corrente Round3
+
+Backend completoR3 **6608PASS449skip2272warnings/exit0/1554,96s**, runtime
+0b1a0d37 immutato; log`/tmp/gaia-r3-backend-full-tests.log`.
+Frontend4099PASS, worker778PASS1skip, tooling169PASS, buildPASS.
+Browser conferma52PASS7skip, ma primo run51PASS7skip1FAILGIS resta registrato.
+Nessun test indebolito; attribuzioneGISUNKNOWN. Prossima wave runtime richiede
+decisione esplicita sul rischio, non un'assunzione di first-runGREEN.
+R3 focused617PASS/sei runtimefull-file100/ratchet0.1938error2749warning,
+cumulativo−531cognitive/−289cyclomatic; goal ancoraACTIVE/INCOMPLETE.
+Report`ROUND3_CHECKPOINT_2026-10-08.md`, `ROUND3_VERIFICATION_2026-10-08.md`,
+`ROUND3_BROWSER_VERIFICATION_2026-10-08.md`; paragrafiIN_PROGRESS seguenti
+sono aggiornamenti storici antecedenti al completamento della suite.
+
 **Global goal ACTIVE / INCOMPLETE.** Round3 runtime is integrated and its
 focused gates are GREEN; the new full backend suite and browser verification
 remain in progress. Round4 has planning proposals only. The original sections after this update

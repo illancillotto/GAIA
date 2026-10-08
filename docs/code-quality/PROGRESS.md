@@ -54,6 +54,12 @@ blocco verificato e prima di chiudere un goal.
 
 ### Campagna globale — Round 2 attivo (2026-10-08)
 
+- BackendR3 congelato0b1a0d37 concluso:6608PASS449skip2272warnings,
+  exit0/1554,96s, log`/tmp/gaia-r3-backend-full-tests.log`; session30021
+  completata. Runtime invariato. StatoRUNNING nei paragrafi seguenti storico.
+  Nextwave runtime resta sospesa in attesa decisione sul rischioGISUNKNOWN,
+  non per failurebackend e non per le30divergenze globali storiche.
+
 - Round3 integrato e review indipendenteGREEN: Presenze`fbd4172d`,
   Settings`b0dd9228`, fuel`0b1a0d37`, report`c7d79229`.617testPASS,
   sei runtime full-file100%, ratchet0 dopo ogni integrazione.

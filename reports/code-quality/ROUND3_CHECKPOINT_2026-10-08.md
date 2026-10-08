@@ -2,6 +2,23 @@
 
 Global goal **ACTIVE / INCOMPLETE**. This checkpoint is not completion.
 
+## Backend gate completed
+
+The pending status in the historical table below is superseded: frozen
+backendR3 full suite **exit0:6608PASS449SKIPPED2272warnings/1554.96s**,
+session30021 completed. Runtime remained unchanged at0b1a0d37 throughout.
+Command from integration/backend:
+
+```bash
+APP_ENV=test DATABASE_URL=sqlite:////tmp/gaia-r3-backend-full.db \
+.venv/bin/python -m pytest -q -o addopts='' \
+-o cache_dir=/tmp/gaia-r3-backend-full-cache --tb=short
+```
+
+Log `/tmp/gaia-r3-backend-full-tests.log`.449skips are not PASS; warnings
+remain visible. Backend freeze execution requirement is satisfied. Next
+runtime authorization still awaits explicit GIS residual-risk decision.
+
 ## Frozen runtime
 
 - Integration worktree `/home/cbo/CursorProjects/GAIA-campaign-20261008-integration`.
