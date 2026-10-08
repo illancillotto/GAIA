@@ -97,6 +97,24 @@ two real UI upload characterization cases separately; it must be reviewed
 before integration. This evidence does not remove either guard.
 There may be additional uncovered defensive arms outside this initial ledger.
 
+Integration4 complete residual ledger39arms identifies five further
+construction-impossible candidates, bringing the conditional proved total
+to21 (five modal guards stillUNKNOWN):
+
+-258 `normalizeImportHeader(value ?? '')` only receives `Object.keys` string
+  elements, never null/undefined; the function is private and has no other
+  callsite. Empty raw header string still does not take the nullish arm.
+-2482 commune/sub nullish fallbacks and2483/2484 label/commune fallbacks,
+  four arms. Batch items come exclusively from the reader's constructed
+  normalized strings and computed label. Mandatory commune/foglio/particella
+  are validated nonempty; optional sub is always a string including empty.
+  No API job result supplies this local preview list and no UI setter allows
+  a user to insert null. A fake setter or private callback is not coverage.
+
+These retain their guards unchanged. Other13 residual arms are assigned to
+C10/C11 genuine presentation/snapshot/toggle cases; their coverage is pending,
+not inferred. Source ownership remains test-only.
+
 ## Decision boundary
 
 Test-only characterization can close legitimate reachable paths but cannot
