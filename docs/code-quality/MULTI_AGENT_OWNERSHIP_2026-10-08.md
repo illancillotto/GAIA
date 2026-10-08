@@ -22,6 +22,12 @@ nessun runtime/test/config modifica autorizzata in questa fase.
 | GIS causality investigator | GIS browser diagnosis | reports/code-quality/GIS_APPLICATION_CAUSALITY_2026-10-08.md only; disposable own stack/probes in /tmp | Compare clean55a and frozen70ae035d in real application with camera events, native gesture and exact test flow; no runtime/E2E changes or implicit risk acceptance | GAIA-campaign-20261008-gis-causality | refactor/complexity-gis-causality | ACTIVE |
 | Modal reachability investigator | Capacitas characterization provenance | reports/code-quality/CAPACITAS_MODAL_REACHABILITY_2026-10-08.md only; disposable probes in /tmp | Resolve five updater-null arms from real React/event/API lifecycle, exhaustive setter/callsite analysis; keep UNKNOWN when proof insufficient, no guard removal or fake setters | GAIA-campaign-20261008-modal-provenance | refactor/complexity-modal-provenance | ACTIVE |
 
+GIS investigator may use detached clean55a worktree
+`GAIA-campaign-20261008-gis-baseline` read-only with local dependency symlinks
+and own generated build outputs only. Port8081 is occupied and must not be
+touched; isolated loopback18081/13001 are the intended own ports after checks.
+No production resources or existing user services may be changed or stopped.
+
 ### Capacitas characterization continuation — runtime held
 
 Previous goal turn produced integrated R3 evidence and plans, not completion.
