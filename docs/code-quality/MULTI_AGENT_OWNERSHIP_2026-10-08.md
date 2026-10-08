@@ -54,6 +54,12 @@ MapLibre reproduction artifacts are allowed in `/tmp` only, no production or
 committed runtime/test modifications; results must distinguish demonstrated
 library behavior from unobserved state in the original failing application.
 
+Coordinator read-only provenance ownership also reserves
+`reports/code-quality/CAPACITAS_DEFENSIVE_BRANCH_PROVENANCE_2026-10-08.md`.
+Purpose: distinguish construction-impossible, installed-library-contract and
+unresolved race branches without fabricating tests, granting exemptions or
+removing runtime guards. No runtime change follows from this report alone.
+
 ### Continuazione del goal globale (Round 2)
 
 Il goal dell'allegato e49b8632 resta ACTIVE: il checkpoint iniziale con cinque
