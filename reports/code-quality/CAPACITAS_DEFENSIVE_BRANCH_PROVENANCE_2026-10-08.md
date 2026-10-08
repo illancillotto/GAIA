@@ -117,6 +117,17 @@ not inferred. Source ownership remains test-only.
 
 ## Decision boundary
 
+Integration5 report `7c7dcc0c` independently accepts C10/C11 and measures the
+actual fifteen-spec union:306 PASS,903/929 branch arms (97.20%), full-file gate
+FAIL. All13 assigned reachable arms now have genuine hits, with no previously
+covered arm lost. The exhaustive residual ledger contains26 arms on25 source
+lines, with no missing location: the21 conditional construction/library
+candidates above and five modal UNKNOWN arms. Artifact
+`/tmp/gaia-capacitas-integration5-residual-ledger.json`, SHA256
+`41d341b0d1f5f7ef32cc41427b56a19cf91ce2980e9696e2de43d82e8e298512`.
+This closes the assigned reachable-path test work, not the runtime coverage
+policy or modal-race proof. Runtime and all defensive expressions are unchanged.
+
 Test-only characterization can close legitimate reachable paths but cannot
 honestly cover the nine standard-language construction arms, nor these six
 installed-library arms using impossible fixtures. Full-file gate remains
