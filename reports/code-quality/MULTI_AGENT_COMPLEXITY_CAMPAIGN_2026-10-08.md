@@ -98,6 +98,18 @@ Prima della prossima wave servono le decisioni richieste su rischio GIS e
 eventuale slice separata delle difese ridondanti; silenzio non è consenso.
 I checkpoint con verifier/suite in esecuzione sottostanti sono storici.
 
+Ultimo controllo Coordinator sul checkpoint `cbfafe0d`: `make complexity-report`
+exit0, `/tmp/gaia-complexity-final.json` e `.md`; ratchet `BASE_REF=main` exit0,
+zero finding; `make complexity-check` exit2/scanner1,30 finding identici a R3.
+Interi files/callables/violations/summary identici alla verifica indipendente.
+Log `/tmp/gaia-characterization-final-{complexity,ratchet,check}.log`.
+Graphify aggiornato via `make graphify-platform-docs` con `gpt-reserve`:
+327 nodi,336 edge,72 community,149 cache hit/3 file riestratti;
+`chunk 1/1 done`,nessun semantic-chunk failure,exit0.13444 token input/3635
+output,costo stimato$0.0112. Log `/tmp/gaia-characterization-final-platform-docs.log`.
+Artefatti Graphify ignorati, non committati; nessuna modifica docs dopo questo
+refresh (questa annotazione è nel report fuori dal corpus `docs/`).
+
 Ultimo checkpoint: Integration5 `7c7dcc0c`, C10 `ffeafafd`/C11 `df86527b`,
 306 test PASS/15 spec/zero skip. Ratchet0 dopo ogni integrazione; coverage
 857/857 statement903/929 branch251/251 funzioni748/748linee. Branch97,20%,
