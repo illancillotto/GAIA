@@ -25,6 +25,8 @@ Baseline, soglie, esclusioni e tooling complexity sono read-only.
 | B5 | Wiki | backend/app/modules/wiki/services/conversation_metrics.py; backend/tests/test_wiki_metrics_campaign.py | Refresh eventi/ranking: integrazione verificata, full-file 100%, cognitive -37 | GAIA-campaign-20261008-wiki | refactor/complexity-wiki-metrics | MERGED |
 | B3 readiness | Capacitas Terreni | backend/app/services/elaborazioni_capacitas_terreni.py read-only | 130 test; coverage 76,98% statement / 62,95% branch, runtime non autorizzato | GAIA-campaign-20261008-terreni | refactor/complexity-capacitas-terreni | BLOCKED |
 | B6 readiness | Bonifica | backend/app/services/elaborazioni_bonifica_sync.py read-only | 14 test; coverage 34,34% statement / 28,13% branch, runtime non autorizzato | GAIA-campaign-20261008-bonifica | refactor/complexity-bonifica-orchestration | BLOCKED |
+| C1 readiness | Catasto backend | backend/app/modules/catasto/services/ade_wfs.py read-only; reports/code-quality/WAVE3_READINESS_2026-10-08.md | ADE WFS BLOCKED_COVERAGE: 8 skip PostGIS | GAIA-campaign-20261008-catasto-backend | refactor/complexity-catasto-ade-readiness | BLOCKED |
+| C2 | GIS frontend | frontend/src/app/catasto/gis/page.tsx; helper privato locale eventuale; test GIS esclusivi; reports/code-quality/SLICE_C2_2026-10-08.md | Una slice normalizzazione riferimenti Excel; backend GIS read-only | GAIA-campaign-20261008-gis-readiness | refactor/complexity-gis-readiness | ACTIVE |
 
 Capacità disponibile: quattro agenti inclusa root. BASELINE parte prima;
 gli agenti successivi sono avviati in batch, massimo tre child simultanei.

@@ -19,6 +19,10 @@
 - Slice B4 `IMPROVED`: normalizzazione bytes statistiche Network deduplicata;
   cognitive principale 209→181, aggregata 322→297; 95 test PASS,
   coverage 276/276 statement e 92/92 branch, zero esclusioni.
+- Slice B5 `IMPROVED`: guard sugli eventi status e ranking dimensioni
+  deduplicato; refresh cognitive 188→178/nesting 7→6, ranking 50→23.
+  Cognitive file 312→275, cyclomatic 145→136; 107 test PASS e full-file
+  265/265 statement, 102/102 branch. Query e transazioni preservate.
 - P2/P3/P4/P5: caratterizzazione test-only integrata; runtime invariato e
   `BLOCKED_COVERAGE`. Capacitas Terreni e Bonifica non autorizzati al runtime
   per coverage insufficiente; Ruolo tributi bloccato dal lavoro concorrente.
