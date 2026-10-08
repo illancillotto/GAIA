@@ -347,6 +347,29 @@ export function CapacitasTestDialog({
   );
 }
 
+function applySisterVerification(
+  current: ElaborazioneCredentialStatus | null,
+  result: ElaborazioneCredentialTestResult,
+): ElaborazioneCredentialStatus | null {
+  if (!current) return current;
+
+  function verifiedAlias(credential: ElaborazioneCredential | null): ElaborazioneCredential | null {
+    if (!credential || credential.id !== (result.credential_id ?? credential.id)) return credential;
+    return { ...credential, verified_at: result.verified_at };
+  }
+
+  return {
+    ...current,
+    credentials: current.credentials.map((credential) =>
+      credential.id === (result.credential_id ?? current.default_credential?.id)
+        ? { ...credential, verified_at: result.verified_at }
+        : credential,
+    ),
+    default_credential: verifiedAlias(current.default_credential),
+    credential: verifiedAlias(current.credential),
+  };
+}
+
 export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?: boolean }) {
   const [activeTab, setActiveTab] = useElaborazioniCredentialTab();
   const [credentialStatus, setCredentialStatus] = useState<ElaborazioneCredentialStatus | null>(null);
@@ -946,26 +969,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
       setTestBusy(["pending", "processing"].includes(result.status));
       setError(null);
       if (result.verified_at) {
-        setCredentialStatus((current) =>
-          current
-            ? {
-                ...current,
-                credentials: current.credentials.map((credential) =>
-                  credential.id === (result.credential_id ?? current.default_credential?.id)
-                    ? { ...credential, verified_at: result.verified_at }
-                    : credential,
-                ),
-                default_credential:
-                  current.default_credential && current.default_credential.id === (result.credential_id ?? current.default_credential.id)
-                    ? { ...current.default_credential, verified_at: result.verified_at }
-                    : current.default_credential,
-                credential:
-                  current.credential && current.credential.id === (result.credential_id ?? current.credential.id)
-                    ? { ...current.credential, verified_at: result.verified_at }
-                    : current.credential,
-              }
-            : current,
-        );
+        setCredentialStatus((current) => applySisterVerification(current, result));
       }
       if (!["pending", "processing"].includes(result.status)) {
         void loadCredentials();
@@ -998,26 +1002,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
         setTestBusy(["pending", "processing"].includes(nextResult.status));
         setError(null);
         if (nextResult.verified_at) {
-          setCredentialStatus((current) =>
-            current
-              ? {
-                  ...current,
-                  credentials: current.credentials.map((credential) =>
-                    credential.id === (nextResult.credential_id ?? current.default_credential?.id)
-                      ? { ...credential, verified_at: nextResult.verified_at }
-                      : credential,
-                  ),
-                  default_credential:
-                    current.default_credential && current.default_credential.id === (nextResult.credential_id ?? current.default_credential.id)
-                      ? { ...current.default_credential, verified_at: nextResult.verified_at }
-                      : current.default_credential,
-                  credential:
-                    current.credential && current.credential.id === (nextResult.credential_id ?? current.credential.id)
-                      ? { ...current.credential, verified_at: nextResult.verified_at }
-                      : current.credential,
-                }
-              : current,
-          );
+          setCredentialStatus((current) => applySisterVerification(current, nextResult));
         }
         if (!["pending", "processing"].includes(nextResult.status)) {
           void loadCredentials();
