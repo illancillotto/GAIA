@@ -406,19 +406,20 @@ Tentativi intermedi non sono risultati accettati.
 
 ## Remaining top 30 hotspot
 
-Ranking riproducibile dalla scansione finale, cognitive discendente.
-L'audit finale non esclude worker test per far sparire divergenze.
+Ranking corrente Round3, cognitive discendente; applicativo senza test worker.
+Scansione globale completa include comunque i test worker e tutte le30divergenze.
+Fonte `/tmp/gaia-r3-integrated-complexity.json`, snapshot`c7d79229`.
 
 | # | Callable | Cognitive | Cyclomatic | LOC | Path |
 | --- | --- | ---: | ---: | ---: | --- |
-| 1 | PresenzeGiornalierePage | 525 | 432 | 2194 | `frontend/src/app/presenze/giornaliere/page.tsx` |
-| 2 | ElaborazioniCapacitasWorkspace | 472 | 416 | 2631 | `frontend/src/components/elaborazioni/capacitas-workspace.tsx` |
+| 1 | ElaborazioniCapacitasWorkspace | 472 | 416 | 2631 | `frontend/src/components/elaborazioni/capacitas-workspace.tsx` |
+| 2 | PresenzeGiornalierePage | 437 | 385 | 2080 | `frontend/src/app/presenze/giornaliere/page.tsx` |
 | 3 | DetailContent | 391 | 304 | 1908 | `frontend/src/app/utenze/[id]/page.tsx` |
 | 4 | CatastoAnomaliePageContent | 390 | 342 | 2109 | `frontend/src/app/catasto/anomalie/page.tsx` |
-| 5 | ElaborazioniSettingsWorkspace | 366 | 316 | 1527 | `frontend/src/components/elaborazioni/settings-workspace.tsx` |
-| 6 | fuel_analytics | 366 | 208 | 402 | `backend/app/modules/operazioni/routes/analytics.py` |
-| 7 | anomalies_analytics | 365 | 160 | 388 | `backend/app/modules/operazioni/routes/analytics.py` |
-| 8 | CatastoGisPage | 317 | 281 | 1889 | `frontend/src/app/catasto/gis/page.tsx` |
+| 5 | anomalies_analytics | 361 | 159 | 387 | `backend/app/modules/operazioni/routes/analytics.py` |
+| 6 | fuel_analytics | 322 | 183 | 348 | `backend/app/modules/operazioni/routes/analytics.py` |
+| 7 | CatastoGisPage | 317 | 281 | 1889 | `frontend/src/app/catasto/gis/page.tsx` |
+| 8 | ElaborazioniSettingsWorkspace | 296 | 265 | 1358 | `frontend/src/components/elaborazioni/settings-workspace.tsx` |
 | 9 | MePageContent | 271 | 256 | 1133 | `frontend/src/app/me/me-page-content.tsx` |
 | 10 | _run_bonifica_sync_background | 269 | 47 | 232 | `backend/app/services/elaborazioni_bonifica_sync.py` |
 | 11 | ElaborazioniBonificaSyncWorkspace | 259 | 202 | 835 | `frontend/src/components/elaborazioni/bonifica-sync-workspace.tsx` |
@@ -431,8 +432,8 @@ L'audit finale non esclude worker test per far sparire divergenze.
 | 18 | run_network_scan | 195 | 101 | 267 | `backend/app/modules/network/services.py` |
 | 19 | UtenzeSubjectsSection | 184 | 169 | 991 | `frontend/src/components/utenze/utenze-subjects-section.tsx` |
 | 20 | TrackingContent | 183 | 159 | 913 | `frontend/src/app/network/tracking/page.tsx` |
-| 21 | AnagraficaBulkPanel | 181 | 155 | 839 | `frontend/src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx` |
-| 22 | _build_network_statistics_summary | 181 | 101 | 214 | `backend/app/modules/network/router/helpers/traffic.py` |
+| 21 | _build_network_statistics_summary | 181 | 101 | 214 | `backend/app/modules/network/router/helpers/traffic.py` |
+| 22 | AnagraficaBulkPanel | 181 | 155 | 839 | `frontend/src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx` |
 | 23 | refresh_wiki_conversation_daily_metrics | 178 | 49 | 153 | `backend/app/modules/wiki/services/conversation_metrics.py` |
 | 24 | CatastoImportPage | 175 | 149 | 1114 | `frontend/src/app/catasto/import/page.tsx` |
 | 25 | ImportContent | 173 | 160 | 971 | `frontend/src/app/utenze/import/page.tsx` |
