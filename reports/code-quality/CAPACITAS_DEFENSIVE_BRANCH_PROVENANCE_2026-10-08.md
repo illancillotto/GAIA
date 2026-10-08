@@ -130,6 +130,15 @@ not inferred. Source ownership remains test-only.
 
 ## Decision boundary
 
+Current Integration6 report `f8c4f670`, source `53e9405b` integrated `acdc9515`:
+actual312-test/16-spec union covers906/929 arms (97.52%), full-file gate FAIL.
+The three genuinely reachable late-response guards3214/3217/3220 are now
+characterized, not removed; no previous arm loses coverage. Complete residual
+ledger23 arms/22 source lines:21 conditional construction/library candidates
+plus two modal arms3166/3206 still UNKNOWN. Artifact
+`/tmp/gaia-capacitas-integration6-residual-ledger.json`. Runtime remains unchanged.
+The five-arm UNKNOWN and26-arm ledgers below are explicitly historical.
+
 Integration5 report `7c7dcc0c` independently accepts C10/C11 and measures the
 actual fifteen-spec union:306 PASS,903/929 branch arms (97.20%), full-file gate
 FAIL. All13 assigned reachable arms now have genuine hits, with no previously

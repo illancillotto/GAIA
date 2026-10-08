@@ -2,6 +2,16 @@
 
 ## Scope and decision
 
+Later controlled real-application comparison is documented separately in
+`GIS_APPLICATION_CAUSALITY_2026-10-08.md` (source `febc7bfb`, integrated
+`46c6f872`). Both clean55a and integrated app show2/2 early native gesture
+misses and2/2 completed-camera hits. This independently establishes that the
+timing mechanism predates this campaign; it still cannot recover the original
+trace's missing camera telemetry. Coordinator independently reran the saved
+event-order/geometry/request assertion script successfully. No runtime/E2E
+change or automatic residual-risk acceptance follows. The offline-only scope
+and outstanding attribution statements below describe the earlier checkpoint.
+
 Coordinator-owned diagnosis under registry1460954c. No runtime, E2E spec,
 configuration, timeouts, retries, exclusions or baseline was changed. R3
 runtime remains frozen; this report does not authorize the next runtime wave.

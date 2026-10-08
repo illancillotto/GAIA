@@ -2,6 +2,15 @@
 
 ## 2026-10-08 — continuazione: prove causali reali, runtime invariato
 
+- C12 source53e9405b integratoacdc9515 dopo review indipendente; report
+  Integration6f8c4f670.6nuovi/312unionPASS16spec0skip,906/929arms97,52%,
+  gate100%FAIL. Tre nullarms reali coperti,23residui/22linee0unlocated0lost:
+  21conditionalcandidate e2modalUNKNOWN. Runtime/AST/protetti invariati.
+  Source frozenacdc9515/frontendtree14de55bb. Nuova suite frontend completa
+  Coordinator4392PASS/298spec,exit0/187,69s; smoke18PASS0skip,log
+  `/tmp/gaia-capacitas-c12-final-unit.log` e `...-smoke.log`. C12 verifier
+  indipendente attivo. Nessuna riduzione complexity attribuita ai test.
+
 - GIS report source `febc7bfb`, integrato `46c6f872`: confronto applicativo
   clean55a vs70ae035d con gli stessi dependency/browser/fixture. Entrambi:
   2/2 gesture anticipate interrompono camera e non producono popup/panel;

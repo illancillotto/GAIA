@@ -6,6 +6,13 @@ Il turno precedente produceva progresso verificato; non dimostrava completamento
 
 ## Stato corrente Round3
 
+C12 test-only source53e9405b accettataacdc9515,Integration6f8c4f670:
+312PASS/16spec0skip,906/929branch97,52%,gate100%FAIL,23residui (21conditional
+candidate+2modalUNKNOWN). Tre guard async necessari ora caratterizzati, non
+rimossi. Runtime immutato. Nuova suite frontend4392PASS/298spec,exit0,smoke18
+PASS0skip; frozenfrontend14de55bb. Verifier C12 indipendente in corso.
+Decisioni runtime nonGIS/cleanup ancora non registrate; goal ACTIVE/INCOMPLETE.
+
 Nuove prove dopo richiesta «continua»: GIS applicativo confrontato con clean55a,
 race native-gesture/center-click indipendentemente preesistente in entrambi,
 report `46c6f872`. Attribution storica R3 ancora UNKNOWN. Modal keyboard race
