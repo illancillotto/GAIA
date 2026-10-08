@@ -1,8 +1,8 @@
 # GAIA — Multi-Agent Complexity Campaign
 
-**Global goal ACTIVE / INCOMPLETE.** Round2 runtime is integrated and its
-focused gates are GREEN; the full backend suite remains in progress. Round3
-is active only in isolated worktrees. The original sections after this update
+**Global goal ACTIVE / INCOMPLETE.** Round3 runtime is integrated and its
+focused gates are GREEN; the new full backend suite and browser verification
+remain in progress. Round4 has planning proposals only. The original sections after this update
 certify the historical R1 checkpoint, not completion of the global mission.
 Requirements and
 completion audit: `docs/code-quality/CAMPAIGN_GLOBAL_GOAL_2026-10-08.md`.
@@ -13,6 +13,36 @@ senza sviluppo funzionale. Questo documento distingue risultati integrati,
 prerequisiti test-only e obiettivi strategici ancora aperti.
 
 ## Stato cumulativo Round2
+
+### Aggiornamento autorevole Round3
+
+Independent integration `c7d79229`: Presenze`fbd4172d`, Settings`b0dd9228`,
+fuel`0b1a0d37`.617focusedPASS, cinque runtime full-file100%, ratchetmain0
+dopo ogni cherry-pick; protected baseline/soglie/esclusioni/tooling immutati.
+Round3 real aggregate delta−166cognitive/−60cyclomatic/−5error/0warning,
+LOC+27. Non dedurre il miglioramento dal solo callable principale.
+
+| Metrica | Initial clean55a | Round3 integrato | Delta |
+| --- | ---: | ---: | ---: |
+| Error | 1956 | 1938 | -18 (-0,920%) |
+| Warning | 2758 | 2749 | -9 (-0,326%) |
+| Finding | 4714 | 4687 | -27 (-0,573%) |
+| Cognitive aggregata | 81931 | 81400 | -531 (-0,648%) |
+| Cyclomatic aggregata | 83666 | 83377 | -289 (-0,345%) |
+| File LOC aggregata | 332181 | 332233 | +52, non miglioramento LOC |
+| Cognitive>300 | 8 | 7 | -1 |
+| Cognitive>200 | 18 | 17 | -1 |
+| Cognitive>100 | 55 | 55 | 0 |
+
+1668file20280callable, `/tmp/gaia-r3-integrated-complexity.json`.
+Presenze550→437, Settings402→296, fuel366→322. Riduzioni effettive ma
+modeste rispetto al goal globale978error/2068warning/zero>200, non raggiunto.
+Frontend4099PASS/283file, cleanbuildPASS, worker778PASS1skip. BackendR2
+6589PASS449skip, ma backendR3fullsuite IN_PROGRESS su runtime0b1a0d37:
+`/tmp/gaia-r3-backend-full-tests.log`. BrowserR3 e verifier indipendente
+IN_PROGRESS; nessun risultato R2/R1 esteso automaticamente al runtime nuovo.
+Report integration`INTEGRATION_ROUND3_2026-10-08.md`; i paragrafi Round2
+seguenti sono storici. R4 solo pianificato, subordinato a checkpointGREEN.
 
 Independent integration checkpoint `65097ce2`; runtime commits `87efd9bb`
 (Presenze), `3f9863fb` (Settings), `bf4c9a26` (analytics prerequisite).

@@ -4,6 +4,28 @@ Fonte: allegato utente `/home/cbo/.codex/attachments/e49b8632-971c-489a-a541-e52
 Stato: ACTIVE. Il checkpoint R1 certifica cinque slice, non l'intera missione.
 Il turno precedente produceva progresso verificato; non dimostrava completamento.
 
+## Stato corrente Round3
+
+Tre nuove slice integrate e revisionate indipendentemente a `c7d79229`:
+Presenze `fbd4172d`, Settings `b0dd9228`, fuel `0b1a0d37`.
+617 test mirati PASS, cinque runtime full-file statement/branch100%, ratchet0
+dopo ogni integrazione. Cognitive aggregata Round3−166, cyclomatic−60,
+error−5, warning0, LOC+27 dichiarate. Cumulativo clean55a:1938error,
+2749warning,4687finding; cognitive81400,cyclomatic83377. Coda7>300/17>200/
+55>100: goal globale ancora INCOMPLETE, nessuna ridefinizione del target.
+Presenze550→437, Settings402→296, fuel366→322. Settings esce dalla coda>300,
+ma non da quella>200; le altre responsabilità estreme restano aperte.
+
+Suite frontend R3 completa4099PASS/283file, cleanbuildPASS; worker778PASS1skip,
+52file. R2 backend6589PASS449skip concluso, ma il nuovo backend R3 richiede
+la sua suite: `/tmp/gaia-r3-backend-full-tests.log` IN_PROGRESS, session30021.
+Browser R3 e verifica indipendente finale IN_PROGRESS. Nessun PASS esteso a
+runtime non ancora verificato, skip o provider live. Solo planning R4, nessuna
+autorizzazione runtime prima del checkpoint completo verde.
+
+La tabella seguente conserva l'audit storico del riavvio R1; questo stato
+corrente e i report Round3 lo aggiornano senza dichiarare chiusa la missione.
+
 ## Missione invariata
 
 Semplificare strutturalmente l'intero backend, frontend e worker senza alterare

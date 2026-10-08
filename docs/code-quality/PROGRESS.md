@@ -54,6 +54,20 @@ blocco verificato e prima di chiudere un goal.
 
 ### Campagna globale — Round 2 attivo (2026-10-08)
 
+- Round3 integrato e review indipendenteGREEN: Presenze`fbd4172d`,
+  Settings`b0dd9228`, fuel`0b1a0d37`, report`c7d79229`.617testPASS,
+  cinque runtime full-file100%, ratchet0 dopo ogni integrazione.
+  Cognitive aggregata−166/cyclomatic−60/error−5/warning0/LOC+27.
+- Scansione globale R3:1668file20280callable1938error2749warning4687finding,
+  cognitive81400/cyclomatic83377. Cumulativo clean55a−531cognitive/−289cyc,
+  −18error/−9warning. Coda7>300/17>200/55>100; goal ACTIVE/INCOMPLETE.
+  Principal Presenze437, Settings296, fuel322; no laundering/baseline inflation.
+- Suite frontend R3 completa4099PASS/283file, buildcleanPASS, worker778PASS
+  1skip/52file; primo worker tentativoFAIL per JWT test mancante documentato,
+  secondo run con chiave sintetica e PYTHONPATH rootPASS. Non produzione.
+  BackendR3fullsuite in corso/session30021, browser/verifierR3 in corso.
+  R4 solo planning; nessun nuovo runtime prima checkpoint completoGREEN.
+
 - Suite backend congelata Round2 conclusa:6589PASS449skip2272warnings,
   exit0/1502,26s sul runtime `bf4c9a26`, log
   `/tmp/gaia-r2-backend-full-tests.log`. Freeze rilasciato dal Coordinator:
