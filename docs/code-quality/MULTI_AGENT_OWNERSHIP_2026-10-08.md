@@ -41,6 +41,13 @@ after independent review/ratchet, one cherry-pick at a time. Runtime complexity
 must stay identical; classification NO_CHANGE, not IMPROVED. Never fake branch
 coverage with private closures, malformed impossible mocks or ignore additions.
 
+C2a integration authorization: apply exact sources8eec9bc2bf7950bbc0c6b563afae68d648fb850b
+and28dfb7c5b37876f8560109f6594bea83e531aac3 as one reviewed final tree using
+`git cherry-pick --no-commit` for the pair, then one coherent test-only commit.
+Do not land the rejected intermediate fixture tree as an integration commit.
+Source before/reviewed coverage identical414/857s381/929arms, reviewed43tests
+PASS and ratchet0 exit0. Integration must independently repeat its gates.
+
 Coordinator also owns `reports/code-quality/GIS_BROWSER_CAUSALITY_2026-10-08.md`
 for read-only diagnosis of the unresolved browser gate. Disposable offline
 MapLibre reproduction artifacts are allowed in `/tmp` only, no production or
