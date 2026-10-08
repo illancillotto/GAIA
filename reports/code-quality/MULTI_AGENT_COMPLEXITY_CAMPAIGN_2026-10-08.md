@@ -109,6 +109,17 @@ chieste all'utente con le nuove prove,non ancora registrate. Non classificare
 «continua» o il silenzio come deroga coverage/rimozione dei guard/rischio accettato.
 I checkpoint Integration5 e precedenti sottostanti conservano la storia.
 
+Ultimi gate Coordinator su `e4801020`: nuova scansione completa
+`/tmp/gaia-complexity-final.json`/`.md` exit0,files/callables/summary/violations
+esattamente identici al verifier C12;ratchet `BASE_REF=main` PASS0/exit0.
+Log `/tmp/gaia-c12-coordinator-final-{report,ratchet}.log`. Globalcheck30 è
+stato rieseguito indipendentemente sullo stesso runtime e registrato nel report
+C12,non riclassificatoPASS. Graphify `make graphify-platform-docs` gpt-reserve
+exit0,chunk1/1done/no semanticfailure:342nodi361edge72community,149cachehit/
+3file riestratti,13915token input3556output/costo stimato$0.0113;log
+`/tmp/gaia-c12-final-platform-docs.log`. Nessuna modifica docs dopo refresh;
+questa annotazione è fuori dal corpus docs. Grafi non committati.
+
 ### Verifica finale della continuazione test-only
 
 Report indipendente source `7f0c6f0a` revisionato e integrato dal Coordinator:
