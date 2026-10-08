@@ -48,7 +48,7 @@ Header connector: `X-GAIA-Connector-Token`.
 
 `build_mobile_operator_push_payload` -> per ogni `WCOperator` con email chiama
 `required_personnel_area(operator.personnel_area, ...)` che alza `ValueError`
-se il valore non e in `{AGRARIO, IMPIANTI}` (quindi anche `NULL`). E un
+se il valore non e in `{AGRARIO, IMPIANTI, CATASTO}` (quindi anche `NULL`). E un
 **500 non gestito** sull'endpoint.
 
 - `wc_operator.personnel_area` e nullable (migration `20260902_1100`) e si

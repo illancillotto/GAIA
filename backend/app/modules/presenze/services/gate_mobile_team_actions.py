@@ -16,7 +16,7 @@ from app.modules.presenze.models import (
     PresenzeCollaborator,
 )
 
-PERSONNEL_AREAS = {"AGRARIO", "IMPIANTI"}
+PERSONNEL_AREAS = {"AGRARIO", "IMPIANTI", "CATASTO"}
 TEAM_PERMISSION_SCOPES = {"view", "validate", "export", "manage_team"}
 TEAM_PERMISSION_SCOPE_ALIASES = {"team": "manage_team"}
 TEAM_ACTION_OPERATIONS = {
@@ -394,7 +394,7 @@ def _team_payload(payload: dict[str, Any]) -> dict[str, Any]:
 def _personnel_area(payload: dict[str, Any]) -> str:
     value = payload.get("personnel_area")
     if value not in PERSONNEL_AREAS:
-        raise TeamChangeApplyError("personnel_area deve essere AGRARIO o IMPIANTI")
+        raise TeamChangeApplyError("personnel_area deve essere AGRARIO, IMPIANTI o CATASTO")
     return str(value)
 
 

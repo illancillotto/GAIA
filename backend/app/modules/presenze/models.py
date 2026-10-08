@@ -91,7 +91,7 @@ class OrganizationTeam(Base):
             name="uq_organization_teams_code_personnel_area",
         ),
         CheckConstraint(
-            "personnel_area IN ('AGRARIO', 'IMPIANTI')",
+            "personnel_area IN ('AGRARIO', 'IMPIANTI', 'CATASTO')",
             name="ck_organization_teams_personnel_area",
         ),
     )

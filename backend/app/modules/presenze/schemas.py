@@ -416,14 +416,14 @@ class PresenzeSupervisorAssignmentResponse(BaseModel):
 class OrganizationTeamCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     code: str | None = Field(default=None, max_length=64)
-    personnel_area: Literal["AGRARIO", "IMPIANTI"]
+    personnel_area: Literal["AGRARIO", "IMPIANTI", "CATASTO"]
     active: bool = True
 
 
 class OrganizationTeamUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     code: str | None = Field(default=None, max_length=64)
-    personnel_area: Literal["AGRARIO", "IMPIANTI"] | None = None
+    personnel_area: Literal["AGRARIO", "IMPIANTI", "CATASTO"] | None = None
     active: bool | None = None
 
 
@@ -494,7 +494,7 @@ class OrganizationTeamResponse(BaseModel):
     id: uuid.UUID
     name: str
     code: str | None = None
-    personnel_area: Literal["AGRARIO", "IMPIANTI"]
+    personnel_area: Literal["AGRARIO", "IMPIANTI", "CATASTO"]
     active: bool
     created_from_channel: OrganizationTeamChannel
     created_by_user_id: int | None = None

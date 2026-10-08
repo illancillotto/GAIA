@@ -15,7 +15,7 @@ from app.modules.presenze.services.collaborator_mapping import (
     stage_collaborator_mapping,
 )
 
-PERSONNEL_AREAS = {"AGRARIO", "IMPIANTI"}
+PERSONNEL_AREAS = {"AGRARIO", "IMPIANTI", "CATASTO"}
 ENTRY_FIELDS = {"gaia_user_id", "personnel_area", "presenze_collaborator_id"}
 
 

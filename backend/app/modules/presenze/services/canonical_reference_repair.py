@@ -68,22 +68,26 @@ def repair_canonical_references(db, identities, *, actor, reason, dry_run=True):
     if dry_run:
         return report
     for person, daily, events in planned:
-        if not daily and not events:
-            continue
-        for row in daily + events:
-            row.application_user_id = person.application_user_id
-        db.add(
-            PresenzeCollaboratorMappingAudit(
-                collaborator_id=person.id,
-                previous_application_user_id=person.application_user_id,
-                new_application_user_id=person.application_user_id,
-                changed_by_user_id=actor.id,
-                changed_by_username=actor.username,
-                action="map",
-                source="canonical_references",
-                reason=f"{reason.strip()} | Missing references repaired: daily={len(daily)}, events={len(events)}; canonical mapping unchanged",
-            )
-        )
+        _stage_reference_repair(db, person, daily, events, actor, reason)
     if report["daily_references"] or report["event_references"]:
         invalidate_all_dashboard_snapshots(db)
     return report
+
+
+def _stage_reference_repair(db, person, daily, events, actor, reason):
+    if not daily and not events:
+        return
+    for row in daily + events:
+        row.application_user_id = person.application_user_id
+    db.add(
+        PresenzeCollaboratorMappingAudit(
+            collaborator_id=person.id,
+            previous_application_user_id=person.application_user_id,
+            new_application_user_id=person.application_user_id,
+            changed_by_user_id=actor.id,
+            changed_by_username=actor.username,
+            action="map",
+            source="canonical_references",
+            reason=f"{reason.strip()} | Missing references repaired: daily={len(daily)}, events={len(events)}; canonical mapping unchanged",
+        )
+    )

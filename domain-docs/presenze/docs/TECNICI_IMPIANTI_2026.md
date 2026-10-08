@@ -149,3 +149,12 @@ Invio outbound autorizzato riuscito: run
 16:58:41 UTC. Consegnati 116 scope collaboratore/mese, 3.567 giornaliere e
 711 anomalie; confronto finale della cache GATE passato. Health finale dei
 servizi GAIA e del gateway VPS positivo, endpoint GATE HTTP 200.
+
+Aggiornamento successivo del 07/10/2026: l’utente ha identificato i 15
+nominativi come personale del Catasto e autorizzato il ripristino dei collegamenti.
+Le 239 giornaliere e i 53 riepiloghi sono stati riparati con audit, senza
+rimappature; tutte le divergenze dei riferimenti Presenze risultano ora zero.
+L’assenza di una scheda operativa WCOperator resta un controllo distinto
+dalla validità dell’identità canonica di un impiegato. Non sono state create
+schede operative o cambiati permessi. Dettagli in
+`CATASTO_CANONICAL_REFERENCE_REPAIR_2026-10-07.md` nel dominio Presenze GAIA.

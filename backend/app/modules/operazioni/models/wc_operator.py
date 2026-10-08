@@ -23,7 +23,7 @@ class WCOperator(Base):
     __tablename__ = "wc_operator"
     __table_args__ = (
         CheckConstraint(
-            "personnel_area IS NULL OR personnel_area IN ('AGRARIO', 'IMPIANTI')",
+            "personnel_area IS NULL OR personnel_area IN ('AGRARIO', 'IMPIANTI', 'CATASTO')",
             name="ck_wc_operator_personnel_area",
         ),
     )

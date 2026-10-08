@@ -79,7 +79,8 @@ def _manifest(*people: object, **person: object) -> dict[str, object]:
     return {"version": 1, "people": rows}
 
 
-def test_manifest_backfill_is_atomic_audited_and_idempotent() -> None:
+@pytest.mark.parametrize("area", ["IMPIANTI", "CATASTO"])
+def test_manifest_backfill_is_atomic_audited_and_idempotent(area: str) -> None:
     db = _session()
     try:
         actor = _user(1, "manifest.actor")
@@ -105,7 +106,7 @@ def test_manifest_backfill_is_atomic_audited_and_idempotent() -> None:
         entries = parse_canonical_identity_manifest(
             _manifest(
                 gaia_user_id=238,
-                personnel_area="IMPIANTI",
+                personnel_area=area,
                 presenze_collaborator_id=str(COLLABORATOR_ID),
             )
         )
@@ -136,7 +137,7 @@ def test_manifest_backfill_is_atomic_audited_and_idempotent() -> None:
         )
         assert applied.operator_area_changes == 1
         assert applied.collaborator_mapping_changes == 1
-        assert operator.personnel_area == "IMPIANTI"
+        assert operator.personnel_area == area
         assert collaborator.application_user_id == person.id
         assert daily.application_user_id == person.id
         assert summary.application_user_id == person.id
