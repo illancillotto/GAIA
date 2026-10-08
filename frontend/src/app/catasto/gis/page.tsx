@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
+import { normalizeExcelReferences } from "./excel-references";
 
 import { UtenzeSubjectQuickViewDialog } from "@/components/utenze/utenze-subject-quick-view-dialog";
 import AdeAlignmentPanel from "@/components/catasto/gis/AdeAlignmentPanel";
@@ -53,7 +54,6 @@ import type {
   GisBasemap,
   GisFilters,
   GisOverlayFeatureClick,
-  GisParticellaRef,
   ParticellaPopupAnomalia,
   ParticellaPopupData,
   GisSavedSelectionItemInput,
@@ -94,12 +94,6 @@ const PARTICELLE_QUICK_FILTERS: Array<{ id: ParticelleQuickFilter; label: string
   { id: "ruolo", label: "A ruolo", dot: "bg-emerald-500" },
   { id: "ruolo_inferito", label: "Ruolo inferito", dot: "bg-amber-500" },
 ];
-
-function toNullableCellString(value: unknown): string | null {
-  if (value == null) return null;
-  const normalized = String(value).trim();
-  return normalized.length > 0 ? normalized : null;
-}
 
 function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
@@ -846,14 +840,7 @@ export default function CatastoGisPage() {
       const ws = workbook.Sheets[sheetName];
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: null });
 
-      const items: GisParticellaRef[] = rows.slice(0, 5000).map((r: Record<string, unknown>, i: number) => ({
-        row_index: i + 2, // assume header row
-        comune: toNullableCellString(r["comune"] ?? r["Comune"] ?? r["COMUNE"] ?? null),
-        sezione: toNullableCellString(r["sezione"] ?? r["Sezione"] ?? r["SEZIONE"] ?? null),
-        foglio: toNullableCellString(r["foglio"] ?? r["Foglio"] ?? r["FOGLIO"] ?? null),
-        particella: toNullableCellString(r["particella"] ?? r["Particella"] ?? r["PARTICELLA"] ?? null),
-        sub: toNullableCellString(r["sub"] ?? r["Sub"] ?? r["SUB"] ?? r["subalterno"] ?? r["Subalterno"] ?? null),
-      }));
+      const items = normalizeExcelReferences(rows);
 
       const resolved = await catastoGisResolveRefs(token, items, { includeGeometry: true });
       const withGeometry = resolved.geojson?.features.filter((f) => f.geometry != null).length ?? 0;

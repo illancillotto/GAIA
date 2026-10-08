@@ -573,6 +573,73 @@ describe("CatastoGisPage", () => {
     expect(await screen.findByText(failure instanceof Error ? failure.message : "Aggiornamento colore fallito")).toBeInTheDocument();
   });
 
+  test("preserves nullish Excel aliases, falsy values and first-sheet resolution", async () => {
+    const firstSheet = { first: true };
+    mocks.xlsxRead.mockReturnValue({
+      SheetNames: ["First", "Second"],
+      Sheets: { First: firstSheet, Second: { ignored: true } },
+    });
+    mocks.sheetToJson.mockReturnValue([
+      {
+        comune: 0, Comune: "ignored", COMUNE: "ignored",
+        sezione: false, Sezione: "ignored",
+        foglio: "", Foglio: "ignored",
+        particella: "  ", Particella: "ignored",
+        sub: null, Sub: undefined, SUB: 0, subalterno: "ignored",
+      },
+      {
+        comune: null, Comune: "  Titlecase  ", COMUNE: "ignored",
+        sezione: undefined, Sezione: null, SEZIONE: " Uppercase ",
+        foglio: null, Foglio: undefined, FOGLIO: 9,
+        particella: undefined, Particella: false,
+        sub: undefined, Sub: null, SUB: null, subalterno: "", Subalterno: "ignored",
+      },
+      { Subalterno: " final ", COMUNE: "UPPER" },
+      {},
+    ]);
+    render(<CatastoGisPage />);
+    const file = { name: "aliases.xlsx", arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)) } as unknown as File;
+    fireEvent.change(document.querySelector('input[type="file"]')!, { target: { files: [file] } });
+    await waitFor(() => expect(mocks.catastoGisResolveRefs).toHaveBeenCalledWith("token", [
+      { row_index: 2, comune: "0", sezione: "false", foglio: null, particella: null, sub: "0" },
+      { row_index: 3, comune: "Titlecase", sezione: "Uppercase", foglio: "9", particella: "false", sub: null },
+      { row_index: 4, comune: "UPPER", sezione: null, foglio: null, particella: null, sub: "final" },
+      { row_index: 5, comune: null, sezione: null, foglio: null, particella: null, sub: null },
+    ], { includeGeometry: true }));
+    expect(mocks.sheetToJson).toHaveBeenCalledWith(firstSheet, { defval: null });
+  });
+
+  test("limits Excel references to 5000 rows and preserves their spreadsheet indices", async () => {
+    mocks.sheetToJson.mockReturnValue(Array.from({ length: 5002 }, (_, index) => ({
+      Comune: "Marrubiu", Foglio: "1", Particella: index,
+    })));
+    render(<CatastoGisPage />);
+    const file = { name: "large.xlsx", arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)) } as unknown as File;
+    fireEvent.change(document.querySelector('input[type="file"]')!, { target: { files: [file] } });
+    await waitFor(() => expect(mocks.catastoGisResolveRefs).toHaveBeenCalled());
+    const references = mocks.catastoGisResolveRefs.mock.calls[0][1] as Array<{ row_index: number; particella: string }>;
+    expect(references).toHaveLength(5000);
+    expect(references[0]).toMatchObject({ row_index: 2, particella: "0" });
+    expect(references[4999]).toMatchObject({ row_index: 5001, particella: "4999" });
+    expect(mocks.catastoGisResolveRefs.mock.calls[0][2]).toEqual({ includeGeometry: true });
+  });
+
+  test("reads Excel aliases lazily and stops at the first non-nullish value", async () => {
+    const reads: string[] = [];
+    const row = new Proxy({ comune: 0, foglio: "1", particella: "2" }, {
+      get(target, key) {
+        reads.push(String(key));
+        return Reflect.get(target, key);
+      },
+    });
+    mocks.sheetToJson.mockReturnValue([row]);
+    render(<CatastoGisPage />);
+    const file = { name: "ordered.xlsx", arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)) } as unknown as File;
+    fireEvent.change(document.querySelector('input[type="file"]')!, { target: { files: [file] } });
+    await waitFor(() => expect(mocks.catastoGisResolveRefs).toHaveBeenCalled());
+    expect(reads).toEqual(["comune", "sezione", "Sezione", "SEZIONE", "foglio", "particella", "sub", "Sub", "SUB", "subalterno", "Subalterno"]);
+  });
+
   test("imports alternate Excel headings and reports unmatched, ambiguous and geometry-free rows", async () => {
     render(<CatastoGisPage />);
     mocks.sheetToJson.mockReturnValue([
