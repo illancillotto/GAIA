@@ -22,7 +22,7 @@ New worktrees from39dbcc40; all runtime read-only, owners exclusive new specs.
 | --- | --- | --- | --- | --- | --- | --- |
 | C0 (capacitas_ui) | Capacitas UI tests | frontend/tests/unit/campaign-capacitas-credentials.test.tsx; reports/code-quality/SLICE_CAPACITAS_C0_2026-10-08.md | Credential selection/refresh, section navigation, embedded shell/settings modal; real workspace, API boundaries only | GAIA-campaign-20261008-c0-tests | refactor/complexity-capacitas-credentials-tests | ACTIVE |
 | C6 (analytics) | Capacitas UI tests | frontend/tests/unit/campaign-capacitas-certificati.test.tsx; reports/code-quality/SLICE_CAPACITAS_C6_2026-10-08.md | Certificati re-fetch payload, pending/old-result lifecycle, error/retry and token boundaries | GAIA-campaign-20261008-c6-tests | refactor/complexity-capacitas-certificati-tests | ACTIVE |
-| C7 (r2_presenze) | Capacitas UI tests | frontend/tests/unit/campaign-capacitas-anomalie.test.tsx; reports/code-quality/SLICE_CAPACITAS_C7_2026-10-08.md | Anomaly list and resolution dialog, exact payload, ordering/removal/error paths and async close behavior | GAIA-campaign-20261008-c7-tests | refactor/complexity-capacitas-anomalie-tests | ACTIVE |
+| C7 (integration_r3) | Capacitas UI tests | frontend/tests/unit/campaign-capacitas-anomalie.test.tsx; reports/code-quality/SLICE_CAPACITAS_C7_2026-10-08.md | Anomaly list and resolution dialog, exact payload, ordering/removal/error paths and async close behavior | GAIA-campaign-20261008-c7-tests | refactor/complexity-capacitas-anomalie-tests | ACTIVE |
 
 No owner writes the common capacitas runtime or existing batch tests, fixtures,
 smoke/config/tooling/shared files. Isolated API mocks in new specs are test
