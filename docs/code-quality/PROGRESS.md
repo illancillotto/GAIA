@@ -1,5 +1,33 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-08 — campagna multi-agent autorizzata, checkpoint locale
+
+- Snapshot autorevole `55a1b1d35911451e018b662c2acc450bf5994ea2`, non i numeri
+  del 7 ottobre. Branch isolata `refactor/complexity-campaign-20261008`;
+  main e lavoro concorrente Presenze/Ruolo/Elaborazioni non integrati né alterati.
+- Ownership preventiva in `MULTI_AGENT_OWNERSHIP_2026-10-08.md`; ogni slice
+  sviluppata in worktree/branch esclusiva e revisionata prima dell'integrazione.
+- Provenance delle 30 divergenze globali completata: 15 regressioni runtime
+  storiche e 15 divergenze test, nessuna attribuita alla campagna. Nessuna
+  modifica di baseline, soglie, scope, esclusioni, ignore o tooling.
+- Slice P1 `IMPROVED`: card anomalie duplicate consolidate; cognitive principale
+  550→525, aggregata 1530→1472. Coverage full-file 100% statement/branch.
+  Il target iniziale -50%/<250 non è raggiunto e resta esplicitamente aperto.
+- Slice P6 `IMPROVED`: mapping credenziali SISTER HTTP/WebSocket consolidato;
+  cognitive principale 402→366, aggregata 718→621. Coverage full-file 100%.
+  Nessuna modifica a lifecycle, stato, dipendenze degli hook o fallback.
+- Slice B4 `IMPROVED`: normalizzazione bytes statistiche Network deduplicata;
+  cognitive principale 209→181, aggregata 322→297; 95 test PASS,
+  coverage 276/276 statement e 92/92 branch, zero esclusioni.
+- P2/P3/P4/P5: caratterizzazione test-only integrata; runtime invariato e
+  `BLOCKED_COVERAGE`. Capacitas Terreni e Bonifica non autorizzati al runtime
+  per coverage insufficiente; Ruolo tributi bloccato dal lavoro concorrente.
+- Ogni integrazione runtime ha ratchet PASS/0 contro main55a, review di
+  aggregati anti-laundering e Graphify del corpus dedicato aggiornato.
+- Report slice, provenance e checkpoint in `reports/code-quality/`;
+  verifica finale e delta aggregato nel report conclusivo della stessa data.
+  Le wave successive dipendono dai gate finali, non dal semplice numero finding.
+
 Questo file e la fonte di verita persistente. Hermes deve aggiornarlo dopo ogni
 blocco verificato e prima di chiudere un goal.
 
