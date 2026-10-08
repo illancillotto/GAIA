@@ -63,6 +63,16 @@ UI characterization test or a contribution to workspace coverage.
 
 ## Race-dependent modal arms remain unresolved
 
+C4 sourcee9577559 adds an additional construction-impossible arm at2056:
+after `Array.isArray(job.payload_json?.items)` succeeds, the same plain JSON
+array is synchronously reread as `items?.length ?? 0`. Its length is defined,
+so the nullish fallback cannot execute. Plain API JSON has no accessors; no
+async yield occurs between checks. This does not cover fabricated getter side
+effects or grant permission to remove the guard. Initial15-arm ledger is
+therefore not exhaustive; this one brings proven candidate arms to16, still
+separate from the five unresolved modal arms below. C4 appropriately retains
+the defense and reports31/32 monitor branch arms rather than claiming100%.
+
 Five `setResolveModal(prev => prev ? ... : null)` false arms at3166,3203,
 3213,3217,3220 remain **UNKNOWN_REACHABILITY**, not proven dead:
 
