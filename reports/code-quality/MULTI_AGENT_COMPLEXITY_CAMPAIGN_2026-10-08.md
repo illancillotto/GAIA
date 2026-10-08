@@ -1,15 +1,62 @@
 # GAIA — Multi-Agent Complexity Campaign
 
-**Global goal ACTIVE / INCOMPLETE.** The measurements and final-suite evidence
-below certify the historical R1 checkpoint, not completion of the original
-global mission. Round2 ownership is active; its runtime must be reviewed,
-integrated and reverified before reusing any PASS claim. Requirements and
+**Global goal ACTIVE / INCOMPLETE.** Round2 runtime is integrated and its
+focused gates are GREEN; the full backend suite remains in progress. Round3
+is active only in isolated worktrees. The original sections after this update
+certify the historical R1 checkpoint, not completion of the global mission.
+Requirements and
 completion audit: `docs/code-quality/CAMPAIGN_GLOBAL_GOAL_2026-10-08.md`.
 Next-tail coverage limitations: `ROUND2_EXTREME_READINESS_2026-10-08.md`.
 
 Data: 2026-10-08. Campagna autorizzata di refactoring locale e caratterizzazione,
 senza sviluppo funzionale. Questo documento distingue risultati integrati,
 prerequisiti test-only e obiettivi strategici ancora aperti.
+
+## Stato cumulativo Round2
+
+Independent integration checkpoint `65097ce2`; runtime commits `87efd9bb`
+(Presenze), `3f9863fb` (Settings), `bf4c9a26` (analytics prerequisite).
+Eight cumulative runtime slices are accepted, not the entire extreme tail.
+All three Round2 slices are IMPROVED, with real aggregate reductions and no
+new helper findings; the prerequisite does not claim substantive fuel
+decomposition. Source commits `5f1ba840`, `9a01d35a`, `6909abd7`.
+
+| Metrica | Initial clean55a | Round2 integrato | Delta |
+| --- | ---: | ---: | ---: |
+| Error | 1956 | 1943 | -13 (-0,665%) |
+| Warning | 2758 | 2749 | -9 (-0,326%) |
+| Finding | 4714 | 4692 | -22 (-0,467%) |
+| Cognitive aggregata | 81931 | 81566 | -365 |
+| Cyclomatic aggregata | 83666 | 83437 | -229 |
+| File LOC aggregata | 332181 | 332206 | +25, non miglioramento LOC |
+| Cognitive>300 | 8 | 8 | 0 |
+| Cognitive>200 | 18 | 17 | -1 |
+| Cognitive>100 | 55 | 55 | 0 |
+
+Scansione completa `/tmp/gaia-r2-integrated-complexity.json`:1665file,
+20266callable. Presenze principale550→506, Settings402→335,
+fuel366→332, anomalies365→361. Gli otto estremi>300 restano aperti;
+i target globali978error/2068warning e zero>200 **NON** sono raggiunti.
+Non usare il totale finding come numero di problemi indipendenti.
+
+Round2 characterization indipendente573PASS, cinque runtime modificati
+full-file statement/branch100%; ratchetmain PASS0 dopo ciascuna integrazione.
+Frontend4074PASS/282file, smoke18PASS/typecheck/cleanbuildPASS; browser52PASS
+7skip storici, nessun flaky. Browser certifica frontend `3f9863fb` ma precede
+l'integrazione backend P3: non estendere quel PASS a P3. Backend completo sul
+runtime congelato `bf4c9a26` in corso, non ancora PASS. Worker/tooling R1
+invariati, nessun nuovo full-suite PASS dedotto senza nuova esecuzione.
+
+Global check al checkpoint UI FAIL30: finding objects identici a R1,
+nessuna nuova divergenza né assorbimento baseline/soglie/esclusioni/tooling.
+Report: `ROUND2_CHECKPOINT_2026-10-08.md`,
+`INTEGRATION_ROUND2_2026-10-08.md`, `INTEGRATION_R2_P3_2026-10-08.md`,
+`ROUND2_BROWSER_VERIFICATION_2026-10-08.md` e tre report slice R2.
+
+Round3 esclusiva da `65097ce2`: modello mensile Presenze, mutation commands
+provider Settings, computazione veicoli fuel. Nessun nuovo backend integrato
+durante la suite congelata. Nessun completamento del goal implicito in questi
+checkpoint; correttezza e reviewability restano prioritarie.
 
 ## Snapshot iniziale
 
