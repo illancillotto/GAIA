@@ -344,7 +344,10 @@ Baseline SHA256 remains
 Protected before/after Git-object hashes in
 `/tmp/r3-integration-protected-{before,after}.hash` are byte-identical.
 Diff check PASS. Only this report untracked before its explicitly authorized
-commit; runtime source worktrees clean, dirty main never edited by this agent.
+commit; source runtime diffs clean, dirty main never edited by this agent.
+Presenze source has concurrent untracked `PLAN_R4_P1_2026-10-08.md` at the
+final status check; it belongs to next-slice planning, is preserved untouched
+and is not cherry-picked, reviewed or certified by this integration.
 Repository-wide suites, clean build,
 browser and global baseline comparison are Coordinator verification gates,
 not PASS inferred from these scoped checks or prior rounds.
