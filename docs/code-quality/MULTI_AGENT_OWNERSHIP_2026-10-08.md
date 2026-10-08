@@ -34,6 +34,12 @@ after independent review/ratchet, one cherry-pick at a time. Runtime complexity
 must stay identical; classification NO_CHANGE, not IMPROVED. Never fake branch
 coverage with private closures, malformed impossible mocks or ignore additions.
 
+Coordinator also owns `reports/code-quality/GIS_BROWSER_CAUSALITY_2026-10-08.md`
+for read-only diagnosis of the unresolved browser gate. Disposable offline
+MapLibre reproduction artifacts are allowed in `/tmp` only, no production or
+committed runtime/test modifications; results must distinguish demonstrated
+library behavior from unobserved state in the original failing application.
+
 ### Continuazione del goal globale (Round 2)
 
 Il goal dell'allegato e49b8632 resta ACTIVE: il checkpoint iniziale con cinque
