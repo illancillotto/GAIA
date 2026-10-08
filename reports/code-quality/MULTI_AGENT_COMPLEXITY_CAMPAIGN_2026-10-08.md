@@ -1,5 +1,12 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+**Global goal ACTIVE / INCOMPLETE.** The measurements and final-suite evidence
+below certify the historical R1 checkpoint, not completion of the original
+global mission. Round2 ownership is active; its runtime must be reviewed,
+integrated and reverified before reusing any PASS claim. Requirements and
+completion audit: `docs/code-quality/CAMPAIGN_GLOBAL_GOAL_2026-10-08.md`.
+Next-tail coverage limitations: `ROUND2_EXTREME_READINESS_2026-10-08.md`.
+
 Data: 2026-10-08. Campagna autorizzata di refactoring locale e caratterizzazione,
 senza sviluppo funzionale. Questo documento distingue risultati integrati,
 prerequisiti test-only e obiettivi strategici ancora aperti.
