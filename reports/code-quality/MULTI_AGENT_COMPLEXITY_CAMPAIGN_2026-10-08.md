@@ -4,6 +4,14 @@
 focused gates are GREEN; the new full backend suite and browser verification
 remain in progress. Round4 has planning proposals only. The original sections after this update
 certify the historical R1 checkpoint, not completion of the global mission.
+Aggiornamento browser: report`ROUND3_BROWSER_VERIFICATION_2026-10-08.md`
+(`aee8a737`) registra primo fullFAIL51PASS7skip1GISfailure, diagnostic1PASS,
+secondo fullPASS52PASS7skip. RootcauseUNKNOWN, nessun test indebolito.
+La prossima wave runtime resta subordinata a decisione esplicita sul rischio
+GIS e conclusione della suite backendR3, non ancoraPASS. Verifier indipendente
+`ROUND3_VERIFICATION_2026-10-08.md` (`0f7ab9d8`): ratchet0, globalcheck30
+identicoR2, protetti byte-identici, sei runtimeR3full-file100%; tooling169PASS.
+
 Requirements and
 completion audit: `docs/code-quality/CAMPAIGN_GLOBAL_GOAL_2026-10-08.md`.
 Next-tail coverage limitations: `ROUND2_EXTREME_READINESS_2026-10-08.md`.

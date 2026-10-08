@@ -67,6 +67,15 @@ blocco verificato e prima di chiudere un goal.
   secondo run con chiave sintetica e PYTHONPATH rootPASS. Non produzione.
   BackendR3fullsuite in corso/session30021, browser/verifierR3 in corso.
   R4 solo planning; nessun nuovo runtime prima checkpoint completoGREEN.
+- BrowserR3 report`aee8a737`: primo fullFAIL51PASS7skip1GISfailure,
+  diagnostic invariato1PASS, secondo fullPASS52PASS7skip. RootcauseUNKNOWN;
+  nessun test/timeout/retry modificato, risorseR3 rimosse, porte8080/13000free.
+  Coordinator richiede decisione sul rischio residuo prima della prossima
+  wave runtime; non certifica un first-runPASS né dichiara chiuso il goal.
+- VerifierR3 report`0f7ab9d8`: ratchet0, globalcheck30identicoR2,
+  protetti byte-identici, sei runtimeR3full-file100%; tooling169PASS.
+  Graphifyplatformdocs282nodes275edges68communities/chunk1/1done,
+  nessun semanticfailure. BackendR3fullsuite rimaneRUNNING/session30021.
 
 - Suite backend congelata Round2 conclusa:6589PASS449skip2272warnings,
   exit0/1502,26s sul runtime `bf4c9a26`, log
