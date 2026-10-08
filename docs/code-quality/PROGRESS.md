@@ -1,5 +1,25 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-08 — continuazione: prove causali reali, runtime invariato
+
+- GIS report source `febc7bfb`, integrato `46c6f872`: confronto applicativo
+  clean55a vs70ae035d con gli stessi dependency/browser/fixture. Entrambi:
+  2/2 gesture anticipate interrompono camera e non producono popup/panel;
+  2/2 controlli dopo moveend mostrano il panel. Callback originale PASS su
+  entrambi dopo readiness. Prima auth502 baseline registrata separatamente,
+  fits0; causa storica R3 resta UNKNOWN per telemetria assente. Entrambe build
+  PASS, risorse proprie pulite. Coordinator raw-matrix verifier PASS.
+- Modal report source `1d8c8411`, integrato `b0a4ac2a`: keyboard nativa
+  raggiunge Risolvi sullo sfondo durante request, sostituisce modal busy,
+  poi close e risposta tardiva con state null. Sei casi browser normal/StrictMode
+  PASS; precise V8 prova9 esecuzioni null a3214/3217/3220. Tre guard NECESSARI,
+  non candidati cleanup. Solo3166/3206 UNKNOWN. Source e coverage ufficiale
+  invariati. C12 test-only assegnata, Integration6 indipendente prima306PASS/
+  903/929armsFAIL100. Nessuna falsa coverage da probe browser.
+- «Continua» interpretato come progresso, non accettazione del rischio o
+  deroga coverage. Domande aggiornate all'utente su ripresa nonGIS/cleanup
+  separato; nessuna risposta ancora registrata. Missione ACTIVE/INCOMPLETE.
+
 ## 2026-10-08 — Capacitas test-only checkpoint, missione aperta
 
 - Verifica finale indipendente source7f0c6f0a accettata:306 PASS/15 spec,

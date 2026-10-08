@@ -6,6 +6,15 @@ Il turno precedente produceva progresso verificato; non dimostrava completamento
 
 ## Stato corrente Round3
 
+Nuove prove dopo richiesta «continua»: GIS applicativo confrontato con clean55a,
+race native-gesture/center-click indipendentemente preesistente in entrambi,
+report `46c6f872`. Attribution storica R3 ancora UNKNOWN. Modal keyboard race
+provata da sei browser witness/nove V8 null executions:3214/3217/3220 REACHABLE,
+guard necessari, solo3166/3206 UNKNOWN, report `b0a4ac2a`. C12 characterization
+test-only in corso, Integration6 before306PASS903/929branchesFAIL100. Runtime
+invariato; decisione specifica ripresa nonGIS e cleanup separato chiesta utente,
+non ancora registrata. Missione globale immutata ACTIVE/INCOMPLETE.
+
 Verifica indipendente conclusa: report source `7f0c6f0a`,306 PASS/15 spec,
 903/929 branch (97,20%), gate100% FAIL; ratchet PASS0, globalcheck30 finding
 storici esattamente identici a R3, AST/protetti invariati. Coordinator ha
