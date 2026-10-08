@@ -6,6 +6,13 @@ Il turno precedente produceva progresso verificato; non dimostrava completamento
 
 ## Stato corrente Round3
 
+Test-only continuation integratedC6/C7/C0 with independent67PASS0skip,
+ratchet0 and frozen runtime; coverage401/857statements371/929arms, gate100FAIL.
+Capacitas472 unchanged; C1/C8/C2a/C3 characterization next, not another runtime
+wave. GIS offline diagnosis proves a library camera-interruption mechanism,
+not original failure attribution; user risk decision pending. Global mission
+still ACTIVE/INCOMPLETE, not completed by characterization or local checkpoints.
+
 Aggiornamento finale gatebackend:6608PASS449skip2272warnings/exit0/1554,96s
 su runtime0b1a0d37. Browser confirmation52PASS7skip dopo primoFAIL51/7/1:
 rootcauseGISUNKNOWN, decisione richiesta prima prossima runtimewave.

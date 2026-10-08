@@ -1,5 +1,22 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## Capacitas characterization checkpoint
+
+Independent integration report`e6f659dd`:C6/C7/C0 test-only sources reviewed
+and integrated sequentially with ratchet0.67testsPASS0skip; explicit test
+TypeScript/scopedESLintPASS. Cumulative full-file coverage401/857statements,
+371/929arms,89/251functions,365/748lines: gate100%FAIL, no compliance claim.
+Runtime byte-identical; principalcognitive472 and globalR3 metrics unchanged.
+Classification NO_CHANGE CHARACTERIZATION_ONLY, not a debt reduction.
+
+Read-only GIS report`GIS_BROWSER_CAUSALITY_2026-10-08.md` demonstrates camera
+interruption in isolated realMapLibre, not original application attribution.
+First browserFAIL remains recorded; risk decision pending, runtimewave held.
+Safe C1Terreni/C8templates/C2acommands/C3Storicoinput characterization is owned
+in separate worktrees. C2a source8eec9bc2:26new/45combinedPASS, commands band
+100%, fullfile48.30%statements41.01%branches; pending independent integration.
+No baseline/scope/threshold inflation or transfer of debt. Goal INCOMPLETE.
+
 ## Checkpoint corrente Round3
 
 Backend completoR3 **6608PASS449skip2272warnings/exit0/1554,96s**, runtime

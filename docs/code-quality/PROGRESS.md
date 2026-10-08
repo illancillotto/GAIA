@@ -1,5 +1,26 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-08 — Capacitas test-only checkpoint, missione aperta
+
+- Independent review/integrationC6/C7/C0 report`e6f659dd`: source7bc9ec17/
+  bc312caf/14615c27 integrateda7e21e9e/c8ba3972/b52ab0af.67testPASS0skip,
+  ratchet0 aftereach, scopedlint and explicit new-specTypeScriptPASS.
+- Genuine cumulative workspace coverage305→401/857statements,
+  263→371/929arms,46→89/251functions,288→365/748lines. Gate100%FAIL exit1,
+  runtime identical/cognitive472 unchanged; NO_CHANGE CHARACTERIZATION_ONLY.
+- Root GIS diagnosis`GIS_BROWSER_CAUSALITY_2026-10-08.md`: offline real
+  MapLibre6.9.0 experiment demonstrates native gesture stopping camera early,
+  two controls hit and four80msinterventions miss, zeroexternalrequests.
+  Original trace camera state uncaptured: attributionUNKNOWN, not fixed.
+  Earlier failed experiments retained; user risk decision still pending.
+- Safe next characterization ownershipC1Terreni/C8templates/C2acommands/C3
+  Storicoinput uses isolated worktrees, runtime read-only. No next runtimewave
+  implicitly approved. C2a source8eec9bc2 has26new/45combinedPASS, commandband
+  59/59statements30/30arms11/11functions; fullfile414/857and381/929FAIL100.
+- Goal ACTIVE/INCOMPLETE. R3 complete suite evidence remains valid for frozen
+  runtime, but new tests need their own cumulative execution. No baseline,
+  threshold, scope, tooling or exclusions change; main dirty preserved.
+
 ## 2026-10-08 — campagna multi-agent autorizzata, checkpoint locale
 
 - Snapshot autorevole `55a1b1d35911451e018b662c2acc450bf5994ea2`, non i numeri
