@@ -44,6 +44,12 @@
  Reviewer autorizzato exactsnapshot/afterfullcoverage e gate indipendenti;
  runtime/testfreeze durante review. Sourcecommit/integration/verifierfullgate
  ancora non autorizzati. Principal399rimane estremo, no globalclosure.
+- Exactauthorsource79bc9969 e finalreview-only687a4a49 APPROVED/IMPROVED, tutti
+  quattroblobs verificati; integratedecdcc93c/reviewd7e2fd72, reviewerduplicate
+ 1f29b917nonintegrata. Author/reviewerterminalcleansource, ownershipMERGEDcampaign.
+  Verifierreadyc518727e autorizzato frozenexactsource/focused/fullfrontend/build/
+  browser con nuovaVERIFY_APPROVAL; suitepending, nessunPASSdedotto. Rootintegration
+  report/ratchet83919 e forcedfrontendgraph93926 live da osservare, nonrestart.
 
 ## 2026-10-09 — R7 Presenze anomaly ordering/grouping
 

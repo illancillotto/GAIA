@@ -1,5 +1,41 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-09 — R8 finite record-label policy, final verification pending
+
+Global objective unchanged ACTIVE/INCOMPLETE. R7 terminal closure independently
+certified first; R8 registry6a005f1a precedes separate author/reviewer/verifier.
+Exact source79bc9969 approved by report-only687a4a49, integratedecdcc93c/review
+d7e2fd72; all4sourceblobs exact, reviewer duplicate1f29b917 not integrated.
+One local finite daily-record primary/secondary/detailbadge and FormulaGAIA
+vocabulary, not JSXmove/lifecycle/commands/API/permissions/classification change.
+
+| R8 metric | Before | After | Delta |
+|---|---:|---:|---:|
+| Principal cognitive |403|399|-4|
+| Principal cyclomatic |356|352|-4|
+| Principal LOC |2020|2020|0|
+| Complete page cognitive |1172|1109|-63(-5.38%)|
+| Complete page cyclomatic |1249|1230|-19(-1.52%)|
+| Complete page callable LOC |4326|4319|-7|
+| Complete page effective file LOC |2778|2788|+10|
+| Page findings |38|33|-5(-4error/-1warning)|
+
+IMPROVED: finite Map/Set/ordered lookup removes actual repeated comparisons;
+allfive new helpers/callback belowwarning. Author/reviewer original424focused
+and44newrendered characterizationPASS before edits; final468focusedPASS/page
+1033statements1143branches100%,typecheck/lintlegacy3/ratchetmainPASS0. Independent
+84020original-AST output comparisons across2800fixtures13kinds/10formula statuses,
+68unchangedhelpers75wholehooks107principalstatements35otherdefinitions exact.
+Root all1670unaffectedfiles/callableobjects exact; no baseline/config inflation.
+Principal399 still extreme; original50%/below250 target and global completion
+NOT achieved. The +10fileLOC is disclosed, not hidden by helper relocation.
+
+Author/reviewer terminal clean, source frozen; verifier preparation ready and
+authorized exactsource/fullfrontend/build/browser, all finalgates pending.
+Durable evidence `~/.cache/gaia-campaign/20261009-r8-presenze/`. Main55a dirty
+concurrent work untouched. CoverageCapacitas97.52%FAIL100 and historical30
+globalbaseline divergences remain separate. No mainmerge/push/PR.
+
 ## 2026-10-09 — R7 anomaly-panel ordering/grouping, verified checkpoint
 
 Original objective unchanged, global campaign ACTIVE/INCOMPLETE. Previous R6

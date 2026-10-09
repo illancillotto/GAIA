@@ -9,8 +9,8 @@ Main dirty backend/Presenze/Ruolo/docs work is not copied or modified.
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 |---|---|---|---|---|---|---|
 | Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md | Scope/design approval and integration gates | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
-| R8 author | Presenze UI | frontend/src/app/presenze/giornaliere/page.tsx; frontend/src/app/presenze/giornaliere/record-presentation-model.ts; frontend/tests/unit/presenze-giornaliere-r8.test.tsx; reports/code-quality/SLICE_R8_PRESENZE_PRESENTATION_2026-10-09.md; domain-docs/presenze/docs/RECORD_PRESENTATION_REFACTOR_2026-10-09.md | Shared daily-record display projection, design only until approved | GAIA-campaign-20261009-r8-presenze-presentation | refactor/complexity-r8-presenze-presentation | ACTIVE |
-| R8 reviewer | Independent review | reports/code-quality/REVIEW_R8_PRESENZE_PRESENTATION_2026-10-09.md only; all source read-only | Original characterization/differential oracle and exact candidate review | GAIA-campaign-20261009-r8-presenze-review | review/complexity-r8-presenze-presentation | ACTIVE |
+| R8 author | Presenze UI | frontend/src/app/presenze/giornaliere/page.tsx; frontend/src/app/presenze/giornaliere/record-presentation-model.ts (not created); frontend/tests/unit/presenze-giornaliere-r8.test.tsx; reports/code-quality/SLICE_R8_PRESENZE_PRESENTATION_2026-10-09.md; domain-docs/presenze/docs/RECORD_PRESENTATION_REFACTOR_2026-10-09.md | Finite label/badge policy consolidated locally after original characterization | GAIA-campaign-20261009-r8-presenze-presentation | refactor/complexity-r8-presenze-presentation | MERGED |
+| R8 reviewer | Independent review | reports/code-quality/REVIEW_R8_PRESENZE_PRESENTATION_2026-10-09.md only; all source read-only | Original characterization/differential oracle and exact candidate review | GAIA-campaign-20261009-r8-presenze-review | review/complexity-r8-presenze-presentation | MERGED |
 | R8 verifier | Independent certification | reports/code-quality/VERIFICATION_R8_PRESENZE_PRESENTATION_2026-10-09.md only; all source read-only | Frozen-source coverage/fullfrontend/build/browser/ratchet | GAIA-campaign-20261009-r8-presenze-verification | verify/complexity-r8-presenze-presentation | ACTIVE |
 
 ## Design-only initial assignment
@@ -77,3 +77,15 @@ Verifier may prepare isolated dependency/evidence/browser environment read-only
 at initialc518727e; must not apply source or start full suites/build before exact
 source review/freeze and Coordinator authorization. Author candidatefocused468
 PASS/page1033statements1143branches100%; metrics/ratchet/review still pending.
+
+## Exact reviewed integration
+
+Author source79bc9969d17111a098d37bc22e4e15f7172feb7d approved independently by
+report-only687a4a4928603664c61ea8b04cedf0e97f36e854. Sourceintegratedecdcc93c,
+reviewd7e2fd72, allfourblobs exact. Duplicate reviewer1f29b917 not integrated.
+468focusedPASS/fullpage1033s1143b100%,84020original-output comparisons/protected
+ASTPASS/typecheck/lintlegacy3/ratchetmain0. Actualaggregate-63cognitive/-19cyc,
+finding38->33, fileLOC+10/callableLOC-7 disclosed; principal399 still extreme.
+Author/reviewer terminal clean. Verifier authorized exactfrozen source/full
+frontend/build/browser gates by plaintextcoordinator/VERIFY_APPROVAL.txt.
+Verifier finalgates pending, not inferredPASS; global ACTIVE/INCOMPLETE.
