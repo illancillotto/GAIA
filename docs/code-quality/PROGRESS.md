@@ -15,6 +15,12 @@
   coverage100%full-file, aggregati reali e ratchet55aPASS0 obbligatori.
 - Capacitas97,52%FAIL100 e trenta divergenze restano aperte e separate. Nessun
   cleanup di guard, modifica baseline/soglie/esclusioni o copia di main dirty.
+- Author/reviewer attivi in worktree separate e source e96277c2. Reviewdesign
+  indipendente CONDITIONALLYSAFE: jointruthy/strip senza collassare spazi interni,
+  indice orderedforward/reverse first-wins,GAIA last-wins incluso0,precedenza
+  linkedisnotNone e fallbackraw. Coordinator approva design bounded soltanto
+  dopo characterizationPASSprima di edit; nessuna altra fase da estrarre.
+  Reviewer before110PASS/analytics673s302b100% confermati da artifact durabili.
 
 ## 2026-10-09 — R4 fuel response mapping, singola slice autorizzata
 
