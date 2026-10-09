@@ -11,9 +11,9 @@ Main dirty backend/Presenze/Ruolo/documentation concurrent work is not an input.
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 |---|---|---|---|---|---|---|
 | Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md | Exact design approval, ownership, integration gates | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
-| R9 author — characterization complete | Presenze UI tests | frontend/tests/unit/presenze-giornaliere-r9.test.tsx | Frozen original characterization, source commit8833a587 | GAIA-campaign-20261009-r9-presenze-mutations | refactor/complexity-r9-presenze-mutations | READY_FOR_REVIEW |
+| R9 author — characterization complete | Presenze UI tests | frontend/tests/unit/presenze-giornaliere-r9.test.tsx | Frozen original characterization8833a587, integrated4e903a83 | GAIA-campaign-20261009-r9-presenze-mutations | refactor/complexity-r9-presenze-mutations | MERGED |
 | Coordinator — R9 implementation | Presenze UI | frontend/src/app/presenze/giornaliere/page.tsx; reports/code-quality/SLICE_R9_PRESENZE_MUTATIONS_2026-10-09.md; domain-docs/presenze/docs/DAILY_RECORD_MUTATIONS_REFACTOR_2026-10-09.md | Apply the independently characterized refined local design, measure and hand off exact candidate | GAIA-campaign-20261009-r9-presenze-mutations | refactor/complexity-r9-presenze-mutations | ACTIVE |
-| R9 reviewer | Independent review | reports/code-quality/REVIEW_R9_PRESENZE_MUTATIONS_2026-10-09.md only; source read-only | Original async ordering/exception oracle and protected AST, exact candidate review | GAIA-campaign-20261009-r9-presenze-review | review/complexity-r9-presenze-mutations | ACTIVE |
+| R9 source reviewer — dedicated task | Independent review | reports/code-quality/REVIEW_R9_PRESENZE_MUTATIONS_2026-10-09.md only; source read-only | Original review complete; independently review frozen actual named candidate | GAIA-campaign-20261009-r9-presenze-review | review/complexity-r9-presenze-mutations | PLANNED |
 | R9 verifier | Independent final certification | reports/code-quality/VERIFICATION_R9_PRESENZE_MUTATIONS_2026-10-09.md only; source read-only | Frozen-source full-file coverage/fullfrontend/build/browser/ratchet | GAIA-campaign-20261009-r9-presenze-verification | verify/complexity-r9-presenze-mutations | PLANNED |
 
 ## Initial assignment: analyze/design only
@@ -132,3 +132,24 @@ type and payload return type are required; no new runtime file/shared path.
 Implementation is not acceptance: exact candidate measurements, full coverage,
 ratchet, protected-source equivalence, review and final certification remain.
 Plaintext approval is `~/.cache/gaia-campaign/20261009-r9-presenze/coordinator/RUNTIME_APPROVAL.md`.
+
+## Actual candidate — review-only handoff
+
+Characterization-only8833a587 integrated4e903a83; integration ratchetPASS0.
+Runtime exists only in dedicated source worktree, uncommitted and not integrated.
+Frozen candidate SHA256d362df3199fbf65dc4566b56d4029fe72135c910f3e39e691b3e3535516fa940.
+Actual six suites472PASS/fullpage1035statement1139branch306function100%, type/lint
+exit0 with three unchanged legacy warnings. Metrics1093cognitive/1231cyclomatic,
+923aggregate decisions/308callables/2812fileLOC; principal385/341/2023LOC.
+One warning removed; zero new runtime finding. Named candidate ratchetPASS0.
+
+An initial unnamed returned async function was assigned to Program<anonymous>
+legacy debt and failed five metrics. The introduced lifecycle function now has
+explicit semantic name executeDailyRecordMutation; no legacy symbol renamed,
+algorithm unchanged, exact Promise/event/timing oracles rerun PASS. Failure and
+identity provenance retained. No baseline/tooling/threshold change.
+
+Independent original reviewer task is terminal. Actual-source review transfers
+sequentially to a dedicated task using the same clean review worktree9afd3bc5;
+only its report is writable. The source candidate remains frozen. No runtime
+commit/integration or verifier final certification before review completion.
