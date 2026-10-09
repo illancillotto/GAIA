@@ -54,6 +54,13 @@ Makeexit2/fullfindingobjectsunchanged. Verifier report/cleanup pending. Platform
 checkpointdocs446nodes518edges84communities/chunk1/1done/no semanticfailure;
 final refresh required after terminalclosure docs, not claimedperformed yet.
 
+FullE2E nowterminal54PASS7existingSKIP0unexpected/flaky/retries,69.565sraw;
+pertinent7PASS0skip. RootreadsJSON/exits; verifierfullASTexactrootfinal. Verifier
+ratchetmainPASS0/globalFAIL30Makeexit2/fullhistoricalobjectsidenticalR7 and
+baselineSHAunchanged. CleanupJSON independentlychecked againstDocker/ports:
+owncontainers/networkabsent,13012/18092free,privatecredentialsdeleted/frontend
+exit0. Finalindependentreport-only stillpending, globalcampaignINCOMPLETE.
+
 ## 2026-10-09 — R7 anomaly-panel ordering/grouping, verified checkpoint
 
 Original objective unchanged, global campaign ACTIVE/INCOMPLETE. Previous R6

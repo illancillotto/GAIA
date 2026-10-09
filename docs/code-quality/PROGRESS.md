@@ -66,6 +66,12 @@
   finalglobalFAIL30Makeexit2 entireobjectsunchanged. Verifierreport/cleanupfinal
   pending; goalglobalINCOMPLETE. Platformcheckpoint446nodes518edges84communities,
   chunk1/1done/no semanticfailures; finalrefresh dopo ultimeclosure note richiesto.
+- Browserterminal54PASS7oldSKIP0unexpected/flaky/retries,69,565sraw/70,128srunner;
+  Presenze7PASS0skip9,707sraw. RootJSON/exits e fullASTindependentverifierexact
+  finalroot confermati. VerifierratchetmainPASS0/globalFAIL30Makeexit2finding
+  objectsidenticalR7/attribution0/baselineSHAunchanged. CleanupJSON e liveDocker/
+  portsinspected: ownstack/networkassenti,13012/18092libere,credentialsdeleted,
+  frontendexit0. Verifierreport-only da completare, no globalclosure yet.
 
 ## 2026-10-09 — R7 Presenze anomaly ordering/grouping
 
