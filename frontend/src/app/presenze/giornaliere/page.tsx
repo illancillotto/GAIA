@@ -418,38 +418,69 @@ const MODAL_ROW_TONE: Record<CellKind, string> = {
   rest: "bg-gray-50 text-gray-500 ring-1 ring-inset ring-gray-100 hover:bg-gray-100",
 };
 
+const ABSENCE_PRIMARY_LABELS = new Map<string | null, string>([
+  ["ferie", "Fer"], ["permesso", "Perm"], ["malattia", "Mal"],
+]);
+const STATUS_PRIMARY_LABELS: ReadonlyArray<readonly [string, string]> = [
+  ["perm", "Perm"], ["fer", "Fer"], ["anom", "Anom"], ["malatt", "Mal"], ["rich", "Rich"],
+];
+const WORKED_CELL_KINDS = new Set<CellKind>(["worked", "special"]);
+const ABSENCE_CELL_KINDS = new Set<CellKind>(["ferie", "permesso", "malattia", "absence"]);
+const CRITICAL_CELL_KINDS = new Set<CellKind>(["analysis", "anomaly"]);
+const DETAIL_BADGE_VARIANTS: Record<CellKind, "danger" | "warning" | "success" | "neutral"> = {
+  anomaly: "danger", analysis: "warning", special: "warning", ferie: "warning",
+  permesso: "warning", malattia: "warning", absence: "neutral", worked: "success", rest: "neutral",
+};
+const DEFAULT_FORMULA_BADGE = { variant: "success", label: "Quadrata" } as const;
+const FORMULA_BADGES = new Map<PresenzeDailyRecord["operational_status"], { variant: "danger" | "warning"; label: string }>([
+  ["blocking", { variant: "danger", label: "Da sistemare" }],
+  ["in_analysis", { variant: "warning", label: "In analisi" }],
+]);
+
+function formulaBadge(status: PresenzeDailyRecord["operational_status"]) {
+  return FORMULA_BADGES.get(status) ?? DEFAULT_FORMULA_BADGE;
+}
+
+function analysisCellPrimaryLabel(record: PresenzeDailyRecord): string {
+  return ABSENCE_PRIMARY_LABELS.get(record.resolved_absence_cause)
+    ?? (record.detail_requests.length > 0 || record.request_description ? "Rich" : "Anom");
+}
+
+function statusCellPrimaryLabel(record: PresenzeDailyRecord, kind: CellKind): string {
+  const status = (record.detail_status ?? record.stato ?? "").trim().toLowerCase();
+  const label = STATUS_PRIMARY_LABELS.find(([fragment]) => status.includes(fragment))?.[1];
+  if (label) return label;
+  if (status && !status.includes("gior") && !status.includes("regol")) return status.slice(0, 4);
+  return kind === "anomaly" ? "Anom" : formatHoursCompact(record.absence_minutes);
+}
+
 function cellPrimaryLabel(record: PresenzeDailyRecord, kind: CellKind): string {
   if (kind === "special" && isUnworkedHolidayRecord(record)) {
     return "Fest";
   }
-  if (kind === "worked" || kind === "special") {
+  if (WORKED_CELL_KINDS.has(kind)) {
     const ordinaryMinutes = effectiveOrdinaryMinutes(record);
     return formatHoursCompact(ordinaryMinutes || record.teo_minutes);
   }
-  if (kind === "ferie") return "Fer";
-  if (kind === "permesso") return "Perm";
-  if (kind === "malattia") return "Mal";
-  if (kind === "analysis") {
-    if (record.resolved_absence_cause === "permesso") return "Perm";
-    if (record.resolved_absence_cause === "ferie") return "Fer";
-    if (record.resolved_absence_cause === "malattia") return "Mal";
-    if (record.detail_requests.length > 0 || record.request_description) return "Rich";
-    return "Anom";
-  }
-  if (kind === "absence" || kind === "anomaly") {
-    const status = (record.detail_status ?? record.stato ?? "").trim().toLowerCase();
-    if (status.includes("perm")) return "Perm";
-    if (status.includes("fer")) return "Fer";
-    if (status.includes("anom")) return "Anom";
-    if (status.includes("malatt")) return "Mal";
-    if (status.includes("rich")) return "Rich";
-    if (status && !status.includes("gior") && !status.includes("regol")) {
-      return status.length > 4 ? status.slice(0, 4) : status;
-    }
-    if (kind === "anomaly") return "Anom";
-    return formatHoursCompact(record.absence_minutes);
-  }
+  const absenceLabel = ABSENCE_PRIMARY_LABELS.get(kind);
+  if (absenceLabel) return absenceLabel;
+  if (kind === "analysis") return analysisCellPrimaryLabel(record);
+  if (kind === "absence" || kind === "anomaly") return statusCellPrimaryLabel(record, kind);
   return "·";
+}
+
+function workedCellSecondaryLabel(record: PresenzeDailyRecord, extra: number): string | null {
+  if (authorizedPunchLabel(record)) return "Valid.";
+  if (extra > 0) return `+${formatHoursCompact(extra)}h`;
+  if ((record.trasferta_minutes ?? 0) > 0) return `T ${formatHoursCompact(record.trasferta_minutes)}h`;
+  if ((record.km_value ?? 0) > 0) return `KM ${record.km_value}`;
+  return record.detail_requests.length > 0 ? "Rich." : null;
+}
+
+function criticalCellSecondaryLabel(record: PresenzeDailyRecord, absence: number, missing: number): string | null {
+  if (missing > 0) return `-${formatHoursCompact(missing)}h`;
+  if (absence > 0) return `${formatHoursCompact(absence)}h`;
+  return record.detail_requests.length > 0 ? "Rich." : null;
 }
 
 function cellSecondaryLabel(record: PresenzeDailyRecord, kind: CellKind): string | null {
@@ -460,33 +491,18 @@ function cellSecondaryLabel(record: PresenzeDailyRecord, kind: CellKind): string
   if (kind === "special" && isUnworkedHolidayRecord(record)) {
     return null;
   }
-  if (kind === "worked" || kind === "special") {
-    if (authorizedPunchLabel(record)) return "Valid.";
-    if (extra > 0) return `+${formatHoursCompact(extra)}h`;
-    if ((record.trasferta_minutes ?? 0) > 0) return `T ${formatHoursCompact(record.trasferta_minutes)}h`;
-    if ((record.km_value ?? 0) > 0) return `KM ${record.km_value}`;
-    return record.detail_requests.length > 0 ? "Rich." : null;
-  }
-  if (kind === "ferie" || kind === "permesso" || kind === "malattia" || kind === "absence") {
+  if (WORKED_CELL_KINDS.has(kind)) return workedCellSecondaryLabel(record, extra);
+  if (ABSENCE_CELL_KINDS.has(kind)) {
     return absence > 0 ? `${formatHoursCompact(absence)}h` : null;
   }
-  if (kind === "analysis" || kind === "anomaly") {
-    if (missing > 0) return `-${formatHoursCompact(missing)}h`;
-    if (absence > 0) return `${formatHoursCompact(absence)}h`;
-    return record.detail_requests.length > 0 ? "Rich." : null;
-  }
+  if (CRITICAL_CELL_KINDS.has(kind)) return criticalCellSecondaryLabel(record, absence, missing);
   return null;
 }
 
 function detailBadgeVariant(record: PresenzeDailyRecord): "danger" | "warning" | "success" | "neutral" {
   const status = (record.detail_status ?? record.stato ?? "").toLowerCase();
   if (status.includes("regolare")) return "success";
-  const kind = classifyCell(record);
-  if (kind === "anomaly") return "danger";
-  if (kind === "analysis") return "warning";
-  if (kind === "special" || kind === "ferie" || kind === "permesso" || kind === "malattia") return "warning";
-  if (kind === "worked") return "success";
-  return "neutral";
+  return DETAIL_BADGE_VARIANTS[classifyCell(record)];
 }
 
 function cellTooltipLabel(record: PresenzeDailyRecord): string {
@@ -2347,8 +2363,8 @@ export default function PresenzeGiornalierePage() {
                           <p className="text-[11px] uppercase tracking-[0.16em] text-amber-600">Formula GAIA</p>
                           <p className="mt-1 text-sm font-semibold text-amber-950">{selectedRecord.operational_formula_code}</p>
                         </div>
-                        <Badge variant={selectedRecord.operational_status === "blocking" ? "danger" : selectedRecord.operational_status === "in_analysis" ? "warning" : "success"}>
-                          {selectedRecord.operational_status === "blocking" ? "Da sistemare" : selectedRecord.operational_status === "in_analysis" ? "In analisi" : "Quadrata"}
+                        <Badge variant={formulaBadge(selectedRecord.operational_status).variant}>
+                          {formulaBadge(selectedRecord.operational_status).label}
                         </Badge>
                       </div>
                       <div className="mt-2 grid gap-2 text-sm text-amber-950 sm:grid-cols-2">
