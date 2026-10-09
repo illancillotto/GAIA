@@ -1,6 +1,34 @@
 # R14 Operazioni — operator kilometre attribution readiness
 
-## Current phase: distinct final prospective-integration certification
+## Current phase: certified sequential integration; closure gate pending
+
+Distinct final reportb77100ee ACCEPTED/IMPROVED, heavy RELEASED; publishedc59cf85a.
+Fresh204PASS0skip/fullanalytics661s288b100%/helper27s10b100%, Ruff/style/ratchet0,
+fullAST1672files20316calls1926error2740warning4666findings; global30complete
+objects exactR13, all1671unaffectedfiles/20288callables exact. Source1ab2/R13UI8111/
+seven specs/baseline38e6/main9f85diff0d54status preserved;3532protected entries,
+13gateprocesses terminal, no browser/server/service resources created.
+
+Coordinator integrated ONE publication at a time with actual immutable55a gate
+after EACH: d7cc→ad8e3939,cf4f→f645ee06,3881→8799e1af,b128→e7566896,
+c59c→28a12572,995e→bebbcad1,c7bf→b748c06a; all seven PASS0. Last two are
+R15 NO_CHANGE readiness/rejection review, not runtime reduction. Fresh root
+fullAST/global30complete-object reconciliation and docs/Graphify/postcommit gate
+are now Coordinator's exclusive heavy closure window. No final global success.
+
+| Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| R14 author | Runtime | analytics1ab2/spec210b/SLICE768c | Accepted source integrated to campaign only | GAIA-campaign-20261009-r14-operazioni-operator-km | refactor/complexity-r14-operazioni-operator-km | MERGED |
+| R14 independent reviewer | Review | originalreviewb852/runtimereview0b3c | Accepted reports integrated | GAIA-campaign-20261009-r14-operazioni-operator-km-review | review/complexity-r14-operazioni-operator-km | MERGED |
+| R14 distinct final verifier | Certification | VERIFICATION_R14 b771 | Accepted certificate integrated | GAIA-campaign-20261009-r14-operazioni-operator-km-final | verify/complexity-r14-operazioni-operator-km | MERGED |
+| Coordinator | Closure | Governance/domain docs/reports/private evidence | Root closure and final postcommit gate | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
+
+MERGED means cherry-picked into the dedicated campaign branch, NOT merged into
+concurrent main. All refactoring/review/verifier runtime ownership released.
+R16 independent review static-only; source permission/characterization still due.
+Global campaign ACTIVE/INCOMPLETE with5>300/17>200/55>100extreme tail unchanged.
+
+## Previous phase: distinct final prospective-integration certification
 
 Independent runtime review terminal ACCEPTED/IMPROVED, report
 0b3c0ca0e1dea4a7d0b476b85b3615705e960e7e06dc3f4c7695472c5e667ae1 published

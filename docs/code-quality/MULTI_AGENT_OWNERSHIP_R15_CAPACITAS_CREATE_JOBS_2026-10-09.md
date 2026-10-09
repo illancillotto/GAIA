@@ -2,7 +2,25 @@
 
 ## Snapshot and scope
 
-## Current phase: independent static-only rejection review
+## Current phase: NO_CHANGE reviewed and documentation integrated
+
+Independent rejection reviewc6115916614e25b1e5d1af3257f03db5f1b55e73f1ec5e19c485fe634e3ce1c1
+terminal ACCEPTED bounded NO_CHANGE. Fresh28artifact/3525protected paths in both
+trees/all21specs and all nested metrics exact; independent41port traces reproduce
+36async timing differences. Stubbed loader/inCASSbuilder and serialized-reference
+limits explicit: NOT React/auth/race equivalence or impossibility certification.
+Reviewer heavy never acquired; all processes terminal. Publishedc7bfb36b.
+Coordinator imported ONLY readiness995e→bebbcad1 and reviewc7bf→b748c06a, actual
+immutable55a ratchetPASS0 after EACH. No runtime/tests/config changes or finding
+reduction. All author/reviewer writable ownership released. R16 is a NEW bounded
+allocation, not revived R15 or silent scope expansion; global ACTIVE/INCOMPLETE.
+
+| Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| R15 author | Readiness | Frozen READINESS_R15 aec8 | NO_CHANGE report integrated only | GAIA-campaign-20261009-r15-capacitas-create-jobs | refactor/complexity-r15-capacitas-create-jobs | MERGED |
+| R15 independent reviewer | Rejection review | Frozen REVIEW_READINESS_R15 c611 | Bounded rejection accepted; report integrated only | GAIA-campaign-20261009-r15-capacitas-create-jobs-review | review/complexity-r15-capacitas-create-jobs | MERGED |
+
+## Previous phase: independent static-only rejection review
 
 Author is terminal NO_CHANGE; no runtime candidate selected. Frozen report
 aec8f39c5bceaa05a97499012fb91e838913bd4a125f8953cf2593257ca1d516,

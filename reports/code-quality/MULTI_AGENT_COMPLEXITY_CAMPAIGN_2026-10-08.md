@@ -1,5 +1,66 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-09 — R14 certified integration; R15 rejected; R16 characterization
+
+Global objective **ACTIVE / INCOMPLETE**. Current accounting supersedes R13
+below; official operational baseline remains8October/main55a, no7October data.
+GIS synchronization FAIL already separately fixed/certified; no redundant fix.
+Dedicated branch only; main concurrent diff9f85/status0d54 preserved.
+
+R14 exactsource1ab2 independently reviewed0b3c and DISTINCT finally certified
+b771. Original16realORM+40supplementary AST tests and seven-suite union204PASS,
+actual analytics661statements288branches100%/helper27/10full100%; raw coverage
+does not count synthetic AST clones. Final Ruff/format/style13/main55aratchet0.
+Guard clauses reduce _op_km54→33cognitive/24→22cyclomatic/4→2nesting, LOC20 and
+wholefile1255 unchanged; outerfuel282→261cognitive/169→167cyclomatic/350LOC.
+Genuine weighted source decisions23→21, NOT inclusive nested/enclosing4.
+All29non-target actual functions unchanged; no laundering or behavior change.
+
+Sequential d7cc→ad8e3939,cf4f→f645ee06,3881→8799e1af,b128→e7566896,
+c59c→28a12572, R15docs995e→bebbcad1/c7bf→b748c06a: EACH actual main55a gate0.
+Root fresh fullMakeAST and globalcheck audit EVERY complete model/finding object
+against prospective final certificate, exact. All30globaldivergences historical,
+not regressions, absorbed baseline or waived checks. Baseline38e6 exact.
+
+| Metric | Official initial8October | Integrated R14 | Delta | Delta percent |
+| --- | ---: | ---: | ---: | ---: |
+| Files |1665 |1672 |+7 |+0.42% |
+| Callables |20261 |20316 |+55 |+0.27% |
+| Error |1956 |1926 |-30 |-1.53% |
+| Warning |2758 |2740 |-18 |-0.65% |
+| Findings |4714 |4666 |-48 |-1.02% |
+
+| Domain | Error initial8October | Error current | Warning initial8October | Warning current |
+| --- | ---: | ---: | ---: | ---: |
+| Backend |1035 |1033 |1688 |1688 |
+| Frontend |878 |850 |881 |863 |
+| Worker runtime |35 |35 |134 |134 |
+| Worker tests, separate |8 |8 |55 |55 |
+
+Application without worker tests1618files/18995callables/318970LOC/4603findings.
+R14 removes ONE nesting warning relative to R13, no error; global deltas include
+earlier certified slices, findings are not independent-problem counts. Tail
+5>300/17>200/55>100 unchanged: Utenze391, Catastoanomalie390, Presenze385,
+Capacitas347, CatastoGIS317. No strategic success/target attainment asserted.
+
+R15 independently reviewed NO_CHANGE: all3exterior designs rejected (LOC growth,
+asyncbusy release36/41different). No source/test/config edits or runtime gate.
+R16 independent static review accepted ONLY for separate original characterization:
+projectionprincipal347→339/combined861→839/LOC3126→3120 is NOT runtime IMPROVED.
+Original UI test author task01a12214 owns ONLY new spec/CHAR; source8111/all21
+oldspecs/config frozen. Drafting only until green postcommit root gate/transfer.
+
+No fresh global backend/worker/frontend/build/E2E/provider certification in R14;
+R13 frontend4671/307/E2E54PASS7SKIP and GIS repeat10 certificates are attributed
+only. Full global suites and optional provider/PostGIS gaps remain due, skips
+are not PASS. Source/hook scanner limitations unchanged, no policy/baseline edit.
+All13finalverifierprocesses terminal; no servers/services/resources created.
+
+Full fresh domain/top30 tables, artifacts, branch/worktree/publication map,
+behavior/coverage limits and closure commands:
+`INTEGRATION_R14_OPERAZIONI_OPERATOR_KM_2026-10-09.md` and
+`VERIFICATION_R14_OPERAZIONI_OPERATOR_KM_2026-10-09.md`.
+
 ## 2026-10-09 — R13 execution controls, certified and integrated checkpoint
 
 Global objective **ACTIVE / INCOMPLETE**. This current snapshot supersedes R12

@@ -2,7 +2,58 @@
 
 ## Snapshot and authorization
 
-## Current phase: independent STATIC readiness review
+## Current phase: ORIGINAL persistent characterization allocation
+
+Independent static readiness review terminal ACCEPTED_FOR_SEPARATE_CHARACTERIZATION,
+reportb43c04be1a482e9260ce5a9f293574db60e73894f37dbb1ca77e5c4b82e85531,
+publishedcb382ac4. Fresh118supplementary pure contracts, original/candidate AST/
+nested metrics/243unallocated records reproduced,21specs/source/config/candidate
+exact. No heavy/rendered/type/coverage/full-context ratchet certification.
+Lazy versus eager access/conversion/functional-updater timing reviewed; actual
+public-UI asynchronous transition/payload gaps remain mandatory, no runtime claim.
+
+Coordinator imported published R14 ORIGINAL/reviews/certified source/final reports
+d7cc/cf4f/3881/b128/c59c, plus R16 static reviewcb382, into SAME R16 author tree.
+This brings its full scan context to certified current campaign source, not older
+R13 analytics. Only sanctioned R14 files/reports changed during synchronization;
+Capacitas8111/all21specs/config/baseline/candidate/readiness remain frozen. New
+phase must record fresh protected manifest AFTER imports, not misclassify them
+as author regressions. No reset/rebase/main merge or dirty source copying.
+
+| Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Previous measured-design author and static reviewer | Readiness | Frozen READINESS_R16 07d9 / REVIEW_READINESS_R16 b43c | Terminal; no runtime/test ownership | Dedicated R16 author/review trees | Existing R16 branches | READY_FOR_REVIEW |
+| R16 Original Characterization Author task01a12214-b28c-72f3-ada5-5d64a6479af6 | Characterization | ONLY new frontend/tests/unit/campaign-capacitas-credential-defaults-r16.test.tsx; ONLY new reports/code-quality/CHARACTERIZATION_R16_CAPACITAS_CREDENTIAL_DEFAULTS_2026-10-09.md | Actual ORIGINAL public-UI deferred credential-default transitions/payloads | GAIA-campaign-20261009-r16-capacitas-credential-defaults | refactor/complexity-r16-capacitas-credential-defaults | ACTIVE |
+
+Registry precedes new task creation. Author may draft ONLY these new files after
+activation; all source/21oldtests/config/reports/readiness/review/candidate/tooling/
+baseline remain read-only. No private helper export or source implementation copy.
+Do not rewrite old tests or manufacture coverage via synthetic runtime filenames.
+The first oversized create prompt was rejected before task creation; the shorter
+retry returned the exact task identity above. No duplicate author was started.
+
+Characterize mixed empty/preselected forms during a delayed singleton response,
+selected IDs absent from later pool retained, unrelated fields edited during
+pending load, multiple/empty/singleton/inactive pools and captured credentials
+through all FOUR actual create payloads. Preserve ordering/token/error/cross-family
+state and current functional updater semantics. Use actual mounted workspace/
+public actions and meaningful exact expected values, not repeated readiness ports
+as equivalence proof. Defensive actual-source synthetic AST tests supplementary
+only if needed and never counted as runtime coverage. Real load/create/refresh
+contracts asserted through existing supported mocks, no new runtime helper mocks.
+
+NO heavy tests/type/lint/fullscan/coverage/build/Graphify refresh until explicit
+Coordinator transfer AFTER final root R14+R15 closure POST-COMMIT ratchetPASS0.
+Then fresh new spec+all22spec union, actual full-workspace/fraction-policy100%
+statements/branches/functions/lines, scoped lint/project+new-spec type, complete
+immutable55a ratchet/report, full-context candidate comparator and protected
+integrity are required. Type/comparator candidate is exterior only; source8111
+must remain ORIGINAL. Retain every failure; no timeout restart/gate weakening.
+Freeze tests/report/source/candidate/evidence, release heavy, stop before source.
+Independent ORIGINAL replay precedes later runtime allocation. No commit/import/
+integration delegated or global completion; R16 still actual NO_CHANGE.
+
+## Previous phase: independent STATIC readiness review
 
 Author terminal MEASURED_DESIGN_ONLY, actual runtime NO_CHANGE. Frozen readiness
 07d9ffab0866c2456b3cff8b7b157bd10e74ee80dea06a16ae60a831db9fd007, candidate
@@ -17,12 +68,16 @@ Coordinator published readiness0167bbcf/imported to existing review worktree.
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | R16 author | Readiness | Frozen READINESS_R16 07d9 | Terminal, no runtime ownership | GAIA-campaign-20261009-r16-capacitas-credential-defaults | refactor/complexity-r16-capacitas-credential-defaults | READY_FOR_REVIEW |
-| /root/r15_static_review, successor R16 allocation | Independent static review | ONLY new reports/code-quality/REVIEW_READINESS_R16_CAPACITAS_CREDENTIAL_DEFAULTS_2026-10-09.md | Reproduce bounded AST/metrics/pure contracts, inspect original public-UI gaps, no runtime equivalence certification | GAIA-campaign-20261009-r16-capacitas-credential-defaults-review | review/complexity-r16-capacitas-credential-defaults | ACTIVE |
+| Independent reviewer task01a121e9-741c-7f90-aa16-a492b838b89f, successor R16 allocation | Independent static review | ONLY new reports/code-quality/REVIEW_READINESS_R16_CAPACITAS_CREDENTIAL_DEFAULTS_2026-10-09.md | Reproduce bounded AST/metrics/pure contracts, inspect original public-UI gaps, no runtime equivalence certification | GAIA-campaign-20261009-r16-capacitas-credential-defaults-review | review/complexity-r16-capacitas-credential-defaults | ACTIVE |
 
-R15 reviewer is terminal/released; successor is separate from R16 author and
+R15 reviewer is terminal/released; its planned native R16 successor was never
+triggered. Coordinator transfers this report-only allocation to the terminal
+R14 independent reviewer TUI task above BEFORE activation, with no overlap.
+R14 final verifier has also released heavy; Coordinator's sequential integration
+gates now own it, so R16 remains STATIC ONLY. Successor is separate from R16 author and
 owns ONLY its new report/private evidence. All source/tests/config/readiness/
 candidate/artifacts are frozen, no source/test edits/commit/import/merge delegated.
-R14 distinct final verifier currently owns exclusive heavy window; bounded
+Coordinator's R14 sequential integration currently owns exclusive heavy window; bounded
 one-file/pure/reading only, no rendered tests/type/lint/fullscan/coverage/build/
 ratchet/Graphify refresh. Inspect lazy property/conversion/spread/access ordering,
 functional updater execution timing/current-state preservation, empty/selected/
