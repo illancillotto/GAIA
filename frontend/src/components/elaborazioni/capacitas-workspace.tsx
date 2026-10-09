@@ -169,6 +169,50 @@ function hasCapacitasCompletedJob(jobs: readonly CapacitasMonitoredJob[], previo
 }
 
 
+interface CapacitasJobCommandPorts {
+  family: CapacitasMonitorFamily;
+  setBusyId: (jobId: number | null) => void;
+  setError: (message: string | null) => void;
+  setStatusMessage: (message: string) => void;
+}
+
+type CapacitasJobCommand<Job extends { id: number }> = CapacitasJobCommandPorts & (
+  | { action: "rerun"; setSessionExpired: (expired: boolean) => void; reload: () => Promise<void> }
+  | { action: "delete"; setJobs: (update: (current: Job[]) => Job[]) => void }
+);
+
+const JOB_COMMAND_LABELS = {
+  terreni: { label: "Job", error: "Terreni" },
+  particelle: { label: "Job particelle", error: "particelle" },
+  history: { label: "Job storico", error: "storico anagrafico" },
+  incass: { label: "Job avvisi", error: "avvisi" },
+};
+
+async function runCapacitasJobCommand<Job extends { id: number }>(
+  jobId: number,
+  run: (token: string, jobId: number) => Promise<unknown>,
+  command: CapacitasJobCommand<Job>,
+): Promise<void> {
+  const token = getStoredAccessToken();
+  if (!token) return;
+  command.setBusyId(jobId);
+  try {
+    await run(token, jobId);
+    if (command.action === "rerun") command.setSessionExpired(false);
+    command.setStatusMessage(`${JOB_COMMAND_LABELS[command.family].label} #${jobId} ${command.action === "rerun" ? "rilanciato" : "eliminato"}.`);
+    command.setError(null);
+    if (command.action === "rerun") {
+      await command.reload();
+    } else {
+      command.setJobs((current) => current.filter((job) => job.id !== jobId));
+    }
+  } catch (commandError) {
+    command.setError(commandError instanceof Error ? commandError.message : `Errore ${command.action === "rerun" ? "rerun" : "eliminazione"} job ${JOB_COMMAND_LABELS[command.family].error}`);
+  } finally {
+    command.setBusyId(null);
+  }
+}
+
 const JOB_POLL_INTERVAL_MS = 15000;
 // Gli avvisi inCASS restano "in coda" per ore quando si lancia un harvest massivo
 // e la lista non è paginata: allunghiamo il polling e rallentiamo ancora quando
@@ -940,39 +984,27 @@ export function ElaborazioniCapacitasWorkspace({
     }, silent);
   }
 
-  async function handleRerunJob(jobId: number): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token) return;
-
-    setTerreniJobBusyId(jobId);
-    try {
-      await rerunCapacitasTerreniJob(token, jobId);
-      setTerreniMonitorSessionExpired(false);
-      setTerreniStatusMessage(`Job #${jobId} rilanciato.`);
-      setTerreniError(null);
-      await loadTerreniJobs();
-    } catch (rerunError) {
-      setTerreniError(rerunError instanceof Error ? rerunError.message : "Errore rerun job Terreni");
-    } finally {
-      setTerreniJobBusyId(null);
-    }
+  function handleRerunJob(jobId: number): Promise<void> {
+    return runCapacitasJobCommand(jobId, rerunCapacitasTerreniJob, {
+      family: "terreni",
+      action: "rerun",
+      setBusyId: setTerreniJobBusyId,
+      setError: setTerreniError,
+      setStatusMessage: setTerreniStatusMessage,
+      setSessionExpired: setTerreniMonitorSessionExpired,
+      reload: loadTerreniJobs,
+    });
   }
 
-  async function handleDeleteJob(jobId: number): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token) return;
-
-    setTerreniDeletingJobId(jobId);
-    try {
-      await deleteCapacitasTerreniJob(token, jobId);
-      setTerreniStatusMessage(`Job #${jobId} eliminato.`);
-      setTerreniError(null);
-      setTerreniJobs((current) => current.filter((job) => job.id !== jobId));
-    } catch (deleteError) {
-      setTerreniError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione job Terreni");
-    } finally {
-      setTerreniDeletingJobId(null);
-    }
+  function handleDeleteJob(jobId: number): Promise<void> {
+    return runCapacitasJobCommand(jobId, deleteCapacitasTerreniJob, {
+      family: "terreni",
+      action: "delete",
+      setBusyId: setTerreniDeletingJobId,
+      setError: setTerreniError,
+      setStatusMessage: setTerreniStatusMessage,
+      setJobs: setTerreniJobs,
+    });
   }
 
   async function handleCreateParticelleSyncJob(): Promise<void> {
@@ -1003,39 +1035,27 @@ export function ElaborazioniCapacitasWorkspace({
     }
   }
 
-  async function handleRerunParticelleJob(jobId: number): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token) return;
-
-    setParticelleJobBusyId(jobId);
-    try {
-      await rerunCapacitasParticelleSyncJob(token, jobId);
-      setParticelleMonitorSessionExpired(false);
-      setParticelleStatusMessage(`Job particelle #${jobId} rilanciato.`);
-      setParticelleError(null);
-      await loadParticelleJobs();
-    } catch (rerunError) {
-      setParticelleError(rerunError instanceof Error ? rerunError.message : "Errore rerun job particelle");
-    } finally {
-      setParticelleJobBusyId(null);
-    }
+  function handleRerunParticelleJob(jobId: number): Promise<void> {
+    return runCapacitasJobCommand(jobId, rerunCapacitasParticelleSyncJob, {
+      family: "particelle",
+      action: "rerun",
+      setBusyId: setParticelleJobBusyId,
+      setError: setParticelleError,
+      setStatusMessage: setParticelleStatusMessage,
+      setSessionExpired: setParticelleMonitorSessionExpired,
+      reload: loadParticelleJobs,
+    });
   }
 
-  async function handleDeleteParticelleJob(jobId: number): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token) return;
-
-    setParticelleDeletingJobId(jobId);
-    try {
-      await deleteCapacitasParticelleSyncJob(token, jobId);
-      setParticelleStatusMessage(`Job particelle #${jobId} eliminato.`);
-      setParticelleError(null);
-      setParticelleJobs((current) => current.filter((job) => job.id !== jobId));
-    } catch (deleteError) {
-      setParticelleError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione job particelle");
-    } finally {
-      setParticelleDeletingJobId(null);
-    }
+  function handleDeleteParticelleJob(jobId: number): Promise<void> {
+    return runCapacitasJobCommand(jobId, deleteCapacitasParticelleSyncJob, {
+      family: "particelle",
+      action: "delete",
+      setBusyId: setParticelleDeletingJobId,
+      setError: setParticelleError,
+      setStatusMessage: setParticelleStatusMessage,
+      setJobs: setParticelleJobs,
+    });
   }
 
   async function handlePatchParticelleSpeed(jobId: number, doubleSpeed: boolean): Promise<void> {
@@ -1177,37 +1197,27 @@ export function ElaborazioniCapacitasWorkspace({
     }
   }
 
-  async function handleRerunHistoryJob(jobId: number): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token) return;
-    setHistoryJobBusyId(jobId);
-    try {
-      await rerunCapacitasAnagraficaHistoryJob(token, jobId);
-      setHistoryMonitorSessionExpired(false);
-      setHistoryStatusMessage(`Job storico #${jobId} rilanciato.`);
-      setHistoryError(null);
-      await loadHistoryJobs();
-    } catch (rerunError) {
-      setHistoryError(rerunError instanceof Error ? rerunError.message : "Errore rerun job storico anagrafico");
-    } finally {
-      setHistoryJobBusyId(null);
-    }
+  function handleRerunHistoryJob(jobId: number): Promise<void> {
+    return runCapacitasJobCommand(jobId, rerunCapacitasAnagraficaHistoryJob, {
+      family: "history",
+      action: "rerun",
+      setBusyId: setHistoryJobBusyId,
+      setError: setHistoryError,
+      setStatusMessage: setHistoryStatusMessage,
+      setSessionExpired: setHistoryMonitorSessionExpired,
+      reload: loadHistoryJobs,
+    });
   }
 
-  async function handleDeleteHistoryJob(jobId: number): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token) return;
-    setHistoryDeletingJobId(jobId);
-    try {
-      await deleteCapacitasAnagraficaHistoryJob(token, jobId);
-      setHistoryStatusMessage(`Job storico #${jobId} eliminato.`);
-      setHistoryError(null);
-      setHistoryJobs((current) => current.filter((job) => job.id !== jobId));
-    } catch (deleteError) {
-      setHistoryError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione job storico anagrafico");
-    } finally {
-      setHistoryDeletingJobId(null);
-    }
+  function handleDeleteHistoryJob(jobId: number): Promise<void> {
+    return runCapacitasJobCommand(jobId, deleteCapacitasAnagraficaHistoryJob, {
+      family: "history",
+      action: "delete",
+      setBusyId: setHistoryDeletingJobId,
+      setError: setHistoryError,
+      setStatusMessage: setHistoryStatusMessage,
+      setJobs: setHistoryJobs,
+    });
   }
 
   async function handleCreateIncassJob(): Promise<void> {
@@ -1255,37 +1265,27 @@ export function ElaborazioniCapacitasWorkspace({
     }
   }
 
-  async function handleRerunIncassJob(jobId: number): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token) return;
-    setIncassJobBusyId(jobId);
-    try {
-      await rerunCapacitasInCassSyncJob(token, jobId);
-      setIncassMonitorSessionExpired(false);
-      setIncassStatusMessage(`Job avvisi #${jobId} rilanciato.`);
-      setIncassError(null);
-      await loadIncassJobs();
-    } catch (rerunError) {
-      setIncassError(rerunError instanceof Error ? rerunError.message : "Errore rerun job avvisi");
-    } finally {
-      setIncassJobBusyId(null);
-    }
+  function handleRerunIncassJob(jobId: number): Promise<void> {
+    return runCapacitasJobCommand(jobId, rerunCapacitasInCassSyncJob, {
+      family: "incass",
+      action: "rerun",
+      setBusyId: setIncassJobBusyId,
+      setError: setIncassError,
+      setStatusMessage: setIncassStatusMessage,
+      setSessionExpired: setIncassMonitorSessionExpired,
+      reload: loadIncassJobs,
+    });
   }
 
-  async function handleDeleteIncassJob(jobId: number): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token) return;
-    setIncassDeletingJobId(jobId);
-    try {
-      await deleteCapacitasInCassSyncJob(token, jobId);
-      setIncassStatusMessage(`Job avvisi #${jobId} eliminato.`);
-      setIncassError(null);
-      setIncassJobs((current) => current.filter((job) => job.id !== jobId));
-    } catch (deleteError) {
-      setIncassError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione job avvisi");
-    } finally {
-      setIncassDeletingJobId(null);
-    }
+  function handleDeleteIncassJob(jobId: number): Promise<void> {
+    return runCapacitasJobCommand(jobId, deleteCapacitasInCassSyncJob, {
+      family: "incass",
+      action: "delete",
+      setBusyId: setIncassDeletingJobId,
+      setError: setIncassError,
+      setStatusMessage: setIncassStatusMessage,
+      setJobs: setIncassJobs,
+    });
   }
 
   const content = (
