@@ -11,7 +11,8 @@ Main dirty backend/Presenze/Ruolo/documentation concurrent work is not an input.
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 |---|---|---|---|---|---|---|
 | Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md | Exact design approval, ownership, integration gates | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
-| R9 author | Presenze UI | frontend/src/app/presenze/giornaliere/page.tsx; frontend/src/app/presenze/giornaliere/daily-record-mutations.ts if justified; frontend/tests/unit/presenze-giornaliere-r9.test.tsx; reports/code-quality/SLICE_R9_PRESENZE_MUTATIONS_2026-10-09.md; domain-docs/presenze/docs/DAILY_RECORD_MUTATIONS_REFACTOR_2026-10-09.md | Analyze/design daily-record persistence lifecycle deduplication, then approved characterization/refactor | GAIA-campaign-20261009-r9-presenze-mutations | refactor/complexity-r9-presenze-mutations | ACTIVE |
+| R9 author — characterization complete | Presenze UI tests | frontend/tests/unit/presenze-giornaliere-r9.test.tsx | Frozen original characterization, source commit8833a587 | GAIA-campaign-20261009-r9-presenze-mutations | refactor/complexity-r9-presenze-mutations | READY_FOR_REVIEW |
+| Coordinator — R9 implementation | Presenze UI | frontend/src/app/presenze/giornaliere/page.tsx; reports/code-quality/SLICE_R9_PRESENZE_MUTATIONS_2026-10-09.md; domain-docs/presenze/docs/DAILY_RECORD_MUTATIONS_REFACTOR_2026-10-09.md | Apply the independently characterized refined local design, measure and hand off exact candidate | GAIA-campaign-20261009-r9-presenze-mutations | refactor/complexity-r9-presenze-mutations | ACTIVE |
 | R9 reviewer | Independent review | reports/code-quality/REVIEW_R9_PRESENZE_MUTATIONS_2026-10-09.md only; source read-only | Original async ordering/exception oracle and protected AST, exact candidate review | GAIA-campaign-20261009-r9-presenze-review | review/complexity-r9-presenze-mutations | ACTIVE |
 | R9 verifier | Independent final certification | reports/code-quality/VERIFICATION_R9_PRESENZE_MUTATIONS_2026-10-09.md only; source read-only | Frozen-source full-file coverage/fullfrontend/build/browser/ratchet | GAIA-campaign-20261009-r9-presenze-verification | verify/complexity-r9-presenze-mutations | PLANNED |
 
@@ -114,3 +115,20 @@ FileLOC+22/principalLOC+9 also disclosed; no artificial helper added to force a
 number down. Final source must still pass full-file coverage, findings/ratchet,
 type/lint, independent review and frozen final gates before integration.
 Runtime approval remains a separate explicit phase after original replay.
+
+## Runtime phase authorization and sequential ownership
+
+Original independent replay completed472PASS/1033statement1143branch294function
+100%, typecheck/new-test lint exit0, original runtime/test hashes exact. Reviewer
+worktree9afd3bc5 clean. Coordinator separately replayed the same original gates.
+Both original author and reviewer tasks are terminal at their reported phase.
+Runtime ownership transfers sequentially to Coordinator in the same dedicated
+source worktree; no concurrent owner or new branch for the same page.
+
+Refined design is authorized locally, with the disclosed raw cyclomatic+1
+tradeoff, because cognitive and actual aggregate decisions decrease and the
+shared lifecycle/pure mapping are real responsibilities. Named local mutation
+type and payload return type are required; no new runtime file/shared path.
+Implementation is not acceptance: exact candidate measurements, full coverage,
+ratchet, protected-source equivalence, review and final certification remain.
+Plaintext approval is `~/.cache/gaia-campaign/20261009-r9-presenze/coordinator/RUNTIME_APPROVAL.md`.
