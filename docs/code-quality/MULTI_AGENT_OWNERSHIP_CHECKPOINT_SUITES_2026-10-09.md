@@ -20,7 +20,7 @@ completion or last-wave final-suite certification is implied by this checkpoint.
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | Coordinator | Governance | This registry, PROGRESS/global report and private checkpoint | Serialized verification allocation and integration | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
-| Checkpoint Suites Verifier, future distinct TUI task | Backend/worker verification | ONLY new reports/code-quality/CHECKPOINT_BACKEND_WORKER_VERIFICATION_2026-10-09.md | Complete backend pytest and complete existing make test-worker, no source fixes | GAIA-campaign-20261009-suites-verification | verify/complexity-campaign-suites-20261009 | PLANNED |
+| Checkpoint Suites Verifier task01a1222c-ba79-7a42-8717-4bd1b8374ce0 | Backend/worker verification | ONLY new reports/code-quality/CHECKPOINT_BACKEND_WORKER_VERIFICATION_2026-10-09.md | Complete backend pytest and complete existing make test-worker, no source fixes | GAIA-campaign-20261009-suites-verification | verify/complexity-campaign-suites-20261009 | ACTIVE |
 
 Registry precedes actor creation; dedicated clean worktree from34c13604 includes
 certified analytics1ab2 and Capacitas8111. All runtime/tests/config/tooling/baseline/
