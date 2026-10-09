@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, TypedDict
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
@@ -74,6 +74,23 @@ def _user_display_name(user: ApplicationUser | None) -> str:
         return "Sconosciuto"
     full = f"{getattr(user, 'first_name', '') or ''} {getattr(user, 'last_name', '') or ''}".strip()
     return full or user.username or str(user.id)
+
+
+class FuelAverageFields(TypedDict):
+    avg_price_per_liter: float | None
+    avg_refuel_cost: float | None
+    avg_liters_per_refuel: float | None
+
+
+def _fuel_average_fields(
+    averages: tuple[float | None, float | None, float | None],
+) -> FuelAverageFields:
+    price, refuel_cost, liters = averages
+    return FuelAverageFields(
+        avg_price_per_liter=round(price, 4) if price is not None else None,
+        avg_refuel_cost=round(refuel_cost, 2) if refuel_cost is not None else None,
+        avg_liters_per_refuel=round(liters, 2) if liters is not None else None,
+    )
 
 
 @dataclass
@@ -387,6 +404,21 @@ def fuel_analytics(
         avg_liters = _avg(pos_liters)
         return avg_price, avg_refuel_cost, avg_liters
 
+    def _related_usage_item(
+        entity_id: str,
+        label: str,
+        items: list[VehicleFuelLog],
+        averages: tuple[float | None, float | None, float | None],
+    ) -> FuelRelatedUsageItem:
+        return FuelRelatedUsageItem(
+            id=entity_id,
+            label=label,
+            refuel_count=len(items),
+            total_liters=round(sum(_safe_float(log.liters) for log in items), 2),
+            total_cost=round(sum(_safe_float(log.total_cost) for log in items), 2),
+            **_fuel_average_fields(averages),
+        )
+
     def _top_stations_for_logs(items: list[VehicleFuelLog], limit: int = 5) -> list[FuelStationUsageItem]:
         grouped: dict[str, list[VehicleFuelLog]] = defaultdict(list)
         for log in items:
@@ -500,7 +532,7 @@ def fuel_analytics(
             km_by_vehicle_from_sessions.get(vid),
             _target_consumption_l_per_100km(vehicles_map.get(vid)),
         )
-        avg_price, avg_refuel_cost, avg_liters = _metrics_for_logs(vehicle_logs)
+        averages = _metrics_for_logs(vehicle_logs)
         top_vehicles_out.append(FuelTopItem(
             id=str(vid),
             label=getattr(vehicles_map.get(vid), "plate_number", None)
@@ -513,9 +545,7 @@ def fuel_analytics(
             avg_consumption_l_per_100km=consumption.consumption,
             consumption_coefficient=consumption.coefficient,
             consumption_judgement=consumption.judgement,
-            avg_price_per_liter=round(avg_price, 4) if avg_price is not None else None,
-            avg_refuel_cost=round(avg_refuel_cost, 2) if avg_refuel_cost is not None else None,
-            avg_liters_per_refuel=round(avg_liters, 2) if avg_liters is not None else None,
+            **_fuel_average_fields(averages),
             top_stations=_top_stations_for_logs(vehicle_logs, limit=5),
             related=[],
         ))
@@ -615,7 +645,7 @@ def fuel_analytics(
     top_operators_out = []
     for fkey in top_fuel_keys:
         fid, flabel = _op_display(fkey)
-        avg_price, avg_refuel_cost, avg_liters = _metrics_for_logs(logs_by_key[fkey])
+        averages = _metrics_for_logs(logs_by_key[fkey])
 
         op_km, op_km_by_vehicle = _op_km(fkey)
         has_km = op_km > 0
@@ -658,17 +688,13 @@ def fuel_analytics(
 
         for vid in sorted(rel_by_vehicle.keys(), key=_rel_score, reverse=True)[:5]:
             ls = rel_by_vehicle[vid]
-            rp, rc, rl = _metrics_for_logs(ls)
+            related_averages = _metrics_for_logs(ls)
             v = rel_vmap.get(vid)
-            related_items.append(FuelRelatedUsageItem(
-                id=vid,
-                label=getattr(v, "plate_number", None) or getattr(v, "name", None) or vid,
-                refuel_count=len(ls),
-                total_liters=round(sum(_safe_float(x.liters) for x in ls), 2),
-                total_cost=round(sum(_safe_float(x.total_cost) for x in ls), 2),
-                avg_price_per_liter=round(rp, 4) if rp is not None else None,
-                avg_refuel_cost=round(rc, 2) if rc is not None else None,
-                avg_liters_per_refuel=round(rl, 2) if rl is not None else None,
+            related_items.append(_related_usage_item(
+                vid,
+                getattr(v, "plate_number", None) or getattr(v, "name", None) or vid,
+                ls,
+                related_averages,
             ))
 
         top_operators_out.append(FuelTopItem(
@@ -681,9 +707,7 @@ def fuel_analytics(
             avg_consumption_l_per_100km=op_consumption,
             consumption_coefficient=round(op_coeff, 3) if op_coeff is not None else None,
             consumption_judgement=op_judge,
-            avg_price_per_liter=round(avg_price, 4) if avg_price is not None else None,
-            avg_refuel_cost=round(avg_refuel_cost, 2) if avg_refuel_cost is not None else None,
-            avg_liters_per_refuel=round(avg_liters, 2) if avg_liters is not None else None,
+            **_fuel_average_fields(averages),
             top_stations=_top_stations_for_logs(logs_by_key[fkey], limit=5),
             related=related_items,
         ))
@@ -708,17 +732,13 @@ def fuel_analytics(
         related_ops: list[FuelRelatedUsageItem] = []
         for k in sorted(rel_by_op.keys(), key=_rel_score_op, reverse=True)[:5]:
             ls = rel_by_op[k]
-            rp, rc, rl = _metrics_for_logs(ls)
+            related_averages = _metrics_for_logs(ls)
             rid, rlabel = _op_display(k)
-            related_ops.append(FuelRelatedUsageItem(
-                id=rid,
-                label=rlabel,
-                refuel_count=len(ls),
-                total_liters=round(sum(_safe_float(x.liters) for x in ls), 2),
-                total_cost=round(sum(_safe_float(x.total_cost) for x in ls), 2),
-                avg_price_per_liter=round(rp, 4) if rp is not None else None,
-                avg_refuel_cost=round(rc, 2) if rc is not None else None,
-                avg_liters_per_refuel=round(rl, 2) if rl is not None else None,
+            related_ops.append(_related_usage_item(
+                rid,
+                rlabel,
+                ls,
+                related_averages,
             ))
         item.related = related_ops
 
