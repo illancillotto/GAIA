@@ -37,6 +37,13 @@
   provvisoria. Metrics/ratchet/typecheck/finalreview pendenti, no sourcecommit.
   Verifierworktreec518727e creato, assignmentpreparatoryread-only prima di freeze;
   nessuna suite/build finale autorizzata ancora, nessun integrationruntime.
+- Root candidateactualdiff/AST/fullcoverage verificati: page1172→1109cognitive
+ (-63),1249→1230cyclomatic(-19),finding38→33(-4error-1warning),fileLOC+10,
+ principal403→399/356→352/2020LOCinvariati. Finitepolicydeduplicata, helperzero
+ warning/error, non laundering. AuthorratchetmainPASS0/typecheck/lintPASSlegacy3.
+ Reviewer autorizzato exactsnapshot/afterfullcoverage e gate indipendenti;
+ runtime/testfreeze durante review. Sourcecommit/integration/verifierfullgate
+ ancora non autorizzati. Principal399rimane estremo, no globalclosure.
 
 ## 2026-10-09 — R7 Presenze anomaly ordering/grouping
 
