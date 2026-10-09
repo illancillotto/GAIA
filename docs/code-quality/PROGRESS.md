@@ -1,5 +1,19 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R13 exact runtime allocation after independent original green
+
+- Independent original review3ca6ee26 frozen: fresh16focused/492union21specs,
+  zero skip, full2file100%724statements804branches254functions630lines. Project
+  and explicitnewtest type/all21lint/integrity and actual immutable55a ratchet0.
+  All3515paths/old20tests exact. Own external symlink diagnostic retained,
+  only newly created root link removed; no source/config/test fix or waiver.
+- Exclusive heavy window released by reviewer, now assigned to existing R13
+  native author for ONLY exact inline8111 workspace+newSLICE. All21tests frozen;
+  real source metrics/full100%/ratchet/Graphify required before runtime review.
+- No source improvement or global completion claimed in advance. Distinct final
+  native keyboard/DOM/payload certification remains mandatory. R14 original
+  characterization authored56static cases, execution queued behind Capacitas.
+
 ## 2026-10-09 — R13 independent original replay; R14 persistent characterization
 
 - R13 native original characterization terminal492PASS/21spec/zero skip and
