@@ -1,6 +1,25 @@
 # R13 Capacitas — execution-mode controls ownership
 
-## Current phase: exact inline runtime implementation
+## Current phase: independent actual-source review
+
+Author runtime terminal READY_FOR_REVIEW/IMPROVED, heavy window RELEASED.
+Actual source8111 and SLICEac55ce2a frozen; fresh492/21/full2file100%, type/lint0,
+actual immutable55a ratchet0, fullreport0, dedicated Graphify frontend0.
+Principal359→347cognitive, combined871→861 and source14→4 decisions, fileLOC
+3131→3126. Hook census AST70 versus scanner31 explicitly unchanged; scanner's
+39generic-call omissions require separate follow-up, not a repair here.
+
+Coordinator publishes ONLY workspace+SLICE and imports this exact commit to
+existing review branch. `/root/r13_review` exclusively owns ONLY new
+`reports/code-quality/REVIEW_R13_CAPACITAS_EXECUTION_CONTROLS_2026-10-09.md` and
+heavy fresh actual-source full21coverage/type/lint/metrics/immutable55a ratchet.
+Review genuine duplication, DOM/event callback/functional update/lifecycle/API
+equivalence and protected integrity, all21specs/config/reports/source frozen.
+No redesign/source edits/commit delegated. Stop frozen report+heavy release;
+distinct final verifier and real native keyboard browser remain mandatory.
+R14 heavy still queued. This supersedes all historical allocations below.
+
+## Previous phase: exact inline runtime implementation
 
 Independent ORIGINAL replay terminal report SHA256
 `3ca6ee26cc6bde08fec474b4efc4a55b608606724a9da906b47112e814cb3d9b`:
@@ -124,8 +143,8 @@ remain unchanged. No reset/stash/main merge/baseline generation or repair.
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; private approvals/checkpoints; later explicitly assigned closure docs | Ownership, phase gates, publication/integration custody | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
-| /root/r13_execution_characterization (successor to terminal TUI author) | Capacitas execution controls | ONLY workspace and SLICE_R13 report; all21specs/reports/readiness/policy frozen | Exact8111 runtime implementation, fresh actual-source gates and heavy release | GAIA-campaign-20261009-r13-capacitas-execution-controls | refactor/complexity-r13-capacitas-execution-controls | ACTIVE |
-| /root/r13_review (successor to idle TUI readiness reviewer) | Independent original replay | Frozen REVIEW_CHARACTERIZATION_R13 report3ca6ee26; readiness1778 frozen | Fresh original gates terminal, heavy released; runtime review awaits source | GAIA-campaign-20261009-r13-capacitas-execution-controls-review | review/complexity-r13-capacitas-execution-controls | READY_FOR_REVIEW |
+| /root/r13_execution_characterization (successor to terminal TUI author) | Capacitas execution controls | Frozen workspace8111 and SLICEac55ce2a; all21specs/reports/readiness/policy frozen | Actual-source author terminal, heavy released | GAIA-campaign-20261009-r13-capacitas-execution-controls | refactor/complexity-r13-capacitas-execution-controls | READY_FOR_REVIEW |
+| /root/r13_review (successor to idle TUI readiness reviewer) | Independent actual-source review | ONLY new REVIEW_R13 report; original3ca6/readiness1778/source/tests frozen | Fresh actual-source review and full gates, exclusive heavy window | GAIA-campaign-20261009-r13-capacitas-execution-controls-review | review/complexity-r13-capacitas-execution-controls | ACTIVE |
 | Final verifier01a120f5-5536-7f11-bb61-089e5d03c923 | Future actual-source certification | Future new VERIFICATION_R13 report only after explicit source freeze | No active task in readiness phase | Dedicated clean final worktree later | Later | PLANNED |
 
 All R12 agents are authoritatively idle and their ownership is released. NEW

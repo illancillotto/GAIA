@@ -1,5 +1,20 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R13 source frozen and independent runtime review allocated
+
+- Exact8111 applied by author via apply_patch, SLICEac55ce2a frozen. Actual
+  principal359→347cognitive336→324cyclomatic2487→2455LOC; combined871→861
+  cognitive762→752decisions3131→3126fileLOC. Genuine14→4distinct decisions,
+  combinedwhole440→430. Helper2cognitive3cyclomatic17LOC under all thresholds.
+- Fresh492/21/zero skip/full2file100%727statements784branches255functions633lines;
+  type/lint0, full immutable55a ratchet0/report0/Graphify frontend0. Protected3517
+  untouched paths/all21specs exact. Author heavy explicitly RELEASED.
+- Scanner regex31useState versus actual AST70 (39generic calls omitted), both
+  unchanged; separate tooling limitation visible, no scanner/baseline edits.
+- Existing independent reviewer now allocated ONLY new REVIEW_R13 and exclusive
+  actual-source gates after source publication. Native final certification and
+  sequential integration remain due; source not yet certified or integrated.
+
 ## 2026-10-09 — R13 exact runtime allocation after independent original green
 
 - Independent original review3ca6ee26 frozen: fresh16focused/492union21specs,
