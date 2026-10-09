@@ -3,6 +3,8 @@
 import * as XLSX from "xlsx";
 import { useEffect, useRef, useState } from "react";
 
+import { transitionFractionResolution } from "@/components/elaborazioni/capacitas-fraction-resolution";
+import type { FractionResolutionState } from "@/components/elaborazioni/capacitas-fraction-resolution";
 import { ProtectedPage } from "@/components/app/protected-page";
 import {
   ElaborazioneHero,
@@ -254,8 +256,8 @@ function triggerDownload(blob: Blob, filename: string): void {
   window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 }
 
-function normalizeImportHeader(value: unknown): string {
-  return String(value ?? "")
+function normalizeImportHeader(value: string): string {
+  return String(value)
     .trim()
     .toLowerCase()
     .replace(/\s+/g, "_")
@@ -278,7 +280,7 @@ function stringifyImportCell(value: unknown): string {
 async function readTerreniBatchFile(
   file: File,
 ): Promise<{ items: CapacitasTerreniBatchItemInput[]; skipped: number }> {
-  const ext = file.name.toLowerCase().split(".").pop() ?? "";
+  const ext = file.name.toLowerCase().split(".").pop()!;
   const workbook =
     ext === "csv" ? XLSX.read(await file.text(), { type: "string" }) : XLSX.read(await file.arrayBuffer(), { type: "array" });
   const firstSheetName = workbook.SheetNames[0];
@@ -288,9 +290,9 @@ async function readTerreniBatchFile(
   const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: null, raw: false });
   if (data.length === 0) return { items: [], skipped: 0 };
 
-  const headers = Object.keys(data[0] ?? {}).map(normalizeImportHeader);
+  const headers = Object.keys(data[0]).map(normalizeImportHeader);
   const headerMap = new Map<string, string>();
-  for (const rawKey of Object.keys(data[0] ?? {})) {
+  for (const rawKey of Object.keys(data[0])) {
     headerMap.set(normalizeImportHeader(rawKey), rawKey);
   }
 
@@ -310,12 +312,12 @@ async function readTerreniBatchFile(
   const items: CapacitasTerreniBatchItemInput[] = [];
 
   for (let index = 0; index < data.length; index += 1) {
-    const record = data[index] ?? {};
-    const comune = stringifyImportCell(record[headerMap.get(comuneKey) ?? comuneKey]);
-    const foglio = stringifyImportCell(record[headerMap.get(foglioKey) ?? foglioKey]);
-    const particella = stringifyImportCell(record[headerMap.get(particellaKey) ?? particellaKey]);
-    const sezione = sezioneKey ? stringifyImportCell(record[headerMap.get(sezioneKey) ?? sezioneKey]) : "";
-    const sub = subKey ? stringifyImportCell(record[headerMap.get(subKey) ?? subKey]) : "";
+    const record = data[index];
+    const comune = stringifyImportCell(record[headerMap.get(comuneKey)!]);
+    const foglio = stringifyImportCell(record[headerMap.get(foglioKey)!]);
+    const particella = stringifyImportCell(record[headerMap.get(particellaKey)!]);
+    const sezione = sezioneKey ? stringifyImportCell(record[headerMap.get(sezioneKey)!]) : "";
+    const sub = subKey ? stringifyImportCell(record[headerMap.get(subKey)!]) : "";
 
     if (!comune && !foglio && !particella && !sub) {
       skipped += 1;
@@ -375,7 +377,7 @@ function downloadTerreniTemplate(format: "csv" | "xlsx"): void {
 async function readAnagraficaHistoryBatchFile(
   file: File,
 ): Promise<{ items: CapacitasAnagraficaHistoryImportItemInput[]; skipped: number }> {
-  const ext = file.name.toLowerCase().split(".").pop() ?? "";
+  const ext = file.name.toLowerCase().split(".").pop()!;
   const workbook =
     ext === "csv" ? XLSX.read(await file.text(), { type: "string" }) : XLSX.read(await file.arrayBuffer(), { type: "array" });
   const firstSheetName = workbook.SheetNames[0];
@@ -385,9 +387,9 @@ async function readAnagraficaHistoryBatchFile(
   const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: null, raw: false });
   if (data.length === 0) return { items: [], skipped: 0 };
 
-  const headers = Object.keys(data[0] ?? {}).map(normalizeImportHeader);
+  const headers = Object.keys(data[0]).map(normalizeImportHeader);
   const headerMap = new Map<string, string>();
-  for (const rawKey of Object.keys(data[0] ?? {})) {
+  for (const rawKey of Object.keys(data[0])) {
     headerMap.set(normalizeImportHeader(rawKey), rawKey);
   }
 
@@ -400,9 +402,9 @@ async function readAnagraficaHistoryBatchFile(
   let skipped = 0;
   const items: CapacitasAnagraficaHistoryImportItemInput[] = [];
   for (let index = 0; index < data.length; index += 1) {
-    const record = data[index] ?? {};
-    const subject_id = subjectIdKey ? stringifyImportCell(record[headerMap.get(subjectIdKey) ?? subjectIdKey]) : "";
-    const idxana = idxanaKey ? stringifyImportCell(record[headerMap.get(idxanaKey) ?? idxanaKey]) : "";
+    const record = data[index];
+    const subject_id = subjectIdKey ? stringifyImportCell(record[headerMap.get(subjectIdKey)!]) : "";
+    const idxana = idxanaKey ? stringifyImportCell(record[headerMap.get(idxanaKey)!]) : "";
     if (!subject_id && !idxana) {
       skipped += 1;
       continue;
@@ -649,13 +651,7 @@ export function ElaborazioniCapacitasWorkspace({
   const [anomalie, setAnomalie] = useState<CapacitasParticellaAnomalia[]>([]);
   const [anomalieBusy, setAnomalieBusy] = useState(false);
   const [anomalieError, setAnomalieError] = useState<string | null>(null);
-  const [resolveModal, setResolveModal] = useState<{
-    particella: CapacitasParticellaAnomalia;
-    selectedFrazioneId: string;
-    busy: boolean;
-    error: string | null;
-    success: boolean;
-  } | null>(null);
+  const [resolveModal, setResolveModal] = useState<FractionResolutionState | null>(null);
 
   const activeCredentialsCount = credentials.filter((credential) => credential.active).length;
   const jobsInFlight =
@@ -2053,7 +2049,7 @@ export function ElaborazioniCapacitasWorkspace({
                 const tone = renderJobStatus(job.status);
                 const result = isHistoryImportJobResult(job.result_json) ? job.result_json : null;
                 const payloadItems = Array.isArray((job.payload_json as { items?: unknown[] } | null)?.items)
-                  ? ((job.payload_json as { items?: unknown[] }).items?.length ?? 0)
+                  ? (job.payload_json as { items: unknown[] }).items.length
                   : 0;
                 const totalItems = payloadItems > 0 ? payloadItems : result ? Math.max(result.processed, 1) : 1;
                 const progress = typeof (job.result_json as { progress_percent?: unknown } | null)?.progress_percent === "number"
@@ -2479,9 +2475,9 @@ export function ElaborazioniCapacitasWorkspace({
                     </thead>
                     <tbody>
                       {terreniBatchItems.slice(0, PREVIEW_ROWS_LIMIT).map((item, index) => (
-                        <tr key={`${item.comune ?? ""}-${item.foglio}-${item.particella}-${item.sub ?? ""}-${index}`}>
-                          <td className="font-medium text-gray-900">{item.label ?? "—"}</td>
-                          <td>{item.comune ?? "—"}</td>
+                        <tr key={`${item.comune}-${item.foglio}-${item.particella}-${item.sub}-${index}`}>
+                          <td className="font-medium text-gray-900">{item.label}</td>
+                          <td>{item.comune}</td>
                           <td>{item.sezione || "—"}</td>
                           <td>{item.foglio}</td>
                           <td>{item.particella}</td>
@@ -3163,7 +3159,7 @@ export function ElaborazioniCapacitasWorkspace({
                     value={c.frazione_id}
                     checked={resolveModal.selectedFrazioneId === c.frazione_id}
                     onChange={() =>
-                      setResolveModal((prev) => prev ? { ...prev, selectedFrazioneId: c.frazione_id } : null)
+                      setResolveModal((prev) => transitionFractionResolution(prev, "selected", c))
                     }
                     className="mt-0.5"
                   />
@@ -3203,7 +3199,7 @@ export function ElaborazioniCapacitasWorkspace({
                     void (async () => {
                       const token = getStoredAccessToken();
                       if (!token) return;
-                      setResolveModal((prev) => prev ? { ...prev, busy: true, error: null } : null);
+                      setResolveModal((prev) => transitionFractionResolution(prev, "started", undefined));
                       try {
                         const result = await resolveCapacitasParticellaFrazione(
                           token,
@@ -3211,13 +3207,13 @@ export function ElaborazioniCapacitasWorkspace({
                           { frazione_id: resolveModal.selectedFrazioneId, fetch_certificati: true },
                         );
                         if (result.ok) {
-                          setResolveModal((prev) => prev ? { ...prev, busy: false, success: true } : null);
+                          setResolveModal((prev) => transitionFractionResolution(prev, "synchronized", undefined));
                           setAnomalie((prev) => prev.filter((a) => a.id !== resolveModal.particella.id));
                         } else {
-                          setResolveModal((prev) => prev ? { ...prev, busy: false, error: result.error ?? "Errore sync" } : null);
+                          setResolveModal((prev) => transitionFractionResolution(prev, "unsuccessful", result));
                         }
                       } catch (err) {
-                        setResolveModal((prev) => prev ? { ...prev, busy: false, error: err instanceof Error ? err.message : "Errore" } : null);
+                        setResolveModal((prev) => transitionFractionResolution(prev, "rejected", err));
                       }
                     })();
                   }}
