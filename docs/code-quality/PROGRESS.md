@@ -47,6 +47,20 @@
   provenance30exact; fullbackendPID259095LIVE,nessunrestart/terminalPASSdedotto.
   Graphifycode530nodi1524edge26communityexit0,domain-docschunk1/1done,
   27nodi39edge4community0semanticfailure. Closure finale aspetta suitecompleta.
+- Verifier terminale sourcec5979141 accettato/report-only350f5ed1:backend completo
+ 6658PASS449SKIP0failure/error2272warning,exit0/1210,23s. Processo259095unico
+  concluso07:54:20UTC senza restart; JUnit7107cases/exits riverificati root.
+  Skip447PostgreSQL/1OSGeo/1pyproj nonPASS,IDs/cause documentati. Questa voce
+  superaLIVEprecedente. Wholefileanalytics661s290b/helper27s10b100% riconfermati,
+  oracle20casi/35assertionsPASS. Sourcefrozen esatto, nessun file shared/gate
+  modificato. Closurefinaleroot/grafo dopo ultime notedocs, niente altra slice.
+- Gatefinaliroot:ratchetmain55aPASS0/exit0, report richiesto
+  `/tmp/gaia-complexity-final.json`/`.md`exit0 copiato durabile `coordinator/final.*`,
+  ASToggetti completi identici freeze; globalcheckFAIL30Makeexit2 esattamente
+  findingobjectsR4/provenance, nessun baselineupdate. RegistryR5tuttiMERGED
+  solo campaignbranch. Graphifyplatformdocs finale dopo queste note; esito
+  effettivo nel report/log, non inferito dalla presente intenzione. Goalglobale
+  ACTIVE/INCOMPLETE,altregrandiUI/coda>200/coverageCapacitas ancora aperti.
 
 ## 2026-10-09 — R4 fuel response mapping, singola slice autorizzata
 

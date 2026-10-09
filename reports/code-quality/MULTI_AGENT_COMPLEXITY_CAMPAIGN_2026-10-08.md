@@ -1,6 +1,6 @@
 # GAIA — Multi-Agent Complexity Campaign
 
-## 2026-10-09 — R5 orphan operator identity, integrato dopo review
+## 2026-10-09 — R5 orphan operator identity, checkpoint verificato
 
 Checkpoint runtime corrente, successivo a R4. Source `cd4b1145` integrato esatto
 `f507a656` dopo review indipendente APPROVED `8730228f`, report `7d8397d8`.
@@ -38,9 +38,12 @@ le dichiarazioni: analytics661/661statement290/290branch100%, helper27/27s10/10b
 Finalverifier source congelato `fba9c2cc`:148PASS/full-file100%,236PASS14SKIP,
 20persistedoracle prima/dopo/35semanticassertionsPASS,style/ratchetPASS0,
 globalcheckFAIL30finding objects identici alla provenance/R4. **Suite backend
-completa ancora LIVE**,PID259095/session28090,nessun restart o PASS dedotto.
-Certificazione finale/report-only attende il terminale; nessun nuovo hotspot
-assegnato mentre questa verifica è aperta. Skip PostgreSQL non sono PASS.
+completa6658PASS449SKIP2272warning0failure/error,exit0/1210,23s**. Processo
+unico259095/session28090 terminato07:54:20UTC senza restart; JUnit root verificato
+7107test totali.447skipPostgreSQL/1OSGeo/1pyproj, IDs/reason e impatto nel report
+verifier e rawartifact; nessuno skip è PASS. Report-only finale `c5979141`
+accettato e integrato `350f5ed1`, source duplicato non integrato. Nessun nuovo
+hotspot assegnato da questa closure; la missione strategica resta incompleta.
 
 Root integrazione:ratchetmain55aPASS0/reportexit0, tutti5files identici al source
 approvato e completi AST objects identici al report verifier. Durabile:
@@ -67,6 +70,23 @@ questioni separate aperte, non riparate, ignorate o assorbite. No mainmerge/
 push/PR o completamento della campagna. Rapporti R5 source/review dettagliati
 e ownership preventiva versionati; tutte le assunzioni diagnostiche fallite
 sono registrate senza attribuire loro PASS applicativi.
+
+Closure Coordinator dopo report-only350f5ed1: ultimo `make complexity-ratchet
+BASE_REF=main` PASS0/exit0. Report richiesto su `/tmp/gaia-complexity-final.*`
+exit0, copiato durabile `coordinator/final.json`/`.md`; completi oggetti
+files/callables/violations/summary/engine/scope identici alla freeze integrata.
+`make complexity-check` resta FAIL30/Makeexit2, finding objects completi
+identici alla precedente provenanceR4. `coordinator/closure-audit.json` e
+`final-*.log/.exit` registrano risultati reali, non PASS inferiti. Nessuna
+baseline inflation, soglia/esclusione/tooling/sharedfile modificato. Tutti gli
+agenti R5 terminali, ownership senza overlap, source approvato invariato.
+Ulteriori UI/hotspot e obiettivo globale restano aperti; nessuna nuova unità
+avviata automaticamente nel checkpoint di closure.
+Ultimo refresh `make graphify-platform-docs` dopo ultime note docs:exit0,
+gpt-reserve,chunk1/1done,zero semanticfailure,397nodi446edge81community,
+154cachehit/2riestratti,7661token input2772output/costo stimato$0.0075.
+`coordinator/graph-platform-final.log`/`.exit` conservano completamento reale;
+nessuna modifica al corpus docs dopo il refresh, questa nota è fuori corpus.
 
 ## 2026-10-09 — R4 fuel mapping, checkpoint backend verificato
 
