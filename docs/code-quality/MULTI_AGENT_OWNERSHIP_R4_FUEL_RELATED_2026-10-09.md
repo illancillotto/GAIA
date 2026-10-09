@@ -13,7 +13,7 @@ R3 source already belongs to the campaign. No active agent owns these files.
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | Coordinator | Governance | this registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md | Validate design, exclusive ownership, exact reviewed integration, final evidence | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
-| R4 fuel author (r4_fuel_related), closure transferred to Coordinator | Operazioni fuel response mapping | backend/app/modules/operazioni/routes/analytics.py; backend/tests/test_operazioni_fuel_related_r4.py; domain-docs/operazioni/docs/FUEL_RELATED_REFACTOR_2026-10-09.md; reports/code-quality/SLICE_R4_FUEL_RELATED_2026-10-09.md | Runtime/test edit validated by author; Coordinator completes docs/report/source freeze after terminal upstream errors, no runtime rework | GAIA-campaign-20261009-r4-fuel-related | refactor/complexity-r4-fuel-related | ACTIVE |
+| R4 fuel author (r4_fuel_related), closure transferred to Coordinator | Operazioni fuel response mapping | backend/app/modules/operazioni/routes/analytics.py; backend/tests/test_operazioni_fuel_related_r4.py; domain-docs/operazioni/docs/FUEL_RELATED_REFACTOR_2026-10-09.md; reports/code-quality/SLICE_R4_FUEL_RELATED_2026-10-09.md | Runtime/test edit validated by author; Coordinator completes docs/report/source freeze after terminal upstream errors, no runtime rework | GAIA-campaign-20261009-r4-fuel-related | refactor/complexity-r4-fuel-related | READY_FOR_REVIEW |
 | R4 integration reviewer (r4_fuel_review) | Independent review | reports/code-quality/INTEGRATION_R4_FUEL_RELATED_2026-10-09.md only; exact approved source integration after Coordinator authorization | Check equivalence, no laundering, full-file coverage and ratchet before integration | GAIA-campaign-20261009-r4-fuel-review | review/complexity-r4-fuel-related | ACTIVE |
 | R4 final verifier (r4_fuel_verifier) | Independent certification | reports/code-quality/VERIFICATION_R4_FUEL_RELATED_2026-10-09.md only | Frozen-source focused full-file coverage, metrics, ratchet and integration suites | GAIA-campaign-20261009-r4-fuel-verification | verify/complexity-r4-fuel-related | ACTIVE |
 
@@ -50,3 +50,8 @@ upstream session-bridge cooling/503 errors before report/domain-doc/source
 commit. No author process remains live. Coordinator explicitly assumes source
 closure ownership (report/doc/freeze only), preserving the validated edits.
 Independent reviewer and final verifier remain separate and mandatory.
+
+Frozen source `6b1bec8d98571240c809fdf39f82c65af1c8c04f`, worktree clean.
+Author focused110PASS/full-file100%, differential40fixturesPASS, lint/ratchet0;
+main cognitive322→282, aggregate analytics978→943, fileLOC1250→1265 disclosed.
+Independent frozen-source review and full-suite certification pending.
