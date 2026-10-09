@@ -1,5 +1,24 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — fix GIS E2E richiesto, verifica in corso
+
+- L'utente identifica il FAIL GIS come target, non il coverage Capacitas o le
+  trenta divergenze globali. Slice Capacitas provvisoria fermata senza edit.
+- Ownership esclusiva in `MULTI_AGENT_OWNERSHIP_GIS_FIX_2026-10-09.md`;
+  author, integration reviewer e final browser verifier separati. Main dirty
+  e sviluppo concorrente preservati; nessuna wave runtime avviata.
+- Fix test-only: osservare il focus magenta nel centro del canvas prima del
+  clic nativo, mantenendo ricerca, richiesta popup e verifiche del panel.
+  Readiness del target, non prova di camera idle; animazioni consentite,
+  nessun aumento dei budget, retry, baseline o soglie.
+- Riavvio host alle 07:57:04 ha terminato lo stack e rimosso gli artifact
+  `/tmp`. Sorgenti e grafi persistono. Nuove verifiche accettate da rieseguire
+  con evidenze persistenti in `/home/cbo/.cache/gaia-campaign/20261009-gis/`;
+  non dichiarare PASS finale dai soli log della sessione precedente.
+- Coverage Capacitas 97,52%/FAIL100 e global check FAIL30 restano questioni
+  separate. Missione globale ACTIVE/INCOMPLETE, nessuna riduzione runtime
+  attribuita alla sincronizzazione E2E. Checkpoint finale GIS ancora aperto.
+
 ## 2026-10-08 — continuazione: prove causali reali, runtime invariato
 
 - Verifica C12 indipendente conclusa, source9ea8f4fe accettato:312PASS/16spec
