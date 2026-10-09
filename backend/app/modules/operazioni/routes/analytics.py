@@ -624,26 +624,23 @@ def fuel_analytics(
 
     def _op_km(fkey) -> tuple[float, dict]:
         """Returns (total_km, {vehicle_id: km}) for an operator key."""
-        if isinstance(fkey, _uuid.UUID):
-            wco = wc_ops_map.get(fkey)
-            if wco and wco.gaia_user_id:
-                gid = int(wco.gaia_user_id)
-                km = km_by_gaia_user.get(gid, 0.0)
-                if km > 0:
-                    return km, dict(km_by_gaia_user_vehicle.get(gid, {}))
-            # WC-synced sessions store operator_name text rather than actual_driver_user_id.
-            # Try matching WCOperator display name variants against session operator_name strings.
-            if wco:
-                for name_variant in [
-                    f"{wco.first_name or ''} {wco.last_name or ''}".strip(),
-                    f"{wco.last_name or ''} {wco.first_name or ''}".strip(),
-                    wco.username or "",
-                ]:
-                    if name_variant and name_variant in km_by_op_name:
-                        return km_by_op_name[name_variant], dict(km_by_op_name_vehicle[name_variant])
-        # Legacy string key: match by session operator_name
-        if isinstance(fkey, str) and fkey != _NO_OPERATOR:
-            return km_by_op_name.get(fkey, 0.0), dict(km_by_op_name_vehicle.get(fkey, {}))
+        wco = wc_ops_map.get(fkey) if isinstance(fkey, _uuid.UUID) else None
+        if not wco:
+            if isinstance(fkey, str) and fkey != _NO_OPERATOR:
+                return km_by_op_name.get(fkey, 0.0), dict(km_by_op_name_vehicle.get(fkey, {}))
+            return 0.0, {}
+        if wco.gaia_user_id:
+            gid = int(wco.gaia_user_id)
+            km = km_by_gaia_user.get(gid, 0.0)
+            if km > 0:
+                return km, dict(km_by_gaia_user_vehicle.get(gid, {}))
+        for name_variant in [
+            f"{wco.first_name or ''} {wco.last_name or ''}".strip(),
+            f"{wco.last_name or ''} {wco.first_name or ''}".strip(),
+            wco.username or "",
+        ]:
+            if name_variant and name_variant in km_by_op_name:
+                return km_by_op_name[name_variant], dict(km_by_op_name_vehicle[name_variant])
         return 0.0, {}
 
     top_fuel_keys = sorted(liters_by_key, key=liters_by_key.__getitem__, reverse=True)
