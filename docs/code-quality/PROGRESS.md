@@ -1,5 +1,22 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R14 runtime review live; R15 rejected; R16 static readiness
+
+- R14 author terminal source1ab2/SLICE768c published3881427a, fresh204PASS/
+  fullanalytics661s288b100%, helper100%, Ruff/style/main55aratchet/Graphify0;
+  op54→33cognitive,4→2nesting, distinctweighted23→21, file1255LOC unchanged.
+  Independent SAME reviewer live task01a121e9, exclusive heavy, final distinct
+  verifier still due. No source integrated to root or final success inferred.
+- R15 terminal NO_CHANGE reportaec8,28artifact manifest127bc: three exterior
+  designs increase existing LOC; async wrapper delays busy release36/41cases.
+  No runtime/test/config edits or heavy gates. Published995e/imported9bbb;
+  independent static-only rejection reviewer active after registry711f.
+- New R16 registry allocates ONLY read-only credential-default selection in
+  loadCredentials for four forms, private design/new readiness report. Dedicated
+  author/review trees from8ccaf548 include R13, source8111/all21specs frozen.
+  No source permission or heavy window while R14 reviewer runs. Global objective
+  ACTIVE/INCOMPLETE; no unsafe R15 broadening, no baseline/scope changes.
+
 ## 2026-10-09 — R14 independent original accepted; bounded source allocation
 
 - Independent reviewer terminal b852f676:56focused/204union0skip/fullanalytics
