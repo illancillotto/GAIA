@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import * as XLSX from "xlsx";
+import { focusedParcelCoversCanvasCenter, hasFocusedParcelAtCenter } from "./gis-canvas-target";
 
 async function loginAsAdmin(page: Page) {
   const username = process.env.PLAYWRIGHT_ADMIN_USERNAME ?? "admin";
@@ -362,6 +363,57 @@ test("catasto gis imports xlsx and manages saved selections", async ({ page }) =
   await expect(page.getByPlaceholder("Nome layer")).toHaveCount(0);
 });
 
+test("catasto gis target readiness rejects absent and partial highlight samples", () => {
+  const sample = (color: number[]) => Array.from({ length: 20 * 20 }, () => color).flat();
+  expect(hasFocusedParcelAtCenter(sample([240, 0, 184, 255]))).toBe(true);
+  expect(hasFocusedParcelAtCenter(sample([196, 0, 142, 255]))).toBe(true);
+  expect(hasFocusedParcelAtCenter(sample([244, 100, 204, 255]))).toBe(true);
+  expect(hasFocusedParcelAtCenter(sample([202, 116, 205, 255]))).toBe(true);
+  const basemaps = [[255, 255, 255], [29, 78, 53], [100, 160, 230]];
+  for (const background of basemaps) {
+    for (const opacity of [0.9, 0.98]) {
+      const composite = [240, 0, 184].map((channel, index) => Math.round(channel * opacity + background[index] * (1 - opacity)));
+      expect(hasFocusedParcelAtCenter(sample([...composite, 255]))).toBe(true);
+    }
+    const dimComposite = [240, 0, 184].map((channel, index) => Math.round(channel * 0.22 + background[index] * 0.78));
+    expect(hasFocusedParcelAtCenter(sample([...dimComposite, 255]))).toBe(false);
+  }
+  expect(hasFocusedParcelAtCenter([])).toBe(false);
+  expect(hasFocusedParcelAtCenter(sample([255, 255, 255, 255]))).toBe(false);
+  expect(hasFocusedParcelAtCenter(sample([29, 78, 53, 255]))).toBe(false);
+  expect(hasFocusedParcelAtCenter(sample([250, 204, 21, 255]))).toBe(false);
+  expect(hasFocusedParcelAtCenter(sample([128, 0, 128, 255]))).toBe(false);
+  expect(hasFocusedParcelAtCenter(sample([240, 0, 184, 0]))).toBe(false);
+  const partialTarget = sample([255, 255, 255, 255]);
+  partialTarget.splice(200 * 4, 4, 240, 0, 184, 255);
+  expect(hasFocusedParcelAtCenter(partialTarget)).toBe(false);
+  const offCenterTarget = sample([240, 0, 184, 255]);
+  offCenterTarget.splice(200 * 4, 4, 255, 255, 255, 255);
+  expect(hasFocusedParcelAtCenter(offCenterTarget)).toBe(false);
+});
+
+test("catasto gis target readiness samples the rendered canvas center", async ({ page }) => {
+  await page.setContent('<canvas width="120" height="80"></canvas>');
+  const canvas = page.locator("canvas");
+  const paint = async (bounds: number[]) => {
+    await page.evaluate(([left, top, width, height]) => {
+      const context = document.querySelector("canvas")!.getContext("2d")!;
+      context.fillStyle = "white";
+      context.fillRect(0, 0, 120, 80);
+      context.fillStyle = "#F000B8";
+      context.fillRect(left, top, width, height);
+    }, bounds);
+  };
+  await paint([0, 0, 0, 0]);
+  expect(await focusedParcelCoversCanvasCenter(page, canvas)).toBe(false);
+  await paint([5, 5, 30, 30]);
+  expect(await focusedParcelCoversCanvasCenter(page, canvas)).toBe(false);
+  await paint([58, 38, 4, 4]);
+  expect(await focusedParcelCoversCanvasCenter(page, canvas)).toBe(false);
+  await paint([40, 20, 40, 40]);
+  expect(await focusedParcelCoversCanvasCenter(page, canvas)).toBe(true);
+});
+
 test("catasto gis fiscal search opens parcel role details", async ({ page }) => {
   await setupGisWorkspace(page);
   await page.goto("/catasto/gis");
@@ -377,8 +429,10 @@ test("catasto gis fiscal search opens parcel role details", async ({ page }) => 
   await page.getByRole("button", { name: "Ricerca nel comprensorio" }).click();
   const popupRequest = page.waitForRequest((request) => request.url().endsWith("/api/catasto/gis/particella/00000000-0000-0000-0000-000000004201/popup"));
   const parcelPanel = page.locator("[data-gis-parcel-panel]");
+  const canvas = page.locator("canvas.maplibregl-canvas");
   await expect(async () => {
-    await page.locator("canvas.maplibregl-canvas").click({ timeout: 5000 });
+    expect(await focusedParcelCoversCanvasCenter(page, canvas)).toBe(true);
+    await canvas.click({ timeout: 5000 });
     await expect(parcelPanel.getByText("A ruolo", { exact: true })).toBeVisible({ timeout: 1000 });
   }).toPass({ timeout: 10000, intervals: [250, 500, 1000] });
   await popupRequest;
