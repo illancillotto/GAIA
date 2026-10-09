@@ -46,3 +46,18 @@ No main commits/merge/push/PR; exact reviewed campaign commits/cherry-picks only
 Unknown equivalence, active concurrent source edits or unexplained failures
 stop the slice. CoverageCapacitasFAIL and historical30 remain separate.
 Durable evidence `~/.cache/gaia-campaign/20261009-r8-presenze/`.
+
+## Original characterization approval
+
+Author exact design and reviewer assessment inspected. Scope narrowed to finite
+cell primary/secondary/detail badge policies and FormulaGAIA status variant/text
+pair, implemented locally rather than unnecessary model file. Technical absence,
+header, tooltip/classification, all hooks/DOM/lifecycle/commands excluded.
+Author may add original-source rendered characterization only; runtime approval
+requires baseline full-file100% and these tests passing first. Preserve inherited
+key rejection for unknown causes, ordered substrings, nullish/NaN/holiday/auth
+precedence. Expected aggregate40-60 cognitive decrease, principalabout8, not<300.
+Reviewer original-AST2800adversarial fixtures frozen before candidate. Every77
+existing worktree inspected, no dirty owned page;15historical/tmp paths absent,
+not cleaned. Ignored established dependency symlinks authorized, no installs.
+Plaintext `coordinator/CHARACTERIZATION_APPROVAL.txt` is authoritative.

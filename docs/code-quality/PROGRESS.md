@@ -18,6 +18,13 @@
  immutabili, ratchetmain0, review e integration gates obbligatori. Nessuna
  baselineinflation/soglia/esclusione/ignore/configedit. CapacitascoverageFAIL e
 30storiche restano separate; fullgoal non ridotto a questo checkpoint.
+- Design author/reviewer letto: coherent primary/secondary/detailbadge policy
+  piu FormulaGAIA variant/text pair, localtables/smallhelpers, no nuovi modelli
+  inutili. Targethelpers53/29+40/22+13/11; expectedaggregate40-60cog/principal8,
+  non below300. Technicalabsence/header/classify/tooltip/hooks/DOM esclusi.
+  Approvata soltanto characterization originalrendered, runtimependingbaseline
+  full-file100%+nuovitestPASS. RevieweroriginalAST2800fixture frozen; keyinheritance
+  e nullish/NaN/orderedsubstring/holiday/authprecedence esplicitamente protetti.
 
 ## 2026-10-09 — R7 Presenze anomaly ordering/grouping
 
