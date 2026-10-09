@@ -2,6 +2,15 @@
 
 ## Current phase: ORIGINAL persistent characterization, authoring only
 
+R13 certified source integrated sequentially through03c25ac9, each main55a gate0;
+distinct final heavy RELEASED, root complete AST/global30objects exact certificate,
+closure docs/graphs completing. R14 heavy remains queued until Coordinator
+observes R13 FINAL POST-COMMIT ratchetPASS0 and explicitly transfers it. That
+transfer may authorize ONLY fresh ORIGINAL new-spec+fullsevenunion coverage100%,
+scoped Ruff/style/integrity/main55a ratchet and report freeze, no source permission.
+Then independent original replay is required before later runtime allocation.
+No completion inferred from static56case draft or historical148readinessPASS.
+
 Independent static readiness is terminal at report SHA256
 `d2c3aedd03149ff79fdccb85517b2a114516ce06675cad237a0f35cf106f8a84`.
 Exact selected external candidate remains recommended, not runtime approved.

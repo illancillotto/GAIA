@@ -1,5 +1,66 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-09 — R13 execution controls, certified and integrated checkpoint
+
+Global objective **ACTIVE / INCOMPLETE**. This current snapshot supersedes R12
+numbers below, preserving historical evidence. User confirms Capacitas priority,
+dedicated campaign branch and100%full-file. GIS synchronization failure remains
+separately fixed/certified; optional GIS/provider skips are not PASS.
+
+Source3a22f966 is independently ACCEPTED/IMPROVED by review1a6aade1 and distinct
+final certificateac922cb3. Sequential integration original1af→bebeaf5a,
+originalreview640→965b6601, source3a22→9e9e5421, review1a6a→63ea4ead,
+certificateac922→03c25ac9: all five actual main55a ratchetsPASS0.
+Complete closure/top30/evidence:
+`INTEGRATION_R13_CAPACITAS_EXECUTION_CONTROLS_2026-10-09.md`.
+
+### Current metrics and real reduction
+
+Private same-file native execution toggle deduplicates four Terreni/Particelle
+controls, preserving direct original functional callbacks, DOM/siblings/payloads/
+pending capture and section persistence. No hooks/state/API/event wrapper/feature.
+Principal359→347cognitive/336→324cyclomatic/2487→2455LOC; combined871→861
+cognitive/762→752decisions/3131→3126fileLOC. Genuine14→4distinct decisions,
+whole combined source440→430, helper2/3/17 under every warning threshold.
+Finding counts unchanged17error/16warning. IMPROVED does not resolve the extreme.
+
+| Metric | Official initial8October | Integrated R13 | Delta | Delta percent |
+| --- | ---: | ---: | ---: | ---: |
+| Files |1665 |1672 |+7 |+0.42% |
+| Callables |20261 |20316 |+55 |+0.27% |
+| Error |1956 |1926 |-30 |-1.53% |
+| Warning |2758 |2741 |-17 |-0.62% |
+| Findings |4714 |4667 |-47 |-1.00% |
+
+Application without worker tests1618files/18995callables/318970effectiveLOC/
+4604findings. Domain errors/warnings unchanged R12: backend1033/1689,
+frontend850/863, worker runtime35/134, worker tests8/55. Findings overlap,
+not47independent defects. No7October operational baseline or baseline inflation.
+
+### Verification and limits
+
+- Fresh final492/21full100%727statements784branches255functions633lines;
+  wholefrontend4671/307zero skip, project/explicitnewtesttype/ownedlint0/smoke18/
+  cleanbuildPASS. Full lint35complete legacy warning objects unchanged.
+- Real Chromium BOTH family orders44trusted keyboard activations,28Enter16Space,
+  focus/Tab/ShiftTab/exactDOM/all8payloadconfigs/pendingcapture/persistencePASS.
+  Auth genuine, synthetic domain API intercepted; no portal/job-write certificate.
+- Full E2E54PASS7historicalSKIP0retry/flaky; exact skips in VERIFICATION_R13.
+  Initial external runner/name/label/count/classifier/collector failures retained
+  and explained; no source/test/config/timeout weakening. Native5freshPASS.
+- GlobalcheckFAIL30make2, ALL COMPLETE finding objects exactR12/historical,
+  baseline38e6 unchanged. Every integration localratchetPASS0.
+- Actual AST70useState/2useEffect unchanged versus scanner regex31states,
+  39generic calls omitted. Explicit separate tooling limitation; no scanner fix.
+- All37owned processes terminal, isolated resources/credentials removed,
+ 43preexisting containers untouched, main concurrent hashes9f85/0d54 intact.
+
+Remaining5callables>300/17>200/55>100: Utenze391, Catasto anomalie390,
+Presenze385, Capacitas347, CatastoGIS317. Initial Capacitas472→347 is-26.48%,
+not50%. Backend/worker full global closure and optional provider suites remain
+due. R14 original56case draft awaits explicit fresh heavy transfer/replay before
+any runtime. No global strategic success or completion claimed.
+
 ## 2026-10-09 — R12 Capacitas commands, certified and integrated checkpoint
 
 Global objective **ACTIVE / INCOMPLETE**. This section supersedes R11 current

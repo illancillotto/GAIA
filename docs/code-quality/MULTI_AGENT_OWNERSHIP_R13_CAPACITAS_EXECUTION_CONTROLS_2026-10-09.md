@@ -1,6 +1,23 @@
 # R13 Capacitas — execution-mode controls ownership
 
-## Current phase: distinct final-source certification
+## Current phase: certified sequential integration complete
+
+Distinct final VERIFICATION181dac58 terminal ACCEPTED/IMPROVED,37owned processes
+terminal, isolated resources removed, heavy RELEASED. Fresh492/21full2file100%,
+wholefrontend4671/307, type/lint/smoke/build/native44trusted activations and
+availableE2E54PASS7historicalSKIP0retry/flaky. Complete global30finding objects
+exact historical; source3520/main/baseline intact, failed external attempts kept.
+
+Originalspec1af→bebeaf5a; originalreview640→965b6601; source3a22→9e9e5421;
+review1a6a→63ea4ead; certificateac922→03c25ac9. Actual main55a ratchet0 after
+EVERY pick, no incomplete import. Integrated full AST objects equal certificate.
+Coordinator closure docs and dedicated code/domain/platform Graphify complete;
+root full AST and all30complete historical finding objects match certificate.
+Final post-doc/commit ratchet remains its exclusive gate before heavy transfer;
+source authors/reviewer/verifier all terminal and release runtime ownership.
+Only this bounded R13 slice complete; global campaign ACTIVE/INCOMPLETE.
+
+## Previous phase: distinct final-source certification
 
 Independent runtime review9fae887fa4f55c6c2329396781f428d1464c5675a6864c2d718fcc2db847f285
 terminal ACCEPTED/IMPROVED, heavy RELEASED. Fresh492/21/zero skip/full2file100%,
@@ -167,10 +184,10 @@ remain unchanged. No reset/stash/main merge/baseline generation or repair.
 
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; private approvals/checkpoints; later explicitly assigned closure docs | Ownership, phase gates, publication/integration custody | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
-| /root/r13_execution_characterization (successor to terminal TUI author) | Capacitas execution controls | Frozen workspace8111 and SLICEac55ce2a; all21specs/reports/readiness/policy frozen | Actual-source author terminal, heavy released | GAIA-campaign-20261009-r13-capacitas-execution-controls | refactor/complexity-r13-capacitas-execution-controls | READY_FOR_REVIEW |
-| /root/r13_review (successor to idle TUI readiness reviewer) | Independent actual-source review | Frozen REVIEW_R13 report9fae887f; original3ca6/readiness1778/source/tests frozen | Runtime review terminal ACCEPTED, heavy released | GAIA-campaign-20261009-r13-capacitas-execution-controls-review | review/complexity-r13-capacitas-execution-controls | READY_FOR_REVIEW |
-| /root/r13_final (distinct native verifier) | Actual-source certification | ONLY new VERIFICATION_R13 report; source/tests/reports/config frozen | Final actual-source certification and native browser, exclusive heavy window | GAIA-campaign-20261009-r13-capacitas-execution-controls-final | verification/complexity-r13-capacitas-execution-controls | ACTIVE |
+| Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md; new INTEGRATION_R13 report; domain-docs/elaborazioni/docs/CAPACITAS_EXECUTION_CONTROLS_2026-10-09.md; private approvals/checkpoints | Certified sequential integration and closure docs; post-commit ratchet pending | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | MERGED |
+| /root/r13_execution_characterization (successor to terminal TUI author) | Capacitas execution controls | Frozen workspace8111 and SLICEac55ce2a; all21specs/reports/readiness/policy frozen | Actual-source author terminal, source integrated9e9e5421 | GAIA-campaign-20261009-r13-capacitas-execution-controls | refactor/complexity-r13-capacitas-execution-controls | MERGED |
+| /root/r13_review (successor to idle TUI readiness reviewer) | Independent actual-source review | Frozen REVIEW_R13 report9fae887f; original3ca6/readiness1778/source/tests frozen | Runtime review integrated63ea4ead, heavy released | GAIA-campaign-20261009-r13-capacitas-execution-controls-review | review/complexity-r13-capacitas-execution-controls | MERGED |
+| /root/r13_final (distinct native verifier) | Actual-source certification | Frozen VERIFICATION_R13 report181dac58; source/tests/reports/config frozen | Distinct certificate integrated03c25ac9, all resources terminal | GAIA-campaign-20261009-r13-capacitas-execution-controls-final | verification/complexity-r13-capacitas-execution-controls | MERGED |
 
 All R12 agents are authoritatively idle and their ownership is released. NEW
 worktrees/branches start from accepted a956; preserve all old worktrees/frozen
