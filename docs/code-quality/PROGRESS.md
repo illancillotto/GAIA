@@ -1,5 +1,22 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R4 fuel response mapping, singola slice autorizzata
+
+- Goal globale riattivato dall'utente; turno precedente classificato PROGRESS:
+  FAIL GIS corretto e verificato, non completamento della campagna.
+- Preflight integration09d5646c clean/main55a; main dirty preservato. Il file
+  analytics è pulito nei checkout operativi e non ha ownership concorrente.
+  Ranking corrente: fuel cognitive322/cyclomatic183/LOC348, ancora estremo;
+  R3 aveva analytics full-file100% statement/branch con98test, da riverificare.
+- Registry `MULTI_AGENT_OWNERSHIP_R4_FUEL_RELATED_2026-10-09.md`: author e
+  reviewer in worktree dedicate; final verifier dopo congelamento source.
+  Responsabilità unica: eliminare duplicazione del mapping related usage e
+  della normalizzazione medie, preservando query, ordinamento e precisione.
+- Design da approvare prima del runtime. Nuovi test prima del refactor,
+  coverage100% full-file, riduzione aggregata reale e ratchetmainPASS0 richiesti.
+  Nessun intervento anomalies, baseline, soglie, esclusioni, config o altri
+  hotspot; Capacitas97,52%FAIL100 e divergenze30 restano separati e aperti.
+
 ## 2026-10-09 — fix GIS E2E verificato e integrato
 
 - L'utente identifica il FAIL GIS come target, non il coverage Capacitas o le
