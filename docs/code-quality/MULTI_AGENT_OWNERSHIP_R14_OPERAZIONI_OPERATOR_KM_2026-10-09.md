@@ -1,6 +1,33 @@
 # R14 Operazioni — operator kilometre attribution readiness
 
-## Current phase: runtime implementation authorized
+## Current phase: independent actual-source runtime review
+
+Author terminal READY_FOR_REVIEW/IMPROVED, heavy RELEASED. Exact frozen candidate
+1ab2e68e is actual runtime; new SLICE report768c067136611ce466c4b34ff7fac5864593380525c1a70e9ca056ca4b2faac6.
+Coordinator published ONLY analytics+SLICE3881427a and imported them to existing
+independent review worktree. Fresh author204PASS0skip/fullanalytics661s288b100%,
+helper27s10b100%, actualimmutable55aratchet0/Ruff/style/Graphify0/protected3519exact.
+All31actual versus28scanner limitation visible,29non-target functions exact,
+genuine weighted decisions23→21. No author result substitutes independent gates.
+
+| Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| /root/r14_operazioni_operator_km | Runtime author | Frozen analytics1ab2/SLICE768c | Terminal; no further ownership | GAIA-campaign-20261009-r14-operazioni-operator-km | refactor/complexity-r14-operazioni-operator-km | READY_FOR_REVIEW |
+| Independent reviewer task01a121e9-741c-7f90-aa16-a492b838b89f | Runtime review | ONLY new reports/code-quality/REVIEW_R14_OPERAZIONI_OPERATOR_KM_2026-10-09.md | Fresh actual204/fullruntime100%, source equivalence, metrics, immutable55a ratchet and integrity | GAIA-campaign-20261009-r14-operazioni-operator-km-review | review/complexity-r14-operazioni-operator-km | ACTIVE |
+
+Exclusive heavy window now transferred to SAME independent original reviewer,
+separate from runtime author. Read source/SLICE/frozen original reviews/tests and
+author evidence; independently replay actual-source gates, verify five-query and
+no-write contracts, NaN/zero/name/key/copy/exception/short-circuit behavior and
+actual ORM truthiness assumption. Count all31functions/29unchanged, actual/file
+aggregates/unique decisions, current source1ab2, exact seven specs and baseline.
+Installed Babel available via NODE_PATH only; retain all attempts. Own ONLY new
+review report/private fresh evidence; no source/test/config/readiness/report/
+baseline/candidate edit, commit/import or next hotspot. Freeze/report/release
+before distinct final verifier allocation. R15 review stays static-only.
+Campaign ACTIVE/INCOMPLETE; no integration/certification inferred.
+
+## Previous phase: runtime implementation authorized
 
 Independent ORIGINAL reviewer task01a121e9-741c-7f90-aa16-a492b838b89f is terminal:
 ORIGINAL_CHARACTERIZATION_ACCEPTED, heavy RELEASED. Frozen report SHA256
