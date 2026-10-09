@@ -2,7 +2,86 @@
 
 ## Snapshot and authorization
 
-## Current phase: ORIGINAL frozen; candidate BLOCKED pending user decision
+## Current phase: reviewed ORIGINAL characterization integrated; candidate BLOCKED
+
+Original spec+CHAR d7c9ba83 integrated e071be2d and independent review publication
+c1b7704a integrated67d5d91c. BOTH actual integration main55a Make ratchets
+PASS0 independently after each publication. All three input hashes exact;
+runtime/config/tooling/baseline unchanged versus ca203378. Characterization
+only, classification NO_CHANGE; no candidate equivalence or source improvement.
+Root closes governance/Graphify and actual postcommit gate before granting
+R17 test execution. Candidate matching diagnosis remains unallocated pending
+actual user decision; no implicit permission from passing ORIGINAL checks.
+
+Reviewer terminal/idle, heavy RELEASED. Independent13focused/505union22files
+PASS0skip/failure; actual review-tree workspace718statements778branches249functions
+625lines and policy9/6/6/8 all100%, no missing/skipped counters. Project/new-spec
+type, scoped lint maxwarnings0 and actual ORIGINAL immutable55a Make ratchet
+PASS0. All3536protected paths, main/dependencies/baseline/inputspec/CHAR/frozen
+candidate remain exact. No comparator, candidate application or diagnosis.
+New review267ae4982bf9bb5ef89c3f6da56e5f529bc569fef4ff2b0ac6d6337bbdd8b987
+and durable evidence frozen; original inputs remain unchanged.
+
+Coordinator accepts ONLY original characterization for publication/integration:
+author spec+CHAR d7c9ba83 and exact independent review. Integrate one coherent
+publication at a time with actual main55a ratchet0 after each. No runtime or
+candidate import authorized; user matching decision still pending. Root owns
+exclusive integration/closure heavy until green explicit R17 transfer.
+No strategic/source metric reduction claim from this test-only result.
+
+Previous goal turn PROGRESS: complete backend6714PASS449SKIP and recovered
+completeworker778PASS1SKIP certified/integrated in ca203378, root fresh fullAST
+objects exactR14, actualPOSTCOMMIT main55a ratchetPASS0/globalcheckhistorical30.
+Main and baseline preserved; verifier terminal/released. This is meaningful
+verification progress, not three blocked turns or strategic completion.
+
+User candidate-matching decision has NOT arrived. No diagnosis of exterior
+matching/diff-input, candidate application, runtime source permission, matcher/
+tooling/baseline edit or circumvention is allocated. The following independent
+ORIGINAL replay was already required before ANY runtime authorization; it
+does not accept, diagnose or unfreeze the candidate.
+
+Independent reviewer task01a121e9-741c-7f90-aa16-a492b838b89f verified terminal/
+idle before activation. Dedicated existing review worktree/branch cb382ac4 clean;
+only analytics.py and the R14 characterization test differ from current source.
+Coordinator authorizes synchronization of exact approved R14 publications
+d7cc251c/cf4f36dd/3881427a/b128e396/c59cf85a, then ONLY author original spec+CHAR
+d7c9ba83. No dirty-main copy/reset/rebase or whole unreviewed branch import.
+Record a fresh protected manifest AFTER these imports; sanctioned imports are
+not reviewer regressions. All actual original runtime must equal current
+integration source, with the extra new spec/CHAR inputs only.
+
+After synchronization and explicit activation, exclusive heavy transfers to
+the reviewer for fresh focused13cases and existing21spec+new union505/22,
+actual full workspace/fraction-policy100% statements/branches/functions/lines,
+type/lint and immutable55a ORIGINAL Make ratchet. Preserve supported actual
+React/API/auth mocks and independent literal payload/assertion matrix.
+Audit pending responses, latest functional state, selected absent/inactive
+credentials, captured requests, rejection paths and StrictMode replay.
+No test/source/config fixes, candidate imports/comparators or provider opt-ins.
+Existing main frontend dependencies may be linked read-only by Coordinator;
+no installation, source resolution outside review tree or weakened coverage.
+Use new private durable evidence; all original inputs/readiness/reviews/
+candidate/tests/runtime/baseline remain immutable. Unexpected failure stops.
+
+Sole new repository output:
+reports/code-quality/REVIEW_CHARACTERIZATION_R16_CAPACITAS_CREDENTIAL_DEFAULTS_2026-10-09.md.
+Include independent matrix/commands/raw counts/skips/exits/coverage-source paths/
+protected identities and limitations, freeze report/evidence, stop/release.
+No commit/import/integration delegated. This verifies ORIGINAL only; no runtime
+equivalence/improvement/global completion claim. Candidate decision still required.
+
+| Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Coordinator | Synchronization/governance | This registry and exact sanctioned imports into reviewer | Align approved original inputs before independent replay | GAIA-campaign-20261008-integration / R16 review tree | Existing campaign/review branches | ACTIVE |
+| Independent ORIGINAL reviewer task01a121e9-741c-7f90-aa16-a492b838b89f | Characterization review | Frozen REVIEW_CHARACTERIZATION_R16_CAPACITAS_CREDENTIAL_DEFAULTS_2026-10-09.md | Accepted/integrated ORIGINAL13/505replay/full100%; no further writes | GAIA-campaign-20261009-r16-capacitas-credential-defaults-review | review/complexity-r16-capacitas-credential-defaults | MERGED |
+| R16 candidate | Matching decision | Frozen candidate34af and comparator failure | No diagnosis/source allocation pending actual user decision | External readiness cache only | No candidate source commit | BLOCKED |
+
+This current phase supersedes older heavy/reviewer row allocations below;
+all earlier outputs remain frozen/read-only. Ownership precedes activation.
+Global ACTIVE/INCOMPLETE; no transfer of debt or new strategic success.
+
+## Previous phase: ORIGINAL frozen; candidate BLOCKED pending user decision
 
 Original author task01a12214 is terminal, heavy RELEASED. New spec SHA256
 b0191f9383a1f15a23f27691ba4e2aac70ed12daedc39431cae752cad4424ba1,

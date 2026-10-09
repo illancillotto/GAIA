@@ -1,5 +1,28 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — Independent R16 ORIGINAL accepted; R17 static CF preparation
+
+- Independent reviewer terminal:13focused/505union22suites0failure/skip,
+  actual complete workspace718s778b249f625lines and policy9/6/6/8 all100%,
+  raw counters positive and runtime paths inside reviewer tree. Project/new-
+  spec type, lint maxwarnings0, immutable55a ORIGINAL Make ratchet PASS0;
+  3536protected paths/main/deps/baseline/source/spec/CHAR exact.
+- Review267ae498 accepts original public-UI deferred/current-state/full literal
+  payload assertions only, not candidate equivalence. Candidate34af remains
+  BLOCKED pending actual user matching decision, no diagnosis/source permission.
+- Coordinator publishes/imports reviewed original d7c9→e071be2d then independent
+  review c1b7704a, with sequential main55a gates. No runtime change, debt delta0;
+  test-only characterization is not IMPROVED or global strategic completion.
+- New R17 ownership precedes /root/r17_catasto_cf_original activation. Existing
+  clean P4tree aligned with exact certified ca203378 in3b120c3e; all tracked
+  content exact, original Catasto page855e unchanged, deps linked read-only.
+  Only new CF wizard spec/report writable; STATIC ONLY while root/R16 closure
+  owns heavy. No Comune/Particella/ADE expansion or runtime/full-page100% claim.
+  Full-file coverage gaps will be measured honestly after explicit transfer.
+- Previous complete backend/worker checkpoint remains attributed; current
+  turn adds independent original evidence, not rerun full global suites.
+  Global campaign ACTIVE/INCOMPLETE, extreme-tail/source reductions still due.
+
 ## 2026-10-09 — Complete backend/worker checkpoint; invocation recovery
 
 - Complete backend on certified34c13604:6714PASS449SKIP0failure/error,

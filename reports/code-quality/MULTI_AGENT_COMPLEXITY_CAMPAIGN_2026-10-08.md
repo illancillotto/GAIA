@@ -1,5 +1,38 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-09 — Independent R16 ORIGINAL acceptance; unrelated CF preparation
+
+Global **ACTIVE / INCOMPLETE**. Independent original replay freshly passes
+13focused/505union22suites0failure/error/skip; full actual workspace718statements/
+778branches249functions625lines and policy9/6/6/8 all100%, no missing/skipped
+counters or virtual/main/candidate coverage paths. Type/lint and actual ORIGINAL
+immutable55a Make ratchet PASS0;3536protected paths/main/deps/baseline exact.
+Independent report267ae498 accepts persistent public-UI deferred pool changes,
+latest state, pending requests and four exact create payload matrices only.
+
+Coordinator integrates ONLY reviewed original spec+CHAR d7c9→e071be2d and
+independent review c1b7704a→67d5d91c, each actual main55a ratchet PASS0. Source8111 remains
+unchanged, no candidate application/diagnosis, no debt reduction claimed.
+Candidate34af remains **BLOCKED** pending actual separate user matching decision;
+passing original ratchet does not accept its ambiguous exterior comparison.
+No tooling/baseline/threshold/exclusion/ignore changes or original gate bypass.
+
+R17 is independent test-only preparation for cognitive390 CatastoAnomaliePageContent,
+not a replacement for Capacitas priority. Ownership precedes a distinct author
+working only the CF wizard loading/drafts/apply responsibility in an existing
+clean dedicated P4tree aligned byte-exact to certified ca203378. New spec/report
+only, original runtime and old tests frozen. STATIC ONLY until green root closure
+and explicit heavy transfer; no other wizard expansion or runtime permission.
+Existing page coverage59.09%/40.46% is historical and must be freshly measured.
+No full-page100% waiver or metric improvement follows from adding tests.
+
+Current full runtime metrics remain certified R14, delta0. Earlier complete
+backend/worker/browser/build evidence remains attributed, not fresh R16 suite
+claims. Remaining extreme-tail5>300/17>200/55>100 and strategic targets persist.
+Coordinator platform-docs Graphify PASS chunk1/1done/no semantic failure,
+641nodes866edges106communities,6242input2866output tokens/$0.0071estimated.
+Graphs uncommitted; this is maintenance, not complexity or behavior proof.
+
 ## 2026-10-09 — Complete backend/worker checkpoint and environment recovery
 
 Global **ACTIVE / INCOMPLETE**. This verification-only checkpoint adds no
