@@ -14,7 +14,7 @@ Main dirty backend/Presenze/Ruolo/documentation concurrent work is not an input.
 | R9 author — characterization complete | Presenze UI tests | frontend/tests/unit/presenze-giornaliere-r9.test.tsx | Frozen original characterization8833a587, integrated4e903a83 | GAIA-campaign-20261009-r9-presenze-mutations | refactor/complexity-r9-presenze-mutations | MERGED |
 | Coordinator — R9 implementation | Presenze UI | frontend/src/app/presenze/giornaliere/page.tsx; reports/code-quality/SLICE_R9_PRESENZE_MUTATIONS_2026-10-09.md; domain-docs/presenze/docs/DAILY_RECORD_MUTATIONS_REFACTOR_2026-10-09.md | Reviewed frozen source91f4c50d, waits final certification | GAIA-campaign-20261009-r9-presenze-mutations | refactor/complexity-r9-presenze-mutations | READY_FOR_REVIEW |
 | R9 source reviewer — dedicated task | Independent review | reports/code-quality/REVIEW_R9_PRESENZE_MUTATIONS_2026-10-09.md only; source read-only | APPROVED exact source; report-only38c27eff | GAIA-campaign-20261009-r9-presenze-review | review/complexity-r9-presenze-mutations | READY_FOR_REVIEW |
-| R9 verifier | Independent final certification | reports/code-quality/VERIFICATION_R9_PRESENZE_MUTATIONS_2026-10-09.md only; source read-only | Frozen-source full-file coverage/fullfrontend/build/browser/ratchet | GAIA-campaign-20261009-r9-presenze-verification | verify/complexity-r9-presenze-mutations | PLANNED |
+| R9 verifier | Independent final certification | reports/code-quality/VERIFICATION_R9_PRESENZE_MUTATIONS_2026-10-09.md only; source read-only | Frozen-source full-file coverage/fullfrontend/build/browser/ratchet | GAIA-campaign-20261009-r9-presenze-verification | verify/complexity-r9-presenze-mutations | ACTIVE |
 
 ## Initial assignment: analyze/design only
 
@@ -174,3 +174,7 @@ Verifier owns only its report. Final coverage/fullfrontend/type/lint/smoke/fresh
 build/isolated browser/report/ratchet/global-status gates authorized in plaintext
 `~/.cache/gaia-campaign/20261009-r9-presenze/coordinator/VERIFY_APPROVAL.md`.
 No new hotspot, runtime/test edit, main integration, baseline update or wave close.
+
+Final verifier task activated after registry/worktree/approval:
+`01a1204c-bef4-7420-b031-5747a913af8a`. Heavy frontend suite slot belongs verifier;
+Coordinator source/fullfrontend jobs are terminal. Runtime source stays frozen.
