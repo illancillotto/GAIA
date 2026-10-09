@@ -1,5 +1,67 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-09 — R9 daily-record lifecycle, final certification in progress
+
+Global objective unchanged **ACTIVE/INCOMPLETE**. GIS request closed separately;
+no main merge or concurrent work copied. Original characterization19new rendered
+tests precedes runtime; author, independent original reviewer and Coordinator
+each472PASS/fullpage100%. Test-only8833a587 integrated4e903a83. Two external
+designs rejected on aggregate metrics, no regression applied or baseline repaired.
+
+Actual local typed async-handler factory deduplicates request/cache/apply/catch/
+finally; pure editor payload mapper runs inside request try, shared finalizers
+retain distinct flags. No new runtime file/hook/state/JSX/API/permission/race fix.
+Independent actual-source reviewer task01a12041-d4a7-7431-a864-0c3fd0b21c5b
+APPROVED/IMPROVED; report-only38c27eff integrated85e56512 and ratchetPASS0.
+Exact source91f4c50de44adf433f20decfa31ccf0ba794a5c0 committed in dedicated
+branch; source **not integrated yet**, waits final certification.
+
+| R9 actual metric | Before | After | Delta |
+|---|---:|---:|---:|
+| Principal cognitive |399|385|-14|
+| Principal cyclomatic |352|341|-11|
+| Principal callable LOC |2020|2023|+3|
+| Page aggregate cognitive |1109|1093|-16|
+| Page raw cyclomatic |1230|1231|+1|
+| Aggregate decisions, sum(cyclomatic−1) |934|923|-11|
+| Callable count |296|308|+12|
+| File effective LOC |2788|2812|+24|
+| Callable LOC sum |4319|4364|+45|
+| Page error/warning |13/20|13/19|0/−1|
+
+Compensation explicitly reviewed: added callable base units versus actual removed
+decisions, real lifecycle deduplication and locally testable payload boundary.
+Not claim every metric decreases, no relocated hotspot or artificial helper.
+Principal385 remains extreme. Initial returned anonymous executor falsely matched
+legacyProgram<anonymous> and failed five metrics. Explicit identity of genuinely
+new executeDailyRecordMutation resolves this, without legacy rename or tooling/
+baseline edits; all53legacyanonymous metric/fingerprint entries remain identical.
+
+- Actual source **472PASS/6UI suites**, raw full-file1035statement1139branch/
+  306function847line100%; independent source reviewer reproduces exact counts.
+  Coordinator fullfrontend **4491PASS/302files/0failure/skip,185.71s**.
+- Exact actual golden comparison101cases/64overlaps/73timingcases365microticks/
+  2352payload variants, protected91helpers75hooks103other statements482JSX PASS.
+  Older v1 null-substitution and Coordinator VM-array realm errors retained and
+  explained; current immutable original-v2 golden matches, no fake expectations.
+- Typecheck/ownedlint exit0,3unchangedlegacywarnings; actualratchet/mainPASS0.
+  GlobalcheckFAIL30Makeexit2: all completefindingobjects identicalR8,0attribution.
+  Candidate global1671files20312callables1933error2745warning4678findings.
+  Integration remains R8 runtime metrics until exact R9 source integration.
+- Graphifyfrontendforce649sources6029nodes12619edges247communities; final force
+  no stale topology difference. Presenze docsgpt-reservechunk1/2and2/2done,
+  0semanticfailure,41nodes45edges13communities,exit0; graph outputs not versioned.
+- Frozen verifier worktree exact91f4c50d exists. Task
+  **01a1204c-bef4-7420-b031-5747a913af8a ACTIVE**: independentfocused472PASS/
+  fullpage100% already; fullfrontend live. Fresh build/browser/finalreport/cleanup/
+  source integration **pending**, no PASS inferred from intent or prior R8 runs.
+
+Ownership: MULTI_AGENT_OWNERSHIP_R9_PRESENZE_MUTATIONS_2026-10-09.md. Source/review
+SLICE_R9 and REVIEW_R9 reports; durable artifacts
+`~/.cache/gaia-campaign/20261009-r9-presenze/`. Main55adirty preserved. Capacitas
+97.52%coverage,30historicalprovenance findings and five>300hotspots remain separate;
+no whole-wave/global-completion claim or baseline inflation.
+
 ## 2026-10-09 — R8 finite record-label policy, verified checkpoint
 
 Global objective unchanged ACTIVE/INCOMPLETE. R7 terminal closure independently

@@ -2,6 +2,38 @@
 
 ## 2026-10-09 — R9 Presenze mutations, design gate
 
+- R9 original characterization8833a587 integrated4e903a83,19new rendered tests;
+  independent original reviewer472PASS/fullpage1033s1143b294f100%. Initial
+  wrapper A and simple-factory prototypes rejected on actual aggregate metrics,
+  neither applied. Refined local lifecycle+purepayload design selected after
+  frozen101case/64overlap/73timing365microtick/2352payload proofs, not easiest
+  fallback or artificial split.
+- Actual source independently APPROVED/IMPROVED by dedicated reviewer task
+  `01a12041-d4a7-7431-a864-0c3fd0b21c5b`, report-only38c27eff integrated85e56512,
+  review-integration ratchetPASS0. Source committed91f4c50d in dedicated branch,
+  not yet integrated; runtimeSHAd362df3199fbf65dc4566b56d4029fe72135c910f3e39e691b3e3535516fa940.
+  Pagecognitive1109→1093, principal399→385/352→341/2020→2023LOC; decisions
+  934→923. Rawcyclomatic1230→1231, callable296→308, fileLOC+24/callableLOC+45
+  explicitly compensated by genuine orchestration deduplication and pure mapping.
+  One warning removed,0new finding, unchanged53legacyanonymous entries.
+- Initial returned anonymous executor triggered five ratchet legacy matches;
+  newly introduced shared function explicitly named executeDailyRecordMutation,
+  no old symbol renamed. Current actualmainratchetPASS0. Original v1 null/error
+  harness bug and Coordinator VM-realm comparison mistake explained/retained;
+  immutable currentoriginal-v2 oracle matches all actual events/state/timing.
+  No baseline/scope/config/tooling/threshold/exclusion change.
+- Source/runtime full-file coverage1035s1139b306f847l100%; independent reviewer
+  reproduces472PASS/typecheck/lint3unchangedwarnings/ratchet0/protectedAST.
+  Coordinator fullfrontend4491PASS/302files/185.71s,0failure/skip. All other
+  complete AST runtime objects identical to R8. GlobalcheckFAIL30Makeexit2:
+  all30completefindingobjects identicalR8,0attribution; not ignored or repaired.
+- Source Graphify dedicatedfrontendforce649sources/6029nodes12619edges247groups;
+  domain docsgpt-reservechunk1/2and2/2done/0semanticfailure/41nodes45edges13groups.
+  Exact source91f4c50d clean; verifier worktree/branch created before task.
+  Final verifier `01a1204c-bef4-7420-b031-5747a913af8a` ACTIVE, already independent
+  focused472PASS/fullpage100%, fullfrontend suite live. Build/browser/final
+  certification/integration still pending. Main55adirty untouched; global goal
+  ACTIVE/INCOMPLETE, extreme principal385 and remaining campaign targets open.
 - Ripresa dopo la conferma del fix GIS già integrato: il checkout main
   concorrente resta intatto. Autorizzata caratterizzazione originale dei
   quattro comandi, prima di qualsiasi modifica runtime. Author e reviewer
