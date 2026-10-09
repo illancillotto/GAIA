@@ -1,5 +1,24 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R8 Presenze presentation, design gate
+
+- Ultimo turno ricontrolla GIS gia corretto:2browser/17unitPASS, evidenzeE2E
+ 54PASS7skip confermate; nessun nuovo runtime. Ripresa concreta: R7report-only
+ e57120c5 integrato c77d9317 dopo review, cleanup verificato, registry chiuso,
+ governancec9216c5a, postreportratchetmainPASS0. Graphplatformfinale exit0,
+ chunk1/1done/zero semanticfailure/432nodes502edges81communities. Goal globale
+ invariato ACTIVE/INCOMPLETE; main55adirty mai input o modificato.
+- Nuova ownership preventiva R8registrata6a005f1a; author/reviewer in worktree
+ dedicate clean allo stessoSHA. Assignmentdesignonly: responsabilita condivisa
+ di presentazione record giornaliero, eliminare branchingduplicato non muovere
+ megaJSX. Principal403cog356cyc2020LOC; direzione desiderata below300 con reale
+ riduzione aggregata, non metrictricks. Runtime non autorizzato prima di design
+ esplicito e characterization sulloriginale. Verifier solo dopo sourcefreeze.
+- Coverage100%completefiles, tutte lifecycle/deps/auth/API/DOM/commandsemantics
+ immutabili, ratchetmain0, review e integration gates obbligatori. Nessuna
+ baselineinflation/soglia/esclusione/ignore/configedit. CapacitascoverageFAIL e
+30storiche restano separate; fullgoal non ridotto a questo checkpoint.
+
 ## 2026-10-09 — R7 Presenze anomaly ordering/grouping
 
 - Turno precedente PROGRESS: R6 implementato/review/integrato/certificato,
