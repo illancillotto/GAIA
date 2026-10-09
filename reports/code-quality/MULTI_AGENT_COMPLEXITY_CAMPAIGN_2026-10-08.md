@@ -40,6 +40,15 @@ Root integrated report1671files20294callables1937error2747warning4684findings,
 cognitive81246/cyclomatic83308/fileLOC332324/callableLOC327726;
 ratchet integration/mainPASS0. Global provenance/final independent gates pending.
 
+Update: independent full frontend units terminal **4428PASS/300files/0skip**,
+zero failure/error,exit0; root independently reads JUnit4428 and raw exits.
+Focused424PASS/page/model100% independently verified. Fresh build/browser are
+still pending. RootglobalcheckFAIL30Makeexit2 with full finding objects exactly
+equal R6 historical provenance; zero new attribution or baseline repair.
+Top30/current report rows exactly match integrated AST. Forcedfrontend graph
+6014nodes12596edges239communities; Presenze docs68nodes70edges13communities,
+chunk1/1done and zero semantic failures. Graph is maintenance, not metric proof.
+
 ## 2026-10-09 — R6 Presenze daily presentation, verified checkpoint
 
 Source `56c46570` independently approved by `c1475bb2`, integrated exactly as

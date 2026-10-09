@@ -45,6 +45,10 @@
  502102/session89959started08:59:01UTC, no restart/buildbrowserPASSdedotto.
   Graphifyrootforcedfrontend6014nodes12596edges239communities; Presenzedocs
  68nodes70edges13communities/chunk1/1done/no semanticfailure. Configimmutable.
+- GlobalcheckrootFAIL30Makeexit2exactR6findingobjects, nessunR7attribution.
+  Verifierfullfrontendunit terminal4428PASS300files0error/failure/skip,exit0;
+  rootJUnit4428countverified/top30rankingallrowsASTexact. Freshbuild/browser
+  ancora pending, non dedottiPASS; requestedrootfinalreport/ratchet/checkrunning.
 
 ## 2026-10-09 — R6 Presenze daily presentation, bounded slice
 
