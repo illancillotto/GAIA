@@ -1,5 +1,40 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R10 Capacitas, independently certified and integrated
+
+- Exact source `be384788` independently APPROVED/IMPROVED and certified on
+  verifier cherry-pick `47e5a853`, integrated `b12780e2`; four frozen blobs
+  retained. Source ratchet/mainPASS0. Report-only certificate `43408282`
+  integrated `4c91af1d`; Coordinator clarifies project/test typecheck scopes
+  and optional GIS SKIP rather than claiming a fresh GIS smoke. Main55a dirty
+  concurrent diff/status hashes unchanged; no main merge or baseline inflation.
+- Fresh338focused/18spec and4517fullunit/304files PASS, zero skip; both runtime
+  full-file100%: workspace857s873b251f748l, policy9s6b6f8l. Project typecheck,
+  owned lint, full lint35legacywarnings, smoke18 and clean build PASS.
+  Coordinator explicit new-spec/runtime compilation independently PASS without
+  production config edits. Native production UI6PASS with genuineTab/Enter,
+  pertinentE2E4PASS, fullE2E54PASS7historicalSKIP,0retry/flaky/default motion.
+- Real five-event typed policy removes duplicated nullable decisions while
+  retaining UNKNOWN/reachable null defenses and lazy payload reads. Exact
+  twenty-one reader/preview fallback removals have construction/SheetJS proof;
+  reader options, alias precedence, captured request/current modal semantics,
+  old races and functional updater scheduling preserved, not corrected.
+- Combined cognitive1099→1022(-77), decisions923→872(-51), rawcyclomatic
+  1174→1129(-45). Principal472→455/416→404/2631→2625; error24→22,warning20→19.
+  Newpolicy35LOC/6below-thresholdcallables/0findings; parentLOC3109→3105,
+  combinedLOC3140(+31), callableLOC4789(+7) explicitly reviewed. No laundering.
+- Current full AST1672files20318callables1931error2744warning4675findings;
+  all unaffected complete runtime objects exactR9. GlobalcheckFAIL30 complete
+  finding objects exactR9, zeroR10attribution. Policy/scanner/config unchanged.
+  Full source3490trackedhash audit and real stack cleanup PASS; installed
+  dependencies unchanged, one generatedVitesttimingcache update disclosed,
+  never restored into shared concurrent dependency storage.
+- Domain graph45nodes48edges10groups, chunks1/2+2/2done/0semanticfailure;
+  integration frontend force/pruning and final closure checks recorded in
+  INTEGRATION_R10_CAPACITAS_2026-10-09.md. Agents terminal/ownershipMERGED.
+  Global goal ACTIVE/INCOMPLETE: five>300,17>200,55>100 remain; principal455,
+  state31/effect2 unchanged. This is not drastic hotspot/global completion.
+
 ## 2026-10-09 — R10 Capacitas, original characterization accepted
 
 - GIS failure already resolved/certified in the dedicated campaign; no new GIS

@@ -1,5 +1,78 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-09 — R10 Capacitas, certified and integrated checkpoint
+
+Global objective **ACTIVE/INCOMPLETE**. Exact bounded sourcebe384788 reviewed
+APPROVED/IMPROVED, independently certified on47e5a853 and integratedb12780e2;
+certificate-only43408282 integrated4c91af1d. Source/mainratchetPASS0, frozen
+four blobs exact; main55a concurrent work unchanged. GIS request remains closed
+by earlier certificate; both optional current GIS browser smokes stay SKIP.
+
+Adjacent typed five-event policy genuinely deduplicates nullable state decisions;
+exact21reader/preview fallback removals have construction/installedSheetJSproof.
+All old17specs, unknown/reachable null defenses, lazy payload reads, updater
+ordering, captured request/current modal and legacy overlap behavior preserved.
+No new feature, race fix, old-test edit, baseline/config/tooling change or ignore.
+
+| R10 metric | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| Principal cognitive |472 |455 |-17 |
+| Principal cyclomatic |416 |404 |-12 |
+| Principal LOC |2631 |2625 |-6 |
+| Combined cognitive |1099 |1022 |-77 |
+| Combined raw cyclomatic |1174 |1129 |-45 |
+| Combined decisions |923 |872 |-51 |
+| Combined file LOC |3109 |3140 |+31 disclosed |
+| Combined callable LOC |4782 |4789 |+7 disclosed |
+| Error / warning |24 /20 |22 /19 |-2 /-1 |
+
+Fresh independent338focusedPASS18spec; both runtime100%full-file (857s873b251f
+748l and9s6b6f8l);4517frontendunitPASS304files0skip; project type/owned lint/full
+lint35legacywarnings/smoke18/clean buildPASS. Coordinator explicitly compiles
+both new R10 specs/runtime graph PASS with external config, separate from normal
+project typecheck excluding tests. Native productionUI6PASS/genuineTab+Enter;
+pertinentE2E4PASS/full54PASS7exacthistoricalSKIP/0retry/flaky/default motion.
+Real cleanup3490sourcehashes exact; all installed dependencies unchanged, one
+generated Vitest timing cache update retained/disclosed, no shared restoration.
+
+### Current global metrics — supersedes older snapshots below
+
+| Metric | Official8October | Current R10 | Delta | Delta percent |
+| --- | ---: | ---: | ---: | ---: |
+| Files |1665 |1672 |+7 |+0.42% |
+| Callables |20261 |20318 |+57 |+0.28% |
+| Error |1956 |1931 |-25 |-1.28% |
+| Warning |2758 |2744 |-14 |-0.51% |
+| Finding |4714 |4675 |-39 |-0.83% |
+
+Application without worker tests1618files18997callables318984effectiveLOC4612
+findings; effectiveLOC+128 (+0.04%) versus official318856. Findings overlap,
+not a proxy for independent problems. No use of7October baseline.
+
+| Domain | Error before | Error after | Warning before | Warning after |
+| --- | ---: | ---: | ---: | ---: |
+| Backend |1035 |1033 |1688 |1689 |
+| Frontend |878 |855 |881 |866 |
+| Worker runtime |35 |35 |134 |134 |
+| Worker tests |8 |8 |55 |55 |
+
+Complete unaffected runtime AST objects exactR9. Registered globalcheckFAIL30
+completefindingobjects identicalR9, zeroR10attribution; provenance work separate,
+not ignored/repaired or absorbed. Actual main ratchet is the change gatePASS0.
+Tail still5callable>300,17>200,55>100: highest455, then391/390/385/317. Current
+complete top30 and skip matrix are in VERIFICATION_R10; integration closure in
+INTEGRATION_R10_CAPACITAS_2026-10-09.md supersedes earlier current rankings.
+
+R10 classification **IMPROVED**, not drastic hotspot closure; no transferred
+violation, all6new policy callables below thresholds. CombinedLOC/callable costs
+explicit. All agents terminal, ownership released/MERGED. Shared Coordinator
+custody of terminal verifier report changed only factual type/GIS scope wording,
+no runtime or independent test result. No broad backend/worker suite rerun in
+this frontend-only slice; global-final suites and historical provenance remain
+due. Structural graph/domain docs refreshed via dedicated Make targets, no
+generated graph committed. Next highest-debt bounded Capacitas slice only after
+green integration checkpoint. Strategic campaign targets remain far away.
+
 ## 2026-10-09 — R10 original characterization of highest residual hotspot
 
 Fresh author and independent reviewer original312tests PASS;857statements/

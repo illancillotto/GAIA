@@ -18,10 +18,10 @@ Main concurrent backend/Presenze/Ruolo/docs are neither input nor copied.
 
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| Coordinator | Governance / integration | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md; reports/code-quality/INTEGRATION_R10_CAPACITAS_2026-10-09.md; domain-docs/elaborazioni/docs/CAPACITAS_FRACTION_RESOLUTION_2026-10-09.md | Design/phase approval, sequential ownership, green checkpoint enforcement and bounded domain documentation | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
-| R10 author | Capacitas UI fraction-resolution policy | frontend/src/components/elaborazioni/capacitas-workspace.tsx; frontend/src/components/elaborazioni/capacitas-fraction-resolution.ts; frontend/tests/unit/campaign-capacitas-fraction-resolution-r10.test.ts; reports/code-quality/SLICE_R10_CAPACITAS_2026-10-09.md | Exact reviewed source committedbe384788; frozen, no further writes | GAIA-campaign-20261009-r10-capacitas | refactor/complexity-r10-capacitas | READY_FOR_REVIEW |
+| Coordinator | Governance / integration | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md; reports/code-quality/INTEGRATION_R10_CAPACITAS_2026-10-09.md; domain-docs/elaborazioni/docs/CAPACITAS_FRACTION_RESOLUTION_2026-10-09.md; sequential custody of VERIFICATION_R10 report after verifier termination | Design/phase approval, sequential ownership, green checkpoint enforcement and bounded domain documentation | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
+| R10 author | Capacitas UI fraction-resolution policy | frontend/src/components/elaborazioni/capacitas-workspace.tsx; frontend/src/components/elaborazioni/capacitas-fraction-resolution.ts; frontend/tests/unit/campaign-capacitas-fraction-resolution-r10.test.ts; reports/code-quality/SLICE_R10_CAPACITAS_2026-10-09.md | Exact certified sourcebe384788 integratedb12780e2; frozen, ownership released | GAIA-campaign-20261009-r10-capacitas | refactor/complexity-r10-capacitas | MERGED |
 | R10 reviewer | Independent actual-source review | reports/code-quality/REVIEW_R10_CAPACITAS_2026-10-09.md only; all runtime/tests/config read-only | APPROVED/IMPROVED; report-only3be62f81 integrated5d914dcb; runtime never edited | GAIA-campaign-20261009-r10-capacitas-review | review/complexity-r10-capacitas | MERGED |
-| R10 final verifier | Independent frozen-source certification | reports/code-quality/VERIFICATION_R10_CAPACITAS_2026-10-09.md only; application/tests/config read-only | Exactsourcebe384788 custody/replay authorized; fresh full-file/focused/fullfrontend/build/browser/provenance and cleanup gates | GAIA-campaign-20261009-r10-verification | verification/complexity-r10-capacitas | ACTIVE |
+| R10 final verifier | Independent frozen-source certification | Delivered report; no writable paths after terminal handoff, custody transferred to Coordinator | CERTIFIED/IMPROVED; scope-clarified report43408282 integrated4c91af1d; all gates/cleanup complete | GAIA-campaign-20261009-r10-verification | verification/complexity-r10-capacitas | MERGED |
 
 ## Authorized current phase — ANALYZE/CHARACTERIZE DESIGN ONLY
 
@@ -197,3 +197,33 @@ Every suite failure/skip/nonexecution must remain explicit; original97.52% is
 historical before proof, not substituted for fresh100%. Verify complete source/
 config/baseline hashes and real cleanup. No report commit before separate review.
 Stop on unexplained failure, ambiguity, source drift or functional difference.
+
+## Certification accepted — sequential report custody
+
+Verifier terminal certificate and exact raw gates accepted:338focused,
+4517fullunit/304files, both runtime100%, type/lint/smoke18/buildPASS, native6,
+pertinent4, full54PASS7historicalSKIP/no retry/flaky. Full baseline30objects exact
+R9, all unaffected AST exact, real cleanup and3490sourcehash audit PASS. One
+generated Vitest timing cache update disclosed; installed dependencies unchanged.
+Coordinator additionally checks both new R10 specs/runtime graph explicitly with
+external tsconfig (project typecheck excludes tests), exit0; no config changes.
+Exact sourcebe384788 integratedb12780e2, four frozen blobs retained.
+
+Verifier is TERMINAL with no processes or writable ownership. Coordinator takes
+exclusive sequential custody of its delivered report in verifier checkout ONLY
+for two reporting clarifications: distinguish project/runtime typecheck from
+Coordinator's explicit test compilation; avoid claiming optional GIS smoke
+revalidation when both current GIS opt-ins remain SKIP. Preserve every other
+certificate fact/source hash. Commit exact report only after review/freeze,
+then separately integrate and ratchet. No source/test/config or agent task edit.
+
+## R10 integration checkpoint
+
+Exact runtime sourcebe384788 integratedb12780e2, source ratchet/mainPASS0;
+scope-clarified certificate43408282 integrated4c91af1d, report hash
+`06f1cf08e95563e062753cc9d1d2c2df5431a3389316f47648086841f673eedd`.
+Both reporting clarifications are Coordinator-attributed; no source/test change
+or verifier restart. All R10 agents terminal, runtime ownership released,
+no overlap, baseline/config/tooling unchanged. Complete closure and final
+integration checks are in INTEGRATION_R10_CAPACITAS_2026-10-09.md. This is a
+bounded IMPROVED checkpoint; global campaign remains ACTIVE/INCOMPLETE.
