@@ -1,5 +1,24 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R16 ORIGINAL passes; exterior matching BLOCKED
+
+- Original task01a12214 terminal/released:13new/505union22suites0skip/failure,
+  fullworkspace/fractionpolicy100%all dimensions, project/new-spec/candidate type,
+  scopedlint and actual ORIGINAL immutable55a Make ratchetPASS0.3534protected
+  paths exact; source8111/21oldspecs/config/baseline untouched. Specb019/CHARe280
+  frozen, ONLY passing tests/report published in dedicated author branch.
+- Exterior full-context comparator passes ORIGINAL but candidate returns
+  ambiguous_identity Program<anonymous>,87candidates, exit1. Candidate NEVER
+  applied; no source improvement/equivalence claim or baseline/matcher change.
+  Separate issue from historical30; repository stop condition honored.
+- User decision requested: dedicated read-only matching/diff-input diagnosis
+  without tooling/baseline edits, or reject candidate while keeping tests. No
+  R16 source/spec integrated, independent original replay still required.
+- Raw /tmp evidence archived unchanged in durable cache, both paths retained.
+  R14 c6caf13a clean actualPOSTCOMMIT ratchetPASS0, graphs updated, global current
+  1672/20316/1926error2740warning4666findings and tail unchanged. Campaign remains
+  ACTIVE/INCOMPLETE; no full global-suite or strategic-completion assertion.
+
 ## 2026-10-09 — R14 certified sequential integration and root audit
 
 - Distinctfinalb771 accepted IMPROVED:204PASS0skip/fullanalytics661s288b100%,

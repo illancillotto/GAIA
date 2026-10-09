@@ -2,7 +2,43 @@
 
 ## Snapshot and authorization
 
-## Current phase: ORIGINAL persistent characterization allocation
+## Current phase: ORIGINAL frozen; candidate BLOCKED pending user decision
+
+Original author task01a12214 is terminal, heavy RELEASED. New spec SHA256
+b0191f9383a1f15a23f27691ba4e2aac70ed12daedc39431cae752cad4424ba1,
+CHAR e28011b36108ac7524fbac6f983827b1cb2479294438735d811ecf41db974bdb.
+Fresh13focused/505union22suites0skip/failure, actual fullworkspace+fractionpolicy
+100%all dimensions, project/new-spec/candidate-overlay type and scopedlint PASS,
+actual ORIGINAL immutable55a Make ratchetPASS0/fullreport/integrity3534paths exact.
+Source8111,21oldspecs/config/baseline/readiness/review/candidate remain frozen.
+Original passing assertions are not candidate equivalence certification.
+
+The exterior full-context comparator passes ORIGINAL then rejects the candidate
+with ambiguous_identity on frontend/src/components/elaborazioni/capacitas-workspace.tsx,
+Program<anonymous>,87baseline candidates. It exits1 before accepting the
+candidate; actual runtime was NEVER replaced and actual change ratchet is PASS0.
+This is a new separate candidate-input/matching issue, NOT the historical30
+global objects. No matcher/baseline/tooling repair, threshold or ignore change.
+
+Coordinator archived original /tmp/gaia-r16-original-characterization-8780c24d
+unchanged into ~/.cache/gaia-campaign/20261009-r16-original-characterization-8780c24d
+for reboot durability. Frozen report's original paths remain valid and preserved.
+Coordinator publishes ONLY passing new spec+CHAR in dedicated author branch;
+no R16 source/spec imported into integration, no incomplete branch integrated.
+
+| Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| R16 original author task01a12214 | Original characterization | Frozen new specb019 / CHAR e280 | Terminal passing ORIGINAL, no further writes | GAIA-campaign-20261009-r16-capacitas-credential-defaults | refactor/complexity-r16-capacitas-credential-defaults | READY_FOR_REVIEW |
+| R16 candidate | Exterior comparator | Frozen candidate34af, recorded ambiguous_identity | NO source permission; await user matching decision | External readiness cache only | No candidate source commit | BLOCKED |
+| Future independent ORIGINAL reviewer | Replay | Later exact new review report | Not activated; remains required before source | Dedicated R16 review worktree | Existing review branch | PLANNED |
+
+Repository stop condition requires a decision for ambiguous baseline matching.
+Coordinator asked user: separate READ-ONLY matching/diff-input diagnosis without
+tooling/baseline edits, or reject candidate and keep characterization. No further
+refactor/diagnostic/source allocation until decision. All heavy windows RELEASED,
+only Coordinator governance closure gate remains; global ACTIVE/INCOMPLETE.
+
+## Previous phase: ORIGINAL persistent characterization allocation
 
 Independent static readiness review terminal ACCEPTED_FOR_SEPARATE_CHARACTERIZATION,
 reportb43c04be1a482e9260ce5a9f293574db60e73894f37dbb1ca77e5c4b82e85531,

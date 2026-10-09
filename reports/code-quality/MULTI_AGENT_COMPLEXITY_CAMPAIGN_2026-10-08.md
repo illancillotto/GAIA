@@ -1,5 +1,27 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-09 — R16 original characterization; candidate matching stop
+
+Global **ACTIVE / INCOMPLETE**, metrics remain certified R14 below. No R16 runtime
+change. Original new13/union505in22suites PASS0skip, fullworkspace/fractionpolicy
+100%all dimensions, type/lint and actual ORIGINAL main55a Make ratchetPASS0;
+3534protected paths exact. Specb019/CHARe280 frozen in dedicated R16 branch,
+not integrated before independent ORIGINAL replay. Raw evidence archived
+unchanged from /tmp into durable ~/.cache/gaia-campaign/.
+
+Exterior full-context candidate comparator fails ambiguous_identity on
+Program<anonymous> with87baseline candidates; ORIGINAL comparison passes.
+Candidate34af not applied, source8111/all21oldspecs/config/baseline preserved.
+This matching issue is NOT attributed to historical30global divergences and
+is NOT an actual runtime regression. No gate bypass, matcher repair or baseline
+update. Candidate state **BLOCKED**, original runtime **NO_CHANGE**.
+
+Stop condition honored: user decision requested for separate READ-ONLY matching/
+diff-input diagnosis without tooling/baseline edits, or rejection retaining
+characterization. No further source/diagnostic allocation pending that decision.
+R14 c6caf13a actualPOSTCOMMIT ratchetPASS0, all7integration gates0; full global
+suites/extreme-tail reduction remain due. No campaign completion declared.
+
 ## 2026-10-09 — R14 certified integration; R15 rejected; R16 characterization
 
 Global objective **ACTIVE / INCOMPLETE**. Current accounting supersedes R13
