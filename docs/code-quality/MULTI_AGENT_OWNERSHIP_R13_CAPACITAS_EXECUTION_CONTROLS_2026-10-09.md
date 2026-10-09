@@ -1,6 +1,36 @@
 # R13 Capacitas — execution-mode controls ownership
 
-## Current phase: ANALYZE / CHARACTERIZE / DESIGN ONLY
+## Current phase: ORIGINAL characterization authoring only, runtime frozen
+
+Formal author readiness terminal SHA256
+`b920736b5cd1df8dfbf936a575b309465976c2f964a531b6327dae9f2be44f82`, candidate
+`8111c1a4658055f29a4c0b56fb1113f8b06677f9e1e622e33d596ae3d9514f48` frozen.
+Independent readiness be0a896d approves only exact inline design: genuine source
+decisions14→4, combined871→861cognitive/762→752decisions/3131→3126LOC,
+full-context immutable55a comparator0, lint/type/protected source and DOM/updater
+proofs. First and paired candidates remain rejected, no source permission.
+
+Coordinator now grants author ONLY new
+`frontend/tests/unit/campaign-capacitas-execution-controls-r13.test.tsx` and
+`reports/code-quality/CHARACTERIZATION_R13_CAPACITAS_EXECUTION_CONTROLS_2026-10-09.md`.
+Readiness report/candidate/sourceb69/all20existing specs/config/policy remain
+frozen and read-only. Characterize ORIGINAL public rendered workspace: all four
+exact native two-span buttons/classes/text/description/sibling order, all four
+boolean configurations, same-render batched functional double toggles, family
+isolation/section persistence, unchanged create payloads after pending options
+change. Use meaningful assertions, no private state/numeric fictitious fixtures.
+Native focus/Enter/Space awaits distinct real-browser phase; do not infer it
+from jsdom keyDown. No runtime implementation or commit/pick/import delegated.
+
+Author MAY author the test/report scaffold now, but R14 still owns heavy replay:
+NO test/type/lint/fullscan execution until Coordinator explicitly transfers
+the heavy window back after backend terminal gates. Reviewer readiness formal
+attribution alone may be updated in its allocated report, no heavy replay.
+After transfer require new-spec/full union both-file100%, explicit test/project
+type/lint/integrity/main55aratchet, frozen old tests exact; then independent
+original replay before runtime allocation. This phase supersedes earlier rules.
+
+## Previous phase: ANALYZE / CHARACTERIZE / DESIGN ONLY
 
 Fresh author ORIGINAL476/20/full100%/type/lint gates are terminal; author explicitly
 released its heavy slot. Coordinator transfers it to independent R14 backend
@@ -27,7 +57,7 @@ remain unchanged. No reset/stash/main merge/baseline generation or repair.
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; private approvals/checkpoints; later explicitly assigned closure docs | Ownership, phase gates, publication/integration custody | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
-| Author01a120c5-d838-7251-b33b-52a5f9b03b48 | Capacitas execution controls | ONLY new reports/code-quality/READINESS_R13_CAPACITAS_EXECUTION_CONTROLS_2026-10-09.md; external prototypes. Workspace/new execution control module reserved, runtime read-only during readiness | Original characterization and bounded real deduplication design | GAIA-campaign-20261009-r13-capacitas-execution-controls | refactor/complexity-r13-capacitas-execution-controls | ACTIVE |
+| Author01a120c5-d838-7251-b33b-52a5f9b03b48 | Capacitas execution controls | ONLY new campaign-capacitas-execution-controls-r13.test.tsx and CHARACTERIZATION_R13 report; readinessb920/candidate8111/source/tests frozen | Author new ORIGINAL public characterization, no execution until heavy transfer | GAIA-campaign-20261009-r13-capacitas-execution-controls | refactor/complexity-r13-capacitas-execution-controls | ACTIVE |
 | Reviewer01a120c7-5237-7f02-9fe7-352e65b9a6ed | Independent design/invariants | ONLY new reports/code-quality/REVIEW_READINESS_R13_CAPACITAS_EXECUTION_CONTROLS_2026-10-09.md | Read-only static design/DOM/state/metric review; no competing heavy tests | GAIA-campaign-20261009-r13-capacitas-execution-controls-review | review/complexity-r13-capacitas-execution-controls | ACTIVE |
 | Final verifier01a120f5-5536-7f11-bb61-089e5d03c923 | Future actual-source certification | Future new VERIFICATION_R13 report only after explicit source freeze | No active task in readiness phase | Dedicated clean final worktree later | Later | PLANNED |
 

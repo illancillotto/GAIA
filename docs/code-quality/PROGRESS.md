@@ -1,5 +1,28 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R13 safe design frozen; R14 original tests freshly green
+
+- R13 formal author readinessb920736b and selected external8111 frozen; final
+  independent inline design approved. Principal359→347projected, combined871→861
+  cognitive/762→752decisions/3131→3126LOC, distinct original14ternaries→4.
+  Full-context main55a comparator0/type/lint/protected/markup-updater proofs;
+  rejected+3/+4LOC variants retained, no matcher/baseline/source workaround.
+- Actual source staysb69NO_CHANGE. New R13 author permission ONLY original
+  public execution-controls characterization spec+report, frozen all20oldspecs/
+  policy/config/readiness. Sixteen meaningful gaps selected; native keyboard
+  requires later actual browser. Authoring may proceed but NO execution while
+  R14 owns heavy slot; independent original replay follows test publication.
+- R14 fresh original six-suite148PASS/0skip, full analytics661statement290branch
+  and existing helper27/10 all100%. Frozen runtimeRuff and main style ratchetPASS;
+  wider read-only test-Ruff diagnosticFAIL2 provably preexisting, no test fix.
+  Local missing-operator guard projects54→33cognitive/nesting4→2/20LOC unchanged,
+  enclosingfuel282→261; complete response/query-order differential7ORM cases and
+  pure202cases+4traces PASS, explicit mutation rejected. Full-context comparison
+  still live at this checkpoint, not yet PASS. Runtime/tests remain unchanged.
+- Two domains progress without overlap; no multiple heavy tests or main edits.
+  Goal remains complete global campaign ACTIVE/INCOMPLETE; thresholds/baseline
+  untouched. Source implementation and integration require later phase gates.
+
 ## 2026-10-09 — independent backend R14 readiness, no source overlap
 
 - Broad global objective retained: while R13 UI readiness evaluates four execution
