@@ -1,5 +1,25 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R13 independent original replay; R14 persistent characterization
+
+- R13 native original characterization terminal492PASS/21spec/zero skip and
+  complete workspace+policy100%724statements804branches254functions630lines.
+  Fresh project/explicitnewtest type and all21lint0, actual immutable55a ratchet0,
+  all3515protected paths/old20specs exact. Frozen spec7154256e/CHAR6d28e1e.
+- Coordinator published ONLY spec+CHAR1af8571b and transferred exact commit to
+  existing review branch47699624. Frozen readiness files untracked/preserved.
+  Idle TUI reviewer replaced by native independent original reviewer, registry
+  updated before creation; exclusive heavy window transferred, no runtime yet.
+- R14 independent bounded readiness reportd2c3aedd terminal: all31actual AST
+  functions versus28scanner records explicit, unchanged29others, selected
+  local guard design recommended. Omitted three control-flow-nested records
+  are separate tooling limitation, not a scanner/baseline fix in this slice.
+- Existing R14 author assigned ONLY new persistent original spec/report,
+  eight meaningful gap families. May author, no heavy execution while R13
+  reviewer window active. Allruntime/oldtests/config/candidates remain frozen.
+- Main55a concurrent binary/status hashes remain9f85e574/0d54d4eb; global campaign
+  ACTIVE/INCOMPLETE, selected GIS failure already certified, baseline untouched.
+
 ## 2026-10-09 — R14 terminal readiness; R13 native characterization execution
 
 - R14 readiness2048764d frozen, candidate1ab2e68e. Original148PASS/full661s290b100%,

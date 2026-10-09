@@ -1,6 +1,10 @@
 # R13 Capacitas — execution-mode controls ownership
 
-## Current phase: ORIGINAL characterization authoring only, runtime frozen
+Latest allocation is **independent ORIGINAL replay**, detailed below. It
+supersedes all older heavy-window assignments in this historical registry.
+Published original spec+CHAR: author1af8571b → review47699624, runtimeb69 unchanged.
+
+## Previous phase: ORIGINAL characterization authoring only, runtime frozen
 
 R14 ORIGINAL actual gates and integrity now terminal; frozen readiness2048764d,
 actual main55a ratchetPASS0 and all2136protected runtime/test/config paths exact.
@@ -49,6 +53,28 @@ After transfer require new-spec/full union both-file100%, explicit test/project
 type/lint/integrity/main55aratchet, frozen old tests exact; then independent
 original replay before runtime allocation. This phase supersedes earlier rules.
 
+## Current phase: independent ORIGINAL replay
+
+Native characterization is terminal READY_FOR_REVIEW and its exclusive heavy
+window RELEASED. Frozen spec7154256e379b911e72bcf2324cda9f6b6bf14de31c1f57b3eb36bfbecdea7983
+and CHAR6d28e1e448d5d90641e066ea01da2999e44072531749e80df48380af713a89fc
+record fresh492/21/zero skip/full2file100%, type/lint0, actual immutable55a
+ratchet0, protected3515paths/old20specs exact. Initial new-fixture expectation
+failures and external audit parser failure are explained and retained.
+
+Coordinator may publish ONLY new spec+CHAR on the author branch. Frozen
+readiness reports remain untracked. Terminal TUI readiness reviewer is idle
+and releases ownership; a native independent successor `/root/r13_review`
+uses the SAME existing review worktree/branch, preserving readiness1778.
+Coordinator transfers ONLY the published spec+CHAR commit there, then grants
+successor exclusive heavy original replay and ONLY new
+`reports/code-quality/REVIEW_CHARACTERIZATION_R13_CAPACITAS_EXECUTION_CONTROLS_2026-10-09.md`.
+Reviewer cannot edit runtime/tests/readiness/config/policy or commit/integrate.
+Fresh focused16/full21union100%, project and explicit new-test type/lint,
+protected integrity and actual immutable55a ratchet are mandatory. Reviewer
+must inspect actual public assertions and distinguish browser keyboard deferred.
+Original review must freeze PASS before Coordinator grants source permission.
+
 ## Previous phase: ANALYZE / CHARACTERIZE / DESIGN ONLY
 
 Fresh author ORIGINAL476/20/full100%/type/lint gates are terminal; author explicitly
@@ -76,8 +102,8 @@ remain unchanged. No reset/stash/main merge/baseline generation or repair.
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; private approvals/checkpoints; later explicitly assigned closure docs | Ownership, phase gates, publication/integration custody | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
-| /root/r13_execution_characterization (successor to terminal TUI author) | Capacitas execution controls | ONLY new campaign-capacitas-execution-controls-r13.test.tsx and CHARACTERIZATION_R13 report; readinessb920/candidate8111/source/tests frozen | Author new ORIGINAL public characterization, no execution until heavy transfer | GAIA-campaign-20261009-r13-capacitas-execution-controls | refactor/complexity-r13-capacitas-execution-controls | ACTIVE |
-| Reviewer01a120c7-5237-7f02-9fe7-352e65b9a6ed | Independent design/invariants | ONLY new reports/code-quality/REVIEW_READINESS_R13_CAPACITAS_EXECUTION_CONTROLS_2026-10-09.md | Read-only static design/DOM/state/metric review; no competing heavy tests | GAIA-campaign-20261009-r13-capacitas-execution-controls-review | review/complexity-r13-capacitas-execution-controls | ACTIVE |
+| /root/r13_execution_characterization (successor to terminal TUI author) | Capacitas execution controls | Frozen spec7154256e and CHAR6d28e1e; readinessb920/candidate8111/source/tests frozen | Original characterization terminal, heavy released | GAIA-campaign-20261009-r13-capacitas-execution-controls | refactor/complexity-r13-capacitas-execution-controls | READY_FOR_REVIEW |
+| /root/r13_review (successor to idle TUI readiness reviewer) | Independent original replay | ONLY new REVIEW_CHARACTERIZATION_R13 report; readiness1778 frozen | Fresh original gates and assertion review, exclusive heavy window | GAIA-campaign-20261009-r13-capacitas-execution-controls-review | review/complexity-r13-capacitas-execution-controls | ACTIVE |
 | Final verifier01a120f5-5536-7f11-bb61-089e5d03c923 | Future actual-source certification | Future new VERIFICATION_R13 report only after explicit source freeze | No active task in readiness phase | Dedicated clean final worktree later | Later | PLANNED |
 
 All R12 agents are authoritatively idle and their ownership is released. NEW

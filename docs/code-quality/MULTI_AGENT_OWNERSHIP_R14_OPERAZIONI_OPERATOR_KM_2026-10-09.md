@@ -1,6 +1,30 @@
 # R14 Operazioni — operator kilometre attribution readiness
 
-## Current phase: terminal author readiness, independent static review next
+## Current phase: ORIGINAL persistent characterization, authoring only
+
+Independent static readiness is terminal at report SHA256
+`d2c3aedd03149ff79fdccb85517b2a114516ce06675cad237a0f35cf106f8a84`.
+Exact selected external candidate remains recommended, not runtime approved.
+All31actual AST functions/28scanner records accounted, 29others unchanged;
+scanner's three omitted control-flow-nested functions remain a separate tooling
+limitation, not repaired or hidden. Independent20cases/4traces/comparator0 are
+bounded evidence; original148/full100% heavy results remain attributed.
+
+Coordinator allocates existing author `/root/r14_operazioni_operator_km` ONLY
+new `backend/tests/test_operazioni_operator_km_r14.py` and
+`reports/code-quality/CHARACTERIZATION_R14_OPERAZIONI_OPERATOR_KM_2026-10-09.md`.
+Readiness2048764d/reviewd2c3/candidate1ab2/runtimecbe/alloldtests/config remain
+frozen. Meaningful persistent tests cover the eight documented gap families,
+using real ORM whole-route priority/collision cases plus clearly separated
+bounded actual-source nested-AST defensive contract tests. No implementation
+copy/export or invalid DB link/NaN fixture; no new production identity rules.
+Author may author now, but NO pytest/coverage/fullscan/type execution until
+Coordinator transfers heavy window after R13 original review terminal release.
+Then fresh original new-spec+complete union full-file100%, scoped Ruff/style,
+protected integrity and actual immutable55a ratchet are mandatory. Original
+independent replay must precede any later runtime permission.
+
+## Previous phase: terminal author readiness, independent static review next
 
 Author terminal frozen report2048764dc493042f9f0df1c12d3ce2ad8e3bc6e332c7b609884ebf94f7653e34,
 external full candidate1ab2e68ebe466f4853ecc86fc0c4d28ca682a1671555a7b5c0d80c0ecc68651d.
@@ -41,8 +65,8 @@ no copying dirty main source, reset/stash/main merge, baseline operation.
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; private approvals | Ownership and serial heavy-window allocation | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
-| /root/r14_operazioni_operator_km | Operazioni analytics | Frozen READINESS_R14 report2048764d; runtime/tests/candidate immutable | Author readiness terminal, heavy released | GAIA-campaign-20261009-r14-operazioni-operator-km | refactor/complexity-r14-operazioni-operator-km | READY_FOR_REVIEW |
-| /root/r14_operator_km_readiness_review | Operazioni attribution review | ONLY new reports/code-quality/REVIEW_READINESS_R14_OPERAZIONI_OPERATOR_KM_2026-10-09.md | Independent bounded static/oracle candidate/invariant/gap review; no heavy original replay while R13 window active | GAIA-campaign-20261009-r14-operazioni-operator-km-review | review/complexity-r14-operazioni-operator-km | ACTIVE |
+| /root/r14_operazioni_operator_km | Operazioni analytics | ONLY new test_operazioni_operator_km_r14.py and CHARACTERIZATION_R14; readiness/runtime/oldtests/candidate immutable | Original characterization authoring, heavy execution waits explicit transfer | GAIA-campaign-20261009-r14-operazioni-operator-km | refactor/complexity-r14-operazioni-operator-km | ACTIVE |
+| /root/r14_operator_km_readiness_review | Operazioni attribution review | Frozen REVIEW_READINESS_R14 reportd2c3aedd only | Static readiness terminal, resources released | GAIA-campaign-20261009-r14-operazioni-operator-km-review | review/complexity-r14-operazioni-operator-km | READY_FOR_REVIEW |
 | Future distinct verifier | Actual-source certification | Later exact new R14 verification report | No active task before source review | Later dedicated clean worktree | Later | PLANNED |
 
 Registry generated BEFORE agent creation. No overlap with R13 workspace, existing
