@@ -1,6 +1,39 @@
 # R14 Operazioni — operator kilometre attribution readiness
 
-## Current phase: independent actual-source runtime review
+## Current phase: distinct final prospective-integration certification
+
+Independent runtime review terminal ACCEPTED/IMPROVED, report
+0b3c0ca0e1dea4a7d0b476b85b3615705e960e7e06dc3f4c7695472c5e667ae1 published
+b128e396; fresh204PASS0skip/fullanalytics661s288b100%/helper27s10b100%, actual
+immutable55aratchet0, Ruff/style0,3520protected paths exact, heavy RELEASED.
+
+| Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| Independent runtime reviewer task01a121e9 | Review | Frozen REVIEW_R14 0b3c | Terminal, heavy released | GAIA-campaign-20261009-r14-operazioni-operator-km-review | review/complexity-r14-operazioni-operator-km | READY_FOR_REVIEW |
+| /root/r13_final, successor R14 final allocation | Distinct final certification | ONLY new reports/code-quality/VERIFICATION_R14_OPERAZIONI_OPERATOR_KM_2026-10-09.md | Fresh actual-source gates on complete prospective current campaign tree | GAIA-campaign-20261009-r14-operazioni-operator-km-final | verify/complexity-r14-operazioni-operator-km | ACTIVE |
+
+Final worktree starts current integration5582b189 INCLUDING certified R13 source,
+not the older R12 ancestry of author3881427a. Coordinator imported ONLY original
+spec+CHARd7cc, originalreviewcf4f, source+SLICE3881, runtime-reviewb128. Clean
+prospective tree preserves exact analytics1ab2/Capacitas8111/seven specs/config.
+Author, independent reviewer and final verifier are distinct. Exclusive heavy
+transfers to verifier; R15 review and R16 readiness remain static-only.
+
+Fresh complete204union/fullanalytics661s288b100%/helper27s10b100%, actual immutable
+55a ratchet0, scopedRuff/style, full read-only Make AST report, actual31function/
+28scanner metrics/29non-target equality/unique23→21/file1255, full globalcheck and
+ALL30complete-object equality with R13 certificate, protected/source/test/config/
+baseline/main integrity are mandatory. Count all global/domain/tail metrics and
+remainingtop30, no aggregate-only provenance. Retain failures/skips/unavailable
+suites with scope; no fullbackend/worker/provider certification inferred from
+focused204union. No UI/source changes, no redundant GIS fix or browser claims.
+Use installed external dependencies/environment without editing package/config.
+Own ONLY new final report/private fresh evidence; no code/tests/reports/config/
+baseline edits, commits/imports or integration. Freeze/report/terminal/release;
+Coordinator sequential root integration with ratchet EACH follows only acceptance.
+Global campaign ACTIVE/INCOMPLETE, final wave/global strategic closure not claimed.
+
+## Previous phase: independent actual-source runtime review
 
 Author terminal READY_FOR_REVIEW/IMPROVED, heavy RELEASED. Exact frozen candidate
 1ab2e68e is actual runtime; new SLICE report768c067136611ce466c4b34ff7fac5864593380525c1a70e9ca056ca4b2faac6.
