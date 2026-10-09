@@ -30,6 +30,32 @@
   per TEST_DATABASE_URL PostgreSQL assente. Suite backend completa attiva,
   PID155612 e artifact `verifier/backend-full.*` nel percorso durabile R4;
   non ancora PASS. Nessuna nuova slice o wave avviata prima di checkpoint.
+- Ripresa dopo conferma GIS: full-backend PID155612 verificato LIVE, nessun
+  riavvio. Confronto globale root30/30 tuple identici alla tabella provenance,
+  finding objects identici al checkpoint GIS; nessuna attribuzione o repair.
+  Summary audit JSON assente nell'integration: usata la tabella versionata,
+  non ricreata una baseline. Cumulativo cognitive81365(-566da clean55a),
+  cyclomatic83370(-296),fileLOC332248(+67),coda>300 sei/>200diciassette.
+  Rapporti aggiornati con top30corrente; coverageCapacitasFAIL100 resta aperto.
+  Graphify platform dopointegrazione chunk1/1done/0semanticfailure,
+  378nodi403edge81community; refreshfinale richiesto dopo queste note docs.
+- Verifier concluso senza restart: full-backend6620PASS449SKIP0failure/error,
+  exit0/1184,72s; JUnit7069test e coverage673/673s302/302b riverificati dal root.
+  Skip447PostgreSQL/1OSGeo/1pyproj espliciti, non PASS;2272warning conservate.
+  Report716a53db integrato report-onlydc1f3b82, source duplicato non integrato.
+  Rimisurato snapshot clean iniziale in worktree baseline49a2b3a1 equivalente55a,
+  1662file20257callable1956error2758warning,cognitive81931/cyclomatic83666:
+  somme originali confermate, engine/include/exclude invariati, nessun baseline
+  update. Artifact `coordinator/initial-clean.json`/`cumulative-audit.json`.
+  Questa voce supera il LIVE precedente: gate suite backend terminale verde.
+  Gate root finali conclusi dopo integrazione report:ratchetmain55aPASS0,
+  reportexit0; AST completi identical allafreeze e globalcheckFAIL30identico,
+  Makeexit2 non riclassificatoPASS. Artifact `coordinator/final.json`/`.md`
+  conservano output del comando richiesto su `/tmp/gaia-complexity-final.*`.
+  Coordinator chiude questa singola responsabilità, nessun altrohotspot
+  assegnato. Ultimo refresh Graphifyplatformdocs eseguito dopo queste note;
+  l'esito effettivo va letto dal report/logfinale, non da questa intenzione.
+  Missione globale resta ACTIVE/INCOMPLETE, senza shrink o waivercoverage.
 
 ## 2026-10-09 — fix GIS E2E verificato e integrato
 

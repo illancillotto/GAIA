@@ -1,5 +1,131 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-09 — R4 fuel mapping, checkpoint backend verificato
+
+Questo è il checkpoint runtime più recente, successivo al fix GIS e a R3.
+La campagna resta **ACTIVE/INCOMPLETE**. La suite backend indipendente è
+conclusa con exit0; nessuna wave successiva è avviata da questo checkpoint.
+
+Slice unica: deduplicare la normalizzazione delle medie nullable e la costruzione
+delle risposte related-vehicle/related-operator di `fuel_analytics`. Query,
+parametri, ranking, identità, arrotondamenti, ordine e read-only restano invariati.
+`anomalies_analytics` non cambia. Source `6b1bec8d` integrato esatto in `5d0529db`,
+review indipendente `afcb2146` integrata in `4e0e94fd`; checkpoint `bff63925`.
+Due errori terminali upstream dell'author hanno richiesto il trasferimento
+esplicito della closure documentale al Coordinator, non modifiche al runtime
+già validato. Registro: `MULTI_AGENT_OWNERSHIP_R4_FUEL_RELATED_2026-10-09.md`.
+
+### Metriche della slice
+
+| Metrica | Before R4 | After R4 | Delta |
+| --- | ---: | ---: | ---: |
+| Fuel cognitive | 322 | 282 | -40 (-12,42%) |
+| Fuel cyclomatic | 183 | 169 | -14 |
+| Fuel callable LOC | 348 | 350 | +2 |
+| Analytics cognitive aggregata | 978 | 943 | -35 (-3,58%) |
+| Analytics cyclomatic aggregata | 585 | 578 | -7 |
+| Analytics file LOC | 1250 | 1265 | +15 |
+| Analytics callable | 26 | 28 | +2 |
+| Callable cognitive >300 globali | 7 | 6 | -1 |
+
+**IMPROVED** per riduzione cognitiva aggregata e duplicazione reale, non per LOC
+o numero finding. I due helper hanno cognitive3/2 e cyclomatic4/3, sotto tutte
+le soglie warning. Nesting4/params5 del target invariati. Nessun trasferimento
+in un mega-helper; crescita LOC limitata e dichiarata nella review.
+
+### Metriche cumulative correnti
+
+Scansione completa integrata, read-only, zero errori parse/eccezioni:
+`/home/cbo/.cache/gaia-campaign/20261009-r4-fuel/coordinator/integrated.json`.
+Snapshot iniziale rimisurato in worktree baseline clean49a2b3a1, runtime/tooling
+byte-equivalenti a55a: `coordinator/initial-clean.json`, exit0. Engine e pattern
+include/exclude identici; tutte le somme iniziali coincidono con il report
+pubblicato. `coordinator/cumulative-audit.json` contiene delta e domini.
+Il confronto causale usa clean55a; audit ufficiale dirty1665file/20261callable
+resta il riferimento pubblicato, senza attribuire alla campagna il lavoro
+concorrente escluso dai worktree.
+
+| Metrica | Clean55a | R4 integrato | Delta | Delta % |
+| --- | ---: | ---: | ---: | ---: |
+| File | 1662 | 1668 | +6 | +0,36% |
+| Callable | 20257 | 20282 | +25 | +0,12% |
+| Error | 1956 | 1938 | -18 | -0,92% |
+| Warning | 2758 | 2749 | -9 | -0,33% |
+| Finding | 4714 | 4687 | -27 | -0,57% |
+| Cognitive aggregata | 81931 | 81365 | -566 | -0,69% |
+| Cyclomatic aggregata | 83666 | 83370 | -296 | -0,35% |
+| File LOC | 332181 | 332248 | +67 | +0,020% |
+| Cognitive >300 | 8 | 6 | -2 | -25,00% |
+| Cognitive >200 | 18 | 17 | -1 | -5,56% |
+| Cognitive >100 | 55 | 55 | 0 | 0% |
+
+Applicativo senza worker tests:1614file/18961callable/318843fileLOC,
+1930error/2694warning/4624finding. Finding non equivalgono a problemi
+indipendenti; riduzione strategica Error/Warning ancora lontana dal target.
+Domain results restano quelli R3: backend1033error1689warning,
+frontend862error871warning, worker runtime35error134warning;
+test worker separati8error55warning. Fuel dal primo audit366→282 (-84).
+
+### Gate ed evidenze
+
+- Author110PASS prima/dopo; reviewer indipendente110PASS, analytics full-file
+  673/673statement302/302branch100%, helper R3 invariato20/20statement8/8branch.
+  Quattro esclusioni difensive preesistenti invariate; nessuna nuova esenzione.
+- Reviewer differenziale40/40fixture persistenti: risposta completa, SQL/bind/
+  ordine, identity-map e assenza di writes equivalenti. Suite ampliata36PASS/
+  14skipPostgreSQL; non è una prova universale o di produzione.
+- Final verifier110PASS/full-file100%, suite Operazioni198PASS/14skip esistenti
+  per `TEST_DATABASE_URL` PostgreSQL assente. **Backend completo6620PASS,
+  449skip,0failure/error,exit0/1184,72s**,2272warning visibili. JUnit root
+  riverificato:7069test totali;447skipPostgreSQL,1OSGeo,1pyproj. Il processo
+  unico155612 è terminato06:56:50UTC senza restart. Skip e impatti puntuali
+  nel report del verifier e nei suoi `backend-full-skips.json`/summary/JUnit.
+- Report indipendente source `716a53db` accettato e integrato report-only
+  `dc1f3b82`. Nessun cherry-pick duplicato del runtime. Root verifica hash,
+  coverage JSON673/673statement302/302branch e totali/exit della suite completa;
+  nessuno skip conteggiato come contratto eseguito.
+- Root ratchet `BASE_REF=main` PASS0/exit0, report globale exit0. Globalcheck
+  FAIL30/Makeexit2: tutti i tuple path/callable/metrica/baseline/value identici
+  alla tabella provenance e agli interi finding GIS precedenti. Nessun finding
+  attribuito a R4, ignorato o assorbito. `coordinator/provenance-match.txt`.
+- Baseline, soglie, scope, esclusioni, tooling e Makefile byte-invariati.
+  I quattro file source integrati sono esattamente quelli approvati. Main
+  dirty55a, lavoro concorrente e branch incompleti restano intatti.
+- Graphify Operazioni code exit0:521nodi1507edge26community; docs gpt-reserve
+  chunk1/1done/zero semanticfailure:16nodi27edge2community. Platform docs dopo
+  l'integrazione chunk1/1done:378nodi403edge81community,7093token input/
+  2806output/costo stimato$0.0073. Refresh finale concluso dopo ultime note docs:
+  exit0,gpt-reserve,chunk1/1done/zero semanticfailure,384nodi418edge80community,
+  7279token input3107output/costo stimato$0.0079;
+  nessun grafo committato o usato come misura di complessità.
+
+Evidenze durabili in `/home/cbo/.cache/gaia-campaign/20261009-r4-fuel/`:
+author/reviewer/verifier/coordinator. Report source, review e verifica R4
+dedicati, tutti accettati nel perimetro della slice. Frontend/build/worker/E2E
+non rieseguiti in questa
+slice backend: riferimenti precedenti restano storici, non nuovi PASS.
+Capacitas97,52%FAIL100 e30divergenze storiche restano questioni separate.
+Nessun merge main/push/PR, nessuna dichiarazione di successo globale.
+
+Closure root dopo report-onlydc1f3b82: comando richiesto `make complexity-report`
+su `/tmp/gaia-complexity-final.json`/`.md`,exit0, copiato come artifact durabile
+`coordinator/final.json`/`.md`. Completi oggetti file/callable/violation/summary/
+engine/scope identici alla freeze integrata. Ultimo `make complexity-ratchet
+BASE_REF=main` PASS0/exit0; `make complexity-check` resta FAIL30/Makeexit2,
+confronto finding objects completo identico al precedente root/GIS/provenance.
+`coordinator/closure-audit.json` e `final-*.log/.exit` conservano le verifiche.
+Sono state corrette assunzioni degli script diagnostici (audit JSON assente
+nel worktree, countfile dinamico dentro scope, brace shell prima del JSON);
+nessuna di queste è un test applicativo PASS o un motivo per modificare il gate.
+Nessun nuovo hotspot è avviato in questa closure; la prossima unità richiede
+ownership preventiva e checkpoint, mantenendo l'obiettivo globale originale.
+Ultimo refresh platform `coordinator/graph-platform-final.log`/`.exit`:153cachehit/
+2riestratti,chunk1/1done,0semanticfailure,exit0. Nessuna modifica al corpus docs
+dopo questo refresh; l'annotazione finale è nel report, fuori dal corpus.
+Tutti i worktree R4 hanno source pulito; report-only del verifier integrato una
+sola volta. Le sole modifiche di closure sono governance/documentazione,
+nessun runtime o contratto riaperto e nessun file Graphify versionato.
+
 ## 2026-10-09 — chiusura del FAIL GIS richiesto
 
 L'utente ha selezionato esplicitamente il FAIL del test GIS. Il fix è soltanto
@@ -490,46 +616,52 @@ dei callable annidati dello scanner, non decisioni uniche del programma.
 
 ## Final metrics
 
-Scansione `/tmp/gaia-complexity-final.json` e `.md`, sul runtime congelato.
+Metriche dell'ultimo checkpoint R4, non dichiarazione di chiusura della campagna.
+Scansione durabile `20261009-r4-fuel/coordinator/integrated.json` e `.md`,
+sul runtime congelato e già revisionato.
 
 | Perimetro | File | Callable | LOC effettive | Error | Warning | Finding |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Snapshot finale ufficiale | 1663 | 20262 | 332159 | 1944 | 2751 | 4695 |
-| Snapshot finale applicativo | 1609 | 18941 | 318754 | 1936 | 2696 | 4632 |
+| Checkpoint R4 ufficiale | 1668 | 20282 | 332248 | 1938 | 2749 | 4687 |
+| Checkpoint R4 applicativo | 1614 | 18961 | 318843 | 1930 | 2694 | 4624 |
 
-La change pulita aggiunge un file e cinque callable netti, inclusi i piccoli
-helper/presenter. Non sono stati rimossi file; le differenze con l'audit dirty
-iniziale non sono riduzioni attribuite al refactoring.
+La campagna aggiunge sei file e venticinque callable netti rispetto a clean55a.
+Le differenze con l'audit dirty iniziale non sono riduzioni attribuite al
+refactoring. File LOC complessive aumentano di67, non sono diminuite.
 
 ## Delta
 
-Confronto causale: snapshot Git pulito55a → snapshot finale congelato.
+Confronto causale: snapshot Git pulito55a → checkpoint R4 congelato.
 
 | Metrica | Before | After | Delta | Delta % |
 | --- | ---: | ---: | ---: | ---: |
-| Error | 1956 | 1944 | -12 | -0,61% |
-| Warning | 2758 | 2751 | -7 | -0,25% |
-| Finding | 4714 | 4695 | -19 | -0,40% |
-| Cognitive sum | 81931 | 81667 | -264 | -0,32% |
-| Cyclomatic sum | 83666 | 83492 | -174 | -0,21% |
-| Callable LOC sum | 328259 | 327961 | -298 | -0,09% |
-| File LOC sum | 332181 | 332159 | -22 | -0,01% |
-| Callable | 20257 | 20262 | +5 | +0,02% |
-| Callable cognitive >300 | 8 | 8 | 0 | 0% |
+| Error | 1956 | 1938 | -18 | -0,92% |
+| Warning | 2758 | 2749 | -9 | -0,33% |
+| Finding | 4714 | 4687 | -27 | -0,57% |
+| Cognitive sum | 81931 | 81365 | -566 | -0,69% |
+| Cyclomatic sum | 83666 | 83370 | -296 | -0,35% |
+| Callable LOC sum | 328259 | 327760 | -499 | -0,15% |
+| File LOC sum | 332181 | 332248 | +67 | +0,020% |
+| Callable | 20257 | 20282 | +25 | +0,12% |
+| Callable cognitive >300 | 8 | 6 | -2 | -25,00% |
 | Callable cognitive >200 | 18 | 17 | -1 | -5,56% |
+| Callable cognitive >100 | 55 | 55 | 0 | 0% |
 
 Nessuna riduzione di parametri o concentrazione degli hook è rivendicata.
 Nesting refresh Wiki7→6 e ranking3→2; gli altri target conservano nesting.
 
 ## Delta %
 
-Nel perimetro dei cinque file runtime originali accettati e del nuovo helper:
+La riduzione cumulativa globale è riportata nella tabella precedente. La sola
+R4 riduce cognitive aggregata analytics978→943(-3,58%) e fuel322→282(-12,42%),
+senza ridurre finding. Per confronto, questi erano i risultati del primo
+checkpoint nel perimetro dei cinque file runtime originali e del nuovo helper:
 
 - Cognitive sum3503→3239: **-264 / -7,54%**.
 - Cyclomatic sum3253→3079: **-174 / -5,35%**.
 - Callable principali selezionati1683→1567: **-116 / -6,89%**.
 
-La coda >300 resta sostanzialmente intatta. Il target P1 -50%/<250 non è
+La coda >300 resta aperta con sei callable. Il target P1 -50%/<250 non è
 raggiunto e la riduzione strategica dell'intera coda estrema resta aperta.
 Non sono successi equivalenti una riduzione locale misurata e il completamento
 dell'obiettivo globale della campagna.
@@ -538,11 +670,11 @@ dell'obiettivo globale della campagna.
 
 | Domain | Error before | Error after | Warning before | Warning after |
 | --- | ---: | ---: | ---: | ---: |
-| Backend runtime | 1035 | 1033 | 1688 | 1690 |
-| Frontend runtime | 878 | 868 | 881 | 872 |
+| Backend runtime | 1035 | 1033 | 1688 | 1689 |
+| Frontend runtime | 878 | 862 | 881 | 871 |
 | Worker runtime | 35 | 35 | 134 | 134 |
 | Worker tests, fuori campagna runtime | 8 | 8 | 55 | 55 |
-| Totale | 1956 | 1944 | 2758 | 2751 |
+| Totale | 1956 | 1938 | 2758 | 2749 |
 
 I due error Wiki e un error LOC GIS diventano warning perché le metriche scendono, non perché
 cambia la soglia. B4 riduce la complessità senza eliminare finding sopra soglia.
@@ -551,8 +683,8 @@ cambia la soglia. B4 riduce la complessità senza eliminare finding sopra soglia
 
 | Callable | Before cognitive | After cognitive | Delta |
 | --- | ---: | ---: | ---: |
-| PresenzeGiornalierePage | 550 | 525 | -25 |
-| ElaborazioniSettingsWorkspace | 402 | 366 | -36 |
+| PresenzeGiornalierePage | 550 | 437 | -113 |
+| ElaborazioniSettingsWorkspace | 402 | 296 | -106 |
 | _build_network_statistics_summary | 209 | 181 | -28 |
 | refresh_wiki_conversation_daily_metrics | 188 | 178 | -10 |
 | _latest_dimension_counts | 50 | 23 | -27 |
@@ -561,8 +693,8 @@ cambia la soglia. B4 riduce la complessità senza eliminare finding sopra soglia
 | ElaborazioniCapacitasWorkspace | 472 | 472 | 0 |
 | DetailContent Utenze | 391 | 391 | 0 |
 | CatastoAnomaliePageContent | 390 | 390 | 0 |
-| fuel_analytics | 366 | 366 | 0 |
-| anomalies_analytics | 365 | 365 | 0 |
+| fuel_analytics | 366 | 282 | -84 |
+| anomalies_analytics | 365 | 361 | -4 |
 | _run_bonifica_sync_background | 269 | 269 | 0 |
 
 Gli aggregati includono presenter/helper nuovi: non è una contabilizzazione
@@ -688,9 +820,9 @@ Tentativi intermedi non sono risultati accettati.
 
 ## Remaining top 30 hotspot
 
-Ranking corrente Round3, cognitive discendente; applicativo senza test worker.
+Ranking corrente R4, cognitive discendente; applicativo senza test worker.
 Scansione globale completa include comunque i test worker e tutte le30divergenze.
-Fonte `/tmp/gaia-r3-integrated-complexity.json`, snapshot`c7d79229`.
+Fonte durabile `20261009-r4-fuel/coordinator/integrated.json`, snapshot`bff63925`.
 
 | # | Callable | Cognitive | Cyclomatic | LOC | Path |
 | --- | --- | ---: | ---: | ---: | --- |
@@ -699,9 +831,9 @@ Fonte `/tmp/gaia-r3-integrated-complexity.json`, snapshot`c7d79229`.
 | 3 | DetailContent | 391 | 304 | 1908 | `frontend/src/app/utenze/[id]/page.tsx` |
 | 4 | CatastoAnomaliePageContent | 390 | 342 | 2109 | `frontend/src/app/catasto/anomalie/page.tsx` |
 | 5 | anomalies_analytics | 361 | 159 | 387 | `backend/app/modules/operazioni/routes/analytics.py` |
-| 6 | fuel_analytics | 322 | 183 | 348 | `backend/app/modules/operazioni/routes/analytics.py` |
-| 7 | CatastoGisPage | 317 | 281 | 1889 | `frontend/src/app/catasto/gis/page.tsx` |
-| 8 | ElaborazioniSettingsWorkspace | 296 | 265 | 1358 | `frontend/src/components/elaborazioni/settings-workspace.tsx` |
+| 6 | CatastoGisPage | 317 | 281 | 1889 | `frontend/src/app/catasto/gis/page.tsx` |
+| 7 | ElaborazioniSettingsWorkspace | 296 | 265 | 1358 | `frontend/src/components/elaborazioni/settings-workspace.tsx` |
+| 8 | fuel_analytics | 282 | 169 | 350 | `backend/app/modules/operazioni/routes/analytics.py` |
 | 9 | MePageContent | 271 | 256 | 1133 | `frontend/src/app/me/me-page-content.tsx` |
 | 10 | _run_bonifica_sync_background | 269 | 47 | 232 | `backend/app/services/elaborazioni_bonifica_sync.py` |
 | 11 | ElaborazioniBonificaSyncWorkspace | 259 | 202 | 835 | `frontend/src/components/elaborazioni/bonifica-sync-workspace.tsx` |
