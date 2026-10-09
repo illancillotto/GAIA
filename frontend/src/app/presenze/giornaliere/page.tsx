@@ -30,6 +30,7 @@ import type {
   PresenzeAccessContext,
   PresenzeCollaborator,
   PresenzeDailyRecord,
+  PresenzeDailyRecordManualUpdateInput,
   PresenzeSyncJob,
 } from "@/types/api";
 import { collaboratorProfileFilterKey, selectMonthlyCollaboratorRows } from "./collaborator-rows";
@@ -50,6 +51,28 @@ type DailyEditForm = {
   manualNote: string;
   validationNote: string;
 };
+
+type DailyRecordMutation = {
+  token: string;
+  request: () => Promise<PresenzeDailyRecord>;
+  success: (updated: PresenzeDailyRecord) => void;
+  finish: () => void;
+  errorMessage: string;
+};
+
+function buildDailyRecordEditorUpdate(editor: DailyEditForm, canValidate: boolean): PresenzeDailyRecordManualUpdateInput {
+  return {
+    km_value: editor.kmValue.trim() ? Number(editor.kmValue) : null,
+    trasferta_minutes: parseMinutesInput(editor.trasfertaMinutes),
+    trasferta_montano: editor.trasfertaMontano,
+    reperibilita_unit: editor.reperibilitaGiornaliera ? "days" : "none",
+    reperibilita_quantity: editor.reperibilitaGiornaliera ? 1 : null,
+    override_straordinario_minutes: parseMinutesInput(editor.overrideStraordinario),
+    override_mpe_minutes: parseMinutesInput(editor.overrideMpe),
+    manual_note: editor.manualNote.trim() || null,
+    ...(canValidate ? { validation_note: editor.validationNote.trim() || null } : {}),
+  };
+}
 
 type DayColumn = {
   iso: string;
@@ -1401,95 +1424,102 @@ export default function PresenzeGiornalierePage() {
     }
   }
 
-  async function persistKm(record: PresenzeDailyRecord, rawValue: string) {
-    const token = getStoredAccessToken();
-    if (!token) return;
-    const trimmed = rawValue.trim();
-    const nextValue = trimmed ? Math.max(0, Math.round(Number(trimmed))) : null;
-    if (trimmed && !Number.isFinite(Number(trimmed))) return;
-    if (nextValue === (record.km_value ?? null)) return;
-    setSavingRecordId(record.id);
-    setError(null);
-    try {
-      const updated = await updatePresenzeDailyRecord(token, record.id, { km_value: nextValue });
-      evictMonthCache(token, updated.work_date);
-      applyUpdatedRecord(updated);
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Errore salvataggio KM");
-    } finally {
-      setSavingRecordId(null);
-    }
+  function ignoreInlineDailyRecordSuccess() {}
+
+  function finishInlineDailyRecordMutation() {
+    setSavingRecordId(null);
   }
 
-  async function persistReperibilita(record: PresenzeDailyRecord, enabled: boolean) {
+  function finishEditorDailyRecordMutation() {
+    setIsSaving(false);
+  }
+
+  function createDailyRecordMutationHandler<Arguments extends unknown[]>(prepare: (...args: Arguments) => DailyRecordMutation | null) {
+    return async function executeDailyRecordMutation(...args: Arguments) {
+      const mutation = prepare(...args);
+      if (!mutation) return;
+      try {
+        const updated = await mutation.request();
+        evictMonthCache(mutation.token, updated.work_date);
+        applyUpdatedRecord(updated);
+        mutation.success(updated);
+      } catch (saveError) {
+        setError(saveError instanceof Error ? saveError.message : mutation.errorMessage);
+      } finally {
+        mutation.finish();
+      }
+    };
+  }
+
+  const persistKm = createDailyRecordMutationHandler((record: PresenzeDailyRecord, rawValue: string) => {
     const token = getStoredAccessToken();
-    if (!token || !canEditRecordOperationalData(record) || isFerieRecord(record)) return;
+    if (!token) return null;
+    const trimmed = rawValue.trim();
+    const nextValue = trimmed ? Math.max(0, Math.round(Number(trimmed))) : null;
+    if (trimmed && !Number.isFinite(Number(trimmed))) return null;
+    if (nextValue === (record.km_value ?? null)) return null;
+    setSavingRecordId(record.id);
+    setError(null);
+    return {
+      token,
+      request: () => updatePresenzeDailyRecord(token, record.id, { km_value: nextValue }),
+      success: ignoreInlineDailyRecordSuccess,
+      finish: finishInlineDailyRecordMutation,
+      errorMessage: "Errore salvataggio KM",
+    };
+  });
+
+  const persistReperibilita = createDailyRecordMutationHandler((record: PresenzeDailyRecord, enabled: boolean) => {
+    const token = getStoredAccessToken();
+    if (!token || !canEditRecordOperationalData(record) || isFerieRecord(record)) return null;
     const nextUnit = enabled ? "days" : "none";
     const nextQuantity = enabled ? 1 : null;
     setSavingRecordId(record.id);
     setError(null);
-    try {
-      const updated = await updatePresenzeDailyRecord(token, record.id, {
+    return {
+      token,
+      request: () => updatePresenzeDailyRecord(token, record.id, {
         reperibilita_unit: nextUnit,
         reperibilita_quantity: nextQuantity,
-      });
-      evictMonthCache(token, updated.work_date);
-      applyUpdatedRecord(updated);
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Errore salvataggio reperibilita");
-    } finally {
-      setSavingRecordId(null);
-    }
-  }
+      }),
+      success: ignoreInlineDailyRecordSuccess,
+      finish: finishInlineDailyRecordMutation,
+      errorMessage: "Errore salvataggio reperibilita",
+    };
+  });
 
-  async function handleSaveEditor() {
+  const handleSaveEditor = createDailyRecordMutationHandler(() => {
     const token = getStoredAccessToken();
-    if (!token || !selectedRecord || !editor) return;
+    if (!token || !selectedRecord || !editor) return null;
     setIsSaving(true);
     setError(null);
     setSuccess(null);
-    try {
-      const updated = await updatePresenzeDailyRecord(token, selectedRecord.id, {
-        km_value: editor.kmValue.trim() ? Number(editor.kmValue) : null,
-        trasferta_minutes: parseMinutesInput(editor.trasfertaMinutes),
-        trasferta_montano: editor.trasfertaMontano,
-        reperibilita_unit: editor.reperibilitaGiornaliera ? "days" : "none",
-        reperibilita_quantity: editor.reperibilitaGiornaliera ? 1 : null,
-        override_straordinario_minutes: parseMinutesInput(editor.overrideStraordinario),
-        override_mpe_minutes: parseMinutesInput(editor.overrideMpe),
-        manual_note: editor.manualNote.trim() || null,
-        ...(canValidate ? { validation_note: editor.validationNote.trim() || null } : {}),
-      });
-      evictMonthCache(token, updated.work_date);
-      applyUpdatedRecord(updated);
-      setSuccess(`Giornata ${updated.work_date} aggiornata.`);
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Errore salvataggio giornaliera");
-    } finally {
-      setIsSaving(false);
-    }
-  }
+    return {
+      token,
+      request: () => updatePresenzeDailyRecord(token, selectedRecord.id, buildDailyRecordEditorUpdate(editor, canValidate)),
+      success: (updated: PresenzeDailyRecord) => setSuccess(`Giornata ${updated.work_date} aggiornata.`),
+      finish: finishEditorDailyRecordMutation,
+      errorMessage: "Errore salvataggio giornaliera",
+    };
+  });
 
-  async function handleValidation(status: "pending" | "validated") {
+  const handleValidation = createDailyRecordMutationHandler((status: "pending" | "validated") => {
     const token = getStoredAccessToken();
-    if (!token || !selectedRecord || !editor || !canValidate) return;
+    if (!token || !selectedRecord || !editor || !canValidate) return null;
     setIsSaving(true);
     setError(null);
     setSuccess(null);
-    try {
-      const updated = await updatePresenzeDailyRecord(token, selectedRecord.id, {
+    return {
+      token,
+      request: () => updatePresenzeDailyRecord(token, selectedRecord.id, {
         validation_status: status,
         validation_note: editor.validationNote.trim() || null,
-      });
-      evictMonthCache(token, updated.work_date);
-      applyUpdatedRecord(updated);
-      setSuccess(status === "validated" ? `Giornata ${updated.work_date} validata.` : `Validazione rimossa per ${updated.work_date}.`);
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Errore validazione giornaliera");
-    } finally {
-      setIsSaving(false);
-    }
-  }
+      }),
+      success: (updated: PresenzeDailyRecord) => setSuccess(status === "validated" ? `Giornata ${updated.work_date} validata.` : `Validazione rimossa per ${updated.work_date}.`),
+      finish: finishEditorDailyRecordMutation,
+      errorMessage: "Errore validazione giornaliera",
+    };
+  });
 
   async function handleSaveCollaboratorContractProfile(collaborator: PresenzeCollaborator) {
     const token = getStoredAccessToken();
