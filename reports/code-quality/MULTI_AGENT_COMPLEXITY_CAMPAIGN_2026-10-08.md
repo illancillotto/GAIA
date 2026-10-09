@@ -55,6 +55,12 @@ checkFAIL30/Makeexit2, identical historical finding objects. Fresh independent
 build:cleanPASS56.546s/exit0; pertinentPresenzeE2E7PASS0skip. FullE2E remains
 live and is not claimedPASS yet; final verifier report/cleanup pending.
 
+Browser is now terminal: **54PASS/7existingSKIP/0failure/flaky**,70.871s,exit0,
+actual result retries0. Root independently reads JSON/exits. Fullnpmrunlint,
+ownedlint,typecheck,smoke18 and freshbuild all exit0; repo warnings are legacy,
+not claimed eliminated. Verifier finalmetrics/provenance/report/cleanup remain
+pending and no global completion is claimed.
+
 ## 2026-10-09 — R6 Presenze daily presentation, verified checkpoint
 
 Source `56c46570` independently approved by `c1475bb2`, integrated exactly as

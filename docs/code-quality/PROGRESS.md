@@ -53,6 +53,10 @@
   identici integrated, finalratchetmainPASS0/globalcheckFAIL30Makeexit2exact
   historicalfindingobjects. VerifierfreshbuildPASS56,546s/ownfrozenproduction,
   pertinentPresenzeE2E7PASS0skip; fullE2E522231/session82077LIVE, noPASSdedotto.
+- FullE2Eterminal54PASS7existingSKIP0failure/flaky/retriesexit0/70,871s,
+  rootactualJSON/exits verified; fullnpmrunlint anchePASSconlegacywarnings,
+  smoke18PASS0skip. Verifier serial finalreportPID530027/session75213LIVE,
+  mainratchet/globalcheck/cleanup/report-onlycommit successivi, nofinalPASSdedotto.
 
 ## 2026-10-09 — R6 Presenze daily presentation, bounded slice
 
