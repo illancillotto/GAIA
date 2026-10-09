@@ -1,5 +1,68 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-09 — R5 orphan operator identity, integrato dopo review
+
+Checkpoint runtime corrente, successivo a R4. Source `cd4b1145` integrato esatto
+`f507a656` dopo review indipendente APPROVED `8730228f`, report `7d8397d8`.
+Una sola responsabilità: indice/normalizzazione/risoluzione operatore per
+orphan-session; nessuna delle altre sette fasi anomalies cambia. Non è una
+riconciliazione delle identità né una modifica della semantica di matching.
+Baseline/soglie/scope/tooling/coverage config immutati, main dirty preservato.
+
+| Metrica R5 | Before | After | Delta |
+| --- | ---: | ---: | ---: |
+| Anomalies cognitive | 361 | 298 | -63 (-17,45%) |
+| Anomalies cyclomatic | 159 | 137 | -22 |
+| Anomalies callable LOC | 387 | 372 | -15 |
+| Analytics + helper cognitive | 943 | 897 | -46 (-4,88%) |
+| Analytics + helper cyclomatic | 578 | 572 | -6 |
+| Analytics + helper file LOC | 1265 | 1298 | +33 |
+| Callable cognitive >300 globali | 6 | 5 | -1 |
+
+**IMPROVED**: duplicazione effettiva rimossa con quattro helper coesi,
+massimo9cognitive/8cyclomatic/18LOC/3nesting/3params, nessun finding nuovo.
+Indice first-wins per nome e last-wins per GAIA, zero/None, whitespace interno,
+precedenza linked/fallback e label raw invariati. Nessun wrapper mega-function,
+nessuna riduzione LOC aggregata rivendicata; il costo +33 è esplicitamente
+revisionato. Il callable resta sopra error e la campagna **ACTIVE/INCOMPLETE**.
+
+Author38nuovi persisted characterization PASS su original runtime,
+148focusedPASS prima/dopo,236OperazioniPASS14existingPGSKIP. Reviewer ripete
+indipendentemente148PASS e236PASS14SKIP, più38testcontrooriginalAST,
+20fixture differential completa/35assertions semantiche: risposta/SQL/binds/
+ordine/snapshot/read-only equivalenti.25queryAST,7altrefasi e27callable
+fingerprints/metriche identici. Root controlla exit e coverage JSON, non solo
+le dichiarazioni: analytics661/661statement290/290branch100%, helper27/27s10/10b
+100%zeroexclusions; quattro esclusioni analytics preesistenti immutate.
+
+Finalverifier source congelato `fba9c2cc`:148PASS/full-file100%,236PASS14SKIP,
+20persistedoracle prima/dopo/35semanticassertionsPASS,style/ratchetPASS0,
+globalcheckFAIL30finding objects identici alla provenance/R4. **Suite backend
+completa ancora LIVE**,PID259095/session28090,nessun restart o PASS dedotto.
+Certificazione finale/report-only attende il terminale; nessun nuovo hotspot
+assegnato mentre questa verifica è aperta. Skip PostgreSQL non sono PASS.
+
+Root integrazione:ratchetmain55aPASS0/reportexit0, tutti5files identici al source
+approvato e completi AST objects identici al report verifier. Durabile:
+`/home/cbo/.cache/gaia-campaign/20261009-r5-orphan/{author,reviewer,verifier,coordinator}`.
+`coordinator/integrated.json`/`.md` e `aggregate.json`:1669file20286callable,
+1938error2749warning4687finding,cognitive81319/cyclomatic83364/fileLOC332281.
+Delta cumulativo clean55a:cognitive-612(-0,75%),cyclomatic-302(-0,36%),
+fileLOC+100(+0,030%),Error-18(-0,92%),Warning-9(-0,33%),finding-27(-0,57%).
+Coda>3008→5,>20018→17,>10055→55. Domain results invariati da R4.
+Queste somme includono tutti gli helper, non soltanto il principale.
+
+Graphify Operazioni code:exit0,530nodi1524edge26community. Domain docs:
+gpt-reserve,chunk1/1done/zero semanticfailure,27nodi39edge4community,
+1018token input1970output/costo stimato$0.0036. Platform docs da aggiornare dopo
+ultime note di governance. Nessun grafo committato o usato come prova metriche.
+Frontend/build/worker/E2E non rieseguiti in questa slice backend; evidenze
+precedenti restano storiche. Capacitas97,52%FAIL100 e30divergenze globali restano
+questioni separate aperte, non riparate, ignorate o assorbite. No mainmerge/
+push/PR o completamento della campagna. Rapporti R5 source/review dettagliati
+e ownership preventiva versionati; tutte le assunzioni diagnostiche fallite
+sono registrate senza attribuire loro PASS applicativi.
+
 ## 2026-10-09 — R4 fuel mapping, checkpoint backend verificato
 
 Questo è il checkpoint runtime più recente, successivo al fix GIS e a R3.
@@ -616,34 +679,34 @@ dei callable annidati dello scanner, non decisioni uniche del programma.
 
 ## Final metrics
 
-Metriche dell'ultimo checkpoint R4, non dichiarazione di chiusura della campagna.
-Scansione durabile `20261009-r4-fuel/coordinator/integrated.json` e `.md`,
+Metriche dell'ultimo checkpoint R5, non dichiarazione di chiusura della campagna.
+Scansione durabile `20261009-r5-orphan/coordinator/integrated.json` e `.md`,
 sul runtime congelato e già revisionato.
 
 | Perimetro | File | Callable | LOC effettive | Error | Warning | Finding |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Checkpoint R4 ufficiale | 1668 | 20282 | 332248 | 1938 | 2749 | 4687 |
-| Checkpoint R4 applicativo | 1614 | 18961 | 318843 | 1930 | 2694 | 4624 |
+| Checkpoint R5 ufficiale | 1669 | 20286 | 332281 | 1938 | 2749 | 4687 |
+| Checkpoint R5 applicativo | 1615 | 18965 | 318876 | 1930 | 2694 | 4624 |
 
-La campagna aggiunge sei file e venticinque callable netti rispetto a clean55a.
+La campagna aggiunge sette file e ventinove callable netti rispetto a clean55a.
 Le differenze con l'audit dirty iniziale non sono riduzioni attribuite al
-refactoring. File LOC complessive aumentano di67, non sono diminuite.
+refactoring. File LOC complessive aumentano di100, non sono diminuite.
 
 ## Delta
 
-Confronto causale: snapshot Git pulito55a → checkpoint R4 congelato.
+Confronto causale: snapshot Git pulito55a → checkpoint R5 congelato.
 
 | Metrica | Before | After | Delta | Delta % |
 | --- | ---: | ---: | ---: | ---: |
 | Error | 1956 | 1938 | -18 | -0,92% |
 | Warning | 2758 | 2749 | -9 | -0,33% |
 | Finding | 4714 | 4687 | -27 | -0,57% |
-| Cognitive sum | 81931 | 81365 | -566 | -0,69% |
-| Cyclomatic sum | 83666 | 83370 | -296 | -0,35% |
-| Callable LOC sum | 328259 | 327760 | -499 | -0,15% |
-| File LOC sum | 332181 | 332248 | +67 | +0,020% |
-| Callable | 20257 | 20282 | +25 | +0,12% |
-| Callable cognitive >300 | 8 | 6 | -2 | -25,00% |
+| Cognitive sum | 81931 | 81319 | -612 | -0,75% |
+| Cyclomatic sum | 83666 | 83364 | -302 | -0,36% |
+| Callable LOC sum | 328259 | 327780 | -479 | -0,15% |
+| File LOC sum | 332181 | 332281 | +100 | +0,030% |
+| Callable | 20257 | 20286 | +29 | +0,14% |
+| Callable cognitive >300 | 8 | 5 | -3 | -37,50% |
 | Callable cognitive >200 | 18 | 17 | -1 | -5,56% |
 | Callable cognitive >100 | 55 | 55 | 0 | 0% |
 
@@ -661,7 +724,7 @@ checkpoint nel perimetro dei cinque file runtime originali e del nuovo helper:
 - Cyclomatic sum3253→3079: **-174 / -5,35%**.
 - Callable principali selezionati1683→1567: **-116 / -6,89%**.
 
-La coda >300 resta aperta con sei callable. Il target P1 -50%/<250 non è
+La coda >300 resta aperta con cinque callable. Il target P1 -50%/<250 non è
 raggiunto e la riduzione strategica dell'intera coda estrema resta aperta.
 Non sono successi equivalenti una riduzione locale misurata e il completamento
 dell'obiettivo globale della campagna.
@@ -694,7 +757,7 @@ cambia la soglia. B4 riduce la complessità senza eliminare finding sopra soglia
 | DetailContent Utenze | 391 | 391 | 0 |
 | CatastoAnomaliePageContent | 390 | 390 | 0 |
 | fuel_analytics | 366 | 282 | -84 |
-| anomalies_analytics | 365 | 361 | -4 |
+| anomalies_analytics | 365 | 298 | -67 |
 | _run_bonifica_sync_background | 269 | 269 | 0 |
 
 Gli aggregati includono presenter/helper nuovi: non è una contabilizzazione
@@ -820,9 +883,9 @@ Tentativi intermedi non sono risultati accettati.
 
 ## Remaining top 30 hotspot
 
-Ranking corrente R4, cognitive discendente; applicativo senza test worker.
+Ranking corrente R5, cognitive discendente; applicativo senza test worker.
 Scansione globale completa include comunque i test worker e tutte le30divergenze.
-Fonte durabile `20261009-r4-fuel/coordinator/integrated.json`, snapshot`bff63925`.
+Fonte durabile `20261009-r5-orphan/coordinator/integrated.json`, snapshot`7d8397d8`.
 
 | # | Callable | Cognitive | Cyclomatic | LOC | Path |
 | --- | --- | ---: | ---: | ---: | --- |
@@ -830,8 +893,8 @@ Fonte durabile `20261009-r4-fuel/coordinator/integrated.json`, snapshot`bff63925
 | 2 | PresenzeGiornalierePage | 437 | 385 | 2080 | `frontend/src/app/presenze/giornaliere/page.tsx` |
 | 3 | DetailContent | 391 | 304 | 1908 | `frontend/src/app/utenze/[id]/page.tsx` |
 | 4 | CatastoAnomaliePageContent | 390 | 342 | 2109 | `frontend/src/app/catasto/anomalie/page.tsx` |
-| 5 | anomalies_analytics | 361 | 159 | 387 | `backend/app/modules/operazioni/routes/analytics.py` |
-| 6 | CatastoGisPage | 317 | 281 | 1889 | `frontend/src/app/catasto/gis/page.tsx` |
+| 5 | CatastoGisPage | 317 | 281 | 1889 | `frontend/src/app/catasto/gis/page.tsx` |
+| 6 | anomalies_analytics | 298 | 137 | 372 | `backend/app/modules/operazioni/routes/analytics.py` |
 | 7 | ElaborazioniSettingsWorkspace | 296 | 265 | 1358 | `frontend/src/components/elaborazioni/settings-workspace.tsx` |
 | 8 | fuel_analytics | 282 | 169 | 350 | `backend/app/modules/operazioni/routes/analytics.py` |
 | 9 | MePageContent | 271 | 256 | 1133 | `frontend/src/app/me/me-page-content.tsx` |
