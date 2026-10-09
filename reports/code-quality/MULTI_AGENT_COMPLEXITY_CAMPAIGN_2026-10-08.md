@@ -1,5 +1,29 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-09 — R10 readiness for highest current residual hotspot
+
+R9 checkpoint10784e76GREEN, source/refinalverification/docs integrated with
+ratchet0 and actual full-file100%/complete frontend/build/browser gates. Global
+goal remains ACTIVE/INCOMPLETE: no narrower success criterion replaces the
+original attachment. Current ranking therefore selects unchanged Capacitas
+principal472/416/2631LOC, not minor warnings or repeated GIS status work.
+
+Exclusive registry MULTI_AGENT_OWNERSHIP_R10_CAPACITAS_2026-10-09.md precedes
+dedicated author/reviewer worktrees and native tasksr10_capacitas_author/
+r10_capacitas_reviewer. Scope is ANALYZE/CHARACTERIZE DESIGN ONLY, runtime/
+tests/config read-only. Author fresh312test full-file coverage and raw missing
+arms; independent reviewer source/library/nullable-transition proofs. Inherited
+97.52%coverage is an open gate, not a fresh result or a reason to weaken policy.
+Twenty-one conditional reader candidates require fresh contract corroboration;
+two unresolved modal null guards must remain, including lazy error/updater/
+race semantics. No new generic wrapper, fake fixtures or relocation accepted.
+
+Candidate design must remove real duplicate decisions and protect behaviors
+before implementation; source edits/commits remain unauthorized in this phase.
+No unreviewed runtime integration, old interrupted-branch resurrection, main
+merge, threshold/exclusion/ignore change or baseline inflation. Current global
+metrics remain the integrated R9 checkpoint below until a future certified slice.
+
 ## 2026-10-09 — R9 daily-record lifecycle, independently certified and integrated
 
 Global objective unchanged **ACTIVE/INCOMPLETE**. GIS request closed separately;

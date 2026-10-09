@@ -1,5 +1,28 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R10 highest residual hotspot, readiness only
+
+- R9 terminal integration10784e76clean: reviewed/certified sourcec51b6038,
+  verifierreport8df92f9d, complete AST current1933error/2745warning/4678findings,
+  focused/fullfrontend/build/browser/fullfile100%/ratchetPASS0. Original global
+  goal ACTIVE/INCOMPLETE; no completion or arbitrary strategic-target reset.
+- Fresh ranking selects untouched ElaborazioniCapacitasWorkspace472/416/
+  2631callableLOC, highest residual cognitive. New ownership registry precedes
+  dedicated author/reviewer worktrees at10784e76. Eighty-one present worktrees
+  inspected, no dirty owned runtime path; fifteen missing handles left intact.
+- Author/reviewer tasks r10_capacitas_author/r10_capacitas_reviewer are active
+  for READ-ONLY-runtime ANALYZE/CHARACTERIZE DESIGN. Author first obtains fresh
+  complete312test union coverage/raw23arm provenance; reviewer independently
+  validates reader/library contracts and nullable resolution race semantics.
+  Historical906/929branch97.52% is not reused as a fresh PASS or exception.
+- Candidate scope: real domain-specific nullable fraction-resolution policy
+  plus exact proven redundant reader defenses, not a generic null wrapper,
+  removed UNKNOWN defenses or fake SheetJS/private-state coverage. No source,
+  test, config, baseline or phase commit authorized yet. Runtime approval only
+  after original behavior characterization, all-callback aggregate metrics and
+  independent proof; final changed runtime must be full-file100% and ratchet0.
+  Old interrupted closure worktree preserved/superseded, not copied/restarted.
+
 ## 2026-10-09 — R9 independently certified and integrated
 
 - Previous GIS-only goal turn revalidated existing evidence, without new
