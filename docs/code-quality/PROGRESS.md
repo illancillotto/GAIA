@@ -1,5 +1,21 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R5 anomalies, una responsabilità di identità orphan
+
+- Turno precedente PROGRESS: R4 chiuso e integrato b4cfd5cd, fullbackend6620PASS/
+  449skip espliciti,100%full-file/ratchetPASS0/provenance30identica. Goalglobale
+  letto e invariato; nessuna riduzione di scope o dichiarazione di completamento.
+- Preflight main55a dirty preservato, integrationb4cfd5cd clean. Analytics pulito,
+  nessun owner attivo R4. Orientamento GraphifyOperazioni prima del codice;
+  ranking corrente anomalies361cognitive/159cyclomatic/387LOC, quinto globale.
+- Registry preventivo `MULTI_AGENT_OWNERSHIP_R5_ORPHAN_OPERATORS_2026-10-09.md`:
+  singola responsabilità operator lookup/annotazione orphan-session, non tutte
+  le otto fasi anomalies. Design da approvare prima delle modifiche runtime.
+  Query/parametri/ordine e semantica matching invariati; test persistenti prima,
+  coverage100%full-file, aggregati reali e ratchet55aPASS0 obbligatori.
+- Capacitas97,52%FAIL100 e trenta divergenze restano aperte e separate. Nessun
+  cleanup di guard, modifica baseline/soglie/esclusioni o copia di main dirty.
+
 ## 2026-10-09 — R4 fuel response mapping, singola slice autorizzata
 
 - Goal globale riattivato dall'utente; turno precedente classificato PROGRESS:
