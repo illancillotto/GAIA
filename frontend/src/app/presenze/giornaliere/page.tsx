@@ -37,6 +37,8 @@ import type { DayFocusFilter, ProfileFilterKey } from "./collaborator-rows";
 import { buildMonthlyRecordInsights } from "./monthly-record-insights";
 import { dailyCellIndicators, kmInputPresentation } from "./daily-cell-model";
 import type { DayOperationalSummary, MonthlyRecordFacts } from "./monthly-record-insights";
+import { anomalyPanelComparisons, anomalyPanelCounts as countAnomalyPanelRecords, buildAnomalyDayGroups, buildAnomalyCollaboratorGroups } from "./anomaly-panel-model";
+import type { MonthAnomalyRecord, AnomalyPanelDayGroup, AnomalyPanelCollaboratorGroup } from "./anomaly-panel-model";
 
 type DailyEditForm = {
   kmValue: string;
@@ -64,26 +66,8 @@ type ContractProfileEditorState = {
   operaiGroup: NonNullable<PresenzeCollaborator["operai_group"]> | "";
   standardDailyMinutes: string;
 };
-type MonthAnomalyRecord = {
-  record: PresenzeDailyRecord;
-  kind: Extract<CellKind, "anomaly" | "analysis">;
-  reason: string;
-};
 type AnomalyPanelFilter = "all" | "anomaly" | "analysis";
-type AnomalyPanelDayGroup = {
-  iso: string;
-  items: MonthAnomalyRecord[];
-  anomalyCount: number;
-  analysisCount: number;
-};
 type AnomalyPanelGrouping = "day" | "collaborator";
-type AnomalyPanelCollaboratorGroup = {
-  collaboratorId: string;
-  collaboratorName: string;
-  items: MonthAnomalyRecord[];
-  anomalyCount: number;
-  analysisCount: number;
-};
 
 const WEEKDAY_LABELS = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
 const INITIAL_VISIBLE_ROWS = 36;
@@ -278,12 +262,6 @@ function MonthlyAnomalyCard({
       </p>
     </button>
   );
-}
-
-function anomalyPriorityScore(item: MonthAnomalyRecord): number {
-  const base = item.kind === "anomaly" ? 0 : 1;
-  const missingMinutes = item.record.operational_missing_minutes;
-  return base * 100000 - missingMinutes;
 }
 
 function buildMonthDays(monthValue: string): DayColumn[] {
@@ -970,15 +948,7 @@ export default function PresenzeGiornalierePage() {
           };
         })
         .filter((item): item is MonthAnomalyRecord => item !== null)
-        .sort((a, b) => {
-          const priorityOrder = anomalyPriorityScore(a) - anomalyPriorityScore(b);
-          if (priorityOrder !== 0) return priorityOrder;
-          const dateOrder = a.record.work_date.localeCompare(b.record.work_date);
-          if (dateOrder !== 0) return dateOrder;
-          const firstCollaborator = collaboratorMap.get(a.record.collaborator_id)?.name ?? "";
-          const secondCollaborator = collaboratorMap.get(b.record.collaborator_id)?.name ?? "";
-          return firstCollaborator.localeCompare(secondCollaborator);
-        }),
+        .sort(anomalyPanelComparisons(collaboratorMap).month),
     [collaboratorMap, records],
   );
 
@@ -999,10 +969,7 @@ export default function PresenzeGiornalierePage() {
     [anomalyPanelRecords],
   );
   const anomalyPanelCounts = useMemo(
-    () => ({
-      anomaly: monthAnomalyRecords.filter((item) => item.kind === "anomaly").length,
-      analysis: monthAnomalyRecords.filter((item) => item.kind === "analysis").length,
-    }),
+    () => countAnomalyPanelRecords(monthAnomalyRecords),
     [monthAnomalyRecords],
   );
   const firstAnomalyPanelRecord = useMemo(
@@ -1010,56 +977,11 @@ export default function PresenzeGiornalierePage() {
     [anomalyPanelRecords],
   );
   const anomalyPanelDayGroups = useMemo<AnomalyPanelDayGroup[]>(
-    () => {
-      const groups = new Map<string, MonthAnomalyRecord[]>();
-      for (const item of anomalyPanelRecords) {
-        const current = groups.get(item.record.work_date) ?? [];
-        current.push(item);
-        groups.set(item.record.work_date, current);
-      }
-      return Array.from(groups.entries())
-        .sort((a, b) => a[0].localeCompare(b[0]))
-        .map(([iso, items]) => ({
-          iso,
-          items: [...items].sort((a, b) => {
-            const priorityOrder = anomalyPriorityScore(a) - anomalyPriorityScore(b);
-            if (priorityOrder !== 0) return priorityOrder;
-            const firstCollaborator = collaboratorMap.get(a.record.collaborator_id)?.name ?? "";
-            const secondCollaborator = collaboratorMap.get(b.record.collaborator_id)?.name ?? "";
-            return firstCollaborator.localeCompare(secondCollaborator);
-          }),
-          anomalyCount: items.filter((item) => item.kind === "anomaly").length,
-          analysisCount: items.filter((item) => item.kind === "analysis").length,
-        }));
-    },
+    () => buildAnomalyDayGroups(anomalyPanelRecords, collaboratorMap),
     [anomalyPanelRecords, collaboratorMap],
   );
   const anomalyPanelCollaboratorGroups = useMemo<AnomalyPanelCollaboratorGroup[]>(
-    () => {
-      const groups = new Map<string, MonthAnomalyRecord[]>();
-      for (const item of anomalyPanelRecords) {
-        const current = groups.get(item.record.collaborator_id) ?? [];
-        current.push(item);
-        groups.set(item.record.collaborator_id, current);
-      }
-      return Array.from(groups.entries())
-        .map(([collaboratorId, items]) => ({
-          collaboratorId,
-          collaboratorName: collaboratorMap.get(collaboratorId)?.name ?? collaboratorId,
-          items: [...items].sort((a, b) => {
-            const priorityOrder = anomalyPriorityScore(a) - anomalyPriorityScore(b);
-            if (priorityOrder !== 0) return priorityOrder;
-            return a.record.work_date.localeCompare(b.record.work_date);
-          }),
-          anomalyCount: items.filter((item) => item.kind === "anomaly").length,
-          analysisCount: items.filter((item) => item.kind === "analysis").length,
-        }))
-        .sort((a, b) => {
-          if (b.anomalyCount !== a.anomalyCount) return b.anomalyCount - a.anomalyCount;
-          if (b.items.length !== a.items.length) return b.items.length - a.items.length;
-          return a.collaboratorName.localeCompare(b.collaboratorName);
-        });
-    },
+    () => buildAnomalyCollaboratorGroups(anomalyPanelRecords, collaboratorMap),
     [anomalyPanelRecords, collaboratorMap],
   );
 
