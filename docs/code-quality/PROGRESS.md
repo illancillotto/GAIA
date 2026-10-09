@@ -1,5 +1,22 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R14 original validation live; R15 bounded Capacitas readiness
+
+- Previous goal turn PROGRESS: R13 certified integration/closure68996649clean,
+  actual final-clean main55a ratchetPASS0. Global objective ACTIVE/INCOMPLETE,
+  extreme tail5>300 remains; main concurrent9f85diff0d54status unchanged.
+- R14 original new-spec attempt1 16ORMFAIL/40nestedPASS on newly authored partially
+  loaded vars snapshot. Fixture refresh before SQL observer corrected only new
+  test, exact5SELECT/fullresponse/no-write preserved; attempt2 56PASS. Defensive
+  actual-source nested AST uses synthetic filename, cannot inflate runtimecov.
+  Fresh sevenunion/fullanalyticscoverage LIVE native session12055/PID1942975;
+  do not restart for timeout or compete with its exclusive heavy window.
+- R15 new exclusive registry/clean dedicated author+review branches/worktrees
+  from68996649, before agent creation. Four coherent create-job lifecycles ONLY,
+  static/test-reading/exterior design now; rendered tests/fullscan/type/coverage
+  wait explicit heavy transfer. No runtime/test/config edits authorized. Frozen
+  source8111/all21specs/policy and existing command/monitor/execution helpers.
+
 ## 2026-10-09 — R13 certified source sequentially integrated
 
 - Final181dac58 accepted IMPROVED; fresh492/21full2file100%, wholefrontend4671/
