@@ -72,6 +72,12 @@ Final post-report ratchet and platform graph refresh follow these closure docs;
 their actual results belong to retained logs, not this stated intent. R7 alone
 is closed; global campaign ACTIVE/INCOMPLETE, principal403 remains extreme.
 
+Post-report root ratchet/main terminalPASS0/exit0. Finalplatformdocs refresh
+terminalexit0,chunk1/1done,zero semantic failures,432nodes502edges81communities;
+durable `20261009-r7-presenze/coordinator/graph-platform-final.log`. No docs
+corpus edit follows that R7 refresh. Governanceclosure `c9216c5a`, independent
+report integrated `c77d9317`, main untouched.
+
 ## 2026-10-09 — R6 Presenze daily presentation, verified checkpoint
 
 Source `56c46570` independently approved by `c1475bb2`, integrated exactly as

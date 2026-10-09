@@ -1,0 +1,48 @@
+# R8 Presenze daily-record presentation — ownership and design gate
+
+Initial integration `c9216c5a`, clean; main/authoritative merge-base
+`55a1b1d35911451e018b662c2acc450bf5994ea2`. R7 owners and processes terminal,
+full-file coverage100%, fullfrontend4428PASS/buildPASS/fullE2E54PASS7oldSKIP,
+post-report ratchetmainPASS0. Global campaign remains ACTIVE/INCOMPLETE.
+Main dirty backend/Presenze/Ruolo/docs work is not copied or modified.
+
+| Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
+|---|---|---|---|---|---|---|
+| Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md | Scope/design approval and integration gates | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
+| R8 author | Presenze UI | frontend/src/app/presenze/giornaliere/page.tsx; frontend/src/app/presenze/giornaliere/record-presentation-model.ts; frontend/tests/unit/presenze-giornaliere-r8.test.tsx; reports/code-quality/SLICE_R8_PRESENZE_PRESENTATION_2026-10-09.md; domain-docs/presenze/docs/RECORD_PRESENTATION_REFACTOR_2026-10-09.md | Shared daily-record display projection, design only until approved | GAIA-campaign-20261009-r8-presenze-presentation | refactor/complexity-r8-presenze-presentation | PLANNED |
+| R8 reviewer | Independent review | reports/code-quality/REVIEW_R8_PRESENZE_PRESENTATION_2026-10-09.md only; all source read-only | Original characterization/differential oracle and exact candidate review | GAIA-campaign-20261009-r8-presenze-review | review/complexity-r8-presenze-presentation | PLANNED |
+| R8 verifier | Independent certification | reports/code-quality/VERIFICATION_R8_PRESENZE_PRESENTATION_2026-10-09.md only; all source read-only | Frozen-source coverage/fullfrontend/build/browser/ratchet | GAIA-campaign-20261009-r8-presenze-verification | verify/complexity-r8-presenze-presentation | PLANNED |
+
+## Design-only initial assignment
+
+Inspect the still-extreme principal403cognitive/356cyclomatic/2020LOC, identify
+one coherent shared daily-record presentation responsibility across matrix,
+collaborator modal and detail rendering, and propose concrete simplification
+before editing runtime. Avoid another nominal JSX move or giant hook. Prefer
+removing repeated branching/conditions through typed pure domain projections.
+Original formatting, null/zero/NaN behavior, icon precedence, DOM/accessibility,
+input controlledness, permissions, commands, API, identity and all React hook
+order/dependencies/cleanup must remain equivalent. Parent retains lifecycle
+and mutation flows. New projections must be genuinely small and below error
+thresholds; no complexity laundering or component explosion.
+
+Desired direction: substantially lower the extreme tail, ideally principal
+below300 within this responsibility; report feasibility honestly rather than
+force metric tricks. Aggregate cognitive/cyclomatic of every affected callable
+must actually fall. Design must state precise original branches/call sites,
+invariants, expected aggregate benefit and full-file test matrix. Coordinator
+must explicitly approve design and original characterization before runtime.
+If this scope is not coherent, report a bounded alternative without editing.
+
+## Gates and stop condition
+
+Analyze current worktrees/status/log and metrics before edits. First execute
+original characterization; then100% statement/branch on every complete runtime
+file modified, focused tests/typecheck/lint, measured before/after including
+all helpers, ratchetmainPASS0, independent source review, and final integration
+gates. Stop after assigned responsibility. No shared lib/hooks/UI/layout,
+backend/worker, package/config/tooling/baseline/threshold/exclusion/ignore changes.
+No main commits/merge/push/PR; exact reviewed campaign commits/cherry-picks only.
+Unknown equivalence, active concurrent source edits or unexplained failures
+stop the slice. CoverageCapacitasFAIL and historical30 remain separate.
+Durable evidence `~/.cache/gaia-campaign/20261009-r8-presenze/`.
