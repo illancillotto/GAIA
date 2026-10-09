@@ -13,7 +13,7 @@ Main dirty backend/Presenze/Ruolo/documentation concurrent work is not an input.
 | Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md | Exact design approval, ownership, integration gates | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
 | R9 author — characterization complete | Presenze UI tests | frontend/tests/unit/presenze-giornaliere-r9.test.tsx | Frozen original characterization8833a587, integrated4e903a83 | GAIA-campaign-20261009-r9-presenze-mutations | refactor/complexity-r9-presenze-mutations | MERGED |
 | Coordinator — R9 implementation | Presenze UI | frontend/src/app/presenze/giornaliere/page.tsx; reports/code-quality/SLICE_R9_PRESENZE_MUTATIONS_2026-10-09.md; domain-docs/presenze/docs/DAILY_RECORD_MUTATIONS_REFACTOR_2026-10-09.md | Apply the independently characterized refined local design, measure and hand off exact candidate | GAIA-campaign-20261009-r9-presenze-mutations | refactor/complexity-r9-presenze-mutations | ACTIVE |
-| R9 source reviewer — dedicated task | Independent review | reports/code-quality/REVIEW_R9_PRESENZE_MUTATIONS_2026-10-09.md only; source read-only | Original review complete; independently review frozen actual named candidate | GAIA-campaign-20261009-r9-presenze-review | review/complexity-r9-presenze-mutations | PLANNED |
+| R9 source reviewer — dedicated task | Independent review | reports/code-quality/REVIEW_R9_PRESENZE_MUTATIONS_2026-10-09.md only; source read-only | Original review complete; independently review frozen actual named candidate | GAIA-campaign-20261009-r9-presenze-review | review/complexity-r9-presenze-mutations | ACTIVE |
 | R9 verifier | Independent final certification | reports/code-quality/VERIFICATION_R9_PRESENZE_MUTATIONS_2026-10-09.md only; source read-only | Frozen-source full-file coverage/fullfrontend/build/browser/ratchet | GAIA-campaign-20261009-r9-presenze-verification | verify/complexity-r9-presenze-mutations | PLANNED |
 
 ## Initial assignment: analyze/design only
@@ -153,3 +153,8 @@ Independent original reviewer task is terminal. Actual-source review transfers
 sequentially to a dedicated task using the same clean review worktree9afd3bc5;
 only its report is writable. The source candidate remains frozen. No runtime
 commit/integration or verifier final certification before review completion.
+
+Dedicated actual-source reviewer task started after this registry:
+`01a12041-d4a7-7431-a864-0c3fd0b21c5b`. Approval/input is the durable plaintext
+`CANDIDATE_REVIEW_APPROVAL.md`; original reviewer finished before ownership
+transfer. One report owner, runtime/test read-only, no duplicate source branch.
