@@ -49,6 +49,10 @@
   Verifierfullfrontendunit terminal4428PASS300files0error/failure/skip,exit0;
   rootJUnit4428countverified/top30rankingallrowsASTexact. Freshbuild/browser
   ancora pending, non dedottiPASS; requestedrootfinalreport/ratchet/checkrunning.
+- Rootfinalreport richiesto/tmp conservatodurabileexit0/ASTobjectsinteramente
+  identici integrated, finalratchetmainPASS0/globalcheckFAIL30Makeexit2exact
+  historicalfindingobjects. VerifierfreshbuildPASS56,546s/ownfrozenproduction,
+  pertinentPresenzeE2E7PASS0skip; fullE2E522231/session82077LIVE, noPASSdedotto.
 
 ## 2026-10-09 — R6 Presenze daily presentation, bounded slice
 

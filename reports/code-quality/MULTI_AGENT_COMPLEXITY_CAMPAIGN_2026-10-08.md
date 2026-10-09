@@ -49,6 +49,12 @@ Top30/current report rows exactly match integrated AST. Forcedfrontend graph
 6014nodes12596edges239communities; Presenze docs68nodes70edges13communities,
 chunk1/1done and zero semantic failures. Graph is maintenance, not metric proof.
 
+Root finalreport at `/tmp/gaia-complexity-final.json`/`.md` is retained durably;
+completeAST matches integrated runtime. Final ratchet/mainPASS0; final global
+checkFAIL30/Makeexit2, identical historical finding objects. Fresh independent
+build:cleanPASS56.546s/exit0; pertinentPresenzeE2E7PASS0skip. FullE2E remains
+live and is not claimedPASS yet; final verifier report/cleanup pending.
+
 ## 2026-10-09 — R6 Presenze daily presentation, verified checkpoint
 
 Source `56c46570` independently approved by `c1475bb2`, integrated exactly as
