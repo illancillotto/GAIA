@@ -53,6 +53,16 @@
  0flaky/exit0,retries0/defaultmotion/timeoutsinvariati. RootleggeJSON/exits,
   non deduce successo dal solo log. FullunitJUnit4417zeroerror/failure confermato.
   Certificazione finale/report/cleanupstack ancora pendenti; goalglobale aperto.
+- Terminalclosure: verifierreport-only3486b24eAPPROVED integrato3b565a50;
+  sourceverifierc03ee32f duplicata non integrata. Tutte suite/processi terminali,
+  stackowned rimosso/credenzialieliminate/porte18090e13010libere; cleanupJSON
+  riverificato. Rootfinalreport richiesto su/tmp conservatodurabile, ASTcompleti
+  identici alla freeze; finalratchetmainPASS0 e finalglobalcheckFAIL30Makeexit2
+  findingobjects esatti. RegistrytuttiMERGED solo campaignbranch, nessunmainmerge.
+  IMPROVEDcognitive-43/cyclomatic-31, LOCgrowth dichiarata. Goalglobale ancora
+  ACTIVE/INCOMPLETE;5UI>300/17callable>200/CapacitascoverageFAIL restano aperti.
+  Ultimorootratchet dopo integrazione report e Graphifyplatform finale richiesti
+  dopo queste note; esiti nei logfinali, non dedotti da questa intenzione.
 
 ## 2026-10-09 — R5 anomalies, una responsabilità di identità orphan
 

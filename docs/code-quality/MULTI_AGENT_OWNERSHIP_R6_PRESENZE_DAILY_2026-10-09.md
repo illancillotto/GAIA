@@ -8,10 +8,10 @@ no source change. The global campaign is ACTIVE/INCOMPLETE.
 
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 |---|---|---|---|---|---|---|
-| Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md | Scope approval, exclusive ownership, integration gates | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
+| Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md | Scope approval, exclusive ownership, integration gates | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | MERGED |
 | R6 author | Presenze frontend | frontend/src/app/presenze/giornaliere/page.tsx; frontend/src/app/presenze/giornaliere/daily-cell-model.ts; frontend/tests/unit/presenze-giornaliere-r6.test.tsx; reports/code-quality/SLICE_R6_PRESENZE_DAILY_2026-10-09.md; domain-docs/presenze/docs/DAILY_CELL_REFACTOR_2026-10-09.md | Ordered indicators and shared KM initial/disabled presentation; commands and lifecycle retained | GAIA-campaign-20261009-r6-presenze-daily | refactor/complexity-r6-presenze-daily | MERGED |
 | R6 reviewer | Independent integration review | reports/code-quality/REVIEW_R6_PRESENZE_DAILY_2026-10-09.md only; all source read-only | Verify design, invariants, aggregate reduction and exact source before authorized integration | GAIA-campaign-20261009-r6-presenze-review | review/complexity-r6-presenze-daily | MERGED |
-| R6 verifier | Independent final verification | reports/code-quality/VERIFICATION_R6_PRESENZE_DAILY_2026-10-09.md only; all source read-only | Frozen-source full-file coverage, focused/full frontend gates, ratchet | GAIA-campaign-20261009-r6-presenze-verification | verify/complexity-r6-presenze-daily | ACTIVE |
+| R6 verifier | Independent final verification | reports/code-quality/VERIFICATION_R6_PRESENZE_DAILY_2026-10-09.md only; all source read-only | Frozen-source full-file coverage, focused/full frontend gates, ratchet | GAIA-campaign-20261009-r6-presenze-verification | verify/complexity-r6-presenze-daily | MERGED |
 
 ## Gates and stop condition
 
@@ -83,3 +83,15 @@ MERGED means campaign-only, never main. Final verifier source `c03ee32f`
 matches author, focused coverage process started08:21:36UTC/npmPID370800,
 session46003; completion not inferred until terminal evidence. Full frontend
 unit/build/browser gates belong only to verifier and are pending.
+
+## Terminal closure — supersedes pending notes above
+
+Independent verifier report-only source `3486b24e` approved and integrated,
+never its duplicate source `c03ee32f`. Full frontend4417PASS/0skip, smoke18PASS,
+typecheck/lintPASS3legacywarnings, freshbuildPASS, pertinentE2E7PASS and
+fullE2E54PASS7existingSKIP0failure/flaky/retries. Both modified runtime files
+100% statements/branches. Root finalreport objects match frozen source,
+ratchetmainPASS0; globalcheckFAIL30Makeexit2 exact historical finding objects.
+All agents/processes terminal, overlap0, owned stack stopped and credentials
+removed. Ports18090/13010 free. No baseline/threshold/scope inflation.
+This is one modest IMPROVED slice, not global completion or50% Presenze target.

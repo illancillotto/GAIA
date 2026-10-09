@@ -1,6 +1,6 @@
 # GAIA — Multi-Agent Complexity Campaign
 
-## 2026-10-09 — R6 Presenze daily presentation, integration in verification
+## 2026-10-09 — R6 Presenze daily presentation, verified checkpoint
 
 Source `56c46570` independently approved by `c1475bb2`, integrated exactly as
 `cdfb8f96`; review report-only `fb3e8b08`. Single responsibility: ordered daily
@@ -55,6 +55,17 @@ zero failures/flaky**,68.596s,exit0,retries0/defaultmotion. Root reads actual
 JSON/exits and confirms fullunitJUnit4417zeroerrors/failures. Exact final
 verification report, disposable-stack cleanup and final root/doc closure are
 still pending; this does not certify the global campaign complete.
+
+**Terminal closure supersedes every pending R6 note above.** Independent final
+report-only `3486b24e` accepted/integrated `3b565a50`; duplicate verifier source
+was not integrated. All suites/build/report processes terminal, disposable
+stack removed, credentials deleted, ports18090/13010free; cleanupJSON verified.
+Root final report requested at `/tmp/gaia-complexity-final.json`/`.md` retained
+durably; complete callable/file objects match frozen integrated source.
+Final ratchet/mainPASS0/globalcheckFAIL30Makeexit2 with exactly unchanged
+historical finding objects. No baseline inflation. Final docs refresh follows
+closure; actual graph result belongs to its log, not this stated intent.
+This closes only R6: the global campaign remains **ACTIVE/INCOMPLETE**.
 
 ## 2026-10-09 — R5 orphan operator identity, checkpoint verificato
 
