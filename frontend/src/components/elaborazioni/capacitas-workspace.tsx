@@ -68,6 +68,107 @@ import type {
   CapacitasTerreniJob,
 } from "@/types/api";
 
+
+type CapacitasMonitorFamily = "terreni" | "particelle" | "history" | "incass";
+
+interface CapacitasMonitoredJob {
+  id: number;
+  status: string;
+}
+
+interface CapacitasJobMonitor<Job extends CapacitasMonitoredJob> {
+  family: CapacitasMonitorFamily;
+  list: (token: string) => Promise<Job[]>;
+  apply: (jobs: Job[], silent: boolean) => void;
+  setSessionExpired: (expired: boolean) => void;
+  setLoading: (loading: boolean) => void;
+  setError: (error: string | null) => void;
+  setStatusMessage: (message: string) => void;
+}
+
+const MONITOR_MESSAGES = {
+  terreni: {
+    expired: "Sessione GAIA scaduta: il monitor Terreni si ferma, ma i job backend gia avviati possono continuare.",
+    resume: "Rientra in GAIA per riprendere il polling del monitor Terreni.",
+    loadError: "Errore caricamento job Terreni",
+  },
+  particelle: {
+    expired: "Sessione GAIA scaduta: il monitor particelle si ferma, ma i job backend gia avviati possono continuare.",
+    resume: "Rientra in GAIA per riprendere il polling della sync progressiva particelle.",
+    loadError: "Errore caricamento job particelle",
+  },
+  history: {
+    expired: "Sessione GAIA scaduta: il monitor storico si ferma, ma i job backend gia avviati possono continuare.",
+    resume: "Rientra in GAIA per riprendere il polling del monitor storico anagrafico.",
+    loadError: "Errore caricamento job storico anagrafico",
+  },
+  incass: {
+    expired: "Sessione GAIA scaduta: il monitor avvisi si ferma, ma i job backend gia avviati possono continuare.",
+    resume: "Rientra in GAIA per riprendere il polling del monitor avvisi.",
+    loadError: "Errore caricamento job avvisi",
+  },
+};
+
+const TERMINAL_STATUSES = new Set(["succeeded", "completed_with_errors", "failed"]);
+
+function expireCapacitasJobMonitor<Job extends CapacitasMonitoredJob>(monitor: CapacitasJobMonitor<Job>): void {
+  monitor.setSessionExpired(true);
+  monitor.setError(MONITOR_MESSAGES[monitor.family].expired);
+  monitor.setStatusMessage(MONITOR_MESSAGES[monitor.family].resume);
+}
+
+async function refreshCapacitasJobMonitor<Job extends CapacitasMonitoredJob>(
+  monitor: CapacitasJobMonitor<Job>,
+  silent: boolean,
+): Promise<void> {
+  const token = getStoredAccessToken();
+  if (!token) {
+    expireCapacitasJobMonitor(monitor);
+    return;
+  }
+  if (!silent) {
+    monitor.setLoading(true);
+  }
+  try {
+    const nextJobs = await monitor.list(token);
+    monitor.setSessionExpired(false);
+    monitor.apply(nextJobs, silent);
+    if (!silent) {
+      monitor.setError(null);
+    }
+  } catch (loadError) {
+    if (isAuthError(loadError)) {
+      expireCapacitasJobMonitor(monitor);
+      return;
+    }
+    if (!silent) {
+      monitor.setError(loadError instanceof Error ? loadError.message : MONITOR_MESSAGES[monitor.family].loadError);
+    }
+  } finally {
+    if (!silent) {
+      monitor.setLoading(false);
+    }
+  }
+}
+
+function getCapacitasInFlightJobIds(jobs: readonly CapacitasMonitoredJob[]): Set<number> {
+  return new Set(
+    jobs.filter((job) => job.status === "pending" || job.status === "processing" || job.status === "queued_resume").map((job) => job.id),
+  );
+}
+
+function findCapacitasCompletedJob<Job extends CapacitasMonitoredJob>(
+  jobs: readonly Job[],
+  previous: ReadonlySet<number>,
+): Job | undefined {
+  return jobs.find((job) => previous.has(job.id) && TERMINAL_STATUSES.has(job.status));
+}
+
+function hasCapacitasCompletedJob(jobs: readonly CapacitasMonitoredJob[], previous: ReadonlySet<number>): boolean {
+  return jobs.some((job) => previous.has(job.id) && TERMINAL_STATUSES.has(job.status));
+}
+
+
 const JOB_POLL_INTERVAL_MS = 15000;
 // Gli avvisi inCASS restano "in coda" per ore quando si lancia un harvest massivo
 // e la lista non è paginata: allunghiamo il polling e rallentiamo ancora quando
@@ -747,198 +848,96 @@ export function ElaborazioniCapacitasWorkspace({
     }
   }
 
-  async function loadTerreniJobs(silent = false): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token) {
-      setTerreniMonitorSessionExpired(true);
-      setTerreniError("Sessione GAIA scaduta: il monitor Terreni si ferma, ma i job backend gia avviati possono continuare.");
-      setTerreniStatusMessage("Rientra in GAIA per riprendere il polling del monitor Terreni.");
-      return;
-    }
+  function loadTerreniJobs(silent = false): Promise<void> {
+    return refreshCapacitasJobMonitor({
+      family: "terreni",
+      list: listCapacitasTerreniJobs,
+      apply: (nextJobs: CapacitasTerreniJob[], silent: boolean) => {
+        const prevInFlight = inFlightJobIds.current;
 
-    if (!silent) {
-      setTerreniJobsLoading(true);
-    }
-    try {
-      const nextJobs = await listCapacitasTerreniJobs(token);
-      setTerreniMonitorSessionExpired(false);
-      const prevInFlight = inFlightJobIds.current;
-      const terminalStatuses = new Set(["succeeded", "completed_with_errors", "failed"]);
-
-      if (silent && prevInFlight.size > 0) {
-        const justCompleted = nextJobs.find(
-          (j) => prevInFlight.has(j.id) && terminalStatuses.has(j.status),
-        );
-        if (justCompleted) {
-          setTerreniCompletedJobModal(justCompleted);
+        if (silent && prevInFlight.size > 0) {
+          const justCompleted = findCapacitasCompletedJob(nextJobs, prevInFlight);
+          if (justCompleted) {
+            setTerreniCompletedJobModal(justCompleted);
+          }
         }
-      }
 
-      inFlightJobIds.current = new Set(
-        nextJobs.filter((j) => j.status === "pending" || j.status === "processing" || j.status === "queued_resume").map((j) => j.id),
-      );
+        inFlightJobIds.current = getCapacitasInFlightJobIds(nextJobs);
 
-      setTerreniJobs(nextJobs);
-      if (!silent) {
-        setTerreniError(null);
-      }
-    } catch (loadError) {
-      if (isAuthError(loadError)) {
-        setTerreniMonitorSessionExpired(true);
-        setTerreniError("Sessione GAIA scaduta: il monitor Terreni si ferma, ma i job backend gia avviati possono continuare.");
-        setTerreniStatusMessage("Rientra in GAIA per riprendere il polling del monitor Terreni.");
-        return;
-      }
-      if (!silent) {
-        setTerreniError(loadError instanceof Error ? loadError.message : "Errore caricamento job Terreni");
-      }
-    } finally {
-      if (!silent) {
-        setTerreniJobsLoading(false);
-      }
-    }
+        setTerreniJobs(nextJobs);
+      },
+      setSessionExpired: setTerreniMonitorSessionExpired,
+      setLoading: setTerreniJobsLoading,
+      setError: setTerreniError,
+      setStatusMessage: setTerreniStatusMessage,
+    }, silent);
   }
 
-  async function loadParticelleJobs(silent = false): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token) {
-      setParticelleMonitorSessionExpired(true);
-      setParticelleError("Sessione GAIA scaduta: il monitor particelle si ferma, ma i job backend gia avviati possono continuare.");
-      setParticelleStatusMessage("Rientra in GAIA per riprendere il polling della sync progressiva particelle.");
-      return;
-    }
+  function loadParticelleJobs(silent = false): Promise<void> {
+    return refreshCapacitasJobMonitor({
+      family: "particelle",
+      list: listCapacitasParticelleSyncJobs,
+      apply: (nextJobs: CapacitasParticelleSyncJob[], silent: boolean) => {
+        const prevInFlight = particelleInFlightJobIds.current;
 
-    if (!silent) {
-      setParticelleJobsLoading(true);
-    }
-    try {
-      const nextJobs = await listCapacitasParticelleSyncJobs(token);
-      setParticelleMonitorSessionExpired(false);
-      const prevInFlight = particelleInFlightJobIds.current;
-      const terminalStatuses = new Set(["succeeded", "completed_with_errors", "failed"]);
+        particelleInFlightJobIds.current = getCapacitasInFlightJobIds(nextJobs);
 
-      particelleInFlightJobIds.current = new Set(
-        nextJobs.filter((job) => job.status === "pending" || job.status === "processing" || job.status === "queued_resume").map((job) => job.id),
-      );
-
-      setParticelleJobs(nextJobs);
-      if (!silent && prevInFlight.size > 0 && nextJobs.some((job) => prevInFlight.has(job.id) && terminalStatuses.has(job.status))) {
-        setParticelleStatusMessage("Sync progressiva particelle aggiornata.");
-      }
-      if (!silent) {
-        setParticelleError(null);
-      }
-    } catch (loadError) {
-      if (isAuthError(loadError)) {
-        setParticelleMonitorSessionExpired(true);
-        setParticelleError("Sessione GAIA scaduta: il monitor particelle si ferma, ma i job backend gia avviati possono continuare.");
-        setParticelleStatusMessage("Rientra in GAIA per riprendere il polling della sync progressiva particelle.");
-        return;
-      }
-      if (!silent) {
-        setParticelleError(loadError instanceof Error ? loadError.message : "Errore caricamento job particelle");
-      }
-    } finally {
-      if (!silent) {
-        setParticelleJobsLoading(false);
-      }
-    }
+        setParticelleJobs(nextJobs);
+        if (!silent && prevInFlight.size > 0 && hasCapacitasCompletedJob(nextJobs, prevInFlight)) {
+          setParticelleStatusMessage("Sync progressiva particelle aggiornata.");
+        }
+      },
+      setSessionExpired: setParticelleMonitorSessionExpired,
+      setLoading: setParticelleJobsLoading,
+      setError: setParticelleError,
+      setStatusMessage: setParticelleStatusMessage,
+    }, silent);
   }
 
-  async function loadHistoryJobs(silent = false): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token) {
-      setHistoryMonitorSessionExpired(true);
-      setHistoryError("Sessione GAIA scaduta: il monitor storico si ferma, ma i job backend gia avviati possono continuare.");
-      setHistoryStatusMessage("Rientra in GAIA per riprendere il polling del monitor storico anagrafico.");
-      return;
-    }
+  function loadHistoryJobs(silent = false): Promise<void> {
+    return refreshCapacitasJobMonitor({
+      family: "history",
+      list: listCapacitasAnagraficaHistoryJobs,
+      apply: (nextJobs: CapacitasAnagraficaHistoryImportJob[], silent: boolean) => {
+        const prevInFlight = historyInFlightJobIds.current;
 
-    if (!silent) {
-      setHistoryJobsLoading(true);
-    }
-    try {
-      const nextJobs = await listCapacitasAnagraficaHistoryJobs(token);
-      setHistoryMonitorSessionExpired(false);
-      const prevInFlight = historyInFlightJobIds.current;
-      const terminalStatuses = new Set(["succeeded", "completed_with_errors", "failed"]);
+        historyInFlightJobIds.current = getCapacitasInFlightJobIds(nextJobs);
+        setHistoryJobs(nextJobs);
 
-      historyInFlightJobIds.current = new Set(
-        nextJobs.filter((job) => job.status === "pending" || job.status === "processing" || job.status === "queued_resume").map((job) => job.id),
-      );
-      setHistoryJobs(nextJobs);
+        const latestCompleted = nextJobs.find((job) => TERMINAL_STATUSES.has(job.status) && isHistoryImportJobResult(job.result_json));
+        if (latestCompleted && isHistoryImportJobResult(latestCompleted.result_json)) {
+          setHistoryResult(latestCompleted.result_json);
+        }
 
-      const latestCompleted = nextJobs.find((job) => terminalStatuses.has(job.status) && isHistoryImportJobResult(job.result_json));
-      if (latestCompleted && isHistoryImportJobResult(latestCompleted.result_json)) {
-        setHistoryResult(latestCompleted.result_json);
-      }
-
-      if (!silent && prevInFlight.size > 0 && nextJobs.some((job) => prevInFlight.has(job.id) && terminalStatuses.has(job.status))) {
-        setHistoryStatusMessage("Storico anagrafico aggiornato.");
-      }
-      if (!silent) {
-        setHistoryError(null);
-      }
-    } catch (loadError) {
-      if (isAuthError(loadError)) {
-        setHistoryMonitorSessionExpired(true);
-        setHistoryError("Sessione GAIA scaduta: il monitor storico si ferma, ma i job backend gia avviati possono continuare.");
-        setHistoryStatusMessage("Rientra in GAIA per riprendere il polling del monitor storico anagrafico.");
-        return;
-      }
-      if (!silent) {
-        setHistoryError(loadError instanceof Error ? loadError.message : "Errore caricamento job storico anagrafico");
-      }
-    } finally {
-      if (!silent) {
-        setHistoryJobsLoading(false);
-      }
-    }
+        if (!silent && prevInFlight.size > 0 && hasCapacitasCompletedJob(nextJobs, prevInFlight)) {
+          setHistoryStatusMessage("Storico anagrafico aggiornato.");
+        }
+      },
+      setSessionExpired: setHistoryMonitorSessionExpired,
+      setLoading: setHistoryJobsLoading,
+      setError: setHistoryError,
+      setStatusMessage: setHistoryStatusMessage,
+    }, silent);
   }
 
-  async function loadIncassJobs(silent = false): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token) {
-      setIncassMonitorSessionExpired(true);
-      setIncassError("Sessione GAIA scaduta: il monitor avvisi si ferma, ma i job backend gia avviati possono continuare.");
-      setIncassStatusMessage("Rientra in GAIA per riprendere il polling del monitor avvisi.");
-      return;
-    }
+  function loadIncassJobs(silent = false): Promise<void> {
+    return refreshCapacitasJobMonitor({
+      family: "incass",
+      list: (token) => listCapacitasInCassSyncJobs(token, { limit: 300 }),
+      apply: (nextJobs: CapacitasInCassSyncJobListItem[], silent: boolean) => {
+        const prevInFlight = incassInFlightJobIds.current;
 
-    if (!silent) {
-      setIncassJobsLoading(true);
-    }
-    try {
-      const nextJobs = await listCapacitasInCassSyncJobs(token, { limit: 300 });
-      setIncassMonitorSessionExpired(false);
-      const prevInFlight = incassInFlightJobIds.current;
-      const terminalStatuses = new Set(["succeeded", "completed_with_errors", "failed"]);
-
-      incassInFlightJobIds.current = new Set(
-        nextJobs.filter((job) => job.status === "pending" || job.status === "processing" || job.status === "queued_resume").map((job) => job.id),
-      );
-      setIncassJobs(nextJobs);
-      if (!silent && prevInFlight.size > 0 && nextJobs.some((job) => prevInFlight.has(job.id) && terminalStatuses.has(job.status))) {
-        setIncassStatusMessage("Sync avvisi aggiornata.");
-      }
-      if (!silent) {
-        setIncassError(null);
-      }
-    } catch (loadError) {
-      if (isAuthError(loadError)) {
-        setIncassMonitorSessionExpired(true);
-        setIncassError("Sessione GAIA scaduta: il monitor avvisi si ferma, ma i job backend gia avviati possono continuare.");
-        setIncassStatusMessage("Rientra in GAIA per riprendere il polling del monitor avvisi.");
-        return;
-      }
-      if (!silent) {
-        setIncassError(loadError instanceof Error ? loadError.message : "Errore caricamento job avvisi");
-      }
-    } finally {
-      if (!silent) {
-        setIncassJobsLoading(false);
-      }
-    }
+        incassInFlightJobIds.current = getCapacitasInFlightJobIds(nextJobs);
+        setIncassJobs(nextJobs);
+        if (!silent && prevInFlight.size > 0 && hasCapacitasCompletedJob(nextJobs, prevInFlight)) {
+          setIncassStatusMessage("Sync avvisi aggiornata.");
+        }
+      },
+      setSessionExpired: setIncassMonitorSessionExpired,
+      setLoading: setIncassJobsLoading,
+      setError: setIncassError,
+      setStatusMessage: setIncassStatusMessage,
+    }, silent);
   }
 
   async function handleRerunJob(jobId: number): Promise<void> {
