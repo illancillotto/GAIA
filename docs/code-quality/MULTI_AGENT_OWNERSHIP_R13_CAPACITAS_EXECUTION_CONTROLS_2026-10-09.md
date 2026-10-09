@@ -2,6 +2,25 @@
 
 ## Current phase: ORIGINAL characterization authoring only, runtime frozen
 
+R14 ORIGINAL actual gates and integrity now terminal; frozen readiness2048764d,
+actual main55a ratchetPASS0 and all2136protected runtime/test/config paths exact.
+R14 explicitly RELEASES heavy window. Coordinator transfers exclusive heavy
+characterization test/type/lint/full-scan window to native successor
+`/root/r13_execution_characterization` NOW. It may execute the assigned original
+new-spec/full21union100%/type/lint/integrity/main55aratchet gates and freeze report.
+This supersedes all earlier wait-only restrictions; no other agent heavy replay
+before terminal publication/release. No runtime implementation is authorized.
+
+Original TUI author test-authoring turns failed terminal systemError then503
+upstream bridge cooling-down; authoritative status confirms no running turn,
+new spec/CHAR absent and no live owned heavy process. This is infrastructure,
+not a source/test failure. Do not repeatedly restart the broken bridge.
+Coordinator assigns a native successor `r13_execution_characterization` to the
+SAME existing author worktree/branch, no branch reset/recreation or readiness
+redo. It exclusively owns the new spec+CHAR report below. Old author is terminal
+and releases write ownership; readinessb920/candidate8111 stay frozen. Successor
+may author now but execution still waits explicit R14heavy-window release.
+
 Formal author readiness terminal SHA256
 `b920736b5cd1df8dfbf936a575b309465976c2f964a531b6327dae9f2be44f82`, candidate
 `8111c1a4658055f29a4c0b56fb1113f8b06677f9e1e622e33d596ae3d9514f48` frozen.
@@ -57,7 +76,7 @@ remain unchanged. No reset/stash/main merge/baseline generation or repair.
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; private approvals/checkpoints; later explicitly assigned closure docs | Ownership, phase gates, publication/integration custody | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
-| Author01a120c5-d838-7251-b33b-52a5f9b03b48 | Capacitas execution controls | ONLY new campaign-capacitas-execution-controls-r13.test.tsx and CHARACTERIZATION_R13 report; readinessb920/candidate8111/source/tests frozen | Author new ORIGINAL public characterization, no execution until heavy transfer | GAIA-campaign-20261009-r13-capacitas-execution-controls | refactor/complexity-r13-capacitas-execution-controls | ACTIVE |
+| /root/r13_execution_characterization (successor to terminal TUI author) | Capacitas execution controls | ONLY new campaign-capacitas-execution-controls-r13.test.tsx and CHARACTERIZATION_R13 report; readinessb920/candidate8111/source/tests frozen | Author new ORIGINAL public characterization, no execution until heavy transfer | GAIA-campaign-20261009-r13-capacitas-execution-controls | refactor/complexity-r13-capacitas-execution-controls | ACTIVE |
 | Reviewer01a120c7-5237-7f02-9fe7-352e65b9a6ed | Independent design/invariants | ONLY new reports/code-quality/REVIEW_READINESS_R13_CAPACITAS_EXECUTION_CONTROLS_2026-10-09.md | Read-only static design/DOM/state/metric review; no competing heavy tests | GAIA-campaign-20261009-r13-capacitas-execution-controls-review | review/complexity-r13-capacitas-execution-controls | ACTIVE |
 | Final verifier01a120f5-5536-7f11-bb61-089e5d03c923 | Future actual-source certification | Future new VERIFICATION_R13 report only after explicit source freeze | No active task in readiness phase | Dedicated clean final worktree later | Later | PLANNED |
 

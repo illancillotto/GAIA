@@ -1,6 +1,20 @@
 # R14 Operazioni — operator kilometre attribution readiness
 
-## Scope: ANALYZE / CHARACTERIZE / EXTERNAL DESIGN ONLY
+## Current phase: terminal author readiness, independent static review next
+
+Author terminal frozen report2048764dc493042f9f0df1c12d3ce2ad8e3bc6e332c7b609884ebf94f7653e34,
+external full candidate1ab2e68ebe466f4853ecc86fc0c4d28ca682a1671555a7b5c0d80c0ecc68651d.
+Fresh original148PASS0skip/full analytics661s290b100%, runtimeRuff/style/main55a
+ratchet PASS0; full-context external comparator0, actual route7cases and pure
+202cases/4traces equivalent;2136protected runtime/test/config paths exact.
+Diagnostic old-testRuffFAIL2 and rejected+2LOCcandidate/harness expectation failure
+retained. No runtime/tests changed, no actual improvement claim before source.
+Heavy window RELEASED to native R13 original characterization. R14 now ONLY
+bounded independent static readiness review; separate registry allocation below
+will authorize report-only successor before task activation. No heavy replay,
+test/runtime/source write, commit/pick/merge permitted here.
+
+## Previous phase: ANALYZE / CHARACTERIZE / EXTERNAL DESIGN ONLY
 
 R13 author ORIGINAL heavy gates are now authoritatively terminal476/20/full100%,
 project/relevant-type/lint0, heavy slot explicitly RELEASED. Coordinator transfers
@@ -27,8 +41,8 @@ no copying dirty main source, reset/stash/main merge, baseline operation.
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; private approvals | Ownership and serial heavy-window allocation | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
-| /root/r14_operazioni_operator_km | Operazioni analytics | ONLY new reports/code-quality/READINESS_R14_OPERAZIONI_OPERATOR_KM_2026-10-09.md; external prototypes. analytics.py reserved read-only in readiness | fuel_analytics._op_km ordered attribution only | GAIA-campaign-20261009-r14-operazioni-operator-km | refactor/complexity-r14-operazioni-operator-km | ACTIVE |
-| Future independent reviewer | Operazioni attribution review | Later exact new R14 review report | No active task/source ownership | Later dedicated clean worktree | Later | PLANNED |
+| /root/r14_operazioni_operator_km | Operazioni analytics | Frozen READINESS_R14 report2048764d; runtime/tests/candidate immutable | Author readiness terminal, heavy released | GAIA-campaign-20261009-r14-operazioni-operator-km | refactor/complexity-r14-operazioni-operator-km | READY_FOR_REVIEW |
+| /root/r14_operator_km_readiness_review | Operazioni attribution review | ONLY new reports/code-quality/REVIEW_READINESS_R14_OPERAZIONI_OPERATOR_KM_2026-10-09.md | Independent bounded static/oracle candidate/invariant/gap review; no heavy original replay while R13 window active | GAIA-campaign-20261009-r14-operazioni-operator-km-review | review/complexity-r14-operazioni-operator-km | ACTIVE |
 | Future distinct verifier | Actual-source certification | Later exact new R14 verification report | No active task before source review | Later dedicated clean worktree | Later | PLANNED |
 
 Registry generated BEFORE agent creation. No overlap with R13 workspace, existing

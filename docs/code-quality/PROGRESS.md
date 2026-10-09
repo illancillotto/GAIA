@@ -1,5 +1,38 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R14 terminal readiness; R13 native characterization execution
+
+- R14 readiness2048764d frozen, candidate1ab2e68e. Original148PASS/full661s290b100%,
+  actual make main55a ratchet0/runtimeRuff/stylePASS, full-context comparator0 and
+  all protected2136runtime/test/config paths exact. All author processes terminal,
+  heavy slot explicitly released; proposed54→33cognitive/nesting4→2 with unchanged
+  LOC remains external design, not achieved runtime improvement.
+- Fresh R14 independent reviewer registry/worktree created BEFORE activation;
+  ONLY REVIEW_READINESS_R14 writable, bounded source/ORM/order/copy/oracle review,
+  no pytest/coverage/fullscan. Formal prior failed variants/diagnostic Ruff remain.
+- Native R13 successor now exclusively holds new ORIGINAL spec/report and heavy
+  test/type/lint/fullscan window, current registry transfer explicit. Same existing
+  author worktree/branch, no reset/readiness redo or old-test edits. Formal R13
+  readinessb920/review1778/candidate8111 and runtimeb69 frozen. All states/branches
+  are original public UI; native keyboard remains later browser responsibility.
+- Source implementation still NOT allocated in either domain. Goal globalACTIVE/
+  INCOMPLETE; no baseline/threshold/scope/ignore change, main work intact.
+
+## 2026-10-09 — infrastructure recovery without restarting live work
+
+- Original R13 author characterization turn failed terminal upstream stream/
+  bridge cooling-down, resumed same allocation once then terminal503before tool
+  execution. Authoritative TUI systemError confirmed; new spec/CHAR absent and
+  no live process. Not a test/source failure, no retry represented as PASS.
+- Assign native successor to SAME author worktree/branch, registry updated before
+  task creation; prior TUI ownership released. Sole new original spec/CHAR remain
+  assigned, frozen readinessb920/candidate8111/all20existing tests/runtimeb69
+  preserved. No repeated restart of broken bridge or branch recreation.
+- R14 all actual original and external full-context gates terminalPASS0; integrity
+  freeze/report pending at this instant. Heavy window remains R14 until explicit
+  terminal release; successor can author only. Coordinator can continue safe
+  work despite transient tool service failure, no global blocked/complete claim.
+
 ## 2026-10-09 — R13 safe design frozen; R14 original tests freshly green
 
 - R13 formal author readinessb920736b and selected external8111 frozen; final
