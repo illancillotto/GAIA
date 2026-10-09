@@ -2,6 +2,14 @@
 
 ## Current phase: ANALYZE / CHARACTERIZE / DESIGN ONLY
 
+Fresh author ORIGINAL476/20/full100%/type/lint gates are terminal; author explicitly
+released its heavy slot. Coordinator transfers it to independent R14 backend
+original replay. R13 author/reviewer may continue bounded external/static design
+and source proofs only, no heavy rendered tests/full scans until later allocation.
+First adjacent and paired external candidates remain REJECTED for LOC growth
+and immutable-main comparator findings. No source/test/baseline fix permitted.
+One final bounded inline design may be evaluated; otherwise report NO_SAFE_CHANGE.
+
 Previous goal turn was PROGRESS: R12 implemented, independently reviewed,
 finally certified and sequentially integrated. Campaign integration is clean
 `a9569119d78a9d2aacebbf842461c8c052a8b0bd`; actual post-commit main55a ratchet

@@ -2,6 +2,15 @@
 
 ## Scope: ANALYZE / CHARACTERIZE / EXTERNAL DESIGN ONLY
 
+R13 author ORIGINAL heavy gates are now authoritatively terminal476/20/full100%,
+project/relevant-type/lint0, heavy slot explicitly RELEASED. Coordinator transfers
+exclusive heavy original-test window to R14 author now. R13 author/reviewer may
+continue ONLY bounded external/static work, no rendered tests or competing full
+scans. R14 may run fresh original six analytics suites/full-file100%, scoped
+style/Ruff/integrity/main55a ratchet and full-context external comparator as
+specified below. Runtime/tests/config remain read-only; no implementation.
+This explicit transfer supersedes the initial heavy-window restriction below.
+
 Global campaign ACTIVE/INCOMPLETE. Previous goal turn implemented and closed
 R12 at clean a9569119; fresh post-commit immutable main55a ratchet PASS0.
 R13 frontend readiness runs independently on another file. R14 is a backend
