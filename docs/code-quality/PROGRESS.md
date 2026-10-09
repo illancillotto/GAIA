@@ -1,5 +1,33 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R7 Presenze anomaly ordering/grouping
+
+- Turno precedente PROGRESS: R6 implementato/review/integrato/certificato,
+ 413focused/full-file100%,4417fullfrontendPASS/buildPASS/E2E54PASS7skip.
+  Goalglobale riletto invariato, ACTIVE/INCOMPLETE. Integrationef322424clean,
+  main55adirty preservato; nessun vecchio owner/processo runtime attivo.
+- Registry preventivo `MULTI_AGENT_OWNERSHIP_R7_PRESENZE_ANOMALY_2026-10-09.md`;
+  author/reviewerworktree separate ef322424/merge-base55a. Percorsi frontend
+  main/R3/R6/altrePresenze puliti, backend concorrente outofscope.
+  Graphifyfrontendquery prima del design; source principale420cog371cyc2076LOC
+  da riconfermare. Una responsabilità: grouping/counting/order del pannello
+  anomalie, no JSXmove/lifecycle/API/auth/state/editor/classification changes.
+- Design e characterization indipendenti prima di runtime. Invariantecritico:
+  priorityOrderNaN viene restituito da `!==0`, non cade su date/name; niente
+  `||` che normalizzi il comportamento. Source aggregati devono migliorare
+  realmente, tutti completefile100%,ratchetmain0/review. Targetiniziale50% e
+  coda5>300 ancora non risolti. Baseline/threshold/scope/ignore non modificabili.
+- Authorbefore413PASS/page1094s1217b302f100%; reviewer indipendente identico.
+  Nuovi4UIcharacterizationPASSsulloriginaleprimaedit. Designcollector/count e
+  comparatorlazytyped approvato esplicitamente dal Coordinator dopo questi
+  gate. Oracleindipendente180fixture2917entriesoriginalAST congelato, inclusi
+  NaN/tie/reference. Dependencyarray/JSX/effects/classification/API immutabili;
+  runtimeallowed soltanto callbacksordermonth/twogroupbuilders/types.
+- Candidateafter417focusedPASS6file, full-page/model100%1087statement1205branch;
+  principal420→403, page+newmodel1222→1192cognitive1309→1284cyclomatic,
+  aggregatefileLOC2855→2879(+24). Helperzeroabove-warning; metriche aggregate
+  devono essere confermate reviewindipendente. Nessuna integrazione ancora.
+
 ## 2026-10-09 — R6 Presenze daily presentation, bounded slice
 
 - Goal globale riletto, invariato e ACTIVE/INCOMPLETE. Ultimo turno ha
