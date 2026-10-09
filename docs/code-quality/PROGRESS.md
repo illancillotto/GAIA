@@ -1,5 +1,36 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R12 Capacitas rerun/delete lifecycle, original readiness active
+
+- Previous goal turn is PROGRESS: R11 reviewed source/certificate/docs integrated
+  at cleanf0b6e00e and fresh post-commit main55a ratchetPASS0. Full global goal
+  remains ACTIVE/INCOMPLETE; no narrower completion definition was substituted.
+- User-confirmed Capacitas priority selects its highest residual391cognitive/
+  360cyclomatic/2527LOC callable. One coherent responsibility: eight rerun/delete
+  handlers duplicate token/busy/API/error/finally phases; refresh and functional
+  row filtering remain distinct. No create/import/render/polling or race fix.
+- Registered exclusive ownership before task activation in
+  MULTI_AGENT_OWNERSHIP_R12_CAPACITAS_COMMANDS_2026-10-09.md. All102worktree handles
+  inspected: no dirty owned runtime path,15missing historical handles preserved.
+  Reused clean author/reviewer worktrees on separate NEW R12branches atf0;
+  no uncommitted concurrent main work copied or reset/stashed.
+- Author owns only READINESS_R12 report and external prototypes; independent
+  reviewer owns only REVIEW_READINESS_R12. Runtime, all19specs, fraction policy,
+  configs/tooling/baseline read-only. Original fresh396/19/full-file100% acquisition
+  and complete nested candidate accounting pending, not inferred from R11.
+- Author initial heavy-test window; reviewer bounded independent original/order/
+  microtask analysis. Candidate must genuinely reduce combined cognitive and
+  decisions with full-context main55a ratchet0/no new lint warning; an extra
+  await/success wrapper altering busy-release order is not accepted as equivalent.
+- Missing token no-op, API/IDs/messages, expiry reset only rerun success, lazy
+  Error.message/nonError fallback, reload swallowing, delete functional updater
+  and original races require a behavior/test matrix before any new test/runtime
+  permission. No commit/pick/merge/next hotspot in the initial agent phase.
+- Main55a binary diff9f85e574...114664b/status0d54d4eb...735e87 unchanged. Baseline,
+  thresholds/scope/exceptions/scanner/packages unchanged; global30historical
+  divergence provenance remains separate and visible. No baseline generation
+  or repair. Dedicated platform docs graph refresh belongs to Coordinator.
+
 ## 2026-10-09 — R11 Capacitas monitor lifecycle, certified and integrated
 
 - Distinct final verifier is terminal, certificate SHA256
