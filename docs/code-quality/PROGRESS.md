@@ -21,6 +21,13 @@
   linkedisnotNone e fallbackraw. Coordinator approva design bounded soltanto
   dopo characterizationPASSprima di edit; nessuna altra fase da estrarre.
   Reviewer before110PASS/analytics673s302b100% confermati da artifact durabili.
+- Author characterizationprima38PASS/focused148PASS0skip/full-file673s302b100%.
+  Reviewer oracle indipendente20casi persistenti (81sessioni/12operatori) PASS
+  risposta/SQL/binds/ordine/read-only; widerprima36PASS14skipPostgreSQL.
+  Prima candidate361→301, aggregata943→899(-44),helpersmall16cog,zero nuove
+  violation. Followupbounded approvato root+reviewer: normalizzazione nullable
+  nome sessione pura riusata in indice/resolver, senza cambiare labelraw o fasi.
+  Non ampliare scope per arrivare<300; gate finali ancora pendenti.
 
 ## 2026-10-09 — R4 fuel response mapping, singola slice autorizzata
 
