@@ -1,5 +1,60 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-09 — Complete backend/worker checkpoint and environment recovery
+
+Global **ACTIVE / INCOMPLETE**. This verification-only checkpoint adds no
+runtime changes or complexity reductions; certified R14 metrics remain below.
+Dedicated suite snapshot34c13604 and integration429a8a1e have identical runtime,
+tests and configuration; intervening changes are ownership documentation only.
+Main concurrent binarydiff9f85/status0d54 and baseline38e6 remain unchanged.
+
+| Suite | Fresh complete result | Limits |
+| --- | --- | --- |
+| Backend, default complete selection |6714PASS449SKIP0failure/error,19warnings, exact exit0 |447PostgreSQL+1OSGeo+1pyproj skipped; no global coverage collected |
+| Worker, existing complete Make attempt4 |778PASS1SKIP0failure/error,all52files, exact exit0 |PostgreSQL recovery-migration skipped; global coverage below100% |
+
+Worker coverage6072/6077statements1624/1630branches, combined99.8572726093%,
+5missinglines/6missingbranches/4partialbranches in unchanged credential-pool/
+retry-metadata runtime. This is not full repository100% or a coverage waiver;
+changed runtime retains its separately scoped full-file100% certificates.
+Frontend/build/browser evidence remains attributed to previous verified
+checkpoints, not rerun or represented as fresh by backend/worker execution.
+
+All failed worker invocations remain separately recorded, not counted as PASS:
+attempt1 coverage persistence/ENOSPC,116PASS8/52files; attempt2 missing synthetic
+HOME,188PASS1FAIL10/52; attempt3 long TMPDIR Chromium socket,357PASS4FAIL22/52.
+Attempt4 only corrects the explained invocation environment with a short owned
+TMPDIR and private HOME; same Make/52files/coverage/isolation/assertions/deps.
+No source/test/config/tooling/threshold/baseline changes or provider opt-in.
+
+Authorized prior backend-basetemp cleanup removed845of911frozenmanifest entries,
+all disposable fixture files. Inventory1283entries/187907679bytes retained;
+remaining66entries, original report0f924612 and manifest9ccfc858 unchanged.
+Full original fixture retention is no longer claimed. Raw JUnit/logs/skips,
+three failures and accepted-source integrity evidence remain preserved.
+The reports below are complementary; the recovery reports supersede the
+earlier worker-incomplete state without rewriting its history or lost evidence:
+
+- reports/code-quality/CHECKPOINT_BACKEND_WORKER_VERIFICATION_2026-10-09.md
+- reports/code-quality/CHECKPOINT_WORKER_RECOVERY_2026-10-09.md
+- reports/code-quality/CHECKPOINT_WORKER_SHORT_TMP_VERIFICATION_2026-10-09.md
+
+Classification **NO_CHANGE — VERIFICATION_ONLY**. This is not last-wave closure.
+Coordinator fresh fullMakeAST objects exactly equal certified R14 for every
+callable/file/violation, engines/scope/errors/summary. Current1672files20316calls,
+1926error2740warning4666findings, delta0. Actual precommit main55a Make ratchet
+PASS0. Root logs/report/audit: ~/.cache/gaia-campaign/20261009-suites-coordinator/.
+Fresh global complexity-check remains FAIL30/Makeexit2; every complete finding
+object exactly equals certified R14. It is not a change regression or PASS.
+Baseline38e6 unchanged; no generation/repair/threshold/exclusion commands.
+Dedicated Graphify platform-docs update PASS:chunk1/1done, no semantic failure,
+631nodes855edges101communities;7689input2919output tokens, estimated$0.0077.
+Graphs stay ignored/uncommitted and are not complexity or behavior proof.
+R16 candidate remains BLOCKED on ambiguous matching pending the separate user
+decision; independent ORIGINAL replay remains required. Global extreme-tail
+5>300/17>200/55>100 and strategy targets remain unmet; historical global30
+divergences remain separate from the authoritative change ratchet.
+
 ## 2026-10-09 — R16 original characterization; candidate matching stop
 
 Global **ACTIVE / INCOMPLETE**, metrics remain certified R14 below. No R16 runtime

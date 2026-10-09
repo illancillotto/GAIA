@@ -1,5 +1,36 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — Complete backend/worker checkpoint; invocation recovery
+
+- Complete backend on certified34c13604:6714PASS449SKIP0failure/error,
+  19warnings,7163rawJUnit cases. Skips447PostgreSQL+1OSGeo+1pyproj remain
+  unverified; no backend repository-wide coverage collected or inferred.
+- Complete existing worker Make attempt4 terminal exit0:778PASS1SKIP,
+  all52sortedfiles, per-file process isolation and coverage unchanged.
+  PostgreSQL recovery-migration case skipped, not PASS. Worker full corpus
+  6072/6077statements1624/1630branches,99.8572726093%combined, not100%.
+  Missing5lines/6branches in unchanged sister_credential_pool and
+  sister_retry_metadata do not waive changed-runtime full-file100% policy.
+- Three earlier attempts remain FAIL:ENOSPC/coverage persistence(116PASS),
+  synthetic HOME omission(188PASS1FAIL), long Chromium TMPDIR socket path
+  (357PASS4FAIL). Separate Coordinator-owned invocation recoveries only;
+  no source/test/config/gate/baseline edits, exclusions or weakened assertions.
+- Previously authorized backend-basetemp cleanup removed845/911original
+  frozenmanifest entries after1283entry inventory;66remaining entries exact.
+  Original report0f924612/manifest9ccfc858 unchanged. Lost disposable fixture
+  evidence explicitly disclosed, not reconstructed or claimed retained.
+- Original/recovery/short-temp reports preserve all attempts, exact terminal
+  identities, skips, coverage limits and source/main/dependency integrity.
+  Current integration differs from suite snapshot only in governance docs;
+  no runtime improvement claimed by this verification-only checkpoint.
+  R16 matching decision/replay and extreme-tail reduction remain due.
+  Global campaign ACTIVE/INCOMPLETE; no full final-suite certification.
+- Coordinator fresh fullMakeAST report matches every R14 callable/file/
+  violation/engine/scope/error/summary object exactly:1672files20316calls,
+  1926error2740warning4666findings, zero metric delta. Actual precommit
+  main55a complexity-ratchet PASS0; baseline38e6 unchanged. Root evidence:
+  ~/.cache/gaia-campaign/20261009-suites-coordinator/.
+
 ## 2026-10-09 — R16 ORIGINAL passes; exterior matching BLOCKED
 
 - Original task01a12214 terminal/released:13new/505union22suites0skip/failure,
