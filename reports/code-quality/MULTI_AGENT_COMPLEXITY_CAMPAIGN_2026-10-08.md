@@ -67,6 +67,12 @@ historical finding objects. No baseline inflation. Final docs refresh follows
 closure; actual graph result belongs to its log, not this stated intent.
 This closes only R6: the global campaign remains **ACTIVE/INCOMPLETE**.
 
+Last post-report integration ratchet/main is terminalPASS0/exit0. Final
+platform docs refresh after closure is terminalexit0, `chunk 1/1 done`, zero
+semantic failures,415nodes479edges81communities; durable log
+`20261009-r6-presenze/coordinator/graph-platform-final.log`. No docs corpus
+edits follow that refresh. Root/verifier completeAST objects are identical.
+
 ## 2026-10-09 — R5 orphan operator identity, checkpoint verificato
 
 Checkpoint runtime corrente, successivo a R4. Source `cd4b1145` integrato esatto
