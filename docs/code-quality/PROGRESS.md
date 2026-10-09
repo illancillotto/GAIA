@@ -1,5 +1,22 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R9 Presenze mutations, design gate
+
+- PreviousturnPROGRESS: R8 actualaggregate-63cog/-19cyc/-5finding, source79bc9969
+  reviewed/integratedecdcc93c, review687a4a49/reportd7e2fd72; verifierreport8ab91f55
+  integratedccc038d9. Allfullfrontend4472PASS/buildPASS/E2E54PASS7oldSKIP,
+  fullpage100%/ratchetmain0, cleanupactual. Finalgraph452/529/84chunk1/1no failures,
+  integrationa6e5fb7cclean/main55adirtyintatto. GoalglobaleinvariatoACTIVE/INCOMPLETE.
+- NewR9registrybeforeagents/worktrees. Analyze/designonly: fourdailyrecordmutations
+  persistKm/reperibilita/editor/validation, real persistence lifecycleduplication,
+  notrelocation/megaContext/newfeature. Principal399cog352cyc2020LOC; page1109/1230.
+  All78existingworktrees ownedpageclean,15historic/tmpmissingnotcleaned/pruned.
+  Graphifyfrontendimpactquery; currentR8source noactiveowner. Baseline/soglie/
+  scope/configunchanged. Authorreviewer design first, originalasyncordering/
+  payload/errorboundary/permissions/race characterization before runtime approval.
+  Coverage100%fullfiles, metricsaggregates/ratchet/review and finalgates mandatory.
+  INAZ/profile/mealvoucher/lifecycle/API/identitymapping outofscope; no mainmerge.
+
 ## 2026-10-09 — R8 Presenze presentation, design gate
 
 - Ultimo turno ricontrolla GIS gia corretto:2browser/17unitPASS, evidenzeE2E
