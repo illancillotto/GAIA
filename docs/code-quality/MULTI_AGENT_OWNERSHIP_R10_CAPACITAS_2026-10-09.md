@@ -18,10 +18,10 @@ Main concurrent backend/Presenze/Ruolo/docs are neither input nor copied.
 
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md | Design/phase approval, sequential ownership, green checkpoint enforcement | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
-| R10 author | Capacitas UI fraction-resolution policy | frontend/src/components/elaborazioni/capacitas-workspace.tsx; frontend/src/components/elaborazioni/capacitas-fraction-resolution.ts; frontend/tests/unit/campaign-capacitas-fraction-resolution-r10.test.ts; reports/code-quality/SLICE_R10_CAPACITAS_2026-10-09.md | Apply independently characterized five-event policy and exact proven reader fallback simplifications; original characterization frozen | GAIA-campaign-20261009-r10-capacitas | refactor/complexity-r10-capacitas | ACTIVE |
-| R10 reviewer | Independent provenance/design review | reports/code-quality/REVIEW_READINESS_R10_CAPACITAS_2026-10-09.md only; all runtime/tests/config read-only | Independent original312PASS/97.52%FAIL retained; library56comparison/state60comparison/complete protected AST/designPASS, conditional only for characterization | GAIA-campaign-20261009-r10-capacitas-review | review/complexity-r10-capacitas | READY_FOR_REVIEW |
-| R10 final verifier | Independent frozen-source certification | Future VERIFICATION_R10_CAPACITAS report only | Only after approved implementation/source freeze; distinct worktree | Not created | Not created | PLANNED |
+| Coordinator | Governance / integration | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md; reports/code-quality/INTEGRATION_R10_CAPACITAS_2026-10-09.md; domain-docs/elaborazioni/docs/CAPACITAS_FRACTION_RESOLUTION_2026-10-09.md | Design/phase approval, sequential ownership, green checkpoint enforcement and bounded domain documentation | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
+| R10 author | Capacitas UI fraction-resolution policy | frontend/src/components/elaborazioni/capacitas-workspace.tsx; frontend/src/components/elaborazioni/capacitas-fraction-resolution.ts; frontend/tests/unit/campaign-capacitas-fraction-resolution-r10.test.ts; reports/code-quality/SLICE_R10_CAPACITAS_2026-10-09.md | Exact reviewed source committedbe384788; frozen, no further writes | GAIA-campaign-20261009-r10-capacitas | refactor/complexity-r10-capacitas | READY_FOR_REVIEW |
+| R10 reviewer | Independent actual-source review | reports/code-quality/REVIEW_R10_CAPACITAS_2026-10-09.md only; all runtime/tests/config read-only | APPROVED/IMPROVED; report-only3be62f81 integrated5d914dcb; runtime never edited | GAIA-campaign-20261009-r10-capacitas-review | review/complexity-r10-capacitas | MERGED |
+| R10 final verifier | Independent frozen-source certification | reports/code-quality/VERIFICATION_R10_CAPACITAS_2026-10-09.md only; application/tests/config read-only | Exactsourcebe384788 custody/replay authorized; fresh full-file/focused/fullfrontend/build/browser/provenance and cleanup gates | GAIA-campaign-20261009-r10-verification | verification/complexity-r10-capacitas | ACTIVE |
 
 ## Authorized current phase — ANALYZE/CHARACTERIZE DESIGN ONLY
 
@@ -143,3 +143,57 @@ exclusions/config/tooling or bypass ambiguous matching. Refresh frontend graph
 only with dedicated Make targets and report pruning. Stop with uncommitted
 source, exact hashes, diff/test/coverage/metrics evidence for independent review;
 source commit/integration requires a separate Coordinator decision.
+
+## Final verifier preparation
+
+Dedicated verifier worktree starts from integration `7316da7f`, containing
+approved original characterization/readiness and runtime-phase governance,
+but original runtime. Allocate only its named verification report and external
+evidence. Initial preparation is read-only: inspect prior isolated R9 harness,
+resource collision/lifecycle/cleanup controls and current source identity.
+No candidate tests, build/browser/backend launch or runtime cherry-pick before
+separate source-freeze authorization. No reused old PASS claims or production
+services. Final source certification remains PLANNED, not executed.
+
+## Actual-source review gate
+
+Author reports terminal actual338PASS/18spec: workspace857s/251f/873b/748l100%,
+policy9s/6f/6b/8l100%; type/lint/mainratchetPASS0. Source SHA256 frozen:
+workspace `a409e88725f0c251df7e93560c909b4464d487f382ce8ceb74787c23b2c60b59`,
+policy `0d635381b311c18477aeef375713cf336114329350bd74791a4d6da447c574eb`,
+new direct spec `c2d0bf12003c5d5718af7b0c6b02af4fcc2b2e39721c68a7d7712dddb6e8848c`.
+Author only finalizes its slice report now; no runtime/test edits or commit.
+Reviewer may inspect that frozen actual source read-only from its dedicated
+review checkout and write only new REVIEW_R10 report/external proof. Recompute
+source/design protected equivalence, all nested/combined metrics and real library/
+lazy timing oracles; inspect actual raw coverage and complete ratchet provenance.
+No runtime custody, heavy test/build/browser or commit authorization yet.
+Acceptance requires real debt reduction, no transferred violation and retained
+UNKNOWN/reachable null behavior. Final verifier remains read-only preparation.
+
+## Independent source certification authorized
+
+Actual-source reviewer APPROVED/IMPROVED; complete protected restoration,
+60state/10timing/56realSheetJS proofs and independently reproduced metrics PASS.
+Report-only3be62f81 integrated5d914dcb. Coordinator authorizes exact four-file
+source commit `be3847888b8b859c2169636d02915131f1690968`; all frozen hashes exact,
+author clean. Source is NOT integrated in campaign until final certification.
+
+Final verifier may cherry-pick only this exact commit into its dedicated7316da7f
+checkout, verify exact source/test/report blobs and all frozen original tracked
+hashes except those four paths. This is controlled unedited candidate custody,
+not an additional runtime owner. Only its report/external harness is writable.
+Authorize ignored dependency symlink to existing main frontend/node_modules;
+capture installed package/library hashes before/after, no installs/config edits.
+Run fresh338-test coverage BOTH full files, explicit runtime/test type/lint,
+whole frontend unit suite, npm test, clean build, pertinent/full E2E and genuine
+native browser resolution/null/lazy/race behavior on the isolated local stack.
+Use inspected R9 isolation/lifecycle controls and unique loopback13014/18094
+ports; synthetic DB/auth, internal backend network, no production/provider calls.
+Retain default motion/timeouts, all old tests and existing skips; no retry or
+functional fix to force green. Read-only full complexity report, mainratchet0,
+globalcheck30 provenance with complete finding-object comparison against R9.
+Every suite failure/skip/nonexecution must remain explicit; original97.52% is
+historical before proof, not substituted for fresh100%. Verify complete source/
+config/baseline hashes and real cleanup. No report commit before separate review.
+Stop on unexplained failure, ambiguity, source drift or functional difference.
