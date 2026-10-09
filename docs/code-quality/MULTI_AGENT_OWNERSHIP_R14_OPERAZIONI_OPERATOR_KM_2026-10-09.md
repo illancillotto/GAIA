@@ -13,9 +13,12 @@ failure retained/explained; no runtime/config/oldtest edits. Source31actual/28
 scanner limitation visible, no scanner repair. Campaign ACTIVE/INCOMPLETE.
 
 Coordinator publishes ONLY new spec+CHAR and imports to SAME existing clean
-review worktree/branch, preserving frozen readinessd2c3 untracked. Fresh native
-independent successor `/root/r14_original_review` owns ONLY new
+review worktree/branch, preserving frozen readinessd2c3 untracked. Fresh
+independent successor `R14 Original Reviewer` (separate TUI task) owns ONLY new
 reports/code-quality/REVIEW_CHARACTERIZATION_R14_OPERAZIONI_OPERATOR_KM_2026-10-09.md.
+Task01a121e9-741c-7f90-aa16-a492b838b89f is active and has read this allocation
+first; source test+CHAR published/imported d7cc251c, no native original-review
+task was started. Existing static readiness reviewer is terminal, no overlap.
 Exclusive heavy original replay now allocated: fresh new56/fullsevenunion204
 fullruntime100%, scopedRuff/format/style/actual immutable55a ratchet/integrity,
 test assertion review. Explicitly distinguish actual real-ORM whole-route tests
@@ -115,7 +118,7 @@ no copying dirty main source, reset/stash/main merge, baseline operation.
 | --- | --- | --- | --- | --- | --- | --- |
 | Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; private approvals | Ownership and serial heavy-window allocation | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
 | /root/r14_operazioni_operator_km | Operazioni analytics | Frozen spec210b958a and CHAR06b2d29e; readiness/runtime/oldtests/candidate immutable | Original characterization terminal, heavy released | GAIA-campaign-20261009-r14-operazioni-operator-km | refactor/complexity-r14-operazioni-operator-km | READY_FOR_REVIEW |
-| /root/r14_original_review (native successor) | Operazioni independent original replay | ONLY new REVIEW_CHARACTERIZATION_R14; frozen REVIEW_READINESS_R14 reportd2c3aedd | Fresh independent original gates and assertion review, exclusive heavy window | GAIA-campaign-20261009-r14-operazioni-operator-km-review | review/complexity-r14-operazioni-operator-km | ACTIVE |
+| R14 Original Reviewer (separate TUI task) | Operazioni independent original replay | ONLY new REVIEW_CHARACTERIZATION_R14; frozen REVIEW_READINESS_R14 reportd2c3aedd | Fresh independent original gates and assertion review, exclusive heavy window | GAIA-campaign-20261009-r14-operazioni-operator-km-review | review/complexity-r14-operazioni-operator-km | ACTIVE |
 | Future distinct verifier | Actual-source certification | Later exact new R14 verification report | No active task before source review | Later dedicated clean worktree | Later | PLANNED |
 
 Registry generated BEFORE agent creation. No overlap with R13 workspace, existing
