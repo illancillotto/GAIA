@@ -1,5 +1,50 @@
 # R12 Capacitas — rerun/delete command lifecycle ownership
 
+## Current phase — authorized exact runtime implementation
+
+Independent ORIGINAL review completed PASS: actual 80 focused / 476 total,
+20 specs, zero skips, both complete runtime files 100% in all dimensions,
+type/lint/integrity and immutable-main55a ratchet PASS0. Reviewer released
+its heavy window. Frozen review SHA256
+`1a9eebed9e14be9ced7dd0418bed1b1bccaf5e84c3b8ba6d63a9b40266a41cf2`.
+
+Coordinator now allocates exclusive runtime write ownership to the author:
+ONLY `frontend/src/components/elaborazioni/capacitas-workspace.tsx` and new
+`reports/code-quality/SLICE_R12_CAPACITAS_COMMANDS_2026-10-09.md`.
+Apply the exact frozen b69cbc44 candidate using apply_patch, no redesign.
+All twenty specs, fraction policy, readiness/characterization reports,
+shared code/config/tooling/baseline remain frozen and read-only.
+Author exclusively owns the fresh heavy test window; reviewer/final verifier
+remain idle until author terminal source freeze. Fresh full476/20/100%, type,
+lint, protected hashes, full AST report, main55a ratchet and Graphify frontend
+force/pruning required. No commit or integration delegated to the author.
+This phase supersedes earlier original-only allocations below; campaign
+ACTIVE/INCOMPLETE. Coordinator retains exclusive publication/git custody.
+
+## Previous phase — frozen original characterization review
+
+Author is terminal: final new spec80PASS/full476PASS20spec0skip, original complete
+two-file100%, project/explicit-test-type/lint0 and protected3506paths/19oldspec
+exact. New spec SHA2566ca512806be4ebf2e399e1df7da735ecd37986eb485f7ca3b0cea9a6ac90189d;
+CHAR reportafdfc7f7e0822a0d295b3d177da58eb7f90815ef86c97936f8e9b4ee56455d3f.
+Both now frozen, author test/source write ownership released. Initial external
+TS2688 and two new-spec unsupported ByRole exact options were corrected only
+in external scaffold/new spec; final explicit attempt3=0. All attempts retained.
+No runtime/all nineteen existing specs/config change; readinessc56/candidateb69
+and independent final readiness6273 remain frozen.
+
+Coordinator has exclusive terminal git custody to publish ONLY frozen new spec
+and CHAR report as a coherent test commit; READINESS remains unstaged. Independent
+reviewer may import that exact two-file commit in its dedicated worktree and owns
+only new `REVIEW_CHARACTERIZATION_R12_CAPACITAS_COMMANDS_2026-10-09.md`.
+Reviewer now exclusively holds heavy original replay window: independently
+review actual public timelines/assertion strength/real polling/ApiError/no fake
+coverage, run fresh new-spec and full20union100%, project/explicit-test type,
+owned lint/diff/protected hashes/main ratchet. Do not edit imported tests/runtime/
+configs/readiness or merge into integration before review. Preserve untracked
+frozen readiness review in reviewer worktree. Source implementation still NOT
+authorized; original characterizations are on a232 only.
+
 ## Current phase — ORIGINAL CHARACTERIZATION ONLY
 
 Independent reviewer readiness is frozen at SHA256
@@ -68,8 +113,8 @@ results as fresh tests. No worktree deletion/pruning/reset/stash/source copying.
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; private phase approvals/checkpoints; later global/integration/domain docs only with explicit allocation | Ownership, phase gates, exact-source publication/integration | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
-| R12 author (01a120c5-d838-7251-b33b-52a5f9b03b48) | Capacitas command lifecycle | Frozen READINESS report after hash publication; new command-lifecycle-r12 spec and CHARACTERIZATION_R12 report only | Original public-UI gaps, fresh union/full100%; no runtime implementation | GAIA-campaign-20261009-r11-capacitas-monitors (reused clean worktree) | refactor/complexity-r12-capacitas-commands | ACTIVE |
-| R12 reviewer/integrator (01a120c7-5237-7f02-9fe7-352e65b9a6ed) | Independent original command behavior/design | REVIEW_READINESS_R12 final frozen6273 only; source/test/config read-only; no further report edit | Third-design independent readiness terminal PASS, original heavy replay not yet granted | GAIA-campaign-20261009-r11-capacitas-monitors-review (reused clean worktree) | review/complexity-r12-capacitas-commands | READY_FOR_REVIEW |
+| R12 author (01a120c5-d838-7251-b33b-52a5f9b03b48) | Capacitas command lifecycle | Exclusive workspace runtime and new SLICE_R12 report only | Apply frozen b69 candidate; fresh runtime gates, exclusive heavy window | GAIA-campaign-20261009-r11-capacitas-monitors (reused clean worktree) | refactor/complexity-r12-capacitas-commands | ACTIVE |
+| R12 reviewer/integrator (01a120c7-5237-7f02-9fe7-352e65b9a6ed) | Independent runtime review | ONLY new REVIEW_R12_CAPACITAS_COMMANDS_2026-10-09.md; frozen old reports/source/tests read-only | Bounded static review now; actual-source replay awaits source freeze and heavy-window transfer | GAIA-campaign-20261009-r11-capacitas-monitors-review (reused clean worktree) | review/complexity-r12-capacitas-commands | ACTIVE |
 | R12 final verifier | Frozen-source certification | Future distinct VERIFICATION_R12 report only after explicit source freeze/phase allocation | No task active before candidate review and original characterization | Dedicated clean final worktree to be assigned | To be assigned | PLANNED |
 
 No runtime file has two owners. Shared lib/hooks/UI/tooling/config/baseline and

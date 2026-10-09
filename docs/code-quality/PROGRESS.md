@@ -1,5 +1,45 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R12 original review accepted; exact runtime slice authorized
+
+- Independent original replay PASS:80 focused and476/20 complete, zero skips;
+  workspace789/818/253/684 and fraction-policy9/6/6/8 counters fully covered.
+  Project and explicit-test typecheck, owned lint, protected hashes and actual
+  main55a ratchet PASS0. Frozen review SHA2561a9eebed9e14be9ced7dd0418bed1b1bccaf5e84c3b8ba6d63a9b40266a41cf2.
+- Exact test-only author commitc11503 integrated ascf2a95b8. The old pending
+  characterization phase below is historical, not the current status.
+- Registry grants author exclusive workspace runtime plus new SLICE_R12 report,
+  exact frozen b69 candidate via apply_patch. Twenty specs/policy/config/baseline
+  remain immutable; fresh actual-source gates and Graphify are required.
+  Reviewer released original heavy window; author holds it during implementation.
+- GIS failure is already separately fixed and independently certified; no GIS
+  runtime change or weakening is authorized. Concurrent main work is preserved.
+  Global campaign remains ACTIVE/INCOMPLETE; projected metrics are not results.
+
+## 2026-10-09 — R12 original command characterization published; replay active
+
+- Concrete test-only progress:80new public-UI cases cover four-family deferred
+  rerun/refetch, token changes/loss, command-vs-refresh auth errors, different-ID
+  rerun/delete order and delete/manual/real-poll current-row/late resurrection.
+  Actual original sourcea232 untouched, all19oldspecs unchanged. Spec6ca51280
+  and CHARafdf frozen, exact two-file commitc11503ea published in author branch
+  by terminal Coordinator git custody; READINESSc56 remains untracked/unstaged.
+- Author fresh final80/1spec PASS,476/20union PASS0skip; both complete runtime
+  files100% statements/branches/functions/lines. Project type0, explicit final
+  attempt3 type0 and owned20spec lint0. Initial external TS2688 and two new-spec
+  ByRole exact-option TS2769 failures retained; only scaffold/new spec corrected,
+  exact string role matching/assertions unchanged, final spec/full coverage rerun.
+- Author actualTUIidle/terminal; all3506protected paths and source/baseline/
+  configs/old19specs exact. Independent reviewer imports ONLYc11503 and owns new
+  REVIEW_CHARACTERIZATION_R12 report with exclusive original heavy replay window.
+  Readiness review6273 frozen. Fresh independent80/476/full100%/type/lint/protected/
+  main55a ratchet gates pending, not inferred from author or source oracles.
+- Root latest governance5a2853df actualmainratchetPASS0, semantic platformdocs
+  chunk1/1done/no failures; phase registry updated before replay. No runtime
+  implementation/integration permission; selectedb69 projected391→359 remains
+  design evidence only. GlobalcampaignACTIVE/INCOMPLETE, baseline/soglie intact,
+  main concurrent hashes unchanged. Next action requires independent replay.
+
 ## 2026-10-09 — R12 selected design approved; original UI characterization active
 
 - Fresh author ORIGINAL396tests/19spec/full-file100% confirmed independently
