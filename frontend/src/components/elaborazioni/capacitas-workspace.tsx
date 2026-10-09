@@ -213,6 +213,36 @@ async function runCapacitasJobCommand<Job extends { id: number }>(
   }
 }
 
+interface CapacitasExecutionToggleProps {
+  kind: "speed" | "parallel";
+  active: boolean;
+  descriptions: [string, string];
+  onClick: () => void;
+}
+
+const EXECUTION_LABELS = {
+  speed: ["Doppia velocita", "Doppia velocita attiva"],
+  parallel: ["Parallelo x2", "Parallelo x2 attivo"],
+};
+
+function CapacitasExecutionToggle(props: CapacitasExecutionToggleProps) {
+  const selection = props.active ? 1 : 0;
+  return (
+    <button
+      className={
+        props.active
+          ? "rounded-lg border border-[#1D4E35] bg-[#eef7ef] px-4 py-3 text-left text-sm font-semibold text-[#1D4E35]"
+          : "rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-gray-700 transition hover:border-[#1D4E35]/30 hover:bg-[#f5faf5]"
+      }
+      onClick={props.onClick}
+      type="button"
+    >
+      <span className="block">{EXECUTION_LABELS[props.kind][selection]}</span>
+      <span className="mt-1 block text-xs font-normal text-gray-500">{props.descriptions[selection]}</span>
+    </button>
+  );
+}
+
 const JOB_POLL_INTERVAL_MS = 15000;
 // Gli avvisi inCASS restano "in coda" per ore quando si lancia un harvest massivo
 // e la lista non è paginata: allunghiamo il polling e rallentiamo ancora quando
@@ -1423,39 +1453,23 @@ export function ElaborazioniCapacitasWorkspace({
                 />
                 <span className="text-sm text-gray-700">Scarica dettagli</span>
               </label>
-              <button
-                className={
-                  particelleSyncForm.double_speed
-                    ? "rounded-lg border border-[#1D4E35] bg-[#eef7ef] px-4 py-3 text-left text-sm font-semibold text-[#1D4E35]"
-                    : "rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-gray-700 transition hover:border-[#1D4E35]/30 hover:bg-[#f5faf5]"
-                }
+              <CapacitasExecutionToggle
+                kind="speed"
+                active={particelleSyncForm.double_speed}
+                descriptions={["Porta la pausa diurna da 900ms a 450ms.", "Pausa dimezzata per questo job."]}
                 onClick={() => setParticelleSyncForm((current) => ({ ...current, double_speed: !current.double_speed }))}
-                type="button"
-              >
-                <span className="block">{particelleSyncForm.double_speed ? "Doppia velocita attiva" : "Doppia velocita"}</span>
-                <span className="mt-1 block text-xs font-normal text-gray-500">
-                  {particelleSyncForm.double_speed ? "Pausa dimezzata per questo job." : "Porta la pausa diurna da 900ms a 450ms."}
-                </span>
-              </button>
-              <button
-                className={
-                  particelleSyncForm.parallel_workers > 1
-                    ? "rounded-lg border border-[#1D4E35] bg-[#eef7ef] px-4 py-3 text-left text-sm font-semibold text-[#1D4E35]"
-                    : "rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-gray-700 transition hover:border-[#1D4E35]/30 hover:bg-[#f5faf5]"
-                }
+              />
+              <CapacitasExecutionToggle
+                kind="parallel"
+                active={particelleSyncForm.parallel_workers > 1}
+                descriptions={["Divide il job su 2 worker.", "Usa 2 sessioni Capacitas dedicate."]}
                 onClick={() =>
                   setParticelleSyncForm((current) => ({
                     ...current,
                     parallel_workers: current.parallel_workers > 1 ? 1 : 2,
                   }))
                 }
-                type="button"
-              >
-                <span className="block">{particelleSyncForm.parallel_workers > 1 ? "Parallelo x2 attivo" : "Parallelo x2"}</span>
-                <span className="mt-1 block text-xs font-normal text-gray-500">
-                  {particelleSyncForm.parallel_workers > 1 ? "Usa 2 sessioni Capacitas dedicate." : "Divide il job su 2 worker."}
-                </span>
-              </button>
+              />
             </div>
 
             {particelleError ? (
@@ -2358,39 +2372,23 @@ export function ElaborazioniCapacitasWorkspace({
               </div>
 
             <div className="grid gap-4 xl:grid-cols-4">
-              <button
-                className={
-                  terreniExecutionForm.double_speed
-                    ? "rounded-lg border border-[#1D4E35] bg-[#eef7ef] px-4 py-3 text-left text-sm font-semibold text-[#1D4E35]"
-                    : "rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-gray-700 transition hover:border-[#1D4E35]/30 hover:bg-[#f5faf5]"
-                }
+              <CapacitasExecutionToggle
+                kind="speed"
+                active={terreniExecutionForm.double_speed}
+                descriptions={["Usa una pausa piu aggressiva tra richieste e righe.", "Riduce la pausa automatica del job Terreni."]}
                 onClick={() => setTerreniExecutionForm((current) => ({ ...current, double_speed: !current.double_speed }))}
-                type="button"
-              >
-                <span className="block">{terreniExecutionForm.double_speed ? "Doppia velocita attiva" : "Doppia velocita"}</span>
-                <span className="mt-1 block text-xs font-normal text-gray-500">
-                  {terreniExecutionForm.double_speed ? "Riduce la pausa automatica del job Terreni." : "Usa una pausa piu aggressiva tra richieste e righe."}
-                </span>
-              </button>
-              <button
-                className={
-                  terreniExecutionForm.parallel_workers > 1
-                    ? "rounded-lg border border-[#1D4E35] bg-[#eef7ef] px-4 py-3 text-left text-sm font-semibold text-[#1D4E35]"
-                    : "rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-gray-700 transition hover:border-[#1D4E35]/30 hover:bg-[#f5faf5]"
-                }
+              />
+              <CapacitasExecutionToggle
+                kind="parallel"
+                active={terreniExecutionForm.parallel_workers > 1}
+                descriptions={["Divide il batch su due worker concorrenti.", "Apre 2 sessioni Capacitas dedicate per il job."]}
                 onClick={() =>
                   setTerreniExecutionForm((current) => ({
                     ...current,
                     parallel_workers: current.parallel_workers > 1 ? 1 : 2,
                   }))
                 }
-                type="button"
-              >
-                <span className="block">{terreniExecutionForm.parallel_workers > 1 ? "Parallelo x2 attivo" : "Parallelo x2"}</span>
-                <span className="mt-1 block text-xs font-normal text-gray-500">
-                  {terreniExecutionForm.parallel_workers > 1 ? "Apre 2 sessioni Capacitas dedicate per il job." : "Divide il batch su due worker concorrenti."}
-                </span>
-              </button>
+              />
               <label className="space-y-2 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
                 <span className="label-caption">Pausa richieste (ms)</span>
                 <input
