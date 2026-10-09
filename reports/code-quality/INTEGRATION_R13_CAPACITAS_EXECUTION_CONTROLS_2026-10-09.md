@@ -218,4 +218,3 @@ permission. A later heavy-window transfer permits fresh original gates, then
 independent original replay before any backend source change. No broad analytics
 rewrite. Further Capacitas responsibilities require a separately registered,
 safe, coherent next slice; never follow-on edits under R13 ownership.
-
