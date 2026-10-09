@@ -58,6 +58,14 @@
   Forcedfrontendgraph6027nodes12618edges224communities,Presenzedocs76/78/13
   chunk1/1done/zero semanticfailure. Verifier468focusedPASS/fullpage1033s1143b100%;
   fullfrontend/build/browser ancora pendenti, nessun nuovo runtimehotspot.
+- Independentfullfrontendunit terminal4472PASS301files0failure/error/skip,
+  rootJUnitactual4472 verified. Typecheck/ownedlint/fullnpmrunlint/smoke18exit0,
+  freshbuild:cleanPASS59,521s; pertinentPresenzeE2E7PASS0skip. FullE2E livePID
+ 658117, noPASSdedotto; sourcea0c145b6 frozenexactauthor. Rootrequestedfinalreport
+  su/tmpretaineddurableexit0/fullASTexactintegrated; finalratchetmainPASS0,
+  finalglobalFAIL30Makeexit2 entireobjectsunchanged. Verifierreport/cleanupfinal
+  pending; goalglobalINCOMPLETE. Platformcheckpoint446nodes518edges84communities,
+  chunk1/1done/no semanticfailures; finalrefresh dopo ultimeclosure note richiesto.
 
 ## 2026-10-09 — R7 Presenze anomaly ordering/grouping
 

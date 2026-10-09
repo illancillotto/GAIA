@@ -45,6 +45,15 @@ domainrows updated to currentAST,30rows independently checked. Verifier fresh
 Forcedfrontendcode graph6027nodes12618edges224communities; Presenzedocs76/78/13,
 chunk1/1done/zero semanticfailure. These are maintenance, not complexity proof.
 
+Independent fullfrontendunits terminal **4472PASS/301files/0skip/error/failure**,
+root JUnit count verified. Typecheck/ownedlint/fullnpmrunlint/smoke18PASS, fresh
+build:cleanPASS59.521s; pertinentPresenzeE2E7PASS0skip. FullE2E stilllive, no
+browser fullsuitePASS inferred. Root requested `/tmp/gaia-complexity-final.*`
+report retained durably/exactcompleteAST, finalratchetmainPASS0/globalFAIL30
+Makeexit2/fullfindingobjectsunchanged. Verifier report/cleanup pending. Platform
+checkpointdocs446nodes518edges84communities/chunk1/1done/no semanticfailure;
+final refresh required after terminalclosure docs, not claimedperformed yet.
+
 ## 2026-10-09 — R7 anomaly-panel ordering/grouping, verified checkpoint
 
 Original objective unchanged, global campaign ACTIVE/INCOMPLETE. Previous R6
