@@ -1,5 +1,54 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-09 — R6 Presenze daily presentation, integration in verification
+
+Source `56c46570` independently approved by `c1475bb2`, integrated exactly as
+`cdfb8f96`; review report-only `fb3e8b08`. Single responsibility: ordered daily
+operational indicators and shared uncontrolled KM default/disabled projection.
+All72 named helpers and75hook expressions remain identical; global matrix and
+row-modal permissions, API/mutations, DOM lifecycle and auth/request precedence
+are preserved. No baseline/threshold/scope/ignore/config change or main merge.
+
+| R6 metric | Before | After | Delta |
+|---|---:|---:|---:|
+| Presenze principal cognitive | 437 | 420 | -17 (-3.89%) |
+| Principal cyclomatic | 385 | 371 | -14 |
+| Principal LOC | 2080 | 2076 | -4 |
+| Page + model cognitive | 1273 | 1230 | -43 (-3.38%) |
+| Page + model cyclomatic | 1350 | 1319 | -31 (-2.30%) |
+| Page + model file LOC | 2858 | 2877 | +19 |
+| Page + model callable LOC | 4508 | 4520 | +12 |
+| Error / warning findings | 18 / 23 | 17 / 21 | -1 / -2 |
+
+Classification **IMPROVED**, not merely moved JSX; model22LOC/zero findings.
+LOC growth is disclosed. Original Presenze50% target is not achieved and the
+five-callable>300 frontier persists; global campaign **ACTIVE/INCOMPLETE**.
+Official scanneruseState21 differs from raw Babel38; both remain unchanged,
+and no complexity-tooling change is attempted inside this source slice.
+
+Author and reviewer413focusedPASS/full-file100%; reviewer15originalUI replay,
+24192indicator and288KM differential casesPASS. Independent final verifier
+also413focusedPASS/zero skip, page1094statements1217branches and model8statements
+14branches all covered. Full frontend unit/build/browser gates **pending**,
+not inferred from focused tests. No fresh backend/worker suite claim on this
+frontend-only slice. Frozen source and durable raw evidence are under
+`~/.cache/gaia-campaign/20261009-r6-presenze/`.
+
+Root integrated report:1670files20290callables1937errors2747warnings4684findings;
+cognitive81276/cyclomatic83333/fileLOC332300. Relative to clean initial55a:
+cognitive-655(-0.80%),cyclomatic-333(-0.40%),error-19(-0.97%),warning-11(-0.40%).
+FileLOC+119 disclosed. Ratchet integration/mainPASS0. Globalcheck provenance,
+independent final suites and final graph/doc closure still pending.
+
+Independent full frontend unit suite is now terminal **4417PASS/299files,
+zero skips/failures**, exit0; full-file counters confirmed. Fresh build/browser
+remain pending. Root `complexity-check` exits2 with exactly30 historical finding
+objects identical to the R5 provenance, not new campaign regressions.
+Whole giornaliere directory including unchanged prior models1332→1289cognitive,
+1414→1383cyclomatic/3046→3065fileLOC. Forced frontend graph6003nodes12570edges
+237communities; Presenze docs56nodes56edges12communities, bothchunks complete,
+zero semantic failures. Graphify is orientation/maintenance, not metric proof.
+
 ## 2026-10-09 — R5 orphan operator identity, checkpoint verificato
 
 Checkpoint runtime corrente, successivo a R4. Source `cd4b1145` integrato esatto

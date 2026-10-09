@@ -1,5 +1,54 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R6 Presenze daily presentation, bounded slice
+
+- Goal globale riletto, invariato e ACTIVE/INCOMPLETE. Ultimo turno ha
+  ricontrollato il fix GIS già integrato, senza avanzamento runtime; ripresa
+  concreta sulla coda frontend estrema, non su un backend più facile.
+- Preflight integrationafebd615/main55a, main dirty preservato. Nuovo report
+  AST identico alla freeze R5:1669file20286callable1938error2749warning;
+  cinque callable>300. Presenze437cognitive385cyclomatic2080LOC, file2858LOC,
+  aggregata1273cognitive1350cyclomatic,21useState13useEffect.
+- Registry preventivo `MULTI_AGENT_OWNERSHIP_R6_PRESENZE_DAILY_2026-10-09.md`;
+  author/reviewer in worktree dedicate, verifier dopo freeze. Percorsi frontend
+  posseduti puliti nei checkout Presenze/main rilevanti; backend concorrente
+  escluso. Graphify frontend query PASS; corpus backend Presenze assente.
+- Author e reviewer riproducono indipendentemente388PASS/full-page100%:
+ 1093/1093statement1245/1245branch301/301function. Design approvato per un
+  modello visuale ordered indicator e default/disabled KM deduplicati soltanto.
+  DOM, input uncontrolled, permission globale vs row, lifecycle, API e
+  precedenza autorizzazione/richiesta invariati. Characterization prima di edit,
+  metriche aggregate realmente migliorate e ratchetmainPASS0 obbligatori.
+- Non è certificato il target iniziale Presenze50% né la chiusura della coda
+  estrema; niente relocation mega JSX, baseline repair, soglie/ignore/waiver.
+  CoverageCapacitasFAIL e30divergenze storiche restano attività separate.
+  Evidenze durabili `~/.cache/gaia-campaign/20261009-r6-presenze/`.
+- Nuovi15testUI di characterizationPASSprima del runtime, dopo413focusedPASS;
+  page+modello100%full-file1102statement1231branch305function. Candidate
+ 437→420cognitive385→371cyclomatic2080→2076LOC; aggregataaffected
+ 1273→1230cognitive1350→1319cyclomatic. FileLOC+19/callableLOC+12 dichiarati,
+  finding41→38, nessunhelperfinding. RatchetmainPASS0/typecheckPASS;
+  trewarningESLint preesistenti invariati. Review/freeze finali ancora pendenti.
+  Verifier indipendente preparato in worktree separata, nessuna source applicata
+  né suite completa dichiarataPASS. Non si integra prima della review esatta.
+- Source56c46570APPROVED da reviewc1475bb2:413focusedPASS/full-file100%,
+  replay15UIoriginalePASS/differenziale24192indicator288KMcasesPASS,
+ 72helpers75hook AST invariati. Sourcetutti5file esatti integraticdfb8f96,
+  reviewreport-onlyfb3e8b08; sourcereviewer duplicata non integrata.
+  Verifier autorizzato frozen-source/fullfrontend/build/browser, gate ancora
+  pendenti; stack synthetic isolato con backend readonly healthyHTTP200,
+  non è prova delle suite. Ratchet/report/globalcheckintegration in corso.
+- RootintegrationratchetPASS0/reportexit0, globale1670file20290callable
+ 1937error2747warning4684finding,cognitive81276/cyclomatic83333/fileLOC332300.
+  GlobalcheckFAIL30Makeexit2 esattamente stessi findingobjectsR5/provenance,
+  nessuna attribuzione o repair. Intera directorygiornaliere1332→1289cognitive,
+ 1414→1383cyclomatic,fileLOC3046→3065; due modelli precedenti invariati.
+- Verifierfullfrontendunit terminale4417PASS299file0skip0failure/exit0,
+  focused413PASS/page1094s1217b/model8s14b100%. Build/browser pending, nonPASS.
+  Graphifyrootforcedfrontend6003nodes12570edges237communities; Presenze docs
+ 56nodes56edges12communities,chunk1/2and2/2done/zero semanticfailure.
+  Tutti output durabili, nessun artefattoGraphify versionato.
+
 ## 2026-10-09 — R5 anomalies, una responsabilità di identità orphan
 
 - Turno precedente PROGRESS: R4 chiuso e integrato b4cfd5cd, fullbackend6620PASS/
