@@ -1,6 +1,6 @@
 # Progress - GAIA Code Complexity Program
 
-## 2026-10-09 — fix GIS E2E richiesto, verifica in corso
+## 2026-10-09 — fix GIS E2E verificato e integrato
 
 - L'utente identifica il FAIL GIS come target, non il coverage Capacitas o le
   trenta divergenze globali. Slice Capacitas provvisoria fermata senza edit.
@@ -12,12 +12,30 @@
   Readiness del target, non prova di camera idle; animazioni consentite,
   nessun aumento dei budget, retry, baseline o soglie.
 - Riavvio host alle 07:57:04 ha terminato lo stack e rimosso gli artifact
-  `/tmp`. Sorgenti e grafi persistono. Nuove verifiche accettate da rieseguire
+  `/tmp`. Sorgenti e grafi persistono. Verifiche accettate rieseguite
   con evidenze persistenti in `/home/cbo/.cache/gaia-campaign/20261009-gis/`;
-  non dichiarare PASS finale dai soli log della sessione precedente.
+  nessun PASS finale dedotto dai soli log della sessione precedente.
+- Source `13b6a8f2` integrato esatto come `286a82cc`, review `e35d6c44`.
+  Author post-riavvio: GIS20PASS, unit17PASS, smoke18PASS; controlli nativi
+  vecchio click2/2miss contro readiness2/2panel; CPU4 quattro scenari PASS.
+  Reviewer indipendente GIS15PASS, TypeScript/lint e ratchetPASS0.
+- Final verifier su source congelato: fiscal-search10/10PASS, GIS5/5PASS,
+  E2E completa54PASS/7skip preesistenti/0failure/0flaky,61scenari,exit0.
+  Default motion e zero retry confermati dai JSON; tutti gli artifact e gli
+  exit code persistono in `verifier/`, con elenco skip nel report dedicato.
+- Runtime/protetti byte-identici al checkpoint precedente, nessuna riduzione
+  complexity attribuita al fix. Report completo1668file20280callable,
+  1938error2749warning4687finding; cognitive81400/cyclomatic83377 invariati.
+  Ratchet main55aPASS0; globalcheckFAIL30, confronto esatto30/30 con provenance.
+  Graphify dominio aggiornato: gpt-reserve,chunk1/1done,0semanticfailure,
+  59nodi70edge9community; evidenza `coordinator/graph-catasto-final.log`.
+- Stack proprio fermato e rimosso; porte18089/13009libere, env sintetico
+  eliminato. Tracce/log conservati; `author/cleanup.log` exit0. Nessuna risorsa
+  produzione o volume persistente toccato.
 - Coverage Capacitas 97,52%/FAIL100 e global check FAIL30 restano questioni
   separate. Missione globale ACTIVE/INCOMPLETE, nessuna riduzione runtime
-  attribuita alla sincronizzazione E2E. Checkpoint finale GIS ancora aperto.
+  attribuita alla sincronizzazione E2E. Solo il checkpoint del FAIL GIS è verde;
+  nessuna dichiarazione di completamento globale o avvio della prossima wave.
 
 ## 2026-10-08 — continuazione: prove causali reali, runtime invariato
 

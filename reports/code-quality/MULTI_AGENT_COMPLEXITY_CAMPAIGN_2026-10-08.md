@@ -1,5 +1,46 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-09 — chiusura del FAIL GIS richiesto
+
+L'utente ha selezionato esplicitamente il FAIL del test GIS. Il fix è soltanto
+test-only: il click nativo attende che il focus della particella sia realmente
+renderizzato nel centro del canvas. Non modifica animazione/gesture runtime,
+API, fixture di ricerca, richiesta popup, panel, timeout, retry o baseline.
+Non è una riduzione di complessità né una prova di camera idle.
+
+- Source `13b6a8f2165ef6ddf0d6b64a092d1e710ed89743`, integrazione esatta
+  `286a82ccdb065d0c357cd47525f91ec14d707f0a`, review indipendente `e35d6c44`.
+- Author: GIS20PASS, unit17PASS, smoke18PASS; riproduzione nativa2/2miss prima
+  contro2/2panel con readiness; quattro scenari CPU4PASS. Reviewer: GIS15PASS.
+- Verifier finale indipendente: focused10PASS/47,3s, GIS5PASS/11,6s,
+  E2E completa54PASS/7skip preesistenti/0failure/0flaky,61scenari/72,35s.
+  Zero retry, default motion; exit0 per tutte e tre le esecuzioni.
+- RatchetPASS0; report globale1668file20280callable1938error2749warning4687finding,
+  cognitive81400/cyclomatic83377/fileLOC332233 invariati. GlobalcheckFAIL30:
+  trenta path/callable/metrica/baseline/current identici alla provenance
+  versionata, non attribuiti al fix e non assorbiti nella baseline.
+- Strict TypeScript, ESLint e diff-check PASS; una warning legacy `_geojson`
+  dichiarata. Runtime/config/protetti byte-identici al checkpoint precedente.
+  Backend/worker/full-unit/build non rieseguiti per questo segmento test-only;
+  nessun nuovo PASS attribuito a suite non eseguite. Coverage runtime N/A,
+  non deroga al requisito100% di una futura modifica runtime.
+- Riavvio host07:57:04 ha rimosso vecchi log `/tmp` e stack. La verifica finale
+  usa esclusivamente artifact post-riavvio persistenti in
+  `/home/cbo/.cache/gaia-campaign/20261009-gis/`: `author/`, `reviewer/`,
+  `verifier/`, `coordinator/`. Tentativi precedenti falliti restano nel report
+  della slice, non sono riscritti come PASS. Main concorrente intatto.
+- Graphify Catasto docs: gpt-reserve,chunk1/1done/nessuna semanticfailure,
+  59nodi70edge9community,3148token input3460output/costo stimato$0.0068.
+  Log `coordinator/graph-catasto-final.log`; grafi non committati.
+
+Evidenze dettagliate: `SLICE_GIS_E2E_FIX_2026-10-09.md`,
+`INTEGRATION_GIS_E2E_FIX_2026-10-09.md` e
+`VERIFICATION_GIS_E2E_FIX_2026-10-09.md`. Ownership e confini nel registro GIS.
+Classificazione: **NO_CHANGE — TEST_SYNCHRONIZATION_FIX**. Il FAIL GIS è risolto
+nel perimetro verificato. Missione globale **ACTIVE/INCOMPLETE**: coverage
+Capacitas97,52%/FAIL100, trenta divergenze globali e target estremi ancora aperti;
+nessuna nuova wave runtime avviata in questo segmento.
+
 ## Risultati cumulativi autorevoli al checkpoint R3
 
 Il runtime rimane quello R3: la continuazione Capacitas modifica soltanto test
