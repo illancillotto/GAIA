@@ -2,6 +2,37 @@
 
 ## Snapshot and authorization
 
+## Current phase: independent STATIC readiness review
+
+Author terminal MEASURED_DESIGN_ONLY, actual runtime NO_CHANGE. Frozen readiness
+07d9ffab0866c2456b3cff8b7b157bd10e74ee80dea06a16ae60a831db9fd007, candidate
+34afe117a828dca307e90f72f1318ac17b4597e14f0e80a897601c8911fe8913,
+artifact manifest737cbe43092dfe749383284198b69c79f1fc303b8d3f54ebf26f3a4e7fa0943c.
+Projection principal347→339, combined861→839cognitive/752→730decisions/
+3126→3120LOC,243unallocated callables exact,118supplementary pure casesPASS.
+Eager credential selection variant rejected for read/short-circuit changes.
+No rendered tests/type/coverage/full-context comparator/ratchet executed here.
+Coordinator published readiness0167bbcf/imported to existing review worktree.
+
+| Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| R16 author | Readiness | Frozen READINESS_R16 07d9 | Terminal, no runtime ownership | GAIA-campaign-20261009-r16-capacitas-credential-defaults | refactor/complexity-r16-capacitas-credential-defaults | READY_FOR_REVIEW |
+| /root/r15_static_review, successor R16 allocation | Independent static review | ONLY new reports/code-quality/REVIEW_READINESS_R16_CAPACITAS_CREDENTIAL_DEFAULTS_2026-10-09.md | Reproduce bounded AST/metrics/pure contracts, inspect original public-UI gaps, no runtime equivalence certification | GAIA-campaign-20261009-r16-capacitas-credential-defaults-review | review/complexity-r16-capacitas-credential-defaults | ACTIVE |
+
+R15 reviewer is terminal/released; successor is separate from R16 author and
+owns ONLY its new report/private evidence. All source/tests/config/readiness/
+candidate/artifacts are frozen, no source/test edits/commit/import/merge delegated.
+R14 distinct final verifier currently owns exclusive heavy window; bounded
+one-file/pure/reading only, no rendered tests/type/lint/fullscan/coverage/build/
+ratchet/Graphify refresh. Inspect lazy property/conversion/spread/access ordering,
+functional updater execution timing/current-state preservation, empty/selected/
+singleton/multiple pools and clone/unrelated references; distinguish pure probes
+from real public-UI assertion gaps. Count actual unique versus nested inclusive
+decisions and differing two historical AST accounting conventions explicitly.
+Freeze review/report hash and stop. Fresh original persistent characterization,
+independent replay and full-context gate still precede ANY runtime permission.
+Global campaign ACTIVE/INCOMPLETE, no projection classified actual IMPROVED.
+
 Campaign ACTIVE / INCOMPLETE. User confirms Capacitas priority, dedicated branch
 and full-file100%. R15 four-create lifecycle allocation ended NO_CHANGE; three
 exterior candidates rejected, no source/test/config change or runtime owner.
