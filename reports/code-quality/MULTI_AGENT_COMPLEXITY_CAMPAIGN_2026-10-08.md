@@ -54,8 +54,13 @@ Queste somme includono tutti gli helper, non soltanto il principale.
 
 Graphify Operazioni code:exit0,530nodi1524edge26community. Domain docs:
 gpt-reserve,chunk1/1done/zero semanticfailure,27nodi39edge4community,
-1018token input1970output/costo stimato$0.0036. Platform docs da aggiornare dopo
-ultime note di governance. Nessun grafo committato o usato come prova metriche.
+1018token input1970output/costo stimato$0.0036. Platform docs dopo integrazione:
+exit0,gpt-reserve,chunk1/1done/zero semanticfailure,394nodi432edge81community,
+7500token input2595output/costo stimato$0.0072; log durabile
+`coordinator/graph-platform-integration.log`. RootglobalcheckMakeexit2 riprodotto:
+30finding objects identici aR4 e30tuple identici alla tabella provenance,
+15runtimelegacy/15testonly,nonattribuibiliR5. Artifact `coordinator/global-check.json`
+e `provenance-match.txt`. Nessun grafo committato o usato come prova metriche.
 Frontend/build/worker/E2E non rieseguiti in questa slice backend; evidenze
 precedenti restano storiche. Capacitas97,52%FAIL100 e30divergenze globali restano
 questioni separate aperte, non riparate, ignorate o assorbite. No mainmerge/
