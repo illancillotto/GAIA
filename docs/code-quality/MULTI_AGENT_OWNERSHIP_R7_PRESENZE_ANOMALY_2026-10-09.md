@@ -7,10 +7,10 @@ terminal; all previous ownership closed. Goal remains ACTIVE/INCOMPLETE.
 
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 |---|---|---|---|---|---|---|
-| Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md | Approve one bounded responsibility and integration gates | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
+| Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md | Approve one bounded responsibility and integration gates | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | MERGED |
 | R7 author | Presenze UI | frontend/src/app/presenze/giornaliere/page.tsx; frontend/src/app/presenze/giornaliere/anomaly-panel-model.ts; frontend/tests/unit/presenze-giornaliere-r7.test.tsx; reports/code-quality/SLICE_R7_PRESENZE_ANOMALY_2026-10-09.md; domain-docs/presenze/docs/ANOMALY_PANEL_REFACTOR_2026-10-09.md | Shared anomaly grouping/counting/comparator policy, no JSX/lifecycle changes | GAIA-campaign-20261009-r7-presenze-anomaly | refactor/complexity-r7-presenze-anomaly | MERGED |
 | R7 reviewer | Independent integration | reports/code-quality/REVIEW_R7_PRESENZE_ANOMALY_2026-10-09.md only, all source read-only | Independent design/source review, original differential oracle, before/after full-file coverage | GAIA-campaign-20261009-r7-presenze-review | review/complexity-r7-presenze-anomaly | MERGED |
-| R7 verifier | Independent final verification | reports/code-quality/VERIFICATION_R7_PRESENZE_ANOMALY_2026-10-09.md only, all source read-only | Frozen source full frontend/build/browser/ratchet after review | GAIA-campaign-20261009-r7-presenze-verification | verify/complexity-r7-presenze-anomaly | ACTIVE |
+| R7 verifier | Independent final verification | reports/code-quality/VERIFICATION_R7_PRESENZE_ANOMALY_2026-10-09.md only, all source read-only | Frozen source full frontend/build/browser/ratchet after review | GAIA-campaign-20261009-r7-presenze-verification | verify/complexity-r7-presenze-anomaly | MERGED |
 
 ## Scope and stop condition
 
@@ -69,3 +69,15 @@ and3NaNtrapsPASS/protectedASTexact. Source integrated `bee3fd53` and review
 Coordinator approves verifier exactsource application/full frontend/build/
 browser gates in durable plaintext `coordinator/VERIFY_APPROVAL.txt`.
 Author/reviewer terminal; verifier gates pending, notPASS. No main merge.
+
+## Terminal closure
+
+Final verifier report-only `e57120c5` reviewed and accepted; duplicate source
+`be4bc395` is not integrated. All gates terminal:424focusedPASS/full-file100%,
+4428full-unitPASS/300files, typecheck/lint/smoke18/buildPASS, pertinentE2E7PASS,
+fullE2E54PASS7existingSKIP, zero failures/flaky/retries. Complete AST agrees
+independently with root; ratchetmainPASS0, globalcheckFAIL30 exact historical
+finding objects, unchanged baseline SHA. CleanupJSON proves owned stack and
+network absent, ports13011/18091free, credentials deleted. This supersedes
+every pending note above and closes only R7. Global campaign ACTIVE/INCOMPLETE,
+principal403 still extreme and Capacitas coverageFAIL remains separate.

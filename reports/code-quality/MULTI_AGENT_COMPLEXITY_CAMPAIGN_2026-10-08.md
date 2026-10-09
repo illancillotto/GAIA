@@ -1,6 +1,6 @@
 # GAIA — Multi-Agent Complexity Campaign
 
-## 2026-10-09 — R7 anomaly-panel ordering/grouping, verification pending
+## 2026-10-09 — R7 anomaly-panel ordering/grouping, verified checkpoint
 
 Original objective unchanged, global campaign ACTIVE/INCOMPLETE. Previous R6
 turn is PROGRESS: actual source reduction independently reviewed/certified.
@@ -60,6 +60,17 @@ actual result retries0. Root independently reads JSON/exits. Fullnpmrunlint,
 ownedlint,typecheck,smoke18 and freshbuild all exit0; repo warnings are legacy,
 not claimed eliminated. Verifier finalmetrics/provenance/report/cleanup remain
 pending and no global completion is claimed.
+
+**Terminal closure supersedes every pending R7 note above.** Independent final
+report-only `e57120c5` reviewed/accepted; duplicate verifier source `be4bc395`
+not integrated. All gates terminal, including full-file100%,4428full-unitPASS,
+freshbuildPASS and fullE2E54PASS7existingSKIP0failure/flaky/retry. Entire frozen
+AST matches root. RatchetmainPASS0, globalcheckFAIL30 exact historical findings,
+baseline unchanged. Own stack/network absent, ports13011/18091free, private
+credentials deleted; cleanupJSON inspected. Registry closed without overlaps.
+Final post-report ratchet and platform graph refresh follow these closure docs;
+their actual results belong to retained logs, not this stated intent. R7 alone
+is closed; global campaign ACTIVE/INCOMPLETE, principal403 remains extreme.
 
 ## 2026-10-09 — R6 Presenze daily presentation, verified checkpoint
 

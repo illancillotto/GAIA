@@ -57,6 +57,16 @@
   rootactualJSON/exits verified; fullnpmrunlint anchePASSconlegacywarnings,
   smoke18PASS0skip. Verifier serial finalreportPID530027/session75213LIVE,
   mainratchet/globalcheck/cleanup/report-onlycommit successivi, nofinalPASSdedotto.
+- Terminalclosure R7: verifierreport-onlye57120c5 reviewed/accepted; duplicate
+  sourcebe4bc395nonintegrata. Tutti gate seriali terminali,424focusedPASS con
+  page1048s1189b/model39s16b100%,4428fullunitPASS300files, lint/typecheck/smoke18/
+  buildPASS; pertinentE2E7PASS/fullE2E54PASS7existingSKIP0failure/flaky/retry.
+  Root e verifier ASTinteri identici, ratchetmainPASS0/globalcheckFAIL30exact
+  historicalfindingobjects/baselineimmutable. CleanupJSON verificato: risorse
+  ownedassenti,13011/18091libere,credenzialieliminate. RegistrytuttiMERGED solo
+  campaign; main dirty intatto. Supera note pending, non chiude obiettivo globale.
+  Refreshplatformdocs e ratchet postreport richiesti dopo queste note; nessun
+  esito dedotto dall'intenzione. Principal403/5UI>300/17callable>200 restano.
 
 ## 2026-10-09 — R6 Presenze daily presentation, bounded slice
 
