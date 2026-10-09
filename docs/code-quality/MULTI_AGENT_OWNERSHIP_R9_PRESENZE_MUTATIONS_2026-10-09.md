@@ -61,3 +61,30 @@ worktree handles absent, not pruned/deleted. Dirtymainbackend preserved. Last
 ownedpagecommit ecdcc93c is reviewedR8, no current owner other than this registry.
 Dedicated frontend Graphify query used for impact; graph not complexity proof.
 Durable evidence `~/.cache/gaia-campaign/20261009-r9-presenze/`.
+
+## Resumption — original characterization authorized
+
+The GIS-only request is closed with independently verified evidence; it did
+not authorize copying campaign code into the concurrent main checkout. The
+global objective remains ACTIVE/INCOMPLETE. The previous turn confirmed the
+existing GIS disposition and produced fresh readiness/ratchet evidence, but
+made no further complexity reduction; resume the registered R9 responsibility.
+
+Coordinator selects design A: one local named `DailyRecordMutation` type with
+required `token`, `request`, `success`, `finish`, `errorMessage`. Preparation
+executes synchronously inside the single async persistence helper before its
+try; nonasync domain delegates return that exact Promise. Request payloads
+execute inside try. Shared cache eviction and response application retain
+their original ordering and captured token/response date. No new runtime file.
+
+Author may now add only the registered R9 characterization test, and record
+the original results in the assigned slice report. Runtime edits and commits
+remain gated on explicit Coordinator approval after original tests and the
+independent design oracle. Reviewer may inspect the external prototype and
+extend the independent frozen-original oracle, without editing source/tests.
+All overlapping microtask/error/preflight semantics must match exactly; count
+every nested callback in the complexity comparison. No generic framework,
+new state/hook, guard changes, or changes to the protected helpers/callsites.
+
+Plaintext phase authorization:
+`~/.cache/gaia-campaign/20261009-r9-presenze/coordinator/CHARACTERIZATION_APPROVAL.md`.
