@@ -1,5 +1,44 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R11 Capacitas monitor lifecycle, certified and integrated
+
+- Distinct final verifier is terminal, certificate SHA256
+  `2898c999f450840268f6ef18a8ffc0ec60598500c10a43e19f0ab87ca9645d34`.
+  Actual reviewed workspacea232 source55827bde integrated01a9ada4; certificate
+  5981be8d integrated81be6d41. Both actual post-pick main55a ratchets exit0/
+  findings[], frozen blobs exact. INTEGRATION_R11 records scope and provenance.
+- Fresh396focused/19spec and4575full-unit/305files PASS, zero unit skips.
+  Entire workspace789s818b253f684l and fraction policy9s6b6f8l100%, no missing
+  counters. Project/explicit new-test typecheck, owned lint0, smoke18/build PASS;
+  full lint35unchanged warnings disclosed. No test/config/policy weakening.
+- 24native monitor cases plus2real logins,4pertinent E2E PASS; full E2E54PASS/
+  7historicalSKIP/0retry/flaky. Browser clock is virtual, callbacks real; no
+  wall-clock/PostGIS/provider certification. Original races explicitly retained.
+  First broad coverage FAIL and startup502browser attempt retained, not PASS.
+- Combined cognitive1022→926,decisions872→803,LOC3140→3131; principal455→391/
+  404→360/2625→2527. All nested callbacks counted, two additional callables
+  disclosed,31states/2effects unchanged. ClassificationIMPROVED, not strategic
+  hotspot completion or debt transfer. Prior hook warning design rejected.
+- Certified complete AST1672files20320callables1926error2741warning4667findings.
+  Official8October delta−30error/−17warning/−47finding; application effectiveLOC
+  318975. Unaffected1671files/20067callables exactR10; all30complete historical
+  finding objects exactR10, Coordinator independently compared them. Global
+  check FAIL30 remains separate15runtime/15test provenance; baseline unchanged.
+- All verifier25processes terminal, own ports/containers/network/credentials
+  removed, source hashes exact, ordinary Vitest timing-cache update disclosed.
+  Main55a concurrent work diff/status hashes unchanged; no reset/stash/merge.
+- Global campaign ACTIVE/INCOMPLETE; top-tail5>300/17>200/55>100 and final broad
+  backend/worker suites remain open. No next hotspot before green checkpoint.
+  Dedicated Graphify code/domain/platform maintenance completed, code force-
+  pruning and query PASS, domain/platform semantic chunk1/1done/no failures.
+  No generated graphs versioned. Older sections retain historical phase states.
+- Coordinator fresh full AST exactcertificate, main55a ratchet exit0/findings[],
+  globalcheck makeexit2/exact30objects and terminal closureauditPASS. One audit
+  attempted consumption before the live gate emitted JSON: retained administrative
+  failure, not a restarted gate or application regression. Frozen source/tests/
+  certificate and protected config/baseline/tooling remain exact. All tasks
+  terminal; integration git window released and R11ownership markedMERGED.
+
 ## 2026-10-09 — R11 monitor lifecycle reviewed; final certification active
 
 - User confirms Capacitas priority, dedicated campaign branch and unchanged

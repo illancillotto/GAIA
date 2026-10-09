@@ -1,5 +1,113 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-09 — R11 Capacitas monitor lifecycle, certified and integrated checkpoint
+
+Global objective **ACTIVE / INCOMPLETE**. This section supersedes the current
+R10 numerical snapshot below; earlier entries retain historical evidence.
+User confirms Capacitas priority, dedicated campaign branch and full-file100%.
+GIS failure was separately fixed/certified; current optional GIS tests remain
+SKIP, not fresh passing certification. No main merge, push or deployment.
+
+Source55827bded7a0dc36a7517d97c938ef4d067f076d is APPROVED / IMPROVED by independent
+source review and distinct final verification. Source integrated01a9ada4;
+certificate-only5981be8d integrated81be6d41. Both main55a post-pick ratchets
+exit0/findings[]. Exact sequential integration and closure provenance are in
+`INTEGRATION_R11_CAPACITAS_MONITORS_2026-10-09.md`.
+Ownership: `docs/code-quality/MULTI_AGENT_OWNERSHIP_R11_CAPACITAS_MONITORS_2026-10-09.md`.
+Author, reviewer/integrator and final verifier have separate worktrees and
+exclusive writes; Coordinator owns governance/domain contract only. No overlap.
+
+Four monitor families now share genuinely duplicated token/loading/auth/error/
+finally phases. Typed family snapshot callbacks preserve response order,
+history guards, Terreni modal-before-ref ordering, inCASS limit300, all polling
+dependencies/timing and original stale/manual overlap behavior. No async wrapper,
+new hook/context/reducer/component/export or source relocation. All nested
+callables and the unchanged fraction policy are included in accounting.
+
+### R11 local metrics
+
+| Metric | R10 before | R11 after | Delta |
+| --- | ---: | ---: | ---: |
+| Principal cognitive |455 |391 |-64 (-14.07%) |
+| Principal cyclomatic |404 |360 |-44 |
+| Principal callable LOC |2625 |2527 |-98 |
+| Combined cognitive |1022 |926 |-96 (-9.39%) |
+| Combined decisions |872 |803 |-69 (-7.91%) |
+| Combined raw cyclomatic |1129 |1062 |-67 |
+| Combined callable LOC |4789 |4677 |-112 |
+| Combined effective file LOC |3140 |3131 |-9 |
+| Combined callables |257 |259 |+2 disclosed |
+| Error findings |22 |17 |-5 |
+| Warning findings |19 |16 |-3 |
+| useState / useEffect |31 /2 |31 /2 |0 /0 |
+
+Principal nesting2/params1 unchanged. Classification **IMPROVED**, not complete
+hotspot resolution. Capacitas472→391 versus the official initial callable is
+−81/−17.16%, not the strategic50% reduction. No transferred debt is claimed away.
+
+### Current global metrics — official 8 October only
+
+| Metric | Official8October | Certified R11 | Delta | Delta percent |
+| --- | ---: | ---: | ---: | ---: |
+| Files |1665 |1672 |+7 |+0.42% |
+| Callables |20261 |20320 |+59 |+0.29% |
+| Error |1956 |1926 |-30 |-1.53% |
+| Warning |2758 |2741 |-17 |-0.62% |
+| Finding |4714 |4667 |-47 |-1.00% |
+
+Application without worker tests:1618files/18999callables/318975effectiveLOC/
+4604findings. EffectiveLOC+119/+0.04% versus official318856. Findings overlap;
+the47reduction is not47independent defects. Snapshot clean-Git/count differences
+are documented below, never silently substituted for the user's official scope.
+
+| Domain | Error before | Error after | Warning before | Warning after |
+| --- | ---: | ---: | ---: | ---: |
+| Backend |1035 |1033 |1688 |1689 |
+| Frontend |878 |850 |881 |863 |
+| Worker runtime |35 |35 |134 |134 |
+| Worker tests |8 |8 |55 |55 |
+
+### Fresh verification and coverage
+
+- 396focused tests/19specs and4575whole-frontend tests/305files PASS, zero unit skip.
+- Entire workspace789statements/818branches/253functions/684lines100%; entire
+  fraction policy9statements/6branches/6functions/8lines100%, zero missing.
+- Project and explicit new-test TypeScript, owned lint0, smoke18, clean build PASS.
+  Full frontend lint PASS with35complete unchanged warning objects.
+- 24native monitor cases plus2real logins PASS: public gestures/API boundary,
+  explicitly disclosed browser virtual clock and actual polling callbacks.
+- Pertinent E2E4PASS; full E2E54PASS/7existingSKIP/0failure/retry/flaky. All skip
+  identities/reasons in VERIFICATION_R11 remain open; PostGIS/provider/optional
+  GIS coverage is not inferred. Fresh backend/worker global suites remain due.
+- Failed initial broader-scope coverage and browser-before-readiness502 attempts
+  retained separately, not reported PASS. First runtime design's new hook warning
+  rejected; generated EOF blank fixed before accepted source, no waiver.
+- Verifier cleanup complete; all25owned processes terminal, ports/containers/
+  network/credentials removed; tracked sources exact, ordinary timing cache
+  change disclosed. Coordinator independently checks complete unaffected AST
+  and all30historical finding objects, not merely totals.
+
+### Ratchet, provenance and remaining debt
+
+Certified source main55a ratchet **PASS0**. Read-only global check **FAIL30**;
+all complete objects equal R10. Provenance report classifies15historical runtime
+REAL_REGRESSION and15TEST_ONLY_DIVERGENCE, none caused by this campaign. These
+remain visible, not ignored, repaired or absorbed by baseline inflation.
+Baseline/soglie/scope/scanner/tooling/packages unchanged. Main concurrent binary
+diff/status SHA256 still9f85e574...114664b/0d54d4eb...735e87.
+
+Remaining tail5callables>300/17>200/55>100; highest Capacitas391, Utenze391,
+Catasto anomalie390, Presenze385, CatastoGIS317. Complete current top30 and
+architectural/coverage risks are in INTEGRATION_R11. Source and domain/technical
+graphs use dedicated Make targets; graph outputs never committed or used as
+complexity proof. Coordinator fresh completeAST equals certificate, root main55a
+ratchet exit0/findings[], globalcheck makeexit2/exact30objects. Graphify code
+force-pruning/query and domain/platform semantic chunk1/1 refreshes completed
+without partial results. Terminal closure audit confirms exact protected hashes.
+No new wave or broad-backend/worker/global completion claim.
+Next proposed bounded responsibility: Capacitas wizard/validation or commands,
+only after green integration checkpoint and fresh original full-file coverage.
+
 ## 2026-10-09 — R10 Capacitas, certified and integrated checkpoint
 
 Global objective **ACTIVE/INCOMPLETE**. Exact bounded sourcebe384788 reviewed

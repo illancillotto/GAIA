@@ -1,5 +1,39 @@
 # R11 Capacitas — job-monitor lifecycle ownership
 
+## Completed authorization — certified sequential integration
+
+Distinct final verifier is terminal: certificate SHA256
+`2898c999f450840268f6ef18a8ffc0ec60598500c10a43e19f0ab87ca9645d34`,
+396 focused tests/full-file100%,4575 frontend unit tests, fresh build,
+24 monitor cases plus2 real logins,4 pertinent E2E,54 full E2E PASS/7 SKIP,
+main ratchet PASS0. Complete30historical finding objects equal R10.
+Coordinator inspected the certificate and source hashes. The Integration Agent
+alone now owns the git window in the integration worktree for exact source
+`55827bded7a0dc36a7517d97c938ef4d067f076d`, then the report-only certificate
+commit, with main ratchet after each pick. No source/report edits permitted.
+Existing Coordinator registry/domain-document changes must remain unstaged.
+Verifier report write ownership is released; Integration Agent may commit
+only the frozen certificate in the verifier worktree. Later sections retain
+historical phase decisions; this authorization supersedes their restrictions.
+Global campaign remains ACTIVE/INCOMPLETE; no next hotspot is authorized here.
+
+## Accepted integration checkpoint
+
+Exact source55827bde integrated01a9ada481dc2b6bd839ef39ee0948692cfca17d;
+report-only certificate5981be8da26b46b72e8961bb6fe5d10bac158820 integrated
+81be6d419749dd47a499687c47ccffbffbac1468. Both post-pick main55a ratchets
+exit0/findings[]. Earlier lifecycle/readiness/review phases below are history,
+not current permissions. Runtime/source/test/certificate hashes remain frozen.
+Author/reviewer/verifier write ownership is released after terminal reports;
+Coordinator closes only governance/domain docs and dedicated Graphify targets.
+No agent may start the next slice under this registry.
+
+Coordinator additionally owns only new domain contract
+domain-docs/elaborazioni/docs/CAPACITAS_JOB_MONITOR_LIFECYCLE_2026-10-09.md.
+No other agent owns that path; dedicated domain-docs graph maintenance belongs
+to Coordinator. This reviewed-source contract does not authorize runtime
+integration or policy/feature changes. No graphs are versioned.
+
 Global attachment objective remains ACTIVE/INCOMPLETE. Previous goal turn is
 PROGRESS: exact reviewed/certified R10 runtime integratedb12780e2, certificate
 4c91af1d and closure d2f222f9; fresh full-file100%, whole frontend/build/browser
@@ -22,12 +56,12 @@ These are measured planning data; acquire fresh original tests/metrics locally.
 
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| Coordinator | Governance / integration | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md; later domain contract and INTEGRATION_R11 report with explicit allocation | Phase gates, exclusive ownership, source review and certification integration | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
-| R11 readiness author | Capacitas job-monitor lifecycle | reports/code-quality/READINESS_R11_CAPACITAS_MONITORS_2026-10-09.md only, frozen | Original and candidate analysis concluded; runtime/test ownership released | GAIA-campaign-20261009-r11-capacitas-monitors | refactor/complexity-r11-capacitas-monitors | READY_FOR_REVIEW |
-| R11 readiness reviewer | Independent lifecycle and original-behavior review | reports/code-quality/REVIEW_READINESS_R11_CAPACITAS_MONITORS_2026-10-09.md only, frozen | Original338PASS100%, selected-inline independently approved for characterization; terminal | GAIA-campaign-20261009-r11-capacitas-monitors-review | review/complexity-r11-capacitas-monitors | READY_FOR_REVIEW |
-| R11 author (01a120c5-d838-7251-b33b-52a5f9b03b48) | Capacitas job-monitor lifecycle | frontend/src/components/elaborazioni/capacitas-workspace.tsx; reports/code-quality/SLICE_R11_CAPACITAS_MONITORS_2026-10-09.md; all19spec/readiness/characterization artifacts frozen read-only | Reviewed published55827bde source, corrected100%/lint0/ratchet0, no further source write or runtime integration before certification | GAIA-campaign-20261009-r11-capacitas-monitors | refactor/complexity-r11-capacitas-monitors | READY_FOR_REVIEW |
-| R11 Integration Agent (01a120c7-5237-7f02-9fe7-352e65b9a6ed) | Independent characterization/source review, eventual sequential integration only after authorization | reports/code-quality/REVIEW_CHARACTERIZATION_R11_CAPACITAS_MONITORS_2026-10-09.md; later source review report explicitly allocated; source/test/config read-only now | Review new rendered tests and original behavior independently; heavy replay only after slot transfer, no commit/integration yet | GAIA-campaign-20261009-r11-capacitas-monitors-review | review/complexity-r11-capacitas-monitors | ACTIVE |
-| R11 final verifier (01a120f5-5536-7f11-bb61-089e5d03c923) | Frozen-source certification | reports/code-quality/VERIFICATION_R11_CAPACITAS_MONITORS_2026-10-09.md only; all reviewed source/tests/config read-only | Fresh focused coverage/fullfrontend/build/nativebrowser/E2E/ratchet/globalprovenance/cleanup, no globalcampaigncompletion | GAIA-campaign-20261009-r11-capacitas-monitors-final | verify/complexity-r11-capacitas-monitors | ACTIVE |
+| Coordinator | Governance / integration | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md; domain contract and INTEGRATION_R11 report | Closure docs/Graphify, exact full AST, main ratchetPASS0/global30 unchanged; bounded slice closed, global campaign incomplete | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | MERGED |
+| R11 readiness author | Capacitas job-monitor lifecycle | reports/code-quality/READINESS_R11_CAPACITAS_MONITORS_2026-10-09.md only, frozen | Original/candidate analysis accepted in01a9ada4; ownership released | GAIA-campaign-20261009-r11-capacitas-monitors | refactor/complexity-r11-capacitas-monitors | MERGED |
+| R11 readiness reviewer | Independent lifecycle and original-behavior review | reports/code-quality/REVIEW_READINESS_R11_CAPACITAS_MONITORS_2026-10-09.md only, frozen | Original338PASS100% review accepted; terminal | GAIA-campaign-20261009-r11-capacitas-monitors-review | review/complexity-r11-capacitas-monitors | MERGED |
+| R11 author (01a120c5-d838-7251-b33b-52a5f9b03b48) | Capacitas job-monitor lifecycle | frontend/src/components/elaborazioni/capacitas-workspace.tsx; reports/code-quality/SLICE_R11_CAPACITAS_MONITORS_2026-10-09.md; all19spec/readiness/characterization artifacts frozen read-only | Source55827bde integrated01a9ada4 after independent review/certification; terminal, ownership released | GAIA-campaign-20261009-r11-capacitas-monitors | refactor/complexity-r11-capacitas-monitors | MERGED |
+| R11 Integration Agent (01a120c7-5237-7f02-9fe7-352e65b9a6ed) | Independent review and certified sequential integration | Frozen original/design/source reviews; exclusive source/certificate git window | Source01a9ada4/certificate81be6d41, both main ratchetsPASS0; release git window after terminal integrity report | GAIA-campaign-20261009-r11-capacitas-monitors-review | review/complexity-r11-capacitas-monitors | MERGED |
+| R11 final verifier (01a120f5-5536-7f11-bb61-089e5d03c923) | Frozen-source certification | reports/code-quality/VERIFICATION_R11_CAPACITAS_MONITORS_2026-10-09.md only; all reviewed source/tests/config read-only | Certificate2898c999 integrated81be6d41, full-file100%/fullfrontend/build/browser/ratchet certified; terminal | GAIA-campaign-20261009-r11-capacitas-monitors-final | verify/complexity-r11-capacitas-monitors | MERGED |
 
 ## Original characterization freeze and review gate
 
