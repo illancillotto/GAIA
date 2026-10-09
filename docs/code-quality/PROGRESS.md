@@ -50,6 +50,14 @@
   Verifierreadyc518727e autorizzato frozenexactsource/focused/fullfrontend/build/
   browser con nuovaVERIFY_APPROVAL; suitepending, nessunPASSdedotto. Rootintegration
   report/ratchet83919 e forcedfrontendgraph93926 live da osservare, nonrestart.
+- Rootintegrationreport/ratchetterminalPASS0, fullASTexactauthorafter; current
+ 1671files20300callables1933error2746warning4679finding/cog81183cyc83289fileLOC
+332334callableLOC327719. GlobalcheckFAIL30Makeexit2 fullobjectsidenticalR7,
+  attribution0/baselineintatta. Top30ranking e domainresults aggiornati current,
+  audit30rowsPASS dopo correggere soloindex/tableselectionscriptesterno.
+  Forcedfrontendgraph6027nodes12618edges224communities,Presenzedocs76/78/13
+  chunk1/1done/zero semanticfailure. Verifier468focusedPASS/fullpage1033s1143b100%;
+  fullfrontend/build/browser ancora pendenti, nessun nuovo runtimehotspot.
 
 ## 2026-10-09 — R7 Presenze anomaly ordering/grouping
 

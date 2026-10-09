@@ -36,6 +36,15 @@ Durable evidence `~/.cache/gaia-campaign/20261009-r8-presenze/`. Main55a dirty
 concurrent work untouched. CoverageCapacitas97.52%FAIL100 and historical30
 globalbaseline divergences remain separate. No mainmerge/push/PR.
 
+Root integrated fullAST exactauthorafter, ratchetmainPASS0; current1671files/
+20300callables/1933error/2746warning/4679finding, cognitive81183/cyclomatic83289,
+fileLOC332334/callableLOC327719. GlobalcheckFAIL30Makeexit2, everyhistorical
+findingobject exactR7/zeroattribution, no baseline repair. Remainingtop30 and
+domainrows updated to currentAST,30rows independently checked. Verifier fresh
+468focusedPASS/page1033s1143b100%; fullfrontend/build/browser gates stillpending.
+Forcedfrontendcode graph6027nodes12618edges224communities; Presenzedocs76/78/13,
+chunk1/1done/zero semanticfailure. These are maintenance, not complexity proof.
+
 ## 2026-10-09 — R7 anomaly-panel ordering/grouping, verified checkpoint
 
 Original objective unchanged, global campaign ACTIVE/INCOMPLETE. Previous R6
@@ -891,33 +900,33 @@ dei callable annidati dello scanner, non decisioni uniche del programma.
 
 ## Final metrics
 
-Metriche dell'ultimo checkpoint R7, non dichiarazione di chiusura della campagna.
-Scansione durabile `20261009-r7-presenze/coordinator/integrated.json` e `.md`,
+Metriche dell'ultimo checkpoint R8, non dichiarazione di chiusura della campagna.
+Scansione durabile `20261009-r8-presenze/coordinator/integrated.json` e `.md`,
 sul runtime congelato e già revisionato.
 
 | Perimetro | File | Callable | LOC effettive | Error | Warning | Finding |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Checkpoint R7 ufficiale | 1671 | 20294 | 332324 | 1937 | 2747 | 4684 |
-| Checkpoint R7 applicativo | 1617 | 18973 | 318919 | 1929 | 2692 | 4621 |
+| Checkpoint R8 ufficiale | 1671 | 20300 | 332334 | 1933 | 2746 | 4679 |
+| Checkpoint R8 applicativo | 1617 | 18979 | 318929 | 1925 | 2691 | 4616 |
 
-La campagna aggiunge nove file e trentasette callable netti rispetto a clean55a.
+La campagna aggiunge nove file e quarantatre callable netti rispetto a clean55a.
 Le differenze con l'audit dirty iniziale non sono riduzioni attribuite al
-refactoring. File LOC complessive aumentano di143, non sono diminuite.
+refactoring. File LOC complessive aumentano di153, non sono diminuite.
 
 ## Delta
 
-Confronto causale: snapshot Git pulito55a → checkpoint R7 congelato.
+Confronto causale: snapshot Git pulito55a → checkpoint R8 congelato.
 
 | Metrica | Before | After | Delta | Delta % |
 | --- | ---: | ---: | ---: | ---: |
-| Error | 1956 | 1937 | -19 | -0,97% |
-| Warning | 2758 | 2747 | -11 | -0,40% |
-| Finding | 4714 | 4684 | -30 | -0,64% |
-| Cognitive sum | 81931 | 81246 | -685 | -0,84% |
-| Cyclomatic sum | 83666 | 83308 | -358 | -0,43% |
-| Callable LOC sum | 328259 | 327726 | -533 | -0,16% |
-| File LOC sum | 332181 | 332324 | +143 | +0,043% |
-| Callable | 20257 | 20294 | +37 | +0,18% |
+| Error | 1956 | 1933 | -23 | -1,18% |
+| Warning | 2758 | 2746 | -12 | -0,44% |
+| Finding | 4714 | 4679 | -35 | -0,74% |
+| Cognitive sum | 81931 | 81183 | -748 | -0,91% |
+| Cyclomatic sum | 83666 | 83289 | -377 | -0,45% |
+| Callable LOC sum | 328259 | 327719 | -540 | -0,16% |
+| File LOC sum | 332181 | 332334 | +153 | +0,046% |
+| Callable | 20257 | 20300 | +43 | +0,21% |
 | Callable cognitive >300 | 8 | 5 | -3 | -37,50% |
 | Callable cognitive >200 | 18 | 17 | -1 | -5,56% |
 | Callable cognitive >100 | 55 | 55 | 0 | 0% |
@@ -946,10 +955,10 @@ dell'obiettivo globale della campagna.
 | Domain | Error before | Error after | Warning before | Warning after |
 | --- | ---: | ---: | ---: | ---: |
 | Backend runtime | 1035 | 1033 | 1688 | 1689 |
-| Frontend runtime | 878 | 861 | 881 | 869 |
+| Frontend runtime | 878 | 857 | 881 | 868 |
 | Worker runtime | 35 | 35 | 134 | 134 |
 | Worker tests, fuori campagna runtime | 8 | 8 | 55 | 55 |
-| Totale | 1956 | 1937 | 2758 | 2747 |
+| Totale | 1956 | 1933 | 2758 | 2746 |
 
 I due error Wiki e un error LOC GIS diventano warning perché le metriche scendono, non perché
 cambia la soglia. B4 riduce la complessità senza eliminare finding sopra soglia.
@@ -958,7 +967,7 @@ cambia la soglia. B4 riduce la complessità senza eliminare finding sopra soglia
 
 | Callable | Before cognitive | After cognitive | Delta |
 | --- | ---: | ---: | ---: |
-| PresenzeGiornalierePage | 550 | 403 | -147 |
+| PresenzeGiornalierePage | 550 | 399 | -151 |
 | ElaborazioniSettingsWorkspace | 402 | 296 | -106 |
 | _build_network_statistics_summary | 209 | 181 | -28 |
 | refresh_wiki_conversation_daily_metrics | 188 | 178 | -10 |
@@ -1102,7 +1111,7 @@ Fonte durabile `20261009-r7-presenze/coordinator/integrated.json`, snapshot`1699
 | # | Callable | Cognitive | Cyclomatic | LOC | Path |
 | --- | --- | ---: | ---: | ---: | --- |
 | 1 | ElaborazioniCapacitasWorkspace | 472 | 416 | 2631 | `frontend/src/components/elaborazioni/capacitas-workspace.tsx` |
-| 2 | PresenzeGiornalierePage | 403 | 356 | 2020 | `frontend/src/app/presenze/giornaliere/page.tsx` |
+| 2 | PresenzeGiornalierePage | 399 | 352 | 2020 | `frontend/src/app/presenze/giornaliere/page.tsx` |
 | 3 | DetailContent | 391 | 304 | 1908 | `frontend/src/app/utenze/[id]/page.tsx` |
 | 4 | CatastoAnomaliePageContent | 390 | 342 | 2109 | `frontend/src/app/catasto/anomalie/page.tsx` |
 | 5 | CatastoGisPage | 317 | 281 | 1889 | `frontend/src/app/catasto/gis/page.tsx` |
