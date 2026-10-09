@@ -1,6 +1,41 @@
 # R14 Operazioni — operator kilometre attribution readiness
 
-## Current phase: independent ORIGINAL persistent characterization replay
+## Current phase: runtime implementation authorized
+
+Independent ORIGINAL reviewer task01a121e9-741c-7f90-aa16-a492b838b89f is terminal:
+ORIGINAL_CHARACTERIZATION_ACCEPTED, heavy RELEASED. Frozen report SHA256
+b852f676a8042e4e10254c06bfc71aaac295ab07582c8ba0c68869a05fc15f75, published
+cf4f36dd and imported to author7f7ae0a7. Fresh56focused/204union0skip,
+fullanalytics661statements290branches100%, helper27statements10branches100%,
+scopedRuff/format/style and actual immutable55a ratchet0 independently confirmed.
+Initial Babel exit2 retained; installed dependency resolved through NODE_PATH,
+no installation/config/scanner/baseline change. All2139protected entries exact.
+
+Coordinator pre-runtime actual immutable55a ratchet is terminal PASS0 (fresh
+20261009-r14-coordinator/pre-runtime-ratchet.log and .exit). Exclusive heavy
+window and runtime ownership now transfer to the SAME author ONLY:
+
+| Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| /root/r14_operazioni_operator_km | Operazioni fuel attribution | backend/app/modules/operazioni/routes/analytics.py; ONLY new reports/code-quality/SLICE_R14_OPERAZIONI_OPERATOR_KM_2026-10-09.md | Apply exact frozen1ab2 guard-clause candidate to nested _op_km ONLY, then fresh actual-source gates | GAIA-campaign-20261009-r14-operazioni-operator-km | refactor/complexity-r14-operazioni-operator-km | ACTIVE |
+| Independent ORIGINAL reviewer | Characterization | Frozen REVIEW_CHARACTERIZATION_R14 b852f676 | Terminal, no runtime ownership | GAIA-campaign-20261009-r14-operazioni-operator-km-review | review/complexity-r14-operazioni-operator-km | READY_FOR_REVIEW |
+| Future independent runtime reviewer | Source review | ONLY later new REVIEW_R14 report | Source/tests/config read-only; activated after author freeze/release | Later dedicated review worktree | Later | PLANNED |
+| Future distinct final verifier | Certification | ONLY later new VERIFICATION_R14 report | Fresh actual-source certification after accepted runtime review | Later dedicated final worktree | Later | PLANNED |
+
+Author must first revalidate sourcecbe/spec210b/CHAR06b2/reviewb852/candidate1ab2,
+status/HEAD/merge-base and protected manifests. Modify runtime using apply_patch,
+no other callable/query/ranking/identity/response responsibility. All seven specs,
+readiness/reviews/config/tooling/coverage markers/baseline are frozen. Required
+fresh204union/full-file100%, Ruff/style, full metrics including all31recursive
+functions versus28scanner records and29non-target functions unchanged, genuine
+distinct decisions24→22, _op_km54→33cognitive/4→2nesting/20LOC unchanged,
+outerfuel282→261cognitive and file1255LOC unchanged, actual immutable55a ratchet0,
+dedicated Graphify Operazioni update and integrity. No source permission until
+explicit Coordinator follow-up after green root gate. Stop/freeze/release;
+no commit/import/merge delegated and no independent certification inferred.
+R15 remains static-only. Global campaign ACTIVE/INCOMPLETE.
+
+## Previous phase: independent ORIGINAL persistent characterization replay
 
 Author terminal READY_FOR_REVIEW, heavy RELEASED. Frozen spec
 210b958a4d2ecfa884ad141364281119575f637669580cb24474b920847892fc and CHAR

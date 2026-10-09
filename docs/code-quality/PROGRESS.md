@@ -1,5 +1,20 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R14 independent original accepted; bounded source allocation
+
+- Independent reviewer terminal b852f676:56focused/204union0skip/fullanalytics
+  661statements290branches100%, helper27/10full100%; scopedRuff/format/style and
+  actual immutable55a ratchet0, protected2139 entries exact. First Babel exit2
+  retained and explained by missing worktree resolution, NODE_PATH only corrected.
+- Reviewer heavy RELEASED; report published cf4f36dd/imported author7f7ae0a7.
+  Registry allocates exact frozen1ab2 nested _op_km candidate only, conditional
+  on Coordinator live root pre-runtime gate. Seven specs/config/baseline frozen.
+  Actual-source implementation/test/measurement still due, no improvement claim.
+- User GIS FAIL already independently resolved: fiscal repeat10/GIS5/fullE2E
+  54PASS7historicalSKIP0retry; separate VERIFICATION_GIS_E2E_FIX certificate.
+  Capacitas priority preserved with R15 static design, not unsafe runtime edits.
+  Global campaign ACTIVE/INCOMPLETE; extreme tail and final full suites remain.
+
 ## 2026-10-09 — R14 original characterization frozen, independent replay allocated
 
 - Author terminal new56PASS/sevenunion204PASS0skip/fullanalytics661s290b100%,
