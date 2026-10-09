@@ -25,6 +25,12 @@
   Approvata soltanto characterization originalrendered, runtimependingbaseline
   full-file100%+nuovitestPASS. RevieweroriginalAST2800fixture frozen; keyinheritance
   e nullish/NaN/orderedsubstring/holiday/authprecedence esplicitamente protetti.
+- Originalauthor/reviewer424focusedPASS/fullpage1048s1189b100%,44nuoviUItest
+  PASSprimaedit. RootbeforeASTinteri identicalR7 e originalruntimeSHA06d0bec0.
+  Wrongsmokecommand e whitespacequeryFAIL spiegati/preservati, test corrected
+  exacttextContent, no runtimeworkaround. Approvato whitelist runtime local
+  labelpolicy+FormulaGAIApair soltanto; altrihelpers/hooks/DOM/API invariati.
+  Candidate/fullcoverage/metrics/ratchet/review/finalgates ancora da eseguire.
 
 ## 2026-10-09 — R7 Presenze anomaly ordering/grouping
 
