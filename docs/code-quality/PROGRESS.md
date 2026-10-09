@@ -1,6 +1,21 @@
 # Progress - GAIA Code Complexity Program
 
-## 2026-10-09 — R10 highest residual hotspot, readiness only
+## 2026-10-09 — R10 highest residual hotspot, original characterization
+
+- Fresh author and independent reviewer original312tests/16specs PASS; all
+  23missing arms coincide, branch906/92997.52%FAIL retained, statements857/
+  functions251/lines748100%. Independent real SheetJS56fixtures and modal60
+  state/timing comparisons PASS; original/candidate protected source unchanged.
+- Inline prototype rejected on parentLOC+28/ambiguous anonymous matching. Typed
+  adjacent domain prototype parent3109→3105LOC,newpolicy35LOC/6smallcallables,
+  combinedcognitive1099→1022/decisions923→872/rawcyclomatic1174→1129,
+  overallLOC+31 disclosed; external comparatorPASS0 is not actual source gate.
+- User confirms branch dedicated/full-file100% unchanged. Readiness accepted
+  conditionally for original characterization only: author may add the exclusive
+  rendered resolution-state-r10 test and update readiness report. Runtime,
+  existing tests/config/baseline unchanged; no commit/runtime implementation yet.
+  Approval CHARACTERIZATION_APPROVAL.md; reviewer readiness task terminal,
+  future independent original replay follows actual author test completion.
 
 - R9 terminal integration10784e76clean: reviewed/certified sourcec51b6038,
   verifierreport8df92f9d, complete AST current1933error/2745warning/4678findings,
@@ -10,15 +25,13 @@
   2631callableLOC, highest residual cognitive. New ownership registry precedes
   dedicated author/reviewer worktrees at10784e76. Eighty-one present worktrees
   inspected, no dirty owned runtime path; fifteen missing handles left intact.
-- Author/reviewer tasks r10_capacitas_author/r10_capacitas_reviewer are active
-  for READ-ONLY-runtime ANALYZE/CHARACTERIZE DESIGN. Author first obtains fresh
-  complete312test union coverage/raw23arm provenance; reviewer independently
-  validates reader/library contracts and nullable resolution race semantics.
-  Historical906/929branch97.52% is not reused as a fresh PASS or exception.
+- Initial author/reviewer ANALYZE/CHARACTERIZE DESIGN completed before the
+  original test phase above; each fresh312test union and per-arm provenance
+  independently recorded. Historical coverage is not reused as a fresh PASS.
 - Candidate scope: real domain-specific nullable fraction-resolution policy
   plus exact proven redundant reader defenses, not a generic null wrapper,
-  removed UNKNOWN defenses or fake SheetJS/private-state coverage. No source,
-  test, config, baseline or phase commit authorized yet. Runtime approval only
+  removed UNKNOWN defenses or fake SheetJS/private-state coverage. No runtime,
+  config, baseline or source commit authorized yet. Runtime approval only
   after original behavior characterization, all-callback aggregate metrics and
   independent proof; final changed runtime must be full-file100% and ratchet0.
   Old interrupted closure worktree preserved/superseded, not copied/restarted.

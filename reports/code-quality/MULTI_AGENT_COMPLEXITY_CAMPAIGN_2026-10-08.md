@@ -1,6 +1,22 @@
 # GAIA — Multi-Agent Complexity Campaign
 
-## 2026-10-09 — R10 readiness for highest current residual hotspot
+## 2026-10-09 — R10 original characterization of highest residual hotspot
+
+Fresh author and independent reviewer original312tests PASS;857statements/
+251functions/748lines100%,906/929branches97.52%FAIL retained. Exact23missing
+arms agree. Independent actualSheetJS56original/candidate fixtures,60modal
+state/access timing comparisons and complete protected source comparison PASS.
+Inline prototype rejected for legacy parentLOCgrowth/identity ambiguity.
+Typed adjacent policy candidate parent3109→3105LOC,new35LOCdomainmodule,
+combinedcognitive1099→1022/decisions923→872/rawcyclomatic1174→1129,
+combinedLOC+31 disclosed. External comparatorPASS0 is not implementation.
+
+User confirms branch dedicated and full-file100%policy unchanged. Coordinator
+accepts design conditionally for ORIGINAL CHARACTERIZATION ONLY: author may
+add exclusive rendered resolution-state-r10 tests and update readiness report.
+Runtime/config/baseline/existing tests read-only; no source/commit approval.
+Independent readiness review terminal; original test replay follows author
+completion. Approval CHARACTERIZATION_APPROVAL.md, authority registry updated.
 
 R9 checkpoint10784e76GREEN, source/refinalverification/docs integrated with
 ratchet0 and actual full-file100%/complete frontend/build/browser gates. Global
@@ -10,8 +26,8 @@ principal472/416/2631LOC, not minor warnings or repeated GIS status work.
 
 Exclusive registry MULTI_AGENT_OWNERSHIP_R10_CAPACITAS_2026-10-09.md precedes
 dedicated author/reviewer worktrees and native tasksr10_capacitas_author/
-r10_capacitas_reviewer. Scope is ANALYZE/CHARACTERIZE DESIGN ONLY, runtime/
-tests/config read-only. Author fresh312test full-file coverage and raw missing
+r10_capacitas_reviewer. Initial ANALYZE/CHARACTERIZE DESIGN phase is now terminal,
+runtime/config read-only. Author fresh312test full-file coverage and raw missing
 arms; independent reviewer source/library/nullable-transition proofs. Inherited
 97.52%coverage is an open gate, not a fresh result or a reason to weaken policy.
 Twenty-one conditional reader candidates require fresh contract corroboration;

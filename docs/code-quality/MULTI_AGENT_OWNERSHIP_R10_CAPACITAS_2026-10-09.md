@@ -19,8 +19,8 @@ Main concurrent backend/Presenze/Ruolo/docs are neither input nor copied.
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md | Design/phase approval, sequential ownership, green checkpoint enforcement | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
-| R10 author | Capacitas UI readiness | reports/code-quality/READINESS_R10_CAPACITAS_2026-10-09.md; future exclusive frontend/tests/unit/campaign-capacitas-resolution-state-r10.test.tsx after authorization; runtime capacitas-workspace.tsx read-only in this phase | Fresh full-file gap audit; one coherent nullable fraction-resolution event policy and provably redundant reader decisions design; original characterization before edits | GAIA-campaign-20261009-r10-capacitas | refactor/complexity-r10-capacitas | ACTIVE |
-| R10 reviewer | Independent provenance/design review | reports/code-quality/REVIEW_READINESS_R10_CAPACITAS_2026-10-09.md only; all runtime/tests/config read-only | Independently inspect 21conditional reader candidates and two UNKNOWN modal branches; reject deletion of reachable/race defenses, debt laundering and fake coverage | GAIA-campaign-20261009-r10-capacitas-review | review/complexity-r10-capacitas | ACTIVE |
+| R10 author | Capacitas UI characterization | reports/code-quality/READINESS_R10_CAPACITAS_2026-10-09.md; frontend/tests/unit/campaign-capacitas-resolution-state-r10.test.tsx; runtime capacitas-workspace.tsx read-only | Fresh original/design proof accepted; add only genuine rendered original state/API transition tests, no runtime yet | GAIA-campaign-20261009-r10-capacitas | refactor/complexity-r10-capacitas | ACTIVE |
+| R10 reviewer | Independent provenance/design review | reports/code-quality/REVIEW_READINESS_R10_CAPACITAS_2026-10-09.md only; all runtime/tests/config read-only | Independent original312PASS/97.52%FAIL retained; library56comparison/state60comparison/complete protected AST/designPASS, conditional only for characterization | GAIA-campaign-20261009-r10-capacitas-review | review/complexity-r10-capacitas | READY_FOR_REVIEW |
 | R10 final verifier | Independent frozen-source certification | Future VERIFICATION_R10_CAPACITAS report only | Only after approved implementation/source freeze; distinct worktree | Not created | Not created | PLANNED |
 
 ## Authorized current phase — ANALYZE/CHARACTERIZE DESIGN ONLY
@@ -70,3 +70,34 @@ risks and precise proposed original characterization. If no safe design exists,
 record NO_CHANGE rather than implement a functional change or wash complexity.
 Coordinator decides next phase; this registry does not authorize runtime edits.
 Global strategic targets, extreme tail and 30historical findings remain open.
+
+## Readiness accepted — original characterization phase only
+
+User confirms dedicated branch and unchanged100%full-file policy. Fresh author
+and independent reviewer originals312PASS/16files,857statements251functions748lines
+100%;906/929branches97.52%FAIL, exact23arms match. No exemption. Independent
+SheetJS0.20.3actual ESM/CJS56real CSV/XLSX outcomes and exact library source proof;
+modal60original/candidate state/access timing comparisons and two lazy Error
+probes PASS. Whole protected source unchanged outside approved exact candidates.
+
+Inline prototype is rejected:3109→3137parentLOC and ambiguous87Programcallback
+identity in external comparator. No compression, baseline repair or real
+application. Genuine adjacent five-event domain policy design conditionally
+accepted:parent3109→3105LOC, newpolicy35LOC/6below-thresholdcallables, combined
+LOC+31 disclosed. Combinedcognitive1099→1022, rawcyclomatic1174→1129,
+decisions923→872, principal472→455/416→404/2631→2625LOC. External unchanged
+full-context comparatorPASS0 is NOT an implementation ratchet or acceptance.
+Selected payload passes candidate object, so frazione_id access remains lazy
+after null guard; unsuccessful/error message reads also remain behind guard.
+
+Coordinator inspected exact two-module source and independent raw/report proof.
+Author now may add only genuine rendered original characterization in the named
+exclusive test file and update assigned readiness report. Runtime/config and
+existing tests remain unchanged. No helper import before helper exists, private
+React state, monkeypatched parser or artificial empty branches. New pure-policy
+direct tests are a later phase, with their own ownership allocation after
+runtime approval. Run new+old original focused union, typecheck and owned lint;
+branch97.52%remains expected explained FAIL, not a waived final gate. No commits
+or source edits yet. Reviewer original task terminal; later independent replay
+is separately assigned after author's characterization is reviewed.
+Approval: external coordinator/CHARACTERIZATION_APPROVAL.md.
