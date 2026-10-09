@@ -1,5 +1,36 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R12 selected design approved; original UI characterization active
+
+- Fresh author ORIGINAL396tests/19spec/full-file100% confirmed independently
+  from raw maps/JUnit; sourcea232/policy/baseline unchanged. Formal readiness
+  c56aab28 and selectedb69 frozen; independent final review627332b0 accepts only
+  this third variant. No actual runtime implementation or candidate UI gate yet.
+- Initial candidate main55a comparatorPASS0 but parentLOC+8: REJECTED, no legacy
+  file-growth waiver. Paired alternative status2 ambiguous unchanged fraction
+  callback identity: REJECTED, no baseline/matcher/renaming/padding workaround.
+  Third variant separates actual API dependency into an explicit third argument,
+  avoiding repeated config fields/method receiver. Parent3096/combined3131LOC
+  unchanged; all nested combined926→871cognitive/803→762decisions, principal
+  391→359 projected. Main55a full-context comparator0, type/lint0,36functions/
+  200arrows protected; no debt transfer, added module/framework/hook/state/effect.
+- Independent196source12microtick traces and author final2664scenarios/97872
+  comparisons supplement actual original coverage. Preliminary oracle used a
+  separate ApiError class: discarded, corrected actual engine-class identity
+  and asserted expiry/guidance. Harness correction does not change application,
+  coverage, baseline or tests; all attempts retained, not passing fake evidence.
+- Author new ownership only campaign-capacitas-command-lifecycle-r12.test.tsx
+  and CHARACTERIZATION_R12 report, after formal hashes sent BEFORE test writes.
+  Protect public deferred refetch/auth/token and different-ID command/delete/
+  manual/polling overlaps; preserve old early busy clearing and late resurrection.
+  All runtime/all19oldspecs/config read-only; author retains heavy window.
+  New-spec/full20union/full100% and explicittest/type/lint/hashes are pending,
+  not PASS. Reviewer final report frozen, original heavy replay not yet granted.
+- Registry/phase approvals govern this same coherent hotspot. Integration
+  planningd5bf2436 mainratchetPASS0; concurrent main hashes unchanged. Global
+  campaign ACTIVE/INCOMPLETE, all strategic/extreme/global suite requirements
+  still apply; no baseline generation/repair or source integration permission.
+
 ## 2026-10-09 — R12 Capacitas rerun/delete lifecycle, original readiness active
 
 - Previous goal turn is PROGRESS: R11 reviewed source/certificate/docs integrated
