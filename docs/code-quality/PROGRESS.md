@@ -1,5 +1,35 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R17 original CF wizard independently characterized
+
+- Author and independent reviewer reproduce34focused/150unionPASS, zero
+  failure/skip. Real original page, public CF loading/drafts/apply flows,
+  literal request/results, pending edits and ordering; no private handler or
+  runtime replacement. Existing P4 warning retained, no ignore/skip added.
+- Full actual page coverage remains FAIL100:449/643statements69.82%,
+  342/645branches53.02%,125/194functions64.43%,416/595lines69.91%, zero skipped
+  counters. Missing194statements303arms69functions179lines enumerated exactly.
+  This test-only acceptance does NOT authorize runtime: BLOCKED_COVERAGE.
+- Independent project/spec types, lint, fresh original AST and immutable55a
+  actualMake ratchetPASS0;3546reviewer/3541author protected paths exact.
+  Explained private log-parser SyntaxError corrected only after Coordinator
+  allocation; no gate rerun/input/source/config/tooling changes.
+- Classification NO_CHANGE — ORIGINAL_CHARACTERIZED: principal390cognitive,
+  342cyclomatic2109LOC and every metric object unchanged. Global runtime debt
+  and extreme-tail strategic objectives remain unmet, not hidden by test gains.
+- Coordinator sequential publication: author35a1d1f5→2e33f0b9 and independent
+  review1d4bf80d→14ef9962, each actual root immutable55a ratchetPASS0.
+  Report: INTEGRATION_R17_CATASTO_CF_CHARACTERIZATION_2026-10-09.md.
+- GIS failure already fixed/test-only in286a82cc: previous certified focused10,
+  GIS5 and fullE2E54PASS7existingSKIP; not rerun here. Capacitas original100%
+  is certified, while R16 candidate matching remains separately BLOCKED.
+- No main edits, baseline inflation, threshold/exclusion changes or runtime
+  architecture cleanup in this slice. Platform-docs Graphify PASS, chunk1/1done,
+  no semantic failure,647nodes876edges105communities; graphs ignored.
+  Closure's actual postcommit gate is retained in private Coordinator evidence
+  `20261009-r17-coordinator/postcommit-ratchet.log`, not inferred from earlier gates.
+  Global campaign ACTIVE/INCOMPLETE; no other wizard automatically allocated.
+
 ## 2026-10-09 — Independent R16 ORIGINAL accepted; R17 static CF preparation
 
 - Independent reviewer terminal:13focused/505union22suites0failure/skip,

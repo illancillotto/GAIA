@@ -1,5 +1,44 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-09 — R17 independent original CF characterization
+
+Global **ACTIVE / INCOMPLETE**. Author and independent reviewer newly reproduce
+34focused/150unionPASS, zero failures/skips. Real original CF public UI covers
+loading, drafts, apply/refresh ordering and relevant deferred transitions.
+Project/spec types, lint, exact fresh page AST and immutable55a Make ratchet
+PASS0. Every3546reviewer/3541author protected path remains unchanged.
+
+Complete-file coverage remains **FAIL100 / runtime BLOCKED_COVERAGE**:
+449/643statements69.82%,342/645branches53.02%,125/194functions64.43%,
+416/595lines69.91%; no skipped counters, one actual page source key. Missing
+194statements/303arms/69functions/179lines independently enumerated. No policy
+waiver, runtime refactor, other wizard expansion or metric reduction claimed.
+
+Classification **NO_CHANGE — ORIGINAL_CHARACTERIZED**. Principal390/342/2109
+and every file/callable/violation object remain exact. Global runtime metrics
+remain certified1672files20316callables1926errors2740warnings4666findings,
+tail5above300/17above200/55above100. These prior full-source aggregates are
+attributed, not falsely described as fresh whole-repository R17 scans.
+
+Author publication35a1d1f5→2e33f0b9 and independent review1d4bf80d→14ef9962
+each have actual separate root55a ratchetPASS0; both accepted publications
+are integrated, byte-exact to independently approved inputs.
+Review report22326c23 and48-entry freeze fd39ac15 are exact. A private evidence
+parser incident was corrected within explicitly allocated private parsing only,
+without rerunning any gate or modifying runtime/config/tooling inputs.
+Checkpoint: `INTEGRATION_R17_CATASTO_CF_CHARACTERIZATION_2026-10-09.md`.
+
+GIS E2E failure is already fixed in286a82cc and independently certified:
+focused10/GIS5/full54PASS7preexistingSKIP, no new R17 rerun claimed. R16 original
+Capacitas100% remains certified; its candidate remains BLOCKED for matching,
+not coverage. Historical30global divergences remain separate provenance.
+Root main binarydiff9f85/status0d54 and baseline38e6 are preserved. Dedicated
+platform-docs Graphify PASS: chunk1/1done, no semantic failure,647nodes876edges
+105communities,7137input2940output tokens, estimated$0.0076; graph ignored.
+No runtime structure changed. Closure's actual postcommit gate is retained in
+private Coordinator `20261009-r17-coordinator/postcommit-ratchet.log`; no gate
+status is inferred from a previous source snapshot. Full campaign remains open.
+
 ## 2026-10-09 — Independent R16 ORIGINAL acceptance; unrelated CF preparation
 
 Global **ACTIVE / INCOMPLETE**. Independent original replay freshly passes
