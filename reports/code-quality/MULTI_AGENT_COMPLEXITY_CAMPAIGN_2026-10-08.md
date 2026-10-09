@@ -1,6 +1,6 @@
 # GAIA — Multi-Agent Complexity Campaign
 
-## 2026-10-09 — R8 finite record-label policy, final verification pending
+## 2026-10-09 — R8 finite record-label policy, verified checkpoint
 
 Global objective unchanged ACTIVE/INCOMPLETE. R7 terminal closure independently
 certified first; R8 registry6a005f1a precedes separate author/reviewer/verifier.
@@ -60,6 +60,16 @@ ratchetmainPASS0/globalFAIL30Makeexit2/fullhistoricalobjectsidenticalR7 and
 baselineSHAunchanged. CleanupJSON independentlychecked againstDocker/ports:
 owncontainers/networkabsent,13012/18092free,privatecredentialsdeleted/frontend
 exit0. Finalindependentreport-only stillpending, globalcampaignINCOMPLETE.
+
+**Terminal R8 closure supersedes all pending notes above.** Verifierreport-only
+8ab91f55 reviewedaccepted/integrated; duplicate sourcea0c145b6 not integrated.
+Allsuite/gates terminal,fullpage100%/4472fullfrontendPASS/freshbuildPASS/E2E54PASS
+7oldSKIP/ratchetmainPASS0/globalFAIL30fullhistoricalobjects exact/baselineunchanged.
+Cleanupindependentlychecked, allowners closedcampaignonly, nooverlap/mainchange.
+Only R8 is closed: cognitiveaggregate-63/cyclomatic-19/finding-5 real improvement,
+principal399 still extreme, globalcampaign ACTIVE/INCOMPLETE. Postreport ratchet
+and finalplatformdocsrefresh aftertheseclosuredocs are Coordinatorfinalgates;
+actual results are retained inlogs, not inferred from this intention.
 
 ## 2026-10-09 — R7 anomaly-panel ordering/grouping, verified checkpoint
 

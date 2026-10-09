@@ -8,10 +8,10 @@ Main dirty backend/Presenze/Ruolo/docs work is not copied or modified.
 
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 |---|---|---|---|---|---|---|
-| Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md | Scope/design approval and integration gates | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
+| Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md | Scope/design approval and integration gates | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | MERGED |
 | R8 author | Presenze UI | frontend/src/app/presenze/giornaliere/page.tsx; frontend/src/app/presenze/giornaliere/record-presentation-model.ts (not created); frontend/tests/unit/presenze-giornaliere-r8.test.tsx; reports/code-quality/SLICE_R8_PRESENZE_PRESENTATION_2026-10-09.md; domain-docs/presenze/docs/RECORD_PRESENTATION_REFACTOR_2026-10-09.md | Finite label/badge policy consolidated locally after original characterization | GAIA-campaign-20261009-r8-presenze-presentation | refactor/complexity-r8-presenze-presentation | MERGED |
 | R8 reviewer | Independent review | reports/code-quality/REVIEW_R8_PRESENZE_PRESENTATION_2026-10-09.md only; all source read-only | Original characterization/differential oracle and exact candidate review | GAIA-campaign-20261009-r8-presenze-review | review/complexity-r8-presenze-presentation | MERGED |
-| R8 verifier | Independent certification | reports/code-quality/VERIFICATION_R8_PRESENZE_PRESENTATION_2026-10-09.md only; all source read-only | Frozen-source coverage/fullfrontend/build/browser/ratchet | GAIA-campaign-20261009-r8-presenze-verification | verify/complexity-r8-presenze-presentation | ACTIVE |
+| R8 verifier | Independent certification | reports/code-quality/VERIFICATION_R8_PRESENZE_PRESENTATION_2026-10-09.md only; all source read-only | Frozen-source coverage/fullfrontend/build/browser/ratchet | GAIA-campaign-20261009-r8-presenze-verification | verify/complexity-r8-presenze-presentation | MERGED |
 
 ## Design-only initial assignment
 
@@ -89,3 +89,16 @@ finding38->33, fileLOC+10/callableLOC-7 disclosed; principal399 still extreme.
 Author/reviewer terminal clean. Verifier authorized exactfrozen source/full
 frontend/build/browser gates by plaintextcoordinator/VERIFY_APPROVAL.txt.
 Verifier finalgates pending, not inferredPASS; global ACTIVE/INCOMPLETE.
+
+## Terminal closure
+
+Independent verifier report-only8ab91f556afe6eac14092dc5a32635930d7d9a01 accepted
+and integrated; duplicate sourcea0c145b6 not integrated. Every suite/gate terminal:
+468focused/fullpage100%,4472fullfrontendPASS301files0skip, lint/typecheck/smoke18/
+freshbuildPASS; pertinentE2E7PASS/fullE2E54PASS7oldSKIP0failure/flaky/retries.
+WholeAST exactrootfinal, ratchetmainPASS0/globalFAIL30exacthistorical/baselineSHA
+unchanged. CleanupJSON and liveDocker/ports verified ownresources absent,
+credentialsdeleted. This supersedes pending notes; allowners closedcampaignonly,
+no unresolvedoverlap/mainchanges. Post-report ratchet and finalplatformdocs
+refresh follow these docs; inspect actual terminal logs. Only R8 is closed,
+globalcampaignACTIVE/INCOMPLETE and principal399 still extreme.

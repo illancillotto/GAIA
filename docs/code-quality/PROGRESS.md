@@ -72,6 +72,14 @@
   objectsidenticalR7/attribution0/baselineSHAunchanged. CleanupJSON e liveDocker/
   portsinspected: ownstack/networkassenti,13012/18092libere,credentialsdeleted,
   frontendexit0. Verifierreport-only da completare, no globalclosure yet.
+- Terminalclosure: verifierreport-only8ab91f55 reviewedaccepted/integrated,
+  duplicate sourcea0c145b6nonintegrata. Allsuite/gatesterminal con fullpage100%,
+  4472fullfrontendPASS/freshbuildPASS/E2E54PASS7oldSKIP, actualobjects/exits
+  rootverificati; ownresources/credentialsassenti. RegistrytuttiMERGED solo
+  campaign/nooverlap, mainintatto. Postreport ratchet/finalplatformgraph dopo
+  questeultimeclosuredocs richiesti, esiti solo nei logrealinonintenzione.
+  R8IMPROVEDcog-63/cyc-19/finding-5, principal399rimane estremo; globalgoal
+  ACTIVE/INCOMPLETE, nessun target50%/below250 o coperturatotale dichiarato.
 
 ## 2026-10-09 — R7 Presenze anomaly ordering/grouping
 
