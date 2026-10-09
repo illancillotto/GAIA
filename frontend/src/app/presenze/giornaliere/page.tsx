@@ -35,6 +35,7 @@ import type {
 import { collaboratorProfileFilterKey, selectMonthlyCollaboratorRows } from "./collaborator-rows";
 import type { DayFocusFilter, ProfileFilterKey } from "./collaborator-rows";
 import { buildMonthlyRecordInsights } from "./monthly-record-insights";
+import { dailyCellIndicators, kmInputPresentation } from "./daily-cell-model";
 import type { DayOperationalSummary, MonthlyRecordFacts } from "./monthly-record-insights";
 
 type DailyEditForm = {
@@ -2204,8 +2205,7 @@ export default function PresenzeGiornalierePage() {
                             <td key={column.iso} className={`border-b border-slate-100 px-1.5 py-2 ${column.isWeekend ? "bg-slate-100/50" : ""}`}>
                               <input
                                 inputMode="numeric"
-                                disabled={!canEdit || savingRecordId === record.id}
-                                defaultValue={kmDrafts[record.id] ?? (record.km_value != null ? String(record.km_value) : "")}
+                                {...kmInputPresentation(record.km_value, kmDrafts[record.id], canEdit, savingRecordId === record.id)}
                                 onChange={(event) => setKmDrafts((current) => ({ ...current, [record.id]: event.target.value }))}
                                 onBlur={(event) => void persistKm(record, event.target.value)}
                                 placeholder="km"
@@ -2232,11 +2232,9 @@ export default function PresenzeGiornalierePage() {
                                 {cellSecondaryLabel(record, kind) ?? " "}
                               </span>
                               <span className="mt-1 flex min-h-[12px] items-center gap-1 text-[10px] font-normal leading-none">
-                                {extra > 0 ? <span className="text-emerald-600">▲</span> : null}
-                                {record.km_value != null ? <span>🚗</span> : null}
-                                {(record.trasferta_minutes ?? 0) > 0 || record.trasferta_montano ? <span className="text-sky-600">T</span> : null}
-                                {record.reperibilita_unit !== "none" ? <span className="text-amber-700">R</span> : null}
-                                {authorizedPunchLabel(record) ? <span className="text-emerald-700">✅</span> : record.detail_requests.length > 0 ? <span className="text-sky-600">✉</span> : null}
+                                {dailyCellIndicators(record, extra, authorizedPunchLabel(record)).map((indicator) => (
+                                  <span key={indicator.label} className={indicator.className}>{indicator.label}</span>
+                                ))}
                               </span>
                             </button>
                           </td>
@@ -2996,8 +2994,7 @@ export default function PresenzeGiornalierePage() {
                           <input
                             aria-label={`KM ${record.work_date}`}
                             className="h-8 w-16 rounded-lg border border-amber-200 bg-white/80 px-2 text-right text-xs font-semibold text-amber-700 outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-                            defaultValue={kmDrafts[record.id] ?? (record.km_value != null ? String(record.km_value) : "")}
-                            disabled={!rowCanEdit || savingRecordId === record.id}
+                            {...kmInputPresentation(record.km_value, kmDrafts[record.id], rowCanEdit, savingRecordId === record.id)}
                             inputMode="numeric"
                             placeholder="KM"
                             onChange={(event) => setKmDrafts((current) => ({ ...current, [record.id]: event.target.value }))}
