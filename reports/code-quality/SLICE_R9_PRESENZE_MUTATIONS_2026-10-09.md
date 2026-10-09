@@ -19,8 +19,9 @@ Main concurrent changes excluded. Runtime SHA256 before characterization:
 ## Target callable
 
 One responsibility: the daily-record persistence lifecycle of `persistKm`,
-`persistReperibilita`, `handleSaveEditor`, `handleValidation`. Current principal
-`PresenzeGiornalierePage` remains399cognitive/352cyclomatic/2020callableLOC.
+`persistReperibilita`, `handleSaveEditor`, `handleValidation`. Baseline principal
+`PresenzeGiornalierePage` is399cognitive/352cyclomatic/2020callableLOC; accepted
+R9 source is385cognitive/341cyclomatic/2023callableLOC.
 No INAZ refresh, profile, meal voucher, identity, hook, JSX or API change.
 
 ## Behavioral invariants

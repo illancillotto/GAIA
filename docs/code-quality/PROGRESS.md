@@ -1,5 +1,31 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R9 independently certified and integrated
+
+- Previous GIS-only goal turn revalidated existing evidence, without new
+  complexity progress. The next safe action now changes authoritative state:
+  reviewed91f4c50d integratedc51b6038; independent verifier report-only0fa78703
+  integrated8df92f9d. Exact approved source blobs and protected config/runtime
+  checked; main55a concurrent dirty work untouched. Ratchet/mainPASS0 after
+  each separate integration, no duplicate source or baseline inflation.
+- Fresh independent focused472PASS/fullpage1035s1139b306f847l100%, wholefrontend
+  4491PASS/302files/0skip, type/lint/smoke18/buildPASS, pertinentE2E7PASS,
+  fullE2E54PASS7existingSKIP/0flaky/retry/default motion. Verifier cleanup and
+  whole3480trackedhash auditPASS. Seven skips are not PASS; backend/worker
+  are not rerun for this frontend-only responsibility.
+- Actual R9 aggregate cognitive1109→1093, principal399→385, decisions934→923;
+  rawcyclomatic+1/fileLOC+24/callableLOC+45 explicitly compensated/reviewed.
+  One warning removed. Complete current candidate AST matches approved source,
+  all unaffected runtime AST objects exactR8. GlobalcheckFAIL30 complete
+  historical finding objects exactR8; zeroR9attribution, baseline immutable.
+- Source and verifier tasks terminal, ownership registryMERGED (campaign only).
+  Dedicated integration frontendforce6029nodes12622edges248communities;
+  Presenze docs gpt-reservechunk1/1done,0semanticfailure,82nodes86edges15groups.
+  Detailed closure: INTEGRATION_R9_PRESENZE_MUTATIONS_2026-10-09.md. This is a
+  bounded IMPROVED checkpoint, not the global definition of done: five>300
+  callables, reported Capacitascoverage97.52%, historical30 and strategic
+  error/warning targets remain open. Original full objectiveACTIVE/INCOMPLETE.
+
 ## 2026-10-09 — R9 Presenze mutations, design gate
 
 - R9 original characterization8833a587 integrated4e903a83,19new rendered tests;

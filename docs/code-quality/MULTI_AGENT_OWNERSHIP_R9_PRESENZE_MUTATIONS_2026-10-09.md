@@ -10,11 +10,11 @@ Main dirty backend/Presenze/Ruolo/documentation concurrent work is not an input.
 
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 |---|---|---|---|---|---|---|
-| Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md | Exact design approval, ownership, integration gates | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
+| Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md; reports/code-quality/INTEGRATION_R9_PRESENZE_MUTATIONS_2026-10-09.md | Certified exact source/report integration; terminal checkpoint | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | MERGED |
 | R9 author — characterization complete | Presenze UI tests | frontend/tests/unit/presenze-giornaliere-r9.test.tsx | Frozen original characterization8833a587, integrated4e903a83 | GAIA-campaign-20261009-r9-presenze-mutations | refactor/complexity-r9-presenze-mutations | MERGED |
-| Coordinator — R9 implementation | Presenze UI | frontend/src/app/presenze/giornaliere/page.tsx; reports/code-quality/SLICE_R9_PRESENZE_MUTATIONS_2026-10-09.md; domain-docs/presenze/docs/DAILY_RECORD_MUTATIONS_REFACTOR_2026-10-09.md | Reviewed frozen source91f4c50d, waits final certification | GAIA-campaign-20261009-r9-presenze-mutations | refactor/complexity-r9-presenze-mutations | READY_FOR_REVIEW |
-| R9 source reviewer — dedicated task | Independent review | reports/code-quality/REVIEW_R9_PRESENZE_MUTATIONS_2026-10-09.md only; source read-only | APPROVED exact source; report-only38c27eff | GAIA-campaign-20261009-r9-presenze-review | review/complexity-r9-presenze-mutations | READY_FOR_REVIEW |
-| R9 verifier | Independent final certification | reports/code-quality/VERIFICATION_R9_PRESENZE_MUTATIONS_2026-10-09.md only; source read-only | Frozen-source full-file coverage/fullfrontend/build/browser/ratchet | GAIA-campaign-20261009-r9-presenze-verification | verify/complexity-r9-presenze-mutations | ACTIVE |
+| Coordinator — R9 implementation | Presenze UI | frontend/src/app/presenze/giornaliere/page.tsx; reports/code-quality/SLICE_R9_PRESENZE_MUTATIONS_2026-10-09.md; domain-docs/presenze/docs/DAILY_RECORD_MUTATIONS_REFACTOR_2026-10-09.md | Exact reviewed source91f4c50d integratedc51b6038; ratchetPASS0 | GAIA-campaign-20261009-r9-presenze-mutations | refactor/complexity-r9-presenze-mutations | MERGED |
+| R9 source reviewer — dedicated task | Independent review | reports/code-quality/REVIEW_R9_PRESENZE_MUTATIONS_2026-10-09.md only; source read-only | APPROVED exact source; report-only38c27eff integrated85e56512 | GAIA-campaign-20261009-r9-presenze-review | review/complexity-r9-presenze-mutations | MERGED |
+| R9 verifier | Independent final certification | reports/code-quality/VERIFICATION_R9_PRESENZE_MUTATIONS_2026-10-09.md only; source read-only | Independent gates/cleanup PASS; report-only0fa78703 integrated8df92f9d; ratchetPASS0 | GAIA-campaign-20261009-r9-presenze-verification | verify/complexity-r9-presenze-mutations | MERGED |
 
 ## Initial assignment: analyze/design only
 
@@ -178,3 +178,20 @@ No new hotspot, runtime/test edit, main integration, baseline update or wave clo
 Final verifier task activated after registry/worktree/approval:
 `01a1204c-bef4-7420-b031-5747a913af8a`. Heavy frontend suite slot belongs verifier;
 Coordinator source/fullfrontend jobs are terminal. Runtime source stays frozen.
+
+## Terminal R9 integration checkpoint
+
+Verifier task terminal, report-only0fa78703; all3480preexistingtrackedhashes exact,
+own services/network/credentials removed, ports13013/18093free. Fresh472focused/
+4491fullfrontend/18smoke/7pertinentE2E/54fullE2EPASS; seven existing E2E skips
+remain individually recorded, default motion/retry0/config unchanged. Fullpage
+1035s1139b306f847l100%, freshbuild/type/lintPASS. GlobalcheckFAIL30 complete
+finding objects exactR8, zeroR9attribution. No baseline/scope/threshold edits.
+
+Coordinator inspected raw exits, counters, complete AST/finding comparisons,
+actual free ports and report scope. ApprovalINTEGRATION_APPROVAL.md precedes
+exactsource91f4c50d→c51b6038 (all3approvedblobs exact), sourcegatePASS0, then
+report-only0fa78703→8df92f9d and reportgatePASS0. Reviewer report already85e56512,
+no duplicate source cherry-pick. New integration report/metric checkpoint is
+coordinator-owned; no runtime owner remains active for R9. MERGED means only
+campaign-branch integration, never main. Global goal stays ACTIVE/INCOMPLETE.

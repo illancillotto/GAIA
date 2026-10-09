@@ -1,6 +1,6 @@
 # GAIA — Multi-Agent Complexity Campaign
 
-## 2026-10-09 — R9 daily-record lifecycle, final certification in progress
+## 2026-10-09 — R9 daily-record lifecycle, independently certified and integrated
 
 Global objective unchanged **ACTIVE/INCOMPLETE**. GIS request closed separately;
 no main merge or concurrent work copied. Original characterization19new rendered
@@ -13,8 +13,10 @@ finally; pure editor payload mapper runs inside request try, shared finalizers
 retain distinct flags. No new runtime file/hook/state/JSX/API/permission/race fix.
 Independent actual-source reviewer task01a12041-d4a7-7431-a864-0c3fd0b21c5b
 APPROVED/IMPROVED; report-only38c27eff integrated85e56512 and ratchetPASS0.
-Exact source91f4c50de44adf433f20decfa31ccf0ba794a5c0 committed in dedicated
-branch; source **not integrated yet**, waits final certification.
+Exact source91f4c50de44adf433f20decfa31ccf0ba794a5c0 independently certified and
+integrated as c51b6038; verifier report-only0fa78703 integrated8df92f9d. Exact
+three approved source blobs compared before report-only target-description
+clarification. Authoritative ratchetPASS0 after each separate integration.
 
 | R9 actual metric | Before | After | Delta |
 |---|---:|---:|---:|
@@ -47,20 +49,52 @@ baseline edits; all53legacyanonymous metric/fingerprint entries remain identical
 - Typecheck/ownedlint exit0,3unchangedlegacywarnings; actualratchet/mainPASS0.
   GlobalcheckFAIL30Makeexit2: all completefindingobjects identicalR8,0attribution.
   Candidate global1671files20312callables1933error2745warning4678findings.
-  Integration remains R8 runtime metrics until exact R9 source integration.
+  Integration now contains these exact R9 runtime metrics. Complete fresh
+  integration AST comparison and current top30 are in INTEGRATION_R9 report.
 - Graphifyfrontendforce649sources6029nodes12619edges247communities; final force
   no stale topology difference. Presenze docsgpt-reservechunk1/2and2/2done,
   0semanticfailure,41nodes45edges13communities,exit0; graph outputs not versioned.
-- Frozen verifier worktree exact91f4c50d exists. Task
-  **01a1204c-bef4-7420-b031-5747a913af8a ACTIVE**: independentfocused472PASS/
-  fullpage100% already; fullfrontend live. Fresh build/browser/finalreport/cleanup/
-  source integration **pending**, no PASS inferred from intent or prior R8 runs.
+- Independent verifier task **01a1204c-bef4-7420-b031-5747a913af8a TERMINAL**:
+  fresh472focused/fullpage100%,4491fullfrontend/302files/0skip,PASS type/lint/
+  smoke18/freshbuild, pertinentE2E7PASS/fullE2E54PASS7existingSKIP,0flaky/retry,
+  default motion. Report-only0fa78703, raw exits/counters inspected; own services,
+  network and credentials removed, ports13013/18093free, all3480sourcehashes exact.
+  First external metrics comparison used pre-naming candidate artifact and
+  failed; corrected complete-object comparison matches named candidate. Failure
+  retained, not a source failure or hidden rerun. No suite reused as fresh.
+- Integration Graphifyfrontendforce6029nodes12622edges248communities; domain
+  docsgpt-reservechunk1/1done,0semanticfailure,82nodes86edges15communities,
+ 1185input1761outputtokens,estimated$0.0033. Source graph counts above are
+  retained source-stage evidence, not substituted integration topology.
 
 Ownership: MULTI_AGENT_OWNERSHIP_R9_PRESENZE_MUTATIONS_2026-10-09.md. Source/review
 SLICE_R9 and REVIEW_R9 reports; durable artifacts
 `~/.cache/gaia-campaign/20261009-r9-presenze/`. Main55adirty preserved. Capacitas
 97.52%coverage,30historicalprovenance findings and five>300hotspots remain separate;
 no whole-wave/global-completion claim or baseline inflation.
+
+### Current global checkpoint and remaining top30
+
+Fresh complete integration report and comparison:1671files/20312callables,
+1933errors/2745warnings/4678findings. Versus authoritative8October baseline:
+error−23(−1.18%),warning−13(−0.47%),findings−36(−0.76%). These are overlapping
+metric findings, not independent problem counts. Full integration AST equals
+approved source; all other runtime AST objects equal R8. No7October baseline.
+
+| Domain | Error initial | Error current | Warning initial | Warning current |
+| --- | ---: | ---: | ---: | ---: |
+| Backend |1035|1033|1688|1689|
+| Frontend |878|857|881|867|
+| Worker runtime |35|35|134|134|
+| Worker tests |8|8|55|55|
+
+Backendwarning+1 explicitly disclosed, including error-to-warning transitions;
+global totals are not the change gate. Extreme tail5>300/17>200/55>100 remains;
+original strategic targets NOT reached. Current ranked top30 and full gates in
+`INTEGRATION_R9_PRESENZE_MUTATIONS_2026-10-09.md`; older ranking sections below
+are historical checkpoints, not current operative planning baseline. Actual
+integration platformgraph468nodes563edges85groups,chunk1/1done,0semanticfailure,
+8758input3477outputtokens/estimated$0.0091,exit0. Graphs never versioned.
 
 ## 2026-10-09 — R8 finite record-label policy, verified checkpoint
 
