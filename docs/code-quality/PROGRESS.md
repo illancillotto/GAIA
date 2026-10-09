@@ -16,6 +16,20 @@
   coverage100% full-file, riduzione aggregata reale e ratchetmainPASS0 richiesti.
   Nessun intervento anomalies, baseline, soglie, esclusioni, config o altri
   hotspot; Capacitas97,52%FAIL100 e divergenze30 restano separati e aperti.
+- Source6b1bec8d integrato5d0529db dopo review indipendenteafcb2146,
+  report integrato4e0e94fd. Author110PASSprima/dopo; reviewer110PASS,analytics
+ 673/673statement302/302branch100%,40fixture persistenti equivalenti per
+  risposta/SQL/bind/ordine/immutabilità. Ruff/ratchetPASS0, nuove esenzioni0.
+- IMPROVED cognitive322→282, aggregataanalytics978→943; cyclomatic183→169,
+  aggregata585→578. LOCcallable348→350/file1250→1265 esplicitamente dichiarate;
+  finding globali invariati1938error2749warning4687. Coda>300 da7a6.
+- Due failure terminali upstream dell'author prima di documentare/committare:
+  Coordinator assume closure report/doc/commit senza toccare runtime validato;
+  reviewer/verifier distinti. Trasferimentoownership esplicito nel registro.
+- Verifier indipendente110PASS/full-file100%,Operazioni198PASS14skip esistenti
+  per TEST_DATABASE_URL PostgreSQL assente. Suite backend completa attiva,
+  PID155612 e artifact `verifier/backend-full.*` nel percorso durabile R4;
+  non ancora PASS. Nessuna nuova slice o wave avviata prima di checkpoint.
 
 ## 2026-10-09 — fix GIS E2E verificato e integrato
 
