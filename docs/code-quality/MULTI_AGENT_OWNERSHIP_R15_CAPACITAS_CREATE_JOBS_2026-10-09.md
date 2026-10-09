@@ -2,6 +2,30 @@
 
 ## Snapshot and scope
 
+## Current phase: independent static-only rejection review
+
+Author is terminal NO_CHANGE; no runtime candidate selected. Frozen report
+aec8f39c5bceaa05a97499012fb91e838913bd4a125f8953cf2593257ca1d516,
+28-artifact readiness manifest127bc6656b317000a10b216d2092fa7e1d3307b1684a11c050abdab48741e63d.
+All3525protected paths/source8111/all21specs/config/baseline/main exact.
+Direct design increases combinedLOC18/decisions7; async design increasesLOC18
+and delays busy release in36of41supplementary traces; error-only design adds3LOC.
+No heavy window acquired or needed for already rejected exterior projections.
+
+| Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| /root/r15_capacitas_create_jobs | Readiness | Frozen READINESS_R15 aec8 | Terminal NO_CHANGE; no source ownership | GAIA-campaign-20261009-r15-capacitas-create-jobs | refactor/complexity-r15-capacitas-create-jobs | READY_FOR_REVIEW |
+| R15 independent rejection reviewer | Static evidence | ONLY new reports/code-quality/REVIEW_READINESS_R15_CAPACITAS_CREATE_JOBS_2026-10-09.md | Verify frozen evidence, LOC/decision accounting, trace counterexample, no runtime/coverage/gate claims | GAIA-campaign-20261009-r15-capacitas-create-jobs-review | review/complexity-r15-capacitas-create-jobs | ACTIVE |
+
+Coordinator imports published readiness to existing clean review worktree before
+activating independent reviewer. Report-only ownership, all source/tests/config/
+readiness/evidence immutable. No fullscan/tests/type/coverage/build/Graphify refresh
+or authoritative ratchet: R14 author owns exclusive heavy window. Reviewer may
+inspect/replay bounded one-file AST/pure trace checks with private output, preserving
+original failure logs and artifacts. Confirm only NO_CHANGE or challenge evidence;
+no runtime design edits/commit/import/merge delegated, no next hotspot. Freeze
+review/report hash and stop; no strategic campaign completion inferred.
+
 Global campaign ACTIVE/INCOMPLETE; previous goal turn PROGRESS: R13 actual source
 8111 implemented/reviewed/finally certified/integrated through03c25ac9, closure
 68996649clean with actual POST-COMMIT main55a ratchetPASS0. Global1672files/
