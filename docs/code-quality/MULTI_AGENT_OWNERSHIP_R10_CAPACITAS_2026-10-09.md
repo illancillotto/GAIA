@@ -19,7 +19,7 @@ Main concurrent backend/Presenze/Ruolo/docs are neither input nor copied.
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md | Design/phase approval, sequential ownership, green checkpoint enforcement | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
-| R10 author | Capacitas UI characterization | reports/code-quality/READINESS_R10_CAPACITAS_2026-10-09.md; frontend/tests/unit/campaign-capacitas-resolution-state-r10.test.tsx; runtime capacitas-workspace.tsx read-only | Fresh original/design proof accepted; add only genuine rendered original state/API transition tests, no runtime yet | GAIA-campaign-20261009-r10-capacitas | refactor/complexity-r10-capacitas | ACTIVE |
+| R10 author | Capacitas UI fraction-resolution policy | frontend/src/components/elaborazioni/capacitas-workspace.tsx; frontend/src/components/elaborazioni/capacitas-fraction-resolution.ts; frontend/tests/unit/campaign-capacitas-fraction-resolution-r10.test.ts; reports/code-quality/SLICE_R10_CAPACITAS_2026-10-09.md | Apply independently characterized five-event policy and exact proven reader fallback simplifications; original characterization frozen | GAIA-campaign-20261009-r10-capacitas | refactor/complexity-r10-capacitas | ACTIVE |
 | R10 reviewer | Independent provenance/design review | reports/code-quality/REVIEW_READINESS_R10_CAPACITAS_2026-10-09.md only; all runtime/tests/config read-only | Independent original312PASS/97.52%FAIL retained; library56comparison/state60comparison/complete protected AST/designPASS, conditional only for characterization | GAIA-campaign-20261009-r10-capacitas-review | review/complexity-r10-capacitas | READY_FOR_REVIEW |
 | R10 final verifier | Independent frozen-source certification | Future VERIFICATION_R10_CAPACITAS report only | Only after approved implementation/source freeze; distinct worktree | Not created | Not created | PLANNED |
 
@@ -101,3 +101,45 @@ branch97.52%remains expected explained FAIL, not a waived final gate. No commits
 or source edits yet. Reviewer original task terminal; later independent replay
 is separately assigned after author's characterization is reviewed.
 Approval: external coordinator/CHARACTERIZATION_APPROVAL.md.
+
+## Characterization frozen — independent original replay
+
+Author characterization-only commit `fd26c39594d438e271ad885d725f1e182920a1e2`
+contains exactly the assigned rendered spec and readiness report. Coordinator
+verified both frozen SHA256 values from the approval and original runtime hash;
+author checkout is clean. No runtime refactor or coverage acceptance yet.
+Reviewer is ACTIVE for authorized exact characterization cherry-pick in its
+own checkout, preserving its distinct untracked report, and independent
+original324-test replay, raw coverage, typecheck, lint and preserved-source
+checks. Heavy focused coverage slot belongs to reviewer until its terminal
+result. Original97.52% remains an explained FAIL, not the final gate. Author
+runtime ownership remains read-only pending that replay and phase decision.
+
+## Original replay accepted — bounded runtime implementation authorized
+
+Independent reviewer characterization cherry-pick `f06b3ed730ca95eff9e5091bbc2c5dfcb6978746`:
+324PASS/17spec, original906/929branches97.52%FAIL, statement/function/line100%,
+no branch gained/lost. Frozen runtime, sixteen old specs and new spec hashes,
+type/lint, real reader and state oracles, complete protected source all PASS.
+Coordinator integrated characterization as `888395b7`; integration ratchet/main
+PASS0. Reviewer owns only its report; it does not own application runtime.
+
+Authorize author to implement only the measured adjacent five-event policy and
+the exact twenty-one independently proven reader/preview fallback removals.
+Allocate exclusively the two runtime paths, direct policy spec and slice report
+listed in the table. No edits to frozen readiness/characterization or old tests.
+Keep UNKNOWN null guards via the shared policy and all reachable null races,
+lazy candidate/error access, updater timing, old completion/current modal,
+payload/filter identity, library options/aliases and all API/UI contracts.
+Use normal two-space style, actual domain filename/import; no new inline comments.
+No relocation of request orchestration, generic reducer, race fix or new feature.
+
+Heavy focused slot returns to author. Require actual full-file100% on BOTH
+runtime files, genuine policy tests plus unchanged rendered union, type/lint,
+real current metrics with all nested callbacks/combined LOC and debt accounting,
+and `make complexity-ratchet BASE_REF=main` PASS0. External design comparisons
+do not substitute implementation gates. Do not change baseline/thresholds,
+exclusions/config/tooling or bypass ambiguous matching. Refresh frontend graph
+only with dedicated Make targets and report pruning. Stop with uncommitted
+source, exact hashes, diff/test/coverage/metrics evidence for independent review;
+source commit/integration requires a separate Coordinator decision.

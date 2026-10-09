@@ -1,5 +1,27 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R10 Capacitas, original characterization accepted
+
+- GIS failure already resolved/certified in the dedicated campaign; no new GIS
+  change or main merge. User confirms Capacitas priority and unchanged100%
+  full-file policy. Main55a concurrent modifications remain untouched.
+- Author exact two-file characterization `fd26c395` integrated `888395b7`;
+  independent reviewer original replay324PASS/17spec, original runtime frozen,
+  sixteen prior specs/new spec hashes and raw branch maps preserved. Type/lint,
+  real SheetJS56fixture oracle and lazy state/timing differential PASS.
+- Original906/929branches97.52%FAIL100 is retained, not waived; other file
+  dimensions100%. Authoritative integration ratchet/mainPASS0. No baseline,
+  thresholds, exclusions or tooling changed.
+- Registry explicitly authorizes only measured adjacent five-event fraction
+  resolution policy plus twenty-one exact proven construction/library fallback
+  simplifications. Null UNKNOWN/reachable race defenses, updater scheduling,
+  captured request/current modal semantics and lazy field reads must remain.
+  Both runtime files require actual100%, debt accounting and ratchet0 before
+  independent actual-source review. Implementation/coverage acceptance pending;
+  no candidate prototype metric is represented as an implementation result.
+- Global objective ACTIVE/INCOMPLETE: highest callable472 and five>300 hotspots
+  remain in the integrated runtime. A bounded slice is not campaign completion.
+
 ## 2026-10-09 — R10 highest residual hotspot, original characterization
 
 - Fresh author and independent reviewer original312tests/16specs PASS; all
