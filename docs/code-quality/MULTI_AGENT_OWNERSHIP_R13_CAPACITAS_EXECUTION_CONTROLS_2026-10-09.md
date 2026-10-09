@@ -1,6 +1,31 @@
 # R13 Capacitas — execution-mode controls ownership
 
-## Current phase: independent actual-source review
+## Current phase: distinct final-source certification
+
+Independent runtime review9fae887fa4f55c6c2329396781f428d1464c5675a6864c2d718fcc2db847f285
+terminal ACCEPTED/IMPROVED, heavy RELEASED. Fresh492/21/zero skip/full2file100%,
+type/lint/fullmetrics/immutable55a actual ratchet0; all3519trackedpaths exact.
+Source8111, SLICEac55 and all21specs/config/baseline frozen. Coordinator publishes
+ONLY REVIEW_R13 and imports to precreated clean dedicated final worktree.
+
+`/root/r13_final` owns ONLY new
+`reports/code-quality/VERIFICATION_R13_CAPACITAS_EXECUTION_CONTROLS_2026-10-09.md`.
+Exclusive final heavy window: fresh full21twofile100%, wholefrontend unit,
+type/explicitnewtest/lint/smoke/actual clean build, full AST report/ratchet55a and
+globalcheck. Compare complete historical30finding objects, not count only.
+Prove actual native focus/Enter/Space and four controls DOM/sibling/payload/
+family persistence in real browser with current source and isolated synthetic
+stack; disclose mocked API boundaries/timing honestly. Pertinent+full available
+E2E workers1/retries0, all skips explicit. No production DB/credentials/external
+portals, no shared resources stopped. Use isolated internal network/tmpfs/read-only
+backend/unique loopback ports and identity-checked cleanup. Every gate/scaffold/
+attempt/process/hash retained externally. R12 scaffolds may be adapted via
+apply_patch, never copy prior results as fresh. Final-source report-only writes;
+no source/tests/config/packages/baseline/commit/merge edits. Stop terminal report
+freeze+heavy release. Global backend/worker campaign closure remains separate.
+Sequential integration only after this distinct certificate PASS.
+
+## Previous phase: independent actual-source review
 
 Author runtime terminal READY_FOR_REVIEW/IMPROVED, heavy window RELEASED.
 Actual source8111 and SLICEac55ce2a frozen; fresh492/21/full2file100%, type/lint0,
@@ -144,8 +169,8 @@ remain unchanged. No reset/stash/main merge/baseline generation or repair.
 | --- | --- | --- | --- | --- | --- | --- |
 | Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; private approvals/checkpoints; later explicitly assigned closure docs | Ownership, phase gates, publication/integration custody | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
 | /root/r13_execution_characterization (successor to terminal TUI author) | Capacitas execution controls | Frozen workspace8111 and SLICEac55ce2a; all21specs/reports/readiness/policy frozen | Actual-source author terminal, heavy released | GAIA-campaign-20261009-r13-capacitas-execution-controls | refactor/complexity-r13-capacitas-execution-controls | READY_FOR_REVIEW |
-| /root/r13_review (successor to idle TUI readiness reviewer) | Independent actual-source review | ONLY new REVIEW_R13 report; original3ca6/readiness1778/source/tests frozen | Fresh actual-source review and full gates, exclusive heavy window | GAIA-campaign-20261009-r13-capacitas-execution-controls-review | review/complexity-r13-capacitas-execution-controls | ACTIVE |
-| Final verifier01a120f5-5536-7f11-bb61-089e5d03c923 | Future actual-source certification | Future new VERIFICATION_R13 report only after explicit source freeze | No active task in readiness phase | Dedicated clean final worktree later | Later | PLANNED |
+| /root/r13_review (successor to idle TUI readiness reviewer) | Independent actual-source review | Frozen REVIEW_R13 report9fae887f; original3ca6/readiness1778/source/tests frozen | Runtime review terminal ACCEPTED, heavy released | GAIA-campaign-20261009-r13-capacitas-execution-controls-review | review/complexity-r13-capacitas-execution-controls | READY_FOR_REVIEW |
+| /root/r13_final (distinct native verifier) | Actual-source certification | ONLY new VERIFICATION_R13 report; source/tests/reports/config frozen | Final actual-source certification and native browser, exclusive heavy window | GAIA-campaign-20261009-r13-capacitas-execution-controls-final | verification/complexity-r13-capacitas-execution-controls | ACTIVE |
 
 All R12 agents are authoritatively idle and their ownership is released. NEW
 worktrees/branches start from accepted a956; preserve all old worktrees/frozen
