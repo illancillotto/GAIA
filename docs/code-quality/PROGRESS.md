@@ -27,6 +27,24 @@
   principal420→403, page+newmodel1222→1192cognitive1309→1284cyclomatic,
   aggregatefileLOC2855→2879(+24). Helperzeroabove-warning; metriche aggregate
   devono essere confermate reviewindipendente. Nessuna integrazione ancora.
+- Authorfinal424PASS/page1048s1189b/model39s16b100%, principal403cog,
+  aggregatecog-30/cyc-25/fileLOC+24/callableLOC-66/finding38invariati.
+  Typecheck/lintPASS3oldwarning/ratchetmainPASS0. Reviewer180fixtures/
+ 2917entries59593comparatorpairs720filteredgroups3NaNtrapsPASS, protected
+ 71helpers75hookorder/deps107statements464JSXnodesexact. Graphdocs/commitfreeze
+  ancora pendenti, reviewerfinaltest/verifiernoniniziati, no integrationyet.
+- ReviewerfinalAPPROVED source d879d268/report-onlya7341048, allprocess terminal;
+  independent424PASS/fullfiles100%/ratchetmain0/typecheck/lintold3warning,
+  oracleexact/protectedASTexact. Sourceesatta5fileintegrata bee3fd53,
+  report1699e790, duplicatasource7307d091nonintegrata. Verifier autorizzato
+  exactfrozen source/fullfrontend/build/browser; gateancorapending.
+- RootintegrationratchetPASS0/reportexit0:1671files20294callable1937error
+ 2747warning4684findings/cognitive81246/cyclomatic83308/fileLOC332324.
+  Interadirectorygiornaliere1289→1259cog1383→1358cyc/fileLOC3065→3089.
+  Verifierfocused424PASS/page1048s1189b/model39s16b100%, fullfrontendunitLIVE
+ 502102/session89959started08:59:01UTC, no restart/buildbrowserPASSdedotto.
+  Graphifyrootforcedfrontend6014nodes12596edges239communities; Presenzedocs
+ 68nodes70edges13communities/chunk1/1done/no semanticfailure. Configimmutable.
 
 ## 2026-10-09 — R6 Presenze daily presentation, bounded slice
 

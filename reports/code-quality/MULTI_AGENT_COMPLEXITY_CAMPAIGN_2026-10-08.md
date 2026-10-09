@@ -1,5 +1,45 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-09 — R7 anomaly-panel ordering/grouping, verification pending
+
+Original objective unchanged, global campaign ACTIVE/INCOMPLETE. Previous R6
+turn is PROGRESS: actual source reduction independently reviewed/certified.
+Current source `d879d268` approved by reviewer report-only `a7341048`, integrated
+exactly `bee3fd53`/review `1699e790`. Main dirty55a remains untouched. Registry
+precedes author/reviewer/verifier worktrees. Single responsibility: duplicated
+anomaly-panel comparator chains/group collection/count projection, not JSX,
+API, lifecycle, state, permissions, classification or identity changes.
+
+| R7 metric | Before | After | Delta |
+|---|---:|---:|---:|
+| Presenze principal cognitive | 420 | 403 | -17 (-4.05%) |
+| Principal cyclomatic | 371 | 356 | -15 |
+| Principal LOC | 2076 | 2020 | -56 |
+| Page + new model cognitive | 1222 | 1192 | -30 (-2.45%) |
+| Page + new model cyclomatic | 1309 | 1284 | -25 (-1.91%) |
+| Page + new model file LOC | 2855 | 2879 | +24 |
+| Page + new model callable LOC | 4499 | 4433 | -66 |
+| Findings | 38 | 38 | 0 |
+
+Classification **IMPROVED**, actual grouping/comparator deduplication with
+small helpers/zero findings. Missing names, strict NaN short-circuit, locale,
+stable ties, reference/duplicate/order and immutable inputs are preserved.
+Reviewer180fixtures2917entries59593comparatorpairs720filteredgroups3NaNtraps
+PASS; whole non-target AST/deps/75hooks/464JSX unchanged. Original new4UI
+characterizations PASS before runtime and independently replayed. Author and
+reviewer424focusedPASS with page1048statements1189branches/model39statements
+16branches100%; typecheck/lintPASS3reproduced oldwarnings, ratchetmainPASS0.
+No baseline/threshold/exclusion/ignore/config update. Principal403 still extreme;
+neither originalPresenze50% nor global completion is claimed.
+
+Verifier exact source `be4bc395` matches author, wholeProgramAST except four
+approvedcallbacks/movedtypes/priorityfunction exact; serial focused/full
+frontend/build/browser gates are pending. No suitePASS inferred from intent.
+Durable evidence `~/.cache/gaia-campaign/20261009-r7-presenze/`.
+Root integrated report1671files20294callables1937error2747warning4684findings,
+cognitive81246/cyclomatic83308/fileLOC332324/callableLOC327726;
+ratchet integration/mainPASS0. Global provenance/final independent gates pending.
+
 ## 2026-10-09 — R6 Presenze daily presentation, verified checkpoint
 
 Source `56c46570` independently approved by `c1475bb2`, integrated exactly as
@@ -777,33 +817,33 @@ dei callable annidati dello scanner, non decisioni uniche del programma.
 
 ## Final metrics
 
-Metriche dell'ultimo checkpoint R6, non dichiarazione di chiusura della campagna.
-Scansione durabile `20261009-r6-presenze/coordinator/integrated.json` e `.md`,
+Metriche dell'ultimo checkpoint R7, non dichiarazione di chiusura della campagna.
+Scansione durabile `20261009-r7-presenze/coordinator/integrated.json` e `.md`,
 sul runtime congelato e già revisionato.
 
 | Perimetro | File | Callable | LOC effettive | Error | Warning | Finding |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Checkpoint R6 ufficiale | 1670 | 20290 | 332300 | 1937 | 2747 | 4684 |
-| Checkpoint R6 applicativo | 1616 | 18969 | 318895 | 1929 | 2692 | 4621 |
+| Checkpoint R7 ufficiale | 1671 | 20294 | 332324 | 1937 | 2747 | 4684 |
+| Checkpoint R7 applicativo | 1617 | 18973 | 318919 | 1929 | 2692 | 4621 |
 
-La campagna aggiunge otto file e trentatre callable netti rispetto a clean55a.
+La campagna aggiunge nove file e trentasette callable netti rispetto a clean55a.
 Le differenze con l'audit dirty iniziale non sono riduzioni attribuite al
-refactoring. File LOC complessive aumentano di119, non sono diminuite.
+refactoring. File LOC complessive aumentano di143, non sono diminuite.
 
 ## Delta
 
-Confronto causale: snapshot Git pulito55a → checkpoint R6 congelato.
+Confronto causale: snapshot Git pulito55a → checkpoint R7 congelato.
 
 | Metrica | Before | After | Delta | Delta % |
 | --- | ---: | ---: | ---: | ---: |
 | Error | 1956 | 1937 | -19 | -0,97% |
 | Warning | 2758 | 2747 | -11 | -0,40% |
 | Finding | 4714 | 4684 | -30 | -0,64% |
-| Cognitive sum | 81931 | 81276 | -655 | -0,80% |
-| Cyclomatic sum | 83666 | 83333 | -333 | -0,40% |
-| Callable LOC sum | 328259 | 327792 | -467 | -0,14% |
-| File LOC sum | 332181 | 332300 | +119 | +0,036% |
-| Callable | 20257 | 20290 | +33 | +0,16% |
+| Cognitive sum | 81931 | 81246 | -685 | -0,84% |
+| Cyclomatic sum | 83666 | 83308 | -358 | -0,43% |
+| Callable LOC sum | 328259 | 327726 | -533 | -0,16% |
+| File LOC sum | 332181 | 332324 | +143 | +0,043% |
+| Callable | 20257 | 20294 | +37 | +0,18% |
 | Callable cognitive >300 | 8 | 5 | -3 | -37,50% |
 | Callable cognitive >200 | 18 | 17 | -1 | -5,56% |
 | Callable cognitive >100 | 55 | 55 | 0 | 0% |
@@ -844,7 +884,7 @@ cambia la soglia. B4 riduce la complessità senza eliminare finding sopra soglia
 
 | Callable | Before cognitive | After cognitive | Delta |
 | --- | ---: | ---: | ---: |
-| PresenzeGiornalierePage | 550 | 420 | -130 |
+| PresenzeGiornalierePage | 550 | 403 | -147 |
 | ElaborazioniSettingsWorkspace | 402 | 296 | -106 |
 | _build_network_statistics_summary | 209 | 181 | -28 |
 | refresh_wiki_conversation_daily_metrics | 188 | 178 | -10 |
@@ -981,14 +1021,14 @@ Tentativi intermedi non sono risultati accettati.
 
 ## Remaining top 30 hotspot
 
-Ranking corrente R6, cognitive discendente; applicativo senza test worker.
+Ranking corrente R7, cognitive discendente; applicativo senza test worker.
 Scansione globale completa include comunque i test worker e tutte le30divergenze.
-Fonte durabile `20261009-r6-presenze/coordinator/integrated.json`, snapshot`fb3e8b08`.
+Fonte durabile `20261009-r7-presenze/coordinator/integrated.json`, snapshot`1699e790`.
 
 | # | Callable | Cognitive | Cyclomatic | LOC | Path |
 | --- | --- | ---: | ---: | ---: | --- |
 | 1 | ElaborazioniCapacitasWorkspace | 472 | 416 | 2631 | `frontend/src/components/elaborazioni/capacitas-workspace.tsx` |
-| 2 | PresenzeGiornalierePage | 420 | 371 | 2076 | `frontend/src/app/presenze/giornaliere/page.tsx` |
+| 2 | PresenzeGiornalierePage | 403 | 356 | 2020 | `frontend/src/app/presenze/giornaliere/page.tsx` |
 | 3 | DetailContent | 391 | 304 | 1908 | `frontend/src/app/utenze/[id]/page.tsx` |
 | 4 | CatastoAnomaliePageContent | 390 | 342 | 2109 | `frontend/src/app/catasto/anomalie/page.tsx` |
 | 5 | CatastoGisPage | 317 | 281 | 1889 | `frontend/src/app/catasto/gis/page.tsx` |
