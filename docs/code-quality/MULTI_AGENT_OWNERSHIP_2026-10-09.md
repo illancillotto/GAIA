@@ -1,5 +1,10 @@
 # GAIA — Coverage closure ownership 2026-10-09
 
+SUPERSEDED: user clarification «FAIL test GIS» received before any runtime
+change integration. Capacitas implementer interrupted; worktree preserved.
+No coverage closure or review is currently authorized. Follow separate
+`MULTI_AGENT_OWNERSHIP_GIS_FIX_2026-10-09.md` for the actual requested fix.
+
 Coordinator: root. User request: «risolvi il fail», interpreted as the last
 reported Capacitas full-file coverage FAIL (906/929 branch arms,97.52%).
 Clarification offered for GIS/global baseline alternatives; no threshold,
