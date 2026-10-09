@@ -2,6 +2,22 @@
 
 ## 2026-10-09 — R9 Presenze mutations, design gate
 
+- Ripresa dopo la conferma del fix GIS già integrato: il checkout main
+  concorrente resta intatto. Autorizzata caratterizzazione originale dei
+  quattro comandi, prima di qualsiasi modifica runtime. Author e reviewer
+  riprendono nei worktree registrati; nessun nuovo owner sullo stesso file.
+- Il Coordinator misura il prototipo esterno A con lo scanner invariato:
+  cognitive aggregata 1109→1136 (+27), cyclomatic 1230→1271 (+41), callable
+  296→313 e LOC file 2788→2806. Il principal scende 399→391, ma questo non
+  giustifica il peggioramento complessivo. Design classificato REGRESSED e
+  non applicato; stime precedenti superate dalle misure reali. Evidenze
+  `~/.cache/gaia-campaign/20261009-r9-presenze/coordinator/prototype-metrics.json`
+  e `DESIGN_MEASURED_REJECTION.md`. Nessun debito spostato o baseline aggiornata.
+- Si valuta una variante locale che costruisce direttamente i quattro
+  handler async, eliminando il livello duplicato di wrapper/preparazione,
+  senza cambiare token, guard, payload, catch/finally, microtask o lifecycle.
+  Ancora solo design: implementazione richiede equivalenza indipendente,
+  test originali verdi, coverage full-file e riduzione aggregata misurata.
 - PreviousturnPROGRESS: R8 actualaggregate-63cog/-19cyc/-5finding, source79bc9969
   reviewed/integratedecdcc93c, review687a4a49/reportd7e2fd72; verifierreport8ab91f55
   integratedccc038d9. Allfullfrontend4472PASS/buildPASS/E2E54PASS7oldSKIP,

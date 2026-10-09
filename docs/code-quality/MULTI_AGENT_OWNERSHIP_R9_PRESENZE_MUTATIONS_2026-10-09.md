@@ -88,3 +88,29 @@ new state/hook, guard changes, or changes to the protected helpers/callsites.
 
 Plaintext phase authorization:
 `~/.cache/gaia-campaign/20261009-r9-presenze/coordinator/CHARACTERIZATION_APPROVAL.md`.
+
+## Measured design checkpoint
+
+Initial wrapper design A rejected before application: page aggregate cognitive
+1109→1136, cyclomatic1230→1271. Simple local factory also not selected:
+cognitive−4, cyclomatic+15 and aggregate decision count+1. Original runtime
+remains byte-identical throughout these external experiments.
+
+Original characterization accepted: 19 new rendered tests, six suites472PASS,
+page1033statement/1143branch/294function100%; Coordinator inspected raw counters
+and unchanged runtime hash. Reviewer inspected test behaviors independently.
+Characterization-only test/report commit is authorized; reviewer replay follows.
+
+Refined bounded design selected in principle: local async-handler factory,
+private pure editor payload mapper called inside request try, shared inline and
+editor finish callbacks and shared no-op inline success. Independent external
+oracle proves101cases,64overlap schedules,73timingcases/365microticks and2352
+payload combinations, with protected helpers/hooks/JSX unchanged.
+
+Measured alternative cognitive1109→1093 and principal399→385, aggregate decision
+count934→923. Raw cyclomatic1230→1231 is disclosed and compensated by twelve
+additional callable base units versus eleven removed aggregate decisions.
+FileLOC+22/principalLOC+9 also disclosed; no artificial helper added to force a
+number down. Final source must still pass full-file coverage, findings/ratchet,
+type/lint, independent review and frozen final gates before integration.
+Runtime approval remains a separate explicit phase after original replay.
