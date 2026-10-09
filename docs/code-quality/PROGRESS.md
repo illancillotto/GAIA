@@ -48,6 +48,11 @@
   Graphifyrootforcedfrontend6003nodes12570edges237communities; Presenze docs
  56nodes56edges12communities,chunk1/2and2/2done/zero semanticfailure.
   Tutti output durabili, nessun artefattoGraphify versionato.
+- Verifierfreshbuild:cleanPASS52,807s/exit0, produzione R6 proprio13010 e
+  gateway18090; pertinentPresenze7PASS0skip, fullE2E54PASS7existingSKIP0failure/
+ 0flaky/exit0,retries0/defaultmotion/timeoutsinvariati. RootleggeJSON/exits,
+  non deduce successo dal solo log. FullunitJUnit4417zeroerror/failure confermato.
+  Certificazione finale/report/cleanupstack ancora pendenti; goalglobale aperto.
 
 ## 2026-10-09 — R5 anomalies, una responsabilità di identità orphan
 

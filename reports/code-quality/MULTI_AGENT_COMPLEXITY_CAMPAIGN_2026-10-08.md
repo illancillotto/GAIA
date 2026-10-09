@@ -49,6 +49,13 @@ Whole giornaliere directory including unchanged prior models1332→1289cognitive
 237communities; Presenze docs56nodes56edges12communities, bothchunks complete,
 zero semantic failures. Graphify is orientation/maintenance, not metric proof.
 
+Fresh verifier `npm run build:clean` **PASS**,52.807s,exit0. ProductionR6
+pertinentPresenze browser **7PASS/0skip**; fullE2E **54PASS/7existingSKIP,
+zero failures/flaky**,68.596s,exit0,retries0/defaultmotion. Root reads actual
+JSON/exits and confirms fullunitJUnit4417zeroerrors/failures. Exact final
+verification report, disposable-stack cleanup and final root/doc closure are
+still pending; this does not certify the global campaign complete.
+
 ## 2026-10-09 — R5 orphan operator identity, checkpoint verificato
 
 Checkpoint runtime corrente, successivo a R4. Source `cd4b1145` integrato esatto
@@ -753,33 +760,33 @@ dei callable annidati dello scanner, non decisioni uniche del programma.
 
 ## Final metrics
 
-Metriche dell'ultimo checkpoint R5, non dichiarazione di chiusura della campagna.
-Scansione durabile `20261009-r5-orphan/coordinator/integrated.json` e `.md`,
+Metriche dell'ultimo checkpoint R6, non dichiarazione di chiusura della campagna.
+Scansione durabile `20261009-r6-presenze/coordinator/integrated.json` e `.md`,
 sul runtime congelato e già revisionato.
 
 | Perimetro | File | Callable | LOC effettive | Error | Warning | Finding |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| Checkpoint R5 ufficiale | 1669 | 20286 | 332281 | 1938 | 2749 | 4687 |
-| Checkpoint R5 applicativo | 1615 | 18965 | 318876 | 1930 | 2694 | 4624 |
+| Checkpoint R6 ufficiale | 1670 | 20290 | 332300 | 1937 | 2747 | 4684 |
+| Checkpoint R6 applicativo | 1616 | 18969 | 318895 | 1929 | 2692 | 4621 |
 
-La campagna aggiunge sette file e ventinove callable netti rispetto a clean55a.
+La campagna aggiunge otto file e trentatre callable netti rispetto a clean55a.
 Le differenze con l'audit dirty iniziale non sono riduzioni attribuite al
-refactoring. File LOC complessive aumentano di100, non sono diminuite.
+refactoring. File LOC complessive aumentano di119, non sono diminuite.
 
 ## Delta
 
-Confronto causale: snapshot Git pulito55a → checkpoint R5 congelato.
+Confronto causale: snapshot Git pulito55a → checkpoint R6 congelato.
 
 | Metrica | Before | After | Delta | Delta % |
 | --- | ---: | ---: | ---: | ---: |
-| Error | 1956 | 1938 | -18 | -0,92% |
-| Warning | 2758 | 2749 | -9 | -0,33% |
-| Finding | 4714 | 4687 | -27 | -0,57% |
-| Cognitive sum | 81931 | 81319 | -612 | -0,75% |
-| Cyclomatic sum | 83666 | 83364 | -302 | -0,36% |
-| Callable LOC sum | 328259 | 327780 | -479 | -0,15% |
-| File LOC sum | 332181 | 332281 | +100 | +0,030% |
-| Callable | 20257 | 20286 | +29 | +0,14% |
+| Error | 1956 | 1937 | -19 | -0,97% |
+| Warning | 2758 | 2747 | -11 | -0,40% |
+| Finding | 4714 | 4684 | -30 | -0,64% |
+| Cognitive sum | 81931 | 81276 | -655 | -0,80% |
+| Cyclomatic sum | 83666 | 83333 | -333 | -0,40% |
+| Callable LOC sum | 328259 | 327792 | -467 | -0,14% |
+| File LOC sum | 332181 | 332300 | +119 | +0,036% |
+| Callable | 20257 | 20290 | +33 | +0,16% |
 | Callable cognitive >300 | 8 | 5 | -3 | -37,50% |
 | Callable cognitive >200 | 18 | 17 | -1 | -5,56% |
 | Callable cognitive >100 | 55 | 55 | 0 | 0% |
@@ -808,10 +815,10 @@ dell'obiettivo globale della campagna.
 | Domain | Error before | Error after | Warning before | Warning after |
 | --- | ---: | ---: | ---: | ---: |
 | Backend runtime | 1035 | 1033 | 1688 | 1689 |
-| Frontend runtime | 878 | 862 | 881 | 871 |
+| Frontend runtime | 878 | 861 | 881 | 869 |
 | Worker runtime | 35 | 35 | 134 | 134 |
 | Worker tests, fuori campagna runtime | 8 | 8 | 55 | 55 |
-| Totale | 1956 | 1938 | 2758 | 2749 |
+| Totale | 1956 | 1937 | 2758 | 2747 |
 
 I due error Wiki e un error LOC GIS diventano warning perché le metriche scendono, non perché
 cambia la soglia. B4 riduce la complessità senza eliminare finding sopra soglia.
@@ -820,7 +827,7 @@ cambia la soglia. B4 riduce la complessità senza eliminare finding sopra soglia
 
 | Callable | Before cognitive | After cognitive | Delta |
 | --- | ---: | ---: | ---: |
-| PresenzeGiornalierePage | 550 | 437 | -113 |
+| PresenzeGiornalierePage | 550 | 420 | -130 |
 | ElaborazioniSettingsWorkspace | 402 | 296 | -106 |
 | _build_network_statistics_summary | 209 | 181 | -28 |
 | refresh_wiki_conversation_daily_metrics | 188 | 178 | -10 |
@@ -957,14 +964,14 @@ Tentativi intermedi non sono risultati accettati.
 
 ## Remaining top 30 hotspot
 
-Ranking corrente R5, cognitive discendente; applicativo senza test worker.
+Ranking corrente R6, cognitive discendente; applicativo senza test worker.
 Scansione globale completa include comunque i test worker e tutte le30divergenze.
-Fonte durabile `20261009-r5-orphan/coordinator/integrated.json`, snapshot`7d8397d8`.
+Fonte durabile `20261009-r6-presenze/coordinator/integrated.json`, snapshot`fb3e8b08`.
 
 | # | Callable | Cognitive | Cyclomatic | LOC | Path |
 | --- | --- | ---: | ---: | ---: | --- |
 | 1 | ElaborazioniCapacitasWorkspace | 472 | 416 | 2631 | `frontend/src/components/elaborazioni/capacitas-workspace.tsx` |
-| 2 | PresenzeGiornalierePage | 437 | 385 | 2080 | `frontend/src/app/presenze/giornaliere/page.tsx` |
+| 2 | PresenzeGiornalierePage | 420 | 371 | 2076 | `frontend/src/app/presenze/giornaliere/page.tsx` |
 | 3 | DetailContent | 391 | 304 | 1908 | `frontend/src/app/utenze/[id]/page.tsx` |
 | 4 | CatastoAnomaliePageContent | 390 | 342 | 2109 | `frontend/src/app/catasto/anomalie/page.tsx` |
 | 5 | CatastoGisPage | 317 | 281 | 1889 | `frontend/src/app/catasto/gis/page.tsx` |
