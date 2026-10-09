@@ -71,6 +71,12 @@ principal399 still extreme, globalcampaign ACTIVE/INCOMPLETE. Postreport ratchet
 and finalplatformdocsrefresh aftertheseclosuredocs are Coordinatorfinalgates;
 actual results are retained inlogs, not inferred from this intention.
 
+Final post-report ratchet/main terminalPASS0/exit0. Finalplatformdocsrefresh
+terminalexit0,chunk1/1done,zero semanticfailure,452nodes529edges84communities;
+durable `20261009-r8-presenze/coordinator/graph-platform-final.log`. No docs
+corpus edit follows this refresh. Verifier integratedccc038d9, governanceclosure
+f249add1, mainuntouched. Entire frozen source/AST still exactreviewedsource.
+
 ## 2026-10-09 — R7 anomaly-panel ordering/grouping, verified checkpoint
 
 Original objective unchanged, global campaign ACTIVE/INCOMPLETE. Previous R6
