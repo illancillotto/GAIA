@@ -1,5 +1,77 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-09 — R12 Capacitas commands, certified and integrated checkpoint
+
+Global objective **ACTIVE / INCOMPLETE**. This section supersedes R11 current
+numbers below; earlier entries preserve historical evidence. GIS synchronization
+FAIL was separately fixed/certified; existing tests pass unchanged in fresh E2E.
+Optional GIS/provider/PostGIS scenarios remain SKIP, not fresh certification.
+Dedicated campaign branch retained, concurrent main55a and baseline untouched.
+
+Exact runtime3b511b6d/b69 integrated673026e7, independent review8da06a90 integrated
+29f29497, distinct certificatebfe0b2d7 integratedb7e3ff2c. Author/reviewer/verifier
+have separate ownership/worktrees; Coordinator controls git custody and closure.
+Actual main55a ratchet PASS0 after EACH integration. Root full AST and every
+historical30finding object exactly match the independent certificate.
+Complete audit, source pins, domain results, branches, tests, coverage, attempts,
+provenance, Graphify and current top30:
+`INTEGRATION_R12_CAPACITAS_COMMANDS_2026-10-09.md`.
+
+### R12 actual metrics
+
+| Metric | R11 before | R12 after | Delta |
+| --- | ---: | ---: | ---: |
+| Principal cognitive |391 |359 |-32 (-8.18%) |
+| Principal cyclomatic |360 |336 |-24 |
+| Principal callable LOC |2527 |2487 |-40 |
+| Combined cognitive |926 |871 |-55 (-5.94%) |
+| Combined decisions |803 |762 |-41 |
+| Combined effective file LOC |3131 |3131 |0 |
+| Combined callable count |259 |254 |-5 |
+| Error / warning findings |17 /16 |17 /16 |0 /0 |
+
+Typed domain command lifecycle genuinely deduplicates eight rerun/delete flows;
+new helper9cognitive/8cyclomatic/24LOC below thresholds. Original API/token/auth,
+reload/current-row deletion and early busy/late-list races preserved. No new
+component/hook/context/reducer/export, relocation, policy or feature change.
+Classification **IMPROVED**; principal359 remains extreme. Against initial472,
+reduction113/-23.94%, not50%. Finding counts unchanged during this slice.
+
+### Current global metrics — official 8 October only
+
+| Metric | Official initial | Integrated R12 | Delta | Delta percent |
+| --- | ---: | ---: | ---: | ---: |
+| Files |1665 |1672 |+7 |+0.42% |
+| Callables |20261 |20315 |+54 |+0.27% |
+| Error |1956 |1926 |-30 |-1.53% |
+| Warning |2758 |2741 |-17 |-0.62% |
+| Findings |4714 |4667 |-47 |-1.00% |
+
+Application without worker tests1618files/18994callables/318975effectiveLOC/
+4604findings. Findings overlap;47fewer findings are not47independent defects.
+Domain error/warning totals unchanged from R11, recorded in INTEGRATION_R12.
+
+### Verification, provenance and residual debt
+
+- Distinct final80focused,476complete/20spec and4655wholefrontend/306files PASS,
+  zero unit skip; entire modified workspace and policy100% in all dimensions.
+- TypeScript/owned lint0/smoke18/clean build PASS;35exact legacy full-lint warnings.
+  Native56commands+genuine login/32overlap timelines PASS, public actions and
+  real polling with explicit browser-virtual-clock limitation.
+- Pertinent E2E4PASS; full E2E54PASS/7historicalSKIP/0failure/retry/flaky.
+  Exact skip identities/reasons and attempts remain in VERIFICATION_R12.
+- All27owned processes terminal; source/dependencies intact except normal
+  disclosed Vitest timing cache. No production mutation or main merge.
+- Local ratchetPASS0; globalcheckFAIL30make2, all complete objects exact historical
+  provenance. No baseline repair/inflation, threshold/scope/ignore/tooling change.
+- Remaining5callables>300/17>200/55>100: Utenze391, Catasto anomalie390,
+  Presenze385, Capacitas359, CatastoGIS317. Backend/worker full-suite closure
+  remains due. Domain contract and dedicated Graphify updates accompany closure.
+
+No global completion or strategic target achievement claimed. Next bounded
+Capacitas wizard/validation responsibility requires fresh ownership/original100%
+and a safe design; no new slice started before this green checkpoint.
+
 ## 2026-10-09 — R11 Capacitas monitor lifecycle, certified and integrated checkpoint
 
 Global objective **ACTIVE / INCOMPLETE**. This section supersedes the current

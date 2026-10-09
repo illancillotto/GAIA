@@ -1,5 +1,53 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R12 certified and sequentially integrated
+
+- Source3b511b6d→673026e7, independent review8da06a90→29f29497, distinct
+  certificatebfe0b2d7→b7e3ff2c integrated one by one, actualmain55aratchetPASS0
+  after EACH pick. Frozen workspaceb69/SLICE7329/REVIEW1308/VERIFICATION8e898848
+  exact. Original characterization commits remaincf2a95b8/ecb4fe51.
+- IMPROVED: principal391→359cognitive/360→336cyclomatic/2527→2487callableLOC;
+  combined926→871cognitive/803→762decisions/1062→1016rawcyclomatic,
+  fileLOC3131unchanged, callables259→254. Sharedhelper9/8/24 below thresholds;
+  owned17error16warning unchanged. No finding elimination or debt transfer claimed.
+- Distinct fresh final80/476/20/full-file100%,4655wholefrontend/306files,
+  type/lint/smoke18/buildPASS; full lint35exact old warnings. Native56+login,
+  32overlaps, actual API/request/auth/current-row/old-race assertions. Browser
+  virtual-clock disclosure retained. E2E4pertinent and54fullPASS/7exact historical
+  SKIP/0retry/flaky. Provider/PostGIS/optionalGIS skips not certified as PASS.
+- Coordinator fresh full AST equals certificate;1672files20315callables,
+  1926error2741warning4667finding. GlobalcheckFAIL30make2, all complete objects
+  match provenance/certificate, no baseline inflation. Compared official8October:
+  error−30(−1.53%),warning−17(−0.62%),findings−47(−1.00%). Findings overlap.
+- All27verifier processes/resources terminal, source/dependency integrity exact
+  except disclosed normal Vitest timing cache; source/tests/config/baseline frozen.
+  Main55a concurrent hashes unchanged. Domain command contract/ownership updated;
+  closure report records actual metrics and dedicated Graphify updates.
+- Global campaign ACTIVE/INCOMPLETE:5callables>300/17>200/55>100 remain; no fresh
+  full backend/worker certification. GIS request already separately closed,
+  synchronization tests run unchanged in fresh full E2E. No new hotspot started.
+
+## 2026-10-09 — R12 runtime reviewed; distinct final certification active
+
+- Exact runtimeb69 + SLICE73292251 published3b511b6d in author branch, NOT
+  integrated into campaign yet. Principal391→359cognitive/360→336cyclomatic/
+  2527→2487LOC; combined926→871cognitive/803→762decisions,3131fileLOC unchanged.
+  Global1926error2741warning4667finding unchanged: no eliminated findings claimed.
+- Author fresh80/476/20full100%, type/lint/integrity/actualmainratchet and
+  Graphify frontendforce/pruning PASS. Independent source reviewer imported
+  exact3b as8348da68; fresh80/476/20full100%, all raw counters positive,
+  type/lint/integrity/actualmainratchet PASS0 and64source traces. Final review
+  frozen1308bb10, report-only commit8da06a90 published by Coordinator.
+- Source write ownership released. Dedicated distinct final worktree80499603
+  contains ONLY source3b+report-only8da imports above clean435b4d31; verifier
+  owns only new VERIFICATION_R12 report and exclusive heavy test window.
+  Fullfrontend/build/native commands/E2E/provenance/integrity certification
+  pending; author/reviewer unit evidence does not substitute for these gates.
+- Domain command lifecycle contract records original busy, auth, token and
+  current-row/late-resurrection races. Twenty specs/config/policy/baseline frozen;
+  concurrent main55a hashes unchanged. GIS fix remains separately certified.
+  Global goal ACTIVE/INCOMPLETE; source/certificate integration awaits final PASS.
+
 ## 2026-10-09 — R12 original review accepted; exact runtime slice authorized
 
 - Independent original replay PASS:80 focused and476/20 complete, zero skips;

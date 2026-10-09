@@ -1,6 +1,68 @@
 # R12 Capacitas — rerun/delete command lifecycle ownership
 
-## Current phase — authorized exact runtime implementation
+## Current phase — closed green R12 checkpoint
+
+Exact source3b511b6d→673026e7, independent review8da06a90→29f29497,
+distinct certificatebfe0b2d7→b7e3ff2c integrated sequentially. Actual immutable
+main55a ratchet PASS0 after EACH pick. All four frozen source/report hashes exact.
+Fresh Coordinator full AST equals complete independent certificate objects;
+global check remains FAIL30, every finding object identical to certificate.
+Coordinator publishes closure docs/Graphify and final post-doc gate. All agents
+are terminal, no active runtime owner or further slice. Global ACTIVE/INCOMPLETE;
+main and baseline/config/tooling bytes preserved. MERGED means integrated into
+the dedicated campaign branch, never main. No new slice is allocated here.
+This phase supersedes earlier integration/final allocations below.
+
+## Previous phase — sequential certified integration
+
+Distinct final verifier terminal APPROVED/IMPROVED, report SHA256
+`8e898848ff9034750359f1f4d05cc3b4f904e54fb9ce86f36c29d90dbf5d146b`.
+Fresh80/476full100%,4655frontend tests/306files, type/lint/smoke/build,
+56native command scenarios+login/32overlaps, E2E4pertinent/54fullPASS7historical
+SKIP0retry/flaky, fullAST/main55a ratchet PASS0/global30exact, cleanup/integrity
+PASS. All27owned processes terminal, heavy window and report writes released.
+
+Coordinator now exclusively integrates source3b511b6d, review-only8da06a90 and
+the frozen certificate-only commit one at a time, authoritative main55a ratchet
+after each. No source redesign or main merge. Closure docs/metrics/Graphify
+follow only if all integration gates remain PASS0. Global goal still incomplete.
+This phase supersedes earlier final-verifier allocation below.
+
+## Previous phase — distinct final certification
+
+Reviewer terminal APPROVED/IMPROVED on exact source3b511b6d/b69, imported
+as8348da68. Frozen REVIEW_R12 SHA256
+`1308bb1040c49e011135e683cbdb06bafd043d885c56b6212cf85ce085d089f9`.
+Fresh independent80/476/20/full100%, type/lint/integrity/fullAST and actual
+main55a ratchet PASS0; reviewer releases all report writes and heavy window.
+
+Coordinator imports exact source and report-only review into dedicated final
+worktree. Distinct final verifier writes ONLY new VERIFICATION_R12 report;
+all source/tests/review/config/baseline frozen and read-only. Exclusive heavy
+window now belongs to final verifier: fresh full-file100%, fullfrontend units,
+type/lint/smoke/build, owned native command browser and available E2E,
+fullAST/main55a ratchet0/global30 provenance/integrity/cleanup. Detailed private
+FINAL_VERIFICATION_APPROVAL.md defines scope. No integration until certificate.
+This phase supersedes earlier author/reviewer allocations below.
+
+## Previous phase — independent frozen runtime replay
+
+Author terminal exact source b69cbc44, SLICE report73292251: fresh80/476/20,
+both full-file100% (724 statements/804 branches/254 functions/630 lines),
+type/lint/protected/main55a ratchet PASS0, Graphify force/pruning PASS.
+All twenty tests and other3507tracked paths remain byte-identical.
+Author releases source write ownership and heavy window; source/report frozen.
+
+Coordinator exclusively publishes only the frozen workspace and SLICE report
+as one runtime commit. Reviewer may import that exact commit and now holds
+exclusive heavy replay ownership. ONLY existing new REVIEW_R12 report writable;
+all imported source/tests/config/old reports read-only. Fresh focused80/full476
+both-file100%, project/explicit-test type, lint, integrity and actual main55a
+ratchet required before APPROVED/IMPROVED. No integration before this review
+and distinct final verification. No source redesign or config/baseline repair.
+This phase supersedes earlier runtime implementation allocation below.
+
+## Previous phase — authorized exact runtime implementation
 
 Independent ORIGINAL review completed PASS: actual 80 focused / 476 total,
 20 specs, zero skips, both complete runtime files 100% in all dimensions,
@@ -112,10 +174,10 @@ results as fresh tests. No worktree deletion/pruning/reset/stash/source copying.
 
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; private phase approvals/checkpoints; later global/integration/domain docs only with explicit allocation | Ownership, phase gates, exact-source publication/integration | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
-| R12 author (01a120c5-d838-7251-b33b-52a5f9b03b48) | Capacitas command lifecycle | Exclusive workspace runtime and new SLICE_R12 report only | Apply frozen b69 candidate; fresh runtime gates, exclusive heavy window | GAIA-campaign-20261009-r11-capacitas-monitors (reused clean worktree) | refactor/complexity-r12-capacitas-commands | ACTIVE |
-| R12 reviewer/integrator (01a120c7-5237-7f02-9fe7-352e65b9a6ed) | Independent runtime review | ONLY new REVIEW_R12_CAPACITAS_COMMANDS_2026-10-09.md; frozen old reports/source/tests read-only | Bounded static review now; actual-source replay awaits source freeze and heavy-window transfer | GAIA-campaign-20261009-r11-capacitas-monitors-review (reused clean worktree) | review/complexity-r12-capacitas-commands | ACTIVE |
-| R12 final verifier | Frozen-source certification | Future distinct VERIFICATION_R12 report only after explicit source freeze/phase allocation | No task active before candidate review and original characterization | Dedicated clean final worktree to be assigned | To be assigned | PLANNED |
+| Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md; new INTEGRATION_R12 report; domain-docs/elaborazioni/docs/CAPACITAS_JOB_COMMAND_LIFECYCLE_2026-10-09.md; private phase approvals/checkpoints | Certified sequential integration and closure documentation | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | MERGED |
+| R12 author (01a120c5-d838-7251-b33b-52a5f9b03b48) | Capacitas command lifecycle | Frozen workspaceb69 and SLICE73292251; write ownership released | IMPROVED, source integrated673026e7 | GAIA-campaign-20261009-r11-capacitas-monitors (reused clean worktree) | refactor/complexity-r12-capacitas-commands | MERGED |
+| R12 reviewer/integrator (01a120c7-5237-7f02-9fe7-352e65b9a6ed) | Independent runtime review | Frozen REVIEW_R12 report1308bb10; all write ownership released | APPROVED/IMPROVED, review integrated29f29497 | GAIA-campaign-20261009-r11-capacitas-monitors-review (reused clean worktree) | review/complexity-r12-capacitas-commands | MERGED |
+| R12 final verifier (01a120f5-5536-7f11-bb61-089e5d03c923) | Frozen-source certification | Frozen VERIFICATION_R12 report8e898848; write ownership released | APPROVED/IMPROVED, certificate integratedb7e3ff2c, resources terminal | GAIA-campaign-20261009-r12-capacitas-final | review/complexity-r12-capacitas-final | MERGED |
 
 No runtime file has two owners. Shared lib/hooks/UI/tooling/config/baseline and
 all previous nineteen specs and policy files remain read-only. Coordinator
