@@ -17,11 +17,21 @@ separate unresolved coverage/defensive-branch issue, not a waiver for R5.
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | Coordinator | Governance | this registry; docs/code-quality/PROGRESS.md; reports/code-quality/MULTI_AGENT_COMPLEXITY_CAMPAIGN_2026-10-08.md | Approve design, ensure exclusive ownership, integrate only reviewed exact source, measure cumulative results | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
-| R5 author (r5_orphan_operators) | Operazioni anomalies | backend/app/modules/operazioni/routes/analytics.py; backend/app/modules/operazioni/routes/_orphan_session_operators.py if justified; backend/tests/test_operazioni_orphan_operator_r5.py; domain-docs/operazioni/docs/ORPHAN_OPERATOR_REFACTOR_2026-10-09.md; reports/code-quality/SLICE_R5_ORPHAN_OPERATORS_2026-10-09.md | Orphan-session operator matching/identity annotation only; pure normalized name indexes and resolution with real aggregate reduction | GAIA-campaign-20261009-r5-orphan-operators | refactor/complexity-r5-orphan-operators | ACTIVE |
+| R5 author (r5_orphan_operators) | Operazioni anomalies | backend/app/modules/operazioni/routes/analytics.py; backend/app/modules/operazioni/routes/_orphan_session_operators.py; backend/tests/test_operazioni_orphan_operator_r5.py; domain-docs/operazioni/docs/ORPHAN_OPERATOR_REFACTOR_2026-10-09.md; reports/code-quality/SLICE_R5_ORPHAN_OPERATORS_2026-10-09.md | Orphan-session operator matching/identity annotation only; pure normalized name indexes and resolution with real aggregate reduction | GAIA-campaign-20261009-r5-orphan-operators | refactor/complexity-r5-orphan-operators | READY_FOR_REVIEW |
 | R5 independent reviewer (r5_orphan_review) | Integration review | reports/code-quality/INTEGRATION_R5_ORPHAN_OPERATORS_2026-10-09.md only | Review design, independently characterize and verify before/after source; no runtime edits or unrelated phase cleanup | GAIA-campaign-20261009-r5-orphan-review | review/complexity-r5-orphan-operators | ACTIVE |
-| R5 final verifier (r5_orphan_verifier) | Frozen-source certification | reports/code-quality/VERIFICATION_R5_ORPHAN_OPERATORS_2026-10-09.md only | Independent whole-file coverage, AST, ratchet and integration suite after source approval | GAIA-campaign-20261009-r5-orphan-verification | verify/complexity-r5-orphan-operators | PLANNED |
+| R5 final verifier (r5_orphan_verifier) | Frozen-source certification | reports/code-quality/VERIFICATION_R5_ORPHAN_OPERATORS_2026-10-09.md only | Independent whole-file coverage, AST, ratchet and integration suite on frozen source; integration still requires reviewer approval | GAIA-campaign-20261009-r5-orphan-verification | verify/complexity-r5-orphan-operators | ACTIVE |
 
 ## Unit, invariants and approval
+
+Frozen author source `cd4b11457f2cb3848b87a5c41d110657d8d11d27`, clean.
+Root validated author JUnit/exits/whole-file coverage counters independently:
+148PASSbefore/after, analytics661s290b100%, helper27s10b100%/zeroexclusions;
+wider236PASS14existingPostgreSQLSKIP. Candidate principal298cog/137cyc372LOC,
+affected897cog572cyc1298LOC (+33fileLOC acknowledged, no LOC reduction claim).
+RatchetPASS0/style/format/queryAST/invariantsPASS; source not integrated yet.
+Coordinator applies exact source for independent checks ONLY: review912dc846,
+verificationfba9c2cc. Reviewer approval and verifier results are pending; no
+authorization to cherry-pick source into integration before review acceptance.
 
 One callable, one responsibility: `anomalies_analytics` orphan-session operator
 indexes, normalized first/last-name matching and identity details. Do not extract

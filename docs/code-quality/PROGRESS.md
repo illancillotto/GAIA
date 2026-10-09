@@ -28,6 +28,14 @@
   violation. Followupbounded approvato root+reviewer: normalizzazione nullable
   nome sessione pura riusata in indice/resolver, senza cambiare labelraw o fasi.
   Non ampliare scope per arrivare<300; gate finali ancora pendenti.
+- Source finale frozen `cd4b1145`,worktreeauthorclean:anomalies361→298cog,
+ 159→137cyc,387→372LOC; aggregataaffected943→897cog/578→572cyc,
+  fileLOC1265→1298(+33esplicito). Quattrohelpersbelowwarning/zero findings.
+  Author148PASSprima/dopo,analytics661s290b100%,helper27s10b100%,
+  wider236PASS14existingPostgreSQLSKIP,ratchet/style/format/invariantsPASS.
+  RootJUnit/coverage/exitsverified. Source applicato SOLO review912dc846 e
+  verificationfba9c2cc, nonintegration; approvazionereview e certificazione
+  indipendente pendenti. Nessun altrohotspot aperto,nessunwaivercoverage.
 
 ## 2026-10-09 — R4 fuel response mapping, singola slice autorizzata
 
