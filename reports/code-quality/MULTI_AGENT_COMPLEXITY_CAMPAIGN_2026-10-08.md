@@ -41,6 +41,16 @@ nel perimetro verificato. Missione globale **ACTIVE/INCOMPLETE**: coverage
 Capacitas97,52%/FAIL100, trenta divergenze globali e target estremi ancora aperti;
 nessuna nuova wave runtime avviata in questo segmento.
 
+Chiusura Coordinator su `c245dfcd`: ultimo `make complexity-ratchet BASE_REF=main`
+PASS0/exit0, log `coordinator/ratchet-final.log`; working tree clean e diff
+runtime/protetti vuoto. Stack proprio rimosso, env sintetico eliminato,
+porte18089/13009libere; tracce/log durabili conservati. Ultimo
+`make graphify-platform-docs` PASS/exit0,gpt-reserve,chunk1/1done,
+nessuna semanticfailure:364nodi391edge77community,152cachehit/2riestratti,
+6834token input3163output/costo stimato$0.0078,log
+`coordinator/graph-platform-final.log`. Nessuna modifica successiva al corpus
+docs; questa annotazione risiede nei report, non nel corpus Graphify docs.
+
 ## Risultati cumulativi autorevoli al checkpoint R3
 
 Il runtime rimane quello R3: la continuazione Capacitas modifica soltanto test
