@@ -1,6 +1,46 @@
 # R14 Operazioni — operator kilometre attribution readiness
 
-## Current phase: ORIGINAL persistent characterization, authoring only
+## Current phase: independent ORIGINAL persistent characterization replay
+
+Author terminal READY_FOR_REVIEW, heavy RELEASED. Frozen spec
+210b958a4d2ecfa884ad141364281119575f637669580cb24474b920847892fc and CHAR
+06b2d29e8ef325a1fe01ed2280b9b11fa2640ba215a350d7cfe26cfd4fac4389.
+Fresh56focused/204sevenunion0skip/fullanalytics661s290b100%, helper27s10b100%,
+scopedRuff/format/style13files0, actual immutable55a Make ratchet0. All2136
+protectedpaths/40readiness artifacts exact. Sourcecbe/readiness204/candidate1ab2
+frozen, synthetic ASTfilename cannot inflate runtimecov. Initial fixture hydration
+failure retained/explained; no runtime/config/oldtest edits. Source31actual/28
+scanner limitation visible, no scanner repair. Campaign ACTIVE/INCOMPLETE.
+
+Coordinator publishes ONLY new spec+CHAR and imports to SAME existing clean
+review worktree/branch, preserving frozen readinessd2c3 untracked. Fresh native
+independent successor `/root/r14_original_review` owns ONLY new
+reports/code-quality/REVIEW_CHARACTERIZATION_R14_OPERAZIONI_OPERATOR_KM_2026-10-09.md.
+Exclusive heavy original replay now allocated: fresh new56/fullsevenunion204
+fullruntime100%, scopedRuff/format/style/actual immutable55a ratchet/integrity,
+test assertion review. Explicitly distinguish actual real-ORM whole-route tests
+from supplementary nested-AST defensive contracts; synthetic filename mandatory.
+Inspect five SELECT/binds/order/no-write/properties/collision priority and all
+eight gap families, retain attempts and read frozen inputs. No source/tests/
+reports/config/candidate changes or commit/import delegated. Independent report
+freeze+heavy release must precede ANY runtime permission. R15 static only until
+later explicit heavy transfer. Original readiness reviewer terminal releases
+ownership; successor may not rewrite its frozen report.
+
+## Previous phase: ORIGINAL persistent characterization validation
+
+R13 final-clean postcommit ratchet at68996649 PASS0, source/tests/certificate
+integrated and final resources terminal. Coordinator explicitly transferred
+exclusive heavy window to R14 author. Fresh new56PASS and sevenunion204PASS,
+zero skip/failure/error; actual full analytics661statements290branches100%,
+unchanged orphanhelper27statements10branches100%. First fixture partial ORM
+snapshot hydration failure16FAIL/40PASS retained; refresh BEFORE observed route
+queries corrected only new test, all5SELECT/fullresponse/no-write exact.
+Nested defensive AST contract uses synthetic filename, not runtime filename,
+cannot inflate analytics coverage. Existing four excluded lines exact.
+New-spec Ruff/format0, main55a style13files0; full Make immutable55a ratchet
+currently live same handle70754, freeze/release waits its terminal result.
+No runtime permission, baseline/config/oldtests/candidates/readiness immutable.
 
 R13 certified source integrated sequentially through03c25ac9, each main55a gate0;
 distinct final heavy RELEASED, root complete AST/global30objects exact certificate,
@@ -74,8 +114,8 @@ no copying dirty main source, reset/stash/main merge, baseline operation.
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | Coordinator | Governance | This registry; docs/code-quality/PROGRESS.md; private approvals | Ownership and serial heavy-window allocation | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
-| /root/r14_operazioni_operator_km | Operazioni analytics | ONLY new test_operazioni_operator_km_r14.py and CHARACTERIZATION_R14; readiness/runtime/oldtests/candidate immutable | Original characterization authoring, heavy execution waits explicit transfer | GAIA-campaign-20261009-r14-operazioni-operator-km | refactor/complexity-r14-operazioni-operator-km | ACTIVE |
-| /root/r14_operator_km_readiness_review | Operazioni attribution review | Frozen REVIEW_READINESS_R14 reportd2c3aedd only | Static readiness terminal, resources released | GAIA-campaign-20261009-r14-operazioni-operator-km-review | review/complexity-r14-operazioni-operator-km | READY_FOR_REVIEW |
+| /root/r14_operazioni_operator_km | Operazioni analytics | Frozen spec210b958a and CHAR06b2d29e; readiness/runtime/oldtests/candidate immutable | Original characterization terminal, heavy released | GAIA-campaign-20261009-r14-operazioni-operator-km | refactor/complexity-r14-operazioni-operator-km | READY_FOR_REVIEW |
+| /root/r14_original_review (native successor) | Operazioni independent original replay | ONLY new REVIEW_CHARACTERIZATION_R14; frozen REVIEW_READINESS_R14 reportd2c3aedd | Fresh independent original gates and assertion review, exclusive heavy window | GAIA-campaign-20261009-r14-operazioni-operator-km-review | review/complexity-r14-operazioni-operator-km | ACTIVE |
 | Future distinct verifier | Actual-source certification | Later exact new R14 verification report | No active task before source review | Later dedicated clean worktree | Later | PLANNED |
 
 Registry generated BEFORE agent creation. No overlap with R13 workspace, existing

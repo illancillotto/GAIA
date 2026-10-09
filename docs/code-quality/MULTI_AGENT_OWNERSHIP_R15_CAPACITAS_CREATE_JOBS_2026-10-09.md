@@ -62,6 +62,9 @@ explicit equivalence proof; no analogy to R12 commands replaces characterization
 Fresh preflight status/HEAD/merge-base/diff/log/worktree conflict checks and
 checkpoint/Graphify/repository complexity skills/references first. Existing
 dedicated Graphify corpus query is orientation, not complexity or ordering proof.
+If the fresh author worktree lacks a graph, Coordinator explicitly authorizes
+the SAME dedicated make graphify-frontend-query from the existing integration
+worktree corpus, read-only orientation only. No refresh or root-generic graphify.
 Before metrics for owned workspace+unchanged fraction policy, all nested callable
 scores and distinct source decisions. R13 planning pins: principal347cognitive/
 324cyclomatic/2455LOC; combined861cognitive752decisions3126effectivefileLOC/

@@ -1,5 +1,20 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-09 — R14 original characterization frozen, independent replay allocated
+
+- Author terminal new56PASS/sevenunion204PASS0skip/fullanalytics661s290b100%,
+  helper27s10b100%. Initial16ORMFAIL40nestedPASS fixture hydration error retained,
+  only new fixture complete refresh before observer corrected. Synthetic nested
+  ASTfilename excludes clones from runtime denominator. Oldtests/source exact.
+- Spec210b958a/CHAR06b2d29e frozen; Ruff/format0/style13files0/actual immutable55a
+  ratchet0, protected2136paths/40readinessartifacts exact. Heavy RELEASED.
+- Registry grants distinct native original reviewer SAME existing reviewworktree,
+  ONLY new REVIEW_CHARACTERIZATION_R14 after Coordinator spec+CHAR publication.
+  Fresh original tests/coverage/invariants needed before runtime permission.
+- R15 static author may query existing integration corpus with dedicated Make
+  query after its own missing-graph diagnostic; no refresh/test/fullscan while
+  R14 reviewer heavy. Domain source8111/all21tests/policy remain frozen.
+
 ## 2026-10-09 — R14 original validation live; R15 bounded Capacitas readiness
 
 - Previous goal turn PROGRESS: R13 certified integration/closure68996649clean,
