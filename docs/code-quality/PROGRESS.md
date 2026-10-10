@@ -1,5 +1,31 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-10 — R20 accepted and integrated after distinct final review
+
+- Old quota-blocked reviewer retained unchanged; distinct final task completed
+  two native original/candidate phases and ACCEPTED exact34afe117/IMPROVED.
+  Report3a3b9576 frozen; heavy released before root publication.
+- Author2a13bb8f→integration1f565147; report-onlyff0394ac→60949d66. Actual immutable
+  55a Make ratchet AFTER EACH integration PASS0/findings[]. No whole-branch
+  import, runtime staged in verifier tree, main merge or push.
+- Root actual integrated505PASS/22specs,0skip; full workspace719statement/
+  766branch/250function/626line100%, fraction9/6/6/8 unchanged100%, all raw
+  counters positive. Native types/scoped lint/smoke18/whitespace PASS.
+- Principal347→339cognitive,324→316cyclomatic,2455→2439LOC; aggregate858→836/
+  998→977, six physical decisions removed429→423. Attributed749→727 overlaps
+  scopes, not22physical decisions. No baseline/scope/threshold/config inflation.
+- Fresh integrated report1673files20321callables1926errors2741warnings4667finding
+  records exactly matches accepted candidate metric objects. Current global
+  check FAIL30 (CLI1/Make2), exact initial2026-10-08 finding objects/order and
+  retained candidate check. Historical divergences are not new regressions.
+- Main binarydiff9f85e574/status0d54d4eb and baseline38e6 unchanged;22specs and
+  237retained inputs exact before/after. Evidence and reproduction:
+  INTEGRATION_R20_CAPACITAS_CREDENTIALS_2026-10-10.md and durable r20-integrated.
+- Global ACTIVE/INCOMPLETE:five>300/seventeen>200/fifty-five>100 remain; full
+  final application suites unverified for this checkpoint. No R21 allocation
+  until maintenance/governance/postcommit gate completes. Older held-candidate
+  section below records historical disposition, not current integration state.
+
 ## 2026-10-10 — R20 Capacitas candidate measured, integration held
 
 - Resumed full goal read from attachment; previous turn PROGRESS, not global

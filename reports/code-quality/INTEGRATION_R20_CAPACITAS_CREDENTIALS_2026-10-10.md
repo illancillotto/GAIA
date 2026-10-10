@@ -2,7 +2,8 @@
 
 ## Scope and current disposition
 
-Candidate measured and frozen; integration HELD, no independent acceptance.
+Initial disposition: candidate measured and frozen; integration HELD.
+This historical entry is superseded by the accepted integration below.
 User resumes the full
 complexity campaign following R16 matcher closure438df8e8. This slice removes
 four copies of one credential-default policy while preserving evaluation inside
@@ -199,3 +200,109 @@ Main binarydiff9f85e574012050218a76c9e65f38248cb2e21f520adb338f90e07a969114664b
 and status0d54d4eb816db5afeaaf183918f3719aefd6c725eebf26af561d96261c735e87
 remain exact; baseline38e6b794 unchanged. Integration runtime/config/Makefile
 diff from438df8e8 is0bytes. No cleanup is performed despite limited disk space.
+
+## Independent acceptance and integrated checkpoint
+
+Distinct final task01a1274c-5903-7c81-8a87-499bed8a4fae completed without error;
+fresh status read confirms idle/completed and heavy RELEASED. Its frozen report
+3a3b95764c2a9de2dc255776684c96c9142ebf9f45d5bad1b164da02d9de3910 explicitly
+ACCEPTS exact runtime34afe117, classification IMPROVED. The quota-blocked old
+review and its failures are retained, not relabeled or restarted.
+
+Independent fresh actual original and candidate13/505/22 PASS, all four
+full-file coverage dimensions100%, project/spec types135sources0diagnostics,
+scoped lint and immutable55a Make ratchet0/findings[]. Literal-preserving AST
+restoration proves the remaining original syntax is exact after reversing only
+the four policy replacements and one helper. Six physical decisions removed,
+not22; no import/hook/API/dependency change or threshold violation is introduced.
+
+| Accepted publication | Dedicated commit | Integration commit | Native55a ratchet |
+| --- | --- | --- | --- |
+| Runtime and author SLICE |2a13bb8fd4c3279ebb41e98dc52e662a4bd83956 |1f565147 |PASS0/findings[] |
+| Final independent report ONLY |ff0394acfed26cc4ce3007c66996fd44f0c789de |60949d66 |PASS0/findings[] |
+
+Only these commits were cherry-picked, one at a time. The verifier's dirty
+read-only candidate runtime was NOT staged or imported as part of its report
+commit. Author tree is clean; verifier retains its sanctioned runtime copy.
+Integration branch remains refactor/complexity-campaign-20261008; main55a is
+untouched. No merge to main, push, baseline repair or cleanup occurs.
+
+## Fresh root integrated verification
+
+On actual integrated60949d66, root ran native gates serially under exclusive
+heavy ownership. Durable evidence:
+`~/.cache/gaia-campaign/20261010-r20-integrated/`.
+Each command has its own native log/exit record; verify.py and audit.cjs record
+the real invocation, JSON assertions and custody, not copied implementations.
+
+| Integrated gate | Actual result |
+| --- | --- |
+| All22 immutable campaign Capacitas specs |505 PASS,0 failure/skip |
+| Full actual workspace coverage |719/719statement,766/766branch,250/250function,626/626line;100% each |
+| Fraction-policy coverage |9/9statement,6/6branch,6/6function,8/8line;100% each |
+| Raw counter/path audit |All positive,0 skip;exact integration-tree paths |
+| Native project types, incremental false |PASS0 |
+| Existing-config ESLint runtime+22specs |PASS0/max-warnings0 |
+| Native npm test smoke |18 PASS |
+| Full application Make report |PASS0;1673files20321callables1926errors2741warnings4667findings |
+| Global baseline check |Historical FAIL30;CLI1/Make2 |
+| Whitespace and complete custody |PASS0;22specs/237retained inputs/main diff+status/baseline exact |
+
+Root current report files/callables/violations/scope/engines/parser errors equal
+the independently accepted candidate objects. Root current global finding
+objects AND order exactly equal BOTH the original authoritative2026-10-08
+audit's global_compare.findings and retained candidate check. No finding is
+absorbed, ignored or attributed to this slice.
+
+The integrated callable is cognitive339/cyclomatic316/LOC2439. File aggregate
+cognitive836/cyclomatic977/LOC3085,17errors15warnings,250callables; hooks remain
+31useState/2useEffect/0useReducer. The helper stays2/3/10/nesting0/params2.
+R20 changes actual integration warnings2742→2741 and findings4668→4667, with
+errors1926 unchanged. Strategic start1956/2758/4714→current1926/2741/4667:
+-30errors(-1.53%),-17warnings(-0.62%),-47finding records(-1.00%). Overlapping
+findings are not independent problems. Five>300/seventeen>200/fifty-five>100
+remain; global goal ACTIVE/INCOMPLETE, not final campaign certification.
+
+## Failure accounting and remaining limits
+
+No fresh integrated native test/type/lint/report/ratchet gate failed. Global
+check's expected Make2 is retained as FAIL, not PASS. This continuation's
+read-only exploration included absent guessed baseline/report/private paths
+and a JSON-array assumption for the files object; these failed lookups changed
+no source or gate, and were corrected by bounded schema/path inspection.
+Earlier ENOBUFS and reviewer quota failures remain disclosed above.
+
+Final full backend/worker/unit frontend/build/E2E suites are not claimed for
+this checkpoint. Existing GIS and R19 fixes are not reopened. Full integrated
+coverage proves this bounded runtime change, not all scheduler interleavings
+or repository-wide functional equivalence. Disk remains critically low,
+approximately5.4GiB available on the shared root filesystem; no deletion is
+authorized or performed.
+
+Graphify integrated code/docs maintenance and governance publication have
+separate native evidence appended after execution. Actual post-governance
+immutable55a ratchet must terminate successfully before another runtime slice.
+The proposed R21 job-action policy is still unallocated.
+
+## Integrated Graphify code maintenance
+
+Dedicated frontend query and force-pruning patch targets exit0. Actual
+integrated frontend target exits0:650/650files re-extracted,6052nodes/12652edges/
+235communities. HTML skipped because graph exceeds5000nodes; graph outputs
+remain ignored and unstaged. This is navigation maintenance, not complexity
+or equivalence proof. Latest disk probe has4.1GiB remaining (100% displayed
+by df rounding), less than the earlier5.4GiB observation; root does not delete
+concurrent artifacts to hide the resource problem.
+
+Dedicated platform-docs and base-URL patch targets exit0. Semantic extraction
+confirmed by actual chunk1/1done with no semantic-failure warning, not merely
+exit0:705nodes/982edges/107communities,167cache hits/6re-extracted files,
+18096input/3691output tokens, estimated$0.0131. Graph artifacts are ignored.
+Final docs were prepared before refresh; these results are recorded here
+outside the platform-docs corpus. No code/docs graph is committed.
+
+Governance publication includes ONLY registry, PROGRESS, this integration report
+and the campaign report. The postcommit actual55a command, native exit and
+findings live in governance-postcommit-ratchet.log/.exit in the root evidence
+directory, recorded after publication rather than inferred from prior gates.
+Final checkpoint custody and integration cleanliness are recorded separately.

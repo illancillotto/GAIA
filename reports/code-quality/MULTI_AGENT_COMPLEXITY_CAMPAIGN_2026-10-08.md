@@ -1,5 +1,153 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-10 — Authoritative R20 integrated checkpoint
+
+Global **ACTIVE / INCOMPLETE**. Latest runtime on integration60949d66;
+authoritative main/merge-base55a unchanged. This section supersedes the older
+HELD disposition and older “Final metrics” checkpoint tables below; those
+remain historical evidence, not final campaign certification.
+
+R16 matcher activity requested separately is already certified and integrated:
+215tooling tests/full844statement332branch100%, conservative source-bound
+ownership proof, real regression negative controls still FAIL1, no baseline
+or threshold edits. Closure438df8e8 is retained. R20 then obtained a DISTINCT
+fresh independent acceptance, report3a3b9576, for exact source34afe117.
+Old quota-blocked reviewer stays BLOCKED; its partial output is not ACCEPT.
+
+### Agents, publications and gates
+
+Author runtime+SLICE2a13bb8f→integration1f565147; final report ONLY
+ff0394ac→60949d66. Actual immutable55a Make ratchet after EACH integration
+PASS0/findings[]. Coordinator root freshly runs actual integrated505PASS/22
+unchanged specs, no skips, workspace719/766/250/626 statement/branch/function/
+line100% and fraction-policy9/6/6/8 unchanged100%. Types, lint, smoke18 and
+whitespace PASS0. Exact22specs/237retained inputs/main diff/status/baseline
+preserved. No candidate runtime staged in verifier's report-only commit.
+
+### Initial metrics, current metrics and delta
+
+| Official metric | Campaign initial audit | Integrated R20 | Delta | Delta % |
+| --- | ---: | ---: | ---: | ---: |
+| Error |1956 |1926 |-30 |-1.53% |
+| Warning |2758 |2741 |-17 |-0.62% |
+| Finding records |4714 |4667 |-47 |-1.00% |
+| Files |1665 |1673 |+8 |Not solely refactoring |
+| Callable |20261 |20321 |+60 |Not solely refactoring |
+
+The initial audit includes concurrent uncommitted sources: clean authoritative
+55a has1662files/20257callables. Do not attribute that scope difference to debt
+reduction. Current official effective LOC332423; no file-LOC reduction is
+claimed globally. Overlapping finding records are not independent problems.
+R20 itself removes1warning/1finding and0errors, not the entire campaign delta.
+
+### Domain results
+
+| Area/domain | Error before | Error after | Warning before | Warning after |
+| --- | ---: | ---: | ---: | ---: |
+| backend | 1035 | 1033 | 1688 | 1690 |
+| frontend | 878 | 850 | 881 | 862 |
+| worker runtime | 35 | 35 | 134 | 134 |
+| worker tests | 8 | 8 | 55 | 55 |
+| backend catasto | 186 | 186 | 233 | 233 |
+| backend ruolo | 117 | 117 | 230 | 230 |
+| backend presenze | 93 | 93 | 240 | 240 |
+| backend wiki | 108 | 106 | 193 | 195 |
+| backend elaborazioni-services-legacy | 120 | 120 | 156 | 156 |
+| backend operazioni | 103 | 103 | 107 | 107 |
+| backend network | 75 | 75 | 65 | 65 |
+| backend gis | 16 | 16 | 71 | 71 |
+
+Area rows partition the official perimeter; domain rows drill down into backend
+and must NOT be added to them. Other backend domains remain in the native JSON.
+Initial numbers use the2026-10-08 audit, never the report of7October.
+
+### Extreme hotspot and actual slice improvement
+
+| R20 metric | Before | Integrated after | Delta |
+| --- | ---: | ---: | ---: |
+| Capacitas principal cognitive |347 |339 |-8 |
+| Principal cyclomatic / LOC |324 /2455 |316 /2439 |-8 /-16 |
+| File cognitive / cyclomatic |858 /998 |836 /977 |-22 /-21 |
+| File effective LOC |3091 |3085 |-6 |
+| Physical decision sites |429 |423 |-6 |
+| File error / warning |17 /16 |17 /15 |0 /-1 |
+
+IMPROVED: four repeated credential-default policies become one pure private
+helper2cognitive3cyclomatic10LOC/nesting0/params2, called INSIDE each functional
+updater. React's latest state, captured response array, object-spread/access/
+String short-circuit order, setter ordering, selected missing/inactive IDs,
+pending edits/clear, already captured requests, failure/no-token/StrictMode
+remain equivalent. No new component/import/effect/API or artificial wrapper.
+Attributed749→727 decisions overlap enclosing scopes: NOT22 unique decisions.
+Fivecallables>300, seventeen>200 and fifty-five>100 remain; extreme-tail
+elimination and strategic target reductions are NOT achieved.
+
+### Ratchet, global baseline and tests
+
+Change gate **PASS0**. Global baseline check **FAIL30** (CLI1/Make2); fresh
+finding objects/order EXACT both initial authoritative global_compare and
+retained candidate check. Baseline38e6, config scope/thresholds and Makefile
+remain byte-exact against55a; no repair/generation/ignore/exclusion.
+Final full backend/worker/unit-frontend/build/E2E suites are NOT certified for
+this checkpoint. Existing historical skips remain documented, not PASS.
+No new rejected regression or reorganization is credited in R20.
+The previous R19V1 rejection and old reviewer quota blocker remain preserved.
+
+### Remaining top30 application callables
+
+Current native integrated report; worker tests excluded only from this ranking,
+NOT from official scanner scope or gates.
+
+| Callable | Cognitive | Cyclomatic | LOC | Path |
+| --- | ---: | ---: | ---: | --- |
+| `DetailContent` | 391 | 304 | 1908 | `frontend/src/app/utenze/[id]/page.tsx:214` |
+| `CatastoAnomaliePageContent` | 390 | 342 | 2109 | `frontend/src/app/catasto/anomalie/page.tsx:175` |
+| `PresenzeGiornalierePage` | 385 | 341 | 2023 | `frontend/src/app/presenze/giornaliere/page.tsx:880` |
+| `ElaborazioniCapacitasWorkspace` | 339 | 316 | 2439 | `frontend/src/components/elaborazioni/capacitas-workspace.tsx:716` |
+| `CatastoGisPage` | 317 | 281 | 1889 | `frontend/src/app/catasto/gis/page.tsx:292` |
+| `ElaborazioniSettingsWorkspace` | 296 | 265 | 1358 | `frontend/src/components/elaborazioni/settings-workspace.tsx:375` |
+| `MePageContent` | 271 | 256 | 1133 | `frontend/src/app/me/me-page-content.tsx:347` |
+| `_run_bonifica_sync_background` | 269 | 47 | 232 | `backend/app/services/elaborazioni_bonifica_sync.py:354` |
+| `fuel_analytics` | 261 | 167 | 350 | `backend/app/modules/operazioni/routes/analytics.py:363` |
+| `ElaborazioniBonificaSyncWorkspace` | 259 | 202 | 835 | `frontend/src/components/elaborazioni/bonifica-sync-workspace.tsx:332` |
+| `MapContainer` | 246 | 169 | 953 | `frontend/src/components/catasto/gis/MapContainer.tsx:453` |
+| `anomalies_analytics` | 239 | 112 | 320 | `backend/app/modules/operazioni/routes/analytics.py:1069` |
+| `PresenzeCollaboratoreDetailPage` | 233 | 212 | 1600 | `frontend/src/app/presenze/collaboratori/[id]/page.tsx:100` |
+| `ElaborazioneBatchDetailWorkspace` | 216 | 177 | 751 | `frontend/src/components/elaborazioni/batch-detail-workspace.tsx:53` |
+| `PresenzeExportPage` | 209 | 172 | 1097 | `frontend/src/app/presenze/export/page.tsx:266` |
+| `sync_from_whitecompany` | 205 | 77 | 290 | `backend/app/modules/organigramma/services/whitecompany_sync.py:198` |
+| `RuoloTributiPageContent` | 204 | 173 | 1064 | `frontend/src/app/ruolo/tributi/page.tsx:404` |
+| `run_network_scan` | 195 | 101 | 267 | `backend/app/modules/network/services.py:1158` |
+| `UtenzeSubjectsSection` | 184 | 169 | 991 | `frontend/src/components/utenze/utenze-subjects-section.tsx:56` |
+| `TrackingContent` | 183 | 159 | 913 | `frontend/src/app/network/tracking/page.tsx:406` |
+| `_build_network_statistics_summary` | 181 | 101 | 214 | `backend/app/modules/network/router/helpers/traffic.py:271` |
+| `AnagraficaBulkPanel` | 181 | 155 | 839 | `frontend/src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx:295` |
+| `refresh_wiki_conversation_daily_metrics` | 178 | 49 | 153 | `backend/app/modules/wiki/services/conversation_metrics.py:156` |
+| `CatastoImportPage` | 175 | 149 | 1114 | `frontend/src/app/catasto/import/page.tsx:77` |
+| `ImportContent` | 173 | 160 | 971 | `frontend/src/app/utenze/import/page.tsx:102` |
+| `RuoloDashboardPage` | 168 | 157 | 1147 | `frontend/src/app/ruolo/page.tsx:176` |
+| `OrganigrammaWorkspace` | 167 | 147 | 1086 | `frontend/src/features/organigramma/organigramma-workspace.tsx:1537` |
+| `WikiRequestsPage` | 166 | 132 | 759 | `frontend/src/features/wiki/WikiRequestsPage.tsx:230` |
+| `GaiaUsersPage` | 162 | 146 | 1011 | `frontend/src/app/gaia/users/page.tsx:283` |
+| `PresenzeConfigurazionePage` | 158 | 148 | 1135 | `frontend/src/app/presenze/configurazione/page.tsx:271` |
+
+### Evidence, architecture, risks and next slice
+
+Runtime/report evidence: `~/.cache/gaia-campaign/20261010-r20-integrated/`,
+including command/log/exit/JSON, raw full-file coverage and before/after custody.
+Independent author/final inputs remain frozen. Detailed review, test matrix,
+invariants, publications and maintenance:
+`INTEGRATION_R20_CAPACITAS_CREDENTIALS_2026-10-10.md`.
+
+Local responsibility deduplication only; FastAPI/Next.js/PostgreSQL architecture
+and application boundaries unchanged. Dedicated frontend Graphify force-pruned
+after accepted integration; generated graphs are ignored, never metric proof.
+Shared root disk remains critically low and decreasing due concurrent activity;
+no cleanup/install/build-space claim is made. No main edits or push.
+R21 job-action presentation dedup remains a PROPOSAL, not an allocated slice;
+only after current maintenance/governance/postcommit checkpoint is green.
+The overall campaign and final suite certification remain INCOMPLETE.
+
 ## 2026-10-10 — R20 credential-default candidate, not integrated
 
 Global ACTIVE/INCOMPLETE. Resumed goal leads to one coherent policy deduplication
