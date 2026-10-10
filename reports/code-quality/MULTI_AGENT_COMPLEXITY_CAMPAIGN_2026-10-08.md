@@ -1,5 +1,63 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-11 — R23 preview characterization integrated; no runtime waiver
+
+Full campaign **ACTIVE / INCOMPLETE**. Coordinator serially integrates test+CHAR
+ec4f5d59→334a4aa8 and independent ACCEPT_CHARACTERIZATION_ONLY36e2fe04→fcdc596d;
+actual immutable55a ratchet AFTER EACH native0/findings[]. Author/reviewer/root
+fresh121mounted tests (55new+66immutable), types/lint, eleven native behavior
+traces and source/evidence custody verified. Root smoke18PASS; all1673 runtime
+inputs/main/baseline exact. New tests preserve preview URL double revocation and
+late-response races; no functional normalization or synthetic-handler coverage.
+
+| Genuine full-file original page | R22 | R23 | Uncovered |
+| --- | ---: | ---: | ---: |
+| Statements | 253/576 (43.92%) | 370/576 (64.23%) | 206 |
+| Branch arms | 273/610 (44.75%) | 408/610 (66.88%) | 202 |
+| Functions | 49/176 (27.84%) | 80/176 (45.45%) | 96 |
+| Lines | 251/536 (46.82%) | 364/536 (67.91%) | 172 |
+
+Coverage **STILL FAIL100**, native1 ONLY unchanged four100 thresholds; runtime
+**BLOCKED_COVERAGE**. Classification CHARACTERIZED_ONLY / NO_CHANGE, not IMPROVED.
+DetailContent391/304/1908 unchanged, aggregate1673files20322callables1925errors/
+2741warnings4666findings,5>300/17>200/55>100. Domain/extreme tables from latest
+accepted runtime remain current. Fresh globalFAIL30/Make2 exact initial+R22
+finding objects/order; separate provenance, never absorbed by baseline changes.
+Final application suites/build/E2E and strategic reductions remain incomplete.
+
+Storage inventory updated without further deletion; root~5GiB free/tmpfs274MiB.
+See INTEGRATION_R23_UTENZE_PREVIEW_2026-10-11.md and exact author/reviewer reports.
+R24 is only drafted, bounded fuel-classifier responsibility, no native/runtime
+admission until separate original100/invariant and heavy scheduling checkpoint.
+
+## 2026-10-11 — R23 safe storage recovery; preview analysis only
+
+Global **ACTIVE / INCOMPLETE**; accepted runtime/metrics remain R21 and test
+consolidation R22. User-authorized cache-only inventory/cleanup removed exactly
+three named idle Jest transform caches,62,846files/2,088,947,712allocated bytes.
+Root free space169,852,928→2,267,160,576bytes; tmpfs untouched. Source/worktrees/
+baseline/main/evidence unchanged, verified custody before/after; descriptor
+inspection limitations explicitly recorded. See STORAGE_CACHE_CLEANUP_R23_
+2026-10-11.md and private20261011-storage-r23-safe-cache-cleanup evidence.
+
+Ownership registry precedes clean author-tree reuse at35d/base55a. R23 author
+completed **ANALYZE ONLY**, original Utenze document-preview/format adapters/URL
+lifecycle, one responsibility; frozen reportb565d6ba/private analysis only,
+eighteen protected paths exact. Root read full plan; READY_FOR_REVIEW, separate
+test admission pending. No new test or runtime edit admitted yet, final review
+not allocated. Genuine full-file100
+prerequisite remains FAIL (253/576statements,273/610arms,49/176functions,
+251/536lines); no waiver or metric improvement credit. No full build/broad final
+suite certified by storage recovery. Main+baseline protected; no push.
+
+Actual immutable55a Make ratchet0/findings[], root diff-check0. Initial dedicated
+platform-docs refresh native0/chunk1/1done/no warnings733nodes1026edges106
+communities173cachehits3reextract12817input3072output/$0.0100. Final refresh after
+analysis governance state is recorded separately in storage report; no code
+graph/runtime boundary changed. Shared host later~5.5GiB free includes external
+activity not attributed to this cleanup. Additional cache candidates inventoried
+only, no further removal.
+
 ## 2026-10-11 — R22 original Utenze NAS readiness integrated
 
 Global **ACTIVE / INCOMPLETE**, full original scope/strategic targets unchanged.

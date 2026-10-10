@@ -1,5 +1,73 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-11 — R23 original preview accepted and integrated
+
+- Fresh independent ACCEPT_CHARACTERIZATION_ONLY0a33d84a after121PASS, eleven
+  native traces/focus/listener identities, types95imports0diag/lint/native55a0.
+  Both author/reviewer terminal/released; Coordinator exact-path publication:
+  spec+CHAR ec4f5d59→334a4aa8, review-only36e2fe04→fcdc596d; actual immutable55a
+  ratchet AFTER EACH native0/findings[]. Main/baseline/concurrent work untouched.
+- Root fresh integrated121PASS twice, types/lint/smoke18/custody0; exact page
+  coverage253→370/576statements,273→408/610arms,49→80/176functions,251→364/536lines.
+  Full-file coverage STILL FAIL100/native1 ONLY unchanged thresholds; remaining
+  206statements202arms96functions172lines. Runtime BLOCKED_COVERAGE, no waiver.
+- CHARACTERIZED_ONLY/NO_CHANGE complexity; Detail391/304/1908 and all1673 runtime
+  inputs byte-exact. Global1925errors2741warnings4666records/5>300/17>200/55>100
+  unchanged. Fresh globalMake2/CLI1/FAIL30 exact initial/prior objects+order.
+  Original full campaign ACTIVE/INCOMPLETE; final suites/build/stack E2E unmet.
+- Additional cache inventory only: Jest1.6GiB/uv158MiB/thumbnails179MiB/wholepnpm
+  store1.8GiB, not metadata163MiB. No further removal; root~5GiB/tmpfs274MiB.
+  Author/root auxiliary reader failures preserved and resolved read-only without
+  native rerun. INTEGRATION_R23_UTENZE_PREVIEW_2026-10-11.md retains actual evidence.
+- R24 draft-only source52469893/spec437fe325,26real ORM+20synthetic diagnostics;
+  original full100/native admission pending separate heavy transfer after docs/
+  governance checkpoint. No candidate runtime admitted or claimed improved.
+
+## 2026-10-11 — R23 original preview new-test-only admission
+
+- Previous goal turn PROGRESS: guarded cache recovery, main/baseline/all1673
+  source custody, actual55a0 and docs graph semantic success; preview analysis
+  frozenb565d6ba and root full matrix review complete. Global ACTIVE/INCOMPLETE.
+- Fresh35d/base55a, original pageb0f822da/old21spec79ef3010/NAS45spec8f2258e4
+  exact; author terminalidle/error-null, disk~5.6GiB. RegistryACTIVE BEFORE phase
+  activation. Own ONLY NEW preview spec + own CHAR amendment/private evidence.
+- Serial author-exclusive native new+old66 union, exact full original coverage,
+  project/new-spec types and scoped lint admitted. Runtime/config/oldtests
+  immutable, no full build/broad suite/ratchet yet. Unexpected native failure
+  STOP/no silent retry; expected legacy100thresholdFAIL recorded, never waived.
+- One actual mounted preview responsibility: format/conversion, token/id/order,
+  invalid-id public guard, URL double-revoke/cleanup/listener and late races.
+  No synthetic handler probes, DTO mutilation, race fixes or scope expansion.
+
+## 2026-10-11 — R23 storage recovery and original preview analysis admission
+
+- Fresh integration35d4121e/base55a, original Utenze sourceb0f822da and immutable
+  old21/NAS45specs79ef3010/8f2258e4 exact. R22 closed; current full-file100
+  prerequisite still FAIL, runtime BLOCKED_COVERAGE; global ACTIVE/INCOMPLETE.
+- User authorized ONLY recreatable-cache cleanup after inventory. Three named
+  inactive Jest transform caches removed under repeated process/ownership/path
+  guards:62,846files,2,088,947,712allocated bytes; available filesystem space
+  169,852,928→2,267,160,576bytes. Main/integration/status/diff/baseline and entire
+  worktree registry byte hashes unchanged. Descriptor inspection limitations
+  disclosed; no browser/dependency/worktree/evidence deletion or tmpfs cleanup.
+  Reproducible inventory/removal evidence and exact scope in STORAGE_CACHE_
+  CLEANUP_R23_2026-10-11.md; private manifest/script/log preserved.
+- Ownership registry ACTIVE BEFORE reused author01a127de activation, clean
+  dedicated characterize/complexity-r23-utenze-preview tree at35d. One original
+  document-preview/format-adapter/objectURL lifecycle responsibility only.
+  ANALYZE ONLY: new CHAR report/small private evidence writable; runtime/all
+  existing tests immutable. No new tests/heavy gates/commit until root admission.
+- Both previous R22 tasks freshly terminal/idle/error-null before reuse. Final
+  R23 review NOT ALLOCATED. No full builds/broad final suites certified; recovered
+  storage permits bounded analysis, not automatic runtime or coverage waivers.
+- Actual root immutable55a Make ratchet native0/findings[] and diff-check0.
+  Later free space~5.5GiB includes unrelated shared-host activity, not credited
+  to this cleanup. Additional remaining caches inventoried ONLY, not removed.
+- R23 author ANALYZE terminal/error-null, frozen CHARreportb565d6ba + private
+  analysis591b8f3e/custody94e80b2a, eighteen protected paths exact. Registry now
+  READY_FOR_REVIEW; root read full public-case plan. No new tests/heavy yet:
+  separate bounded test admission pending, no runtime or coverage waiver.
+
 ## 2026-10-11 — R22 Utenze NAS original characterization accepted/integrated
 
 - Highest unchangedDetailContent391 selected readiness-first. New45mounted NAS
