@@ -213,6 +213,17 @@ async function runCapacitasJobCommand<Job extends { id: number }>(
   }
 }
 
+function withCapacitasDefaultCredential<Form extends { credential_id: string }>(
+  current: Form,
+  credentials: readonly CapacitasCredential[],
+): Form {
+  return {
+    ...current,
+    credential_id:
+      current.credential_id ? current.credential_id : credentials.length === 1 ? String(credentials[0].id) : "",
+  };
+}
+
 interface CapacitasExecutionToggleProps {
   kind: "speed" | "parallel";
   active: boolean;
@@ -897,26 +908,10 @@ export function ElaborazioniCapacitasWorkspace({
     try {
       const nextCredentials = await listCapacitasCredentials(token);
       setCredentials(nextCredentials);
-      setTerreniForm((current) => ({
-        ...current,
-        credential_id:
-          current.credential_id ? current.credential_id : nextCredentials.length === 1 ? String(nextCredentials[0].id) : "",
-      }));
-      setParticelleSyncForm((current) => ({
-        ...current,
-        credential_id:
-          current.credential_id ? current.credential_id : nextCredentials.length === 1 ? String(nextCredentials[0].id) : "",
-      }));
-      setHistoryForm((current) => ({
-        ...current,
-        credential_id:
-          current.credential_id ? current.credential_id : nextCredentials.length === 1 ? String(nextCredentials[0].id) : "",
-      }));
-      setIncassForm((current) => ({
-        ...current,
-        credential_id:
-          current.credential_id ? current.credential_id : nextCredentials.length === 1 ? String(nextCredentials[0].id) : "",
-      }));
+      setTerreniForm((current) => withCapacitasDefaultCredential(current, nextCredentials));
+      setParticelleSyncForm((current) => withCapacitasDefaultCredential(current, nextCredentials));
+      setHistoryForm((current) => withCapacitasDefaultCredential(current, nextCredentials));
+      setIncassForm((current) => withCapacitasDefaultCredential(current, nextCredentials));
     } catch (loadError) {
       setTerreniError(loadError instanceof Error ? loadError.message : "Errore caricamento credenziali Capacitas");
     }
