@@ -75,6 +75,7 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 - `backend/app/modules/dotazioni/`: beni operativi, custodie e audit; frontend in `frontend/src/app/dotazioni/` e documentazione in `domain-docs/dotazioni/docs/`.
 - `backend/app/modules/utenze/router/` e `backend/app/modules/utenze/routes/`: facade FastAPI compatibile e route Utenze separate per responsabilita.
 - `backend/app/modules/network/router/`: facade FastAPI Network, route HTTP e helper di correlazione/serializzazione separati per responsabilita.
+- `backend/app/modules/operazioni/routes/_driver_mismatch.py`: query, selezione temporale e mapping delle anomalie guidatore; `analytics.py` conserva gli input ORM fino alla risposta per preservare il lifetime originale.
 - `backend/app/modules/presenze/router/`: facade FastAPI Presenze, route di dominio e helper per scheduling, giornaliere, recovery, banca ore, sync ed export.
 - `backend/app/modules/me/router/`: facade FastAPI self-service, helper comuni e route separate per stato/Presenze, riepilogo, Operazioni e asset.
 - `backend/app/modules/gis/router/`: facade GIS Platform e route separate per catalogo, interrogazione/proxy, import, layer, annotazioni, change request ed export/audit.

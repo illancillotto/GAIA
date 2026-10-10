@@ -1,5 +1,37 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-10 — R19 V2 accepted; R16 faithful matching diagnosis
+
+- R19 V2 keeps typed driver inputs in the route through response, preserving
+  original strong ORM identity references across all later families. Rejected
+  V1 remains excluded. Other seven families and twelve other functions AST exact.
+- Coordinator original/V2 and independent focused56/ORM250 PASS; root integrated
+  ORM250 PASS, no failure/error/skip. Ten synthetic focused diagnostics excluded
+  from all full-file unions. Analytics641/641+272/272, driver49/49+16/16,
+  orphan27/27+10/10 statement/branch100%; inherited four exclusions unchanged.
+- IMPROVED: principal cognitive298→239 (-19.80%), combined855→829 (-3.04%),
+  decisions536 exact. Errors19 unchanged, warnings12→14; callable/file LOC
+  increases disclosed. No helper error or artificial debt relocation.
+- Accepted authora7c75dde→d43d4426, reviewce0b7c3e→72f416a4; read-only R16
+  diagnosis49334bdd→f8a449e7. Actual immutable55a ratchet after EACH integration
+  PASS0. Main concurrent work, baseline/scope/thresholds unchanged.
+- R16 unchanged engine replay: original0, candidate2 with both original and
+  faithful Git metadata, local0(non-authoritative), negative1. Unchanged
+  Sincronizza callback shifts -5 lines and ties Chiudi positionally. All3563
+  tracked/237 retained inputs exact. Candidate still BLOCKED_MATCHING, not merged.
+- Fresh integrated full-source report:1673files20320callables1926errors2742warnings
+  4668findings. Relative to previous9f62: +1file/+4callables/+0errors/+2warnings.
+  This slice reduces cognitive complexity, not finding count or extreme-tail
+  cardinality. Campaign INCOMPLETE; full final suites/PostgreSQL not certified.
+- User authorizes a SEPARATE matcher activity after R19 closure; no implicit
+  baseline repair, positional padding, candidate application or gate waiver.
+  Closure/evidence: INTEGRATION_R19_V2_R16_DIAGNOSIS_2026-10-10.md.
+- Root global check confirms exact historical30, CLI1/Make2, not a campaign
+  regression. First style default interpreter lacks Ruff (FAIL2); authorized
+  installed-interpreter invocation PASS0, original failure retained. Operazioni
+  code Graphify force refresh PASS534nodes/1533edges; domain docs PASS chunk1/1
+  with no semantic failure. Final closure gate has its own retained native log.
+
 ## 2026-10-10 — Original ORM lifetime characterized; rejected V1 caught
 
 - Three actual ORIGINAL-route ORM contracts pass independently: full-route

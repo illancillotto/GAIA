@@ -1,5 +1,19 @@
 # GAIA Operazioni — Progress Tracking
 
+## 2026-10-10 — Refactoring locale anomalie guidatore R19 V2
+
+- Una sola famiglia: query, selezione temporale delle assegnazioni e mapping
+  isolati in `routes/_driver_mismatch.py`; la route conserva gli input ORM
+  fino alla risposta. Nessun cambiamento API, query, transazione o autorizzazione.
+- V1 respinto per lifetime ORM; V2 accettato indipendentemente con 56 test
+  focused e 250 ORM, coverage statement/branch full-file 100%, ratchet 55a PASS.
+- Cognitive principale 298→239; aggregata 855→829, decisioni 536 invariate.
+  Error 19 invariati, warning 12→14 e LOC crescenti dichiarati: non eliminazione
+  del debito complessivo. Altre sette famiglie e altri callable invariati.
+- Report: `reports/code-quality/SLICE_R19_V2_ORM_LIFETIME_2026-10-10.md`
+  e review indipendente associata. PostgreSQL e suite globali non certificati
+  da questi test SQLite; campagna globale ancora incompleta.
+
 ## Istruzioni d'uso
 
 Questo file deve essere aggiornato durante l'implementazione del modulo.

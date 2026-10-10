@@ -1,5 +1,98 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-10 — R19 V2 integrated; R16 diagnosis preserved
+
+Global **ACTIVE / INCOMPLETE**. R19 V2 independently ACCEPTED / IMPROVED:
+typed inputs remain route-local through response, preserving original ORM
+lifetime; V1 remains REJECTED. Other seven families and other functions unchanged.
+Original/V2/independent focused56 and ORM250 PASS; integrated root ORM250 PASS,
+no fail/error/skip, full-file statement/branch100% on analytics/driver/orphan.
+SQLite evidence does not certify PostgreSQL isolation or full final suites.
+
+| Metric | Before R19 V2 | Integrated | Delta |
+| --- | ---: | ---: | ---: |
+| Principal cognitive |298 |239 |-59 (-19.80%) |
+| Combined cognitive |855 |829 |-26 (-3.04%) |
+| Combined decisions |536 |536 |0 |
+| Slice error / warning |19 /12 |19 /14 |0 /+2 |
+| Global files / callable |1672 /20316 |1673 /20320 |+1 /+4 |
+| Global error / warning |1926 /2740 |1926 /2742 |0 /+2 |
+| Global findings |4666 |4668 |+2 |
+
+| Application domain | Error initial | Error current | Warning initial | Warning current |
+| --- | ---: | ---: | ---: | ---: |
+| Backend |1035 |1033 |1688 |1690 |
+| Frontend |878 |850 |881 |863 |
+| Worker runtime |35 |35 |134 |134 |
+
+Worker tests8errors55warnings are separately unchanged, not runtime reduction.
+
+Full-source report is fresh at integratedf8a449e7:
+`/tmp/gaia-r19-v2-integrated-20261010.json` and `.md`. Against authoritative
+campaign start1956errors2758warnings4714findings: -30errors (-1.53%), -16warnings
+(-0.58%), -46findings (-0.98%). Findings overlap metrics and are not independent
+problems. Extreme-tail cardinality and strategic targets remain unresolved;
+LOC increases and two warning tradeoffs are explicit, not hidden by extraction.
+
+Publications: authora7c75dde→d43d4426, reviewce0b7c3e→72f416a4, diagnosis
+49334bdd→f8a449e7; actual immutable55a ratchet after EACH integration PASS0.
+Main concurrent work and baseline38e6 preserved, no inflation or new exclusion.
+
+R16 read-only replay preserves original0/candidate2/candidate-faithful2/local0/
+negative1 native exits. Ambiguity87 means original candidate group size, not
+87 new functions. Sincronizza source is unchanged but -5line shift causes
+position tie with Chiudi; faithful metadata does not resolve it. All3563 tracked
+and237retained inputs exact. Candidate remains BLOCKED_MATCHING and excluded;
+its projected -1warning is NOT counted in integrated metrics.
+
+User authorizes separately testing the matcher after this R19 closure. No
+tooling repair or acceptance is implied by this diagnostic publication.
+Closure: `INTEGRATION_R19_V2_R16_DIAGNOSIS_2026-10-10.md`. Existing GIS PASS
+remains attributed, not rerun. Full final suites are still outstanding.
+
+Fresh global check remains exact historical FAIL30 (CLI1/Make2); local ratchet
+PASS0 is the change gate. Root style default python lacks Ruff (retained FAIL2);
+installed integration interpreter invocation PASS0. Graphify code534/1533/26,
+domain docs52/67/7 and platform docs680/918/107 (nodes/edges/communities) PASS;
+both docs chunk1/1done, no semantic failure, ignored outputs. Final postcommit
+ratchet has separate actual native evidence at root integration evidence path;
+no full campaign completion inferred from this single corrected slice.
+
+### Remaining top 30 — fresh integrated scan
+
+| Callable | Cognitive | Source |
+| --- | ---: | --- |
+| `DetailContent` | 391 | `frontend/src/app/utenze/[id]/page.tsx:214` |
+| `CatastoAnomaliePageContent` | 390 | `frontend/src/app/catasto/anomalie/page.tsx:175` |
+| `PresenzeGiornalierePage` | 385 | `frontend/src/app/presenze/giornaliere/page.tsx:880` |
+| `ElaborazioniCapacitasWorkspace` | 347 | `frontend/src/components/elaborazioni/capacitas-workspace.tsx:705` |
+| `CatastoGisPage` | 317 | `frontend/src/app/catasto/gis/page.tsx:292` |
+| `ElaborazioniSettingsWorkspace` | 296 | `frontend/src/components/elaborazioni/settings-workspace.tsx:375` |
+| `MePageContent` | 271 | `frontend/src/app/me/me-page-content.tsx:347` |
+| `_run_bonifica_sync_background` | 269 | `backend/app/services/elaborazioni_bonifica_sync.py:354` |
+| `fuel_analytics` | 261 | `backend/app/modules/operazioni/routes/analytics.py:363` |
+| `ElaborazioniBonificaSyncWorkspace` | 259 | `frontend/src/components/elaborazioni/bonifica-sync-workspace.tsx:332` |
+| `MapContainer` | 246 | `frontend/src/components/catasto/gis/MapContainer.tsx:453` |
+| `anomalies_analytics` | 239 | `backend/app/modules/operazioni/routes/analytics.py:1069` |
+| `PresenzeCollaboratoreDetailPage` | 233 | `frontend/src/app/presenze/collaboratori/[id]/page.tsx:100` |
+| `ElaborazioneBatchDetailWorkspace` | 216 | `frontend/src/components/elaborazioni/batch-detail-workspace.tsx:53` |
+| `PresenzeExportPage` | 209 | `frontend/src/app/presenze/export/page.tsx:266` |
+| `sync_from_whitecompany` | 205 | `backend/app/modules/organigramma/services/whitecompany_sync.py:198` |
+| `RuoloTributiPageContent` | 204 | `frontend/src/app/ruolo/tributi/page.tsx:404` |
+| `run_network_scan` | 195 | `backend/app/modules/network/services.py:1158` |
+| `UtenzeSubjectsSection` | 184 | `frontend/src/components/utenze/utenze-subjects-section.tsx:56` |
+| `TrackingContent` | 183 | `frontend/src/app/network/tracking/page.tsx:406` |
+| `AnagraficaBulkPanel` | 181 | `frontend/src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx:295` |
+| `_build_network_statistics_summary` | 181 | `backend/app/modules/network/router/helpers/traffic.py:271` |
+| `refresh_wiki_conversation_daily_metrics` | 178 | `backend/app/modules/wiki/services/conversation_metrics.py:156` |
+| `CatastoImportPage` | 175 | `frontend/src/app/catasto/import/page.tsx:77` |
+| `ImportContent` | 173 | `frontend/src/app/utenze/import/page.tsx:102` |
+| `RuoloDashboardPage` | 168 | `frontend/src/app/ruolo/page.tsx:176` |
+| `OrganigrammaWorkspace` | 167 | `frontend/src/features/organigramma/organigramma-workspace.tsx:1537` |
+| `WikiRequestsPage` | 166 | `frontend/src/features/wiki/WikiRequestsPage.tsx:230` |
+| `GaiaUsersPage` | 162 | `frontend/src/app/gaia/users/page.tsx:283` |
+| `PresenzeConfigurazionePage` | 158 | `frontend/src/app/presenze/configurazione/page.tsx:271` |
+
 ## 2026-10-10 — Versioned original ORM lifetime safeguard
 
 Global ACTIVE / INCOMPLETE. Actual ORIGINAL imported route is now protected
