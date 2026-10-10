@@ -16,6 +16,7 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 from collections import Counter, defaultdict
 from collections.abc import Iterable
 from datetime import UTC, datetime
@@ -812,11 +813,202 @@ def resolve_baseline_callable(
     return None, None, False
 
 
+def source_callable_signature(c: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        c.get("name"), c.get("kind"), c.get("line"), c.get("end_line"),
+        c.get("fingerprint"), metric_tuple(c),
+    )
+
+
+def unchanged_source_lines(diff: str, before: list[str], after: list[str]) -> dict[int, int]:
+    headers = list(re.finditer(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@.*$", diff, re.M))
+    mapping: dict[int, int] = {}
+    old_cursor = new_cursor = 0
+    for number, header in enumerate(headers):
+        old_start, old_count, new_start, new_count = header.groups()
+        old_count = int(old_count) if old_count is not None else 1
+        new_count = int(new_count) if new_count is not None else 1
+        old_start = int(old_start) - bool(old_count)
+        new_start = int(new_start) - bool(new_count)
+        old_end, new_end = old_start + old_count, new_start + new_count
+        limit = headers[number + 1].start() if number + 1 < len(headers) else len(diff)
+        payload = diff[header.end():limit].splitlines()
+        old_bounds, new_bounds = (old_cursor, old_start, old_end), (new_cursor, new_start, new_end)
+        if not valid_source_hunk(before, after, old_bounds, new_bounds, payload):
+            return {}
+        mapping.update({new_cursor + offset + 1: old_cursor + offset + 1
+                        for offset in range(old_start - old_cursor)})
+        old_cursor, new_cursor = old_end, new_end
+    if before[old_cursor:] != after[new_cursor:]:
+        return {}
+    mapping.update({new_cursor + offset + 1: old_cursor + offset + 1
+                    for offset in range(len(before) - old_cursor)})
+    return mapping
+
+
+def valid_source_hunk(before, after, old_bounds, new_bounds, payload) -> bool:
+    old_cursor, old_start, old_end = old_bounds
+    new_cursor, new_start, new_end = new_bounds
+    if not (old_cursor <= old_start <= old_end <= len(before)
+            and new_cursor <= new_start <= new_end <= len(after)):
+        return False
+    if any(line and line[0] not in "-+\\" for line in payload):
+        return False
+    removed = [line[1:] for line in payload if line.startswith("-")]
+    inserted = [line[1:] for line in payload if line.startswith("+")]
+    return (before[old_cursor:old_start] == after[new_cursor:new_start]
+            and removed == before[old_start:old_end] and inserted == after[new_start:new_end])
+
+
+def validated_source_mapping(path, commit, source, old_calls, new_calls):
+    previous = subprocess.run(
+        ["git", "--no-replace-objects", "show", f"{commit}:{path}"],
+        cwd=ROOT, capture_output=True, check=True,
+    ).stdout
+    present = source.read_bytes()
+    with tempfile.TemporaryDirectory(prefix="gaia-callable-provenance-") as directory:
+        old_path = Path(directory) / ("before" + Path(path).suffix)
+        new_path = Path(directory) / ("after" + Path(path).suffix)
+        old_path.write_bytes(previous)
+        new_path.write_bytes(present)
+        scanner = scan_python if Path(path).suffix == ".py" else scan_js
+        for snapshot, expected in ((old_path, old_calls), (new_path, new_calls)):
+            calls, _ = scanner(snapshot)
+            if Counter(source_callable_signature(call.to_dict()) for call in calls) != Counter(
+                source_callable_signature(call) for call in expected
+            ):
+                return {}, [], []
+        process = subprocess.run(
+            ["git", "diff", "--no-index", "--no-ext-diff", "--no-textconv", "--no-color",
+             "--diff-algorithm=myers", "--no-indent-heuristic", "--unified=0",
+             "--", str(old_path), str(new_path)],
+            cwd=ROOT, text=True, capture_output=True,
+        )
+        if process.returncode not in (0, 1) or process.stderr:
+            return {}, [], []
+        before, after = previous.decode("utf-8").splitlines(), present.decode("utf-8").splitlines()
+        return unchanged_source_lines(process.stdout, before, after), before, after
+
+
+def source_anchor(mapping, before, after, boundary, direction):
+    positions = range(max(1, boundary - 8), boundary) if direction < 0 else range(
+        boundary + 1, min(len(after), boundary + 8) + 1
+    )
+    for line in positions:
+        if mapping.get(line) is None:
+            continue
+        if before.count(after[line - 1]) != 1 or after.count(after[line - 1]) != 1:
+            continue
+        interval = range(min(line, boundary), max(line, boundary) + 1)
+        if all(mapping.get(position) == mapping[line] + position - line for position in interval):
+            return line
+    return None
+
+
+def unclaimed_source_owner(current, owner, new_calls, report, baseline, added_lines):
+    if owner is None:
+        return False
+    base = call_index(baseline)
+    by_fingerprint = defaultdict(list)
+    for key, call in base.items():
+        by_fingerprint[call.get("fingerprint")].append((key, call))
+    for sibling in new_calls:
+        if sibling is current:
+            continue
+        claimed, _, equivalent = resolve_baseline_callable(
+            sibling, report, base, by_fingerprint, added_lines
+        )
+        if claimed == owner or (equivalent and sibling.get("fingerprint") == owner.get("fingerprint")):
+            return False
+    return True
+
+
+def unique_mapped_callable(current, mapping, old_calls, new_calls):
+    span = mapping.get(current["line"]), mapping.get(current["end_line"])
+    candidates = [call for call in old_calls if call["name"] == current["name"]]
+    candidates = remove_candidates_reserved_by_unique_fingerprint(current, candidates, new_calls)
+    owners = [call for call in candidates if (call["line"], call["end_line"]) == span]
+    consumers = [call for call in new_calls if call["name"] == current["name"]
+                 and (mapping.get(call["line"]), mapping.get(call["end_line"])) == span]
+    if len(owners) == len(consumers) == 1:
+        return owners[0]
+    return None
+
+
+def source_provenance_owner(
+    current: dict[str, Any], report: dict[str, Any], baseline: dict[str, Any],
+    source_paths: dict[str, Path] | None = None,
+    added_lines: dict[str, set[int]] | None = None,
+    context: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    path = current["path"]
+    commit = baseline.get("source_commit", "")
+    if not valid_provenance_source(commit, path):
+        return None
+    old_calls = [call for call in baseline["callables"] if call["path"] == path]
+    new_calls = [call for call in report["callables"] if call["path"] == path]
+    try:
+        source = (source_paths or {}).get(path, ROOT / path)
+        mapping, before, after = source_snapshot_mapping(
+            path, commit, source, old_calls, new_calls, context
+        )
+        start, end = current["line"], current["end_line"]
+        if source_anchor(mapping, before, after, start, -1) is None:
+            return None
+        if source_anchor(mapping, before, after, end, 1) is None:
+            return None
+        if end <= start:
+            return None
+        owner = unique_mapped_callable(current, mapping, old_calls, new_calls)
+        if (unclaimed_source_owner(current, owner, new_calls, report, baseline, added_lines)
+                and claim_provenance_owner(owner, context)):
+            return owner
+    except (OSError, ValueError, SyntaxError, RuntimeError, subprocess.CalledProcessError):
+        return None
+    return None
+
+
+def source_snapshot_mapping(path, commit, source, old_calls, new_calls, context):
+    snapshots = context["snapshots"] if context is not None else {}
+    if path not in snapshots:
+        snapshots[path] = ({}, [], [])
+        snapshots[path] = validated_source_mapping(path, commit, source, old_calls, new_calls)
+    return snapshots[path]
+
+
+def claim_provenance_owner(owner, context):
+    if context is None:
+        return True
+    identity = callable_key(owner)
+    if identity in context["owners"]:
+        return False
+    context["owners"].add(identity)
+    return True
+
+
+def valid_provenance_source(commit, path):
+    return (isinstance(commit, str) and re.fullmatch(r"[0-9a-f]{40}", commit) is not None
+            and not Path(path).is_absolute() and ".." not in Path(path).parts)
+
+
+def resolve_source_ambiguity(current, report, baseline, resolution, context):
+    owner, ambiguity, equivalent = resolution
+    if ambiguity:
+        proven = source_provenance_owner(
+            current, report, baseline, context["source_paths"], context["added_lines"], context
+        )
+        if proven is not None:
+            return proven, None, False
+    return owner, ambiguity, equivalent
+
+
 def compare(
     report: dict[str, Any],
     baseline: dict[str, Any] | None,
     changed_only: set[str] | None = None,
     added_lines: dict[str, set[int]] | None = None,
+    *,
+    source_paths: dict[str, Path] | None = None,
 ) -> tuple[int, list[dict[str, Any]]]:
     if report.get("parse_errors") or report.get("exception_errors"):
         return 2, [
@@ -837,11 +1029,16 @@ def compare(
     base_by_fp = defaultdict(list)
     for k, c in base.items():
         base_by_fp[c.get("fingerprint")].append((k, c))
+    source_context = {"source_paths": source_paths, "added_lines": added_lines,
+                      "snapshots": {}, "owners": set()}
     for c in report["callables"]:
         if changed_only is not None and c["path"] not in changed_only:
             continue
-        b, ambiguity, equivalent_group = resolve_baseline_callable(
+        resolution = resolve_baseline_callable(
             c, report, base, base_by_fp, added_lines
+        )
+        b, ambiguity, equivalent_group = resolve_source_ambiguity(
+            c, report, baseline, resolution, source_context
         )
         if ambiguity:
             return 2, [ambiguity]
