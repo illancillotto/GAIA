@@ -19,12 +19,15 @@ from app.modules.operazioni.models.fuel_cards import FuelCard, FuelCardAssignmen
 from app.modules.operazioni.models.organizational import Team
 from app.modules.operazioni.models.vehicles import (
     Vehicle,
-    VehicleAssignment,
     VehicleFuelLog,
     VehicleUsageSession,
     WCRefuelEvent,
 )
 from app.modules.operazioni.models.wc_operator import WCOperator
+from app.modules.operazioni.routes._driver_mismatch import (
+    driver_mismatch_anomalies,
+    load_driver_mismatch_inputs,
+)
 from app.modules.operazioni.routes._fuel_vehicle_metrics import (
     _judgement_from_coeff,
     vehicle_fuel_consumption,
@@ -1141,65 +1144,8 @@ def anomalies_analytics(
 
     # 2. Driver mismatch: actual_driver != assigned operator in the period
     if not anomaly_type or anomaly_type == "driver_mismatch":
-        sessions = db.scalars(
-            select(VehicleUsageSession).where(
-                VehicleUsageSession.started_at >= dt_from,
-                VehicleUsageSession.started_at <= dt_to,
-                VehicleUsageSession.actual_driver_user_id.isnot(None),
-            )
-        ).all()
-
-        vehicle_ids = {s.vehicle_id for s in sessions if s.vehicle_id}
-        vehicles_map2: dict = {}
-        if vehicle_ids:
-            for v in db.scalars(select(Vehicle).where(Vehicle.id.in_(vehicle_ids))).all():
-                vehicles_map2[v.id] = v
-
-        user_ids = {s.actual_driver_user_id for s in sessions} | {s.started_by_user_id for s in sessions}
-        users_map: dict = {}
-        if user_ids:
-            for u in db.scalars(
-                select(ApplicationUser).where(ApplicationUser.id.in_(user_ids))
-            ).all():
-                users_map[u.id] = u
-
-        # Load active assignments for these vehicles
-        assignments = db.scalars(
-            select(VehicleAssignment).where(
-                VehicleAssignment.vehicle_id.in_(vehicle_ids),
-                VehicleAssignment.assignment_target_type == "operator",
-            )
-        ).all() if vehicle_ids else []
-        assign_by_vehicle: dict = defaultdict(list)
-        for a in assignments:
-            assign_by_vehicle[a.vehicle_id].append(a)
-
-        for s in sessions:
-            if not s.actual_driver_user_id or not s.vehicle_id:
-                continue
-            assigned_ops = [
-                a.operator_user_id
-                for a in assign_by_vehicle[s.vehicle_id]
-                if a.operator_user_id
-                and (a.end_at is None or a.end_at >= s.started_at)
-                and a.start_at <= s.started_at
-            ]
-            if assigned_ops and s.actual_driver_user_id not in assigned_ops:
-                v = vehicles_map2.get(s.vehicle_id)
-                driver = users_map.get(s.actual_driver_user_id)
-                anomalies.append(AnomalyItem(
-                    id=f"mismatch_{s.id}",
-                    type="driver_mismatch",
-                    severity="high",
-                    description="Guidatore effettivo non coincide con operatore assegnato al mezzo",
-                    entity_id=str(s.id),
-                    entity_label=getattr(v, "plate_number", None) or str(s.vehicle_id),
-                    detected_at=s.started_at.isoformat(),
-                    details={
-                        "actual_driver": _user_display_name(driver),
-                        "assigned_operator_ids": [str(x) for x in assigned_ops],
-                    },
-                ))
+        driver_mismatch_inputs = load_driver_mismatch_inputs(db, dt_from, dt_to)
+        anomalies.extend(driver_mismatch_anomalies(driver_mismatch_inputs, _user_display_name))
 
     # 3. Excessive fuel: > 120L in a single refuel (threshold configurable)
     if not anomaly_type or anomaly_type == "excessive_fuel":
