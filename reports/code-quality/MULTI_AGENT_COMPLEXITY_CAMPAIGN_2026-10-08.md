@@ -1,5 +1,77 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-10 — Disk recovered; R18 independent acceptance integrated
+
+Global **ACTIVE / INCOMPLETE**. External-state change restored12GB root space;
+Coordinator deleted nothing. Previous ENOSPC remains an actual historical
+failure, but disk capacity no longer blocks this checkpoint. Main hashes9f85/
+0d54 and baseline38e6 unchanged. R19 V1 stays REJECTED; no fix or matching
+workaround is implicitly authorized by the goal resume.
+
+R18 SAME independent reviewer freshly executes46focused/196union PASS, zero
+failures/errors/skips, project/spec types, lint, exact page AST and actual
+immutable55a Make ratchet PASS0.3550protected paths and47author artifacts exact.
+Full-page coverage remains FAIL100:522/643statements81.18%,427/645branches66.20%,
+148/194functions76.28%,484/595lines81.34%. Runtime BLOCKED_COVERAGE, not waived.
+
+Only test-only ORIGINAL characterization accepted: authorbb01abcf→b4ade2e6,
+review559f1866→e9da9e85. Coordinator publishes privately frozen report0589e0bd
+byte-exact because reviewer sandbox denied repository save (Errno30).
+Independent parser/status-format bookkeeping failures remain recorded; native
+gates were not rerun. Actual root immutable55a ratchet after EACH integration
+PASS0. Runtime diff from218670c7 is empty, no complexity reduction claimed.
+
+Certified global1672files20316callables1926errors2740warnings4666findings and
+extreme-tail5>300/17>200/55>100 remain prior full-scan evidence, not a fresh scan.
+GIS remains resolved, not rerun. Global final suites and strategic objectives
+are still incomplete. See `INTEGRATION_R18_CATASTO_COMUNE_CHARACTERIZATION_2026-10-10.md`.
+
+Platform-docs Graphify PASS0, chunk1/1done, no semantic failure:654nodes884edges
+105communities,11757input2628output tokens/$0.0089estimated. Graphs ignored,
+not complexity evidence. Closure postcommit native ratchet is separately
+recorded in `/tmp/gaia-r18-closure-postcommit-ratchet-20261010.log` and `.exit`;
+no status is inferred from the two earlier integration gates.
+
+## 2026-10-10 — R19 rejected; infrastructure stop
+
+Global **ACTIVE / INCOMPLETE**. Integration remains at `218670c7`; no R19
+runtime/test publication or R18 characterization has been integrated. The
+certified aggregate remains 1672 files, 20316 callables, 1926 errors, 2740
+warnings and 4666 findings; no fresh global scan or final suite is claimed.
+
+Independent R19 V1 real-ORM diagnostic reproduces a functional regression:
+route-local strong references originally retain vehicle data until response,
+but the extracted family releases them before later queries. A distinct writer
+commits plate AFTER between queries; original returns BEFORE and V1 returns
+AFTER in an inactive-vehicle item, with identical query order. V1 is therefore
+**REGRESSED / REJECTED**, even with 53 focused / 247 ORM union PASS, full-file
+100% and its earlier immutable-base ratchet PASS. No rejected metrics count
+toward the campaign delta. Diagnostic is isolated SQLite, not PostgreSQL proof.
+
+The independent reviewer is terminal and explicitly released heavy. ENOSPC
+prevented its final report and post-audit manifest: both are empty. Surviving
+diagnostic artifacts and frozen source/test hashes are verified and preserved
+in `REJECTION_R19_DRIVER_MISMATCH_2026-10-10.md`; the missing complete freeze is
+not reported as PASS. Main concurrent work remains unchanged.
+
+Disk revalidation shows approximately 124 MB available. No cleanup, gate
+restart or V2 implementation has occurred. User decisions are outstanding for
+removing only the integration frontend regenerable `.next` build and priority
+between correcting the same R19 lifetime slice versus returning to Capacitas.
+R16 matching ambiguity still requires its separate decision; the prior
+Capacitas full-file100% confirmation does not authorize a baseline workaround.
+
+R18 author reports original characterization 46 focused / 196 union PASS,
+statement81.18% / branch66.20%: runtime remains BLOCKED_COVERAGE. Independent
+fresh replay is still not performed; neither publication nor metric improvement
+is claimed. GIS failure remains separately resolved with its retained
+focused10 / GIS5 / fullE2E54PASS7existingSKIP certificate.
+
+This is a reporting checkpoint, not a green integration checkpoint. No baseline,
+threshold, exclusion or runtime structure changes. Platform-docs Graphify is
+deferred while disk capacity and cleanup decision are unresolved; no graph
+maintenance PASS is claimed for these new documentation changes.
+
 ## 2026-10-09 — R17 independent original CF characterization
 
 Global **ACTIVE / INCOMPLETE**. Author and independent reviewer newly reproduce

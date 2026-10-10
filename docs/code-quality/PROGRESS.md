@@ -1,5 +1,37 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-10 — R18 original Comune independently accepted and integrated
+
+- External disk recovery gives12GB free; no Coordinator cleanup. R19 rejected
+  V1 stays excluded; separate correction/priority decision still outstanding.
+- Independent46focused/196unionPASS, types/lint/pageAST/actual55aMake ratchet
+  PASS0;3550protected paths/47author artifacts exact. Expected full-page100%
+  FAIL:81.18%statement66.20%branch; runtime BLOCKED_COVERAGE, policy unchanged.
+- Accepted authorbb01abcf→b4ade2e6 and review559f1866→e9da9e85, exact frozen
+  spec/CHAR/review hashes. Coordinator publishes private reviewer report after
+  Errno30 sandbox denial. Audit bookkeeping failures preserved; no gate rerun.
+- Each actual root post-integration55a ratchet PASS0. Runtime/baseline byte
+  diff unchanged; classification NO_CHANGE — ORIGINAL_CHARACTERIZED, not
+  IMPROVED. Global campaign still incomplete; no new runtime permission.
+- Closure: `INTEGRATION_R18_CATASTO_COMUNE_CHARACTERIZATION_2026-10-10.md`.
+
+## 2026-10-10 — R19 functional rejection and ENOSPC stop
+
+- Independent ORM lifetime diagnostic proves V1 changes a later anomaly label
+  from BEFORE to AFTER after a distinct writer update; V1 REGRESSED/REJECTED,
+  never integrated. Passing 53 focused/247 ORM union, full-file100% and prior
+  candidate ratchet cannot override response inequality.
+- Reviewer terminal/idle, heavy explicitly released. ENOSPC left its final
+  review report and post-audit manifest empty; no completed freeze claimed.
+  Surviving raw artifacts/hashes preserved in
+  `REJECTION_R19_DRIVER_MISMATCH_2026-10-10.md` and current ownership registry.
+- Integration runtime unchanged at218670c7; certified global1672files/
+  20316callables/1926errors/2740warnings remains attributed to prior full scan.
+  No new full suite, baseline/scope change, V2, cleanup or restart.
+- Disk approximately124MB; await exact regenerable build cleanup decision
+  and same-slice R19-versus-Capacitas priority. R18 independent replay and
+  platform-docs Graphify deferred, not declared PASS. Goal remains incomplete.
+
 ## 2026-10-09 — R17 original CF wizard independently characterized
 
 - Author and independent reviewer reproduce34focused/150unionPASS, zero
