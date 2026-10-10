@@ -245,3 +245,13 @@ the explicit user-approved bounded cache commands described above.
 
 Governance publication includes only registry/PROGRESS/global report/this report;
 actual postcommit immutable55a ratchet evidence follows without source changes.
+
+### Actual post-governance gate
+
+Governance3b03d78d3cbd693bae95790a6779814fd6bc3b2b includes ONLY the four
+declared governance/report files. Actual native immutable55a Make ratchet on
+that committed tree PASS0/findings[], baseline_commit55a verified; Git status
+clean. Evidence post-governance-ratchet.log/.exit under root E, not projected.
+Integration runtime7f9/spec409/baseline38e6 remain exact; current shared-root
+space486MiB. Recording this result changes this report only, not docs corpus,
+runtime, baseline or fixed thresholds. Full global goal remains INCOMPLETE.
