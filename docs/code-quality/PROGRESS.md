@@ -1,5 +1,44 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-11 — R22 Utenze NAS original characterization accepted/integrated
+
+- Highest unchangedDetailContent391 selected readiness-first. New45mounted NAS
+  cases+old21=66PASS; genuine command/order/busy/partial failure/captured path/
+  reverse status/route races protected, no runtime change or race normalization.
+- Author spec8f2258e4/report95402c0a, distinct final6e55808c explicit
+  ACCEPT_CHARACTERIZATION_ONLY; fresh66/types95imports0diag/lint/native55a0,
+  full original coverage remains FAIL100. Both terminal/HEAVY RELEASED.
+- Coordinator test+CHAR647e89a6→8aa18111, FINAL_REVIEW ONLY2cf66505→15285301;
+  actual immutable55a ratchet AFTER EACH PASS0/findings[]. Independent sparse
+  tree includes ALL1673runtime paths exact, no scope exclusion or partial gate.
+- Root actual integrated66/2spec PASS/types/lint/smoke18/custody0; fullfile
+  statement36.28→43.92%,branch37.54→44.75%,function20.45→27.84%,line38.8→46.82%.
+  Native fullcoverage still1,323statements337arms127functions285lines missing.
+  Runtime BLOCKED_COVERAGE, CHARACTERIZED_ONLY/NO_CHANGE; no IMPROVED credit.
+- Root whole corpus1673files runtime byte-exact31436; global1925errors2741
+  warnings4666records/5>300/17>200/55>100 unchanged. Fresh globalFAIL30 exact
+  initial AND prior objects/order. Main/baseline/spec custody exact, no waiver.
+- Dedicated platform-docs/governance/postcommit evidence in INTEGRATION_R22_
+  UTENZE_NAS_2026-10-11.md; no code-graph refresh required for runtime-neutral
+  tests. No new cleanup/build/install or evidence deletion; shared disk about
+  230MiB, broad/final suites still unverified. Global ACTIVE/INCOMPLETE.
+
+## 2026-10-11 — R22 highest-hotspot Utenze original readiness
+
+- Prior turn PROGRESS: R21 accepted/integrated/graphs/root559/full100 and actual
+  closure-postcommit55a0. Fresh clean31436/base55a, current1673/20322/1925errors/
+  2741warnings4666records; global extreme-tail/final full-suite goals unmet.
+- Root dedicated frontend graph query orients highest unchangedDetailContent391;
+  main path diff/status empty, sourceb0f822da/existing spec79ef3010 exact. Old
+  coverage36% is historical, not current gate. Runtime still BLOCKED_COVERAGE.
+- Ownership registry BEFORE new task01a127de; reuse clean publishedR21author
+  tree on dedicated R22branchat31436, no worktree/dependency copies. Scope ONLY
+  NAS status/import/candidate/path command characterization. New report only
+  during ANALYZE; tests/heavy/runtime edits not yet admitted. Stop for plan.
+- Shared disk459MiB/tmpfs274MiB, no full build/new runtime wave authorized;
+  small static analysis feasible, not replacing full-file100 or global success.
+  Main/baseline/evidence protected; no new cleanup/push or gate weakening.
+
 ## 2026-10-11 — R21 accepted and integrated, actual root checkpoint
 
 - Distinct final review83c3d8e ACCEPT exact7f9/spec409, fresh ORIGINAL and

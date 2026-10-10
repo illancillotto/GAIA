@@ -1,5 +1,60 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-11 — R22 original Utenze NAS readiness integrated
+
+Global **ACTIVE / INCOMPLETE**, full original scope/strategic targets unchanged.
+Highest unchanged DetailContent391cognitive selected: a real missing behavior
+responsibility characterized before unsafe runtime decomposition, not a smaller
+replacement goal. Runtime remains R21 exactly; current test/review integration
+15285301 includes no application runtime diff versus31436, all1673 official
+scanner source inputs byte-exact. Prior R21 aggregate/domain/extreme tables
+remain current1925errors2741warnings4666findings,1673files20322callables;
+five>300/seventeen>200/fifty-five>100, strategic targets/final suites unmet.
+
+Author new45NAS cases+immutable21=66PASS; distinct final independent fresh66,
+types95actual imported runtime sources0diagnostics/lint/native Make55a0 and
+complete custody; explicit ACCEPT_CHARACTERIZATION_ONLY6e55808c. Coordinator
+test+CHAR647e89a6→8aa18111, FINAL_REVIEW ONLY2cf66505→15285301, actual immutable
+55a ratchet AFTER EACH PASS0/findings[]. Reviewer sparse53MiB checkout contains
+ALL1673 runtime scanner paths exact including worker tests, no policy exclusion.
+
+Root freshly verifies actual integrated66PASS/types/lint/smoke18/custody and
+globalcheckFAIL30/CLI1/Make2, exact initial/prior finding objects AND order.
+New native tests protect literal NAS command payload/order, duplicate explicit/
+effect status calls, partial failures, edit/busy/scalar races and late old status
+on same-instance route transition; no runtime race guard, API or lifecycle fix.
+
+| Genuine full-file original coverage | Old21 | New+old66 | Remaining uncovered |
+| --- | ---: | ---: | ---: |
+| Statements |209/57636.28% |253/57643.92% |323 |
+| Branch arms |229/61037.54% |273/61044.75% |337 |
+| Functions |36/17620.45% |49/17627.84% |127 |
+| Lines |208/53638.8% |251/53646.82% |285 |
+
+Full-file gate **STILL FAIL100**, native1 ONLY unchanged thresholds. Regional NAS
+body coverage is diagnosis, never100waiver. R22 **CHARACTERIZED_ONLY/NO_CHANGE**,
+not IMPROVED, reorganized architecture or cognitive/finding reduction. Detail391/
+304/1908 and file729/723/2118/176callables/official28state10effect unchanged.
+Baseline38e6/main diff9f85/status0d54 remain exact; no repair/generation/threshold/
+scope/ignore inflation. Existing optional untested NAS permutations/identifier
+arms and substantial preview/upload/delete/visura/domain UI gaps are disclosed.
+
+Evidence and full matrices/publications/custody/native residual spans:
+INTEGRATION_R22_UTENZE_NAS_2026-10-11.md; root private20261011-r22-integrated.
+Actual docs maintenance/governance/postcommit appended after execution; runtime
+code graph unchanged. Main untouched, no push. Shared root disk drifts to about
+230MiB; no new cleanup/dependency install/full build/broad final suite claimed.
+Next original document-preview or upload characterization requires separate
+bounded admission, preserving whole-file100 prerequisite before runtime changes.
+Global campaign final complete suites and extreme-hotspot elimination remain
+incomplete; this coherent test consolidation is progress, not final success.
+
+R22 dedicated platform-docs native0/chunk1/1done/no semantic warning:
+718nodes1011edges103communities,167cached8re-extracted,24378input2821output
+tokens/$0.0143estimated; graph artifacts ignored. Current shared disk185MiB;
+no full clean build or next runtime refactor admitted. Actual post-governance
+immutable55a gate is recorded in the dedicated closure report, not projected.
+
 ## 2026-10-11 — Authoritative R21 integrated checkpoint
 
 Global **ACTIVE / INCOMPLETE**. R21 started10October; closure crosses midnight
