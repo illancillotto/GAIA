@@ -224,6 +224,37 @@ function withCapacitasDefaultCredential<Form extends { credential_id: string }>(
   };
 }
 
+interface CapacitasJobActionsProps {
+  job: CapacitasMonitoredJob;
+  busyId: number | null;
+  deletingId: number | null;
+  onRerun: () => void;
+  onDelete: () => void;
+}
+
+function CapacitasJobActions(props: CapacitasJobActionsProps) {
+  return (
+    <>
+      <button className="btn-secondary" disabled={props.busyId === props.job.id} onClick={props.onRerun} type="button">
+        {props.busyId === props.job.id ? "Rerun..." : "Rilancia"}
+      </button>
+      <button
+        className="btn-secondary"
+        disabled={
+          props.deletingId === props.job.id ||
+          props.job.status === "pending" ||
+          props.job.status === "processing" ||
+          props.job.status === "queued_resume"
+        }
+        onClick={props.onDelete}
+        type="button"
+      >
+        {props.deletingId === props.job.id ? "Elimina..." : "Elimina"}
+      </button>
+    </>
+  );
+}
+
 interface CapacitasExecutionToggleProps {
   kind: "speed" | "parallel";
   active: boolean;
@@ -2083,22 +2114,13 @@ export function ElaborazioniCapacitasWorkspace({
                         ) : null}
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <button className="btn-secondary" disabled={historyJobBusyId === job.id} onClick={() => void handleRerunHistoryJob(job.id)} type="button">
-                          {historyJobBusyId === job.id ? "Rerun..." : "Rilancia"}
-                        </button>
-                        <button
-                          className="btn-secondary"
-                          disabled={
-                            historyDeletingJobId === job.id ||
-                            job.status === "pending" ||
-                            job.status === "processing" ||
-                            job.status === "queued_resume"
-                          }
-                          onClick={() => void handleDeleteHistoryJob(job.id)}
-                          type="button"
-                        >
-                          {historyDeletingJobId === job.id ? "Elimina..." : "Elimina"}
-                        </button>
+                        <CapacitasJobActions
+                          job={job}
+                          busyId={historyJobBusyId}
+                          deletingId={historyDeletingJobId}
+                          onRerun={() => void handleRerunHistoryJob(job.id)}
+                          onDelete={() => void handleDeleteHistoryJob(job.id)}
+                        />
                       </div>
                     </div>
                     {result ? (
@@ -2578,22 +2600,13 @@ export function ElaborazioniCapacitasWorkspace({
                                 Errori
                               </button>
                             ) : null}
-                            <button className="btn-secondary" disabled={terreniJobBusyId === job.id} onClick={() => void handleRerunJob(job.id)} type="button">
-                              {terreniJobBusyId === job.id ? "Rerun..." : "Rilancia"}
-                            </button>
-                            <button
-                              className="btn-secondary"
-                              disabled={
-                                terreniDeletingJobId === job.id ||
-                                job.status === "pending" ||
-                                job.status === "processing" ||
-                                job.status === "queued_resume"
-                              }
-                              onClick={() => void handleDeleteJob(job.id)}
-                              type="button"
-                            >
-                              {terreniDeletingJobId === job.id ? "Elimina..." : "Elimina"}
-                            </button>
+                            <CapacitasJobActions
+                              job={job}
+                              busyId={terreniJobBusyId}
+                              deletingId={terreniDeletingJobId}
+                              onRerun={() => void handleRerunJob(job.id)}
+                              onDelete={() => void handleDeleteJob(job.id)}
+                            />
                           </div>
                         </td>
                       </tr>
@@ -2801,22 +2814,13 @@ export function ElaborazioniCapacitasWorkspace({
                         {result ? (
                           <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-[#1D4E35] shadow-sm">{progress}%</span>
                         ) : null}
-                        <button className="btn-secondary" disabled={incassJobBusyId === job.id} onClick={() => void handleRerunIncassJob(job.id)} type="button">
-                          {incassJobBusyId === job.id ? "Rerun..." : "Rilancia"}
-                        </button>
-                        <button
-                          className="btn-secondary"
-                          disabled={
-                            incassDeletingJobId === job.id ||
-                            job.status === "pending" ||
-                            job.status === "processing" ||
-                            job.status === "queued_resume"
-                          }
-                          onClick={() => void handleDeleteIncassJob(job.id)}
-                          type="button"
-                        >
-                          {incassDeletingJobId === job.id ? "Elimina..." : "Elimina"}
-                        </button>
+                        <CapacitasJobActions
+                          job={job}
+                          busyId={incassJobBusyId}
+                          deletingId={incassDeletingJobId}
+                          onRerun={() => void handleRerunIncassJob(job.id)}
+                          onDelete={() => void handleDeleteIncassJob(job.id)}
+                        />
                       </div>
                     </div>
 
