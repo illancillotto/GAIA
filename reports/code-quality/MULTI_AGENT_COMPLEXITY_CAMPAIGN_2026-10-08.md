@@ -1,5 +1,200 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-11 — Authoritative R21 integrated checkpoint
+
+Global **ACTIVE / INCOMPLETE**. R21 started10October; closure crosses midnight
+Europe/Rome11October. Existing R21 file/date identities remain unchanged.
+Current integrated runtime509a3913 on refactor/complexity-campaign-20261008,
+authoritative main/merge-base55a unchanged. This section supersedes older current
+metric/disposition tables below, preserving their historical evidence.
+
+### Agents, branch/worktree and publications
+
+Author dedicated r21-capacitas-job-actions tree, source+new54-test spec+SLICE
+c6ba08e6→96de8e12; distinct independent final task01a1274c in dedicated
+r21-capacitas-final tree, FINAL_REVIEW ONLY330be623→509a3913. Source7f9d7883,
+spec409b5da6, author report70429d08 and final accepted report83c3d8e2 frozen.
+Static c0bfa63e remains evidence, not native acceptance; old quota-blocked
+reviewer is not restarted. Ownership registry precedes each activation.
+Actual immutable55a Make ratchet after EACH integration PASS0/findings[].
+
+Independent fresh ORIGINAL and CANDIDATE54focused/559union23specs/full100,
+types/new-spec types/lint/metric/AST/custody all PASS. Exact literal-preserving
+AST expansion returns all three shared action controls to the original AST;
+runtime event-time callbacks, original job reference and fragment DOM remain.
+Root freshly verifies actual integrated559PASS/23specs/no skips, raw coverage,
+types/lint/smoke18/report0 and complete custody, not copied agent results.
+
+### Initial metrics, current metrics, delta and delta %
+
+| Official metric | Initial8October audit | Integrated R21 | Delta | Delta % |
+| --- | ---: | ---: | ---: | ---: |
+| Error |1956 |1925 |-31 |-1.58% |
+| Warning |2758 |2741 |-17 |-0.62% |
+| Finding records |4714 |4666 |-48 |-1.02% |
+| Files |1665 |1673 |+8 |Scope-sensitive |
+| Callable |20261 |20322 |+61 |Scope-sensitive |
+
+Application without worker tests: initial1611files/18940callables/318856LOC/
+4651findings→current1619/19001/319020/4603. LOC+164 disclosed; no global LOC
+reduction claim. Official all-scope LOC332425 is NOT compared with initial
+application-only LOC. Initial audit includes concurrent uncommitted sources:
+clean55a has1662files/20257callables. Scope differences are not campaign credit.
+Overlapping finding records are NOT independent problems. R21 itself removes
+one error/finding, not the whole campaign delta. Strategic targets remain unmet.
+
+### Domain results
+
+| Area/domain | Error before | Error after | Warning before | Warning after |
+| --- | ---: | ---: | ---: | ---: |
+| backend |1035 |1033 |1688 |1690 |
+| frontend |878 |849 |881 |862 |
+| worker runtime |35 |35 |134 |134 |
+| worker tests |8 |8 |55 |55 |
+| backend catasto |186 |186 |233 |233 |
+| backend ruolo |117 |117 |230 |230 |
+| backend presenze |93 |93 |240 |240 |
+| backend wiki |108 |106 |193 |195 |
+| backend elaborazioni-services-legacy |120 |120 |156 |156 |
+| backend operazioni |103 |103 |107 |107 |
+| backend network |75 |75 |65 |65 |
+| backend gis |16 |16 |71 |71 |
+
+Areas partition official scope; backend domain rows are drilldowns, NOT added
+again. Counts come from current native root report and initial8October audit.
+
+### Extreme hotspot
+
+| Callable | Initial cognitive | Current cognitive | Delta |
+| --- | ---: | ---: | ---: |
+| PresenzeGiornalierePage |550 |385 |-165 |
+| ElaborazioniCapacitasWorkspace |472 |324 |-148 |
+| ElaborazioniSettingsWorkspace |402 |296 |-106 |
+| DetailContent — Utenze |391 |391 |0 |
+| CatastoAnomaliePageContent |390 |390 |0 |
+| CatastoGisPage |334 |317 |-17 |
+| fuel_analytics |366 |261 |-105 |
+| anomalies_analytics |365 |239 |-126 |
+
+Five>300/seventeen>200/fifty-five>100 still remain; extreme-tail elimination
+and final global goal are NOT achieved. GIS and separate R16 matcher fix are
+already closed, not reopened or counted as another R21 reduction.
+
+### Improved slice and architectural changes
+
+R21 **IMPROVED**, exact repeated Terreni/history/inCass Rilancia/Elimina
+presentation policy deduplicated by one small private fragment component.
+
+| R21 metric | Before | Actual integrated after | Delta |
+| --- | ---: | ---: | ---: |
+| Principal cognitive |339 |324 |-15 (-4.42%) |
+| Principal cyclomatic / LOC |316 /2439 |301 /2412 |-15 /-27 |
+| File cognitive / cyclomatic |836 /977 |811 /953 |-25 /-24 |
+| Physical unique decisions |423 |413 |-10 |
+| Callable-attributed decisions |727 |702 |-25, overlapping |
+| File effective LOC |3085 |3087 |+2 |
+| File errors / warnings |17 /15 |16 /15 |-1 /0 |
+| useState / useEffect |31 /2 |31 /2 |0 /0 |
+
+Helper5cognitive6cyclomatic22LOC/nesting0/params1 below every fixed threshold;
+four ternaries/six logical physical nodes actually disappear. Not a mega JSX
+move,25 independent decisions or eliminated extreme. Earlier planning20-point
+target superseded only after independent exact15/10 census, never a threshold,
+baseline, coverage or global target change. No new hook/import/state/effect/
+command/API/auth/DB/transaction change. FastAPI/Next.js/PostgreSQL unchanged.
+
+### Tests and coverage
+
+Root actual workspace720/720statement750/750branch251/251function627/627line,
+fraction policy unchanged9/9+6/6+6/6+8/8; full-file100% all dimensions, positive
+raw counts/no excluded or skipped maps.23actual spec files559cases pass, no
+failure/skip/todo. Existing22specs/237retained inputs/main diff+status/baseline
+byte-exact. Project/new-spec135actual imported runtime sources types0diagnostics,
+ESLint existing config/all23specs maxwarnings0, smoke18 and whitespace PASS.
+
+Initial new-spec type TS2353 unsupported exact:true retained as FAIL1, no lint
+in that attempt. Separately authorized ONLY removal of unsupported role-query
+option preserves exact string-name matching. Final corrected spec ran natively
+on ORIGINAL and CANDIDATE independently; genuine assertions were not weakened.
+Missing source snapshot restored only by exact original4-hunk patch/SHA check,
+then byte/diff freeze. Root read-only JSON parse initially mistook Make's shell
+variable brace for JSON; corrected standalone-JSON extraction, native gate not
+rerun or changed. Failed context/lookups/waits remain disclosed, not test credit.
+
+### Ratchet, global baseline status and remaining verification
+
+Change **PASS0**, actual immutable55a after each integration. Global check
+**FAIL30**, CLI1/Make2, exact finding objects AND order against both initial
+authoritative global_compare and prior integrated check. Baseline38e6 unchanged;
+no baseline generation/repair/threshold/exclusion/ignore/scope inflation.
+
+Final full backend/worker/frontend-unit/build/E2E suites are NOT certified for
+this checkpoint. Targeted results are not full-suite PASS. Historical skips
+remain documented; no new skips added. R19V1 remains rejected; R16 old frontend
+candidate remains excluded without separate UI-equivalence acceptance. No new
+regression or reorganization is credited here.
+
+### Remaining top30 application hotspots
+
+Worker tests excluded ONLY from ranking, not scanner scope/gates.
+
+| Callable | Cognitive | Cyclomatic | LOC | Path |
+| --- | ---: | ---: | ---: | --- |
+| `DetailContent` | 391 | 304 | 1908 | `frontend/src/app/utenze/[id]/page.tsx:214` |
+| `CatastoAnomaliePageContent` | 390 | 342 | 2109 | `frontend/src/app/catasto/anomalie/page.tsx:175` |
+| `PresenzeGiornalierePage` | 385 | 341 | 2023 | `frontend/src/app/presenze/giornaliere/page.tsx:880` |
+| `ElaborazioniCapacitasWorkspace` | 324 | 301 | 2412 | `frontend/src/components/elaborazioni/capacitas-workspace.tsx:747` |
+| `CatastoGisPage` | 317 | 281 | 1889 | `frontend/src/app/catasto/gis/page.tsx:292` |
+| `ElaborazioniSettingsWorkspace` | 296 | 265 | 1358 | `frontend/src/components/elaborazioni/settings-workspace.tsx:375` |
+| `MePageContent` | 271 | 256 | 1133 | `frontend/src/app/me/me-page-content.tsx:347` |
+| `_run_bonifica_sync_background` | 269 | 47 | 232 | `backend/app/services/elaborazioni_bonifica_sync.py:354` |
+| `fuel_analytics` | 261 | 167 | 350 | `backend/app/modules/operazioni/routes/analytics.py:363` |
+| `ElaborazioniBonificaSyncWorkspace` | 259 | 202 | 835 | `frontend/src/components/elaborazioni/bonifica-sync-workspace.tsx:332` |
+| `MapContainer` | 246 | 169 | 953 | `frontend/src/components/catasto/gis/MapContainer.tsx:453` |
+| `anomalies_analytics` | 239 | 112 | 320 | `backend/app/modules/operazioni/routes/analytics.py:1069` |
+| `PresenzeCollaboratoreDetailPage` | 233 | 212 | 1600 | `frontend/src/app/presenze/collaboratori/[id]/page.tsx:100` |
+| `ElaborazioneBatchDetailWorkspace` | 216 | 177 | 751 | `frontend/src/components/elaborazioni/batch-detail-workspace.tsx:53` |
+| `PresenzeExportPage` | 209 | 172 | 1097 | `frontend/src/app/presenze/export/page.tsx:266` |
+| `sync_from_whitecompany` | 205 | 77 | 290 | `backend/app/modules/organigramma/services/whitecompany_sync.py:198` |
+| `RuoloTributiPageContent` | 204 | 173 | 1064 | `frontend/src/app/ruolo/tributi/page.tsx:404` |
+| `run_network_scan` | 195 | 101 | 267 | `backend/app/modules/network/services.py:1158` |
+| `UtenzeSubjectsSection` | 184 | 169 | 991 | `frontend/src/components/utenze/utenze-subjects-section.tsx:56` |
+| `TrackingContent` | 183 | 159 | 913 | `frontend/src/app/network/tracking/page.tsx:406` |
+| `AnagraficaBulkPanel` | 181 | 155 | 839 | `frontend/src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx:295` |
+| `_build_network_statistics_summary` | 181 | 101 | 214 | `backend/app/modules/network/router/helpers/traffic.py:271` |
+| `refresh_wiki_conversation_daily_metrics` | 178 | 49 | 153 | `backend/app/modules/wiki/services/conversation_metrics.py:156` |
+| `CatastoImportPage` | 175 | 149 | 1114 | `frontend/src/app/catasto/import/page.tsx:77` |
+| `ImportContent` | 173 | 160 | 971 | `frontend/src/app/utenze/import/page.tsx:102` |
+| `RuoloDashboardPage` | 168 | 157 | 1147 | `frontend/src/app/ruolo/page.tsx:176` |
+| `OrganigrammaWorkspace` | 167 | 147 | 1086 | `frontend/src/features/organigramma/organigramma-workspace.tsx:1537` |
+| `WikiRequestsPage` | 166 | 132 | 759 | `frontend/src/features/wiki/WikiRequestsPage.tsx:230` |
+| `GaiaUsersPage` | 162 | 146 | 1011 | `frontend/src/app/gaia/users/page.tsx:283` |
+| `PresenzeConfigurazionePage` | 158 | 148 | 1135 | `frontend/src/app/presenze/configurazione/page.tsx:271` |
+
+### Evidence, risks and recommended next campaign
+
+Native root evidence ~/.cache/gaia-campaign/20261010-r21-integrated/ contains
+commands/logs/exits/JSON, actual full coverage, fresh report/global30 equality
+and custody. Detailed invariants/test matrix/review/publications/Graphify:
+INTEGRATION_R21_CAPACITAS_JOB_ACTIONS_2026-10-10.md and FINAL_REVIEW_R21 report.
+
+Frontend Graphify force-pruned via dedicated Make target:650files6054nodes/
+12654edges245communities; HTML appropriately skipped>5000, ignored artifacts.
+Platform-docs native0/chunk1/1done/no semantic warning:713nodes998edges106
+communities,167cached7re-extracted,21064input4225outputtokens/$0.0152estimated.
+Actual post-governance55a gate recorded in closure report; neither Graphify
+nor a report substitutes for complexity or equivalence proof.
+
+Shared root disk critically low; user authorizes ONLY recreatable-cache cleanup
+after inventory. Native npm/pip/uv and seven inactive npx keys cleaned; active
+MCP cache/browsers/NVM/code/worktrees/evidence preserved. Free space still drifts
+below500MiB with concurrent host activity. No full clean build or another runtime
+slice is safe to allocate under this headroom; acquire storage headroom first.
+Then readiness-first selection from actual extremes, beginning unchanged Utenze
+or Catasto anomalies if exclusive ownership and genuine full-file100 can be
+demonstrated. Continue one bounded responsibility, not another global rewrite.
+No main edit, push, inflated baseline, global completion or suite waiver.
+
 ## 2026-10-10 — Authoritative R20 integrated checkpoint
 
 Global **ACTIVE / INCOMPLETE**. Latest runtime on integration60949d66;

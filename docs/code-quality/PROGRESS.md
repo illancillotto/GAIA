@@ -1,5 +1,85 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-11 — R21 accepted and integrated, actual root checkpoint
+
+- Distinct final review83c3d8e ACCEPT exact7f9/spec409, fresh ORIGINAL and
+  CANDIDATE54/559/full100/types/lint/own metrics/AST expansion/native55a/custody0.
+  Author and final terminal, heavy RELEASED; old quota reviewer not restarted.
+- Coordinator source+spec+SLICEc6ba08e6→96de8e12, FINAL_REVIEW ONLY330be623→
+  509a3913; actual immutable55a ratchet after EACH PASS0/findings[]. No reviewer
+  dirty runtime/new spec staged. Static publication superseded, evidence kept.
+- Root actual integrated559/23specs PASS, workspace720/750/251/627 and fraction
+  9/6/6/8full100four positive dimensions/no skips; types/new-spec135sources0diag,
+  lint/maxwarnings0, smoke18, full report and custody0. Historical globalFAIL30
+  exact initial AND prior objects/order; no baseline/main/config inflation.
+- IMPROVED principal339→324, aggregate836→811, physical423→413; fileLOC+2
+  disclosed. Global1673files20322calls1925errors2741warnings4666records;
+  five>300/seventeen>200/fifty-five>100. AppwithoutworkerTests1619/19001/
+  319020LOC4603records. Global targets/final full suites remain INCOMPLETE.
+- Native frontend Graphify force-pruned650files6054nodes12654edges245communities;
+  HTML skipped>5000, graphs ignored. Final platform-docs/governance/postcommit
+  gate logged in INTEGRATION_R21_CAPACITAS_JOB_ACTIONS_2026-10-10.md. Names keep
+  slice-start10October identity across11October local midnight.
+- User-authorized ONLY cache cleanup after inventory: npm/pip/uv/seven inactive
+  npx keys, all0; activeMCP/browser/NVM/code/worktree/evidence intact. Disk still
+  about468MiB, no clean full build or next runtime slice allocated. Full global
+  goal ACTIVE/INCOMPLETE, main55a concurrent changes and baseline38e6 protected.
+
+## 2026-10-10 — R21 V2 author READY, distinct final ORIGINAL allocation
+
+- V2 final-spec54/559/23specs before/after/full100, types/lint/report/AST/custody
+  and actual55a0 all PASS. Source7f9d7883/spec409b5da6/report70429d08 frozen;
+  TS2353 attempt1 preserved. Author READY_FOR_REVIEW, HEAVY RELEASED.
+- Principal339→324, file836→811cognitive, physical423→413, +2fileLOC disclosed.
+  Candidate1925errors2741warnings4666records, not yet integrated credit.
+- Distinct final task01a1274c verified idle/completed/error-null; registry before
+  activation; own dedicated1cd tree and FINAL_REVIEW only. Final spec409b
+  root-imported into exact original34afe. ORIGINAL heavy alone, candidate held.
+- Static native allocation never activated, earlier static c0bfa preserved.
+  Root observation/wait bookkeeping failures disclosed in integration report;
+  actual worktree creation0 and fresh custody exact. Official state stillR20,
+  global ACTIVE/INCOMPLETE. Cache-only recovery authorized, no code/evidence loss.
+
+## 2026-10-10 — R21 new-spec types STOP and bounded correction
+
+- Author stops TS2353 spec88: unsupported exact:true in getByRole options.
+  Project types PASS, original/candidate54/559/full100 and actual55a0; spec
+  types FAIL, lint unexecuted. Source/spec/report and failed logs frozen.
+- Coordinator verifies exact string role matching in installed library and
+  allocates ONLY removal of unsupported option from that one role query,
+  no assertion/runtime/policy change. Fresh V2 original/candidate54/559/full100
+  plus types/lint/custody/55a required; no automatic retry of other failures.
+- Author exclusively owns heavy; independent native review still pending.
+  R21 source remains HELD, official runtime/metrics still R20. Global goal
+  ACTIVE/INCOMPLETE; baseline/main hashes unchanged, no cleanup or push.
+
+- Subsequent disk recovery explicitly authorized by user: inventory then only
+  official npm/pip/uv cache purge and five inactive npx keys, all exit0.
+  Worktrees/code/evidence/browsers/active MCP cache untouched. Free435MB→about
+  856MB, shared concurrent host writes remain risk; no full build claimed.
+  Native logs in 20261010-cache-cleanup; main/baseline hashes exact afterwards.
+
+## 2026-10-10 — R21 exact job-action scope admitted after census
+
+- Previous goal turn PROGRESS: R20 root505/full100 and postcommit55a0 are
+  actually integrated1cd01a79; global full objective remains ACTIVE/INCOMPLETE.
+- Dedicated ownership registry precedes author/static-review activation, clean
+  separate1cd worktrees, source34afe/main/base55a/baseline38e6 unchanged.
+- Author analysis96034913 and independent staticc0bfa63e prove three exact
+  controls contain only15 principal cognitive points, not initial20 projection.
+  Both stop honestly; original/static reports preserved byte-exact privately.
+- Coordinator admits EXACT SAME scope with honest15principal/10physical target,
+  no threshold/baseline/coverage/global-goal change or scope expansion. Full
+  success still requires elimination of extreme tail, not this modest slice.
+- New54 genuine mounted public-control tests pass ORIGINAL; author actual
+  original union559/23specs PASS/full100. No source integration or IMPROVED
+  credit yet; native candidate, independent fresh and root integration gates
+  pending. Author owns exclusive heavy; reviewer static only, now terminal.
+- Disk observed2.1GiB available; no cleanup/install/copied dependencies or main
+  edits. Details, invariants and gate attribution in new
+  INTEGRATION_R21_CAPACITAS_JOB_ACTIONS_2026-10-10.md. Current accepted metric
+  state remains R20, historical30 separate, full final application suites open.
+
 ## 2026-10-10 — R20 accepted and integrated after distinct final review
 
 - Old quota-blocked reviewer retained unchanged; distinct final task completed
