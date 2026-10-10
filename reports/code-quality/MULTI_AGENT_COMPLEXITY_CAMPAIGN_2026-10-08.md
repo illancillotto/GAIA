@@ -1,5 +1,35 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-10 — R20 credential-default candidate, not integrated
+
+Global ACTIVE/INCOMPLETE. Resumed goal leads to one coherent policy deduplication
+inside four React functional updaters, preserving current-state and evaluation
+timing rather than computing defaults eagerly. Author source34afe117/report
+13abf17b frozen. Existing22specs unchanged; author and root separately execute
+actual original13/505 and candidate13/505, all dimensions full-file100% and
+zero skipped. Native55a/types/lint PASS; root smoke18PASS.
+
+| Candidate metric | Before | Candidate | Integrated credit |
+| --- | ---: | ---: | --- |
+| Principal cognitive |347 |339 |None yet |
+| File aggregate cognitive |858 |836 |None yet |
+| Physical unique decision sites |429 |423 |None yet |
+| Official errors / warnings / findings |1926 /2742 /4668 |1926 /2741 /4667 |No change |
+
+Attributed decision sums749→727 overlap nested scopes; six distinct decisions
+are removed, not22. Helper2cognitive3cyclomatic10LOC stays below all thresholds.
+No source is imported into integration: independent reviewer becomes terminal
+ERRORED due account usage limit before native gates/ACCEPT. Static no-blocker
+report16cc8fa3 is not an acceptance certificate; root replay is not silently
+attributed to that agent. Author READY_FOR_REVIEW, integration HELD.
+
+All five cognitive>300, seventeen>200 and fifty-five>100 callables remain in
+integrated application source. Strategic targets are not achieved; current
+global application metrics are still post-R19. Failed private freeze-buffer
+attempt is retained; bounded custody-v2 passes without native-gate/source retry.
+Baseline38e6/main concurrent work preserved. Root closure and next review step:
+`INTEGRATION_R20_CAPACITAS_CREDENTIALS_2026-10-10.md`.
+
 ## 2026-10-10 — R16 matcher fixed with source-bound ownership
 
 Global **ACTIVE / INCOMPLETE**. Separately authorized tooling activity follows

@@ -1,5 +1,46 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-10 — R20 Capacitas candidate measured, integration held
+
+- Resumed full goal read from attachment; previous turn PROGRESS, not global
+  completion. New exclusive ownership registry precedes author/reviewer activation
+  in separate clean438df8e8 worktrees. Main55a concurrent work stays unchanged.
+- Exact frozen candidate34afe117 shares credential-default policy INSIDE four
+  functional updaters. Latest-state/spread/short-circuit/String timing, captured
+  credential response and setter order unchanged; no eager default computation.
+- Author and root in separate tree each freshly run original13/505 and
+  candidate13/505 across22specs, zero failures/skips. Actual workspace before
+  718statement778branch249function625line and after719/766/250/626; unchanged
+  fraction-policy9/6/6/8, all dimensions100%, positive raw counters/zero skipped.
+- Author actual55a ratchet/project+spectypes/scopedlint PASS0; root candidate
+  actual55a/types/lint PASS0 and frontend smoke18PASS. Root execution is not
+  attributed to the independent agent. Existing22specs/config remain immutable.
+- Candidate IMPROVED: principal347→339cognitive,324→316cyclomatic,2455→2439LOC;
+  aggregate858→836cognitive,998→977cyclomatic. Six physical decisions genuinely
+  eliminated429→423; attributed749→727 overlaps scopes, NOT22unique decisions.
+  Candidate official1926errors2741warnings4667findings, but NOT integrated.
+- Author source34afe117/report13abf17b frozen, terminal heavy RELEASED. Private
+  custody attempt1 ENOBUFS from1MiB buffer on8.45MB Git baseline retained;
+  separately authorized bounded freeze-v2 PASS0, no native gate/source retry.
+- Independent reviewer static no-blocker matrix retained16cc8fa3, but terminal
+  account-usage ERRORED before native gates/ACCEPT, quoted reset Oct11 00:20AM.
+  READY_FOR_REVIEW author is NOT merged; source integration remains HELD.
+- Integration application still1673files20320calls1926errors2742warnings4668
+  findings, five>300/seventeen>200/fifty-five>100 cognitive. Global goals and
+  final application suites remain unmet/unverified; no baseline inflation.
+- Root report `INTEGRATION_R20_CAPACITAS_CREDENTIALS_2026-10-10.md` separates
+  native candidate evidence, missing independent acceptance and integration
+  accounting. No automatic review retry, threshold repair, main edit or push.
+- Root candidate global check FAIL30/CLI1/Make2 exactly matches initial finding
+  objects/order; full report metric objects exactly match frozen author report.
+  Candidate frontend Graphify force-pruned via dedicated Make targets650files/
+  6052nodes12649edges241communities; HTML skipped>5000, graph artifacts ignored.
+  No subsequent runtime wave before independent-review green checkpoint.
+- Platform-docs Graphify PASS0/chunk1/1done/no semantic failure:703nodes974edges
+  106communities,167cached6re-extracted,18088input4242outputtokens/$0.0140estimated.
+  Main diff/status and baseline38e6 exact; integration runtime/config/Makefile
+  diff from438df8e8 is0bytes. Governance postcommit55a gate recorded separately.
+
 ## 2026-10-10 — Separate R16 matcher source-provenance fix
 
 - User explicitly approves tooling-only activity after R19 closure. Immutable
