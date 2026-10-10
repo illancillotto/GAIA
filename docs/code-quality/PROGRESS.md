@@ -1,5 +1,24 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-10 — Original ORM lifetime characterized; rejected V1 caught
+
+- Three actual ORIGINAL-route ORM contracts pass independently: full-route
+  BEFORE after distinct writer commits AFTER, driver-only retention BEFORE,
+  inactive-only no-anchor control AFTER. Seed session closed, weakrefs only,
+  real Session/scalars/Core writer/witness; no compiled/synthetic runtime.
+- Original author3PASS and independent3PASS, Ruff/format/actual55a ratchet
+  PASS0;3557protected inputs exact. First formatting failure resolved only
+  by authorized AST-identical wrapping; independent summary parser failure
+  retained, native JSON read directly, no native gate rerun.
+- Exact test74f2b509 on frozen rejected V1 actual route produces EXPECTED
+  FAIL1/2PASS, same complete-response assertion as known lifetime regression.
+  Raw counterprobe/JUnit preserved; no source/input fix or runtime import.
+- Accepted test-only authora425a93c→506d4fd0, review47128b9d→eeda0d97;
+  V1 remains excluded. No runtime reduction/full-file coverage/PostgreSQL claim.
+  See `COUNTERPROBE_R19_ORM_LIFETIME_2026-10-10.md` and owned review.
+- Global goal incomplete; R19 V2 correction and R16 matching still require
+  separate decisions. This characterization is a safety prerequisite only.
+
 ## 2026-10-10 — R18 original Comune independently accepted and integrated
 
 - External disk recovery gives12GB free; no Coordinator cleanup. R19 rejected

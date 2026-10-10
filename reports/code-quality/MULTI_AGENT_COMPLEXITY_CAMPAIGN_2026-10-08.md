@@ -1,5 +1,39 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-10 — Versioned original ORM lifetime safeguard
+
+Global ACTIVE / INCOMPLETE. Actual ORIGINAL imported route is now protected
+by three independently passing deterministic ORM lifetime tests: all-family
+retention after external writer update, driver-only retention and inactive-only
+no-prior-identity control. Seed entities do not anchor reader identities; weak
+references only, distinct real writer connection/commit and Core witness.
+No compiled/synthetic runtime or mocked scalar results participate.
+
+Author3PASS and independent3PASS, Ruff/format/actual55a PASS0,3557protected
+paths exact. Original formatterFAIL preserved and authorized whitespace-only
+AST equality proved. Reviewer ancillary parser misread shell expansion as
+JSON; failed summary retained without native gate retry, actual JSON contains
+baseline55a/findings[]. Scope is isolated SQLite, not PostgreSQL/full-file100%.
+
+Counterprobe executes the exact accepted test against frozen actual rejected
+V1 read-only:1FAIL2PASS, all-families response assertion fails. Runtime hashes
+unchanged. This regression-sensitive test is meaningful protection, but no
+runtime simplification is claimed. See `COUNTERPROBE_R19_ORM_LIFETIME_2026-10-10.md`.
+
+Accepted publications authora425a93c→506d4fd0 and reviewer47128b9d→eeda0d97
+contain ONLY original test/CHAR and independent review. Rejected V1 stays
+excluded; no V2 correction or R16 workaround silently authorized. Runtime
+metrics remain prior certified1672files20316callables1926errors2740warnings
+4666findings; extreme tail/strategic goals unresolved. Full final suites are
+not rerun for this prerequisite. Sequential integration gates and closure
+evidence are separately recorded, not inferred from author checks.
+
+Actual root55a ratchet after EACH lifetime publication PASS0. Platform-docs
+Graphify PASS0/chunk1/1done/no semantic failure,670nodes904edges105communities,
+7121input3517output tokens/$0.0085estimated; graph ignored. Closure native
+postcommit gate evidence at `/tmp/gaia-r19-lifetime-closure-postcommit-ratchet-20261010.log`
+and `.exit` is authoritative for its snapshot, not earlier passing checks.
+
 ## 2026-10-10 — Disk recovered; R18 independent acceptance integrated
 
 Global **ACTIVE / INCOMPLETE**. External-state change restored12GB root space;
