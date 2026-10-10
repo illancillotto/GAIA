@@ -485,15 +485,13 @@ def fuel_analytics(
             return None
 
         # Conservative defaults (can be tuned with real data)
-        if any(k in vt for k in ["auto", "berlina", "utilitaria"]):
-            return 7.5
-        if any(k in vt for k in ["furg", "van", "ducato", "daily"]):
-            return 11.5
-        if any(k in vt for k in ["autocarro", "camion", "truck"]):
-            return 26.0
-        if any(k in vt for k in ["trattore", "trattor", "escavat", "terna"]):
-            return 15.0
-        return None
+        targets = (
+            ("auto", 7.5), ("berlina", 7.5), ("utilitaria", 7.5),
+            ("furg", 11.5), ("van", 11.5), ("ducato", 11.5), ("daily", 11.5),
+            ("autocarro", 26.0), ("camion", 26.0), ("truck", 26.0),
+            ("trattore", 15.0), ("trattor", 15.0), ("escavat", 15.0), ("terna", 15.0),
+        )
+        return next((target for keyword, target in targets if keyword in vt), None)
 
     # Time series
     liters_by_period: dict[str, float] = defaultdict(float)
