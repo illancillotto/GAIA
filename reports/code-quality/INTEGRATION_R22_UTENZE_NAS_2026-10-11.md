@@ -185,3 +185,13 @@ gate expansion. No cache cleanup beyond the earlier explicitly authorized
 commands, no evidence/worktree/browser/source removal. Only the four declared
 governance/report paths are published; native postcommit immutable55a gate
 recorded separately after actual execution. Global remains ACTIVE/INCOMPLETE.
+
+## Actual post-governance native gate
+
+Governance6afc2d0d005ef245ad151cc36b848edd5c8d330f publishes ONLY the four
+declared quality governance/report files. Native immutable55a Make ratchet on
+that committed tree PASS0/findings[], baseline_commit55a verified, integration
+Git status clean. Exact post-governance-ratchet.log/.exit in root E. Main diff/
+status hashes unchanged. Free root space now172MiB, no further broad gate/build
+or runtime refactoring allocated. This result changes only this report outside
+docs corpus; no source, baseline, threshold, scope or Graphify-input change.
