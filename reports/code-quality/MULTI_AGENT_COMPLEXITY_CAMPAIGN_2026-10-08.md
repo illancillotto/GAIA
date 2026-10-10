@@ -1,5 +1,50 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-10 — R16 matcher fixed with source-bound ownership
+
+Global **ACTIVE / INCOMPLETE**. Separately authorized tooling activity follows
+R19 closure; no application runtime or baseline/scope/threshold change. New
+fallback resolves ambiguity only after fresh immutable/current source scans,
+verified unchanged boundaries with unique exterior anchors and no conflicting
+owner. Local coherent snapshots and owner ledger prevent duplicate/racy proof.
+Ordinary resolver/multiset/wholly-added/rename contracts remain unchanged;
+absent proof still exits2. This is TOOLING_FIXED, not application IMPROVED.
+
+Author, independent reviewer and distinct final verifier each215PASS with
+full-file runtime844/844statements332/332branches100%, no exclusions. Installed
+style/Ruff/actual55a ratchet PASS. Root integrated215PASS/full100%. Native full-
+context original/candidate/faithful/local0/0/0/0, negative12→13 remains1;
+independent real Sincronizza byte-regression14→47cognitive also1. Candidate34af
+remains excluded: matcher projection does not prove UI equivalence/coverage.
+
+Accepted publications authorb3d4377f→269d3f09, reviewa7fae4d2→e8c8d4d5,
+final392b0da7→b3efb126, EACH actual immutable55a integration ratchet PASS0.
+Runtime871ebffc/testd2752cac/report30a16375, independentreviewcdbe69a5 and final
+report818eabb3 are frozen and byte-exact. Main concurrent work untouched.
+
+Intermediate coverageFAIL99.81/99.82, pre-race draft actual countertestFAIL1,
+private diagnostic metadata omissionFAIL retained; only separately allocated
+corrected private probe rerun, no source weakening. Brief final-verifier gate
+overlap before late pause disclosed; same process tree SIGSTOP/SIGCONT, no kill
+or restart. Do not claim perfect serialization. No global final-suite claim.
+
+Toolkit cost: compare cognitive85/cyclomatic41 unchanged, LOC85→92/params4→5;
+aggregate cognitive561→671/cyclomatic424→510 from added proof functionality.
+Official application scope stays unchanged; no debt reduction attributed to
+this tooling fix. Historical30 global baseline findings remain a separate
+provenance issue, not automatically accepted/absorbed. Closure:
+`INTEGRATION_R16_MATCHER_PROVENANCE_2026-10-10.md`.
+
+Fresh root verification on b3efb126:215PASS in31.88s, full-file844/844statement
+and332/332branch100%, zero exclusions/missing/partial; installed stylePASS0.
+Fresh official report1673files20320callables1926errors2742warnings4668findings
+is application-metric-identical to post-R19 (runtime diff0bytes). Global check
+is still FAIL30, CLI1/Make2, exact historical finding objects/order. No new
+findings or hidden baseline update. Main diff/status hashes remain exact.
+Full final application suites are not rerun or certified by this tooling gate.
+Platform-docs Graphify PASS0/chunk1/1done with no semantic failure:
+693nodes941edges108communities; graph artifacts ignored, not metric evidence.
+
 ## 2026-10-10 — R19 V2 integrated; R16 diagnosis preserved
 
 Global **ACTIVE / INCOMPLETE**. R19 V2 independently ACCEPTED / IMPROVED:

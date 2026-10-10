@@ -90,6 +90,23 @@ make complexity-baseline-verify
 Aggiungere poi i comandi applicativi realmente pertinenti. Non usare questa
 sequenza come prova che i target esistono prima di averli implementati.
 
+## Matching con provenance R16
+
+I contratti in `tests/code_quality/test_complexity_r16_provenance.py` coprono
+provenance reale Python/JS, uscita CLI `0/1/2`, commit/sorgenti/report stale o
+malformati, replacement refs Git, hunk invalidi, callback duplicate/spostate,
+ownership condivisa e snapshot alternati con metriche identiche. Le prove
+rifiutate restano memorizzate nel singolo confronto; il successivo confronto
+rilegge i sorgenti. Nessun test preesistente viene indebolito.
+
+Eseguire l'intera suite `tests/code_quality`, non solo il nuovo file. Il
+runtime `complexity.py` richiede coverage statement/branch full-file `100%`,
+con `patch = subprocess` per le invocazioni CLI effettive, zero nuove esclusioni.
+Il replay R16 deve preservare il contesto globale, i byte candidato congelati
+e la baseline immutabile; il controtest di regressione deve continuare a
+fallire. Documentare separatamente PASS del matcher e mancata certificazione
+runtime del candidato. Non cambiare soglie o baseline per validare il fix.
+
 ## Verifiche manuali obbligatorie
 
 - controllare il diff della baseline;

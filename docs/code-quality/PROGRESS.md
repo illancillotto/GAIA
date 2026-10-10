@@ -1,5 +1,45 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-10 — Separate R16 matcher source-provenance fix
+
+- User explicitly approves tooling-only activity after R19 closure. Immutable
+  baseline55a/source_commit11ed944 unchanged; no threshold/scope/ignore change.
+- New conservative fallback only after ordinary matcher ambiguity: fresh scans
+  bind complete per-path callable tuples to immutable Git/current snapshots;
+  verified zero-context diff maps unchanged boundaries with unique external
+  anchors. Refuse absent/stale/ambiguous proof. Snapshot success/refusal cache
+  and owner ledger local to comparison prevent context races/double consumption.
+- Author215PASS and independent215PASS, real subprocess full-file runtime
+  coverage844/844statement332/332branch100%, zero exclusions. Actual55a Make
+  ratchet/style/Ruff PASS. Independent ACCEPT_TOOLING_ONLY, not IMPROVED.
+- Frozen R16 full-context comparison original0/candidate0/faithful0/local0,
+  negative12→13 still1. Independent actual Sincronizza byte regression rejected
+  native1 (cognitive14→47/cyclomatic10→26). First private probe failure due lost
+  other-path diff metadata retained, authorized NEW corrected probe only.
+- Source-provenance replacement/malformed-source blockers resolved; real
+  pre-race draft countertest FAIL1 preserved. Intermediate coverage99.81/99.82
+  failures retained; genuine missing-path/owner tests achieve100%, no waiver.
+- Tool complexity cost disclosed: compare cognitive85/cyclomatic41 unchanged,
+  LOC85→92/params4→5; aggregate cognitive561→671/cyclomatic424→510. Added tooling
+  functionality is not application debt reduction. Candidate frontend source
+  remains excluded; passing matcher projection is not UI-equivalence evidence.
+- Additional final verifier independently allocated; brief gate overlap before
+  late pause disclosed, process tree SIGSTOP/SIGCONT without kill/retry. Final
+  certificate and actual root publication gates recorded in dedicated closure.
+- Root integrated b3efb126:215PASS in31.88s,844/844statement332/332branch100%,
+  zero exclusions/missing/partial, installed-interpreter stylePASS0. Fresh
+  report1673files20320callables1926errors2742warnings4668findings: all application
+  metric objects equal post-R19; runtime diff from54705ef8 is0bytes.
+- Fresh global check FAIL30 (CLI1/Make2), exact post-R19 finding objects/order;
+  no new regression, no baseline inflation. Main binarydiff/status hashes exact.
+  Candidate R16 remains excluded pending its own UI-equivalence/full-file gate;
+  global campaign ACTIVE/INCOMPLETE. Root evidence and maintenance recorded in
+  `INTEGRATION_R16_MATCHER_PROVENANCE_2026-10-10.md`.
+- Dedicated platform-docs Graphify PASS0/chunk1/1done, no semantic failure:
+  693nodes941edges108communities,167cached6re-extracted,18058input3316output
+  tokens/$0.0125estimated. Graphs ignored; baseline38e6 unchanged. Closure
+  postcommit actual55a ratchet has separate native log/exit in root evidence.
+
 ## 2026-10-10 — R19 V2 accepted; R16 faithful matching diagnosis
 
 - R19 V2 keeps typed driver inputs in the route through response, preserving

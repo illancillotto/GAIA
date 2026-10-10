@@ -136,6 +136,33 @@ resta nuovo e le normali soglie error-level continuano ad applicarsi. Anche un
 move riconosciuto conserva il confronto completo delle metriche legacy, quindi
 non autorizza regressioni o debt laundering.
 
+## Provenance sorgente per ambiguita residue — R16
+
+Il resolver ordinario conserva priorita, fingerprint, multinsiemi, prenotazioni
+e fallback esistenti. Una sua ambiguita puo essere risolta soltanto con prova
+aggiuntiva dai sorgenti, senza modificare baseline o scegliere il candidato
+piu vicino: il commit sorgente e `baseline.source_commit`, non necessariamente
+il merge-base da cui si legge il JSON autorevole.
+
+Si leggono byte Git immutabili senza replacement refs e byte correnti, quindi
+si riscansionano entrambi. L'intero multinsieme di callable del path deve
+corrispondere a identita, span, fingerprint e metriche dei report forniti.
+Un diff Git zero-context verificato sui byte mappa soltanto righe invariate;
+entrambi i confini devono corrispondere allo stesso span baseline e avere
+contesto esterno invariato e univoco. Senza tale prova resta exit `2`.
+
+La prova rifiuta span monoriga, confini/contesto modificati, ownership multiple,
+consumatori duplicati e owner gia reclamati dal resolver ordinario. Ogni
+confronto conserva uno snapshot coerente per path, comprese le prove rifiutate,
+e un registro locale degli owner utilizzati. Nessuna cache globale o identita
+trasferita tramite metadati diff del chiamante.
+
+Il parametro Python keyword-only `source_paths` permette diagnosi exterior
+con sorgenti esatti senza applicarli al checkout; non accetta identita o mapping.
+Il medesimo binding tramite scansione si applica a questi byte. Un confronto
+exterior PASS non certifica equivalenza funzionale o coverage del candidato.
+I normali controlli di regressione restano attivi dopo il matching provato.
+
 ## Debt laundering da bloccare
 
 - rinominare un simbolo per farlo apparire nuovo o sparito;
