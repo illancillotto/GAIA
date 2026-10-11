@@ -1,5 +1,21 @@
 # GAIA Operazioni — Progress Tracking
 
+## 2026-10-11 — Selezione identità operatore carburante R28
+
+- Consolidata esclusivamente la politica UUID→nome raw→sentinel, duplicata nei
+  raggruppamenti principali e correlati di `fuel_analytics`. Query, risposta,
+  autorizzazioni, consolidamento solo principale e lifetime ORM invariati.
+- Autore e verifica indipendente: originale/candidato 342 test reali PASS,
+  coverage statement/branch full-file 100%; ratchet reale `main`/55a PASS.
+- Cognitive principale 250→240, LOC 348→344; aggregata cognitiva 757→749 e
+  LOC file 1204→1200. Cyclomatic aggregata 513→514 per una nuova callable;
+  normalizzata 485 invariata, compensazione dichiarata. Nessun finding eliminato.
+- Report congelati `SLICE_R28_FUEL_OPERATOR_KEYS_2026-10-11.md` e
+  `FINAL_VERIFICATION_R28_FUEL_OPERATOR_KEYS_2026-10-11.md` sotto
+  `reports/code-quality/`. Integrazione e suoi gate ulteriori documentati a parte.
+- La slice non certifica PostgreSQL, suite globali o completamento campagna;
+  nessuna modifica a baseline, soglie o esclusioni.
+
 ## 2026-10-10 — Refactoring locale anomalie guidatore R19 V2
 
 - Una sola famiglia: query, selezione temporale delle assegnazioni e mapping

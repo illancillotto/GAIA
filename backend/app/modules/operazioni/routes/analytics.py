@@ -562,6 +562,13 @@ def fuel_analytics(
 
     _NO_OPERATOR = "__no_operator__"
 
+    def _fuel_operator_key(log: VehicleFuelLog) -> _uuid.UUID | str:
+        if log.wc_operator_id is not None:
+            return log.wc_operator_id
+        if log.operator_name:
+            return log.operator_name
+        return _NO_OPERATOR
+
     # Load WCOperators referenced by logs in this period
     wc_op_ids_in_logs = {log.wc_operator_id for log in logs if log.wc_operator_id}
     wc_ops_map: dict[_uuid.UUID, WCOperator] = {}
@@ -575,12 +582,7 @@ def fuel_analytics(
     count_by_key: dict = defaultdict(int)
     logs_by_key: dict = defaultdict(list)
     for log in logs:
-        if log.wc_operator_id is not None:
-            fkey = log.wc_operator_id
-        elif log.operator_name:
-            fkey = log.operator_name
-        else:
-            fkey = _NO_OPERATOR
+        fkey = _fuel_operator_key(log)
         liters_by_key[fkey] += _safe_float(log.liters)
         cost_by_key[fkey] += _safe_float(log.total_cost)
         count_by_key[fkey] += 1
@@ -721,12 +723,7 @@ def fuel_analytics(
         vlogs = logs_by_vehicle[vid]
         rel_by_op: dict = defaultdict(list)
         for log in vlogs:
-            if log.wc_operator_id is not None:
-                rkey = log.wc_operator_id
-            elif log.operator_name:
-                rkey = log.operator_name
-            else:
-                rkey = _NO_OPERATOR
+            rkey = _fuel_operator_key(log)
             rel_by_op[rkey].append(log)
 
         def _rel_score_op(operator_key, logs_by_related_operator=rel_by_op) -> float:
