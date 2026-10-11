@@ -1,5 +1,34 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## R35 checkpoint — 2026-10-11, Bonifica prerequisite identified
+
+**NO_SAFE_CHANGE / BLOCKED_COVERAGE locally; whole campaign ACTIVE/INCOMPLETE.**
+Runtime/test unchanged, accepted metric delta0; R34 global metrics/top30 below
+remain source-bound current state.153-worktree census found no dirty Bonifica
+target; main/baseline3655tracked inputs exact. Native97original tests PASS,
+coverage100FAIL:399/399statement120/128branch arms (93.75branches/98.48combined).
+
+One false guard214→217 is structurally unreachable: aware entity resolver always
+returns two dates on success, missing/invalid inputs default or raise. Root/
+author/independent reviewer source proof; no fake resolver, new exclusion or
+baseline inflation. Exterior ten-result normalization would reduce target269→174
+and file430→336cog/739→718LOC, but NOT admitted, tested or given reduction credit.
+Only provenance/author/review/governance evidence published. Initial reviewer
+fallback mistake retracted; author freeze metadata rewrite disclosed and old
+versions recovered separately, NOT called original immutable capture.
+
+User decision requested for SEPARATE redundant-date-guard prerequisite/final100;
+not scope expansion or policy waiver. If not authorized, leave this candidate
+excluded and continue ranked ownership elsewhere. Broad final suites, historical
+30 and R25 remain open. See INTEGRATION_R35_BONIFICA_RESULTS for precise proof.
+
+Publication main55a ratchet PASS0/findings[], exact7documentation paths,
+3653protected originals/main preserved. Agent/recovery manifests fully rehashed;
+reviewer terminal, candidate final verifier never started. No runtime delta or
+original-test rerun.22GiB root/320GiB SSD free, storage no longer blocks work.
+Platform-docs Graphify semanticchunk1/1complete/no partialfailure,424/413/110;
+R35 runtime NO_CHANGE. Redundant-guard prerequisite needs separate authorization.
+
 ## R34 checkpoint — 2026-10-11, Presenze monthly summary deduplicated
 
 **IMPROVED; campaign ACTIVE / INCOMPLETE.** NEW coherent projection admitted

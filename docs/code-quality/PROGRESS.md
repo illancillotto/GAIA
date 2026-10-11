@@ -1,5 +1,30 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-11 — R35 Bonifica normalization NOT ADMITTED
+
+- NEW dedicated ownership/provenance/static author/review after greenR34;153
+  worktrees/138present, no dirty target source, main and3655input bytes preserved.
+- Root fresh97tests PASS, native1 ONLY coverage:399/399statement100 and120/128
+  branches93.75 (98.48combined). Eight arcs missing; original threshold100 exact.
+- False date-inheritance guard214→217 unreachable: same aware entity flows
+  synchronously through resolver that always returns two dates or raises. Root/
+  author/reviewer independent proof; initial reviewer empty-params idea retracted.
+  No fake internal return/exclusion/test-only busywork, source e01 unchanged.
+- Exterior typed normalization269→174targetcog/430→336filecog/739→718LOC is
+  prospective ONLY, zero accepted delta. R35 NO_SAFE_CHANGE/BLOCKED_COVERAGE.
+- Three reports frozen/reviewed; initial author freeze metadata rewrite explicitly
+  disclosed as superseded/unverified, exact old byte versions reconstructed
+  separately, not claimed original immutable provenance. Final current binding
+  checked; no source/native output changed. No candidate final verifier started.
+- User asked SEPARATE redundant-date-guard prerequisite with equivalence/final100;
+  no R35 expansion. Global goal ACTIVE/INCOMPLETE, no globalblocked/completion.
+- Publication audit0:458provenance/5author/5review/4recovery members rehashed,
+  exact7docs paths and3653protected files/main preserved. Reviewer terminal,
+  final verifier NOT STARTED; fresh main55a ratchet0/findings[]. No native retry.
+- Platform docs Graphify native0/semanticchunk1/1/no partial failure,
+  424nodes413edges110communities; final governance refresh recorded separately.
+  R35 closed NO_CHANGE runtime, not IMPROVED; user prerequisite decision pending.
+
 ## 2026-10-11 — R34 Presenze monthly summary admission
 
 - Exclusive NEW design, not rejected R26 import; historical dirty owner proved
