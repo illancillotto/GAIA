@@ -6,7 +6,7 @@ import { InazSyncControl } from "@/components/presenze/inaz-sync-control";
 
 import Link from "next/link";
 import { patchPresenzeEditor } from "@/lib/presenze-editor-state";
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +37,7 @@ import { collaboratorProfileFilterKey, selectMonthlyCollaboratorRows } from "./c
 import type { DayFocusFilter, ProfileFilterKey } from "./collaborator-rows";
 import { buildMonthlyRecordInsights } from "./monthly-record-insights";
 import { dailyCellIndicators, kmInputPresentation } from "./daily-cell-model";
-import type { DayOperationalSummary, MonthlyRecordFacts } from "./monthly-record-insights";
+import type { CollaboratorMonthTotals, DayOperationalSummary, MonthlyRecordFacts } from "./monthly-record-insights";
 import { anomalyPanelComparisons, anomalyPanelCounts as countAnomalyPanelRecords, buildAnomalyDayGroups, buildAnomalyCollaboratorGroups } from "./anomaly-panel-model";
 import type { MonthAnomalyRecord, AnomalyPanelDayGroup, AnomalyPanelCollaboratorGroup } from "./anomaly-panel-model";
 
@@ -322,6 +322,39 @@ function formatHoursCompact(minutes: number | null | undefined): string {
   if (!minutes) return "0";
   const value = minutes / 60;
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function buildMonthlyOperationalSummary(totals: CollaboratorMonthTotals) {
+  const absenceEntries = Array.from(totals.absencesByCause.entries()).sort((left, right) => right[1] - left[1]);
+  const saturdaySummary = totals.saturdayEntries.length
+    ? totals.saturdayEntries.sort((left, right) => left.ordinal - right.ordinal)
+        .map((entry) => `${formatSaturdayOrdinal(entry.ordinal)} ${entry.label}`).join(" · ")
+    : "";
+  const saturdayBorder = totals.extra > 0 || absenceEntries.length > 0 ? "border-b border-slate-100" : "";
+  const supplements = [
+    ...(totals.extra > 0 ? [{
+      key: "extra", label: "Extra", value: `${formatHoursCompact(totals.extra)}h`,
+      gridLabelClass: "border-b border-slate-100 px-2 py-1.5 font-medium text-emerald-700",
+      gridValueClass: "border-b border-l border-slate-100 px-2 py-1.5 text-right font-semibold text-emerald-700",
+      modalClass: "flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs",
+      modalLabelClass: "font-medium text-emerald-700", modalValueClass: "font-semibold text-emerald-800",
+    }] : []),
+    ...(saturdaySummary ? [{
+      key: "saturday", label: "Sabati mese", value: saturdaySummary,
+      gridLabelClass: `${saturdayBorder} px-2 py-1.5 font-medium text-violet-700`,
+      gridValueClass: `${saturdayBorder} border-l border-slate-100 px-2 py-1.5 text-right font-semibold text-violet-800`,
+      modalClass: "flex items-center justify-between gap-3 rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-xs",
+      modalLabelClass: "font-medium text-violet-700", modalValueClass: "text-right font-semibold text-violet-800",
+    }] : []),
+  ];
+  const absences = absenceEntries.map(([cause, minutes], index) => {
+    const tone = absenceCauseSummaryTone(cause);
+    const label = formatAbsenceCause(cause);
+    const value = `${formatHoursCompact(minutes)}h`;
+    const border = index < absenceEntries.length - 1 ? "border-b border-slate-100" : "";
+    return { cause, tone, label, value, border };
+  });
+  return { supplements, absences };
 }
 
 function formatMinutesInput(minutes: number | null): string {
@@ -2081,14 +2114,8 @@ export default function PresenzeGiornalierePage() {
               <tbody>
                 {visibleCollaboratorRows.map((collaborator, rowIndex) => {
                   const totals = monthTotals.get(collaborator.id);
-                  const absenceEntries = Array.from(totals!.absencesByCause.entries()).sort((a, b) => b[1] - a[1]);
+                  const { supplements, absences } = buildMonthlyOperationalSummary(totals!);
                   const saturdayPolicyLabel = collaboratorSaturdayPolicyLabel(collaborator);
-                  const saturdaySummary = totals?.saturdayEntries.length
-                    ? totals.saturdayEntries
-                        .sort((a, b) => a.ordinal - b.ordinal)
-                        .map((entry) => `${formatSaturdayOrdinal(entry.ordinal)} ${entry.label}`)
-                        .join(" · ")
-                    : "";
                   const rowTone = rowIndex % 2 === 0 ? "bg-white" : "bg-slate-50/60";
                   return (
                     <tr key={collaborator.id} className={`group ${rowTone}`}>
@@ -2118,39 +2145,25 @@ export default function PresenzeGiornalierePage() {
                           {totals && totals.trasferta > 0 ? <span className="rounded bg-sky-100 px-1.5 py-0.5 text-sky-700">Trasf {formatHoursCompact(totals.trasferta)}h</span> : null}
                           {totals && totals.anomalies > 0 ? <span className="rounded bg-red-100 px-1.5 py-0.5 text-red-700">{totals.anomalies} ⚠</span> : null}
                         </div>
-                        {totals && (totals.extra > 0 || absenceEntries.length > 0 || Boolean(saturdaySummary)) ? (
+                        {supplements.length + absences.length > 0 ? (
                           <div className="mt-2 overflow-hidden rounded-lg border border-slate-200 bg-white/80 text-[10px]">
                             <div className="grid grid-cols-[minmax(0,1fr)_5.75rem]">
-                              {totals.extra > 0 ? (
-                                <>
-                                  <div className="border-b border-slate-100 px-2 py-1.5 font-medium text-emerald-700">Extra</div>
-                                  <div className="border-b border-l border-slate-100 px-2 py-1.5 text-right font-semibold text-emerald-700">
-                                    {formatHoursCompact(totals.extra)}h
+                              {supplements.map((entry) => (
+                                <Fragment key={entry.key}>
+                                  <div className={entry.gridLabelClass}>{entry.label}</div>
+                                  <div className={entry.gridValueClass}>{entry.value}</div>
+                                </Fragment>
+                              ))}
+                              {absences.map((entry) => (
+                                <div key={entry.cause} className="contents">
+                                  <div className={`${entry.border} px-2 py-1.5 font-medium ${entry.tone.label}`}>
+                                    {entry.label}
                                   </div>
-                                </>
-                              ) : null}
-                              {saturdaySummary ? (
-                                <>
-                                  <div className={`${totals.extra > 0 || absenceEntries.length > 0 ? "border-b border-slate-100" : ""} px-2 py-1.5 font-medium text-violet-700`}>
-                                    Sabati mese
-                                  </div>
-                                  <div className={`${totals.extra > 0 || absenceEntries.length > 0 ? "border-b border-slate-100" : ""} border-l border-slate-100 px-2 py-1.5 text-right font-semibold text-violet-800`}>
-                                    {saturdaySummary}
-                                  </div>
-                                </>
-                              ) : null}
-                              {absenceEntries.map(([cause, minutes], index) => {
-                                const tone = absenceCauseSummaryTone(cause);
-                                return (
-                                <div key={cause} className="contents">
-                                  <div className={`${index < absenceEntries.length - 1 ? "border-b border-slate-100" : ""} px-2 py-1.5 font-medium ${tone.label}`}>
-                                    {formatAbsenceCause(cause)}
-                                  </div>
-                                  <div className={`${index < absenceEntries.length - 1 ? "border-b border-slate-100" : ""} border-l border-slate-100 px-2 py-1.5 text-right font-semibold ${tone.value}`}>
-                                    {formatHoursCompact(minutes)}h
+                                  <div className={`${entry.border} border-l border-slate-100 px-2 py-1.5 text-right font-semibold ${entry.tone.value}`}>
+                                    {entry.value}
                                   </div>
                                 </div>
-                              )})}
+                              ))}
                             </div>
                           </div>
                         ) : null}
@@ -2750,13 +2763,7 @@ export default function PresenzeGiornalierePage() {
           .sort((a, b) => a.work_date.localeCompare(b.work_date));
         const totals = monthTotals.get(collaboratorModalId)!;
         const schedule = collaboratorSchedule.get(collaboratorModalId);
-        const absenceEntries = Array.from(totals!.absencesByCause.entries()).sort((a, b) => b[1] - a[1]);
-        const saturdaySummary = totals?.saturdayEntries.length
-          ? totals.saturdayEntries
-              .sort((a, b) => a.ordinal - b.ordinal)
-              .map((entry) => `${formatSaturdayOrdinal(entry.ordinal)} ${entry.label}`)
-              .join(" · ")
-          : "";
+        const { supplements, absences } = buildMonthlyOperationalSummary(totals);
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/35 px-4 py-8" onClick={() => setCollaboratorModalId("")}>
             <div className="flex max-h-full w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
@@ -2905,31 +2912,22 @@ export default function PresenzeGiornalierePage() {
                 </div>
               ) : null}
 
-              {totals && (totals.extra > 0 || absenceEntries.length > 0 || Boolean(saturdaySummary)) ? (
+              {supplements.length + absences.length > 0 ? (
                 <div className="border-t border-gray-100 px-6 py-4">
                   <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Riepilogo operativo mese</p>
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    {totals.extra > 0 ? (
-                      <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs">
-                        <span className="font-medium text-emerald-700">Extra</span>
-                        <span className="font-semibold text-emerald-800">{formatHoursCompact(totals.extra)}h</span>
+                    {supplements.map((entry) => (
+                      <div key={entry.key} className={entry.modalClass}>
+                        <span className={entry.modalLabelClass}>{entry.label}</span>
+                        <span className={entry.modalValueClass}>{entry.value}</span>
                       </div>
-                    ) : null}
-                    {saturdaySummary ? (
-                      <div className="flex items-center justify-between gap-3 rounded-xl border border-violet-100 bg-violet-50 px-3 py-2 text-xs">
-                        <span className="font-medium text-violet-700">Sabati mese</span>
-                        <span className="text-right font-semibold text-violet-800">{saturdaySummary}</span>
+                    ))}
+                    {absences.map((entry) => (
+                      <div key={entry.cause} className="flex items-center justify-between rounded-xl border border-slate-100 bg-white px-3 py-2 text-xs shadow-sm">
+                        <span className={`font-medium ${entry.tone.label}`}>{entry.label}</span>
+                        <span className={`font-semibold ${entry.tone.value}`}>{entry.value}</span>
                       </div>
-                    ) : null}
-                    {absenceEntries.map(([cause, minutes]) => {
-                      const tone = absenceCauseSummaryTone(cause);
-                      return (
-                        <div key={cause} className="flex items-center justify-between rounded-xl border border-slate-100 bg-white px-3 py-2 text-xs shadow-sm">
-                          <span className={`font-medium ${tone.label}`}>{formatAbsenceCause(cause)}</span>
-                          <span className={`font-semibold ${tone.value}`}>{formatHoursCompact(minutes)}h</span>
-                        </div>
-                      );
-                    })}
+                    ))}
                   </div>
                 </div>
               ) : null}

@@ -1,5 +1,106 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## R34 checkpoint — 2026-10-11, Presenze monthly summary deduplicated
+
+**IMPROVED; campaign ACTIVE / INCOMPLETE.** NEW coherent projection admitted
+after ownership and149-worktree provenance, not import of rejected R26.
+Author/static reviewer/independent native final/root publication gates complete:
+496 public mounted tests before/after PASS, full-file four-dimension100,
+types/lint/report/main55a ratchet0/findings[]. Old seven specs/configs immutable;
+no baseline/scope/threshold/ignore/new runtime file or main merge.
+
+Principal cognitive385→367 (-18,-4.68%), cyclomatic341→323, LOC2023→1988;
+page cognitiveSUM1093→1062 (-31,-2.84%), cyclomaticSUM1231→1201, LOC2812→2809.
+Helper6/7/32/nesting0/params1 nofinding. Direct grid Fragment/absence cause keys,
+exact DOM/styles, stable absence ties and same-array Saturday sort retained.
+Some total primitive formatting/policy computations commute with unrelated
+headers; observable equivalence independently proved, literal trace NOT equal.
+Helper retains original sort mutation, not generally pure. No effect/lifecycle,
+API/auth/identity/aggregation change. Genuine aggregate reduction, not relocation.
+
+### Current global metrics
+
+| Metric | October8 initial | R34 integrated | Delta | Delta % |
+| --- | ---: | ---: | ---: | ---: |
+| Files |1665|1673|+8|+0.48%|
+| Callables |20261|20324|+63|+0.31%|
+| Error observations |1956|1922|-34|-1.74%|
+| Warning observations |2758|2741|-17|-0.62%|
+| Overlapping observations |4714|4663|-51|-1.08%|
+
+Application without worker tests1619files/19003callables/319004LOC/4600findings.
+R34 upgrades two page errors to warnings (13/19→11/21), so overlapping finding
+count unchanged; these are NOT independent defects. Accumulated initial-to-now
+applicationLOC+148 (+0.05%) remains disclosed; R34 itself reduces3LOC.
+
+### Domain results
+
+| Domain | Error initial | Error current | Warning initial | Warning current |
+| --- | ---: | ---: | ---: | ---: |
+| Backend Catasto |186|186|233|233|
+| Backend Ruolo |117|117|230|230|
+| Backend Presenze |93|93|240|240|
+| Backend Wiki |108|106|193|195|
+| Legacy elaborazioni services |120|120|156|156|
+| Backend Operazioni |103|102|107|105|
+
+Frontend page Presenze slice13→11errors/19→21warnings. Main principal
+October8 cognitive550→367 (-183,-33.27%), still exceeds300 and misses P1 50%
+strategic target. Extreme tail5>300/17>200/55>100 unchanged.
+
+### Remaining top30 — current native R34
+
+| Path / callable | Cognitive | Cyclomatic | LOC |
+| --- | ---: | ---: | ---: |
+| `frontend/src/app/utenze/[id]/page.tsx` / `DetailContent` |391|304|1908|
+| `frontend/src/app/catasto/anomalie/page.tsx` / `CatastoAnomaliePageContent` |390|342|2109|
+| `frontend/src/app/presenze/giornaliere/page.tsx` / `PresenzeGiornalierePage` |367|323|1988|
+| `frontend/src/components/elaborazioni/capacitas-workspace.tsx` / `ElaborazioniCapacitasWorkspace` |324|301|2412|
+| `frontend/src/app/catasto/gis/page.tsx` / `CatastoGisPage` |317|281|1889|
+| `frontend/src/components/elaborazioni/settings-workspace.tsx` / `ElaborazioniSettingsWorkspace` |296|265|1358|
+| `frontend/src/app/me/me-page-content.tsx` / `MePageContent` |271|256|1133|
+| `backend/app/services/elaborazioni_bonifica_sync.py` / `_run_bonifica_sync_background` |269|47|232|
+| `frontend/src/components/elaborazioni/bonifica-sync-workspace.tsx` / `ElaborazioniBonificaSyncWorkspace` |259|202|835|
+| `frontend/src/components/catasto/gis/MapContainer.tsx` / `MapContainer` |246|169|953|
+| `backend/app/modules/operazioni/routes/analytics.py` / `anomalies_analytics` |239|112|320|
+| `frontend/src/app/presenze/collaboratori/[id]/page.tsx` / `PresenzeCollaboratoreDetailPage` |233|212|1600|
+| `backend/app/modules/operazioni/routes/analytics.py` / `fuel_analytics` |217|148|329|
+| `frontend/src/components/elaborazioni/batch-detail-workspace.tsx` / `ElaborazioneBatchDetailWorkspace` |216|177|751|
+| `frontend/src/app/presenze/export/page.tsx` / `PresenzeExportPage` |209|172|1097|
+| `backend/app/modules/organigramma/services/whitecompany_sync.py` / `sync_from_whitecompany` |205|77|290|
+| `frontend/src/app/ruolo/tributi/page.tsx` / `RuoloTributiPageContent` |204|173|1064|
+| `backend/app/modules/network/services.py` / `run_network_scan` |195|101|267|
+| `frontend/src/components/utenze/utenze-subjects-section.tsx` / `UtenzeSubjectsSection` |184|169|991|
+| `frontend/src/app/network/tracking/page.tsx` / `TrackingContent` |183|159|913|
+| `backend/app/modules/network/router/helpers/traffic.py` / `_build_network_statistics_summary` |181|101|214|
+| `frontend/src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx` / `AnagraficaBulkPanel` |181|155|839|
+| `backend/app/modules/wiki/services/conversation_metrics.py` / `refresh_wiki_conversation_daily_metrics` |178|49|153|
+| `frontend/src/app/catasto/import/page.tsx` / `CatastoImportPage` |175|149|1114|
+| `frontend/src/app/utenze/import/page.tsx` / `ImportContent` |173|160|971|
+| `frontend/src/app/ruolo/page.tsx` / `RuoloDashboardPage` |168|157|1147|
+| `frontend/src/features/organigramma/organigramma-workspace.tsx` / `OrganigrammaWorkspace` |167|147|1086|
+| `frontend/src/features/wiki/WikiRequestsPage.tsx` / `WikiRequestsPage` |166|132|759|
+| `frontend/src/app/gaia/users/page.tsx` / `GaiaUsersPage` |162|146|1011|
+| `frontend/src/app/presenze/configurazione/page.tsx` / `PresenzeConfigurazionePage` |158|148|1135|
+
+### Verification and residual work
+
+Source194686c9; author32e7100a, reviewer269abb5d, final4cedf7dc. Root-rehashed
+provenance546/author66/reviewer6/final75members, no mismatches. Root whole native
+metrics equal author, all1672other source metrics and protected3648tracked input
+bytes exact except owned runtime/governance. Baseline/main concurrent work exact.
+Dedicated frontend force graph6055/12657/245, helper EXTRACTED (page→helper
+destructuring edge absent, explicit extractor limit); domain91/94/15 and
+platform408/385/98 semanticchunk1/1complete, graph audit0. Native globalcheck
+Make2/CLI1 EXACT30historical objects equality0, still FAIL, not campaign
+regression. Publication/final freeze in R34 integration report/private handoff.
+Wrong-CWD/patch/static metadata diagnostics
+preserved; no native application failure or blind successful-gate rerun.
+Full backend/frontend/build/worker/stackE2E final suites NOT certified, historical
+30 provenance and R25 matcher/Catasto-Utenze coverage gaps remain open. Do not
+call global campaign complete or strategic extreme tail resolved.
+Next action: NEW ranked single responsibility after green R34 closure only.
+
 ## R33 checkpoint — 2026-10-11, operator weighted target simplified
 
 **IMPROVED / accepted integration; original campaign ACTIVE / INCOMPLETE.**

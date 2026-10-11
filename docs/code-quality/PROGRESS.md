@@ -1,5 +1,27 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-11 — R34 Presenze monthly summary admission
+
+- Exclusive NEW design, not rejected R26 import; historical dirty owner proved
+  frozen/terminal by149-worktree census. Main concurrent work preserved.
+- Author/native and independent static review: page principal385→367cog,
+  fileSUM1093→1062cog/1231→1201cyc/2812→2809LOC, helper6/7/32 nofinding.
+- Fresh original/after496 tests PASS and full-file four dimensions100; types/
+  lint/main55a ratchet0. Seven specs/configs/baseline immutable, no new test.
+- Exact DOM/key classes and same-array Saturday mutation retained. Pure numeric/
+  string formatting commutes with unrelated headers; literal call trace is NOT
+  certified identical. Independent source-backed observable-equivalence proof.
+- Independent native final original/candidate496full100/types/lint/report/main55a
+  ratchet0; final report4cedf7dc/freeze75members root-rehashed0. Fresh root496/
+  full100/types/lint/whole-report/main55a ratchet and raw/custody audit0; all1672
+  other source metrics and3648protected inputs exact except owned/governance.
+- Globalcheck Make2/CLI1 EXACT30historic objects equality0, not globalPASS.
+  Frontend force6055nodes12657links245communities; helper EXTRACTED, page→helper
+  destructuring call not emitted by extractor (explicit limitation). Domain/
+  platform semanticchunk1/1complete91/94/15 and408/385/98; graph audit0.
+- R34 accepted campaign-only coherent publication; no broad-suite/campaign-
+  completion claim. Extreme tail5/17/55 and historical provenance remain open.
+
 ## 2026-10-11 — R33 operator weighted target IMPROVED
 
 - Exclusive weighted-target responsibility, lazy typed same-file helper, no query/
