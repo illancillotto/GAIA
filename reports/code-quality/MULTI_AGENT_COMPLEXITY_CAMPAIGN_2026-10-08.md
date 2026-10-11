@@ -1,5 +1,61 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## R36 checkpoint — 2026-10-11, selected INAZ punch projection
+
+**IMPROVED; root integration native/raw/Graphify gates PASS, campaign-only publication.**
+Single selected-record punch source/sort/fallback/display responsibility, genuine
+shared policy, no request/anomaly/editor/state/effect/API/identity change. Exact
+V5deb4e9a0 imported after independent author/reviewer/final admission, not merely
+JSX relocation. Four reports frozen/rehashed3049/82/18/81members0. Author report
+publication removes ONE redundant EOF LF (fcca→0235), source/body exact; strict
+relationship proof0, originalfreeze untouched. Other reports byte-exact.
+Original root496/full100/report/custody0, author/final candidate496/four100/
+types/lint/report/main55aratchet0; all1672other metrics/3659inputs/main preserved.
+Root fresh candidate serial gate completed; no global completion certification.
+
+| Metric | October8 initial | R36 native candidate | Delta | Delta % |
+| --- | ---: | ---: | ---: | ---: |
+| Files |1665|1673|+8|+0.48%|
+| Callables |20261|20323|+62|+0.31%|
+| Error observations |1956|1922|-34|-1.74%|
+| Warning observations |2758|2739|-19|-0.69%|
+| Overlapping observations |4714|4661|-53|-1.12%|
+
+Application1619files19002callables318998LOC4598findings; LOCinitial318856→318998
+(+142,+0.04%), retained openly. Slice page principal367→360cog323→316cyc/
+1988→1945LOC, file1062→1048cog1201→1191cyc2809→2803LOC,decisions892→883.
+Page11errors/21warnings→11/19, old warning removed not transferred; newhelpers
+below warnings. No new runtime file, extra hooks or component explosion.
+Initial Presenze550→360(-190,-34.55%) remains above300/P1strategic target unmet.
+
+Top30R34 table below remains valid EXCEPT Presenze principal now360/316/1945;
+allother1672runtime metrics exact, ranking position unchanged. Tail5>300/17>200/
+55>100 persists. Domain backend table below unchanged; this is not extreme-tail
+elimination or strategic campaign success. Findings overlap, not defect count.
+
+Source/meaningful JSX/DOM/classes/keys/text segmentation and plainDTO observable
+equivalence independently proved; pure invocation/fiber ordering NOT identical.
+V2exterior regex regression rejected before runtime, V4EOF/Babelmetadata/Make
+echo-parser diagnostics retained; strict metadata recovery0 without native
+rerun. No baseline/scope/threshold/ignore/test/config change. Bonifica guard
+decision pending separately, historical30/R25 and broad final suites remain open.
+See INTEGRATION_R36_PRESENZE_DETAIL for full evidence, closure and residual limits.
+
+Root fresh496/four100/types/lint/report/main55aratchet0/findings[]/raw custody0
+now completed: allnative metrics exactauthor/final,1672other source records and
+3657protected originals/main unchanged. R36 actual improvement accepted; global
+baseline/Graphify/coherent publication follow, not campaign completion.
+
+Globalcheck remains EXACT30historical objects Make2/CLI1, not campaign FAIL.
+Distinct strict locale-aware parser0, no native retry. Frontend force6057nodes/
+12655edges/236communities, six new symbols extracted/six old helpers pruned;
+domain note/Presenze final docs semantic1/1complete101/106/17, no partialfailure.
+Final platform semantic1/1complete444/456/103, no partialfailure; closure metadata
+refresh uses the same dedicated target. Exact ten-path campaign-only publication,
+no main merge. Initial graph metadata auditor KeyError came from shadowing the
+corpus key with a symbol-loop variable; distinct existing-output auditor0, no
+native gate retry. R36 closed, campaign ACTIVE/INCOMPLETE; no broad-suite claim.
+
 ## R35 checkpoint — 2026-10-11, Bonifica prerequisite identified
 
 **NO_SAFE_CHANGE / BLOCKED_COVERAGE locally; whole campaign ACTIVE/INCOMPLETE.**

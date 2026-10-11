@@ -1,5 +1,59 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-11 — R36 selected INAZ punch detail IMPROVED
+
+- Previous turnR35 PROGRESS via original blocker evidence/publication, not runtime
+  improvement. Bonifica separate-guard decision pending; no R35 expansion.
+- Registry BEFORE agents/worktrees; fresh157/142/15/141provenance, three frozen
+  dirty R26/R34 snapshots proved historical terminal.3049members root-rehashed0,
+  main/baseline/oldspec/config unchanged. R26 rejected source NOT copied.
+- Root original496/sevenspecPASS full1041/1119/307/854four100, native whole report
+  exactR34/all3660input custody0. Single punch sort/fallback/display responsibility,
+  no request/anomaly/editor/state/effect/identity/API change.
+- V2 escaped-regex exterior regression rejected before runtime. V4 text-node
+  segmentation fixed, EOF-only V5deb4e9a0 admitted independently. Whole unrelated
+  AST/meaningful JSX exact; finite realDTO source differentials supplemental,
+  not native gates. Pure computation/fiber call order NOT certified identical.
+- Author candidate496/four100/types/lint/report/main55aratchet/custody3659/
+  diffcheck native0. Prospective native principal367→360, file1062→1048cog/
+  1201→1191cyc/2809→2803LOC; no transferred finding/new helper warning.
+- EOFpreflight and BabelFileEOFmetadata diagnostics preserved. Author supplemental
+  first-brace JSON parserFAIL on Make echo; distinct strict metadata auditor
+  recovery pending, native outputs not rerun. Independent final verifier now
+  holds serial heavy token for original/candidate full-file gates. NO runtime
+  integration/accepted credit until actual review/final/root admission.
+- Global goal ACTIVE/INCOMPLETE: broad final suites/historical30/R25 remain open.
+- Author/reviewer/final TERMINAL freezes82/18/81 root-rehashed0; exact reports
+  fcca/2de/92eb imported. Final original/candidate496four100/types/lint/report/
+  main55aratchet0/custody0. ExactV5 now integrated, fresh root session75550 live;
+  no root acceptance/commit until actual native/raw/Graphify completion.
+- Root fresh candidate496PASS/full1040/1106/306/853four100, types/lint/report/
+  actualmain55aratchet0/findings[]/strict raw custody0;3657protected files and
+  all1672other runtime metric records exact. Runtime IMPROVED; dedicated
+  Graphify/globalcheck/publication still follow, no strategic completion claim.
+- Publication metadata audit1 caught author-report import ONE EOF LF removal;
+  originalfcca freeze untouched, published0235 body exact. Distinct strictv2
+  audit0 verifies originalhash/onebyte/finalhash/exact9paths/custody. Three other
+  agent reports byte-exact. No runtime or native test/gate retry.
+- Globalcheck Make2/CLI1 exact30historic objects; initial locale-parser mismatch
+  retained, distinct strict English/Italian trailer2+5countertests/audit0, native
+  not rerun. Frontendforce6057/12655/236 new6symbols extracted/old6pruned.
+- NEW Coordinator-owned domain note/final Presenze semanticchunk1/1/no partial
+  failure101/106/17; final platform governance refresh follows. Exact10paths,
+  no mainmerge/baselineinflation or broad-suite/global-success claim.
+
+- Closure: all agents terminal, root496/four100/types/lint/native report/actual
+  main ratchet PASS; native gates not repeated. Whole-page cognitive1062→1048,
+  principal367→360, no debt transfer. Exact ten-path campaign-only publication.
+- Initial graph metadata auditor1 was a Python loop-variable shadowing KeyError,
+  not a Graphify failure. Original diagnostics retained; distinct symbol-aware
+  auditor0 verifies existing native outputs, six added/six pruned symbols and
+  only observed edges. Final platform semantic1/1complete444/456/103, no partial
+  failure,13819input3905output tokens/$0.0118 before closure metadata refresh.
+- R36 responsibility closed; campaign ACTIVE/INCOMPLETE. Historical30 unchanged,
+  Bonifica guard decision pending, tail5/17/55 and broad final suites still open.
+  No main merge/push, baseline inflation, threshold or coverage-policy change.
+
 ## 2026-10-11 — R35 Bonifica normalization NOT ADMITTED
 
 - NEW dedicated ownership/provenance/static author/review after greenR34;153

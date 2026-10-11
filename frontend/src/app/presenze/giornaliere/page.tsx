@@ -774,43 +774,6 @@ function normalizePunchTime(value: string | null | undefined): string {
   return `${match[1].padStart(2, "0")}:${match[2]}`;
 }
 
-function resolvedPunchSortTime(
-  record: PresenzeDailyRecord,
-  punch: { time?: string | null; direction?: string | null },
-): string {
-  if (punch.time) return normalizePunchTime(punch.time);
-  const authorizedDirection = authorizedPunchDirection(record);
-  const normalizedDirection = punch.direction?.trim().toUpperCase() ?? null;
-  if (!authorizedDirection || normalizedDirection !== authorizedDirection) return "";
-  const fallback = flattenedPairedPunches(record).find((row) => row.direction === authorizedDirection && row.time);
-  return fallback?.time ? normalizePunchTime(fallback.time) : "";
-}
-
-function punchSortKey(
-  record: PresenzeDailyRecord,
-  punch: { time?: string | null; direction?: string | null },
-): [number, number, string] {
-  const normalizedTime = resolvedPunchSortTime(record, punch);
-  const timeMatch = normalizedTime.match(/^(\d{2}):(\d{2})$/);
-  const minutes = timeMatch ? Number(timeMatch[1]) * 60 + Number(timeMatch[2]) : Number.MAX_SAFE_INTEGER;
-  const direction = punch.direction?.trim().toUpperCase() ?? "";
-  const directionPriority = direction === "E" ? 0 : direction === "U" ? 1 : 2;
-  return [minutes, directionPriority, normalizedTime];
-}
-
-function sortDisplayedPunchRows<T extends { time?: string | null; direction?: string | null }>(
-  record: PresenzeDailyRecord,
-  rows: T[],
-): T[] {
-  return [...rows].sort((left, right) => {
-    const [leftMinutes, leftDirectionPriority, leftTime] = punchSortKey(record, left);
-    const [rightMinutes, rightDirectionPriority, rightTime] = punchSortKey(record, right);
-    if (leftMinutes !== rightMinutes) return leftMinutes - rightMinutes;
-    if (leftDirectionPriority !== rightDirectionPriority) return leftDirectionPriority - rightDirectionPriority;
-    return leftTime.localeCompare(rightTime);
-  });
-}
-
 function normalizedDetailPunchTuple(punch: { time?: string | null; direction?: string | null; terminal_label?: string | null }): string {
   return [
     normalizePunchTime(punch.time),
@@ -841,34 +804,110 @@ function shouldShowDetailPunchRows(record: PresenzeDailyRecord): boolean {
   return rows.some((row, index) => normalizedDetailPunchTuple(row) !== normalizedDetailPunchTuple(pairedRows[index]));
 }
 
-function displayedInazPunchRows(record: PresenzeDailyRecord): DisplayedPunchRow[] {
-  const rows: DisplayedPunchRow[] = shouldShowDetailPunchRows(record) ? meaningfulDetailPunchRows(record) : flattenedPairedPunches(record);
-  return sortDisplayedPunchRows(record, rows);
+type InazPunchDetailRow = {
+  timeLabel: string; directionLabel: string; terminalLabel: string | null;
+  sortKey: [number, number, string];
+};
+
+type InazPunchSelection = { detailed: boolean; authorizedDirection: "E" | "U" | null; paired: DisplayedPunchRow[] };
+
+function resolveInazPunchTime(punch: DisplayedPunchRow, selection: InazPunchSelection): string | null {
+  if (punch.time) return punch.time;
+  if (!selection.authorizedDirection || punch.direction?.trim().toUpperCase() !== selection.authorizedDirection) return null;
+  return selection.paired.find((row) => row.direction === selection.authorizedDirection && row.time)?.time ?? null;
 }
 
-function displayedInazPunchTimeLabel(
-  record: PresenzeDailyRecord,
-  punch: { time: string | null; direction: string | null; terminal_label: string | null },
-): string {
+function formatProjectedInazTime(punch: DisplayedPunchRow, selection: InazPunchSelection, rawTime: string | null): string {
+  if (!rawTime) return "—";
+  const time = normalizePunchTime(rawTime);
+  if (!selection.authorizedDirection || punch.direction?.trim().toUpperCase() !== selection.authorizedDirection || (punch.time && selection.detailed)) return time;
+  const authorization = selection.authorizedDirection === "E" ? "ingresso autorizzato" : "uscita autorizzata";
+  return `${time} (${authorization})`;
+}
+
+function projectInazPunchRow(punch: DisplayedPunchRow, selection: InazPunchSelection): InazPunchDetailRow {
+  const rawTime = resolveInazPunchTime(punch, selection);
+  const time = normalizePunchTime(rawTime);
+  const timeMatch = time.match(/^(\d{2}):(\d{2})$/);
+  const minutes = timeMatch ? Number(timeMatch[1]) * 60 + Number(timeMatch[2]) : Number.MAX_SAFE_INTEGER;
+  const direction = punch.direction?.trim().toUpperCase() ?? null;
+  const priority = direction === "E" ? 0 : direction === "U" ? 1 : 2;
+  return {
+    timeLabel: formatProjectedInazTime(punch, selection, rawTime),
+    directionLabel: formatDetailPunchDirection(punch.direction),
+    terminalLabel: formatPunchTerminalLabel(punch.terminal_label),
+    sortKey: [minutes, priority, time],
+  };
+}
+
+function compareInazPunchRows(left: InazPunchDetailRow, right: InazPunchDetailRow): number {
+  const [leftMinutes, leftDirectionPriority, leftTime] = left.sortKey;
+  const [rightMinutes, rightDirectionPriority, rightTime] = right.sortKey;
+  if (leftMinutes !== rightMinutes) return leftMinutes - rightMinutes;
+  if (leftDirectionPriority !== rightDirectionPriority) return leftDirectionPriority - rightDirectionPriority;
+  return leftTime.localeCompare(rightTime);
+}
+
+function buildInazPunchDetail(record: PresenzeDailyRecord) {
+  const detailed = shouldShowDetailPunchRows(record);
+  const paired = flattenedPairedPunches(record);
   const authorizedDirection = authorizedPunchDirection(record);
-  const normalizedDirection = punch.direction?.trim().toUpperCase() ?? null;
-  if (punch.time) {
-    const baseTime = normalizePunchTime(punch.time);
-    if (!shouldShowDetailPunchRows(record) && authorizedDirection && normalizedDirection === authorizedDirection) {
-      const authorizationLabel = authorizedDirection === "E" ? "ingresso autorizzato" : "uscita autorizzata";
-      return `${baseTime} (${authorizationLabel})`;
-    }
-    return baseTime;
-  }
-  if (!authorizedDirection || normalizedDirection !== authorizedDirection) return "—";
-  const fallback = flattenedPairedPunches(record).find((row) => row.direction === authorizedDirection && row.time);
-  if (!fallback?.time) return "—";
-  const authorizationLabel = authorizedDirection === "E" ? "ingresso autorizzato" : "uscita autorizzata";
-  return `${normalizePunchTime(fallback.time)} (${authorizationLabel})`;
+  const authorizationLabel = authorizedPunchLabel(record);
+  const selection = { detailed, authorizedDirection, paired };
+  const rows = (detailed ? meaningfulDetailPunchRows(record) : paired)
+    .map((punch) => projectInazPunchRow(punch, selection)).sort(compareInazPunchRows);
+  const copy = detailed
+    ? "Qui vedi le righe del dettaglio Inaz che aggiungono informazione utile rispetto alla ricostruzione della coppia."
+    : "Qui vedi le timbrature lette da Inaz per la giornata.";
+  const rowLabel = rows.length === 1 ? "riga" : "righe";
+  return { authorizationLabel, rows, copy, rowLabel, visible: rows.length > 0 || Boolean(authorizationLabel) };
 }
 
-function shouldShowInazDetailSection(record: PresenzeDailyRecord): boolean {
-  return displayedInazPunchRows(record).length > 0 || Boolean(authorizedPunchLabel(record));
+function InazPunchDetail({ record }: { record: PresenzeDailyRecord }) {
+  const detail = buildInazPunchDetail(record);
+  if (!detail.visible) return null;
+  return (
+    <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/40 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="section-title">Timbrature dettaglio Inaz</p>
+          {detail.authorizationLabel ? (
+            <p className="mt-1 text-sm font-medium text-emerald-700">{detail.authorizationLabel}</p>
+          ) : null}
+          <p className="section-copy mt-1">
+            {detail.copy}
+          </p>
+        </div>
+        {detail.rows.length > 0 ? (
+          <span className="rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-medium text-amber-700">
+            {detail.rows.length} {detail.rowLabel} lette
+          </span>
+        ) : null}
+      </div>
+      {detail.rows.length > 0 ? (
+        <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {detail.rows.map((punch, index) => (
+            <div key={`${record.id}-detail-punch-${index}`} className="rounded-xl border border-amber-200 bg-white px-3 py-3 text-sm text-gray-700 shadow-sm">
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-medium text-gray-900">Riga {index + 1}</p>
+                <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-amber-700">
+                  {punch.directionLabel}
+                </span>
+              </div>
+              <p className="mt-2 text-xs uppercase tracking-wide text-gray-500">Ora</p>
+              <p className="text-base font-semibold text-gray-900">{punch.timeLabel}</p>
+              {punch.terminalLabel ? (
+                <>
+                  <p className="mt-2 text-xs uppercase tracking-wide text-gray-500">Terminale</p>
+                  <p className="text-sm font-medium text-gray-800">{punch.terminalLabel}</p>
+                </>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function validationBadgeVariant(record: PresenzeDailyRecord): "success" | "neutral" {
@@ -2611,50 +2650,7 @@ export default function PresenzeGiornalierePage() {
                 </div>
               ) : null}
 
-              {shouldShowInazDetailSection(selectedRecord) ? (
-                <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/40 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="section-title">Timbrature dettaglio Inaz</p>
-                      {authorizedPunchLabel(selectedRecord) ? (
-                        <p className="mt-1 text-sm font-medium text-emerald-700">{authorizedPunchLabel(selectedRecord)}</p>
-                      ) : null}
-                      <p className="section-copy mt-1">
-                        {shouldShowDetailPunchRows(selectedRecord)
-                          ? "Qui vedi le righe del dettaglio Inaz che aggiungono informazione utile rispetto alla ricostruzione della coppia."
-                          : "Qui vedi le timbrature lette da Inaz per la giornata."}
-                      </p>
-                    </div>
-                    {displayedInazPunchRows(selectedRecord).length > 0 ? (
-                      <span className="rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-medium text-amber-700">
-                        {displayedInazPunchRows(selectedRecord).length} {displayedInazPunchRows(selectedRecord).length === 1 ? "riga" : "righe"} lette
-                      </span>
-                    ) : null}
-                  </div>
-                  {displayedInazPunchRows(selectedRecord).length > 0 ? (
-                    <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                      {displayedInazPunchRows(selectedRecord).map((punch, index) => (
-                        <div key={`${selectedRecord.id}-detail-punch-${index}`} className="rounded-xl border border-amber-200 bg-white px-3 py-3 text-sm text-gray-700 shadow-sm">
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="font-medium text-gray-900">Riga {index + 1}</p>
-                            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-amber-700">
-                              {formatDetailPunchDirection(punch.direction)}
-                            </span>
-                          </div>
-                          <p className="mt-2 text-xs uppercase tracking-wide text-gray-500">Ora</p>
-                          <p className="text-base font-semibold text-gray-900">{displayedInazPunchTimeLabel(selectedRecord, punch)}</p>
-                          {formatPunchTerminalLabel(punch.terminal_label) ? (
-                            <>
-                              <p className="mt-2 text-xs uppercase tracking-wide text-gray-500">Terminale</p>
-                              <p className="text-sm font-medium text-gray-800">{formatPunchTerminalLabel(punch.terminal_label)}</p>
-                            </>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
+              <InazPunchDetail record={selectedRecord} />
 
               <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
