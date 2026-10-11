@@ -1,5 +1,17 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## R25 checkpoint — 2026-10-11, candidate excluded
+
+Capacitas result tables were actually refactored in a dedicated author tree and
+tested:45focused/604unionPASS/full100/types/lint/report0. First actual55a ratchet
+FAIL14 stops integration; no runtime delta booked. Independent original and
+source-backed provenance review0dced3bf confirms generic JSX callback naming/
+nearest-line misattribution, including one byte-identical callback shifted18lines.
+Failing gate is not waived; tooling decision separate, no baseline inflation.
+Official state remains R24:1924errors2740warnings4664findings,5>300/17>200/55>100.
+Full campaign ACTIVE/INCOMPLETE; author source/test evidence preserved, no R25
+runtime/test integration. Detail: INTEGRATION_R25_CAPACITAS_RESULTS_STOP_2026-10-11.md.
+
 ## 2026-10-11 — R24 fuel classification IMPROVED and root certified
 
 Global **ACTIVE / INCOMPLETE**, original backend/frontend/worker scope unchanged.

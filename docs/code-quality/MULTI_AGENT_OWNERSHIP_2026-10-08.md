@@ -9,6 +9,80 @@ Baseline, soglie, esclusioni e tooling complexity sono read-only.
 
 ## Ownership attiva e sequenza
 
+### R25 — Capacitas monitor result presentation (2026-10-11)
+
+Previous goal turn: PROGRESS through fresh measured cache inventory (no deletion),
+which establishes ~4 GiB root headroom; tmpfs remains ~273 MiB. Full objective
+ACTIVE/INCOMPLETE. Fresh clean integration9660bfde/base55a, protected main diff
+9f85e574/status0d54d4eb exact. R24 author/reviewer terminal, heavy released.
+
+| Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| R25 Capacitas author | Capacitas UI | frontend/src/components/elaborazioni/capacitas-workspace.tsx; NEW frontend/tests/unit/campaign-capacitas-result-presentation-r25.test.tsx; NEW reports/code-quality/SLICE_CAPACITAS_RESULT_PRESENTATION_R25_2026-10-11.md | CANDIDATE FROZEN:45/604/full100/types/lint/report0, actual55a ratchet FAIL14; no runtime integration or retry | GAIA-campaign-20261010-r20-capacitas-credentials (clean at9660bfde verified before branch creation) | refactor/complexity-r25-capacitas-result-presentation | BLOCKED |
+| R25 independent final reviewer | Capacitas review | NEW reports/code-quality/FINAL_REVIEW_CAPACITAS_RESULT_PRESENTATION_R25_2026-10-11.md ONLY; source/spec review inputs read-only imported by Coordinator | ORIGINALd996 accepted; failed-gate source-backed provenance0dced3bf frozen, report-only published; candidate excluded, heavy released | GAIA-campaign-20261011-r25-capacitas-results-review (fresh clean9660bfde/base55a; full runtime corpus materialized) | review/complexity-r25-capacitas-result-presentation | MERGED |
+| Coordinator | Campaign | ownership registry, PROGRESS, campaign/integration reports and private evidence | exclusive governance, later serial publication/integration/root gates | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
+
+Before activation the Coordinator creates the dedicated R25 branch from9660bfde
+in the freshly clean author tree. No reviewer allocated yet. Only author report
+and small private analysis evidence writable during ANALYZE; no new tests,
+runtime edits, native heavy commands, dependencies/build/cleanup or commits.
+Target remains genuine aggregate/physical reduction, not component/JSX relocation.
+Main cognitive324 and whole-file sum811 are the measured selection inputs;
+candidate acceptance needs fresh ORIGINAL full-file100, unchanged23specs559
+plus pertinent characterization, candidate full100 and immutable55a ratchet0.
+No baseline/scope/threshold/ignore change. STOP after reviewable proposal.
+
+Read-only analysis reader errors are preserved privately: coordinator used a
+nonexistent nested metrics key, author assumed files array instead of path map.
+No native gate failed or runtime changed. Corrected existing-JSON shape lookup
+is authorized; no native retry, test/refactor admission or gate waiver follows.
+
+R25 ANALYZE frozen55c920c0/private3f19b722; coordinator read full proposal.
+Root ORIGINAL native23specs559PASS/full100 four positive dimensions, unchanged
+workspace720stmt750arms251functions627lines and fraction9/6/6/8, raw audit0.
+Root heavy released. Author now admitted NEW mounted spec + report/private
+evidence ONLY, original runtime/all23existing specs immutable. Native focused
+then original union/full100/types/lint serially, with frozen commands/exits.
+First unexplained native failure STOP/no silent retry. No runtime/commit yet.
+Design refinement required: avoid additional getRowKey callbacks/callback
+wrappers that may increase cyclomatic sum. Prefer domain-owned keyed renderRow
+passed directly to items.map in small shared shell (3 typed props), not an
+intermediate callback reapplying renderCells. Preserve keys/cells byte-equivalent;
+native metrics/physical proof and independent review decide acceptance.
+
+Author NEW45case mounted spec frozen6c91bb4d; private verifier stopped before
+any Vitest command because Node Git byte reader default1MiB maxBuffer caused
+ENOBUFS on immutable baseline. Original diagnostic remains frozene6fb8bb7;
+root inspected reader/command sequence. Explicitly authorize bounded32MiB
+capacity for private Git reader only and a new corrected attempt/log path;
+require complete byte comparison, never truncation. No application/test rerun,
+gate waiver or runtime admission: actual native focused/union have not started.
+
+Author ORIGINAL terminal0/frozen75af001c:45focused/604union24spec PASS, genuine
+full100 workspace720/750/251/627 and fraction9/6/6/8, types/lint/custody exact.
+Heavy released. Distinct reviewer NOW ACTIVE ORIGINAL-exclusive native only,
+admission20261011-r25-capacitas-results-review/original-admission.json. Root
+imported immutable new spec6c91 viaapply_patch/cmp exact; all1673runtime source
+and original23specs/config exact. No candidate import/refactor or other native.
+Reviewer prepared ORIGINAL runner also contains fresh report/55a/diffcheck:
+Coordinator inspected and explicitly extends current ORIGINAL read-only
+admission to those once-only gates; no runner change or restart required.
+Independent ORIGINAL explicit ACCEPT_ORIGINAL_CHARACTERIZATIONd996a5b1,
+terminal/released; root read raw gates/audit/custody. Separate candidate-admission
+brief activated ONLY author-owned workspace refactor + once-only candidate
+native gates. Originals frozen; reviewer/root no heavy until author release.
+
+Candidate native gate failed: actual Make55a exit2 wrappingCLI1/14findings,
+all Program<anonymous> legacy regressions. Test/type/lint/full100 PASS does not
+override gate. Frozen candidate8ea9b7cb/spec6c91 preserved, NO MERGE/RETRY/FIX.
+Measured main324→318/file811→795/cyc953→940/LOC3087→3066 remain UNACCEPTED.
+Independent reviewer assigned read-only exact source/report/finding provenance
+diagnosis only; may amend own report/private evidence, no native gate/replay,
+runtime/tooling edit, commit or claim matcher defect without source evidence.
+Read-only final diagnosis0dced3bf frozen, allfour finding owners explained from
+exact sources/reports/baselinesource11ed944a. Report-only publication authorized;
+NO R25runtime/test integration, no gate waiver, separate tooling decision pending.
+
 ### Continuazione richiesta — diagnosi per sbloccare la wave runtime
 
 Il messaggio «continua» autorizza progresso verso il goal, non accettazione

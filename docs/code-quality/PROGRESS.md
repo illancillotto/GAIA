@@ -1,5 +1,55 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-11 — R25 candidate stopped on actual ratchet FAIL14
+
+- Original45new mounted cases + immutable559 =604PASS/24spec; distinct reviewer
+  explicit ACCEPT_ORIGINAL_CHARACTERIZATIONd996a5b1, fresh full100/types/lint/
+  report/actual55a0 and all1673source/config/main custody exact. Heavy released.
+- Separately admitted candidate only consolidates three result-table shells and
+  exact outcome cells; domain keys/cells/order/slices/guards/lifecycle untouched.
+  Candidate8ea9b7cb/spec6c91:45/604PASS/full100 workspace723stmt742arms254fn630
+  lines and fraction9/6/6/8; types/lint/report0. No test/gate weakening.
+- FIRST actual candidate immutable55a Make ratchet exit2 wrappingCLI1,14findings
+  all Program<anonymous> legacy regressions. Author STOP/frozensource/evidence/
+  heavyRELEASED, no retry/fix/commit/integration. Independent read-only diagnosis
+  assigned; matcher cause UNPROVEN, historical30 distinct from these14.
+- Measured main324→318/file811→795cognitive and file953→940cyclomatic/3087→3066
+  LOC are UNACCEPTED; physical full-proof not run after stop, no IMPROVED credit.
+  Official integrated global remains1924E2740W4664, extreme5/17/55 and original
+  workspace7f9. No runtime source integrated, baseline/scope/suppression unchanged.
+- Private candidate-stop checkpoint/85artifact manifestb2f19176 retained. Technical
+  user decision requested separated matcher activity versus next hotspot; whole
+  campaign ACTIVE/INCOMPLETE, not globally blocked/completed by this one slice.
+- Distinct frozen read-only provenance review0dced3bf proves four unrelated
+  nearest-line owners: three reduced renderRow callbacks namedProgramanonymous
+  matched with1LOCbuttons, plus exact unchanged modalSincronizza shifted18lines
+  matched withChiudi. Actual baselinesource11ed944a inspected. No native replay/
+  waiver/tooling edit; source-backed misattribution does not authorize merge.
+
+## 2026-10-11 — R25 result-table original admission
+
+- Previous goal turn PROGRESS: fresh read-only cache inventory establishes root
+  ~4 GiB free versus historical170MiB; separate tmpfs still273MiB. No deletion,
+  browser/worktree/dependency/evidence change. Full global goal ACTIVE/INCOMPLETE.
+- Fresh clean integration9660bfde/base55a and protected main9f85/0d54 exact.
+  Coordinator registry before author dedicated branch/reactivation and distinct
+  reviewer creation. One coherent three-family result-table responsibility only;
+  no job-card/progress/hooks/commands expansion or simple mega-JSX move.
+- Root actual ORIGINAL559PASS/23specs/no skips, unchanged native four-dimension
+  full100: workspace720stmt750branches251functions627lines; fraction9/6/6/8.
+  Raw coverage audit0, every positive counter covered/no skip markers, input
+  SHA custody exact. Private20261011-r25-original preserves commands/raw outputs.
+- Author frozen ANALYZE55c920c0/private3f19b722, root read complete proposal.
+  Admit only NEW mounted DOM/status/polling-key characterization + ORIGINAL
+  gates; runtime/all23existing specs/config immutable. Root heavy released to
+  author; distinct reviewer light runner preparation only, no native token.
+- Revised design preserves domain-owned keyed renderRow and uses direct shared
+  items.map(renderRow), avoiding extra key/wrapper callbacks. Physical predicted
+  duplicate reduction5 is not native acceptance; principal<300 unproven.
+- Read-only JSON shape errors and fresh reviewer empty-index/symlink setup
+  diagnostic preserved; no native failure retried, reset or source overwritten.
+  No runtime delta or IMPROVED credit yet, baseline/scope/suppression unchanged.
+
 ## 2026-10-11 — R24 fuel classification accepted, integrated and root verified
 
 - One nested classifier only: repeated category decisions replaced by exact
