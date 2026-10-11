@@ -1,6 +1,26 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-11 — Particella wizard original lifecycle characterization
+
+- R29 adds39 real mounted-route tests for response-first candidates, query/
+  pagination, preserved/stale/off-page drafts, hidden selected batch rows,
+  ordered payloads, partial counts, failure/refresh and late-response races.
+  Existing CF/Comune/manual tests unchanged; five-spec235PASS,0failure/skip,
+  independently verified and freshly replayed after integration d3aaeff5.
+- Captured old year/tab loaders, completion-order responses and scalar busy-ID
+  single/batch overlap are original invariants, not silently repaired behavior.
+  Auth wrapper props tested, real authorization/HTTP/provider not certified.
+- Full-page coverage still FAIL100:598/643statements,521/645branches,
+ 174/194functions,554/595lines. No runtime edit until actual coverage policy
+  is satisfied; no synthetic private-handler execution or excluded guards.
+  Two union act warnings reproduce in unchanged old manual tests; new39 clean.
+- Runtime page855e3ef0 unchanged: cognitive390/cyclomatic342/LOC2109;
+  full AST/runtime/main/baseline custody and actualmain55a ratchet PASS0.
+  Classification NO_CHANGE / ORIGINAL_CHARACTERIZED, not debt reduction.
+  Further original AdE/manual public contracts remain; global campaign open.
+  Reports CHARACTERIZATION/REVIEW/INTEGRATION_R29_CATASTO_PARTICELLA_2026-10-11.
+
 ### 2026-10-06 — base riga export bulk
 
 - Costruzione base riga estratta in helper tipizzato; URL calcolato prima,

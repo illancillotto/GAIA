@@ -1,5 +1,96 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-11 — R29 characterization accepted, integrated and root verified
+
+- Distinct reviewer terminal ACCEPT_ORIGINAL_CHARACTERIZATION_ONLY/NO_CHANGE;
+  freeze627eb984/review54d6cc80, all67 private manifest hashes independently
+  verified before publication. Author80 manifest/source/spec/report likewise
+  exact. Explained first auditor ENOENT preserved, bounded canonical-path-only
+  corrected custody0; no observation-timeout retry or hidden failure.
+- Exact NEWspecadd0937d/authorreporte4529d7c/review54d6cc80 integrated via
+  apply_patch; actualmain55a ratchet after each import PASS0/findings[].
+  Coherent tests/report-only commit d3aaeff5; main never modified or merged.
+- Fresh root genuine five-spec235PASS,0failure/skip; V8 complete page coverage
+  statement598/643(93%),branch521/645(80.77%),function174/194(89.69%),
+  line554/595(93.10%). Native1 ONLY unchanged100 deficits, not declared PASS.
+  Counters/maps match author/reviewer exactly. Two act warnings belong to old
+  manual tests, reproduce initial196 baseline; new focus39 independently clean.
+- Root strict project+NEWspec TypeScript0, scoped ESLint0, native whole report0,
+  raw JUnit/coverage/object/ratchet audit0 and all1673runtime/main/baseline/old4
+  custody0. All1673file/20323callable AST objects exactly R28. Source855e3ef0,
+  Catasto target390/342/2109 and global1924error2740warning4664findings unchanged.
+- Runtime remains BLOCKED_COVERAGE; no reduction claim or baseline inflation.
+  Residual45statements124branches20functions41lines include public-inaccessible
+  empty-selection guards; disabled click is not private-handler coverage.
+  Further original reachable AdE/manual contracts need a separate bounded
+  admission; unreachable branches require an explicit decision, not synthetic
+  execution or threshold/exclusion change. Whole campaign ACTIVE / INCOMPLETE.
+- Root evidence on isolated SSD `root-evidence/`, exact command/log/exit/storage
+  snapshots retained. No cache deleted; root~177MiB still constrained. Broad
+  project suites/build/worker/E2E not certified by this tests-only checkpoint.
+  Documentation graph refresh and final governance/postcommit gate recorded
+  in `INTEGRATION_R29_CATASTO_PARTICELLA_2026-10-11.md` and raw SSD evidence.
+
+## 2026-10-11 — R29 independent review auditor recovery admission
+
+- Previous turn PROGRESS: read-only cache inventory identified about2.19GiB
+  candidate caches and confirmed root~194MiB/SSD~336GiB free. No deletion,
+  worktree/evidence movement or runtime edit; all heavy outputs remain on SSD.
+- Independent reviewer stopped before tests at first custody exit1: its private
+  script assumed `tools/code_quality/complexity-baseline.json`, while runtime
+  DEFAULT_BASELINE defines `config/code-quality/complexity-baseline.json`.
+  Root/review canonical hashes both38e6b794, matching frozen custody. Explained
+  observation-tool defect, not application regression or matcher ambiguity.
+- Separate bounded recovery admitted: retain original auditor/failure; create
+  distinct private auditor with ONLY canonical path correction; run fresh
+  named corrected custody before independent gates. Reviewer sole heavy token,
+  root static. No baseline, threshold, source, test or shared tooling changes.
+  Final focus39 should have no act warnings; union235 has two attributable
+  to unchanged old manual spec, also present in original196 baseline.
+- Full-page100 deficit remains known FAIL; no runtime admission, reduction
+  credit or global completion. Await terminal independent evidence/review.
+
+## 2026-10-11 — R29 extreme Catasto Particella characterization admission
+
+- Previous goal turn PROGRESS: real R28 integrated/fresh342/full100/report/
+  exact historicalFAIL30/graphs/publications/postcommit main55a ratchet0 and
+  custody1673/main/baseline0; integration clean f3598577. Whole goal remains open.
+- Revalidated current extreme tail: Utenze391, Catasto390, Presenze385,
+  Capacitas324, GIS317. Capacitas R25 localFAIL14 source-backed misattribution
+  is separate from global30; new dedicated matcher activity decision requested,
+  candidate still excluded, no tool/baseline change or speculative replay.
+- Catasto original full-page100 remains blocked after196genuine cases. Select
+  single Particella wizard correction lifecycle to close real public UI contract
+  gaps before later behavior-preserving decomposition; no runtime edit admitted.
+  Registry R29 precedes author activation, fresh dedicated branch/worktree,
+  one serial heavy token, source/all old tests immutable.119accessible worktrees
+  checked for owned runtime edits: none; historical missing/tmp records preserved.
+  Current critical storage~541MiB/root273MiBtmpfs; no cleanup or build.
+- Storage mitigation without deletion: separate existing ext4 archive SSD has
+ 337GiB free; new isolated `.codex-gaia-campaign-20261011-r29/` evidence/tmp/
+ bytecode allocated, root source remains dedicated f359/55a worktree. No old
+ evidence/worktree moved, external-project directories untouched. R29 fresh
+ original four-spec baseline196PASS/native0/no skips, all1673runtime/main/base/
+ oldspec custody exact. NEW public Particella contract tests now being authored;
+ runtime remains855e3ef0 original. Main root still~212MiB; heavyweight outputs
+ must stay on SSD, coverage full-file100 unchanged and no baseline adjustment.
+- Author new strict test-inclusive types0/scoped lint0 and initial focused
+  Particella37PASS/native0. NEWspec prefreeze extensions/synchronization remain
+  in progress; no runtime edit or full-page100/reduction claim. Distinct reviewer
+  on isolated SSD tree f359/55a STATIC only identifies hidden/stale drafts, first
+  response candidate, scalar overlap and captured-loader/late-response semantics;
+  all are invariants to preserve, not bugs to fix in this campaign. Initial focus
+  React act warnings retained and flagged for genuine await/cleanup attribution,
+  no suppression. Old four tests and1673runtime unchanged, main/baseline preserved.
+- Current author terminal native evidence: final focused39PASS, old+new five-spec
+  union235PASS/no skips; native coverage exit1 SOLELY unchanged100thresholds:
+  statements598/643(93%),branches521/645(80.77%),functions174/194(89.69%),
+  lines554/595(93.10%). Baseline522/427/148/484 improves through real public
+  contracts, but full-page100 still FAIL; source remains unchanged, no runtime
+  admission/reduction credit. Native types/lint-final/report/actualmain55a
+  ratchet/audit/custody0 retained on SSD. Frozen author report and independent
+  review/publication remain pending; no hidden failure attribution or rerun.
+
 ## 2026-10-11 — R28 fuel operator-key deduplication admission
 
 - Integrated checkpoint: source/spec/report d25c8e9b, static review98170cbf and

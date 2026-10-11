@@ -9,6 +9,31 @@ Baseline, soglie, esclusioni e tooling complexity sono read-only.
 
 ## Ownership attiva e sequenza
 
+### R29 — Catasto Particella original characterization
+
+Exclusive allocation and native recovery admission precede activation in
+`MULTI_AGENT_OWNERSHIP_R29_CATASTO_PARTICELLA_2026-10-11.md`. Author and distinct
+reviewer terminal, tokens released; root published exact NEWspec/author/review
+in d3aaeff5 after acceptance and fresh integration235 tests/types/lint/report/
+raw audit/custody. Runtime1673/main/baseline/old4 unchanged, no overlap.
+
+| Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| R29 author | Catasto Particella UI | NEW frontend/tests/unit/campaign-catasto-particella-wizard-r29.test.tsx; NEW reports/code-quality/CHARACTERIZATION_R29_CATASTO_PARTICELLA_2026-10-11.md | Public mounted original wizard39 new tests; exact d3aaeff5 publication, token RELEASED; no runtime | GAIA-campaign-20261011-r29-catasto-particella | refactor/complexity-r29-catasto-particella-characterization | MERGED |
+| R29 reviewer | Catasto independent verification | NEW reports/code-quality/REVIEW_R29_CATASTO_PARTICELLA_2026-10-11.md ONLY | Native independent39/235 and raw metric/coverage/custody audit; exact d3aaeff5 publication, token RELEASED | /media/cbo/ARCHIVIO_SSD/.codex-gaia-campaign-20261011-r29/review-worktree | review/complexity-r29-catasto-particella | MERGED |
+| Coordinator | Integration/governance | R29 registry/global registry/PROGRESS, integration/global/domain reports | Root fresh235/strict types/lint/report/audit/custody; docs graphs and postcommit gate required; sole token until closure | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
+
+ACCEPT_ORIGINAL_CHARACTERIZATION_ONLY / NO_CHANGE: target390/342/2109 and
+whole1924errors2740warnings4664findings unchanged. Full-page coverage native1,
+598/643statements521/645branches174/194functions554/595lines, unchanged100
+thresholds. Runtime BLOCKED_COVERAGE; no debt reduction, waiver or new runtime
+admission. Expected known coverage deficit distinguished from test failure.
+Two union act warnings reproduce unchanged manual baseline; NEWspec focus none.
+Explained initial reviewer auditor wrong-path ENOENT preserved; only separately
+admitted private audit correction, never baseline/tooling/test/source changes.
+Storage cache inventory only; evidence/temp/bytecode on SSD, no cleanup.
+Whole global campaign ACTIVE / INCOMPLETE, strategic tail and final suites open.
+
 ### R28 — Fuel operator identity selection
 
 R27 checkpoint CLOSED: governance fed2cc7d, actual postcommit main55a ratchet0/

@@ -1,5 +1,55 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## R29 checkpoint — 2026-10-11, original Catasto Particella contracts
+
+Whole original campaign **ACTIVE / INCOMPLETE**. R29 independently accepted
+as **NO_CHANGE — ORIGINAL_CHARACTERIZED**, not a complexity reduction. Exact
+NEWspec/author/review publication d3aaeff5 on dedicated campaign branch; main
+and55a merge-base unchanged. Exclusive registries precede both agents, heavy
+gates serial, author/reviewer terminal. Root integration gates freshly replayed.
+
+### Behavioral protection and coverage status
+
+39 new real mounted-route cases; original196 plus NEW39 =235PASS,0failure/skip.
+Ordered candidates/batch payloads, stale/off-page drafts, hidden selected rows,
+partial counters, error/refresh, captured-loader and late-response/scalar-busy
+contracts characterized without functional correction. Boundary mocks do not
+prove actual authorization/HTTP/DB/provider behavior.
+
+| Full-page coverage | Accepted original R18 | R29 root/independent | Newly covered |
+| --- | ---: | ---: | ---: |
+| Statements |522/643|598/643 (93.00%)|+76|
+| Branches |427/645|521/645 (80.77%)|+94|
+| Functions |148/194|174/194 (89.69%)|+26|
+| Lines |484/595|554/595 (93.10%)|+70|
+
+**Coverage100 FAIL**, native1 solely four unchanged thresholds; runtime
+**BLOCKED_COVERAGE**. No synthetic test, guard ignore, threshold/baseline update
+or runtime relocation. Two union act warnings reproduce in old manual baseline;
+the independent NEW39 focus is clean. Initial review auditor ENOENT is preserved
+and separately corrected ONLY in a private script, not misreported as PASS.
+
+### Metrics, ratchet and remaining work
+
+Fresh root whole report and object audit: all1673 files/all20323 callables
+exactly R28, including spans/fingerprints/metrics/findings. Global1924errors,
+2740warnings,4664overlapping findings: initial1956/2758/4714 deltas-32/-18/-50,
+respectively-1.64%/-0.65%/-1.06%. No R29 reduction credit. Catasto target
+390cognitive/342cyclomatic/2109LOC unchanged; extreme tail5>300/17>200/55>100
+and top30/domain table below remain the same current native report state.
+
+Actualmain55a ratchet PASS0 after both exact-path imports; source/runtime1673/
+old4/main/baseline custody PASS. Root strict project+NEWspec types/lint PASS,
+raw coverage and whole AST audit PASS. Expected original coverage deficit is
+not a ratchet failure. Exact unchanged inputs preserve global30 provenance;
+no fresh global-check/final-suite certificate claimed here. No cache cleanup.
+
+Remaining45statements/124branches include inaccessible empty-selection guards;
+reachable AdE/manual branches require further bounded characterization. Runtime
+changes require actual full-file100, no waiver inferred. Broad backend/frontend/
+worker/build/E2E final gates and strategic targets still open. Docs graphs and
+postcommit evidence tracked in INTEGRATION_R29_CATASTO_PARTICELLA_2026-10-11.md.
+
 ## R28 checkpoint — 2026-10-11, operator identity policy consolidated
 
 Whole original campaign ACTIVE / INCOMPLETE. R28 ACCEPT_IMPROVED: one real
