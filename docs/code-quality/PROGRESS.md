@@ -1,5 +1,28 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-11 — R24 fuel classification accepted, integrated and root verified
+
+- One nested classifier only: repeated category decisions replaced by exact
+  ordered14pair local data and lazy first-match. Guards/access/normalization/
+  fallback/rates/bothcall-sites/query/response unchanged; autocarro still7.5.
+- Author and distinct independent reviewer ORIGINAL+candidate46focused/276real
+  ORM PASS; analytics original641stmt272branches100→candidate634/264full100,
+  driver49/16+orphan27/10full100. Synthetic20diagnostics isolated/no credit.
+  Native style/lint/report/actual55a gates0, no skips/failures/retries.
+- Explicit independent ACCEPT_IMPROVED185e5d60. Coordinator exact source+spec+
+  SLICE0a9dd0b2→16c5d641; review-only34356f60→2a7ffa93; actual immutable55a
+  ratchet AFTER EACH0/findings[]. Root actual integrated46/276/full100/lint/
+  fullreport/55a0/globalFAIL30exactinitial+R23/custodyall1673exceptanalytics PASS.
+- Genuine helper cognitive20→9/cyclomatic16→9/LOC17→15; parent261→250/167→160/
+  350→348. Physical decisions13→7 including generator filter; no new callable
+  or moved debt. File cognitive sum779→757 overlaps nested/parent, NOT22physical
+  decisions. Global1924error2740warning4664findings,5>300/17>200/55>100 unchanged.
+- Baseline38e6/main9f85+0d54/oldtests/config unchanged, exclusions identicaltext
+  shifted2lines, no inflation. GlobalFAIL30 remains provenance, not regression.
+  Root~4GiB/tmpfs274MiB, no extra cleanup. Dedicated Operazioni code/docsgraph
+  and post-governance checkpoint recorded in integration report. Full campaign
+  ACTIVE/INCOMPLETE; broad final suites/build/E2E not certified by this slice.
+
 ## 2026-10-11 — R23 original preview accepted and integrated
 
 - Fresh independent ACCEPT_CHARACTERIZATION_ONLY0a33d84a after121PASS, eleven

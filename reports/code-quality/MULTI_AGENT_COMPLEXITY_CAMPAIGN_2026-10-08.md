@@ -1,5 +1,60 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## 2026-10-11 — R24 fuel classification IMPROVED and root certified
+
+Global **ACTIVE / INCOMPLETE**, original backend/frontend/worker scope unchanged.
+One real nested classifier simplified, no transfer: cognitive20→9 (-55%),
+cyclomatic16→9,LOC17→15; enclosing fuel261→250 (-11),167→160,350→348.
+Physical local decisions13→7, including actual generator filter. No new callable.
+Ordered14patterns/rates, auto-before-autocarro, normalization/fallback/access/
+exceptions and both eager call sites plus all source outside nested body exact.
+
+Author+distinct independent ORIGINAL/candidate46focused/276real ORM PASS,
+genuine full-file100 before and after; separate20synthetic diagnostics never
+credited as runtime coverage. Explicit independent ACCEPT185e5d60. Source+
+spec+SLICE0a9dd0b2→16c5d641, review-only34356f60→2a7ffa93; actual immutable55a
+gate AFTER EACH0/findings[]. Root fresh integrated46/276/full100/style/fullnative
+report/ratchet55a0/custodyall1673sourceexceptanalytics and historicalglobalFAIL30
+exact initial+R23. No baseline/scope/suppression/threshold/config change or push.
+
+### Current authoritative metrics
+
+| Official metric | Initial8October | Integrated R24 | Delta | Delta % |
+| --- | ---: | ---: | ---: | ---: |
+| Error |1956 |1924 |-32 |-1.64% |
+| Warning |2758 |2740 |-18 |-0.65% |
+| Finding records |4714 |4664 |-50 |-1.06% |
+| Files |1665 |1673 |+8 |Scope-sensitive |
+| Callable |20261 |20322 |+61 |Scope-sensitive |
+
+Application without worker tests1619files/19001callables/319018LOC/4601findings;
+initial1611/18940/318856/4651. All-scopeLOC332423; initial app-onlyLOC not compared
+to all-scope. Audit included concurrent uncommitted source; clean55a scope differs.
+Finding records overlap metrics, not independent problems. R24 itself removes
+one error and one warning. Tail still5>300/17>200/55>100; strategic goals unmet.
+
+| Domain | Error before | Error after | Warning before | Warning after |
+| --- | ---: | ---: | ---: | ---: |
+| backend |1035 |1032 |1688 |1689 |
+| frontend |878 |849 |881 |862 |
+| worker runtime |35 |35 |134 |134 |
+| worker tests |8 |8 |55 |55 |
+| backend catasto |186 |186 |233 |233 |
+| backend ruolo |117 |117 |230 |230 |
+| backend presenze |93 |93 |240 |240 |
+| backend wiki |108 |106 |193 |195 |
+| legacy elaborazioni services |120 |120 |156 |156 |
+| backend operazioni |103 |102 |107 |106 |
+| backend network |75 |75 |65 |65 |
+| backend GIS |16 |16 |71 |71 |
+
+Domain rows drill down backend, not added again. Current hotspot fuel366→250
+(-116), anomalies365→239 (-126); frontend extreme values remain R21/R23.
+Utenze runtime still BLOCKED_COVERAGE64.23/66.88/45.45/67.91%; no waiver.
+Full application suites/build/stack E2E remain uncertified; global baselineFAIL30
+is separate provenance. Historical sections below retain their dated snapshots,
+not competing current totals. See INTEGRATION_R24_FUEL_TARGETS_2026-10-11.md.
+
 ## 2026-10-11 — R23 preview characterization integrated; no runtime waiver
 
 Full campaign **ACTIVE / INCOMPLETE**. Coordinator serially integrates test+CHAR
