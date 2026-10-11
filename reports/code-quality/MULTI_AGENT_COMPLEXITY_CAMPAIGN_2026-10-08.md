@@ -1,5 +1,43 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## R27 checkpoint — 2026-10-11, inactive-vehicle characterization
+
+Whole campaign ACTIVE/INCOMPLETE; accepted runtime metrics remain1924errors/
+2740warnings4664findings1673files20322callables, extreme tail5>300/17>200/55>100.
+One bounded responsibility from anomalies_analytics239cognitive characterized;
+private actual mapper draft2c486e7c+15LOC rejected, never copied into runtime/
+native measured/admitted. No R27 complexity-reduction credit, debt laundering,
+scope expansion or baseline inflation. Old frozen R19/R25/R26 candidates intact.
+
+NEW35 real persisted/public route cases, source/query sequence including empty
+secondVehicleSELECT, full literal two-source payload, fallbacks/date boundaries/
+numeric details/status/type filters/row and stable cross-family order/auth.
+Root and distinct independent reviewer38focus/311real-only11specPASS, no skips/
+synthetic coverage credit; genuine analytics634stmt264branch outcomes100%,
+unchanged driver49/16 and orphan27/10full100. RuffNEWspec/format/raw audit0.
+
+Independent actual ratchet firstSTOP/Make2 due missing @babel/parser in fresh
+review tree, NOT finding or matcher ambiguity. Failure preserved; explicitly
+authorized ONLY ignored link to EXISTING installed dependency graph, no install/
+version/scanner/config/baseline change. Same corrected actual55aratchet0/findings[],
+post-input/custody0, no tests rerun. Independent ACCEPT_CHARACTERIZATION_ONLY
+4b96ba86; author0f0abea1→integration84c01277, reviewd035d655→1ada2d6c, ratchet
+AFTER EACH PASS0. All1673runtime inputs/main9f85/0d54/baseline38e6 exact.
+
+Fresh root integrated311PASS/11spec/full100/raw audit0 completed without restart;
+native whole report0, actual globalcheck Make2/CLI1 EXACT30historical finding
+objects/global-audit0, parser and exception errors empty; input/custody1673/main
+exact. DocsGraph/governance/postcommit ratchet are separately gated below, not
+implied by characterization. Broad final suites/build/E2E remain uncertified. Details:
+INTEGRATION_R27_INACTIVE_VEHICLE_2026-10-11.md. No cache deletion; root storage
+~1.6–2.2GiB and separate tmpfs273MiB, browser/worktree/evidence protected.
+
+Dedicated platform-docs Graphify verified0/chunk1/1done/no partial failures:
+791nodes1133edges108communities,16024input3400outputtokens/$0.0118estimated.
+Graph ignored/uncommitted and not used as complexity evidence. Exact four-path
+governance publication/postcommit actual55a ratchet and final custody recorded
+externally in 20261011-r27-integrated; no main/push/runtime/baseline change.
+
 ## R26 checkpoint — 2026-10-11, original characterization only
 
 Actual Presenze candidate3e68dbf4 was implemented in author tree, then correctly

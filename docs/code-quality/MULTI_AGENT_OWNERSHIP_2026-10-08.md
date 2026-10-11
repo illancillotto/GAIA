@@ -9,6 +9,129 @@ Baseline, soglie, esclusioni e tooling complexity sono read-only.
 
 ## Ownership attiva e sequenza
 
+### R27 — Operazioni inactive-vehicle anomaly responsibility
+
+Previous goal turn PROGRESS: four R26 test/report publications plus governance
+integrated with actual-main55a ratchet0 after every publication; combined666PASS,
+raw coverage/custody0, native whole report0, historicalFAIL30 exact, Graphify
+semantic PASS. Whole original campaign remains ACTIVE/INCOMPLETE, not R26-only.
+
+Starting integration6ab78dc4/base55a, main9f85/0d54/baseline38e6 protected.
+Current anomalies_analytics239cognitive112cyclomatic320LOC/nesting4/params5;
+file1204LOC. Operazioni graph query0 guides local relationships. Extreme UI
+coverage/matcher blockers are retained, not waived to chase >300 counts.
+Original ten-spec real-only analytics union276/full100 is historical proof,
+not fresh admission; Coordinator reacquires it under sole native token.
+Fresh Coordinator original gate now TERMINAL0:276PASS/10spec/no skips/synthetic
+credit, analytics634statement264branch outcomes100%, unchanged driver49/16 and
+orphan27/10full100. Raw audit0/input SHA0/all1673runtime/main custody exact.
+Native token released; author remains ANALYZE-only until written proposal review.
+Exact command/argv/environment saved in 20261011-r27-original/union-command-exact.json;
+earlier shorthand union.command had selector-text typo, actual native selector
+was 'not synthetic'. No test rerun or evidence deletion.
+Old GAIA-campaign-20261008-analytics tree has frozen R19 uncommitted source,
+helper/test/report; no live old agent/token. Never import/reset/overwrite it;
+historical BLOCKED ownership is inactive and not a new source baseline.
+
+| Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| R27 characterization author | Operazioni analytics | backend/tests/test_operazioni_inactive_vehicle_r27.py; reports/code-quality/SLICE_R27_INACTIVE_VEHICLE_ANOMALIES_2026-10-11.md; runtime READ-ONLY |35NEW cases original38/311PASS/full100, independent acceptance4b96ba86; author0f0abea1→84c01277, post-source ratchet0; characterization ONLY | GAIA-campaign-20261011-r27-inactive-vehicle (author0f0abea1 clean/base55a) | refactor/complexity-r27-inactive-vehicle-anomalies | MERGED |
+| R27 runtime projection proposal | Operazioni analytics | backend/app/modules/operazioni/routes/analytics.py READ-ONLY; private static projection-candidate.py |Actual static draft2c486e7c +15LOC, decisions10→9, NO_SAFE_CHANGE/NOT_ADMITTED; never copied into runtime/native measured/committed | Same author tree, original runtimee877 intact | refactor/complexity-r27-inactive-vehicle-anomalies | REJECTED |
+| Coordinator | R27 integration checkpoint | Registry/progress/global report and INTEGRATION_R27_INACTIVE_VEHICLE_2026-10-11.md; runtime/old tests immutable | Fresh integrated311/full100/report0/custody0; exact historicalFAIL30 audited0; docsGraph and governance publication separately gated | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | READY_FOR_REVIEW |
+| R27 independent reviewer | Operazioni review | reports/code-quality/FINAL_REVIEW_R27_INACTIVE_VEHICLE_2026-10-11.md ONLY; original runtime/NEWspec read-only |ACCEPT_CHARACTERIZATION_ONLY4b96ba86,38/311full100/Ruff/audit/custody/actual55aratchet0; reportd035d655→1ada2d6c, post-review root ratchet0 | GAIA-campaign-20261011-r27-inactive-vehicle-review (authord035d655; only imported inputspec untracked) | review/complexity-r27-inactive-vehicle | MERGED |
+
+ANALYZE admission only: author may write own NEW slice report/private static
+evidence, no runtime/test edits/native commands/commit until separate admission.
+Characterize every query (including empty-set SELECTs), object lifetime/attribute
+evaluation, inclusive dates/filter, auth, stable severity ordering, two source
+families and every response field. No generic engine/mega-context/untyped dict
+abstraction or simple move of complexity. Propose real physical duplication/
+nesting reduction, no new violation and fileLOC growth. Target materially lower
+anomalies cognitive (prefer <=200) without increasing remaining metric debt.
+Stop after this responsibility or first uncertainty/failure. Refuse an unsafe
+target rather than weaken100 coverage, baseline, thresholds or tests.
+
+Coordinator reviewed static5564996c: preserves ORM locals/retention, unchanged
+four-query sequence including empty second SELECT and exact field evaluation.
+Characterization phase admitted ONLY NEW backend/tests/test_operazioni_inactive_vehicle_r27.py
+and own report/private evidence. Use real persisted rows/actual route; query
+observers delegate originals, no fake entity/scalar coverage, no old test edits.
+Literal payloads/two sources/fallbacks/date edges/filter/query sequence/ordering
+and existing lifetime tests protect future mapper. Author may also write a small
+PRIVATE static proposed projection shape for Coordinator review, NOT runtime;
+honest effectiveLOC/physical decisions must include discriminator/imports/calls.
+No native author commands; freeze source/spec/command before root serial gate.
+First failure STOP/no silent retry. Runtime still immutable, no accepted delta.
+
+Author NEWspecd4790f91 frozen35static cases; own report95981fe6. Private actual
+projection draft2c486e7c parsed only: old24LOC→loops16+mapper23=39 (+15), physical
+decisions10→9 including two discriminator branches. Coordinator rejects runtime
+shape NO_SAFE_CHANGE/NOT_ADMITTED; no runtime/native candidate/merge or credit.
+Distinct static reviewer560e2fd0 confirms invariants/18-line budget, no original
+native acceptance yet; its earlier spec observatione4e640 differs from later
+frozend4790 and must be refreshed before acceptance. Root sole native token:
+focus NEW35+immutable lifetime3 then exact ten-spec+NEW real-only311/full100,
+style/format/custody. Expected counts are not PASS until executed. Public auth
+coverage/new writer cases not invented; unchanged existing lifetime3 remain
+required. Author/reviewer no native token during root characterization.
+
+Root focused native0: NEW35 + unchanged lifetime3 =38PASS/no skips. Exact frozen
+specd4790 and originale877 source custody verified; old public JWT short-key
+warnings retained (private inherited test env), no auth/code/config weakening.
+Root serial311real-only union/full100 measurement now active, no author/reviewer
+native. Coordinator may import EXACT frozen NEWspecd4790 via apply_patch into
+fresh reviewer as READ-ONLY input (no reviewer spec ownership/edit permission)
+before later independent original admission. No candidate admitted; runtime
+responsibility projection draft+15LOC rejected, not complexity improvement.
+
+Root union43557 TERMINAL0/311PASS/11spec/no skips/no synthetic credit; raw
+audit0/manifest exact, analytics634/264 driver49/16 orphan27/10 full100. Scoped
+new-spec Ruffcheck0/formatcheck0. Root releases native token. Distinct reviewer
+now admitted fresh ORIGINAL ONLY focused38→real-only311/full100/raw audit/style/
+actual-main55a ratchet/custody under exclusive serial token. Exact review source
+e877/specd4790; all old specs/configs/runtime immutable. It may append only own
+report/private evidence, no runtime/code/spec changes or candidate gates. First
+unexplained failure STOP/freeze/no retry. Root no native while reviewer running.
+Acceptance, if earned, must say CHARACTERIZATION_ONLY / NO_CHANGE complexity;
+private candidate+15LOC not integrated or characterized as actual runtime.
+
+Independent first actual ratchet STOP/Make2: ratchet_engine_changed because
+fresh review tree has no @babel/parser installed graph (baseline available,
+current missing). This is an explained engine-availability failure, NOT new
+finding or matching ambiguity. All38/311tests/full100/audit/Ruff/format0 frozen;
+post-ratchet custody deliberately not run, no acceptance. Reviewer released
+token. No silent retry. Coordinator admits only local ignored frontend/node_modules
+symlink to integration's EXISTING exact installed graph, no install/update/
+package-lock/scanner/baseline/config modification. Verify same parser resolution
+before explicitly reactivating corrected ratchet ONLY under reviewer token;
+preserve old failure and new corrected command/log/exit distinct. No test rerun.
+
+Independent final ACCEPT_CHARACTERIZATION_ONLY4b96ba86: original38/311PASS/
+full100/audit/Ruff/format0, explicitly corrected SAME actual55a ratchet0/findings[],
+post-input/custody0 all1673runtime/main/baseline exact. Initial engine2 preserved;
+no test rerun or baseline/scope change. All agent native processes terminal,
+token released. Coordinator admits only author NEWspecd4790+own report
+95981fe6 (append actual evidence), separately reviewer finalreport4b96ba86;
+exact-path small commits/cherry-picks, actualmain55a ratchet AFTER EACH. Runtime
+NEVER staged or integrated; no complexity credit. No agent writable ownership
+remains active during Coordinator publication, no main change/push.
+
+Two R27 publications integrated84c01277/1ada2d6c, actualsame55a ratchet AFTER EACH
+PASS0/findings[]. Coordinator final narrow root gate serial fresh integrated311
+real-only/full100/raw audit, whole native report/global exacthistoricalFAIL30/
+all1673runtime+main+baseline custody and docs-Graphify. No additional candidate
+or agent activation/scope expansion allowed during checkpoint. Broad final
+campaign suites/build/E2E NOT certified by these narrow gates; full goal active.
+
+Terminal root integrated40002:311PASS/11spec/no skips/synthetic credit, analytics
+634statement264branch outcomes100%, driver49/16 orphan27/10full100, raw audit0.
+Native whole report0, actual global-check Make2/CLI1 EXACT30historicalfindings,
+global raw audit0/no parse or exception errors; all1673runtime/main/baseline
+custody exact. No runtime credit; author/reviewer publications MERGED, private
+runtime proposal REJECTED. Coordinator's exact four-path governance publication
+requires docsGraph semantic evidence and actualsame55a postcommit ratchet0.
+No new ownership/agent or heavy gate overlaps this final checkpoint.
+
 R26 integrated public union completed:666PASS/11spec, no skips/todo; native
 coverage exit1 SOLELY unchanged100thresholds on Utenze, raw auditor0 and input
 custody0. Presenze full1001035/1139/306/847; Utenze437/460/109/426 with unchanged

@@ -1,5 +1,60 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-11 — R27 inactive-vehicle characterization accepted
+
+- Latest result: independent ACCEPT_CHARACTERIZATION_ONLY4b96ba86 after fresh
+  original38/311full100/raw audit/Ruff/format0 and actualmain55aratchet0/custody0.
+  Initial Make2 missing-parser STOP retained; explicit ignored dependency link
+  to EXISTING installed graph, same corrected ratchet only, no test rerun/config/
+  source/baseline change. Author test/report0f0abea1→84c01277 and separate review
+  d035d655→1ada2d6c integrated, ratchet AFTER EACH0/findings[]. Runtime unmodified.
+  Root fresh integrated311PASS/11spec/no skips, analytics634statement264branch
+  outcomes100%, driver49/16 and orphan27/10full100; raw audit0, inputSHA0,
+  whole1673runtime/main custody exact. Session40002 completed without restart.
+  Whole native report0:1673files20322callables1924errors2740warnings4664findings.
+  Actual global-check Make2/CLI1 retains EXACT30historical finding objects;
+  global-audit0 verifies unchanged summary and zero parser/exception errors.
+  R27 runtime NO_SAFE_CHANGE/NOT_ADMITTED (+15LOC), characterization NO_CHANGE
+  complexity. No reduction credit or baseline inflation. Broad final campaign
+  suites/build/E2E uncertified; original goal remains ACTIVE/INCOMPLETE.
+  Docs Graphify and governance publication are separately gated; results live
+  in 20261011-r27-integrated and INTEGRATION_R27_INACTIVE_VEHICLE_2026-10-11.md.
+
+Earlier admission chronology (later terminal results take precedence):
+
+- Previous turn PROGRESS: R26 public tests/reviews/governance integrated under
+  actual55a ratchets0, combined666PASS, whole native report0, historicalFAIL30
+  exact, Graphify semanticPASS, cache inventory-only/no deletion. Whole campaign
+  remains ACTIVE/INCOMPLETE, not redefined as a narrow R26 success.
+- Starting6ab78dc4/base55a; dedicated fresh author branch/tree allocated after
+  registry, initial runtime/test READ-ONLY. Scope one inactive-vehicle anomaly
+  responsibility only; current anomalies239cognitive112cyclomatic320LOC,
+  file1204LOC. Old dirty analytics R19 candidate frozen/protected, not imported.
+- Fresh exact ten-spec276 real-only testsPASS/no skip/synthetic credit; analytics
+ 634statements264branch outcomes100%, unchanged driver49/16 and orphan27/10
+  full100. Raw audit0/input SHA0/all1673runtime/main custody exact; original
+  evidence ~/.cache/gaia-campaign/20261011-r27-original/. Native token released.
+- Author proposal still ANALYZE-only, no test/runtime admission or metric credit.
+  Query ordering/empty-set SELECTs/ORM local lifetime and both source projections
+  must remain exact. Target <=200 only a preference, not permission to broaden
+  responsibility or shift debt; <=203 theoretical floor retains current guard.
+
+- Later admission NEW35case specd4790f91: actual persisted ORM/public-auth route,
+  full literal two-source payload/query sequence/empty second SELECT/fallbacks/
+  inclusive edges/numeric details/status/filter/order/ties, old tests immutable.
+  Root focusNEW35+lifetime3=38PASS; full11spec311real-onlyPASS/no skip/synthetic
+  credit, whole runtime100 unchanged634/264 driver49/16 orphan27/10, raw audit0,
+  complete inputSHA0, new-spec Ruffcheck0/format0. Whole1673runtime/main exact.
+- Private actual mapper draft2c486e7c parsed only: loops16+mapper23 vsold24,
+  +15effectiveLOC, physicaldecisions10→9 INCLUDING source discrimination.
+  NO_SAFE_CHANGE/NOT_ADMITTED, not integrated/code executed/native measured;
+  no minification, unrelated subtraction or baseline waiver. No runtime credit.
+- Independent reviewer560e2fd0 static/source review confirms invariants/budget,
+  requires fresh final specd4790 read (early observatione4e640 was unfrozen).
+  Registry transfers serial token after root terminal gates, distinct reviewer
+  explicitly reactivated original38→311full100/Ruff/actual55aratchet/custody.
+  Independent acceptance still pending; no candidate/slice merge yet.
+
 ## 2026-10-11 — R26 original extreme-hotspot characterization
 
 - Four TEST/REPORTONLY publications integrated separately: Utenze0e1661d5→
