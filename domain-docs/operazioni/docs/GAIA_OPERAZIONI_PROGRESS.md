@@ -1,5 +1,26 @@
 # GAIA Operazioni — Progress Tracking
 
+## 2026-10-11 — Politica distanza sessioni R31
+
+- Deduplicata la stessa politica distanza nei callable `fuel_analytics` e
+  `km_analytics` in un unico helper puro tipizzato nello stesso `analytics.py`.
+  Precedenza della distanza route anche negativa, fallback per zero/None,
+  odometri, coercizione, ordine delle letture e clamp invariati; query/API/auth
+  e lifetime ORM dimostrati identici dal confronto AST dell'intero modulo.
+- Autore, reviewer indipendente e integrazione: 366 test persistiti e 374
+  completi PASS, coverage statement/branch full-file 100%. Otto probe ORM non
+  persistiti sono solo supplementari e non aggiungono coverage. Nessun test
+  preesistente indebolito, nuova esclusione o modifica della policy.
+- Cognitive fuel 240→235, km 44→39; file 749→734, LOC 1200→1193.
+  Implementazioni fisiche 2→1, branch outcome 260→256; i delta aggregati dello
+  scanner ricorsivo non sono conteggi di regole indipendenti eliminate.
+- Ratchet `main`/55a PASS0, lint e custody PASS. Global-check conserva esattamente
+  le 30 divergenze storiche, baseline intatta. L'errore iniziale del wrapper
+  autore è preservato e distinto dai gate successivi, non dichiarato PASS.
+- Report R31 autore/review/integrazione in `reports/code-quality/`; aggiornamento
+  Graphify dedicato e chiusura descritti nel report d'integrazione. PostgreSQL,
+  suite globali ed E2E non certificati; campagna complessiva ancora incompleta.
+
 ## 2026-10-11 — Selezione identità operatore carburante R28
 
 - Consolidata esclusivamente la politica UUID→nome raw→sentinel, duplicata nei

@@ -114,6 +114,15 @@ class SessionAttributionContext:
     wc_operators_by_username: dict[str, list[WCOperator]]
 
 
+def _session_distance_km(session: VehicleUsageSession) -> float:
+    if session.route_distance_km:
+        return float(session.route_distance_km)
+    if session.end_odometer_km is not None and session.start_odometer_km is not None:
+        distance = float(session.end_odometer_km) - float(session.start_odometer_km)
+        return max(0.0, distance)
+    return 0.0
+
+
 def _wc_operator_display_name(wc_operator: WCOperator) -> str:
     return f"{wc_operator.first_name or ''} {wc_operator.last_name or ''}".strip() or wc_operator.username or str(wc_operator.id)
 
@@ -449,17 +458,9 @@ def fuel_analytics(
             ))
         return out
 
-    def _session_km(s: VehicleUsageSession) -> float:
-        if s.route_distance_km:
-            return float(s.route_distance_km)
-        if s.end_odometer_km is not None and s.start_odometer_km is not None:
-            diff = float(s.end_odometer_km) - float(s.start_odometer_km)
-            return max(0.0, diff)
-        return 0.0
-
     km_by_vehicle_from_sessions: dict = defaultdict(float)
     for s in sessions:
-        km_by_vehicle_from_sessions[s.vehicle_id] += _session_km(s)
+        km_by_vehicle_from_sessions[s.vehicle_id] += _session_distance_km(s)
 
     # km per GAIA user (actual_driver_user_id) and per session operator_name (legacy fallback)
     km_by_gaia_user: dict[int, float] = defaultdict(float)
@@ -467,7 +468,7 @@ def fuel_analytics(
     km_by_op_name: dict[str, float] = defaultdict(float)
     km_by_op_name_vehicle: dict[str, dict] = defaultdict(lambda: defaultdict(float))
     for s in sessions:
-        km = _session_km(s)
+        km = _session_distance_km(s)
         if s.actual_driver_user_id:
             km_by_gaia_user[s.actual_driver_user_id] += km
             km_by_gaia_user_vehicle[s.actual_driver_user_id][s.vehicle_id] += km
@@ -791,19 +792,11 @@ def km_analytics(
         )
     ).all()
 
-    def _session_km(s: VehicleUsageSession) -> float:
-        if s.route_distance_km:
-            return float(s.route_distance_km)
-        if s.end_odometer_km is not None and s.start_odometer_km is not None:
-            diff = float(s.end_odometer_km) - float(s.start_odometer_km)
-            return max(0.0, diff)
-        return 0.0
-
     # Time series
     km_by_period: dict[str, float] = defaultdict(float)
     for s in sessions:
         key = _period_key(s.started_at, granularity)
-        km_by_period[key] += _session_km(s)
+        km_by_period[key] += _session_distance_km(s)
 
     time_series = [
         TimeSeriesPoint(period=p, value=round(km_by_period[p], 1))
@@ -820,7 +813,7 @@ def km_analytics(
     km_by_vehicle: dict = defaultdict(float)
     count_by_vehicle: dict = defaultdict(int)
     for s in sessions:
-        km_by_vehicle[s.vehicle_id] += _session_km(s)
+        km_by_vehicle[s.vehicle_id] += _session_distance_km(s)
         count_by_vehicle[s.vehicle_id] += 1
 
     top_v = sorted(km_by_vehicle, key=km_by_vehicle.__getitem__, reverse=True)[:10]
@@ -849,7 +842,7 @@ def km_analytics(
         attribution = _resolve_session_attribution(s, attribution_context)
         if attribution.key is None:
             continue
-        km_by_key[attribution.key] += _session_km(s)
+        km_by_key[attribution.key] += _session_distance_km(s)
         count_by_key[attribution.key] += 1
         attribution_by_key[attribution.key] = attribution
 
@@ -871,7 +864,7 @@ def km_analytics(
             ),
         ))
 
-    total_km = sum(_session_km(s) for s in sessions)
+    total_km = sum(_session_distance_km(s) for s in sessions)
     avg_km = round(total_km / len(sessions), 1) if sessions else 0
 
     def _operator_label_for_session(s: VehicleUsageSession) -> str | None:
@@ -912,7 +905,7 @@ def km_analytics(
                 started_at=s.started_at.isoformat(),
                 ended_at=s.ended_at.isoformat() if s.ended_at else s.started_at.isoformat(),
                 duration_minutes=minutes,
-                km=round(_session_km(s), 1),
+                km=round(_session_distance_km(s), 1),
             )
 
         longest_item = _to_extreme(longest_sess, longest_min)
