@@ -1,5 +1,80 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-11 — R28 fuel operator-key deduplication admission
+
+- Integrated checkpoint: source/spec/report d25c8e9b, static review98170cbf and
+  independent FINAL992aab05 published one at a time, actual main55a ratchet0
+  after EACH import. Fresh root342tests/12specs/no skips/full100632/260+49/16+
+  27/10, raw audit0/Ruff0/newformat0/whole report0/exact independent metrics0.
+  Current1673files20323callables1924errors2740warnings4664overlapping findings;
+  global-check Make2/CLI1 retains EXACT30historical objects, global-audit0.
+  Fuel cognitive250→240/file757→749/LOC1204→1200; rawcyclo513→514 compensates
+  one new callable, normalized485 unchanged. No finding-elimination credit.
+  Code graph534/1533/26 and domain semantic chunk1/1 PASS71/86/8, no partial
+  results. Shared env gpt-5.5 not edited; dedicated domain docs target explicitly
+  selects gpt-reserve. Platform-docs refresh and post-governance ratchet/custody
+  recorded separately in integration report/private evidence. Remaining tail
+  5>300/17>200/55>100 and broad final suites/build/E2E keep global goal ACTIVE.
+  Native inputs/main/baseline preserved; no cleanup, dependency install, test
+  weakening or retry. Stop R28 policy responsibility; prioritize extreme UI next.
+
+- Current terminal result supersedes admission chronology below: independent
+  FINAL ACCEPT_IMPROVED c084f930, fresh original31/342 and candidate342 PASS,
+  full100634/264→632/260, native report/style/main55a ratchet/custody0. Token
+  released; all1672other runtime/main/baseline/old11specs exact. Root imported
+  byte-exact49b9/specf899/report44ea through apply_patch, original custody0 and
+  actual main55a ratchet0/findings[]; coherent four-path publication d25c8e9b
+  includes domain documentation. Review/final publication and fresh integrated
+  tests/report/global provenance/Graphify/governance gates were then pending;
+  terminal integrated checkpoint above supersedes that admission chronology.
+  Previous goal turn PROGRESS: new bounded cache inventory identifies2.63GiB
+  Jest caches and active external suite; no deletion or process restart.
+
+- Previous goal turn PROGRESS: new cache inventory evidence and verified same
+  live311gate, no deletion/restart. R27 now closed under fed2cc7d/postcommit55a
+  ratchet0/findings[];311real-only/full100/report0/exacthistoricalFAIL30 audit0/
+  semantic docsGraph0/custody1673+main exact. Original campaign still ACTIVE.
+- Next single responsibility selected from current fuel_analytics250cognitive:
+  duplicated UUID→untrimmed name→sentinel key policy in primary/related grouping.
+  Proposed typed nested selector removes duplicated branching, preserves query/
+  reference/evaluation order, and must reduce aggregate cognitive/fileLOC debt.
+  Three dedicated planned author/integration-review/final-verification branches
+  registered before activation. No runtime change yet; genuine original full100
+  prerequisite, no gate waiver or scope expansion. Native heavy commands serial.
+- Actual original focus STOP29PASS/2authFAIL, runtimee877 unchanged. Explained
+  NEWspec harness missing get_db override during _auth_headers/login, causing
+  global engine missing application_users; canonical persisted fixture intact.
+  Separate NEWspec-only correction admitted: cover real login/request with same
+  restoring get_db override, preserve all401/403/full payload/date assertions.
+  Freeze old3bd9358a+failedlog/XML/exit and corrected input; only newly labelled
+  focused-original-auth-override run admitted before original whole union.
+- Corrected31focused and original342real-only12spec/full100/raw audit0 complete,
+  original analytics634/264/driver49/16/orphan27/10, all1673runtime exact.
+  Frozen candidate49b9ffee/specf899cf78: nested typed selector+exactlytwo branch
+  replacements, no other runtime changes. Author candidate342union LIVE91188;
+  integration reviewer reads frozen inputs STATIC only. Distinct final verifier
+  now STATIC preparation only, not yet native/import admission. No credit yet.
+- Candidate342/full100/raw audit0; actual native report0 gives fuel250→240cog,
+  160→158cyc/348→344LOC; file757→749cogsum/1204→1200LOC. Selector2cog3cyc6LOC,
+  no findings. Raw cyclomatic sum513→514 (+1callable entry), normalized485→485
+  unchanged due nested counting; physical duplicated if sites4→2 and runtime
+  branch outcomes264→260. Explicit compensation, not all-metric decline claim.
+- Private metrics audit STOP1 had extra strict normalized-reduction assumption.
+  Separate audit-only non-growth/entry-adjusted assertion correction admitted,
+  initial script/log/hashes retained; no native rerun/source/test/policy change.
+  Same55a ratchet still required before independent fresh final verification.
+- Author actual55a ratchet0/Ruff0/Graphify0/custody0 and static48db acceptance
+  complete. FINAL independently31focus0 then342native union0/full100; private
+  auditor STOP1 used nonexistent partial_branches key. Actual schema independently
+  inspected: num_partial_branches0/allmissingempty. Separate schema-only correction
+  admitted with original evidence retained/new raw audit labels; no test rerun,
+  source/test/policy change. Candidate still not imported into final tree.
+- FINAL original phase now ACCEPT_ORIGINAL:31/342PASS/full100/schema-corrected
+  raw audit0/fresh report0/custody1673+main+baseline0; root compares full callable/
+  file/summary report exact to accepted R27. Token released. Separate exact49b9
+  candidate patch into final tree admitted; fresh candidate342/full100/report/
+  compensated metrics/style/actual55a/custody still mandatory before integration.
+
 ## 2026-10-11 — R27 inactive-vehicle characterization accepted
 
 - Latest result: independent ACCEPT_CHARACTERIZATION_ONLY4b96ba86 after fresh

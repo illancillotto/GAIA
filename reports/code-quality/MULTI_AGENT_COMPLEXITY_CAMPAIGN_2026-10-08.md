@@ -1,5 +1,101 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## R28 checkpoint — 2026-10-11, operator identity policy consolidated
+
+Whole original campaign ACTIVE / INCOMPLETE. R28 ACCEPT_IMPROVED: one real
+duplicated UUID/name/sentinel policy consolidated, not a large function move.
+Root publications d25c8e9b / 98170cbf / 992aab05; exact independent frozen
+author/reviewer/final inputs, dedicated branches/worktrees and exclusive owners.
+Actual main55a ratchet after EACH import PASS0/findings[]; main/baseline preserved.
+Fresh integrated342 genuine tests/12specs/no skips, full-file statement/branch100,
+Ruff/format0, full native report0/exact independent metrics audit0. Global-check
+Make2/CLI1 retains EXACT30 historical divergence objects, raw equality audit0.
+Code graph534nodes1533edges26communities refreshed; semantic docs/governance
+closure separately recorded in INTEGRATION_R28_FUEL_OPERATOR_KEYS_2026-10-11.md.
+
+### Current aggregate metrics (not final campaign certification)
+
+| Metric | Authoritative initial | Current R28 | Delta | Delta % |
+| --- | ---: | ---: | ---: | ---: |
+| Files |1665|1673|+8|+0.48%|
+| Callables |20261|20323|+62|+0.31%|
+| Error observations |1956|1924|-32|-1.64%|
+| Warning observations |2758|2740|-18|-0.65%|
+| Total overlapping observations |4714|4664|-50|-1.06%|
+
+R28 adds one backend callable; errors/warnings/findings unchanged from R27.
+These observations overlap: they are not a count of independent defects.
+No baseline/scope/threshold/ignore inflation. Full original success criteria
+remain unmet: current extreme tail5>300/17>200/55>100; broad final suites,
+frontend clean build, worker coverage and deployed stack E2E not certified.
+
+### Measured domain observations
+
+Current values aggregate unexcepted file and callable findings from the whole
+native R28 report. Initial values are the October8 audit priority groups.
+
+| Domain | Error before | Error current | Warning before | Warning current |
+| --- | ---: | ---: | ---: | ---: |
+| Backend Catasto |186|186|233|233|
+| Backend Ruolo |117|117|230|230|
+| Backend Presenze |93|93|240|240|
+| Backend Wiki |108|106|193|195|
+| Legacy elaborazioni services |120|120|156|156|
+| Backend Operazioni |103|102|107|106|
+
+### Bounded slice metrics and limits
+
+fuel_analytics cognitive250→240/cyclomatic160→158/LOC348→344; file cognitive
+sum757→749 and LOC1204→1200. Raw file cyclomatic513→514 is NOT a reduction:
+one added callable entry, normalized485→485 unchanged. Physical duplicated
+if sites4→2 and covered branch outcomes264→260; selector2cog/3cyc/6LOC,
+zero findings. Other27callables and all1672other runtime inputs unchanged.
+No finding-elimination credit. Full-file coverage analytics632/260, driver49/16
+and orphan27/10 all100; preserved original/candidate342 evidence and explained
+private/harness failures. Coverage is not a deployed PostgreSQL equivalence proof.
+
+### Remaining top 30 (current whole AST report)
+
+| Callable | Cognitive | Cyclomatic | LOC |
+| --- | ---: | ---: | ---: |
+| `frontend/src/app/utenze/[id]/page.tsx` / `DetailContent` | 391 | 304 | 1908 |
+| `frontend/src/app/catasto/anomalie/page.tsx` / `CatastoAnomaliePageContent` | 390 | 342 | 2109 |
+| `frontend/src/app/presenze/giornaliere/page.tsx` / `PresenzeGiornalierePage` | 385 | 341 | 2023 |
+| `frontend/src/components/elaborazioni/capacitas-workspace.tsx` / `ElaborazioniCapacitasWorkspace` | 324 | 301 | 2412 |
+| `frontend/src/app/catasto/gis/page.tsx` / `CatastoGisPage` | 317 | 281 | 1889 |
+| `frontend/src/components/elaborazioni/settings-workspace.tsx` / `ElaborazioniSettingsWorkspace` | 296 | 265 | 1358 |
+| `frontend/src/app/me/me-page-content.tsx` / `MePageContent` | 271 | 256 | 1133 |
+| `backend/app/services/elaborazioni_bonifica_sync.py` / `_run_bonifica_sync_background` | 269 | 47 | 232 |
+| `frontend/src/components/elaborazioni/bonifica-sync-workspace.tsx` / `ElaborazioniBonificaSyncWorkspace` | 259 | 202 | 835 |
+| `frontend/src/components/catasto/gis/MapContainer.tsx` / `MapContainer` | 246 | 169 | 953 |
+| `backend/app/modules/operazioni/routes/analytics.py` / `fuel_analytics` | 240 | 158 | 344 |
+| `backend/app/modules/operazioni/routes/analytics.py` / `anomalies_analytics` | 239 | 112 | 320 |
+| `frontend/src/app/presenze/collaboratori/[id]/page.tsx` / `PresenzeCollaboratoreDetailPage` | 233 | 212 | 1600 |
+| `frontend/src/components/elaborazioni/batch-detail-workspace.tsx` / `ElaborazioneBatchDetailWorkspace` | 216 | 177 | 751 |
+| `frontend/src/app/presenze/export/page.tsx` / `PresenzeExportPage` | 209 | 172 | 1097 |
+| `backend/app/modules/organigramma/services/whitecompany_sync.py` / `sync_from_whitecompany` | 205 | 77 | 290 |
+| `frontend/src/app/ruolo/tributi/page.tsx` / `RuoloTributiPageContent` | 204 | 173 | 1064 |
+| `backend/app/modules/network/services.py` / `run_network_scan` | 195 | 101 | 267 |
+| `frontend/src/components/utenze/utenze-subjects-section.tsx` / `UtenzeSubjectsSection` | 184 | 169 | 991 |
+| `frontend/src/app/network/tracking/page.tsx` / `TrackingContent` | 183 | 159 | 913 |
+| `backend/app/modules/network/router/helpers/traffic.py` / `_build_network_statistics_summary` | 181 | 101 | 214 |
+| `frontend/src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx` / `AnagraficaBulkPanel` | 181 | 155 | 839 |
+| `backend/app/modules/wiki/services/conversation_metrics.py` / `refresh_wiki_conversation_daily_metrics` | 178 | 49 | 153 |
+| `frontend/src/app/catasto/import/page.tsx` / `CatastoImportPage` | 175 | 149 | 1114 |
+| `frontend/src/app/utenze/import/page.tsx` / `ImportContent` | 173 | 160 | 971 |
+| `frontend/src/app/ruolo/page.tsx` / `RuoloDashboardPage` | 168 | 157 | 1147 |
+| `frontend/src/features/organigramma/organigramma-workspace.tsx` / `OrganigrammaWorkspace` | 167 | 147 | 1086 |
+| `frontend/src/features/wiki/WikiRequestsPage.tsx` / `WikiRequestsPage` | 166 | 132 | 759 |
+| `frontend/src/app/gaia/users/page.tsx` / `GaiaUsersPage` | 162 | 146 | 1011 |
+| `frontend/src/app/presenze/configurazione/page.tsx` / `PresenzeConfigurazionePage` | 158 | 148 | 1135 |
+
+Next priority remains the extreme frontend tail, using its existing genuine
+characterization/full-file coverage where available. Old R25/R26 runtime
+candidates remain excluded; do not replay rejected debt transfers or absorb
+regressions with a baseline update. R28 stops after its assigned policy.
+Storage is shared and critically low; cache inventory only, no removal of
+worktrees/browser/dependencies/evidence or termination of external test jobs.
+
 ## R27 checkpoint — 2026-10-11, inactive-vehicle characterization
 
 Whole campaign ACTIVE/INCOMPLETE; accepted runtime metrics remain1924errors/

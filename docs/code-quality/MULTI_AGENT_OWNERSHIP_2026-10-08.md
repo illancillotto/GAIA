@@ -9,6 +9,141 @@ Baseline, soglie, esclusioni e tooling complexity sono read-only.
 
 ## Ownership attiva e sequenza
 
+### R28 — Fuel operator identity selection
+
+R27 checkpoint CLOSED: governance fed2cc7d, actual postcommit main55a ratchet0/
+findings[], full311real-only tests and634/264whole analytics100, report0 and
+EXACT30historical global findings audited0; all1673runtime/main/baseline custody
+exact, clean integration before this admission. Whole goal ACTIVE/INCOMPLETE.
+
+Single responsibility: UUID/name/sentinel operator-key selection duplicated in
+fuel_analytics primary grouping and per-vehicle related grouping. Preserve UUID
+precedence (is not None, not truthiness), untrimmed case-sensitive legacy names,
+sentinel collision semantics, two attribute reads on selected branch, grouping/
+consolidation distinction, stable sort/ties/top limits, all query/order/lifetime
+and response behavior. No anomaly family or other fuel phase changes.
+
+| Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| R28 author | Operazioni fuel | backend/app/modules/operazioni/routes/analytics.py; NEW backend/tests/test_operazioni_fuel_operator_keys_r28.py; NEW reports/code-quality/SLICE_R28_FUEL_OPERATOR_KEYS_2026-10-11.md | Frozen49b9/specf899/report44ea accepted independently; publication d25c8e9b/main55a0, root342/full100/report/style/exact historicalFAIL30 audit PASS; token RELEASED | GAIA-campaign-20261011-r28-fuel-operator-keys (fed2cc7d/base55a, frozen inputs preserved) | refactor/complexity-r28-fuel-operator-keys | MERGED |
+| R28 integration reviewer | Operazioni integration | NEW reports/code-quality/INTEGRATION_REVIEW_R28_FUEL_OPERATOR_KEYS_2026-10-11.md ONLY; runtime/spec read-only | STATIC_ACCEPT_IMPROVED48db, root publication98170cbf/main55a ratchet0; terminal/no native | GAIA-campaign-20261011-r28-fuel-operator-keys-review (fed2cc7d/base55a, frozen own report) | review/complexity-r28-fuel-operator-keys | MERGED |
+| R28 final verifier | Operazioni verification | NEW reports/code-quality/FINAL_VERIFICATION_R28_FUEL_OPERATOR_KEYS_2026-10-11.md ONLY; imported NEWspec/runtime read-only | ACCEPT_IMPROVED c084; original31/342 and candidate342/full100/report/metrics/style/main55a/custody PASS; publication992aab05/main55a0; TERMINAL token RELEASED | GAIA-campaign-20261011-r28-fuel-operator-keys-final (fed2cc7d/base55a, frozen49b9+specf899) | verify/complexity-r28-fuel-operator-keys | MERGED |
+
+Coordinator alone owns governance/publication, not main. Author process:
+ANALYZE/CHARACTERIZE/TEST original full-file100 before any runtime change, then
+bounded REFACTOR/TEST full100/MEASURE/actualmain55a RATCHET/REVIEW. No self-commit
+or cherry-pick; root publishes exact-path coherent commits after acceptance.
+Original runtimee877/fileLOC1204/cognitive sum757/cyclomatic sum513/28callables;
+fuel cognitive250/cyclomatic160/LOC348. Stop after selector responsibility,
+first unexplained native failure, input mismatch, ambiguous matching or unsafe
+equivalence. No LOC growth, new violation, synthetic coverage, test weakening,
+baseline/threshold/exclusion/config/scanner/dependency changes. Ordinary readable
+formatting only, no unrelated subtraction/packing or broad-module refactor.
+Original test union includes all11 R27 specs, '-k not synthetic'; NEW spec added
+to the union, genuine full-file100634/264 before candidate. Native heavy gates
+SERIAL: initially author only; all other agents/root static-only until release.
+Old R19/R25/R26/R27 candidates/worktrees/evidence remain frozen and protected.
+
+R28 original focus first native STOP/exit1:29PASS/2authFAIL before runtime changes.
+Actual login OperationalError missing application_users; imported real database
+fixture creates existing.engine, but existing module-local autouse override is
+not applied to the NEWspec. NEWspec calls _auth_headers before its get_db override,
+so login uses unrelated global engine. Original sourcee877 unchanged/spec3bd9358a
+and failed log/XML/exit retained. Explained test-harness correction separately
+authorized ONLY NEWspec: real get_db override must cover login AND public request,
+restoring prior dependency overrides; same R27 canonical pattern. No fake token,
+permission weakening, 401/403 removal or application change. Freeze corrected
+input, rerun same focused31 with NEW focused-original-auth-override evidence
+labels, not overwrite initial failure. Full union and candidate remain gated on
+that fresh focused PASS. Author retains sole token, root/reviewer no native.
+
+Corrected original31focused0, real-only12spec342union0/raw audit0, genuine
+analytics634statement264branch outcomes100%/driver49/16/orphan27/10; all1673
+runtime original bytes identical. Candidate49b9ffeef7851e12aa4e8a309fb63356d226a6526cffbdaef052d4c9d3fde0d7
+and NEWspecf899cf78f3842663108e624dc79658d36b5645de03676cab161ad36f21638163
+frozen. Exactly7LOC typed nested selector +two duplicated branches replaced;
+queries/loop locals/maps/helper closures unchanged. Author actual candidate
+342union LIVE session91188/PID866348, sole token, native metrics/ratchet later
+serial and only after PASS. Static integration reviewer may now read frozen
+candidate/spec/evidence cross-tree, NO imports/native. Final verifier admission
+ONLY own report/private preparation, no runtime/spec import or native gate until
+Coordinator explicitly transfers token and validates immutable inputs. No
+acceptance/metric credit inferred from original characterization or staticdiff.
+
+Author candidate342/full100/raw audit0 complete (analytics632/260, helpers49/16
+and27/10 unchanged). Native report0: fuel250→240cognitive160→158cyclomatic
+348→344LOC; selector2/3/6/nesting1/params1/no findings, file1204→1200LOC,
+cognitive sum757→749. Raw cyclomatic sum513→514 (+1) and callables28→29;
+normalized sum(cyclomatic−1)485→485 unchanged because nested selector decisions
+are counted in both parent and its own callable. Actual duplicated source if
+sites4→2 and measured whole-file branch outcomes264→260. This is a compensated
+raw-entry increase, not a claim that all metrics decline or debt was moved.
+
+Private metrics-audit exit1 STOP retained: its extra strict normalized-sum
+reduction assertion was not the registered cognitive/duplication/non-growth
+target. Coordinator independently read actual report and static reviewer concurs.
+Separate audit-only correction authorized: assert normalized NON-GROWTH and
+raw-sum increase no greater than callable-entry increase, plus strict cognitive/
+LOC/physical duplicate reduction and unchanged metrics of other callables.
+Keep initial failed audit/log/script/hashes; use metrics-audit-nongrowth labels.
+Do NOT rerun native report/tests, edit source/spec, change policy/thresholds/
+baseline or weaken actual ratchet. Author may resume SAME55a actual ratchet then
+Ruff/Graphify serial only after corrected raw audit0; first new failure STOP.
+Final verifier private audit must encode the same explicit compensated +1,
+not invent strict aggregate cyclomatic reduction; fresh final gates still
+separately admitted after token release. No final acceptance/merge yet.
+
+Author TERMINAL/TOKEN RELEASED: same actual55a ratchet0/findings[], Ruff0/format0,
+dedicated Operazioni AST Graphify0 (534nodes1533edges26communities), custody0.
+Frozen report44ea04529737754c28e9fc53bf9ce62b06c7d4a5c6dfef897401324157e073a6,
+source49b9/specf899 exact, no commit. Static integration reviewer reads final
+slice then freezes verdict; independent final remains STATIC only until explicit
+root exact-input admission. No native process overlaps or speculative merge.
+
+Static reviewer terminal STATIC_ACCEPT_IMPROVED report48db02e0ee3ee64ce0e85fa1ef81dcb407201ab2ad21fa7c83f93cc9a2cf3632,
+independent source/raw evidence read, never native/import/commit. Coordinator now
+authorizes exact NEWspecf899 import via apply_patch into final-original tree as
+read-only test input; runtime remains originale877, all1673/main/baseline custody
+before first gate. FINAL alone receives serial native token: fresh original31
+focus→342real-only/full100/raw audit→native original report→STOP/notify root.
+Only after original acceptance may frozen49b9 runtime patch be applied byte-exact
+by Coordinator and candidate342/full100/report/style/actualmain55a resumed.
+No fake getter/handler execution, weakening100/assertions, unrelated imports,
+threshold/scope/baseline changes or private strict aggregate-cyclo requirement.
+Preserve real failure evidence; stop first new unexplained failure. Root/author/
+reviewer no native while FINAL owns token. Capture exact commands/env/input SHA.
+
+Coordinator imported exact NEWspecf899 via apply_patch; final-original runtime
+still e877 and complete1673/main/baseline custody-before PASS. Final token now
+explicitly active ORIGINAL ONLY sequence, no candidate copy yet. Author/reviewer
+terminal frozen, root no native while verifier runs. Corrected final private
+metric audit non-growth/entry-compensation prepared before execution, not a
+failure workaround; whole goal remains ACTIVE/INCOMPLETE and not narrowed.
+
+FINAL original31focus0, original342native union0/full100634/264 helpers49/16
+27/10; private audit STOP1 KeyError partial_branches. Coordinator independently
+reads actual coverage JSON: canonical key num_partial_branches=0 in all3files,
+missing arrays empty; XML342failures0/errors0/skips0, source/spec immutable.
+Separate PRIVATE auditor schema-only correction authorized: replace nonexistent
+partial_branches key by actual num_partial_branches, no default/fallback or
+assertion weakening. Preserve failed helper/log/exit/hashes first; rerun SAME
+raw audit under audit-original-schema-corrected labels, NOT native test rerun.
+Only after corrected raw audit0 run original native whole report then STOP/notify
+root before candidate. FINAL alone resumes token, no other native or app change.
+
+FINAL original phase TERMINAL/TOKEN RELEASED:31focus0/342real-only12specnative0/
+full100/raw corrected schema audit0, fresh original whole report0 exactly same
+files/callables/summary as accepted R27, custody1673/main/baseline/oldspec0.
+Initial private audit failure retained/no native rerun. Coordinator now separately
+admits exact49b9 candidate patch via apply_patch into FINAL runtime, original
+testsf899 immutable; all1673custody expected ONLY analytics candidate change.
+Then FINAL sole token candidate342/full100/schema-corrected raw audit0→native
+candidate report→metrics audit with explicit raw+1entry compensation→Ruff/new
+format→actualsame55a ratchet/raw audit→postinput/custody→freeze report/TOKEN RELEASE.
+No candidate source/test edit by verifier, no native original rerun, no broad
+suite/wholecampaign certification. Stop first new unexplained failure, preserve
+exact command/environment/input SHA/raw logs/exits. Root no native during FINAL.
+
 ### R27 — Operazioni inactive-vehicle anomaly responsibility
 
 Previous goal turn PROGRESS: four R26 test/report publications plus governance
