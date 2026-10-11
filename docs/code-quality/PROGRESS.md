@@ -1,5 +1,27 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-11 — R33 operator weighted target IMPROVED
+
+- Exclusive weighted-target responsibility, lazy typed same-file helper, no query/
+  target classifier/rounding/auth/response change. Whole-module AST independently
+  reviewed; eight historical source owners proved terminal before activation.
+- Actual root fuel cognitive235→217, cyclomatic154→148, LOC337→329, nesting4→3;
+  helper8/6/7/2/1 nofinding. File cognitive734→724, cyclomatic501/LOC1193same;
+  normalized decisions473→472. Nested+4cyc and fileLOC-growth proposals rejected.
+- Author/final/root383persisted and391complete PASS,0failure/error/skip;
+  analytics623/623statements252/252branches100, driver49/16 and orphan27/10full100.
+  Original13spec bytes unchanged;17NEW genuine persisted HTTP/auth cases.
+- Main55a ratchet/style/format/whole-report/custody0; global-check retains EXACT30
+  historical findings. Baseline/thresholds/exclusions unchanged, main protected.
+- Private raw-coverage and Make-echo parser audit1 STOPs retained; distinct static
+  normalization/strict-parser recovery validates entire maps/counts and14+9
+  countertests without native gate/diagnostic rerun. Accepted freezee156bb0b/38.
+- Whole1673files20323callables1924errors2739warnings4663observations; application
+  extreme tail5>300/17>200/55>100 persists. Global goal ACTIVE/INCOMPLETE; broad
+  suites/build/worker/stackE2E and Catasto/Utenze/R25 blockers remain open.
+- Dedicated code graph536/1538/26; domain/platform graph/publication/postcommit
+  closure evidence in INTEGRATION_R33_OPERATOR_CONSUMPTION and private handoff.
+
 ## 2026-10-11 — R32 highest Utenze hotspot command characterization
 
 - CURRENT accepted characterisation: native-v4 final verifier terminal/release

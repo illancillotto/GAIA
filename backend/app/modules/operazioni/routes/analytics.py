@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, TypedDict
@@ -82,6 +83,15 @@ def _user_display_name(user: ApplicationUser | None) -> str:
         return "Sconosciuto"
     full = f"{getattr(user, 'first_name', '') or ''} {getattr(user, 'last_name', '') or ''}".strip()
     return full or user.username or str(user.id)
+
+
+def _operator_weighted_target(target_distances: Iterable[tuple[float | None, float]]) -> float | None:
+    numerator = denominator = 0.0
+    for target, kilometers in target_distances:
+        if not (target is None or kilometers <= 0):
+            numerator += float(kilometers) * float(target)
+            denominator += float(kilometers)
+    return numerator / denominator if denominator > 0 else None
 
 
 class FuelAverageFields(TypedDict):
@@ -658,18 +668,9 @@ def fuel_analytics(
         op_liters = sum(max(0.0, _safe_float(log.liters)) for log in logs_by_key[fkey])
         op_consumption = round(op_liters / op_km * 100, 2) if has_km and op_liters > 0 else None
 
-        # Weighted consumption target across vehicles used (km-weighted)
-        target_weighted = None
-        if has_km and op_km_by_vehicle:
-            num = den = 0.0
-            for vid, kmv in op_km_by_vehicle.items():
-                t = _target_consumption_l_per_100km(vehicles_map.get(vid))
-                if t is None or kmv <= 0:
-                    continue
-                num += float(kmv) * float(t)
-                den += float(kmv)
-            if den > 0:
-                target_weighted = num / den
+        target_weighted = _operator_weighted_target(
+            (_target_consumption_l_per_100km(vehicles_map.get(vid)), kmv) for vid, kmv in op_km_by_vehicle.items()
+        ) if has_km else None
 
         op_coeff = (
             op_consumption / target_weighted

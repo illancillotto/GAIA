@@ -1,5 +1,112 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## R33 checkpoint — 2026-10-11, operator weighted target simplified
+
+**IMPROVED / accepted integration; original campaign ACTIVE / INCOMPLETE.**
+Author/provenance/static-review/independent-native-final/static-metadata-recovery/
+Coordinator integration executed under exclusive registry and serial heavy gates.
+Operational pre-slice HEAD1613, actual main/merge-base55a remains authoritative;
+eight dirty historical source snapshots terminal, preserved and never imported.
+No main merge/push or baseline/threshold/exclusion inflation.
+
+Only fuel operator weighted target changed: coherent typed pure helper/lazy
+resolution, exact query/auth/lifetime/rounding/lookup/accumulation/response.
+Fuel cognitive235→217 (-7.66%), cyclomatic154→148, LOC337→329, nesting4→3.
+Helper8/6/7/2/1 nofinding; file cognition734→724 (-1.36%), cyclomatic501 and
+LOC1193same. Normalized decisions473→472; genuine guard/nesting simplification,
+not whole-body relocation. Broader fuel/anomalies responsibilities untouched.
+
+Author, independent native final and fresh root383persisted/391complete PASS,
+0failure/error/skip; analytics623/623statement252/252branch100, unchanged
+driver49/16 and orphan27/10full100.17new genuine persisted HTTP/auth cases,
+old13specs exact. Native report/main55a ratchet/style/format/custody0. Whole
+root metrics/coverage files exactly equal independent final;1672other files and
+all nonowned callable objects unchanged. Extra source declaration protected too.
+
+Global-check Make2/CLI1 retains EXACT30historical finding objects; equality0.
+Two private audit1 STOPs preserved: tracing events vs normalized CoverageJSON,
+then Make shell brace vs actual JSON. Distinct static recoveries bind installed
+reporter/whole maps/counters,14coverage+9parser negative cases, no native gate/
+successful-diagnostic rerun; accepted freezee156bb0b/38. Earlier BLOCKED report
+remains historical; RECOVERY report04605e1b is the accepted continuation.
+
+### Current global metrics
+
+| Metric | October8 initial | R33 integrated | Delta | Delta % |
+| --- | ---: | ---: | ---: | ---: |
+| Files |1665|1673|+8|+0.48%|
+| Callables |20261|20323|+62|+0.31%|
+| Error observations |1956|1924|-32|-1.64%|
+| Warning observations |2758|2739|-19|-0.69%|
+| Overlapping observations |4714|4663|-51|-1.08%|
+
+Application excluding worker tests:1611→1619files,18940→19002callables,
+318856→319007effectiveLOC (+151,+0.05%),4651→4600overlapping findings.
+File count/LOC growth from accumulated prior helpers is disclosed, not called
+global LOC reduction. R33 itself adds no fileLOC or new finding and removes only
+one nesting warning. Observations are not independent defects.
+
+### Domain observations
+
+| Domain | Error initial | Error current | Warning initial | Warning current |
+| --- | ---: | ---: | ---: | ---: |
+| Backend Catasto |186|186|233|233|
+| Backend Ruolo |117|117|230|230|
+| Backend Presenze |93|93|240|240|
+| Backend Wiki |108|106|193|195|
+| Legacy elaborazioni services |120|120|156|156|
+| Backend Operazioni |103|102|107|105|
+
+### Remaining top30 — current native R33, application scope
+
+| Path / callable | Cognitive | Cyclomatic | LOC |
+| --- | ---: | ---: | ---: |
+| `frontend/src/app/utenze/[id]/page.tsx` / `DetailContent` |391|304|1908|
+| `frontend/src/app/catasto/anomalie/page.tsx` / `CatastoAnomaliePageContent` |390|342|2109|
+| `frontend/src/app/presenze/giornaliere/page.tsx` / `PresenzeGiornalierePage` |385|341|2023|
+| `frontend/src/components/elaborazioni/capacitas-workspace.tsx` / `ElaborazioniCapacitasWorkspace` |324|301|2412|
+| `frontend/src/app/catasto/gis/page.tsx` / `CatastoGisPage` |317|281|1889|
+| `frontend/src/components/elaborazioni/settings-workspace.tsx` / `ElaborazioniSettingsWorkspace` |296|265|1358|
+| `frontend/src/app/me/me-page-content.tsx` / `MePageContent` |271|256|1133|
+| `backend/app/services/elaborazioni_bonifica_sync.py` / `_run_bonifica_sync_background` |269|47|232|
+| `frontend/src/components/elaborazioni/bonifica-sync-workspace.tsx` / `ElaborazioniBonificaSyncWorkspace` |259|202|835|
+| `frontend/src/components/catasto/gis/MapContainer.tsx` / `MapContainer` |246|169|953|
+| `backend/app/modules/operazioni/routes/analytics.py` / `anomalies_analytics` |239|112|320|
+| `frontend/src/app/presenze/collaboratori/[id]/page.tsx` / `PresenzeCollaboratoreDetailPage` |233|212|1600|
+| `backend/app/modules/operazioni/routes/analytics.py` / `fuel_analytics` |217|148|329|
+| `frontend/src/components/elaborazioni/batch-detail-workspace.tsx` / `ElaborazioneBatchDetailWorkspace` |216|177|751|
+| `frontend/src/app/presenze/export/page.tsx` / `PresenzeExportPage` |209|172|1097|
+| `backend/app/modules/organigramma/services/whitecompany_sync.py` / `sync_from_whitecompany` |205|77|290|
+| `frontend/src/app/ruolo/tributi/page.tsx` / `RuoloTributiPageContent` |204|173|1064|
+| `backend/app/modules/network/services.py` / `run_network_scan` |195|101|267|
+| `frontend/src/components/utenze/utenze-subjects-section.tsx` / `UtenzeSubjectsSection` |184|169|991|
+| `frontend/src/app/network/tracking/page.tsx` / `TrackingContent` |183|159|913|
+| `frontend/src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx` / `AnagraficaBulkPanel` |181|155|839|
+| `backend/app/modules/network/router/helpers/traffic.py` / `_build_network_statistics_summary` |181|101|214|
+| `backend/app/modules/wiki/services/conversation_metrics.py` / `refresh_wiki_conversation_daily_metrics` |178|49|153|
+| `frontend/src/app/catasto/import/page.tsx` / `CatastoImportPage` |175|149|1114|
+| `frontend/src/app/utenze/import/page.tsx` / `ImportContent` |173|160|971|
+| `frontend/src/app/ruolo/page.tsx` / `RuoloDashboardPage` |168|157|1147|
+| `frontend/src/features/organigramma/organigramma-workspace.tsx` / `OrganigrammaWorkspace` |167|147|1086|
+| `frontend/src/features/wiki/WikiRequestsPage.tsx` / `WikiRequestsPage` |166|132|759|
+| `frontend/src/app/gaia/users/page.tsx` / `GaiaUsersPage` |162|146|1011|
+| `frontend/src/app/presenze/configurazione/page.tsx` / `PresenzeConfigurazionePage` |158|148|1135|
+
+### Closure, risks and next campaign
+
+Dedicated code graph536/1538/26 with extracted fuel→helper boundary; domain/
+platform docs/semantic refresh, actual publication and postcommit custody/freeze
+recorded in INTEGRATION_R33_OPERATOR_CONSUMPTION and private closure handoff.
+No graph output committed or used as complexity proof; no cleanup of user work.
+Root free~24GiB, SSD~320GiB; current storage no longer blocks this slice.
+
+Full repository backend/frontend/worker/build/stackE2E final gate NOT executed
+or called PASS. Catasto/Utenze coverage100, R25 matcher14 and historical30 remain
+separate unresolved blockers. Tail5>300/17>200/55>100 and strategic targets unmet.
+Recommend a NEW ranked coherent already-protected responsibility after this
+green checkpoint, never a broad endpoint refactor or artificial guard coverage.
+R32/R31 and older sections below are historical, not current global measurements.
+
 ## R32 checkpoint — 2026-10-11, document commands characterized
 
 **ORIGINAL_CHARACTERIZED / NO_CHANGE runtime; full100 FAIL.**

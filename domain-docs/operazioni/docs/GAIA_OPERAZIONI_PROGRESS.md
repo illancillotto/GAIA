@@ -1,5 +1,21 @@
 # GAIA Operazioni — Progress Tracking
 
+## 2026-10-11 — Target consumo ponderato operatore R33
+
+- Isolato il solo target chilometrico ponderato in helper puro tipizzato, con
+  iteratore lazy. Ordine lookup/classificazione/coercizioni/accumulo, veicoli del
+  solo fuel-map, arrotondamenti e giudizio, query/API/auth/lifetime invariati.
+- Cognitive fuel235→217, cyclomatic154→148, nesting4→3; aggregata cognitiva
+ 734→724, cyclomatic501 e LOCfile1193 invariati. Helper8/6/7 sotto soglia, nessun
+  trasferimento del debito; una warning nesting eliminata, non una nuova feature.
+- Autore/verifica indipendente/root:383 test persistiti e391 completi PASS;
+  statement/branch full-file100,17 nuovi casi HTTP/auth reali, vecchi test intatti.
+- Ratchet main55a e lint PASS; global-check mantiene le30 divergenze storiche.
+  Failure degli auditor privati preservate; recupero metadata statico distinto,
+  senza ripetere test riusciti o cambiare baseline/coverage/esclusioni.
+- Grafi dedicati e report R33 in reports/code-quality; PostgreSQL, suite globali
+  ed E2E non certificati. fuel217 resta hotspot, campagna globale incompleta.
+
 ## 2026-10-11 — Politica distanza sessioni R31
 
 - Deduplicata la stessa politica distanza nei callable `fuel_analytics` e
