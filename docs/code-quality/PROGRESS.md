@@ -1,5 +1,88 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-11 — R30 characterization published and root verified
+
+- Closure native STOP: platform docs graph completed semantic chunk1/1, then
+  JSON export ENOSPC/Make2 at root0bytes; ignored graph.json left empty. Exact
+  failed command/log/exit/disk retained, no restart or false PASS. Fresh storage
+  external change restores4555202560bytes; no Coordinator cleanup. Separate
+  recovery admits ONLY newly named platform-docs regeneration, failure bytes
+  preserved on SSD and parseable/semantic/native graph audit mandatory.
+- Previous goal turn PROGRESS: additional read-only cache inventory changed
+  the available storage options, not the runtime. New Docker build cache
+ 38.93GB reported reclaimable, old Cursor CachedData1.22GiB; no prune/delete/
+  move. Existing session92136 ratchet acquired terminal0 without restart.
+- Distinct reviewer ACCEPT_ORIGINAL_CHARACTERIZATION_ONLY/NO_CHANGE, final
+  report51a98bd6/freeze714714cc with62members exact; author freeze7a9be0fe/
+ 92members exact. Root imports frozen NEWspec/author/review via apply_patch,
+  actualmain55a ratchet after EACH import PASS0/findings[], original1673runtime/
+  old5/shared8/main/baseline exact. Native heavy token exclusively root/serial.
+- Fresh root six-spec269PASS,0failure/skip; native1 ONLY known full-page100
+  deficit. V8 maps/counters exactly author/reviewer:624/643statements (97.04%),
+ 580/645branches (89.92%),188/194functions (96.90%),579/595lines (97.31%).
+  Covered delta+26/+59/+14/+25 vs R29; remaining19/65/6/16. Two act warnings
+  match the same unchanged old manual test identities. No runtime admission.
+- Strict project+NEWspec types0, scoped lint0, whole report0, raw AST/JUnit/
+  coverage audit0 and custody0. Target390/342/2109, all1673files20323callables
+  and1924errors2740warnings4664findings unchanged. No R30 complexity credit.
+- Exact tests/author/review coherent publication f94e4534; final postcommit,
+  dedicated semantic Catasto/platform docs graphs and custody evidence tracked
+  in INTEGRATION_R30_CATASTO_ADE_2026-10-11.md and SSD root-evidence. Runtime
+  BLOCKED_COVERAGE, unreachable guards/fallbacks need explicit decision.
+  Global backend/frontend/worker goal ACTIVE / INCOMPLETE, broad final suites
+  and strategic extreme tail5>300/17>200/55>100 still open. No baseline inflation.
+
+## 2026-10-11 — R30 original Catasto AdE characterization admission
+
+- Previous goal turn PROGRESS: R29 exact test/report publication d3aaeff5 and
+  governance3b99dea5, fresh root235/strict types/lint/report/raw audit/custody,
+  docs semantic graphs/audit0, actual postcommit main55a ratchet0/findings[].
+  Clean3b99 integration and root freeze58e3d24c/80members revalidated this turn.
+  Global goal remains original backend/frontend/worker ACTIVE / INCOMPLETE.
+- Next single responsibility is original AdE scan public workflow, not source
+  refactor: load summary/candidates/batches, prefix/date-order/top6/active batch,
+  scan command/result/failure/refresh/busy/late responses and workspace modal.
+  NEWspec/report-only exclusive registry R30 created BEFORE activation;
+  existing5tests and1673runtime protected. Fresh121accessible worktree census
+  finds no owned runtime changes;15missing historical records untouched.
+- Source855e3ef0/target390/342/2109 and whole1924errors2740warnings4664findings
+  unchanged. Original coverage100 FAIL after598/643statements521/645branches;
+  no runtime admission or complexity reduction credit. Reachable AdE gaps can
+  be characterized honestly; inaccessible guards require explicit decision.
+- Root~165MiB/SSD336GiB; allocate NEW isolated SSD worktree/evidence/tmp/bytecode,
+  no cleanup/install/build/browser or existing-data movement. Native gate serial
+  author-only after ACTIVE/custody admission; first unexplained failure STOP.
+- Fresh author3b99/55a tree admitted after exact1673runtime/old5/shared8/main/
+  baseline custody. Original235 full-page baseline terminal:235PASS,0failure/
+  skip; native1 ONLY the four known unchanged100 coverage deficits, exact
+  R29 counters. Author NEWspec/report work active, sole token; distinct reviewer
+  on separate SSD tree prepares original contracts STATIC only, no native.
+  Prefix filtering makes null/empty batch-name row fallbacks inaccessible;
+  disabled scan/refresh controls do not authorize synthetic handler overlap.
+- Author strict NEWspec-inclusive types terminal2: five TS2769 for invalid
+  `exact:true` ByRoleOptions. Original NEWspec/native evidence preserved;
+  separately admitted removal of ONLY five invalid options (literal name is
+  already exact), unchanged strings/assertions/source/tests/config. Distinct
+  corrected-types gate before focus, author-only token. Same grouping lint0
+  ran after type terminal before failure interpretation, disclosed deviation;
+  no further gate/restart or failure concealment. Reviewer STATIC preparation
+  terminal6380f615, no acceptance of draft or native certification yet.
+  Initial author count-six observation corrected against actual five log
+  diagnostics/option occurrences before recovery, no extra change inferred.
+- Fresh corrected-types0; native focus31PASS3FAIL because three exact role-name
+  selectors inserted a space absent from original adjacent label/count spans.
+  Raw roles show Scansione AdE31/77; frozen82bb9b64 NEWspec/log/XML retained.
+  Separate correction admitted ONLY three literal spaces, same exact query and
+  count/aria assertions; no runtime accessibility fix or weakened regexp.
+  Distinct corrected-focus and final-byte types/lint required before union.
+- Corrected original public AdE focus34PASS/0failure/skip/act warning; root
+  byte comparison proves ONLY three literal spaces changed from failed input,
+  earlier options recovery proved ONLY five invalid properties removed.
+  Six-spec union269PASS, native1 ONLY full-page100 deficit:624/643statements
+  (97.04%),580/645branches(89.92%),188/194functions(96.90%),579/595lines(97.31%).
+  Genuine covered gains+26/+59/+14/+25 vs fresh235 baseline, no source/reduction
+  admission. Final-byte types/lint and metrics/ratchet/custody still author-only.
+
 ## 2026-10-11 — R29 characterization accepted, integrated and root verified
 
 - Distinct reviewer terminal ACCEPT_ORIGINAL_CHARACTERIZATION_ONLY/NO_CHANGE;

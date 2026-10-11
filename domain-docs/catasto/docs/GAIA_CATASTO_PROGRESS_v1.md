@@ -1,6 +1,24 @@
 # GAIA — Modulo Catasto
 ## Progress Tracker v1
 
+### 2026-10-11 — AdE original workflow characterization
+
+- R30 adds34 genuine mounted original route cases: atomic loader publication,
+  preserved prior data, case-sensitive prefix filtering BEFORE sort/top6,
+  active batch, scan payload/result/error/refresh/busy, token/tab/context/late
+  completion/unmount and modal boundary. Existing five specs unchanged.
+  Six-spec269PASS,0failure/skip, independently verified and root replayed;
+  exact publication f94e4534. External provider/auth/DB/portal not certified.
+- Full-page100 still FAIL:624/643statements580/645branches188/194functions
+ 579/595lines. Covered gains+26/+59/+14/+25, not a complexity reduction.
+  Remaining public manual/wizard residuals and unreachable guards/name fallbacks
+  disclosed; no synthetic private handlers, exclusion or coverage waiver.
+- Runtime page855e3ef0/target390cognitive342cyclomatic2109LOC unchanged;
+  actualmain55a import ratchets PASS0, strict types/lint/report/raw audit/custody
+  PASS. Runtime BLOCKED_COVERAGE; whole original campaign ACTIVE/INCOMPLETE.
+  Two union act warnings remain in the same old manual tests, unsuppressed.
+  Reports CHARACTERIZATION/REVIEW/INTEGRATION_R30_CATASTO_ADE_2026-10-11.
+
 ### 2026-10-11 — Particella wizard original lifecycle characterization
 
 - R29 adds39 real mounted-route tests for response-first candidates, query/

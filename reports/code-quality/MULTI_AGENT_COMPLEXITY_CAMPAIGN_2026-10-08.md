@@ -1,5 +1,46 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## R30 checkpoint — 2026-10-11, original Catasto AdE workflow
+
+Whole original campaign **ACTIVE / INCOMPLETE**. R30 independently accepted
+as **NO_CHANGE — ORIGINAL_CHARACTERIZED**, not a complexity reduction. Exact
+NEWspec/author/review publication f94e4534 on the dedicated campaign branch;
+main/55a merge-base unchanged. Exclusive ownership, dedicated SSD worktrees,
+author/reviewer terminal/token released, root-only serial publication gates.
+
+34 new real mounted-page cases protect loader atomicity/prior data, prefix
+filter BEFORE date sort/top6, active batch, queue payload/refresh/error/busy,
+token/tab/context/late response/unmount and modal boundary. Root/independent
+six-spec269PASS,0failure/skip; no public contract silently corrected. Boundary
+mocks do not prove real provider/authorization/DB/portal execution.
+
+| Full-page coverage | Accepted original R29 | R30 root/independent | Newly covered |
+| --- | ---: | ---: | ---: |
+| Statements |598/643|624/643 (97.04%)|+26|
+| Branches |521/645|580/645 (89.92%)|+59|
+| Functions |174/194|188/194 (96.90%)|+14|
+| Lines |554/595|579/595 (97.31%)|+25|
+
+**Coverage100 FAIL**, native1 ONLY four unchanged thresholds, not test failure;
+runtime **BLOCKED_COVERAGE**. Final-byte types/lint PASS, whole native report/
+raw JUnit/maps/counters/AST audit/custody PASS. Author five invalid type options
+and three exact role-name spaces corrected separately, failed inputs/logs
+preserved and byte-exact bounded recovery verified; no weakened assertion.
+Two union act warnings reproduce the same unchanged old manual test names.
+
+Actualmain55a ratchet after both imports PASS0, baseline/scope/thresholds
+unchanged. All1673files20323callables1924errors2740warnings4664overlapping
+observations exactly R29; R30 complexity delta0/0%. Domain/top30 tables below
+still describe the exact current runtime; extreme tail5>300/17>200/55>100.
+Remaining19statements65branches6functions16lines and unreachable guards/name
+fallbacks are disclosed, not synthetically covered. Global30 provenance and
+broad final suites/build/worker/E2E remain separately uncertified here.
+
+Docs graph semantic completion, actual postcommit gates and final custody are
+recorded in INTEGRATION_R30_CATASTO_ADE_2026-10-11.md and its raw root evidence.
+Storage inventory read-only, no prune/delete/movement: root critically low.
+Further slices must retain full original mission and runtime full100 policy.
+
 ## R29 checkpoint — 2026-10-11, original Catasto Particella contracts
 
 Whole original campaign **ACTIVE / INCOMPLETE**. R29 independently accepted

@@ -9,6 +9,28 @@ Baseline, soglie, esclusioni e tooling complexity sono read-only.
 
 ## Ownership attiva e sequenza
 
+### R30 — Catasto AdE original characterization
+
+Exclusive NEWspec/report allocation preceded activation in
+`MULTI_AGENT_OWNERSHIP_R30_CATASTO_ADE_2026-10-11.md`. Author and distinct
+reviewer terminal/token RELEASED; exact accepted publication f94e4534 after
+fresh root native269 tests/types/lint/report/raw audit/custody. No runtime
+ownership/mutation; main/baseline/old5/shared8/all1673runtime unchanged.
+
+| Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| R30 author | Catasto AdE UI | NEW campaign-catasto-ade-scan-r30.test.tsx; NEW CHARACTERIZATION_R30_CATASTO_ADE_2026-10-11.md |34 real original workflow cases; exact f94e4534 publication; token RELEASED | SSD r30-catasto-ade/author-worktree | refactor/complexity-r30-catasto-ade-characterization | MERGED |
+| R30 independent reviewer | Catasto verification | NEW REVIEW_R30_CATASTO_ADE_2026-10-11.md ONLY | ACCEPT_ORIGINAL_CHARACTERIZATION_ONLY; independent34/269/raw audit; exact f94e4534 publication; token RELEASED | SSD r30-catasto-ade/review-worktree | review/complexity-r30-catasto-ade | MERGED |
+| Coordinator | Integration/governance | R30/global registry/PROGRESS/integration/global/domain reports | Actual import ratchets0, fresh269/types/lint/report/audit/custody; closure graphs/postcommit required | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
+
+NO_CHANGE: full-page100 still FAIL (624/643statements580/645branches188/194
+functions579/595lines), original runtime BLOCKED_COVERAGE. Unreachable guards/
+fallbacks need explicit decision, no synthetic private handlers or waiver.
+Target390/342/2109/global1924errors2740warnings4664findings unchanged. Two old
+manual act warnings preserved; original author failures/exact bounded recoveries
+disclosed. Read-only additional cache inventory, no cleanup; SSD outputs only.
+Whole backend/frontend/worker campaign ACTIVE / INCOMPLETE, no reduction credit.
+
 ### R29 — Catasto Particella original characterization
 
 Exclusive allocation and native recovery admission precede activation in
