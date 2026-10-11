@@ -1,5 +1,136 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-11 — R32 highest Utenze hotspot command characterization
+
+- CURRENT accepted characterisation: native-v4 final verifier terminal/release
+  freeze13ec3968/210 fully root-rehashed0, exact NEWspec/oldNAS507/three reports
+  published via apply_patch. Independent and root203PASS/0failure/skip/todo/
+  unhandled, full100 STILLFAIL480/576s480/610b118/176f469/536l (+43/+20/+9/+43).
+  No runtime admission/complexity credit; all1673 runtime/shared/main exact.
+- Actualmain55a ratchet0/findings[] and whole metrics delta0 (1673/20322/
+  1924error/2740warning/4664observations), strict/lint/raw/custody0. Root strict
+  includes859 configured roots (197 existing.next) plus4=863; verifier662+4=666,
+  both strict0diagnostics/full roots/no emit/incremental writes disabled.
+- Root focus33PASS native1 uncovered100, raw auditor misread slow successful
+  Error: case titles. STOP preserved; distinct auditor recognizes ONLY exact
+  native checkmark/JSON-passed title/numeric-duration lines. Frozen-focus audit0,
+  no test rerun; previously unrun203/after/ratchet then once. All54 implicit
+  else counters/maps/denominator retained; no skip, scope or threshold waiver.
+- Domain/global/integration reports updated; fresh global30 check/Graphify/
+  campaign-only commit/postcommit closure are separately recorded. Global goal
+  ACTIVE/INCOMPLETE; final broad suites/strategic tail/Catasto/R25 remain open.
+
+- CURRENT: author v6 terminal0 and static reviewer ACCEPT; all107+8 frozen
+  members independently root-rehashed0, exact NEWspec/oldNAS507/reports ONLY
+  imported to verify-worktree (not integration). Runtime NO_CHANGE, no credit.
+- Independent CLI verifier v4/v5 STOPs preserved: v4 native whole-report0/
+  strict666 roots0diagnostics/lintboth0, but supplemental wrong literal665
+  assertion1 and premature lint sequencing; v5 actualfocus33PASS/native1
+  known100 deficit, raw metadata auditor1 incorrectly compared declared
+  coverage exclusions to Vitest's automatic resolved exclusions. No union/
+  after-report/ratchet executed. Both terminal0/token RELEASED; freezes111/42
+  root-rehashed0. No false all-gate acceptance or focus retry.
+- Coordinator proves all author665 roots retained plus ONLY explicit required
+  GeoJSON; installed unchanged Vitest resolver appends setup/tests/config/
+  virtual/dependency exclusions automatically. DISTINCT metadata auditor
+  binds exact config+installed resolver/constants SHA, exact resolved list,
+  keeps full-page/raw-map/V8/counter/all100 checks. No coverage/config/scope
+  change, baseline repair or runtime/test edit.
+- Direct coordination restored; ORIGINAL managed final-verifier v2 ACTIVE
+  sole token under NEW native-v3 plan275703e3/12/admission332 inputs/custody0.
+  Recovery is metadata audit of frozen focus ONLY, then previously unrun
+  complete203/after-report/actualmain55a ratchet once. Earlier managed-v2
+  preparation was STATIC only, not attributed any CLI gates. Root publication
+  plan-v2 prepared but NOT admitted; no integration/campaign completion yet.
+- Initial root v3 admission preparation STOP caught truncated duplicate
+  custody JSON before any token/gate; original valid immutable ce59f08d
+  reference verified. V2/v3 files and failed root metadata scripts preserved;
+  separate plan binds the original reference directly, never today's code.
+
+- Independent persisted reviewer terminal0 REJECT_STOP: one `type altro` case
+  forces same-value event from initialaltro, not a genuine public transition.
+  Frozen9/2fac46fe and all65author members rehashed0; green203 does not override
+  characterization authenticity. NO integration/native-verifier admission.
+  DISTINCT test-only v6 real CLI author launched with inherited parent and
+  exclusive same worktree after prior author terminal: valid different initial
+  type plus rendered-value/inequality assertions, all33cases/API/order/assertions
+  retained. OldNASf445/runtime/main/baseline read-only; private NEW logs, sole
+  heavy token author. Prior rejection/failures/counters preserved, no fake credit.
+- Author v5 terminal READY_FOR_REVIEW; root rehashed587adf8c/65members0.
+  Corrected203/203unfilteredPASS/no failure/skip/todo, strict665/lintboth0,
+  actualmain55a ratchet0/findings[], native full metrics exactly unchanged.
+  Whole-page coverage480/576s480/610b118/176f469/536l: +43/+20/+9/+43 covered
+  vs fresh original170, STILLFAIL100. Exact candidate imported into reviewer
+  worktree; independent persisted CLI reviewer actually resumed on original
+  thread after direct followup routing unavailable (no recipient turn started).
+  Reviewer STATIC/no native token. No root integration or global success claim.
+- R32C distinct original203 diagnostic actually203PASS, raw full-page480/576s
+ 480/610b118/176f469/536l; same original bytes as v3 failed203, intermittent
+  outcome now observed. Author mechanical hunk changed duplicate assertion240,
+  not authorized507; immediate diff STOP, wrong input/strict6650 disclosed,
+  no successor test/lint gate. Precise two-hunk correction and full-file byte
+  reconstruction require separate admission after frozen wrong input rehash;
+  no runtime edit, original evidence erased or successful diagnostic rerun.
+- v3 strict664roots0/lint0, NEWfocus33/33PASS. Complete5spec union STOP:
+ 202PASS/1FAIL in unchanged R22NAS test507 (`Sola lettura` sync assertion).
+  Failed DOM and source suggest unawaited subject-effect reset after success,
+  NOT yet a reproduced flake or demonstrated R32 regression. Exact inputs/
+  logs/JSON preserved; author token RELEASED, independent static attribution
+  admitted before any new test-consolidation ownership/replay. No merge/import,
+  union coverage/after-report/ratchet PASS claimed; runtime remains unchanged.
+- Native author v2 STOP/types1 before any NEW test:663project+NEWspec roots,
+ 57TS2339 matcher-extension diagnostics ONLY. Root independent diagnosis binds
+  the cause to unchanged test setup excluded from application tsconfig; no
+  runtime/old-test/shared/main/baseline mutation, custody0. Separate bounded
+  admission, AFTER terminal freeze rehash, adds unchanged tests/setup-vitest.ts
+  to a NEW strict test-program without dropping any root or relaxing options.
+  Original failure/log/script preserved; no coverage/type PASS claimed yet.
+- Continuation: direct collaboration API restored; NEW inherited native author
+  continues in the same exclusive worktree after original CLI author terminal
+  STOP/RELEASED, reviewer/verifier static CLI terminal0. Sole heavy token author,
+  no runtime admission. Original freezeaa450f46/29 independently rehashed0;
+  root standard bundle-loader recovery independently audits170/170PASS,
+  zero failed/pending/todo/skipped maps, full-page437/576statements460/610branches
+ 109/176functions. Native1 is ONLY unchanged coverage100 deficit. Prior runner
+  loader `__dirname` failure preserved; no config shim/source edit or rerun of
+  original successful gate. NEWspec/types/lint/focus/union gates still pending;
+  whole campaign ACTIVE/INCOMPLETE, no complexity credit yet.
+- Direct delegation API unavailable this continuation: isolated real Codex CLI
+  threads/worktrees preserve independent roles and native process evidence.
+  First bootstrap failed terminal1/503 with stale unrelated CLIdefaultgpt-5.4,
+  zero application command/file change; all logs/input preserved, no test retry.
+  Parent turn_context proves gpt-6.1-sol/high; distinct immutable launcher
+  inherits EXACT current parent (not a discretionary override/global config
+  change), author actual command_execution observed. Review/verify separate
+  static-only processes launched; no competing heavy test token. Workspace-write
+  limits writes to owned worktree/private SSD output, dependencies read-only.
+- Fresh dedicated2c9/55a author/review/verify trees clean, all four trees prove
+ 1673runtime/old4spec/shared8 byte-exact. Author ACTIVE sole serial native token
+  ONLY for original whole report/old170 full-page coverage first, then NEWspec
+  command characterization. Integration reviewer/final verifier ACTIVE STATIC,
+  own distinct reports, no native token/import/source writes until frozen
+  admission. Any new unexplained failure STOP; no competing gate or retry.
+- Previous goal turn PROGRESS: genuine R31 duplication2→1, file cognition749→734,
+  runtime7834/governance2c9, final actualmain55a ratchet0/custody0/tree clean and
+  rootfreeze13650c14/169 rehashed. Archive exact frozen live members with manifest
+  provenance before new docs change; no historical evidence rewritten/pruned.
+- Original backend/frontend/worker goal ACTIVE/INCOMPLETE, not narrowed to R31.
+  Remaining highest callable DetailContent391/304/1908, sourceb0f822da; fresh
+  census125existing15missing/no dirty owned source, main unchanged. Registry R32
+  created BEFORE worktree/agent activation, exclusive NEWtest/reports only.
+- Prior NAS/preview/upload4spec170 coverage437/576statements460/610branches,
+ 109/176functions426/536lines is FAIL100; these old flows are not NEW progress.
+  Next single responsibility: genuine public document-type/classify/password-
+  deletion commands, request/order/hydration/feedback/busy/errors/async behavior.
+  Runtime still read-only, no private handler/invalid DTO/hidden underlay probe,
+  synthetic coverage, threshold/exclusion/ignore or inferred guard-policy waiver.
+- Author PLANNED, integration reviewer/final verifier STATIC preparation only;
+  sole native token initially Coordinator baseline, then explicit author admission.
+  Whole original native coverage and raw counters, full-project+NEWspec strict
+  types, scoped lint, full report/actualmain55a ratchet/custody required. Only
+  NO_CHANGE/ORIGINAL_CHARACTERIZED before safe full-file100 runtime admission.
+  Global30/R25 ambiguity/Catasto guards/final broad suites remain separate open.
+
 ## 2026-10-11 — R31 session distance policy admission
 
 - R31 runtime/test/frozen reports/domain documentation published coherently

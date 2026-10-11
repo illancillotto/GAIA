@@ -1,5 +1,44 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## R32 checkpoint — 2026-10-11, document commands characterized
+
+**ORIGINAL_CHARACTERIZED / NO_CHANGE runtime; full100 FAIL.**
+Original global campaign remains ACTIVE / INCOMPLETE; no strategic reduction
+claimed from this slice. Actual main/merge-base55a and main concurrent work
+unchanged; operational pre-publication HEAD2c9 on dedicated campaign branch.
+Author107/static-review8/independent-verifier210 frozen members root-rehashed0,
+exact test/report publication, temporal ownership and serial native gates.
+
+33 genuine mounted-page command cases plus old170 give203PASS in independent
+verification and root integration,0failure/skip/todo/unhandled. Eight type
+selections start from DIFFERENT rendered values; type/classify/password-delete
+payload/order/hydration/busy/errors/partial failures protected. Only existing
+NAS507 await consolidated, all other original assertion bytes retained.
+
+| Original full-page metric | Before original170 | Root203 | Delta covered |
+| --- | ---: | ---: | ---: |
+| Statements |437/576|480/576 (83.33%)|+43|
+| Branches |460/610|480/610 (78.68%)|+20|
+| Functions |109/176|118/176 (67.04%)|+9|
+| Lines |426/536|469/536 (87.50%)|+43|
+
+Native1 ONLY four100 deficits, not green coverage. Runtimepageb0f822da and
+DetailContent391/304/1908 unchanged. Whole1673/20322/1924error/2740warning/
+4664overlapping findings, delta0/0%; domain observations and current top30
+in R31 checkpoint remain exact. Tail5>300/17>200/55>100 remains unresolved.
+Full strict project/test types, lintboth, raw V8/maps/counters, complete reports,
+actualmain55a ratchet0 and custody0 verified. All54 native implicit else arms
+retained including uncovered counters, no source/config/coverage/baseline waiver.
+
+Historical failures/private auditor assumption errors preserved, distinct
+metadata recovery only; no repeated successful original diagnostic or focus
+test. Full-file100 blocks runtime, no unsafe refactor integrated. Baseline
+historical30 separate, no inflation. Full broad suites/build/worker/stackE2E
+remain uncertified; Graphify/publication/postcommit closure evidence in R32
+integration report and private handoff. Next prefer a coherent already-covered
+backend hotspot instead of fabricated guard coverage. R31 remains latest
+actual complexity improvement; earlier checkpoints below are historical.
+
 ## R31 checkpoint — 2026-10-11, session distance duplication eliminated
 
 Coherent runtime/test/report/domain publication7834d382, actual postcommit
