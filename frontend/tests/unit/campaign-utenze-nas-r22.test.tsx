@@ -504,7 +504,7 @@ describe("R22 mounted path payload and completion", () => {
     savePath(); await screen.findByText(pathMessage);
     expect(screen.getByText("Verifica NAS non disponibile")).toBeInTheDocument();
     expect(pathInput()).toHaveValue("/persisted/path");
-    expect(screen.getByText("Sola lettura")).toBeInTheDocument();
+    expect(await screen.findByText("Sola lettura")).toBeInTheDocument();
     expect(api.getUtenzeSubjectNasImportStatus).toHaveBeenCalledTimes(3);
   });
 

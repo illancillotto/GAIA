@@ -1,5 +1,22 @@
 # Progress
 
+## 2026-10-11 — caratterizzazione comandi documento R32
+
+- 33 nuovi casi sul componente originale: tipo documento con transizioni
+  reali fra valori diversi, classificazione contenuto e cancellazione con
+  password. Payload/ordine GET/NAS, hydration, feedback, busy, fallimenti
+  parziali e route catturata protetti; nessuna modifica funzionale.
+- Unica consolidazione test esistente: assertion NAS507 attende Sola lettura
+  dopo effetto React, mantenendo tutte le altre verifiche e NAScount3.
+  Review statica indipendente e verifier/integration203PASS senza skip/failure.
+- Coverage pagina:480/576statement480/610branch118/176funzioni469/536righe,
+  incremento+43/+20/+9/+43 sul170 originale. Full-file100 resta FAIL; runtime
+  read-only, nessun credito di complessita (DetailContent391/304/1908 invariato).
+- Ratchet actualmain55a PASS0; baseline/soglie/esclusioni e main invariati.
+  Audit metadata corretti separatamente con failure precedenti preservate,
+  nessun test ripetuto per renderlo verde. API mock non certificano backend/
+  DB/browser reali. Report INTEGRATION_R32_UTENZE_DOCUMENTS_2026-10-11.md.
+
 ## 2026-10-05 — validazione azienda con PIVA parziale
 
 - Helper privato `_parse_partial_company` per PIVA a dieci cifre: ragione
