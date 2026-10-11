@@ -1,5 +1,86 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-11 — R26 original extreme-hotspot characterization
+
+- Four TEST/REPORTONLY publications integrated separately: Utenze0e1661d5→
+  d019710f, reviewfb0cf15c→4aeb1398, Presenze19197441→16a7816b, original
+  review388b052b→276f356d. Actual-main55a ratchet AFTER EACH PASS0/findings[].
+  Runtime candidates never staged; dedicated Presenze author remains dirty ONLY
+  rejected page3e68. Original independent reviewer never activated candidate
+  append; its original acceptance does not certify candidate equivalence.
+- Root final combined mounted union666PASS/11spec/no skips/todo, raw audit0,
+  input SHA0. Presenze full1001035/1139/306/847; Utenze437/576statements460/610
+  branches109/176functions426/536lines. Native coverage exit1 SOLELY four
+  unchanged100thresholds; Utenze runtime still BLOCKED_COVERAGE, not coveragePASS.
+- Fresh integrated native report0 confirms1673files20322callables1924errors
+  2740warnings4664findings. All1673runtime inputs byte-identical to accepted R24;
+  main9f85/0d54 and baseline38e6 exact. No R26 accepted complexity reduction.
+- Fresh global baseline Make2/CLI1 retains exactly30 historical finding objects
+  from accepted R24; independent raw equality audit0. No new change finding
+  attributed to R26, no baseline update or threshold/scope/ignore alteration.
+- Runtime relationships unchanged: Graphify code not regenerated for test-only
+  publication. Dedicated make graphify-platform-docs refreshes this docs corpus;
+  exact semantic outcome and final governance gate recorded separately in
+  reports/code-quality/INTEGRATION_R26_CHARACTERIZATION_2026-10-11.md, not
+  inferred from Make exit0. Graphs ignored/uncommitted, no complexity credit.
+- Fresh cache inventory03:17, no deletion: root2,63GiB, separate tmpfs273MiB.
+  Additional /tmp/jest_rs1,58GiB is external Jest cache with incompletely proven
+  ownership/active Arrubia suite; excluded from automatic cleanup. Total listed
+  cache4,49GiB including both external Jest stores, nonexternal candidates~1,86GiB.
+  Installed browsers, Mongo binaries/live DB, dotslash, worktrees/dependencies
+  and campaign evidence protected. Inventory ~/.cache/gaia-campaign/
+  CACHE_INVENTORY_2026-10-11.md; no new cleanup authorized by inventory reply.
+
+Earlier admission chronology (later terminal results take precedence):
+
+- Actual Presenze code-only candidate3e68dbf4 STOP/NOT_ADMITTED/eaa1fd9b:
+  scanner-equivalent effectiveLOC2812→2813 and changed tone/formatter ordering.
+  Native candidate metrics/gates NOT RUN, no merge or reduction credit; dedicated
+  author source/test evidence retained. Independent original characterization
+  remains valid; no minification/unrelated subtraction used to hide the line.
+
+- Snapshotde761/base55a, main concurrent custody9f85/0d54 and baseline38e6
+  unchanged. Exclusive ownership registered before author/reviewer activation;
+  two separate author trees, one fresh Presenze reviewer. Runtime still immutable.
+- Fresh full report1673files20322callables1924errors2740warnings4664findings;
+  all1673runtime byte-exact versus accepted R24. Extreme tail not reduced yet.
+- Presenze original472PASS/6spec full100 independently raw-audited by root.
+  New public24case spec4abd9f8e focused24PASS then union496PASS/7spec/full100:
+  1035statements1139branch arms306functions847lines, no skips/todo or raw zeros.
+  Exact grid/modal wrappers, classes, border policy, order, cause tones, lifecycle
+  and asynchronous refresh characterized. No runtime candidate admitted yet.
+- Utenze fresh original121PASS/3spec; coverage-only expected native exit1 under
+  UNCHANGED100 thresholds:370/576statements408/610arms80/176functions364/536lines.
+  Runtime remains BLOCKED_COVERAGE; new manual-upload characterization draft
+  authorized, no gate waiver or synthetic coverage. No native test failure.
+- Independent Presenze static review200ffe41 requires keyed Fragment supplements,
+  separate raw-cause keys, exact spaces/tones/borders and render-time same-array
+  Saturday sort; projected22→8 decisions is not measured improvement credit.
+  Reviewer native/original acceptance and author types/lint still incomplete.
+- Native project types0, first private new-spec type gate1 with20diagnostics
+  STOP before lint:18GeoJSON from omitted project roots,2unsupported role-option
+  errors in NEW spec. Explicit Coordinator test-only correction removes redundant
+  exact:true (string name remains exact); corrected spec ea775e5c. Complete-project
+  private type verifier added, old failure retained; no runtime admission/waiver.
+- Corrected complete-project+spec types0 (662roots661runtime0diagnostics) and
+  scoped lint0/3unchanged warnings. Source d362/test ea775 custody exact, all1673
+  runtime unchanged. Independent reviewer now admitted ORIGINAL characterization
+  native gates under exclusive serial token; runtime still forbidden.
+- Independent Presenze ACCEPT_ORIGINAL_CHARACTERIZATION6d569ca7 after fresh
+  corrected24/496full100/types/lint/custody0; author now CODEONLY runtime projection
+  admitted with immutable tests and explicit non-growth/Fragment/source invariants.
+  No native candidate result or improvement credit yet.
+- Root Utenze NEW49focused and170union4specPASS/types/lint/rawaudit0, unchanged
+  thresholds keep full-filecoverage FAIL:437/576statements460/610branches109/176
+  functions426/536lines (75.86/75.40/61.93/79.47%). Genuine +67stmt/+52arms/+29fn/
+  +62lines original characterization, runtime still BLOCKED_COVERAGE. Distinct
+  independent reviewer ACTIVE before spawn, exclusive serial token now reviewer.
+- Cache inventory only, no deletion: root~3.5GiB and separate tmpfs273MiB.
+  Two root SHA-check invocation errors retained (wrong CWD, malformed brace path)
+  with explicit corrected complete custody checks, no application test rerun.
+  R25 rejected candidate remains frozen; baseline/scope/suppression unchanged.
+  Full campaign ACTIVE/INCOMPLETE; final suites/build/E2E still uncertified.
+
 ## 2026-10-11 — R25 candidate stopped on actual ratchet FAIL14
 
 - Original45new mounted cases + immutable559 =604PASS/24spec; distinct reviewer

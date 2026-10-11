@@ -1,5 +1,75 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## R26 checkpoint — 2026-10-11, original characterization only
+
+Actual Presenze candidate3e68dbf4 was implemented in author tree, then correctly
+STOPPED/NOT_ADMITTED: source-backed effectiveLOC2812→2813 and evaluation-order
+issue. No native candidate gate/metric or improvement credit; original runtime
+remains on integration. Test-only original characterized independently, candidate
+preserved dirty/uncommitted without minification or baseline waiver.
+
+Global **ACTIVE / INCOMPLETE**. Starting integrationde761/base55a and accepted
+R24 metrics unchanged:1924errors2740warnings4664findings,5>300/17>200/55>100.
+Fresh native whole report confirms1673files20322callables; all1673runtime bytes,
+main concurrent work9f85/0d54 and baseline38e6 exact. No R26 runtime integration,
+baseline inflation, threshold/exclusion change or improvement credit.
+
+Two nonoverlapping dedicated author trees, fresh distinct Presenze reviewer,
+registry before activation. One coherent monthly operational-summary projection
+candidate proposed for Presenze385, not a mega-JSX move; actual runtime denied
+until public original characterization plus independent review. Original six
+specs472PASS/full100, new24 public cases focused24 then496union/7specPASS,
+full1001035statements1139branches306functions847lines, no skips/raw zeros.
+Exact two-layout classes/borders, ordered causes/Saturday, key collisions,
+close/reopen and async mutation refresh characterized. Corrected NEW specea775
+strict project+spec types0 (662roots661runtime0diag), lint0/3unchanged warnings.
+First private strict-type failure retained: partial root harness omitted GeoJSON
+declarations, NEW spec had2unsupported role exact options; explicit test-only
+correction and complete-project verifier, no compiler/gate weakening.
+
+Independent reviewer original native verification ACCEPT_ORIGINAL_CHARACTERIZATION
+6d569ca7: fresh24/496PASS/full100/types/lint/custody0. Its first
+CLI command exited1 before collection for unsupported Vitest4 --minWorkers:
+STOP/report33778397/evidence frozen, no tests failed. Coordinator separately
+admitted corrected invocation without that option, maxWorkers1 and exact inputs
+unchanged; old failure retained. This is not an accepted runtime slice or proof
+of improvement. Its review never activated or certified the rejected candidate.
+
+Utenze391 fresh original121PASS/3spec with expected full-file coverage FAIL100:
+370/576statements408/610branches80/176functions364/536lines. Runtime remains
+BLOCKED_COVERAGE. NEW49-case manual-upload characterization24878b60 tested:
+root and distinct reviewer49/170PASS/4spec, strict project+spec types/lint0,
+raw audit/input custody0. Current coverage437/576statements460/610branches
+109/176functions426/536lines; native exit1 solely unchanged100thresholds.
+Independent ACCEPT_CHARACTERIZATION_ONLY637906a7; original page/components
+and boundary mocks only, no synthetic runtime coverage.
+No deduplication, sequential captured uploads, partial retries, Escape/late
+responses and dual explicit/effect status semantics remain unchanged.
+
+Four test/report-only publications integrated one at a time with actual55a
+ratchet0 AFTER EACH: d019710f,4aeb1398,16a7816b,276f356d. Root combined mounted
+666PASS/11spec/no skips/todo, raw auditor0/input SHA0; Presenze four-dimension
+full1001035/1139/306/847, Utenze counts above. Combined native coverage exit1
+SOLELY unchanged100thresholds, never reported as coverage PASS. Fresh native
+whole report0 gives1673files20322callables1924errors2740warnings4664findings;
+all1673runtime inputs byte-identical to accepted R24, no accepted runtime delta.
+Fresh global baseline Make2/CLI1 retains exact30 historical finding objects
+from R24, raw equality auditor0; not a new R26 regression, no baseline update.
+Details: INTEGRATION_R26_CHARACTERIZATION_2026-10-11.md.
+Dedicated platform-docs Graphify refresh Make0/semantic PASS: chunk1/1done,
+174cached/3re-extracted,784nodes1116edges114communities, no semantic failures
+or partial-results warnings. Runtime graph boundaries unchanged; graphs not
+committed or used as complexity evidence. Final governance gate/custody lives
+in 20261011-r26-integrated private evidence, separate from broad final gates.
+
+Fresh root space2,63GiB; separate tmpfs~273MiB. Cache inventory only, no deletion;
+additional /tmp/jest_rs1,58GiB belongs to other Jest work with incomplete ownership
+and an active external suite; protected from automatic cleanup. Total listed
+cache4,49GiB including two external Jest caches, nonexternal candidates~1,86GiB.
+worktree/browser/dependency/evidence custody preserved. R25 remains excluded,
+historical globalFAIL30 not attributable to R26. Broad final suites/build/E2E
+uncertified; full original campaign goal remains open.
+
 ## R25 checkpoint — 2026-10-11, candidate excluded
 
 Capacitas result tables were actually refactored in a dedicated author tree and

@@ -9,6 +9,199 @@ Baseline, soglie, esclusioni e tooling complexity sono read-only.
 
 ## Ownership attiva e sequenza
 
+R26 integrated public union completed:666PASS/11spec, no skips/todo; native
+coverage exit1 SOLELY unchanged100thresholds on Utenze, raw auditor0 and input
+custody0. Presenze full1001035/1139/306/847; Utenze437/460/109/426 with unchanged
+denominators576/610/176/536, still BLOCKED_COVERAGE. Coordinator alone owns the
+serial docs-Graphify/governance checkpoint. Native whole report0; globalcheck
+Make2/CLI1 has exactly historicalFAIL30, identical R24 finding objects (audit0).
+All1673runtime/main/baseline custody exact; baseline diff against55a empty.
+No broad final campaign certification or full-suite/build/E2E claim from this
+narrow checkpoint; governance publication only after actual results.
+
+### R26 — independent extreme-hotspot continuation (2026-10-11)
+
+Prior goal turn PROGRESS: actual R25 candidate implemented/tested/measured,
+correctly rejected at FAIL14, independent source-backed provenance published.
+No retry or R25/tooling repair implied; user's separate matcher decision pending.
+Fresh clean integrationde76117a/base55a, main9f85/0d54/baseline38e6 unchanged.
+Integrated docs-only ratchet0, while frozen R25 candidate remains BLOCKED.
+
+| Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| R26 Utenze upload characterization author | Utenze UI highest current391 | NEW frontend/tests/unit/campaign-utenze-manual-upload-r26.test.tsx; NEW reports/code-quality/CHAR_UTENZE_MANUAL_UPLOAD_R26_2026-10-11.md; original frontend/src/app/utenze/[id]/page.tsx READ-ONLY |49/170PASS/type/lint/rawaudit0, independent ACCEPT_CHARACTERIZATION_ONLY637906a7; test/report0e1661d5→d019710f, post-integration ratchet0; runtime coverage blocked | GAIA-campaign-20261010-r21-capacitas-job-actions (author0e1661d5, clean) | characterize/complexity-r26-utenze-manual-upload | MERGED |
+| R26 Presenze summary refactoring author | Presenze UI extreme385 | frontend/src/app/presenze/giornaliere/page.tsx; NEW frontend/tests/unit/presenze-giornaliere-summary-r26.test.tsx; NEW reports/code-quality/SLICE_PRESENZE_SUMMARY_R26_2026-10-11.md | Candidate3e68 FROZEN/NOT_ADMITTED: effectiveLOC2812→2813, formatter evaluation order issue; ONLY original test/report19197441→16a7816b, ratchet0; no candidate native gates or merge | GAIA-campaign-20261009-r9-presenze-mutations (author19197441; rejected runtime ONLY dirty file) | refactor/complexity-r26-presenze-summary | BLOCKED |
+| R26 Presenze original test-only publication | Presenze characterization | frontend/tests/unit/presenze-giornaliere-summary-r26.test.tsx; reports/code-quality/SLICE_PRESENZE_SUMMARY_R26_2026-10-11.md; runtime excluded | Original24/496PASS/full100, independent ACCEPT_ORIGINAL_CHARACTERIZATION; publication19197441→16a7816b, ratchet0; no ongoing writable ownership | Same Presenze author tree | refactor/complexity-r26-presenze-summary | MERGED |
+| R26 Presenze independent reviewer | Presenze review | NEW reports/code-quality/FINAL_REVIEW_PRESENZE_SUMMARY_R26_2026-10-11.md ONLY; page/spec/model read-only inputs | ACCEPT_ORIGINAL_CHARACTERIZATION6d569ca7; original full100/types/lint/custody0; report388b052b→276f356d, ratchet0; candidate append never activated | GAIA-campaign-20261011-r26-presenze-review (author388b052b/base55a) | review/complexity-r26-presenze-summary | MERGED |
+| R26 Utenze independent reviewer | Utenze characterization | NEW reports/code-quality/FINAL_REVIEW_UTENZE_MANUAL_UPLOAD_R26_2026-10-11.md ONLY; original runtime/NEW spec read-only input | ACCEPT_CHARACTERIZATION_ONLY637906a7;49/170PASS/rawaudit/types/lint/custody0; reportfb0cf15c→4aeb1398, ratchet0; coverage-onlyFAIL100 remains | GAIA-campaign-20261011-r26-utenze-review (authorfb0cf15c/base55a) | review/complexity-r26-utenze-upload | MERGED |
+| Coordinator | Campaign | registry/PROGRESS/campaign reports/private evidence | exclusive phase admission/native token/publication/integration, R25 untouched | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | ACTIVE |
+
+Both scopes nonoverlapping. Only NEW report/private static evidence writable
+during ANALYZE; no runtime/spec/native/commit/build/cleanup/dependency writes.
+Presenze current target path is clean in main and both user worktrees checked;
+their last page history July27/September9 is not new concurrent working-tree
+input. All existing tests/current source must stay immutable. Canonical identity
+mapping/authorization/INAZ lifecycle outside Presenze presentation scope.
+Coverage historical Presenze472/full100 and Utenze121/FAIL100 is not fresh proof;
+Coordinator acquires actual original gate separately before any runtime admission.
+No final reviewer allocated before proposal freeze. Stop after bounded proposal.
+Wrong backend Presenze Graphify query lacked graph; read-only diagnostic kept
+in /tmp, appropriate existing frontend corpus query then passed0. No native
+application test failed/retried and no graph generated from repository root.
+
+R26 continuation preflight 2026-10-11: previous turn PROGRESS through measured
+cache inventory and completion of inherited original Presenze gate. No cache
+deleted. Integrationde761/base55a/main9f85/0d54 remain unchanged; root3.5GiB
+and separate tmpfs273MiB. Original six UI suites472PASS, no skip/todo, fresh
+full-file100:1035statements1139branch arms306functions847lines. Raw auditor0;
+input custody verified0 from frontend. Initial SHA-check invocation from root
+had missing relative files, not mismatched byte custody or native test failure;
+both logs retained, no test rerun. Evidence20261011-r26-presenze-original.
+
+Both static proposals frozen; now ONLY each already-owned NEW mounted spec,
+own report and private evidence may be written. All runtime, existing tests,
+configs, dependencies, tooling and baseline remain immutable. Presenze design
+admitted for characterization, not runtime: complete Extra/Saturday/absence
+policy, two unchanged layouts, separate key domains, exact borders and in-place
+sort. Utenze admission is manual-upload characterization only, no runtime credit
+or waiver of historical full-file coverage failure. Real public page/React DOM;
+only external/auth/API/navigation boundaries mocked. Freeze spec/source inputs
+and command proposal before any native gate. Coordinator alone holds native
+token and executes focused/original union gates serially. No native process,
+runtime edit or commit admitted to either author at this phase.
+
+Root native original report now0:1673files20322callables1924errors2740warnings
+4664findings. All1673runtime bytes unchanged versus accepted R24 custody;
+main9f85/0d54 and baseline38e6 exact. Root separately admits original Utenze
+121-test/3-spec full-file measurement with UNCHANGED100% thresholds. Historical
+FAIL100 is an expected prerequisite gap, not permission to alter runtime/gate;
+any failed test or different unexpected failure STOP. No author native token.
+
+Root Utenze original gate completed121PASS/3specs, no skip/todo; expected
+coverage-only exit1 with unchanged370/576statements408/610arms80/176functions
+364/536lines. Raw audit/custody0, no unexpected failure or test retry; Utenze
+runtime remains BLOCKED_COVERAGE. Presenze new frozen spec4abd9f8e focused24PASS
+native0; root starts seven-spec496 union/full100 now. Static reviewer identifies
+keyed Fragment supplement requirement, original raw-cause keys, exact spaces/
+tones, render-time in-place sort; source remains immutable. A root SHA manifest
+brace typo referenced absent `presenze-giornaliere.test.tsx`; original incomplete
+manifest retained and explicit-path SHA set verified separately, no test rerun.
+
+Coordinator materialized exact frozen new Presenze spec4abd9f8e into clean
+reviewer tree via apply_patch as read-only input; no reviewer ownership transfer.
+Independent static original/spec review admitted, native token still root until
+seven-spec union/audit/types/lint terminal. Reviewer may write own NEW report
+only; no runtime or native process admitted yet.
+
+Presenze root union496PASS/full100/raw-audit0/custody0/project-types0.
+FIRST new-spec strict type invocation exit1,20diagnostics; root STOP before lint,
+native evidence frozen. Read-only diagnosis:18GeoJSON namespace diagnostics
+arise from private program omitting repository ambient declarations (project
+typecheck0);2errors in NEW spec use unsupported ByRoleOptions `exact:true`.
+Coordinator explicitly authorizes ONLY remove those two redundant `exact:true`
+options (string role-name match defaults exact), own report/private evidence;
+runtime/all old specs unchanged. Private verifier must include repository
+declaration roots, not ignore diagnostics/change project options/config. Separate
+new corrected logs/spec hash needed; original failure retained, no silent retry.
+Reviewer spec import stays frozen4abd until root explicitly replaces it.
+
+Strict verifier corrected via NEW private `type-spec-project.cjs`: use complete
+parsed project root list PLUS new spec/Jest DOM declarations, preserving every
+project compiler option (no ignored diagnostics/ambient stub). Old verifier
+and failure retained. This tests project plus spec, not a narrowed substitute.
+Utenze NEW spec also uses role-name `exact:true`; Coordinator admits static
+removal of these redundant unsupported options ONLY before freezing first run.
+
+Coordinator applied exact test-only correction: Presenze two role options removed
+in author and read-only reviewer input, new spec SHAea775e5ca3a1356a3b59be9a70ca3
+daf13abb9b4b886e46128bd9746f95c666e; Utenze three role options removed, new SHA
+24878b60ce520369b94fc456c6ef28626a8bcc8511dc62085511cd825bd1e720. Existing tests,
+runtime and assertions unchanged. Original drafts/failures remain separately
+recorded; corrected project-plus-spec gate pending. No complexity credit.
+
+Corrected project-plus-Presenze-spec strict types0 (662project roots661runtime
+files0diagnostics), scoped lint0/only3unchanged legacy warnings. Root native
+token RELEASED. Reviewer now exclusively admitted frozen CORRECTEDea775 original
+spec/public source review and focused24→union496/full-file100/types/lint serial
+native gates in its own tree. Do not run candidate/Graphify/build or edit inputs.
+Root/author/Utenze no native process while reviewer token held. First unexpected
+native failure STOP, report/freeze; acceptance must explicitly cover actual DOM,
+full coverage, custody and corrected type failure provenance. Runtime forbidden.
+
+Reviewer first focused CLI attempt terminal exit1 before test collection:
+`CACError Unknown option --minWorkers` on installed Vitest4.1.6. Root confirmed
+no live native process and sent STOP/preserve request; token frozen pending
+reviewer confirmation. This is invalid invocation, not a functional failure or
+coverage waiver. Corrected command may omit ONLY unsupported --minWorkers while
+retaining --maxWorkers=1 and exact frozen inputs; separate evidence required.
+
+Reviewer STOP confirmed33778397, failed-command99730f6f/log8cee3694/exit1 frozen,
+no tests executed and no assertion failed; originald362/spec ea775/baseline38e6
+and manifest inputs exact. Coordinator explicitly RE-ADMITS original gates with
+ONLY --minWorkers removed, --maxWorkers=1 intact, NEW corrected artifact names.
+Reviewer exclusive native token again; root/author/Utenze static-only. No
+source/spec/config changes, invalid original command retained, no silent retry.
+
+Independent explicit ACCEPT_ORIGINAL_CHARACTERIZATION6d569ca7: corrected
+24focused/496union7spec/full100/rawaudit0/types662roots661runtime0diag/lint0/
+custody0, no skips,3unchanged warnings. All reviewer native terminal/token
+RELEASED. Coordinator inspected report/exits and author refinedd10d24b0 plan.
+Now admit author ONE runtime candidate in owned page: local actual typed monthly
+summary projection, exact supplements/absence layouts and keys/classes/order,
+in-place Saturday sort at both render sites. No component/hook/model/shared
+path edits, tests immutable ea775/old6, no minification or name laundering.
+AUTHOR CODE/REPORT ONLY initially: freeze candidate hash/diff/AST census and
+native command proposal; no native token yet, no commit. STOP if unsafe or
+source budget cannot avoid fileLOC growth. Root next native admission only
+Utenze focused49/project+spec types/scoped lint on frozen24878; no coverage
+waiver or runtime Utenze. All gates serial, no concurrent author/reviewer native.
+
+Root Utenze focused49PASS0 (four actual async traces preserved); complete-project
+types and new-spec lint pending. Coordinator additionally admits root exact
+170union/4spec full-file coverage measurement with UNCHANGED100thresholds,
+expected coverage-only FAIL remains reportable (not PASS/waiver). Failures in
+tests or unexpected gate STOP; no author native/runtime, no parallel heavy gate.
+
+Root Utenze original170PASS/4spec and49focused/types/lint all0; coverage-only
+native1 with unchanged100 thresholds. Raw audit0/custody0:437/576statements,
+460/610arms,109/176functions,426/536lines (75.86/75.40/61.93/79.47%). Genuine
+coverage improvement over original121 baseline370/408/80/364, not runtime
+IMPROVED. Remaining139stmt150arms67functions110lines, runtime blocked/no waiver.
+Root token released after terminal session50534; author Presenze runtime code
+admission remains pending activation, no heavy process currently live.
+
+Presenze author CODEONLY phase actually reactivated; no native token. Fresh
+dedicated Utenze reviewer clean de761/base55a created with exact24878spec
+materialized by Coordinator via apply_patch (read-only input). Reviewer ACTIVE
+before delegation; owns ONLY NEW final review report/private evidence. Exclusive
+native token reviewer49focused→170union4spec/full-filemeasurement/types/lint,
+expected unchanged100 coverage-onlyFAIL retained/classified, any failed test STOP.
+No other root/author/Presenze reviewer native process permitted concurrently.
+
+Presenze author3e68dbf4 actual code-only candidate implemented, froze eaa1fd9b
+report under explicit STOP: source-backed scanner-equivalent effectiveLOC2812→
+2813 grows debt, and absence tone/formatter evaluation order changed. No native
+candidate gate/retry or integration; tests ea775 immutable. Syntax22→7 remains
+unaccepted static count, no metric credit. Candidate preserved dirty in author
+tree. Reviewer may inspect rejected candidate read-only at author path and append
+rejection provenance to own report WITHOUT importing it/native token. Original
+characterization remains independently accepted and eligible test-only review.
+
+Utenze reviewer native55a terminal0/findings[], heavyRELEASED. Ancillary JSON
+reader brace matched Make substitution then checked absent merge_base field;
+diagnostics retained (schema has baseline_commit55a), not native retry/failure.
+Root directly inspected makeexit0/nativefindings[]. Final reviewer report freeze
+pending at that point. Presenze rejected-candidate append was planned but NOT
+reactivated: original accepted review was published unchanged, candidate
+rejection is recorded by Coordinator/author separately; no candidate imported.
+
+Coordinator publication actual: Utenze0e1661d5→d019710f and reviewfb0cf15c→
+4aeb1398; Presenze TEST/DOCONLY19197441→16a7816b and original review388b052b→
+276f356d. Actual55a ratchet AFTER EACH native0/findings[]. Presenze candidate
+3e68 remains ONLYdirty runtime in author, never staged/cherry-picked; root
+all1673runtime custody0/main/baseline unchanged. Combined root666verification
+currently live under sole Coordinator token, no new source or agent native work.
+
 ### R25 — Capacitas monitor result presentation (2026-10-11)
 
 Previous goal turn: PROGRESS through fresh measured cache inventory (no deletion),
