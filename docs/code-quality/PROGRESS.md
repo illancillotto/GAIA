@@ -1,5 +1,77 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-11 — R31 session distance policy admission
+
+- R31 runtime/test/frozen reports/domain documentation published coherently
+ 7834d382b01e8ca720ce5ae139214b7b68177822 on campaign ONLY. Actual postcommit
+  ratchet main55a0/findings[] and custody0, no main merge/push. Dedicated code
+  pruning patch idempotent0, code graph535/1536/26 with both extracted route
+  calls; semantic domain81/102/9 and platform362/311/101, chunk1/1/no partial
+  results and raw graph audit0. Ignored generated graphs not committed.
+  Single responsibility CLOSED/IMPROVED; governance final-head evidence and
+  freeze tracked in integration report/SSD handoff. Broad global goal remains
+  ACTIVE/INCOMPLETE, no next responsibility admitted automatically.
+- Root accepted exact author/reviewer freezes f33d8a40/140 and73ccea3a/106;
+  four-file apply_patch publication, actualmain55a ratchet-import0/findings[].
+  Fresh integrated366persisted/374complete PASS0/no failure/skip, analytics
+ 625/256 and driver49/16+orphan27/10 full100. Raw XML/Python coverage
+  audit0 proves exact author counters/maps and unchanged legacy exclusions.
+  Independent complete-module AST proof0, full report/aggregate audit0,
+  lint-backend0 and runtime/shared/old12/main custody0. No baseline inflation.
+  Global-check nativeMake2/CLI1 is EXACT historical30, equality audit0; not a
+  new campaign failure. Code/domain/platform graphs and coherent publication
+  are tracked separately in INTEGRATION_R31_SESSION_DISTANCE_2026-10-11.md.
+  Root32GiB storage restored externally; no Coordinator cleanup/pruning of
+  worktrees/evidence. Whole campaign ACTIVE/INCOMPLETE, extreme tail unchanged.
+- Author candidate terminal IMPROVED/READY_FOR_REVIEW, token RELEASED; freeze
+  f33d8a40/140 members independently rehashed before exact reviewer import.
+  Persisted366 and complete374 candidate native/wrapper0/full100; analytics
+  625/625 statements256/256branches, supplemental8 adds no coverage. Cognitive
+  file749→734/effectiveLOC1200→1193, fuel240→235 and km44→39; no finding credit.
+  Native report/actualmain55a ratchet/style/custody/code graph0. Root integration
+  runtime still original; distinct reviewer ACTIVE sole serial native token.
+  Publication requires independent acceptance and fresh root gate evidence.
+- Renewed continuation resolves optional wrapper-recovery preference using
+  Coordinator best judgment: explained outer Bash failure requires no domain
+  or policy decision. Admit ONLY distinct immutable private wrapper/new original
+  persisted366 gate; no original374 rerun or evidence erasure. Runtime still
+  gated on actual persisted whole100. Sole serial token author, reviewer static.
+- Author process STOP: original374 native0/full100, outer union wrapper2 after
+  author edited LIVE script during pytest to add persisted filter, yielding
+  resumed-offset unexpected EOF. Native logs/XML/coverage/exit retained and root
+  verified; outer2 disclosed, not PASS. Frozen post-failure wrapperdba3086c
+  syntax0. Separately admit distinct byte-frozen persisted-before366 wrapper;
+  no runtime change before proof, no original374 restart or live-script edit.
+- Root NEWspec review distinguishes20persisted+4real-login public cases from
+ 8unflushed ORM error/None probes (originalfocus32PASS). Supplemental probes
+  cannot certify persisted-domain coverage. LIVE original374 kept/polled;
+  separately required original/candidate union-persisted366 with unchanged
+  whole100 and test filter not synthetic/not unflushed. Complete374 remains
+  required for all invariants; no tests weakened or runtime coverage excluded.
+- Previous goal turn PROGRESS: R30 characterization/root/governance closure
+  f94e4534/6089b05e, actual postcommitmain55a ratchet0 and runtime/main/baseline
+  custody0, rootfreeze0ddf0123/111members. Original platform-docs ENOSPC2 kept;
+  external storage recovery4.3GiB allows separately named regeneration0 with
+  semantic chunk1/1 and graph audit0. No Coordinator cache deletion/prune/move.
+- New exclusive R31 registry created BEFORE dedicated6089/55a SSD worktrees
+  and author/reviewer activation. Single responsibility: remove identical
+  nested distance policy duplication in fuel/km, not broad endpoint extraction.
+  Both helpers cognitive5/cyclomatic5/LOC7; original source49b9ffee; preserve
+  truthy route precedence/zero fallback/None odometers/clamp/float errors and
+  attribute order. Require genuine public route contracts and real whole100.
+- Author ACTIVE sole serial heavy token. Fresh original whole report native0:
+ 1673files20323callables1924errors2740warnings4664findings. Coordinator custody
+  all1673runtime/shared8/old12/main exact; old dirty analytics snapshots must
+  match frozen terminal R19/R24/R28 provenance before author runtime mutation.
+- Distinct reviewer STATIC TERMINAL, pending criteria report77f0886e, no native
+  execution/import/candidate acceptance. Supplemental pure-helper probes cannot
+  replace persisted fuel/km/query/auth tests; nonnull start odometer is a DB
+  constraint, not waived to fabricate public coverage. Independent native
+  admission only after author frozen terminal/released and exact root import.
+- Whole global backend/frontend/worker goal ACTIVE / INCOMPLETE. No R31 reduction
+  or completion claim before actual candidate metrics/tests/coverage/ratchet/
+  review/integration; baseline/scope/threshold/ignores unchanged.
+
 ## 2026-10-11 — R30 characterization published and root verified
 
 - Closure native STOP: platform docs graph completed semantic chunk1/1, then

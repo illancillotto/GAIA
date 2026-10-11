@@ -1,5 +1,111 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## R31 checkpoint — 2026-10-11, session distance duplication eliminated
+
+Coherent runtime/test/report/domain publication7834d382, actual postcommit
+main55a ratchet0/findings[] and custody0. Dedicated code/domain/platform graphs
+and raw audits0; governance final-head/freeze evidence in R31 closure handoff.
+No main merge/push, baseline/scope/threshold inflation or next hotspot admitted.
+
+**IMPROVED / integrated; global campaign ACTIVE / INCOMPLETE.** Initial
+main55a remains authoritative, operational pre-slice HEAD6089 on dedicated
+refactor/complexity-campaign-20261008. Main concurrent work untouched.
+Author freeze f33d8a40/140 and independent reviewer73ccea3a/106 rehashed
+before exact apply_patch publication. No automatic branch merge or cherry-pick.
+
+One same-file typed pure policy replaces two identical fuel/km implementations.
+Fuel cognitive/cyclomatic/LOC240/158/344→235/154/337; km44/37/137→39/33/130.
+File cognitive749→734, cyclomatic514→501, LOC1200→1193, callable29→28.
+Physical policy2→1 and coverage branch outcomes260→256; recursive scanner
+aggregate reductions are NOT independent business-rule counts. No finding credit.
+
+Author, independent reviewer and fresh integration each reproduce366persisted
+and374complete test PASS, no failure/error/skip. Whole analytics625/625statements
+and256/256branches100; unchanged driver49/16 and orphan27/10full100. Eight
+unflushed ORM probes are supplemental only and add no coverage. Query/auth/
+lifetime/other module AST exact; all1672other runtime metrics/input bytes exact.
+Ruff/format/lint, full native report/raw audits/custody PASS.
+
+Actualmain55a ratchet-import PASS0/findings[]. Global-check Make2/CLI1 retains
+EXACT30historical finding objects, independent equality audit0. Baseline38e6
+unchanged, no threshold/exclusion/ignore changes. Original author374 native0
+with outer wrapper2 is preserved as process deviation; distinct immutable
+persisted proof and candidate/independent/root gates0, no live-script edits.
+Graphify and coherent commit/postcommit evidence tracked separately in
+INTEGRATION_R31_SESSION_DISTANCE_2026-10-11.md, not assumed from tests.
+
+### Measured current global metrics
+
+| Metric | October8 initial | R31 integrated | Delta | Delta % |
+| --- | ---: | ---: | ---: | ---: |
+| Files | 1665 | 1673 | 8 | 0.48% |
+| Callables | 20261 | 20322 | 61 | 0.30% |
+| Error observations | 1956 | 1924 | -32 | -1.64% |
+| Warning observations | 2758 | 2740 | -18 | -0.65% |
+| Overlapping observations | 4714 | 4664 | -50 | -1.06% |
+
+Observations overlap and are not independent defects. Full scope includes
+worker tests; application extreme tail excludes them and remains5>300/17>200/
+55>100. Targets and final broad backend/frontend/worker/build/stackE2E gates
+remain unmet; these pertinent gates are not the complete application suites.
+
+### Domain observations
+
+| Domain | Error before | Error current | Warning before | Warning current |
+| --- | ---: | ---: | ---: | ---: |
+| Backend Catasto | 186 | 186 | 233 | 233 |
+| Backend Ruolo | 117 | 117 | 230 | 230 |
+| Backend Presenze | 93 | 93 | 240 | 240 |
+| Backend Wiki | 108 | 106 | 193 | 195 |
+| Legacy elaborazioni services | 120 | 120 | 156 | 156 |
+| Backend Operazioni | 103 | 102 | 107 | 106 |
+
+### Remaining top 30 — current R31 native whole AST
+
+| Callable | Cognitive | Cyclomatic | LOC |
+| --- | ---: | ---: | ---: |
+| `frontend/src/app/utenze/[id]/page.tsx` / `DetailContent` | 391 | 304 | 1908 |
+| `frontend/src/app/catasto/anomalie/page.tsx` / `CatastoAnomaliePageContent` | 390 | 342 | 2109 |
+| `frontend/src/app/presenze/giornaliere/page.tsx` / `PresenzeGiornalierePage` | 385 | 341 | 2023 |
+| `frontend/src/components/elaborazioni/capacitas-workspace.tsx` / `ElaborazioniCapacitasWorkspace` | 324 | 301 | 2412 |
+| `frontend/src/app/catasto/gis/page.tsx` / `CatastoGisPage` | 317 | 281 | 1889 |
+| `frontend/src/components/elaborazioni/settings-workspace.tsx` / `ElaborazioniSettingsWorkspace` | 296 | 265 | 1358 |
+| `frontend/src/app/me/me-page-content.tsx` / `MePageContent` | 271 | 256 | 1133 |
+| `backend/app/services/elaborazioni_bonifica_sync.py` / `_run_bonifica_sync_background` | 269 | 47 | 232 |
+| `frontend/src/components/elaborazioni/bonifica-sync-workspace.tsx` / `ElaborazioniBonificaSyncWorkspace` | 259 | 202 | 835 |
+| `frontend/src/components/catasto/gis/MapContainer.tsx` / `MapContainer` | 246 | 169 | 953 |
+| `backend/app/modules/operazioni/routes/analytics.py` / `anomalies_analytics` | 239 | 112 | 320 |
+| `backend/app/modules/operazioni/routes/analytics.py` / `fuel_analytics` | 235 | 154 | 337 |
+| `frontend/src/app/presenze/collaboratori/[id]/page.tsx` / `PresenzeCollaboratoreDetailPage` | 233 | 212 | 1600 |
+| `frontend/src/components/elaborazioni/batch-detail-workspace.tsx` / `ElaborazioneBatchDetailWorkspace` | 216 | 177 | 751 |
+| `frontend/src/app/presenze/export/page.tsx` / `PresenzeExportPage` | 209 | 172 | 1097 |
+| `backend/app/modules/organigramma/services/whitecompany_sync.py` / `sync_from_whitecompany` | 205 | 77 | 290 |
+| `frontend/src/app/ruolo/tributi/page.tsx` / `RuoloTributiPageContent` | 204 | 173 | 1064 |
+| `backend/app/modules/network/services.py` / `run_network_scan` | 195 | 101 | 267 |
+| `frontend/src/components/utenze/utenze-subjects-section.tsx` / `UtenzeSubjectsSection` | 184 | 169 | 991 |
+| `frontend/src/app/network/tracking/page.tsx` / `TrackingContent` | 183 | 159 | 913 |
+| `backend/app/modules/network/router/helpers/traffic.py` / `_build_network_statistics_summary` | 181 | 101 | 214 |
+| `frontend/src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx` / `AnagraficaBulkPanel` | 181 | 155 | 839 |
+| `backend/app/modules/wiki/services/conversation_metrics.py` / `refresh_wiki_conversation_daily_metrics` | 178 | 49 | 153 |
+| `frontend/src/app/catasto/import/page.tsx` / `CatastoImportPage` | 175 | 149 | 1114 |
+| `frontend/src/app/utenze/import/page.tsx` / `ImportContent` | 173 | 160 | 971 |
+| `frontend/src/app/ruolo/page.tsx` / `RuoloDashboardPage` | 168 | 157 | 1147 |
+| `frontend/src/features/organigramma/organigramma-workspace.tsx` / `OrganigrammaWorkspace` | 167 | 147 | 1086 |
+| `frontend/src/features/wiki/WikiRequestsPage.tsx` / `WikiRequestsPage` | 166 | 132 | 759 |
+| `frontend/src/app/gaia/users/page.tsx` / `GaiaUsersPage` | 162 | 146 | 1011 |
+| `frontend/src/app/presenze/configurazione/page.tsx` / `PresenzeConfigurazionePage` | 158 | 148 | 1135 |
+
+### Remaining blockers and next bounded work
+
+Catasto original page coverage100 remains FAIL after R30: inaccessible guards/
+fallback decision unresolved, no synthetic credit or runtime waiver. R25 matcher
+ambiguity14 remains separate, not silently covered by R16 authorization.
+Historical30 provenance is unchanged, not absorbed into baseline. No unsafe
+regression integrated. Next prioritize the remaining extreme tail only with
+exclusive ownership, demonstrable equivalence and genuine full-file100; stop
+this single policy slice rather than extending either endpoint indiscriminately.
+All earlier checkpoints below remain historical, superseded by this measurement.
+
 ## R30 checkpoint — 2026-10-11, original Catasto AdE workflow
 
 Whole original campaign **ACTIVE / INCOMPLETE**. R30 independently accepted
