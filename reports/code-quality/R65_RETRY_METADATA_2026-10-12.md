@@ -97,6 +97,11 @@ PASS; its ambiguity remains distinct from the change ratchet.
 
 Independent static review, Graphify publication and durable manifest are recorded
 in the companion `R65_RETRY_METADATA_2026-10-12.json` after terminal publication.
+Final static closure detected one V1 manifest self-reference: stdout receipt
+was captured empty before emission. V1 and closure FAIL are preserved unchanged;
+V2 removes only that self-generated record and verifies all other92 original
+hashes. Finalized receipt is bound separately in the append-only handoff chain.
+This custody correction is a separate docs-only commit, not a native gate retry.
 Mutable PROGRESS and ownership were archived before updates. Historical receipts
 and failures were not rewritten. Evidence root:
 
