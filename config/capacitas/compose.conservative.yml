@@ -1,0 +1,15 @@
+x-capacitas-conservative: &capacitas-conservative
+  CAPACITAS_REQUEST_POLICY_PATH: /runtime-data/capacitas/request-policy.json
+  CAPACITAS_REQUEST_INTERVAL_SECONDS: "5"
+  CAPACITAS_REQUEST_COOLDOWN_SECONDS: "300"
+  CAPACITAS_REQUEST_MAX_COOLDOWN_SECONDS: "3600"
+
+services:
+  backend:
+    environment: *capacitas-conservative
+  platform-scheduler:
+    environment: *capacitas-conservative
+  elaborazioni-worker-runtime:
+    environment:
+      <<: *capacitas-conservative
+      ELABORAZIONI_CAPACITAS_PARALLEL_WORKERS: "1"

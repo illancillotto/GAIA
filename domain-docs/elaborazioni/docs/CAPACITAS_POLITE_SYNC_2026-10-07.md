@@ -1,5 +1,73 @@
 # Capacitas: sincronizzazione a carico ridotto
 
+## Profilo conservativo preparato l'8 ottobre
+
+`config/capacitas/compose.conservative.yml` imposta almeno 5 secondi dopo
+ogni risposta, una richiesta globale alla volta e una sessione irrigue.
+Il tetto teorico e dodici richieste al minuto complessive, inclusi login,
+redirect e keep-alive, quando tutti i processi condividono la policy.
+Le pause dopo errori consecutivi diventano 5, 10, 20, 40 e poi 60 minuti;
+un `Retry-After` piu lungo continua a prevalere. Gli heartbeat dei job
+restano attivi durante queste pause.
+
+L'autosync irrigue esegue prima un passaggio storico completo (`full-v1`),
+anche attraverso cambi di giorno e riavvii. Al primo avvio della nuova logica
+un vecchio cursore viene azzerato: i completamenti legacy potevano includere
+errori e non provano che tutto lo storico sia stato acquisito. Un chunk con
+errori non avanza il cursore e viene riprovato; solo `succeeded` lo avanza.
+Dopo il passaggio completo, i cicli giornalieri `recent-v1:DATA` aggiornano
+solo l'anno corrente e il precedente (2025 e 2026 oggi), senza cancellare
+lo storico. Gli anni sono fissati nel payload del job e ricalcolati per ogni
+nuovo chunk nel fuso configurato. Tutte le anagrafiche sono ancora cercate
+per rilevare domande nuove, ma i dettagli degli anni precedenti non vengono
+scaricati. Un anno mancante o non valido produce un errore, non un successo
+silenzioso. I job manuali senza `refresh_years` restano senza filtro.
+
+Applicare questo file come ultimo override, dopo tutti i pin e gli hotfix
+esistenti, ai tre servizi. Non eseguire un deploy dal solo Compose base.
+Una futura campagna separata deve ricevere gli stessi parametri e il
+medesimo mount della policy; l'override riguarda solo i tre servizi elencati.
+
+Il profilo e preparato e validato localmente, non applicato al CED:
+la sessione dell'8 ottobre impedisce connessioni SSH (`Operation not permitted`).
+Non avviare i recuperi sospesi per applicare questa configurazione.
+Le finestre orarie e gli intervalli di refresh restano quelli gia configurati;
+le sezioni successive descrivono il profilo precedente e il rilascio del 7 ottobre.
+
+### Verifica locale della nuova logica
+
+152 test mirati superati; statement e branch al 100% sui quattro file runtime
+toccati. `make lint-backend` e Compose risolto verificati: intervallo `5`
+per tutti e tre i servizi, una sessione irrigue. Ratchet sul perimetro contro
+la baseline del merge-base di `origin/main` (`d6c34ba8`) senza finding;
+baseline, soglie ed esclusioni non modificate. Metriche cognitive/cyclomatic/LOC:
+scheduler `9/9/23 -> 6/7/23`, riconciliazione `18/13/17 -> 16/12/17`,
+worker seriale irrigue `30/15/41` invariato; worker parallelo
+`10/8/24 -> 12/9/25`, sotto soglia. Restano 11 error-level legacy nel
+perimetro, senza incremento. Graphify backend aggiornato; estrazione semantica
+docs incompleta per `Connection error` (exit 0 non indica successo).
+
+### Consolidamento verificato del 12 ottobre
+
+La ricevuta precedente descrive la verifica storica dell'8 ottobre; non sostituisce
+i gate sul contenuto consolidato. La nuova verifica esegue 147 test, senza skip
+o deselezioni: statement e branch al 100% sui quattro file runtime, senza nuove
+esclusioni o sostituzioni di primitive Python per fabbricare percorsi.
+
+Il worker inCASS nel runtime condiviso esplicita il contatore dei tentativi e
+mantiene la terminazione nei percorsi gia esistenti, evitando l'uscita irraggiungibile
+del precedente iteratore. Il test artificioso con `range` vuoto e sostituito dalla
+verifica dello stato resume non-dict; un controtest copre tre timeout consecutivi,
+pause 2/5 secondi, rollback, commit finale e chiusura di ogni sessione/DB nel medesimo
+ordine. Retry, transazioni e cleanup non cambiano.
+
+I controtest HTTP con trasporto sintetico usano parser e scraper reali: il filtro
+degli anni precede le richieste dettagli e un anno invalido interrompe quelle
+richieste. Nessun portale o database di produzione viene contattato. Il profilo
+conservativo resta una configurazione preparata, non un deploy autorizzato da
+questo consolidamento. Evidenze e gate di ammissione sono registrati in
+`reports/code-quality/IRRIGUE_ADMISSION_2026-10-12.md`; la campagna resta in pausa.
+
 ## Problema e comportamento
 
 Il 7 ottobre il batch particelle 3266 presentava 39 errori su 39 elementi,
