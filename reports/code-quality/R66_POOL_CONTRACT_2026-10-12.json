@@ -1,0 +1,87 @@
+{
+  "classification": "DIAGNOSED_NO_SAFE_UNIVERSAL_CLEANUP",
+  "global_goal": "INCOMPLETE",
+  "branch": "refactor/complexity-campaign-20261008",
+  "start_head": "a6d4b7833dbf4a1bfdbd7879217930ddca88a8d0",
+  "actual_main_merge_base": "a51a48dc4caefbdd1aea82fe4d749054b9465970",
+  "runtime_changed": false,
+  "baseline_policy_thresholds_exclusions_changed": false,
+  "pool_sha256": "b39a936771c238e13d63f82b8b269a55118818c9ea1d8ccdd3e4cf6b080ff894",
+  "worker_sha256": "bc8fec11dd44688161d7c5f32f3b5b029d50280b033d861c5ae0fc3c7b9607bf",
+  "production_contract_audit": {
+    "call_sites": 1,
+    "no_suspension_between_checks": true,
+    "refresh_excludes_started_ids": true,
+    "synchronous_callback_count": 4,
+    "runtime_scheduling_hook_matches": [],
+    "integration_inputs": 2852,
+    "main_inputs": 2851,
+    "r65_source_inputs_exact": true,
+    "scope": "Current unique-ID non-reentrant cooperative callback contract only"
+  },
+  "native_observations": {
+    "default": "511false -> 522false -> 511true; both runners finished",
+    "official_eager": "511false -> 522false -> 511true; new runner eagerly done, original pending at522",
+    "unique_id_probe_exit": 0,
+    "duplicate_id_counterexample": "511false -> 522true -> 523; displaced original runner pending",
+    "duplicate_id_probe_exit": 0,
+    "duplicate_id_callback_violates_actual_production_filter": true,
+    "all_owned_counterexample_tasks_cancelled_gathered_terminal": true,
+    "task_done_wait_methods_mocked": false,
+    "native_retries": 0,
+    "coverage_run_or_global100_claim": false,
+    "counterexample_admitted_as_coverage_test": false
+  },
+  "decision": "PRESERVE_GUARD; supported callback-contract decision required before runtime cleanup",
+  "coverage": {
+    "pool_full_file": "FAIL_UNCHANGED_LINE523_ARC522_TO523",
+    "worker_full100": "FAIL",
+    "retry_metadata_r65": "17/17_statements_6/6_branches_100"
+  },
+  "gates": {
+    "ratchet_BASE_REF": "main",
+    "ratchet_baseline_commit": "a51a48dc4caefbdd1aea82fe4d749054b9465970",
+    "ratchet_exit": 0,
+    "ratchet_findings": [],
+    "diff_check": "PASS",
+    "full_suites_report": "NOT_RERUN_UNCHANGED_INPUTS",
+    "global_baseline_status": "SEPARATE_AMBIGUITY_NOT_DECLARED_PASS"
+  },
+  "last_measured_metrics_unchanged": {
+    "files": 1681, "callables": 20360, "errors": 1920,
+    "warnings": 2736, "overlapping_findings": 4656
+  },
+  "review": {
+    "decision": "DIAGNOSED_NO_SAFE_UNIVERSAL_CLEANUP",
+    "base_report_sha256": "f432f6e2288771dbcbf2eb86e09167dc0d01cd7566a97f8cc277d8e25ccb0b1f",
+    "counterexample_report_sha256": "0df9d6f79ba8260cde6dbd7cf433030e133f0f12d416adad96bcd1d7f1abf01e",
+    "reviewer_manifest_sha256": "152db2f8e555ca449eee1947a29f719899d4701c1eeb93ab78118ccf65c6e397",
+    "reviewer_terminal": true
+  },
+  "graphify": {
+    "platform_docs": "PASS_semantic_chunk1_of1_done_no_failed_chunks",
+    "nodes_edges_communities": [806, 1008, 152],
+    "tokens_in_out": [5720, 1626],
+    "estimated_cost_usd": 0.0049,
+    "code_graph_update": "NOT_REQUIRED_NO_CODE_CHANGE",
+    "graphs_not_committed": true
+  },
+  "evidence": {
+    "root": "/media/cbo/ARCHIVIO_SSD/.codex-gaia-campaign-resume-20261012/r66-pool-contract",
+    "manifest": "publication/EVIDENCE_MANIFEST.json",
+    "manifest_sha256": "58e7f8c77eb173b621f4d7d492e6b3aaab761c13866f422ce9caf30194807c5d",
+    "records_verified": 54,
+    "stdout_receipt_explicitly_excluded_from_manifest": true,
+    "post_commit_chain": "publication/HANDOFF_CHAIN.json",
+    "prior_freezes_preserved": true
+  },
+  "remaining": [
+    "pool supported-callback-contract decision",
+    "worker full-file coverage FAIL and PostgreSQL migration skip NOT VERIFIED",
+    "449 backend skips and 7 E2E skips NOT VERIFIED",
+    "global baseline/matcher ambiguity",
+    "R43/R51/R63 excluded partials",
+    "extreme hotspot tail and global targets"
+  ],
+  "no_push_or_main_merge": true
+}

@@ -1,5 +1,25 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-12 — R66 pool guard: scoped proof and real counterexample, no removal
+
+- Previous goal turn is verified R65 progress, not global completion. R66 is
+  read-only diagnosis, dedicated HEADa6d4b783/main-basea51a48dc; source/baseline
+  unchanged, ownership and PROGRESS archived before edits.
+- AST binds sole production pool caller and four synchronous callbacks. No
+  suspension between completion checks; production refresh excludes pending
+  IDs. Native default/eager probes both show original runner pending at second
+  guard, then genuine completion at next first guard. No Task.done/wait mocks.
+- Separate native counterexample deliberately reuses pending ID in callback,
+  contrary to production refresh: official eager tasks reach line523 and leave
+  original runner pending. Explicit cancel/gather closes owned tasks. No coverage
+  run, manufactured100 or runtime repair. Universal dead-branch claim refuted;
+  no guard removal or execution-contract change authorized.
+- DIAGNOSED/NO_SAFE_UNIVERSAL_CLEANUP, not IMPROVED. Report and companion R66
+  bind independent review, actual-main gate and durable handoff. Source input
+  identity checked against R65; full suites/report not blindly repeated.
+  Worker100FAIL/PGskip,449backend/7E2E skips, matcher ambiguity, excluded partials
+  and extreme complexity tail remain open; global goal INCOMPLETE.
+
 ## 2026-10-12 — R65 retry metadata: genuine helper coverage closure, runtime unchanged
 
 - Test-only continuation after V4 checkpoint b93b636c; dedicated branch,
