@@ -1,5 +1,26 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-12 — R68 original Presenze/WhatsApp PostgreSQL tests verified
+
+- Verification-only from HEAD8f7e0a8e/main-basea51a48dc; registry before execution,
+  prior documents frozen. No runtime/test/migration/policy modification; main
+  and untracked Bonifica test preserved. Unrelated build terminal, no job killed.
+- Immutable R62 XML inventory449skips/12reasons/43classnames saved. Two original
+  WhatsApp PGtests freshly2PASS/0skip/fail/error, one invocation/retry0,1.406s
+  JUnit. Genuine advisory lock survives app commits, excludes competitor and
+  releases on exception; migrations/receipts/persistence/constraints/roundtrip.
+- Pinned private PostgreSQL16.15, networknone/read-only/tmpfs/noports/noexisting
+  volumes; new short Unixsocket only, synthetic replacement env, no gateway.
+  DBschemas/userrelations/zero advisorylocks exact; owned container removed,
+  43existingcontainers/67volumes exact.2852/2851protected source inputs unchanged.
+- Independent preflight/terminal accepted; actual-main ratchetPASS0. Static
+  JSON extraction failed on echoed Make variable, disclosed; no native rerun.
+  Report R68_WHATSAPP_POSTGRES_2026-10-12 and companion bind gates/handoff.
+- Historical R62 7142PASS/449SKIP not rewritten;2identities freshly verified,
+  other447 still unverified here.7E2Eskip, pool/fullworker100FAIL, global matcher,
+  excluded partials and extreme tail remain. No complexity credit or global
+  completion; selective local documentation checkpoint only, no main merge/push.
+
 ## 2026-10-12 — R67 original worker PG migration variant freshly verified
 
 - No runtime refactor. Dedicated HEAD92c4cfc7/main-basea51a48dc; ownership before
