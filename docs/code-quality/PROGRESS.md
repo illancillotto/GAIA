@@ -1,5 +1,30 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-12 — R65 retry metadata: genuine helper coverage closure, runtime unchanged
+
+- Test-only continuation after V4 checkpoint b93b636c; dedicated branch,
+  actual main/merge-base a51a48dc. Ownership precedes execution; old PROGRESS
+  and registry frozen externally. Main/untracked Bonifica spec preserved.
+- New mapped-request tests characterize default/False/True clear-baseline,
+  empty/populated baseline, four cleared fields, retained state and idempotence;
+  three exact exception reason/code cases. Two model keyword corrections before
+  first pytest run, no hidden failed run. Standalone9PASS, existing pure
+  coordinator1PASS, zero skip/retry. Helper17/17statement6/6branch100 in both
+  raw reports, no exclusions; exact runtime SHA unchanged against HEAD/main.
+- Fullreport1681files20360callables1920error2736warning4656finding. All prior
+  R64 file/callable/finding objects exact; sole test adds1file2callables, cogmax5,
+  LOC65, no finding. TEST_ONLY_CHARACTERIZATION, not complexity reduction.
+- Style/format/report/ratchetmain/diff-check PASS, zero ratchet finding with
+  actual authoritative basea51a48dc.2850integration/2849main protected inputs
+  exact beforeafter; baseline/exceptions exact expected hashes and Git refs.
+  Native env-i reconstruction limits and static JSON extraction failure documented;
+  raw receipts preserved, no native retry or baseline/policy change.
+- Report R65_RETRY_METADATA_2026-10-12.md and companion record independent
+  review/publication. Worker full suite not blindly repeated; R50 remains
+  782PASS/1PostgreSQLskip, aggregate100FAIL with pool523/522→523 unresolved.
+  Seven E2E/449backend skips remain NOT VERIFIED; global matcher ambiguity,
+  R43/R51/R63 exclusions and extreme tail remain open. Global goal INCOMPLETE.
+
 ## 2026-10-12 — Chromium diagnosis and private E2E V4 green checkpoint
 
 - User reactivates global goal; no new application refactor. Previous V3 turn
