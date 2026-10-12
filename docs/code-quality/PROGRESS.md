@@ -1,5 +1,26 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-12 — R69 full Ruolo revision verification prepared; reviewer blocked
+
+- R68 is verified progress; no new refactoring. Dedicated HEADe09f6f84/main-base
+  a51a48dc. Largest skipped file selected: original125notice_revision identities,
+  including124historical PGskips and1SQLitePASS; no tests/assertions changed.
+- Registry before work, mutable docs/input sources frozen;2852integration/
+  2851main protected hashes exact against R68. Real UUIDschema fixtures, deferred
+  trigger/COPY/replica, transaction/lock/race and actual domain-writer behavior
+  inventoried. Prepared private networknone/tmpfs/pinned-image runner unlaunched.
+- Independent read-only CLI review terminalexit1: configuredgpt-5.4 HTTP503
+  no compatible account. Raw transport retries/failure retained; no accepted
+  review, container, DB or pytest invocation. User decision requested for a
+  distinctgpt-6.1-solreview, no global config edit. Native work remains blocked.
+- Ruolo Graphifyqueryexit2 missing corpus graph retained; platformdocs query
+  fallbackPASS. Diff-checkPASS, last executed ratchet is R68mainPASS0; unchanged
+  runtime means no repeated full suite/report or newly claimed gate result.
+- Report R69_NOTICE_REVISION_PREFLIGHT_2026-10-12 records pending ownership and
+  durable preparation. Historical449skips unchanged,2freshR68identities verified,
+  other447 unverified;7E2Eskips/worker100FAIL/matcher/extreme tail remain.
+  Global goal ACTIVE/INCOMPLETE, not paused/complete; no runtime admission/push.
+
 ## 2026-10-12 — R68 original Presenze/WhatsApp PostgreSQL tests verified
 
 - Verification-only from HEAD8f7e0a8e/main-basea51a48dc; registry before execution,
