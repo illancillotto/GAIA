@@ -38,6 +38,10 @@ from app.modules.operazioni.routes._orphan_session_operators import (
     normalize_orphan_session_name,
     orphan_operator_identity,
 )
+from app.modules.operazioni.services.inactive_vehicle_anomalies import (
+    inactive_vehicle_fuel_anomaly,
+    inactive_vehicle_session_anomaly,
+)
 from app.schemas.operazioni_analytics import (
     AnalyticsSummary,
     AnomaliesResponse,
@@ -1213,24 +1217,24 @@ def anomalies_analytics(
 
         for a in acts:
             diff = abs(
-                int(a.duration_minutes_declared or 0)
-                - int(a.duration_minutes_calculated or 0)
+                int(a.duration_minutes_declared or 0) - int(a.duration_minutes_calculated or 0)
             )
-            if diff > THRESHOLD_MIN:
-                anomalies.append(AnomalyItem(
-                    id=f"hours_{a.id}",
-                    type="hours_discrepancy",
-                    severity="low" if diff < 120 else "medium",
-                    description=f"Discrepanza ore: dichiarate vs calcolate ({diff} min di scarto)",
-                    entity_id=str(a.id),
-                    entity_label=_user_display_name(umap.get(a.operator_user_id)),
-                    detected_at=a.started_at.isoformat(),
-                    details={
-                        "declared_min": int(a.duration_minutes_declared),
-                        "calculated_min": int(a.duration_minutes_calculated),
-                        "diff_min": diff,
-                    },
-                ))
+            if diff <= THRESHOLD_MIN:
+                continue
+            anomalies.append(AnomalyItem(
+                id=f"hours_{a.id}",
+                type="hours_discrepancy",
+                severity="low" if diff < 120 else "medium",
+                description=f"Discrepanza ore: dichiarate vs calcolate ({diff} min di scarto)",
+                entity_id=str(a.id),
+                entity_label=_user_display_name(umap.get(a.operator_user_id)),
+                detected_at=a.started_at.isoformat(),
+                details={
+                    "declared_min": int(a.duration_minutes_declared),
+                    "calculated_min": int(a.duration_minutes_calculated),
+                    "diff_min": diff,
+                },
+            ))
 
     # 6. Fuel logs on decommissioned vehicles
     if not anomaly_type or anomaly_type == "inactive_vehicle":
@@ -1262,28 +1266,10 @@ def anomalies_analytics(
 
             for log in bad_logs:
                 v = vmap_inactive.get(log.vehicle_id)
-                anomalies.append(AnomalyItem(
-                    id=f"inact_v_log_{log.id}",
-                    type="inactive_vehicle",
-                    severity="high",
-                    description="Rifornimento registrato su mezzo dismesso",
-                    entity_id=str(log.vehicle_id),
-                    entity_label=getattr(v, "plate_number", None) or getattr(v, "code", None) or str(log.vehicle_id),
-                    detected_at=log.fueled_at.isoformat(),
-                    details={"liters": float(log.liters or 0), "vehicle_code": getattr(v, "code", None)},
-                ))
+                anomalies.append(inactive_vehicle_fuel_anomaly(log, v))
             for s in bad_sessions:
                 v = vmap_inactive.get(s.vehicle_id)
-                anomalies.append(AnomalyItem(
-                    id=f"inact_v_sess_{s.id}",
-                    type="inactive_vehicle",
-                    severity="high",
-                    description="Sessione d'uso registrata su mezzo dismesso",
-                    entity_id=str(s.vehicle_id),
-                    entity_label=getattr(v, "plate_number", None) or getattr(v, "code", None) or str(s.vehicle_id),
-                    detected_at=s.started_at.isoformat(),
-                    details={"vehicle_code": getattr(v, "code", None)},
-                ))
+                anomalies.append(inactive_vehicle_session_anomaly(s, v))
 
     # 7. Sessions / fuel logs for inactive/removed operators
     if not anomaly_type or anomaly_type == "inactive_operator":
