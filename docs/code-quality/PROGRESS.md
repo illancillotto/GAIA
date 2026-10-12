@@ -1,5 +1,39 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-12 — Private E2E V3: device quota obstacle removed, browser STOP
+
+- Dedicated user-authorized owned-containment/exclusive-transaction guard:
+  32unitPASS plus separate real detached-child proof0; six distinct supervisor
+  boundary testsPASS. Independent source-frozen reviews accepted the bounded
+  current-stack attempt, not historical complete build-byte provenance or E2EPASS.
+- Exact current61collection/24specs; unchanged config/test/auth/quota. One
+  native invocation per case in original order, workers1/retries0; owned stack
+  restarted between cases, explicitly NOT one full-suite invocation.
+  50PASS,5explicitSKIP,1FAIL,5NOT_RUN. Historical quota-failing case42
+  ruolo-avvisi genuinelyPASS; devices no longer accumulate between cases.
+- Case55 ruolo-solleciti "conferma lotto e conflitto1440px" FAIL BEFORE
+  assertions: full Chromium channel browser exitsSIGTRAP during launch.
+  Cause not established; not a demonstrated application/Ruolo regression.
+  Native JSON/log/trace and first-failure preserved; no cleanup or retry on
+  failed case. Remaining56..60 not run, skip conditions unchanged.
+- Initial synthetic reset21sessions/20devices;55completed lifecycle receipts
+  then delete20sessions/20devices total. Each removal after owned kernelempty,
+  freeports and real BEGINEXCLUSIVE; before-image/row inventory durable,
+  schema/FKs and280other tables exact per transaction. OriginalR49DB unchanged.
+- Strict teardown recorded nativeexit1 as failure AFTER stopping owned stack;
+  kernelpopulated0 and no PIDs. Separate poststop identity/empty/ports receipt
+  closes only exact empty owned cgroup; no signaling or failed-case DBcleanup.
+  All services terminal; no process/test/build/scanner remains active.
+- Protected2732inputs and main custody equal before/after. R61 frontend1047
+  and selected200artifacts exact; current serving1405files/nft253/browser8
+  snapshot bound, NOT historical full serving-byte archive equivalence.
+  No certified build/unit/backend suite repeated; runtime/baseline unchanged.
+- SSD evidence in resume20261012/e2e-lifecycle-v3; prior mutable governance
+  frozen before updates. Report E2E_LIFECYCLE_V3_2026-10-12 recordsSTOP and
+  next separate browser diagnosis.449backend skips, worker coverageFAIL,
+  global baseline ambiguity and R43/R51/R63 exclusions remain open.
+  Global goal INCOMPLETE; no new refactoring or main integration.
+
 ## 2026-10-12 — Private E2E harness V2 authorized, new preparation STOP
 
 - User approves distinct correction/verification after synthetic-device

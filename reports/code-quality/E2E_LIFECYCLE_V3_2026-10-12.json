@@ -1,0 +1,88 @@
+{
+  "classification": "DEVICE_LIFECYCLE_VERIFIED_E2E_STOP_BROWSER_LAUNCH",
+  "global_goal_complete": false,
+  "branch": "refactor/complexity-campaign-20261008",
+  "runtime_input_head": "050db233a8a6f08a2bb2072d8f56d6da246c9c92",
+  "actual_merge_base": "a51a48dc4caefbdd1aea82fe4d749054b9465970",
+  "main_head_unchanged": "a51a48dc4caefbdd1aea82fe4d749054b9465970",
+  "native": {
+    "collected": 61,
+    "attempted": 56,
+    "passed": 50,
+    "skipped_not_verified": 5,
+    "failed": 1,
+    "not_run": 5,
+    "retries": 0,
+    "separate_case_invocations": true,
+    "not_full_suite_single_invocation": true,
+    "failure": "case55 full Chromium launch SIGTRAP, before assertions; cause unknown"
+  },
+  "guard_tests": {
+    "unit_pass": 32,
+    "detached_child_separate_exit": 0,
+    "supervisor_boundary_pass": 6
+  },
+  "cleanup": {
+    "initial_sessions": 21,
+    "initial_devices": 20,
+    "completed_case_receipts": 55,
+    "between_cases_sessions": 20,
+    "between_cases_devices": 20,
+    "other_tables_preserved_per_transaction": 280,
+    "failed_case_cleanup": false,
+    "original_database_unchanged": true
+  },
+  "custody": {
+    "before_after_exact": true,
+    "protected_inputs": 2732,
+    "r61_sources": 1047,
+    "r61_selected_artifacts": 200,
+    "current_serving_files": 1405,
+    "nft_closure_files": 253,
+    "browser_executables": 8,
+    "historical_full_serving_byte_archive_equivalence_claimed": false
+  },
+  "gates": {
+    "diff_check": 0,
+    "ratchet_main": 0,
+    "baseline_changed": false,
+    "graphify_platform_docs_exit": 0,
+    "graphify_semantic_chunk": "1/1 done"
+  },
+  "runtime_metrics_unchanged": {
+    "files": 1680,
+    "callables": 20358,
+    "error": 1920,
+    "warning": 2736,
+    "findings": 4656,
+    "source": "Previously certified R64 report, unchanged runtime custody; not a new full scan"
+  },
+  "residual": [
+    "449 backend skips not verified",
+    "worker full-file coverage FAIL",
+    "global baseline/matcher ambiguity",
+    "R43/R51/R63 excluded",
+    "known main untracked Bonifica characterization spec preserved"
+  ],
+  "external_manifest": {
+    "path": "/media/cbo/ARCHIVIO_SSD/.codex-gaia-campaign-resume-20261012/e2e-lifecycle-v3/publication/EVIDENCE_MANIFEST.json",
+    "sha256": "14c0acaad7fe4937a7e6d237faa98f694db3129f0f879aad145dce20f46851fd",
+    "records": 1990
+  },
+  "key_evidence": {
+    "candidate-runs/native-v3/terminal.json": "2aa1239e68563b69bad7edfe67f89a82c34bb066831f1e8e0c3d26b60c072262",
+    "candidate-runs/native-v3/inputs-before.json": "e5421c647c92bfb4809f1cd49caa7a94fc5e6eb3204255448f33a3f3f693f688",
+    "candidate-runs/native-v3/inputs-after.json": "e5421c647c92bfb4809f1cd49caa7a94fc5e6eb3204255448f33a3f3f693f688",
+    "candidate-runs/native-v3/first-failure.json": "fba6e076470da18eb6270ae34b6df1e0d8428d27ec3e3fdbe2d240e71c529ba6",
+    "candidate-runs/native-v3/case-55/results.json": "792330661f4249d3302f39704cea88283ddbf1b7d5a912030318ba94efc5f0c2",
+    "candidate-runs/native-v3/post-stop-owned-empty-receipt.json": "ce4cb31800d67d09ec81cc67fae74d03d336b1e0233129a3f39a090825d64366",
+    "candidate-runs/native-v3/post-stop-owned-scope-closed.json": "8d6d83c0d085fc326d518b29b7a9c313fbe55b1295842ab332f810bf203b672c",
+    "cleanup-review/TERMINAL_REVIEW.md": "92b4d50af4b6436d39665259f018bd94208728caa2562f0e9f4f768095fdac29",
+    "runner-review/NATIVE_STOP_REVIEW.md": "8d6493a40fef8ed0bf043280f6d701a53b9ee8b3685ed59fecbb9bb309ae005a",
+    "ratchet-main.log": "2f1734b731d106990e77113df590e805bf3a256708c8a1b2d22771c2f5d10c1b",
+    "graphify-platform-docs.log": "9b2f0b74f8888de56cb1c87cfa6c86d300dd2d8159d68a53576f2fd4d92dd2e6"
+  },
+  "commit_scope": "Only new V3 registry, V3 report/evidence index and PROGRESS; no runtime/cache/DB/build/graphify-out",
+  "next_action": "Separate diagnosis of Chromium channel crash; no automatic retry or application/test changes",
+  "external_handoff_sha256": "bdef2028ca43839a6fd9658a756310bbe3608cc6fa6b4703993219cb6168c400"
+}
