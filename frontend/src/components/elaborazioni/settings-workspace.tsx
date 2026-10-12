@@ -63,6 +63,7 @@ import {
   sisterCredentialUpdatePayload,
   useSisterCredentialForm,
 } from "@/components/elaborazioni/sister-credential-form";
+import type { SisterCredentialFormState } from "@/components/elaborazioni/sister-credential-form";
 
 const DEFAULT_UFFICIO = "ORISTANO Territorio";
 const DEFAULT_CAPACITAS_FORM = {
@@ -372,6 +373,37 @@ function applySisterVerification(
   };
 }
 
+function loadedSisterCredentialFields(credential: ElaborazioneCredential): Pick<
+  SisterCredentialFormState,
+  "label" | "sister_username" | "convenzione" | "codice_richiesta" | "ufficio_provinciale" | "active" | "is_default"
+> {
+  return {
+    label: credential.label,
+    sister_username: credential.sister_username,
+    convenzione: credential.convenzione ?? "",
+    codice_richiesta: credential.codice_richiesta ?? "",
+    ufficio_provinciale: credential.ufficio_provinciale,
+    active: credential.active,
+    is_default: credential.is_default,
+  };
+}
+
+function refreshSisterCredentialForm(
+  current: SisterCredentialFormState,
+  status: ElaborazioneCredentialStatus,
+): SisterCredentialFormState {
+  const selected = current.id == null
+    ? undefined
+    : status.credentials.find((credential) => credential.id === current.id);
+  if (selected) return { ...current, ...loadedSisterCredentialFields(selected) };
+  if (!status.default_credential || current.sister_username.trim()) return current;
+  return {
+    ...current,
+    id: status.default_credential.id,
+    ...loadedSisterCredentialFields(status.default_credential),
+  };
+}
+
 export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?: boolean }) {
   const [activeTab, setActiveTab] = useElaborazioniCredentialTab();
   const [credentialStatus, setCredentialStatus] = useState<ElaborazioneCredentialStatus | null>(null);
@@ -479,39 +511,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
     try {
       const result = await getElaborazioneCredentials(token);
       setCredentialStatus(result);
-      setFormState((current) => {
-        if (current.id != null) {
-          const selected = result.credentials.find((credential) => credential.id === current.id);
-          if (selected) {
-            return {
-              ...current,
-              label: selected.label,
-              sister_username: selected.sister_username,
-              convenzione: selected.convenzione ?? "",
-              codice_richiesta: selected.codice_richiesta ?? "",
-              ufficio_provinciale: selected.ufficio_provinciale,
-              active: selected.active,
-              is_default: selected.is_default,
-            };
-          }
-        }
-
-        if (result.default_credential && !current.sister_username.trim()) {
-          return {
-            ...current,
-            id: result.default_credential.id,
-            label: result.default_credential.label,
-            sister_username: result.default_credential.sister_username,
-            convenzione: result.default_credential.convenzione ?? "",
-            codice_richiesta: result.default_credential.codice_richiesta ?? "",
-            ufficio_provinciale: result.default_credential.ufficio_provinciale,
-            active: result.default_credential.active,
-            is_default: result.default_credential.is_default,
-          };
-        }
-
-        return current;
-      });
+      setFormState((current) => refreshSisterCredentialForm(current, result));
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Errore caricamento credenziali");
