@@ -1,5 +1,23 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-12 — Private E2E harness V2 authorized, new preparation STOP
+
+- User approves distinct correction/verification after synthetic-device
+  explanation. V1 source/log/exit/schema frozen byte-exact; original DB retained.
+  New external V2 fixes hardlink fixture with hardlink_to, exact refusal causes,
+  isolated listener diagnostics and fail-fast; adds real SQLite/fsync boundary
+  fault tests. Application/auth/quota/config/policy and cleanup guards unchanged.
+- One V2 invocation terminal1: first positive setup PermissionError reading
+  /proc/2181/fd/0. Zero assertions/cleanup receipts/deletions; remaining24cases
+  NOT_RUN (25 defined). Fresh metadata shows PID2181 systemd dell'utente cbo,
+  PPID1, unrelated to E2E;
+  proc fd access denied. Do not ignore permission failure or claim V2 passes.
+- No stack/Playwright/build/scanner started. Original DB SHAebc902bd exact;
+  R64/main tracked runtime remain unchanged. Distinct static review requested
+  for owned-process/SQLite-exclusive-lock design; new guard/run grant pending.
+  No automatic native retry. `MULTI_AGENT_OWNERSHIP_E2E_V2_2026-10-12.md` owns
+  new external files and separate static-review paths. Global objective incomplete.
+
 ## 2026-10-12 — RESUME R64: global goal active, Bonifica normalization readiness
 
 - R64 pubblicata localmente29994c62; provenance/readiness storichec9da6160.
