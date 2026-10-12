@@ -63,6 +63,7 @@ from app.modules.ruolo.services.capacitas_role_codes import (
 from app.modules.ruolo.services.notice_draft_inputs import capture_inputs
 from app.modules.ruolo.services.notice_eligibility import generation_allowed
 from app.modules.ruolo.services.notice_generation import register_batch_item, register_reminder
+from app.modules.ruolo.services.posta_online_recipient_columns import recipient_address_columns
 from app.modules.ruolo.services.registered_mail_association import (
     associated_avviso_ids,
     manual_association,
@@ -2790,7 +2791,7 @@ def _parse_posta_online_detail_html(
         cells = [_clean_html_text(cell) for cell in _POSTA_ONLINE_CELL_RE.findall(row_html)]
         if len(cells) < 4 or cells[1].lower() == "servizio":
             continue
-        info = cells[4] if len(cells) > 4 else ""
+        address, info, fiscal_identifier = recipient_address_columns(cells)
         rows.append(
             {
                 "source_shipment_id": source_id,
@@ -2800,13 +2801,13 @@ def _parse_posta_online_detail_html(
                 "status_label": status_label,
                 "sent_at": sent_at,
                 "recipient_name": cells[2],
-                "recipient_address": cells[3],
+                "recipient_address": address,
                 "recipient_city": None,
                 "recipient_province": None,
-                "recipient_zipcode": _first_regex(cells[3], r"\b(\d{5})\b"),
+                "recipient_zipcode": _first_regex(address, r"\b(\d{5})\b"),
                 "tracking_number": _clean_tracking_number(_first_regex(info, r"Raccomandata\s+N\.?\s*([0-9]+)")),
                 "price_amount": price_amount,
-                "raw": {"source": source_payload or {}, "info": info},
+                "raw": {"source": source_payload or {}, "info": info, "recipient_cf": fiscal_identifier, "cells": cells},
             }
         )
     if rows:
