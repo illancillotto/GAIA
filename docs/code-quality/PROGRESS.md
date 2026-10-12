@@ -1,5 +1,42 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-12 — Chromium diagnosis and private E2E V4 green checkpoint
+
+- User reactivates global goal; no new application refactor. Previous V3 turn
+  was verified progress, not completion. Isolated fullChromium probe:
+  longTMPDIR131bytes→SIGTRAP, short25bytes→Chromium147/data-pagePASS.
+  Original106byte path reproduced understrace: singleton readlink/socket then
+  SIGTRAP. Actual long Unixsocket bind fails, short succeeds; root issue is
+  private temporary-path length, not demonstrated GAIA runtime regression.
+  Exact Chromium C++ failing line not claimed; diagnosis logs immutable.
+- NEW explained-environment V4 verification changes ONLY privateTMPDIR to
+  nonsymlink/owned0700 shortroot22bytes; helper validated eachlaunch. Guard
+  copies byte-exact; four distinct realtmp/socket/refusal testsPASS. Independent
+  source-frozen static reviews ACCEPTED runnerdbe3a092/privateTMP9fe1a5c before
+  sole native session5511. V3FAIL unchanged, no blind native retry/test change.
+- Native terminal0: full61collection/24specs,61attempts in originalorder,
+  workers1/retries0,54PASS/7SKIP/0FAIL/0NOT_RUN. One native invocation and owned
+  stack restart per case, explicitly NOT one monolithic suite invocation.
+  Quota case42PASS; fullChromium/PDFviewer case55desktop1440px and56mobile390px
+  PASS with original extension/load-success/conflict/export assertions intact.
+- Seven skips NOT VERIFIED: removed singleCatasto search, two no-distretto
+  drilldowns, two optionalGISterritorio disabled, two privateDocker/MCP cases
+  require unavailable optional stack. Mocked MCP preview/widget cases59/60PASS;
+  do not claim those certify external Docker/model integrations.
+- Initial reset21sessions/20devices;61completedcase cleanup receipts delete
+  21sessions/21devices total. EachrealBEGINEXCLUSIVE after native-terminal,
+  ownedkernelempty/freeports;280other tables/schema/FKs exact. OriginalR49DB
+  unchanged, source2732beforeafter exact, R61sources1047/selectedartifacts200
+  exact; live serving1405/nft253/browser8 bound with historical archive limit.
+  All ownedscopes removed/services stopped; no new suite/build/scanner overlap.
+- Evidence V4 and V3/diagnosis-v4 on SSD; prior mutable governance frozen;
+  hardcoded/tmp passed PDF screenshots copied durably. Both independent raw
+  terminal reviews ACCEPTED54/7/0 and61cleanup/62scope receipts. Final ratchet
+  mainPASS/zero findings; new report E2E_LIFECYCLE_V4_2026-10-12.
+  Runtime/baseline/auth/quota/schema/testcfg/coverage policy unchanged; no main
+  merge/push.449backend skips, workerfullcoverageFAIL, globalbaseline ambiguity,
+  excludedR43/R51/R63 and extreme hotspots remain. Global goal INCOMPLETE.
+
 ## 2026-10-12 — Private E2E V3: device quota obstacle removed, browser STOP
 
 - Dedicated user-authorized owned-containment/exclusive-transaction guard:

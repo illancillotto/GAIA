@@ -1,0 +1,97 @@
+{
+  "classification": "IMPROVED_PRIVATE_VERIFICATION_ENVIRONMENT_NOT_APPLICATION_REFACTOR",
+  "branch": "refactor/complexity-campaign-20261008",
+  "input_head": "4d6cdfd9a835297ca50a3f28860d8da9b97bcb72",
+  "actual_merge_base": "a51a48dc4caefbdd1aea82fe4d749054b9465970",
+  "global_goal_complete": false,
+  "native": {
+    "collection": 61,
+    "attempted": 61,
+    "passed": 54,
+    "skip_not_verified": 7,
+    "failed": 0,
+    "not_run": 0,
+    "retries": 0,
+    "same_config_specs_assertions_channel": true,
+    "single_native_invocation_per_case": true,
+    "monolithic_suite_invocation": false,
+    "previous_v3_fail_preserved": true,
+    "full_chromium_pdf_desktop_mobile": "PASS"
+  },
+  "new_helper_tests": {
+    "private_tmp_pass": 4,
+    "full_external_tool_coverage_claimed": false,
+    "identical_guard_suite_not_repeated": true
+  },
+  "diagnosis": {
+    "long_TMPDIR_bytes": 131,
+    "short_probe_TMPDIR_bytes": 25,
+    "original_length_reproduction_bytes": 106,
+    "long_browser_status": "SIGTRAP",
+    "short_browser_status": "PASS",
+    "exact_chromium_cpp_failure_line_proven": false,
+    "correction": "Only owned0700 nonsymlink short TMPDIR,22bytes; no runtime/test/config/auth/quota changes"
+  },
+  "cleanup": {
+    "initial_sessions": 21,
+    "initial_devices": 20,
+    "completed_case_receipts": 61,
+    "between_case_sessions": 21,
+    "between_case_devices": 21,
+    "unaffected_tables_per_transaction": 280,
+    "kernel_scopes_terminal_removed": 62,
+    "ports_free": true,
+    "original_database_sha256": "ebc902bd5479951f0e3971c85fd21423bee368a21f6c2b0c02eea3fa0a71524d"
+  },
+  "custody": {
+    "before_after_exact": true,
+    "protected_inputs": 2732,
+    "r61_source_records": 1047,
+    "r61_selected_artifacts": 200,
+    "current_serving_files": 1405,
+    "nft_closure_files": 253,
+    "browser_executables": 8,
+    "historical_full_serving_archive_equivalence_claimed": false
+  },
+  "gates": {
+    "ratchet_main": "PASS0finding",
+    "diff_check": "PASS",
+    "baseline_changed": false,
+    "graphify_platform_docs": "semanticchunk1/1done",
+    "both_independent_terminal_reviews": "ACCEPTED"
+  },
+  "runtime_metrics_unchanged": {
+    "files": 1680,
+    "callables": 20358,
+    "errors": 1920,
+    "warnings": 2736,
+    "findings": 4656,
+    "source": "Existing R64 runtime report; no newfullscan"
+  },
+  "remaining": [
+    "seven E2E skips NOT VERIFIED",
+    "449 backend skips NOT VERIFIED",
+    "worker full-file coverageFAIL",
+    "global baseline/matcher ambiguity",
+    "R43/R51/R63 excluded partials",
+    "extreme complexity tail and global targets incomplete",
+    "main known untracked Bonifica characterization spec preserved"
+  ],
+  "manifest": {
+    "path": "/media/cbo/ARCHIVIO_SSD/.codex-gaia-campaign-resume-20261012/e2e-lifecycle-v4/publication/EVIDENCE_MANIFEST.json",
+    "sha256": "6cc7be39d812d9f37b9526d2ac1433430c08b5ab32371a789417d3b749a2cdab",
+    "records": 1958
+  },
+  "key_evidence": {
+    "candidate-runs/native-v4/terminal.json": "6dfbba2ea48317e89de5d577f07497edda3ba322adee8a1934f755e1acdb44dc",
+    "candidate-runs/native-v4/inputs-before.json": "3c1ce1bb9ccaeed38fcb2d155208ae0c584349a4bfe030ed5e5d68a49945ff0b",
+    "candidate-runs/native-v4/inputs-after.json": "3c1ce1bb9ccaeed38fcb2d155208ae0c584349a4bfe030ed5e5d68a49945ff0b",
+    "root-terminal-audit.json": "1348c0013fc8c055ad559cd2bb1934558bc9b25f2abee3c2f386acdcafb1be1b",
+    "cleanup-review/TERMINAL_REVIEW.md": "d02043818bbedf626400fa09683f3566a862c2bd07da6693879a6f73aed20779",
+    "runner-review/TERMINAL_REVIEW.md": "ce6cf313a7cdbdd725b84896648dd081f259052d13c993fd39b0f20dbdbf150c",
+    "ratchet-main.log": "aba3a7f33f71286eeee237814620218f3e5d3b625d39f6a63e736252c5091e0d",
+    "graphify-platform-docs.log": "a659597b57a8942e24d86b7788f389fa07ed3e3f3fbb3b86f1ecad2b0cdf92fd"
+  },
+  "next_action": "Handoff verified checkpoint; no new application refactoring or main merge inferred",
+  "external_handoff_sha256": "aae549f9eae54b152bdc67379e323561884f183bfe6d044b91346e96a5f99eb6"
+}
