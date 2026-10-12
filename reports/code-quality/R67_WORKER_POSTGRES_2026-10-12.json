@@ -1,0 +1,97 @@
+{
+  "classification": "VERIFIED_EXISTING_TEST_VARIANT_NO_CHANGE_RUNTIME",
+  "global_goal": "INCOMPLETE",
+  "branch": "refactor/complexity-campaign-20261008",
+  "start_head": "92c4cfc7decb33ec102d0d868c6969d8231abc74",
+  "actual_main_merge_base": "a51a48dc4caefbdd1aea82fe4d749054b9465970",
+  "runtime_test_migration_changed": false,
+  "baseline_threshold_exclusions_coverage_policy_changed": false,
+  "test_sha256": "c54935bdd79d899c3e6761604f0ac9655a10013817c422e50fc7b96059f43ecb",
+  "migration_sha256": "ca709d8222f373d2ced959b7b98e2bbd28dcc10807cd58d8f4057f9495a44352",
+  "native": {
+    "V1": "PREPYTEST_STOP_PERMISSION_AND_CLEANUP_ASSERTION_FAILURE_PRESERVED",
+    "V2": "PREPYTEST_STOP_BOOTSTRAP_READINESS_RACE_CLEANUP_PASS",
+    "V3": "PREPYTEST_STOP_BOOTSTRAP_DEFAULT_SOCKET_MISMATCH_CLEANUP_PASS",
+    "V4": {"exit": 0, "pass": 2, "skip": 0, "fail": 0, "error": 0, "seconds": 0.36},
+    "pytest_invocations": 1,
+    "pytest_retries": 0,
+    "variants": ["sqlite", "postgresql"],
+    "historical_R50_782PASS_1PGskip_preserved": true,
+    "full_worker_suite_not_rerun": true,
+    "full_migration_chain_not_certified": true
+  },
+  "environment": {
+    "image": "sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea",
+    "actual_server": "PostgreSQL16.15",
+    "image_pull": false,
+    "network": "none",
+    "published_ports": [],
+    "root_readonly": true,
+    "PGDATA": "owned_container_tmpfs",
+    "named_volumes": [],
+    "host_bind": "Only newly owned socket directory inside0700shortroot",
+    "socket_directories": ["/sockets", "/var/run/postgresql"],
+    "readiness": "final_PID1postgres_AND_pg_isready_AND_actual_target_database_SQL",
+    "local_private_socket_trust_not_application_auth_change": true,
+    "replacement_synthetic_pytest_environment": true,
+    "private_db_schema_user_relations_exact_beforeafter": true,
+    "all_owned_containers_removed_tmpfs_databases_destroyed": true,
+    "existing_container_set_exact": 43,
+    "existing_volume_set_exact": 67,
+    "short_socket_roots_retained": true
+  },
+  "custody": {
+    "integration_inputs": 2852,
+    "main_inputs": 2851,
+    "source_drift": 0,
+    "main_head_status_unchanged": true,
+    "assigned_document_status_delta_disclosed": true,
+    "static_whole_capture_equality_failure_not_native_test_failure": true
+  },
+  "gates": {
+    "ratchet_BASE_REF": "main",
+    "ratchet_baseline_commit": "a51a48dc4caefbdd1aea82fe4d749054b9465970",
+    "ratchet_exit": 0,
+    "ratchet_findings": [],
+    "diff_check": "PASS",
+    "global_baseline_check": "NOT_RERUN_SEPARATE_AMBIGUITY",
+    "full_suites_complexity_report": "NOT_RERUN_UNCHANGED_INPUTS"
+  },
+  "metrics_last_measured_not_rescanned": {
+    "files": 1681, "callables": 20360, "errors": 1920, "warnings": 2736, "overlapping_findings": 4656,
+    "runtime_complexity_credit": false
+  },
+  "review": {
+    "decision": "ACCEPTED_UNCHANGED_TWO_DIALECT_MIGRATION_VERIFICATION",
+    "terminal_report_sha256": "bab881f5f31b7a563de34e1d7cf9a4b8e3015f7385852a7ea30b67cac26c4483",
+    "terminal_audit_sha256": "1d9713e2c6588871745176494a0c90e7c1410d527ffa6078e198320859910735",
+    "postgates_audit_sha256": "c6fa3979dd5b0402f595cfacd7fbdea773851320409263766be48ff38ecd020c",
+    "terminal_manifest_sha256": "e4368a7c148e4eb2e1864e20f52dc84ad0ec540adb75aee2fd85c4370de3648a",
+    "reviewer_static_only_stopped": true
+  },
+  "graphify": {
+    "platform_docs": "PASS_chunk1_of1_done_no_failed_semantic_chunk",
+    "nodes_edges_communities": [820, 1028, 156],
+    "tokens_in_out": [5856, 3889],
+    "estimated_cost_usd": 0.0086,
+    "runtime_graph_not_updated_no_code_change": true,
+    "generated_graph_not_committed": true
+  },
+  "evidence": {
+    "root": "/media/cbo/ARCHIVIO_SSD/.codex-gaia-campaign-resume-20261012/r67-worker-pg",
+    "manifest": "publication/EVIDENCE_MANIFEST.json",
+    "manifest_sha256": "3335a945512e5acb7ecab8fcb63dbef27b9d0e5bdfbb40fa0afcdaee0e0a63f6",
+    "records_verified": 306,
+    "stdout_receipt_explicitly_excluded": true,
+    "post_commit_chain": "publication/HANDOFF_CHAIN.json",
+    "historical_failures_freezes_unchanged": true
+  },
+  "remaining": [
+    "Pool line523/arc522_to523 and full-worker100 coverage FAIL; guard preserved",
+    "449 backend and 7 E2E skips NOT VERIFIED",
+    "Global baseline/matcher ambiguity",
+    "R43/R51/R63 excluded partials",
+    "Extreme hotspot tail and strategic campaign targets"
+  ],
+  "no_push_or_main_merge": true
+}

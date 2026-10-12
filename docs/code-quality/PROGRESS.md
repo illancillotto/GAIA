@@ -1,5 +1,26 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-12 — R67 original worker PG migration variant freshly verified
+
+- No runtime refactor. Dedicated HEAD92c4cfc7/main-basea51a48dc; ownership before
+  native work and mutable PROGRESS/registry frozen. Historical R50PGskip retained.
+- Private pinned PostgreSQL16.15, networknone/read-only/tmpfs/no ports/no existing
+  DBvolume. Sole owned0700shortroot socket bind; synthetic replacement test env.
+  Actual source/test/migration bytes identical to HEAD/main and R66 inventories.
+- Three distinct preparationSTOP before pytest preserved:0700tmpfs parent,
+  bootstrap pg_isready race, bootstrap default-socket mismatch. Same-image real
+  permission probe and pinned entrypoint cause evidence; independent V2/V3/V4
+  preflight reviews. Corrections solely private environment, zero test retries.
+- V4 original two-dialect test2PASS/0skip/0failure in0.36s, SQLite+PostgreSQL.
+  Historical unknown date/timezone/downgrade/row assertions unchanged. Private DB
+  schema/user-relations exact beforeafter; all owned containers removed, existing
+  43containers/67volumes sets exact.2852integration/2851main protected inputs exact.
+- Report/companion R67_WORKER_POSTGRES_2026-10-12 binds native/review/gate/handoff.
+  VERIFIED_EXISTING_TEST_VARIANT, not runtime complexity credit/full-suite rerun.
+  R50historical782PASS/1skip unchanged; fresh PGvariant nowverified separately.
+  Pool/full-worker100FAIL,449backend/7E2E skips, matcher ambiguity, excluded partials
+  and extreme tail remain; global goal INCOMPLETE. Main untouched, no push/merge.
+
 ## 2026-10-12 — R66 pool guard: scoped proof and real counterexample, no removal
 
 - Previous goal turn is verified R65 progress, not global completion. R66 is
