@@ -151,9 +151,17 @@ async function refreshCapacitasJobMonitor<Job extends CapacitasMonitoredJob>(
   }
 }
 
+function isCapacitasInFlightJob(job: CapacitasMonitoredJob): boolean {
+  return job.status === "pending" || job.status === "processing" || job.status === "queued_resume";
+}
+
+function hasCapacitasInFlightJobs(jobs: readonly CapacitasMonitoredJob[], sessionExpired: boolean): boolean {
+  return !sessionExpired && jobs.some(isCapacitasInFlightJob);
+}
+
 function getCapacitasInFlightJobIds(jobs: readonly CapacitasMonitoredJob[]): Set<number> {
   return new Set(
-    jobs.filter((job) => job.status === "pending" || job.status === "processing" || job.status === "queued_resume").map((job) => job.id),
+    jobs.filter(isCapacitasInFlightJob).map((job) => job.id),
   );
 }
 
@@ -690,6 +698,39 @@ function isParticelleSyncJobResult(value: unknown): value is {
   );
 }
 
+function getParticelleJobResult(job: CapacitasParticelleSyncJob) {
+  return isParticelleSyncJobResult(job.result_json) ? job.result_json : null;
+}
+
+function hasParticelleSessionExpired(jobs: CapacitasParticelleSyncJob[]): boolean {
+  return jobs.some((job) => {
+    const result = getParticelleJobResult(job);
+    if (!result) return false;
+    return result.recent_items.some(
+      (item) => item.status === "failed" && (item.message.includes("NOSessione") || item.message.toLowerCase().includes("sessione scaduta")),
+    );
+  });
+}
+
+function getParticelleActiveResultPresentation(result: NonNullable<ReturnType<typeof getParticelleJobResult>>) {
+  const doubleSpeed = result.speed_multiplier && result.speed_multiplier > 1;
+  return {
+    currentLabel: result.current_label ? ` · ${result.current_label}` : "",
+    windowLabel: result.aggressive_window ? "Fascia serale" : "Fascia diurna",
+    multiplierLabel: doubleSpeed ? ` · x${result.speed_multiplier}` : "",
+    workers: result.parallel_workers ?? 1,
+    standardClass: !result.speed_multiplier || result.speed_multiplier <= 1 ? "border-[#1D4E35] bg-[#eef7ef] text-[#1D4E35]" : "border-gray-200 bg-gray-50 text-gray-600 hover:border-[#1D4E35]/30 hover:bg-[#f5faf5]",
+    doubleClass: doubleSpeed ? "border-[#1D4E35] bg-[#eef7ef] text-[#1D4E35]" : "border-gray-200 bg-gray-50 text-gray-600 hover:border-[#1D4E35]/30 hover:bg-[#f5faf5]",
+  };
+}
+
+function getParticelleStopPresentation(job: CapacitasParticelleSyncJob, stoppingId: number | null) {
+  return {
+    disabled: stoppingId === job.id || job.status === "cancelling",
+    label: job.status === "cancelling" ? "Fermando…" : stoppingId === job.id ? "Stop..." : "Stop",
+  };
+}
+
 function isHistoryImportJobResult(value: unknown): value is CapacitasAnagraficaHistoryImportResult & {
   progress_percent?: number;
   current_label?: string | null;
@@ -871,15 +912,9 @@ export function ElaborazioniCapacitasWorkspace({
   const [resolveModal, setResolveModal] = useState<FractionResolutionState | null>(null);
 
   const activeCredentialsCount = credentials.filter((credential) => credential.active).length;
-  const jobsInFlight =
-    !terreniMonitorSessionExpired &&
-    terreniJobs.some((job) => job.status === "pending" || job.status === "processing" || job.status === "queued_resume");
-  const particelleJobsInFlight =
-    !particelleMonitorSessionExpired &&
-    particelleJobs.some((job) => job.status === "pending" || job.status === "processing" || job.status === "queued_resume");
-  const historyJobsInFlight =
-    !historyMonitorSessionExpired &&
-    historyJobs.some((job) => job.status === "pending" || job.status === "processing" || job.status === "queued_resume");
+  const jobsInFlight = hasCapacitasInFlightJobs(terreniJobs, terreniMonitorSessionExpired);
+  const particelleJobsInFlight = hasCapacitasInFlightJobs(particelleJobs, particelleMonitorSessionExpired);
+  const historyJobsInFlight = hasCapacitasInFlightJobs(historyJobs, historyMonitorSessionExpired);
   const incassJobsInFlight =
     !incassMonitorSessionExpired &&
     incassJobs.some((job) => isCapacitasInCassActiveJobStatus(job.status));
@@ -1542,13 +1577,7 @@ export function ElaborazioniCapacitasWorkspace({
             const activeJobs = particelleJobs.filter((j) => activeStatuses.has(j.status));
             const doneJobs = particelleJobs.filter((j) => !activeStatuses.has(j.status));
 
-            const hasSessionExpired = activeJobs.some((job) => {
-              const result = isParticelleSyncJobResult(job.result_json) ? job.result_json : null;
-              if (!result) return false;
-              return result.recent_items.some(
-                (item) => item.status === "failed" && (item.message.includes("NOSessione") || item.message.toLowerCase().includes("sessione scaduta")),
-              );
-            });
+            const hasSessionExpired = hasParticelleSessionExpired(activeJobs);
 
             return (
               <div className="space-y-6 p-6">
@@ -1569,7 +1598,9 @@ export function ElaborazioniCapacitasWorkspace({
                 {activeJobs.length > 0 ? (
                   <div className="space-y-3">
                     {activeJobs.map((job) => {
-                      const result = isParticelleSyncJobResult(job.result_json) ? job.result_json : null;
+                      const result = getParticelleJobResult(job);
+                      const presentation = result ? getParticelleActiveResultPresentation(result) : null;
+                      const stop = getParticelleStopPresentation(job, particelleStoppingJobId);
                       const tone = renderJobStatus(job.status);
                       return (
                         <div className="rounded-[24px] border border-sky-100 bg-sky-50/40 p-5" key={job.id}>
@@ -1582,7 +1613,7 @@ export function ElaborazioniCapacitasWorkspace({
                               {result ? (
                                 <span className="text-xs text-gray-500">
                                   {result.processed_items}/{result.total_items}
-                                  {result.current_label ? ` · ${result.current_label}` : ""}
+                                  {presentation!.currentLabel}
                                 </span>
                               ) : null}
                             </div>
@@ -1592,11 +1623,11 @@ export function ElaborazioniCapacitasWorkspace({
                               ) : null}
                               <button
                                 className="btn-secondary text-rose-600 hover:border-rose-300"
-                                disabled={particelleStoppingJobId === job.id || job.status === "cancelling"}
+                                disabled={stop.disabled}
                                 onClick={() => void handleStopParticelleJob(job.id)}
                                 type="button"
                               >
-                                {job.status === "cancelling" ? "Fermando…" : particelleStoppingJobId === job.id ? "Stop..." : "Stop"}
+                                {stop.label}
                               </button>
                             </div>
                           </div>
@@ -1609,15 +1640,13 @@ export function ElaborazioniCapacitasWorkspace({
                                 <span>ok <span className="font-medium text-emerald-700">{result.success_items}</span></span>
                                 <span>skipped <span className="font-medium text-gray-600">{result.skipped_items}</span></span>
                                 <span>failed <span className="font-medium text-rose-600">{result.failed_items}</span></span>
-                                <span className="ml-auto text-gray-400">{result.aggressive_window ? "Fascia serale" : "Fascia diurna"} · {result.throttle_ms}ms{result.speed_multiplier && result.speed_multiplier > 1 ? ` · x${result.speed_multiplier}` : ""} · {result.parallel_workers ?? 1}w</span>
+                                <span className="ml-auto text-gray-400">{presentation!.windowLabel} · {result.throttle_ms}ms{presentation!.multiplierLabel} · {presentation!.workers}w</span>
                               </div>
                               <div className="mt-3 flex flex-wrap items-center gap-2">
                                 <span className="text-xs text-gray-400 mr-1">Velocità:</span>
                                 <button
                                   className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
-                                    !result.speed_multiplier || result.speed_multiplier <= 1
-                                      ? "border-[#1D4E35] bg-[#eef7ef] text-[#1D4E35]"
-                                      : "border-gray-200 bg-gray-50 text-gray-600 hover:border-[#1D4E35]/30 hover:bg-[#f5faf5]"
+                                    presentation!.standardClass
                                   }`}
                                   disabled={particelleSpeedBusyId === job.id}
                                   onClick={() => void handlePatchParticelleSpeed(job.id, false)}
@@ -1627,9 +1656,7 @@ export function ElaborazioniCapacitasWorkspace({
                                 </button>
                                 <button
                                   className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
-                                    result.speed_multiplier && result.speed_multiplier > 1
-                                      ? "border-[#1D4E35] bg-[#eef7ef] text-[#1D4E35]"
-                                      : "border-gray-200 bg-gray-50 text-gray-600 hover:border-[#1D4E35]/30 hover:bg-[#f5faf5]"
+                                    presentation!.doubleClass
                                   }`}
                                   disabled={particelleSpeedBusyId === job.id}
                                   onClick={() => void handlePatchParticelleSpeed(job.id, true)}
@@ -1681,7 +1708,7 @@ export function ElaborazioniCapacitasWorkspace({
                     ) : null}
                     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                       {doneJobs.map((job) => {
-                        const result = isParticelleSyncJobResult(job.result_json) ? job.result_json : null;
+                        const result = getParticelleJobResult(job);
                         const tone = renderJobStatus(job.status);
                         return (
                           <div className="rounded-[20px] border border-gray-100 bg-[#fbfcfb] p-4" key={job.id}>
