@@ -85,6 +85,17 @@ class _SyncExecutionResult:
     error_detail: str | None = None
 
 
+def _normalize_sync_result(
+    synced: int, skipped: int, errors: list[str],
+) -> _SyncExecutionResult:
+    return _SyncExecutionResult(
+        synced=synced,
+        skipped=skipped,
+        errors=len(errors),
+        error_detail="\n".join(errors[:20]) if errors else None,
+    )
+
+
 def _persist_job_runtime_snapshot(
     db: Session,
     job: WCSyncJob,
@@ -403,11 +414,8 @@ async def _run_bonifica_sync_background(
                     rows, total = await report_types_client.fetch_report_types()
                     _persist_job_runtime_snapshot(db, job, source_total=total)
                     sync_result = sync_white_report_types(db=db, rows=rows)
-                    result = _SyncExecutionResult(
-                        synced=sync_result.synced,
-                        skipped=sync_result.skipped,
-                        errors=len(sync_result.errors),
-                        error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
+                    result = _normalize_sync_result(
+                        sync_result.synced, sync_result.skipped, sync_result.errors,
                     )
                     params_updates = {"source_total": total}
                 elif entity == "reports":
@@ -420,11 +428,8 @@ async def _run_bonifica_sync_background(
                         current_user=current_user,
                         rows=rows,
                     )
-                    result = _SyncExecutionResult(
-                        synced=sync_result.synced,
-                        skipped=sync_result.skipped,
-                        errors=len(sync_result.errors),
-                        error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
+                    result = _normalize_sync_result(
+                        sync_result.synced, sync_result.skipped, sync_result.errors,
                     )
                     params_updates = {"source_total": total}
                 elif entity == "vehicles":
@@ -435,11 +440,8 @@ async def _run_bonifica_sync_background(
                         current_user=current_user,
                         rows=rows,
                     )
-                    result = _SyncExecutionResult(
-                        synced=sync_result.vehicles_synced,
-                        skipped=sync_result.vehicles_skipped,
-                        errors=len(sync_result.errors),
-                        error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
+                    result = _normalize_sync_result(
+                        sync_result.vehicles_synced, sync_result.vehicles_skipped, sync_result.errors,
                     )
                     params_updates = {"source_total": total}
                 elif entity == "refuels":
@@ -457,11 +459,8 @@ async def _run_bonifica_sync_background(
                         current_user=current_user,
                         rows=rows,
                     )
-                    result = _SyncExecutionResult(
-                        synced=sync_result.fuel_logs_synced,
-                        skipped=sync_result.fuel_logs_skipped,
-                        errors=len(sync_result.errors),
-                        error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
+                    result = _normalize_sync_result(
+                        sync_result.fuel_logs_synced, sync_result.fuel_logs_skipped, sync_result.errors,
                     )
                     params_updates = {"source_total": total}
                 elif entity == "taken_charge":
@@ -477,33 +476,24 @@ async def _run_bonifica_sync_background(
                         current_user=current_user,
                         rows=rows,
                     )
-                    result = _SyncExecutionResult(
-                        synced=sync_result.usage_sessions_synced,
-                        skipped=sync_result.usage_sessions_skipped,
-                        errors=len(sync_result.errors),
-                        error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
+                    result = _normalize_sync_result(
+                        sync_result.usage_sessions_synced, sync_result.usage_sessions_skipped, sync_result.errors,
                     )
                     params_updates = {"source_total": total}
                 elif entity == "users":
                     rows, total = await users_client.fetch_users()
                     _persist_job_runtime_snapshot(db, job, source_total=total)
                     sync_result = sync_white_operators(db=db, rows=rows)
-                    result = _SyncExecutionResult(
-                        synced=sync_result.synced,
-                        skipped=sync_result.skipped,
-                        errors=len(sync_result.errors),
-                        error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
+                    result = _normalize_sync_result(
+                        sync_result.synced, sync_result.skipped, sync_result.errors,
                     )
                     params_updates = {"source_total": total}
                 elif entity == "areas":
                     rows, total = await areas_client.fetch_areas()
                     _persist_job_runtime_snapshot(db, job, source_total=total)
                     sync_result = sync_white_areas(db=db, rows=rows)
-                    result = _SyncExecutionResult(
-                        synced=sync_result.synced,
-                        skipped=sync_result.skipped,
-                        errors=len(sync_result.errors),
-                        error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
+                    result = _normalize_sync_result(
+                        sync_result.synced, sync_result.skipped, sync_result.errors,
                     )
                     params_updates = {"source_total": total}
                 elif entity == "warehouse_requests":
@@ -515,33 +505,24 @@ async def _run_bonifica_sync_background(
                     )
                     _persist_job_runtime_snapshot(db, job, source_total=total)
                     sync_result = sync_white_warehouse_requests(db=db, rows=rows)
-                    result = _SyncExecutionResult(
-                        synced=sync_result.synced,
-                        skipped=sync_result.skipped,
-                        errors=len(sync_result.errors),
-                        error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
+                    result = _normalize_sync_result(
+                        sync_result.synced, sync_result.skipped, sync_result.errors,
                     )
                     params_updates = {"source_total": total}
                 elif entity == "org_charts":
                     rows, total = await org_charts_client.fetch_org_charts()
                     _persist_job_runtime_snapshot(db, job, source_total=total)
                     sync_result = sync_white_org_charts_to_canonical(db=db, rows=rows, user_id=current_user.id)
-                    result = _SyncExecutionResult(
-                        synced=sync_result.synced,
-                        skipped=sync_result.skipped,
-                        errors=len(sync_result.errors),
-                        error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
+                    result = _normalize_sync_result(
+                        sync_result.synced, sync_result.skipped, sync_result.errors,
                     )
                     params_updates = {"source_total": total}
                 elif entity == "consorziati":
                     rows, total = await users_client.fetch_consorziati()
                     _persist_job_runtime_snapshot(db, job, source_total=total)
                     sync_result = sync_white_consorziati(db=db, rows=rows)
-                    result = _SyncExecutionResult(
-                        synced=sync_result.synced,
-                        skipped=sync_result.skipped,
-                        errors=len(sync_result.errors),
-                        error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
+                    result = _normalize_sync_result(
+                        sync_result.synced, sync_result.skipped, sync_result.errors,
                     )
                     params_updates = {"source_total": total}
                 else:  # pragma: no cover
