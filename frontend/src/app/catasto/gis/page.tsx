@@ -5,6 +5,13 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { normalizeExcelReferences } from "./excel-references";
+import {
+  getParcelPopupLocation,
+  getParcelPopupRecordState,
+  getParcelPopupTitle,
+  hasIncompleteParcelKey,
+  selectParcelRoleBadge,
+} from "./parcel-popup-presentation";
 
 import { UtenzeSubjectQuickViewDialog } from "@/components/utenze/utenze-subject-quick-view-dialog";
 import AdeAlignmentPanel from "@/components/catasto/gis/AdeAlignmentPanel";
@@ -1019,33 +1026,12 @@ export default function CatastoGisPage() {
 
   const popupRuoloSourceMode = popupParticella?.ruolo_summary?.source_mode ?? null;
   const popupHasFallbackRuolo = Boolean(popupParticella?.ha_ruolo_inferito || (popupParticella?.ruolo_summary && popupRuoloSourceMode && popupRuoloSourceMode !== "exact"));
-  const popupRuoloBadgeClass = popupParticella?.ha_ruolo
-    ? "bg-emerald-100 text-emerald-700"
-    : popupHasFallbackRuolo
-      ? "bg-amber-100 text-amber-700"
-      : "bg-slate-100 text-slate-600";
-  const popupRuoloBadgeLabel = popupParticella?.ha_ruolo
-    ? "A ruolo"
-    : popupHasFallbackRuolo
-      ? "Ruolo inferito"
-      : "Fuori ruolo";
-  const popupHasIncompleteKey = Boolean(
-    popupParticella &&
-      (!popupParticella.codice_catastale || !popupParticella.foglio || !popupParticella.particella),
-  );
-  const popupTitle = popupParticella
-    ? popupParticella.cfm || (popupHasIncompleteKey ? "Particella GIS incompleta" : `${popupParticella.foglio} / ${popupParticella.particella}`)
-    : "";
-  const popupLocationLine = popupHasIncompleteKey
-    ? "Riferimenti catastali non disponibili per questo poligono GIS."
-    : `${popupParticella?.nome_comune ?? popupParticella?.codice_catastale ?? "Comune ND"} · Fg. ${popupParticella?.foglio ?? "-"} · Part. ${popupParticella?.particella ?? "-"}${popupParticella?.subalterno ? ` · Sub. ${popupParticella.subalterno}` : ""}`;
-  const popupRecordState = popupParticella
-    ? popupParticella.suppressed
-      ? "Soppresso"
-      : popupParticella.is_current
-        ? "Corrente"
-        : "Storico"
-    : "-";
+  const popupRuoloBadgeClass = selectParcelRoleBadge(popupParticella?.ha_ruolo, popupHasFallbackRuolo).className;
+  const popupRuoloBadgeLabel = selectParcelRoleBadge(popupParticella?.ha_ruolo, popupHasFallbackRuolo).label;
+  const popupHasIncompleteKey = hasIncompleteParcelKey(popupParticella);
+  const popupTitle = getParcelPopupTitle(popupParticella, popupHasIncompleteKey);
+  const popupLocationLine = getParcelPopupLocation(popupParticella, popupHasIncompleteKey);
+  const popupRecordState = getParcelPopupRecordState(popupParticella);
   const popupRuoloHelp = useMemo(() => buildRuoloInferenceDetails(popupParticella?.ruolo_summary), [popupParticella?.ruolo_summary]);
   const popupDuiDomanda = popupDuiDetail?.domanda_irrigua
     ?? (typeof popupDuiFeature?.properties.domanda_irrigua === "string" ? popupDuiFeature.properties.domanda_irrigua : null);
