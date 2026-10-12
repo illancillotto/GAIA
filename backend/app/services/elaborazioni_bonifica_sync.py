@@ -211,8 +211,7 @@ def _resolve_job_params(
         )
         if latest_job is not None:
             inherited_date_from, inherited_date_to = _resolve_date_window_from_job(latest_job, entity)
-            if inherited_date_from is not None or inherited_date_to is not None:
-                date_from, date_to = inherited_date_from, inherited_date_to
+            date_from, date_to = inherited_date_from, inherited_date_to
 
     return {
         "date_from": date_from.isoformat() if date_from else None,
