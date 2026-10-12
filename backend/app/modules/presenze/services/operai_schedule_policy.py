@@ -3,6 +3,10 @@
 from dataclasses import dataclass, replace
 from types import SimpleNamespace
 
+from app.modules.presenze.services.inaz_assigned_calendar import (
+    assigned_saturday_minutes,
+    is_inaz_monthly_calendar,
+)
 from app.modules.presenze.services.operai_daily_policy import (
     _complete_day_pairs,
     assigned_daily_start,
@@ -26,8 +30,8 @@ class OperaiDayPolicy:
 
 
 def has_individual_saturday(record, template, rules):
-    return individual_saturday_eligible(record, template) and any(
-        _is_biweekly_saturday(rule) for rule in rules
+    return individual_saturday_eligible(record, template) and (
+        is_inaz_monthly_calendar(template) or any(_is_biweekly_saturday(rule) for rule in rules)
     )
 
 
@@ -58,7 +62,7 @@ def build_operai_day_policy(rule, record, punches, matched_rules, individual_sat
     if individual_saturday:
         scheduled = bool(matched_rules)
         minutes = SUMMER_SATURDAY_MINUTES.get(
-            rule.formula_code, rule.rule.saturday_expected_minutes
+            rule.formula_code, assigned_saturday_minutes(rule, matched_rules)
         )
         rule = replace(
             rule, expected_minutes=minutes if scheduled else 0, saturday_is_scheduled=scheduled

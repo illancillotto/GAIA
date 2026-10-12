@@ -473,6 +473,30 @@ def test_build_presenze_rules_months_giornaliere_and_anomalie_payloads(monkeypat
         assert anomalie_payload["anomalie"] == anomalie_payload["anomalies"]
         assert anomalie_payload["inaz_sync"]["status"] == "never"
 
+        source_record = db.get(PresenzeDailyRecord, daily_record_id)
+        source_record.stato = "Giornata anomala"
+        source_record.raw_payload_json = {
+            **source_record.raw_payload_json,
+            "detail_status": "Giornata anomala",
+            "detail_anomalies": [{"code": "OREM", "description": "Ore mancanti"}],
+            "detail_time_slots": "08:00 - 15:00",
+            "detail_requests": [{"Stato": "ACC", "Descrizione": "P. ORD"}],
+        }
+        db.commit()
+        with_details = build_presenze_giornaliere_push_payload(db, month="2026-07")["records"][0]
+        assert with_details["stato"] == "Giornata anomala"
+        assert with_details["detail_status"] == "Giornata anomala"
+        assert with_details["detail_anomalies"] == source_record.raw_payload_json["detail_anomalies"]
+        assert with_details["detail_requests"] == source_record.raw_payload_json["detail_requests"]
+        assert with_details["detail_time_slots"] == "08:00 - 15:00"
+        assert with_details["inaz_source"] == {key: value for key, value in source_record.raw_payload_json.items() if key != "detail_title"}
+        assert with_details["operational_status"] == with_details["status"]
+        assert with_details["has_inaz_anomaly"] is True
+        assert with_details["detail_punch_rows"] == [{"entry_time": "08:00", "exit_time": "15:00"}]
+        anomaly_details = build_presenze_anomalie_push_payload(db, month="2026-07")["anomalies"][0]
+        assert anomaly_details["detail_anomalies"] == with_details["detail_anomalies"]
+        assert anomaly_details["inaz_source"] == with_details["inaz_source"]
+
         db.get(PresenzeDailyRecord, daily_record_id).validation_status = "validated"
         db.commit()
         clean_payload = build_presenze_anomalie_push_payload(db, month="2026-07")

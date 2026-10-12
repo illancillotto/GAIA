@@ -18,6 +18,7 @@ from app.modules.presenze.models import (
     PresenzeDailyRecord,
 )
 from app.modules.presenze.services.daily_details import classification_breakdown_values
+from app.modules.presenze.services.gate_inaz_details import gate_inaz_detail_values
 from app.modules.presenze.services.meal_vouchers import meal_voucher_values
 from app.modules.presenze.services.operai_daily_policy import classified_extra_minutes
 from app.modules.presenze.services.personnel_profiles import personnel_profile_values
@@ -260,7 +261,7 @@ def build_presenze_mobile_record_payload(
         "team_ids": [str(team_id) for team_id in team_ids],
         "work_date": json_date(record.work_date),
         "weekday": weekday_label(record.work_date),
-        "status": serialized.operational_status,
+        **gate_inaz_detail_values(record, serialized),
         "review_status": record.validation_status,
         "severity": severity,
         "schedule_code": record.schedule_code,
