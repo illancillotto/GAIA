@@ -331,5 +331,3 @@ legacy modal race behavior, extreme principal455, state concentration and LOC
 cost. Do not broaden this slice, change baseline or infer campaign completion.
 Global campaign remains ACTIVE/INCOMPLETE; historical30baseline provenance,
 large extreme tail and global-final application suites remain open.
-
-
