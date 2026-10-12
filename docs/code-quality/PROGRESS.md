@@ -1,5 +1,1051 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-12 — PAUSE: consolidamento autorizzato, nessuna nuova slice
+
+- Utente richiede pausa del goal globale, non completamento. Swarm terminale;
+  R63 chiusa con types TS2345, spec esterna NON AMMESSA e lint/coverage NOT_RUN.
+  R43/R51 parziali, R42 e runtime R59 respinti restano esclusi.
+- Checkout dedicato e branch refactor/complexity-campaign-20261008; main e
+  merge-base55a1b1d invariati.126 cambi iniziali inventariati con hash/ownership:
+  18 source/test e108 ricevute documentali; nessuna copia del lavoro concorrente.
+- R60/R61 inventario1047 frontend e R62 inventario1606 backend esatti con
+  dipendenze selezionate; non ripetute suite certificate. Backend7142PASS e
+  449 skip NON VERIFICATI; frontend18smoke/5238unit; build163/163,35warning.
+  Worker782PASS/1PGskip e coverageFAIL100; E2E R49 FAIL quota resta distinto.
+- Chiusura: diff-check0, una sola make complexity-ratchet BASE_REF=main0,
+  zero finding. Baseline38e6/matcher32b/soglie/esclusioni/policy preservate;
+  ambiguita globale GAIAusers non assorbita e non confusa con il gate change.
+- Prima degli aggiornamenti, freeze e documenti mutabili archiviati su SSD:
+  preflight6997binding/catena R60–R63 zero drift, dieci freeze ulteriori/1036
+  record e sette companion storici risolti esattamente. Ricevute non riscritte.
+- Tredici commit locali selettivi gia creati per responsabilita/R39–R62;
+  hash e staging receipts nel handoff. Ultimo ccb05866, runtime invariato.
+  Consolidamento finale solo documentale; nessun push/PR/main
+  merge/reset/cancellazione. Report CAMPAIGN_PAUSE_2026-10-12 e manifest handoff
+  in reports/code-quality; ricevuta commit/freeze documentata separatamente.
+  Obiettivo globale INCOMPLETO; nessuna nuova wave o continuazione automatica.
+
+## 2026-10-12 — R63 Catasto CF test-source STOP, no admission
+
+- Extremepage390cognitive unchanged; new bounded typed mountedCF interactions
+  prepared under exclusive test-only ownership. Two dedicated worktrees have
+  exact1047admittedfrontend snapshot; main/concurrentruntime untouched.
+- Root native61219 TERMINAL2:278unitPASS/7specs, then NEWspec106TS2345
+  Element→HTMLElement in within(container). Lint/coverageNOT_RUN, no retry or
+  typecast/fixture/config repair.1047before/STOPcustody exact. Static config
+  parsing/663originalroots retained was readiness, not native typesPASS.
+- Review19a2d77d imported exact; privatefinalfreeze2de0ca09/1100records root
+  rehash0. Reviewer metadataaudit1 on parser-mutatedconfig overlay preserved;
+  automated historicalauditNOT_REACHED. Separate root rawJUnit observation0
+  confirms269old+9NEWmultiset exact, not correction/retry of reviewer auditor.
+- NEWspec NOT_ADMITTED/BLOCKED_TEST_SOURCE_TYPES; runtime metricsdelta0;
+  historicalR30fullpagecoverageFAIL100 remains distinct, no branch credit.
+  R62publication2991 preserved through5privatearchives/companion8888fea7.
+  RegistryGraphify61861exit0/chunkdone720/874/136, no semanticfailedwarning.
+- Separate NEWspecHTMLElement guard decision required; R43DTO/ByRole repair
+  still independently pending. CampaignACTIVE/INCOMPLETE/fullobjective intact,
+  no baseline/matcher/threshold/config/mainedit/commit/push/Gitmerge. See
+  STOP_R63_CATASTO_CF_2026-10-12.md. Native token RELEASED.
+
+## 2026-10-12 — R62 fresh full backend checkpoint after R58
+
+- Native68373 TERMINAL0/all5gates0:7142PASS449NOT_PASSskip/7591actualcases,
+  zero failure/error,2384warnings,1286.26s. Default suite once, unchanged
+  configuration/provider flags, private SQLite/cache; no native retry.
+- 1606backend inputs beforeafter/independentlive exact. R56→R62 adds only
+  mapper/two tests and changes analytics; no removals. Actual86newcases:
+  49mapper37route, all17R58testfunctions represented. All7505historical
+  outcome/skip-message/text multisets retained via4freshcontent-proven XLSX
+  pairs, eight raw archives/rawIDs; no generic normalization or old pair reuse.
+- Independent reporte792920b imported exact; freeze7217f1f6,2936records/
+  3201bindings/2911privateobjects, root rehash0. R61publication1547 preserved
+  via five exact archived mutable inputs/companion987a7f69. No old freeze edit.
+- Verification only/NO_CHANGE, accepted metric delta0; no fresh coverage,
+  ratchet/globalcheck/worker/E2E/campaign certificate. R60localPASS remains
+  source-bound; baseline38e6/matcher32b/main55a preserved.447provider and2GIS
+  skips unverified; SQLite does not prove production PostgreSQL semantics.
+- Repeated fresh Presenze choice already corresponds to external R43, still
+  NOT_ADMITTED pending distinct DTO/ByRole correction decision. No R42 retry
+  or fixture grant inferred. Campaign ACTIVE/INCOMPLETE, objective unchanged.
+  See BACKEND_CHECKPOINT_R62_2026-10-12.md; no runtime/config/policy/main edit,
+  commit/push/Gitmerge. Documentation Graphify/publication tracked separately.
+
+## 2026-10-12 — R61 current admitted production build
+
+- Fresh build46012/cell2102 TERMINAL0/all7gates0:Next15.5.25 compilation/project
+  lint/types/163of163staticpages/optimization/traces;35warnings retained, no
+  native failure/retry/install. All1047frontendinputs/322specs/selecteddeps/
+  Node/main/integration beforeafter/live and R60manifest2bce60d2 exact.
+- Root audit552d8ec5 once0 archives200manifests/traces/standalone artifacts,
+  191NFT/1997referenceoccurrences/5916events; later .next persistence not assumed.
+  BuildnST1uBT1SiPNlsNDgCMQn/logc1bed57d; token RELEASED. No unit relabel/rerun:
+  fresh R60 18smoke/5238unit PASS remains source-bound and distinct.
+- Additional TUIverifier terminalPASS; report03847f80 imported exact,1280record
+  freeze04e7476a rehashed0,2484consumedbindings/1272immutableobjects. Original
+  reviewer remains explicitly BLOCKED on notification wait; never credited
+  with terminal review. Ancillary transport/inventory/status observations
+  preserved separately, no native-source failure or automatic repair inferred.
+- R60publication1183 rehashed0; five mutable inputs archived exact before
+  shared-doc edits, companiond8d4c02e, no old receipt rewritten. Runtime/
+  metrics delta0; baseline38e6/matcher32b/main55a preserved. No coverage/E2E/
+  backend/worker/global/campaign certificate from build. R43 fixture and R59
+  direction decisions still pending; campaign ACTIVE/INCOMPLETE. See
+  BUILD_CHECKPOINT_R61_2026-10-12.md. No commit/push/Gitmerge/source/policy edits.
+
+## 2026-10-12 — R60 fresh full frontend checkpoint
+
+- Fresh native8496 TERMINAL0:18smoke/5238unit/322actualspecs, no failed/pending/
+  skipped/todo. All5153R54 assertion identities retained with multiplicities,
+  plus36R57GIS and49R59feedback cases; no default inventory removal/filter.
+  All1047frontendinputs/selecteddeps/Node/main/integration custody exact.
+- Independent report9a27b922 imported exact;106record freezeb8561d37 rehash0.
+  First reviewer metadata SHA-literal transcriptionFAIL preserved/frozen;
+  distinctV2 correction only, no native retry or source/policy edit. Root
+  after-ratchet JSON observation failed on Make's shell-prefix brace, not the
+  authoritative next-line JSON; raw argv/log/exit preserved, no scan retry.
+- Fresh actualmain55a ratchet59777 TERMINAL0/zero findings; diffbinding exact.
+  Runtime/spec/config/baseline38e6/matcher32b/main unchanged. R59publication49
+  rehashed0 and archived exact before shared-doc edits, companion0d3ddd0e;
+  no original receipt rewritten. All seven suite/custody gates0.
+- Classification NO_CHANGE/verification only, accepted metric delta0. No
+  coverage inferred from non-coverage suite, no current production build,
+  backend/worker/E2E/global certificate; R55build predatesR57. Global baseline
+  GAIAusers ambiguity remains distinct from localPASS. R43 separate DTO/
+  ByRole test-only grant and R59 direction decisions still pending. Campaign
+  ACTIVE/INCOMPLETE; no cleanup/install/commit/push/Gitmerge/main/baseline edit.
+  See FRONTEND_CHECKPOINT_R60_2026-10-12.md.
+
+## 2026-10-12 — R59 Capacitas feedback, runtime rejected; characterization accepted
+
+- Original26346 TERMINAL0/actual12namedgates0:653PASS across25specs,
+  604historical raw multiset+49new public mounted policy cases, zero skip.
+  Fullworkspace725/733/253/633four100, fraction9/6/6/8four100; strictNEW665
+  roots retains662configured/zero diagnostics. All prior tests unchanged.
+- Candidate088338d6 replaces12literal fallbacks with one typed policy; exact
+  original byte/AST restoration, getter/empty/nonError/auth/lifecycle preserved.
+  Rejected prospective principal298→273/file762→708cognitive, physical401→390
+  (402→391 including switch dispatch), all238survivors/20072nonowned exact.
+- Native47071 TERMINAL2 at actualmain ratchet: real legacy_file_metric_regression
+  baselineLOC3109→3111(+2), local3108→3111(+3). Nine earlier stages0, two later
+  native stagesNOT_RUN.653same cases/fullworkspace726/711/254/634four100 cannot
+  override gate. REGRESSED/REJECTED; no runtime import, compacting or relocation
+  to bypass LOC. STOP123c36601da; poststop3674inputs exact, no native retry.
+- Only NEWspec10bdbd91 admitted as ORIGINAL_CHARACTERIZED/NO_CHANGE. Actual
+  integration90103 all7gates0/projecttypes/lint/report/main55a ratchet/diff/
+  1052inputbindings. Workspace92a5 remains exact; no label-only unit rerun or
+  full-suite certificate. Initial stage miscount13→actual12 retained/corrected.
+- Fresh report e7c33914 allcallable/filerecords equalR58:1676files20345callables,
+  1920error2735warning4655findings; accepted runtime/metric delta0. Current
+  globalcheck65499 exits2 sameGAIAusers ambiguous_identity/fourcandidates,
+  separate from rejected R59 LOC and not automatically historic30.
+- Main55a/baseline38e6/matcher32b/configs unchanged; old R58mutable publication
+  inputs archived exact before this note. Final review/publication maintenance
+  separate. R43 fixture and future R59 design decisions pending. Campaign
+  ACTIVE/INCOMPLETE; current targeted tests do not replace final suites.
+  See SLICE_R59_CAPACITAS_ERRORS_2026-10-12.md.
+
+## 2026-10-12 — R58 inactive-vehicle emission, verified local improvement
+
+- Composite original accepted d0dc:494PASS/full3runtime100, first formatFAIL
+  preserved freeze37bc8b. Three wrapping hunks only, AST6b24→bc260 equivalent;
+  distinct tail67599 completes format/report/main55a ratchet/diff/custody0,
+  no green test retry. First static odometer/custody-order blockers preserved.
+- Actual mapper47713/candidate91594 TERMINAL0:49pure+494base=543PASS/0skip,
+  exact raw identities/disjoint gates/all457historical intact. Full4runtime100;
+  helper8statements/zero branch denominator explicit, boolean/error contracts
+  genuine. Route legacy four exclusions shifted solely by four import lines.
+- Principal238→221/112→104/320→302; owned cognitive723→711(-12), physical
+  decisions342→340. CyclomaticSUM501 unchanged, combinedLOC1193→1212(+19),
+  route1193→1179; helpercognitive3/2/0 belowwarning. Survivor/nonowned metrics
+  exact. IMPROVED net12, not17global; no finding/parameter/nesting/tail credit.
+- First metric metadata assertionFAIL on derivedscope.files preserved; distinct
+  V2count-to-inventory/policyexact audit0, no native rerun. Independent candidate
+  auditc9e22328 accepts actual receipts. Reviewer mistaken fixed-guard claim
+  retained and corrected on unchanged dynamic/sourcebound V3, no gate change.
+- Fullreport33c957c3:1676files20345callables1920error2735warning4655findings;
+  application1621files19014callables319060LOC; tail3>300/17>200/55>100 unchanged.
+  Local ratchet0; separate globalcheck2 sameGAIAusers ambiguous_identity/four
+  candidates, not automatically historic30. Main/baseline38e6/matcher32b exact.
+- Graphifyoperazioni force/pruning0:541nodes1549edges30communities, ignored.
+  R57publication237 rehashed and mutable inputs archived before owned docs
+  publication. See SLICE_R58_INACTIVE_VEHICLES_2026-10-12.md; runtime owner stops.
+  Independent finale77e8aec imported exact/freeze52621da8; domain docs Graphify
+  125/159/11/chunk1of1done/no failedsemantic PASS. Registry MERGED is apply_patch
+  only; final platform/publication maintenance is Coordinator-owned.
+  Platform-docs semantic maintenance PASS/chunkdone/no failedsemantic; eventuale
+  sync finale e ricevuta publication sono esterne al claim runtime. Tutte le
+  evidenze iniziali/finali restano congelate separatamente, senza test retry.
+  R56backend now predatesR58; R54frontend/R55build predateR57. Worker/E2E/global
+  and R43distinct test-only decision remain open. Campaign ACTIVE/INCOMPLETE;
+  no commit/push/Gitmerge/main edit/baseline inflation or final-suite certificate.
+
+## 2026-10-12 — R57 GIS popup presentation, verified local improvement
+
+- Fresh original44465/candidate90196 TERMINAL0, all12nativegates0 each:
+  73PASS/37historical+36new/zero skip; fullfilefour100 original page/excel and
+  candidate page/helper/excel. Types/strictNEW preserving projectroots/lint/
+  report/ratchetmain55a/custodyPASS; all173survivors/allnonownedmetrics exact.
+- Principal317→298cognitive/281→262cyclomatic/1889→1868LOC. Owned cognitive
+  568→566(-2), genuine physical decision duplication removed483→481; root-based
+  cyclomaticSUM657→660(+3 from five helpers), combinedLOC2155→2178(+23) disclosed.
+  MainLOC2141; helpers2/3/3/6/3cognitive below warnings; state28/effect8 unchanged.
+  Classification IMPROVED smallnet2, not19global improvement/LOC/hook reduction.
+- Global report3c6d6678:1675files20342callables1920error2735warning4655overlapping
+  findings; application1620files19011callables319041LOC. Tail3>300/17>200/55>100,
+  one extreme callable removed; no finding reduction or campaign completion.
+- First53524 STOP37historicalPASS36newFAIL missing Promise in new DUI API mock.
+  Exact failedaa8spec/argv/log/exit preserved; typedb88correction only, all36case
+  assertions unchanged; distinct fresh original-v2, no native/config/runtime retry.
+  Reviewer stale-content error and separate correction kept. Independent actual
+  original/candidate accepted; final19db06f0 imported exact/freeze34b972ed9d,
+  independent publication audit228records88aa9c83 accepted after docs maintenance.
+- Current globalcheck38144 exits2 unchanged GAIAusers ambiguous_identity/four
+  candidates, not plain errorcountFAIL or automatically historic30. Localratchet
+  zero; main/baseline38e6/matcher32b unchanged. No commit/push/Gitmerge.
+- Graphifyfrontend force/pruningpatchPASS6075nodes12688edges228communities ignored.
+  Three original publication inputs archived exact before docs update; R56old
+  companion4d765/nested earlier freezes preserved. Runtime owner stops here.
+- R54frontend/R55build predate R57, not fresh final-suite evidence. R56backend
+  unchanged-source7056PASS449skips; worker/E2E/global and R43test-only decision
+  remain open. Campaign ACTIVE/INCOMPLETE. See SLICE_R57_GIS_POPUP_PRESENTATION_2026-10-12.md.
+- Reviewer TERMINAL; slice registryMERGED means apply_patch integration, noGitmerge.
+  Final-reviewed three docs archived separately before this completion update;
+  root publication/handoff retain custody without rewriting prior freeze.
+  See REVIEW_R57_GIS_POPUP_FINAL_2026-10-12.md; runtime ownership released.
+
+## 2026-10-12 — R56 full backend after R52, independent PASS with skips
+
+- Previous goal turn PROGRESS: R55 build/independent review completed; full
+  campaign goal unchanged. Fresh default backend37710 TERMINAL0, five native
+  gates0:7056PASS449skip0failure0error/2380warnings/1276.06s. Pytest ran once,
+  private SQLite/cache, no selection/skip/timeout/config/policy/source repair.
+- All1603backendinputs/package metadata/Python/main/baseline/matcher/admitted
+  Presenze beforeafter/live exact, manifests70890a62. Source delta versus R45:
+  only admitted R52analytics and its new spec;36new genuine default test cases.
+- Actual7505raw JUnit cases retain identities/multiplicities/outcomes. Historical
+  raw Counter differs four generated XLSX IDs:7465descriptors exact plus four
+  narrowly content-proven pairs, not silently renamed tests. Eight valid ZIP/
+  CRC/forward-ID snapshots/ordered9members/non-core bytes exact; only core
+  created/modified text and ZIPtimestamps differ. Arbitrary data/creator/order/
+  member changes rejected by complete signature comparator; raw IDs preserved.
+- Root initial raw-ID metadata STOP and distinct V2path/V3literal/V4duplicate
+  comparator preparation failures retained. Native gates all0; metadata V5
+  separately0, summary0267fc1a. Reviewer first static and broad-exit terminal
+  STOPs retained, corrected distinct audits do not repair/retry native pytest.
+- Independent final0ad519a8 VERIFIED WITH SKIPS,73record freezecfd00d35 rehash0,
+  imported exact. JUnitc228ed04; all449exact skip reasons/outcomes preserved:
+  447PGdependent and2GISdependency cases unverified, not PASS. No full-file100
+  or PostgreSQL lock/race/transaction proof from default SQLite suite.
+- R55original258publication records preserved via companion21e9015a: five
+  mutable-input snapshots,253old immutable records, nested R54/R53 intact.
+  Main concurrent work unchanged, no commit/push/Gitmerge/baseline inflation.
+- Runtime NO_CHANGE, R53metrics/last ratchet unchanged/tail4>300/17>200/55>100.
+  R54frontend5153unit18smoke and R55buildPASS remain separate. E2E/worker/global/
+  coverage obligations and R43/R51/Bonifica/worker decisions remain pending.
+  Campaign ACTIVE/INCOMPLETE; no blanket final-suite or completion certificate.
+- See BACKEND_CHECKPOINT_R56_2026-10-12.md and FINAL_R56_BACKEND_VERIFICATION_2026-10-12.md.
+
+## 2026-10-12 — R55 fresh production build after R53, independent PASS
+
+- Coordinator70685 TERMINAL0, existing npm build:clean executed once under
+  fixed Node24/env-i: Next15.5.25 compile/project types/lint/static163of163/
+  optimization/traces PASS; all7launcher gates0, no repair/install/retry.
+- All1044frontendinputs/default320specs/selected dependencies/Node/main/baseline/
+  matcher beforeafter/live unchanged; manifests1a0354fe. Main concurrent work
+  preserved. Only own real ignored integration .next cleaned as requested.
+- Root audit09441828 archives199byte-exact build artifacts before cache reuse;
+  buildIDdBH5BSo4uq8ZHB5ns0roG,190app-paths,161static29dynamic routes entries,
+  191NFTtraces/1997reference occurrences,5914Nexttrace events. Inventories are
+  distinct from behavioral tests/routes. All35warnings retained, not suppressed.
+- Independent final report e23cf5a6 VERIFIED,238record freezec49137d4 rehash0,
+  imported byte-exact; all app targets/required-server files/manifest chunks
+  checked. R54original59records bound through companion3b4f904b: five mutable
+  inputs archived losslessly,54immutable artifacts exact; R53companion intact.
+- Runtime NO_CHANGE; fresh R54frontend18smoke5153unit320specPASS remains
+  separate evidence, no coverage/E2E/backend/worker/global certificate inferred.
+  Last admitted R53metrics/ratchet unchanged; current tail4>300/17>200/55>100.
+- User-selected new Presenze design R43 remains external pending distinct
+  test-only DTO/findByRole correction decision, requested again this turn.
+  Prospective360→347principal/1048→1023file not admitted; runtime deb4 unchanged.
+  R51/E2E/Bonifica/worker decisions not inferred. Campaign ACTIVE/INCOMPLETE;
+  no main/threshold/baseline edit, commit/push/Gitmerge or complexity credit.
+- See BUILD_CHECKPOINT_R55_2026-10-12.md and FINAL_R55_BUILD_VERIFICATION_2026-10-12.md.
+
+## 2026-10-12 — R54 fresh complete frontend after R53, independent PASS
+
+- Previous goal turn PROGRESS: actual R53 admitted, no narrower goal substitute.
+  Fresh root76878 TERMINAL0:18smoke/5153unitPASS/320exact defaultspecs/zero skip,
+  same full historicalR46assertion Counter5108 plus R53new45; multiplicities
+  retained (5107distinct identities), no unique-name undercount or case loss.
+- Fixed Node24.14.0/npm11.9.0/env-i, full default includes/maxWorkers2/bail1;
+  no selected tests/runtime/config/timeout/policy/install/native retry. All8
+  command/custody exits0,1044frontendinputs/dependencies/Node/main snapshots
+  beforeafter/live exact; baseline38e6/matcher32b unchanged. Seven jsdom
+  navigation diagnostics retained. No coverage inferred from noncoverage suite.
+- Independent final93ca6bf6 VERIFIED,260record freeze8d9efe92 rehashed0;
+  imported exact FINAL_R54_FRONTEND_VERIFICATION_2026-10-12.md. R53original200
+  records/ten mutable inputs archived byte-exact via companion69c0bc86, all190
+  old immutable artifacts unchanged; reviewerabbbf2c1 confirms historical
+  original6e568aab. No frozen evidence rewritten for later owned-doc updates.
+- Prelaunch cwd-relative syntax observation STOP retained; unchanged absolute
+  observation passed before native launch, not a repaired/retried test gate.
+  FRONTEND_CHECKPOINT_R54_2026-10-12.md records full commands and limitations.
+- Runtime NO_CHANGE, complexity report remains R53c3924c4a with4>300/17>200/
+  55>100. Fresh production build afterR53 NOT_RUN; E2E still R49quota failure.
+  R43test-only/R51/E2E/Bonifica/worker grants remain pending. Campaign ACTIVE/
+  INCOMPLETE; no main edit/commit/push/Gitmerge/baseline inflation.
+
+## 2026-10-12 — R53 Capacitas activity policy, verified IMPROVED
+
+- Fresh actual-root original34276/604assertions/24specs/fullfour100 PASS;
+  initial raw descriptor-uniqueness audit STOP retained. Read-only provenance
+  proves the same legacy multiplicities2/3/2 in R41. Distinct raw-v2 validates
+  exact559legacy multiset+45unique new descriptors,604assertions/600namekeys;
+  tail39261 executes only previously unrun gates, all0. No native test retry.
+- Candidate67243 TERMINAL0:604/24/four100workspace+fraction/raw locations/
+  positive maps/50+1implicit-else/countertests/projecttypes/strictNEW/lint/
+  whole report/actualmain55aratchetfindings[]/diff/custody3666 PASS. Root2810
+  all-input/main custody drift0; matcher32b/baseline38e6 unchanged. Original
+  and candidate fixed Node24; R52Node18→24 metadata disclosed, every original
+  file/callable/violation/scope/summary object equals R52.
+- Two typed same-file pure policies genuinely remove duplicated ordered
+  status chains and session gates; no JSX/hook/state/effect/API/lifecycle move.
+  Principal307→298cognitive/284→275cyclomatic/2404→2398LOC; file778→762cognitive,
+  924→906cyclomatic/255→253callables/3108LOC unchanged. Physical decisions−8,
+  all624unrelated JSX exact; helpers2/1cognitive below thresholds, no survivor
+  regression or debt transfer. Official1674files20337callables1920errors2735
+  warnings4655observations; application tail5→4>300,17>200/55>100 unchanged.
+- Independent final76573269 ACCEPT_VERIFIED_LOCAL_IMPROVEMENT,6member output
+  freeze9f6a0112 verified; first frozen final-worktree STOP preserved. Imported
+  separate FINAL_R53_CAPACITAS_ACTIVITY_VERIFIED_2026-10-12.md byte-exact plus
+  author28766233/reviewb0903ce6; integration report records complete evidence.
+  Verifier physical-line/parser STOPs retained with distinct authorized audits.
+- Dedicated frontend Graphify force/pruning PASS:6065nodes12666edges253
+  communities; graph ignored, HTML omitted by existing size limit. Domain
+  note CAPACITAS_MONITOR_ACTIVITY_2026-10-12.md records polling invariants.
+- Fresh integral make complexity-check exits2 at the known unchanged GAIAusers
+  callback ambiguity (four candidates). Diffmain0/custody0, separate disposition;
+  not an R53 regression or enumeration of historical30. No matcher/baseline edit.
+- User choice Nuova progettazione Presenze matches existing fresh R43 design,
+  still NOT_ADMITTED pending its distinct test-only typing correction. No
+  fixture grant inferred; R51/E2E/Bonifica/worker decisions remain separate.
+  Full frontend/build afterR53 NOT_RUN; historical suites not relabeled current.
+  Campaign ACTIVE/INCOMPLETE; no main edit/commit/push/Gitmerge/baseline inflation.
+
+## 2026-10-12 — R52 hours anomaly guard, actual integration gates PASS
+
+- Dedicated final raw review identified Node metadata24.14.0→18.19.1 from
+  isolated system PATH. Initial strict engines-equality failure preserved;
+  distinct static review authorized under existing comparable_engines rule,
+  with every non-runtime field/full object/custody assertion retained. No
+  native rerun, configuration change or historical npm-version claim.
+
+- Original5091/candidate51392 and root21779 TERMINAL0:379genuine+78supplement
+  PASS each,457exact JUnit IDs/15specs, no skip/failure/error. AST/synthetic
+  supplement runs separately without coverage credit. Complete analytics
+  statement623→624/branch252,100% before/after/root, legacy4exclusions unchanged.
+- Physical guard flattens emission without moving code. Entire-module AST
+  proof only expected integer complement/continue/dedent; cognitive239→238,
+  file724→723, LOC/cyclomatic/params/maxnesting unchanged. Small local IMPROVED,
+  no finding elimination or strategic extreme-tail success.
+- Author87/reviewer21freeze records verified; exact source0aa1f196/testb430bc30/
+  reports imported. Actual current fullreport2fd85c34:1674files20339callables,
+  1920error2735warning4655overlapping findings unchanged. Backend new test is
+  outside existing official backend/app scope, no scope or baseline edit.
+- Root actualmain55a ratchet PASS/findings[],Ruff/format/diff PASS,2809protected
+  inputs drift0 outside exact owned paths and main unchanged. Source parser
+  preparation/invalid observation issues recorded, no native gate retry.
+- INTEGRATION_R52_ANOMALY_HOURS_2026-10-12.md records evidence. Dedicated final
+  actual-root reviewad531b0a ACCEPT_VERIFIED_LOCAL_IMPROVEMENT;14member freeze
+  0c4868c8 verified. Initial metadata STOP retained, distinct static audit PASS;
+  no full-backend-after-R52 or campaign completion certificate. R43/R51/E2E/
+  Bonifica/worker decisions stay separate; source admitted without Git commit.
+
+## 2026-10-12 — R51 fuel variant design, fixture prerequisite STOP
+
+- Fresh exclusive SSD author/reviewer worktrees at114fbf/main55a; both static
+  only and TERMINAL. Fuel217cognitive/148cyclomatic/329LOC remains unchanged.
+  Two ordered eager WC alias lists are AST-identical modulo owner variable.
+- Author8145e241/reviewerb4decb5f independently identify R14 AST fixture global
+  namespace={} and seven fixed closures: shared helper would not resolve there.
+  No runtime/newtest/oldfixture edit or native-heavy gate. Separate minimal
+  real-helper fixture-binding decision requested, no reply received.
+- Reports/matrices imported exact; author5/reviewer2freeze records checked.
+  Root2808protected inputs/main custody drift0. Future genuine coverage must
+  exclude synthetic AST execution from credit but run every assertion separately;
+  inherited `not synthetic` names alone do not enforce this separation.
+- NO_CHANGE_RUNTIME/BLOCKED, not a demonstrated production failure or metric
+  reduction. R43 test-only/E2E lifecycle/Bonifica/worker decisions unchanged;
+  campaign ACTIVE/INCOMPLETE, no baseline/matcher/policy change or commit/merge.
+
+## 2026-10-12 — R50 SISTER pool characterization, runtime unchanged
+
+- V1 new4test ORM/async31PASS then Ruff I001 STOP preserved26freeze. Distinct
+  import-only V2 body/importmultiset exact,31focusedPASS/style/formatPASS and
+  worker782PASS/1PGskip/53files; reviewer4f3a57f8/freeze25fef358d5 accepts test-only.
+- Root40854 TERMINAL0 independently782PASS/1skip/53files/style/format/report/
+  main55a ratchetfindings[]/diff/custody2808drift0. Sanitized root launcher,
+  no runtime/oldtest/config/policy/baseline change. All1673oldfile/20329callable
+  reportobjects equal R41; newtest195LOC10callables/no violation, global1920/2735.
+- Worker coverage6075/6077statement1628/1630branch:3lines/4edges newly covered,
+  full100stillFAIL. Remainingpool523/522→523 and retry_metadata22/21→22;21legacy
+  exclusions unchanged. No fake scheduler, unreachableguard removal or waiver.
+- Classification NO_CHANGE/CHARACTERIZED, not complexity improvement. Independent
+  final75ebb4ef/freeze38members567466da accepts exact test-only admission;
+  prior123freeze records unchanged. E2E/R43/Bonifica decisions still open.
+  Report INTEGRATION_R50_WORKER_POOL_CHARACTERIZATION_2026-10-12.md, campaign
+  ACTIVE/INCOMPLETE, no commit/push/Gitmerge or reduced extreme-tail claim.
+
+## 2026-10-11 — R49 E2E STOP at private synthetic-device quota
+
+- Original package-path preparation STOP preserved; V2 never launched after
+  static JSON-contract HOLD. Distinct V3 independently reviewed with mandatory
+  sanitized launcher,43freeze records exact; owned health/login/identity PASS.
+- Native83110 TERMINAL1:37PASS/1failure/5explicit skips/18not run across all24
+  specfiles/61cases. Ruolo-avvisi login403 reaches unchanged super_admin limit20;
+  trace plus read-only DB prove20active/20allowed/1blocked synthetic devices.
+  No retry, auth bypass, quota increase, assertion or runtime/config correction.
+- All5CatastoGIS cases and GIS strumenti smoke PASS; optional Territorio skipped,
+  no full E2E PASS.2712inputs/main/admitted custody drift0, three owned children
+  terminated/ports free. Report E2E_CHECKPOINT_R49_2026-10-11.md; evidence retained.
+- Distinct fixture-lifecycle decision and R43 test-only decision pending.
+  Campaign ACTIVE/INCOMPLETE, metrics unchanged, no commit/merge/baseline edit.
+- Independent result review fcf7065e/freeze57f135a947 ACCEPT_STOP_EVIDENCE:
+  case accounting/403/20deviceDB/main custody confirmed; no base-stack replay
+  claimed. Native freeze2131f98dd6d5 exact. Root main55a ratchet59008 TERMINAL0,
+  findings[]; Graphify54092 TERMINAL0/chunk1of1done/no semantic-failure warning,
+  540nodes601edges116communities. No E2E success inferred from either gate.
+
+## 2026-10-11 — R48 admitted clean production build PASS
+
+- Native45446 TERMINAL0:Next15.5.25compile25.5s/lint/types/static163of163/
+  optimization/traces, standalone190route entries,35warnings retained.
+  Exact metadata completion audit and original manifest byte snapshots stored;
+  generic summary boolean not sole proof.1043protected inputs/main/admitted
+  state drift0; no tracked next-env/tsconfig change, repair or native retry.
+- Only own ignored nonsymlink .next cache cleaned by existing user-requested
+  script, no main/worktree/container/browser/frozen evidence removal. No coverage,
+  external R43 spec typing or E2E certificate inferred from production build.
+- Report BUILD_CHECKPOINT_R48_2026-10-11.md, registry READY_FOR_REVIEW/token
+  released. R47worker778PASS/1skip and its actual coverage gaps remain separate.
+  E2E/strategic hotspot mission/R43 test-only decision open, campaign INCOMPLETE;
+  no commit/push/Gitmerge/baseline inflation.
+
+## 2026-10-11 — R47 worker PASS with gaps; R48 clean build running
+
+- R47native80483 TERMINAL0:778PASS/1PostgreSQLskip/52exact files,1pytestwarning,
+  1756inputs/main/admitted custody drift0. Worker diffmain0, no repair/retry.
+- Actual coverage6072/6077statements99.9177%,1624/1630branches99.6319%, not100;
+  missing5lines/6branches in credential_pool/retry_metadata,21existingexcluded
+  lines preserved. Gap not hidden, runtime unchanged so no changed-file waiver.
+- Report WORKER_CHECKPOINT_R47_2026-10-11.md; registry READY_FOR_REVIEW,
+  native token released. R48 registry then clean frontend build45446 live,
+ 1043inputs bound, own ignored real .next842MiB recreatable cache only, no
+  symlink/active Next server. Existing npm build:clean, no Docker helper/main/
+  container/browser/evidence cleanup. Native result/custody still pending.
+- Full goal intact/ACTIVE/INCOMPLETE. R43 actual test-only decision pending,
+  frozen source/spec not installed. No coverage inference from build, E2E and
+  extreme-hotspot requirements still open; no commit/push/Gitmerge/baseline edit.
+
+## 2026-10-11 — R47 admitted-worker complete suite running
+
+- Previous goal turn progress: complete frontend5108unit/18smokePASS/319files,
+  1043inputs drift0,20-member freeze81885306. Full objective reread unchanged.
+- Separate read-only R47 existing make test-worker on admitted source, sole
+  GAIA native80483,1756worker/backend/scripts/Makefile inputs bound before run,
+  all52recursive worker test files equal target maxdepth inventory; no omitted
+  nested files, new exclusions, thresholds, source/test/config edits or retries.
+- Synthetic backend test defaults/private SQLite DB/rootPYTHONPATH; coverage
+  JSON/XML redirected via existing target variables. Only skip reason/maxfail1
+  reporting added. Worker runtime unchanged; no full100 policy waiver inferred.
+- Actual native handle/process tree confirmed live. Complete result/coverage/
+  custody still pending, not PASS yet. Frozen R43 not installed or repaired;
+  user test-only decision pending. Build/E2E/extreme-hotspot mission still open.
+- Private SSD R47 evidence/registry retained, poll tools.write_stdin80483,
+  no restart for timeout; token serial. No commit/push/Gitmerge/baseline update.
+
+## 2026-10-11 — R46 complete admitted-frontend smoke/unit PASS
+
+- Native92230 TERMINAL0:18smoke/5108unit PASS,319exact default specfiles,
+  zero failure/skips/nonpassed. Independent JSON/spec-inventory audit matches
+  every expected path, no absent/extra;1043input/main/admitted custody drift0.
+- No runtime/test/config/dependency edit, retry, coverage inference or frozen
+  R43 fixture/source installed. Existing jsdom navigation diagnostics retained,
+  not assertion failures. Native JSON span289748.17ms, reportSHA3f6c61f1.
+- Report FRONTEND_CHECKPOINT_R46_2026-10-11.md, registry READY_FOR_REVIEW,
+  heavy token released. Current R45backend7020PASS/449skip remains separate.
+  Build/worker/E2E/extreme-hotspot mission and R43 test-only decision still open;
+  campaign ACTIVE/INCOMPLETE, no commit/push/Gitmerge/baseline change.
+
+## 2026-10-11 — R46 complete admitted-frontend checkpoint running
+
+- Previous goal turn progress: backend7020PASS/449skip/zero failure,1602inputs
+  drift0,17-member freeze5ab943da. Full objective reread, still INCOMPLETE.
+- R46 registry before launch, no new agent/worktree/source changes. Root sole
+  GAIA heavy session92230,1043frontend inputs/319default specs bound before run;
+  smoke18PASS/zero skip, complete default Vitest now running with maxWorkers2/
+  bail1, no test selection filters, config/timeout/assertion/exclusion changes.
+- Actual process3334945/PTY92230 confirmed live. No retry, frozen R43 spec/source
+  not installed or repaired; separate test-only user decision remains pending.
+  Complete unit result/native JSON/custody await terminal status, not PASS yet.
+- No coverage inference from this non-coverage run; frontend build/worker/E2E
+  and extreme-hotspot requirements still open. Private SSD R46 evidence retained,
+  poll tools.write_stdin92230; never restart solely on observation timeout.
+
+## 2026-10-11 — R45 complete admitted-backend suite PASS with449skips
+
+- Native session67767 TERMINAL0:7020PASS/449skip/zero failure/error,
+ 2376warnings,1363.99seconds. Independent XML7469cases and before/after1602
+  backend inputs/main state/admitted source hashes all exact, custody drift0.
+- 447PostgreSQL transaction/race/integration and2OSGeo/pyproj scenarios skipped,
+  retained case-by-case in XML/summary; not PASS or production concurrency proof.
+  No coverage inferred, source/test/config repair/retry or R43 reactivation.
+- Current full-suite certificate limited to admitted backend. Frontend/build/
+  worker/E2E current full certification and extreme-hotspot mission still open.
+  Corrected global Final metrics/top30 from stale R8/R7 to admitted R41f0985cac,
+  historical suite section explicitly historical; no new runtime metric credit.
+- Report BACKEND_CHECKPOINT_R45_2026-10-11.md, registry READY_FOR_REVIEW,
+  heavy token released. R43 test-only decision pending, source deb4 unchanged.
+  Campaign ACTIVE/INCOMPLETE, baseline/main preserved; no commit/push/Gitmerge.
+
+## 2026-10-11 — R45 complete admitted-backend checkpoint running
+
+- Previous goal turn progressed: independent historical30 provenance recovery,
+  exact12-member freeze536fa163, zero drift. No goal completion inferred.
+- Current full goal reread. R43 test-only decision remains pending and its
+  external runtime/specs are untouched. Separate required integration check:
+  R45 root sole serial session67767, complete backend pytest on admitted source,
+  backend cwd, explicit test environment/private SQLite DB, no test selection
+  exclusions or opt-in changes. Existing config excludes no tests additionally.
+- Preflight1602backend inputs hashed; integration114fbf71/main55a, Presenze deb4,
+  baseline38e6/matcher32b unchanged. Registry before launch; no new agent/worktree.
+  Process handle and native process tree confirmed live; no blind restart.
+- JUnit XML records every collected case/skip. Stop on first failure, preserve
+  evidence, no runtime/test/config repair or retry. Native completion/custody
+  still pending, no PASS/coverage/final-campaign certification asserted.
+- Private evidence SSD `.codex-gaia-campaign-20261011-r45-backend-checkpoint`;
+  correct polling via tools.write_stdin(session_id=67767), not functions.wait
+  with a PTY ID. All other heavy gates remain stopped while this process runs.
+
+## 2026-10-11 — R44 historical provenance independently re-established
+
+- Full goal attachment reread; campaign ACTIVE/INCOMPLETE. Previous turn
+  completed documentation/custody evidence, not campaign completion or R43 repair.
+- While R43 test-only decision remains pending, separate read-only required
+  provenance task recomputes historical30 from Git/registered baseline: fresh
+  V2session99623 TERMINAL0, 30records/14paths/71callable scans plus file LOC;
+  15REAL_REGRESSION/15TEST_ONLY_DIVERGENCE/UNKNOWN0. Commit/parent measurements,
+  baseline-origin/last-baseline/snapshot metrics all reproduced. Current14
+  source bytes equal snapshot/main/integration HEAD, CLEAN, custody drift0.
+- Old temporary provenance artifacts unavailable; fresh evidence on SSD R44
+  restores independent numerical proof without trusting prose or changing
+  baseline. V1 diagnosed preparation omission on two explicit file records
+  preserved; separate V2 supports official file LOC, keeps every assertion.
+- NO_CHANGE / PROVENANCE_REVALIDATED. Historical30 not campaign regressions,
+  not absorbed or ignored. New corrected-global ownership ambiguities remain
+  distinct; no global PASS, application metric credit, R43 gate retry or fix.
+- New report `reports/code-quality/BASELINE_PROVENANCE_REVALIDATION_2026-10-11.md`;
+  ownership R44 READY_FOR_REVIEW. No new agent/worktree/commit/push/Gitmerge.
+
+## 2026-10-11 — R43 STOP on reused test-spec typing, not runtime regression
+
+- Author88643 TERMINAL1:506/eight/fullfour100 and official project typecheck
+  PASS; supplemental strict NEWspec finds TS2352 incomplete DTO type assertion
+  and TS2769 unsupported `exact` role option. ExactR42spec16a unchanged;
+  earlier project typecheck excluded specs. Lint/report/ratchet/audit NOT_RUN.
+- STOP47freezef5f9af52 preserved; runtime64af/test/source fixes withheld,
+  token RELEASED, final HOLD. User asked distinct test-only correction decision;
+  no assertions weakened, unknown cast/config/ignore/baseline change or retry.
+- Prospective347/1023 remains unadmitted; integration originaldeb4/metricsR41
+  exact. Independent static reviewer0e05293f/freeze8d426460c had supported design,
+  not native certification. Campaign ACTIVE/INCOMPLETE.
+- Platform Graphify session12347 TERMINAL0: semantic `chunk 1/1 done`, no
+  failed-chunk warning; 500nodes/548edges/111communities, 15429input/3483output
+  tokens, estimated $0.0117. Logs/exits retained in R43 root-evidence;
+  no generated graph tracked. STOP47/final14 rehashed with zero drift;
+  admitted source/matcher/baseline hashes unchanged. Test-only decision pending.
+
+## 2026-10-11 — User-selected R43 fresh Presenze policy design
+
+- User selects Nuova progettazione Presenze after rejected R42. New registry
+  before author/reviewer worktrees/agents; originaldeb4 still unchanged.
+- Static-only design: pure typed editor normalization policy plus original
+  React deferred scheduling boundary. Must demonstrate duplicate guard removal
+  and whole-file/physical-decision reduction versus original, every helper counted.
+- R42 real callback regression remains rejected/frozen, not fixed by baseline,
+  matcher or callable rename. Original506/four100 characterization reusable only
+  with exact source/ALL eight spec hashes. Native/source HOLD until design review.
+- R42 independent rejection30e95d7e and finalSTOP347d173c imported; both final
+  native NOT_RUN. Campaign ACTIVE/INCOMPLETE; current admitted metrics R41.
+
+## 2026-10-11 — R42 Presenze candidate rejected by real callable ratchet
+
+- Fresh ownership/three dedicated worktrees; original506/eight mounted specs
+  four100/raw3668custody PASS. Existing496 tests unchanged,10 additive real
+  StrictMode public transitions. Historical dirty R26/R34/R36 copies rehashed,
+  no live conflict; accepted R38/R39/R40/R41 root manifests0drift.
+- One contract-kind effect,8add/14remove, prospective principal360→355/file
+  cognitive1048→1039; all477JSX/unrelated AST/hooks unchanged. No helper or
+  complexity relocation; closure/current race and defaults preserved.
+- Candidate5260 TERMINAL2:506tests/four100/types/lint/report PASS, actualmain55a
+  ratchet Make2/CLI1 THREE real regressions on surviving setter callback:
+  cognitive2→8/cyclomatic3→7/LOC7→18. Final raw/custody audit NOT_EXECUTED,
+  independent final/root native NOT_RUN. This is NOT matcher ambiguity/history30.
+- REGRESSED / REJECTED_FOR_INTEGRATION; candidate92235 and STOP80freeze37dfe062
+  retained externally, no source/baseline repair or blind gate retry. Integration
+  Presenze exactdeb4 unchanged; accepted global R41 metrics remain1673files/
+  20329callables/1920errors/2735warnings/4655overlapping observations, tail5/17/55.
+- Heavy tokens RELEASED; new design/priority decision requested separately.
+  Main55a/concurrent work/baseline38e6 unchanged, no commit/push/merge. Campaign
+  ACTIVE/INCOMPLETE. See INTEGRATION_R42_PRESENZE_CONTRACT_PROFILE_2026-10-11.md.
+
+## 2026-10-11 — R41 completed checkpoint, global extreme-tail goal open
+
+- Root60860 TERMINAL0/559tests/fullfour100/types/lint/report/main55aratchet0/raw/
+  custody, exact Capacitas3ae8b186 admitted. Native tokens RELEASED, agents terminal.
+- Graphify32124all0, forceAST650/650/6063nodes12663edges230communities (HTMLskipped
+  existing5000limit); domain138/141/18, platform492/536/104, both docs chunk1/1done/
+  no warning. Domain657in2885out estimated$0.0049; platform16230in3064out$0.0114.
+- Root76freeze7a3c1a4348192ae075a47e5d524e6a7e7b9fee8adb775b863e9026d2a4274108
+  rehash0, prior R37STOP75/R38root75/R39root63/R40root55 preserved. Two exact
+  reports/new integration/domain note imported; failed old R37 records historical.
+- Current1673files20329callables1920errors2735warnings4655overlapping findings,
+  Capacitas principal307still>300/tail5>300/17>200/55>100. Global goal remains
+  ACTIVE/INCOMPLETE. No further hotspot/commit/mainmerge/cleanup/baseline change.
+- Publication registry hunk ordering failed atomically after freeze; corrected
+  metadata only, no native rerun/source/evidence edit. Next cohesive extreme
+  responsibility requires fresh ownership/coverage census. Broad application
+  suites/global baseline ambiguity/historical30provenance remain open.
+
+## 2026-10-11 — R41 exact preserved R37 admitted by composite root PASS
+
+- Root60860 TERMINAL0, ten stages0:559mounted tests/23immutable specs/no skips,
+  workspace727statement746branch255function634line/fraction9/6/6/8 four100,
+  types/lint/source-bound raw maps positive/exact frozen candidate/fullreport/
+  actualmain55aratchet/findings[]/diff/custody/terminalauditPASS. No native retry.
+- Exact source3ae8b186, four pure guard/speed/stop helpers, unchanged624JSX and
+  all state/effects/API/DOM/order/race/exception contracts. Independent reviewer
+  report1ffaba96/19freeze bae98963; finalab65ff7f/59freeze8c2d7b18, rehash0.
+  Final original metadataENOBUFS STOP preserved; separately authorized V2audit0,
+  green native gates never rerun. Exact two reports imported byte-for-byte.
+- IMPROVED principal324→307cognitive/301→284cyclomatic/2412→2404LOC;
+  wholefile811→778cognitive/953→924cyclomatic. LOC3087→3108(+21), callableLOC
+  4517→4528(+11),31state2effect unchanged, fileerrors16→14/warnings15→16.
+  Tradeoffs disclosed and source-backed guard/speed decision dedup demonstrated;
+  mainfileLOC3109 respected, no laundering/new helper warning. >300exit unmet.
+- Composite1673files20329callables1920errors2735warnings4655overlapping findings,
+  every other runtime record exactly R39. Tail5>300/17>200/55>100 unchanged.
+  Main55a/baseline38e6b794/source tests/config unchanged, no commit/mainmerge.
+  Prior R37 NOT_ADMITTED reports remain immutable historical; R41supersedes
+  current disposition only. Graphify/docs/freeze pending, campaign incomplete.
+
+## 2026-10-11 — R41 native green, private metadata buffer STOP
+
+- Independent60956 native559tests/23specs/full727statement746branch255function
+  634line100 and fraction9/6/6/8, types/lint/report/main55aratchet0 and original
+  location-countertests0 preserved. Final auditor stops at Git-show immutable
+  baseline ENOBUFS, Node default1MiB; Coordinator measures8,454,547bytes.
+  STOP50ce745048 preserved/token released; no final certificate yet.
+- Distinct metadata-only V2 grant permits32MiB Git buffer and new receipt name
+  only, same complete assertions/raw/source/custody; no suite/types/lint/report/
+  ratchet rerun, source/test/config/baseline change. New failure STOP/freeze.
+  Integration candidate still NOT_ADMITTED/original7f9d7883; root gate prepared
+  and syntaxPASS but not executed until independent final audit/custody acceptance.
+
+## 2026-10-11 — R41 static behavior/custody PASS, independent native token
+
+- Reviewer v2inventory23exact specs/559old cases/source624JSX/412→410decisions
+  verified; all7frozen manifests0drift. Census172/157/15 and four historical dirty
+  copies bind explicit terminal/release receipts; R25STOP85/R20final116/R21final124
+  rehashed0 independently. Original private glob omitted one .test.ts; V1/log
+  preserved, distinct inventory-only grant/v2exact immutable testResults PASS.
+- Final exact verification fixtures3ae8b186/32b11750 applied only in dedicated
+  worktree, unchanged3665protected tracked inputs/main/23specs. Dependencies,
+  paths/scripts/oldSTOP75 prechecked. Fresh sole native token granted;559mounted
+  cases/full727statement746branch255function634line100/fraction9/6/6/8,
+  types/lint/report/main55aratchet/raw/custody mandatory before admission.
+  Integration runtime remains original7f9d7883; no baseline/test/config/source fix.
+- Coordinator several functions.wait calls used nonexistent IDs and failed
+  without process effects; correct agent wait is collaboration.wait_agent.
+  No live process restarted or log called PASS; native heavy execution serial.
+
+## 2026-10-11 — R41 fresh independent R37 admission after verified matcher
+
+- Previous goal turn PROGRESS: R39 matcher and R40 prerequisite actually
+  integrated/independently/root-tested/measured/frozen; not a status-only turn.
+  Global objective reread unchanged, ACTIVE/INCOMPLETE, no strategic completion.
+- Current integration114fbf71/main55a, Capacitas exact original7f9d7883,
+  matcher admitted32b11750, baseline38e6b794 unchanged; root18GiB/SSD317GiB.
+  Fresh source census172registered157available15unavailable; four dirty historical
+  copies match retained8ea9b7cb/34afe117/34afe117/7f9d7883, no observed live agent
+  owner. Reviewer verifies frozen/terminal provenance, unavailable not called clean.
+- Registry R41 created BEFORE two new114fbf71 worktrees/agents; reviewer read-only
+  source/behavior/custody, final STATIC-only fixture/native HOLD. Exact external
+  R37 V3candidate3ae8b186, no source/test/config improvement authorized. Full559
+  immutable mounted cases/23specs and four-dimension full100, types/lint/report/
+  main55aratchet/raw/custody independent/root mandatory; exterior replay alone
+  insufficient. Single native-heavy token only after explicit static receipt.
+- Graphify frontend orientation via dedicated query identifies workspace/polling/
+  result-policy relationships; not used as complexity proof. Target principal
+  324→307 and aggregate811→778 with LOC+21 disclosed; >300 target still unmet.
+  R37 source NOT_ADMITTED until fresh independent gates; all previous STOP/freeze
+  evidence and R38/R39/R40 accepted inputs preserved. No main merge/commit.
+
+## 2026-10-11 — R39/R40 authorized tasks closed with immutable evidence
+
+- R39 root63freeze SHA a590e5467b4f30d1f9e1eb6502fe5cfefa3268cebcec682c0e7c01e98022f5fc,
+  rehash0, after native95635 eleven stages0/270full100/ratchet0/replay/custodyPASS.
+  Platform Graphify41015 TERMINAL0, chunk1/1done/no semantic warning,
+  484nodes523edges104communities,18030input/3085outputtokens estimated$0.0121.
+  No dedicated Make tooling-code corpus exists; no unsupported root graph run.
+- R40 root55freeze d099fab5 and R38root75freezeab377713 remain0drift; Bonifica
+ 186/full100/ratchet0 admitted separately. Main/baseline unchanged, no cache
+  cleanup, commit/push/main merge. All native-heavy tokens RELEASED.
+- These two user-authorized bounded tasks are complete, not the global campaign.
+  R37 remains external/NOT_ADMITTED and needs independent UI gates; global
+  matcher exit2, historical baseline reconciliation, orchestrator269, remaining
+  extreme hotspots and complete application/build/worker/E2E suites still open.
+  No next hotspot started. Whole campaign ACTIVE/INCOMPLETE.
+
+## 2026-10-11 — R39 bounded matcher admitted, independent/root PASS
+
+- Independent final report7addefeb/107freeze886878b5 root-rehashed0: retained
+  V3native270/full919statement370branch100/patch27+6100/rawDB/style/mainratchet0,
+  original20323 replay; fresh V4previously-unrun candidate20327/negative/custody
+  TERMINAL24850exit0, no green rerun. Global2/notPASS, actualnegative1/six findings.
+- Root95635 TERMINAL0, all eleven stages0:270tests/55new/zero skipped,
+  full919statement370branch100/patch27+6/rawDBJSONexact/Ruff/NEWformat/fullreport/
+  actualmain55aratchet/findings[]/complete exterior original+candidate+realnegative/
+  diffcheck/custody/terminalaudit. Source32b11750/spec1db1888c exact; every
+  application metric record equals R40. No baseline/scope/threshold/config edit.
+- Correct only positively source-contradicted positional owner, using complete
+  source/report binding and unique ordered exterior fences; unchanged resolver/
+  strictR16/fullPRIMARY checks. R37 callback3182:3183 rightful3165:3166/LOC2,
+  not unrelated close3193/LOC1. Real source negative still detects six regressions
+  including below-threshold cognitive/cyclomatic. Tooling fix, no application
+  debt credit and no R37 UI certification. Unmapped/absent legacy fallback remains
+  explicitly unsupported; unchanged GAIAusers/Organigramma global ambiguity2
+  separated from historical30 and current campaign regressions.
+- Metadata erratum: frozen author prose states20323 for both full reports;
+  actual original1673/20323 SHA d8ec7dc8, candidate1673/20327 SHA1ddc5910,
+  all four added candidate callables retained. Independent/root exact evidence
+  supersedes that prose; no frozen author artifact changed. Root initial rehash
+  used wrong manifest-relative base and failed before native; parent corrected,
+  107members0drift. Three erroneous functions.wait/PT Yids produced not-found,
+  no process changes; native95635 correctly consumed through write_stdin.
+- Four exact source/review/final reports imported; technical docs updated,
+  platform Graphify/rootfreeze pending. Root/source ownership only Coordinator;
+  no main merge/commit, whole campaign ACTIVE/INCOMPLETE. Current application
+  1673files20325callables1922errors2734warnings4656overlapping findings unchanged.
+
+## 2026-10-11 — R39 final V3 native green; replay size metadata STOP
+
+- Final30192 native270PASS/full919statement370branch100/patch27+6100/rawDB/
+  Ruff/NEWformat/main55aratchet0 all preserved. Original exterior1673/20323
+  replay complete; candidate receipt assertion incorrectly required20323 instead
+  of its actual full20327 callables. Wrapper terminal1; candidate comparisons
+  and genuine negative not run yet. No source regression demonstrated.
+- Coordinator independently binds original d8ec7dc8/candidate1ddc5910 full
+  unchanged reports1673files/20323and20327calls. Distinct V4 metadata grant
+  permits ONLY previously unrun candidate/negative/finalcustody with exact
+  counts/hashes, preserving successful native and original replay (no rerun).
+  Failed receipts/STOPfreeze required; no scope narrowing or test/source/config
+  change. Unexecuted root replay prep corrected same count expectation.
+
+## 2026-10-11 — R39 final V2 launcher pre-native STOP; literal V3 grant
+
+- Existing ignored dependency link now resolves Babel and actual JS startup0;
+  source/spec/main/oldfreeze exact. Final V2 launcher failed BEFORE custody
+  Python/pytest: receipt prefix substitution changed final-evidence directory
+  literal into nonexistent final-v2-evidence. No native suite/gate started,
+  terminal1/token released; nine-member STOPfreeze e7a000b9 preserves scripts/logs.
+- Independent agent and Coordinator diagnose exact private path error. Distinct
+  V3 grant permits literal-path private launcher/receipt preparation and sole
+  native token only after path/preflight assertions. Original/V2 failures intact,
+  no runtime/test/config change or silent green claim. Root scripts unexecuted;
+  matcher original871ebffc remains integration until independent finalPASS.
+
+## 2026-10-11 — R39 independent final environment STOP, diagnosed prerequisite
+
+- Independent final60006 TERMINAL1:211PASS/6FAIL/53ERROR,270collected;
+  coverage94.93% NOT100, downstream gates NOT RUN. Source32b11750/spec1db1888c
+  unchanged. Missing @babel/parser in final-worktree: ignored frontend/node_modules
+  symlink was never prepared. Coordinator independently verifies absence and
+  Babel parser/traverse availability in existing integration dependencies.
+  Root18GiB/SSD317GiB free; not space exhaustion or proved matcher regression.
+- Failed native artifacts/coverage/config/scripts preserved and STOP freeze
+  required before distinct environment-only grant. Author has the expected
+  ignored dependency link; permit identical existing dependency link ONLY,
+  no package installation, source/test/config alteration. Fresh final-V2 token
+  and evidence names required, complete270/full100 gates mandatory. No blind
+  retry or tooling admission. Bonifica root55freeze remains immutable.
+
+## 2026-10-11 — R40 Graphify/freeze complete; R39 final native token granted
+
+- R40 Graphify83941 TERMINAL0, backend AST918/918,9339nodes22644edges530communities
+  (HTML skipped existing5000limit); domain126/129/17, platform477/505/103.
+  Both docs chunk1/1done/no semantic warning, all exits0; no generated artifact
+  tracked. Root55member freeze SHA d099fab5045bb2efb9dbfd497be86ab53b76f51ace42ca9370eee4830f579aba,
+  rehash0. Exact native/imported reports/source/spec/Graphify logs immutable.
+- Root metadata patch failed context lookup because hunks were out of order;
+  no partial changes, corrected hunk order only, no native rerun or test edit.
+- R39 final sole native-heavy token granted via filesystem after R40 release,
+  exact fixtures/static/custody prerequisite; complete old/new tooling, subprocess
+  full100 and exterior/realnegative/local/global distinction mandatory. No tooling
+  installed yet, R37 unadmitted, campaign ACTIVE/INCOMPLETE; no commit/main merge.
+
+## 2026-10-11 — R40 root PASS; R39 V3 author terminal, independent final preparing
+
+- R40 exact root25841 TERMINAL0:186tests (89new), zero failure/error/skips,
+  full398statements/126branches100, Ruff/newformat/report/actualmain55aratchet/
+  diffcheck/custody/raw audit all0. Existing50JWT key-length warnings and two
+  pre-existing coverage exclusions retained, not waived or concealed. Every
+  other runtime record equals accepted R38; Bonifica equals independent final.
+- Authorized unreachable date guard only: cognitive18→10/cyclomatic12→9/LOC26→25/
+  nesting3→2, file cognitive430→422/LOC739→738; two warnings removed. Queries,
+  inherited/default dates, exceptions, retries, transactions and external calls
+  unchanged. Orchestrator cognitive269/nesting13 remains unchanged; no R35 grant.
+  Exact four reports imported with matching hashes; Graphify/publication pending.
+- Complete application metrics1673files20325callables1922errors2734warnings4656
+  overlapping findings. Baseline38e6b794/main55a unchanged; root19GiB/SSD318GiB,
+  no cleanup. Campaign ACTIVE/INCOMPLETE, no commit/push/main merge.
+- R39 authorV3 session26702 TERMINAL0, eight stages0,270tests/full919statement/
+  370branch100/zero exclusions/mainratchet0/custody0; author50freeze39ad30da.
+  Preserved R37 exterior local old1→V3zero; actual source negative exit1 with six
+  PRIMARY regressions, including below-threshold metrics. Global remains exit2:
+  source ownership unprovable in unchanged GAIAusers/Organigramma paths; neither
+  global PASS nor automatic attribution to campaign/historical30 is claimed.
+  Independent final fixture/static preparation active, native token HOLD while
+  Coordinator completes R40 Graphify. Matcher not installed; R37 not admitted.
+
+## 2026-10-11 — R40 author candidate green; R39 V2 native running
+
+- Bonifica exact guardac6c0b36/NEWspecd77c1330 native186PASS/full398statement/
+  126branch100,2existing exclusions unchanged; Ruff/format/fullreport/main55a
+  ratchet/findings[]/custody0. Target18→10cognitive/12→9cyclomatic/26→25LOC/3→2nesting;
+  file430→422cognitive/739→738LOC,2warnings removed; orchestrator269unchanged.
+  Author45freeze7056669f/token RELEASED, independent candidate review/final/root
+  pending. No runtime integration or R35normalization credit yet.
+- R39 V2source32b11750/spece22c57af approved static13654905/e0a2d76b, sole serial
+  native grant now running complete old/new/subprocess100/replay/mainratchet.
+  No gate/acceptance presumed before terminal raw custody, no application copy.
+- R40 final preparation metadata diagnostic found three untouched fixtures when
+  comparing read_bytes to Git blob; git120000 confirms symlinks. Preserve failed
+  audit; readlink-aware distinct custody correction allowed after actual diagnosis,
+  no fixture edit/native token. Same issue was documented independently in R16.
+  Main/source/baseline untouched, campaign ACTIVE/INCOMPLETE, no commit/push.
+
+## 2026-10-11 — R40 original honest coverage proof, exact guard grant
+
+- Original-v2 native186tests (97old+89new) PASS0failure/error/skip; runtimee01d85f2
+  399/399statements100 and127/128branches. ONLY214→217missing, proven impossible;
+  unchangedfailunder100 nativeexit1 recorded honestly, raw audit/Ruff/format0.
+  Custody4158inputs/main/baseline exact,freeze25 61dca1f9,token RELEASED.
+- Reviewer4ec821c5 source proof and original-native test matrix now support
+  exact authorized prerequisite. COORDINATOR_GUARD_SOURCE_NATIVE_GRANT.md permits
+  ONLY bc8ae7d6patch→ac6c0b36source via apply_patch, exact NEWspecd77c1330 retained.
+  R40 candidate sole native token; full modified runtime statement/branch100,
+  old exclusions unchanged,186tests/metric/main55aratchet/custody required.
+  Orchestrator269/R35normalization untouched, no retrospective original100 claim.
+- R39V2 independent review13654905/e0a2d76b statically admits bounded repaired
+  matcher32b11750/spece22c57af to separate native testing, not integration.
+  Accepted/refused race/ledger proof limitations explicitly retained. Native HOLD
+  pending R40candidate terminal; tooling/baseline/application runtime unchanged.
+  Whole campaign ACTIVE/INCOMPLETE, no commit/main merge or strategic closure.
+
+## 2026-10-11 — R40 metadata preflight STOP reconciled, no pytest yet
+
+- ORIGINALpreflight terminal1 BEFOREpytest: Coordinator added UPDATE paragraph
+  to its COORDINATOR_STATIC_TERMINAL.md after author froze that note among22members.
+  Root cause metadata custody, not runtime/test failure; STOP10db50abe7 preserved,
+  no blind retry/runtime grant. Original22expected3c0d90d2 versus changed717f972e.
+- Exact reverse-paragraph proof root-evidence/static-note-provenance.json binds
+  reconstructed3c0d90d2 to old frozen22; both versions preserved, no claim of old
+  live immutable capture. Coordinator restores ONLY note with apply_patch; all22
+  rehash0, oldR35/runtime/spec/main remain exact. Frozen metadata never waived.
+- Distinct COORDINATOR_METADATA_RECONCILIATION.md permits preparation of new
+  original-native-v2 preflight with all original members still strict; fresh token
+  needed before launch. Date guard/runtime unchanged,89cases still unexecuted.
+  R39V2review remains pending, campaign incomplete. R38root75freezeab377713 intact.
+
+## 2026-10-11 — R38 IMPROVED, root/Graphify checkpoint complete
+
+- R38 root40649 native terminal0 exact sourceea946b88/spec eb1f1b6e;80tests,
+  complete file four100, types/lint/report/main55aratchet/custody/raw audit PASS0.
+  Global1673files20325callables1922errors2736warnings4658findings. File cognitive
+  509→468 and principal296→280, genuine shared projection and flat guards,
+  no finding transfer, fileLOC1702 unchanged. Author/final/root independently green.
+- Code graph AST650/650 complete (HTML skipped existing5000limit); domain docs
+  semantic chunk1/1done/no warning119nodes122edges16communities1593in/2415out
+  tokens estimated$0.0045. Platform docs chunk1/1done/no warning469nodes495edges/
+  109communities18975in/3545out estimated$0.0133. Local pruning already patched.
+- No commit/main merge/push; only exact integration runtime admitted, campaign
+  publication pending. Old docs retained historical, current ownership transferred
+  exclusively Coordinator, no overlapping live source owner. Main/baseline unchanged.
+- R39 independent V2review and R40 ORIGINALnative exclusively assigned; no broad
+  suite/global mission complete claim. R37 candidate and orchestrator269 still open.
+
+## 2026-10-11 — R38 exact root integration native PASS
+
+- Exact candidateea946b88 and NEWspeceb1f1b6e installed after ownership transfer;
+  root40649 TERMINAL0:80/four100/types/lint/report/main55aratchet0/findings[]/
+  diffcheck/custody/raw audit. Full metrics equal independent final; no source/
+  baseline/main input changed during accepted gate.54finalfreeze members rehashed0.
+  Root complete metrics1673files20325callables1922errors2736warnings4658findings.
+- Root NEWspec initial copy had one extra EOF LF9c38dac4, not admitted bytes.
+  First launcher55912 explicitly terminated143 after tests exit0, no acceptance;
+  orphan types group terminated. Failed removal patch used wrong API context,
+  no change; exact extra LF removed, SHAeb1f1b6e restored. Runtime unchanged.
+- Distinct V2 private launcher initially exited1 BEFORE native stage due automated
+  prefix replacement corrupting root-evidence directory literal. Diagnosed exact
+  private paths corrected, no logs/test assertions/config/runtime edits; remaining
+  fresh stages launched once with exact inputs. All partial receipts retained.
+  Raw root audit native_audit_v2 verifies full positive456/552/120/401counters,
+  no skips, exact complete native records and all3667tracked/3355main input custody.
+- R38 Graphify frontend force refresh running; local pruning patch independently
+  reports already patched. Docs/Graphify/freeze/publication pending; no main merge.
+  Three functions.wait calls with non-exec-cell IDs failed not-found, no process
+  changes; PTY40649 correctly resumed with write_stdin. Orchestration defects not
+  misreported as application failures. Broad suites/campaign remain incomplete.
+- R39 V2static32b11750/e22c57af/freeze20c48b53, B1/B2 repair review requested;
+  no native token yet. R40 independent static reviewer4ec821c5/freeze5275b915
+  approves original characterization; exclusive serial ORIGINAL token granted
+  after root release, runtime removal still withheld until honest native proof.
+
+## 2026-10-11 — R38 candidate green; R39 first native STOP
+
+- R38 author50116 TERMINAL0/token RELEASED:80tests/four100 (456statements,
+  552branches,120functions,401lines), types/lint/fullreport/main55aratchet/custody0.
+  Exact sourceea946b88/spec eb1f1b6e, report0291aa46, candidate49memberfreeze4a4bbc4d;
+  Coordinator rehash all150members0. File509→468cognitive/551→535cyclomatic,
+  callableLOCsum2416→2355; principal296→280. Full effectivefileLOC1702 unchanged,
+  two below-warning helpers, no newly transferred findings. Still NOT_INTEGRATED.
+- Independent final verifier STATIC_READY report984d76ef/exact fixtures and
+  158frozen members0. Native final token HOLD pending R39 author release.
+- R39 expected-red actual Git/TSX bug independently reproduced before candidate.
+  Candidate source50c01133/specb07601a6: first native old/new suite FAIL3new/253PASS.
+  No retry; STOP/freeze/independent diagnosis pending. Candidate full-tooling
+  918/919statements and369/370branches is NOT100. Missing peer-refusal path1060
+  disclosed; no remaining pipeline gate or candidate acceptance inferred.
+- Failures concern insufficiently damaged trailing context and forged peer at
+  fence boundary; hypotheses only until independent source/test review. Runtime
+  metric comparisons/baseline never waived. Integration tooling remains871ebffc.
+- R40 author static terminal,89honest real-ORM cases not run; freeze22members
+  2c098be1,468R35evidence/rootmain exact. Source guard18→10 prospective only;
+  runtime grant withheld. Orchestrator269 unchanged. Global campaign incomplete.
+- Coordinator doc patch with absent secondary title failed atomically; corrected
+  distinct intended document update succeeded, no runtime/evidence change. Prior
+  metadata list-schema probe diagnosed separately, not called a native gate fail.
+
+## 2026-10-11 — R38/R39 grants and R40 prerequisite preparation
+
+- Resumed preflight: main55a concurrent work preserved; integration114fbf71,
+  merge-base55a, runtime unchanged, about21GiB root/318GiB SSD free. No cleanup.
+- R39 independent narrow-design review6b4f4af5 verifies wrong positional owner
+  and historical R16 custody; original complete215tests/full tooling844statement/
+  332branch100/Ruff/actualmain ratchet/custody native exits0. Implementation grant
+  bounded to positive source contradictions; existing unsupported fallback remains
+  residual, not certified safe. Old contracts/strict R16 proof immutable. Author
+  static implementation proceeds; prospective candidate-heavy token explicitly HOLD.
+- R38 reviewerf935dbe1 admits exact proposal for native testing after V2mounted
+  proof and supplementary4224projection cases/6mutants. Source grant exactc4e48a8a,
+  expected candidateea946b88, immutable speceb1f1b6e; continuation author receives
+  sole heavy token. No candidate native acceptance or integration inferred.
+- R40 registry BEFORE fresh dedicated114fbf71author worktree; user-authorized
+  date guard prerequisite starts ANALYZE/NEWspec only, no runtime/heavy grant.
+  R35 normalization/orchestrator untouched. Current campaign ACTIVE/INCOMPLETE.
+- Read-only discovery of absent R38 characterization-v2-gates.sh returned2;
+  actual receipt/scripts located by targeted listing. No source/native gate failed.
+
+## 2026-10-11 — Bonifica separate prerequisite authorized, queued
+
+- User approves ONLY removal of the source-proved unreachable date guard,
+  separate prerequisite to R35 orchestration, with tests and no retry/DB/external
+  semantics change. No silent R35 expansion or runtime grant issued yet.
+- Await new dedicated ownership/worktree and an available author/serial heavy
+  token after current R38/R39 checkpoint. Baseline/scope/thresholds unchanged.
+  Original R35 failing coverage and all frozen evidence preserved; no rerun
+  or metric credit inferred from this authorization. Cognitive269 remains open.
+
+## 2026-10-11 — R39 positional matcher separate correction authorized
+
+- User explicitly approves separate tie-breaker correction with countertests,
+  no baseline/scope/threshold change. Registry before two fresh114fbf71worktrees;
+  sole tooling author plus read-only independent reviewer, initially DESIGN ONLY.
+- R37 exact V3 remains externally frozen/not admitted; root runtime7f9d7883 and
+  fresh deactivation main55a ratchetPASS0. Correcting matcher will not certify UI.
+- Fresh167registered152present15missing/219branch owned-source census finds two
+  dirty historical R16 copies exact accepted tooling871ebffc; frozen terminal
+  provenance under independent review. Do not touch old files or unavailable trees.
+- Required source-bound proof must reject unsafe nearest-span borrowing while
+  retaining exact/fingerprint/multiset identity and all real metric regressions.
+  Full tooling subprocess statement/branch100 and adversarial old/new tests
+  mandatory; no application candidate installation, no implementation admitted yet.
+- R38 characterization-v2 remains separate frontend owner/token; R39 heavy gates
+  wait for its terminal release. Global campaign ACTIVE/INCOMPLETE.
+
+## 2026-10-11 — R38 settings hydration PREPARE; R37 temporarily deactivated
+
+- Previous turn made progress: exact one-finding positional mismatch diagnosed,
+  independently confirmed, failed evidence75members frozen; no R37 waiver.
+- R37 Coordinator-owned runtime restored via apply_patch to exact admitted HEAD
+  7f9d7883 only. Candidate3ae8 remains preserved externally; no permanent rejection
+  or matcher/baseline change. Separate user decision pending. Fresh root ratchet
+  after deactivation session19318 TERMINAL0/findings[]; custody and75frozen
+  R37member rehash PASS. This certifies deactivation, NOT candidate acceptance.
+- Fresh R38 registry precedes three worktrees from114fbf71, no dirty main/source
+  imported. Settings296 next safe covered hotspot while Utenze/Catasto remain
+  coverage-blocked; >300 campaign targets remain open, not redefined.
+- Provenance165registered150present15missing/217branches, no dirty settings owner;
+  all R37STOP75/review19/final24+report/provenance2939 hashes verified0. Main exact.
+- Author original ddb7113b, prospective shared seven-field hydration projector
+  independently reviewed. Original author35253 TERMINAL0:69tests/2specs,
+  full file455statement556branch118function402line all100; native whole report
+  exact R36, actual main55a ratchet0 and3667tracked/raw/main custody0.
+  NEW mounted characterization53987 TERMINAL0:78tests/3specs including9new,
+  full file455/556/118/402four100, types/lint/raw custody0; original35and
+  characterization33members frozen. Runtime remains original; candidate not applied.
+- Reviewer identifies two missing proofs: fallback id via actual public save
+  payload, and reload failure/recovery preserving current draft. Candidate grant
+  ON HOLD before activation; distinct characterization-v2 permitted, old receipts
+  immutable. Supplementary identity/strict-id/source proof requested independently.
+  No candidate-native acceptance or new runtime integration claim.
+
+## 2026-10-11 — R37 particelle monitor STOP_MATCHER / NOT_ADMITTED
+
+- R36 previous turn PROGRESS: actual runtime improvement, verified campaign-only
+  commit114fbf71, postcommit custody0/165member terminal freeze. Goal incomplete.
+- New ownership before four dedicated worktrees; fresh provenance161/146/15 and
+  four dirty historical owners proved frozen terminal;2939members root-rehashed0.
+- Fresh original559/23immutable specs PASS, workspace720/750/251/627four100;
+  whole native report equals R36,3667tracked/main/baseline custody0.
+- V1 LOC3123>main3109 rejected before runtime. V3 source3ae8b186 accepted by
+  independent static reviewer: unrelated AST/624 JSX exact,719DTO comparisons
+  including12 preserved exceptions. No JSX move, four pure policy helpers.
+- Author proposal terminal without native gate; runtime ownership transferred to
+  Coordinator. Exact V3 installed, candidate session78456 TERMINAL exit2;
+  tests559/full100/types/lint/report PASS, ratchet FAIL with one finding.
+  Candidate raw/custody pipeline audit was not executed after the failure.
+- Finding: Program<anonymous> LOC1→2. Resolver chooses baseline3193:3193
+  `onClick` close handler rather than baseline3165:3166 `onChange` selection.
+  Current3182:3183 and original3157:3158 selection handler have identical bytes,
+  fingerprint and metrics; the native original gate passed. Positional source
+  misbinding is diagnosed, not waived or attributed to the historical30.
+  Separate matcher decision requested; no baseline/tooling/source change during
+  diagnosis, no candidate commit or integration. Independent reviewer confirms
+  PROVEN_WRONG_BINDING: positional distances change7→16 for selection and10 for
+  close; provenance fallback is never invoked because no ambiguity is returned.
+- Prospective principal324→307/file811→778cognitive, physical413→411decisions;
+  fileLOC+21/callableLOC+11 explicitly disclosed, new helpers below warnings,
+  immutable main3109 unchanged. Preferred<300/25-point target not met.
+- Candidate evidence frozen75members, SHAce582072; exact V3 preserved on SSD.
+  Final verifier terminal: distinct original metadata audit PASS,51synthetic
+  else arms retained,16negative/2positive countertests,24members freeze5f910c87.
+  Candidate independent-native/Graphify/publication pending; no heavy token
+  acquired. No improvement credit admitted despite lower prospective metrics.
+  No campaign completion, baseline inflation, main merge/push or broad
+  suite claim. Bonifica guard decision separate; global historical30/R25 open.
+
 ## 2026-10-11 — R36 selected INAZ punch detail IMPROVED
 
 - Previous turnR35 PROGRESS via original blocker evidence/publication, not runtime

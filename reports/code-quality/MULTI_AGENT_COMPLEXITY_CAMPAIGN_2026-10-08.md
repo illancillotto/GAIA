@@ -1,5 +1,704 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## Current state — PAUSE requested, verified work consolidation only
+
+User pauses the global campaign, not COMPLETE. No new refactoring or automatic
+continuation. Swarm terminal; R63 typesSTOP remains separate and NOT_ADMITTED.
+R60/R61 frontend1047 and R62 backend1606 source inventories/selected dependencies
+are exact; full suites not repeated. One closing actualmain55a ratchet PASS,
+zero findings, diff-check0. Backend449skip and worker coverage/E2E/global
+ambiguity remain unverified or failed as recorded, never relabelled PASS.
+126 initial changed files inventoried and archived before mutable docs edits;
+selective local commits authorized on dedicated branch only. Historical receipts
+below preserved verbatim. See CAMPAIGN_PAUSE_2026-10-12.md, handoff manifest and
+PAUSE_COMMITS_2026-10-12.md for admitted/excluded files, commit and evidence custody.
+Goal remains globally INCOMPLETE and must be PAUSED after consolidation.
+
+## Current stop — R63 Catasto CF characterization, NEW spec not admitted
+
+Rootnative61219TERMINAL2:278unitPASS/sevenspecs, then NEWspec106TS2345
+Element→HTMLElement in rowwithin helper. Lint/coverageNOT_RUN/no retry or repair.
+Bothtrees1047admittedfrontend exact; source855e3ef0 and all runtime unchanged.
+Static663rootsretained/typesconfiguration parsing was not semanticcheckerPASS.
+Review19a2d77d exact/finalfreeze2de0ca09/1100records rehash0; its metadataaudit1
+parser-overlay bookkeeping mismatch preserved, historysectionNOT_REACHED.
+Root distinct rawJUnit observation0 retains269historical+9NEWexact identities.
+
+NOT_ADMITTED/BLOCKED_TEST_SOURCE_TYPES, acceptedmetricdelta0. HistoricalR30
+fullpage100 remainsFAIL; no fresh coverage or prospectivebranchcredit. Separate
+typedHTMLElementguard decision required; R43fixture decision still distinct.
+R62publication2991 archived five mutable inputs/companion8888fea7 before docs;
+no old freeze rewritten. RegistryGraphify61861exit0/chunkdone720/874/136.
+CampaignACTIVE/INCOMPLETE, no runtimebaseline/policyedit/commit/Gitmerge/mainchange.
+See STOP_R63_CATASTO_CF_2026-10-12.md; other current suite evidence below.
+
+## Current verification — R62 fresh available backend suite
+
+Native68373 TERMINAL0/all5gates0:7142pass449NOT_PASSskip/7591cases, zero
+failure/error,2384warnings,1286.26s.1606backendinputs beforeafter/live exact;
+default testpaths/config/provider flags unchanged, privateSQLite/cache, one run.
+All7505R56outcome/skip-message/text multisets preserved after4freshcontent-bound
+generatedXLSX pairs/eightpayloads/rawIDs;86actualR58cases49mapper37route added.
+No removed source or skipped historical pass;447provider/2GIS remain unverified.
+
+Independent reporte792920b exact;2936record freeze7217f1f6 rehash0,3201bindings/
+2911privateobjects, no mutable source/docs bound. R61publication1547 preserved
+through5archivedinputs/companion987a7f69. No native retry/runtime repair, no
+baseline/matcher/threshold/config/main edit; runtime/accepted metric delta0.
+Fresh coverage/ratchet/globalcheck NOT_RUN; R60localPASS remains separate.
+
+Fresh Presenze design is already R43, external NOT_ADMITTED pending distinct
+DTO/ByRole test-only correction decision; R42 remains rejected. R60frontend/
+R61productionbuild are separate current checkpoints. Worker/E2E/provider and
+further extreme-hotspot reductions remain open. Campaign ACTIVE/INCOMPLETE,
+global objective unchanged. See BACKEND_CHECKPOINT_R62_2026-10-12.md.
+
+## Current verification — R61 fresh production build
+
+Native46012/cell2102 TERMINAL0/all7gates0 on actual admitted postR57/R59
+sources. Next15.5.25 compilation/projectlint/types/163of163staticpages/optimization/
+traces complete;35warnings preserved. All1047inputs/322specs/selectedmetadata/
+Node/main/integration beforeafter/live and R60manifest2bce60d2 exact. No unit
+rerun merely for labels; source-bound R60 18smoke/5238unit PASS stays distinct.
+
+Root audit552d8ec5 archives200immutable artifacts including standalone/server,
+191NFT/1997referenceoccurrences/5916traceevents; buildIDnST1uBT1SiPNlsNDgCMQn.
+Independent additional report03847f80 imported exact;1280record freeze04e7476a
+rehashed0,2484consumedbindings/1272privateobjects, no mutable docs bound. Original
+static reviewer explicitly BLOCKED, not credited with terminal certification.
+Parent status/transport/inventory observations do not substitute for receipts;
+no native failure, source repair or retry. R60publication1183 preserved through
+exact five-input companiond8d4c02e before owned shared-document updates.
+
+NO_CHANGE/build verification only, runtime/metric delta0; baseline/matcher/
+thresholds/config/main untouched. Source-bound R60 localratchetPASS remains
+distinct; no new global check/coverage/E2E/backend/worker/campaign certificate.
+R43 test-only and R59 direction decisions pending; actual campaign still
+ACTIVE/INCOMPLETE. Fresh backend afterR58 and worker/E2E/further real hotspot
+reductions remain required. See BUILD_CHECKPOINT_R61_2026-10-12.md.
+
+## Current verification — R60 full available frontend suite
+
+Fresh native8496 TERMINAL0/all7gates0:18smoke/5238unit/322default spec files,
+zero failures/pending/skips/todo. Exact5153R54 identity multiset retained plus
+36R57GIS popup and49R59feedback cases, no removed/filtered old spec. All1047
+frontend inputs/selected dependency metadata/Node/main/integration beforeafter
+and live bindings exact. Independent report9a27b922 imported byte-exact,
+106record freezeb8561d37 rehash0; seven jsdom diagnostics retained/non-failing.
+
+Fresh localratchet59777 TERMINAL0, actualmain/merge-base55a, zero findings;
+tracked diffbinding exact. Ancillary reviewer SHA transcription and root
+Make-prefix JSON parse failures preserved, separate from native gates; no
+suite/scanner retry. Old R59 publication49 records archived byte-exact with
+companion0d3ddd0e before owned shared-doc edits, no receipt overwritten.
+
+NO_CHANGE/verification only, accepted runtime/metric delta0; baseline/matcher/
+thresholds/config/main untouched. No coverage inferred, no current build or
+backend/worker/E2E/global certificate. R55build predatesR57. Current recorded-
+baseline ambiguity remains distinct from local PASS, not automatically the30
+historical divergences. R43 new design NOT_ADMITTED pending distinct DTO/
+ByRole test-only decision; R59 direction and other decisions remain separate.
+Campaign ACTIVE/INCOMPLETE. See FRONTEND_CHECKPOINT_R60_2026-10-12.md.
+
+## Current verification — R59 rejected runtime / accepted characterization
+
+R59 candidate088338d6 NOT_ADMITTED: real file-LOC ratchet regression3109→3111,
+not matcher ambiguity. Original3108→candidate3111; no baseline inflation,
+compact helper or relocation to force PASS. Prospective principal298→273,
+whole-file cognitive762→708 and11physical duplicate decisions eliminated are
+not accepted campaign credit. Runtime remains admitted92a5 byte-exact.
+
+Original26346 actual12gates0,653PASS/604historical+49NEW/25specs/fullfour100;
+candidate47071 ninegates0 then ratchetFAIL, finaltwoNOT_RUN. Frozen123records
+c36601da; metadata stage miscount13→12 and ancillary read failures retained.
+Only49NEW public cases integrated, characterizationNO_CHANGE. Actual test-only
+integration90103 all7gates0/types/lint/main55a ratchet/diff/1052bindings;
+no unit rerun for labels or new full-suite certificate. Fresh complete report
+e7c33914 allcallable/filerecords exactR58:1676/20345/1920error/2735warning/
+4655findings; application1621/19014/319060LOC, tail3>300/17>200/55>100 unchanged.
+
+Fresh globalcheck65499 exits2 sameGAIAusers ambiguous_identity/fourcandidates,
+separate unresolved provenance, not R59 LOC failure or automatically historic30.
+Change ratchetPASS0; main/baseline/matcher/thresholds/configs preserved.
+R43 separate fixture correction and new R59 direction decisions pending;
+campaign ACTIVE/INCOMPLETE. Full-suite/build/worker/E2E obligations still open.
+See SLICE_R59_CAPACITAS_ERRORS_2026-10-12.md for before/after, coverage and
+invariant matrix. R58 remains last admitted runtime improvement.
+
+## Current verification — R58 inactive-vehicle emission
+
+Candidate91594 all7gate0/custody exact:494base cases retained plus separate
+49pure mapper contracts=543PASS/zero skip, not543persisted cases. Full4runtime
+statement/branch100; helper8statements/0branch denominator explicit. Queries,
+loading, loop order, getter laziness, code reread and exceptions preserved.
+Principal238→221/112→104/320→302, owned cognitive723→711(-12), decisions342→340;
+cyclomaticSUM501 unchanged. RouteLOC1193→1179, combinedLOC1193→1212(+19).
+Helpers3/2/0cognitive belowwarning, all survivors/nonownedmetrics exact.
+Independent native auditc9e22328 accepts IMPROVED net12, not17global credit.
+
+Original formatFAIL preserved37records; ASTexact wrapping correction6b24→bc260
+and distinct tail67599 complete only previously unrun gates, no green retry.
+First metric derived-count assertionFAIL and narrow V2 correction preserved.
+Reviewer false fixed-guard caveat corrected on unchanged V3; no gate weakening.
+Fullreport33c957c3:1676files20345callables332660LOC1920error2735warning4655finding;
+app1621/19014/319060LOC, unchanged3>300/17>200/55>100. LocalratchetPASS0,
+globalcheckexit2 sameGAIAusers ambiguous_identity/fourcandidates, not historical
+30 automatically or debtcountFAIL. Main/baseline/matcher/scope policy unchanged.
+CodeGraphoperazioni force/pruning0:541/1549/30, ignored and not metric evidence.
+R57immutable publication preserved through byte-exact mutable-input companion.
+See SLICE_R58_INACTIVE_VEHICLES_2026-10-12.md.
+
+Independent final e77e8aec imported exact/freeze52621da8; docs Operazioni graph
+125/159/11/chunk1of1done/no failedsemantic PASS. Final platform/publication
+maintenance is Coordinator-owned, no broader suite/campaign success inferred.
+Platform-docs first receipt641/757/129/chunk1of1done/no failedsemantic PASS;
+final status-doc sync is a separate receipt, never a metric/test certificate.
+
+R56fullbackend predates this source; R54frontend/R55build predateR57. No fresh
+full-suite certificate. R43newPresenze design remains NOT_ADMITTED pending
+distinct fixture decision; worker/E2E/global baseline obligations remain open.
+Campaign ACTIVE/INCOMPLETE, no main edit/commit/push/Gitmerge or baseline inflation.
+
+## Current verification — R57 GIS popup presentation
+
+Original44465/candidate90196 TERMINAL0/all12nativegates0 each,73PASS zero skips/
+fullfilefour100; same37historical descriptor multiset+36NEW, all173survivors/
+nonowned metrics and source/main custody exact. Principal317→298/281→262/
+1889→1868; aggregate568→566(-2), decisions483→481(-2). Five under-warning
+domain selectors, no JSX/state/effect/API movement. CyclomaticSUM657→660
+from5roots; combinedLOC2155→2178(+23), neither hidden nor improvement credit.
+Local classification IMPROVED smallnet2, notnet19. Tail4>300→3,17>200/55>100
+unchanged. Global1920error2735warning4655finding unchanged.
+
+Initial original53524FAIL is new mock missing Promise:37historicalPASS36newFAIL,
+runtime unchanged. Exact failedspec/argv/log/exit frozen; only typed DUI mock
+corrected, all36assertion cases exact; fresh distinct original-v2 testsPASS.
+No old launcher retried/baseline inflated. Reviewer stale-content mistake and
+separate correction preserved. Independent final19db06f0 accepted/imported exact,
+34record freezeb972ed9d/228record publication audit88aa9c83 verified after graphs.
+Final-reviewed docs archived before completion updates. RegistryMERGED denotes
+apply_patch integration, notGitmerge. No git commit/push/merge/main edit.
+
+Fresh fullreport3c6d6678a18603afce28b0961f29eb08a946a33a10732b3aa5ba8146c673ff46;
+local ratchetmain55a PASS0; fresh globalcheck38144exit2 is unchanged GAIAusers
+ambiguous_identity/fourcandidates, not debt summary count and not automatically
+the historical30. Graphifyfrontend force/pruningpatchPASS6075/12688/228 ignored.
+Native publication docs archived byte-exact before updates; old R56/nested
+companions preserved. See SLICE_R57_GIS_POPUP_PRESENTATION_2026-10-12.md.
+
+R54frontend/R55build predate this new source, no fresh current fullsuite/build
+PASS inferred. R56backend unchanged source remains7056PASS449skip. Worker/E2E/
+global baseline/R43 decisions open. Campaign ACTIVE/INCOMPLETE; objective intact.
+
+## Current verification — R56 full backend after R52
+
+Fresh default backend37710 TERMINAL0:7056PASS449skip0failure0error/2380warnings/
+1276.06s; all five native launcher gates0. Private SQLite/cache/default pytest
+collection, no selection/config/skip/timeout/policy/source repair or native retry.
+1603backendinputs/selected package metadata/Python/main/baseline/matcher/
+admitted Presenze beforeafter/live exact, manifests70890a62. Source delta versus
+R45 is admitted R52analytics plus its spec;36new genuine default cases.
+
+Current raw JUnit7505cases, SHAc228ed04, full IDs/multiplicities/outcomes retained.
+Historical raw Counter not equal:7465descriptors exact, four generated XLSX-name
+replacements narrowly content-proven from eight valid ZIP/CRC/forward-ID archives.
+Ordered9members/non-core bytes exact; only created/modified core metadata and
+ZIPtimestamps differ, other values authoritative. Complete comparator rejects
+data/creator/order/member alterations, not a generic decoder-bijection claim.
+Comparison aliases never rewrite tests/raw XML. All old outcomes/skips preserved.
+
+Separate metadata V5summary0267fc1a PASS; root raw-ID/V2path/V3literal/V4duplicate
+preparation STOPs preserved, not native failures. Reviewer first static and
+broad-exit terminal STOPs preserved; distinct final review0ad519a8 VERIFIED WITH
+SKIPS/73record freezecfd00d35 rehash0, report imported exact. R55original258
+records preserved through companion21e9015a with five exact input snapshots/
+253immutable originals, nested R54/R53 intact. All449skip IDs/reasons preserved:
+447PGdependent/2GISdependency cases unverified, no PG race/lock/transaction proof.
+
+See BACKEND_CHECKPOINT_R56_2026-10-12.md and FINAL_R56_BACKEND_VERIFICATION_2026-10-12.md.
+Dedicated platform-docs Graphify82439 TERMINAL0/chunk1of1done/no semantic failure:
+619nodes723edges126communities/6210input1850outputtokens/$0.0054. Graph ignored,
+maintenance only, not complexity/test evidence. Current Tests section updated
+to R56backend/R54frontend/R55build, older checkpoints explicitly historical.
+Classification NO_CHANGE; no coverage/worker/E2E/global/full-campaign PASS or
+complexity credit inferred. R54frontend5153unit18smoke and R55buildPASS separate;
+R53current metrics/tail4>300/17>200/55>100 and last localratchet unchanged.
+R43test-only/R51/E2E/Bonifica/worker decisions pending; design choice is not
+fixture-edit permission. Campaign ACTIVE/INCOMPLETE; full objective unchanged,
+no main edit/baseline inflation/threshold change/commit/push/Gitmerge.
+
+## Current verification — R55 fresh production build after R53
+
+Coordinator70685 TERMINAL0: existing npm build:clean once/fixed Node24/env-i,
+Next15.5.25 compile/project lint/types/static163of163/optimization/traces PASS.
+All7launcher gates0; no install/runtime/spec/config repair or native retry.
+1044frontendinputs/default320specs/selected dependencies/Node/main/baseline/
+matcher beforeafter/live exact, manifests1a0354fe. Concurrent main untouched;
+only own ignored nonsymlink .next cleaned through the requested existing script.
+
+Root audit09441828 binds199exact archived build artifacts, buildIDdBH5BSo4uq8ZHB5ns0roG,
+190app-paths/161static29dynamic route entries/191NFTtraces/5914trace events.
+All35warning lines retained; artifact inventories are not functional route counts.
+Independent finale23cf5a6 VERIFIED/freeze238recordsc49137d4 rehashed0, report
+imported byte-exact. R54original59records preserved via companion3b4f904b with
+five exact mutable-input snapshots and54unchanged immutable artifacts; R53intact.
+See BUILD_CHECKPOINT_R55_2026-10-12.md and FINAL_R55_BUILD_VERIFICATION_2026-10-12.md.
+
+Dedicated platform-docs Graphify5453 TERMINAL0:chunk1of1done/no semantic failure,
+616nodes717edges127communities/5906input2967outputtokens/$0.0071. Ignored graph
+not versioned; maintenance is not complexity or application verification.
+
+Classification NO_CHANGE. Fresh R54frontend18smoke5153unit320specPASS separately
+retained; no inferred coverage/E2E/backend/worker/global/full-campaign PASS.
+Last admitted R53metrics unchanged1674files20337callables1920error2735warning/
+4655overlapping findings; application tail4>300/17>200/55>100. No fresh complexity
+gate for this runtime-unchanged build; R53ratchetPASS/globalambiguity separate.
+New Presenze design R43 external: prospective360→347/1048→1023,506tests/full100
+PASS but strict test-spec typesFAIL. Distinct test-only correction decision
+requested again; design choice is not fixture-edit permission. R43NOT_ADMITTED,
+admitted deb4 unchanged. Other pending decisions unchanged. Campaign ACTIVE/
+INCOMPLETE; no baseline inflation/main edit/commit/push/Gitmerge.
+
+## Current verification — R54 complete frontend after R53
+
+Native76878 TERMINAL0:18smoke/5153unitPASS/320exact defaultspecfiles/zero skip,
+full historicalR46Counter5108+R53new45 exactly retained. All8exits0/1044frontend
+inputs/config/specs/selected dependencies/Node/integration/main custody unchanged.
+Fixed Node24/npm11.9/env-i/full default includes/maxWorkers2/bail1, no native
+retry, selected filter, timeout/policy/runtime/spec/config/install edit. Seven
+jsdom navigation diagnostics retained without failed assertion. Fresh JSON38bf2d60,
+input manifests1a0354fe; independent final93ca6bf6 VERIFIED/freeze8d9efe92260records
+rehashed0. Exact R53historical200input/archive bindings and R46old20records intact;
+ten mutable integration inputs archived losslessly before owned-doc updates.
+See FRONTEND_CHECKPOINT_R54_2026-10-12.md and independent FINAL_R54 report.
+
+No runtime complexity credit or inferred coverage/build/E2E/backend/global PASS.
+R53complete metrics remain authoritative:4>300/17>200/55>100; campaign ACTIVE/
+INCOMPLETE. Fresh production build afterR53 NOT_RUN. R43/R51/E2E/Bonifica/worker
+pending decisions unchanged, no automatic grant/main edit/commit/push/Gitmerge.
+
+## Current verification — R53 Capacitas activity policy
+
+Actual-root original34276 plus disclosed continuation39261, candidate67243
+completed:604assertions/24specs each, full workspace+fraction four100, raw map/
+span/50+1implicit-else/countertests/types/strictNEW/lint/report/actualmain55a
+ratchetfindings[]/diff/custody3666 PASS. Initial raw.exit1 remains preserved:
+604assertions have600descriptor keys, exact same legacy559multiset as R41 plus
+45unique new mounted cases. Distinct raw-v2, no native-test rerun or oldtest edit.
+Root all-input2810/main drift0; exact admitted source92a5e1e/new specf6907334.
+Independent final76573269 ACCEPT_VERIFIED_LOCAL_IMPROVEMENT/IMPROVED and6record
+freeze9f6a0112 verified. First frozen final-worktree preparation STOP preserved;
+separate FINAL_R53_CAPACITAS_ACTIVITY_VERIFIED_2026-10-12.md imported exact.
+
+Two typed pure policies genuinely remove four status chains and three session
+gates. Exact ordered status reads/native array operations/624unrelated JSX/
+INCASS/completion/async lifecycle remain unchanged. Principal307→298cognitive,
+file778→762/924→906cyclomatic/255→253callables/3108LOC unchanged; physical−8,
+new helpers2/1cognitive under thresholds, no surviving callable regression.
+Reportc3924c4a:1674files20337callables1920errors2735warnings4655overlapping findings;
+application tail5→4>300,17>200/55>100 unchanged. R53 alone eliminates no finding.
+Original equals R52 objects; Node18→24 metadata disclosed, no compatibility-rule
+edit; original/candidate fixed Node24. Baseline38e6/matcher32b unchanged.
+
+Frontend Graphify dedicated force/pruning PASS6065nodes12666edges253communities,
+ignored graph/HTML omitted by existing size limit. Native receipts are not a
+full frontend/build/E2E certificate afterR53; historical suites remain historical.
+User-selected fresh Presenze design is R43, still NOT_ADMITTED pending its
+separate test-only fixture-typing decision. Other decisions remain separate.
+Campaign ACTIVE/INCOMPLETE; no main edit/baseline inflation/commit/push/Gitmerge.
+See INTEGRATION_R53_CAPACITAS_ACTIVITY_2026-10-12.md.
+
+## Historical verification — R52 hours discrepancy guard
+
+Actual integration21779 TERMINAL0, independent initial source/raw author review
+50b7a529 accepted:379genuine+78supplement/457exact identities/15specs/full-file
+analytics100624statement252branch, four legacy exclusions unchanged; style/
+format/report/actualmain55a ratchetPASS/findings[]/diff/custody2809drift0/main0.
+Original623statement252branch100 before guarded refactor. Synthetic/AST assertions
+run separately without coverage credit. Entire-module AST proves only inverse
+integer guard/continue/dedent and unchanged operand/query/order semantics.
+Small local IMPROVED: anomalies239→238cognitive/file724→723; every other callable/
+file object exact, no finding or extreme-tail elimination. Current full-report
+SHA2fd85c34 retains1674files20339callables1920error2735warning4655observations;
+new backend test outside unchanged official backend/app scope. No baseline/
+threshold/matcher/config edit, commit or Git merge. See INTEGRATION_R52_ANOMALY_HOURS_2026-10-12.md.
+Final actual-root independent reviewad531b0a ACCEPT_VERIFIED_LOCAL_IMPROVEMENT,
+14member freeze0c4868c8 verified; slice admitted without Git merge/commit.
+Full backend after R52
+NOT_RUN, broader suite checkpoints historical. R43/R51 and other decisions
+remain pending; campaign ACTIVE/INCOMPLETE, no global completion certificate.
+
+Final static review found disclosed Node metadata drift R50v24.14.0→R52v18.19.1
+from sanitized system PATH. Initial engines-equality audit STOP retained;
+distinct review follows the existing comparable_engines compatibility rule,
+without changing gates or proving unrecorded historical npm versions. No
+native gate rerun; identical corpus objects do not imply universal equivalence.
+
+R52 Graphify correct corpus receipts: operazioni-code no topology change;
+operazioni-docs103nodes134edges11communities/platform-docs586nodes670edges119
+communities, both chunk1/1done/no semantic failure/exit0. Graphs ignored and
+not used as metric proof. Native receipts and final review remain exact.
+
+## Current readiness — R51 fuel variants, static fixture prerequisite
+
+Fuel217cognitive remains rank13. Fresh disjoint author/reviewer worktrees at
+114fbf/main55a independently verify identical eager WC alias construction but
+find the immutable R14 AST fixture cannot resolve a new shared helper: it
+compiles only live `_op_km` with namespace={} and seven hardcoded closures.
+Reports SLICE_R51_FUEL_NAME_VARIANTS_2026-10-12.md8145e241 and independent
+REVIEW_R51_FUEL_NAME_VARIANTS_2026-10-12.mdb4decb5f preserve exact behavioral
+matrix and minimal honest binding proposal. Root AST/custody confirms original
+runtime/test hashes and2808protected inputs/main drift0. Author5/reviewer2freeze
+records verified. Both agents TERMINAL; no native token or test/gate executed.
+Separate fixture-scope decision requested; candidate NOT_ADMITTED, runtime
+NO_CHANGE/BLOCKED, no metric credit or demonstrated production failure.
+Current R52 metrics/limits are authoritative. R43/E2E/Bonifica/worker
+decisions remain distinct; campaign ACTIVE/INCOMPLETE, no automatic grant.
+
+## Current verification — R50 SISTER pool characterization
+
+Separate test-only V2 corrects the diagnosed V1 Ruff import-order failure while
+preserving complete assertion AST/import multiset and frozen first failure.
+Author and independent reviewer confirm782PASS/1PGskip/53files, then root40854
+independently verifies actual integration with sanitized launcher: same suite,
+style/format/report/main55aratchetPASS/findings[],2808protectedinput custody0.
+New4honest ORM/async tests cover3previously missing statements/4branch edges;
+worker6075/6077statement1628/1630branch, still FAIL100 with pool523/522→523 and
+retry_metadata22/21→22 visible.21existingexcluded lines preserved, none added.
+Classification NO_CHANGE runtime/CHARACTERIZED; no runtime complexity credit.
+Independent final75ebb4ef/freeze567466da verifies raw root evidence, prior123
+freeze records and final38records without relaunch: ACCEPT_TEST_ONLY_CHARACTERIZATION.
+Exact new test admitted; full100FAIL retained, runtime cleanup not authorized.
+Allprior1673file/20329callable metric objects equal R41; sole new test1file/
+10callables195LOC/no violations. Official1674files20339callables1920errors/
+2735warnings4655overlapping observations; application and extreme tail unchanged.
+See INTEGRATION_R50_WORKER_POOL_CHARACTERIZATION_2026-10-12.md. E2E lifecycle,
+R43 test-only and Bonifica normalization decisions pending; full campaign remains
+ACTIVE/INCOMPLETE. No frozen repair, baseline inflation or main/Gitmerge change.
+
+## Current verification — R49 E2E STOP, GIS cases PASS
+
+Distinct V3 isolated stack passes seed/health/login/identity after independently
+reviewed package-path/JSON-probe corrections and sanitized launcher. Original
+preparation STOP and unlaunched V2 HOLD remain preserved. Native83110 TERMINAL1:
+37PASS/1failed/5explicit skips/18not run, all24specfiles/61cases collected.
+Ruolo-avvisi times out during login before search assertions: actual403 and
+read-only private DB establish unchanged super_admin quota20 exhausted by
+synthetic browser devices, not a demonstrated Ruolo functional regression.
+All5CatastoGIS cases plus GIS strumenti PASS; optional Territorio skipped.
+No full E2E certificate, native retry, increased quota or enforcement bypass.
+2712protected inputs/main/admitted custody drift0; owned children terminal,
+ports free. See E2E_CHECKPOINT_R49_2026-10-11.md and exact case/trace evidence.
+Fixture-lifecycle decision and R43 test-only decision remain separate pending
+items. Current admitted R41 metrics unchanged; campaign ACTIVE/INCOMPLETE.
+Independent result review accepts STOP evidence only, verifies exact cases,
+trace and private-device records; no base-stack reproduction or future fixture
+repair demonstrated. Root actualmain55a ratchet59008 PASS/findings[], unchanged
+baseline/soglie. Native STOP2131members and independent57member result freeze
+preserved. E2E remains incomplete; no source/refactoring credit for verification.
+
+## Current verification — R47 worker and R48 build PASS, limits retained
+
+Worker native80483 TERMINAL0:778PASS/1skip/all52files,1756inputs/main/admitted
+hashes zero drift. Runtime diffmain0. Coverage statement99.9177%/branch99.6319%,
+NOT100:5missing lines/6branches/21existingexclusions retained. Report
+WORKER_CHECKPOINT_R47_2026-10-11.md; no repair/retry or policy waiver.
+
+R48 existing npm build:clean45446 TERMINAL0/1043protected inputs drift0,
+Next15.5.25compile25.5s/lint/types/static163of163/optimization/traces,
+standalone190manifest entries/35warnings retained. Exact completion marker and
+original manifest snapshots archived. Only own real ignored .next cache cleaned,
+no main/cache/worktree/containers/browser/frozen evidence touched, no retry.
+See BUILD_CHECKPOINT_R48_2026-10-11.md. No coverage/R43spec/E2E proof inferred.
+E2E/strategic tail reduction/R43 test-only
+decision remain open; current admitted source unchanged, campaign INCOMPLETE.
+
+## Current verification — R46 admitted-frontend suites PASS
+
+Smoke npmtest18PASS/zero skipped. Sole GAIA native session92230 completed
+default Vitest319specs,1043frontend inputs bound, maxWorkers2/bail1/no test
+filters or config/test/runtime edits. Native terminal0:5108unitPASS/319files,
+zero skipped/failure; independent JSON/custody all1043inputs/main/admitted hashes
+unchanged and exact319expected paths, no absent/extra. No coverage inferred.
+Report FRONTEND_CHECKPOINT_R46_2026-10-11.md; no retry or R43 repair/admission.
+Previous current backend7020PASS/449skip
+checkpoint remains exact; worker/build/E2E and extreme-hotspot mission open.
+R43 external/NOT_ADMITTED, separate test-only decision pending. Campaign ACTIVE.
+
+## Current verification — R45 admitted-backend available suite PASS
+
+Complete backend pytest session67767 completed on admitted integration114fbf71
+with exact current R40 backend change, backend cwd/private test SQLite DB;
+1602backend inputs bound before launch, all collected cases/skips retained in XML.
+Session67767 TERMINAL0:7020PASS/449skip/zero failure/error,2376warnings,1363.99s.
+Independent XML7469cases/custody all1602inputs/main/admitted hashes unchanged.
+Skipped447PostgreSQL and2geospatial cases remain unverified, no coverage inferred.
+No retries or source/config/test repair; heavy token released. Full evidence:
+BACKEND_CHECKPOINT_R45_2026-10-11.md. Remaining full current frontend/build/worker/
+E2E certification still open; backend result is not full campaign completion.
+R43 correction remains pending, no frozen fixture/source installed. Current
+report's Final metrics and top30 now show admitted R41, superseding stale R8/R7
+values while retaining historical certification as historical, not current PASS.
+Campaign ACTIVE/INCOMPLETE, full global goal not achieved.
+
+## Latest provenance checkpoint — R44 independent historical revalidation
+
+Fresh V2session99623 TERMINAL0 re-establishes all30 historical records from Git
+objects and unchanged registered baseline:14paths/71callable scans plus file LOC,
+15REAL_REGRESSION/15TEST_ONLY_DIVERGENCE/UNKNOWN0. All commit/parent transitions
+and baseline-origin/last-baseline/snapshot values reproduced. Current14 sources
+equal snapshot55a/main/integration HEAD, CLEAN; custody drift0. Missing original
+temporary evidence replaced by new separately named artifacts, not prose trust.
+V1 preparation omission on explicit file scope preserved; separate V2 retains
+all assertions and uses official file LOC. NO_CHANGE / PROVENANCE_REVALIDATED,
+no application metric credit. No baseline/runtime/matcher/threshold change.
+
+See BASELINE_PROVENANCE_REVALIDATION_2026-10-11.md. Historical30 are not campaign
+regressions and remain visible debt; R39 complete-global ownership ambiguities
+are distinct, not resolved or relabeled by this replay. R43 remains NOT_ADMITTED,
+test-only decision pending, no native retry or repair. Campaign ACTIVE/INCOMPLETE;
+global goal/extreme-hotspot reduction/full final suites remain unsatisfied.
+
+## Latest checkpoint — R43 supplemental test-type STOP
+
+Author88643 TERMINAL1,506/eight/fullfour100 and official project typecheck PASS;
+supplemental strict reused R42NEWspec16a fails two diagnostics: incomplete DTO
+assertion TS2352 and unsupported `exact` role option TS2769. Specs excluded by
+existing tsconfig; earlier project typecheck not full spec certification. Lint/
+report/ratchet/audit NOT_RUN, no R43 admission. STOP47f5f9af52 preserved/token
+RELEASED/final HOLD; distinct test-only correction decision requested. Runtime,
+tests/config/baseline unmodified under STOP; integration originaldeb4 exact.
+Current admitted metrics R41 unchanged, campaign ACTIVE/INCOMPLETE.
+
+Platform Graphify session12347 TERMINAL0: `chunk 1/1 done`, no semantic-failure
+warning; 500nodes/548edges/111communities, 15429input/3483outputtokens, estimated
+$0.0117. R43 root-evidence retains log/exit. STOP47/final14 rehash zero drift;
+admitted Presenze/matcher/baseline unchanged. This documentation checkpoint
+does not certify missing R43 gates or authorize the pending test-only repair.
+
+## Latest decision — R43 fresh Presenze design authorized
+
+User selects Nuova progettazione Presenze. Separate R43 registry and dedicated
+author/reviewer worktrees before agents; static design only, runtime unchanged.
+Typed pure normalization policy + React scheduling boundary must reduce actual
+duplicate guards/whole-file sums/physical decisions versus originaldeb4; all
+helpers counted, no matcher/baseline/name workaround for rejected R42.
+Original506/eight/four100 evidence reusable only after exact input-hash binding.
+R42 independent rejection30e95d7e/finalSTOP347d173c confirm preserved80freeze/
+integration original; final native NOT_RUN, not application certification.
+All current admitted metrics remain R41, campaign ACTIVE/INCOMPLETE.
+
+## Latest checkpoint — R42 rejected; admitted runtime unchanged
+
+R42 contract-kind effect one updater: original506/eight real mounted specs/
+fullfour100/raw3668custody PASS; candidate506/four100/types/lint/report PASS,
+ratchet actualmain55a Make2/CLI1 THREE real setter regressions cognitive2→8,
+cyclomatic3→7/LOC7→18. Final candidate raw/custody audit NOT_EXECUTED;
+independent final/root native NOT_RUN. Not historical30 or matcher ambiguity.
+
+REGRESSED / REJECTED_FOR_INTEGRATION. Prospective principal360→355/file1048→1039
+does not override per-callable ratchet; zero R42 accepted credit. Candidate92235
+and STOP80freeze37dfe062 retained; integration Presenze exactdeb4 unchanged.
+No baseline/threshold/ignore/tooling/name workaround, no native retry or rollback.
+Main55a and accepted R38/R39/R40/R41 evidence0drift, all heavy tokens released.
+Fresh design/ownership decision required, not automatically authorized repair.
+
+Current admitted R41 metrics remain1673files20329callables1920errors2735warnings,
+4655overlapping observations/tail5>300/17>200/55>100. Campaign ACTIVE/INCOMPLETE;
+full final suites/global provenance unresolved, no strategic completion claim.
+See INTEGRATION_R42_PRESENZE_CONTRACT_PROFILE_2026-10-11.md and private SSD
+`.codex-gaia-campaign-20261011-r42-presenze-contract-profile`.
+
+## Latest admitted checkpoint — R41 Capacitas R37 reactivation
+
+Exact preserved R37candidate3ae8b186 admitted after corrected matcher and fresh
+independent reviewer1ffaba96/19freezebae98963, finalab65ff7f/59freeze8c2d7b18,
+composite root60860 TERMINAL0. Ten native stages0,559tests/23immutable specs/
+zero skips/fullworkspace727statement746branch255function634line and unchanged
+fraction9/6/6/8 four100/types/lint/raw/fullreport/actualmain55aratchet0/custody.
+Final metadata-only ENOBUFS recovery separate, failed first output frozen;
+no suite/types/lint/report/ratchet rerun, no baseline/tooling/config/test change.
+
+IMPROVED: principal cognitive324→307(-5.25%), aggregate811→778(-4.07%),
+cyclomatic301→284/953→924; actual decision sharing, no JSX/hook/API relocation.
+LOC3087→3108(+21) and callableLOC4517→4528(+11) disclosed, mainLOC3109 respected;
+state31/effect2 unchanged, fileerrors16→14/warnings15→16. Four helpers below
+thresholds,624JSX/unrelated AST unchanged; weak validation/exceptions/race/DOM
+contracts preserved. Preferred principal<300 target still unmet, no tail credit.
+
+Current1673files20329callables1920errors2735warnings4655overlapping observations.
+Against Oct8: errors-36(-1.84%), warnings-23(-0.83%), findings-59(-1.25%).
+These are overlapping observations, not counts of independent defects.
+Tail5>300/17>200/55>100 unchanged. All other runtime records exact accepted R39.
+Old R37 NOT_ADMITTED/STOP75 evidence remains immutable/historical; new R41
+admission supersedes disposition, does not rewrite failed old gate as PASS.
+Graphify32124 frontend650/650force/domain/platform chunks1/1done/no warning/all0,
+root76freeze7a3c1a43 rehash0. Main55a/baseline38e6b794 untouched, no
+commit/push/mainmerge. Global source ambiguity/history30 and full campaign
+application suites/extreme hotspots remain open. Campaign ACTIVE/INCOMPLETE.
+
+## Latest admitted checkpoint — R39 matcher and R40 prerequisite
+
+Campaign ACTIVE/INCOMPLETE. R39 exact bounded tooling fix admitted after
+independent final7addefeb/107freeze886878b5 and root95635 TERMINAL0, eleven
+native stages0:270tests/55new, zero skipped, full919statement370branch100,
+patch27+6100/rawDBJSONexact/Ruff/NEWformat/fullreport/actualmain55aratchet0/
+complete exterior replay/diffcheck/custody/terminalaudit. Main55a, baseline
+38e6b794 and concurrent work preserved; no source/config/threshold exclusions
+or baseline inflation. Root report application records exactly equal R40:
+1673files20325callables1922errors2734warnings4656overlapping observations.
+
+Source-backed identity corrects the unrelated nearest-owner assignment; all
+PRIMARY metrics still checked. R37 exterior local old1/new0; genuine source
+negative1 with six regressions, including below-threshold increases. Global
+comparisons remain exit2: unchanged GAIAusers/Organigramma ownership cannot
+be proved. Not a global PASS or automatic attribution to campaign/historical30.
+R37 application source remains external/NOT_ADMITTED; no application metric
+reduction is credited to matcher. Unsupported unmapped legacy fallback remains
+residual; universal identity safety is not asserted.
+
+Exact reports original1673/20323 d8ec7dc8 and candidate1673/20327 1ddc5910 retain
+all four added candidate callables. Frozen author prose count20323-for-both is
+superseded by independent/root hashes, never by changing those artifacts.
+Failed final dependency/launcher/replay-metadata receipts remain frozen; distinct
+diagnosed grants and successful V3native/V4remainder lineage explicitly retained.
+Technical docs updated; platform Graphify41015 chunk1/1done/no warning/exit0,
+root63freeze a590e546 rehash0. Bonifica root55
+freeze d099fab5/R38root75freezeab377713 remain exact. No normalization/orchestrator
+269refactor, main merge/commit, broad suite PASS or campaign completion claimed.
+
+## Latest checkpoint — R40 root / R39 author V3
+
+This section supersedes historical pending-state entries below. Campaign remains
+ACTIVE/INCOMPLETE; no strategic completion, broad-suite PASS or main merge.
+
+R40 separate date-guard prerequisite admitted by exact root25841 TERMINAL0:
+186tests/89new, zero skipped, full398statement126branch100, Ruff/newformat/
+report/actualmain55aratchet/findings[]/diffcheck/custody/raw audit all0. Fifty
+existing JWT key-length warnings and two existing exclusions explicitly retained.
+Four exact author/review/final reports imported. Graphify checkpoint complete:
+backend918/918AST, domain/platform semantic chunk1/1done/no warning/all exits0;
+root55freeze d099fab5 rehash0. No generated graph tracked.
+Target cognitive18→10(-44.44%), cyclomatic12→9, LOC26→25, nesting3→2; aggregate
+file430→422, effectiveLOC739→738. IMPROVED, no transferred debt. Orchestrator269
+and normalization R35 untouched; only the user-authorized unreachable guard.
+
+Current1673files20325callables1922errors2734warnings4656overlapping findings.
+Against authoritative Oct8: errors-34(-1.74%), warnings-24(-0.87%), findings-58
+(-1.23%). Findings are overlapping observations, not independent defects.
+Tail5>300/17>200/55>100 unchanged; major hotspot mission remains open.
+
+R39 V3 author270PASS/full919statement370branch100/mainratchet0/custody0,
+freeze50 SHA39ad30da. Independent final sole native token granted after root
+Graphify release; tooling not admitted yet.
+Full-report exterior R37 local1→0; real source negative exit1/six regressions.
+Both global comparisons remain exit2, not PASS: historical nearest owner is
+source-contradicted but new ownership unprovable for GAIAusers/Organigramma.
+Unchanged-main provenance separated from campaign and historical30 divergences.
+R37 remains preserved/external/NOT_ADMITTED; no UI equivalence inferred.
+Main55a/baseline38e6b794/scope/thresholds/config unchanged, no cache deletion.
+
+## Latest admitted runtime checkpoint — R38
+
+Update: frontend/domain/platform Graphify complete, semantic chunk1/1done and
+no semantic-warning both docs; root75memberfreezeab377713. Four exact agent reports
+imported, no commit/main merge. R40 original preflight metadata-only STOPbefore
+pytest caused by Coordinator editing a note already frozen22; exact reversal
+proven/restored all22hash0, changed/reconstructed bytes preserved. Distinct native
+V2 grant, runtime still unchanged. R39V2source32b11750/spece22c57af static frozen,
+independent review active, no native acceptance yet. Campaign incomplete.
+
+R38 IMPROVED after independent author50116/final48643/root40649 full native
+80tests/four100/types/lint/report/main55aratchet/raw custody PASS. Exact source
+ea946b88/spec eb1f1b6e; principal cognitive296→280, aggregate file509→468,
+cyclomatic551→535/callableLOCsum2416→2355/fileLOC1702 unchanged. No new helper
+violation; no baseline/scope/threshold/ignore/config edit or debt transfer.
+
+Current native complete metrics:1673files20325callables1922errors2736warnings
+4658overlapping findings. Against authoritative Oct8: errors1956→1922(-34,
+-1.74%), warnings2758→2736(-22,-0.80%), findings4714→4658(-56,-1.19%). These
+overlapping observations are NOT counts of independent problems. Extreme tail
+5>300/17>200/55>100 unchanged by R38; strategic goal remains substantially open.
+
+Root first test-copy EOF and private launcher path defects explicitly diagnosed,
+failed/terminated evidence retained; only exact independent native gate accepted.
+Frontend Graphify AST650files complete,6059nodes/HTML skipped existing limit.
+Docs/freeze/publication pending, no main merge. Bonifica guard authorized but
+runtime unchanged; R39 V1 stopped, V2 static review pending; R37 not admitted.
+This is a slice checkpoint, NOT wave/global-suite/campaign completion.
+
+## Current coordinated checkpoint — R38/R39/R40
+
+Main55a remains concurrent and untouched; integration114fbf71 has documentation
+only at resumed preflight. Root21GiB/SSD318GiB free, no cache cleanup needed.
+User approves both separate matcher correction and separate Bonifica date-guard
+prerequisite. All pending-decision entries below are historical, not fresh holds.
+
+R39 narrow independent design6b4f4af5 accepted for implementation only; original
+215tests/full tooling844statements332branches100/Ruff/main55a ratchet/custody PASS0,
+25member terminal freeze6ab80e68 root-rehashed0. Bounded source contradiction fix
+granted; unchanged direct resolver/strict R16, no baseline/scope/threshold edits.
+Unsupported positional legacy remains residual, not silently certified safe.
+Candidate tooling/full-global replay/independent final certification pending.
+
+R38 original V2characterization80tests/four100 complete; refined reviewerf935dbe1
+admits exact proposalc4e48a8a for native testing only, candidateea946b88/speceb1f1b6e.
+Supplementary exact-AST4224case/6mutant proof is not coverage. Sole heavy token
+R38; R39 implementation and R40 preparation static-only until separate token grant.
+No runtime integration, admitted metric delta or wave closure inferred yet.
+
+R40 fresh registry/worktree/author activates separate guard prerequisite analysis;
+same successful date-aware resolver returns dates or raises. Runtime/source grant
+withheld until honest NEWtests/proof/custody, orchestrator269 untouched. R35 result
+normalization remains unadmitted. Campaign ACTIVE/INCOMPLETE; admitted metrics R36.
+
+## R38 readiness — 2026-10-11, settings SISTER form hydration
+
+Settings principal296, one coherent refresh responsibility: selected/default
+loaded-field projection without losing draft/password/schedule or functional
+updater timing. Registry created before three fresh114fbf71worktrees; source
+ddb7113b exact, provenance165/150/15/217 and zero dirty settings copies.
+Independent static proposal review favorable for characterization only; author
+original35253 TERMINAL0:69tests/2specs, full workspace455/556/118/402four100,
+whole report exact R36, actual main55a ratchet0/raw maps/tracked/main custody0.
+NEW mounted characterization53987 TERMINAL0:78tests/3specs including9new,
+full455/556/118/402four100, types/lint/raw custody0, original35+new33freeze intact.
+Reviewer identifies fallback-id payload/reload recovery gaps; candidate activation
+held BEFORE source edit, distinct characterization-v2 only permitted. Runtime
+unchanged, no native candidate acceptance or claimed complexity reduction yet.
+All metrics/admitted reductions remain R36. No wave-completion certification.
+
+Coordinator temporarily deactivates ONLY exclusively owned unadmitted R37
+runtime through apply_patch, exact HEAD7f9d7883; candidate3ae8 and failed75member
+evidence remain intact. Separate matcher decision pending, no permanent rejection,
+baseline change or waived gate. Fresh root main55a ratchet19318 TERMINAL0,
+findings[], deactivation custody0 and75frozen members unchanged. This is NOT
+R37 candidate acceptance or strategic >300 success: those targets and full
+global mission remain outstanding. R38 integration still requires a green root.
+
+## R37 checkpoint — 2026-10-11, STOP_MATCHER / NOT_ADMITTED
+
+Exact V3 Capacitas particelle-monitor proposal3ae8b186 installed after exclusive
+ownership and independent static review. Candidate559mounted tests/full-file
+four100/types/lint/report PASS. Native session78456 TERMINAL exit2: actual main55a
+ratchet FAIL with exactly one Program<anonymous> LOC1→2 finding; subsequent
+raw/custody pipeline audit NOT_EXECUTED. No R37 commit, integration or metric
+credit. Latest admitted global metrics remain R36 below.
+
+Read-only source-backed trace: original3157:3158 and candidate3182:3183 selection
+handler bytes/fingerprint/metrics identical. Positional resolver switches from
+baseline selection3165:3166/LOC2 to unrelated close-button3193:3193/LOC1.
+Separate matcher decision requested; independent reviewer confirms wrong binding,
+with no ambiguity returned (existing R16 provenance fallback never invoked).
+Final verifier original metadata-v2/countertests PASS; candidate native gate
+NOT_EXECUTED, verifier TERMINAL and no token acquired. Baseline,
+thresholds, scope, ignores, tooling and runtime unchanged during diagnosis;
+no line-compression workaround or attribution to the historical30. Candidate
+evidence75members frozence582072; parked V3 preserved. Independent final native,
+raw/custody audit, Graphify and publication still required after a real gate PASS.
+Campaign ACTIVE/INCOMPLETE; broad suites, historical30/R25 and separate Bonifica
+guard decision remain open. See INTEGRATION_R37_CAPACITAS_PARTICELLE for proof.
+
 ## R36 checkpoint — 2026-10-11, selected INAZ punch projection
 
 **IMPROVED; root integration native/raw/Graphify gates PASS, campaign-only publication.**
@@ -3122,6 +3821,28 @@ dei callable annidati dello scanner, non decisioni uniche del programma.
 
 ## Final metrics
 
+Latest measured checkpoint R58, not campaign completion; exact full-report
+SHA33c957c3 cited in current verification. R43/R51 prospective values excluded.
+
+| Perimeter | Files | Callables | Effective LOC | Error | Warning | Findings |
+|---|---:|---:|---:|---:|---:|---:|
+| R58 official | 1676 | 20345 | 332660 | 1920 | 2735 | 4655 |
+| R58 application without worker tests | 1621 | 19014 | 319060 | 1912 | 2680 | 4592 |
+
+These are current root measured-report values, not a global suite/campaign
+certificate. R50 adds only tested characterization and no runtime improvement.
+R52 decreases one cognitive point in existing runtime with no finding delta.
+R53 reduces cognitive sum16/cyclomatic sum18 and removes one>300callable,
+with zero finding delta. R57 further reduces net cognitive2, duplicated decisions2;
+five helper roots raise cyclomaticSUM3 and aggregateLOC23, explicitly disclosed.
+R58 removes net12 cognitive and two physical decisions; cyclomaticSUM stays501,
+combinedLOC grows19, no finding or extreme-tail credit. Application tail is
+3>300/17>200/55>100; no R57/R58 finding reduction.
+Finding observations overlap and do not count independent defects.
+The R8 values below are historical only, superseded for campaign planning.
+
+### Historical R8 Metrics
+
 Metriche dell'ultimo checkpoint R8, non dichiarazione di chiusura della campagna.
 Scansione durabile `20261009-r8-presenze/coordinator/integrated.json` e `.md`,
 sul runtime congelato e già revisionato.
@@ -3137,7 +3858,22 @@ refactoring. File LOC complessive aumentano di153, non sono diminuite.
 
 ## Delta
 
-Confronto causale: snapshot Git pulito55a → checkpoint R8 congelato.
+Indicatori correnti: audit autorevole8ottobre → report integrale R58.
+
+| Metrica | Audit iniziale | R58 corrente | Delta | Delta % |
+| --- | ---: | ---: | ---: | ---: |
+| Error | 1956 | 1920 | -36 | -1,84% |
+| Warning | 2758 | 2735 | -23 | -0,83% |
+| Finding sovrapposti | 4714 | 4655 | -59 | -1,25% |
+
+Questi indicatori non contano problemi indipendenti e non sostituiscono il
+confronto causale su perimetri omogenei: l'audit iniziale includeva working-tree
+dirty e il perimetro corrente aggiunge test. R52 da sola ha delta0 finding e
+cognitive anomalies239→238/file724→723; R43 NOT_ADMITTED resta esclusa. Non attribuire l'intero
+delta alla sola caratterizzazione o considerarlo prova di campagna completata.
+
+Confronto causale storico: snapshot Git pulito55a → checkpoint R8 congelato.
+La tabella seguente conserva quella certificazione, non descrive R52 corrente.
 
 | Metrica | Before | After | Delta | Delta % |
 | --- | ---: | ---: | ---: | ---: |
@@ -3158,7 +3894,8 @@ Nesting refresh Wiki7→6 e ranking3→2; gli altri target conservano nesting.
 
 ## Delta %
 
-La riduzione cumulativa globale è riportata nella tabella precedente. La sola
+Gli indicatori correnti e i delta causali storici sono distinti nelle tabelle
+precedenti; le somme certificate sotto restano riferite ai rispettivi checkpoint. La sola
 R4 riduce cognitive aggregata analytics978→943(-3,58%) e fuel322→282(-12,42%),
 senza ridurre finding. Per confronto, questi erano i risultati del primo
 checkpoint nel perimetro dei cinque file runtime originali e del nuovo helper:
@@ -3167,7 +3904,7 @@ checkpoint nel perimetro dei cinque file runtime originali e del nuovo helper:
 - Cyclomatic sum3253→3079: **-174 / -5,35%**.
 - Callable principali selezionati1683→1567: **-116 / -6,89%**.
 
-La coda >300 resta aperta con cinque callable. Il target P1 -50%/<250 non è
+La coda >300 resta aperta con tre callable. Il target P1 -50%/<250 non è
 raggiunto e la riduzione strategica dell'intera coda estrema resta aperta.
 Non sono successi equivalenti una riduzione locale misurata e il completamento
 dell'obiettivo globale della campagna.
@@ -3176,11 +3913,16 @@ dell'obiettivo globale della campagna.
 
 | Domain | Error before | Error after | Warning before | Warning after |
 | --- | ---: | ---: | ---: | ---: |
-| Backend runtime | 1035 | 1033 | 1688 | 1689 |
-| Frontend runtime | 878 | 857 | 881 | 868 |
+| Backend runtime | 1035 | 1032 | 1688 | 1686 |
+| Frontend runtime | 878 | 845 | 881 | 860 |
 | Worker runtime | 35 | 35 | 134 | 134 |
 | Worker tests, fuori campagna runtime | 8 | 8 | 55 | 55 |
-| Totale | 1956 | 1933 | 2758 | 2746 |
+| Totale | 1956 | 1920 | 2758 | 2735 |
+
+After values are current R58 root observations; before values are initial audit
+indicators, not homogeneous causal attribution. R52/R53 change none of these
+counts; R57/R58 leave all domain finding counts unchanged as well. Historical R8
+domain totals1933/2746 remain in its historical metrics.
 
 I due error Wiki e un error LOC GIS diventano warning perché le metriche scendono, non perché
 cambia la soglia. B4 riduce la complessità senza eliminare finding sopra soglia.
@@ -3189,24 +3931,58 @@ cambia la soglia. B4 riduce la complessità senza eliminare finding sopra soglia
 
 | Callable | Before cognitive | After cognitive | Delta |
 | --- | ---: | ---: | ---: |
-| PresenzeGiornalierePage | 550 | 399 | -151 |
-| ElaborazioniSettingsWorkspace | 402 | 296 | -106 |
+| PresenzeGiornalierePage | 550 | 360 | -190 |
+| ElaborazioniSettingsWorkspace | 402 | 280 | -122 |
 | _build_network_statistics_summary | 209 | 181 | -28 |
 | refresh_wiki_conversation_daily_metrics | 188 | 178 | -10 |
 | _latest_dimension_counts | 50 | 23 | -27 |
-| CatastoGisPage | 334 | 317 | -17 |
-| handleImportXlsx | 43 | 26 | -17 |
-| ElaborazioniCapacitasWorkspace | 472 | 472 | 0 |
+| CatastoGisPage | 334 | 298 | -36 |
+| ElaborazioniCapacitasWorkspace | 472 | 298 | -174 |
 | DetailContent Utenze | 391 | 391 | 0 |
 | CatastoAnomaliePageContent | 390 | 390 | 0 |
-| fuel_analytics | 366 | 282 | -84 |
-| anomalies_analytics | 365 | 298 | -67 |
+| fuel_analytics | 366 | 217 | -149 |
+| anomalies_analytics | 365 | 221 | -144 |
 | _run_bonifica_sync_background | 269 | 269 | 0 |
+
+`handleImportXlsx`43→26 è un risultato storico, non un callable identificato
+nel report corrente R52; è escluso dalla tabella corrente senza inferire una
+metrica per un simbolo rimosso o una riduzione aggiuntiva.
 
 Gli aggregati includono presenter/helper nuovi: non è una contabilizzazione
 basata soltanto sulla scomparsa di LOC dal callable principale.
 
 ## Tests
+
+R58 latest backend source:494base+49pure contracts543PASS/full4runtime100/
+Ruff/format/ratchetPASS. Full backend R56 PRE-DATES R58, so it is not a fresh
+current-source full-suite certificate. R57 frontend73targeted mounted cases
+remain separate; R54fullfrontend/R55build PRE-DATE R57. All449backend skips and
+worker/E2E obligations remain unverified/open.
+
+Latest verified available-suite checkpoints, not campaign completion:
+
+| Gate | Latest result | Evidence |
+| --- | --- | --- |
+| R58 pertinent analytics + mapper | 543 PASS in disjoint base/additive gates, zero skip; full4runtime100 | SLICE_R58; root candidate91594/mapper47713 |
+| Full backend after R52 | 7056 PASS, 449 skip, zero failure/error; 2380 warnings | BACKEND_CHECKPOINT_R56_2026-10-12.md; independent FINAL_R56 |
+| Full frontend after R53 | 5153 unit + 18 smoke PASS, 320 specs, zero skip | FRONTEND_CHECKPOINT_R54_2026-10-12.md; independent FINAL_R54 |
+| Production build after R53 | PASS, 163/163 static pages; 35 warnings | BUILD_CHECKPOINT_R55_2026-10-12.md; independent FINAL_R55 |
+| Latest full worker R50 | 782 PASS, 1 PostgreSQL skip; full-file coverage FAIL | INTEGRATION_R50_WORKER_POOL_CHARACTERIZATION_2026-10-12.md |
+| Latest historical E2E R49 | 37 PASS, 1 device-quota FAIL, 5 skip, 18 NOT_RUN; GIS cases PASS | R49 evidence; no fresh post-R53 E2E certificate |
+
+R56 source/dependency/main custody1603inputs exact; raw JUnit7505cases, four
+explicit timestamp-metadata workbook pairs,36new R52 cases. All449skips retained
+and unverified, no PostgreSQL concurrency/transaction certificate. R54/R55
+frontend1044inputs exact; native suite/build are separate coverage evidence.
+R53 pertinent original/candidate604PASS/24specs/zero skips/fullfour100, strict
+new-spec typing and root ratchet PASS. R52 pertinent union457PASS/15specs/
+full-file100/ratchetPASS remains its own slice certificate, not the R56 case count.
+Worker R50 runtime6075/6077statement1628/1630branch is not100; no exclusions added.
+
+R45/R46/R47/R48 are historical checkpoints superseded where later evidence
+exists. The following table preserves October8 certification on its recorded
+source, not a current-source full-suite certificate. Current full E2E/global/
+coverage/campaign obligations remain open. R43 remains NOT_ADMITTED.
 
 | Gate | Risultato osservato | Evidenza |
 | --- | --- | --- |
@@ -3251,6 +4027,19 @@ GIS/Territorio opt-in2, provider/MCP live opt-in2. Worker skip PostgreSQL migrat
 
 ## Coverage
 
+Latest changed backend R58: analytics625/625statement252/252branch; driver49/49
+and16/16; orphan27/27 and10/10; mapper8/8 and0/0(vacuous branch denominator).
+Boolean getter/error contracts49PASS, not invented measured arcs. Exactly four
+historical route exclusions417/418/887/888, moved by import only, zero new ignore.
+Full-file100 is not repository-wide coverage or proof of PostgreSQL concurrency.
+
+Latest changed Capacitas runtime R53: full-file workspace statement725/725,
+branch733/733,function253/253,line633/633100; unchanged fraction9/6/6/8four100.
+Fresh original727/746/255/634four100. Source-bound raw map and implicit-else
+audits PASS, zero skipped locations. The table below retains earlier snapshots;
+repository-wide100 is not inferred. Worker latest R50 still6075/6077statement
+and1628/1630branch, not100, without runtime change or new exclusion.
+
 | Runtime modificato | Statements | Branches | Gate |
 | --- | ---: | ---: | --- |
 | Presenze giornaliere | 1186/1186 | 1336/1336 | 100% PASS |
@@ -3268,19 +4057,32 @@ modificati, come verificato dai JSON e dall'identità byte delle sorgenti integr
 
 ## Ratchet
 
+R53 actual original/candidate ratchets against main55a PASS/findings[];
+baseline38e6 unchanged. Working-tree admission, no Git merge/commit.
+
 Ogni cherry-pick runtime e test-only è stato seguito da ratchet completo contro
 main55a: **PASS, zero finding nuovi**. Controllo read-only, baseline del merge-base.
 Nessun cambio BASE_REF opportunistico. Gate conclusivo nel report verifier.
 
 ## Global baseline status
 
-`complexity-check` rimane **FAIL per le30 divergenze storiche** già classificate.
-Non è il gate differenziale della change. Nessuna `complexity-baseline`,
-`baseline-repair` o equivalente è stata eseguita. Baseline, soglie, scope,
-eccezioni e tooling sono byte-identici rispetto al merge-base.
+Initial `complexity-check` failed for30historical divergences, classified with
+provenance; this is not a current full-check PASS or the change gate. Separate
+R39 full-global replay exits2 on unchanged-path GAIAusers/Organigramma owner
+ambiguities, not automatically members of those30 or campaign regressions.
+Fresh R53 make complexity-check exits2 with one ambiguous_identity configuration
+finding at unchanged GAIAusers useEffect[0]<callback>, four candidates. Diffmain0,
+all-input/main custody0; known R39 ambiguity, no new R53 metric regression.
+Historical30cannot be enumerated by this stopped invocation and remain separate.
+Exact global-check log/exit/disposition recorded in the R53 integration report.
+No complexity-baseline/baseline-repair/equivalent was executed. Baseline,
+thresholds, scope and exceptions stay immutable. Tooling has the explicitly
+authorized, separately verified R39 matcher correction; R53 does not modify it.
 
 ## Improved slices
 
+- R53: typed polling-membership policies genuinely remove8physical decisions;
+  principal307→298/file778→762, all new helpers under thresholds,604tests/full100.
 - P1: duplicazione reale card giornaliere/collaboratore consolidata in presenter
   locali di dominio; stato, effetti e comandi invariati.
 - P6: una sola implementazione del mapping verifica SISTER, mantenendo fallback
@@ -3296,10 +4098,16 @@ eccezioni e tooling sono byte-identici rispetto al merge-base.
 ## Reorganized slices
 
 Nessun runtime accettato viene classificato come semplice riorganizzazione.
-P2/P3/P4/P5 sono `NO_CHANGE` sul runtime e characterization significativa,
-non una riduzione numerica rivendicata.
+Initial P2/P3/P4/P5 readiness was `NO_CHANGE` runtime with characterization,
+not a claimed reduction. Later Capacitas/analytics bounded slices are admitted
+IMPROVED; the initial readiness labels do not supersede those verified results.
 
 ## Blocked slices
+
+Current: R43 Presenze fresh design awaits its separate test-only typing repair;
+R51 real-helper fixture binding/E2E device lifecycle/Bonifica/worker decisions
+remain distinct. P2/P3 runtime refactors are now admitted with full100; their
+initial coverage rows below are historical readiness, not current blockers.
 
 | Candidate | Evidence / motivo | Azione richiesta |
 | --- | --- | --- |
@@ -3318,6 +4126,9 @@ misure delle suite indicate, non un giudizio su tutta la coverage repository.
 
 ## Regressions rejected
 
+R42 Presenze profile callback2→8 rejected, no source admitted; R43 is a distinct
+new design and still blocked on test-spec typing. Frozen failures are preserved.
+
 Nessuna slice `REGRESSED` è integrata. P1 aveva una regressione callback params
 nel primo tentativo: ratchet FAIL; contratto callback corretto e ratchet PASS,
 senza ignore/baseline change. B5 primo tentativo compattava assignment in un int
@@ -3326,25 +4137,51 @@ Tentativi intermedi non sono risultati accettati.
 
 ## Remaining top 30 hotspot
 
-Ranking corrente R7, cognitive discendente; applicativo senza test worker.
-Scansione globale completa include comunque i test worker e tutte le30divergenze.
-Fonte durabile `20261009-r7-presenze/coordinator/integrated.json`, snapshot`1699e790`.
+Latest measured R58 full-report ranking, cognitive descending with cyclomatic
+tie-breaker; application scope excluding worker tests. The official complete
+report retains worker tests. Supersedes the stale R7 ranking formerly shown here.
+Source: SSD `.codex-gaia-campaign-20261011-r41-capacitas-r37-reactivation/root-evidence/root-complexity.json`,
+SHA-256 `f0985cacb206ee839d08fc775eec20dbc7c2255746639c85741ed430001d604f`,
+R50 root scan504e7355 verifies every prior callable/file metric object unchanged;
+official scope now1674files/20339callables adds only the new worker test. This
+application ranking therefore stays exact. R43 prospective values are excluded,
+no additional complexity reduction is credited to the test-only checkpoint.
+R52 root scan2fd85c34 then verifies all prior objects except anomalies239→238
+and file cognitive724→723 exact; ranking otherwise unchanged, no new official
+file/callable or finding reduction. This is planning evidence, not campaign closure.
+R53 actual complete reportc3924c4a verifies every other file/callable unchanged;
+Capacitas now298cognitive275cyclomatic2398LOC. Current ranking below includes
+that measured delta; application subset unchanged, no prospective R43 credit.
+R57 complete report3c6d6678 verifies every other metric exact, GIS now298/262/1868,
+five new helpers all below warning. Ranking updated for that measured slice;
+historical report provenance above retained, newest exact artifact is SSD
+`.codex-gaia-campaign-20261012-r57-gis-popup/root-evidence/original-v2/candidate-native/complexity.json`.
+R58 report33c957c3 supersedes that artifact: anomalies221/104/302, every other
+survivor metric exact; three new helpers belowwarning. Latest artifact is SSD
+`.codex-gaia-campaign-20261012-r58-inactive-vehicles/root-evidence/candidate/complexity.json`.
+
+R59 actual integration report `e7c33914cda97cbddc07c695323cd095fac428688d7bd2081989f72244dd53dc`
+verifies every callable/file object identical to R58. The table therefore
+remains exact; no rejected R59 prospective delta is included. R60/R61 are
+source-bound verification checkpoints with no runtime/metric change, not new
+complexity measurements. Latest preserved complete report lives at SSD
+`.codex-gaia-campaign-20261012-r59-capacitas-errors/integration-evidence/complexity.json`.
 
 | # | Callable | Cognitive | Cyclomatic | LOC | Path |
 | --- | --- | ---: | ---: | ---: | --- |
-| 1 | ElaborazioniCapacitasWorkspace | 472 | 416 | 2631 | `frontend/src/components/elaborazioni/capacitas-workspace.tsx` |
-| 2 | PresenzeGiornalierePage | 399 | 352 | 2020 | `frontend/src/app/presenze/giornaliere/page.tsx` |
-| 3 | DetailContent | 391 | 304 | 1908 | `frontend/src/app/utenze/[id]/page.tsx` |
-| 4 | CatastoAnomaliePageContent | 390 | 342 | 2109 | `frontend/src/app/catasto/anomalie/page.tsx` |
-| 5 | CatastoGisPage | 317 | 281 | 1889 | `frontend/src/app/catasto/gis/page.tsx` |
-| 6 | anomalies_analytics | 298 | 137 | 372 | `backend/app/modules/operazioni/routes/analytics.py` |
-| 7 | ElaborazioniSettingsWorkspace | 296 | 265 | 1358 | `frontend/src/components/elaborazioni/settings-workspace.tsx` |
-| 8 | fuel_analytics | 282 | 169 | 350 | `backend/app/modules/operazioni/routes/analytics.py` |
-| 9 | MePageContent | 271 | 256 | 1133 | `frontend/src/app/me/me-page-content.tsx` |
-| 10 | _run_bonifica_sync_background | 269 | 47 | 232 | `backend/app/services/elaborazioni_bonifica_sync.py` |
-| 11 | ElaborazioniBonificaSyncWorkspace | 259 | 202 | 835 | `frontend/src/components/elaborazioni/bonifica-sync-workspace.tsx` |
-| 12 | MapContainer | 246 | 169 | 953 | `frontend/src/components/catasto/gis/MapContainer.tsx` |
-| 13 | PresenzeCollaboratoreDetailPage | 233 | 212 | 1600 | `frontend/src/app/presenze/collaboratori/[id]/page.tsx` |
+| 1 | DetailContent | 391 | 304 | 1908 | `frontend/src/app/utenze/[id]/page.tsx` |
+| 2 | CatastoAnomaliePageContent | 390 | 342 | 2109 | `frontend/src/app/catasto/anomalie/page.tsx` |
+| 3 | PresenzeGiornalierePage | 360 | 316 | 1945 | `frontend/src/app/presenze/giornaliere/page.tsx` |
+| 4 | ElaborazioniCapacitasWorkspace | 298 | 275 | 2398 | `frontend/src/components/elaborazioni/capacitas-workspace.tsx` |
+| 5 | CatastoGisPage | 298 | 262 | 1868 | `frontend/src/app/catasto/gis/page.tsx` |
+| 6 | ElaborazioniSettingsWorkspace | 280 | 257 | 1328 | `frontend/src/components/elaborazioni/settings-workspace.tsx` |
+| 7 | MePageContent | 271 | 256 | 1133 | `frontend/src/app/me/me-page-content.tsx` |
+| 8 | _run_bonifica_sync_background | 269 | 47 | 232 | `backend/app/services/elaborazioni_bonifica_sync.py` |
+| 9 | ElaborazioniBonificaSyncWorkspace | 259 | 202 | 835 | `frontend/src/components/elaborazioni/bonifica-sync-workspace.tsx` |
+| 10 | MapContainer | 246 | 169 | 953 | `frontend/src/components/catasto/gis/MapContainer.tsx` |
+| 11 | PresenzeCollaboratoreDetailPage | 233 | 212 | 1600 | `frontend/src/app/presenze/collaboratori/[id]/page.tsx` |
+| 12 | anomalies_analytics | 221 | 104 | 302 | `backend/app/modules/operazioni/routes/analytics.py` |
+| 13 | fuel_analytics | 217 | 148 | 329 | `backend/app/modules/operazioni/routes/analytics.py` |
 | 14 | ElaborazioneBatchDetailWorkspace | 216 | 177 | 751 | `frontend/src/components/elaborazioni/batch-detail-workspace.tsx` |
 | 15 | PresenzeExportPage | 209 | 172 | 1097 | `frontend/src/app/presenze/export/page.tsx` |
 | 16 | sync_from_whitecompany | 205 | 77 | 290 | `backend/app/modules/organigramma/services/whitecompany_sync.py` |
@@ -3352,8 +4189,8 @@ Fonte durabile `20261009-r7-presenze/coordinator/integrated.json`, snapshot`1699
 | 18 | run_network_scan | 195 | 101 | 267 | `backend/app/modules/network/services.py` |
 | 19 | UtenzeSubjectsSection | 184 | 169 | 991 | `frontend/src/components/utenze/utenze-subjects-section.tsx` |
 | 20 | TrackingContent | 183 | 159 | 913 | `frontend/src/app/network/tracking/page.tsx` |
-| 21 | _build_network_statistics_summary | 181 | 101 | 214 | `backend/app/modules/network/router/helpers/traffic.py` |
-| 22 | AnagraficaBulkPanel | 181 | 155 | 839 | `frontend/src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx` |
+| 21 | AnagraficaBulkPanel | 181 | 155 | 839 | `frontend/src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx` |
+| 22 | _build_network_statistics_summary | 181 | 101 | 214 | `backend/app/modules/network/router/helpers/traffic.py` |
 | 23 | refresh_wiki_conversation_daily_metrics | 178 | 49 | 153 | `backend/app/modules/wiki/services/conversation_metrics.py` |
 | 24 | CatastoImportPage | 175 | 149 | 1114 | `frontend/src/app/catasto/import/page.tsx` |
 | 25 | ImportContent | 173 | 160 | 971 | `frontend/src/app/utenze/import/page.tsx` |
@@ -3384,12 +4221,16 @@ costo stimato$0,0673. Evidenza `/tmp/gaia-campaign-graphify-platform-docs-final.
 
 ## Risks
 
-- Otto callable >300 restano: la campagna locale non raggiunge il target strategico.
-- P1 principale525, Settings366, Network181 e Wiki178 sono ancora hotspot.
+- Current R53 integration: quattro callable >300 e diciassette >200 restano; il
+  target strategico non è raggiunto. R43/R51 sono NOT_ADMITTED; R53 elimina un
+  callable>300 ma non certifica la chiusura dell'intera campagna.
+- Presenze principale360, Capacitas298, Settings280, Network181 e Wiki178 sono
+  ancora hotspot; queste sono metriche ammesse, non quelle storiche October8.
 - Test SQLite/mocked boundary non certificano produzione PostgreSQL/PostGIS,
   portali INAZ/SISTER/GATE, browser automation reali o provider esterni.
-- E2E paralleli hanno mostrato instabilità: gate seriale passa senza cambiare
-  i test, ma restano due failure da triage separato prima di pretendere stabilità.
+- Latest E2E R49:37PASS/1FAIL/5skip/18NOT_RUN; il FAIL login Ruolo è la quota
+  privata sintetica20device esaurita. GIS tutti PASS. Nessun PASS E2E completo
+  corrente; il PASS seriale precedente è storico, non un certificato R49/R52.
 - Artefatti `/tmp` e dipendenze symlink sono locali/effimeri; i report versionati
   conservano comandi e risultati, non credenziali o un ambiente portabile.
 - Integration non include sviluppo concorrente main: una futura integrazione
