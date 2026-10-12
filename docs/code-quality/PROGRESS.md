@@ -1,5 +1,73 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-12 — RESUME R64: global goal active, Bonifica normalization readiness
+
+- R64 pubblicata localmente29994c62; provenance/readiness storichec9da6160.
+  Main NON integrata. Reviewer conferma origine NEWspec untracked su main:
+  errore di scope Add File relativo durante import review; copia esatta resta
+  preservata senza stage/delete. Ricevuta nuova runner-review/REVIEW.md,
+  non riscritte precedenti osservazioni "provenienza pending".
+- E2E cleanup STOP preparatorio:18casi/16OK/2ERROR, nessun cleanup.json,
+  nessuno stack/Playwright avviato o DB storico mutato. API Path.link_to
+  non disponibile nel harness; positive rifiutato bind98. Porte ora libere;
+  rifiuti potrebbero essere passati per motivo sbagliato, non certificati.
+  Log/exit/copie synthetic preservati; review statica distinta, niente retry.
+- Checkpoint terminale R64: post-integration actual-main ratchet0/findings[],
+  diff-check0, exact runtimef03279ca/speca3b01fd7; nessuna suite ripetuta dopo
+  freeze1320. Graphify backend force923sources/9365nodes/22690edges532communities;
+  elaborazioni docs chunk1/1done164nodes174edges21communities; platform docs
+  chunk1/1done741nodes909edges144communities, zero semantic failure. Ricevute
+  SSD root-checkpoint conservate; pubblicazione selettiva sulla sola branch
+  dedicata. Main conserva NEWspec non tracciata, provenienza ancora pendente.
+  Cleanup E2E tra casi autorizzato ma separato: DB/stack/test non avviati;
+  ownership E2E_LIFECYCLE preventiva per due review statiche senza overlap.
+- Candidate exact integration253PASS/400statement126branch100; lint0,
+  complete report1680files20358callables1920error2736warning4656findings.
+  Independent final253/full100 and actualmainratchet0; observerJSON-path and
+  multiline rawarc diagnostics preserved; Coordinator distinct V3 proof0 with
+  established PythonParser translation,1320custody/94manifestrecords exact.
+  Post-integration ratchet/Graphify/publication pending. Main trackedruntime
+  unchanged; identical untracked NEWspec observed there, origin pending,
+  archived and never staged/deleted. Candidate input exclusively author freeze.
+- Candidate author native terminal0:253PASS/zero skip/error/fail,
+  full400/400statement126/126branch100; lint/report/mainratchet0/findings[].
+  Independent reverse substitution proves entire module AST exact outside
+  helper/ten substitutions. Target269→174, filecognitive422→328,
+  cyclomatic181→173, LOC738→717; helper1/2/9/3params, no findings.
+  Global >200tail17→16, counts1920error/2736warning unchanged. Candidate not
+  integrated yet; final independent gates and exact integration still required.
+- User authorizes sole required-email fixture correction. Distinct V2 native
+  terminal0:253PASS(186old+67new), zero skip/error/fail, full398/126coverage100;
+  exact input custody. Reviewer confirms single-field diff. Prior STOP retained.
+  Coordinator activates sole typed3parameter normalization source grant;
+  candidate/native/review/final/integration admission still pending.
+- R64 characterized-original STOP terminal1:186oldPASS/67NEWsetupERROR,
+  required ApplicationUser.email omitted in new synthetic fixture. No runtime
+  change; custody exact; old-suite full100 not evidence for new assertions.
+  Native token released, no automatic retry. Separate fixture-only repair
+  decision requested; candidate NOT_ADMITTED, original failure preserved.
+- Global goal reactivated; historical PAUSE and admission receipts stay frozen.
+  No completion claim. Concurrent 22-file consolidation is separately admitted
+  on main a51a48dc, clean; dedicated integration branch fast-forwarded to that
+  verified snapshot without copying uncommitted work or changing main.
+- Fresh native read-only audit exit0:1680files/20357callables,
+  1920error/2736warning/4656overlapping findings; tails >300/>200/>100 =3/17/55.
+  Official initial1956/2758 remain reference; changed scope prevents attributing
+  every global delta to campaign refactoring.
+- Exclusive R64 registry precedes three new dedicated worktrees/agents.
+  Bonifica normalization only:269cognitive/47cyclomatic/232LOC/nesting13,
+  file738LOC/cognitive422/cyclomatic181. Fresh original full-file100 and genuine
+  characterization are prerequisites; runtime not yet admitted or changed.
+- Author sole native-heavy token; Baseline and Integration review static-only.
+  Historic worktree census207registered/128present; four dirty copies equal
+  admitted R40 source, no old live agents. No pruning, reset or deletion.
+- R43/R51/R63 partials and R42/R59 rejections remain excluded; no baseline,
+  matcher, thresholds, exclusions, ignore or coverage policy change.
+  449 backend skips and global divergence/worker/E2E gaps remain unverified.
+- Durable evidence `/media/cbo/ARCHIVIO_SSD/.codex-gaia-campaign-resume-20261012`:
+  audit argv/log/exit/JSON/Markdown, original governance freeze and census.
+  `MULTI_AGENT_OWNERSHIP_RESUME_R64_2026-10-12.md` defines scope/stop condition.
+
 ## 2026-10-12 — PAUSE: consolidamento autorizzato, nessuna nuova slice
 
 - Utente richiede pausa del goal globale, non completamento. Swarm terminale;

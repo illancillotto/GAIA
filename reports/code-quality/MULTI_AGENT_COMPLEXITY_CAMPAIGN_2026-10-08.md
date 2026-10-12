@@ -1,5 +1,82 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## Current state — RESUME R64, goal ACTIVE / INCOMPLETE
+
+R64 local commit29994c62 and static provenance/readiness commitc9da6160 now
+versioned, no push/main integration. Separate E2E preparation STOP18cases:
+16OK/2ERROR (removed harness Path.link_to API; positive free-port bind98).
+No cleanup transaction admitted, original DB hash exact, no stack/test launched.
+Negative outcomes are not certified absent exact refusal-cause validation.
+Main NEWspec provenance now disclosed by reviewer: accidental relative Add File
+scope during reviewer import. Exact copy remains untracked/preserved; earlier
+pending-origin receipts stay immutable. See new lifecycle/checkpoint report.
+
+R64 checkpoint native, observerV3, integration and Graphify are terminal PASS;
+dedicated-branch selective local publication is authorized. Backend graph
+923sources/9365nodes22690edges; elaborazioni/platform docs chunk1/1done,
+no semantic failures. Immutable STOP receipts retained separately. Fresh
+read-only check confirms1047R61 frontend inputs and200archived build artifacts
+equal current integration cache; no full suite/build repeated. E2E lifecycle
+has separate ownership and static review, no launch or DB mutation yet.
+
+R64 exact runtime now integrated on dedicated branch: author, independent final
+and Coordinator each253PASS/zero skip/error/fail/full400statement126branch100.
+Actualmainratchet PASS0 after integration; complete integration records match
+candidate, all1320independent source/config inputs exact. Cognitive269→174,
+file422→328, cyclomatic181→173, LOC738→717: IMPROVED, no transferred debt.
+Global >200tail17→16; global1920errors/2736warnings/4656findings unchanged.
+Independent metadata auditor STOP on JSON path is retained; Coordinator distinct
+V3 observer uses source-bound rawDB and established PythonParser normalization,
+proves raw arcs/case retention/exclusions/custody/94manifestrecords. V2 and
+ephemeral observer diagnostics remain documented, no native retries.
+See INTEGRATION_R64_BONIFICA_RESULTS_2026-10-12.md; publication pending.
+Main HEAD/trackedsources unchanged; identical untracked NEWspec observed there,
+origin pending and preserved outside admission/staging, never deleted.
+User now separately grants private synthetic E2E cleanup between completed cases;
+readiness is static, no DB mutation/stack launch or E2E PASS inferred.
+
+User approves sole-email NEWfixture correction. Distinct V2 original gate
+253PASS/zero skip/error/fail and full398statement/126branch100, custody exact;
+review confirms only required-email addition. Prior STOP retained unchanged.
+Normalization source grant now active; candidate admission remains pending.
+
+R64 characterized-original STOP:186oldPASS/67newsetupERROR, zero assertion
+failures/skips; required email omitted in new fixture. Runtime unchanged;
+new test assertions NOT VERIFIED. No candidate admitted, automatic retry or
+runtime repair. Separate fixture-only decision pending; all failure evidence
+preserved. Original full-file100 is not used to claim new tests passed.
+
+2026-10-12: the global goal has been reactivated. Previous pause receipts below
+are historical and remain unchanged. Concurrent maintenance was independently
+verified and committed on main, now clean at `a51a48dc4caefbdd1aea82fe4d749054b9465970`.
+The dedicated campaign integration branch fast-forwarded to that existing
+snapshot; new campaign work stays off main. New change ratchet uses actual main
+merge-base `a51a48dc`, original campaign comparison remains `55a1b1d35911451e018b662c2acc450bf5994ea2`.
+
+Fresh read-only complete audit exit0:1680files/20357callables/1920errors/
+2736warnings/4656overlapping findings; no parse or exception errors.
+Compared with official initial1956errors/2758warnings: -36errors (-1.84%),
+-22warnings (-0.80%). This includes independently consolidated maintenance and
+a changed file/callable scope; it is not pure campaign reduction attribution.
+Strategic targets are far from met. Cognitive tails >300/>200/>100:3/17/55.
+The three >300 callables are Utenze DetailContent391, Catasto anomalies390,
+and Presenze daily360; all remain open. Full final requirement audit NOT PASSED.
+
+R64 is one bounded Bonifica result-normalization responsibility, supported by
+the already admitted R40 prerequisite, not an import of rejected R35 code.
+Fresh original five-suite gate:186PASS/zero skips or failures, full-file
+398/398statements and126/126branches100, two preexisting excluded lines retained.
+Runtime still original; no candidate improvement or admission claimed yet.
+Independent provenance and static review run in disjoint dedicated worktrees;
+author holds the sole heavy-native token. Registry and durable evidence:
+`docs/code-quality/MULTI_AGENT_OWNERSHIP_RESUME_R64_2026-10-12.md`,
+`/media/cbo/ARCHIVIO_SSD/.codex-gaia-campaign-resume-20261012`.
+
+R43/R51/R63 partials, R42/R59 rejections remain excluded. Historical global
+divergences/ambiguities,449backend skips, worker coverage and E2E device-quota
+gaps remain separate and unverified. No baseline/threshold/scope/coverage-policy
+change, push, deployment or main integration is authorized by this checkpoint.
+
 ## Current state — PAUSE requested, verified work consolidation only
 
 User pauses the global campaign, not COMPLETE. No new refactoring or automatic
