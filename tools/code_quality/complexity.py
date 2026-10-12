@@ -991,15 +991,114 @@ def valid_provenance_source(commit, path):
             and not Path(path).is_absolute() and ".." not in Path(path).parts)
 
 
-def resolve_source_ambiguity(current, report, baseline, resolution, context):
+def positional_candidates(current, report, baseline, owner):
+    if owner is None or owner.get("fingerprint") == current.get("fingerprint"):
+        return []
+    if callable_key(current) in call_index(baseline):
+        return []
+    candidates = [call for call in baseline["callables"]
+                  if call["path"] == current["path"] and call["name"] == current["name"]]
+    siblings = [call for call in report["callables"]
+                if call["path"] == current["path"] and call["name"] == current["name"]]
+    remaining = remove_candidates_reserved_by_unique_fingerprint(current, candidates, siblings)
+    return remaining if owner in remaining and len(remaining) > 1 else []
+
+
+def exterior_source_fence(mapping, before, after, boundary, direction):
+    positions = range(boundary - 1, max(0, boundary - 9), -1) if direction < 0 else range(
+        boundary + 1, min(len(after), boundary + 8) + 1
+    )
+    for line in positions:
+        if mapping.get(line) is None:
+            continue
+        if before.count(after[line - 1]) != 1 or after.count(after[line - 1]) != 1:
+            continue
+        interval = range(line, boundary + 1) if direction < 0 else range(boundary + 1, line + 1)
+        if all(mapping.get(position) == mapping[line] + position - line for position in interval):
+            return line
+    return None
+
+
+def enclosed_source_callables(calls, current, leading, trailing):
+    return [call for call in calls if call["name"] == current["name"]
+            and call.get("kind") == current.get("kind")
+            and call["line"] < trailing and call["end_line"] > leading]
+
+
+def source_fence_has_peer(calls, owner, leading, trailing):
+    start, end = owner["line"], owner["end_line"]
+    for call in calls:
+        other_start, other_end = call["line"], call["end_line"]
+        if other_end < leading or other_start > trailing:
+            continue
+        if other_start <= start and other_end >= end:
+            continue
+        if start <= other_start and other_end <= end:
+            continue
+        return True
+    return False
+
+
+def contextual_source_owner(current, mapping, before, after, old_calls, new_calls):
+    start, end = current["line"], current["end_line"]
+    if end <= start:
+        return None
+    leading = exterior_source_fence(mapping, before, after, start, -1)
+    trailing = exterior_source_fence(mapping, before, after, end, 1)
+    if leading is None or trailing is None:
+        return None
+    old_leading, old_trailing = mapping[leading], mapping[trailing]
+    owners = enclosed_source_callables(old_calls, current, old_leading, old_trailing)
+    consumers = enclosed_source_callables(new_calls, current, leading, trailing)
+    if len(owners) != 1 or len(consumers) != 1 or consumers[0] is not current:
+        return None
+    owner = owners[0]
+    if owner["line"] != mapping.get(start) or owner["end_line"] >= old_trailing:
+        return None
+    if (source_fence_has_peer(old_calls, owner, old_leading, old_trailing)
+            or source_fence_has_peer(new_calls, current, leading, trailing)):
+        return None
+    return owner
+
+
+def resolve_source_position(current, report, baseline, resolution, context):
     owner, ambiguity, equivalent = resolution
+    if ambiguity or equivalent:
+        return resolution
+    candidates = positional_candidates(current, report, baseline, owner)
+    path, commit = current["path"], baseline.get("source_commit", "")
+    if not candidates or not valid_provenance_source(commit, path):
+        return resolution
+    old_calls = [call for call in baseline["callables"] if call["path"] == path]
+    new_calls = [call for call in report["callables"] if call["path"] == path]
+    try:
+        source = (context["source_paths"] or {}).get(path, ROOT / path)
+        mapping, before, after = source_snapshot_mapping(
+            path, commit, source, old_calls, new_calls, context
+        )
+    except (OSError, ValueError, SyntaxError, RuntimeError, subprocess.CalledProcessError):
+        return resolution
+    mapped_start = mapping.get(current["line"])
+    if mapped_start is None or mapped_start == owner["line"]:
+        return resolution
+    proven = contextual_source_owner(current, mapping, before, after, old_calls, new_calls)
+    if (unclaimed_source_owner(current, proven, new_calls, report, baseline,
+                               context["added_lines"])
+            and claim_provenance_owner(proven, context)):
+        return proven, None, False
+    return None, {"reason": "ambiguous_identity", "path": path,
+                  "symbol": current["name"], "candidates": len(candidates)}, False
+
+
+def resolve_source_ambiguity(current, report, baseline, resolution, context):
+    ambiguity = resolution[1]
     if ambiguity:
         proven = source_provenance_owner(
             current, report, baseline, context["source_paths"], context["added_lines"], context
         )
         if proven is not None:
             return proven, None, False
-    return owner, ambiguity, equivalent
+    return resolve_source_position(current, report, baseline, resolution, context)
 
 
 def compare(

@@ -107,6 +107,24 @@ e la baseline immutabile; il controtest di regressione deve continuare a
 fallire. Documentare separatamente PASS del matcher e mancata certificazione
 runtime del candidato. Non cambiare soglie o baseline per validare il fix.
 
+## Matcher posizionale R39
+
+Eseguire anche `tests/code_quality/test_complexity_positional_provenance.py`
+come parte dell'intera suite, mai al posto dei contratti preesistenti. Il file
+tooling completo richiede coverage statement/branch `100%` con subprocess,
+zero nuove esclusioni. Verificare la disponibilita effettiva di Babel nel
+worktree prima della suite; un link ignorato alle dipendenze gia installate
+non autorizza modifiche a package o policy. Ogni tentativo fallito conserva
+argv/log/exit/coverage e freeze distinto, senza overwrite o retry ciechi.
+
+Replay R37: report globale completo e byte candidato congelati restano esterni;
+confrontare separatamente locale e globale. Il vero controtest deve modificare
+il corpo sorgente, riscansionare il file intero e continuare a rilevare gli
+incrementi PRIMARY sotto soglia. Una contraddizione source-backed non risolvibile
+resta exit `2`, con provenienza del path rispetto a main documentata. Non
+attribuirla automaticamente alla change o alle trenta divergenze storiche.
+PASS del replay del matcher non equivale ad ammissione runtime della UI.
+
 ## Verifiche manuali obbligatorie
 
 - controllare il diff della baseline;

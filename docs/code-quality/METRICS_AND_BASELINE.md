@@ -163,6 +163,29 @@ Il medesimo binding tramite scansione si applica a questi byte. Un confronto
 exterior PASS non certifica equivalenza funzionale o coverage del candidato.
 I normali controlli di regressione restano attivi dopo il matching provato.
 
+## Posizione contraddetta dai sorgenti — R39
+
+La correzione candidata R39 riguarda soltanto un owner posizionale di un gruppo
+con nome duplicato e fingerprint diverso, dopo le prenotazioni ordinarie. Non
+modifica il resolver diretto o la prova R16 a due confini. Lo snapshot Git/AST
+completo del path deve validare entrambi i report prima che un header multilinea
+invariato possa contraddire positivamente la posizione dell'owner selezionato.
+
+Un owner alternativo richiede due fence esterne invariate, univoche e ordinate,
+un solo owner/consumer compatibile nell'intervallo e start mappato corrispondente.
+Gli antenati compatibili sovrapposti non vengono scartati; i peer sui confini
+chiusi impediscono la prova. Prenotazioni, multinsiemi consumati e ledger locale
+impediscono il riuso. Le metriche non scelgono l'identita: tutti i confronti
+PRIMARY restano attivi, anche sotto soglia. Contraddizione provata senza owner
+dimostrabile produce exit `2`, non il riuso dell'owner smentito.
+
+Il fallback legacy senza header mappato o senza sorgenti validati resta un
+limite preesistente, non una nuova certificazione universale dell'identita.
+Replay globale exit `2` e ratchet locale exit `0` sono risultati distinti; la
+correzione del matcher non certifica il comportamento di un candidato UI esterno.
+Ammissione R39 confermata da final/root indipendenti nel registro della campagna;
+nessuna baseline o soglia viene aggiornata per assorbire divergenze.
+
 ## Debt laundering da bloccare
 
 - rinominare un simbolo per farlo apparire nuovo o sparito;
