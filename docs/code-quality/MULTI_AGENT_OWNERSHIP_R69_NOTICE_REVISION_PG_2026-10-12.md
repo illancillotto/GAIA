@@ -7,8 +7,8 @@ global objective remains INCOMPLETE. No new runtime refactoring.
 
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| Coordinator | Ruolo commit revision verification | This registry, new R69 report/index, PROGRESS after freeze; external r69-notice-revision-pg except review | Original125test identities inventoried;124 R62 skipped PostgreSQL identities; native work not started pending review | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | BLOCKED |
-| R69 read-only CLI reviewer | Isolation and evidence audit | External r69-notice-revision-pg/review output only | Terminal exit1: configured gpt-5.4 rejected HTTP503; no accepted review; user decision requested before different model attempt | Read-only integration view | refactor/complexity-campaign-20261008 | BLOCKED |
+| Coordinator | Ruolo commit revision verification | This registry, new R69 report/index, PROGRESS after freeze; external r69-notice-revision-pg except review | Original125test identities inventoried; native work not started; pending deliberate reviewer-model decision | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | BLOCKED |
+| R69 read-only CLI reviewer V2 | Isolation and evidence audit | External r69-notice-revision-pg/review/v2 output only | Terminalexit1, still gpt-5.4 from project config; no accepted review; V1/V2 retained and no third retry | Read-only integration view | refactor/complexity-campaign-20261008 | BLOCKED |
 
 Read-only: `backend/tests/ruolo/test_notice_revision.py`, imported
 `test_notice_generation_concurrency.py`, `notice_history_fixtures.py`, both
@@ -38,3 +38,11 @@ no automatic retry. Failure stops admission and is preserved; close only owned
 container. Historical449skips never rewritten; fresh results count separately.
 No runtime/coverage/baseline/threshold/exclusion/policy changes, main merge/push,
 new branch, fabricated100 or complexity reduction credit.
+
+After checkpoint990f645c, V2 inferred an effective default change from the global
+config model=gpt-6.1-sol. Actual startup contradicts this: project-local config
+selects gpt-5.4 and V2 also terminates HTTP503. The global-only inference and
+claim of an external config change are withdrawn; no earlier observation proves
+when it changed. Both config files remain untouched. Original prompt/observation/
+V1/V2 failures and frozen registries are retained. Pending user model decision
+is not bypassed by changing cwd or config; no third retry or native admission.

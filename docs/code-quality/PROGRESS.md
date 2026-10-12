@@ -1,5 +1,24 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-12 — R69 reviewer precedence diagnosed; E2E skip prerequisites bound
+
+- Previous R69 preparation checkpoint990f645c is progress. No native125test
+  launch or new runtime refactor. Prior PROGRESS/registry archived before update.
+- V2 global-only default inference contradicted by actual process: project
+  .codex/config.toml selectsgpt-5.4, global configgpt-6.1-sol. V2terminalexit1
+  same503; both raw failures retained. No config was changed; earlier claim
+  of an external/effective config change withdrawn. Pending user-model decision
+  remains, no third automatic review, cwd workaround, DB or pytest attempt.
+- Seven E2Eskip exact identities/annotations mapped to unchanged sources:
+  1obsolete unconditionalempty case,2realCatastodataseed prerequisites,
+  2optionalGISmocks/UI-only,2syntheticgateway/provideropt-in live proofs.
+  No feature restored, skip removed, provider contacted or case claimedPASS.
+- Report R69_REVIEW_CONFIGURATION_DIAGNOSIS_2026-10-12 and external checksum
+  inventory preserve cause, corrected inference and next prerequisite decisions.
+  Historical449backend/7E2Eskip unchanged;2freshR68identities verified,447others
+  unverified. Worker100FAIL/matcher/excludedpartials/extremetail unresolved.
+  Global goal ACTIVE/INCOMPLETE; R69scopeBLOCKED, main/source/policy untouched.
+
 ## 2026-10-12 — R69 full Ruolo revision verification prepared; reviewer blocked
 
 - R68 is verified progress; no new refactoring. Dedicated HEADe09f6f84/main-base
