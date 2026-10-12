@@ -177,7 +177,7 @@ def test_autosync_skips_completed_cycle_pending_checkpoint_and_active_job(
     monkeypatch.setattr(scheduler_module, "has_available_credential", lambda _db, _id: True)
 
     monkeypatch.setattr(
-        scheduler_module, "_load_state", lambda _db: _state(completed_cycle_key="cycle")
+        scheduler_module, "_load_state", lambda _db: _state(completed_cycle_key="recent-v1:cycle")
     )
     assert scheduler_module.run_domande_irrigue_autosync(db) == 0
 
@@ -223,7 +223,7 @@ def test_autosync_materializes_exact_identifier_chunk(monkeypatch: pytest.Monkey
 
 def test_autosync_closes_cycle_and_runs_anomalies_once(monkeypatch: pytest.MonkeyPatch) -> None:
     _settings(monkeypatch)
-    state = _state(cursor="ZZZ", cycle_key="2026-09-05", processed_identifiers=14)
+    state = _state(cursor="ZZZ", cycle_key="full-v1", processed_identifiers=14)
     db = MagicMock()
     db.scalar.return_value = None
     monkeypatch.setattr(scheduler_module, "_window_context", lambda _now=None: (True, "2026-09-05"))
@@ -238,7 +238,7 @@ def test_autosync_closes_cycle_and_runs_anomalies_once(monkeypatch: pytest.Monke
     assert scheduler_module.run_domande_irrigue_autosync(db) == 0
     scan.assert_called_once_with(db)
     assert state.cursor is None
-    assert state.completed_cycle_key == "2026-09-05"
+    assert state.completed_cycle_key == "full-v1"
 
 
 @pytest.mark.anyio

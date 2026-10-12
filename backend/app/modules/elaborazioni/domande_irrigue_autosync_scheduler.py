@@ -26,17 +26,19 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasDomandeIrrigueAnagraficaSearch,
     CapacitasDomandeIrrigueSyncJobCreateRequest,
 )
+from app.modules.elaborazioni.domande_irrigue_refresh import refresh_years, sync_cycle_key
 from app.services.elaborazioni_capacitas import has_available_credential
 from app.services.elaborazioni_capacitas_domande_irrigue import create_domande_irrigue_sync_job
 
 logger = logging.getLogger(__name__)
 
 ACTIVE_JOB_STATUSES = {"pending", "queued_resume", "processing"}
-SUCCESS_JOB_STATUSES = {"succeeded", "completed_with_errors"}
+SUCCESS_JOB_STATUSES = {"succeeded"}
 
 
 class _AutoSyncJobRequest(CapacitasDomandeIrrigueSyncJobCreateRequest):
     trigger: Literal["autosync"] = "autosync"
+    refresh_years: list[int] | None = None
 
 
 def _window_zone() -> ZoneInfo:
@@ -81,7 +83,7 @@ def _reconcile_pending_job(db: Session, state: CapacitasDomandeIrrigueAutoSyncSt
         state.cursor = state.pending_cursor
         payload = job.payload_json if isinstance(job.payload_json, dict) else {}
         state.processed_identifiers += len(payload.get("searches") or [])
-        state.last_error = job.error_detail if job.status == "completed_with_errors" else None
+        state.last_error = None
     else:
         state.last_error = job.error_detail if job is not None else "Job autosync non trovato"
     state.pending_job_id = None
@@ -128,14 +130,14 @@ def run_domande_irrigue_autosync(db: Session, *, now_utc: datetime | None = None
     cycle_key, credential_id = context
 
     state = _load_state(db)
-    if state.completed_cycle_key == cycle_key or _reconcile_pending_job(db, state):
+    cycle_key = _prepare_cycle(db, state, cycle_key)
+    if cycle_key is None:
         return 0
-    active_job_id = db.scalar(
+    if db.scalar(
         select(CapacitasDomandeIrrigueSyncJob.id)
         .where(CapacitasDomandeIrrigueSyncJob.status.in_(tuple(ACTIVE_JOB_STATUSES)))
         .limit(1)
-    )
-    if active_job_id is not None:
+    ) is not None:
         return 0
 
     identifiers = _next_identifiers(db, state.cursor)
@@ -146,6 +148,13 @@ def run_domande_irrigue_autosync(db: Session, *, now_utc: datetime | None = None
     return _enqueue_chunk(
         db, state, identifiers, cycle_key=cycle_key, credential_id=credential_id, now=now
     )
+
+
+def _prepare_cycle(db: Session, state: CapacitasDomandeIrrigueAutoSyncState, day: str) -> str | None:
+    if _reconcile_pending_job(db, state):
+        return None
+    cycle_key = sync_cycle_key(state, day)
+    return None if state.completed_cycle_key == cycle_key else cycle_key
 
 
 def _autosync_context(db: Session, now_utc: datetime | None) -> tuple[str, int] | None:
@@ -204,6 +213,7 @@ def _enqueue_chunk(
         credential_id=credential_id,
         payload=_AutoSyncJobRequest(
             credential_id=credential_id,
+            refresh_years=refresh_years(state, now.astimezone(_window_zone()).year),
             searches=[
                 CapacitasDomandeIrrigueAnagraficaSearch(
                     q=value, tipo_ricerca=1, solo_con_beni=False
@@ -220,7 +230,6 @@ def _enqueue_chunk(
     )
     state.pending_job_id = job.id
     state.pending_cursor = identifiers[-1]
-    state.last_error = None
     db.commit()
     logger.info(
         "Domande irrigue autosync accodato job id=%s chunk=%s cursor=%s",

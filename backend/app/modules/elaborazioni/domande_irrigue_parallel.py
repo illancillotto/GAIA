@@ -13,6 +13,7 @@ from app.modules.elaborazioni.capacitas.apps.involture.client import (
 from app.modules.elaborazioni.capacitas.apps.involture.domande_irrigue import DomandeIrrigueScraper
 from app.modules.elaborazioni.capacitas.models import CapacitasDomandeIrrigueSyncJobCreateRequest
 from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
+from app.modules.elaborazioni.domande_irrigue_refresh import limit_scraper
 from app.modules.elaborazioni.ordered_prefetch import OrderedPrefetch
 from app.services import elaborazioni_capacitas_domande_irrigue as service
 from app.services.elaborazioni_capacitas import (
@@ -121,6 +122,7 @@ async def run_parallel_domande_job(job_id: int, workers: int) -> None:
                 clients, scrapers = await open_sources(
                     stack, credential.username, password, min(workers, max(1, len(searches)))
                 )
+                scrapers = [limit_scraper(scraper, job.payload_json) for scraper in scrapers]
                 source = ParallelDomandeSource(searches, clients, scrapers, payload)
                 stack.push_async_callback(source.close)
                 logger.info("Domande irrigue job %s: %s sessioni parallele", job_id, len(clients))
