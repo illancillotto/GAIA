@@ -75,6 +75,121 @@ Original SHAebc902bd5479951f0e3971c85fd21423bee368a21f6c2b0c02eea3fa0a71524d
 identical before/after; no application imports/seed/schema mutation. A separate
 new-copy synthetic dataset preparation was requested; no approval is presumed.
 
+## Separate authorized private fixture preparation
+
+The user subsequently authorizes only a new isolated copy with one synthetic
+district and one parcel. Preparation completed once: exit0, existing282table
+schemas unchanged, all280other tables/counts/row hashes exact, only two Catasto
+tables0→1. The source DB SHA remains identical before/after. Actual fixture
+SHA529e7aa4fa4e929581ff70d2e3bf9fb622d925bef8d5c8213baf0d3a4f58a44f;
+explicit private UUIDs, district-code join, required/current fields and closed
+contained positive-area WKT geometries. No production/schema/runtime/auth or
+existing synthetic user/session/device modification. Raw dataset never staged.
+
+Independent raw fixture review616checksPASS, all282schema/index/trigger metadata
+identical,280other tables exact, foreign-key0violations and quick-checkOK. The
+source SQLite read-only immutable URI and fixture checks leave both DB hashes
+unchanged. Classification RAW_PRIVATE_FIXTURE_ACCEPTED_NOT_EXECUTION_READY;
+no application/API/ORM/geometry/browser/coverage/native certification. Reviewer
+stopped; custody in external private-fixture/ and review/fixture/.
+
+Reviewed lifecycle runner adaptation assigned separately to a preparer owning
+only external runner-preparation/. No native launch, source/app imports or
+fixture mutation by preparer. Existing private cgroup/namespace/read-only source
+and byte custody rules, workers1/retry0/original identities/assertions/timeouts,
+quiescent synthetic cleanup and bounded resources remain mandatory. Independent
+runner preparation review is required before launch; heavy external Vitest was
+confirmed live in this goal turn. No test/scanner overlapping that work.
+
+Runner preparer subsequently completed external source-only adapter and stopped.
+ManifestSHA d40ac331dc2c8e23fb468a6f888ca5c5786cc24c19f5ee26a52a15431b6026ea,
+adapterSHA0db382ded0282d3e1c97160aba33aea45423a35ab830160f974042c624b3305e.
+V4guard copies unchanged; parent-owned cgroup bounds3GiB/512pids/two-core budget,
+bwrap network/PID/read-only root+repo/build with isolated/run+private/tmp, real
+backend/Next/proxy, original two identities21:5/60:5 and private-copy-only cleanup.
+Each case gets a separate once-only invocation; failed or skipped result stops
+remaining identities, retains DB/log/trace, never admits campaign source itself.
+Current protected2732files and V4serving1405/NFT253/browser8 custody pinned; this
+is source preparation, not executed containment/readiness. Coordinator10module
+hash/ASTsyntax checks exact, explicitly non-independent and no application import.
+Independent runner review owns external review/runner/, currently active.
+No native candidate directory/server/browser/cgroup created by preparation.
+
+## Independent runner review and guarded execution disposition
+
+Independent runner review subsequently accepts1775/1775static/hash checks,
+17consumed inputs frozen,20sealed files checksum verified. No DB/app import or
+launch; reviewer stopped. Cold prefix, exact V4guards, current2732protected and
+1405build/253NFT/8browser custody, two original identities21:5/60:5, isolation,
+bounded resources and fail-closed lifecycle inspected. This is preparation
+acceptance only, not execution readiness, source admission or native PASS.
+
+Coordinator attempts only the finite launch-slot waiter, once, after source/review
+checksum checks. It ends exit3 after240s with external Jest/Vitest active;
+native driver is never invoked. No native-launch.json, workingDB, native-r83,
+server/browser/cgroup or case attempt exists. Both original cases NOT_RUN;
+this guard refusal is not a GIS/test failure or retry. Source remains partial,
+unstaged and uncommitted. All owned preparer/reviewer/waiter work terminal.
+Receipts in external execution-coordinator/, current source/docs checkpoint in
+runner-reviewed-stop/. Goal ACTIVE/INCOMPLETE. No new scanner/Graphify attempted
+over external jobs; last recorded ratchetPASS0 and docs graph remain historical.
+
+Resume from verified immutable runner/review/fixture and same candidate only
+after fresh free-heavy observation and current source/main/HEAD/base custody.
+Do not restart on polling timeout or alter pinned HEAD to hide drift. No old
+native execution has to be retried: none began. Preserve any future real failure
+without repair or source admission until its separate decision and verification.
+
+## Subsequent once-only driver: environmental failure, native NOT_RUN
+
+New evidence directory `execution-coordinator-20261013T165729Z/` preserves its
+own guard observations, exact coordinator source copy, invocation and terminal
+exit1. Earlier sealed waiter receipts remain unchanged. A fresh quiet slot was
+obtained; immutable reviewed driver was invoked once, with a new cold prefix.
+
+The driver created only the private working DB and initial owned scope. Initial
+authorized synthetic cleanup completed; case0 resource-limit preparation then
+raised `PermissionError(13, 'Permission denied')`. No namespace command, backend,
+Next, proxy, browser or native test was launched. `terminal.json` records zero
+native attempts, zero namespace launches and both original identities NOT_RUN.
+This is an environmental driver failure, not a test FAIL/SKIP; no retry occurred.
+
+Original DB SHAebc902bd and fixture SHA529e7aa4 remain unchanged. Working DB
+SHA4cb230cb is preserved after the initial cleanup, not falsely equal to the raw
+fixture. Current input custody before/after exact; both owned scopes terminal
+with populated0 and no process handles. Read-only diagnosis observes an empty
+parent `cgroup.subtree_control`, `memory pids` available and no parent `cpu.max`.
+The partial stat diagnostic failure is preserved, with a separate supplement.
+No cgroup controller/delegation/permission changes or relaxed bounds applied.
+
+Independent terminal review requested in `review/terminal-20261013T165729Z/`.
+Source remains excluded and uncommitted. Before any new native attempt, isolate
+and independently review a suitable delegated resource-bound execution scope;
+do not reuse exclusive attempt paths, weaken isolation or auto-retry this run.
+No current ratchet/Graphify claim follows from this failed environment setup.
+Global campaign remains ACTIVE/INCOMPLETE.
+
+Independent terminal review subsequently accepts66/66checks,32sealed files
+checksum verified. Classification ENVIRONMENT_RESOURCE_DELEGATION_BLOCKED_NOT_TEST_FAIL.
+ReviewSHA2ad4102058a52b5f7995ed9e9fafc01d8098f2c8f5dab1e549f45f87adde224a.
+Both original identities NOT_RUN; original/fixture unchanged, working DB exactly
+matches initial-cleanup afterimage; driver/coordinator terminal, scopes removed.
+The first failing controller filename is an ordering inference, not proven by
+the repr-only exception. CPU is available higher in app.slice but not enabled
+below it. A dedicated properly delegated CPU/memory/pids hierarchy with suitable
+empty parent is a separate prerequisite; no shared-cgroup writes or retries.
+Reviewer stopped. This acceptance certifies environmental disposition only.
+
+Separate publication preflight verified quiet guard and prepared custody exact.
+`make complexity-ratchet BASE_REF=main` then completed exit0/findings[] against
+actual merge-basea51a48dc. It is a change gate, not proof of native execution,
+coverage or global baseline freshness. Before Graphify, a new guard refused on
+live external Jest/pytest; `make graphify-platform-docs` NOT_RUN, not FAIL/PASS.
+No retry or overlapping graph workload launched. Logs/exit receipts preserved
+in `publication-environment-stop-20261013T165729Z/`. Updated documentary files
+remain uncommitted pending required graph maintenance; partial spec unadmitted.
+No new commit/main merge/push or modified baseline/threshold/policy this turn.
+
 ## Classification / files changed / commit
 
 PARZIALE_NOT_ADMITTED; source workflow candidate only, not IMPROVED or PASS.
