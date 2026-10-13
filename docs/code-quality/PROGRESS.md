@@ -1,5 +1,28 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-13 — R70 original36Ruolo interleaving tests verified
+
+- Verification only from dedicated HEAD2c727b41, actual main/basea51a48dc;
+  registry before assignment and mutable documents frozen before update.
+  Existing swarm reviewer accepts preparation and terminal, no model/config
+  override, CLI retry or new native job by reviewer. Source/assertions intact.
+- Full original notice_generation_concurrency file:36PASS/0skip/fail/error,
+  25.922s JUnit, one invocation/retry0. Matrix2years×2modes×3changes×3phases;
+  separate committed PostgreSQL connections exercise payment/notification/STEP
+  eligibility loss, private review_required drafts and no publication.
+- Deterministic interleaving, not simultaneous threads or realPDF/E2E/GIS/
+  provider certificate; original renderer/storage mocks and geo stubs disclosed.
+  Reviewed R69V2private1GiBtmpfs/2GiBmemory reused; prior R69FAIL retained.
+  DBschemas/relations/routines/zero locks exact; owned container removed,
+  43existing containers/67volumes and2852/2851input hashes unchanged.
+- Actual-main ratchet PASS0. No baseline/threshold/exclusion/policy change,
+  runtime refactor or complexity credit; coverage NOT_MEASURED unchanged runtime.
+  R70_NOTICE_CONCURRENCY_POSTGRES_2026-10-13 binds review/publication/handoff.
+- New36prior skips verified; R68+R69+R70=162of449,287still unverified.
+  Historical R62certificate7142PASS/449SKIP unchanged.7E2Eskip,worker100FAIL,
+  matcher ambiguity,excludedR43/R51/R63partials and extreme tail remain.
+  Goal ACTIVE/INCOMPLETE; selective docs checkpoint only, no push/main merge.
+
 ## 2026-10-13 — R69 original125Ruolo tests verified after private capacity fix
 
 - Goal reactivated; original swarm reviewer reachable and resumed without model
