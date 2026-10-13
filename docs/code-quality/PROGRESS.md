@@ -1,5 +1,28 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-13 — R71 original58draft-input provenance tests verified
+
+- Prior R70checkpoint0cb2463a is verified progress. Verification only on
+  dedicated branch, actual main/basea51a48dc; no new runtime refactor.
+  Ownership before reviewer assignment; mutable docs/source freezes preserved.
+- Full original notice_draft_inputs file58PASS/0skip/fail/error,40.735s,retry0.
+ 37priorPGskips freshly verified,21unitPASS reconfirmed. Actual revision migration,
+  pre-read basis/epoch/digest, staleORM/cache, concurrentwriter token rejection,
+  whole mixedlot quarantine, tampering/batch integrity/rollback/migration bytes.
+- Original SQLite/read_revision/date/budget/renderer mocks distinguished from
+  realPG proof; real storage under privateTMPDIR, mixed2024 remains private.
+  NoPDF/GIS/provider/E2Econfirmation/simultaneousthread certificate. Existing
+  reviewer accepts prep/terminal, no nativejobs/modeloverride/configchange.
+- Reviewed privatePG1GiBtmpfs/2GiBmemory reused; DBmetadata/routines/zero locks,
+  43containers/67volumes and2852/2851protected hashes exact; owned container
+  removed. Main concurrent Bonifica source and priorfailures remain untouched.
+- Actual-main ratchetPASS0, no baseline/threshold/exclusion/policy edits or
+  complexity credit. CoverageNOT_MEASURED unchangedruntime,worker100FAIL remains.
+  R71_NOTICE_DRAFT_INPUTS_POSTGRES_2026-10-13 binds review/gates/durable custody.
+- Cumulative199of449historical backend skips verified,250still unverified;
+  R62historical7142PASS/449SKIP unchanged,7E2Eskips and other gaps remain.
+  GoalACTIVE/INCOMPLETE; selective docs checkpoint only, no push/main merge.
+
 ## 2026-10-13 — R70 original36Ruolo interleaving tests verified
 
 - Verification only from dedicated HEAD2c727b41, actual main/basea51a48dc;
