@@ -1,5 +1,28 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-13 — R72 original27committed-export PG tests verified
+
+- Previous R71checkpoint e7effa2a is verified progress. Verification only on
+  dedicated branch; main/basea51a48dc. Registry before review, mutable docs frozen.
+- Full original notice_export27PASS/0skip/fail/error,18.510s,retry0. Genuine
+  private confirmation/ZIP parity/digests/idempotence/claims, disqualifying writers,
+  tampering/commitfailure/identity uniqueness; original2threads/Barrier10s intact.
+  Renderer synthetic, storage realTMPDIR; noPDF/authAPI/E2E/GIS/provider claim.
+- Original after-native inventoryFAIL retained: protected2852/2851entries exact,
+  but mainstatus gained .codex/config.toml; HEAD unchanged. Shell exit0 not
+  inventoryPASS; missing raw processlog disclosed with labeled tool transcript.
+  Distinct custody supplement accepts only explicit concurrent nonruntime delta;
+  configauthorUNKNOWN/excluded, no source/policy edit/native retry/model inference.
+- Independent bounded review accepted; reviewerstatic v1-v4 failures retained,
+  v5PASS, no native jobs. DBmetadata/routines/zero locks,43containers/67volumes
+  exact; owned container removed. Main concurrent config/Bonifica preserved.
+- Actual-main ratchetPASS0; no baseline/threshold/exclusion/policy change,
+  coverageNOT_MEASURED unchangedruntime,worker100FAIL and extreme tail remain.
+  R72_NOTICE_EXPORT_POSTGRES_2026-10-13 binds full provenance/gates/handoff.
+- Cumulative226of449backend historical skips verified,223still unverified;
+  immutableR62certificate7142PASS/449SKIP unchanged,7E2Eskips remain.
+  GoalACTIVE/INCOMPLETE; selective docs checkpoint, no runtime refactor/push/main merge.
+
 ## 2026-10-13 — R71 original58draft-input provenance tests verified
 
 - Prior R70checkpoint0cb2463a is verified progress. Verification only on
