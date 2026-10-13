@@ -1,5 +1,32 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-13 — R83 district iframe workflow prepared, not admitted
+
+- R81versioned checkpoint2d9236e6 stays preserved. Fresh continuation quiet-slot
+  waiter ended240s/exit3 with external heavy jobs: publication ratchet/Graphify
+  NOT_RUN; no scanner/native retry. Missing private-pycache launch guard from
+  first continuation preserved as separate pre-import refusal, not test failure.
+- Static R82source custody9files exact reveals two missing prerequisites beyond
+  data: parent navigation is now an iframe; Apri link is now first-row navigation.
+  User separately authorizes both workflow-only test adaptations. Runtime,
+  existing content/URL assertions, timeouts/config/skips and main untouched.
+- R83exclusive ownership and old-source/PROGRESS freeze before edit. Candidate
+  92fae5dc... uses real iframeFrame and visible first parcel row; source review
+  assigned, no dataset preparation/browser/test/scanner/coverage result claimed.
+  Candidate PARZIALE_NOT_ADMITTED, no commit. Diff-checkPASS; currentratchetNOT_RUN.
+- SSD r82-distretti-readiness and r83-distretti-workflow preserve diagnosis,
+  source custody and launch/failure decisions. Five original E2Eidentities remain
+  unverified; no skip promoted to PASS by source edits. GlobalACTIVE/INCOMPLETE.
+- Independent static workflow accepted59checks/16frozen inputs; reviewer stopped.
+  Original private SQLite metadata read-only verifies all four Catasto tables
+  empty and DBchecksum unchanged. Separate new-copy dataset decision pending;
+  candidate still NOT_ADMITTED/uncommitted, no native/readiness certification.
+- Fresh continuation2 later obtained quietslot: ratchet actualmainPASS0, Graphify
+  platformdocsPASS/chunk1of1/no semanticwarning,958nodes/1228edges/162communities.
+  Old guard refusals/NOT_RUN preserved; no native rerun. Graph includes preterminal
+  docs, not later receipt-only annotations. Separate documentary checkpoint/handoff
+  binds review, source partial, gate results and next private-data prerequisite.
+
 ## 2026-10-13 — R81 independently admitted and selectively published
 
 - Fresh goal resume: all113pre-reviewmanifest entries exact before document edits,
