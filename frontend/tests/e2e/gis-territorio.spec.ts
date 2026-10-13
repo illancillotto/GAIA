@@ -488,12 +488,12 @@ test("territorio smokes map consultation, sheets, measurements, print and QGIS",
   await expect(page.getByRole("button", { name: "Cancella selezione" })).toHaveCount(0);
   await page.getByRole("button", { name: "Chiudi strumenti GIS" }).click();
 
-  const box = await canvas.boundingBox();
-  if (!box) throw new Error("Map canvas has no bounding box");
   for (let index = 0; index < 4; index += 1) {
     await page.locator(".maplibregl-ctrl-zoom-in").click();
   }
+  await page.getByRole("button", { name: /Arborea - Fg\. 14, Part\. 82.*GAIA Catasto/ }).click();
   await page.waitForTimeout(1_000);
+  await expect(page.locator(".maplibregl-ctrl-scale")).toHaveText(/^\d+(?:[.,]\d+)?\s+m$/);
   const closeParcel = page.getByRole("button", { name: "Chiudi dettaglio particella GIS" });
   const parcelCandidates = [
     [0.5, 0.5], [0.45, 0.45], [0.55, 0.45], [0.45, 0.55], [0.55, 0.55],
@@ -506,7 +506,11 @@ test("territorio smokes map consultation, sheets, measurements, print and QGIS",
     if (await closeParcel.count()) break;
   }
   await expect(closeParcel).toBeVisible();
-  const parcelPanelBox = await page.locator("[data-gis-parcel-panel]").boundingBox();
+  const [box, parcelPanelBox] = await Promise.all([
+    canvas.boundingBox(),
+    page.locator("[data-gis-parcel-panel]").boundingBox(),
+  ]);
+  if (!box) throw new Error("Map canvas has no bounding box");
   if (!parcelPanelBox) throw new Error("GIS parcel panel has no bounding box");
   expect(parcelPanelBox.y - box.y).toBeGreaterThanOrEqual(0);
   expect(parcelPanelBox.y - box.y).toBeLessThan(20);
