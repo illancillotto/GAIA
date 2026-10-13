@@ -2,7 +2,7 @@
 
 | Agent | Domain | File/paths | Slice | Worktree | Branch | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| Coordinator | GIS test | `frontend/tests/e2e/gis-territorio.spec.ts`, this registry, R81 report, PROGRESS after freeze; external `r81-gis-current-box/` except review | Native2PASS/0FAIL, ratchetPASS; independent admission accepted, selective publication pending | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | READY_FOR_REVIEW |
+| Coordinator | GIS test | `frontend/tests/e2e/gis-territorio.spec.ts`, this registry, R81 report, PROGRESS after freeze; external `r81-gis-current-box/` except review | Independently admitted final test, committed ef99dc16 on dedicated integration branch; no main merge | GAIA-campaign-20261008-integration | refactor/complexity-campaign-20261008 | MERGED |
 | R78 reviewer reassigned R81 | Independent review | Exclusive external `r81-gis-current-box/review/`, everything else READ ONLY | Independent admission accepted2196+19checks, exact two-case native report verified; reviewer stopped | Shared read-only checkout | No branch changes | READY_FOR_REVIEW |
 
 Coordinator owns `coordinator-review/` for bounded non-independent preparation
@@ -42,3 +42,12 @@ do not rerun native suite or scanner merely because availability changed.
 Current independent review accepts only final R81test workflow plus appropriate
 evidence docs; previous NOT_RUN/BLOCKED states above are historical. No failure
 receipt rewritten. Main unchanged; selective local commits pending, no push/merge.
+
+Publication completed locally: historical failure receipts ce57e1e5, admitted
+test/spec/report ef99dc16; byte hash identical to native/review. MERGED means
+admitted into dedicated integration branch, not main. Final documentary checkpoint
+and guarded publication gates tracked separately; no suite replay or globalDONE.
+Publication waiter terminal exit3 after240s of external-heavy-job contention;
+current ratchet/Graphify NOT_RUN, no retry. Documentary checkpoint is separate
+from runtime admission; final SHA/manifest in admission-resume/final-publication/.
+Coordinator stops further edits after sealing the handoff; reviewer remains stopped.

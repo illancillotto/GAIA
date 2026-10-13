@@ -1,5 +1,217 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-13 — R81 independently admitted and selectively published
+
+- Fresh goal resume: all113pre-reviewmanifest entries exact before document edits,
+  current branch/base/mainconcurrent hashes unchanged. Independent admission
+  accepted2196bounded checks plus19raw-report/binary checks; native2PASS/0FAIL/
+  0SKIP/0FLAKY/0RETRY independently reconstructed, exact original assertions.
+- Review also decodes R80actual canvas snapshot rectangles680→1060px, superseding
+  earlier broad trace-coordinate absence while preserving missing getter/panel
+  inference limits. No native/scanner retry or overwritten historical receipt.
+- Local commits ce57e1e5 (R78–R80 historical failure documents only), ef99dc16
+  (final R81test plus report/ownership). Exact verified spec hash unchanged;
+  runtimeNO_CHANGE. All files individually staged, supported docs-hook skip only
+  prevents uncontrolled automatic AI docs edits; no test/quality gate bypass.
+- MERGED ownership means integration branch, not main. Main concurrent config/
+  Bonifica test untouched. Publication waiter terminal exit3 after bounded240s:
+  external Jest3895096 still active; current ratchet/Graphify NOT_RUN, no retry.
+  Independently reviewed prior ratchetPASS0 remains historical, runtime/spec
+  inputs unchanged. Final diff-checkPASS; documentary checkpoint/handoff in
+  R81_GIS_PUBLICATION_CHECKPOINT_2026-10-13.md and external
+  admission-resume/final-publication/, with exact commits/checksums/freezes.
+  No repeated suite/full-build/current metrics or final graph refresh claimed.
+  Global goal ACTIVE/INCOMPLETE, no new hotspot/refactoring in this checkpoint.
+
+## 2026-10-13 — R81 authorized contemporaneous GIS measurements
+
+- User authorized only reacquiring canvas/panel together after detail visible,
+  keeping old placement thresholds/null guards/timeouts unchanged. R79refocus and
+  R80whitespace readiness retained; runtime/layout/mock/geometry unchanged.
+- R80read-only diagnosis decoded canvas rects900→1280right (width680→1060),
+  matching380pxConsole; reconstructed gap64, not nativePASS. Original getter
+  return absent; panelright inferred.593offlinecrosschecksPASS; reviewer then
+  unavailable. No historical failure or receipt overwritten.
+- Exclusive R81ownership, mutable docs/R80spec frozen; exact hash custody allows
+  only candidate spec. Coordinator preparation29checksPASS, NOT independent;
+  reviewer unavailable from prior diagnosis usage limit, no workaround/retry.
+- Native full-file once:2PASS/0FAIL/0SKIP/0FLAKY,17.9s,retry0; all original
+  consultation/layout assertions pass with unchanged private mocks/MVT. No live
+  provider/auth/DB/QGIS-import/full-suite certification.
+- Coordinator terminal2754checksPASS, NOT independent; original checker schema
+  error preserved, corrected offline checker no native rerun. Custody exact,
+  owned cgroup empty/removed, servers terminal, main concurrent hashes unchanged.
+  Ratchet actualmainPASS0findings, diff-checkPASS. Graphifydocs once after guarded
+  free-slot waitPASS,chunk1of1/no semanticwarning,951nodes/1215edges/161communities;
+  ignored output, no runtime/component-boundary graph change.
+- Candidate READY_FOR_REVIEW, not admitted/committed until independent review;
+  historical failures untouched. Evidence SSD `r81-gis-current-box/`, goal incomplete.
+  Handoff/checksums sealed,10unstaged files retained, no staging/commit/main write;
+  all owned processes terminal, no automatic next slice or full-suite rerun.
+
+## 2026-10-13 — R80 authorized GIS whitespace correction
+
+- User authorized only correcting new scale assertion whitespace and a distinct
+  verification. ASCII-space requirement becomes `\s+`, accepting MapLibre NBSP;
+  numeric/metre intent and all old assertions/timeouts retained. Runtime unchanged.
+- R79 ownership of spec transferred to R80; R78/R79 original failures immutable.
+  Mutable documents/R79 candidate frozen before edit; main concurrent work excluded.
+- Nine focused regex checks PASS; preparation accepted1856checks. Native run once:
+  1PASS/1FAIL/0SKIP, retry0. New whitespace assertion and old detail visibility
+  pass; original panel right-gap check fails at line515 (-316 versus>=55px).
+  Subsequent sheet/measure/print/QGIS assertions NOT_REACHED; no automatic repair.
+- First launch guard blocked external Jest before native; separate free-slot
+  observation allowed exactly one native run, all receipts retained. Custody exact,
+  owned cgroup empty/removed, servers terminal, main concurrent hashes unchanged.
+  Ratchet actualmain PASS0finding; diff-check PASS. Candidate PARZIALE/excluded,
+  no commit. Terminal evidence accepted WITH failure2930checks/559frozen files;
+  reviewer stopped. Trace lacks numerical boxes: stale pre-refocus box is a
+  hypothesis, not proven runtime/test cause. No assertion tolerance changed.
+- Graphify docs updated once after fresh quietslot, exit0/chunk1of1/no semantic
+  warning,944nodes/1205edges/164communities; output ignored. Handoff on SSD R80root,
+  eight unstaged changes retained; no further native invocation or repair.
+  No runtime, baseline/policy change or global completion claim.
+
+## 2026-10-13 — R79 separate GIS test workflow verification
+
+- Continuation after R78 diagnosis: only two test lines added, refocusing the
+  original parcel after municipal search/drawing and checking public metre scale.
+  All existing assertions/timeouts/helper, runtime, fixture geometry and mocks
+  unchanged. R78 original reviewed FAIL remains immutable, not overwritten.
+- Exclusive R79 ownership recorded; mutable PROGRESS and preexisting R78 documents
+  frozen externally before edit. Candidate spec has an explicit custody hash;
+  private runner accepts no other protected-file change. Preparation capture PASS.
+- Independent preparation review accepted 1838 checks. One distinct native run:
+  1 PASS / 1 FAIL / 0 SKIP, retry0. New readiness regex rejects non-breaking
+  space in actual `200\u00a0m`; original detail/later assertions not reached.
+  Candidate remains PARZIALE, excluded from commit; no automatic fix/retry.
+- Ratchet actual main PASS, zero findings; diff-check PASS, exact custody and
+  empty/removed owned cgroup, servers terminal. Main concurrent hashes unchanged.
+  Independent terminal review accepted WITH failure, 3014 checks PASS; reviewer
+  stopped. MapLibre source confirms deliberate `&nbsp;` in the scale control.
+  Graphify docs completed once after reviewer/heavy jobs ended: exit0, chunk1/1
+  done, no semantic warning; 936nodes/1194edges/159communities. No concurrent
+  scanner, runtime/component-boundary change or committed graphify-out.
+  No baseline/policy changes or new hotspot. Separate decision required for
+  whitespace-only correction of the new readiness regex and distinct validation.
+- Evidence `r79-gis-test-workflow/` on ARCHIVIO_SSD, report
+  `reports/code-quality/R79_GIS_WORKFLOW_2026-10-13.md`. Global goal incomplete.
+
+## 2026-10-13 — R78 publication checkpoint blocked after fresh three-turn audit
+
+- Original GIS remains reviewed 1 PASS / 1 FAIL / 0 SKIP, no retry. The native
+  result, 2941-check terminal review and all historical receipts are unchanged.
+- The same external-heavy-job condition recurred in three consecutive resumed
+  goal turns: native/report turn with a bounded publication waiter, continuation
+  1 with a verified 182-second wait, and continuation 2 with fresh live identities.
+  Jest 3397726/start9469723 and 3425519/start9500329 remain confirmed live.
+  No old blocked audit counts reused. No further publication gate can run safely
+  under the one-heavy-job rule; pending GIS decision does not authorize a repair.
+- Goal BLOCKED, not PAUSED or COMPLETE. Current ratchet/Graphify NOT_RUN, no
+  scanner/test retry, commit, baseline or policy change. Diff-check PASS; branch
+  and main/merge-base unchanged. All owned waiters/reviewer/native handles terminal.
+- Mutable documents archived before update in external `gate-continuation-2/`;
+  new BLOCKED_CHECKPOINT and manifest preserve the handoff. Three documentary
+  files remain uncommitted. Resume after a free slot and the applicable user
+  decision, rechecking current state; do not poll indefinitely or start new slices.
+
+## 2026-10-13 — R78 checkout restored; original GIS with private MVT: 1 PASS / 1 FAIL
+
+- User explicitly authorized restoring the dedicated checkout from Trash. Same
+  directory/inode returned to its original path; HEAD `e458dcde`, branch and
+  actual main/merge-base `a51a48dc` unchanged. Main concurrent work untouched.
+  Custody rechecked: 2732 protected files, 253 NFT closure, 8 browser executables,
+  1405 build files, 108 MVT dependency files and 5 preparator modules exact.
+- Fresh free-heavy-slot preflight and V5 review checksums allowed one original
+  full-file GIS execution, workers=1/retries=0/max-failures=1. Result: 1 PASS,
+  1 FAIL, 0 SKIP, 0 flaky; the detail-panel assertion at original spec line 508
+  still fails. R76 remains a separate immutable historical result. No retry,
+  test/runtime/assertion/timeout modification or relocation of fixture geometry.
+- Proxy observed 34 genuine MVT requests, all HTTP 200: 28 empty tiles and
+  6 populated tiles. Supplying faithful vector data did not resolve the original
+  workflow. This does not establish a campaign runtime regression or certify
+  the later consultation/measurement/print/QGIS assertions.
+- Owned namespace had only loopback; repo/build mounted read-only, no backend,
+  database or provider started. Original before/after input capture identical;
+  owned cgroup terminal receipt empty. Server/browser execution is terminal.
+- Documents frozen before this update in external `terminal-checkpoint-20261013/`.
+  Screenshots, trace, video, request log, launch/exit/custody receipts retained in
+  `r78-gis-private-mvt/native/`; `execute-v5-distinct-2.exit` is 1, not a guard STOP.
+  Independent terminal review accepted the evidence with native failure:
+  2941 checks PASS, 487 consumed files frozen; 22 failed-case browser tile bodies
+  decoded independently (6 populated, 16 empty). No parcel popup API request;
+  camera/root cause not proven. Reviewer stopped, no additional test launched.
+  Runtime classification NO_CHANGE; fixture not admitted as a GIS resolution.
+- Publication gates: diff-check PASS. Actual-main ratchet NOT_RUN, not FAIL or
+  inherited PASS: a free-slot observation was followed by new external jobs;
+  a separate bounded 242-second waiter ended with live Jest processes and no
+  scanner launch. Graphify docs NOT_RUN for the same heavy-process constraint,
+  although local API configuration is available. No code-graph update required
+  by R78 because runtime/responsibility boundaries are unchanged. All waiters
+  terminal; no checkpoint commit until the pending gates, no retry of GIS.
+- Goal ACTIVE/INCOMPLETE. Do not begin a repair or new hotspot automatically.
+  The next GIS action requires a separate decision after reviewing this FAIL;
+  user asked to choose read-only diagnosis, a separate test-workflow correction,
+  or leaving GIS excluded. No choice is assumed and no repair is started.
+  global baseline ambiguity, worker coverage FAIL and other unverified skips
+  remain separate. No baseline, threshold, exclusion or coverage policy changes.
+
+## 2026-10-13 — R78 resumed: executable MVT preparation verified, native pending
+
+- Thirdresumedturn12:58 freshliveTBOWVitest confirms sameheavyblocker after
+  verified600swait90698. No originalnative launch; goalBLOCKED, not COMPLETE or
+  PAUSED. ActualverifiedV5fixture/1970review and originalfailure remain preserved.
+  Currentliveprocess/audit archived in resumed-blocked-audit; quietslot required
+  to resume. HistoricalACTIVE entries unchanged as previousstates.
+- Userresumeactive starts freshblocked audit. V4capture exact then retained
+  self-checkFAIL: aggregateVectorTile omits emptylayers. V5rawPBF layer validation
+  corrects privatechecker only; original geometry/UUID/encoder/proxy/spec/runtime
+  unchanged. Earlier staticreview misses preserved, no native failure erased.
+- V5fresh capture/selfcheckexit0,11zooms/allvertices/identity/name/version/extent/
+  negativepoint/emptytile verified. Maxoutside0.503593pixel;31byteemptyPBF valid.
+  Independent1970checks ACCEPTED_PREPARATION,2732inputs/build/browser/108MVTdeps
+  exact.23recordmanifestfe9b50c9...exact; no originalGISPASS/skip/coverage credit.
+- Fresh original-launch guard refused newGaTe/Cinearchiveheavyjobs before native
+  directory/server/browser. Further boundedwait60770exit3/no free slot. No original
+  R78nativeattempt or retry; R76retained1PASS/1FAIL unchanged. Reviewer stopped.
+- CurrentdiffcheckPASS; ratchet/GraphifyNOT_RUN while externaljobs active, no
+  commit/mainmerge/push. Resumedcheckpoint/evidence preservedSSD, oldsealed and
+  blockedreceipts immutable. GoalACTIVE/INCOMPLETE. Next quietslot: freshguard/
+  custody -> onceoriginalfullfile -> terminalreview/gates/selectivecheckpoint.
+
+## 2026-10-13 — R78 faithful private MVT prepared, execution blocked
+
+- Third consecutive goalturn11:50 reconfirmed competingJest2820483live/proc.
+  Sameexternalblocker after finitewaits, no correctedcapture/selfcheck/native;
+  furtherphase requires freeexecution slot. GoalBLOCKED, not COMPLETE/PAUSED;
+  current audit and liveprocess evidence preserved externally, no newtest or
+  commit. Resume after readinesschange with freshaudit; historicalACTIVE entries
+  are unchanged historical receipts, not currentstatus.
+- Continuation11:49 verified sealed50records exact, then polled liveJest and
+  bounded waiter600s/session62442 exit3. OldPID2776871gone/newPID2820483live;
+  no restart/kill or newtest launched. OriginalspecSHA/diffcheck still exact,
+  mutable docs archived before continuation. Quiet execution window requested;
+  gates/commit remain pending, not PASS inferred. GoalACTIVE/INCOMPLETE.
+- User chose privateMVT/testidentical after R77. Exact original triangle/UUID,
+  actual vector URL/layer, existing encoder and independent decoder; no relocated
+  feature, forcedhit, mock/runtime/spec/assertion/timeout/baseline change or DB.
+- V1static property-prototype blocker retained, correctedV2accepted35checks;
+  V3vertexchecks accepted15. Capture2732protected inputs exact, first executable
+  fixturecheckFAIL before body due installed namedGeoJSONVT API. Failure/source
+  retained; V4private import/constructor corrected, static9checks accepted, not
+  execution certification. Later capture refused by competingTBOWtests.
+- Finite600swait ended no free slot; unrelatedJest still active. No native GIS
+  run, retry, newPASS/skip/coverage/complexity credit. R76 remains1PASS/1FAIL.
+  Faithful geometry keeps disjoint municipality; original selection may still
+  fail, no PASS prediction. Original E2E remains byte-identical.
+- R78report/ownership/externalhandoff record PARZIALE/blocked preparation. Diff
+  checkPASS; ratchet/GraphifyNOT_RUN while heavy processes active. No commit or
+  execution-ready admission; main concurrent work untouched. Reviewer stopped,
+  no owned test/browser/server/container. GoalACTIVE/INCOMPLETE, not COMPLETE.
+  Next free slot: distinct capture/selfcheck -> independentreview -> one original
+  full-file run -> terminalreview/gates/selective checkpoint. Other prerequisites
+  and runtime hotspots remain separate; historical receipts immutable.
+
 ## 2026-10-13 — R77 bounded GIS source/trace diagnosis, no new native run
 
 - Previous R76verified progress; user priority7E2Eskips retained. Pending optional

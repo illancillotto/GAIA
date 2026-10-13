@@ -123,3 +123,17 @@ graphify/private runner, unrelated partial candidate or main concurrent file may
 enter those commits. Existing pre-commit docs automation is documented: its
 supported SKIP_DOCS_UPDATE=1 avoids uncontrolled AI edits only for curated test
 publication; no quality/test gate bypass. Exact files are staged individually.
+
+## Selective local publication
+
+Independent admission completed; local historical documentary commit ce57e1e5
+and final test-workflow commit ef99dc16 on existing dedicated branch. Spec hash
+remains503a704d... exactly; no new browser run or runtime change. Historical
+intermediate failed candidate source is not committed. Registry MERGED denotes
+integration-branch admission only. Final handoff/publication status in
+`R81_GIS_PUBLICATION_CHECKPOINT_2026-10-13.md` and external `admission-resume/`;
+old manifests/freezes retained. Main/push/PR untouched, global goal incomplete.
+Separate publication waiter ended exit3 after240s with external Jest active;
+current ratchet/Graphify NOT_RUN, no retry or native rerun. Earlier verified
+native/ratchet/Graphify receipts remain immutable historical results. Final
+documentary commit and checksums are bound in the separate publication handoff.
