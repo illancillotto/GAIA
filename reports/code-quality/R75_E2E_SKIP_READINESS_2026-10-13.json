@@ -1,0 +1,78 @@
+{
+  "classification": "CHARACTERIZED_E2E_PREREQUISITES_NATIVE_NOT_RUN",
+  "global_goal": "ACTIVE_INCOMPLETE",
+  "initial_head": "15b1defc11793c8b66697b38fe10b8ba7a984641",
+  "branch": "refactor/complexity-campaign-20261008",
+  "actual_main_merge_base": "a51a48dc4caefbdd1aea82fe4d749054b9465970",
+  "user_priority": "SEVEN_E2E_SKIPS_BEFORE_OTHER_POSTGRES_RUNS",
+  "future_targeted_runtime_slice_authorized_after_verification_phase": true,
+  "historical_original_E2E": {"collected": 61, "pass": 54, "skip": 7, "fail": 0, "not_run": 0, "immutable": true},
+  "current_original_skip_sources_exact": true,
+  "native_cases_executed": 0, "fresh_skip_resolutions": 0,
+  "seven_skip_classifications": {
+    "REMOVED_FEATURE_EMPTY_UNCONDITIONAL_TEST": 1,
+    "REAL_PRIVATE_CATASTO_DATA_REQUIRED": 2,
+    "OPTIONAL_ORIGINAL_MOCKED_GIS_UI_SMOKE": 2,
+    "ISOLATED_SYNTHETIC_DOCKER_GATEWAY_REQUIRED": 1,
+    "REAL_SYNTHETIC_FIXTURE_PROVIDER_OPT_IN_REQUIRED": 1
+  },
+  "fresh_readiness": {
+    "frontend_runtime_artifact_records": 1405,
+    "missing": 0, "mismatched": 0, "BUILD_ID_unchanged": true,
+    "build_byte_continuity_not_new_build_or_running_stack": true,
+    "owned_legacy_listeners_observed": 0,
+    "synthetic_named_running_containers_observed": 0,
+    "names_not_ownership_or_provider_availability_proof": true,
+    "original_private_proxy_has_no_tile_service_route": true,
+    "unmocked_tile_path": "/tiles/cat_particelle_current/{z}/{x}/{y}",
+    "actual_rendered_feature_hit_test_readiness_unproved": true,
+    "original_search_GeoJSON_overlay_can_participate_in_parcel_hit_test": true,
+    "missing_base_tiles_not_proof_original_consultation_case_impossible": true,
+    "GIS_auth_PDF_print_QGIS_are_original_mocks_not_live_proof": true,
+    "Wiki_original_provider_not_replaceable_by_mock": true,
+    "Wiki_shared_compose_env_config_runtime_mounts_not_private_fixture": true,
+    "Wiki_subject_count_expected": 300,
+    "Wiki_exact_subject_ID_expected": "4a00bb81-2eb8-5fbc-81fe-98e6858033af",
+    "Wiki_provider_readiness_opt_in_and_budget_unverified": true
+  },
+  "static_audit": {
+    "v1_exit": 1, "v1_schema_assumption_failure_preserved": true,
+    "v2_exit": 0, "original_receipt_has_skip_record_list_not_scalar": true,
+    "no_native_retry": true
+  },
+  "R74": "INDEPENDENT_PREPARATION_ACCEPTED_NATIVE_NOT_RUN_QUEUED",
+  "independent_review_v1": {
+    "result": "STOP_NO_ACCEPTANCE", "audit_exit": 1,
+    "cause": "unjustified whole-object equality across different evidence and summary JSON schemas",
+    "automatic_identity_build_validation_not_reached": true,
+    "original_output_manifest_sha256": "78220de22113bb14d0dac22da6704079ad23827dc2876ff41575409bf4823b1b",
+    "original_script_log_exit_report_preserved": true,
+    "distinct_static_V2_review_assigned_not_native_retry": true
+  },
+  "independent_review_v2": {
+    "result": "ACCEPTED_STATIC_PREREQUISITE_ANALYSIS_NOT_EXECUTION_READY",
+    "audit_exit": 0, "original_identities_verified": 7, "build_artifacts_rehashed": 1405,
+    "review_sha256": "8b432842d87f1e7cde7a67b6fb510aaaa3f42cc10f9f5592706546edf8650186",
+    "manifest_sha256": "da3dcfefe9a181533cdf152ca950d82581837b26c01eeb72344416d775ad34fa",
+    "manifest_records": 1336, "reviewer_stopped": true,
+    "temporary_output_archived_exactly_to_SSD": true,
+    "does_not_certify_native_PASS_or_execution_readiness": true
+  },
+  "ratchet": {"base_ref": "main", "baseline_commit": "a51a48dc4caefbdd1aea82fe4d749054b9465970", "exit": 0, "findings": 0},
+  "diff_check_exit": 0,
+  "graphify_platform_docs": {
+    "exit": 0, "chunks": "1/1 done", "semantic_failures": 0,
+    "nodes": 900, "edges": 1148, "communities": 159,
+    "tokens_in": 7056, "tokens_out": 2913, "estimated_cost_usd": 0.0075,
+    "generated_graph_not_committed": true
+  },
+  "runtime_test_assertion_fixture_baseline_policy_changes": false,
+  "coverage": "NOT_MEASURED_UNCHANGED_RUNTIME", "worker100": "FAIL",
+  "historical_backend_skips_verified": 250, "historical_backend_skips_unverified": 199,
+  "E2E_skips_still_unverified": 7, "complexity_reduction_credit": false,
+  "last_full_metrics": {"files": 1681, "callables": 20360, "errors": 1920, "warnings": 2736, "overlapping_findings": 4656},
+  "evidence_root": "/media/cbo/ARCHIVIO_SSD/.codex-gaia-campaign-resume-20261012/r75-e2e-skip-readiness",
+  "readiness_evidence": "CURRENT_SKIP_READINESS.json",
+  "handoff_manifest": "FINAL_HANDOFF_MANIFEST.json",
+  "no_main_merge_push_or_new_runtime_refactor": true
+}

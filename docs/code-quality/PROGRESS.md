@@ -1,5 +1,41 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-13 — R74 prepared; user prioritizes seven E2E skip prerequisites
+
+- Previous R73checkpoint15b1defc verified progress, no runtime/input drift.
+  Dedicated branch/mainbasea51a48dc. User prioritizes7E2Eskips before morePG
+  native runs; one future targeted runtime slice authorized after verification.
+- R74 original registerAPI52identities/26PGskips independently prepared,
+  NOT_RUN/queued. Existing reviewer reused, original SSD sandbox refusal kept;
+  distinct allowed/tmp review archived byte-exact onSSD.32source freezes and
+  2852/2851inputs exact. Duplicate-freeze/preflight self-log failures preserved,
+  authoritative67record manifestV2 accepted, no native retry or test change.
+- R75 binds all7originalskip identities/current source hashes. Removed empty
+  single-search test1; real private Catasto data2; original mocked optionalGIS2;
+  isolatedWiki console1 and real synthetic gateway/MCP/model1. No native run,
+  zero newPASS/resolvedskip/coverage/complexity credit. Initial static schema
+  assumptionFAIL preserved, distinct V2auditPASS confirms original skip list.
+- Fresh1405frontend runtime build artifacts exact/missing0/drift0; unchanged
+  BUILD_ID is continuity, not new build/running-stack proof. No legacy owned
+  loopback listeners or synthetic-named running containers in observation.
+  Original proxy has no tile service; flag alone cannot prove real rendered
+  feature hit-test. GISauth/PDF/print/QGIS original mocks remain boundedUI.
+- Wiki shared compose.env/config/runtime mounts cannot become a private fixture;
+  exact300subject dataset/expectedID, real model/tools/login and owneddevice
+  custody required. Provider readiness/opt-in/budget unverified, no secret read,
+  provider call, auth/quota change or mocked substitute for original livepath.
+- R74/R75reports bind review/failure/readiness/gates and durable handoff. Only
+  selective docs checkpoints, no main modification/push/runtime refactoring.
+  Cumulative250of449backend historical skips verified,199unverified;7E2Eskips
+  unchanged. ImmutableR62certificate, worker100FAIL, matcher ambiguity, excluded
+  R43/R51/R63 and extreme tail remain. GoalACTIVE/INCOMPLETE.
+- IndependentR75V1STOP preserved (differentJSONschema whole-object comparison,
+  identity/build checksNOT_REACHED); distinctV2auditPASS rehashes7identities/
+  1405artifacts.1336member output archived exactSSD, reviewer stopped. Original
+  GeoJSONoverlay alternative exists, so tile absence is not GISimpossibility.
+  Bounded prerequisite analysis accepted, NOT execution-ready or nativePASS;
+  actual-main ratchetPASS0. Graphify/diff/publication gates separately bound.
+
 ## 2026-10-13 — R73 original recorded-attempt lifecycle verified
 
 - Verification only after R72 checkpoint e167e981, dedicated integration branch;
