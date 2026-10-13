@@ -1,5 +1,31 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-13 — R76 optional GIS original tests: bounded PASS and preserved FAIL
+
+- User prioritizes7historical E2Eskips. Original GIS full-file2cases, one native
+  invocation/retry0/original config: layout/toolbar1PASS, consultation1FAIL at
+  spec508 missing parcel closebutton;0SKIP. Later sheet/print/QGIS assertions
+  NOT_VERIFIED. No runtime/test/fixture changes or automatic repair/retry.
+- Private network/PID namespace, loopback-only server, read-only runtime/build,
+  original mock contracts. Bounded UI only, not live GIS/auth/PDF/provider.
+  Frontend stopped, owned cgroup empty/removed;2732original E2Eprotected inputs,
+  dependencies/build/runner/main exact. Private screenshots durably archived.
+- PreparationV1wrong reviewer path STOP and V2bytecode custody STOP preserved;
+  V3cold private pycacheprefix/-B accepted after21984static checks. No cache
+  deletion or implied nativePASS. Original snapshots/manifests remain historical.
+- R76report records trace/video/errorcontext, disjoint original polygon/camera
+  hypothesis and unconfirmed root cause. No campaign regression attribution.
+  One historical identity freshly PASS, one FAIL, five not run; old54PASS/7SKIP
+  certificate immutable. Actual-main ratchetPASS0, no baseline/policy inflation.
+- Coverage NOT_MEASURED_UNCHANGED_RUNTIME; metrics not newly measured. Backend
+  historical250of449skips verified/199unverified;R74queued. Worker100FAIL,
+  excludedR43/R51/R63, matcher ambiguity and extreme tail open. GoalACTIVE/
+  INCOMPLETE. Separate GIS diagnosis needed before new runtime/test admission.
+- Terminal independent ACCEPTED_EVIDENCE_WITH_NATIVE_FAILURE,2602static checks,
+  477nativefiles/305trace members frozen; exact/tmp review archived SSD, reviewer
+  stopped. Acceptance is not suitePASS. Graphify platform-docs chunk1/1done,
+  no semanticfail; final metadata publication separately bound in R76handoff.
+
 ## 2026-10-13 — R74 prepared; user prioritizes seven E2E skip prerequisites
 
 - Previous R73checkpoint15b1defc verified progress, no runtime/input drift.
