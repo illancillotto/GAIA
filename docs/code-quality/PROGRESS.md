@@ -1,5 +1,78 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-13 — R85 scoped manager activation authorized
+
+- User explicitly authorizes circumscribed systemd-managed controller activation,
+  without changing existing quotas or process membership. No native tests or
+  automatic R83retry. R84rejected preparation/review preserved as historical.
+- New exclusive R85ownership: external source preparer, independent reviewer,
+  Coordinator checkpoint docs. Before launch require review of allowed additive
+  CPU/memory/pids propagation, quota/member invariants and empty private unit parent.
+- Effective parent topology must be recorded explicitly outside supervisor leaf;
+  native OwnedContainment adapter remains a separate unverified integration step.
+- HEADd1dc5a84/main-basea51a48dc unchanged, R83spec partial/excluded, concurrent
+  main untouched. Existing heavy suites live; no GAIA test/build/scanner/Graphify.
+  No new commit, runtime/database/schema/baseline/threshold/coverage change.
+- Preparation source ready/stopped, manifestdebf46e4/source265070bc. Independent
+  source review67/67 corrected checks accepts one infrastructure-only probe under
+  fresh quiet/custody. Reviewer key-parsing error preserved separately, no source
+  repair. Coordinator guard quiet/current protected/main custody exact.
+- Once-only infrastructure probe exit0: empty unit parent/supervisor leaf and
+  empty owned child actualCPU200000/100000,memory3221225472,pids512. Child removed
+  empty, service inactive/dead/MainPID0. Shared observed audits zero controller/
+  limit changes or violations,906surviving PID/starttime memberships unchanged.
+  No GAIA workload/native tests/app/DB/browser launched; terminalreview assigned.
+- Descriptor valid only for that terminated probe lifetime, never native readiness.
+  Future native adapter must explicitly bind empty parent rather than current
+  populated supervisor leaf. R83/R84 immutable failures/rejections remain preserved.
+- Independent terminal review accepts1162/1162checks,36sealed inputs exact;
+  saved58shared groups inode/controller/limit bytes exact,906original recorded
+  PID/starttime/memberships unchanged, one newPID158706 disclosed. Intermediate
+  raw snapshots absent; transient state/attribution not proven. Own unit/child
+  absent, slice empty/absent, PIDs terminal; infrastructure-only result accepted.
+- Fresh publication ratchet preflight refused external live pytest, scanner
+  NOT_RUN/no retry; last measured R83actualmainPASS0 remains historical. No native
+  tests or new runtime changes. Parent adapter remains next explicit preparation
+  boundary, not magically fixed by this short-lived successful probe.
+- Subsequent distinct quiet-slot publication gate executes actual
+  `make complexity-ratchet BASE_REF=main` once, PASS0, basea51a48dc unchanged.
+  Prior guard refusal preserved; no native retry. Current graph/checkpoint
+  publication receipts and final documentary commit status recorded externally
+  in R85handoff to avoid rewriting historical execution inputs.
+
+## 2026-10-13 — R84 private delegated environment authorized
+
+- User authorizes private environment preparation and independent review only;
+  no native test launch or automatic R83retry. Prior environmental failure and
+  partial candidate remain preserved. Mutable documents archived before update.
+- Exclusive R84ownership assigned: external source-only preparer, separate
+  read-only independent reviewer, Coordinator owns new registry/report/PROGRESS.
+- Design must use a new user-systemd private top-level slice/delegated service;
+  no direct shared cgroup writes or moving unrelated processes. Keep3GiB,
+  512pids/two-core limits, future loopback/PID/read-only source isolation intact.
+- Fresh preflight HEADd1dc5a84/main-basea51a48dc unchanged. Existing external
+  suites remain live; no GAIA test/build/scanner/Graphify starts. Source candidate
+  still NOT_ADMITTED, no runtime/main/baseline/threshold/policy change or commit.
+  This infrastructure prerequisite does not complete the global campaign.
+- Source preparation finished/stopped, manifest52b7baae/source6110e503. New
+  private nonce/slice/service proposal retains exact resource bounds and no
+  app/DB/runner endpoint. Independent57/57inspection checks completed/stopped;
+  classification SOURCE_REVIEW_COMPLETE_LAUNCH_BLOCKED_STRICT_NO_SHARED_CHANGE_UNPROVEN.
+- Review rejects launch: systemd can automatically activate controllers for
+  shared parents/siblings before the private probe detects drift; detection
+  does not enforce the strict no-shared-change invariant. Also an empty sibling
+  under the unit root does not certify current runner child placement beneath
+  its populated supervisor leaf. Native parent binding must be explicit.
+- Coordinator verifies11sealed review files and observes no existing user
+  slice below user-root with allCPU/memory/pids enabled. No service/probe/test
+  launched, controller write or process movement. Preparation/review retained;
+  effective environment readiness remains unproven, no automatic retry.
+- Required platform-docs graph prelaunch guard refuses actual external heavy
+  Jest/Vitest/Playwright; Graphify NOT_RUN, no retry or overlapping launch. Receipt
+  in R84publication/. Six residual repo files remain unstaged/uncommitted; no
+  partial spec admission or new branch. Durable R84handoff preserves source
+  preparation, rejected launch design, independent review and next decision.
+
 ## 2026-10-13 — R83 district iframe workflow prepared, not admitted
 
 - R81versioned checkpoint2d9236e6 stays preserved. Fresh continuation quiet-slot
@@ -26,6 +99,57 @@
   Old guard refusals/NOT_RUN preserved; no native rerun. Graph includes preterminal
   docs, not later receipt-only annotations. Separate documentary checkpoint/handoff
   binds review, source partial, gate results and next private-data prerequisite.
+- User subsequently authorizes separate private fixture copy: preparationexit0,
+  one synthetic district/parcel,282schemas unchanged/all280other tables exact,
+  original DB unchanged. Independent rawreview616checksPASS, fixtureSHA529e7aa4.
+  RAW_PRIVATE_FIXTURE_ACCEPTED_NOT_EXECUTION_READY; no app/API/ORM/browser proof.
+- R64lifecycle reviewer reassigned sole external runner-preparation/ ownership;
+  preparation-only namespace/cgroup/lifecycle adaptation, no launch. Original
+  config/timeout/assertions/identities/retry0 and custody remain; independent
+  runnerreview and fresh free-heavy slot required. Live external Vitest confirmed,
+  never interrupted. Partial spec remains excluded from verified publication.
+- Runner preparer finished and stopped, manifestd40ac331/adapter0db382de; exact
+  reviewed guard copies, bounded host-cgroup plus isolated loopback/PID/read-only
+  stack and quiescent private-copy cleanup design. Coordinator10modulehash/AST
+  check exact, not independent/native. Independent runnerreview assigned and
+  active; original2case namespace/native remains NOT_RUN, source uncommitted.
+- Independent runnerreview1775/1775checks accepted,17frozen/20sealed inputs exact,
+  reviewer stopped. Coordinator finite240s quietslot wait endedexit3 with live
+  external Jest/Vitest; zero native attempts, no source/workingDB/server/cgroup
+  startup or retry. Both original cases NOT_RUN, spec remains uncommitted/excluded.
+  Mutable docs frozen before terminal status. execution-coordinator receipts and
+  runner-reviewed-stop handoff preserve current4file residual and next free-slot
+  custody/once-only launch. GlobalACTIVE/INCOMPLETE; no campaign-completion claim.
+
+### R83 — Once-only execution preparation stopped before native tests
+
+- New isolated coordinator receipts: external
+  `r83-distretti-workflow/execution-coordinator-20261013T165729Z/`.
+  Earlier waiter/freeze receipts remain unchanged. Fresh guard eventually
+  found a quiet slot; reviewed immutable driver invoked once, terminal exit1.
+- Environment preparation stopped with `PermissionError(13, 'Permission denied')`
+  while applying owned cgroup resource limits, before any namespace launch.
+  Both original test identities remain NOT_RUN, not FAIL or SKIP; zero retries.
+- Initial authorized cleanup affected only the new working DB. Prepared fixture
+  and original DB hashes unchanged; input custody before/after exact. Both owned
+  cgroups closed with populated0, zero process handles; working DB retained.
+- Read-only host diagnosis finds parent subtree_control empty and cpu.max absent.
+  No delegation/controller/permission changes or weaker bounds applied. Partial
+  diagnostic command failure retained separately from its supplemental evidence.
+- Independent terminal review assigned; candidate remains PARZIALE_NOT_ADMITTED,
+  unstaged/uncommitted. Existing main/runtime/baseline/policies untouched. Global
+  goal remains ACTIVE/INCOMPLETE; no new native attempt authorized by this receipt.
+- Independent terminal review accepts66/66checks,32sealed files checksum exact:
+  ENVIRONMENT_RESOURCE_DELEGATION_BLOCKED_NOT_TEST_FAIL. Reviewer stopped; first
+  failing controller filename is not proven by the repr-only exception. A new
+  dedicated CPU/memory/pids delegated hierarchy requires separate preparation
+  and review, retaining all bounds and the historical environmental failure.
+- Separate fresh guarded publication ratchet `BASE_REF=main` PASS0; actual
+  merge-basea51a48dc, original55a1b1d remains historical provenance. Next Graphify
+  prelaunch guard refused on newly live external Jest/pytest: graph NOT_RUN,
+  no retry. Receipts in `publication-environment-stop-20261013T165729Z/`.
+  Updated documentary checkpoint remains uncommitted pending graph maintenance;
+  source admission remains blocked independently on delegated native execution.
 
 ## 2026-10-13 — R81 independently admitted and selectively published
 
