@@ -1,5 +1,28 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-13 — R77 bounded GIS source/trace diagnosis, no new native run
+
+- Previous R76verified progress; user priority7E2Eskips retained. Pending optional
+  priority question is not repair permission. Static source/retained-trace only;
+  no runtime/test/mock/fixture/assertion/timeout/auth/quota change or native retry.
+- Successful original parcel then municipal clicks observed. Conditional completed
+  municipal focus replaces parcel-only search overlay withnull; React state/camera/
+  hit-test not read back.26tile404/2status-1/0popup: selection prerequisite not
+  guaranteed, not complete causal proof or sufficient-fix prediction. Original
+  stub returnsPNG on differentpath than vectorMVT; URL-only fix invalid.
+- Delivered geometry bboxes disjoint, both in sourcecomprensorio. Ten examined
+  files match native hashes/currentmain; stub/focus commits precede55a1b1d.
+  Pre-existing assumptions, not historical nativeFAIL/global equivalence proof.
+- Initial substring/source-ID checker failures preserved; distinct corrected
+  static reads accepted. Independent193checks ACCEPTED_STATIC_FINDINGS_WITH_LIMITS,
+  reviewer stopped, exact evidence archivedSSD. R76still1PASS/1FAIL/0SKIP; no new
+  PASS/skip/coverage/complexity credit. Runtime NO_CHANGE; actual-main ratchetPASS0.
+- R77report/ownership/handoff bind next fixture-versus-workflow decision. Graphify
+  orientation query/dedicated platform-docs refresh, no generated files staged.
+  Backend250of449historical skips verified/199unverified;R74queued, other5E2E
+  prerequisites, worker100FAIL, matcher ambiguity, excludedR43/R51/R63 and extreme
+  hotspots remain. Global goalACTIVE/INCOMPLETE, not COMPLETE.
+
 ## 2026-10-13 — R76 optional GIS original tests: bounded PASS and preserved FAIL
 
 - User prioritizes7historical E2Eskips. Original GIS full-file2cases, one native
