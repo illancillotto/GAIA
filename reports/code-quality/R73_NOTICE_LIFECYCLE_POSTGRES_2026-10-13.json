@@ -1,0 +1,90 @@
+{
+  "classification": "VERIFIED_EXISTING_TEST_VARIANTS_NO_CHANGE_RUNTIME",
+  "global_goal": "ACTIVE_INCOMPLETE",
+  "branch": "refactor/complexity-campaign-20261008",
+  "start_head": "e167e981f26d5fffbda4aee2870091d8d6b7edeb",
+  "actual_main_merge_base": "a51a48dc4caefbdd1aea82fe4d749054b9465970",
+  "test_file": "backend/tests/ruolo/test_notice_lifecycle.py",
+  "campaign_runtime_test_migration_config_policy_changed": false,
+  "native": {
+    "exit": 0, "pass": 46, "skip": 2, "fail": 0, "error": 0, "not_run": 0,
+    "original_identities": 48, "junit_seconds": 10.865, "invocations": 1, "retries": 0,
+    "complete_original_identities": true,
+    "unsupported_original_SQLite_skips_remain_unverified": true,
+    "unsupported_skip_names": [
+      "test_concurrent_attempts_and_edits_are_serialized[sqlite-attempt]",
+      "test_concurrent_attempts_and_edits_are_serialized[sqlite-edit]"
+    ],
+    "unsupported_skip_reason": "Concorrenza reale verificata su PostgreSQL",
+    "genuine_simultaneous_PG_race_variants": 2,
+    "original_threads": 2, "original_barrier_timeout_seconds": 10,
+    "native_manifest_records": 121,
+    "native_manifest_sha256": "df060af7c62af88a613c57b9cf0b2632efb7880a21b774e133636149881b68ba"
+  },
+  "custody": {
+    "inventory_after_native_exit": 0,
+    "integration_inputs": 2852, "main_inputs": 2851, "protected_source_hash_drift": 0,
+    "main_head_status_config_unchanged_since_R73_start": true,
+    "concurrent_file": ".codex/config.toml", "concurrent_author": "UNKNOWN",
+    "concurrent_classification": "CONCORRENTE_EXCLUDED",
+    "config_current_sha256": "93348e08240c1c9b3c9379173160d2a2f425050621854bcb7d0ad4de4fb598b2",
+    "config_not_edited_staged_copied_overridden_by_campaign": true,
+    "existing_containers": 43, "existing_volumes": 67,
+    "resource_sets_exact": true, "raw_resource_ordering_differs": true,
+    "main_untracked_bonifica_preserved": true,
+    "historical_R72_original_custody_FAIL_and_R69_capacity_FAIL_preserved": true
+  },
+  "review": {
+    "transport": "EXISTING_SWARM_TASK_NO_MODEL_OVERRIDE",
+    "preparation": "ACCEPTED_PREPARATION_NOT_TEST_PASS",
+    "terminal": "ACCEPTED_BOUND_NATIVE46_PASS_2_ORIGINAL_UNSUPPORTED_SKIP",
+    "report_sha256": "54fa540c1f70ed68e9206f7b3878ac1b76ece92ec099716a9f1b4233569de2ae",
+    "manifest_sha256": "0934d8c63e813fcd92285c6a41ea4f43018a1db15d7e76b95db007a378b280d5",
+    "native_jobs_by_reviewer": 0, "reviewer_stopped": true
+  },
+  "private_db": {
+    "postgres_version": "16.15",
+    "image": "sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea",
+    "PGDATA_tmpfs": "1GiB", "memory_cap": "2GiB", "network": "none",
+    "ports_named_volumes_production_mounts": 0, "readonly_root": true,
+    "metadata_routines_advisory_locks_exact": true, "owned_container_removed": true,
+    "owned_socket_directory_retained": "/tmp/g73-6ns8mpqv"
+  },
+  "limitations": [
+    "In-process module API and synthetic JWT actors, not full login/session/device quota or E2E",
+    "API fixture commits release savepoints under rolled-back outer transactions",
+    "Original diagnostic repository stubs and injected failure disclosed",
+    "Race snapshot_poste reads private synthetic rows, no provider dispatch/GIS/NAS certificate",
+    "Repository .env influence not universally excluded",
+    "Synthetic 21-byte JWT key emits 88 original InsecureKeyLengthWarning messages"
+  ],
+  "historical_R62": {"pass": 7142, "skip": 449, "unchanged": true},
+  "fresh_prior_skip_identities_R73": 24,
+  "fresh_prior_skip_identities_cumulative": 250,
+  "remaining_prior_backend_skip_identities_not_verified_by_followups": 199,
+  "remaining_E2E_skips": 7,
+  "ratchet": {"base_ref": "main", "baseline_commit": "a51a48dc4caefbdd1aea82fe4d749054b9465970", "exit": 0, "findings": 0},
+  "diff_check_exit": 0,
+  "publication_seal": {
+    "original_parser_failure_exit": 1,
+    "original_script_log_exit_preserved": true,
+    "distinct_corrected_static_seal": "sealing.v2.log / sealing.v2.exit",
+    "native_or_scanner_retry": false
+  },
+  "graphify_docs": {
+    "exit": 0, "chunks": "1/1 done", "semantic_failures": 0,
+    "nodes": 891, "edges": 1137, "communities": 161,
+    "tokens_in": 5983, "tokens_out": 2614, "estimated_cost_usd": 0.0066,
+    "generated_graph_not_committed": true
+  },
+  "coverage": "NOT_MEASURED_UNCHANGED_RUNTIME", "worker100": "FAIL",
+  "full_suites_not_repeated": true,
+  "last_full_metrics": {"files": 1681, "callables": 20360, "errors": 1920, "warnings": 2736, "overlapping_findings": 4656},
+  "complexity_reduction_credit": false,
+  "baseline_sha256": "38e6b7943cb4f2b214baac51290fdfc97a88c8ee1bf80d3c639642de77cd4d95",
+  "exceptions_sha256": "81a515050e5d312ac4a453fa1bdaa999cfc11ad6a652659776bf5747c6b69168",
+  "evidence_root": "/media/cbo/ARCHIVIO_SSD/.codex-gaia-campaign-resume-20261012/r73-notice-lifecycle-pg",
+  "handoff_manifest": "FINAL_HANDOFF_MANIFEST.json",
+  "post_commit_receipt": "publication/POST_COMMIT.json",
+  "no_new_refactor_no_push_no_main_merge": true
+}

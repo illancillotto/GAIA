@@ -1,5 +1,33 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-13 — R73 original recorded-attempt lifecycle verified
+
+- Verification only after R72 checkpoint e167e981, dedicated integration branch;
+  actual main/base a51a48dc, original 55a1b1d historical. Ownership before review;
+  PROGRESS and registry frozen before publication. No new runtime refactor.
+- Full original notice_lifecycle: 48 identities, 46 PASS / 2 original SQLite
+  concurrency SKIP / 0 fail/error/NOT_RUN, JUnit 10.865s, one invocation/retry0.
+  Exactly 24 prior PostgreSQL skips verified, not 26; both remaining skips keep
+  original names/reason and remain unverified. Test source/assertions unchanged.
+- Original FastAPI/TestClient routes, real JWT/permissions on synthetic actors;
+  audit/version/notification, deduplication, invalid input and post-audit rollback.
+  API commits release savepoints under rolled-back outer fixture transactions;
+  not durable outer API commits. Two genuine PG races use original 2 threads /
+  Barrier10s and independent transactions; diagnostic stubs disclosed.
+  No login/device/quota/browser/E2E/GIS/provider or dispatch certification.
+- Existing reviewer accepts preparation/terminal independently. Protected
+  2852/2851 inputs and concurrent main config hash exact; private DB metadata/
+  routines/zero locks exact, owned container removed. Existing 43 containers /
+  67 volumes exact sets; initial unsorted/final sorted ordering is disclosed.
+- Actual-main ratchet PASS0; no baseline/threshold/exclusion/policy change or
+  complexity credit. R73_NOTICE_LIFECYCLE_POSTGRES_2026-10-13 binds gates/review/
+  publication/handoff. Coverage NOT_MEASURED_UNCHANGED_RUNTIME, worker100 FAIL;
+  historical R69 capacity FAIL and R72 custody FAIL remain preserved.
+- Cumulative 250 of 449 historical backend skip identities freshly verified;
+  199 remain unverified. Immutable R62 7142 PASS / 449 SKIP unchanged; 7 E2E
+  skips, matcher ambiguity, excluded R43/R51/R63 and extreme hotspots remain.
+  Goal ACTIVE/INCOMPLETE; selective docs checkpoint only, no push/main merge.
+
 ## 2026-10-13 — R72 original27committed-export PG tests verified
 
 - Previous R71checkpoint e7effa2a is verified progress. Verification only on
