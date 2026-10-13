@@ -1,5 +1,27 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-13 — R69 original125Ruolo tests verified after private capacity fix
+
+- Goal reactivated; original swarm reviewer reachable and resumed without model
+  override/config edit/CLI retry. Historical twoCLI503 failures and prior blocked
+  audit remain frozen; no pending model authorization inferred.
+- Complete original125notice_revision identities,124R62PGskips+1SQLitePASS.
+  V1 native105PASS/1failedidentity+teardownERROR/19NOT_RUN, private128MiBtmpfs
+  WALENOSPC demonstrated; OOMfalse. FAIL preserved, owned container removed.
+- User authorizes distinct private capacity correction; reviewedV2changes only
+  PGDATAtmpfs1GiB/memorycap2GiB/new private identity. Original tests/assertions/
+  timeouts/runtime unchanged. V2fresh125PASS/0skip/fail/error,19.103s,retry0.
+- Actual SQL/deferredtriggers/COPYreplica/23dependency tables/rollback/savepoint/
+  isolation/epoch/constraints/pg_blocking_pids nativecommitfences/domainwriters.
+  NoGIS/liveprovider/endtoendconfirmation claim. PrivateV2schemas/relations/
+  routines/zero advisorylocks exact;43containers/67volumes unchanged;2852/2851
+  protected input hashes exact, main/untracked Bonifica source preserved.
+- New124previously skipped identities verified, plus2R68=126of449;323remain
+  unverified. HistoricalR62certificate never rewritten. Report
+  R69_NOTICE_REVISION_POSTGRES_2026-10-13 binds reviews/gates/durable custody.
+  No new runtime refactor, baseline/policy edit or complexity credit;7E2Eskip,
+  worker100FAIL/matcher/excludedpartials/extremetail remain, goalINCOMPLETE.
+
 ## 2026-10-12 — R69 reviewer precedence diagnosed; E2E skip prerequisites bound
 
 - Previous R69 preparation checkpoint990f645c is progress. No native125test
