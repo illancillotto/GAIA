@@ -1,5 +1,30 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-14 — R88 private proxy candidate prepared and independently reviewed
+
+- Explicit grant: preparation/review of sole private proxy correction, no new E2E.
+  New external candidate only; historical proxy/R86run/spec/runtime/main/DB/auth/
+  quota/baseline/policy unchanged. Original case0SKIP/case1NOT_RUN preserved.
+- Candidate delta: pure helper import and response header mapping only. Restore
+  /api on supported same-public-origin backend slash redirects; preserve raw URL
+  suffix/encoding, headers, status/body and original route/error/abort/signal code.
+  Refuse unrelated origins/frontend/malformed/duplicate Location. Deliberately
+  narrower than broad nginx rule, not universal production-equivalence claim.
+-11unit contracts PASS, helper/candidate each100line/V8branch/function in explicit
+  final file rows. First instrumentation's empty coverage scope rejected/preserved;
+  same sources in distinct instrumentation iteration. Statement counter separately
+  unavailable, not declared100; supported V8 metrics do not waive admission policy.
+- Independent SOURCE_CONTRACT_ACCEPTED / NO_NATIVE_ADMISSION,70/70evidence checks;
+  pure in-memory countertest rejects identity/wrong-origin/duplicate-Location mutants.
+  No sockets/server/DB/browser/E2E launched. Preparer/reviewer stopped, seals exact.
+- Report R88_PRIVATE_PROXY_REDIRECT_2026-10-14.md, ownership before agents. Candidate
+  retained externally, no launcher/deployment/native grant or GAIA source admission.
+  Actual R86cause/readiness and real HTTP behavior remain unverified. Goal incomplete.
+- Dedicated make graphify-platform-docs attempted once, exit0 but semantic1/1
+  failed HTTP429usage_limit_reached; PARTIAL, not PASS. Raw log preserved, no
+  retry/model fallback or generated output commit. Runtime code unchanged, no
+  new module graph obligation. Final limit note not semantically indexed yet.
+
 ## 2026-10-14 — R87 read-only source diagnosis independently corroborated
 
 - Existing R86source/log inspection identifies a private proxy contract mismatch:
