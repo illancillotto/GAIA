@@ -1,5 +1,24 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-14 — R87 read-only source diagnosis independently corroborated
+
+- Existing R86source/log inspection identifies a private proxy contract mismatch:
+  backend slash redirect loses public /api prefix, so the followed path routes
+  to frontend rather than backend. Repository nginx config already restores the
+  prefix; no deployed-production traffic or native redirect replay inspected.
+- Original test heading/count does not distinguish loading/error/empty dataset;
+  immediate queryCount is not an async row-readiness assertion. A loading race
+  remains possible, not the demonstrated actual R86SKIP cause. Missing Location/
+  browser chain/DOM evidence prevents choosing between coexisting mechanisms.
+- Independent review175/175source/AST/hash/evidence checks corroborates diagnosis,
+  not application tests or E2E PASS. Native case0originalSKIP/case1NOT_RUN and
+  driver secondary status failure preserved. No correction candidate prepared.
+- Reviewer stopped; review32file seal and16source freeze verified. Report
+  R87_SOURCE_DIAGNOSIS_2026-10-14.md; ownership registry updated after freeze.
+  Proxy-correction preparation question remains unanswered; no native grant,
+  runtime/spec/proxy/DB/main/policy changes or new scanner/coverage claim.
+  Global campaign incomplete, original refactor candidate still NOT_ADMITTED.
+
 ## 2026-10-14 — R86 once-only native execution stopped on original SKIP
 
 - Separate user authorization covered one R86 execution, service900s/host930s,
