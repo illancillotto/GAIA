@@ -1,5 +1,55 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-14 — R86 once-only native execution stopped on original SKIP
+
+- Separate user authorization covered one R86 execution, service900s/host930s,
+  no retry. Reviewed sources and historical authorization fields unchanged;
+  separate grant archived externally. Fresh full custody2732/quiet guard PASS
+  at HEADffe3724a/main-basea51a48dc before launch.
+- Original first identity21:5 executed once, retry0, and SKIPPED at unchanged
+  zero-district-row guard (line29); no assertion failure and no drill-down proof.
+  Second identity60:5 NOT_RUN, as required by fail-stop. Never count SKIP as PASS.
+- Namespace exit1 subsequently rejected by owned drain as unexpected teardown
+  status; preserve both the original SKIP and secondary orchestration failure.
+  Backend PID53 SIGTERM(-15), proxyPID55 exit0; backend signal is not drain cause.
+- Owned service terminal failed/exit1, MainPID0; host exit1. Raw shared audits
+  accepted observed scoped changes; before/after runtime/main custody exact,
+  private slice removed or empty. No retry, post-failure DB cleanup or repair.
+- Working DB/logs/results and82terminal records plus manifest sealed externally
+  under r86-native-parent-binding/. Terminal review pending; candidate spec
+  remains PARZIALE/NOT_ADMITTED. No runtime/main/baseline/threshold/policy change,
+  no new coverage claim, no new ratchet run. Global goal remains incomplete.
+- Independent terminal review NOT_ADMITTED,513/513evidence checks (not runtime
+  tests); raw audit replay60groups/921original survivor identities unchanged.
+  Failure DB queried ro/immutable: one active district and one parcel, hash exact.
+  Zero DOM rows therefore do not prove missing fixture. Async-loading race is
+  compatible with evidence, not proven; cause remains UNKNOWN. Reviewer's SQL/
+  count/path expectation errors preserved separately and resolved; no native retry.
+  Further diagnosis and driver provenance review require a separate decision.
+
+## 2026-10-13 — R86 explicit native parent binding source preparation
+
+- Continue private environment preparation only, not automatic native testing.
+  R85observed infrastructure is accepted; its short-lived descriptor expired.
+- New external exclusive source preparation/review ownership. Adapter must bind
+  empty delegated unit parent outside supervisor leaf, not current_cgroup().
+  Preserve R83/V4native behavior, cleanup, isolation, test identities/assertions/
+  timeouts/retry0 and exact resource bounds; old immutable sources untouched.
+- Current HEADffe3724a/main-basea51a48dc and protected inputs bound afresh in new
+  manifest; old HEADd1dc5a84pins remain historical, not edited to hide drift.
+- Source candidate still uncommitted/excluded, main concurrent work untouched.
+  No service/probe/test/build/scanner/Graphify or DB/runtime/policy changes.
+  Global goal remains ACTIVE/INCOMPLETE, not completed by launcher preparation.
+- Independent R86source binding review subsequently accepted1781/1781checks,
+  26sealed files exact; no blocker, reviewer stopped. Parent nonce/UID/inode/
+  empty direct membership/sole supervisorPID-starttime/resource validation and
+  samePID exec chain source-inspected; five old contracts and native child exact.
+- Fresh2026-10-14preflight HEADffe3724a/main-basea51a48dc/spec92fae5dc exact;
+  no R86unit/service-run/native-r86 exists. Proposed900sservice/930shost caps
+  reviewed, not permission; original360/150/90/20deadlines unchanged. Native
+  behavior/coverage still NOT_RUN, candidate excluded. Separate launch decision
+  required; no commit while reviewed currentHEADpin awaits that decision.
+
 ## 2026-10-13 — R85 scoped manager activation authorized
 
 - User explicitly authorizes circumscribed systemd-managed controller activation,
