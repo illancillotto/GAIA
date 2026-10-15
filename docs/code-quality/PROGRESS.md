@@ -12902,3 +12902,18 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   branch. Ratchet integrazione exit 0, zero finding, indice invariato. Review
   ACCEPT_WITH_NOTES.
 - Graphify catasto-code aggiornato. Evidenze `claude-20261015/slices/r111-*`.
+
+## 2026-10-15 - R116 Ruolo: stato posizione nel calcolo GAIA
+
+- Runtime `backend/app/modules/ruolo/repositories.py`: rimosso il primo ramo di
+  stato di `get_gaia_role_calculation`, sussunto da `elif abs(delta) <= thr`
+  (prova per casi, inclusi entry falsy non-None impossibili e NaN/inf).
+- Esito `IMPROVED` modesto: target cyclomatic/cognitive/LOC/nesting
+  56/95/264/4 -> 52/86/262/3 (violation nesting rimossa); file cognitive
+  597 -> 588, cyclomatic 442 -> 438, violation 49 -> 48; nessun helper nuovo.
+- Coverage full-file portata al 100% (744/744 statement, 266/266 branch) con
+  test di route reali che chiudono 14 branch parziali preesistenti; precedenza
+  `only_in_capacitas` fissata. 1112 test (720 PASS, 392 skip PostgreSQL
+  preesistenti). Ratchet integrazione exit 0, zero finding, indice invariato.
+  Review ACCEPT_WITH_NOTES (un'asserzione dipende dall'ordine SQLite, annotata).
+- Graphify ruolo-code aggiornato. Evidenze `claude-20261015/slices/r116-*`.

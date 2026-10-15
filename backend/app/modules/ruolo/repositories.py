@@ -1918,9 +1918,7 @@ def get_gaia_role_calculation(
         if gap_excel_gaia_total != 0:
             anomaly_gap_share = round(abs(anomaly_gap) / abs(gap_excel_gaia_total) * 100, 1)
         anomaly_driven_case = item["anomalous_rows_count"] > 0 and anomaly_gap_share >= 95.0
-        if ruolo_entry and abs(delta_ruolo_gaia_totale) <= threshold and abs(gap_excel_gaia_total) <= threshold:
-            status = "matched"
-        elif ruolo_entry is None:
+        if ruolo_entry is None:
             status = "only_in_capacitas"
         elif abs(delta_ruolo_gaia_totale) <= threshold:
             status = "matched"
