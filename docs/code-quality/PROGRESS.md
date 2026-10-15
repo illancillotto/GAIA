@@ -12792,3 +12792,22 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   230/230 branch. Ratchet integrazione contro main exit 0, zero finding,
   indice invariato. Review indipendente ACCEPT_WITH_NOTES.
 - Graphify operazioni-code aggiornato. Evidenze `claude-20261015/slices/r110-*`.
+
+## 2026-10-15 - R113 Bonifica: dispatch delle entita del sync
+
+- Runtime `backend/app/services/elaborazioni_bonifica_sync.py`: la sequenza
+  per entita di `_run_bonifica_sync_background` (finestra date, fetch,
+  snapshot, sync, finalize) e il blocco di failure duplicato diventano helper
+  (`_build_bonifica_clients`, `_job_date_window`, `_fetch_entity_rows`,
+  `_sync_entity_rows`, `_load_entity_job`, `_mark_job_failed`), risolti a
+  runtime dai globali del modulo. Consorziati esplicito; entita non supportata
+  rifiutata sia in fetch sia in sync; pragma rimosso (zero righe escluse).
+- Esito `IMPROVED`: orchestratore cognitive/cyclomatic/LOC/nesting
+  174/37/202/13 -> 32/13/56/4 (error 4 -> 1); file cognitive 328 -> 211;
+  cyclomatic +7 (180) dichiarato; due helper con warning cyclomatic 11;
+  error callable 8 -> 5.
+- 274 test PASS in integrazione; coverage full-file 397/397 statement e
+  146/146 branch. Ratchet integrazione contro main exit 0, zero finding,
+  indice invariato. Review indipendente ACCEPT_WITH_NOTES (verifica v2 ok):
+  restano due catene di dispatch parallele da mantenere allineate.
+- Graphify backend aggiornato. Evidenze `claude-20261015/slices/r113-*`.

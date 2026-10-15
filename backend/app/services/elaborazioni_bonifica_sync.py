@@ -361,6 +361,148 @@ def _create_job(
     return job
 
 
+@dataclass(frozen=True)
+class _BonificaClients:
+    areas: BonificaAreasClient
+    report_types: BonificaReportTypesClient
+    reports: BonificaReportsClient
+    vehicles: BonificaVehiclesClient
+    refuels: BonificaRefuelsClient
+    taken_charge: BonificaTakenChargeClient
+    users: BonificaUsersClient
+    warehouse_requests: BonificaWarehouseRequestsClient
+    org_charts: BonificaOrgChartsClient
+
+
+def _build_bonifica_clients(manager: BonificaOristaneseSessionManager) -> _BonificaClients:
+    return _BonificaClients(
+        areas=BonificaAreasClient(manager),
+        report_types=BonificaReportTypesClient(manager),
+        reports=BonificaReportsClient(manager),
+        vehicles=BonificaVehiclesClient(manager),
+        refuels=BonificaRefuelsClient(manager),
+        taken_charge=BonificaTakenChargeClient(manager),
+        users=BonificaUsersClient(manager),
+        warehouse_requests=BonificaWarehouseRequestsClient(manager),
+        org_charts=BonificaOrgChartsClient(manager),
+    )
+
+
+def _job_date_window(job: WCSyncJob, entity: str) -> tuple[date, date]:
+    date_from, date_to = _resolve_date_window_from_job(job, entity)
+    assert date_from is not None and date_to is not None
+    return date_from, date_to
+
+
+async def _fetch_entity_rows(
+    db: Session,
+    job: WCSyncJob,
+    entity: str,
+    clients: _BonificaClients,
+) -> tuple[list, int]:
+    if entity == "report_types":
+        return await clients.report_types.fetch_report_types()
+    if entity == "reports":
+        date_from, date_to = _job_date_window(job, entity)
+        return await clients.reports.fetch_reports(date_from=date_from, date_to=date_to)
+    if entity == "vehicles":
+        return await clients.vehicles.fetch_vehicles()
+    if entity == "refuels":
+        date_from, date_to = _job_date_window(job, entity)
+        vehicle_codes = _list_vehicle_refuel_search_codes(db)
+        return await clients.refuels.fetch_refuels_for_vehicle_codes(
+            vehicle_codes=vehicle_codes,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    if entity == "taken_charge":
+        date_from, date_to = _job_date_window(job, entity)
+        return await clients.taken_charge.fetch_taken_charge(
+            date_from=date_from,
+            date_to=date_to,
+        )
+    if entity == "users":
+        return await clients.users.fetch_users()
+    if entity == "areas":
+        return await clients.areas.fetch_areas()
+    if entity == "warehouse_requests":
+        date_from, date_to = _job_date_window(job, entity)
+        return await clients.warehouse_requests.fetch_warehouse_requests(
+            date_from=date_from,
+            date_to=date_to,
+        )
+    if entity == "org_charts":
+        return await clients.org_charts.fetch_org_charts()
+    if entity == "consorziati":
+        return await clients.users.fetch_consorziati()
+    raise RuntimeError(f"Entity `{entity}` non supportata")
+
+
+def _sync_entity_rows(
+    db: Session,
+    entity: str,
+    current_user: ApplicationUser,
+    rows: list,
+) -> _SyncExecutionResult:
+    if entity == "report_types":
+        result = sync_white_report_types(db=db, rows=rows)
+        return _normalize_sync_result(result.synced, result.skipped, result.errors)
+    if entity == "reports":
+        result = sync_white_reports(db=db, current_user=current_user, rows=rows)
+        return _normalize_sync_result(result.synced, result.skipped, result.errors)
+    if entity == "vehicles":
+        result = sync_white_vehicles(db=db, current_user=current_user, rows=rows)
+        return _normalize_sync_result(result.vehicles_synced, result.vehicles_skipped, result.errors)
+    if entity == "refuels":
+        result = sync_white_refuels(db=db, current_user=current_user, rows=rows)
+        return _normalize_sync_result(result.fuel_logs_synced, result.fuel_logs_skipped, result.errors)
+    if entity == "taken_charge":
+        result = sync_white_taken_charge(db=db, current_user=current_user, rows=rows)
+        return _normalize_sync_result(
+            result.usage_sessions_synced, result.usage_sessions_skipped, result.errors,
+        )
+    if entity == "users":
+        result = sync_white_operators(db=db, rows=rows)
+        return _normalize_sync_result(result.synced, result.skipped, result.errors)
+    if entity == "areas":
+        result = sync_white_areas(db=db, rows=rows)
+        return _normalize_sync_result(result.synced, result.skipped, result.errors)
+    if entity == "warehouse_requests":
+        result = sync_white_warehouse_requests(db=db, rows=rows)
+        return _normalize_sync_result(result.synced, result.skipped, result.errors)
+    if entity == "org_charts":
+        result = sync_white_org_charts_to_canonical(db=db, rows=rows, user_id=current_user.id)
+        return _normalize_sync_result(result.synced, result.skipped, result.errors)
+    if entity == "consorziati":
+        result = sync_white_consorziati(db=db, rows=rows)
+        return _normalize_sync_result(result.synced, result.skipped, result.errors)
+    raise RuntimeError(f"Entity `{entity}` non supportata")
+
+
+def _load_entity_job(
+    db: Session,
+    job_ids_by_entity: dict[str, str],
+    entity: str,
+) -> WCSyncJob | None:
+    job_id = job_ids_by_entity.get(entity)
+    if not job_id:
+        return None
+    return db.get(WCSyncJob, uuid.UUID(job_id))
+
+
+def _mark_job_failed(job: WCSyncJob, exc: Exception) -> None:
+    job.status = "failed"
+    job.finished_at = datetime.now(timezone.utc)
+    job.records_synced = 0
+    job.records_skipped = 0
+    job.records_errors = 1
+    job.error_detail = str(exc)
+    job.params_json = {
+        **(job.params_json or {}),
+        "report_summary": _build_job_report_summary(job, error_detail=str(exc)),
+    }
+
+
 async def _run_bonifica_sync_background(
     *,
     triggered_by_user_id: int,
@@ -388,21 +530,10 @@ async def _run_bonifica_sync_background(
 
         session = await manager.login()
         mark_credential_used(db, credential.id, authenticated_url=session.authenticated_url)
-        areas_client = BonificaAreasClient(manager)
-        report_types_client = BonificaReportTypesClient(manager)
-        reports_client = BonificaReportsClient(manager)
-        vehicles_client = BonificaVehiclesClient(manager)
-        refuels_client = BonificaRefuelsClient(manager)
-        taken_charge_client = BonificaTakenChargeClient(manager)
-        users_client = BonificaUsersClient(manager)
-        warehouse_requests_client = BonificaWarehouseRequestsClient(manager)
-        org_charts_client = BonificaOrgChartsClient(manager)
+        clients = _build_bonifica_clients(manager)
 
         for entity in entities:
-            job_id = job_ids_by_entity.get(entity)
-            if not job_id:
-                continue
-            job = db.get(WCSyncJob, uuid.UUID(job_id))
+            job = _load_entity_job(db, job_ids_by_entity, entity)
             if job is None:
                 continue
 
@@ -410,160 +541,24 @@ async def _run_bonifica_sync_background(
             db.commit()
 
             try:
-                if entity == "report_types":
-                    rows, total = await report_types_client.fetch_report_types()
-                    _persist_job_runtime_snapshot(db, job, source_total=total)
-                    sync_result = sync_white_report_types(db=db, rows=rows)
-                    result = _normalize_sync_result(
-                        sync_result.synced, sync_result.skipped, sync_result.errors,
-                    )
-                    params_updates = {"source_total": total}
-                elif entity == "reports":
-                    date_from, date_to = _resolve_date_window_from_job(job, entity)
-                    assert date_from is not None and date_to is not None
-                    rows, total = await reports_client.fetch_reports(date_from=date_from, date_to=date_to)
-                    _persist_job_runtime_snapshot(db, job, source_total=total)
-                    sync_result = sync_white_reports(
-                        db=db,
-                        current_user=current_user,
-                        rows=rows,
-                    )
-                    result = _normalize_sync_result(
-                        sync_result.synced, sync_result.skipped, sync_result.errors,
-                    )
-                    params_updates = {"source_total": total}
-                elif entity == "vehicles":
-                    rows, total = await vehicles_client.fetch_vehicles()
-                    _persist_job_runtime_snapshot(db, job, source_total=total)
-                    sync_result = sync_white_vehicles(
-                        db=db,
-                        current_user=current_user,
-                        rows=rows,
-                    )
-                    result = _normalize_sync_result(
-                        sync_result.vehicles_synced, sync_result.vehicles_skipped, sync_result.errors,
-                    )
-                    params_updates = {"source_total": total}
-                elif entity == "refuels":
-                    date_from, date_to = _resolve_date_window_from_job(job, entity)
-                    assert date_from is not None and date_to is not None
-                    vehicle_codes = _list_vehicle_refuel_search_codes(db)
-                    rows, total = await refuels_client.fetch_refuels_for_vehicle_codes(
-                        vehicle_codes=vehicle_codes,
-                        date_from=date_from,
-                        date_to=date_to,
-                    )
-                    _persist_job_runtime_snapshot(db, job, source_total=total)
-                    sync_result = sync_white_refuels(
-                        db=db,
-                        current_user=current_user,
-                        rows=rows,
-                    )
-                    result = _normalize_sync_result(
-                        sync_result.fuel_logs_synced, sync_result.fuel_logs_skipped, sync_result.errors,
-                    )
-                    params_updates = {"source_total": total}
-                elif entity == "taken_charge":
-                    date_from, date_to = _resolve_date_window_from_job(job, entity)
-                    assert date_from is not None and date_to is not None
-                    rows, total = await taken_charge_client.fetch_taken_charge(
-                        date_from=date_from,
-                        date_to=date_to,
-                    )
-                    _persist_job_runtime_snapshot(db, job, source_total=total)
-                    sync_result = sync_white_taken_charge(
-                        db=db,
-                        current_user=current_user,
-                        rows=rows,
-                    )
-                    result = _normalize_sync_result(
-                        sync_result.usage_sessions_synced, sync_result.usage_sessions_skipped, sync_result.errors,
-                    )
-                    params_updates = {"source_total": total}
-                elif entity == "users":
-                    rows, total = await users_client.fetch_users()
-                    _persist_job_runtime_snapshot(db, job, source_total=total)
-                    sync_result = sync_white_operators(db=db, rows=rows)
-                    result = _normalize_sync_result(
-                        sync_result.synced, sync_result.skipped, sync_result.errors,
-                    )
-                    params_updates = {"source_total": total}
-                elif entity == "areas":
-                    rows, total = await areas_client.fetch_areas()
-                    _persist_job_runtime_snapshot(db, job, source_total=total)
-                    sync_result = sync_white_areas(db=db, rows=rows)
-                    result = _normalize_sync_result(
-                        sync_result.synced, sync_result.skipped, sync_result.errors,
-                    )
-                    params_updates = {"source_total": total}
-                elif entity == "warehouse_requests":
-                    date_from, date_to = _resolve_date_window_from_job(job, entity)
-                    assert date_from is not None and date_to is not None
-                    rows, total = await warehouse_requests_client.fetch_warehouse_requests(
-                        date_from=date_from,
-                        date_to=date_to,
-                    )
-                    _persist_job_runtime_snapshot(db, job, source_total=total)
-                    sync_result = sync_white_warehouse_requests(db=db, rows=rows)
-                    result = _normalize_sync_result(
-                        sync_result.synced, sync_result.skipped, sync_result.errors,
-                    )
-                    params_updates = {"source_total": total}
-                elif entity == "org_charts":
-                    rows, total = await org_charts_client.fetch_org_charts()
-                    _persist_job_runtime_snapshot(db, job, source_total=total)
-                    sync_result = sync_white_org_charts_to_canonical(db=db, rows=rows, user_id=current_user.id)
-                    result = _normalize_sync_result(
-                        sync_result.synced, sync_result.skipped, sync_result.errors,
-                    )
-                    params_updates = {"source_total": total}
-                elif entity == "consorziati":
-                    rows, total = await users_client.fetch_consorziati()
-                    _persist_job_runtime_snapshot(db, job, source_total=total)
-                    sync_result = sync_white_consorziati(db=db, rows=rows)
-                    result = _normalize_sync_result(
-                        sync_result.synced, sync_result.skipped, sync_result.errors,
-                    )
-                    params_updates = {"source_total": total}
-                else:  # pragma: no cover
-                    raise RuntimeError(f"Entity `{entity}` non supportata")
-
-                _finalize_job(db, job, result, params_updates=params_updates)
+                rows, total = await _fetch_entity_rows(db, job, entity, clients)
+                _persist_job_runtime_snapshot(db, job, source_total=total)
+                result = _sync_entity_rows(db, entity, current_user, rows)
+                _finalize_job(db, job, result, params_updates={"source_total": total})
                 db.commit()
             except Exception as exc:
                 logger.exception("Bonifica sync failed for entity `%s`", entity)
-                job.status = "failed"
-                job.finished_at = datetime.now(timezone.utc)
-                job.records_synced = 0
-                job.records_skipped = 0
-                job.records_errors = 1
-                job.error_detail = str(exc)
-                job.params_json = {
-                    **(job.params_json or {}),
-                    "report_summary": _build_job_report_summary(job, error_detail=str(exc)),
-                }
+                _mark_job_failed(job, exc)
                 db.commit()
     except Exception as exc:
         logger.exception("Bonifica sync bootstrap failed before entity execution")
         if credential_id is not None:
             mark_credential_error(db, credential_id, str(exc))
         for entity in entities:
-            job_id = job_ids_by_entity.get(entity)
-            if not job_id:
-                continue
-            job = db.get(WCSyncJob, uuid.UUID(job_id))
+            job = _load_entity_job(db, job_ids_by_entity, entity)
             if job is None:
                 continue
-            job.status = "failed"
-            job.finished_at = datetime.now(timezone.utc)
-            job.records_synced = 0
-            job.records_skipped = 0
-            job.records_errors = 1
-            job.error_detail = str(exc)
-            job.params_json = {
-                **(job.params_json or {}),
-                "report_summary": _build_job_report_summary(job, error_detail=str(exc)),
-            }
+            _mark_job_failed(job, exc)
         db.commit()
     finally:
         try:
