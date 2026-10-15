@@ -12762,3 +12762,18 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   sigillati su byte identici; ratchet autorevole dopo R109M exit 0, zero
   finding, indice invariato. Review di ammissione indipendente ADMIT_WITH_NOTES.
 - Dettaglio in `MULTI_AGENT_OWNERSHIP_R109_PRESENZE_DAY_FOCUS_2026-10-15.md`.
+
+## 2026-10-15 - R115 GIS: riepilogo import Excel
+
+- Runtime `frontend/src/app/catasto/gis/page.tsx` e `excel-references.ts`:
+  esito import estratto nella funzione pura `summarizeExcelImport` con guard
+  piatte; stringhe italiane, ordine dei setState e negazione NaN-safe invariati.
+- Esito `IMPROVED`: `handleImportXlsx` cyclomatic/cognitive/LOC/nesting
+  14/26/74/4 -> 10/11/62/2 (violation cognitive e nesting rimosse);
+  `CatastoGisPage` cognitive 298 -> 283, nesting violation rimossa; helper
+  7/6/17; cognitive netta dei due file 555 -> 531, cyclomatic 644 -> 643.
+- Coverage full-file 100% statement/branch/function/line su entrambi i file;
+  91 test PASS in integrazione; eslint e tsc PASS; ratchet integrazione
+  contro main exit 0, zero finding, indice invariato. Review indipendente
+  ACCEPT_WITH_NOTES: gap preesistente sul banner errore/info a livello pagina.
+- Graphify frontend aggiornato. Evidenze `claude-20261015/slices/r115-*`.

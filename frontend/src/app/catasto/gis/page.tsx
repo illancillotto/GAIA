@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { normalizeExcelReferences } from "./excel-references";
+import { normalizeExcelReferences, summarizeExcelImport } from "./excel-references";
 import {
   getParcelPopupLocation,
   getParcelPopupRecordState,
@@ -888,21 +888,9 @@ export default function CatastoGisPage() {
       setOverlayLayers((layers) => [...layers, nextLayer]);
       focusLayerGeojson(nextLayer.geojson);
 
-      if (resolved.found === 0) {
-        setGisError(`Nessuna particella trovata su ${resolved.processed} righe.`);
-      } else {
-        if (withGeometry === 0) {
-          setGisError(
-            `Trovate ${resolved.found} particelle ma nessuna ha geometria: controlla che lo shapefile sia stato importato.`,
-          );
-        } else if (resolved.not_found + resolved.multiple + resolved.invalid > 0) {
-          const parts: string[] = [`Import completato: trovate ${resolved.found}/${resolved.processed}.`];
-          if (resolved.not_found > 0) parts.push(`Non trovate: ${resolved.not_found}.`);
-          if (resolved.multiple > 0) parts.push(`Multiple: ${resolved.multiple}.`);
-          if (resolved.invalid > 0) parts.push(`Righe invalide: ${resolved.invalid}.`);
-          setGisInfo(parts.join(" "));
-        }
-      }
+      const summary = summarizeExcelImport(resolved, withGeometry);
+      if (summary?.kind === "error") setGisError(summary.message);
+      else if (summary) setGisInfo(summary.message);
     } catch (e) {
       setGisError(e instanceof Error ? e.message : "Import Excel fallito");
     } finally {
