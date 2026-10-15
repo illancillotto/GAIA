@@ -12917,3 +12917,18 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   preesistenti). Ratchet integrazione exit 0, zero finding, indice invariato.
   Review ACCEPT_WITH_NOTES (un'asserzione dipende dall'ordine SQLite, annotata).
 - Graphify ruolo-code aggiornato. Evidenze `claude-20261015/slices/r116-*`.
+
+## 2026-10-15 - R120 Me: totali Operazioni del riepilogo personale
+
+- Runtime `backend/app/modules/me/router/routes/summary.py`: il primo blocco
+  Operazioni di `get_me_summary` diventa `_operazioni_summary_totals` con un
+  NamedTuple privato; gating, default a zero, ordine SQL (trace identica),
+  fallback dei casi, arrotondamenti, auth e OpenAPI invariati; il monkeypatch
+  tramite facade continua a raggiungere gli helper.
+- Esito `IMPROVED` con disclosure: target cyclomatic/cognitive/LOC 24/38/123 ->
+  19/28/74 (LOC da error a warning); file cognitive 38 -> 33, cyclomatic +1.
+  Nuovo warning LOC sull'helper (70 > 50) per catene di query formattate da
+  ruff: la review non trova uno split onesto che lo eviti in una sola slice.
+- 138 test PASS; coverage full-file 61/61 statement e 10/10 branch. Ratchet
+  integrazione exit 0, zero finding, indice invariato. Review ACCEPT_WITH_NOTES.
+- Graphify backend aggiornato. Evidenze `claude-20261015/slices/r120-*`.

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Annotated
+from typing import Annotated, NamedTuple
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, or_, select
@@ -27,6 +27,93 @@ from app.modules.operazioni.models.vehicles import VehicleAssignment, VehicleUsa
 from app.modules.presenze.models import PresenzeDailyRecord
 
 router = APIRouter(prefix="/me")
+
+
+class _OperazioniSummaryTotals(NamedTuple):
+    activities_count: int = 0
+    activity_minutes: int = 0
+    reports_count: int = 0
+    assigned_cases_count: int = 0
+    open_cases_count: int = 0
+    closed_cases_count: int = 0
+    vehicle_sessions_count: int = 0
+    vehicle_km: float = 0.0
+
+
+def _operazioni_summary_totals(
+    db: Session,
+    user_id: int,
+    resolved_start: date,
+    resolved_end: date,
+) -> _OperazioniSummaryTotals:
+    activities = (
+        db.execute(
+            select(OperatorActivity).where(
+                OperatorActivity.operator_user_id == user_id,
+                func.date(OperatorActivity.started_at) >= resolved_start,
+                func.date(OperatorActivity.started_at) <= resolved_end,
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    reports_count = db.execute(
+        select(func.count(FieldReport.id)).where(
+            FieldReport.reporter_user_id == user_id,
+            or_(
+                func.date(FieldReport.created_at).between(resolved_start, resolved_end),
+                FieldReport.client_created_at.is_(None),
+            ),
+        )
+    ).scalar_one()
+
+    assigned_cases = (
+        db.execute(
+            select(InternalCase).where(
+                InternalCase.assigned_to_user_id == user_id,
+                func.date(InternalCase.created_at).between(resolved_start, resolved_end),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not assigned_cases:
+        assigned_cases = (
+            db.execute(select(InternalCase).where(InternalCase.assigned_to_user_id == user_id))
+            .scalars()
+            .all()
+        )
+
+    vehicle_sessions = (
+        db.execute(
+            select(VehicleUsageSession).where(
+                or_(
+                    VehicleUsageSession.actual_driver_user_id == user_id,
+                    VehicleUsageSession.started_by_user_id == user_id,
+                ),
+                func.date(VehicleUsageSession.started_at) >= resolved_start,
+                func.date(VehicleUsageSession.started_at) <= resolved_end,
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    return _OperazioniSummaryTotals(
+        activities_count=len(activities),
+        activity_minutes=sum(_activity_duration_minutes(activity) for activity in activities),
+        reports_count=reports_count,
+        assigned_cases_count=len(assigned_cases),
+        open_cases_count=sum(
+            1 for case in assigned_cases if case.status not in {"closed", "resolved"}
+        ),
+        closed_cases_count=sum(
+            1 for case in assigned_cases if case.status in {"closed", "resolved"}
+        ),
+        vehicle_sessions_count=len(vehicle_sessions),
+        vehicle_km=round(sum(_vehicle_session_km(session) for session in vehicle_sessions), 2),
+    )
 
 
 # Preserve legacy callable layout so the complexity ratchet remains comparable.
@@ -62,62 +149,9 @@ def get_me_summary(
         anomaly_days = sum(1 for record in records if _daily_record_has_anomaly(record))
         km_from_presenze = float(sum(record.km_value or 0 for record in records))
 
-    activities_count = 0
-    activity_minutes = 0
-    reports_count = 0
-    assigned_cases_count = 0
-    open_cases_count = 0
-    closed_cases_count = 0
-    vehicle_sessions_count = 0
-    vehicle_km = 0.0
-
+    operazioni = _OperazioniSummaryTotals()
     if _module_enabled(current_user, "operazioni"):
-        activities = db.execute(
-            select(OperatorActivity).where(
-                OperatorActivity.operator_user_id == current_user.id,
-                func.date(OperatorActivity.started_at) >= resolved_start,
-                func.date(OperatorActivity.started_at) <= resolved_end,
-            )
-        ).scalars().all()
-        activities_count = len(activities)
-        activity_minutes = sum(_activity_duration_minutes(activity) for activity in activities)
-
-        reports_count = db.execute(
-            select(func.count(FieldReport.id)).where(
-                FieldReport.reporter_user_id == current_user.id,
-                or_(
-                    func.date(FieldReport.created_at).between(resolved_start, resolved_end),
-                    FieldReport.client_created_at.is_(None),
-                ),
-            )
-        ).scalar_one()
-
-        assigned_cases = db.execute(
-            select(InternalCase).where(
-                InternalCase.assigned_to_user_id == current_user.id,
-                func.date(InternalCase.created_at).between(resolved_start, resolved_end),
-            )
-        ).scalars().all()
-        if not assigned_cases:
-            assigned_cases = db.execute(
-                select(InternalCase).where(InternalCase.assigned_to_user_id == current_user.id)
-            ).scalars().all()
-        assigned_cases_count = len(assigned_cases)
-        open_cases_count = sum(1 for case in assigned_cases if case.status not in {"closed", "resolved"})
-        closed_cases_count = sum(1 for case in assigned_cases if case.status in {"closed", "resolved"})
-
-        vehicle_sessions = db.execute(
-            select(VehicleUsageSession).where(
-                or_(
-                    VehicleUsageSession.actual_driver_user_id == current_user.id,
-                    VehicleUsageSession.started_by_user_id == current_user.id,
-                ),
-                func.date(VehicleUsageSession.started_at) >= resolved_start,
-                func.date(VehicleUsageSession.started_at) <= resolved_end,
-            )
-        ).scalars().all()
-        vehicle_sessions_count = len(vehicle_sessions)
-        vehicle_km = round(sum(_vehicle_session_km(session) for session in vehicle_sessions), 2)
+        operazioni = _operazioni_summary_totals(db, current_user.id, resolved_start, resolved_end)
 
     assigned_devices_count = 0
     active_vehicle_assignments_count = 0
@@ -155,14 +189,14 @@ def get_me_summary(
         worked_days=worked_days,
         anomaly_days=anomaly_days,
         km_from_presenze=km_from_presenze,
-        activities_count=activities_count,
-        activity_minutes=activity_minutes,
-        reports_count=reports_count,
-        assigned_cases_count=assigned_cases_count,
-        open_cases_count=open_cases_count,
-        closed_cases_count=closed_cases_count,
-        vehicle_sessions_count=vehicle_sessions_count,
-        vehicle_km=vehicle_km,
+        activities_count=operazioni.activities_count,
+        activity_minutes=operazioni.activity_minutes,
+        reports_count=operazioni.reports_count,
+        assigned_cases_count=operazioni.assigned_cases_count,
+        open_cases_count=operazioni.open_cases_count,
+        closed_cases_count=operazioni.closed_cases_count,
+        vehicle_sessions_count=operazioni.vehicle_sessions_count,
+        vehicle_km=operazioni.vehicle_km,
         assigned_devices_count=assigned_devices_count,
         active_vehicle_assignments_count=active_vehicle_assignments_count,
     )
