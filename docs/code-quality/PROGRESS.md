@@ -1,5 +1,848 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-15 — Commit recovery checkpoint through R108; R109 blocked
+
+- User explicitly requests local commits of verified work and a Claude handoff.
+  Last committed campaign runtime refactor is R64 (`29994c62`); subsequent
+  commits through HEAD `7f39510a` include tests and documentation through R88.
+  R89–R108 integration changes are being checkpointed on the campaign branch,
+  without merging main, pushing, or certifying the full campaign complete.
+- Read-only recovery rehashed all 1,634 sealed R102–R108 members and 18
+  symlinks. All 79 pending integration files outside three R109 coordinator
+  documents exactly matched the accepted R108 inventory/checkpoints. Existing
+  source-bound test, coverage, ratchet and Graphify receipts are retained;
+  successful application gates were not repeated solely for this commit.
+- Integration Presenze source remains accepted R108 `c726f5c4`. R109 candidate
+  `c1a1d360` and its new day-focus spec remain only in the external author
+  worktree. Candidate native504/eight/full-file100, types and lint passed,
+  but the actual ratchet exited2 with three callback-matching findings and
+  author-index identity drift. Independent diagnosis identifies an unrelated
+  nearest-line baseline match; the index writer/cause remains unproven.
+- R109 is BLOCKED, not admitted or integrated. Preserve all original receipts,
+  baseline and both index hashes. The latest external recovery checkpoint is
+  `/home/cbo/.codex/gaia-recovery-20261015-mount/CURRENT_R109_RATCHET_STOP.md`.
+  Earlier grants/status below are historical, not current authorization.
+  Matcher correction and index diagnosis require their own reviewable decision.
+- Staged diff-check found an extra blank EOF line in the copied R102 report;
+  remove only that whitespace in the repository copy. The sealed SSD original
+  remains byte-identical. No runtime, tests, coverage policy or gate changed.
+
+## 2026-10-15 — R109 original-first characterization, runtime still unchanged
+
+- User requests completion of the current R109 unit before commit discussion;
+  no commit/staging of earlier unrelated/campaign dirt is performed. Full
+  original campaign remains ACTIVE/INCOMPLETE, distinctly from round closure.
+- Original native rebind independently verified:34910pins/2646integration
+  mappings/671real sources exact, accepted496/seven/full-page four100 retained.
+  First design review requested an explicit eighth spec; additive DESIGN_V2
+  preserves seven admitted specs and requires new-spec original-first checks.
+- Combined setup review caught three existing tracked fixture symlinks before
+  execution. Original helper/refusal preserved. Additive kind/target-aware
+  plan independently ACCEPT_DESIGN_AND_WORKTREE_PLANb703c858/seal6b143775.
+  Reviewed full-helper launcher executed once terminal0/2.402s:3958seedmembers,
+  3955regular/3preservedlinks,671sources2646nativepaths; parent independently
+  re-enumerated/rehashed both checkouts. Author is detached at exactHEAD/base.
+- Author now owns only new public day-focus R109 spec plus characterization
+  notes, no runtime/config/setup or seven-spec edits and no gate execution.
+  Metadata specialist owns proposed original eight-spec strict/lint/native
+  preparation helpers only. Actual preparation review precedes coordinator
+  launch; no changed-spec result or runtime grant exists yet.
+
+## 2026-10-15 — R108 sealed; R109 day-focus design selected
+
+- Canonical SSD path restored by user and verified; integration refs/source
+  unchanged. No successful native/compiler/ratchet/graph gate repeated.
+- Actual independent R108 closure ACCEPT_R108_CLOSURE4a35688d/sealfc2e92d5:
+  104checks PASS,1592current immutable inputs, eight review-seal members.
+  Dedicated frontend/Presenze/platform graphs terminal0/stable inputs;
+  both docs gpt-reserve chunk1/1done, no failed semantic chunks. Original
+  graph-output auditor assumption failure and additive v2 correction preserved.
+- Approved close_r108.py executed once terminal0. Master421regular members/
+  12symlinks a7c5c2ce0cd31b947a996b26a1de43edd96a58c5a3a4032fa31039157dceb74b;
+  every actual member and symlink independently re-enumerated/reverified.
+  R108root now immutable. This is not full campaign/P1/final-suite completion.
+- Current ranking Utenze391/Catasto390 coverage-blocked; Presenze352 highest
+  demonstrated full-file100 extreme. New preventive R109registry selects only
+  DESIGN_ONLY for duplicate daily-heading anomaly/request focus badges.
+  Preserve null child slots/keys, focus, count/copy/styles and functional
+  day/kind toggle; no whole-header relocation or artificial wrapper credit.
+-3957integration members frozen before coordinator docs edits; all421R108
+  members/12symlinks reverified. Dedicated Graphify orientation terminal0,
+  graph bytes unchanged. Author owns only external DESIGN.md; no runtime,
+  tests/config/worktree/gate grant. Full campaign ACTIVE/INCOMPLETE; no baseline,
+  policy, main checkout, commit, push or merge changes.
+
+## 2026-10-15 — R108 runtime independently integrated; graphs/custody pending
+
+- Full campaign ACTIVE/INCOMPLETE. Narrow granted author candidate c726f5c
+  is now byte-identical in author/integration/admitted snapshot.
+  Shared ordinary monthly-group renderer preserves keyed host sections, direct
+  day-heading child array, card order and the two separate ordered setters.
+- Supplemental3888finite source/element/action/error cases PASS, not native
+  coverage or exhaustive browser proof. Actual native496PASS/seven specs,
+  full-file1043statement1100branch306function855line100%; strict configured
+  types0/lint0 with three legacy warnings. No successful native retry.
+- Actual principal358→352cognitive315→309cyclomatic1942→1870LOC; file1042→1034/
+  1188→1180/2800→2786. Renderer4cognitive5cyclomatic46LOC/no violations;
+  308callables11errors19warnings fixed. Two physical decisions removed, not
+  eight independent improvements from overlapping scanner owners. P1 still open.
+- Independent preparation caught full-ratchet Git/source closure and separate
+  auditor consumed-path gaps before execution. Refusals immutable; additive v2
+  plans accepted, actual metadata38109full-scan/34947auditor pins prepared.
+  Actual v2 preparations both ACCEPT_PREP; foreign Jest ended naturally.
+  Author main ratchet-v2 terminal0/44.827s/findings[] and auditor-v2
+  terminal0/4.047s, stable inputs. Independent final ACCEPT_CANDIDATE05bfb2cc
+  sealed e4491e94; this is not an integration copy grant or admission.
+- Independent integration-plan CORRECTIONS_REQUIREDc3d06cb5/sealf7c072b2:
+  unfiltered recursive source discovery included677generated Graphify files.
+  Original helper/refusal immutable; additive prepare_integration_v2 explicitly
+  excludes only that generated subtree and preserves671real-source equality.
+  Corrected plan ACCEPT_PLANcedb5427 then actual39077pin ACCEPT_PREPd7405ee2;
+  exact copy and four serialized39079pin gates terminal0: mainratchet45.535s,
+  freshAFTER44.372s, strict860root/198Nexttypes24.011s, lint1.204s/three warnings.
+- Independent post-copy ACCEPT_INTEGRATED_RUNTIME1ab1c656/sealeaebc5fe;
+  671source/2646consumed-path native rebind, no identical-input native retry.
+  R107BEFORE reused only after35255runtime/tool pin rebind. Global1681files/
+  20361callables1918errors2739warnings4657findings fixed;1680other file metrics
+  and20053other callable records exact. Overlapping sums80546→80538cognitive,
+  83012→83004cyclomatic327743→327622LOC are not independent physical counts.
+-3954initial/3957current preservation and963R103–R107sealed members reverified.
+  Dedicated frontend/Presenze/platform graphs and final custody still pending;
+  actual terminal handoff/master remain authoritative. Existing tests,
+  baseline/scope/thresholds/policy/main checkout and sealed R107 remain intact.
+  No commit,push,merge or whole-campaign completion. Durable current evidence
+  lives under external r108-presenze-anomaly-groups/coordinator-evidence/.
+
+## 2026-10-15 — R107 sealed; R108 anomaly-group design selected
+
+- R107 independent closure ACCEPT_R107_CLOSURE0b2b36e7, three dedicated graphs
+  terminal0/stableinputs, both docs chunk1/1done/no failed semantic chunks.
+  Final preservation3952initial/3954current PASS. Master269members
+  bb6ceda2e93ca46a72bcdf24d65b38d8e863bedc7e219b97c7ec8432b7a6c764;
+  every member reverified before R108. R107root now immutable.
+- Full campaign remains ACTIVE/INCOMPLETE; principal358 is not original P1
+  completion. Current AFTER ranks Utenze391/Catasto390 coverage-blocked,
+  Presenze358 highest demonstrated full-file100. No global final-suite claim.
+- New preventive R108registry selects DESIGN_ONLY for duplicated monthly
+  anomaly group sections, not runtime admission. Author evaluates genuine
+  duplicate count/plural/card-list decisions while preserving keys/DOM/action
+  order and React reconciliation. No excluded candidate reuse or broad panel
+  relocation.3954integration members frozen before coordinator docs change.
+  Original current100 requires exact input rebind; no same-input native retry.
+
+## 2026-10-15 — R107 selected-day keyboard runtime independently admitted
+
+- Full campaign ACTIVE/INCOMPLETE. Current original native496/seven/four100
+  preceded exact runtime grant; no historical R36green substituted. Corrected
+  PLAN ACCEPT_PLAN and actual PREP ACCEPT_PREP bind32220inputs/30311required,
+  deterministic executables/child PATH, configured types/lint closure and
+  immutable original receipts. Foreign process refusals and502reviewer failures
+  preserved; no external process interrupted or identical successful gate repeated.
+- Author changes only selected-day onKeyDown dispatch: closest lookup remains
+  before keys, Escape first, then editable-target return, unchanged arrows.
+  Candidate/integration/snapshot exactdaad670d. Native496PASS/seven specs and
+  full-file1040statement1104branch306function852line100%; provider/native/tests
+  maps equal, seven actual raw page-bearing payloads, no independent raw replay.
+- Configured strict TypeScript0, scoped ESLint0 with two existing hooks warnings
+  plus unused isLoadingRecordDetail; author main ratchet0/findings[]. Metrics
+  main360→358cognitive316→315cyclomatic1945→1942LOC;file1048→1042/1191→1188/
+  2803→2800. Three nested owners overlap one physical removed redundant decision,
+  not six independent domain improvements.308callables/11errors19warnings fixed.
+- Independent final ACCEPT_CANDIDATE9d3fb803; exact apply_patch integration,
+  fresh integration main ratchet0/44.98s and AFTER global report0/44.28s.
+  Separate post-copy ACCEPT_INTEGRATED_RUNTIMEe4bc78c1 verifies all671frontend
+  runtime bytes equal author. Full BEFORE/AFTER1681files/20361callables,
+  1918errors/2739warnings/4657findings unchanged;1680other file and20053other
+  callable metric records exact. Local classification IMPROVED; main358 still
+  extreme, original P1/full campaign targets NOT met.
+-3952initial tracked/untracked members preserved outside authorized page/docs;
+  only two new R107documents. R103–R106all694sealed members reverified. Baseline,
+  thresholds, exclusions, coverage policy and main checkout untouched; no commit,
+  push or merge. Summary-parser failure preserved separately, no gate retry.
+- Report R107_PRESENZE_KEYBOARD_DISPATCH_2026-10-15.md and Presenze domain
+  contract document describe evidence/invariants. Dedicated frontend/Presenze/
+  platform graphs and final custody must be verified from external R107terminal
+  HANDOFF/MANIFEST, not inferred from runtime acceptance. Continue the full
+  campaign one responsibility at a time after this round's custody closure.
+
+## 2026-10-15 — R107 returns to Presenze runtime, selection only
+
+- R106closed151members/masterb511bea8, full original goal ACTIVE/INCOMPLETE.
+  New preventive R107ownership before any design/source work. Existing author
+  evaluates ONE semantic redundancy on original Presenze page; independent
+  reviewer audits whether admitted R36original-input receipts rebind today.
+  No runtime/test edit or native application gate authorized at this stage.
+- Current source deb4e9a0; fresh scoped scanner0 confirms principal
+  360cognitive316cyclomatic1945LOC, file1048cognitive1191cyclomatic2803LOC,
+  308callables11errors19warnings. All308records/file metrics exact to R100;
+  not a new global scan or a new improvement.3952versioned/untracked integration
+  file bytes hashed before candidate work, preserving unrelated dirt.
+- Selected design797ea4d2 removes one redundant key comparison/If from the
+  existing selected-day keyboard handler, keeping closest evaluation before
+  dispatch and all setters/effect dependencies/DOM/API unchanged. No extracted
+  wrapper or new callable; expected principal360→358/file1048→1042cognitive
+  is prospective and overlaps three owners. Independent design review and
+  current-tool original100 still HOLD runtime edit. Dedicated worktree from
+  committedHEAD, dependencies linked;2714current pins/745required prepared.
+- Independent rebind verdict requires fresh current-tool original evidence;
+  preparation ACCEPT_PREP/design ACCEPT_DESIGN issued87407f17. Initial launch
+  refused before spawn due foreign Jest686510; original refusal preserved.
+  Separate additive helper/auditor ACCEPT_PREPbee5e0f2, new exclusive label.
+  First foreign handle ended; second foreign Jest693074 independently live.
+  Additive helper returned3/not_launched without consuming its label. After
+  identity-bound monitor87818 ended, fresh preflight allowed approved native
+  original: terminal0/82.17s,2719stable inputs,496PASS/seven specs and full-file
+  1040statement1106branch306function853line100%. Provider/native/tests maps
+  equal with seven actual raw page-bearing payloads; no independent raw replay.
+  Exact-design grant then issued; author-only source daad670d,3added/5removed,
+  no test/config/other source changes. Supplemental480case action/exception
+  traces and exact whole-file diff PASS, not native candidate coverage.
+- Candidate PLAN review preserved CORRECTIONS_REQUIRED; corrected helpers
+  bind Node/Python/make/child PATH, configured types/lint dependency closure,
+  original temporal receipts and original proof SHA. Independent corrected
+  PLAN review pending; candidate prep/native/types/lint/metrics/ratchet remain
+  unexecuted. Integration page still original, no measured reduction or
+  admission claimed. External HANDOFF_CURRENT.md records the precise next step.
+- R42candidate remains REJECTED and R43/R63 excluded. Prefer existing seven
+  admitted496case tests if exact relevant closure can be rebound; otherwise
+  require genuinely fresh current-input original full-file100 evidence before
+  runtime admission. No historical green result substituted for current proof.
+- Ambient Graphify query failed with known Python package mismatch; explicit
+  existing R100private interpreter environment query succeeded, no installation
+  or shared environment modification. External R107SELECTION_CHECKPOINT.md
+  preserves failure and next action. No baseline/policy/commit/main changes.
+
+## 2026-10-15 — R106 select isolation, return to runtime reduction after closure
+
+- Previous prompt-only turn classified NO_PROGRESS for the campaign; current
+  continuation revalidated refs/processes, copied only independently approved
+  e96f038etest and completed fresh integration main ratchet0/43.84s/findings[],
+  actualbasea51a48dc. Independent post-copy ACCEPT_TEST_ONLY issued, conditional
+  receipt preserved; review manifest40cedbf5. Frontend graph0/10.68s. Domain/
+  platform semantic graphs and final custody bound by terminal handoff.
+- Two new public enabled-select click cases; eleven-spec273PASS/zero skip or
+  unhandled, strict670roots0/lint0/author-mainratchet0. Ten prior specs and
+  671runtime files unchanged. Original full page567/576statement578/610branch
+  176/176function528/536line: gains1/0/1/1, identical maps/no coverage lost.
+  Full-file100 FAIL9statement32branch8line; native exit1 preserved. Runtime
+  DetailContent391/304/1908unchanged, NO_CHANGE; no runtime admission.
+- Native2727stablepins/86mandatory/11actual page-bearing provider payloads
+  2595557B; provider/native/tests-map equality, no independent raw-to-Istanbul
+  replay claimed. No identical successful suite repeated or foreign job stopped.
+- Read-only R106 RESIDUAL_REACHABILITY_AUDIT classifies32remaining branch arms
+  as8public,2plausible unproved,22guarded/contract-excluded under current calls.
+  Not universal dead-code proof or authorization to remove defensive guards.
+  Further public tests alone cannot close every full-file100barrier. Preserve
+  policy and Utenze runtime unchanged; do not prolong test-only micro-slices.
+- After R106review/graphs/seal, select one original high-priority runtime
+  responsibility with demonstrable full-file100: first assess Presenze360
+  with a NEW design, never import rejected R42 or excluded R43/R63. Analytics
+  anomalies221 is an alternative with R100full-file evidence requiring rebind.
+  Full campaign ACTIVE/INCOMPLETE; no baseline/policy/commit/push/main changes.
+
+## 2026-10-15 — R105 archive metadata characterized, runtime100 still FAIL
+
+- Eight new public mounted cases: collapsed path states, all nine exact field
+  associations, null/empty fallbacks, both review flags, preservation and
+  independent disclosure lifecycle. Ten-spec271PASS/zero skip/unhandled;
+  nine prior specs/671runtime files unchanged. Strict669roots0, scoped lint0,
+  author and post-copy integration main ratchets0/findings[],actualbasea51a48dc.
+  Independent final ACCEPT_TEST_ONLY admits exactdaac33c5test; reviewer STOP.
+  Initial pre-native integration refusal preserved; additive-reviewed distinct
+  helper gate0/2728stablepins, no foreign-process interruption or suite retry.
+- Full original page566/576statement578/610branch175/176function527/536line;
+  gains2/10/2/1, identical maps and no lost coverage. FAIL100 remains
+  10statement32branch1function9line. Runtime391/304/1908unchanged, NO_CHANGE;
+  no runtime refactor admission or complexity reduction credited.
+- 2726stable native pins/85mandatory/671src,10actual page-bearing payloads
+  2343822B, provider/native/tests map equality. No independent raw-to-Istanbul
+  replay claimed; one genuinely new-input native union, no retries.
+- R104167member seal027f8400 verified before67file freeze. Main/baseline/
+  thresholds/policies and unrelated work preserved; no commit,push,main merge.
+  Report R105_UTENZE_ARCHIVE_METADATA_2026-10-15.md; terminal handoff under
+  external r105-utenze-archive-metadata/coordinator-evidence/HANDOFF.md.
+  Full campaign ACTIVE/INCOMPLETE; next public gap selection only after closure.
+
+## 2026-10-15 — R104 Audit log characterized, full-file100 still FAIL
+
+- Seven new public mounted disclosure cases, nine-spec263PASS/zero skip or
+  unhandled errors; previous eight specs and671runtime sources unchanged.
+  Strict668roots0, scoped lint0; author and post-copy integration main ratchets
+  terminal0/findings[], actual basea51a48dc. Independent final ACCEPT_TEST_ONLY
+  admits exacte504cf93test; conditional receipt preserved, reviewer STOP.
+- Original page564/576statement568/610branch173/176function526/536line;
+  gains3/5/3/2, identical maps/denominators and no covered counter lost.
+  FAIL100 remains12statement42branch3function10line. Runtime391unchanged,
+  NO_CHANGE; no runtime refactor admission or new complexity reduction.
+- Native2727stable pins/84mandatory/671src,9actual page-bearing payloads
+  2090200bytes, provider/native/tests coverage equality; no independent
+  raw-to-Istanbul replay claimed. Original pre-native refusal/static rejection
+  and reviewer parser correction retained; no identical native suite retry.
+- R103220member seal intact. No baseline/policy/main/commit/push changes;
+  unrelated dirty work preserved. Report R104_UTENZE_AUDIT_LOG_2026-10-15.md;
+  external r104-utenze-audit-log/coordinator-evidence/HANDOFF.md indexes final
+  gates, review, graphs and custody. Global campaign ACTIVE/INCOMPLETE;
+  archive metadata remains a separate next prerequisite after R104 closure.
+
+## 2026-10-15 — R103 recovery, document collection characterized
+
+- Successor goal recovered native terminal256PASS/0skip/unhandled rather than
+  rerunning certified inputs;27new public mounted collection cases, exact
+  source921a46ea. Strict667roots0; recovered lint0/author-mainratchet0.
+  Independent source admission ACCEPT_TEST_ONLY; post-copy integration gate,
+  final certificate and Graphify/custody in recovery handoff below.
+- Full original page561/576statement563/610branch170/176function524/536line;
+  gains20/31/9/12, identical maps/denominators and no coverage loss. FAIL100
+  remains15statement47branch6function12line. Runtime391unchanged, NO_CHANGE;
+  no runtime refactor before full-file100 or new global reduction claimed.
+- Native2726stable temporal pins/83mandatory/671src,8actual page-bearing raw
+  payloads1,845,102B,provider/native equality. No raw-to-Istanbul replay claim.
+  Original strict failure,31memberfreeze and foreign-heavy refusals preserved.
+  No baseline/policy/main/commit/push changes; unrelated dirty work preserved.
+- Reporting correction:449historical backend skips are immutable suite results;
+  R68–R73 separately report250follow-up identities verified/199remaining.
+  R103 re-certifies none of those backend cases; avoid blanket449unverified.
+- Report R103_UTENZE_DOCUMENT_COLLECTION_2026-10-15.md; durable
+  r103-utenze-document-collection/coordinator-evidence/recovery-20261015-HANDOFF.md.
+  Global goal ACTIVE/INCOMPLETE; next bounded prerequisite is public audit log.
+
+## 2026-10-15 — R102 Visura characterization admitted, runtime still blocked100
+
+- Exact frozen R10110edit and new16real mounted Visura tests admitted under a
+  distinct current independent ACCEPT_TEST_ONLY certificate; historical R101
+  REJECTs unchanged. Corrected229PASS/0skip/unhandled, strict666roots0, lint0.
+- First222PASS/7FAIL duplicate-text queries preserved49members, then minimal
+  distinct guarded card-scoping fix at three sites; no assertion removed or
+  automatic native retry. Reviewer metadata-audit errors retained separately.
+- Complete2724stable temporal pins including actual converter,82minimum inputs,
+ 671source files,7page-bearing raw payloads1589416B, full native/provider map
+  equality. No independent raw-to-Istanbul transform replay claimed.
+- Full original page541/576statement532/610branch161/176function512/536line;
+  gains16/14/2/16 over prior same-page report, no map/counter coverage loss.
+  FAIL100 persists35statement/78branch; DetailContent391unchanged, NO_CHANGE
+  runtime complexity. No runtime refactor before full-file100.
+- Author and integration main ratchets0/findings[], authoritative basea51a48dc;
+  diff-check0. Waited foreign-heavy jobs without interruption; original refusals
+  retained. No baseline/threshold/policy/main/commit/push changes; R100/R99
+  preserved. Last global scan remains R100, no new reduction claimed.
+- Final certificate sealf26b3f4b, report
+  R102_UTENZE_VISURA_CHARACTERIZATION_2026-10-15.md; durable handoff/graphs in
+  external R102 coordinator-evidence/HANDOFF.md. Goal ACTIVE/INCOMPLETE;
+  449historical backend skips still unverified, not PASS.
+
+## 2026-10-15 — R101 distinct provider capture preserves data, admission still BLOCKED
+
+- Conditional preparation review accepted actual native-provider reporter, not
+  main-process V8. After two600s foreign-heavy waits and fresh quiet preflight,
+  one distinct capture ran:213PASS/zero skip/unhandled, six real page-bearing
+  provider payloads, exact pre-report/report map equality. Native1 remains four
+  unchanged100threshold deficits; no corrected types/lint replay.
+- Independent post-capture audit REJECT:41identical before/after pins omit the
+  converter required by preparation. Current matching converter hash is not a
+  historical launch-time receipt. No retrofit pin, third identical suite run or
+  weaker admission. New test stays outside integration; no runtime change.
+- Original REJECT/first-failure metadata mismatch preserved. Current capture
+  review seal5ca615b8 and verification seal35b749bc are distinct, not historical
+  repairs. Remaining51statements/92branches; Utenze391 unchanged. All agents STOP;
+  only checkpoint docs/handoff admitted. Existing R100/R99 inputs unchanged.
+- Next: prove pinset completeness before any future genuinely new-input test
+  responsibility; do not rerun certified213 merely to replace missing metadata.
+  Goal ACTIVE/INCOMPLETE; no baseline/policy/commit/main changes.
+
+## 2026-10-15 — R101 admission blocked by independent evidence review
+
+- New ten public Utenze edit/save cases plus original203 pass:213PASS, zero
+  failed/skipped/pending/todo. Strict665roots and lint terminal0; author main
+  ratchet0/findings[]. Original full-page coverage remains FAIL100:
+  statements525/576,branches518/610,functions159/176,lines496/536; no runtime edit.
+- Independent final audit REJECT, not an assertion failure: first types failure
+  manifest matches23/24 members because v2 overwrote shared roots metadata;
+  original14TS2769 diagnostic log/candidate remain intact. Automatic raw V8
+  output lacks original page URL/worker source maps; provider coverage reports
+  compare correctly, but no independent raw-to-page reconstruction is proven.
+- Candidate1bcb2f76 stays separate in R101 author worktree, NOT imported into
+  integration, no code/receipt repair or suite retry. Useful characterized tests
+  do not override custody rejection or admit DetailContent391 runtime refactor.
+  Author/current66member seal and independent verifier seal retained separately.
+- Existing R100/R99 inputs preserved; no baseline/policy/main/commit changes.
+  All R101 agents STOP. Report R101_UTENZE_SUBJECT_EDIT_CHARACTERIZATION_2026-10-15.md
+  records the precise deficits; next activity requires separate evidence-capture
+  design/review before any distinct execution. Goal ACTIVE/INCOMPLETE.
+
+## 2026-10-15 — R101 returns to highest remaining extreme, Utenze391
+
+- Prior R100 is real progress, verified/sealed125members; goal ACTIVE/INCOMPLETE.
+  New single test-only responsibility: subject person/company hydration→editing→
+  save payload/response lifecycle. handleSave57 and hydration51 contribute to
+  DetailContent391. No runtime refactor/admission before full-page100.
+- R32 original measurement480/576statement480/610branch remains FAIL100;
+  bind preserved raw coverage to exact current source, do not rerun identical
+  certified suites merely for a new label. Add genuine public transitions only.
+- Dedicated branch/worktree from committed7f39510a excludes unrelated uncommitted
+  R100/R99 changes. New test exclusive author; independent gap reviewer read-only,
+  one heavy token. Runtime/old tests/config/main/baseline/policy unchanged.
+
+## 2026-10-15 — R100 independently verified ordered-name deduplication admitted
+
+- Exact three reviewed files applied to integration; source review ACCEPT,
+  independent genuine428PASS/terminal0, analytics627statement252branch100%.
+  Supplemental78PASS and mutation probes2PASS; prior harness failures retained.
+- Fuel cognitive217→192, `_op_km`33→18, file706→676; five unique duplicate OR
+  nodes removed, not ten independent decisions. Errors18→16, warnings10→13;
+  helper cyclomatic11 warning explicit, finding total28→29 not called reduction.
+- Author/verifier full main ratchet terminal0/findings[], basea51a48dc. Runtime
+  pins exact; no baseline/policy/main edits or commit. After recorded external
+  TypeScript/Jest waits, integration lint/ratchet/globalreport/diff-check and
+  Operazioni code Graphify terminal0. Domain/platform docs also terminal0,
+  chunk1/1done/no semantic failures, gpt-reserve. Initial interpreter import
+  failure retained; private Python3.12 binding uses existing packages without
+  changing shared venvs/dependencies. External-started domain overlap recorded;
+  platform waited for fresh quiet slot and ran once, no successful gate repeated.
+- Fresh global1681files/20361callables,1918error/2739warning; all nonanalytics
+  runtime records exact to October14. Tail>20016→15; >3003 and >10055 unchanged.
+- Report R100_FUEL_OPERATOR_NAME_VARIANTS_2026-10-15.md and durable external
+  r100-fuel-operator-names/integration-evidence/HANDOFF.md and content manifest.
+  Final receipt annotations not claimed graph-indexed; prior source pins/seals
+  preserved. No next hotspot or commit. Goal ACTIVE/INCOMPLETE.
+
+## 2026-10-15 — R100 resumes measured extreme-tail reduction, one fuel policy
+
+- Prior turn is concrete progress: original Catasto native cases both PASS and
+  independently reviewed, bounded test-only candidate admitted for checkpoint.
+  Global goal remains ACTIVE/INCOMPLETE; no commit/merge inferred.
+- Current highest frontend extremes Utenze391/Catasto390 remain coverage constrained:
+  R32 full-page83.33%statement/78.68%branch, R30 Catasto624/643statement/580/645branch.
+  No bypass or reuse of R63/R43 excluded work. Next safe runtime hotspot is
+  fuel_analytics217cognitive with existing full-file625/625statement252/252branch.
+- R100 owns only duplicated ordered WCOperator name-variant construction used by
+  consolidation and distance fallback. Preserve raw username/empty variants/order/
+  collision precedence/SQL/results; deduplicate real repeated boolean fallbacks,
+  not relocate mega-function. New dedicated SSD worktree from committed7f39510a,
+  main/basea51a48dc, unrelated uncommitted integration/main work not copied.
+- Author sole campaign heavy token; frontend/main/baseline/tooling read-only.
+  Characterize→test→refactor→test→measure→ratchet→independent review; full-file100
+  mandatory before runtime admission. Scope/threshold/policy unchanged; no commits.
+
+## 2026-10-15 — R99 both original Catasto drill-down cases native PASS
+
+- Fresh quiet/exact custody PASS; reviewed wrapper once session31276 terminal0,
+  invocation92a1b8777d3142e08ac375dd15a98394, service46.033s. Original22:5PASS3525ms
+  and58:5PASS3875ms, zero skip/retry; all native/wrapper/driver exits0.
+- Raw129files copied/verified, seal
+  9e1248a6ec2443baeffc691bfc99d9ea325f6c29ad145a2e28af5b547cebbac6.
+  Working private DB79afb736 retained; authorized synthetic cleanup after success
+  only. MainPID0/ownedcgroupabsent; source/main/policies unchanged.
+- Independent terminal2471/2471PASS, eight-file seal
+  4ea6e40dcb524b6e91da3e20d803be3a3bd0bf495f7ca4245ff22f0b64b4fa11;
+  reviewer STOP. Coordinator admits six pinned test-only sources for checkpoint/
+  review, no commit/merge. Actual empty branch supported, populated branch unit-
+  characterized only, not native verified. No global completion. R97
+  failures/DB/seals remain immutable. Graphify docs before launch exit0/chunk1/1done,
+  1077nodes/1435edges/165communities; terminal annotations not claimed indexed.
+- R98 external documentary archive initially used wrong cwd, preserved with limit;
+  accidental read-only main PROGRESS copy not adopted. True integration companion
+  seal51d0f79a156721424f1654207e4baeabc38967bda93625104c839a1981fbac34
+  independently verified. No source/native custody change or main write.
+
+## 2026-10-15 — R99 fresh source preparation sealed, review pending
+
+- R98 source accepted36/36,116unitPASS/tsc0/mainratchet0. Fresh R99 preparation
+ 2168checks PASS; exact inherited contracts/proxy, only identities change.
+  Six test-source pins; protected2736 projects R97 with only spec/manualunit delta.
+-33record seal1330b28e9452d5b11c6b0aabcee09c55de6050c49e0c29f2bc9ed1b90e8dd10f
+  verified/fsynced; preparer STOP. Independent binding2212/2212PASS, review seal
+  8aaffec62366f98461e03021f16c40ef654cea5699f7ea61b25fcf2cb14b1082;
+  reviewer STOP. No activation
+  before acceptance/fresh quiet custody. R97failedDB/seals preserved; no retry.
+  Runtime/main/policies unchanged; no admission/coverage/global completion claim.
+
+## 2026-10-15 — R98 two exact combobox-role queries, source gates
+
+- R97 independent terminal confirms label/options mismatch. Two E2E selectors
+  now use exact combobox role/name; same article scope, visibility and timeout.
+  Only matching new smoke unit updated; remaining source byte-exact to R97.
+-116tests/5files PASS, strict typecheck0, exact bounded delta/diff-check PASS.
+  Ratchet main actual session26657 terminal0/findings[]. Independent source
+  review36/36accepted for fresh binding only, seal
+  4e91118e64cf2f204145130f4a9fc38d1f2dd6040f695c9b3161af6ca0ae5820;
+  reviewer stopped. R99 source-only fresh preparation on disjoint ownership.
+  No consumed-run retry, runtime/main/policy changes, coverage/reduction/admission
+  or global completion claim. Historical failures/seals preserved.
+
+## 2026-10-14 — R97 native once: first PASS, second selector FAIL
+
+- Awaited two external Jest phases; both refused preflight receipts retained.
+  Fresh quiet/full custody PASS, reviewed wrapper once, session26115 terminal1.
+  Native22:5 PASS3.767s;58:5 FAIL24.700s at exact label Severità, no skip/retry.
+- Browser snapshot shows actual Severità/Stato combobox accessible names; diagnosis
+  is test-selector mismatch, not an application regression claim. Secondary strict
+  drain failure preserved separately; no source correction or native rerun here.
+- Service66.079s/MainPID0/owned cgroup absent; raw234files seal
+  fd04c5b8f2a663573f39ee79308e78f6b87b59ba107a0031efe0a06d560a749f,
+  failed DBd1b90869 retained before diagnosis. Independent terminal review770/770,
+  seal0db4fe3e3c2b13208a35eae718f2da7d41432c5e0d62f46d4a6e19e806172611;
+  reviewer stopped, confirms bounded two-query correction recommendation;
+  accumulated candidate NOT_ADMITTED. Runtime/main/policies unchanged, goal incomplete.
+
+## 2026-10-14 — R97 fresh source preparation sealed; binding review pending
+
+- R96 minimal source review accepted62/62 for preparation only. R97 fresh nonce,
+  six test-source pins, exact R95 contracts/proxy, only runner identity/unit custody
+  and wrapper stem differences. Final2120read-only checks PASS; no activation.
+- Preparation seal ca85110245ddbe1322e310e7ef20b4e34be2d98d0694be04f68b5ba2580e810a
+  verified. Preparer stopped; independent binding review2183/2183PASS, seal
+  81f6ba91610af05a69bea9cf4aeef591acbb89e59fa2fc45721015b1ee36eae5;
+  reviewer stopped. Fresh quiet/full custody before separate native activation.
+  Standing execution grant already applies, no repeated permission question.
+  Accumulated candidate NOT_ADMITTED before native gate; failures preserved.
+- Fresh current scanner checkpoint:1681files/20360callables,1920errors/2736warnings;
+  tail>300:3,>200:16,>100:55. Raw global deltas include intervening history, not
+  exclusively campaign impact. No new reduction from test-only corrections.
+  COMPLEXITY_CURRENT_CHECKPOINT_2026-10-14.md records evidence/hash and limits.
+  Runtime/main/policies unchanged; no commit/global completion claim.
+  Graphify platform-docs exit0/chunk1/1done,1073nodes/1426edges/164communities;
+  subsequent receipt annotations not claimed indexed, generated output ignored.
+  First fresh preflight refused before activation due live external Jest2479812;
+  exit1/stderr preserved. No native attempt; awaiting external-state change, not
+  retrying tests or bypassing the guard.
+  Earlier advisory comm-based filter missed Node's renamed comm: Graphify did
+  overlap this external process and is not claimed quiet/exclusive. Authoritative
+  reviewed argv-based native guard caught it; no guard change or native launch.
+
+## 2026-10-14 — R96 minimal anomaly smoke implemented;116tests/ratchet PASS
+
+- Independent V2 review rejects380LOC observer as disproportionate and improperly
+  excluding valid equivalent visible rows. Minimal original visibility/navigation
+  intent preserved instead: manual tab, scoped real register/filter/reset controls,
+  nonloading/error-free row-close or empty. No observer or mutation/API-generation claim.
+- Four additive real-page unit cases; entire prior unit source and first native
+  case/second prefix/static22:5/58:5 exact. Before61PASS, after116PASS; first strict
+  typecheckFAIL retained (five unsupported new Testing Library exact options).
+  Only new matchers corrected to anchored regex; distinct116PASS/typecheckPASS.
+- Actual ratchet main terminal0/findings[], policy hashes/source preservation/
+  diff-check PASS. Runtime/main untouched, no coverage or new complexity reduction.
+  Implemented source review accepted62/62 for fresh preparation only, seal
+  88f9ecc86562cf4c55ba80bfa71297e2160bfb9b862ee990ae31bbd7d21c0afd;
+  native admission still withheld. R97 source-only fresh binding begins on
+  disjoint ownership, activation only after both independent reviews. Global incomplete.
+
+## 2026-10-14 — R96 anomaly workflow test-only design under independent review
+
+- Separate bounded consolidation follows sealed R95 PASS/FAIL; no retry or source
+  implementation yet. Manual-tab/automatic-filter/context-reset/register-reset
+  mapping preserves original smoke intent, not unrelated-button substitution.
+- First case/prefix/static identities22:5/58:5 preserved. Proposal85net test LOC
+  requires observer countertests and pertinent existing page suites/typecheck.
+  No native proof, runtime change, baseline or timeout policy edit.
+- Designer25staticchecks/10-file seal verified; stopped. Independent48checks
+  rejects exact observer lifecycle/frame guards/stale-cardinality handling.
+  No source implemented; new design-v2 only, first proposal/review immutable.
+  V2 now sealed9datafiles/63staticchecks, designer stopped.380LOC helper proposal
+  requires independent necessity/lifecycle/source review and characterization;
+  revised reviewer reserved, not yet dispatched. All dispatched agents stopped.
+  Preserve failure/history seals; global incomplete.
+
+## 2026-10-14 — R95 native verification: parcel case PASS, anomaly case FAIL
+
+- Standing grant used without repeated authorization request; quiet/full custody
+  PASS, exact reviewed wrapper once, session96971 terminal1, no timeout/retry.
+- Original22:5 PASS full first case, success-only synthetic cleanup completed.
+  Original58:5 FAIL at78:75, old Applica filtri absent20s; suffix unverified.
+  Strict-drain secondary failure preserved separately. Accumulated NOT_ADMITTED.
+- Raw223files byte-exact copy/seal and failure DB21f24881 retained; no postfailure
+  cleanup. Input/source/original fixture exact; owned unit MainPID0/cgroup empty.
+- Read-only history proves June5d8d78faa removed old apply workflow, ancestor
+  HEAD/main; runtime unchanged. New console defaults CF and manual register is a
+  separate tab, not a simple label substitution. No test correction or retry now.
+- Independent terminal review1065checks confirms PASS/FAIL/secondary-drain,
+  7-data-file seal verified, reviewer stopped; no admission of accumulated candidate.
+  Graphify docs before native run PASS,
+  chunk1/1done; terminal annotations not claimed indexed. Global incomplete.
+
+## 2026-10-14 — R95 private environment source binding independently accepted
+
+- Standing execution grant retained, no repeat authorization questions. Fresh
+  R94-bound source environment only; five test pins and two original native
+  identities preserved. Runtime/config/main/baseline untouched.
+- Nine contracts/proxy exact; wrapper identity and runner path/supporting unit
+  custody only. Protected2736map45e81a48 reconstructs R93 with exact two test deltas.
+  Source-only stage did not create services, working DB or execution directories.
+- Initial expected-metadata inspector2235FAIL retained; template-only correction,
+  corrected2238/final2276PASS.34-file preparation seal verified; preparer stopped.
+  Coordinator incorrect seal-filename read retained as diagnostic, no source effect.
+- Independent2467+4checks accepted,13-file review seal verified; reviewer stopped.
+  Initial inspector regex parse diagnostic retained, checker-only correction.
+  No native admission yet; execute once with fresh quiet/custody and unchanged limits.
+  R93 failure evidence/DB immutable; global campaign incomplete.
+
+## 2026-10-14 — R94 obsolete parcel heading test reconciled, source accepted
+
+- Separate small test-consolidation slice follows independently proven April24
+  label drift. Changes only Ruoli tributo→Utilizzatore / pagatore annualità in
+  existing visibility assertion; every other spec byte exact frozen R93.
+- Five new actual annual-user panel DOM/source counterchecks; focused four-file
+  suite61PASS (5new+19KPI+27readiness+10existing parcel), strict typecheck PASS.
+  Missing/hidden/duplicate labels retain failing model conditions; no positional
+  workaround or removed assertion. jsdom is not native Playwright proof.
+- Runtime/helper/existing tests/config/package hashes unchanged; diff-check PASS.
+  No runtime coverage/complexity claim, no source repair to driver or old failed
+  run. Standing execution grant removes repeated verification-permission requests.
+- External r94-parcel-heading/ preserves prior spec/docs and final source/tests.
+  Independent272checks accepts source correction;6-file seal verified, reviewer
+  stopped. Actual native behavior remains unverified; later run requires binding
+  and cannot rewrite R93 FAIL/NOT_RUN. Global campaign incomplete.
+
+## 2026-10-14 — R93 native execution authorized: FAIL / NOT_RUN
+
+- User grants all verification executions without repeated permission requests.
+  New receipt separate from immutable source-only preparation. Quiet/full custody
+  PASS; reviewed wrapper invoked once, service44.528s exit1, not timeout.
+- First22:5 FAIL at53:54 waiting Ruoli tributo; second58:5 NOT_RUN, retry0.
+  Scoped KPI assertions/parcel URL reached; native snapshot renders current
+  Utilizzatore / pagatore annualità label. All relevant detail GETs200 in log.
+- Read-only history proves same panel renamed by8ee906ff on2026-04-24, ancestor
+  of HEAD/main; runtime exact committed sources. Evidence indicates stale test
+  label, not newly demonstrated runtime regression. Independent review875checks
+  confirms provenance, all four KPI assertions and parcel navigation prefix;
+  7-file seal verified, reviewer stopped, no native admission.
+- Secondary strict-drain failure preserved separately. DB failure snapshot and
+  raw171files copied exact; wrapper/runner before-after custody exact. No
+  postfailure cleanup/retry, service reset, runtime or test repair at this stage.
+- Native session39435 terminal1/MainPID0, owned cgroup empty observed. Source and
+  limits unchanged; global goal incomplete, candidate NOT_ADMITTED. Missing
+  execution permission no longer a blocker; future verified runs need no repeat
+  question, but retain fresh source binding, review and failure preservation.
+- Graphify platform-docs exit0/chunk1/1done,1044nodes/1382edges/163communities,
+  no semantic warnings; final annotations after refresh not claimed indexed.
+  Coordinator made one refused nonexistent-cell wait during terminal review;
+  no process touched. Next label reconciliation isolated from this frozen run.
+
+## 2026-10-14 — R93 private source binding prepared; no activation
+
+- User approves only preparation/review of a new private environment for R92.
+  Dedicated integration HEAD7f39510a/main-basea51a48dc unchanged; main untouched.
+  Fresh nonce33721455b8fa4ef492b1456cd5e45080; future run directories absent.
+- Corrected spec and supporting KPI unit explicitly bound with unchanged
+  readiness closure. Protected2735 digest401b4b60 reconstructs R91 with only
+  those two test deltas; no runtime/config change or physical restoration.
+- Nine R91 contracts/proxy exact; wrapper only stem; runner only native-r93
+  future identity and supporting unit custody. Driver, limits, retry/auth/DB
+  semantics unchanged. R91 failure/consumed grant and prior seals preserved.
+- Preparer1957 final static checks, 30-file seal verified; preparer stopped.
+  Independent binding accepted:2176 inspection checks, 5-data-file seal verified;
+  reviewer stopped. No native collection, service, E2E, DB API,
+  build or suite rerun. Prior R92 46PASS referenced only, not rerun in R93.
+- External r93-private-environment/preparation/ retains snapshots/diagnostics/
+  manifests; mutable PROGRESS frozen before update. Global goal incomplete,
+  accumulated candidate NOT_ADMITTED; source review cannot authorize activation.
+- Graphify platform-docs exit0/chunk1/1done,1029nodes/1354edges/163communities,
+  no semantic warning; ignored generated output. Final annotations afterward
+  not claimed indexed. Reviewer wrong-cwd stat and Coordinator refused wait
+  diagnostics retained; none is an application test or service failure.
+
+## 2026-10-14 — R92 KPI selector preparation; no new native execution
+
+- Explicit user grant only correction preparation/review after R91 strict-text
+  FAIL. Four KPI visibility selectors now scoped to `.metric-card`; all other
+  spec bytes identical to frozen R91, including tabs/actions/URLs/timeouts/auth.
+- Added 19 source/DOM contract cases with real MetricCard rendering; existing
+  readiness27 unchanged. Final focused46 PASS, targeted strict typecheck PASS,
+  protected input hashes and diff-check PASS. These are NOT native Playwright.
+- Initial unit attempt42PASS/4FAIL retained: manual DOM removal conflicted with
+  React cleanup, fixed only new fixture using unmount. Initial external typecheck
+  config lacked Node types; failure/config retained, external config corrected.
+- No runtime, helper, driver, fixture DB, dependency/config/policy or baseline
+  edits; no services/E2E/commit/main merge. Historical R91 FAIL/NOT_RUN remains.
+- External r92-kpi-selectors/ preserves prior mutable docs/spec, failed attempts
+  and current-source hashes. Independent source review accepts preparation only:
+  258 inspection checks, 10-file seal verified; reviewer stopped. Whole accumulated
+  candidate NOT_ADMITTED. New native binding/grant required before E2E.
+- Graphify platform-docs exit0/chunk1/1done, 1026nodes/1341edges/163communities,
+  no semantic warnings, ignored output; later closure annotations not claimed
+  indexed. Ancillary reviewer /tmp log ownership deviation and Coordinator
+  wrong-cwd hash observation preserved separately, not application failures.
+
+## 2026-10-14 — R91 once-only native execution: FAIL / NOT_RUN
+
+- User explicitly grants one R91 invocation, no retry, service900s/host930s.
+  Fresh quiet/full custody PASS; exact reviewed wrapper invoked ONCE, service
+  23.503s exit1, not deadline exhaustion. Source-only historical seals unchanged.
+- Original22:5 first case FAIL strict getByText Particelle matches3elements at
+  spec37:68;58:5 second NOT_RUN. Raw expected0/skipped0/unexpected1/flaky0/retry0.
+  Readiness passed district selection/frame/N.distretto check in this run, not
+  proof of whole helper/downstream/case2/anno-reload equivalence or admission.
+- Secondary strict driver Unexpected owned teardown status over namespace1
+  preserved separately; it must not replace primary raw locator failure.
+  No locator/runtime/driver correction, timeout increase, retry or baseline edit.
+- Wrapper and runner before/after custody exact; failed unit/MainPID0 and retained
+  slice populated0 observed. Failure DB407e4a3a preserved; only initial cleanup,
+  no postfailure synthetic cleanup, service reset/deletion or unowned signal.
+- Raw results/log/trace/video/screenshot/DB archived with no self-entry manifest;
+  separate terminal reviewer owns only new review/ and native token is released.
+  Report R91_NATIVE_TERMINAL_2026-10-14.md; grant consumed, candidate NOT_ADMITTED.
+  Global campaign incomplete; new repairs/native execution need separate decision.
+- Independent terminal review559/559inspection checks, raw155records/live exact,
+  trace confirms primary locatorFAIL;121file seal verified. Reviewer stopped.
+  Graphify platform-docs after quiet/native terminal exit0/chunk1/1done,
+  1021nodes/1333edges/161communities, no semantic warning; final annotations after
+  refresh not claimed indexed. Durable HANDOFF/FINAL_SHA256SUMS preserve failure.
+
+## 2026-10-14 — R91 new private source binding accepted; no activation
+
+- Explicit grant only preparation/review, no services/E2E. Dedicated integration
+  HEAD7f39510a/main-basea51a48dc unchanged, main concurrent bytes read-only/excluded.
+  New nonce5cc96152760d4c6da5421a7dbde0ed1b and exclusive future paths remain absent.
+- Nine R89 contracts/proxy byte-exact; wrapper stem and runner native-r91 identity/
+  R90 spec-helper-unit import closure custody only. Driver strict-drain unchanged;
+  no reuse of consumed R89 grant/run/failure DB or rewriting historical receipts.
+- Protected2734 reconstructs old2732 digest with only R90 test deltas; identities
+ 22:5/58:5 source-derived, NOT real Playwright collection proof. No runtime edits.
+- Preparer1817final AST/hash checks and28file seal; independent1913/1913checks and
+  39file seal accepted SOURCE_BINDING_ACCEPTED_NO_EXECUTION_AUTHORIZATION. These
+  are inspection checks, no native test/coverage/ratchet or universal timing proof.
+- Preserved R90 ordering, proxy coverage and build provenance limits. Explained
+  missing-path inspection and accidental nonexistent wait-handle refusal retained.
+  No DB API/open/copy/mutation, auth/quota change, test/build/scanner or service.
+- Mutable docs frozen before edits; durable root external r91-private-environment/,
+  HANDOFF.md/FINAL_SHA256SUMS. Registry/report R91_PRIVATE_ENVIRONMENT_2026-10-14.md.
+  Agents stopped; candidate NOT_ADMITTED, no commit/main merge or new slice.
+- Graphify platform-docs deferred due to live concurrent shared Jest1944509,
+  NOT_RUN; old R90 graph not claimed current. Native follow-up needs separate
+  explicit execution decision, fresh quiet/full custody and original unchanged
+  bounds. Global goal remains incomplete, never COMPLETE from this preparation.
+
+## 2026-10-14 — R90 test-only readiness prepared; native verification not authorized
+
+- User authorizes preparation/review only. Integration branch/HEAD/base unchanged;
+  main, DB, services, proxy/driver, consumed R89 grant and historical receipts intact.
+- Frozen prior spec and PROGRESS externally before edits. Two immediate row counts
+  now gated by real fetch/XHR list/history and coherent rendered DOM; document HTML
+  excluded following independent review. Genuine confirmed empty retains old skip;
+  load error, missing-auth/loading and timeout cannot become zero-row skip.
+- Year reload boundary after history body parsing rejects initial duplicate effects,
+  including header/body interleaving. Conservative observer/browser ordering can
+  fail closed; no universal React or native readiness claim. KPI fallback unchanged.
+- 27 unit cases PASS; strict targeted three-file typecheck, byte-exact downstream
+  preservation and runtime/config hash checks PASS; diff-check PASS. Earlier CLI
+  unsupported minWorkers, fixture24PASS/2FAIL and first typecheck failure preserved.
+- No runtime edits/coverage-policy changes or complexity-reduction claim. Unit DOM
+  and mocked poll are not actual browser timeout/E2E/auth/DB proof. No E2E launched.
+- Candidate source snapshot sealed externally under r90-drilldown-readiness/;
+  report R90_DRILLDOWN_READINESS_2026-10-14.md. Independent source review accepts
+  preparation with ordering limitation: 105/105 inspection checks,36-file seal;
+  full candidate including prior iframe/click remains NOT_ADMITTED. No commit.
+  Future native verification needs separately reviewed new binding/authorization;
+  global campaign remains incomplete, no automatic new slice or R89 retry.
+- Graphify platform-docs refreshed after quiet observation: chunk1/1done,
+  1013nodes/1315edges/161communities, no semantic warning. Final review annotations
+  appended afterward not claimed indexed. Durable handoff/manifest at external
+  r90-drilldown-readiness/HANDOFF.md and FINAL_SHA256SUMS; reviewer stopped.
+
+## 2026-10-14 — R89 executed once after lock closure: SKIP / NOT_RUN
+
+- User closes spreadsheet; lock absent. New after-sheet-close snapshot reuses
+  exact reviewed sources without repinning. Quiet and full source/build/main/
+  fixture/proxy custody PASS; wrapper invoked once, service900s/host930s unchanged.
+- Native service terminal1 after22.137s. Original21:5 case SKIP (native exit0,
+  one skipped, zero unexpected/flaky), original60:5 NOT_RUN. No retry or admission.
+  Child reports original test skipped; strict driver separately rejects already
+  exited namespace1 despite recorded populated0, preserving secondary failure.
+- Backend logs307non-slash then200slash district list and200district KPI with
+  corrected proxy. This does not prove response body, rendered readiness or exact
+  SKIP cause. Initial cleanup only; working failure DB/raw receipts preserved,
+  no post-failure synthetic cleanup. Original/prepared DB hashes unchanged.
+- Full before/after custody exact. Service failed/MainPID0, retained slice empty
+  populated0 observed; no failed-unit reset, unowned signaling or native restart.
+  Independent terminal reviewer assigned exclusive new directory, no test rerun.
+  Report R89_NATIVE_TERMINAL_2026-10-14.md; campaign globally incomplete.
+- Independent terminal review confirms SKIP/NOT_RUN/secondary-drain-failure,
+  no admission. First inspector328/330exit1 retained: real raw-manifest self-entry
+  defect plus reviewer row-variable expectation error. Distinct81/81checks pass;
+  all79raw data hashes independently verified,103review-file seal verified.
+  Original malformed80-entry manifest preserved, never reported fully PASS.
+- Dedicated Graphify platform-docs after quiet guard: patch/target exit0,
+  chunk1/1done,1002nodes/1302edges/160communities; no semantic warning.
+  No generated graph staged. Final receipt annotations added afterward are not
+  claimed semantically indexed. One native grant consumed; no automatic rerun.
+
+## 2026-10-14 — R89 quiet slot found; custody drift stops before launch
+
+- User authorizes continuous read-only slot observation; exact reviewed guard
+  finds QUIET on first observation in watch-20261014T154358Z. Not a native retry.
+- Full custody then refuses: recorded diagnostic shows only main_untracked differs,
+  by a new spreadsheet lock under main outputs/avvisi_2022_2023_20261014/.
+  Runtime/build/interpreter/fixture/proxy/source/HEAD/base and all other pinned
+  fields equal in the captured comparison. No stale pin rewritten or lock removed.
+- Observer terminal1, diagnosis terminal0 as metadata inspection only; wrapper
+  invocations0, no private unit/run/working DB/browser and both E2Es NOT_RUN.
+  Independent inspection assigned external terminal-review only; no native retry.
+- Requested normal spreadsheet closure, not deletion of lock or concurrent work.
+  Further action requires exact custody restored, or separately prepared/reviewed
+  new snapshot. Previous refusals/seals unchanged; global goal incomplete.
+
+## 2026-10-14 — R89 user-requested fresh preflight still refused
+
+- User «riprova»: new external resume-20261014T150424Z, prior63-file native
+  checkpoint/source seals verified unchanged. Full preflight program retained.
+- Fresh guard exit1 detects live Piscaware Jest1733494/1756460; full runtime/
+  build/main custody not reached. Both Catasto cases remain NOT_RUN; no launch,
+  unit, working DB, native retry, source change or weakening of guard.
+- Refusal, exact invocation, process observation and final documents sealed in
+  the new resume directory. Coordinator evidence, no new independent certification.
+  Once-only native authorization remains unconsumed; genuinely quiet slot and
+  exact custody still required. No commit; global campaign incomplete.
+
+## 2026-10-14 — R89 native grant received, preflight deferred by live external tests
+
+- User «procedi» answers the explicit once-only R89 request: two original Catasto
+  cases, no retry, service900s/host930s. Separate authorization recorded externally;
+  earlier source-only preparation/review/closure seals remain immutable.
+- First preflight exit1: heavy_guard detects two concurrent Piscaware Jest jobs,
+  before runtime/build/main custody. No service-run/native-r89 paths, private unit,
+  working DB, browser or E2E created; both cases NOT_RUN, no native failure claimed.
+- Read-only waits bind PID/starttime: frontend1701345 disappeared, backend1701352
+  remained live at final observation. Other project's jobs never interrupted.
+  Observer sessions44287/18795 terminal0, not application test PASS.
+- Registry R89_NATIVE and report R89_NATIVE_PREFLIGHT_2026-10-14.md distinguish
+  authorization from execution. Grant not consumed by a native invocation;
+  fresh quiet/custody preflight required before launch, no pin rewriting or retry.
+  No commit/runtime/baseline/policy change. Global goal remains incomplete.
+- First refusal independently accepted126/126read-only checks,30-file seal;
+  reviewer stopped. After old PIDs disappeared, new preflight-after-wait refuses
+  different Piscaware shared Jest/TBOW Vitest/Graphify jobs, still before custody.
+  Second refusal separate, not covered by historical reviewer seal. Native
+  invocations0; no further guards this checkpoint. Handoff preserves authorization
+  pending a genuinely quiet slot, not a request to repeat native tests.
+
+## 2026-10-14 — R89 source-only private environment binding accepted
+
+- User grants preparation/review of new private environment with R88proxy,
+  without services/E2E. Fresh nonce/future paths/currentHEAD7f39510a pinned;
+  no live descriptor, working DB copy, service/probe/test or operational import.
+- Accepted R88proxy/helper copied byte-exact and bound in manifest/MODULES/
+  before-after custody. Native child changes only proxy argv to NEW BASE path;
+  seven R86contracts exact, wrapper changes only nonce prefix. No readiness/
+  SKIP/driver fix, original identities/assertions/timeouts/isolation/auth unchanged.
+- Independent SOURCE_BINDING_ACCEPTED_NO_EXECUTION_AUTHORIZATION,1912/1912
+  AST/source/hash/read-only metadata checks;40review-file seal verified. This
+  is not application tests, native readiness, coverage100 or candidate admission.
+  Preparer/reviewer stopped; source_review_required=true and
+  native_execution_authorized=false retained, not a service grant.
+- Fresh protected2732/build1405/NFT253/browser8/current executable pins exact.
+  Concurrent main outputs/ now inventoried as CONCURRENT/UNKNOWN by hashes only;
+  never copied/interpreted/staged. Main config/Bonifica bytes unchanged.
+- Original R86case0SKIP/case1NOT_RUN and R88statement-coverage limitation retained.
+  Report R89_PRIVATE_ENVIRONMENT_2026-10-14.md and registry updated after freezes.
+  HEAD deliberately unchanged while launcher pins await separate native decision;
+  documentary updates unstaged, durable external handoff/seal. Goal incomplete.
+- Final read-only closure: diff-check PASS, preparation20/review40 seals exact;
+  planned run paths/cgroup absent, no loaded R89 unit or matching process observed.
+  External closure/HANDOFF.md, FINAL_READ_ONLY_CHECKS.log and SHA256SUMS preserve
+  current documents and partial spec. No commit, activation or E2E performed.
+- Graphify platform-docs deferred during known HTTP429 quota until at least
+  2026-10-14T15:00:47Z; R88 PARTIAL remains unchanged, no automatic retry.
+  No runtime code changed; no code graph refresh required for this closure.
+
 ## 2026-10-14 — R88 private proxy candidate prepared and independently reviewed
 
 - Explicit grant: preparation/review of sole private proxy correction, no new E2E.

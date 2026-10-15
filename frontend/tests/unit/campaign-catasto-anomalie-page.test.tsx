@@ -133,6 +133,51 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Catasto anomalie manual queue characterization", () => {
+  test("drill-down smoke opens the manual register from the default CF tab without mutations", async () => {
+    mocks.params = new URLSearchParams();
+    render(<CatastoAnomaliePage />);
+    const navigation = await screen.findByRole("navigation", { name: "Code anomalie" });
+    expect(screen.queryByText("Registro completo anomalie", { exact: true })).not.toBeInTheDocument();
+    const manualTab = within(navigation).getByRole("button", { name: /^Triage manuale/ });
+    fireEvent.click(manualTab);
+    expect(manualTab).toHaveAttribute("aria-pressed", "true");
+    const register = (await screen.findByText("Registro completo anomalie", { exact: true })).closest("article")!;
+    expect(within(register).getByLabelText("Tipo", { exact: true })).toBeVisible();
+    expect(within(register).getByRole("combobox", { name: /^Severità$/ })).toBeVisible();
+    expect(within(register).getByRole("combobox", { name: /^Stato$/ })).toBeVisible();
+    expect(within(register).getByRole("button", { name: /^Reset registro$/ })).toBeVisible();
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Reset contesto$/ })).toBeEnabled());
+    expect(screen.queryByText("Errore caricamento", { exact: true })).not.toBeInTheDocument();
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { name: "empty register", items: [] },
+    { name: "two distinct rows", items: [anomaly("first"), anomaly("second")] },
+    { name: "valid identical public rows with distinct IDs", items: [
+      anomaly("first", { descrizione: "Same visible values" }),
+      anomaly("second", { descrizione: "Same visible values" }),
+    ] },
+  ])("drill-down smoke scopes row commands or empty state to $name", async ({ items }) => {
+    setItems(items);
+    render(<CatastoAnomaliePage />);
+    const register = (await screen.findByText("Registro completo anomalie", { exact: true })).closest("article")!;
+    await waitFor(() => expect(screen.getByRole("button", { name: /^Reset contesto$/ })).toBeEnabled());
+    await waitFor(() => expect(register.querySelectorAll("table.data-table tbody tr")).toHaveLength(items.length));
+    expect(within(register).queryByText("Caricamento...", { exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByText("Errore caricamento", { exact: true })).not.toBeInTheDocument();
+    const closeButtons = within(register).queryAllByRole("button", { name: /^Chiudi$/ });
+    expect(closeButtons).toHaveLength(items.length);
+    if (items.length) {
+      expect(closeButtons[0]).toBeVisible();
+      expect(within(register).queryByText("Nessuna anomalia", { exact: true })).not.toBeInTheDocument();
+      expect(within(register).queryByRole("button", { name: /^Chiudi da pannello$/ })).not.toBeInTheDocument();
+    } else {
+      expect(within(register).getByText("Nessuna anomalia", { exact: true })).toBeVisible();
+    }
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
   test("loads manual register, summary and lookups while inactive wizards remain idle", async () => {
     await mountManual();
     expect(mocks.list).toHaveBeenCalledExactlyOnceWith("token", {

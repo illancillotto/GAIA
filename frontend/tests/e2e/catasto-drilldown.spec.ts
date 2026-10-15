@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Frame, type Page } from "@playwright/test";
+import { openReadyDistrettiList } from "./helpers/distretti-readiness";
 
 async function loginAsAdmin(page: Page) {
   const username = process.env.PLAYWRIGHT_ADMIN_USERNAME ?? "admin";
@@ -11,73 +12,95 @@ async function loginAsAdmin(page: Page) {
   await page.waitForURL("**/");
 }
 
+async function getDistrettoWorkspace(page: Page): Promise<Frame> {
+  const iframe = await page.locator('iframe[title^="Distretto "]').elementHandle();
+  const workspace = await iframe?.contentFrame();
+  if (!workspace) throw new Error("District workspace has no content frame");
+  return workspace;
+}
+
 test("admin navigates catasto distretti -> distretto detail -> particella detail", async ({ page }) => {
   await loginAsAdmin(page);
 
-  await page.goto("/catasto/distretti");
-  await expect(page.getByText("Tabella distretti")).toBeVisible();
-
+  const distrettoRowCount = await openReadyDistrettiList(page);
   const distrettoRows = page.locator("table.data-table tbody tr");
-  const distrettoRowCount = await distrettoRows.count();
   test.skip(distrettoRowCount === 0, "Nessun distretto disponibile nello stack locale: esegui seed/import shapefile prima del drill-down.");
 
   const firstDistrettoRow = page.locator("table.data-table tbody tr").first();
   await expect(firstDistrettoRow).toBeVisible();
   await firstDistrettoRow.click();
 
-  await page.waitForURL("**/catasto/distretti/**");
+  const workspace = await getDistrettoWorkspace(page);
+  await workspace.waitForURL("**/catasto/distretti/**");
 
-  await expect(page.getByText("N. distretto:")).toBeVisible();
-  await expect(page.getByText("Particelle", { exact: true })).toBeVisible();
-  await expect(page.getByText("Utenze", { exact: true })).toBeVisible();
-  await expect(page.getByText("Importo 0648", { exact: true })).toBeVisible();
-  await expect(page.getByText("Importo 0985", { exact: true })).toBeVisible();
+  await expect(workspace.getByText("N. distretto:")).toBeVisible();
+  await expect(workspace.locator(".metric-card").getByText("Particelle", { exact: true })).toBeVisible();
+  await expect(workspace.locator(".metric-card").getByText("Utenze", { exact: true })).toBeVisible();
+  await expect(workspace.locator(".metric-card").getByText("Importo 0648", { exact: true })).toBeVisible();
+  await expect(workspace.locator(".metric-card").getByText("Importo 0985", { exact: true })).toBeVisible();
 
-  await expect(page.getByRole("button", { name: "Particelle" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Anomalie" })).toBeVisible();
+  await expect(workspace.getByRole("button", { name: "Particelle" })).toBeVisible();
+  await expect(workspace.getByRole("button", { name: "Anomalie" })).toBeVisible();
 
-  await expect(page.getByText("Particelle (prime 200)")).toBeVisible();
+  await expect(workspace.getByText("Particelle (prime 200)")).toBeVisible();
 
-  const firstApriLink = page.getByRole("link", { name: "Apri" }).first();
-  await expect(firstApriLink).toBeVisible();
-  await firstApriLink.click();
+  const firstParticellaRow = workspace.locator("table.data-table tbody tr").first();
+  await expect(firstParticellaRow).toBeVisible();
+  await firstParticellaRow.click();
 
-  await page.waitForURL("**/catasto/particelle/**");
+  await workspace.waitForURL("**/catasto/particelle/**");
 
-  await expect(page.getByText("Ruoli tributo")).toBeVisible();
-  await expect(page.getByText("Anomalie", { exact: true })).toBeVisible();
-  await expect(page.getByText("Storico", { exact: true })).toBeVisible();
+  await expect(workspace.getByText("Utilizzatore / pagatore annualità")).toBeVisible();
+  await expect(workspace.getByText("Anomalie", { exact: true })).toBeVisible();
+  await expect(workspace.getByText("Storico", { exact: true })).toBeVisible();
 });
 
 test("admin navigates catasto distretti -> anomalie tab -> anomaly workspace", async ({ page }) => {
   await loginAsAdmin(page);
 
-  await page.goto("/catasto/distretti");
-  await expect(page.getByText("Tabella distretti")).toBeVisible();
-
+  const distrettoRowCount = await openReadyDistrettiList(page);
   const distrettoRows = page.locator("table.data-table tbody tr");
-  const distrettoRowCount = await distrettoRows.count();
   test.skip(distrettoRowCount === 0, "Nessun distretto disponibile nello stack locale: esegui seed/import shapefile prima del drill-down.");
 
   await distrettoRows.first().click();
-  await page.waitForURL("**/catasto/distretti/**");
+  const workspace = await getDistrettoWorkspace(page);
+  await workspace.waitForURL("**/catasto/distretti/**");
 
-  await page.getByRole("button", { name: "Anomalie" }).click();
-  await expect(page.getByText("Anomalie aperte (prime 200)")).toBeVisible();
+  await workspace.getByRole("button", { name: "Anomalie" }).click();
+  await expect(workspace.getByText("Anomalie aperte (prime 200)")).toBeVisible();
 
-  const viewComplete = page.getByRole("link", { name: "Vista completa" });
+  const viewComplete = workspace.getByRole("link", { name: "Vista completa" });
   await expect(viewComplete).toBeVisible();
   await viewComplete.click();
 
-  await page.waitForURL("**/catasto/anomalie");
-  await expect(page.getByText("Filtri")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Applica filtri" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Reset" })).toBeVisible();
+  await workspace.waitForURL("**/catasto/anomalie");
+  const manualTab = workspace.getByRole("navigation", { name: "Code anomalie" })
+    .getByRole("button", { name: /^Triage manuale/ });
+  await manualTab.click();
+  await expect(manualTab).toHaveAttribute("aria-pressed", "true");
+  const register = workspace.locator("article").filter({
+    has: workspace.getByText("Registro completo anomalie", { exact: true }),
+  });
+  await expect(register).toBeVisible();
+  await expect(register.getByLabel("Tipo", { exact: true })).toBeVisible();
+  await expect(register.getByRole("combobox", { name: "Severità", exact: true })).toBeVisible();
+  await expect(register.getByRole("combobox", { name: "Stato", exact: true })).toBeVisible();
+  await expect(register.getByRole("button", { name: "Reset registro", exact: true })).toBeVisible();
+  const resetContext = workspace.getByRole("button", { name: "Reset contesto", exact: true });
+  await expect(resetContext).toBeVisible();
+  const anomalyRows = register.locator("table.data-table tbody tr");
+  const emptyState = register.getByText("Nessuna anomalia", { exact: true });
+  await expect(anomalyRows.first().or(emptyState)).toBeVisible();
+  await expect(resetContext).toBeEnabled();
+  await expect(register.getByText("Caricamento...", { exact: true })).toHaveCount(0);
+  await expect(workspace.getByText("Errore caricamento", { exact: true })).toHaveCount(0);
 
-  const closeButtons = page.getByRole("button", { name: "Chiudi" });
-  if (await closeButtons.count()) {
-    await expect(closeButtons.first()).toBeVisible();
+  if (await anomalyRows.count()) {
+    await expect(anomalyRows.first()).toBeVisible();
+    await expect(anomalyRows.first().getByRole("button", { name: "Chiudi", exact: true })).toBeVisible();
   } else {
-    await expect(page.getByText("Nessuna anomalia")).toBeVisible();
+    await expect(anomalyRows).toHaveCount(0);
+    await expect(register.getByRole("button", { name: "Chiudi", exact: true })).toHaveCount(0);
+    await expect(emptyState).toBeVisible();
   }
 });

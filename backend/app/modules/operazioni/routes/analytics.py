@@ -607,13 +607,16 @@ def fuel_analytics(
     # unmatched WC events). When the same operator already has a UUID key in
     # liters_by_key, merge the orphan string key into the UUID key so the operator
     # appears only once in the top-10.
+    def _operator_name_variants(operator: WCOperator) -> tuple[str, str, str]:
+        return (
+            f"{operator.first_name or ''} {operator.last_name or ''}".strip(),
+            f"{operator.last_name or ''} {operator.first_name or ''}".strip(),
+            operator.username or "",
+        )
+
     _name_to_uuid: dict[str, _uuid.UUID] = {}
     for _uid, _wco in wc_ops_map.items():
-        for _variant in [
-            f"{_wco.first_name or ''} {_wco.last_name or ''}".strip(),
-            f"{_wco.last_name or ''} {_wco.first_name or ''}".strip(),
-            _wco.username or "",
-        ]:
+        for _variant in _operator_name_variants(_wco):
             if _variant:
                 _name_to_uuid[_variant] = _uid
 
@@ -652,11 +655,7 @@ def fuel_analytics(
             km = km_by_gaia_user.get(gid, 0.0)
             if km > 0:
                 return km, dict(km_by_gaia_user_vehicle.get(gid, {}))
-        for name_variant in [
-            f"{wco.first_name or ''} {wco.last_name or ''}".strip(),
-            f"{wco.last_name or ''} {wco.first_name or ''}".strip(),
-            wco.username or "",
-        ]:
+        for name_variant in _operator_name_variants(wco):
             if name_variant and name_variant in km_by_op_name:
                 return km_by_op_name[name_variant], dict(km_by_op_name_vehicle[name_variant])
         return 0.0, {}

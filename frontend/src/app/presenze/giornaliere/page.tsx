@@ -287,6 +287,68 @@ function MonthlyAnomalyCard({
   );
 }
 
+type MonthlyAnomalyGroupInput = (
+  | { grouping: "day"; group: AnomalyPanelDayGroup }
+  | { grouping: "collaborator"; group: AnomalyPanelCollaboratorGroup }
+) & {
+  collaboratorMap: ReadonlyMap<string, PresenzeCollaborator>;
+  collaboratorSchedule: ReadonlyMap<string, { code: string; label: string }>;
+  onOpenRecord: (recordId: string) => void;
+};
+
+const MONTHLY_ANOMALY_GROUP_COPY = {
+  day: { periodTail: " da lavorare in sequenza", countTail: " coll." },
+  collaborator: { periodTail: " nel mese", countTail: " totali" },
+} as const;
+
+function renderMonthlyAnomalyGroup(input: MonthlyAnomalyGroupInput) {
+  const group = input.group;
+  const copy = MONTHLY_ANOMALY_GROUP_COPY[input.grouping];
+  const identity = input.grouping === "day"
+    ? { key: input.group.iso, heading: [input.group.iso, " · ", formatWeekdayLabel(input.group.iso)] }
+    : { key: input.group.collaboratorId, heading: input.group.collaboratorName };
+  return (
+    <section key={identity.key} className="rounded-3xl border border-red-100 bg-white/60 p-3 shadow-sm">
+      <div className="flex flex-col gap-3 border-b border-red-100 px-2 pb-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-slate-950">{identity.heading}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {group.items.length} {group.items.length === 1 ? "giornata aperta" : "giornate aperte"}{copy.periodTail}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2 text-[11px]">
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">
+            {group.items.length}{copy.countTail}
+          </span>
+          {group.anomalyCount > 0 ? (
+            <span className="rounded-full bg-red-100 px-2.5 py-1 font-semibold text-red-700">
+              {group.anomalyCount} bloccanti
+            </span>
+          ) : null}
+          {group.analysisCount > 0 ? (
+            <span className="rounded-full bg-amber-100 px-2.5 py-1 font-semibold text-amber-800">
+              {group.analysisCount} da verificare
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-3 xl:grid-cols-2">
+        {group.items.map((item) => (
+          <MonthlyAnomalyCard
+            key={item.record.id}
+            item={item}
+            collaborator={input.collaboratorMap.get(item.record.collaborator_id)}
+            schedule={input.collaboratorSchedule.get(item.record.collaborator_id)}
+            grouping={input.grouping}
+            onOpen={() => input.onOpenRecord(item.record.id)}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function buildMonthDays(monthValue: string): DayColumn[] {
   const [yearString, monthString] = monthValue.split("-");
   const year = Number(yearString);
@@ -1228,17 +1290,15 @@ export default function PresenzeGiornalierePage() {
 
     function onKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select")) {
-        if (event.key !== "Escape") {
-          return;
-        }
-      }
+      const editingTarget = target?.closest("input, textarea, select");
 
       if (event.key === "Escape") {
         event.preventDefault();
         closeSelectedRecord();
         return;
       }
+
+      if (editingTarget) return;
 
       if (event.key === "ArrowLeft" && previousRecord) {
         event.preventDefault();
@@ -1348,6 +1408,11 @@ export default function PresenzeGiornalierePage() {
       setCollaboratorModalId(returnToCollaboratorModalId);
       setReturnToCollaboratorModalId("");
     }
+  }
+
+  function openAnomalyPanelRecord(recordId: string) {
+    setReturnToCollaboratorModalId("");
+    setSelectedRecordId(recordId);
   }
 
   function openRecordFromCollaboratorModal(record: PresenzeDailyRecord) {
@@ -1956,91 +2021,13 @@ export default function PresenzeGiornalierePage() {
                   </div>
 
                   <div className="mt-4 space-y-4">
-                    {anomalyPanelGrouping === "day" ? anomalyPanelDayGroups.map((group) => (
-                      <section key={group.iso} className="rounded-3xl border border-red-100 bg-white/60 p-3 shadow-sm">
-                        <div className="flex flex-col gap-3 border-b border-red-100 px-2 pb-3 md:flex-row md:items-center md:justify-between">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-950">{group.iso} · {formatWeekdayLabel(group.iso)}</p>
-                            <p className="mt-1 text-xs text-slate-500">
-                              {group.items.length} {group.items.length === 1 ? "giornata aperta" : "giornate aperte"} da lavorare in sequenza
-                            </p>
-                          </div>
-                          <div className="flex flex-wrap gap-2 text-[11px]">
-                            <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">
-                              {group.items.length} coll.
-                            </span>
-                            {group.anomalyCount > 0 ? (
-                              <span className="rounded-full bg-red-100 px-2.5 py-1 font-semibold text-red-700">
-                                {group.anomalyCount} bloccanti
-                              </span>
-                            ) : null}
-                            {group.analysisCount > 0 ? (
-                              <span className="rounded-full bg-amber-100 px-2.5 py-1 font-semibold text-amber-800">
-                                {group.analysisCount} da verificare
-                              </span>
-                            ) : null}
-                          </div>
-                        </div>
-
-                        <div className="mt-3 grid gap-3 xl:grid-cols-2">
-                          {group.items.map((item) => (
-                            <MonthlyAnomalyCard
-                              key={item.record.id}
-                              item={item}
-                              collaborator={collaboratorMap.get(item.record.collaborator_id)}
-                              schedule={collaboratorSchedule.get(item.record.collaborator_id)}
-                              grouping={anomalyPanelGrouping}
-                              onOpen={() => {
-                                setReturnToCollaboratorModalId("");
-                                setSelectedRecordId(item.record.id);
-                              }}
-                            />
-                          ))}
-                        </div>
-                      </section>
-                    )) : anomalyPanelCollaboratorGroups.map((group) => (
-                      <section key={group.collaboratorId} className="rounded-3xl border border-red-100 bg-white/60 p-3 shadow-sm">
-                        <div className="flex flex-col gap-3 border-b border-red-100 px-2 pb-3 md:flex-row md:items-center md:justify-between">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-950">{group.collaboratorName}</p>
-                            <p className="mt-1 text-xs text-slate-500">
-                              {group.items.length} {group.items.length === 1 ? "giornata aperta" : "giornate aperte"} nel mese
-                            </p>
-                          </div>
-                          <div className="flex flex-wrap gap-2 text-[11px]">
-                            <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">
-                              {group.items.length} totali
-                            </span>
-                            {group.anomalyCount > 0 ? (
-                              <span className="rounded-full bg-red-100 px-2.5 py-1 font-semibold text-red-700">
-                                {group.anomalyCount} bloccanti
-                              </span>
-                            ) : null}
-                            {group.analysisCount > 0 ? (
-                              <span className="rounded-full bg-amber-100 px-2.5 py-1 font-semibold text-amber-800">
-                                {group.analysisCount} da verificare
-                              </span>
-                            ) : null}
-                          </div>
-                        </div>
-
-                        <div className="mt-3 grid gap-3 xl:grid-cols-2">
-                          {group.items.map((item) => (
-                            <MonthlyAnomalyCard
-                              key={item.record.id}
-                              item={item}
-                              collaborator={collaboratorMap.get(item.record.collaborator_id)}
-                              schedule={collaboratorSchedule.get(item.record.collaborator_id)}
-                              grouping={anomalyPanelGrouping}
-                              onOpen={() => {
-                                setReturnToCollaboratorModalId("");
-                                setSelectedRecordId(item.record.id);
-                              }}
-                            />
-                          ))}
-                        </div>
-                      </section>
-                    ))}
+                    {anomalyPanelGrouping === "day" ? anomalyPanelDayGroups.map((group) => renderMonthlyAnomalyGroup({
+                      grouping: "day", group, collaboratorMap, collaboratorSchedule,
+                      onOpenRecord: openAnomalyPanelRecord,
+                    })) : anomalyPanelCollaboratorGroups.map((group) => renderMonthlyAnomalyGroup({
+                      grouping: "collaborator", group, collaboratorMap, collaboratorSchedule,
+                      onOpenRecord: openAnomalyPanelRecord,
+                    }))}
                   </div>
                 </>
               ) : null}

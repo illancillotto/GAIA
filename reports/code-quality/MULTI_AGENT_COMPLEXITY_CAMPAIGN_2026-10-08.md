@@ -1,5 +1,295 @@
 # GAIA — Multi-Agent Complexity Campaign
 
+## Commit recovery checkpoint — through R108; R109 BLOCKED
+
+User authorizes a local checkpoint of verified integration work and a Claude
+handoff. R64 `29994c62` is the last committed runtime refactor before this
+checkpoint; later existing commits reach R88 documentation/test work at
+`7f39510a`. R89–R108 pending integration work is preserved on the campaign
+branch, without main merge, push or a final campaign completion claim.
+
+Recovery verified 1,634 sealed R102–R108 members and 18 symlinks. The 79 pending
+integration files outside R109 coordinator documentation exactly matched the
+accepted R108 inventories/checkpoints. Current accepted Presenze source is
+`c726f5c4`, principal cognitive352. Historical successful application/Graphify
+receipts remain available; this checkpoint does not imply fresh broad suites.
+
+R109 candidate `c1a1d360` and its new spec remain external and unintegrated.
+Native504/eight/full-file100, types and lint passed, but actual ratchet exited2:
+three nearest-line callback matching findings plus author Git-index hash drift.
+Independent read-only review identifies a concrete matcher limitation; index
+writer/cause remains unresolved. R109 is BLOCKED and the campaign INCOMPLETE.
+Consult `CURRENT_R109_RATCHET_STOP.md` in the external recovery directory before
+resuming. Older pending/grant/commit statements below describe their historical
+checkpoints. Sealed evidence and the authoritative baseline remain unchanged.
+
+## R108 closure / R109 selection — goal ACTIVE / INCOMPLETE
+
+After canonical SSD recovery, actual independent ACCEPT_R108_CLOSURE4a35688d
+and sealfc2e92d5 certify round reporting/graph/preservation custody:104checks,
+1592immutable inputs. Three actual dedicated graphs terminal0/stableinputs,
+both docs gpt-reserve chunk1/1done/no failed chunks; original output-auditor
+assumption failure and additive v2 correction remain preserved. Approved
+closure executed once terminal0; master421regular members/12symlinks
+a7c5c2ce0cd31b947a996b26a1de43edd96a58c5a3a4032fa31039157dceb74b independently
+re-enumerated and verified. R108root immutable; no successful gate retry.
+
+Original P1/full campaign remains open. Current Utenze391/Catasto390 remain
+coverage-blocked; Presenze352 highest demonstrated full-file100 extreme.
+R109design-only selects duplicate daily-heading anomaly/request focus badges,
+not runtime admission. All3957integration members frozen first; preserve
+children/keys/focus/functional toggle semantics. No second responsibility,
+baseline/policy/main checkout change, commit/push/merge or final-suite claim.
+The following R108runtime checkpoint is historical; external sealed master
+above supersedes only its then-pending graph/closure status.
+
+## R108 checkpoint — shared monthly anomaly groups, goal ACTIVE / INCOMPLETE
+
+Exact sourcec726f5c author/integration/snapshot independently admitted:
+finalACCEPT_CANDIDATE05bfb2cc then post-copyACCEPT_INTEGRATED_RUNTIME1ab1c656.
+Ordinary synchronous renderer preserves keyed host sections, direct day-heading
+children, mode copy/card order and separate ordered setters; no new React fiber.
+Two physical duplicate decisions removed; principal358→352cognitive315→309/
+1942→1870LOC, file1042→1034/1188→1180/2800→2786. Overlapping scanner ownership
+is not eight independent improvements;308callables11errors19warnings fixed.
+
+Candidate496PASS/seven/full-file1043statement1100branch306function855line100,
+strict types/lint/mainratchet/auditor0. Supplemental3888finite source cases are
+not browser coverage; no independent raw-to-Istanbul replay. Integration exact
+native source/spec/config/dependency rebind avoids redundant same-input suite.
+First integration-plan refusal caught generated Graphify discovery; additive
+v2plan and actual39077pin preparation accepted before four serialized gates,
+39079stable inputs each: mainratchet0/45.535s/findings[],AFTER0/44.372s,
+actualstrict860root/198Nexttypes0/24.011s, scopedlint0/1.204s/three legacy warnings.
+
+R107globalBEFORE reused only after35255exact runtime/tool input rebind. Fresh
+AFTER1681files20361callables1918errors2739warnings4657findings unchanged;
+1680other file metrics/20053other callable records exact. Overlapping callable
+sums80546→80538cognitive83012→83004cyclomatic327743→327622LOC.3954initial/
+3957current preservation,963prior sealed members verified. Baseline/policy/main
+untouched; no commit/push/merge. Dedicated graphs and final custody remain
+pending in externalR108terminal handoff/master. Presenze352 still misses P1;
+full extreme-tail campaign and final broad verification are not complete.
+
+## R107 checkpoint — actual Presenze runtime reduction, goal ACTIVE / INCOMPLETE
+
+Exact selected-day keyboard dispatch simplification independently admitted:
+candidate/integration/snapshotdaad670d. Original current-tool496/seven/four100
+before runtime grant; corrected PLAN and actual PREP independently accepted.
+Candidate496/seven/four100:1040statements1104branches306functions852lines;
+configured strict types0, lint0(two hooks plus one unused-variable warnings),
+author main ratchet0. Native/provider/tests maps equal, seven real raw V8 page
+payloads; no independent raw-to-Istanbul replay or new test/config change.
+
+Main cognitive360→358/cyclomatic316→315/LOC1945→1942; whole file1048→1042/
+1191→1188/2803→2800. Three overlapping scanner owners count one removed physical
+redundant decision, not six independent domain improvements.308callables and
+existing30findings unchanged; no debt transfer/wrapper/new state/dependency/API.
+Local IMPROVED, not P1 completion: Presenze358 remains an original extreme.
+
+Independent final ACCEPT_CANDIDATE9d3fb803, exact apply_patch copy, integration
+main ratchet0/44.98s/findings[] and full AFTER report0/44.28s. Separate post-copy
+ACCEPT_INTEGRATED_RUNTIMEe4bc78c1 verifies all671frontend runtime bytes equal
+author. Fresh BEFORE/AFTER1681files20361callables1918errors2739warnings4657findings;
+all1680other file metric records and20053other callable records exact. Scope/
+engines/baseline/policy fixed.3952initial members preserved outside authorized
+page/docs; only two new R107documents. Prior R103–R106694sealed members intact.
+
+Report R107_PRESENZE_KEYBOARD_DISPATCH_2026-10-15.md; dedicated frontend/domain/
+platform graph receipts and final custody indexed by external R107terminal
+handoff/manifest. No semantic graph success inferred from exit0 alone. Foreign
+process refusals, reviewer502 and explained metadata-parser failure preserved;
+no successful app gate repeated, external process interrupted, commit,push or
+merge. Full extreme-tail targets and final campaign-wide verification remain
+incomplete. Continue one reviewable responsibility after custody closure.
+
+## R106 checkpoint — select click isolation, goal ACTIVE / INCOMPLETE
+
+Two new real public enabled-select click cases; eleven-spec273PASS, zero skip
+or unhandled. Strict670roots0/lint0, author main ratchet0 and exact post-copy
+integration main ratchet0/43.84s/findings[],actualbasea51a48dc. Conditional
+review preserved; independent post-copy ACCEPT_TEST_ONLY admits exacte96f038e,
+review manifest40cedbf5. Frontend graph0/10.68s. Domain/platform semantic graphs
+and final custody must be read from terminal handoff, not inferred from tests.
+
+Original full page567/576statement578/610branch176/176function528/536line;
+gain1/0/1/1, identical maps/no coverage lost. Full-file100 FAIL9/32/0/8;
+DetailContent391cognitive unchanged, NO_CHANGE, no runtime admission. Native
+2727stablepins/86mandatory/671src/11actual pagepayloads2595557B; provider/native/
+tests coverage-map equality, no independent raw-to-Istanbul replay claim.
+
+Current source/contract audit of32residual branch arms finds8public paths,
+2plausible unproved and22guarded/contract-excluded. This is not universal dead
+code proof, new executed coverage or permission to remove guards/weaken policy.
+Utenze runtime remains coverage-blocked; the full campaign is not blocked.
+Close R106 then return to a real reduction of an original high-priority runtime
+hotspot with full-file100 evidence. Assess Presenze360 with a fresh design;
+R42 remains REJECTED, R43/R63 excluded. Analytics anomalies221 is an alternative
+requiring fresh source/input bindings to R100full-file evidence. Do not loop on
+indefinite low-yield test-only Utenze slices. Last global runtime scan is R100;
+no test-only complexity credit or global completion claimed. Preserve prior
+seals, dirty files and failures; no baseline/policy/main/commit/push changes.
+
+## R105 checkpoint — archive metadata, goal ACTIVE / INCOMPLETE
+
+Eight new real mounted public metadata cases, ten-spec271PASS/zero skip or
+unhandled errors; strict669roots0, scoped lint0; author and post-copy integration
+main ratchets0/findings[],actualbasea51a48dc. Independent final ACCEPT_TEST_ONLY
+admits exactdaac33c5test. Initial integration pre-native refusal and conditional
+receipt preserved; additive helper approved and2728post-copy pins stable.
+Terminal graphs/custody indexed by external R105coordinator-evidence/HANDOFF.md.
+
+Full original page566/576statement578/610branch175/176function527/536line,
+gains2/10/2/1, identical maps/no coverage loss. FAIL100 remains10/32/1/9;
+DetailContent391cognitive unchanged, NO_CHANGE runtime.2726stable pins include
+85mandatory/671src;10actual provider page payloads2343822B/native map equality.
+No independent raw-to-Istanbul conversion replay or runtime admission claimed.
+
+R104sealed167members verified before67file integration freeze. No baseline,
+threshold,policy,main changes, commit,push,main merge or unrelated dirty-file
+edits. No identical native suite retry or foreign-process interruption. Last
+global runtime scan remains R100; no new reduction attributed to tests.
+Report R105_UTENZE_ARCHIVE_METADATA_2026-10-15.md. Full extreme-tail objectives
+and final campaign gates remain incomplete; select next distinct public
+prerequisite from actual residual coverage after R105 closure.
+
+## R104 checkpoint — Audit log, goal ACTIVE / INCOMPLETE
+
+Seven new public mounted Audit log cases, nine-spec263PASS/zero skip/unhandled;
+strict668roots0, scoped lint0; author and post-copy integration main ratchets0,
+findings[], actual basea51a48dc. Independent final ACCEPT_TEST_ONLY admits
+exacte504cf93test, with conditional receipt preserved and reviewer STOP.
+
+Original full page564/576statement568/610branch173/176function526/536line,
+gains3/5/3/2, unchanged maps/no coverage loss. FAIL100 remains12/42/3/10;
+runtime391cognitive unchanged, NO_CHANGE complexity, no runtime admission.
+2727stable temporal pins/84mandatory/671src/9rawpayloads2090200bytes, exact
+provider/native/tests map equality, no independent raw-to-Istanbul replay.
+First pre-native refusal, original static REJECT and reviewer parser correction
+preserved. No identical native retry or foreign process interruption.
+
+R103 seal220members remains intact;63initial dirty files preserved except
+permitted coordinator documents. No baseline/threshold/policy/main changes,
+commit,push or main merge. No new global scan for unchanged runtime; last R100
+metrics and extreme-tail objectives remain open. Full report
+R104_UTENZE_AUDIT_LOG_2026-10-15.md and external
+r104-utenze-audit-log/coordinator-evidence/HANDOFF.md bind final gates/graphs/
+custody. Next separate public prerequisite after closure is archive metadata.
+
+## R103 recovered checkpoint — document collection, goal ACTIVE / INCOMPLETE
+
+Recovered existing native256PASS/zero skip/unhandled, including27new real mounted
+public collection tests; no identical suite repeated. Strict667roots0, scoped
+lint0 and author-mainratchet0. Independent exact source admission921a46ea;
+post-copy integration gate/final certificate/graphs/custody are bound by external
+r103-utenze-document-collection/coordinator-evidence/recovery-20261015-HANDOFF.md.
+
+Page561/576statement563/610branch170/176function524/536line, gains20/31/9/12,
+no lost coverage. FAIL100 persists15/47/6/12; runtime cognitive391 unchanged,
+NO_CHANGE complexity. Native2726stable pins/83mandatory/671src/8pagepayloads,
+provider-native equality; no independent raw-to-Istanbul replay claimed. Original
+type failure and refusals retained. Main/baseline/policies/unrelated work intact;
+no commit, push or main merge. Full report R103_UTENZE_DOCUMENT_COLLECTION_2026-10-15.md.
+
+Correction to historical summaries below:449backend skips were the original
+suite result; R68–R73 separately report250identified follow-up cases verified,
+199remaining. No R103 backend re-certification. Last runtime scan remains R100;
+strategic complexity targets and remaining validation gaps are not completed.
+Next responsibility is genuine public audit-log characterization before runtime.
+
+## R102 current checkpoint — useful tests admitted, goal ACTIVE / INCOMPLETE
+
+Distinct current certificate ACCEPT_TEST_ONLY admits exact frozen10edit and new
+16Visura real public cases;229PASS/0skip/unhandled, strict666roots0, lint0.
+Historical R101 custody REJECTs remain final, not repaired. Original R102
+222PASS/7FAIL duplicate selectors preserved; separate minimal same-assertion
+card-scoping candidate verified once. Complete2724temporal pins incl converter,
+82required/671src,7actual worker payloads1589416B/native-map equality. This is
+not independent raw-to-Istanbul transform replay or runtime admission.
+
+Original page541/576statement532/610branch161/176function512/536line; remaining
+35/78/15/24 means full-file100 remains FAIL. Cognitive391/cyclomatic304/LOC1908
+unchanged, NO_CHANGE complexity classification. Author and integration ratchets
+BASE_REFmain/basea51a48dc terminal0/findings[]. All671frontend/src bytes equal;
+no full application/build/E2E suite repeated for unchanged inputs. Existing
+R100/R99 and baseline/threshold/policy/main preserved. No new commit/push/merge.
+449historical backend skips remain unverified. Last global runtime scan R100
+unchanged in provenance, not rescanned or claimed as R102 reductions.
+
+Final certificate sealf26b3f4b; full report
+R102_UTENZE_VISURA_CHARACTERIZATION_2026-10-15.md. Graph/custody/manifest handoff
+under external r102-utenze-visura-characterization/coordinator-evidence/HANDOFF.md.
+Next work must address remaining genuine public coverage before any runtime
+hotspot decomposition; no coverage policy relaxation or fake private-state tests.
+
+## R101 final current checkpoint — distinct capture rejected, no source admission
+
+One separately reviewed native-provider capture preserves six actual page-bearing
+payloads and pre-report/native-map equality;213assertionsPASS, native1 solely
+unchanged100coverage deficits. Original main-process artifact problem resolved
+for this distinct run, not historically repaired. Independent current certificate
+REJECT:41before/after pins omit the converter required by preparation. Current
+matching hash is not a historical receipt. No retrofit, third identical suite,
+weaker coverage policy or new test import into integration. Original REJECT and
+first-failure metadata mismatch remain explicit. New verification seal35b749bc;
+current source unchanged, Utenze391, no complexity credit. All agents STOP;
+checkpoint docs only. Existing R100/R99 work preserved, goal ACTIVE/INCOMPLETE.
+
+## Current state — R101 test admission BLOCKED, goal ACTIVE / INCOMPLETE
+
+Utenze extreme-tail391 prerequisite produced ten genuine edit/save cases;
+213union cases PASS, strict665roots/lint/main ratchet PASS. Native full-file100
+remains FAIL:525/576statement,518/610branch,159/176function,496/536line.
+No Utenze runtime change or complexity reduction. Independent final audit REJECT:
+first-failure metadata member overwritten by v2 (23/24historical members exact),
+and automatic main-process raw V8 lacks page/worker maps. Current66member seal
+is intact; original error log/source survive. Provider report delta is verified,
+not independent raw-worker reconstruction. No test imported into integration,
+receipt repaired or native suite retried. Candidate preserved in separate R101
+worktree. All agents STOP; prior R100/R99 admitted inputs remain unchanged.
+Full report R101_UTENZE_SUBJECT_EDIT_CHARACTERIZATION_2026-10-15.md and durable
+root r101-utenze-edit-characterization/ under October12 resume directory.
+Verifier seal3757a77583640ab714531a344564f19ebb21275c843c1002687753b5d2067f5a.
+Next distinct work is evidence-capture design/review, not an unprotected runtime
+refactor or baseline/coverage waiver. No new commit/push/main merge.
+
+## Current state — R100, goal ACTIVE / INCOMPLETE, 2026-10-15
+
+R99 resolved the two original Catasto drill-down native cases: both PASS, zero
+retry/skip, independent terminal review accepted. Six test-only source changes
+admitted for checkpoint, not automatically committed. Historical R97 failures
+and the empty/populated native-branch distinction remain in the R99 report.
+
+R100 is the next bounded runtime slice, not a new mass refactor: deduplicate
+ordered operator-name variants in fuel analytics. Independent source review
+ACCEPT and distinct genuine428PASS/terminal0/full-file627statements252branches100;
+supplement78PASS and mutation probes2PASS. Fuel cognitive217→192 (-11.52%),
+`_op_km`33→18, file706→676 (-4.25%). Exactly five unique duplicated OR nodes
+removed. New helper cyclomatic11 warning is explicit: errors18→16, warnings10→13,
+total findings28→29. No debt-laundering or reduced total-finding claim.
+
+Exact reviewed source admitted to dedicated integration branch, HEAD7f39510a,
+actual main/merge-basea51a48dc. Fresh integration lint, diff-check, full main
+ratchet and global report terminal0; ratchet findings[]. Operazioni code graph
+updated through dedicated target; docs graph receipts maintained separately.
+No baseline, thresholds, coverage policy, ignores or shared runtime tooling edits;
+no commit, push or main merge inferred from the execution grant.
+
+Current measured1681files/20361callables,1918errors/2739warnings/4657findings;
+tail cognitive>300/>200/>100 is3/15/55. All runtime records outside analytics
+match the immediately prior scan exactly. Raw October8 deltas are-38errors
+(-1.94%),-19warnings (-0.69%); changed scope and intervening concurrent history
+mean these are not pure campaign gains. Strategic targets remain unmet.
+
+Full application-suite/coverage/global-baseline certification is not implied.
+449 historical backend skips remain unverified unless covered by their separate
+specific later receipts; no blanket PASS. R43/R63 partials and other exclusions
+remain excluded. Detailed invariants, metrics, failures, provenance, evidence
+seals and current top30 reference:
+`reports/code-quality/R100_FUEL_OPERATOR_NAME_VARIANTS_2026-10-15.md`.
+No new hotspot starts inside this slice. Historical states below are retained,
+not rewritten as current results.
+
 ## Current state — RESUME R64, goal ACTIVE / INCOMPLETE
 
 R64 local commit29994c62 and static provenance/readiness commitc9da6160 now

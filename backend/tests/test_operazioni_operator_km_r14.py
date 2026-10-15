@@ -298,6 +298,11 @@ def nested_ast_factory():
     nested = next(
         node for node in outer.body if isinstance(node, ast.FunctionDef) and node.name == "_op_km"
     )
+    variants = next(
+        node
+        for node in outer.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_operator_name_variants"
+    )
     closure_names = [
         "_uuid",
         "_NO_OPERATOR",
@@ -316,11 +321,15 @@ def nested_ast_factory():
             kw_defaults=[],
             defaults=[],
         ),
-        body=[copy.deepcopy(nested), ast.Return(value=ast.Name(id="_op_km", ctx=ast.Load()))],
+        body=[
+            copy.deepcopy(variants),
+            copy.deepcopy(nested),
+            ast.Return(value=ast.Name(id="_op_km", ctx=ast.Load())),
+        ],
         decorator_list=[],
     )
     module = ast.fix_missing_locations(ast.Module(body=[factory], type_ignores=[]))
-    namespace = {}
+    namespace = {"WCOperator": WCOperator}
     exec(compile(module, "<r14-live-source-nested-contract>", "exec"), namespace)
     return namespace[factory.name]
 
