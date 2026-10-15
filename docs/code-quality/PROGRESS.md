@@ -12884,3 +12884,21 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   ACCEPT_WITH_NOTES.
 - Graphify elaborazioni-worker-code aggiornato. Evidenze
   `claude-20261015/slices/r118-*`.
+
+## 2026-10-15 - R111 Catasto: riga fiscale della ricerca massiva anagrafica
+
+- Runtime `backend/app/modules/catasto/routes/anagrafica/execution.py`: il ramo
+  `CF_PIVA_PARTICELLE` di `execute_bulk_search_payload` diventa
+  `_build_tax_row_result` con `_query_tax_particella_ids` e
+  `_query_current_particelle`; query, limiti, dedup ordinata, commit dopo
+  append, rollback solo se dirty e `on_row_processed` invariati. Le due uscite
+  NOT_FOUND unite: JSON identico, cambia solo `model_fields_set` (nessun uso di
+  `exclude_unset` nei consumer, verificato dalla review).
+- Esito `IMPROVED`: target cyclomatic/cognitive/LOC 31/126/188 -> 20/67/117
+  (nesting 7 invariato per il ramo catastale); file cognitive 163 -> 113,
+  cyclomatic invariato 70; nessuna nuova violation.
+- Test di caratterizzazione con forma delle query fissata (ordinamento,
+  is_current, limit); 499 PASS; coverage full-file 143/143 statement e 52/52
+  branch. Ratchet integrazione exit 0, zero finding, indice invariato. Review
+  ACCEPT_WITH_NOTES.
+- Graphify catasto-code aggiornato. Evidenze `claude-20261015/slices/r111-*`.

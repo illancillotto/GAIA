@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -47,7 +47,7 @@ CATASTO_DISTRETTO_EXPORT_STORAGE_PATH = Path(
 
 async def _build_tax_matches(
     db: Session,
-    particelle: list[CatParticella],
+    particelle: Sequence[CatParticella],
     consorzio_present_ids: set,
     live_resolver: _CapacitasLiveResolver | _CapacitasAuthoritativeResolver | None,
 ) -> list[CatAnagraficaMatch]:
@@ -283,6 +283,82 @@ async def _build_no_candidate_result(
     )
 
 
+def _query_tax_particella_ids(db: Session, tax_key: str) -> list:
+    utenze = (
+        db.execute(
+            select(CatUtenzaIrrigua.particella_id)
+            .where(
+                CatUtenzaIrrigua.particella_id.is_not(None),
+                func.upper(func.coalesce(CatUtenzaIrrigua.codice_fiscale, "")) == tax_key,
+            )
+            .order_by(desc(CatUtenzaIrrigua.anno_campagna))
+            .limit(200)
+        )
+        .scalars()
+        .all()
+    )
+    return list(dict.fromkeys([pid for pid in utenze if pid is not None]))
+
+
+def _query_current_particelle(db: Session, particella_ids: list) -> Sequence[CatParticella]:
+    return (
+        db.execute(
+            select(CatParticella)
+            .where(CatParticella.id.in_(particella_ids), CatParticella.is_current.is_(True))
+            .limit(200)
+        )
+        .scalars()
+        .all()
+    )
+
+
+async def _build_tax_row_result(
+    db: Session,
+    row: CatAnagraficaBulkSearchRow,
+    live_resolver: _CapacitasLiveResolver | _CapacitasAuthoritativeResolver | None,
+) -> CatAnagraficaBulkSearchRowResult:
+    cf_norm = _norm_str(row.codice_fiscale)
+    piva_norm = _norm_str(row.partita_iva)
+    tax_key = (cf_norm or piva_norm or "").upper()
+    if not tax_key:
+        return CatAnagraficaBulkSearchRowResult(
+            row_index=row.row_index,
+            codice_fiscale_input=row.codice_fiscale,
+            partita_iva_input=row.partita_iva,
+            esito="INVALID_ROW",
+            message="Campo obbligatorio mancante (codice_fiscale o partita_iva).",
+        )
+    particella_ids = _query_tax_particella_ids(db, tax_key)
+    matches: list[CatAnagraficaMatch] = []
+    if particella_ids:
+        particelle = _query_current_particelle(db, particella_ids)
+        consorzio_present_ids = _load_consorzio_presence_by_particella_ids(
+            db, {p.id for p in particelle if p.id is not None}
+        )
+        matches = await _build_tax_matches(db, particelle, consorzio_present_ids, live_resolver)
+    if not matches:
+        return CatAnagraficaBulkSearchRowResult(
+            row_index=row.row_index,
+            codice_fiscale_input=row.codice_fiscale,
+            partita_iva_input=row.partita_iva,
+            esito="NOT_FOUND",
+            message="Nessuna particella associata trovata.",
+            matches_count=0,
+            matches=[],
+        )
+    return CatAnagraficaBulkSearchRowResult(
+        row_index=row.row_index,
+        codice_fiscale_input=row.codice_fiscale,
+        partita_iva_input=row.partita_iva,
+        esito="FOUND",
+        message="OK",
+        matches_count=len(matches),
+        matches=matches,
+        match=matches[0],
+        particella_id=matches[0].particella_id,
+    )
+
+
 # fmt: off
 
 async def execute_bulk_search_payload(
@@ -306,80 +382,7 @@ async def execute_bulk_search_payload(
         for row in payload.rows:
             try:
                 if kind == "CF_PIVA_PARTICELLE":
-                    cf_norm = _norm_str(row.codice_fiscale)
-                    piva_norm = _norm_str(row.partita_iva)
-                    tax_key = (cf_norm or piva_norm or "").upper()
-
-                    if not tax_key:
-                        results.append(
-                            CatAnagraficaBulkSearchRowResult(
-                                row_index=row.row_index,
-                                codice_fiscale_input=row.codice_fiscale,
-                                partita_iva_input=row.partita_iva,
-                                esito="INVALID_ROW",
-                                message="Campo obbligatorio mancante (codice_fiscale o partita_iva).",
-                            )
-                        )
-                    else:
-                        utenze = (
-                            db.execute(
-                                select(CatUtenzaIrrigua.particella_id)
-                                .where(
-                                    CatUtenzaIrrigua.particella_id.is_not(None),
-                                    func.upper(func.coalesce(CatUtenzaIrrigua.codice_fiscale, "")) == tax_key,
-                                )
-                                .order_by(desc(CatUtenzaIrrigua.anno_campagna))
-                                .limit(200)
-                            )
-                            .scalars()
-                            .all()
-                        )
-                        particella_ids = list(dict.fromkeys([pid for pid in utenze if pid is not None]))
-                        if not particella_ids:
-                            results.append(
-                                CatAnagraficaBulkSearchRowResult(
-                                    row_index=row.row_index,
-                                    codice_fiscale_input=row.codice_fiscale,
-                                    partita_iva_input=row.partita_iva,
-                                    esito="NOT_FOUND",
-                                    message="Nessuna particella associata trovata.",
-                                    matches_count=0,
-                                    matches=[],
-                                )
-                            )
-                        else:
-                            particelle = (
-                                db.execute(
-                                    select(CatParticella)
-                                    .where(CatParticella.id.in_(particella_ids), CatParticella.is_current.is_(True))
-                                    .limit(200)
-                                )
-                                .scalars()
-                                .all()
-                            )
-                            consorzio_present_ids = _load_consorzio_presence_by_particella_ids(
-                                db, {p.id for p in particelle if p.id is not None}
-                            )
-                            matches = await _build_tax_matches(
-                                db,
-                                particelle,
-                                consorzio_present_ids,
-                                live_resolver,
-                            )
-
-                            results.append(
-                                CatAnagraficaBulkSearchRowResult(
-                                    row_index=row.row_index,
-                                    codice_fiscale_input=row.codice_fiscale,
-                                    partita_iva_input=row.partita_iva,
-                                    esito="FOUND" if matches else "NOT_FOUND",
-                                    message="OK" if matches else "Nessuna particella associata trovata.",
-                                    matches_count=len(matches),
-                                    matches=matches,
-                                    match=matches[0] if matches else None,
-                                    particella_id=matches[0].particella_id if matches else None,
-                                )
-                            )
+                    results.append(await _build_tax_row_result(db, row, live_resolver))
                     _commit_live_changes(db, live_resolver)
                 else:
                     comune_norm, sezione_norm, foglio_norm = _normalize_bulk_particella_inputs(
