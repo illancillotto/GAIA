@@ -1090,6 +1090,71 @@ def resolve_source_position(current, report, baseline, resolution, context):
                   "symbol": current["name"], "candidates": len(candidates)}, False
 
 
+def source_held_candidates(current, report, baseline, context):
+    # Baseline callables named like the current one that a validated source
+    # snapshot shows surviving unchanged: some other current callable with the
+    # same name and fingerprint maps line by line, without gaps, onto exactly
+    # their span. None means no verifiable snapshot, so nothing is proven.
+    path, commit = current["path"], baseline.get("source_commit", "")
+    if not valid_provenance_source(commit, path):
+        return None
+    old_calls = [call for call in baseline["callables"] if call["path"] == path]
+    new_calls = [call for call in report["callables"] if call["path"] == path]
+    try:
+        source = (context["source_paths"] or {}).get(path, ROOT / path)
+        mapping, _, _ = source_snapshot_mapping(
+            path, commit, source, old_calls, new_calls, context
+        )
+    except (OSError, ValueError, SyntaxError, RuntimeError, subprocess.CalledProcessError):
+        return None
+    held = []
+    for owner in old_calls:
+        if owner["name"] != current["name"]:
+            continue
+        for survivor in new_calls:
+            start, end = survivor["line"], survivor["end_line"]
+            if (survivor is not current
+                    and survivor["name"] == owner["name"]
+                    and survivor.get("fingerprint") == owner.get("fingerprint")
+                    and end - start == owner["end_line"] - owner["line"]
+                    and all(mapping.get(line) == owner["line"] + line - start
+                            for line in range(start, end + 1))):
+                held.append(owner)
+                break
+    return held
+
+
+def unheld_source_owner(current, owner, report, baseline, context):
+    # A wholly added callable has no baseline source of its own, so a guessed
+    # owner that provably survives elsewhere is unrelated. Identical twins are
+    # only proven as a class, so every same-fingerprint twin must survive. Then
+    # only elimination is trusted: a single unaccounted, unclaimed same-name
+    # callable is the owner; none or several leave the callable new.
+    if (owner.get("fingerprint") == current.get("fingerprint")
+            or owner.get("path") != current["path"]
+            or not callable_is_wholly_added(current, context["added_lines"])):
+        return owner
+    held = source_held_candidates(current, report, baseline, context)
+    if not held:
+        return owner
+    same_name = [call for call in baseline["callables"]
+                 if call["path"] == current["path"] and call["name"] == current["name"]]
+    twins = [call for call in same_name if call.get("fingerprint") == owner.get("fingerprint")]
+    if not all(any(twin is kept for kept in held) for twin in twins):
+        return owner
+    remaining = [call for call in same_name if not any(call is kept for kept in held)]
+    if len(remaining) != 1:
+        return None
+    # The eliminated callable lends its budget only if no other current callable
+    # still claims it, and only once.
+    new_calls = [call for call in report["callables"] if call["path"] == current["path"]]
+    if not (unclaimed_source_owner(current, remaining[0], new_calls, report, baseline,
+                                   context["added_lines"])
+            and claim_provenance_owner(remaining[0], context)):
+        return owner
+    return remaining[0]
+
+
 def resolve_source_ambiguity(current, report, baseline, resolution, context):
     ambiguity = resolution[1]
     if ambiguity:
@@ -1143,6 +1208,8 @@ def compare(
             return 2, [ambiguity]
         if equivalent_group:
             continue
+        if b:
+            b = unheld_source_owner(c, b, report, baseline, source_context)
         if not b:
             for v in c.get("violations", []):
                 if v["severity"] == "error" and not v.get("excepted"):

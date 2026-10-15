@@ -125,6 +125,23 @@ resta exit `2`, con provenienza del path rispetto a main documentata. Non
 attribuirla automaticamente alla change o alle trenta divergenze storiche.
 PASS del replay del matcher non equivale ad ammissione runtime della UI.
 
+## Matcher callable aggiunte R109M
+
+`tests/code_quality/test_complexity_wholly_added_ownership.py` usa repository
+git reali, `source_commit` della baseline e `added_lines_since`: non scegliere
+a mano le righe aggiunte. Una callable interamente aggiunta perde il proprietario
+indovinato solo se lo snapshot sorgente validato prova che quel proprietario, e
+ogni gemello con lo stesso fingerprint, sopravvive altrove con stesso nome,
+fingerprint e span mappato senza buchi. Poi vale solo l'eliminazione: un unico
+omonimo non spiegato e non rivendicato da un'altra callable corrente e il
+proprietario, una sola volta; zero o piu la rendono nuova; mai una nuova
+scelta per prossimita di riga. Senza snapshot verificabile resta il
+comportamento precedente. Tenere verdi i controesempi delle review (riscritture
+one-liner, setter Python, decoratori, cancellazioni interne, rinomina antenato,
+gemelli identici): una differenza rispetto a HEAD e ammessa solo quando il
+proprietario di HEAD e provato sopravvissuto. Coverage tooling full-file `100%`
+con subprocess come sopra.
+
 ## Verifiche manuali obbligatorie
 
 - controllare il diff della baseline;

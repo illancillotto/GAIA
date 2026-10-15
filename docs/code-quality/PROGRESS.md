@@ -12720,3 +12720,32 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   (cognitive/cyclomatic 27/13). Nessuna seconda slice o commit avviato;
   modifiche concorrenti preservate. Prossima azione: review del delta prima
   di selezionare un altro hotspot con ownership libera.
+
+## 2026-10-15 - Matcher R109M: callable interamente aggiunte
+
+- Ambito: tooling del ratchet, nessun runtime applicativo. Sblocca R109
+  (Presenze giornaliere), fermato da ratchet exit 2 su `Program<anonymous>`
+  693-696: il fallback per prossimita assegnava a una callback interamente
+  aggiunta il vecchio `onClick={() => setSearch("")}` ancora presente.
+- Diagnosi: riprodotta con test e replay reale (stessi input, matcher HEAD:
+  gli stessi tre finding cyclomatic 1->3, cognitive 0->2, LOC 1->4).
+- Iterazioni con review indipendenti distinte: v1 (callable nuova senza prova)
+  REJECT, perdeva il ratchet di one-liner riscritti; v2 (superstiti "non
+  interamente aggiunti") REJECT; v3 (span senza righe `+`) REJECT per
+  cancellazioni interne, decoratori e nomi da antenati; v4 (prova costruttiva
+  dallo snapshot sorgente validato) accettata solo con guardia sui gemelli;
+  v5 REJECT: l'eliminazione prestava il budget di un hotspot ancora in uso;
+  v6 (eliminazione solo se non rivendicata, una volta) ACCEPT_WITH_NOTES.
+- Decisione utente sul matching ambiguo: solo eliminazione. Rischi accettati:
+  un unico omonimo non spiegato presta il proprio budget anche se cancellato;
+  piu omonimi non spiegati rendono nuova la riscrittura (restano soglie
+  assolute e callable contenitore). Mutanti superstiti dei nuovi test
+  (claim e lunghezza span) giudicati irraggiungibili: restano backstop.
+- Verifiche: suite `tests/code_quality` 294 PASS; `complexity.py` full-file
+  959/959 statement e 392/392 branch con subprocess; `make lint-backend`
+  BASE_REF=main PASS; replay R109 candidato exit 0, campagna pulita `aa87c991`
+  exit 0 come HEAD. Evidenze in
+  `.codex-gaia-campaign-resume-20261012/claude-20261015/r109m-matcher/`.
+- Indice author-worktree R109: causa storica UNKNOWN; riprodotto il meccanismo
+  (git 2.53 `git diff HEAD` riscrive l'indice con stat-cache stantia anche con
+  `GIT_OPTIONAL_LOCKS=0`). Nuove esecuzioni con snapshot e confronto entry.
