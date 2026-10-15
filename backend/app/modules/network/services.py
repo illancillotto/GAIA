@@ -1155,6 +1155,97 @@ def sync_network_device_alert_state(db: Session, device: NetworkDevice) -> None:
     )
 
 
+_SUSPICIOUS_BYPASS_TAGS = frozenset(
+    {"vpn_suspected", "proxy_suspected", "tor_suspected", "encrypted_dns", "vpn_port", "wireguard_port"}
+)
+
+
+def _suspicious_bypass_tags(db: Session, *, device_id: int, now: datetime) -> list[str]:
+    bypass_tags = _recent_bypass_signal_tags_for_device(
+        db,
+        device_id=device_id,
+        observed_since=now - timedelta(hours=_TRANSIENT_BYPASS_LOOKBACK_HOURS),
+    )
+    return [tag for tag in bypass_tags if tag in _SUSPICIOUS_BYPASS_TAGS]
+
+
+def _alert_arp_ephemeral_presence(db: Session, device: NetworkDevice, *, scan_id: int, now: datetime) -> int:
+    if not (
+        _is_arp_discovered_device(device)
+        and now - _coerce_utc(device.first_seen_at) <= timedelta(hours=_ARP_EPHEMERAL_WINDOW_HOURS)
+    ):
+        _resolve_alerts_for_device(db, device_id=device.id, alert_types=[_ARP_EPHEMERAL_ALERT_TYPE])
+        return 0
+    suspicious_bypass_tags = _suspicious_bypass_tags(db, device_id=device.id, now=now)
+    arp_message = (
+        f"Device scoperto via ARP e sparito rapidamente | "
+        f"Primo seen: {device.first_seen_at.isoformat()} | Ultimo seen: {device.last_seen_at.isoformat()}"
+    )
+    if suspicious_bypass_tags:
+        arp_message = f"{arp_message} | Correlazione bypass: {', '.join(suspicious_bypass_tags)}"
+    created = _create_alert(
+        db,
+        device_id=device.id,
+        scan_id=scan_id,
+        alert_type=_ARP_EPHEMERAL_ALERT_TYPE,
+        severity="danger" if suspicious_bypass_tags else "warning",
+        title=f"Presenza ARP effimera: {device.ip_address}",
+        message=arp_message,
+    )
+    return 1 if created else 0
+
+
+def _reconcile_missing_monitored_device(db: Session, device: NetworkDevice, *, scan_id: int, now: datetime) -> int:
+    if device.status != "offline":
+        device.status = "offline"
+    device.last_scan_id = scan_id
+    alerts_created = _alert_arp_ephemeral_presence(db, device, scan_id=scan_id, now=now)
+    if not device.is_known_device:
+        _resolve_alerts_for_device(
+            db,
+            device_id=device.id,
+            alert_types=[
+                "MISSING_DEVICE",
+                "device_offline",
+                _TRANSIENT_BYPASS_ALERT_TYPE,
+                _ARP_EPHEMERAL_ALERT_TYPE,
+                _ARP_MAC_CHANGE_ALERT_TYPE,
+                _ARP_IP_ROTATION_ALERT_TYPE,
+            ],
+        )
+        return alerts_created
+    alert_threshold = timedelta(days=max(settings.network_missing_device_alert_days, 1))
+    if now - _coerce_utc(device.last_seen_at) < alert_threshold:
+        _resolve_alerts_for_device(db, device_id=device.id, alert_types=["MISSING_DEVICE", "device_offline"])
+    elif _create_alert(
+        db,
+        device_id=device.id,
+        scan_id=scan_id,
+        alert_type="MISSING_DEVICE",
+        severity="danger",
+        title=f"Dispositivo conosciuto assente dalla rete: {device.ip_address}",
+        message=f"Ultimo avvistamento: {device.last_seen_at.isoformat()}",
+    ):
+        alerts_created += 1
+    if now - _coerce_utc(device.last_seen_at) > timedelta(hours=_TRANSIENT_BYPASS_OFFLINE_WINDOW_HOURS):
+        _resolve_alerts_for_device(db, device_id=device.id, alert_types=[_TRANSIENT_BYPASS_ALERT_TYPE])
+        return alerts_created
+    suspicious_bypass_tags = _suspicious_bypass_tags(db, device_id=device.id, now=now)
+    if not suspicious_bypass_tags:
+        _resolve_alerts_for_device(db, device_id=device.id, alert_types=[_TRANSIENT_BYPASS_ALERT_TYPE])
+    elif _create_alert(
+        db,
+        device_id=device.id,
+        scan_id=scan_id,
+        alert_type=_TRANSIENT_BYPASS_ALERT_TYPE,
+        severity="danger",
+        title=f"Device sparito dopo segnali bypass: {device.ip_address}",
+        message=f"Ultimo avvistamento: {device.last_seen_at.isoformat()} | Segnali recenti: {', '.join(suspicious_bypass_tags)}",
+    ):
+        alerts_created += 1
+    return alerts_created
+
+
 def run_network_scan(
     db: Session,
     initiated_by: str | None = None,
@@ -1273,98 +1364,11 @@ def run_network_scan(
             _resolve_alerts_for_device(db, device_id=device.id, alert_types=["UNKNOWN_DEVICE", "NEW_DEVICE", "new_device"])
 
     now = datetime.now(UTC)
-    alert_threshold = timedelta(days=max(settings.network_missing_device_alert_days, 1))
     monitored_devices = db.scalars(select(NetworkDevice).where(NetworkDevice.is_monitored.is_(True))).all()
     for device in monitored_devices:
         if device.ip_address in seen_ips:
             continue
-        if device.status != "offline":
-            device.status = "offline"
-        device.last_scan_id = scan.id
-        if _is_arp_discovered_device(device) and now - _coerce_utc(device.first_seen_at) <= timedelta(hours=_ARP_EPHEMERAL_WINDOW_HOURS):
-            bypass_tags = _recent_bypass_signal_tags_for_device(
-                db,
-                device_id=device.id,
-                observed_since=now - timedelta(hours=_TRANSIENT_BYPASS_LOOKBACK_HOURS),
-            )
-            suspicious_bypass_tags = [
-                tag
-                for tag in bypass_tags
-                if tag in {"vpn_suspected", "proxy_suspected", "tor_suspected", "encrypted_dns", "vpn_port", "wireguard_port"}
-            ]
-            arp_message = (
-                f"Device scoperto via ARP e sparito rapidamente | "
-                f"Primo seen: {device.first_seen_at.isoformat()} | Ultimo seen: {device.last_seen_at.isoformat()}"
-            )
-            if suspicious_bypass_tags:
-                arp_message = f"{arp_message} | Correlazione bypass: {', '.join(suspicious_bypass_tags)}"
-            if _create_alert(
-                db,
-                device_id=device.id,
-                scan_id=scan.id,
-                alert_type=_ARP_EPHEMERAL_ALERT_TYPE,
-                severity="danger" if suspicious_bypass_tags else "warning",
-                title=f"Presenza ARP effimera: {device.ip_address}",
-                message=arp_message,
-            ):
-                alerts_created += 1
-        else:
-            _resolve_alerts_for_device(db, device_id=device.id, alert_types=[_ARP_EPHEMERAL_ALERT_TYPE])
-        if not device.is_known_device:
-            _resolve_alerts_for_device(
-                db,
-                device_id=device.id,
-                alert_types=[
-                    "MISSING_DEVICE",
-                    "device_offline",
-                    _TRANSIENT_BYPASS_ALERT_TYPE,
-                    _ARP_EPHEMERAL_ALERT_TYPE,
-                    _ARP_MAC_CHANGE_ALERT_TYPE,
-                    _ARP_IP_ROTATION_ALERT_TYPE,
-                ],
-            )
-            continue
-        if now - _coerce_utc(device.last_seen_at) < alert_threshold:
-            _resolve_alerts_for_device(db, device_id=device.id, alert_types=["MISSING_DEVICE", "device_offline"])
-        else:
-            if _create_alert(
-                db,
-                device_id=device.id,
-                scan_id=scan.id,
-                alert_type="MISSING_DEVICE",
-                severity="danger",
-                title=f"Dispositivo conosciuto assente dalla rete: {device.ip_address}",
-                message=f"Ultimo avvistamento: {device.last_seen_at.isoformat()}",
-            ):
-                alerts_created += 1
-
-        last_seen_at = _coerce_utc(device.last_seen_at)
-        if now - last_seen_at > timedelta(hours=_TRANSIENT_BYPASS_OFFLINE_WINDOW_HOURS):
-            _resolve_alerts_for_device(db, device_id=device.id, alert_types=[_TRANSIENT_BYPASS_ALERT_TYPE])
-            continue
-        bypass_tags = _recent_bypass_signal_tags_for_device(
-            db,
-            device_id=device.id,
-            observed_since=now - timedelta(hours=_TRANSIENT_BYPASS_LOOKBACK_HOURS),
-        )
-        suspicious_bypass_tags = [
-            tag
-            for tag in bypass_tags
-            if tag in {"vpn_suspected", "proxy_suspected", "tor_suspected", "encrypted_dns", "vpn_port", "wireguard_port"}
-        ]
-        if not suspicious_bypass_tags:
-            _resolve_alerts_for_device(db, device_id=device.id, alert_types=[_TRANSIENT_BYPASS_ALERT_TYPE])
-        else:
-            if _create_alert(
-                db,
-                device_id=device.id,
-                scan_id=scan.id,
-                alert_type=_TRANSIENT_BYPASS_ALERT_TYPE,
-                severity="danger",
-                title=f"Device sparito dopo segnali bypass: {device.ip_address}",
-                message=f"Ultimo avvistamento: {device.last_seen_at.isoformat()} | Segnali recenti: {', '.join(suspicious_bypass_tags)}",
-            ):
-                alerts_created += 1
+        alerts_created += _reconcile_missing_monitored_device(db, device, scan_id=scan.id, now=now)
 
 
     db.flush()

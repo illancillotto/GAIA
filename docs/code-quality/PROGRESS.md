@@ -12829,3 +12829,21 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   finding, indice invariato. Review indipendente ACCEPT_WITH_NOTES; laziness
   fissata da test con resolver sentinella.
 - Graphify presenze-code aggiornato. Evidenze `claude-20261015/slices/r117-*`.
+
+## 2026-10-15 - R112 Network: riconciliazione dispositivi monitorati mancanti
+
+- Runtime `backend/app/modules/network/services.py`: il ciclo dei dispositivi
+  monitorati non visti di `run_network_scan` diventa
+  `_reconcile_missing_monitored_device`, con `_alert_arp_ephemeral_presence` e
+  `_suspicious_bypass_tags` (filtro tag duplicato unificato). Ordine degli
+  effetti per dispositivo, chiamate sensibili al flush, quirk ARP-ephemeral,
+  dedup degli alert e commit singolo invariati; la soglia giorni e letta per
+  dispositivo mancante noto invece che una volta per scansione (campo int).
+- Esito `IMPROVED`: `run_network_scan` cyclomatic/cognitive/LOC 101/195/267 ->
+  86/158/181; file cognitive 644 -> 624, cyclomatic +2 dichiarato; violation
+  invariate 32, nessuna nuova.
+- Test: caratterizzazione su originale, confini con clock congelato (soglia,
+  floor, finestre 12h), dedup su scansioni ripetute; mutanti M1–M6 uccisi.
+  186 PASS; coverage full-file 814/814 statement e 288/288 branch. Ratchet
+  integrazione exit 0, zero finding, indice invariato. Review ACCEPT_WITH_NOTES.
+- Graphify network-code aggiornato. Evidenze `claude-20261015/slices/r112-*`.
