@@ -12811,3 +12811,21 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   indice invariato. Review indipendente ACCEPT_WITH_NOTES (verifica v2 ok):
   restano due catene di dispatch parallele da mantenere allineate.
 - Graphify backend aggiornato. Evidenze `claude-20261015/slices/r113-*`.
+
+## 2026-10-15 - R117 Presenze: campi richiesta delle timbrature giornaliere
+
+- Runtime `backend/app/modules/presenze/router/helpers/daily_records.py`: le
+  quattro risoluzioni duplicate dei campi richiesta in
+  `_serialize_daily_record` e `_serialize_daily_record_matrix` diventano
+  `_REQUEST_FIELD_RESOLVERS` + `_resolved_request_values`, alla stessa posizione
+  del dict; risoluzione lazy invariata. Payload GATE giornaliere byte-identico
+  (golden 20 casi); mapping identita, personnel_area e sync GaTe non toccati.
+- Esito `IMPROVED`: `_serialize_daily_record` 55/71/137 -> 43/59/130;
+  matrice 19/18/76 -> 7/6/69 (error cyclomatic e warning cognitive rimossi);
+  file cognitive 265 -> 245, cyclomatic 233 -> 214, violation 19 -> 17.
+- Coverage full-file 283/283 statement e 106/106 branch (un test chiude il gap
+  preesistente 648->644 su `_build_catasto_saturday_coverage_counts`); test
+  presenze e GaTe PASS in integrazione; ratchet contro main exit 0, zero
+  finding, indice invariato. Review indipendente ACCEPT_WITH_NOTES; laziness
+  fissata da test con resolver sentinella.
+- Graphify presenze-code aggiornato. Evidenze `claude-20261015/slices/r117-*`.

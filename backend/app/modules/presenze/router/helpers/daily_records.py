@@ -58,6 +58,21 @@ from app.modules.presenze.services.schedule_engine import (
 # Keep extracted callable formatting stable for complexity-baseline matching.
 # fmt: off
 
+_REQUEST_FIELD_RESOLVERS = (
+    ("request_type", resolve_request_type),
+    ("request_description", resolve_request_description),
+    ("request_status", resolve_request_status),
+    ("request_authorized_by", resolve_request_authorized_by),
+)
+
+def _resolved_request_values(record: PresenzeDailyRecord) -> dict[str, str | None]:
+    raw_payload = record.raw_payload_json
+    payload_is_dict = isinstance(raw_payload, dict)
+    return {
+        field: getattr(record, field) or (resolver(raw_payload) if payload_is_dict else None)
+        for field, resolver in _REQUEST_FIELD_RESOLVERS
+    }
+
 def _serialize_daily_record(
     db: Session,
     record: PresenzeDailyRecord,
@@ -161,14 +176,7 @@ def _serialize_daily_record(
             "monthly_night_shift_count": monthly_night_bonus["monthly_night_shift_count"] if monthly_night_bonus is not None else 0,
             "ordinary_night_bonus_threshold_met": monthly_night_bonus["ordinary_night_bonus_threshold_met"] if monthly_night_bonus is not None else False,
             "ordinary_night_bonus_rate": monthly_night_bonus["ordinary_night_bonus_rate"] if monthly_night_bonus is not None else None,
-            "request_type": record.request_type
-            or (resolve_request_type(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
-            "request_description": record.request_description
-            or (resolve_request_description(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
-            "request_status": record.request_status
-            or (resolve_request_status(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
-            "request_authorized_by": record.request_authorized_by
-            or (resolve_request_authorized_by(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
+            **_resolved_request_values(record),
             "resolved_absence_cause": _resolved_absence_cause_for_response(record, classification),
             "detail_title": detail.get("title"),
             "detail_status": detail.get("status"),
@@ -396,14 +404,7 @@ def _serialize_daily_record_matrix(
             "monthly_night_shift_count": 0,
             "ordinary_night_bonus_threshold_met": False,
             "ordinary_night_bonus_rate": None,
-            "request_type": record.request_type
-            or (resolve_request_type(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
-            "request_description": record.request_description
-            or (resolve_request_description(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
-            "request_status": record.request_status
-            or (resolve_request_status(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
-            "request_authorized_by": record.request_authorized_by
-            or (resolve_request_authorized_by(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
+            **_resolved_request_values(record),
             "resolved_absence_cause": _resolved_absence_cause_for_response(record, classification),
             "detail_title": None,
             "detail_status": detail.get("status"),
