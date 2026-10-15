@@ -1,16 +1,17 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
 import re
+from collections.abc import Iterator
+from dataclasses import dataclass
+from itertools import chain
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 from app.modules.elaborazioni.bonifica_oristanese.apps.client import BonificaDatatableClient
 from app.modules.elaborazioni.bonifica_oristanese.apps.registry import get_bonifica_app
 from app.modules.elaborazioni.bonifica_oristanese.parsers import clean_html_text, extract_href_id
 from app.modules.elaborazioni.bonifica_oristanese.session import BonificaOristaneseSessionManager
-
 
 ORG_AREA_APP = get_bonifica_app("organizational_chart_areas")
 ORG_USER_APP = get_bonifica_app("organizational_chart_users")
@@ -31,7 +32,7 @@ def _parse_numeric(value: str | None) -> int | None:
 _DATASOURCE_RE = re.compile(r"datasource\s*=\s*(\{.*?\});", re.DOTALL)
 
 
-def _extract_datasource_entries(html: str, chart_type: str) -> list["BonificaOrgChartEntryRow"]:
+def _extract_datasource_entries(html: str, chart_type: str) -> list[BonificaOrgChartEntryRow]:
     match = _DATASOURCE_RE.search(html)
     if match is None:
         return []
@@ -71,7 +72,84 @@ def _extract_datasource_entries(html: str, chart_type: str) -> list["BonificaOrg
     return entries
 
 
-def _extract_entries(html: str) -> list["BonificaOrgChartEntryRow"]:
+_OPERATOR_TOKENS = ("referent", "user", "employee", "operator")
+_ENTRY_TOKENS = (*_OPERATOR_TOKENS, "area")
+
+# (field_name, wc_id, label) candidate read from a form control.
+_FormCandidate = tuple[str, int | None, str]
+
+
+def _field_name(tag: Tag) -> str:
+    return (tag.get("name") or "").strip()
+
+
+def _name_qualifies(field_name: str) -> bool:
+    normalized_name = field_name.lower()
+    return field_name.endswith("[]") or any(token in normalized_name for token in _ENTRY_TOKENS)
+
+
+def _input_is_submitted(field: Tag) -> bool:
+    input_type = (field.get("type") or "").lower()
+    if input_type == "hidden":
+        return True
+    return input_type in {"checkbox", "radio"} and field.has_attr("checked")
+
+
+def _input_label(soup: BeautifulSoup, field: Tag) -> str:
+    field_id = field.get("id")
+    if field_id:
+        explicit_label = soup.find("label", attrs={"for": field_id})
+        if explicit_label is not None:
+            label = clean_html_text(explicit_label.get_text())
+            if label:
+                return label
+    parent_label = field.find_parent("label")
+    if parent_label is not None:
+        label = clean_html_text(parent_label.get_text())
+        if label:
+            return label
+    return clean_html_text(field.get("data-label") or field.get("title") or "")
+
+
+def _select_candidates(soup: BeautifulSoup) -> Iterator[_FormCandidate]:
+    for select in soup.find_all("select"):
+        field_name = _field_name(select)
+        if not field_name or not (select.has_attr("multiple") or _name_qualifies(field_name)):
+            continue
+        for option in select.find_all("option", selected=True):
+            wc_id = _parse_numeric(option.get("value"))
+            yield field_name, wc_id, clean_html_text(option.get_text())
+
+
+def _input_candidates(soup: BeautifulSoup) -> Iterator[_FormCandidate]:
+    for field in soup.find_all("input"):
+        field_name = _field_name(field)
+        if not field_name or not _input_is_submitted(field) or not _name_qualifies(field_name):
+            continue
+        wc_id = _parse_numeric(field.get("value"))
+        if wc_id is None:
+            continue
+        yield field_name, wc_id, _input_label(soup, field)
+
+
+def _form_entry(
+    field_name: str, wc_id: int, label: str, sort_order: int
+) -> BonificaOrgChartEntryRow:
+    normalized_name = field_name.lower()
+    is_operator = any(token in normalized_name for token in _OPERATOR_TOKENS)
+    is_area = "area" in normalized_name and "chart" not in normalized_name
+    return BonificaOrgChartEntryRow(
+        wc_id=wc_id,
+        label=label,
+        role=_entry_role(field_name),
+        operator_wc_id=wc_id if is_operator else None,
+        area_wc_id=wc_id if is_area else None,
+        source_field=field_name,
+        sort_order=sort_order,
+    )
+
+
+def _extract_entries(html: str) -> list[BonificaOrgChartEntryRow]:
     datasource_entries = _extract_datasource_entries(html, chart_type="user")
     if datasource_entries:
         return datasource_entries
@@ -80,102 +158,15 @@ def _extract_entries(html: str) -> list["BonificaOrgChartEntryRow"]:
     entries: list[BonificaOrgChartEntryRow] = []
     seen: set[tuple[str, int, str]] = set()
 
-    for select in soup.find_all("select"):
-        field_name = (select.get("name") or "").strip()
-        if not field_name:
+    # Selected options are emitted before submitted inputs; dedupe and sort_order span both.
+    for field_name, wc_id, label in chain(_select_candidates(soup), _input_candidates(soup)):
+        if wc_id is None or not label:
             continue
-        normalized_name = field_name.lower()
-        if not (
-            select.has_attr("multiple")
-            or field_name.endswith("[]")
-            or any(token in normalized_name for token in ("referent", "user", "employee", "operator", "area"))
-        ):
-            continue
-
-        for option in select.find_all("option", selected=True):
-            wc_id = _parse_numeric(option.get("value"))
-            label = clean_html_text(option.get_text())
-            if wc_id is None or not label:
-                continue
-
-            operator_wc_id = (
-                wc_id if any(token in normalized_name for token in ("referent", "user", "employee", "operator")) else None
-            )
-            area_wc_id = (
-                wc_id if "area" in normalized_name and "chart" not in normalized_name else None
-            )
-            role = _entry_role(field_name)
-            dedupe_key = (field_name, wc_id, label)
-            if dedupe_key in seen:
-                continue
-            seen.add(dedupe_key)
-            entries.append(
-                BonificaOrgChartEntryRow(
-                    wc_id=wc_id,
-                    label=label,
-                    role=role,
-                    operator_wc_id=operator_wc_id,
-                    area_wc_id=area_wc_id,
-                    source_field=field_name,
-                    sort_order=len(entries),
-                )
-            )
-
-    for field in soup.find_all("input"):
-        field_name = (field.get("name") or "").strip()
-        if not field_name:
-            continue
-        normalized_name = field_name.lower()
-        input_type = (field.get("type") or "").lower()
-        if input_type not in {"checkbox", "radio", "hidden"}:
-            continue
-        if input_type in {"checkbox", "radio"} and not field.has_attr("checked"):
-            continue
-        if not (
-            field_name.endswith("[]")
-            or any(token in normalized_name for token in ("referent", "user", "employee", "operator", "area"))
-        ):
-            continue
-
-        wc_id = _parse_numeric(field.get("value"))
-        if wc_id is None:
-            continue
-
-        label = ""
-        field_id = field.get("id")
-        if field_id:
-            explicit_label = soup.find("label", attrs={"for": field_id})
-            if explicit_label is not None:
-                label = clean_html_text(explicit_label.get_text())
-        if not label:
-            parent_label = field.find_parent("label")
-            if parent_label is not None:
-                label = clean_html_text(parent_label.get_text())
-        if not label:
-            label = clean_html_text(field.get("data-label") or field.get("title") or "")
-        if not label:
-            continue
-
-        operator_wc_id = (
-            wc_id if any(token in normalized_name for token in ("referent", "user", "employee", "operator")) else None
-        )
-        area_wc_id = wc_id if "area" in normalized_name and "chart" not in normalized_name else None
-        role = _entry_role(field_name)
         dedupe_key = (field_name, wc_id, label)
         if dedupe_key in seen:
             continue
         seen.add(dedupe_key)
-        entries.append(
-            BonificaOrgChartEntryRow(
-                wc_id=wc_id,
-                label=label,
-                role=role,
-                operator_wc_id=operator_wc_id,
-                area_wc_id=area_wc_id,
-                source_field=field_name,
-                sort_order=len(entries),
-            )
-        )
+        entries.append(_form_entry(field_name, wc_id, label, len(entries)))
 
     return entries
 

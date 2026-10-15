@@ -12847,3 +12847,21 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   186 PASS; coverage full-file 814/814 statement e 288/288 branch. Ratchet
   integrazione exit 0, zero finding, indice invariato. Review ACCEPT_WITH_NOTES.
 - Graphify network-code aggiornato. Evidenze `claude-20261015/slices/r112-*`.
+
+## 2026-10-15 - R119 Elaborazioni: estrazione voci organigramma Bonifica
+
+- Runtime `backend/app/modules/elaborazioni/bonifica_oristanese/apps/org_charts/client.py`:
+  i cicli duplicati select/input di `_extract_entries` diventano generatori
+  candidati concatenati (`_select_candidates` poi `_input_candidates`) con
+  helper di qualificazione, label e costruzione voce; dedup e sort_order
+  condivisi, short-circuit datasource invariato. Debito Ruff del file (I001,
+  UP037) corretto senza effetti runtime.
+- Esito `IMPROVED`: `_extract_entries` cyclomatic/cognitive/LOC 51/101/98 ->
+  7/10/16 (tutte le violation rimosse); helper sotto ogni soglia; file
+  cognitive 152 -> 111, cyclomatic 98 -> 97, violation 8 -> 5 (residue in
+  callable non toccate).
+- Coverage del file da 49% (test esistenti) a 100% statement/branch (147/50)
+  con test pubblici e client via httpx MockTransport. Harness differenziale
+  della review: 40000 documenti, zero differenze. Ratchet integrazione exit 0,
+  zero finding, indice invariato. Review ACCEPT_WITH_NOTES.
+- Graphify backend aggiornato. Evidenze `claude-20261015/slices/r119-*`.
