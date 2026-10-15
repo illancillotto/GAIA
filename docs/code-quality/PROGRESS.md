@@ -12865,3 +12865,22 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   della review: 40000 documenti, zero differenze. Ratchet integrazione exit 0,
   zero finding, indice invariato. Review ACCEPT_WITH_NOTES.
 - Graphify backend aggiornato. Evidenze `claude-20261015/slices/r119-*`.
+
+## 2026-10-15 - R118 Worker: passo per veicolo del sync AUTODOC
+
+- Runtime `modules/elaborazioni/worker/autodoc_sync.py`: il passo per veicolo
+  di `run_autodoc_sync_job_by_id` diventa `_sync_autodoc_vehicle`,
+  `_apply_autodoc_snapshot` e `_record_vehicle_progress` con stato di run
+  `_AutodocRunState`; eccezioni, commit e cleanup browser restano
+  nell'orchestratore. Nessuna semantica SISTER/login/CAPTCHA/retry toccata.
+  Fix Ruff sicuri richiesti dal gate (UTC, import separato).
+- Esito `IMPROVED`: orchestratore cyclomatic/cognitive/LOC/nesting
+  46/122/145/6 -> 24/44/82/4 (nesting da error a warning); file cognitive
+  200 -> 149, cyclomatic +3 dichiarato; due helper con warning cyclomatic 10.
+- Test: 20 caratterizzazioni (snapshot params_json a ogni commit, trim a 10,
+  anno con cifra non ASCII); coverage full-file 315/315 statement e 86/86
+  branch combinando i test come `make test-worker`; test worker correlati PASS.
+  Ratchet integrazione exit 0, zero finding, indice invariato. Review
+  ACCEPT_WITH_NOTES.
+- Graphify elaborazioni-worker-code aggiornato. Evidenze
+  `claude-20261015/slices/r118-*`.

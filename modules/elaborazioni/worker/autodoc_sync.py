@@ -4,7 +4,8 @@ import asyncio
 import logging
 import re
 import uuid
-from datetime import datetime, timezone
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urljoin
 
@@ -13,8 +14,10 @@ from playwright.async_api import (
     BrowserContext,
     Page,
     Playwright,
-    TimeoutError as PlaywrightTimeoutError,
     async_playwright,
+)
+from playwright.async_api import (
+    TimeoutError as PlaywrightTimeoutError,
 )
 from sqlalchemy import select
 
@@ -333,6 +336,97 @@ async def _close_browser(
     await playwright.stop()
 
 
+@dataclass
+class _AutodocRunState:
+    page: Page | None
+    force_refresh: bool
+    total: int
+    synced: int = 0
+    skipped: int = 0
+    errors: int = 0
+    error_messages: list[str] = field(default_factory=list)
+
+
+def _apply_autodoc_snapshot(
+    vehicle: Vehicle, title: str, data: dict[str, str], now: datetime
+) -> None:
+    vehicle.autodoc_title = title
+    vehicle.autodoc_data = data
+    vehicle.autodoc_synced_at = now
+    vehicle.autodoc_sync_error = None
+    if not vehicle.brand and data.get("Marca"):
+        vehicle.brand = data["Marca"]
+    if not vehicle.fuel_type and data.get("Carburante"):
+        vehicle.fuel_type = data["Carburante"]
+    if vehicle.year_of_manufacture is None and data.get("Anno da", "").isdigit():
+        vehicle.year_of_manufacture = int(data["Anno da"])
+
+
+async def _sync_autodoc_vehicle(
+    state: _AutodocRunState, vehicle: Vehicle, now: datetime
+) -> dict[str, Any]:
+    autodoc_url = vehicle.autodoc_url
+    had_saved_autodoc_url = bool(autodoc_url)
+    if not autodoc_url and AUTODOC_ENABLE_PLATE_DISCOVERY and vehicle.plate_number:
+        assert state.page is not None
+        autodoc_url = await _discover_vehicle_url_by_plate(state.page, vehicle.plate_number)
+        vehicle.autodoc_url = autodoc_url
+
+    if not autodoc_url:
+        state.skipped += 1
+        vehicle.autodoc_sync_error = (
+            "Link AUTODOC mancante: la sync massiva aggiorna solo i mezzi con URL AUTODOC gia salvato"
+        )
+        return {
+            "vehicle_id": str(vehicle.id),
+            "status": "skipped",
+            "reason": "missing_autodoc_url",
+        }
+    if not state.force_refresh and vehicle.autodoc_synced_at and vehicle.autodoc_data:
+        state.skipped += 1
+        return {"vehicle_id": str(vehicle.id), "status": "skipped", "reason": "already_synced"}
+
+    assert state.page is not None
+    logger.info(
+        "AUTODOC snapshot avviata per mezzo %s url=%s",
+        vehicle.code,
+        autodoc_url,
+    )
+    title, data = await _extract_vehicle_snapshot(state.page, autodoc_url)
+    _apply_autodoc_snapshot(vehicle, title, data, now)
+    state.synced += 1
+    result = {
+        "vehicle_id": str(vehicle.id),
+        "status": "synced",
+        "autodoc_url_discovered": not had_saved_autodoc_url,
+    }
+    logger.info(
+        "AUTODOC sync completata per mezzo %s discovered=%s",
+        vehicle.code,
+        not had_saved_autodoc_url,
+    )
+    return result
+
+
+def _record_vehicle_progress(
+    job: WCSyncJob, state: _AutodocRunState, index: int, result: dict[str, Any]
+) -> None:
+    recent_results = list((job.params_json or {}).get("recent_results", []))
+    recent_results.append(result)
+    params = dict(job.params_json or {})
+    params["recent_results"] = recent_results[-10:]
+    params["processed_items"] = index
+    params["success_items"] = state.synced
+    params["failed_items"] = state.errors
+    params["skipped_items"] = state.skipped
+    params["progress_percent"] = round(index / state.total * 100)
+    params["current_vehicle"] = None
+    job.params_json = params
+    job.records_synced = state.synced
+    job.records_skipped = state.skipped
+    job.records_errors = state.errors
+
+
 async def run_autodoc_sync_job_by_id(session_factory, job_id: str | uuid.UUID) -> None:
     db = session_factory()
     playwright: Playwright | None = None
@@ -368,7 +462,7 @@ async def run_autodoc_sync_job_by_id(session_factory, job_id: str | uuid.UUID) -
 
         if total == 0:
             job.status = "completed"
-            job.finished_at = datetime.now(timezone.utc)
+            job.finished_at = datetime.now(UTC)
             job.records_synced = 0
             job.records_skipped = 0
             job.records_errors = 0
@@ -377,10 +471,7 @@ async def run_autodoc_sync_job_by_id(session_factory, job_id: str | uuid.UUID) -
             return
 
         playwright, browser, context, page = await _build_browser()
-        synced = 0
-        skipped = 0
-        errors = 0
-        error_messages: list[str] = []
+        state = _AutodocRunState(page=page, force_refresh=force_refresh, total=total)
 
         for index, vehicle in enumerate(vehicles, start=1):
             params = dict(job.params_json or {})
@@ -389,7 +480,7 @@ async def run_autodoc_sync_job_by_id(session_factory, job_id: str | uuid.UUID) -
             job.params_json = params
             db.commit()
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             try:
                 logger.info(
                     "AUTODOC sync mezzo %s/%s id=%s code=%s plate=%s",
@@ -399,59 +490,11 @@ async def run_autodoc_sync_job_by_id(session_factory, job_id: str | uuid.UUID) -
                     vehicle.code,
                     vehicle.plate_number,
                 )
-                autodoc_url = vehicle.autodoc_url
-                had_saved_autodoc_url = bool(autodoc_url)
-                if not autodoc_url and AUTODOC_ENABLE_PLATE_DISCOVERY and vehicle.plate_number:
-                    assert page is not None
-                    autodoc_url = await _discover_vehicle_url_by_plate(page, vehicle.plate_number)
-                    vehicle.autodoc_url = autodoc_url
-
-                if not autodoc_url:
-                    skipped += 1
-                    vehicle.autodoc_sync_error = (
-                        "Link AUTODOC mancante: la sync massiva aggiorna solo i mezzi con URL AUTODOC gia salvato"
-                    )
-                    result = {
-                        "vehicle_id": str(vehicle.id),
-                        "status": "skipped",
-                        "reason": "missing_autodoc_url",
-                    }
-                elif not force_refresh and vehicle.autodoc_synced_at and vehicle.autodoc_data:
-                    skipped += 1
-                    result = {"vehicle_id": str(vehicle.id), "status": "skipped", "reason": "already_synced"}
-                else:
-                    assert page is not None
-                    logger.info(
-                        "AUTODOC snapshot avviata per mezzo %s url=%s",
-                        vehicle.code,
-                        autodoc_url,
-                    )
-                    title, data = await _extract_vehicle_snapshot(page, autodoc_url)
-                    vehicle.autodoc_title = title
-                    vehicle.autodoc_data = data
-                    vehicle.autodoc_synced_at = now
-                    vehicle.autodoc_sync_error = None
-                    if not vehicle.brand and data.get("Marca"):
-                        vehicle.brand = data["Marca"]
-                    if not vehicle.fuel_type and data.get("Carburante"):
-                        vehicle.fuel_type = data["Carburante"]
-                    if vehicle.year_of_manufacture is None and data.get("Anno da", "").isdigit():
-                        vehicle.year_of_manufacture = int(data["Anno da"])
-                    synced += 1
-                    result = {
-                        "vehicle_id": str(vehicle.id),
-                        "status": "synced",
-                        "autodoc_url_discovered": not had_saved_autodoc_url,
-                    }
-                    logger.info(
-                        "AUTODOC sync completata per mezzo %s discovered=%s",
-                        vehicle.code,
-                        not had_saved_autodoc_url,
-                    )
+                result = await _sync_autodoc_vehicle(state, vehicle, now)
             except Exception as exc:
-                errors += 1
+                state.errors += 1
                 message = str(exc)
-                error_messages.append(f"{vehicle.name}: {message}")
+                state.error_messages.append(f"{vehicle.name}: {message}")
                 vehicle.autodoc_synced_at = now
                 vehicle.autodoc_sync_error = message
                 result = {"vehicle_id": str(vehicle.id), "status": "failed", "reason": message}
@@ -461,25 +504,12 @@ async def run_autodoc_sync_job_by_id(session_factory, job_id: str | uuid.UUID) -
                     message,
                 )
 
-            recent_results = list((job.params_json or {}).get("recent_results", []))
-            recent_results.append(result)
-            params = dict(job.params_json or {})
-            params["recent_results"] = recent_results[-10:]
-            params["processed_items"] = index
-            params["success_items"] = synced
-            params["failed_items"] = errors
-            params["skipped_items"] = skipped
-            params["progress_percent"] = round(index / total * 100)
-            params["current_vehicle"] = None
-            job.params_json = params
-            job.records_synced = synced
-            job.records_skipped = skipped
-            job.records_errors = errors
+            _record_vehicle_progress(job, state, index, result)
             db.commit()
 
-        job.status = "failed" if synced == 0 and errors > 0 else "completed"
-        job.finished_at = datetime.now(timezone.utc)
-        job.error_detail = "\n".join(error_messages[:20]) if error_messages else None
+        job.status = "failed" if state.synced == 0 and state.errors > 0 else "completed"
+        job.finished_at = datetime.now(UTC)
+        job.error_detail = "\n".join(state.error_messages[:20]) if state.error_messages else None
         params = dict(job.params_json or {})
         params["completed_at"] = job.finished_at.isoformat()
         job.params_json = params
