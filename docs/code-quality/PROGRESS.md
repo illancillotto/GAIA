@@ -12777,3 +12777,18 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   contro main exit 0, zero finding, indice invariato. Review indipendente
   ACCEPT_WITH_NOTES: gap preesistente sul banner errore/info a livello pagina.
 - Graphify frontend aggiornato. Evidenze `claude-20261015/slices/r115-*`.
+
+## 2026-10-15 - R110 Operazioni: mappe id delle anomalie
+
+- Runtime `backend/app/modules/operazioni/routes/analytics.py`: i sei blocchi
+  identici "carica righe per id in dict" di `anomalies_analytics` diventano
+  l'helper privato `_rows_by_id` (nessuna query con insieme vuoto). Lookup non
+  protetti, fuel e work_hours invariati; pragma solo spostati.
+- Esito `IMPROVED`: `anomalies_analytics` cyclomatic/cognitive/LOC/nesting
+  104/221/302/4 -> 92/189/282/3 (violation nesting rimossa); helper 3/2/5;
+  file cognitive 676 -> 646, cyclomatic 484 -> 475, violation 28 -> 27.
+- Test: registratore di statement SQL (21 SELECT in ordine, insiemi vuoti,
+  lookup non protetto). 287 PASS; coverage full-file 613/613 statement e
+  230/230 branch. Ratchet integrazione contro main exit 0, zero finding,
+  indice invariato. Review indipendente ACCEPT_WITH_NOTES.
+- Graphify operazioni-code aggiornato. Evidenze `claude-20261015/slices/r110-*`.

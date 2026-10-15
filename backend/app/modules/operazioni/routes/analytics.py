@@ -65,6 +65,13 @@ router = APIRouter(prefix="/analytics", tags=["operazioni/analytics"])
 
 # ─── helpers ───────────────────────────────────────────────────────────────────
 
+def _rows_by_id(db: Session, model: type, ids: set) -> dict:
+    """Load ``model`` rows keyed by primary key; an empty id set issues no query."""
+    if not ids:
+        return {}
+    return {row.id: row for row in db.scalars(select(model).where(model.id.in_(ids))).all()}
+
+
 def _parse_date(value: str | None, fallback: date) -> date:
     if value:
         try:
@@ -1086,10 +1093,7 @@ def anomalies_analytics(
         ).all()
 
         vehicle_ids = {s.vehicle_id for s in orphan_sessions if s.vehicle_id}
-        vehicles_map: dict = {}
-        if vehicle_ids:
-            for v in db.scalars(select(Vehicle).where(Vehicle.id.in_(vehicle_ids))).all():
-                vehicles_map[v.id] = v
+        vehicles_map = _rows_by_id(db, Vehicle, vehicle_ids)
 
         gaia_user_ids = {
             s.actual_driver_user_id
@@ -1151,10 +1155,7 @@ def anomalies_analytics(
         ).all()
 
         vids = {log.vehicle_id for log in excess_logs if log.vehicle_id}
-        vmap: dict = {}
-        if vids:
-            for v in db.scalars(select(Vehicle).where(Vehicle.id.in_(vids))).all():
-                vmap[v.id] = v
+        vmap = _rows_by_id(db, Vehicle, vids)
 
         for log in excess_logs:
             v = vmap.get(log.vehicle_id)
@@ -1207,12 +1208,7 @@ def anomalies_analytics(
         ).all()
 
         user_ids_disc = {a.operator_user_id for a in acts if a.operator_user_id}
-        umap: dict = {}
-        if user_ids_disc:
-            for u in db.scalars(
-                select(ApplicationUser).where(ApplicationUser.id.in_(user_ids_disc))
-            ).all():
-                umap[u.id] = u
+        umap = _rows_by_id(db, ApplicationUser, user_ids_disc)
 
         for a in acts:
             diff = abs(
@@ -1299,10 +1295,7 @@ def anomalies_analytics(
                 umap_inactive[u.id] = u
 
             vids_op = {log.vehicle_id for log in op_logs} | {s.vehicle_id for s in op_sessions}
-            vmap_op: dict = {}
-            if vids_op:
-                for v in db.scalars(select(Vehicle).where(Vehicle.id.in_(vids_op))).all():
-                    vmap_op[v.id] = v
+            vmap_op = _rows_by_id(db, Vehicle, vids_op)
 
             for log in op_logs:
                 u = umap_inactive.get(log.recorded_by_user_id)
@@ -1344,16 +1337,10 @@ def anomalies_analytics(
         ).all()
 
         wc_op_ids = {a.wc_operator_id for a in open_assignments}
-        wc_ops: dict = {}
-        if wc_op_ids:
-            for op in db.scalars(select(WCOperator).where(WCOperator.id.in_(wc_op_ids))).all():
-                wc_ops[op.id] = op
+        wc_ops = _rows_by_id(db, WCOperator, wc_op_ids)
 
         card_ids = {a.fuel_card_id for a in open_assignments}
-        cards_map: dict = {}
-        if card_ids:
-            for card in db.scalars(select(FuelCard).where(FuelCard.id.in_(card_ids))).all():
-                cards_map[card.id] = card
+        cards_map = _rows_by_id(db, FuelCard, card_ids)
 
         for assignment in open_assignments:
             op = wc_ops.get(assignment.wc_operator_id)
