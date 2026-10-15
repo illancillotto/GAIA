@@ -12749,3 +12749,16 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
 - Indice author-worktree R109: causa storica UNKNOWN; riprodotto il meccanismo
   (git 2.53 `git diff HEAD` riscrive l'indice con stat-cache stantia anche con
   `GIT_OPTIONAL_LOCKS=0`). Nuove esecuzioni con snapshot e confronto entry.
+
+## 2026-10-15 - R109 Presenze giornaliere day-focus renderer
+
+- Slice runtime: estratto il renderer dei badge day-focus in
+  `frontend/src/app/presenze/giornaliere/page.tsx`, fondendo i due callback
+  di toggle duplicati; nuova spec `presenze-giornaliere-day-focus-r109.test.tsx`.
+- Esito `IMPROVED`: principale cognitive/cyclomatic/LOC 352/309/1870 ->
+  345/302/1833; file 1034/1180/2786 -> 1017/1161/2779; error 11 -> 10;
+  warning nuovo: `renderDayFocusBadge` cinque parametri.
+- Gate: native 504 PASS con coverage full-file 100%, types e lint gia
+  sigillati su byte identici; ratchet autorevole dopo R109M exit 0, zero
+  finding, indice invariato. Review di ammissione indipendente ADMIT_WITH_NOTES.
+- Dettaglio in `MULTI_AGENT_OWNERSHIP_R109_PRESENZE_DAY_FOCUS_2026-10-15.md`.

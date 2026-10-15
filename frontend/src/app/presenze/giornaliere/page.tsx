@@ -37,7 +37,7 @@ import { collaboratorProfileFilterKey, selectMonthlyCollaboratorRows } from "./c
 import type { DayFocusFilter, ProfileFilterKey } from "./collaborator-rows";
 import { buildMonthlyRecordInsights } from "./monthly-record-insights";
 import { dailyCellIndicators, kmInputPresentation } from "./daily-cell-model";
-import type { CollaboratorMonthTotals, DayOperationalSummary, MonthlyRecordFacts } from "./monthly-record-insights";
+import type { CollaboratorMonthTotals, MonthlyRecordFacts } from "./monthly-record-insights";
 import { anomalyPanelComparisons, anomalyPanelCounts as countAnomalyPanelRecords, buildAnomalyDayGroups, buildAnomalyCollaboratorGroups } from "./anomaly-panel-model";
 import type { MonthAnomalyRecord, AnomalyPanelDayGroup, AnomalyPanelCollaboratorGroup } from "./anomaly-panel-model";
 
@@ -666,12 +666,43 @@ function operationalRuleHint(record: PresenzeDailyRecord): string | null {
   return null;
 }
 
-function daySummaryBadges(summary: DayOperationalSummary | undefined): string[] {
-  if (!summary) return [];
-  const badges: string[] = [];
-  if (summary.anomalies > 0) badges.push(`${summary.anomalies} anom.`);
-  if (summary.requests > 0) badges.push(`${summary.requests} ric.`);
-  return badges;
+const DAY_FOCUS_BADGE_PRESENTATION = {
+  anomalies: {
+    suffix: " anom.", titleSuffix: "anomalie",
+    selected: "bg-red-700 text-white ring-red-700",
+    idle: "bg-red-50 text-red-700 ring-red-200 hover:bg-red-100",
+  },
+  requests: {
+    suffix: " ric.", titleSuffix: "richieste",
+    selected: "bg-sky-700 text-white ring-sky-700",
+    idle: "bg-sky-50 text-sky-700 ring-sky-200 hover:bg-sky-100",
+  },
+};
+
+function renderDayFocusBadge(
+  column: DayColumn,
+  kind: NonNullable<DayFocusFilter>["kind"],
+  count: number,
+  dayFocusFilter: DayFocusFilter,
+  setDayFocusFilter: (update: (current: DayFocusFilter) => DayFocusFilter) => void,
+) {
+  const presentation = DAY_FOCUS_BADGE_PRESENTATION[kind];
+  return (
+    <button
+      type="button"
+      onClick={() => setDayFocusFilter((current) =>
+        current?.iso === column.iso && current.kind === kind
+          ? null : { iso: column.iso, kind },
+      )}
+      className={`w-[68px] rounded-lg px-2 py-1 text-[10px] font-bold leading-none ring-1 ring-inset transition ${
+        dayFocusFilter?.iso === column.iso && dayFocusFilter.kind === kind
+          ? presentation.selected : presentation.idle
+      }`}
+      title={`${column.iso} · ${count} ${presentation.titleSuffix}`}
+    >
+      {count}{presentation.suffix}
+    </button>
+  );
 }
 
 function formatAbsenceCause(cause: string | null | undefined): string {
@@ -2076,7 +2107,8 @@ export default function PresenzeGiornalierePage() {
                   </th>
                   {days.map((column) => {
                     const daySummary = dayTotals.get(column.iso);
-                    const badges = daySummaryBadges(daySummary);
+                    const hasAnomalies = Boolean(daySummary && daySummary.anomalies > 0);
+                    const hasRequests = Boolean(daySummary && daySummary.requests > 0);
                     return (
                     <th
                       key={column.iso}
@@ -2085,48 +2117,10 @@ export default function PresenzeGiornalierePage() {
                       <div className="uppercase leading-none">{column.weekday}</div>
                       <div className={`mt-1 text-base leading-none ${column.isToday ? "font-bold text-slate-950" : "text-slate-700"}`}>{column.day}</div>
                       <div className="mt-2 flex min-h-[32px] flex-col items-center justify-start gap-1">
-                        {badges.length > 0 ? (
+                        {hasAnomalies || hasRequests ? (
                           <>
-                            {daySummary && daySummary.anomalies > 0 ? (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setDayFocusFilter((current) =>
-                                    current?.iso === column.iso && current.kind === "anomalies"
-                                      ? null
-                                      : { iso: column.iso, kind: "anomalies" },
-                                  )
-                                }
-                                className={`w-[68px] rounded-lg px-2 py-1 text-[10px] font-bold leading-none ring-1 ring-inset transition ${
-                                  dayFocusFilter?.iso === column.iso && dayFocusFilter.kind === "anomalies"
-                                    ? "bg-red-700 text-white ring-red-700"
-                                    : "bg-red-50 text-red-700 ring-red-200 hover:bg-red-100"
-                                }`}
-                                title={`${column.iso} · ${daySummary.anomalies} anomalie`}
-                              >
-                                {daySummary.anomalies} anom.
-                              </button>
-                            ) : null}
-                            {daySummary && daySummary.requests > 0 ? (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setDayFocusFilter((current) =>
-                                    current?.iso === column.iso && current.kind === "requests"
-                                      ? null
-                                      : { iso: column.iso, kind: "requests" },
-                                  )
-                                }
-                                className={`w-[68px] rounded-lg px-2 py-1 text-[10px] font-bold leading-none ring-1 ring-inset transition ${
-                                  dayFocusFilter?.iso === column.iso && dayFocusFilter.kind === "requests"
-                                    ? "bg-sky-700 text-white ring-sky-700"
-                                    : "bg-sky-50 text-sky-700 ring-sky-200 hover:bg-sky-100"
-                                }`}
-                                title={`${column.iso} · ${daySummary.requests} richieste`}
-                              >
-                                {daySummary.requests} ric.
-                              </button>
-                            ) : null}
+                            {hasAnomalies ? renderDayFocusBadge(column, "anomalies", daySummary!.anomalies, dayFocusFilter, setDayFocusFilter) : null}
+                            {hasRequests ? renderDayFocusBadge(column, "requests", daySummary!.requests, dayFocusFilter, setDayFocusFilter) : null}
                           </>
                         ) : (
                           <span className="text-[10px] leading-none text-slate-300">-</span>

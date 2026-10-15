@@ -111,3 +111,24 @@ No commit, push or merge. Author issues a concrete minimal design or
 NO_SAFE_CHANGE, explains physical versus overlapping scanner reduction, then
 stops. Independent design/rebind/preparation acceptance precedes any later
 narrow runtime grant. No second responsibility is authorized.
+
+## Closure 2026-10-15 (Claude continuation)
+
+- Ratchet blocker resolved by the separate matcher change R109M (commit
+  `d8e81d69`, five independent review rounds, user decision: elimination
+  only for genuinely ambiguous matches). No baseline, receipt or sealed
+  evidence was rewritten; the failed original ratchet stays preserved.
+- Authoritative ratchet on `d8e81d69` + candidate page `c1a1d360` + spec
+  `eece98cd`: `make complexity-ratchet BASE_REF=main` exit 0, baseline
+  commit `a51a48dc`, findings `[]`, worktree index identical before/after.
+  Repeated in the integration worktree: exit 0, findings `[]`, index identical.
+- Independent admission review: ADMIT_WITH_NOTES. Native (504 PASS, eight
+  specs, full-file 100%), types and lint inputs byte-identical to the sealed
+  receipts, so they were revalidated by hash, not rerun.
+- Classification `IMPROVED`: principal cognitive/cyclomatic/LOC
+  352/309/1870 -> 345/302/1833; file 1034/1180/2786 -> 1017/1161/2779;
+  errors 11 -> 10. New `renderDayFocusBadge` has a five-parameter warning.
+- Author-index hash drift `4200262b -> 3c13008b`: cause UNKNOWN; mechanism
+  (git `diff HEAD` stat refresh with optional locks disabled) reproduced, not
+  proven historically. New runs use index snapshots and entry comparison.
+- Graphify: `make graphify-frontend` exit 0 (graph not committed).
