@@ -13322,3 +13322,20 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   fallire le nuove attese. 12 suite della pagina verdi in 3 run.
 - Ratchet integrazione exit 0, zero finding, indice invariato. Review
   ACCEPT_WITH_NOTES.
+
+## 2026-10-16 - R144 Tooling: `baseline-verify` indipendente dal percorso del checkout
+
+- Decisione utente 2026-10-16. `tools/code_quality/complexity.py`: la
+  normalizzazione di `baseline-verify` ignora anche `provenance.repo_root`,
+  l'unico path assoluto della baseline. Prima la verifica falliva da qualunque
+  checkout diverso da quello che aveva generato la baseline, anche con file e
+  callable identici. `repo_root` non e letto da check, ratchet o compare; i
+  campi `tool`, file, callable, scope ed engine restano confrontati.
+- Nuovo `tests/code_quality/test_complexity_baseline_verify_repo_root.py`: il
+  test di regressione fallisce sull'originale; due guardie verificano che una
+  modifica reale e un `provenance.tool` diverso restino rilevati. Tooling 297
+  PASS, `complexity.py` 960/960 statement e 392/392 branch. Ratchet integrazione
+  exit 0, zero finding, indice invariato. Review ACCEPT_WITH_NOTES.
+- Gap preesistente annotato: nessun test protegge la deriva di nome o versione
+  degli engine. La baseline resta da sincronizzare per il debito eliminato da
+  R132 (commit separato).
