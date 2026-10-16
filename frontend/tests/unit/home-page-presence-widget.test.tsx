@@ -16,7 +16,6 @@ const mocks = vi.hoisted(() => ({
   getNetworkDashboard: vi.fn(),
   getUtenzeStats: vi.fn(),
   getCatastoDocuments: vi.fn(),
-  getGateMobileSyncStatus: vi.fn(),
   getPresenceSummary: vi.fn(),
   getRuoloStats: vi.fn(),
   getRuoloStatsAnalytics: vi.fn(),
@@ -40,10 +39,6 @@ vi.mock("@/lib/use-presence-heartbeat", () => ({
   usePresenceHeartbeat: mocks.usePresenceHeartbeat,
 }));
 
-vi.mock("@/app/home-gate-mobile-summary", () => ({
-  buildHomeGateMobileSummary: () => ({ value: "0", copy: "nessuna sync" }),
-}));
-
 vi.mock("@/lib/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
   return {
@@ -54,7 +49,6 @@ vi.mock("@/lib/api", async () => {
     getNetworkDashboard: mocks.getNetworkDashboard,
     getUtenzeStats: mocks.getUtenzeStats,
     getCatastoDocuments: mocks.getCatastoDocuments,
-    getGateMobileSyncStatus: mocks.getGateMobileSyncStatus,
     getPresenceSummary: mocks.getPresenceSummary,
     isAuthError: mocks.isAuthError,
   };
@@ -93,7 +87,6 @@ describe("HomePage presence widget", () => {
     mocks.getNetworkDashboard.mockReset();
     mocks.getUtenzeStats.mockReset();
     mocks.getCatastoDocuments.mockReset();
-    mocks.getGateMobileSyncStatus.mockReset();
     mocks.getPresenceSummary.mockReset();
     mocks.getRuoloStats.mockReset();
     mocks.getRuoloStatsAnalytics.mockReset();
@@ -160,7 +153,6 @@ describe("HomePage presence widget", () => {
       by_letter: {},
     });
     mocks.getCatastoDocuments.mockResolvedValue([]);
-    mocks.getGateMobileSyncStatus.mockResolvedValue(null);
     mocks.getRuoloStats.mockResolvedValue({ items: [] });
     mocks.getRuoloStatsAnalytics.mockResolvedValue(null);
     mocks.catastoGetIndiciOverview.mockResolvedValue(null);

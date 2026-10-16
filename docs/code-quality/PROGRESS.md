@@ -13159,3 +13159,15 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   sull'originale; 297 test PASS. R63 non riutilizzato. Ratchet integrazione exit 0,
   zero finding, indice invariato. Review ACCEPT_WITH_NOTES.
 - Graphify catasto-code e frontend aggiornati. Evidenze `claude-20261015/slices/r133-*`.
+
+## 2026-10-16 - R138 Home: rimozione modulo morto GaTe Mobile
+
+- Rimossi `frontend/src/app/home-gate-mobile-summary.ts` e il suo test: il
+  riepilogo GaTe Mobile e stato tolto dalla home in fe66c1b2 e la riga "Stato
+  operativo" documentata in `docs/ARCHITECTURE.md:401-407` non lo include.
+  Rimossi i mock inutilizzati in `home-page-presence-widget.test.tsx` (nessuna
+  asserzione cambiata, 106 expect invariati).
+- Debito eliminato: `buildHomeGateMobileSummary` (cyclomatic 12, warning).
+  Test home 36 PASS; tsc, eslint e smoke PASS. Ratchet integrazione exit 0,
+  zero finding, indice invariato. Review ACCEPT. Le voci della baseline per il
+  file rimosso saranno sincronizzate con il baseline-repair autorizzato.
