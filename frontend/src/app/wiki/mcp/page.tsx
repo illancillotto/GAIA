@@ -37,13 +37,12 @@ export default function WikiMCPPreview() {
     }
     setBusy(true);
     try {
-      const answer = await request<MCPAnswer>("/wiki/mcp/chat", {
+      setResult(await request<MCPAnswer>("/wiki/mcp/chat", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         body: JSON.stringify({ question }),
         timeoutMs: 180_000,
-      });
-      setResult(answer);
+      }));
     } catch {
       setError("Agente non disponibile o accesso negato. Verifica sessione e configurazione MCP.");
     } finally {

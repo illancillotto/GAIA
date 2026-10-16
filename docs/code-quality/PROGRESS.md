@@ -13171,3 +13171,16 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   Test home 36 PASS; tsc, eslint e smoke PASS. Ratchet integrazione exit 0,
   zero finding, indice invariato. Review ACCEPT. Le voci della baseline per il
   file rimosso saranno sincronizzate con il baseline-repair autorizzato.
+
+## 2026-10-16 - R141 Wiki MCP preview: ripristino baseline LOC (complexity-check)
+
+- Parte del piano autorizzato "correggere le regressioni, poi riparare la
+  baseline". `frontend/src/app/wiki/mcp/page.tsx`: variabile temporanea
+  monouso `answer` resa inline in `submit`. Comportamento identico.
+  WikiMCPPreview loc 55 -> 54 (baseline 54). Classificazione: ripristino
+  cosmetico della baseline, non IMPROVED.
+- `RegisteredMailRow` (loc 40 contro baseline 39) e NO_SAFE_CHANGE: la riga in
+  piu e la feature `RegisteredMailCards` (2908e0e1). Va assorbita nel
+  baseline-repair con decisione esplicita.
+- Coverage full-file 100%. Ratchet integrazione exit 0, zero finding, indice
+  invariato. Review ACCEPT_WITH_NOTES. Graphify wiki-code aggiornato.
