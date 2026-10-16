@@ -13421,3 +13421,17 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   eslint e tsc puliti. Mutanti sull'helper e sui 12 fallback tutti uccisi.
   Ratchet integrazione exit 0, zero finding, indice invariato. Review
   indipendente ACCEPT_WITH_NOTES. Graphify `make graphify-frontend` aggiornato.
+
+## 2026-10-16 - Sync baseline: debito eliminato da R145 e R59
+
+- Eseguito il comando ordinario `make complexity-baseline` (rifiuta le
+  regressioni) su HEAD `f4816734`, senza modifiche runtime nel working tree.
+  Il diff della baseline tocca solo
+  `frontend/src/components/elaborazioni/capacitas-workspace.tsx`: file LOC
+  3108 -> 3104, cognitive_sum 762 -> 706, cyclomatic_sum 906 -> 880,
+  cognitive_max 298 -> 273, cyclomatic_max 275 -> 263. Unico callable nuovo
+  `getCapacitasOperationErrorMessage` (1/2, nessuna violation); nessuna
+  violation aggiunta, rimosso il warning cyclomatic di
+  `handleCreateTerreniBatchJob`.
+- Dopo la sync: `complexity-baseline-verify` riproducibile, `complexity-check`
+  exit 0, ratchet contro il merge-base senza finding.
