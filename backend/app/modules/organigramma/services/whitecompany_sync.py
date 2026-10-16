@@ -11,7 +11,8 @@ Le righe con `is_manual_locked=True` non vengono mai sovrascritte.
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timezone
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -195,8 +196,58 @@ def _pick_descendant_unit_by_bucket(
     return candidates[index]
 
 
+@dataclass
+class _ChartUnitPlacement:
+    """Per-chart state for placing user-chart operators into the area unit tree."""
+
+    root_unit: OrgUnit
+    child_units_by_parent_id: dict[UUID, list[OrgUnit]]
+    unit_depth_by_id: dict[UUID, int]
+    assigned_unit_by_operator_wc_id: dict[int, OrgUnit] = field(default_factory=dict)
+    next_child_cursor_by_parent_key: dict[tuple[UUID, int], int] = field(
+        default_factory=lambda: defaultdict(int)
+    )
+    next_descendant_cursor_by_parent_key: dict[tuple[UUID, str], int] = field(
+        default_factory=lambda: defaultdict(int)
+    )
+
+
+def _place_operator_unit(
+    placement: _ChartUnitPlacement,
+    *,
+    parent_operator_wc_id: int | None,
+    role: str | None,
+) -> OrgUnit:
+    if parent_operator_wc_id is None:
+        return placement.root_unit
+
+    parent_unit = placement.assigned_unit_by_operator_wc_id.get(parent_operator_wc_id, placement.root_unit)
+    role_target_depth = _target_depth_for_role(role)
+    role_target_bucket = _target_bucket_for_role(role)
+    if role_target_depth is not None and role_target_depth <= placement.unit_depth_by_id.get(parent_unit.id, 0):
+        return parent_unit
+
+    picked_unit = None
+    if role_target_depth is not None and role_target_bucket is not None:
+        picked_unit = _pick_descendant_unit_by_bucket(
+            parent_unit=parent_unit,
+            child_units_by_parent_id=placement.child_units_by_parent_id,
+            next_descendant_cursor_by_parent_key=placement.next_descendant_cursor_by_parent_key,
+            target_bucket=role_target_bucket,
+        )
+    if picked_unit is None:
+        picked_unit = _pick_child_unit(
+            parent_unit=parent_unit,
+            child_units_by_parent_id=placement.child_units_by_parent_id,
+            next_child_cursor_by_parent_key=placement.next_child_cursor_by_parent_key,
+            target_depth=role_target_depth,
+            unit_depth_by_id=placement.unit_depth_by_id,
+        )
+    return picked_unit or parent_unit
+
+
 def sync_from_whitecompany(db: Session, *, user_id: int | None) -> WhiteCompanySyncResult:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     result = WhiteCompanySyncResult()
 
     areas = db.execute(select(WCArea)).scalars().all()
@@ -338,16 +389,11 @@ def sync_from_whitecompany(db: Session, *, user_id: int | None) -> WhiteCompanyS
         for child_units in area_children_by_unit_id.values():
             child_units.sort(key=lambda unit: (unit.sort_order, unit.nome.lower(), str(unit.id)))
 
-        operator_children_count: dict[int, int] = defaultdict(int)
-        for entry, _chart in chart_rows:
-            metadata = _parse_source_field(entry.source_field)
-            parent_wc_id = metadata.get("parent")
-            if parent_wc_id and parent_wc_id.isdigit():
-                operator_children_count[int(parent_wc_id)] += 1
-
-        assigned_unit_by_operator_wc_id: dict[int, OrgUnit] = {}
-        next_child_cursor_by_parent_key: dict[tuple[UUID, int], int] = defaultdict(int)
-        next_descendant_cursor_by_parent_key: dict[tuple[UUID, str], int] = defaultdict(int)
+        placement = _ChartUnitPlacement(
+            root_unit=root_unit,
+            child_units_by_parent_id=area_children_by_unit_id,
+            unit_depth_by_id=area_unit_depth_by_id,
+        )
 
         for entry, _chart in chart_rows:
             if entry.wc_operator_id is None:
@@ -366,53 +412,12 @@ def sync_from_whitecompany(db: Session, *, user_id: int | None) -> WhiteCompanyS
                 if parent_operator is not None and parent_operator.gaia_user_id != gaia_user_id:
                     manager_user_id = parent_operator.gaia_user_id
 
-            unit = root_unit
-            role_target_depth = _target_depth_for_role(entry.role)
-            role_target_bucket = _target_bucket_for_role(entry.role)
-            if parent_operator_wc_id is not None:
-                parent_unit = assigned_unit_by_operator_wc_id.get(parent_operator_wc_id, root_unit)
-                parent_depth = area_unit_depth_by_id.get(parent_unit.id, 0)
-                if role_target_depth is not None:
-                    if role_target_depth <= parent_depth:
-                        unit = parent_unit
-                    else:
-                        picked_unit = None
-                        if role_target_bucket is not None:
-                            picked_unit = _pick_descendant_unit_by_bucket(
-                                parent_unit=parent_unit,
-                                child_units_by_parent_id=area_children_by_unit_id,
-                                next_descendant_cursor_by_parent_key=next_descendant_cursor_by_parent_key,
-                                target_bucket=role_target_bucket,
-                            )
-                        if picked_unit is None:
-                            picked_unit = _pick_child_unit(
-                                parent_unit=parent_unit,
-                                child_units_by_parent_id=area_children_by_unit_id,
-                                next_child_cursor_by_parent_key=next_child_cursor_by_parent_key,
-                                target_depth=role_target_depth,
-                                unit_depth_by_id=area_unit_depth_by_id,
-                            )
-                        unit = picked_unit or parent_unit
-                elif operator_children_count.get(entry.wc_id, 0) > 0:
-                    picked_unit = _pick_child_unit(
-                        parent_unit=parent_unit,
-                        child_units_by_parent_id=area_children_by_unit_id,
-                        next_child_cursor_by_parent_key=next_child_cursor_by_parent_key,
-                        target_depth=None,
-                        unit_depth_by_id=area_unit_depth_by_id,
-                    )
-                    unit = picked_unit or parent_unit
-                else:
-                    picked_unit = _pick_child_unit(
-                        parent_unit=parent_unit,
-                        child_units_by_parent_id=area_children_by_unit_id,
-                        next_child_cursor_by_parent_key=next_child_cursor_by_parent_key,
-                        target_depth=None,
-                        unit_depth_by_id=area_unit_depth_by_id,
-                    )
-                    unit = picked_unit or parent_unit
-
-            assigned_unit_by_operator_wc_id[entry.wc_id] = unit
+            unit = _place_operator_unit(
+                placement,
+                parent_operator_wc_id=parent_operator_wc_id,
+                role=entry.role,
+            )
+            placement.assigned_unit_by_operator_wc_id[entry.wc_id] = unit
 
             link = _find_assignment_link(db, entry.wc_id)
             if link is not None:

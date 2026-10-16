@@ -13092,3 +13092,22 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   ACCEPT. Osservazione preesistente non modificata: live e rollup divergono
   su eventi `denied` e sul case delle etichette destinazione.
 - Graphify network-code aggiornato. Evidenze `claude-20261015/slices/r130-*`.
+
+## 2026-10-16 - R128 Organigramma: collocazione operatori nel sync WhiteCompany
+
+- Runtime `backend/app/modules/organigramma/services/whitecompany_sync.py`: in
+  `sync_from_whitecompany` i rami elif/else identici della collocazione
+  operatori sono uniti (il conteggio figli diventa codice morto e viene
+  rimosso); stato per organigramma in `_ChartUnitPlacement` e scelta unita in
+  `_place_operator_unit` con early return. Chiamate ai cursori, contatori,
+  scritture, flush, commit singolo, link bloccati e dedup utenti invariati.
+  Fix UP017 (`UTC`) imposto dal gate di stile.
+- Esito `IMPROVED`: target cyclomatic/cognitive/LOC/nesting 77/205/290/6 ->
+  61/145/246/4 (nesting da error a warning); file cognitive 263 -> 215,
+  cyclomatic 137 -> 132; nuovo warning cyclomatic 11 su `_place_operator_unit`.
+- Coverage full-file 100% statement/branch; harness differenziale della review
+  400 seed identici; test dei casi limite incluso figlio non primo. Bug
+  preesistenti documentati da test e non modificati: autoflush=False al primo
+  sync e link duplicato (IntegrityError). Ratchet integrazione exit 0, zero
+  finding, indice invariato. Review ACCEPT_WITH_NOTES con condizioni soddisfatte.
+- Graphify organigramma-code aggiornato. Evidenze `claude-20261015/slices/r128-*`.
