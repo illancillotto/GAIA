@@ -248,12 +248,7 @@ function CapacitasJobActions(props: CapacitasJobActionsProps) {
       </button>
       <button
         className="btn-secondary"
-        disabled={
-          props.deletingId === props.job.id ||
-          props.job.status === "pending" ||
-          props.job.status === "processing" ||
-          props.job.status === "queued_resume"
-        }
+        disabled={props.deletingId === props.job.id || isCapacitasInFlightJob(props.job)}
         onClick={props.onDelete}
         type="button"
       >

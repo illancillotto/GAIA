@@ -13391,3 +13391,17 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
 - Gap annotati (LOW): guardie di prenotazione/appartenenza in
   `contextual_ambiguity_owner` ridondanti e non isolate da test;
   `source_start_holds` senza snapshot non fissato da test (solo piu severo).
+
+## 2026-10-16 - R145 Elaborazioni Capacitas: riuso di `isCapacitasInFlightJob` (IMPROVED)
+
+- `frontend/src/components/elaborazioni/capacitas-workspace.tsx`: il `disabled`
+  del pulsante Elimina in `CapacitasJobActions` riusa `isCapacitasInFlightJob`
+  (stessi tre stati, stesso ordine) invece di ripetere i confronti inline.
+  Comportamento invariato. LOC file 3108 -> 3103; cognitive di
+  `CapacitasJobActions` 5 -> 3.
+- 25 spec Capacitas 701/701 PASS, coverage del file 100% (725/731/253/633).
+  eslint e tsc puliti. Il ratchet era bloccato da `ambiguous_identity` su
+  `Program<anonymous>` (baseline del merge-base datata 11ed944a, pareggio di
+  distanza dopo lo shift di 5 righe); risolto dal matcher R146. Ratchet
+  integrazione exit 0, zero finding, indice invariato. Review indipendente
+  ACCEPT (IMPROVED). Graphify `make graphify-frontend` aggiornato.
