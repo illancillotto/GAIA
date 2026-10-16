@@ -125,6 +125,28 @@ def delete_parcel(db: Session, practice_id: UUID, parcel_id: UUID) -> RiordinoPa
     return parcel
 
 
+def _csv_optional(row: dict[str, str | None], key: str) -> str | None:
+    return (row.get(key) or "").strip() or None
+
+
+def _parcel_payload_from_row(row: dict[str, str | None]) -> dict | None:
+    if not row.get("foglio") or not row.get("particella"):
+        return None
+    payload = {
+        "foglio": row["foglio"].strip(),
+        "particella": row["particella"].strip(),
+        "subalterno": _csv_optional(row, "subalterno"),
+        "quality_class": _csv_optional(row, "quality_class"),
+        "title_holder_name": _csv_optional(row, "title_holder_name"),
+        "source": _csv_optional(row, "source") or "csv_import",
+        "notes": _csv_optional(row, "notes"),
+    }
+    subject_raw = _csv_optional(row, "title_holder_subject_id")
+    if subject_raw:
+        payload["title_holder_subject_id"] = UUID(subject_raw)
+    return payload
+
+
 def import_parcels_csv(db: Session, practice_id: UUID, file: UploadFile) -> list[RiordinoParcelLink]:
     _require_practice(db, practice_id)
     if not file.filename or not file.filename.lower().endswith(".csv"):
@@ -133,20 +155,10 @@ def import_parcels_csv(db: Session, practice_id: UUID, file: UploadFile) -> list
     reader = csv.DictReader(io.StringIO(content))
     items: list[RiordinoParcelLink] = []
     for row in reader:
-        if not row.get("foglio") or not row.get("particella"):
+        payload = _parcel_payload_from_row(row)
+        if payload is None:
             continue
-        payload = {
-            "foglio": row["foglio"].strip(),
-            "particella": row["particella"].strip(),
-            "subalterno": (row.get("subalterno") or "").strip() or None,
-            "quality_class": (row.get("quality_class") or "").strip() or None,
-            "title_holder_name": (row.get("title_holder_name") or "").strip() or None,
-            "source": (row.get("source") or "csv_import").strip() or "csv_import",
-            "notes": (row.get("notes") or "").strip() or None,
-        }
-        subject_raw = (row.get("title_holder_subject_id") or "").strip()
-        if subject_raw:
-            payload["title_holder_subject_id"] = UUID(subject_raw)
+        if "title_holder_subject_id" in payload:
             _require_subject(db, payload["title_holder_subject_id"])
         parcel = RiordinoParcelLink(practice_id=practice_id, **payload)
         db.add(parcel)

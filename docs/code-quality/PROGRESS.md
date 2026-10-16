@@ -12986,3 +12986,21 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   eslint e tsc PASS. Ratchet integrazione exit 0, zero finding, indice
   invariato. Review ACCEPT_WITH_NOTES.
 - Graphify frontend aggiornato. Evidenze `claude-20261015/slices/r121-*`.
+
+## 2026-10-16 - R126 Riordino: import CSV delle particelle
+
+- Runtime `backend/app/modules/riordino/services/link_service.py`:
+  `import_parcels_csv` usa `_csv_optional` e `_parcel_payload_from_row`;
+  404 pratica prima del 422 filename, utf-8-sig, righe senza foglio/particella
+  saltate, default `csv_import`, ValueError su UUID, `_require_subject` per riga
+  prima dell'add, ordine flush/refresh e risposta invariati.
+- Esito `IMPROVED`: target cyclomatic/cognitive/LOC 32/47/30 -> 8/10/20
+  (entrambi gli error rimossi); file cyclomatic 66 -> 54, cognitive 73 -> 47,
+  violation 2 -> 0.
+- Coverage del file da 85% a 100% (125/125 statement, 38/38 branch) con 19
+  test validi sull'originale; harness differenziale della review 6010 casi
+  senza differenze; 113 test riordino PASS (primo tentativo con `--cov`
+  puntato fallito in collection SQLAlchemy, rieseguito con `coverage run`).
+  Ratchet integrazione exit 0, zero finding, indice invariato. Review
+  ACCEPT_WITH_NOTES.
+- Graphify riordino-code aggiornato. Evidenze `claude-20261015/slices/r126-*`.
