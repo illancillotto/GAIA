@@ -13455,3 +13455,26 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   R125 su sequenza di `db.get` da rilassare dopo R125; utente richiedente
   cancellato lascia il job `pending`, comportamento fissato come attuale).
   Graphify `make graphify-utenze-code` aggiornato.
+
+## 2026-10-16 - Checkpoint campagna: gate finali e stato
+
+- Gate su `123879ed` (worktree pulito; R148 successivo e solo test):
+  tooling 346 PASS; ratchet vs merge-base `a51a48dc` zero finding;
+  `complexity-check` PASS (FAIL prima della campagna); `baseline-verify` PASS;
+  backend 7447 PASS / 449 skip / 0 fail (7505 con R148); frontend 341 file /
+  5509 test PASS; smoke PASS; `next build` PASS; indice invariato.
+- Worker: `make test-worker` senza `PYTHONPATH` della root FAIL in collection
+  (`backend/scripts` oscura `scripts` della root, preesistente); con la
+  invocazione documentata PASS, coverage 99% (solo
+  `sister_credential_pool.py:523`, file non toccato).
+- E2E Playwright su stack usa-e-getta isolato (rete interna, SQLite tmpfs,
+  admin sintetico): HEAD e merge-base identici, 54 PASS / 0 FAIL / 7 skip
+  (1 ritirato, 6 ambientali). Le spec modificate catasto-drilldown e
+  gis-territorio restano skip su entrambi i lati: non esercitate.
+- Metriche (baseline registrata su main, sorgente 11ed944a, -> HEAD): callable
+  error-level 993 -> 913; cognitive >200 21 -> 12, >100 59 -> 50; file con
+  errori 67 -> 67.
+- Aperti: refactor R125 (sbloccato da R148, non avviato); decisione su ramo
+  `LOCAL_UPLOAD` morto in `import_service.py`; residui del matcher R147
+  (ADV4b p03/p05 preesistente, falso positivo fail-closed fpA/fpC); target
+  worker senza root su `PYTHONPATH`; eccezione coverage R132 registrata.
