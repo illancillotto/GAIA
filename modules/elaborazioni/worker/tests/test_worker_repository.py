@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 import test_worker as worker_test_support
 from sqlalchemy import select
-from test_worker import _seed_batch, _VisuraFlowResult
+from test_worker import _VisuraFlowResult
+from worker_seed_support import seed_requests
 
 from app.models.catasto import (
     CatastoBatch,
@@ -14,6 +15,12 @@ from app.models.catasto import (
     CatastoDocument,
     CatastoVisuraRequest,
     CatastoVisuraRequestStatus,
+)
+from sister_worker_reliability import (
+    _future_retry_seconds,
+    build_document_path,
+    is_expired,
+    sha256_file,
 )
 
 worker_module = worker_test_support.worker_module
@@ -25,10 +32,7 @@ def worker_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 def test_request_repository_fails_only_current_execution(worker_db, monkeypatch: pytest.MonkeyPatch) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, request_ids = _seed_batch(
-        SessionLocal,
-        request_statuses=[CatastoVisuraRequestStatus.PROCESSING.value],
-    )
+    _, batch_id, request_ids = seed_requests(SessionLocal, CatastoVisuraRequestStatus.PROCESSING)
     token = uuid.uuid4()
     ade_calls: list[dict[str, object]] = []
     monkeypatch.setattr(worker_module, "persist_ade_status_scan_result", lambda _db, **kwargs: ade_calls.append(kwargs))
@@ -55,13 +59,11 @@ def test_request_repository_fails_only_current_execution(worker_db, monkeypatch:
 
 def test_request_repository_reset_for_retry_handles_release_and_guards(worker_db) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, request_ids = _seed_batch(
+    _, batch_id, request_ids = seed_requests(
         SessionLocal,
-        request_statuses=[
-            CatastoVisuraRequestStatus.PROCESSING.value,
-            CatastoVisuraRequestStatus.PROCESSING.value,
-            CatastoVisuraRequestStatus.COMPLETED.value,
-        ],
+        CatastoVisuraRequestStatus.PROCESSING,
+        CatastoVisuraRequestStatus.PROCESSING,
+        CatastoVisuraRequestStatus.COMPLETED,
     )
     tokens = [uuid.uuid4(), uuid.uuid4()]
     retry_at = datetime.now(UTC) + timedelta(seconds=20)
@@ -147,9 +149,8 @@ def test_prepare_execution_resolves_captcha_states(
 ) -> None:
     worker, SessionLocal, _ = worker_db
     monkeypatch.setattr(worker_module, "DEBUG_ARTIFACTS_PATH", tmp_path / "debug")
-    _, batch_id, request_ids = _seed_batch(
-        SessionLocal,
-        request_statuses=[CatastoVisuraRequestStatus.AWAITING_CAPTCHA.value],
+    _, batch_id, request_ids = seed_requests(
+        SessionLocal, CatastoVisuraRequestStatus.AWAITING_CAPTCHA
     )
     with SessionLocal() as db:
         request = db.get(CatastoVisuraRequest, request_ids[0])
@@ -180,10 +181,7 @@ def test_prepare_execution_claims_pending_subject_and_handles_missing(
     worker, SessionLocal, tmp_path = worker_db
     monkeypatch_root = tmp_path / "debug"
     monkeypatch.setattr(worker_module, "DEBUG_ARTIFACTS_PATH", monkeypatch_root)
-    _, batch_id, request_ids = _seed_batch(
-        SessionLocal,
-        request_statuses=[CatastoVisuraRequestStatus.PENDING.value],
-    )
+    _, batch_id, request_ids = seed_requests(SessionLocal, CatastoVisuraRequestStatus.PENDING)
     with SessionLocal() as db:
         request = db.get(CatastoVisuraRequest, request_ids[0])
         assert request is not None
@@ -212,9 +210,8 @@ def test_prepare_execution_keeps_unresolved_captcha_waiting(
 ) -> None:
     worker, SessionLocal, tmp_path = worker_db
     monkeypatch.setattr(worker_module, "DEBUG_ARTIFACTS_PATH", tmp_path / "debug")
-    _, batch_id, request_ids = _seed_batch(
-        SessionLocal,
-        request_statuses=[CatastoVisuraRequestStatus.AWAITING_CAPTCHA.value],
+    _, batch_id, request_ids = seed_requests(
+        SessionLocal, CatastoVisuraRequestStatus.AWAITING_CAPTCHA
     )
     with SessionLocal() as db:
         request = db.get(CatastoVisuraRequest, request_ids[0])
@@ -233,10 +230,7 @@ def test_prepare_execution_keeps_unresolved_captcha_waiting(
 
 def test_request_repository_fences_operation_and_remote_updates(worker_db) -> None:
     worker, SessionLocal, _ = worker_db
-    _, _, request_ids = _seed_batch(
-        SessionLocal,
-        request_statuses=[CatastoVisuraRequestStatus.PROCESSING.value],
-    )
+    _, _, request_ids = seed_requests(SessionLocal, CatastoVisuraRequestStatus.PROCESSING)
     token = uuid.uuid4()
     credential_id = uuid.uuid4()
     with SessionLocal() as db:
@@ -282,10 +276,7 @@ def test_request_repository_fences_operation_and_remote_updates(worker_db) -> No
 
 def test_request_repository_persists_completed_document_idempotently(worker_db, tmp_path: Path) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, request_ids = _seed_batch(
-        SessionLocal,
-        request_statuses=[CatastoVisuraRequestStatus.PROCESSING.value],
-    )
+    _, batch_id, request_ids = seed_requests(SessionLocal, CatastoVisuraRequestStatus.PROCESSING)
     token = uuid.uuid4()
     pdf_path = tmp_path / "first.pdf"
     pdf_path.write_bytes(b"%PDF-1.4\nfirst")
@@ -350,10 +341,7 @@ def test_request_repository_persists_completed_document_idempotently(worker_db, 
 
 def test_request_repository_persists_queued_sister_for_retry(worker_db, tmp_path: Path) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, request_ids = _seed_batch(
-        SessionLocal,
-        request_statuses=[CatastoVisuraRequestStatus.PROCESSING.value],
-    )
+    _, batch_id, request_ids = seed_requests(SessionLocal, CatastoVisuraRequestStatus.PROCESSING)
     token = uuid.uuid4()
     result = _VisuraFlowResult()
     result.status = "queued_sister"
@@ -387,10 +375,7 @@ def test_request_repository_persists_queued_sister_for_retry(worker_db, tmp_path
 
 def test_request_repository_infers_captcha_log_method(worker_db, tmp_path: Path) -> None:
     worker, SessionLocal, _ = worker_db
-    _, _, request_ids = _seed_batch(
-        SessionLocal,
-        request_statuses=[CatastoVisuraRequestStatus.PROCESSING.value],
-    )
+    _, _, request_ids = seed_requests(SessionLocal, CatastoVisuraRequestStatus.PROCESSING)
     repository = worker._request_repository()
     for filename, expected_method in (("captcha_manual.png", "manual"), ("captcha.png", "ocr")):
         result = _VisuraFlowResult()
@@ -425,10 +410,7 @@ def test_request_repository_persists_terminal_statuses(
     expected_error_code: str | None,
 ) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, request_ids = _seed_batch(
-        SessionLocal,
-        request_statuses=[CatastoVisuraRequestStatus.PROCESSING.value],
-    )
+    _, batch_id, request_ids = seed_requests(SessionLocal, CatastoVisuraRequestStatus.PROCESSING)
     result = _VisuraFlowResult()
     result.status = status
     result.error_message = "detail" if status != "failed" else None
@@ -450,10 +432,7 @@ def test_request_repository_persists_non_evadibile_retry_and_terminal(
     is_ade: bool,
 ) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, request_ids = _seed_batch(
-        SessionLocal,
-        request_statuses=[CatastoVisuraRequestStatus.PROCESSING.value],
-    )
+    _, batch_id, request_ids = seed_requests(SessionLocal, CatastoVisuraRequestStatus.PROCESSING)
     ade_calls: list[dict[str, object]] = []
     monkeypatch.setattr(worker_module, "persist_ade_status_scan_result", lambda _db, **kwargs: ade_calls.append(kwargs))
     with SessionLocal() as db:
@@ -495,10 +474,7 @@ def test_request_repository_persists_ade_document_payload(
     parse_fails: bool,
 ) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, request_ids = _seed_batch(
-        SessionLocal,
-        request_statuses=[CatastoVisuraRequestStatus.PROCESSING.value],
-    )
+    _, batch_id, request_ids = seed_requests(SessionLocal, CatastoVisuraRequestStatus.PROCESSING)
     ade_calls: list[dict[str, object]] = []
     monkeypatch.setattr(worker_module, "persist_ade_status_scan_result", lambda _db, **kwargs: ade_calls.append(kwargs))
     monkeypatch.setattr(
@@ -529,12 +505,8 @@ def test_request_repository_persists_ade_document_payload(
 
 def test_request_repository_persists_ade_payload_without_document(worker_db, monkeypatch: pytest.MonkeyPatch) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, request_ids = _seed_batch(
-        SessionLocal,
-        request_statuses=[
-            CatastoVisuraRequestStatus.PROCESSING.value,
-            CatastoVisuraRequestStatus.PROCESSING.value,
-        ],
+    _, batch_id, request_ids = seed_requests(
+        SessionLocal, CatastoVisuraRequestStatus.PROCESSING, CatastoVisuraRequestStatus.PROCESSING
     )
     ade_calls: list[dict[str, object]] = []
     monkeypatch.setattr(worker_module, "persist_ade_status_scan_result", lambda _db, **kwargs: ade_calls.append(kwargs))
@@ -560,18 +532,8 @@ def test_request_repository_persists_ade_payload_without_document(worker_db, mon
 
 
 def test_document_path_builders_cover_subject_and_immobile_fallbacks(worker_db, tmp_path: Path) -> None:
-    from sister_worker_reliability import (
-        _future_retry_seconds,
-        build_document_path,
-        is_expired,
-        sha256_file,
-    )
-
     _, SessionLocal, _ = worker_db
-    _, _, request_ids = _seed_batch(
-        SessionLocal,
-        request_statuses=[CatastoVisuraRequestStatus.PROCESSING.value],
-    )
+    _, _, request_ids = seed_requests(SessionLocal, CatastoVisuraRequestStatus.PROCESSING)
     with SessionLocal() as db:
         request = db.get(CatastoVisuraRequest, request_ids[0])
         assert request is not None

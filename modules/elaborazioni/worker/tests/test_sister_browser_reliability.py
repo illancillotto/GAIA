@@ -27,6 +27,8 @@ from sister_exceptions import (
 )
 from sister_request_rows import SisterRequestCorrelation
 
+_PROVINCE_SELECTOR = "form[action='/Visure/DataRichiesta.do'] select[name='listacom']"
+
 
 class _Locator:
     def __init__(self, *, text: str = "", count: int = 0, href: str | None = None, error: Exception | None = None):
@@ -57,27 +59,20 @@ class _Locator:
 
 
 class _Page:
-    def __init__(
-        self,
-        *,
-        url: str = "https://sister3.agenziaentrate.gov.it/Visure/Home.do",
-        **options,
-    ) -> None:
-        self.url = url
-        self.body = _Locator(text=options.get("body", ""), error=options.get("body_error"))
+    def __init__(self, **options) -> None:
+        self.url = options.get("url", "https://sister3.agenziaentrate.gov.it/Visure/Home.do")
         self.link = _Locator(href=options.get("href"), error=options.get("link_error"))
         self.catasto = _Locator(count=options.get("catasto_count", 0))
-        self.province = _Locator(count=options.get("province_count", 0))
         self.immobile = _Locator(count=options.get("immobile_count", 0))
+        self.exact_locators = {
+            "body": _Locator(text=options.get("body", ""), error=options.get("body_error")),
+            _PROVINCE_SELECTOR: _Locator(count=options.get("province_count", 0)),
+        }
 
     def locator(self, selector: str) -> _Locator:
-        if selector == "form[action='/Visure/DataRichiesta.do'] select[name='listacom']":
-            return self.province
-        if selector == "body":
-            return self.body
         if "ConsultazioneRichieste" in selector:
             return self.link
-        return self.catasto
+        return self.exact_locators.get(selector, self.catasto)
 
     def get_by_role(self, _role: str, name: str) -> _Locator:
         return self.immobile

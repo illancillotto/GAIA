@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 import test_worker as worker_test_support
-from test_worker import SisterRequestCorrelationError, _seed_batch, _VisuraFlowResult
+from test_worker import SisterRequestCorrelationError, _VisuraFlowResult
+from worker_seed_support import seed_requests
 
 from app.models.catasto import (
     CatastoBatch,
@@ -25,7 +26,7 @@ def worker_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 def test_next_request_id_claims_pending_request_and_marks_processing(worker_db) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, request_ids = _seed_batch(SessionLocal, request_statuses=[CatastoVisuraRequestStatus.PENDING.value])
+    _, batch_id, request_ids = seed_requests(SessionLocal, CatastoVisuraRequestStatus.PENDING)
 
     selection = worker._request_repository().claim_next(batch_id)
 
@@ -41,7 +42,7 @@ def test_next_request_id_claims_pending_request_and_marks_processing(worker_db) 
 
 def test_next_request_id_stops_after_maximum_attempts(worker_db, monkeypatch: pytest.MonkeyPatch) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, request_ids = _seed_batch(SessionLocal, request_statuses=[CatastoVisuraRequestStatus.PENDING.value])
+    _, batch_id, request_ids = seed_requests(SessionLocal, CatastoVisuraRequestStatus.PENDING)
     monkeypatch.setattr(worker_module, "MAX_REQUEST_ATTEMPTS", 3)
     with SessionLocal() as db:
         request = db.get(CatastoVisuraRequest, request_ids[0])
@@ -63,9 +64,7 @@ def test_next_request_id_stops_perpetual_sync_after_three_attempts(
     worker_db, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, request_ids = _seed_batch(
-        SessionLocal, request_statuses=[CatastoVisuraRequestStatus.PENDING.value]
-    )
+    _, batch_id, request_ids = seed_requests(SessionLocal, CatastoVisuraRequestStatus.PENDING)
     monkeypatch.setattr(worker_module, "MAX_REQUEST_ATTEMPTS", 5)
     with SessionLocal() as db:
         request = db.get(CatastoVisuraRequest, request_ids[0])
@@ -86,7 +85,7 @@ def test_next_request_id_stops_perpetual_sync_after_three_attempts(
 
 def test_next_request_id_uses_persisted_retry_deadline(worker_db) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, request_ids = _seed_batch(SessionLocal, request_statuses=[CatastoVisuraRequestStatus.PENDING.value])
+    _, batch_id, request_ids = seed_requests(SessionLocal, CatastoVisuraRequestStatus.PENDING)
     with SessionLocal() as db:
         request = db.get(CatastoVisuraRequest, request_ids[0])
         assert request is not None
@@ -103,12 +102,8 @@ def test_next_request_id_uses_persisted_retry_deadline(worker_db) -> None:
 
 def test_next_request_id_skips_claimed_request_and_uses_next_pending(worker_db) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, request_ids = _seed_batch(
-        SessionLocal,
-        request_statuses=[
-            CatastoVisuraRequestStatus.PENDING.value,
-            CatastoVisuraRequestStatus.PENDING.value,
-        ],
+    _, batch_id, request_ids = seed_requests(
+        SessionLocal, CatastoVisuraRequestStatus.PENDING, CatastoVisuraRequestStatus.PENDING
     )
 
     selection = worker._request_repository().claim_next(batch_id, claimed_request_ids={request_ids[0]})
@@ -124,10 +119,7 @@ def test_next_request_id_skips_claimed_request_and_uses_next_pending(worker_db) 
 
 def test_next_request_id_resumes_remote_request_only_with_its_sister_credential(worker_db) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, request_ids = _seed_batch(
-        SessionLocal,
-        request_statuses=[CatastoVisuraRequestStatus.PENDING.value],
-    )
+    _, batch_id, request_ids = seed_requests(SessionLocal, CatastoVisuraRequestStatus.PENDING)
     pinned_credential_id = uuid.uuid4()
     other_credential_id = uuid.uuid4()
     with SessionLocal() as db:
@@ -154,7 +146,7 @@ def test_next_request_id_resumes_remote_request_only_with_its_sister_credential(
 
 def test_next_request_id_returns_retry_later_for_deferred_requests(worker_db) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, request_ids = _seed_batch(SessionLocal, request_statuses=[CatastoVisuraRequestStatus.PENDING.value])
+    _, batch_id, request_ids = seed_requests(SessionLocal, CatastoVisuraRequestStatus.PENDING)
     deferred_until = datetime.now(UTC) + timedelta(seconds=120)
 
     selection = worker._request_repository().claim_next(batch_id, deferred_requests={request_ids[0]: deferred_until})
@@ -169,7 +161,7 @@ def test_next_request_id_returns_retry_later_for_deferred_requests(worker_db) ->
 
 def test_next_request_id_returns_wait_for_unresolved_captcha(worker_db) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, request_ids = _seed_batch(SessionLocal, request_statuses=[CatastoVisuraRequestStatus.AWAITING_CAPTCHA.value])
+    _, batch_id, request_ids = seed_requests(SessionLocal, CatastoVisuraRequestStatus.AWAITING_CAPTCHA)
     with SessionLocal() as db:
         request = db.get(CatastoVisuraRequest, request_ids[0])
         assert request is not None
@@ -184,7 +176,7 @@ def test_next_request_id_returns_wait_for_unresolved_captcha(worker_db) -> None:
 
 def test_next_request_id_reclaims_captcha_request_when_solution_present(worker_db) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, request_ids = _seed_batch(SessionLocal, request_statuses=[CatastoVisuraRequestStatus.AWAITING_CAPTCHA.value])
+    _, batch_id, request_ids = seed_requests(SessionLocal, CatastoVisuraRequestStatus.AWAITING_CAPTCHA)
     with SessionLocal() as db:
         request = db.get(CatastoVisuraRequest, request_ids[0])
         assert request is not None
@@ -199,10 +191,7 @@ def test_next_request_id_reclaims_captcha_request_when_solution_present(worker_d
 
 def test_manual_captcha_wait_is_fenced_and_exposes_current_decision(worker_db) -> None:
     worker, SessionLocal, tmp_path = worker_db
-    _, batch_id, request_ids = _seed_batch(
-        SessionLocal,
-        request_statuses=[CatastoVisuraRequestStatus.PROCESSING.value],
-    )
+    _, batch_id, request_ids = seed_requests(SessionLocal, CatastoVisuraRequestStatus.PROCESSING)
     request_id = request_ids[0]
     token = uuid.uuid4()
     deadline = datetime.now(UTC) + timedelta(minutes=5)
@@ -233,10 +222,7 @@ def test_manual_captcha_wait_is_fenced_and_exposes_current_decision(worker_db) -
 
 def test_manual_captcha_wait_cannot_resurrect_cancelled_claim(worker_db) -> None:
     worker, SessionLocal, tmp_path = worker_db
-    _, batch_id, request_ids = _seed_batch(
-        SessionLocal,
-        request_statuses=[CatastoVisuraRequestStatus.SKIPPED.value],
-    )
+    _, batch_id, request_ids = seed_requests(SessionLocal, CatastoVisuraRequestStatus.SKIPPED)
     request_id = request_ids[0]
     stale_token = uuid.uuid4()
     with SessionLocal() as db:
@@ -262,10 +248,7 @@ def test_manual_captcha_wait_cannot_resurrect_cancelled_claim(worker_db) -> None
 
 def test_manual_captcha_wait_stops_after_claim_is_cancelled(worker_db) -> None:
     worker, SessionLocal, tmp_path = worker_db
-    _, batch_id, request_ids = _seed_batch(
-        SessionLocal,
-        request_statuses=[CatastoVisuraRequestStatus.PROCESSING.value],
-    )
+    _, batch_id, request_ids = seed_requests(SessionLocal, CatastoVisuraRequestStatus.PROCESSING)
     request_id = request_ids[0]
     token = uuid.uuid4()
     with SessionLocal() as db:
@@ -306,12 +289,8 @@ def test_manual_captcha_wait_stops_after_claim_is_cancelled(worker_db) -> None:
 
 def test_batch_has_open_requests_reflects_terminal_state(worker_db) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, request_ids = _seed_batch(
-        SessionLocal,
-        request_statuses=[
-            CatastoVisuraRequestStatus.COMPLETED.value,
-            CatastoVisuraRequestStatus.NOT_FOUND.value,
-        ],
+    _, batch_id, request_ids = seed_requests(
+        SessionLocal, CatastoVisuraRequestStatus.COMPLETED, CatastoVisuraRequestStatus.NOT_FOUND
     )
 
     assert worker._batch_has_open_requests(batch_id) is False
@@ -327,12 +306,8 @@ def test_batch_has_open_requests_reflects_terminal_state(worker_db) -> None:
 
 def test_finalize_batch_keeps_processing_when_pending_requests_remain(worker_db) -> None:
     worker, SessionLocal, _tmp_path = worker_db
-    _, batch_id, _ = _seed_batch(
-        SessionLocal,
-        request_statuses=[
-            CatastoVisuraRequestStatus.COMPLETED.value,
-            CatastoVisuraRequestStatus.PENDING.value,
-        ],
+    _, batch_id, _ = seed_requests(
+        SessionLocal, CatastoVisuraRequestStatus.COMPLETED, CatastoVisuraRequestStatus.PENDING
     )
 
     worker._finalize_batch(batch_id)
@@ -349,13 +324,11 @@ def test_finalize_batch_keeps_processing_when_pending_requests_remain(worker_db)
 
 def test_finalize_batch_marks_completed_for_not_found_and_skipped(worker_db) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, _ = _seed_batch(
+    _, batch_id, _ = seed_requests(
         SessionLocal,
-        request_statuses=[
-            CatastoVisuraRequestStatus.COMPLETED.value,
-            CatastoVisuraRequestStatus.NOT_FOUND.value,
-            CatastoVisuraRequestStatus.SKIPPED.value,
-        ],
+        CatastoVisuraRequestStatus.COMPLETED,
+        CatastoVisuraRequestStatus.NOT_FOUND,
+        CatastoVisuraRequestStatus.SKIPPED,
     )
 
     worker._finalize_batch(batch_id)
@@ -371,7 +344,7 @@ def test_finalize_batch_marks_completed_for_not_found_and_skipped(worker_db) -> 
 
 def test_finalize_batch_does_not_overwrite_cancellation(worker_db) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, _ = _seed_batch(SessionLocal, request_statuses=[CatastoVisuraRequestStatus.SKIPPED.value])
+    _, batch_id, _ = seed_requests(SessionLocal, CatastoVisuraRequestStatus.SKIPPED)
     with SessionLocal() as db:
         batch = db.get(CatastoBatch, batch_id)
         assert batch is not None
@@ -390,7 +363,7 @@ def test_finalize_batch_does_not_overwrite_cancellation(worker_db) -> None:
 
 def test_persist_flow_result_discards_stale_cancelled_claim(worker_db) -> None:
     worker, SessionLocal, tmp_path = worker_db
-    _, batch_id, request_ids = _seed_batch(SessionLocal, request_statuses=[CatastoVisuraRequestStatus.PROCESSING.value])
+    _, batch_id, request_ids = seed_requests(SessionLocal, CatastoVisuraRequestStatus.PROCESSING)
     stale_token = uuid.uuid4()
     with SessionLocal() as db:
         batch = db.get(CatastoBatch, batch_id)
@@ -432,12 +405,8 @@ def test_persist_flow_result_discards_stale_cancelled_claim(worker_db) -> None:
 
 def test_stale_claim_cannot_reset_or_fail_new_execution(worker_db) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, request_ids = _seed_batch(
-        SessionLocal,
-        request_statuses=[
-            CatastoVisuraRequestStatus.PROCESSING.value,
-            CatastoVisuraRequestStatus.PROCESSING.value,
-        ],
+    _, batch_id, request_ids = seed_requests(
+        SessionLocal, CatastoVisuraRequestStatus.PROCESSING, CatastoVisuraRequestStatus.PROCESSING
     )
     stale_token = uuid.uuid4()
     current_tokens = [uuid.uuid4(), uuid.uuid4()]
@@ -471,12 +440,8 @@ def test_stale_claim_cannot_reset_or_fail_new_execution(worker_db) -> None:
 
 def test_new_correlation_baseline_clears_deleted_remote_identity(worker_db) -> None:
     worker, SessionLocal, _ = worker_db
-    _, _, request_ids = _seed_batch(
-        SessionLocal,
-        request_statuses=[
-            CatastoVisuraRequestStatus.PROCESSING.value,
-            CatastoVisuraRequestStatus.PROCESSING.value,
-        ],
+    _, _, request_ids = seed_requests(
+        SessionLocal, CatastoVisuraRequestStatus.PROCESSING, CatastoVisuraRequestStatus.PROCESSING
     )
     execution_tokens = [uuid.uuid4(), uuid.uuid4()]
     with SessionLocal() as db:
@@ -518,9 +483,8 @@ def test_new_correlation_baseline_clears_deleted_remote_identity(worker_db) -> N
 def test_document_paths_are_unique_per_request_and_execution(worker_db, monkeypatch: pytest.MonkeyPatch) -> None:
     worker, SessionLocal, tmp_path = worker_db
     monkeypatch.setattr(worker_module, "DOCUMENT_STORAGE_PATH", tmp_path / "documents")
-    _, _, request_ids = _seed_batch(
-        SessionLocal,
-        request_statuses=[CatastoVisuraRequestStatus.PROCESSING.value, CatastoVisuraRequestStatus.PROCESSING.value],
+    _, _, request_ids = seed_requests(
+        SessionLocal, CatastoVisuraRequestStatus.PROCESSING, CatastoVisuraRequestStatus.PROCESSING
     )
     with SessionLocal() as db:
         first = db.get(CatastoVisuraRequest, request_ids[0])
@@ -607,13 +571,11 @@ def test_request_repository_fails_active_batch_and_preserves_terminal_items(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, request_ids = _seed_batch(
+    _, batch_id, request_ids = seed_requests(
         SessionLocal,
-        request_statuses=[
-            CatastoVisuraRequestStatus.PENDING.value,
-            CatastoVisuraRequestStatus.COMPLETED.value,
-            CatastoVisuraRequestStatus.PROCESSING.value,
-        ],
+        CatastoVisuraRequestStatus.PENDING,
+        CatastoVisuraRequestStatus.COMPLETED,
+        CatastoVisuraRequestStatus.PROCESSING,
     )
     ade_calls: list[dict[str, object]] = []
     monkeypatch.setattr(worker_module, "persist_ade_status_scan_result", lambda _db, **kwargs: ade_calls.append(kwargs))
@@ -650,13 +612,11 @@ def test_request_repository_fails_active_batch_and_preserves_terminal_items(
 
 def test_request_repository_fails_remote_requests_without_their_pinned_credential(worker_db) -> None:
     worker, SessionLocal, _ = worker_db
-    _, batch_id, request_ids = _seed_batch(
+    _, batch_id, request_ids = seed_requests(
         SessionLocal,
-        request_statuses=[
-            CatastoVisuraRequestStatus.PENDING.value,
-            CatastoVisuraRequestStatus.PENDING.value,
-            CatastoVisuraRequestStatus.PENDING.value,
-        ],
+        CatastoVisuraRequestStatus.PENDING,
+        CatastoVisuraRequestStatus.PENDING,
+        CatastoVisuraRequestStatus.PENDING,
     )
     available_credential_id = uuid.uuid4()
     with SessionLocal() as db:

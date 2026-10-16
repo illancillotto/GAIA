@@ -13184,3 +13184,18 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   baseline-repair con decisione esplicita.
 - Coverage full-file 100%. Ratchet integrazione exit 0, zero finding, indice
   invariato. Review ACCEPT_WITH_NOTES. Graphify wiki-code aggiornato.
+
+## 2026-10-16 - R142 Worker Elaborazioni: regressioni complexity-check nei test
+
+- Parte del piano autorizzato "correggere le regressioni, poi riparare la
+  baseline". Solo codice di test in `modules/elaborazioni/worker/tests/`: fake
+  `_Page` e pagine SISTER statiche passate da catene if/elif a tabelle,
+  boilerplate di seed sostituito da `seed_requests` nel nuovo
+  `worker_seed_support.py` (6 LOC), import spostato a livello di modulo.
+- Tutti i finding scoped tornano a baseline o sotto: `_Page.locator` 4/3 -> 2/1,
+  reused-menu cognitive 16 -> 7, file loc reliability 584 -> 544, repository
+  534 -> 497. Stessi 89 node id e stessi esiti, asserzioni AST identiche
+  (283/283), coverage runtime del worker identica. Classificazione: tabelle =
+  semplificazione; seed/import = REORGANIZED_AND_CHARACTERIZED.
+- Ratchet integrazione exit 0, zero finding, indice invariato. Review
+  ACCEPT_WITH_NOTES. Graphify elaborazioni-worker-code aggiornato.

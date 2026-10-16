@@ -7,6 +7,18 @@ import pytest
 from browser_test_support import make_session
 from playwright.async_api import async_playwright
 
+_VISURA_PAGES = {
+    # SISTER keeps Informativa.do in the URL after prior acceptance.
+    "/Visure/Informativa.do": (
+        "<title>Scelta province</title>"
+        '<form method="post" action="/Visure/DataRichiesta.do">'
+        '<select name="listacom">'
+        '<option value="ORISTANO Territorio-OR">ORISTANO</option></select>'
+        '<input type="submit" value="Applica"></form>'
+    ),
+    "/Visure/DataRichiesta.do": '<select name="tipoCatasto"><option>Terreni</option></select>',
+}
+
 
 @pytest.mark.parametrize("expanded", [False, True])
 def test_reused_menu_does_not_toggle_closed_and_skips_already_accepted_notice(expanded):
@@ -25,24 +37,12 @@ def test_reused_menu_does_not_toggle_closed_and_skips_already_accepted_notice(ex
                     nonlocal menu_open
                     path = route.request.url.split(".gov.it")[-1]
                     visits.append(path)
-                    if path == "/Visure/Informativa.do":
-                        # SISTER keeps Informativa.do in the URL after prior acceptance.
-                        body = (
-                            '<title>Scelta province</title>'
-                            '<form method="post" action="/Visure/DataRichiesta.do">'
-                            '<select name="listacom">'
-                            '<option value="ORISTANO Territorio-OR">ORISTANO</option></select>'
-                            '<input type="submit" value="Applica"></form>'
-                        )
-                    elif path == "/Visure/DataRichiesta.do":
-                        body = '<select name="tipoCatasto"><option>Terreni</option></select>'
-                    else:
-                        if path == "/consultazioni":
-                            menu_open = not menu_open
-                        body = '<a href="/consultazioni">Consultazioni e Certificazioni</a>'
-                        if menu_open:
-                            body += '<a href="/Visure/Informativa.do">Visure catastali</a>'
-                    await route.fulfill(body=body, content_type="text/html")
+                    if path == "/consultazioni":
+                        menu_open = not menu_open
+                    body = '<a href="/consultazioni">Consultazioni e Certificazioni</a>'
+                    if menu_open:
+                        body += '<a href="/Visure/Informativa.do">Visure catastali</a>'
+                    await route.fulfill(body=_VISURA_PAGES.get(path, body), content_type="text/html")
 
                 await page.route("**/*", serve)
                 await page.goto("https://sister3.agenziaentrate.gov.it/Servizi/")
