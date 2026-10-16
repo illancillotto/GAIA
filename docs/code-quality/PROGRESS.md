@@ -13339,3 +13339,15 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
 - Gap preesistente annotato: nessun test protegge la deriva di nome o versione
   degli engine. La baseline resta da sincronizzare per il debito eliminato da
   R132 (commit separato).
+
+## 2026-10-16 - Sync baseline: debito eliminato da R132
+
+- Eseguito il comando ordinario `make complexity-baseline` (rifiuta le
+  regressioni) su HEAD `ef93a38a`, senza modifiche runtime nel working tree.
+  Il diff della baseline tocca solo `frontend/src/app/utenze/[id]/page.tsx`
+  (c2e3052a): nessun aumento di metrica e nessun callable nuovo; per esempio
+  DetailContent cognitive 391 -> 382, file cognitive_sum 729 -> 698, LOC
+  2118 -> 2071, insieme delle violation invariato.
+- Dopo la sync: `complexity-baseline-verify` riproducibile anche fuori dal
+  checkout generatore (R144), `complexity-check` exit 0, ratchet contro il
+  merge-base senza finding.
