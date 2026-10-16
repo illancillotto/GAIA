@@ -13214,3 +13214,21 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   87/143 -> 84/140; bug fix, non IMPROVED). Ratchet integrazione exit 0, zero
   finding, indice invariato. Review ACCEPT_WITH_NOTES.
 - Graphify network-code aggiornato. Evidenze `claude-20261015/slices/r135-*`.
+
+## 2026-10-16 - R136 Organigramma: due bug del sync WhiteCompany (bug fix)
+
+- Decisione utente 2026-10-16 (correggere i bug documentati in R128).
+  `backend/app/modules/organigramma/services/whitecompany_sync.py`:
+  (a) `db.flush()` dopo il ciclo delle aree, cosi con autoflush=False il link
+  dell'ultima area e visibile gia al primo sync (prima i collaboratori venivano
+  collocati nell'unita sbagliata); (b) un link non bloccato senza assignment
+  viene riusato invece di inserirne un duplicato (prima IntegrityError). I link
+  bloccati non vengono mai toccati; contatori invariati; nuovo helper
+  `_write_assignment_link` (un warning params 6, non bloccante).
+- Test di regressione falliti sull'originale (6), cambiate solo le asserzioni
+  che fissavano i due bug. 98 test PASS, coverage full-file 100% (302/130),
+  `sync_from_whitecompany` LOC 246 -> 227, cyclomatic/cognitive invariati.
+  Ratchet integrazione exit 0, zero finding, indice invariato. Review
+  ACCEPT_WITH_NOTES. Al primo sync dopo il deploy i link orfani non bloccati
+  vengono ricollegati (effetto voluto).
+- Graphify organigramma-code aggiornato. Evidenze `claude-20261015/slices/r136-*`.

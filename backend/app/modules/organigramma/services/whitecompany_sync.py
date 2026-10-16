@@ -246,6 +246,36 @@ def _place_operator_unit(
     return picked_unit or parent_unit
 
 
+def _write_assignment_link(
+    db: Session,
+    link: OrgSourceLink | None,
+    *,
+    entry: WCOrgChartEntry,
+    assignment: OrgAssignment,
+    now: datetime,
+    user_id: int | None,
+) -> None:
+    """Point the entry's assignment link at ``assignment``.
+
+    ``link`` is the entry's unlocked link left without an assignment, if any: it is reused,
+    because a second link with the same ``external_wc_id`` would violate
+    ``uq_org_source_link_entity_source_external``.
+    """
+    if link is None:
+        link = OrgSourceLink(
+            entity_type="org_assignment",
+            source_system=SOURCE_SYSTEM,
+            external_wc_id=entry.wc_id,
+            last_synced_at=now,
+            created_by_user_id=user_id,
+            updated_by_user_id=user_id,
+        )
+        db.add(link)
+    link.org_assignment_id = assignment.id
+    link.wc_operator_id = entry.wc_operator_id
+    link.wc_org_chart_entry_id = entry.id
+
+
 def sync_from_whitecompany(db: Session, *, user_id: int | None) -> WhiteCompanySyncResult:
     now = datetime.now(UTC)
     result = WhiteCompanySyncResult()
@@ -292,6 +322,8 @@ def sync_from_whitecompany(db: Session, *, user_id: int | None) -> WhiteCompanyS
             )
         )
         result.units_created += 1
+    # autoflush=False: make the last area's unit link visible to the lookups below.
+    db.flush()
 
     area_chart_rows = _sort_chart_rows(
         db.execute(
@@ -461,18 +493,8 @@ def sync_from_whitecompany(db: Session, *, user_id: int | None) -> WhiteCompanyS
                 )
                 db.add(assignment)
                 db.flush()
-                db.add(
-                    OrgSourceLink(
-                        entity_type="org_assignment",
-                        source_system=SOURCE_SYSTEM,
-                        external_wc_id=entry.wc_id,
-                        org_assignment_id=assignment.id,
-                        wc_operator_id=entry.wc_operator_id,
-                        wc_org_chart_entry_id=entry.id,
-                        last_synced_at=now,
-                        created_by_user_id=user_id,
-                        updated_by_user_id=user_id,
-                    )
+                _write_assignment_link(
+                    db, link, entry=entry, assignment=assignment, now=now, user_id=user_id
                 )
                 result.assignments_created += 1
                 seen_user_ids.add(gaia_user_id)
@@ -489,18 +511,8 @@ def sync_from_whitecompany(db: Session, *, user_id: int | None) -> WhiteCompanyS
             assignment.updated_by_user_id = user_id
             db.add(assignment)
             db.flush()
-            db.add(
-                OrgSourceLink(
-                    entity_type="org_assignment",
-                    source_system=SOURCE_SYSTEM,
-                    external_wc_id=entry.wc_id,
-                    org_assignment_id=assignment.id,
-                    wc_operator_id=entry.wc_operator_id,
-                    wc_org_chart_entry_id=entry.id,
-                    last_synced_at=now,
-                    created_by_user_id=user_id,
-                    updated_by_user_id=user_id,
-                )
+            _write_assignment_link(
+                db, link, entry=entry, assignment=assignment, now=now, user_id=user_id
             )
             result.assignments_updated += 1
             seen_user_ids.add(gaia_user_id)

@@ -7,7 +7,6 @@ real SQLite test schema and asserts the exact org unit chosen per operator.
 from __future__ import annotations
 
 import pytest
-from sqlalchemy.exc import IntegrityError
 
 from app.modules.accessi.wc_org_charts import WCOrgChart, WCOrgChartEntry
 from app.modules.operazioni.models.wc_area import WCArea
@@ -144,10 +143,11 @@ def test_r128_operator_placement_matrix(session, make_user):
         0,
         0,
     )
-    # First run quirk (autoflush=False): the link of the last area created in the run is not
-    # flushed yet, so "Gruppo misto" is missing from the tree and its operators stay on Settore due.
+    # R136: with autoflush=False the link of the last area created in the run must already be
+    # visible to the placement, so the first run places "Gruppo misto" operators correctly.
+    assert session.autoflush is False
     first_placement = _placement_by_wc_id(session, users)
-    assert [first_placement[wc_id] for wc_id in (107, 108, 109)] == ["Settore due"] * 3
+    assert [first_placement[wc_id] for wc_id in (107, 108, 109)] == ["Gruppo misto"] * 3
 
     result = whitecompany_sync.sync_from_whitecompany(session, user_id=None)
 
@@ -211,13 +211,13 @@ def test_r128_exact_unit_for_capo_sezione_under_capo_settore(session, make_user)
     users = _add_user_chart(session, chart_wc_id=1, rows=rows, make_user=make_user)
     session.commit()
 
+    assert session.autoflush is False
     whitecompany_sync.sync_from_whitecompany(session, user_id=None)
-    # First run: the link of the last created area ("Sezione reti sud") is not flushed yet,
-    # so the capo sezione stays on the settore unit (test_api accepts either unit).
+    # R136: the link of the last created area ("Sezione reti sud") is visible on the first run.
     assert _placement_by_wc_id(session, users) == {
         455: "Area agraria",
         13010: "Settore Manutenzione",
-        548: "Settore Manutenzione",
+        548: "Sezione reti sud",
     }
 
     whitecompany_sync.sync_from_whitecompany(session, user_id=None)
@@ -409,7 +409,7 @@ def test_r128_area_sync_edge_branches(session, make_user):
     assert units["Area radice"].parent_id is None
     assert units["Settore figlio"].parent_id == units["Area radice"].id
     assert units["Settore autoreferenziale"].parent_id is None
-    assert units["Settore autoreferenziale"].sort_order == 0  # last created area: link unflushed
+    assert units["Settore autoreferenziale"].sort_order == 2  # R136: last area link flushed
 
     rerun = whitecompany_sync.sync_from_whitecompany(session, user_id=None)
     assert (rerun.units_created, rerun.units_updated) == (0, 3)
@@ -444,26 +444,102 @@ def _sync_then_detach_assignment_link(session, make_user, *, delete_assignment: 
     session.commit()
 
 
-@pytest.mark.parametrize(
-    "delete_assignment", [False, True], ids=["keep-assignment", "delete-assignment"]
-)
-def test_r128_unlocked_link_without_assignment_hits_known_duplicate_link_bug(
-    session, make_user, delete_assignment
-):
-    """Known pre-existing bug (characterized, not fixed in R128).
-
-    An unlocked org_assignment link whose org_assignment_id is NULL falls through to the
-    wc_operator lookup (update path when the assignment survives, create path when it was
-    deleted); both write a second link with the same external_wc_id, so the commit violates
-    uq_org_source_link_entity_source_external.
-    """
-    _sync_then_detach_assignment_link(session, make_user, delete_assignment=delete_assignment)
-
-    # SQLite reports the constraint by its columns rather than by name.
-    unique_columns = (
-        r"UNIQUE constraint failed: org_source_link\.entity_type, "
-        r"org_source_link\.source_system, org_source_link\.external_wc_id"
+def _assignment_links(session, external_wc_id: int):
+    session.expire_all()
+    return (
+        session.query(OrgSourceLink)
+        .filter(
+            OrgSourceLink.entity_type == "org_assignment",
+            OrgSourceLink.external_wc_id == external_wc_id,
+        )
+        .all()
     )
-    with pytest.raises(IntegrityError, match=unique_columns):
-        whitecompany_sync.sync_from_whitecompany(session, user_id=None)
-    session.rollback()
+
+
+@pytest.mark.parametrize(
+    ("delete_assignment", "expected_counters"),
+    [(False, (0, 1, 0)), (True, (1, 0, 0))],
+    ids=["keep-assignment", "delete-assignment"],
+)
+def test_r136_unlocked_link_without_assignment_is_reused(
+    session, make_user, delete_assignment, expected_counters
+):
+    """R136 fix: an unlocked org_assignment link whose org_assignment_id is NULL is reused.
+
+    The entry falls through to the wc_operator lookup (update path when the assignment
+    survives, create path when it was deleted); both must repoint the existing link instead
+    of adding a second one with the same external_wc_id.
+    """
+    assert session.autoflush is False
+    _sync_then_detach_assignment_link(session, make_user, delete_assignment=delete_assignment)
+    (stale_link,) = _assignment_links(session, 100)
+    stale_link_id, stale_created_at = stale_link.id, stale_link.created_at
+
+    result = whitecompany_sync.sync_from_whitecompany(session, user_id=None)
+
+    assert (
+        result.assignments_created,
+        result.assignments_updated,
+        result.assignments_skipped_locked,
+    ) == expected_counters
+    (link,) = _assignment_links(session, 100)
+    assignment = session.query(OrgAssignment).one()
+    entry = session.query(WCOrgChartEntry).filter(WCOrgChartEntry.wc_id == 100).one()
+    assert link.id == stale_link_id
+    assert link.created_at == stale_created_at
+    assert link.org_assignment_id == assignment.id
+    assert link.wc_operator_id == entry.wc_operator_id == assignment.wc_operator_id
+    assert link.wc_org_chart_entry_id == entry.id
+    assert link.last_synced_at is not None
+    assert link.is_manual_locked is False
+
+    # Idempotent from now on: the regular linked-update path.
+    rerun = whitecompany_sync.sync_from_whitecompany(session, user_id=None)
+    assert (rerun.assignments_created, rerun.assignments_updated) == (0, 1)
+    assert [row.id for row in _assignment_links(session, 100)] == [stale_link_id]
+
+
+def test_r136_locked_link_without_assignment_is_never_touched(session, make_user):
+    _sync_then_detach_assignment_link(session, make_user, delete_assignment=False)
+    (link,) = _assignment_links(session, 100)
+    link.is_manual_locked = True
+    session.commit()
+
+    result = whitecompany_sync.sync_from_whitecompany(session, user_id=None)
+
+    assert (
+        result.assignments_created,
+        result.assignments_updated,
+        result.assignments_skipped_locked,
+    ) == (0, 0, 1)
+    (link,) = _assignment_links(session, 100)
+    assert link.is_manual_locked is True
+    assert link.org_assignment_id is None
+
+
+def test_r136_area_chart_entry_without_area_link_is_ignored(session, make_user):
+    """An area-chart node with no wc_area (hence no unit link) is skipped, not placed."""
+    _build_area_tree(session, tree=[(1, "Area tecnica", None, 0)])
+    area_chart = session.query(WCOrgChart).filter(WCOrgChart.chart_type == "area").one()
+    session.add(
+        WCOrgChartEntry(
+            org_chart_id=area_chart.id,
+            wc_id=99,
+            label="Nodo senza area",
+            source_field=_source(chart="area", depth=1, parent=1),
+            sort_order=1,
+        )
+    )
+    users = _add_user_chart(
+        session,
+        chart_wc_id=1,
+        rows=[(100, None, "Dirigente", "a"), (101, 100, "Capo settore", "b")],
+        make_user=make_user,
+    )
+    session.commit()
+
+    result = whitecompany_sync.sync_from_whitecompany(session, user_id=None)
+
+    assert (result.units_created, result.assignments_created) == (1, 2)
+    assert session.query(OrgSourceLink).filter(OrgSourceLink.external_wc_id == 99).count() == 0
+    assert _placement_by_wc_id(session, users) == {100: "Area tecnica", 101: "Area tecnica"}
