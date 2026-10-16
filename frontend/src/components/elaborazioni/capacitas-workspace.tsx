@@ -221,6 +221,8 @@ async function runCapacitasJobCommand<Job extends { id: number }>(
   }
 }
 
+const getCapacitasOperationErrorMessage = (error: unknown, fallback: string): string => (error instanceof Error ? error.message : fallback);
+
 function withCapacitasDefaultCredential<Form extends { credential_id: string }>(
   current: Form,
   credentials: readonly CapacitasCredential[],
@@ -974,7 +976,7 @@ export function ElaborazioniCapacitasWorkspace({
       setHistoryForm((current) => withCapacitasDefaultCredential(current, nextCredentials));
       setIncassForm((current) => withCapacitasDefaultCredential(current, nextCredentials));
     } catch (loadError) {
-      setTerreniError(loadError instanceof Error ? loadError.message : "Errore caricamento credenziali Capacitas");
+      setTerreniError(getCapacitasOperationErrorMessage(loadError, "Errore caricamento credenziali Capacitas"));
     }
   }
 
@@ -1115,7 +1117,7 @@ export function ElaborazioniCapacitasWorkspace({
       setParticelleError(null);
       await loadParticelleJobs();
     } catch (createError) {
-      setParticelleError(createError instanceof Error ? createError.message : "Errore avvio job particelle");
+      setParticelleError(getCapacitasOperationErrorMessage(createError, "Errore avvio job particelle"));
     } finally {
       setParticelleCreatingJob(false);
     }
@@ -1152,7 +1154,7 @@ export function ElaborazioniCapacitasWorkspace({
       const updated = await patchCapacitasParticelleSyncJobSpeed(token, jobId, doubleSpeed);
       setParticelleJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
     } catch (err) {
-      setParticelleError(err instanceof Error ? err.message : "Errore cambio velocità job");
+      setParticelleError(getCapacitasOperationErrorMessage(err, "Errore cambio velocità job"));
     } finally {
       setParticelleSpeedBusyId(null);
     }
@@ -1166,7 +1168,7 @@ export function ElaborazioniCapacitasWorkspace({
       const updated = await stopCapacitasParticelleSyncJob(token, jobId);
       setParticelleJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
     } catch (err) {
-      setParticelleError(err instanceof Error ? err.message : "Errore stop job");
+      setParticelleError(getCapacitasOperationErrorMessage(err, "Errore stop job"));
     } finally {
       setParticelleStoppingJobId(null);
     }
@@ -1186,7 +1188,7 @@ export function ElaborazioniCapacitasWorkspace({
     } catch (parseError) {
       setTerreniBatchItems([]);
       setTerreniBatchSkipped(0);
-      setTerreniBatchError(parseError instanceof Error ? parseError.message : "Errore parsing file Terreni");
+      setTerreniBatchError(getCapacitasOperationErrorMessage(parseError, "Errore parsing file Terreni"));
     } finally {
       setTerreniBatchBusy(false);
     }
@@ -1216,7 +1218,7 @@ export function ElaborazioniCapacitasWorkspace({
       );
       await loadTerreniJobs();
     } catch (createError) {
-      setTerreniBatchError(createError instanceof Error ? createError.message : "Errore avvio job batch Terreni");
+      setTerreniBatchError(getCapacitasOperationErrorMessage(createError, "Errore avvio job batch Terreni"));
     } finally {
       setTerreniBatchCreatingJob(false);
     }
@@ -1252,7 +1254,7 @@ export function ElaborazioniCapacitasWorkspace({
     } catch (parseError) {
       setHistoryBatchItems([]);
       setHistoryBatchSkipped(0);
-      setHistoryError(parseError instanceof Error ? parseError.message : "Errore parsing file storico anagrafico");
+      setHistoryError(getCapacitasOperationErrorMessage(parseError, "Errore parsing file storico anagrafico"));
     } finally {
       setHistoryBatchBusy(false);
     }
@@ -1277,7 +1279,7 @@ export function ElaborazioniCapacitasWorkspace({
       setHistoryStatusMessage(`Job storico #${job.id} creato con ${items.length} righe e avviato in background.`);
       await loadHistoryJobs();
     } catch (importError) {
-      setHistoryError(importError instanceof Error ? importError.message : "Errore import storico anagrafico");
+      setHistoryError(getCapacitasOperationErrorMessage(importError, "Errore import storico anagrafico"));
     } finally {
       setHistoryImporting(false);
     }
@@ -1320,7 +1322,7 @@ export function ElaborazioniCapacitasWorkspace({
       setIncassError(null);
       await loadIncassJobs();
     } catch (createError) {
-      setIncassError(createError instanceof Error ? createError.message : "Errore avvio job avvisi");
+      setIncassError(getCapacitasOperationErrorMessage(createError, "Errore avvio job avvisi"));
     } finally {
       setIncassCreatingJob(false);
     }
@@ -1345,7 +1347,7 @@ export function ElaborazioniCapacitasWorkspace({
       setIncassError(null);
       await loadIncassJobs();
     } catch (createError) {
-      setIncassError(createError instanceof Error ? createError.message : "Errore creazione job harvest inCass");
+      setIncassError(getCapacitasOperationErrorMessage(createError, "Errore creazione job harvest inCass"));
     } finally {
       setIncassHarvestCreating(false);
     }
@@ -3030,7 +3032,7 @@ export function ElaborazioniCapacitasWorkspace({
                       if (isAuthError(err)) {
                         setRefetchError("Sessione GAIA scaduta. Rientra per riprovare.");
                       } else {
-                        setRefetchError(err instanceof Error ? err.message : "Errore durante il re-fetch.");
+                        setRefetchError(getCapacitasOperationErrorMessage(err, "Errore durante il re-fetch."));
                       }
                     } finally {
                       setRefetchBusy(false);
@@ -3073,7 +3075,7 @@ export function ElaborazioniCapacitasWorkspace({
                         const rows = await listCapacitasParticelleAnomalie(token);
                         setAnomalie(rows);
                       } catch (err) {
-                        setAnomalieError(err instanceof Error ? err.message : "Errore caricamento anomalie");
+                        setAnomalieError(getCapacitasOperationErrorMessage(err, "Errore caricamento anomalie"));
                       } finally {
                         setAnomalieBusy(false);
                       }

@@ -13405,3 +13405,19 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   distanza dopo lo shift di 5 righe); risolto dal matcher R146. Ratchet
   integrazione exit 0, zero finding, indice invariato. Review indipendente
   ACCEPT (IMPROVED). Graphify `make graphify-frontend` aggiornato.
+
+## 2026-10-16 - R59 Elaborazioni Capacitas: messaggi di errore delle operazioni (IMPROVED)
+
+- Decisione utente 2026-10-16 (opzione B: prima una riduzione reale, R145).
+  `frontend/src/components/elaborazioni/capacitas-workspace.tsx`: nuovo
+  `getCapacitasOperationErrorMessage(error, fallback)` sostituisce 12 copie di
+  `error instanceof Error ? error.message : "<fallback>"` con fallback letterali
+  identici. Esclusi 2 siti con fallback dinamico (monitor e comandi job), per
+  non rendere eager la valutazione.
+- Metriche: `ElaborazioniCapacitasWorkspace` cognitive 298 -> 273, cyclomatic
+  275 -> 263; file cognitive_sum 760 -> 706, cyclomatic_sum 904 -> 880; LOC
+  3103 -> 3104 (budget merge-base 3109); helper 1/2.
+- 25 spec Capacitas 701/701 PASS, coverage del file 100% (727/709/254/634).
+  eslint e tsc puliti. Mutanti sull'helper e sui 12 fallback tutti uccisi.
+  Ratchet integrazione exit 0, zero finding, indice invariato. Review
+  indipendente ACCEPT_WITH_NOTES. Graphify `make graphify-frontend` aggiornato.
