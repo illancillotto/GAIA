@@ -86,54 +86,6 @@ const DOCUMENT_TYPE_OPTIONS = [
   { value: "altro", label: "Altro" },
 ] as const;
 
-const DOCUMENT_PRIORITY_BY_TYPE: Record<string, number> = {
-  ingiunzione: 100,
-  notifica: 90,
-  corrispondenza: 80,
-  estratto_debito: 70,
-  irrigation_application: 65,
-  visura: 60,
-  contratto: 50,
-  pratica_interna: 40,
-  altro: 10,
-};
-
-const DOCUMENT_LABEL_BY_TYPE: Record<string, string> = {
-  ingiunzione: "Azioni legali",
-  notifica: "Notifiche e relate",
-  corrispondenza: "Prove invio e PEC",
-  estratto_debito: "Pagamenti e debito",
-  irrigation_application: "Domande utenza irrigua",
-  visura: "Visure e catasto",
-  contratto: "Contratti e convenzioni",
-  pratica_interna: "Pratiche interne",
-  altro: "Altro da classificare",
-};
-
-const DOCUMENT_PRIORITY_BY_CATEGORY: Record<string, number> = {
-  legal_action: 100,
-  notification: 90,
-  delivery_proof: 80,
-  debt_payment: 70,
-  irrigation_application: 65,
-  cadastral: 60,
-  contract: 50,
-  internal_practice: 40,
-  other: 10,
-};
-
-const DOCUMENT_LABEL_BY_CATEGORY: Record<string, string> = {
-  legal_action: "Azioni legali",
-  notification: "Notifiche e relate",
-  delivery_proof: "Prove invio e PEC",
-  debt_payment: "Pagamenti e debito",
-  irrigation_application: "Domande utenza irrigua",
-  cadastral: "Visure e catasto",
-  contract: "Contratti e convenzioni",
-  internal_practice: "Pratiche interne",
-  other: "Altro da classificare",
-};
-
 type DocumentSmartGroup = {
   category: string;
   label: string;
@@ -142,15 +94,15 @@ type DocumentSmartGroup = {
 };
 
 function getDocumentSmartPriority(document: AnagraficaDocument): number {
-  return document.smart_priority ?? DOCUMENT_PRIORITY_BY_CATEGORY[document.smart_category ?? ""] ?? DOCUMENT_PRIORITY_BY_TYPE[document.doc_type] ?? 10;
+  return document.smart_priority;
 }
 
 function getDocumentSmartLabel(document: AnagraficaDocument): string {
-  return document.smart_category_label ?? DOCUMENT_LABEL_BY_CATEGORY[document.smart_category ?? ""] ?? DOCUMENT_LABEL_BY_TYPE[document.doc_type] ?? "Altro da classificare";
+  return document.smart_category_label;
 }
 
 function getDocumentSmartCategory(document: AnagraficaDocument): string {
-  return document.smart_category ?? document.doc_type ?? "other";
+  return document.smart_category;
 }
 
 function groupDocumentsForReading(documents: AnagraficaDocument[]): DocumentSmartGroup[] {
@@ -173,7 +125,7 @@ function groupDocumentsForReading(documents: AnagraficaDocument[]): DocumentSmar
 }
 
 function documentConfidenceLabel(document: AnagraficaDocument): string {
-  const confidence = document.smart_confidence ?? 0;
+  const confidence = document.smart_confidence;
   if (confidence >= 0.85) return "alta";
   if (confidence >= 0.6) return "media";
   return "bassa";
@@ -187,8 +139,7 @@ function documentGroupClassName(priority: number): string {
   return "border-gray-200 bg-gray-50 text-gray-600";
 }
 
-function formatEuro(value: number | null | undefined): string {
-  if (value == null) return "—";
+function formatEuro(value: number): string {
   return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(value);
 }
 
@@ -428,7 +379,7 @@ function DetailContent({
     }
 
     if (subject.person) {
-      const identifierValue = subject.person.codice_fiscale?.trim().toUpperCase() ?? "";
+      const identifierValue = subject.person.codice_fiscale.trim().toUpperCase();
       if (!identifierValue) {
         return null;
       }
@@ -442,7 +393,7 @@ function DetailContent({
     }
 
     if (subject.company) {
-      const partitaIva = subject.company.partita_iva?.trim().toUpperCase() ?? "";
+      const partitaIva = subject.company.partita_iva.trim().toUpperCase();
       const codiceFiscale = subject.company.codice_fiscale?.trim().toUpperCase() ?? "";
       const identifierValue = partitaIva || codiceFiscale;
       if (!identifierValue) {
@@ -759,7 +710,7 @@ function DetailContent({
   }, [previewUrl]);
 
   async function openPreviewFromBlob(
-    document: { filename: string; extension?: string | null; is_pdf?: boolean | null; doc_type?: string; classification_source?: string },
+    document: { filename: string; extension?: string | null; is_pdf: boolean; doc_type: string; classification_source: string },
     blobPromise: Promise<Blob>,
   ) {
     if (previewUrl) {
@@ -772,9 +723,9 @@ function DetailContent({
       relative_path: "",
       nas_path: "",
       extension: document.extension ?? getExtensionFromFilename(document.filename),
-      is_pdf: document.is_pdf ?? isPdfFilename(document.filename),
-      doc_type: document.doc_type ?? "visura",
-      classification_source: document.classification_source ?? "preview",
+      is_pdf: document.is_pdf,
+      doc_type: document.doc_type,
+      classification_source: document.classification_source,
       smart_category: "cadastral",
       smart_category_label: "Visure e catasto",
       smart_priority: 60,
@@ -806,7 +757,7 @@ function DetailContent({
       const nextPreviewKind = getDocumentPreviewKind({
         filename: document.filename,
         extension,
-        isPdf: document.is_pdf ?? null,
+        isPdf: document.is_pdf,
       });
       setPreviewUrl(objectUrl);
 
@@ -916,9 +867,7 @@ function DetailContent({
         return;
       }
 
-      if (isManualUploadModalOpen) {
-        setIsManualUploadModalOpen(false);
-      }
+      setIsManualUploadModalOpen(false);
     }
 
     window.addEventListener("keydown", handleKeyDown);

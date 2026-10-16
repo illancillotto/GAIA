@@ -13285,3 +13285,25 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   `baseline-verify` riproducibile, tooling 294 PASS, ratchet contro il
   merge-base a51a48dc exit 0 `findings []`. Evidenze
   `claude-20261015/baseline-repair/`.
+
+## 2026-10-16 - R132 Utenze dettaglio: guardie ridondanti, coverage con eccezione registrata
+
+- Decisione utente 2026-10-16: rimuovere le guardie ridondanti e testare le race
+  dove possibile. `frontend/src/app/utenze/[id]/page.tsx`: rimossi i fallback
+  `smart_*` e le quattro mappe `DOCUMENT_*_BY_*` (sempre valorizzati dal backend
+  con campi Pydantic non opzionali), la guardia null di `formatEuro`, l'optional
+  chaining su CF persona fisica e P.IVA azienda, i fallback dell'anteprima e
+  l'else implicito di Escape. La guardia ANPR e mantenuta e coperta dal test
+  della riclassificazione persona fisica -> azienda.
+- Esito `FUNCTIONAL_SIMPLIFICATION` + `IMPROVED`: DetailContent cognitive
+  391 -> 382 e cyclomatic 304 -> 297; `openPreviewFromBlob` scende sotto soglia
+  cognitive (18 -> 14); violation 22 -> 21. Spec nuova valida anche
+  sull'originale; 283 test PASS su 12 suite.
+- Coverage NON 100%: `565/569` statement, `578/581` branch, `176/176` funzioni.
+  Tre guardie contro closure stale restano di proposito e sono registrate come
+  eccezione in `docs/TEST_COVERAGE_100_PLAN.md`. Il fallimento intermittente
+  osservato nel run completo e una race preesistente nel test R22, che si
+  riproduce anche sulla pagina base; la correzione del test e la slice
+  separata R143.
+- Ratchet integrazione exit 0, zero finding, indice invariato. Review
+  ACCEPT_WITH_NOTES. Graphify utenze-code e frontend aggiornati.

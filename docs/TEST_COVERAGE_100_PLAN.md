@@ -1071,6 +1071,19 @@ Fino alla chiusura completa del piano:
 
 ## Eccezioni temporanee aperte
 
+- `2026-10-16` - frontend `src/app/utenze/[id]/page.tsx` (R132)
+  Motivo: dopo la rimozione autorizzata delle guardie ridondanti restano tre
+  guardie difensive contro closure stale, dimostrate irraggiungibili dalla UI e
+  mantenute di proposito: `getSubjectVisuraRequestState` con `!subject`
+  (righe 377-379), `handleSave` con `!subject` (468-470) e
+  `handleDeleteDocument` con `!deleteDocumentTarget?.id` (639-642). Ogni
+  chiamante e renderizzato solo dopo la guardia `!subject` della pagina, oppure
+  solo per documenti con id, e cattura un valore non nullo. Le 12 suite della
+  pagina misurano `565/569` statement, `578/581` branch, `176/176` funzioni e
+  `526/530` linee: la coverage non va riportata come 100%.
+  Rientro atteso: rimuovere le tre guardie con decisione esplicita oppure
+  coprirle quando un nuovo chiamante le renda raggiungibili.
+
 - `2026-07-06` - frontend `src/app/presenze/collaboratori/[id]/page.tsx`
   Motivo: la pagina resta monolitica; la suite `presenze-collaboratore-detail` copre helper, tab `Cartellino`, tab `Riepilogo eventi`, rettifiche e flussi admin principali, ma il gate mirato Vitest misura ancora `98.21%` statement / `81.19%` branch / `100%` functions / `98.26%` lines.
   Rientro atteso: spezzare la page in componenti/helper testabili e chiudere i rami residui su redirect embedded, azioni admin edge e fallback di dettaglio.
