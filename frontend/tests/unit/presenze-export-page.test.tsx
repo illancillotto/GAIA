@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import PresenzeExportPage from "@/app/presenze/export/page";
@@ -407,5 +407,283 @@ describe("Presenze export page", () => {
 
     await waitFor(() => expect(mocks.deletePresenzeXlsmExportJob).toHaveBeenCalledWith("token", "job-archived-1"));
     await waitFor(() => expect(screen.queryByText("maggio 2026")).not.toBeInTheDocument());
+  });
+});
+
+describe("Presenze export page job history polling (characterization)", () => {
+  function buildJob(overrides: Record<string, unknown>) {
+    return {
+      id: "job-poll-1",
+      status: "pending",
+      requested_by_user_id: 1,
+      credential_id: null,
+      import_job_id: null,
+      period_start: "2026-05-01",
+      period_end: "2026-05-31",
+      collaborator_limit: 1,
+      records_imported: 0,
+      records_skipped: 0,
+      records_errors: 0,
+      json_artifact_path: null,
+      worker_log_path: null,
+      worker_pid: null,
+      attempt_count: 1,
+      max_attempts: 1,
+      error_detail: null,
+      params_json: { mode: "export_xlsm" },
+      created_at: "2026-06-04T09:00:00Z",
+      started_at: null,
+      finished_at: null,
+      ...overrides,
+    };
+  }
+
+  function mockSessionUser(role: string) {
+    mocks.getCurrentUser.mockResolvedValue({
+      id: 1,
+      username: "user",
+      email: "user@example.local",
+      role,
+      enabled_modules: ["presenze"],
+      is_active: true,
+      created_at: "2026-06-04T09:00:00Z",
+      updated_at: "2026-06-04T09:00:00Z",
+    });
+  }
+
+  async function advancePollingInterval() {
+    await act(async () => {
+      vi.advanceTimersByTime(2500);
+    });
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    Object.values(mocks).forEach((mock) => mock.mockReset());
+    mocks.getStoredAccessToken.mockReturnValue("token");
+    mockSessionUser("admin");
+    mocks.listAllPresenzeCollaborators.mockResolvedValue([]);
+    mocks.listPresenzeDailyRecords.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 500 });
+    mocks.listPresenzeXlsmExportJobs.mockResolvedValue([]);
+    mocks.listPresenzeStraordinariExportJobs.mockResolvedValue([]);
+    mocks.createPresenzeXlsmExportJob.mockResolvedValue(buildJob({ id: "job-1", period_start: "2026-06-01", period_end: "2026-06-30" }));
+    mocks.getPresenzeXlsmExportJob.mockResolvedValue(buildJob({ id: "job-1", period_start: "2026-06-01", period_end: "2026-06-30" }));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  test("polls the XLSM history silently while a job is active and announces its completion once", async () => {
+    mocks.listPresenzeXlsmExportJobs
+      .mockResolvedValueOnce([buildJob({ status: "running" })])
+      .mockResolvedValue([buildJob({ status: "completed" })]);
+
+    render(<PresenzeExportPage />);
+
+    await waitFor(() => expect(mocks.listPresenzeXlsmExportJobs).toHaveBeenCalledTimes(1));
+    expect(mocks.listPresenzeXlsmExportJobs).toHaveBeenCalledWith("token", { limit: 25 });
+    await screen.findByText("In lavorazione");
+    expect(screen.queryByText(/pronto\. Trovi il file/)).not.toBeInTheDocument();
+
+    await advancePollingInterval();
+
+    await waitFor(() => expect(mocks.listPresenzeXlsmExportJobs).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("Export maggio 2026 pronto. Trovi il file nella sezione Ultimi export XLSM.")).toBeInTheDocument();
+    expect(screen.getByText("Pronto")).toBeInTheDocument();
+
+    await advancePollingInterval();
+    await advancePollingInterval();
+    expect(mocks.listPresenzeXlsmExportJobs).toHaveBeenCalledTimes(2);
+  });
+
+  test("polls the straordinari history while a job is pending and announces its completion", async () => {
+    mocks.listPresenzeStraordinariExportJobs
+      .mockResolvedValueOnce([buildJob({ id: "str-poll-1", status: "pending" })])
+      .mockResolvedValueOnce([buildJob({ id: "str-poll-1", status: "pending" })])
+      .mockResolvedValue([buildJob({ id: "str-poll-1", status: "completed" })]);
+
+    render(<PresenzeExportPage />);
+
+    await waitFor(() => expect(mocks.listPresenzeStraordinariExportJobs).toHaveBeenCalledTimes(1));
+    expect(mocks.listPresenzeStraordinariExportJobs).toHaveBeenCalledWith("token", { limit: 25 });
+
+    await advancePollingInterval();
+    await waitFor(() => expect(mocks.listPresenzeStraordinariExportJobs).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText(/Richiesta straordinari .* pronta/)).not.toBeInTheDocument();
+
+    await advancePollingInterval();
+    await waitFor(() => expect(mocks.listPresenzeStraordinariExportJobs).toHaveBeenCalledTimes(3));
+    expect(await screen.findByText("Richiesta straordinari maggio 2026 pronta. Trovi il file nella sezione dedicata.")).toBeInTheDocument();
+
+    await advancePollingInterval();
+    expect(mocks.listPresenzeStraordinariExportJobs).toHaveBeenCalledTimes(3);
+  });
+
+  test("suppresses the completion notice on the initial load and does not poll without active jobs", async () => {
+    mocks.listPresenzeXlsmExportJobs.mockResolvedValue([buildJob({ status: "completed" })]);
+    mocks.listPresenzeStraordinariExportJobs.mockResolvedValue([buildJob({ id: "str-done", status: "completed" })]);
+
+    render(<PresenzeExportPage />);
+
+    await waitFor(() => expect(mocks.listPresenzeXlsmExportJobs).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mocks.listPresenzeStraordinariExportJobs).toHaveBeenCalledTimes(1));
+    await advancePollingInterval();
+    await advancePollingInterval();
+
+    expect(mocks.listPresenzeXlsmExportJobs).toHaveBeenCalledTimes(1);
+    expect(mocks.listPresenzeStraordinariExportJobs).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/pronto\. Trovi il file/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/pronta\. Trovi il file/)).not.toBeInTheDocument();
+  });
+
+  test("starts polling for a job registered by the export action and announces its completion", async () => {
+    mocks.listPresenzeXlsmExportJobs.mockResolvedValueOnce([]).mockResolvedValue([
+      buildJob({ id: "job-1", status: "completed", period_start: "2026-06-01", period_end: "2026-06-30" }),
+    ]);
+
+    render(<PresenzeExportPage />);
+
+    await waitFor(() => expect(mocks.listPresenzeXlsmExportJobs).toHaveBeenCalledTimes(1));
+    await advancePollingInterval();
+    expect(mocks.listPresenzeXlsmExportJobs).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Avvia export XLSM" }));
+    await waitFor(() => expect(mocks.getPresenzeXlsmExportJob).toHaveBeenCalledWith("token", "job-1"));
+    await screen.findByText(/Export avviato\./);
+
+    await advancePollingInterval();
+
+    await waitFor(() => expect(mocks.listPresenzeXlsmExportJobs).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("Export giugno 2026 pronto. Trovi il file nella sezione Ultimi export XLSM.")).toBeInTheDocument();
+  });
+
+  test("never loads the XLSM history for a non-admin user but still loads straordinari", async () => {
+    mockSessionUser("viewer");
+    mocks.listPresenzeStraordinariExportJobs.mockResolvedValue([buildJob({ id: "str-own", status: "running" })]);
+
+    render(<PresenzeExportPage />);
+
+    await waitFor(() => expect(mocks.listPresenzeStraordinariExportJobs).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mocks.getCurrentUser).toHaveBeenCalled());
+    await advancePollingInterval();
+
+    await waitFor(() => expect(mocks.listPresenzeStraordinariExportJobs).toHaveBeenCalledTimes(2));
+    expect(mocks.listPresenzeXlsmExportJobs).not.toHaveBeenCalled();
+  });
+
+  test("shows the XLSM history fallback error for non-Error rejections", async () => {
+    mocks.listPresenzeXlsmExportJobs.mockRejectedValue("network down");
+
+    render(<PresenzeExportPage />);
+
+    expect(await screen.findByText("Errore caricamento storico export XLSM")).toBeInTheDocument();
+  });
+
+  test("shows the XLSM history error message for Error rejections", async () => {
+    mocks.listPresenzeXlsmExportJobs.mockRejectedValue(new Error("Storico XLSM non disponibile"));
+
+    render(<PresenzeExportPage />);
+
+    expect(await screen.findByText("Storico XLSM non disponibile")).toBeInTheDocument();
+  });
+
+  test("shows the straordinari history fallback error for non-Error rejections", async () => {
+    mocks.listPresenzeStraordinariExportJobs.mockRejectedValue("network down");
+
+    render(<PresenzeExportPage />);
+
+    expect(await screen.findByText("Errore caricamento storico export straordinari")).toBeInTheDocument();
+  });
+
+  test("does not load any history without an access token", async () => {
+    mocks.getStoredAccessToken.mockReturnValue(null);
+
+    render(<PresenzeExportPage />);
+
+    await advancePollingInterval();
+    expect(mocks.listPresenzeXlsmExportJobs).not.toHaveBeenCalled();
+    expect(mocks.listPresenzeStraordinariExportJobs).not.toHaveBeenCalled();
+  });
+
+  test("stops polling after unmount", async () => {
+    mocks.listPresenzeXlsmExportJobs.mockResolvedValue([buildJob({ status: "running" })]);
+    mocks.listPresenzeStraordinariExportJobs.mockResolvedValue([buildJob({ id: "str-run", status: "running" })]);
+
+    const { unmount } = render(<PresenzeExportPage />);
+
+    await waitFor(() => expect(mocks.listPresenzeXlsmExportJobs).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mocks.listPresenzeStraordinariExportJobs).toHaveBeenCalledTimes(1));
+    await advancePollingInterval();
+    await waitFor(() => expect(mocks.listPresenzeXlsmExportJobs).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mocks.listPresenzeStraordinariExportJobs).toHaveBeenCalledTimes(2));
+
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+    await advancePollingInterval();
+
+    expect(mocks.listPresenzeXlsmExportJobs).toHaveBeenCalledTimes(2);
+    expect(mocks.listPresenzeStraordinariExportJobs).toHaveBeenCalledTimes(2);
+  });
+
+  test("starts polling for a straordinari job registered by the create action and announces its completion", async () => {
+    mocks.listAllPresenzeCollaborators.mockResolvedValue([
+      {
+        id: "collab-1",
+        owner_user_id: 1,
+        application_user_id: 7,
+        kint: "10159",
+        kkint: "{demo}",
+        employee_code: "1854",
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: "AMADU SALVATORE",
+        birth_date: "1967-02-26",
+        contract_kind: "operaio",
+        standard_daily_minutes: 420,
+        is_active: true,
+        last_seen_at: "2026-06-04T09:00:00Z",
+        created_at: "2026-06-04T09:00:00Z",
+        updated_at: "2026-06-04T09:00:00Z",
+      },
+    ]);
+    mocks.previewPresenzeStraordinariExport.mockResolvedValue({
+      collaborator: { id: "collab-1", name: "AMADU SALVATORE" },
+      period_start: "2026-05-01",
+      period_end: "2026-05-31",
+      items: [
+        {
+          record_id: "record-1",
+          work_date: "2026-05-16",
+          motivation: "Intervento impianto",
+          start_time: "14:30",
+          end_time: "16:30",
+          duration_minutes: 120,
+          duration_label: "02:00",
+        },
+      ],
+    });
+    mocks.createPresenzeStraordinariExportJob.mockResolvedValue(buildJob({ id: "str-new", status: "pending" }));
+    mocks.getPresenzeStraordinariExportJob.mockResolvedValue(buildJob({ id: "str-new", status: "pending" }));
+    mocks.listPresenzeStraordinariExportJobs.mockResolvedValueOnce([]).mockResolvedValue([buildJob({ id: "str-new", status: "completed" })]);
+
+    render(<PresenzeExportPage />);
+
+    await waitFor(() => expect(mocks.listPresenzeStraordinariExportJobs).toHaveBeenCalledTimes(1));
+    await advancePollingInterval();
+    expect(mocks.listPresenzeStraordinariExportJobs).toHaveBeenCalledTimes(1);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Compila motivazioni" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Compila motivazioni" }));
+    await waitFor(() => expect(mocks.previewPresenzeStraordinariExport).toHaveBeenCalledWith("token", { collaboratorId: "collab-1" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Genera file straordinari" }));
+    await waitFor(() => expect(mocks.getPresenzeStraordinariExportJob).toHaveBeenCalledWith("token", "str-new"));
+    await screen.findByText(/Richiesta straordinari avviata\./);
+
+    await advancePollingInterval();
+
+    await waitFor(() => expect(mocks.listPresenzeStraordinariExportJobs).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("Richiesta straordinari maggio 2026 pronta. Trovi il file nella sezione dedicata.")).toBeInTheDocument();
   });
 });

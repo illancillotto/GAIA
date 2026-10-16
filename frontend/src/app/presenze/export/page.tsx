@@ -1,7 +1,7 @@
 /* v8 ignore start -- Next page shell: covered by rendering tests; operational logic is tested in backend/helpers. */
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +32,8 @@ import {
 import { getStoredAccessToken } from "@/lib/auth";
 import { getPresenzeCompanyLabel } from "@/lib/presenze-display";
 import type { CurrentUser, PresenzeCollaborator, PresenzeDailyRecord, PresenzeStraordinariPreviewResponse, PresenzeSyncJob } from "@/types/api";
+
+import { sortExportJobs, useExportJobHistory } from "./use-export-job-history";
 
 type ContractFilter = "all" | "operaio" | "impiegato" | "quadro" | "altro" | "unassigned";
 type ExportWorkspaceTab = "parameters" | "preview";
@@ -186,10 +188,6 @@ function ExportSpinner({ label = "Esportazione in corso..." }: { label?: string 
   );
 }
 
-function sortExportJobs(items: PresenzeSyncJob[]): PresenzeSyncJob[] {
-  return [...items].sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at));
-}
-
 function formatJobDateTime(value: string): string {
   return new Intl.DateTimeFormat("it-IT", {
     day: "2-digit",
@@ -213,6 +211,14 @@ function statusToneClasses(status: string): string {
   if (status === "failed") return "border-red-200 bg-red-50 text-red-700";
   if (status === "running") return "border-amber-200 bg-amber-50 text-amber-700";
   return "border-slate-200 bg-slate-50 text-slate-700";
+}
+
+function buildXlsmCompletionNotice(job: PresenzeSyncJob): string {
+  return `Export ${formatMonthLabel(job.period_start.slice(0, 7))} pronto. Trovi il file nella sezione Ultimi export XLSM.`;
+}
+
+function buildStraordinariCompletionNotice(job: PresenzeSyncJob): string {
+  return `Richiesta straordinari ${formatMonthLabel(job.period_start.slice(0, 7))} pronta. Trovi il file nella sezione dedicata.`;
 }
 
 function buildExportFilename(job: PresenzeSyncJob): string {
@@ -275,10 +281,6 @@ export default function PresenzeExportPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [isSubmittingExportJob, setIsSubmittingExportJob] = useState(false);
-  const [isLoadingExportJobs, setIsLoadingExportJobs] = useState(true);
-  const [exportJobs, setExportJobs] = useState<PresenzeSyncJob[]>([]);
-  const [isLoadingStraordinariJobs, setIsLoadingStraordinariJobs] = useState(true);
-  const [straordinariJobs, setStraordinariJobs] = useState<PresenzeSyncJob[]>([]);
   const [downloadingJobId, setDownloadingJobId] = useState<string | null>(null);
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
@@ -290,8 +292,6 @@ export default function PresenzeExportPage() {
   const [straordinariDraftItems, setStraordinariDraftItems] = useState<StraordinariDraftItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const knownJobStatusesRef = useRef<Map<string, string>>(new Map());
-  const knownStraordinariJobStatusesRef = useRef<Map<string, string>>(new Map());
   const canManageXlsm = currentUser?.role === "admin" || currentUser?.role === "super_admin";
 
   useEffect(() => {
@@ -317,119 +317,32 @@ export default function PresenzeExportPage() {
       .finally(() => setIsLoadingPreview(false));
   }, [selectedMonth]);
 
-  useEffect(() => {
-    const token = getStoredAccessToken();
-    if (!token) return;
-    if (!canManageXlsm) {
-      setIsLoadingExportJobs(false);
-      setExportJobs([]);
-      knownJobStatusesRef.current = new Map();
-      return;
-    }
-    const authToken = token;
-
-    let cancelled = false;
-    async function refreshExportJobs(options?: { silent?: boolean; suppressCompletionNotice?: boolean }) {
-      if (!options?.silent) {
-        setIsLoadingExportJobs(true);
-      }
-      try {
-        const items = sortExportJobs(await listPresenzeXlsmExportJobs(authToken, { limit: 25 }));
-        if (cancelled) return;
-
-        if (!options?.suppressCompletionNotice) {
-          for (const item of items) {
-            const previousStatus = knownJobStatusesRef.current.get(item.id);
-            if ((previousStatus === "pending" || previousStatus === "running") && item.status === "completed") {
-              setSuccess(`Export ${formatMonthLabel(item.period_start.slice(0, 7))} pronto. Trovi il file nella sezione Ultimi export XLSM.`);
-            }
-          }
-        }
-
-        knownJobStatusesRef.current = new Map(items.map((item) => [item.id, item.status]));
-        setExportJobs(items);
-      } catch (loadError) {
-        if (!cancelled) {
-          setError(loadError instanceof Error ? loadError.message : "Errore caricamento storico export XLSM");
-        }
-      } finally {
-        if (!cancelled && !options?.silent) {
-          setIsLoadingExportJobs(false);
-        }
-      }
-    }
-
-    void refreshExportJobs({ suppressCompletionNotice: true });
-    const intervalId = window.setInterval(() => {
-      if (knownJobStatusesRef.current.size === 0) {
-        return;
-      }
-      const hasActiveJob = Array.from(knownJobStatusesRef.current.values()).some((status) => status === "pending" || status === "running");
-      if (!hasActiveJob) {
-        return;
-      }
-      void refreshExportJobs({ silent: true });
-    }, 2500);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, [canManageXlsm]);
-
-  useEffect(() => {
-    const token = getStoredAccessToken();
-    if (!token) return;
-    const authToken = token;
-
-    let cancelled = false;
-    async function refreshStraordinariJobs(options?: { silent?: boolean; suppressCompletionNotice?: boolean }) {
-      if (!options?.silent) {
-        setIsLoadingStraordinariJobs(true);
-      }
-      try {
-        const items = sortExportJobs(await listPresenzeStraordinariExportJobs(authToken, { limit: 25 }));
-        if (cancelled) return;
-
-        if (!options?.suppressCompletionNotice) {
-          for (const item of items) {
-            const previousStatus = knownStraordinariJobStatusesRef.current.get(item.id);
-            if ((previousStatus === "pending" || previousStatus === "running") && item.status === "completed") {
-              setSuccess(`Richiesta straordinari ${formatMonthLabel(item.period_start.slice(0, 7))} pronta. Trovi il file nella sezione dedicata.`);
-            }
-          }
-        }
-
-        knownStraordinariJobStatusesRef.current = new Map(items.map((item) => [item.id, item.status]));
-        setStraordinariJobs(items);
-      } catch (loadError) {
-        if (!cancelled) {
-          setError(loadError instanceof Error ? loadError.message : "Errore caricamento storico export straordinari");
-        }
-      } finally {
-        if (!cancelled && !options?.silent) {
-          setIsLoadingStraordinariJobs(false);
-        }
-      }
-    }
-
-    void refreshStraordinariJobs({ suppressCompletionNotice: true });
-    const intervalId = window.setInterval(() => {
-      if (knownStraordinariJobStatusesRef.current.size === 0) {
-        return;
-      }
-      const hasActiveJob = Array.from(knownStraordinariJobStatusesRef.current.values()).some((status) => status === "pending" || status === "running");
-      if (!hasActiveJob) {
-        return;
-      }
-      void refreshStraordinariJobs({ silent: true });
-    }, 2500);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, []);
+  const {
+    jobs: exportJobs,
+    setJobs: setExportJobs,
+    isLoading: isLoadingExportJobs,
+    knownStatusesRef: knownJobStatusesRef,
+  } = useExportJobHistory({
+    enabled: canManageXlsm,
+    listJobs: listPresenzeXlsmExportJobs,
+    completionNotice: buildXlsmCompletionNotice,
+    loadErrorMessage: "Errore caricamento storico export XLSM",
+    onSuccess: setSuccess,
+    onError: setError,
+  });
+  const {
+    jobs: straordinariJobs,
+    setJobs: setStraordinariJobs,
+    isLoading: isLoadingStraordinariJobs,
+    knownStatusesRef: knownStraordinariJobStatusesRef,
+  } = useExportJobHistory({
+    enabled: true,
+    listJobs: listPresenzeStraordinariExportJobs,
+    completionNotice: buildStraordinariCompletionNotice,
+    loadErrorMessage: "Errore caricamento storico export straordinari",
+    onSuccess: setSuccess,
+    onError: setError,
+  });
 
   useEffect(() => {
     if (!isHistoryModalOpen && !isStraordinariModalOpen) {

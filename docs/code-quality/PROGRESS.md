@@ -13004,3 +13004,23 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   Ratchet integrazione exit 0, zero finding, indice invariato. Review
   ACCEPT_WITH_NOTES.
 - Graphify riordino-code aggiornato. Evidenze `claude-20261015/slices/r126-*`.
+
+## 2026-10-16 - R123 Presenze export: polling dello storico job
+
+- Runtime `frontend/src/app/presenze/export/page.tsx` e nuovo
+  `use-export-job-history.ts`: i due cicli di polling identici (storico XLSM e
+  straordinari, fingerprint duplicato) diventano l'hook `useExportJobHistory`
+  con helper puri; non riusa `hooks/use-polling.ts`. Token, reset da
+  disabilitato, notifica iniziale soppressa, tick silenziosi solo con job
+  attivi, guardie di cancellazione, 2500 ms, limit 25, ordinamento, messaggi
+  e ref condiviso con create/delete invariati. `v8 ignore` della pagina non
+  toccato (decisione coordinatore).
+- Esito `IMPROVED`: PresenzeExportPage cyclomatic/cognitive/LOC 172/209/1097 ->
+  139/150/1015; i due refresh duplicati (13/25 ciascuno) rimossi; pagina
+  cyclomatic 546 -> 436, cognitive 524 -> 348; violation 21 -> 11; nuovo file
+  senza violation.
+- Hook 100% statement/branch/function/line; caratterizzazione a timer finti
+  valida sull'originale; mutanti uccisi salvo due equivalenti confermati dalla
+  review (delete di job gia conclusi). eslint e tsc PASS. Ratchet integrazione
+  exit 0, zero finding, indice invariato. Review ACCEPT.
+- Graphify frontend aggiornato. Evidenze `claude-20261015/slices/r123-*`.
