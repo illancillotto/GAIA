@@ -64,6 +64,7 @@ type ManualQueueFilterMode = "all" | "without_wizard" | "unworked";
 type SortDirection = "asc" | "desc";
 type WorkspaceMode = "cf" | "comune" | "particella" | null;
 type TabId = "manuale" | "cf" | "comune" | "particella" | "ade";
+type AdeScanBatch = ElaborazioneBatch & { name: string };
 type BatchWorkspaceState = {
   href: string;
   title: string;
@@ -258,7 +259,7 @@ function CatastoAnomaliePageContent() {
   const [adeScanBusy, setAdeScanBusy] = useState(false);
   const [adeScanMessage, setAdeScanMessage] = useState<string | null>(null);
   const [adeScanError, setAdeScanError] = useState<string | null>(null);
-  const [adeScanBatches, setAdeScanBatches] = useState<ElaborazioneBatch[]>([]);
+  const [adeScanBatches, setAdeScanBatches] = useState<AdeScanBatch[]>([]);
   const [adeScanWorkspace, setAdeScanWorkspace] = useState<BatchWorkspaceState | null>(null);
   const [manualAnomaliaWorkspace, setManualAnomaliaWorkspace] = useState<ManualAnomaliaWorkspaceState | null>(null);
 
@@ -459,7 +460,7 @@ function CatastoAnomaliePageContent() {
       setAdeScanCandidates(candidateData.items);
       setAdeScanBatches(
         batchData
-          .filter((batch) => (batch.name ?? "").startsWith(ADE_SCAN_BATCH_NAME_PREFIX))
+          .filter((batch): batch is AdeScanBatch => (batch.name ?? "").startsWith(ADE_SCAN_BATCH_NAME_PREFIX))
           .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))
           .slice(0, 6),
       );
@@ -544,7 +545,7 @@ function CatastoAnomaliePageContent() {
       return;
     }
 
-    const draft = (cfDrafts[item.anomalia_id] ?? "").trim().toUpperCase();
+    const draft = cfDrafts[item.anomalia_id].trim().toUpperCase();
     if (!draft) {
       setCfError("Inserisci un codice fiscale o una partita IVA valida prima di applicare la correzione.");
       setCfMessage(null);
@@ -614,12 +615,6 @@ function CatastoAnomaliePageContent() {
       }))
       .filter((item) => item.comune_id);
 
-    if (selectedItems.length === 0) {
-      setComuneError("Seleziona almeno un comune candidato prima di applicare il batch.");
-      setComuneMessage(null);
-      return;
-    }
-
     setApplyingComuneAnomaliaId("__batch__");
     setComuneError(null);
     setComuneMessage(null);
@@ -682,12 +677,6 @@ function CatastoAnomaliePageContent() {
         particella_id: particellaDrafts[item.anomalia_id] ?? "",
       }))
       .filter((item) => item.particella_id);
-
-    if (selectedItems.length === 0) {
-      setParticellaError("Seleziona almeno una candidata particella prima di applicare il batch.");
-      setParticellaMessage(null);
-      return;
-    }
 
     setApplyingParticellaAnomaliaId("__batch__");
     setParticellaError(null);
@@ -792,18 +781,15 @@ function CatastoAnomaliePageContent() {
     setParticellaDrafts({});
   }
 
-  function handleOpenAdeScanBatch(batch: ElaborazioneBatch): void {
+  function handleOpenAdeScanBatch(batch: AdeScanBatch): void {
     setAdeScanWorkspace({
       href: `/elaborazioni/batches/${batch.id}`,
-      title: batch.name ?? "Dettaglio batch",
+      title: batch.name,
       description: "Dettaglio operativo del batch visure AdE con stato richieste, errori e CAPTCHA manuali.",
     });
   }
 
   function handleOpenManualParticellaWorkspace(anomalia: CatAnomalia): void {
-    if (!anomalia.particella_id) {
-      return;
-    }
     setManualAnomaliaWorkspace({
       href: `/catasto/particelle/${anomalia.particella_id}`,
       title: `Particella collegata a ${anomalia.tipo}`,
@@ -892,10 +878,10 @@ function CatastoAnomaliePageContent() {
     }
   }
 
-  const handleSelectTab = useCallback((next: TabId, tipo?: string | null): void => {
+  const handleSelectTab = useCallback((next: TabId, tipo?: string): void => {
     setTab(next);
     if (tipo !== undefined) {
-      setFilters((current) => ({ ...current, tipo: tipo ?? "" }));
+      setFilters((current) => ({ ...current, tipo }));
     }
     setOverviewPage(1);
     setCfPage(1);
@@ -1061,22 +1047,22 @@ function CatastoAnomaliePageContent() {
     ];
   }, [summaryBuckets, summaryTotal]);
 
-  const manualQueueCount = workQueues.find((queue) => queue.id === "manual")?.count ?? 0;
+  const manualQueueCount = workQueues.find((queue) => queue.id === "manual")!.count;
   const correggibiliCount = useMemo(
     () => workQueues.filter((queue) => queue.id !== "manual").reduce((acc, queue) => acc + queue.count, 0),
     [workQueues],
   );
-  const tabs = useMemo<Array<{ id: TabId; label: string; count: number | null; tipo?: string | null }>>(() => {
+  const tabs = useMemo<Array<{ id: TabId; label: string; count: number | null; tipo?: string }>>(() => {
     const byId = new Map(workQueues.map((queue) => [queue.id, queue]));
     return [
-      { id: "manuale", label: "Triage manuale", count: byId.get("manual")?.count ?? 0, tipo: "" },
-      { id: "cf", label: "CF / P.IVA", count: byId.get("cf")?.count ?? 0, tipo: "VAL-02-cf_invalido" },
-      { id: "comune", label: "Comuni", count: byId.get("comune")?.count ?? 0, tipo: "VAL-04-comune_invalido" },
-      { id: "particella", label: "Particelle", count: byId.get("particella")?.count ?? 0, tipo: "VAL-05-particella_assente" },
+      { id: "manuale", label: "Triage manuale", count: byId.get("manual")!.count, tipo: "" },
+      { id: "cf", label: "CF / P.IVA", count: byId.get("cf")!.count, tipo: "VAL-02-cf_invalido" },
+      { id: "comune", label: "Comuni", count: byId.get("comune")!.count, tipo: "VAL-04-comune_invalido" },
+      { id: "particella", label: "Particelle", count: byId.get("particella")!.count, tipo: "VAL-05-particella_assente" },
       { id: "ade", label: "Scansione AdE", count: adeScanSummary?.total_unmatched ?? null, tipo: undefined },
     ];
   }, [adeScanSummary, workQueues]);
-  const activeTabLabel = tabs.find((entry) => entry.id === tab)?.label ?? "Registro manuale";
+  const activeTabLabel = tabs.find((entry) => entry.id === tab)!.label;
   const activeWorkspaceCount = wizardMode === "cf"
     ? cfTotal
     : wizardMode === "comune"
@@ -1432,7 +1418,7 @@ function CatastoAnomaliePageContent() {
                             onClick={() => handleOpenAdeScanBatch(batch)}
                             type="button"
                           >
-                            {batch.name ?? batch.id}
+                            {batch.name}
                           </button>
                         </td>
                         <td><ElaborazioneStatusBadge status={batch.status} /></td>
@@ -1531,7 +1517,7 @@ function CatastoAnomaliePageContent() {
                         Correzione CF / P.IVA
                         <input
                           className="form-control mt-1"
-                          value={cfDrafts[item.anomalia_id] ?? ""}
+                          value={cfDrafts[item.anomalia_id]}
                           onChange={(event) =>
                             setCfDrafts((current) => ({
                               ...current,
@@ -1549,7 +1535,7 @@ function CatastoAnomaliePageContent() {
                             onClick={() =>
                               setCfDrafts((current) => ({
                                 ...current,
-                                [item.anomalia_id]: item.suggested_codice_fiscale ?? "",
+                                [item.anomalia_id]: item.suggested_codice_fiscale!,
                               }))
                             }
                           >

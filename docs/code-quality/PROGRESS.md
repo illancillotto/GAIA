@@ -13142,3 +13142,20 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   (`_parcel_payload_from_row` cognitive 7 -> 12). Ratchet integrazione exit 0,
   zero finding, indice invariato. Review ACCEPT_WITH_NOTES.
 - Graphify riordino-code aggiornato. Evidenze `claude-20261015/slices/r137-*`.
+
+## 2026-10-16 - R133 Catasto anomalie: guardie ridondanti e coverage completa
+
+- Decisione utente 2026-10-16: rimuovere le guardie ridondanti; per le guardie di
+  tipo race "testare le race dove possibile". Runtime
+  `frontend/src/app/catasto/anomalie/page.tsx`: rimossi 8 gruppi di guardie
+  dimostrate irraggiungibili (draft CF sempre presenti, errori batch vuoto dietro
+  pulsanti disabilitati, nome batch AdE garantito dal filtro, particella_id,
+  tipo, conteggi delle code fisse, etichetta tab, suggerimento CF); mantenute e
+  coperte da test le 4 clamp di paginazione (doppia attivazione nello stesso batch).
+- Esito `FUNCTIONAL_SIMPLIFICATION` + `IMPROVED`: CatastoAnomaliePageContent
+  cyclomatic/cognitive/LOC 342/390/2109 -> 327/374/2096; file cyclomatic 868 -> 837,
+  cognitive 794 -> 761. Coverage full-file da 89.92% branch a 100%
+  statement/branch/function/line (633/615/194/585) con 24 nuovi test pubblici validi
+  sull'originale; 297 test PASS. R63 non riutilizzato. Ratchet integrazione exit 0,
+  zero finding, indice invariato. Review ACCEPT_WITH_NOTES.
+- Graphify catasto-code e frontend aggiornati. Evidenze `claude-20261015/slices/r133-*`.
