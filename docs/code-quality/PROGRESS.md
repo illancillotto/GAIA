@@ -13250,3 +13250,38 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   (file 1025 -> 1029 LOC, entro baseline). Ratchet integrazione exit 0, zero
   finding, indice invariato. Review v2 ACCEPT.
 - Graphify utenze-code e frontend aggiornati.
+
+## 2026-10-16 - Baseline-repair autorizzato: `complexity-check` torna PASS
+
+- Decisione utente 2026-10-16: "correggere le regressioni, poi riparare" e poi
+  assorbire, documentandole una per una, le 9 crescite NO_SAFE_CHANGE.
+  Regressioni correggibili gia chiuse da R141 (WikiMCPPreview) e R142 (test del
+  worker); R140 ha dimostrato NO_SAFE_CHANGE per wiki/mcps con review
+  indipendente.
+- Prima della riparazione l'audit completo per file contro la baseline
+  registrata (`source_commit` 11ed944a) riportava solo: 2 `ambiguous_identity`
+  (`gaia/users/page.tsx` e `organigramma-workspace.tsx`, callback `useEffect`)
+  e queste crescite assorbite, tutte da feature successive alla baseline:
+  `wiki/mcps/auth.py` verify_token loc 21 -> 22 (`AUDIT_SCOPE`);
+  `wiki/mcps/cli.py` main cyclomatic 3 -> 4, loc 22 -> 28 (audit store, data-only);
+  `wiki/mcps/data/cli.py` main loc 26 -> 29; `wiki/mcps/data/server.py`
+  create_server loc 28 -> 31 (filtro scope di `list_tools`);
+  `wiki/mcps/data/service.py` DataService.__init__ loc 7 -> 8, params 2 -> 3
+  (dipendenza `audit`); `wiki/mcps/experiment_cli.py` live loc 3 -> 4
+  (`ComparisonExecutor`, 85b179b0); `wiki/mcps/experiment_runner.py`
+  experiment_manifest loc 29 -> 30 (`data/catalog.py`); `wiki/mcps/http.py`
+  create_http_app cyclomatic 1 -> 2, cognitive 0 -> 1, nesting 0 -> 1,
+  loc 44 -> 50 (modalita data-only); `ruolo/registered-mails-console.tsx`
+  RegisteredMailRow loc 39 -> 40 (`RegisteredMailCards`, 2908e0e1).
+- Eseguito `complexity.py baseline-repair` in un worktree pulito a `ef1f4dde`
+  secondo `QUALITY_RATCHET.md`: include/exclude invariati (file in scope
+  1526 -> 1685 per file nuovi), nessuna soglia o esclusione cambiata, nessun
+  nuovo callable con violation di severita error, rimosso il file eliminato da
+  R138. Violation callable 4511 -> 4422. Due nuovi warning file-LOC non
+  bloccanti: `wiki/services/conversation_metrics.py` 496 -> 526 (R114, gia
+  autorizzato) e `worker/sister_observability.py` 459 -> 507 (76a98847,
+  pre-campagna).
+- Gate dopo la riparazione: `complexity-check` exit 0 `findings []`,
+  `baseline-verify` riproducibile, tooling 294 PASS, ratchet contro il
+  merge-base a51a48dc exit 0 `findings []`. Evidenze
+  `claude-20261015/baseline-repair/`.
