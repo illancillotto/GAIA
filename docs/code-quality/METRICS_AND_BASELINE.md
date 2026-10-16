@@ -186,6 +186,24 @@ correzione del matcher non certifica il comportamento di un candidato UI esterno
 Ammissione R39 confermata da final/root indipendenti nel registro della campagna;
 nessuna baseline o soglia viene aggiornata per assorbire divergenze.
 
+## Budget condiviso fra callable correnti — R147
+
+Dopo la risoluzione ordinaria, se due o piu callable correnti risolvono allo
+stesso callable baseline (o il fingerprint dell'owner resta detenuto da un
+gruppo di gemelli equivalenti), il budget non puo essere prestato in silenzio.
+Il detentore e l'unico condivisore la cui prima riga, nello snapshot sorgente
+validato, mappa sulla prima riga dell'owner e non risulta aggiunta nel diff.
+Ogni altro condivisore viene valutato anche come callable nuovo; senza
+detentore provato, soltanto i condivisori interamente aggiunti. Il confronto
+con l'owner resta sempre attivo, cosi un one-liner modificato non perde il
+ratchet; nessun owner nuovo viene scelto. Il controllo aggiunge soltanto
+finding `new_callable_violation`: exit `2` e confronti esistenti invariati.
+
+Limiti noti: con prima riga dell'hotspot modificata e ultima riga allineata
+dal diff all'aggiunto, il prestito resta possibile (preesistente). Un hotspot
+riscritto su ogni riga con un fratello omonimo aggiunto nella stessa change
+puo fallire come nuovo (fail-closed); separare l'aggiunta in un'altra change.
+
 ## Debt laundering da bloccare
 
 - rinominare un simbolo per farlo apparire nuovo o sparito;

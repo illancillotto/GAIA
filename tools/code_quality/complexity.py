@@ -1090,11 +1090,9 @@ def resolve_source_position(current, report, baseline, resolution, context):
                   "symbol": current["name"], "candidates": len(candidates)}, False
 
 
-def source_held_candidates(current, report, baseline, context):
-    # Baseline callables named like the current one that a validated source
-    # snapshot shows surviving unchanged: some other current callable with the
-    # same name and fingerprint maps line by line, without gaps, onto exactly
-    # their span. None means no verifiable snapshot, so nothing is proven.
+def source_line_mapping(current, report, baseline, context):
+    # Unchanged current lines of the callable's path mapped to their baseline
+    # source lines; None when the snapshot is unverifiable or unreadable.
     path, commit = current["path"], baseline.get("source_commit", "")
     if not valid_provenance_source(commit, path):
         return None
@@ -1107,6 +1105,19 @@ def source_held_candidates(current, report, baseline, context):
         )
     except (OSError, ValueError, SyntaxError, RuntimeError, subprocess.CalledProcessError):
         return None
+    return mapping
+
+
+def source_held_candidates(current, report, baseline, context):
+    # Baseline callables named like the current one that a validated source
+    # snapshot shows surviving unchanged: some other current callable with the
+    # same name and fingerprint maps line by line, without gaps, onto exactly
+    # their span. None means no verifiable snapshot, so nothing is proven.
+    mapping = source_line_mapping(current, report, baseline, context)
+    if mapping is None:
+        return None
+    old_calls = [call for call in baseline["callables"] if call["path"] == current["path"]]
+    new_calls = [call for call in report["callables"] if call["path"] == current["path"]]
     held = []
     for owner in old_calls:
         if owner["name"] != current["name"]:
@@ -1166,6 +1177,47 @@ def resolve_source_ambiguity(current, report, baseline, resolution, context):
     return resolve_source_position(current, report, baseline, resolution, context)
 
 
+def source_start_holds(current, owner, report, baseline, context):
+    # Both diffs must agree: a first line the added-lines diff reports as added
+    # holds nothing, even if the snapshot diff slides an identical line onto it.
+    added = (context["added_lines"] or {}).get(current["path"], set())
+    if owner.get("path") != current["path"] or current["line"] in added:
+        return False
+    mapping = source_line_mapping(current, report, baseline, context)
+    return mapping is not None and mapping.get(current["line"]) == owner["line"]
+
+
+def shared_budget_borrowers(resolved, equivalent_fingerprints, report, baseline, context):
+    # A baseline callable lends its budget to one current callable. When
+    # several resolve to the same owner, or an equivalent group still holds its
+    # fingerprint, it is held only by the unique sharer whose unchanged first
+    # line is the owner's own in both diffs; every other sharer, or without a
+    # holder every wholly added one, is also checked as new. The owner
+    # comparison stays, so an edited callable never loses its ratchet; nothing
+    # is re-guessed.
+    users = defaultdict(list)
+    for current, owner in resolved:
+        if owner:
+            users[callable_key(owner)].append(current)
+    borrowers = set()
+    for current, owner in resolved:
+        if not owner:
+            continue
+        sharers = users[callable_key(owner)]
+        if (len(sharers) < 2
+                and (owner.get("path"), owner.get("fingerprint")) not in equivalent_fingerprints):
+            continue
+        holders = [sharer for sharer in sharers
+                   if source_start_holds(sharer, owner, report, baseline, context)]
+        if len(holders) == 1:
+            unproven = current is not holders[0]
+        else:
+            unproven = callable_is_wholly_added(current, context["added_lines"])
+        if unproven:
+            borrowers.add(id(current))
+    return borrowers
+
+
 def compare(
     report: dict[str, Any],
     baseline: dict[str, Any] | None,
@@ -1195,6 +1247,7 @@ def compare(
         base_by_fp[c.get("fingerprint")].append((k, c))
     source_context = {"source_paths": source_paths, "added_lines": added_lines,
                       "snapshots": {}, "owners": set()}
+    resolved, equivalent_fingerprints = [], set()
     for c in report["callables"]:
         if changed_only is not None and c["path"] not in changed_only:
             continue
@@ -1207,10 +1260,16 @@ def compare(
         if ambiguity:
             return 2, [ambiguity]
         if equivalent_group:
+            equivalent_fingerprints.add((c["path"], c.get("fingerprint")))
             continue
         if b:
             b = unheld_source_owner(c, b, report, baseline, source_context)
-        if not b:
+        resolved.append((c, b))
+    lent = shared_budget_borrowers(
+        resolved, equivalent_fingerprints, report, baseline, source_context
+    )
+    for c, b in resolved:
+        if not b or id(c) in lent:
             for v in c.get("violations", []):
                 if v["severity"] == "error" and not v.get("excepted"):
                     findings.append(
@@ -1221,6 +1280,7 @@ def compare(
                             **v,
                         }
                     )
+        if not b:
             continue
         for m in PRIMARY:
             if c[m] > b.get(m, 0):

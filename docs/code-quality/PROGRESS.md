@@ -13351,3 +13351,23 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
 - Dopo la sync: `complexity-baseline-verify` riproducibile anche fuori dal
   checkout generatore (R144), `complexity-check` exit 0, ratchet contro il
   merge-base senza finding.
+
+## 2026-10-16 - R147 Tooling: budget condiviso non prestabile a callable aggiunti
+
+- Decisione utente 2026-10-16 (chiudere il buco prima di R146).
+  `tools/code_quality/complexity.py`: nuovo controllo `shared_budget_borrowers`
+  dopo la risoluzione ordinaria; i condivisori di un budget baseline privi della
+  prova di detenzione (prima riga mappata nello snapshot e non aggiunta nel
+  diff) sono valutati anche come callable nuovi. Il confronto con l'owner resta
+  sempre attivo (trappola R109M v1 evitata). Estratto `source_line_mapping` da
+  `source_held_candidates`. Regola in `METRICS_AND_BASELINE.md`.
+- Nuovo `tests/code_quality/test_complexity_shared_budget.py` (14 test falliscono
+  sul tool precedente). Tooling 327 PASS, `complexity.py` 998/998 statement e
+  414/414 branch. Replay di 1235 commit storici: 1233 identici, 2 piu severi e
+  reali (4f812308 MapContainer, fe5fdcad inaz sync), nessuno piu debole.
+  Ratchet integrazione exit 0, zero finding, indice invariato; complexity-check
+  e baseline-verify PASS. Review indipendente ACCEPT_WITH_NOTES.
+- Residui annotati: variante ADV4b con prima riga dell'hotspot modificata e
+  ultima riga allineata (preesistente, MEDIUM); falso positivo fail-closed su
+  hotspot riscritto integralmente con fratello omonimo aggiunto (LOW-MEDIUM,
+  assente nello storico). Follow-up proposto come slice separata.
