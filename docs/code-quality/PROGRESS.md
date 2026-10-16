@@ -13199,3 +13199,18 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   semplificazione; seed/import = REORGANIZED_AND_CHARACTERIZED.
 - Ratchet integrazione exit 0, zero finding, indice invariato. Review
   ACCEPT_WITH_NOTES. Graphify elaborazioni-worker-code aggiornato.
+
+## 2026-10-16 - R135 Network: eventi `denied` e etichette coerenti col rollup (bug fix)
+
+- Decisione utente 2026-10-16: etichette in minuscolo come nel rollup.
+  `backend/app/modules/network/router/helpers/traffic.py`: la regola "bloccato"
+  del riepilogo live e del riepilogo traffico dispositivo usa ora gli stessi
+  token del rollup/tracking/inference (`deny`, `denied`, `block`, `drop`,
+  sottostringa sul tipo minuscolo); prima gli eventi `*.denied` non erano
+  contati. Etichetta peer = dominio minuscolo oppure IP, come nel rollup.
+- Test di regressione falliti sull'originale (4); cambiata solo l'asserzione
+  che fissava l'etichetta "Mixed.Example". 302 test network PASS, coverage
+  full-file 100% (269/84). Complessita senza nuove violation (statistics summary
+  87/143 -> 84/140; bug fix, non IMPROVED). Ratchet integrazione exit 0, zero
+  finding, indice invariato. Review ACCEPT_WITH_NOTES.
+- Graphify network-code aggiornato. Evidenze `claude-20261015/slices/r135-*`.

@@ -41,6 +41,9 @@ from app.modules.network.sophos import (
     list_network_firewalls,
 )
 
+# Same blocked-event rule as the hourly rollups (telemetry_rollups.py) and tracking.
+_BLOCKED_EVENT_TYPE_TOKENS = ("deny", "denied", "block", "drop")
+
 # Keep extracted callable formatting stable for complexity-baseline matching.
 # fmt: off
 
@@ -166,7 +169,7 @@ def _build_device_traffic_summary(db: Session, device: NetworkDevice, *, window_
         lowered_type = event.event_type.lower()
         if "allow" in lowered_type:
             allowed_events += 1
-        if "deny" in lowered_type or "block" in lowered_type or "drop" in lowered_type:
+        if any(token in lowered_type for token in _BLOCKED_EVENT_TYPE_TOKENS):
             blocked_events += 1
 
         if peer_ip:
@@ -390,7 +393,7 @@ def _build_network_statistics_summary(db: Session, *, window_hours: int = 24) ->
         lowered_type = event_type.lower()
         if "allow" in lowered_type:
             allowed_events += 1
-        if "deny" in lowered_type or "block" in lowered_type or "drop" in lowered_type:
+        if any(token in lowered_type for token in _BLOCKED_EVENT_TYPE_TOKENS):
             blocked_events += 1
 
         firewall_rule_name = parsed.get("fw_rule_name")
@@ -418,7 +421,7 @@ def _build_network_statistics_summary(db: Session, *, window_hours: int = 24) ->
                 peer_parsed = None
             if peer_parsed and not (peer_parsed.is_private or peer_parsed.is_loopback or peer_parsed.is_link_local or peer_parsed.is_multicast):
                 external_peers.add(peer_ip)
-            peer_label = domain_value or peer_ip
+            peer_label = domain_value.lower() if domain_value else peer_ip
             destinations_entry = destinations_map[peer_ip]
             destinations_entry["label"] = peer_label
             destinations_entry["ip_address"] = peer_ip

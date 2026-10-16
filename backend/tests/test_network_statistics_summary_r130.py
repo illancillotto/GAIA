@@ -4,6 +4,9 @@ Pins how the live path derives domain keys and destination labels from the
 parsed firewall payload (``domain`` first, then the ``url`` hostname) and
 checks that the live and rollup summary paths keep agreeing on the data where
 they already agreed.
+
+R135: the live path now mirrors the rollup rules for ``*.denied`` event types
+(counted as blocked) and for lowercased destination labels.
 """
 
 import json
@@ -105,7 +108,7 @@ def test_live_summary_derives_domain_keys_and_destination_labels(db) -> None:
     )
     db.add_all(
         [
-            # domain wins over url; domain key is lowercased, destination label keeps case
+            # domain wins over url; domain key and destination label are lowercased (R135)
             _event(
                 firewall,
                 parsed={
@@ -151,7 +154,7 @@ def test_live_summary_derives_domain_keys_and_destination_labels(db) -> None:
     assert domains["url.example"].tracked_subject_id is None
     destinations = {item.ip_address: item.label for item in summary.top_destinations}
     assert destinations == {
-        "1.1.1.1": "Mixed.Example",
+        "1.1.1.1": "mixed.example",
         "2.2.2.2": "url.example",
         "3.3.3.3": "num.example",
         "4.4.4.4": "4.4.4.4",
@@ -238,6 +241,16 @@ def test_live_and_rollup_summaries_agree_on_shared_dimensions(db) -> None:
                 parsed={"domain": "one.one", "bytes_sent": "7", "bytes_received": "11"},
                 minutes_ago=8,
             ),
+            # R135: "*.denied" counts as blocked and a mixed-case domain yields a
+            # lowercased destination label on both paths
+            _event(
+                firewall,
+                src_ip=device.ip_address,
+                dst_ip="4.4.4.4",
+                parsed={"domain": " Mixed.Case.Example ", "bytes_sent": "3"},
+                event_type="web.denied",
+                minutes_ago=9,
+            ),
         ]
     )
     db.commit()
@@ -260,8 +273,9 @@ def test_live_and_rollup_summaries_agree_on_shared_dimensions(db) -> None:
     assert {name: getattr(live, name) for name in shared_scalars} == {
         name: getattr(rollup, name) for name in shared_scalars
     }
-    assert live.total_events == 4
-    assert live.unique_domains == 2
+    assert live.total_events == 5
+    assert live.unique_domains == 3
+    assert live.blocked_events == 2
     assert _traffic_rows(live.top_domains) == _traffic_rows(rollup.top_domains)
     assert _traffic_rows(live.top_destinations) == _traffic_rows(rollup.top_destinations)
     assert [(item.key, item.count) for item in live.top_firewall_rules] == [
@@ -271,3 +285,67 @@ def test_live_and_rollup_summaries_agree_on_shared_dimensions(db) -> None:
     assert destinations["8.8.8.8"].label == "dns.google"
     assert destinations["8.8.8.8"].tracked_subject_id is not None
     assert destinations["9.9.9.9"].label == "9.9.9.9"
+    assert destinations["4.4.4.4"].label == "mixed.case.example"
+
+
+def test_live_summary_counts_denied_event_types_as_blocked(db) -> None:
+    firewall = _firewall(db)
+    event_types = (
+        "web.allowed",
+        "firewall.deny",
+        "Web.DENIED",
+        "firewall.block",
+        "firewall.drop",
+        "system.info",
+    )
+    db.add_all(
+        [
+            _event(firewall, parsed={}, dst_ip="10.0.0.1", event_type=event_type)
+            for event_type in event_types
+        ]
+    )
+    db.commit()
+
+    summary = traffic._build_network_statistics_summary(db)
+
+    assert summary.total_events == 6
+    assert summary.allowed_events == 1
+    assert summary.blocked_events == 4
+
+
+def test_device_traffic_summary_counts_denied_event_types_as_blocked(db) -> None:
+    firewall = _firewall(db)
+    device = NetworkDevice(
+        ip_address="192.168.1.50",
+        hostname="pc-denied",
+        lifecycle_state="active",
+        is_known_device=True,
+        status="online",
+        is_monitored=True,
+        first_seen_at=datetime.now(UTC),
+        last_seen_at=datetime.now(UTC),
+    )
+    db.add(device)
+    db.flush()
+    event_types = (
+        "web.allowed",
+        "firewall.deny",
+        "firewall.invalid_traffic.denied",
+        "Web.DENIED",
+        "firewall.block",
+        "firewall.drop",
+        "system.info",
+    )
+    db.add_all(
+        [
+            _event(firewall, parsed={}, dst_ip="10.0.0.1", event_type=event_type)
+            for event_type in event_types
+        ]
+    )
+    db.commit()
+
+    summary = traffic._build_device_traffic_summary(db, device)
+
+    assert summary.total_events == 7
+    assert summary.allowed_events == 1
+    assert summary.blocked_events == 5
