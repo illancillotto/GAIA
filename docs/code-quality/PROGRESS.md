@@ -13058,3 +13058,18 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   valida sull'originale; mutanti uccisi. Ratchet integrazione exit 0, zero
   finding, indice invariato. Review ACCEPT_WITH_NOTES.
 - Graphify frontend aggiornato. Evidenze `claude-20261015/slices/r129-*`.
+
+## 2026-10-16 - R127 Utenze: caratterizzazione sezione soggetti (test-only)
+
+- Nuova spec `frontend/tests/unit/campaign-utenze-subjects-section-r127.test.tsx`
+  (48 test di comportamento pubblico; runtime byte-identico): lista, filtri e
+  paginazione, import/export CSV, creazione, drawer dettaglio, anteprime
+  pdf/immagine/docx/xlsx/testo, storico con diff.
+- Coverage di `utenze-subjects-section.tsx` da 0% a 288/290 statement, 313/316
+  branch, 73/73 function, 277/279 line. Esito `CHARACTERIZED_PARTIAL`
+  (`NO_CHANGE` runtime): tre guardie ridondanti irraggiungibili via
+  comportamento pubblico (L199, L303-305, ternario L559-571) richiedono una
+  decisione utente (rimozione guardie o eccezione di coverage).
+- Review ACCEPT_TEST_ONLY: 13 esecuzioni stabili, 8/8 mutanti uccisi. Nota a11y:
+  l'overlay di anteprima non ha focus trap. Ratchet integrazione exit 0, zero
+  finding. Graphify non necessario (nessun runtime modificato).
