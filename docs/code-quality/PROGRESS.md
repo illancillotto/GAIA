@@ -13041,3 +13041,20 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   e attribuito correttamente dal matcher. eslint e tsc PASS. Ratchet
   integrazione exit 0, zero finding, indice invariato. Review ACCEPT_WITH_NOTES.
 - Graphify frontend aggiornato. Evidenze `claude-20261015/slices/r122-*`.
+
+## 2026-10-16 - R129 Catasto anagrafica: riepilogo della ricerca massiva
+
+- Runtime `frontend/src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx`:
+  la catena `if/else if` sugli esiti di `buildSummary` diventa una lookup su
+  `Map` costante (nessuna chiave di prototipo); totale, contatori, ordine dei
+  chip e markup invariati.
+- Esito `IMPROVED`: `buildSummary` cyclomatic/cognitive/LOC/nesting 7/21/11/6 ->
+  3/3/8/2 (violation nesting e warning cognitive rimossi; il nesting era in parte
+  artefatto della metrica sulle catene else-if); file cognitive 484 -> 466,
+  cyclomatic 479 -> 475, violation 23 -> 21, LOC invariato 1103. Disclosure:
+  la Map su tre righe segue lo stile del file e precedenti integrati; una voce
+  per riga darebbe LOC +4 e farebbe fallire il ratchet LOC del file legacy.
+- Coverage full-file 100% statement/branch/function/line; caratterizzazione
+  valida sull'originale; mutanti uccisi. Ratchet integrazione exit 0, zero
+  finding, indice invariato. Review ACCEPT_WITH_NOTES.
+- Graphify frontend aggiornato. Evidenze `claude-20261015/slices/r129-*`.

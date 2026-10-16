@@ -218,14 +218,15 @@ type BulkProgressState = {
   phase: "idle" | "processing" | "completed" | "error";
 };
 
+const SUMMARY_COUNTER_BY_ESITO = new Map<string, Exclude<keyof BulkSummary, "total">>([
+  ["FOUND", "found"], ["NOT_FOUND", "notFound"], ["MULTIPLE_MATCHES", "multiple"], ["INVALID_ROW", "invalid"], ["ERROR", "error"],
+]);
+
 function buildSummary(results: CatAnagraficaBulkRowResult[]): BulkSummary {
   const s: BulkSummary = { total: results.length, found: 0, notFound: 0, multiple: 0, invalid: 0, error: 0 };
   for (const r of results) {
-    if (r.esito === "FOUND") s.found += 1;
-    else if (r.esito === "NOT_FOUND") s.notFound += 1;
-    else if (r.esito === "MULTIPLE_MATCHES") s.multiple += 1;
-    else if (r.esito === "INVALID_ROW") s.invalid += 1;
-    else if (r.esito === "ERROR") s.error += 1;
+    const counter = SUMMARY_COUNTER_BY_ESITO.get(r.esito);
+    if (counter) s[counter] += 1;
   }
   return s;
 }
