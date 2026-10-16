@@ -12952,3 +12952,19 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   118 test PASS in integrazione. Ratchet integrazione exit 0, zero finding,
   indice invariato. Review ACCEPT_WITH_NOTES.
 - Graphify wiki-code aggiornato. Evidenze `claude-20261015/slices/r114-*`.
+
+## 2026-10-16 - R124 Backup DB Elaborazioni: artefatto di upload
+
+- Runtime `backend/app/services/elaborazioni_db_backup.py`: la preparazione del
+  file da caricare e dei metadati di cifratura diventa `_prepare_upload_artifact`;
+  rimossi il ricontrollo `None` dimostrabilmente morto e il merge dei
+  placeholder. Flock, cleanup in finally, routing e messaggi delle eccezioni,
+  argomenti e ordine dei kwargs di `export_dump` invariati. Riordino import
+  I001 imposto dal gate di stile, senza effetti a runtime.
+- Esito `IMPROVED`: target cyclomatic/cognitive/LOC/nesting 19/30/80/3 ->
+  16/23/58/2 (cognitive e LOC da error a warning); helper 3/2/21; file
+  cognitive 46 -> 41, cyclomatic invariato 36.
+- Coverage del file da 95% a 100% (91/91 statement, 8/8 branch) con 7 test
+  nuovi validi sull'originale; 42 test PASS in integrazione. Ratchet
+  integrazione exit 0, zero finding, indice invariato. Review ACCEPT_WITH_NOTES.
+- Graphify backend aggiornato. Evidenze `claude-20261015/slices/r124-*`.

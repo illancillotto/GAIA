@@ -4,18 +4,18 @@ import fcntl
 import hashlib
 import logging
 import os
-from pathlib import Path
 import subprocess
+from pathlib import Path
 from urllib.parse import unquote
 
 from sqlalchemy.engine import make_url
 
 from app.core.config import settings
+from app.scripts.nas_db_transfer import export_dump
 from app.services.backup_encryption import (
     BackupEncryptionError,
     encrypt_file,
 )
-from app.scripts.nas_db_transfer import export_dump
 
 logger = logging.getLogger(__name__)
 LOCK_FILENAME = ".gaia-elaborazioni-db-backup.lock"
@@ -77,6 +77,29 @@ def _sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _prepare_upload_artifact(
+    dump_path: Path,
+    encrypted_dump_path: Path,
+    dump_filename: str,
+) -> tuple[Path, dict[str, object]]:
+    if not settings.elaborazioni_db_backup_encryption_enabled:
+        return dump_path, {}
+    passphrase = settings.elaborazioni_db_backup_encryption_passphrase
+    if not passphrase:
+        raise RuntimeError("backup encryption enabled but passphrase is empty")
+    plaintext_sha256 = _sha256_file(dump_path)
+    plaintext_size_bytes = dump_path.stat().st_size
+    encryption_metadata = encrypt_file(dump_path, encrypted_dump_path, passphrase)
+    dump_path.unlink(missing_ok=True)
+    return encrypted_dump_path, {
+        "encryption": encryption_metadata,
+        "plaintext_dump_filename": dump_filename,
+        "plaintext_dump_format": "custom",
+        "plaintext_sha256": plaintext_sha256,
+        "plaintext_size_bytes": plaintext_size_bytes,
+    }
+
+
 def run_elaborazioni_db_backup_job() -> str | None:
     local_dir = Path(settings.elaborazioni_db_backup_local_dir).resolve()
     local_dir.mkdir(parents=True, exist_ok=True)
@@ -109,40 +132,18 @@ def run_elaborazioni_db_backup_job() -> str | None:
             text=True,
             env={**os.environ, **env_overrides},
         )
-        upload_path = dump_path
-        encryption_metadata: dict[str, str] | None = None
-        plaintext_sha256: str | None = None
-        plaintext_size_bytes: int | None = None
-        if settings.elaborazioni_db_backup_encryption_enabled:
-            passphrase = settings.elaborazioni_db_backup_encryption_passphrase
-            if not passphrase:
-                raise RuntimeError("backup encryption enabled but passphrase is empty")
-            plaintext_sha256 = _sha256_file(dump_path)
-            plaintext_size_bytes = dump_path.stat().st_size
-            encryption_metadata = encrypt_file(dump_path, encrypted_dump_path, passphrase)
-            dump_path.unlink(missing_ok=True)
-            upload_path = encrypted_dump_path
-        export_kwargs: dict[str, object] = {
-            "db_name": db_name,
-            "db_user": db_user,
-        }
-        if encryption_metadata is not None:
-            export_kwargs.update(
-                {
-                    "encryption": encryption_metadata,
-                    "plaintext_dump_filename": dump_filename,
-                    "plaintext_dump_format": "custom",
-                    "plaintext_sha256": plaintext_sha256,
-                    "plaintext_size_bytes": plaintext_size_bytes,
-                }
-            )
+        upload_path, encryption_kwargs = _prepare_upload_artifact(
+            dump_path, encrypted_dump_path, dump_filename
+        )
         manifest_path = export_dump(
             str(upload_path),
             settings.elaborazioni_db_backup_remote_root,
             ".env",
             "elaborazioni-nightly",
             settings.elaborazioni_db_backup_retention_count,
-            **export_kwargs,
+            db_name=db_name,
+            db_user=db_user,
+            **encryption_kwargs,
         )
         logger.info("Elaborazioni DB backup completato: manifest=%s", manifest_path)
         return manifest_path
