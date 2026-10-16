@@ -12968,3 +12968,21 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   nuovi validi sull'originale; 42 test PASS in integrazione. Ratchet
   integrazione exit 0, zero finding, indice invariato. Review ACCEPT_WITH_NOTES.
 - Graphify backend aggiornato. Evidenze `claude-20261015/slices/r124-*`.
+
+## 2026-10-16 - R121 Home: caricamento dati della dashboard
+
+- Runtime `frontend/src/app/page.tsx` e nuovo `frontend/src/app/home-dashboard-data.ts`:
+  il caricamento a due fasi della home diventa `loadHomeDashboardData` con
+  `settledValue`/`settledError` (sei ternari duplicati per fase rimossi) e
+  `canReadHomePresenceSummary` (gate presenza duplicato rimosso); HomePage usa
+  un solo stato. Gating per modulo/ruolo/sezione, argomenti e ordine delle
+  chiamate, fallback, `console.warn`, dipendenze dell'effetto e reset al logout
+  invariati.
+- Esito `IMPROVED`: HomePage cyclomatic/cognitive/LOC 75/99/417 -> 44/57/343;
+  effetto 32/44 -> 4/5; cognitive dei due file 221 -> 114; violation della
+  pagina 11 -> 5; nuovo modulo senza violation.
+- Coverage full-file 100% statement/branch/function/line su entrambi i file;
+  test nuovi (catasto senza ruolo, reset al logout) validi sull'originale;
+  eslint e tsc PASS. Ratchet integrazione exit 0, zero finding, indice
+  invariato. Review ACCEPT_WITH_NOTES.
+- Graphify frontend aggiornato. Evidenze `claude-20261015/slices/r121-*`.
