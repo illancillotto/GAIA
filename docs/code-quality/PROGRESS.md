@@ -13073,3 +13073,22 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
 - Review ACCEPT_TEST_ONLY: 13 esecuzioni stabili, 8/8 mutanti uccisi. Nota a11y:
   l'overlay di anteprima non ha focus trap. Ratchet integrazione exit 0, zero
   finding. Graphify non necessario (nessun runtime modificato).
+
+## 2026-10-16 - R130 Network: hostname del peer nelle statistiche traffico
+
+- Runtime `backend/app/modules/network/router/helpers/traffic.py`: la derivazione
+  "domain non vuoto, altrimenti hostname dell'url", copiata tre volte
+  (`_extract_peer_hint` e due blocchi di `_build_network_statistics_summary`),
+  diventa `_parsed_peer_hostname`; chiavi dominio, etichette destinazione,
+  ordine di fallback del peer hint ed eccezioni invariati.
+- Esito `IMPROVED`: `_build_network_statistics_summary` cyclomatic/cognitive/LOC
+  101/181/214 -> 87/143/202; `_extract_peer_hint` 13/15 -> 7/6 (warning rimossi);
+  helper 7/8/8; file cognitive 297 -> 258, cyclomatic 176 -> 163; nessuna
+  violation nuova.
+- Test: caratterizzazione su originale incl. accordo live/rollup sulle
+  dimensioni condivise; harness differenziale della review 9568 casi + 1000
+  dataset senza differenze; coverage full-file 268/268 statement e 84/84
+  branch. Ratchet integrazione exit 0, zero finding, indice invariato. Review
+  ACCEPT. Osservazione preesistente non modificata: live e rollup divergono
+  su eventi `denied` e sul case delle etichette destinazione.
+- Graphify network-code aggiornato. Evidenze `claude-20261015/slices/r130-*`.

@@ -44,20 +44,25 @@ from app.modules.network.sophos import (
 # Keep extracted callable formatting stable for complexity-baseline matching.
 # fmt: off
 
-def _extract_peer_hint(event: NetworkFirewallEvent, *, peer_ip: str | None) -> str | None:
-    raw_payload = metadata_sources_to_dict(event.raw_payload) or {}
-    parsed = raw_payload.get("parsed") if isinstance(raw_payload, dict) else None
-    parsed = parsed if isinstance(parsed, dict) else {}
-
+def _parsed_peer_hostname(parsed: dict[str, Any]) -> str | None:
     domain = parsed.get("domain")
     if isinstance(domain, str) and domain.strip():
         return domain.strip()
 
     url = parsed.get("url")
     if isinstance(url, str) and url.strip():
-        hostname = urlparse(url.strip()).hostname
-        if hostname:
-            return hostname
+        return urlparse(url.strip()).hostname
+    return None
+
+
+def _extract_peer_hint(event: NetworkFirewallEvent, *, peer_ip: str | None) -> str | None:
+    raw_payload = metadata_sources_to_dict(event.raw_payload) or {}
+    parsed = raw_payload.get("parsed") if isinstance(raw_payload, dict) else None
+    parsed = parsed if isinstance(parsed, dict) else {}
+
+    hostname = _parsed_peer_hostname(parsed)
+    if hostname:
+        return hostname
 
     if peer_ip:
         return _resolve_peer_label(peer_ip)
@@ -392,11 +397,7 @@ def _build_network_statistics_summary(db: Session, *, window_hours: int = 24) ->
         if isinstance(firewall_rule_name, str) and firewall_rule_name.strip():
             firewall_rule_counter[firewall_rule_name.strip()] += 1
 
-        domain_value = parsed.get("domain")
-        if not isinstance(domain_value, str) or not domain_value.strip():
-            raw_url = parsed.get("url")
-            if isinstance(raw_url, str) and raw_url.strip():
-                domain_value = urlparse(raw_url.strip()).hostname
+        domain_value = _parsed_peer_hostname(parsed)
         if isinstance(domain_value, str) and domain_value.strip():
             normalized_domain = domain_value.strip().lower()
             seen_domains.add(normalized_domain)
@@ -417,15 +418,7 @@ def _build_network_statistics_summary(db: Session, *, window_hours: int = 24) ->
                 peer_parsed = None
             if peer_parsed and not (peer_parsed.is_private or peer_parsed.is_loopback or peer_parsed.is_link_local or peer_parsed.is_multicast):
                 external_peers.add(peer_ip)
-            peer_label = None
-            parsed_domain = parsed.get("domain")
-            if isinstance(parsed_domain, str) and parsed_domain.strip():
-                peer_label = parsed_domain.strip()
-            else:
-                parsed_url = parsed.get("url")
-                if isinstance(parsed_url, str) and parsed_url.strip():
-                    peer_label = urlparse(parsed_url.strip()).hostname or peer_ip
-            peer_label = peer_label or peer_ip
+            peer_label = domain_value or peer_ip
             destinations_entry = destinations_map[peer_ip]
             destinations_entry["label"] = peer_label
             destinations_entry["ip_address"] = peer_ip
