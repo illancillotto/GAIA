@@ -13111,3 +13111,17 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   sync e link duplicato (IntegrityError). Ratchet integrazione exit 0, zero
   finding, indice invariato. Review ACCEPT_WITH_NOTES con condizioni soddisfatte.
 - Graphify organigramma-code aggiornato. Evidenze `claude-20261015/slices/r128-*`.
+
+## 2026-10-16 - R131 Utenze: rimozione guardie ridondanti sezione soggetti
+
+- Decisione utente 2026-10-16: rimuovere le guardie ridondanti (cambio
+  funzionale). Runtime `frontend/src/components/utenze/utenze-subjects-section.tsx`:
+  rimosse tre guardie dimostrate irraggiungibili (Escape con soggetto sempre
+  selezionato, `!csvFile` dietro un pulsante disabilitato, ramo null del tono
+  import dentro il blocco risultato); unico `csvFile!` commentato.
+- Esito `FUNCTIONAL_SIMPLIFICATION` + `IMPROVED`: componente cyclomatic/cognitive/LOC
+  169/184/991 -> 166/181/982; coverage full-file 100% statement/branch/function/line
+  con la spec R127 invariata. DOM del pannello import identico in 18 stati
+  (review); messaggio "Seleziona un file CSV da importare." mai mostrabile, rimosso.
+- Ratchet integrazione exit 0, zero finding, indice invariato. Review
+  ACCEPT_WITH_NOTES. Graphify utenze-code e frontend aggiornati.

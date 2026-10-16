@@ -196,9 +196,7 @@ export function UtenzeSubjectsSection({ token }: { token: string }) {
         return;
       }
 
-      if (selectedSubjectId) {
-        setSelectedSubjectId(null);
-      }
+      setSelectedSubjectId(null);
     }
 
     window.addEventListener("keydown", handleKeyDown);
@@ -300,18 +298,14 @@ export function UtenzeSubjectsSection({ token }: { token: string }) {
   );
 
   async function handleCsvImport() {
-    if (!csvFile) {
-      setSaveError("Seleziona un file CSV da importare.");
-      return;
-    }
-
     setIsImportingCsv(true);
     setCsvUploadProgress(0);
     setSaveError(null);
     setSaveMessage(null);
     setCsvImportResult(null);
     try {
-      const result = await importUtenzeSubjectsCsv(token, csvFile, setCsvUploadProgress);
+      // Sole caller is the "Importa CSV" button, disabled while csvFile is null.
+      const result = await importUtenzeSubjectsCsv(token, csvFile!, setCsvUploadProgress);
       setCsvImportResult(result);
       setSaveMessage(
         `Import CSV completato: ${result.created_subjects} creati, ${result.updated_subjects} aggiornati, ${result.skipped_rows} scartati.`,
@@ -422,8 +416,8 @@ export function UtenzeSubjectsSection({ token }: { token: string }) {
   }
 
   const pageCount = Math.max(1, Math.ceil(total / 20));
-  const csvImportTone = csvImportResult
-    ? csvImportResult.skipped_rows > 0
+  const csvImportTone =
+    csvImportResult && csvImportResult.skipped_rows > 0
       ? {
           border: "border-amber-200",
           background: "bg-amber-50",
@@ -437,8 +431,7 @@ export function UtenzeSubjectsSection({ token }: { token: string }) {
           badge: "bg-emerald-100 text-emerald-800",
           title: "Import completato",
           copy: "Tutte le righe valide del file sono state elaborate correttamente.",
-        }
-    : null;
+        };
 
   function triggerDownload(blob: Blob, filename: string): void {
     const url = URL.createObjectURL(blob);
@@ -556,19 +549,17 @@ export function UtenzeSubjectsSection({ token }: { token: string }) {
         ) : null}
         {csvImportResult ? (
           <div className="mt-4 space-y-4">
-            {csvImportTone ? (
-              <div className={`rounded-2xl border px-4 py-4 shadow-sm ${csvImportTone.border} ${csvImportTone.background}`}>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">{csvImportTone.title}</p>
-                    <p className="mt-1 text-sm text-gray-600">{csvImportTone.copy}</p>
-                  </div>
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${csvImportTone.badge}`}>
-                    {csvImportResult.skipped_rows > 0 ? "Warning" : "Successo"}
-                  </span>
+            <div className={`rounded-2xl border px-4 py-4 shadow-sm ${csvImportTone.border} ${csvImportTone.background}`}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">{csvImportTone.title}</p>
+                  <p className="mt-1 text-sm text-gray-600">{csvImportTone.copy}</p>
                 </div>
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${csvImportTone.badge}`}>
+                  {csvImportResult.skipped_rows > 0 ? "Warning" : "Successo"}
+                </span>
               </div>
-            ) : null}
+            </div>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Righe lette</p>
