@@ -13435,3 +13435,23 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   `handleCreateTerreniBatchJob`.
 - Dopo la sync: `complexity-baseline-verify` riproducibile, `complexity-check`
   exit 0, ratchet contro il merge-base senza finding.
+
+## 2026-10-16 - R148 Utenze: coverage di `import_service.py` (solo test)
+
+- Sblocca R125 (BLOCKED_COVERAGE). Nessun file runtime modificato. Nuovi
+  `backend/tests/test_utenze_import_service_coverage_r148.py` (34 test su entry
+  point pubblici e worker, mock solo del confine NAS) e
+  `backend/tests/test_utenze_folder_scoring_r125.py` (caratterizzazione R125,
+  punteggi esatti esposti dall'API).
+- Coverage di `app/modules/utenze/services/import_service.py`: 75% -> 98%
+  (861 statement, 13 mancanti, 4 branch parziali). Residuo non raggiungibile:
+  guardie `None` dopo load (L1019, L1330), ramo `LOCAL_UPLOAD` morto
+  (L1494-1496, L1697-1698, L1706-1710; tutti i chiamanti usano `NAS_LINK`),
+  guardia L1790 gia verificata dai chiamanti. Decisione utente richiesta:
+  rimuovere il ramo morto o registrare un'eccezione.
+- Backend completo 7505 PASS / 449 skip; ruff e style ratchet puliti; 14
+  mutanti uccisi; ordine dei test indifferente. Ratchet integrazione exit 0,
+  zero finding, indice invariato. Review indipendente ACCEPT_WITH_NOTES (test
+  R125 su sequenza di `db.get` da rilassare dopo R125; utente richiedente
+  cancellato lascia il job `pending`, comportamento fissato come attuale).
+  Graphify `make graphify-utenze-code` aggiornato.
