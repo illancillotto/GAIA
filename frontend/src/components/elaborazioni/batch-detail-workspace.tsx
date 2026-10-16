@@ -216,27 +216,9 @@ export function ElaborazioneBatchDetailWorkspace({
       });
       return changed ? next : current;
     });
-    setArtifactPreviewMimeTypes((current) => {
-      const next = Object.fromEntries(Object.entries(current).filter(([requestId]) => eligibleRequestIds.has(requestId)));
-      const sameKeys =
-        Object.keys(next).length === Object.keys(current).length &&
-        Object.keys(next).every((requestId) => current[requestId] === next[requestId]);
-      return sameKeys ? current : next;
-    });
-    setArtifactPreviewLoadingIds((current) => {
-      const next = Object.fromEntries(Object.entries(current).filter(([requestId]) => eligibleRequestIds.has(requestId)));
-      const sameKeys =
-        Object.keys(next).length === Object.keys(current).length &&
-        Object.keys(next).every((requestId) => current[requestId] === next[requestId]);
-      return sameKeys ? current : next;
-    });
-    setArtifactPreviewFailedIds((current) => {
-      const next = Object.fromEntries(Object.entries(current).filter(([requestId]) => eligibleRequestIds.has(requestId)));
-      const sameKeys =
-        Object.keys(next).length === Object.keys(current).length &&
-        Object.keys(next).every((requestId) => current[requestId] === next[requestId]);
-      return sameKeys ? current : next;
-    });
+    setArtifactPreviewMimeTypes((current) => retainEligibleEntries(current, eligibleRequestIds));
+    setArtifactPreviewLoadingIds((current) => retainEligibleEntries(current, eligibleRequestIds));
+    setArtifactPreviewFailedIds((current) => retainEligibleEntries(current, eligibleRequestIds));
 
     if (!token) {
       return;
@@ -858,4 +840,12 @@ export function ElaborazioneBatchDetailWorkspace({
       {content}
     </ProtectedPage>
   );
+}
+
+function retainEligibleEntries<T>(current: Record<string, T>, eligibleIds: Set<string>): Record<string, T> {
+  const next = Object.fromEntries(Object.entries(current).filter(([requestId]) => eligibleIds.has(requestId)));
+  const sameKeys =
+    Object.keys(next).length === Object.keys(current).length &&
+    Object.keys(next).every((requestId) => current[requestId] === next[requestId]);
+  return sameKeys ? current : next;
 }

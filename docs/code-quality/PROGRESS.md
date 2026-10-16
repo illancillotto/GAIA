@@ -13024,3 +13024,20 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   review (delete di job gia conclusi). eslint e tsc PASS. Ratchet integrazione
   exit 0, zero finding, indice invariato. Review ACCEPT.
 - Graphify frontend aggiornato. Evidenze `claude-20261015/slices/r123-*`.
+
+## 2026-10-16 - R122 Elaborazioni: pruning anteprime del dettaglio batch
+
+- Runtime `frontend/src/components/elaborazioni/batch-detail-workspace.tsx`: i tre
+  updater identici di pruning (mime, loading, failed) nell'effetto anteprime
+  diventano la funzione pura `retainEligibleEntries`, che restituisce lo
+  stesso riferimento quando nulla cambia; pruning con revoke degli URL, fetch,
+  dipendenze e JSX invariati.
+- Esito `IMPROVED`: effetto cyclomatic/cognitive/LOC 19/20/83 -> 13/14/65;
+  componente principale 177/216 -> 171/210; file cognitive 436 -> 420,
+  cyclomatic 445 -> 426; violation 12 -> 11; helper 3/2/7.
+- Coverage full-file 100% statement/branch/function/line; caratterizzazione
+  valida sull'originale con guardia anti-render-loop (fallisce in ~1 s invece
+  di bloccarsi). Controllo negativo della review: lo spostamento di -18 righe
+  e attribuito correttamente dal matcher. eslint e tsc PASS. Ratchet
+  integrazione exit 0, zero finding, indice invariato. Review ACCEPT_WITH_NOTES.
+- Graphify frontend aggiornato. Evidenze `claude-20261015/slices/r122-*`.
