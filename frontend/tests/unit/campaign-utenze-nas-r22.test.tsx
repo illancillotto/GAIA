@@ -237,7 +237,7 @@ describe("R22 mounted NAS import orchestration", () => {
     await screen.findByText(importMessage);
     expect(api.getUtenzeSubject.mock.calls).toEqual([["campaign-token", "subject-1"], ["campaign-token", "subject-1"]]);
     expect(api.getUtenzeSubjectNasImportStatus.mock.calls).toEqual(Array.from({ length: 3 }, () => ["campaign-token", "subject-1"]));
-    expect(screen.getByText("Sola lettura")).toBeInTheDocument();
+    expect(await screen.findByText("Sola lettura")).toBeInTheDocument();
     expect(pathInput()).toHaveValue("");
     expect(headerImport()).toBeEnabled();
   });
@@ -431,7 +431,7 @@ describe("R22 mounted path payload and completion", () => {
     expect(api.updateUtenzeSubject.mock.calls).toEqual([["campaign-token", "subject-1", {
       nas_folder_path: "/archive/R/first", nas_folder_letter: expectedLetter,
     }]]);
-    expect(screen.getByText("Sola lettura")).toBeInTheDocument();
+    expect(await screen.findByText("Sola lettura")).toBeInTheDocument();
     expect(api.getUtenzeSubject).toHaveBeenCalledTimes(1);
     expect(api.getUtenzeSubjectNasImportStatus).toHaveBeenCalledTimes(3);
   });
@@ -537,6 +537,7 @@ describe("R22 shared messages, cross-command and route races", () => {
   test("candidate command and empty guard preserve success; next nonempty save clears messages", async () => {
     await ready(); edit(); setPath("/initial/path"); savePath();
     await screen.findByText(pathMessage);
+    expect(await screen.findByText("Sola lettura")).toBeInTheDocument();
     edit();
     api.getUtenzeSubjectNasCandidates.mockRejectedValueOnce(new Error("Candidate failure after success"));
     search(); await screen.findByText("Candidate failure after success");
@@ -557,6 +558,7 @@ describe("R22 shared messages, cross-command and route races", () => {
   test("next import clears prior save success/error immediately", async () => {
     await ready(); edit(); setPath("/initial/path"); savePath();
     await screen.findByText(pathMessage);
+    expect(await screen.findByText("Sola lettura")).toBeInTheDocument();
     edit(); setPath(""); savePath();
     const pending = deferred<AnagraficaSubjectImportResult>();
     api.importUtenzeSubjectFromNas.mockReturnValueOnce(pending.promise);

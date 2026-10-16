@@ -13307,3 +13307,18 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   separata R143.
 - Ratchet integrazione exit 0, zero finding, indice invariato. Review
   ACCEPT_WITH_NOTES. Graphify utenze-code e frontend aggiornati.
+
+## 2026-10-16 - R143 Utenze: race nel test R22 (solo test)
+
+- Il fallimento intermittente visto durante l'integrazione di R132 e una race
+  preesistente in `frontend/tests/unit/campaign-utenze-nas-r22.test.tsx`: dopo
+  salvataggio/import la pagina mostra il messaggio prima che l'effetto su
+  `subject` disattivi la modalita modifica, mentre il test proseguiva in modo
+  sincrono. Si riproduce anche sulla pagina base.
+- Correzione solo test in 4 punti: attesa con `findByText("Sola lettura")`,
+  stesso pattern gia usato nel file. Nessuna asserzione rimossa o indebolita,
+  nessuna attesa fissa. Con il probe di rallentamento l'originale fallisce e la
+  versione corretta passa; un mutante senza reset della modalita modifica fa
+  fallire le nuove attese. 12 suite della pagina verdi in 3 run.
+- Ratchet integrazione exit 0, zero finding, indice invariato. Review
+  ACCEPT_WITH_NOTES.
