@@ -13232,3 +13232,21 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   ACCEPT_WITH_NOTES. Al primo sync dopo il deploy i link orfani non bloccati
   vengono ricollegati (effetto voluto).
 - Graphify organigramma-code aggiornato. Evidenze `claude-20261015/slices/r136-*`.
+
+## 2026-10-16 - R139 Utenze soggetti: accessibilita degli overlay (a11y fix)
+
+- Decisioni utente 2026-10-16: correzione locale dei 3 overlay (vista rapida,
+  anteprima documento, storico) senza focus trap; hook in un file Utenze
+  dedicato invece di comprimere le righe. Nuovo hook privato
+  `frontend/src/components/utenze/use-overlay-close-button-ref.ts`: all'apertura
+  il focus va al pulsante di chiusura, alla chiusura torna all'elemento che ha
+  aperto l'overlay; istanze separate per l'anteprima sovrapposta al soggetto.
+  `utenze-subjects-section.tsx`: `role="dialog"`, `aria-modal`,
+  `aria-labelledby`; nessun cambio di testi o classi.
+- La v1 e stata respinta in review per un LOC game (tre chiamate su una riga);
+  la v2 ha formattazione normale. 57 test PASS (anche in StrictMode), coverage
+  100% su entrambi i runtime; il test della sequenza sovrapposta uccide il
+  mutante a istanza condivisa. Classificazione: fix a11y, neutro sulle metriche
+  (file 1025 -> 1029 LOC, entro baseline). Ratchet integrazione exit 0, zero
+  finding, indice invariato. Review v2 ACCEPT.
+- Graphify utenze-code e frontend aggiornati.

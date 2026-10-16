@@ -11,6 +11,7 @@ import { RuoloAvvisiSection } from "@/components/ruolo/ruolo-avvisi-section";
 import { UtenzePaymentNoticesSection } from "@/components/utenze/utenze-payment-notices-section";
 import { UtenzeCreateSubjectTrigger } from "@/components/utenze/utenze-create-subject-trigger";
 import { UtenzeSubjectDocumentsRefresh } from "@/components/utenze/utenze-subject-documents-refresh";
+import { useOverlayCloseButtonRef } from "@/components/utenze/use-overlay-close-button-ref";
 import { downloadUtenzeDocumentBlob, downloadUtenzeExportBlob, getUtenzeSubject, getUtenzeSubjectAuditLog, getUtenzeSubjects, importUtenzeSubjectsCsv } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
 import type { UtenzeAuditLog, UtenzeCsvImportResult, UtenzeDocument, UtenzeSubjectDetail, UtenzeSubjectListItem } from "@/types/api";
@@ -86,6 +87,9 @@ export function UtenzeSubjectsSection({ token }: { token: string }) {
   const [historyEntries, setHistoryEntries] = useState<UtenzeAuditLog[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const subjectCloseButtonRef = useOverlayCloseButtonRef();
+  const previewCloseButtonRef = useOverlayCloseButtonRef();
+  const historyCloseButtonRef = useOverlayCloseButtonRef();
 
   const deferredSearch = useDeferredValue(filters.search);
   const normalizedSearch = deferredSearch.trim();
@@ -742,18 +746,18 @@ export function UtenzeSubjectsSection({ token }: { token: string }) {
             onClick={() => setSelectedSubjectId(null)}
             type="button"
           />
-          <div className="relative z-10 max-h-[calc(100vh-2rem)] w-full max-w-4xl overflow-y-auto rounded-[28px] border border-gray-200 bg-[#F6F7F2] p-5 shadow-[0_30px_80px_rgba(15,25,19,0.18)] md:max-h-[calc(100vh-4rem)] md:p-6">
+          <div aria-labelledby="utenze-subject-detail-title" aria-modal="true" className="relative z-10 max-h-[calc(100vh-2rem)] w-full max-w-4xl overflow-y-auto rounded-[28px] border border-gray-200 bg-[#F6F7F2] p-5 shadow-[0_30px_80px_rgba(15,25,19,0.18)] md:max-h-[calc(100vh-4rem)] md:p-6" role="dialog">
             <div className="mb-5 flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-medium uppercase tracking-[0.18em] text-gray-400">Dettaglio utente</p>
-                <h3 className="mt-1 text-xl font-medium text-gray-900">Vista rapida del registro</h3>
+                <h3 className="mt-1 text-xl font-medium text-gray-900" id="utenze-subject-detail-title">Vista rapida del registro</h3>
               </div>
               <div className="flex items-center gap-3">
                 <UtenzeSubjectDocumentsRefresh token={token} subjectId={selectedSubjectId} onRefreshed={setSelectedSubject} />
                 <Link className="text-sm font-medium text-[#1D4E35]" href={`/utenze/${selectedSubjectId}`}>
                   Apri pagina completa
                 </Link>
-                <button className="btn-secondary" onClick={() => setSelectedSubjectId(null)} type="button">
+                <button className="btn-secondary" onClick={() => setSelectedSubjectId(null)} ref={subjectCloseButtonRef} type="button">
                   Chiudi
                 </button>
               </div>
@@ -905,13 +909,13 @@ export function UtenzeSubjectsSection({ token }: { token: string }) {
             onClick={closePreviewModal}
             type="button"
           />
-          <div className="relative z-10 flex h-full max-h-[92vh] w-full max-w-5xl flex-col rounded-2xl bg-white shadow-2xl">
+          <div aria-labelledby="utenze-document-preview-title" aria-modal="true" className="relative z-10 flex h-full max-h-[92vh] w-full max-w-5xl flex-col rounded-2xl bg-white shadow-2xl" role="dialog">
             <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-6 py-4">
               <div className="min-w-0">
-                <p className="section-title">Anteprima documento</p>
+                <p className="section-title" id="utenze-document-preview-title">Anteprima documento</p>
                 <p className="mt-1 truncate text-sm text-gray-500">{previewDocument.filename}</p>
               </div>
-              <button className="btn-secondary" type="button" onClick={closePreviewModal}>
+              <button className="btn-secondary" ref={previewCloseButtonRef} type="button" onClick={closePreviewModal}>
                 Chiudi
               </button>
             </div>
@@ -998,13 +1002,13 @@ export function UtenzeSubjectsSection({ token }: { token: string }) {
       {historySubjectId ? (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-4 py-6 backdrop-blur-sm">
           <button aria-label="Chiudi storico" className="absolute inset-0" onClick={() => setHistorySubjectId(null)} type="button" />
-          <div className="relative z-10 max-h-[calc(100vh-3rem)] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-gray-200 bg-white p-6 shadow-2xl">
+          <div aria-labelledby="utenze-subject-history-kicker utenze-subject-history-title" aria-modal="true" className="relative z-10 max-h-[calc(100vh-3rem)] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-gray-200 bg-white p-6 shadow-2xl" role="dialog">
             <div className="mb-5 flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-medium uppercase tracking-[0.18em] text-gray-400">Storico modifiche</p>
-                <h3 className="mt-1 text-lg font-medium text-gray-900">{historySubjectName}</h3>
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-gray-400" id="utenze-subject-history-kicker">Storico modifiche</p>
+                <h3 className="mt-1 text-lg font-medium text-gray-900" id="utenze-subject-history-title">{historySubjectName}</h3>
               </div>
-              <button className="btn-secondary" onClick={() => setHistorySubjectId(null)} type="button">Chiudi</button>
+              <button className="btn-secondary" onClick={() => setHistorySubjectId(null)} ref={historyCloseButtonRef} type="button">Chiudi</button>
             </div>
 
             {isHistoryLoading ? <p className="text-sm text-gray-500">Caricamento storico...</p> : null}
