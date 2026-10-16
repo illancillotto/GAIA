@@ -12932,3 +12932,23 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
 - 138 test PASS; coverage full-file 61/61 statement e 10/10 branch. Ratchet
   integrazione exit 0, zero finding, indice invariato. Review ACCEPT_WITH_NOTES.
 - Graphify backend aggiornato. Evidenze `claude-20261015/slices/r120-*`.
+
+## 2026-10-16 - R114 Wiki: timeline eventi delle metriche conversazioni
+
+- Runtime `backend/app/modules/wiki/services/conversation_metrics.py`: il ciclo
+  eventi per conversazione di `refresh_wiki_conversation_daily_metrics` diventa
+  cinque helper puri (timeline fino a fine giorno, conteggi del giorno, primo
+  ingresso in review, coppie review/resolve, attese utente) con condizionali
+  espliciti. Lock advisory 948173, delete/add, commit singolo, ordine dei campi,
+  arrotondamenti e semantica break invariati.
+- Esito `IMPROVED` con disclosure (decisione utente 2026-10-16): target
+  cyclomatic/cognitive/LOC/nesting 49/178/153/6 -> 27/82/128/4; file cognitive
+  275 -> 230; error 8 -> 7. Nuovi warning: LOC effettive del file 498 -> 526
+  (soglia 500, ora il file e soggetto al ratchet LOC), helper conteggi a
+  cognitive 15; cyclomatic del file +10 dichiarato. Dedup alternative provate
+  e scartate perche creavano un error o non rientravano senza giochi di LOC.
+- 26 test R114 (11 nuovi incl. arrotondamento mezz'ora); coverage full-file
+  287/287 statement e 114/114 branch; harness differenziale 3000 scenari OK;
+  118 test PASS in integrazione. Ratchet integrazione exit 0, zero finding,
+  indice invariato. Review ACCEPT_WITH_NOTES.
+- Graphify wiki-code aggiornato. Evidenze `claude-20261015/slices/r114-*`.

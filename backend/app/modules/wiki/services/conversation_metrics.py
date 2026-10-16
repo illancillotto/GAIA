@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
+from typing import Any
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
@@ -153,6 +154,69 @@ def _hours_between(start: datetime | None, end: datetime | None) -> int:
     return max(round((end - start).total_seconds() / 3600), 0)
 
 
+def _timed_events_until(events: list[Any], day_end: datetime) -> list[tuple[Any, datetime]]:
+    """Return ``(event, utc_created_at)`` in source order, skipping untimed rows.
+
+    The scan stops at the first event after ``day_end``: rows are expected in
+    ascending ``created_at`` order and later rows are never inspected.
+    """
+    timed: list[tuple[Any, datetime]] = []
+    for event in events:
+        event_created_at = _to_utc(event.created_at)
+        if event_created_at is None:
+            continue
+        if event_created_at > day_end:
+            break
+        timed.append((event, event_created_at))
+    return timed
+
+
+def _count_day_events(bucket: dict[str, Any], timed_events: list[tuple[Any, datetime]], *, day_start: datetime) -> None:
+    for event, event_created_at in timed_events:
+        if event_created_at < day_start:
+            continue
+        if event.event_type == "assignment_changed":
+            bucket["reassigned_count"] += 1
+        if event.event_type != "status_changed":
+            continue
+        if event.to_status == "in_review":
+            bucket["review_entered_count"] += 1
+        if event.from_status == "resolved" and event.to_status == "open":
+            bucket["reopened_count"] += 1
+
+
+def _collect_open_to_review_sample(
+    bucket: dict[str, Any], timed_events: list[tuple[Any, datetime]], *, created_at: datetime
+) -> None:
+    for event, event_created_at in timed_events:
+        if event.event_type == "status_changed" and event.to_status == "in_review":
+            bucket["open_to_review_samples"].append(_hours_between(created_at, event_created_at))
+            return
+
+
+def _collect_review_to_resolve_samples(bucket: dict[str, Any], timed_events: list[tuple[Any, datetime]]) -> None:
+    latest_in_review_started_at: datetime | None = None
+    for event, event_created_at in timed_events:
+        if event.event_type != "status_changed":
+            continue
+        if event.to_status == "in_review":
+            latest_in_review_started_at = event_created_at
+        if event.to_status == "resolved" and latest_in_review_started_at is not None:
+            bucket["review_to_resolve_samples"].append(_hours_between(latest_in_review_started_at, event_created_at))
+
+
+def _collect_waiting_user_samples(bucket: dict[str, Any], timed_events: list[tuple[Any, datetime]]) -> None:
+    waiting_started_at: datetime | None = None
+    for event, event_created_at in timed_events:
+        if event.event_type != "status_changed":
+            continue
+        if event.to_status == "waiting_user":
+            waiting_started_at = event_created_at
+        elif event.from_status == "waiting_user" and waiting_started_at is not None:
+            bucket["waiting_user_samples"].append(_hours_between(waiting_started_at, event_created_at))
+            waiting_started_at = None
+
+
 def refresh_wiki_conversation_daily_metrics(
     db: Session,
     *,
@@ -236,36 +300,11 @@ def refresh_wiki_conversation_daily_metrics(
                 if last_reviewed_at and day_start <= last_reviewed_at <= day_end:
                     bucket["review_hours_total"] += _hours_between(created_at, last_reviewed_at)
                     bucket["review_hours_samples"] += 1
-                open_review_started_at = None
-                latest_in_review_started_at = None
-                waiting_started_at = None
-                for event in event_rows_by_conversation.get(conversation.id, []):
-                    event_created_at = _to_utc(event.created_at)
-                    if event_created_at is None:
-                        continue
-                    if event_created_at > day_end:
-                        break
-                    if event.event_type == "assignment_changed" and day_start <= event_created_at <= day_end:
-                        bucket["reassigned_count"] += 1
-                    if event.event_type != "status_changed":
-                        continue
-                    if event.to_status == "in_review":
-                        if open_review_started_at is None:
-                            open_review_started_at = event_created_at
-                        latest_in_review_started_at = event_created_at
-                        if day_start <= event_created_at <= day_end:
-                            bucket["review_entered_count"] += 1
-                    if event.from_status == "resolved" and event.to_status == "open" and day_start <= event_created_at <= day_end:
-                        bucket["reopened_count"] += 1
-                    if event.to_status == "waiting_user":
-                        waiting_started_at = event_created_at
-                    elif event.from_status == "waiting_user" and waiting_started_at is not None:
-                        bucket["waiting_user_samples"].append(_hours_between(waiting_started_at, event_created_at))
-                        waiting_started_at = None
-                    if event.to_status == "resolved" and latest_in_review_started_at is not None:
-                        bucket["review_to_resolve_samples"].append(_hours_between(latest_in_review_started_at, event_created_at))
-                if open_review_started_at is not None:
-                    bucket["open_to_review_samples"].append(_hours_between(created_at, open_review_started_at))
+                timed_events = _timed_events_until(event_rows_by_conversation.get(conversation.id, []), day_end)
+                _count_day_events(bucket, timed_events, day_start=day_start)
+                _collect_open_to_review_sample(bucket, timed_events, created_at=created_at)
+                _collect_review_to_resolve_samples(bucket, timed_events)
+                _collect_waiting_user_samples(bucket, timed_events)
 
                 is_visible_in_snapshot = resolved_at is None or resolved_at > day_end or conversation.status == "resolved"
                 if not is_visible_in_snapshot:
