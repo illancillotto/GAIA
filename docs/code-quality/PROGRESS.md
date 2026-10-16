@@ -13125,3 +13125,20 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   (review); messaggio "Seleziona un file CSV da importare." mai mostrabile, rimosso.
 - Ratchet integrazione exit 0, zero finding, indice invariato. Review
   ACCEPT_WITH_NOTES. Graphify utenze-code e frontend aggiornati.
+
+## 2026-10-16 - R137 Riordino: errori di validazione nell'import CSV particelle (bug fix)
+
+- Decisione utente 2026-10-16: UUID `title_holder_subject_id` non valido rifiuta
+  l'intero import con HTTP 422 "Invalid title_holder_subject_id at row N"
+  (N = riga fisica del CSV esclusa l'intestazione); contenuto non UTF-8 -> 422
+  "CSV file must be UTF-8 encoded". Prima entrambi producevano HTTP 500.
+- Runtime `backend/app/modules/riordino/services/link_service.py`: eccezioni
+  incapsulate `from exc` prima di qualsiasi add della riga; nuovo
+  `_decode_csv_content`. Nessun commit in caso di errore (la route committa solo
+  dopo il ritorno del servizio). Tutti gli altri percorsi invariati.
+- Test di regressione falliti sull'originale e verdi dopo; cambiate solo le due
+  asserzioni che fissavano il bug; test di route senza commit. Coverage
+  full-file 100% (132/38). Complessita: nessuna nuova violation
+  (`_parcel_payload_from_row` cognitive 7 -> 12). Ratchet integrazione exit 0,
+  zero finding, indice invariato. Review ACCEPT_WITH_NOTES.
+- Graphify riordino-code aggiornato. Evidenze `claude-20261015/slices/r137-*`.

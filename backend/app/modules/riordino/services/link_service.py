@@ -129,7 +129,7 @@ def _csv_optional(row: dict[str, str | None], key: str) -> str | None:
     return (row.get(key) or "").strip() or None
 
 
-def _parcel_payload_from_row(row: dict[str, str | None]) -> dict | None:
+def _parcel_payload_from_row(row: dict[str, str | None], row_number: int) -> dict | None:
     if not row.get("foglio") or not row.get("particella"):
         return None
     payload = {
@@ -143,19 +143,34 @@ def _parcel_payload_from_row(row: dict[str, str | None]) -> dict | None:
     }
     subject_raw = _csv_optional(row, "title_holder_subject_id")
     if subject_raw:
-        payload["title_holder_subject_id"] = UUID(subject_raw)
+        try:
+            payload["title_holder_subject_id"] = UUID(subject_raw)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Invalid title_holder_subject_id at row {row_number}",
+            ) from exc
     return payload
+
+
+def _decode_csv_content(file: UploadFile) -> str:
+    try:
+        return file.file.read().decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="CSV file must be UTF-8 encoded"
+        ) from exc
 
 
 def import_parcels_csv(db: Session, practice_id: UUID, file: UploadFile) -> list[RiordinoParcelLink]:
     _require_practice(db, practice_id)
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="CSV file required")
-    content = file.file.read().decode("utf-8-sig")
-    reader = csv.DictReader(io.StringIO(content))
+    reader = csv.DictReader(io.StringIO(_decode_csv_content(file)))
     items: list[RiordinoParcelLink] = []
     for row in reader:
-        payload = _parcel_payload_from_row(row)
+        # Row number shown to users: CSV line number excluding the header line.
+        payload = _parcel_payload_from_row(row, reader.line_num - 1)
         if payload is None:
             continue
         if "title_holder_subject_id" in payload:

@@ -217,11 +217,38 @@ def test_import_csv_header_only_returns_empty_list(db: Session) -> None:
     assert link_service.import_parcels_csv(db, practice.id, _upload("")) == []
 
 
-def test_import_csv_invalid_subject_uuid_raises_value_error(db: Session) -> None:
+def test_import_csv_invalid_subject_uuid_is_422_with_row_number(db: Session) -> None:
+    # R137: an invalid UUID rejects the whole import with 422 instead of an
+    # unhandled ValueError (HTTP 500). "row N" is the 1-based CSV line number
+    # excluding the header line (first line after the header is row 1).
     practice = _practice(db)
     content = "foglio,particella,title_holder_subject_id\n1,10,not-a-uuid\n"
-    with pytest.raises(ValueError):
+    with pytest.raises(HTTPException) as exc:
         link_service.import_parcels_csv(db, practice.id, _upload(content))
+    assert exc.value.status_code == 422
+    assert exc.value.detail == "Invalid title_holder_subject_id at row 1"
+    assert isinstance(exc.value.__cause__, ValueError)
+    assert not [obj for obj in db.new if isinstance(obj, RiordinoParcelLink)]
+
+
+def test_import_csv_invalid_subject_uuid_row_counts_skipped_and_blank_lines(
+    db: Session,
+) -> None:
+    practice = _practice(db)
+    content = (
+        "foglio,particella,title_holder_subject_id\n"
+        "1,10,\n"  # row 1: valid, added
+        ",11,not-a-uuid\n"  # row 2: skipped (no foglio), UUID not validated
+        "\n"  # row 3: blank line, ignored by csv but still a line
+        "3,30,also-bad\n"  # row 4: rejected
+        "4,40,\n"
+    )
+    with pytest.raises(HTTPException) as exc:
+        link_service.import_parcels_csv(db, practice.id, _upload(content))
+    assert exc.value.status_code == 422
+    assert exc.value.detail == "Invalid title_holder_subject_id at row 4"
+    pending = [obj for obj in db.new if isinstance(obj, RiordinoParcelLink)]
+    assert [(obj.foglio, obj.particella) for obj in pending] == [("1", "10")]
 
 
 def test_import_csv_unknown_subject_is_404_before_adding_that_row(db: Session) -> None:
@@ -236,10 +263,14 @@ def test_import_csv_unknown_subject_is_404_before_adding_that_row(db: Session) -
     assert [(obj.foglio, obj.particella) for obj in pending] == [("1", "10")]
 
 
-def test_import_csv_invalid_utf8_raises_unicode_error(db: Session) -> None:
+def test_import_csv_invalid_utf8_is_422(db: Session) -> None:
+    # R137: non UTF-8 content is a client error (422), not an unhandled 500.
     practice = _practice(db)
-    with pytest.raises(UnicodeDecodeError):
+    with pytest.raises(HTTPException) as exc:
         link_service.import_parcels_csv(db, practice.id, _upload(b"foglio,particella\n\xff,1\n"))
+    assert exc.value.status_code == 422
+    assert exc.value.detail == "CSV file must be UTF-8 encoded"
+    assert isinstance(exc.value.__cause__, UnicodeDecodeError)
 
 
 # --- parcels ----------------------------------------------------------------
