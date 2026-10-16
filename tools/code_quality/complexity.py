@@ -1066,18 +1066,13 @@ def resolve_source_position(current, report, baseline, resolution, context):
     if ambiguity or equivalent:
         return resolution
     candidates = positional_candidates(current, report, baseline, owner)
-    path, commit = current["path"], baseline.get("source_commit", "")
-    if not candidates or not valid_provenance_source(commit, path):
+    if not candidates:
         return resolution
-    old_calls = [call for call in baseline["callables"] if call["path"] == path]
-    new_calls = [call for call in report["callables"] if call["path"] == path]
-    try:
-        source = (context["source_paths"] or {}).get(path, ROOT / path)
-        mapping, before, after = source_snapshot_mapping(
-            path, commit, source, old_calls, new_calls, context
-        )
-    except (OSError, ValueError, SyntaxError, RuntimeError, subprocess.CalledProcessError):
+    snapshot = source_snapshot_calls(current, report, baseline, context)
+    if snapshot is None:
         return resolution
+    path = current["path"]
+    old_calls, new_calls, mapping, before, after = snapshot
     mapped_start = mapping.get(current["line"])
     if mapped_start is None or mapped_start == owner["line"]:
         return resolution
@@ -1090,9 +1085,11 @@ def resolve_source_position(current, report, baseline, resolution, context):
                   "symbol": current["name"], "candidates": len(candidates)}, False
 
 
-def source_line_mapping(current, report, baseline, context):
-    # Unchanged current lines of the callable's path mapped to their baseline
-    # source lines; None when the snapshot is unverifiable or unreadable.
+def source_snapshot_calls(current, report, baseline, context):
+    # The validated snapshot of the current path at the baseline source commit:
+    # its old and new callables, and the unchanged current lines mapped to their
+    # baseline source lines with the before/after context; None when the commit
+    # is unverifiable or the snapshot cannot be read.
     path, commit = current["path"], baseline.get("source_commit", "")
     if not valid_provenance_source(commit, path):
         return None
@@ -1100,12 +1097,12 @@ def source_line_mapping(current, report, baseline, context):
     new_calls = [call for call in report["callables"] if call["path"] == path]
     try:
         source = (context["source_paths"] or {}).get(path, ROOT / path)
-        mapping, _, _ = source_snapshot_mapping(
+        mapping, before, after = source_snapshot_mapping(
             path, commit, source, old_calls, new_calls, context
         )
     except (OSError, ValueError, SyntaxError, RuntimeError, subprocess.CalledProcessError):
         return None
-    return mapping
+    return old_calls, new_calls, mapping, before, after
 
 
 def source_held_candidates(current, report, baseline, context):
@@ -1113,11 +1110,10 @@ def source_held_candidates(current, report, baseline, context):
     # snapshot shows surviving unchanged: some other current callable with the
     # same name and fingerprint maps line by line, without gaps, onto exactly
     # their span. None means no verifiable snapshot, so nothing is proven.
-    mapping = source_line_mapping(current, report, baseline, context)
-    if mapping is None:
+    snapshot = source_snapshot_calls(current, report, baseline, context)
+    if snapshot is None:
         return None
-    old_calls = [call for call in baseline["callables"] if call["path"] == current["path"]]
-    new_calls = [call for call in report["callables"] if call["path"] == current["path"]]
+    old_calls, new_calls, mapping, _, _ = snapshot
     held = []
     for owner in old_calls:
         if owner["name"] != current["name"]:
@@ -1166,12 +1162,42 @@ def unheld_source_owner(current, owner, report, baseline, context):
     return remaining[0]
 
 
+def contextual_ambiguity_owner(current, report, baseline, context):
+    # Elimination only, for an identity tie the strict anchors cannot prove: the
+    # unique exterior fences must enclose exactly one old and one new same-name
+    # callable, and the old one must be a same-name candidate not reserved by a
+    # unique fingerprint, unclaimed by any sibling and lent once. A wholly added
+    # callable has no source slot. Without that proof the original ambiguity
+    # stands; distance is never consulted.
+    if callable_is_wholly_added(current, context["added_lines"]):
+        return None
+    snapshot = source_snapshot_calls(current, report, baseline, context)
+    if snapshot is None:
+        return None
+    old_calls, new_calls, mapping, before, after = snapshot
+    candidates = remove_candidates_reserved_by_unique_fingerprint(
+        current,
+        [call for call in old_calls if call["name"] == current["name"]],
+        [call for call in new_calls if call["name"] == current["name"]],
+    )
+    proven = contextual_source_owner(current, mapping, before, after, old_calls, new_calls)
+    if not any(proven is call for call in candidates):
+        return None
+    if (unclaimed_source_owner(current, proven, new_calls, report, baseline,
+                               context["added_lines"])
+            and claim_provenance_owner(proven, context)):
+        return proven
+    return None
+
+
 def resolve_source_ambiguity(current, report, baseline, resolution, context):
     ambiguity = resolution[1]
     if ambiguity:
         proven = source_provenance_owner(
             current, report, baseline, context["source_paths"], context["added_lines"], context
         )
+        if proven is None and ambiguity["reason"] == "ambiguous_identity":
+            proven = contextual_ambiguity_owner(current, report, baseline, context)
         if proven is not None:
             return proven, None, False
     return resolve_source_position(current, report, baseline, resolution, context)
@@ -1183,8 +1209,8 @@ def source_start_holds(current, owner, report, baseline, context):
     added = (context["added_lines"] or {}).get(current["path"], set())
     if owner.get("path") != current["path"] or current["line"] in added:
         return False
-    mapping = source_line_mapping(current, report, baseline, context)
-    return mapping is not None and mapping.get(current["line"]) == owner["line"]
+    snapshot = source_snapshot_calls(current, report, baseline, context)
+    return snapshot is not None and snapshot[2].get(current["line"]) == owner["line"]
 
 
 def shared_budget_borrowers(resolved, equivalent_fingerprints, report, baseline, context):

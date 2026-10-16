@@ -13371,3 +13371,23 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   ultima riga allineata (preesistente, MEDIUM); falso positivo fail-closed su
   hotspot riscritto integralmente con fratello omonimo aggiunto (LOW-MEDIUM,
   assente nello storico). Follow-up proposto come slice separata.
+
+## 2026-10-16 - R146 Tooling: ambiguita di identita risolta dal contesto sorgente
+
+- Decisione utente 2026-10-16 (correggere il matcher dopo la diagnosi R145).
+  `tools/code_quality/complexity.py`: nuovo `contextual_ambiguity_owner`,
+  richiamato da `resolve_source_ambiguity`, risolve un pareggio di distanza
+  soltanto con prova contestuale nello snapshot validato; i pareggi non provati
+  restano exit 2. L'helper `source_line_mapping` (R147) e unificato in
+  `source_snapshot_calls`, senza wrapper; rimosso il duplicato inline in
+  `resolve_source_position`. Regola in `METRICS_AND_BASELINE.md`.
+- Nuovo `tests/code_quality/test_complexity_contextual_ambiguity.py`. Tooling
+  346 PASS, `complexity.py` 1010/1010 statement e 426/426 branch. Harness R147,
+  R109M v1-v5 e fuzz: nessun risultato piu debole; 25 exit 2 risolti verso
+  l'owner corretto. Oracle fuzz della review: 46 risoluzioni contestuali
+  corrette, 0 errate. Ratchet integrazione exit 0, zero finding, indice
+  invariato; complexity-check e baseline-verify PASS. R145 passa da exit 2 a
+  exit 0. Review indipendenti ACCEPT_WITH_NOTES (R146 e re-land R146b).
+- Gap annotati (LOW): guardie di prenotazione/appartenenza in
+  `contextual_ambiguity_owner` ridondanti e non isolate da test;
+  `source_start_holds` senza snapshot non fissato da test (solo piu severo).

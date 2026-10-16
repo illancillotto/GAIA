@@ -186,6 +186,16 @@ correzione del matcher non certifica il comportamento di un candidato UI esterno
 Ammissione R39 confermata da final/root indipendenti nel registro della campagna;
 nessuna baseline o soglia viene aggiornata per assorbire divergenze.
 
+## Ambiguita risolta dal contesto sorgente — R146
+
+Quando il matching resta `ambiguous_identity` per un pareggio di distanza, lo
+snapshot sorgente validato puo risolvere l'owner soltanto se il contesto lo
+prova: fence invariate e mappate attorno al callable, un solo candidato
+compatibile non prenotato e nessun fratello non rivendicato in grado di
+contendere l'owner. Le metriche non scelgono mai l'identita; i pareggi non
+dimostrabili restano exit `2`. L'owner risolto e soggetto al controllo del
+budget condiviso (R147) e a tutti i confronti di regressione.
+
 ## Budget condiviso fra callable correnti — R147
 
 Dopo la risoluzione ordinaria, se due o piu callable correnti risolvono allo
