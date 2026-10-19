@@ -10,6 +10,9 @@
   baseline e riallineamento delle dipendenze frontend per `npm ci` riproducibile.
 - Evidenze, limiti e stato rilascio:
   [TRIBUTI_FILTERS_VALIDATION_2026-10-19.md](TRIBUTI_FILTERS_VALIDATION_2026-10-19.md).
+- Deploy frontend `837ae49c` completato su `gaia.lan`: healthy e smoke
+  pagina/asset/API verdi, altri container invariati. Suite finale 5241 test
+  frontend, 18 smoke, 9 API e 270 tooling; coverage runtime modificato 100%.
 
 ## Controllo storico particelle — 2026-10-06
 

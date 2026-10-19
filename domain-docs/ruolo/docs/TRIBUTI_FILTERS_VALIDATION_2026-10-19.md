@@ -111,6 +111,16 @@ e descrizione del saldo. Immagine verificata:
 Archivio sorgenti locale/remoto con SHA256 identico:
 `465f17ff7502db5f615adc48709c66e11d72992a86f3f1af0ba944e455cd0248`.
 
-Gate finali superati; attivazione di produzione successiva al commit e
-verifica live da registrare dopo lo switch. Le segnalazioni npm audit e i
-warning preesistenti sopra restano limiti dichiarati del rilascio.
+Deploy completato il 2026-10-19 dopo il commit applicativo `837ae49c`.
+Container `gaia-frontend` healthy, immagine corrispondente al digest candidato.
+Smoke dal server e dalla workstation: home, login e Tributi HTTP 200,
+bundle dei nuovi controlli effettivamente servito da `gaia.lan`;
+`/api/health` restituisce backend production `ok`.
+Il confronto degli ID conferma nessun altro container ricreato. Il container
+temporaneo candidato e stato rimosso; rollback conservato nella directory release.
+
+Graphify frontend aggiornato con pruning forzato; corpus docs Ruolo e piattaforma
+aggiornati con `gpt-reserve`, chunk completati senza failure semantiche.
+I grafi restano ignorati da Git. Le segnalazioni npm audit, i warning ESLint e
+il warning gia legato all'avvio `next start` con output standalone restano
+limiti dichiarati; non sono emerse regressioni funzionali nei controlli finali.
