@@ -13,6 +13,11 @@
   Ratchet contro `f0e066e0` senza finding, baseline sincronizzata/verificata.
   `CalculationPoliciesPanel`: cognitiva 24 -> 23, ciclomatica 25 -> 24,
   LOC 258 -> 257. Nessun cambio a backend, regole o dati.
+- Rilasciato `cb4814d9` su `gaia.lan`, immagine frontend
+  `gaia-frontend:tributi-rule-scroll-20261019`. Smoke HTTP/asset PASS;
+  entrambi i test browser ripetuti sul frontend pubblicato con API simulate
+  PASS. Backend e altri container invariati; rollback frontend predisposto in
+  `/opt/gaia/releases/tributi-rule-scroll-20261019`.
 
 ## Regole annuali e non notificati — 2026-10-19
 
