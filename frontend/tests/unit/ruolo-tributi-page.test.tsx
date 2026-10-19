@@ -7,6 +7,10 @@ import {
   EMPTY_CALCULATION_POLICY_FORM,
   calculationPolicyAnnualityYears,
   calculationPolicyPayload,
+  calculationPolicyFormFromPolicy,
+  policyChargeMode,
+  groupCalculationPolicies,
+  annualityPolicyPayload,
   optionalDate,
   parseOptionalYear,
   policyBonarioDueDate,
@@ -819,6 +823,79 @@ describe("Ruolo tributi page", () => {
     expect((await screen.findAllByText("Eliminazione bloccata")).length).toBeGreaterThan(0);
   });
 
+  test("creates annual rules with independent components, dates and notification scope", async () => {
+    render(<RuoloTributiPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Gestisci regole calcolo" }));
+    fireEvent.change(screen.getByPlaceholderText("Nome, es. Ruoli morosi 2024"), { target: { value: "Blocco annuale" } });
+    fireEvent.change(screen.getByPlaceholderText("Anno da"), { target: { value: "2022" } });
+    fireEvent.change(screen.getByPlaceholderText("Anno a"), { target: { value: "2023" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Solo avvisi non notificati" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Componenti da applicare 2022" }), { target: { value: "surcharge" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Componenti da applicare 2023" }), { target: { value: "interest" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Solo avvisi non notificati 2023" }));
+    fireEvent.change(screen.getByLabelText("% maggiorazione ruolo 2022"), { target: { value: "6" } });
+    fireEvent.change(screen.getByLabelText("% Euribor medio 6 mesi 2023"), { target: { value: "2,5" } });
+    fireEvent.change(screen.getByLabelText("% tasso da delibera 2023"), { target: { value: "1,5" } });
+    fireEvent.change(screen.getByLabelText("Scadenza pagamento bonario 2022"), { target: { value: "2025-05-26" } });
+    fireEvent.change(screen.getByLabelText("Fallback/minimo interessi 2023"), { target: { value: "2026-05-08" } });
+    fireEvent.change(screen.getByLabelText("Decorrenza interessi 2023"), { target: { value: "fixed_date" } });
+    fireEvent.click(screen.getByRole("button", { name: "Aggiungi" }));
+    await waitFor(() => expect(mocks.createTributiCalculationPolicy).toHaveBeenCalledTimes(2));
+    expect(mocks.createTributiCalculationPolicy).toHaveBeenNthCalledWith(1, "token", expect.objectContaining({
+      name: "Blocco annuale 2022", year_from: 2022, year_to: 2022,
+      only_unnotified: true, surcharge_rate_percent: 6, interest_rate_percent: 0, euribor_6m_rate_percent: 0,
+      bonario_due_date: "2025-05-26", interest_from: null,
+    }));
+    expect(mocks.createTributiCalculationPolicy).toHaveBeenNthCalledWith(2, "token", expect.objectContaining({
+      name: "Blocco annuale 2023", year_from: 2023, year_to: 2023,
+      only_unnotified: false, surcharge_rate_percent: 0, interest_rate_percent: 1.5, euribor_6m_rate_percent: 2.5,
+      bonario_due_date: null, interest_from: "2026-05-08", interest_start_mode: "fixed_date",
+      euribor_source_url: null, euribor_reference_period: null, euribor_fetched_at: null,
+    }));
+    await screen.findAllByText("Regole ruolo salvate per 2 annualita.");
+    expect(screen.getByRole("checkbox", { name: "Solo avvisi non notificati" })).not.toBeChecked();
+  });
+
+  test("groups existing annual rules without merging their settings and edits notification scope", async () => {
+    const rules = [
+      { ...calculationPolicies[0], name: "Ruoli 2024 e 2025 2024", year_from: 2024, year_to: 2024, only_unnotified: true, euribor_6m_rate_percent: 0, interest_rate_percent: 0 },
+      { ...calculationPolicies[0], id: "policy-2025", name: "Ruoli 2024 e 2025 2025", year_from: 2025, year_to: 2025, only_unnotified: false },
+    ];
+    mocks.listTributiCalculationPolicies.mockResolvedValue({ items: rules });
+    render(<RuoloTributiPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Gestisci regole calcolo" }));
+    const block = await screen.findByRole("region", { name: "Blocco Ruoli 2024 e 2025" });
+    expect(within(block).getAllByRole("article")).toHaveLength(2);
+    const rule = within(block).getByText("Ruoli 2024 e 2025 2024").closest("article")!;
+    expect(within(rule).getByText("Solo avvisi non notificati")).toBeInTheDocument();
+    fireEvent.click(within(rule).getByRole("button", { name: "Modifica" }));
+    const checkbox = screen.getByRole("checkbox", { name: "Solo avvisi non notificati" });
+    expect(checkbox).toBeChecked();
+    expect(screen.getByRole("combobox", { name: "Componenti da applicare" })).toHaveValue("surcharge");
+    fireEvent.click(checkbox);
+    fireEvent.change(screen.getByRole("combobox", { name: "Componenti da applicare" }), { target: { value: "both" } });
+    fireEvent.change(screen.getByLabelText("% tasso da delibera"), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Aggiorna" }));
+    await waitFor(() => expect(mocks.updateTributiCalculationPolicy).toHaveBeenCalledWith("token", rules[0].id, expect.objectContaining({
+      year_from: 2024, year_to: 2024, only_unnotified: false, surcharge_rate_percent: 3, interest_rate_percent: 2,
+    })));
+    expect(mocks.createTributiCalculationPolicy).not.toHaveBeenCalled();
+  });
+
+  test("preserves legacy zero-rate rules and handles independent block names", () => {
+    const policy = calculationPolicies[0];
+    expect(policyChargeMode({ ...policy, surcharge_rate_percent: 0 })).toBe("interest");
+    const zero = { ...policy, surcharge_rate_percent: 0, interest_rate_percent: 0, euribor_6m_rate_percent: 0 };
+    const form = calculationPolicyFormFromPolicy(zero);
+    expect(form.charge_mode).toBe("none");
+    expect(calculationPolicyPayload({ ...form, surcharge_rate_percent: "6", interest_rate_percent: "3" })).toEqual(expect.objectContaining({ surcharge_rate_percent: 0, interest_rate_percent: 0 }));
+    expect(annualityPolicyPayload({ ...form, name: "Zero" }, 2022)).toEqual(expect.objectContaining({ name: "Zero 2022", bonario_due_date: null, interest_from: null }));
+    expect(groupCalculationPolicies([
+      { ...policy, name: "A", year_from: null, year_to: null },
+      { ...policy, name: "B", year_from: 2024, year_to: 2024 },
+    ]).map((block) => block.name)).toEqual(["A", "B"]);
+  });
+
   test("manages calculation policies configuration", async () => {
     render(<RuoloTributiPage />);
 
@@ -864,6 +941,7 @@ describe("Ruolo tributi page", () => {
     await waitFor(() => expect(mocks.updateTributiCalculationPolicy).toHaveBeenCalled());
     expect(mocks.updateTributiCalculationPolicy).toHaveBeenCalledWith("token", "policy-gaia-2024", {
       name: "Policy aggiornata 2025",
+      only_unnotified: false,
       year_from: 2025,
       year_to: 2025,
       bonario_due_date: "2026-07-31",
@@ -883,6 +961,7 @@ describe("Ruolo tributi page", () => {
     });
     expect(mocks.createTributiCalculationPolicy).toHaveBeenCalledWith("token", {
       name: "Policy aggiornata 2026",
+      only_unnotified: false,
       year_from: 2026,
       year_to: 2026,
       bonario_due_date: "2027-07-31",
@@ -1058,6 +1137,7 @@ describe("Ruolo tributi page", () => {
     await waitFor(() => expect(mocks.createTributiCalculationPolicy).toHaveBeenCalledTimes(2));
     expect(mocks.createTributiCalculationPolicy).toHaveBeenNthCalledWith(1, "token", {
       name: "Ruoli bonari 2024",
+      only_unnotified: false,
       year_from: 2024,
       year_to: 2024,
       bonario_due_date: "2026-07-31",
@@ -1077,6 +1157,7 @@ describe("Ruolo tributi page", () => {
     });
     expect(mocks.createTributiCalculationPolicy).toHaveBeenNthCalledWith(2, "token", {
       name: "Ruoli bonari 2025",
+      only_unnotified: false,
       year_from: 2025,
       year_to: 2025,
       bonario_due_date: "2027-07-31",

@@ -85,6 +85,15 @@ from app.modules.ruolo.services.tributi_reminder_service import (
     generate_reminder_docx,
     reminder_storage_dir,
 )
+from app.modules.ruolo.tributi_notification_evidence import (
+    calculation_policy_context,
+    documented_registered_mail_ids,
+    has_documented_pec_delivery,
+    policy_for_notice,
+)
+from app.modules.ruolo.tributi_notification_evidence import (
+    parse_policy_date as _parse_policy_date,
+)
 from app.modules.ruolo.tributi_policy_repository import (
     bollettino_policy_payload as _bollettino_policy_payload,
 )
@@ -254,24 +263,6 @@ def _abs_incass_amount(value: object) -> Decimal | None:
 
 def _percent(value: object) -> Decimal:
     return (Decimal(str(value or 0)) / Decimal("100")).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
-
-
-def _parse_policy_date(value: object) -> date | None:
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    text = str(value).strip()
-    if not text:
-        return None
-    for pattern in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y", "%Y-%m-%d"):
-        with suppress(ValueError):
-            return datetime.strptime(text[:19] if "%H" in pattern else text[:10], pattern).date()
-    with suppress(ValueError):
-        return datetime.fromisoformat(text.replace("Z", "+00:00")).date()
-    return None
 
 
 def _normalise_tax_code(value: str | None) -> str:
@@ -849,6 +840,13 @@ def _hydrate_incass_notice_row(notice_row: dict[str, Any] | Any | None) -> dict[
         "importo_residuo": notice_row["importo_residuo"],
         "importo_rateizzato": notice_row["importo_rateizzato"],
         "rateization_fee_amount": _money_float(rateization_fee_amount),
+        **_notice_notification_payload(notice_row),
+    }
+
+
+def _notice_notification_payload(notice_row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "documented_pec_delivery": has_documented_pec_delivery(notice_row["raw_detail_json"]),
         "mailing_delivery": _extract_incass_mailing_delivery(
             source_notice_id=notice_row["source_notice_id"],
             raw_detail_json=notice_row["raw_detail_json"],
@@ -1093,10 +1091,7 @@ def _precompute_tributi_effective_cores(
         db,
         avviso_ids=[row[0].id for row in rows],
     )
-    policy_by_year = {
-        year: get_calculation_policy_for_year(db, year)
-        for year in sorted({row[0].anno_tributario for row in rows})
-    }
+    policy_by_year, notified_ids = calculation_policy_context(db, [row[0] for row in rows])
     cores_by_avviso_id: dict[uuid.UUID, dict[str, Any]] = {}
     for row in rows:
         avviso: RuoloAvviso = row[0]
@@ -1112,7 +1107,7 @@ def _precompute_tributi_effective_cores(
             status=status,
             paid_amount_value=row[2],
             incass_notice=incass_notice,
-            policy=policy_by_year.get(avviso.anno_tributario),
+            policy=policy_for_notice(policy_by_year.get(avviso.anno_tributario), avviso.id, incass_notice, notified_ids),
             notification_start_date=notification_start_date,
             notification_start_source=notification_start_source,
         )
@@ -1939,7 +1934,7 @@ def _row_to_tributi_item(
             status=status,
             paid_amount_value=row[2],
             incass_notice=incass_notice,
-            policy=get_calculation_policy_for_year(db, avviso.anno_tributario),
+            policy=policy_for_notice(get_calculation_policy_for_year(db, avviso.anno_tributario), avviso.id, incass_notice, documented_registered_mail_ids(db, [avviso.id])),
             notification_start_date=notification_start_date,
             notification_start_source=notification_start_source,
         )

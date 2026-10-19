@@ -1,15 +1,14 @@
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
-import uuid
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.modules.ruolo.models import RuoloTributiCalculationPolicy
-
 
 INTEREST_START_MODES = {"fixed_date", "notification_date"}
 
@@ -35,6 +34,7 @@ class CalculationPolicyUpsert:
     euribor_fetched_at: datetime | None = None
     bollettino_causale: str | None = None
     bollettino_esercizio: str | None = None
+    only_unnotified: bool = False
 
 
 def list_calculation_policies(db: Session) -> list[RuoloTributiCalculationPolicy]:
@@ -84,18 +84,13 @@ def _upsert_calculation_policy(db: Session, command: CalculationPolicyUpsert) ->
         db.add(policy)
 
     policy.name = command.name.strip()
-    policy.year_from = command.year_from
-    policy.year_to = command.year_to
-    policy.bonario_due_date = command.bonario_due_date
+    _apply_policy_schedule(policy, command)
     policy.surcharge_rate_percent = surcharge_rate
-    policy.surcharge_from = command.bonario_due_date + timedelta(days=1) if command.bonario_due_date else command.surcharge_from
     policy.euribor_6m_rate_percent = euribor_rate
     policy.euribor_source_url = command.euribor_source_url
     policy.euribor_reference_period = command.euribor_reference_period
     policy.euribor_fetched_at = command.euribor_fetched_at
     policy.interest_rate_percent = interest_rate
-    policy.interest_from = command.interest_from
-    policy.interest_start_mode = command.interest_start_mode
     policy.bollettino_causale = _optional_code(command.bollettino_causale)
     policy.bollettino_esercizio = _optional_code(command.bollettino_esercizio)
     policy.is_active = command.is_active
@@ -103,6 +98,16 @@ def _upsert_calculation_policy(db: Session, command: CalculationPolicyUpsert) ->
     policy.updated_by = command.updated_by
     db.flush()
     return policy
+
+
+def _apply_policy_schedule(policy: RuoloTributiCalculationPolicy, command: CalculationPolicyUpsert) -> None:
+    policy.only_unnotified = command.only_unnotified
+    policy.year_from = command.year_from
+    policy.year_to = command.year_to
+    policy.bonario_due_date = command.bonario_due_date
+    policy.surcharge_from = command.bonario_due_date + timedelta(days=1) if command.bonario_due_date else command.surcharge_from
+    policy.interest_from = command.interest_from
+    policy.interest_start_mode = command.interest_start_mode
 
 
 def delete_calculation_policy(db: Session, policy_id: uuid.UUID) -> bool:

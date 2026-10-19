@@ -24,13 +24,13 @@ import {
   calculationPolicyFormFromPolicy,
   calculationPolicyPayload,
   formatPolicyBollettino,
-  optionalDate,
+  annualityPolicyPayload,
   parseOptionalYear,
   policyBonarioDueDate,
-  policyNameForAnnuality,
   type CalculationPolicyFormState,
 } from "./calculation-policy-form";
 import { PolicyAnnualityCard, PolicyBollettinoFields } from "./policy-bollettino-fields";
+import { AnnualityPolicyFields, CalculationPolicyBlocks, PolicyNotificationScope, PolicyRuleOptions } from "./calculation-policy-options";
 import { listAllReminderCandidatesForYear, reminderBatchTaxCodes } from "./reminder-candidates";
 import { parseNoticeAmount } from "@/lib/utenze-payment-notices-summary";
 import {
@@ -759,14 +759,7 @@ function RuoloTributiPageContent() {
     try {
       if (shouldSaveOnePolicyPerAnnuality) {
         for (const [index, year] of annualityYears.entries()) {
-          const annualityPayload = {
-            ...payload,
-            name: policyNameForAnnuality(payload.name, year),
-            year_from: year,
-            year_to: year,
-            bonario_due_date: optionalDate(calculationPolicyForm.bonario_due_dates_by_year[String(year)]),
-            interest_from: optionalDate(calculationPolicyForm.interest_from_by_year[String(year)]),
-          };
+          const annualityPayload = annualityPolicyPayload(calculationPolicyForm, year);
           if (editingCalculationPolicyId && index === 0) {
             await updateTributiCalculationPolicy(token, editingCalculationPolicyId, annualityPayload);
           } else {
@@ -1825,7 +1818,7 @@ function CalculationPoliciesPanel({
 	                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#f3d98f]">Regole ruolo</p>
 	                <h2 className="mt-2 text-xl font-semibold">Scadenza bonaria, maggiorazioni e interessi</h2>
 	                <p className="mt-1 text-sm leading-6 text-white/75">
-	                  La maggiorazione scatta dopo la scadenza bonaria. Gli interessi partono dalla PEC o dalla ricezione raccomandata.
+	                  Ogni annualita ha le proprie componenti e decorrenze. Le regole con lo stesso nome base sono raccolte in un blocco.
 	                </p>
               </div>
               <button type="button" className="btn-secondary border-white/20 bg-white/10 text-white hover:bg-white/20" onClick={onClose}>
@@ -1842,11 +1835,12 @@ function CalculationPoliciesPanel({
                   ) : policies.length === 0 ? (
 	                    <p className="rounded-2xl bg-white px-4 py-5 text-sm text-gray-500">Nessuna regola ruolo configurata.</p>
                   ) : (
-                    policies.map((policy) => (
+                    <CalculationPolicyBlocks policies={policies} renderRule={function renderCalculationPolicyRule(policy) { return (
                       <article key={policy.id} className="grid gap-3 rounded-[22px] border border-[#eadfc9] bg-white px-4 py-3 md:grid-cols-[minmax(0,1fr),auto]">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="font-semibold text-gray-900">{policy.name}</p>
+                            <PolicyNotificationScope policy={policy} />
                             <span className="rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800">{formatYearRange(policy)}</span>
                             <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${policy.is_active ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
                               {policy.is_active ? "Attiva" : "Disattiva"}
@@ -1879,7 +1873,7 @@ function CalculationPoliciesPanel({
                           </button>
                         </div>
                       </article>
-                    ))
+                    ); }} />
                   )}
                   {/* c8 ignore stop */}
                 </div>
@@ -1888,6 +1882,8 @@ function CalculationPoliciesPanel({
 	                  <p className="text-sm font-semibold text-gray-900">{editingId ? "Modifica regola" : "Nuova regola"}</p>
                   <div className="mt-3 grid gap-2">
                     <input required value={form.name} onChange={(event) => onFormChange({ ...form, name: event.target.value })} placeholder="Nome, es. Ruoli morosi 2024" className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-amber-400" />
+                    <p className="text-xs text-gray-600">Usa lo stesso nome base per raccogliere gli anni in un blocco; modifica ogni regola separatamente.</p>
+                    <PolicyRuleOptions value={form} onChange={function updateCalculationPolicyOptions(change) { onFormChange({ ...form, ...change }); }} />
                     <div className="grid gap-2 sm:grid-cols-2">
                       <input value={form.year_from} onChange={(event) => onFormChange({ ...form, year_from: event.target.value.replace(/\D/g, "").slice(0, 4) })} inputMode="numeric" maxLength={4} placeholder="Anno da" className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-amber-400" />
                       <input value={form.year_to} onChange={(event) => onFormChange({ ...form, year_to: event.target.value.replace(/\D/g, "").slice(0, 4) })} inputMode="numeric" maxLength={4} placeholder="Anno a" className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-amber-400" />
@@ -1908,54 +1904,7 @@ function CalculationPoliciesPanel({
                         </label>
                       )}
                     </div>
-                    {shouldShowAnnualityDateFields ? (
-                      <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-3">
-                        <p className="text-xs font-semibold text-amber-900">Date per annualita</p>
-                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                          {annualityYears.map((year) => (
-                            <div key={year} className="grid gap-2 rounded-2xl border border-amber-100 bg-white/70 p-3">
-                              <p className="text-xs font-semibold text-amber-900">Annualita {year}</p>
-                              <label className="grid gap-1 text-xs font-semibold text-gray-600">
-                                Scadenza pagamento bonario
-                                <input
-                                  aria-label={`Scadenza pagamento bonario ${year}`}
-                                  type="date"
-                                  value={form.bonario_due_dates_by_year[String(year)] ?? ""}
-                                  onChange={(event) =>
-                                    onFormChange({
-                                      ...form,
-                                      bonario_due_dates_by_year: {
-                                        ...form.bonario_due_dates_by_year,
-                                        [year]: event.target.value,
-                                      },
-                                    })
-                                  }
-                                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-amber-400"
-                                />
-                              </label>
-                              <label className="grid gap-1 text-xs font-semibold text-gray-600">
-                                Fallback/minimo interessi
-                                <input
-                                  aria-label={`Fallback/minimo interessi ${year}`}
-                                  type="date"
-                                  value={form.interest_from_by_year[String(year)] ?? ""}
-                                  onChange={(event) =>
-                                    onFormChange({
-                                      ...form,
-                                      interest_from_by_year: {
-                                        ...form.interest_from_by_year,
-                                        [year]: event.target.value,
-                                      },
-                                    })
-                                  }
-                                  className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-normal outline-none focus:border-amber-400"
-                                />
-                              </label>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
+                    {shouldShowAnnualityDateFields ? <AnnualityPolicyFields form={form} onChange={onFormChange} years={annualityYears} /> : null}
                     <div className="grid gap-2 sm:grid-cols-2">
                       <label className="grid gap-1 text-xs font-semibold text-gray-600">
                         % Euribor medio 6 mesi

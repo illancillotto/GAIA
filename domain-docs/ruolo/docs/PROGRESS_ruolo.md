@@ -1,5 +1,17 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## Regole annuali e non notificati — 2026-10-19
+
+- Implementazione locale di blocchi visuali con regole annuali indipendenti:
+  maggiorazione/interessi/entrambi, tassi, date e checkbox non notificati.
+- Scope basato su consegna PEC o ricezione raccomandata documentata; preservati
+  regole esistenti, formule e decorrenze storiche. Nessun dato operativo creato.
+- Rilascio isolato autorizzato e preparato: ramo Alembic Tributi separato,
+  hotfix live preservati, backup e rollback compatibile con la nuova revisione.
+- 132 test backend e 5249 frontend piu 18 smoke PASS; coverage runtime toccato
+  100%. Immagine candidata: 130 test API PASS e migration PostgreSQL verificata.
+- Contratti, test e limiti: [TRIBUTI_RULE_BLOCKS_2026-10-19.md](TRIBUTI_RULE_BLOCKS_2026-10-19.md).
+
 ## Pulsanti annuali Consorzio/GAIA — 2026-10-19
 
 - Nel periodo Consorzio/GAIA, `Elenco tributi` espone 2022, 2023, 2024,

@@ -1,5 +1,5 @@
-from datetime import date, datetime
 import uuid
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -9,6 +9,7 @@ class RuoloTributiCalculationPolicyResponse(BaseModel):
 
     id: uuid.UUID
     name: str
+    only_unnotified: bool = False
     year_from: int | None = None
     year_to: int | None = None
     bonario_due_date: date | None = None
@@ -33,6 +34,7 @@ class RuoloTributiCalculationPolicyResponse(BaseModel):
 
 class RuoloTributiCalculationPolicyUpsertRequest(BaseModel):
     name: str = Field(min_length=1, max_length=160)
+    only_unnotified: bool = False
     year_from: int | None = None
     year_to: int | None = None
     bonario_due_date: date | None = None

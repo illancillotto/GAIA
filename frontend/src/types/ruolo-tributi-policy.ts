@@ -1,6 +1,7 @@
 export type RuoloTributiCalculationPolicyResponse = {
   id: string;
   name: string;
+  only_unnotified?: boolean;
   year_from: number | null;
   year_to: number | null;
   bonario_due_date: string | null;
@@ -25,6 +26,7 @@ export type RuoloTributiCalculationPolicyResponse = {
 
 export type RuoloTributiCalculationPolicyUpsertRequest = {
   name: string;
+  only_unnotified?: boolean;
   year_from?: number | null;
   year_to?: number | null;
   bonario_due_date?: string | null;

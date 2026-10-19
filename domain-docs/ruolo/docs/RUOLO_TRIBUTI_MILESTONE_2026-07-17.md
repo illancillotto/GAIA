@@ -230,6 +230,10 @@ Decisioni implementate:
 
 Aggiornamento UI successivo:
 
+- regole annuali con selettore maggiorazione/interessi/entrambi, date e tassi
+  personalizzabili per anno, blocchi per nome base e checkbox non notificati;
+  consegna documentata distinta dall'accettazione PEC. Implementazione locale
+  e vincoli di rilascio descritti in [TRIBUTI_RULE_BLOCKS_2026-10-19.md](TRIBUTI_RULE_BLOCKS_2026-10-19.md);
 - dal 2026-10-19 `Elenco tributi` raggruppa sotto i tre periodi dei gestori il
   campo `Anno tributario` e il filtro `Solo non pagati (anche parziali)`, attivo
   per default. L'anno vuoto seleziona tutte le annualita del periodo; cambiando
