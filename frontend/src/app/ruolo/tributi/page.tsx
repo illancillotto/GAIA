@@ -33,6 +33,7 @@ import { PolicyAnnualityCard, PolicyBollettinoFields } from "./policy-bollettino
 import { AnnualityPolicyFields, CalculationPolicyBlocks, PolicyNotificationScope, PolicyRuleOptions } from "./calculation-policy-options";
 import { PolicyDateInput, formatPolicyDate } from "./policy-date-input";
 import { listAllReminderCandidatesForYear, reminderBatchTaxCodes } from "./reminder-candidates";
+import { loadReminderPreview, reminderPreviewFilename } from "./reminder-preview";
 import { parseNoticeAmount } from "@/lib/utenze-payment-notices-summary";
 import {
   addTributiNote,
@@ -42,7 +43,6 @@ import {
   createTributiYearManager,
   deleteTributiCalculationPolicy,
   deleteTributiYearManager,
-  downloadTributiReminderDocument,
   fetchTributiEuribor6mRate,
   getTributiAvviso,
   getTributiSummary,
@@ -1071,14 +1071,10 @@ function RuoloTributiPageContent() {
           template_path: template.templatePath,
           notes: `Preview sollecito ${template.label} generata da Elenco tributi per avviso ${item.codice_cnc}.`,
         });
-        const generatedItem = result.items.find((batchItem) => batchItem.status === "generated" && batchItem.download_url) ?? result.items[0];
-        if (!generatedItem?.download_url) {
-          throw new Error(generatedItem?.error_detail || `PDF sollecito non disponibile per la preview ${template.label}.`);
-        }
-        const blob = await downloadTributiReminderDocument(token, generatedItem.download_url);
+        const { item: generatedItem, blob, label } = await loadReminderPreview(token, result, template.label);
         nextDocuments.push({
           key: template.key,
-          label: template.label,
+          label,
           item: generatedItem,
           objectUrl: URL.createObjectURL(blob),
           mimeType: blob.type || null,
@@ -2856,7 +2852,7 @@ function ReminderPreviewModal({
     );
   }
   const { item, objectUrl, mimeType } = activeDocument;
-  const filename = item.generated_document_path?.split("/").pop() || `${item.codice_fiscale}_avviso_sollecito.pdf`;
+  const filename = reminderPreviewFilename(item);
   const isPdf = mimeType === "application/pdf" || filename.toLowerCase().endsWith(".pdf");
   const downloadLabel = isPdf ? "Scarica PDF" : "Scarica DOCX";
   const pdfPreviewUrl = isPdf ? buildPdfPreviewUrlWithoutToolbar(objectUrl, pdfPreviewZoom) : objectUrl;

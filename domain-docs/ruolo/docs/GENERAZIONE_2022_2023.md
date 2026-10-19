@@ -6,6 +6,10 @@
 > le altre anomalie restano bloccanti. Questa modifica non abilita export,
 > conferma o invio e non cambia il workflow descritto di seguito.
 
+> L'azione rapida `Avviso sollecito` apre inoltre la copia PDF marcata delle
+> bozze private, senza usare il download legacy. Vedi
+> [Anteprima documentale](ANTEPRIMA_EXPORT_SOLLECITI.md).
+
 ## Stato Al 2026-09-22
 
 Implementate anteprima PDF marcata di ogni documento e preparazione/download

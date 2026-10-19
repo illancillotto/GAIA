@@ -1,5 +1,32 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## Anteprima PDF bozze da Elenco Tributi — 2026-10-19
+
+- Collegato il comando rapido `Avviso sollecito` all'anteprima privata gia
+  disponibile: gli elementi `draft` usano la route autenticata PDF marcato,
+  non il download legacy. Supportati 2022/2023 e lotti misti protetti.
+- Finestra con dicitura `BOZZA - NON VALIDA PER INVIO` e filename `bozza-...pdf`;
+  nessuna conferma, export definitivo, invio o modifica allo storico.
+- Errori di anteprima restano espliciti, senza fallback agli originali.
+  Generazione e download legacy delle altre annualita invariati.
+- Superato il limite della sola mancata apertura PDF segnalato nella sezione
+  precedente: si tratta di copia marcata, non di avviso definitivo.
+- Collaudo: 62 test frontend con coverage full-file dei due runtime al 100%
+  (655 statement, 637 branch); 18 smoke; build, typecheck e lint mirato PASS.
+  Un warning hook preesistente nella pagina rimane invariato.
+- 67 test backend PASS nell'immagine operativa con PostgreSQL isolato,
+  inclusi generazione-bozza-anteprima 2022/2023 senza storico verificato,
+  originali privati, permessi/errori e conversione LibreOffice reale.
+  Servizio preview preesistente al 100% (70 statement, 14 branch).
+- Chromium: 4 scenari desktop/mobile PASS, incluso visualizzatore PDF nativo,
+  filename bozza, errore senza fallback, regressione scrollbar/date.
+  Primo tentativo browser corretto solo nella fixture: inizializzazione token
+  limitata al frame principale, non al visualizzatore PDF di Chromium.
+- Ratchet contro `7435d3f1` PASS, nessun finding; orchestrazione anteprima
+  cognitive/cyclomatic 20/14 -> 11/10, nuovo loader 9/9, sotto soglia.
+  Baseline sincronizzata dopo ratchet e verifica riproducibilita PASS;
+  nessuna esclusione o soglia ampliata. Grafo frontend e docs aggiornati.
+
 ## Generazione senza storico verificato — 2026-10-19
 
 - Su autorizzazione operativa, il gate Tributi 2022/2023 ammette il solo

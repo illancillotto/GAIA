@@ -14,6 +14,22 @@ bozze protette.
 
 ## Anteprima Documentale
 
+### Accesso Rapido Da Elenco Tributi — 2026-10-19
+
+Il pulsante **Avviso sollecito** in Elenco tributi e nel dettaglio genera
+il lotto di anteprima. Per gli elementi `draft` (2022/2023 e lotti misti
+protetti), apre la route privata di anteprima anche se `download_url` e nullo.
+Il PDF e marcato **BOZZA - NON VALIDA PER INVIO**, la stessa indicazione
+compare nella finestra e il download si chiama `bozza-<CF>_avviso_sollecito.pdf`.
+
+Non vengono esposti originali DOCX/PDF delle bozze, ne eseguiti conferma,
+export definitivo o invio. Se conversione, integrita o accesso falliscono,
+si mostra l'errore senza ripiegare sul download originale. Gli avvisi legacy
+gia generati conservano il percorso di download e il comportamento precedente.
+Alla chiusura della finestra i blob temporanei vengono revocati.
+
+### Accesso Dal Lotto
+
 In **Ruolo > Tributi > Solleciti**, aprire un lotto, scegliere **Esamina
 documento** e **Carica anteprima PDF**. Il visualizzatore del browser permette
 di leggere tutte le pagine; **Apri bozza in una nuova scheda** e disponibile

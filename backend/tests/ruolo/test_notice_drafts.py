@@ -1,6 +1,7 @@
 """Private artifacts are durable, but never downloadable as confirmed notices."""
 
 import hashlib
+from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID, uuid4
@@ -9,6 +10,7 @@ import pytest
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from alembic.util import load_python_file
+from pypdf import PdfReader, PdfWriter
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -22,6 +24,7 @@ from app.modules.ruolo.models import (
 from app.modules.ruolo.notice_draft_models import NoticeDraft
 from app.modules.ruolo.notice_register_models import NoticeDocument
 from app.modules.ruolo.services import notice_drafts as drafts
+from app.modules.ruolo.services.notice_preview import PREVIEW_LABEL
 
 from .test_notice_generation_concurrency import generation_engine as generation_engine
 from .test_tributi_api import TestingSessionLocal, auth_headers, client, engine, seed_avviso
@@ -31,6 +34,50 @@ from .test_tributi_api import setup_database as setup_database
 def _render(payload, *, output_path):
     assert output_path.parent.stat().st_mode & 0o777 == 0o700
     output_path.write_bytes(b"synthetic draft artifact")
+
+
+@pytest.mark.parametrize("year", [2022, 2023])
+def test_list_action_generates_private_draft_with_marked_preview(year, monkeypatch):
+    avviso_id = seed_avviso(anno=year)
+    original = BytesIO()
+    writer = PdfWriter()
+    writer.add_blank_page(width=595, height=842)
+    writer.write(original)
+
+    def render(payload, *, output_path):
+        assert output_path.parent.stat().st_mode & 0o777 == 0o700
+        output_path.write_bytes(original.getvalue())
+
+    monkeypatch.setattr(repo, "_generate_and_store_batch_reminder_pdf", render)
+    result = client.post(
+        "/ruolo/tributi/solleciti/batches",
+        headers=auth_headers(),
+        json={"codice_fiscale": [], "filters": {"years": [year], "preview_only": True, "policy_group": True}},
+    )
+    assert result.status_code == 200, result.text
+    batch = result.json()
+    item = batch["items"][0]
+    assert batch["status"] == "review_required"
+    assert item["status"] == "draft"
+    assert item["avviso_ids_json"] == [str(avviso_id)]
+    assert item["download_url"] is item["generated_document_path"] is None
+    preview = client.get(
+        f"/ruolo/tributi/solleciti/batches/{batch['id']}/items/{item['id']}/preview",
+        headers=auth_headers(),
+    )
+    assert preview.status_code == 200, preview.text
+    assert preview.headers["cache-control"] == "no-store, private"
+    assert preview.headers["content-type"] == "application/pdf"
+    assert PREVIEW_LABEL in PdfReader(BytesIO(preview.content)).pages[0].extract_text()
+    assert preview.content != original.getvalue()
+    with TestingSessionLocal() as db:
+        draft = db.scalar(select(NoticeDraft))
+        assert draft.artifact == original.getvalue()
+        assert draft.state == "review_required"
+        assert db.scalar(select(NoticeDocument)) is None
+    assert client.get(
+        f"/ruolo/tributi/solleciti/items/{item['id']}/download", headers=auth_headers()
+    ).status_code == 404
 
 
 @pytest.mark.parametrize("year", [2022, 2023])

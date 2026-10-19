@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { RuoloTributiFallback } from "@/app/ruolo/tributi/fallback";
 import RuoloTributiPage from "@/app/ruolo/tributi/page";
+import { loadReminderPreview, reminderPreviewFilename } from "@/app/ruolo/tributi/reminder-preview";
 import {
   EMPTY_CALCULATION_POLICY_FORM,
   calculationPolicyAnnualityYears,
@@ -1704,6 +1705,67 @@ describe("Ruolo tributi page", () => {
     expect(await screen.findByText("Conferma generazione di 1 solleciti")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Genera PDF nel NAS" }));
     expect(await screen.findByText("Seleziona almeno una annualita da includere nel nuovo avviso.")).toBeInTheDocument();
+  });
+
+  test.each([2022, 2023])("opens a marked private draft preview for %i without using legacy download", async (year) => {
+    mocks.listTributiAvvisi.mockResolvedValue({
+      items: [{ ...listItem, anno_tributario: year }], total: 1, page: 1, page_size: 25,
+    });
+    const draft = {
+      ...reminderBatch.items[0], status: "draft", years_json: [year],
+      download_url: "/must-not-download-original", generated_document_path: null,
+      error_detail: "Bozza privata: conferma ed esportazione non ancora disponibili",
+    };
+    mocks.createTributiReminderBatch.mockResolvedValue({ ...reminderBatch, status: "review_required", items: [draft] });
+    mocks.downloadTributiReminderDocument.mockResolvedValue(new Blob(["marked PDF"], { type: "application/pdf" }));
+    render(<RuoloTributiPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Avviso sollecito" }));
+    expect(await screen.findByTitle("Preview PDF avviso sollecito")).toBeInTheDocument();
+    expect(mocks.downloadTributiReminderDocument).toHaveBeenCalledExactlyOnceWith(
+      "token", "/ruolo/tributi/solleciti/batches/batch-1/items/item-1/preview",
+    );
+    expect(screen.getByText(/BOZZA - NON VALIDA PER INVIO/)).toBeVisible();
+    expect(screen.getByRole("link", { name: "Scarica PDF" })).toHaveAttribute("download", "bozza-RSSMRA80A01H501Z_avviso_sollecito.pdf");
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi", exact: true }));
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:sollecito-preview");
+  });
+
+  test("does not fall back to original bytes when private draft preview is unavailable", async () => {
+    mocks.createTributiReminderBatch.mockResolvedValue({
+      ...reminderBatch, status: "review_required",
+      items: [{ ...reminderBatch.items[0], status: "draft" }],
+    });
+    mocks.downloadTributiReminderDocument.mockRejectedValue(new Error("Anteprima non disponibile: verificare il PDF o il convertitore"));
+    render(<RuoloTributiPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Avviso sollecito" }));
+    expect(await screen.findByText("Anteprima non disponibile: verificare il PDF o il convertitore")).toBeVisible();
+    expect(mocks.downloadTributiReminderDocument).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("link", { name: "Scarica PDF" })).not.toBeInTheDocument();
+  });
+
+  test("rejects an empty preview batch and prefers a generated document over earlier failures", async () => {
+    await expect(loadReminderPreview("token", { ...reminderBatch, items: [] }, "Template GAIA"))
+      .rejects.toThrow("PDF sollecito non disponibile per la preview Template GAIA.");
+    const generated = reminderBatch.items[0];
+    const result = await loadReminderPreview("token", {
+      ...reminderBatch, items: [{ ...generated, status: "failed", download_url: null }, generated],
+    }, "Template GAIA");
+    expect(result.item).toBe(generated);
+    expect(result.label).toBe("Template GAIA");
+    expect(reminderPreviewFilename({ ...generated, generated_document_path: "/" }))
+      .toBe("RSSMRA80A01H501Z_avviso_sollecito.pdf");
+  });
+
+  test("selects a private draft after failed items and never uses its legacy path", async () => {
+    const draft = { ...reminderBatch.items[0], status: "draft", generated_document_path: "/private/original.docx" };
+    const result = await loadReminderPreview("token", {
+      ...reminderBatch, items: [{ ...draft, status: "failed", download_url: null }, draft],
+    }, "Template GAIA");
+    expect(result.item).toBe(draft);
+    expect(mocks.downloadTributiReminderDocument).toHaveBeenCalledExactlyOnceWith(
+      "token", "/ruolo/tributi/solleciti/batches/batch-1/items/item-1/preview",
+    );
+    expect(reminderPreviewFilename(draft)).toBe("bozza-RSSMRA80A01H501Z_avviso_sollecito.pdf");
   });
 
   test("generates a reminder preview from list rows and detail modal", async () => {

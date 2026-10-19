@@ -1,5 +1,13 @@
 # GAIA Ruolo — Product Requirements Document v1.0
 
+### Anteprima bozze da Elenco Tributi — 2026-10-19
+
+`Avviso sollecito` apre anche le bozze private 2022/2023 tramite il PDF
+marcato `BOZZA - NON VALIDA PER INVIO`, con download della sola copia marcata.
+Il download legacy resta chiuso per le bozze. Errori di conversione/accesso
+non espongono gli originali; conferma, export e invio restano flussi separati.
+Dettagli in [ANTEPRIMA_EXPORT_SOLLECITI.md](ANTEPRIMA_EXPORT_SOLLECITI.md).
+
 ### Controllo storico particelle — 2026-10-06
 
 Il workspace `/ruolo/particelle` riusa la pagina esistente per il controllo
