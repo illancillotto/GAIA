@@ -2,12 +2,13 @@
 
 ## Regole annuali e non notificati — 2026-10-19
 
-- Implementazione locale di blocchi visuali con regole annuali indipendenti:
+- Implementazione di blocchi visuali con regole annuali indipendenti:
   maggiorazione/interessi/entrambi, tassi, date e checkbox non notificati.
 - Scope basato su consegna PEC o ricezione raccomandata documentata; preservati
   regole esistenti, formule e decorrenze storiche. Nessun dato operativo creato.
-- Rilascio isolato autorizzato e preparato: ramo Alembic Tributi separato,
-  hotfix live preservati, backup e rollback compatibile con la nuova revisione.
+- Rilasciato `c58250bb` su `gaia.lan`: backend/frontend healthy, ramo Alembic
+  isolato `20261019_1400`, hotfix live e due regole esistenti preservati.
+  Backup e rollback compatibile verificati; altri servizi permanenti invariati.
 - 132 test backend e 5249 frontend piu 18 smoke PASS; coverage runtime toccato
   100%. Immagine candidata: 130 test API PASS e migration PostgreSQL verificata.
 - Contratti, test e limiti: [TRIBUTI_RULE_BLOCKS_2026-10-19.md](TRIBUTI_RULE_BLOCKS_2026-10-19.md).

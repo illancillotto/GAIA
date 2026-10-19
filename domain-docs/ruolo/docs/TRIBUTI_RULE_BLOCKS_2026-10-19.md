@@ -117,7 +117,9 @@ Il backend di rollback contiene il codice live precedente e la sola migration
 additiva, cosi il suo entrypoint riconosce la nuova revisione Alembic. Il
 rollback non elimina la colonna ne i dati; non usare direttamente la vecchia
 immagine priva della revisione, ne eseguire downgrade distruttivi automatici.
-Il deploy e ancora da eseguire al momento di questo checkpoint pre-rilascio.
+Rilascio completato il 19 ottobre 2026 alle 14:46 Europe/Rome, dalla feature
+`c58250bb`. Immagini attive: `gaia-backend:tributi-rules-20261019` e
+`gaia-frontend:tributi-rules-20261019`.
 
 ## Evidenze finali locali
 
@@ -147,6 +149,28 @@ Il deploy e ancora da eseguire al momento di questo checkpoint pre-rilascio.
   limite dimensionale, HTML Ruolo generato. Docs Ruolo aggiornati con
   `gpt-reserve`, chunk completato senza failure semantiche. Output non versionati.
 
-Le prove PostgreSQL isolate non equivalgono a un deploy: le verifiche live
-vengono registrate dopo il rilascio. Non e stata eseguita una verifica browser
-autenticata; le interazioni sono coperte dai test UI montati.
+## Verifica finale live
+
+- Backend e frontend healthy; `/api/health`, home, login e pagina Tributi
+  rispondono correttamente. Gli asset pubblicati contengono pulsanti annuali,
+  filtri saldo, componenti annuali, blocchi e checkbox non notificati.
+- OpenAPI espone `only_unnotified` in richiesta e risposta, con default falso.
+  La route policy resta protetta: richiesta senza credenziali rifiutata.
+- Database alla sola revisione `20261019_1400`; entrambe le regole preesistenti
+  sono identiche al backup, salvo la nuova colonna falsa. Nessuna regola,
+  percentuale, data operativa o notifica e stata creata/modificata dal deploy.
+- Diff immagini backend verificato: esattamente sei moduli Tributi e una
+  migration. Environment, comandi e mount preservati; nessun container
+  permanente estraneo ricreato.
+- Il primo tentativo ha attivato il rollback precauzionale: l'istantanea dei
+  container includeva un processo temporaneo terminato durante i test.
+  Ripristino riuscito; secondo tentativo con istantanea aggiornata PASS,
+  preservando il controllo d'identita degli altri container. Entrambi i
+  tentativi e il risultato finale sono conservati nella directory di rilascio.
+- Nessuna regressione rilevata nel perimetro verificato. Restano warning
+  preesistenti: hook ESLint, chiave JWT delle fixture e metadata Compose del
+  volume PostgreSQL recuperato (nessuna modifica del volume).
+
+Non e stata eseguita una verifica browser autenticata; le interazioni sono
+coperte dai test UI montati. Restano i limiti funzionali dichiarati sopra:
+salvataggio multianno non atomico e divieto di policy annuali sovrapposte.
