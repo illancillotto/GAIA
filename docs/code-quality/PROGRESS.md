@@ -1,5 +1,22 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-19 — Recupero baseline sul runtime gia committato
+
+- Il check globale su un checkout pulito di `5e158913` riproduce
+  `ambiguous_identity` per `gaia/users/page.tsx`, `useEffect[0]<callback>`,
+  quattro candidati. La feature filtri Tributi non e presente nel checkout.
+- Eseguiti `baseline-repair` e `baseline-verify` nel checkout pulito:
+  riproducibilita confermata. La baseline precedente referenziava `11ed944a`;
+  il recupero fotografa esclusivamente codice gia committato a `5e158913`.
+- Snapshot completo: 1680 file e 20357 callable; 274 record file differiscono
+  dal vecchio snapshot, inclusi i file aggiunti nei commit intermedi.
+  Soglie, motori, policy include/exclude ed eccezioni non sono modificati.
+  Il debito legacy resta censito: 1920 error e 2736 warning nello scanner.
+- Suite completa `tests/code_quality`: 270 test PASS. Recupero versionato
+  separatamente dalla feature; il suo ratchet resta confrontato anche con
+  la baseline originale del merge-base, senza assorbire le modifiche runtime
+  non committate nel recupero.
+
 ## 2026-10-12 — PAUSE: consolidamento autorizzato, nessuna nuova slice
 
 - Utente richiede pausa del goal globale, non completamento. Swarm terminale;
