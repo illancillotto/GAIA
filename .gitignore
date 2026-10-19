@@ -97,3 +97,5 @@ config/mcps/approved-clients.json
 backend/.tmp/inaz_export_compare_2026-05.xlsm 
 tsconfig.tsbuildinfo
 graphify-out/
+output/
+outputs/
