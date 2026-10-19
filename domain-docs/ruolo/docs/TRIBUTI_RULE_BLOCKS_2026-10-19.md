@@ -2,6 +2,13 @@
 
 ## Comportamento
 
+L'anteprima `Regole ruolo` mostra tutte le policy attive, non solo le prime tre,
+in ordine crescente di anno iniziale; quelle senza limite iniziale precedono
+gli anni specifici. Il conteggio corrisponde alle schede consultabili, anche per
+gli utenti in sola lettura. Le schede scorrono orizzontalmente nel riquadro,
+raggiungibile da tastiera, senza spostare il pulsante `Gestisci regole calcolo`.
+Le regole inattive restano consultabili nella gestione amministrativa.
+
 In `Regole ruolo`, ogni annualita conserva una regola indipendente. La modale
 raggruppa le regole per nome base, rimuovendo dal nome il suffisso dell'anno
 quando la regola riguarda un singolo anno: e lo stesso criterio gia usato

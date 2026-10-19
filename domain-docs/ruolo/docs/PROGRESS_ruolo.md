@@ -1,5 +1,19 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## Scorrimento anteprima regole — 2026-10-19
+
+- Rimosso il limite di tre schede: tutte le regole attive sono ordinate per
+  anno, consultabili orizzontalmente anche da tastiera. Gestione fuori dall'area
+  scorrevole; stesse schede per amministratori e utenti in sola lettura.
+- 57 test del componente PASS, coverage full-file `page.tsx` 100% statement,
+  branch, funzioni e linee; 18 smoke PASS. Due test browser Chromium a 1440 e
+  390 px verificano overflow interno, ultima scheda raggiungibile, freccia
+  destra e comando gestione stabile/funzionante. Nessuna scrittura API live.
+- Typecheck, lint e build produzione PASS (warning hook preesistenti).
+  Ratchet contro `f0e066e0` senza finding, baseline sincronizzata/verificata.
+  `CalculationPoliciesPanel`: cognitiva 24 -> 23, ciclomatica 25 -> 24,
+  LOC 258 -> 257. Nessun cambio a backend, regole o dati.
+
 ## Regole annuali e non notificati — 2026-10-19
 
 - Implementazione di blocchi visuali con regole annuali indipendenti:

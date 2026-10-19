@@ -1741,8 +1741,7 @@ function CalculationPoliciesPanel({
   onOpen: () => void;
   onClose: () => void;
 }) {
-  const activePolicies = [...policies].filter((policy) => policy.is_active);
-  const visiblePolicies = canManage ? activePolicies.slice(0, 3) : activePolicies;
+  const activePolicies = policies.filter((policy) => policy.is_active).sort((first, second) => Number(first.year_from) - Number(second.year_from));
   const annualityYears = calculationPolicyAnnualityYears(parseOptionalYear(form.year_from), parseOptionalYear(form.year_to));
   const shouldShowAnnualityDateFields = annualityYears.length > 1;
 
@@ -1760,14 +1759,14 @@ function CalculationPoliciesPanel({
             <p className="section-copy mt-1">
               Configura scadenza bonaria, maggiorazioni per annualita e decorrenza interessi da PEC/raccomandata.
             </p>
-            <div className="mt-3 grid gap-2 md:grid-cols-3">
+            <div role="region" aria-label="Regole ruolo attive per anno" tabIndex={0} className="mt-3 flex gap-2 overflow-x-auto pb-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-700">
               {loading ? (
                 <span className="rounded-2xl bg-white px-3 py-3 text-xs font-semibold text-gray-500">Caricamento policy...</span>
               ) : activePolicies.length === 0 ? (
                 <span className="rounded-2xl bg-white px-3 py-3 text-xs font-semibold text-amber-800">Nessuna maggiorazione attiva</span>
               ) : (
-                visiblePolicies.map((policy) => (
-                  <article key={policy.id} className="rounded-2xl border border-amber-100 bg-white px-3 py-3">
+                activePolicies.map((policy) => (
+                  <article key={policy.id} className="w-64 shrink-0 rounded-2xl border border-amber-100 bg-white px-3 py-3">
                     <p className="truncate text-sm font-semibold text-gray-900">{policy.name}</p>
                     <p className="mt-1 text-xs text-gray-500">{formatYearRange(policy)}</p>
                     <div className="mt-2 space-y-1 text-[11px] leading-4 text-gray-600">

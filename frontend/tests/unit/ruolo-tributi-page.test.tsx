@@ -896,6 +896,28 @@ describe("Ruolo tributi page", () => {
     ]).map((block) => block.name)).toEqual(["A", "B"]);
   });
 
+  test.each(["super_admin", "viewer"])("shows every active rule chronologically in a keyboard-accessible strip for %s", async (role) => {
+    mocks.getCurrentUser.mockResolvedValueOnce(buildCurrentUser({ role, username: role }));
+    const policies = [2025, null, 2023, 2022, 2024].map((year) => ({
+      ...calculationPolicies[0], id: `policy-${year}`, name: `Regola ${year ?? "storica"}`, year_from: year, year_to: year,
+    }));
+    mocks.listTributiCalculationPolicies.mockResolvedValue({ items: [...policies, { ...calculationPolicies[0], id: "inactive", name: "Regola inattiva", is_active: false }] });
+    render(<RuoloTributiPage />);
+
+    const strip = await screen.findByRole("region", { name: "Regole ruolo attive per anno" });
+    await within(strip).findByText("Regola 2025");
+    expect(within(strip).getAllByRole("article").map((card) => card.querySelector("p")?.textContent)).toEqual([
+      "Regola storica", "Regola 2022", "Regola 2023", "Regola 2024", "Regola 2025",
+    ]);
+    expect(screen.getByText("5 attive")).toBeInTheDocument();
+    expect(within(strip).queryByText("Regola inattiva")).not.toBeInTheDocument();
+    expect(strip).toHaveClass("overflow-x-auto");
+    strip.focus();
+    expect(strip).toHaveFocus();
+    expect(strip).not.toContainElement(screen.getByRole("button", { name: "Gestisci regole calcolo" }));
+    expect(policies.map((policy) => policy.year_from)).toEqual([2025, null, 2023, 2022, 2024]);
+  });
+
   test("manages calculation policies configuration", async () => {
     render(<RuoloTributiPage />);
 

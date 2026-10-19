@@ -187,6 +187,10 @@ provenienza e recupero dello storico sono descritti in
 > selezione maggiorazione/interessi/entrambi e checkbox `Solo avvisi non notificati`.
 > La checkbox usa consegna PEC o ricezione raccomandata documentata, non la sola
 > accettazione. Dettagli e stato rilascio: [regole annuali](TRIBUTI_RULE_BLOCKS_2026-10-19.md).
+
+> Anteprima regole: tutte le policy attive sono consultabili in ordine di anno
+> tramite scorrimento orizzontale nel riquadro, anche da tastiera. Nessun limite
+> di tre schede; il comando di gestione resta esterno all'area scorrevole.
 >
 > Aggiornamento 2026-08-06: il tasso interessi delle `Regole ruolo` e composto da
 > `Euribor medio 6 mesi + tasso da delibera`. La modal consente l'inserimento manuale
