@@ -2,6 +2,13 @@
 
 ## Comportamento
 
+Le date delle regole, nei campi comuni, nelle personalizzazioni annuali e nei
+riepiloghi, usano sempre `gg/mm/aaaa` con anno a quattro cifre, indipendentemente
+dalla lingua del browser. Si puo digitare la data o selezionarla dal calendario.
+Date impossibili, incomplete o con anno a due cifre impediscono il salvataggio;
+un campo vuoto conserva il significato precedente. Le API mantengono date ISO
+`aaaa-mm-gg` e i dati gia salvati vengono visualizzati nel formato italiano.
+
 L'anteprima `Regole ruolo` mostra tutte le policy attive, non solo le prime tre,
 in ordine crescente di anno iniziale; quelle senza limite iniziale precedono
 gli anni specifici. Il conteggio corrisponde alle schede consultabili, anche per

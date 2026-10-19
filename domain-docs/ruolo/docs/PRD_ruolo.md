@@ -191,6 +191,10 @@ provenienza e recupero dello storico sono descritti in
 > Anteprima regole: tutte le policy attive sono consultabili in ordine di anno
 > tramite scorrimento orizzontale nel riquadro, anche da tastiera. Nessun limite
 > di tre schede; il comando di gestione resta esterno all'area scorrevole.
+
+> Date delle regole: inserimento, calendario e riepiloghi in `gg/mm/aaaa`, con
+> validazione delle date effettive e anno a quattro cifre. Il contratto API
+> conserva il formato ISO `aaaa-mm-gg`.
 >
 > Aggiornamento 2026-08-06: il tasso interessi delle `Regole ruolo` e composto da
 > `Euribor medio 6 mesi + tasso da delibera`. La modal consente l'inserimento manuale

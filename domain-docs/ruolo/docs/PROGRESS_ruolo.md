@@ -1,5 +1,21 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## Formato italiano date regole — 2026-10-19
+
+- Campi comuni e per anno in `gg/mm/aaaa` con calendario, indipendenti dalla
+  lingua del browser. Riepiloghi con anno a quattro cifre. Date impossibili,
+  parziali e anni a due cifre impediscono il salvataggio; API sempre ISO.
+- 69 test unitari/integrati e 18 smoke PASS. Tre file runtime interessati al
+  100% statement (681/681), branch (651/651), funzioni e linee, senza esclusioni
+  aggiunte. Test coprono anni bisestili, date invalide, cancellazione, reset,
+  calendario, creazione e modifica con payload ISO comune e annuale.
+- Due test Chromium desktop/mobile (1440/390 px), locale `en-US`, PASS:
+  formato visualizzato, validazione, calendario e POST con date ISO.
+  Typecheck, lint e build produzione PASS, salvo warning hook preesistenti.
+- Ratchet contro `b1b15013` senza finding; baseline sincronizzata e verificata.
+  `CalculationPoliciesPanel`: cognitiva/ciclomatica 23/24 invariate,
+  LOC 257 -> 251. Graphify frontend e documentazione Ruolo aggiornati.
+
 ## Scorrimento anteprima regole — 2026-10-19
 
 - Rimosso il limite di tre schede: tutte le regole attive sono ordinate per

@@ -836,8 +836,8 @@ describe("Ruolo tributi page", () => {
     fireEvent.change(screen.getByLabelText("% maggiorazione ruolo 2022"), { target: { value: "6" } });
     fireEvent.change(screen.getByLabelText("% Euribor medio 6 mesi 2023"), { target: { value: "2,5" } });
     fireEvent.change(screen.getByLabelText("% tasso da delibera 2023"), { target: { value: "1,5" } });
-    fireEvent.change(screen.getByLabelText("Scadenza pagamento bonario 2022"), { target: { value: "2025-05-26" } });
-    fireEvent.change(screen.getByLabelText("Fallback/minimo interessi 2023"), { target: { value: "2026-05-08" } });
+    fireEvent.change(screen.getByLabelText("Scadenza pagamento bonario 2022"), { target: { value: "26/05/2025" } });
+    fireEvent.change(screen.getByLabelText("Fallback/minimo interessi 2023"), { target: { value: "08/05/2026" } });
     fireEvent.change(screen.getByLabelText("Decorrenza interessi 2023"), { target: { value: "fixed_date" } });
     fireEvent.click(screen.getByRole("button", { name: "Aggiungi" }));
     await waitFor(() => expect(mocks.createTributiCalculationPolicy).toHaveBeenCalledTimes(2));
@@ -935,9 +935,9 @@ describe("Ruolo tributi page", () => {
     expect(policyCard).not.toBeNull();
     expect(policyCard).toHaveTextContent("Annualita 2024");
     expect(policyCard).toHaveTextContent("Annualita 2025");
-    expect(policyCard).toHaveTextContent("Scadenza bonaria 26/05/25");
-    expect(policyCard).toHaveTextContent("Maggiorazione dal 27/05/25");
-    expect(policyCard).toHaveTextContent("Fallback/minimo interessi 27/05/25");
+    expect(policyCard).toHaveTextContent("Scadenza bonaria 26/05/2025");
+    expect(policyCard).toHaveTextContent("Maggiorazione dal 27/05/2025");
+    expect(policyCard).toHaveTextContent("Fallback/minimo interessi 27/05/2025");
     expect(policyCard).toHaveTextContent("interessi effettivi 6,25%");
     expect(policyCard).toHaveTextContent("Fonte Euribor BCE 2024");
 
@@ -950,11 +950,11 @@ describe("Ruolo tributi page", () => {
     expect(await modal.findByText("verifica il dato BCE")).toBeInTheDocument();
     fireEvent.change(modal.getByPlaceholderText("es. 3"), { target: { value: "4,5" } });
     expect(await modal.findByText("Date per annualita")).toBeInTheDocument();
-    fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario 2025"), { target: { value: "2026-07-31" } });
-    fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario 2026"), { target: { value: "2027-07-31" } });
+    fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario 2025"), { target: { value: "31/07/2026" } });
+    fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario 2026"), { target: { value: "31/07/2027" } });
     fireEvent.change(modal.getByLabelText("% tasso da delibera"), { target: { value: "abc" } });
-    fireEvent.change(modal.getByLabelText("Fallback/minimo interessi 2025"), { target: { value: "2026-08-10" } });
-    fireEvent.change(modal.getByLabelText("Fallback/minimo interessi 2026"), { target: { value: "2027-08-10" } });
+    fireEvent.change(modal.getByLabelText("Fallback/minimo interessi 2025"), { target: { value: "10/08/2026" } });
+    fireEvent.change(modal.getByLabelText("Fallback/minimo interessi 2026"), { target: { value: "10/08/2027" } });
     fireEvent.change(modal.getByLabelText("Decorrenza interessi"), { target: { value: "fixed_date" } });
     fireEvent.change(modal.getByPlaceholderText("Note operative"), { target: { value: "Nuova nota" } });
     fireEvent.click(modal.getByLabelText("Policy attiva"));
@@ -1031,8 +1031,8 @@ describe("Ruolo tributi page", () => {
     expect(modal.queryByText("Date per annualita")).not.toBeInTheDocument();
     expect(modal.getByLabelText("Causale bollettino")).toHaveValue("025");
     expect(modal.getByLabelText("Esercizio bollettino")).toHaveValue("2424");
-    fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario"), { target: { value: "2026-07-31" } });
-    fireEvent.change(modal.getByLabelText("Fallback/minimo interessi"), { target: { value: "2026-08-10" } });
+    fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario"), { target: { value: "31/07/2026" } });
+    fireEvent.change(modal.getByLabelText("Fallback/minimo interessi"), { target: { value: "10/08/2026" } });
     fireEvent.change(modal.getByLabelText("Causale bollettino"), { target: { value: "a0079" } });
     fireEvent.change(modal.getByLabelText("Esercizio bollettino"), { target: { value: "x25259" } });
     fireEvent.click(modal.getByRole("button", { name: "Aggiorna" }));
@@ -1150,10 +1150,10 @@ describe("Ruolo tributi page", () => {
     fireEvent.change(modal.getByPlaceholderText("Anno da"), { target: { value: "2024" } });
     fireEvent.change(modal.getByPlaceholderText("Anno a"), { target: { value: "2025" } });
     expect(await modal.findByText("Date per annualita")).toBeInTheDocument();
-    fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario 2024"), { target: { value: "2026-07-31" } });
-    fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario 2025"), { target: { value: "2027-07-31" } });
-    fireEvent.change(modal.getByLabelText("Fallback/minimo interessi 2024"), { target: { value: "2026-08-10" } });
-    fireEvent.change(modal.getByLabelText("Fallback/minimo interessi 2025"), { target: { value: "2027-08-10" } });
+    fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario 2024"), { target: { value: "31/07/2026" } });
+    fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario 2025"), { target: { value: "31/07/2027" } });
+    fireEvent.change(modal.getByLabelText("Fallback/minimo interessi 2024"), { target: { value: "10/08/2026" } });
+    fireEvent.change(modal.getByLabelText("Fallback/minimo interessi 2025"), { target: { value: "10/08/2027" } });
     fireEvent.click(modal.getByRole("button", { name: "Aggiungi" }));
 
     await waitFor(() => expect(mocks.createTributiCalculationPolicy).toHaveBeenCalledTimes(2));

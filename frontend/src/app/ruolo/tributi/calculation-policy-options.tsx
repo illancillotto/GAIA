@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { PolicyDateInput } from "./policy-date-input";
 import type { RuoloTributiCalculationPolicyResponse } from "@/types/ruolo";
 import {
   groupCalculationPolicies,
@@ -73,10 +74,7 @@ function AnnualityRuleEditor({ form, onChange, year }: FormProps & { year: numbe
         ["bonario_due_dates_by_year", "Scadenza pagamento bonario"],
         ["interest_from_by_year", "Fallback/minimo interessi"],
       ] as const).map(([field, label]) => (
-        <label key={field} className="grid gap-1 text-xs font-semibold text-gray-600">
-          {label} {year}
-          <input aria-label={`${label} ${year}`} type="date" value={form[field][String(year)] ?? ""} onChange={(event) => onChange({ ...form, [field]: { ...form[field], [year]: event.target.value } })} className="rounded-xl border border-gray-200 px-3 py-2" />
-        </label>
+        <PolicyDateInput key={field} label={`${label} ${year}`} value={form[field][String(year)] ?? ""} onChange={(value) => onChange({ ...form, [field]: { ...form[field], [year]: value } })} />
       ))}
       <label className="grid gap-1 text-xs font-semibold text-gray-600">
         Decorrenza interessi {year}

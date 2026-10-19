@@ -31,6 +31,7 @@ import {
 } from "./calculation-policy-form";
 import { PolicyAnnualityCard, PolicyBollettinoFields } from "./policy-bollettino-fields";
 import { AnnualityPolicyFields, CalculationPolicyBlocks, PolicyNotificationScope, PolicyRuleOptions } from "./calculation-policy-options";
+import { PolicyDateInput, formatPolicyDate } from "./policy-date-input";
 import { listAllReminderCandidatesForYear, reminderBatchTaxCodes } from "./reminder-candidates";
 import { parseNoticeAmount } from "@/lib/utenze-payment-notices-summary";
 import {
@@ -1772,7 +1773,7 @@ function CalculationPoliciesPanel({
                     <div className="mt-2 space-y-1 text-[11px] leading-4 text-gray-600">
                       {calculationPolicyAnnualityRows(policy).map((annuality) => (
                         <p key={annuality.key}>
-                          <span className="font-semibold text-gray-800">{annuality.label}</span> · scad. bonaria {formatDate(policyBonarioDueDate(policy))} · magg. dal {formatDate(policy.surcharge_from)} · int. dal {formatDate(policy.interest_from)}
+                          <span className="font-semibold text-gray-800">{annuality.label}</span> · scad. bonaria {formatPolicyDate(policyBonarioDueDate(policy))} · magg. dal {formatPolicyDate(policy.surcharge_from)} · int. dal {formatPolicyDate(policy.interest_from)}
                         </p>
                       ))}
                     </div>
@@ -1846,7 +1847,7 @@ function CalculationPoliciesPanel({
                             </span>
                           </div>
                           <p className="mt-1 text-xs text-gray-500">
-                            Scadenza bonaria {formatDate(policyBonarioDueDate(policy))} · maggiorazione {formatPercent(policy.surcharge_rate_percent)} dal {formatDate(policy.surcharge_from)} · interessi effettivi {formatPercent(effectivePolicyInterestRatePercent(policy))} (Euribor {formatPercent(policy.euribor_6m_rate_percent)} + delibera {formatPercent(policy.interest_rate_percent)}) · {INTEREST_START_MODE_LABELS[policy.interest_start_mode]}
+                            Scadenza bonaria {formatPolicyDate(policyBonarioDueDate(policy))} · maggiorazione {formatPercent(policy.surcharge_rate_percent)} dal {formatPolicyDate(policy.surcharge_from)} · interessi effettivi {formatPercent(effectivePolicyInterestRatePercent(policy))} (Euribor {formatPercent(policy.euribor_6m_rate_percent)} + delibera {formatPercent(policy.interest_rate_percent)}) · {INTEREST_START_MODE_LABELS[policy.interest_start_mode]}
                           </p>
                           {policy.euribor_source_url ? (
                             <p className="mt-1 text-xs text-blue-700">
@@ -1858,7 +1859,7 @@ function CalculationPoliciesPanel({
                           ) : null}
                           <div className="mt-2 grid gap-1.5 text-xs text-gray-600 sm:grid-cols-2">
                             {calculationPolicyAnnualityRows(policy).map((annuality) => (
-                              <PolicyAnnualityCard key={annuality.key} label={annuality.label} bonarioDueDate={formatDate(policyBonarioDueDate(policy))} surchargeFrom={formatDate(policy.surcharge_from)} interestFrom={formatDate(policy.interest_from)} bollettino={formatPolicyBollettino(policy)} />
+                              <PolicyAnnualityCard key={annuality.key} label={annuality.label} bonarioDueDate={formatPolicyDate(policyBonarioDueDate(policy))} surchargeFrom={formatPolicyDate(policy.surcharge_from)} interestFrom={formatPolicyDate(policy.interest_from)} bollettino={formatPolicyBollettino(policy)} />
                             ))}
                           </div>
                           {policy.notes ? <p className="mt-2 text-xs leading-5 text-gray-600">{policy.notes}</p> : null}
@@ -1897,10 +1898,7 @@ function CalculationPoliciesPanel({
                           Il range verra salvato come una regola separata per ogni annualita, con scadenza bonaria e fallback interessi dedicati.
                         </p>
                       ) : (
-                        <label className="grid gap-1 text-xs font-semibold text-gray-600">
-	                          Scadenza pagamento bonario
-	                          <input type="date" value={form.bonario_due_date} onChange={(event) => onFormChange({ ...form, bonario_due_date: event.target.value })} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-normal outline-none focus:border-amber-400" />
-                        </label>
+                        <PolicyDateInput label="Scadenza pagamento bonario" value={form.bonario_due_date} onChange={(value) => onFormChange({ ...form, bonario_due_date: value })} />
                       )}
                     </div>
                     {shouldShowAnnualityDateFields ? <AnnualityPolicyFields form={form} onChange={onFormChange} years={annualityYears} /> : null}
@@ -1934,10 +1932,7 @@ function CalculationPoliciesPanel({
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2">
                       {shouldShowAnnualityDateFields ? null : (
-                        <label className="grid gap-1 text-xs font-semibold text-gray-600">
-                          Fallback/minimo interessi
-                          <input type="date" value={form.interest_from} onChange={(event) => onFormChange({ ...form, interest_from: event.target.value })} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-normal outline-none focus:border-amber-400" />
-                        </label>
+                        <PolicyDateInput label="Fallback/minimo interessi" value={form.interest_from} onChange={(value) => onFormChange({ ...form, interest_from: value })} />
                       )}
                     </div>
                     <label className="grid gap-1 text-xs font-semibold text-gray-600">

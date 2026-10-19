@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+test.use({ locale: "en-US" });
+
 for (const width of [1440, 390]) {
   test(`active policy cards scroll inside their panel at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
@@ -45,6 +47,22 @@ for (const width of [1440, 390]) {
     expect((await manage.boundingBox())!.x).toBe(originalButton!.x);
     await manage.click();
     await expect(page.getByText("Scadenza bonaria, maggiorazioni e interessi")).toBeVisible();
+    await expect(page.getByText("Scadenza bonaria 26/05/2022", { exact: true })).toBeVisible();
+    const dueDate = page.getByRole("textbox", { name: "Scadenza pagamento bonario", exact: true });
+    await expect(dueDate).toHaveAttribute("placeholder", "gg/mm/aaaa");
+    await dueDate.fill("31/02/2026");
+    expect(await dueDate.evaluate((element) => (element as HTMLInputElement).checkValidity())).toBe(false);
+    await dueDate.fill("15/11/2026");
+    await expect(page.getByLabel("Calendario Scadenza pagamento bonario", { exact: true })).toHaveValue("2026-11-15");
+    await page.getByLabel("Calendario Scadenza pagamento bonario", { exact: true }).fill("2026-07-31");
+    await expect(dueDate).toHaveValue("31/07/2026");
+    await page.getByRole("textbox", { name: "Fallback/minimo interessi", exact: true }).fill("10/08/2026");
+    await page.getByPlaceholder("Nome, es. Ruoli morosi 2024").fill("Regola data italiana");
+    await page.getByPlaceholder("Anno da", { exact: true }).fill("2026");
+    await page.getByPlaceholder("Anno a", { exact: true }).fill("2026");
+    const saved = page.waitForRequest((request) => request.url().endsWith("/calculation-policies") && request.method() === "POST");
+    await page.getByRole("button", { name: "Aggiungi", exact: true }).click();
+    expect((await saved).postDataJSON()).toMatchObject({ bonario_due_date: "2026-07-31", interest_from: "2026-08-10" });
     expect(errors).toEqual([]);
   });
 }
