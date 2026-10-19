@@ -15,6 +15,10 @@
 - Ratchet contro `b1b15013` senza finding; baseline sincronizzata e verificata.
   `CalculationPoliciesPanel`: cognitiva/ciclomatica 23/24 invariate,
   LOC 257 -> 251. Graphify frontend e documentazione Ruolo aggiornati.
+- Rilasciato `dd5a2429`: frontend `tributi-italian-dates-20261019` healthy su
+  `gaia.lan`. Smoke HTTP/asset e due prove browser ripetute sul sito pubblicato
+  con API simulate PASS; nessuna scrittura dei dati live. Backend e altri
+  container invariati. Rollback in `/opt/gaia/releases/tributi-italian-dates-20261019`.
 
 ## Scorrimento anteprima regole — 2026-10-19
 
