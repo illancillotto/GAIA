@@ -1,5 +1,11 @@
 # Generazione 2022/2023: Conferma Ed Export
 
+> Aggiornamento 2026-10-19: la generazione da Tributi consente ora posizioni
+> con il solo motivo `storico_non_verificato`, su autorizzazione operativa.
+> Il registro continua a esporre questa condizione; notifiche, STEP e tutte
+> le altre anomalie restano bloccanti. Questa modifica non abilita export,
+> conferma o invio e non cambia il workflow descritto di seguito.
+
 ## Stato Al 2026-09-22
 
 Implementate anteprima PDF marcata di ogni documento e preparazione/download

@@ -68974,7 +68974,7 @@
       "cognitive": 2,
       "cyclomatic": 3,
       "end_line": 154,
-      "fingerprint": "a00930aba57e955a",
+      "fingerprint": "cd05e0d32f7aac87",
       "kind": "function",
       "line": 149,
       "loc": 6,
@@ -347575,10 +347575,10 @@
       "violations": []
     }
   },
-  "generated_at": "2026-10-19T14:04:44.117674+00:00",
+  "generated_at": "2026-10-19T15:13:35.086963+00:00",
   "provenance": {
     "repo_root": "/home/cbo/CursorProjects/GAIA",
-    "source_commit": "b1b15013cc926af6f169cf50a70eb6a2937a8b88",
+    "source_commit": "82530422305f31befe0e981e021ecc749b9a9ec1",
     "tool": "tools/code_quality/complexity.py"
   },
   "schema_version": 2,
@@ -347608,5 +347608,5 @@
       "modules/elaborazioni/worker/**/*.py"
     ]
   },
-  "source_commit": "b1b15013cc926af6f169cf50a70eb6a2937a8b88"
+  "source_commit": "82530422305f31befe0e981e021ecc749b9a9ec1"
 }

@@ -151,4 +151,4 @@ def generation_allowed(db, item: dict, otherwise_allowed: bool) -> bool:
         return False
     if item["avviso"].anno_tributario not in {2022, 2023}:
         return True
-    return eligibility(db, item)["eligible"]
+    return set(eligibility(db, item)["reasons"]) <= {"storico_non_verificato"}

@@ -85,6 +85,67 @@ def test_verified_history_allows_generation_and_rechecked_changes_block(api):
         )
 
 
+@pytest.mark.parametrize("year", [2022, 2023])
+@pytest.mark.parametrize("payment_status", ["unpaid", "partial"])
+def test_generation_without_history_preserves_review_status(api, year, payment_status):
+    with api.session() as db:
+        avviso = _avviso(db, year=year)
+        avviso.codice_fiscale_raw = "TESTCF"
+        item = {
+            "avviso": avviso,
+            "saldo_amount": Decimal("10.00"),
+            "payment_status": payment_status,
+            "calculation_policy": "internal_gaia",
+        }
+        assert service.eligibility(db, item)["reasons"] == ["storico_non_verificato"]
+        assert service.generation_allowed(db, item, True)
+        assert not service.generation_allowed(db, item, False)
+        item["workflow_status"] = "sospeso"
+        assert not service.generation_allowed(db, item, True)
+
+
+@pytest.mark.parametrize("year", [2022, 2023])
+@pytest.mark.parametrize("state", ["da_verificare", "affidato", "chiuso"])
+def test_generation_still_blocks_linked_step_even_without_historical_source(api, year, state):
+    item, doc_id = eligible_item(api)
+    item["avviso"].anno_tributario = year
+    with api.session() as db:
+        document = db.get(NoticeDocument, doc_id)
+        document.source_system = "gaia_reminder"
+        position = db.scalar(
+            select(NoticePosition).where(NoticePosition.avviso_id == item["avviso"].id)
+        )
+        position.tax_year = year
+        recovery = db.get(NoticeRecovery, position.id)
+        recovery.state = state
+        recovery.case_reference = "STEP-TEST-001"
+        db.flush()
+        assert service.generation_allowed(db, item, True) == (state == "da_verificare")
+        document.source_system = "excel_2022_2023"
+        db.flush()
+        assert not service.generation_allowed(db, item, True)
+
+
+@pytest.mark.parametrize("year", [2022, 2023])
+def test_generation_still_blocks_documented_notification_without_historical_source(api, year):
+    item, doc_id = eligible_item(api)
+    item["avviso"].anno_tributario = year
+    with api.session() as db:
+        db.get(NoticeDocument, doc_id).source_system = "gaia_reminder"
+        position = db.scalar(
+            select(NoticePosition).where(NoticePosition.avviso_id == item["avviso"].id)
+        )
+        position.tax_year = year
+        notification = db.get(NoticeNotification, doc_id)
+        notification.state, notification.notified_on = "perfezionata", date.today()
+        notification.evidence_id = db.scalar(
+            select(NoticeEvidence.id).where(NoticeEvidence.document_id == doc_id)
+        )
+        db.flush()
+        assert "storico_non_verificato" in service.eligibility(db, item)["reasons"]
+        assert not service.generation_allowed(db, item, True)
+
+
 @pytest.mark.parametrize(
     ("changes", "reason"),
     [
@@ -101,6 +162,7 @@ def test_accounting_and_external_signals_fail_closed(api, changes, reason):
     item, _ = eligible_item(api)
     with api.session() as db:
         assert reason in service.eligibility(db, {**item, **changes})["reasons"]
+        assert not service.generation_allowed(db, {**item, **changes}, True)
 
 
 def test_unknown_history_missing_tax_code_and_orphan_positions_block(api):
@@ -117,6 +179,7 @@ def test_unknown_history_missing_tax_code_and_orphan_positions_block(api):
         db.flush()
         reasons = service.eligibility(db, item)["reasons"]
         assert {"collegamenti_mancanti", "storici_da_collegare"} <= set(reasons)
+        assert not service.generation_allowed(db, item, True)
 
 
 def test_pending_attempts_require_reviewed_non_notification_evidence(api):
@@ -130,6 +193,7 @@ def test_pending_attempts_require_reviewed_non_notification_evidence(api):
         )
         db.flush()
         assert "invii_non_chiariti" in service.eligibility(db, item)["reasons"]
+        assert not service.generation_allowed(db, item, True)
         notification.state = "tentativo_senza_notifica"
         db.flush()
         assert "invii_non_chiariti" in service.eligibility(db, item)["reasons"]
@@ -166,6 +230,7 @@ def test_poste_without_register_attempt_and_missing_recovery_are_blocked(api):
         assert {"poste_da_importare", "step_non_liberato"} <= set(
             service.eligibility(db, item)["reasons"]
         )
+        assert not service.generation_allowed(db, item, True)
 
 
 @pytest.mark.parametrize("state", ["da_verificare", "affidato", "chiuso", "revocato"])

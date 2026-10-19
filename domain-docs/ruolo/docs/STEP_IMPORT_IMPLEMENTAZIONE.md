@@ -156,8 +156,11 @@ last-write-wins e senza cancellazione dello storico.
 | Pratica chiusa | `chiuso`; resta bloccata nel gate attuale, non equivale a insoluto nuovamente esigibile |
 | Stati discordanti, copertura incompleta o collegamento dubbio | Revisione obbligatoria; nessun nuovo via libera |
 
-Notifica perfezionata, saldo non esigibile, storico non verificato, invii
-irrisolti e anomalie continuano a bloccare indipendentemente da STEP.
+Notifica perfezionata, saldo non esigibile, invii irrisolti e anomalie
+continuano a bloccare indipendentemente da STEP. Dal 2026-10-19 il solo
+storico non verificato non blocca la generazione da Tributi 2022/2023;
+resta segnalato nell'analisi del registro. Non vengono rimossi gli altri
+blocchi, inclusi gli stati STEP non liberati delle posizioni storiche note.
 L'import non puo trasformare una notifica gia perfezionata in assenza di notifica.
 La scadenza di una verifica e l'eventuale liberazione di pratiche chiuse richiedono
 una decisione di dominio separata, non una scelta implicita del parser.

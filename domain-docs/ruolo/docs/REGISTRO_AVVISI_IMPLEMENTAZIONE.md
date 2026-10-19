@@ -1,5 +1,20 @@
 # Registro Avvisi: Implementazione Incrementale
 
+## Aggiornamento Generazione 2022/2023 — 2026-10-19
+
+Su richiesta operativa, l'assenza di storico verificato non impedisce piu
+la generazione da Tributi per il 2022/2023: il gate `generation_allowed`
+ammette anche il solo motivo `storico_non_verificato`. L'analisi di registro
+`eligibility` continua a segnalare lo storico non verificato, senza inventare
+evidenze o modificare i dati storici.
+
+Restano bloccanti tutti gli altri motivi: notifiche documentate o da chiarire,
+affidamenti STEP noti e stati storici STEP non liberati, invii inCASS/Poste
+da riconciliare, collegamenti ambigui, anomalie contabili e workflow sospesi.
+Restano necessari saldo positivo, posizione non pagata o parziale, gestione
+GAIA e regola di calcolo applicabile. Il filtro «Non pagato» non rimuove questi
+controlli. Nessun cambiamento a esportazione, conferma o invio dei documenti.
+
 ## Stato Al 2026-09-21
 
 Primi quattro blocchi implementati: modello persistente, comandi di dominio,

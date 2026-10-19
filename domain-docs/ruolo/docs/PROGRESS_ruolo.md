@@ -1,5 +1,24 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## Generazione senza storico verificato — 2026-10-19
+
+- Su autorizzazione operativa, il gate Tributi 2022/2023 ammette il solo
+  motivo `storico_non_verificato`, anche per pagamenti parziali. Il registro
+  continua a segnalarlo: nessuna evidenza storica viene creata o alterata.
+- Tutti gli altri blocchi restano attivi, incluse notifiche documentate,
+  STEP, invii da riconciliare, anomalie e vincoli contabili/regole applicabili.
+- 56 test eligibility/generation PASS su SQLite e PostgreSQL isolato usando
+  l'immagine candidata. Runtime modificato full-file 75 statement e 38 branch
+  al 100%. Regressione Tributi API/checkbox non notificati: 130 test PASS.
+- Lint e complexity ratchet contro `82530422` PASS; `generation_allowed`
+  invariato a cognitive 2, cyclomatic 3, LOC 6. Baseline sincronizzata dopo
+  il ratchet e verifica riproducibilita PASS; nessuna soglia modificata.
+- Graphify codice aggiornato senza cambi di topologia; grafo documentazione
+  aggiornato con estrazione semantica completata, senza chunk falliti.
+- Limite preesistente confermato anche sul runtime operativo: 2022/2023
+  producono bozze private; conferma/export e PDF scaricabile non sono abilitati
+  da questo intervento. La selezionabilita non equivale a disponibilita PDF.
+
 ## Formato italiano date regole — 2026-10-19
 
 - Campi comuni e per anno in `gg/mm/aaaa` con calendario, indipendenti dalla
