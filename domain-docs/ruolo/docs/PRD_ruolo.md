@@ -164,6 +164,14 @@ provenienza e recupero dello storico sono descritti in
 > per le righe della pagina richiesta, riducendo il rischio di `Gateway Time-out` sul
 > perimetro `Consorzio/GAIA` con vista `Solo scoperti`.
 >
+> Aggiornamento 2026-10-19: `Elenco tributi` raggruppa i tre periodi dei gestori,
+> il campo `Anno tributario` e `Solo non pagati (anche parziali)`. Il filtro saldo
+> e attivo per default e riusa `open_only`: include residui positivi e posizioni
+> da verificare, esclude saldati ed eccedenze. Attivarlo azzera lo stato pagamento
+> puntuale per includere anche i parziali. L'anno vuoto comprende tutto il periodo;
+> cambiando gestore l'anno viene svuotato. Lista e KPI ricevono gli stessi filtri,
+> persistiti nell'URL, con ritorno alla prima pagina a ogni cambio filtro.
+>
 > Aggiornamento 2026-08-05: le `Regole ruolo` multi-annualita vengono salvate come policy
 > annuali separate per permettere date diverse per scadenza bonaria e fallback interessi.
 > Le policy annuali con stesso nome base restano pero un unico gruppo logico per la preview

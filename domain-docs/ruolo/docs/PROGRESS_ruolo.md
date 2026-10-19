@@ -1,5 +1,16 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## Filtri tributi per saldo e annualita — 2026-10-19
+
+- `Elenco tributi` raggruppa i tre periodi gestori, anno tributario e filtro
+  `Solo non pagati (anche parziali)`. Sono inclusi anche i saldi da verificare.
+- Cambiare periodo azzera l'anno; attivare il filtro saldo azzera lo stato
+  pagamento puntuale. Lista, paginazione e KPI usano gli stessi filtri URL.
+- Test UI per tutti i periodi e API con stati misti; recupero separato della
+  baseline e riallineamento delle dipendenze frontend per `npm ci` riproducibile.
+- Evidenze, limiti e stato rilascio:
+  [TRIBUTI_FILTERS_VALIDATION_2026-10-19.md](TRIBUTI_FILTERS_VALIDATION_2026-10-19.md).
+
 ## Controllo storico particelle — 2026-10-06
 
 - Confronto geometrico persistente per singola pratica su layer poligonali

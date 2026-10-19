@@ -230,6 +230,15 @@ Decisioni implementate:
 
 Aggiornamento UI successivo:
 
+- dal 2026-10-19 `Elenco tributi` raggruppa sotto i tre periodi dei gestori il
+  campo `Anno tributario` e il filtro `Solo non pagati (anche parziali)`, attivo
+  per default. L'anno vuoto seleziona tutte le annualita del periodo; cambiando
+  gestore si azzera l'anno e si riparte dalla prima pagina;
+- il filtro riusa `open_only`: include pagamenti parziali e saldi da verificare,
+  esclude le posizioni saldate. Attivandolo si azzera l'eventuale filtro puntuale
+  sullo stato pagamento, cosi non restano esclusi i parziali;
+- anno, gestore e saldo sono applicati lato API sia alla lista paginata sia ai
+  KPI, e restano rappresentati nell'URL della pagina;
 - gli avvisi con saldo aperto espongono l'azione rapida `Avviso sollecito` direttamente in
   `Elenco tributi`;
 - la stessa azione e disponibile nella modale `Dettaglio tributo`;

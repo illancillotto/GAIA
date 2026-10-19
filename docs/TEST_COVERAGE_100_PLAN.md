@@ -1,5 +1,14 @@
 # Test Coverage 100% Plan
 
+## Toolchain frontend riproducibile — 2026-10-19
+
+`vitest` e `@vitest/coverage-v8` sono fissati entrambi a `4.1.6`, compatibile
+con Node 20 usato dalla CI. Aggiornarli insieme: il provider richiede la stessa
+versione del runner. Il precedente manifest misto Vitest `5.0.3` / coverage
+`4.1.6` impediva `npm ci`; inoltre Vitest 5 richiede almeno Node 22.12.
+Il recupero conserva configurazione, test e soglie del 100%, senza flag
+`--force` / `--legacy-peer-deps` o soppressioni della coverage.
+
 Riverifica finale MCP live 2026-10-07: 117 test live e 437 test della suite
 MCP completa PASS dopo consolidamento del decoder JSON patologico.
 Live 187/187 statement, 40/40 branch; suite 2319/2319 statement,

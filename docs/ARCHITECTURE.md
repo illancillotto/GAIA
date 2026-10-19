@@ -109,7 +109,8 @@ Interfaccia web per:
 Tecnologie:
 - Next.js
 - React
-- TailwindCSS
+- TailwindCSS 3.4.13, con plugin diretto in `frontend/postcss.config.js`;
+  il passaggio a Tailwind 4 richiede una migrazione esplicita di PostCSS e degli stili.
 - TanStack Table
 
 Path repository:

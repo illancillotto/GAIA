@@ -17,6 +17,7 @@ import { DocumentIcon, LockIcon, SearchIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
 import { createCapacitasInCassSyncJob, getCurrentUser } from "@/lib/api";
 import { RuoloTributiFallback } from "./fallback";
+import { TributiListFilters, formatYearRange, managerYearStart } from "./list-filters";
 import {
   EMPTY_CALCULATION_POLICY_FORM,
   calculationPolicyAnnualityYears,
@@ -178,41 +179,6 @@ function formatDeliveryDate(value: string | null | undefined): string {
   if (!value) return "-";
   if (value.includes("/")) return value;
   return new Intl.DateTimeFormat("it-IT", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
-}
-
-function formatYearRange(manager: Pick<RuoloTributiYearManagerResponse, "year_from" | "year_to">): string {
-  if (manager.year_from == null && manager.year_to == null) return "Tutte le annualita";
-  if (manager.year_from == null) return `Fino al ${manager.year_to}`;
-  if (manager.year_to == null) return `Dal ${manager.year_from}`;
-  if (manager.year_from === manager.year_to) return String(manager.year_from);
-  return `${manager.year_from}-${manager.year_to}`;
-}
-
-function managerYearStart(manager: Pick<RuoloTributiYearManagerResponse, "year_from">): number {
-  if (manager.year_from == null) return Number.NEGATIVE_INFINITY;
-  return manager.year_from;
-}
-
-function getAnnualityManagerFilterClassName(managerKey: string, selected: boolean): string {
-  const palettes: Record<string, { selected: string; idle: string }> = {
-    agenzia_entrate: {
-      selected: "border-red-700 bg-red-700 text-white shadow-sm",
-      idle: "border-red-200 bg-red-50 text-red-800 hover:border-red-300 hover:bg-red-100",
-    },
-    step: {
-      selected: "border-orange-600 bg-orange-600 text-white shadow-sm",
-      idle: "border-orange-200 bg-orange-50 text-orange-800 hover:border-orange-300 hover:bg-orange-100",
-    },
-    gaia: {
-      selected: "border-yellow-500 bg-yellow-400 text-yellow-950 shadow-sm",
-      idle: "border-yellow-200 bg-yellow-50 text-yellow-900 hover:border-yellow-300 hover:bg-yellow-100",
-    },
-  };
-  const palette = palettes[managerKey] ?? {
-    selected: "border-[#1D4E35] bg-[#1D4E35] text-white shadow-sm",
-    idle: "border-[#d8dfd3] bg-white text-gray-700 hover:border-[#8CB39D] hover:bg-[#f4faf6]",
-  };
-  return selected ? palette.selected : palette.idle;
 }
 
 function normaliseManagerKey(value: string): string {
@@ -875,10 +841,6 @@ function RuoloTributiPageContent() {
     router.push(`/ruolo/tributi?${qs}`);
   }
 
-  function selectManagerFilter(nextManagerKey: string) {
-    setFilterManagerKey(nextManagerKey);
-  }
-
   function refreshSelected() {
     /* c8 ignore next -- Defensive guard: UI actions expose refresh only after token and selection exist. */
     if (!selectedId || !token) return;
@@ -1225,7 +1187,7 @@ function RuoloTributiPageContent() {
               <p className="section-title">Filtri tributi</p>
               <p className="section-copy">Cerca per nominativo, CF/P.IVA, codice CNC, codice utenza, comune o anno tributario.</p>
             </div>
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr),120px,160px,160px]">
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr),160px,160px]">
               <label className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
                 <SearchIcon className="h-5 w-5 text-gray-400" />
                 <input
@@ -1236,16 +1198,6 @@ function RuoloTributiPageContent() {
                   className="w-full border-0 bg-transparent text-sm outline-none"
                 />
               </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={4}
-                pattern="[0-9]{4}"
-                placeholder="Anno completo"
-                value={filterAnno}
-                onChange={(event) => setFilterAnno(event.target.value.replace(/\D/g, "").slice(0, 4))}
-                className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none"
-              />
               <input
                 type="text"
                 placeholder="Comune"
@@ -1279,10 +1231,6 @@ function RuoloTributiPageContent() {
                   </option>
                 ))}
               </select>
-              <label className="flex items-center gap-2 rounded-xl border border-[#e3e9e0] bg-[#fbfcfb] px-4 py-2.5 text-sm text-gray-700">
-                <input type="checkbox" checked={filterOpenOnly} onChange={(event) => setFilterOpenOnly(event.target.checked)} />
-                Solo scoperti
-              </label>
               <label className="flex items-center gap-2 rounded-xl border border-[#e3e9e0] bg-[#fbfcfb] px-4 py-2.5 text-sm text-gray-700">
                 <input type="checkbox" checked={filterUnlinked} onChange={(event) => setFilterUnlinked(event.target.checked)} />
                 Non collegati
@@ -1340,10 +1288,15 @@ function RuoloTributiPageContent() {
                 Elenco tributi
               </p>
               <p className="mt-3 text-lg font-semibold text-gray-900">Avvisi e saldo pagamento.</p>
-              <AnnualityManagerQuickFilters
+              <TributiListFilters
                 managers={yearManagers}
-                selectedManagerKey={filterManagerKey}
-                onSelect={selectManagerFilter}
+                managerKey={filterManagerKey}
+                onManagerChange={setFilterManagerKey}
+                anno={filterAnno}
+                openOnly={filterOpenOnly}
+                onAnnoChange={setFilterAnno}
+                onOpenOnlyChange={setFilterOpenOnly}
+                onPaymentStatusChange={setFilterPaymentStatus}
               />
             </div>
             <div className="p-6">
@@ -2064,46 +2017,6 @@ function CalculationPoliciesPanel({
         </div>
       ) : null}
     </>
-  );
-}
-
-function AnnualityManagerQuickFilters({
-  managers,
-  selectedManagerKey,
-  onSelect,
-}: {
-  managers: RuoloTributiYearManagerResponse[];
-  selectedManagerKey: string;
-  onSelect: (managerKey: string) => void;
-}) {
-  const activeManagers = [...managers]
-    .filter((manager) => manager.is_active)
-    .sort((first, second) => managerYearStart(first) - managerYearStart(second));
-  if (activeManagers.length === 0) {
-    return (
-      <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
-        Regole annualita non disponibili: il filtro predefinito resta Consorzio/GAIA.
-      </div>
-    );
-  }
-
-  return (
-    <div className="mt-4 flex flex-wrap gap-2">
-      {activeManagers.map((manager) => {
-        const selected = selectedManagerKey === manager.manager_key;
-        return (
-          <button
-            key={manager.id}
-            type="button"
-            onClick={() => onSelect(manager.manager_key)}
-            className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${getAnnualityManagerFilterClassName(manager.manager_key, selected)}`}
-            aria-pressed={selected}
-          >
-            {formatYearRange(manager)} · {manager.manager_label}
-          </button>
-        );
-      })}
-    </div>
   );
 }
 

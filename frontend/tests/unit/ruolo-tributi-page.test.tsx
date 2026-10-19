@@ -604,6 +604,63 @@ describe("Ruolo tributi page", () => {
     expect(screen.queryByText("Raccomandate Poste Online")).not.toBeInTheDocument();
   });
 
+  test.each([
+    ["agenzia_entrate", "2017", "Fino al 2017 · Agenzia delle Entrate"],
+    ["step", "2019", "2018-2021 · STEP - Agenzia recupero crediti"],
+    ["gaia", "2024", "Dal 2022 · Consorzio/GAIA"],
+  ])("filters outstanding tributi by year in the %s period", async (managerKey, year, periodLabel) => {
+    mocks.searchParams = new URLSearchParams(
+      `manager_key=${managerKey}&open_only=false&payment_status=paid&q=Rossi&page=3`,
+    );
+    const view = render(<RuoloTributiPage />);
+    await screen.findByText("ROSSI MARIO");
+    const section = screen.getByText("Elenco tributi").closest("section")!;
+    const yearInput = within(section).getByRole("textbox", { name: "Anno tributario" });
+    const outstandingFilter = within(section).getByRole("checkbox", { name: "Solo non pagati (anche parziali)" });
+    expect(within(section).getByRole("button", { name: periodLabel })).toHaveAttribute("aria-pressed", "true");
+    expect(outstandingFilter).not.toBeChecked();
+
+    fireEvent.change(yearInput, { target: { value: year } });
+    fireEvent.click(outstandingFilter);
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalled());
+    const filteredUrl = new URL(mocks.replace.mock.lastCall![0], "http://gaia.lan");
+    expect(Object.fromEntries(filteredUrl.searchParams)).toEqual({
+      q: "Rossi", anno: year, manager_key: managerKey, page: "1",
+    });
+
+    mocks.searchParams = filteredUrl.searchParams;
+    view.rerender(<RuoloTributiPage />);
+    await waitFor(() => {
+      expect(mocks.listTributiAvvisi).toHaveBeenLastCalledWith("token", expect.objectContaining({
+        manager_key: managerKey, anno: Number(year), open_only: true, payment_status: undefined, page: 1,
+      }));
+      expect(mocks.getTributiSummary).toHaveBeenLastCalledWith("token", expect.objectContaining({
+        manager_key: managerKey, anno: Number(year), open_only: true, payment_status: undefined,
+      }));
+    });
+    expect(outstandingFilter).toBeChecked();
+    expect(within(section).getByText("Parziale")).toBeInTheDocument();
+
+    mocks.replace.mockClear();
+    const nextPeriod = managerKey === "step" ? "gaia" : "step";
+    const nextPeriodLabel = managerKey === "step" ? "Dal 2022 · Consorzio/GAIA" : "2018-2021 · STEP - Agenzia recupero crediti";
+    fireEvent.click(within(section).getByRole("button", { name: nextPeriodLabel }));
+    expect(yearInput).toHaveValue("");
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalled());
+    const nextUrl = new URL(mocks.replace.mock.lastCall![0], "http://gaia.lan");
+    expect(Object.fromEntries(nextUrl.searchParams)).toEqual({ q: "Rossi", manager_key: nextPeriod, page: "1" });
+    mocks.searchParams = nextUrl.searchParams;
+    view.rerender(<RuoloTributiPage />);
+    await waitFor(() => {
+      expect(mocks.listTributiAvvisi).toHaveBeenLastCalledWith("token", expect.objectContaining({
+        manager_key: nextPeriod, anno: undefined, open_only: true, payment_status: undefined, page: 1,
+      }));
+      expect(mocks.getTributiSummary).toHaveBeenLastCalledWith("token", expect.objectContaining({
+        manager_key: nextPeriod, anno: undefined, open_only: true, payment_status: undefined,
+      }));
+    });
+  });
+
   test("manages annuality managers configuration", async () => {
     render(<RuoloTributiPage />);
 
@@ -2010,8 +2067,12 @@ describe("Ruolo tributi page", () => {
     const comboboxes = screen.getAllByRole("combobox");
     fireEvent.change(comboboxes[0], { target: { value: "paid" } });
     fireEvent.change(comboboxes[1], { target: { value: "moroso" } });
-    fireEvent.click(screen.getByLabelText("Solo scoperti"));
-    fireEvent.click(screen.getByLabelText("Solo scoperti"));
+    await waitFor(() => {
+      expect(mocks.replace).toHaveBeenCalledWith(expect.stringContaining("payment_status=paid"));
+      expect(mocks.replace).toHaveBeenCalledWith(expect.stringContaining("open_only=false"));
+    });
+    fireEvent.click(screen.getByLabelText("Solo non pagati (anche parziali)"));
+    fireEvent.click(screen.getByLabelText("Solo non pagati (anche parziali)"));
     fireEvent.click(screen.getByLabelText("Non collegati"));
     fireEvent.click(screen.getByLabelText("Non collegati"));
 
