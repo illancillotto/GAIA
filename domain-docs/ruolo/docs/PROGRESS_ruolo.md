@@ -26,6 +26,13 @@
   cognitive/cyclomatic 20/14 -> 11/10, nuovo loader 9/9, sotto soglia.
   Baseline sincronizzata dopo ratchet e verifica riproducibilita PASS;
   nessuna esclusione o soglia ampliata. Grafo frontend e docs aggiornati.
+- Commit `59ad5357` rilasciato con immagine frontend isolata
+  `gaia-frontend:tributi-preview-20261019`; sorgenti runtime verificati tramite
+  hash, dipendenze installate coerenti con il lockfile. HTTP/assets e health
+  backend PASS; backend e altri container invariati, nessuna migration.
+- Regressione Solleciti standalone: altri 2 scenari Chromium PASS. Sul frontend
+  pubblicato `gaia.lan`, ripetuti i 2 scenari bozza desktop/mobile con API
+  simulate: PASS, senza generare avvisi o modificare dati operativi.
 
 ## Generazione senza storico verificato — 2026-10-19
 
