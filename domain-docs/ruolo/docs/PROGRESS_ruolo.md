@@ -7,6 +7,9 @@
   sincronizzata con URL, lista e KPI; filtro saldo preservato.
 - Negli altri periodi i pulsanti non compaiono. Restano disponibili il campo
   manuale e il reset anno al cambio gestore.
+- Rilasciato `320f1b86` su `gaia.lan`: frontend healthy, smoke pagina/asset/API
+  PASS, nessun altro container ricreato. 5246 test frontend e 18 smoke PASS;
+  coverage del file runtime modificato 100%, ratchet senza finding.
 - Evidenze del ciclo e rilascio in
   [TRIBUTI_FILTERS_VALIDATION_2026-10-19.md](TRIBUTI_FILTERS_VALIDATION_2026-10-19.md).
 

@@ -193,3 +193,12 @@ Smoke candidato sulla porta loopback 3301 PASS: home, login, Tributi e bundle
 contenente il gruppo `Anni Consorzio/GAIA`, le quattro annualita e il reset.
 Le interazioni autenticate sono verificate nei test UI montati; lo smoke
 HTTP di rilascio non sostituisce una verifica visuale autenticata nel browser.
+
+Deploy del follow-up completato il 2026-10-19, commit `320f1b86`. L'archivio
+frontend del commit e identico file per file ai sorgenti dell'immagine candidata.
+Container healthy e digest corrispondente; smoke dal server e dalla workstation
+PASS su home, login, Tributi e nuovi asset. `/api/health`: production `ok`.
+Solo `gaia-frontend` ricreato; tutti gli altri ID container invariati, candidato
+temporaneo rimosso e rollback conservato. Il checkout remoto sporco non e stato
+modificato. Nessuna nuova failure o parte runtime modificata non coperta nei
+controlli finali; rimangono i limiti preesistenti gia dichiarati.
