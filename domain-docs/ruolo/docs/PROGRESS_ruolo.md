@@ -18,6 +18,10 @@
 - Limite preesistente confermato anche sul runtime operativo: 2022/2023
   producono bozze private; conferma/export e PDF scaricabile non sono abilitati
   da questo intervento. La selezionabilita non equivale a disponibilita PDF.
+- Commit runtime `b2fa9ee0` rilasciato con overlay backend isolato; health e
+  hash runtime verificati, altri container invariati. Verifica read-only sui
+  primi 25 tributi 2022: 18 selezionabili (inclusa la riga segnalata), 7 ancora
+  bloccati dagli altri controlli. Migration invariata a `20261019_1400`.
 
 ## Formato italiano date regole — 2026-10-19
 
