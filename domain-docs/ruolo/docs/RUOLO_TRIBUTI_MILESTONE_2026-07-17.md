@@ -234,6 +234,10 @@ Aggiornamento UI successivo:
   campo `Anno tributario` e il filtro `Solo non pagati (anche parziali)`, attivo
   per default. L'anno vuoto seleziona tutte le annualita del periodo; cambiando
   gestore si azzera l'anno e si riparte dalla prima pagina;
+- selezionando Consorzio/GAIA sono visibili i pulsanti rapidi 2022, 2023,
+  2024, 2025 e `Tutti gli anni`: condividono lo stato con il campo anno,
+  mantengono il filtro saldo e scompaiono negli altri periodi. Il campo manuale
+  consente anche anni diversi dalle quattro scorciatoie richieste;
 - il filtro riusa `open_only`: include pagamenti parziali e saldi da verificare,
   esclude le posizioni saldate. Attivandolo si azzera l'eventuale filtro puntuale
   sullo stato pagamento, cosi non restano esclusi i parziali;

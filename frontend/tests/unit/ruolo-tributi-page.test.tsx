@@ -661,6 +661,67 @@ describe("Ruolo tributi page", () => {
     });
   });
 
+  test.each(["2022", "2023", "2024", "2025"])("selects the GAIA %s shortcut for the list and summary", async (year) => {
+    mocks.searchParams = new URLSearchParams("manager_key=gaia&q=Rossi&page=3");
+    const view = render(<RuoloTributiPage />);
+    await screen.findByText("ROSSI MARIO");
+    const shortcuts = screen.getByRole("group", { name: "Anni Consorzio/GAIA" });
+    expect(within(shortcuts).getAllByRole("button")).toHaveLength(5);
+    expect(within(shortcuts).getByRole("button", { name: "Tutti gli anni" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(within(shortcuts).getByRole("button", { name: year }));
+    expect(screen.getByRole("textbox", { name: "Anno tributario" })).toHaveValue(year);
+    expect(within(shortcuts).getByRole("button", { name: year })).toHaveAttribute("aria-pressed", "true");
+    expect(within(shortcuts).getByRole("button", { name: "Tutti gli anni" })).toHaveAttribute("aria-pressed", "false");
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalled());
+    const filteredUrl = new URL(mocks.replace.mock.lastCall![0], "http://gaia.lan");
+    expect(Object.fromEntries(filteredUrl.searchParams)).toEqual({
+      q: "Rossi", anno: year, manager_key: "gaia", page: "1",
+    });
+    mocks.searchParams = filteredUrl.searchParams;
+    view.rerender(<RuoloTributiPage />);
+    await waitFor(() => {
+      expect(mocks.listTributiAvvisi).toHaveBeenLastCalledWith("token", expect.objectContaining({
+        manager_key: "gaia", anno: Number(year), open_only: true, page: 1,
+      }));
+      expect(mocks.getTributiSummary).toHaveBeenLastCalledWith("token", expect.objectContaining({
+        manager_key: "gaia", anno: Number(year), open_only: true,
+      }));
+    });
+    expect(screen.getByRole("checkbox", { name: "Solo non pagati (anche parziali)" })).toBeChecked();
+  });
+
+  test("synchronizes year shortcuts with manual input, reset and manager changes", async () => {
+    mocks.searchParams = new URLSearchParams("manager_key=gaia&anno=2023&open_only=false");
+    const view = render(<RuoloTributiPage />);
+    await screen.findByText("ROSSI MARIO");
+    const shortcuts = screen.getByRole("group", { name: "Anni Consorzio/GAIA" });
+    const yearInput = screen.getByRole("textbox", { name: "Anno tributario" });
+    expect(within(shortcuts).getByRole("button", { name: "2023" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.change(yearInput, { target: { value: "2025" } });
+    expect(within(shortcuts).getByRole("button", { name: "2025" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.change(yearInput, { target: { value: "2026" } });
+    expect(within(shortcuts).queryByRole("button", { pressed: true })).not.toBeInTheDocument();
+    fireEvent.click(within(shortcuts).getByRole("button", { name: "Tutti gli anni" }));
+    expect(yearInput).toHaveValue("");
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalled());
+    const filteredUrl = new URL(mocks.replace.mock.lastCall![0], "http://gaia.lan");
+    expect(Object.fromEntries(filteredUrl.searchParams)).toEqual({ manager_key: "gaia", open_only: "false", page: "1" });
+    mocks.searchParams = filteredUrl.searchParams;
+    view.rerender(<RuoloTributiPage />);
+    await waitFor(() => {
+      expect(mocks.listTributiAvvisi).toHaveBeenLastCalledWith("token", expect.objectContaining({ anno: undefined, open_only: false }));
+      expect(mocks.getTributiSummary).toHaveBeenLastCalledWith("token", expect.objectContaining({ anno: undefined, open_only: false }));
+    });
+    for (const period of ["2018-2021 · STEP - Agenzia recupero crediti", "Fino al 2017 · Agenzia delle Entrate"]) {
+      fireEvent.click(screen.getByRole("button", { name: period }));
+      expect(screen.queryByRole("group", { name: "Anni Consorzio/GAIA" })).not.toBeInTheDocument();
+      expect(yearInput).toBeInTheDocument();
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Dal 2022 · Consorzio/GAIA" }));
+    expect(screen.getByRole("group", { name: "Anni Consorzio/GAIA" })).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Solo non pagati (anche parziali)" })).not.toBeChecked();
+  });
+
   test("manages annuality managers configuration", async () => {
     render(<RuoloTributiPage />);
 
@@ -668,7 +729,7 @@ describe("Ruolo tributi page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Gestisci regole" }));
     expect((await screen.findAllByText("Agenzia delle Entrate")).length).toBeGreaterThan(0);
     expect(screen.getByText("2018-2021")).toBeInTheDocument();
-    expect(screen.getByText("2022")).toBeInTheDocument();
+    expect(screen.getByText("2022", { selector: "span" })).toBeInTheDocument();
     expect(screen.getAllByText("Tutte le annualita").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Aggiungi" }));
     expect((await screen.findAllByText("Inserisci chiave e descrizione gestore.")).length).toBeGreaterThan(0);
@@ -1522,8 +1583,9 @@ describe("Ruolo tributi page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Torna alla selezione" }));
     expect(await screen.findByText("Utenze candidabili")).toBeInTheDocument();
 
-    const year2024Button = screen.getByRole("button", { name: "2024" });
-    const year2025Button = screen.getByRole("button", { name: "2025" });
+    const wizard = screen.getByText("Utenze candidabili").closest("section")!;
+    const year2024Button = within(wizard).getByRole("button", { name: "2024" });
+    const year2025Button = within(wizard).getByRole("button", { name: "2025" });
     fireEvent.click(year2024Button);
     await waitFor(() => expect(year2024Button).toHaveAttribute("aria-pressed", "false"));
     fireEvent.click(year2024Button);

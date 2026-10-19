@@ -32,24 +32,7 @@ export function TributiListFilters({
         }}
       />
       <div className="mt-4 flex flex-wrap items-end gap-4">
-        <div className="grid gap-1 text-sm font-medium text-gray-700">
-          <label htmlFor="tributi-anno">Anno tributario</label>
-          <input
-            id="tributi-anno"
-            type="text"
-            inputMode="numeric"
-            maxLength={4}
-            pattern="[0-9]{4}"
-            placeholder="Anno completo"
-            value={anno}
-            onChange={(event) => onAnnoChange(event.target.value.replace(/\D/g, "").slice(0, 4))}
-            aria-describedby="tributi-anno-hint"
-            className="w-44 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none"
-          />
-          <span id="tributi-anno-hint" className="text-xs font-normal text-gray-500">
-            Vuoto: tutti gli anni del periodo selezionato.
-          </span>
-        </div>
+        <AnnualityYearFilter managerKey={managerKey} anno={anno} onAnnoChange={onAnnoChange} />
         <div className="grid gap-1">
           <label className="flex items-center gap-2 rounded-xl border border-[#e3e9e0] bg-[#fbfcfb] px-4 py-3 text-sm text-gray-700">
             <input
@@ -69,6 +52,44 @@ export function TributiListFilters({
         </div>
       </div>
     </>
+  );
+}
+
+function AnnualityYearFilter({ managerKey, anno, onAnnoChange }: Pick<TributiListFiltersProps, "managerKey" | "anno" | "onAnnoChange">) {
+  return (
+    <div className="grid gap-1 text-sm font-medium text-gray-700">
+      {managerKey === "gaia" && (
+        <div role="group" aria-label="Anni Consorzio/GAIA" className="mb-2 flex flex-wrap gap-2">
+          {["", "2022", "2023", "2024", "2025"].map((year) => (
+            <button
+              key={year}
+              type="button"
+              aria-pressed={anno === year}
+              onClick={() => onAnnoChange(year)}
+              className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${getAnnualityManagerFilterClassName("gaia", anno === year)}`}
+            >
+              {year || "Tutti gli anni"}
+            </button>
+          ))}
+        </div>
+      )}
+      <label htmlFor="tributi-anno">Anno tributario</label>
+      <input
+        id="tributi-anno"
+        type="text"
+        inputMode="numeric"
+        maxLength={4}
+        pattern="[0-9]{4}"
+        placeholder="Anno completo"
+        value={anno}
+        onChange={(event) => onAnnoChange(event.target.value.replace(/\D/g, "").slice(0, 4))}
+        aria-describedby="tributi-anno-hint"
+        className="w-44 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm shadow-sm outline-none"
+      />
+      <span id="tributi-anno-hint" className="text-xs font-normal text-gray-500">
+        Vuoto: tutti gli anni del periodo selezionato.
+      </span>
+    </div>
   );
 }
 

@@ -190852,25 +190852,16 @@
     {
       "cognitive": 1,
       "cyclomatic": 2,
-      "end_line": 73,
-      "fingerprint": "4c8d6c5a8d5f3a91",
+      "end_line": 56,
+      "fingerprint": "0487221dba6aa1c6",
       "kind": "react_component",
       "line": 14,
-      "loc": 60,
+      "loc": 43,
       "name": "TributiListFilters",
       "nesting": 1,
       "params": 1,
       "path": "frontend/src/app/ruolo/tributi/list-filters.tsx",
-      "violations": [
-        {
-          "excepted": false,
-          "metric": "loc",
-          "scope": "callable",
-          "severity": "warning",
-          "threshold": 50,
-          "value": 60
-        }
-      ]
+      "violations": []
     },
     {
       "cognitive": 0,
@@ -190887,26 +190878,12 @@
       "violations": []
     },
     {
-      "cognitive": 0,
-      "cyclomatic": 1,
-      "end_line": 45,
-      "fingerprint": "81ac18302521f799",
-      "kind": "react_component",
-      "line": 45,
-      "loc": 1,
-      "name": "Program<anonymous>",
-      "nesting": 0,
-      "params": 1,
-      "path": "frontend/src/app/ruolo/tributi/list-filters.tsx",
-      "violations": []
-    },
-    {
       "cognitive": 1,
       "cyclomatic": 2,
-      "end_line": 61,
+      "end_line": 44,
       "fingerprint": "695f4432c2871321",
       "kind": "react_component",
-      "line": 58,
+      "line": 41,
       "loc": 4,
       "name": "Program<anonymous>",
       "nesting": 1,
@@ -190915,12 +190892,68 @@
       "violations": []
     },
     {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "end_line": 94,
+      "fingerprint": "c5e7582fb902433f",
+      "kind": "react_component",
+      "line": 58,
+      "loc": 37,
+      "name": "AnnualityYearFilter",
+      "nesting": 0,
+      "params": 1,
+      "path": "frontend/src/app/ruolo/tributi/list-filters.tsx",
+      "violations": []
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "end_line": 73,
+      "fingerprint": "ed506bf76c65fef4",
+      "kind": "react_component",
+      "line": 63,
+      "loc": 11,
+      "name": "ArrayExpression.map[0]<callback>",
+      "nesting": 0,
+      "params": 1,
+      "path": "frontend/src/app/ruolo/tributi/list-filters.tsx",
+      "violations": []
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "end_line": 68,
+      "fingerprint": "6998ca7c20f73338",
+      "kind": "react_component",
+      "line": 68,
+      "loc": 1,
+      "name": "Program<anonymous>",
+      "nesting": 0,
+      "params": 0,
+      "path": "frontend/src/app/ruolo/tributi/list-filters.tsx",
+      "violations": []
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "end_line": 85,
+      "fingerprint": "81ac18302521f799",
+      "kind": "react_component",
+      "line": 85,
+      "loc": 1,
+      "name": "Program<anonymous>",
+      "nesting": 0,
+      "params": 1,
+      "path": "frontend/src/app/ruolo/tributi/list-filters.tsx",
+      "violations": []
+    },
+    {
       "cognitive": 6,
       "cyclomatic": 6,
-      "end_line": 81,
+      "end_line": 102,
       "fingerprint": "84cf74a1369b5c77",
       "kind": "function",
-      "line": 75,
+      "line": 96,
       "loc": 7,
       "name": "formatYearRange",
       "nesting": 1,
@@ -190931,10 +190964,10 @@
     {
       "cognitive": 1,
       "cyclomatic": 2,
-      "end_line": 86,
+      "end_line": 107,
       "fingerprint": "146aa9df53def909",
       "kind": "function",
-      "line": 83,
+      "line": 104,
       "loc": 4,
       "name": "managerYearStart",
       "nesting": 1,
@@ -190945,10 +190978,10 @@
     {
       "cognitive": 2,
       "cyclomatic": 3,
-      "end_line": 108,
+      "end_line": 129,
       "fingerprint": "43f835a0b104474e",
       "kind": "function",
-      "line": 88,
+      "line": 109,
       "loc": 21,
       "name": "getAnnualityManagerFilterClassName",
       "nesting": 0,
@@ -190959,10 +190992,10 @@
     {
       "cognitive": 1,
       "cyclomatic": 2,
-      "end_line": 148,
+      "end_line": 169,
       "fingerprint": "016d1d400845b09b",
       "kind": "react_component",
-      "line": 110,
+      "line": 131,
       "loc": 38,
       "name": "AnnualityManagerQuickFilters",
       "nesting": 1,
@@ -190973,10 +191006,10 @@
     {
       "cognitive": 0,
       "cyclomatic": 1,
-      "end_line": 120,
+      "end_line": 141,
       "fingerprint": "64faab945a959790",
       "kind": "arrow_function",
-      "line": 120,
+      "line": 141,
       "loc": 1,
       "name": "activeManagers:ArrayExpression.filter[0]<callback>",
       "nesting": 0,
@@ -190987,10 +191020,10 @@
     {
       "cognitive": 0,
       "cyclomatic": 1,
-      "end_line": 121,
+      "end_line": 142,
       "fingerprint": "7f20182a82ea0a18",
       "kind": "arrow_function",
-      "line": 121,
+      "line": 142,
       "loc": 1,
       "name": "activeManagers:CallExpression.sort[0]<callback>",
       "nesting": 0,
@@ -191001,10 +191034,10 @@
     {
       "cognitive": 0,
       "cyclomatic": 1,
-      "end_line": 145,
+      "end_line": 166,
       "fingerprint": "e591d5c973740a93",
       "kind": "arrow_function",
-      "line": 132,
+      "line": 153,
       "loc": 14,
       "name": "activeManagers.map[0]<callback>",
       "nesting": 0,
@@ -191015,10 +191048,10 @@
     {
       "cognitive": 0,
       "cyclomatic": 1,
-      "end_line": 138,
+      "end_line": 159,
       "fingerprint": "eaca5cb3d8f51705",
       "kind": "react_component",
-      "line": 138,
+      "line": 159,
       "loc": 1,
       "name": "Program<anonymous>",
       "nesting": 0,
@@ -338601,15 +338634,15 @@
       "violations": []
     },
     "frontend/src/app/ruolo/tributi/list-filters.tsx": {
-      "callables": 12,
+      "callables": 15,
       "cognitive_max": 6,
-      "cognitive_sum": 12,
-      "complexity_density": 0.248227,
+      "cognitive_sum": 15,
+      "complexity_density": 0.273292,
       "cyclomatic_max": 6,
-      "cyclomatic_sum": 23,
+      "cyclomatic_sum": 29,
       "dependency_count": 1,
       "imports": 1,
-      "loc": 141,
+      "loc": 161,
       "useEffect": 0,
       "useReducer": 0,
       "useState": 0,
@@ -346971,10 +347004,10 @@
       "violations": []
     }
   },
-  "generated_at": "2026-10-19T10:46:39.930378+00:00",
+  "generated_at": "2026-10-19T11:17:47.670822+00:00",
   "provenance": {
     "repo_root": "/home/cbo/CursorProjects/GAIA",
-    "source_commit": "f4dc144b1b7caff654062303a7c1f8f07f335b53",
+    "source_commit": "86ac864378bd23ed79d6ceb975d234e6382b5dc9",
     "tool": "tools/code_quality/complexity.py"
   },
   "schema_version": 2,
@@ -347004,5 +347037,5 @@
       "modules/elaborazioni/worker/**/*.py"
     ]
   },
-  "source_commit": "f4dc144b1b7caff654062303a7c1f8f07f335b53"
+  "source_commit": "86ac864378bd23ed79d6ceb975d234e6382b5dc9"
 }

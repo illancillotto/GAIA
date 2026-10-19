@@ -10,9 +10,16 @@ il campo `Anno tributario` e `Solo non pagati (anche parziali)`:
 - dal 2022: Consorzio/GAIA, selezione iniziale.
 
 I periodi provengono dalle regole gestori attive; le date non sono duplicate
-nel nuovo componente. Anno vuoto significa intero periodo. Un anno completo
+nelle definizioni dei periodi UI. Anno vuoto significa intero periodo. Un anno completo
 restringe il periodo; cambiarlo riparte dalla prima pagina. Se si cambia
 gestore, l'anno viene svuotato per evitare intersezioni involontariamente vuote.
+
+Con Consorzio/GAIA selezionato, il campo anno e affiancato dai pulsanti
+2022, 2023, 2024, 2025 e `Tutti gli anni`. Le quattro scorciatoie sono quelle
+richieste, non una discovery delle annualita presenti ne un limite al campo
+manuale. I pulsanti condividono `anno`, espongono `aria-pressed` e non cambiano
+il filtro saldo. `Tutti gli anni` svuota l'anno; negli altri periodi il gruppo
+non e visualizzato. Nessuna nuova API o selezione multipla.
 
 Il filtro saldo riusa `open_only`, attivo per default. Include non pagati,
 parziali e saldi non determinabili da verificare; esclude saldati ed eccedenze.
@@ -124,3 +131,65 @@ aggiornati con `gpt-reserve`, chunk completati senza failure semantiche.
 I grafi restano ignorati da Git. Le segnalazioni npm audit, i warning ESLint e
 il warning gia legato all'avvio `next start` con output standalone restano
 limiti dichiarati; non sono emerse regressioni funzionali nei controlli finali.
+
+## Follow-up: pulsanti annuali Consorzio/GAIA
+
+Estensione del 2026-10-19, successiva al rilascio `837ae49c`:
+
+- Un test UI per ciascun pulsante 2022–2025 verifica selezione, campo anno,
+  ricerca preservata, pagina 1, URL e parametri lista/KPI con non pagati attivo.
+- Un ulteriore scenario verifica anno da URL, digitazione manuale anche fuori
+  scorciatoie, `Tutti gli anni` con richieste senza anno, storico preservato,
+  scomparsa nei due altri periodi e ricomparsa tornando a GAIA.
+- Le query dei test del wizard e della configurazione gestori sono circoscritte
+  alla rispettiva UI per non confondere pulsanti con le stesse etichette.
+- Suite mirata: 52 test PASS, coverage full-file `list-filters.tsx` 100%:
+  statement 34/34, branch 24/24, funzioni 15/15, linee 28/28.
+- ESLint dei due file toccati e typecheck PASS, dipendenze installate da lockfile.
+- Ratchet contro `86ac8643`: zero finding. `TributiListFilters` mantiene
+  cognitiva 1/ciclomatica 2, LOC 60 -> 43. Il controllo anno e scorciatoie e
+  un componente coeso (`AnnualityYearFilter`: cognitiva 2, ciclomatica 3,
+  LOC 37). Nel file non restano warning o violation; nessun cambio di soglie,
+  esclusioni o runtime backend. La crescita funzionale non viene presentata
+  come riduzione della complessita globale.
+- Aggregati file: cognitiva 12 -> 15, ciclomatica 23 -> 29, LOC 141 -> 161,
+  coerenti con l'aggiunta delle scorciatoie. Baseline sincronizzata solo dopo
+  il ratchet e verificata riproducibile; cambia soltanto il file runtime toccato
+  oltre ai metadati di generazione.
+
+Comandi del follow-up:
+
+```sh
+VITEST_COVERAGE_INCLUDE=src/app/ruolo/tributi/list-filters.tsx npm run test:coverage -- tests/unit/ruolo-tributi-page.test.tsx
+VITEST_COVERAGE_INCLUDE=src/app/ruolo/tributi/list-filters.tsx npm run test:coverage -- --maxWorkers=2
+npm test
+./node_modules/.bin/eslint src/app/ruolo/tributi/list-filters.tsx tests/unit/ruolo-tributi-page.test.tsx
+npm run typecheck
+make complexity-ratchet BASE_REF=86ac8643
+make complexity-baseline
+make complexity-baseline-verify
+make graphify-patch-force-pruning
+make graphify-frontend GRAPHIFY_CODE_FLAGS=--force
+```
+
+Verifica finale follow-up: 5246 test in 322 file e 18 smoke PASS, senza skip
+o failure; coverage full-file invariata al 100% su tutte le metriche.
+Build Docker isolata con Node 20 e lockfile: compilazione, lint, tipi e
+generazione di 163 pagine PASS. Nessuna dipendenza modificata in questo ciclo.
+Restano i warning e le segnalazioni audit del rilascio precedente.
+
+Graphify frontend aggiornato con pruning: 6690 nodi, 15929 edge. JSON e report
+sono correnti; HTML omesso dal limite automatico di 5000 nodi. Docs Ruolo
+aggiornati tramite il target dedicato con `gpt-reserve`, `chunk 1/1 done`
+senza failure semantiche. Nessun output Graphify viene committato.
+
+Immagine candidata del follow-up `gaia-frontend:tributi-year-buttons-20261019`,
+digest `sha256:0f1f124e8a92c403edfe5cf92c2099ca615db59c45f8be7817eee72888b5f2ca`.
+Directory isolata `/opt/gaia/releases/tributi-year-buttons-20261019`, con
+snapshot e rollback alla release `gaia-frontend:tributi-filters-20261019`.
+SHA256 archivio sorgenti locale/remoto:
+`f8ebb5a5856a9d4a97135bbdf713fe2c3b16428b91023174c8d68b3fba300aa4`.
+Smoke candidato sulla porta loopback 3301 PASS: home, login, Tributi e bundle
+contenente il gruppo `Anni Consorzio/GAIA`, le quattro annualita e il reset.
+Le interazioni autenticate sono verificate nei test UI montati; lo smoke
+HTTP di rilascio non sostituisce una verifica visuale autenticata nel browser.

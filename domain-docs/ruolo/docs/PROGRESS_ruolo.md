@@ -1,5 +1,15 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## Pulsanti annuali Consorzio/GAIA — 2026-10-19
+
+- Nel periodo Consorzio/GAIA, `Elenco tributi` espone 2022, 2023, 2024,
+  2025 e `Tutti gli anni`, oltre al campo anno. Selezione accessibile e
+  sincronizzata con URL, lista e KPI; filtro saldo preservato.
+- Negli altri periodi i pulsanti non compaiono. Restano disponibili il campo
+  manuale e il reset anno al cambio gestore.
+- Evidenze del ciclo e rilascio in
+  [TRIBUTI_FILTERS_VALIDATION_2026-10-19.md](TRIBUTI_FILTERS_VALIDATION_2026-10-19.md).
+
 ## Filtri tributi per saldo e annualita — 2026-10-19
 
 - `Elenco tributi` raggruppa i tre periodi gestori, anno tributario e filtro

@@ -171,6 +171,10 @@ provenienza e recupero dello storico sono descritti in
 > puntuale per includere anche i parziali. L'anno vuoto comprende tutto il periodo;
 > cambiando gestore l'anno viene svuotato. Lista e KPI ricevono gli stessi filtri,
 > persistiti nell'URL, con ritorno alla prima pagina a ogni cambio filtro.
+> Selezionando Consorzio/GAIA compaiono anche i pulsanti 2022, 2023, 2024,
+> 2025 e `Tutti gli anni`, sincronizzati con il campo anno senza cambiare il
+> filtro saldo. Sono scorciatoie esplicite, non l'elenco degli anni disponibili:
+> il campo manuale resta utilizzabile anche per altri anni.
 >
 > Aggiornamento 2026-08-05: le `Regole ruolo` multi-annualita vengono salvate come policy
 > annuali separate per permettere date diverse per scadenza bonaria e fallback interessi.
