@@ -19,8 +19,17 @@
   decimo, Code 128 e Data Matrix decodificati (zxing) uguali al payload di 50
   cifre, nessun testo sovrapposto. Preparati 5 campioni per la richiesta di
   autorizzazione Poste alla stampa in proprio.
-- Il codice di autorizzazione stampato resta `AUT.DB/SISB/36211 DEL 5/9/2012`
-  finche Poste non rilascia il nuovo.
+- Il codice di autorizzazione stampato diventa il segnaposto
+  `AUT.DB/SISB/XXXXX DEL XX/XX/2026` (prima `AUT.DB/SISB/36211 DEL 5/9/2012`,
+  non valido per il nuovo layout): va sostituito con il codice che Poste
+  rilascera per la stampa in proprio in PDF.
+- Dopo la revisione interna dei campioni: riquadro bollo della ricevuta di
+  versamento ridotto a `33.2mm` per liberare la zona di rispetto del Data Matrix
+  (`2.14mm` misurati, minimo `1.875mm`); `Esercizio` automatico ora pari
+  all'anno di emissione (`2626`), secondo la convenzione Capacitas degli avvisi
+  accorpati, invece dell'annualita piu alta (`2525`); aggiunte sopra il
+  bollettino le istruzioni di stampa PDF raccomandate da Poste. Rimosso il
+  wrapper `.bollettino-landscape`, che duplicava il box di `.bollettino-sheet`.
 - Test: suite Ruolo PASS; coverage 100% su `tributi_notice_registry.py`,
   `tributi_reminder_service.py` e `td896.py`; style e complexity ratchet senza
   finding; grafo `ruolo-code` aggiornato.

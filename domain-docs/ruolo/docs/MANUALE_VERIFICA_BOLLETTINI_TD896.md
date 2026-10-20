@@ -23,8 +23,9 @@ PDF all'amministratore GAIA.
    `Esercizio bollettino`, la ricevuta di versamento deve mostrare esattamente i
    codici di tre e quattro cifre inseriti. La ricevuta di accredito riserva la
    zona cliente esclusivamente ai dati del versante, come richiesto dal manuale
-   Poste. Se i campi sono vuoti, GAIA applica i valori automatici derivati dal
-   numero avviso e dall'annualita piu recente.
+   Poste. Se i campi sono vuoti, GAIA applica i valori automatici: causale
+   derivata dal numero avviso ed esercizio pari all'anno di emissione ripetuto,
+   per esempio `2626` per un avviso emesso nel 2026.
 6. Verificare i dati fissi del Consorzio:
    - conto corrente postale `1007214826`;
    - conto a 12 cifre nella codeline `001007214826`;
@@ -51,8 +52,10 @@ di accredito da `165 mm`, corpo da `83 mm` e zona OCR inferiore da `19 mm`.
 I dati significativi e la codeline devono usare il font incorporato
 `OCRB-Regular` e il colore nero. Il barcode deve misurare circa `93 x 12 mm`;
 il Data Matrix utile `45 x 15 mm`, esclusa la quiet zone di due celle per lato.
-Le due aree per il bollo postale devono misurare `55 x 34 mm` e iniziare a
-`49 mm` dal bordo superiore del modulo.
+Le due aree per il bollo postale devono iniziare a `49 mm` dal bordo superiore
+del modulo e misurare `55 x 34 mm`; sulla ricevuta di versamento l'area e alta
+`33.2 mm` per lasciare libera la zona di rispetto del Data Matrix. Sopra il
+modulo devono comparire le istruzioni di stampa.
 
 ## Verifica con lettore codici
 

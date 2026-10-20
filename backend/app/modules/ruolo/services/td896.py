@@ -114,13 +114,12 @@ def td896_amount_code(amount: str | Decimal) -> str:
     return f"{integer_part:08d}+{cents:02d}"
 
 
-def td896_esercizio(payload: dict[str, object], years: list[int]) -> str:
+def td896_esercizio(payload: dict[str, object]) -> str:
     configured = payload.get("bollettino_esercizio")
     if isinstance(configured, str) and configured.strip():
         return configured.strip()
-    if not years:
-        return ""
-    suffix = str(years[-1])[-2:]
+    # Capacitas convention for merged notices: emission year 2026 -> "2626".
+    suffix = str(payload.get("notice_emission_year", ""))[-2:]
     return f"{suffix}{suffix}"
 
 

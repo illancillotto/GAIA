@@ -56,7 +56,16 @@ finale e conformi a `Caratteristiche del bollettino` Ed. 2020):
   allineato a `3mm` dal bordo destro;
 - etichetta `Intestato a` a `21.3mm` e intestazione su due righe a `24.1mm` dall'alto,
   senza sovrapporsi al riquadro `eseguito da`;
-- numero sotto il barcode in `7.9pt`, dettagli della ricevuta di versamento in `8pt`.
+- numero sotto il barcode in `7.9pt`, dettagli della ricevuta di versamento in `8pt`;
+- riquadro bollo della ricevuta di versamento alto `33.2mm` invece di `34mm`: con il
+  Data Matrix a `84.75mm` la zona di rispetto di due celle (`1.875mm`) resta libera dal
+  bordo tratteggiato (distanza misurata `2.14mm`). Il manuale chiede il bollo fino a
+  `83mm` e il Data Matrix a circa `84.5mm`, quindi le due misure nominali non lasciano
+  spazio sufficiente;
+- sopra il bollettino, fuori dal modulo, la pagina riporta le istruzioni di stampa
+  raccomandate da Poste per i PDF (cap. 6): stampa come immagine, A4 orizzontale al
+  100%, solo fronte, carta bianca non riciclata da 80-100 g/m², ritaglio lungo il bordo
+  superiore e retro bianco.
 
 La verifica di questi posizionamenti e stata eseguita con PyMuPDF e con la decodifica
 `zxing` di Code 128 e Data Matrix sui campioni preparati per la richiesta di
@@ -79,7 +88,10 @@ Valori fissi configurati nel renderer:
 - conto corrente postale `1007214826`;
 - IBAN `IT15L0760117400001007214826`;
 - intestazione `CONSORZIO DI BONIFICA DELL'ORISTANESE - RISCOSSIONE QUOTE ASSOCIATIVE`;
-- tipo documento `896`.
+- tipo documento `896`;
+- codice di autorizzazione alla stampa `AUT.DB/SISB/XXXXX DEL XX/XX/2026`, segnaposto
+  in attesa del codice che Poste rilascera per la stampa in proprio in PDF (dal
+  2026-10-20; prima era stampato `AUT.DB/SISB/36211 DEL 5/9/2012`).
 
 La codeline usa il codice cliente postale di 18 cifre. Le prime 16 cifre incorporano il numero avviso GAIA e un discriminante interno; le ultime due sono il resto della divisione delle prime 16 per 93. L'importo usa il formato Poste `00000000+00` e il conto corrente viene normalizzato a 12 cifre.
 
@@ -98,9 +110,12 @@ e indirizzo del versante; questa separazione evita l'inserimento di dati
 amministrativi nell'area riservata dal modello Poste.
 
 Se la policy non valorizza i campi, il comportamento resta automatico: la
-causale e derivata dal numero avviso e `Esercizio` dall'anno piu alto presente
-nel payload. Per un avviso multi-annualita `2024-2025`, GAIA usa `2025`, prende
-il suffisso `25` e lo duplica in `2525`.
+causale e derivata dal numero avviso e `Esercizio` dall'anno di emissione
+dell'avviso (`notice_emission_year`), secondo la convenzione Capacitas degli
+avvisi accorpati: un avviso emesso nel `2026`, anche se relativo alle annualita
+`2024-2025`, riporta `2626` (aggiornamento 2026-10-20; prima GAIA duplicava
+l'annualita piu alta, producendo `2525`). Un payload senza anno di emissione
+lascia il campo vuoto.
 
 Nota operativa: la pagina rende un facsimile precompilato per stampa e pagamento manuale/online tramite dati, codeline e barcode. La piena omologazione di stampa in proprio Poste richiede verifica specialistica di posizionamenti OCR e Data Matrix secondo le specifiche ufficiali.
 

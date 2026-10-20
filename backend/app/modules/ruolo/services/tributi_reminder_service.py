@@ -40,7 +40,7 @@ GAIA_PROPOSAL_TEMPLATE_KEY = "__gaia_proposal__"
 PARTITARIO_LINE_WIDTH = 80
 _BOLLETTINO_POSTAL_ACCOUNT = "1007214826"
 _BOLLETTINO_IBAN = "IT15L0760117400001007214826"
-_BOLLETTINO_PRINT_AUTHORIZATION = "AUT.DB/SISB/36211 DEL 5/9/2012"
+_BOLLETTINO_PRINT_AUTHORIZATION = "AUT.DB/SISB/XXXXX DEL XX/XX/2026"
 _BOLLETTINO_ACCOUNT_NAME_LINES = (
     "CONSORZIO DI BONIFICA DELL'ORISTANESE -",
     "RISCOSSIONE QUOTE ASSOCIATIVE",
@@ -563,7 +563,6 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .signature .note {{ font-size: 5.9pt; line-height: 1.05; color: #39443f; border: 0; margin: 0; padding: 0; }}
 .bollettino-page {{ page: bollettino; width: 297mm; min-height: 210mm; padding: 0; overflow: hidden; color: #000; background: #fff; }}
 .bollettino-sheet {{ position: absolute; inset: 0; width: 297mm; height: 210mm; overflow: hidden; font: 9.8pt Arial, Helvetica, sans-serif; }}
-.bollettino-landscape {{ position: absolute; inset: 0; width: 297mm; height: 210mm; overflow: hidden; }}
 .bollettino-methods {{ position: absolute; top: 5.5mm; left: 6.5mm; right: 6.5mm; height: 52mm; }}
 .bollettino-methods h2 {{ position: absolute; top: 0; left: 0; right: 0; margin: 0; text-align: center; font-size: 11pt; }}
 .bollettino-methods-box {{ position: absolute; left: 0; right: 0; top: 8.5mm; bottom: 0; border: 1.2pt solid #111; overflow: hidden; }}
@@ -574,6 +573,7 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .bollettino-bonifico {{ position: absolute; top: 62.5mm; left: 6.5mm; right: 6.5mm; height: 25mm; border: 1.2pt solid #000; padding: 4mm; text-align: center; }}
 .bollettino-bonifico h3 {{ margin: 0 0 5mm; font-size: 9.8pt; text-transform: uppercase; }}
 .bollettino-bonifico p {{ margin: 2mm 0; }}
+.bollettino-print-instructions {{ position: absolute; top: 97.5mm; left: 6.5mm; right: 6.5mm; font: 7.4pt/1.3 Arial, Helvetica, sans-serif; text-align: center; }}
 .bollettino-coupons {{ position: absolute; left: 0; bottom: 0; width: 297mm; height: 102mm; display: grid; grid-template-columns: 132mm 165mm; gap: 0; font-family: "OCR B", monospace; }}
 .bollettino-slip {{ height: 102mm; min-height: 0; padding: 0; position: relative; color: #000; border-top: 1pt solid #000; overflow: hidden; }}
 .bollettino-slip.accredito {{ border-left: 1pt solid #000; }} .bollettino-slip.accredito::after {{ content: ""; position: absolute; left: 0; right: 0; top: 83mm; border-top: .4pt solid #ccc; }}
@@ -606,7 +606,7 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .bollettino-barcode-number {{ position: absolute; left: 59mm; top: 76.3mm; width: 93mm; text-align: center; font: 7.9pt/1 Arial, Helvetica, sans-serif; letter-spacing: 0; color: #000; }}
 .bollettino-barcode-note {{ position: absolute; left: 59mm; top: 79.6mm; width: 93mm; text-align: center; font: 4.9pt Arial, Helvetica, sans-serif; color: #ccc; text-transform: uppercase; }}
 .bollettino-postmark {{ position: absolute; width: 55mm; height: 34mm; top: 49mm; border: .65pt dashed #ccc; text-align: center; color: #ccc; }}
-.bollettino-slip.versamento .bollettino-postmark {{ right: 0; }}
+.bollettino-slip.versamento .bollettino-postmark {{ right: 0; height: 33.2mm; }}
 .bollettino-slip.accredito .bollettino-postmark {{ left: 0; }}
 .bollettino-postmark-label {{ margin-top: 10mm; font: 6.2pt Arial, Helvetica, sans-serif; text-transform: uppercase; letter-spacing: .18pt; }}
 .bollettino-postmark-code {{ font: 5.5pt Arial, Helvetica, sans-serif; color: #ccc; line-height: 1; }}
@@ -825,7 +825,6 @@ def _gaia_bollettino_html(field_values: dict[str, str], payload: dict[str, Any])
     values = _gaia_bollettino_values(field_values, payload)
     return f"""
   <div class="bollettino-sheet">
-  <div class="bollettino-landscape">
     <div class="bollettino-methods">
       <h2>MODALITA' DI PAGAMENTO: <span>I pagamenti possono essere effettuati:</span></h2>
       <div class="bollettino-methods-box">
@@ -844,10 +843,10 @@ def _gaia_bollettino_html(field_values: dict[str, str], payload: dict[str, Any])
       <p>Il bonifico per il pagamento dell'importo richiesto con il presente avviso, dovrà riportare la seguente <strong>causale: {html.escape(values['bonifico_causale'])}</strong></p>
       <p>Versamenti eseguiti con <span class="under">causale difforme</span> da quanto indicato <span class="under">potrebbero non essere correttamente rendicontati</span> dal sistema.</p>
     </div>
+    <div class="bollettino-print-instructions"><strong>ISTRUZIONI DI STAMPA:</strong> selezionare "stampa come immagine", foglio A4 orizzontale al 100% (dimensioni effettive, non "adatta alla pagina"), solo fronte, su carta bianca non riciclata da 80-100 g/m&sup2;.<br>Ritagliare il bollettino lungo il bordo superiore: il retro deve restare completamente bianco.</div>
     <div class="bollettino-coupons">
       {_gaia_bollettino_slip_html(values, title="Ricevuta di Versamento", kind="versamento")}
       {_gaia_bollettino_slip_html(values, title="Ricevuta di Accredito", kind="accredito")}
-    </div>
     </div>
   </div>"""
 
@@ -1047,7 +1046,7 @@ def _gaia_bollettino_due_date(payload: dict[str, Any]) -> str:
 
 
 def _gaia_bollettino_esercizio(payload: dict[str, Any]) -> str:
-    return td896_esercizio(payload, _sorted_payload_years(payload, _batch_yearly_values(payload)))
+    return td896_esercizio(payload)
 
 
 def _generate_batch_reminder_docx_from_template(

@@ -3653,6 +3653,9 @@ def test_tributi_reminder_batch_groups_candidates_generates_pdf_and_tracks_items
     assert len(first_payload["notice_identity_key"]) == 64
     assert first_payload["notice_progressive"] == 1
     assert first_payload["notice_number"] == f"1{current_year}2200001"
+    # Without a policy override the bollettino esercizio follows the emission year, not 2022.
+    assert not first_payload.get("bollettino_esercizio")
+    assert reminder_service._gaia_bollettino_esercizio(first_payload) == f"{current_year % 100:02d}" * 2
     assert first_payload["avvisi"][0]["partitario"]["info_text"].startswith("=" * 80)
     assert first_payload["avvisi"][0]["partite"][0]["particelle"][0]["sup_catastale_are"] == "150.0000"
 
@@ -4570,7 +4573,7 @@ def test_gaia_reminder_template_contract() -> None:
     assert "@page { size: A4; margin: 0; } @page bollettino { size: A4 landscape; margin: 0; }" in rendered_html
     assert ".bollettino-page { page: bollettino; width: 297mm; min-height: 210mm;" in rendered_html
     assert ".bollettino-sheet { position: absolute; inset: 0; width: 297mm; height: 210mm;" in rendered_html
-    assert ".bollettino-landscape { position: absolute; inset: 0; width: 297mm; height: 210mm;" in rendered_html
+    assert "bollettino-landscape" not in rendered_html
     assert "transform: rotate(-90deg) scale(.940);" not in rendered_html
     assert ".front { font-size: 11.45pt; line-height: 1.28; }" in rendered_html
     assert ".header { display: grid; grid-template-columns: 39mm 1fr 39mm;" in rendered_html
@@ -4594,6 +4597,11 @@ def test_gaia_reminder_template_contract() -> None:
     assert ".bollettino-barcode-svg { position: absolute; left: 59mm; top: 64mm; width: 93mm; height: 12mm;" in rendered_html
     assert ".bollettino-datamatrix { position: absolute; right: 3.125mm; top: 82.625mm; width: 48.75mm; height: 18.75mm;" in rendered_html
     assert ".bollettino-postmark { position: absolute; width: 55mm; height: 34mm; top: 49mm;" in rendered_html
+    # The versamento box ends above the Data Matrix two-cell quiet zone (84.75mm - 1.875mm).
+    assert ".bollettino-slip.versamento .bollettino-postmark { right: 0; height: 33.2mm; }" in rendered_html
+    assert "<strong>ISTRUZIONI DI STAMPA:</strong> selezionare \"stampa come immagine\", foglio A4 orizzontale al 100%" in rendered_html
+    assert "carta bianca non riciclata" in rendered_html
+    assert "il retro deve restare completamente bianco" in rendered_html
     assert ".bollettino-slip.accredito .bollettino-details { display: none; }" in rendered_html
     assert '<div class="bollettino-small-label">TD</div><div class="bollettino-td">896</div>' in rendered_html
     assert ".legal-copy { font-size: 8.75pt; line-height: .97;" in rendered_html
@@ -4636,7 +4644,7 @@ def test_gaia_reminder_template_contract() -> None:
     assert '<span class="field-td">896&gt;</span>' in rendered_html
     assert "bollettino-postmark" in rendered_html
     assert "BOLLO DELL'UFFICIO POSTALE" in rendered_html
-    assert "AUT.DB/SISB/36211 DEL 5/9/2012" in rendered_html
+    assert "AUT.DB/SISB/XXXXX DEL XX/XX/2026" in rendered_html
     assert "bollettino-barcode-svg" in rendered_html
     assert "bollettino-datamatrix" in rendered_html
     assert "Data Matrix TD 896" in rendered_html
@@ -4698,7 +4706,13 @@ def test_gaia_reminder_template_contract() -> None:
     assert reminder_service._gaia_bollettino_due_date({"deadline": "21.12.2024"}) == "21/12/2024"
     assert reminder_service._gaia_bollettino_due_date({"generated_at": "2026-07-22T00:00:00Z"}) == "21/08/2026"
     assert reminder_service._gaia_bollettino_due_date({"deadline": " ", "generated_at": "2026-07-22"}) == "21/08/2026"
-    assert reminder_service._gaia_bollettino_esercizio({"years": [2024, 2025]}) == "2525"
+    assert (
+        reminder_service._gaia_bollettino_esercizio(
+            {"years": [2024, 2025], "notice_emission_year": 2026}
+        )
+        == "2626"
+    )
+    assert reminder_service._gaia_bollettino_esercizio({"years": [2024, 2025]}) == ""
     assert reminder_service._gaia_bollettino_esercizio({"bollettino_esercizio": " 0123 "}) == "0123"
     assert reminder_service._gaia_bollettino_esercizio({}) == ""
 
@@ -5228,7 +5242,7 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert "MODALITA' DI PAGAMENTO" not in main_html
     assert "MODALITA' DI PAGAMENTO" in bollettino_html
     assert "BOLLO DELL'UFFICIO POSTALE" in bollettino_html
-    assert "AUT.DB/SISB/36211 DEL 5/9/2012" in bollettino_html
+    assert "AUT.DB/SISB/XXXXX DEL XX/XX/2026" in bollettino_html
     assert "18012026242500001985120010072148261000000221553896" in bollettino_html
     assert "bollettino-barcode-svg" in bollettino_html
     assert "Ricevuta di Versamento" in bollettino_html
