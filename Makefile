@@ -3,11 +3,12 @@ GRAPHIFY_ENV = if [ -f /home/cbo/CursorProjects/GAIA/.env.graphify ]; then set -
 GRAPHIFY_CODE_FLAGS ?=
 # gpt-5.4-mini e' stato ritirato dal codex-lb il 2026-09-09: rispondeva HTTP 503
 # no_plan_support_for_model, e graphify degradava a "partial results" con exit 0,
-# cioe' un grafo aggiornato ma senza arricchimento semantico. gpt-reserve e' il
-# modello veloce del catalogo attuale, validato su elaborazioni, presenze e wiki
-# (quest'ultimo e' il corpus con l'hang storico su gpt-5.5: nessun hang).
+# cioe' un grafo aggiornato ma senza arricchimento semantico. Dal 2026-10-20 il
+# modello docs e' gpt-6-luna, lo stesso di .env.graphify per i target senza pin
+# (gpt-5.5 risponde ora 503). Il precedente gpt-reserve era stato validato su
+# elaborazioni, presenze e wiki (corpus con l'hang storico su gpt-5.5).
 # I timeout sono allineati ai valori con cui la validazione e' passata.
-GRAPHIFY_DOC_MODEL ?= gpt-reserve
+GRAPHIFY_DOC_MODEL ?= gpt-6-luna
 GRAPHIFY_WIKI_DOC_MODEL = $(GRAPHIFY_DOC_MODEL)
 GRAPHIFY_WIKI_DOC_FLAGS = --max-concurrency 1 --api-timeout 180
 GRAPHIFY_WIKI_DOC_TIMEOUT = timeout --foreground 420s
