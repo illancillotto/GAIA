@@ -44,6 +44,24 @@ Il layout recepisce le misure principali del modello CH8/Bis TD 896 indicate nei
 - elementi guida non significativi in grigio laserizzato al `20%`;
 - due aree bollo da `55mm x 34mm`, posizionate a `49mm` dal bordo superiore.
 
+Posizionamenti sulla ricevuta di accredito (aggiornamento 2026-10-20, misurati sul PDF
+finale e conformi a `Caratteristiche del bollettino` Ed. 2020):
+
+- codeline allineata alla griglia Poste a decimi di pollice, con i quattro campi ancorati
+  al bordo destro: codice cliente a `106.68mm`, importo a `60.96mm`, conto a `22.86mm` e
+  tipo documento a `7.62mm`; i delimitatori cadono quindi nel 4°, 10°, 25° e 43° decimo;
+- simbolo `€` `7mm x 7mm` a `7.5mm` dall'alto e dalla divisione, con `TD 896` sotto;
+- conto corrente a circa `34.5mm` dalla divisione e importo a circa `116mm`, entrambi a
+  `10mm` dall'alto; nella ricevuta di versamento il conto parte da `42.9mm` e l'importo e
+  allineato a `3mm` dal bordo destro;
+- etichetta `Intestato a` a `21.3mm` e intestazione su due righe a `24.1mm` dall'alto,
+  senza sovrapporsi al riquadro `eseguito da`;
+- numero sotto il barcode in `7.9pt`, dettagli della ricevuta di versamento in `8pt`.
+
+La verifica di questi posizionamenti e stata eseguita con PyMuPDF e con la decodifica
+`zxing` di Code 128 e Data Matrix sui campioni preparati per la richiesta di
+autorizzazione alla stampa in proprio.
+
 Per la stampa PDF con Chromium il renderer usa tre job separati: avviso/comunicazioni,
 partitario e bollettino. I documenti vengono poi uniti con `pypdf` nell'ordine
 `avviso + comunicazioni -> partitario -> bollettino`. Questa separazione evita che un

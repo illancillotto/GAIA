@@ -1,5 +1,30 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## Bollettini TD 896 e numeri avviso multi-annualita — 2026-10-20
+
+- Corretto il numero avviso con tre o piu annualita: prima arrivava a 16-18
+  cifre, oltre il limite di 15 del codice cliente TD 896, e il bollettino non
+  veniva generato. Ora dalla terza annualita il suffisso riporta solo la prima
+  e l'ultima (es. `2022-2025` -> `12026222500001`, 14 cifre). Numeri con una o
+  due annualita invariati; univocita garantita da anno emissione + progressivo.
+- Le prenotazioni gia salvate non vengono riscritte: eventuali numeri storici
+  oltre 15 cifre in `ruolo_tributi_notice_numbers` vanno verificati sul DB di
+  produzione e riemessi a parte (non verificabile dall'ambiente di sviluppo).
+- Allineato il layout della ricevuta di accredito alle `Caratteristiche del
+  bollettino` Ed. 2020: codeline sulla griglia a decimi di pollice ancorata a
+  destra, conto/importo a `34.5mm`/`116mm`, intestazione a `24.1mm` senza
+  sovrapposizioni con `eseguito da`. Dettagli in
+  `RUOLO_TRIBUTI_TEMPLATE_GAIA_2026-07-23.md`.
+- Verifica su PDF generati: delimitatori della codeline nel 4°, 10°, 25° e 43°
+  decimo, Code 128 e Data Matrix decodificati (zxing) uguali al payload di 50
+  cifre, nessun testo sovrapposto. Preparati 5 campioni per la richiesta di
+  autorizzazione Poste alla stampa in proprio.
+- Il codice di autorizzazione stampato resta `AUT.DB/SISB/36211 DEL 5/9/2012`
+  finche Poste non rilascia il nuovo.
+- Test: suite Ruolo PASS; coverage 100% su `tributi_notice_registry.py`,
+  `tributi_reminder_service.py` e `td896.py`; style e complexity ratchet senza
+  finding; grafo `ruolo-code` aggiornato.
+
 ## Anteprima PDF bozze da Elenco Tributi — 2026-10-19
 
 - Collegato il comando rapido `Avviso sollecito` all'anteprima privata gia

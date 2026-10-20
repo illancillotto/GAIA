@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import func, select
@@ -18,10 +18,10 @@ from app.modules.ruolo.models import (
 MAX_NOTICE_PROGRESSIVE = 99_999
 
 
-def build_notice_number(
-    *, emission_year: int, reference_years: list[int], progressive: int
-) -> str:
-    years_suffix = "".join(f"{year % 100:02d}" for year in sorted(set(reference_years)))
+def build_notice_number(*, emission_year: int, reference_years: list[int], progressive: int) -> str:
+    # Only first and last year: 3+ years must still fit the 15-digit TD 896 limit.
+    years = sorted(set(reference_years))
+    years_suffix = "".join(f"{year % 100:02d}" for year in years[:1] + years[1:][-1:])
     return f"1{emission_year}{years_suffix}{progressive:05d}"
 
 
@@ -134,8 +134,8 @@ def find_existing_notice_payload(
 
 
 def next_notice_progressive(db: Session, *, emission_year: int) -> int:
-    year_start = datetime(emission_year, 1, 1, tzinfo=timezone.utc)
-    year_end = datetime(emission_year + 1, 1, 1, tzinfo=timezone.utc)
+    year_start = datetime(emission_year, 1, 1, tzinfo=UTC)
+    year_end = datetime(emission_year + 1, 1, 1, tzinfo=UTC)
     payloads = db.scalars(
         select(RuoloTributiReminderBatchItem.payload_json)
         .join(

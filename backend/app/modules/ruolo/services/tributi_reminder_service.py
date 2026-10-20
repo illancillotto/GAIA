@@ -10,17 +10,18 @@ import subprocess
 import tempfile
 import uuid
 import zipfile
+from collections.abc import Iterable
 from contextlib import suppress
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 from xml.etree import ElementTree as ET
 
 from pypdf import PdfReader, PdfWriter
 
+from app.modules.ruolo.services.td896 import TD896_DOCUMENT_CODE as _BOLLETTINO_TD_CODE
 from app.modules.ruolo.services.td896 import (
-    TD896_DOCUMENT_CODE as _BOLLETTINO_TD_CODE,
     build_td896_barcode_payload,
     build_td896_payment_code,
     td896_amount_code,
@@ -337,8 +338,7 @@ def _render_gaia_html_to_pdf(
             html_path.as_uri(),
         ],
         check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
     if not pdf_path.exists():
@@ -578,46 +578,45 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .bollettino-slip {{ height: 102mm; min-height: 0; padding: 0; position: relative; color: #000; border-top: 1pt solid #000; overflow: hidden; }}
 .bollettino-slip.accredito {{ border-left: 1pt solid #000; }} .bollettino-slip.accredito::after {{ content: ""; position: absolute; left: 0; right: 0; top: 83mm; border-top: .4pt solid #ccc; }}
 .bollettino-slip .band {{ position: absolute; left: 0; right: 0; top: 0; height: 4mm; padding: .6mm 6mm 0; background: #ccc; border-bottom: .8pt solid #000; color: #000; font: 6.6pt Arial, sans-serif; text-transform: uppercase; display: flex; justify-content: space-between; }}
-.bollettino-logo-cbo {{ position: absolute; left: 6mm; top: 7.5mm; width: 20mm; height: 15mm; display: flex; align-items: center; justify-content: center; }}
-.bollettino-logo-cbo img {{ max-width: 20mm; max-height: 15mm; object-fit: contain; filter: grayscale(100%); }}
-.bollettino-euro-block {{ position: absolute; top: 7.5mm; left: 7.5mm; width: 13mm; text-align: center; }}
+.bollettino-logo-cbo {{ position: absolute; left: 6mm; top: 7.5mm; width: 20mm; height: 13mm; display: flex; align-items: center; justify-content: center; }}
+.bollettino-logo-cbo img {{ max-width: 20mm; max-height: 13mm; object-fit: contain; filter: grayscale(100%); }}
+.bollettino-euro-block {{ position: absolute; top: 7.5mm; left: 7.24mm; white-space: nowrap; }} .bollettino-euro-block .bollettino-small-label, .bollettino-euro-block .bollettino-td {{ display: inline-block; margin-right: 1.2mm; }}
 .bollettino-slip.versamento .bollettino-euro-block {{ left: 28mm; }}
-.bollettino-euro-mark {{ width: 7mm; height: 7mm; margin: 0 auto .6mm; background: #000; color: white; display: grid; place-content: center; font: 800 13pt Georgia, serif; }}
+.bollettino-euro-mark {{ width: 7mm; height: 7mm; margin: 0 0 .9mm; background: #000; color: white; display: grid; place-content: center; font: 800 13pt Georgia, serif; }}
 .bollettino-small-label {{ font: 6.5pt Arial, sans-serif; text-transform: uppercase; color: #ccc; }}
-.bollettino-account-row {{ position: absolute; top: 10mm; left: 23mm; right: 40mm; white-space: nowrap; }}
-.bollettino-slip.versamento .bollettino-account-row {{ left: 44mm; }}
+.bollettino-account-row {{ position: absolute; top: 8.9mm; left: 18.74mm; white-space: nowrap; font-size: 0; }} .bollettino-account-row .bollettino-small-label {{ display: inline-block; width: 14mm; margin-right: 1.5mm; text-align: right; }}
+.bollettino-slip.versamento .bollettino-account-row {{ left: 42.9mm; }}
 .bollettino-account, .bollettino-td {{ font: 10pt "OCR B", monospace; letter-spacing: 0; color: #000; }}
-.bollettino-amount-row {{ position: absolute; top: 10mm; right: 7.5mm; width: 31mm; text-align: right; }}
+.bollettino-amount-row {{ position: absolute; top: 8.9mm; left: 104.24mm; white-space: nowrap; font-size: 0; }} .bollettino-slip.versamento .bollettino-amount-row {{ left: auto; right: 3mm; }} .bollettino-amount-row > div {{ display: inline-block; }} .bollettino-amount-row .bollettino-small-label {{ width: 10mm; margin-right: 1.5mm; text-align: right; }}
 .bollettino-amount {{ font: 10pt "OCR B", monospace; letter-spacing: 0; color: #000; }}
 .bollettino-iban {{ position: absolute; top: 16.5mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center; gap: 2mm; align-items: center; white-space: nowrap; color: #ccc; }}
-.bollettino-slip.versamento .bollettino-iban {{ left: 39mm; right: 3mm; }}
+.bollettino-slip.versamento .bollettino-iban {{ left: 42mm; right: 1mm; }}
 .bollettino-boxes {{ display: grid; grid-template-columns: repeat(27, 2.52mm); width: max-content; white-space: nowrap; }}
 .bollettino-boxes span {{ height: 3.8mm; border: .4pt solid #ccc; border-right: 0; display: grid; place-content: center; font-size: 7.7pt; line-height: 1; }}
 .bollettino-boxes span:last-child {{ border-right: .4pt solid #ccc; }}
-.bollettino-intestato-label {{ position: absolute; top: 24.5mm; left: 7.5mm; }}
-.bollettino-intestato {{ position: absolute; top: 28mm; left: 7.5mm; right: 7.5mm; font: 10pt/1.12 "OCR B", monospace; letter-spacing: 0; color: #000; }}
+.bollettino-intestato-label {{ position: absolute; top: 21.3mm; left: 7.5mm; }}
+.bollettino-intestato {{ position: absolute; top: 24.1mm; left: 7.5mm; right: 7.5mm; font: 10pt/1.12 "OCR B", monospace; letter-spacing: 0; color: #000; }}
 .bollettino-eseguito {{ position: absolute; top: 35mm; left: 7.5mm; right: 61mm; max-height: 17mm; overflow: hidden; font-size: 8.25pt; line-height: 1.05; color: #000; }}
 .bollettino-eseguito-address {{ display: block; margin-top: .7mm; font-size: 7.05pt; line-height: 1.04; white-space: normal; overflow-wrap: break-word; }}
 .bollettino-slip.accredito .bollettino-eseguito {{ left: 58.5mm; right: 4mm; top: 35mm; max-height: 27mm; }}
-.bollettino-details {{ position: absolute; left: 7.5mm; right: 61mm; top: 58.5mm; font-size: 9.1pt; line-height: 1.18; }}
+.bollettino-details {{ position: absolute; left: 7.5mm; right: 56mm; top: 58.5mm; font-size: 8pt; line-height: 1.18; }}
 .bollettino-slip.accredito .bollettino-details {{ display: none; }}
 .bollettino-customer {{ position: absolute; left: 7.5mm; top: 42mm; font: 10pt "OCR B", monospace; letter-spacing: 0; color: #000; }}
 .bollettino-barcode-svg {{ position: absolute; left: 59mm; top: 64mm; width: 93mm; height: 12mm; display: block; }}
-.bollettino-barcode-number {{ position: absolute; left: 59mm; top: 76.3mm; width: 93mm; text-align: center; font: 5.8pt Arial, Helvetica, sans-serif; letter-spacing: .15pt; color: #000; }}
-.bollettino-barcode-note {{ position: absolute; left: 59mm; top: 79.2mm; width: 93mm; text-align: center; font: 4.9pt Arial, Helvetica, sans-serif; color: #ccc; text-transform: uppercase; }}
+.bollettino-barcode-number {{ position: absolute; left: 59mm; top: 76.3mm; width: 93mm; text-align: center; font: 7.9pt/1 Arial, Helvetica, sans-serif; letter-spacing: 0; color: #000; }}
+.bollettino-barcode-note {{ position: absolute; left: 59mm; top: 79.6mm; width: 93mm; text-align: center; font: 4.9pt Arial, Helvetica, sans-serif; color: #ccc; text-transform: uppercase; }}
 .bollettino-postmark {{ position: absolute; width: 55mm; height: 34mm; top: 49mm; border: .65pt dashed #ccc; text-align: center; color: #ccc; }}
 .bollettino-slip.versamento .bollettino-postmark {{ right: 0; }}
 .bollettino-slip.accredito .bollettino-postmark {{ left: 0; }}
 .bollettino-postmark-label {{ margin-top: 10mm; font: 6.2pt Arial, Helvetica, sans-serif; text-transform: uppercase; letter-spacing: .18pt; }}
-.bollettino-slip.accredito .bollettino-postmark-label {{ margin-top: 10mm; }}
 .bollettino-postmark-code {{ font: 5.5pt Arial, Helvetica, sans-serif; color: #ccc; line-height: 1; }}
 .bollettino-datamatrix {{ position: absolute; right: 3.125mm; top: 82.625mm; width: 48.75mm; height: 18.75mm; display: block; }}
-.bollettino-codeline {{ position: absolute; left: 0; right: 0; top: 91.7mm; height: 3.6mm; font: 10pt/3.6mm "OCR B", monospace; letter-spacing: 0; color: #000; white-space: nowrap; z-index: 1; }}
+.bollettino-codeline {{ position: absolute; left: 0; right: 0; top: 91.5mm; height: 3.6mm; font: 10pt/3.6mm "OCR B", monospace; letter-spacing: -.03pt; color: #000; white-space: nowrap; z-index: 1; }}
 .bollettino-codeline span {{ position: absolute; top: 0; }}
-.bollettino-codeline .field-customer {{ left: 7.5mm; }}
-.bollettino-codeline .field-amount {{ left: 74mm; }}
-.bollettino-codeline .field-account {{ left: 108mm; }}
-.bollettino-codeline .field-td {{ right: 7.5mm; text-align: right; }}
+.bollettino-codeline .field-customer {{ right: 106.68mm; }}
+.bollettino-codeline .field-amount {{ right: 60.96mm; }}
+.bollettino-codeline .field-account {{ right: 22.86mm; }}
+.bollettino-codeline .field-td {{ right: 7.62mm; }}
 .bollettino-authorization {{ position: absolute; right: 8mm; top: 4.8mm; color: #ccc; font: 5.8pt Arial, Helvetica, sans-serif; letter-spacing: .2pt; }}
 .partitario-page {{ break-before: page; page-break-before: always; min-height: 297mm; }}
 .partitario-page:first-child {{ break-before: auto; page-break-before: auto; }}
@@ -1044,7 +1043,7 @@ def _gaia_bollettino_due_date(payload: dict[str, Any]) -> str:
         with suppress(ValueError):
             created_at = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
             return (created_at + timedelta(days=30)).strftime("%d/%m/%Y")
-    return (datetime.now(timezone.utc) + timedelta(days=30)).strftime("%d/%m/%Y")
+    return (datetime.now(UTC) + timedelta(days=30)).strftime("%d/%m/%Y")
 
 
 def _gaia_bollettino_esercizio(payload: dict[str, Any]) -> str:
@@ -1483,7 +1482,7 @@ def _stable_default_first_page_xml(
                 after=60,
             ),
             _docx_paragraph(
-                "Intestato a: CONSORZIO DI BONIFICA DELL’ORISTANESE - RISCOSSIONE QUOTE ASSOCIATIVE",
+                "Intestato a: CONSORZIO DI BONIFICA DELL\u2019ORISTANESE - RISCOSSIONE QUOTE ASSOCIATIVE",
                 size=18,
                 after=40,
             ),
@@ -1495,7 +1494,7 @@ def _stable_default_first_page_xml(
             ),
             _stable_yearly_summary_table_xml(field_values, yearly_rows),
             _docx_paragraph(
-                "Per maggiori chiarimenti contattare l’Ente o recarsi presso la sede nei seguenti giorni: "
+                "Per maggiori chiarimenti contattare l\u2019Ente o recarsi presso la sede nei seguenti giorni: "
                 "Lunedi e giovedì 11.00 - 13.00, - tel. 0783 3150212",
                 size=16,
                 before=130,
@@ -1504,7 +1503,7 @@ def _stable_default_first_page_xml(
             _docx_paragraph(
                 "INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI: lo scrivente Consorzio, titolare del trattamento "
                 "dei dati personali, li utilizza esclusivamente per le finalità istituzionali previste dalla legge, "
-                "anche quando comunicate a terzi. Il trattamento dei Suoi dati avviene anche mediante l’utilizzo di "
+                "anche quando comunicate a terzi. Il trattamento dei Suoi dati avviene anche mediante l\u2019utilizzo di "
                 "strumenti elettronici, con logistiche strettamente correlate alle predette finalità nel rispetto del D.LGS n. 196/2003.",
                 size=15,
                 after=80,
@@ -1532,7 +1531,7 @@ def _stable_creditor_table_xml() -> str:
     creditor = (
         "Ente creditore <w:br/>"
         "Codice Fiscale: 90022600952<w:br/>"
-        "Consorzio di Bonifica dell’Oristanese<w:br/>"
+        "Consorzio di Bonifica dell\u2019Oristanese<w:br/>"
         "Sede: Via Cagliari 170 - 09170 Oristano<w:br/>"
         "Telefono 0783 3150<w:br/>"
         "Sito www.bonificaoristanese.it<w:br/>"
@@ -1562,7 +1561,7 @@ def _stable_payment_summary_table_xml(amount: str, field_values: dict[str, str])
             [
                 _docx_cell(
                     f"{amount}<w:br/>entro il {html.escape(field_values['Scadenza'])} - UNICA SOLUZIONE<w:br/><w:br/>"
-                    "Si può richiedere, direttamente presso gli uffici dell’Ente, una diversa dilazione del pagamento.",
+                    "Si può richiedere, direttamente presso gli uffici dell\u2019Ente, una diversa dilazione del pagamento.",
                     width=5100,
                     bold=True,
                     size=18,
@@ -2088,7 +2087,7 @@ def _empty_document_rels_xml() -> str:
 
 
 def _core_xml(payload: dict[str, Any]) -> str:
-    created_at = html.escape(str(payload.get("generated_at") or datetime.now(timezone.utc).isoformat()))
+    created_at = html.escape(str(payload.get("generated_at") or datetime.now(UTC).isoformat()))
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" '

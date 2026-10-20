@@ -1,6 +1,6 @@
 # Mini manuale di verifica bollettini TD 896 GAIA
 
-Aggiornamento del 2026-08-24.
+Aggiornamento del 2026-10-20.
 
 ## Scopo
 
@@ -36,6 +36,10 @@ PDF all'amministratore GAIA.
    due cifre di controllo modulo 93. Le cifre finali possono ripetersi tra
    avvisi diversi: l'identificativo da confrontare e sempre il codice completo
    di 18 cifre, mai il solo suffisso.
+8. Verificare che il numero avviso abbia al massimo 15 cifre. Per avvisi con tre
+   o piu annualita il numero riporta solo la prima e l'ultima annualita, per
+   esempio `12026222500001` per `2022-2025`: l'elenco completo delle annualita
+   va controllato nel riepilogo per anno e nel partitario, non nel numero.
 
 ## Verifica formato di stampa
 

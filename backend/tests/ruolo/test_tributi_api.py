@@ -3910,6 +3910,95 @@ def test_tributi_notice_registry_enforces_uniqueness_and_adopts_legacy_payload()
     db.close()
 
 
+def test_tributi_notice_registry_reserves_new_number_when_legacy_adoption_is_lost(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = TestingSessionLocal()
+    legacy_batch = RuoloTributiReminderBatch(
+        status="generated",
+        generated_at=datetime(2026, 1, 2, tzinfo=UTC),
+    )
+    db.add(legacy_batch)
+    db.flush()
+    db.add(
+        RuoloTributiReminderBatchItem(
+            batch_id=legacy_batch.id,
+            codice_fiscale="VRDLGU80A01H501Y",
+            paid_amount=0,
+            status="generated",
+            payload_json={
+                "codice_fiscale": "VRDLGU80A01H501Y",
+                "years": [2022, 2023, 2024, 2025],
+                "avvisi": [{"id": "legacy-multi-year"}],
+                "notice_emission_year": 2026,
+                "notice_progressive": 7,
+                "notice_number": "1202622232425000007",
+            },
+        )
+    )
+    db.flush()
+    real_insert = notice_registry.insert_notice_reservation
+    insert_calls: list[str] = []
+
+    def lose_legacy_adoption(session: Session, **kwargs: object) -> object:
+        insert_calls.append(str(kwargs["notice_number"]))
+        if len(insert_calls) == 1:
+            return None
+        return real_insert(session, **kwargs)
+
+    monkeypatch.setattr(notice_registry, "insert_notice_reservation", lose_legacy_adoption)
+
+    reservation = notice_registry.reserve_notice_number(
+        db,
+        emission_year=2026,
+        candidate={
+            "codice_fiscale": "VRDLGU80A01H501Y",
+            "avvisi": [{"id": "legacy-multi-year"}],
+        },
+        reference_years=[2025, 2023, 2022, 2024],
+    )
+
+    assert insert_calls == ["1202622232425000007", "12026222500008"]
+    assert reservation.progressive == 8
+    assert reservation.notice_number == "12026222500008"
+    db.close()
+
+
+@pytest.mark.parametrize(
+    ("reference_years", "expected"),
+    [
+        ([2025], "120262500001"),
+        ([2025, 2024], "12026242500001"),
+        ([2023, 2024, 2025], "12026232500001"),
+        ([2025, 2022, 2024, 2023], "12026222500001"),
+        ([2022, 2024, 2025], "12026222500001"),
+        ([2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024], "12026152400001"),
+    ],
+)
+def test_tributi_notice_number_fits_td896_customer_code_for_any_year_count(
+    reference_years: list[int], expected: str
+) -> None:
+    notice_number = notice_registry.build_notice_number(
+        emission_year=2026, reference_years=reference_years, progressive=1
+    )
+
+    assert notice_number == expected
+    assert len(notice_number) <= 15
+    customer_code = td896_service.td896_customer_code(notice_number)
+    assert customer_code.startswith(f"{notice_number}9".zfill(16))
+
+
+def test_tributi_notice_number_keeps_max_progressive_within_td896_limit() -> None:
+    notice_number = notice_registry.build_notice_number(
+        emission_year=2026,
+        reference_years=[2022, 2023, 2024, 2025],
+        progressive=notice_registry.MAX_NOTICE_PROGRESSIVE,
+    )
+
+    assert notice_number == "12026222599999"
+    assert td896_service.td896_customer_code(notice_number) == "012026222599999970"
+
+
 def test_tributi_notice_registry_canonicalizes_identity_and_scopes_it_by_emission_year() -> None:
     db = TestingSessionLocal()
     canonical = notice_registry.reserve_notice_number(
@@ -4491,7 +4580,16 @@ def test_gaia_reminder_template_contract() -> None:
     assert ".bollettino-slip { height: 102mm;" in rendered_html
     assert ".bollettino-eseguito-address { display: block; margin-top: .7mm; font-size: 7.05pt;" in rendered_html
     assert '.bollettino-account, .bollettino-td { font: 10pt "OCR B", monospace;' in rendered_html
-    assert '.bollettino-codeline { position: absolute; left: 0; right: 0; top: 91.7mm; height: 3.6mm; font: 10pt/3.6mm "OCR B", monospace;' in rendered_html
+    assert '.bollettino-codeline { position: absolute; left: 0; right: 0; top: 91.5mm; height: 3.6mm; font: 10pt/3.6mm "OCR B", monospace; letter-spacing: -.03pt;' in rendered_html
+    # Codeline TD 896 sulla griglia Poste a decimi di pollice (2,54 mm) dal bordo destro:
+    # delimitatori nel 4°, 10°, 25° e 43° decimo (manuale Poste, par. 2.2.3).
+    assert ".bollettino-codeline .field-customer { right: 106.68mm; }" in rendered_html
+    assert ".bollettino-codeline .field-amount { right: 60.96mm; }" in rendered_html
+    assert ".bollettino-codeline .field-account { right: 22.86mm; }" in rendered_html
+    assert ".bollettino-codeline .field-td { right: 7.62mm; }" in rendered_html
+    assert ".bollettino-account-row { position: absolute; top: 8.9mm; left: 18.74mm;" in rendered_html
+    assert ".bollettino-amount-row { position: absolute; top: 8.9mm; left: 104.24mm;" in rendered_html
+    assert ".bollettino-intestato { position: absolute; top: 24.1mm;" in rendered_html
     assert ".bollettino-iban { position: absolute; top: 16.5mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center;" in rendered_html
     assert ".bollettino-barcode-svg { position: absolute; left: 59mm; top: 64mm; width: 93mm; height: 12mm;" in rendered_html
     assert ".bollettino-datamatrix { position: absolute; right: 3.125mm; top: 82.625mm; width: 48.75mm; height: 18.75mm;" in rendered_html
@@ -4679,6 +4777,23 @@ def test_gaia_reminder_shows_visible_note_for_unpaid_rateization_residual() -> N
     assert 'class="rateization-note"' in rendered_html
     assert "Ruolo 2024" in rendered_html.split('class="rateization-note"')[1][:400]
     assert "110,53" in rendered_html.split('class="rateization-note"')[1][:400]
+
+
+def test_gaia_reminder_lists_every_year_with_unpaid_rateization_residual() -> None:
+    payload = {
+        "display_name": "IBBA SALVATORE",
+        "codice_fiscale": "BBISVT30T16B314S",
+        "notice_number": "12026242500102",
+        "avvisi": [
+            {"codice_cnc": "020240014003350", "anno_tributario": 2024, "saldo_amount": 110.53, "rateization_fee_amount": 110.53},
+            {"codice_cnc": "020250013730530", "anno_tributario": 2025, "saldo_amount": 75.49, "rateization_fee_amount": 75.49},
+        ],
+    }
+
+    note = reminder_service._gaia_rateization_residual_note_html(payload)
+
+    assert note.startswith('<div class="rateization-note"><strong>Attenzione:</strong> i seguenti ruoli presentano')
+    assert "Ruolo 2024: € 110,53; Ruolo 2025: € 75,49." in note
 
 
 def test_gaia_reminder_hides_rateization_note_when_no_open_residual() -> None:

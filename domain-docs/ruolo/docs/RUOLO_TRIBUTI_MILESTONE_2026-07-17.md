@@ -186,11 +186,23 @@ Regola numero avviso:
 - il numero avviso del nuovo bollettino non usa piu i codici CNC come intestazione primaria;
 - formato: `1 + anno_emissione(4) + anni_riferimento(2+2+...) + progressivo(5)`;
 - `anno_emissione` coincide sempre con l'anno corrente in cui il wizard genera il batch;
-- `anni_riferimento` concatena in ordine crescente le ultime due cifre delle annualita selezionate;
-- il `progressivo` e unico globale per l'anno di emissione e identifica in modo univoco
-  l'avviso per quella combinazione di anno emissione e annualita di riferimento;
+- `anni_riferimento` usa le ultime due cifre delle annualita selezionate, in ordine crescente:
+  con una o due annualita le riporta tutte; dalla terza in poi riporta solo la prima e
+  l'ultima (aggiornamento 2026-10-20);
+- il `progressivo` e unico globale per l'anno di emissione: la coppia anno emissione +
+  progressivo identifica da sola l'avviso, mentre `anni_riferimento` e solo descrittivo;
 - esempio per emissione `2026`, annualita `2024` e `2025`, progressivo `00078`:
-  `12026242500078`.
+  `12026242500078`;
+- esempio per emissione `2026`, annualita `2022`, `2023`, `2024` e `2025`, progressivo
+  `00078`: `12026222500078`. Anche annualita non consecutive, ad esempio `2022`, `2024` e
+  `2025`, producono `2225`: l'elenco esatto resta nell'avviso, nel riepilogo per anno e nel
+  partitario;
+- il numero avviso non supera mai 15 cifre, limite imposto dal codice cliente TD 896
+  (numero avviso + discriminante `9` su 16 cifre + controcodice modulo 93). Prima di questa
+  regola, con tre o piu annualita il numero arrivava a 16-18 cifre e il bollettino non
+  veniva generato;
+- le prenotazioni gia salvate in `ruolo_tributi_notice_numbers` non vengono riscritte:
+  un'eventuale prenotazione storica oltre 15 cifre va individuata e riemessa a parte.
 
 Aggiornamento template batch multi-annualita:
 
