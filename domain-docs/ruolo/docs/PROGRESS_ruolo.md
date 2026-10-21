@@ -15,6 +15,16 @@
 - Test: riemissione per `reserved`/`generation_failed`, nessuna modifica per
   `generated`; suite Ruolo PASS, coverage 100% su `tributi_notice_registry.py`,
   style e complexity ratchet senza finding.
+- Verifica read-only in produzione prima del rilascio: unica prenotazione oltre
+  15 cifre `120262223242500103` (`generation_failed`, annualita 2022-2025, la
+  societa segnalata); nessun numero lungo in stato `generated`.
+- Rilasciato `f7346bf2` con overlay backend isolato
+  `gaia-backend:td896-notice-20261021` (base `tributi-history-20261019` + i tre
+  file `tributi_notice_registry.py`, `tributi_reminder_service.py`, `td896.py`,
+  identici in produzione a `b2fa9ee0` prima del rilascio). Test nell'immagine
+  candidata con PostgreSQL isolato: 134 PASS. Health ok, hash runtime
+  verificati, altri container invariati; rollback in
+  `/opt/gaia/releases/td896-notice-20261021/rollback.sh`.
 
 ## Bollettini TD 896 e numeri avviso multi-annualita — 2026-10-20
 
