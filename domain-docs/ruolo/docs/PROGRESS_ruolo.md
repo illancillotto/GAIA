@@ -30,6 +30,12 @@
   accorpati, invece dell'annualita piu alta (`2525`); aggiunte sopra il
   bollettino le istruzioni di stampa PDF raccomandate da Poste. Rimosso il
   wrapper `.bollettino-landscape`, che duplicava il box di `.bollettino-sheet`.
+- Confronto puntuale con gli Allegati 4 e 8 del manuale Poste: corretti logo
+  beneficiario (`7.6` -> `5.5mm` dall'alto), codice cliente sull'accredito
+  (`43.1` -> `42mm`), caselle IBAN (`17.1` -> `16.6mm`, target `16.5mm`) e
+  mezzeria della codeline (`8.25` -> `8.5mm`). Rigenerati i 5 campioni con il
+  segnaposto di autorizzazione: codeline, barcode e Data Matrix invariati e
+  decodificati.
 - Test: suite Ruolo PASS; coverage 100% su `tributi_notice_registry.py`,
   `tributi_reminder_service.py` e `td896.py`; style e complexity ratchet senza
   finding; grafo `ruolo-code` aggiornato.

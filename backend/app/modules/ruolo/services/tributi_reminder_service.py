@@ -578,7 +578,7 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .bollettino-slip {{ height: 102mm; min-height: 0; padding: 0; position: relative; color: #000; border-top: 1pt solid #000; overflow: hidden; }}
 .bollettino-slip.accredito {{ border-left: 1pt solid #000; }} .bollettino-slip.accredito::after {{ content: ""; position: absolute; left: 0; right: 0; top: 83mm; border-top: .4pt solid #ccc; }}
 .bollettino-slip .band {{ position: absolute; left: 0; right: 0; top: 0; height: 4mm; padding: .6mm 6mm 0; background: #ccc; border-bottom: .8pt solid #000; color: #000; font: 6.6pt Arial, sans-serif; text-transform: uppercase; display: flex; justify-content: space-between; }}
-.bollettino-logo-cbo {{ position: absolute; left: 6mm; top: 7.5mm; width: 20mm; height: 13mm; display: flex; align-items: center; justify-content: center; }}
+.bollettino-logo-cbo {{ position: absolute; left: 6mm; top: 5.5mm; width: 20mm; height: 13mm; display: flex; align-items: center; justify-content: center; }}
 .bollettino-logo-cbo img {{ max-width: 20mm; max-height: 13mm; object-fit: contain; filter: grayscale(100%); }}
 .bollettino-euro-block {{ position: absolute; top: 7.5mm; left: 7.24mm; white-space: nowrap; }} .bollettino-euro-block .bollettino-small-label, .bollettino-euro-block .bollettino-td {{ display: inline-block; margin-right: 1.2mm; }}
 .bollettino-slip.versamento .bollettino-euro-block {{ left: 28mm; }}
@@ -589,7 +589,7 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .bollettino-account, .bollettino-td {{ font: 10pt "OCR B", monospace; letter-spacing: 0; color: #000; }}
 .bollettino-amount-row {{ position: absolute; top: 8.9mm; left: 104.24mm; white-space: nowrap; font-size: 0; }} .bollettino-slip.versamento .bollettino-amount-row {{ left: auto; right: 3mm; }} .bollettino-amount-row > div {{ display: inline-block; }} .bollettino-amount-row .bollettino-small-label {{ width: 10mm; margin-right: 1.5mm; text-align: right; }}
 .bollettino-amount {{ font: 10pt "OCR B", monospace; letter-spacing: 0; color: #000; }}
-.bollettino-iban {{ position: absolute; top: 16.5mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center; gap: 2mm; align-items: center; white-space: nowrap; color: #ccc; }}
+.bollettino-iban {{ position: absolute; top: 16.1mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center; gap: 2mm; align-items: center; white-space: nowrap; color: #ccc; }}
 .bollettino-slip.versamento .bollettino-iban {{ left: 42mm; right: 1mm; }}
 .bollettino-boxes {{ display: grid; grid-template-columns: repeat(27, 2.52mm); width: max-content; white-space: nowrap; }}
 .bollettino-boxes span {{ height: 3.8mm; border: .4pt solid #ccc; border-right: 0; display: grid; place-content: center; font-size: 7.7pt; line-height: 1; }}
@@ -601,7 +601,7 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .bollettino-slip.accredito .bollettino-eseguito {{ left: 58.5mm; right: 4mm; top: 35mm; max-height: 27mm; }}
 .bollettino-details {{ position: absolute; left: 7.5mm; right: 56mm; top: 58.5mm; font-size: 8pt; line-height: 1.18; }}
 .bollettino-slip.accredito .bollettino-details {{ display: none; }}
-.bollettino-customer {{ position: absolute; left: 7.5mm; top: 42mm; font: 10pt "OCR B", monospace; letter-spacing: 0; color: #000; }}
+.bollettino-customer {{ position: absolute; left: 7.5mm; top: 40.9mm; font: 10pt "OCR B", monospace; letter-spacing: 0; color: #000; }}
 .bollettino-barcode-svg {{ position: absolute; left: 59mm; top: 64mm; width: 93mm; height: 12mm; display: block; }}
 .bollettino-barcode-number {{ position: absolute; left: 59mm; top: 76.3mm; width: 93mm; text-align: center; font: 7.9pt/1 Arial, Helvetica, sans-serif; letter-spacing: 0; color: #000; }}
 .bollettino-barcode-note {{ position: absolute; left: 59mm; top: 79.6mm; width: 93mm; text-align: center; font: 4.9pt Arial, Helvetica, sans-serif; color: #ccc; text-transform: uppercase; }}
@@ -611,7 +611,7 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .bollettino-postmark-label {{ margin-top: 10mm; font: 6.2pt Arial, Helvetica, sans-serif; text-transform: uppercase; letter-spacing: .18pt; }}
 .bollettino-postmark-code {{ font: 5.5pt Arial, Helvetica, sans-serif; color: #ccc; line-height: 1; }}
 .bollettino-datamatrix {{ position: absolute; right: 3.125mm; top: 82.625mm; width: 48.75mm; height: 18.75mm; display: block; }}
-.bollettino-codeline {{ position: absolute; left: 0; right: 0; top: 91.5mm; height: 3.6mm; font: 10pt/3.6mm "OCR B", monospace; letter-spacing: -.03pt; color: #000; white-space: nowrap; z-index: 1; }}
+.bollettino-codeline {{ position: absolute; left: 0; right: 0; top: 91.25mm; height: 3.6mm; font: 10pt/3.6mm "OCR B", monospace; letter-spacing: -.03pt; color: #000; white-space: nowrap; z-index: 1; }}
 .bollettino-codeline span {{ position: absolute; top: 0; }}
 .bollettino-codeline .field-customer {{ right: 106.68mm; }}
 .bollettino-codeline .field-amount {{ right: 60.96mm; }}

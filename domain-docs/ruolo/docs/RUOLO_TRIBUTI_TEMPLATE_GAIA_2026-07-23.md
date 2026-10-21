@@ -57,6 +57,11 @@ finale e conformi a `Caratteristiche del bollettino` Ed. 2020):
 - etichetta `Intestato a` a `21.3mm` e intestazione su due righe a `24.1mm` dall'alto,
   senza sovrapporsi al riquadro `eseguito da`;
 - numero sotto il barcode in `7.9pt`, dettagli della ricevuta di versamento in `8pt`;
+- confronto con l'Allegato 8 del manuale: logo beneficiario a `5.5mm` dall'alto, caselle IBAN
+  a `16.5mm` (misurate `16.6mm`, arrotondamento al pixel di Chromium), codice cliente a `42mm`
+  dall'alto e `7.5mm` dalla divisione, mezzeria della codeline a `8.5mm` dal bordo inferiore.
+  Le regole CSS compensano lo spazio sopra i glifi (`top` del codice cliente `40.9mm`, della
+  codeline `91.25mm`, delle caselle IBAN `16.1mm`);
 - riquadro bollo della ricevuta di versamento alto `33.2mm` invece di `34mm`: con il
   Data Matrix a `84.75mm` la zona di rispetto di due celle (`1.875mm`) resta libera dal
   bordo tratteggiato (distanza misurata `2.14mm`). Il manuale chiede il bollo fino a

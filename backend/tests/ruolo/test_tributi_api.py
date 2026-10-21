@@ -4583,7 +4583,7 @@ def test_gaia_reminder_template_contract() -> None:
     assert ".bollettino-slip { height: 102mm;" in rendered_html
     assert ".bollettino-eseguito-address { display: block; margin-top: .7mm; font-size: 7.05pt;" in rendered_html
     assert '.bollettino-account, .bollettino-td { font: 10pt "OCR B", monospace;' in rendered_html
-    assert '.bollettino-codeline { position: absolute; left: 0; right: 0; top: 91.5mm; height: 3.6mm; font: 10pt/3.6mm "OCR B", monospace; letter-spacing: -.03pt;' in rendered_html
+    assert '.bollettino-codeline { position: absolute; left: 0; right: 0; top: 91.25mm; height: 3.6mm; font: 10pt/3.6mm "OCR B", monospace; letter-spacing: -.03pt;' in rendered_html
     # Codeline TD 896 sulla griglia Poste a decimi di pollice (2,54 mm) dal bordo destro:
     # delimitatori nel 4°, 10°, 25° e 43° decimo (manuale Poste, par. 2.2.3).
     assert ".bollettino-codeline .field-customer { right: 106.68mm; }" in rendered_html
@@ -4593,12 +4593,15 @@ def test_gaia_reminder_template_contract() -> None:
     assert ".bollettino-account-row { position: absolute; top: 8.9mm; left: 18.74mm;" in rendered_html
     assert ".bollettino-amount-row { position: absolute; top: 8.9mm; left: 104.24mm;" in rendered_html
     assert ".bollettino-intestato { position: absolute; top: 24.1mm;" in rendered_html
-    assert ".bollettino-iban { position: absolute; top: 16.5mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center;" in rendered_html
+    assert ".bollettino-iban { position: absolute; top: 16.1mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center;" in rendered_html
     assert ".bollettino-barcode-svg { position: absolute; left: 59mm; top: 64mm; width: 93mm; height: 12mm;" in rendered_html
     assert ".bollettino-datamatrix { position: absolute; right: 3.125mm; top: 82.625mm; width: 48.75mm; height: 18.75mm;" in rendered_html
     assert ".bollettino-postmark { position: absolute; width: 55mm; height: 34mm; top: 49mm;" in rendered_html
     # The versamento box ends above the Data Matrix two-cell quiet zone (84.75mm - 1.875mm).
     assert ".bollettino-slip.versamento .bollettino-postmark { right: 0; height: 33.2mm; }" in rendered_html
+    # Allegato 8 TD 896: logo 5.5mm and customer code 42mm from the top edge (rendered glyph box).
+    assert ".bollettino-logo-cbo { position: absolute; left: 6mm; top: 5.5mm;" in rendered_html
+    assert ".bollettino-customer { position: absolute; left: 7.5mm; top: 40.9mm;" in rendered_html
     assert "<strong>ISTRUZIONI DI STAMPA:</strong> selezionare \"stampa come immagine\", foglio A4 orizzontale al 100%" in rendered_html
     assert "carta bianca non riciclata" in rendered_html
     assert "il retro deve restare completamente bianco" in rendered_html
@@ -5234,7 +5237,7 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert "position: absolute; left: 0; bottom: 0; width: 297mm; height: 102mm;" in bollettino_html
     assert "grid-template-columns: 132mm 165mm;" in bollettino_html
     assert ".bollettino-slip { height: 102mm;" in bollettino_html
-    assert ".bollettino-iban { position: absolute; top: 16.5mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center;" in bollettino_html
+    assert ".bollettino-iban { position: absolute; top: 16.1mm; left: 7.5mm; right: 6mm; display: flex; justify-content: center;" in bollettino_html
     assert ".bollettino-barcode-svg { position: absolute; left: 59mm; top: 64mm; width: 93mm; height: 12mm;" in bollettino_html
     assert ".bollettino-datamatrix { position: absolute; right: 3.125mm; top: 82.625mm; width: 48.75mm; height: 18.75mm;" in bollettino_html
     assert ".partitario-page { break-before: page; page-break-before: always; min-height: 297mm; }" in all_html
