@@ -1,5 +1,21 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-10-21 — Recupero baseline sul runtime gia committato (16a0e710)
+
+- `baseline-verify` su checkout pulito di `16a0e710` falliva: la baseline
+  referenziava `7435d3f1` e non riproduceva i commit TD896 successivi.
+- Eseguiti `baseline-repair` e `baseline-verify` nel worktree pulito
+  `GAIA-baseline-repair-20261021`: riproducibilita confermata.
+- Diff limitato a 3 record file, tutti codice gia committato:
+  `ruolo/services/td896.py` LOC 308->306,
+  `ruolo/services/tributi_notice_registry.py` 231->249,
+  `ruolo/services/tributi_reminder_service.py` 1842->1840; callable
+  20401->20402. Soglie, motori, scope ed eccezioni invariati; violation
+  error-level 1835 invariate.
+- Suite completa `tests/code_quality`: 270 test PASS. Recupero da versionare
+  separatamente dalla feature STEP, che resta confrontata con la baseline del
+  merge-base.
+
 ## 2026-10-19 — Recupero baseline sul runtime gia committato
 
 - Il check globale su un checkout pulito di `5e158913` riproduce
