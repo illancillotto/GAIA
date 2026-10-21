@@ -3913,6 +3913,45 @@ def test_tributi_notice_registry_enforces_uniqueness_and_adopts_legacy_payload()
     db.close()
 
 
+@pytest.mark.parametrize(
+    ("status", "expected_number"),
+    [
+        ("generation_failed", "12026222500042"),
+        ("reserved", "12026222500042"),
+        ("generated", "120262223242500042"),
+    ],
+)
+def test_tributi_notice_registry_reissues_overlong_number_only_without_document(
+    status: str, expected_number: str
+) -> None:
+    # Reservations made before the first/last-year rule kept 2 digits per year; a failed
+    # preview left them stored, so the next attempt reused a number TD 896 cannot carry.
+    db = TestingSessionLocal()
+    candidate = {"codice_fiscale": "01137580955", "avvisi": [{"id": "avviso-2022"}]}
+    years = [2022, 2023, 2024, 2025]
+    stored = RuoloTributiNoticeNumber(
+        emission_year=2026,
+        progressive=42,
+        notice_number="120262223242500042",
+        identity_key=notice_registry.build_notice_identity_key(
+            candidate, emission_year=2026, reference_years=years
+        ),
+        status=status,
+    )
+    db.add(stored)
+    db.flush()
+
+    reservation = notice_registry.reserve_notice_number(
+        db, emission_year=2026, candidate=candidate, reference_years=years
+    )
+
+    assert reservation.id == stored.id
+    assert reservation.progressive == 42
+    assert reservation.status == status
+    assert reservation.notice_number == expected_number
+    db.close()
+
+
 def test_tributi_notice_registry_reserves_new_number_when_legacy_adoption_is_lost(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

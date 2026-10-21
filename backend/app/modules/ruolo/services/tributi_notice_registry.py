@@ -16,6 +16,9 @@ from app.modules.ruolo.models import (
 )
 
 MAX_NOTICE_PROGRESSIVE = 99_999
+# The TD 896 customer code carries the notice number plus a "9" discriminant in 16 digits.
+TD896_MAX_NOTICE_DIGITS = 15
+_REISSUABLE_STATUSES = frozenset({"reserved", "generation_failed"})
 
 
 def build_notice_number(*, emission_year: int, reference_years: list[int], progressive: int) -> str:
@@ -201,6 +204,25 @@ def _reservation_for_identity(
     )
 
 
+def _reissue_if_over_td896_limit(
+    db: Session,
+    reservation: RuoloTributiNoticeNumber,
+    reference_years: list[int],
+) -> RuoloTributiNoticeNumber:
+    """Rewrite numbers reserved before the first/last-year rule that never produced a document."""
+    if (
+        len(reservation.notice_number) > TD896_MAX_NOTICE_DIGITS
+        and reservation.status in _REISSUABLE_STATUSES
+    ):
+        reservation.notice_number = build_notice_number(
+            emission_year=reservation.emission_year,
+            reference_years=reference_years,
+            progressive=reservation.progressive,
+        )
+        db.flush()
+    return reservation
+
+
 def reserve_notice_number(
     db: Session,
     *,
@@ -215,7 +237,7 @@ def reserve_notice_number(
     )
     existing = _reservation_for_identity(db, identity_key)
     if existing is not None:
-        return existing
+        return _reissue_if_over_td896_limit(db, existing, reference_years)
 
     legacy = find_existing_notice_payload(
         db,

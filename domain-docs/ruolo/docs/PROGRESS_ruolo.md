@@ -1,5 +1,21 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## Riemissione numeri avviso oltre 15 cifre — 2026-10-21
+
+- Segnalazione da produzione: preview dell'avviso 2022 di una societa agricola
+  con piu annualita raggruppate per regola -> `Il numero avviso non puo superare
+  15 cifre per il TD 896`. Causa: backend di produzione ancora su `b2fa9ee0`,
+  precedente alla regola prima/ultima annualita (`43489c4c`).
+- Il preview prenota il numero prima di generare il PDF: dopo il fallimento la
+  prenotazione resta in `generation_failed` con il numero lungo e viene riusata
+  ai tentativi successivi, quindi il solo rilascio non bastava.
+- `reserve_notice_number` ora riscrive con il formato nuovo le prenotazioni oltre
+  15 cifre senza documento (`reserved`, `generation_failed`), mantenendo id,
+  stato e progressivo; le `generated` restano invariate.
+- Test: riemissione per `reserved`/`generation_failed`, nessuna modifica per
+  `generated`; suite Ruolo PASS, coverage 100% su `tributi_notice_registry.py`,
+  style e complexity ratchet senza finding.
+
 ## Bollettini TD 896 e numeri avviso multi-annualita — 2026-10-20
 
 - Corretto il numero avviso con tre o piu annualita: prima arrivava a 16-18

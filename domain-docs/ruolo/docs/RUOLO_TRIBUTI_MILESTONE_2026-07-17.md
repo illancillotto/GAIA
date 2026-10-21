@@ -201,8 +201,12 @@ Regola numero avviso:
   (numero avviso + discriminante `9` su 16 cifre + controcodice modulo 93). Prima di questa
   regola, con tre o piu annualita il numero arrivava a 16-18 cifre e il bollettino non
   veniva generato;
-- le prenotazioni gia salvate in `ruolo_tributi_notice_numbers` non vengono riscritte:
-  un'eventuale prenotazione storica oltre 15 cifre va individuata e riemessa a parte.
+- una prenotazione gia salvata in `ruolo_tributi_notice_numbers` con piu di 15 cifre e
+  senza documento generato (stato `reserved` o `generation_failed`, tipicamente lasciata da
+  un preview fallito con la regola precedente) viene riscritta al successivo riuso con il
+  formato nuovo, mantenendo id, stato e progressivo: il vincolo univoco su anno emissione +
+  progressivo esclude collisioni. Le prenotazioni in stato `generated` non vengono mai
+  modificate (aggiornamento 2026-10-21).
 
 Aggiornamento template batch multi-annualita:
 
