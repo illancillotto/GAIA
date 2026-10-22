@@ -175,7 +175,7 @@ def test_read_api_exposes_archive_links_and_pdfs(
         import_root / "raccolta.zip", [scheda(), scheda("ZZZZZZ80A01G113X", RESIDUO="0,00")]
     )
     with session_factory() as db:
-        avviso_id = add_avviso(db, "020190006018040", 2019)
+        avviso_id = add_avviso(db, "01.02019000601804", 2019)
         not_found = scheda("NNNNNN80A01G113X")
         not_found["documents"][0]["tributi"]["rows"][0]["DES_TRI1"] = "Avv. N. 020199999999990 Not."
         build_archive(tmp_path / "extra.zip", [not_found])

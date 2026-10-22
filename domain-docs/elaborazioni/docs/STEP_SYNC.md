@@ -183,6 +183,31 @@ Variabili: `STEP_DOCUMENT_STORAGE_PATH` (default
   riproducibile gia su `HEAD`: riparata a parte sul branch
   `chore/complexity-baseline-repair-20261021`.
 
+## Stato in produzione (2026-10-22)
+
+Rilascio parziale, solo backend, come overlay dell'immagine in esercizio
+(`/opt/gaia/releases/step-archive-20261022/` e `step-linkfix-20261022/`):
+
+- Completato: backup completo pre-rilascio, migration a `20261021_1200`
+  (applicate anche `20261006_1200`, `20261007_1600/1800`, `20261019_1500`
+  rimaste indietro), backend `gaia-backend:step-linkfix-20261022`.
+- Completato: import di `raccolta-completa.zip` (job 1): 3.354 contribuenti,
+  3.410 documenti e PDF, 21.265 tributi, 3.237 pagamenti.
+- Corretto dopo l'import: STEP stampa il codice avviso senza il prefisso
+  GAIA `01.` e con una cifra finale in piu, quindi il confronto esatto dava
+  0 collegamenti; con `gaia_codice_cnc` il relink (job 2) ha prodotto 7.118
+  `linked` (7.070 avvisi: 2018 584, 2019 1.437, 2020 1.916, 2021 2.997,
+  2022 114, 2023 21, 2024 1), 201 `not_found`, 0 `ambiguous`,
+  36 `unrecognized`.
+- Proiezione nel registro: autore audit scelto `admin` (id 1). Anteprima del
+  job 2: 0 posizioni interessate, perche il registro contiene solo avvisi
+  2022-2023 (3.400 posizioni) e nessuno di quelli collegati a STEP. Non
+  pubblicata; da eseguire quando nel registro entreranno avvisi collegati
+  (`relink_publish.py publish 1` nella cartella del rilascio).
+- Residuo: worker `elaborazioni-worker-step` (sync, autosync,
+  `STEP_REGISTER_ACTOR_USER_ID`) e frontend `/elaborazioni/step` non
+  rilasciati; credenziale STEP non inserita.
+
 ## Interfaccia
 
 - menu Elaborazioni: voce **STEP riscossione** (sezioni del modulo in
@@ -196,7 +221,9 @@ Variabili: `STEP_DOCUMENT_STORAGE_PATH` (default
 
 - una variazione STEP che non cambia le colonne dell'elenco richiede un `sync`
   con `force_details`;
-- il tasso di collegamento reale va misurato in produzione dopo l'import
-  (dipende da `ruolo_avvisi`);
+- tasso di collegamento misurato in produzione il 2026-10-22 (vedi sotto):
+  i 201 `not_found` residui (178 del 2018) sono avvisi assenti da
+  `ruolo_avvisi`, i 36 `unrecognized` riferimenti non numerici (`PG...`) o
+  codici accorciati;
 - la proiezione non riapre posizioni gia decise da un operatore: eventuali
   discordanze sono visibili nel conteggio `operator_decision` del job.

@@ -12,8 +12,15 @@ sotto:
   tributi e 3.237 pagamenti, con PDF e impronte;
 - identita pratica: documento STEP `(ente, codice fiscale, NUM_DOC, PRG_COO)`;
   riferimento avviso letto dal tributo (`Avv. N.` / `Bollettazione n.`);
-- collegamento a `ruolo_avvisi` solo per `codice_cnc` esatto e univoco
-  (annualita del tributo come seconda meta della chiave); `not_found`,
+- collegamento a `ruolo_avvisi` solo per `codice_cnc` univoco, confrontato
+  nel formato GAIA (annualita del tributo come seconda meta della chiave):
+  STEP stampa il codice senza il prefisso GAIA `01.` e con una cifra finale
+  in piu (`020190006018040` -> `01.02019000601804`, `gaia_codice_cnc`).
+  Verificato il 2026-10-22 su produzione: tutti i `codice_cnc` GAIA iniziano
+  con `01.`, nessuna coppia di codici STEP differisce solo per l'ultima cifra,
+  7.070 codici STEP su 7.267 agganciati in modo univoco (7.118 link
+  `linked`, 201 `not_found`, 36 `unrecognized`; prima del fix 0 `linked`).
+  Un avviso con il codice STEP grezzo non viene agganciato; `not_found`,
   `ambiguous` e `unrecognized` restano anomalie; nessun uso di CF, nome o
   importi;
 - proiezione automatica nel registro (decisione dell'operatore del

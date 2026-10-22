@@ -220,7 +220,7 @@ def test_sync_fetches_new_schede_and_skips_unchanged(factory) -> None:
                 RuoloAvviso(
                     id=uuid.uuid4(),
                     import_job_id=job.id,
-                    codice_cnc="020190006018040",
+                    codice_cnc="01.02019000601804",
                     anno_tributario=2019,
                 ),
             ]
@@ -392,7 +392,7 @@ def test_archive_import_and_relink_jobs(factory, tmp_path) -> None:
                 RuoloAvviso(
                     id=uuid.uuid4(),
                     import_job_id=job.id,
-                    codice_cnc="020190006018040",
+                    codice_cnc="01.02019000601804",
                     anno_tributario=2019,
                 ),
             ]

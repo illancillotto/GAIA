@@ -3,7 +3,9 @@
 Rules (see ``domain-docs/ruolo/docs/STEP_IMPORT_IMPLEMENTAZIONE.md``):
 
 - the only identifier is the 15 digit ``codice_cnc`` printed by STEP in the
-  tributo description (``Avv. N. 020190006018040 ...``);
+  tributo description (``Avv. N. 020190006018040 ...``). STEP drops the
+  ``01.`` prefix of the GAIA code and appends one digit, so it matches the
+  GAIA ``codice_cnc`` ``01.02019000601804`` (see ``gaia_codice_cnc``);
 - a link is created only for a unique match, using the tributo year solely as
   the second half of the ``(codice_cnc, anno_tributario)`` key;
 - tax code, name and amounts are never used; unrecognized references, missing
@@ -28,6 +30,13 @@ from app.modules.elaborazioni.step.models import StepDocumento, StepRuoloLink, S
 from app.modules.ruolo.models import RuoloAvviso
 
 LINK_STATUSES = ("linked", "not_found", "ambiguous", "unrecognized")
+GAIA_CNC_PREFIX = "01."
+
+
+def gaia_codice_cnc(step_code: str | None) -> str | None:
+    """GAIA ``ruolo_avvisi.codice_cnc`` of a 15 digit STEP notice code."""
+
+    return GAIA_CNC_PREFIX + step_code[:14] if step_code else None
 
 
 @dataclass
@@ -110,7 +119,7 @@ def link_documents(db: Session, documento_ids: list[uuid.UUID], *, now: datetime
         by_document[tributo.documento_id].append(tributo)
     groups = {document_id: _groups(rows) for document_id, rows in by_document.items()}
     codes = {
-        group.codice_cnc
+        gaia_codice_cnc(group.codice_cnc)
         for items in groups.values()
         for group in items.values()
         if group.codice_cnc
@@ -118,7 +127,7 @@ def link_documents(db: Session, documento_ids: list[uuid.UUID], *, now: datetime
     candidates = _candidates(db, codes)
     for document_id, items in groups.items():
         for reference_key, group in items.items():
-            pool = candidates.get(group.codice_cnc or "", [])
+            pool = candidates.get(gaia_codice_cnc(group.codice_cnc), [])
             status, avviso_id = _resolve(group, pool)
             counts[status] += 1
             db.add(

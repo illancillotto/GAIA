@@ -28,6 +28,7 @@ from app.modules.ruolo.services import notice_register as register
 
 NOW = datetime(2026, 10, 21, 8, 0, tzinfo=UTC)
 CNC = "020190006018040"
+GAIA_CNC = "01.02019000601804"
 
 
 def _link(carico: str, pagato: str = "0", discaricato: str = "0"):
@@ -102,7 +103,7 @@ def test_publish_without_links_is_a_no_op(db) -> None:
 
 
 def test_publish_projects_step_state_and_respects_operator_decisions(db) -> None:
-    avviso_id = add_avviso(db, CNC, 2019)
+    avviso_id = add_avviso(db, GAIA_CNC, 2019)
     owned = _position(db, avviso_id, number="DOC-A")
     operator = _position(db, avviso_id, number="DOC-B")
     reconciled = _position(db, avviso_id, number="DOC-C")
@@ -121,7 +122,7 @@ def test_publish_projects_step_state_and_respects_operator_decisions(db) -> None
     target = db.get(NoticeDocument, owned.document_id)
     db.get(NoticeDocument, reconciled.document_id).reconciled_into_id = target.id
     db.commit()
-    add_avviso(db, "020190000000001", 2019)
+    add_avviso(db, "01.02019000000000", 2019)
     _import_step(db)
     orphan = scheda(
         "ORFANO80A01G113X", tributi=[tributo("20241421500000099", "Avv. N. 020190000000001 Not.")]
@@ -159,7 +160,7 @@ def test_publish_projects_step_state_and_respects_operator_decisions(db) -> None
 
 
 def test_publish_reports_register_conflicts(db, monkeypatch: pytest.MonkeyPatch) -> None:
-    avviso_id = add_avviso(db, CNC, 2019)
+    avviso_id = add_avviso(db, GAIA_CNC, 2019)
     position = _position(db, avviso_id, number="DOC-A")
     _import_step(db)
 

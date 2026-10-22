@@ -22,7 +22,7 @@ from app.modules.elaborazioni.step.persistence import (
     summary_key,
     upsert_summary,
 )
-from app.modules.elaborazioni.step.ruolo_link import link_documents, relink_all
+from app.modules.elaborazioni.step.ruolo_link import gaia_codice_cnc, link_documents, relink_all
 
 NOW = datetime(2026, 10, 21, tzinfo=UTC)
 
@@ -118,16 +118,24 @@ def test_persist_scheda_rejects_inconsistent_schede(db) -> None:
         persist_scheda(db, partial, job_id=None, now=NOW, pdf_store=store)
 
 
+def test_gaia_codice_cnc_restores_prefix_and_drops_step_digit() -> None:
+    assert gaia_codice_cnc("020190006018040") == "01.02019000601804"
+    assert gaia_codice_cnc("120180000785090") == "01.12018000078509"
+    assert gaia_codice_cnc(None) is None
+
+
 def _links(db) -> dict[str, StepRuoloLink]:
     return {link.reference_key: link for link in db.scalars(select(StepRuoloLink)).all()}
 
 
 def test_links_are_exact_and_fail_closed(db) -> None:
-    linked_id = add_avviso(db, "020190006018040", 2019)
-    add_avviso(db, "020200000000010", 2020)
-    narrowed_id = add_avviso(db, "020200000000010", 2021)
-    add_avviso(db, "020210000000020", 2018)
-    add_avviso(db, "020210000000020", 2017)
+    linked_id = add_avviso(db, "01.02019000601804", 2019)
+    add_avviso(db, "01.02020000000001", 2020)
+    narrowed_id = add_avviso(db, "01.02020000000001", 2021)
+    add_avviso(db, "01.02021000000002", 2018)
+    add_avviso(db, "01.02021000000002", 2017)
+    # Only the GAIA format matches: an avviso carrying the raw STEP code does not.
+    add_avviso(db, "020219999999990", 2021)
     num_doc = "20241421500000003"
     rows = [
         tributo(num_doc, "Avv. N. 020190006018040 Not. 31/01/2021", "2019", IMP_CAR="50,00"),
@@ -164,7 +172,7 @@ def test_links_are_exact_and_fail_closed(db) -> None:
 
 
 def test_relink_all_reparses_stored_raw_rows(db) -> None:
-    avviso_id = add_avviso(db, "020190006018040", 2019)
+    avviso_id = add_avviso(db, "01.02019000601804", 2019)
     persist_scheda(db, scheda(), job_id=None, now=NOW, pdf_store=store)
     stored = db.scalar(select(StepTributo))
     stored.codice_cnc = None

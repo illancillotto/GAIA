@@ -15,7 +15,7 @@ from app.modules.elaborazioni.step.models import StepContribuente, StepDocumento
 
 def test_import_archive_is_verified_linked_and_idempotent(db, storage_dirs, tmp_path) -> None:
     documents_root, _ = storage_dirs
-    avviso_id = add_avviso(db, "020190006018040", 2019)
+    avviso_id = add_avviso(db, "01.02019000601804", 2019)
     unavailable = scheda("BBBBBB80A01G113X", pdf={"status": "unavailable"})
     unavailable["summary"]["DENOMINAZIONE"] = "BIANCHI"
     archive_path = tmp_path / "raccolta.zip"
