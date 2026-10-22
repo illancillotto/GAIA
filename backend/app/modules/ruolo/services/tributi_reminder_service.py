@@ -29,6 +29,7 @@ from app.modules.ruolo.services.td896 import (
     td896_datamatrix_svg,
     td896_esercizio,
 )
+from app.modules.ruolo.services.tributi_legal_text import legal_page_html
 
 DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 PDF_MEDIA_TYPE = "application/pdf"
@@ -660,7 +661,7 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 </section>
 <section class="page legal">
   <h2>Comunicazioni per il Contribuente</h2>
-  <div class="legal-copy">{_gaia_legal_html(field_values)}</div>
+  <div class="legal-copy">{legal_page_html(_extract_gaia_legal_blocks(_default_batch_reminder_template_path()), field_values, _sorted_payload_years(payload, _batch_yearly_values(payload)))}</div>
   <div class="signature"><div class="title">IL DIRETTORE GENERALE</div><div class="name">Dott. Maurizio Scanu</div><div class="rule"></div><div class="note">Sottoscrizione originale sostituita da firma a stampa<br>ex art. 3 D. Lgs. n. 39 del 12.02.1993 - Giusta Det. DG n. 01/2022</div></div>
 </section>
 ''' if include_main else ''}
@@ -698,13 +699,6 @@ def _gaia_partitario_lines_html(lines: Iterable[str]) -> str:
         f'<div class="partitario-line">{html.escape(line) if line else "&nbsp;"}</div>'
         for line in lines
     )
-
-
-def _gaia_legal_html(field_values: dict[str, str]) -> str:
-    legal_blocks = _extract_gaia_legal_blocks(_default_batch_reminder_template_path())
-    if legal_blocks:
-        return _gaia_legal_blocks_html(legal_blocks, field_values)
-    return _gaia_fallback_legal_html(field_values)
 
 
 def _extract_gaia_legal_blocks(template_path: Path) -> list[dict[str, Any]]:
@@ -756,69 +750,6 @@ def _word_paragraph_text(element: ET.Element) -> str:
 
 def _is_word_list_paragraph(element: ET.Element) -> bool:
     return element.find(".//w:numPr", WORD_NAMESPACES) is not None
-
-
-def _gaia_legal_blocks_html(blocks: list[dict[str, Any]], field_values: dict[str, str]) -> str:
-    chunks: list[str] = []
-    in_list = False
-    for block in blocks:
-        text = _replace_legal_placeholders(str(block["text"]), field_values)
-        if block["list"]:
-            if not in_list:
-                chunks.append("<ul>")
-                in_list = True
-            chunks.append(f"<li>{html.escape(text)}</li>")
-            continue
-        if in_list:
-            chunks.append("</ul>")
-            in_list = False
-        chunks.append(_gaia_legal_paragraph_html(text))
-    if in_list:
-        chunks.append("</ul>")
-    return "\n".join(chunks)
-
-
-def _replace_legal_placeholders(text: str, field_values: dict[str, str]) -> str:
-    for field_name, value in field_values.items():
-        text = text.replace(f"«{field_name}»", value)
-    return text
-
-
-def _gaia_legal_paragraph_html(text: str) -> str:
-    labels = (
-        "Informazioni di carattere generale.",
-        "Informazioni sul tributo.",
-        "Scadenza del Pagamento:",
-        "Determinazione del Contributo.",
-        "Detraibilità del contributo.",
-        "Modalità di ricorso al presente avviso di pagamento.",
-        "Richiesta di Voltura / Variazione:",
-        "Informazione sulla riscossione mediante Avvisi di Pagamento:",
-        "AVVERTENZA IMPORTANTE:",
-    )
-    for label in labels:
-        if text.startswith(label):
-            return f"<p><strong>{html.escape(label)}</strong>{html.escape(text[len(label) :])}</p>"
-    return f"<p>{html.escape(text)}</p>"
-
-
-def _gaia_fallback_legal_html(field_values: dict[str, str]) -> str:
-    tax_code = html.escape(field_values["CodFiscale"])
-    notice_number = html.escape(field_values["Avviso_n"])
-    return f"""
-    <p><strong>Informazioni di carattere generale.</strong> Il Consorzio di Bonifica dell'Oristanese è un Ente Pubblico ex art. 59 R.D. 215/1933 e art. 14 L.R. 06/2008. Il contributo consortile costituisce la quota dovuta da ciascun consorziato per le spese di manutenzione e gestione delle opere di bonifica, nonché per le spese di funzionamento dell'Ente. Sono tenuti al pagamento i proprietari di terreni ricadenti nel perimetro consortile e serviti dalla rete consortile di distribuzione dell'acqua ad uso irriguo. I contributi di bonifica sono oneri reali sulla proprietà, sono esigibili con le norme per l'esazione dei tributi e seguono il regime di riscossione delle imposte. Il contributo consortile è annuale e le volture producono effetti a partire dal ruolo dell'anno successivo.</p>
-    <p><strong>Informazioni sul tributo.</strong> L'Avviso di Pagamento si riferisce ai tributi istituzionali, manutenzione opere irrigue e utenza irrigua, emessi in acconto in attesa dell'approvazione del Rendiconto di gestione. L'emissione dei ruoli è disposta dagli atti deliberativi dell'Ente pubblicati all'albo.</p>
-    <p>Dilazione del pagamento. Il contribuente può richiedere, direttamente presso gli uffici dell'Ente, una dilazione del pagamento del presente AVVISO fino a:</p><ul><li>n. 18 rate per gli importi superiori ai 5.000,00 euro; n. 12 rate per gli importi da 1.000,00 euro a 5.000,00 euro;</li><li>n. 6 rate per gli importi da 500,01 euro a 1.000,00 euro; n. 4 rate per gli importi da 300,01 euro a 500,00 euro;</li><li>n. 2 rate per gli importi da 100,00 euro a 300,00 euro; non sono previste dilazioni per importi inferiori a 100,00 euro;</li></ul>
-    <p><strong>Scadenza del Pagamento:</strong> Si ricorda che in caso di mancato pagamento nel termine indicato, verranno attivate le procedure previste dal D.P.R. n. 602/1973 e successive modificazioni con conseguente aggravio delle spese per la riscossione coattiva.</p>
-    <p>Il pagamento potrà essere effettuato anche mediante bonifico bancario al Conto Corrente:<br>Intestato a: CONSORZIO DI BONIFICA DELL'ORISTANESE - RISCOSSIONE QUOTE ASSOCIATIVE<br>Iban: IT15L0760117400001007214826 - Causale: indicare codice fiscale {tax_code} e numero dell'avviso di pagamento {notice_number}</p>
-    <p><strong>Determinazione del Contributo.</strong> Il tributo istituzionale è dovuto per le spese di funzionamento dell'Ente (cod. 0985). Il tributo per la manutenzione opere irrigue (cod. 0648) è dovuto per le spese di manutenzione ordinaria delle opere irrigue. Il contributo utenza (cod. 0668) è dovuto da coloro che hanno utilizzato la risorsa idrica ed è commisurato ai criteri del Piano di Classifica e Riparto.</p>
-    <p><strong>Detraibilità del contributo.</strong> I contributi del Consorzio hanno natura tributaria. Il contributo istituzionale e il contributo opere irrigue sono deducibili dal reddito lordo da denunciare ai fini fiscali; il contributo utenza non è invece deducibile.</p>
-    <p><strong>Modalità di ricorso al presente avviso di pagamento.</strong></p><ul><li>Direttamente al Consorzio di Bonifica dell'Oristanese mediante raccomandata A/R da inviarsi alla sede legale: Via Cagliari 170, 09170 ORISTANO, ovvero mediante PEC all'indirizzo protocollo.cbo@pec.it.</li></ul>
-    <p><strong>Richiesta di Voltura / Variazione:</strong> Il contribuente potrà segnalare al Consorzio qualsiasi correzione di dati anagrafici e/o di trasferimento della proprietà mediante invio di apposita comunicazione:</p><ul><li>Via posta all'indirizzo del Consorzio: 09170 Oristano - Via Cagliari, 170</li><li>Via e-mail a uno dei seguenti indirizzi: catasto@bonificaoristanese.it, tributi.cbo@pec.it;</li></ul>
-    <p><strong>Informazione sulla riscossione mediante Avvisi di Pagamento:</strong> La riscossione ordinaria dei contributi di bonifica iscritti a ruolo viene fatta precedere da una fase di riscossione volontaria realizzata mediante avvisi di pagamento, consentendo al contribuente di evitare i diritti di notifica altrimenti dovuti all'Agente della Riscossione.</p>
-    <p class="warning"><strong>AVVERTENZA IMPORTANTE:</strong> IL MANCATO PAGAMENTO DEL PRESENTE AVVISO, NON GIUSTIFICA IL MANCATO O TARDIVO VERSAMENTO DEL TRIBUTO DOVUTO. PERTANTO, È OBBLIGO DEL CONTRIBUENTE ATTIVARSI PER ADEMPIERE AL PAGAMENTO DEL DOVUTO ALLA SCADENZA PREFISSATA. <em>Tale omissione comporta il conseguente avvio della RISCOSSIONE COATTIVA del credito tributario in oggetto.</em></p>
-    <p>Il responsabile del procedimento è il Direttore Generale del Consorzio, Dott. Maurizio Scanu.</p>
-    """
 
 
 def _gaia_bollettino_html(field_values: dict[str, str], payload: dict[str, Any]) -> str:

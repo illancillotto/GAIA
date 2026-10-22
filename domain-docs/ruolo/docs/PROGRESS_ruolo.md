@@ -1,5 +1,29 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## Comunicazioni per il Contribuente per annualita — 2026-10-22
+
+- Completato: la pagina 2 dell'avviso GAIA non stampa piu le delibere fisse
+  2022-2023 del template DOCX. `tributi_legal_text.py` ricostruisce, dagli anni
+  inclusi nell'avviso, il paragrafo "Informazioni sul tributo" (una delibera di
+  emissione e una di approvazione per anno, con data albo), la delibera di
+  dilazione e di riscossione coattiva (approvazione dell'anno piu recente), la
+  conferma dei minimi (emissione dell'anno piu recente) e l'anno di bilancio.
+- Delibere configurate in `ROLE_YEAR_RESOLUTIONS` per 2021-2025, ricavate dal
+  template (2023) e dagli avvisi emessi 2021, 2022, 2024, 2025. Per 2021 e 2022
+  si stampa anche la nota sul rimborso tributi 2017 (CdA 42/2020), una sola
+  volta anche negli avvisi pluriennali.
+- Impaginazione: se il testo supera la lunghezza del modello annuale
+  (`LEGAL_PAGE_FIT_LENGTH`), il corpo viene ridotto in proporzione, cosi firma e
+  testo restano nella pagina 2; verificate con Chromium tutte le 31 combinazioni
+  di anni 2021-2025.
+- Fail-closed: un anno senza delibere configurate (es. 2026) o un template
+  privo dei paragrafi attesi blocca la generazione invece di stampare delibere
+  di altri anni. Per un nuovo ruolo aggiungere la riga in `ROLE_YEAR_RESOLUTIONS`.
+- Corretto: data albo della CdA 131/2023 (ruolo 2022) e 16.10.2023, come
+  nell'avviso 2022 emesso; il template DOCX riportava erroneamente 16.10.2022.
+- Test: `backend/tests/ruolo/test_tributi_legal_text.py`; suite `tests/ruolo`
+  verde, coverage 100% su `tributi_legal_text.py` e `tributi_reminder_service.py`.
+
 ## STEP: collegamento avvisi e stato registro automatico — 2026-10-21
 
 - Completato: i documenti STEP (riscossione coattiva 2018-2021, sync in

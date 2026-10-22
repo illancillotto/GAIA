@@ -111,6 +111,7 @@ from app.modules.ruolo.routes import tributi_routes
 from app.modules.ruolo.schemas import RuoloImportJobResponse
 from app.modules.ruolo.services import euribor as euribor_service
 from app.modules.ruolo.services import td896 as td896_service
+from app.modules.ruolo.services import tributi_legal_text as legal_text
 from app.modules.ruolo.services import tributi_notice_registry as notice_registry
 from app.modules.ruolo.services import tributi_reminder_service as reminder_service
 from app.modules.ruolo.services.tributi_reminder_service import (
@@ -5293,7 +5294,7 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     legal_blocks = reminder_service._extract_gaia_legal_blocks(default_template_path_for_legal)
     assert len(legal_blocks) == 25
     assert any("Piano di Classifica" in block["text"] for block in legal_blocks)
-    assert "<ul>" in reminder_service._gaia_legal_blocks_html(
+    assert "<ul>" in legal_text._gaia_legal_blocks_html(
         [
             {"text": "Informazioni sul tributo. «CodFiscale»", "list": False},
             {"text": "Prima voce", "list": True},
@@ -5302,7 +5303,7 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
         ],
         {"CodFiscale": "RSSMRA80A01H501Z"},
     )
-    assert reminder_service._gaia_legal_blocks_html(
+    assert legal_text._gaia_legal_blocks_html(
         [{"text": "Voce finale", "list": True}],
         {},
     ).endswith("</ul>")
@@ -5350,8 +5351,10 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     )
     assert reminder_service._word_paragraph_text(paragraph_with_break) == "A\nB"
     monkeypatch.setattr("app.modules.ruolo.services.tributi_reminder_service._default_batch_reminder_template_path", lambda: tmp_path / "missing.docx")
-    assert "RSSMRA80A01H501Z" in reminder_service._gaia_legal_html(
-        {"CodFiscale": "RSSMRA80A01H501Z", "Avviso_n": "12026242500001"}
+    assert "RSSMRA80A01H501Z" in legal_text.legal_page_html(
+        reminder_service._extract_gaia_legal_blocks(reminder_service._default_batch_reminder_template_path()),
+        {"CodFiscale": "RSSMRA80A01H501Z", "Avviso_n": "12026242500001"},
+        [2024],
     )
 
     gaia_docx = tmp_path / "gaia.docx"
@@ -5632,7 +5635,7 @@ def test_tributi_reminder_service_helper_fallbacks(tmp_path: Path, monkeypatch: 
     assert reminder_service._join_human_list([]) == ""
     assert reminder_service._join_human_list(["2025"]) == "2025"
     assert reminder_service._join_human_list(["2022", "2023", "2024"]) == "2022, 2023 e 2024"
-    legal_html = reminder_service._gaia_fallback_legal_html({"CodFiscale": "RSSMRA80A01H501Z", "Avviso_n": "AVV-1"})
+    legal_html = legal_text._gaia_fallback_legal_html({"CodFiscale": "RSSMRA80A01H501Z", "Avviso_n": "AVV-1"})
     assert "D.P.R. n. 602/1973" in legal_html
     assert "D.P.R. n. 603/1973" not in legal_html
 
