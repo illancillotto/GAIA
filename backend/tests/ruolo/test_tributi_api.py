@@ -3301,8 +3301,9 @@ def test_tributi_year_managers_are_configurable_and_filter_avvisi() -> None:
             "calculation_policy": "external",
         },
     )
-    assert create_overlap_response.status_code == 422
-    assert "Range annualita sovrapposto" in create_overlap_response.json()["detail"]
+    assert create_overlap_response.status_code == 200
+    assert create_overlap_response.json()["year_from"] == 2021
+    assert create_overlap_response.json()["year_to"] == 2023
 
     gaia_id = next(item["id"] for item in managers_payload["items"] if item["manager_key"] == "gaia")
     invalid_update_response = client.put(
@@ -3399,19 +3400,6 @@ def test_tributi_year_managers_are_configurable_and_filter_avvisi() -> None:
 
 
 def test_tributi_year_manager_helper_edges(monkeypatch: pytest.MonkeyPatch) -> None:
-    assert tributi_repo._manager_range_label(
-        RuoloTributiYearManager(manager_key="all", manager_label="All", year_from=None, year_to=None)
-    ) == "tutte le annualita"
-    assert tributi_repo._manager_range_label(
-        RuoloTributiYearManager(manager_key="to", manager_label="To", year_from=None, year_to=2017)
-    ) == "fino al 2017"
-    assert tributi_repo._manager_range_label(
-        RuoloTributiYearManager(manager_key="from", manager_label="From", year_from=2022, year_to=None)
-    ) == "dal 2022"
-    assert tributi_repo._manager_range_label(
-        RuoloTributiYearManager(manager_key="single", manager_label="Single", year_from=2022, year_to=2022)
-    ) == "2022"
-
     monkeypatch.setattr(tributi_repo, "DEFAULT_YEAR_MANAGERS", ())
     assert tributi_repo._default_year_manager_for_year(2024) == {
         "manager_key": None,

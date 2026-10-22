@@ -133,7 +133,7 @@ _PAYMENT_COLUMN_ALIASES = {
     "payment_method": {"metodo", "modalita", "canale", "strumento", "tipopagamento"},
     "status": {"stato", "esito"},
 }
-REMINDER_MIN_YEAR = 2022
+REMINDER_MIN_YEAR = 2021
 POSTA_ONLINE_DEFAULT_YEARS = (2022, 2023)
 INTEREST_START_MODE_FIXED_DATE = "fixed_date"
 INTEREST_START_MODE_NOTIFICATION_DATE = "notification_date"
@@ -373,18 +373,6 @@ def _normalise_manager_key(value: str | None) -> str:
     return re.sub(r"_+", "_", normalised).strip("_")
 
 
-def _manager_range_label(manager: RuoloTributiYearManager) -> str:
-    if manager.year_from is None and manager.year_to is None:
-        return "tutte le annualita"
-    if manager.year_from is None:
-        return f"fino al {manager.year_to}"
-    if manager.year_to is None:
-        return f"dal {manager.year_from}"
-    if manager.year_from == manager.year_to:
-        return str(manager.year_from)
-    return f"{manager.year_from}-{manager.year_to}"
-
-
 def _default_year_manager_for_year(year: int) -> dict[str, Any]:
     for manager in DEFAULT_YEAR_MANAGERS:
         year_from = manager["year_from"]
@@ -398,48 +386,9 @@ def _default_year_manager_for_year(year: int) -> dict[str, Any]:
     }
 
 
-def _year_ranges_overlap(
-    *,
-    first_from: int | None,
-    first_to: int | None,
-    second_from: int | None,
-    second_to: int | None,
-) -> bool:
-    first_start = first_from if first_from is not None else -9999
-    first_end = first_to if first_to is not None else 9999
-    second_start = second_from if second_from is not None else -9999
-    second_end = second_to if second_to is not None else 9999
-    return first_start <= second_end and second_start <= first_end
-
-
-def _validate_year_manager_range(
-    db: Session,
-    *,
-    year_from: int | None,
-    year_to: int | None,
-    is_active: bool,
-    exclude_id: uuid.UUID | None = None,
-) -> None:
+def _validate_year_manager_range(*, year_from: int | None, year_to: int | None) -> None:
     if year_from is not None and year_to is not None and year_from > year_to:
         raise ValueError("year_from non puo essere maggiore di year_to")
-    if not is_active:
-        return
-
-    managers = db.scalars(
-        select(RuoloTributiYearManager).where(RuoloTributiYearManager.is_active.is_(True))
-    ).all()
-    for manager in managers:
-        if exclude_id is not None and manager.id == exclude_id:
-            continue
-        if _year_ranges_overlap(
-            first_from=year_from,
-            first_to=year_to,
-            second_from=manager.year_from,
-            second_to=manager.year_to,
-        ):
-            raise ValueError(
-                f"Range annualita sovrapposto a {manager.manager_label} ({_manager_range_label(manager)})"
-            )
 
 
 def list_year_managers(db: Session) -> list[RuoloTributiYearManager]:
@@ -461,8 +410,7 @@ def list_year_managers(db: Session) -> list[RuoloTributiYearManager]:
 
 
 def get_year_manager_for_year(db: Session, year: int) -> dict[str, Any]:
-    has_db_config = db.scalar(select(func.count()).select_from(RuoloTributiYearManager)) or 0
-    if not has_db_config:
+    if not db.scalar(select(func.count()).select_from(RuoloTributiYearManager)):
         return _default_year_manager_for_year(year)
 
     manager = db.scalar(
@@ -472,15 +420,16 @@ def get_year_manager_for_year(db: Session, year: int) -> dict[str, Any]:
             or_(RuoloTributiYearManager.year_from.is_(None), RuoloTributiYearManager.year_from <= year),
             or_(RuoloTributiYearManager.year_to.is_(None), RuoloTributiYearManager.year_to >= year),
         )
-        .order_by(RuoloTributiYearManager.year_from.desc().nullslast())
-        .limit(1)
+        .order_by(
+            RuoloTributiYearManager.year_from.desc().nullslast(),
+            RuoloTributiYearManager.year_to.asc().nullslast(),
+            RuoloTributiYearManager.updated_at.desc(),
+            RuoloTributiYearManager.id.desc(),
+        )
     )
-    if manager is None:
-        return {"manager_key": None, "manager_label": None, "calculation_policy": None}
     return {
-        "manager_key": manager.manager_key,
-        "manager_label": manager.manager_label,
-        "calculation_policy": manager.calculation_policy,
+        key: getattr(manager, key, None)
+        for key in ("manager_key", "manager_label", "calculation_policy")
     }
 
 
@@ -532,13 +481,7 @@ def upsert_year_manager(
     if manager_id is not None and manager is None:
         raise ValueError("Gestore annualita non trovato")
 
-    _validate_year_manager_range(
-        db,
-        year_from=year_from,
-        year_to=year_to,
-        is_active=is_active,
-        exclude_id=manager.id if manager else None,
-    )
+    _validate_year_manager_range(year_from=year_from, year_to=year_to)
 
     if manager is None:
         manager = RuoloTributiYearManager()

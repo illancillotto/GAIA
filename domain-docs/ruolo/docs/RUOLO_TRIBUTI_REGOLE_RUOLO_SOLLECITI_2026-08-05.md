@@ -59,6 +59,42 @@ Cliccando dal 2024 o dal 2025 il risultato deve essere equivalente:
 - `notice_number`: identico;
 - PDF preview con entrambe le annualita nello stesso avviso.
 
+## Ripresa avvisi 2021 — 2026-10-21
+
+I gestori annualita possono avere range attivi sovrapposti. Per attribuire
+un avviso prevale il gestore con anno iniziale piu recente, poi anno finale
+piu vicino (i limiti aperti vengono dopo quelli definiti). A parita di range
+prevale la modifica piu recente, quindi l'ID decrescente per stabilita.
+I filtri per gestore continuano a selezionare il suo intero range.
+
+Per riprendere gli avvisi 2021 non notificati nella precedente tornata:
+
+1. In `Gestisci regole`, creare `Avvisi 2021`, chiave `avvisi_2021`, anno da
+   e anno a `2021`, policy `internal_gaia`, regola attiva. Il range STEP
+   `2018-2021` puo restare attivo e invariato.
+2. In `Regole ruolo`, configurare il 2021 con `Solo avvisi non notificati`,
+   date e importi deliberati. Questa opzione esclude gli avvisi con ricevuta
+   PEC di consegna o data documentata di ricezione della raccomandata.
+   Un semplice stato di invio o accettazione PEC non prova la notifica.
+3. Selezionare il periodo `Avvisi 2021` e il solo anno `2021` nel wizard,
+   oppure usare la preview rapida dalla singola posizione.
+
+Il wizard e il backend supportano annualita dal 2021; la generazione richiede
+comunque saldo aperto e gestione `internal_gaia`. La sola sovrapposizione
+non abilita gli avvisi affidati a un gestore esterno. Le regole di calcolo
+mantengono la propria validazione dei range, distinta dai gestori annualita.
+
+### Contratto API e persistenza
+
+`POST /ruolo/tributi/year-managers` e `PUT /ruolo/tributi/year-managers/{id}`
+accettano i range sovrapposti con lo schema esistente. Restano `422` per
+range invertiti o chiavi non valide, `404` per modifica/cancellazione di ID
+inesistenti, `401` senza autenticazione e `403` senza permesso di gestione.
+Le mutazioni richiedono `ruolo.tributi.manage_status`; la creazione registra
+`updated_by`. Una modifica non valida viene annullata senza alterare il gestore
+persistito. Disattivare o cancellare la regola 2021 ripristina la precedenza STEP.
+Nessuna nuova tabella, colonna, migration o modifica ai payload REST.
+
 ## Numero avviso
 
 La preview rapida usa `filters.preview_only=true` e `filters.policy_group=true`.

@@ -1,5 +1,24 @@
 # GAIA Ruolo — Execution Plan v1.0
 
+## Consolidamento avvisi 2021 — 2026-10-21
+
+Questa sezione aggiorna il ciclo corrente; il piano storico segue sotto.
+
+- [x] Consentire la sovrapposizione dei gestori con precedenza deterministica.
+- [x] Abilitare il 2021 in wizard, preview e batch esistenti.
+- [x] Verificare esclusione dei notificati tramite la Regola ruolo esistente.
+- [x] Caratterizzare permessi, rollback, persistenza e gestione esterna.
+- [x] Verificare il contratto del gestore su PostgreSQL isolato.
+- [x] Eseguire build pulita da lockfile ed E2E desktop/mobile.
+- [ ] Chiudere il gate complessivo: restano finding preesistenti del ratchet,
+  segnalazioni dell'audit dipendenze e un timeout Utenze nella suite completa
+  da lockfile, non riprodotto dal rerun mirato; l'assert della head Alembic
+  fallisce per la nuova migration STEP concorrente, estranea a questo ciclo.
+- [ ] Rilascio su `gaia.lan`, fuori dal ciclo locale di verifica.
+
+Matrice comportamenti/test, misure e residui nel
+[report di verifica finale](VERIFICA_FINALE_AVVISI_2021_2026-10-21.md).
+
 > Stato documento: archivio storico di implementazione.
 > Questo piano descrive anche il vecchio stack file-based oggi rimosso.
 > Non usarlo come fonte operativa per nuove modifiche: il riferimento corrente e il read-model `ruolo_*` materializzato da `inCASS`.

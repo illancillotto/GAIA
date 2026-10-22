@@ -1,5 +1,20 @@
 # GAIA Ruolo — Product Requirements Document v1.0
 
+### Recupero avvisi 2021 e gestori sovrapposti — 2026-10-21
+
+I gestori annualita possono avere range attivi sovrapposti, mantenendo STEP
+2018-2021 e una regola dedicata al 2021. L'attribuzione segue anno iniziale
+decrescente, anno finale crescente, ultima modifica e ID decrescenti;
+i limiti aperti seguono quelli definiti. I filtri selezionano l'intero range
+del gestore e possono quindi condividere posizioni.
+Wizard, preview e batch supportano il 2021 con gestione `internal_gaia`.
+Per recuperare solo gli avvisi non notificati occorre una Regola ruolo 2021
+con `Solo avvisi non notificati`: una consegna PEC o una ricezione postale
+documentata esclude la posizione. Assenza di notifica non significa assenza
+di un precedente tentativo di invio. Permessi, schema DB e flussi di invio
+restano quelli esistenti. Procedura e contratto API in
+[RUOLO_TRIBUTI_REGOLE_RUOLO_SOLLECITI_2026-08-05.md](RUOLO_TRIBUTI_REGOLE_RUOLO_SOLLECITI_2026-08-05.md).
+
 ### Anteprima bozze da Elenco Tributi — 2026-10-19
 
 `Avviso sollecito` apre anche le bozze private 2022/2023 tramite il PDF
@@ -132,7 +147,8 @@ provenienza e recupero dello storico sono descritti in
 > selezione manuale per CF/P.IVA, genera un PDF per utenza con avviso e partitario e salva il file
 > in `{nas_folder_path}/solleciti/{CF}_avviso_sollecito_{anni}.pdf`. Ogni item resta tracciato con
 > stato `generated` o `failed`; l'invio automatico resta escluso.
-> Il perimetro dei solleciti generati e limitato agli avvisi non saldati dal 2022 in poi.
+> Il perimetro dei solleciti generati era inizialmente limitato dal 2022; dal
+> 2026-10-21 include il 2021, con saldo aperto e gestione interna GAIA.
 > Per path archivio remoti sotto `/volume1`, GAIA scrive e rilegge il documento tramite il NAS
 > connector SSH, senza richiedere che la share sia montata nel filesystem del container backend.
 > La preview PDF del sollecito usa il viewer embedded senza toolbar nativa e con zoom iniziale

@@ -14,15 +14,14 @@ from app.modules.catasto.services.dashboard_queries import active_capacitas_batc
 from app.modules.ruolo.models import (
     RuoloAvviso,
     RuoloImportJob,
-    RuoloPartita,
     RuoloParticella,
+    RuoloPartita,
     RuoloTributiAvvisoStatus,
     RuoloTributiRegisteredMail,
 )
-from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice, AnagraficaPerson, AnagraficaSubject
-from app.modules.utenze.services.subject_identity import normalize_tax_identifier
 from app.modules.ruolo.services.registered_mail_association import associated_avviso_ids
-
+from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice, AnagraficaPerson
+from app.modules.utenze.services.subject_identity import normalize_tax_identifier
 
 # ---------------------------------------------------------------------------
 # Import Jobs

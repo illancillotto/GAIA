@@ -734,6 +734,7 @@ describe("Ruolo tributi page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Gestisci regole" }));
     expect((await screen.findAllByText("Agenzia delle Entrate")).length).toBeGreaterThan(0);
     expect(screen.getByText("2018-2021")).toBeInTheDocument();
+    expect(screen.getByText(/I range possono sovrapporsi/)).toBeInTheDocument();
     expect(screen.getByText("2022", { selector: "span" })).toBeInTheDocument();
     expect(screen.getAllByText("Tutte le annualita").length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Aggiungi" }));
@@ -787,6 +788,26 @@ describe("Ruolo tributi page", () => {
     await waitFor(() => expect(mocks.deleteTributiYearManager).toHaveBeenCalledWith("token", "manager-gaia"));
     fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
     expect(screen.queryByText("Configura competenza e policy calcolo")).not.toBeInTheDocument();
+  });
+
+  test("creates an overlapping 2021 manager and offers 2021 in the reminder wizard", async () => {
+    render(<RuoloTributiPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Gestisci regole" }));
+    fireEvent.change(screen.getByPlaceholderText("Descrizione, es. STEP"), { target: { value: "Avvisi 2021" } });
+    fireEvent.change(screen.getByPlaceholderText("Chiave, es. step"), { target: { value: "avvisi_2021" } });
+    fireEvent.change(screen.getByPlaceholderText("Anno da, vuoto = -inf"), { target: { value: "2021" } });
+    fireEvent.change(screen.getByPlaceholderText("Anno a, vuoto = aperto"), { target: { value: "2021" } });
+    fireEvent.change(screen.getByPlaceholderText("Policy calcolo"), { target: { value: "internal_gaia" } });
+    fireEvent.click(screen.getByRole("button", { name: "Aggiungi" }));
+    await waitFor(() => expect(mocks.createTributiYearManager).toHaveBeenCalledWith("token", expect.objectContaining({
+      manager_key: "avvisi_2021", year_from: 2021, year_to: 2021, calculation_policy: "internal_gaia",
+    })));
+    fireEvent.click(screen.getByRole("button", { name: "Chiudi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Wizard solleciti" }));
+    const year = await screen.findByRole("button", { name: "2021" });
+    fireEvent.click(year);
+    expect(year).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => expect(mocks.listTributiReminderCandidates).toHaveBeenCalledWith("token", expect.objectContaining({ anno_from: 2021, anno_to: 2021 })));
   });
 
   test("handles annuality manager loading and mutation errors", async () => {

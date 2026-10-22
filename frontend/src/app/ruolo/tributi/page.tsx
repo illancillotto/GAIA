@@ -70,7 +70,7 @@ import type { CurrentUser } from "@/types/api";
 const PAGE_SIZE = 25;
 const FILTER_AUTOSUBMIT_DELAY_MS = 350;
 const DEFAULT_MANAGER_KEY = "gaia";
-const REMINDER_MIN_YEAR = 2022;
+const REMINDER_MIN_YEAR = 2021;
 const GAIA_REMINDER_TEMPLATE_PATH = "__gaia_proposal__";
 const DEFAULT_REMINDER_TEMPLATE_LABEL = "Template GAIA con bollettino postale e partitario allegato";
 const REMINDER_PREVIEW_DESKTOP_ZOOM = 125;
@@ -1582,7 +1582,7 @@ function YearManagersPanel({
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#cfe2b8]">Gestori annualita tributo</p>
                 <h2 className="mt-2 text-xl font-semibold">Configura competenza e policy calcolo</h2>
-                <p className="mt-1 text-sm leading-6 text-white/70">I range attivi non possono sovrapporsi e sono usati per lista tributi, wizard solleciti e calcolo dovuto.</p>
+                <p className="mt-1 text-sm leading-6 text-white/70">I range possono sovrapporsi: prevale quello con inizio piu recente, poi fine piu vicina. Per gli avvisi 2021 usa la policy internal_gaia e una Regola ruolo 2021 con Solo non notificati.</p>
               </div>
               <button type="button" className="btn-secondary border-white/20 bg-white/10 text-white hover:bg-white/20" onClick={onClose}>
                 Chiudi

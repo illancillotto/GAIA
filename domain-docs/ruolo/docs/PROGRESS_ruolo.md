@@ -17,6 +17,34 @@
 - Dettagli: `domain-docs/elaborazioni/docs/STEP_SYNC.md`,
   `STEP_IMPORT_IMPLEMENTAZIONE.md`.
 
+## Gestori sovrapposti e recupero avvisi 2021 — 2026-10-21
+
+- Implementazione locale completata: regola 2021 sovrapposta a STEP, priorita
+  deterministica, minimo 2021 condiviso da backend e wizard. Nessuna migration,
+  nuova dipendenza o modifica dei permessi. La selezione dei non notificati
+  riusa `only_unnotified`; i tentativi senza consegna non provano una notifica.
+- Consolidamento con test di autorizzazione delle tre mutazioni, rollback,
+  persistenza tra sessioni, cancellazione e ripristino STEP, gestione esterna
+  ancora esclusa. Nuovo test PostgreSQL reale in schema temporaneo PASS.
+- Suite Ruolo completa con PostgreSQL: 1162 PASS, nove skip SQLite, una failure
+  nell'assert della head Alembic per la nuova migration STEP concorrente.
+  Coverage repository Tributi: 1822 statement e 694 branch, 100% entrambi.
+- Frontend: 5269 unit test e 18 smoke PASS; pagina Tributi al 100% su statement,
+  branch, funzioni e linee. Sei E2E Chromium PASS a 1440/390 px, compresi errore
+  di salvataggio, retry, periodo 2021 e regressioni delle preview 2022.
+- La ripetizione della suite completa da lockfile ha 5268 PASS e un timeout
+  di 5000 ms in Utenze, fuori scope. Rerun isolato Utenze + Tributi: 84 PASS,
+  coverage Tributi ancora 100%. Il gate completo fallito resta registrato.
+- Build pulita isolata da `npm ci`: Next 15.5.27, 163/163 pagine PASS.
+  L'installazione locale precedente aveva Next 15.5.25: non e stata modificata.
+- Ratchet mirato contro HEAD PASS; quello autorevole contro `origin/main`
+  riproduce due finding preesistenti. Baseline, soglie ed esclusioni invariati.
+  Audit dipendenze di produzione: due segnalazioni high e tre moderate legacy.
+  Gate complessivo non superato anche per le due failure delle suite complete;
+  nessun commit o rilascio incluso.
+- Evidenze, matrice funzionalita/test, integrazioni e residui nel
+  [report finale](VERIFICA_FINALE_AVVISI_2021_2026-10-21.md).
+
 ## Riemissione numeri avviso oltre 15 cifre — 2026-10-21
 
 - Segnalazione da produzione: preview dell'avviso 2022 di una societa agricola
