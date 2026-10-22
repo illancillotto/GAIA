@@ -4,6 +4,7 @@ import hashlib
 from decimal import Decimal
 
 import pytest
+
 from app.modules.ruolo.services import td896
 
 PAYLOAD_120_67 = "18025257650095110900120010072148261000000120673896"
@@ -101,3 +102,13 @@ def test_galois_zero_product() -> None:
     exponent, logarithm = td896._galois_tables()
     assert td896._galois_multiply(0, 42, exponent, logarithm) == 0
     assert td896._galois_multiply(42, 0, exponent, logarithm) == 0
+
+
+def test_td896_esercizio_documents_current_default() -> None:
+    # Samples print "2626" for 2024-2025 notices: with no "Regola ruolo" value the
+    # esercizio repeats the emission year suffix, not the last reference year.
+    assert td896.td896_esercizio({"years": [2024, 2025], "notice_emission_year": 2026}) == "2626"
+    assert td896.td896_esercizio({"years": [2024, 2025], "notice_emission_year": "2026"}) == "2626"
+    assert td896.td896_esercizio({"bollettino_esercizio": " 2525 ", "notice_emission_year": 2026}) == "2525"
+    assert td896.td896_esercizio({"bollettino_esercizio": " ", "notice_emission_year": 2026}) == "2626"
+    assert td896.td896_esercizio({"years": [2024, 2025]}) == ""

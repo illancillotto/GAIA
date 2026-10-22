@@ -1,5 +1,47 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## Bollettino TD 896 pronto per campionatura Poste — 2026-10-22
+
+- Nome del versante (`eseguito da`) stampato per intero, senza troncamento
+  `...`. Posizioni e `max-height` dei riquadri invariati; se nome e indirizzo
+  non entrano nella ricevuta di versamento il font del blocco nome scende per
+  gradi (`payer-fit-1..3`: 7.5, 6.75, 6pt). La stima usa l'avanzamento OCR-B
+  monospazio (0.723em, misurato sul PDF) con 0.3mm di margine; oltre i 6pt
+  viene loggato un warning con il numero avviso, senza troncare. Durante la
+  verifica e emerso che col vecchio layout l'ultima riga di un indirizzo lungo
+  veniva tagliata dall'`overflow: hidden`: ora il campione Su Campu chiude a
+  50.2mm su 52mm.
+- Codice autorizzativo stampa in proprio non piu hardcoded: `Settings`
+  `TD896_SAMPLE_MODE` (default false) e `TD896_PRINT_AUTHORIZATION`. In
+  campionatura si stampa `AUT.DB/SISB/XXXXX DEL XX/XX/XXXX`; in produzione un
+  codice vuoto o con `X` fa fallire il bollettino con `Codice autorizzazione
+  Poste TD 896 non configurato`. Variabili documentate in `.env.example`.
+  Attenzione al deploy: senza una delle due configurazioni i solleciti GAIA con
+  bollettino risultano `failed`.
+- Causale: rimosso il fallback `digits[6:9]` del numero avviso. Senza
+  `bollettino_causale` in `Regola ruolo` (o `payment_reason_code`/`causale` nel
+  payload) la riga `Causale` non viene stampata.
+- Rimossa la riga statica vuota `Altre modalita:` dalle modalita di pagamento.
+- Esercizio (solo verifica): `2626` sui campioni deriva dal fallback
+  `td896_esercizio` su `notice_emission_year` (commit `bc6fda82`); le due
+  `Regola ruolo` 2024 e 2025 nel DB locale non valorizzano
+  `bollettino_esercizio`. Aggiunto test che documenta il comportamento.
+- Avvisi con 3+ annualita: gia risolto da `43489c4c` (solo prima e ultima
+  annualita nel numero avviso). Analisi read-only sul DB locale: una sola
+  prenotazione (12 cifre), nessun batch item. Nessuna modifica a
+  `build_notice_number` in attesa della scelta sulle opzioni proposte.
+- Nuovo `scripts/ruolo/verify_td896_pdf.py` (dipendenze di sviluppo in
+  `scripts/ruolo/requirements-verify-td896.txt`): controlli OK/KO di formato,
+  modulo, divisione, codeline e mod 93, Code 128 e Data Matrix 16x48 a 600 dpi,
+  importo, IBAN, font OCR B, nome non troncato, codice AUT. Documentato nel
+  manuale di verifica. Esito sui 5 campioni (Rossi, Piras, Su Campu, Melis,
+  Sanna): tutti OK, AUT `CAMPIONATURA`.
+- Test dello script: `tests/ruolo/test_verify_td896_pdf.py` (28 test, fixture
+  PDF sintetica Su Campu), `make test-verify-td896` con coverage 100%
+  statement `189/189` e branch `60/60`; dipendenze di sviluppo fissate
+  (`pymupdf==2.0`, `zxing-cpp==3.1.1`) e installate nel job CI `backend.yml`,
+  che esegue lo stesso target.
+
 ## Comunicazioni per il Contribuente per annualita — 2026-10-22
 
 - Completato: la pagina 2 dell'avviso GAIA non stampa piu le delibere fisse

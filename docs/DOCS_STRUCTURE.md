@@ -220,6 +220,14 @@ compatibilita; il backend canonico e `backend/app/modules/utenze/`.
 - `domain-docs/ruolo/docs/RUOLO_READ_MODEL_AUDIT_2026-06-16.md`
 - `domain-docs/ruolo/docs/RUOLO_2025_INCASS_GRIGLIA_PARTITARIO_DIFF_2026-07-10.md`
 - `domain-docs/ruolo/docs/RUOLO_TRIBUTI_REGOLE_RUOLO_SOLLECITI_2026-08-05.md`
+- `domain-docs/ruolo/docs/MANUALE_VERIFICA_BOLLETTINI_TD896.md`: procedura di verifica dei PDF di campionatura TD 896.
+- `domain-docs/ruolo/docs/RUOLO_TRIBUTI_TEMPLATE_GAIA_2026-07-23.md`: contratto del template avvisi e bollettini GAIA.
+
+Tooling di campionatura: `scripts/ruolo/verify_td896_pdf.py`, dipendenze solo di
+sviluppo in `scripts/ruolo/requirements-verify-td896.txt`; test in
+`tests/ruolo/test_verify_td896_pdf.py` con fixture PDF in
+`tests/ruolo/fixtures/td896_su_campu_sample.pdf`. Target locale e CI:
+`make test-verify-td896`.
 
 Nota: diversi documenti Ruolo sono storici. Per lo stato corrente dare priorita
 al PRD aggiornato, ai report inCASS recenti e al codice runtime.

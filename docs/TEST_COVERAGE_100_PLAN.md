@@ -1186,3 +1186,13 @@ estratto `34/34` statement e `10/10` branch (100% per file), nessuna
 esclusione o test saltato. Comando aggiornato nel runbook GIS. Questo gate
 locale non risolve le failure globali di stile/identita del ratchet su
 modifiche concorrenti e non certifica PostGIS/QGIS live o E2E.
+
+Gate script di verifica TD 896 del 2026-10-22: nuovo target
+`make test-verify-td896` per `scripts/ruolo/verify_td896_pdf.py` (strumento
+di sviluppo, fuori dall'immagine backend), con test in
+`tests/ruolo/test_verify_td896_pdf.py` e `--cov-fail-under=100`. Esito:
+28 test verdi, `189/189` statement e `60/60` branch, nessuna esclusione o
+test saltato. Le dipendenze `pymupdf`/`zxing-cpp` sono fissate in
+`scripts/ruolo/requirements-verify-td896.txt`; il job `backend.yml` le
+installa ed esegue il target, e scatta anche su `scripts/ruolo/**` e
+`tests/ruolo/**`. Il gate copre solo lo script, non il renderer PDF.

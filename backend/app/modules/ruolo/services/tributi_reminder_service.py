@@ -3,11 +3,13 @@ from __future__ import annotations
 import base64
 import copy
 import html
+import logging
 import os
 import re
 import shutil
 import subprocess
 import tempfile
+import textwrap
 import uuid
 import zipfile
 from collections.abc import Iterable
@@ -20,6 +22,7 @@ from xml.etree import ElementTree as ET
 
 from pypdf import PdfReader, PdfWriter
 
+from app.core.config import settings
 from app.modules.ruolo.services.td896 import TD896_DOCUMENT_CODE as _BOLLETTINO_TD_CODE
 from app.modules.ruolo.services.td896 import (
     build_td896_barcode_payload,
@@ -39,9 +42,20 @@ WORD_NAMESPACES = {"w": WORD_NAMESPACE}
 DEFAULT_BATCH_REMINDER_TEMPLATE_NAME = "Avviso_Sollecito_Template.docx"
 GAIA_PROPOSAL_TEMPLATE_KEY = "__gaia_proposal__"
 PARTITARIO_LINE_WIDTH = 80
+logger = logging.getLogger(__name__)
 _BOLLETTINO_POSTAL_ACCOUNT = "1007214826"
 _BOLLETTINO_IBAN = "IT15L0760117400001007214826"
-_BOLLETTINO_PRINT_AUTHORIZATION = "AUT.DB/SISB/XXXXX DEL XX/XX/2026"
+_BOLLETTINO_SAMPLE_AUTHORIZATION = "AUT.DB/SISB/XXXXX DEL XX/XX/XXXX"
+# Payer-name font steps (pt) and the "eseguito da" box on the narrower versamento slip.
+_BOLLETTINO_PAYER_FONT_STEPS = (8.25, 7.5, 6.75, 6.0)
+_BOLLETTINO_PAYER_BOX_WIDTH_MM = 63.5
+# max-height 17mm minus a 0.3mm margin so the last line is never clipped.
+_BOLLETTINO_PAYER_BOX_HEIGHT_MM = 16.7
+_BOLLETTINO_ADDRESS_FONT_PT = 7.05
+_BOLLETTINO_ADDRESS_GAP_MM = 0.7
+# The slip text is OCR-B, a monospaced face with a 0.723 em advance (measured on the rendered PDF).
+_BOLLETTINO_GLYPH_WIDTH_EM = 0.723
+_PT_TO_MM = 25.4 / 72
 _BOLLETTINO_ACCOUNT_NAME_LINES = (
     "CONSORZIO DI BONIFICA DELL'ORISTANESE -",
     "RISCOSSIONE QUOTE ASSOCIATIVE",
@@ -159,7 +173,6 @@ _CODE128_START_C = 105
 _CODE128_STOP = 106
 _HTML_BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
 _HTML_TAG_RE = re.compile(r"<[^>]+>")
-_NON_DIGIT_RE = re.compile(r"\D+")
 _GAIA_ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
 _OCR_B_FONT_BASE64 = (_GAIA_ASSETS_DIR / "OCRB.otf.b64").read_text(encoding="ascii").strip()
 _GAIA_CBO_LOGO_CANDIDATES = (
@@ -599,7 +612,7 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .bollettino-intestato {{ position: absolute; top: 24.1mm; left: 7.5mm; right: 7.5mm; font: 10pt/1.12 "OCR B", monospace; letter-spacing: 0; color: #000; }}
 .bollettino-eseguito {{ position: absolute; top: 35mm; left: 7.5mm; right: 61mm; max-height: 17mm; overflow: hidden; font-size: 8.25pt; line-height: 1.05; color: #000; }}
 .bollettino-eseguito-address {{ display: block; margin-top: .7mm; font-size: 7.05pt; line-height: 1.04; white-space: normal; overflow-wrap: break-word; }}
-.bollettino-slip.accredito .bollettino-eseguito {{ left: 58.5mm; right: 4mm; top: 35mm; max-height: 27mm; }}
+.bollettino-slip.accredito .bollettino-eseguito {{ left: 58.5mm; right: 4mm; top: 35mm; max-height: 27mm; }} .bollettino-eseguito.payer-fit-1 {{ font-size: 7.5pt; }} .bollettino-eseguito.payer-fit-2 {{ font-size: 6.75pt; }} .bollettino-eseguito.payer-fit-3 {{ font-size: 6pt; }}
 .bollettino-details {{ position: absolute; left: 7.5mm; right: 56mm; top: 58.5mm; font-size: 8pt; line-height: 1.18; }}
 .bollettino-slip.accredito .bollettino-details {{ display: none; }}
 .bollettino-customer {{ position: absolute; left: 7.5mm; top: 40.9mm; font: 10pt "OCR B", monospace; letter-spacing: 0; color: #000; }}
@@ -765,7 +778,6 @@ def _gaia_bollettino_html(field_values: dict[str, str], payload: dict[str, Any])
           <p class="indent">- <span class="under">per i correntisti postali:</span> tramite BancoPostaOnLine (funzione "Paga bollettino");</p>
           <p class="indent">- <span class="under">per i non correntisti:</span> sul sito www.poste.it - previa registrazione (funzione "Paga bollettino") con addebito su Carta di Credito VISA e MasterCard o con Carta PostePay.</p>
           <p class="indent">- <span class="under">per i clienti POSTEMOBILE:</span> tramite servizio "Semplifica" addebitando l'importo sul Conto BancoPosta o sulla Postepay associati alla tua SIM PosteMobile.</p>
-          <p><strong>Altre modalità:</strong></p>
         </div>
       </div>
     </div>
@@ -786,7 +798,7 @@ def _gaia_bollettino_slip_html(values: dict[str, str], *, title: str, kind: str)
     is_accredito = kind == "accredito"
     logo_html = "" if is_accredito else f'<div class="bollettino-logo-cbo">{values["cbo_logo_html"]}</div>'
     authorization_html = (
-        f'<div class="bollettino-authorization">{html.escape(_BOLLETTINO_PRINT_AUTHORIZATION)}</div>'
+        f'<div class="bollettino-authorization">{html.escape(values["print_authorization"])}</div>'
         if is_accredito
         else ""
     )
@@ -811,7 +823,7 @@ def _gaia_bollettino_slip_html(values: dict[str, str], *, title: str, kind: str)
         if is_accredito
         else ""
     )
-    causale_row = "" if is_accredito else f"<div>Causale: &nbsp;&nbsp;&nbsp; {html.escape(values['causale'])}</div>"
+    causale_row, accredito_causale = _gaia_bollettino_causale_html(values["causale"], is_accredito=is_accredito)
     return f"""
     <div class="bollettino-slip {html.escape(kind)}">
       <div class="band"><span>Conti correnti postali - {html.escape(title)}</span><span>BancoPosta</span></div>
@@ -823,18 +835,27 @@ def _gaia_bollettino_slip_html(values: dict[str, str], *, title: str, kind: str)
       <div class="bollettino-iban"><span class="bollettino-small-label">Codice IBAN</span><span class="bollettino-boxes">{values['iban_boxes_html']}</span></div>
       <div class="bollettino-small-label bollettino-intestato-label">Intestato a</div>
       <div class="bollettino-intestato">{html.escape(values['account_line_1'])}<br>{html.escape(values['account_line_2'])}</div>
-      <div class="bollettino-eseguito">eseguito da: {html.escape(values['payer_name'])}<span class="bollettino-eseguito-address">{html.escape(values['payer_address'])}</span></div>
+      <div class="bollettino-eseguito{html.escape(values['payer_fit_class'])}">eseguito da: {html.escape(values['payer_name'])}<span class="bollettino-eseguito-address">{html.escape(values['payer_address'])}</span></div>
       {customer_html}
       {_gaia_bollettino_postmark_html()}
       <div class="bollettino-details">
         <div>Scadenza: {html.escape(values['due_date'])} - Rata unica</div>
-        <div>Esercizio: &nbsp;&nbsp; {html.escape(values['esercizio'])}{' Causale: ' + html.escape(values['causale']) if is_accredito else ''}</div>
+        <div>Esercizio: &nbsp;&nbsp; {html.escape(values['esercizio'])}{accredito_causale}</div>
         {causale_row}
         <div>Importo: &nbsp;&nbsp;&nbsp; {html.escape(values['amount'])}</div>
       </div>
       {barcode_html}
       {codeline_html}
     </div>"""
+
+
+def _gaia_bollettino_causale_html(causale: str, *, is_accredito: bool) -> tuple[str, str]:
+    """Return the versamento "Causale" row and the accredito inline suffix; both empty without a code."""
+    if not causale:
+        return "", ""
+    if is_accredito:
+        return "", f" Causale: {html.escape(causale)}"
+    return f"<div>Causale: &nbsp;&nbsp;&nbsp; {html.escape(causale)}</div>", ""
 
 
 def _gaia_bollettino_postmark_html() -> str:
@@ -869,30 +890,65 @@ def _gaia_bollettino_values(field_values: dict[str, str], payload: dict[str, Any
         "barcode_number": payment_code.barcode_payload,
         "barcode_svg": _gaia_bollettino_code128_svg(payment_code.barcode_payload),
         "bonifico_causale": f"A {notice_number} CF {field_values['CodFiscale']}",
-        "causale": _gaia_bollettino_causale(payload, notice_number),
+        "causale": _gaia_bollettino_causale(payload),
         "cbo_logo_html": _gaia_bollettino_cbo_logo_html(),
         "customer_code": payment_code.customer_code,
-        "codeline": payment_code.codeline,
         "due_date": _gaia_bollettino_due_date(payload),
         "esercizio": _gaia_bollettino_esercizio(payload),
         "iban_boxes_html": _gaia_bollettino_iban_boxes_html(_BOLLETTINO_IBAN),
-        "iban_spaced": " ".join(_BOLLETTINO_IBAN),
         "payer_address": _gaia_bollettino_payer_address(field_values),
+        "payer_fit_class": _gaia_bollettino_payer_fit_class(field_values, notice_number=notice_number),
         "payer_name": _gaia_bollettino_payer_name(field_values["Denominazione"]),
         "postal_account": _BOLLETTINO_POSTAL_ACCOUNT,
         "postal_account_code": payment_code.postal_account_code,
+        "print_authorization": _gaia_bollettino_print_authorization(),
     }
+
+
+def _gaia_bollettino_print_authorization() -> str:
+    if settings.td896_sample_mode:
+        return _BOLLETTINO_SAMPLE_AUTHORIZATION
+    configured = (settings.td896_print_authorization or "").strip()
+    if not configured or "X" in configured.upper():
+        raise RuntimeError("Codice autorizzazione Poste TD 896 non configurato")
+    return configured
 
 
 def _gaia_bollettino_payer_address(field_values: dict[str, str]) -> str:
     return " ".join(field_values.get("INDIRIZZO_SPEDIZIONE", "").split())
 
 
-def _gaia_bollettino_payer_name(value: str, *, max_length: int = 42) -> str:
-    normalized = " ".join(value.split())
-    if len(normalized) <= max_length:
-        return normalized
-    return f"{normalized[: max_length - 3].rstrip()}..."
+def _gaia_bollettino_payer_name(value: str) -> str:
+    return " ".join(value.split())
+
+
+def _gaia_bollettino_payer_fit_class(field_values: dict[str, str], *, notice_number: str) -> str:
+    payer_name = _gaia_bollettino_payer_name(field_values["Denominazione"])
+    payer_address = _gaia_bollettino_payer_address(field_values)
+    address_height = 0.0
+    if payer_address:
+        address_lines = _estimated_text_lines(payer_address, font_pt=_BOLLETTINO_ADDRESS_FONT_PT)
+        address_height = _BOLLETTINO_ADDRESS_GAP_MM + address_lines * _line_height_mm(_BOLLETTINO_ADDRESS_FONT_PT, 1.04)
+    name_text = f"eseguito da: {payer_name}"
+    for step, font_pt in enumerate(_BOLLETTINO_PAYER_FONT_STEPS):
+        name_height = _estimated_text_lines(name_text, font_pt=font_pt) * _line_height_mm(font_pt, 1.05)
+        if name_height + address_height <= _BOLLETTINO_PAYER_BOX_HEIGHT_MM:
+            return f" payer-fit-{step}" if step else ""
+    logger.warning(
+        "Bollettino TD 896 avviso %s: nome e indirizzo del versante potrebbero non entrare nel riquadro a %spt",
+        notice_number,
+        _BOLLETTINO_PAYER_FONT_STEPS[-1],
+    )
+    return f" payer-fit-{len(_BOLLETTINO_PAYER_FONT_STEPS) - 1}"
+
+
+def _estimated_text_lines(text: str, *, font_pt: float) -> int:
+    chars_per_line = int(_BOLLETTINO_PAYER_BOX_WIDTH_MM / (font_pt * _PT_TO_MM * _BOLLETTINO_GLYPH_WIDTH_EM))
+    return len(textwrap.wrap(text, width=chars_per_line))
+
+
+def _line_height_mm(font_pt: float, line_height: float) -> float:
+    return font_pt * _PT_TO_MM * line_height
 
 
 def _gaia_bollettino_barcode_payload(customer_code: str, amount_code: str, postal_account_code: str) -> str:
@@ -945,15 +1001,13 @@ def _gaia_bollettino_customer_code(notice_number: str) -> str:
     return td896_customer_code(notice_number)
 
 
-def _gaia_bollettino_causale(payload: dict[str, Any], notice_number: str) -> str:
+def _gaia_bollettino_causale(payload: dict[str, Any]) -> str:
+    # Only an explicit code: no fallback derived from the notice number digits.
     for key in ("bollettino_causale", "payment_reason_code", "causale"):
         raw_value = payload.get(key)
         if isinstance(raw_value, str) and raw_value.strip():
             return raw_value.strip()
-    digits = _NON_DIGIT_RE.sub("", notice_number)
-    if len(digits) >= 9:
-        return digits[6:9]
-    return digits or notice_number
+    return ""
 
 
 def _gaia_bollettino_amount_code(amount: str) -> str:

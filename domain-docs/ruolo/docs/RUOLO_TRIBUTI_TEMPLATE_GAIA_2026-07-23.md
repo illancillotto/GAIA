@@ -30,7 +30,7 @@ Il renderer non usa percorsi locali del PC, cartelle `Downloads` o file temporan
 
 ## Bollettino TD 896
 
-La pagina bollettino usa i dati dell'avviso GAIA: numero avviso, codice fiscale, denominazione contribuente, importo saldo, scadenza, esercizio e anni di riferimento. Il numero avviso visibile resta quello GAIA, mentre il codice cliente postale e un identificativo distinto di 18 cifre derivato deterministicamente dall'avviso e completato con controcodice modulo 93. La causale stampata nei riquadri del bollettino usa il codice a tre cifre derivato dal numero avviso, con override possibile tramite payload dedicato; la causale bonifico resta invece nel formato completo `A <numero avviso> CF <codice fiscale>`.
+La pagina bollettino usa i dati dell'avviso GAIA: numero avviso, codice fiscale, denominazione contribuente, importo saldo, scadenza, esercizio e anni di riferimento. Il numero avviso visibile resta quello GAIA, mentre il codice cliente postale e un identificativo distinto di 18 cifre derivato deterministicamente dall'avviso e completato con controcodice modulo 93. La causale stampata nei riquadri del bollettino e solo quella configurata nella `Regola ruolo` (`bollettino_causale`) o presente nel payload (`payment_reason_code`, `causale`); se manca, la riga `Causale` non viene stampata (dal 2026-10-22; prima GAIA stampava come fallback le cifre 7-9 del numero avviso, un frammento di annualita/progressivo e non una causale). La causale bonifico resta invece nel formato completo `A <numero avviso> CF <codice fiscale>`.
 
 Il layout recepisce le misure principali del modello CH8/Bis TD 896 indicate nei manuali Poste forniti localmente:
 
@@ -95,9 +95,15 @@ Valori fissi configurati nel renderer:
 - IBAN `IT15L0760117400001007214826`;
 - intestazione `CONSORZIO DI BONIFICA DELL'ORISTANESE - RISCOSSIONE QUOTE ASSOCIATIVE`;
 - tipo documento `896`;
-- codice di autorizzazione alla stampa `AUT.DB/SISB/XXXXX DEL XX/XX/2026`, segnaposto
-  in attesa del codice che Poste rilascera per la stampa in proprio in PDF (dal
-  2026-10-20; prima era stampato `AUT.DB/SISB/36211 DEL 5/9/2012`).
+- codice di autorizzazione alla stampa in proprio, configurato e non piu hardcoded
+  (dal 2026-10-22). Il codice `AUT.DB/SISB/36211 DEL 5/9/2012` non copre il layout
+  GAIA e non viene piu stampato. Le variabili `Settings` sono:
+  - `TD896_SAMPLE_MODE=true`: stampa il segnaposto `AUT.DB/SISB/XXXXX DEL XX/XX/XXXX`
+    per la campionatura da inviare a Poste;
+  - `TD896_SAMPLE_MODE=false` (default): stampa `TD896_PRINT_AUTHORIZATION`; se il
+    valore e vuoto o contiene `X` la generazione del bollettino fallisce con
+    `Codice autorizzazione Poste TD 896 non configurato` e l'item batch risulta
+    `failed`. La sola pagina avviso senza bollettino non richiede il codice.
 
 La codeline usa il codice cliente postale di 18 cifre. Le prime 16 cifre incorporano il numero avviso GAIA e un discriminante interno; le ultime due sono il resto della divisione delle prime 16 per 93. L'importo usa il formato Poste `00000000+00` e il conto corrente viene normalizzato a 12 cifre.
 
@@ -115,8 +121,8 @@ zona cliente della ricevuta di accredito contiene esclusivamente denominazione
 e indirizzo del versante; questa separazione evita l'inserimento di dati
 amministrativi nell'area riservata dal modello Poste.
 
-Se la policy non valorizza i campi, il comportamento resta automatico: la
-causale e derivata dal numero avviso e `Esercizio` dall'anno di emissione
+Se la policy non valorizza i campi, la riga `Causale` non viene stampata e
+`Esercizio` resta automatico, derivato dall'anno di emissione
 dell'avviso (`notice_emission_year`), secondo la convenzione Capacitas degli
 avvisi accorpati: un avviso emesso nel `2026`, anche se relativo alle annualita
 `2024-2025`, riporta `2626` (aggiornamento 2026-10-20; prima GAIA duplicava
@@ -127,9 +133,16 @@ Nota operativa: la pagina rende un facsimile precompilato per stampa e pagamento
 
 Il Data Matrix non usa piu un asset statico o una matrice grafica simulata. Viene generato per ogni avviso dallo stesso payload del Code 128 e puo essere verificato seguendo `MANUALE_VERIFICA_BOLLETTINI_TD896.md`.
 
-Per i campi `eseguito da` delle due ricevute il bollettino usa una denominazione abbreviata e
-clampata su due righe. La denominazione completa resta nella pagina 1 dell'avviso; nel bollettino
-il vincolo primario e non sovrapporre codice cliente, scadenza, barcode e codeline.
+Nei campi `eseguito da` delle due ricevute la denominazione e stampata per intero, senza
+troncamento con `...` (dal 2026-10-22). Posizione e dimensioni dei riquadri restano invariate
+(versamento: `top 35mm`, larghezza `63.5mm`, `max-height 17mm`; accredito: `left 58.5mm`,
+`max-height 27mm`), cosi il testo non invade dettagli (`58.5mm`), riquadro bollo (`49mm`) o
+barcode (`64mm`). Se nome e indirizzo non entrano nel riquadro piu stretto, quello della
+ricevuta di versamento, il renderer riduce per gradi il font del blocco nome (`8.25pt`,
+`7.5pt`, `6.75pt`, `6pt`, classi `payer-fit-1..3`); l'indirizzo resta a `7.05pt`. La stima e
+esatta perche il testo e in OCR-B monospazio (avanzamento `0.723em`) e lascia un margine di
+`0.3mm`. Oltre i `6pt` il nome non viene troncato: il log registra un warning con il numero
+avviso, da verificare a vista sul PDF.
 
 ## Vincoli di regressione
 
@@ -139,7 +152,7 @@ il vincolo primario e non sovrapporre codice cliente, scadenza, barcode e codeli
 - Il wizard batch e il fallback backend devono generare il template GAIA `__gaia_proposal__`, non il DOCX legacy, per includere sempre il bollettino postale.
 - Il bollettino TD 896 deve restare dopo il partitario, come ultima pagina, e deve usare codeline coerente con codice cliente, importo, conto corrente e tipo documento.
 - Code 128 e Data Matrix devono decodificare lo stesso payload numerico di 50 cifre.
-- Causale ed esercizio configurati nella `Regola ruolo` devono comparire nella ricevuta di versamento; se assenti devono restare attivi i fallback automatici.
+- Causale ed esercizio configurati nella `Regola ruolo` devono comparire nella ricevuta di versamento; senza causale configurata la riga `Causale` non compare, mentre l'esercizio resta automatico.
 - Il partitario deve mantenere spaziatura e allineamenti del formato raw.
 - Il partitario non deve contenere script o frammenti UI Capacitas come `mstrAvvisoDlgPartitarioKUI`, `btnScaricaPartitarioDlgPartitarioKUI` o `exportExcel.aspx`.
 - Il partitario non deve stampare azioni di modale Capacitas come `Chiudi` o `Scarica` in coda.

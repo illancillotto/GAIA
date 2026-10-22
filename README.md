@@ -833,6 +833,35 @@ Nota operativa Docker:
 - la suite backend CI avvia un servizio PostgreSQL 16 dedicato e include automaticamente questi test
 - senza `GAIA_TEST_POSTGRES_URL`, l'esecuzione pytest esterna al target marca i test come skipped
 
+### Verifica PDF TD 896
+
+La verifica di campionatura opera su PDF gia generati, con dipendenze solo di
+sviluppo, escluse dall'immagine backend:
+
+```bash
+backend/.venv/bin/python -m pip install -r scripts/ruolo/requirements-verify-td896.txt
+backend/.venv/bin/python scripts/ruolo/verify_td896_pdf.py avviso.pdf
+make test-verify-td896
+```
+
+Il verificatore controlla geometria, codeline e controcodice mod 93, Code 128 e
+Data Matrix, importo, IBAN, font OCR B, assenza di ellissi nel nome versante e
+presenza del codice AUT. Produce un report per pagina con codeline TD 896 ed
+esce con codice `1` in presenza di KO o se un PDF non contiene bollettini
+riconoscibili. Il segnaposto AUT e classificato `CAMPIONATURA`, senza causare KO.
+
+Il target usa `TD896_VERIFY_PYTHON` (default `backend/.venv/bin/python`) e impone
+coverage statement/branch al `100%` su `scripts/ruolo`. La CI backend installa
+le dipendenze di verifica ed esegue `make test-verify-td896 TD896_VERIFY_PYTHON=python`;
+il workflow si attiva anche per modifiche a `scripts/ruolo/**` e `tests/ruolo/**`.
+
+Per generare il bollettino in produzione occorre `TD896_PRINT_AUTHORIZATION`
+con il codice Poste: con `TD896_SAMPLE_MODE=false` (default), un valore vuoto
+o contenente `X` blocca la generazione. Solo per campionatura,
+`TD896_SAMPLE_MODE=true` stampa `AUT.DB/SISB/XXXXX DEL XX/XX/XXXX`.
+Procedura e dettagli del layout:
+`domain-docs/ruolo/docs/MANUALE_VERIFICA_BOLLETTINI_TD896.md`.
+
 ### Test frontend
 
 - smoke statici:

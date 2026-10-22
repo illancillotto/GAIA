@@ -4675,7 +4675,8 @@ def test_gaia_reminder_template_contract() -> None:
     assert '<span class="field-td">896&gt;</span>' in rendered_html
     assert "bollettino-postmark" in rendered_html
     assert "BOLLO DELL'UFFICIO POSTALE" in rendered_html
-    assert "AUT.DB/SISB/XXXXX DEL XX/XX/2026" in rendered_html
+    assert "AUT.DB/SISB/XXXXX DEL XX/XX/XXXX" in rendered_html
+    assert "Altre modalità" not in rendered_html
     assert "bollettino-barcode-svg" in rendered_html
     assert "bollettino-datamatrix" in rendered_html
     assert "Data Matrix TD 896" in rendered_html
@@ -4711,9 +4712,9 @@ def test_gaia_reminder_template_contract() -> None:
         )
         == "18025257650095110900120010072148261000000120673896"
     )
-    assert reminder_service._gaia_bollettino_causale({}, "025257650095110") == "650"
-    assert reminder_service._gaia_bollettino_causale({"bollettino_causale": "777"}, "025257650095110") == "777"
-    assert reminder_service._gaia_bollettino_causale({}, "AB12") == "12"
+    assert reminder_service._gaia_bollettino_causale({}) == ""
+    assert reminder_service._gaia_bollettino_causale({"bollettino_causale": "777"}) == "777"
+    assert reminder_service._gaia_bollettino_causale({"bollettino_causale": " ", "payment_reason_code": "025"}) == "025"
     assert '<svg class="bollettino-datamatrix"' in reminder_service._gaia_bollettino_datamatrix_svg(
         "18025257650095110900120010072148261000000120673896"
     )
@@ -4746,6 +4747,130 @@ def test_gaia_reminder_template_contract() -> None:
     assert reminder_service._gaia_bollettino_esercizio({"years": [2024, 2025]}) == ""
     assert reminder_service._gaia_bollettino_esercizio({"bollettino_esercizio": " 0123 "}) == "0123"
     assert reminder_service._gaia_bollettino_esercizio({}) == ""
+
+
+def _gaia_bollettino_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "display_name": "ROSSI MARIO",
+        "codice_fiscale": "RSSMRA80A01H501Z",
+        "years": [2024, 2025],
+        "due_amount": "250.00 EUR",
+        "paid_amount": "40.00 EUR",
+        "saldo_amount": "210.00 EUR",
+        "notice_number": "12026242500001",
+        "notice_emission_year": 2026,
+        "notice_reference_years": [2024, 2025],
+        "due_date": "2025-11-21",
+        "avvisi": [
+            {
+                "codice_cnc": "01.02024000364253",
+                "anno_tributario": 2024,
+                "residenza_raw": "VIA RESIDENZA 2 09170 ORISTANO (OR)",
+                "importo_totale_euro": "110.00 EUR",
+                "partite": [],
+            }
+        ],
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _gaia_bollettino_eseguito_divs(rendered_html: str) -> list[str]:
+    return [chunk.split("</div>", 1)[0] for chunk in rendered_html.split('<div class="bollettino-eseguito')[1:]]
+
+
+def test_gaia_bollettino_long_payer_name_is_printed_in_full() -> None:
+    payer_name = "AZIENDA AGRICOLA SU CAMPU DE SOS SOLITO DI PIRAS GIOVANNI ANTONIO E FIGLI SOCIETA SEMPLICE AGRICOLA"
+    long_address_avviso = {
+        "codice_cnc": "01.02024000364253",
+        "anno_tributario": 2024,
+        "residenza_raw": "LOCALITA SU CAMPU DE SOS SOLITO STRADA VICINALE 12 09170 ORISTANO (OR)",
+        "importo_totale_euro": "110.00 EUR",
+        "partite": [],
+    }
+    cases = (
+        (_gaia_bollettino_payload(display_name=payer_name), '">'),
+        (_gaia_bollettino_payload(display_name=payer_name, avvisi=[long_address_avviso]), ' payer-fit-3">'),
+    )
+    for payload, expected_class_tail in cases:
+        rendered_html = reminder_service._gaia_proposal_html(payload, include_main=False, include_partitario=False)
+
+        eseguito_divs = _gaia_bollettino_eseguito_divs(rendered_html)
+        assert len(eseguito_divs) == 2
+        for eseguito in eseguito_divs:
+            assert eseguito.startswith(expected_class_tail)
+            assert f"eseguito da: {payer_name}<span" in eseguito
+            assert "..." not in eseguito
+    assert ".bollettino-eseguito.payer-fit-3 { font-size: 6pt; }" in rendered_html
+    # Positions and clipping of the box are unchanged (Poste geometry).
+    assert ".bollettino-eseguito { position: absolute; top: 35mm; left: 7.5mm; right: 61mm; max-height: 17mm;" in rendered_html
+
+
+def test_gaia_bollettino_payer_font_steps_down_and_warns(caplog: pytest.LogCaptureFixture) -> None:
+    address = "VIA RESIDENZA 2 09170 ORISTANO OR"
+
+    def fit(name: str, payer_address: str, *, notice_number: str) -> str:
+        field_values = {"Denominazione": name, "INDIRIZZO_SPEDIZIONE": payer_address}
+        return reminder_service._gaia_bollettino_payer_fit_class(field_values, notice_number=notice_number)
+
+
+    assert fit("ROSSI MARIO", address, notice_number="N1") == ""
+    assert fit(" ".join(["AB"] * 36), address, notice_number="N1") == ""
+    assert fit(" ".join(["AB"] * 37), address, notice_number="N1") == " payer-fit-1"
+    assert fit(" ".join(["AB"] * 41), address, notice_number="N1") == " payer-fit-2"
+    assert fit(" ".join(["AB"] * 57), address, notice_number="N1") == " payer-fit-3"
+    assert fit(" ".join(["AB"] * 47), "", notice_number="N1") == " payer-fit-1"
+    assert not caplog.records
+
+    with caplog.at_level("WARNING", logger=reminder_service.__name__):
+        assert fit("NOME " * 80, address, notice_number="12026242500001") == " payer-fit-3"
+    assert "12026242500001" in caplog.text
+    assert "6.0pt" in caplog.text
+
+
+def test_gaia_bollettino_without_configured_causale_omits_causale_row() -> None:
+    rendered_html = reminder_service._gaia_proposal_html(
+        _gaia_bollettino_payload(),
+        include_main=False,
+        include_partitario=False,
+    )
+
+    assert "Causale: &nbsp;" not in rendered_html
+    assert " Causale: " not in rendered_html
+    assert "Esercizio: &nbsp;&nbsp; 2626</div>" in rendered_html
+    assert "Altre modalità" not in rendered_html
+
+    configured_html = reminder_service._gaia_proposal_html(
+        _gaia_bollettino_payload(bollettino_causale="025"),
+        include_main=False,
+        include_partitario=False,
+    )
+    assert "<div>Causale: &nbsp;&nbsp;&nbsp; 025</div>" in configured_html
+    assert "Esercizio: &nbsp;&nbsp; 2626 Causale: 025</div>" in configured_html
+
+
+def test_gaia_bollettino_print_authorization_modes(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = _gaia_bollettino_payload()
+
+    monkeypatch.setattr("app.core.config.settings.td896_sample_mode", True)
+    monkeypatch.setattr("app.core.config.settings.td896_print_authorization", "AUT.DB/SISB/12345 DEL 01/12/2026")
+    sample_html = reminder_service._gaia_proposal_html(payload, include_main=False, include_partitario=False)
+    assert '<div class="bollettino-authorization">AUT.DB/SISB/XXXXX DEL XX/XX/XXXX</div>' in sample_html
+    assert "AUT.DB/SISB/12345" not in sample_html
+    assert "36211" not in sample_html
+
+    monkeypatch.setattr("app.core.config.settings.td896_sample_mode", False)
+    production_html = reminder_service._gaia_proposal_html(payload, include_main=False, include_partitario=False)
+    assert '<div class="bollettino-authorization">AUT.DB/SISB/12345 DEL 01/12/2026</div>' in production_html
+    assert "XXXXX" not in production_html
+
+    for missing in (None, "", "  ", "AUT.DB/SISB/XXXXX DEL XX/XX/2026", "aut.db/sisb/1234x"):
+        monkeypatch.setattr("app.core.config.settings.td896_print_authorization", missing)
+        with pytest.raises(RuntimeError, match="Codice autorizzazione Poste TD 896 non configurato"):
+            reminder_service._gaia_proposal_html(payload, include_main=False, include_partitario=False)
+
+    # Without the bollettino section the authorization is not required.
+    assert '<div class="bollettino-authorization">' not in reminder_service._gaia_proposal_html(payload, include_bollettino=False)
 
 
 def test_td896_validation_boundaries(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -5273,7 +5398,7 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert "MODALITA' DI PAGAMENTO" not in main_html
     assert "MODALITA' DI PAGAMENTO" in bollettino_html
     assert "BOLLO DELL'UFFICIO POSTALE" in bollettino_html
-    assert "AUT.DB/SISB/XXXXX DEL XX/XX/2026" in bollettino_html
+    assert "AUT.DB/SISB/XXXXX DEL XX/XX/XXXX" in bollettino_html
     assert "18012026242500001985120010072148261000000221553896" in bollettino_html
     assert "bollettino-barcode-svg" in bollettino_html
     assert "Ricevuta di Versamento" in bollettino_html
@@ -5555,7 +5680,10 @@ def test_tributi_reminder_service_helper_fallbacks(tmp_path: Path, monkeypatch: 
     assert "Dettaglio partitario allegato - pagina 1 di 2" in paginated_partitario_html
     assert "Dettaglio partitario allegato - pagina 2 di 2" in paginated_partitario_html
     assert "Dettaglio partitario allegato - continua" not in paginated_partitario_html
-    assert reminder_service._gaia_bollettino_payer_name("Societa Per La Bonifica Dei Terreni Ferraresi").endswith("...")
+    assert (
+        reminder_service._gaia_bollettino_payer_name("Societa  Per La Bonifica Dei Terreni Ferraresi")
+        == "Societa Per La Bonifica Dei Terreni Ferraresi"
+    )
     assert reminder_service._role_subject_label([]) == "Tributi Consortili"
     assert reminder_service._role_subject_label([2025]) == "Tributi Consortili anno 2025"
     assert reminder_service._yearly_reference_summary({2025: {"codice_cnc": "-"}}) == "-"

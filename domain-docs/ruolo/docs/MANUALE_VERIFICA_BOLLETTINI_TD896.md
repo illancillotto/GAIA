@@ -1,6 +1,6 @@
 # Mini manuale di verifica bollettini TD 896 GAIA
 
-Aggiornamento del 2026-10-20.
+Aggiornamento del 2026-10-22.
 
 ## Scopo
 
@@ -23,9 +23,12 @@ PDF all'amministratore GAIA.
    `Esercizio bollettino`, la ricevuta di versamento deve mostrare esattamente i
    codici di tre e quattro cifre inseriti. La ricevuta di accredito riserva la
    zona cliente esclusivamente ai dati del versante, come richiesto dal manuale
-   Poste. Se i campi sono vuoti, GAIA applica i valori automatici: causale
-   derivata dal numero avviso ed esercizio pari all'anno di emissione ripetuto,
-   per esempio `2626` per un avviso emesso nel 2026.
+   Poste. Se la causale non e configurata, la riga `Causale` non deve comparire:
+   GAIA non ricava piu una causale dal numero avviso. Se l'esercizio non e
+   configurato, vale l'anno di emissione ripetuto, per esempio `2626` per un
+   avviso emesso nel 2026.
+   La denominazione nel campo `eseguito da` deve essere completa, senza `...`:
+   se e lunga va a capo e il font si riduce fino a `6pt`.
 6. Verificare i dati fissi del Consorzio:
    - conto corrente postale `1007214826`;
    - conto a 12 cifre nella codeline `001007214826`;
@@ -85,6 +88,47 @@ Interpretazione del risultato:
 Esempio: per `1,00 EUR` il campo importo deve essere `0000000100`; per
 `120,67 EUR` deve essere `0000012067`.
 
+## Verifica automatica della campionatura
+
+Lo script `scripts/ruolo/verify_td896_pdf.py` controlla uno o piu PDF gia
+generati (avviso completo o solo bollettino). Le dipendenze `pymupdf` e
+`zxing-cpp` (versioni fissate in `scripts/ruolo/requirements-verify-td896.txt`)
+servono solo allo sviluppo e alla CI e non entrano nell'immagine backend:
+
+```bash
+python3 -m venv /tmp/td896-verify
+/tmp/td896-verify/bin/pip install -r scripts/ruolo/requirements-verify-td896.txt
+/tmp/td896-verify/bin/python scripts/ruolo/verify_td896_pdf.py campionatura_TD896_5_bollettini.pdf
+```
+
+Ogni pagina con una codeline TD 896 e trattata come un bollettino. Per ciascuna
+lo script stampa una tabella `OK`/`KO`:
+
+| Controllo | Criterio |
+| --- | --- |
+| Pagina A4 orizzontale | `297 x 210 mm` (tolleranza 1 mm) |
+| Modulo `297 x 102 mm` | bordo superiore nero del modulo, tolleranza `0.5 mm` |
+| Divisione a `132 mm` | linea verticale nera fra le ricevute, `132 +/- 0.5 mm` |
+| Codeline e controcodice | regex `<\d{18}> \d{8}\+\d{2}> \d{12}< 896>`, ultime due cifre del codice cliente = prime 16 modulo 93 |
+| Code 128 e Data Matrix | rasterizzazione a 600 dpi con zxing-cpp; entrambi uguali al payload di 50 cifre ricavato dalla codeline; Data Matrix `16x48` |
+| Importo | tutti gli importi del corpo del modulo uguali all'importo in codeline |
+| IBAN | uguale sulle due ricevute, mod 97 valido, ABI `07601` nelle posizioni 6-10 |
+| Font codeline | `FontDescriptor` con `FontFamily` `OCR B` |
+| Nome versante | riga `eseguito da` presente e senza `...` |
+| Codice AUT | presente; `CAMPIONATURA` se contiene `XXXXX` |
+
+L'uscita e `0` se nessun controllo e `KO`. `CAMPIONATURA` non e un errore: va
+risolto prima della produzione configurando `TD896_PRINT_AUTHORIZATION` e
+`TD896_SAMPLE_MODE=false`. Le misure geometriche si basano sui tratti neri del
+PDF e non sostituiscono la verifica a stampa al 100%.
+
+Lo script ha test propri in `tests/ruolo/test_verify_td896_pdf.py`, con una
+pagina campione sintetica in `tests/ruolo/fixtures/td896_su_campu_sample.pdf`
+(nominativo lungo Su Campu, AUT segnaposto). Si eseguono con
+`make test-verify-td896` (venv `backend/.venv` con le dipendenze sopra), che
+richiede il 100% di statement e branch; il job CI `backend.yml` installa le
+stesse dipendenze ed esegue lo stesso target.
+
 ## Esito accettabile
 
 Il bollettino e verificato solo se:
@@ -94,8 +138,11 @@ Il bollettino e verificato solo se:
 - Code 128 e Data Matrix restituiscono lo stesso valore di 50 cifre;
 - codice cliente, conto e tipo documento rispettano lunghezze e valori sopra
   indicati;
-- causale ed esercizio coincidono con la `Regola ruolo` applicata oppure, se
-  non configurati, con i fallback automatici;
+- causale ed esercizio coincidono con la `Regola ruolo` applicata; senza
+  causale configurata la riga non compare e l'esercizio segue l'anno di
+  emissione;
+- il codice `AUT.DB/SISB/...` e quello rilasciato da Poste; il segnaposto
+  `AUT.DB/SISB/XXXXX DEL XX/XX/XXXX` e ammesso solo per la campionatura;
 - il PDF mantiene formato, font, colori e misure descritti nella verifica di
   stampa, senza riduzioni automatiche;
 - il Data Matrix viene letto senza ritagliare o alterare le aree bianche che lo

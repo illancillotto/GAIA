@@ -28,6 +28,7 @@ GRAPHIFY_ELABORAZIONI_DOC_FLAGS = --max-concurrency 1 --api-timeout 180
 GRAPHIFY_ELABORAZIONI_DOC_TIMEOUT = timeout --foreground 420s
 QUALITY_PYTHON ?= python3
 WORKER_PYTHON ?= backend/.venv/bin/python
+TD896_VERIFY_PYTHON ?= backend/.venv/bin/python
 WORKER_COVERAGE_JSON ?= backend/coverage-worker.json
 WORKER_COVERAGE_XML ?= backend/coverage-worker.xml
 MCP_DOCS_MANIFEST ?= config/mcps/docs-manifest.json
@@ -39,7 +40,7 @@ GAIA_SYNTHETIC_SEED ?= gaia-v1
 PRESENZE_IDENTITY_MANIFEST ?= secrets/presenze/canonical-identities.json
 PRESENZE_IDENTITY_AUDIT_USER_ID ?= 1
 
-.PHONY: test-ruolo-postgres test-presenze-postgres audit-presenze-identities
+.PHONY: test-ruolo-postgres test-presenze-postgres audit-presenze-identities test-verify-td896
 .PHONY: mcp-docs-build mcp-docs-serve test-mcp-docs
 .PHONY: mcp-data-seed mcp-data-reset mcp-data-serve mcp-http test-mcp mcp-evaluate
 .PHONY: mcp-data-http
@@ -189,6 +190,9 @@ test-worker:
 	"$$python" -m coverage json -o "$$coverage_json"; \
 	"$$python" -m coverage xml -o "$$coverage_xml"; \
 	"$$python" -m coverage report
+
+test-verify-td896:
+	$(TD896_VERIFY_PYTHON) -m pytest -q -p no:cacheprovider tests/ruolo/test_verify_td896_pdf.py --cov=scripts/ruolo --cov-branch --cov-report=term-missing --cov-fail-under=100
 
 test-ruolo-postgres:
 	$(COMPOSE) exec backend sh -lc 'GAIA_TEST_POSTGRES_URL="$${DATABASE_URL}" python -m pytest -m postgres tests/ruolo/test_tributi_notice_registry_postgres.py tests/ruolo/test_tributi_notice_migration_postgres.py'

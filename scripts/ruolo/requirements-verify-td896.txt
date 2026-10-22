@@ -1,0 +1,6 @@
+# Solo sviluppo: verifica campionatura TD 896 (scripts/ruolo/verify_td896_pdf.py)
+# e relativi test (make test-verify-td896). Non entra nell'immagine backend.
+pymupdf==2.0
+zxing-cpp==3.1.1
+# numpy arriva gia con pandas da backend/requirements.txt.
+numpy

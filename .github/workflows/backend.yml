@@ -9,6 +9,8 @@ on:
       - "scripts/check_changed_backend_coverage.py"
       - "scripts/check_changed_worker_coverage.py"
       - "scripts/check_changed_python_style.py"
+      - "scripts/ruolo/**"
+      - "tests/ruolo/**"
       - "ruff.toml"
       - "Makefile"
       - ".github/workflows/backend.yml"
@@ -20,6 +22,8 @@ on:
       - "scripts/check_changed_backend_coverage.py"
       - "scripts/check_changed_worker_coverage.py"
       - "scripts/check_changed_python_style.py"
+      - "scripts/ruolo/**"
+      - "tests/ruolo/**"
       - "ruff.toml"
       - "Makefile"
       - ".github/workflows/backend.yml"
@@ -52,13 +56,16 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install -r backend/requirements.txt -r modules/elaborazioni/worker/requirements.txt
+        run: pip install -r backend/requirements.txt -r modules/elaborazioni/worker/requirements.txt -r scripts/ruolo/requirements-verify-td896.txt
 
       - name: Shared dependency guardrail
         run: |
           python scripts/check_shared_deps.py \
             backend/requirements.txt \
             modules/elaborazioni/worker/requirements.txt
+
+      - name: TD 896 verification script tests
+        run: make test-verify-td896 TD896_VERIFY_PYTHON=python
 
       - name: Syntax check
         working-directory: backend
