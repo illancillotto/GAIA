@@ -6,6 +6,7 @@ import pytest
 
 from app.modules.ruolo.services import tributi_reminder_service as reminder_service
 from app.modules.ruolo.services.tributi_legal_text import (
+    INSTALLMENT_TIERS,
     ROLE_YEAR_RESOLUTIONS,
     MissingRoleYearResolutionsError,
     apply_role_year_resolutions,
@@ -139,14 +140,44 @@ def test_proposal_html_uses_payload_years_for_the_legal_page() -> None:
 
     assert "per l\N{RIGHT SINGLE QUOTATION MARK}anno 2024 è stata disposta" in rendered
     assert "(Delib. CdA n. 19/2025)" in rendered
+    assert (
+        "padding: 0; text-align: center; }"
+        in rendered.split(".signature .note {")[1].split("\n")[0]
+    )
 
 
-def test_long_multi_year_legal_page_shrinks_font_to_keep_one_page() -> None:
-    single_year = legal_page_html(_template_blocks(), FIELD_VALUES, [2021])
-    all_years = legal_page_html(_template_blocks(), FIELD_VALUES, [2021, 2022, 2023, 2024, 2025])
+def test_installment_list_becomes_an_ordered_table() -> None:
+    rendered = legal_page_html(_template_blocks(), FIELD_VALUES, [2024])
 
-    assert not single_year.startswith("<div")
-    match = re.match(r'<div style="font-size: (\d+\.\d)%">', all_years)
-    assert match is not None
-    assert 90 < float(match.group(1)) < 96
-    assert all_years.endswith("</div>")
+    assert "rate per gli importi" not in rendered
+    table = re.search(r'<table class="legal-installments".*?</table>', rendered, re.S)
+    assert table is not None
+    cells = re.findall(r"<td[^>]*>(.*?)</td>", table.group(0))
+    assert cells[:6] == [amount for amount, _ in INSTALLMENT_TIERS]
+    assert cells[6:] == [f"<strong>{rate}</strong>" for _, rate in INSTALLMENT_TIERS]
+    assert [rate for _, rate in INSTALLMENT_TIERS] == [
+        "nessuna dilazione",
+        "2",
+        "4",
+        "6",
+        "12",
+        "18",
+    ]
+    assert "Importo dell&#x27;avviso" in table.group(0)
+    assert "Numero massimo di rate" in table.group(0)
+
+
+def test_template_without_installment_list_fails_closed() -> None:
+    blocks = [block for block in _template_blocks() if "rate per gli importi" not in block["text"]]
+
+    with pytest.raises(MissingRoleYearResolutionsError, match="fasce di dilazione"):
+        legal_page_html(blocks, FIELD_VALUES, [2024])
+
+
+def test_legal_page_is_wrapped_with_the_print_fit_script() -> None:
+    rendered = legal_page_html(_template_blocks(), FIELD_VALUES, [2021, 2022, 2023, 2024, 2025])
+
+    assert rendered.startswith('<div class="legal-fit">')
+    assert rendered.endswith("})();</script>")
+    assert "</div><script>" in rendered
+    assert "largest(1.05, 1.8" in rendered and "largest(70, 100" in rendered

@@ -9,15 +9,53 @@ budget year) are rebuilt here from the years included in the notice.
 from __future__ import annotations
 
 import html
-import math
 import re
 from dataclasses import dataclass
 from typing import Any
 
 TRIBUTE_INFO_LABEL = "Informazioni sul tributo."
-# Longest legal page HTML (single-year model) that fits one A4 page at the default font size,
-# measured with Chromium print-to-pdf.
-LEGAL_PAGE_FIT_LENGTH = 9650
+# Installment plan tiers (delibera di approvazione del ruolo), lowest amount first.
+INSTALLMENT_TIERS: tuple[tuple[str, str], ...] = (
+    ("inferiore a 100,00 €", "nessuna dilazione"),
+    ("da 100,00 a 300,00 €", "2"),
+    ("da 300,01 a 500,00 €", "4"),
+    ("da 500,01 a 1.000,00 €", "6"),
+    ("da 1.000,00 a 5.000,00 €", "12"),
+    ("oltre 5.000,00 €", "18"),
+)
+_INSTALLMENT_LIST_PATTERN = re.compile(r"<ul>\n<li>n\. 18 rate per gli importi.*?</ul>", re.S)
+_CELL_STYLE = "border: .5pt solid #87958e; padding: .45mm .8mm; text-align: center;"
+_HEAD_STYLE = (
+    f"{_CELL_STYLE} background: #eef3f0; font-weight: 700; text-align: left; white-space: nowrap;"
+)
+# Runs in Chromium before print-to-pdf: picks the largest line height (1.05-1.8) that keeps the
+# text and the signature on page 2; if even 1.05 overflows, shrinks the font (down to 70%).
+_FIT_SCRIPT = """(function () {
+  var box = document.currentScript.previousElementSibling;
+  var copy = box.parentElement;
+  var page = copy.closest("section");
+  var style = getComputedStyle(page);
+  var safety = 2 * 96 / 25.4;
+  function fits(lineHeight, fontSize) {
+    box.style.lineHeight = String(lineHeight);
+    box.style.fontSize = fontSize + "%";
+    var limit = page.getBoundingClientRect().top + parseFloat(style.minHeight)
+      - parseFloat(style.paddingBottom) - safety;
+    return copy.getBoundingClientRect().bottom <= limit;
+  }
+  function largest(low, high, test) {
+    for (var step = 0; step < 14; step++) {
+      var mid = (low + high) / 2;
+      if (test(mid)) { low = mid; } else { high = mid; }
+    }
+    return low;
+  }
+  if (fits(1.05, 100)) {
+    fits(largest(1.05, 1.8, function (value) { return fits(value, 100); }), 100);
+  } else {
+    fits(1.05, largest(70, 100, function (value) { return fits(1.05, value); }));
+  }
+})();"""
 # Typographic apostrophe used by the template text (RUF001 flags it as a literal).
 APOS = "\N{RIGHT SINGLE QUOTATION MARK}"
 
@@ -175,18 +213,36 @@ def legal_page_html(
     blocks: list[dict[str, Any]], field_values: dict[str, str], years: list[int]
 ) -> str:
     if blocks:
-        return _fit_legal_page(
-            _gaia_legal_blocks_html(apply_role_year_resolutions(blocks, years), field_values)
-        )
+        content = _gaia_legal_blocks_html(apply_role_year_resolutions(blocks, years), field_values)
+        return _fit_legal_page(_installment_table(content))
     return _gaia_fallback_legal_html(field_values)
 
 
 def _fit_legal_page(content: str) -> str:
-    # Multi-year notices add text: shrink the font proportionally so the signature stays on page 2.
-    if len(content) <= LEGAL_PAGE_FIT_LENGTH:
-        return content
-    scale = math.floor(LEGAL_PAGE_FIT_LENGTH / len(content) * 1000) / 10
-    return f'<div style="font-size: {scale}%">{content}</div>'
+    return f'<div class="legal-fit">{content}</div><script>{_FIT_SCRIPT}</script>'
+
+
+def _installment_table(content: str) -> str:
+    rows = (
+        ("Importo dell'avviso", [amount for amount, _ in INSTALLMENT_TIERS]),
+        ("Numero massimo di rate", [f"<strong>{rate}</strong>" for _, rate in INSTALLMENT_TIERS]),
+    )
+    table = "".join(
+        f'<tr><th scope="row" style="{_HEAD_STYLE}">{html.escape(label)}</th>'
+        + "".join(f'<td style="{_CELL_STYLE}">{cell}</td>' for cell in cells)
+        + "</tr>"
+        for label, cells in rows
+    )
+    replaced, count = _INSTALLMENT_LIST_PATTERN.subn(
+        f'<table class="legal-installments" style="width: 100%; border-collapse: collapse; '
+        f'margin: -.4mm 0 .8mm;">{table}</table>',
+        content,
+    )
+    if count != 1:
+        raise MissingRoleYearResolutionsError(
+            "Il template delle Comunicazioni per il Contribuente non contiene le fasce di dilazione attese."
+        )
+    return replaced
 
 
 def _gaia_legal_blocks_html(blocks: list[dict[str, Any]], field_values: dict[str, str]) -> str:

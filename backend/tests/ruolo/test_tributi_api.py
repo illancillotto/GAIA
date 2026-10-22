@@ -4635,7 +4635,7 @@ def test_gaia_reminder_template_contract() -> None:
     assert "il retro deve restare completamente bianco" in rendered_html
     assert ".bollettino-slip.accredito .bollettino-details { display: none; }" in rendered_html
     assert '<div class="bollettino-small-label">TD</div><div class="bollettino-td">896</div>' in rendered_html
-    assert ".legal-copy { font-size: 8.75pt; line-height: .97;" in rendered_html
+    assert ".legal-copy { font-size: 7.75pt; line-height: 1.05;" in rendered_html
     assert ".partitario-page { break-before: page; page-break-before: always; min-height: 297mm; }" in rendered_html
     assert ".partitario-page:first-child { break-before: auto; page-break-before: auto; }" in rendered_html
     assert '.partitario { font-family: "Courier New", monospace; font-size: 10.45pt; line-height: 1.14; max-width: 100%; color: #111; }' in rendered_html
@@ -5378,7 +5378,7 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert "Rev.2026/01" in main_html
     assert "@page { size: A4; margin: 0; }" in all_html
     assert ".front { font-size: 11.45pt; line-height: 1.28; }" in all_html
-    assert ".legal-copy { font-size: 8.75pt; line-height: .97;" in all_html
+    assert ".legal-copy { font-size: 7.75pt; line-height: 1.05;" in all_html
     assert ".header { display: grid; grid-template-columns: 39mm 1fr 39mm;" in all_html
     assert ".amount .euro { font-family: Georgia, serif; font-size: 28pt;" in all_html
     assert "text-align: justify;" in all_html

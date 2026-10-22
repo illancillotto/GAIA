@@ -565,16 +565,16 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .privacy {{ margin-top: 1.6mm; }}
 .rev {{ position: absolute; bottom: 0; left: 0; font-size: 7.5pt; color: #5b6b63; }}
 .legal h2 {{ text-align: center; margin: 0 0 2.4mm; font-size: 10.2pt; font-weight: 800; }}
-.legal-copy {{ font-size: 8.75pt; line-height: .97; padding-bottom: 16mm; width: 100%; }}
-.legal-copy p {{ margin: 0 0 .08mm; text-align: justify; }}
-.legal-copy ul {{ margin: -.55mm 0 .16mm 8mm; padding: 0; }}
+.legal-copy {{ font-size: 7.75pt; line-height: 1.05; padding-bottom: 24mm; width: 100%; }}
+.legal-copy p {{ margin: 0 0 .8mm; text-align: justify; }}
+.legal-copy ul {{ margin: -.6mm 0 .8mm 8mm; padding: 0; }}
 .legal-copy li {{ margin: 0; padding: 0; }}
 .warning em {{ font-style: italic; text-decoration: underline; }}
-.signature {{ position: absolute; right: 0; bottom: 4mm; width: 78mm; text-align: center; font-family: Georgia, 'Times New Roman', serif; color: #1a211d; }}
+.signature {{ position: absolute; right: 25mm; bottom: 12mm; width: 78mm; text-align: center; font-family: Georgia, 'Times New Roman', serif; color: #1a211d; }}
 .signature .title {{ font-size: 7.8pt; font-weight: 700; letter-spacing: .25pt; }}
 .signature .name {{ font-size: 8.4pt; font-weight: 600; margin-top: .3mm; }}
 .signature .rule {{ width: 38mm; border-top: .7pt solid #87958e; margin: 1mm auto .75mm; }}
-.signature .note {{ font-size: 5.9pt; line-height: 1.05; color: #39443f; border: 0; margin: 0; padding: 0; }}
+.signature .note {{ font-size: 5.9pt; line-height: 1.05; color: #39443f; border: 0; margin: 0; padding: 0; text-align: center; }}
 .bollettino-page {{ page: bollettino; width: 297mm; min-height: 210mm; padding: 0; overflow: hidden; color: #000; background: #fff; }}
 .bollettino-sheet {{ position: absolute; inset: 0; width: 297mm; height: 210mm; overflow: hidden; font: 9.8pt Arial, Helvetica, sans-serif; }}
 .bollettino-methods {{ position: absolute; top: 5.5mm; left: 6.5mm; right: 6.5mm; height: 52mm; }}
