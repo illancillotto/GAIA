@@ -204,9 +204,19 @@ Rilascio parziale, solo backend, come overlay dell'immagine in esercizio
   2022-2023 (3.400 posizioni) e nessuno di quelli collegati a STEP. Non
   pubblicata; da eseguire quando nel registro entreranno avvisi collegati
   (`relink_publish.py publish 1` nella cartella del rilascio).
+- Completato (18:35): frontend `gaia-frontend:step-frontend-20261022`
+  (`/opt/gaia/releases/step-frontend-20261022/`), sorgente frontend di
+  `d080e2ac` (produzione era `59ad5357`: differiscono solo i file STEP; escluse
+  le modifiche Tributi di `48291081`, backend non rilasciato), `public/gaia-ca`
+  del server preservato. Build Next con type-check pulita, 145 test Vitest
+  STEP/pagine toccate e 18 smoke verdi sul sorgente della release, smoke HTTP
+  (`/elaborazioni/step`, `/ruolo/tributi`, `gaia-ca`) e health ok, altri
+  container invariati. Rollback: `rollback.sh` (torna a
+  `tributi-preview-20261019`).
 - Residuo: worker `elaborazioni-worker-step` (sync, autosync,
-  `STEP_REGISTER_ACTOR_USER_ID`) e frontend `/elaborazioni/step` non
-  rilasciati; credenziale STEP non inserita.
+  `STEP_REGISTER_ACTOR_USER_ID`) non rilasciato: i job avviati dalla pagina
+  restano in coda e l'intestazione mostra comunque "Worker pronto";
+  credenziale STEP non inserita.
 
 ## Interfaccia
 
