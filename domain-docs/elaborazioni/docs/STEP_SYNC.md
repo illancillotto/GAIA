@@ -213,10 +213,20 @@ Rilascio parziale, solo backend, come overlay dell'immagine in esercizio
   (`/elaborazioni/step`, `/ruolo/tributi`, `gaia-ca`) e health ok, altri
   container invariati. Rollback: `rollback.sh` (torna a
   `tributi-preview-20261019`).
-- Residuo: worker `elaborazioni-worker-step` (sync, autosync,
-  `STEP_REGISTER_ACTOR_USER_ID`) non rilasciato: i job avviati dalla pagina
-  restano in coda e l'intestazione mostra comunque "Worker pronto";
-  credenziale STEP non inserita.
+- Completato (19:10): worker `gaia-elaborazioni-worker-step:step-worker-20261022`
+  (`/opt/gaia/releases/step-worker-20261022/`), overlay dell'immagine worker
+  in esercizio (SISTER `7d5aa2db`, stesse versioni dei pacchetti del backend)
+  con l'app backend di `step-linkfix-20261022` (moduli STEP identici a
+  `1e795352`, verificato con SHA-256) e i file worker `step_*.py` e
+  `sister_worker_watchdog.py` di `1e795352`. Smoke degli import prima
+  dell'avvio, container healthy, limiti 2 CPU/3 GB, volume `catasto-data`,
+  altri 31 container invariati. Il servizio non e nel `docker-compose.yml`
+  del server ma nell'overlay `service.yml`: per ricrearlo usare la lista `-f`
+  del backend piu `service.yml`, come in `release.sh`. Rollback:
+  `docker stop`/`rm gaia-elaborazioni-worker-step` (servizio nuovo).
+- Residuo: credenziale STEP non inserita (poi **Test login** e primo `sync`);
+  autosync spento (`STEP_AUTOSYNC_ENABLED` e `STEP_REGISTER_ACTOR_USER_ID`
+  assenti dal `.env`).
 
 ## Interfaccia
 

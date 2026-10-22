@@ -54,10 +54,20 @@
   template (2023) e dagli avvisi emessi 2021, 2022, 2024, 2025. Per 2021 e 2022
   si stampa anche la nota sul rimborso tributi 2017 (CdA 42/2020), una sola
   volta anche negli avvisi pluriennali.
-- Impaginazione: se il testo supera la lunghezza del modello annuale
-  (`LEGAL_PAGE_FIT_LENGTH`), il corpo viene ridotto in proporzione, cosi firma e
-  testo restano nella pagina 2; verificate con Chromium tutte le 31 combinazioni
-  di anni 2021-2025.
+- Impaginazione: corpo del testo legale 7.75pt (prima 8.75pt), spazio fra
+  paragrafi .8mm (prima .08mm). Uno script
+  eseguito da Chromium prima del print-to-pdf sceglie l'interlinea massima
+  (1.05-1.8) che riempie la pagina 2 lasciando testo e firma sulla stessa
+  pagina; se non basta l'interlinea minima riduce il corpo (fino al 70%).
+  Firma alzata e spostata a sinistra (bottom 12mm, right 25mm; spazio
+  riservato sotto il testo 24mm) con nota centrata sotto la firma. Verificate
+  con Chromium tutte le 31 combinazioni di anni 2021-2025: corpo 100% per
+  2023-2025 singoli, minimo 96,5% nel caso 2021-2025.
+- Dilazione: le tre righe di fasce sono sostituite da una tabella ordinata per
+  importo crescente (`INSTALLMENT_TIERS`: <100 nessuna, 2, 4, 6, 12, 18 rate);
+  un template senza l'elenco atteso blocca la generazione. Le fasce riportano
+  1.000,00 euro sia nel limite superiore dei 6 rate sia in quello inferiore dei
+  12 rate, come nella delibera: da chiarire con gli uffici.
 - Fail-closed: un anno senza delibere configurate (es. 2026) o un template
   privo dei paragrafi attesi blocca la generazione invece di stampare delibere
   di altri anni. Per un nuovo ruolo aggiungere la riga in `ROLE_YEAR_RESOLUTIONS`.
@@ -84,8 +94,10 @@
   `not_found`, 36 `unrecognized`). Proiezione nel registro non pubblicata:
   l'anteprima con autore `admin` interessa 0 posizioni (registro solo
   2022-2023).
-- Residuo: anteprima/conferma operatore per singola pratica STEP; rilascio di
-  worker e frontend STEP; pubblicazione del registro quando conterra avvisi
+- Completato 2026-10-22: frontend e worker STEP in produzione
+  (`step-frontend-20261022`, `step-worker-20261022`).
+- Residuo: anteprima/conferma operatore per singola pratica STEP; credenziale
+  STEP e primo `sync`; pubblicazione del registro quando conterra avvisi
   collegati.
 - Dettagli: `domain-docs/elaborazioni/docs/STEP_SYNC.md`,
   `STEP_IMPORT_IMPLEMENTAZIONE.md`.
