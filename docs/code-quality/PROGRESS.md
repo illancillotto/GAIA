@@ -10965,3 +10965,33 @@ Gli interventi Wiki precedenti in questo documento sono preservati.
   (cognitive/cyclomatic 27/13). Nessuna seconda slice o commit avviato;
   modifiche concorrenti preservate. Prossima azione: review del delta prima
   di selezionare un altro hotspot con ownership libera.
+
+### 2026-10-21 — hotspot richiesti per STEP: navigazione Elaborazioni e dettaglio avviso
+
+Richiesta esplicita dell'operatore: aggiungere la voce STEP al menu e il
+riquadro STEP al dettaglio avviso, prima bloccati dal ratchet (ogni riga in
+piu peggiorava callable legacy sopra soglia). Due estrazioni minime, senza
+cambi di comportamento, una per hotspot.
+
+- `getModuleSections` (`frontend/src/components/layout/navigation.ts`):
+  le sezioni statiche Elaborazioni (e la voce SISTER) spostate in
+  `elaborazioni-navigation.ts`, stesso pattern gia usato per
+  `ruolo-navigation.ts`/`presenze-navigation.ts`; aggiunta li la voce STEP.
+  Prima LOC/cyclomatic/cognitive 266/26/49, dopo 243/26/49; file 502 -> 477
+  (sotto la soglia warning 500). Esito `REORGANIZED_AND_CHARACTERIZED`: cala
+  solo la LOC, complessita invariata; il nuovo file e dichiarativo senza
+  callable. Test: `layout-navigation`, `desktop-top-navigation`, smoke
+  `tests/smoke.test.mjs` (aggiornato per leggere il file estratto).
+- `AvvisoDetailPage` (`frontend/src/app/ruolo/avvisi/[id]/page.tsx`): il
+  riquadro presentazionale "Ripartizione importi" e `formatEuro` spostati in
+  `components/ruolo/avviso-importi-card.tsx` (cyclomatic 1, LOC 43); inserito
+  `StepAvvisoCard`. Prima 263/32/36, dopo 226/32/36; file 382 -> 342. Esito
+  `REORGANIZED_AND_CHARACTERIZED`: nessun ramo spostato, complessita invariata.
+  Test: `ruolo-pages` (caratterizzazione esistente del dettaglio avviso),
+  nuovo `step-avviso-card`.
+- Ratchet contro main: nessun finding sui file toccati; resta il solo finding
+  preesistente `backend/app/modules/ruolo/repositories.py` (LOC 1885 -> 1889)
+  da modifiche ruolo concorrenti non di questa change. Baseline non
+  sincronizzata: il comando baseline rifiuterebbe quella regressione estranea.
+- Debito residuo invariato: `getModuleSections` cyclomatic 26/cognitive 49,
+  `AvvisoDetailPage` 32/36, `PartitaCard` 19/18/88. Nessun'altra slice avviata.

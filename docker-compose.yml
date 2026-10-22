@@ -613,6 +613,50 @@ services:
       retries: 3
       start_period: 20s
 
+  elaborazioni-worker-step:
+    build:
+      context: .
+      dockerfile: ./modules/elaborazioni/worker/Dockerfile
+    container_name: gaia-elaborazioni-worker-step
+    restart: unless-stopped
+    command: python /app/worker/step_worker.py
+    init: true
+    stop_grace_period: "30s"
+    cpus: ${ELABORAZIONI_STEP_CPU_LIMIT:-2.0}
+    mem_limit: ${ELABORAZIONI_STEP_MEMORY_LIMIT:-3g}
+    pids_limit: ${ELABORAZIONI_STEP_PIDS_LIMIT:-768}
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      CREDENTIAL_MASTER_KEY: ${CREDENTIAL_MASTER_KEY}
+      ELABORAZIONI_LOG_LEVEL: ${ELABORAZIONI_LOG_LEVEL:-${CATASTO_LOG_LEVEL:-INFO}}
+      GAIA_WORKER_HEALTH_SERVICE: elaborazioni-worker-step
+      STEP_DOCUMENT_STORAGE_PATH: ${STEP_DOCUMENT_STORAGE_PATH:-/data/catasto/step/documents}
+      STEP_IMPORT_ROOT: ${STEP_IMPORT_ROOT:-/data/catasto/step/import}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - catasto-data:/data/catasto
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-m",
+          "app.worker_health",
+          "check",
+          "--service",
+          "elaborazioni-worker-step",
+          "--max-age-seconds",
+          "90",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
   elaborazioni-worker-autodoc:
     build:
       context: .

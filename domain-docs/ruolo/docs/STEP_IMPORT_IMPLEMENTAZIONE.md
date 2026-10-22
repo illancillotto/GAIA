@@ -1,5 +1,36 @@
 # STEP: Piano Di Implementazione Import
 
+## Stato Al 2026-10-21
+
+Implementato in `elaborazioni` il connettore in sola lettura del portale STEP
+(Prunesenti/servizienti, ente `14215`) con worker dedicato, archivio
+osservazioni immutabile e import dell'estrazione completa del 2026-10-20:
+vedi [STEP_SYNC](../../elaborazioni/docs/STEP_SYNC.md). Rispetto ai passi
+sotto:
+
+- campioni reali acquisiti: 3.354 contribuenti, 3.410 documenti, 21.265
+  tributi e 3.237 pagamenti, con PDF e impronte;
+- identita pratica: documento STEP `(ente, codice fiscale, NUM_DOC, PRG_COO)`;
+  riferimento avviso letto dal tributo (`Avv. N.` / `Bollettazione n.`);
+- collegamento a `ruolo_avvisi` solo per `codice_cnc` esatto e univoco
+  (annualita del tributo come seconda meta della chiave); `not_found`,
+  `ambiguous` e `unrecognized` restano anomalie; nessun uso di CF, nome o
+  importi;
+- proiezione automatica nel registro (decisione dell'operatore del
+  2026-10-21: niente valutazione manuale): dopo ogni sync/import/relink le
+  posizioni collegate ricevono `affidato` (carico aperto), `revocato`
+  (carico interamente discaricato) o `chiuso` (carico coperto da pagamenti)
+  tramite `assess_recovery`, con audit, prova e pratica STEP; le decisioni
+  dell'operatore non vengono sovrascritte, `non_affidato_verificato` non e mai
+  dedotto e le posizioni senza collegamento restano invariate. Gli effetti
+  sulla generazione seguono `notice_eligibility` (calcolata in lettura);
+- **non implementati**: pubblicazione con anteprima/conferma operatore della
+  singola pratica e archivio pratiche/eventi separato dalle osservazioni; gli
+  incassi STEP non creano pagamenti GAIA.
+
+Lo stato precedente resta valido per il parser report CSV/XLSX
+(`notice_import_step.py`), che non e collegato al connettore.
+
 ## Stato Al 2026-09-21
 
 Documento preparatorio richiesto dall'operatore. **Import STEP operativo non è

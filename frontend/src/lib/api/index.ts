@@ -15,3 +15,4 @@ export * from "./sync";
 export * from "./elaborazioni-credentials";
 export * from "./elaborazioni-capacitas";
 export * from "./elaborazioni-jobs";
+export * from "./step";

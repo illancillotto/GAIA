@@ -45,6 +45,13 @@ export const SYNC_JOB_SERVICES: SyncService[] = [
     },
   },
   {
+    id: "step", title: "STEP riscossione", description: "Sincronizzazione contribuenti e schede STEP.", href: "/elaborazioni/step",
+    async load(token) {
+      const job = latestSync(await api.listStepJobs(token));
+      return jobSnapshot(job, resultMetrics(job?.result_json));
+    },
+  },
+  {
     id: "presenze", title: "Presenze INAZ", description: "Import delle presenze e dei cartellini.", href: "/elaborazioni/presenze-sync",
     async load(token) {
       const job = latestSync(await api.listPresenzeSyncJobs(token, { limit: 1 }));

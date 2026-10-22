@@ -27,6 +27,7 @@ Ambito runtime attuale:
 - diagnostica login Capacitas con dump HTML/metadata del tentativo quando il token SSO non viene estratto
 - provider `Bonifica Oristanese` con pool credenziali cifrato, test login HTTP su `https://login.bonificaoristanese.it/login`, helper DataTables condiviso, bootstrap `apps/registry.py` per le entity del portale e orchestratore di sync persistito su `wc_sync_job`
 - provider `Poste Online` per recupero worker-only delle raccomandate online 2022-2023 da `posta-online.it`, con credenziali cifrate, test login accodato e import verso `ruolo/tributi`
+- provider `STEP riscossione` in sola lettura (contribuenti, documenti, tributi, PDF e pagamenti della riscossione coattiva 2018-2021) con worker dedicato `elaborazioni-worker-step`, import dell'archivio dello scraper e collegamento esatto a `ruolo_avvisi` tramite `codice_cnc`: vedi [STEP_SYNC](docs/STEP_SYNC.md)
 
 ## Dashboard operativa
 

@@ -54,6 +54,7 @@ test("layout includes app shell, sidebar and topbar", () => {
   const sidebar = read("src/components/layout/sidebar.tsx");
   const desktopTopNavigation = read("src/components/layout/desktop-top-navigation.tsx");
   const navigation = read("src/components/layout/navigation.ts");
+  const elaborazioniNavigation = read("src/components/layout/elaborazioni-navigation.ts");
   const platformSidebar = read("src/components/layout/platform-sidebar.tsx");
   const moduleSidebar = read("src/components/layout/module-sidebar.tsx");
   const topbar = read("src/components/layout/topbar.tsx");
@@ -74,8 +75,10 @@ test("layout includes app shell, sidebar and topbar", () => {
   assert.match(moduleSidebar, /getModuleSections/);
   assert.match(navigation, /Sincronizzazione/);
   assert.match(navigation, /Review NAS/);
-  assert.match(navigation, /Moduli Capacitas/);
-  assert.match(navigation, /SISTER \/ Visure/);
+  assert.match(navigation, /elaborazioniNavigationSections/);
+  assert.match(elaborazioniNavigation, /Moduli Capacitas/);
+  assert.match(elaborazioniNavigation, /SISTER \/ Visure/);
+  assert.match(elaborazioniNavigation, /STEP riscossione/);
   assert.match(navigation, /Elaborazione massiva/);
   assert.match(topbar, /StatusPill/);
   assert.match(topbar, /DesktopTopNavigation/);

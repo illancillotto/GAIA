@@ -43,6 +43,8 @@ vi.mock("@/lib/api", () => ({
   getUtenzeSubjectPaymentNotices: mocks.getUtenzeSubjectPaymentNotices,
 }));
 
+vi.mock("@/lib/api/step", () => ({ listStepLinksForAvviso: vi.fn().mockResolvedValue([]) }));
+
 vi.mock("@/lib/ruolo-api", () => ({
   getRuoloStats: mocks.getRuoloStats,
   getRuoloCapacitasCheck: mocks.getRuoloCapacitasCheck,

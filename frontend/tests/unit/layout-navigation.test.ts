@@ -234,6 +234,7 @@ describe("layout navigation helpers", () => {
       label: "SISTER / Visure",
       match: "prefix",
     }));
+    expect(elaborazioniItems).toContainEqual(expect.objectContaining({ href: "/elaborazioni/step", label: "STEP riscossione" }));
     expect(elaborazioniItems).not.toContainEqual(expect.objectContaining({ href: "/elaborazioni/portal-health" }));
     expect(elaborazioniItems).not.toContainEqual(expect.objectContaining({ href: "/elaborazioni/visure" }));
     expect(getModuleSections({ currentModuleKey: "gis", currentUserRole: "admin" }).flatMap((section) => section.items)).toContainEqual(

@@ -18,7 +18,7 @@ import ElaborazioniPage from "@/app/elaborazioni/page";
 vi.mock("@/lib/api", () => ({
   listCapacitasParticelleSyncJobs: vi.fn(), listCapacitasInCassSyncJobs: vi.fn(),
   listCapacitasAnagraficaHistoryJobs: vi.fn(), listCapacitasTerreniJobs: vi.fn(), listCapacitasDomandeIrrigueSyncJobs: vi.fn(),
-  listPostaOnlineRegisteredMailJobs: vi.fn(), listPresenzeSyncJobs: vi.fn(), getElaborazioneBatches: vi.fn(),
+  listPostaOnlineRegisteredMailJobs: vi.fn(), listStepJobs: vi.fn(), listPresenzeSyncJobs: vi.fn(), getElaborazioneBatches: vi.fn(),
   getSyncJobs: vi.fn(), getBonificaSyncStatus: vi.fn(), getGateMobileSyncStatus: vi.fn(),
   getElaborazioneRuoloAutoSyncStatus: vi.fn(), getElaborazioneAnprSummary: vi.fn(),
   getElaborazioneAutoJobControls: vi.fn(), updateElaborazioneAutoJobControl: vi.fn(),
@@ -41,7 +41,7 @@ vi.mock("next/dynamic", async () => {
 });
 
 const listNames = ["listCapacitasParticelleSyncJobs", "listCapacitasInCassSyncJobs", "listCapacitasAnagraficaHistoryJobs",
-  "listCapacitasTerreniJobs", "listCapacitasDomandeIrrigueSyncJobs", "listPostaOnlineRegisteredMailJobs", "listPresenzeSyncJobs", "getElaborazioneBatches", "getSyncJobs"] as const;
+  "listCapacitasTerreniJobs", "listCapacitasDomandeIrrigueSyncJobs", "listPostaOnlineRegisteredMailJobs", "listStepJobs", "listPresenzeSyncJobs", "getElaborazioneBatches", "getSyncJobs"] as const;
 const time = "2026-09-15T10:00:00Z";
 const job = { status: "completed", created_at: time, started_at: time, completed_at: time, finished_at: time,
   error_detail: null, result_json: { processed_subjects: 12, notices_synced: 23 }, period_start: "2026-09-01", period_end: "2026-09-15",
@@ -250,7 +250,7 @@ describe("interfaccia e aggiornamento", () => {
     fireEvent.click(screen.getByRole("button", { name: /In corso \/ in coda/ }));
     expect(screen.getByText("Nessun servizio corrisponde alla ricerca.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Mostra tutti i servizi" }));
-    expect(screen.getAllByRole("article")).toHaveLength(15);
+    expect(screen.getAllByRole("article")).toHaveLength(16);
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "inCass" } });
     fireEvent.click(screen.getByRole("button", { name: "Vedi dettagli" }));
     expect(screen.getByRole("dialog", { name: "Capacitas inCass" })).toBeInTheDocument();

@@ -1,5 +1,22 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## STEP: collegamento avvisi e stato registro automatico — 2026-10-21
+
+- Completato: i documenti STEP (riscossione coattiva 2018-2021, sync in
+  `elaborazioni`) sono collegati a `ruolo_avvisi` solo per `codice_cnc` esatto
+  e univoco; anomalie `not_found`/`ambiguous`/`unrecognized` visibili in
+  `/elaborazioni/step`.
+- Completato: la valutazione STEP del registro (`ruolo_notice_recoveries`) e
+  aggiornata automaticamente dopo ogni sync/import/relink tramite
+  `assess_recovery` con audit (`affidato`, `revocato`, `chiuso`); decisioni
+  dell'operatore preservate, `non_affidato_verificato` mai dedotto.
+- Completato: riquadro "Riscossione coattiva STEP" nel dettaglio avviso
+  `/ruolo/avvisi/{id}`.
+- Residuo: anteprima/conferma operatore per singola pratica STEP e misura del
+  tasso di collegamento in produzione dopo l'import dell'archivio.
+- Dettagli: `domain-docs/elaborazioni/docs/STEP_SYNC.md`,
+  `STEP_IMPORT_IMPLEMENTAZIONE.md`.
+
 ## Riemissione numeri avviso oltre 15 cifre — 2026-10-21
 
 - Segnalazione da produzione: preview dell'avviso 2022 di una societa agricola

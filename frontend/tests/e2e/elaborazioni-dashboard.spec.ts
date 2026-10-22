@@ -35,7 +35,7 @@ for (const width of [1440, 390]) {
     await page.goto("/elaborazioni");
     await expect(page.getByRole("button", { name: "Aggiorna ora" })).toBeEnabled();
     const catalog = page.getByRole("region", { name: "Servizi di sincronizzazione" });
-    await expect(catalog.getByRole("article")).toHaveCount(15);
+    await expect(catalog.getByRole("article")).toHaveCount(16);
     const firstCards = await catalog.getByRole("article").evaluateAll((cards) => cards.slice(0, 3).map((card) => card.getAttribute("aria-label")));
     expect(firstCards).toEqual(["SISTER autosync", "ANPR", "GAIA Mobile Sync"]);
     await expect(page.getByRole("article", { name: "Capacitas anagrafica", exact: true })).toContainText("Completato");

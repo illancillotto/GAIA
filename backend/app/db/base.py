@@ -124,6 +124,16 @@ from app.modules.utenze.models import (
     AnagraficaVisuraRoutingAnomaly,
     BonificaUserStaging,
 )
+from app.modules.elaborazioni.step.models import (
+    StepContribuente,
+    StepCredential,
+    StepDocumento,
+    StepObservation,
+    StepPagamento,
+    StepRuoloLink,
+    StepSyncJob,
+    StepTributo,
+)
 from app.modules.ruolo.notice_import_models import NoticeImportBatch, NoticeImportRow
 from app.modules.ruolo.notice_draft_models import NoticeDraft
 from app.modules.ruolo.notice_confirmation_models import NoticeGenerationConfirmation
@@ -322,6 +332,14 @@ __all__ = [
     "GisShapefileImport",
     "PermissionEntry",
     "Review",
+    "StepContribuente",
+    "StepCredential",
+    "StepDocumento",
+    "StepObservation",
+    "StepPagamento",
+    "StepRuoloLink",
+    "StepSyncJob",
+    "StepTributo",
     "RuoloAvviso",
     "ParcelControlAudit",
     "ParcelControlCase",

@@ -68,7 +68,7 @@ from alembic.script import ScriptDirectory
 config = Config()
 config.set_main_option("script_location", sys.argv[1])
 scripts = ScriptDirectory.from_config(config)
-paths = [("20261019_1400", "20261005_1500"), ("heads", "20261019_1400"), ("heads", "20261007_1800")]
+paths = [("20261019_1400", "20261005_1500"), ("20261019_1500", "20261019_1400"), ("20261019_1500", "20261007_1800")]
 print(json.dumps([scripts.get_heads()] + [
     [step.revision.revision for step in scripts._upgrade_revs(target, current)]
     for target, current in paths
@@ -83,7 +83,8 @@ print(json.dumps([scripts.get_heads()] + [
     )
     assert process.returncode == 0, process.stderr
     heads, isolated, remaining, current = json.loads(process.stdout)
-    assert heads == ["20261019_1500"]
+    # Later migrations may follow the merge; the history must still have a single head.
+    assert len(heads) == 1
     assert isolated == ["20261019_1400"]
     assert remaining == [
         "20261006_1200",

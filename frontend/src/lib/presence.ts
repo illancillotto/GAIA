@@ -97,6 +97,7 @@ const ROUTE_RULES: Array<{ prefix: string; moduleKey: string; routeLabel: string
   { prefix: "/elaborazioni/ade-alignment", moduleKey: "elaborazioni", routeLabel: "Elaborazioni / Allineamento AdE" },
   { prefix: "/elaborazioni/autodoc", moduleKey: "elaborazioni", routeLabel: "Elaborazioni / AUTODOC" },
   { prefix: "/elaborazioni/posta-online", moduleKey: "elaborazioni", routeLabel: "Elaborazioni / Poste Online" },
+  { prefix: "/elaborazioni/step", moduleKey: "elaborazioni", routeLabel: "Elaborazioni / STEP riscossione" },
   { prefix: "/elaborazioni/gaia-mobile-sync", moduleKey: "elaborazioni", routeLabel: "Elaborazioni / GAIA Mobile Sync" },
   { prefix: "/elaborazioni/settings", moduleKey: "elaborazioni", routeLabel: "Elaborazioni / Credenziali" },
   { prefix: "/elaborazioni", moduleKey: "elaborazioni", routeLabel: "Elaborazioni" },

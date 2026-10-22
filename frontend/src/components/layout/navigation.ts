@@ -23,6 +23,7 @@ import { hasUserModuleAccess } from "@/lib/module-access";
 import { canManageUsers as canManageGaiaUsers } from "@/lib/user-management-policy";
 import type { CurrentUser } from "@/types/api";
 
+import { elaborazioniNavigationSections } from "./elaborazioni-navigation";
 import { presenzeNavigationSections } from "./presenze-navigation";
 import { ruoloNavigationSections } from "./ruolo-navigation";
 
@@ -188,10 +189,6 @@ function item(
 function isAdministrativeRole(role: string | undefined): boolean {
   return role === "admin" || role === "super_admin";
 }
-
-const sisterNavigationItems: NavigationItem[] = [
-  item("/elaborazioni/sister", EyeIcon, "SISTER / Visure", { match: "prefix" }),
-];
 
 export function getCurrentModuleKey(pathname: string): CurrentModuleKey {
   const routes: [string, CurrentModuleKey][] = [
@@ -364,30 +361,7 @@ export function getModuleSections({
         },
       ];
     case "elaborazioni":
-      return [
-        {
-          label: "Panoramica",
-          items: [item("/elaborazioni", GridIcon, "Dashboard")],
-        },
-        {
-          label: "Operazioni",
-          items: [
-            item("/elaborazioni/bonifica", RefreshIcon, "WhiteCompany Sync", { match: "prefix" }),
-            item("/elaborazioni/anpr", UserIcon, "ANPR batch", { match: "prefix" }),
-            item("/elaborazioni/presenze-sync", RefreshIcon, "Presenze INAZ Sync", { match: "prefix" }),
-            ...sisterNavigationItems,
-            item("/elaborazioni/capacitas", BookOpenIcon, "Moduli Capacitas", { match: "prefix" }),
-            item("/elaborazioni/ade-alignment", GridIcon, "Allineamento AdE", { match: "prefix" }),
-            item("/elaborazioni/autodoc", TruckIcon, "AUTODOC mezzi", { match: "prefix" }),
-            item("/elaborazioni/posta-online", DocumentIcon, "Poste Online", { match: "prefix" }),
-            item("/elaborazioni/gaia-mobile-sync", ServerIcon, "GAIA Mobile Sync", { match: "prefix" }),
-          ],
-        },
-        {
-          label: "Configurazioni",
-          items: [item("/elaborazioni/settings", LockIcon, "Credenziali")],
-        },
-      ];
+      return elaborazioniNavigationSections;
     case "network":
       return [
         {

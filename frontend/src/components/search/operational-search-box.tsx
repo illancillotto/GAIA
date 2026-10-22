@@ -49,6 +49,7 @@ const menuSearchRoutes: SearchRoute[] = [
   { label: "Elaborazioni · SISTER / Visure", href: "/elaborazioni/sister", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["sister", "visure"] },
   { label: "Elaborazioni · Capacitas", href: "/elaborazioni/capacitas", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["capacitas"] },
   { label: "Elaborazioni · Poste Online", href: "/elaborazioni/posta-online", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["poste", "posta online", "raccomandate"] },
+  { label: "Elaborazioni · STEP riscossione", href: "/elaborazioni/step", moduleKey: "ruolo", keywords: ["step", "riscossione", "coattiva", "ingiunzioni"] },
   { label: "Elaborazioni · GAIA Mobile Sync", href: "/elaborazioni/gaia-mobile-sync", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["gaia mobile", "mobile sync", "gateway"] },
   { label: "Elaborazioni · Credenziali", href: "/elaborazioni/settings", moduleKey: "elaborazioni", requiredRoles: ["super_admin"], keywords: ["credenziali", "settings"] },
   { label: "Elaborazioni · Credenziali INAZ", href: "/elaborazioni/settings#credenziali-inaz", moduleKey: "presenze", keywords: ["inaz", "credenziali", "portale", "settings"] },

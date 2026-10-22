@@ -1,8 +1,8 @@
 # Dashboard sincronizzazioni
 
-Aggiornamento: 2026-09-16.
+Aggiornamento: 2026-10-21 (aggiunto STEP riscossione).
 
-La pagina `/elaborazioni` raccoglie 15 servizi in un catalogo responsive,
+La pagina `/elaborazioni` raccoglie 16 servizi in un catalogo responsive,
 filtrabile per nome, descrizione e stato (tutti, da verificare, in corso/coda).
 L'ordine iniziale e intenzionale: `SISTER autosync`, `ANPR`, `GAIA Mobile
 Sync`, poi gli altri servizi. La priorita resta invariata anche quando le
@@ -38,6 +38,7 @@ I percorsi API seguenti sono relativi al prefisso `/api`.
 | Capacitas particelle | `/elaborazioni/capacitas/involture/particelle/jobs` | `/elaborazioni/capacitas` |
 | Capacitas inCass | `/elaborazioni/capacitas/incass/avvisi/jobs?limit=1` | `/elaborazioni/capacitas?section=incass` |
 | Poste Online | `/elaborazioni/posta-online/raccomandate/jobs` | `/elaborazioni/posta-online` |
+| STEP riscossione | `/elaborazioni/step/jobs` (super admin) | `/elaborazioni/step` |
 | Presenze INAZ | client `listPresenzeSyncJobs`, `limit=1` | `/elaborazioni/presenze-sync` |
 | SISTER visure | `/elaborazioni/batches` | `/elaborazioni/sister` |
 | NAS e directory | `/sync/jobs` | `/nas-control/sync` |
