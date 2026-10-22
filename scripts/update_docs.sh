@@ -242,12 +242,18 @@ fi
 
 # Quando eseguito da GUI (es. integrazione Git di Cursor), spesso non c'è un TTY:
 # in quel caso `codex exec` può restare in attesa e bloccare il commit.
-if [ ! -t 0 ] || [ ! -t 1 ]; then
+# FORCE_DOCS_UPDATE=1 lo esegue comunque, con un timeout che evita il blocco.
+if [ "${FORCE_DOCS_UPDATE:-}" != "1" ] && { [ ! -t 0 ] || [ ! -t 1 ]; }; then
   echo "Nessun TTY disponibile (commit da GUI). Salto aggiornamento documentazione automatica."
+  echo "Per eseguirlo comunque: FORCE_DOCS_UPDATE=1 git commit ..."
   exit 0
 fi
 
-codex exec --skip-git-repo-check --cd "$PROJECT_ROOT" - < "$PROMPT_FILE"
+if ! timeout "${DOCS_UPDATE_TIMEOUT:-900}" codex exec --skip-git-repo-check --cd "$PROJECT_ROOT" - < "$PROMPT_FILE"; then
+  echo "codex exec fallito o oltre ${DOCS_UPDATE_TIMEOUT:-900}s. Documentazione non aggiornata."
+  rm -f "$PROMPT_FILE"
+  exit 0
+fi
 
 echo "==> Aggiungo allo staging i file documentali consentiti..."
 git add -- "${ALLOWED_FILES[@]}" 2>/dev/null || true
