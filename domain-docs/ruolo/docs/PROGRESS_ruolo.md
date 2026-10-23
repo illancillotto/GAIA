@@ -20,8 +20,24 @@
   `linked`) resta a STEP e non e sollecitabile da GAIA, salvo che STEP lo
   dimostri `revocato` (stessa regola `desired_recovery` della proiezione nel
   registro); gli avvisi senza documenti STEP passano a GAIA con la regola 2021.
-- Rilascio: produzione non ha ancora `48291081` (rifiuta le sovrapposizioni,
-  `REMINDER_MIN_YEAR` 2022): va rilasciato insieme a questa change.
+- Completato 2026-10-23 08:52: rilascio in produzione
+  (`/opt/gaia/releases/ruolo-regole-20261023/`), overlay di
+  `deps-python-20261022`/`deps-frontend-20261022` con lo stack tributi di
+  `main` (`48291081` sovrapposizioni e 2021, `74d6a7d4` + `37a83db2` pagina
+  legale, `b56d8eb2` impostazioni TD 896) e questa change. Candidato: 231 test
+  tributi/STEP nell'immagine, migration up/down/up su copia dello schema di
+  produzione, build frontend. Backup mirato (tabelle regole e gestori, schema,
+  `.env`) in `/opt/gaia/backups/pre-ruolo-regole-20261023*`;
+  `TD896_SAMPLE_MODE=true` (campionatura: il bollettino stampa il segnaposto
+  `AUT.DB/SISB/XXXXX`, da sostituire con `TD896_PRINT_AUTHORIZATION` prima
+  dell'invio ai contribuenti). Migration `20261023_0900` applicata (4/4 regole
+  con bollettino), backend e frontend healthy, altri container invariati.
+  Misura: 6.651 avvisi restano a STEP (2.811 del 2021). Rollback:
+  `rollback.sh` nella cartella del rilascio (downgrade con l'immagine nuova
+  prima di riavviare la vecchia, che esegue `alembic upgrade heads`).
+- Residuo: in `Gestori annualita tributo` estendere `Consorzio/GAIA` al 2021
+  (o aggiungere un gestore GAIA 2021) e creare la regola 2021 con le sue date;
+  `db/base.py` e il controllo particelle di `main` restano fuori dal rilascio.
 
 ## Bollettino TD 896 pronto per campionatura Poste — 2026-10-22
 
