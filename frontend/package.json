@@ -20,7 +20,7 @@
     "clsx": "2.1.1",
     "mammoth": "^1.12.0",
     "maplibre-gl": "^6.9.0",
-    "next": "^15.5.27",
+    "next": "^15.5.28",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-draggable": "4.4.6",
@@ -41,23 +41,25 @@
     "@types/react": "18.3.23",
     "@types/react-dom": "18.3.7",
     "@vitejs/plugin-react": "^5.1.0",
-    "@vitest/coverage-v8": "4.1.6",
+    "@vitest/coverage-v8": "4.1.12",
     "autoprefixer": "10.4.20",
     "eslint": "8.57.1",
-    "eslint-config-next": "^15.5.23",
+    "eslint-config-next": "^15.5.28",
     "jsdom": "^29.1.1",
     "postcss": "8.5.26",
     "tailwindcss": "3.4.13",
     "typescript": "5.8.3",
-    "vitest": "4.1.6"
+    "vitest": "4.1.12"
   },
   "overrides": {
     "postcss": "8.5.26",
     "nanoid": "3.3.18",
-    "sharp": "0.35.4",
-    "undici": "7.29.0",
-    "js-yaml": "4.3.1",
-    "brace-expansion@1": "1.1.18",
-    "brace-expansion@5": "5.0.9"
+    "sharp": "0.35.5",
+    "undici": "7.29.1",
+    "js-yaml": "4.3.2",
+    "brace-expansion@1": "1.1.21",
+    "brace-expansion@5": "5.0.12",
+    "vite": "8.1.6",
+    "postcss-selector-parser": "7.1.6"
   }
 }

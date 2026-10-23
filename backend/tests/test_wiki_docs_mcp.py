@@ -448,6 +448,8 @@ def test_stdio_protocol_handshake_and_tools(tmp_path, corpus):
                 assert result.structured_content["result_count"] == 2
                 invalid = await session.call_tool("get_doc_section", {"chunk_id": "missing"})
                 assert invalid.is_error is True
+                # Expected refusals keep their message (mcp >= 2.2 masks unexpected errors).
+                assert "Document section unavailable" in invalid.content[0].text
                 capped = await session.call_tool("search_docs", {"query": "x", "limit": 999})
                 assert capped.is_error is True
 
