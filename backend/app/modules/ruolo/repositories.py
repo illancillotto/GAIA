@@ -19,6 +19,7 @@ from app.modules.ruolo.models import (
     RuoloTributiAvvisoStatus,
     RuoloTributiRegisteredMail,
 )
+from app.modules.ruolo.services.incass_notice_match import select_incass_notice
 from app.modules.ruolo.services.registered_mail_association import associated_avviso_ids
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice, AnagraficaPerson
 from app.modules.utenze.services.subject_identity import normalize_tax_identifier
@@ -178,15 +179,7 @@ def _batch_load_avviso_notification_summaries(
                 (str(avviso.anno_tributario), _normalise_tax_code(avviso.codice_fiscale_raw)),
                 [],
             )
-            selected = None
-            preferred_notice_id = preferred_notice_ids.get(avviso.id)
-            if preferred_notice_id:
-                selected = next(
-                    (notice for notice in notices if notice["source_notice_id"] == preferred_notice_id),
-                    None,
-                )
-            if selected is None and notices:
-                selected = notices[0]
+            selected = select_incass_notice(avviso.codice_cnc, preferred_notice_ids.get(avviso.id), notices)
             if selected is not None:
                 summaries[avviso.id]["digital_delivery"] = _extract_incass_delivery_summary(
                     source_notice_id=selected["source_notice_id"],

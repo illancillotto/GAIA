@@ -60,6 +60,7 @@ from app.modules.ruolo.services.capacitas_role_codes import (
     CAPACITAS_SPECIAL_NOTICE_STATUS_TO_REVIEW,
     classify_capacitas_role_code,
 )
+from app.modules.ruolo.services.incass_notice_match import select_incass_notice
 from app.modules.ruolo.services.notice_draft_inputs import capture_inputs
 from app.modules.ruolo.services.notice_eligibility import generation_allowed, manager_scope_clause
 from app.modules.ruolo.services.notice_generation import register_batch_item, register_reminder
@@ -859,14 +860,7 @@ def _batch_load_incass_notice_links(
         notice_candidates = notices_grouped.get(key, [])
         for avviso, status in avvisi_for_key:
             preferred_notice_id = status.capacitas_avviso_code if status else None
-            selected_notice = None
-            if preferred_notice_id:
-                selected_notice = next(
-                    (notice for notice in notice_candidates if notice["source_notice_id"] == preferred_notice_id),
-                    None,
-                )
-            if selected_notice is None and notice_candidates:
-                selected_notice = notice_candidates[0]
+            selected_notice = select_incass_notice(avviso.codice_cnc, preferred_notice_id, notice_candidates)
             notices_by_avviso_id[avviso.id] = _hydrate_incass_notice_row(selected_notice)
     return notices_by_avviso_id
 
@@ -1950,15 +1944,8 @@ def _load_incass_notice_link(
             AnagraficaPaymentNotice.detail_url.is_not(None),
         )
     )
-    notice_row = None
-    if preferred_notice_id:
-        notice_row = db.execute(
-            base_stmt.where(AnagraficaPaymentNotice.source_notice_id == preferred_notice_id).limit(1)
-        ).mappings().first()
-    if notice_row is None:
-        notice_row = db.execute(
-            base_stmt.order_by(desc(AnagraficaPaymentNotice.updated_at)).limit(1)
-        ).mappings().first()
+    candidates = db.execute(base_stmt.order_by(desc(AnagraficaPaymentNotice.updated_at))).mappings().all()
+    notice_row = select_incass_notice(avviso.codice_cnc, preferred_notice_id, candidates)
     if notice_row is None:
         return empty_notice
     return _hydrate_incass_notice_row(notice_row)
@@ -1976,7 +1963,7 @@ def _load_incass_partitario_payload(db: Session, avviso: RuoloAvviso) -> dict[st
             "",
         )
     )
-    notice_row = db.execute(
+    candidates = db.execute(
         select(AnagraficaPaymentNotice.source_notice_id, AnagraficaPaymentNotice.raw_detail_json)
         .where(
             AnagraficaPaymentNotice.anno == str(avviso.anno_tributario),
@@ -1985,8 +1972,8 @@ def _load_incass_partitario_payload(db: Session, avviso: RuoloAvviso) -> dict[st
             AnagraficaPaymentNotice.raw_detail_json.is_not(None),
         )
         .order_by(desc(AnagraficaPaymentNotice.updated_at))
-        .limit(1)
-    ).mappings().first()
+    ).mappings().all()
+    notice_row = select_incass_notice(avviso.codice_cnc, None, candidates)
     if notice_row is None or not isinstance(notice_row["raw_detail_json"], dict):
         return None
 
