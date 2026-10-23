@@ -35,6 +35,8 @@ class CalculationPolicyUpsert:
     bollettino_causale: str | None = None
     bollettino_esercizio: str | None = None
     only_unnotified: bool = False
+    print_bollettino: bool = True
+    payment_due_date: date | None = None
 
 
 def list_calculation_policies(db: Session) -> list[RuoloTributiCalculationPolicy]:
@@ -91,8 +93,7 @@ def _upsert_calculation_policy(db: Session, command: CalculationPolicyUpsert) ->
     policy.euribor_reference_period = command.euribor_reference_period
     policy.euribor_fetched_at = command.euribor_fetched_at
     policy.interest_rate_percent = interest_rate
-    policy.bollettino_causale = _optional_code(command.bollettino_causale)
-    policy.bollettino_esercizio = _optional_code(command.bollettino_esercizio)
+    _apply_notice_print_options(policy, command)
     policy.is_active = command.is_active
     policy.notes = command.notes
     policy.updated_by = command.updated_by
@@ -108,6 +109,13 @@ def _apply_policy_schedule(policy: RuoloTributiCalculationPolicy, command: Calcu
     policy.surcharge_from = command.bonario_due_date + timedelta(days=1) if command.bonario_due_date else command.surcharge_from
     policy.interest_from = command.interest_from
     policy.interest_start_mode = command.interest_start_mode
+
+
+def _apply_notice_print_options(policy: RuoloTributiCalculationPolicy, command: CalculationPolicyUpsert) -> None:
+    policy.bollettino_causale = _optional_code(command.bollettino_causale)
+    policy.bollettino_esercizio = _optional_code(command.bollettino_esercizio)
+    policy.print_bollettino = command.print_bollettino
+    policy.payment_due_date = command.payment_due_date
 
 
 def delete_calculation_policy(db: Session, policy_id: uuid.UUID) -> bool:
@@ -131,6 +139,21 @@ def bollettino_policy_payload(db: Session, years: list[int]) -> dict[str, str]:
         }.items()
         if value
     }
+
+
+def notice_print_policy_payload(db: Session, years: list[int]) -> dict[str, object]:
+    """Slip codes and payment date of the latest year; the slip only if every year's rule prints it."""
+    if not years:
+        return {}
+    policies = [get_calculation_policy_for_year(db, year) for year in set(years)]
+    payload: dict[str, object] = {
+        **bollettino_policy_payload(db, years),
+        "print_bollettino": all(policy.print_bollettino for policy in policies if policy is not None),
+    }
+    latest = get_calculation_policy_for_year(db, max(years))
+    if latest is not None and latest.payment_due_date is not None:
+        payload["due_date"] = latest.payment_due_date.isoformat()
+    return payload
 
 
 def _validate_policy_range(

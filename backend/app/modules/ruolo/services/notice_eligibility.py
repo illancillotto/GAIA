@@ -4,6 +4,8 @@ from decimal import Decimal
 
 from sqlalchemy import func, select
 
+from app.modules.elaborazioni.step.models import StepDocumento, StepRuoloLink
+from app.modules.elaborazioni.step.register_projection import desired_recovery
 from app.modules.ruolo.models import RuoloTributiRegisteredMail
 from app.modules.ruolo.notice_register_models import (
     NoticeAttempt,
@@ -146,9 +148,29 @@ def eligibility(db, item: dict) -> dict:
     return {"avviso_id": str(avviso.id), "eligible": not reasons, "reasons": sorted(set(reasons))}
 
 
+def _step_assigned_avviso_ids(db) -> set:
+    """Avvisi whose linked STEP documents keep them with STEP (not ``revocato``)."""
+    cache_key = "ruolo_step_assigned_avviso_ids"
+    if cache_key not in db.info:
+        links: dict = {}
+        for link, num_doc in db.execute(
+            select(StepRuoloLink, StepDocumento.num_doc)
+            .join(StepDocumento, StepDocumento.id == StepRuoloLink.documento_id)
+            .where(StepRuoloLink.status == "linked")
+        ).all():
+            links.setdefault(link.ruolo_avviso_id, []).append((link, num_doc))
+        db.info[cache_key] = {
+            avviso_id
+            for avviso_id, avviso_links in links.items()
+            if desired_recovery(avviso_links).state != "revocato"
+        }
+    return db.info[cache_key]
+
+
 def generation_allowed(db, item: dict, otherwise_allowed: bool) -> bool:
     if not otherwise_allowed:
         return False
     if item["avviso"].anno_tributario not in {2022, 2023}:
-        return True
+        # Years shared by GAIA and STEP: an avviso handed to STEP stays with STEP.
+        return item["avviso"].id not in _step_assigned_avviso_ids(db)
     return set(eligibility(db, item)["reasons"]) <= {"storico_non_verificato"}

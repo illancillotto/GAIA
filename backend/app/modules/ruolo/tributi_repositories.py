@@ -94,9 +94,6 @@ from app.modules.ruolo.tributi_notification_evidence import (
 from app.modules.ruolo.tributi_notification_evidence import (
     parse_policy_date as _parse_policy_date,
 )
-from app.modules.ruolo.tributi_policy_repository import (
-    bollettino_policy_payload as _bollettino_policy_payload,
-)
 
 # Public compatibility exports used by the existing routes and integrations.
 from app.modules.ruolo.tributi_policy_repository import (
@@ -107,6 +104,9 @@ from app.modules.ruolo.tributi_policy_repository import (
 )
 from app.modules.ruolo.tributi_policy_repository import (
     list_calculation_policies as list_calculation_policies,
+)
+from app.modules.ruolo.tributi_policy_repository import (
+    notice_print_policy_payload as _notice_print_policy_payload,
 )
 from app.modules.ruolo.tributi_policy_repository import (
     upsert_calculation_policy as upsert_calculation_policy,
@@ -3906,7 +3906,7 @@ def _build_batch_item_payload(
     notice_reference_years: list[int],
 ) -> dict[str, Any]:
     return {
-        **_bollettino_policy_payload(db, notice_reference_years),
+        **_notice_print_policy_payload(db, notice_reference_years),
         "codice_fiscale": candidate["codice_fiscale"],
         "display_name": candidate["display_name"],
         "comune": candidate["comune"],

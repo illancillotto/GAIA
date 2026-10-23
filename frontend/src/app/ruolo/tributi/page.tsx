@@ -21,15 +21,12 @@ import { TributiListFilters, formatYearRange, managerYearStart } from "./list-fi
 import {
   EMPTY_CALCULATION_POLICY_FORM,
   calculationPolicyAnnualityYears,
-  calculationPolicyFormFromPolicy,
-  calculationPolicyPayload,
-  formatPolicyBollettino,
-  annualityPolicyPayload,
   parseOptionalYear,
   policyBonarioDueDate,
   type CalculationPolicyFormState,
 } from "./calculation-policy-form";
-import { PolicyAnnualityCard, PolicyBollettinoFields } from "./policy-bollettino-fields";
+import { PolicyAnnualityCard } from "./policy-bollettino-fields";
+import { annualityPayloadWithNoticePrint, formatPolicyNoticePrint, PolicyNoticePrintFields, policyFormWithNoticePrint, policyPayloadWithNoticePrint } from "./policy-notice-print";
 import { AnnualityPolicyFields, CalculationPolicyBlocks, PolicyNotificationScope, PolicyRuleOptions } from "./calculation-policy-options";
 import { PolicyDateInput, formatPolicyDate } from "./policy-date-input";
 import { listAllReminderCandidatesForYear, reminderBatchTaxCodes } from "./reminder-candidates";
@@ -736,7 +733,7 @@ function RuoloTributiPageContent() {
 
   function editCalculationPolicy(policy: RuoloTributiCalculationPolicyResponse) {
     setEditingCalculationPolicyId(policy.id);
-    setCalculationPolicyForm(calculationPolicyFormFromPolicy(policy));
+    setCalculationPolicyForm(policyFormWithNoticePrint(policy));
     setCalculationPolicyError(null);
     setCalculationPolicyMessage(null);
   }
@@ -752,7 +749,7 @@ function RuoloTributiPageContent() {
     event.preventDefault();
     /* c8 ignore next -- The form is usable only after token-backed page initialisation. */
     if (!token) return;
-    const payload = calculationPolicyPayload(calculationPolicyForm);
+    const payload = policyPayloadWithNoticePrint(calculationPolicyForm);
     const annualityYears = calculationPolicyAnnualityYears(payload.year_from, payload.year_to);
     const shouldSaveOnePolicyPerAnnuality = annualityYears.length > 1;
     setCalculationPolicyError(null);
@@ -760,7 +757,7 @@ function RuoloTributiPageContent() {
     try {
       if (shouldSaveOnePolicyPerAnnuality) {
         for (const [index, year] of annualityYears.entries()) {
-          const annualityPayload = annualityPolicyPayload(calculationPolicyForm, year);
+          const annualityPayload = annualityPayloadWithNoticePrint(calculationPolicyForm, year);
           if (editingCalculationPolicyId && index === 0) {
             await updateTributiCalculationPolicy(token, editingCalculationPolicyId, annualityPayload);
           } else {
@@ -1855,7 +1852,7 @@ function CalculationPoliciesPanel({
                           ) : null}
                           <div className="mt-2 grid gap-1.5 text-xs text-gray-600 sm:grid-cols-2">
                             {calculationPolicyAnnualityRows(policy).map((annuality) => (
-                              <PolicyAnnualityCard key={annuality.key} label={annuality.label} bonarioDueDate={formatPolicyDate(policyBonarioDueDate(policy))} surchargeFrom={formatPolicyDate(policy.surcharge_from)} interestFrom={formatPolicyDate(policy.interest_from)} bollettino={formatPolicyBollettino(policy)} />
+                              <PolicyAnnualityCard key={annuality.key} label={annuality.label} bonarioDueDate={formatPolicyDate(policyBonarioDueDate(policy))} surchargeFrom={formatPolicyDate(policy.surcharge_from)} interestFrom={formatPolicyDate(policy.interest_from)} bollettino={formatPolicyNoticePrint(policy)} />
                             ))}
                           </div>
                           {policy.notes ? <p className="mt-2 text-xs leading-5 text-gray-600">{policy.notes}</p> : null}
@@ -1938,7 +1935,7 @@ function CalculationPoliciesPanel({
                         <option value="fixed_date">Da data fissa policy</option>
                       </select>
                     </label>
-                    <PolicyBollettinoFields form={form} onChange={onFormChange} />
+                    <PolicyNoticePrintFields form={form} onChange={onFormChange} years={annualityYears} />
                     <textarea value={form.notes} onChange={(event) => onFormChange({ ...form, notes: event.target.value })} rows={3} placeholder="Note operative" className="rounded-2xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-amber-400" />
                     <label className="flex items-center gap-2 text-sm text-gray-700">
                       <input type="checkbox" checked={form.is_active} onChange={(event) => onFormChange({ ...form, is_active: event.target.checked })} />

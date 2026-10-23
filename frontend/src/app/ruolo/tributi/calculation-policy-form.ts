@@ -33,13 +33,18 @@ export const EMPTY_CALCULATION_POLICY_FORM = {
   interest_start_mode: "notification_date" as RuoloTributiCalculationPolicyResponse["interest_start_mode"],
   bollettino_causale: "",
   bollettino_esercizio: "",
+  print_bollettino: true,
+  payment_due_date: "",
+  payment_due_dates_by_year: {} as Record<string, string>,
   is_active: true,
   notes: "",
 };
 
 export type CalculationPolicyFormState = typeof EMPTY_CALCULATION_POLICY_FORM;
+// Notice print options are filled by policyFormWithNoticePrint (policy-notice-print.tsx).
+export type PolicyFormWithoutNoticePrint = Omit<CalculationPolicyFormState, "print_bollettino" | "payment_due_date" | "payment_due_dates_by_year">;
 
-export function calculationPolicyFormFromPolicy(policy: RuoloTributiCalculationPolicyResponse): CalculationPolicyFormState {
+export function calculationPolicyFormFromPolicy(policy: RuoloTributiCalculationPolicyResponse): PolicyFormWithoutNoticePrint {
   const years = calculationPolicyAnnualityYears(policy.year_from, policy.year_to);
   const bonarioDueDate = policyBonarioDueDate(policy);
   return {

@@ -1,5 +1,28 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## Regole ruolo: bollettino e data di pagamento; 2021 condiviso con STEP — 2026-10-23
+
+- `Regola ruolo` ha due nuove scelte (migration `20261023_0900`):
+  `print_bollettino` ("Stampa bollettino postale", default si: le regole
+  esistenti restano con bollettino) e `payment_due_date` ("Pagamento avviso
+  entro"), la data di `QUANTO E QUANDO PAGARE` e della scadenza sul
+  bollettino, distinta dalla scadenza del pagamento bonario. Senza data resta
+  il fallback di 30 giorni dalla generazione.
+- Avvisi su piu annualita: il bollettino si stampa solo se tutte le regole
+  degli anni coinvolti lo prevedono (un anno senza regola non lo esclude); data
+  di pagamento, causale ed esercizio vengono dalla regola dell'anno piu
+  recente. Senza bollettino il PDF salta la pagina TD 896 (restano bonifico e
+  pagoPA).
+- Stessa annualita in piu gestori (sovrapposizione gia ammessa da `48291081`):
+  per il 2021 condiviso da `STEP - Agenzia recupero crediti` (2018-2021) e
+  `Consorzio/GAIA` (dal 2021) la divisione e per avviso. Fuori dal registro
+  2022-2023, un avviso con documenti STEP collegati (`step_ruolo_links`
+  `linked`) resta a STEP e non e sollecitabile da GAIA, salvo che STEP lo
+  dimostri `revocato` (stessa regola `desired_recovery` della proiezione nel
+  registro); gli avvisi senza documenti STEP passano a GAIA con la regola 2021.
+- Rilascio: produzione non ha ancora `48291081` (rifiuta le sovrapposizioni,
+  `REMINDER_MIN_YEAR` 2022): va rilasciato insieme a questa change.
+
 ## Bollettino TD 896 pronto per campionatura Poste — 2026-10-22
 
 - Nome del versante (`eseguito da`) stampato per intero, senza troncamento

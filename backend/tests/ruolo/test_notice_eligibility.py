@@ -67,6 +67,8 @@ def test_verified_history_allows_generation_and_rechecked_changes_block(api):
         assert service.generation_allowed(db, item, True)
         assert not service.generation_allowed(db, item, False)
         item["avviso"].anno_tributario = 2024
+        # This schema has no STEP tables; the STEP split is covered in test_step_reminder_split.
+        db.info["ruolo_step_assigned_avviso_ids"] = set()
         assert service.generation_allowed(db, item, True)
         item["avviso"].anno_tributario = 2022
         recovery = db.scalar(select(NoticeRecovery))

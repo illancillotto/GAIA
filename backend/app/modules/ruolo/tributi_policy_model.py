@@ -44,6 +44,10 @@ class RuoloTributiCalculationPolicy(Base):
     )
     bollettino_causale: Mapped[str | None] = mapped_column(String(3), nullable=True)
     bollettino_esercizio: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    print_bollettino: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    payment_due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_by: Mapped[int | None] = mapped_column(

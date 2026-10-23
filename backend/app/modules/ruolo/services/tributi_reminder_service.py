@@ -309,26 +309,21 @@ def _generate_gaia_proposal_pdf(payload: dict[str, Any], *, output_path: Path) -
         prefix="gaia_tributi_proposal_",
         dir=str(temp_parent) if temp_parent is not None else None,
     ) as temp_dir:
-        working_dir = Path(temp_dir)
-        main_pdf_path = _render_gaia_html_to_pdf(
-            _gaia_proposal_html(payload, include_partitario=False, include_bollettino=False),
-            chromium_binary=chromium_binary,
-            working_dir=working_dir,
-            stem=f"{output_path.stem}_main",
-        )
-        partitario_pdf_path = _render_gaia_html_to_pdf(
-            _gaia_proposal_html(payload, include_main=False, include_bollettino=False),
-            chromium_binary=chromium_binary,
-            working_dir=working_dir,
-            stem=f"{output_path.stem}_partitario",
-        )
-        bollettino_pdf_path = _render_gaia_html_to_pdf(
-            _gaia_proposal_html(payload, include_main=False, include_partitario=False),
-            chromium_binary=chromium_binary,
-            working_dir=working_dir,
-            stem=f"{output_path.stem}_bollettino",
-        )
-        _merge_pdf_files([main_pdf_path, partitario_pdf_path, bollettino_pdf_path], output_path=output_path)
+        pdf_paths = _render_gaia_proposal_sections(payload, chromium_binary=chromium_binary, working_dir=Path(temp_dir), stem=output_path.stem)
+        _merge_pdf_files(pdf_paths, output_path=output_path)
+
+
+_GAIA_PROPOSAL_SECTIONS = (
+    ("main", {"include_partitario": False, "include_bollettino": False}),
+    ("partitario", {"include_main": False, "include_bollettino": False}),
+    ("bollettino", {"include_main": False, "include_partitario": False}),
+)
+
+
+def _render_gaia_proposal_sections(payload: dict[str, Any], *, chromium_binary: str, working_dir: Path, stem: str) -> list[Path]:
+    # One PDF per section; the TD 896 slip only when the year rules print it.
+    sections = _GAIA_PROPOSAL_SECTIONS if payload.get("print_bollettino", True) else _GAIA_PROPOSAL_SECTIONS[:2]
+    return [_render_gaia_html_to_pdf(_gaia_proposal_html(payload, **flags), chromium_binary=chromium_binary, working_dir=working_dir, stem=f"{stem}_{name}") for name, flags in sections]
 
 
 def _render_gaia_html_to_pdf(

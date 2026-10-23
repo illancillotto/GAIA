@@ -25,6 +25,8 @@ class RuoloTributiCalculationPolicyResponse(BaseModel):
     interest_start_mode: str = "fixed_date"
     bollettino_causale: str | None = None
     bollettino_esercizio: str | None = None
+    print_bollettino: bool = True
+    payment_due_date: date | None = None
     is_active: bool
     notes: str | None = None
     updated_by: int | None = None
@@ -49,6 +51,8 @@ class RuoloTributiCalculationPolicyUpsertRequest(BaseModel):
     interest_start_mode: str = Field(default="fixed_date", pattern="^(fixed_date|notification_date)$")
     bollettino_causale: str | None = Field(default=None, pattern=r"^\d{3}$")
     bollettino_esercizio: str | None = Field(default=None, pattern=r"^\d{4}$")
+    print_bollettino: bool = True
+    payment_due_date: date | None = None
     is_active: bool = True
     notes: str | None = None
 

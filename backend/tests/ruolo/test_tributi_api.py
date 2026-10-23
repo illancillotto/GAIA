@@ -2800,11 +2800,12 @@ def test_tributi_calculation_policy_crud_validates_active_year_ranges() -> None:
 
     db = TestingSessionLocal()
     try:
-        assert tributi_repo._bollettino_policy_payload(db, [2023, 2024]) == {
+        assert tributi_repo._notice_print_policy_payload(db, [2023, 2024]) == {
             "bollettino_causale": "025",
             "bollettino_esercizio": "2424",
+            "print_bollettino": True,
         }
-        assert tributi_repo._bollettino_policy_payload(db, []) == {}
+        assert tributi_repo._notice_print_policy_payload(db, []) == {}
     finally:
         db.close()
 

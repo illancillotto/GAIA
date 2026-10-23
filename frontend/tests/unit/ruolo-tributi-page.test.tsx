@@ -10,12 +10,14 @@ import {
   calculationPolicyPayload,
   calculationPolicyFormFromPolicy,
   policyChargeMode,
+  formatPolicyBollettino,
   groupCalculationPolicies,
   annualityPolicyPayload,
   optionalDate,
   parseOptionalYear,
   policyBonarioDueDate,
 } from "@/app/ruolo/tributi/calculation-policy-form";
+import { formatPolicyNoticePrint } from "@/app/ruolo/tributi/policy-notice-print";
 import type { CurrentUser } from "@/types/api";
 import type { RuoloTributiAvvisoListItemResponse } from "@/types/ruolo";
 
@@ -916,6 +918,8 @@ describe("Ruolo tributi page", () => {
       { ...policy, name: "A", year_from: null, year_to: null },
       { ...policy, name: "B", year_from: 2024, year_to: 2024 },
     ]).map((block) => block.name)).toEqual(["A", "B"]);
+    expect(formatPolicyBollettino({ ...policy, bollettino_causale: null, bollettino_esercizio: null })).toBe("Bollettino: causale automatica · esercizio automatico");
+    expect(formatPolicyNoticePrint({ ...policy, print_bollettino: false })).toBe("Bollettino: non stampato · pagamento avviso entro -");
   });
 
   test.each(["super_admin", "viewer"])("shows every active rule chronologically in a keyboard-accessible strip for %s", async (role) => {
@@ -958,6 +962,7 @@ describe("Ruolo tributi page", () => {
     expect(policyCard).toHaveTextContent("Annualita 2024");
     expect(policyCard).toHaveTextContent("Annualita 2025");
     expect(policyCard).toHaveTextContent("Scadenza bonaria 26/05/2025");
+    expect(policyCard).toHaveTextContent("Bollettino: causale 025 · esercizio 2424 · pagamento avviso entro -");
     expect(policyCard).toHaveTextContent("Maggiorazione dal 27/05/2025");
     expect(policyCard).toHaveTextContent("Fallback/minimo interessi 27/05/2025");
     expect(policyCard).toHaveTextContent("interessi effettivi 6,25%");
@@ -974,6 +979,8 @@ describe("Ruolo tributi page", () => {
     expect(await modal.findByText("Date per annualita")).toBeInTheDocument();
     fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario 2025"), { target: { value: "31/07/2026" } });
     fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario 2026"), { target: { value: "31/07/2027" } });
+    fireEvent.change(modal.getByLabelText("Pagamento avviso entro 2025"), { target: { value: "30/11/2026" } });
+    fireEvent.click(modal.getByRole("checkbox", { name: "Stampa bollettino postale" }));
     fireEvent.change(modal.getByLabelText("% tasso da delibera"), { target: { value: "abc" } });
     fireEvent.change(modal.getByLabelText("Fallback/minimo interessi 2025"), { target: { value: "10/08/2026" } });
     fireEvent.change(modal.getByLabelText("Fallback/minimo interessi 2026"), { target: { value: "10/08/2027" } });
@@ -986,9 +993,11 @@ describe("Ruolo tributi page", () => {
     expect(mocks.updateTributiCalculationPolicy).toHaveBeenCalledWith("token", "policy-gaia-2024", {
       name: "Policy aggiornata 2025",
       only_unnotified: false,
+      print_bollettino: false,
       year_from: 2025,
       year_to: 2025,
       bonario_due_date: "2026-07-31",
+      payment_due_date: "2026-11-30",
       surcharge_rate_percent: 4.5,
       surcharge_from: null,
       euribor_6m_rate_percent: 3.25,
@@ -1006,9 +1015,11 @@ describe("Ruolo tributi page", () => {
     expect(mocks.createTributiCalculationPolicy).toHaveBeenCalledWith("token", {
       name: "Policy aggiornata 2026",
       only_unnotified: false,
+      print_bollettino: false,
       year_from: 2026,
       year_to: 2026,
       bonario_due_date: "2027-07-31",
+      payment_due_date: null,
       surcharge_rate_percent: 4.5,
       surcharge_from: null,
       euribor_6m_rate_percent: 3.25,
@@ -1055,6 +1066,8 @@ describe("Ruolo tributi page", () => {
     expect(modal.getByLabelText("Esercizio bollettino")).toHaveValue("2424");
     fireEvent.change(modal.getByLabelText("Scadenza pagamento bonario"), { target: { value: "31/07/2026" } });
     fireEvent.change(modal.getByLabelText("Fallback/minimo interessi"), { target: { value: "10/08/2026" } });
+    fireEvent.change(modal.getByLabelText("Pagamento avviso entro"), { target: { value: "30/11/2026" } });
+    fireEvent.click(modal.getByRole("checkbox", { name: "Stampa bollettino postale" }));
     fireEvent.change(modal.getByLabelText("Causale bollettino"), { target: { value: "a0079" } });
     fireEvent.change(modal.getByLabelText("Esercizio bollettino"), { target: { value: "x25259" } });
     fireEvent.click(modal.getByRole("button", { name: "Aggiorna" }));
@@ -1070,6 +1083,8 @@ describe("Ruolo tributi page", () => {
           interest_from: "2026-08-10",
           bollettino_causale: "007",
           bollettino_esercizio: "2525",
+          print_bollettino: false,
+          payment_due_date: "2026-11-30",
         }),
       );
     });
@@ -1109,6 +1124,8 @@ describe("Ruolo tributi page", () => {
         {
           ...calculationPolicies[0],
           id: "policy-no-euribor",
+          print_bollettino: false,
+          payment_due_date: "2026-11-30",
           euribor_source_url: null,
           euribor_reference_period: null,
           euribor_fetched_at: null,
@@ -1130,7 +1147,10 @@ describe("Ruolo tributi page", () => {
     const dialog = screen.getByText("Scadenza bonaria, maggiorazioni e interessi").closest("div")?.parentElement?.parentElement;
     expect(dialog).not.toBeNull();
     const modal = within(dialog as HTMLElement);
+    expect(modal.getAllByText("Bollettino: non stampato · pagamento avviso entro 30/11/2026").length).toBeGreaterThan(0);
     fireEvent.click(await modal.findByRole("button", { name: "Modifica" }));
+    expect(modal.getByRole("checkbox", { name: "Stampa bollettino postale" })).not.toBeChecked();
+    expect(modal.getByLabelText("Pagamento avviso entro 2024")).toHaveValue("30/11/2026");
     expect(modal.queryByText("verifica il dato BCE")).not.toBeInTheDocument();
     expect(modal.getByLabelText("Causale bollettino")).toHaveValue("");
     expect(modal.getByLabelText("Esercizio bollettino")).toHaveValue("");
@@ -1182,9 +1202,11 @@ describe("Ruolo tributi page", () => {
     expect(mocks.createTributiCalculationPolicy).toHaveBeenNthCalledWith(1, "token", {
       name: "Ruoli bonari 2024",
       only_unnotified: false,
+      print_bollettino: true,
       year_from: 2024,
       year_to: 2024,
       bonario_due_date: "2026-07-31",
+      payment_due_date: null,
       surcharge_rate_percent: 0,
       surcharge_from: null,
       euribor_6m_rate_percent: 0,
@@ -1202,9 +1224,11 @@ describe("Ruolo tributi page", () => {
     expect(mocks.createTributiCalculationPolicy).toHaveBeenNthCalledWith(2, "token", {
       name: "Ruoli bonari 2025",
       only_unnotified: false,
+      print_bollettino: true,
       year_from: 2025,
       year_to: 2025,
       bonario_due_date: "2027-07-31",
+      payment_due_date: null,
       surcharge_rate_percent: 0,
       surcharge_from: null,
       euribor_6m_rate_percent: 0,
