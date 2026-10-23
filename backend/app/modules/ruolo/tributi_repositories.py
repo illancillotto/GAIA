@@ -61,7 +61,7 @@ from app.modules.ruolo.services.capacitas_role_codes import (
     classify_capacitas_role_code,
 )
 from app.modules.ruolo.services.notice_draft_inputs import capture_inputs
-from app.modules.ruolo.services.notice_eligibility import generation_allowed
+from app.modules.ruolo.services.notice_eligibility import generation_allowed, manager_scope_clause
 from app.modules.ruolo.services.notice_generation import register_batch_item, register_reminder
 from app.modules.ruolo.services.posta_online_recipient_columns import recipient_address_columns
 from app.modules.ruolo.services.registered_mail_association import (
@@ -456,7 +456,7 @@ def _year_filter_for_manager(db: Session, manager_key: str) -> list[Any]:
             clause.append(RuoloAvviso.anno_tributario >= manager.year_from)
         if manager.year_to is not None:
             clause.append(RuoloAvviso.anno_tributario <= manager.year_to)
-        clauses.append(literal(True) if not clause else and_(*clause))
+        clauses.append(manager_scope_clause(db, manager, clause))
     return clauses
 
 

@@ -2,11 +2,11 @@
 
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, literal, or_, select
 
 from app.modules.elaborazioni.step.models import StepDocumento, StepRuoloLink
 from app.modules.elaborazioni.step.register_projection import desired_recovery
-from app.modules.ruolo.models import RuoloTributiRegisteredMail
+from app.modules.ruolo.models import RuoloAvviso, RuoloTributiRegisteredMail
 from app.modules.ruolo.notice_register_models import (
     NoticeAttempt,
     NoticeDocument,
@@ -16,6 +16,8 @@ from app.modules.ruolo.notice_register_models import (
 )
 
 GAIA_SOURCES = ("gaia_reminder", "gaia_batch_item")
+# Years GAIA reviews notice by notice; elsewhere an avviso handed to STEP stays with STEP.
+GAIA_REVIEWED_YEARS = (2022, 2023)
 
 
 def _recovery_blocks(recovery, generated: bool) -> bool:
@@ -170,7 +172,23 @@ def _step_assigned_avviso_ids(db) -> set:
 def generation_allowed(db, item: dict, otherwise_allowed: bool) -> bool:
     if not otherwise_allowed:
         return False
-    if item["avviso"].anno_tributario not in {2022, 2023}:
-        # Years shared by GAIA and STEP: an avviso handed to STEP stays with STEP.
+    if item["avviso"].anno_tributario not in GAIA_REVIEWED_YEARS:
         return item["avviso"].id not in _step_assigned_avviso_ids(db)
     return set(eligibility(db, item)["reasons"]) <= {"storico_non_verificato"}
+
+
+def manager_scope_clause(db, manager, year_clauses: list):
+    """Avvisi listed under ``manager``: a GAIA manager leaves out those STEP keeps."""
+    scope = and_(*year_clauses) if year_clauses else literal(True)
+    if manager.calculation_policy != "internal_gaia":
+        return scope
+    step_assigned = _step_assigned_avviso_ids(db)
+    if not step_assigned:
+        return scope
+    return and_(
+        scope,
+        or_(
+            RuoloAvviso.anno_tributario.in_(GAIA_REVIEWED_YEARS),
+            RuoloAvviso.id.not_in(step_assigned),
+        ),
+    )
