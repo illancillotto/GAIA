@@ -23,6 +23,7 @@ from xml.etree import ElementTree as ET
 from pypdf import PdfReader, PdfWriter
 
 from app.core.config import settings
+from app.modules.ruolo.services.partitario_dialog import usable_partitario_text
 from app.modules.ruolo.services.td896 import TD896_DOCUMENT_CODE as _BOLLETTINO_TD_CODE
 from app.modules.ruolo.services.td896 import (
     build_td896_barcode_payload,
@@ -1151,7 +1152,7 @@ def _partitario_text_from_source(source: Any) -> str | None:
     for key in ("raw_html", "info_html", "info_text", "text"):
         value = source.get(key)
         if isinstance(value, str) and value.strip():
-            return value
+            return usable_partitario_text(value)
     return None
 
 
