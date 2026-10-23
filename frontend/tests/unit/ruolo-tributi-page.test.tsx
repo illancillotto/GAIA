@@ -697,6 +697,50 @@ describe("Ruolo tributi page", () => {
     expect(screen.getByRole("checkbox", { name: "Solo non pagati (anche parziali)" })).toBeChecked();
   });
 
+  test("filters unpaid and partially paid tributi separately", async () => {
+    mocks.searchParams = new URLSearchParams("manager_key=gaia");
+    const view = render(<RuoloTributiPage />);
+    await screen.findByText("ROSSI MARIO");
+    const statuses = screen.getByRole("group", { name: "Stato pagamento" });
+    const outstandingFilter = screen.getByRole("checkbox", { name: "Solo non pagati (anche parziali)" });
+    expect(within(statuses).getByRole("button", { name: "Tutti gli stati" })).toHaveAttribute("aria-pressed", "true");
+
+    const applyStatus = async (label: string, expectedParams: Record<string, string>) => {
+      mocks.replace.mockClear();
+      fireEvent.click(within(statuses).getByRole("button", { name: label }));
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalled());
+      const url = new URL(mocks.replace.mock.lastCall![0], "http://gaia.lan");
+      expect(Object.fromEntries(url.searchParams)).toEqual(expectedParams);
+      mocks.searchParams = url.searchParams;
+      view.rerender(<RuoloTributiPage />);
+      expect(within(statuses).getByRole("button", { name: label })).toHaveAttribute("aria-pressed", "true");
+    };
+
+    await applyStatus("Non pagati", { payment_status: "unpaid", manager_key: "gaia", page: "1" });
+    await waitFor(() => {
+      expect(mocks.listTributiAvvisi).toHaveBeenLastCalledWith("token", expect.objectContaining({
+        manager_key: "gaia", open_only: true, payment_status: "unpaid", page: 1,
+      }));
+      expect(mocks.getTributiSummary).toHaveBeenLastCalledWith("token", expect.objectContaining({
+        manager_key: "gaia", open_only: true, payment_status: "unpaid",
+      }));
+    });
+    fireEvent.click(outstandingFilter);
+    fireEvent.click(outstandingFilter);
+    expect(outstandingFilter).toBeChecked();
+    expect(within(statuses).getByRole("button", { name: "Non pagati" })).toHaveAttribute("aria-pressed", "true");
+
+    await applyStatus("Pagamenti parziali", { payment_status: "partial", manager_key: "gaia", page: "1" });
+    await waitFor(() => expect(mocks.listTributiAvvisi).toHaveBeenLastCalledWith("token", expect.objectContaining({
+      open_only: true, payment_status: "partial",
+    })));
+
+    await applyStatus("Tutti gli stati", { manager_key: "gaia", page: "1" });
+    await waitFor(() => expect(mocks.listTributiAvvisi).toHaveBeenLastCalledWith("token", expect.objectContaining({
+      open_only: true, payment_status: undefined,
+    })));
+  });
+
   test("synchronizes year shortcuts with manual input, reset and manager changes", async () => {
     mocks.searchParams = new URLSearchParams("manager_key=gaia&anno=2023&open_only=false");
     const view = render(<RuoloTributiPage />);

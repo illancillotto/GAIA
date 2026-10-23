@@ -1283,7 +1283,7 @@ function RuoloTributiPageContent() {
                 openOnly={filterOpenOnly}
                 onAnnoChange={setFilterAnno}
                 onOpenOnlyChange={setFilterOpenOnly}
-                onPaymentStatusChange={setFilterPaymentStatus}
+                paymentStatusFilter={[filterPaymentStatus, setFilterPaymentStatus]}
               />
             </div>
             <div className="p-6">

@@ -1,5 +1,7 @@
 import type { RuoloTributiYearManagerResponse } from "@/types/ruolo";
 
+import { TributiPaymentFilters, type PaymentStatusFilterState } from "./payment-filters";
+
 type TributiListFiltersProps = {
   managers: RuoloTributiYearManagerResponse[];
   managerKey: string;
@@ -8,7 +10,7 @@ type TributiListFiltersProps = {
   openOnly: boolean;
   onAnnoChange: (anno: string) => void;
   onOpenOnlyChange: (openOnly: boolean) => void;
-  onPaymentStatusChange: (paymentStatus: string) => void;
+  paymentStatusFilter: PaymentStatusFilterState;
 };
 
 export function TributiListFilters({
@@ -19,7 +21,7 @@ export function TributiListFilters({
   openOnly,
   onAnnoChange,
   onOpenOnlyChange,
-  onPaymentStatusChange,
+  paymentStatusFilter,
 }: TributiListFiltersProps) {
   return (
     <>
@@ -33,23 +35,7 @@ export function TributiListFilters({
       />
       <div className="mt-4 flex flex-wrap items-end gap-4">
         <AnnualityYearFilter managerKey={managerKey} anno={anno} onAnnoChange={onAnnoChange} />
-        <div className="grid gap-1">
-          <label className="flex items-center gap-2 rounded-xl border border-[#e3e9e0] bg-[#fbfcfb] px-4 py-3 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              checked={openOnly}
-              onChange={(event) => {
-                onOpenOnlyChange(event.target.checked);
-                if (event.target.checked) onPaymentStatusChange("");
-              }}
-              aria-describedby="tributi-saldo-hint"
-            />
-            Solo non pagati (anche parziali)
-          </label>
-          <span id="tributi-saldo-hint" className="text-xs text-gray-500">
-            Esclude i saldati; restano visibili le posizioni con saldo da verificare.
-          </span>
-        </div>
+        <TributiPaymentFilters openOnly={openOnly} onOpenOnlyChange={onOpenOnlyChange} paymentStatusFilter={paymentStatusFilter} />
       </div>
     </>
   );
