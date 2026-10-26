@@ -61,6 +61,7 @@ from app.modules.ruolo.services.capacitas_role_codes import (
     classify_capacitas_role_code,
 )
 from app.modules.ruolo.services.incass_notice_match import select_incass_notice
+from app.modules.ruolo.services.incass_residual import settled_status
 from app.modules.ruolo.services.notice_draft_inputs import capture_inputs
 from app.modules.ruolo.services.notice_eligibility import generation_allowed, manager_scope_clause
 from app.modules.ruolo.services.notice_generation import register_batch_item, register_reminder
@@ -926,7 +927,7 @@ def _build_effective_tributi_core(
     incass_rateized_amount = _parse_incass_amount(incass_notice.get("importo_rateizzato"))
     incass_carico_amount = _parse_incass_amount(incass_notice.get("importo_carico"))
     incass_paid_amount = _abs_incass_amount(incass_notice.get("importo_riscosso"))
-    incass_residual_amount = _abs_incass_amount(incass_notice.get("importo_residuo"))
+    incass_residual_amount = _parse_incass_amount(incass_notice.get("importo_residuo"))
     incass_rateization_fee = None
     if incass_rateized_amount is not None and incass_carico_amount is not None:
         incass_rateization_fee = max(incass_rateized_amount - incass_carico_amount, _CURRENCY_ZERO)
@@ -1073,7 +1074,7 @@ def _derive_incass_residual_status(
     paid_amount: Decimal,
 ) -> str:
     if residual_amount <= _CURRENCY_ZERO:
-        return RuoloTributiPaymentStatus.PAID.value
+        return settled_status(residual_amount)
     if paid_amount > _CURRENCY_ZERO:
         return RuoloTributiPaymentStatus.PARTIAL.value
     if due_amount is not None and residual_amount < due_amount:
