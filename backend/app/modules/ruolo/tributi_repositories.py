@@ -64,6 +64,7 @@ from app.modules.ruolo.services.incass_notice_match import select_incass_notice
 from app.modules.ruolo.services.notice_draft_inputs import capture_inputs
 from app.modules.ruolo.services.notice_eligibility import generation_allowed, manager_scope_clause
 from app.modules.ruolo.services.notice_generation import register_batch_item, register_reminder
+from app.modules.ruolo.services.ord_reference_partite import partite_source_avviso_id
 from app.modules.ruolo.services.posta_online_recipient_columns import recipient_address_columns
 from app.modules.ruolo.services.registered_mail_association import (
     associated_avviso_ids,
@@ -3924,7 +3925,7 @@ def _batch_avvisi_payload(db: Session, avvisi: list[dict[str, Any]]) -> list[dic
         payload.append(
             {
                 **{key: str(value) if isinstance(value, uuid.UUID) else value for key, value in summary.items()},
-                "partite": _partite_payload(db, avviso_id),
+                "partite": _partite_payload(db, partite_source_avviso_id(db, avviso_id)),
                 "partitario": _load_incass_partitario_payload(db, avviso) if avviso is not None else None,
             }
         )

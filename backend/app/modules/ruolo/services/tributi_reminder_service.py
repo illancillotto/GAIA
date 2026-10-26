@@ -23,6 +23,8 @@ from xml.etree import ElementTree as ET
 from pypdf import PdfReader, PdfWriter
 
 from app.core.config import settings
+from app.modules.ruolo.services.notice_number_cell import notice_numbers_html
+from app.modules.ruolo.services.partitario_by_avviso import partitario_by_avviso
 from app.modules.ruolo.services.partitario_dialog import usable_partitario_text
 from app.modules.ruolo.services.td896 import TD896_DOCUMENT_CODE as _BOLLETTINO_TD_CODE
 from app.modules.ruolo.services.td896 import (
@@ -494,7 +496,7 @@ def _gaia_proposal_html(
     summary_rows = "".join(
         "<tr>"
         f"<td>{html.escape(row['Anno_Ruolo'])}</td>"
-        f"<td class=\"notice-number\">{html.escape(row['Rif_Ruolo'])}</td>"
+        f"<td class=\"notice-number\">{notice_numbers_html(row['Rif_Ruolo'])}</td>"
         f"<td>{html.escape(row['M_648'])}</td>"
         f"<td>{html.escape(row['M_668'])}</td>"
         f"<td>{html.escape(row['M_985'])}</td>"
@@ -1079,7 +1081,7 @@ def _batch_partitario_paragraphs(payload: dict[str, Any]) -> list[str]:
 
 
 def _batch_partitario_lines(payload: dict[str, Any]) -> list[str]:
-    raw_lines = _stored_partitario_lines(payload)
+    raw_lines = partitario_by_avviso(payload, _stored_partitario_lines, _batch_partitario_lines)
     if raw_lines:
         return raw_lines
 
@@ -1099,7 +1101,7 @@ def _batch_partitario_lines(payload: dict[str, Any]) -> list[str]:
                     _partitario_tributo_line(avviso, partita, "0648", "Contributo Opere Irrigue", "importo_0648"),
                     _partitario_tributo_line(avviso, partita, "0668", "Contributo utenza", "importo_0668"),
                     _partitario_tributo_line(avviso, partita, "0985", "Consorzio Quote Ordinarie", "importo_0985"),
-                    "Dom. Dis. Fog. Part. Sub Sup.Cata. Sup.Irr. Colt.        Manut.   Irrig.      Ist.",
+                    "Dom. Dis. Fog. Part. Sub Sup.Cata. Sup.Irr. Colt.        Manut.  Irrig.    Ist.",
                 ]
             )
             for particella in partita.get("particelle", []):
@@ -1215,7 +1217,7 @@ def _partitario_tributo_line(avviso: dict[str, Any], partita: dict[str, Any], co
     year = _value(avviso.get("anno_tributario"))
     comune = _value(partita.get("comune_nome"))
     description = f"Beni in {comune} - {descrizione}"
-    return f"{year:<4} {codice:<4} {description[:55]:<55} {amount:>10} euro"
+    return f"{year:<4} {codice:<4} {description[:54]:<54} {amount:>10} euro"
 
 
 def _partitario_particella_line(particella: dict[str, Any]) -> str:
