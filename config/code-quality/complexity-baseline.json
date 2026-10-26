@@ -81685,7 +81685,7 @@
       "cognitive": 7,
       "cyclomatic": 6,
       "end_line": 171,
-      "fingerprint": "d37f682533a0749c",
+      "fingerprint": "4bb850700cb26f91",
       "kind": "async_function",
       "line": 148,
       "loc": 24,
@@ -81708,7 +81708,7 @@
       "cognitive": 7,
       "cyclomatic": 6,
       "end_line": 198,
-      "fingerprint": "8772d1ab17a240ed",
+      "fingerprint": "61c6785dc2ef5c47",
       "kind": "async_function",
       "line": 175,
       "loc": 24,
@@ -202997,10 +202997,10 @@
       ]
     },
     {
-      "cognitive": 35,
-      "cyclomatic": 34,
+      "cognitive": 34,
+      "cyclomatic": 33,
       "end_line": 245,
-      "fingerprint": "108009fa836f4c4c",
+      "fingerprint": "69f2ae2a7512baa2",
       "kind": "react_component",
       "line": 78,
       "loc": 154,
@@ -203015,7 +203015,7 @@
           "scope": "callable",
           "severity": "error",
           "threshold": 15,
-          "value": 34
+          "value": 33
         },
         {
           "excepted": false,
@@ -203023,7 +203023,7 @@
           "scope": "callable",
           "severity": "error",
           "threshold": 25,
-          "value": 35
+          "value": 34
         },
         {
           "excepted": false,
@@ -203120,10 +203120,10 @@
       "violations": []
     },
     {
-      "cognitive": 2,
-      "cyclomatic": 3,
+      "cognitive": 1,
+      "cyclomatic": 2,
       "end_line": 133,
-      "fingerprint": "bc7f447fecd566be",
+      "fingerprint": "4a590394d8b6f9a6",
       "kind": "arrow_function",
       "line": 131,
       "loc": 3,
@@ -346729,11 +346729,11 @@
     },
     "frontend/src/components/anagrafica/AnprStatusCard.tsx": {
       "callables": 15,
-      "cognitive_max": 35,
-      "cognitive_sum": 84,
-      "complexity_density": 0.77027,
-      "cyclomatic_max": 34,
-      "cyclomatic_sum": 87,
+      "cognitive_max": 34,
+      "cognitive_sum": 82,
+      "complexity_density": 0.752252,
+      "cyclomatic_max": 33,
+      "cyclomatic_sum": 85,
       "dependency_count": 7,
       "imports": 7,
       "loc": 222,
@@ -354866,7 +354866,7 @@
       "violations": []
     }
   },
-  "generated_at": "2026-10-26T14:35:16.162965+00:00",
+  "generated_at": "2026-10-26T13:06:06.475865+00:00",
   "provenance": {
     "repo_root": "/home/cbo/CursorProjects/GAIA",
     "source_commit": "d3139342be003df74e3802ac4849242a5c744f04",

@@ -50,14 +50,24 @@ describe("AnprStatusCard", () => {
     vi.useRealTimers();
   });
 
-  test("shows both verify actions for reviewer", async () => {
+  test.each(["reviewer", "operator", "admin", "super_admin"])("shows both verify actions for %s", async (role) => {
+    mocks.getCurrentUser.mockResolvedValue({ id: 7, role, username: role });
     render(<AnprStatusCard subjectId="subject-1" initialStatus={buildStatus()} />);
 
     expect(await screen.findByRole("button", { name: "Verifica se vivo" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Verifica data morte" })).toBeInTheDocument();
   });
 
+  test.each(["viewer", "ced", "hr_manager"])("hides both verify actions for %s", async (role) => {
+    mocks.getCurrentUser.mockResolvedValue({ id: 7, role, username: role });
+    render(<AnprStatusCard subjectId="subject-1" />);
+    await waitFor(() => expect(screen.queryByText("Caricamento...")).not.toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Verifica se vivo" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Verifica data morte" })).not.toBeInTheDocument();
+  });
+
   test("calls verify alive endpoint and refreshes status", async () => {
+    mocks.getCurrentUser.mockResolvedValue({ id: 7, role: "operator", username: "operator" });
     const onStatusUpdated = vi.fn();
     mocks.verifyUtenzeAnprAlive.mockResolvedValue({
       subject_id: "subject-1",
@@ -84,6 +94,7 @@ describe("AnprStatusCard", () => {
   });
 
   test("calls verify death date endpoint and shows inferred date message", async () => {
+    mocks.getCurrentUser.mockResolvedValue({ id: 7, role: "operator", username: "operator" });
     mocks.verifyUtenzeAnprDeathDate.mockResolvedValue({
       subject_id: "subject-1",
       success: true,

@@ -129,7 +129,7 @@ export function AnprStatusCard({ subjectId, initialStatus, onStatusUpdated }: An
   }, [toast]);
 
   const canSync = useMemo(() => {
-    return currentUser?.role === "admin" || currentUser?.role === "reviewer" || currentUser?.role === "super_admin";
+    return ["admin", "reviewer", "super_admin", "operator"].includes(currentUser?.role ?? "");
   }, [currentUser]);
 
   const statusMeta = getStatusMeta(status?.stato_anpr ?? null);

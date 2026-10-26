@@ -495,18 +495,31 @@ Metriche dashboard collegate al job:
 
 Prefisso router: `/utenze/anpr`
 
+Tutte le route richiedono account autenticato e attivo e il modulo `utenze`;
+`super_admin` conserva il bypass del controllo modulo. Le dipendenze separate
+`RequireAnprVerificationRole` e `RequireAnprSyncRole` consentono dal 26 ottobre
+2026 le due verifiche a `operator`, senza estendere le altre API ANPR.
+
 | Metodo | Path | Auth | Descrizione |
 |---|---|---|---|
-| `POST` | `/sync/{subject_id}` | admin, reviewer | Sync singola legacy soggetto |
-| `POST` | `/sync/{subject_id}/verify-alive` | admin, reviewer | Verifica stato corrente senza inferenza storica della data decesso |
-| `POST` | `/sync/{subject_id}/verify-death-date` | admin, reviewer | Calcola la data decesso solo per soggetti gia risultati `deceased` |
-| `GET` | `/sync/{subject_id}/status` | admin, reviewer, viewer | Stato ANPR soggetto |
-| `GET` | `/log` | admin | Lista log chiamate ANPR (paginata) |
-| `GET` | `/log/{subject_id}` | admin, reviewer | Log chiamate per soggetto specifico |
-| `GET` | `/config` | admin | Lettura config job |
-| `PUT` | `/config` | admin | Aggiornamento config job |
-| `POST` | `/job/trigger` | admin | Trigger manuale job (usa budget giornaliero) |
-| `GET` | `/job/status` | admin | Stato ultima esecuzione job |
+| `POST` | `/preview-lookup` | super_admin, admin, reviewer | Recupero dati da CF prima della creazione soggetto |
+| `POST` | `/sync/{subject_id}` | super_admin, admin, reviewer | Sync singola legacy soggetto |
+| `POST` | `/sync/{subject_id}/verify-alive` | super_admin, admin, reviewer, operator | Verifica stato corrente senza inferenza storica della data decesso |
+| `POST` | `/sync/{subject_id}/verify-death-date` | super_admin, admin, reviewer, operator | Calcola la data decesso solo per soggetti gia risultati `deceased` |
+| `GET` | `/sync/{subject_id}/status` | Tutti i ruoli con modulo | Stato ANPR soggetto |
+| `GET` | `/log` | super_admin, admin | Lista log chiamate ANPR (paginata) |
+| `GET` | `/log/{subject_id}` | super_admin, admin, reviewer | Log chiamate per soggetto specifico |
+| `GET` | `/config` | super_admin, admin | Lettura config job |
+| `PUT` | `/config` | super_admin, admin | Aggiornamento config job |
+| `POST` | `/job/trigger` | super_admin, admin | Trigger manuale job (usa budget giornaliero) |
+| `GET` | `/job/status` | super_admin, admin | Stato ultima esecuzione job |
+| `POST` | `/capacitas/refresh-deceased` | super_admin, admin | Aggiornamento evidenze locali Capacitas |
+
+La matrice e verificata da test HTTP con token reali di test: entrambe le
+verifiche ammesse per i quattro ruoli, rifiuto di `viewer`/`ced`/`hr_manager`,
+modulo assente, account disattivato e chiamante anonimo; tutte le altre API
+restano negate agli operatori. Le chiamate ai servizi esterni sono simulate
+nei test, senza usare credenziali o dati PDND produttivi.
 
 ---
 
@@ -523,13 +536,17 @@ Aggiungere alla pagina `frontend/src/app/utenze/[id]/page.tsx` (i path `anagrafi
 //   alive → verde, deceased → rosso, unknown/null → grigio, not_found_anpr → arancione
 // - data_decesso se deceased
 // - last_anpr_check_at (ultimo controllo)
-// - Pulsante "Verifica se vivo" (solo admin/reviewer)
+// - Pulsante "Verifica se vivo" (super_admin/admin/reviewer/operator)
 //   → chiama POST /utenze/anpr/sync/{subject_id}/verify-alive
-// - Pulsante "Verifica data morte" (solo admin/reviewer)
+// - Pulsante "Verifica data morte" (super_admin/admin/reviewer/operator)
 //   → chiama POST /utenze/anpr/sync/{subject_id}/verify-death-date
 // - entrambi aggiornano stato e toast alla risposta
-// - Link al log verifiche (solo admin)
+// - durante una verifica entrambi i pulsanti sono disabilitati
 ```
+
+La card mostra entrambe le azioni ai ruoli consentiti. La precondizione
+`deceased` per le sonde storiche e applicata dal servizio, non dalla visibilita
+del pulsante. La allowlist frontend non sostituisce i controlli backend.
 
 ### 8.2 Pagina configurazione job
 

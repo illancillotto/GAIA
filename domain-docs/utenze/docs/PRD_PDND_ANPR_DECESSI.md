@@ -44,9 +44,17 @@ Integrazione con i servizi ANPR esposti su PDND (Piattaforma Digitale Nazionale 
 
 | Ruolo | Azioni consentite |
 |---|---|
-| `admin` | Configurazione job, trigger manuale, consultazione log, sync singola |
-| `reviewer` | Sync singola da scheda soggetto, consultazione log |
+| `super_admin`, `admin` | Configurazione job, trigger manuale, consultazione log, sync singola e verifiche manuali |
+| `reviewer` | Sync singola, recupero dati in creazione soggetto, log del singolo soggetto e verifiche manuali |
+| `operator` | Consultazione stato e azioni «Verifica se vivo» / «Verifica data morte» nella scheda soggetto |
 | `viewer` | Consultazione stato ANPR in scheda soggetto (read-only) |
+
+Tutte le API richiedono autenticazione, account attivo e accesso al modulo
+`utenze` (con il bypass modulo gia previsto per `super_admin`). Dal 26 ottobre
+2026 gli operatori possono eseguire soltanto le due verifiche manuali:
+sincronizzazione completa, preview di creazione, log, configurazione e job
+conservano le restrizioni precedenti. Gli account disattivati vengono rifiutati
+con `401`; modulo mancante o ruolo non consentito producono `403`.
 
 ---
 
@@ -102,9 +110,10 @@ Il job deve essere interrompibile e riprendibile: in caso di errore a meta esecu
 
 ### RF-04 — Sync singola da scheda soggetto
 
-Il dettaglio soggetto espone due azioni distinte visibili agli utenti con ruolo `admin` o `reviewer`:
+Il dettaglio soggetto espone due azioni distinte visibili agli utenti con ruolo
+`super_admin`, `admin`, `reviewer` o `operator`:
 - **"Verifica se vivo"**: esegue il controllo corrente di stato tramite C030/C004 e aggiorna il record
-- **"Verifica data morte"**: disponibile solo quando il soggetto risulta gia `deceased`; lancia le sonde storiche per inferire `data_decesso`
+- **"Verifica data morte"**: il pulsante e visibile anche prima del riscontro di decesso; il servizio richiede uno stato gia `deceased` prima di avviare le sonde storiche e restituisce altrimenti un messaggio che invita a eseguire prima «Verifica se vivo»
 
 Al click su **"Verifica se vivo"**:
 1. Se il soggetto non ha `anpr_id` → esegue prima C030 (1 chiamata)
@@ -118,7 +127,10 @@ Al click su **"Verifica data morte"**:
 3. Aggiorna `data_decesso` se l'inferenza converge
 4. Restituisce un messaggio esplicito se il sistema non riesce a determinare la data entro il budget massimo di sonde
 
-La sync singola non consuma quota del job giornaliero (è un'azione operatore esplicita), ma incrementa un contatore separato `anpr_check_log.triggered_by = 'manual'`.
+Le azioni manuali sono tracciate in `anpr_check_log.triggered_by = 'user:{id}'`;
+il job usa il proprio percorso di selezione e budget. L'abilitazione degli
+operatori non modifica le chiamate C030/C004, la persistenza o il budget delle
+sonde storiche.
 
 ### RF-05 — Configurazione job
 

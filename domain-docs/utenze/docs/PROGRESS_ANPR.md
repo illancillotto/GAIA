@@ -1,5 +1,57 @@
 # Progress ANPR
 
+## 2026-10-26 — Verifiche manuali abilitate agli operatori
+
+- Attive sul CED le azioni «Verifica se vivo» e «Verifica data morte» per
+  `operator` con account attivo e modulo Utenze. Nessuna promozione di ruolo
+  o modifica ai dati degli utenti; sincronizzazione completa, preview, log,
+  configurazione e job conservano i permessi precedenti.
+- Backend: dipendenza dedicata `RequireAnprVerificationRole` sulle sole due
+  route; frontend: allowlist allineata in `AnprStatusCard`.
+- Test pertinenti: autorizzazione HTTP per ruoli ammessi/esclusi, modulo,
+  autenticazione e account attivo; divieto delle altre API agli operatori;
+  visibilita dei pulsanti e invocazione di entrambe le verifiche dalla card
+  come operatore, con aggiornamento di stato e feedback.
+- Rilascio `anpr-operator-20261026`: backend e frontend healthy, ambiente,
+  volumi e altri container invariati. Il primo controllo ha attivato rollback
+  per il solo ordine delle variabili d'ambiente; confronto normalizzato e
+  riattivazione completati con successo. Rollback conservato nella release.
+- Verifica live dei permessi di `salaris.annamaria`: entrambe le route
+  raggiungono il controllo soggetto (`404` su UUID inesistente), mentre un
+  viewer resta `403`. Nessuna interrogazione PDND reale o scrittura anagrafica
+  effettuata da questa prova. Bundle frontend attivo con ruolo `operator`
+  verificato e pagina Utenze servita con HTTP `200`.
+- I limiti della validazione esterna ANPR indicati in «Note Aperte» restano
+  separati da questa abilitazione dei permessi.
+
+### Validazione finale della modifica
+
+- 143 test backend superati: route ANPR, servizio, client, autenticazione
+  PDND, scheduler, dipendenze API e servizio di autenticazione. 75 test
+  frontend superati: card ANPR, client API Utenze e pagina dettaglio soggetto.
+- Coverage dei file runtime modificati: `anpr/routes.py` 137/137 statement
+  e 20/20 branch; `AnprStatusCard.tsx` 79/79 statement, 87/87 branch,
+  15/15 funzioni e 76/76 righe. Nessuna nuova esclusione: restano le tre
+  righe preesistenti del guard difensivo `_run_daily_job_task`, marcate
+  `pragma: no cover`; non sono comportamento introdotto da questa change.
+- `make lint-backend BASE_REF=HEAD QUALITY_PYTHON=backend/.venv/bin/python`,
+  `npm run typecheck` e lint mirato dei due file frontend superati.
+  Build delle immagini CED completata e 45 test route superati anche
+  nell'immagine backend candidata senza rete.
+- Per riprodurre pytest con coverage nell'ambiente Python locale, importare
+  `sqlalchemy.orm` prima di invocare `pytest.main`: evita il conflitto di
+  registrazione SQLAlchemy osservato durante la raccolta sotto coverage.
+  L'immagine CED esegue normalmente `python -m pytest`. Restano warning
+  preesistenti sulla chiave JWT corta delle sole fixture locali e sulla
+  deprecazione di `next lint`.
+- Metriche backend invariate: cognitive/cyclomatic aggregate 47/52, 322 LOC;
+  frontend 84/87 -> 82/85, 222 LOC, senza nuovi callable o debito trasferito.
+  Il ratchet usa la baseline del merge-base; la sincronizzazione della
+  baseline registra questa differenza senza cambiare soglie o esclusioni.
+- Graphify codice Utenze e frontend aggiornato; estrazione semantica del
+  dominio completata con `gpt-6-luna`, senza chunk falliti. Gli artefatti
+  `graphify-out/` restano locali e non versionati.
+
 ## Stato Modulo
 
 - milestone corrente: `PDND/ANPR — Verifica Decessi`

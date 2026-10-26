@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
-from typing import Annotated, Any
 import uuid
+from datetime import UTC, datetime
+from typing import Annotated, Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -33,17 +33,17 @@ from app.modules.utenze.anpr.service import (
     refresh_capacitas_deceased_flags,
     run_daily_job,
     sync_single_subject,
+    update_config,
     verify_single_subject_alive,
     verify_single_subject_death_date,
-    update_config,
 )
 from app.modules.utenze.models import AnagraficaPerson, AnagraficaSubject
 
 router = APIRouter(prefix="/utenze/anpr", tags=["anpr"])
 
-UTC = timezone.utc
 RequireUtenzeModule = Depends(require_module("utenze"))
 RequireAnprSyncRole = Depends(require_role("super_admin", "admin", "reviewer"))
+RequireAnprVerificationRole = Depends(require_role("super_admin", "admin", "reviewer", "operator"))
 
 _job_runtime_state: dict[str, Any] = {
     "running": False,
@@ -149,7 +149,7 @@ async def post_verify_subject_alive(
     subject_id: uuid.UUID,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     _: Annotated[ApplicationUser, RequireUtenzeModule],
-    __: Annotated[ApplicationUser, RequireAnprSyncRole],
+    __: Annotated[ApplicationUser, RequireAnprVerificationRole],
     db: Annotated[Session, Depends(get_db)],
 ) -> AnprSyncResult:
     try:
@@ -176,7 +176,7 @@ async def post_verify_subject_death_date(
     subject_id: uuid.UUID,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     _: Annotated[ApplicationUser, RequireUtenzeModule],
-    __: Annotated[ApplicationUser, RequireAnprSyncRole],
+    __: Annotated[ApplicationUser, RequireAnprVerificationRole],
     db: Annotated[Session, Depends(get_db)],
 ) -> AnprSyncResult:
     try:

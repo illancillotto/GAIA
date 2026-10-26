@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Generator
-from datetime import date, datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
@@ -19,10 +19,13 @@ from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.accessi.routes.auth import router as auth_router
 from app.modules.utenze.anpr.auth import PdndConfigurationError
 from app.modules.utenze.anpr.models import AnprCheckLog
-from app.modules.utenze.anpr.routes import AnprJobSummary, _job_runtime_state, _serialize_job_summary
+from app.modules.utenze.anpr.routes import (
+    AnprJobSummary,
+    _job_runtime_state,
+    _serialize_job_summary,
+)
 from app.modules.utenze.anpr.routes import router as anpr_router
 from app.modules.utenze.models import AnagraficaPerson, AnagraficaSubject
-
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
 engine = create_engine(
@@ -35,7 +38,6 @@ app = FastAPI()
 app.include_router(auth_router)
 app.include_router(anpr_router)
 client = TestClient(app)
-UTC = timezone.utc
 
 
 def override_get_db() -> Generator[Session, None, None]:
@@ -221,8 +223,9 @@ def test_post_sync_subject_returns_503_for_pdnd_misconfiguration(monkeypatch: py
     assert response.json()["detail"] == "PDND private key not configured: set PDND_PRIVATE_KEY_PATH or PDND_PRIVATE_KEY_PEM"
 
 
-def test_post_verify_subject_alive_returns_result(monkeypatch: pytest.MonkeyPatch) -> None:
-    reviewer = _create_user(ApplicationUserRole.REVIEWER.value)
+@pytest.mark.parametrize("role", ["reviewer", "operator", "admin", "super_admin"])
+def test_post_verify_subject_alive_returns_result(monkeypatch: pytest.MonkeyPatch, role: str) -> None:
+    reviewer = _create_user(role)
     subject_id = uuid.uuid4()
 
     async def fake_verify_single_subject_alive(subject_id: str, db, triggered_by: str, auth, client):
@@ -246,8 +249,9 @@ def test_post_verify_subject_alive_returns_result(monkeypatch: pytest.MonkeyPatc
     assert response.json()["esito"] == "alive"
 
 
-def test_post_verify_subject_death_date_returns_result(monkeypatch: pytest.MonkeyPatch) -> None:
-    reviewer = _create_user(ApplicationUserRole.REVIEWER.value)
+@pytest.mark.parametrize("role", ["reviewer", "operator", "admin", "super_admin"])
+def test_post_verify_subject_death_date_returns_result(monkeypatch: pytest.MonkeyPatch, role: str) -> None:
+    reviewer = _create_user(role)
     subject_id = uuid.uuid4()
 
     async def fake_verify_single_subject_death_date(subject_id: str, db, triggered_by: str, auth, client):
@@ -269,6 +273,62 @@ def test_post_verify_subject_death_date_returns_result(monkeypatch: pytest.Monke
     assert response.status_code == 200
     assert response.json()["calls_made"] == 4
     assert response.json()["esito"] == "deceased"
+
+
+@pytest.mark.parametrize("action", ["verify-alive", "verify-death-date"])
+@pytest.mark.parametrize("role", ["viewer", "ced", "hr_manager"])
+def test_verification_denies_roles_without_verification_access(action: str, role: str) -> None:
+    user = _create_user(role)
+    response = client.post(f"/utenze/anpr/sync/{uuid.uuid4()}/{action}", headers=_auth_headers(user.username))
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Insufficient role"
+
+
+@pytest.mark.parametrize("action", ["verify-alive", "verify-death-date"])
+def test_operator_verification_requires_utenze_module(action: str) -> None:
+    user = _create_user("operator", module_utenze=False)
+    response = client.post(f"/utenze/anpr/sync/{uuid.uuid4()}/{action}", headers=_auth_headers(user.username))
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Module access denied"
+
+
+@pytest.mark.parametrize("action", ["verify-alive", "verify-death-date"])
+def test_operator_verification_requires_active_account(action: str) -> None:
+    user = _create_user("operator")
+    headers = _auth_headers(user.username)
+    with TestingSessionLocal() as db:
+        db.get(ApplicationUser, user.id).is_active = False
+        db.commit()
+    response = client.post(f"/utenze/anpr/sync/{uuid.uuid4()}/{action}", headers=headers)
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Sessione scaduta o non valida. Effettua di nuovo l'accesso."
+
+
+@pytest.mark.parametrize("action", ["verify-alive", "verify-death-date"])
+def test_verification_requires_authentication(action: str) -> None:
+    response = client.post(f"/utenze/anpr/sync/{uuid.uuid4()}/{action}")
+    assert response.status_code == 401
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "payload"),
+    [
+        ("post", "/utenze/anpr/sync/00000000-0000-0000-0000-000000000001", None),
+        ("post", "/utenze/anpr/preview-lookup", {"codice_fiscale": "RSSMRA80A01H501U"}),
+        ("get", "/utenze/anpr/log/00000000-0000-0000-0000-000000000001", None),
+        ("get", "/utenze/anpr/log", None),
+        ("get", "/utenze/anpr/config", None),
+        ("put", "/utenze/anpr/config", {"job_enabled": False}),
+        ("post", "/utenze/anpr/job/trigger", None),
+        ("get", "/utenze/anpr/job/status", None),
+        ("post", "/utenze/anpr/capacitas/refresh-deceased", None),
+    ],
+)
+def test_operator_verification_does_not_grant_other_anpr_actions(method: str, path: str, payload: dict | None) -> None:
+    user = _create_user("operator")
+    response = client.request(method, path, headers=_auth_headers(user.username), json=payload)
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Insufficient role"
 
 
 def test_post_verify_routes_cover_503_and_404_paths(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -432,8 +492,9 @@ def test_route_helpers_cover_runtime_loop_and_summary() -> None:
 
 
 def test_get_runtime_loop_returns_loop_inside_asyncio_run() -> None:
-    import app.modules.utenze.anpr.routes as routes_module
     import asyncio
+
+    import app.modules.utenze.anpr.routes as routes_module
 
     async def probe():
         return routes_module._get_runtime_loop()
