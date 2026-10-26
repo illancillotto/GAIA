@@ -9,6 +9,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.modules.ruolo.models import RuoloTributiCalculationPolicy
+from app.modules.ruolo.services.policy_notice_layout import apply_notice_layout
 
 INTEREST_START_MODES = {"fixed_date", "notification_date"}
 BOLLETTINO_POLICY_FIELDS = ("bollettino_causale", "bollettino_esercizio", "bollettino_version")
@@ -38,6 +39,7 @@ class CalculationPolicyUpsert:
     only_unnotified: bool = False
     print_bollettino: bool = True
     bollettino_version: str = "v1"
+    notice_number_source: str = "gaia"
     payment_due_date: date | None = None
 
 
@@ -124,7 +126,7 @@ def _apply_bollettino_codes(policy: RuoloTributiCalculationPolicy, command: Calc
         raise ValueError("Versione bollettino non valida")
     policy.bollettino_causale = _optional_code(command.bollettino_causale)
     policy.bollettino_esercizio = _optional_code(command.bollettino_esercizio)
-    policy.bollettino_version = command.bollettino_version
+    apply_notice_layout(policy, command)
 
 
 def delete_calculation_policy(db: Session, policy_id: uuid.UUID) -> bool:

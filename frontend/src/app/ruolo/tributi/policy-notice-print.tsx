@@ -13,13 +13,14 @@ import {
 } from "./calculation-policy-form";
 import { PolicyBollettinoFields } from "./policy-bollettino-fields";
 import { formatPolicyDate, PolicyDateInput } from "./policy-date-input";
+import { formatNoticeLayout, noticeLayoutOptions } from "./policy-notice-numbering";
 
 // Notice print options of a rule: TD 896 slip and the "QUANTO E QUANDO PAGARE" payment date.
 
-function bollettinoPrintOptions(policy: Pick<RuoloTributiCalculationPolicyResponse, "print_bollettino" | "bollettino_version">) {
+function bollettinoPrintOptions(policy: Pick<RuoloTributiCalculationPolicyResponse, "print_bollettino" | "bollettino_version" | "notice_number_source">) {
   return {
     print_bollettino: policy.print_bollettino !== false,
-    bollettino_version: policy.bollettino_version ?? "v1",
+    ...noticeLayoutOptions(policy),
   };
 }
 
@@ -52,7 +53,7 @@ export function annualityPayloadWithNoticePrint(form: CalculationPolicyFormState
 
 export function formatPolicyNoticePrint(policy: RuoloTributiCalculationPolicyResponse): string {
   const bollettino = policy.print_bollettino === false ? "Bollettino: non stampato" : formatPolicyBollettino(policy);
-  return `${bollettino} · versione ${bollettinoPrintOptions(policy).bollettino_version.slice(1)} · pagamento avviso entro ${formatPolicyDate(policy.payment_due_date)}`;
+  return `${bollettino} · ${formatNoticeLayout(policy)} · pagamento avviso entro ${formatPolicyDate(policy.payment_due_date)}`;
 }
 
 export function PolicyNoticePrintFields({ form, onChange, years }: {

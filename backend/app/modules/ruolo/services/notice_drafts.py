@@ -8,8 +8,9 @@ from uuid import UUID
 
 from sqlalchemy import inspect, select
 
-from app.modules.ruolo.models import RuoloAvviso, RuoloTributiNoticeNumber, RuoloTributiReminder
+from app.modules.ruolo.models import RuoloAvviso, RuoloTributiReminder
 from app.modules.ruolo.notice_draft_models import NoticeDraft
+from app.modules.ruolo.services.incass_notice_numbering import notice_reservation
 from app.modules.ruolo.services.notice_draft_inputs import basis_for
 
 PROTECTED_YEARS = {2022, 2023, "2022", "2023"}
@@ -92,7 +93,7 @@ def render_batch_item(db, item, batch, render, output_path: Path):
 
 def retain_draft_number(db, item) -> None:
     if item.status == "draft":
-        reservation = db.get(RuoloTributiNoticeNumber, item.notice_number_id)
+        reservation = notice_reservation(db, item.notice_number_id)
         if reservation is not None:
             reservation.status = "draft"
 

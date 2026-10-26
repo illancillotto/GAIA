@@ -1,4 +1,5 @@
 import type { CalculationPolicyFormState } from "./calculation-policy-form";
+import { IncassCausaleNote, NoticeNumberSourceField } from "./policy-notice-numbering";
 
 
 type Props = {
@@ -9,11 +10,16 @@ type Props = {
 export function PolicyBollettinoFields({ form, onChange }: Props) {
   return (
     <div className="grid gap-2 sm:grid-cols-2">
-      <BollettinoVersionField form={form} onChange={onChange} />
-      <BollettinoCodeField label="Causale bollettino" value={form.bollettino_causale} length={3} placeholder="es. 425" onChange={(value) => onChange({ ...form, bollettino_causale: value })} />
+      <BollettinoVersionField form={form} onChange={onChange} /><NoticeNumberSourceField form={form} onChange={onChange} />
+      <BollettinoCausaleField form={form} onChange={onChange} />
       <BollettinoCodeField label="Esercizio bollettino" value={form.bollettino_esercizio} length={4} placeholder="es. 2525" onChange={(value) => onChange({ ...form, bollettino_esercizio: value })} />
     </div>
   );
+}
+
+function BollettinoCausaleField({ form, onChange }: Props) {
+  if (form.notice_number_source === "incass") return <IncassCausaleNote />;
+  return <BollettinoCodeField label="Causale bollettino" value={form.bollettino_causale} length={3} placeholder="es. 425" onChange={(value) => onChange({ ...form, bollettino_causale: value })} />;
 }
 
 function BollettinoVersionField({ form, onChange }: Props) {

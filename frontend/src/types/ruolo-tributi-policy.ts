@@ -19,6 +19,7 @@ export type RuoloTributiCalculationPolicyResponse = {
   bollettino_esercizio: string | null;
   print_bollettino?: boolean;
   bollettino_version?: "v1" | "v2";
+  notice_number_source?: "gaia" | "incass";
   payment_due_date?: string | null;
   is_active: boolean;
   notes: string | null;
@@ -46,6 +47,7 @@ export type RuoloTributiCalculationPolicyUpsertRequest = {
   bollettino_esercizio?: string | null;
   print_bollettino?: boolean;
   bollettino_version?: "v1" | "v2";
+  notice_number_source?: "gaia" | "incass";
   payment_due_date?: string | null;
   is_active?: boolean;
   notes?: string | null;

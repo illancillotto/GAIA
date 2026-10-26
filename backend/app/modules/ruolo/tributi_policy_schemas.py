@@ -28,6 +28,7 @@ class RuoloTributiCalculationPolicyResponse(BaseModel):
     bollettino_esercizio: str | None = None
     print_bollettino: bool = True
     bollettino_version: Literal["v1", "v2"] = "v1"
+    notice_number_source: Literal["gaia", "incass"] = "gaia"
     payment_due_date: date | None = None
     is_active: bool
     notes: str | None = None
@@ -55,6 +56,7 @@ class RuoloTributiCalculationPolicyUpsertRequest(BaseModel):
     bollettino_esercizio: str | None = Field(default=None, pattern=r"^\d{4}$")
     print_bollettino: bool = True
     bollettino_version: Literal["v1", "v2"] = "v1"
+    notice_number_source: Literal["gaia", "incass"] = "gaia"
     payment_due_date: date | None = None
     is_active: bool = True
     notes: str | None = None

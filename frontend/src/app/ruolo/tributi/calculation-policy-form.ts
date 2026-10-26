@@ -35,6 +35,7 @@ export const EMPTY_CALCULATION_POLICY_FORM = {
   bollettino_esercizio: "",
   print_bollettino: true,
   bollettino_version: "v1" as "v1" | "v2",
+  notice_number_source: "gaia" as "gaia" | "incass",
   payment_due_date: "",
   payment_due_dates_by_year: {} as Record<string, string>,
   is_active: true,
@@ -43,7 +44,7 @@ export const EMPTY_CALCULATION_POLICY_FORM = {
 
 export type CalculationPolicyFormState = typeof EMPTY_CALCULATION_POLICY_FORM;
 // Notice print options are filled by policyFormWithNoticePrint (policy-notice-print.tsx).
-export type PolicyFormWithoutNoticePrint = Omit<CalculationPolicyFormState, "print_bollettino" | "bollettino_version" | "payment_due_date" | "payment_due_dates_by_year">;
+export type PolicyFormWithoutNoticePrint = Omit<CalculationPolicyFormState, "print_bollettino" | "bollettino_version" | "notice_number_source" | "payment_due_date" | "payment_due_dates_by_year">;
 
 export function calculationPolicyFormFromPolicy(policy: RuoloTributiCalculationPolicyResponse): PolicyFormWithoutNoticePrint {
   const years = calculationPolicyAnnualityYears(policy.year_from, policy.year_to);

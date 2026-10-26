@@ -47,6 +47,7 @@ from app.modules.ruolo.models import (
     RuoloTributiYearManager,
 )
 from app.modules.ruolo.repositories import _get_subject_display_name
+from app.modules.ruolo.services import incass_notice_numbering as incass_numbering
 from app.modules.ruolo.services import notice_drafts
 from app.modules.ruolo.services.capacitas_role_codes import (
     CAPACITAS_ROLE_ACCOUNTING_SCOPE_OUT_OF_ORDINARY,
@@ -73,14 +74,10 @@ from app.modules.ruolo.services.registered_mail_association import (
     preserve_manual_association,
     resolve_import_match,
 )
-from app.modules.ruolo.services.tributi_notice_registry import (
-    build_notice_identity_key,
-    reserve_notice_number,
-)
+from app.modules.ruolo.services.tributi_notice_registry import build_notice_identity_key
 from app.modules.ruolo.services.tributi_reminder_service import (
     GAIA_PROPOSAL_TEMPLATE_KEY,
     REGISTERED_MAIL_NOTIFICATION_AMOUNT,
-    build_batch_reminder_filename,
     build_reminder_filename,
     build_reminder_payload,
     generate_batch_reminder_docx,
@@ -3379,7 +3376,7 @@ def create_reminder_batch(
             selected_years=selected_years,
             tax_codes=selected_cf,
         )
-    candidates = _collect_reminder_candidates(
+    candidates = incass_numbering.split_incass_candidates(db, _collect_reminder_candidates(
         db,
         years=selected_years or None,
         anno_from=_int_or_none(filters.get("anno_from")),
@@ -3388,7 +3385,7 @@ def create_reminder_batch(
         comune=str(filters.get("comune") or "").strip() or None,
         codice_fiscale=selected_cf or None,
         manager_key=str(filters.get("manager_key") or "").strip() or None,
-    )
+    ))
     if selected_cf:
         selected_set = set(selected_cf)
         candidates = [candidate for candidate in candidates if candidate["codice_fiscale"] in selected_set]
@@ -3703,7 +3700,7 @@ def _prepare_batch_item(
     avviso_ids = [str(avviso["id"]) for avviso in candidate["avvisi"]]
     emission_year = generated_at.astimezone(UTC).year
     reference_years = sorted({int(year) for year in candidate["years"] if isinstance(year, int)})
-    reservation = reserve_notice_number(
+    reservation = incass_numbering.candidate_notice_number(
         db,
         emission_year=emission_year,
         candidate=candidate,
@@ -3711,7 +3708,7 @@ def _prepare_batch_item(
     )
     item = RuoloTributiReminderBatchItem(
         batch_id=batch.id,
-        notice_number_id=reservation.id,
+        notice_number_id=reservation.reservation_id,
         subject_id=candidate["subject_id"],
         codice_fiscale=candidate["codice_fiscale"],
         display_name=candidate["display_name"],
@@ -3733,12 +3730,12 @@ def _prepare_batch_item(
         candidate,
         template_path=template_path,
         generated_at=generated_at,
-        notice_number=reservation.notice_number,
+        notice_number=reservation.number,
         notice_emission_year=emission_year,
         notice_progressive=reservation.progressive,
         notice_reference_years=reference_years,
     )
-    item.payload_json = payload
+    item.payload_json = {**payload, **incass_numbering.incass_payload_overrides(candidate)}
     db.flush()
     return item
 
@@ -3773,7 +3770,7 @@ def _generate_prepared_batch_item(
     candidate: dict[str, Any],
     preview_only: bool,
 ) -> None:
-    reservation = db.get(RuoloTributiNoticeNumber, item.notice_number_id)
+    reservation = incass_numbering.notice_reservation(db, item.notice_number_id)
     output_path = _batch_item_output_path(item=item, candidate=candidate, preview_only=preview_only)
     if output_path is None:
         item.status = "failed"
@@ -3797,7 +3794,7 @@ def _batch_item_output_path(
     candidate: dict[str, Any],
     preview_only: bool,
 ) -> Path | None:
-    filename = build_batch_reminder_filename(codice_fiscale=candidate["codice_fiscale"], years=candidate["years"])
+    filename = incass_numbering.notice_filename(candidate)
     if preview_only or candidate.get(notice_drafts.PRIVATE_BATCH_KEY):
         return reminder_storage_dir() / f"{item.id}_{filename}"
     if not candidate["nas_folder_path"]:

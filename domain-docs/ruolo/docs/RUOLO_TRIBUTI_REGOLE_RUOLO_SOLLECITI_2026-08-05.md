@@ -23,6 +23,16 @@ gia generati. Le regole esistenti restano v1 dopo la migration `20261026_0900`.
 Misure e differenze dei layout sono in `RUOLO_TRIBUTI_TEMPLATE_GAIA_2026-07-23.md`
 e `MANUALE_VERIFICA_BOLLETTINI_TD896.md`.
 
+Aggiornamento 2026-10-26 (numero avviso): la regola salva `notice_number_source`
+(`gaia` default, `incass`), migration `20261026_1600`. Con `incass` GAIA non
+genera un nuovo numero: ogni avviso dell'anno della regola diventa un avviso a
+se, con numero = numero avviso inCASS a 15 cifre, usato come codice cliente
+TD 896, causale del bollettino e suffisso del file sul NAS; non viene
+prenotato alcun progressivo GAIA. L'esercizio resta quello configurato nella
+regola (per il 2021: `2021`). Gli avvisi di anni con regola `gaia` dello stesso
+contribuente restano raggruppati in un unico avviso GAIA. Un avviso senza
+numero inCASS valido blocca il batch con errore esplicito.
+
 ## Tasso interessi
 
 Dal 2026-08-06 il tasso interessi effettivo della Regola ruolo e:
