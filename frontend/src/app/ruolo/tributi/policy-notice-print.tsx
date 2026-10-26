@@ -16,12 +16,19 @@ import { formatPolicyDate, PolicyDateInput } from "./policy-date-input";
 
 // Notice print options of a rule: TD 896 slip and the "QUANTO E QUANDO PAGARE" payment date.
 
+function bollettinoPrintOptions(policy: Pick<RuoloTributiCalculationPolicyResponse, "print_bollettino" | "bollettino_version">) {
+  return {
+    print_bollettino: policy.print_bollettino !== false,
+    bollettino_version: policy.bollettino_version ?? "v1",
+  };
+}
+
 export function policyFormWithNoticePrint(policy: RuoloTributiCalculationPolicyResponse): CalculationPolicyFormState {
   const paymentDueDate = policy.payment_due_date ?? "";
   const years = calculationPolicyAnnualityYears(policy.year_from, policy.year_to);
   return {
     ...calculationPolicyFormFromPolicy(policy),
-    print_bollettino: policy.print_bollettino !== false,
+    ...bollettinoPrintOptions(policy),
     payment_due_date: paymentDueDate,
     payment_due_dates_by_year: Object.fromEntries(years.map((year) => [String(year), paymentDueDate])),
   };
@@ -30,7 +37,7 @@ export function policyFormWithNoticePrint(policy: RuoloTributiCalculationPolicyR
 export function policyPayloadWithNoticePrint(form: CalculationPolicyFormState): RuoloTributiCalculationPolicyUpsertRequest {
   return {
     ...calculationPolicyPayload(form),
-    print_bollettino: form.print_bollettino,
+    ...bollettinoPrintOptions(form),
     payment_due_date: optionalDate(form.payment_due_date),
   };
 }
@@ -38,14 +45,14 @@ export function policyPayloadWithNoticePrint(form: CalculationPolicyFormState): 
 export function annualityPayloadWithNoticePrint(form: CalculationPolicyFormState, year: number): RuoloTributiCalculationPolicyUpsertRequest {
   return {
     ...annualityPolicyPayload(form, year),
-    print_bollettino: form.print_bollettino,
+    ...bollettinoPrintOptions(form),
     payment_due_date: optionalDate(form.payment_due_dates_by_year[String(year)]),
   };
 }
 
 export function formatPolicyNoticePrint(policy: RuoloTributiCalculationPolicyResponse): string {
   const bollettino = policy.print_bollettino === false ? "Bollettino: non stampato" : formatPolicyBollettino(policy);
-  return `${bollettino} · pagamento avviso entro ${formatPolicyDate(policy.payment_due_date)}`;
+  return `${bollettino} · versione ${bollettinoPrintOptions(policy).bollettino_version.slice(1)} · pagamento avviso entro ${formatPolicyDate(policy.payment_due_date)}`;
 }
 
 export function PolicyNoticePrintFields({ form, onChange, years }: {

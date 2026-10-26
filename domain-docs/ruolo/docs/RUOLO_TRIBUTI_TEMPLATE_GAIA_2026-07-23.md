@@ -1,6 +1,6 @@
 # Template GAIA avviso/sollecito tributi
 
-Aggiornamento del 2026-08-24.
+Aggiornamento del 2026-10-26.
 
 ## Scopo
 
@@ -14,6 +14,8 @@ Gli asset grafici sono versionati nel modulo `ruolo`:
 
 - `backend/app/modules/ruolo/assets/cbo-logo.png`
 - `backend/app/modules/ruolo/assets/pagopa-logo.png`
+- `backend/app/modules/ruolo/assets/bollettino-v2-base.svg` (grafica fissa Poste
+  sanitizzata; provenienza in `bollettino-v2-base.md`)
 
 Il renderer non usa percorsi locali del PC, cartelle `Downloads` o file temporanei per i loghi.
 
@@ -26,9 +28,36 @@ Il renderer non usa percorsi locali del PC, cartelle `Downloads` o file temporan
 - Pagina 2: comunicazioni amministrative complete derivate dal template originale, con interlinea compatta ma leggibile.
 - Pagina 2: i riferimenti dipendenti dall'annualita (delibere di emissione/approvazione con data albo, dilazione, minimi, riscossione coattiva, anno di bilancio) sono ricostruiti per gli anni dell'avviso da `backend/app/modules/ruolo/services/tributi_legal_text.py` (`ROLE_YEAR_RESOLUTIONS`, 2021-2025); un anno non configurato blocca la generazione.
 - Pagina 3 e successive: dettaglio partitario allegato con font monospace ingrandito, wrapping controllato, formato raw preservato e titolo `Dettaglio partitario allegato - pagina X di N`.
-- Ultima pagina: bollettino postale TD 896 precompilato in A4 orizzontale nativo, inserito dopo il partitario e stampabile al `100%` senza rotazioni o riduzioni.
+- Ultima pagina, se abilitata dalle regole: bollettino postale TD 896 nella versione
+  salvata, inserito dopo il partitario e stampabile al `100%`.
 
-## Bollettino TD 896
+## Versione salvata nella regola
+
+`Gestisci regole calcolo` salva `bollettino_version`: `v1` (modello esistente,
+default anche per regole migrate e snapshot precedenti) o `v2` (modello Poste).
+Preview e batch usano la versione della regola attiva dell'anno piu recente;
+`print_bollettino=false` in una qualsiasi regola coinvolta esclude la pagina.
+Il payload del batch conserva la scelta: cambiare una regola non riscrive
+snapshot e PDF gia generati.
+
+V2 riproduce il riferimento `avviso026267010014169.pdf`: box MediaBox/CropBox
+`595 x 841 pt`, grafica orizzontale ruotata internamente alla pagina, senza
+scaling. Mantiene testi, loghi, conto, IBAN e autorizzazione del riferimento;
+rigenera versante, indirizzo, importo, scadenza, esercizio/causale e codici da
+GAIA. Entrambe le ricevute riportano scadenza, esercizio e importo. Il font dei
+dati del versante si riduce fino a `6pt`; oltre tale limite la generazione
+fallisce con errore esplicito, senza troncare i dati. L'autorizzazione v2 e
+quella nell'asset, indipendente dalle impostazioni `TD896_*` riservate a v1.
+`services/notice_html_pdf.py` ripristina i box esatti dopo l'arrotondamento di
+Chromium, senza spostare la grafica; le altre pagine restano invariate.
+
+Le misure, le posizioni e la configurazione AUT descritte sotto si riferiscono
+a v1; codifica TD 896, dati della regola e ordine dei documenti sono condivisi.
+La procedura di verifica v2 e nel manuale: il verificatore geometrico v1 non
+valida le coordinate del modello Poste. I test di integrazione generano PDF
+con Chromium e decodificano Code 128 e Data Matrix di entrambe le versioni.
+
+## Bollettino TD 896: v1 e codifica condivisa
 
 La pagina bollettino usa i dati dell'avviso GAIA: numero avviso, codice fiscale, denominazione contribuente, importo saldo, scadenza, esercizio e anni di riferimento. Il numero avviso visibile resta quello GAIA, mentre il codice cliente postale e un identificativo distinto di 18 cifre derivato deterministicamente dall'avviso e completato con controcodice modulo 93. La causale stampata nei riquadri del bollettino e solo quella configurata nella `Regola ruolo` (`bollettino_causale`) o presente nel payload (`payment_reason_code`, `causale`); se manca, la riga `Causale` non viene stampata (dal 2026-10-22; prima GAIA stampava come fallback le cifre 7-9 del numero avviso, un frammento di annualita/progressivo e non una causale). La causale bonifico resta invece nel formato completo `A <numero avviso> CF <codice fiscale>`.
 
@@ -149,7 +178,7 @@ avviso, da verificare a vista sul PDF.
 - La stampa deve restare A4; il numero pagine può crescere quando il partitario reale è lungo.
 - I loghi devono essere caricati dagli asset interni al progetto.
 - Il testo amministrativo non deve essere sintetizzato o rimosso.
-- Il wizard batch e il fallback backend devono generare il template GAIA `__gaia_proposal__`, non il DOCX legacy, per includere sempre il bollettino postale.
+- Il wizard batch e il fallback backend devono generare il template GAIA `__gaia_proposal__`, rispettando esclusione e versione del bollettino salvate nelle regole.
 - Il bollettino TD 896 deve restare dopo il partitario, come ultima pagina, e deve usare codeline coerente con codice cliente, importo, conto corrente e tipo documento.
 - Code 128 e Data Matrix devono decodificare lo stesso payload numerico di 50 cifre.
 - Causale ed esercizio configurati nella `Regola ruolo` devono comparire nella ricevuta di versamento; senza causale configurata la riga `Causale` non compare, mentre l'esercizio resta automatico.

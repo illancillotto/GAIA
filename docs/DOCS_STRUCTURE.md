@@ -223,11 +223,17 @@ compatibilita; il backend canonico e `backend/app/modules/utenze/`.
 - `domain-docs/ruolo/docs/MANUALE_VERIFICA_BOLLETTINI_TD896.md`: procedura di verifica dei PDF di campionatura TD 896.
 - `domain-docs/ruolo/docs/RUOLO_TRIBUTI_TEMPLATE_GAIA_2026-07-23.md`: contratto del template avvisi e bollettini GAIA.
 
-Tooling di campionatura: `scripts/ruolo/verify_td896_pdf.py`, dipendenze solo di
+Tooling di campionatura del layout v1: `scripts/ruolo/verify_td896_pdf.py`, dipendenze solo di
 sviluppo in `scripts/ruolo/requirements-verify-td896.txt`; test in
 `tests/ruolo/test_verify_td896_pdf.py` con fixture PDF in
 `tests/ruolo/fixtures/td896_su_campu_sample.pdf`. Target locale e CI:
 `make test-verify-td896`.
+
+Layout v2: `backend/app/modules/ruolo/services/bollettino_v2.py`, asset fisso
+sanitizzato `backend/app/modules/ruolo/assets/bollettino-v2-base.svg` e relativa
+provenienza `.md`. Conversione Chromium condivisa in `services/notice_html_pdf.py`;
+test del layout, migrazione e stampa reale in
+`backend/tests/ruolo/test_bollettino_v2{,_integration}.py`.
 
 Nota: diversi documenti Ruolo sono storici. Per lo stato corrente dare priorita
 al PRD aggiornato, ai report inCASS recenti e al codice runtime.

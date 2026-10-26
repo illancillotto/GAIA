@@ -9,15 +9,34 @@ type Props = {
 export function PolicyBollettinoFields({ form, onChange }: Props) {
   return (
     <div className="grid gap-2 sm:grid-cols-2">
-      <label className="grid gap-1 text-xs font-semibold text-gray-600">
-        Causale bollettino
-        <input aria-label="Causale bollettino" value={form.bollettino_causale} onChange={(event) => onChange({ ...form, bollettino_causale: digits(event.target.value, 3) })} inputMode="numeric" maxLength={3} placeholder="es. 425" className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-normal outline-none focus:border-amber-400" />
-      </label>
-      <label className="grid gap-1 text-xs font-semibold text-gray-600">
-        Esercizio bollettino
-        <input aria-label="Esercizio bollettino" value={form.bollettino_esercizio} onChange={(event) => onChange({ ...form, bollettino_esercizio: digits(event.target.value, 4) })} inputMode="numeric" maxLength={4} placeholder="es. 2525" className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-normal outline-none focus:border-amber-400" />
-      </label>
+      <BollettinoVersionField form={form} onChange={onChange} />
+      <BollettinoCodeField label="Causale bollettino" value={form.bollettino_causale} length={3} placeholder="es. 425" onChange={(value) => onChange({ ...form, bollettino_causale: value })} />
+      <BollettinoCodeField label="Esercizio bollettino" value={form.bollettino_esercizio} length={4} placeholder="es. 2525" onChange={(value) => onChange({ ...form, bollettino_esercizio: value })} />
     </div>
+  );
+}
+
+function BollettinoVersionField({ form, onChange }: Props) {
+  return (
+    <label className="grid gap-1 text-xs font-semibold text-gray-600 sm:col-span-2">
+      Versione bollettino
+      <select aria-label="Versione bollettino" value={form.bollettino_version} onChange={(event) => onChange({ ...form, bollettino_version: event.target.value as "v1" | "v2" })} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-normal outline-none focus:border-amber-400">
+        <option value="v1">Versione 1 - modello attuale</option>
+        <option value="v2">Versione 2 - modello Poste</option>
+      </select>
+      <span className="font-normal">Per avvisi con più annualità si usa la versione della regola dell&apos;anno più recente.</span>
+    </label>
+  );
+}
+
+function BollettinoCodeField({ label, value, length, placeholder, onChange }: {
+  label: string; value: string; length: number; placeholder: string; onChange: (value: string) => void;
+}) {
+  return (
+    <label className="grid gap-1 text-xs font-semibold text-gray-600">
+      {label}
+      <input aria-label={label} value={value} onChange={(event) => onChange(digits(event.target.value, length))} inputMode="numeric" maxLength={length} placeholder={placeholder} className="rounded-xl border border-gray-200 px-3 py-2 text-sm font-normal outline-none focus:border-amber-400" />
+    </label>
   );
 }
 

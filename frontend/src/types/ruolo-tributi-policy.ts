@@ -18,6 +18,7 @@ export type RuoloTributiCalculationPolicyResponse = {
   bollettino_causale: string | null;
   bollettino_esercizio: string | null;
   print_bollettino?: boolean;
+  bollettino_version?: "v1" | "v2";
   payment_due_date?: string | null;
   is_active: boolean;
   notes: string | null;
@@ -44,6 +45,7 @@ export type RuoloTributiCalculationPolicyUpsertRequest = {
   bollettino_causale?: string | null;
   bollettino_esercizio?: string | null;
   print_bollettino?: boolean;
+  bollettino_version?: "v1" | "v2";
   payment_due_date?: string | null;
   is_active?: boolean;
   notes?: string | null;

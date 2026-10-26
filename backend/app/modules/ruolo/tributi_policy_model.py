@@ -47,6 +47,9 @@ class RuoloTributiCalculationPolicy(Base):
     print_bollettino: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true"
     )
+    bollettino_version: Mapped[str] = mapped_column(
+        String(2), nullable=False, default="v1", server_default="v1"
+    )
     payment_due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -12,6 +12,17 @@ Quando l'operatore configura un range multi-annualita, per esempio `2024-2025`, 
 - fallback/minimo interessi per annualita;
 - percentuali e modalita interessi della regola.
 
+Aggiornamento 2026-10-26: la regola salva anche `print_bollettino` (default
+`true`), `payment_due_date` e `bollettino_version` (`v1` default, `v2` modello
+Poste). La UI espone la versione in `Gestisci regole calcolo` e nel riepilogo.
+Per avvisi multiannualita, basta una regola con bollettino disattivato per
+escluderlo; versione, data avviso, causale ed esercizio provengono dalla regola
+dell'anno piu recente. La scelta vale per preview e stampe successive e viene
+copiata nello snapshot del batch; cambiare la regola non riscrive documenti
+gia generati. Le regole esistenti restano v1 dopo la migration `20261026_0900`.
+Misure e differenze dei layout sono in `RUOLO_TRIBUTI_TEMPLATE_GAIA_2026-07-23.md`
+e `MANUALE_VERIFICA_BOLLETTINI_TD896.md`.
+
 ## Tasso interessi
 
 Dal 2026-08-06 il tasso interessi effettivo della Regola ruolo e:

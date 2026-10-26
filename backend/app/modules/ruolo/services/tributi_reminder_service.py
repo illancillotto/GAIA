@@ -23,6 +23,13 @@ from xml.etree import ElementTree as ET
 from pypdf import PdfReader, PdfWriter
 
 from app.core.config import settings
+from app.modules.ruolo.services.bollettino_v2 import (
+    _BOLLETTINO_ACCOUNT_NAME_LINES,
+    _BOLLETTINO_IBAN,
+    _BOLLETTINO_POSTAL_ACCOUNT,
+    bollettino_layout_html,
+)
+from app.modules.ruolo.services.notice_html_pdf import _render_gaia_html_to_pdf
 from app.modules.ruolo.services.notice_number_cell import notice_numbers_html
 from app.modules.ruolo.services.partitario_by_avviso import partitario_by_avviso
 from app.modules.ruolo.services.partitario_dialog import usable_partitario_text
@@ -46,8 +53,6 @@ DEFAULT_BATCH_REMINDER_TEMPLATE_NAME = "Avviso_Sollecito_Template.docx"
 GAIA_PROPOSAL_TEMPLATE_KEY = "__gaia_proposal__"
 PARTITARIO_LINE_WIDTH = 80
 logger = logging.getLogger(__name__)
-_BOLLETTINO_POSTAL_ACCOUNT = "1007214826"
-_BOLLETTINO_IBAN = "IT15L0760117400001007214826"
 _BOLLETTINO_SAMPLE_AUTHORIZATION = "AUT.DB/SISB/XXXXX DEL XX/XX/XXXX"
 # Payer-name font steps (pt) and the "eseguito da" box on the narrower versamento slip.
 _BOLLETTINO_PAYER_FONT_STEPS = (8.25, 7.5, 6.75, 6.0)
@@ -59,10 +64,6 @@ _BOLLETTINO_ADDRESS_GAP_MM = 0.7
 # The slip text is OCR-B, a monospaced face with a 0.723 em advance (measured on the rendered PDF).
 _BOLLETTINO_GLYPH_WIDTH_EM = 0.723
 _PT_TO_MM = 25.4 / 72
-_BOLLETTINO_ACCOUNT_NAME_LINES = (
-    "CONSORZIO DI BONIFICA DELL'ORISTANESE -",
-    "RISCOSSIONE QUOTE ASSOCIATIVE",
-)
 _CODE128_PATTERNS = (
     "212222",
     "222122",
@@ -327,35 +328,6 @@ def _render_gaia_proposal_sections(payload: dict[str, Any], *, chromium_binary: 
     # One PDF per section; the TD 896 slip only when the year rules print it.
     sections = _GAIA_PROPOSAL_SECTIONS if payload.get("print_bollettino", True) else _GAIA_PROPOSAL_SECTIONS[:2]
     return [_render_gaia_html_to_pdf(_gaia_proposal_html(payload, **flags), chromium_binary=chromium_binary, working_dir=working_dir, stem=f"{stem}_{name}") for name, flags in sections]
-
-
-def _render_gaia_html_to_pdf(
-    html_text: str,
-    *,
-    chromium_binary: str,
-    working_dir: Path,
-    stem: str,
-) -> Path:
-    html_path = working_dir / f"{stem}.html"
-    pdf_path = working_dir / f"{stem}.pdf"
-    html_path.write_text(html_text, encoding="utf-8")
-    subprocess.run(
-        [
-            chromium_binary,
-            "--headless",
-            "--disable-gpu",
-            "--no-sandbox",
-            "--no-pdf-header-footer",
-            f"--print-to-pdf={pdf_path}",
-            html_path.as_uri(),
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    if not pdf_path.exists():
-        raise RuntimeError("Conversione PDF template GAIA non riuscita")
-    return pdf_path
 
 
 def _merge_pdf_files(pdf_paths: Iterable[Path], *, output_path: Path) -> None:
@@ -679,7 +651,7 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 {partitario_sections_html if include_partitario else ''}
 {f'''
 <section class="page bollettino-page">
-{_gaia_bollettino_html(field_values, payload)}
+{bollettino_layout_html(field_values, payload, render_v1=_gaia_bollettino_html, render_barcode=_gaia_bollettino_code128_svg, causale=_gaia_bollettino_causale(payload))}
 </section>
 ''' if include_bollettino else ''}
 </body>

@@ -2803,6 +2803,7 @@ def test_tributi_calculation_policy_crud_validates_active_year_ranges() -> None:
         assert tributi_repo._notice_print_policy_payload(db, [2023, 2024]) == {
             "bollettino_causale": "025",
             "bollettino_esercizio": "2424",
+            "bollettino_version": "v1",
             "print_bollettino": True,
         }
         assert tributi_repo._notice_print_policy_payload(db, []) == {}
@@ -5358,6 +5359,8 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
             writer.write(pdf_file)
         return object()
 
+    # This case exercises system Chromium discovery, independently of the real-print override.
+    monkeypatch.delenv("PLAYWRIGHT_CHROMIUM_EXECUTABLE", raising=False)
     monkeypatch.setattr("app.modules.ruolo.services.tributi_reminder_service.shutil.which", lambda _name: "/usr/bin/chromium")
     monkeypatch.setattr("app.modules.ruolo.services.tributi_reminder_service.subprocess.run", fake_chromium_run)
     generate_batch_reminder_pdf(

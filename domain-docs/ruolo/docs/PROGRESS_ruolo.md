@@ -1,5 +1,77 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## Bollettino versione 2 selezionabile nelle regole — 2026-10-26
+
+- Implementazione nel repository, rilascio e migrazione sul database
+  dell'istanza non eseguiti. La migration `20261026_0900` aggiunge
+  `bollettino_version` con default `v1`; API ammette soltanto `v1`/`v2`.
+  Il selettore si trova in `Gestisci regole calcolo`, accanto a causale ed
+  esercizio. Scelta persistente anche dopo riapertura e negli avvisi su piu
+  anni: prevale la regola dell'anno piu recente. Il flag di esclusione del
+  bollettino mantiene la precedenza sulla versione.
+- Nuovo renderer `services/bollettino_v2.py`, base grafica sanitizzata
+  `assets/bollettino-v2-base.svg` con provenienza in `bollettino-v2-base.md`:
+  riproduce il riferimento Poste fornito dall'utente. Testi, loghi, conto,
+  IBAN e autorizzazione originali fissi; dati del versante, importi, scadenza
+  e codici rigenerati dall'avviso. Il PDF con i dati del contribuente di
+  esempio non e versionato. `notice_html_pdf.py` isola la conversione
+  Chromium e ripristina soltanto per v2 i box esatti `595 x 841 pt`, senza
+  ridimensionare la grafica. V1 mantiene l'HTML identico byte per byte a
+  `HEAD`, anche per snapshot senza campo versione; invariati prima pagina,
+  partitario e contratti TD 896.
+- Test finali: 139 test backend PASS nella suite API/notice-print/v2 e
+  integrazione; statement e branch `100%` sui sei runtime Python modificati
+  (1130 statement, 306 branch), nessun test saltato. Migrazione misurata
+  separatamente: 1 test PASS, `100%` dei 10 statement, nessun branch.
+  Le integrazioni verificano regola API -> payload di generazione -> snapshot
+  batch, conservazione del documento dopo cambio regola, stampa reale
+  Chromium v1/v2, pagine precedenti uguali, nominativo completo con caratteri
+  speciali, box esatti e decodifica coerente Code 128/Data Matrix.
+  Test del renderer coprono anche dati mancanti, font ridotto e rifiuto di
+  nomi oltre lo spazio disponibile, attraverso il comportamento di stampa.
+  Frontend: 66 test PASS
+  (`ruolo-tributi-page.test.tsx`, `ruolo-bollettino-version.test.tsx`),
+  statement/branch/funzioni/linee `100%` sui tre runtime TSX/TS modificati.
+  `make lint-backend QUALITY_PYTHON=backend/.venv/bin/python BASE_REF=main`,
+  ESLint mirato e `npm run typecheck` PASS. Migration upgrade/downgrade e
+  default sulle regole esistenti verificati su SQLite; `alembic heads`
+  restituisce `20261026_0900`.
+  Build frontend di produzione PASS nel checkout isolato della feature;
+  restano warning ESLint su file invariati, nessun warning sui file runtime
+  della feature. I 270 test degli strumenti code quality sono PASS.
+  Ulteriori 41 test di regressione PASS su testi legali, sovrapposizioni dei
+  gestori annualita e policy dei non notificati: 180 test backend complessivi.
+- Ratchet ordinario contro il merge-base `main`: nessuna nuova violation.
+  Servizio legacy LOC `1814 -> 1788`, somma cognitive `430 -> 429`, somma
+  cyclomatic `436 -> 434`; il convertitore estratto conserva comportamento
+  v1 e aggiunge la calibrazione v2. Nuovi moduli: massimi cognitive `6` e
+  `2`, cyclomatic `7` e `3`, nessuna violation. Nessuna soglia, esclusione
+  o gate modificato; preservate le modifiche ANPR e la baseline gia presenti
+  nel working tree.
+  Baseline della feature sincronizzata soltanto sui 10 file runtime (incluso
+  il tipo TS). Il controllo finale in checkout isolato ha confermato che la
+  riparazione gia presente localmente riproduce il codice a HEAD, salvo i
+  record ANPR: recupero del codice gia committato separato dalla feature,
+  senza includere le modifiche ANPR nel commit.
+  `make complexity-baseline-verify QUALITY_PYTHON=.venv/bin/python` PASS,
+  baseline riproducibile. Per la sincronizzazione usare Python `3.14.4`
+  dell'ambiente `.venv`, come la baseline locale; Python `3.12` produce
+  fingerprint AST diversi anche sui sorgenti invariati.
+- Generata e ispezionata un'anteprima con dati sintetici, anche dentro
+  l'avviso completo: box v2 esatti e font incorporati OCR-B/Courier New.
+  Lettura con zxing-cpp a 216 dpi: Code 128 e Data Matrix restituiscono lo
+  stesso payload TD 896 di 50 cifre. Aggiornati i grafi con i target Make
+  Ruolo, backend, frontend e documentazione di dominio. Il manuale distingue
+  la geometria v2 dal verificatore geometrico esistente, dedicato a v1.
+  Aggiornato anche il grafo documentazione piattaforma: entrambi i target
+  semantici riportano `chunk 1/1 done`, senza chunk falliti.
+- Per rieseguire la stampa reale servono Chromium, PyMuPDF, Pillow e zxing-cpp;
+  `PLAYWRIGHT_CHROMIUM_EXECUTABLE` indica il binario. Il test segnala uno skip
+  se queste dipendenze non sono disponibili (la CI corrente non installa
+  Chromium). La misura locale finale le include tutte. La migrazione e stata
+  verificata su SQLite, non applicata al PostgreSQL dell'istanza; stampa
+  fisica e rilascio restano attivita operative successive.
+
 ## Regole ruolo: bollettino e data di pagamento; 2021 condiviso con STEP — 2026-10-23
 
 - `Regola ruolo` ha due nuove scelte (migration `20261023_0900`):

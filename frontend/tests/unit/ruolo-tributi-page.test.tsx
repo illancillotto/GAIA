@@ -963,7 +963,7 @@ describe("Ruolo tributi page", () => {
       { ...policy, name: "B", year_from: 2024, year_to: 2024 },
     ]).map((block) => block.name)).toEqual(["A", "B"]);
     expect(formatPolicyBollettino({ ...policy, bollettino_causale: null, bollettino_esercizio: null })).toBe("Bollettino: causale automatica · esercizio automatico");
-    expect(formatPolicyNoticePrint({ ...policy, print_bollettino: false })).toBe("Bollettino: non stampato · pagamento avviso entro -");
+    expect(formatPolicyNoticePrint({ ...policy, print_bollettino: false })).toBe("Bollettino: non stampato · versione 1 · pagamento avviso entro -");
   });
 
   test.each(["super_admin", "viewer"])("shows every active rule chronologically in a keyboard-accessible strip for %s", async (role) => {
@@ -1006,13 +1006,14 @@ describe("Ruolo tributi page", () => {
     expect(policyCard).toHaveTextContent("Annualita 2024");
     expect(policyCard).toHaveTextContent("Annualita 2025");
     expect(policyCard).toHaveTextContent("Scadenza bonaria 26/05/2025");
-    expect(policyCard).toHaveTextContent("Bollettino: causale 025 · esercizio 2424 · pagamento avviso entro -");
+    expect(policyCard).toHaveTextContent("Bollettino: causale 025 · esercizio 2424 · versione 1 · pagamento avviso entro -");
     expect(policyCard).toHaveTextContent("Maggiorazione dal 27/05/2025");
     expect(policyCard).toHaveTextContent("Fallback/minimo interessi 27/05/2025");
     expect(policyCard).toHaveTextContent("interessi effettivi 6,25%");
     expect(policyCard).toHaveTextContent("Fonte Euribor BCE 2024");
 
     fireEvent.click(modal.getByRole("button", { name: "Modifica" }));
+    fireEvent.change(modal.getByLabelText("Versione bollettino"), { target: { value: "v2" } });
     fireEvent.change(modal.getByPlaceholderText("Nome, es. Ruoli morosi 2024"), { target: { value: "Policy aggiornata" } });
     fireEvent.change(modal.getByPlaceholderText("Anno da"), { target: { value: "2025" } });
     fireEvent.change(modal.getByPlaceholderText("Anno a"), { target: { value: "2026" } });
@@ -1038,6 +1039,7 @@ describe("Ruolo tributi page", () => {
       name: "Policy aggiornata 2025",
       only_unnotified: false,
       print_bollettino: false,
+      bollettino_version: "v2",
       year_from: 2025,
       year_to: 2025,
       bonario_due_date: "2026-07-31",
@@ -1060,6 +1062,7 @@ describe("Ruolo tributi page", () => {
       name: "Policy aggiornata 2026",
       only_unnotified: false,
       print_bollettino: false,
+      bollettino_version: "v2",
       year_from: 2026,
       year_to: 2026,
       bonario_due_date: "2027-07-31",
@@ -1191,7 +1194,7 @@ describe("Ruolo tributi page", () => {
     const dialog = screen.getByText("Scadenza bonaria, maggiorazioni e interessi").closest("div")?.parentElement?.parentElement;
     expect(dialog).not.toBeNull();
     const modal = within(dialog as HTMLElement);
-    expect(modal.getAllByText("Bollettino: non stampato · pagamento avviso entro 30/11/2026").length).toBeGreaterThan(0);
+    expect(modal.getAllByText("Bollettino: non stampato · versione 1 · pagamento avviso entro 30/11/2026").length).toBeGreaterThan(0);
     fireEvent.click(await modal.findByRole("button", { name: "Modifica" }));
     expect(modal.getByRole("checkbox", { name: "Stampa bollettino postale" })).not.toBeChecked();
     expect(modal.getByLabelText("Pagamento avviso entro 2024")).toHaveValue("30/11/2026");
@@ -1247,6 +1250,7 @@ describe("Ruolo tributi page", () => {
       name: "Ruoli bonari 2024",
       only_unnotified: false,
       print_bollettino: true,
+      bollettino_version: "v1",
       year_from: 2024,
       year_to: 2024,
       bonario_due_date: "2026-07-31",
@@ -1269,6 +1273,7 @@ describe("Ruolo tributi page", () => {
       name: "Ruoli bonari 2025",
       only_unnotified: false,
       print_bollettino: true,
+      bollettino_version: "v1",
       year_from: 2025,
       year_to: 2025,
       bonario_due_date: "2027-07-31",

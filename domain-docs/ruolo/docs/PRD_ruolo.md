@@ -163,8 +163,13 @@ provenienza e recupero dello storico sono descritti in
 > Aggiornamento 2026-07-27: il template GAIA con bollettino postale TD 896 e partitario
 > allegato e il default operativo sia per l'azione rapida `Avviso sollecito` sia per il
 > wizard batch `Genera PDF nel NAS`. Il backend usa `__gaia_proposal__` anche quando il
-> batch arriva senza `template_path`, cosi i PDF generati dal wizard includono sempre il
-> bollettino. Il DOCX legacy resta supportato solo come path esplicito di compatibilita.
+> batch arriva senza `template_path`. Il DOCX legacy resta supportato solo come path
+> esplicito di compatibilita. Stato al 2026-10-26: le regole possono escludere la pagina
+> bollettino (`print_bollettino=false` in almeno una annualita) e salvarne la versione
+> (`bollettino_version`: `v1`, default retrocompatibile, oppure `v2`, modello Poste).
+> La versione della regola dell'anno piu recente vale per preview e batch successivi;
+> i documenti gia generati conservano il proprio snapshot. V2 mantiene gli elementi
+> fissi del PDF di riferimento e i box pagina `595 x 841 pt`.
 > Aggiornamento 2026-07-28: nella prima pagina del template GAIA il riepilogo importi
 > mostra una colonna `Numero avviso` per ogni riga `Ruolo {anno}`, valorizzata con il
 > `codice_cnc` dell'avviso relativo a quell'anno. La regola vale sia per il PDF HTML/Chromium

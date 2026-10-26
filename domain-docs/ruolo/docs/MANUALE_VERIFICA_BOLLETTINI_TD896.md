@@ -1,6 +1,6 @@
 # Mini manuale di verifica bollettini TD 896 GAIA
 
-Aggiornamento del 2026-10-22.
+Aggiornamento del 2026-10-26.
 
 ## Scopo
 
@@ -8,6 +8,27 @@ Questa procedura permette di verificare, prima della consegna o del pagamento,
 che il bollettino postale allegato a un avviso GAIA contenga i dati dello stesso
 avviso. In caso di una sola difformita non procedere al pagamento e segnalare il
 PDF all'amministratore GAIA.
+
+## Scelta della versione nella regola ruolo
+
+In `Ruolo > Tributi > Gestisci regole calcolo`, il campo `Versione bollettino`
+salva la scelta per le stampe e le anteprime successive:
+
+- `Versione 1 - modello attuale`: mantiene la stampa GAIA esistente. E il
+  valore iniziale anche per tutte le regole precedenti alla migrazione
+  `20261026_0900`.
+- `Versione 2 - modello Poste`: riproduce la pagina del riferimento fornito
+  `avviso026267010014169.pdf`, conservando grafica, testi fissi, loghi, conto,
+  IBAN e autorizzazione postale del riferimento. Contribuente, indirizzo,
+  scadenza, esercizio, causale, importo e codici di pagamento provengono
+  dall'avviso GAIA. Non richiede l'autorizzazione configurabile della versione 1.
+
+Negli avvisi con piu annualita, la versione segue la regola dell'anno piu
+recente, come causale, esercizio e data di pagamento. `Stampa bollettino
+postale` continua a escludere l'intera pagina se anche una sola annualita
+non prevede il bollettino. Prima pagina e partitario non cambiano.
+Le nuove impostazioni si applicano ai PDF generati successivamente, senza
+modificare i documenti gia archiviati.
 
 ## Verifica visiva
 
@@ -22,13 +43,17 @@ PDF all'amministratore GAIA.
    Se nella `Regola ruolo` sono stati configurati `Causale bollettino` ed
    `Esercizio bollettino`, la ricevuta di versamento deve mostrare esattamente i
    codici di tre e quattro cifre inseriti. La ricevuta di accredito riserva la
-   zona cliente esclusivamente ai dati del versante, come richiesto dal manuale
-   Poste. Se la causale non e configurata, la riga `Causale` non deve comparire:
+   zona cliente esclusivamente ai dati del versante nella versione 1. La
+   versione 2 conserva le posizioni del riferimento, con i dettagli sotto
+   l'indirizzo anche sulla ricevuta di accredito.
+   Se la causale non e configurata, la riga `Causale` non deve comparire:
    GAIA non ricava piu una causale dal numero avviso. Se l'esercizio non e
    configurato, vale l'anno di emissione ripetuto, per esempio `2626` per un
    avviso emesso nel 2026.
    La denominazione nel campo `eseguito da` deve essere completa, senza `...`:
-   se e lunga va a capo e il font si riduce fino a `6pt`.
+   nella versione 1, se e lunga va a capo e il font si riduce fino a `6pt`.
+   La versione 2 riduce il font nella riga disponibile fino a `6pt`; se non
+   basta, segnala un errore di generazione senza troncare il nominativo.
 6. Verificare i dati fissi del Consorzio:
    - conto corrente postale `1007214826`;
    - conto a 12 cifre nella codeline `001007214826`;
@@ -45,7 +70,7 @@ PDF all'amministratore GAIA.
    esempio `12026222500001` per `2022-2025`: l'elenco completo delle annualita
    va controllato nel riepilogo per anno e nel partitario, non nel numero.
 
-## Verifica formato di stampa
+## Verifica formato di stampa - versione 1
 
 L'ultima pagina del PDF deve essere A4 orizzontale. Stampare al `100%` o con
 `Dimensioni effettive`, mai con `Adatta alla pagina`. Il modulo da ritagliare
@@ -59,6 +84,31 @@ Le due aree per il bollo postale devono iniziare a `49 mm` dal bordo superiore
 del modulo e misurare `55 x 34 mm`; sulla ricevuta di versamento l'area e alta
 `33.2 mm` per lasciare libera la zona di rispetto del Data Matrix. Sopra il
 modulo devono comparire le istruzioni di stampa.
+
+## Verifica formato di stampa - versione 2
+
+La pagina ha `MediaBox` e `CropBox` di `595 x 841 pt`, rotazione PDF `0`,
+come il riferimento. Il contenuto e orizzontale e ruotato di 90 gradi dentro
+la pagina verticale. Non impostare un secondo adattamento o una seconda
+rotazione: stampare al `100%` / `Dimensioni effettive`.
+
+Le coordinate seguenti sono riferite al contenuto letto orizzontalmente,
+con origine nell'angolo superiore sinistro, in punti PDF:
+
+| Elemento | Posizione / dimensione |
+| --- | --- |
+| Base del modulo originale | x `12`, y `306.3`, larghezza `815.5`, altezza `283.2` |
+| Separazione delle ricevute | x circa `369.5` |
+| Codice cliente | x `389.3`, baseline y `433.5` |
+| Codeline | x `389.3`, baseline y `571.8`, OCR-B `9.75pt`, avanzamento `6.747pt` |
+| Barre Code 128 | x `532.1`, y `485.3`, `263.5 x 30.4pt`, numero subito sotto |
+| Riquadro Data Matrix | x `222.7`, y `533.3`, `129.25 x 45.95pt` |
+
+La grafica fissa e incorporata nel PDF; i dati del contribuente dell'esempio
+non sono presenti nell'asset riutilizzato. I due codici vengono rigenerati,
+con lo stesso contratto TD 896 della versione 1. La correzione della
+quantizzazione Chromium ripristina le dimensioni esatte della pagina senza
+ridimensionare il contenuto.
 
 ## Verifica con lettore codici
 
@@ -90,7 +140,13 @@ Esempio: per `1,00 EUR` il campo importo deve essere `0000000100`; per
 
 ## Verifica automatica della campionatura
 
-Lo script `scripts/ruolo/verify_td896_pdf.py` controlla uno o piu PDF gia
+Lo script `scripts/ruolo/verify_td896_pdf.py` verifica le misure della
+**versione 1**: i suoi controlli geometrici A4 orizzontale e modulo `297 x
+102 mm` non si applicano alla versione 2. Per la versione 2 verificare le
+misure sopra e leggere entrambi i simboli come descritto nella sezione
+`Verifica con lettore codici`.
+
+Lo script controlla uno o piu PDF gia
 generati (avviso completo o solo bollettino). Le dipendenze `pymupdf` e
 `zxing-cpp` (versioni fissate in `scripts/ruolo/requirements-verify-td896.txt`)
 servono solo allo sviluppo e alla CI e non entrano nell'immagine backend:

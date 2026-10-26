@@ -835,7 +835,7 @@ Nota operativa Docker:
 
 ### Verifica PDF TD 896
 
-La verifica di campionatura opera su PDF gia generati, con dipendenze solo di
+La verifica di campionatura del layout v1 opera su PDF gia generati, con dipendenze solo di
 sviluppo, escluse dall'immagine backend:
 
 ```bash
@@ -855,7 +855,17 @@ coverage statement/branch al `100%` su `scripts/ruolo`. La CI backend installa
 le dipendenze di verifica ed esegue `make test-verify-td896 TD896_VERIFY_PYTHON=python`;
 il workflow si attiva anche per modifiche a `scripts/ruolo/**` e `tests/ruolo/**`.
 
-Per generare il bollettino in produzione occorre `TD896_PRINT_AUTHORIZATION`
+In `Gestisci regole calcolo` la scelta `Versione bollettino` viene salvata per
+le stampe successive: v1 resta il default, v2 riproduce il PDF Poste fornito,
+con pagina `595 x 841 pt`, elementi fissi e autorizzazione del riferimento.
+Negli avvisi multiannualita prevale la versione della regola piu recente;
+`Stampa bollettino postale` disattivato esclude entrambe le versioni.
+Il verificatore geometrico sopra e dedicato a v1. Per v2 i test
+`backend/tests/ruolo/test_bollettino_v2_integration.py` verificano stampa reale,
+box pagina, dati e decodifica dei due simboli; richiedono Chromium e le
+dipendenze di verifica (`PLAYWRIGHT_CHROMIUM_EXECUTABLE` permette di indicare il binario).
+
+Per generare il bollettino v1 in produzione occorre `TD896_PRINT_AUTHORIZATION`
 con il codice Poste: con `TD896_SAMPLE_MODE=false` (default), un valore vuoto
 o contenente `X` blocca la generazione. Solo per campionatura,
 `TD896_SAMPLE_MODE=true` stampa `AUT.DB/SISB/XXXXX DEL XX/XX/XXXX`.

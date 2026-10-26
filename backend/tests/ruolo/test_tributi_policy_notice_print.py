@@ -40,6 +40,7 @@ def test_policy_stores_slip_choice_and_notice_payment_date() -> None:
         assert tributi_repo._notice_print_policy_payload(db, [2025]) == {
             "print_bollettino": False,
             "bollettino_causale": "801",
+            "bollettino_version": "v1",
             "due_date": "2026-11-30",
         }
         # One year without the slip removes it from the whole multi-year notice.

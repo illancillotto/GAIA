@@ -1,5 +1,6 @@
 import uuid
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -26,6 +27,7 @@ class RuoloTributiCalculationPolicyResponse(BaseModel):
     bollettino_causale: str | None = None
     bollettino_esercizio: str | None = None
     print_bollettino: bool = True
+    bollettino_version: Literal["v1", "v2"] = "v1"
     payment_due_date: date | None = None
     is_active: bool
     notes: str | None = None
@@ -52,6 +54,7 @@ class RuoloTributiCalculationPolicyUpsertRequest(BaseModel):
     bollettino_causale: str | None = Field(default=None, pattern=r"^\d{3}$")
     bollettino_esercizio: str | None = Field(default=None, pattern=r"^\d{4}$")
     print_bollettino: bool = True
+    bollettino_version: Literal["v1", "v2"] = "v1"
     payment_due_date: date | None = None
     is_active: bool = True
     notes: str | None = None

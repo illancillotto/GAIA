@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.modules.ruolo.models import RuoloTributiCalculationPolicy
 
 INTEREST_START_MODES = {"fixed_date", "notification_date"}
+BOLLETTINO_POLICY_FIELDS = ("bollettino_causale", "bollettino_esercizio", "bollettino_version")
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,7 @@ class CalculationPolicyUpsert:
     bollettino_esercizio: str | None = None
     only_unnotified: bool = False
     print_bollettino: bool = True
+    bollettino_version: str = "v1"
     payment_due_date: date | None = None
 
 
@@ -112,10 +114,17 @@ def _apply_policy_schedule(policy: RuoloTributiCalculationPolicy, command: Calcu
 
 
 def _apply_notice_print_options(policy: RuoloTributiCalculationPolicy, command: CalculationPolicyUpsert) -> None:
-    policy.bollettino_causale = _optional_code(command.bollettino_causale)
-    policy.bollettino_esercizio = _optional_code(command.bollettino_esercizio)
+    _apply_bollettino_codes(policy, command)
     policy.print_bollettino = command.print_bollettino
     policy.payment_due_date = command.payment_due_date
+
+
+def _apply_bollettino_codes(policy: RuoloTributiCalculationPolicy, command: CalculationPolicyUpsert) -> None:
+    if command.bollettino_version not in {"v1", "v2"}:
+        raise ValueError("Versione bollettino non valida")
+    policy.bollettino_causale = _optional_code(command.bollettino_causale)
+    policy.bollettino_esercizio = _optional_code(command.bollettino_esercizio)
+    policy.bollettino_version = command.bollettino_version
 
 
 def delete_calculation_policy(db: Session, policy_id: uuid.UUID) -> bool:
@@ -132,12 +141,7 @@ def bollettino_policy_payload(db: Session, years: list[int]) -> dict[str, str]:
     if policy is None:
         return {}
     return {
-        key: value
-        for key, value in {
-            "bollettino_causale": policy.bollettino_causale,
-            "bollettino_esercizio": policy.bollettino_esercizio,
-        }.items()
-        if value
+        key: getattr(policy, key) for key in BOLLETTINO_POLICY_FIELDS if getattr(policy, key)
     }
 
 
