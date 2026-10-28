@@ -24,9 +24,9 @@ INSTALLMENT_TIERS: tuple[tuple[str, str], ...] = (
     ("oltre 5.000,00 €", "18"),
 )
 _INSTALLMENT_LIST_PATTERN = re.compile(r"<ul>\n<li>n\. 18 rate per gli importi.*?</ul>", re.S)
-_CELL_STYLE = "border: .5pt solid #87958e; padding: .45mm .8mm; text-align: center;"
+_CELL_STYLE = "border: .5pt solid #8797ad; padding: .45mm .8mm; text-align: center;"
 _HEAD_STYLE = (
-    f"{_CELL_STYLE} background: #eef3f0; font-weight: 700; text-align: left; white-space: nowrap;"
+    f"{_CELL_STYLE} background: #f0f4f9; font-weight: 700; text-align: left; white-space: nowrap;"
 )
 # Runs in Chromium before print-to-pdf: picks the largest line height (1.05-1.8) that keeps the
 # text and the signature on page 2; if even 1.05 overflows, shrinks the font (down to 70%).
@@ -58,6 +58,18 @@ _FIT_SCRIPT = """(function () {
 })();"""
 # Typographic apostrophe used by the template text (RUF001 flags it as a literal).
 APOS = "\N{RIGHT SINGLE QUOTATION MARK}"
+EXISTING_INSTALLMENT_PLAN_NOTE = (
+    "Qualora le somme oggetto della presente comunicazione siano già comprese in un piano di "
+    "rateizzazione sottoscritto e non integralmente saldato, la presente comunicazione non "
+    "sostituisce il piano né modifica le decorrenze applicabili ai fini del calcolo degli "
+    "interessi. Restano ferme le conseguenze dell\N{RIGHT SINGLE QUOTATION MARK}eventuale "
+    "mancato rispetto del piano, secondo le condizioni sottoscritte e il regolamento vigente. "
+    "La determinazione dell\N{RIGHT SINGLE QUOTATION MARK}importo residuo dovuto tiene conto "
+    "dei versamenti già effettuati."
+)
+_EXISTING_INSTALLMENT_PLAN_HTML = (
+    f'<p class="existing-installment-plan">{EXISTING_INSTALLMENT_PLAN_NOTE}</p>'
+)
 
 
 @dataclass(frozen=True)
@@ -235,7 +247,7 @@ def _installment_table(content: str) -> str:
     )
     replaced, count = _INSTALLMENT_LIST_PATTERN.subn(
         f'<table class="legal-installments" style="width: 100%; border-collapse: collapse; '
-        f'margin: -.4mm 0 .8mm;">{table}</table>',
+        f'margin: -.4mm 0 .8mm;">{table}</table>{_EXISTING_INSTALLMENT_PLAN_HTML}',
         content,
     )
     if count != 1:
@@ -296,7 +308,7 @@ def _gaia_fallback_legal_html(field_values: dict[str, str]) -> str:
     <p><strong>Informazioni di carattere generale.</strong> Il Consorzio di Bonifica dell'Oristanese è un Ente Pubblico ex art. 59 R.D. 215/1933 e art. 14 L.R. 06/2008. Il contributo consortile costituisce la quota dovuta da ciascun consorziato per le spese di manutenzione e gestione delle opere di bonifica, nonché per le spese di funzionamento dell'Ente. Sono tenuti al pagamento i proprietari di terreni ricadenti nel perimetro consortile e serviti dalla rete consortile di distribuzione dell'acqua ad uso irriguo. I contributi di bonifica sono oneri reali sulla proprietà, sono esigibili con le norme per l'esazione dei tributi e seguono il regime di riscossione delle imposte. Il contributo consortile è annuale e le volture producono effetti a partire dal ruolo dell'anno successivo.</p>
     <p><strong>Informazioni sul tributo.</strong> L'Avviso di Pagamento si riferisce ai tributi istituzionali, manutenzione opere irrigue e utenza irrigua, emessi in acconto in attesa dell'approvazione del Rendiconto di gestione. L'emissione dei ruoli è disposta dagli atti deliberativi dell'Ente pubblicati all'albo.</p>
     <p>Dilazione del pagamento. Il contribuente può richiedere, direttamente presso gli uffici dell'Ente, una dilazione del pagamento del presente AVVISO fino a:</p><ul><li>n. 18 rate per gli importi superiori ai 5.000,00 euro; n. 12 rate per gli importi da 1.000,00 euro a 5.000,00 euro;</li><li>n. 6 rate per gli importi da 500,01 euro a 1.000,00 euro; n. 4 rate per gli importi da 300,01 euro a 500,00 euro;</li><li>n. 2 rate per gli importi da 100,00 euro a 300,00 euro; non sono previste dilazioni per importi inferiori a 100,00 euro;</li></ul>
-    <p><strong>Scadenza del Pagamento:</strong> Si ricorda che in caso di mancato pagamento nel termine indicato, verranno attivate le procedure previste dal D.P.R. n. 602/1973 e successive modificazioni con conseguente aggravio delle spese per la riscossione coattiva.</p>
+    {_EXISTING_INSTALLMENT_PLAN_HTML}<p><strong>Scadenza del Pagamento:</strong> Si ricorda che in caso di mancato pagamento nel termine indicato, verranno attivate le procedure previste dal D.P.R. n. 602/1973 e successive modificazioni con conseguente aggravio delle spese per la riscossione coattiva.</p>
     <p>Il pagamento potrà essere effettuato anche mediante bonifico bancario al Conto Corrente:<br>Intestato a: CONSORZIO DI BONIFICA DELL'ORISTANESE - RISCOSSIONE QUOTE ASSOCIATIVE<br>Iban: IT15L0760117400001007214826 - Causale: indicare codice fiscale {tax_code} e numero dell'avviso di pagamento {notice_number}</p>
     <p><strong>Determinazione del Contributo.</strong> Il tributo istituzionale è dovuto per le spese di funzionamento dell'Ente (cod. 0985). Il tributo per la manutenzione opere irrigue (cod. 0648) è dovuto per le spese di manutenzione ordinaria delle opere irrigue. Il contributo utenza (cod. 0668) è dovuto da coloro che hanno utilizzato la risorsa idrica ed è commisurato ai criteri del Piano di Classifica e Riparto.</p>
     <p><strong>Detraibilità del contributo.</strong> I contributi del Consorzio hanno natura tributaria. Il contributo istituzionale e il contributo opere irrigue sono deducibili dal reddito lordo da denunciare ai fini fiscali; il contributo utenza non è invece deducibile.</p>

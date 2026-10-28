@@ -9,6 +9,10 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.modules.ruolo.models import RuoloTributiCalculationPolicy
+from app.modules.ruolo.services.notice_payment_deadline import (
+    apply_payment_deadline,
+    payment_deadline_payload,
+)
 from app.modules.ruolo.services.policy_notice_layout import apply_notice_layout
 
 INTEREST_START_MODES = {"fixed_date", "notification_date"}
@@ -41,6 +45,7 @@ class CalculationPolicyUpsert:
     bollettino_version: str = "v1"
     notice_number_source: str = "gaia"
     payment_due_date: date | None = None
+    payment_deadline_mode: str = "fixed_date"
 
 
 def list_calculation_policies(db: Session) -> list[RuoloTributiCalculationPolicy]:
@@ -118,7 +123,7 @@ def _apply_policy_schedule(policy: RuoloTributiCalculationPolicy, command: Calcu
 def _apply_notice_print_options(policy: RuoloTributiCalculationPolicy, command: CalculationPolicyUpsert) -> None:
     _apply_bollettino_codes(policy, command)
     policy.print_bollettino = command.print_bollettino
-    policy.payment_due_date = command.payment_due_date
+    apply_payment_deadline(policy, command)
 
 
 def _apply_bollettino_codes(policy: RuoloTributiCalculationPolicy, command: CalculationPolicyUpsert) -> None:
@@ -157,9 +162,7 @@ def notice_print_policy_payload(db: Session, years: list[int]) -> dict[str, obje
         "print_bollettino": all(policy.print_bollettino for policy in policies if policy is not None),
     }
     latest = get_calculation_policy_for_year(db, max(years))
-    if latest is not None and latest.payment_due_date is not None:
-        payload["due_date"] = latest.payment_due_date.isoformat()
-    return payload
+    return {**payload, **payment_deadline_payload(latest, require_date=payload["print_bollettino"])}
 
 
 def _validate_policy_range(

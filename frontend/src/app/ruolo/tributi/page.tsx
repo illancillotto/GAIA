@@ -29,6 +29,8 @@ import { PolicyAnnualityCard } from "./policy-bollettino-fields";
 import { annualityPayloadWithNoticePrint, formatPolicyNoticePrint, PolicyNoticePrintFields, policyFormWithNoticePrint, policyPayloadWithNoticePrint } from "./policy-notice-print";
 import { AnnualityPolicyFields, CalculationPolicyBlocks, PolicyNotificationScope, PolicyRuleOptions } from "./calculation-policy-options";
 import { PolicyDateInput, formatPolicyDate } from "./policy-date-input";
+import { ActionCard, ActionField, InternalNoteCard } from "./action-card";
+import { PayerAssignmentCard } from "./payer-assignment-card";
 import { listAllReminderCandidatesForYear, reminderBatchTaxCodes } from "./reminder-candidates";
 import { loadReminderPreview, reminderPreviewFilename } from "./reminder-preview";
 import { parseNoticeAmount } from "@/lib/utenze-payment-notices-summary";
@@ -2628,6 +2630,8 @@ function TributiDetailPanel({
             </form>
           </ActionCard>
 
+          <PayerAssignmentCard avvisoId={detail.id} />
+
           <ActionCard
             eyebrow="inCASS"
             title="Sincronizza il soggetto collegato"
@@ -2652,18 +2656,7 @@ function TributiDetailPanel({
             </div>
           </ActionCard>
 
-          <ActionCard
-            eyebrow="Tracciamento"
-            title="Nota interna"
-            description="Usa note brevi e operative per lasciare il contesto utile al prossimo passaggio."
-          >
-            <form className="space-y-3" onSubmit={onSubmitNote}>
-              <ActionField htmlFor="tributi-note-body" label="Nota operativa">
-                <textarea id="tributi-note-body" name="body" rows={3} placeholder="Es. utente contattato, pratica contestata..." className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#8CB39D]" />
-              </ActionField>
-              <button type="submit" className="btn-secondary w-full">Salva nota</button>
-            </form>
-          </ActionCard>
+          <InternalNoteCard onSubmit={onSubmitNote} />
 
           {reminderEnabled ? (
             <ActionCard
@@ -2991,53 +2984,6 @@ function DetailSection({
       </div>
       <div className="p-4">{children}</div>
     </article>
-  );
-}
-
-function ActionCard({
-  eyebrow,
-  title,
-  description,
-  children,
-  tone = "neutral",
-}: {
-  eyebrow: string;
-  title: string;
-  description: string;
-  children: ReactNode;
-  tone?: "neutral" | "emerald" | "sky" | "amber";
-}) {
-  const toneClassName = {
-    neutral: "border-[#d8dfd3] bg-white",
-    emerald: "border-emerald-200 bg-[linear-gradient(180deg,_rgba(236,253,245,0.9),_#ffffff)]",
-    sky: "border-sky-200 bg-[linear-gradient(180deg,_rgba(240,249,255,0.9),_#ffffff)]",
-    amber: "border-amber-200 bg-[linear-gradient(180deg,_rgba(255,251,235,0.92),_#ffffff)]",
-  }[tone];
-
-  return (
-    <article className={`rounded-[22px] border p-3.5 shadow-panel ${toneClassName}`}>
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">{eyebrow}</p>
-      <p className="mt-1 text-base font-semibold text-gray-900">{title}</p>
-      <p className="mt-1 text-sm leading-5 text-gray-600">{description}</p>
-      <div className="mt-3">{children}</div>
-    </article>
-  );
-}
-
-function ActionField({
-  htmlFor,
-  label,
-  children,
-}: {
-  htmlFor: string;
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <label htmlFor={htmlFor} className="grid gap-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
-      <span>{label}</span>
-      {children}
-    </label>
   );
 }
 

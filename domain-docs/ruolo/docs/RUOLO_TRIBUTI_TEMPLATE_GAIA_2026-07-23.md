@@ -1,12 +1,24 @@
 # Template GAIA avviso/sollecito tributi
 
-Aggiornamento del 2026-10-26.
+Aggiornamento del 2026-10-28.
 
 ## Scopo
 
 Il template GAIA propone una resa grafica formale per la preview e la stampa degli avvisi/solleciti di pagamento tributi. Dal 2026-07-27 e il default operativo sia per l'azione rapida `Avviso sollecito` sia per il wizard batch `Genera PDF nel NAS`.
 
 Il template legacy `Avviso_Sollecito_Template.docx` resta supportato nel codice solo se viene passato un `template_path` esplicito, ma non viene esposto nella preview utente e non e piu il fallback del batch quando il frontend non specifica un template.
+
+## Palette corrente
+
+Dal 2026-10-27 la variante locale usa il blu `#2b5793`, con gradiente titolo
+verso `#3e72b3` e fondi azzurri coordinati. Bordi, titoli, importo, riquadro
+termine, accessi, note, tabella comunicazioni e titolo partitario sono coordinati.
+La prima pagina usa ora un'unica famiglia Arial/Helvetica/sans-serif, anche
+per titolo ente e importo, con dimensioni e pesi differenziati. Loghi e
+bollettino mantengono il contratto precedente. Non e una nuova versione del bollettino o un nuovo campo regola.
+Palette e provenienza: [grafica istituzionale](../../../backend/app/modules/ruolo/assets/notice-branding.md).
+Anteprima dimostrativa blu: `output/pdf/avviso-2021-anteprima-blu.pdf`;
+la precedente anteprima verde rimane disponibile per confronto.
 
 ## Asset
 
@@ -16,20 +28,105 @@ Gli asset grafici sono versionati nel modulo `ruolo`:
 - `backend/app/modules/ruolo/assets/pagopa-logo.png`
 - `backend/app/modules/ruolo/assets/bollettino-v2-base.svg` (grafica fissa Poste
   sanitizzata; provenienza in `bollettino-v2-base.md`)
+- Prima pagina: `notice-cbo-logo.png`, `notice-anbi-logo.png`,
+  `notice-whatsapp-qr.png`, `notice-irrighiamo-qr.png`, `notice-taxpayer-portal-qr.png`, con provenienza,
+  trasformazioni e destinazioni in `assets/notice-branding.md`.
 
 Il renderer non usa percorsi locali del PC, cartelle `Downloads` o file temporanei per i loghi.
 
 ## Layout GAIA
 
-- Pagina 1: intestazione con logo CBO a sinistra e pagoPA a destra, entrambi in riquadro `39mm x 23mm`.
+- Pagina 1: intestazione con logo CBO Pantone a sinistra e ANBI a destra,
+  in aree `39mm x 18mm`, senza ritagliare o deformare i loghi. `notice_branding.py`
+  incorpora i nuovi asset; i vecchi loghi restano disponibili per compatibilita
+  e per il bollettino v1.
 - Pagina 1: titolo avviso su due righe, senza trattino tra numero avviso e oggetto ruoli.
 - Pagina 1: riepilogo pagamento, dati ente, destinatario, tabella importi, informativa privacy e revisione `Rev.2026/01`.
+- Pagina 1: la richiesta di diversa dilazione compare sotto la scadenza nel
+  blocco `Quanto e quando pagare`, senza duplicazione nel testo a pie pagina.
+  `Come pagare` riporta `effettuato anche mediante` e l'etichetta `intestato a:`
+  minuscola e il nome `Consorzio di Bonifica dell'Oristanese - Riscossione quote associative`.
+  La tabella mostra `Spese Notifica`, senza il codice tecnico `SN01`;
+  il relativo importo non cambia. La colonna Interessi viene eliminata da
+  intestazione, colonne e righe quando tutti gli importi annuali visualizzati
+  sono zero; un importo non nullo la mantiene, anche negativo o compensato
+  da un'altra annualita. Spese e totali non cambiano.
+- Pagina 1, subito prima dei contatti degli uffici e del testo sul sito: blocco
+  `PER CONSULTARE LA PROPRIA POSIZIONE`, con percorso
+  `www.bonificaoristanese.it > Cartella contribuenza >`, spiegazione del servizio
+  e una sola coppia Codice ditta/PIN per utenza del destinatario. Senza dati
+  o con piu utenze ambigue compare l'invito a contattare gli uffici: i sei CF
+  ambigui sono sospesi in attesa del riscontro dei colleghi.
+  I valori provengono da snapshot cifrati: vedi
+  [importazione accessi](RUOLO_PORTALE_CONTRIBUENTE_ACCESSI_2026-10-27.md).
+- Pagina 1, in fondo: due blocchi affiancati con QR `18mm`: WhatsApp
+  (canale `0029Vb9tZLzDJ6H3keAt9h24`) e Irrighiamo Insieme
+  (`https://login.bonificaoristanese.it/`), con spiegazione e invito a inquadrarli.
+  Irrighiamo Insieme riporta: «L'applicazione del Consorzio per segnalare guasti
+  o rotture e richiedere l'autorizzazione all'irrigazione.»
+  Eliminata la dicitura «Apri il canale WhatsApp»; il QR portale resta un asset
+  di provenienza ma non viene stampato. L'informativa privacy segue i due servizi
+  con margine `1.5mm`, corpo `7.8pt` e interlinea `1.15`.
+  Corpo prima pagina `10.2pt`, interlinea `1.24`, spazi verticali compattati per
+  mantenere accessi, QR e privacy sulla prima pagina anche con cinque annualita,
+  una coppia di accesso o messaggio uffici e note di residuo. Tutta la prima pagina usa Arial/Helvetica/sans-serif, incluso il titolo ente `19.5pt`;
+  i margini verticali della prima pagina sono `10mm`.
 - Pagina 1: nella colonna `Numero avviso` del riepilogo annuale il template mostra il codice avviso senza il prefisso tecnico `01.`; il valore persistito `codice_cnc` resta invariato.
 - Pagina 2: comunicazioni amministrative complete derivate dal template originale, con interlinea compatta ma leggibile.
 - Pagina 2: i riferimenti dipendenti dall'annualita (delibere di emissione/approvazione con data albo, dilazione, minimi, riscossione coattiva, anno di bilancio) sono ricostruiti per gli anni dell'avviso da `backend/app/modules/ruolo/services/tributi_legal_text.py` (`ROLE_YEAR_RESOLUTIONS`, 2021-2025); un anno non configurato blocca la generazione.
+- Pagina 2: subito dopo la tabella delle dilazioni e prima di `Scadenza del
+  Pagamento`, un paragrafo chiarisce che l'avviso non sostituisce un piano di
+  rateizzazione gia sottoscritto e non saldato, ne modifica le decorrenze degli
+  interessi, e che il residuo tiene conto dei versamenti effettuati. Lo stesso
+  testo compare nel fallback delle comunicazioni senza DOCX sorgente.
 - Pagina 3 e successive: dettaglio partitario allegato con font monospace ingrandito, wrapping controllato, formato raw preservato e titolo `Dettaglio partitario allegato - pagina X di N`.
 - Ultima pagina, se abilitata dalle regole: bollettino postale TD 896 nella versione
   salvata, inserito dopo il partitario e stampabile al `100%`.
+
+### Riquadro 2021: data e termine dalla notifica
+
+Nel solo riquadro `Quanto e quando pagare` degli avvisi del solo ruolo 2021,
+se lo snapshot contiene `due_date` o `deadline`, si stampa
+`entro il gg/mm/aaaa e comunque entro 60 giorni dalla data di notifica`.
+Senza data esplicita si stampa soltanto `entro 60 giorni dalla data di notifica`,
+senza inventare una data dalla generazione. Le altre annualita e i gruppi
+multiannualita mantengono il termine della regola. Questa dicitura riguarda
+la prima pagina; i bollettini usano la data fissa e i campi DOCX restano invariati.
+
+### Termine di pagamento dalla notifica
+
+Dal 2026-10-27 la regola puo salvare `payment_deadline_mode=notification_60_days`,
+in alternativa al termine a data fissa. Il riepilogo e i campi DOCX `Scadenza`
+e `Pagamento_entro` riportano il termine relativo `60 giorni dalla data di notifica`.
+Dal 2026-10-28 i bollettini v1/v2 stampano invece `gg/mm/aaaa - Rata Unica`
+su entrambi i tagliandi. La data fissa resta visibile e salvata nelle Regole ruolo
+anche nella modalita a 60 giorni ed e obbligatoria con bollettino abilitato.
+Salvataggio e generazione da vecchie regole/snapshot senza data sono bloccati
+con invito a impostarla nelle Regole ruolo. Senza bollettino il solo termine
+relativo e ammesso. Non viene inventata una data dalla stampa per la modalita
+a 60 giorni; il fallback legacy della modalita a data fissa resta invariato.
+
+Solo con questa modalita, prima del portale, compare `Pagamento entro 60 giorni
+dalla data di notifica`, senza ripetere l'importo del riepilogo, seguito dalle avvertenze sul rinvio
+di sabati/festivi al primo giorno lavorativo e sugli interessi oltre i 60 giorni.
+Nel footer, dopo gli accessi portale e sopra i due QR, compare un punto
+esclamativo rosso dentro un triangolo vettoriale con il testo d'intimazione riferito al Consorzio e alle
+procedure di riscossione coattiva nei casi e con le modalita previsti dalla legge.
+La frase richiesta e: «In caso di mancato pagamento, il Consorzio di Bonifica
+dell'Oristanese tramite l'agente di riscossione attiverà le procedure di
+riscossione coattiva previste dalla legge.»
+
+Il CSS `notice_payment_deadline.py` compatta soltanto questa modalita:
+margini verticali `8mm`, corpo `9.2pt`, riquadro intimazione `8.3pt`;
+da tre annualita il riepilogo e gli spazi si riducono ulteriormente.
+QR WhatsApp/Irrighiamo Insieme `18mm`, accessi e privacy restano sulla prima pagina nelle prove
+con una, due e cinque annualita, nomi lunghi e una coppia di accesso per utenza.
+Gli spazi liberi vengono distribuiti tra termine, accessi portale, contatti e sito, e
+footer: distacco minimo `1mm`, senza un vuoto concentrato sopra l'intimazione.
+In entrambe le modalita, subito dopo il portale compaiono prima giorni/orari e
+telefono degli uffici, poi la frase sul sito. Il paragrafo usa `8.5pt`,
+interlinea `1.12`, margine e padding superiore `1mm`.
+Stato locale e verifiche: [scadenza dalla notifica](RUOLO_SCADENZA_NOTIFICA_2026-10-27.md).
 
 ## Versione salvata nella regola
 
@@ -181,6 +278,12 @@ avviso, da verificare a vista sul PDF.
 - Il wizard batch e il fallback backend devono generare il template GAIA `__gaia_proposal__`, rispettando esclusione e versione del bollettino salvate nelle regole.
 - Il bollettino TD 896 deve restare dopo il partitario, come ultima pagina, e deve usare codeline coerente con codice cliente, importo, conto corrente e tipo documento.
 - Code 128 e Data Matrix devono decodificare lo stesso payload numerico di 50 cifre.
+- Entrambi i QR devono decodificare canale WhatsApp e login Irrighiamo Insieme dal PDF finale e rimanere sulla
+  prima pagina; il blocco di accesso portale precede i contatti degli uffici e il testo sul sito.
+  I PIN devono essere cifrati nel DB e negli snapshot persistiti; lo stesso
+  nominativo senza codice fiscale corrispondente non autorizza alcun accesso.
+- Il testo sui piani gia sottoscritti deve comparire una sola volta, dopo le
+  dilazioni e prima della scadenza, senza invadere la firma della pagina 2.
 - Causale ed esercizio configurati nella `Regola ruolo` devono comparire nella ricevuta di versamento; senza causale configurata la riga `Causale` non compare, mentre l'esercizio resta automatico.
 - Il partitario deve mantenere spaziatura e allineamenti del formato raw.
 - Il partitario non deve contenere script o frammenti UI Capacitas come `mstrAvvisoDlgPartitarioKUI`, `btnScaricaPartitarioDlgPartitarioKUI` o `exportExcel.aspx`.

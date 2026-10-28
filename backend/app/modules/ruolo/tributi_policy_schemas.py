@@ -30,6 +30,7 @@ class RuoloTributiCalculationPolicyResponse(BaseModel):
     bollettino_version: Literal["v1", "v2"] = "v1"
     notice_number_source: Literal["gaia", "incass"] = "gaia"
     payment_due_date: date | None = None
+    payment_deadline_mode: Literal["fixed_date", "notification_60_days"] = "fixed_date"
     is_active: bool
     notes: str | None = None
     updated_by: int | None = None
@@ -58,6 +59,7 @@ class RuoloTributiCalculationPolicyUpsertRequest(BaseModel):
     bollettino_version: Literal["v1", "v2"] = "v1"
     notice_number_source: Literal["gaia", "incass"] = "gaia"
     payment_due_date: date | None = None
+    payment_deadline_mode: Literal["fixed_date", "notification_60_days"] = "fixed_date"
     is_active: bool = True
     notes: str | None = None
 

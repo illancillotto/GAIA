@@ -49,6 +49,10 @@ const mocks = vi.hoisted(() => ({
   searchParams: new URLSearchParams(),
 }));
 
+vi.mock("@/lib/ruolo-payer-api", () => ({
+  getAvvisoPayer: vi.fn(async () => ({ active: null, history: [] })),
+}));
+
 vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: mocks.getStoredAccessToken,
 }));
@@ -1041,6 +1045,7 @@ describe("Ruolo tributi page", () => {
       print_bollettino: false,
       bollettino_version: "v2",
       notice_number_source: "gaia",
+      payment_deadline_mode: "fixed_date",
       year_from: 2025,
       year_to: 2025,
       bonario_due_date: "2026-07-31",
@@ -1065,6 +1070,7 @@ describe("Ruolo tributi page", () => {
       print_bollettino: false,
       bollettino_version: "v2",
       notice_number_source: "gaia",
+      payment_deadline_mode: "fixed_date",
       year_from: 2026,
       year_to: 2026,
       bonario_due_date: "2027-07-31",
@@ -1254,6 +1260,7 @@ describe("Ruolo tributi page", () => {
       print_bollettino: true,
       bollettino_version: "v1",
       notice_number_source: "gaia",
+      payment_deadline_mode: "fixed_date",
       year_from: 2024,
       year_to: 2024,
       bonario_due_date: "2026-07-31",
@@ -1278,6 +1285,7 @@ describe("Ruolo tributi page", () => {
       print_bollettino: true,
       bollettino_version: "v1",
       notice_number_source: "gaia",
+      payment_deadline_mode: "fixed_date",
       year_from: 2025,
       year_to: 2025,
       bonario_due_date: "2027-07-31",
@@ -1480,9 +1488,7 @@ describe("Ruolo tributi page", () => {
       );
     });
 
-    const workflowSelect = screen.getAllByRole("combobox").at(-1);
-    expect(workflowSelect).toBeDefined();
-    fireEvent.change(workflowSelect!, { target: { value: "contestato" } });
+    fireEvent.change(screen.getByLabelText("Stato operativo"), { target: { value: "contestato" } });
     fireEvent.click(screen.getByRole("button", { name: "Aggiorna stato" }));
 
     await waitFor(() => {

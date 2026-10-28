@@ -38,6 +38,7 @@ from app.modules.ruolo.notice_register_schemas import (
     OperatorChange,
     RecoveryDecision,
 )
+from app.modules.ruolo.payer_assignment_models import RuoloTributiPayerAssignment
 from app.modules.ruolo.services import notice_register as service
 
 REGISTER_MODELS = (
@@ -56,7 +57,7 @@ def _metadata():
     Table("application_users", metadata, Column("id", Integer, primary_key=True))
     Table("ana_subjects", metadata, Column("id", Uuid, primary_key=True))
     Table("ruolo_tributi_registered_mails", metadata, Column("id", Uuid, primary_key=True))
-    for model in (RuoloImportJob, RuoloAvviso, *REGISTER_MODELS):
+    for model in (RuoloImportJob, RuoloAvviso, RuoloTributiPayerAssignment, *REGISTER_MODELS):
         model.__table__.to_metadata(metadata)
     return metadata
 

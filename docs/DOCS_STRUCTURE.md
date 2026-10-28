@@ -235,6 +235,44 @@ provenienza `.md`. Conversione Chromium condivisa in `services/notice_html_pdf.p
 test del layout, migrazione e stampa reale in
 `backend/tests/ruolo/test_bollettino_v2{,_integration}.py`.
 
+Pagatore diverso dall'intestatario: `payer_assignment_models.py`,
+`payer_assignment_schemas.py`, `routes/payer_assignment_routes.py`,
+`services/payer_assignments.py` e `services/payer_notice_cell.py`;
+`services/notice_candidates.py` coordina selezione, riassegnazione, separazione
+inCASS e snapshot degli accessi. Frontend `tributi/payer-assignment-card.tsx`,
+client `lib/ruolo-payer-api.ts`; CLI `scripts/import_payer_assignments.py`.
+Migration `20261027_0900` per la tabella e `20261028_0900` per invalidare le
+bozze PostgreSQL al cambio pagatore. Runbook e contratti in
+`domain-docs/ruolo/docs/RUOLO_PAGATORE_AVVISO_2026-10-28.md`.
+
+Grafica della prima pagina: `backend/app/modules/ruolo/services/notice_branding.py`,
+loghi CBO/ANBI e QR WhatsApp/Irrighiamo Insieme in `assets/notice-*.png`,
+con `notice-irrighiamo-qr.png` diretto al login dell'applicazione. Font prima
+pagina Arial/Helvetica/sans-serif e triangolo vettoriale rosso nell'avvertenza; provenienza in
+`assets/notice-branding.md`. Verifica di testo, link, QR stampati e impaginazione
+in `backend/tests/ruolo/test_notice_presentation.py`.
+Accessi personalizzati al portale: modello `portal_access_models.py`, importatore
+`services/taxpayer_portal_import.py`, snapshot `services/taxpayer_portal_access.py`
+e CLI `app/scripts/import_taxpayer_portal_access.py`. Una coppia per utenza;
+se il CF ha piu utenze senza collegamento verificato, si stampa il messaggio
+uffici. I sei CF ambigui restano sospesi in attesa del riscontro dei colleghi.
+Riepilogo prima pagina GAIA: `services/notice_summary.py` nasconde la colonna
+Interessi soltanto quando tutti gli importi annuali visualizzati sono zero;
+contratti in `backend/tests/ruolo/test_notice_summary.py`.
+Runbook e stato importazione:
+`domain-docs/ruolo/docs/RUOLO_PORTALE_CONTRIBUENTE_ACCESSI_2026-10-27.md`.
+
+Termine di pagamento avviso: `services/notice_payment_deadline.py` centralizza
+modalita, campi di stampa e riquadri a 60 giorni, inclusa la dicitura data piu
+termine nel box della prima pagina per gli avvisi del solo 2021. La data fissa
+e conservata anche a 60 giorni ed e obbligatoria per il bollettino; entrambi
+i tagliandi v1/v2 stampano `gg/mm/aaaa - Rata Unica`. Il frontend usa
+`frontend/src/app/ruolo/tributi/policy-payment-deadline.tsx`. La migration
+`20261027_1300` aggiunge `payment_deadline_mode` alle regole. Test backend
+`test_notice_payment_deadline.py`, frontend `ruolo-payment-deadline.test.tsx`;
+stato e verifiche in
+`domain-docs/ruolo/docs/RUOLO_SCADENZA_NOTIFICA_2026-10-27.md`.
+
 Nota: diversi documenti Ruolo sono storici. Per lo stato corrente dare priorita
 al PRD aggiornato, ai report inCASS recenti e al codice runtime.
 

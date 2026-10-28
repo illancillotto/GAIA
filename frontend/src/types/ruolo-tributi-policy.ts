@@ -21,6 +21,7 @@ export type RuoloTributiCalculationPolicyResponse = {
   bollettino_version?: "v1" | "v2";
   notice_number_source?: "gaia" | "incass";
   payment_due_date?: string | null;
+  payment_deadline_mode?: "fixed_date" | "notification_60_days";
   is_active: boolean;
   notes: string | null;
   updated_by: number | null;
@@ -49,6 +50,7 @@ export type RuoloTributiCalculationPolicyUpsertRequest = {
   bollettino_version?: "v1" | "v2";
   notice_number_source?: "gaia" | "incass";
   payment_due_date?: string | null;
+  payment_deadline_mode?: "fixed_date" | "notification_60_days";
   is_active?: boolean;
   notes?: string | null;
 };

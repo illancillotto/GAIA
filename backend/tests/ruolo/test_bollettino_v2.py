@@ -88,7 +88,7 @@ def test_v2_prints_live_fields_and_preserves_the_original_static_artwork(payload
     assert 'class="poste-v2"' in rendered
     assert "ROSSI MARIO" in rendered and "VIA ROMA 1" in rendered
     assert "09170 ORISTANO OR" in rendered
-    assert "Scadenza:30/11/2026 - Rata unica" in rendered
+    assert "Scadenza:30/11/2026 - Rata Unica" in rendered
     assert "Esercizio: 2626 Causale: 025" in rendered
     assert "causale: A 12026242500001 CF RSSMRA80A01H501Z" in rendered
     assert "18012026242500001985120010072148261000000221553896" in rendered

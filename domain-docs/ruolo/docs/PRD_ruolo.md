@@ -170,6 +170,53 @@ provenienza e recupero dello storico sono descritti in
 > La versione della regola dell'anno piu recente vale per preview e batch successivi;
 > i documenti gia generati conservano il proprio snapshot. V2 mantiene gli elementi
 > fissi del PDF di riferimento e i box pagina `595 x 841 pt`.
+> Aggiornamento palette 2026-10-27: il renderer HTML/Chromium locale usa
+> il blu `#2b5793`, fascia titolo fino a `#3e72b3` e fondi azzurri coordinati,
+> anche nel riquadro importo e nel partitario. Testi, geometria, loghi, QR e
+> bollettino invariati; anteprima blu separata dalla precedente verde.
+> Aggiornamento 2026-10-28 (pagatore): il dettaglio avviso consente di assegnare
+> un soggetto GAIA diverso per decesso, vendita o indicazione ufficio. Storico,
+> permessi `manage_status` e un solo collegamento attivo per avviso. Nei lotti,
+> destinatario, indirizzo, archivio e accessi portale seguono il pagatore;
+> il riepilogo conserva l'intestatario originario. La migration `20261028_0900`
+> invalida al commit le bozze preparate prima di un cambio pagatore. Il flusso
+> singolo DOCX legacy resta escluso: usare i lotti della pagina Tributi.
+> Dettagli in `RUOLO_PAGATORE_AVVISO_2026-10-28.md`.
+> Aggiornamento 2026-10-28: prima pagina tutta in Arial/Helvetica/sans-serif,
+> inclusi titolo e importo. Box del solo ruolo 2021: eventuale data esplicita
+> `gg/mm/aaaa e comunque entro 60 giorni dalla data di notifica`, senza data
+> soltanto il termine relativo. Le altre annualita e i campi DOCX mantengono
+> il termine della regola; per i bollettini vale la data fissa descritta sotto. Footer con due QR affiancati WhatsApp e Irrighiamo
+> Insieme (login `https://login.bonificaoristanese.it/`), triangolo rosso e frase
+> «tramite l'agente di riscossione attiverà» per le procedure coattive.
+> Aggiornamento 2026-10-27: la prima pagina usa i loghi CBO Pantone e ANBI e
+> il QR WhatsApp in basso, senza «Apri il canale WhatsApp». Prima delle informazioni
+> sul sito del Consorzio, precedute dai contatti degli uffici, compare il blocco
+> «PER CONSULTARE LA PROPRIA POSIZIONE»: percorso sito/Cartella contribuenza e
+> una sola coppia Codice ditta/PIN per utenza. Senza credenziali o con piu utenze
+> ambigue invita a contattare gli uffici; i sei CF ambigui sono sospesi in attesa
+> del riscontro dei colleghi. Il QR del portale non viene stampato.
+> I dati Excel sono persistiti con PIN cifrato e associati soltanto per codice fiscale. La richiesta di diversa dilazione e nel riquadro
+> importo/scadenza; `Come pagare` riporta `anche mediante` e `intestato a:`.
+> Il riepilogo mostra le spese di notifica senza `SN01` e nasconde la colonna
+> Interessi se tutti gli importi annuali visualizzati sono zero. Basta un importo
+> non nullo per conservarla, anche con compensazioni fra annualita. Nelle comunicazioni,
+> dopo la tabella delle dilazioni e prima della scadenza, compare la precisazione
+> integrale sui piani gia sottoscritti, sugli interessi e sui versamenti eseguiti.
+> Aggiornamento 2026-10-27 (termine notifica): `Regole ruolo` salva la scelta
+> fra data fissa e pagamento entro 60 giorni dalla notifica (`payment_deadline_mode`).
+> Dal 2026-10-28 la seconda conserva anche la data fissa e lascia visibili i
+> campi data. Con bollettino abilitato la data e obbligatoria; il backend blocca
+> salvataggio e generazione da regole/snapshot a 60 giorni senza data. Senza
+> bollettino il solo termine relativo e ammesso. Per avvisi multiannualita prevale
+> la regola piu recente e lo snapshot conserva scelta e data. I bollettini v1/v2
+> stampano `gg/mm/aaaa - Rata Unica` su entrambi i tagliandi; il termine relativo
+> resta nell'avviso e nei campi DOCX. Prima del portale sono
+> stampati termine di pagamento, rinvio dei sabati/festivi e avvertenza sugli interessi;
+> l'importo resta nel riepilogo e non e ripetuto nel riquadro del termine;
+> sopra il QR compare l'intimazione del Consorzio. Le regole esistenti restano
+> a data fissa. Il calcolo effettivo degli interessi non cambia. Migration
+> `20261027_1300` e nuova grafica ancora da rilasciare sul server degli uffici.
 > Aggiornamento 2026-07-28: nella prima pagina del template GAIA il riepilogo importi
 > mostra una colonna `Numero avviso` per ogni riga `Ruolo {anno}`, valorizzata con il
 > `codice_cnc` dell'avviso relativo a quell'anno. La regola vale sia per il PDF HTML/Chromium

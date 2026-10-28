@@ -48,7 +48,7 @@ from app.modules.ruolo.models import (
 )
 from app.modules.ruolo.repositories import _get_subject_display_name
 from app.modules.ruolo.services import incass_notice_numbering as incass_numbering
-from app.modules.ruolo.services import notice_drafts
+from app.modules.ruolo.services import notice_candidates, notice_drafts
 from app.modules.ruolo.services.capacitas_role_codes import (
     CAPACITAS_ROLE_ACCOUNTING_SCOPE_OUT_OF_ORDINARY,
     CAPACITAS_ROLE_OPERATIONAL_POLICY_AUDIT_ONLY,
@@ -3376,7 +3376,7 @@ def create_reminder_batch(
             selected_years=selected_years,
             tax_codes=selected_cf,
         )
-    candidates = incass_numbering.split_incass_candidates(db, _collect_reminder_candidates(
+    candidates = notice_candidates.batch_candidates(db, _collect_reminder_candidates(
         db,
         years=selected_years or None,
         anno_from=_int_or_none(filters.get("anno_from")),
@@ -3385,10 +3385,7 @@ def create_reminder_batch(
         comune=str(filters.get("comune") or "").strip() or None,
         codice_fiscale=selected_cf or None,
         manager_key=str(filters.get("manager_key") or "").strip() or None,
-    ))
-    if selected_cf:
-        selected_set = set(selected_cf)
-        candidates = [candidate for candidate in candidates if candidate["codice_fiscale"] in selected_set]
+    ), selected_cf)
     if not candidates:
         raise ValueError("Nessuna utenza morosa selezionabile per il batch")
 
@@ -3735,7 +3732,7 @@ def _prepare_batch_item(
         notice_progressive=reservation.progressive,
         notice_reference_years=reference_years,
     )
-    item.payload_json = {**payload, **incass_numbering.incass_payload_overrides(candidate)}
+    item.payload_json = {**payload, **notice_candidates.payload_overrides(candidate)}
     db.flush()
     return item
 

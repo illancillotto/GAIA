@@ -14,6 +14,7 @@ from app.modules.ruolo.notice_register_models import (
     NoticePosition,
     NoticeRecovery,
 )
+from app.modules.ruolo.services.payer_assignments import payer_tax_code
 
 GAIA_SOURCES = ("gaia_reminder", "gaia_batch_item")
 # Years GAIA reviews notice by notice; elsewhere an avviso handed to STEP stays with STEP.
@@ -38,15 +39,15 @@ def _history_reasons(db, avviso) -> list[str]:
     ).all()
     reasons = []
     historical = False
+    # A notice addressed to the assigned payer (heir, buyer) is not a mismatch.
+    recipients = {(avviso.codice_fiscale_raw or "").strip().upper(), payer_tax_code(db, avviso.id)}
     for position, document, notification, recovery in rows:
         generated = document.source_system in GAIA_SOURCES
         historical |= not generated
         reasons.extend(_document_reasons(db, document, notification))
         if position.tax_year != avviso.anno_tributario:
             reasons.append("annualita_discordante")
-        if (document.tax_code or "").strip().upper() != (
-            avviso.codice_fiscale_raw or ""
-        ).strip().upper():
+        if (document.tax_code or "").strip().upper() not in recipients:
             reasons.append("destinatario_discordante")
         if _recovery_blocks(recovery, generated):
             reasons.append("step_non_liberato")

@@ -6,6 +6,7 @@ import pytest
 
 from app.modules.ruolo.services import tributi_reminder_service as reminder_service
 from app.modules.ruolo.services.tributi_legal_text import (
+    EXISTING_INSTALLMENT_PLAN_NOTE,
     INSTALLMENT_TIERS,
     ROLE_YEAR_RESOLUTIONS,
     MissingRoleYearResolutionsError,
@@ -123,6 +124,9 @@ def test_missing_template_uses_generic_fallback_without_resolutions() -> None:
 
     assert "atti deliberativi dell'Ente" in rendered
     assert "RSSMRA80A01H501Z" in rendered
+    assert rendered.count(EXISTING_INSTALLMENT_PLAN_NOTE) == 1
+    assert rendered.index("rate per gli importi") < rendered.index(EXISTING_INSTALLMENT_PLAN_NOTE)
+    assert rendered.index(EXISTING_INSTALLMENT_PLAN_NOTE) < rendered.index("Scadenza del Pagamento:")
 
 
 def test_proposal_html_uses_payload_years_for_the_legal_page() -> None:
@@ -165,6 +169,9 @@ def test_installment_list_becomes_an_ordered_table() -> None:
     ]
     assert "Importo dell&#x27;avviso" in table.group(0)
     assert "Numero massimo di rate" in table.group(0)
+    assert rendered.count(EXISTING_INSTALLMENT_PLAN_NOTE) == 1
+    assert rendered.index("</table>") < rendered.index(EXISTING_INSTALLMENT_PLAN_NOTE)
+    assert rendered.index(EXISTING_INSTALLMENT_PLAN_NOTE) < rendered.index("Scadenza del Pagamento:")
 
 
 def test_template_without_installment_list_fails_closed() -> None:

@@ -54,6 +54,9 @@ class RuoloTributiCalculationPolicy(Base):
         String(8), nullable=False, default="gaia", server_default="gaia"
     )
     payment_due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    payment_deadline_mode: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="fixed_date", server_default="fixed_date"
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_by: Mapped[int | None] = mapped_column(

@@ -15,6 +15,7 @@ from sqlalchemy.schema import CreateSchema, DropSchema
 
 from app.db.base import Base
 from app.models.application_user import ApplicationUser
+from app.modules.elaborazioni.step.models import StepRuoloLink
 from app.modules.ruolo import tributi_repositories as repo
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob
 from app.modules.ruolo.notice_draft_models import NoticeDraft
@@ -47,6 +48,7 @@ def _metadata():
         model.__table__
         for model in (
             ApplicationUser,
+            StepRuoloLink,
             AnagraficaSubject,
             AnagraficaPerson,
             AnagraficaCompany,

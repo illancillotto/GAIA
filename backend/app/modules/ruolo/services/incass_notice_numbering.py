@@ -61,13 +61,13 @@ def split_incass_candidates(db: Session, candidates: list[dict[str, Any]]) -> li
             result.append(candidate)
             continue
         rest = [avviso for avviso in candidate["avvisi"] if avviso not in own]
-        result.extend(_with_avvisi(candidate, [avviso]) for avviso in own)
+        result.extend(with_avvisi(candidate, [avviso]) for avviso in own)
         if rest:
-            result.append(_with_avvisi(candidate, rest))
+            result.append(with_avvisi(candidate, rest))
     return result
 
 
-def _with_avvisi(candidate: dict[str, Any], avvisi: list[dict[str, Any]]) -> dict[str, Any]:
+def with_avvisi(candidate: dict[str, Any], avvisi: list[dict[str, Any]]) -> dict[str, Any]:
     managers = {
         avviso["annuality_manager_label"]
         for avviso in avvisi

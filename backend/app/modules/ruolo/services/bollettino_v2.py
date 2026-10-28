@@ -131,10 +131,10 @@ def _details(fields: dict[str, str], payload: dict[str, Any], *, causale: str) -
     amount = fields["Complessivo"]
     right_year = f"Esercizio: {year}" + (f" Causale: {causale}" if causale else "")
     rows = [
-        (30.9, 456.9, f"Scadenza:{fields['Scadenza']} - Rata unica"),
+        (30.9, 456.9, f"Scadenza:{fields['Scadenza']} - Rata Unica"),
         (30.9, 469.5, f"Esercizio:    {year}"),
         (30.9, 494.7, f"Importo:      {amount}"),
-        (532.1, 456.9, f"Scadenza:{fields['Scadenza']} - Rata unica"),
+        (532.1, 456.9, f"Scadenza:{fields['Scadenza']} - Rata Unica"),
         (532.1, 469.5, right_year),
         (532.1, 482.1, f"Importo: {amount}"),
     ]

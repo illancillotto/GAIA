@@ -835,6 +835,43 @@ Nota operativa Docker:
 
 ### Verifica PDF TD 896
 
+Nel dettaglio Tributi e disponibile l'assegnazione di un pagatore diverso
+(erede, acquirente o indicazione dell'ufficio), con storico e permessi di modifica.
+I lotti indirizzano i relativi avvisi al pagatore e mantengono il riferimento
+all'intestatario; gli accessi al portale seguono il destinatario effettivo.
+La migration `20261028_0900` invalida le bozze al cambio pagatore.
+Flusso, API e limiti: [pagatore avviso](domain-docs/ruolo/docs/RUOLO_PAGATORE_AVVISO_2026-10-28.md).
+
+Il renderer locale degli avvisi usa la palette blu `#2b5793`, con gradiente e
+fondi azzurri coordinati. Anteprima 2021 dimostrativa:
+`output/pdf/avviso-2021-anteprima-blu.pdf`; la precedente anteprima verde resta
+conservata per confronto. La prima pagina usa una sola famiglia Arial/Helvetica/sans-serif. Dal 28 ottobre
+il box 2021 affianca alla data esplicita `e comunque entro 60 giorni dalla data
+di notifica`; senza data esplicita conserva solo il termine.
+
+Gli avvisi GAIA riportano i loghi CBO/ANBI e un blocco per consultare la propria
+posizione, seguito dai contatti degli uffici e dal testo informativo sul sito del Consorzio.
+Ogni utenza ha un solo Codice ditta/PIN: si stampa la coppia univoca del destinatario.
+In assenza di credenziali o in caso di utenze ambigue viene indicato di contattare
+gli uffici. I sei codici fiscali con due utenze restano sospesi in attesa del
+riscontro dei colleghi. Il riepilogo della prima pagina GAIA omette la colonna
+Interessi quando tutti gli importi annuali visualizzati sono zero. In basso restano
+due blocchi affiancati, WhatsApp e Irrighiamo Insieme, con i rispettivi QR
+(`https://login.bonificaoristanese.it/` per l'applicazione). L'avvertenza usa
+un triangolo rosso e indica l'attivazione tramite l'agente di riscossione.
+Importazione cifrata e comandi: [accessi portale](domain-docs/ruolo/docs/RUOLO_PORTALE_CONTRIBUENTE_ACCESSI_2026-10-27.md). Le comunicazioni chiariscono la validita dei piani di
+rateizzazione gia sottoscritti dopo la tabella delle dilazioni. Dettagli e
+asset: `domain-docs/ruolo/docs/RUOLO_TRIBUTI_TEMPLATE_GAIA_2026-07-23.md`.
+
+Le `Regole ruolo` possono scegliere data fissa oppure pagamento entro 60 giorni
+dalla notifica. La seconda modalita stampa il termine e le avvertenze prima del portale,
+e un riquadro d'intimazione del Consorzio sopra i QR. I bollettini v1/v2 stampano
+`gg/mm/aaaa - Rata Unica` su entrambi i tagliandi. Con il termine a 60 giorni
+la data fissa deve essere salvata nelle Regole ruolo: senza data, salvataggio
+con bollettino e generazione sono bloccati con un messaggio esplicito.
+Il termine dell'avviso resta relativo alla notifica. Default e date preesistenti sono conservati. Stato locale,
+migration `20261027_1300` e verifiche: [scadenza dalla notifica](domain-docs/ruolo/docs/RUOLO_SCADENZA_NOTIFICA_2026-10-27.md).
+
 La verifica di campionatura del layout v1 opera su PDF gia generati, con dipendenze solo di
 sviluppo, escluse dall'immagine backend:
 

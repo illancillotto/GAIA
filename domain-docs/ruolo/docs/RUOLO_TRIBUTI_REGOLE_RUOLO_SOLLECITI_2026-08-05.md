@@ -23,6 +23,31 @@ gia generati. Le regole esistenti restano v1 dopo la migration `20261026_0900`.
 Misure e differenze dei layout sono in `RUOLO_TRIBUTI_TEMPLATE_GAIA_2026-07-23.md`
 e `MANUALE_VERIFICA_BOLLETTINI_TD896.md`.
 
+Aggiornamento 2026-10-27 (termine dalla notifica): `payment_deadline_mode`
+sceglie tra `fixed_date` (default retrocompatibile) e `notification_60_days`.
+Dal 2026-10-28 in `Regole ruolo` le date restano visibili per entrambe le
+modalita e sono conservate anche passando al termine a 60 giorni. Con questa
+modalita e bollettino abilitato, `payment_due_date` e obbligatoria: il backend
+rifiuta il salvataggio senza data e blocca la generazione da regole o snapshot
+storici senza data. Senza bollettino la data puo essere assente. Il fallback
+legacy a 30 giorni resta limitato alla modalita a data fissa.
+La modalita dell'anno piu recente prevale negli avvisi multiannualita e viene
+copiata nello snapshot del batch. Il termine relativo e riportato nella prima
+pagina e nei campi DOCX, senza calcolare una data di notifica dalla stampa.
+I bollettini v1/v2 stampano la data fissa salvata seguita da ` - Rata Unica`
+su entrambi i tagliandi. Solo nella modalita a 60 giorni compaiono il termine e
+le avvertenze prima del portale, seguito dai contatti degli uffici e dalle
+informazioni sul sito del Consorzio, e l'intimazione del Consorzio con triangolo
+rosso prima dei due QR WhatsApp/Irrighiamo Insieme. Nel solo box importo della
+prima pagina di un avviso del solo 2021, la data esplicita e seguita da
+`e comunque entro 60 giorni dalla data di notifica`; senza data esplicita si
+stampa solo il termine relativo. Non cambia la persistenza delle regole.
+La nuova scelta riguarda il termine e i testi stampati: non cambia il motore
+di calcolo degli interessi ne la scadenza bonaria. Richiede la migration
+`20261027_1300`, successiva a `20261027_1100`; al termine di questo ciclo non
+e applicata al server degli uffici. Verifiche e limiti in
+[scadenza dalla notifica](RUOLO_SCADENZA_NOTIFICA_2026-10-27.md).
+
 Aggiornamento 2026-10-26 (numero avviso): la regola salva `notice_number_source`
 (`gaia` default, `incass`), migration `20261026_1600`. Con `incass` GAIA non
 genera un nuovo numero: ogni avviso dell'anno della regola diventa un avviso a
@@ -32,6 +57,37 @@ prenotato alcun progressivo GAIA. L'esercizio resta quello configurato nella
 regola (per il 2021: `2021`). Gli avvisi di anni con regola `gaia` dello stesso
 contribuente restano raggruppati in un unico avviso GAIA. Un avviso senza
 numero inCASS valido blocca il batch con errore esplicito.
+
+## Chi paga: avvisi di deceduti e vendite (2026-10-27)
+
+Tabella `ruolo_tributi_payer_assignments` (migration `20261027_0900`): per
+ogni avviso al massimo un pagatore attivo diverso dall'intestatario, con
+motivo `decesso` (erede), `vendita` (acquirente/voltura) o `ufficio`
+(indicazione dell'ufficio) e nota. Sostituire o rimuovere il pagatore
+annulla la riga precedente (`voided_at`), che resta come storico.
+
+- Il pagatore deve esistere in anagrafica (persona o societa, cercato per CF
+  o partita IVA): se manca, va inserito prima da Utenze. Non puo coincidere
+  con l'intestatario.
+- API: `GET|PUT|DELETE /ruolo/tributi/avvisi/{id}/payer`; le modifiche
+  richiedono `ruolo.tributi.manage_status`. In UI e la card "Chi paga" nel
+  dettaglio dell'avviso in `/ruolo/tributi`.
+- Solleciti: la selezione resta per intestatario (CF dell'avviso). Ogni
+  avviso con pagatore diventa un sollecito a parte intestato al pagatore
+  (nome, CF, indirizzo dell'anagrafica, cartella NAS del pagatore); gli
+  avvisi dello stesso intestatario senza pagatore restano raggruppati. Nella
+  tabella del sollecito, sotto il numero avviso, compare "intestato a
+  <intestatario>" e, per decesso/vendita, "dovuto come erede/acquirente".
+  Con la regola `incass` il numero resta quello inCASS.
+- L'idoneita registro non segnala `destinatario_discordante` se il documento
+  e intestato al pagatore attivo.
+- Caricamento iniziale: `python -m app.scripts.import_payer_assignments
+  file.csv [--apply]`, CSV `avviso_id;avviso;cf_pagatore;motivo;note`
+  separato da `;`. Senza `--apply` e una prova; i pagatori non in anagrafica
+  sono segnalati e saltati, quelli gia collegati non vengono duplicati.
+
+Gli avvisi da non sollecitare (annullati, esubero, caricati ad altri) si
+gestiscono con lo stato operativo esistente, non con questa tabella.
 
 ## Tasso interessi
 

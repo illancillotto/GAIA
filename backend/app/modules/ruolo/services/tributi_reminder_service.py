@@ -29,8 +29,22 @@ from app.modules.ruolo.services.bollettino_v2 import (
     _BOLLETTINO_POSTAL_ACCOUNT,
     bollettino_layout_html,
 )
+from app.modules.ruolo.services.notice_branding import (
+    NOTICE_BRANDING_CSS,
+    notice_contacts_html,
+    notice_header_html,
+    notice_portal_html,
+)
 from app.modules.ruolo.services.notice_html_pdf import _render_gaia_html_to_pdf
-from app.modules.ruolo.services.notice_number_cell import notice_numbers_html
+from app.modules.ruolo.services.notice_payment_deadline import (
+    PAYMENT_DEADLINE_CSS,
+    bollettino_deadline_date,
+    front_payment_due_phrase,
+    notice_enforcement_html,
+    payment_deadline_fields,
+    payment_deadline_html,
+)
+from app.modules.ruolo.services.notice_summary import notice_summary_html
 from app.modules.ruolo.services.partitario_by_avviso import partitario_by_avviso
 from app.modules.ruolo.services.partitario_dialog import usable_partitario_text
 from app.modules.ruolo.services.td896 import TD896_DOCUMENT_CODE as _BOLLETTINO_TD_CODE
@@ -454,31 +468,7 @@ def _gaia_proposal_html(
     field_values = _batch_template_field_values(payload)
     yearly_rows = _batch_yearly_row_values(payload)
     partitario_sections_html = _gaia_partitario_sections_html(_batch_partitario_lines(payload))
-    cbo_logo_html = _gaia_logo_html(
-        candidates=_GAIA_CBO_LOGO_CANDIDATES,
-        alt="Logo Consorzio di Bonifica dell'Oristanese",
-        fallback="CBO",
-    )
-    pagopa_logo_html = _gaia_logo_html(
-        candidates=_GAIA_PAGOPA_LOGO_CANDIDATES,
-        alt="Logo pagoPA",
-        fallback="pagoPA",
-    )
     notification_amount = _format_template_number(payload.get("notification_amount") or REGISTERED_MAIL_NOTIFICATION_AMOUNT)
-    summary_rows = "".join(
-        "<tr>"
-        f"<td>{html.escape(row['Anno_Ruolo'])}</td>"
-        f"<td class=\"notice-number\">{notice_numbers_html(row['Rif_Ruolo'])}</td>"
-        f"<td>{html.escape(row['M_648'])}</td>"
-        f"<td>{html.escape(row['M_668'])}</td>"
-        f"<td>{html.escape(row['M_985'])}</td>"
-        f"<td>{html.escape(row['Magg_Applicate'])}</td>"
-        f"<td>{html.escape(row['Interessi'])}</td>"
-        f"<td>{html.escape(row['Riscosso'])}</td>"
-        "<td>0,00</td>"
-        "</tr>"
-        for row in yearly_rows
-    )
     return f"""<!doctype html>
 <html lang="it">
 <head>
@@ -487,36 +477,28 @@ def _gaia_proposal_html(
 <style>@font-face {{ font-family: "OCR B"; src: url("data:font/otf;base64,{_OCR_B_FONT_BASE64}") format("opentype"); font-style: normal; font-weight: 400; }}
 @page {{ size: A4; margin: 0; }} @page bollettino {{ size: A4 landscape; margin: 0; }}
 * {{ box-sizing: border-box; }}
-body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; font-size: 10.2pt; line-height: 1.28; }}
+body {{ margin: 0; color: #1c2633; font-family: Arial, Helvetica, sans-serif; font-size: 10.2pt; line-height: 1.28; }}
 .page {{ width: 210mm; min-height: 297mm; break-after: page; page-break-after: always; position: relative; padding: 12mm 18mm 12mm 13mm; }}
 .page:last-child {{ break-after: auto; page-break-after: auto; }}
-.front {{ font-size: 11.45pt; line-height: 1.28; }}
-.header {{ display: grid; grid-template-columns: 39mm 1fr 39mm; align-items: center; gap: 5mm; padding-bottom: 5mm; border-bottom: 1.6pt solid #1f5d45; }}
-.brand {{ display: grid; place-content: center; position: relative; height: 23mm; border-radius: 4mm; border: 1pt solid #d9e3dd; font-weight: 900; text-align: center; overflow: hidden; }}
-.brand svg {{ display: block; width: 100%; height: 100%; }}
-.logo-image {{ display: block; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }}
-.brand.cbo {{ color: #213d66; font-size: 23pt; letter-spacing: -1.5pt; }}
-.brand.cbo .logo-image {{ inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }}
-.brand.pagopa {{ justify-self: end; width: 39mm; color: #0b6eb4; font-size: 15pt; }}
-.head-title {{ text-align: center; }}
-.head-title h1 {{ margin: 0; font-family: Georgia, serif; font-size: 21.5pt; line-height: 1.05; }}
-.head-title p {{ margin: 1.5mm 0 0; font-weight: 700; font-size: 10.2pt; }}
-.notice-title {{ margin: 5mm 0 4.5mm; padding: 3mm 4mm; background: linear-gradient(90deg, #1f5d45, #2c7558); color: white; border-radius: 2.5mm; font-weight: 800; text-align: center; font-size: 13.2pt; }}
+.front {{ font-size: 10.2pt; line-height: 1.24; padding-top: 10mm; padding-bottom: 10mm; }}
+{NOTICE_BRANDING_CSS}
+{PAYMENT_DEADLINE_CSS}
+.notice-title {{ margin: 3mm 0 3.5mm; padding: 2.5mm 4mm; background: linear-gradient(90deg, #2b5793, #3e72b3); color: white; border-radius: 2.5mm; font-weight: 800; text-align: center; font-size: 13.2pt; }}
 .grid-2 {{ display: grid; grid-template-columns: 1fr 1fr; gap: 5mm; }}
-.card {{ border: 1pt solid #cfd8d2; border-radius: 3mm; overflow: hidden; background: #fff; }}
-.card h2 {{ margin: 0; padding: 2.4mm 3mm; background: #e7f0ea; color: #1f5d45; font-size: 10.2pt; text-transform: uppercase; letter-spacing: .4pt; }}
-.body {{ padding: 3mm; }}
-.kv {{ display: grid; grid-template-columns: 28mm 1fr; gap: 1.2mm 2mm; }}
-.kv b {{ color: #5b6b63; font-size: 8.9pt; }}
+.card {{ border: 1pt solid #ccd7e5; border-radius: 3mm; overflow: hidden; background: #fff; }}
+.card h2 {{ margin: 0; padding: 2mm 3mm; background: #eaf0f7; color: #2b5793; font-size: 10.2pt; text-transform: uppercase; letter-spacing: .4pt; }}
+.body {{ padding: 2.5mm; }}
+.kv {{ display: grid; grid-template-columns: 28mm 1fr; gap: .6mm 2mm; }}
+.kv b {{ color: #5b6b80; font-size: 8.9pt; }}
 .recipient {{ font-weight: 800; font-size: 11.3pt; }}
-.pay-band {{ margin-top: 5mm; display: grid; grid-template-columns: 56mm 1fr; gap: 4mm; align-items: stretch; }}
-.amount {{ background: #f8f5ec; border: 1.3pt solid #b18b3d; border-radius: 3mm; padding: 4mm; }}
-.amount .label {{ text-transform: uppercase; color: #745821; font-size: 8.7pt; font-weight: 800; letter-spacing: .4pt; }}
-.amount .euro {{ font-family: Georgia, serif; font-size: 28pt; color: #1f5d45; font-weight: 900; margin: 1.5mm 0; }}
-.instructions {{ border-left: 3pt solid #1f5d45; padding-left: 4mm; }}
-.instructions h2 {{ margin: 0 0 2mm; color: #1f5d45; font-size: 13pt; }}
+.pay-band {{ margin-top: 3mm; display: grid; grid-template-columns: 56mm 1fr; gap: 4mm; align-items: stretch; }}
+.amount {{ background: #f2f6fa; border: 1.3pt solid #2b5793; border-radius: 3mm; padding: 3mm; }}
+.amount .label {{ text-transform: uppercase; color: #2b5793; font-size: 8.7pt; font-weight: 800; letter-spacing: .4pt; }}
+.amount .euro {{ font-size: 28pt; color: #2b5793; font-weight: 900; margin: 1mm 0; }}
+.instructions {{ border-left: 3pt solid #2b5793; padding-left: 4mm; }}
+.instructions h2 {{ margin: 0 0 2mm; color: #2b5793; font-size: 13pt; }}
 .instructions p {{ margin: 1mm 0; }}
-.summary {{ margin-top: 4mm; width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 8.05pt; }}
+.summary {{ margin-top: 3mm; width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 8.05pt; }}
 .summary col.role {{ width: 13%; }}
 .summary col.notice {{ width: 16%; }}
 .summary col.opere {{ width: 14%; }}
@@ -526,25 +508,25 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .summary col.interessi {{ width: 8%; }}
 .summary col.versate {{ width: 10%; }}
 .summary col.spese {{ width: 6%; }}
-.summary th {{ background: #eef3f0; color: #1f5d45; border: 1px solid #cfd8d2; padding: 1mm .75mm; text-align: left; overflow-wrap: anywhere; }}
-.summary td {{ border: 1px solid #cfd8d2; padding: 1.05mm .75mm; text-align: right; }}
+.summary th {{ background: #f0f4f9; color: #2b5793; border: 1px solid #ccd7e5; padding: 1mm .75mm; text-align: left; overflow-wrap: anywhere; }}
+.summary td {{ border: 1px solid #ccd7e5; padding: .75mm .75mm; text-align: right; }}
 .summary td:first-child {{ text-align: left; font-weight: 800; }}
 .summary .notice-number {{ white-space: nowrap; text-align: left; font-size: 7.35pt; letter-spacing: -.12pt; }}
-.note {{ margin-top: 3mm; padding-top: 2.4mm; border-top: 1px solid #cfd8d2; font-size: 9.15pt; line-height: 1.16; color: #2e3934; text-align: justify; }}
-.rateization-note {{ margin-top: 2.5mm; padding: 2mm 3mm; background: #fdf2e0; border: 1pt solid #b18b3d; border-radius: 2mm; font-size: 9.15pt; line-height: 1.2; color: #5c4413; }}
+.note {{ margin-top: 2mm; padding-top: 2mm; border-top: 1px solid #ccd7e5; font-size: 9.15pt; line-height: 1.16; color: #344154; text-align: justify; }}
+.rateization-note {{ margin-top: 2mm; padding: 1.5mm 3mm; background: #eaf0f7; border: 1pt solid #2b5793; border-radius: 2mm; font-size: 9.15pt; line-height: 1.2; color: #244a7d; }}
 .privacy {{ margin-top: 1.6mm; }}
-.rev {{ position: absolute; bottom: 0; left: 0; font-size: 7.5pt; color: #5b6b63; }}
+.rev {{ position: absolute; bottom: 0; left: 0; font-size: 7.5pt; color: #5b6b80; }}
 .legal h2 {{ text-align: center; margin: 0 0 2.4mm; font-size: 10.2pt; font-weight: 800; }}
 .legal-copy {{ font-size: 7.75pt; line-height: 1.05; padding-bottom: 24mm; width: 100%; }}
 .legal-copy p {{ margin: 0 0 .8mm; text-align: justify; }}
 .legal-copy ul {{ margin: -.6mm 0 .8mm 8mm; padding: 0; }}
 .legal-copy li {{ margin: 0; padding: 0; }}
 .warning em {{ font-style: italic; text-decoration: underline; }}
-.signature {{ position: absolute; right: 25mm; bottom: 12mm; width: 78mm; text-align: center; font-family: Georgia, 'Times New Roman', serif; color: #1a211d; }}
+.signature {{ position: absolute; right: 25mm; bottom: 12mm; width: 78mm; text-align: center; font-family: Georgia, 'Times New Roman', serif; color: #1d2633; }}
 .signature .title {{ font-size: 7.8pt; font-weight: 700; letter-spacing: .25pt; }}
 .signature .name {{ font-size: 8.4pt; font-weight: 600; margin-top: .3mm; }}
-.signature .rule {{ width: 38mm; border-top: .7pt solid #87958e; margin: 1mm auto .75mm; }}
-.signature .note {{ font-size: 5.9pt; line-height: 1.05; color: #39443f; border: 0; margin: 0; padding: 0; text-align: center; }}
+.signature .rule {{ width: 38mm; border-top: .7pt solid #8797ad; margin: 1mm auto .75mm; }}
+.signature .note {{ font-size: 5.9pt; line-height: 1.05; color: #3f4b5d; border: 0; margin: 0; padding: 0; text-align: center; }}
 .bollettino-page {{ page: bollettino; width: 297mm; min-height: 210mm; padding: 0; overflow: hidden; color: #000; background: #fff; }}
 .bollettino-sheet {{ position: absolute; inset: 0; width: 297mm; height: 210mm; overflow: hidden; font: 9.8pt Arial, Helvetica, sans-serif; }}
 .bollettino-methods {{ position: absolute; top: 5.5mm; left: 6.5mm; right: 6.5mm; height: 52mm; }}
@@ -604,7 +586,7 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 .bollettino-authorization {{ position: absolute; right: 8mm; top: 4.8mm; color: #ccc; font: 5.8pt Arial, Helvetica, sans-serif; letter-spacing: .2pt; }}
 .partitario-page {{ break-before: page; page-break-before: always; min-height: 297mm; }}
 .partitario-page:first-child {{ break-before: auto; page-break-before: auto; }}
-.partitario-title {{ margin: 0 0 3mm; color: #1f5d45; font: 800 14pt Arial, sans-serif; border-bottom: 1.2pt solid #1f5d45; padding-bottom: 2mm; }}
+.partitario-title {{ margin: 0 0 3mm; color: #2b5793; font: 800 14pt Arial, sans-serif; border-bottom: 1.2pt solid #2b5793; padding-bottom: 2mm; }}
 .partitario {{ font-family: "Courier New", monospace; font-size: 10.45pt; line-height: 1.14; max-width: 100%; color: #111; }}
 .partitario-line {{ display: block; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }}
 </style>
@@ -612,11 +594,7 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 <body>
 {f'''
 <section class="page front">
-  <div class="header">
-    <div class="brand cbo">{cbo_logo_html}</div>
-    <div class="head-title"><h1>Consorzio di Bonifica<br>dell'Oristanese</h1><p>DPGRS N. 239 del 04.12.96</p></div>
-    <div class="brand pagopa">{pagopa_logo_html}</div>
-  </div>
+  {notice_header_html()}
   <div class="notice-title">AVVISO/SOLLECITO DI PAGAMENTO N. {html.escape(field_values['Avviso_n'])}<br>{html.escape(field_values['Oggetto_Ruoli'])}</div>
   <div class="grid-2">
     <div class="card"><h2>Ente creditore</h2><div class="body kv">
@@ -631,13 +609,19 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
     </div></div>
   </div>
   <div class="pay-band">
-    <div class="amount"><div class="label">Quanto e quando pagare</div><div class="euro">€. {html.escape(field_values['Complessivo'])}</div><div><b>entro il {html.escape(field_values['Scadenza'])}</b><br>UNICA SOLUZIONE</div></div>
-    <div class="instructions"><h2>Come pagare</h2><p>Il pagamento potrà essere effettuato mediante bonifico bancario al Conto Corrente:</p><p><b>Intestato a:</b> CONSORZIO DI BONIFICA DELL'ORISTANESE - RISCOSSIONE QUOTE ASSOCIATIVE</p><p><b>IBAN:</b> IT15L0760117400001007214826</p><p><b>Causale:</b> {html.escape(field_values['CodFiscale'])}; {html.escape(field_values['Avviso_n'])}</p></div>
+    <div class="amount"><div class="label">Quanto e quando pagare</div><div class="euro">€. {html.escape(field_values['Complessivo'])}</div><div><b>{html.escape(front_payment_due_phrase(payload, _sorted_payload_years(payload, _batch_yearly_values(payload)), _gaia_bollettino_due_date))}</b><br>UNICA SOLUZIONE</div><p class="installment-request">Si può richiedere, direttamente presso gli uffici dell&rsquo;Ente, una diversa dilazione del pagamento</p></div>
+    <div class="instructions"><h2>Come pagare</h2><p>Il pagamento potrà essere effettuato anche mediante bonifico bancario al Conto Corrente:</p><p><b>intestato a:</b> Consorzio di Bonifica dell'Oristanese - Riscossione quote associative</p><p><b>IBAN:</b> IT15L0760117400001007214826</p><p><b>Causale:</b> {html.escape(field_values['CodFiscale'])}; {html.escape(field_values['Avviso_n'])}</p></div>
   </div>
-  <table class="summary"><colgroup><col class="role"><col class="notice"><col class="opere"><col class="utenza"><col class="quota"><col class="magg"><col class="interessi"><col class="versate"><col class="spese"></colgroup><thead><tr><th>Ruolo</th><th>Numero avviso</th><th>0648 Opere irrigue</th><th>0668 Utenza</th><th>0985 Quota istituzionale</th><th>Magg.</th><th>Interessi</th><th>Somme versate</th><th>Altre spese</th></tr></thead><tbody>{summary_rows}<tr><td>SN01 Spese Notifica</td><td colspan="7"></td><td>{html.escape(notification_amount)}</td></tr></tbody></table>
+  {notice_summary_html(yearly_rows, notification_amount, payload.get('payer_assignment'))}
   {_gaia_rateization_residual_note_html(payload)}
+  {payment_deadline_html(payload)}
+  {notice_portal_html(payload)}
   <div class="note">
-    Si può richiedere, direttamente presso gli uffici dell'Ente, una diversa dilazione del pagamento. Per maggiori chiarimenti contattare l'Ente o recarsi presso la sede nei seguenti giorni: Lunedi e giovedì 11.00 - 13.00, - tel. 0783 3150212.
+    Per maggiori chiarimenti contattare l'Ente o recarsi presso la sede nei seguenti giorni: Lunedi e giovedì 11.00 - 13.00, - tel. 0783 3150212. È possibile consultare il sito internet www.bonificaoristanese.it per una migliore individuazione delle proprietà assoggettate a tributo, degli indici applicati nel calcolo, e la normativa inerente l&rsquo;attività istituzionale dell&rsquo;Ente.
+  </div>
+  <div class="notice-footer">
+    {notice_enforcement_html(payload)}
+    {notice_contacts_html()}
     <div class="privacy"><strong>INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI:</strong> lo scrivente Consorzio, titolare del trattamento dei dati personali, li utilizza esclusivamente per le finalità istituzionali previste dalla legge, anche quando comunicate a terzi. Il trattamento dei Suoi dati avviene anche mediante l'utilizzo di strumenti elettronici, con logistiche strettamente correlate alle predette finalità nel rispetto del D.LGS n. 196/2003.</div>
   </div>
   <div class="rev">Rev.2026/01</div>
@@ -651,7 +635,7 @@ body {{ margin: 0; color: #17231e; font-family: Arial, Helvetica, sans-serif; fo
 {partitario_sections_html if include_partitario else ''}
 {f'''
 <section class="page bollettino-page">
-{bollettino_layout_html(field_values, payload, render_v1=_gaia_bollettino_html, render_barcode=_gaia_bollettino_code128_svg, causale=_gaia_bollettino_causale(payload))}
+{bollettino_layout_html({**field_values, 'Scadenza': bollettino_deadline_date(payload, _gaia_bollettino_due_date)}, payload, render_v1=_gaia_bollettino_html, render_barcode=_gaia_bollettino_code128_svg, causale=_gaia_bollettino_causale(payload))}
 </section>
 ''' if include_bollettino else ''}
 </body>
@@ -809,7 +793,7 @@ def _gaia_bollettino_slip_html(values: dict[str, str], *, title: str, kind: str)
       {customer_html}
       {_gaia_bollettino_postmark_html()}
       <div class="bollettino-details">
-        <div>Scadenza: {html.escape(values['due_date'])} - Rata unica</div>
+        <div>Scadenza: {html.escape(values['due_date'])} - Rata Unica</div>
         <div>Esercizio: &nbsp;&nbsp; {html.escape(values['esercizio'])}{accredito_causale}</div>
         {causale_row}
         <div>Importo: &nbsp;&nbsp;&nbsp; {html.escape(values['amount'])}</div>
@@ -863,7 +847,7 @@ def _gaia_bollettino_values(field_values: dict[str, str], payload: dict[str, Any
         "causale": _gaia_bollettino_causale(payload),
         "cbo_logo_html": _gaia_bollettino_cbo_logo_html(),
         "customer_code": payment_code.customer_code,
-        "due_date": _gaia_bollettino_due_date(payload),
+        "due_date": bollettino_deadline_date(payload, _gaia_bollettino_due_date),
         "esercizio": _gaia_bollettino_esercizio(payload),
         "iban_boxes_html": _gaia_bollettino_iban_boxes_html(_BOLLETTINO_IBAN),
         "payer_address": _gaia_bollettino_payer_address(field_values),
@@ -1281,7 +1265,7 @@ def _batch_template_field_values(payload: dict[str, Any]) -> dict[str, str]:
         "RESIDENZA": address["residenza"],
         "INDIRIZZO_SPEDIZIONE": address["indirizzo_spedizione"],
         "Complessivo": _format_template_number(total_amount),
-        "Scadenza": _gaia_bollettino_due_date(payload),
+        **payment_deadline_fields(payload, _gaia_bollettino_due_date),
         "CodFiscale": _value(payload.get("codice_fiscale")),
         "Oggetto_Ruoli": _role_subject_label(years),
         "Rif_Ruoli": yearly_references,
@@ -1514,7 +1498,7 @@ def _stable_payment_summary_table_xml(amount: str, field_values: dict[str, str])
             ],
             [
                 _docx_cell(
-                    f"{amount}<w:br/>entro il {html.escape(field_values['Scadenza'])} - UNICA SOLUZIONE<w:br/><w:br/>"
+                    f"{amount}<w:br/>{html.escape(field_values['Pagamento_entro'])} - UNICA SOLUZIONE<w:br/><w:br/>"
                     "Si può richiedere, direttamente presso gli uffici dell\u2019Ente, una diversa dilazione del pagamento.",
                     width=5100,
                     bold=True,

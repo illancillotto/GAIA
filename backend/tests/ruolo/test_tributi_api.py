@@ -4605,10 +4605,10 @@ def test_gaia_reminder_template_contract() -> None:
     assert ".bollettino-sheet { position: absolute; inset: 0; width: 297mm; height: 210mm;" in rendered_html
     assert "bollettino-landscape" not in rendered_html
     assert "transform: rotate(-90deg) scale(.940);" not in rendered_html
-    assert ".front { font-size: 11.45pt; line-height: 1.28; }" in rendered_html
+    assert ".front { font-size: 10.2pt; line-height: 1.24; padding-top: 10mm; padding-bottom: 10mm; }" in rendered_html
     assert ".header { display: grid; grid-template-columns: 39mm 1fr 39mm;" in rendered_html
-    assert ".brand.pagopa { justify-self: end; width: 39mm;" in rendered_html
-    assert ".brand.cbo .logo-image { inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }" in rendered_html
+    assert '<div class="brand anbi">' in rendered_html
+    assert ".brand .logo-image { display: block; width: 100%; height: 100%; object-fit: contain; }" in rendered_html
     assert "grid-template-columns: 132mm 165mm;" in rendered_html
     assert ".bollettino-slip { height: 102mm;" in rendered_html
     assert ".bollettino-eseguito-address { display: block; margin-top: .7mm; font-size: 7.05pt;" in rendered_html
@@ -4642,17 +4642,17 @@ def test_gaia_reminder_template_contract() -> None:
     assert ".partitario-page:first-child { break-before: auto; page-break-before: auto; }" in rendered_html
     assert '.partitario { font-family: "Courier New", monospace; font-size: 10.45pt; line-height: 1.14; max-width: 100%; color: #111; }' in rendered_html
     assert ".partitario-line { display: block; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }" in rendered_html
-    assert ".summary { margin-top: 4mm; width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 8.05pt; }" in rendered_html
+    assert ".summary { margin-top: 3mm; width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 8.05pt; }" in rendered_html
     assert ".summary col.notice { width: 16%; }" in rendered_html
     assert ".summary col.quota { width: 14%; }" in rendered_html
     assert ".summary col.magg { width: 8%; }" in rendered_html
     assert ".summary .notice-number { white-space: nowrap; text-align: left; font-size: 7.35pt; letter-spacing: -.12pt; }" in rendered_html
-    assert '<colgroup><col class="role"><col class="notice"><col class="opere"><col class="utenza"><col class="quota"><col class="magg"><col class="interessi"><col class="versate"><col class="spese"></colgroup>' in rendered_html
+    assert '<colgroup><col class="role"><col class="notice"><col class="opere"><col class="utenza"><col class="quota"><col class="magg"><col class="versate"><col class="spese"></colgroup>' in rendered_html
     assert "AVVISO/SOLLECITO DI PAGAMENTO N. 12026242500001<br>Tributi Consortili anni 2024 e 2025" in rendered_html
     assert "AVVISO/SOLLECITO DI PAGAMENTO N. 12026242500001 - Tributi Consortili" not in rendered_html
     assert '<span class="bollettino-eseguito-address">VIA RESIDENZA 2 09170 ORISTANO OR</span>' in rendered_html
     assert '<span class="bollettino-eseguito-address">VIA DOMICILIO 1' not in rendered_html
-    assert "Per maggiori chiarimenti contattare l'Ente o recarsi presso la sede" in rendered_html
+    assert "È possibile consultare il sito internet www.bonificaoristanese.it" in rendered_html
     assert "· <strong>INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI" not in rendered_html
     assert "<strong>INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI:</strong>" in rendered_html
     assert "Rev.2026/01" in rendered_html
@@ -4683,7 +4683,7 @@ def test_gaia_reminder_template_contract() -> None:
     assert "bollettino-datamatrix" in rendered_html
     assert "Data Matrix TD 896" in rendered_html
     assert "A 12026242500001 CF RSSMRA80A01H501Z" in rendered_html
-    assert "Scadenza: 21/11/2025 - Rata unica" in rendered_html
+    assert "Scadenza: 21/11/2025 - Rata Unica" in rendered_html
     assert "Esercizio: &nbsp;&nbsp; 9999 Causale: 777" in rendered_html
     assert '<span class="bollettino-boxes"><span>I</span><span>T</span><span>1</span><span>5</span><span>L</span>' in rendered_html
     assert rendered_html.count('<span class="bollettino-boxes">') == 2
@@ -4704,7 +4704,8 @@ def test_gaia_reminder_template_contract() -> None:
     assert "GaTe-mobile" not in rendered_html
     assert "/tmp/logo-pagopa.png" not in rendered_html
     assert rendered_html.count('<img class="logo-image"') == 2
-    assert rendered_html.count("data:image/png;base64,") == 3
+    assert rendered_html.count("data:image/png;base64,") == 5
+    assert 'alt="QR di accesso a Irrighiamo Insieme"' in rendered_html
     assert reminder_service._gaia_bollettino_customer_code("025257650095110") == "025257650095110900"
     assert reminder_service._gaia_bollettino_customer_code("12026242500001") == "012026242500001985"
     assert reminder_service._gaia_bollettino_customer_code("AVV-1") == "000000000000001919"
@@ -5374,23 +5375,22 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     main_html, partitario_html, bollettino_html = rendered_html["texts"]
     all_html = "\n".join(rendered_html["texts"])
     assert "Consorzio di Bonifica" in main_html
-    assert "pagoPA" in main_html
+    assert "Logo ANBI" in main_html
     assert "AVVISO/SOLLECITO DI PAGAMENTO N. 12026242500001<br>Tributi Consortili anni 2022 e 2024" in main_html
     assert "AVVISO/SOLLECITO DI PAGAMENTO N. 12026242500001 - Tributi Consortili" not in all_html
-    assert "Per maggiori chiarimenti contattare l'Ente o recarsi presso la sede" in main_html
+    assert "È possibile consultare il sito internet www.bonificaoristanese.it" in main_html
     assert "INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI" in main_html
     assert "Rev.2026/01" in main_html
     assert "@page { size: A4; margin: 0; }" in all_html
-    assert ".front { font-size: 11.45pt; line-height: 1.28; }" in all_html
+    assert ".front { font-size: 10.2pt; line-height: 1.24; padding-top: 10mm; padding-bottom: 10mm; }" in all_html
     assert ".legal-copy { font-size: 7.75pt; line-height: 1.05;" in all_html
     assert ".header { display: grid; grid-template-columns: 39mm 1fr 39mm;" in all_html
-    assert ".amount .euro { font-family: Georgia, serif; font-size: 28pt;" in all_html
+    assert ".amount .euro { font-size: 28pt;" in all_html
     assert "text-align: justify;" in all_html
     assert "· <strong>INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI" not in all_html
-    assert ".brand svg { display: block; width: 100%; height: 100%; }" in all_html
-    assert ".logo-image { display: block; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }" in all_html
-    assert ".brand.cbo .logo-image { inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }" in all_html
-    assert ".brand.pagopa { justify-self: end; width: 39mm;" in all_html
+    assert ".brand .logo-image { display: block; width: 100%; height: 100%; object-fit: contain; }" in all_html
+    assert '<div class="brand cbo">' in main_html
+    assert '<div class="brand anbi">' in main_html
     assert "position: absolute; left: 0; bottom: 0; width: 297mm; height: 102mm;" in bollettino_html
     assert "grid-template-columns: 132mm 165mm;" in bollettino_html
     assert ".bollettino-slip { height: 102mm;" in bollettino_html

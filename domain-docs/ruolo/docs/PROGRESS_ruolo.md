@@ -1,5 +1,304 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## Verifica finale avvisi, accessi e pagatore — 2026-10-28
+
+- Perimetro conclusivo: grafica blu e testi dell'avviso, accessi al portale,
+  scadenza fissa dei bollettini v1/v2 insieme al termine di notifica, regole
+  persistite e assegnazione del pagatore diverso dall'intestatario. Il modello
+  esistente resta selezionabile. Runbook del pagatore:
+  `RUOLO_PAGATORE_AVVISO_2026-10-28.md`.
+- Corretto un difetto emerso nella verifica: una modifica del pagatore dopo
+  la preparazione non invalidava la bozza. La migration `20261028_0900`
+  aggiunge trigger PostgreSQL di revisione per insert/update/delete/truncate,
+  attivi anche in replica. Test prima rosso e poi verde: la conferma della
+  bozza obsoleta viene rifiutata e richiede una nuova preparazione. Verificati
+  anche downgrade, compatibilita SQLite e unico head Alembic `20261028_0900`.
+- Backend: **1.295 PASS**, di cui 1.293 nel corpus Ruolo e due test STEP
+  esistenti sul mantenimento degli avvisi affidati alla riscossione esterna;
+  **9 skip SQLite**, tutti con equivalente PostgreSQL eseguito e superato.
+  Il corpus Ruolo e suddiviso in quattro gruppi disgiunti; inventario finale
+  di 1.302 casi riconciliato con gli XML JUnit. Per i soli sei parametri dei
+  workbook non validi e normalizzato l'ID dinamico contenente timestamp ZIP;
+  nessun caso e stato eliminato dal confronto.
+- Coverage backend combinata **100% statement e branch** su tutti i **25
+  runtime** modificati: **3.770 statement, 1.198 branch**, zero righe mancanti
+  e zero branch parziali. Restano soltanto le due righe di guardia FK escluse
+  gia in HEAD in `tributi_repositories.py`; nessuna nuova esclusione.
+  Rimossi gli ignore dal nuovo componente pagatore e dall'ingresso CLI;
+  test pertinenti per sessione assente/scaduta, permessi sola lettura e
+  comando CSV reale in dry-run con rollback.
+- Frontend: **156 PASS su 16 suite**; coverage **100%** sui **7 runtime
+  eseguibili** modificati: **768 statement, 745 branch, 262 funzioni, 695
+  righe**. I due file di soli tipi sono verificati dal typecheck.
+- `make lint-backend QUALITY_PYTHON=backend/.venv/bin/python BASE_REF=HEAD`,
+  lint frontend e TypeScript PASS. Restano warning legacy del lint in altri
+  moduli e l'avviso JWT sulla chiave corta dell'ambiente di test; nessuna
+  failure nel perimetro verificato.
+- Ratchet ordinario contro la baseline immutabile di `9ff86d83` PASS, zero
+  finding e nessun nuovo debito. Metriche finali su 34 runtime: 656 callable;
+  repository tributi LOC `3625 -> 3619`, cognitive/cyclomatic aggregate
+  `1348/1156 -> 1345/1154`; pagina Tributi LOC `2906 -> 2854`, aggregate
+  `636/761 -> 636/759`; eligibility LOC `168` invariata, aggregate
+  `64/56 -> 62/56`. Il debito legacy resta censito. Baseline circoscritta
+  sincronizzata dopo ratchet e verificata con scansione fresca, preservando
+  tutti i record estranei e i metadati globali.
+- Anteprima PDF 2021 verificata senza modificarla: quattro pagine con dati
+  dimostrativi, descrizione Irrighiamo, QR WhatsApp/Irrighiamo e codici di
+  pagamento decodificabili; entrambi i tagliandi riportano
+  `30/11/2026 - Rata Unica`. Verifica circoscritta alla change, non
+  certificazione dell'intero repository.
+- Limiti operativi confermati: i sei CF con utenze ambigue restano sospesi;
+  il generatore DOCX singolo legacy mantiene il destinatario originale,
+  mentre la pagina Tributi applica il pagatore tramite i lotti anche per
+  l'anteprima singola. Nessun deploy, push o modifica al database degli uffici
+  in questo ciclo. Modifiche locali estranee preservate fuori dal commit.
+- Evidenze locali: `/tmp/gaia-avvisi-final-20261028/`, inclusi inventario test,
+  report coverage, metriche prima/dopo e hash dei sorgenti verificati.
+
+## Descrizione Irrighiamo Insieme nell'avviso — 2026-10-28
+
+- Nel riquadro accanto al QR: «L'applicazione del Consorzio per segnalare guasti
+  o rotture e richiedere l'autorizzazione all'irrigazione.» Segue l'invito a
+  inquadrare il QR per accedere. Funzioni verificate sulla pagina pubblica
+  `https://login.bonificaoristanese.it/`; nessun cambio al collegamento o al QR.
+- **30 test mirati PASS, zero skip**, coverage statement/branch **100%** del
+  runtime `notice_branding.py` (`26` statement, `2` branch). Il contratto
+  verifica la frase nell'HTML e nel PDF con una, due e cinque annualita.
+  Lint backend e ratchet autorevole contro HEAD PASS, nessun finding.
+  Metriche invariate: LOC `88`, cognitive/cyclomatic aggregate `2/6`.
+  Baseline circoscritta sincronizzata e verificata dopo ratchet, senza
+  modificare record o metadati concorrenti.
+- Anteprima blu 2021 aggiornata e ispezionata: prima pagina completa, entrambi
+  i QR decodificati; pagine 2-4 identiche pixel per pixel alla precedente.
+  Documentazione del template e provenienza asset allineate; Graphify codice
+  Ruolo/backend e docs Ruolo aggiornati con i target dedicati.
+- Evidenze locali: `/tmp/gaia-irrighiamo-description-20261028/`. Nessun
+  intervento al database o al server degli uffici.
+
+## Data fissa e Rata Unica nei bollettini — 2026-10-28
+
+- I bollettini v1/v2 stampano `gg/mm/aaaa - Rata Unica` su entrambi i
+  tagliandi. Nella modalita a 60 giorni `payment_due_date` resta visibile e
+  salvata nelle Regole ruolo; con bollettino abilitato e obbligatoria.
+  Salvataggio senza data HTTP 422; regole e snapshot storici senza data
+  bloccano la generazione con invito a completare le Regole ruolo.
+- Senza bollettino il solo termine relativo resta ammesso. Avviso e campi DOCX
+  conservano il termine di notifica; box 2021 con data e termine invariato.
+  Il fallback legacy a 30 giorni della modalita a data fissa e conservato.
+  Nessuna nuova migration: si usa la colonna gia esistente. Nessun backfill
+  automatico della data e nessun intervento al database degli uffici.
+- Backend **234 PASS, zero skip**, coverage statement/branch **100%** su 15
+  runtime (`1532` statement, `406` branch), zero esclusioni. Test API,
+  snapshot, regole storiche, assenza bollettino e entrambi i tagliandi v1/v2,
+  con date ISO e italiane. Ruff/formatter, lint backend, ESLint mirato e
+  TypeScript PASS. Nessuna failure residua nel perimetro verificato;
+  permane l'avviso JWT sulla chiave corta dell'ambiente di test.
+- Frontend **72 PASS** su quattro suite, coverage statement/branch/funzioni/righe
+  **100%** sui tre runtime del form (`78` statement, `91` branch).
+  Test pertinenti per conservazione date, campi annuali e correzione regole
+  storiche senza data; nessun test aggiunto per la sola percentuale.
+- Anteprima blu 2021 dimostrativa aggiornata: le prime tre pagine sono identiche
+  pixel per pixel alla precedente; quarta pagina con `30/11/2026 - Rata Unica`
+  su entrambi i tagliandi. Bollettino ispezionato; QR, Code128 e DataMatrix
+  decodificati. PDF esistenti e server degli uffici non modificati.
+- Ratchet ordinario autorevole contro `9ff86d83` PASS, nessun finding.
+  Renderer LOC `1772`, aggregate cognitive/cyclomatic `428/433` invariate;
+  repository regole LOC `165`, aggregate `42/50` invariate; v2 LOC `128`,
+  aggregate `13/18` invariate. Helper scadenza LOC `98 -> 115`, aggregate
+  `14/21 -> 31/33`, massimi `9/7`, nessuna violation. Frontend LOC `52 -> 53`,
+  aggregate `8/17 -> 7/16`, nessuna violation. Debito legacy invariato.
+  Baseline dei cinque runtime sincronizzata dopo ratchet e verificata con
+  scansione fresca; record, ordine e metadati concorrenti preservati.
+- Graphify aggiornato tramite i target dedicati codice Ruolo/backend/frontend
+  e docs Ruolo/piattaforma. Gli output restano locali e non versionati.
+- Evidenze: `/tmp/gaia-bollettino-deadline-20261028/`; verifica circoscritta
+  alla change, senza certificare l'intero repository concorrente.
+
+## Avviso 2021, font uniforme e due QR — 2026-10-28
+
+- Box `Quanto e quando pagare` degli avvisi del solo 2021: data esplicita dello
+  snapshot in `gg/mm/aaaa`, seguita da `e comunque entro 60 giorni dalla data
+  di notifica`. Senza data esplicita, soltanto il termine di notifica, senza
+  data derivata dalla generazione. Altre annualita e gruppi multiannualita,
+  persistenza delle regole, DOCX e bollettini mantengono il contratto precedente.
+- Tutto il testo della prima pagina usa Arial/Helvetica/sans-serif, compresi
+  titolo ente e importo. Pesi e dimensioni restano differenziati per gerarchia.
+- Footer con due blocchi affiancati e QR originali `18mm`: WhatsApp e Irrighiamo
+  Insieme, login `https://login.bonificaoristanese.it/`. Il nuovo PNG e identico
+  alla sorgente fornita; nessuna rigenerazione o nuova credenziale applicativa.
+- Avvertenza con triangolo vettoriale rosso `#c62828` e punto esclamativo rosso.
+  Testo: «In caso di mancato pagamento, il Consorzio di Bonifica dell'Oristanese
+  tramite l'agente di riscossione attiverà le procedure di riscossione coattiva
+  previste dalla legge.»
+- Anteprima blu 2021 aggiornata con dati dimostrativi dichiarati su ogni pagina.
+  Prima pagina ispezionata, tutti gli span testuali in Arial; due QR, Code128 e
+  DataMatrix decodificati. Pagine 2-4 identiche pixel per pixel alla versione
+  blu precedente. Layout verificato con una, due e cinque annualita.
+- Ratchet autorevole contro `9ff86d83` PASS, zero finding. Renderer LOC
+  `1771 -> 1772`, cognitive/cyclomatic aggregate `428/433` invariate. Branding
+  LOC `80 -> 88`, aggregate `2/6` invariate. Gestione termine LOC `88 -> 98`,
+  aggregate `9/16 -> 14/21`, massimo `5/5`, nessuna nuova violation. La dicitura
+  specifica resta nel rendering della prima pagina, senza aggiungere campi
+  inutilizzati ai valori condivisi con DOCX/bollettini. Baseline di tre runtime
+  sincronizzata dopo il ratchet e verificata; record estranei e metadati preservati.
+- Suite finale aggiornata: **229 PASS, zero skip**, coverage statement/branch
+  **100%** su 14 runtime (`1477` statement, `394` branch), zero esclusioni.
+  Contratti precedenti del numero immagini e del font aggiornati alle modifiche
+  richieste e verificati nella suite completa; nessuna failure residua.
+  Ruff/formatter e `make lint-backend` PASS. Test Chromium per famiglia font,
+  due QR affiancati e scansionabili, palette e triangolo rosso; date esplicite
+  ISO/formato italiano e assenza data per il 2021 in entrambe le modalita.
+- Graphify Ruolo/backend codice e Ruolo/piattaforma docs aggiornati con i target
+  dedicati, chunk semantici completati senza errori. Gli output restano locali.
+- Stato locale, nessun rilascio o nuova scrittura sul database degli uffici.
+  I sei CF con utenze ambigue restano sospesi in attesa del riscontro dei colleghi.
+
+## Variante cromatica blu — 2026-10-27
+
+- Palette renderer HTML/Chromium: blu principale `#2b5793`, gradiente titolo
+  verso `#3e72b3`, fondi azzurri e bordi coordinati. Anche importo, residuo,
+  titolo partitario e tabella comunicazioni seguono il blu. Loghi e QR originali.
+- Anteprima separata `output/pdf/avviso-2021-anteprima-blu.pdf`; il PDF verde
+  precedente resta disponibile per confronto. Testo e coordinate delle parole
+  identici sulle quattro pagine, bollettino identico pixel per pixel. Ispezione
+  visiva delle prime tre pagine e decodifica QR WhatsApp/Code128/DataMatrix PASS.
+- Test aggiuntivi sui colori effettivi calcolati da Chromium in stampa, per data
+  fissa e termine a 60 giorni: colore principale, gradiente, fondi, bordi e icona.
+  Testi, regole e geometria restano invariati; nessuna scelta tema aggiunta in UI.
+- Suite finale: **223 PASS, zero skip**, coverage statement/branch **100%**
+  su 14 runtime (`1469` statement, `390` branch), zero esclusioni.
+- Metriche dei quattro runtime immutate. Ratchet autorevole contro `9ff86d83`,
+  lint backend/formatter e verifica baseline circoscritta PASS. Stato locale;
+  nessun rilascio sul server degli uffici. I sei casi utenza restano sospesi.
+
+## Una coppia per utenza e colonna Interessi condizionale — 2026-10-27
+
+- Regola confermata: un avviso -> un'utenza -> un Codice ditta/PIN. I sei CF
+  con due utenze sono sospesi in attesa dei colleghi: messaggio uffici, nessuna
+  scelta arbitraria e nessuna stampa multipla. Anche il rendering da snapshot
+  storici ambigui usa il fallback senza decifrare le coppie.
+- Tabella prima pagina GAIA senza colonna Interessi se tutti gli importi annuali
+  visualizzati sono zero; intestazione, colonne, celle e colspan allineati.
+  Basta un valore non nullo per mantenerla, anche con negativi o compensazioni.
+- Dopo il portale, contatti degli uffici seguiti dalla frase sul sito nello
+  stesso paragrafo (`8.5pt`, interlinea `1.12`), per tenere tutto sulla prima pagina.
+- Verifica finale: **221 PASS, zero skip**, **100%** statement/branch su 14
+  runtime (`1469` statement, `390` branch), zero esclusioni. Ruff/formatter e
+  lint backend PASS; ratchet sul merge-base `9ff86d83` senza finding.
+  Renderer LOC `1785 -> 1771`, nuovo riepilogo LOC `35`, nessuna nuova violation.
+  Baseline di quattro runtime sincronizzata e verificata dopo il ratchet,
+  preservando metadati e record concorrenti.
+- Anteprima 2021 aggiornata: una coppia dimostrativa, Interessi nascosti, contatti
+  e sito presenti; quattro pagine marcate come dimostrative. Prima pagina
+  ispezionata, QR WhatsApp/Code128/DataMatrix decodificati, pagine 2-4 identiche.
+- Graphify codice Ruolo/backend aggiornato (1333/10568 nodi). Aggiornamento
+  documentale tramite i target dedicati; output solo locali.
+- Stato locale, nessun rilascio o nuova scrittura sul server. Le sezioni
+  successive conservano le evidenze delle iterazioni precedenti; questo
+  aggiornamento descrive il contratto finale. Dettagli: [accessi portale](RUOLO_PORTALE_CONTRIBUENTE_ACCESSI_2026-10-27.md)
+  e [scadenza dalla notifica](RUOLO_SCADENZA_NOTIFICA_2026-10-27.md).
+
+## Distribuzione verticale avviso — verifica precedente 2026-10-27
+
+- Riquadro termine: `Pagamento entro 60 giorni dalla data di notifica`, senza
+  importo duplicato; totale e spese restano nel riepilogo originario.
+- Sotto `PER CONSULTARE LA PROPRIA POSIZIONE`, in entrambe le modalita,
+  compaiono prima giorni/orari e telefono degli uffici, poi il testo sul sito
+  del Consorzio (rettifica finale del ciclo). Nella modalita a 60 giorni lo spazio
+  libero viene ripartito tra i blocchi, con distacco minimo `1mm`.
+- Test PDF con una, due e cinque annualita verificano ordine, assenza di
+  sovrapposizioni e scarto fra i distacchi inferiore a `12pt`. Anteprima 2021
+  aggiornata e ispezionata; QR e codici TD896 decodificati. Pagine 2-4
+  identiche pixel per pixel rispetto all'anteprima precedente.
+- Verifica finale: `209` casi della suite PASS e due contratti aggiornati al
+  nuovo testo rieseguiti PASS; coverage cumulativa **100%** sui 13 runtime
+  (`1453` statement, `388` branch). Nessuna failure residua. Ruff e
+  `make lint-backend` PASS.
+- Ratchet autorevole PASS; renderer LOC `1785` invariati, helper `87 -> 88`,
+  nessuna nuova violation. Stato locale, nessun nuovo rilascio sul server.
+
+## Termine avviso entro 60 giorni dalla notifica — 2026-10-27
+
+Stato iniziale storico: conservazione data, UI e dicitura bollettini sono
+superati dal ciclo del 2026-10-28 descritto in apertura.
+
+- `Regole ruolo` salva `payment_deadline_mode`: data fissa retrocompatibile
+  oppure `notification_60_days`. La seconda azzera la data salvata; la scelta
+  dell'anno piu recente alimenta lo snapshot e il termine relativo in prima
+  pagina, DOCX e bollettini v1/v2. Nessuna data derivata dalla stampa.
+- Prima del portale: termine di pagamento, rinvio dei sabati/festivi e avvertenza sugli
+  interessi. Sopra WhatsApp: intimazione adattata al Consorzio con icona blu.
+  Blocchi e CSS compatti sono limitati alla modalita a 60 giorni. Il motore
+  degli interessi e le decorrenze amministrative restano invariati.
+- Backend **211 PASS, zero skip**, **100%** statement/branch sui 13 runtime
+  misurati (`1454` statement, `388` branch). Frontend **71 PASS**, **100%**
+  statement/branch/funzioni/righe sui tre runtime interessati. Typecheck,
+  Ruff/format e lint backend PASS; lint frontend PASS con avvisi in altri file.
+- Anteprima 2021 con dati dimostrativi dichiarati su tutte le quattro pagine;
+  prima pagina e comunicazioni ispezionate. QR WhatsApp, Code 128 e Data Matrix
+  decodificati dal PDF finale. Test di impaginazione con una, due e cinque
+  annualita, nomi lunghi, residui e una coppia per utenza e fallback per snapshot ambigui PASS.
+- Ratchet contro il merge-base `9ff86d83`: zero finding. Renderer LOC
+  `1775 -> 1785`, sotto `1788` del merge-base; cognitive/cyclomatic aggregati
+  `429/434` invariati. Helper backend e componente scadenza sotto soglia.
+  Sincronizzazione baseline circoscritta al perimetro, senza assorbire i
+  record estranei o certificare la baseline globale.
+- Graphify codice Ruolo/backend/frontend e docs Ruolo/piattaforma aggiornati;
+  chunk semantici completati senza errori. JSON/report dei corpus backend e
+  frontend correnti, nuova visualizzazione HTML omessa per il limite di nodi.
+- Migration `20261027_1300` e applicazione **non rilasciate**. Nessuna modifica
+  al server degli uffici in questo ciclo; resta alla revisione `20261027_1100`.
+  Dettagli e limiti: [scadenza dalla notifica](RUOLO_SCADENZA_NOTIFICA_2026-10-27.md).
+
+## Grafica avviso e accessi personali al portale — 2026-10-27
+
+- Prima pagina GAIA: loghi CBO Pantone/ANBI, frase sulla diversa dilazione nel
+  blocco importo/scadenza, `effettuato anche mediante`, intestatario
+  `Consorzio di Bonifica dell'Oristanese - Riscossione quote associative`,
+  spese di notifica senza codice `SN01`. Comunicazioni: testo integrale sui
+  piani già sottoscritti dopo le dilazioni e prima della scadenza, anche nel fallback.
+- Prima del testo informativo sul sito compare `PER CONSULTARE LA PROPRIA POSIZIONE`,
+  percorso sito/Cartella contribuenza e una coppia Codice ditta/PIN per utenza
+  del destinatario. Senza dati o con utenze ambigue invita a contattare gli uffici. Eliminati il QR
+  portale e «Apri il canale WhatsApp»; restano QR WhatsApp `18mm`, descrizione
+  del canale e privacy con margine `1.5mm`.
+- Importazione Excel in `ruolo_taxpayer_portal_access`: PIN cifrati Fernet,
+  matching esatto per codice fiscale, zeri conservati, validazione prima della
+  scrittura, conflitti bloccanti, upsert transazionale/idempotente. Snapshot
+  con PIN ancora cifrati, acquisiti dopo la riassegnazione del pagatore.
+  Runbook e stato: [accessi portale](RUOLO_PORTALE_CONTRIBUENTE_ACCESSI_2026-10-27.md).
+- DB degli uffici `serverCed`: 12.353 accessi per 12.347 codici fiscali,
+  sei con due coppie; 12.339 codici fiscali hanno già avvisi, otto conservati
+  per avvisi futuri. Confronto completo con decifratura: zero differenze.
+  Ripetizione: 12.353 invariati, zero scritture; 176.114 avvisi invariati.
+  Applicate le due migration additive fino a `20261027_1100`, con backup
+  preventivo di schema e metadati versione/revisione. I due trigger sono ALWAYS.
+- Verifica finale: **202 test PASS, zero skip**, 100% statement e branch su
+  nove runtime (`1181` statement, `350` branch). Include API, importazione,
+  cifratura, snapshot e pagatore diverso, migration/trigger PostgreSQL reali,
+  template, testi amministrativi e bollettini v1/v2. Nessuna esclusione aggiunta.
+- Stampa Chromium 2021, due e cinque annualità, una coppia per utenza e fallback per snapshot ambigui:
+  prima pagina completa, QR decodificato dal PDF a 144 dpi, privacy ravvicinata,
+  comunicazioni sulla seconda pagina e bollettino dopo il partitario.
+  Anteprima 2021 aggiornata con dati dimostrativi dichiarati su ogni pagina,
+  delibere `89/2022` e `106/2022`; prima pagina e comunicazioni ispezionate.
+- Ruff, formatter dei file nuovi e `make lint-backend` PASS. Ratchet autorevole
+  contro HEAD/merge-base `9ff86d83`: zero finding. Renderer LOC `1771 -> 1775`
+  rispetto alla precedente grafica, ancora sotto `1788` del merge-base;
+  cognitive `429` e cyclomatic `434` invariati. Branding LOC `57 -> 80`,
+  cognitive `0 -> 2`, cyclomatic `3 -> 6`, sotto soglia. Nuovo importatore:
+  LOC `98`, cognitive max `18`, cyclomatic max `13`, nessuna nuova violation
+  error-level; warning dichiarati, nessun refactoring estraneo.
+- Baseline sincronizzata soltanto sui nove runtime dopo il ratchet; proiezione
+  del perimetro verificata con scansione fresca. Preservati gli altri 20.729
+  record callable e le altre modifiche concorrenti. Nessuna certificazione
+  della baseline globale su un working tree con altri sviluppi in corso.
+- Limiti: dati importati sul server; nuova grafica e aggancio alla generazione
+  pronti nel checkout, senza sostituire il backend attivo con modifiche
+  concorrenti. Rilascio applicativo ancora necessario. Nessun test di stampa
+  fisica o login con credenziali reali. La pagina informativa WhatsApp restituisce
+  403: la descrizione è limitata alle comunicazioni del Consorzio.
+
 ## Bollettino versione 2 selezionabile nelle regole — 2026-10-26
 
 - Implementazione nel repository, rilascio e migrazione sul database
