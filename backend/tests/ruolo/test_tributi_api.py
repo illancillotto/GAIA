@@ -886,6 +886,9 @@ def test_tributi_archive_folder_helpers_cover_sanitising_and_fallbacks(monkeypat
     assert tributi_repo._ensure_subject_archive_path(db, fallback_subject, "RSSMRA80A01H501Z") == "/nas/R/RAW"
     assert fallback_subject.nas_folder_path == "/nas/R/RAW"
     assert tributi_repo._ensure_subject_archive_path(db, fallback_subject, "RSSMRA80A01H501Z") == "/nas/R/RAW"
+    # The folder belongs to a duplicate subject: reuse it, never steal it (unique path).
+    assert tributi_repo._ensure_subject_archive_path(db, person_subject, "RSSMRA80A01H501Z") == "/nas/R/RAW"
+    assert person_subject.nas_folder_path is None
     db.close()
 
 

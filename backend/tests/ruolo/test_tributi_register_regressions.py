@@ -137,6 +137,12 @@ def test_preferred_incass_document_takes_precedence():
         assert result["source_notice_id"] == "PREFERRED"
 
 
+def test_incass_notice_link_without_tax_code_is_empty():
+    assert repo._load_incass_notice_link(None, RuoloAvviso(codice_fiscale_raw=" ")) == (
+        repo._empty_incass_notice()
+    )
+
+
 def test_voided_payment_does_not_reduce_balance_or_enable_postage_recovery():
     avviso_id = UUID(seed_avviso())
     with TestingSessionLocal() as db:

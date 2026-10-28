@@ -49,6 +49,7 @@ from app.modules.ruolo.models import (
 from app.modules.ruolo.repositories import _get_subject_display_name
 from app.modules.ruolo.services import incass_notice_numbering as incass_numbering
 from app.modules.ruolo.services import notice_candidates, notice_drafts
+from app.modules.ruolo.services.candidate_avviso_entry import candidate_avviso_entry
 from app.modules.ruolo.services.capacitas_role_codes import (
     CAPACITAS_ROLE_ACCOUNTING_SCOPE_OUT_OF_ORDINARY,
     CAPACITAS_ROLE_OPERATIONAL_POLICY_AUDIT_ONLY,
@@ -74,6 +75,7 @@ from app.modules.ruolo.services.registered_mail_association import (
     preserve_manual_association,
     resolve_import_match,
 )
+from app.modules.ruolo.services.subject_archive_folder import assign_subject_folder
 from app.modules.ruolo.services.tributi_notice_registry import build_notice_identity_key
 from app.modules.ruolo.services.tributi_reminder_service import (
     GAIA_PROPOSAL_TEMPLATE_KEY,
@@ -3532,8 +3534,16 @@ def _collect_reminder_candidates(
     query = query.order_by(RuoloAvviso.nominativo_raw, RuoloAvviso.anno_tributario, payment_status_expr)
 
     grouped: dict[str, dict[str, Any]] = {}
-    for row in db.execute(query).all():
-        item = _row_to_tributi_item(db, row)
+    rows = db.execute(query).all()
+    cores: dict[uuid.UUID, dict[str, Any]] = {}
+    # Chunked like the tributi list: the inCASS detail JSON is too large to load for a whole year.
+    for start in range(0, len(rows), EFFECTIVE_FILTER_SCAN_CHUNK_SIZE):
+        cores.update(_precompute_tributi_effective_cores(db, rows=rows[start : start + EFFECTIVE_FILTER_SCAN_CHUNK_SIZE]))
+    for row in rows:
+        # Paid avvisi can never be reminded: skip the per-row item build.
+        if not _item_is_sendable_for_reminder(cores[row[0].id]):
+            continue
+        item = _row_to_tributi_item(db, row, core=cores[row[0].id])
         if not item["reminder_enabled"]:
             continue
         avviso: RuoloAvviso = item["avviso"]
@@ -3572,38 +3582,7 @@ def _collect_reminder_candidates(
             group["comune"] = avviso_comune
         if item["annuality_manager_label"]:
             group["annuality_managers"].add(item["annuality_manager_label"])
-        group["avvisi"].append(
-            {
-                "id": avviso.id,
-                "codice_cnc": item["capacitas_avviso_code"] or avviso.codice_cnc,
-                "anno_tributario": avviso.anno_tributario,
-                "nominativo_raw": avviso.nominativo_raw,
-                "domicilio_raw": avviso.domicilio_raw,
-                "residenza_raw": avviso.residenza_raw,
-                "codice_utenza": avviso.codice_utenza,
-                "importo_totale_0648": _money_float(_money(avviso.importo_totale_0648)),
-                "importo_totale_0985": _money_float(_money(avviso.importo_totale_0985)),
-                "importo_totale_0668": _money_float(_money(avviso.importo_totale_0668)),
-                "importo_totale_euro": _money_float(_money(avviso.importo_totale_euro)),
-                "principal_saldo_amount": item["principal_saldo_amount"],
-                "surcharge_amount": item["surcharge_amount"],
-                "interest_amount": item["interest_amount"],
-                "adjusted_due_amount": item["adjusted_due_amount"],
-                "calculation_date": str(item["calculation_date"]) if item["calculation_date"] else None,
-                "interest_start_date": str(item["interest_start_date"]) if item["interest_start_date"] else None,
-                "interest_start_source": item["interest_start_source"],
-                "calculation_policy_name": item["calculation_policy_name"],
-                "paid_amount": item["paid_amount"],
-                "saldo_amount": item["saldo_amount"],
-                "payment_status": item["payment_status"],
-                "capacitas_url": item["capacitas_url"],
-                "rateization_fee_amount": item["incass_notice"].get("rateization_fee_amount"),
-                "incass_stato_label": item["incass_notice"].get("stato_label"),
-                "annuality_manager_key": item["annuality_manager_key"],
-                "annuality_manager_label": item["annuality_manager_label"],
-                "calculation_policy": item["calculation_policy"],
-            }
-        )
+        group["avvisi"].append(candidate_avviso_entry(avviso, item))
 
     candidates = list(grouped.values())
     for group in candidates:
@@ -4009,12 +3988,7 @@ def _ensure_subject_archive_path(db: Session, subject: AnagraficaSubject, codice
     nas_folder_path = canonical_subject_nas_folder_path(source_name_raw=folder_name, nas_folder_letter=letter)
     if not nas_folder_path:
         return None
-
-    subject.nas_folder_letter = letter
-    subject.nas_folder_path = nas_folder_path
-    db.add(subject)
-    db.flush()
-    return nas_folder_path
+    return assign_subject_folder(db, subject, letter=letter, nas_folder_path=nas_folder_path)
 
 
 def _valid_archive_letter(value: str | None) -> str | None:
