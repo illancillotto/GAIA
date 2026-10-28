@@ -105,10 +105,11 @@ Hash fonte: `bfb0f82972b1989c7703aec015a7b9651bdf7b653f2d8cbd11d54084f2a5ec8a`.
 Ricevute e backup riservati: `/opt/gaia/runtime-data/portal-import-20261027/`.
 La sorgente originale sul PC dell'ufficio resta intatta.
 
-L'importazione dati è attiva sul server. La nuova grafica e il collegamento
-degli accessi alla generazione sono nel checkout di sviluppo: il backend attivo
-non è stato sostituito con le altre modifiche concorrenti presenti nel repository.
-Occorre il rilascio del codice verificato per usarli nelle nuove stampe dell'app.
+L'importazione dati e il collegamento degli accessi alle nuove stampe sono attivi
+sul server. Il codice verificato e stato rilasciato il 2026-10-28, conservando
+gli hotfix e la configurazione esistenti. Verificata la decifratura di tutte
+le 12.353 righe, senza esporre i PIN. I sei CF ambigui restano sospesi.
+Ricevute e rollback: [rilascio CED](RUOLO_AVVISI_DEPLOY_2026-10-28.md).
 
 ## Verifiche
 

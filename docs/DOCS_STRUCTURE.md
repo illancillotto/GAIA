@@ -244,6 +244,8 @@ client `lib/ruolo-payer-api.ts`; CLI `scripts/import_payer_assignments.py`.
 Migration `20261027_0900` per la tabella e `20261028_0900` per invalidare le
 bozze PostgreSQL al cambio pagatore. Runbook e contratti in
 `domain-docs/ruolo/docs/RUOLO_PAGATORE_AVVISO_2026-10-28.md`.
+Rilascio mirato CED, backup e rollback di grafica, scadenze, portale e pagatore:
+`domain-docs/ruolo/docs/RUOLO_AVVISI_DEPLOY_2026-10-28.md`.
 
 Grafica della prima pagina: `backend/app/modules/ruolo/services/notice_branding.py`,
 loghi CBO/ANBI e QR WhatsApp/Irrighiamo Insieme in `assets/notice-*.png`,

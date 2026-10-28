@@ -1,5 +1,20 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## Deploy avvisi sul CED — 2026-10-28
+
+- Rilasciata la feature del commit `b7cbc31a` su `gaia.lan` alle 10:43:
+  immagini mirate backend/frontend, hotfix e ambiente operativo conservati.
+  Schema `20261028_0900`; le cinque regole mantengono date e modalita precedenti.
+- Candidato: 277 PASS, uno skip SQLite con equivalente PostgreSQL PASS;
+  build produzione e prova migrazioni up/down/up su schema isolato PASS.
+  Smoke HTTP/autenticati e stampa sintetica dal backend live PASS;
+  verificate tutte le 12.353 credenziali cifrate. Sei CF ambigui sospesi.
+- Primo tentativo ripristinato automaticamente per un controllo sui container
+  gia fermi; corretto il confronto operativo, secondo rilascio e verifica
+  integrita completati. Nessuna regressione applicativa rilevata.
+- Backup, rollback, perimetro effettivo e ricevute:
+  [rilascio CED](RUOLO_AVVISI_DEPLOY_2026-10-28.md).
+
 ## Verifica finale avvisi, accessi e pagatore — 2026-10-28
 
 - Perimetro conclusivo: grafica blu e testi dell'avviso, accessi al portale,

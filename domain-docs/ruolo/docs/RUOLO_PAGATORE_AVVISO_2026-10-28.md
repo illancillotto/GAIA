@@ -57,7 +57,8 @@ sessione scade prima dell'azione.
 Il downgrade `20261028_0900` rimuove soltanto i trigger aggiunti; non cancella
 assegnazioni. Su SQLite la migrazione dei trigger e un no-op. La verifica della
 concorrenza e dell'invalidazione usa PostgreSQL con schemi temporanei isolati.
-Questo ciclo non applica migrazioni o deploy al server degli uffici.
+Il successivo rilascio CED del 2026-10-28 applica queste migrazioni e rende
+operativa la funzione: [verifiche e rollback](RUOLO_AVVISI_DEPLOY_2026-10-28.md).
 
 ## Importazione CSV
 

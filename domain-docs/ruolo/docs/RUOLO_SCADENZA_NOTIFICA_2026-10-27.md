@@ -159,9 +159,10 @@ errore d'estrazione. Gli output restano locali e non vengono versionati.
 
 ## Stato di rilascio
 
-Modifiche e anteprima 2021 locali. Il server degli uffici resta alla revision
-`20261027_1100`; questo ciclo non modifica database, regole o PDF del server.
-Prima di usare la scelta in produzione occorrono migration `20261027_1300`
-e rilascio coordinato di backend e frontend. I sei CF con piu utenze restano
-sospesi, come richiesto dall'ufficio, in attesa del riscontro dei colleghi. La precedente importazione degli
-accessi portale non deve essere ripetuta per introdurre questa opzione.
+Backend e frontend sono rilasciati sul CED dal 2026-10-28, con migration
+`20261027_1300` applicata e schema finale `20261028_0900`. Le cinque regole
+esistenti conservano `fixed_date` e le date precedenti: la modalita a 60 giorni
+si sceglie dalle Regole ruolo, con data fissa obbligatoria se si stampa il
+bollettino. Nessun PDF esistente riscritto o nuova importazione degli accessi.
+I sei CF con piu utenze restano sospesi in attesa dei colleghi.
+Verifiche e rollback: [rilascio CED](RUOLO_AVVISI_DEPLOY_2026-10-28.md).

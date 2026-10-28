@@ -869,8 +869,10 @@ e un riquadro d'intimazione del Consorzio sopra i QR. I bollettini v1/v2 stampan
 `gg/mm/aaaa - Rata Unica` su entrambi i tagliandi. Con il termine a 60 giorni
 la data fissa deve essere salvata nelle Regole ruolo: senza data, salvataggio
 con bollettino e generazione sono bloccati con un messaggio esplicito.
-Il termine dell'avviso resta relativo alla notifica. Default e date preesistenti sono conservati. Stato locale,
-migration `20261027_1300` e verifiche: [scadenza dalla notifica](domain-docs/ruolo/docs/RUOLO_SCADENZA_NOTIFICA_2026-10-27.md).
+Il termine dell'avviso resta relativo alla notifica. Default e date preesistenti sono conservati.
+Grafica, scadenze, accessi portale e pagatore sono rilasciati sul CED dal 2026-10-28,
+schema `20261028_0900`: [verifiche e rollback](domain-docs/ruolo/docs/RUOLO_AVVISI_DEPLOY_2026-10-28.md).
+Regole: [scadenza dalla notifica](domain-docs/ruolo/docs/RUOLO_SCADENZA_NOTIFICA_2026-10-27.md).
 
 La verifica di campionatura del layout v1 opera su PDF gia generati, con dipendenze solo di
 sviluppo, escluse dall'immagine backend:

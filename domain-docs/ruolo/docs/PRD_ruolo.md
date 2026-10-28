@@ -170,7 +170,7 @@ provenienza e recupero dello storico sono descritti in
 > La versione della regola dell'anno piu recente vale per preview e batch successivi;
 > i documenti gia generati conservano il proprio snapshot. V2 mantiene gli elementi
 > fissi del PDF di riferimento e i box pagina `595 x 841 pt`.
-> Aggiornamento palette 2026-10-27: il renderer HTML/Chromium locale usa
+> Aggiornamento palette 2026-10-27: il renderer HTML/Chromium usa
 > il blu `#2b5793`, fascia titolo fino a `#3e72b3` e fondi azzurri coordinati,
 > anche nel riquadro importo e nel partitario. Testi, geometria, loghi, QR e
 > bollettino invariati; anteprima blu separata dalla precedente verde.
@@ -216,7 +216,9 @@ provenienza e recupero dello storico sono descritti in
 > l'importo resta nel riepilogo e non e ripetuto nel riquadro del termine;
 > sopra il QR compare l'intimazione del Consorzio. Le regole esistenti restano
 > a data fissa. Il calcolo effettivo degli interessi non cambia. Migration
-> `20261027_1300` e nuova grafica ancora da rilasciare sul server degli uffici.
+> `20261027_1300` e nuova grafica rilasciate sul CED il 2026-10-28 insieme al
+> pagatore e agli accessi portale, schema finale `20261028_0900`.
+> Perimetro e verifiche: `RUOLO_AVVISI_DEPLOY_2026-10-28.md`.
 > Aggiornamento 2026-07-28: nella prima pagina del template GAIA il riepilogo importi
 > mostra una colonna `Numero avviso` per ogni riga `Ruolo {anno}`, valorizzata con il
 > `codice_cnc` dell'avviso relativo a quell'anno. La regola vale sia per il PDF HTML/Chromium

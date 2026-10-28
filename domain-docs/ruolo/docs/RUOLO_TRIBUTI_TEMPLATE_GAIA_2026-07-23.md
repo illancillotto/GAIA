@@ -10,7 +10,7 @@ Il template legacy `Avviso_Sollecito_Template.docx` resta supportato nel codice 
 
 ## Palette corrente
 
-Dal 2026-10-27 la variante locale usa il blu `#2b5793`, con gradiente titolo
+Dal 2026-10-27 la variante usa il blu `#2b5793`, con gradiente titolo
 verso `#3e72b3` e fondi azzurri coordinati. Bordi, titoli, importo, riquadro
 termine, accessi, note, tabella comunicazioni e titolo partitario sono coordinati.
 La prima pagina usa ora un'unica famiglia Arial/Helvetica/sans-serif, anche
@@ -19,6 +19,8 @@ bollettino mantengono il contratto precedente. Non e una nuova versione del boll
 Palette e provenienza: [grafica istituzionale](../../../backend/app/modules/ruolo/assets/notice-branding.md).
 Anteprima dimostrativa blu: `output/pdf/avviso-2021-anteprima-blu.pdf`;
 la precedente anteprima verde rimane disponibile per confronto.
+Grafica e nuovi blocchi sono rilasciati sul CED dal 2026-10-28:
+[verifiche e rollback](RUOLO_AVVISI_DEPLOY_2026-10-28.md).
 
 ## Asset
 
@@ -126,7 +128,7 @@ footer: distacco minimo `1mm`, senza un vuoto concentrato sopra l'intimazione.
 In entrambe le modalita, subito dopo il portale compaiono prima giorni/orari e
 telefono degli uffici, poi la frase sul sito. Il paragrafo usa `8.5pt`,
 interlinea `1.12`, margine e padding superiore `1mm`.
-Stato locale e verifiche: [scadenza dalla notifica](RUOLO_SCADENZA_NOTIFICA_2026-10-27.md).
+Stato operativo e verifiche: [scadenza dalla notifica](RUOLO_SCADENZA_NOTIFICA_2026-10-27.md).
 
 ## Versione salvata nella regola
 
