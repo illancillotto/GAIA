@@ -1,5 +1,63 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## Invio solleciti con Posta Online — 2026-10-28
+
+- **Decisione dell'utente.** INVIA lo preme sempre l'operatore su Poste.
+- **Cosa fa GAIA.** Prepara lotti di massimo 50 solleciti generati in PDF:
+  - verifica gli indirizzi sullo stradario Poste, con un match esatto su via,
+    civico, comune, CAP e provincia;
+  - crea le bozze di Raccomandata A/R online in «Verifica e invia»;
+  - dall'archivio registra raccomandata, tracking e tentativo nel Registro
+    avvisi.
+- **Come.** Outbox con migration `20261028_1500`: lotti, avvisi ed eventi
+  append-only. I job usano la coda Poste esistente. La guardia di rete del
+  worker nega `inserisciInvii` in ogni fase.
+- **Nuova interfaccia.** Pagina `/ruolo/tributi/solleciti/poste`, con un link
+  dalla pagina Solleciti.
+- **Documentazione.** Procedura, stati e limiti in
+  [POSTE_INVIO_SOLLECITI_2026-10-28.md](POSTE_INVIO_SOLLECITI_2026-10-28.md).
+- **Difetti trovati dai test e corretti:**
+  - un `ValueError` del Registro interrompeva la riconciliazione;
+  - un PDF alterato fermava l'intero job invece del solo avviso;
+  - il runner caricava `tributi_repositories` all'avvio del worker; ora lo
+    carica solo quando serve, come l'import Poste esistente.
+- **Test nuovi:**
+
+  | Area | Test superati |
+  | --- | --- |
+  | Backend | 56 |
+  | Worker | 47 |
+  | Frontend | 18, più l'asserzione del link nella pagina Solleciti |
+
+- **Coverage al 100% di statement e branch** sui runtime nuovi e modificati:
+  - backend: 13 file, compresi `db/base.py`, `ruolo/router.py` e
+    `notice_dispatch_contract.py`;
+  - worker: 3 file nuovi e `posta_online_sync.py`;
+  - frontend: 7 file, più `solleciti/workspace.tsx`.
+- **Altri gate superati:**
+  - `make complexity-ratchet BASE_REF=main` con `findings: []`. Per non far
+    crescere le funzioni esistenti, lo smistamento dei job Poste è passato in
+    `posta_online_sync._job_runner`;
+  - gate di stile Python;
+  - ESLint e `tsc`;
+  - migration con up/down e confronto modelli;
+  - una sola head Alembic.
+- **Fix collaterale.** In `tests/test_worker.py` lo stub di `pypdf` era rotto
+  su `main` dal commit `b9b0d461`, che importa `pypdf.generic`. Lo stub è stato
+  rimosso: nessun file del worker usa `pypdf` e la libreria è nei requisiti del
+  backend. Worker: 852 test PASS, uno skip.
+- **Suite complete.** Backend: 7.641 PASS, 464 skip, nessun errore.
+  Frontend: 5.353 PASS.
+- **Problemi preesistenti estranei a questa change:**
+  - `tests/test_sister_efficiency.py` non è importabile con `make test-worker`,
+    perché manca la root del repository nel PYTHONPATH;
+  - nel frontend, `https-access-guide.test.tsx` fallisce per
+    `home-sync-alerts`, che fa parte di un lavoro non committato.
+- **Ancora da collaudare sul portale reale:**
+  - l'indirizzo manuale;
+  - `DeleteInvio(id)`;
+  - se INVIA spedisca tutte le bozze presenti o solo quelle selezionate.
+
 ## Deploy avvisi sul CED — 2026-10-28
 
 - Rilasciata la feature del commit `b7cbc31a` su `gaia.lan` alle 10:43:

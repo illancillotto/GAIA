@@ -1,7 +1,9 @@
-"""Pure outbound protocol for the future Poste outbox, not a sending service.
+"""Pure protocol for an automatic Poste submission, kept unused on purpose.
 
-No routes or worker execute this protocol yet. Persistence, serialized approval
-and the provider adapter are mandatory before production submission is possible.
+Since 2026-10-28 the operator presses INVIA on Poste: the outbox in
+poste_dispatch_* only prepares drafts and reads the archive, and never runs
+this protocol. Persistence, serialized approval and a provider adapter would
+still be mandatory before any automatic submission.
 """
 
 from datetime import UTC, datetime

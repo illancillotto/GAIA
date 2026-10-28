@@ -13,7 +13,7 @@ vi.mock("@/lib/ruolo-api", () => ({
   confirmTributiReminderBatch: mocks.confirm,
 }));
 vi.mock("@/components/ruolo/solleciti/client", () => ({ confirmTributiReminderBatch: mocks.confirm }));
-vi.mock("@/components/ruolo/module-page", () => ({ RuoloModulePage: ({ children }: { children: React.ReactNode }) => <main>{children}</main> }));
+vi.mock("@/components/ruolo/module-page", () => ({ RuoloModulePage: ({ children, topbarActions }: { children: React.ReactNode; topbarActions?: React.ReactNode }) => <main>{topbarActions}{children}</main> }));
 
 const batch = (status = "review_required") => ({
   id: "batch-1", title: "Import 2022/2023", status, template_path: null, filters_json: { years: [2022, 2023] },
@@ -39,6 +39,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 it("loads a draft, displays identity and confirms the batch", async () => {
   render(<SollecitiPage />);
   expect(await screen.findByText("Bozza da verificare")).toBeVisible();
+  expect(screen.getByRole("link", { name: "Invio con Posta Online" })).toHaveAttribute("href", "/ruolo/tributi/solleciti/poste");
   fireEvent.click(screen.getByRole("button", { name: /Import 2022/ }));
   expect(await screen.findByText(/Identità: a/)).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Conferma lotto" }));

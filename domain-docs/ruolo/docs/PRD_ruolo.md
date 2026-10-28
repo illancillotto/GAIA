@@ -182,6 +182,12 @@ provenienza e recupero dello storico sono descritti in
 > invalida al commit le bozze preparate prima di un cambio pagatore. Il flusso
 > singolo DOCX legacy resta escluso: usare i lotti della pagina Tributi.
 > Dettagli in `RUOLO_PAGATORE_AVVISO_2026-10-28.md`.
+> Aggiornamento 2026-10-28 (Posta Online): i solleciti generati in PDF si
+> preparano in lotti fino a 50 come bozze di Raccomandata A/R online. GAIA
+> verifica gli indirizzi sullo stradario Poste, crea le bozze in «Verifica e
+> invia» e poi registra dall'archivio raccomandata e tentativo di notifica.
+> INVIA lo preme sempre l'operatore su Poste. Dettagli in
+> `POSTE_INVIO_SOLLECITI_2026-10-28.md`.
 > Aggiornamento 2026-10-28: prima pagina tutta in Arial/Helvetica/sans-serif,
 > inclusi titolo e importo. Box del solo ruolo 2021: eventuale data esplicita
 > `gg/mm/aaaa e comunque entro 60 giorni dalla data di notifica`, senza data

@@ -247,6 +247,15 @@ bozze PostgreSQL al cambio pagatore. Runbook e contratti in
 Rilascio mirato CED, backup e rollback di grafica, scadenze, portale e pagatore:
 `domain-docs/ruolo/docs/RUOLO_AVVISI_DEPLOY_2026-10-28.md`.
 
+Invio solleciti con Posta Online (bozze preparate da GAIA, INVIA manuale
+dell'operatore): modelli `poste_dispatch_models.py`, schemi
+`poste_dispatch_schemas.py`, route `routes/poste_dispatch_routes.py`, servizi
+`services/poste_dispatch*.py`, migration `20261028_1500`; worker
+`posta_online_dispatch{,_portal,_runner}.py`; frontend
+`components/ruolo/poste-dispatch/`, `lib/ruolo-poste-dispatch-api.ts` e pagina
+`/ruolo/tributi/solleciti/poste`. Procedura e stati:
+`domain-docs/ruolo/docs/POSTE_INVIO_SOLLECITI_2026-10-28.md`.
+
 Grafica della prima pagina: `backend/app/modules/ruolo/services/notice_branding.py`,
 loghi CBO/ANBI e QR WhatsApp/Irrighiamo Insieme in `assets/notice-*.png`,
 con `notice-irrighiamo-qr.png` diretto al login dell'applicazione. Font prima

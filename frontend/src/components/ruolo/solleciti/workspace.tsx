@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { RuoloModulePage } from "@/components/ruolo/module-page";
@@ -35,7 +36,7 @@ export function SollecitiAccess() {
 function SollecitiWorkspace({ token, canEdit }: { token: string; canEdit: boolean }) {
   const { page, setPage, total, batches, selected, confirmation, loading, busy, error, selectBatch, confirmSelected } = useSolleciti(token, canEdit);
   return (
-    <RuoloModulePage title="Solleciti Tributi" description="Bozze, conferma e storico dei lotti generati." breadcrumb="Solleciti" requiredSection="ruolo.tributi.view">
+    <RuoloModulePage title="Solleciti Tributi" description="Bozze, conferma e storico dei lotti generati." breadcrumb="Solleciti" requiredSection="ruolo.tributi.view" topbarActions={<Link className="btn-secondary" href="/ruolo/tributi/solleciti/poste">Invio con Posta Online</Link>}>
       <div className="space-y-6">
         {!canEdit && <p>Accesso in sola lettura.</p>}
         <nav aria-label="Pagine lotti" className="flex gap-3">

@@ -1,5 +1,13 @@
 # Poste: Predisposizione Invio Automatico
 
+> **Aggiornamento 2026-10-28.** L'invio automatico non verrà realizzato: INVIA
+> lo preme sempre l'operatore su Posta Online. È operativa la preparazione delle
+> bozze (Raccomandata A/R online), con la riconciliazione dall'archivio. Stato,
+> procedura e limiti sono in
+> [POSTE_INVIO_SOLLECITI_2026-10-28.md](POSTE_INVIO_SOLLECITI_2026-10-28.md).
+> Il contratto descritto qui sotto resta scollegato; la sezione «Collegamento
+> operativo» documenta i requisiti di un eventuale invio automatico futuro.
+
 ## Stato Al 2026-09-21
 
 Richiesta: predisporre anche l'invio automatico e tracciare gli endpoint Poste.

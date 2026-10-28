@@ -57,7 +57,6 @@ playwright_module.async_api = playwright_async_api
 sys.modules.setdefault("playwright", playwright_module)
 sys.modules.setdefault("playwright.async_api", playwright_async_api)
 
-_stub_module("pypdf", PdfReader=object, PdfWriter=object)
 _stub_module("anti_captcha_client", AntiCaptchaClient=object)
 _stub_module(
     "autodoc_sync",

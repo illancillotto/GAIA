@@ -140,6 +140,9 @@ from app.modules.ruolo.notice_draft_models import NoticeDraft
 from app.modules.ruolo.notice_confirmation_models import NoticeGenerationConfirmation
 from app.modules.ruolo.notice_revision_models import NoticeGenerationRevision
 from app.modules.ruolo.payer_assignment_models import RuoloTributiPayerAssignment
+from app.modules.ruolo.poste_dispatch_models import (
+    PosteDispatchEvent, PosteDispatchItem, PosteDispatchLot,
+)
 from app.modules.ruolo.notice_register_models import (
     NoticeDocument, NoticePosition, NoticeAttempt, NoticeEvidence,
     NoticeNotification, NoticeRecovery, NoticeAudit,

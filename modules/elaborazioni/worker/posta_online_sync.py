@@ -9,6 +9,7 @@ from typing import Any
 
 from sqlalchemy.orm import sessionmaker
 
+import posta_online_dispatch_runner as dispatch_runner
 from app.models.posta_online import PostaOnlineCredential, PostaOnlineRegisteredMailSyncJob
 from app.modules.elaborazioni.posta_online.schemas import (
     PostaOnlineRegisteredMailSyncJobCreateRequest,
@@ -54,21 +55,20 @@ async def run_posta_online_job_by_id(
             return
         mode = job.mode
 
-    if mode == "credential_test":
-        await run_posta_online_credential_test_job_by_id(
-            job_id=job_id,
-            session_factory=session_factory,
-            headless=headless,
-            _client_class=_client_class,
-        )
-        return
-
-    await run_posta_online_registered_mail_job_by_id(
+    await _job_runner(mode)(
         job_id=job_id,
         session_factory=session_factory,
         headless=headless,
         _client_class=_client_class,
     )
+
+
+def _job_runner(mode: str):
+    if mode in dispatch_runner.HANDLERS:
+        return dispatch_runner.run_dispatch_job
+    if mode == "credential_test":
+        return run_posta_online_credential_test_job_by_id
+    return run_posta_online_registered_mail_job_by_id
 
 
 async def run_posta_online_credential_test_job_by_id(
