@@ -57,6 +57,34 @@
   - l'indirizzo manuale;
   - `DeleteInvio(id)`;
   - se INVIA spedisca tutte le bozze presenti o solo quelle selezionate.
+- **Rilasciato sul CED il 2026-10-29 alle 08:50.**
+  - Release `poste-dispatch-20261029-05fa4a86`, database a `20261028_1500`.
+  - Immagini `gaia-backend`, `gaia-frontend` ed
+    `elaborazioni-worker-poste` con tag `poste-dispatch-20261029-05fa4a86`.
+  - Prima del rilascio:
+    - 106 test backend e 55 worker superati nelle immagini candidate;
+    - build frontend riuscita;
+    - Compose cambia solo l'immagine;
+    - migration up/down/up provata su una copia dello schema.
+  - Smoke dopo il rilascio:
+    - health OK, pagina HTTP 200, API senza login HTTP 401;
+    - 146 candidati e 0 lotti;
+    - nel worker INVIA è bloccato in ogni fase;
+    - gli altri servizi sono invariati.
+  - Ripristino: `/opt/gaia/releases/poste-dispatch-20261029-05fa4a86/rollback.sh`.
+    Se ci sono lotti chiede `FORCE=yes` e li salva prima del downgrade.
+  - L'immagine backend è a 127 layer, il limite di overlay: il prossimo
+    rilascio backend richiede una ricostruzione completa dell'immagine.
+- **Vincoli del rilascio mirato.** Riguarda backend, frontend ed
+  `elaborazioni-worker-poste`, e richiede:
+  - `notice_registered_mail_link.py`, usato dalla riconciliazione e mai
+    rilasciato;
+  - `base.py` e router ruolo attivi più le sole righe nuove, perché le
+    versioni attive non hanno il controllo particelle;
+  - nel worker Poste, `app/` uguale a quello del backend candidato: la copia
+    attuale, del 22 ottobre, non ha i modelli ruolo usati dall'outbox;
+  - backend e worker insieme. Il worker attuale tratterebbe un job
+    `poste_dispatch_*` come sincronizzazione delle raccomandate.
 
 ## Deploy avvisi sul CED — 2026-10-28
 

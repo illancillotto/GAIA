@@ -152,6 +152,13 @@ alterato non viene caricato.
   Il primo lotto va seguito sul portale.
 - **Prima di usare il primo lotto vero.** L'operatore verifica con due bozze di
   prova se INVIA spedisce tutto «Verifica e invia» o solo le bozze selezionate.
+- **Rilasciato sul CED il 2026-10-29** (release
+  `poste-dispatch-20261029-05fa4a86`, database a `20261028_1500`).
+  - Backend, frontend e worker Poste sono stati rilasciati insieme, perché il
+    worker precedente non riconosceva i job `poste_dispatch_*`.
+  - Il worker usa lo stesso `app/` del backend.
+  - Verifiche, ripristino e vincoli sono in `PROGRESS_ruolo.md`, alla voce
+    del 2026-10-28.
 
 ## Verifiche
 
