@@ -854,8 +854,9 @@ Il renderer locale degli avvisi usa la palette blu `#2b5793`, con gradiente e
 fondi azzurri coordinati. Anteprima 2021 dimostrativa:
 `output/pdf/avviso-2021-anteprima-blu.pdf`; la precedente anteprima verde resta
 conservata per confronto. La prima pagina usa una sola famiglia Arial/Helvetica/sans-serif. Dal 28 ottobre
-il box 2021 affianca alla data esplicita `e comunque entro 60 giorni dalla data
-di notifica`; senza data esplicita conserva solo il termine.
+il box 2021 stampa `scadenza il gg/mm/aaaa e comunque entro 60 giorni dalla data
+di notifica`; senza data esplicita conserva solo il termine. L'importo del box
+resta su una sola riga.
 
 Gli avvisi GAIA riportano i loghi CBO/ANBI e un blocco per consultare la propria
 posizione, seguito dai contatti degli uffici e dal testo informativo sul sito del Consorzio.

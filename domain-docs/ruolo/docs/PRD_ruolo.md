@@ -189,8 +189,9 @@ provenienza e recupero dello storico sono descritti in
 > INVIA lo preme sempre l'operatore su Poste. Dettagli in
 > `POSTE_INVIO_SOLLECITI_2026-10-28.md`.
 > Aggiornamento 2026-10-28: prima pagina tutta in Arial/Helvetica/sans-serif,
-> inclusi titolo e importo. Box del solo ruolo 2021: eventuale data esplicita
-> `gg/mm/aaaa e comunque entro 60 giorni dalla data di notifica`, senza data
+> inclusi titolo e importo, con l'importo del box su una sola riga (20pt).
+> Box del solo ruolo 2021: eventuale data esplicita
+> `scadenza il gg/mm/aaaa e comunque entro 60 giorni dalla data di notifica`, senza data
 > soltanto il termine relativo. Le altre annualita e i campi DOCX mantengono
 > il termine della regola; per i bollettini vale la data fissa descritta sotto. Footer con due QR affiancati WhatsApp e Irrighiamo
 > Insieme (login `https://login.bonificaoristanese.it/`), triangolo rosso e frase

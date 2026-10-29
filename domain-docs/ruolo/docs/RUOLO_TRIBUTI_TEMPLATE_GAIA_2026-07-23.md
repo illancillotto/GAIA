@@ -87,9 +87,13 @@ Il renderer non usa percorsi locali del PC, cartelle `Downloads` o file temporan
 
 ### Riquadro 2021: data e termine dalla notifica
 
+In ogni avviso l'importo `€. n.nnn,nn` del riquadro resta su una sola riga
+(`white-space: nowrap`, 20pt): nella colonna di 56mm entra fino ai milioni
+(`€. 9.999.961,55` verificato nel rendering Chromium).
+
 Nel solo riquadro `Quanto e quando pagare` degli avvisi del solo ruolo 2021,
 se lo snapshot contiene `due_date` o `deadline`, si stampa
-`entro il gg/mm/aaaa e comunque entro 60 giorni dalla data di notifica`.
+`scadenza il gg/mm/aaaa e comunque entro 60 giorni dalla data di notifica`.
 Senza data esplicita si stampa soltanto `entro 60 giorni dalla data di notifica`,
 senza inventare una data dalla generazione. Le altre annualita e i gruppi
 multiannualita mantengono il termine della regola. Questa dicitura riguarda

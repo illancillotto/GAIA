@@ -221,15 +221,15 @@ def test_notification_blocks_are_ordered_and_amount_is_only_in_payment_summary()
     assert '<svg class="attention-icon"' in front
     assert '<div class="attention-icon"' not in front
     assert "Agente della riscossione" not in front
-    assert "entro il 30/11/2026 e comunque entro 60 giorni dalla data di notifica" in front
+    assert "scadenza il 30/11/2026 e comunque entro 60 giorni dalla data di notifica" in front
 
 
 @pytest.mark.parametrize("mode", ["fixed_date", "notification_60_days"])
 @pytest.mark.parametrize(
     "dates,expected",
     [
-        ({"due_date": "2026-11-30"}, "entro il 30/11/2026 e comunque entro "),
-        ({"deadline": "30.11.2026"}, "entro il 30/11/2026 e comunque entro "),
+        ({"due_date": "2026-11-30"}, "scadenza il 30/11/2026 e comunque entro "),
+        ({"deadline": "30.11.2026"}, "scadenza il 30/11/2026 e comunque entro "),
         ({}, "entro "),
     ],
 )

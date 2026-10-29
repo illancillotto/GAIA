@@ -23,7 +23,6 @@ PAYMENT_DEADLINE_CSS = """
 .front:has(.payment-deadline) .summary { margin-top: 2mm; }
 .front:has(.payment-deadline) .portal-body { padding-top: 1mm; padding-bottom: 1mm; }
 .front:has(.payment-deadline) .amount { padding: 2.5mm; }
-.front:has(.payment-deadline) .amount .euro { font-size: 26pt; }
 .front:has(.payment-deadline) .amount .installment-request { font-size: 8.2pt; }
 .front:has(.payment-deadline):has(.summary tbody tr:nth-child(4)) .body {
   padding: 1.2mm; font-size: 8.3pt; line-height: 1.05; }
@@ -33,7 +32,6 @@ PAYMENT_DEADLINE_CSS = """
 .front:has(.payment-deadline):has(.summary tbody tr:nth-child(4)) .card p { margin: 1mm 0; }
 .front:has(.payment-deadline):has(.summary tbody tr:nth-child(4)) .recipient { font-size: 10pt; }
 .front:has(.payment-deadline):has(.summary tbody tr:nth-child(4)) .amount { padding: 2mm; font-size: 9.2pt; }
-.front:has(.payment-deadline):has(.summary tbody tr:nth-child(4)) .amount .euro { font-size: 24pt; }
 .front:has(.payment-deadline):has(.summary tbody tr:nth-child(4)) .amount .installment-request { font-size: 7.8pt; }
 .front:has(.payment-deadline):has(.summary tbody tr:nth-child(4)) .instructions p { font-size: 9.2pt; }
 .front:has(.payment-deadline):has(.summary tbody tr:nth-child(4)) .summary { font-size: 7.5pt; }
@@ -103,7 +101,7 @@ def front_payment_due_phrase(payload, years, fixed_date_formatter) -> str:
     if years != [2021]:
         return payment_due_phrase(payload, payment_deadline_text(payload, fixed_date_formatter))
     if payload.get("due_date") or payload.get("deadline"):
-        return f"entro il {fixed_date_formatter(payload)} e comunque entro {NOTIFICATION_TERM}"
+        return f"scadenza il {fixed_date_formatter(payload)} e comunque entro {NOTIFICATION_TERM}"
     return f"entro {NOTIFICATION_TERM}"
 
 

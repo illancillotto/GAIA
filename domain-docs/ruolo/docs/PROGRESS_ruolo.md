@@ -1,5 +1,15 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## Box «Quanto e quando pagare» — 2026-10-29
+
+- L'importo resta su una sola riga: 20pt e `white-space: nowrap`. Prima
+  andava a capo dopo `€.` a 26-28pt.
+- Avvisi del solo ruolo 2021 con data esplicita: stampano
+  `scadenza il gg/mm/aaaa e comunque entro 60 giorni dalla data di notifica`.
+  Prima la dicitura era `entro il ...`. Gli altri anni e i campi DOCX non cambiano.
+- Test: rendering Chromium con `€. 111.141,88` su una riga dentro il box,
+  in entrambe le modalita di scadenza.
+
 ## Invio solleciti con Posta Online — 2026-10-28
 
 - **Decisione dell'utente.** INVIA lo preme sempre l'operatore su Poste.

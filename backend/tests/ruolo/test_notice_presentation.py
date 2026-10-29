@@ -231,3 +231,29 @@ def test_print_keeps_two_intro_pages_and_scannable_footer_links(
             "La determinazione dell\N{RIGHT SINGLE QUOTATION MARK}importo residuo dovuto tiene conto dei versamenti già effettuati."
             in text
         )
+
+
+@pytest.mark.parametrize("mode", ["fixed_date", "notification_60_days"])
+def test_notice_amount_stays_on_one_line_inside_the_payment_box(mode):
+    from playwright.sync_api import sync_playwright
+
+    payload = {**_payload([2021]), "payment_deadline_mode": mode, "saldo_amount": "111130.33 EUR"}
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(executable_path=service._find_chromium_binary())
+        try:
+            page = browser.new_page()
+            page.emulate_media(media="print")
+            page.set_content(service._gaia_proposal_html(payload))
+            box = page.locator(".amount .euro").evaluate("""euro => {
+                const range = document.createRange();
+                range.selectNodeContents(euro);
+                const text = range.getBoundingClientRect();
+                const parent = euro.parentElement.getBoundingClientRect();
+                return {text: euro.textContent, lines: range.getClientRects().length,
+                    right: text.right, parentRight: parent.right};
+            }""")
+        finally:
+            browser.close()
+    assert box["text"].startswith("€. 111.")
+    assert box["lines"] == 1
+    assert box["right"] <= box["parentRight"]

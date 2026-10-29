@@ -25,7 +25,8 @@ della modalita `fixed_date` resta invariato.
 
 Eccezione grafica dal 2026-10-28: nel solo box `Quanto e quando pagare` di un
 avviso del solo ruolo 2021, l'eventuale data esplicita del payload viene affiancata
-al termine: `entro il gg/mm/aaaa e comunque entro 60 giorni dalla data di notifica`.
+al termine: `scadenza il gg/mm/aaaa e comunque entro 60 giorni dalla data di notifica`
+(dal 2026-10-29; prima `entro il gg/mm/aaaa ...`).
 Senza data esplicita si conserva solo il termine di notifica. Non viene modificato
 il termine dei campi DOCX; i bollettini seguono la data fissa descritta sopra. Per gli altri anni
 e i gruppi multiannualita resta il comportamento esistente.

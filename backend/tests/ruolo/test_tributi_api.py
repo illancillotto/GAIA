@@ -5388,7 +5388,7 @@ def test_tributi_batch_document_generation_helpers(tmp_path: Path, monkeypatch: 
     assert ".front { font-size: 10.2pt; line-height: 1.24; padding-top: 10mm; padding-bottom: 10mm; }" in all_html
     assert ".legal-copy { font-size: 7.75pt; line-height: 1.05;" in all_html
     assert ".header { display: grid; grid-template-columns: 39mm 1fr 39mm;" in all_html
-    assert ".amount .euro { font-size: 28pt;" in all_html
+    assert ".amount .euro { font-size: 20pt;" in all_html
     assert "text-align: justify;" in all_html
     assert "· <strong>INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI" not in all_html
     assert ".brand .logo-image { display: block; width: 100%; height: 100%; object-fit: contain; }" in all_html

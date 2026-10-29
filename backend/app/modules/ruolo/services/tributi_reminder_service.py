@@ -494,7 +494,7 @@ body {{ margin: 0; color: #1c2633; font-family: Arial, Helvetica, sans-serif; fo
 .pay-band {{ margin-top: 3mm; display: grid; grid-template-columns: 56mm 1fr; gap: 4mm; align-items: stretch; }}
 .amount {{ background: #f2f6fa; border: 1.3pt solid #2b5793; border-radius: 3mm; padding: 3mm; }}
 .amount .label {{ text-transform: uppercase; color: #2b5793; font-size: 8.7pt; font-weight: 800; letter-spacing: .4pt; }}
-.amount .euro {{ font-size: 28pt; color: #2b5793; font-weight: 900; margin: 1mm 0; }}
+.amount .euro {{ font-size: 20pt; color: #2b5793; font-weight: 900; margin: 1mm 0; white-space: nowrap; }}
 .instructions {{ border-left: 3pt solid #2b5793; padding-left: 4mm; }}
 .instructions h2 {{ margin: 0 0 2mm; color: #2b5793; font-size: 13pt; }}
 .instructions p {{ margin: 1mm 0; }}

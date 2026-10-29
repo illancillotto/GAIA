@@ -39,8 +39,8 @@ su entrambi i tagliandi. Solo nella modalita a 60 giorni compaiono il termine e
 le avvertenze prima del portale, seguito dai contatti degli uffici e dalle
 informazioni sul sito del Consorzio, e l'intimazione del Consorzio con triangolo
 rosso prima dei due QR WhatsApp/Irrighiamo Insieme. Nel solo box importo della
-prima pagina di un avviso del solo 2021, la data esplicita e seguita da
-`e comunque entro 60 giorni dalla data di notifica`; senza data esplicita si
+prima pagina di un avviso del solo 2021 si stampa `scadenza il gg/mm/aaaa`
+seguito da `e comunque entro 60 giorni dalla data di notifica`; senza data esplicita si
 stampa solo il termine relativo. Non cambia la persistenza delle regole.
 La nuova scelta riguarda il termine e i testi stampati: non cambia il motore
 di calcolo degli interessi ne la scadenza bonaria. Richiede la migration
