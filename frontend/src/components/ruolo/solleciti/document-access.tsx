@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { requestBlob } from "@/lib/api";
 
 type BlobState = { loading: boolean; url: string | null; error: string | null };
@@ -47,10 +47,16 @@ function PdfFrame({ url, link, title }: { url: string; link: string; title: stri
   </>;
 }
 
-// The generated PDF is the exact document that a Poste lot would upload.
-export function GeneratedNoticePreview({ token, url }: { token: string; url: string }) {
-  const [open, setOpen] = useState(false);
+// The generated PDF is the exact document that a Poste lot would upload; it opens with the batch.
+export function GeneratedNoticePreview({ token, url, defaultOpen = true }: { token: string; url: string; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
   const resource = useDocumentBlob(token, url, "GET");
+  const loaded = useRef(false);
+  useEffect(() => {
+    if (!defaultOpen || loaded.current) return;
+    loaded.current = true;
+    resource.request();
+  });
   function toggle() {
     if (!open && !resource.url) resource.request();
     setOpen(!open);

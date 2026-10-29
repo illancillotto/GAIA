@@ -27,6 +27,10 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+function openOptions() {
+  fireEvent.click(screen.getByRole("button", { name: "Mostra opzioni" }));
+}
+
 it("regenerates every sollecito in order and reports skipped and failed ones", async () => {
   const finished = vi.fn();
   api.regenerateReminderItem
@@ -34,6 +38,7 @@ it("regenerates every sollecito in order and reports skipped and failed ones", a
     .mockResolvedValueOnce({ item_id: "item-2", outcome: "skipped", detail: "Posizione cambiata o saldata" })
     .mockRejectedValueOnce(new Error("Chromium non trovato"));
   render(<RegenerationPanel token="t" batchId="batch-1" onFinished={finished} />);
+  openOptions();
   fireEvent.click(screen.getByRole("radio", { name: /Ricalcola dati e regole/ }));
   fireEvent.click(screen.getByRole("radio", { name: "Solo il lotto selezionato" }));
   fireEvent.click(screen.getByRole("radio", { name: "Tutti i lotti" }));
@@ -51,6 +56,7 @@ it("regenerates every sollecito in order and reports skipped and failed ones", a
 it("limits the run to the selected batch and needs one", async () => {
   api.listRegenerationTargets.mockResolvedValue({ items: [], excluded_drafts: 0 });
   const { rerender } = render(<RegenerationPanel token="t" batchId={null} onFinished={vi.fn()} />);
+  openOptions();
   fireEvent.click(screen.getByRole("radio", { name: "Solo il lotto selezionato" }));
   expect(screen.getByRole("button", { name: "Rigenera PDF" })).toBeDisabled();
   expect(screen.getByText("Seleziona prima un lotto.")).toBeVisible();
@@ -66,6 +72,7 @@ it("stops between two PDFs and locks the choices while running", async () => {
   const first = deferred<unknown>();
   api.regenerateReminderItem.mockReturnValueOnce(first.promise);
   render(<RegenerationPanel token="t" batchId={null} onFinished={vi.fn()} />);
+  openOptions();
   fireEvent.click(screen.getByRole("button", { name: "Rigenera PDF" }));
   expect(await screen.findByText("In corso: 0 di 3 · rigenerati 0 · saltati 0 · errori 0")).toBeVisible();
   expect(screen.getByRole("radio", { name: "Tutti i lotti" })).toBeDisabled();
@@ -79,6 +86,7 @@ it("stops between two PDFs and locks the choices while running", async () => {
 it.each([[new Error("Accesso negato"), "Accesso negato"], ["offline", "Elenco dei solleciti non caricato"]])("reports a target list that cannot be read (%s)", async (failure, message) => {
   api.listRegenerationTargets.mockRejectedValue(failure);
   render(<RegenerationPanel token="t" batchId={null} onFinished={vi.fn()} />);
+  openOptions();
   fireEvent.click(screen.getByRole("button", { name: "Rigenera PDF" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(message);
 });
@@ -87,12 +95,27 @@ it("reports a failed request without an error message", async () => {
   api.listRegenerationTargets.mockResolvedValue({ items: [targets.items[0]], excluded_drafts: 0 });
   api.regenerateReminderItem.mockRejectedValue("offline").mockResolvedValueOnce({ item_id: "item-1", outcome: "failed", detail: null });
   render(<RegenerationPanel token="t" batchId={null} onFinished={vi.fn()} />);
+  openOptions();
   fireEvent.click(screen.getByRole("button", { name: "Rigenera PDF" }));
   expect(await screen.findByText(/Completata: 1 di 1/)).toBeVisible();
   expect(screen.getByRole("status")).toHaveTextContent("Mario Rossi - errore:");
   cleanup();
   render(<RegenerationPanel token="t" batchId={null} onFinished={vi.fn()} />);
+  openOptions();
   fireEvent.click(screen.getByRole("button", { name: "Rigenera PDF" }));
   expect(await screen.findByText(/Completata: 1 di 1/)).toBeVisible();
   expect(screen.getByRole("status")).toHaveTextContent("Mario Rossi - errore: Rigenerazione non riuscita");
+});
+
+it("starts closed and keeps the report visible after hiding the options", async () => {
+  api.regenerateReminderItem.mockResolvedValue({ item_id: "item-1", outcome: "regenerated", detail: null });
+  render(<RegenerationPanel token="t" batchId={null} onFinished={vi.fn()} />);
+  expect(screen.queryByRole("radio", { name: "Tutti i lotti" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Mostra opzioni" })).toHaveAttribute("aria-expanded", "false");
+  openOptions();
+  fireEvent.click(screen.getByRole("button", { name: "Rigenera PDF" }));
+  expect(await screen.findByText(/Completata: 3 di 3/)).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Nascondi opzioni" }));
+  expect(screen.queryByRole("radio", { name: "Tutti i lotti" })).toBeNull();
+  expect(screen.getByText(/Completata: 3 di 3/)).toBeVisible();
 });

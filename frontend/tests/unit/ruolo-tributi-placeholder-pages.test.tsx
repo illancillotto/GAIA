@@ -281,12 +281,11 @@ describe("Ruolo tributi import and reminders pages", () => {
     render(<RuoloTributiSollecitiPage />);
 
     expect(screen.getByRole("heading", { name: "Invio solleciti" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "GAIA prepara, l'operatore invia" })).toBeInTheDocument();
+    expect(screen.getByText(/INVIA lo preme sempre l'operatore su Posta Online/)).toBeInTheDocument();
     expect(screen.getByText("Accesso in sola lettura.")).toBeInTheDocument();
     expect(await screen.findByText("Nessun lotto generato.")).toBeInTheDocument();
     expect(mocks.listTributiReminderBatches).toHaveBeenCalledWith("token", 1, 50);
-    expect(screen.getByRole("button", { name: "Precedente" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Successiva" })).toBeDisabled();
+    expect(screen.queryByRole("navigation", { name: "Pagine lotti" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Conferma lotto" })).not.toBeInTheDocument();
   });
 });

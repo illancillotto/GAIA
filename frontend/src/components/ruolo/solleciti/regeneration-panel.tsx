@@ -85,29 +85,44 @@ function RegenerationReport({ progress, running }: { progress: Progress; running
 type Props = { token: string; batchId: string | null; onFinished: () => void };
 
 export function RegenerationPanel({ token, batchId, onFinished }: Props) {
-  const [scope, setScope] = useState<Scope>("all");
-  const [mode, setMode] = useState<RegenerationMode>("template");
+  const [open, setOpen] = useState(false);
   const regeneration = useRegeneration(token, onFinished);
-  const missingBatch = scope === "batch" && !batchId;
-  return <section aria-label="Rigenera PDF" className="rounded-[28px] border border-amber-200 bg-amber-50 p-5 text-sm text-amber-950">
-    <h2 className="text-lg font-semibold">Rigenera PDF</h2>
-    <p className="mt-1">Dopo modifiche al template o alle regole del ruolo. Rigenera anche i solleciti già caricati su Poste o spediti e sovrascrive le copie sul NAS; le bozze 2022/2023 restano escluse. Lasciare la pagina aperta fino alla fine.</p>
-    <fieldset className="mt-3 flex flex-wrap gap-4" disabled={regeneration.running}>
-      <legend className="font-medium">Quali solleciti</legend>
-      <label className="flex items-center gap-2"><input type="radio" name="regeneration-scope" checked={scope === "all"} onChange={() => setScope("all")} />Tutti i lotti</label>
-      <label className="flex items-center gap-2"><input type="radio" name="regeneration-scope" checked={scope === "batch"} onChange={() => setScope("batch")} />Solo il lotto selezionato</label>
-    </fieldset>
-    <fieldset className="mt-3 space-y-1" disabled={regeneration.running}>
-      <legend className="font-medium">Con quali dati</legend>
-      {MODES.map((entry) => <label key={entry.key} className="flex items-start gap-2"><input type="radio" name="regeneration-mode" checked={mode === entry.key} onChange={() => setMode(entry.key)} /><span><span className="font-semibold">{entry.label}</span> - {entry.hint}</span></label>)}
-    </fieldset>
-    <div className="mt-3">
-      {regeneration.running
-        ? <button type="button" className="btn-secondary" onClick={regeneration.stop}>Ferma</button>
-        : <button type="button" className="btn-primary" disabled={missingBatch} onClick={() => void regeneration.start(scope === "batch" ? batchId : null, mode)}>Rigenera PDF</button>}
-      {missingBatch && <p className="mt-2">Seleziona prima un lotto.</p>}
+  return <section aria-label="Rigenera PDF" className="rounded-2xl border border-[#d8dfd3] bg-white px-5 py-3 text-sm text-slate-700">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 className="font-semibold text-slate-900">Rigenera PDF</h2>
+        <p className="text-xs text-slate-500">Dopo modifiche al template o alle regole del ruolo.</p>
+      </div>
+      <button type="button" className="btn-secondary" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Nascondi opzioni" : "Mostra opzioni"}</button>
     </div>
+    {open && <RegenerationOptions batchId={batchId} regeneration={regeneration} />}
     {regeneration.error && <p role="alert" className="mt-2 text-rose-800">{regeneration.error}</p>}
     {regeneration.progress && <RegenerationReport progress={regeneration.progress} running={regeneration.running} />}
   </section>;
+}
+
+function RegenerationOptions({ batchId, regeneration }: { batchId: string | null; regeneration: ReturnType<typeof useRegeneration> }) {
+  const [scope, setScope] = useState<Scope>("all");
+  const [mode, setMode] = useState<RegenerationMode>("template");
+  const missingBatch = scope === "batch" && !batchId;
+  return <div className="mt-3 border-t border-slate-100 pt-3">
+    <p className="rounded-xl bg-amber-50 px-3 py-2 text-amber-950">Rigenera anche i solleciti già caricati su Poste o spediti e sovrascrive le copie sul NAS; le bozze 2022/2023 restano escluse. Lasciare la pagina aperta fino alla fine.</p>
+    <div className="mt-3 grid gap-4 md:grid-cols-[auto_1fr]">
+      <fieldset className="space-y-1" disabled={regeneration.running}>
+        <legend className="font-medium text-slate-900">Quali solleciti</legend>
+        <label className="flex items-center gap-2"><input type="radio" name="regeneration-scope" checked={scope === "all"} onChange={() => setScope("all")} />Tutti i lotti</label>
+        <label className="flex items-center gap-2"><input type="radio" name="regeneration-scope" checked={scope === "batch"} onChange={() => setScope("batch")} />Solo il lotto selezionato</label>
+      </fieldset>
+      <fieldset className="space-y-1" disabled={regeneration.running}>
+        <legend className="font-medium text-slate-900">Con quali dati</legend>
+        {MODES.map((entry) => <label key={entry.key} className="flex items-start gap-2"><input type="radio" className="mt-1" name="regeneration-mode" checked={mode === entry.key} onChange={() => setMode(entry.key)} /><span><span className="font-semibold">{entry.label}</span> - {entry.hint}</span></label>)}
+      </fieldset>
+    </div>
+    <div className="mt-3 flex flex-wrap items-center gap-3">
+      {regeneration.running
+        ? <button type="button" className="btn-secondary" onClick={regeneration.stop}>Ferma</button>
+        : <button type="button" className="btn-primary" disabled={missingBatch} onClick={() => void regeneration.start(scope === "batch" ? batchId : null, mode)}>Rigenera PDF</button>}
+      {missingBatch && <p>Seleziona prima un lotto.</p>}
+    </div>
+  </div>;
 }

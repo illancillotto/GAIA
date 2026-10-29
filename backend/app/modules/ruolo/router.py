@@ -16,6 +16,9 @@ from app.modules.ruolo.routes.registered_mail_document_routes import (
     router as registered_mail_document_router,
 )
 from app.modules.ruolo.routes.registered_mail_routes import router as registered_mail_router
+from app.modules.ruolo.routes.reminder_batch_overview_routes import (
+    router as reminder_batch_overview_router,
+)
 from app.modules.ruolo.routes.reminder_document_routes import router as reminder_document_router
 from app.modules.ruolo.routes.tributi_routes import router as tributi_router
 
@@ -25,6 +28,7 @@ router.include_router(query_router)
 router.include_router(parcel_control_router)
 router.include_router(tributi_router)
 router.include_router(reminder_document_router)
+router.include_router(reminder_batch_overview_router)
 router.include_router(payer_assignment_router)
 router.include_router(notice_confirmation_router)
 router.include_router(notice_document_router)

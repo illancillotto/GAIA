@@ -11,6 +11,10 @@
   «Solo template» o «Ricalcola dati e regole» con lo stesso numero avviso.
   Audit `regenerate_document` nel Registro. Bozze 2022/2023 escluse.
 - Dettagli e regole: [RUOLO_RIGENERAZIONE_PDF_2026-10-29.md](RUOLO_RIGENERAZIONE_PDF_2026-10-29.md).
+- **Pagina Invio solleciti, dopo il rilascio.** Layout compatto, checkbox
+  per lotto nella lista, badge «Inviato via PEC» (spedizione PEC inCASS),
+  anteprima aperta di default. I solleciti `failed` si rigenerano da soli
+  all'apertura del lotto per chi può modificarli. Non ancora rilasciato.
 - **Rilasciato sul CED il 2026-10-29 alle 16:16** (commit `428aff0d`).
   - Release `pdf-regen-20261029-428aff0d`; database invariato a
     `20261028_1500`, nessuna migration.

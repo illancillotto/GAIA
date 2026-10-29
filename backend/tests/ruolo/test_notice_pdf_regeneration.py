@@ -9,7 +9,9 @@ from sqlalchemy import select
 
 from app.models.application_user import ApplicationUser
 from app.modules.ruolo.models import (
+    RuoloTributiNoticeNumber,
     RuoloTributiPayment,
+    RuoloTributiReminderBatch,
     RuoloTributiReminderBatchItem,
 )
 from app.modules.ruolo.notice_register_models import NoticeAudit, NoticeDocument
@@ -178,7 +180,7 @@ def test_recompute_skips_a_reminder_without_positions(tmp_path, renders):
     assert _regenerate(item["id"], "recompute").json()["detail"] == regeneration.CHANGED_SKIP
 
 
-def test_drafts_and_failed_reminders_are_not_regenerated(tmp_path, renders):
+def test_drafts_and_failed_drafts_are_not_regenerated(tmp_path, renders):
     draft, _ = _batch(tmp_path, years=(2022,))
     assert draft["status"] == "draft"
     assert _regenerate(draft["id"]).json()["detail"] == regeneration.DRAFT_SKIP
@@ -311,3 +313,100 @@ def test_a_lost_single_reminder_is_rebuilt_and_audited():
     )
     assert (audit.action, audit.reason) == ("regenerate_document", regeneration.MISSING_REASON)
     db.close()
+
+
+def _broken(payload, *, output_path):
+    raise RuntimeError("Chromium non trovato")
+
+
+def _failed_batch(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, renders, **kwargs) -> dict:
+    with monkeypatch.context() as patch:
+        patch.setattr(RENDERER, _broken)
+        item, _ = _batch(tmp_path, **kwargs)
+    assert item["status"] == "failed" and item["generated_document_path"] is None
+    return item
+
+
+def _update_item(item_id: str, **values) -> None:
+    db = TestingSessionLocal()
+    item = db.get(RuoloTributiReminderBatchItem, UUID(item_id))
+    for key, value in values.items():
+        setattr(item, key, value)
+    db.commit()
+    db.close()
+
+
+def test_a_failed_generation_is_rendered_again_on_the_nas_and_registered(
+    tmp_path, renders, monkeypatch
+):
+    item = _failed_batch(tmp_path, monkeypatch, renders)
+    assert _regenerate(item["id"]).json()["outcome"] == "regenerated"
+    stored = _item(item["id"])
+    path = Path(stored.generated_document_path)
+    assert (stored.status, stored.error_detail) == ("generated", None)
+    assert path.parent == tmp_path / "archivio" / TAX_CODE / "solleciti" and path.is_file()
+    db = TestingSessionLocal()
+    batch = db.get(RuoloTributiReminderBatch, UUID(item["batch_id"]))
+    assert (batch.status, batch.items_generated, batch.items_failed) == ("generated", 1, 0)
+    assert db.get(RuoloTributiNoticeNumber, stored.notice_number_id).status == "generated"
+    db.close()
+    assert [audit.version for audit in _audits(item["id"])] == [1]
+    download = f"/ruolo/tributi/solleciti/items/{item['id']}/download"
+    assert client.get(download, headers=auth_headers()).status_code == 200
+
+
+def test_a_failed_preview_goes_to_the_storage_and_stays_out_of_the_register(
+    tmp_path, renders, monkeypatch
+):
+    item = _failed_batch(tmp_path, monkeypatch, renders, preview=True)
+    _update_item(item["id"], notice_number_id=None)
+    assert _regenerate(item["id"], "recompute").json()["outcome"] == "regenerated"
+    path = Path(_item(item["id"]).generated_document_path)
+    assert path.parent == reminder_storage_dir() and path.name.startswith(item["id"])
+    assert item["payload_json"]["notice_number"] in path.name
+    db = TestingSessionLocal()
+    assert db.scalar(select(NoticeDocument).where(NoticeDocument.source_key == item["id"])) is None
+    db.close()
+
+
+def test_a_failed_retry_reports_why_and_keeps_the_reminder_failed(tmp_path, renders, monkeypatch):
+    item = _failed_batch(tmp_path, monkeypatch, renders)
+    monkeypatch.setattr(RENDERER, _broken)
+    assert _regenerate(item["id"]).json()["detail"] == "Chromium non trovato"
+    _update_item(item["id"], nas_folder_path=None)
+    assert _regenerate(item["id"]).json() == {
+        "item_id": item["id"],
+        "outcome": "failed",
+        "detail": regeneration.NAS_MISSING,
+    }
+    assert _item(item["id"]).status == "failed"
+    download = f"/ruolo/tributi/solleciti/items/{item['id']}/download"
+    assert client.get(download, headers=auth_headers()).status_code == 404
+
+
+def test_a_failed_reminder_in_a_private_batch_or_without_number_is_skipped(
+    tmp_path, renders, monkeypatch
+):
+    item = _failed_batch(tmp_path, monkeypatch, renders)
+    db = TestingSessionLocal()
+    batch = db.get(RuoloTributiReminderBatch, UUID(item["batch_id"]))
+    batch.filters_json = {**batch.filters_json, "gaia_private_draft": True}
+    db.commit()
+    db.close()
+    assert _regenerate(item["id"]).json()["detail"] == regeneration.DRAFT_SKIP
+    _update_item(item["id"], payload_json={})
+    detail = _regenerate(item["id"]).json()["detail"]
+    assert detail == "Nessun PDF definitivo da rigenerare (stato failed)"
+
+
+def test_targets_include_failed_reminders_without_counting_them_as_drafts(
+    tmp_path, renders, monkeypatch
+):
+    item = _failed_batch(tmp_path, monkeypatch, renders)
+    other = _failed_batch(tmp_path / "altro", monkeypatch, renders, tax_code="BNCLGU80A01H501Y")
+    _update_item(other["id"], payload_json={})
+    targets = client.get(
+        "/ruolo/tributi/solleciti/regeneration-targets", headers=auth_headers()
+    ).json()
+    assert [entry["item_id"] for entry in targets["items"]] == [item["id"]]
+    assert targets["excluded_drafts"] == 0

@@ -5,6 +5,7 @@ import SollecitiPage from "@/app/ruolo/tributi/solleciti/page";
 import PostePage from "@/app/ruolo/tributi/solleciti/poste/page";
 import { useDocumentBlob } from "@/components/ruolo/solleciti/document-access";
 import { usePosteSelection } from "@/components/ruolo/solleciti/poste-selection";
+import { useBatchOverview } from "@/components/ruolo/solleciti/batch-overview";
 import { useSolleciti } from "@/components/ruolo/solleciti/workspace";
 
 const mocks = vi.hoisted(() => ({ session: vi.fn(), token: vi.fn(), list: vi.fn(), get: vi.fn(), confirm: vi.fn(), blob: vi.fn() }));
@@ -15,6 +16,8 @@ const poste = vi.hoisted(() => ({
 vi.mock("@/lib/ruolo-poste-dispatch-api", () => poste);
 const regeneration = vi.hoisted(() => ({ listRegenerationTargets: vi.fn(), regenerateReminderItem: vi.fn() }));
 vi.mock("@/lib/ruolo-regeneration-api", () => regeneration);
+const overview = vi.hoisted(() => ({ getBatchOverview: vi.fn() }));
+vi.mock("@/lib/ruolo-batch-overview-api", () => overview);
 vi.mock("@/lib/api", async (original) => ({ ...(await original<typeof import("@/lib/api")>()), requestBlob: mocks.blob }));
 const pathname = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({ usePathname: pathname }));
@@ -45,6 +48,8 @@ beforeEach(() => {
   mocks.token.mockReturnValue("token");
   mocks.list.mockResolvedValue({ items: [batch()], total: 1, page: 1, page_size: 50 });
   mocks.get.mockResolvedValue(batch());
+  overview.getBatchOverview.mockResolvedValue([]);
+  mocks.blob.mockReturnValue(new Promise(() => undefined));
   poste.listPosteLots.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 50 });
   poste.listPosteCandidates.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 50 });
   mocks.confirm.mockResolvedValue({ id: "confirmation-1", generation_id: "batch-1", generation_kind: "batch", review_digest: "b".repeat(64), input_basis: {}, identity_keys: ["a".repeat(64)], notice_numbers: [], confirmed_by: 1, confirmed_at: "2026-09-21T10:01:00Z" });
@@ -230,7 +235,6 @@ it("previews the generated PDF that Poste would upload", async () => {
   vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: vi.fn(() => "blob:avviso"), revokeObjectURL: vi.fn() }));
   mocks.blob.mockResolvedValue(new Blob(["%PDF"]));
   await openGenerated();
-  fireEvent.click(screen.getByRole("button", { name: "Anteprima avviso" }));
   expect(await screen.findByTitle("Anteprima avviso generato")).toHaveAttribute("src", "blob:avviso");
   expect(mocks.blob).toHaveBeenCalledWith("/ruolo/tributi/solleciti/items/item-2/download", expect.objectContaining({ method: "GET" }));
   fireEvent.click(screen.getByRole("button", { name: "Chiudi anteprima" }));
@@ -242,7 +246,6 @@ it("previews the generated PDF that Poste would upload", async () => {
 it("reports a generated PDF that cannot be loaded", async () => {
   mocks.blob.mockRejectedValue(new Error("Documento sollecito non trovato"));
   await openGenerated();
-  fireEvent.click(screen.getByRole("button", { name: "Anteprima avviso" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("Documento sollecito non trovato");
 });
 
@@ -269,7 +272,8 @@ it("collects reminders from several batches and loads them on Poste", async () =
   expect(poste.getPosteLot).toHaveBeenCalledWith("token", "lot-1");
   expect(screen.getByRole("tab", { name: "Posta Online" })).toHaveAttribute("aria-selected", "true");
   fireEvent.click(screen.getByRole("tab", { name: "Solleciti generati" }));
-  expect(await screen.findByText("0 di massimo 50 solleciti selezionati")).toBeVisible();
+  expect(await screen.findByRole("button", { name: /Generati batch-2/ })).toBeVisible();
+  expect(screen.queryByRole("region", { name: "Selezione per Posta Online" })).toBeNull();
 });
 
 it.each([[new Error("Sollecito già in un lotto Poste attivo"), "già in un lotto"], ["broken", "Lotto Poste non creato"]])("keeps the selection when Poste refuses the lot (%s)", async (failure, message) => {
@@ -305,7 +309,7 @@ it("offers Poste only for generated PDFs and only to editors", async () => {
   await openGenerated();
   expect(screen.queryByRole("checkbox", { name: "Seleziona per Posta Online" })).toBeNull();
   expect(screen.queryByRole("region", { name: "Selezione per Posta Online" })).toBeNull();
-  expect(screen.getByRole("button", { name: "Anteprima avviso" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "Chiudi anteprima" })).toBeVisible();
 });
 
 it("opens the former Posta Online address on its tab", async () => {
@@ -332,7 +336,6 @@ it("loads the marked draft copy and the generated PDF, showing progress while th
   cleanup();
   mocks.blob.mockReturnValueOnce(new Promise(() => undefined));
   await openGenerated();
-  fireEvent.click(screen.getByRole("button", { name: "Anteprima avviso" }));
   expect(screen.getByRole("status")).toHaveTextContent("Caricamento avviso...");
 });
 
@@ -405,6 +408,7 @@ it("lets editors regenerate the selected batch, then reloads it", async () => {
   regeneration.regenerateReminderItem.mockResolvedValue({ item_id: "item-2", outcome: "regenerated", detail: null });
   await openGenerated();
   const panel = screen.getByRole("region", { name: "Rigenera PDF" });
+  fireEvent.click(within(panel).getByRole("button", { name: "Mostra opzioni" }));
   fireEvent.click(within(panel).getByRole("radio", { name: "Solo il lotto selezionato" }));
   fireEvent.click(within(panel).getByRole("button", { name: "Rigenera PDF" }));
   expect(await within(panel).findByText(/Completata: 1 di 1/)).toBeVisible();
@@ -416,6 +420,7 @@ it("reloads nothing when no batch is open, and hides regeneration from viewers",
   regeneration.listRegenerationTargets.mockResolvedValue({ items: [], excluded_drafts: 0 });
   render(<SollecitiPage />);
   await screen.findByRole("button", { name: /Import 2022/ });
+  fireEvent.click(screen.getByRole("button", { name: "Mostra opzioni" }));
   fireEvent.click(screen.getByRole("button", { name: "Rigenera PDF" }));
   expect(await screen.findByText(/Completata: 0 di 0/)).toBeVisible();
   expect(mocks.get).not.toHaveBeenCalled();
@@ -424,4 +429,125 @@ it("reloads nothing when no batch is open, and hides regeneration from viewers",
   render(<SollecitiPage />);
   await screen.findByRole("button", { name: /Import 2022/ });
   expect(screen.queryByRole("region", { name: "Rigenera PDF" })).toBeNull();
+});
+
+const overviewRow = (batchId: string, itemId: string, values: Partial<{ label: string; status: string; sendable: boolean; pec_sent: boolean }> = {}) => ({
+  batch_id: batchId, items: [{ item_id: itemId, label: "Anna Bianchi", status: "generated", sendable: true, pec_sent: false, ...values }],
+});
+
+it("selects a whole batch from the list and flags avvisi already sent by PEC", async () => {
+  const sent = generatedBatch();
+  const failed = { ...generatedBatch(null, "batch-4", "item-4", "Luca Verdi"), status: "failed" };
+  mocks.list.mockResolvedValue({ items: [sent, failed], total: 2 });
+  mocks.get.mockResolvedValue(sent);
+  overview.getBatchOverview.mockResolvedValue([
+    overviewRow("batch-2", "item-2", { pec_sent: true }),
+    { batch_id: "batch-4", items: [overviewRow("batch-4", "item-4", { status: "failed", sendable: false }).items[0], overviewRow("batch-4", "item-5", { status: "failed", sendable: false, pec_sent: true }).items[0]] },
+  ]);
+  render(<SollecitiPage />);
+  const list = await screen.findByRole("checkbox", { name: "Seleziona per Posta Online: Generati batch-2" });
+  expect(overview.getBatchOverview).toHaveBeenCalledWith("token", ["batch-2", "batch-4"]);
+  expect(screen.getByText("Inviato via PEC")).toBeVisible();
+  expect(screen.getByText("Inviato via PEC (1)")).toBeVisible();
+  expect(screen.getByText("PDF non generato (2)")).toBeVisible();
+  expect(screen.queryByRole("checkbox", { name: /Generati batch-4/ })).toBeNull();
+  fireEvent.click(list);
+  expect(screen.getByRole("region", { name: "Selezione per Posta Online" })).toHaveTextContent("1 di massimo 50 solleciti selezionati");
+  fireEvent.click(screen.getByRole("button", { name: /Generati batch-2/ }));
+  expect(await screen.findByText("Avviso già inviato via PEC")).toBeVisible();
+  expect(screen.getByRole("checkbox", { name: "Seleziona per Posta Online" })).toBeChecked();
+  fireEvent.click(list);
+  expect(screen.queryByRole("region", { name: "Selezione per Posta Online" })).toBeNull();
+});
+
+it("keeps the list usable when the batch summary is not available", async () => {
+  overview.getBatchOverview.mockRejectedValue(new Error("offline"));
+  render(<SollecitiPage />);
+  await screen.findByRole("button", { name: /Import 2022/ });
+  await waitFor(() => expect(overview.getBatchOverview).toHaveBeenCalled());
+  expect(screen.queryByRole("checkbox")).toBeNull();
+});
+
+function failedBatch(detail: string | null = "Chromium non trovato") {
+  const base = generatedBatch(null, "batch-5", "item-5", "Sotgiu Donatello");
+  return { ...base, status: "failed", items: [{ ...base.items[0], status: "failed", error_detail: detail }] };
+}
+
+it("renders a failed sollecito again as soon as an editor opens its batch", async () => {
+  mocks.list.mockResolvedValue({ items: [failedBatch()], total: 1 });
+  mocks.get.mockResolvedValue(failedBatch());
+  const pending = deferred<unknown>();
+  regeneration.regenerateReminderItem.mockReturnValue(pending.promise);
+  render(<SollecitiPage />);
+  fireEvent.click(await screen.findByRole("button", { name: /Generati batch-5/ }));
+  expect(await screen.findByText(/rigenerazione in corso/)).toBeVisible();
+  await act(async () => pending.resolve({ item_id: "item-5", outcome: "regenerated", detail: null }));
+  expect(await screen.findByRole("button", { name: "Chiudi anteprima" })).toBeVisible();
+  expect(regeneration.regenerateReminderItem).toHaveBeenCalledWith("token", "item-5", "template");
+  expect(regeneration.regenerateReminderItem).toHaveBeenCalledTimes(1);
+  expect(mocks.blob).toHaveBeenCalledWith("/ruolo/tributi/solleciti/items/item-5/download", expect.objectContaining({ method: "GET" }));
+  await waitFor(() => expect(overview.getBatchOverview).toHaveBeenCalledTimes(2));
+});
+
+it.each([
+  [{ item_id: "item-5", outcome: "failed", detail: "Cartella archivio NAS mancante per l'utenza" }, "Cartella archivio NAS mancante"],
+  [{ item_id: "item-5", outcome: "skipped", detail: null }, "PDF non generato: PDF non generato"],
+  [new Error("Servizio non raggiungibile"), "Servizio non raggiungibile"],
+  ["offline", "Rigenerazione non riuscita"],
+])("explains why a failed sollecito is still missing (%s) and lets the editor retry", async (answer, message) => {
+  mocks.list.mockResolvedValue({ items: [failedBatch()], total: 1 });
+  mocks.get.mockResolvedValue(failedBatch());
+  if (answer instanceof Error || typeof answer === "string") regeneration.regenerateReminderItem.mockRejectedValue(answer);
+  else regeneration.regenerateReminderItem.mockResolvedValue(answer);
+  render(<SollecitiPage />);
+  fireEvent.click(await screen.findByRole("button", { name: /Generati batch-5/ }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(message);
+  fireEvent.click(screen.getByRole("button", { name: "Riprova a generare" }));
+  await waitFor(() => expect(regeneration.regenerateReminderItem).toHaveBeenCalledTimes(2));
+});
+
+it.each([["Chromium non trovato", "Chromium non trovato"], [null, "motivo non registrato"]])("shows viewers why the PDF is missing without retrying (%s)", async (detail, message) => {
+  mocks.session.mockReturnValue({ status: "ready", token: "token", currentUser: { role: "admin", enabled_modules: ["ruolo"] }, grantedSectionKeys: ["ruolo.tributi.view"] });
+  mocks.list.mockResolvedValue({ items: [failedBatch(detail)], total: 1 });
+  mocks.get.mockResolvedValue(failedBatch(detail));
+  render(<SollecitiPage />);
+  fireEvent.click(await screen.findByRole("button", { name: /Generati batch-5/ }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(message);
+  expect(screen.queryByRole("button", { name: "Riprova a generare" })).toBeNull();
+  expect(regeneration.regenerateReminderItem).not.toHaveBeenCalled();
+});
+
+it("opens only the first previews of a large batch", async () => {
+  const base = generatedBatch();
+  const large = { ...base, items: Array.from({ length: 6 }, (_, index) => ({ ...base.items[0], id: `item-${index}`, display_name: `Utente ${index}`, download_url: `/ruolo/tributi/solleciti/items/item-${index}/download` })) };
+  await openGenerated(large);
+  expect(screen.getAllByRole("button", { name: "Chiudi anteprima" })).toHaveLength(5);
+  fireEvent.click(screen.getByRole("button", { name: "Anteprima avviso" }));
+  expect(screen.getAllByRole("button", { name: "Chiudi anteprima" })).toHaveLength(6);
+  expect(mocks.blob).toHaveBeenLastCalledWith("/ruolo/tributi/solleciti/items/item-5/download", expect.objectContaining({ method: "GET" }));
+});
+
+it("selects and unselects a whole batch within the Poste cap", () => {
+  const { result } = renderHook(() => usePosteSelection());
+  const many = Array.from({ length: 51 }, (_, index) => ({ id: `item-${index}`, label: `Utente ${index}` }));
+  act(() => result.current.toggleAll(many.slice(0, 2)));
+  act(() => result.current.toggleAll(many));
+  expect(result.current.selected).toHaveLength(50);
+  act(() => result.current.toggleAll(many.slice(0, 50)));
+  expect(result.current.selected).toHaveLength(0);
+});
+
+it("flags a single failed sollecito in the list", async () => {
+  overview.getBatchOverview.mockResolvedValue([overviewRow("batch-1", "item-1", { status: "failed", sendable: false })]);
+  render(<SollecitiPage />);
+  expect(await screen.findByText("PDF non generato")).toBeVisible();
+});
+
+it.each([false, true])("drops a batch summary that arrives after leaving the page (failure=%s)", async (failure) => {
+  const pending = deferred<unknown>();
+  overview.getBatchOverview.mockReturnValue(pending.promise);
+  const { result, unmount } = renderHook(() => useBatchOverview("token", ["batch-1"]));
+  unmount();
+  await act(async () => { if (failure) pending.reject(new Error("late")); else pending.resolve([overviewRow("batch-1", "item-1")]); });
+  expect(result.current.overview).toEqual({});
 });

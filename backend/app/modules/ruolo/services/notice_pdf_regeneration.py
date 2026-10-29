@@ -21,7 +21,9 @@ from app.modules.ruolo.models import (
     RuoloTributiReminderBatchItem,
 )
 from app.modules.ruolo.notice_register_models import NoticeAudit, NoticeDocument
+from app.modules.ruolo.services import incass_notice_numbering as incass_numbering
 from app.modules.ruolo.services import notice_candidates, notice_drafts
+from app.modules.ruolo.services.notice_generation import register_batch_item
 from app.modules.ruolo.services.tributi_reminder_service import (
     generate_reminder_docx,
     reminder_storage_dir,
@@ -30,6 +32,8 @@ from app.modules.ruolo.services.tributi_reminder_service import (
 TEMPLATE = "template"
 RECOMPUTE = "recompute"
 REGENERABLE = {"generated", "generated_docx"}
+FAILED = "failed"
+NAS_MISSING = "Cartella archivio NAS mancante per l'utenza"
 MISSING_REASON = "PDF mancante: ricostruito dai dati salvati"
 REASONS = {
     TEMPLATE: "Rigenerazione PDF con il template attuale, stessi dati",
@@ -131,8 +135,19 @@ def _recompute(db: Session, item: RuoloTributiReminderBatchItem) -> None:
         setattr(item, field, candidate.get(field))
 
 
+def _retryable(item: RuoloTributiReminderBatchItem) -> bool:
+    """A failed generation that already holds its notice number can simply be rendered again."""
+    return (
+        item.status == FAILED
+        and bool((item.payload_json or {}).get("notice_number"))
+        and not notice_drafts.requires_draft(item.years_json or [])
+    )
+
+
 def _skip_reason(item: RuoloTributiReminderBatchItem) -> str | None:
     if item.status in REGENERABLE and notice_drafts.publishable(item):
+        return None
+    if _retryable(item):
         return None
     if item.status == "draft" or item.generated_document_path:
         return DRAFT_SKIP
@@ -145,9 +160,12 @@ def regenerate_batch_item(
     skip = _skip_reason(item)
     if skip:
         raise RegenerationSkipped(skip)
-    before = item.generated_document_path
     if mode == RECOMPUTE:
         _recompute(db, item)
+    if item.status == FAILED:
+        _retry_failed(db, item)
+        return
+    before = item.generated_document_path
     status, path, detail = repo._generate_batch_document(
         item.payload_json or {}, output_path=_target(item, ".pdf")
     )
@@ -158,10 +176,45 @@ def regenerate_batch_item(
     db.flush()
 
 
+def _failed_output_path(item: RuoloTributiReminderBatchItem, preview: bool) -> Path:
+    # Same file name and place as the first generation: inCASS-numbered notices carry their number.
+    candidate = {"codice_fiscale": item.codice_fiscale, "years": item.years_json or []}
+    if item.notice_number_id is None:
+        candidate[incass_numbering.INCASS_NOTICE_KEY] = item.payload_json["notice_number"]
+    filename = incass_numbering.notice_filename(candidate)
+    if preview:
+        return reminder_storage_dir() / f"{item.id}_{filename}"
+    if not item.nas_folder_path:
+        raise RegenerationFailed(NAS_MISSING)
+    return Path(item.nas_folder_path) / "solleciti" / filename
+
+
+def _retry_failed(db: Session, item: RuoloTributiReminderBatchItem) -> None:
+    batch = db.get(RuoloTributiReminderBatch, item.batch_id)
+    filters = batch.filters_json or {}
+    if filters.get(notice_drafts.PRIVATE_BATCH_KEY):
+        raise RegenerationSkipped(DRAFT_SKIP)
+    preview = repo._bool_filter(filters.get("preview_only"))
+    status, path, detail = repo._generate_batch_document(
+        item.payload_json, output_path=_failed_output_path(item, preview)
+    )
+    if status == FAILED:
+        raise RegenerationFailed(detail or "Generazione PDF non riuscita")
+    item.status, item.generated_document_path, item.error_detail = status, path, detail
+    repo._update_notice_reservation_status(
+        incass_numbering.notice_reservation(db, item.notice_number_id), status
+    )
+    batch.items_failed -= 1
+    batch.items_generated += 1
+    batch.status = "generated" if batch.items_failed == 0 else "partial_failed"
+    db.flush()
+    register_batch_item(db, item, preview_only=preview)
+
+
 def ensure_batch_item_document(
     db: Session, item: RuoloTributiReminderBatchItem, *, actor_id: int
 ) -> Path | None:
-    if _skip_reason(item) is None and _missing_local(item):
+    if item.status in REGENERABLE and _skip_reason(item) is None and _missing_local(item):
         regenerate_batch_item(db, item, TEMPLATE, actor_id=actor_id, reason=MISSING_REASON)
     return repo.reminder_batch_item_document_path(item)
 
@@ -184,7 +237,7 @@ def regeneration_targets(
 ) -> tuple[list[RuoloTributiReminderBatchItem], int]:
     # Drafts are listed only to count them as excluded in the report.
     query = select(RuoloTributiReminderBatchItem).where(
-        RuoloTributiReminderBatchItem.status.in_(REGENERABLE | {"draft"})
+        RuoloTributiReminderBatchItem.status.in_(REGENERABLE | {"draft", FAILED})
     )
     if batch_id is not None:
         query = query.where(RuoloTributiReminderBatchItem.batch_id == batch_id)
@@ -195,7 +248,6 @@ def regeneration_targets(
             )
         )
     )
-    eligible = [
-        item for item in items if item.status in REGENERABLE and notice_drafts.publishable(item)
-    ]
-    return eligible, len(items) - len(eligible)
+    eligible = [item for item in items if _skip_reason(item) is None]
+    excluded = [item for item in items if item.status != FAILED and _skip_reason(item)]
+    return eligible, len(excluded)

@@ -27,7 +27,15 @@ export function usePosteSelection() {
       return [...current, { id: item.id, label: item.display_name || item.codice_fiscale }];
     });
   }
-  return { selected, toggle, isSelected: (id: string) => selected.some((entry) => entry.id === id), clear: () => setSelected([]) };
+  // A whole batch from the list: all its reminders in, or all out when they are all in already.
+  function toggleAll(entries: Selected[]) {
+    setSelected((current) => {
+      const ids = new Set(current.map((entry) => entry.id));
+      if (entries.every((entry) => ids.has(entry.id))) return current.filter((entry) => !entries.some((other) => other.id === entry.id));
+      return [...current, ...entries.filter((entry) => !ids.has(entry.id))].slice(0, MAX_POSTE_ITEMS);
+    });
+  }
+  return { selected, toggle, toggleAll, isSelected: (id: string) => selected.some((entry) => entry.id === id), clear: () => setSelected([]) };
 }
 
 type SelectProps = { item: Item; canEdit: boolean; checked: boolean; onToggle: (item: Item) => void };
@@ -63,13 +71,18 @@ export function SelectionBar({ token, selection, onCreated }: BarProps) {
     }
   }
 
-  return <section aria-label="Selezione per Posta Online" className="rounded-[28px] border border-sky-200 bg-sky-50 p-5 text-sm text-sky-950">
-    <p className="font-semibold">{count} di massimo {MAX_POSTE_ITEMS} solleciti selezionati</p>
-    {count > 0 && <p className="mt-1 text-sky-900">{selection.selected.map((entry) => entry.label).join(", ")}</p>}
-    <div className="mt-3 flex flex-wrap gap-2">
-      <input className="form-control min-w-64 flex-1" aria-label="Titolo lotto Poste" placeholder="Es. Solleciti 2021 Oristano" value={title} onChange={(event) => setTitle(event.target.value)} />
-      <button type="button" className="btn-primary" disabled={busy || !title.trim() || count === 0} onClick={() => void upload()}>{busy ? "Creazione..." : `Carica su Poste (${count})`}</button>
-      {count > 0 && <button type="button" className="btn-secondary" disabled={busy} onClick={selection.clear}>Svuota</button>}
+  if (count === 0) return null;
+  const names = selection.selected.map((entry) => entry.label).join(", ");
+  // Sticky at the bottom: the checkboxes sit deep in the batch detail, the upload must stay at hand.
+  return <section aria-label="Selezione per Posta Online" className="sticky bottom-4 z-20 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-950 shadow-lg">
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="min-w-0 flex-1 basis-64">
+        <p className="font-semibold">{count} di massimo {MAX_POSTE_ITEMS} solleciti selezionati</p>
+        <p className="truncate text-sky-900" title={names}>{names}</p>
+      </div>
+      <input className="form-control min-w-0 flex-1 basis-56" aria-label="Titolo lotto Poste" placeholder="Titolo lotto, es. Solleciti 2021 Oristano" value={title} onChange={(event) => setTitle(event.target.value)} />
+      <button type="button" className="btn-primary" disabled={busy || !title.trim()} onClick={() => void upload()}>{busy ? "Creazione..." : `Carica su Poste (${count})`}</button>
+      <button type="button" className="btn-secondary" disabled={busy} onClick={selection.clear}>Svuota</button>
     </div>
     <p className="mt-2 text-xs text-sky-900">Crea il lotto Posta Online: poi verifica indirizzi e crea le bozze nella scheda Posta Online. INVIA resta all&apos;operatore, su Poste.</p>
     {error && <p role="alert" className="mt-2 text-rose-800">{error}</p>}

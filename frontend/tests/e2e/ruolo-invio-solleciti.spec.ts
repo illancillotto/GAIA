@@ -40,6 +40,7 @@ for (const width of [1440, 390]) {
         data = route.request().method() === "POST" ? lot : { items: created ? [lot] : [], total: created ? 1 : 0, page: 1, page_size: 50 };
       }
       if (path.endsWith("/lots/lot-1")) data = lot;
+      if (path.endsWith("/batch-overview")) data = [{ batch_id: "batch-1", items: [{ item_id: "item-1", label: item.display_name, status: "generated", sendable: true, pec_sent: true }] }];
       if (path.endsWith("/items/item-1/download")) {
         await route.fulfill({ status: 200, contentType: "application/pdf", body: noticePdf });
         return;
@@ -47,10 +48,12 @@ for (const width of [1440, 390]) {
       await route.fulfill({ status: 200, json: data });
     });
     await page.goto("/ruolo/tributi/solleciti?embedded=1");
+    await expect(page.getByText("Inviato via PEC", { exact: true })).toBeVisible();
+    await page.getByRole("checkbox", { name: /Seleziona per Posta Online: Sollecito tributi 00048250955/ }).check();
     await page.getByRole("button", { name: /Sollecito tributi 00048250955/ }).click();
-    await page.getByRole("button", { name: "Anteprima avviso" }).click();
     await expect(page.getByTitle("Anteprima avviso generato")).toHaveAttribute("src", /^blob:/);
-    await page.getByRole("checkbox", { name: "Seleziona per Posta Online" }).check();
+    await expect(page.getByText("Avviso già inviato via PEC")).toBeVisible();
+    await expect(page.getByRole("checkbox", { name: "Seleziona per Posta Online", exact: true })).toBeChecked();
     await page.getByRole("textbox", { name: "Titolo lotto Poste" }).fill("Solleciti 2021");
     await page.screenshot({ path: `/tmp/gaia-invio-solleciti-${width}.png`, fullPage: true });
     expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
