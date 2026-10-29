@@ -389,6 +389,25 @@ Per il monitoraggio applicativo degli utenti autenticati e stato introdotto un m
 Vincolo esplicito:
 - questa vista rappresenta attivita recente applicativa, non "online reale" in senso websocket o session-presence server-side
 
+### Avvisi sincronizzazioni nella home
+
+`HomeSyncAlerts`, montato dal layout radice, attiva il monitor soltanto sulla
+route `/` con sessione pronta e ruolo `admin` o `super_admin`. Il componente
+legge `GET /elaborazioni/sync-alerts` all'apertura, ogni 30 secondi a scheda
+visibile e al ritorno in primo piano. Le richieste hanno timeout di 15 secondi
+e non si sovrappongono. Il toast e persistente fino alla chiusura o al recupero;
+gli incidenti chiusi restano silenziati durante quella permanenza nella home,
+finche scompaiono dal riepilogo. Nuovi incidenti generano un nuovo avviso.
+
+Il backend applica `require_admin_user` ed espone solo ID tecnico del problema,
+nome del servizio e messaggio sintetico. Gli operatori non interrogano il
+monitor e ricevono 403 se chiamano direttamente l'endpoint. I permessi sulle
+azioni e sui monitor di Elaborazioni restano invariati. La lettura non avvia
+scraping, non modifica credenziali e non corregge gli stati dei job.
+Gli errori di rete del riepilogo hanno un messaggio distinto dalle interruzioni
+dei servizi; 401/403 rimuovono gli avvisi gia visualizzati. Catalogo, criteri e
+limiti sono descritti in `domain-docs/elaborazioni/docs/SYNC_DASHBOARD.md`.
+
 ### Ricerca operativa home
 La home usa un layout search-first, simile a una schermata di ricerca centrale: logo GAIA, barra dominante e chip dei domini operativi. La ricerca è limitata ai domini locali `utenze`, `ruolo` e `catasto`.
 

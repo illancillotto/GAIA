@@ -5,6 +5,7 @@ from app.modules.elaborazioni.capacitas_routes import router as capacitas_router
 from app.modules.elaborazioni.posta_online_routes import router as posta_online_router
 from app.modules.elaborazioni.routes import router as elaborazioni_router
 from app.modules.elaborazioni.step_routes import router as step_router
+from app.modules.elaborazioni.sync_alerts import router as sync_alerts_router
 from app.modules.elaborazioni.telemetry_routes import router as telemetry_router
 
 router = APIRouter()
@@ -13,5 +14,6 @@ router.include_router(telemetry_router)
 router.include_router(capacitas_router)
 router.include_router(posta_online_router)
 router.include_router(step_router)
+router.include_router(sync_alerts_router)
 router.include_router(bonifica_oristanese_router, prefix="/elaborazioni/bonifica")
 router.include_router(bonifica_oristanese_router, prefix="/elaborazioni/bonifica-oristanese")

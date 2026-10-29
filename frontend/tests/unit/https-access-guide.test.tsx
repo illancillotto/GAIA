@@ -8,6 +8,7 @@ import { HttpsAccessGuide } from "@/components/security/https-access-guide";
 const mocks = vi.hoisted(() => ({ pathname: "/" as string | null }));
 vi.mock("next/navigation", () => ({ usePathname: () => mocks.pathname }));
 vi.mock("@/features/wiki/WikiWidget", () => ({ WikiWidget: () => <aside>Wiki legacy</aside> }));
+vi.mock("@/components/elaborazioni/home-sync-alerts", () => ({ HomeSyncAlerts: () => null }));
 
 beforeEach(() => { mocks.pathname = "/"; });
 afterEach(cleanup);

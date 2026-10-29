@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { WikiWidget } from "@/features/wiki/WikiWidget";
 import { HttpsAccessGuide } from "@/components/security/https-access-guide";
+import { HomeSyncAlerts } from "@/components/elaborazioni/home-sync-alerts";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
 
@@ -18,7 +19,7 @@ export default function RootLayout({
   return (
     <html lang="it">
       <body>
-        <HttpsAccessGuide>{children}</HttpsAccessGuide>
+        <HttpsAccessGuide>{children}<HomeSyncAlerts /></HttpsAccessGuide>
         <WikiWidget />
       </body>
     </html>

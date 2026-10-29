@@ -1,6 +1,6 @@
 # Dashboard sincronizzazioni
 
-Aggiornamento: 2026-10-21 (aggiunto STEP riscossione).
+Aggiornamento: 2026-10-28 (avvisi delle sincronizzazioni nella home admin).
 
 La pagina `/elaborazioni` raccoglie 16 servizi in un catalogo responsive,
 filtrabile per nome, descrizione e stato (tutti, da verificare, in corso/coda).
@@ -106,6 +106,61 @@ l'elenco dopo il salvataggio. L'aggiornamento degli stati non modifica
 schedulazioni e non avvia job. La configurazione Mobile incompleta viene
 segnalata anche quando non esiste ancora un run.
 
+## Toast nella home degli amministratori
+
+La home `/` mostra un toast accessibile (`role="alert"`) solo ai ruoli
+`admin` e `super_admin`. La lettura parte quando la sessione e pronta e si
+ripete ogni 30 secondi a scheda visibile, anche al ritorno in primo piano.
+Ogni richiesta scade dopo 15 secondi e non si sovrappone alla precedente.
+Fuori dalla home o per utenti non amministratori non partono queste richieste.
+
+La sorgente e `GET /elaborazioni/sync-alerts` (prefisso pubblico `/api`), con
+protezione backend `require_admin_user`. La risposta e una lista di
+`{ id, service, message }`: non espone errori grezzi, nominativi, credenziali,
+cookie o payload di scraping. Questa autorizzazione riguarda soltanto gli
+avvisi; le azioni e i workspace operativi mantengono i permessi preesistenti.
+Gli admin possono quindi ricevere gli avvisi senza ottenere accesso ai monitor
+riservati ai super admin.
+
+Il riepilogo legge dal database gli stessi 16 servizi del catalogo. Per ogni
+sorgente considera l'ultimo job secondo `created_at` (oppure `started_at` per
+WhiteCompany, AUTODOC, Mobile, AdE e ANPR), con ID decrescente a parita di data.
+WhiteCompany mantiene distinti i flussi per entity e separa AUTODOC; SISTER
+separa batch manuali e autosync e considera l'ultima esecuzione per proprietario.
+Un successo successivo sostituisce il fallimento precedente nello stesso flusso.
+
+Generano un avviso gli stati terminali `failed`, `error`, `cancelled`, `partial`
+e `completed_with_errors`. Job assenti, attivi, in coda, completati con successo
+o `skipped` non generano un allarme per il solo stato. I contatori storici di
+errori e il metadato aggregato INAZ `degraded` non sono usati come prova di
+interruzione del servizio. Si aggiungono controlli espliciti per:
+
+- INAZ: pianificazione abilitata con credenziale mancante o disattivata;
+- INAZ: job `running` con lease del worker scaduto;
+- SISTER autosync: errore registrato nel planner, anche se il planner e stato
+  disabilitato dopo il problema.
+
+La lettura e priva di scritture e chiamate ai portali esterni. Non e un health
+check Docker e non deduce un blocco dalla sola durata di un job: per i servizi
+senza lease non rileva un processo morto finche il loro stato persistito non
+segnala il problema. Per INAZ il riepilogo dei job considera l'ultimo job,
+non ricostruisce la completezza di tutti gli shard di una campagna. Questi
+avvisi non sostituiscono gli audit di completezza o i monitor infrastrutturali.
+
+Il toast elenca i servizi interessati e resta visibile fino alla chiusura o al
+recupero. E collocato sopra il pulsante dell'assistente Wiki, con priorita
+visiva sufficiente a mantenere raggiungibile `Chiudi` anche su mobile.
+`Chiudi` silenzia gli ID correnti durante quella permanenza nella
+home: lo stesso problema non ricompare a ogni polling. Un nuovo incidente
+oppure la ricomparsa dopo un controllo sano genera un nuovo avviso. Tornare
+nella home o cambiare sessione ricrea il monitor e ripresenta i problemi attivi.
+Le risposte di una sessione precedente non aggiornano il monitor corrente.
+
+Se il riepilogo non e leggibile, il toast mostra `Monitor sincronizzazioni:
+Stato non disponibile` e conserva gli incidenti gia noti; il successo seguente
+riconcilia l'elenco. Una risposta 401/403 rimuove gli avvisi. La chiusura del
+toast non modifica la configurazione o lo stato di alcun servizio.
+
 ## Implementazione e verifiche
 
 - `frontend/src/app/elaborazioni/page.tsx`: composizione, ricerca e riepilogo.
@@ -116,6 +171,37 @@ segnalata anche quando non esiste ancora un run.
 - `sync-service-card.tsx` e `sync-schedules.tsx`: schede e pianificazioni.
 - `sync-service-details.tsx` e `sync-dashboard-dialog.tsx`: risultati completi
   e navigazione in modale con caricamento differito dei monitor.
+- `backend/app/modules/elaborazioni/sync_alerts.py`: riepilogo read-only e
+  endpoint riservato agli amministratori per la home.
+- `frontend/src/components/elaborazioni/home-sync-alerts.tsx`: controllo della
+  route/sessione, polling e toast; integrato in `frontend/src/app/layout.tsx`.
+
+I test `backend/tests/test_elaborazioni_sync_alerts.py` verificano ogni sorgente
+del catalogo, permessi reali, recupero, separazione dei flussi e assenza di
+scritture o dati sensibili nella risposta. Le suite frontend
+`home-sync-alerts.test.tsx` e `root-layout.test.tsx` verificano composizione,
+ruoli, polling, errori di lettura, chiusura, recupero e cambio di sessione.
+I file runtime del toast e del relativo endpoint richiedono coverage full-file
+al 100%, inclusi branch; non vengono modificate le policy o le soglie esistenti.
+
+Verifica locale del 2026-10-28 per il toast: 40 test backend della feature e
+5 regressioni Portal Health, 23 test frontend della feature e 45 regressioni
+home/dashboard, tutti superati. Coverage full-file dei quattro runtime
+modificati: backend statement `75/75` e branch `6/6`; frontend statement
+`51/51`, branch `22/22`, funzioni `16/16`, righe `38/38`, tutto `100%`.
+TypeScript, Ruff, ESLint sui file toccati e build produzione passano; la build
+mantiene warning su file fuori perimetro. Tre test Chromium sulla build locale
+con API simulate verificano desktop 1440px, mobile 390px e assenza di letture
+per un operatore, inclusi chiusura, polling, nuovo incidente e mancata
+sovrapposizione con il pulsante Wiki. Questo collaudo non e un deploy su GAIA.
+
+Il report di complessita del perimetro rileva zero violation: massimo nuovo
+cognitive `14`, cyclomatic `9`, LOC `49`; `RootLayout` mantiene cognitive `0`,
+cyclomatic `1`, LOC `14`. Il ratchet usa la baseline del merge-base `main`,
+senza modificare soglie o esclusioni. La sincronizzazione esplicita della
+baseline usa Python 3.14, coerente con il motore gia registrato: oltre ai
+quattro runtime della feature riallinea sette record file Ruolo relativi a
+codice gia committato, senza modificarlo. Non introduce nuovo debito.
 
 Verifica finale del 2026-09-16: 23 test unitari nella suite dashboard,
 coverage full-file dei runtime modificati al `100%` (statement `83/83`, branch
