@@ -11,6 +11,20 @@
   «Solo template» o «Ricalcola dati e regole» con lo stesso numero avviso.
   Audit `regenerate_document` nel Registro. Bozze 2022/2023 escluse.
 - Dettagli e regole: [RUOLO_RIGENERAZIONE_PDF_2026-10-29.md](RUOLO_RIGENERAZIONE_PDF_2026-10-29.md).
+- **Rilasciato sul CED il 2026-10-29 alle 16:16** (commit `428aff0d`).
+  - Release `pdf-regen-20261029-428aff0d`; database invariato a
+    `20261028_1500`, nessuna migration.
+  - Backend: immagine `invio-solleciti-20261029-76e57300` più i file della
+    funzione. Il `router.py` attivo differisce da git: rilasciata la versione
+    attiva con le sole due registrazioni nuove. Frontend: sorgenti della release
+    precedente più tre file.
+  - Prima del rilascio: 78 test backend superati nell'immagine candidata;
+    stessa impronta del filesystem; build frontend riuscita; Compose cambia
+    solo l'immagine.
+  - Smoke: health OK, home e `/ruolo/tributi/solleciti` HTTP 200, API senza
+    login 401. Cartella `/opt/gaia/runtime-data/ruolo/solleciti` creata e
+    scrivibile dal backend.
+  - Ripristino: `/opt/gaia/releases/pdf-regen-20261029-428aff0d/rollback.sh`.
 
 
 ## Pagina «Invio solleciti» — 2026-10-29

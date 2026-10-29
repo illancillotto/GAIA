@@ -84,3 +84,10 @@ erano coinvolti.
   `frontend/tests/unit/ruolo-regeneration-panel.test.tsx`,
   `frontend/tests/unit/ruolo-regeneration-api.test.ts` e gli scenari nella
   pagina Invio solleciti.
+
+## Rilascio
+
+In produzione sul CED dal 2026-10-29 alle 16:16, release
+`pdf-regen-20261029-428aff0d`. I PDF persi prima del rilascio si ricostruiscono
+alla prima apertura dell'anteprima o con «Rigenera PDF». Ripristino:
+`/opt/gaia/releases/pdf-regen-20261029-428aff0d/rollback.sh`.
