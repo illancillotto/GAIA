@@ -203,6 +203,24 @@ baseline usa Python 3.14, coerente con il motore gia registrato: oltre ai
 quattro runtime della feature riallinea sette record file Ruolo relativi a
 codice gia committato, senza modificarlo. Non introduce nuovo debito.
 
+Rilascio sul CED del 2026-10-29 alle 10:16: release
+`sync-alerts-20261029-09ec7751`, solo backend e frontend, senza migration.
+
+- **Immagine backend appiattita.** L'immagine attiva aveva 127 layer, il
+  limite di overlay. Il candidato copia il suo filesystem in un solo layer,
+  con la stessa configurazione, poi aggiunge i file della feature. Contenuti,
+  permessi e proprietari coincidono con l'immagine precedente, esclusi i file
+  della feature; il candidato ha 3 layer.
+- **Verifiche.**
+  - Nell'immagine candidata: 40 test superati, build frontend riuscita,
+    Compose cambia solo l'immagine.
+  - Dopo il rilascio: home, pagina Poste e `gaia.lan` HTTP 200; senza login
+    gli avvisi e i lotti Poste rispondono HTTP 401; gli altri servizi sono
+    invariati.
+  - Lettura in produzione: 11 avvisi attivi, su GAIA Mobile Sync, NAS e
+    directory, Poste Online, SISTER visure e WhiteCompany.
+- **Ripristino.** `/opt/gaia/releases/sync-alerts-20261029-09ec7751/rollback.sh`.
+
 Verifica finale del 2026-09-16: 23 test unitari nella suite dashboard,
 coverage full-file dei runtime modificati al `100%` (statement `83/83`, branch
 `99/99`, funzioni `28/28`, righe `60/60`). I test caratterizzano l'ordine delle

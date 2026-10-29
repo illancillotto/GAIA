@@ -83,8 +83,9 @@
     - gli altri servizi sono invariati.
   - Ripristino: `/opt/gaia/releases/poste-dispatch-20261029-05fa4a86/rollback.sh`.
     Se ci sono lotti chiede `FORCE=yes` e li salva prima del downgrade.
-  - L'immagine backend è a 127 layer, il limite di overlay: il prossimo
-    rilascio backend richiede una ricostruzione completa dell'immagine.
+  - L'immagine backend era a 127 layer, il limite di overlay. Il rilascio
+    `sync-alerts-20261029-09ec7751` l'ha appiattita a 3 layer, con lo stesso
+    contenuto: vedi `domain-docs/elaborazioni/docs/SYNC_DASHBOARD.md`.
 - **Vincoli del rilascio mirato.** Riguarda backend, frontend ed
   `elaborazioni-worker-poste`, e richiede:
   - `notice_registered_mail_link.py`, usato dalla riconciliazione e mai
