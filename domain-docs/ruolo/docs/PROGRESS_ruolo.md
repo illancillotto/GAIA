@@ -14,7 +14,17 @@
 - **Pagina Invio solleciti, dopo il rilascio.** Layout compatto, checkbox
   per lotto nella lista, badge «Inviato via PEC» (spedizione PEC inCASS),
   anteprima aperta di default. I solleciti `failed` si rigenerano da soli
-  all'apertura del lotto per chi può modificarli. Non ancora rilasciato.
+  all'apertura del lotto per chi può modificarli.
+  - Rilasciato sul CED il 2026-10-29 alle 17:08 (commit `f73be942`), release
+    `solleciti-ui-20261029-f73be942` sopra `pdf-regen-20261029-428aff0d`;
+    database invariato a `20261028_1500`.
+  - Backend: router attivo più la sola registrazione `batch-overview`, più tre
+    file ruolo. Prima del rilascio 85 test superati nell'immagine candidata,
+    stessa impronta del filesystem, build frontend riuscita, Compose cambia
+    solo l'immagine.
+  - Smoke: health OK, home e Invio solleciti HTTP 200, API (anche
+    `batch-overview`) senza login 401.
+  - Ripristino: `/opt/gaia/releases/solleciti-ui-20261029-f73be942/rollback.sh`.
 - **Rilasciato sul CED il 2026-10-29 alle 16:16** (commit `428aff0d`).
   - Release `pdf-regen-20261029-428aff0d`; database invariato a
     `20261028_1500`, nessuna migration.

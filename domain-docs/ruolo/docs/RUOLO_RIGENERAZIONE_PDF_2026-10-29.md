@@ -143,3 +143,7 @@ In produzione sul CED dal 2026-10-29 alle 16:16, release
 `pdf-regen-20261029-428aff0d`. I PDF persi prima del rilascio si ricostruiscono
 alla prima apertura dell'anteprima o con «Rigenera PDF». Ripristino:
 `/opt/gaia/releases/pdf-regen-20261029-428aff0d/rollback.sh`.
+
+Le modifiche della pagina Invio solleciti e la rigenerazione dei `failed` sono
+in produzione dalle 17:08, release `solleciti-ui-20261029-f73be942`. Ripristino:
+`/opt/gaia/releases/solleciti-ui-20261029-f73be942/rollback.sh`.
