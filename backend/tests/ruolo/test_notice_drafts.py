@@ -357,3 +357,10 @@ def test_draft_migration_postgres_parity(generation_engine):
             migration.downgrade()
             migration.upgrade()
             basis_migration.upgrade()
+
+
+def test_a_missing_local_document_is_not_published_but_a_nas_one_is(tmp_path):
+    record = SimpleNamespace(generated_document_path=str(tmp_path / "perso.pdf"), payload_json={"anno_tributario": 2024}, status="generated")
+    assert drafts.published_document_path(record) is None
+    record.generated_document_path = "/volume1/archivio/R/solleciti/avviso.pdf"
+    assert drafts.published_document_path(record) == Path("/volume1/archivio/R/solleciti/avviso.pdf")

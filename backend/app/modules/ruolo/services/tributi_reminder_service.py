@@ -203,7 +203,7 @@ REGISTERED_MAIL_NOTIFICATION_AMOUNT = Decimal("11.55")
 
 
 def reminder_storage_dir() -> Path:
-    path = Path(tempfile.gettempdir()) / "gaia_ruolo_tributi_reminders"
+    path = Path(settings.ruolo_reminder_storage_path)
     path.mkdir(parents=True, exist_ok=True)
     return path
 

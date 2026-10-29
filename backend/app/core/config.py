@@ -4,13 +4,13 @@ from pathlib import Path
 from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import SettingsConfigDict
 
-from app.core.td896_settings import Td896Settings
+from app.core.ruolo_settings import RuoloSettings
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ROOT_ENV_FILE = REPO_ROOT / ".env"
 
 
-class Settings(Td896Settings):
+class Settings(RuoloSettings):
     project_name: str = "GAIA"
     app_version: str = "0.1.0"
     app_env: str = "development"

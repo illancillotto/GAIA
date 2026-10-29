@@ -107,7 +107,7 @@ from app.modules.ruolo.models import (
     RuoloTributiSpecialNotice,
     RuoloTributiYearManager,
 )
-from app.modules.ruolo.routes import tributi_routes
+from app.modules.ruolo.routes import reminder_document_routes, tributi_routes
 from app.modules.ruolo.schemas import RuoloImportJobResponse
 from app.modules.ruolo.services import euribor as euribor_service
 from app.modules.ruolo.services import td896 as td896_service
@@ -5900,7 +5900,7 @@ def test_tributi_reminder_endpoints_return_404_for_missing_resources() -> None:
     assert download_response.status_code == 404
 
 
-def test_tributi_reminder_download_returns_404_when_document_file_is_missing() -> None:
+def test_tributi_reminder_download_rebuilds_a_missing_document_but_not_a_draft() -> None:
     avviso_id = seed_avviso(amount=100.0)
     headers = auth_headers()
 
@@ -5927,8 +5927,9 @@ def test_tributi_reminder_download_returns_404_when_document_file_is_missing() -
     document_path.unlink()
 
     download_response = client.get(reminder_payload["download_url"], headers=headers)
-    assert download_response.status_code == 404
-    assert download_response.json()["detail"] == "Documento sollecito non trovato"
+    assert download_response.status_code == 200
+    assert download_response.content.startswith(b"PK")
+    assert document_path.is_file()
 
     db = TestingSessionLocal()
     avviso = db.get(RuoloAvviso, UUID(avviso_id))
@@ -6514,9 +6515,9 @@ def test_tributi_route_helpers_cover_direct_branches(monkeypatch: pytest.MonkeyP
 
     monkeypatch.setattr(tributi_routes.repo, "read_remote_reminder_document", lambda path: (_ for _ in ()).throw(RuntimeError("missing")))
     with pytest.raises(HTTPException, match="Documento sollecito non trovato"):
-        tributi_routes._remote_document_response(Path("/tmp/sollecito.docx"), media_type="application/test")
+        reminder_document_routes._remote_document_response(Path("/tmp/sollecito.docx"), media_type="application/test")
     monkeypatch.setattr(tributi_routes.repo, "read_remote_reminder_document", lambda path: b"docx-bytes")
-    remote_success = tributi_routes._remote_document_response(Path("/tmp/sollecito finale.docx"), media_type="application/test")
+    remote_success = reminder_document_routes._remote_document_response(Path("/tmp/sollecito finale.docx"), media_type="application/test")
     assert remote_success.body == b"docx-bytes"
     assert "sollecito%20finale.docx" in remote_success.headers["content-disposition"]
 
@@ -6569,17 +6570,18 @@ def test_tributi_route_helpers_cover_direct_branches(monkeypatch: pytest.MonkeyP
         tributi_routes.list_reminders(missing_id, db=db)
 
     with pytest.raises(HTTPException, match="Sollecito non trovato"):
-        tributi_routes.download_reminder(uuid4(), db=db)
-    monkeypatch.setattr(tributi_routes.repo, "get_reminder", lambda _db, reminder_id: SimpleNamespace(id=reminder_id))
+        reminder_document_routes.download_reminder(uuid4(), db=db, current_user=user)
+    unrecorded = SimpleNamespace(generated_document_path=None, status="generated", payload_json={})
+    monkeypatch.setattr(tributi_routes.repo, "get_reminder", lambda _db, reminder_id: SimpleNamespace(id=reminder_id, **vars(unrecorded)))
     monkeypatch.setattr(tributi_routes.repo, "reminder_document_path", lambda reminder: None)
     with pytest.raises(HTTPException, match="Documento sollecito non trovato"):
-        tributi_routes.download_reminder(uuid4(), db=db)
+        reminder_document_routes.download_reminder(uuid4(), db=db, current_user=user)
 
     local_docx = tmp_path / "sollecito.docx"
     local_docx.write_bytes(b"local-doc")
-    monkeypatch.setattr(tributi_routes.repo, "get_reminder", lambda _db, reminder_id: SimpleNamespace(id=reminder_id))
+    monkeypatch.setattr(tributi_routes.repo, "get_reminder", lambda _db, reminder_id: SimpleNamespace(id=reminder_id, **vars(unrecorded)))
     monkeypatch.setattr(tributi_routes.repo, "reminder_document_path", lambda reminder: local_docx)
     monkeypatch.setattr(tributi_routes.repo, "is_remote_reminder_document_path", lambda path: False)
-    file_response = tributi_routes.download_reminder(uuid4(), db=db)
+    file_response = reminder_document_routes.download_reminder(uuid4(), db=db, current_user=user)
     assert Path(getattr(file_response, "path", local_docx)) == local_docx
     db.close()

@@ -83,7 +83,6 @@ def test_unknown_items_are_rejected(db):
     [
         ({"status": "draft"}, "non generato"),
         ({"content": b"PK docx"}, "PDF non valido"),
-        ({"generated_document_path": "/tmp/missing.docx"}, "senza PDF"),
     ],
 )
 def test_only_final_pdf_reminders_can_be_prepared(db, tmp_path, overrides, message):
@@ -106,7 +105,15 @@ def test_remote_nas_documents_are_downloaded(db, tmp_path, monkeypatch):
     monkeypatch.setattr(
         service.repo, "read_remote_reminder_document", lambda path: PDF + str(path).encode()
     )
-    assert service.read_batch_document(item) == PDF + b"/volume1/x.pdf"
+    assert service.read_batch_document(db, item, 1) == PDF + b"/volume1/x.pdf"
+
+
+def test_a_docx_reminder_is_not_a_final_pdf(db, tmp_path):
+    document = tmp_path / "sollecito.docx"
+    document.write_bytes(b"PK docx")
+    item = seed_batch_item(db, tmp_path, generated_document_path=str(document))
+    with pytest.raises(DispatchConflict, match="senza PDF"):
+        service.create_lot(db, title="x", batch_item_ids=[item.id], actor_id=1)
 
 
 def test_candidates_exclude_active_notices_and_filter_by_text(db, tmp_path):

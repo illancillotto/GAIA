@@ -1,5 +1,18 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## Rigenerazione dei PDF dei solleciti — 2026-10-29
+
+- **Difetto.** «Documento sollecito non trovato» sui lotti generati: i PDF
+  fuori dal NAS stavano nel `/tmp` del container e sparivano a ogni rilascio.
+- **Correzione.** Archivio permanente `RUOLO_REMINDER_STORAGE_PATH`
+  (`/runtime-data/ruolo/solleciti`). Un PDF locale mancante si ricostruisce dai
+  dati salvati: anteprima, download e lotto Poste usano la stessa logica.
+- **Nuovo.** Riquadro «Rigenera PDF» in Invio solleciti: tutti i lotti o uno,
+  «Solo template» o «Ricalcola dati e regole» con lo stesso numero avviso.
+  Audit `regenerate_document` nel Registro. Bozze 2022/2023 escluse.
+- Dettagli e regole: [RUOLO_RIGENERAZIONE_PDF_2026-10-29.md](RUOLO_RIGENERAZIONE_PDF_2026-10-29.md).
+
+
 ## Pagina «Invio solleciti» — 2026-10-29
 
 - **Una sola pagina.** Solleciti e Invio con Posta Online sono uniti in

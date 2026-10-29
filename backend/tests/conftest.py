@@ -1,7 +1,7 @@
 import os
-from pathlib import Path
 import sys
-
+import tempfile
+from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 
@@ -16,6 +16,7 @@ TEST_ENV_DEFAULTS = {
     "MOBILE_CONNECTOR_TOKEN": "pytest-mobile-connector-token",
     "BOOTSTRAP_ADMIN_PASSWORD": "pytest-bootstrap-admin",
     "CREDENTIAL_MASTER_KEY": "WnCjZ2L63B1kIh_2mDkk8j5M6Bf0dzxN3Qv8QbQwB0A=",
+    "RUOLO_REMINDER_STORAGE_PATH": str(Path(tempfile.gettempdir()) / "gaia_pytest_ruolo_solleciti"),
 }
 
 

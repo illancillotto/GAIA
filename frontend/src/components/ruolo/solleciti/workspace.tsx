@@ -10,6 +10,7 @@ import { confirmTributiReminderBatch } from "./client";
 import { PostePanel, usePosteLots } from "@/components/ruolo/poste-dispatch/workspace";
 import { GeneratedNoticePreview, NoticeExport, NoticePreview } from "./document-access";
 import { SelectForPoste, SelectionBar, canSendToPoste, usePosteSelection } from "./poste-selection";
+import { RegenerationPanel } from "./regeneration-panel";
 import type { NoticeGenerationConfirmationResponse, RuoloTributiReminderBatchResponse } from "@/types/ruolo";
 import type { PosteDispatchLotDetail } from "@/types/ruolo-poste-dispatch";
 
@@ -85,6 +86,7 @@ function GeneratedPanel({ token, canEdit, solleciti, selection, onLotCreated }: 
       <button className="btn-secondary" disabled={busy || page * 50 >= total} onClick={() => setPage(page + 1)}>Successiva</button>
     </nav>
     {canEdit && <SelectionBar token={token} selection={selection} onCreated={onLotCreated} />}
+    {canEdit && <RegenerationPanel token={token} batchId={selected?.id ?? null} onFinished={() => { if (selected) void selectBatch(selected.id); }} />}
     {error && <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{error}</div>}
     {confirmation && <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">Lotto confermato. Digest: <code className="break-all">{confirmation.review_digest}</code></div>}
     <div className="grid gap-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">

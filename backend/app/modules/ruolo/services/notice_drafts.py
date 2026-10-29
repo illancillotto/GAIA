@@ -98,15 +98,20 @@ def retain_draft_number(db, item) -> None:
             reservation.status = "draft"
 
 
-def published_document_path(record) -> Path | None:
+def publishable(record) -> bool:
+    """A final GAIA document with a recorded path, outside the 2022/2023 draft protocol."""
     payload = getattr(record, "payload_json", None) or {}
     years = getattr(record, "years_json", None) or [payload.get("anno_tributario")]
-    if (
+    return not (
         requires_draft(years)
         or _protected_linked_year(record)
         or getattr(record, "status", None) == "draft"
         or not record.generated_document_path
-    ):
+    )
+
+
+def published_document_path(record) -> Path | None:
+    if not publishable(record):
         return None
     path = Path(record.generated_document_path)
     if path.is_file() or str(path).startswith("/volume1/"):

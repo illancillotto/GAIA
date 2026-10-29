@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import SollecitiPage from "@/app/ruolo/tributi/solleciti/page";
@@ -13,6 +13,8 @@ const poste = vi.hoisted(() => ({
   updatePosteRecipient: vi.fn(), acceptPosteManualAddress: vi.fn(), cancelPosteItem: vi.fn(), getPosteItemDocument: vi.fn(),
 }));
 vi.mock("@/lib/ruolo-poste-dispatch-api", () => poste);
+const regeneration = vi.hoisted(() => ({ listRegenerationTargets: vi.fn(), regenerateReminderItem: vi.fn() }));
+vi.mock("@/lib/ruolo-regeneration-api", () => regeneration);
 vi.mock("@/lib/api", async (original) => ({ ...(await original<typeof import("@/lib/api")>()), requestBlob: mocks.blob }));
 const pathname = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({ usePathname: pathname }));
@@ -395,4 +397,31 @@ it("shows the confirmed export without the prepare action to viewers", async () 
   fireEvent.click(await screen.findByRole("button", { name: /Import 2022/ }));
   await screen.findByRole("region", { name: "Export definitivo" });
   expect(screen.queryByRole("button", { name: "Prepara export definitivo" })).toBeNull();
+});
+
+
+it("lets editors regenerate the selected batch, then reloads it", async () => {
+  regeneration.listRegenerationTargets.mockResolvedValue({ items: [{ item_id: "item-2", batch_id: "batch-2", display_name: "Anna Bianchi", codice_fiscale: "RSSMRA80A01H501Z" }], excluded_drafts: 0 });
+  regeneration.regenerateReminderItem.mockResolvedValue({ item_id: "item-2", outcome: "regenerated", detail: null });
+  await openGenerated();
+  const panel = screen.getByRole("region", { name: "Rigenera PDF" });
+  fireEvent.click(within(panel).getByRole("radio", { name: "Solo il lotto selezionato" }));
+  fireEvent.click(within(panel).getByRole("button", { name: "Rigenera PDF" }));
+  expect(await within(panel).findByText(/Completata: 1 di 1/)).toBeVisible();
+  expect(regeneration.listRegenerationTargets).toHaveBeenCalledWith("token", "batch-2");
+  await waitFor(() => expect(mocks.get).toHaveBeenCalledTimes(2));
+});
+
+it("reloads nothing when no batch is open, and hides regeneration from viewers", async () => {
+  regeneration.listRegenerationTargets.mockResolvedValue({ items: [], excluded_drafts: 0 });
+  render(<SollecitiPage />);
+  await screen.findByRole("button", { name: /Import 2022/ });
+  fireEvent.click(screen.getByRole("button", { name: "Rigenera PDF" }));
+  expect(await screen.findByText(/Completata: 0 di 0/)).toBeVisible();
+  expect(mocks.get).not.toHaveBeenCalled();
+  cleanup();
+  mocks.session.mockReturnValue({ status: "ready", token: "token", currentUser: { role: "admin", enabled_modules: ["ruolo"] }, grantedSectionKeys: ["ruolo.tributi.view"] });
+  render(<SollecitiPage />);
+  await screen.findByRole("button", { name: /Import 2022/ });
+  expect(screen.queryByRole("region", { name: "Rigenera PDF" })).toBeNull();
 });

@@ -3,10 +3,8 @@ from __future__ import annotations
 import json
 import uuid
 from typing import Annotated
-from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from fastapi.responses import FileResponse, Response
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -70,7 +68,6 @@ from app.modules.ruolo.services.capacitas_role_codes import (
     CAPACITAS_SPECIAL_NOTICE_STATUS_TO_REVIEW,
 )
 from app.modules.ruolo.services.euribor import fetch_euribor_6m_average
-from app.modules.ruolo.services.tributi_reminder_service import DOCX_MEDIA_TYPE, PDF_MEDIA_TYPE
 
 router = APIRouter(
     prefix="/tributi",
@@ -582,23 +579,6 @@ def get_reminder_batch(
     return _batch_to_response(batch, repo.list_reminder_batch_items(db, batch.id))
 
 
-
-
-@router.get("/solleciti/items/{item_id}/download")
-def download_reminder_batch_item(
-    item_id: uuid.UUID,
-    db: Session = Depends(get_db),
-) -> Response:
-    item = repo.get_reminder_batch_item(db, item_id)
-    if item is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sollecito batch non trovato")
-    path = repo.reminder_batch_item_document_path(item)
-    if path is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento sollecito non trovato")
-    media_type = DOCX_MEDIA_TYPE if path.suffix.lower() == ".docx" else PDF_MEDIA_TYPE
-    if repo.is_remote_reminder_document_path(path):
-        return _remote_document_response(path, media_type=media_type)
-    return FileResponse(path, media_type=media_type, filename=path.name)
 
 
 @router.get("/avvisi", response_model=RuoloTributiAvvisoListResponse)
@@ -1126,34 +1106,3 @@ def list_reminders(
     if db.get(RuoloAvviso, avviso_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Avviso non trovato")
     return [_reminder_to_response(reminder) for reminder in repo.list_reminders(db, avviso_id)]
-
-
-@router.get("/reminders/{reminder_id}/download")
-def download_reminder(
-    reminder_id: uuid.UUID,
-    db: Session = Depends(get_db),
-) -> Response:
-    reminder = repo.get_reminder(db, reminder_id)
-    if reminder is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sollecito non trovato")
-    path = repo.reminder_document_path(reminder)
-    if path is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento sollecito non trovato")
-    if repo.is_remote_reminder_document_path(path):
-        return _remote_document_response(path, media_type=DOCX_MEDIA_TYPE)
-    return FileResponse(path, media_type=DOCX_MEDIA_TYPE, filename=path.name)
-
-
-def _remote_document_response(path, *, media_type: str) -> Response:
-    try:
-        content = repo.read_remote_reminder_document(path)
-    except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Documento sollecito non trovato") from exc
-
-    filename = path.name
-    quoted_filename = quote(filename)
-    return Response(
-        content=content,
-        media_type=media_type,
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quoted_filename}"},
-    )

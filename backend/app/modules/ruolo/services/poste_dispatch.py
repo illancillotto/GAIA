@@ -16,6 +16,7 @@ from app.models.posta_online import PostaOnlineRegisteredMailSyncJob
 from app.modules.ruolo import tributi_repositories as repo
 from app.modules.ruolo.models import RuoloTributiReminderBatch, RuoloTributiReminderBatchItem
 from app.modules.ruolo.poste_dispatch_models import PosteDispatchItem, PosteDispatchLot
+from app.modules.ruolo.services import notice_pdf_regeneration as regeneration
 from app.modules.ruolo.services import poste_dispatch_recipient as recipients
 from app.modules.ruolo.services.poste_dispatch_state import (
     DispatchConflict,
@@ -56,8 +57,11 @@ _PORTAL_CANCEL_STATUSES = {"draft_created", "draft_priced", "draft_uncertain"}
 DocumentReader = Callable[[RuoloTributiReminderBatchItem], bytes]
 
 
-def read_batch_document(item: RuoloTributiReminderBatchItem) -> bytes:
-    path = repo.reminder_batch_item_document_path(item)
+def read_batch_document(db: Session, item: RuoloTributiReminderBatchItem, actor_id: int) -> bytes:
+    try:
+        path = regeneration.ensure_batch_item_document(db, item, actor_id=actor_id)
+    except regeneration.RegenerationFailed as exc:
+        raise DispatchConflict(f"PDF del sollecito non ricostruibile: {exc}") from exc
     if path is None or path.suffix.lower() != ".pdf":
         raise DispatchConflict("Sollecito senza PDF definitivo: non spedibile da GAIA")
     if repo.is_remote_reminder_document_path(path):
@@ -133,7 +137,7 @@ def create_lot(
     title: str,
     batch_item_ids: list[UUID],
     actor_id: int,
-    read: DocumentReader = read_batch_document,
+    read: DocumentReader | None = None,
 ) -> PosteDispatchLot:
     if not 1 <= len(set(batch_item_ids)) == len(batch_item_ids) <= MAX_LOT_ITEMS:
         raise DispatchConflict(f"Un lotto contiene da 1 a {MAX_LOT_ITEMS} solleciti distinti")
@@ -153,7 +157,8 @@ def create_lot(
     db.flush()
     try:
         with db.begin_nested():
-            dispatches = [_new_item(lot, item, read) for item in items]
+            reader = read or (lambda item: read_batch_document(db, item, actor_id))
+            dispatches = [_new_item(lot, item, reader) for item in items]
             db.add_all(dispatches)
             db.flush()
     except IntegrityError as exc:
