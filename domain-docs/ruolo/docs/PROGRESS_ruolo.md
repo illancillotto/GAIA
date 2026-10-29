@@ -19,6 +19,20 @@
   frontend nuovi o modificati; eslint, tsc e `complexity-ratchet` puliti.
   Suite unit completa: 5369 superati, 2 fallimenti in test non correlati
   (Utenze NAS R22, Catasto GIS) che passano se eseguiti da soli.
+- **Rilasciato sul CED il 2026-10-29 alle 12:31**, insieme al box importo del
+  2026-10-29 (commit `d86aa857` e `76e57300`).
+  - Release `invio-solleciti-20261029-76e57300`; database invariato a
+    `20261028_1500`, nessuna migration.
+  - Backend appiattito dall'immagine attiva `sync-alerts-20261029-09ec7751`
+    (3 layer, stessa configurazione e stessa impronta del filesystem), più i
+    due servizi ruolo modificati. Frontend: sorgenti della release precedente
+    più i sei file della pagina.
+  - Prima del rilascio: 36 test backend superati nell'immagine candidata, con
+    PyMuPDF, zxing-cpp e Pillow installati solo in un'immagine di test separata;
+    build frontend riuscita; Compose cambia solo l'immagine.
+  - Smoke: health OK, home, `/ruolo/tributi/solleciti` e il vecchio `/poste`
+    HTTP 200, API senza login 401, altri servizi invariati.
+  - Ripristino: `/opt/gaia/releases/invio-solleciti-20261029-76e57300/rollback.sh`.
 
 
 ## Box «Quanto e quando pagare» — 2026-10-29
