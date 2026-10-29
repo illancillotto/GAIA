@@ -845,7 +845,10 @@ La migration `20261028_0900` invalida le bozze al cambio pagatore.
 Flusso, API e limiti: [pagatore avviso](domain-docs/ruolo/docs/RUOLO_PAGATORE_AVVISO_2026-10-28.md).
 
 I solleciti generati in PDF si preparano come bozze di Raccomandata A/R su
-Posta Online da `/ruolo/tributi/solleciti/poste`: GAIA verifica gli indirizzi
+Posta Online dalla pagina **Invio solleciti** (`/ruolo/tributi/solleciti`, voce
+della sidebar Ruolo sotto Tributi). Nella scheda «Solleciti generati» si apre
+l'anteprima del PDF e si selezionano gli avvisi, anche da lotti diversi, da
+caricare su Poste; la scheda «Posta Online» gestisce i lotti. GAIA verifica gli indirizzi
 sullo stradario Poste, crea le bozze e registra le raccomandate trovate in
 archivio. INVIA lo preme sempre l'operatore su Poste; GAIA non lo chiama mai.
 Procedura e limiti: [invio solleciti Poste](domain-docs/ruolo/docs/POSTE_INVIO_SOLLECITI_2026-10-28.md).

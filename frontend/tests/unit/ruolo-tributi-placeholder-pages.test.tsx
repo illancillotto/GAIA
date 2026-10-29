@@ -280,8 +280,8 @@ describe("Ruolo tributi import and reminders pages", () => {
   test("renders the empty reminders registry for a read-only operator", async () => {
     render(<RuoloTributiSollecitiPage />);
 
-    expect(screen.getByRole("heading", { name: "Solleciti Tributi" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Lotti 2022/2023" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Invio solleciti" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "GAIA prepara, l'operatore invia" })).toBeInTheDocument();
     expect(screen.getByText("Accesso in sola lettura.")).toBeInTheDocument();
     expect(await screen.findByText("Nessun lotto generato.")).toBeInTheDocument();
     expect(mocks.listTributiReminderBatches).toHaveBeenCalledWith("token", 1, 50);

@@ -18,6 +18,9 @@ const api = vi.hoisted(() => ({
 }));
 const session = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/ruolo-poste-dispatch-api", () => api);
+vi.mock("@/lib/ruolo-api", () => ({ listTributiReminderBatches: vi.fn(async () => ({ items: [], total: 0 })), getTributiReminderBatch: vi.fn() }));
+const pathname = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", () => ({ usePathname: pathname }));
 vi.mock("@/lib/use-session-bootstrap", () => ({ useSessionBootstrap: session }));
 vi.mock("@/components/ruolo/module-page", () => ({ RuoloModulePage: ({ children }: { children: React.ReactNode }) => <main>{children}</main> }));
 
@@ -55,6 +58,7 @@ async function openLot(detail = lot()) {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  pathname.mockReturnValue("/ruolo/tributi/solleciti/poste");
   grant();
   api.listPosteLots.mockResolvedValue({ items: [lot()], total: 1, page: 1, page_size: 50 });
   api.listPosteCandidates.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 50 });

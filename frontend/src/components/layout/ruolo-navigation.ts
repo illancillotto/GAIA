@@ -6,6 +6,7 @@ export const ruoloNavigationSections: NavigationSection[] = [
   { label: "Dati", items: [
     { href: "/ruolo/avvisi", icon: DocumentIcon, label: "Avvisi", match: "prefix" },
     { href: "/ruolo/tributi", icon: LockIcon, label: "Tributi", match: "prefix" },
+    { href: "/ruolo/tributi/solleciti", icon: DocumentIcon, label: "Invio solleciti", match: "prefix" },
     { href: "/ruolo/tributi/registro-avvisi", icon: DocumentIcon, label: "Registro avvisi", match: "prefix" },
     { href: "/ruolo/raccomandate", icon: DocumentIcon, label: "Raccomandate", match: "prefix" },
     { href: "/ruolo/particelle", icon: FolderIcon, label: "Particelle", match: "prefix" },

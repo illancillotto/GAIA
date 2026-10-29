@@ -172,6 +172,14 @@ describe("layout navigation helpers", () => {
     }));
   });
 
+  test("lists Invio solleciti right after Tributi in the Ruolo sidebar", () => {
+    const items = getModuleSections({ currentModuleKey: "ruolo" }).flatMap((section) => section.items);
+    const index = items.findIndex((entry) => entry.href === "/ruolo/tributi/solleciti");
+
+    expect(items[index]).toEqual(expect.objectContaining({ label: "Invio solleciti", match: "prefix" }));
+    expect(items[index - 1]).toEqual(expect.objectContaining({ href: "/ruolo/tributi", label: "Tributi" }));
+  });
+
   test("exposes the operator straordinari request link from the self-service sidebar", () => {
     const items = getModuleSections({ currentModuleKey: "me" }).flatMap((section) => section.items);
 

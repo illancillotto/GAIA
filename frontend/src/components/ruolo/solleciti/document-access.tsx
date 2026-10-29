@@ -34,10 +34,32 @@ function PreviewContent({ token, batchId, itemId }: { token: string; batchId: st
     <button type="button" className="btn-secondary" disabled={resource.loading} onClick={resource.request}>{resource.loading ? "Preparazione anteprima..." : "Carica anteprima PDF"}</button>
     {resource.error && <p role="alert" className="text-sm text-rose-800">{resource.error}</p>}
     {resource.url && <>
-      <a className="btn-secondary" href={resource.url} target="_blank" rel="noreferrer">Apri bozza in una nuova scheda</a>
-      <iframe title="Anteprima documento - BOZZA" src={resource.url} className="h-[65vh] min-h-80 w-full rounded-xl border border-slate-300" />
+      <PdfFrame url={resource.url} link="Apri bozza in una nuova scheda" title="Anteprima documento - BOZZA" />
       <p className="text-xs text-slate-600">Se il visualizzatore non compare sul telefono, usa il collegamento sopra. Il PDF resta marcato anche se scaricato o stampato.</p>
     </>}
+  </div>;
+}
+
+function PdfFrame({ url, link, title }: { url: string; link: string; title: string }) {
+  return <>
+    <a className="btn-secondary" href={url} target="_blank" rel="noreferrer">{link}</a>
+    <iframe title={title} src={url} className="h-[65vh] min-h-80 w-full rounded-xl border border-slate-300" />
+  </>;
+}
+
+// The generated PDF is the exact document that a Poste lot would upload.
+export function GeneratedNoticePreview({ token, url }: { token: string; url: string }) {
+  const [open, setOpen] = useState(false);
+  const resource = useDocumentBlob(token, url, "GET");
+  function toggle() {
+    if (!open && !resource.url) resource.request();
+    setOpen(!open);
+  }
+  return <div className="mt-3 space-y-3 border-t border-slate-200 pt-3">
+    <button type="button" className="btn-secondary" aria-expanded={open} onClick={toggle}>{open ? "Chiudi anteprima" : "Anteprima avviso"}</button>
+    {open && resource.loading && <p role="status" className="text-sm text-slate-600">Caricamento avviso...</p>}
+    {open && resource.error && <p role="alert" className="text-sm text-rose-800">{resource.error}</p>}
+    {open && resource.url && <PdfFrame url={resource.url} link="Apri avviso in una nuova scheda" title="Anteprima avviso generato" />}
   </div>;
 }
 

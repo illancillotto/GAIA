@@ -252,8 +252,9 @@ dell'operatore): modelli `poste_dispatch_models.py`, schemi
 `poste_dispatch_schemas.py`, route `routes/poste_dispatch_routes.py`, servizi
 `services/poste_dispatch*.py`, migration `20261028_1500`; worker
 `posta_online_dispatch{,_portal,_runner}.py`; frontend
-`components/ruolo/poste-dispatch/`, `lib/ruolo-poste-dispatch-api.ts` e pagina
-`/ruolo/tributi/solleciti/poste`. Procedura e stati:
+`components/ruolo/poste-dispatch/`, `components/ruolo/solleciti/`,
+`lib/ruolo-poste-dispatch-api.ts` e pagina «Invio solleciti»
+`/ruolo/tributi/solleciti` (`/poste` apre la scheda Posta Online). Procedura e stati:
 `domain-docs/ruolo/docs/POSTE_INVIO_SOLLECITI_2026-10-28.md`.
 
 Grafica della prima pagina: `backend/app/modules/ruolo/services/notice_branding.py`,

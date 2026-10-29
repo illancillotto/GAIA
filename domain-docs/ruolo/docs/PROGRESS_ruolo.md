@@ -1,5 +1,26 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## Pagina «Invio solleciti» — 2026-10-29
+
+- **Una sola pagina.** Solleciti e Invio con Posta Online sono uniti in
+  `/ruolo/tributi/solleciti`, voce «Invio solleciti» della sidebar Ruolo
+  subito dopo Tributi. Due schede: «Solleciti generati» e «Posta Online».
+  `/ruolo/tributi/solleciti/poste` resta valido e apre la seconda scheda.
+- **Anteprima avviso.** Per i solleciti generati in PDF il dettaglio lotto
+  mostra il PDF reale, lo stesso che verrebbe caricato su Poste. Prima
+  l'anteprima c'era solo per le bozze `draft`/`confirmed`, quindi mancava sui
+  lotti `generated`.
+- **Selezione e caricamento.** «Seleziona per Posta Online» su ogni sollecito
+  generato in PDF, solo per chi ha `ruolo.tributi.manage_status`. La selezione
+  vale tra lotti diversi, fino a 50. «Carica su Poste» crea il lotto Poste con
+  le API esistenti e apre la scheda «Posta Online». Nessuna modifica backend.
+- **Verifiche.** 72 test unit sui file toccati e 4 e2e (1440 e 390 px, anche il
+  vecchio indirizzo `/poste`); coverage 100% statement e branch sui file
+  frontend nuovi o modificati; eslint, tsc e `complexity-ratchet` puliti.
+  Suite unit completa: 5369 superati, 2 fallimenti in test non correlati
+  (Utenze NAS R22, Catasto GIS) che passano se eseguiti da soli.
+
+
 ## Box «Quanto e quando pagare» — 2026-10-29
 
 - L'importo resta su una sola riga: 20pt e `white-space: nowrap`. Prima

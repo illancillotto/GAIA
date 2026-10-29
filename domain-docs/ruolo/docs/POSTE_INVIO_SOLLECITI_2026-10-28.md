@@ -19,9 +19,14 @@ rifiutare ogni invio.
 
 ## Procedura operativa
 
-1. Da **Tributi → Solleciti → Invio con Posta Online**
-   (`/ruolo/tributi/solleciti/poste`) scegliere fino a 50 solleciti generati in
-   PDF e creare il lotto. GAIA copia il PDF e prende il destinatario dallo
+1. Dalla sidebar Ruolo aprire **Invio solleciti** (`/ruolo/tributi/solleciti`).
+   Nella scheda «Solleciti generati» aprire un lotto, controllare il PDF con
+   **Anteprima avviso** e spuntare **Seleziona per Posta Online**. La selezione
+   resta mentre si passa ad altri lotti, fino a 50 solleciti. Dare un titolo e
+   premere **Carica su Poste**: GAIA crea il lotto e apre la scheda «Posta
+   Online». In alternativa, nella stessa scheda, «Nuovo lotto» cerca i
+   solleciti per nome, codice fiscale o lotto. Il vecchio indirizzo
+   `/ruolo/tributi/solleciti/poste` apre direttamente la scheda «Posta Online». GAIA copia il PDF e prende il destinatario dallo
    stesso payload che ha prodotto la lettera: nominativo, indirizzo, CAP,
    comune e provincia.
 2. **Verifica indirizzi.** Il worker interroga lo stradario Poste
@@ -121,10 +126,14 @@ alterato non viene caricato.
   ripreso dal recovery esistente: rilegge «Verifica e invia» prima di agire e
   non ripete CONTINUA sugli avvisi in `draft_creating`.
 - Frontend:
-  - pagina `src/app/ruolo/tributi/solleciti/poste/page.tsx`;
-  - componenti in `src/components/ruolo/poste-dispatch/`;
+  - pagina «Invio solleciti» `src/app/ruolo/tributi/solleciti/page.tsx`, con
+    le schede «Solleciti generati» e «Posta Online»; `poste/page.tsx` apre la
+    seconda;
+  - componenti in `src/components/ruolo/poste-dispatch/` (pannello lotti) e
+    `src/components/ruolo/solleciti/` (anteprima PDF e selezione,
+    `poste-selection.tsx`);
   - client `src/lib/ruolo-poste-dispatch-api.ts`;
-  - link dalla pagina Solleciti.
+  - voce «Invio solleciti» nella sidebar Ruolo, subito dopo Tributi.
 
 ## Scelte predefinite e limiti
 
@@ -173,8 +182,10 @@ alterato non viene caricato.
   - azioni del browser con pagina finta;
   - runner: creazione unica, esito incerto, fermata dopo due errori, archivio
     incompleto, cancellazione.
-- **Frontend.** `tests/unit/ruolo-poste-dispatch-*.test.ts(x)` e il link nel
-  test della pagina Solleciti.
+- **Frontend.** `tests/unit/ruolo-poste-dispatch-*.test.ts(x)`,
+  `tests/unit/notice-solleciti-page.test.tsx` (anteprima, selezione tra lotti,
+  caricamento, errori, limite di 50, permessi) e l'e2e
+  `tests/e2e/ruolo-invio-solleciti.spec.ts` a 1440 e 390 px.
 - **Coverage e complessità.** Il 100% su runtime nuovi e modificati e i
   risultati dei gate sono riportati in `PROGRESS_ruolo.md`, alla voce del
   2026-10-28.
