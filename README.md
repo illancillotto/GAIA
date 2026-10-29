@@ -844,14 +844,14 @@ all'intestatario; gli accessi al portale seguono il destinatario effettivo.
 La migration `20261028_0900` invalida le bozze al cambio pagatore.
 Flusso, API e limiti: [pagatore avviso](domain-docs/ruolo/docs/RUOLO_PAGATORE_AVVISO_2026-10-28.md).
 
-Il renderer locale degli avvisi usa la palette blu `#2b5793`, con gradiente e
-fondi azzurri coordinati. Anteprima 2021 dimostrativa:
 I solleciti generati in PDF si preparano come bozze di Raccomandata A/R su
 Posta Online da `/ruolo/tributi/solleciti/poste`: GAIA verifica gli indirizzi
 sullo stradario Poste, crea le bozze e registra le raccomandate trovate in
 archivio. INVIA lo preme sempre l'operatore su Poste; GAIA non lo chiama mai.
 Procedura e limiti: [invio solleciti Poste](domain-docs/ruolo/docs/POSTE_INVIO_SOLLECITI_2026-10-28.md).
 
+Il renderer locale degli avvisi usa la palette blu `#2b5793`, con gradiente e
+fondi azzurri coordinati. Anteprima 2021 dimostrativa:
 `output/pdf/avviso-2021-anteprima-blu.pdf`; la precedente anteprima verde resta
 conservata per confronto. La prima pagina usa una sola famiglia Arial/Helvetica/sans-serif. Dal 28 ottobre
 il box 2021 affianca alla data esplicita `e comunque entro 60 giorni dalla data
