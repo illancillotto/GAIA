@@ -18,6 +18,8 @@ const regeneration = vi.hoisted(() => ({ listRegenerationTargets: vi.fn(), regen
 vi.mock("@/lib/ruolo-regeneration-api", () => regeneration);
 const overview = vi.hoisted(() => ({ getBatchOverview: vi.fn() }));
 vi.mock("@/lib/ruolo-batch-overview-api", () => overview);
+const yearNotices = vi.hoisted(() => ({ getYearStatus: vi.fn(), generateYearNotices: vi.fn() }));
+vi.mock("@/lib/ruolo-year-notices-api", () => yearNotices);
 vi.mock("@/lib/api", async (original) => ({ ...(await original<typeof import("@/lib/api")>()), requestBlob: mocks.blob }));
 const pathname = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({ usePathname: pathname }));
@@ -49,6 +51,7 @@ beforeEach(() => {
   mocks.list.mockResolvedValue({ items: [batch()], total: 1, page: 1, page_size: 50 });
   mocks.get.mockResolvedValue(batch());
   overview.getBatchOverview.mockResolvedValue([]);
+  yearNotices.getYearStatus.mockReturnValue(new Promise(() => undefined));
   mocks.blob.mockReturnValue(new Promise(() => undefined));
   poste.listPosteLots.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 50 });
   poste.listPosteCandidates.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 50 });
@@ -88,7 +91,7 @@ it("does not expose confirmation to a read-only operator", async () => {
   render(<SollecitiPage />);
   fireEvent.click(await screen.findByRole("button", { name: /Import 2022/ }));
   await screen.findByText(/Identità: a/);
-  expect(screen.getByText("Accesso in sola lettura.")).toBeVisible();
+  expect(screen.getByText(/^Accesso in sola lettura/)).toBeVisible();
   expect(screen.queryByRole("button", { name: "Conferma lotto" })).toBeNull();
 });
 
@@ -431,8 +434,8 @@ it("reloads nothing when no batch is open, and hides regeneration from viewers",
   expect(screen.queryByRole("region", { name: "Rigenera PDF" })).toBeNull();
 });
 
-const overviewRow = (batchId: string, itemId: string, values: Partial<{ label: string; status: string; sendable: boolean; pec_sent: boolean }> = {}) => ({
-  batch_id: batchId, items: [{ item_id: itemId, label: "Anna Bianchi", status: "generated", sendable: true, pec_sent: false, ...values }],
+const overviewRow = (batchId: string, itemId: string, values: Partial<{ label: string; status: string; sendable: boolean; pec_sent: boolean; notice_number: string | null }> = {}) => ({
+  batch_id: batchId, items: [{ item_id: itemId, label: "Anna Bianchi", status: "generated", sendable: true, pec_sent: false, notice_number: `0202100000${itemId.slice(-1)}`, years: [2021], amount: 111.55, ...values }],
 });
 
 it("selects a whole batch from the list and flags avvisi already sent by PEC", async () => {
@@ -447,9 +450,11 @@ it("selects a whole batch from the list and flags avvisi already sent by PEC", a
   render(<SollecitiPage />);
   const list = await screen.findByRole("checkbox", { name: "Seleziona per Posta Online: Generati batch-2" });
   expect(overview.getBatchOverview).toHaveBeenCalledWith("token", ["batch-2", "batch-4"]);
-  expect(screen.getByText("Inviato via PEC")).toBeVisible();
-  expect(screen.getByText("Inviato via PEC (1)")).toBeVisible();
-  expect(screen.getByText("PDF non generato (2)")).toBeVisible();
+  const sentRow = screen.getByText("02021000002").closest("li") as HTMLElement;
+  expect(sentRow).toHaveTextContent(/2021.*111,55.*Inviato via PEC/);
+  expect(screen.getAllByText("Inviato via PEC")).toHaveLength(2);
+  expect(screen.getAllByText("PDF non generato")).toHaveLength(2);
+  expect(screen.queryByText("PDF non generato (2)")).toBeNull();
   expect(screen.queryByRole("checkbox", { name: /Generati batch-4/ })).toBeNull();
   fireEvent.click(list);
   expect(screen.getByRole("region", { name: "Selezione per Posta Online" })).toHaveTextContent("1 di massimo 50 solleciti selezionati");
@@ -458,6 +463,30 @@ it("selects a whole batch from the list and flags avvisi already sent by PEC", a
   expect(screen.getByRole("checkbox", { name: "Seleziona per Posta Online" })).toBeChecked();
   fireEvent.click(list);
   expect(screen.queryByRole("region", { name: "Selezione per Posta Online" })).toBeNull();
+});
+
+it("lists the first notices of a large batch and keeps its counters", async () => {
+  mocks.list.mockResolvedValue({ items: [generatedBatch()], total: 1 });
+  const items = ["item-1", "item-2", "item-3", "item-4"].map((id) => ({ ...overviewRow("batch-2", id).items[0], years: [] }));
+  items[0].notice_number = null;
+  items[3] = { ...items[3], pec_sent: true, status: "failed" };
+  overview.getBatchOverview.mockResolvedValue([{ batch_id: "batch-2", items }]);
+  render(<SollecitiPage />);
+  expect(await screen.findByText("e altri 1 avvisi")).toBeVisible();
+  expect(screen.getByText("senza numero")).toBeVisible();
+  expect(screen.getByText("Inviato via PEC (1)")).toBeVisible();
+  expect(screen.getByText("PDF non generato (1)")).toBeVisible();
+  expect(within(screen.getByRole("button", { name: /Generati batch-2/ })).queryByText("2021")).toBeNull();
+});
+
+it("refreshes the batch list and its summary after making the missing PDFs of a year", async () => {
+  yearNotices.getYearStatus.mockResolvedValue({ year: 2021, total: 1, ready: 0, failed: [], missing: [{ label: "Anna Bianchi", avviso_ids: ["a1"] }] });
+  yearNotices.generateYearNotices.mockResolvedValue({ batch_id: "batch-9", generated: 1, problems: [] });
+  render(<SollecitiPage />);
+  fireEvent.click(await screen.findByRole("button", { name: "Crea il PDF mancante" }));
+  expect(await screen.findByText("Finito: 1 di 1.")).toBeVisible();
+  await waitFor(() => expect(mocks.list).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(overview.getBatchOverview).toHaveBeenCalledTimes(2));
 });
 
 it("keeps the list usable when the batch summary is not available", async () => {

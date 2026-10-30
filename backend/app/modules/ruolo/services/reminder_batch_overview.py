@@ -1,4 +1,4 @@
-"""What the batch list shows without opening each batch: selectable reminders and PEC shipments."""
+"""What the batch list shows without opening each batch: each notice, its amount and PEC shipment."""
 
 from collections import defaultdict
 from uuid import UUID
@@ -12,6 +12,7 @@ from app.modules.ruolo.models import (
     RuoloTributiAvvisoStatus,
     RuoloTributiReminderBatchItem,
 )
+from app.modules.ruolo.services.tributi_reminder_service import notice_total_amount
 
 
 def pec_sent_avvisi(db: Session, avviso_ids: set[UUID]) -> set[UUID]:
@@ -53,6 +54,9 @@ def batch_overview(db: Session, batch_ids: list[UUID]) -> dict[UUID, list[dict]]
                 "status": item.status,
                 "sendable": sendable(item),
                 "pec_sent": bool(_avviso_ids(item) & pec),
+                "notice_number": (item.payload_json or {}).get("notice_number"),
+                "years": item.years_json or [],
+                "amount": float(notice_total_amount(item.payload_json or {})),
             }
         )
     return overview

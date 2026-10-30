@@ -3371,7 +3371,6 @@ def create_reminder_batch(
     selected_cf = [_normalise_tax_code(value) for value in codice_fiscale if _normalise_tax_code(value)]
     filters = filters or {}
     selected_years = _parse_selected_years(filters.get("years"))
-    preview_only = _bool_filter(filters.get("preview_only"))
     if _bool_filter(filters.get("policy_group")) and selected_years and selected_cf:
         selected_years = _expand_selected_years_for_policy_group(
             db,
@@ -3390,19 +3389,20 @@ def create_reminder_batch(
     ), selected_cf)
     if not candidates:
         raise ValueError("Nessuna utenza morosa selezionabile per il batch")
+    return generate_reminder_batch(db, candidates, title=title, filters_json=filters, template_path=template_path, notes=notes, generated_by=generated_by)
 
+
+def generate_reminder_batch(db: Session, candidates: list[dict[str, Any]], **fields: Any) -> RuoloTributiReminderBatch:
+    """Create the batch (title, filters_json, template_path, notes, generated_by) and render one PDF per candidate."""
+    preview_only = _bool_filter(fields["filters_json"].get("preview_only"))
     generated_at = datetime.now(UTC)
     batch = RuoloTributiReminderBatch(
-        title=title,
+        **fields | {"template_path": fields["template_path"] or DEFAULT_BATCH_TEMPLATE_PATH},
         status="running",
-        template_path=template_path or DEFAULT_BATCH_TEMPLATE_PATH,
-        filters_json=filters,
         items_total=len(candidates),
         items_generated=0,
         items_failed=0,
-        generated_by=generated_by,
         generated_at=generated_at,
-        notes=notes,
     )
     db.add(batch)
     db.flush()

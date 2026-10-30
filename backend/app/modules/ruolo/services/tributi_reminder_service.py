@@ -1246,14 +1246,17 @@ def _write_simple_docx(payload: dict[str, Any], *, paragraphs: list[str], output
         archive.writestr("word/_rels/document.xml.rels", _empty_document_rels_xml())
 
 
+# The amount printed on the notice and its bollettino: balance plus registered-mail fee.
+def notice_total_amount(payload: dict[str, Any]) -> Decimal:
+    notification = payload.get("notification_amount") or REGISTERED_MAIL_NOTIFICATION_AMOUNT
+    return _decimal_or_zero(payload.get("saldo_amount") or payload.get("due_amount")) + _decimal_or_zero(notification)
+
+
 def _batch_template_field_values(payload: dict[str, Any]) -> dict[str, str]:
     yearly = _batch_yearly_values(payload)
     address = _batch_address_values(payload)
     yearly_references = _yearly_reference_summary(yearly)
     years = _sorted_payload_years(payload, yearly)
-    payment_base_amount = _decimal_or_zero(payload.get("saldo_amount") or payload.get("due_amount"))
-    notification_amount = _decimal_or_zero(payload.get("notification_amount") or REGISTERED_MAIL_NOTIFICATION_AMOUNT)
-    total_amount = payment_base_amount + notification_amount
     return {
         "Avviso_n": _value(payload.get("notice_number")),
         "Denominazione": _value(payload.get("display_name")),
@@ -1264,7 +1267,7 @@ def _batch_template_field_values(payload: dict[str, Any]) -> dict[str, str]:
         "DOMICILIO": address["domicilio"],
         "RESIDENZA": address["residenza"],
         "INDIRIZZO_SPEDIZIONE": address["indirizzo_spedizione"],
-        "Complessivo": _format_template_number(total_amount),
+        "Complessivo": _format_template_number(notice_total_amount(payload)),
         **payment_deadline_fields(payload, _gaia_bollettino_due_date),
         "CodFiscale": _value(payload.get("codice_fiscale")),
         "Oggetto_Ruoli": _role_subject_label(years),

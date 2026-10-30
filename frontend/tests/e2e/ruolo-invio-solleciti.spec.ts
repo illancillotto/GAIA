@@ -27,6 +27,7 @@ for (const width of [1440, 390]) {
       priced_total: 0, postal_options: {}, portal_snapshot: null, draft_expires_at: null, active_job: null, events: [], items: [],
     };
     let created: unknown = null;
+    let generatedYear: unknown = null;
     await page.route("**/api/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
       let data: unknown = {};
@@ -40,7 +41,9 @@ for (const width of [1440, 390]) {
         data = route.request().method() === "POST" ? lot : { items: created ? [lot] : [], total: created ? 1 : 0, page: 1, page_size: 50 };
       }
       if (path.endsWith("/lots/lot-1")) data = lot;
-      if (path.endsWith("/batch-overview")) data = [{ batch_id: "batch-1", items: [{ item_id: "item-1", label: item.display_name, status: "generated", sendable: true, pec_sent: true }] }];
+      if (path.endsWith("/batch-overview")) data = [{ batch_id: "batch-1", items: [{ item_id: "item-1", label: item.display_name, status: "generated", sendable: true, pec_sent: true, notice_number: "020210000743640", years: [2021], amount: 221.55 }] }];
+      if (path.endsWith("/years/2021/status")) data = { year: 2021, total: 2, ready: 1, failed: [], missing: generatedYear ? [] : [{ label: "Rossi Mario", avviso_ids: ["avviso-2"] }] };
+      if (path.endsWith("/years/2021/generate")) { generatedYear = route.request().postDataJSON(); data = { batch_id: "batch-2", generated: 1, problems: [] }; }
       if (path.endsWith("/items/item-1/download")) {
         await route.fulfill({ status: 200, contentType: "application/pdf", body: noticePdf });
         return;
@@ -49,6 +52,13 @@ for (const width of [1440, 390]) {
     });
     await page.goto("/ruolo/tributi/solleciti?embedded=1");
     await expect(page.getByText("Inviato via PEC", { exact: true })).toBeVisible();
+    await expect(page.getByText("020210000743640")).toBeVisible();
+    await expect(page.getByText("221,55 €")).toBeVisible();
+    const year = page.getByRole("region", { name: "Avvisi da sollecitare" });
+    await year.getByRole("button", { name: "Crea il PDF mancante" }).click();
+    await expect(year.getByText("Finito: 1 di 1.")).toBeVisible();
+    await expect(year.getByText("Tutti i PDF del 2021 sono pronti.")).toHaveCount(0);
+    expect(generatedYear).toEqual({ avviso_ids: ["avviso-2"] });
     await page.getByRole("checkbox", { name: /Seleziona per Posta Online: Sollecito tributi 00048250955/ }).check();
     await page.getByRole("button", { name: /Sollecito tributi 00048250955/ }).click();
     await expect(page.getByTitle("Anteprima avviso generato")).toHaveAttribute("src", /^blob:/);

@@ -6,6 +6,9 @@ export interface BatchOverviewItem {
   status: string;
   sendable: boolean;
   pec_sent: boolean;
+  notice_number: string | null;
+  years: number[];
+  amount: number;
 }
 
 export interface BatchOverview {

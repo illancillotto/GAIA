@@ -18,6 +18,7 @@ const api = vi.hoisted(() => ({
 }));
 const session = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/ruolo-poste-dispatch-api", () => api);
+vi.mock("@/lib/ruolo-year-notices-api", () => ({ getYearStatus: vi.fn(() => new Promise(() => undefined)), generateYearNotices: vi.fn() }));
 vi.mock("@/lib/ruolo-api", () => ({ listTributiReminderBatches: vi.fn(async () => ({ items: [], total: 0 })), getTributiReminderBatch: vi.fn() }));
 const pathname = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({ usePathname: pathname }));
@@ -85,7 +86,7 @@ describe("access", () => {
     api.listPosteLots.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 50 });
     render(<PostePage />);
     expect(await screen.findByText("Nessun lotto Poste.")).toBeVisible();
-    expect(screen.getByText("Accesso in sola lettura.")).toBeVisible();
+    expect(screen.getByText(/^Accesso in sola lettura/)).toBeVisible();
     expect(screen.queryByRole("region", { name: "Nuovo lotto Poste" })).not.toBeInTheDocument();
   });
 

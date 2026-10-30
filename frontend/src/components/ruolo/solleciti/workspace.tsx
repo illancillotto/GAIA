@@ -11,6 +11,7 @@ import { PostePanel, usePosteLots } from "@/components/ruolo/poste-dispatch/work
 import { NoticeExport } from "./document-access";
 import { SelectionBar, usePosteSelection } from "./poste-selection";
 import { RegenerationPanel } from "./regeneration-panel";
+import { YearNoticesPanel } from "./year-notices-panel";
 import { useBatchOverview, type Overview } from "./batch-overview";
 import { BatchList, dateLabel, statusClass, statusLabel } from "./batch-list";
 import { NoticeCards } from "./notice-cards";
@@ -50,7 +51,7 @@ function SollecitiWorkspace({ token, canEdit }: { token: string; canEdit: boolea
           </div>
           <p className="rounded-full bg-[#eef3ea] px-4 py-2 text-xs text-[#203829]"><span className="font-semibold">Raccomandata A/R online:</span> GAIA prepara le bozze, INVIA lo preme sempre l&apos;operatore su Posta Online.</p>
         </div>
-        {!canEdit && <p className="text-sm text-slate-600">Accesso in sola lettura.</p>}
+        {!canEdit && <p className="text-sm text-slate-600">Accesso in sola lettura: per creare o rigenerare i PDF chiedi all&apos;amministratore il permesso di gestione Tributi.</p>}
         {tab === "generati"
           ? <GeneratedPanel token={token} canEdit={canEdit} solleciti={solleciti} selection={selection} onLotCreated={lotCreated} />
           : <PostePanel token={token} canEdit={canEdit} posteLots={posteLots} />}
@@ -65,13 +66,14 @@ type GeneratedProps = {
 };
 
 function GeneratedPanel({ token, canEdit, solleciti, selection, onLotCreated }: GeneratedProps) {
-  const { page, setPage, total, batches, selected, confirmation, loading, busy, error, selectBatch, confirmSelected } = solleciti;
+  const { page, setPage, total, batches, selected, confirmation, loading, busy, error, selectBatch, confirmSelected, reload } = solleciti;
   const overview = useBatchOverview(token, batches.map((batch) => batch.id));
   function regenerated() {
     overview.reload();
     if (selected) void selectBatch(selected.id);
   }
   return <div className="space-y-6">
+    {canEdit && <YearNoticesPanel token={token} onFinished={() => { reload(); overview.reload(); }} />}
     {canEdit && <RegenerationPanel token={token} batchId={selected?.id ?? null} onFinished={regenerated} />}
     {error && <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{error}</div>}
     {confirmation && <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">Lotto confermato. Digest: <code className="break-all">{confirmation.review_digest}</code></div>}
@@ -112,6 +114,7 @@ export function useSolleciti(token: string, canEdit: boolean) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [version, setVersion] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,7 +124,7 @@ export function useSolleciti(token: string, canEdit: boolean) {
       .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : "Errore caricamento lotti"); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [token, page]);
+  }, [token, page, version]);
 
   async function selectBatch(batchId: string) {
     setError(null);
@@ -144,9 +147,7 @@ export function useSolleciti(token: string, canEdit: boolean) {
     try {
       const result = await confirmTributiReminderBatch(token, selected.id);
       setConfirmation(result);
-      const response = await listTributiReminderBatches(token, page, PAGE_SIZE);
-      setBatches(response.items);
-      setTotal(response.total);
+      setVersion((value) => value + 1);
       setSelected(await getTributiReminderBatch(token, selected.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Conferma non riuscita");
@@ -155,7 +156,7 @@ export function useSolleciti(token: string, canEdit: boolean) {
     }
   }
 
-  return { page, setPage, total, batches, selected, confirmation, loading, busy, error, selectBatch, confirmSelected };
+  return { page, setPage, total, batches, selected, confirmation, loading, busy, error, selectBatch, confirmSelected, reload: () => setVersion((value) => value + 1) };
 }
 
 type Selection = ReturnType<typeof usePosteSelection>;

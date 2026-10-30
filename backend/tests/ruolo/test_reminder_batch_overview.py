@@ -68,6 +68,9 @@ def test_overview_lists_sendable_reminders_and_pec_shipments(
                     "status": "generated",
                     "sendable": True,
                     "pec_sent": True,
+                    "notice_number": sent["payload_json"]["notice_number"],
+                    "years": [2024],
+                    "amount": 111.55,
                 }
             ],
         },
@@ -80,6 +83,9 @@ def test_overview_lists_sendable_reminders_and_pec_shipments(
                     "status": "failed",
                     "sendable": False,
                     "pec_sent": False,
+                    "notice_number": failed["payload_json"]["notice_number"],
+                    "years": [2024],
+                    "amount": 111.55,
                 }
             ],
         },

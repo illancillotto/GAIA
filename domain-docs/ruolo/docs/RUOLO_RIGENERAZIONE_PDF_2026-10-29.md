@@ -165,3 +165,48 @@ in produzione dalle 17:08, release `solleciti-ui-20261029-f73be942`. Ripristino:
   `/opt/gaia/releases/pdf-lock-20261030-482af0aa/rollback.sh`.
 - **Dopo il rilascio.** I solleciti falliti si ripetono con «Rigenera PDF» su
   tutti i lotti, oppure aprendo il lotto.
+
+## Nomi lunghi sul bollettino v2 (2026-10-30)
+
+Nome, indirizzo o città che a 6 pt non entrano nel bollettino v2 non bloccano più
+il PDF. GAIA abbrevia le forme societarie (Soc. Agr., S.S., S.r.l., Soc. Coop.,
+Coop., F.lli) e, se il testo è ancora lungo, lo taglia con «…». Il testo che
+entra e la lettera restano invariati. Codice: `_fit` in
+`services/bollettino_v2.py`. Commit `9cc5999c`.
+
+## Avvisi da sollecitare per anno (2026-10-30)
+
+Riquadro in cima a Invio solleciti, per chi ha `ruolo.tributi.manage_status`,
+pensato per chi ha poca dimestichezza digitale: si sceglie l'anno (dal 2021),
+si leggono tre numeri e si preme un pulsante.
+
+- **Avvisi dell'anno.** Gli stessi del wizard Tributi: candidati dell'anno con le
+  regole GAIA (`manager_key=gaia`), divisi per avviso come in stampa.
+- **Pronto.** Un avviso è pronto quando tutti i suoi avvisi ruolo sono coperti da
+  un sollecito `generated`, `generated_docx` o `draft`. I pronti non vengono
+  rifatti: nessuna seconda copia.
+- **Non riuscito.** L'ultimo sollecito `failed` con numero avviso: si ripete con
+  la rigenerazione esistente, stesso numero e stesso file.
+- **Mancante.** Tutto il resto: si crea un lotto «Solleciti {anno}» ogni 5
+  avvisi, così la pagina mostra l'avanzamento e il pulsante «Ferma» agisce fra
+  un gruppo e l'altro.
+- **API.** `GET /ruolo/tributi/solleciti/years/{anno}/status` e
+  `POST /ruolo/tributi/solleciti/years/{anno}/generate` (`avviso_ids`, massimo
+  200), entrambe con `ruolo.tributi.manage_status`. Il POST rilegge lo stato e
+  genera solo i mancanti: rilanciarlo non duplica.
+- **Codice.** `services/year_notice_generation.py`, rotte in
+  `routes/notice_regeneration_routes.py`. `generate_reminder_batch` in
+  `tributi_repositories.py` è la parte di `create_reminder_batch` che genera il
+  lotto dagli avvisi scelti, usata da entrambi. Frontend:
+  `components/ruolo/solleciti/year-notices-panel.tsx`,
+  `lib/ruolo-year-notices-api.ts`.
+- **Lotti generati.** Ogni lotto elenca i primi 3 avvisi con numero, anno,
+  importo stampato (saldo più spese di notifica, `notice_total_amount`) e i
+  badge «Inviato via PEC» e «PDF non generato». I lotti con più di 3 avvisi
+  mostrano anche i contatori.
+- **Sola lettura.** Chi non ha il permesso vede il messaggio che spiega di
+  chiederlo all'amministratore.
+- **Test.** `backend/tests/ruolo/test_year_notice_generation.py`,
+  `test_reminder_batch_overview.py`, `frontend/tests/unit/ruolo-year-notices-panel.test.tsx`,
+  `ruolo-year-notices-api.test.ts`, `notice-solleciti-page.test.tsx`, e2e
+  `ruolo-invio-solleciti.spec.ts`.

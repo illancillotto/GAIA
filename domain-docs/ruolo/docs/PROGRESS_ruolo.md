@@ -2,6 +2,11 @@
 
 ## Rigenerazione dei PDF dei solleciti — 2026-10-29
 
+- **2026-10-30, Avvisi da sollecitare per anno.** Riquadro guidato in Invio
+  solleciti: PDF pronti, non riusciti e da creare per anno, un pulsante che
+  crea solo i mancanti e riprova i falliti. In «Lotti generati» ogni avviso
+  mostra numero, importo e invio PEC. Nomi lunghi abbreviati o tagliati sul
+  bollettino v2 (commit `9cc5999c`).
 - **2026-10-30, PDF falliti con SIGTRAP/SIGABRT.** Chromium concorrenti
   esaurivano i 512 processi del container backend. Ora un PDF alla volta, con
   tempo massimo di 90 secondi. Rilasciato alle 11:09 (commit `482af0aa`,

@@ -24,6 +24,9 @@ class BatchOverviewItem(BaseModel):
     status: str
     sendable: bool
     pec_sent: bool
+    notice_number: str | None
+    years: list[int]
+    amount: float
 
 
 class BatchOverview(BaseModel):

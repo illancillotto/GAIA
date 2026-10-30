@@ -282,7 +282,7 @@ describe("Ruolo tributi import and reminders pages", () => {
 
     expect(screen.getByRole("heading", { name: "Invio solleciti" })).toBeInTheDocument();
     expect(screen.getByText(/INVIA lo preme sempre l'operatore su Posta Online/)).toBeInTheDocument();
-    expect(screen.getByText("Accesso in sola lettura.")).toBeInTheDocument();
+    expect(screen.getByText(/^Accesso in sola lettura/)).toBeInTheDocument();
     expect(await screen.findByText("Nessun lotto generato.")).toBeInTheDocument();
     expect(mocks.listTributiReminderBatches).toHaveBeenCalledWith("token", 1, 50);
     expect(screen.queryByRole("navigation", { name: "Pagine lotti" })).not.toBeInTheDocument();

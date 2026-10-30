@@ -1,6 +1,6 @@
 "use client";
 
-import { BatchBadges, SelectBatchForPoste, type Overview } from "./batch-overview";
+import { BatchBadges, BatchNotices, SelectBatchForPoste, type Overview } from "./batch-overview";
 import type { usePosteSelection } from "./poste-selection";
 import type { RuoloTributiReminderBatchResponse } from "@/types/ruolo";
 
@@ -21,6 +21,8 @@ export function dateLabel(value: string | null): string {
 }
 
 type Batch = RuoloTributiReminderBatchResponse;
+// Small batches show PEC and failures on each notice line; large ones keep the counters too.
+const SHOWN_IN_ROW = 3;
 type Selection = ReturnType<typeof usePosteSelection>;
 
 type RowProps = { batch: Batch; active: boolean; busy: boolean; selectBatch: (id: string) => Promise<void>; overview: Overview; selection: Selection | null };
@@ -33,7 +35,8 @@ function BatchRow({ batch, active, busy, selectBatch, overview, selection }: Row
     {selection && <SelectBatchForPoste title={title} items={items} selection={selection} />}
     <button disabled={busy} type="button" onClick={() => void selectBatch(batch.id)} className={`min-w-0 flex-1 rounded-2xl border p-4 text-left ${active ? "border-[#1d4e35] bg-[#eef7ef]" : "border-slate-200 hover:border-[#9ab69c]"}`}>
       <div className="flex items-start justify-between gap-3"><span className="font-semibold text-slate-900">{title}</span><span className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${statusClass(batch.status)}`}>{statusLabel(batch.status)}</span></div>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500"><span>{batch.items_total} avvisi · creato {dateLabel(batch.created_at)}</span><BatchBadges items={items} /></div>
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500"><span>{batch.items_total} avvisi · creato {dateLabel(batch.created_at)}</span>{items.length > SHOWN_IN_ROW && <BatchBadges items={items} />}</div>
+      <BatchNotices items={items} />
     </button>
   </div>;
 }
