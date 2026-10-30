@@ -147,3 +147,21 @@ alla prima apertura dell'anteprima o con «Rigenera PDF». Ripristino:
 Le modifiche della pagina Invio solleciti e la rigenerazione dei `failed` sono
 in produzione dalle 17:08, release `solleciti-ui-20261029-f73be942`. Ripristino:
 `/opt/gaia/releases/solleciti-ui-20261029-f73be942/rollback.sh`.
+
+## PDF falliti con SIGTRAP o SIGABRT (2026-10-30)
+
+- **Causa.** Ogni Chromium usa circa 200 thread e il container backend ne ammette
+  512 (`pids_limit`). Più PDF generati insieme (lotti, anteprime, rigenerazione
+  automatica dei `failed`) esaurivano il limite: Chromium moriva con `SIGTRAP` o
+  `SIGABRT`, oppure restava bloccato e faceva fallire ogni PDF successivo.
+- **Correzione.** `services/notice_html_pdf.py` genera un PDF alla volta in tutto
+  il container (lock `fcntl` su file, valido fra i worker uvicorn), termina un
+  Chromium che supera 90 secondi e passa `--disable-dev-shm-usage` (la memoria
+  condivisa del container è di 64 MB). Test: `tests/ruolo/test_notice_html_pdf.py`.
+- **Rilascio.** CED 2026-10-30 alle 11:09, commit `482af0aa`, release
+  `pdf-lock-20261030-482af0aa`, solo backend. Prima del rilascio: 31 test e
+  quattro PDF reali in parallelo superati nell'immagine candidata con limite di
+  512 processi; dopo il rilascio un PDF reale nel backend attivo. Ripristino:
+  `/opt/gaia/releases/pdf-lock-20261030-482af0aa/rollback.sh`.
+- **Dopo il rilascio.** I solleciti falliti si ripetono con «Rigenera PDF» su
+  tutti i lotti, oppure aprendo il lotto.

@@ -2,6 +2,11 @@
 
 ## Rigenerazione dei PDF dei solleciti — 2026-10-29
 
+- **2026-10-30, PDF falliti con SIGTRAP/SIGABRT.** Chromium concorrenti
+  esaurivano i 512 processi del container backend. Ora un PDF alla volta, con
+  tempo massimo di 90 secondi. Rilasciato alle 11:09 (commit `482af0aa`,
+  release `pdf-lock-20261030-482af0aa`, solo backend). Ripristino:
+  `/opt/gaia/releases/pdf-lock-20261030-482af0aa/rollback.sh`.
 - **Difetto.** «Documento sollecito non trovato» sui lotti generati: i PDF
   fuori dal NAS stavano nel `/tmp` del container e sparivano a ogni rilascio.
 - **Correzione.** Archivio permanente `RUOLO_REMINDER_STORAGE_PATH`
