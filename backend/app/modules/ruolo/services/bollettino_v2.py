@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import html
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,18 @@ _BOLLETTINO_ACCOUNT_NAME_LINES = (
 _ASSETS = Path(__file__).resolve().parents[1] / "assets"
 _BASE = base64.b64encode((_ASSETS / "bollettino-v2-base.svg").read_bytes()).decode("ascii")
 _OCR_FONT = (_ASSETS / "OCRB.otf.b64").read_text(encoding="ascii").strip()
+# Courier advance at the smallest readable size (6 pt), with the specimen's 0.15 pt spacing.
+_MIN_CHAR_WIDTH = 6 * 0.6 + 0.15
+# Legal forms are shortened only on the slip and only when the full text does not fit.
+_SOCIETA = r"soc(?:ieta|ietà)'?"
+_ABBREVIATIONS = (
+    (rf"\b{_SOCIETA} agricola\b", "Soc. Agr."),
+    (rf"\b(?:{_SOCIETA}|soc\.) semplice\b", "S.S."),
+    (rf"\b{_SOCIETA} a responsabilit(?:a|à)'? limitata\b", "S.r.l."),
+    (rf"\b{_SOCIETA} cooperativa\b", "Soc. Coop."),
+    (r"\bcooperativa\b", "Coop."),
+    (r"\bfratelli\b", "F.lli"),
+)
 
 
 def bollettino_layout_html(
@@ -95,11 +108,9 @@ def bollettino_v2_html(
 
 
 def _text(x: float, y: float, value: str, *, ocr: bool = False, width: float = 0) -> str:
-    normalized = " ".join(value.split()) if not ocr else value
+    normalized = value if ocr else _fit(" ".join(value.split()), width)
     # Courier's measured advance includes the specimen's 0.15 pt character spacing.
     size = min(9.75, (width / max(len(normalized), 1) - 0.15) / 0.6) if width else 9.75
-    if size < 6:
-        raise ValueError("Nome o indirizzo troppo lungo per il bollettino versione 2")
     family = "PosteOCR" if ocr else "Courier New, Courier, monospace"
     spacing = 0 if ocr else 0.15
     advance = (
@@ -109,6 +120,16 @@ def _text(x: float, y: float, value: str, *, ocr: bool = False, width: float = 0
         f'<text x="{x}" y="{y}" font-family="{family}" font-size="{size}" '
         f'letter-spacing="{spacing}" xml:space="preserve"{advance}>{html.escape(normalized)}</text>'
     )
+
+
+def _fit(value: str, width: float) -> str:
+    """Shorten legal forms, then cut with an ellipsis, so the text stays at 6 pt or more."""
+    limit = int(width / _MIN_CHAR_WIDTH) if width else len(value)
+    if len(value) <= limit:
+        return value
+    for pattern, short in _ABBREVIATIONS:
+        value = re.sub(pattern, short, value, flags=re.IGNORECASE)
+    return value if len(value) <= limit else value[: limit - 1].rstrip() + "…"
 
 
 def _payer(fields: dict[str, str], *, x: float, name_x: float) -> str:

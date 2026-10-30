@@ -122,13 +122,42 @@ def test_v2_handles_missing_causale_city_and_long_names_without_truncation(paylo
     assert rendered.count(">VIA A &lt; B</text>") == 2
     assert rendered.count('y="442.5"') == 2 and rendered.count("></text>") == 2
     fields["Denominazione"] = "A" * 200
-    with pytest.raises(ValueError, match="troppo lungo"):
-        layout.bollettino_v2_html(
-            fields,
-            payload,
-            barcode_renderer=service._gaia_bollettino_code128_svg,
-            causale="",
-        )
+    rendered = layout.bollettino_v2_html(
+        fields,
+        payload,
+        barcode_renderer=service._gaia_bollettino_code128_svg,
+        causale="",
+    )
+    assert (
+        rendered.count(f'font-size="6.0{"3"}') == 2 and rendered.count(f">{'A' * 60}…</text>") == 2
+    )
+
+
+@pytest.mark.parametrize(
+    ("name", "printed"),
+    [
+        (
+            "Societa Agricola F.lli Sotgiu Donatello E Maria Irene Soc. Semplice",
+            "Soc. Agr. F.lli Sotgiu Donatello E Maria Irene S.S.",
+        ),
+        (
+            "SOCIETÀ COOPERATIVA AGRICOLA FRATELLI ROSSI E BIANCHI DI ORISTANO SANTA GIUSTA",
+            "Soc. Coop. AGRICOLA F.lli ROSSI E BIANCHI DI ORISTANO SANTA…",
+        ),
+        (
+            "Cooperativa dei Fratelli Rossi a responsabilita limitata del Campidano di Oristano",
+            "Coop. dei F.lli Rossi a responsabilita limitata del Campidan…",
+        ),
+        (
+            "Rossi e Bianchi Societa' a responsabilita' limitata - Campidano di Oristano",
+            "Rossi e Bianchi S.r.l. - Campidano di Oristano",
+        ),
+        ("Mario Rossi Societa Agricola", "Mario Rossi Societa Agricola"),
+    ],
+)
+def test_v2_shortens_legal_forms_only_when_the_name_does_not_fit(name, printed) -> None:
+    assert layout._fit(name, 230) == printed
+    assert len(printed) <= 61
 
 
 def test_pdf_pipeline_selects_only_the_slip_and_restores_exact_page_size(
