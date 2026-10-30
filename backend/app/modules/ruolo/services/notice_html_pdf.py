@@ -1,10 +1,29 @@
 """Chromium print conversion, including the measured page box of the Poste v2 layout."""
 
+import fcntl
 import subprocess
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 from pypdf import PdfReader, PdfWriter
 from pypdf.generic import RectangleObject
+
+# One Chromium uses about 200 threads and the backend container allows 512 processes:
+# renders from all uvicorn workers take turns, and a stuck one is killed instead of
+# holding the slots forever.
+RENDER_LOCK_PATH = Path(tempfile.gettempdir()) / "gaia-chromium-pdf.lock"
+RENDER_TIMEOUT_SECONDS = 90
+
+
+@contextmanager
+def _one_render_at_a_time():
+    with RENDER_LOCK_PATH.open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 def _render_gaia_html_to_pdf(
@@ -17,25 +36,32 @@ def _render_gaia_html_to_pdf(
     html_path = working_dir / f"{stem}.html"
     pdf_path = working_dir / f"{stem}.pdf"
     html_path.write_text(html_text, encoding="utf-8")
-    subprocess.run(
-        [
-            chromium_binary,
-            "--headless",
-            "--disable-gpu",
-            "--no-sandbox",
-            "--no-pdf-header-footer",
-            f"--print-to-pdf={pdf_path}",
-            html_path.as_uri(),
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    _print_to_pdf(chromium_binary, html_path, pdf_path)
     if not pdf_path.exists():
         raise RuntimeError("Conversione PDF template GAIA non riuscita")
     if 'class="poste-v2"' in html_text:
         _restore_poste_page_box(pdf_path)
     return pdf_path
+
+
+def _print_to_pdf(chromium_binary: str, html_path: Path, pdf_path: Path) -> None:
+    with _one_render_at_a_time():
+        subprocess.run(
+            [
+                chromium_binary,
+                "--headless",
+                "--disable-gpu",
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--no-pdf-header-footer",
+                f"--print-to-pdf={pdf_path}",
+                html_path.as_uri(),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=RENDER_TIMEOUT_SECONDS,
+        )
 
 
 def _restore_poste_page_box(pdf_path: Path) -> None:
