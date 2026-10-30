@@ -6,7 +6,9 @@
   solleciti: PDF pronti, non riusciti e da creare per anno, un pulsante che
   crea solo i mancanti e riprova i falliti. In «Lotti generati» ogni avviso
   mostra numero, importo e invio PEC. Nomi lunghi abbreviati o tagliati sul
-  bollettino v2 (commit `9cc5999c`).
+  bollettino v2 (commit `9cc5999c`). Rilasciato sul CED alle 12:38, release
+  `year-notices-20261030-024eeadf`; ripristino
+  `/opt/gaia/releases/year-notices-20261030-024eeadf/rollback.sh`.
 - **2026-10-30, PDF falliti con SIGTRAP/SIGABRT.** Chromium concorrenti
   esaurivano i 512 processi del container backend. Ora un PDF alla volta, con
   tempo massimo di 90 secondi. Rilasciato alle 11:09 (commit `482af0aa`,

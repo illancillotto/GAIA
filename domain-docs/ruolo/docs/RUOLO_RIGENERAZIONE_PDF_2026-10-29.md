@@ -210,3 +210,12 @@ si leggono tre numeri e si preme un pulsante.
   `test_reminder_batch_overview.py`, `frontend/tests/unit/ruolo-year-notices-panel.test.tsx`,
   `ruolo-year-notices-api.test.ts`, `notice-solleciti-page.test.tsx`, e2e
   `ruolo-invio-solleciti.spec.ts`.
+
+**Rilascio.** CED 2026-10-30 alle 12:38, release `year-notices-20261030-024eeadf`
+(commit `9cc5999c` nomi lunghi + `024eeadf` riquadro e righe avviso), backend e
+frontend. Prima del rilascio: 77 test superati più 1 saltato (solo PostgreSQL)
+nell'immagine candidata, stessa impronta del filesystem, quattro PDF reali in
+parallelo, build frontend riuscita, Compose cambia solo l'immagine. Dopo: PDF
+reale nel backend attivo, health OK, home e Invio solleciti HTTP 200, API
+(anche `years/2021/status`) senza login 401. Database invariato. Ripristino:
+`/opt/gaia/releases/year-notices-20261030-024eeadf/rollback.sh`.
