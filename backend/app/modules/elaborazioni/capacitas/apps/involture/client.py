@@ -2,22 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from urllib.parse import quote
+from urllib.parse import quote, unquote_plus
 
 from app.modules.elaborazioni.capacitas.apps import get_capacitas_app
-from app.modules.elaborazioni.capacitas.decoder import decode_response
-from app.modules.elaborazioni.capacitas.models import (
-    CapacitasAnagraficaDetail,
-    CapacitasAnagrafica,
-    CapacitasLookupOption,
-    CapacitasSearchResult,
-    CapacitasStoricoAnagraficaRow,
-    CapacitasTerreniSearchRequest,
-    CapacitasTerreniSearchResult,
-    CapacitasTerrenoCertificato,
-    CapacitasTerrenoDetail,
-)
-from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
 from app.modules.elaborazioni.capacitas.apps.involture.parsers import (
     parse_anagrafica_detail_html,
     parse_certificato_html,
@@ -27,6 +14,19 @@ from app.modules.elaborazioni.capacitas.apps.involture.parsers import (
     parse_terreni_search_result,
     parse_terreno_detail_html,
 )
+from app.modules.elaborazioni.capacitas.decoder import decode_response
+from app.modules.elaborazioni.capacitas.models import (
+    CapacitasAnagrafica,
+    CapacitasAnagraficaDetail,
+    CapacitasLookupOption,
+    CapacitasSearchResult,
+    CapacitasStoricoAnagraficaRow,
+    CapacitasTerreniSearchRequest,
+    CapacitasTerreniSearchResult,
+    CapacitasTerrenoCertificato,
+    CapacitasTerrenoDetail,
+)
+from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,18 @@ INVOLTURE_APP = get_capacitas_app("involture")
 
 class CapacitasSessionExpiredError(RuntimeError):
     """Raised when Capacitas responds with a session-expired payload (e.g. 'NOSessione scaduta')."""
+
+
+def _is_session_expired_text(text: str) -> bool:
+    snippet = unquote_plus(" ".join(text.strip().split())[:240])
+    return "NOSessione" in snippet or "sessione scaduta" in snippet.lower()
+
+
+def _decode_search_payload(text: str) -> list | dict | str:
+    # Without this check an expired session reads as "no results" and callers never re-login.
+    if _is_session_expired_text(text):
+        raise CapacitasSessionExpiredError(f"Sessione Capacitas scaduta su {AJAX_RICERCA_URL}.")
+    return decode_response(text.strip())
 AJAX_RICERCA_URL = f"{INVOLTURE_APP.base_url}/pages/ajax/ajaxRicerca.aspx"
 AJAX_FRAZIONI_URL = f"{INVOLTURE_APP.base_url}/pages/ajax/ajaxFrazioni.aspx"
 AJAX_SEZIONI_URL = f"{INVOLTURE_APP.base_url}/pages/ajax/ajaxSezioni.aspx"
@@ -93,7 +105,7 @@ class InVoltureClient:
             headers={**_AJAX_HEADERS, "Referer": referer},
         )
         response.raise_for_status()
-        decoded = decode_response(response.text.strip())
+        decoded = _decode_search_payload(response.text)
         return _parse_search_result(decoded)
 
     async def search_by_cf(self, codice_fiscale: str) -> CapacitasSearchResult:
@@ -183,8 +195,7 @@ class InVoltureClient:
                 if attempt < 3:
                     await self.relogin()
                     await asyncio.sleep(min(attempt, 2))
-                    continue
-                break
+                continue
             return certificato
         raise last_error or RuntimeError(f"Capacitas certificato non valido: cco={cco} com={com} fra={fra}")
 
@@ -264,7 +275,7 @@ class InVoltureClient:
             raise ValueError(f"lookup payload type inatteso: {type(decoded).__name__}")
         except Exception as exc:
             snippet = " ".join(response.text.strip().split())[:240]
-            if "NOSessione" in snippet or "sessione scaduta" in snippet.lower():
+            if _is_session_expired_text(response.text):
                 raise CapacitasSessionExpiredError(
                     f"Sessione Capacitas scaduta su {url}. snippet={snippet}"
                 ) from exc
