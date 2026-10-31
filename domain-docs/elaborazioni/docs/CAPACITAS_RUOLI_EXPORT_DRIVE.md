@@ -78,9 +78,12 @@ righe, coerenti con le griglie del portale.
 - Login: usa `pick_credential` (credenziale attiva e in fascia oraria) e
   aggiorna `mark_credential_used` / `mark_credential_error`, quindi un login
   fallito conta verso l'auto-disable dopo 5 errori consecutivi come per gli
-  altri job Capacitas. Le richieste passano dal client "polite" condiviso
-  (`CAPACITAS_REQUEST_POLICY_PATH`), quindi si serializzano con gli altri worker
-  Capacitas.
+  altri job Capacitas. Le richieste passano dal client "polite" (5 s fra le
+  richieste, pause crescenti sugli errori) con un file di stato proprio,
+  `/runtime-data/capacitas/request-policy-ruoli-export.json`: i due worker ruoli
+  si serializzano fra loro ma non con il worker runtime. Scelta del 2026-10-31:
+  il file condiviso era in pausa di 3600 s a ogni richiesta del runtime con
+  sessione involture scaduta (ripresa Capacitas) e l'export non avanzava.
 - Prima di caricare un file il worker cerca un file con lo stesso nome nella
   cartella dello snapshot: una ripresa dopo un crash non crea duplicati.
 
@@ -92,6 +95,10 @@ righe, coerenti con le griglie del portale.
 
    ```bash
    docker compose exec backend python scripts/google_drive_authorize.py
+   # CED: lo script e solo nell'immagine dei worker ruoli
+   docker compose --project-directory /opt/gaia -p gaia \
+     -f releases/ruoli-export-20261031-544ac5a8/compose.ruoli.yml \
+     run --rm elaborazioni-worker-ruoli-incass python /app/scripts/google_drive_authorize.py
    ```
 
    Aprire l'URL stampato, autorizzare, incollare l'indirizzo
@@ -124,3 +131,24 @@ righe, coerenti con le griglie del portale.
 - `Refresh token Google Drive rifiutato`: token revocato o scaduto (client in
   stato "Testing" su Google Cloud scade dopo 7 giorni: pubblicare l'app OAuth o
   usare un client interno), ripetere il passo 1.
+
+## Rilascio sul CED (2026-10-31)
+
+Commit `544ac5a8`, rilascio mirato `ruoli-export-20261031-544ac5a8`: immagine
+`gaia-elaborazioni-worker-ruoli` costruita su `gaia-backend:year-notices-20261030-024eeadf`
+con i soli file della feature, compose dedicato
+`/opt/gaia/releases/ruoli-export-20261031-544ac5a8/compose.ruoli.yml` (da usare
+con `--project-directory /opt/gaia -p gaia`). Backend, frontend, altri worker,
+schema DB e checkout `/opt/gaia` invariati.
+
+- 107 test superati nell'immagine candidata, rete disattivata.
+- Google: client "App desktop" del progetto `gaia-499807`, autorizzato da
+  ced.cbo@gmail.com (proprietario di `jobData`); client, secret e refresh token
+  in `/opt/gaia/.env` (sul CED e il file attivo, diverso da `.env.production`;
+  copia precedente `env.before-drive` nella directory del rilascio).
+- Prova `--once` inBOLLETTINI: snapshot `2026-10-25` completato, 12 esercizi
+  caricati (2525 = 1.294 righe).
+- `CAPACITAS_RUOLI_EXPORT_ENABLED=true` dalle 11:20 circa; lo snapshot inCASS
+  della settimana e partito all'accensione.
+- Ripristino: `/opt/gaia/releases/ruoli-export-20261031-544ac5a8/rollback.sh`
+  (rimuove i due worker; stato e file su Drive restano).

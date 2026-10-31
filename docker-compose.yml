@@ -505,6 +505,8 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       CREDENTIAL_MASTER_KEY: ${CREDENTIAL_MASTER_KEY}
       ELABORAZIONI_LOG_LEVEL: ${ELABORAZIONI_LOG_LEVEL:-${CATASTO_LOG_LEVEL:-INFO}}
+      # Limitatore Capacitas proprio: le pause del worker runtime non fermano l'export.
+      CAPACITAS_REQUEST_POLICY_PATH: /runtime-data/capacitas/request-policy-ruoli-export.json
     depends_on:
       postgres:
         condition: service_healthy
