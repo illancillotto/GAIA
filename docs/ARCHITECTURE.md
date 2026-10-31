@@ -301,6 +301,8 @@ L’applicazione gira tramite Docker Compose con questi servizi:
 - `elaborazioni-worker-visure`
 - `elaborazioni-worker-exports`
 - `elaborazioni-worker-runtime`
+- `elaborazioni-worker-ruoli-incass`
+- `elaborazioni-worker-ruoli-inbollettini`
 - `elaborazioni-worker-poste`
 - `elaborazioni-worker-autodoc`
 - `scanner`
@@ -368,6 +370,7 @@ La separazione minima corrente e:
 - `elaborazioni-worker-visure`: test connessione SISTER, run AdE, bulk search catastali e batch visure
 - `elaborazioni-worker-exports`: soli export per distretto e per comune (anche multipli), indipendenti da visure e ricerche massive
 - `elaborazioni-worker-runtime`: job Capacitas e import REGISTRY (`runtime`)
+- `elaborazioni-worker-ruoli-incass` / `elaborazioni-worker-ruoli-inbollettini`: export Excel settimanale dei ruoli Capacitas su Google Drive (snapshot datati, nessuna coda DB)
 - `elaborazioni-worker-poste`: soli job Poste Online e relativo scraping Playwright
 - `elaborazioni-worker-autodoc`: sync massiva AUTODOC mezzi
 

@@ -16,6 +16,8 @@ interventi in produzione.
 | `elaborazioni-worker-visure` | SISTER, AdE e bulk catastali | 6 CPU, 8 GiB, 1536 PID, 4 browser |
 | `elaborazioni-worker-exports` | soli export distretto/comune | 2 CPU, 4 GiB, 256 PID |
 | `elaborazioni-worker-runtime` | Capacitas e import REGISTRY | 2 CPU, 2 GiB, 256 PID |
+| `elaborazioni-worker-ruoli-incass` | export settimanale inCASS (ricerca avvisi, Avvisi Minuta) su Drive | 1 CPU, 2 GiB, 128 PID |
+| `elaborazioni-worker-ruoli-inbollettini` | export settimanale Registro Bollettini su Drive | 1 CPU, 2 GiB, 128 PID |
 | `elaborazioni-worker-poste` | Poste Online e relativo browser | 2 CPU, 3 GiB, 768 PID |
 | `elaborazioni-worker-autodoc` | AUTODOC e relativo browser | 2 CPU, 3 GiB, 768 PID |
 | `gate-mobile-sync` | proiezione outbound verso Gate ogni 5 minuti | 1 CPU, 1 GiB, 128 PID |
@@ -32,6 +34,13 @@ Prima di avviare un'immagine worker nuova, verificare che Alembic sia a `head`:
 gli export includono dati SISTER e richiedono le tabelle delle estrazioni.
 Se il caricamento fallisce per una tabella mancante, allineare lo schema prima
 di rimettere in coda il job; non riavviare un altro export ancora in esecuzione.
+
+I due worker `elaborazioni-worker-ruoli-*` sono opt-in
+(`CAPACITAS_RUOLI_EXPORT_ENABLED=false` di default) e non usano code DB: ogni
+5 minuti verificano se lo snapshot settimanale e dovuto, lo eseguono e salvano
+lo stato riprendibile in `runtime-data/ruoli-export/<gruppo>.json`. Procedura
+completa, configurazione Drive e recovery in
+`domain-docs/elaborazioni/docs/CAPACITAS_RUOLI_EXPORT_DRIVE.md`.
 
 ## Import automatico documenti NAS Utenze
 
@@ -208,7 +217,8 @@ includere intervallo e durata del ciclo outbound.
 ```bash
 docker compose ps platform-scheduler gate-mobile-sync presenze-worker \
   elaborazioni-worker-visure elaborazioni-worker-exports elaborazioni-worker-runtime \
-  elaborazioni-worker-poste elaborazioni-worker-autodoc
+  elaborazioni-worker-poste elaborazioni-worker-autodoc \
+  elaborazioni-worker-ruoli-incass elaborazioni-worker-ruoli-inbollettini
 jq . runtime-data/worker-health/*.json
 docker compose exec platform-scheduler \
   python -m app.worker_health check --service platform-scheduler \
