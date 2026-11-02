@@ -31,7 +31,7 @@ import { AnnualityPolicyFields, CalculationPolicyBlocks, PolicyNotificationScope
 import { PolicyDateInput, formatPolicyDate } from "./policy-date-input";
 import { ActionCard, ActionField, InternalNoteCard } from "./action-card";
 import { PayerAssignmentCard } from "./payer-assignment-card";
-import { listAllReminderCandidatesForYear, reminderBatchTaxCodes } from "./reminder-candidates";
+import { listAllReminderCandidatesForYear, reminderBatchTaxCodes, reminderCandidateKey, reminderNeedsArchive, reminderSelectionCount } from "./reminder-candidates";
 import { loadReminderPreview, reminderPreviewFilename } from "./reminder-preview";
 import { parseNoticeAmount } from "@/lib/utenze-payment-notices-summary";
 import {
@@ -269,9 +269,9 @@ function mergeReminderCandidates(
   const merged = new Map<string, RuoloTributiReminderCandidateResponse>();
   for (const responseItems of responses) {
     for (const item of responseItems) {
-      const current = merged.get(item.codice_fiscale);
+      const current = merged.get(reminderCandidateKey(item));
       if (!current) {
-        merged.set(item.codice_fiscale, {
+        merged.set(reminderCandidateKey(item), {
           ...item,
           years: [...item.years].sort((left, right) => left - right),
           annuality_managers: [...item.annuality_managers].sort(),
@@ -281,7 +281,7 @@ function mergeReminderCandidates(
       }
       const avvisiById = new Map(current.avvisi.map((avviso) => [avviso.id, avviso]));
       for (const avviso of item.avvisi) avvisiById.set(avviso.id, avviso);
-      merged.set(item.codice_fiscale, {
+      merged.set(reminderCandidateKey(item), {
         ...current,
         display_name: current.display_name ?? item.display_name,
         comune: current.comune ?? item.comune,
@@ -608,7 +608,7 @@ function RuoloTributiPageContent() {
         setSelectedTaxCodes((current) => {
           const preserved = current.filter((taxCode) => mergedCandidates.some((item) => item.codice_fiscale === taxCode));
           if (preserved.length > 0) return preserved;
-          return mergedCandidates.map((item) => item.codice_fiscale);
+          return [...new Set(mergedCandidates.map((item) => item.codice_fiscale))];
         });
       })
       .catch((err: unknown) => setWizardError(err instanceof Error ? err.message : "Errore caricamento utenze sollecitabili"))
@@ -2009,7 +2009,7 @@ function ReminderWizardModal({
   const selectedCandidates = candidates.filter((candidate) => selectedTaxCodes.includes(candidate.codice_fiscale));
   const selectedDue = selectedCandidates.reduce((sum, candidate) => sum + (candidate.due_amount ?? 0), 0);
   const selectedSaldo = selectedCandidates.reduce((sum, candidate) => sum + (candidate.saldo_amount ?? 0), 0);
-  const missingNasCount = selectedCandidates.filter((candidate) => !candidate.has_nas_folder).length;
+  const missingNasCount = selectedCandidates.filter(reminderNeedsArchive).length;
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-[#0f172a]/55 px-4 py-6 backdrop-blur-sm">
@@ -2085,7 +2085,7 @@ function ReminderWizardModal({
                   ) : (
                     candidates.map((candidate) => (
                       <label
-                        key={candidate.codice_fiscale}
+                        key={reminderCandidateKey(candidate)}
                         className={`grid cursor-pointer gap-4 rounded-[24px] border px-4 py-4 transition hover:-translate-y-0.5 hover:shadow-sm md:grid-cols-[auto,minmax(0,1fr),320px] ${
                           selectedTaxCodes.includes(candidate.codice_fiscale) ? "border-[#1D4E35] bg-[#f3faf5]" : "border-[#e5ebe1] bg-white"
                         }`}
@@ -2106,7 +2106,7 @@ function ReminderWizardModal({
                               Gestione: {candidate.annuality_managers.join(", ")}
                             </p>
                           ) : null}
-                          {!candidate.has_nas_folder ? (
+                          {reminderNeedsArchive(candidate) ? (
                             <p className="mt-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">Cartella NAS mancante: verra tracciato come errore</p>
                           ) : null}
                         </div>
@@ -2122,7 +2122,7 @@ function ReminderWizardModal({
               </section>
 
               <WizardSummaryCard
-                selectedCount={selectedTaxCodes.length}
+                selectedCount={reminderSelectionCount(candidates, selectedTaxCodes)}
                 selectedDue={selectedDue}
                 selectedSaldo={selectedSaldo}
                 missingNasCount={missingNasCount}
@@ -2136,9 +2136,9 @@ function ReminderWizardModal({
           {step === 2 ? (
             <section className="rounded-[28px] border border-[#d7e0d2] bg-white p-6 shadow-panel">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Verifica batch</p>
-              <h3 className="mt-2 text-xl font-semibold text-gray-900">Conferma generazione di {selectedTaxCodes.length} solleciti</h3>
+              <h3 className="mt-2 text-xl font-semibold text-gray-900">Conferma generazione di {reminderSelectionCount(candidates, selectedTaxCodes)} solleciti</h3>
               <div className="mt-5 grid gap-3 md:grid-cols-4">
-                <DetailField label="Utenze selezionate" value={String(selectedTaxCodes.length)} />
+                <DetailField label="Utenze selezionate" value={String(reminderSelectionCount(candidates, selectedTaxCodes))} />
                 <DetailField label="Annualita" value={selectedReminderYears.join(", ") || "-"} />
                 <DetailField label="Dovuto selezione" value={formatEuro(selectedDue)} />
                 <DetailField label="Saldo selezione" value={formatEuro(selectedSaldo)} />
@@ -2153,7 +2153,7 @@ function ReminderWizardModal({
                   Torna alla selezione
                 </button>
                 <button type="button" className="btn-primary" onClick={onGenerate} disabled={generating}>
-                  {generating ? "Generazione in corso..." : "Genera PDF nel NAS"}
+                  {generating ? "Generazione in corso..." : "Genera PDF"}
                 </button>
               </div>
             </section>

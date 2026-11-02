@@ -188,14 +188,14 @@ def test_snapshot_prints_only_an_unambiguous_account_of_the_exact_recipient(port
             [
                 PortalAccessRow(CF, "2222222", "0022222"),
                 PortalAccessRow(CF, "1111111", "0011111"),
-                PortalAccessRow("01234567890", "3333333", "0033333"),
+                PortalAccessRow("00048250955", "3333333", "0033333"),
             ],
             "a" * 64,
         )
         candidates = [
             {"codice_fiscale": f" {CF.lower()} ", "display_name": "Rossi"},
             {"codice_fiscale": OTHER_CF, "display_name": "Rossi"},
-            {"codice_fiscale": "01234567890"},
+            {"codice_fiscale": "00048250955"},
         ]
         enriched = with_portal_access(db, candidates)
         payload = payload_overrides(enriched[2])
@@ -210,7 +210,7 @@ def test_snapshot_prints_only_an_unambiguous_account_of_the_exact_recipient(port
         assert (
             printable_portal_access({}) == printable_portal_access({PORTAL_ACCESS_KEY: None}) == []
         )
-        import_access_rows(db, [PortalAccessRow("01234567890", "3333333", "9999999")], "b" * 64)
+        import_access_rows(db, [PortalAccessRow("00048250955", "3333333", "9999999")], "b" * 64)
         assert printable_portal_access(payload) == [("3333333", "0033333")]
 
 

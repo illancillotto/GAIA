@@ -48,7 +48,7 @@ from app.modules.ruolo.models import (
 )
 from app.modules.ruolo.repositories import _get_subject_display_name
 from app.modules.ruolo.services import incass_notice_numbering as incass_numbering
-from app.modules.ruolo.services import notice_candidates, notice_drafts
+from app.modules.ruolo.services import notice_candidates, notice_drafts, notice_recipient_identity
 from app.modules.ruolo.services.candidate_avviso_entry import candidate_avviso_entry
 from app.modules.ruolo.services.capacitas_role_codes import (
     CAPACITAS_ROLE_ACCOUNTING_SCOPE_OUT_OF_ORDINARY,
@@ -1897,8 +1897,8 @@ def _row_to_tributi_item(
         "capacitas_avviso_code": core["capacitas_avviso_code"],
         "incass_notice": core["incass_notice"],
         "mailing_delivery": core["mailing_delivery"],
-        "display_name": _get_subject_display_name(db, avviso.subject_id),
-        "is_linked": avviso.subject_id is not None,
+        "display_name": notice_recipient_identity.display_name(avviso, _get_subject_display_name(db, avviso.subject_id)),
+        "is_linked": notice_recipient_identity.subject_id(avviso) is not None,
         "notes_count": int(row[4] or 0),
         "annuality_manager_key": year_manager["manager_key"],
         "annuality_manager_label": year_manager["manager_label"],
@@ -3551,9 +3551,9 @@ def _collect_reminder_candidates(
         if not tax_code:
             continue
         group = grouped.setdefault(
-            tax_code,
+            notice_recipient_identity.group_key(avviso),
             {
-                "codice_fiscale": tax_code,
+                "codice_fiscale": avviso.codice_fiscale_raw.strip().upper(),
                 "display_name": item["display_name"] or avviso.nominativo_raw,
                 "comune": None,
                 "years": set(),
@@ -3561,13 +3561,12 @@ def _collect_reminder_candidates(
                 "due_amount": Decimal("0.00"),
                 "paid_amount": Decimal("0.00"),
                 "saldo_amount": Decimal("0.00"),
-                "subject_id": avviso.subject_id,
+                "subject_id": notice_recipient_identity.subject_id(avviso),
                 "annuality_managers": set(),
                 "avvisi": [],
             },
         )
-        if group["subject_id"] is None and avviso.subject_id is not None:
-            group["subject_id"] = avviso.subject_id
+        group["subject_id"] = group["subject_id"] or notice_recipient_identity.subject_id(avviso)
         group["years"].add(avviso.anno_tributario)
         group["avvisi_count"] += 1
         group["due_amount"] += _money_or_zero(item["adjusted_due_amount"])
@@ -3586,7 +3585,7 @@ def _collect_reminder_candidates(
 
     candidates = list(grouped.values())
     for group in candidates:
-        subject_id, nas_folder_path = _resolve_subject_archive(db, group["codice_fiscale"], group["subject_id"])
+        subject_id, nas_folder_path = notice_recipient_identity.resolve_archive(db, group["codice_fiscale"], group["subject_id"], _resolve_subject_archive)
         group["subject_id"] = subject_id
         group["nas_folder_path"] = nas_folder_path
         group["has_nas_folder"] = bool(nas_folder_path)
@@ -3771,7 +3770,7 @@ def _batch_item_output_path(
     preview_only: bool,
 ) -> Path | None:
     filename = incass_numbering.notice_filename(candidate)
-    if preview_only or candidate.get(notice_drafts.PRIVATE_BATCH_KEY):
+    if notice_recipient_identity.requires_local_storage(candidate["codice_fiscale"], preview_only, candidate.get(notice_drafts.PRIVATE_BATCH_KEY)):
         return reminder_storage_dir() / f"{item.id}_{filename}"
     if not candidate["nas_folder_path"]:
         return None

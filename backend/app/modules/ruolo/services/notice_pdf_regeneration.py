@@ -22,7 +22,7 @@ from app.modules.ruolo.models import (
 )
 from app.modules.ruolo.notice_register_models import NoticeAudit, NoticeDocument
 from app.modules.ruolo.services import incass_notice_numbering as incass_numbering
-from app.modules.ruolo.services import notice_candidates, notice_drafts
+from app.modules.ruolo.services import notice_candidates, notice_drafts, notice_recipient_identity
 from app.modules.ruolo.services.notice_generation import register_batch_item
 from app.modules.ruolo.services.tributi_reminder_service import (
     generate_reminder_docx,
@@ -58,6 +58,8 @@ def _missing_local(record) -> bool:
 
 
 def _target(record, suffix: str) -> Path:
+    if isinstance(record, RuoloTributiReminderBatchItem) and not notice_recipient_identity.valid_tax_code(record.codice_fiscale):
+        return _failed_output_path(record, True).with_suffix(suffix)
     # NAS copies and existing files are rewritten in place; lost local files go to the persistent storage.
     if not _missing_local(record):
         return Path(record.generated_document_path).with_suffix(suffix)
@@ -131,7 +133,7 @@ def _recompute(db: Session, item: RuoloTributiReminderBatchItem) -> None:
         notice_reference_years=payload.get("notice_reference_years") or [],
     )
     item.payload_json = {**fresh, **notice_candidates.payload_overrides(candidate)}
-    for field in AMOUNT_FIELDS:
+    for field in (*AMOUNT_FIELDS, "subject_id", "codice_fiscale", "display_name", "nas_folder_path"):
         setattr(item, field, candidate.get(field))
 
 
@@ -182,7 +184,7 @@ def _failed_output_path(item: RuoloTributiReminderBatchItem, preview: bool) -> P
     if item.notice_number_id is None:
         candidate[incass_numbering.INCASS_NOTICE_KEY] = item.payload_json["notice_number"]
     filename = incass_numbering.notice_filename(candidate)
-    if preview:
+    if preview or not notice_recipient_identity.valid_tax_code(item.codice_fiscale):
         return reminder_storage_dir() / f"{item.id}_{filename}"
     if not item.nas_folder_path:
         raise RegenerationFailed(NAS_MISSING)

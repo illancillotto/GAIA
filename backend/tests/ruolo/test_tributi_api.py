@@ -4502,7 +4502,7 @@ def test_tributi_reminder_candidates_resolve_subject_from_person_and_company(tmp
     db = TestingSessionLocal()
     company_subject = AnagraficaSubject(
         source_name_raw="ACME SRL",
-        nas_folder_path=str(tmp_path / "archivio" / "12345678901"),
+        nas_folder_path=str(tmp_path / "archivio" / "00048250955"),
         nas_folder_letter="A",
     )
     db.add(company_subject)
@@ -4511,8 +4511,8 @@ def test_tributi_reminder_candidates_resolve_subject_from_person_and_company(tmp
         AnagraficaCompany(
             subject_id=company_subject.id,
             ragione_sociale="ACME SRL",
-            partita_iva="12345678901",
-            codice_fiscale="12345678901",
+            partita_iva="00048250955",
+            codice_fiscale="00048250955",
         )
     )
     db.commit()
@@ -4520,7 +4520,7 @@ def test_tributi_reminder_candidates_resolve_subject_from_person_and_company(tmp
     db.close()
 
     seed_avviso(amount=50.0, tax_code="VRDLGI80A01H501X", nominativo="VERDI LUIGI", anno=2024)
-    seed_avviso(amount=75.0, tax_code="12345678901", nominativo="ACME SRL", anno=2024)
+    seed_avviso(amount=75.0, tax_code="00048250955", nominativo="ACME SRL", anno=2024)
 
     response = client.get("/ruolo/tributi/solleciti/candidates?q=VERDI", headers=auth_headers())
     assert response.status_code == 200
@@ -4529,11 +4529,11 @@ def test_tributi_reminder_candidates_resolve_subject_from_person_and_company(tmp
     assert payload["items"][0]["subject_id"] == str(person_subject_id)
     assert payload["items"][0]["has_nas_folder"] is True
 
-    company_response = client.get("/ruolo/tributi/solleciti/candidates?comune=NO_MATCH&codice_fiscale=12345678901", headers=auth_headers())
+    company_response = client.get("/ruolo/tributi/solleciti/candidates?comune=NO_MATCH&codice_fiscale=00048250955", headers=auth_headers())
     assert company_response.status_code == 200
     assert company_response.json()["total"] == 0
 
-    company_response = client.get("/ruolo/tributi/solleciti/candidates?codice_fiscale=12345678901", headers=auth_headers())
+    company_response = client.get("/ruolo/tributi/solleciti/candidates?codice_fiscale=00048250955", headers=auth_headers())
     assert company_response.status_code == 200
     assert company_response.json()["items"][0]["subject_id"] == str(company_subject_id)
 

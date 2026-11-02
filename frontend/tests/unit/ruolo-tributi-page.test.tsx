@@ -1670,7 +1670,7 @@ describe("Ruolo tributi page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Avanti" }));
     expect(await screen.findByText("Conferma generazione di 2 solleciti")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Genera PDF nel NAS" }));
+    fireEvent.click(screen.getByRole("button", { name: "Genera PDF" }));
     await waitFor(() => {
       expect(mocks.createTributiReminderBatch).toHaveBeenCalledWith(
         "token",
@@ -1687,6 +1687,38 @@ describe("Ruolo tributi page", () => {
     expect(screen.getByText(/RSSMRA80A01H501Z_avviso_sollecito_2024-2025.pdf/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Chiudi wizard" }));
     expect(screen.queryByText("Crea batch PDF per utenze morose")).not.toBeInTheDocument();
+  });
+
+  test("keeps original recipients separate when their invalid tax code is shared", async () => {
+    const originals = ["FIRST RECIPIENT", "SECOND RECIPIENT"].map((name, index) => ({
+      ...reminderCandidate2024,
+      codice_fiscale: "C",
+      display_name: name,
+      subject_id: null,
+      nas_folder_path: null,
+      has_nas_folder: false,
+      avvisi: [{ ...reminderCandidate2024.avvisi[0], id: `original-${index}` }],
+    }));
+    mocks.listTributiReminderCandidates.mockImplementation(
+      (_token: string, params?: { anno_from?: number }) => Promise.resolve({
+        items: params?.anno_from === 2024 ? originals : [],
+        total: params?.anno_from === 2024 ? 2 : 0,
+        page: 1,
+        page_size: 80,
+      }),
+    );
+    render(<RuoloTributiPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Wizard solleciti" }));
+    expect(await screen.findByText("FIRST RECIPIENT")).toBeInTheDocument();
+    expect(screen.getByText("SECOND RECIPIENT")).toBeInTheDocument();
+    expect(screen.getByText(/2 utenze aperte trovate/)).toBeInTheDocument();
+    expect(screen.queryByText(/Cartella NAS mancante:/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Avanti" }));
+    expect(await screen.findByText("Conferma generazione di 2 solleciti")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Genera PDF" }));
+    await waitFor(() => expect(mocks.createTributiReminderBatch).toHaveBeenCalledWith(
+      "token", expect.objectContaining({ codice_fiscale: [] }),
+    ));
   });
 
   test("loads every reminder candidate page before selecting the batch", async () => {
@@ -1719,7 +1751,7 @@ describe("Ruolo tributi page", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Avanti" }));
     expect(await screen.findByText("Conferma generazione di 2 solleciti")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Genera PDF nel NAS" }));
+    fireEvent.click(screen.getByRole("button", { name: "Genera PDF" }));
     await waitFor(() => {
       expect(mocks.createTributiReminderBatch).toHaveBeenCalledWith(
         "token",
@@ -1807,7 +1839,7 @@ describe("Ruolo tributi page", () => {
     fireEvent.click(within(screen.getByPlaceholderText("Codice fiscale").closest("div")!).getByRole("button", { name: "Aggiungi" }));
     fireEvent.click(screen.getByRole("button", { name: "Avanti" }));
     expect(await screen.findByText("Conferma generazione di 1 solleciti")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Genera PDF nel NAS" }));
+    fireEvent.click(screen.getByRole("button", { name: "Genera PDF" }));
     expect(await screen.findByText("Seleziona almeno una annualita da includere nel nuovo avviso.")).toBeInTheDocument();
   });
 
@@ -2223,7 +2255,7 @@ describe("Ruolo tributi page", () => {
     expect(await screen.findByText("Conferma generazione di 1 solleciti")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Torna alla selezione" }));
     fireEvent.click(screen.getByRole("button", { name: "Avanti" }));
-    fireEvent.click(screen.getByRole("button", { name: "Genera PDF nel NAS" }));
+    fireEvent.click(screen.getByRole("button", { name: "Genera PDF" }));
     expect(await screen.findByText("Errore generazione batch solleciti")).toBeInTheDocument();
   });
 
@@ -2270,10 +2302,10 @@ describe("Ruolo tributi page", () => {
     fireEvent.click(within(screen.getByPlaceholderText("Codice fiscale").closest("div")!).getByRole("button", { name: "Aggiungi" }));
     fireEvent.click(screen.getByRole("button", { name: "Avanti" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Genera PDF nel NAS" }));
+    fireEvent.click(screen.getByRole("button", { name: "Genera PDF" }));
     expect(await screen.findByText("Generazione non disponibile")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Genera PDF nel NAS" }));
+    fireEvent.click(screen.getByRole("button", { name: "Genera PDF" }));
     expect(await screen.findByText("0 PDF generati, 1 errori")).toBeInTheDocument();
     expect(screen.getByText("In attesa")).toBeInTheDocument();
   });

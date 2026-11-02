@@ -5,13 +5,14 @@ from collections import defaultdict
 from sqlalchemy import select
 
 from app.modules.ruolo.portal_access_models import RuoloTaxpayerPortalAccess
+from app.modules.ruolo.services.notice_recipient_identity import portal_tax_codes
 from app.services.elaborazioni_credentials import get_credential_fernet
 
 PORTAL_ACCESS_KEY = "taxpayer_portal_access"
 
 
 def with_portal_access(db, candidates):
-    tax_codes = {candidate["codice_fiscale"].strip().upper() for candidate in candidates}
+    tax_codes = portal_tax_codes(candidates)
     accesses = defaultdict(list)
     if tax_codes:
         rows = db.scalars(
