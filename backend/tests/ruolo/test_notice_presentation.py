@@ -7,6 +7,13 @@ import pytest
 from app.modules.ruolo.services import tributi_reminder_service as service
 from app.services.elaborazioni_credentials import get_credential_fernet
 
+_ALREADY_PAID_TEXT = (
+    "Qualora il pagamento sia già stato effettuato, si invita a darne comunicazione "
+    "all'indirizzo catasto@bonificaoristanese.it, indicando il numero dell'avviso "
+    "e allegando copia della ricevuta, per consentire le opportune verifiche "
+    "e l'eventuale aggiornamento della posizione contributiva."
+)
+
 
 def _payload(years: list[int]) -> dict:
     return {
@@ -78,6 +85,9 @@ def test_first_page_groups_requested_content_and_omits_internal_notification_cod
     assert "Apri il canale WhatsApp" not in front
     assert "Per ottenere i dati di accesso contattare gli uffici del Consorzio" in front
     assert '<div class="rateization-note">' in front
+    assert front.index("Causale:") < front.index("PAGAMENTO GIÀ EFFETTUATO")
+    assert _ALREADY_PAID_TEXT in html.unescape(front)
+    assert "anche parzialmente" not in front
 
 
 @pytest.mark.parametrize("mode", ["fixed_date", "notification_60_days"])
@@ -191,7 +201,12 @@ def test_print_keeps_two_intro_pages_and_scannable_footer_links(
         images = front.get_image_info()
         # Chromium also rasterizes the title gradient; select logos and QR images by position.
         top = sorted(
-            [item for item in images if item["bbox"][3] < 95], key=lambda item: item["bbox"][0]
+            [
+                item
+                for item in images
+                if item["bbox"][3] < 95 and item["bbox"][3] - item["bbox"][1] > 1
+            ],
+            key=lambda item: item["bbox"][0],
         )
         bottom = sorted(
             [item for item in images if item["bbox"][1] > front.rect.height / 2],
@@ -257,3 +272,116 @@ def test_notice_amount_stays_on_one_line_inside_the_payment_box(mode):
     assert box["text"].startswith("€. 111.")
     assert box["lines"] == 1
     assert box["right"] <= box["parentRight"]
+
+
+@pytest.mark.parametrize("mode", ["fixed_date", "notification_60_days"])
+def test_payment_notification_note_matches_installment_request_font_size(mode, tmp_path):
+    import pymupdf
+
+    output = tmp_path / "avviso.pdf"
+    payload = {**_payload([2021]), "payment_deadline_mode": mode, "due_date": "2026-12-15"}
+    service.generate_batch_reminder_pdf(payload, output_path=output)
+    with pymupdf.open(output) as document:
+        front = document[0]
+        text = " ".join(front.get_text().split())
+        assert "UNICA SOLUZIONE scadenza 15/12/2026 E comunque entro 60 giorni dalla data di notifica." in text
+        assert "scadenza il" not in text
+        spans = [
+            span
+            for block in front.get_text("dict")["blocks"]
+            if "lines" in block
+            for line in block["lines"]
+            for span in line["spans"]
+        ]
+        notification = next(span for span in spans if "E comunque entro" in span["text"])
+        installment = next(span for span in spans if "Si può richiedere" in span["text"])
+        amount = front.search_for("€. 221,55")[0]
+        single_payment = front.search_for("UNICA SOLUZIONE")[0]
+        due_date = front.search_for("scadenza 15/12/2026")[0]
+        assert amount.y1 < single_payment.y0 < due_date.y0 < notification["bbox"][1]
+        assert notification["size"] == pytest.approx(installment["size"])
+        assert len(document) == 4
+
+
+@pytest.mark.parametrize("mode", ["fixed_date", "notification_60_days"])
+@pytest.mark.parametrize("long_values", [False, True])
+def test_payment_columns_stay_balanced_and_wrap_long_details(mode, long_values):
+    from playwright.sync_api import sync_playwright
+
+    payload = {**_payload([2021]), "payment_deadline_mode": mode}
+    if long_values:
+        payload["display_name"] = (
+            "SOCIETÀ AGRICOLA COOPERATIVA SAN GIOVANNI BATTISTA E FIGLI DI MARIO ROSSI"
+        )
+        payload["saldo_amount"] = "111130.33 EUR"
+        # Stress wrapping of the payment reference beyond the normal 16-character CF.
+        payload["codice_fiscale"] = "RSSMRA80A01H501Z" * 3
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(executable_path=service._find_chromium_binary())
+        try:
+            page = browser.new_page()
+            page.emulate_media(media="print")
+            page.set_content(service._gaia_proposal_html(payload))
+            geometry = page.evaluate("""() => {
+                const rect = selector => {
+                    const element = document.querySelector(selector);
+                    const r = element.getBoundingClientRect();
+                    return {left: r.left, right: r.right, top: r.top, bottom: r.bottom,
+                        width: r.width, scroll: element.scrollWidth, client: element.clientWidth};
+                };
+                return Object.fromEntries(['.pay-band', '.amount', '.instructions',
+                    '.payment-already-made', '.summary'].map(s => [s, rect(s)]));
+            }""")
+            text = page.locator(".payment-already-made p").inner_text()
+            cause = page.locator(".instructions > p").last.inner_text()
+        finally:
+            browser.close()
+    band = geometry[".pay-band"]
+    instructions = geometry[".instructions"]
+    assert instructions["left"] == pytest.approx(band["left"] + band["width"] / 2, abs=1)
+    assert instructions["width"] == pytest.approx(band["width"] / 2, abs=1)
+    assert geometry[".amount"]["right"] < instructions["left"]
+    assert instructions["scroll"] <= instructions["client"]
+    assert geometry[".payment-already-made"]["bottom"] <= band["bottom"] + 1
+    assert band["bottom"] < geometry[".summary"]["top"]
+    assert text == _ALREADY_PAID_TEXT
+    assert payload["codice_fiscale"] in cause
+
+
+@pytest.mark.parametrize("mode", ["fixed_date", "notification_60_days"])
+@pytest.mark.parametrize(
+    "years,amount,long_values",
+    [
+        ([2021], "0.00 EUR", False),
+        ([2021], "111130.33 EUR", True),
+        ([2021, 2022, 2023, 2024, 2025], "111130.33 EUR", True),
+    ],
+)
+def test_already_paid_copy_is_unconditional_and_only_on_page_one(
+    mode, years, amount, long_values, tmp_path
+):
+    import pymupdf
+
+    payload = {**_payload(years), "payment_deadline_mode": mode, "saldo_amount": amount}
+    if long_values:
+        payload["display_name"] = (
+            "SOCIETÀ AGRICOLA COOPERATIVA SAN GIOVANNI BATTISTA E FIGLI DI MARIO ROSSI"
+        )
+        for notice in payload["avvisi"]:
+            notice["residenza_raw"] = (
+                "STRADA PROVINCIALE SAN GIOVANNI BATTISTA NUMERO 123 09170 ORISTANO OR"
+            )
+    output = tmp_path / "avviso.pdf"
+    service.generate_batch_reminder_pdf(payload, output_path=output)
+    with pymupdf.open(output) as document:
+        assert len(document) == 4
+        text = " ".join(document[0].get_text().split())
+        assert _ALREADY_PAID_TEXT in text
+        assert text.count("PAGAMENTO GIÀ EFFETTUATO") == 1
+        assert text.index("Causale:") < text.index("PAGAMENTO GIÀ EFFETTUATO")
+        assert "anche parzialmente" not in text
+        assert "INFORMATIVA SUL TRATTAMENTO DEI DATI PERSONALI" in text
+        for image in document[0].get_image_info():
+            assert image["bbox"][3] < document[0].rect.height - 10
+        for page in document[1:]:
+            assert "PAGAMENTO GIÀ EFFETTUATO" not in page.get_text()

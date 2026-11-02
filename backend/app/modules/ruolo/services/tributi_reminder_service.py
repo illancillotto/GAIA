@@ -39,7 +39,7 @@ from app.modules.ruolo.services.notice_html_pdf import _render_gaia_html_to_pdf
 from app.modules.ruolo.services.notice_payment_deadline import (
     PAYMENT_DEADLINE_CSS,
     bollettino_deadline_date,
-    front_payment_due_phrase,
+    front_payment_due_html,
     notice_enforcement_html,
     payment_deadline_fields,
     payment_deadline_html,
@@ -491,11 +491,11 @@ body {{ margin: 0; color: #1c2633; font-family: Arial, Helvetica, sans-serif; fo
 .kv {{ display: grid; grid-template-columns: 28mm 1fr; gap: .6mm 2mm; }}
 .kv b {{ color: #5b6b80; font-size: 8.9pt; }}
 .recipient {{ font-weight: 800; font-size: 11.3pt; }}
-.pay-band {{ margin-top: 3mm; display: grid; grid-template-columns: 56mm 1fr; gap: 4mm; align-items: stretch; }}
-.amount {{ background: #f2f6fa; border: 1.3pt solid #2b5793; border-radius: 3mm; padding: 3mm; }}
+.pay-band {{ margin-top: 3mm; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; align-items: stretch; }}
+.amount {{ background: #f2f6fa; border: 1.3pt solid #2b5793; border-radius: 3mm; padding: 3mm; margin-right: 4mm; }}
 .amount .label {{ text-transform: uppercase; color: #2b5793; font-size: 8.7pt; font-weight: 800; letter-spacing: .4pt; }}
 .amount .euro {{ font-size: 20pt; color: #2b5793; font-weight: 900; margin: 1mm 0; white-space: nowrap; }}
-.instructions {{ border-left: 3pt solid #2b5793; padding-left: 4mm; }}
+.instructions {{ border-left: 3pt solid #2b5793; padding-left: 4mm; min-width: 0; overflow-wrap: anywhere; font-size: 9.2pt; line-height: 1.16; }}
 .instructions h2 {{ margin: 0 0 2mm; color: #2b5793; font-size: 13pt; }}
 .instructions p {{ margin: 1mm 0; }}
 .summary {{ margin-top: 3mm; width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 8.05pt; }}
@@ -609,8 +609,8 @@ body {{ margin: 0; color: #1c2633; font-family: Arial, Helvetica, sans-serif; fo
     </div></div>
   </div>
   <div class="pay-band">
-    <div class="amount"><div class="label">Quanto e quando pagare</div><div class="euro">€. {html.escape(field_values['Complessivo'])}</div><div><b>{html.escape(front_payment_due_phrase(payload, _sorted_payload_years(payload, _batch_yearly_values(payload)), _gaia_bollettino_due_date))}</b><br>UNICA SOLUZIONE</div><p class="installment-request">Si può richiedere, direttamente presso gli uffici dell&rsquo;Ente, una diversa dilazione del pagamento</p></div>
-    <div class="instructions"><h2>Come pagare</h2><p>Il pagamento potrà essere effettuato anche mediante bonifico bancario al Conto Corrente:</p><p><b>intestato a:</b> Consorzio di Bonifica dell'Oristanese - Riscossione quote associative</p><p><b>IBAN:</b> IT15L0760117400001007214826</p><p><b>Causale:</b> {html.escape(field_values['CodFiscale'])}; {html.escape(field_values['Avviso_n'])}</p></div>
+    <div class="amount"><div class="label">Quanto e quando pagare</div><div class="euro">€. {html.escape(field_values['Complessivo'])}</div><div>UNICA SOLUZIONE<br>{front_payment_due_html(payload, _sorted_payload_years(payload, _batch_yearly_values(payload)), _gaia_bollettino_due_date)}</div><p class="installment-request">Si può richiedere, direttamente presso gli uffici dell&rsquo;Ente, una diversa dilazione del pagamento</p></div>
+    <div class="instructions"><h2>Come pagare</h2><p>Il pagamento potrà essere effettuato anche mediante bonifico bancario al Conto Corrente:</p><p><b>intestato a:</b> Consorzio di Bonifica dell'Oristanese - Riscossione quote associative</p><p><b>IBAN:</b> IT15L0760117400001007214826</p><p><b>Causale:</b> {html.escape(field_values['CodFiscale'])}; {html.escape(field_values['Avviso_n'])}</p><div class="payment-already-made"><h3>PAGAMENTO GIÀ EFFETTUATO</h3><p>Qualora il pagamento sia già stato effettuato, si invita a darne comunicazione all'indirizzo catasto@bonificaoristanese.it, indicando il numero dell'avviso e allegando copia della ricevuta, per consentire le opportune verifiche e l'eventuale aggiornamento della posizione contributiva.</p></div></div>
   </div>
   {notice_summary_html(yearly_rows, notification_amount, payload.get('payer_assignment'))}
   {_gaia_rateization_residual_note_html(payload)}

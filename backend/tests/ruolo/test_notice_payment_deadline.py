@@ -1,5 +1,6 @@
 """Saved notification terms, old-rule compatibility and the printed legal/payment blocks."""
 
+from html.parser import HTMLParser
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID
@@ -221,15 +222,16 @@ def test_notification_blocks_are_ordered_and_amount_is_only_in_payment_summary()
     assert '<svg class="attention-icon"' in front
     assert '<div class="attention-icon"' not in front
     assert "Agente della riscossione" not in front
-    assert "scadenza il 30/11/2026 e comunque entro 60 giorni dalla data di notifica" in front
+    assert '<b>scadenza 30/11/2026</b>' in front
+    assert '<span class="notification-term">E comunque entro 60 giorni dalla data di notifica.</span>' in front
 
 
 @pytest.mark.parametrize("mode", ["fixed_date", "notification_60_days"])
 @pytest.mark.parametrize(
     "dates,expected",
     [
-        ({"due_date": "2026-11-30"}, "scadenza il 30/11/2026 e comunque entro "),
-        ({"deadline": "30.11.2026"}, "scadenza il 30/11/2026 e comunque entro "),
+        ({"due_date": "2026-11-30"}, "scadenza 30/11/2026 E comunque entro "),
+        ({"deadline": "30.11.2026"}, "scadenza 30/11/2026 E comunque entro "),
         ({}, "entro "),
     ],
 )
@@ -240,7 +242,7 @@ def test_2021_amount_box_combines_only_an_explicit_date_with_notification_term(
     payload.pop("due_date")
     payload.update(dates)
     fields = renderer._batch_template_field_values(payload)
-    phrase = expected + deadline.NOTIFICATION_TERM
+    phrase = expected + deadline.NOTIFICATION_TERM + ("." if dates else "")
     assert (
         deadline.front_payment_due_phrase(payload, [2021], renderer._gaia_bollettino_due_date)
         == phrase
@@ -250,7 +252,11 @@ def test_2021_amount_box_combines_only_an_explicit_date_with_notification_term(
         .split('<div class="amount">')[1]
         .split('<div class="instructions">')[0]
     )
-    assert phrase in front
+    text = []
+    parser = HTMLParser()
+    parser.handle_data = text.append
+    parser.feed(front)
+    assert phrase in "".join(text)
     # The shared DOCX fields retain the relative term independently of the slip date.
     if mode == "notification_60_days":
         assert fields["Scadenza"] == deadline.NOTIFICATION_TERM

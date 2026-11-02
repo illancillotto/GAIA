@@ -21,6 +21,14 @@ NOTICE_BRANDING_CSS = """
 .head-title h1 { margin: 0; font-size: 19.5pt; line-height: 1.05; }
 .head-title p { margin: 1mm 0 0; font-weight: 700; font-size: 10.2pt; }
 .amount .installment-request { margin: 2mm 0 0; font-size: 8.5pt; line-height: 1.2; }
+.payment-already-made { margin-top: 2mm; border-top: .7pt solid #ccd7e5; padding-top: 1.5mm; }
+.payment-already-made h3 { margin: 0 0 1mm; color: #2b5793; font-size: 9pt; font-weight: 700; }
+.instructions .payment-already-made p { margin: 0; font-size: 8.5pt; line-height: 1.15; }
+.front:is(:has(.payment-deadline), :has(.summary tbody tr:nth-child(4))) .instructions h2 { margin-bottom: .5mm; font-size: 12pt; }
+.front:is(:has(.payment-deadline), :has(.summary tbody tr:nth-child(4))) .instructions > p { margin: .2mm 0; line-height: 1.05; }
+.front:is(:has(.payment-deadline), :has(.summary tbody tr:nth-child(4))) .payment-already-made { margin-top: .5mm; padding-top: .5mm; }
+.front:has(.summary tbody tr:nth-child(4)) .notice-title { margin: 1mm 0; font-size: 12.5pt; }
+.front:has(.summary tbody tr:nth-child(4)) .recipient { font-size: 9.2pt; }
 .front .card p { margin: 2mm 0; }
 .front > .note { padding-top: 1mm; margin-top: 1mm; font-size: 8.5pt; line-height: 1.12; }
 .notice-footer { margin-top: auto; padding-top: 1.5mm; break-inside: avoid; }

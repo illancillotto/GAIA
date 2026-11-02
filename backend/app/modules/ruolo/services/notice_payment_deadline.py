@@ -1,5 +1,7 @@
 """Payment terms printed from the saved rule, without inventing a notification date."""
 
+import html
+
 FIXED_DEADLINE = "fixed_date"
 NOTIFICATION_DEADLINE = "notification_60_days"
 DEADLINE_MODES = {FIXED_DEADLINE, NOTIFICATION_DEADLINE}
@@ -9,7 +11,8 @@ MISSING_BOLLETTINO_DATE = (
 )
 
 PAYMENT_DEADLINE_CSS = """
-.front:has(.payment-deadline) { padding-top: 8mm; padding-bottom: 8mm; }
+.amount .notification-term { font-size: 8.5pt; line-height: 1.2; }
+.front:is(:has(.payment-deadline), :has(.summary tbody tr:nth-child(4))) { padding-top: 6mm; padding-bottom: 6mm; }
 .front:has(.payment-deadline) > :is(.payment-deadline, .note, .portal-access, .notice-footer) {
   margin-top: auto; margin-bottom: 1mm; }
 .front:has(.payment-deadline) > .notice-footer { margin-bottom: 0; }
@@ -23,21 +26,21 @@ PAYMENT_DEADLINE_CSS = """
 .front:has(.payment-deadline) .summary { margin-top: 2mm; }
 .front:has(.payment-deadline) .portal-body { padding-top: 1mm; padding-bottom: 1mm; }
 .front:has(.payment-deadline) .amount { padding: 2.5mm; }
-.front:has(.payment-deadline) .amount .installment-request { font-size: 8.2pt; }
-.front:has(.payment-deadline):has(.summary tbody tr:nth-child(4)) .body {
+.front:has(.payment-deadline) .amount :is(.installment-request, .notification-term) { font-size: 8.2pt; }
+.front:has(.summary tbody tr:nth-child(4)) .body {
   padding: 1.2mm; font-size: 8.3pt; line-height: 1.05; }
-.front:has(.payment-deadline):has(.summary tbody tr:nth-child(4)) .kv { row-gap: .2mm; }
-.front:has(.payment-deadline):has(.summary tbody tr:nth-child(4)) .card h2 {
+.front:has(.summary tbody tr:nth-child(4)) .kv { row-gap: .2mm; }
+.front:has(.summary tbody tr:nth-child(4)) .card h2 {
   padding-top: 1.2mm; padding-bottom: 1.2mm; font-size: 9pt; }
-.front:has(.payment-deadline):has(.summary tbody tr:nth-child(4)) .card p { margin: 1mm 0; }
-.front:has(.payment-deadline):has(.summary tbody tr:nth-child(4)) .recipient { font-size: 10pt; }
-.front:has(.payment-deadline):has(.summary tbody tr:nth-child(4)) .amount { padding: 2mm; font-size: 9.2pt; }
-.front:has(.payment-deadline):has(.summary tbody tr:nth-child(4)) .amount .installment-request { font-size: 7.8pt; }
-.front:has(.payment-deadline):has(.summary tbody tr:nth-child(4)) .instructions p { font-size: 9.2pt; }
-.front:has(.payment-deadline):has(.summary tbody tr:nth-child(4)) .summary { font-size: 7.5pt; }
-.front:has(.payment-deadline):has(.summary tbody tr:nth-child(4)) .summary td { padding-top: .5mm; padding-bottom: .5mm; }
-.front:has(.payment-deadline):has(.summary tbody tr:nth-child(4)) .summary th { padding-top: .75mm; padding-bottom: .75mm; }
-.front:has(.payment-deadline):has(.summary tbody tr:nth-child(4)) .rateization-note { font-size: 8.3pt; }
+.front:has(.summary tbody tr:nth-child(4)) .card p { margin: 1mm 0; }
+.front:has(.summary tbody tr:nth-child(4)) .recipient { font-size: 10pt; }
+.front:has(.summary tbody tr:nth-child(4)) .amount { padding: 2mm; font-size: 9.2pt; }
+.front:has(.summary tbody tr:nth-child(4)) .amount :is(.installment-request, .notification-term) { font-size: 7.8pt; }
+.front:has(.summary tbody tr:nth-child(4)) .instructions > p { font-size: 9.2pt; }
+.front:has(.summary tbody tr:nth-child(4)) .summary { font-size: 7.5pt; }
+.front:has(.summary tbody tr:nth-child(4)) .summary td { padding-top: .5mm; padding-bottom: .5mm; }
+.front:has(.summary tbody tr:nth-child(4)) .summary th { padding-top: .75mm; padding-bottom: .75mm; }
+.front:has(.summary tbody tr:nth-child(4)) .rateization-note { font-size: 8.3pt; }
 .payment-deadline { margin-top: 2mm; border: 1pt solid #2b5793; border-radius: 2mm;
   padding: 1.5mm 3mm; background: #f2f6fa; break-inside: avoid; }
 .payment-deadline p { margin: 0 0 .6mm; font-size: 8.5pt; line-height: 1.18; }
@@ -101,8 +104,19 @@ def front_payment_due_phrase(payload, years, fixed_date_formatter) -> str:
     if years != [2021]:
         return payment_due_phrase(payload, payment_deadline_text(payload, fixed_date_formatter))
     if payload.get("due_date") or payload.get("deadline"):
-        return f"scadenza il {fixed_date_formatter(payload)} e comunque entro {NOTIFICATION_TERM}"
+        return f"scadenza {fixed_date_formatter(payload)} E comunque entro {NOTIFICATION_TERM}."
     return f"entro {NOTIFICATION_TERM}"
+
+
+def front_payment_due_html(payload, years, fixed_date_formatter) -> str:
+    phrase = front_payment_due_phrase(payload, years, fixed_date_formatter)
+    date, separator, term = phrase.partition(" E comunque entro ")
+    if separator:
+        return (
+            f"<b>{html.escape(date)}</b> <br>"
+            f'<span class="notification-term">E comunque entro {html.escape(term)}</span>'
+        )
+    return f"<b>{html.escape(phrase)}</b>"
 
 
 def payment_deadline_fields(payload, fixed_date_formatter) -> dict[str, str]:
