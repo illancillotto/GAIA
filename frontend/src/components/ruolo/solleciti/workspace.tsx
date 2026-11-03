@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { SollecitiNavigation } from "@/components/communications/navigation";
 import { useEffect, useRef, useState } from "react";
 
 import { RuoloModulePage } from "@/components/ruolo/module-page";
@@ -29,7 +30,6 @@ export function SollecitiAccess() {
   return <SollecitiWorkspace key={session.token} token={session.token} canEdit={session.grantedSectionKeys.includes("ruolo.tributi.manage_status")} />;
 }
 
-const TABS: { key: Tab; label: string }[] = [{ key: "generati", label: "Solleciti generati" }, { key: "poste", label: "Posta Online" }];
 
 function SollecitiWorkspace({ token, canEdit }: { token: string; canEdit: boolean }) {
   // The former Posta Online address opens the same page on its tab.
@@ -46,9 +46,7 @@ function SollecitiWorkspace({ token, canEdit }: { token: string; canEdit: boolea
     <RuoloModulePage title="Invio solleciti" description="Lotti generati, anteprima degli avvisi e invio con Posta Online." breadcrumb="Invio solleciti" requiredSection="ruolo.tributi.view">
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div role="tablist" aria-label="Invio solleciti" className="flex gap-2">
-            {TABS.map((entry) => <button key={entry.key} type="button" role="tab" aria-selected={tab === entry.key} className={tab === entry.key ? "btn-primary" : "btn-secondary"} onClick={() => setTab(entry.key)}>{entry.label}</button>)}
-          </div>
+          <SollecitiNavigation tab={tab} onChange={setTab} />
           <p className="rounded-full bg-[#eef3ea] px-4 py-2 text-xs text-[#203829]"><span className="font-semibold">Raccomandata A/R online:</span> GAIA prepara le bozze, INVIA lo preme sempre l&apos;operatore su Posta Online.</p>
         </div>
         {!canEdit && <p className="text-sm text-slate-600">Accesso in sola lettura: per creare o rigenerare i PDF chiedi all&apos;amministratore il permesso di gestione Tributi.</p>}

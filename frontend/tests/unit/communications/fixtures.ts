@@ -1,0 +1,7 @@
+import type { Communication, Candidate, Account, Template } from "@/types/communications";
+export const part = { id: "pdf", filename: "Avviso.pdf", mime_type: "application/pdf", size: 4, pages: 3, sha256: "a".repeat(64), version: 1 };
+export const message: Communication = { id: "message", channel: "pec", account_id: "account", sender: "sender@example.org", recipient: "recipient@example.org", subject: "Avviso", body: "Corpo", state: "draft", version: 1, notice_number: "1/2021", source_entity_id: "source", attachments: [part] };
+export const account: Account = { id: "account", name: "PEC sintetica", channel: "pec", provider: "synthetic", sender: message.sender, paused: false, max_bytes: 100000 };
+export const template: Template = { id: "template", code: "synthetic", name: "Template sintetico", channel: "pec", subject: "Avviso", body: "Corpo", version: 1, status: "approved" };
+export const candidate: Candidate = { id: "source", batch_title: "Lotto sintetico", batch_id: "batch", notice_number: "1/2021", display_name: "Contribuente sintetico", tax_code: "SYNTHETIC", amount: "10.00", year: 2021, email: "ordinary@example.org", pec: "recipient@example.org", document_state: "generated", payment_state: "unpaid", notification_state: "nessuna_evidenza", communication_state: null, message_id: null, last_event_at: null };
+export const session = { status: "ready", token: "synthetic", currentUser: { role: "admin", enabled_modules: ["ruolo"] }, grantedSectionKeys: ["ruolo.tributi.view", "ruolo.tributi.manage_status"] };
