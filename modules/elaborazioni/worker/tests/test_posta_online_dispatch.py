@@ -106,8 +106,9 @@ class Page:
 class DocumentLocator(Locator):
     """Model the new-shipment reset and the bytes retained by the upload control."""
 
-    async def click(self):
-        await super().__getattr__("click")()
+    async def evaluate(self, script):
+        assert "event.preventDefault()" in script and "element.click()" in script
+        await super().__getattr__("evaluate")(script)
         self.page.documents = []
 
     async def set_input_files(self, filename):
@@ -394,14 +395,14 @@ def test_previous_documents_are_removed_before_uploading_the_next_notice():
 
     run(portal.create_draft(_item(), b"%PDF-new", before_submit))
     actions = [entry[:2] for entry in page.log]
-    assert actions.index(("click", "#crea_spedizione")) < actions.index(("set_input_files", "#file"))
+    assert actions.index(("evaluate", "#crea_spedizione")) < actions.index(("set_input_files", "#file"))
 
 
 def test_a_failed_new_shipment_reset_cannot_submit_or_upload():
     page = _form_page()
     page.documents = [{"name": "previous.pdf", "slot": "file0"}]
 
-    async def no_reset():
+    async def no_reset(_event):
         pass
 
     page.locators["#crea_spedizione"] = {}
@@ -410,7 +411,7 @@ def test_a_failed_new_shipment_reset_cannot_submit_or_upload():
     def locator(selector):
         result = original_locator(selector)
         if selector == "#crea_spedizione":
-            result.click = no_reset
+            result.evaluate = no_reset
         return result
 
     page.locator = locator

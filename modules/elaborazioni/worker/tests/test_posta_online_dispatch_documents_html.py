@@ -57,6 +57,7 @@ def test_home_navigation_restores_the_old_notice_and_new_shipment_removes_it(tmp
 
     async def scenario(portal):
         page = portal.page
+        assert not await page.locator("#crea_spedizione").is_visible()
         await page.evaluate("""() => sessionStorage.setItem('file_0', JSON.stringify({
             name: 'GAIA_020210000654720.pdf', body: '%PDF-previous-notice'
         }))""")

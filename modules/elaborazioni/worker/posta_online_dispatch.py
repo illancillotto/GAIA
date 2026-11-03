@@ -222,7 +222,11 @@ class PostaOnlineDispatchPortal:
         # Use Poste's own new-shipment action, which resets its storage before navigation.
         await self.page.wait_for_load_state("load")
         async with self.page.expect_navigation(wait_until="load"):
-            await self.page.locator("#crea_spedizione").click()
+            # Activate Poste's hidden menu handler without the competing href="#" navigation.
+            await self.page.locator("#crea_spedizione").evaluate("""element => {
+                element.addEventListener('click', event => event.preventDefault(), {once: true});
+                element.click();
+            }""")
         await self._verify_document(None)
 
     async def _verify_document(self, path: Path | None) -> None:

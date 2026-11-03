@@ -320,7 +320,7 @@ azzera le cinque chiavi prima della navigazione. Il worker saltava tale
 handler e aggiungeva il nuovo PDF agli allegati ripristinati. Il controllo di
 un solo destinatario e del nome della bozza non rilevava la contaminazione.
 
-**Correzione implementata nel checkout.** Prima di compilare un avviso il
+**Correzione rilasciata.** Prima di compilare un avviso il
 worker attende anche l'evento `load`, usa il comando `#crea_spedizione`, attende
 il caricamento completo della nuova pagina e verifica che allegati, coda e
 testo siano vuoti. Prima di CONTINUA controlla tutti gli input file della pagina:
@@ -353,14 +353,43 @@ Il dettaglio dei 17 incrementi accettati è versionato in
 `docs/code-quality/debt/POSTE_PENDING_2026-11-03.json`.
 Graphify del codice worker e della documentazione Ruolo aggiornati.
 
-**Stato operativo.** I caricamenti della campagna restano sospesi; la
+Rilascio sul CED completato alle 11:19:55 UTC del 03/11/2026, release
+`poste-document-isolation-20261103`, commit `66b72e51`. Worker `healthy`,
+pool di tre account, smoke HTTP superati e sorgenti verificati contro
+l'immagine candidata. Backup delle quattro tabelle Poste e rollback nella
+directory privata della release. Dati dispatch, configurazione e container
+estranei preservati. Lo snapshot di integrità della procedura legge una riga
+alla volta: il primo tentativo, che materializzava tutti i PDF in memoria,
+è terminato prima del rilascio; la verifica incrementale è poi passata.
+
+**Stato operativo prima del collaudo.** I caricamenti della campagna restano sospesi; la
 cancellazione delle bozze errate è affidata ai colleghi. Questo fix non
 cancella bozze, non rimette automaticamente in coda gli avvisi e non preme
 INVIA. Il controllo multipart precede CONTINUA e non certifica la successiva
-conversione PDF di Poste: prima della ripresa occorrono rilascio e collaudo
+conversione PDF di Poste: prima della ripresa occorre il collaudo
 di bozze consecutive con confronto delle anteprime finali ai sorgenti.
 Il numero di pagine atteso va ricavato dal relativo sorgente, considerando
 la cover e le eventuali pagine aggiunte dal portale.
+
+**Adattamento al menu nascosto.** Il primo collaudo successivo al rilascio
+ha fermato due tentativi prima di CONTINUA: `#crea_spedizione` esiste nel DOM
+ma è nascosto nel menu, quindi il click Playwright attendeva inutilmente.
+Il worker attiva ora il click nativo dello stesso elemento, conservando
+l'handler Poste che azzera gli allegati. Sopprime soltanto l'azione predefinita
+del collegamento `href="#"`, che altrimenti compete con la navigazione
+`home.do` dell'handler. Il test Chromium riproduce sia il menu nascosto sia
+il collegamento `#`, oltre al ripristino del documento precedente e al
+caricamento consecutivo. I controlli sugli allegati restano prima di CONTINUA.
+
+Verifica dell'adattamento: 84 test worker superati, righe e branch al 100%
+sui tre file dispatch (427 statement, 100 branch); Ruff dei tre file toccati
+e ratchet contro il merge-base di `origin/main` superati in un worktree
+contenente soltanto questo fix. `_open_clean_form` conserva cognitiva 0,
+ciclomatica 1 e nesting 0; LOC 6 → 9 per l'attivazione del menu.
+Nessuna soglia o baseline modificata. Nel workspace condiviso lint e ratchet
+globali rilevano problemi nelle modifiche Communications estranee al rilascio:
+queste non sono incluse nell'immagine candidata né dichiarate risolte.
+Graphify worker e Ruolo aggiornati, estrazione docs `chunk 1/1 done`.
 
 ## Documenti in attesa di lavorazione e lettura delle pagine — 2026-11-03
 

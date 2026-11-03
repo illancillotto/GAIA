@@ -4,7 +4,8 @@
      only the Crea spedizione action clears storage before navigating to home.do.
      No credentials, personal data or requests to the real portal. -->
 <html><body onload="restoreDocuments()">
-<a id="crea_spedizione" href="/col/home.do" onclick="resetDocuments()">Crea spedizione</a>
+<a id="crea_spedizione" href="#" style="display:none"
+   onclick="resetDocuments(); location.href='/col/home.do'">Crea spedizione</a>
 <form action="/col/invioDestinatari.do" method="post" enctype="multipart/form-data">
   <input name="nomeInvio">
   <input type="file" id="file" name="files" onchange="addDocument(this.files)">
