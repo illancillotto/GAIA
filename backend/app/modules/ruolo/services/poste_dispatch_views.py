@@ -52,6 +52,10 @@ def _summary(lot: PosteDispatchLot, counts: dict, prices: dict) -> dict:
         "title": lot.title,
         "status": lot.status,
         "created_by": lot.created_by,
+        "created_by_username": lot.created_by_username,
+        "credential_id": lot.credential_id,
+        "poste_username": lot.poste_username,
+        "credential_label": lot.credential_label,
         "created_at": lot.created_at,
         "counts": counts.get(lot.id, {}),
         "priced_total": round(prices.get(lot.id, 0.0), 2),
@@ -59,12 +63,15 @@ def _summary(lot: PosteDispatchLot, counts: dict, prices: dict) -> dict:
 
 
 def list_lots(
-    db: Session, *, page: int, page_size: int
+    db: Session, *, page: int, page_size: int, credential_id: int | None = None
 ) -> tuple[list[PosteDispatchLotSummary], int]:
-    total = db.scalar(select(func.count()).select_from(PosteDispatchLot)) or 0
+    query = select(PosteDispatchLot)
+    if credential_id is not None:
+        query = query.where(PosteDispatchLot.credential_id == credential_id)
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
     lots = list(
         db.scalars(
-            select(PosteDispatchLot)
+            query
             .order_by(PosteDispatchLot.created_at.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)

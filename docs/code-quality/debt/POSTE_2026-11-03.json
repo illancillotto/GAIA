@@ -1,0 +1,630 @@
+{
+  "id": "POSTE-20261103-COMPLEXITY",
+  "status": "accepted_technical_debt",
+  "accepted_on": "2026-11-03",
+  "authorization": "Utente: procedi lo stesso e laciamolo come debito tecnico tracciato",
+  "owner": "Manutentori GAIA — Ruolo / Elaborazioni",
+  "review_by": "2026-12-03",
+  "base_runtime_commit": "686e529ee011487e0764b9f91d023be063dbdf55",
+  "scope": "Estensioni campagna 2021, multiaccount e indirizzi Poste precedenti al rilascio del pool",
+  "finding_count": 68,
+  "affected_files": 16,
+  "runtime_findings": 51,
+  "worker_test_findings": 17,
+  "limits": "Solo gli incrementi elencati; nessuna esclusione automatica, modifica di soglie o deroga a coverage/test.",
+  "remediation": "Rivedere le responsabilità nei callable elencati in interventi separati; confrontare le metriche con questo record e conservare i test comportamentali. Riesaminare alla prossima modifica dei callable o entro review_by.",
+  "findings": [
+    {
+      "baseline": 3,
+      "delta": 1,
+      "metric": "params",
+      "path": "backend/app/modules/ruolo/routes/poste_dispatch_routes.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "list_lots",
+      "value": 4
+    },
+    {
+      "baseline": 12,
+      "delta": 1,
+      "metric": "loc",
+      "path": "backend/app/modules/ruolo/routes/poste_dispatch_routes.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "create_lot",
+      "value": 13
+    },
+    {
+      "baseline": 50,
+      "delta": 3,
+      "metric": "loc",
+      "path": "backend/app/modules/ruolo/services/poste_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "create_lot",
+      "value": 53
+    },
+    {
+      "baseline": 5,
+      "delta": 1,
+      "metric": "params",
+      "path": "backend/app/modules/ruolo/services/poste_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "create_lot",
+      "value": 6
+    },
+    {
+      "baseline": 24,
+      "delta": 1,
+      "metric": "loc",
+      "path": "backend/app/modules/ruolo/services/poste_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "enqueue_job",
+      "value": 25
+    },
+    {
+      "baseline": 3,
+      "delta": 1,
+      "metric": "cyclomatic",
+      "path": "backend/app/modules/ruolo/services/poste_dispatch_reconcile.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "record_sent",
+      "value": 4
+    },
+    {
+      "baseline": 2,
+      "delta": 1,
+      "metric": "cognitive",
+      "path": "backend/app/modules/ruolo/services/poste_dispatch_reconcile.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "record_sent",
+      "value": 3
+    },
+    {
+      "baseline": 22,
+      "delta": 2,
+      "metric": "loc",
+      "path": "backend/app/modules/ruolo/services/poste_dispatch_reconcile.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "record_sent",
+      "value": 24
+    },
+    {
+      "baseline": 0,
+      "delta": 1,
+      "metric": "nesting",
+      "path": "backend/app/modules/ruolo/services/poste_dispatch_reconcile.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "record_sent",
+      "value": 1
+    },
+    {
+      "baseline": 3,
+      "delta": 4,
+      "metric": "cyclomatic",
+      "path": "backend/app/modules/ruolo/services/poste_dispatch_state.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "record_event",
+      "value": 7
+    },
+    {
+      "baseline": 2,
+      "delta": 4,
+      "metric": "cognitive",
+      "path": "backend/app/modules/ruolo/services/poste_dispatch_state.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "record_event",
+      "value": 6
+    },
+    {
+      "baseline": 10,
+      "delta": 6,
+      "metric": "loc",
+      "path": "backend/app/modules/ruolo/services/poste_dispatch_state.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "record_event",
+      "value": 16
+    },
+    {
+      "baseline": 10,
+      "delta": 4,
+      "metric": "loc",
+      "path": "backend/app/modules/ruolo/services/poste_dispatch_views.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "_summary",
+      "value": 14
+    },
+    {
+      "baseline": 5,
+      "delta": 1,
+      "metric": "cyclomatic",
+      "path": "backend/app/modules/ruolo/services/poste_dispatch_views.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "list_lots",
+      "value": 6
+    },
+    {
+      "baseline": 4,
+      "delta": 1,
+      "metric": "cognitive",
+      "path": "backend/app/modules/ruolo/services/poste_dispatch_views.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "list_lots",
+      "value": 5
+    },
+    {
+      "baseline": 14,
+      "delta": 3,
+      "metric": "loc",
+      "path": "backend/app/modules/ruolo/services/poste_dispatch_views.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "list_lots",
+      "value": 17
+    },
+    {
+      "baseline": 0,
+      "delta": 1,
+      "metric": "nesting",
+      "path": "backend/app/modules/ruolo/services/poste_dispatch_views.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "list_lots",
+      "value": 1
+    },
+    {
+      "baseline": 3,
+      "delta": 1,
+      "metric": "params",
+      "path": "backend/app/modules/ruolo/services/poste_dispatch_views.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "list_lots",
+      "value": 4
+    },
+    {
+      "baseline": 2,
+      "delta": 2,
+      "metric": "cyclomatic",
+      "path": "backend/app/modules/ruolo/services/poste_dispatch_work.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "mark_draft_creating",
+      "value": 4
+    },
+    {
+      "baseline": 1,
+      "delta": 2,
+      "metric": "cognitive",
+      "path": "backend/app/modules/ruolo/services/poste_dispatch_work.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "mark_draft_creating",
+      "value": 3
+    },
+    {
+      "baseline": 8,
+      "delta": 11,
+      "metric": "loc",
+      "path": "backend/app/modules/ruolo/services/poste_dispatch_work.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "mark_draft_creating",
+      "value": 19
+    },
+    {
+      "baseline": 26,
+      "delta": 1,
+      "metric": "loc",
+      "path": "frontend/src/components/ruolo/poste-dispatch/item-row.tsx",
+      "reason": "legacy_metric_regression",
+      "symbol": "ItemRow",
+      "value": 27
+    },
+    {
+      "baseline": 8,
+      "delta": 6,
+      "metric": "cyclomatic",
+      "path": "frontend/src/components/ruolo/poste-dispatch/lot-detail.tsx",
+      "reason": "legacy_metric_regression",
+      "symbol": "LotDetail",
+      "value": 14
+    },
+    {
+      "baseline": 7,
+      "delta": 6,
+      "metric": "cognitive",
+      "path": "frontend/src/components/ruolo/poste-dispatch/lot-detail.tsx",
+      "reason": "legacy_metric_regression",
+      "symbol": "LotDetail",
+      "value": 13
+    },
+    {
+      "baseline": 35,
+      "delta": 2,
+      "metric": "loc",
+      "path": "frontend/src/components/ruolo/poste-dispatch/lot-detail.tsx",
+      "reason": "legacy_metric_regression",
+      "symbol": "LotDetail",
+      "value": 37
+    },
+    {
+      "baseline": 2,
+      "delta": 1,
+      "metric": "cyclomatic",
+      "path": "frontend/src/components/ruolo/poste-dispatch/lot-detail.tsx",
+      "reason": "legacy_metric_regression",
+      "symbol": "JOB_ACTIONS.map[0]<callback>",
+      "value": 3
+    },
+    {
+      "baseline": 1,
+      "delta": 1,
+      "metric": "cognitive",
+      "path": "frontend/src/components/ruolo/poste-dispatch/lot-detail.tsx",
+      "reason": "legacy_metric_regression",
+      "symbol": "JOB_ACTIONS.map[0]<callback>",
+      "value": 2
+    },
+    {
+      "baseline": 16,
+      "delta": 1,
+      "metric": "loc",
+      "path": "frontend/src/components/ruolo/poste-dispatch/workspace.tsx",
+      "reason": "legacy_metric_regression",
+      "symbol": "usePosteLots",
+      "value": 17
+    },
+    {
+      "baseline": 6,
+      "delta": 1,
+      "metric": "cyclomatic",
+      "path": "frontend/src/components/ruolo/poste-dispatch/workspace.tsx",
+      "reason": "legacy_metric_regression",
+      "symbol": "PostePanel",
+      "value": 7
+    },
+    {
+      "baseline": 5,
+      "delta": 1,
+      "metric": "cognitive",
+      "path": "frontend/src/components/ruolo/poste-dispatch/workspace.tsx",
+      "reason": "legacy_metric_regression",
+      "symbol": "PostePanel",
+      "value": 6
+    },
+    {
+      "baseline": 22,
+      "delta": 1,
+      "metric": "loc",
+      "path": "frontend/src/components/ruolo/poste-dispatch/workspace.tsx",
+      "reason": "legacy_metric_regression",
+      "symbol": "PostePanel",
+      "value": 23
+    },
+    {
+      "baseline": 2,
+      "delta": 1,
+      "metric": "cyclomatic",
+      "path": "frontend/src/components/ruolo/poste-dispatch/workspace.tsx",
+      "reason": "legacy_metric_regression",
+      "symbol": "lots.map[0]<callback>",
+      "value": 3
+    },
+    {
+      "baseline": 1,
+      "delta": 1,
+      "metric": "cognitive",
+      "path": "frontend/src/components/ruolo/poste-dispatch/workspace.tsx",
+      "reason": "legacy_metric_regression",
+      "symbol": "lots.map[0]<callback>",
+      "value": 2
+    },
+    {
+      "baseline": 6,
+      "delta": 1,
+      "metric": "cyclomatic",
+      "path": "frontend/src/components/ruolo/solleciti/poste-selection.tsx",
+      "reason": "legacy_metric_regression",
+      "symbol": "SelectionBar",
+      "value": 7
+    },
+    {
+      "baseline": 5,
+      "delta": 1,
+      "metric": "cognitive",
+      "path": "frontend/src/components/ruolo/solleciti/poste-selection.tsx",
+      "reason": "legacy_metric_regression",
+      "symbol": "SelectionBar",
+      "value": 6
+    },
+    {
+      "baseline": 35,
+      "delta": 2,
+      "metric": "loc",
+      "path": "frontend/src/components/ruolo/solleciti/poste-selection.tsx",
+      "reason": "legacy_metric_regression",
+      "symbol": "SelectionBar",
+      "value": 37
+    },
+    {
+      "baseline": 17,
+      "delta": 1,
+      "metric": "loc",
+      "path": "frontend/src/components/ruolo/solleciti/year-notices-panel.tsx",
+      "reason": "legacy_metric_regression",
+      "symbol": "YearNoticesPanel",
+      "value": 18
+    },
+    {
+      "baseline": 1,
+      "delta": 1,
+      "metric": "cyclomatic",
+      "path": "frontend/src/lib/ruolo-poste-dispatch-api.ts",
+      "reason": "legacy_metric_regression",
+      "symbol": "listPosteLots",
+      "value": 2
+    },
+    {
+      "baseline": 0,
+      "delta": 1,
+      "metric": "cognitive",
+      "path": "frontend/src/lib/ruolo-poste-dispatch-api.ts",
+      "reason": "legacy_metric_regression",
+      "symbol": "listPosteLots",
+      "value": 1
+    },
+    {
+      "baseline": 3,
+      "delta": 2,
+      "metric": "loc",
+      "path": "frontend/src/lib/ruolo-poste-dispatch-api.ts",
+      "reason": "legacy_metric_regression",
+      "symbol": "listPosteLots",
+      "value": 5
+    },
+    {
+      "baseline": 0,
+      "delta": 1,
+      "metric": "nesting",
+      "path": "frontend/src/lib/ruolo-poste-dispatch-api.ts",
+      "reason": "legacy_metric_regression",
+      "symbol": "listPosteLots",
+      "value": 1
+    },
+    {
+      "baseline": 1,
+      "delta": 1,
+      "metric": "params",
+      "path": "frontend/src/lib/ruolo-poste-dispatch-api.ts",
+      "reason": "legacy_metric_regression",
+      "symbol": "listPosteLots",
+      "value": 2
+    },
+    {
+      "baseline": 3,
+      "delta": 1,
+      "metric": "params",
+      "path": "frontend/src/lib/ruolo-poste-dispatch-api.ts",
+      "reason": "legacy_metric_regression",
+      "symbol": "createPosteLot",
+      "value": 4
+    },
+    {
+      "baseline": 1,
+      "delta": 1,
+      "metric": "cyclomatic",
+      "path": "modules/elaborazioni/worker/posta_online_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "PostaOnlineDispatchPortal._open",
+      "value": 2
+    },
+    {
+      "baseline": 0,
+      "delta": 1,
+      "metric": "cognitive",
+      "path": "modules/elaborazioni/worker/posta_online_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "PostaOnlineDispatchPortal._open",
+      "value": 1
+    },
+    {
+      "baseline": 4,
+      "delta": 3,
+      "metric": "loc",
+      "path": "modules/elaborazioni/worker/posta_online_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "PostaOnlineDispatchPortal._open",
+      "value": 7
+    },
+    {
+      "baseline": 0,
+      "delta": 1,
+      "metric": "nesting",
+      "path": "modules/elaborazioni/worker/posta_online_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "PostaOnlineDispatchPortal._open",
+      "value": 1
+    },
+    {
+      "baseline": 3,
+      "delta": 3,
+      "metric": "cyclomatic",
+      "path": "modules/elaborazioni/worker/posta_online_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "PostaOnlineDispatchPortal._fill_manual_address",
+      "value": 6
+    },
+    {
+      "baseline": 3,
+      "delta": 3,
+      "metric": "cognitive",
+      "path": "modules/elaborazioni/worker/posta_online_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "PostaOnlineDispatchPortal._fill_manual_address",
+      "value": 6
+    },
+    {
+      "baseline": 15,
+      "delta": 9,
+      "metric": "loc",
+      "path": "modules/elaborazioni/worker/posta_online_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "PostaOnlineDispatchPortal._fill_manual_address",
+      "value": 24
+    },
+    {
+      "baseline": 17,
+      "delta": 3,
+      "metric": "loc",
+      "path": "modules/elaborazioni/worker/posta_online_dispatch_runner.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "_job_context",
+      "value": 20
+    },
+    {
+      "baseline": 5,
+      "delta": 1,
+      "metric": "loc",
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "Locator.__init__",
+      "value": 6
+    },
+    {
+      "baseline": 3,
+      "delta": 3,
+      "metric": "cyclomatic",
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "Locator.__getattr__",
+      "value": 6
+    },
+    {
+      "baseline": 2,
+      "delta": 4,
+      "metric": "cognitive",
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "Locator.__getattr__",
+      "value": 6
+    },
+    {
+      "baseline": 8,
+      "delta": 4,
+      "metric": "loc",
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "Locator.__getattr__",
+      "value": 12
+    },
+    {
+      "baseline": 3,
+      "delta": 3,
+      "metric": "cyclomatic",
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "Locator.__getattr__.record",
+      "value": 6
+    },
+    {
+      "baseline": 2,
+      "delta": 4,
+      "metric": "cognitive",
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "Locator.__getattr__.record",
+      "value": 6
+    },
+    {
+      "baseline": 6,
+      "delta": 4,
+      "metric": "loc",
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "Locator.__getattr__.record",
+      "value": 10
+    },
+    {
+      "baseline": 3,
+      "delta": 1,
+      "metric": "loc",
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "Page.__init__",
+      "value": 4
+    },
+    {
+      "baseline": 1,
+      "delta": 1,
+      "metric": "cyclomatic",
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "Page.locator",
+      "value": 2
+    },
+    {
+      "baseline": 0,
+      "delta": 1,
+      "metric": "cognitive",
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "Page.locator",
+      "value": 1
+    },
+    {
+      "baseline": 2,
+      "delta": 1,
+      "metric": "loc",
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "Page.locator",
+      "value": 3
+    },
+    {
+      "baseline": 10,
+      "delta": 1,
+      "metric": "loc",
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "_form_page",
+      "value": 11
+    },
+    {
+      "baseline": 18,
+      "delta": 8,
+      "metric": "loc",
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_dispatch.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "test_remembered_ar_form_and_manual_address",
+      "value": 26
+    },
+    {
+      "baseline": 1,
+      "delta": 1,
+      "metric": "cyclomatic",
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_dispatch_runner.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "JobDb.get",
+      "value": 2
+    },
+    {
+      "baseline": 0,
+      "delta": 1,
+      "metric": "cognitive",
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_dispatch_runner.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "JobDb.get",
+      "value": 1
+    },
+    {
+      "baseline": 2,
+      "delta": 2,
+      "metric": "loc",
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_dispatch_runner.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "JobDb.get",
+      "value": 4
+    },
+    {
+      "baseline": 0,
+      "delta": 1,
+      "metric": "nesting",
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_dispatch_runner.py",
+      "reason": "legacy_metric_regression",
+      "symbol": "JobDb.get",
+      "value": 1
+    }
+  ]
+}

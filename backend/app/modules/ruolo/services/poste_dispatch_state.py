@@ -7,6 +7,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.application_user import ApplicationUser
+from app.models.posta_online import PostaOnlineRegisteredMailSyncJob
 from app.modules.ruolo.poste_dispatch_models import (
     PosteDispatchEvent,
     PosteDispatchItem,
@@ -50,6 +52,12 @@ def get_item(db: Session, lot_id: UUID, item_id: UUID) -> PosteDispatchItem:
 
 
 def record_event(db: Session, lot, item, kind: str, **values: Any) -> None:
+    job = db.get(PostaOnlineRegisteredMailSyncJob, values["job_id"]) if values.get("job_id") else None
+    actor_id = values.get("actor_id") or (job.requested_by_user_id if job else None)
+    values["actor_id"] = actor_id
+    values["actor_username"] = db.scalar(
+        select(ApplicationUser.username).where(ApplicationUser.id == actor_id)
+    )
     db.add(
         PosteDispatchEvent(
             lot_id=lot.id if lot is not None else item.lot_id,

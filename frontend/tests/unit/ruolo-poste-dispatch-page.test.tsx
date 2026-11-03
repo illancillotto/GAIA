@@ -7,6 +7,7 @@ import type { PosteDispatchItem, PosteDispatchLotDetail } from "@/types/ruolo-po
 
 const api = vi.hoisted(() => ({
   listPosteCandidates: vi.fn(),
+  listPosteAccounts: vi.fn(), bindPosteAccount: vi.fn(),
   listPosteLots: vi.fn(),
   getPosteLot: vi.fn(),
   createPosteLot: vi.fn(),
@@ -33,14 +34,14 @@ function item(overrides: Partial<PosteDispatchItem> = {}): PosteDispatchItem {
     status: "address_review", recipient, poste_address: null,
     address_review: { reason: "Nessun indirizzo dello stradario", problems: ["cap: servono 5 cifre"], suggestions: ["VIA ROMA 1, ORISTANO (OR), 09170"] },
     artifact_sha256: "a".repeat(64), artifact_size: 10, poste_draft_id: null, poste_status: null, price_amount: null,
-    draft_created_at: null, sent_at: null, tracking_number: null, registered_mail_id: null, error_detail: null, updated_at: "2026-10-28T10:00:00Z",
+    upload_requested_by_user_id: null, upload_requested_by_username: null, upload_job_id: null, draft_created_at: null, sent_at: null, tracking_number: null, registered_mail_id: null, error_detail: null, updated_at: "2026-10-28T10:00:00Z",
     ...overrides,
   };
 }
 
 function lot(overrides: Partial<PosteDispatchLotDetail> = {}): PosteDispatchLotDetail {
   return {
-    id: "lot-1", title: "Solleciti 2021", status: "open", created_by: 1, created_at: "2026-10-28T10:00:00Z",
+    id: "lot-1", title: "Solleciti 2021", status: "open", created_by: 1, created_by_username: "creator", credential_id: 1, poste_username: "account-1", credential_label: "Account 1", created_at: "2026-10-28T10:00:00Z",
     counts: { address_review: 1 }, priced_total: 0, postal_options: {}, portal_snapshot: null, draft_expires_at: null,
     active_job: null, items: [item()], events: [], ...overrides,
   };
@@ -61,6 +62,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   pathname.mockReturnValue("/ruolo/tributi/solleciti/poste");
   grant();
+  api.listPosteAccounts.mockResolvedValue([{ id: 1, label: "Account 1", username: "account-1", active: true }]);
   api.listPosteLots.mockResolvedValue({ items: [lot()], total: 1, page: 1, page_size: 50 });
   api.listPosteCandidates.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 50 });
 });
@@ -115,8 +117,10 @@ describe("new lot", () => {
     fireEvent.click(boxes[1]);
     expect(within(picker).getByText(/Lotto senza titolo/)).toBeVisible();
     fireEvent.change(within(picker).getByLabelText("Titolo lotto"), { target: { value: "Solleciti 2021" } });
+    await waitFor(() => expect(within(picker).getByRole("option", { name: /account-1/ })).toBeInTheDocument());
+    fireEvent.change(within(picker).getByLabelText("Account Poste per il nuovo lotto"), { target: { value: "1" } });
     fireEvent.click(within(picker).getByRole("button", { name: "Crea lotto (1)" }));
-    await waitFor(() => expect(api.createPosteLot).toHaveBeenCalledWith("token", "Solleciti 2021", ["b1"]));
+    await waitFor(() => expect(api.createPosteLot).toHaveBeenCalledWith("token", "Solleciti 2021", ["b1"], 1));
     expect(await screen.findByRole("region", { name: "Dettaglio lotto Poste" })).toBeVisible();
   });
 
@@ -129,12 +133,16 @@ describe("new lot", () => {
     const boxes = await within(picker).findAllByRole("checkbox");
     boxes.forEach((box) => fireEvent.click(box));
     fireEvent.change(within(picker).getByLabelText("Titolo lotto"), { target: { value: "Pieno" } });
+    await waitFor(() => expect(within(picker).getByRole("option", { name: /account-1/ })).toBeInTheDocument());
+    fireEvent.change(within(picker).getByLabelText("Account Poste per il nuovo lotto"), { target: { value: "1" } });
     fireEvent.click(within(picker).getByRole("button", { name: "Crea lotto (50)" }));
     expect(await within(picker).findByRole("alert")).toHaveTextContent("già in un altro lotto");
     api.listPosteCandidates.mockRejectedValue("offline");
     api.createPosteLot.mockRejectedValue("offline");
     fireEvent.change(within(picker).getByLabelText("Cerca sollecito"), { target: { value: "x" } });
     await waitFor(() => expect(within(picker).getByRole("alert")).toHaveTextContent("Solleciti non caricati"));
+    await waitFor(() => expect(within(picker).getByRole("option", { name: /account-1/ })).toBeInTheDocument());
+    fireEvent.change(within(picker).getByLabelText("Account Poste per il nuovo lotto"), { target: { value: "1" } });
     fireEvent.click(within(picker).getByRole("button", { name: "Crea lotto (50)" }));
     await waitFor(() => expect(within(picker).getByRole("alert")).toHaveTextContent("Lotto non creato"));
   });
@@ -176,7 +184,7 @@ describe("lot detail", () => {
     const detail = await openLot(lot({
       priced_total: 10.86,
       draft_expires_at: "2026-11-04T10:00:00Z",
-      active_job: { id: 4, mode: "poste_dispatch_reconcile", status: "processing", error_detail: "In attesa di una credenziale", created_at: "2026-10-28T10:00:00Z" },
+      active_job: { credential_id: 1, requested_by_user_id: 1, id: 4, mode: "poste_dispatch_reconcile", status: "processing", error_detail: "In attesa di una credenziale", created_at: "2026-10-28T10:00:00Z" },
       portal_snapshot: { foreign_drafts: [{ draft_id: "1", name: "BIANCHI ANNA", status: "PREZZATO" }], duplicate_names: ["GAIA 1"] },
     }));
     expect(within(detail).getByRole("status")).toHaveTextContent("Controllo Poste (processing) - In attesa di una credenziale");
@@ -189,7 +197,7 @@ describe("lot detail", () => {
 
   it("shows only duplicates or an unknown job mode", async () => {
     const detail = await openLot(lot({
-      active_job: { id: 4, mode: "poste_dispatch_other", status: "pending", error_detail: null, created_at: "2026-10-28T10:00:00Z" },
+      active_job: { credential_id: 1, requested_by_user_id: 1, id: 4, mode: "poste_dispatch_other", status: "pending", error_detail: null, created_at: "2026-10-28T10:00:00Z" },
       portal_snapshot: { duplicate_names: ["GAIA 1"] },
       items: [item({ address_review: { reason: "Più indirizzi dello stradario coincidono" } })],
     }));
@@ -268,4 +276,31 @@ it("formats labels with fallbacks", () => {
   expect(countsSummary({})).toBe("Nessun avviso");
   expect(countsSummary({ sent: 2 })).toBe("2 spedito");
   expect(errorMessage("x", "fallback")).toBe("fallback");
+});
+
+it("shows the account, actual upload requester and creator separately", async () => {
+  const detail = await openLot(lot({ items: [item({ upload_requested_by_user_id: 2, upload_requested_by_username: "uploader", upload_job_id: 17 })] }));
+  expect(within(detail).getByText(/Account Poste: account-1 · Creato da: creator/)).toBeVisible();
+  expect(within(detail).getByText(/Caricamento avviato da uploader · operazione 17/)).toBeVisible();
+});
+
+it("requires an explicit account for a historical lot before any Poste operation", async () => {
+  const detail = await openLot(lot({ credential_id: null, poste_username: null, created_by_username: null }));
+  expect(within(detail).getByText(/Account Poste: Da associare · Creato da: 1/)).toBeVisible();
+  expect(within(detail).getByRole("button", { name: "Controlla Poste" })).toBeDisabled();
+  expect(within(detail).getByText(/Lotto storico/)).toBeVisible();
+});
+
+it("filters lots by the selected Poste account", async () => {
+  render(<PostePage />);
+  const filter = await screen.findByLabelText("Filtra lotti per account Poste");
+  await waitFor(() => expect(within(filter).getByRole("option", { name: /account-1/ })).toBeInTheDocument());
+  fireEvent.change(filter, { target: { value: "1" } });
+  await waitFor(() => expect(api.listPosteLots).toHaveBeenLastCalledWith("token", 1));
+});
+
+it("marks historical accounts as unattributed in the lot list", async () => {
+  api.listPosteLots.mockResolvedValue({ items: [lot({ poste_username: null, credential_id: null })], total: 1 });
+  render(<PostePage />);
+  expect(await screen.findByText(/Account da associare/)).toBeVisible();
 });

@@ -12,11 +12,13 @@ from sqlalchemy import exists, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.models.application_user import ApplicationUser
 from app.models.posta_online import PostaOnlineRegisteredMailSyncJob
 from app.modules.ruolo import tributi_repositories as repo
 from app.modules.ruolo.models import RuoloTributiReminderBatch, RuoloTributiReminderBatchItem
 from app.modules.ruolo.poste_dispatch_models import PosteDispatchItem, PosteDispatchLot
 from app.modules.ruolo.services import notice_pdf_regeneration as regeneration
+from app.modules.ruolo.services import poste_dispatch_accounts as accounts
 from app.modules.ruolo.services import poste_dispatch_recipient as recipients
 from app.modules.ruolo.services.poste_dispatch_state import (
     DispatchConflict,
@@ -136,6 +138,7 @@ def create_lot(
     *,
     title: str,
     batch_item_ids: list[UUID],
+    credential_id: int,
     actor_id: int,
     read: DocumentReader | None = None,
 ) -> PosteDispatchLot:
@@ -151,8 +154,10 @@ def create_lot(
     if len(items) != len(batch_item_ids):
         raise DispatchNotFound("Uno o più solleciti non esistono")
     lot = PosteDispatchLot(
-        title=title.strip(), status="open", postal_options=dict(POSTAL_OPTIONS), created_by=actor_id
+        title=title.strip(), status="open", postal_options=dict(POSTAL_OPTIONS), created_by=actor_id,
+        created_by_username=db.scalar(select(ApplicationUser.username).where(ApplicationUser.id == actor_id)),
     )
+    accounts.assign_account(lot, accounts.selected_account(db, credential_id))
     db.add(lot)
     db.flush()
     try:
@@ -212,10 +217,11 @@ def enqueue_job(
             return None
         raise DispatchConflict("Nessun avviso del lotto è pronto per questa operazione")
     job = PostaOnlineRegisteredMailSyncJob(
+        credential_id=accounts.lot_account(db, lot).id,
         requested_by_user_id=actor_id,
         status="pending",
         mode=JOB_MODES[kind],
-        payload_json={"lot_id": str(lot.id)},
+        payload_json={"lot_id": str(lot.id), "poste_username": lot.poste_username},
     )
     db.add(job)
     db.flush()
@@ -227,6 +233,16 @@ def request_job(db: Session, lot_id: UUID, kind: str, *, actor_id: int):
     if kind not in JOB_MODES:
         raise DispatchNotFound("Operazione Poste sconosciuta")
     return enqueue_job(db, get_lot(db, lot_id, lock=True), kind, actor_id=actor_id)
+
+
+def bind_account(db: Session, lot_id: UUID, credential_id: int, *, actor_id: int):
+    lot = get_lot(db, lot_id, lock=True)
+    if active_job(db, lot_id) is not None:
+        raise DispatchConflict("Attendere la conclusione dell'operazione Poste in corso")
+    accounts.assign_account(lot, accounts.selected_account(db, credential_id))
+    record_event(db, lot, None, "account_bound", actor_id=actor_id,
+                 detail={"credential_id": lot.credential_id, "poste_username": lot.poste_username})
+    return lot
 
 
 def update_recipient(

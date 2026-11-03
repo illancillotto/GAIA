@@ -1,5 +1,12 @@
 export type PosteDispatchJobKind = "addresses" | "drafts" | "reconcile" | "delete";
 
+export interface PosteDispatchAccount {
+  id: number;
+  label: string;
+  username: string;
+  active: boolean;
+}
+
 export interface PosteDispatchCandidate {
   batch_item_id: string;
   batch_title: string | null;
@@ -41,6 +48,9 @@ export interface PosteDispatchItem {
   poste_status: string | null;
   price_amount: number | null;
   draft_created_at: string | null;
+  upload_requested_by_user_id: number | null;
+  upload_requested_by_username: string | null;
+  upload_job_id: number | null;
   sent_at: string | null;
   tracking_number: string | null;
   registered_mail_id: string | null;
@@ -54,6 +64,8 @@ export interface PosteDispatchJob {
   status: string;
   error_detail: string | null;
   created_at: string;
+  credential_id: number | null;
+  requested_by_user_id: number | null;
 }
 
 export interface PosteDispatchPortalSnapshot {
@@ -68,6 +80,10 @@ export interface PosteDispatchLotSummary {
   title: string;
   status: string;
   created_by: number;
+  created_by_username: string | null;
+  credential_id: number | null;
+  poste_username: string | null;
+  credential_label: string | null;
   created_at: string;
   counts: Record<string, number>;
   priced_total: number;
@@ -79,7 +95,7 @@ export interface PosteDispatchLotDetail extends PosteDispatchLotSummary {
   draft_expires_at: string | null;
   active_job: PosteDispatchJob | null;
   items: PosteDispatchItem[];
-  events: { kind: string; item_id: string | null; created_at: string }[];
+  events: { kind: string; item_id: string | null; created_at: string; actor_id: number | null; actor_username: string | null; job_id: number | null }[];
 }
 
 export interface PosteDispatchLotList {

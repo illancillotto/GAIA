@@ -72,6 +72,9 @@ class PostaOnlineDispatchPortal:
     async def _open(self, url: str) -> None:
         await self.client.throttle.wait(f"dispatch:{self.phase}")
         await self.page.goto(url, wait_until="domcontentloaded")
+        cookie_notice = self.page.locator("#alertCookie-confirm")
+        if await cookie_notice.is_visible():
+            await cookie_notice.click()
         await self.client._prepare_login_page(self.page)
 
     async def open_send_form(self) -> None:
@@ -136,21 +139,21 @@ class PostaOnlineDispatchPortal:
         self, item: WorkItem, artifact: bytes, before_submit: Callable[[], Awaitable[None]]
     ) -> None:
         """Fill "Crea spedizione" for one AR recipient and press CONTINUA once."""
-        try:
-            with tempfile.TemporaryDirectory(prefix="gaia_poste_") as directory:
+        with tempfile.TemporaryDirectory(prefix="gaia_poste_") as directory:
+            try:
                 path = Path(directory) / f"{item.shipment_name.replace(' ', '_')}.pdf"
                 path.write_bytes(artifact)
                 await self._fill_form(item, path)
-        except Exception as exc:
-            raise DraftNotSubmitted(str(exc)) from exc
-        await before_submit()
-        try:
-            await self.page.locator("#continua").click()
-            await self.page.wait_for_url(
-                re.compile(r"incorso\.do|invioDestinatari\.do"), timeout=90000
-            )
-        except Exception as exc:
-            raise DraftSubmitUncertain(str(exc)) from exc
+            except Exception as exc:
+                raise DraftNotSubmitted(str(exc)) from exc
+            await before_submit()
+            try:
+                await self.page.locator("#continua").click()
+                await self.page.wait_for_url(
+                    re.compile(r"incorso\.do|invioDestinatari\.do"), timeout=90000
+                )
+            except Exception as exc:
+                raise DraftSubmitUncertain(str(exc)) from exc
 
     async def _fill_form(self, item: WorkItem, path: Path) -> None:
         await self._open(POSTA_ONLINE_SEND_HOME_URL)
@@ -206,6 +209,18 @@ class PostaOnlineDispatchPortal:
         await self.page.wait_for_timeout(2500)
 
     async def _fill_manual_address(self, recipient: dict[str, str]) -> None:
+        city = self.page.locator(f"#{AR_PREFIX}localita")
+        await city.click()
+        await city.fill("")
+        await city.press_sequentially(recipient["city"], delay=100)
+        await self.page.wait_for_timeout(5000)
+        options = self.page.locator("ul.ui-autocomplete:visible li")
+        texts = [text.strip() for text in await options.all_inner_texts()]
+        label = f"{recipient['city']} ({recipient['province']})"
+        if texts.count(label) != 1:
+            raise RuntimeError(f"Comune {label!r} non proposto univocamente da Poste")
+        await options.nth(texts.index(label)).click()
+        await self.page.wait_for_timeout(2500)
         for selector in (f"#{AR_PREFIX}indirizzo", f"#{AR_PREFIX}indirizzoautocomplete"):
             field = self.page.locator(selector)
             if await field.is_visible():
@@ -213,10 +228,7 @@ class PostaOnlineDispatchPortal:
                 break
         else:
             raise RuntimeError("Campo indirizzo manuale non trovato nel modulo Poste")
-        city = self.page.locator(f"#{AR_PREFIX}localita")
-        await city.click()
-        await city.press_sequentially(recipient["city"], delay=100)
-        await city.press("Tab")
-        await self.page.wait_for_timeout(4000)
         await self.page.locator(f"#{AR_PREFIX}cap").select_option(recipient["cap"])
-        await self.page.locator(f"#{AR_PREFIX}provincia").fill(recipient["province"])
+        province = await self.page.locator(f"#{AR_PREFIX}provincia").input_value()
+        if province != recipient["province"]:
+            raise RuntimeError(f"Provincia Poste {province!r} diversa da quella dell'avviso")

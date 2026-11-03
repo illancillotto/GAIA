@@ -13,10 +13,13 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.application_user import ApplicationUser
 from app.modules.ruolo.poste_dispatch_models import PosteDispatchItem, PosteDispatchLot
+from app.modules.ruolo.services.poste_dispatch_accounts import checked_job
 from app.modules.ruolo.services.poste_dispatch_address import suggestion_label
 from app.modules.ruolo.services.poste_dispatch_state import (
     DRAFT_STATUSES,
+    DispatchConflict,
     get_lot,
     record_event,
     release,
@@ -118,6 +121,17 @@ def mark_draft_creating(db: Session, item_id: UUID, *, job_id: int) -> bool:
     item = _item(db, item_id)
     if item.status not in DRAFT_READY_STATUSES:
         return False
+    job = checked_job(db, item.lot_id, job_id)
+    if job.mode != "poste_dispatch_drafts":
+        raise DispatchConflict("Job di caricamento non coerente con l'account dell'avviso")
+    username = db.scalar(
+        select(ApplicationUser.username).where(ApplicationUser.id == job.requested_by_user_id)
+    )
+    if username is None:
+        raise DispatchConflict("Operatore GAIA del caricamento non disponibile")
+    item.upload_requested_by_user_id = job.requested_by_user_id
+    item.upload_requested_by_username = username
+    item.upload_job_id = job_id
     item.error_detail = None
     transition(db, item, "draft_creating", "draft_submitting", job_id=job_id)
     return True

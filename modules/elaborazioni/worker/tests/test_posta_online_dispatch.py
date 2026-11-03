@@ -24,6 +24,7 @@ class Locator:
         self.count_value = state.get("count", 1)
         self.visible = state.get("visible", True)
         self.text, self.texts = state.get("text", ""), list(state.get("texts", ()))
+        self.value = state.get("value", "")
 
     async def count(self):
         return self.count_value
@@ -37,6 +38,9 @@ class Locator:
     async def all_inner_texts(self):
         return self.texts
 
+    async def input_value(self):
+        return self.value
+
     def nth(self, index):
         return Locator(self.page, f"{self.selector}[{index}]", {})
 
@@ -47,6 +51,10 @@ class Locator:
             self.page.log.append(
                 (action, self.selector, *[arg for arg in args if not isinstance(arg, int)])
             )
+            if action == "press_sequentially" and self.selector == "#raccomandataarlocalita":
+                self.page.locators["ul.ui-autocomplete:visible li"] = {
+                    "texts": self.page.city_options
+                }
 
         return record
 
@@ -55,9 +63,11 @@ class Page:
     def __init__(self, pages=(), **locators):
         self.pages, self.log, self.fail_on, self.url_error = list(pages), [], set(), None
         self.locators = locators
+        self.city_options = ["ORISTANO (OR)"]
 
     def locator(self, selector):
-        return Locator(self, selector, self.locators.get(selector, {}))
+        default = {"visible": False} if selector == "#alertCookie-confirm" else {}
+        return Locator(self, selector, self.locators.get(selector, default))
 
     async def goto(self, url, **_kwargs):
         self.log.append(("goto", url))
@@ -142,6 +152,7 @@ def _form_page(**locators):
     defaults = {
         "a[onclick*=\"registraForm('raccomandataar')\"]": {"count": 0},
         "#raccomandataarSummary": {"text": " 1 "},
+        "#raccomandataarprovincia": {"value": "OR", "visible": False},
         ".has-error": {"count": 0},
         "ul.ui-autocomplete:visible li": {
             "texts": ["VIA ORISTANO 170, CAGLIARI (CA), 09127", LABEL, MANUAL]
@@ -231,6 +242,45 @@ def test_create_draft_fills_one_ar_recipient_and_presses_continua_once():
     assert Path(uploaded[2]).name == "GAIA_020217801062586.pdf" and not Path(uploaded[2]).exists()
 
 
+def test_legacy_cookie_notice_is_closed_before_filling_the_form():
+    page = _form_page(**{"#alertCookie-confirm": {"visible": True}})
+    client = Client(page)
+
+    async def prepare_page(_page):
+        # The generic fallback disables pointer events on legacy banners.
+        page.fail_on.add("#alertCookie-confirm")
+
+    client._prepare_login_page = prepare_page
+    portal = dispatch.PostaOnlineDispatchPortal(client)
+
+    async def before_submit():
+        return None
+
+    run(portal.create_draft(_item("manual"), b"%PDF", before_submit))
+    actions = [entry[:2] for entry in page.log]
+    assert actions.index(("click", "#alertCookie-confirm")) < actions.index(
+        ("fill", "input[name=nomeInvio]")
+    )
+
+
+def test_uploaded_pdf_remains_available_until_form_submission_completes():
+    page = _form_page()
+    portal = dispatch.PostaOnlineDispatchPortal(Client(page))
+    uploaded = []
+
+    async def before_submit():
+        path = Path(next(entry[2] for entry in page.log if entry[0] == "set_input_files"))
+        assert path.read_bytes() == b"%PDF-notice"
+        uploaded.append(path)
+
+    async def navigation(*_args, **_kwargs):
+        assert uploaded[0].read_bytes() == b"%PDF-notice"
+
+    page.wait_for_url = navigation
+    run(portal.create_draft(_item(), b"%PDF-notice", before_submit))
+    assert not uploaded[0].exists()
+
+
 def test_remembered_ar_form_and_manual_address():
     page = _form_page(
         **{
@@ -251,6 +301,77 @@ def test_remembered_ar_form_and_manual_address():
     ) in actions
     assert ("fill", "#raccomandataarindirizzoautocomplete", "VIA CAGLIARI 170") in page.log
     assert ("select_option", "#raccomandataarcap", "09170") in page.log
+    city_click = actions.index(("click", "ul.ui-autocomplete:visible li[0]"))
+    address_fill = page.log.index(
+        ("fill", "#raccomandataarindirizzoautocomplete", "VIA CAGLIARI 170")
+    )
+    cap_select = actions.index(("select_option", "#raccomandataarcap"))
+    assert city_click < address_fill < cap_select
+    assert ("fill", "#raccomandataarprovincia") not in actions
+    assert ("press", "#raccomandataarlocalita", "Tab") not in page.log
+
+
+@pytest.mark.parametrize(
+    "suggestions",
+    [[], ["ORISTANO (CA)"], ["ORISTANO (OR)", "ORISTANO (OR)"]],
+)
+def test_manual_city_must_match_notice_city_and_province_once(suggestions):
+    page = _form_page()
+    page.city_options = suggestions
+    portal = dispatch.PostaOnlineDispatchPortal(Client(page))
+
+    async def before_submit():
+        pytest.fail("CONTINUA must not be reached")
+
+    with pytest.raises(dispatch.DraftNotSubmitted, match=r"Comune.*non proposto univocamente"):
+        run(portal.create_draft(_item("manual"), b"%PDF", before_submit))
+    actions = [entry[:2] for entry in page.log]
+    assert ("fill", "#raccomandataarindirizzo") not in actions
+    assert ("click", "#continua") not in actions
+
+
+def test_manual_address_keeps_notice_street_when_city_selection_enables_cap():
+    page = _form_page(**{"#raccomandataarprovincia": {"value": "MI", "visible": False}})
+    page.city_options = ["MILANO MARITTIMA (RA)", "MILANO (MI)"]
+    portal = dispatch.PostaOnlineDispatchPortal(Client(page))
+    item = _item("manual")
+    item.recipient.update(address="VIA VIGONI 5", city="MILANO", province="MI", cap="20122")
+
+    async def before_submit():
+        actions = [entry[:2] for entry in page.log]
+        selected = actions.index(("click", "ul.ui-autocomplete:visible li[1]"))
+        assert selected < actions.index(("fill", "#raccomandataarindirizzo"))
+        assert selected < actions.index(("select_option", "#raccomandataarcap"))
+
+    run(portal.create_draft(item, b"%PDF", before_submit))
+    assert ("fill", "#raccomandataarindirizzo", "VIA VIGONI 5") in page.log
+    assert ("select_option", "#raccomandataarcap", "20122") in page.log
+    assert ("fill", "#raccomandataarprovincia", "MI") not in page.log
+
+
+def test_manual_province_must_match_notice_before_continua():
+    page = _form_page(**{"#raccomandataarprovincia": {"value": "CA", "visible": False}})
+    portal = dispatch.PostaOnlineDispatchPortal(Client(page))
+
+    async def before_submit():
+        pytest.fail("CONTINUA must not be reached")
+
+    with pytest.raises(dispatch.DraftNotSubmitted, match=r"Provincia Poste.*diversa"):
+        run(portal.create_draft(_item("manual"), b"%PDF", before_submit))
+    assert ("click", "#continua") not in [entry[:2] for entry in page.log]
+
+
+def test_missing_notice_cap_stops_manual_address_before_continua():
+    page = _form_page()
+    page.fail_on.add("#raccomandataarcap")
+    portal = dispatch.PostaOnlineDispatchPortal(Client(page))
+
+    async def before_submit():
+        pytest.fail("CONTINUA must not be reached")
+
+    with pytest.raises(dispatch.DraftNotSubmitted, match="select_option failed"):
+        run(portal.create_draft(_item("manual"), b"%PDF", before_submit))
+    assert ("click", "#continua") not in [entry[:2] for entry in page.log]
 
 
 @pytest.mark.parametrize(

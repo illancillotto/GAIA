@@ -31,7 +31,7 @@ def _lot(db, tmp_path, **payload_overrides):
     number = f"0202178010625{len(_jobs(db)):02d}"
     items = [seed_batch_item(db, tmp_path, payload_json=payload(number, **payload_overrides))]
     lot = service.create_lot(
-        db, title=" Solleciti 2021 ", batch_item_ids=[item.id for item in items], actor_id=1
+        db, credential_id=1, title=" Solleciti 2021 ", batch_item_ids=[item.id for item in items], actor_id=1
     )
     return lot, list(
         db.scalars(select(PosteDispatchItem).where(PosteDispatchItem.lot_id == lot.id))
@@ -49,7 +49,7 @@ def test_lot_snapshots_pdf_and_recipient_and_queues_the_address_check(db, tmp_pa
     assert item.status == "address_pending" and item.artifact == PDF
     assert item.recipient["city"] == "ORISTANO" and len(item.artifact_sha256) == 64
     [job] = _jobs(db)
-    assert job.mode == "poste_dispatch_addresses" and job.payload_json == {"lot_id": str(lot.id)}
+    assert job.mode == "poste_dispatch_addresses" and job.payload_json == {"lot_id": str(lot.id), "poste_username": "account-1"}
     kinds = [event.kind for event in db.scalars(select(PosteDispatchEvent))]
     assert kinds == ["lot_created", "job_addresses_queued"]
 
@@ -70,12 +70,12 @@ def test_lot_size_and_uniqueness_are_enforced(db, tmp_path, ids):
         "too_many": [uuid4() for _ in range(51)],
     }[ids]
     with pytest.raises(DispatchConflict, match="da 1 a 50"):
-        service.create_lot(db, title="x", batch_item_ids=selected, actor_id=1)
+        service.create_lot(db, credential_id=1, title="x", batch_item_ids=selected, actor_id=1)
 
 
 def test_unknown_items_are_rejected(db):
     with pytest.raises(DispatchNotFound):
-        service.create_lot(db, title="x", batch_item_ids=[uuid4()], actor_id=1)
+        service.create_lot(db, credential_id=1, title="x", batch_item_ids=[uuid4()], actor_id=1)
 
 
 @pytest.mark.parametrize(
@@ -88,13 +88,13 @@ def test_unknown_items_are_rejected(db):
 def test_only_final_pdf_reminders_can_be_prepared(db, tmp_path, overrides, message):
     item = seed_batch_item(db, tmp_path, **overrides)
     with pytest.raises(DispatchConflict, match=message):
-        service.create_lot(db, title="x", batch_item_ids=[item.id], actor_id=1)
+        service.create_lot(db, credential_id=1, title="x", batch_item_ids=[item.id], actor_id=1)
 
 
 def test_a_notice_cannot_be_in_two_active_lots(db, tmp_path):
     _, [item] = _lot(db, tmp_path)
     with pytest.raises(DispatchConflict, match="già in un altro lotto"):
-        service.create_lot(db, title="y", batch_item_ids=[item.batch_item_id], actor_id=1)
+        service.create_lot(db, credential_id=1, title="y", batch_item_ids=[item.batch_item_id], actor_id=1)
 
 
 def test_remote_nas_documents_are_downloaded(db, tmp_path, monkeypatch):
@@ -113,7 +113,7 @@ def test_a_docx_reminder_is_not_a_final_pdf(db, tmp_path):
     document.write_bytes(b"PK docx")
     item = seed_batch_item(db, tmp_path, generated_document_path=str(document))
     with pytest.raises(DispatchConflict, match="senza PDF"):
-        service.create_lot(db, title="x", batch_item_ids=[item.id], actor_id=1)
+        service.create_lot(db, credential_id=1, title="x", batch_item_ids=[item.id], actor_id=1)
 
 
 def test_candidates_exclude_active_notices_and_filter_by_text(db, tmp_path):
@@ -122,7 +122,7 @@ def test_candidates_exclude_active_notices_and_filter_by_text(db, tmp_path):
     seed_batch_item(db, tmp_path, status="failed")
     rows, total = service.list_candidates(db, q=None, page=1, page_size=10)
     assert total == 2 and {row[0].id for row in rows} == {first.id, second.id}
-    service.create_lot(db, title="x", batch_item_ids=[first.id], actor_id=1)
+    service.create_lot(db, credential_id=1, title="x", batch_item_ids=[first.id], actor_id=1)
     rows, total = service.list_candidates(db, q="cabras", page=1, page_size=10)
     assert total == 1 and rows[0][0].id == second.id and rows[0][1] == "Lotto Cabras"
 
@@ -194,3 +194,14 @@ def test_upload_refuses_a_missing_or_altered_pdf(db, tmp_path):
         verified_artifact(item)
     attach_artifact(item, b"%PDF new")
     assert verified_artifact(item) == b"%PDF new"
+
+
+def test_failed_pdf_regeneration_is_reported_as_dispatch_conflict(db, tmp_path, monkeypatch):
+    item = seed_batch_item(db, tmp_path)
+
+    def fail(*_args, **_kwargs):
+        raise service.regeneration.RegenerationFailed("PDF mancante")
+
+    monkeypatch.setattr(service.regeneration, "ensure_batch_item_document", fail)
+    with pytest.raises(DispatchConflict, match="non ricostruibile"):
+        service.read_batch_document(db, item, 1)

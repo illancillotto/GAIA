@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import {
+  listPosteAccounts, bindPosteAccount,
   acceptPosteManualAddress,
   cancelPosteItem,
   createPosteLot,
@@ -41,12 +42,12 @@ test("reads candidates, lots and a lot with the bearer token", async () => {
 });
 
 test("sends the operator commands", async () => {
-  await createPosteLot("t", "Lotto", ["a", "b"]);
+  await createPosteLot("t", "Lotto", ["a", "b"], 2);
   await requestPosteJob("t", "lot-1", "drafts");
   await updatePosteRecipient("t", "lot-1", "item-1", recipient);
   await acceptPosteManualAddress("t", "lot-1", "item-1");
   await cancelPosteItem("t", "lot-1", "item-1");
-  expect(JSON.parse(call(0)[1].body as string)).toEqual({ title: "Lotto", batch_item_ids: ["a", "b"] });
+  expect(JSON.parse(call(0)[1].body as string)).toEqual({ title: "Lotto", batch_item_ids: ["a", "b"], credential_id: 2 });
   expect(JSON.parse(call(1)[1].body as string)).toEqual({ kind: "drafts" });
   expect(call(2)[1].method).toBe("PUT");
   expect(call(3)[0]).toContain("/items/item-1/manual-address");
@@ -58,4 +59,16 @@ test("downloads the PDF snapshot as a blob", async () => {
   const blob = await getPosteItemDocument("t", "lot-1", "item-1");
   expect(await blob.text()).toBe("%PDF");
   expect(call(0)[0]).toContain("/lots/lot-1/items/item-1/document");
+});
+
+
+test("selects an explicit Poste account and filters lots by that account", async () => {
+  await listPosteAccounts("t");
+  await listPosteLots("t", 2);
+  await bindPosteAccount("t", "legacy", 2);
+  expect(call(0)[0]).toContain(`${BASE}/accounts`);
+  expect(call(1)[0]).toContain("credential_id=2");
+  expect(call(2)[0]).toContain("/lots/legacy/account");
+  expect(call(2)[1].method).toBe("PUT");
+  expect(JSON.parse(call(2)[1].body as string)).toEqual({ credential_id: 2 });
 });

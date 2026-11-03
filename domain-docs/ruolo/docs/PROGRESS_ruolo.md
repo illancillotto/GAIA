@@ -1,5 +1,57 @@
 # GAIA Ruolo — Progress Tracking v1.0
 
+## Pool caricamenti Poste per account — 2026-11-03
+
+- Implementato localmente, da distribuire: fino a tre account distinti in
+  parallelo, limite configurabile `POSTA_ONLINE_MAX_CONCURRENT_ACCOUNTS`.
+  Lock PostgreSQL per username anche fra processi; stesso account in coda,
+  sincronizzazioni e test credenziali legacy con accesso esclusivo al portale.
+- Errori isolati, stop con attesa dei job attivi e recovery soltanto dopo
+  rilascio del lock. Audit multiaccount e INVIA manuale conservati.
+- Revisione finale: 90 test worker PASS, inclusi sei su PostgreSQL 16 isolato;
+  coverage righe/branch 100% sui sei runtime pool/dispatch. Altri 61 test worker,
+  105 frontend e 270 tooling PASS; coverage 100% anche sui 21 runtime backend/script.
+  Test di rigenerazione PDF aggiornato alla credenziale obbligatoria, 17/17 PASS.
+- Candidata CED preparata, import e sorgenti verificati; incluso il watchdog
+  già versionato richiesto dal runner (20 test, coverage 100%). Nessun riavvio
+  o caricamento reale. Tre credenziali attive nel DB di produzione.
+- L'utente ha autorizzato commit/push/deploy lasciando i 68 incrementi di
+  complessità su 16 file come debito tecnico `POSTE-20261103-COMPLEXITY`.
+  Tutti i confronti sono conservati in `docs/code-quality/debt/POSTE_2026-11-03.json`;
+  revisione entro 03/12/2026 o alla prossima modifica dei callable. Nessuna
+  modifica a soglie, esclusioni o gate: l'eccezione riguarda solo questo elenco.
+  Evidenze e matrice comportamenti/test nel runbook `POSTE_INVIO_SOLLECITI_2026-10-28.md`.
+
+## Poste multiaccount e audit caricamenti — 2026-11-03
+
+- Rilasciato sul CED alle 09:49 CET: `poste-accounts-20261103`, backend,
+  frontend e worker Poste, database a `20261103_0900`. Nuova scelta obbligatoria
+  dell'account per lotto, filtro per account, attribuzione del caricamento
+  all'operatore GAIA richiedente con username e job conservati negli eventi.
+- Verifiche produzione: tre servizi sani, sette percorsi HTTP a 200, API
+  anonime a 401 e autenticate a 200, filtro account e campi audit presenti;
+  hash dei dati originali invariati (1 lotto, 5 avvisi, 39 eventi). Nessun
+  caricamento o invio reale avviato dal rilascio. È configurata una sola
+  credenziale attiva; il lotto storico richiede l'associazione esplicita nella UI.
+- Migrazione provata con upgrade/downgrade su copie PostgreSQL isolate,
+  comprese le tabelle di riferimento. La prima prova di downgrade è stata
+  interrotta per lock sui riferimenti pubblici e la sua connessione terminata;
+  il test isolato finale passa senza modifiche alle tabelle pubbliche.
+- Pacchetto worker corretto prima della chiusura: il backend condiviso risiede
+  in `/app/backend/app/`, non `/app/app/`. Import dell'immagine corretto e
+  avvio del worker verificati. Il ripristino iniziale ha anche evidenziato che
+  il backend precedente non riconosceva la nuova revisione Alembic: è stata
+  preparata un'immagine di ripristino con la sola revisione aggiunta, senza
+  retrocedere lo schema o perdere audit. Il nuovo rilascio è quello attivo.
+- Ambiente, mount, limiti, sorgenti estranei e container degli altri servizi
+  conservati. Backup schema e tabelle Poste, manifest e ripristino:
+  `/opt/gaia/releases/poste-accounts-20261103/rollback.sh`.
+- Verifiche locali: 75 test backend, 21 worker e 89 frontend; coverage 100%
+  sui runtime della feature, lint/typecheck e ratchet contro `main` superati.
+  La sincronizzazione della baseline locale resta rifiutata come documentato
+  nel runbook; nessun bypass, commit o push eseguito.
+- Dettagli: [POSTE_INVIO_SOLLECITI_2026-10-28.md](POSTE_INVIO_SOLLECITI_2026-10-28.md).
+
 ## Rigenerazione dei PDF dei solleciti — 2026-10-29
 
 - **2026-10-30, Avvisi da sollecitare per anno.** Riquadro guidato in Invio

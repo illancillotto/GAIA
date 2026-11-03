@@ -22,7 +22,8 @@ rifiutare ogni invio.
 1. Dalla sidebar Ruolo aprire **Invio solleciti** (`/ruolo/tributi/solleciti`).
    Nella scheda «Solleciti generati» aprire un lotto, controllare il PDF con
    **Anteprima avviso** e spuntare **Seleziona per Posta Online**. La selezione
-   resta mentre si passa ad altri lotti, fino a 50 solleciti. Dare un titolo e
+   resta mentre si passa ad altri lotti, fino a 50 solleciti. Scegliere l'account
+   Poste da usare, dare un titolo e
    premere **Carica su Poste**: GAIA crea il lotto e apre la scheda «Posta
    Online». In alternativa, nella stessa scheda, «Nuovo lotto» cerca i
    solleciti per nome, codice fiscale o lotto. Il vecchio indirizzo
@@ -43,7 +44,8 @@ rifiutare ogni invio.
 
    Dopo 45 secondi rilegge prezzi e stati. Due bozze fallite di seguito fermano
    il lotto.
-4. L'operatore apre **Verifica e invia** su Posta Online e controlla anteprime,
+4. L'operatore accede con **l'account Poste indicato nel lotto**, apre
+   **Verifica e invia** su Posta Online e controlla anteprime,
    destinatari e prezzi. Se tutto è corretto preme **INVIA**.
 5. **Controlla Poste.** Il worker rilegge «Verifica e invia» e l'archivio. Per
    ogni bozza che non è più in «Verifica e invia»:
@@ -65,6 +67,189 @@ La pagina avvisa se in «Verifica e invia» ci sono **bozze che non fanno parte
 del lotto**: non è verificato se INVIA spedisca tutte le bozze presenti o solo
 quelle selezionate. Segnala anche **bozze doppie**, cioè con lo stesso nome. Le
 bozze scadono su Poste dopo 7 giorni, e la pagina mostra la prima scadenza.
+
+## Account Poste e tracciabilità — 2026-11-03
+
+Le credenziali si configurano nella gestione Posta Online esistente. Alla
+creazione del lotto è obbligatorio scegliere una credenziale attiva: GAIA
+conserva ID, username e nome dell'account e non permette di cambiarlo sul lotto.
+La password resta nella gestione credenziali e non compare nelle API dei lotti.
+La pagina permette di filtrare i lotti per account; restano i permessi GAIA
+esistenti di lettura e gestione, senza introdurre una proprietà privata del lotto.
+
+Ogni verifica indirizzi, caricamento, riconciliazione ed eliminazione usa
+esclusivamente l'account associato. Il worker apre una sessione browser separata,
+senza riutilizzare cookie o browser CDP condivisi. Un account disattivato, uno
+username cambiato o un job incoerente bloccano l'operazione: non si passa a
+un'altra credenziale disponibile. Le bozze e l'archivio letti sono quelli
+visibili all'account usato su Poste; per vedere le bozze nel portale bisogna
+accedere con quell'account. I controlli contro il doppio caricamento dello stesso
+avviso restano globali anche fra account diversi.
+
+GAIA distingue il creatore del lotto dall'operatore che avvia il caricamento.
+Prima di CONTINUA registra sull'avviso ID e username dell'operatore richiedente
+e ID del job. Gli eventi conservano operatore, username al momento dell'evento,
+job, stato e data: anche in caso di nuovo tentativo si può ricostruire la storia.
+Il dettaglio mostra account, creatore e operatore del caricamento di ogni avviso.
+La riconciliazione registra l'operatore che la richiede; questo non identifica
+chi ha premuto manualmente INVIA sul portale Poste.
+Se l'operatore del caricamento non è più identificabile, il worker blocca
+CONTINUA prima di cambiare lo stato dell'avviso.
+
+La migration `20261103_0900`, successiva a `20261028_1500`, aggiunge questi campi
+e conserva i lotti storici. Recupera gli username soltanto dagli ID GAIA già
+registrati; non deduce account Poste o autore del caricamento. Prima di usare
+un lotto storico occorre associargli esplicitamente l'account effettivamente
+usato, tramite **Associa account** (permesso di gestione, nessun job in corso).
+L'associazione è definitiva e produce un evento di audit.
+
+Per il rilascio occorre distribuire backend, frontend e worker compatibili ed
+eseguire la migration prima di riattivare i job. Il rilascio sul CED è stato
+completato il 2026-11-03 alle 09:49 CET, release `poste-accounts-20261103`, con
+database a `20261103_0900`. Backend, frontend e worker sono sani; le nuove API
+sono state verificate con autenticazione e filtro per account. I dati del lotto
+storico sono conservati: 1 lotto, 5 avvisi e 39 eventi. È presente una sola
+credenziale Poste attiva e il lotto storico resta da associare esplicitamente;
+il collaudo sul portale con due account reali resta da eseguire.
+
+Le immagini mantengono configurazione, volumi e sorgenti estranei alla modifica.
+Nel worker i moduli condivisi devono essere copiati in `/app/backend/app/`,
+mentre nel backend risiedono in `/app/app/`: il pacchetto iniziale del worker è
+stato corretto e verificato anche con un import nell'immagine di produzione.
+Backup e ricevuta del rilascio sono in
+`/opt/gaia/releases/poste-accounts-20261103/`; il ripristino è `rollback.sh`.
+Il backend di ripristino include la nuova revisione Alembic, necessaria perché
+l'entrypoint esegue `upgrade head`, ma mantiene il codice applicativo precedente.
+Il ripristino conserva lo schema additivo e i dati di audit.
+
+Verifica locale della modifica:
+
+- Backend: `pytest tests/ruolo/test_poste_dispatch_*.py`, 75 test superati;
+  coverage di righe e branch al 100% sui nove file runtime della modifica.
+  Inclusi due account distinti, operatore diverso dal creatore, cambio username,
+  credenziale inattiva, job di altro lotto, duplicati tra account, migration
+  up/down e conservazione dei dati storici senza attribuzioni dedotte.
+- Worker: 21 test del runner superati, coverage di righe e branch al 100% su
+  `posta_online_dispatch_runner.py`; inclusi mancata apertura del browser con
+  account incoerente e disattivazione di storage state e CDP condivisi.
+- Frontend: 89 test nelle quattro suite account, pagina Poste, client API e
+  pagina solleciti; coverage statement/branch/funzioni/righe al 100% sui sette
+  file runtime interessati. Typecheck ed ESLint mirato superati.
+- `make lint-backend BASE_REF=main QUALITY_PYTHON=backend/.venv/bin/python`
+  superato. Ratchet di complessità contro la baseline del merge-base `main`,
+  senza nuove violation o regressioni. La lista dei solleciti candidati ha una
+  responsabilità di rendering separata dal form di creazione: `CandidatePicker`
+  passa da cognitiva/ciclomatica 13/14 a 10/11, senza cambiare la selezione.
+  Non sono stati modificati soglie, esclusioni o motori delle metriche.
+- La sincronizzazione globale `make complexity-baseline` è stata rifiutata:
+  lo snapshot locale già modificato rispetto a `main` rileva 60 aumenti di
+  metriche rispetto al proprio contenuto, pur con ratchet contro `main` verde.
+  La baseline preesistente è rimasta invariata; nessun aggiornamento forzato o
+  `baseline-repair` è stato applicato. `baseline-verify` non è stato eseguito
+  perché la sincronizzazione richiesta prima della verifica non è riuscita.
+
+## Caricamenti concorrenti per account — 2026-11-03
+
+Implementazione locale successiva al rilascio `poste-accounts-20261103`, ancora
+da distribuire. Il worker esegue fino a tre job di caricamento contemporanei,
+ciascuno con un account Poste diverso. Il limite per processo si configura con
+`POSTA_ONLINE_MAX_CONCURRENT_ACCOUNTS` (default `3`, intervallo `1–32`), esposto
+anche dal servizio Docker Compose `elaborazioni-worker-poste`.
+
+`posta_online_pool.py` gestisce il pool; `posta_online_queue.py` seleziona i job;
+`posta_online_leases.py` mantiene lock di sessione PostgreSQL su connessioni
+dedicate per tutta la lavorazione, anche attraverso i commit del job. Due
+credenziali con lo stesso username normalizzato (spazi esterni rimossi e
+confronto senza distinzione maiuscole/minuscole) condividono il lock. I job
+successivi dello stesso account aspettano, mentre altri account avanzano;
+questo vale anche con più processi worker collegati allo stesso database.
+Il limite numerico è per processo, il lock per account è condiviso nel DB.
+
+I job storici di sincronizzazione e test credenziali mantengono l'accesso
+esclusivo al portale: attendono la fine dei caricamenti e, mentre lavorano,
+impediscono l'avvio di altre sessioni, preservando storage state e CDP legacy.
+I caricamenti continuano a usare browser isolati e la credenziale del lotto,
+con la tracciabilità GAIA già prevista. Le fasce orarie e i cooldown restano
+applicati. Un errore di un job non annulla le altre lavorazioni. Lo stop
+ordinario smette di acquisire job e attende quelli attivi, entro il tempo di
+arresto del servizio; dopo l'interruzione del processo, la perdita dei lock
+consente il recupero dei job rimasti `processing`, senza azzerare quelli di
+altri worker ancora attivi. L'INVIA resta manuale sul portale Poste.
+
+Verifiche finali: 90 test worker superati, inclusi sei casi su PostgreSQL 16
+dedicato e isolato. Oltre ai due pool, tre account, username duplicati, riga
+occupata e perdita della connessione proprietaria, due thread acquisiscono
+realmente nello stesso momento: account diversi partono insieme e username
+equivalenti non ricevono ownership duplicate. Coverage righe e branch 100%
+su pool, coda, lock, runner del processo, runner dei caricamenti e portale
+(537 statement, 128 branch). Altri 31 test del worker generale e 30 di
+sincronizzazione/cooldown/parsing passano. Arresto e cancellazione provati
+con browser simulati; nessun caricamento reale effettuato dai test.
+
+Ratchet contro la baseline del merge-base `main` senza regressioni:
+`run_worker` conserva cognitiva `0`, ciclomatica `1`, LOC `6`; i tre nuovi
+file non hanno violation error-level (due warning). La baseline locale
+preesistente non viene forzata; resta il limite di sincronizzazione globale
+descritto nella verifica del rilascio multiaccount sopra.
+
+### Revisione finale, dipendenze e stato del rilascio
+
+Il 03/11 la verifica finale comprende anche le estensioni precedenti ancora
+non committate: 105 test frontend con coverage statement/branch/funzioni/righe
+100% sui file interessati, typecheck ed ESLint verdi; coverage righe e branch
+100% sui 21 file backend/script interessati (2272 statement, 570 branch).
+La suite Ruolo estesa ha individuato un test di rigenerazione PDF rimasto
+alla firma precedente di `create_lot`, senza credenziale. Il test ora salva
+una credenziale esplicita prima del rollback del lotto e continua a verificare
+sia il recupero del documento sia il rifiuto se il NAS non è raggiungibile:
+l'intero file passa, 17 test. Le altre 76 verifiche della ripetizione mirata
+campagna/script/rigenerazione erano già passate. Nessun assert indebolito.
+I test PostgreSQL non pertinenti della suite estesa restano saltati in SQLite;
+i sei test di concorrenza citati sopra usano invece un database PostgreSQL reale.
+La suite completa degli strumenti di qualità passa: 270 test.
+
+L'immagine candidata `gaia-elaborazioni-worker-poste:poste-pool-20261103` è
+preparata sul CED in `/opt/gaia/releases/poste-pool-20261103`, senza riavviare
+servizi. Il runner locale dipende anche da `sister_worker_watchdog.py`, già
+versionato ma assente nell'immagine precedente: il primo probe candidato ha
+rilevato l'import mancante, risolto includendo questa dipendenza. I suoi 20
+test passano con coverage righe/branch 100%. Il pacchetto definitivo contiene
+i tre moduli del pool, `worker_runner.py` e il watchdog. Hash di tutte le altre
+sorgenti Python invariati, import della candidata e limite `3` verificati,
+configurazione conservata salvo la nuova variabile del limite. Nessuna nuova
+migrazione. In produzione risultano tre credenziali attive; nessun job attivo
+al preflight e il lotto storico richiede ancora associazione esplicita.
+
+La sincronizzazione ordinaria della baseline locale era stata rifiutata con
+60 incrementi di metrica, sospendendo commit/push/deploy.
+Una seconda verifica ha ricostruito la baseline dal solo codice committato
+`686e529e`, in un worktree pulito; `baseline-verify` su quella fotografia passa.
+Il confronto delle estensioni correnti con tale fotografia rileva 68 incrementi
+su 16 file (51 sul runtime e 17 nei test worker), pur senza nuove violation
+error-level. Il gate autorevole sul merge-base di `origin/main` passa perché
+la sua fotografia è più vecchia. I risultati sono distinti: il gate verde
+non viene presentato come prova che la sincronizzazione sia riuscita.
+L'utente ha quindi autorizzato esplicitamente di procedere mantenendo questi
+incrementi come debito tecnico tracciato. Il record
+`docs/code-quality/debt/POSTE_2026-11-03.json`, ID
+`POSTE-20261103-COMPLEXITY`, conserva tutti i 68 confronti prima/dopo, il
+perimetro, l'autorizzazione e la revisione prevista entro il 03/12/2026 o alla
+prossima modifica dei callable interessati. Nessuna soglia, esclusione o
+regola del gate cambia: l'eccezione vale soltanto per gli incrementi elencati.
+La sincronizzazione della fotografia finale richiede corrispondenza esatta con
+questo elenco; test e coverage restano obbligatori. Il rilascio del pool è
+autorizzato, con immagine candidata già verificata e rollback predisposto.
+
+| Comportamento | Evidenza pertinente |
+| --- | --- |
+| Account distinti in parallelo e limite del pool | pool con tre account e quarto in attesa; due pool PostgreSQL |
+| Uno stesso username non si sovrappone | credenziali duplicate normalizzate e acquisizioni simultanee PostgreSQL |
+| Job occupato non recuperato da un altro worker | lock di sessione, commit intermedi e riga PostgreSQL già bloccata |
+| Recovery dopo perdita del proprietario | rilascio della connessione e nuova acquisizione dello stesso job |
+| Arresto e cancellazione | completamento del browser attivo e rilascio dei lock anche prima dell'avvio del task |
+| Errore isolato | un account fallisce mentre il secondo completa il lavoro |
+| Account esplicito e audit | backend multiaccount, richiedente diverso dal creatore, incongruenze respinte prima del browser |
+| Indirizzo dell'avviso e PDF | portale comune prima della via e rigenerazione del PDF mancante |
 
 ## Stati dell'avviso nel lotto
 
@@ -107,8 +292,10 @@ alterato non viene caricato.
   | Metodo | Percorso | Uso |
   | --- | --- | --- |
   | GET | `/candidates` | solleciti generati in PDF e non in un lotto attivo |
-  | GET, POST | `/lots` | elenco dei lotti, creazione |
+  | GET | `/accounts` | account selezionabili, senza password |
+  | GET, POST | `/lots` | elenco filtrabile con `credential_id`; creazione con `credential_id` obbligatorio |
   | GET | `/lots/{id}` | dettaglio del lotto |
+  | PUT | `/lots/{id}/account` | associazione definitiva dell'account a un lotto storico |
   | POST | `/lots/{id}/jobs` | operazioni sul portale: `addresses`, `drafts`, `reconcile`, `delete` |
   | PUT | `/lots/{id}/items/{item}/recipient` | correzione del destinatario |
   | POST | `/lots/{id}/items/{item}/manual-address` | indirizzo manuale |
@@ -121,10 +308,11 @@ alterato non viene caricato.
 
   I job usano la coda esistente `posta_online_registered_mail_sync_jobs` con
   le modalità `poste_dispatch_*`, smistate da `posta_online_sync._job_runner`.
-  Restano quindi un solo worker Poste, una credenziale alla volta e le fasce
-  orarie. Si può avere un solo job attivo per lotto. Un job interrotto viene
-  ripreso dal recovery esistente: rilegge «Verifica e invia» prima di agire e
-  non ripete CONTINUA sugli avvisi in `draft_creating`.
+  Il pool permette account distinti in parallelo e serializza i job dello
+  stesso account, mantenendo le fasce orarie. Si può avere un solo job attivo
+  per lotto. Un job interrotto viene ripreso dopo aver acquisito il lock
+  dell'account: rilegge «Verifica e invia» prima di agire e non ripete CONTINUA
+  sugli avvisi in `draft_creating`.
 - Frontend:
   - pagina «Invio solleciti» `src/app/ruolo/tributi/solleciti/page.tsx`, con
     le schede «Solleciti generati» e «Posta Online»; `poste/page.tsx` apre la

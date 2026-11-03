@@ -9,6 +9,8 @@ from app.api.deps import require_module, require_section
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.modules.ruolo.poste_dispatch_schemas import (
+    PosteDispatchAccountChoice,
+    PosteDispatchAccountOut,
     PosteDispatchCandidate,
     PosteDispatchCandidateList,
     PosteDispatchItemOut,
@@ -20,6 +22,7 @@ from app.modules.ruolo.poste_dispatch_schemas import (
     PosteDispatchRecipientUpdate,
 )
 from app.modules.ruolo.services import poste_dispatch as service
+from app.modules.ruolo.services import poste_dispatch_accounts as accounts
 from app.modules.ruolo.services import poste_dispatch_views as views
 from app.modules.ruolo.services.poste_dispatch_state import DispatchConflict, DispatchNotFound
 
@@ -65,8 +68,8 @@ def list_candidates(
 
 
 @router.get("/lots", response_model=PosteDispatchLotList)
-def list_lots(page: int = 1, page_size: int = 20, db: Session = Depends(get_db)):
-    items, total = views.list_lots(db, page=page, page_size=page_size)
+def list_lots(page: int = 1, page_size: int = 20, credential_id: int | None = None, db: Session = Depends(get_db)):
+    items, total = views.list_lots(db, page=page, page_size=page_size, credential_id=credential_id)
     return PosteDispatchLotList(items=items, total=total, page=page, page_size=page_size)
 
 
@@ -79,9 +82,28 @@ def create_lot(
     lot = _command(
         db,
         lambda: service.create_lot(
-            db, title=payload.title, batch_item_ids=payload.batch_item_ids, actor_id=current_user.id
+            db, title=payload.title, batch_item_ids=payload.batch_item_ids,
+            credential_id=payload.credential_id, actor_id=current_user.id
         ),
     )
+    return views.lot_detail(db, lot.id)
+
+
+@router.get("/accounts", response_model=list[PosteDispatchAccountOut])
+def list_accounts(db: Session = Depends(get_db)):
+    return accounts.list_accounts(db)
+
+
+@router.put("/lots/{lot_id}/account", response_model=PosteDispatchLotDetail)
+def bind_account(
+    lot_id: UUID,
+    payload: PosteDispatchAccountChoice,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_section(MANAGE)),
+):
+    lot = _command(db, lambda: service.bind_account(
+        db, lot_id, payload.credential_id, actor_id=current_user.id
+    ))
     return views.lot_detail(db, lot.id)
 
 

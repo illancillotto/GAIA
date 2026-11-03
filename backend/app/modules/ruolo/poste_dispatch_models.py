@@ -33,6 +33,12 @@ class PosteDispatchLot(Base):
     status: Mapped[str] = mapped_column(String(24), default="open", index=True)
     postal_options: Mapped[dict] = mapped_column(JSON)
     portal_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    credential_id: Mapped[int | None] = mapped_column(
+        ForeignKey("posta_online_credentials.id", ondelete="RESTRICT"), index=True
+    )
+    poste_username: Mapped[str | None] = mapped_column(String(255))
+    credential_label: Mapped[str | None] = mapped_column(String(120))
+    created_by_username: Mapped[str | None] = mapped_column(String(255))
     created_by: Mapped[int] = mapped_column(ForeignKey("application_users.id", ondelete="RESTRICT"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
@@ -72,6 +78,13 @@ class PosteDispatchItem(Base):
     draft_created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    upload_requested_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL")
+    )
+    upload_requested_by_username: Mapped[str | None] = mapped_column(String(255))
+    upload_job_id: Mapped[int | None] = mapped_column(
+        ForeignKey("posta_online_registered_mail_sync_jobs.id", ondelete="SET NULL")
+    )
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     tracking_number: Mapped[str | None] = mapped_column(String(40), nullable=True)
     registered_mail_id: Mapped[UUID | None] = mapped_column(
@@ -102,6 +115,7 @@ class PosteDispatchEvent(Base):
     actor_id: Mapped[int | None] = mapped_column(
         ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True
     )
+    actor_username: Mapped[str | None] = mapped_column(String(255))
     job_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     detail: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Python clock: events written in one transaction keep their order.

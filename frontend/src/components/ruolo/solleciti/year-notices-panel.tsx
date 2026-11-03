@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 
 import { errorMessage } from "@/components/ruolo/poste-dispatch/labels";
 import { regenerateReminderItem } from "@/lib/ruolo-regeneration-api";
@@ -98,6 +99,7 @@ export function YearNoticesPanel({ token, onFinished }: { token: string; onFinis
   return <section aria-label="Avvisi da sollecitare" className="rounded-2xl border-2 border-[#9ab69c] bg-[#f6faf5] p-5 text-slate-800">
     <div className="flex flex-wrap items-center gap-3">
       <h2 className="text-lg font-semibold text-slate-900">Avvisi da sollecitare</h2>
+      <Link className="btn-secondary" href="/ruolo/tributi/2021">Avvisi e solleciti 2021</Link>
       <label className="flex items-center gap-2 text-base">Anno
         <select className="rounded-lg border border-slate-300 bg-white px-3 py-1 text-base" value={notices.year} disabled={running} onChange={(event) => notices.choose(Number(event.target.value))}>
           {years().map((value) => <option key={value} value={value}>{value}</option>)}

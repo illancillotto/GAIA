@@ -5,6 +5,7 @@ import { useState } from "react";
 import { createPosteLot } from "@/lib/ruolo-poste-dispatch-api";
 import type { RuoloTributiReminderBatchItemResponse } from "@/types/ruolo";
 import type { PosteDispatchLotDetail } from "@/types/ruolo-poste-dispatch";
+import { AccountSelector } from "@/components/ruolo/poste-dispatch/account-controls";
 import { errorMessage } from "@/components/ruolo/poste-dispatch/labels";
 
 export const MAX_POSTE_ITEMS = 50;
@@ -51,6 +52,7 @@ export function SelectForPoste({ item, canEdit, checked, onToggle }: SelectProps
 type BarProps = { token: string; selection: ReturnType<typeof usePosteSelection>; onCreated: (lot: PosteDispatchLotDetail) => void };
 
 export function SelectionBar({ token, selection, onCreated }: BarProps) {
+  const [credentialId, setCredentialId] = useState<number | null>(null);
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +62,7 @@ export function SelectionBar({ token, selection, onCreated }: BarProps) {
     setBusy(true);
     setError(null);
     try {
-      const lot = await createPosteLot(token, title, selection.selected.map((entry) => entry.id));
+      const lot = await createPosteLot(token, title, selection.selected.map((entry) => entry.id), credentialId!);
       selection.clear();
       setTitle("");
       onCreated(lot);
@@ -80,8 +82,9 @@ export function SelectionBar({ token, selection, onCreated }: BarProps) {
         <p className="font-semibold">{count} di massimo {MAX_POSTE_ITEMS} solleciti selezionati</p>
         <p className="truncate text-sky-900" title={names}>{names}</p>
       </div>
+      <AccountSelector token={token} label="Account Poste per la selezione" value={credentialId} onChange={setCredentialId} />
       <input className="form-control min-w-0 flex-1 basis-56" aria-label="Titolo lotto Poste" placeholder="Titolo lotto, es. Solleciti 2021 Oristano" value={title} onChange={(event) => setTitle(event.target.value)} />
-      <button type="button" className="btn-primary" disabled={busy || !title.trim()} onClick={() => void upload()}>{busy ? "Creazione..." : `Carica su Poste (${count})`}</button>
+      <button type="button" className="btn-primary" disabled={busy || !title.trim() || credentialId === null} onClick={() => void upload()}>{busy ? "Creazione..." : `Carica su Poste (${count})`}</button>
       <button type="button" className="btn-secondary" disabled={busy} onClick={selection.clear}>Svuota</button>
     </div>
     <p className="mt-2 text-xs text-sky-900">Crea il lotto Posta Online: poi verifica indirizzi e crea le bozze nella scheda Posta Online. INVIA resta all&apos;operatore, su Poste.</p>

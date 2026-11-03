@@ -4,14 +4,37 @@ import { useEffect, useState } from "react";
 
 import { createPosteLot, listPosteCandidates } from "@/lib/ruolo-poste-dispatch-api";
 import type { PosteDispatchCandidate, PosteDispatchLotDetail } from "@/types/ruolo-poste-dispatch";
+import { AccountSelector } from "./account-controls";
 import { dateTime, errorMessage } from "./labels";
 
 const MAX_ITEMS = 50;
+
+type CandidateListProps = {
+  candidates: PosteDispatchCandidate[];
+  selected: string[];
+  onToggle: (id: string) => void;
+};
+
+function CandidateList({ candidates, selected, onToggle }: CandidateListProps) {
+  return (
+    <ul className="max-h-80 space-y-1 overflow-y-auto">
+      {candidates.length === 0 && <li className="text-sm text-slate-500">Nessun sollecito disponibile.</li>}
+      {candidates.map((candidate) => <li key={candidate.batch_item_id}>
+        <label className="flex items-start gap-2 rounded-xl border border-slate-200 p-2 text-sm">
+          <input type="checkbox" checked={selected.includes(candidate.batch_item_id)} onChange={() => onToggle(candidate.batch_item_id)} />
+          <span><span className="font-semibold">{candidate.display_name || candidate.codice_fiscale}</span><br />
+            <span className="text-xs text-slate-500">Avviso {candidate.notice_number || "-"} · {candidate.batch_title || "Lotto senza titolo"} · {dateTime(candidate.created_at)}</span></span>
+        </label>
+      </li>)}
+    </ul>
+  );
+}
 
 export function CandidatePicker({ token, onCreated }: { token: string; onCreated: (lot: PosteDispatchLotDetail) => void }) {
   const [query, setQuery] = useState("");
   const [candidates, setCandidates] = useState<PosteDispatchCandidate[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
+  const [credentialId, setCredentialId] = useState<number | null>(null);
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +55,7 @@ export function CandidatePicker({ token, onCreated }: { token: string; onCreated
     setBusy(true);
     setError(null);
     try {
-      const lot = await createPosteLot(token, title, selected);
+      const lot = await createPosteLot(token, title, selected, credentialId!);
       setSelected([]);
       setTitle("");
       onCreated(lot);
@@ -48,18 +71,10 @@ export function CandidatePicker({ token, onCreated }: { token: string; onCreated
     <p className="text-sm text-slate-600">Solo solleciti generati in PDF e non già in un lotto attivo. Massimo {MAX_ITEMS} per lotto.</p>
     <input className="form-control w-full" aria-label="Cerca sollecito" placeholder="Nome, codice fiscale o lotto" value={query} onChange={(event) => setQuery(event.target.value)} />
     {error && <p role="alert" className="text-sm text-rose-800">{error}</p>}
-    <ul className="max-h-80 space-y-1 overflow-y-auto">
-      {candidates.length === 0 && <li className="text-sm text-slate-500">Nessun sollecito disponibile.</li>}
-      {candidates.map((candidate) => <li key={candidate.batch_item_id}>
-        <label className="flex items-start gap-2 rounded-xl border border-slate-200 p-2 text-sm">
-          <input type="checkbox" checked={selected.includes(candidate.batch_item_id)} onChange={() => toggle(candidate.batch_item_id)} />
-          <span><span className="font-semibold">{candidate.display_name || candidate.codice_fiscale}</span><br />
-            <span className="text-xs text-slate-500">Avviso {candidate.notice_number || "-"} · {candidate.batch_title || "Lotto senza titolo"} · {dateTime(candidate.created_at)}</span></span>
-        </label>
-      </li>)}
-    </ul>
+    <CandidateList candidates={candidates} selected={selected} onToggle={toggle} />
+    <AccountSelector token={token} label="Account Poste per il nuovo lotto" value={credentialId} onChange={setCredentialId} />
     <input className="form-control w-full" aria-label="Titolo lotto" placeholder="Es. Solleciti 2021 Oristano" value={title} onChange={(event) => setTitle(event.target.value)} />
-    <button type="button" className="btn-primary" disabled={busy || !title.trim() || selected.length === 0} onClick={() => void create()}>
+    <button type="button" className="btn-primary" disabled={busy || !title.trim() || selected.length === 0 || credentialId === null} onClick={() => void create()}>
       {busy ? "Creazione..." : `Crea lotto (${selected.length})`}
     </button>
   </section>;

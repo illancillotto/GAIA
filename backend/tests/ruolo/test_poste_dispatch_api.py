@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.models.posta_online import PostaOnlineRegisteredMailSyncJob
 from app.modules.ruolo.router import router
 
-from .poste_dispatch_fixtures import PDF, dispatch_engine, seed_batch_item
+from .poste_dispatch_fixtures import PDF, dispatch_engine, seed_account, seed_batch_item
 from .test_notice_register_api import _headers, _seed_auth
 
 URL = "/ruolo/tributi/poste-dispatch"
@@ -36,6 +36,7 @@ def api(tmp_path):
 
         app.dependency_overrides[get_db] = database
         with session() as db:
+            seed_account(db)
             items = [seed_batch_item(db, tmp_path) for _ in range(2)]
             ids = [str(item.id) for item in items]
             db.commit()
@@ -48,7 +49,7 @@ def api(tmp_path):
 
 def _create(api, ids=None):
     response = api.client.post(
-        f"{URL}/lots", json={"title": "Lotto", "batch_item_ids": ids or api.ids[:1]}
+        f"{URL}/lots", json={"credential_id": 1, "title": "Lotto", "batch_item_ids": ids or api.ids[:1]}
     )
     assert response.status_code == 200, response.text
     return response.json()
@@ -71,9 +72,9 @@ def test_operator_builds_a_lot_from_generated_reminders(api):
 
 def test_lot_conflicts_and_unknown_resources_are_reported(api):
     _create(api)
-    duplicate = api.client.post(f"{URL}/lots", json={"title": "Bis", "batch_item_ids": api.ids[:1]})
+    duplicate = api.client.post(f"{URL}/lots", json={"credential_id": 1, "title": "Bis", "batch_item_ids": api.ids[:1]})
     assert duplicate.status_code == 409
-    missing = api.client.post(f"{URL}/lots", json={"title": "X", "batch_item_ids": [str(uuid4())]})
+    missing = api.client.post(f"{URL}/lots", json={"credential_id": 1, "title": "X", "batch_item_ids": [str(uuid4())]})
     assert missing.status_code == 404
     assert api.client.get(f"{URL}/lots/{uuid4()}").status_code == 404
     assert api.client.get(f"{URL}/lots/{uuid4()}/items/{uuid4()}/document").status_code == 404
@@ -107,10 +108,43 @@ def test_jobs_are_queued_one_at_a_time(api):
 @pytest.mark.parametrize("user,status", [(2, 403), (5, 403)])
 def test_commands_need_the_manage_permission(api, user, status):
     response = api.client.post(
-        f"{URL}/lots", json={"title": "x", "batch_item_ids": api.ids[:1]}, headers=_headers(user)
+        f"{URL}/lots", json={"credential_id": 1, "title": "x", "batch_item_ids": api.ids[:1]}, headers=_headers(user)
     )
     assert response.status_code == status
 
 
 def test_viewers_can_read_lots(api):
     assert api.client.get(f"{URL}/lots", headers=_headers(2)).status_code == 200
+
+
+def test_accounts_are_selectable_without_exposing_secrets(api):
+    response = api.client.get(f"{URL}/accounts")
+    assert response.status_code == 200
+    assert response.json() == [{"id": 1, "label": "Account 1", "username": "account-1", "active": True}]
+    missing = api.client.post(f"{URL}/lots", json={"title": "X", "batch_item_ids": api.ids[:1]})
+    assert missing.status_code == 422
+    inactive = api.client.post(f"{URL}/lots", json={"title": "X", "batch_item_ids": api.ids[:1], "credential_id": 999})
+    assert inactive.status_code == 409
+    lot = _create(api)
+    assert lot["credential_id"] == 1 and lot["poste_username"] == "account-1"
+    assert api.client.get(f"{URL}/lots", params={"credential_id": 999}).json()["total"] == 0
+    assert api.client.get(f"{URL}/lots", params={"credential_id": 1}).json()["total"] == 1
+    assert api.client.post(f"{URL}/lots/{lot['id']}/jobs", json={"kind": "reconcile", "credential_id": 2}).status_code == 422
+
+
+def test_binding_a_historical_account_is_an_audited_manage_command(api):
+    from uuid import UUID
+
+    from app.modules.ruolo.poste_dispatch_models import PosteDispatchLot
+    lot = _create(api)
+    with api.session() as db:
+        row = db.get(PosteDispatchLot, UUID(lot["id"]))
+        row.credential_id = row.poste_username = row.credential_label = None
+        db.execute(update(PostaOnlineRegisteredMailSyncJob).values(status="succeeded"))
+        db.commit()
+    path = f"{URL}/lots/{lot['id']}/account"
+    assert api.client.put(path, json={"credential_id": 1}, headers=_headers(2)).status_code == 403
+    bound = api.client.put(path, json={"credential_id": 1})
+    assert bound.status_code == 200 and bound.json()["credential_id"] == 1
+    assert bound.json()["events"][0]["actor_username"]
+    assert api.client.put(path, json={"credential_id": 1}).status_code == 409

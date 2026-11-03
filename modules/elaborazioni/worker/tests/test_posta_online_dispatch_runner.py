@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from decimal import Decimal
 from types import SimpleNamespace
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -294,8 +294,14 @@ class JobDb(Db):
     def __init__(self, store):
         self.store = store
 
-    def get(self, _model, _job_id):
+    def get(self, model, _job_id):
+        if model.__name__ == "PostaOnlineCredential":
+            return SimpleNamespace(id=9, username="poste", active=True)
         return self.store["job"]
+
+    def scalar(self, _query):
+        job = self.store["job"]
+        return SimpleNamespace(id=UUID(job.payload_json["lot_id"]), credential_id=9, poste_username="poste")
 
 
 class Client:
@@ -319,8 +325,8 @@ class Client:
 def _job_store(mode="poste_dispatch_reconcile"):
     job = SimpleNamespace(
         mode=mode,
-        credential_id=None,
-        payload_json={"lot_id": str(uuid4())},
+        credential_id=9,
+        payload_json={"lot_id": str(uuid4()), "poste_username": "poste"},
         status="processing",
         error_detail=None,
         completed_at=None,
@@ -449,3 +455,26 @@ def test_archive_records_are_written_by_the_backend_reconciliation(monkeypatch):
     )
     runner.record_sent("db", "item", job_id=1, id_invio="77", detail_html="<html/>")
     assert calls == [("db", "item", {"job_id": 1, "id_invio": "77", "detail_html": "<html/>"})]
+
+
+def test_dispatch_account_mismatch_fails_before_starting_a_browser(monkeypatch):
+    store = _job_store()
+    store["job"].credential_id = 8
+    calls = _patch_credentials(monkeypatch)
+    before = len(Client.instances)
+    run(runner.run_dispatch_job(job_id=4, session_factory=lambda: JobDb(store), headless=True,
+                                _client_class=Client, _portal_class=JobPortal))
+    assert store["job"].status == "failed"
+    assert "Account del job" in store["job"].error_detail
+    assert len(Client.instances) == before and calls == []
+
+
+def test_dispatch_uses_the_bound_credential_and_a_fresh_private_session(monkeypatch):
+    store = _job_store()
+    ids = []
+    credential = SimpleNamespace(id=9, username="poste", min_delay_ms=1000, max_delay_ms=2000)
+    monkeypatch.setattr(runner, "pick_credential", lambda _db, cid: ids.append(cid) or (credential, "secret"))
+    context = runner._job_context(lambda: JobDb(store), 4)
+    config = context[-1]
+    assert ids == [9] and context[2:4] == (9, "poste")
+    assert config.storage_state_path is None and config.cdp_url is None

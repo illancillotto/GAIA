@@ -10,6 +10,7 @@ import { useSolleciti } from "@/components/ruolo/solleciti/workspace";
 
 const mocks = vi.hoisted(() => ({ session: vi.fn(), token: vi.fn(), list: vi.fn(), get: vi.fn(), confirm: vi.fn(), blob: vi.fn() }));
 const poste = vi.hoisted(() => ({
+  listPosteAccounts: vi.fn(), bindPosteAccount: vi.fn(),
   listPosteLots: vi.fn(), getPosteLot: vi.fn(), createPosteLot: vi.fn(), listPosteCandidates: vi.fn(), requestPosteJob: vi.fn(),
   updatePosteRecipient: vi.fn(), acceptPosteManualAddress: vi.fn(), cancelPosteItem: vi.fn(), getPosteItemDocument: vi.fn(),
 }));
@@ -53,6 +54,7 @@ beforeEach(() => {
   overview.getBatchOverview.mockResolvedValue([]);
   yearNotices.getYearStatus.mockReturnValue(new Promise(() => undefined));
   mocks.blob.mockReturnValue(new Promise(() => undefined));
+  poste.listPosteAccounts.mockResolvedValue([{ id: 1, label: "Account 1", username: "account-1", active: true }]);
   poste.listPosteLots.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 50 });
   poste.listPosteCandidates.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 50 });
   mocks.confirm.mockResolvedValue({ id: "confirmation-1", generation_id: "batch-1", generation_kind: "batch", review_digest: "b".repeat(64), input_basis: {}, identity_keys: ["a".repeat(64)], notice_numbers: [], confirmed_by: 1, confirmed_at: "2026-09-21T10:01:00Z" });
@@ -269,9 +271,11 @@ it("collects reminders from several batches and loads them on Poste", async () =
   expect(bar).toHaveTextContent("Anna Bianchi, Luca Verdi");
   expect(screen.getByRole("button", { name: "Carica su Poste (2)" })).toBeDisabled();
   fireEvent.change(screen.getByRole("textbox", { name: "Titolo lotto Poste" }), { target: { value: "Solleciti 2021" } });
+  await waitFor(() => expect(within(screen.getByLabelText("Account Poste per la selezione")).getByRole("option", { name: /account-1/ })).toBeInTheDocument());
+  fireEvent.change(screen.getByLabelText("Account Poste per la selezione"), { target: { value: "1" } });
   fireEvent.click(screen.getByRole("button", { name: "Carica su Poste (2)" }));
   expect(await screen.findByRole("region", { name: "Dettaglio lotto Poste" })).toBeVisible();
-  expect(poste.createPosteLot).toHaveBeenCalledWith("token", "Solleciti 2021", ["item-2", "item-3"]);
+  expect(poste.createPosteLot).toHaveBeenCalledWith("token", "Solleciti 2021", ["item-2", "item-3"], 1);
   expect(poste.getPosteLot).toHaveBeenCalledWith("token", "lot-1");
   expect(screen.getByRole("tab", { name: "Posta Online" })).toHaveAttribute("aria-selected", "true");
   fireEvent.click(screen.getByRole("tab", { name: "Solleciti generati" }));
@@ -284,6 +288,8 @@ it.each([[new Error("Sollecito già in un lotto Poste attivo"), "già in un lott
   await openGenerated();
   fireEvent.click(screen.getByRole("checkbox", { name: "Seleziona per Posta Online" }));
   fireEvent.change(screen.getByRole("textbox", { name: "Titolo lotto Poste" }), { target: { value: "Prova" } });
+  await waitFor(() => expect(within(screen.getByLabelText("Account Poste per la selezione")).getByRole("option", { name: /account-1/ })).toBeInTheDocument());
+  fireEvent.change(screen.getByLabelText("Account Poste per la selezione"), { target: { value: "1" } });
   fireEvent.click(screen.getByRole("button", { name: "Carica su Poste (1)" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(message);
   expect(screen.getByRole("tab", { name: "Solleciti generati" })).toHaveAttribute("aria-selected", "true");

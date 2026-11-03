@@ -16,6 +16,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.models.posta_online import PostaOnlineRegisteredMailSyncJob
 from app.modules.ruolo.services import poste_dispatch_work as work
+from app.modules.ruolo.services.poste_dispatch_accounts import job_account
 from app.modules.ruolo.services.poste_dispatch_address import (
     match_address,
     normalize_suggestions,
@@ -230,11 +231,14 @@ def _finish(session_factory: sessionmaker, job_id: int, status: str, result: dic
 def _job_context(session_factory: sessionmaker, job_id: int):
     with session_factory() as db:
         job = db.get(PostaOnlineRegisteredMailSyncJob, job_id)
-        credential, password = pick_credential(db, job.credential_id)
+        lot = job_account(db, job)
+        credential, password = pick_credential(db, lot.credential_id)
         config = PostaOnlineScrapeConfig(
             min_delay_ms=credential.min_delay_ms,
             max_delay_ms=credential.max_delay_ms,
             include_contacts=False,
+            storage_state_path=None,
+            cdp_url=None,
         )
         return (
             job.mode,

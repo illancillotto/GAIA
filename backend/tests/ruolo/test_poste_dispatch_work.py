@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.posta_online import PostaOnlineRegisteredMailSyncJob
 from app.modules.ruolo.models import RuoloTributiRegisteredMail
 from app.modules.ruolo.notice_register_models import NoticeAttempt, NoticeDocument, NoticePosition
 from app.modules.ruolo.poste_dispatch_models import PosteDispatchEvent, PosteDispatchItem
@@ -45,11 +46,25 @@ def db():
 
 def _item(db, tmp_path, status="address_ok", number="020217801062586"):
     batch_item = seed_batch_item(db, tmp_path, payload_json=payload(number))
-    lot = service.create_lot(db, title="Lotto", batch_item_ids=[batch_item.id], actor_id=1)
+    lot = service.create_lot(db, credential_id=1, title="Lotto", batch_item_ids=[batch_item.id], actor_id=1)
     item = db.scalar(select(PosteDispatchItem).where(PosteDispatchItem.lot_id == lot.id))
     item.status = status
     db.flush()
     return lot, item
+
+
+def _record_sent(db, item_id, **kwargs):
+    item = db.get(PosteDispatchItem, item_id)
+    job = db.get(PostaOnlineRegisteredMailSyncJob, kwargs["job_id"])
+    if job is None:
+        job = PostaOnlineRegisteredMailSyncJob(id=kwargs["job_id"])
+        db.add(job)
+    job.credential_id = 1
+    job.requested_by_user_id = 1
+    job.mode = "poste_dispatch_reconcile"
+    job.payload_json = {"lot_id": str(item.lot_id), "poste_username": "account-1"}
+    db.flush()
+    return reconcile.record_sent(db, item_id, **kwargs)
 
 
 def _row(name="GAIA 020217801062586", status="PREZZATO", draft_id="12269236"):
@@ -96,6 +111,7 @@ def test_address_result_accepts_a_directory_match_or_asks_for_review(db, tmp_pat
 def test_submission_is_persisted_before_continua_and_only_from_ready_states(db, tmp_path):
     _, item = _item(db, tmp_path)
     item.error_detail = "old"
+    db.get(PostaOnlineRegisteredMailSyncJob, 1).mode = "poste_dispatch_drafts"
     assert work.mark_draft_creating(db, item.id, job_id=1) is True
     assert item.status == "draft_creating" and item.error_detail is None
     assert work.mark_draft_creating(db, item.id, job_id=1) is False
@@ -188,7 +204,7 @@ def test_archive_detail_marks_the_item_sent_and_links_the_register(db, tmp_path,
     document = _document(db, item)
     calls = []
     monkeypatch.setattr(reconcile, "associate_registered_mail", lambda *args: calls.append(args))
-    reconcile.record_sent(
+    _record_sent(
         db,
         item.id,
         job_id=5,
@@ -205,7 +221,7 @@ def test_archive_detail_marks_the_item_sent_and_links_the_register(db, tmp_path,
 def test_register_problems_are_reported_without_blocking_the_sent_state(db, tmp_path, monkeypatch):
     _, item = _item(db, tmp_path, "draft_priced")
     html = DETAIL_PAGE.format(id="9", name=item.shipment_name)
-    reconcile.record_sent(db, item.id, job_id=5, id_invio="9", detail_html=html)
+    _record_sent(db, item.id, job_id=5, id_invio="9", detail_html=html)
     assert item.status == "sent" and "collegare la raccomandata a mano" in item.error_detail
     _, other = _item(db, tmp_path, "draft_priced", "020217801000009")
     _document(db, other)
@@ -214,7 +230,7 @@ def test_register_problems_are_reported_without_blocking_the_sent_state(db, tmp_
         raise ValueError("CF del documento non coerente")
 
     monkeypatch.setattr(reconcile, "associate_registered_mail", refuse)
-    reconcile.record_sent(
+    _record_sent(
         db,
         other.id,
         job_id=5,
@@ -230,7 +246,7 @@ def test_register_problems_are_reported_without_blocking_the_sent_state(db, tmp_
 def test_a_detail_with_another_name_is_rejected(db, tmp_path):
     _, item = _item(db, tmp_path, "draft_priced")
     with pytest.raises(DispatchConflict, match="non coerente"):
-        reconcile.record_sent(
+        _record_sent(
             db,
             item.id,
             job_id=5,
@@ -276,7 +292,7 @@ def test_sent_item_becomes_an_attempt_in_the_notice_register(db, tmp_path):
     )
     db.flush()
     html = DETAIL_PAGE.format(id="12", name=item.shipment_name)
-    reconcile.record_sent(db, item.id, job_id=5, id_invio="12", detail_html=html)
+    _record_sent(db, item.id, job_id=5, id_invio="12", detail_html=html)
     attempt = db.scalar(select(NoticeAttempt).where(NoticeAttempt.document_id == document.id))
     assert item.error_detail is None and attempt.tracking_code == "619591492509"
     assert (

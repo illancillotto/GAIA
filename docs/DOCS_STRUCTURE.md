@@ -250,12 +250,20 @@ Rilascio mirato CED, backup e rollback di grafica, scadenze, portale e pagatore:
 Invio solleciti con Posta Online (bozze preparate da GAIA, INVIA manuale
 dell'operatore): modelli `poste_dispatch_models.py`, schemi
 `poste_dispatch_schemas.py`, route `routes/poste_dispatch_routes.py`, servizi
-`services/poste_dispatch*.py`, migration `20261028_1500`; worker
-`posta_online_dispatch{,_portal,_runner}.py`; frontend
+`services/poste_dispatch*.py`, migration `20261028_1500` e `20261103_0900`
+(account del lotto e audit operatore); worker
+`posta_online_dispatch{,_portal,_runner}.py`, pool `posta_online_pool.py`,
+coda `posta_online_queue.py` e lock PostgreSQL `posta_online_leases.py`; frontend
 `components/ruolo/poste-dispatch/`, `components/ruolo/solleciti/`,
 `lib/ruolo-poste-dispatch-api.ts` e pagina «Invio solleciti»
 `/ruolo/tributi/solleciti` (`/poste` apre la scheda Posta Online). Procedura e stati:
 `domain-docs/ruolo/docs/POSTE_INVIO_SOLLECITI_2026-10-28.md`.
+
+Campagna «Avvisi e solleciti 2021»: pagina `/ruolo/tributi/2021`, componenti
+`components/ruolo/campaign-2021/`, API `routes/campaign_2021_routes.py` e servizi
+`services/campaign_2021*.py`. Parser dedicato, confronto in sola lettura,
+snapshot approvati e anteprime nel renderer esistente; nessun invio automatico.
+Contratti, audit e rollback: `domain-docs/ruolo/docs/AVVISI_SOLLECITI_2021.md`.
 
 Grafica della prima pagina: `backend/app/modules/ruolo/services/notice_branding.py`,
 loghi CBO/ANBI e QR WhatsApp/Irrighiamo Insieme in `assets/notice-*.png`,

@@ -9,6 +9,7 @@ import {
   updatePosteRecipient,
 } from "@/lib/ruolo-poste-dispatch-api";
 import type { PosteDispatchItem, PosteDispatchRecipient } from "@/types/ruolo-poste-dispatch";
+import { UploadAudit } from "./account-controls";
 import { STATUS_TONES, errorMessage, euro, statusLabel } from "./labels";
 
 const EDITABLE = ["address_pending", "address_review", "address_ok", "draft_error", "draft_missing"];
@@ -107,6 +108,7 @@ export function ItemRow({ token, lotId, item, canEdit, onChanged }: Props) {
 
   return <li className="rounded-2xl border border-slate-200 p-4 text-sm">
     <ItemSummary item={item} />
+    <UploadAudit item={item} />
     <ItemNotes item={item} />
     {error && <p role="alert" className="mt-2 text-rose-800">{error}</p>}
     <ItemActions status={item.status} canEdit={canEdit} actions={actions} />

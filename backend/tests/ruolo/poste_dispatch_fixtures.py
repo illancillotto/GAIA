@@ -69,6 +69,14 @@ def dispatch_engine(**kwargs):
     return engine
 
 
+def seed_account(db: Session, credential_id: int = 1, username: str = "account-1", active: bool = True):
+    credential = PostaOnlineCredential(id=credential_id, label=f"Account {credential_id}", username=username,
+                                      password_encrypted="unused", active=active)
+    db.add(credential)
+    db.flush()
+    return credential
+
+
 def seed_user(db: Session, user_id: int = 1) -> None:
     db.add(
         ApplicationUser(
@@ -82,6 +90,8 @@ def seed_user(db: Session, user_id: int = 1) -> None:
         )
     )
     db.flush()
+    if db.get(PostaOnlineCredential, 1) is None:
+        seed_account(db)
 
 
 def payload(notice_number: str = "020217801062586", **overrides) -> dict:

@@ -1,5 +1,23 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-11-03 — Debito accettato per estensioni Poste e campagna 2021
+
+- Dopo la verifica finale l'utente autorizza esplicitamente: «procedi lo stesso
+  e laciamolo come debito tecnico tracciato». L'eccezione riguarda soltanto i
+  68 incrementi di metrica già comunicati, su 16 file (51 runtime, 17 test worker).
+- Record autorevole: `docs/code-quality/debt/POSTE_2026-11-03.json`, ID
+  `POSTE-20261103-COMPLEXITY`, con callable, metrica, valore precedente/finale,
+  delta, owner e revisione entro 03/12/2026 o al prossimo intervento sul callable.
+- Fotografia di confronto ricostruita sul runtime pulito di `686e529e`;
+  `baseline-verify` di tale fotografia PASS. Il ratchet contro `origin/main`
+  passa, ma non sostituisce il record del debito perché la baseline di main
+  è più vecchia. Nessuna nuova violation error-level nei file della change.
+- L'aggiornamento autorizzato della baseline richiede coincidenza esatta dei
+  finding con l'elenco accettato; nessun cambiamento a soglie, motori, scope,
+  esclusioni o logica dei gate. Non è una deroga permanente o globale.
+- Test pertinenti, coverage al 100%, lint e typecheck conservati; dettagli nel
+  runbook `domain-docs/ruolo/docs/POSTE_INVIO_SOLLECITI_2026-10-28.md`.
+
 ## 2026-10-21 — Recupero baseline sul runtime gia committato (16a0e710)
 
 - `baseline-verify` su checkout pulito di `16a0e710` falliva: la baseline

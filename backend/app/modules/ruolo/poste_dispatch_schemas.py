@@ -31,6 +31,20 @@ class PosteDispatchLotCreate(BaseModel):
 
     title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
     batch_item_ids: list[UUID] = Field(min_length=1, max_length=50)
+    credential_id: int = Field(gt=0)
+
+
+class PosteDispatchAccountChoice(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    credential_id: int = Field(gt=0)
+
+
+class PosteDispatchAccountOut(BaseModel):
+    id: int
+    label: str
+    username: str
+    active: bool
 
 
 class PosteDispatchRecipientUpdate(BaseModel):
@@ -67,6 +81,9 @@ class PosteDispatchItemOut(BaseModel):
     poste_status: str | None
     price_amount: float | None
     draft_created_at: datetime | None
+    upload_requested_by_user_id: int | None
+    upload_requested_by_username: str | None
+    upload_job_id: int | None
     sent_at: datetime | None
     tracking_number: str | None
     registered_mail_id: UUID | None
@@ -80,6 +97,8 @@ class PosteDispatchJobOut(BaseModel):
     status: str
     error_detail: str | None
     created_at: datetime
+    credential_id: int | None
+    requested_by_user_id: int | None
 
 
 class PosteDispatchEventOut(BaseModel):
@@ -90,6 +109,7 @@ class PosteDispatchEventOut(BaseModel):
     from_status: str | None
     to_status: str | None
     actor_id: int | None
+    actor_username: str | None
     job_id: int | None
     created_at: datetime
 
@@ -99,6 +119,10 @@ class PosteDispatchLotSummary(BaseModel):
     title: str
     status: str
     created_by: int
+    created_by_username: str | None
+    credential_id: int | None
+    poste_username: str | None
+    credential_label: str | None
     created_at: datetime
     counts: dict[str, int]
     priced_total: float

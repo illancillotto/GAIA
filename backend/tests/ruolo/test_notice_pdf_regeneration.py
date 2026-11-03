@@ -21,6 +21,7 @@ from app.modules.ruolo.services import poste_dispatch
 from app.modules.ruolo.services.poste_dispatch_state import DispatchConflict
 from app.modules.ruolo.services.tributi_reminder_service import reminder_storage_dir
 
+from .poste_dispatch_fixtures import seed_account
 from .test_tributi_api import (
     TestingSessionLocal,
     auth_headers,
@@ -270,8 +271,11 @@ def test_a_poste_lot_rebuilds_a_lost_pdf_or_refuses_it(tmp_path, renders, monkey
     actor = db.scalar(
         select(ApplicationUser.id).where(ApplicationUser.username == "ruolo-tributi-admin")
     )
+    credential_id = seed_account(db).id
+    db.commit()
     lot = poste_dispatch.create_lot(
-        db, title="Poste", batch_item_ids=[UUID(item["id"])], actor_id=actor
+        db, title="Poste", batch_item_ids=[UUID(item["id"])], actor_id=actor,
+        credential_id=credential_id,
     )
     assert (
         Path(_item_in(db, item["id"]).generated_document_path).read_bytes() == b"%PDF-1.4 render 2"
@@ -290,7 +294,8 @@ def test_a_poste_lot_rebuilds_a_lost_pdf_or_refuses_it(tmp_path, renders, monkey
     db = TestingSessionLocal()
     with pytest.raises(DispatchConflict, match="non ricostruibile: NAS non raggiungibile"):
         poste_dispatch.create_lot(
-            db, title="Poste", batch_item_ids=[UUID(item["id"])], actor_id=actor
+            db, title="Poste", batch_item_ids=[UUID(item["id"])], actor_id=actor,
+            credential_id=credential_id,
         )
     db.close()
 

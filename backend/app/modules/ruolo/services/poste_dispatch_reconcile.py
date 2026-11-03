@@ -13,9 +13,9 @@ from app.modules.ruolo.notice_register_schemas import OperatorChange
 from app.modules.ruolo.poste_dispatch_models import PosteDispatchItem
 from app.modules.ruolo.services.notice_register import RegisterConflict, RegisterNotFound
 from app.modules.ruolo.services.notice_registered_mail_link import associate_registered_mail
+from app.modules.ruolo.services.poste_dispatch_accounts import checked_job
 from app.modules.ruolo.services.poste_dispatch_state import (
     DispatchConflict,
-    get_lot,
     release,
     transition,
 )
@@ -81,7 +81,9 @@ def record_sent(
     item = db.scalar(
         select(PosteDispatchItem).where(PosteDispatchItem.id == item_id).with_for_update()
     )
-    actor_id = get_lot(db, item.lot_id).created_by
+    actor_id = checked_job(db, item.lot_id, job_id).requested_by_user_id
+    if actor_id is None:
+        raise DispatchConflict("Operatore GAIA della verifica Poste non disponibile")
     mail = _import_detail(db, item, id_invio, detail_html, actor_id)
     item.registered_mail_id, item.tracking_number = mail.id, mail.tracking_number
     item.sent_at, item.price_amount = mail.sent_at, mail.price_amount or item.price_amount

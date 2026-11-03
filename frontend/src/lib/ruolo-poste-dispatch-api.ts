@@ -1,5 +1,6 @@
 import { request, requestBlob } from "@/lib/api";
 import type {
+  PosteDispatchAccount,
   PosteDispatchCandidateList,
   PosteDispatchItem,
   PosteDispatchJob,
@@ -25,19 +26,31 @@ export function listPosteCandidates(token: string, q: string): Promise<PosteDisp
   return request<PosteDispatchCandidateList>(`${BASE}/candidates?${query}`, { headers: auth(token) });
 }
 
-export function listPosteLots(token: string): Promise<PosteDispatchLotList> {
-  return request<PosteDispatchLotList>(`${BASE}/lots?page=1&page_size=50`, { headers: auth(token) });
+export function listPosteLots(token: string, credentialId?: number | null): Promise<PosteDispatchLotList> {
+  const query = new URLSearchParams({ page: "1", page_size: "50" });
+  if (credentialId != null) query.set("credential_id", String(credentialId));
+  return request<PosteDispatchLotList>(`${BASE}/lots?${query}`, { headers: auth(token) });
+}
+
+export function listPosteAccounts(token: string): Promise<PosteDispatchAccount[]> {
+  return request<PosteDispatchAccount[]>(`${BASE}/accounts`, { headers: auth(token) });
+}
+
+export function bindPosteAccount(token: string, lotId: string, credentialId: number): Promise<PosteDispatchLotDetail> {
+  return request<PosteDispatchLotDetail>(`${BASE}/lots/${lotId}/account`, {
+    method: "PUT", headers: auth(token), body: JSON.stringify({ credential_id: credentialId }),
+  });
 }
 
 export function getPosteLot(token: string, lotId: string): Promise<PosteDispatchLotDetail> {
   return request<PosteDispatchLotDetail>(`${BASE}/lots/${lotId}`, { headers: auth(token) });
 }
 
-export function createPosteLot(token: string, title: string, batchItemIds: string[]): Promise<PosteDispatchLotDetail> {
+export function createPosteLot(token: string, title: string, batchItemIds: string[], credentialId: number): Promise<PosteDispatchLotDetail> {
   return request<PosteDispatchLotDetail>(`${BASE}/lots`, {
     method: "POST",
     headers: auth(token),
-    body: JSON.stringify({ title, batch_item_ids: batchItemIds }),
+    body: JSON.stringify({ title, batch_item_ids: batchItemIds, credential_id: credentialId }),
   });
 }
 
