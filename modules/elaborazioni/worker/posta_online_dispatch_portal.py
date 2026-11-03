@@ -91,14 +91,27 @@ def _rows(page_html: str) -> list[list[str]]:
     ]
 
 
+def _draft_row(cells: list[str]) -> DraftRow | None:
+    if len(cells) < 6:
+        return None
+    if not cells[1].isdigit() and (
+        cells[1] != "-" or cells[4].upper() != "IN ATTESA DI LAVORAZIONE" or not cells[2]
+    ):
+        return None
+    return DraftRow(
+        draft_id=None if cells[1] == "-" else cells[1],
+        name=cells[2],
+        status=cells[4].upper(),
+        price=parse_price(cells[5]),
+    )
+
+
 def parse_draft_rows(page_html: str) -> list[DraftRow]:
     """Rows of "Verifica e invia": checkbox, id, name, date, status, price, preview, edit, delete."""
     return [
-        DraftRow(
-            draft_id=cells[1], name=cells[2], status=cells[4].upper(), price=parse_price(cells[5])
-        )
+        row
         for cells in _rows(page_html)
-        if len(cells) >= 6 and cells[1].isdigit()
+        if (row := _draft_row(cells)) is not None
     ]
 
 

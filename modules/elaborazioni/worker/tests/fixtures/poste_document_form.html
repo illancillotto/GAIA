@@ -1,0 +1,47 @@
+<!doctype html>
+<!-- Reduced, synthetic reproduction of Poste's observed document lifecycle:
+     settaDocumenti restores file_0..file_4; addDocument appends, never replaces;
+     only the Crea spedizione action clears storage before navigating to home.do.
+     No credentials, personal data or requests to the real portal. -->
+<html><body onload="restoreDocuments()">
+<a id="crea_spedizione" href="/col/home.do" onclick="resetDocuments()">Crea spedizione</a>
+<form action="/col/invioDestinatari.do" method="post" enctype="multipart/form-data">
+  <input name="nomeInvio">
+  <input type="file" id="file" name="files" onchange="addDocument(this.files)">
+  <div id="document_container"></div>
+  <input type="file" id="file0" name="files0">
+  <input type="file" id="file1" name="files1">
+  <input type="file" id="file2" name="files2">
+  <input type="file" id="file3" name="files3">
+  <input type="file" id="file4" name="files4">
+  <textarea id="testo" name="testo"></textarea>
+  <button type="button" id="raccomandataar_add_dest_button">Aggiungi destinatario</button>
+  <span id="raccomandataarSummary">1</span>
+  <button id="continua">Continua</button>
+</form>
+<script>
+var mainDt = [], indexCount = 0;
+function addDocument(files) {
+    const added = files[0];
+    mainDt.push(added);
+    indexCount++;
+    document.getElementById('file').value = '';
+    document.getElementById('document_container').innerHTML +=
+        '<div class="file-upload-item"><div>' + added.name + '</div></div>';
+    mainDt.forEach((file, i) => {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        document.getElementById('file' + i).files = dt.files;
+    });
+}
+function resetDocuments() {
+    for (let i = 0; i < 5; i++) sessionStorage.setItem('file_' + i, 'null');
+}
+function restoreDocuments() {
+    for (let i = 0; i < 5; i++) {
+        const saved = JSON.parse(sessionStorage.getItem('file_' + i));
+        if (saved) addDocument([new File([saved.body], saved.name)]);
+    }
+}
+</script>
+</body></html>

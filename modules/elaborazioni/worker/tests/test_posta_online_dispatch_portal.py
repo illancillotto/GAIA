@@ -132,3 +132,22 @@ def test_archive_rows_and_prices_are_parsed():
     assert parse_archive_rows(ARCHIVE_PAGE) == [("11280322", "GAIA 020217801062586")]
     assert parse_price("€ 1.234,50") == Decimal("1234.50")
     assert parse_price("in lavorazione") is None
+
+
+def test_pending_upload_without_numeric_id_is_preserved():
+    page = '''<table id="col_invio_dett"><tbody><tr>
+      <td>-</td><td>-</td><td>GAIA 020210000000000</td><td>03/11/2026 11:13</td>
+      <td>In attesa di lavorazione</td><td>-</td></tr></tbody></table>'''
+    [row] = parse_draft_rows(page)
+    assert (row.draft_id, row.name, row.status, row.price) == (
+        None, "GAIA 020210000000000", "IN ATTESA DI LAVORAZIONE", None
+    )
+
+
+@pytest.mark.parametrize(
+    "identifier,name,status",
+    [("invalid", "GAIA 1", "IN ATTESA DI LAVORAZIONE"), ("-", "GAIA 1", "PREZZATO"), ("-", "", "IN ATTESA DI LAVORAZIONE")],
+)
+def test_malformed_draft_rows_are_not_adopted(identifier, name, status):
+    page = f'<table id="col_invio_dett"><tr><td></td><td>{identifier}</td><td>{name}</td><td></td><td>{status}</td><td>-</td></tr></table>'
+    assert parse_draft_rows(page) == []

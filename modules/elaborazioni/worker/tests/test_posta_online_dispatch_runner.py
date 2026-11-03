@@ -190,6 +190,20 @@ def test_a_draft_failing_before_continua_is_retryable(work):
     ) in fake.log
 
 
+@pytest.mark.parametrize("already_listed", [False, True])
+def test_pending_upload_is_adopted_without_resubmission_or_failure(work, already_listed):
+    item = _item()
+    fake = work([item])
+    pending = runner.work.DraftRow(None, item.shipment_name, "IN ATTESA DI LAVORAZIONE", None)
+    portal = Portal(drafts=[[pending]] if already_listed else [[], [pending]])
+    dispatch_run = _run(portal)
+    run(runner.run_drafts(dispatch_run))
+    assert portal.created == ([] if already_listed else [item.shipment_name])
+    assert dispatch_run.counters == ({} if already_listed else {"created": 1})
+    assert any(entry[0] == "record_draft_row" for entry in fake.log)
+    assert not any(entry[0] == "record_draft_failure" for entry in fake.log)
+
+
 def test_an_altered_pdf_is_never_uploaded(work):
     fake = work([_item()], tampered=True)
     portal = Portal(drafts=[[]])

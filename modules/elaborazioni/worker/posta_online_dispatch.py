@@ -6,13 +6,14 @@ drafts from "Verifica e invia" after checking them on Poste.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 import tempfile
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 from app.modules.ruolo.services.poste_dispatch_address import search_term
 from app.modules.ruolo.services.poste_dispatch_work import DraftRow, WorkItem
@@ -25,7 +26,24 @@ POSTA_ONLINE_SEND_HOME_URL = "https://corrispondenza.poste.it/col/home.do"
 POSTA_ONLINE_DRAFTS_URL = "https://corrispondenza.poste.it/col/incorso.do"
 POSTA_ONLINE_AUTOCOMPLETE_URL = "https://corrispondenza.poste.it/col/autocomplete.do"
 AR_PREFIX = "raccomandataar"
-MAX_LIST_PAGES = 20
+MAX_LIST_PAGES = 100
+
+# Inspect the actual multipart inputs, not just the visible document name. Poste
+# restores files from sessionStorage on load and submits the hidden file0..file4.
+_DOCUMENT_STATE = """async () => ({
+    files: await Promise.all(Array.from(document.querySelectorAll('input[type=file]'))
+        .flatMap(input => Array.from(input.files, async file => ({
+            slot: input.id, name: file.name, size: file.size,
+            sha256: Array.from(new Uint8Array(await crypto.subtle.digest(
+                'SHA-256', await file.arrayBuffer())))
+                .map(byte => byte.toString(16).padStart(2, '0')).join('')
+        })))),
+    cards: Array.from(document.querySelectorAll('#document_container .file-upload-item'),
+        card => card.firstElementChild.textContent.trim()),
+    queued: mainDt.length,
+    count: indexCount,
+    text: document.getElementById('testo').value
+})"""
 
 
 class DraftNotSubmitted(RuntimeError):
@@ -97,13 +115,41 @@ class PostaOnlineDispatchPortal:
             else []
         )
 
+    async def _list_page(self, url: str) -> None:
+        await self.client.throttle.wait(f"dispatch:{self.phase}")
+        await self.page.goto(url, wait_until="commit")
+        # The legacy page can keep navigation pending while the complete table is usable.
+        # Requiring the table also prevents a login/error page being read as an empty list.
+        await self.page.locator("#col_invio_dett").wait_for(state="attached")
+
+    async def _next_list_url(self, current: str) -> str | None:
+        link = self.page.locator('ul.pagination a[aria-label="Next"]')
+        if await link.count() == 0:
+            return None
+        href = await link.get_attribute("href")
+        if not href:
+            return None
+        target = urljoin(current, href)
+        source, destination = urlparse(current), urlparse(target)
+        if (source.scheme, source.netloc, source.path) != (
+            destination.scheme, destination.netloc, destination.path
+        ):
+            raise RuntimeError("Paginazione Poste fuori dall'elenco richiesto")
+        return target
+
     async def _all_pages(self, url: str, parse) -> tuple[list, bool]:
-        await self._open(url)
         rows: list = []
+        seen: set[str] = set()
         for _ in range(MAX_LIST_PAGES):
+            if url in seen:
+                raise RuntimeError("Paginazione Poste ripetuta: elenco incompleto")
+            seen.add(url)
+            await self._list_page(url)
             rows.extend(parse(await self.page.content()))
-            if not await self.client._goto_next_archive_page(self.page):
+            next_url = await self._next_list_url(url)
+            if next_url is None:
                 return rows, True
+            url = next_url
         return rows, False
 
     async def list_drafts(self) -> list[DraftRow]:
@@ -122,8 +168,10 @@ class PostaOnlineDispatchPortal:
             index.setdefault(name, []).append(shipment_id)
         return index, complete
 
-    async def delete_draft(self, draft_id: str) -> None:
+    async def delete_draft(self, draft_id: str | None) -> None:
         """Delete one draft by id with the row's own action, never through the shared selection."""
+        if draft_id is None:
+            raise RuntimeError("Bozza in lavorazione: attendere l'identificativo prima di eliminarla")
         await self._open(POSTA_ONLINE_DRAFTS_URL)
         if await self.page.locator(f"input[name='invioCheck'][id='{draft_id}']").count() != 1:
             raise RuntimeError(f"Bozza {draft_id} non presente in Verifica e invia")
@@ -156,10 +204,9 @@ class PostaOnlineDispatchPortal:
                 raise DraftSubmitUncertain(str(exc)) from exc
 
     async def _fill_form(self, item: WorkItem, path: Path) -> None:
-        await self._open(POSTA_ONLINE_SEND_HOME_URL)
+        await self._open_clean_form()
         await self.page.locator("input[name=nomeInvio]").fill(item.shipment_name)
         await self.page.locator("#file").set_input_files(str(path))
-        await self.page.wait_for_timeout(4000)
         await self._open_ar_form()
         await self._fill_recipient(item)
         await self.page.locator(f"#{AR_PREFIX}_add_dest_button").click()
@@ -167,6 +214,35 @@ class PostaOnlineDispatchPortal:
         badge = (await self.page.locator(f"#{AR_PREFIX}Summary").inner_text()).strip()
         if badge != "1" or await self.page.locator(".has-error").count():
             raise RuntimeError(f"Destinatari nel modulo Poste: {badge!r}, attesi 1 senza errori")
+        await self._verify_document(path)
+
+    async def _open_clean_form(self) -> None:
+        await self._open(POSTA_ONLINE_SEND_HOME_URL)
+        # The onload handler restores the previous documents after DOMContentLoaded.
+        # Use Poste's own new-shipment action, which resets its storage before navigation.
+        await self.page.wait_for_load_state("load")
+        async with self.page.expect_navigation(wait_until="load"):
+            await self.page.locator("#crea_spedizione").click()
+        await self._verify_document(None)
+
+    async def _verify_document(self, path: Path | None) -> None:
+        expected = {"files": [], "cards": [], "queued": 0, "count": 0, "text": ""}
+        if path is not None:
+            raw = path.read_bytes()
+            expected.update(
+                files=[{
+                    "slot": "file0", "name": path.name, "size": len(raw),
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                }],
+                cards=[path.name],
+                queued=1,
+                count=1,
+            )
+        if await self.page.evaluate(_DOCUMENT_STATE) != expected:
+            raise RuntimeError(
+                "Allegati Poste non conformi: atteso solo il PDF dell'avviso, "
+                "senza documenti precedenti né testo aggiuntivo; CONTINUA bloccato"
+            )
 
     async def _open_ar_form(self) -> None:
         """The AR switch replaces the panel; the portal may remember the AR choice."""

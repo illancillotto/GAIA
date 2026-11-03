@@ -135,6 +135,18 @@ def test_a_cancellation_request_survives_draft_observations(db, tmp_path):
     assert item.status == "cancel_requested" and item.poste_draft_id == "12269236"
 
 
+def test_pending_upload_is_observed_without_id_then_becomes_priced(db, tmp_path):
+    lot, item = _item(db, tmp_path, "draft_uncertain")
+    pending = work.DraftRow(None, item.shipment_name, "IN ATTESA DI LAVORAZIONE", None)
+    assert work.apply_drafts_snapshot(db, lot.id, job_id=1, rows=[pending]) == []
+    assert item.status == "draft_created" and item.poste_draft_id is None
+    assert item.poste_status == "IN ATTESA DI LAVORAZIONE" and item.active_key
+    created_at = item.draft_created_at
+    assert work.apply_drafts_snapshot(db, lot.id, job_id=1, rows=[_row()]) == []
+    assert item.status == "draft_priced" and item.poste_draft_id == "12269236"
+    assert item.draft_created_at == created_at
+
+
 def test_failures_before_and_after_continua_are_distinguished(db, tmp_path):
     _, item = _item(db, tmp_path, "draft_creating")
     work.record_draft_failure(db, item.id, job_id=1, submitted=True, error="x" * 2000)

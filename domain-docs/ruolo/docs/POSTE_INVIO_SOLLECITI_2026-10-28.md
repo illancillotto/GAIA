@@ -301,6 +301,96 @@ sollecito. Il PDF copiato viene cancellato alla spedizione o all'annullamento;
 resta il suo SHA-256. Prima del caricamento GAIA ricalcola l'hash: un PDF
 alterato non viene caricato.
 
+## Incidente: più avvisi nello stesso documento Poste — 2026-11-03
+
+L'anteprima segnalata per `GAIA 020210000815390` contiene nove pagine:
+la cover Poste e gli avvisi `020210000654720` e `020210000815390`.
+Il PDF originale del secondo avviso contiene quattro pagine e il solo numero
+corretto. La verifica locale dei 712 PDF in `Desktop/PDF_da_inviare/Ordinari`
+trova per ciascun file una sola intestazione di avviso e il numero corrispondente
+al nome: 691 documenti di quattro pagine, 17 di cinque e quattro di sei.
+Questa verifica riguarda l'identità dei documenti, non un nuovo audit degli
+importi o degli indirizzi.
+
+**Causa.** La pagina `home.do` esegue `settaDocumenti()` al caricamento:
+ripristina gli allegati da `sessionStorage` (`file_0` … `file_4`) e li aggiunge
+alla coda `mainDt` e agli input multipart `file0` … `file4`. Aprire direttamente
+la pagina non equivale al comando «Crea spedizione»: il relativo handler
+azzera le cinque chiavi prima della navigazione. Il worker saltava tale
+handler e aggiungeva il nuovo PDF agli allegati ripristinati. Il controllo di
+un solo destinatario e del nome della bozza non rilevava la contaminazione.
+
+**Correzione implementata nel checkout.** Prima di compilare un avviso il
+worker attende anche l'evento `load`, usa il comando `#crea_spedizione`, attende
+il caricamento completo della nuova pagina e verifica che allegati, coda e
+testo siano vuoti. Prima di CONTINUA controlla tutti gli input file della pagina:
+deve esserci soltanto `file0`, con nome, dimensione e SHA-256 identici ai byte
+del PDF sorgente. Controlla anche l'unica scheda visibile, `mainDt.length`,
+`indexCount` e l'assenza di testo aggiuntivo. Un'incongruenza interrompe il
+caricamento prima di `mark_draft_creating` e CONTINUA. Il reset usa il comando
+del portale: non cancella cookie o storage di autenticazione.
+
+La lettura e l'hash degli input avvengono nel browser; non basta verificare
+la didascalia dell'allegato. L'attesa fissa dopo la selezione del file è stata
+rimossa: `addDocument()` aggiorna sincronicamente la coda; resta il controllo
+dei byte dopo l'inserimento del destinatario.
+
+**Verifiche.** I test unitari coprono reset fallito e contaminazione durante
+l'inserimento del destinatario. I test Chromium su una riproduzione HTML
+sintetica del ciclo osservato coprono ripristino degli allegati, due avvisi
+consecutivi, input nascosti, contenuto differente a parità di nome/dimensione,
+scheda, coda, contatore, slot errato e testo aggiuntivo. Un ricevitore HTTP
+locale verifica anche i multipart effettivamente trasmessi in due creazioni
+consecutive. Non vengono contattati account Poste reali dai test.
+
+Esito finale locale: 84 test worker e 50 test backend superati; coverage
+statement/branch al 100% sui tre file del dispatch worker e su
+`poste_dispatch_work.py`. `make lint-backend` e il ratchet contro `origin/main`
+passano. Nel confronto con HEAD i 17 rilievi del precedente fix di lettura
+pagine sono identici a quelli già autorizzati: nessun nuovo incremento sui
+callable runtime esistenti, né nuove violazioni error-level. Baseline invariata.
+Il dettaglio dei 17 incrementi accettati è versionato in
+`docs/code-quality/debt/POSTE_PENDING_2026-11-03.json`.
+Graphify del codice worker e della documentazione Ruolo aggiornati.
+
+**Stato operativo.** I caricamenti della campagna restano sospesi; la
+cancellazione delle bozze errate è affidata ai colleghi. Questo fix non
+cancella bozze, non rimette automaticamente in coda gli avvisi e non preme
+INVIA. Il controllo multipart precede CONTINUA e non certifica la successiva
+conversione PDF di Poste: prima della ripresa occorrono rilascio e collaudo
+di bozze consecutive con confronto delle anteprime finali ai sorgenti.
+Il numero di pagine atteso va ricavato dal relativo sorgente, considerando
+la cover e le eventuali pagine aggiunte dal portale.
+
+## Documenti in attesa di lavorazione e lettura delle pagine — 2026-11-03
+
+Poste può mostrare una spedizione con nome `GAIA <numero avviso>`, stato
+«In attesa di lavorazione» e identificativo `-`. La riga è una prova che il
+documento è già stato caricato: il parser la conserva con identificativo
+`None`, e GAIA registra `draft_created` con lo stato Poste originale.
+Non ripete CONTINUA e non la considera assente durante la riconciliazione.
+Una lettura successiva aggiorna lo stesso avviso con identificativo numerico
+e prezzo, conservando la prima data di osservazione. Il contatore `created`
+comprende queste righe; per distinguere le bozze prezzate occorre leggere
+gli stati degli avvisi. Una bozza senza identificativo non può essere eliminata:
+il comando attende che Poste assegni l'identificativo.
+
+Gli elenchi vengono letti dopo il commit della navigazione e la presenza
+della tabella `col_invio_dett`: una pagina di login o errore non vale come
+elenco vuoto. La pagina successiva viene aperta tramite l'href del collegamento
+`Next`, con protocollo, host e percorso uguali all'elenco richiesto. Link
+ripetuti producono un errore; dopo 100 pagine la lettura è incompleta.
+Il limite consente anche gli oltre 20 fogli necessari a un account con
+235 avvisi e otto righe per pagina. La navigazione non usa il click che sul
+portale reale può restare bloccato in attesa del caricamento della pagina.
+
+Il caricamento della campagna può usare più lotti da 50 dello stesso gruppo.
+La procedura operativa mantiene una sola operazione per account, riconcilia
+gli esiti incerti prima di proseguire e sospende i casi non confermati.
+Il controller privato della campagna e il monitor non sono nuove API o un
+servizio generale di GAIA. HTTP 403 sul servizio CAP e timeout/login restano
+errori da verificare; non autorizzano modifiche agli indirizzi né retry ciechi.
+
 ## Componenti
 
 - Backend `backend/app/modules/ruolo/`:
@@ -370,8 +460,9 @@ alterato non viene caricato.
   - creazione ed eliminazione di una bozza con indirizzo dello stradario
     (bozza 12269236, prova del 2026-10-28);
   - lettura dell'archivio e del dettaglio.
+  - indirizzo manuale con comune prima della via e CAP dell'avviso
+    (pilota del 2026-11-02, completato con riconciliazione il 2026-11-03).
 - **Non ancora collaudato sul portale reale:**
-  - l'**indirizzo manuale**, con i selettori presi dagli script del portale;
   - la cancellazione con `DeleteInvio(id)`.
 
   Il primo lotto va seguito sul portale.

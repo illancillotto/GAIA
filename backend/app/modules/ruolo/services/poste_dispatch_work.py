@@ -45,7 +45,8 @@ class WorkItem:
 class DraftRow:
     """One row of the Poste "Verifica e invia" table."""
 
-    draft_id: str
+    # Poste lists newly uploaded documents before assigning their numeric id.
+    draft_id: str | None
     name: str
     status: str
     price: Decimal | None
