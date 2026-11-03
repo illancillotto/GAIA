@@ -1,0 +1,27 @@
+{
+  "release": "poste-document-menu-20261103",
+  "source_commit": "a2bd56fed7030475c35ec108c8393aa43ab2948a",
+  "deployed_at_utc": "2026-11-03T11:47:24Z",
+  "image": "gaia-elaborazioni-worker-poste:poste-document-menu-20261103",
+  "image_id": "sha256:f94abaac5139d9777ccfcb0865f6b3801b2199c5140cd92c1c86356b8102a358",
+  "health": "healthy",
+  "runtime": {
+    "pool_import": "PASS",
+    "limit": 3,
+    "heartbeat_path": "/runtime-data/worker-health/elaborazioni-worker-poste.json"
+  },
+  "http": {
+    "/api/health": 200,
+    "/login": 200,
+    "/ruolo/tributi/solleciti/poste": 200
+  },
+  "revision": "20261103_0900",
+  "active_accounts": 3,
+  "active_jobs": 0,
+  "dispatch_data_unchanged": true,
+  "unrelated_containers_unchanged": true,
+  "configuration_preserved_except_account_limit": true,
+  "sources_match_candidate": true,
+  "maintenance": false,
+  "rollback": "/opt/gaia/releases/poste-document-menu-20261103/rollback.sh"
+}

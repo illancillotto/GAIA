@@ -391,6 +391,54 @@ globali rilevano problemi nelle modifiche Communications estranee al rilascio:
 queste non sono incluse nell'immagine candidata né dichiarate risolte.
 Graphify worker e Ruolo aggiornati, estrazione docs `chunk 1/1 done`.
 
+L'adattamento è stato rilasciato alle 11:47:24 UTC del 03/11/2026 come
+`poste-document-menu-20261103`, commit `a2bd56fe`: worker `healthy`, limite
+effettivo tre account, import e smoke HTTP superati. L'immagine cambia soltanto
+`posta_online_dispatch.py`; hash delle altre sorgenti, configurazione, dati
+dispatch e container estranei invariati. Nessuna migrazione. Backup e rollback
+sono nella directory privata della release sul CED; ricevuta senza credenziali
+in `evidence/POSTE_DOCUMENT_MENU_2026-11-03.json`.
+
+**Collaudo finale e ripresa della campagna.** Il job 93 dell'account Frau ha
+creato consecutivamente `020210000458700` e `020210000768890`, bozze
+`12276942` e `12276943`, entrambe prezzate. Le anteprime scaricate contengono
+cinque pagine ciascuna: copertina Poste e quattro pagine del relativo sorgente,
+un solo codice avviso, nessun documento dell'altra utenza. Il testo delle tre
+pagine della lettera coincide con l'originale; i bollettini sono stati renderizzati
+con Poppler e confrontati visivamente con l'ultima pagina del sorgente.
+I render non sono identici pixel per pixel dopo la conversione Poste: non è
+stata dichiarata uguaglianza binaria delle anteprime.
+Evidenza priva di dati dei destinatari in
+`evidence/POSTE_DOCUMENT_CANARY_2026-11-03.json`.
+
+Prima della ripresa sono stati riletti integralmente i tre archivi (1018, 396
+e 773 nomi spedizione) e verificata l'assenza di bozze precedenti; gli errori
+temporanei «Oops» hanno richiesto ripetizioni delle sole letture. Il caso
+`020210000775960` ha superato la compilazione manuale senza cambiare destinatario
+né premere CONTINUA. Sono stati ripristinati con audit e hash dei sorgenti 708
+avvisi assenti, conservando i due del collaudo: nessun caso residuo nel piano
+di ripresa. I due avvisi esteri restano sospesi in attesa degli indirizzi
+nazionali verificati già richiesti.
+
+Alle 11:59 UTC il controller privato e il monitor sono stati riattivati per
+i tre account, con nuova epoca di job a partire da 94: i fallimenti precedenti
+restano nell'audit e non bloccano questo ciclo. Inclusi i cinque avvisi del
+lotto pilota eliminati dai colleghi. Verificati tre job contemporaneamente
+`processing`, uno per account, e il successivo lotto Salaris `pending`;
+nessun INVIA automatico. Lo stato di avanzamento resta nel monitor privato
+della campagna; queste evidenze descrivono la ripresa, non il completamento
+dei 710 caricamenti nazionali. Sette test del controller confermano la
+priorità della riconciliazione, il blocco degli esiti incerti e dei login
+falliti, la sospensione degli errori e il filtro dei job della nuova epoca.
+
+Nel primo avanzamento dopo la ripresa sono ricomparsi errori intermittenti
+prima di CONTINUA: comando `#crea_spedizione` assente oppure `mainDt` non
+definito nella pagina caricata. Il controllo degli allegati ferma il tentativo;
+il controller sospende l'avviso con l'errore in audit e procede sugli altri,
+senza ripetere automaticamente gli avvisi sospesi. Questi errori di compilazione
+restano da riesaminare separatamente e non sono presentati come risolti dal
+collaudo delle due anteprime.
+
 ## Documenti in attesa di lavorazione e lettura delle pagine — 2026-11-03
 
 Poste può mostrare una spedizione con nome `GAIA <numero avviso>`, stato

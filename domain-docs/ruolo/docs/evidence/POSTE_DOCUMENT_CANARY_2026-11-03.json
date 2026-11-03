@@ -1,0 +1,63 @@
+{
+  "passed": true,
+  "body_and_identity_passed": true,
+  "items": [
+    {
+      "number": "020210000458700",
+      "id": "e702969f-21da-4d8d-83ab-5d1e3698165e",
+      "account": 2,
+      "draft_id": "12276942",
+      "portal_status": "PREZZATO",
+      "price": "5.55",
+      "source_pages": 4,
+      "preview_pages": 5,
+      "notice_codes": [
+        "020210000458700"
+      ],
+      "body_page_text_matches": [
+        true,
+        true,
+        true
+      ],
+      "source_sha256": "a4ac33e046769b9afb702f3c7ed6a0223579f77eacd31e17f969fc6537d2fa33",
+      "preview_sha256": "dc73999a11ace7a50b6ac20c413380ae34b8e85b57a3048e19e263614a346c98",
+      "payment_page_visual_check_required": false,
+      "payment_page_visual_check_passed": true,
+      "payment_comparison": "source page 4 vs Poste preview page 5; same payee, amount, notice number, IBAN and codes; no foreign notice",
+      "payment_page_rendered_pixels_equal": false,
+      "source_payment_render_sha256": "61e5777bceffd9c82bc1a23ad0c1546047eb5f7be860c97a4b9acc13120923c4",
+      "preview_payment_render_sha256": "743ec030c9b04f131d1743fb0329563c9b40cbdd48e1eef75afe0d65f8384877"
+    },
+    {
+      "number": "020210000768890",
+      "id": "591f61fc-cddd-40c0-b635-fc8d260cc0ae",
+      "account": 2,
+      "draft_id": "12276943",
+      "portal_status": "PREZZATO",
+      "price": "5.55",
+      "source_pages": 4,
+      "preview_pages": 5,
+      "notice_codes": [
+        "020210000768890"
+      ],
+      "body_page_text_matches": [
+        true,
+        true,
+        true
+      ],
+      "source_sha256": "0b203c4a053bf7dcf8587655af7cf25ee760240a6b238e6ec38c64a42e5406ef",
+      "preview_sha256": "24a11c00c1e8574df143ac1fca2bbfeaea2a1202a001520bf67b92924558a1dd",
+      "payment_page_visual_check_required": false,
+      "payment_page_visual_check_passed": true,
+      "payment_comparison": "source page 4 vs Poste preview page 5; same payee, amount, notice number, IBAN and codes; no foreign notice",
+      "payment_page_rendered_pixels_equal": false,
+      "source_payment_render_sha256": "0c3dc5ee85e6f44a52f83dc6364f2a2bfae54cf8ee18ea3d77c38b8f7d434958",
+      "preview_payment_render_sha256": "f2945fd05e5cf3d2a7d9794458ed90e2fb6c6465512cfa9c1f405fc5476c4d63"
+    }
+  ],
+  "sent": false,
+  "visual_check_pending": false,
+  "visual_check_method": "Poppler 1200px renders compared side by side and pixel comparison",
+  "release": "a2bd56fe",
+  "job_id": 93
+}
