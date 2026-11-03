@@ -493,3 +493,7 @@ ricevute PEC/DSN, UI e worker. Stato e prove nel
 [piano dedicato](communications/IMPLEMENTATION_PLAN.md) e nel
 [report di collaudo](communications/TEST_REPORT.md). Il rilascio rimane opt-in:
 migrazione, segreti e collaudo caselle/CED richiedono autorizzazione.
+
+Chiusura Communications: [verifica finale e matrice test](communications/FINAL_REVIEW.md)
+e [avanzamento](communications/PROGRESS.md). Nessuna nuova feature o modifica
+architetturale durante la chiusura; rilascio non eseguito.

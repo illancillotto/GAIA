@@ -1133,3 +1133,8 @@ Ruolo/Tributi, solleciti definitivi2021. [Audit e indice](docs/communications/CO
 [operazioni](docs/communications/OPERATIONS.md). Overlay opt-in in
 deploy/communications: trasporto disabilitato, nessuna migrazione o spedizione
 automatica. Rilascio e caselle reali richiedono autorizzazione specifica.
+
+Verifica finale Communications: [matrice comportamenti/test e gate](docs/communications/FINAL_REVIEW.md),
+[avanzamento e residui](docs/communications/PROGRESS.md),
+[baseline riproducibile](docs/communications/BASELINE_REPAIR.md).
+Nessun deployment eseguito durante la verifica.

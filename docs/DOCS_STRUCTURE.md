@@ -502,3 +502,7 @@ ROLLBACK_PLAN, OPEN_DECISIONS e CHANGELOG. Runtime:
 backend/app/modules/communications; frontend/src/components/communications;
 overlay/esempi: deploy/communications. Integrazione dominio descritta in
 domain-docs/ruolo/docs/COMMUNICATIONS_SOLLECITI_2021.md.
+
+La chiusura di sviluppo Communications aggiunge FINAL_REVIEW.md (matrice/gate),
+PROGRESS.md (avanzamento/residui) e BASELINE_REPAIR.md (riproducibilità qualità)
+nella medesima directory docs/communications, senza nuovi moduli runtime.

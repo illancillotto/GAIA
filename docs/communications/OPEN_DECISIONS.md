@@ -19,11 +19,32 @@
 Questi punti non impediscono il collaudo sintetico e non autorizzano credenziali,
 atti, produzione o deployment.
 
-## Gate qualità del branch preesistente
+## Baseline del branch — risolto
 
-La sincronizzazione globale della baseline complessità è bloccata da17
-regressioni di metriche nei due file worker Poste del commit a2bd56fe,
-precedente ai commit Communications. Ratchet merge-base main PASS.
-Occorre una review separata della baseline/metriche Poste prima di dichiarare
-riproducibile la baseline dell'intero branch; questa change non modifica quei
-file né allarga le soglie per assorbire il debito. Dettagli in TEST_REPORT.
+Il precedente blocco di sincronizzazione è risolto nel commit d826c904 tramite
+la procedura per runtime già committato, verificata in worktree isolato e nel
+checkout canonico. Nessun refactoring Poste o nuova esclusione; ratchet main
+sempre autorevole e verde. Evidenze in BASELINE_REPAIR.md.
+
+## Configurazione di dominio
+
+La prova con il repository contabile reale conferma che il default2021 è
+external_recovery/STEP. Un avviso non diventa eleggibile perché compare nella
+tabella Communications: occorre la configurazione di gestione canonica e la
+revisione delle posizioni prevista dal Ruolo. Nessuna configurazione tributaria
+reale è stata modificata o automaticamente aggirata.
+
+Il collaudo NAS deve includere la policy host-key del connector condiviso e
+il download in memoria prima del limite PDF: debito preesistente descritto in
+SECURITY/FINAL_REVIEW, non dichiarato risolto dai test sintetici.
+
+
+## Gate finale — regressione generale residua
+
+La suite PG collettiva attivata nella verifica finale incontra un errore di
+setup GeoAlchemy/GeometryCompat, riprodotto anche sul commit9676aaa7 prima di
+Communications. Non è stato modificato il modello Catasto condiviso: il fix e
+la stabilizzazione della composizione dei fixture richiedono un ciclo dedicato.
+Restano inoltre prove legacy con requisiti PostGIS/schema migrato e dipendenze
+GIS mancanti. Il gate complessivo è FAIL; il dettaglio delle corse isolate e
+la distinzione rispetto al100% del runtime Communications sono in FINAL_REVIEW.

@@ -898,3 +898,7 @@ non conoscono le formule tributarie. API HTTP accodano soltanto job.
 [modello dati](communications/DATA_MODEL.md),
 [confini di sicurezza](communications/SECURITY.md). Coordinamento PostgreSQL
 con le prenotazioni Posta Online senza modificarne il workflow.
+
+Chiusura Communications: [verifica finale e matrice test](communications/FINAL_REVIEW.md)
+e [avanzamento](communications/PROGRESS.md). Nessuna nuova feature o modifica
+architetturale durante la chiusura; rilascio non eseguito.

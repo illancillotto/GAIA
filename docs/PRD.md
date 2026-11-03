@@ -212,3 +212,7 @@ worker dedicato. Email soltanto cortesia; esito SMTP distinto da ricevuta PEC
 e notifica legale. [PRD](communications/PRD.md) e
 [decisioni esterne](communications/OPEN_DECISIONS.md). Nessun invio reale o
 deployment autorizzato da questa implementazione.
+
+Chiusura Communications: [verifica finale e matrice test](communications/FINAL_REVIEW.md)
+e [avanzamento](communications/PROGRESS.md). Nessuna nuova feature o modifica
+architetturale durante la chiusura; rilascio non eseguito.

@@ -42,3 +42,7 @@ attachments, account; tutti true. Nessuna approvazione batch.
 concorrenza; 422 schema/anno/dati. Unique violation normalizzata, senza SQL/PII.
 Schema autorevole completo: OpenAPI FastAPI e schemas.py. Dispatch idempotente
 non significa exactly-once SMTP.
+
+Verifica conclusiva: contratti invariati; la nuova prova con contabilità reale
+conferma HTTP409 e assenza di job se un pagamento rende ineleggibile un avviso
+già approvato. Matrice API/permessi/errori in FINAL_REVIEW.md.

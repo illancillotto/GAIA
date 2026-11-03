@@ -1,4 +1,7 @@
-# Report di collaudo — 2026-11-03
+# Report di collaudo iniziale — 2026-11-03
+
+Snapshot storico a6274cac. La verifica conclusiva, con due test ulteriori,
+coverage della migrazione e baseline riparata, è in [FINAL_REVIEW](FINAL_REVIEW.md).
 
 Le evidenze sono locali e sintetiche: nessun messaggio reale, credenziale
 provider, dato tributario di produzione o deployment. Non equiparare i mock
@@ -122,3 +125,10 @@ il rifiuto; non viene presentato come gate passato.
 Evidenze: /tmp/gaia-comm-ratchet-final.json,
 /tmp/gaia-comm-baseline-final.log, /tmp/gaia-comm-baseline-verify-final.log,
 /tmp/gaia-comm-ui-lint-final.log, /tmp/gaia-communications-after-final.json.
+
+## Chiusura successiva
+
+Il precedente FAIL di riproducibilità non è lo stato corrente: la procedura
+prevista per runtime già committato è stata applicata e verificata nel commit
+d826c904. Scope/esclusioni/engine invariati; nessun codice Poste modificato.
+Vedi BASELINE_REPAIR.md e FINAL_REVIEW.md per evidenze e gate conclusivo.

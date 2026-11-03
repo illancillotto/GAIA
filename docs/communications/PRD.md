@@ -39,3 +39,13 @@ Evidenze riproducibili in TEST_REPORT.md. Mock e certificati sintetici verifican
 il software, non i provider reali. Testi, trust, conservazione, recapiti e collaudo
 provider restano all'ente (OPEN_DECISIONS.md). Nessun reinvio automatico di
 incerti/terminali. Il completamento locale non autorizza il rilascio.
+
+## Verifica conclusiva dello sviluppo
+
+La matrice in FINAL_REVIEW.md collega i comportamenti implementati alle prove
+automatizzate; PROGRESS.md registra le attività completate e quelle esterne
+residue. La chiusura aggiunge test di integrazione senza nuove funzionalità.
+L'operatività2021 resta subordinata alle regole reali di gestione Ruolo/STEP.
+
+Il gate finale complessivo resta FAIL per i limiti della regressione generale
+dettagliati in FINAL_REVIEW.md; il100% locale non equivale a PASS globale.

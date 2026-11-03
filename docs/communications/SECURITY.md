@@ -34,3 +34,10 @@ no-new-privileges, limiti CPU/memoria/PID, secret solo al worker, nessuna porta.
 SQL allowlist senza DDL/DELETE/UPDATE tributi; validare dipendenze sul rilascio.
 Firewall di egress ai soli endpoint approvati da applicare nel CED; nessun
 Docker socket o credenziale CED al worker.
+
+Verifica finale: npm audit produzione senza vulnerabilità note alla data della
+prova, senza equivalenza con un audit formale. Il connector NAS condiviso
+mantiene la policy host-key preesistente e legge la sorgente in memoria prima
+del controllo32MiB Communications: verificare identità SSH, dimensioni e budget
+risorse nel collaudo CED. Nessuna modifica a questo servizio condiviso durante
+la chiusura. Matrice dei controlli locali in FINAL_REVIEW.md.

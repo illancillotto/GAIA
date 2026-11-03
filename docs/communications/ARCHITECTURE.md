@@ -64,3 +64,11 @@ account e destinatario. DSN ordinarie sono evidenze tecniche senza effetti legal
 Snapshot, autorizzazioni, eventi e ricevute append-only tramite trigger.
 NoticeAttempt/NoticeEvidence nel namespace gaia_communications, senza mutare
 NoticeNotification o inCASS. Il monitor espone code/errori/incerti/non correlati.
+
+## Riscontro di chiusura
+
+Nessun cambiamento architetturale nella verifica finale. Il test
+test_real_accounting_payment_blocks_an_already_reviewed_dispatch esercita il
+repository contabile reale e la frontiera Ruolo/outbox. La migrazione è ora
+misurata nel coverage con roundtrip PostgreSQL e SQLite. Matrice e limiti in
+FINAL_REVIEW.md; procedura di baseline in BASELINE_REPAIR.md.

@@ -33,9 +33,10 @@ Commit locali incrementali richiesti; nessun push/PR/merge.
 Metriche prima:1836file/21785callable,1918error-level legacy.
 Dopo:1870file/22099callable,1918error-level, zero nuovi errori;
 warning2845→2893. Ratchet merge-base main: finding0.
-Sincronizzazione baseline tentata dopo il gate e rifiutata per17 regressioni
-di metriche preesistenti nei due file del worker Poste del commit a2bd56fe.
-Baseline preservata; riproducibilità globale non dichiarata.
+La prima sincronizzazione ordinaria era stata rifiutata per17 metriche Poste
+preesistenti. La successiva verifica finale ha applicato la procedura documentata
+di riparazione del runtime già committato: baseline riproducibile nel commit
+d826c904, ratchet merge-base sempre PASS (BASELINE_REPAIR.md).
 Nessuna soglia/esclusione allargata. Non è una campagna hotspot:
 crescita dovuta alla piattaforma, nessuna riduzione legacy dichiarata.
 Backend100% include i due registri API/ORM; frontend100% include workspace
@@ -47,3 +48,13 @@ Sorgente iniziale66b72e5; durante il lavoro il branch ha ricevuto commit esterni
 Poste a2bd56f/9676aaa. Le modifiche a .codex/config.toml, .gitignore e documenti
 Elaborazioni/Presenze restano fuori dai commit Communications.
 Graphify aggiornato solo tramite target dei corpus; nessun graphify-out committato.
+
+## Chiusura di qualità
+
+FINAL_REVIEW.md contiene la matrice completa dei comportamenti/test e le misure
+finali. PROGRESS.md distingue sviluppo/collaudo locale dalle attività esterne
+residue. Due nuovi test verificano migrazione SQLite e contabilità Ruolo reale;
+nessuna funzionalità aggiunta durante la chiusura.
+
+Gate complessivo finale: FAIL; le prove Communications sono verdi, ma i limiti
+della regressione generale restano espliciti in FINAL_REVIEW.md.

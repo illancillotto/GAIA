@@ -36,3 +36,23 @@
 - Chiusura: report finali, attributo binario fixture e limite baseline documentato.
 
 Nessun push, PR, merge o deployment eseguito.
+
+## Verifica finale del ciclo
+
+- Nessuna nuova feature o modifica runtime. Nessun deployment.
+- Due test reali aggiunti: roundtrip SQLite della migrazione e pagamento
+  persistito dopo review attraverso il repository Ruolo reale.
+- Coverage backend esteso ad Alembic:125PASS,1639statement/336branch100%.
+- Frontend89PASS con coverage100%, suite5468PASS, smoke18PASS, E2E4PASS;
+  ripetuti build:clean, type-check e lint.
+- Worker Poste166PASS e strumenti qualità270PASS.
+- Riparazione baseline già committata, verificata e revisionata separatamente
+  nel commit d826c904; nessuna soglia/esclusione/engine alterato.
+- Matrice e stato conclusivo in FINAL_REVIEW.md, avanzamento in PROGRESS.md.
+- Regressione backend generale ripetuta:8022PASS/471SKIP,0failure/error;
+  ragioni degli skip aggregate da JUnit e distinte dalle125prove dedicate.
+- npm audit produzione:0vulnerabilità note; hash runtime/migrazione invariati.
+- Gate finale complessivo FAIL: setup PG collettivo fallito anche sul commit
+  di partenza; prove legacy/PostGIS/GIS non interamente verificabili.
+- Recuperate428prove PG in38processi isolati;9skip SQLite intenzionali.
+ 32prove schema/PostGIS e2GIS restano non verificate.
