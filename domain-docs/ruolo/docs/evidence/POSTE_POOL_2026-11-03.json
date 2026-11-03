@@ -1,0 +1,28 @@
+{
+  "release": "poste-pool-20261103",
+  "source_commit": "a46337a7db3cc95f5e1b431246a950d86b6d3752",
+  "deployed_at_utc": "2026-11-03T09:48:18Z",
+  "image": "gaia-elaborazioni-worker-poste:poste-pool-20261103",
+  "image_id": "sha256:05617a8954e5846aa540a5816a347c7b9c5227450193cd02b97977b821584e63",
+  "health": "healthy",
+  "runtime": {
+    "pool_import": "PASS",
+    "limit": 3,
+    "heartbeat_path": "/runtime-data/worker-health/elaborazioni-worker-poste.json"
+  },
+  "http": {
+    "/api/health": 200,
+    "/login": 200,
+    "/ruolo/tributi/solleciti/poste": 200
+  },
+  "revision": "20261103_0900",
+  "active_accounts": 3,
+  "active_jobs": 0,
+  "dispatch_data_unchanged": true,
+  "unrelated_containers_unchanged": true,
+  "configuration_preserved_except_account_limit": true,
+  "sources_match_candidate": true,
+  "maintenance": false,
+  "rollback": "/opt/gaia/releases/poste-pool-20261103/rollback.sh",
+  "accepted_technical_debt": "POSTE-20261103-COMPLEXITY"
+}

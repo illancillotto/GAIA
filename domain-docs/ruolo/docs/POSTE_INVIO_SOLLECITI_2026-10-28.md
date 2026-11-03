@@ -150,8 +150,8 @@ Verifica locale della modifica:
 
 ## Caricamenti concorrenti per account — 2026-11-03
 
-Implementazione locale successiva al rilascio `poste-accounts-20261103`, ancora
-da distribuire. Il worker esegue fino a tre job di caricamento contemporanei,
+Rilasciato sul CED il 03/11/2026 alle 10:48 CET come `poste-pool-20261103`,
+successivamente al rilascio `poste-accounts-20261103`. Il worker esegue fino a tre job di caricamento contemporanei,
 ciascuno con un account Poste diverso. Il limite per processo si configura con
 `POSTA_ONLINE_MAX_CONCURRENT_ACCOUNTS` (default `3`, intervallo `1–32`), esposto
 anche dal servizio Docker Compose `elaborazioni-worker-poste`.
@@ -208,9 +208,9 @@ I test PostgreSQL non pertinenti della suite estesa restano saltati in SQLite;
 i sei test di concorrenza citati sopra usano invece un database PostgreSQL reale.
 La suite completa degli strumenti di qualità passa: 270 test.
 
-L'immagine candidata `gaia-elaborazioni-worker-poste:poste-pool-20261103` è
+L'immagine `gaia-elaborazioni-worker-poste:poste-pool-20261103` è stata prima
 preparata sul CED in `/opt/gaia/releases/poste-pool-20261103`, senza riavviare
-servizi. Il runner locale dipende anche da `sister_worker_watchdog.py`, già
+servizi, poi rilasciata dopo le verifiche. Il runner locale dipende anche da `sister_worker_watchdog.py`, già
 versionato ma assente nell'immagine precedente: il primo probe candidato ha
 rilevato l'import mancante, risolto includendo questa dipendenza. I suoi 20
 test passano con coverage righe/branch 100%. Il pacchetto definitivo contiene
@@ -236,9 +236,37 @@ incrementi come debito tecnico tracciato. Il record
 perimetro, l'autorizzazione e la revisione prevista entro il 03/12/2026 o alla
 prossima modifica dei callable interessati. Nessuna soglia, esclusione o
 regola del gate cambia: l'eccezione vale soltanto per gli incrementi elencati.
-La sincronizzazione della fotografia finale richiede corrispondenza esatta con
-questo elenco; test e coverage restano obbligatori. Il rilascio del pool è
-autorizzato, con immagine candidata già verificata e rollback predisposto.
+La sincronizzazione della fotografia finale ha verificato corrispondenza esatta
+con questo elenco; `baseline-verify` e ratchet `origin/main` passano. Test e
+coverage restano obbligatori. Non si tratta di una deroga per aumenti futuri.
+
+### Rilascio produzione e verifica conclusiva
+
+- Codice committato e pushato nel branch `feature/avvisi-solleciti-2021`, commit
+  `a46337a7db3cc95f5e1b431246a950d86b6d3752`. La baseline finale è riproducibile;
+  il debito resta nel record esplicito, senza modifica dei gate.
+- Alle 10:48:18 CET rilasciato soltanto `gaia-elaborazioni-worker-poste`, immagine
+  `gaia-elaborazioni-worker-poste:poste-pool-20261103`. Backend e frontend
+  mantengono le immagini del precedente rilascio multiaccount, già attive.
+  Gli hotfix e gli altri container del server sono conservati.
+- Health worker `healthy`, import runtime PASS e limite effettivo `3`.
+  HTTP 200 su `/api/health`, `/login` e `/ruolo/tributi/solleciti/poste`.
+  Tutte le sorgenti Python coincidono con la candidata; ambiente, mount,
+  limiti, comando e healthcheck coincidono con il precedente container,
+  con la sola aggiunta di `POSTA_ONLINE_MAX_CONCURRENT_ACCOUNTS=3`.
+- Nessuna migrazione: DB a `20261103_0900`. Tre credenziali attive, zero job
+  pendenti/in corso al controllo. Hash delle tabelle lotti, avvisi, eventi e
+  job identici prima/dopo; nessun caricamento o invio reale avviato dal deploy.
+- Backup delle tabelle Poste in `backup/poste-before.dump`, verificato con
+  `pg_restore --list`; rollback pronto in
+  `/opt/gaia/releases/poste-pool-20261103/rollback.sh`. Il rollback ripristina
+  l'immagine e la configurazione del worker precedente, senza modificare il DB.
+- Ricevuta priva di credenziali: `evidence/POSTE_POOL_2026-11-03.json`.
+  Configurazioni complete, hash sorgenti e backup restano nella directory
+  privata della release sul CED. Manutenzione applicativa sempre disattivata.
+- Il push GitHub segnala inoltre quattro alert Dependabot di severità alta
+  sul branch predefinito. I manifest delle dipendenze non cambiano in questo
+  rilascio; tali alert restano un'attività separata e non sono dichiarati risolti.
 
 | Comportamento | Evidenza pertinente |
 | --- | --- |

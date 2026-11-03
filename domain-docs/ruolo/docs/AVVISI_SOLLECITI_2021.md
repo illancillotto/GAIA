@@ -279,8 +279,10 @@ backend/script coinvolti nella campagna e nel multiaccount. Il test di
 rigenerazione del PDF mancante è stato allineato all'account obbligatorio prima
 di creare un lotto, conservando i controlli del caso NAS indisponibile.
 Verifiche complete, concorrenza e stato del rilascio del pool Poste sono nel
-runbook `POSTE_INVIO_SOLLECITI_2026-10-28.md`: l'immagine è candidata e il rilascio
-è autorizzato con gli incrementi di complessità tracciati nel debito tecnico
-`POSTE-20261103-COMPLEXITY`. Il
+runbook `POSTE_INVIO_SOLLECITI_2026-10-28.md`: il pool Poste è in produzione
+dal 03/11/2026 alle 10:48 CET, release `poste-pool-20261103`, con gli incrementi
+di complessità accettati nel debito tecnico `POSTE-20261103-COMPLEXITY`.
+Codice committato/pushato in `a46337a7`, fotografia finale verificata con
+`baseline-verify`, senza modifiche a soglie o esclusioni. Il
 precedente esito di `baseline-verify` della sola campagna non certifica le
 estensioni multiaccount successive.

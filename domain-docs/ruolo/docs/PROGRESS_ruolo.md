@@ -2,7 +2,7 @@
 
 ## Pool caricamenti Poste per account — 2026-11-03
 
-- Implementato localmente, da distribuire: fino a tre account distinti in
+- Rilasciato sul CED alle 10:48 CET come `poste-pool-20261103`: fino a tre account distinti in
   parallelo, limite configurabile `POSTA_ONLINE_MAX_CONCURRENT_ACCOUNTS`.
   Lock PostgreSQL per username anche fra processi; stesso account in coda,
   sincronizzazioni e test credenziali legacy con accesso esclusivo al portale.
@@ -12,15 +12,21 @@
   coverage righe/branch 100% sui sei runtime pool/dispatch. Altri 61 test worker,
   105 frontend e 270 tooling PASS; coverage 100% anche sui 21 runtime backend/script.
   Test di rigenerazione PDF aggiornato alla credenziale obbligatoria, 17/17 PASS.
-- Candidata CED preparata, import e sorgenti verificati; incluso il watchdog
-  già versionato richiesto dal runner (20 test, coverage 100%). Nessun riavvio
-  o caricamento reale. Tre credenziali attive nel DB di produzione.
+- Worker Poste aggiornato e `healthy`, import e sorgenti verificati; incluso il
+  watchdog già versionato richiesto dal runner (20 test, coverage 100%). Gli
+  altri container, backend/frontend e dati dei lotti sono invariati. Tre
+  credenziali attive, limite `3`, zero job in corso. Nessun caricamento reale.
 - L'utente ha autorizzato commit/push/deploy lasciando i 68 incrementi di
   complessità su 16 file come debito tecnico `POSTE-20261103-COMPLEXITY`.
   Tutti i confronti sono conservati in `docs/code-quality/debt/POSTE_2026-11-03.json`;
   revisione entro 03/12/2026 o alla prossima modifica dei callable. Nessuna
   modifica a soglie, esclusioni o gate: l'eccezione riguarda solo questo elenco.
   Evidenze e matrice comportamenti/test nel runbook `POSTE_INVIO_SOLLECITI_2026-10-28.md`.
+- Commit codice `a46337a7`, push nel branch `feature/avvisi-solleciti-2021`.
+  Baseline aggiornata con corrispondenza esatta dei 68 finding autorizzati,
+  `baseline-verify` e ratchet `origin/main` PASS. Ricevuta pubblica del deploy
+  `evidence/POSTE_POOL_2026-11-03.json`; backup e rollback nella directory
+  `/opt/gaia/releases/poste-pool-20261103/` sul CED.
 
 ## Poste multiaccount e audit caricamenti — 2026-11-03
 

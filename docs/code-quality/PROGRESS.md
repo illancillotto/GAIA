@@ -17,6 +17,10 @@
   esclusioni o logica dei gate. Non è una deroga permanente o globale.
 - Test pertinenti, coverage al 100%, lint e typecheck conservati; dettagli nel
   runbook `domain-docs/ruolo/docs/POSTE_INVIO_SOLLECITI_2026-10-28.md`.
+- Aggiornamento autorizzato completato con confronto esatto dei 68 finding;
+  `baseline-verify` e ratchet `origin/main` PASS. Commit codice `a46337a7`
+  pushato; worker rilasciato sul CED come `poste-pool-20261103`, `healthy`,
+  alle 10:48 CET. Il record del debito resta aperto per il successivo intervento.
 
 ## 2026-10-21 — Recupero baseline sul runtime gia committato (16a0e710)
 
