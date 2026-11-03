@@ -203,3 +203,12 @@ il comando mensile è nella console GATE.
 
 Specifica: `domain-docs/presenze/docs/TURNISTI_GAIA_GATE.md`.
 Verifiche, matrice test e residui: `domain-docs/presenze/docs/TURNISTI_COORDINATED_VERIFICATION_2026-10-05.md`.
+
+## Communications — ambito iniziale 2021
+
+PEC/email dei solleciti da /ruolo/tributi/solleciti, con PDF multipagina reale,
+snapshot immutabile, checklist individuale, account/template amministrabili e
+worker dedicato. Email soltanto cortesia; esito SMTP distinto da ricevuta PEC
+e notifica legale. [PRD](communications/PRD.md) e
+[decisioni esterne](communications/OPEN_DECISIONS.md). Nessun invio reale o
+deployment autorizzato da questa implementazione.

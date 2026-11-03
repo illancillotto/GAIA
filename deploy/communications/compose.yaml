@@ -1,0 +1,44 @@
+# Explicit overlay. Does not start under the default GAIA Compose invocation.
+services:
+  communications-worker:
+    image: ${COMPOSE_PROJECT_NAME:-gaia}-backend:latest
+    profiles: [communications]
+    entrypoint: [python, -m, app.modules.communications.worker]
+    restart: unless-stopped
+    init: true
+    user: "10001:10001"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 90s
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 64
+    environment:
+      APP_ENV: production
+      DATABASE_URL: ${COMMUNICATIONS_DATABASE_URL:?Set a dedicated worker database URL}
+      JWT_SECRET_KEY: ${COMMUNICATIONS_INTERNAL_KEY:?Set a non-provider internal application key}
+      COMMUNICATIONS_TRANSPORT_ENABLED: ${COMMUNICATIONS_TRANSPORT_ENABLED:-false}
+      COMMUNICATIONS_POLL_SECONDS: "2"
+      COMMUNICATIONS_SECRETS_DIR: /run/communications-secrets
+      COMMUNICATIONS_PEC_CA_BUNDLE: /run/communications-trust/ca.pem
+      COMMUNICATIONS_PEC_SIGNER_SHA256: ${COMMUNICATIONS_PEC_SIGNER_SHA256:-}
+      NAS_HOST: ${COMMUNICATIONS_NAS_HOST:-}
+      NAS_PORT: ${COMMUNICATIONS_NAS_PORT:-22}
+      NAS_USERNAME: ${COMMUNICATIONS_NAS_USERNAME:-}
+      NAS_PRIVATE_KEY_PATH: ${COMMUNICATIONS_NAS_KEY_PATH:-}
+    volumes:
+      - ./runtime-data:/runtime-data:ro
+      - ${COMMUNICATIONS_SECRETS_PATH:-./secrets/communications}:/run/communications-secrets:ro
+      - ${COMMUNICATIONS_TRUST_PATH:-./secrets/communications-trust}:/run/communications-trust:ro
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,uid=10001,gid=10001,mode=0700
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -m, app.modules.communications.health]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s

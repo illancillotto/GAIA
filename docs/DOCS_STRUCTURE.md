@@ -493,3 +493,12 @@ GAIA/
 - Nel runtime possono coesistere superfici `anagrafica` e `utenze` per compatibilita applicativa.
 - La directory `progress/` contiene file di avanzamento tecnico puntuali per tranche di lavoro e non sostituisce PRD, README o documentazione di dominio.
 - La directory `secrets/pdnd/` e destinata solo a chiavi locali non versionate usate dal backend in sviluppo, ad esempio `private_key.pem`.
+
+## Communications
+
+docs/communications raccoglie CODE_AUDIT, PRD, ARCHITECTURE, IMPLEMENTATION_PLAN,
+DATA_MODEL, API_CONTRACT, SECURITY, OPERATIONS, TEST_REPORT, DEPLOYMENT_PLAN,
+ROLLBACK_PLAN, OPEN_DECISIONS e CHANGELOG. Runtime:
+backend/app/modules/communications; frontend/src/components/communications;
+overlay/esempi: deploy/communications. Integrazione dominio descritta in
+domain-docs/ruolo/docs/COMMUNICATIONS_SOLLECITI_2021.md.

@@ -485,3 +485,11 @@ il comando mensile è nella console GATE.
 
 Specifica: `domain-docs/presenze/docs/TURNISTI_GAIA_GATE.md`.
 Verifiche, matrice test e residui: `domain-docs/presenze/docs/TURNISTI_COORDINATED_VERIFICATION_2026-10-05.md`.
+
+## GAIA Communications — 2026-11-03
+
+Implementazione outbox, snapshot, workflow individuale, adapter SMTP/IMAP,
+ricevute PEC/DSN, UI e worker. Stato e prove nel
+[piano dedicato](communications/IMPLEMENTATION_PLAN.md) e nel
+[report di collaudo](communications/TEST_REPORT.md). Il rilascio rimane opt-in:
+migrazione, segreti e collaudo caselle/CED richiedono autorizzazione.

@@ -888,3 +888,13 @@ Le assegnazioni sono registrate dalla registry canonica `app.db.base`.
 permessi distinti e callback di aggiornamento record/mese. Maturazione e audit
 restano nei servizi Presenze; nessun contratto di trasporto cambiato.
 Evidenze: `domain-docs/presenze/docs/TURNISTI_COMPLEXITY_SLICES_2026-10-05.md`.
+
+## Communications — 2026-11-03
+
+Outbox trasversale in backend/app/modules/communications, worker SMTP/IMAP
+autonomo e snapshot privati. Ruolo fornisce identità/eleggibilità/PDF; i trasporti
+non conoscono le formule tributarie. API HTTP accodano soltanto job.
+[Architettura dettagliata](communications/ARCHITECTURE.md),
+[modello dati](communications/DATA_MODEL.md),
+[confini di sicurezza](communications/SECURITY.md). Coordinamento PostgreSQL
+con le prenotazioni Posta Online senza modificarne il workflow.

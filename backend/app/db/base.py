@@ -232,6 +232,18 @@ from app.modules.gis.models import (
 )
 
 __all__ = [
+    "CommunicationAccount",
+    "CommunicationAttachment",
+    "CommunicationAttempt",
+    "CommunicationAuthorization",
+    "CommunicationControl",
+    "CommunicationEvent",
+    "CommunicationJob",
+    "CommunicationMessage",
+    "CommunicationReceipt",
+    "CommunicationReview",
+    "CommunicationTemplate",
+
     "SisterPortalEvent",
     "ApplicationUser",
     "OrgStructureAssignment",
@@ -408,3 +420,16 @@ __all__ = [
     "SyncRun",
     "SyncJob",
 ]
+from app.modules.communications.models import (
+    CommunicationAccount,
+    CommunicationAttachment,
+    CommunicationAttempt,
+    CommunicationAuthorization,
+    CommunicationControl,
+    CommunicationEvent,
+    CommunicationJob,
+    CommunicationMessage,
+    CommunicationReceipt,
+    CommunicationReview,
+    CommunicationTemplate,
+)

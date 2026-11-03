@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends
 from app.modules.accessi.router import router as accessi_router
 from app.modules.accessi.user_management_policy import require_not_ced
 from app.modules.catasto.router import router as catasto_router
+from app.modules.communications.admin import router as communications_admin_router
+from app.modules.communications.router import router as communications_router
 from app.modules.core.router import router as core_router
 from app.modules.dotazioni.router import router as dotazioni_router
 from app.modules.elaborazioni.router import router as elaborazioni_router
@@ -30,6 +32,8 @@ from app.modules.utenze.router import router as utenze_router
 from app.modules.wiki.router import router as wiki_router
 
 api_router = APIRouter()
+api_router.include_router(communications_router)
+api_router.include_router(communications_admin_router)
 api_router.include_router(core_router)
 api_router.include_router(accessi_router)
 api_router.include_router(catasto_router)

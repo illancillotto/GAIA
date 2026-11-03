@@ -1123,3 +1123,13 @@ conserva i comandi nel registro esistente e li invia mediante LAN/outbound.
 Regole, API e priorità in `domain-docs/presenze/docs/TURNISTI_GAIA_GATE.md`;
 matrice test e residui in `domain-docs/presenze/docs/TURNISTI_COORDINATED_VERIFICATION_2026-10-05.md`.
 Nessun deploy eseguito.
+
+## GAIA Communications
+
+Piattaforma PEC/email con revisione individuale e worker separato; primo ambito
+Ruolo/Tributi, solleciti definitivi2021. [Audit e indice](docs/communications/CODE_AUDIT.md),
+[architettura](docs/communications/ARCHITECTURE.md),
+[collaudo e limiti](docs/communications/TEST_REPORT.md),
+[operazioni](docs/communications/OPERATIONS.md). Overlay opt-in in
+deploy/communications: trasporto disabilitato, nessuna migrazione o spedizione
+automatica. Rilascio e caselle reali richiedono autorizzazione specifica.
