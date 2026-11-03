@@ -14,7 +14,7 @@ Commit locali incrementali richiesti; nessun push/PR/merge.
 | D — Worker | Completata | Servizio autonomo, mutex/lease/recovery/retry sicuri/health |
 | E/F — Esiti | Completata in isolamento | SMTP/IMAP mock, CMS sintetico reale, PEC/DSN/originali/Registro |
 | G — UI | Completata | PEC/email, filtri/paginazione, compositore/PDF.js/checklist/amministrazione |
-| H — Collaudo | Gate mirati passati | TEST_REPORT:100% statement/branch sui runtime toccati, build, E2E e regressioni |
+| H — Collaudo | Gate mirati passati | TEST_REPORT:100% statement/branch sui runtime toccati, build, E2E, backend8015PASS/471SKIP, frontend5468PASS, workerPoste166PASS |
 | I — Rilascio | Preparato, non eseguito | Overlay opt-in, esempi, grants, manuale, rollback; decisioni esterne aperte |
 
 ## Ordine operativo
@@ -33,6 +33,9 @@ Commit locali incrementali richiesti; nessun push/PR/merge.
 Metriche prima:1836file/21785callable,1918error-level legacy.
 Dopo:1870file/22099callable,1918error-level, zero nuovi errori;
 warning2845→2893. Ratchet merge-base main: finding0.
+Sincronizzazione baseline tentata dopo il gate e rifiutata per17 regressioni
+di metriche preesistenti nei due file del worker Poste del commit a2bd56fe.
+Baseline preservata; riproducibilità globale non dichiarata.
 Nessuna soglia/esclusione allargata. Non è una campagna hotspot:
 crescita dovuta alla piattaforma, nessuna riduzione legacy dichiarata.
 Backend100% include i due registri API/ORM; frontend100% include workspace

@@ -25,7 +25,8 @@ modifica envelope accodato/trasmesso e alterazione MIME.
 ## Stati
 
 draft → ready → approved → queued → sending → submitted.
-Modifiche da ready/approved tornano draft; annullamento fino a queued e dopo failed soltanto senza prove di trasmissione\niniziata/incerta/accettata.
+Modifiche da ready/approved tornano draft; annullamento fino a queued e dopo failed soltanto senza prove di trasmissione
+iniziata/incerta/accettata.
 Da sending: failed, uncertain o queued solo dopo rifiuto esplicito sicuro.
 submitted/accepted/uncertain ammettono esiti documentati; delivered non regredisce
 con ricevute tardive. Una consegna tardiva può superare not_delivered.

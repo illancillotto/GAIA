@@ -57,4 +57,5 @@ Il test SMTP/IMAP non invia messaggi; la connessione reale richiede autorizzazio
 Una operazione per account; più processi consentono parallelismo fra account.
 Non si configurano più invii simultanei nella stessa casella nella v1.
 
-I metadati completi della riga sorgente sono inclusi nel fingerprint: anche\ncambi di nominativo, soggetto, CF o importi senza rigenerazione bloccano il job.\n
+I metadati completi della riga sorgente sono inclusi nel fingerprint: anche
+cambi di nominativo, soggetto, CF o importi senza rigenerazione bloccano il job.

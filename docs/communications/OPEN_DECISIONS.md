@@ -18,3 +18,12 @@
 
 Questi punti non impediscono il collaudo sintetico e non autorizzano credenziali,
 atti, produzione o deployment.
+
+## Gate qualità del branch preesistente
+
+La sincronizzazione globale della baseline complessità è bloccata da17
+regressioni di metriche nei due file worker Poste del commit a2bd56fe,
+precedente ai commit Communications. Ratchet merge-base main PASS.
+Occorre una review separata della baseline/metriche Poste prima di dichiarare
+riproducibile la baseline dell'intero branch; questa change non modifica quei
+file né allarga le soglie per assorbire il debito. Dettagli in TEST_REPORT.
