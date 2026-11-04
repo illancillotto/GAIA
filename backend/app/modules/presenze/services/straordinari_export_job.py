@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import date, datetime, time
+from datetime import date, time
+from itertools import pairwise
 from pathlib import Path
 
 from openpyxl import load_workbook
@@ -15,6 +16,7 @@ from app.modules.presenze.models import (
     PresenzeDailyPunch,
     PresenzeDailyRecord,
 )
+from app.modules.presenze.services.impiegati_pending_overtime import effective_inaz_mpe_minutes
 
 MONTHS_IT = [
     "Gennaio",
@@ -254,7 +256,7 @@ def effective_extra_minutes(record: PresenzeDailyRecord) -> int:
         if record.override_straordinario_minutes is not None
         else record.straordinario_minutes or 0
     )
-    effective_mpe = record.override_mpe_minutes if record.override_mpe_minutes is not None else record.mpe_minutes or 0
+    effective_mpe = record.override_mpe_minutes if record.override_mpe_minutes is not None else effective_inaz_mpe_minutes(record) or 0
     return effective_straordinario + effective_mpe
 
 
@@ -354,7 +356,7 @@ def post_lunch_tail_minutes(punches: list[PresenzeDailyPunch]) -> int | None:
     max_gap = -1
     tail_start: time | None = None
     tail_end = complete_punches[-1].exit_time
-    for left, right in zip(complete_punches, complete_punches[1:]):
+    for left, right in pairwise(complete_punches):
         assert left.exit_time is not None
         assert right.entry_time is not None
         gap = time_to_minutes(right.entry_time) - time_to_minutes(left.exit_time)
@@ -369,7 +371,7 @@ def post_lunch_tail_minutes(punches: list[PresenzeDailyPunch]) -> int | None:
 
 def max_break_minutes(punches: list[PresenzeDailyPunch]) -> int:
     max_gap = 0
-    for left, right in zip(punches, punches[1:]):
+    for left, right in pairwise(punches):
         assert left.exit_time is not None
         assert right.entry_time is not None
         gap = time_to_minutes(right.entry_time) - time_to_minutes(left.exit_time)

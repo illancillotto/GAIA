@@ -23,7 +23,10 @@ from app.modules.presenze.services.inaz_minute_buckets import (
     inaz_special_day,
     reconcile_inaz_minute_buckets,
 )
-from app.modules.presenze.services.operai_daily_policy import PENDING_PUNCH_REQUEST_SOURCE
+from app.modules.presenze.services.operai_daily_policy import (
+    PENDING_PUNCH_REQUEST_SOURCE,
+    effective_extra_values,
+)
 from app.modules.presenze.services.operai_rules import (
     OperaiRuleConfig,
     load_operai_rule_configs,
@@ -127,15 +130,7 @@ def build_schedule_context(
 
 def effective_imported_extra_minutes(record: PresenzeDailyRecord) -> int | None:
     """Manual overtime/MPE values override INAZ independently, including zero."""
-    values = (
-        record.override_straordinario_minutes
-        if record.override_straordinario_minutes is not None
-        else record.straordinario_minutes,
-        record.override_mpe_minutes
-        if record.override_mpe_minutes is not None
-        else record.mpe_minutes,
-    )
-    return sum(value or 0 for value in values) or None
+    return effective_extra_values(record, None)["effective_extra_minutes"]
 
 
 def classify_daily_record(

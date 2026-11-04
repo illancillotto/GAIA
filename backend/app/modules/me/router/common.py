@@ -19,6 +19,7 @@ from app.modules.network.router import _resolve_device_label
 from app.modules.operazioni.models.activities import OperatorActivity
 from app.modules.operazioni.models.vehicles import VehicleUsageSession
 from app.modules.presenze.models import PresenzeCollaborator, PresenzeDailyRecord
+from app.modules.presenze.services.impiegati_pending_overtime import effective_inaz_mpe_minutes
 from app.modules.presenze.services.parser import extract_detail_payload
 
 # Preserve legacy callable layout so the complexity ratchet remains comparable.
@@ -95,7 +96,7 @@ def _daily_record_effective_extra_minutes(record: PresenzeDailyRecord) -> int:
         if record.override_straordinario_minutes is not None
         else record.straordinario_minutes
     )
-    effective_mpe = record.override_mpe_minutes if record.override_mpe_minutes is not None else record.mpe_minutes
+    effective_mpe = record.override_mpe_minutes if record.override_mpe_minutes is not None else effective_inaz_mpe_minutes(record)
     return (effective_straordinario or 0) + (effective_mpe or 0)
 
 

@@ -461,6 +461,10 @@ Frontend:
 
 Regola pausa richiesta straordinari:
 
+- per giornate `IMP1`/`IMP2` ancora `Giornata da calcolare`, una sola fascia ordinaria e timbrature importate complete e non sovrapposte consentono di ricostruire il pomeriggio dopo una pausa e dopo il completamento della fascia mattutina. La durata sostituisce la MPE provvisoria del mattino in self-service, riepiloghi e richiesta straordinari, senza modificare i totali INAZ salvati;
+- caso verificato del 30/10/2026: fascia `07:30–13:55`, timbrature `10:50–14:10` e `14:20–18:24`, permesso banca ore `07:30–10:30`: extra effettivo **04:04**, dalle `14:20` alle `18:24`, in sostituzione dei `00:15` provvisori. Il permesso non viene sottratto dalla fascia pomeridiana;
+- giornate gia calcolate, rientri ordinari, timbrature incomplete o incoerenti e rettifiche amministrative mantengono la precedenza dei valori esistenti;
+
 - la regola si applica solo quando le timbrature complete mostrano una giornata lunga con prima entrata prima delle `12:00`, ultima uscita almeno alle `15:30`, span minimo `8h` e nessuna pausa singola di almeno `30` minuti;
 - GAIA detrae dagli straordinari solo la quota di pausa mancante, quindi `0` minuti se la pausa e gia almeno `30`, `15` minuti se la pausa rilevata e `15`, `30` minuti se non esiste alcuna pausa intermedia;
 - se la detrazione azzera lo straordinario, la giornata viene scartata dalla preview e dall'export;

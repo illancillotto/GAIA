@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import time
 
 from app.modules.presenze.models import PresenzeDailyPunch, PresenzeDailyRecord
+from app.modules.presenze.services.impiegati_pending_overtime import effective_inaz_mpe_minutes
 from app.modules.presenze.services.operai_recognized_minutes import (
     DayMinuteInterval,
     RecognizedOperaiMinutes,
@@ -135,7 +136,7 @@ def effective_extra_values(record: PresenzeDailyRecord, classification: object) 
     straordinario = _adjusted(record.straordinario_minutes, record.override_straordinario_minutes)
     if getattr(classification, "source", None) == PENDING_PUNCH_REQUEST_SOURCE:
         return _classified_extra_values(classification, straordinario or 0, recognized=False)
-    mpe = _adjusted(record.mpe_minutes, record.override_mpe_minutes)
+    mpe = _adjusted(effective_inaz_mpe_minutes(record), record.override_mpe_minutes)
     return {
         "effective_straordinario_minutes": straordinario,
         "effective_mpe_minutes": mpe,
