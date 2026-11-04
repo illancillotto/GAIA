@@ -19,8 +19,12 @@ for (const channel of ["pec", "email"]) for (const width of [1440, 390]) {
       let data: unknown = [];
       if (path.endsWith("/auth/me")) data = { id: 1, username: "synthetic", role: "admin", is_active: true, enabled_modules: ["ruolo"] };
       else if (path.endsWith("/auth/my-permissions")) data = { sections: [], granted_keys: ["ruolo.tributi.view", "ruolo.tributi.manage_status"] };
-      else if (path.endsWith("/candidates")) data = { items: [{ id: "source", batch_title: "Sintetico", notice_number: "1/2021", display_name: "Contribuente di prova", year: 2021, amount: "10.00", pec: message.recipient, email: message.recipient, document_state: "generated", payment_state: "unpaid", notification_state: "nessuna_evidenza" }], total: 1 };
-      else if (path.endsWith("/accounts")) data = [{ id: "account", name: "Casella sintetica", provider: "synthetic", channel, sender: message.sender, paused: false }];
+      else if (path.endsWith("/candidates")) {
+        const query = new URL(route.request().url()).searchParams;
+        expect(query.get(`has_${channel}`)).toBe("true");
+        expect(query.get(channel === "pec" ? "has_email" : "has_pec")).toBeNull();
+        data = { items: [{ id: "source", batch_title: "Sintetico", notice_number: "1/2021", display_name: "Contribuente di prova", year: 2021, amount: "10.00", pec: message.recipient, email: message.recipient, document_state: "generated", payment_state: "unpaid", notification_state: "nessuna_evidenza" }], total: 1 };
+      } else if (path.endsWith("/accounts")) data = [{ id: "account", name: "Casella sintetica", provider: "synthetic", channel, sender: message.sender, paused: false }];
       else if (path.endsWith("/messages") && method === "POST") data = message;
       else if (path.endsWith("/messages/message")) data = message;
       else if (path.endsWith("/preview")) {
@@ -38,6 +42,7 @@ for (const channel of ["pec", "email"]) for (const width of [1440, 390]) {
     });
     await page.goto("/ruolo/tributi/solleciti/" + channel + "?embedded=1");
     await expectSidebarLayout(page, width);
+    await expect(page.getByRole("combobox", { name: channel === "pec" ? "Presenza PEC" : "Presenza email", exact: true })).toHaveValue("true");
     await page.getByRole("button", { name: "Componi", exact: true }).click();
     await expect(page.getByRole("complementary").getByLabel("Recapito verificato")).toHaveValue(message.recipient);
     await page.getByRole("button", { name: "Crea bozza e snapshot PDF" }).click();

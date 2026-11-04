@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-04 — Presenza recapito iniziale per canale
+
+- Invio PEC apre con Presenza PEC=Presente; Invio Email con Presenza email=Presente.
+- Prima richiesta server già filtrata, altro canale non vincolato; selezioni modificabili.
+- Due test unitari parametrizzati verificano default e passaggi a Tutti/Assente; E2E verifica query e dropdown.
+- Nessun cambiamento API, backend, database, dipendenza o logica di invio.
+- Verifiche e stato rilascio: CONTACT_FILTERS_2026-11-04.md.
+
 ## 2026-11-04 — Risoluzione gate sidebar e rilascio autorizzato
 
 - Eliminati otto incrementi senza eccezioni o modifiche al gate.

@@ -43,3 +43,10 @@ Ratchet completo, sincronizzazione ordinaria e verifica baseline PASS;
 quattro E2E locali più quattro sull’immagine candidata CED PASS.
 Dettagli e stato di pubblicazione corrente in
 [SIDEBAR_RELEASE_2026-11-04](SIDEBAR_RELEASE_2026-11-04.md).
+
+## Default presenza recapiti — 4 novembre
+
+- [x] PEC/email inizializzano Presente sul rispettivo canale nella prima query server.
+- [x] L’altro canale resta Tutti; controlli modificabili dall’operatore.
+- [x] Test su default, primo caricamento e scelta Tutti/Assente.
+- [ ] Pubblicazione frontend e verifica live: stato in CONTACT_FILTERS_2026-11-04.md.

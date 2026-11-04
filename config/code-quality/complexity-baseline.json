@@ -229406,7 +229406,7 @@
       "cognitive": 6,
       "cyclomatic": 6,
       "end_line": 36,
-      "fingerprint": "d1db8c5ca0616321",
+      "fingerprint": "ac8907517b4b538f",
       "kind": "function",
       "line": 13,
       "loc": 24,
@@ -375145,7 +375145,7 @@
       "violations": []
     }
   },
-  "generated_at": "2026-11-04T10:43:11.549431+00:00",
+  "generated_at": "2026-11-04T11:01:40.637284+00:00",
   "provenance": {
     "repo_root": "/tmp/gaia-communications-sidebar-20261104",
     "source_commit": "f7bb4d9fa9ab38c2f2c94123c7a136cca80ddba7",

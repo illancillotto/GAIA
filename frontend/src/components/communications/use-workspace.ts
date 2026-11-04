@@ -11,7 +11,7 @@ export function useCommunicationsWorkspace(token: string, channel: Channel, canE
 }
 
 function useCandidates(token: string, channel: Channel, canEdit: boolean) {
-  const [filters, setFilters] = useState({ q: "", has_contact: "", state: "", date_from: "", date_to: "", account_id: "", batch_id: "", payment_state: "", notification_state: "", has_pec: "", has_email: "" });
+  const [filters, setFilters] = useState({ q: "", has_contact: "", state: "", date_from: "", date_to: "", account_id: "", batch_id: "", payment_state: "", notification_state: "", has_pec: "", has_email: "", [`has_${channel}`]: "true" });
   const [page, setPage] = useState(1);
   const [data, setData] = useState<{ items: Candidate[]; total: number; accounts: Account[]; templates: Template[] }>({ items: [], total: 0, accounts: [], templates: [] });
   const [loading, setLoading] = useState(true);

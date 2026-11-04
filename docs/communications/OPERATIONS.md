@@ -28,7 +28,10 @@ Il test SMTP/IMAP non invia messaggi; la connessione reale richiede autorizzazio
 
 ## Operatore Tributi
 
-1. Solleciti → PEC/Email. Filtrare e paginare candidati 2021.
+1. Solleciti → PEC/Email. La presenza del recapito del canale è preselezionata
+   su Presente: PEC mostra inizialmente gli avvisi con PEC, Email quelli con
+   email. Per consultare anche gli altri avvisi scegliere Tutti nel filtro
+   corrispondente. Filtrare e paginare candidati 2021.
 2. Premere Componi: il pannello destro mostra l’avviso selezionato. Verificare
    recapito, account e template/testo, quindi creare bozza e snapshot.
 3. Nel pannello destro, sotto i campi, esaminare ogni pagina di tutti i PDF: zoom/fit/navigazione/fullscreen

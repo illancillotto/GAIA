@@ -77,3 +77,6 @@ Ratchet completo, sincronizzazione ordinaria e verifica baseline PASS;
 quattro E2E locali più quattro sull’immagine candidata CED PASS.
 Dettagli e stato di pubblicazione corrente in
 [SIDEBAR_RELEASE_2026-11-04](SIDEBAR_RELEASE_2026-11-04.md).
+
+Default recapiti per canale completato e verificato: nessuna variazione backend
+o schema. [Verifiche e pubblicazione frontend](CONTACT_FILTERS_2026-11-04.md).

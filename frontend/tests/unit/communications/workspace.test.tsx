@@ -163,3 +163,19 @@ it("clears the old document during an existing-message load and releases busy af
   expect(result.current.status.error).toBe("");
   expect(result.current.status.busy).toBe(false);
 });
+
+it.each(["pec", "email"] as const)("defaults %s to contacts present from the first request and allows changing the filter", async (channel) => {
+  render(<CommunicationsAccess channel={channel} />);
+  const label = channel === "pec" ? "Presenza PEC" : "Presenza email";
+  const other = channel === "pec" ? "email" : "pec";
+  expect(screen.getByLabelText(label)).toHaveValue("true");
+  expect(screen.getByLabelText(other === "pec" ? "Presenza PEC" : "Presenza email")).toHaveValue("");
+  await screen.findByText(/Contribuente sintetico/);
+  const requests = () => mocks.api.mock.calls.filter((call) => call[1].includes("/ruolo/candidates?")).map((call) => new URL(call[1], "http://localhost").searchParams);
+  expect(requests()[0].get(`has_${channel}`)).toBe("true");
+  expect(requests()[0].get(`has_${other}`)).toBeNull();
+  fireEvent.change(screen.getByLabelText(label), { target: { value: "" } });
+  await waitFor(() => expect(requests().at(-1)?.get(`has_${channel}`)).toBeNull());
+  fireEvent.change(screen.getByLabelText(label), { target: { value: "false" } });
+  await waitFor(() => expect(requests().at(-1)?.get(`has_${channel}`)).toBe("false"));
+});

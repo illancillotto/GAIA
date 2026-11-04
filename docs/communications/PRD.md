@@ -22,6 +22,9 @@ quality gate; verifiche e stato in SIDEBAR_RELEASE_2026-11-04.md.
 Ogni allegato deve essere renderizzato integralmente e controllato esplicitamente
 con otto conferme. La modifica incrementa la versione e invalida l'approvazione.
 Elenco paginato/filtrato dal server; nessuna approvazione massiva.
+All’apertura PEC, Presenza PEC è Presente; all’apertura Email, Presenza email
+è Presente. Il vincolo del canale è inviato già nella prima richiesta; l’altro
+canale non viene escluso. L’operatore può scegliere Tutti o Assente.
 
 ## Vincoli
 

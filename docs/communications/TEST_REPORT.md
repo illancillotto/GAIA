@@ -176,3 +176,12 @@ La sidebar è ora pubblicata: frontend healthy, configurazione preservata, sei
 URL HTTP200, tre API anonime HTTP401, quattro flussi Chromium attraverso nginx
 di produzione con API simulate PASS. Stato dati Communications invariato:
 zero account/messaggi/job, pausa globale true e trasporti false. Nessun invio reale.
+
+## Default presenza recapiti per canale
+
+37 test Communications PASS; runtime use-workspace.ts 65 statement/33 branch/
+14 funzioni/46 linee tutti coperti. Suite frontend 5.473 PASS, smoke18,
+build:clean/type-check/lint, ratchet e baseline riproducibile PASS.
+Quattro E2E candidati verificano filtro iniziale e query server corretti.
+Tentativo E2E iniziale non superato per selettore e stato del rilascio in
+[CONTACT_FILTERS_2026-11-04](CONTACT_FILTERS_2026-11-04.md).
