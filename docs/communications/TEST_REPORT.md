@@ -2,6 +2,18 @@
 
 Snapshot storico a6274cac. La verifica conclusiva, con due test ulteriori,
 coverage della migrazione e baseline riparata, è in [FINAL_REVIEW](FINAL_REVIEW.md).
+I test successivi sull'immagine candidata CED e le prove di ripristino sono
+registrati separatamente in
+[DEPLOYMENT_REPORT_2026-11-04](DEPLOYMENT_REPORT_2026-11-04.md).
+
+Il 4 novembre il successivo hardening dei privilegi del worker ha superato
+132 casi sull'immagine candidata: 1.641 statement e 336 branch tutti coperti,
+zero esclusioni. Include la negazione reale della lettura di password e
+recapiti nel database sintetico. I tentativi preparatori non superati e lo
+stato della regressione generale sono distinti nel report del rilascio.
+La successiva regressione backend completa in checkout isolato ha concluso
+8.030 PASS e 472 SKIP, senza failure/error, in 1.584 secondi. Gli skip e i
+blocchi PostgreSQL/GIS storici restano espliciti e non sono prove superate.
 
 Le evidenze sono locali e sintetiche: nessun messaggio reale, credenziale
 provider, dato tributario di produzione o deployment. Non equiparare i mock

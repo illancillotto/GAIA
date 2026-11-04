@@ -11,13 +11,20 @@
 | Reinvio dopo incerto/esito trasmesso | Ufficio/provider | Nessun comando di reinvio o retry incerto |
 | Bozze/invii portale Poste esterni al DB | Operatore | Coordinamento manuale necessario |
 | Fonte recapiti PF PEC/PG email non presente nello schema | Anagrafica/ufficio | Nessuna inferenza, inserimento e verifica espliciti |
-| Grants, NAS, firewall e restore CED | IT/DBA | Esempi preparati, non applicati alla produzione |
+| Grants, NAS e firewall CED | IT/DBA | Grant verificati sul clone completo; non applicati alla produzione, NAS/firewall da collaudare |
+| Nuova finestra di attivazione CED | Utente/IT | Backup/restore completo verificato; rilascio rinviato a stanotte o domani, riconvalidare freschezza e runtime prima di procedere |
 | Altre annualità/moduli e CC/CCN/HTML | Product owner | Solo Ruolo2021, destinatario singolo, testo semplice |
 | Formati PEC proprietari/CMS multipli | IT/provider | Non classificati automaticamente, EML conservati |
 | Inbox preesistenti/voluminose o EML oltre32MiB | IT | Readonly, triage cursore senza eliminazione automatica |
+| Rotazione delle credenziali mostrate durante la preparazione del rilascio | IT | Incidente segnalato; rotazione coordinata ancora necessaria, nessun valore riportato in documentazione |
 
 Questi punti non impediscono il collaudo sintetico e non autorizzano credenziali,
 atti, produzione o deployment.
+
+L'autorizzazione successiva al rilascio CED del 4 novembre e le verifiche
+operative sono registrate in
+[DEPLOYMENT_REPORT_2026-11-04](DEPLOYMENT_REPORT_2026-11-04.md).
+Non autorizzano l'attivazione dei trasporti o invii a recapiti reali.
 
 ## Baseline del branch — risolto
 

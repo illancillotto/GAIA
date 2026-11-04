@@ -11,9 +11,15 @@
 - [x] Regressione backend8022 PASS/471 SKIP, baseline riproducibile e grafi codice/Ruolo.
 - [x] Refresh semantico Graphify piattaforma; controllo conclusivo dei file prima del commit.
 - [x] Regressione PG per file:428 PASS/9 SKIP intenzionali,38 processi senza errori.
+- [x] Hardening pre-rilascio: ruolo worker senza hash/recapiti utenti, 132 test e coverage statement/branch 100% sull'immagine aggiornata.
+- [x] Regressione backend dopo il hardening in checkout isolato: 8.030 PASS/472 SKIP, zero failure/error; `make lint-backend` PASS.
 - [ ] Gate complessivo: FAIL per regressione PG collettiva e prove generali non verificate.
 - [ ] Collaudo autorizzato provider/NAS/restore/carico/trust e decisioni ufficio.
-- [ ] Deployment: non eseguito e vietato senza successiva autorizzazione.
+- [x] Preparazione CED: backup/checksum/restore integrale, migrazione ripetuta/RBAC sul clone e nove GET autenticati PASS.
+- [ ] Attivazione CED rinviata dall'utente a stanotte o domani; nessuna migrazione o sostituzione dei servizi di produzione eseguita.
+- [ ] Abilitazione trasporti e collaudo reale: non autorizzati da questo rilascio.
 
 Lo stato corrente e la matrice comportamenti/test sono in FINAL_REVIEW.md.
 TEST_REPORT.md conserva anche le evidenze del primo ciclo a6274cac.
+Lo stato del rilascio successivo è in
+[DEPLOYMENT_REPORT_2026-11-04](DEPLOYMENT_REPORT_2026-11-04.md).

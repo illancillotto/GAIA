@@ -902,3 +902,8 @@ con le prenotazioni Posta Online senza modificarne il workflow.
 Chiusura Communications: [verifica finale e matrice test](communications/FINAL_REVIEW.md)
 e [avanzamento](communications/PROGRESS.md). Nessuna nuova feature o modifica
 architetturale durante la chiusura; rilascio non eseguito.
+
+La preparazione CED del 4 novembre preserva il monolite e prevede il worker
+autonomo con trasporto disabilitato. Attivazione rinviata dall'utente, produzione
+invariata; configurazione, isolamento del collaudo e stato nel
+[report operativo](communications/DEPLOYMENT_REPORT_2026-11-04.md).

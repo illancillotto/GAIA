@@ -10,7 +10,11 @@ il working tree estraneo sono distinti dal ciclo Communications.
 Questa chiusura aggiunge solo due test di integrazione, documentazione e la
 riproduzione della baseline sul runtime già committato. Nessuna nuova feature,
 refactoring applicativo, invio reale, migrazione produzione o deployment.
-L'istruzione successiva «quando hai finito non deployare» resta vincolante.
+Alla chiusura del 3 novembre l'istruzione «quando hai finito non deployare»
+restava vincolante. Il successivo rilascio autorizzato dall'utente il 4 novembre
+è distinto da questa verifica e descritto in
+[DEPLOYMENT_REPORT_2026-11-04](DEPLOYMENT_REPORT_2026-11-04.md);
+non modifica il risultato del gate qui documentato.
 
 Le verifiche Communications in isolamento sono superate; il gate complessivo
 resta FAIL per le prove di regressione generali non interamente verificabili

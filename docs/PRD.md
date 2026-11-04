@@ -216,3 +216,8 @@ deployment autorizzato da questa implementazione.
 Chiusura Communications: [verifica finale e matrice test](communications/FINAL_REVIEW.md)
 e [avanzamento](communications/PROGRESS.md). Nessuna nuova feature o modifica
 architetturale durante la chiusura; rilascio non eseguito.
+
+La preparazione CED del 4 novembre è verificata; l'utente ha rinviato
+l'attivazione a stanotte o domani. PEC/email disabilitati, produzione invariata.
+Stato effettivo e residui nel
+[report operativo](communications/DEPLOYMENT_REPORT_2026-11-04.md).

@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-11-04 — Hardening e preparazione del rilascio autorizzato
+
+- Query approvatore limitata a quattro colonne; il ruolo worker non legge
+  hash delle password, username o recapiti degli utenti.
+- Sei test RBAC e una prova PostgreSQL effettiva sui grant aggiunti; immagine
+  candidata 132 PASS, coverage statement/branch 100%, nessuno skip/esclusione.
+- Baseline del solo worker sincronizzata dopo ratchet e verificata in
+  checkout isolato, senza includere le modifiche concorrenti.
+- Artefatti CED, configurazione congelata e rollback compatibile preparati.
+  Backup/checksum/restore integrale e migrazione/RBAC sul clone PASS; nove
+  GET autenticati sul clone PASS. Regressione backend 8.030 PASS/472 SKIP.
+- Hardening committato in `e39cbafc`. Attivazione rinviata dall'utente a
+  stanotte o domani; nessuna migrazione o sostituzione dei servizi di produzione.
+- Stato e residui, inclusa la rotazione delle credenziali esposte nell'output
+  preparatorio, in DEPLOYMENT_REPORT_2026-11-04.md. Nessun invio reale.
+
 ## 2026-11-03 — Implementazione iniziale e collaudo isolato
 
 - Audit del checkout e individuazione dei contratti Ruolo/Registro/Poste.

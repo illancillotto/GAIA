@@ -32,6 +32,11 @@ di conservazione a norma già accreditato.
 Overlay worker: UID10001, root filesystem readonly, cap_drop ALL,
 no-new-privileges, limiti CPU/memoria/PID, secret solo al worker, nessuna porta.
 SQL allowlist senza DDL/DELETE/UPDATE tributi; validare dipendenze sul rilascio.
+La lettura di `application_users` è limitata a `id`, `role`, `is_active` e
+`module_ruolo`. Il controllo dell'approvatore nel worker usa `load_only` con
+`raiseload=True`: password, username e recapiti non vengono caricati e non
+sono concessi al ruolo DB del worker. I super amministratori mantengono la
+precedente semantica di accesso ai moduli anche senza flag individuale.
 Firewall di egress ai soli endpoint approvati da applicare nel CED; nessun
 Docker socket o credenziale CED al worker.
 
@@ -41,3 +46,11 @@ mantiene la policy host-key preesistente e legge la sorgente in memoria prima
 del controllo32MiB Communications: verificare identità SSH, dimensioni e budget
 risorse nel collaudo CED. Nessuna modifica a questo servizio condiviso durante
 la chiusura. Matrice dei controlli locali in FINAL_REVIEW.md.
+
+Nel successivo rilascio del 4 novembre i file di configurazione e backup
+restano protetti sul CED; non stampare `docker inspect`, Compose risolti o
+override completi, perché possono contenere segreti. Un output preparatorio
+ha esposto credenziali dei vecchi override: incidente segnalato e rotazione
+coordinata ancora da completare, come registrato in OPEN_DECISIONS e nel
+[report operativo](DEPLOYMENT_REPORT_2026-11-04.md). Nessun valore è incluso
+nei documenti o nei commit.

@@ -1,7 +1,13 @@
 # Preparazione al rilascio
 
-Nessun deployment eseguito. Migrazione, rete reale, credenziali e atti richiedono
-autorizzazione specifica, backup provato e finestra di manutenzione.
+Piano preparato durante il ciclo del 3 novembre senza eseguire deployment.
+Il successivo rilascio CED autorizzato il 4 novembre è registrato nel
+[report operativo](DEPLOYMENT_REPORT_2026-11-04.md), che distingue i passaggi
+conclusi da quelli pendenti. L'attivazione è stata rinviata dall'utente a
+stanotte o domani dopo il completamento delle verifiche isolate; nessuna
+migrazione di produzione eseguita. Trasporti e caselle reali restano disabilitati.
+Credenziali provider, collaudo con recapiti reali e atti richiedono
+autorizzazione specifica.
 
 ## Artefatti
 
@@ -12,7 +18,7 @@ autorizzazione specifica, backup provato e finestra di manutenzione.
 - Worker entrypoint diretto bypassa bootstrap/migrazioni web.
 - PDF.js worker locale incluso nella build frontend.
 
-## Sequenza autorizzata da eseguire successivamente
+## Sequenza operativa
 
 1. Backup consistente DB e trust/secret; provare restore isolato. Congelare
    prenotazioni Poste durante la migrazione; verificare Alembic head unica.
@@ -30,10 +36,13 @@ autorizzazione specifica, backup provato e finestra di manutenzione.
    EML e Registro; nessun salto da mock a casella reale.
 8. Riprendere solo account/ambito approvati e monitorare. Incerti mai riprodotti.
 
-Comando di avvio previsto, non eseguito:
+Comando dell'overlay generico, da adattare alla configurazione CED preservata:
 docker compose -f docker-compose.yml -f deploy/communications/compose.yaml --profile communications up -d communications-worker
 
 Fornire variabili da file protetto esterno. Path relativi al primo Compose file.
 config --quiet è stato validato con valori sintetici; non è prova di deployment.
+La preparazione del 4 novembre usa una configurazione congelata e immagini derivate
+dal runtime CED per preservare le correzioni operative preesistenti; vedere
+il report per comandi effettivi e rollback, senza rigenerare tutti i servizi.
 Prima del CED: restore, grants sull'intero schema, carico/limiti contrattuali,
 testi/trust/conservazione e checklist dell'ente approvati.

@@ -59,3 +59,10 @@ Non si configurano più invii simultanei nella stessa casella nella v1.
 
 I metadati completi della riga sorgente sono inclusi nel fingerprint: anche
 cambi di nominativo, soggetto, CF o importi senza rigenerazione bloccano il job.
+
+La preparazione CED del 4 novembre è verificata; attivazione rinviata dall'utente
+a stanotte o domani, produzione invariata e trasporti disabilitati.
+Immagini, configurazione effettiva, backup/restore, verifiche e residui sono nel
+[report operativo](DEPLOYMENT_REPORT_2026-11-04.md); il rollback usa gli artefatti
+specifici di quella release. Non avviare lo stack intero e non riprendere Poste
+come effetto collaterale di un riavvio Communications.
