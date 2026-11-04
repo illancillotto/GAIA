@@ -171,3 +171,8 @@ Ratchet completo, sincronizzazione ordinaria e verifica baseline PASS;
 quattro E2E locali più quattro sull’immagine candidata CED PASS.
 Dettagli e stato di pubblicazione corrente in
 [SIDEBAR_RELEASE_2026-11-04](SIDEBAR_RELEASE_2026-11-04.md).
+
+La sidebar è ora pubblicata: frontend healthy, configurazione preservata, sei
+URL HTTP200, tre API anonime HTTP401, quattro flussi Chromium attraverso nginx
+di produzione con API simulate PASS. Stato dati Communications invariato:
+zero account/messaggi/job, pausa globale true e trasporti false. Nessun invio reale.

@@ -72,6 +72,7 @@ Immagini, configurazione effettiva, backup/restore, verifiche e residui sono nel
 specifici di quella release. Non avviare lo stack intero e non riprendere Poste
 come effetto collaterale di un riavvio Communications.
 
-Layout sidebar verificato localmente il 4 novembre, ancora da pubblicare;
-il CED mantiene il layout del rilascio precedente. Dettagli e verifiche in
-[SIDEBAR_REVIEW_2026-11-04](SIDEBAR_REVIEW_2026-11-04.md).
+Layout sidebar pubblicato il 4 novembre alle 11:50 CET: elenco e composizione
+a metà desktop, campi sopra PDF. Solo frontend sostituito; backend, worker e
+stato effettivo di Posta Online preservati. Dettagli, collaudo e rollback in
+[SIDEBAR_RELEASE_2026-11-04](SIDEBAR_RELEASE_2026-11-04.md).

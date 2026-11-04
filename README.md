@@ -1143,3 +1143,8 @@ Dal 4 novembre le pagine Invio PEC, Invio Email e amministrazione Communications
 sono pubblicate sul CED, con worker dedicato e trasporti ancora disabilitati.
 Configurazione delle caselle e collaudo reale restano necessari.
 Stato nel [report operativo](docs/communications/DEPLOYMENT_REPORT_2026-11-04.md).
+
+La sidebar PEC/email è pubblicata sul CED: elenco a sinistra e composizione
+a destra, campi sopra il PDF, con disposizione verticale su mobile.
+Quality gate specifico risolto senza deroghe; trasporti ancora disabilitati.
+[Verifiche e rilascio frontend](docs/communications/SIDEBAR_RELEASE_2026-11-04.md).

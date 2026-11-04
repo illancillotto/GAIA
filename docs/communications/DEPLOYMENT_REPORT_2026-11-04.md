@@ -233,3 +233,11 @@ di deploy contenenti credenziali di produzione. L'incidente è stato segnalato
 all'utente; i valori non sono riportati nei documenti. La rotazione coordinata
 delle credenziali esposte resta necessaria e non viene eseguita implicitamente
 durante questo rilascio.
+
+## Aggiornamento frontend sidebar alle 11:50 CET
+
+Il rilascio successivo autorizzato sostituisce il solo frontend con la sidebar
+PEC/email, immagine `6218c83aa7da`, runtime `9ee72287`. Backend, worker, schema
+e trasporti preservati; Posta Online era già attivo al nuovo preflight e resta
+in esecuzione. Le immagini e gli stati iniziali riportati sopra restano la
+fotografia del primo rilascio. [Report corrente e rollback della sola UI](SIDEBAR_RELEASE_2026-11-04.md).

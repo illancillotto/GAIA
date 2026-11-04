@@ -17,8 +17,8 @@ La pagina PEC/email divide lo spazio desktop in due colonne uguali: elenco
 a sinistra e compositore persistente a destra. Componi carica i campi dell’avviso
 selezionato; nella sidebar i campi precedono il PDF e la checklist. Su mobile
 i pannelli sono verticali. Il PDF compare dopo la creazione della bozza e del
-suo snapshot immutabile. La revisione UI del 4 novembre è verificata localmente
-e non ancora pubblicata (SIDEBAR_REVIEW_2026-11-04.md).
+suo snapshot immutabile. La revisione UI del 4 novembre è pubblicata sul CED dopo la risoluzione del
+quality gate; verifiche e stato in SIDEBAR_RELEASE_2026-11-04.md.
 Ogni allegato deve essere renderizzato integralmente e controllato esplicitamente
 con otto conferme. La modifica incrementa la versione e invalida l'approvazione.
 Elenco paginato/filtrato dal server; nessuna approvazione massiva.

@@ -31,7 +31,7 @@ Lo stato del rilascio successivo è in
 - [x] 34 test mirati, coverage runtime 100% statement/branch; 5.470 unit test e 18 smoke PASS.
 - [x] Build pulita, type-check, lint, quattro E2E Chromium e verifica visiva.
 - [x] Sincronizzazione baseline: gli otto incrementi iniziali sono risolti; comando ordinario e baseline-verify PASS, dettagli in SIDEBAR_RELEASE_2026-11-04.md.
-- [ ] Pubblicazione della revisione UI: non eseguita in questo intervento.
+- [x] Pubblicazione sidebar CED alle 11:50 CET: solo frontend, healthy; sei URL 200, tre API 401 e quattro E2E live con API simulate PASS.
 
 Evidenze, matrice e limiti: [SIDEBAR_REVIEW_2026-11-04](SIDEBAR_REVIEW_2026-11-04.md).
 

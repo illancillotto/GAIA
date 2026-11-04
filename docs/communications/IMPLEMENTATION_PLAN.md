@@ -67,7 +67,7 @@ della regressione generale restano espliciti in FINAL_REVIEW.md.
 Completata e verificata localmente la sidebar destra: elenco e composizione
 a metà desktop, campi prima del PDF e checklist, disposizione verticale mobile.
 Nessun cambiamento backend, schema, trasporto o dipendenza. Pubblicazione UI
-residua; [evidenze](SIDEBAR_REVIEW_2026-11-04.md).
+completata alle 11:50 CET dopo risoluzione gate; [evidenze](SIDEBAR_RELEASE_2026-11-04.md).
 
 ## Risoluzione gate sidebar
 

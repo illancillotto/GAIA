@@ -1,13 +1,15 @@
 # Changelog
 
-## 2026-11-04 — Risoluzione gate sidebar e preparazione rilascio autorizzato
+## 2026-11-04 — Risoluzione gate sidebar e rilascio autorizzato
 
 - Eliminati otto incrementi senza eccezioni o modifiche al gate.
 - Ridotte duplicazioni dello stato vuoto, struttura DOM e indicazioni ripetute.
 - Cleanup busy con finally e nuovo test di richiesta fallita con documento precedente.
 - Ratchet, sincronizzazione ordinaria e baseline riproducibile PASS.
 - 35 test mirati/coverage100%, regressione5470, smoke18, build/lint/types e 4+4 E2E PASS.
-- Stato operativo e provenienza in SIDEBAR_RELEASE_2026-11-04.md.
+- Commit correzione `9ee72287`; frontend CED `6218c83aa7da` pubblicato alle 11:50 CET.
+- Sei URL200, tre API401 e quattro E2E live con API simulate PASS; 49 container preservati.
+- Nessun invio reale, migrazione o modifica dei worker. Stato e rollback in SIDEBAR_RELEASE_2026-11-04.md.
 
 ## 2026-11-04 — Sidebar composizione PEC/email (locale)
 

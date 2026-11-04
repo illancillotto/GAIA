@@ -106,8 +106,32 @@ preservate. Nessun push, merge o rilascio completo GAIA.
 
 ## Attivazione
 
-Pubblicazione frontend autorizzata, da eseguire dopo commit e registrazione
-locale delle verifiche. Esito operativo definitivo da registrare a fine rilascio.
+Pubblicazione completata alle **11:50:07 CET**, commit runtime `9ee72287`.
+Immagine `gaia-frontend:communications-sidebar-20261104`, ID `6218c83aa7da`.
+Sostituito soltanto `frontend` con `--no-deps --no-build --pull never`, poi
+`nginx -t` e reload della risoluzione upstream. Frontend healthy, identico
+BUILD_ID dell’immagine canary testata e fingerprint configurazione invariato.
 
-Gate di sviluppo della revisione sidebar: **PASS**, tutti i controlli pertinenti
-eseguiti. L’attivazione frontend è una fase successiva distinta.
+- Sei URL attraverso nginx HTTP200: login, solleciti, Poste, PEC, email, admin.
+- Tre API Communications anonime HTTP401: account, messaggi, job.
+- Quattro E2E Chromium attraverso nginx di produzione PASS (10,7 secondi):
+  tutte le API simulate, PDF sintetico, nessun destinatario reale o scrittura DB.
+- 49 container preesistenti con identità preservata, inclusi backend, worker
+  Communications e Posta Online. Nessun arresto/ripresa degli invii Poste.
+- Controllo DB in transazione READ ONLY prima/dopo: zero account, messaggi e
+  job Communications; pausa globale true. Trasporti backend/worker false,
+  entrambi healthy e con le medesime identità. Nessun invio reale eseguito.
+
+Prove protette CED: `ACTIVATED.json`, `postflight-proof.json`,
+`QUALITY_GATE_PASSED.json`, `source-proof.json`, log build/attivazione/nginx.
+Le prove live browser sono locali in `/tmp/gaia-sidebar-qg-live-e2e*`.
+
+Rollback della sola UI, se necessario: usare il `rollback.json` di questa
+release con `docker compose --project-directory /opt/gaia -f <release>/rollback.json
+up -d --no-deps --no-build --pull never frontend`, attendere health, verificare
+nginx e ricaricarlo. Ripristina l’immagine precedente `59b2b4bdfcd2`; nessuna
+operazione backend, worker o database. Non usare il rollback globale del primo
+rilascio Communications per annullare questa revisione dell’interfaccia.
+
+Gate della revisione sidebar e relativo rilascio: **PASS**, tutti i controlli
+pertinenti eseguiti. Il gate generale storico PG/GIS resta distinto e invariato.
