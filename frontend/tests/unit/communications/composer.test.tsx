@@ -65,7 +65,6 @@ it("renders immutable/read-only communication, email courtesy warning, errors an
   const { rerender } = render(<CommunicationComposer token="token" message={{ ...message, state: "submitted", channel: "email" }} accounts={[account]} canEdit={false} onChange={vi.fn()} />);
   expect(screen.getByText(/Comunicazione di cortesia/)).toBeInTheDocument();
   expect(screen.queryByText("Invia Email")).not.toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText("Larghezza documento"), { target: { value: "65" } });
   fireEvent.click(screen.getByText("PDF caricato"));
   await screen.findByText(/submitted ·/);
   URL.createObjectURL = vi.fn(() => "blob:eml"); URL.revokeObjectURL = vi.fn();
@@ -100,7 +99,7 @@ it("disables checks while a command is pending and renders the ordinary email di
   expect(screen.getAllByRole("checkbox")[0]).toBeDisabled();
 });
 it("revokes downloaded EML URLs and discards both resolved history requests on unmount", async () => {
-  let resolvers: ((value: unknown) => void)[] = [];
+  const resolvers: ((value: unknown) => void)[] = [];
   api.communications.mockImplementation(() => new Promise((resolve) => resolvers.push(resolve)));
   const view = render(<CommunicationComposer token="token" message={message} accounts={[]} canEdit onChange={vi.fn()} />);
   view.unmount();
@@ -123,4 +122,14 @@ it("keeps failed validation visible in the composition form", async () => {
   await act(async () => result.current.action("validate"));
   render(<ComposerForm message={message} accounts={[]} canEdit controller={result.current} />);
   expect(screen.getByRole("alert")).toHaveTextContent("Dati modificati");
+});
+
+it("places message fields above the PDF and the review checklist after it", async () => {
+  render(<CommunicationComposer token="token" message={message} accounts={[account]} canEdit onChange={vi.fn()} />);
+  const before = (a: Element, b: Element) => expect(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  before(screen.getByLabelText("Oggetto"), screen.getByLabelText("Anteprima allegati PDF"));
+  before(screen.getByLabelText("Anteprima allegati PDF"), screen.getByText("Verifica individuale obbligatoria"));
+  expect(screen.getByRole("heading", { name: "Componi avviso 1/2021 · PEC" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Invia PEC" })).toBeDisabled();
+  await screen.findByLabelText("Storico comunicazione");
 });

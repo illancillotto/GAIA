@@ -29,8 +29,9 @@ Il test SMTP/IMAP non invia messaggi; la connessione reale richiede autorizzazio
 ## Operatore Tributi
 
 1. Solleciti → PEC/Email. Filtrare e paginare candidati 2021.
-2. Aprire una riga, verificare recapito, account e template/testo. Creare snapshot.
-3. Esaminare ogni pagina di tutti i PDF a sinistra: zoom/fit/navigazione/fullscreen
+2. Premere Componi: il pannello destro mostra l’avviso selezionato. Verificare
+   recapito, account e template/testo, quindi creare bozza e snapshot.
+3. Nel pannello destro, sotto i campi, esaminare ogni pagina di tutti i PDF: zoom/fit/navigazione/fullscreen
    e nuova scheda autenticata. Verificare nome, versione, dimensione e hash.
 4. Verificare dati attuali; confermare gli otto controlli e approvare.
 5. Invia PEC/Email accoda il worker. Monitorare stati e ricevute, senza
@@ -70,3 +71,7 @@ Immagini, configurazione effettiva, backup/restore, verifiche e residui sono nel
 [report operativo](DEPLOYMENT_REPORT_2026-11-04.md); il rollback usa gli artefatti
 specifici di quella release. Non avviare lo stack intero e non riprendere Poste
 come effetto collaterale di un riavvio Communications.
+
+Layout sidebar verificato localmente il 4 novembre, ancora da pubblicare;
+il CED mantiene il layout del rilascio precedente. Dettagli e verifiche in
+[SIDEBAR_REVIEW_2026-11-04](SIDEBAR_REVIEW_2026-11-04.md).

@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { CommunicationsAccess } from "@/components/communications/workspace";
 import { useCommunicationsWorkspace } from "@/components/communications/use-workspace";
@@ -118,4 +118,26 @@ it("leaves missing contacts visible and requires an explicit verified address", 
   fireEvent.click(screen.getByLabelText("Seleziona 1/2021"));
   expect(screen.getByLabelText("Recapito verificato")).toHaveValue("");
   expect(screen.getByText("Crea bozza e snapshot PDF")).toBeDisabled();
+});
+
+it("keeps the selected notice and fields in the right panel while the candidate list remains available", async () => {
+  const second = { ...candidate, id: "second", notice_number: "2/2021", pec: "second@example.org" };
+  mocks.api.mockImplementation((_token, path) => Promise.resolve(path.includes("candidates?") ? { items: [candidate, second], total: 2 } : path === "/accounts" ? [account] : path === "/templates" ? [] : { ...message, source_entity_id: second.id, notice_number: second.notice_number }));
+  render(<PecPage />);
+  const list = screen.getByRole("region", { name: "Elenco avvisi" });
+  const panel = screen.getByRole("complementary", { name: "Composizione avviso" });
+  expect(within(panel).getByText("Composizione e documento")).toBeInTheDocument();
+  await within(list).findAllByRole("button", { name: "Componi", exact: true });
+  fireEvent.click(within(list).getAllByRole("button", { name: "Componi", exact: true })[0]);
+  expect(within(panel).getByRole("heading", { name: "Componi avviso 1/2021" })).toBeInTheDocument();
+  fireEvent.change(within(panel).getByLabelText("Oggetto"), { target: { value: "Solo primo avviso" } });
+  fireEvent.click(within(list).getAllByRole("button", { name: "Componi", exact: true })[1]);
+  expect(within(panel).getByRole("heading", { name: "Componi avviso 2/2021" })).toBeInTheDocument();
+  expect(within(panel).getByLabelText("Recapito verificato")).toHaveValue("second@example.org");
+  expect(within(panel).getByLabelText("Oggetto")).toHaveValue("");
+  fireEvent.click(within(panel).getByRole("button", { name: "Crea bozza e snapshot PDF" }));
+  await within(panel).findByText("Composer message");
+  fireEvent.click(within(list).getByLabelText("Seleziona 1/2021"));
+  expect(within(panel).queryByText("Composer message")).not.toBeInTheDocument();
+  expect(within(panel).getByLabelText("Recapito verificato")).toHaveValue("recipient@example.org");
 });

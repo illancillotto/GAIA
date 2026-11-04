@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
@@ -37,11 +37,18 @@ for (const channel of ["pec", "email"]) for (const width of [1440, 390]) {
       await route.fulfill({ status: 200, json: data });
     });
     await page.goto("/ruolo/tributi/solleciti/" + channel + "?embedded=1");
+    await expectSidebarLayout(page, width);
     await page.getByRole("button", { name: "Componi", exact: true }).click();
+    await expect(page.getByRole("complementary").getByLabel("Recapito verificato")).toHaveValue(message.recipient);
     await page.getByRole("button", { name: "Crea bozza e snapshot PDF" }).click();
     await expect(page.getByRole("button", { name: channel === "pec" ? "Invia PEC" : "Invia Email", exact: true })).toBeDisabled();
     await expect(page.locator("canvas[data-page]")).toHaveCount(3);
     await expect.poll(() => rendered).toBeGreaterThan(0);
+    const fieldsTop = await page.getByLabel("Oggetto", { exact: true }).evaluate((el) => el.getBoundingClientRect().top);
+    const previewTop = await page.getByRole("region", { name: "Anteprima allegati PDF" }).evaluate((el) => el.getBoundingClientRect().top);
+    expect(fieldsTop).toBeLessThan(previewTop);
+    await page.getByRole("complementary").evaluate((el) => { el.scrollTop = 0; });
+    await page.screenshot({ path: "/tmp/gaia-sidebar-" + channel + width + ".png", fullPage: true });
     expect(await page.locator('canvas[data-page="3"]').evaluate((canvas) => (canvas as HTMLCanvasElement).width)).toBeGreaterThan(100);
     await page.getByRole("button", { name: "Pagina successiva" }).click();
     await expect(page.getByText("2 / 3", { exact: true })).toBeVisible();
@@ -57,4 +64,18 @@ for (const channel of ["pec", "email"]) for (const width of [1440, 390]) {
     expect(errors).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2)).toBe(true);
   });
+}
+
+async function expectSidebarLayout(page: Page, width: number) {
+  const list = page.getByRole("region", { name: "Elenco avvisi" });
+  const panel = page.getByRole("complementary", { name: "Composizione avviso" });
+  await expect(list.getByRole("button", { name: "Componi", exact: true })).toBeVisible();
+  const a = (await list.boundingBox())!;
+  const b = (await panel.boundingBox())!;
+  if (width >= 1280) {
+    expect(b.x).toBeGreaterThan(a.x + a.width);
+    expect(Math.abs(a.width - b.width)).toBeLessThan(2);
+  } else {
+    expect(b.y).toBeGreaterThanOrEqual(a.y + a.height);
+  }
 }

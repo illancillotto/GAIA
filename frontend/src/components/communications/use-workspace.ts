@@ -43,9 +43,10 @@ function useCommunicationSelection(token: string, channel: Channel, reload: () =
   const [error, setError] = useState("");
   async function open(candidate: Candidate, fresh = false) {
     setBusy(true); setError("");
+    setSelected(null); setMessage(null);
     try {
       if (candidate.message_id && !fresh) setMessage(await communications<Communication>(token, `/messages/${candidate.message_id}`));
-      else { setSelected(candidate); setMessage(null); setCompose({ recipient: candidate[channel] || "", account_id: "", template_id: "", subject: "", body: "" }); }
+      else { setSelected(candidate); setCompose({ recipient: candidate[channel] || "", account_id: "", template_id: "", subject: "", body: "" }); }
     } catch (failure) { setError(errorText(failure)); }
     setBusy(false);
   }

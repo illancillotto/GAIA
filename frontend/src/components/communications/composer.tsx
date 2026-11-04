@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { communications, receiptBlob } from "@/lib/communications-api";
 import type { Account, Attachment, CommEvent, Communication, Receipt } from "@/types/communications";
 import { useComposer } from "./use-composer";
@@ -10,18 +10,12 @@ import { CommunicationPdfViewer } from "./pdf-viewer";
 type Props = { token: string; message: Communication; accounts: Account[]; canEdit: boolean; onChange: (message: Communication) => void };
 
 export function CommunicationComposer({ token, message, accounts, canEdit, onChange }: Props) {
-  const [ratio, setRatio] = useState(55);
   const controller = useComposer({ token, message, canEdit, onChange });
-  const style = { "--composition-columns": `${ratio}fr ${100 - ratio}fr` } as CSSProperties;
   return <section aria-label="Compositore comunicazione" className="space-y-4">
-    <div className="flex flex-wrap justify-between gap-3"><h2 className="text-xl font-semibold">Avviso {message.notice_number} · {message.channel.toUpperCase()}</h2><span role="status">{message.state} · revisione {message.version}</span></div>
-    <label className="hidden items-center gap-3 text-sm lg:flex">Larghezza documento
-      <input aria-label="Larghezza documento" type="range" min="35" max="70" value={ratio} onChange={(event) => setRatio(Number(event.target.value))} /> {ratio}%
-    </label>
-    <div style={style} className="grid items-start gap-4 lg:grid-cols-[var(--composition-columns)]">
-      <div className="min-w-0 space-y-4">{message.attachments.map((part) => <AttachmentPreview key={`${part.id}:${message.version}`} token={token} message={message} part={part} onRender={controller.onRender} canReview={canEdit} />)}</div>
-      <ComposerForm message={message} accounts={accounts} canEdit={canEdit} controller={controller} />
-    </div>
+    <div className="flex flex-wrap justify-between gap-3"><h2 className="text-xl font-semibold">Componi avviso {message.notice_number} · {message.channel.toUpperCase()}</h2><span role="status">{message.state} · revisione {message.version}</span></div>
+    <ComposerForm message={message} accounts={accounts} canEdit={canEdit} controller={controller}>
+      <section aria-label="Anteprima allegati PDF" className="min-w-0 space-y-4 border-t pt-4"><h3 className="font-semibold">Documento da verificare</h3>{message.attachments.map((part) => <AttachmentPreview key={`${part.id}:${message.version}`} token={token} message={message} part={part} onRender={controller.onRender} canReview={canEdit} />)}</section>
+    </ComposerForm>
     <CommunicationHistory key={message.state} token={token} id={message.id} />
   </section>;
 }

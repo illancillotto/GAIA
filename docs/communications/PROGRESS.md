@@ -23,3 +23,14 @@ Lo stato corrente e la matrice comportamenti/test sono in FINAL_REVIEW.md.
 TEST_REPORT.md conserva anche le evidenze del primo ciclo a6274cac.
 Lo stato del rilascio successivo è in
 [DEPLOYMENT_REPORT_2026-11-04](DEPLOYMENT_REPORT_2026-11-04.md).
+
+## Revisione sidebar — 4 novembre
+
+- [x] Elenco/compositore 50/50 su desktop; campi sopra PDF; mobile verticale.
+- [x] Cambio avviso senza mantenere campi o documento della selezione precedente.
+- [x] 34 test mirati, coverage runtime 100% statement/branch; 5.470 unit test e 18 smoke PASS.
+- [x] Build pulita, type-check, lint, quattro E2E Chromium e verifica visiva.
+- [ ] Sincronizzazione baseline: rifiutata per otto incrementi della nuova UI; baseline invariata e quality gate completo FAIL, dettagli nel report.
+- [ ] Pubblicazione della revisione UI: non eseguita in questo intervento.
+
+Evidenze, matrice e limiti: [SIDEBAR_REVIEW_2026-11-04](SIDEBAR_REVIEW_2026-11-04.md).

@@ -61,3 +61,10 @@ nessuna funzionalità aggiunta durante la chiusura.
 
 Gate complessivo finale: FAIL; le prove Communications sono verdi, ma i limiti
 della regressione generale restano espliciti in FINAL_REVIEW.md.
+
+## Revisione UI successiva al rilascio
+
+Completata e verificata localmente la sidebar destra: elenco e composizione
+a metà desktop, campi prima del PDF e checklist, disposizione verticale mobile.
+Nessun cambiamento backend, schema, trasporto o dipendenza. Pubblicazione UI
+residua; [evidenze](SIDEBAR_REVIEW_2026-11-04.md).

@@ -150,3 +150,15 @@ Il precedente FAIL di riproducibilità non è lo stato corrente: la procedura
 prevista per runtime già committato è stata applicata e verificata nel commit
 d826c904. Scope/esclusioni/engine invariati; nessun codice Poste modificato.
 Vedi BASELINE_REPAIR.md e FINAL_REVIEW.md per evidenze e gate conclusivo.
+
+## Revisione sidebar del 4 novembre
+
+Verifica frontend isolata successiva al rilascio, senza invii reali: 34 test
+mirati e coverage dei cinque runtime modificati 100% statement/branch/function/line;
+5.470 unit test, 18 smoke, quattro flussi Chromium e build:clean PASS.
+Type-check e lint nel perimetro PASS. Matrice, metriche e limiti in
+[SIDEBAR_REVIEW_2026-11-04](SIDEBAR_REVIEW_2026-11-04.md).
+Il gate generale storico e i suoi residui restano quelli di FINAL_REVIEW.md.
+Il gate completo della nuova sidebar è inoltre FAIL: la sincronizzazione della
+baseline corrente rifiuta otto incrementi documentati, benché ratchet merge-base
+e controlli frontend siano PASS. Nessuna baseline o soglia modificata.

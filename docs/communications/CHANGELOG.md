@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-04 — Sidebar composizione PEC/email (locale)
+
+- Elenco a sinistra e compositore a destra in colonne uguali su desktop.
+- Campi sopra PDF, poi checklist; composizione verticale su mobile.
+- Componi aggiorna il pannello; il cambio avviso pulisce la selezione precedente.
+- Tabella con scroll e azioni visibili; viewer e autorizzazione esistenti preservati.
+- Test, coverage e build verificati; nessun nuovo rilascio o invio reale.
+- Lint esteso ai test: corretto un prefer-const preesistente; otto test composer ripetuti PASS.
+- Sincronizzazione baseline rifiutata per otto incrementi UI; quality gate completo FAIL, baseline e soglie preservate.
+- Evidenze in SIDEBAR_REVIEW_2026-11-04.md.
+
 ## 2026-11-04 — Hardening e rilascio mirato CED autorizzato
 
 - Query approvatore limitata a quattro colonne; il ruolo worker non legge

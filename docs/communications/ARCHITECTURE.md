@@ -12,6 +12,15 @@ FastAPI registra due router sotto /communications, prefisso GAIA esterno /api.
 Frontend: sessione, permessi, client e Tailwind/btn esistenti. PDF.js 5.4.624
 caricato sul client; worker PDF distribuito localmente nella build.
 
+## Workspace PEC/email
+
+`workspace.tsx` mantiene filtri comuni e due colonne uguali da breakpoint xl:
+elenco e sidebar sticky con scroll indipendente. `use-workspace.ts` svuota la
+composizione precedente al cambio avviso. `composer.tsx` inserisce il viewer
+come slot di `ComposerForm`, fra campi e checklist. API, snapshot, permessi e
+workflow di autorizzazione restano quelli esistenti; nessuna nuova dipendenza.
+La versione mobile dispone elenco e composizione verticalmente.
+
 ## Revisione e persistenza
 
 Ogni bozza lega UUID sorgente/documento Registro e numero stampato a versione
