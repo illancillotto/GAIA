@@ -18791,12 +18791,26 @@
       ]
     },
     {
-      "cognitive": 4,
-      "cyclomatic": 5,
-      "end_line": 25,
-      "fingerprint": "243e7479444b503c",
+      "cognitive": 9,
+      "cyclomatic": 8,
+      "end_line": 41,
+      "fingerprint": "642530b2be1dc97a",
       "kind": "function",
       "line": 21,
+      "loc": 21,
+      "name": "_authorize_operator",
+      "nesting": 1,
+      "params": 2,
+      "path": "backend/app/modules/communications/worker.py",
+      "violations": []
+    },
+    {
+      "cognitive": 4,
+      "cyclomatic": 5,
+      "end_line": 49,
+      "fingerprint": "243e7479444b503c",
+      "kind": "function",
+      "line": 45,
       "loc": 5,
       "name": "Worker.__init__",
       "nesting": 0,
@@ -18816,10 +18830,10 @@
     {
       "cognitive": 8,
       "cyclomatic": 6,
-      "end_line": 40,
+      "end_line": 64,
       "fingerprint": "024ed5bd06d3b16c",
       "kind": "function",
-      "line": 27,
+      "line": 51,
       "loc": 14,
       "name": "Worker.tick",
       "nesting": 2,
@@ -18830,10 +18844,10 @@
     {
       "cognitive": 4,
       "cyclomatic": 4,
-      "end_line": 53,
+      "end_line": 77,
       "fingerprint": "4e185a5d014c6f43",
       "kind": "function",
-      "line": 42,
+      "line": 66,
       "loc": 11,
       "name": "Worker._claim_and_run",
       "nesting": 2,
@@ -18844,10 +18858,10 @@
     {
       "cognitive": 2,
       "cyclomatic": 3,
-      "end_line": 63,
+      "end_line": 87,
       "fingerprint": "7a69c0c9959bdf04",
       "kind": "function",
-      "line": 55,
+      "line": 79,
       "loc": 9,
       "name": "Worker.run",
       "nesting": 1,
@@ -18856,51 +18870,26 @@
       "violations": []
     },
     {
-      "cognitive": 16,
-      "cyclomatic": 14,
-      "end_line": 114,
-      "fingerprint": "15fcaa9cace418ef",
+      "cognitive": 10,
+      "cyclomatic": 9,
+      "end_line": 131,
+      "fingerprint": "fee828d981aa7ab8",
       "kind": "function",
-      "line": 65,
-      "loc": 50,
+      "line": 89,
+      "loc": 43,
       "name": "Worker._prepare",
       "nesting": 1,
       "params": 3,
       "path": "backend/app/modules/communications/worker.py",
-      "violations": [
-        {
-          "excepted": false,
-          "metric": "cyclomatic",
-          "scope": "callable",
-          "severity": "warning",
-          "threshold": 10,
-          "value": 14
-        },
-        {
-          "excepted": false,
-          "metric": "cognitive",
-          "scope": "callable",
-          "severity": "warning",
-          "threshold": 15,
-          "value": 16
-        },
-        {
-          "excepted": false,
-          "metric": "loc",
-          "scope": "callable",
-          "severity": "warning",
-          "threshold": 50,
-          "value": 50
-        }
-      ]
+      "violations": []
     },
     {
       "cognitive": 10,
       "cyclomatic": 7,
-      "end_line": 132,
+      "end_line": 149,
       "fingerprint": "cedb1aa6ffb3a665",
       "kind": "function",
-      "line": 116,
+      "line": 133,
       "loc": 17,
       "name": "Worker._dispatch",
       "nesting": 2,
@@ -18911,10 +18900,10 @@
     {
       "cognitive": 4,
       "cyclomatic": 5,
-      "end_line": 147,
+      "end_line": 164,
       "fingerprint": "327be0ea12952371",
       "kind": "function",
-      "line": 134,
+      "line": 151,
       "loc": 14,
       "name": "Worker._finish_dispatch",
       "nesting": 1,
@@ -18934,10 +18923,10 @@
     {
       "cognitive": 1,
       "cyclomatic": 2,
-      "end_line": 164,
+      "end_line": 181,
       "fingerprint": "9938924f26d45d8d",
       "kind": "function",
-      "line": 149,
+      "line": 166,
       "loc": 16,
       "name": "Worker._reconcile",
       "nesting": 1,
@@ -18948,10 +18937,10 @@
     {
       "cognitive": 0,
       "cyclomatic": 1,
-      "end_line": 174,
+      "end_line": 191,
       "fingerprint": "20b7cce07f1e33e9",
       "kind": "function",
-      "line": 166,
+      "line": 183,
       "loc": 9,
       "name": "Worker._test_account",
       "nesting": 0,
@@ -18962,10 +18951,10 @@
     {
       "cognitive": 14,
       "cyclomatic": 9,
-      "end_line": 197,
+      "end_line": 214,
       "fingerprint": "ea71a42ad63b8d09",
       "kind": "function",
-      "line": 176,
+      "line": 193,
       "loc": 22,
       "name": "Worker._unexpected",
       "nesting": 2,
@@ -18976,10 +18965,10 @@
     {
       "cognitive": 1,
       "cyclomatic": 2,
-      "end_line": 210,
+      "end_line": 227,
       "fingerprint": "f17bf78b164874c3",
       "kind": "function",
-      "line": 200,
+      "line": 217,
       "loc": 10,
       "name": "main",
       "nesting": 1,
@@ -350890,15 +350879,15 @@
       "violations": []
     },
     "backend/app/modules/communications/worker.py": {
-      "callables": 11,
-      "cognitive_max": 16,
-      "cognitive_sum": 64,
-      "complexity_density": 0.632124,
-      "cyclomatic_max": 14,
-      "cyclomatic_sum": 58,
-      "dependency_count": 13,
-      "imports": 13,
-      "loc": 193,
+      "callables": 12,
+      "cognitive_max": 14,
+      "cognitive_sum": 67,
+      "complexity_density": 0.615385,
+      "cyclomatic_max": 9,
+      "cyclomatic_sum": 61,
+      "dependency_count": 14,
+      "imports": 14,
+      "loc": 208,
       "violations": []
     },
     "backend/app/modules/core/__init__.py": {
@@ -375170,10 +375159,10 @@
       "violations": []
     }
   },
-  "generated_at": "2026-11-03T13:08:44.570433+00:00",
+  "generated_at": "2026-11-04T08:47:13.187103+00:00",
   "provenance": {
-    "repo_root": "/home/cbo/CursorProjects/GAIA",
-    "source_commit": "a6274cac03debeca61380df564aea7be87dfe70f",
+    "repo_root": "/tmp/gaia-communications-release-20261104",
+    "source_commit": "1d26140c4d922310ad0cdd0daee56441763a88fb",
     "tool": "tools/code_quality/complexity.py"
   },
   "schema_version": 2,
@@ -375203,5 +375192,5 @@
       "modules/elaborazioni/worker/**/*.py"
     ]
   },
-  "source_commit": "a6274cac03debeca61380df564aea7be87dfe70f"
+  "source_commit": "1d26140c4d922310ad0cdd0daee56441763a88fb"
 }

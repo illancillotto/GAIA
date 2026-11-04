@@ -84,3 +84,15 @@ La lettura remota PDF riutilizza nas_connector.get_nas_client, configurato da
 NAS_HOST/NAS_PORT/NAS_USERNAME/NAS_PRIVATE_KEY_PATH. L'overlay consente questi
 riferimenti senza incorporarvi segreti; permessi/key NAS readonly e accesso
 effettivo CED restano da collaudare. Nessun nuovo comportamento di scrittura NAS.
+
+## Controllo dei privilegi prima del rilascio — 2026-11-04
+
+Il controllo dell'approvatore leggeva l'intero modello `ApplicationUser`,
+che comprende anche `password_hash`, username e recapiti. L'analisi di
+`permission_resolver.can_access_section` e `ApplicationUser.enabled_modules`
+conferma che per questa responsabilità servono soltanto ID, ruolo, stato attivo
+e flag Ruolo. `communications.worker._authorize_operator` usa ora una query
+limitata a queste colonne con caricamenti impliciti vietati; i grant sono
+coerenti con la query. Revoca, utente assente/inattivo e semantica dei super
+amministratori mantengono il comportamento precedente. Nessuna modifica alle
+API, alle formule, agli stati o alle transazioni del dispatch.

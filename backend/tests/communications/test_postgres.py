@@ -1,6 +1,7 @@
 """Real PostgreSQL guarantees, isolated in a disposable schema and database."""
 
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Barrier
@@ -307,3 +308,57 @@ def test_two_worker_instances_cannot_claim_the_same_account_at_once(postgres):
         first, second = pool.submit(owner), pool.submit(competitor)
         assert first.result(timeout=10) is not None
         assert second.result(timeout=10) is None
+
+
+def test_worker_grants_allow_rbac_without_password_or_personal_data(postgres):
+    from sqlalchemy.orm import Session
+
+    from app.modules.communications.worker import _authorize_operator
+
+    engine, _, _ = postgres
+    role = f"comm_worker_{uuid4().hex}"
+    grants = (
+        Path(__file__).resolve().parents[3] / "deploy/communications/worker-grants.sql"
+    ).read_text()
+    grants = re.sub(r"--[^\n]*", "", grants)
+    targets = re.findall(r"GRANT\s+.+?\s+ON\s+(.+?)\s+TO\s+communications_worker\s*;", grants, re.S)
+    with engine.begin() as connection:
+        schema = connection.scalar(sa.text("SELECT current_schema()"))
+        existing = set(sa.inspect(connection).get_table_names())
+        for group in targets:
+            if group.startswith("SCHEMA "):
+                continue
+            for name in group.split(","):
+                name = name.strip()
+                if name not in existing:
+                    connection.exec_driver_sql(f'CREATE TABLE "{name}" (id integer)')
+                    existing.add(name)
+    with engine.begin() as connection:
+        connection.exec_driver_sql(f'CREATE ROLE "{role}" NOLOGIN NOINHERIT')
+    try:
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                grants.replace("ON SCHEMA public", f'ON SCHEMA "{schema}"').replace(
+                    "TO communications_worker", f'TO "{role}"'
+                )
+            )
+            connection.exec_driver_sql(f'SET LOCAL ROLE "{role}"')
+            for column in ("password_hash", "username", "email", "full_name"):
+                assert (
+                    connection.scalar(
+                        sa.text(
+                            "SELECT has_column_privilege(current_user, 'application_users', :column, 'SELECT')"
+                        ),
+                        {"column": column},
+                    )
+                    is False
+                )
+            with Session(bind=connection) as db:
+                assert _authorize_operator(db, 1) is None
+            with pytest.raises(sa.exc.DBAPIError) as denied, connection.begin_nested():
+                connection.exec_driver_sql("SELECT password_hash FROM application_users")
+            assert denied.value.orig.sqlstate == "42501"
+    finally:
+        with engine.begin() as connection:
+            connection.exec_driver_sql(f'DROP OWNED BY "{role}"')
+            connection.exec_driver_sql(f'DROP ROLE "{role}"')

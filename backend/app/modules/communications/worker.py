@@ -7,6 +7,7 @@ from datetime import timedelta
 from uuid import uuid4
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import load_only
 
 from app.models.application_user import ApplicationUser
 from app.services.permission_resolver import can_access_section
@@ -15,6 +16,29 @@ from . import health, outbox, queue, receipts, registry, store
 from .models import CommunicationAccount, CommunicationAttempt, CommunicationJob
 from .policy import Conflict, now, sha256, transport_enabled
 from .transports import IMAPAdapter, SafeFailure, SMTPAdapter, Uncertain, mime_message
+
+
+def _authorize_operator(db, actor_id):
+    actor = db.get(
+        ApplicationUser,
+        actor_id,
+        options=[
+            load_only(
+                ApplicationUser.id,
+                ApplicationUser.role,
+                ApplicationUser.is_active,
+                ApplicationUser.module_ruolo,
+                raiseload=True,
+            )
+        ],
+    )
+    if (
+        actor is None
+        or not actor.is_active
+        or not (actor.is_super_admin or actor.module_ruolo)
+        or not can_access_section(db, actor, "ruolo.tributi.manage_status")
+    ):
+        raise Conflict("Operatore approvatore non più autorizzato")
 
 
 class Worker:
@@ -69,14 +93,7 @@ class Worker:
         if queue.control(db).paused or not transport_enabled():
             raise Conflict("Invio sospeso globalmente")
         auth = outbox.authorization(db, value, store.attachments(db, value.id))
-        actor = db.get(ApplicationUser, auth.actor_id)
-        if (
-            actor is None
-            or not actor.is_active
-            or "ruolo" not in actor.enabled_modules
-            or not can_access_section(db, actor, "ruolo.tributi.manage_status")
-        ):
-            raise Conflict("Operatore approvatore non più autorizzato")
+        _authorize_operator(db, auth.actor_id)
         account = registry.route_account(db, value.channel, auth.actor_id, value.account_id)
         if account.paused or job.account_id != value.account_id:
             raise Conflict("Account sospeso o job incoerente")

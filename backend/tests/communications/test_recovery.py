@@ -21,6 +21,27 @@ def claim(api):
         return queue.claim(db, api.account_ids[0])
 
 
+@pytest.mark.parametrize("actor_id", [1, 2, 3, 4, 999])
+def test_worker_operator_guard_preserves_rbac_and_revocation(api, actor_id):
+    with api.session() as db:
+        if actor_id == 1:
+            assert worker._authorize_operator(db, actor_id) is None
+        else:
+            with pytest.raises(policy.Conflict, match="approvatore non più autorizzato"):
+                worker._authorize_operator(db, actor_id)
+
+
+def test_worker_super_admin_does_not_require_a_module_flag(api):
+    from app.models.application_user import ApplicationUser
+
+    with api.session() as db:
+        actor = db.get(ApplicationUser, 1)
+        actor.role, actor.module_ruolo = "super_admin", False
+        db.commit()
+    with api.session() as db:
+        assert worker._authorize_operator(db, 1) is None
+
+
 @pytest.mark.parametrize("fault", ["queued", "sending", "cancelled", "reconcile"])
 def test_unexpected_error_recovers_the_correct_boundary(api, monkeypatch, fault):
     monkeypatch.setenv("COMMUNICATIONS_TRANSPORT_ENABLED", "true")

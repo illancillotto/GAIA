@@ -1,12 +1,13 @@
 -- Run only with explicit DBA authorization. Role creation and password provision are external.
 -- Run after migration; public is the GAIA application schema. Review effective privileges first.
 GRANT USAGE ON SCHEMA public TO communications_worker;
+GRANT SELECT (id, role, is_active, module_ruolo) ON application_users TO communications_worker;
 GRANT SELECT ON
     communication_accounts, communication_templates, communication_messages,
     communication_attachments, communication_authorizations, communication_reviews,
     communication_jobs, communication_attempts, communication_events,
     communication_receipts, communication_controls,
-    application_users, sections, role_section_permissions, user_section_permissions,
+    sections, role_section_permissions, user_section_permissions,
     ana_subjects, ana_persons, ana_companies, ana_payment_notices,
     ruolo_avvisi, ruolo_partite, ruolo_particelle, ruolo_tributi_payments,
     ruolo_tributi_avviso_status, ruolo_tributi_notes, ruolo_tributi_special_notices,
@@ -27,4 +28,5 @@ GRANT INSERT ON communication_events, communication_receipts,
     ruolo_notice_attempts, ruolo_notice_evidence TO communications_worker;
 -- No DELETE, no DDL, no UPDATE of tax data or imported evidence.
 -- SELECT is needed by the existing accounting/eligibility and RBAC queries.
--- Validate this dependency closure on the release schema before granting. No credential tables.
+-- application_users is column-scoped: no password_hash or personal contact fields.
+-- Validate this dependency closure on the release schema before granting.
