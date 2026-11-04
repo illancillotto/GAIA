@@ -241,3 +241,10 @@ PEC/email, immagine `6218c83aa7da`, runtime `9ee72287`. Backend, worker, schema
 e trasporti preservati; Posta Online era già attivo al nuovo preflight e resta
 in esecuzione. Le immagini e gli stati iniziali riportati sopra restano la
 fotografia del primo rilascio. [Report corrente e rollback della sola UI](SIDEBAR_RELEASE_2026-11-04.md).
+
+## Filtri iniziali per recapito alle 12:13 CET
+
+Aggiornato il solo frontend per preselezionare Presente sul rispettivo canale
+PEC/email, immagine `1318fd5bdc5c`, runtime `2df77b43`. Rilascio concorrente
+backend/Poste concluso prima del secondo tentativo; nuove versioni preservate.
+[Report corrente, controlli e rollback UI](CONTACT_FILTERS_2026-11-04.md).

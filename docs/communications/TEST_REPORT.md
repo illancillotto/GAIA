@@ -185,3 +185,8 @@ build:clean/type-check/lint, ratchet e baseline riproducibile PASS.
 Quattro E2E candidati verificano filtro iniziale e query server corretti.
 Tentativo E2E iniziale non superato per selettore e stato del rilascio in
 [CONTACT_FILTERS_2026-11-04](CONTACT_FILTERS_2026-11-04.md).
+
+Default recapiti pubblicati alle 12:13 CET: quattro flussi Chromium su nginx
+di produzione PASS con API simulate, sei URL200, tre API401, frontend healthy
+e 50 container preservati. Primo tentativo annullato per rilascio concorrente,
+ripetuto dopo DEPLOYED e nuova fotografia: nessun controllo indebolito.

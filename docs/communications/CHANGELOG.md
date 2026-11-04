@@ -6,7 +6,9 @@
 - Prima richiesta server già filtrata, altro canale non vincolato; selezioni modificabili.
 - Due test unitari parametrizzati verificano default e passaggi a Tutti/Assente; E2E verifica query e dropdown.
 - Nessun cambiamento API, backend, database, dipendenza o logica di invio.
-- Verifiche e stato rilascio: CONTACT_FILTERS_2026-11-04.md.
+- Commit `2df77b43`, frontend `1318fd5bdc5c` pubblicato alle 12:13 CET; quattro E2E live sintetici PASS.
+- Primo tentativo ripristinato per rilascio backend/Poste concorrente; secondo concluso preservando le nuove versioni.
+- Verifiche e rollback della sola UI: CONTACT_FILTERS_2026-11-04.md.
 
 ## 2026-11-04 — Risoluzione gate sidebar e rilascio autorizzato
 

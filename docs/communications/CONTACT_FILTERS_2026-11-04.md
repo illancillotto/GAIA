@@ -50,8 +50,42 @@ Le verifiche generali PostgreSQL/GIS storiche non sono modificate da questa UI.
 
 ## Stato di rilascio
 
-In preparazione dopo i gate: aggiornamento del solo frontend, derivato
-dall’immagine sidebar `6218c83aa7da`. Preservate le sorgenti del builder CED
+Pubblicato alle **12:13:03 CET**, commit runtime `2df77b43`.
+Frontend `gaia-frontend:communications-contact-filters-20261104`, ID `1318fd5bdc5c`.
+Aggiornato solo frontend, derivato dall’immagine sidebar `6218c83aa7da`. Preservate le sorgenti del builder CED
 precedente; overlay limitato a `src/components/communications/use-workspace.ts`,
 package e lockfile dell’immagine effettiva. Rollback alla sidebar precedente,
 nessuna operazione backend/worker/database.
+
+Il primo tentativo di attivazione ha rilevato un cambio concorrente delle
+identità backend/Poste da un rilascio `antiduplicati` separato. Il guard ha
+annullato l’attivazione e ripristinato il frontend precedente, healthy.
+I log Compose confermano che questo intervento ha ricreato soltanto frontend.
+Nessun tentativo di ripristinare backend o worker estranei; nuova fotografia
+e secondo tentativo soltanto dopo la conclusione del rilascio concorrente.
+
+
+Il secondo tentativo, nella directory protetta
+`/opt/gaia/releases/communications-contact-filters-20261104-2`, è completato:
+frontend healthy, configurazione invariata, 196 route preservate, sei URL
+HTTP200 e stesso BUILD_ID della candidata collaudata. Tutti i 50 container
+preesistenti hanno mantenuto identità, incluse le nuove versioni del rilascio
+concorrente backend `78b5f2e6ea03f` e Poste `c9a6efa7c0e6f`.
+Il primo tentativo e i suoi log restano conservati nella directory `-1`.
+Nessuna soglia o guard è stato indebolito per il secondo tentativo.
+
+Quattro flussi Chromium attraverso nginx di produzione PASS (13,5 secondi),
+API tutte simulate. Query e dropdown iniziali corretti per entrambi i canali.
+Controllo DB READ ONLY prima/dopo: zero account/messaggi/job Communications,
+pausa globale true. Trasporti backend/worker false; identità del backend e del
+worker dopo il rilascio separato preservate; tre API anonime HTTP401.
+Nessun invio reale o scrittura tributaria effettuato da questo intervento.
+
+Rollback della sola UI: `rollback.json` della directory `-2`, con
+`docker compose --project-directory /opt/gaia -f <release>/rollback.json up -d
+--no-deps --no-build --pull never frontend`, health, `nginx -t` e reload.
+Ripristina `6218c83aa7da`; non usare configurazioni o immagini di rollback per
+ripristinare backend/Poste che appartengono al rilascio concorrente.
+
+Gate specifico della modifica e del rilascio: **PASS**. Nessuna modifica
+estranea inclusa nei commit, nessun push/merge o rilascio generale GAIA.

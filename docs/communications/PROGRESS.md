@@ -49,4 +49,4 @@ Dettagli e stato di pubblicazione corrente in
 - [x] PEC/email inizializzano Presente sul rispettivo canale nella prima query server.
 - [x] L’altro canale resta Tutti; controlli modificabili dall’operatore.
 - [x] Test su default, primo caricamento e scelta Tutti/Assente.
-- [ ] Pubblicazione frontend e verifica live: stato in CONTACT_FILTERS_2026-11-04.md.
+- [x] Pubblicazione frontend 12:13 CET e quattro flussi live sintetici PASS; backend/Poste del rilascio concorrente preservati, dettagli in CONTACT_FILTERS_2026-11-04.md.
