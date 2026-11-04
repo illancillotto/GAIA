@@ -30,7 +30,16 @@ Lo stato del rilascio successivo è in
 - [x] Cambio avviso senza mantenere campi o documento della selezione precedente.
 - [x] 34 test mirati, coverage runtime 100% statement/branch; 5.470 unit test e 18 smoke PASS.
 - [x] Build pulita, type-check, lint, quattro E2E Chromium e verifica visiva.
-- [ ] Sincronizzazione baseline: rifiutata per otto incrementi della nuova UI; baseline invariata e quality gate completo FAIL, dettagli nel report.
+- [x] Sincronizzazione baseline: gli otto incrementi iniziali sono risolti; comando ordinario e baseline-verify PASS, dettagli in SIDEBAR_RELEASE_2026-11-04.md.
 - [ ] Pubblicazione della revisione UI: non eseguita in questo intervento.
 
 Evidenze, matrice e limiti: [SIDEBAR_REVIEW_2026-11-04](SIDEBAR_REVIEW_2026-11-04.md).
+
+## Risoluzione gate sidebar
+
+Gli otto incrementi del commit `86fa982d` sono eliminati senza deroghe.
+Ratchet completo, sincronizzazione ordinaria e verifica baseline PASS;
+35 test mirati e coverage 100%, regressione frontend, build/lint/types e
+quattro E2E locali più quattro sull’immagine candidata CED PASS.
+Dettagli e stato di pubblicazione corrente in
+[SIDEBAR_RELEASE_2026-11-04](SIDEBAR_RELEASE_2026-11-04.md).

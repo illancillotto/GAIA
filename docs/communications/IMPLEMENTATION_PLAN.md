@@ -68,3 +68,12 @@ Completata e verificata localmente la sidebar destra: elenco e composizione
 a metà desktop, campi prima del PDF e checklist, disposizione verticale mobile.
 Nessun cambiamento backend, schema, trasporto o dipendenza. Pubblicazione UI
 residua; [evidenze](SIDEBAR_REVIEW_2026-11-04.md).
+
+## Risoluzione gate sidebar
+
+Gli otto incrementi del commit `86fa982d` sono eliminati senza deroghe.
+Ratchet completo, sincronizzazione ordinaria e verifica baseline PASS;
+35 test mirati e coverage 100%, regressione frontend, build/lint/types e
+quattro E2E locali più quattro sull’immagine candidata CED PASS.
+Dettagli e stato di pubblicazione corrente in
+[SIDEBAR_RELEASE_2026-11-04](SIDEBAR_RELEASE_2026-11-04.md).

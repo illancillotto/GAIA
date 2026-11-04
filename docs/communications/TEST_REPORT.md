@@ -162,3 +162,12 @@ Il gate generale storico e i suoi residui restano quelli di FINAL_REVIEW.md.
 Il gate completo della nuova sidebar è inoltre FAIL: la sincronizzazione della
 baseline corrente rifiuta otto incrementi documentati, benché ratchet merge-base
 e controlli frontend siano PASS. Nessuna baseline o soglia modificata.
+
+## Risoluzione gate sidebar
+
+Gli otto incrementi del commit `86fa982d` sono eliminati senza deroghe.
+Ratchet completo, sincronizzazione ordinaria e verifica baseline PASS;
+35 test mirati e coverage 100%, regressione frontend, build/lint/types e
+quattro E2E locali più quattro sull’immagine candidata CED PASS.
+Dettagli e stato di pubblicazione corrente in
+[SIDEBAR_RELEASE_2026-11-04](SIDEBAR_RELEASE_2026-11-04.md).

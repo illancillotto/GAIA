@@ -141,3 +141,25 @@ it("keeps the selected notice and fields in the right panel while the candidate 
   expect(within(panel).queryByText("Composer message")).not.toBeInTheDocument();
   expect(within(panel).getByLabelText("Recapito verificato")).toHaveValue("recipient@example.org");
 });
+
+it("clears the old document during an existing-message load and releases busy after failure", async () => {
+  const { result } = renderHook(() => useCommunicationsWorkspace("token", "pec", true));
+  await waitFor(() => expect(result.current.status.loading).toBe(false));
+  await act(async () => result.current.open({ ...candidate, message_id: message.id }));
+  expect(result.current.message).toEqual(message);
+  let rejectLoad!: (reason: Error) => void;
+  mocks.api.mockImplementation(() => new Promise((_resolve, reject) => { rejectLoad = reject; }));
+  let opening!: Promise<void>;
+  act(() => { opening = result.current.open({ ...candidate, message_id: "unavailable" }); });
+  expect(result.current.status.busy).toBe(true);
+  expect(result.current.message).toBeNull();
+  expect(result.current.selected).toBeNull();
+  await act(async () => { rejectLoad(new Error("Documento non disponibile")); await opening; });
+  expect(result.current.status.busy).toBe(false);
+  expect(result.current.status.error).toBe("Documento non disponibile");
+  expect(result.current.message).toBeNull();
+  await act(async () => result.current.open(candidate));
+  expect(result.current.selected).toEqual(candidate);
+  expect(result.current.status.error).toBe("");
+  expect(result.current.status.busy).toBe(false);
+});

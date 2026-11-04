@@ -1,5 +1,9 @@
 # Revisione UI PEC/email — 4 novembre 2026
 
+> Snapshot storico del commit `86fa982d`. Il successivo intervento autorizzato
+> risolve gli otto incrementi senza deroghe: stato corrente e rilascio in
+> [SIDEBAR_RELEASE_2026-11-04](SIDEBAR_RELEASE_2026-11-04.md).
+
 ## Perimetro e risultato
 
 Revisione del layout successiva al rilascio CED `f7bb4d9f`, realizzata e

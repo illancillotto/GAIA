@@ -26,11 +26,10 @@ export function ComposerForm({ message, accounts, canEdit, controller, children 
     <p className="text-sm">Allegati: {message.attachments.length} · {message.attachments.reduce((total, part) => total + part.size, 0)} byte prima della codifica MIME.</p>
     {message.channel === "email" && <p className="rounded-lg bg-sky-50 p-3 text-sm">Comunicazione di cortesia. L&apos;accettazione SMTP non attesta consegna o notifica legale.</p>}
     {children}
-    <p className="text-xs text-slate-600">L&apos;approvazione registra la dichiarazione di controllo dell&apos;operatore; la correttezza sostanziale richiede la verifica dell&apos;ufficio.</p>
+    <p className="text-xs text-slate-600">L&apos;approvazione registra la dichiarazione di controllo dell&apos;operatore; la correttezza sostanziale richiede la verifica dell&apos;ufficio. Invia accoda il lavoro persistente al worker. Una modifica richiede una nuova approvazione.</p>
     {canEdit && <ReviewChecklist message={message} controller={controller} />}
     {status.error && <p role="alert" className="text-rose-800">{status.error}</p>}
     {canEdit && <ComposerActions message={message} controller={controller} />}
-    <p className="text-xs text-slate-600">Invia accoda il lavoro persistente al worker. Una modifica richiede una nuova approvazione.</p>
   </div>;
 }
 

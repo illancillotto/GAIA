@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-04 — Risoluzione gate sidebar e preparazione rilascio autorizzato
+
+- Eliminati otto incrementi senza eccezioni o modifiche al gate.
+- Ridotte duplicazioni dello stato vuoto, struttura DOM e indicazioni ripetute.
+- Cleanup busy con finally e nuovo test di richiesta fallita con documento precedente.
+- Ratchet, sincronizzazione ordinaria e baseline riproducibile PASS.
+- 35 test mirati/coverage100%, regressione5470, smoke18, build/lint/types e 4+4 E2E PASS.
+- Stato operativo e provenienza in SIDEBAR_RELEASE_2026-11-04.md.
+
 ## 2026-11-04 — Sidebar composizione PEC/email (locale)
 
 - Elenco a sinistra e compositore a destra in colonne uguali su desktop.

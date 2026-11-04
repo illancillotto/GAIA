@@ -24,20 +24,13 @@ export function CommunicationsAccess({ channel }: { channel: Channel }) {
 
 function ChannelWorkspace({ token, channel, canEdit }: { token: string; channel: Channel; canEdit: boolean }) {
   const workspace = useCommunicationsWorkspace(token, channel, canEdit);
-  const { message, selected, setMessage, data, status } = workspace;
-  return <div className="mt-5 space-y-5">
+  return <div className="mt-5 grid min-w-0 items-start gap-5 xl:grid-cols-2">
     <CandidateFilters workspace={workspace} />
-    {status.error && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-rose-800">{status.error}</p>}
-    {status.loading && <p role="status">Caricamento candidati 2021...</p>}
-    <div className="grid min-w-0 items-start gap-5 xl:grid-cols-2">
-      <section aria-label="Elenco avvisi" className="min-w-0 space-y-3">
-        <CandidateTable workspace={workspace} channel={channel} canEdit={canEdit} />
-      </section>
-      <aside aria-label="Composizione avviso" className="min-w-0 rounded-2xl border border-[#d8dfd3] bg-[#f7f9f5] p-3 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-6rem)] xl:overflow-y-auto">
-        {!selected && !message && <div className="space-y-2 p-4"><h2 className="text-lg font-semibold">Composizione e documento</h2><p className="text-sm text-slate-600">Premi Componi o Apri comunicazione nell&apos;elenco: qui troverai i campi dell&apos;avviso selezionato e l&apos;anteprima del PDF.</p></div>}
-        <NewCommunication workspace={workspace} channel={channel} canEdit={canEdit} />
-        {message && <CommunicationComposer key={`${message.id}:${message.version}`} token={token} message={message} accounts={data.accounts} canEdit={canEdit} onChange={setMessage} />}
-      </aside>
-    </div>
+    {workspace.status.error && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-rose-800 xl:col-span-2">{workspace.status.error}</p>}
+    {workspace.status.loading && <p role="status" className="xl:col-span-2">Caricamento candidati 2021...</p>}
+    <CandidateTable workspace={workspace} channel={channel} canEdit={canEdit} />
+    <aside aria-label="Composizione avviso" className="min-w-0 rounded-2xl border border-[#d8dfd3] bg-[#f7f9f5] p-3 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-6rem)] xl:overflow-y-auto">
+      {workspace.message ? <CommunicationComposer key={`${workspace.message.id}:${workspace.message.version}`} token={token} message={workspace.message} accounts={workspace.data.accounts} canEdit={canEdit} onChange={workspace.setMessage} /> : <NewCommunication workspace={workspace} channel={channel} canEdit={canEdit} />}
+    </aside>
   </div>;
 }
