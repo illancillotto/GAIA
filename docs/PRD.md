@@ -217,7 +217,8 @@ Chiusura Communications: [verifica finale e matrice test](communications/FINAL_R
 e [avanzamento](communications/PROGRESS.md). Nessuna nuova feature o modifica
 architetturale durante la chiusura; rilascio non eseguito.
 
-La preparazione CED del 4 novembre è verificata; l'utente ha rinviato
-l'attivazione a stanotte o domani. PEC/email disabilitati, produzione invariata.
+Il rilascio mirato CED del 4 novembre pubblica PEC/email per gli avvisi e la
+relativa amministrazione. Trasporti disabilitati; configurazione delle caselle,
+approvazione template e collaudo reale restano necessari prima dell'uso.
 Stato effettivo e residui nel
 [report operativo](communications/DEPLOYMENT_REPORT_2026-11-04.md).

@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-11-04 — Hardening e preparazione del rilascio autorizzato
+## 2026-11-04 — Hardening e rilascio mirato CED autorizzato
 
 - Query approvatore limitata a quattro colonne; il ruolo worker non legge
   hash delle password, username o recapiti degli utenti.
@@ -11,8 +11,12 @@
 - Artefatti CED, configurazione congelata e rollback compatibile preparati.
   Backup/checksum/restore integrale e migrazione/RBAC sul clone PASS; nove
   GET autenticati sul clone PASS. Regressione backend 8.030 PASS/472 SKIP.
-- Hardening committato in `e39cbafc`. Attivazione rinviata dall'utente a
-  stanotte o domani; nessuna migrazione o sostituzione dei servizi di produzione.
+- Hardening committato in `e39cbafc`. Migrazione `20261103_1200`, ruolo ristretto
+  e backend/frontend/worker distribuiti su nuova autorizzazione.
+- Pagine PEC/email/admin pubblicate; nove GET autenticati e tre 401 PASS,
+  sette pagine/health e asset PDF.js HTTP 200. Altri 33 container preservati.
+- Pausa globale attiva, trasporti false, zero account/messaggi/job e due template
+  draft. Configurazione caselle e collaudo reale restano necessari.
 - Stato e residui, inclusa la rotazione delle credenziali esposte nell'output
   preparatorio, in DEPLOYMENT_REPORT_2026-11-04.md. Nessun invio reale.
 

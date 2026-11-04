@@ -60,8 +60,12 @@ Non si configurano più invii simultanei nella stessa casella nella v1.
 I metadati completi della riga sorgente sono inclusi nel fingerprint: anche
 cambi di nominativo, soggetto, CF o importi senza rigenerazione bloccano il job.
 
-La preparazione CED del 4 novembre è verificata; attivazione rinviata dall'utente
-a stanotte o domani, produzione invariata e trasporti disabilitati.
+Il rilascio mirato CED del 4 novembre è attivo: pagine PEC/email, amministrazione
+e worker healthy. Pausa globale e trasporti disabilitati; zero caselle configurate.
+Gli operatori accedono da Invio solleciti alle schede Invio PEC e Invio Email;
+l'amministrazione è in `/gaia/communications`. Prima della composizione/invio
+occorrono account utilizzabile, template approvato e collaudo autorizzato di
+documenti, caselle e trust. Nessun invio reale eseguito dal rilascio.
 Immagini, configurazione effettiva, backup/restore, verifiche e residui sono nel
 [report operativo](DEPLOYMENT_REPORT_2026-11-04.md); il rollback usa gli artefatti
 specifici di quella release. Non avviare lo stack intero e non riprendere Poste

@@ -3,9 +3,9 @@
 Piano preparato durante il ciclo del 3 novembre senza eseguire deployment.
 Il successivo rilascio CED autorizzato il 4 novembre è registrato nel
 [report operativo](DEPLOYMENT_REPORT_2026-11-04.md), che distingue i passaggi
-conclusi da quelli pendenti. L'attivazione è stata rinviata dall'utente a
-stanotte o domani dopo il completamento delle verifiche isolate; nessuna
-migrazione di produzione eseguita. Trasporti e caselle reali restano disabilitati.
+conclusi da quelli pendenti. La distribuzione mirata è completata su nuova
+autorizzazione: migrazione applicata, backend/frontend/worker healthy.
+Trasporti e caselle reali restano disabilitati.
 Credenziali provider, collaudo con recapiti reali e atti richiedono
 autorizzazione specifica.
 
@@ -44,5 +44,6 @@ config --quiet è stato validato con valori sintetici; non è prova di deploymen
 La preparazione del 4 novembre usa una configurazione congelata e immagini derivate
 dal runtime CED per preservare le correzioni operative preesistenti; vedere
 il report per comandi effettivi e rollback, senza rigenerare tutti i servizi.
-Prima del CED: restore, grants sull'intero schema, carico/limiti contrattuali,
-testi/trust/conservazione e checklist dell'ente approvati.
+Restore completo e grant sullo schema CED verificati; ruolo ristretto applicato.
+Prima dei trasporti reali restano carico/limiti contrattuali, NAS, configurazione
+provider, testi/trust/conservazione e checklist dell'ente approvati.

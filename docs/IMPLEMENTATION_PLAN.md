@@ -498,8 +498,8 @@ Chiusura Communications: [verifica finale e matrice test](communications/FINAL_R
 e [avanzamento](communications/PROGRESS.md). Nessuna nuova feature o modifica
 architetturale durante la chiusura; rilascio non eseguito.
 
-Il successivo rilascio CED è stato autorizzato il 4 novembre nella finestra
-immediata comunicata dall'utente, poi rinviato a stanotte o domani. Preparazione
-e restore isolato verificati, nessuna attivazione di produzione; PEC/email
-restano disabilitati. Prove realmente concluse e attività residue nel
+Il rilascio mirato CED del 4 novembre è completato su autorizzazione esplicita:
+restore completo, migrazione, ruolo ristretto e backend/frontend/worker healthy.
+PEC/email pubblicati con trasporti disabilitati; caselle e collaudo reale residui.
+Prove realmente concluse e attività residue nel
 [report operativo](communications/DEPLOYMENT_REPORT_2026-11-04.md).

@@ -1139,6 +1139,7 @@ Verifica finale Communications: [matrice comportamenti/test e gate](docs/communi
 [baseline riproducibile](docs/communications/BASELINE_REPAIR.md).
 Nessun deployment eseguito durante la verifica.
 
-La preparazione CED del 4 novembre è verificata; l'attivazione è stata rinviata
-a stanotte o domani, senza modificare la produzione o abilitare PEC/email.
+Dal 4 novembre le pagine Invio PEC, Invio Email e amministrazione Communications
+sono pubblicate sul CED, con worker dedicato e trasporti ancora disabilitati.
+Configurazione delle caselle e collaudo reale restano necessari.
 Stato nel [report operativo](docs/communications/DEPLOYMENT_REPORT_2026-11-04.md).

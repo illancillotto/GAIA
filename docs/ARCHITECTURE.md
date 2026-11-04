@@ -903,7 +903,7 @@ Chiusura Communications: [verifica finale e matrice test](communications/FINAL_R
 e [avanzamento](communications/PROGRESS.md). Nessuna nuova feature o modifica
 architetturale durante la chiusura; rilascio non eseguito.
 
-La preparazione CED del 4 novembre preserva il monolite e prevede il worker
-autonomo con trasporto disabilitato. Attivazione rinviata dall'utente, produzione
-invariata; configurazione, isolamento del collaudo e stato nel
+Il rilascio mirato CED del 4 novembre preserva il monolite e attiva il worker
+autonomo con ruolo DB ristretto, pausa globale e trasporto disabilitato.
+Backend/frontend/worker healthy; configurazione, collaudo e stato nel
 [report operativo](communications/DEPLOYMENT_REPORT_2026-11-04.md).

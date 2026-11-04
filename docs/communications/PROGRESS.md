@@ -14,9 +14,9 @@
 - [x] Hardening pre-rilascio: ruolo worker senza hash/recapiti utenti, 132 test e coverage statement/branch 100% sull'immagine aggiornata.
 - [x] Regressione backend dopo il hardening in checkout isolato: 8.030 PASS/472 SKIP, zero failure/error; `make lint-backend` PASS.
 - [ ] Gate complessivo: FAIL per regressione PG collettiva e prove generali non verificate.
-- [ ] Collaudo autorizzato provider/NAS/restore/carico/trust e decisioni ufficio.
+- [ ] Collaudo autorizzato provider/NAS/carico/trust e decisioni ufficio.
 - [x] Preparazione CED: backup/checksum/restore integrale, migrazione ripetuta/RBAC sul clone e nove GET autenticati PASS.
-- [ ] Attivazione CED rinviata dall'utente a stanotte o domani; nessuna migrazione o sostituzione dei servizi di produzione eseguita.
+- [x] Rilascio mirato CED su nuova autorizzazione: migrazione, ruolo ristretto, backend/frontend/worker healthy; nove GET autenticati e tre 401 PASS, pagine e PDF.js HTTP 200.
 - [ ] Abilitazione trasporti e collaudo reale: non autorizzati da questo rilascio.
 
 Lo stato corrente e la matrice comportamenti/test sono in FINAL_REVIEW.md.

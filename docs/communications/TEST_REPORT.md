@@ -15,6 +15,12 @@ La successiva regressione backend completa in checkout isolato ha concluso
 8.030 PASS e 472 SKIP, senza failure/error, in 1.584 secondi. Gli skip e i
 blocchi PostgreSQL/GIS storici restano espliciti e non sono prove superate.
 
+Il rilascio mirato CED del 4 novembre ha inoltre verificato migrazione/ruolo,
+health dei tre servizi, nove GET autenticati HTTP 200 e tre GET HTTP 401,
+sette URL tramite nginx e l'asset PDF.js HTTP 200. Controlli di produzione
+in sola lettura, zero messaggi/job/account e trasporti disabilitati; dettaglio
+e prove nel report operativo. Nessuna prova con casella o destinatario reale.
+
 Le evidenze sono locali e sintetiche: nessun messaggio reale, credenziale
 provider, dato tributario di produzione o deployment. Non equiparare i mock
 alla verifica di una casella reale.

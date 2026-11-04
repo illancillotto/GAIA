@@ -11,8 +11,7 @@
 | Reinvio dopo incerto/esito trasmesso | Ufficio/provider | Nessun comando di reinvio o retry incerto |
 | Bozze/invii portale Poste esterni al DB | Operatore | Coordinamento manuale necessario |
 | Fonte recapiti PF PEC/PG email non presente nello schema | Anagrafica/ufficio | Nessuna inferenza, inserimento e verifica espliciti |
-| Grants, NAS e firewall CED | IT/DBA | Grant verificati sul clone completo; non applicati alla produzione, NAS/firewall da collaudare |
-| Nuova finestra di attivazione CED | Utente/IT | Backup/restore completo verificato; rilascio rinviato a stanotte o domani, riconvalidare freschezza e runtime prima di procedere |
+| NAS e firewall CED | IT/DBA | Grant verificati sul clone completo e ruolo ristretto applicato; NAS/firewall da collaudare prima dell'abilitazione dei trasporti |
 | Altre annualità/moduli e CC/CCN/HTML | Product owner | Solo Ruolo2021, destinatario singolo, testo semplice |
 | Formati PEC proprietari/CMS multipli | IT/provider | Non classificati automaticamente, EML conservati |
 | Inbox preesistenti/voluminose o EML oltre32MiB | IT | Readonly, triage cursore senza eliminazione automatica |

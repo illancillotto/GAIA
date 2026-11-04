@@ -2,12 +2,17 @@
 
 ## Stato operativo
 
-Preparazione verificata; attivazione rinviata su richiesta dell'utente a
-stanotte o domani, per mantenere disponibili le funzioni operative esistenti.
-La precedente finestra immediata è revocata. Nessuna migrazione di produzione,
-creazione del ruolo worker o sostituzione di backend/frontend è stata eseguita.
-Gli invii PEC/email devono restare disabilitati. La nuova funzione PEC non è
-ancora pubblicata; Posta Online esistente risponde, con automatismi in pausa.
+Rilascio mirato completato il 4 novembre, dopo l'autorizzazione esplicita
+«ok rilasciamo invio pec e mail da gaia per gli avvisi», successiva al rinvio.
+Migrazione e ruolo worker applicati alle 10:45; backend, frontend e worker
+Communications healthy alle 10:46; verifiche conclusive terminate alle 10:48
+(Europe/Rome). Le pagine PEC, email e amministrazione sono pubblicate.
+
+Pausa globale attiva e trasporto backend/worker disabilitato: zero account,
+zero messaggi e zero job. Prima dell'uso occorrono configurazione delle caselle,
+approvazione dei template e collaudo autorizzato dei provider/documenti.
+Nessun invio reale è stato eseguito. Posta Online risponde con automatismi
+ancora in pausa; gli altri 33 container sono rimasti invariati.
 
 La verifica di sviluppo del 3 novembre resta storica e conserva il proprio
 `FINAL QUALITY GATE — FAIL`: il rilascio non trasforma i test generali mancanti
@@ -27,7 +32,7 @@ o la failure preesistente di setup PostgreSQL in prove superate.
 - Directory protetta CED:
   `/opt/gaia/releases/communications-20261104-1d26140c`.
 - Nessun aggiornamento globale del checkout CED, push, merge o riavvio degli
-  altri worker previsto. Le modifiche locali estranee restano escluse.
+  altri worker eseguito. Le modifiche locali estranee restano escluse.
 
 Il confronto di 1.227 file Python del backend esistente ammette soltanto le
 due registrazioni API/ORM modificate, oltre ai 17 file aggiunti. Nessuna
@@ -69,7 +74,13 @@ protetti e non versionati.
 | Verifica indipendente del checksum e ripristino integrale | PASS, intero archivio con `--exit-on-error --single-transaction` |
 | Migrazione ripetuta e ruolo ristretto sul database ripristinato integralmente | PASS |
 | API autenticate sul clone completo, account/template/messaggi/job/admin/candidati PEC/email | Nove GET, tutti HTTP 200; nessun messaggio creato |
-| Migrazione e smoke di produzione | Non ancora eseguiti |
+| Migrazione di produzione | PASS, revisione `20261103_1200`, undici tabelle e ruolo worker ristretto |
+| Backend/frontend/worker Communications in produzione | Healthy, configurazioni effettive confrontate con i container precedenti |
+| API di produzione autenticate / non autenticate | Nove GET HTTP 200 / tre GET HTTP 401 |
+| HTTP tramite nginx: health, login, solleciti, Poste, PEC, email, amministrazione | Sette URL HTTP 200 |
+| Asset worker PDF.js tramite nginx | HTTP 200, asset locale da 1.002.904 byte |
+| Stato operativo di sicurezza | Pausa globale, trasporto false, zero account/messaggi/job, due template draft |
+| Altri servizi | 33 container con identità preservata; worker Poste ancora fermo |
 
 I test SMTP/IMAP e le prove documentali sintetiche non verificano caselle,
 trust o destinatari reali. Nessuna comunicazione è stata inviata.
@@ -159,20 +170,37 @@ non siano cambiati dalla preparazione e che il worker Poste resti fermo.
 Una failure arresta i passaggi successivi; non autorizza replay automatici.
 
 I marker `FULL_RESTORE_OK`, `FULL_RESTORE_MIGRATION_ROLE_OK` e
-`CLONE_AUTH_API_OK` sono presenti. Dopo il rinvio è stato aggiunto
-`DEPLOYMENT_DEFERRED_BY_USER`, verificato dallo script di attivazione: non
-eseguire il rilascio nella precedente finestra. Il solo database Docker di
-verifica è stato arrestato, preservando volume ripristinato, backup e prove.
-La prossima finestra richiede una nuova verifica di freschezza del backup,
-configurazioni, sorgenti e immagini di produzione: i servizi restano operativi
-e possono cambiare dopo questa preparazione.
+`CLONE_AUTH_API_OK` sono presenti. Il precedente blocco
+`DEPLOYMENT_DEFERRED_BY_USER` è stato archiviato soltanto dopo la nuova
+autorizzazione, registrata in `USER_AUTHORIZED_TARGETED_RELEASE`.
+Prima dell'attivazione sono stati ricontrollati container, immagini, schema,
+configurazioni e sorgenti effettive. Il backup completo verificato aveva circa
+106 minuti; dimensione e artefatti immutati, schema ancora alla revisione
+`20261103_0900`. È stato inoltre creato `backup/schema-preactivation.dump`
+(1.245.404 byte). Il rollback applicativo conserva il database, senza riportare
+i dati dei servizi attivi all'ora del backup.
+
+Il solo database Docker di verifica resta arrestato, con volume ripristinato,
+backup e prove preservati. I container applicativi sono stati sostituiti usando
+la configurazione congelata, con `up -d --no-deps --no-build` sui soli servizi
+backend/frontend, poi Communications worker. Eseguiti `nginx -t` e reload DNS;
+nessun `down`, riavvio globale o attivazione del worker Poste.
+
+Il primo tentativo si è fermato prima della migrazione perché Docker aveva
+restituito i dieci mount backend in un ordine diverso. Il confronto di tutti
+i campi, ordinati per destinazione univoca, ha confermato configurazioni
+identiche; corretto il solo controllo operativo e ripetuta l'attivazione.
+Anche il controllo successivo delle porte è stato precisato: l'immagine eredita
+il metadato `EXPOSE 8000`, ma `PortBindings` è vuoto e non esistono porte
+pubblicate. Nessuna modifica al runtime o alle sue protezioni per superare
+questi controlli.
 
 Verifica della disponibilità attuale: backend/frontend healthy; HTTP 200 per
 `/api/health`, `/login`, `/ruolo/tributi/solleciti`. Tre GET autenticati Posta
 Online per account, lotti e candidati hanno restituito 200. Nessun job avviato,
 nessuna bozza caricata sul portale e nessun invio effettuato da questi controlli.
 
-## Stato richiesto dopo il rilascio
+## Stato verificato dopo il rilascio
 
 - Undici tabelle Communications e revisione `20261103_1200`.
 - Pausa globale attiva, trasporto backend/worker disabilitato, zero account.
@@ -181,6 +209,17 @@ nessuna bozza caricata sul portale e nessun invio effettuato da questi controlli
   nessun socket Docker e heartbeat recente.
 - Controlli HTTP autenticati limitati a GET; nessuna modifica tributaria.
 - Posta Online non viene riavviata automaticamente.
+
+Le prove sono conservate nella directory protetta della release:
+`post-release-probe.log`, `postactivation-config-proof.json`,
+`production-http-proof.json`, `production-pdfjs-asset-proof.json` e i marker
+`PRODUCTION_ACTIVATED`, `PRODUCTION_READONLY_PROBES_OK`, `RELEASE_VERIFIED`.
+
+Pagine operative pubblicate:
+
+- `/ruolo/tributi/solleciti/pec`;
+- `/ruolo/tributi/solleciti/email`;
+- `/gaia/communications`, amministrazione per gli utenti autorizzati.
 
 ## Residui e sicurezza
 

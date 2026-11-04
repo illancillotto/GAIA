@@ -4,9 +4,9 @@
 
 Piattaforma trasversale, primo adapter Ruolo2021. Il ciclo di sviluppo del
 3 novembre non ha eseguito invii, migrazioni produzione o deployment.
-La preparazione del rilascio del 4 novembre, con trasporto disabilitato,
-è tracciata in [DEPLOYMENT_REPORT_2026-11-04](DEPLOYMENT_REPORT_2026-11-04.md).
-L'attivazione è stata rinviata dall'utente a stanotte o domani; produzione invariata.
+Il rilascio mirato CED del 4 novembre, con trasporto disabilitato,
+è tracciato in [DEPLOYMENT_REPORT_2026-11-04](DEPLOYMENT_REPORT_2026-11-04.md).
+Backend/frontend/worker attivi; caselle e collaudo reale restano da configurare.
 Commit locali incrementali richiesti; nessun push/PR/merge.
 
 | Fase | Esito locale | Evidenza |
@@ -18,7 +18,7 @@ Commit locali incrementali richiesti; nessun push/PR/merge.
 | E/F — Esiti | Completata in isolamento | SMTP/IMAP mock, CMS sintetico reale, PEC/DSN/originali/Registro |
 | G — UI | Completata | PEC/email, filtri/paginazione, compositore/PDF.js/checklist/amministrazione |
 | H — Collaudo | Gate mirati passati | TEST_REPORT:100% statement/branch sui runtime toccati, build, E2E, backend8015PASS/471SKIP, frontend5468PASS, workerPoste166PASS |
-| I — Rilascio | Preparazione verificata, attivazione rinviata | Backup/restore completo e clone PASS; attendere la nuova finestra, mantenere trasporti disabilitati |
+| I — Rilascio | Distribuzione CED completata, trasporti disabilitati | Backup/restore completo, migrazione/ruolo/health/API/PDF.js PASS; configurazione e collaudo caselle residui |
 
 ## Ordine operativo
 
