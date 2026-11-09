@@ -6,6 +6,13 @@ esclusivamente 2021. I criteri software non certificano atti o recapiti.
 
 ## Operatori e funzioni
 
+Il gestore offre modelli di partenza PEC/email adattati all'esempio dell'ufficio,
+con dati del singolo avviso, totale/termine del PDF, portale, codice utenza e
+PIN verificabili. La scelta popola un form modificabile; salvataggio draft e
+approvazione restano distinti. Fonti, audit PIN e limiti nel
+[report modelli ufficio](OFFICE_TEMPLATES_2026-11-07.md). Implementazione locale,
+non rilasciata; decisione sui vecchi PDF senza accessi pendente.
+
 - Permesso ruolo.tributi.view: elenco, storico, snapshot e ricevute del dominio.
 - Permesso ruolo.tributi.manage_status: composizione, allegati PDF, validazione,
   approvazione individuale, accodamento e annullamento consentito.

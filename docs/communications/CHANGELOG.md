@@ -1,4 +1,13 @@
 # Changelog
+
+## 2026-11-07 — Modelli ufficio PEC/email (locale)
+
+- Catalogo amministrativo e modelli modificabili, senza salvataggio/approvazione impliciti.
+- Campi Ruolo specifici, importo complessivo e termine PDF, utenza/PIN univoci dallo snapshot; blocchi sui dati mancanti o non validi.
+- Bonifico, rateizzazione e termine del 31 dicembre 2026 confermati dall'operatore; email esplicitamente di cortesia.
+- 268 backend, 67 unit frontend, 18 smoke e otto E2E sintetici PASS; coverage runtime del ciclo 100% con branch.
+- Audit sola lettura concluso su 1.195 PDF reali: 138 con PIN coincidente, zero discordanti; 1.057 senza PIN nel testo. Nessun rilascio, nuova migrazione/dipendenza, invio o modifica tributaria.
+
 ## 2026-11-07 — Eliminazione singola versione template
 
 - Pulsante Elimina con conferma nativa che identifica template, canale e versione.

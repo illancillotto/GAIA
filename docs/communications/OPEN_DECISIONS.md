@@ -1,5 +1,14 @@
 # Decisioni esterne e limiti
 
+Modelli ufficio del 7 novembre: contenuti, rateizzazione, IBAN e termine
+confermati dall'operatore. Resta da decidere l'uso dei 726 accessi univoci in
+archivio non presenti nel PDF. Confronto completo richiesto dall'utente:
+138 PDF con PIN coincidono con archivio/snapshot, zero discordanti; 1.057 senza
+PIN nel testo (726 utenze univoche, 330 assenti, una multipla). Nessun fallback
+o rigenerazione automatica. Le 93 numerazioni con versioni miste richiedono
+attenzione allo storico già trasmesso/caricato.
+Audit e stato: [OFFICE_TEMPLATES_2026-11-07.md](OFFICE_TEMPLATES_2026-11-07.md).
+
 | Decisione/verifica | Responsabile | Comportamento in attesa |
 | --- | --- | --- |
 | Autorizzazione caselle/provider e recapiti collaudo | Ente/IT | Trasporto false, nessun invio reale |

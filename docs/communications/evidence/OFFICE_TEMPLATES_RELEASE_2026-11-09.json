@@ -1,0 +1,157 @@
+{
+  "release": "office-templates-20261109",
+  "application_commit": "06f6597c22c1ab21eab6fd26c794bd990b3f905f",
+  "branch": "feat/communications-office-templates-20261109",
+  "activation": {
+    "started_at": "2026-11-09T13:57:55.632382+00:00",
+    "activated_at": "2026-11-09T13:58:35.288047+00:00",
+    "images": {
+      "backend": "sha256:ab9e8c1bac26af5b0d1e918eb4159a74b853db87dec996fca66011a269ed7320",
+      "frontend": "sha256:9f0e956c7e8be0ada766aa4147bb6850cfdfb339f6c11dbb23e970711ccb6358"
+    },
+    "http": {
+      "/login": 200,
+      "/gaia/communications": 200,
+      "/ruolo/tributi/solleciti": 200,
+      "/ruolo/tributi/solleciti/pec": 200,
+      "/ruolo/tributi/solleciti/email": 200,
+      "/presenze/giornaliere": 200,
+      "/api/health": 200,
+      "/api/communications/admin/templates": 401,
+      "/api/communications/admin/template-catalog": 401
+    },
+    "effective_configuration_preserved": true,
+    "unchanged_other_containers": 35,
+    "schema_unchanged": true,
+    "templates_unchanged": true,
+    "transports_unchanged": true,
+    "build_matches_canary": true,
+    "no_migrations": true,
+    "no_real_template_deletion": true,
+    "no_real_messages": true,
+    "commit": "06f6597c22c1ab21eab6fd26c794bd990b3f905f",
+    "authenticated_probe": {
+      "counts": {
+        "communication_accounts": 2,
+        "communication_templates": 4,
+        "communication_messages": 0,
+        "communication_jobs": 5,
+        "communication_authorizations": 0,
+        "communication_receipts": 0
+      },
+      "template_rows_hash": "dc0a74c695619e1dac0a05ef87e4997f",
+      "schema": [
+        "20261106_1000"
+      ],
+      "http_authenticated": {
+        "/admin/templates": 200,
+        "/templates": 200,
+        "/admin/accounts": 200,
+        "/admin/monitor": 200
+      },
+      "monitor": {
+        "paused": true,
+        "transport_enabled": false
+      },
+      "catalog_supported": true,
+      "catalog": {
+        "authenticated": 200,
+        "unauthenticated": 401,
+        "sha256": "35095529c9ae64e5226c3768749b89243ca2cbe28c012d3a48d75c43fdcf7dda",
+        "codes": [
+          "sollecito_2021_ufficio_pec",
+          "sollecito_2021_ufficio_email"
+        ]
+      },
+      "delete_supported": true,
+      "transaction_read_only": true
+    }
+  },
+  "prepared": {
+    "backend": {
+      "changed": [
+        "app/modules/communications/admin.py",
+        "app/modules/communications/registry.py",
+        "app/modules/communications/ruolo_source.py",
+        "app/modules/communications/template_catalog.json",
+        "app/modules/communications/template_catalog.py",
+        "app/modules/ruolo/services/notice_communication_fields.py"
+      ],
+      "preserved": 1009,
+      "base_image": "sha256:7c3af564e76e2985ea27ee16245b52c050816e595d7b310eeaffb426b80f8300",
+      "image": "sha256:ab9e8c1bac26af5b0d1e918eb4159a74b853db87dec996fca66011a269ed7320",
+      "tag": "gaia-backend:office-templates-20261109"
+    },
+    "frontend": {
+      "changed": [
+        "src/components/communications/admin-templates.tsx",
+        "src/components/communications/template-catalog.tsx"
+      ],
+      "preserved": 770,
+      "flattened_base": "sha256:376d371e88b1a439b17dac08845a3a99c05aa72a6c9f0f70f371679b737fc765",
+      "base_image": "sha256:bf73b599a3e8d5fedfcaa5b2bc796a0f221fd6f830cc2ab5b87bd01b548a78ea",
+      "image": "sha256:9f0e956c7e8be0ada766aa4147bb6850cfdfb339f6c11dbb23e970711ccb6358",
+      "tag": "gaia-frontend:office-templates-20261109",
+      "routes_preserved": 196
+    }
+  },
+  "checks": {
+    "commit": "06f6597c22c1ab21eab6fd26c794bd990b3f905f",
+    "images": {
+      "backend": "sha256:ab9e8c1bac26af5b0d1e918eb4159a74b853db87dec996fca66011a269ed7320",
+      "frontend": "sha256:9f0e956c7e8be0ada766aa4147bb6850cfdfb339f6c11dbb23e970711ccb6358"
+    },
+    "e2e": {
+      "startTime": "2026-11-09T13:55:30.560Z",
+      "duration": 25271.895,
+      "expected": 8,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "unit_frontend": 70,
+    "coverage_runtime": 100,
+    "typecheck": true,
+    "lint": true,
+    "backend_image_tests": 272,
+    "backend_image_pass": 262,
+    "postgres_pass": 10,
+    "commit_backend_pass": 207,
+    "commit_scope_ratchet_pass": true,
+    "main_ratchet_findings": 18,
+    "main_findings_reproduced_identically_on_base": true
+  },
+  "main_gate": "FAIL: 18 identical Presenze findings reproduced on clean c55dcf9f; zero office findings",
+  "no_baseline_or_threshold_change": true,
+  "live_e2e": {
+    "startTime": "2026-11-09T13:58:52.379Z",
+    "duration": 13970.324,
+    "expected": 8,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "final_health": {
+    "gaia-backend": {
+      "health": "healthy",
+      "id": "fe1d9de77ffdffe4dea043f96b33752e5e0c2bb77f09779a01cf2733f2f7dc09",
+      "image": "sha256:ab9e8c1bac26af5b0d1e918eb4159a74b853db87dec996fca66011a269ed7320"
+    },
+    "gaia-frontend": {
+      "health": "healthy",
+      "id": "d3d0905b8498f73c728d53de9651146b658b7c5ddb29001a2d21662374f812bb",
+      "image": "sha256:9f0e956c7e8be0ada766aa4147bb6850cfdfb339f6c11dbb23e970711ccb6358"
+    },
+    "gaia-communications-worker": {
+      "health": "healthy",
+      "id": "28458e811dbb543b73fe584992027a353c51651baa42568a2ce5cfe3bdf15272",
+      "image": "sha256:2879ad8d18a94984395b3629c10e2925e7cfb002031f7ada21cc489acfc3e095"
+    },
+    "gaia-nginx": {
+      "health": "healthy",
+      "id": "71573228b74fd0c264ccf3215d2f409ce3121f26b819c1c695dedfbd89f3b87c",
+      "image": "sha256:812d47f806db497c53f9b47e76bdab38bcf5d724c69d3986df5ee4336c210559"
+    }
+  },
+  "final_read_only_audit_matches_activation": true
+}

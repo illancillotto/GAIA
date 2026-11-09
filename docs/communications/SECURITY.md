@@ -1,5 +1,13 @@
 # Sicurezza
 
+I modelli dell'ufficio possono includere il PIN del portale contribuenti,
+come richiesto dall'operatore. Deriva dallo snapshot cifrato univoco del PDF;
+errori di decifratura o ambiguità non espongono valori negli errori/eventi.
+Il corpo risolto è conservato in chiaro nell'archivio privato come PDF/MIME:
+è un artefatto sensibile, non un secret provider né un campo cifrato separato.
+Catalogo e proposte non contengono PIN personali. Accesso tramite i permessi
+Communications esistenti; nessun endpoint pubblico di decifratura.
+
 RBAC GAIA separa lettura, gestione Tributi e amministrazione provider. Account
 filtrati per canale/modulo/utenti; worker ricontrolla approvatore attivo e
 autorizzato. Routing: esplicito, default Ruolo, default canale; niente failover.

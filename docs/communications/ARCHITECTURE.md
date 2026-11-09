@@ -2,6 +2,14 @@
 
 ## Confini
 
+Il catalogo amministrativo dei modelli (`communications/template_catalog.json`)
+fornisce solo proposte modificabili e descrizioni delle variabili. Il mapping
+dei dati è nel dominio Ruolo (`services/notice_communication_fields.py`), con
+riuso delle funzioni del PDF per totale, termine e accessi. L'outbox conserva
+il testo risolto; nessuna logica tributaria negli adapter. Versioni, approvazioni,
+snapshot e trasporti restano quelli esistenti. Dettagli e limite sui vecchi
+documenti senza accessi: [modelli ufficio](OFFICE_TEMPLATES_2026-11-07.md).
+
 backend/app/modules/communications contiene ORM, API, outbox, registry, policy,
 queue, worker, trasporti, parser e proiezione evidenze. ruolo_source.py è il
 boundary di dominio: identità, pagamenti, eleggibilità, recapiti e lettura PDF.

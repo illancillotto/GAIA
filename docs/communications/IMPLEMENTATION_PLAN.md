@@ -1,4 +1,16 @@
 # Piano di implementazione e stato
+
+## 2026-11-07 — Modelli dall'esempio dell'ufficio
+
+- [x] Analisi fonti, conferma testi/condizioni e campi del singolo avviso.
+- [x] Catalogo PEC/email amministrativo, form modificabile, solo draft esplicito.
+- [x] Mapping Ruolo, totale/termine PDF, accessi univoci e blocchi sui dati mancanti.
+- [x] Test mirati, PostgreSQL, coverage, build e otto E2E sintetici.
+- [x] Confronto completo PIN archivio/payload/file PDF: 1.195 documenti, 138 con PIN coincidente, zero discordanti/errori di lettura.
+- [ ] Decidere uso dei dati GAIA nei 726 documenti senza PIN nel PDF e revisione dei casi mancanti/multipli.
+- [ ] Rilascio: non eseguito né autorizzato per questo ciclo.
+- Fonti, matrice ed evidenze: [OFFICE_TEMPLATES_2026-11-07.md](OFFICE_TEMPLATES_2026-11-07.md).
+
 ## 2026-11-07 — Eliminazione template con conferma
 
 - [x] Pulsante Elimina per singola versione, con conferma e blocco durante la richiesta.

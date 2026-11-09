@@ -1,5 +1,28 @@
 # Report di collaudo iniziale — 2026-11-03
 
+Modelli ufficio, verifica locale del 7 novembre: **268 backend PASS** (dieci
+PostgreSQL e regressione accessi portale), **67 unit frontend**, **18 smoke**,
+**otto E2E con API mock** PASS. Cinque runtime backend 327 statement/86 branch
+e due componenti frontend 48 statement/28 branch:100%, zero nuove esclusioni.
+Build clean isolata, typecheck e lint mirato PASS. Audit PIN completo sui 1.195
+PDF reali: 138 con accessi coincidenti con GAIA/snapshot, zero discordanti o
+errori di lettura; 1.057 senza PIN nel testo. Nessun login reale al portale.
+Stato, matrice e limiti in
+[OFFICE_TEMPLATES_2026-11-07.md](OFFICE_TEMPLATES_2026-11-07.md).
+
+Verifica aggiuntiva del 7 novembre: eliminazione template con conferma,
+197 test backend (dieci PostgreSQL), 63 unit frontend, 18 smoke e sei E2E PASS;
+coverage dei quattro runtime modificati 100% con branch. Build/typecheck/lint
+del perimetro PASS; gate globale ancora FAIL per 17 finding Presenze estranei.
+Matrice, comandi, tentativi iniziali e limiti nel rapporto
+[TEMPLATE_DELETION_2026-11-07.md](TEMPLATE_DELETION_2026-11-07.md).
+
+Rilascio successivamente autorizzato, 09:42:21 CET: immagine backend187PASS/
+10PGskip già verificati localmente, candidata frontend63PASS/coverage100%,
+sei E2E candidata e sei live PASS. Health, API autenticata, protezioni DELETE
+senza cancellazioni reali e invarianti dati/configurazioni verificati.
+Dettagli: [TEMPLATE_DELETION_RELEASE_2026-11-07.md](TEMPLATE_DELETION_RELEASE_2026-11-07.md).
+
 Snapshot storico a6274cac. La verifica conclusiva, con due test ulteriori,
 coverage della migrazione e baseline riparata, è in [FINAL_REVIEW](FINAL_REVIEW.md).
 I test successivi sull'immagine candidata CED e le prove di ripristino sono

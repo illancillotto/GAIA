@@ -1,0 +1,31 @@
+{
+  "checked": 1195,
+  "counts": {
+    "pdf:no_pin": 1057,
+    "pdf:single_access": 138,
+    "pdf_account_owner:same_tax_code": 138,
+    "pdf_vs_registry:match": 138,
+    "pdf_vs_snapshot:match": 138,
+    "snapshot:absent": 1057,
+    "snapshot:readable": 138,
+    "snapshot_vs_registry:match": 138,
+    "snapshot_vs_registry:not_comparable": 1057
+  },
+  "elapsed_seconds": 1052.3,
+  "invalid_registry_pin_count": 0,
+  "registry_accounts_loaded": 12353,
+  "scope": "generated_2021",
+  "total": 1195,
+  "distinct_notice_numbers": 1009,
+  "unique_pdf_hashes": 1186,
+  "notice_numbers_with_any_pdf_pin": 131,
+  "notice_numbers_with_mixed_versions": 93,
+  "distinct_notice_numbers_with_differences": 0,
+  "no_pdf_pin_unique_registry": 726,
+  "no_pdf_pin_no_registry": 330,
+  "no_pdf_pin_multiple_registry": 1,
+  "source_read_only": true,
+  "pdf_regenerated": false,
+  "provider_login_tested": false,
+  "credentials_in_report": false
+}

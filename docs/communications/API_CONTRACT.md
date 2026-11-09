@@ -12,7 +12,8 @@ Amministrazione: require_admin_user. Nessuna API riceve password provider.
 | POST /accounts/{id}/test | Job test SMTP+IMAP, senza messaggi |
 | POST /accounts/{id}/reconcile | Job raccolta ricevute |
 | POST /accounts/{id}/pause | paused boolean |
-| GET /templates, /admin/templates | Approvati / tutte le versioni |
+| GET /templates, /admin/templates | Approvati / tutte le versioni non eliminate |
+| GET /admin/template-catalog | Solo admin attivo; variables, note e due proposals modificabili PEC/email; nessuna scrittura |
 | POST /templates | Nuova versione draft |
 | POST /templates/{id}/approve | Approvazione admin esplicita |
 | DELETE /templates/{id} | Solo admin; body confirmed=true obbligatorio; elimina logicamente la singola versione |

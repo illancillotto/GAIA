@@ -2,6 +2,18 @@
 
 ## Amministrazione
 
+### Modelli dell'ufficio per i solleciti 2021
+
+In Template versionati aprire **Modelli di partenza 2021 e variabili** e
+scegliere PEC o Email. Revisionare oggetto/corpo e salvare la nuova versione
+bozza; approvarla solo dopo la verifica dell'ufficio. La scelta del modello
+non salva né approva automaticamente. Nel compositore verificare i dati
+risolti e lo stesso PDF allegato. Mancanza o ambiguità dei dati di accesso
+blocca i modelli che richiedono codice utenza/PIN; non copiare credenziali
+di un'altra utenza. Condizioni, fonti e audit nel
+[report dedicato](OFFICE_TEMPLATES_2026-11-07.md). Funzione locale non rilasciata.
+
+
 Aprire /gaia/communications come admin/super_admin. Creare account disabilitato/
 in pausa: canale/provider, indirizzo/display name, endpoint TLS, username,
 metodo auth e secret_ref. Non incollare password nei campi. Impostare utenti

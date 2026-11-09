@@ -1,0 +1,34 @@
+{
+  "variables": {
+    "contribuente_nome": "Intestatario del sollecito selezionato",
+    "numero_avviso": "Numero definitivo dell'avviso, mantenendo gli zeri iniziali",
+    "anno_tributario": "Annualità tributaria: 2021",
+    "importo": "Variabile storica conservata per i template esistenti; preferire importo_documento",
+    "importo_documento": "Totale in formato italiano, comprese le spese indicate nel PDF; obbligatorio il dato nel payload salvato",
+    "ente_nome": "Consorzio di Bonifica dell'Oristanese",
+    "codice_fiscale": "CF/P.IVA dell'intestatario del sollecito",
+    "url_portale": "Collegamento al portale contribuenti già utilizzato nel PDF",
+    "termine_pagamento": "Termine riportato nel riquadro pagamento del PDF 2021, senza calcolare una data di notifica",
+    "codice_utenza": "Codice utenza univoco già associato al PDF; zeri iniziali conservati",
+    "pin_utenza": "PIN personale decifrato dallo snapshot del PDF; dati assenti, ambigui o non decifrabili bloccano i modelli che lo richiedono"
+  },
+  "note": "Modelli adattati dall'esempio dell'ufficio ai solleciti 2021, con condizioni e termine del 31 dicembre 2026 confermati dall'operatore. Salvare come bozza e approvare il testo prima dell'uso. Codice utenza e PIN provengono dai dati associati al PDF: in caso di assenza o ambiguità il modello non può essere composto.",
+  "proposals": [
+    {
+      "code": "sollecito_2021_ufficio_pec",
+      "name": "Sollecito 2021 – modello ufficio PEC",
+      "channel": "pec",
+      "module": "ruolo",
+      "subject": "Sollecito di pagamento avviso n. {{numero_avviso}} – esercizio {{anno_tributario}}",
+      "body": "Gentile contribuente,\n\nsi trasmette in allegato il sollecito di pagamento relativo all'avviso n. {{numero_avviso}}, intestato a {{contribuente_nome}}, codice fiscale/P.IVA {{codice_fiscale}}, per l'esercizio {{anno_tributario}}.\n\nImporto complessivo riportato nell'avviso: euro {{importo_documento}}.\nTermine di pagamento indicato nell'avviso: {{termine_pagamento}}.\n\nPer consultare la propria posizione e gli avvisi di pagamento è disponibile il SERVIZIO ICATASTO:\n{{url_portale}}\nAnno di riferimento: {{anno_tributario}}\nCodice utenza servizi online: {{codice_utenza}}\nPIN: {{pin_utenza}}\n\nOltre alle modalità indicate nell'avviso allegato, il pagamento potrà essere effettuato con bonifico bancario al conto corrente intestato a:\nCONSORZIO DI BONIFICA DELL'ORISTANESE – RISCOSSIONE QUOTE ASSOCIATIVE\nIBAN: IT15L0760117400001007214826\nCausale: CF {{codice_fiscale}} – Avviso n. {{numero_avviso}}\n\nIl contribuente può richiedere la dilazione del pagamento nei seguenti termini:\n- 2 rate per importi da 100,00 a 300,00 euro;\n- 4 rate per importi da 300,01 a 500,00 euro;\n- 6 rate per importi da 500,01 a 1.000,00 euro;\n- 12 rate per importi da 1.000,01 a 5.000,00 euro;\n- 18 rate per importi superiori a 5.000,00 euro.\nNon sono previste dilazioni per importi inferiori a 100,00 euro.\n\nLe richieste di rateizzazione possono essere inviate a tributi@bonificaoristanese.it oppure via PEC a tributi.cbo@pec.it, non oltre il termine perentorio del 31 dicembre 2026.\n\nPer informazioni: tributi@bonificaoristanese.it\nPEC: tributi.cbo@pec.it\n\nCordiali saluti\n{{ente_nome}}\nSettore Catasto - Ruoli - Patrimonio\nTel. 0783 3150 212"
+    },
+    {
+      "code": "sollecito_2021_ufficio_email",
+      "name": "Sollecito 2021 – modello ufficio Email",
+      "channel": "email",
+      "module": "ruolo",
+      "subject": "Promemoria di cortesia – avviso n. {{numero_avviso}}, esercizio {{anno_tributario}}",
+      "body": "Gentile contribuente,\n\ncon la presente comunicazione di cortesia si trasmette in allegato il sollecito di pagamento relativo all'avviso n. {{numero_avviso}}, intestato a {{contribuente_nome}}, codice fiscale/P.IVA {{codice_fiscale}}, per l'esercizio {{anno_tributario}}.\n\nImporto complessivo riportato nell'avviso: euro {{importo_documento}}.\nTermine di pagamento indicato nell'avviso: {{termine_pagamento}}.\n\nPer consultare la propria posizione e gli avvisi di pagamento è disponibile il SERVIZIO ICATASTO:\n{{url_portale}}\nAnno di riferimento: {{anno_tributario}}\nCodice utenza servizi online: {{codice_utenza}}\nPIN: {{pin_utenza}}\n\nOltre alle modalità indicate nell'avviso allegato, il pagamento potrà essere effettuato con bonifico bancario al conto corrente intestato a:\nCONSORZIO DI BONIFICA DELL'ORISTANESE – RISCOSSIONE QUOTE ASSOCIATIVE\nIBAN: IT15L0760117400001007214826\nCausale: CF {{codice_fiscale}} – Avviso n. {{numero_avviso}}\n\nIl contribuente può richiedere la dilazione del pagamento nei seguenti termini:\n- 2 rate per importi da 100,00 a 300,00 euro;\n- 4 rate per importi da 300,01 a 500,00 euro;\n- 6 rate per importi da 500,01 a 1.000,00 euro;\n- 12 rate per importi da 1.000,01 a 5.000,00 euro;\n- 18 rate per importi superiori a 5.000,00 euro.\nNon sono previste dilazioni per importi inferiori a 100,00 euro.\n\nLe richieste di rateizzazione possono essere inviate a tributi@bonificaoristanese.it oppure via PEC a tributi.cbo@pec.it, non oltre il termine perentorio del 31 dicembre 2026.\n\nQuesta email è una comunicazione di cortesia e non costituisce una ricevuta PEC o una prova di notifica.\n\nPer informazioni: tributi@bonificaoristanese.it\nPEC: tributi.cbo@pec.it\n\nCordiali saluti\n{{ente_nome}}\nSettore Catasto - Ruoli - Patrimonio\nTel. 0783 3150 212"
+    }
+  ]
+}

@@ -1,4 +1,20 @@
 # GAIA Ruolo — Progress Tracking v1.0
+
+## Modelli Communications e audit PIN — 7 novembre, locale
+
+Il dominio espone i dati del singolo avviso tramite
+`services/notice_communication_fields.py`, riusando totale, termine e accessi
+del renderer PDF. Catalogo PEC/email modificabile con salvataggio bozza e
+approvazione distinti; nessuna nuova formula o rigenerazione automatica.
+Verifiche: 268 backend inclusi accessi portale/PostgreSQL, 67 unit frontend,
+otto E2E sintetici PASS; runtime del ciclo 100% statement/branch.
+Su richiesta dell'utente, audit sola lettura concluso sui 1.195 file PDF (1.009
+numeri avviso): 138 con PIN coincidenti con GAIA/snapshot, zero discordanti;
+1.057 senza PIN nel testo. Restano da decidere i 726 casi con utenza univoca
+in archivio ma assente dal PDF; nessuna rigenerazione automatica dello storico.
+Nessun nuovo rilascio, invio o modifica tributaria. Fonti, matrice e stato:
+[report Communications](../../../docs/communications/OFFICE_TEMPLATES_2026-11-07.md).
+
 ## Revisione UX dopo il rilascio — pubblicata, 2026-11-06
 
 Su conferma esplicita realizzata la schermata semplificata: anno e ricerca

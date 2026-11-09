@@ -30,3 +30,7 @@ gestione STEP e che un pagamento persistito dopo review blocca l'accodamento.
 La configurazione interna usata nei test è esclusivamente sintetica: nessun
 override tributario reale. Matrice completa in docs/communications/FINAL_REVIEW.md
 e avanzamento in docs/communications/PROGRESS.md. Nessun deployment.
+
+## Modelli ufficio — novembre 2026
+
+Il catalogo Communications propone testi PEC/email con importo e termine del PDF 2021, bonifico, rateizzazione e accessi ICATASTO. Codice utenza/PIN provengono esclusivamente dallo snapshot del documento. Nessun recupero automatico dei 726 accessi presenti solo in archivio. Testi semplici modificabili e approvazione della versione distinta da quella del singolo messaggio. [Dettagli](../../../docs/communications/OFFICE_TEMPLATES_2026-11-07.md).

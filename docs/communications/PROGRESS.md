@@ -1,4 +1,19 @@
 # Avanzamento Communications
+
+## 2026-11-09 — Modelli ufficio pubblicati
+
+Rilascio mirato autorizzato e attivato alle **14:58:35 CET**; commit applicativo `06f6597c` sul branch `feat/communications-office-templates-20261109`. Catalogo PEC/email disponibile in Communications, backend/frontend healthy. Otto E2E candidata e otto live PASS; coverage runtime del perimetro 100%. Nessun fallback PIN, template reale creato/approvato o invio. Dati, schema e stato trasporti invariati. [Rapporto completo](OFFICE_TEMPLATES_RELEASE_2026-11-09.md).
+
+## 2026-11-07 — Modelli dell'ufficio e verifica PIN
+
+- [x] Modelli PEC/email modificabili con dati specifici avviso, bonifico, fasce e termine confermati.
+- [x] Composizione con formule/termini PDF e accessi univoci; variabili mancanti bloccano senza salvataggi parziali.
+- [x] 268 backend (dieci PostgreSQL), 67 unit frontend, 18 smoke, otto E2E sintetici PASS; runtime del ciclo 100% statement/branch.
+- [x] Typecheck, build clean isolata e lint mirato PASS.
+- [x] Audit PIN su tutti i 1.195 file: 138 coincidenti con GAIA/snapshot, zero discordanti; 1.057 senza PIN nel testo, nessun errore di lettura.
+- [ ] Decisione sui 726 accessi univoci presenti solo in archivio; 330 documenti senza utenza GAIA e uno con due utenze da verificare.
+- Nessun fallback all'archivio, deployment, commit o invio reale. [Analisi e matrice](OFFICE_TEMPLATES_2026-11-07.md).
+
 ## 2026-11-07 — Eliminazione template con conferma
 
 - [x] Elimina per versione draft/approved, conferma con identità e gestione errori.
