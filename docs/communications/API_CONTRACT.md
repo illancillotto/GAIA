@@ -15,6 +15,7 @@ Amministrazione: require_admin_user. Nessuna API riceve password provider.
 | GET /templates, /admin/templates | Approvati / tutte le versioni |
 | POST /templates | Nuova versione draft |
 | POST /templates/{id}/approve | Approvazione admin esplicita |
+| DELETE /templates/{id} | Solo admin; body confirmed=true obbligatorio; elimina logicamente la singola versione |
 | GET /ruolo/candidates | channel, year=2021, page/page_size; q/batch/contatti/stati/date/account |
 | GET /ruolo/candidates/{id}/eligibility | Verifica attuale, authorizes_dispatch=false |
 | GET /messages | channel/state/account_id e paginazione |
@@ -42,6 +43,14 @@ attachments, account; tutti true. Nessuna approvazione batch.
 concorrenza; 422 schema/anno/dati. Unique violation normalizzata, senza SQL/PII.
 Schema autorevole completo: OpenAPI FastAPI e schemas.py. Dispatch idempotente
 non significa exactly-once SMTP.
+
+La cancellazione template restituisce HTTP200 con `status=deleted`; ripetere
+lo stesso comando non aggiunge eventi di audit. Il template sparisce da entrambi
+gli elenchi e non può più essere approvato o usato per creare messaggi (409).
+Identità, contenuto, approvazione pregressa e riferimenti dei messaggi restano
+conservati. Una nuova versione dello stesso codice prosegue la numerazione,
+incluse le versioni eliminate. Conferma assente/falsa o campi extra:422;
+identità inesistente:404. Il comando non contatta provider né accoda invii.
 
 Verifica conclusiva: contratti invariati; la nuova prova con contabilità reale
 conferma HTTP409 e assenza di job se un pagamento rende ineleggibile un avviso

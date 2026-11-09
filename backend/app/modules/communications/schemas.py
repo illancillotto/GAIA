@@ -78,6 +78,10 @@ class TemplateInput(Command):
     body: Annotated[str, Field(min_length=1, max_length=20000)]
 
 
+class TemplateDeletion(Command):
+    confirmed: Literal[True]
+
+
 class MessageCreate(Command):
     source_entity_id: UUID
     expected_source_sha256: Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")] | None = None

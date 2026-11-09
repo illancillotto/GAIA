@@ -11,6 +11,10 @@ esclusivamente 2021. I criteri software non certificano atti o recapiti.
   approvazione individuale, accodamento e annullamento consentito.
 - Admin/super_admin: account, endpoint, utenti autorizzati, template versionati,
   test asincroni, pause e monitoraggio. Secret provisionati fuori da DB/UI.
+- Ogni versione template può essere eliminata dall'amministratore dopo una
+  conferma che identifica nome, canale, codice e versione. Scompare dalle
+  selezioni future; testi e messaggi già creati, altre versioni e audit restano
+  conservati. Cancellazione logica, senza invii o nuove migrazioni.
 
 Solleciti offre Generati, Posta Online, PEC ed Email. Nessuna spedizione HTTP.
 La pagina PEC/email divide lo spazio desktop in due colonne uguali: elenco

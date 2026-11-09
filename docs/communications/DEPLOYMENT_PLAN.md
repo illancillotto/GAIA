@@ -1,5 +1,14 @@
 # Preparazione al rilascio
 
+## Rilascio mirato template — 7 novembre 2026
+
+Completato su richiesta esplicita: sole immagini backend/frontend derivate dal
+runtime CED e quattro file Communications modificati. Nessuna nuova migrazione,
+variazione worker o trasporto; configurazione e dati conservati. Preparazione,
+test candidata, controlli concorrenti, attivazione, API e sei E2E live conclusi.
+Evidenze e rollback: [TEMPLATE_DELETION_RELEASE_2026-11-07.md](TEMPLATE_DELETION_RELEASE_2026-11-07.md).
+
+
 Piano preparato durante il ciclo del 3 novembre senza eseguire deployment.
 Il successivo rilascio CED autorizzato il 4 novembre è registrato nel
 [report operativo](DEPLOYMENT_REPORT_2026-11-04.md), che distingue i passaggi

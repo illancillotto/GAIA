@@ -7,6 +7,21 @@ in pausa: canale/provider, indirizzo/display name, endpoint TLS, username,
 metodo auth e secret_ref. Non incollare password nei campi. Impostare utenti
 autorizzati, default Ruolo/canale, priorità, dimensione MIME e limite orario.
 
+### Eliminazione di una versione template
+
+In **Template versionati**, premere **Elimina** sulla versione da rimuovere.
+La conferma mostra nome, canale, codice e versione: **Annulla** lascia tutto
+invariato; confermando viene eliminata solo quella versione. Le altre versioni
+restano disponibili. Durante la richiesta i comandi sono disabilitati; in caso
+di errore il messaggio resta visibile ed è possibile riprovare.
+
+Il template eliminato sparisce dall'elenco e dalla selezione per nuove
+comunicazioni. Testi, PDF e messaggi già creati restano conservati, insieme
+all'audit della cancellazione. La numerazione non riparte da uno se si crea
+un'altra versione dello stesso codice. Azione riservata a admin/super_admin.
+Dettagli e verifiche: [TEMPLATE_DELETION_2026-11-07.md](TEMPLATE_DELETION_2026-11-07.md).
+
+
 Guide ufficiali consultate il 2026-11-03, HTTP200:
 
 - [Aruba PEC, client e dispositivi](https://guide.aruba.it/pec/configurazione-programmi-di-posta/client-posta-e-dispositivi-mobili):

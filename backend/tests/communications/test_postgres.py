@@ -115,6 +115,40 @@ def postgres(tmp_path):
         admin.dispose()
 
 
+def test_concurrent_template_deletions_keep_one_audit_event(postgres):
+    _engine, factory, _ids = postgres
+    with factory() as db:
+        identity = db.scalar(
+            sa.select(models.CommunicationTemplate.id).where(
+                models.CommunicationTemplate.channel == "pec"
+            )
+        )
+    barrier = Barrier(2)
+
+    def delete():
+        with factory() as db:
+            barrier.wait(timeout=10)
+            value = registry.delete_template(db, identity, 1)
+            db.commit()
+            return value.status
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: delete(), range(2)))
+    assert results == ["deleted", "deleted"]
+    with factory() as db:
+        assert db.get(models.CommunicationTemplate, identity).status == "deleted"
+        events = list(
+            db.scalars(
+                sa.select(models.CommunicationEvent).where(
+                    models.CommunicationEvent.aggregate_id == identity,
+                    models.CommunicationEvent.kind == "template_deleted",
+                )
+            )
+        )
+        assert len(events) == 1
+        assert events[0].detail == {"version": 1, "previous_status": "draft"}
+
+
 def test_migration_schema_seed_and_roundtrip(postgres):
     engine, _factory, _ = postgres
     expected = metadata()

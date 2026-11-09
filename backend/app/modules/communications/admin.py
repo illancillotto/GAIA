@@ -21,7 +21,7 @@ from .models import (
 )
 from .policy import transport_enabled
 from .router import command
-from .schemas import AccountChange, AccountInput, Pause, TemplateInput
+from .schemas import AccountChange, AccountInput, Pause, TemplateDeletion, TemplateInput
 
 router = APIRouter(
     prefix="/communications",
@@ -104,9 +104,9 @@ def templates(db: Session = Depends(get_db)):
     return [
         store.public_model(value)
         for value in db.scalars(
-            select(CommunicationTemplate).order_by(
-                CommunicationTemplate.code, CommunicationTemplate.version.desc()
-            )
+            select(CommunicationTemplate)
+            .where(CommunicationTemplate.status != "deleted")
+            .order_by(CommunicationTemplate.code, CommunicationTemplate.version.desc())
         )
     ]
 
@@ -127,6 +127,16 @@ def approve_template(
     user: ApplicationUser = Depends(require_admin_user),
 ):
     return store.public_model(command(db, lambda: registry.approve_template(db, identity, user.id)))
+
+
+@router.delete("/templates/{identity}")
+def delete_template(
+    identity: UUID,
+    payload: TemplateDeletion,
+    db: Session = Depends(get_db),
+    user: ApplicationUser = Depends(require_admin_user),
+):
+    return store.public_model(command(db, lambda: registry.delete_template(db, identity, user.id)))
 
 
 @router.post("/admin/pause")

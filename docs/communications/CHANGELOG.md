@@ -1,4 +1,13 @@
 # Changelog
+## 2026-11-07 — Eliminazione singola versione template
+
+- Pulsante Elimina con conferma nativa che identifica template, canale e versione.
+- DELETE amministrativo con confirmed=true; cancellazione logica, audit e idempotenza sotto lock PostgreSQL.
+- Eliminati non riapprovabili/utilizzabili; messaggi/PDF, altre versioni e numerazione conservati.
+- 197 backend, 63 unit frontend, 18 smoke e sei E2E PASS; runtime modificati coperti al 100% con branch.
+- Rilascio mirato autorizzato alle 09:42:21 CET, backend `b259894c1ad4` e frontend `bf73b599a3e8`. Sei E2E candidata e sei live PASS; worker e dati invariati.
+- Nessuna nuova migrazione, dipendenza, cancellazione reale o commit. Report sviluppo: TEMPLATE_DELETION_2026-11-07.md; rilascio: TEMPLATE_DELETION_RELEASE_2026-11-07.md.
+
 ## 2026-11-06 — Apertura del compositore dalla riga PEC/email
 
 - Rimossi Componi/Apri comunicazione e la relativa colonna azioni; clic sulla riga o Invio/Spazio apre lo stesso workflow.

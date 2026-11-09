@@ -1,4 +1,11 @@
 # Piano di implementazione e stato
+## 2026-11-07 — Eliminazione template con conferma
+
+- [x] Pulsante Elimina per singola versione, con conferma e blocco durante la richiesta.
+- [x] DELETE amministrativo, conferma validata dal backend, cancellazione logica e audit.
+- [x] Preservati messaggi/snapshot e numerazione delle versioni.
+- Verifiche e stato del rilascio: [TEMPLATE_DELETION_2026-11-07.md](TEMPLATE_DELETION_2026-11-07.md).
+- [x] Rilascio selettivo CED autorizzato, 09:42:21 CET; sola modifica template sopra le immagini effettive, collaudo candidata/live e health conclusi. [Report](TEMPLATE_DELETION_RELEASE_2026-11-07.md).
 
 ## Mandato e invarianti
 

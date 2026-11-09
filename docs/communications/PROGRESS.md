@@ -1,4 +1,15 @@
 # Avanzamento Communications
+## 2026-11-07 — Eliminazione template con conferma
+
+- [x] Elimina per versione draft/approved, conferma con identità e gestione errori.
+- [x] DELETE solo amministratori, conferma backend, lock, cancellazione logica e audit idempotente.
+- [x] Messaggi/PDF e altre versioni conservati; versionamento monotono.
+- [x] 197 backend, 63 unit frontend, 18 smoke e sei E2E PASS; coverage runtime modificati 100% statement/branch.
+- [x] Build clean isolata, typecheck e lint del perimetro PASS; nessun finding Communications nel ratchet completo.
+- [x] Rilascio mirato autorizzato il 7 novembre, 09:42:21 CET: backend/frontend healthy, sei E2E candidata e sei live PASS, dati/schema/trasporti invariati. [Report](TEMPLATE_DELETION_RELEASE_2026-11-07.md).
+- Gate globale ancora FAIL per 17 finding Presenze estranei. Baseline invariata; nessuna riclassificazione del gate globale.
+- Matrice, file, metriche e limiti: [TEMPLATE_DELETION_2026-11-07.md](TEMPLATE_DELETION_2026-11-07.md).
+
 ## 2026-11-06 — Apertura avviso dalla riga
 
 - [x] Clic/Invio/Spazio sostituiscono Componi/Apri comunicazione.

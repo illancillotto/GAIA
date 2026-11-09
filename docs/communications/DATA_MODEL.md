@@ -6,7 +6,7 @@ FK verso utenti GAIA e documento Registro. Nessuna modifica a importi o formule.
 | Tabella | Responsabilità / vincoli |
 | --- | --- |
 | communication_accounts | TLS, username, secret_ref esterno, canale/provider, utenti/moduli/default/priorità, limiti, pausa, versione, salute e cursore IMAP |
-| communication_templates | Unique codice/versione, testo semplice, stato/approvatore |
+| communication_templates | Unique codice/versione, testo semplice, stato draft/approved/deleted e approvatore |
 | communication_messages | Sorgente e Registro, numero, envelope, fingerprint, versione/stato; unique active_key e technical_id |
 | communication_attachments | PDF BYTEA, nome/MIME, pagine/byte/SHA256/versione/primario, immutabile |
 | communication_reviews | Review UUID, allegato, operatore, versione messaggio, rendering |
@@ -21,6 +21,14 @@ Indici su sorgente, numero, documento, account, stato/canale, job, aggregato,
 correlazione. BYTEA deferred nell'ORM; costituisce il riferimento di archivio
 privato, senza URL permanente. Trigger impediscono delete dello storico,
 modifica envelope accodato/trasmesso e alterazione MIME.
+
+La cancellazione di una versione template aggiorna soltanto `status=deleted`,
+con lock PostgreSQL della riga ed evento append-only `template_deleted`
+(operatore, timestamp, versione e stato precedente). Non rimuove righe, FK,
+testi o metadati di approvazione. Nessuna migrazione aggiuntiva: la colonna
+status esistente supporta già il valore. Gli elenchi escludono i cancellati;
+il calcolo della prossima versione li include. I messaggi già composti
+conservano testi e snapshot indipendenti dalla disponibilità del template.
 
 ## Stati
 

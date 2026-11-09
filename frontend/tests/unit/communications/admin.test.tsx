@@ -10,7 +10,7 @@ vi.mock("@/lib/use-session-bootstrap", () => ({ useSessionBootstrap: mocks.sessi
 vi.mock("@/components/app/protected-page", () => ({ ProtectedPage: ({ children }: { children: React.ReactNode }) => <main>{children}</main> }));
 const stored = { id: "account", version: 1, health: "untested", last_test_at: null, last_sync_at: null, name: "Synthetic", channel: "pec", provider: "synthetic", sender: "sender@example.org", display_name: "Office", smtp_host: "smtp.example.org", smtp_port: 465, smtp_encryption: "tls", imap_host: "imap.example.org", imap_port: 993, imap_encryption: "tls", auth_method: "password", username: "synthetic", secret_ref: "synthetic", active: false, paused: true, allowed_modules: ["ruolo"], allowed_user_ids: [], default_modules: [], is_default: false, priority: 100, max_bytes: 10000, hourly_limit: 10 };
 beforeEach(() => { vi.resetAllMocks(); mocks.session.mockReturnValue(session); mocks.api.mockImplementation((_token, path) => Promise.resolve(path === "/admin/accounts" ? [stored] : path === "/admin/templates" ? [{ ...template, status: "draft" }] : path === "/admin/monitor" ? { paused: true, transport_enabled: false, worker_seen_at: null, queues: { pending: 3 }, uncertain: 1, unmatched_receipts: 2 } : {})); });
-afterEach(() => { cleanup(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 it("guards administration before reading account settings", () => {
   for (const value of [{ status: "checking" }, { ...session, token: null }, { ...session, currentUser: null }, { ...session, currentUser: { role: "operator" } }]) {
     mocks.session.mockReturnValue(value); const view = render(<AdminPage />);
@@ -67,6 +67,60 @@ it("creates a fresh version and approves only draft templates", async () => {
     mocks.api.mockRejectedValue(failure); fireEvent.click(screen.getByText("Salva nuova versione bozza"));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(failure instanceof Error ? "invalid" : "Operazione fallita"));
   }
+});
+it.each(["draft", "approved"])("asks confirmation before deleting a %s template and permits cancelling", async (status) => {
+  mocks.api.mockResolvedValue([{ ...template, status }]);
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  render(<TemplateAdministration token="token" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Elimina Template sintetico, pec, versione 1" }));
+  expect(confirm).toHaveBeenCalledOnce();
+  expect(confirm).toHaveBeenCalledWith(expect.stringContaining("«Template sintetico» (PEC, codice synthetic, versione 1)"));
+  expect(confirm).toHaveBeenCalledWith(expect.stringContaining("I messaggi già creati e lo storico resteranno conservati"));
+  expect(mocks.api).toHaveBeenCalledTimes(1);
+  expect(screen.getByText("Crea nuova versione")).toBeEnabled();
+});
+it("deletes only the confirmed version, disables actions during deletion, and reloads the list", async () => {
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  const second = { ...template, id: "second", version: 2, status: "draft" };
+  let remaining = [template, second];
+  let resolveDelete!: (value: unknown) => void;
+  mocks.api.mockImplementation((_token, path, _data, method) => {
+    if (method === "DELETE") return new Promise((resolve) => { resolveDelete = resolve; });
+    return Promise.resolve(remaining);
+  });
+  render(<TemplateAdministration token="token" />);
+  fireEvent.click(await screen.findByRole("button", { name: "Elimina Template sintetico, pec, versione 1" }));
+  expect(mocks.api).toHaveBeenCalledWith("token", "/templates/template", { confirmed: true }, "DELETE");
+  for (const button of screen.getAllByRole("button")) expect(button).toBeDisabled();
+  expect(screen.getByLabelText("Codice template")).toBeDisabled();
+  remaining = [second];
+  await act(async () => { resolveDelete({ ...template, status: "deleted" }); });
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Elimina Template sintetico, pec, versione 1" })).not.toBeInTheDocument());
+  expect(screen.getByRole("button", { name: "Elimina Template sintetico, pec, versione 2" })).toBeEnabled();
+  expect(mocks.api.mock.calls.filter((call) => call[1] === "/admin/templates")).toHaveLength(2);
+});
+it.each([new Error("Eliminazione non autorizzata"), "failure"])("keeps the template and reports a failed deletion: %s", async (failure) => {
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  render(<TemplateAdministration token="token" />);
+  const button = await screen.findByRole("button", { name: "Elimina Template sintetico, pec, versione 1" });
+  mocks.api.mockRejectedValueOnce(failure);
+  fireEvent.click(button);
+  await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(failure instanceof Error ? failure.message : "Eliminazione fallita"));
+  expect(button).toBeEnabled();
+  expect(mocks.api.mock.calls.filter((call) => call[3] === "DELETE")).toHaveLength(1);
+});
+it("reports a failed reload after deletion and allows an idempotent retry", async () => {
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  render(<TemplateAdministration token="token" />);
+  const button = await screen.findByRole("button", { name: "Elimina Template sintetico, pec, versione 1" });
+  mocks.api.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error("Elenco non disponibile"));
+  fireEvent.click(button);
+  await screen.findByText("Elenco non disponibile");
+  expect(button).toBeEnabled();
+  mocks.api.mockResolvedValueOnce({}).mockResolvedValueOnce([]);
+  fireEvent.click(button);
+  await waitFor(() => expect(screen.queryByText("Crea nuova versione")).not.toBeInTheDocument());
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 it("reports initial account and template load errors without hiding them", async () => {
   mocks.api.mockRejectedValue(new Error("offline"));

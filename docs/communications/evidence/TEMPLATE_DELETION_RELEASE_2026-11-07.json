@@ -1,0 +1,76 @@
+{
+  "release": "template-delete-20261107",
+  "activated_at": "2026-11-07T08:42:21.927983+00:00",
+  "activated_at_rome": "2026-11-07T09:42:21.927983+01:00",
+  "images": {
+    "backend": "sha256:b259894c1ad4f5fb575253175f57303e474dacc2192f61c134603bccb5d7761e",
+    "frontend": "sha256:bf73b599a3e8d5fedfcaa5b2bc796a0f221fd6f830cc2ab5b87bd01b548a78ea"
+  },
+  "source_proof": {
+    "backend": {
+      "changed": [
+        "app/modules/communications/admin.py",
+        "app/modules/communications/registry.py",
+        "app/modules/communications/schemas.py"
+      ],
+      "preserved": 988,
+      "base_image": "sha256:3eba82eb04dc4b6fcad7714a7e8f5c4d9c5d98725c41a0a523faa57de06c4ef7",
+      "image": "sha256:b259894c1ad4f5fb575253175f57303e474dacc2192f61c134603bccb5d7761e",
+      "tag": "gaia-backend:template-delete-20261107"
+    },
+    "frontend": {
+      "changed": [
+        "src/components/communications/admin-templates.tsx"
+      ],
+      "preserved": 770,
+      "base_image": "sha256:d8dbf6a70ffd5a9abe6092dd91139c6cae6bd4c41079865a16f068e8e50311d1",
+      "image": "sha256:bf73b599a3e8d5fedfcaa5b2bc796a0f221fd6f830cc2ab5b87bd01b548a78ea",
+      "tag": "gaia-frontend:template-delete-20261107",
+      "routes_preserved": 196
+    }
+  },
+  "e2e": {
+    "canary": {
+      "startTime": "2026-11-07T08:39:08.530Z",
+      "duration": 24218.890000000003,
+      "expected": 6,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "live": {
+      "startTime": "2026-11-07T08:42:45.265Z",
+      "duration": 31679.254,
+      "expected": 6,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    }
+  },
+  "backend_image": {
+    "tests": 197,
+    "passed": 187,
+    "skipped_postgres_already_tested": 10,
+    "failures": 0
+  },
+  "frontend_unit": {
+    "passed": 63,
+    "coverage_percent": 100
+  },
+  "http": {
+    "/login": 200,
+    "/gaia/communications": 200,
+    "/ruolo/tributi/solleciti": 200,
+    "/ruolo/tributi/solleciti/pec": 200,
+    "/ruolo/tributi/solleciti/email": 200,
+    "/presenze/giornaliere": 200,
+    "/api/health": 200,
+    "/api/communications/admin/templates": 401
+  },
+  "preserved_containers": 36,
+  "templates_unchanged": true,
+  "schema_unchanged": true,
+  "transports_unchanged": true,
+  "no_real_message_or_template_deletion": true,
+  "global_checkout_gate_remains_failed_outside_scope": true
+}

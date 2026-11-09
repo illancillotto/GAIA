@@ -1,5 +1,17 @@
 # Rollback e ripristino
 
+## Cancellazione template — rilascio 7 novembre 2026
+
+Rollback software in `/opt/gaia/releases/template-delete-20261107`:
+`backend.rollback.json` e `frontend.rollback.json`, soltanto se i servizi sono
+ancora sulle immagini `b259894c1ad4` e `bf73b599a3e8`. Ripristinare i soli
+servizi omonimi con `--no-deps --no-build --pull never`, verificare health,
+quindi `nginx -t` e reload. Preservare eventuali rilasci successivi.
+Non modificare worker, schema o righe template; le cancellazioni degli
+operatori restano auditabili e non vanno annullate tramite restore DB.
+Dettagli: [TEMPLATE_DELETION_RELEASE_2026-11-07.md](TEMPLATE_DELETION_RELEASE_2026-11-07.md).
+
+
 Pausa globale, trasporto false, arresto cooperativo worker. Registrare job attivi
 e Message-ID; un SMTP già accettato non può essere richiamato con rollback.
 

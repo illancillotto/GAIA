@@ -123,6 +123,30 @@ def approve_template(db, identity, actor_id):
     return value
 
 
+def delete_template(db, identity, actor_id):
+    value = db.scalar(
+        select(CommunicationTemplate)
+        .where(CommunicationTemplate.id == identity)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if value is None:
+        raise Missing("Template non trovato")
+    if value.status == "deleted":
+        return value
+    previous_status = value.status
+    value.status = "deleted"
+    event(
+        db,
+        value.id,
+        "template_deleted",
+        actor_id=actor_id,
+        version=value.version,
+        previous_status=previous_status,
+    )
+    return value
+
+
 def request_account_job(db, identity, kind, actor_id):
     value = account(db, identity)
     job = CommunicationJob(account_id=value.id, kind=kind, idempotency_key=str(uuid4()))
