@@ -1,5 +1,9 @@
 # Sicurezza
 
+## Credenziali del portale nei modelli
+
+Catalogo e variabili descrittive non contengono credenziali personali. PIN e codice utenza sono ammessi nella composizione solo dal singolo snapshot cifrato associato al PDF: assenza, ambiguita, dati corrotti o chiave mancante bloccano i modelli che li richiedono. Nessun fallback all'archivio e nessun PIN in eventi/errori. Corpo finale, PDF e MIME sono artefatti sensibili nell'archivio privato; la persistenza separata del corpo non viene dichiarata cifrata.
+
 RBAC GAIA separa lettura, gestione Tributi e amministrazione provider. Account
 filtrati per canale/modulo/utenti; worker ricontrolla approvatore attivo e
 autorizzato. Routing: esplicito, default Ruolo, default canale; niente failover.

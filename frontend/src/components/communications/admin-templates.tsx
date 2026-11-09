@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { communications } from "@/lib/communications-api";
 import type { Template } from "@/types/communications";
+import { TemplateCatalog } from "./template-catalog";
 
 const EMPTY = { code: "", name: "", channel: "pec", module: "ruolo", subject: "", body: "" };
 
@@ -28,7 +29,7 @@ export function TemplateAdministration({ token }: { token: string }) {
       <label>Canale template<select className="block rounded border p-2" value={form.channel} onChange={(event) => setForm({ ...form, channel: event.target.value })}><option value="pec">PEC</option><option value="email">Email</option></select></label>
       <label className="md:col-span-2">Corpo template<textarea className="block min-h-40 w-full rounded border p-2" value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} /></label>
     </fieldset>
-    <p className="text-xs text-slate-600">Variabili: {"{{contribuente_nome}}, {{numero_avviso}}, {{anno_tributario}}, {{importo}}, {{ente_nome}}"}. Solo testo semplice.</p>
+    <TemplateCatalog token={token} disabled={status.busy} onSelect={setForm} />
     <button className="btn-primary" disabled={status.busy} onClick={() => void command()}>Salva nuova versione bozza</button>
   </section>;
 }

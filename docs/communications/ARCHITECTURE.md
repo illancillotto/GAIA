@@ -1,5 +1,9 @@
 # Architettura
 
+## Catalogo e campi dell'avviso
+
+Il catalogo JSON in `communications/template_catalog.json` espone due proposte modificabili attraverso `GET /communications/admin/template-catalog`, solo per amministratori attivi. La lettura non crea versioni. `ruolo/services/notice_communication_fields.py` fornisce importo, termine e accessi secondo le regole del PDF; `ruolo_source.template_variables` resta compatibile. La UI `TemplateCatalog` carica su richiesta e popola il form esistente. Nessuna migrazione o nuova dipendenza.
+
 ## Confini
 
 backend/app/modules/communications contiene ORM, API, outbox, registry, policy,

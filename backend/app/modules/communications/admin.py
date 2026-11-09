@@ -21,6 +21,7 @@ from .models import (
 from .policy import transport_enabled
 from .router import command
 from .schemas import AccountChange, AccountInput, Pause, TemplateInput
+from .template_catalog import load_catalog
 
 router = APIRouter(
     prefix="/communications",
@@ -106,6 +107,11 @@ def templates(db: Session = Depends(get_db)):
             )
         )
     ]
+
+
+@router.get("/admin/template-catalog")
+def template_catalog():
+    return load_catalog()
 
 
 @router.post("/templates", status_code=201)

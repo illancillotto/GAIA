@@ -7,11 +7,9 @@ from sqlalchemy import func, select
 from .models import CommunicationAccount, CommunicationJob, CommunicationTemplate
 from .policy import Conflict, Missing, now, render_template
 from .store import event
+from .template_catalog import load_catalog
 
-VARIABLES = {
-    key: "esempio"
-    for key in ("contribuente_nome", "numero_avviso", "anno_tributario", "importo", "ente_nome")
-}
+VARIABLES = dict.fromkeys(load_catalog()["variables"], "esempio")
 
 
 def account(db, identity):

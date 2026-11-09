@@ -1,5 +1,11 @@
 # Avanzamento Communications
 
+## 2026-11-09 — Ripresa modelli ufficio
+
+Modelli PEC/email del 7 novembre ripresi su branch isolato, senza includere le modifiche locali di altre funzionalita. Rilascio mirato autorizzato dall'utente. Restano obbligatori gli accessi nello snapshot del PDF: nessun fallback ai 726 record presenti solo in archivio.
+
+Verifiche e stato del rilascio: [OFFICE_TEMPLATES_RELEASE_2026-11-09.md](OFFICE_TEMPLATES_RELEASE_2026-11-09.md).
+
 - [x] Audit e contratti del checkout verificato.
 - [x] Modello dati, migrazione e API.
 - [x] Snapshot/revisione/autorizzazione individuale.

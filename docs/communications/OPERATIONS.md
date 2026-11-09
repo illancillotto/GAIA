@@ -1,5 +1,11 @@
 # Manuale operativo
 
+## Modelli di partenza 2021
+
+In Communications → Template versionati aprire «Modelli di partenza 2021 e variabili», scegliere PEC o Email, revisionare il testo e salvare la nuova versione bozza. La scelta non approva e non invia. I modelli includono bonifico, fasce di rateizzazione, termine del 31 dicembre 2026 e firma: revisionare prima dell'uso e dopo la scadenza.
+
+Se mancano importo valido, codice utenza o PIN univoci nello snapshot del PDF, la composizione viene rifiutata senza salvataggio parziale. Non usare dati di un'altra utenza e non recuperare automaticamente dall'archivio. Vedere [audit del 7 novembre](OFFICE_TEMPLATES_2026-11-07.md).
+
 ## Amministrazione
 
 Aprire /gaia/communications come admin/super_admin. Creare account disabilitato/

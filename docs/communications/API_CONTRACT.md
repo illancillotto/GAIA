@@ -1,5 +1,7 @@
 # Contratto API
 
+`GET /communications/admin/template-catalog`: solo amministratori attivi; restituisce `variables`, `note` e due `proposals` PEC/email modificabili, senza scritture. Nuove variabili: `codice_fiscale`, `url_portale`, `importo_documento`, `termine_pagamento`, `codice_utenza`, `pin_utenza`. Le variabili richieste prive di fonte valida causano HTTP 409 senza messaggio parziale.
+
 Prefisso /communications (esterno normalmente /api/communications). Bearer GAIA.
 Lettura: modulo Ruolo + ruolo.tributi.view; scritture: anche manage_status.
 Amministrazione: require_admin_user. Nessuna API riceve password provider.

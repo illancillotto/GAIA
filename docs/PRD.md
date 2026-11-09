@@ -222,3 +222,7 @@ relativa amministrazione. Trasporti disabilitati; configurazione delle caselle,
 approvazione template e collaudo reale restano necessari prima dell'uso.
 Stato effettivo e residui nel
 [report operativo](communications/DEPLOYMENT_REPORT_2026-11-04.md).
+
+### Catalogo amministrativo dei modelli Communications
+
+I solleciti definitivi 2021 dispongono di proposte PEC/email modificabili dall'esempio dell'ufficio, con dati del singolo avviso, importo/scadenza del PDF, bonifico e rateizzazione. La selezione popola il form, il salvataggio crea una bozza e l'approvazione resta un'azione distinta. I modelli con credenziali richiedono lo snapshot univoco del PDF. [Contratto e audit](communications/OFFICE_TEMPLATES_2026-11-07.md).

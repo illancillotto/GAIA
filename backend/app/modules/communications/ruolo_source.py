@@ -18,6 +18,9 @@ from app.modules.ruolo.notice_register_models import (
     NoticePosition,
 )
 from app.modules.ruolo.poste_dispatch_models import PosteDispatchItem
+from app.modules.ruolo.services.notice_communication_fields import (
+    template_variables as template_variables,
+)
 from app.modules.ruolo.services.notice_eligibility import eligibility
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson
 from app.services.nas_connector import NasConnectorError
@@ -160,16 +163,6 @@ def inspect(db, identity, *, own_message_id=None):
         }
     )
     return item, document, content, fingerprint
-
-
-def template_variables(item):
-    return {
-        "contribuente_nome": item.display_name or item.codice_fiscale,
-        "numero_avviso": (item.payload_json or {}).get("notice_number", ""),
-        "anno_tributario": "2021",
-        "importo": str((item.payload_json or {}).get("notice_total_amount") or item.saldo_amount),
-        "ente_nome": "Consorzio di Bonifica dell'Oristanese",
-    }
 
 
 def list_candidates(db, *, channel, filters, page, page_size):

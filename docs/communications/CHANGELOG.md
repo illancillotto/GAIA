@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-09 — Modelli dell'ufficio
+
+Catalogo amministrativo modificabile PEC/email per i solleciti 2021, adattato dall'esempio dell'ufficio. Importo e scadenza seguono il PDF; codice utenza e PIN provengono esclusivamente dallo snapshot associato. Scelta senza salvataggio automatico, versione bozza e approvazione esplicita separate.
+
 ## 2026-11-04 — Presenza recapito iniziale per canale
 
 - Invio PEC apre con Presenza PEC=Presente; Invio Email con Presenza email=Presente.

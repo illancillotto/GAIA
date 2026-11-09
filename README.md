@@ -1148,3 +1148,5 @@ La sidebar PEC/email è pubblicata sul CED: elenco a sinistra e composizione
 a destra, campi sopra il PDF, con disposizione verticale su mobile.
 Quality gate specifico risolto senza deroghe; trasporti ancora disabilitati.
 [Verifiche e rilascio frontend](docs/communications/SIDEBAR_RELEASE_2026-11-04.md).
+
+I modelli PEC/email dell'ufficio per i solleciti 2021 sono descritti in [Communications: modelli e audit](docs/communications/OFFICE_TEMPLATES_2026-11-07.md).
