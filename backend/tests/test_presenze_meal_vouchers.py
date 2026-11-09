@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, time
 from types import SimpleNamespace
 
 import pytest
@@ -11,7 +11,11 @@ from test_presenze_api import (  # noqa: F401 - shared API fixture
     setup_database,
 )
 
-from app.modules.presenze.models import PresenzeCollaborator, PresenzeDailyRecord
+from app.modules.presenze.models import (
+    PresenzeCollaborator,
+    PresenzeDailyPunch,
+    PresenzeDailyRecord,
+)
 from app.modules.presenze.services import import_jobs
 from app.modules.presenze.services.meal_vouchers import meal_voucher_values
 from app.modules.presenze.services.parser import ParsedCollaboratorPayload, ParsedImportPayload
@@ -39,7 +43,7 @@ def test_daily_count_and_provenance(day, extra, manual, count, sources):
     assert values["meal_voucher_sources"] == sources
 
 
-def _record(owner_id, *, extra=0):
+def _record(owner_id, *, extra=0, with_presence=False):
     with TestingSessionLocal() as db:
         person = PresenzeCollaborator(
             owner_user_id=owner_id,
@@ -61,6 +65,15 @@ def _record(owner_id, *, extra=0):
             validation_status="pending",
         )
         db.add(day)
+        if with_presence and extra != 120:
+            db.flush()
+            db.add(PresenzeDailyPunch(daily_record_id=day.id, sequence=1, entry_time=time(6), exit_time=time(13)))
+        if extra == 120:
+            db.flush()
+            db.add_all([
+                PresenzeDailyPunch(daily_record_id=day.id, sequence=1, entry_time=time(6), exit_time=time(13)),
+                PresenzeDailyPunch(daily_record_id=day.id, sequence=2, entry_time=time(13, 30), exit_time=time(15, 30)),
+            ])
         db.commit()
         db.refresh(day)
         return day.id, person.id
@@ -122,7 +135,7 @@ def test_api_manual_permission_and_invalid_null():
 
 def test_reimport_preserves_manual_audit_replaces_punches_and_export_counts():
     user = _create_user("meal-import")
-    rid, cid = _record(user.id)
+    rid, cid = _record(user.id, with_presence=True)
     headers = {"Authorization": "Bearer " + _login(user.username)}
     response = client.patch(
         "/presenze/giornaliere/" + str(rid), headers=headers, json={"meal_voucher_manual": True}

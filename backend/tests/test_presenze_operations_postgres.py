@@ -3,7 +3,7 @@
 import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date
+from datetime import date, time
 from pathlib import Path
 
 import pytest
@@ -19,11 +19,13 @@ from app.models.application_user import ApplicationUser
 from app.modules.presenze.models import (
     PresenzeCollaborator,
     PresenzeCredential,
+    PresenzeDailyPunch,
     PresenzeDailyRecord,
     PresenzeImportJob,
     PresenzeSyncJob,
 )
 from app.modules.presenze.services.auto_sync import _try_acquire_auto_sync_lock
+from app.modules.presenze.services.manual_presence import validate_manual_km
 from app.modules.presenze.services.meal_vouchers import apply_manual_meal_voucher
 from app.modules.presenze.services.sync_start import ensure_sync_start_available
 
@@ -46,6 +48,7 @@ def operations_engine():
         PresenzeCredential.__table__,
         PresenzeImportJob.__table__,
         PresenzeDailyRecord.__table__,
+        PresenzeDailyPunch.__table__,
         PresenzeSyncJob.__table__,
     ]
     for table in tables:
@@ -111,6 +114,8 @@ def test_concurrent_manual_grants_create_one_audit_entry(operations_engine):
             collaborator_id=person.id, owner_user_id=1, work_date=date(2026, 10, 1)
         )
         db.add(record)
+        db.flush()
+        db.add(PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(6), exit_time=time(13)))
         db.commit()
         rid = record.id
 
@@ -167,3 +172,48 @@ def test_voucher_migration_round_trip_preserves_existing_daily_data(operations_e
         }
         with Operations.context(MigrationContext.configure(conn)):
             module.upgrade()
+
+
+def test_manual_presence_uses_persisted_punches_and_preserves_transaction_rollback(operations_engine):
+    with Session(operations_engine) as db:
+        person = PresenzeCollaborator(employee_code="presence-pg", name="Synthetic", owner_user_id=1)
+        db.add(person)
+        db.flush()
+        record = PresenzeDailyRecord(
+            collaborator_id=person.id, owner_user_id=1, work_date=date(2026, 10, 3),
+            km_value=12, meal_voucher_manual=False,
+        )
+        db.add(record)
+        db.commit()
+        for operation in [lambda: validate_manual_km(db, record, 13),
+                          lambda: apply_manual_meal_voucher(db, record, True, 1)]:
+            with pytest.raises(HTTPException) as rejected:
+                operation()
+            assert rejected.value.status_code == 422
+            db.rollback()
+            assert record.km_value == 12 and not record.meal_voucher_manual
+            assert not record.meal_voucher_audit
+        punch = PresenzeDailyPunch(daily_record_id=record.id, sequence=1)
+        db.add(punch)
+        db.commit()
+        with pytest.raises(HTTPException):
+            validate_manual_km(db, record, 13)
+        db.rollback()
+        validate_manual_km(db, record, 0)
+        record.km_value = 0
+        apply_manual_meal_voucher(db, record, False, 1)
+        db.commit()
+        punch.entry_time = time(0)
+        db.commit()
+        validate_manual_km(db, record, 13)
+        record.km_value = 13
+        apply_manual_meal_voucher(db, record, True, 1)
+        db.rollback()
+        assert record.km_value == 0 and not record.meal_voucher_manual
+        assert not record.meal_voucher_audit
+        validate_manual_km(db, record, 13)
+        record.km_value = 13
+        apply_manual_meal_voucher(db, record, True, 1)
+        db.commit()
+        assert record.km_value == 13 and record.meal_voucher_manual
+        assert len(record.meal_voucher_audit) == 1

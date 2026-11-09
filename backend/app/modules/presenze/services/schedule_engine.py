@@ -173,7 +173,7 @@ def classify_daily_record(
     individual_saturday = has_individual_saturday(record, template, rules)
     policy = build_operai_day_policy(
         resolve_individual_operai_rule(collaborator, record, context.operai_rule_configs if context else None, individual_saturday),
-        record, punches, matched_rules, individual_saturday,
+        record, punches, matched_rules, individual_saturday, template.code if template else None,
     )
     operai_quality = evaluate_operai_operational_quality(
         collaborator,

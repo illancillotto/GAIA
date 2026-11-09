@@ -5205,6 +5205,8 @@ def test_gate_presenze_daily_record_detail_validate_patch_and_audit() -> None:
         db.commit()
         db.refresh(record)
         record_id = str(record.id)
+        db.add(PresenzeDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(7), exit_time=time(14)))
+        db.commit()
     finally:
         db.close()
 

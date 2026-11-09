@@ -60,3 +60,43 @@ Il collaudo operativo su una persona/giornata reale resta separato.
 
 
 FINAL QUALITY GATE — PASS
+
+# Aggiornamento locale 09/11/2026: prerequisito di presenza
+
+Il candidato locale richiede almeno una timbratura persistita di entrata o
+uscita per KM positivi e buono manuale attivo. L'assenza completa di timbrature,
+anche con ore contabili o AG, causa HTTP 422 prima delle modifiche.
+Righe con entrata e uscita entrambe nulle non attestano presenza.
+
+Controllo condiviso fra web GAIA, route GATE LAN e worker outbound; viene
+acquisito il lock della giornaliera. Zero/null KM e buono manuale false sono
+sempre rimovibili entro i permessi dell'operatore. Non è previsto alcun
+azzeramento retroattivo; la reperibilità resta indipendente dalle timbrature.
+Una presenza parziale consente i KM senza soglia di sette ore. La timbratura
+incompleta richiede verifica prima del buono manuale e non attribuisce alcun
+diritto automatico. Le regole automatiche restano quelle già concordate.
+
+Correzione Loi 14/10/2026: OPE0613 giornaliero prevale sul diverso calendario
+generale OPE0714_1E3SAB nei giorni feriali anche se manca il dettaglio INAZ. Con 05:51–13:03 il
+calcolo di regressione passa da 363 ordinari/57 mancanti a 420/0. Gli inizi
+personalizzati dello stesso codice e i codici non riconosciuti conservano il
+comportamento precedente. Nessuna attribuzione implicita di profilo turnista.
+
+Test: `test_presenze_manual_presence.py` (web/LAN/outbound, cancellazione,
+patch combinate, orari parziali), `test_presenze_operai_daily_policy.py`
+(regressione e controprova uscita anticipata), test React del buono manuale.
+Rilascio in attesa dei gate completi: non assumere che il comportamento sia
+già presente in produzione. Nessuna migrazione del database.
+
+Ricontrollo finale del candidato del 9 novembre: suite estesa su copia congelata,
+1.458 test passati e 2 saltati; sette file backend modificati al 100% di righe e
+branch. Le controprove ripristinano il difetto di Loi soltanto su copie di test:
+363 anziché 420 minuti, e falliscono come atteso. Sul candidato le stesse prove
+passano. Il rilascio resta non effettuato per i gate GATE e di complessità ancora
+non soddisfatti; questi risultati non sono una certificazione globale.
+
+Il commit isolato su `fix/presenze-presence-guard-20261109` conserva le regole
+automatiche versionate a HEAD: i cambi paralleli non sono inclusi. Controlli
+sul contenuto selezionato dall'indice Git: 134 test backend e 13 test frontend
+passati. Le misure estese sopra riguardano il checkout completo. Il push del
+branch non rappresenta un rilascio e non chiude i gate ancora falliti.

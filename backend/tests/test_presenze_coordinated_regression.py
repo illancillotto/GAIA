@@ -43,7 +43,7 @@ def test_global_presenze_roles_can_assign_employee_range(role):
 @pytest.mark.parametrize("transport", ["lan", "outbound"])
 def test_gate_manual_voucher_grant_retry_and_removal_remain_audited(transport):
     actor = _create_user("manual-" + transport)
-    rid, _ = _record(actor.id)
+    rid, _ = _record(actor.id, with_presence=True)
     headers = {"Authorization": "Bearer " + _login(actor.username)}
     for enabled in [True, True, False]:
         if transport == "lan":

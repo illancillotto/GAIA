@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import time
 
 from app.modules.presenze.models import PresenzeDailyPunch, PresenzeDailyRecord
@@ -31,9 +32,12 @@ SCHEDULE_STARTS = {
     "OPSABE": 360,
     "OSAB5.3_11.3": 330,
 }
+SCHEDULE_FORMULA = re.compile(
+    "^(" + "|".join(re.escape(code) for code in SCHEDULE_STARTS) + r")(?:_|$)"
+)
 
 
-def assigned_daily_start(record, rule, starts):
+def assigned_daily_start(record, rule, starts, template_code=None):
     # The effective schedule of this imported day supersedes a generic
     # seasonal template (which may still contain the 05:30 summer shift).
     payload = record.raw_payload_json
@@ -42,6 +46,15 @@ def assigned_daily_start(record, rule, starts):
         effective_code = parse_schedule_code_from_detail(detail.get("effective_schedule"))
         if effective_code == rule.formula_code:
             return None
+    # A recognized code on the imported day supersedes a *different* generic
+    # template (Loi, 14/10: OPE0613 versus OPE0714_1E3SAB), even if the detail
+    # page timed out. An assignment of the same code can still attest a
+    # seasonal/custom start. Never infer a schedule from the punch times.
+    template_formula = SCHEDULE_FORMULA.match(template_code or "")
+    if (record.work_date.weekday() < 5 and template_formula is not None
+            and rule.formula_code in SCHEDULE_STARTS
+            and template_formula[1] != rule.formula_code):
+        return None
     return next(iter(starts)) if len(starts) == 1 else None
 
 

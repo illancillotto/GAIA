@@ -6,12 +6,13 @@ import type { PresenzeDailyRecord } from "@/types/api";
 
 type Props = { record: PresenzeDailyRecord; disabled: boolean; onSaved: (record: PresenzeDailyRecord) => void };
 export function MealVoucherControl({ record, disabled, onSaved }: Props) {
+  const hasPresence = (record.punches ?? []).some(punch => Boolean(punch.entry_time || punch.exit_time));
   const busy = useRef(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   async function toggle(enabled: boolean) {
     const token = getStoredAccessToken();
-    if (!token || disabled || busy.current) return;
+    if (!token || disabled || busy.current || (enabled && !hasPresence)) return;
     busy.current = true;
     setSaving(true);
     setError("");
@@ -26,7 +27,8 @@ export function MealVoucherControl({ record, disabled, onSaved }: Props) {
   }
   return <div className="rounded border p-2 text-sm">
     <p>Buono pasto: {record.meal_voucher_count ?? 0} · {record.meal_voucher_sources?.join(" + ") || "non riconosciuto"}</p>
-    <label><input type="checkbox" aria-label="Buono pasto manuale" checked={record.meal_voucher_manual === true} disabled={disabled || saving} onChange={event => void toggle(event.target.checked)} /> Buono pasto manuale</label>
+    <label><input type="checkbox" aria-label="Buono pasto manuale" checked={record.meal_voucher_manual === true} disabled={disabled || saving || (!hasPresence && !record.meal_voucher_manual)} onChange={event => void toggle(event.target.checked)} /> Buono pasto manuale</label>
+    {!hasPresence && <p>Assenza di timbrature: puoi solo rimuovere il buono manuale.</p>}
     {saving && <p role="status">Salvataggio…</p>}
     {error && <p role="alert">{error}</p>}
     {record.meal_voucher_automatic && <p className="text-xs">Il buono automatico rimane riconosciuto anche rimuovendo quello manuale.</p>}

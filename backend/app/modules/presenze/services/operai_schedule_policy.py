@@ -56,7 +56,7 @@ def resolve_individual_operai_rule(collaborator, record, configs, individual_sat
     return resolve_operai_rule(collaborator, scheduled_record, configs)
 
 
-def build_operai_day_policy(rule, record, punches, matched_rules, individual_saturday):
+def build_operai_day_policy(rule, record, punches, matched_rules, individual_saturday, template_code=None):
     if rule is None:
         return OperaiDayPolicy(None)
     if individual_saturday:
@@ -70,7 +70,7 @@ def build_operai_day_policy(rule, record, punches, matched_rules, individual_sat
     if individual_saturday and rule.expected_minutes == 0:
         return OperaiDayPolicy(rule, _recognize_unscheduled_saturday(punches), True)
     starts = {item.start_time for item in matched_rules}
-    start = assigned_daily_start(record, rule, starts)
+    start = assigned_daily_start(record, rule, starts, template_code)
     return OperaiDayPolicy(
         rule,
         recognized_daily_minutes(punches, rule, scheduled_start=start),

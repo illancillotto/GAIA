@@ -77,6 +77,7 @@ from app.modules.presenze.services.contract_profile import (
 from app.modules.presenze.services.dashboard_snapshot_store import (
     invalidate_all_dashboard_snapshots,
 )
+from app.modules.presenze.services.manual_presence import validate_manual_km
 from app.modules.presenze.services.meal_vouchers import apply_manual_meal_voucher
 from app.modules.presenze.services.operai_rules import (
     ensure_operai_rule_configs,
@@ -473,6 +474,7 @@ def update_giornaliera(
         raise HTTPException(status_code=403, detail="Edit privileges required for this daily record")
     if any(field in payload_data for field in validation_fields) and not _can_validate_daily_record(db, current_user, record):
         raise HTTPException(status_code=403, detail="Validation privileges required for this daily record")
+    validate_manual_km(db, record, payload_data.get("km_value"))
     apply_manual_meal_voucher(db, record, payload_data.get("meal_voucher_manual"), current_user.id)
     for field, value in payload_data.items():
         setattr(record, field, value)

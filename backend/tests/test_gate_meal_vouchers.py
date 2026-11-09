@@ -90,7 +90,7 @@ def test_gate_rejects_invalid_voucher_value_before_persistence(value):
 
 def test_omitted_voucher_does_not_clear_an_existing_manual_grant():
     actor = _create_user("meal-gate-km")
-    record_id, _ = _record(actor.id)
+    record_id, _ = _record(actor.id, with_presence=True)
     with TestingSessionLocal() as db:
         record = db.get(PresenzeDailyRecord, record_id)
         apply_gate_daily_record_patch(

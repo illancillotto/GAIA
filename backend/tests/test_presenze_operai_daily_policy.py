@@ -15,6 +15,7 @@ from app.modules.presenze.models import (
 )
 from app.modules.presenze.services.gate_mobile_payloads import presenze_extra_minutes
 from app.modules.presenze.services.operai_daily_policy import (
+    assigned_daily_start,
     effective_extra_values,
     recognized_daily_minutes,
 )
@@ -97,6 +98,38 @@ def test_shift_start_is_attested_by_assignment_not_inferred_from_punches():
     assert result.ordinary_night_minutes == 30
     assert result.extra_minutes == quality.mpe_minutes == 20
     assert quality.missing_minutes == 0
+
+
+@pytest.mark.parametrize("exit_time,ordinary,missing", [(time(13, 3), 420, 0), (time(12), 360, 60)])
+def test_imported_six_to_thirteen_day_overrides_different_generic_calendar(exit_time, ordinary, missing):
+    collaborator, record, punches = _day("OPE0613", ((time(5, 51), exit_time),))
+    record.work_date = date(2026, 10, 14)
+    record.raw_payload_json = {"detail_effective_schedule": None, "detail_error": "timeout"}
+    template = PresenzeScheduleTemplate(id=1, code="OPE0714_1E3SAB", is_active=True)
+    assignment = PresenzeCollaboratorScheduleAssignment(collaborator_id=collaborator.id, template_id=1)
+    rule = PresenzeScheduleRule(start_time=time(7), end_time=time(14), weekday=2,
+                               recurrence_kind="weekly", applies_on_holiday=False)
+    context = ScheduleContext({}, {str(collaborator.id): [assignment]}, {1: template}, {1: [rule]})
+    result = classify_daily_record(collaborator, record, punches, context)
+    assert result.ordinary_minutes == ordinary
+    assert result.recognized_minutes.missing_minutes == missing
+    assert result.recognized_minutes.excluded_early_minutes == 9
+    assert result.extra_minutes == 0
+
+
+@pytest.mark.parametrize("template", [None, "CUSTOM", "OPE0613", "OPE0613_CUSTOM"])
+def test_same_or_unrecognized_template_preserves_attested_assignment(template):
+    collaborator, record, _ = _day("OPE0613")
+    rule = resolve_operai_rule(collaborator, record)
+    assert assigned_daily_start(record, rule, {time(5, 30)}, template) == time(5, 30)
+    assert assigned_daily_start(record, rule, set(), template) is None
+
+
+def test_different_weekday_code_does_not_rewrite_an_individual_saturday_calendar():
+    collaborator, record, _ = _day("OPE0613")
+    record.work_date = date(2026, 10, 17)
+    rule = resolve_operai_rule(collaborator, record)
+    assert assigned_daily_start(record, rule, {time(5, 30)}, "OPE0714_1E3SAB") == time(5, 30)
 
 
 @pytest.mark.parametrize(

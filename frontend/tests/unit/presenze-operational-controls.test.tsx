@@ -7,7 +7,7 @@ import type { PresenzeDailyRecord, PresenzeSyncJob } from "@/types/api";
 const m=vi.hoisted(()=>({token:vi.fn(),create:vi.fn(),config:vi.fn(),credentials:vi.fn(),jobs:vi.fn(),update:vi.fn()}));
 vi.mock("@/lib/auth",()=>({getStoredAccessToken:m.token}));
 vi.mock("@/lib/api",()=>({createPresenzeSyncJob:m.create,getPresenzeAutoSyncConfig:m.config,listPresenzeCredentials:m.credentials,listPresenzeSyncJobs:m.jobs,updatePresenzeDailyRecord:m.update}));
-const day={id:"one",meal_voucher_count:1,meal_voucher_manual:false,meal_voucher_automatic:true,meal_voucher_sources:["automatic"]} as PresenzeDailyRecord;
+const day={id:"one",punches:[{entry_time:"06:00",exit_time:"13:00"}],meal_voucher_count:1,meal_voucher_manual:false,meal_voucher_automatic:true,meal_voucher_sources:["automatic"]} as PresenzeDailyRecord;
 const job=(extra:Partial<PresenzeSyncJob>={}):PresenzeSyncJob=>({id:"job",status:"completed",credential_id:7,period_start:"2026-10-01",period_end:"2026-10-31",records_errors:0,finished_at:"2026-10-01T09:00:00Z",params_json:{},...extra} as PresenzeSyncJob);
 function deferred<T>() {let resolve!:(v:T)=>void;const promise=new Promise<T>(r=>{resolve=r});return {promise,resolve};}
 beforeEach(()=>{vi.resetAllMocks();m.token.mockReturnValue("token");m.config.mockResolvedValue({credential_id:7});m.credentials.mockResolvedValue([{id:7,active:true}]);m.jobs.mockResolvedValue([])});
@@ -26,8 +26,20 @@ describe("meal voucher",()=>{
   rerender(<MealVoucherControl record={day} disabled onSaved={vi.fn()}/>);expect(screen.getByLabelText("Buono pasto manuale")).toBeDisabled();
  });
  it("handles no metadata, session and non-Error failures",async()=>{
-  render(<MealVoucherControl record={{id:"one"} as PresenzeDailyRecord} disabled={false} onSaved={vi.fn()}/>);expect(screen.getByText(/non riconosciuto/)).toHaveTextContent("0");
+  render(<MealVoucherControl record={{id:"one",punches:day.punches} as PresenzeDailyRecord} disabled={false} onSaved={vi.fn()}/>);expect(screen.getByText(/non riconosciuto/)).toHaveTextContent("0");
   m.token.mockReturnValue(null);fireEvent.click(screen.getByLabelText("Buono pasto manuale"));expect(m.update).not.toHaveBeenCalled();m.token.mockReturnValue("token");m.update.mockRejectedValue("failure");fireEvent.click(screen.getByLabelText("Buono pasto manuale"));expect(await screen.findByRole("alert")).toHaveTextContent("Buono pasto non salvato");
+ });
+ it("blocks grants without punches but keeps removal available",async()=>{
+  const {rerender}=render(<MealVoucherControl record={{id:"one"} as PresenzeDailyRecord} disabled={false} onSaved={vi.fn()}/>);
+  expect(screen.getByLabelText("Buono pasto manuale")).toBeDisabled();
+  expect(screen.getByText(/Assenza di timbrature/)).toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText("Buono pasto manuale"));expect(m.update).not.toHaveBeenCalled();
+  m.update.mockResolvedValue({...day,meal_voucher_manual:false});
+  rerender(<MealVoucherControl record={{...day,punches:[],meal_voucher_manual:true}} disabled={false} onSaved={vi.fn()}/>);
+  expect(screen.getByLabelText("Buono pasto manuale")).toBeEnabled();
+  fireEvent.click(screen.getByLabelText("Buono pasto manuale"));await waitFor(()=>expect(m.update).toHaveBeenCalledWith("token","one",{meal_voucher_manual:false}));
+  rerender(<MealVoucherControl record={{...day,punches:[{entry_time:null,exit_time:"13:00"}] as PresenzeDailyRecord["punches"]}} disabled={false} onSaved={vi.fn()}/>);
+  expect(screen.getByLabelText("Buono pasto manuale")).toBeEnabled();
  });
 });
 describe("INAZ",()=>{

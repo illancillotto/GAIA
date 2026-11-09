@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.presenze.models import PresenzeDailyRecord
+from app.modules.presenze.services.manual_presence import require_manual_presence
 from app.modules.presenze.services.meal_voucher_audit import record_manual_meal_voucher_change
 from app.modules.presenze.services.shift_worker_rules import (
     shift_meal_voucher,
@@ -60,6 +61,8 @@ def apply_audited_manual_meal_voucher(
     if enabled is None:
         return
     locked = lock_manual_meal_voucher_record(db, record)
+    if enabled:
+        require_manual_presence(db, locked)
     record_manual_meal_voucher_change(locked, enabled, actor_id, source)
 
 
