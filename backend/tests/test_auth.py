@@ -1,5 +1,5 @@
 from collections.abc import Generator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -322,6 +322,47 @@ def test_login_keeps_four_device_limit_for_non_admin(
     assert "massimo 4 dispositivi attivi" in blocked.json()["detail"]
 
 
+@pytest.mark.parametrize(
+    ("username", "role"),
+    [
+        ("porcu.alessandro", ApplicationUserRole.OPERATOR.value),
+        ("podda.fabrizio", ApplicationUserRole.SUPER_ADMIN.value),
+    ],
+)
+def test_login_named_accounts_allow_ten_devices_and_block_eleventh(
+    monkeypatch: pytest.MonkeyPatch, username: str, role: str
+) -> None:
+    monkeypatch.setattr(settings, "network_vpn_device_enforcement_enabled", True)
+    monkeypatch.setattr(settings, "network_vpn_max_active_devices_per_user", 4)
+    with TestingSessionLocal() as db:
+        db.add(ApplicationUser(
+            username=username,
+            email=f"{username}@example.local",
+            password_hash=hash_password("secret123"),
+            role=role,
+            is_active=True,
+        ))
+        db.commit()
+
+    for index in range(11):
+        response = client.post(
+            "/auth/login",
+            json={"username": username, "password": "secret123", "device_id": f"named-{index}"},
+        )
+        assert response.status_code == (200 if index < 10 else 403)
+    assert "massimo 10 dispositivi attivi" in response.json()["detail"]
+
+    reused = client.post(
+        "/auth/login",
+        json={"username": username, "password": "secret123", "device_id": "named-0"},
+    )
+    assert reused.status_code == 200
+    with TestingSessionLocal() as db:
+        assert db.query(NetworkVpnDevice).count() == 10
+        blocked = db.query(NetworkVpnSession).filter_by(event_type="login_blocked").one()
+        assert blocked.blocked_reason == "max_active_devices:10"
+
+
 def test_login_blocks_revoked_vpn_device() -> None:
     create_user()
     first = client.post(
@@ -537,7 +578,7 @@ def test_password_reset_rejects_expired_token(monkeypatch: pytest.MonkeyPatch) -
 
     db = TestingSessionLocal()
     stored_token = db.query(ApplicationUserPasswordResetToken).one()
-    stored_token.expires_at = datetime(2020, 1, 1, tzinfo=timezone.utc)
+    stored_token.expires_at = datetime(2020, 1, 1, tzinfo=UTC)
     db.add(stored_token)
     db.commit()
     db.close()
@@ -568,7 +609,7 @@ def test_password_reset_rejects_missing_or_user_invalid_token(monkeypatch: pytes
 
 
 def test_auth_internal_datetime_and_redirect_helpers() -> None:
-    aware_value = datetime.now(timezone.utc)
+    aware_value = datetime.now(UTC)
 
     assert auth_routes._as_utc(aware_value) == aware_value
     assert auth_routes._build_frontend_login_redirect().endswith("/login")
@@ -801,8 +842,8 @@ def test_presence_summary_returns_recent_users_only() -> None:
     db.add(
         UserPresence(
             user_id=1,
-            first_seen_at=datetime.now(timezone.utc),
-            last_seen_at=datetime.now(timezone.utc),
+            first_seen_at=datetime.now(UTC),
+            last_seen_at=datetime.now(UTC),
             last_path="/",
             last_route_label="Home",
             last_module_key="home",
@@ -812,8 +853,8 @@ def test_presence_summary_returns_recent_users_only() -> None:
     db.add(
         UserPresence(
             user_id=viewer.id,
-            first_seen_at=datetime.now(timezone.utc),
-            last_seen_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            first_seen_at=datetime.now(UTC),
+            last_seen_at=datetime(2026, 1, 1, tzinfo=UTC),
             last_path="/network",
             last_route_label="Rete",
             last_module_key="rete",
