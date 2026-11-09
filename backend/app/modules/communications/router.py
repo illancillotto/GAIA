@@ -31,6 +31,7 @@ from .schemas import (
     Rendered,
     VersionCommand,
 )
+from .source_preview import router as source_preview_router
 
 MANAGE = "ruolo.tributi.manage_status"
 router = APIRouter(
@@ -38,6 +39,8 @@ router = APIRouter(
     tags=["communications"],
     dependencies=[Depends(require_module("ruolo")), Depends(require_section("ruolo.tributi.view"))],
 )
+
+router.include_router(source_preview_router)
 
 
 def command(db, action):

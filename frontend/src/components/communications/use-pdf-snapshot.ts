@@ -6,11 +6,11 @@ import { renderSnapshot, type RenderSession } from "./pdf-renderer";
 
 export type PdfViewerProps = {
   token: string; messageId: string; version: number; part: Attachment; onRendered: (ok: boolean) => void;
-  canReview: boolean; pixelBudget: number;
+  canReview: boolean; pixelBudget: number; loadContent?: typeof loadSnapshot;
 };
 
 export function usePdfSnapshot(props: PdfViewerProps, host: RefObject<HTMLDivElement>, zoom: number) {
-  const { token, messageId, version, part, onRendered, canReview, pixelBudget } = props;
+  const { token, messageId, version, part, onRendered, canReview, pixelBudget, loadContent = loadSnapshot } = props;
   const [resource, setResource] = useState({ url: "", error: "", loading: true });
   useEffect(() => {
     const abort = new AbortController();
@@ -20,7 +20,7 @@ export function usePdfSnapshot(props: PdfViewerProps, host: RefObject<HTMLDivEle
     async function render() {
       try {
         if (part.mime_type !== "application/pdf") throw new Error("Allegato non visualizzabile come PDF");
-        const { content, reviewId } = await loadSnapshot(token, messageId, part, abort.signal);
+        const { content, reviewId } = await loadContent(token, messageId, part, abort.signal);
         if (session.disposed || !host.current) return;
         blobUrl = URL.createObjectURL(new Blob([content], { type: "application/pdf" }));
         await renderSnapshot(content, part, host.current, { zoom, pixelBudget, total: part.pages }, session);
@@ -35,6 +35,6 @@ export function usePdfSnapshot(props: PdfViewerProps, host: RefObject<HTMLDivEle
     }
     void render();
     return () => { session.disposed = true; abort.abort(); session.task?.cancel(); void session.document?.destroy(); if (blobUrl) URL.revokeObjectURL(blobUrl); };
-  }, [token, messageId, version, part, zoom, onRendered, canReview, pixelBudget, host]);
+  }, [token, messageId, version, part, zoom, onRendered, canReview, pixelBudget, host, loadContent]);
   return { resource, setResource };
 }

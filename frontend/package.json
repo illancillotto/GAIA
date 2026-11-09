@@ -16,6 +16,7 @@
     "typecheck:from-root": "cd .. && frontend/node_modules/.bin/tsc -p frontend/tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@noble/hashes": "2.0.1",
     "@tanstack/react-table": "8.21.3",
     "clsx": "2.1.1",
     "mammoth": "^1.12.0",

@@ -1,4 +1,17 @@
 # GAIA Ruolo — Product Requirements Document v1.0
+### Revisione UX Solleciti — pubblicata il 6 novembre alle 12:48 CET
+
+Implementata la schermata semplificata richiesta: anno e ricerca unica,
+elenco/PDF immediati, stato/account sotto Altri filtri e barra di preparazione
+solo con selezioni. Pulsante PDF disabilitato; nessun cambio automatico di
+scheda dopo la preparazione. Il refresh mantiene aperto il PDF. Storico lotti
+negli strumenti avanzati, senza cambiare API o persistenza. Analisi, limiti e
+verifiche nel [report](SOLLECITI_WORKSPACE_2026-11-06.md). Inclusa anche l’apertura
+del compositore PEC/email con clic sulla riga o Invio/Spazio, senza pulsante
+Componi; permessi e checklist invariati. Rilascio solo frontend autorizzato,
+senza abilitare trasporti o cambiare backend/worker. La sezione sotto descrive
+la prima release del mattino.
+
 
 ### Recupero avvisi 2021 e gestori sovrapposti — 2026-10-21
 

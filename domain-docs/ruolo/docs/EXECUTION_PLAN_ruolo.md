@@ -1,4 +1,17 @@
 # GAIA Ruolo — Execution Plan v1.0
+## Revisione UX successiva al rilascio — pubblicata il 6 novembre
+
+- [x] Analisi del percorso operatore e dei punti di confusione.
+- [x] Disabilitazione del pulsante PDF e rimozione dei campi CF/anno duplicati.
+- [x] Schermata elenco/PDF con filtri secondari, preparazione contestuale e storico tecnico negli strumenti avanzati.
+- [x] Refresh senza smontare il PDF e azzeramento del contesto al cambio sessione.
+- [x] Coverage runtime 100%, 86 test pertinenti, 18 smoke, sei E2E desktop/mobile, lint/typecheck e clean build isolata.
+- [x] Aggiornamento grafo frontend; gate globale documentato FAIL per finding Presenze estranei.
+- [x] Apertura righe PEC/email con clic/Invio/Spazio, senza Componi; 143 test e coverage 100% sui sei runtime.
+- [x] Rilascio frontend autorizzato alle 12:48 CET, distinto dalla prima release del mattino; controlli HTTP, probe autenticato e dieci E2E live sintetici PASS.
+
+Scopo e proposta nel [report](SOLLECITI_WORKSPACE_2026-11-06.md).
+
 
 ## Consolidamento avvisi 2021 — 2026-10-21
 

@@ -90,3 +90,9 @@ fisiche incluse. Provenienza/versione/stato separano PEC, email e sconosciuti;
 i trigger partecipano al fence della revisione documentale. Non è una seconda
 anagrafica né una prova di validità giuridica del recapito. La migrazione non
 classifica automaticamente dati legacy. Vedi CONTACT_CLASSIFICATION_2026-11-04.md.
+
+## Anteprima immediata — 4 novembre 2026
+
+Il GET sorgente autenticato è read-only e separato dalla creazione/approvazione della bozza. SourcePreview usa il viewer esistente con loader del contenuto e senza attestazioni; SourcePreviewActions conserva l’hash nel modello di composizione.
+
+Dettagli: [SOURCE_PREVIEW_2026-11-04](SOURCE_PREVIEW_2026-11-04.md).

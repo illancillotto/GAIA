@@ -1,4 +1,10 @@
 # Avanzamento Communications
+## 2026-11-06 — Apertura avviso dalla riga
+
+- [x] Clic/Invio/Spazio sostituiscono Componi/Apri comunicazione.
+- [x] Permessi, checkbox, revisione, errore e caricamento verificati: 15 test specifici PASS, coverage statement/branch 100%.
+- [x] Ratchet del runtime PASS, senza nuove deroghe; regressione combinata 143 test PASS.
+- Stato del rilascio frontend e verifiche nel [report Ruolo](../../domain-docs/ruolo/docs/SOLLECITI_WORKSPACE_2026-11-06.md); nessun invio reale autorizzato dalla revisione.
 
 - [x] Audit e contratti del checkout verificato.
 - [x] Modello dati, migrazione e API.

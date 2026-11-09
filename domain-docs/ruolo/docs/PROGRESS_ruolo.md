@@ -1,4 +1,28 @@
 # GAIA Ruolo — Progress Tracking v1.0
+## Revisione UX dopo il rilascio — pubblicata, 2026-11-06
+
+Su conferma esplicita realizzata la schermata semplificata: anno e ricerca
+unica, elenco/PDF subito sotto, filtri aggiuntivi richiudibili, barra di
+preparazione solo con selezioni. Il pulsante PDF è disabilitato; la preparazione
+resta nella vista avvisi e il refresh non smonta il PDF. Dati Poste nel dettaglio
+e storico tecnico negli strumenti avanzati. Contratti, permessi e dati invariati.
+Il [report](SOLLECITI_WORKSPACE_2026-11-06.md) distingue la release pubblicata da
+questa revisione, poi pubblicata su autorizzazione alle 12:48 CET. Solo
+frontend, configurazione conservata e 52 altri container preservati; nessuna
+migrazione, modifica tributaria, invio reale o commit. Inclusa apertura righe
+PEC/email con clic o Invio/Spazio senza pulsante Componi: 143 test PASS,
+coverage 100% statement/branch sui sei runtime; dieci E2E canary e dieci
+sulla release pubblicata PASS, tutti con API simulate.
+Controlli live HTTP e storico autenticato in sola lettura PASS. Le verifiche
+seguenti descrivono la fase locale precedente all’estensione sulle righe.
+86 test PASS e coverage 100% statement/branch sui cinque runtime; 18 smoke,
+typecheck, lint e clean build isolata PASS; sei E2E desktop/mobile PASS,
+incluso rendering PDF e controllo della sovrapposizione ricerca/pulsante.
+Ratchet contestuale scope PASS, globale FAIL per 17
+finding Presenze estranei; baseline invariata. Rimosso il componente gruppi,
+mantenuti gli stati in un modulo dedicato. Analisi e documentazione riallineate
+al codice; verifica browser/build e aggiornamento Graphify riportati nel report.
+
 
 ## Pool caricamenti Poste per account — 2026-11-03
 

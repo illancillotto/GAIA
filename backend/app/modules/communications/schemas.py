@@ -80,6 +80,7 @@ class TemplateInput(Command):
 
 class MessageCreate(Command):
     source_entity_id: UUID
+    expected_source_sha256: Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")] | None = None
     channel: Channel
     account_id: UUID | None = None
     recipient: str

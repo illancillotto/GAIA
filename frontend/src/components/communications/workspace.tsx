@@ -30,7 +30,7 @@ function ChannelWorkspace({ token, channel, canEdit }: { token: string; channel:
     {workspace.status.loading && <p role="status" className="xl:col-span-2">Caricamento candidati 2021...</p>}
     <CandidateTable workspace={workspace} channel={channel} canEdit={canEdit} />
     <aside aria-label="Composizione avviso" className="min-w-0 rounded-2xl border border-[#d8dfd3] bg-[#f7f9f5] p-3 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-6rem)] xl:overflow-y-auto">
-      {workspace.message ? <CommunicationComposer key={`${workspace.message.id}:${workspace.message.version}`} token={token} message={workspace.message} accounts={workspace.data.accounts} canEdit={canEdit} onChange={workspace.setMessage} /> : <NewCommunication workspace={workspace} channel={channel} canEdit={canEdit} />}
+      {workspace.message ? <CommunicationComposer key={`${workspace.message.id}:${workspace.message.version}`} token={token} message={workspace.message} accounts={workspace.data.accounts} canEdit={canEdit} onChange={workspace.setMessage} /> : <NewCommunication key={workspace.selected?.id} token={token} workspace={workspace} channel={channel} canEdit={canEdit} />}
     </aside>
   </div>;
 }

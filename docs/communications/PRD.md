@@ -14,10 +14,10 @@ esclusivamente 2021. I criteri software non certificano atti o recapiti.
 
 Solleciti offre Generati, Posta Online, PEC ed Email. Nessuna spedizione HTTP.
 La pagina PEC/email divide lo spazio desktop in due colonne uguali: elenco
-a sinistra e compositore persistente a destra. Componi carica i campi dell’avviso
+a sinistra e compositore persistente a destra. Il clic sulla riga carica i campi dell’avviso
 selezionato; nella sidebar i campi precedono il PDF e la checklist. Su mobile
-i pannelli sono verticali. Il PDF compare dopo la creazione della bozza e del
-suo snapshot immutabile. La revisione UI del 4 novembre è pubblicata sul CED dopo la risoluzione del
+i pannelli sono verticali. Il PDF sorgente compare subito alla selezione; la creazione della bozza ne
+verifica l’hash e crea lo snapshot immutabile. La revisione UI del 4 novembre è pubblicata sul CED dopo la risoluzione del
 quality gate; verifiche e stato in SIDEBAR_RELEASE_2026-11-04.md.
 Ogni allegato deve essere renderizzato integralmente e controllato esplicitamente
 con otto conferme. La modifica incrementa la versione e invalida l'approvazione.
@@ -67,3 +67,20 @@ più indirizzi attivi del medesimo canale richiedono revisione. Non inferire PEC
 dal solo dominio. L'API amministrativa versionata e il resolver sono implementati
 nel checkout, con migrazione ancora da rilasciare; UI Utenze e automatismi di sync
 non inclusi. Stato e verifica 2021: CONTACT_CLASSIFICATION_2026-11-04.md.
+
+## Anteprima immediata — 4 novembre 2026
+
+Il clic sulla riga e la checkbox devono mostrare subito il PDF reale sotto i campi, senza creare una bozza o richiedere un account. Tutte le pagine devono essere renderizzate prima di creare lo snapshot; hash sorgente verificato server-side.
+
+Dettagli: [SOURCE_PREVIEW_2026-11-04](SOURCE_PREVIEW_2026-11-04.md).
+
+## Revisione righe PEC/email — 2026-11-06
+
+Il pulsante Componi è sostituito dall’attivazione della riga, con clic o
+Invio/Spazio da tastiera. Si apre lo storico quando esiste una comunicazione,
+altrimenti il compositore con PDF. Permessi invariati: sola lettura ammessa
+solo per lo storico, nuova bozza riservata agli operatori autorizzati.
+La checkbox e Nuova revisione non propagano il clic alla riga; durante un
+caricamento i comandi di apertura sono bloccati. Nessuna creazione o spedizione
+automaticamente provocata dal clic. Verifiche e rilascio nel
+[report Ruolo](../../domain-docs/ruolo/docs/SOLLECITI_WORKSPACE_2026-11-06.md).

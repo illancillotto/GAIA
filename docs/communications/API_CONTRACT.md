@@ -58,3 +58,9 @@ Nessun comando trasmette messaggi. Endpoint non ancora rilasciati.
 
 Contratto completo e compatibilità dei campi legacy:
 [CONTACT_CLASSIFICATION_2026-11-04.md](CONTACT_CLASSIFICATION_2026-11-04.md).
+
+## Anteprima immediata — 4 novembre 2026
+
+GET /communications/ruolo/candidates/{identity}/preview restituisce PDF private/no-store, X-Content-SHA256 e X-PDF-Pages. Richiede ruolo.tributi.view e modulo Ruolo. MessageCreate accetta expected_source_sha256 opzionale (64 hex): mismatch 409 prima dello snapshot.
+
+Dettagli: [SOURCE_PREVIEW_2026-11-04](SOURCE_PREVIEW_2026-11-04.md).

@@ -1,4 +1,10 @@
 # Changelog
+## 2026-11-06 — Apertura del compositore dalla riga PEC/email
+
+- Rimossi Componi/Apri comunicazione e la relativa colonna azioni; clic sulla riga o Invio/Spazio apre lo stesso workflow.
+- Checkbox e Nuova revisione restano indipendenti; permessi, blocco durante caricamento e anteprima PDF preservati.
+- Tre test aggiunti per tastiera/propagazione, lettore con storico e caricamento fallito; quindici test della workspace PASS, coverage del runtime 100%.
+- Nessun cambiamento a API, DB, worker o dipendenze. Rilascio frontend autorizzato insieme alla schermata Solleciti semplificata; evidenze nel report Ruolo del 6 novembre.
 
 ## 2026-11-04 — Presenza recapito iniziale per canale
 

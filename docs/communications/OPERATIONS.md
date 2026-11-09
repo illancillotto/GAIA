@@ -32,7 +32,9 @@ Il test SMTP/IMAP non invia messaggi; la connessione reale richiede autorizzazio
    su Presente: PEC mostra inizialmente gli avvisi con PEC, Email quelli con
    email. Per consultare anche gli altri avvisi scegliere Tutti nel filtro
    corrispondente. Filtrare e paginare candidati 2021.
-2. Premere Componi: il pannello destro mostra l’avviso selezionato. Verificare
+2. Cliccare la riga dell’avviso (oppure raggiungerla con Tab e premere Invio
+   o Spazio): il pannello destro mostra l’avviso e il PDF. Se una comunicazione
+   esiste già, si apre il suo storico. Il pulsante Componi non è più presente. Verificare
    recapito, account e template/testo, quindi creare bozza e snapshot.
 3. Nel pannello destro, sotto i campi, esaminare ogni pagina di tutti i PDF: zoom/fit/navigazione/fullscreen
    e nuova scheda autenticata. Verificare nome, versione, dimensione e hash.
@@ -96,6 +98,12 @@ del piano validato per evitare che il vecchio campo venga usato come fallback.
 Nessun trasporto di prova è necessario alla classificazione. L'indirizzo con sintassi
 invalida va corretto o rimosso solo dopo verifica, non attivato dal piano.
 Guida e report: CONTACT_CLASSIFICATION_2026-11-04.md.
+
+## Anteprima immediata — 4 novembre 2026
+
+Il PDF si carica subito cliccando la riga o selezionando la checkbox, anche senza account. Per un errore usare Riprova anteprima. Se la creazione restituisce PDF modificato, riaprire l’avviso e ricontrollare il documento. La consultazione non sostituisce la checklist individuale.
+
+Dettagli: [SOURCE_PREVIEW_2026-11-04](SOURCE_PREVIEW_2026-11-04.md).
 
 ## Registro recapiti operativo dal 05/11/2026
 

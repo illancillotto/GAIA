@@ -93,3 +93,14 @@ it("does not enable send if rendering acknowledgement completes after unmount", 
   await act(async () => done({}));
   expect(settings.onRendered).not.toHaveBeenCalledWith(true);
 });
+
+it("renders supplied preview bytes without downloading or acknowledging a draft", async () => {
+  const data = new ArrayBuffer(4);
+  const loadContent = vi.fn(async () => ({ content: data.slice(0), reviewId: "" }));
+  render(<CommunicationPdfViewer {...props()} canReview={false} loadContent={loadContent} />);
+  await screen.findByRole("link");
+  expect(api.loadSnapshot).not.toHaveBeenCalled(); expect(api.communications).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByLabelText("Aumenta zoom"));
+  await waitFor(() => expect(loadContent).toHaveBeenCalledTimes(2));
+  expect(api.render.mock.calls[0][0]).not.toBe(api.render.mock.calls[1][0]);
+});

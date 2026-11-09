@@ -25,6 +25,7 @@ from .policy import (
     sha256,
     verify_snapshots,
 )
+from .source_preview import verify_preview
 
 
 def _composition(db, payload, source):
@@ -43,7 +44,7 @@ def create(db, payload, actor_id):
     if payload.channel == "email" and payload.purpose != "courtesy":
         raise Conflict("Email ordinaria abilitata esclusivamente per cortesia")
     source, document, content, fingerprint = ruolo_source.inspect(db, payload.source_entity_id)
-    pages = pdf_pages(content)
+    pages = verify_preview(content, payload.expected_source_sha256)
     account = registry.route_account(db, payload.channel, actor_id, payload.account_id)
     subject, body = _composition(db, payload, source)
     value = CommunicationMessage(

@@ -1,0 +1,45 @@
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { SourcePreview } from "@/components/communications/source-preview";
+import { part } from "./fixtures";
+const loader = vi.hoisted(() => vi.fn());
+const viewer = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/communication-source-preview", () => ({ loadSourcePreview: loader }));
+vi.mock("@/components/communications/pdf-viewer", () => ({ CommunicationPdfViewer: (props: { onRendered: (ok: boolean) => void }) => { viewer(props); return <><button onClick={() => props.onRendered(true)}>Rendered</button><button onClick={() => props.onRendered(false)}>Failed</button></>; } }));
+beforeEach(() => { vi.resetAllMocks(); loader.mockResolvedValue({ part, content: new ArrayBuffer(4) }); });
+afterEach(cleanup);
+it("loads immediately, enables draft only after full rendering, and copies bytes for each render without review", async () => {
+  const ready = vi.fn();
+  const view = render(<SourcePreview token="token" sourceId="source" onReady={ready} />);
+  expect(ready).toHaveBeenLastCalledWith("");
+  expect(screen.getByRole("status")).toHaveTextContent("Caricamento PDF");
+  fireEvent.click(await screen.findByText("Rendered"));
+  expect(ready).toHaveBeenLastCalledWith(part.sha256);
+  const props = viewer.mock.lastCall![0];
+  expect(props.canReview).toBe(false);
+  const first = await props.loadContent(); const second = await props.loadContent();
+  expect(first.content).not.toBe(second.content);
+  expect(first.content.byteLength).toBe(4); expect(first.reviewId).toBe("");
+  fireEvent.click(screen.getByText("Failed")); expect(ready).toHaveBeenLastCalledWith("");
+  view.unmount(); expect(loader.mock.lastCall![2].aborted).toBe(true);
+});
+it.each([new Error("Denied"), "failure"])("fails closed with a retry after %s", async (error) => {
+  loader.mockRejectedValueOnce(error);
+  render(<SourcePreview token="token" sourceId="source" onReady={vi.fn()} />);
+  expect(await screen.findByRole("alert")).toHaveTextContent(error instanceof Error ? error.message : "Anteprima PDF non disponibile");
+  fireEvent.click(screen.getByText("Riprova anteprima"));
+  await screen.findByText("Rendered");
+  expect(loader).toHaveBeenCalledTimes(2);
+});
+it.each([true, false])("ignores obsolete load completion after selection changes (success=%s)", async (success) => {
+  let done!: (value: unknown) => void, fail!: (reason: unknown) => void;
+  loader.mockReturnValueOnce(new Promise((resolve, reject) => { done = resolve; fail = reject; }));
+  const ready = vi.fn();
+  const view = render(<SourcePreview token="token" sourceId="old" onReady={ready} />);
+  view.rerender(<SourcePreview token="token" sourceId="new" onReady={ready} />);
+  await screen.findByText("Rendered");
+  await act(async () => { if (success) done({ part: { ...part, sha256: "obsolete" }, content: new ArrayBuffer(4) }); else fail(new Error("obsolete")); });
+  fireEvent.click(screen.getByText("Rendered"));
+  expect(ready).toHaveBeenLastCalledWith(part.sha256);
+  await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+});

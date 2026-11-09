@@ -37,7 +37,7 @@ function useCandidates(token: string, channel: Channel, canEdit: boolean) {
 
 function useCommunicationSelection(token: string, channel: Channel, reload: () => void) {
   const [selected, setSelected] = useState<Candidate | null>(null);
-  const [compose, setCompose] = useState({ recipient: "", account_id: "", template_id: "", subject: "", body: "" });
+  const [compose, setCompose] = useState({ recipient: "", account_id: "", template_id: "", subject: "", body: "", expected_source_sha256: "" });
   const [message, setMessage] = useState<Communication | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -46,14 +46,14 @@ function useCommunicationSelection(token: string, channel: Channel, reload: () =
     setSelected(null); setMessage(null);
     try {
       if (candidate.message_id && !fresh) setMessage(await communications<Communication>(token, `/messages/${candidate.message_id}`));
-      else { setSelected(candidate); setCompose({ recipient: candidate[channel] || "", account_id: "", template_id: "", subject: "", body: "" }); }
+      else { setSelected(candidate); setCompose({ recipient: candidate[channel] || "", account_id: "", template_id: "", subject: "", body: "", expected_source_sha256: "" }); }
     } catch (failure) { setError(errorText(failure)); } finally { setBusy(false); }
   }
   async function create() {
     if (!selected) return;
     setBusy(true); setError("");
     try {
-      setMessage(await communications<Communication>(token, "/messages", creationPayload(selected, channel, compose)));
+      setMessage(await communications<Communication>(token, "/messages", { ...creationPayload(selected, channel, compose), expected_source_sha256: compose.expected_source_sha256 }));
       setSelected(null); reload();
     } catch (failure) { setError(errorText(failure)); }
     setBusy(false);

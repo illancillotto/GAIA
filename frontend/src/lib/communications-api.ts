@@ -1,3 +1,5 @@
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex } from "@noble/hashes/utils.js";
 import { getApiBaseUrl, request } from "@/lib/api";
 import type { Attachment } from "@/types/communications";
 
@@ -17,7 +19,7 @@ export async function loadSnapshot(token: string, messageId: string, part: Attac
   });
   if (!response.ok) throw new Error("PDF non disponibile o accesso negato");
   const content = await response.arrayBuffer();
-  const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", content)), (value) => value.toString(16).padStart(2, "0")).join("");
+  const hash = bytesToHex(sha256(new Uint8Array(content)));
   const reviewId = response.headers.get("X-Communication-Review");
   if (!reviewId || hash !== part.sha256 || content.byteLength !== part.size || content.byteLength > 32 * 1024 * 1024) throw new Error("Integrità dello snapshot non verificata");
   return { content, reviewId };

@@ -13,9 +13,14 @@ it("uses authenticated commands, default GET and explicit PATCH without cached P
   expect(request.mock.lastCall?.[1].method).toBe("POST");
   await communications("token", "/messages/id", {}, "PATCH");
   expect(request.mock.lastCall?.[1].method).toBe("PATCH");
+  await communications("token", "/templates/id", { confirmed: true }, "DELETE");
+  expect(request).toHaveBeenLastCalledWith("/communications/templates/id", {
+    method: "DELETE", headers: { Authorization: "Bearer token", "Content-Type": "application/json" },
+    body: JSON.stringify({ confirmed: true }), cache: "no-store",
+  });
 });
 it("checks SHA256, size, review proof and authentication before returning PDF bytes", async () => {
-  vi.stubGlobal("crypto", webcrypto);
+  vi.stubGlobal("crypto", undefined);
   const bytes = new Uint8Array([1, 2, 3, 4]);
   const hash = Buffer.from(await webcrypto.subtle.digest("SHA-256", bytes)).toString("hex");
   const fetcher = vi.fn().mockResolvedValue(new Response(bytes, { headers: { "X-Communication-Review": "proof" } }));

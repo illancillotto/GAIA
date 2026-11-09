@@ -12,7 +12,7 @@ for (const channel of ["pec", "email"]) for (const width of [1440, 390]) {
     page.on("pageerror", (error) => errors.push(error.message));
     const attachment = { id: "pdf", filename: "Avviso sintetico.pdf", mime_type: "application/pdf", size: pdf.length, sha256, pages: 3, version: 1 };
     const message = { id: "message", notice_number: "1/2021", account_id: "account", channel, sender: "sender@example.org", recipient: "recipient@example.org", subject: "Avviso sintetico", body: "Testo sintetico", state: "draft", version: 1, attachments: [attachment] };
-    let rendered = 0, dispatched = 0;
+    let rendered = 0, dispatched = 0, drafts = 0;
     await page.route("**/api/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
       const method = route.request().method();
@@ -25,10 +25,10 @@ for (const channel of ["pec", "email"]) for (const width of [1440, 390]) {
         expect(query.get(channel === "pec" ? "has_email" : "has_pec")).toBeNull();
         data = { items: [{ id: "source", batch_title: "Sintetico", notice_number: "1/2021", display_name: "Contribuente di prova", year: 2021, amount: "10.00", pec: message.recipient, email: message.recipient, document_state: "generated", payment_state: "unpaid", notification_state: "nessuna_evidenza" }], total: 1 };
       } else if (path.endsWith("/accounts")) data = [{ id: "account", name: "Casella sintetica", provider: "synthetic", channel, sender: message.sender, paused: false }];
-      else if (path.endsWith("/messages") && method === "POST") data = message;
+      else if (path.endsWith("/messages") && method === "POST") { expect(route.request().postDataJSON().expected_source_sha256).toBe(sha256); drafts++; data = message; }
       else if (path.endsWith("/messages/message")) data = message;
       else if (path.endsWith("/preview")) {
-        await route.fulfill({ contentType: "application/pdf", body: pdf, headers: { "X-Communication-Review": "synthetic-review", "X-Content-SHA256": sha256 } }); return;
+        await route.fulfill({ contentType: "application/pdf", body: pdf, headers: { "X-Communication-Review": "synthetic-review", "X-Content-SHA256": sha256, "X-PDF-Pages": "3" } }); return;
       } else if (path.endsWith("/rendered")) {
         const payload = route.request().postDataJSON();
         expect(payload.pages).toBe(3); expect(payload.sha256).toBe(sha256); rendered++; data = { recorded: true };
@@ -43,8 +43,20 @@ for (const channel of ["pec", "email"]) for (const width of [1440, 390]) {
     await page.goto("/ruolo/tributi/solleciti/" + channel + "?embedded=1");
     await expectSidebarLayout(page, width);
     await expect(page.getByRole("combobox", { name: channel === "pec" ? "Presenza PEC" : "Presenza email", exact: true })).toHaveValue("true");
-    await page.getByRole("button", { name: "Componi", exact: true }).click();
+    await page.getByRole("checkbox", { name: "Seleziona 1/2021" }).check();
+    await expect(page.locator("canvas[data-page]")).toHaveCount(3);
+    await expect(page.getByRole("button", { name: "Crea bozza e snapshot PDF" })).toBeEnabled();
+    expect(drafts).toBe(0); expect(rendered).toBe(0);
+    await page.getByRole("checkbox", { name: "Seleziona 1/2021" }).uncheck();
+    await expect(page.locator("canvas[data-page]")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Componi", exact: true })).toHaveCount(0);
+    const noticeRow = page.getByRole("row", { name: "Apri avviso 1/2021" });
+    if (width >= 1280) await noticeRow.press("Enter");
+    else await noticeRow.click();
     await expect(page.getByRole("complementary").getByLabel("Recapito verificato")).toHaveValue(message.recipient);
+    await expect(page.locator("canvas[data-page]")).toHaveCount(3);
+    await expect(page.getByRole("link", { name: "Apri PDF in nuova scheda" })).toHaveAttribute("href", /^blob:/);
+    expect(drafts).toBe(0); expect(rendered).toBe(0);
     await page.getByRole("button", { name: "Crea bozza e snapshot PDF" }).click();
     await expect(page.getByRole("button", { name: channel === "pec" ? "Invia PEC" : "Invia Email", exact: true })).toBeDisabled();
     await expect(page.locator("canvas[data-page]")).toHaveCount(3);
@@ -74,7 +86,7 @@ for (const channel of ["pec", "email"]) for (const width of [1440, 390]) {
 async function expectSidebarLayout(page: Page, width: number) {
   const list = page.getByRole("region", { name: "Elenco avvisi" });
   const panel = page.getByRole("complementary", { name: "Composizione avviso" });
-  await expect(list.getByRole("button", { name: "Componi", exact: true })).toBeVisible();
+  await expect(list.getByRole("row", { name: "Apri avviso 1/2021" })).toBeVisible();
   const a = (await list.boundingBox())!;
   const b = (await panel.boundingBox())!;
   if (width >= 1280) {
