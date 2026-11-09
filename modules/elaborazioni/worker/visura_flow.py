@@ -56,6 +56,19 @@ class VisuraFlowCallbacks:
         if self.update_remote_state is not None:
             self.update_remote_state(remote_id, remote_url, state)
 
+    def begin_submission(self, browser: BrowserSession) -> None:
+        begin = getattr(browser, "begin_remote_submission", None)
+        if callable(begin):
+            begin(self.update_remote_state)
+
+    async def prepare_submission(self, browser: BrowserSession) -> str | None:
+        """Arm persistence only when the current form is about to be submitted."""
+        prepare = getattr(browser, "prepare_captcha_or_download", None)
+        if not callable(prepare):
+            return None
+        self.begin_submission(browser)
+        return await prepare()
+
     def correlation_baseline(self, keys: list[str]) -> None:
         if self.update_correlation_baseline is not None:
             self.update_correlation_baseline(keys)
@@ -72,7 +85,7 @@ def _summarize_captcha_failure(
 ) -> str:
     """Riassume perché la catena CAPTCHA non ha prodotto una visura.
 
-    Raggruppa i motivi identici (``motivo ×N``) e segnala quali provider non
+    Raggruppa i motivi identici (``motivo xN``) e segnala quali provider non
     erano configurati e che il fallback manuale è disattivato.
     """
     parts: list[str] = []
@@ -80,7 +93,7 @@ def _summarize_captcha_failure(
         counts: dict[str, int] = {}
         for note in notes:
             counts[note] = counts.get(note, 0) + 1
-        parts.extend(f"{note} ×{count}" if count > 1 else note for note, count in counts.items())
+        parts.extend(f"{note} \N{MULTIPLICATION SIGN}{count}" if count > 1 else note for note, count in counts.items())
     if not llm_enabled and not external_enabled:
         parts.append("nessun solver CAPTCHA automatico configurato")
     elif not external_enabled:
@@ -198,9 +211,7 @@ async def _send_captcha(
     submission: CaptchaSubmission,
     callbacks: VisuraFlowCallbacks,
 ) -> bool:
-    begin_submission = getattr(browser, "begin_remote_submission", None)
-    if callable(begin_submission):
-        begin_submission(callbacks.update_remote_state)
+    callbacks.begin_submission(browser)
     return await browser.submit_captcha(submission.text or "")
 
 
@@ -257,11 +268,8 @@ async def _download_if_ready(
     callbacks: VisuraFlowCallbacks,
     mode_label: str,
 ) -> VisuraFlowResult | None:
-    prepare = getattr(browser, "prepare_captcha_or_download", None)
-    if not callable(prepare):
-        return None
     try:
-        next_step = await prepare()
+        next_step = await callbacks.prepare_submission(browser)
     except DocumentNotYetProducedError as exc:
         return await _poll_and_download(
             browser,

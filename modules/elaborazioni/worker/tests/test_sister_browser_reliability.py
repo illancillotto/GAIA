@@ -52,6 +52,11 @@ class _Locator:
     async def count(self) -> int:
         return self._count
 
+    async def evaluate_all(self, _script: str):
+        if self.error is not None:
+            raise self.error
+        return [self.href] if self.href else []
+
     async def is_visible(self) -> bool:
         return self._count > 0
 
@@ -305,18 +310,18 @@ def test_document_not_yet_produced_correlates_relative_requests_link() -> None:
     )
 
     error = asyncio.run(
-        document_not_yet_produced_error(page, state, "https://sister3.agenziaentrate.gov.it", "https://requests")
+        document_not_yet_produced_error(page, state, "https://sister3.agenziaentrate.gov.it/Servizi/ConsultazioneRichieste.do")
     )
 
     assert error is not None
     assert error.remote_id == "REQ-7"
     assert error.richieste_url.endswith("idRichiesta=REQ-7")
-    assert calls == [("REQ-7", "https://requests", "submitted")]
+    assert calls == [("REQ-7", error.richieste_url, "submitted")]
 
 
 def test_document_not_yet_produced_handles_absolute_missing_and_broken_links() -> None:
     normal = asyncio.run(
-        document_not_yet_produced_error(_Page(body="Pagina normale"), SisterSessionState(), "https://base", "requests")
+        document_not_yet_produced_error(_Page(body="Pagina normale"), SisterSessionState(), "requests")
     )
     assert normal is None
 
@@ -324,10 +329,9 @@ def test_document_not_yet_produced_handles_absolute_missing_and_broken_links() -
         document_not_yet_produced_error(
             _Page(
                 body="NON È STATO ANCORA PRODOTTO",
-                href="https://sister/ConsultazioneRichieste.do?idRich=R-2",
+                href="https://sister3.agenziaentrate.gov.it/Servizi/ConsultazioneRichieste.do?idRich=R-2",
             ),
             SisterSessionState(),
-            "https://base",
             "requests",
         )
     )
@@ -337,26 +341,23 @@ def test_document_not_yet_produced_handles_absolute_missing_and_broken_links() -
         document_not_yet_produced_error(
             _Page(body="NON E' STATO ANCORA PRODOTTO"),
             SisterSessionState(),
-            "https://base",
             "requests",
         )
     )
-    assert no_link is not None and no_link.richieste_url is None
+    assert no_link is not None and no_link.richieste_url == "requests"
 
     broken = asyncio.run(
         document_not_yet_produced_error(
             _Page(
-                url="https://sister/CheckRichiesta.do?requestId=R-3",
+                url="https://sister3.agenziaentrate.gov.it/Visure/CheckRichiesta.do?requestId=R-3",
                 body_error=RuntimeError("body"),
-                link_error=RuntimeError("link"),
             ),
             SisterSessionState(),
-            "https://base",
             "requests",
         )
     )
     assert broken is not None and broken.remote_id == "R-3"
-    assert broken.richieste_url is None
+    assert broken.richieste_url == "requests"
 
 
 @pytest.mark.parametrize(

@@ -18,6 +18,7 @@ from sister_exceptions import (
     SisterServerError,
 )
 from sister_request_rows import SisterRequestCorrelation, extract_remote_id
+from sister_submission_identity import capture_submission_identity, observed_requests_url
 
 logger = logging.getLogger(__name__)
 UTC = timezone.utc  # noqa: UP017 - Production worker uses Python 3.10.
@@ -165,8 +166,8 @@ async def _is_non_blocking_init_portale_error(page, status: int, response_url: s
 async def document_not_yet_produced_error(
     page,
     state: SisterSessionState,
-    base_url: str,
     requests_url: str,
+    emit=None,
 ) -> DocumentNotYetProducedError | None:
     body_text = ""
     with contextlib.suppress(Exception):
@@ -175,13 +176,8 @@ async def document_not_yet_produced_error(
     if not _is_pending_document_page(page.url, upper):
         return None
 
-    remote_requests_url: str | None = None
-    with contextlib.suppress(Exception):
-        href = await page.locator("a[href*='ConsultazioneRichieste']").first.get_attribute("href", timeout=2000)
-        if href:
-            remote_requests_url = href if href.startswith("http") else base_url + href
-    remote_id = extract_remote_id(tuple(value for value in (page.url, remote_requests_url or "") if value))
-    state.mark_submitted(remote_id, requests_url)
+    remote_requests_url = await observed_requests_url(page, requests_url, state.convention_id)
+    remote_id = await capture_submission_identity(page, state, remote_requests_url, emit)
     logger.info(
         "Documento SISTER non ancora prodotto, richieste_url=%s remote_id=%s",
         remote_requests_url,

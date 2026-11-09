@@ -1,11 +1,8 @@
-import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from browser_session import BrowserSession
+from browser_session import BrowserSession, BrowserSessionConfig
 from sister_browser_reliability import SisterSessionState
 from sister_exceptions import (
     SisterConventionSelectionError,
@@ -44,6 +41,9 @@ class FakeLocator:
 
     async def count(self) -> int:
         return self._count
+
+    async def evaluate_all(self, _script: str):
+        return []
 
     async def is_visible(self) -> bool:
         return self.visible
@@ -594,7 +594,7 @@ def test_response_event_persists_correlated_submit() -> None:
     assert states == [
         (
             "REMOTE-7",
-            "https://sister3.agenziaentrate.gov.it/Visure/ConsultazioneRichieste.do?metodo=lista&numConv=1050380&apertura=T",
+            "https://sister3.agenziaentrate.gov.it/Servizi/ConsultazioneRichieste.do?metodo=lista&numConv=1050380&apertura=T",
             "submitted",
         )
     ]
@@ -727,9 +727,9 @@ def test_polling_downloads_only_the_correlated_ready_row(monkeypatch: pytest.Mon
 
     import browser_session as browser_session_module
 
-    session = BrowserSession.__new__(BrowserSession)
+    session = BrowserSession(BrowserSessionConfig())
     session._page = FakePage(url="https://sister/richieste", body="Espletate 4")
-    session.config = type("Config", (), {"debug_artifacts_path": None})()
+    session._page.locators["input[name='radioCount']"] = FakeLocator()
     row = SisterRemoteRequestRow(2, "REMOTE-1", "REMOTE-1", "ready", "Espletata", (), "/download", None)
     session._find_correlated_request_row = lambda: _async_value(row)
     session._download_correlated_row = lambda selected, destination: _async_value(17 if selected is row else 0)
@@ -750,9 +750,9 @@ def test_polling_ignores_global_ready_count_without_correlated_row(
 
     import browser_session as browser_session_module
 
-    session = BrowserSession.__new__(BrowserSession)
+    session = BrowserSession(BrowserSessionConfig())
     session._page = FakePage(url="https://sister/richieste", body="Espletate 3")
-    session.config = type("Config", (), {"debug_artifacts_path": None})()
+    session._page.locators["input[name='radioCount']"] = FakeLocator()
     session._find_correlated_request_row = lambda: _async_value(None)
     session._find_correlated_row_in_tab = lambda _tab: _async_value(None)
     session._raise_if_server_error = _noop_trace
@@ -804,7 +804,7 @@ class _DownloadPage(FakePage):
 def test_download_pdf_validates_and_atomically_replaces_destination(tmp_path: Path) -> None:
     import asyncio
 
-    session = BrowserSession.__new__(BrowserSession)
+    session = BrowserSession(BrowserSessionConfig())
     session._page = _DownloadPage(b"%PDF-1.4\nvalid")
     session.selectors = type("Selectors", (), {"save_button_selector": "#save"})()
     destination = tmp_path / "visura.pdf"
@@ -820,7 +820,7 @@ def test_download_pdf_validates_and_atomically_replaces_destination(tmp_path: Pa
 def test_download_pdf_rejects_non_pdf_and_removes_temporary_file(tmp_path: Path) -> None:
     import asyncio
 
-    session = BrowserSession.__new__(BrowserSession)
+    session = BrowserSession(BrowserSessionConfig())
     session._page = _DownloadPage(b"pagina HTML di errore")
     session.selectors = type("Selectors", (), {"save_button_selector": "#save"})()
     destination = tmp_path / "visura.pdf"

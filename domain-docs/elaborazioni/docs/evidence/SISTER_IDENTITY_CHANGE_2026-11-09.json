@@ -1,0 +1,355 @@
+{
+  "change_id": "sister_identity_v1",
+  "status": "deployed_healthy_pending_comparison",
+  "deployed": true,
+  "activation_utc": "2026-11-09T10:59:34.854239641Z",
+  "first_identity_event_utc": null,
+  "rollback_utc": null,
+  "production_image_before": "sha256:097e827af8a1a0ae45d836463b45fc781c174b4720826fb856fae9912c3d8c41",
+  "production_image_after": "sha256:68156b4f755b973a8c0e424062dbdcaecf60e05b0794b9849595e6038a4ed720",
+  "checkout_commit": "2115dd7bb74384c7dc3b843450bd73fd76b8405f",
+  "ratchet_merge_base": "686e529ee011487e0764b9f91d023be063dbdf55",
+  "scope": "SISTER request identity capture and request-list recovery only",
+  "runtime_files": {
+    "modules/elaborazioni/worker/browser_session.py": {
+      "sha256": "d253d1c1b48ee8a53e55358c8614613454761bf7cfd984f74a4cab567a9f7c9a",
+      "coverage": {
+        "covered_lines": 897,
+        "num_statements": 897,
+        "percent_covered": 100.0,
+        "percent_covered_display": "100",
+        "missing_lines": 0,
+        "excluded_lines": 0,
+        "percent_statements_covered": 100.0,
+        "percent_statements_covered_display": "100",
+        "num_branches": 272,
+        "num_partial_branches": 0,
+        "covered_branches": 272,
+        "missing_branches": 0,
+        "percent_branches_covered": 100.0,
+        "percent_branches_covered_display": "100"
+      }
+    },
+    "modules/elaborazioni/worker/sister_browser_reliability.py": {
+      "sha256": "66383aa1099c4c2e4be3eef9fbc115e6f65aab114834e8ba6fee9cd3d64e97d5",
+      "coverage": {
+        "covered_lines": 145,
+        "num_statements": 145,
+        "percent_covered": 100.0,
+        "percent_covered_display": "100",
+        "missing_lines": 0,
+        "excluded_lines": 0,
+        "percent_statements_covered": 100.0,
+        "percent_statements_covered_display": "100",
+        "num_branches": 38,
+        "num_partial_branches": 0,
+        "covered_branches": 38,
+        "missing_branches": 0,
+        "percent_branches_covered": 100.0,
+        "percent_branches_covered_display": "100"
+      }
+    },
+    "modules/elaborazioni/worker/visura_flow.py": {
+      "sha256": "728a6e0949ca6a4d1d823f9d4a3b509ac2eb8540171f9f068113f4b49e36a2af",
+      "coverage": {
+        "covered_lines": 286,
+        "num_statements": 286,
+        "percent_covered": 100.0,
+        "percent_covered_display": "100",
+        "missing_lines": 0,
+        "excluded_lines": 2,
+        "percent_statements_covered": 100.0,
+        "percent_statements_covered_display": "100",
+        "num_branches": 88,
+        "num_partial_branches": 0,
+        "covered_branches": 88,
+        "missing_branches": 0,
+        "percent_branches_covered": 100.0,
+        "percent_branches_covered_display": "100"
+      }
+    },
+    "modules/elaborazioni/worker/sister_submission_identity.py": {
+      "sha256": "ed8f5d155f2596c84726b23d864133e560126f1f4c755ccfff389f6551f98ed3",
+      "coverage": {
+        "covered_lines": 75,
+        "num_statements": 75,
+        "percent_covered": 100.0,
+        "percent_covered_display": "100",
+        "missing_lines": 0,
+        "excluded_lines": 0,
+        "percent_statements_covered": 100.0,
+        "percent_statements_covered_display": "100",
+        "num_branches": 26,
+        "num_partial_branches": 0,
+        "covered_branches": 26,
+        "missing_branches": 0,
+        "percent_branches_covered": 100.0,
+        "percent_branches_covered_display": "100"
+      }
+    },
+    "modules/elaborazioni/worker/sister_pdf_recovery.py": {
+      "sha256": "eec3ed6704bb8f49497208ed36c67cb0583e88dc9a65d1b5bc20cc1e1b82c244",
+      "coverage": {
+        "covered_lines": 40,
+        "num_statements": 40,
+        "percent_covered": 100.0,
+        "percent_covered_display": "100",
+        "missing_lines": 0,
+        "excluded_lines": 0,
+        "percent_statements_covered": 100.0,
+        "percent_statements_covered_display": "100",
+        "num_branches": 12,
+        "num_partial_branches": 0,
+        "covered_branches": 12,
+        "missing_branches": 0,
+        "percent_branches_covered": 100.0,
+        "percent_branches_covered_display": "100"
+      }
+    }
+  },
+  "query": {
+    "path": "scripts/sql/sister_identity_metrics.sql",
+    "schema_version": 2,
+    "sha256": "098e0f0b37b991288f3e81947fa91854f0527f7d84c0db8886584ec2bfa935ee",
+    "verified_on": "gaia_ced_production",
+    "mode": "READ ONLY"
+  },
+  "baseline": "SISTER_IDENTITY_BEFORE_V2_2026-11-09.json",
+  "earlier_baseline_preserved": "SISTER_IDENTITY_BEFORE_2026-11-09.json",
+  "production_checks": {
+    "initial": {
+      "status": "healthy; source hashes match; recovery navigation observed; natural new-document identity verification pending",
+      "checked_at_utc": "2026-11-09T11:08:58.656687+00:00"
+    },
+    "one_hour": {
+      "status": "pending",
+      "due_at_utc": "2026-11-09T11:59:34.854239+00:00"
+    },
+    "24_hours": {
+      "status": "pending",
+      "due_at_utc": "2026-11-10T10:59:34.854239+00:00"
+    },
+    "72_hours": {
+      "status": "pending",
+      "due_at_utc": "2026-11-12T10:59:34.854239+00:00"
+    },
+    "7_days": {
+      "status": "pending",
+      "due_at_utc": "2026-11-16T10:59:34.854239+00:00"
+    }
+  },
+  "validation": {
+    "coverage": "Reverified before production: 100% statements and branches on all five shipped runtime files",
+    "persistence": "6 passed: direct subject/property download interrupted; current/stale/released claim; callback unarmed during form filling",
+    "real_browser": "sanitized observed HTML exercised in Chromium",
+    "full_worker": {
+      "passed": 980,
+      "skipped": 7,
+      "test_files": 70,
+      "note": "Regression run completed; authoritative coverage for final source is the isolated targeted run, repeated after final edits."
+    },
+    "lint": {
+      "scope": "passed (11 Python files); 4 new files format-check passed",
+      "global": "make lint-backend QUALITY_PYTHON=backend/.venv/bin/python fails on concurrent changes outside SISTER; not modified"
+    },
+    "complexity_ratchet": {
+      "scope": "passed, runtime and tests, zero findings",
+      "base_ref": "origin/main",
+      "global_findings_outside_scope": 35,
+      "global_paths": [
+        "backend/app/modules/presenze/router/helpers/daily_records.py",
+        "backend/app/modules/presenze/router/routes/collaborators_daily.py",
+        "backend/app/modules/presenze/schemas.py",
+        "backend/app/modules/presenze/services/gate_daily_record_patch.py",
+        "backend/app/modules/presenze/services/gate_mobile_payloads.py",
+        "backend/app/modules/presenze/services/meal_vouchers.py",
+        "backend/app/modules/presenze/services/operai_daily_policy.py",
+        "backend/app/modules/presenze/services/operai_schedule_policy.py",
+        "backend/app/modules/presenze/services/schedule_engine.py",
+        "backend/app/modules/presenze/services/xlsm_export.py",
+        "frontend/src/app/presenze/giornaliere/page.tsx",
+        "frontend/src/components/presenze/meal-voucher-control.tsx",
+        "frontend/src/lib/presenze-monthly-presentation.ts",
+        "frontend/src/lib/presenze-monthly-sheet.ts"
+      ]
+    },
+    "graphify_code": "passed after final correction",
+    "graphify_docs": "passed on final documentation: chunk 1/1 done, no warnings",
+    "final_targeted_tests": {
+      "passed": 217,
+      "test_files": 10,
+      "isolated_processes": true,
+      "rerun_for": "native_form_owner_revision"
+    },
+    "artifact": "SISTER_IDENTITY_VALIDATION_2026-11-09.json",
+    "python_310_syntax": "passed for all five runtime files",
+    "deployment_verification": {
+      "targeted_tests_passed": 217,
+      "test_files": 10,
+      "coverage": {
+        "modules/elaborazioni/worker/browser_session.py": {
+          "covered_lines": 897,
+          "num_statements": 897,
+          "percent_covered": 100.0,
+          "percent_covered_display": "100",
+          "missing_lines": 0,
+          "excluded_lines": 0,
+          "percent_statements_covered": 100.0,
+          "percent_statements_covered_display": "100",
+          "num_branches": 272,
+          "num_partial_branches": 0,
+          "covered_branches": 272,
+          "missing_branches": 0,
+          "percent_branches_covered": 100.0,
+          "percent_branches_covered_display": "100"
+        },
+        "modules/elaborazioni/worker/sister_browser_reliability.py": {
+          "covered_lines": 145,
+          "num_statements": 145,
+          "percent_covered": 100.0,
+          "percent_covered_display": "100",
+          "missing_lines": 0,
+          "excluded_lines": 0,
+          "percent_statements_covered": 100.0,
+          "percent_statements_covered_display": "100",
+          "num_branches": 38,
+          "num_partial_branches": 0,
+          "covered_branches": 38,
+          "missing_branches": 0,
+          "percent_branches_covered": 100.0,
+          "percent_branches_covered_display": "100"
+        },
+        "modules/elaborazioni/worker/visura_flow.py": {
+          "covered_lines": 286,
+          "num_statements": 286,
+          "percent_covered": 100.0,
+          "percent_covered_display": "100",
+          "missing_lines": 0,
+          "excluded_lines": 2,
+          "percent_statements_covered": 100.0,
+          "percent_statements_covered_display": "100",
+          "num_branches": 88,
+          "num_partial_branches": 0,
+          "covered_branches": 88,
+          "missing_branches": 0,
+          "percent_branches_covered": 100.0,
+          "percent_branches_covered_display": "100"
+        },
+        "modules/elaborazioni/worker/sister_submission_identity.py": {
+          "covered_lines": 75,
+          "num_statements": 75,
+          "percent_covered": 100.0,
+          "percent_covered_display": "100",
+          "missing_lines": 0,
+          "excluded_lines": 0,
+          "percent_statements_covered": 100.0,
+          "percent_statements_covered_display": "100",
+          "num_branches": 26,
+          "num_partial_branches": 0,
+          "covered_branches": 26,
+          "missing_branches": 0,
+          "percent_branches_covered": 100.0,
+          "percent_branches_covered_display": "100"
+        },
+        "modules/elaborazioni/worker/sister_pdf_recovery.py": {
+          "covered_lines": 40,
+          "num_statements": 40,
+          "percent_covered": 100.0,
+          "percent_covered_display": "100",
+          "missing_lines": 0,
+          "excluded_lines": 0,
+          "percent_statements_covered": 100.0,
+          "percent_statements_covered_display": "100",
+          "num_branches": 12,
+          "num_partial_branches": 0,
+          "covered_branches": 12,
+          "missing_branches": 0,
+          "percent_branches_covered": 100.0,
+          "percent_branches_covered_display": "100"
+        }
+      },
+      "ruff": "passed",
+      "new_files_format": "passed",
+      "complexity_ratchet_findings": [],
+      "chromium_regression": "Malformed table/form: original selector fails; native form owner succeeds; unrelated orphan ID ignored.",
+      "server_image_smoke": "imports + Chromium + native owner extraction passed, isolated network=none",
+      "log_sha256": {
+        "tests.log": "87280b8a76f3aecd08940610e87ff7ba389c87dd81d304ecc4025c54bdca7500",
+        "coverage.json": "685fb8de57ef3e892c406625e1d919dc2c0617af9fdaceec9f12b473b8e085ce",
+        "ruff.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+        "ratchet.json": "34386646fce9266f7aa3f643c7a3e7c06e258b98c3d8d378f3c54ec73ca90a10",
+        "format.log": "177f260a5645724013185e4b140c7045cc39e56c0c97b120f5cb23599f85f0de"
+      }
+    },
+    "production_health": {
+      "checked_at_utc": "2026-11-09T11:08:58.656687+00:00",
+      "container_id": "90afb3e81833736d48e7686b427caf4245101b7f0dcae1d5e2caca9a263b0506",
+      "image_id": "sha256:68156b4f755b973a8c0e424062dbdcaecf60e05b0794b9849595e6038a4ed720",
+      "started_at_utc": "2026-11-09T10:59:34.854239641Z",
+      "running": true,
+      "health": "healthy",
+      "restart_count": 0,
+      "source_hashes_match": true,
+      "config_environment_identical": true,
+      "mounts_identical": true
+    },
+    "production_initial_events": {
+      "checked_at": "2026-11-09T11:06:58.629612+00:00",
+      "captured_requests": 0,
+      "first_identity_event": null,
+      "first_recovery_event": "2026-11-09T11:01:48.331594+00:00",
+      "recovery_error_events": 0,
+      "identity_missing_events": 0,
+      "recovery_success_events": 2,
+      "identity_captured_events": 0,
+      "identity_conflict_events": 0,
+      "captured_requests_with_id_in_db": 0
+    }
+  },
+  "detailed_local_logs": "/tmp/gaia-sister-identity-20261109",
+  "limitations": [
+    "No automatic monitoring tasks created; rollout checklist requires dated evidence.",
+    "Release must use the five runtime files only atop the deployed image, preserving concurrent work.",
+    "sister_observability.py differs from production and is excluded.",
+    "Zero pre-release remote_identity and recovery_navigation events mean uninstrumented; they do not prove zero incidents.",
+    "Final production image healthy and navigation verified. No new PDF or identity capture occurred during the bounded observation ending 2026-11-09T11:06:58Z; live identity-to-document verification remains pending."
+  ],
+  "updated_at_utc": "2026-11-09T11:10:42.365509+00:00",
+  "first_recovery_event_utc": "2026-11-09T11:01:48.331594+00:00",
+  "release_evidence": "SISTER_IDENTITY_FORM_OWNER_RELEASE_2026-11-09.json",
+  "aligned_before_baseline": "SISTER_IDENTITY_BEFORE_T0_2026-11-09.json",
+  "initial_after_snapshot": "SISTER_IDENTITY_AFTER_FORM_OWNER_2026-11-09.json",
+  "rollout_checkout_commit": "49c48a75cb0800848ad06693e7cff89cc621fb42",
+  "rollout_attempts": [
+    {
+      "started_at_utc": "2026-11-09T10:44:36.659047302Z",
+      "container_id": "84605e2d252c8c459d467686a01ad98435d44861b9868f5e13d91cab288e9b95",
+      "outcome": "automatic_rollback",
+      "cause": "Mount list ordering comparison was too strict; same volume definitions and permissions.",
+      "rollback_container_id": "8484cc584a9abc6a3090f935cae9766a318befe4dd6c5a2c4b8e2737831ae827",
+      "rollback_started_at_utc": "2026-11-09T10:44:38.135340826Z"
+    }
+  ],
+  "first_activation_utc": "2026-11-09T10:46:39.712237195Z",
+  "identity_revision": "native_form_owner",
+  "first_identity_captured_utc": null,
+  "prior_activations": [
+    {
+      "activated_at_utc": "2026-11-09T10:46:39.712237195Z",
+      "container_id": "d21405d47ffd01f60ac7a163afe742ae8f8fb6c8d45513c41ad265177673a3ef",
+      "image_id": "sha256:654bb58d80ff63f0e8ef6c47eed634f4c9b7f31f6bca6922d53e210a2fbb9fc8",
+      "revision": "initial_dom_ancestor_selector",
+      "outcome": "PDF downloaded but hidden ID missed on malformed table HTML; corrected with native form ownership",
+      "identity_missing_events": 2
+    }
+  ],
+  "comparison_windows": {
+    "before_start": "2026-11-02T10:46:39.712237+00:00",
+    "before_end": "2026-11-09T10:46:39.712237+00:00",
+    "transition_excluded_start": "2026-11-09T10:46:39.712237195Z",
+    "transition_excluded_end": "2026-11-09T10:59:34.854239641Z",
+    "after_start": "2026-11-09T10:59:34.854239641Z",
+    "after_end": "2026-11-16T10:59:34.854239+00:00"
+  },
+  "natural_identity_capture_check": "pending_new_document"
+}

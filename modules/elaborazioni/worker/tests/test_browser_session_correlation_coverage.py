@@ -1,21 +1,13 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import replace
 from pathlib import Path
-import sys
 from types import SimpleNamespace
 
 import pytest
-
-
-WORKER_ROOT = Path(__file__).resolve().parents[1]
-if str(WORKER_ROOT) not in sys.path:
-    sys.path.insert(0, str(WORKER_ROOT))
+from browser_test_support import ScriptedLocator, ScriptedPage, make_session, noop_async
 
 import browser_session as browser_module
-from browser_session import SISTER_REQUESTS_URL
-from browser_test_support import ScriptedLocator, ScriptedPage, make_session, noop_async
 from sister_exceptions import (
     DocumentNonEvadibileError,
     DocumentNotYetProducedError,
@@ -94,8 +86,8 @@ def test_poll_requests_download_and_timeout(monkeypatch: pytest.MonkeyPatch, tmp
     monkeypatch.setattr(browser_module, "RICHIESTE_POLL_ATTEMPTS", 2)
     monkeypatch.setattr(browser_module.asyncio, "sleep", noop_async)
     session = make_session(ScriptedPage())
+    session.page.locators["input[name='radioCount']"] = ScriptedLocator()
     session._raise_if_server_error = noop_async
-    session._poll_body_upper = lambda: async_value("")
     session._poll_correlated_request = lambda *_args: async_value(10)
     assert run(session.poll_richieste_for_download(tmp_path / "out.pdf")) == 10
 
