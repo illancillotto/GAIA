@@ -759,6 +759,137 @@ conserva le identità dei simboli che una scansione parziale non includerebbe.
 Durante il refactoring baseline del repository e produzione sono rimaste
 invariate; non è richiesta la deroga proposta per la prima versione.
 
+## Secondo controllo finale di tutti gli account — 2026-11-04
+
+Rilasciato insieme a backend e worker il 2026-11-04 alle 11:11 UTC. La verifica
+è richiesta separatamente dopo il rilascio e non riattiva i job messi in pausa.
+Questo passaggio si richiede esplicitamente a caricamenti conclusi: non parte
+automaticamente dalla conclusione del singolo lotto.
+
+`POST /ruolo/tributi/poste-dispatch/final-checks`, con permesso
+`ruolo.tributi.manage_status`, congela il manifest degli account e degli avvisi
+già caricati, con esito incerto o spediti. Crea un job di sola lettura per ogni
+account disponibile, accorpando credenziali con lo stesso username normalizzato.
+Richieste simultanee vengono serializzate tramite lock del lotto comune:
+finché esistono job Poste `pending`, `queued_resume` o `processing`, una nuova
+richiesta restituisce 409. Anche un job sospeso in `queued_resume` deve quindi
+essere concluso o fermato definitivamente prima di richiedere il controllo;
+non si deve riattivarlo soltanto per superare questa condizione.
+
+Ogni job usa il login e il lease esclusivo per username già implementati nel
+worker. Rilegge tutte le pagine di **Verifica e invia** e dell'**archivio**;
+salva una prova dedicata con intervallo di lettura, identificativo esecuzione,
+job, account e operatore GAIA richiedente. Non crea o cancella bozze, non cambia
+gli stati degli avvisi e non preme INVIA. Timeout, errori di login e paginazioni
+incomplete non producono una prova di successo. Account inattivi, storici senza
+credenziale o senza lotto utilizzabile restano esplicitamente non verificabili.
+
+`GET /ruolo/tributi/poste-dispatch/final-checks/{check_id}`, con i normali
+permessi di lettura del modulo, confronta esclusivamente le prove di quella
+esecuzione e restituisce:
+
+- `accounts`: esito e prova di ogni account, inclusi quelli mancanti o falliti;
+- `duplicates`: occorrenze dello stesso nome avviso GAIA, con account,
+  identificativi Poste, fonte bozze/archivio e indicatore `cross_account`;
+- `missing` e `misplaced`: avvisi attesi assenti oppure presenti soltanto
+  su un account diverso da quello assegnato;
+- `invalidations`: ripartenza/creazione di operazioni Poste, modifiche agli
+  avvisi/lotti registrate nell'audit o variazioni del perimetro account;
+- `complete`: tutte le letture sono riuscite, coerenti con manifest e job,
+  datate al massimo 30 minuti, senza invalidazioni.
+
+Lo stesso identificativo Poste osservato nelle bozze e poi nell'archivio dello
+stesso account viene contato una volta. Identificativi uguali su account diversi
+restano occorrenze distinte; due bozze senza identificativo restano due righe.
+I nomi esterni al prefisso GAIA vengono conteggiati in `unmatched_rows`.
+
+Lo stato `verified_no_duplicates` richiede completezza e assenza di duplicati,
+mancanti e account errati. `duplicates_found` segnala un conflitto anche quando
+il controllo è incompleto: leggere sempre anche `complete`. `needs_review`
+indica avvisi mancanti o su account diverso; `incomplete` impedisce di considerare
+il controllo concluso. Non vengono cancellati automaticamente i duplicati.
+
+Le letture avvengono in intervalli distinti per account: il rapporto documenta
+quanto osservato, non una transazione atomica del portale. Durante il passaggio
+finale devono restare fermi i caricamenti e le modifiche manuali; quelle esterne
+a GAIA non sono rilevabili prima della successiva lettura. Il confronto usa il
+nome avviso GAIA, non il contenuto dei PDF o nomi arbitrari di spedizioni manuali.
+Le prove storiche restano consultabili, ma dopo 30 minuti l'esito di completezza
+scade e occorre una nuova esecuzione per verificare lo stato attuale.
+
+Servizi: `poste_dispatch_final_check.py` (manifest e prove),
+`poste_dispatch_final_report.py` (rapporto), worker `posta_online_final_check.py`.
+Nessuna migrazione: utilizza job esistenti ed eventi append-only dedicati.
+Evidenza di validazione: `evidence/POSTE_FINAL_CHECK_2026-11-04.json`.
+
+Validazione finale: 183 test backend, 169 test unitari worker, 6 casi concorrenti
+worker su PostgreSQL locale isolato e 10 test browser HTML superati. Quattro
+casi concorrenti PostgreSQL sono inclusi nei 183 backend, compresa la doppia
+richiesta simultanea del controllo finale. Coverage righe/rami 100% sui sette
+runtime backend e quattro worker verificati, zero nuove esclusioni. Lint,
+formattazione e ratchet completo contro il merge-base di `origin/main` passano;
+i tre nuovi runtime hanno zero finding error e quattro warning. Sincronizzazione
+e `baseline-verify` passano su copia privata completa della baseline, senza
+modificare quella del repository. I test browser richiedono un processo separato
+dalla suite client legacy, che sostituisce globalmente Playwright durante la
+collection: il tentativo combinato fallito è conservato nell'evidenza.
+
+## Rilascio anti duplicati e verifica in produzione — 2026-11-04
+
+Rilascio selettivo completato alle 11:11 UTC: immagini
+`gaia-backend:antiduplicati-20261104` e
+`gaia-elaborazioni-worker-poste:antiduplicati-20261104`, ricavate dalle immagini
+in uso. Sei file backend e due file worker aggiornati; gli stessi sei file
+backend sono presenti anche nell'immagine worker. Confrontati gli hash di
+tutte le sorgenti Python: nessuna differenza fuori dal manifest. Conservati
+ambiente, comandi, mount, risorse e limite di cinque account contemporanei;
+nessuna nuova migrazione. Le altre immagini di servizio restano fuori dal
+rilascio, comprese quelle delle comunicazioni.
+
+Prima dell'aggiornamento sono stati fermati controller e timer di recupero;
+i job già avviati sono terminati e il worker è uscito con codice zero.
+Il primo tentativo è stato ripristinato automaticamente perché Compose
+proponeva `unless-stopped` mentre il worker aveva `restart=no`. Entrambi gli
+overlay, rilascio e rollback, ora preservano esplicitamente la politica
+effettiva. Il secondo tentativo ha superato healthcheck e confronto completo
+della configurazione. Ripetuti 183 test backend: coverage righe/rami 100%
+dei sei file distribuiti, 636 statement e 166 branch.
+
+La verifica indipendente è stata richiesta come `porcu.alessandro` dopo il
+rilascio, con i caricamenti fermi. Frau resta esclusa per istruzione esplicita
+dell'operatore: credenziale inattiva e account in standby. L'esecuzione censisce
+comunque l'account come non verificato; anche con quattro letture riuscite non
+può certificare l'intero insieme delle credenziali. Scanu Beniamino resta
+rinviato e il controllo non avvia cancellazioni o ricaricamenti.
+
+Ricevuta tecnica, identificativo della verifica e stato aggiornato:
+`evidence/POSTE_ANTIDUPLICATI_RELEASE_2026-11-04.json`. Le prove nominative
+complete restano nel volume runtime privato e nella cartella del controllo
+sul Desktop; non vengono versionate nel repository.
+
+Esito della prima verifica dopo il rilascio: tutti e quattro i job richiesti
+sono riusciti. Lette 258 bozze e 3.110 righe di archivio: Salaris 80/1.089,
+Cascinu 0/918, Serusi 93/964 e Cadoni 85/139. Nessun gruppo duplicato e nessun
+avviso presente soltanto su un account diverso da quello previsto. Restano
+cinque avvisi attesi non ritrovati nei quattro account, quattro dei quali già
+con esito incerto nell'outbox. I riferimenti sono nel rapporto privato; nessun
+ricaricamento automatico è stato avviato. Caricamenti e recuperi restano in
+pausa per approfondire i mancanti. Il rapporto conserva `complete=false` e
+`status=incomplete` per l'esclusione di Frau: questi risultati non certificano
+l'assenza di duplicati sull'account escluso.
+
+Ripresa autorizzata dall'operatore alle 11:41 UTC: controller riattivato e
+quattro job di riconciliazione accodati per Salaris, Cascinu, Serusi e Cadoni,
+prima delle successive bozze. I cinque mancanti sono stati messi singolarmente
+in `address_review`, con evento `final_check_missing_held`, riferimento alla
+verifica e `no_automatic_retry=true`; conservati PDF, indirizzi e identificativi
+precedenti. Frau resta inattiva e in standby, Scanu resta rinviato. Riattivato
+soltanto il recupero sicuro degli errori precedenti a qualsiasi submission;
+il vecchio servizio di recupero delle assenze resta spento. Il worker torna
+alla politica `unless-stopped` per la prosecuzione autonoma della campagna.
+La verifica appena salvata resta una prova storica: la ripresa invalida
+correttamente la sua certificazione dello stato attuale.
+
 ## Componenti
 
 - Backend `backend/app/modules/ruolo/`:

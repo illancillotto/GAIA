@@ -1,0 +1,86 @@
+{
+  "date": "2026-11-04",
+  "status": "deployed_2026-11-04T11:11:04Z",
+  "scope": "Independent final read of drafts and archive for each Poste account, followed by global duplicate comparison",
+  "production_mutations": false,
+  "automatic_resume": false,
+  "automatic_invocation": false,
+  "runtime_files": [
+    "backend/app/modules/ruolo/services/poste_dispatch_final_check.py",
+    "backend/app/modules/ruolo/services/poste_dispatch_final_report.py",
+    "backend/app/modules/ruolo/services/poste_dispatch.py",
+    "backend/app/modules/ruolo/routes/poste_dispatch_routes.py",
+    "modules/elaborazioni/worker/posta_online_final_check.py",
+    "modules/elaborazioni/worker/posta_online_dispatch_runner.py"
+  ],
+  "endpoints": {
+    "start": "POST /ruolo/tributi/poste-dispatch/final-checks",
+    "report": "GET /ruolo/tributi/poste-dispatch/final-checks/{check_id}"
+  },
+  "max_snapshot_age_minutes": 30,
+  "coverage": {
+    "statements_percent": 100,
+    "branches_percent": 100,
+    "backend_statements": 709,
+    "backend_branches": 190,
+    "worker_statements": 408,
+    "worker_branches": 94,
+    "excluded_lines": 0,
+    "scope": "Seven backend and four worker runtime files, including prior duplicate/retry changes; coverage data files isolated per process"
+  },
+  "validation": {
+    "backend_poste_cases": 183,
+    "backend_postgres_concurrency_cases_included": 4,
+    "worker_unit_cases": 169,
+    "worker_postgres_cases": 6,
+    "browser_html_cases": 10,
+    "total_passing_unique_cases": 368,
+    "lint_backend": "PASS",
+    "ruff_new_files_format": "PASS",
+    "diff_check": "PASS",
+    "production_portal_test": "not executed during deploy"
+  },
+  "complexity": {
+    "full_repository_merge_base_ratchet": "PASS: origin/main; findings=[]",
+    "new_runtime_errors": 0,
+    "new_runtime_warnings": 4,
+    "repository_baseline_modified": false,
+    "private_baseline_sync": "PASS without exceptions",
+    "private_baseline_verify": "PASS reproducible"
+  },
+  "invariants": [
+    "One queued read job per available normalized account",
+    "Unavailable historical/inactive accounts remain incomplete",
+    "Concurrent start requests produce a single run (real PostgreSQL test)",
+    "Existing exclusive per-account lease and login workflow reused",
+    "Draft and archive reads must both finish all pages",
+    "Proof is bound to run, job, account and interval",
+    "Only evidence from the requested run is accepted",
+    "Same shipment id on one account moving to archive is counted once",
+    "Same id on different accounts and drafts without ids remain distinct",
+    "Missing and misplaced expected notices are reported",
+    "Restarted GAIA operations invalidate completeness",
+    "No portal creation, deletion or INVIA; item states unchanged"
+  ],
+  "limitations": [
+    "Explicit start after operations finish; no automatic trigger added",
+    "Any pending/queued_resume/processing Poste job blocks start, including manually paused jobs",
+    "Portal reads are not atomic across accounts; external manual changes require a new read",
+    "Only GAIA shipment names are compared, not PDF content or arbitrary manual names",
+    "After 30 minutes a new read is needed to certify current state"
+  ],
+  "test_harness_notes": [
+    "A combined worker process failed 10 browser tests because existing test_posta_online_client globally stubs playwright.async_api. All 10 passed in an isolated process; no unrelated tests were changed.",
+    "Initial worker run skipped six PostgreSQL cases because POSTE_TEST_DATABASE_URL was missing; all six subsequently passed using the disposable local PostgreSQL container.",
+    "Early concurrent coverage runs used the shared default data file; final isolated coverage artifacts supersede them."
+  ],
+  "artifacts": "/tmp/gaia-poste-final-check-20261104",
+  "graphify": {
+    "ruolo_code": "PASS: 1705 nodes, 4177 edges",
+    "elaborazioni_worker_code": "PASS: 2283 nodes, 5278 edges",
+    "ruolo_docs": "PASS: chunk 1/1 done, no semantic failure; 1967 nodes, 3936 edges",
+    "artifacts_committed": false
+  },
+  "implementation_validation_status": "implemented_in_checkout_not_deployed",
+  "production_release_evidence": "POSTE_ANTIDUPLICATI_RELEASE_2026-11-04.json"
+}

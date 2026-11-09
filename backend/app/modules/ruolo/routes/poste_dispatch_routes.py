@@ -23,8 +23,10 @@ from app.modules.ruolo.poste_dispatch_schemas import (
 )
 from app.modules.ruolo.services import poste_dispatch as service
 from app.modules.ruolo.services import poste_dispatch_accounts as accounts
+from app.modules.ruolo.services import poste_dispatch_final_check as final_check
 from app.modules.ruolo.services import poste_dispatch_views as views
 from app.modules.ruolo.services.poste_dispatch_duplicates import duplicate_report
+from app.modules.ruolo.services.poste_dispatch_final_report import check_report
 from app.modules.ruolo.services.poste_dispatch_state import DispatchConflict, DispatchNotFound
 
 MANAGE = "ruolo.tributi.manage_status"
@@ -88,6 +90,20 @@ def create_lot(
         ),
     )
     return views.lot_detail(db, lot.id)
+
+
+@router.post("/final-checks")
+def start_final_check(
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_section(MANAGE)),
+):
+    check = _command(db, lambda: final_check.start_check(db, actor_id=current_user.id))
+    return check_report(db, check.id)
+
+
+@router.get("/final-checks/{check_id}")
+def get_final_check(check_id: UUID, db: Session = Depends(get_db)):
+    return _command(db, lambda: check_report(db, check_id))
 
 
 @router.get("/duplicates")

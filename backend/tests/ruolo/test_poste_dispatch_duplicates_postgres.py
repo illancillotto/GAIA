@@ -10,8 +10,10 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session
 from sqlalchemy.schema import CreateSchema, DropSchema
 
+from app.models.posta_online import PostaOnlineRegisteredMailSyncJob
 from app.modules.ruolo.poste_dispatch_models import PosteDispatchItem
 from app.modules.ruolo.services import poste_dispatch as service
+from app.modules.ruolo.services import poste_dispatch_final_check as final_checks
 from app.modules.ruolo.services.poste_dispatch_state import DispatchConflict
 
 from .poste_dispatch_fixtures import (
@@ -91,3 +93,46 @@ def test_parallel_accounts_reserve_each_notice_once_without_serializing_other_no
     assert results.count("conflict") == 2 - expected
     with Session(postgres) as db:
         assert db.scalar(select(func.count()).select_from(PosteDispatchItem)) == expected
+
+
+@pytest.mark.postgres
+def test_simultaneous_final_checks_queue_only_one_all_account_pass(postgres, tmp_path):
+    with Session(postgres) as db:
+        seed_user(db)
+        first = seed_batch_item(db, tmp_path)
+        service.create_lot(
+            db,
+            title="Final verification",
+            batch_item_ids=[first.id],
+            credential_id=1,
+            actor_id=1,
+            read=lambda _item: PDF,
+        )
+        for job in db.scalars(select(PostaOnlineRegisteredMailSyncJob)):
+            job.status = "succeeded"
+        db.commit()
+    barrier = Barrier(2)
+
+    def request_check(_request):
+        with Session(postgres) as db:
+            barrier.wait(timeout=10)
+            try:
+                final_checks.start_check(db, actor_id=1)
+                db.commit()
+                return "created"
+            except DispatchConflict:
+                db.rollback()
+                return "conflict"
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(request_check, range(2)))
+    assert sorted(results) == ["conflict", "created"]
+    with Session(postgres) as db:
+        assert (
+            db.scalar(
+                select(func.count())
+                .select_from(PostaOnlineRegisteredMailSyncJob)
+                .where(PostaOnlineRegisteredMailSyncJob.mode == final_checks.MODE)
+            )
+            == 1
+        )

@@ -31,6 +31,7 @@ from app.services.elaborazioni_posta_online import (
 )
 from posta_online_client import PostaOnlineBrowserClient, PostaOnlineScrapeConfig
 from posta_online_dispatch import DraftNotSubmitted, DraftSubmitUncertain, PostaOnlineDispatchPortal
+from posta_online_final_check import run_final_check
 
 logger = logging.getLogger(__name__)
 
@@ -211,6 +212,7 @@ async def run_delete(run: DispatchRun) -> None:
 
 
 HANDLERS = {
+    "poste_dispatch_final_check": run_final_check,
     "poste_dispatch_addresses": run_addresses,
     "poste_dispatch_drafts": run_drafts,
     "poste_dispatch_reconcile": run_reconcile,

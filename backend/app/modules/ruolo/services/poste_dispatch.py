@@ -35,6 +35,7 @@ from app.services.elaborazioni_posta_online import ACTIVE_JOB_STATUSES
 MAX_LOT_ITEMS = 50
 MAX_ARTIFACT_BYTES = 7 * 1024 * 1024
 JOB_MODES = {
+    "final_check": "poste_dispatch_final_check",
     "addresses": "poste_dispatch_addresses",
     "drafts": "poste_dispatch_drafts",
     "reconcile": "poste_dispatch_reconcile",
