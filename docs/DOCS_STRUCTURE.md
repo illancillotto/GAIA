@@ -130,6 +130,12 @@ In root e presente anche `AGENTS.md` per le regole operative repository-level us
 - `domain-docs/elaborazioni/README.md`
 - `domain-docs/elaborazioni/docs/ELABORAZIONI_REFACTOR_PLAN.md`
 - `domain-docs/elaborazioni/docs/RUOLO_VISURE_AUTOSYNC_PLAN.md`
+- `domain-docs/elaborazioni/docs/INCASS_INCREMENTAL_AUDIT_2026-11-09.md`: audit della pipeline giornaliera inCASS.
+- `domain-docs/elaborazioni/docs/INCASS_INCREMENTAL_RUNBOOK.md`: configurazione, shadow/active, recovery e rollback.
+- `domain-docs/elaborazioni/docs/INCASS_INCREMENTAL_CHANGELOG_2026-11-09.md`: perimetro, test e limiti live.
+- `backend/app/modules/elaborazioni/capacitas/incremental/`: pipeline autonoma, avviabile come modulo Python `incremental.runner`.
+- `backend/tests/incass_incremental/`: fixture sintetiche e integrazioni locali della pipeline.
+- `compose.incass-incremental.yml`: servizio opzionale con profilo separato, modalità predefinita off.
 - `domain-docs/elaborazioni/docs/SISTER_debug_runbook.md`
 - `domain-docs/elaborazioni/capacitas/docs/CAPACITAS_integration.md`
 - `domain-docs/elaborazioni/capacitas/docs/CAPACITAS_DATA_RECOVERY.md`

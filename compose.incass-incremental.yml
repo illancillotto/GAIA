@@ -1,0 +1,37 @@
+# Optional service. No change to the legacy workers; never enabled by the default stack.
+# Review the runbook and migrate before starting with --profile incass-incremental.
+services:
+  incass-incremental:
+    profiles: [incass-incremental]
+    build:
+      context: .
+      dockerfile: modules/elaborazioni/worker/Dockerfile
+    command: python -m app.modules.elaborazioni.capacitas.incremental.runner
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 30s
+    env_file: .env
+    environment:
+      INCASS_INCREMENTAL_MODE: ${INCASS_INCREMENTAL_MODE:-off}
+      # Cooperates with the runtime rate limiter, unlike the weekly export pool.
+      CAPACITAS_REQUEST_POLICY_PATH: /runtime-data/capacitas/request-policy.json
+    volumes:
+      - ./runtime-data:/runtime-data
+    networks: [gaia]
+    cpus: 1
+    mem_limit: 2g
+    pids_limit: 128
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '5'
+    healthcheck:
+      test: [CMD, python, -m, app.worker_health, check, --service, incass-incremental, --max-age-seconds, '90']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+networks:
+  gaia:
+    external: true
+    name: ${GAIA_NETWORK_NAME:-gaia_default}

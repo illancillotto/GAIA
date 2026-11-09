@@ -433,3 +433,9 @@ from app.modules.communications.models import (
     CommunicationReview,
     CommunicationTemplate,
 )
+
+from app.modules.elaborazioni.capacitas.incremental.models import (
+    IncrementalChange,
+    IncrementalCycle,
+    IncrementalHead,
+)
