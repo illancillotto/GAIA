@@ -78,11 +78,12 @@ def normalized_absence_cause(
 def covered_inaz_absence_minutes(
     record: PresenzeDailyRecord, allowed_causes: tuple[str, ...], expected_minutes: int
 ) -> int:
+    from app.modules.presenze.services.ordinary_permits import ordinary_permit_minutes
+
     union_minutes = union_leave_minutes(record)
     if union_minutes is not None:
         return min(union_minutes, expected_minutes)
-    cause = record.resolved_absence_cause
-    normalized = cause.strip().lower() if isinstance(cause, str) else None
+    normalized = str(record.resolved_absence_cause).strip().lower()
     if normalized not in allowed_causes:
         return 0
-    return max(record.absence_minutes or 0, record.justified_minutes or 0)
+    return min(expected_minutes, ordinary_permit_minutes(record)) if normalized == "permesso" else max(record.absence_minutes or 0, record.justified_minutes or 0)
