@@ -1,0 +1,126 @@
+{
+  "date": "2026-11-04",
+  "status": "deployed_2026-11-04T11:11:04Z",
+  "scope": "Cross-account global duplicate report and final pre-CONTINUA guard",
+  "production_mutations_during_feature": false,
+  "automatic_resume": false,
+  "runtime_files": [
+    "backend/app/modules/ruolo/services/poste_dispatch_duplicates.py",
+    "backend/app/modules/ruolo/services/poste_dispatch_work.py",
+    "backend/app/modules/ruolo/routes/poste_dispatch_routes.py"
+  ],
+  "coverage": {
+    "statements_percent": 100,
+    "branches_percent": 100,
+    "scope": "Three runtime files above",
+    "covered_statements": 288,
+    "covered_branches": 60,
+    "excluded_lines": 0
+  },
+  "tests": {
+    "backend_poste_cases": 141,
+    "postgres_concurrency_cases_included": 3,
+    "worker_regression_cases": 74,
+    "metadata_query_check": "SELECT only, no PDF artifact or encrypted password columns"
+  },
+  "invariants": [
+    "Global unique notice and source reservations remain active across all accounts",
+    "No CONTINUA after a detected conflict",
+    "No INVIA and no portal deletion",
+    "Cancelled outbox rows do not reserve a notice; positive portal evidence remains visible",
+    "Only latest stored draft snapshot per normalized username is compared",
+    "Unknown draft identifiers are counted without collapsing rows"
+  ],
+  "report_endpoint": "GET /ruolo/tributi/poste-dispatch/duplicates",
+  "max_snapshot_age_minutes": 30,
+  "limitations": [
+    "No live all-account portal scan is performed by the report",
+    "Arbitrary manual shipment names are not matched",
+    "Archive shipments not yet imported are not certified",
+    "Legacy snapshots are partial until a complete refresh",
+    "Positive stale observations block conservatively pending a newer account snapshot"
+  ],
+  "deployment_requirements": [
+    "Backend and worker must both include new backend service",
+    "No database migration required",
+    "Keep campaign paused until explicit resumption"
+  ],
+  "complexity": {
+    "error_level_violations": 0,
+    "warnings_before": 3,
+    "warnings_after": 6,
+    "full_repository_ratchet": "PASS after refactor against merge-base origin/main (686e529e); no findings",
+    "baseline": "repository baseline not modified",
+    "baseline_sync": "PASS on a private complete baseline candidate, without exceptions; repository baseline unchanged",
+    "baseline_findings": [],
+    "partial_scan_diagnostic": "A partial scan misidentified new _groups as a moved legacy helper; full repository scan keeps original identities present and passes. No symbol renamed or metric bypassed.",
+    "classification": "IMPROVED",
+    "refactor_metrics_before": {
+      "callable_cyclomatic_sum": 120,
+      "callable_cognitive_sum": 107,
+      "callable_loc_sum": 427
+    },
+    "refactor_metrics_after": {
+      "callable_cyclomatic_sum": 119,
+      "callable_cognitive_sum": 106,
+      "callable_loc_sum": 420
+    },
+    "decision_required": false,
+    "resolved_metric_changes": [
+      {
+        "symbol": "mark_draft_creating",
+        "cyclomatic": [
+          5,
+          4
+        ],
+        "cognitive": [
+          4,
+          3
+        ],
+        "loc": [
+          21,
+          14
+        ]
+      },
+      {
+        "symbol": "allow_upload",
+        "cyclomatic": [
+          8,
+          8
+        ],
+        "cognitive": [
+          8,
+          8
+        ],
+        "loc": [
+          27,
+          34
+        ]
+      },
+      {
+        "symbol": "apply_drafts_snapshot",
+        "cyclomatic": [
+          5,
+          5
+        ],
+        "cognitive": [
+          7,
+          7
+        ],
+        "loc": [
+          40,
+          33
+        ]
+      }
+    ],
+    "baseline_verify": "PASS: private complete candidate reproducible ignoring timestamp/commit; repository baseline unchanged"
+  },
+  "refactor_invariants": [
+    "Account/job/operator validation still occurs before the duplicate decision",
+    "Only one branch chooses success or a durable duplicate hold",
+    "The same lot predicate is reused for state-filtered items and all lot names",
+    "No API, schema, lock, transaction or portal behavior change"
+  ],
+  "implementation_validation_status": "implemented_in_checkout_not_deployed",
+  "production_release_evidence": "POSTE_ANTIDUPLICATI_RELEASE_2026-11-04.json"
+}

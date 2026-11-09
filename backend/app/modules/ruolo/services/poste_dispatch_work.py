@@ -17,6 +17,7 @@ from app.models.application_user import ApplicationUser
 from app.modules.ruolo.poste_dispatch_models import PosteDispatchItem, PosteDispatchLot
 from app.modules.ruolo.services.poste_dispatch_accounts import checked_job
 from app.modules.ruolo.services.poste_dispatch_address import suggestion_label
+from app.modules.ruolo.services.poste_dispatch_duplicates import allow_upload
 from app.modules.ruolo.services.poste_dispatch_state import (
     DRAFT_STATUSES,
     DispatchConflict,
@@ -130,12 +131,7 @@ def mark_draft_creating(db: Session, item_id: UUID, *, job_id: int) -> bool:
     )
     if username is None:
         raise DispatchConflict("Operatore GAIA del caricamento non disponibile")
-    item.upload_requested_by_user_id = job.requested_by_user_id
-    item.upload_requested_by_username = username
-    item.upload_job_id = job_id
-    item.error_detail = None
-    transition(db, item, "draft_creating", "draft_submitting", job_id=job_id)
-    return True
+    return allow_upload(db, item, job=job, username=username)
 
 
 def _apply_row(db: Session, item: PosteDispatchItem, row: DraftRow, job_id: int) -> None:
@@ -186,11 +182,8 @@ def apply_drafts_snapshot(
     by_name: dict[str, list[DraftRow]] = {}
     for row in rows:
         by_name.setdefault(row.name, []).append(row)
-    items = db.scalars(
-        select(PosteDispatchItem).where(
-            PosteDispatchItem.lot_id == lot_id, PosteDispatchItem.status.in_(DRAFT_STATUSES)
-        )
-    ).all()
+    lot_items_query = select(PosteDispatchItem).where(PosteDispatchItem.lot_id == lot_id)
+    items = db.scalars(lot_items_query.where(PosteDispatchItem.status.in_(DRAFT_STATUSES))).all()
     missing, duplicates = [], []
     for item in items:
         matches = by_name.get(item.shipment_name, [])
@@ -203,15 +196,12 @@ def apply_drafts_snapshot(
             duplicates.append(item.shipment_name)
         else:
             missing.append(item.id)
-    gaia_names = set(
-        db.scalars(
-            select(PosteDispatchItem.shipment_name).where(PosteDispatchItem.lot_id == lot_id)
-        )
-    )
+    gaia_names = set(db.scalars(lot_items_query.with_only_columns(PosteDispatchItem.shipment_name)))
     lot.portal_snapshot = {
         "checked_at": datetime.now(UTC).isoformat(),
         "job_id": job_id,
         "drafts_total": len(rows),
+        "drafts": _foreign(rows, set()),
         "foreign_drafts": _foreign(rows, gaia_names),
         "duplicate_names": duplicates,
     }

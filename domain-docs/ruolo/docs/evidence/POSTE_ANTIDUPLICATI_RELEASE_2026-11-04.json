@@ -1,0 +1,89 @@
+{
+  "at_utc": "2026-11-04T11:11:04.665187+00:00",
+  "backend_healthy": true,
+  "worker_healthy": true,
+  "global_upload_guard_active": true,
+  "independent_final_check_available": true,
+  "source_hashes_verified": true,
+  "configuration_preserved": true,
+  "database_migrations": false,
+  "controllers_paused_for_verification": true,
+  "send_action": false,
+  "portal_deletions": false,
+  "release": "poste-antiduplicati-20261104",
+  "backend_image": "gaia-backend:antiduplicati-20261104",
+  "worker_image": "gaia-elaborazioni-worker-poste:antiduplicati-20261104",
+  "scope": "Global duplicate pre-submit guard and independent read of drafts/archive",
+  "backend_runtime_files": 6,
+  "worker_runtime_files": 2,
+  "validation": {
+    "backend_cases_passed": 183,
+    "runtime_statement_coverage": 100,
+    "runtime_branch_coverage": 100,
+    "covered_backend_statements": 636,
+    "covered_backend_branches": 166,
+    "candidate_imports": "PASS",
+    "unrelated_python_sources_preserved": true,
+    "complexity_reference": "POSTE_FINAL_CHECK_2026-11-04.json"
+  },
+  "first_deploy_attempt": {
+    "automatic_rollback": true,
+    "reason": "Compose restart policy differed from the stopped worker actual policy",
+    "resolution": "Both deploy and rollback overlays explicitly preserve actual RestartPolicy; full configuration checks passed on second attempt",
+    "jobs_started_during_attempt": 0
+  },
+  "verification": {
+    "check_id": "af09bbe6-15f5-4ade-b441-c0e839729785",
+    "credential_ids_requested": [
+      1,
+      3,
+      4,
+      5
+    ],
+    "credential_ids_excluded_by_user": [
+      2
+    ],
+    "status": "completed_for_four_available_accounts",
+    "full_five_account_certification": false,
+    "report_status": "incomplete",
+    "cross_account_duplicate_groups": 0,
+    "duplicate_groups_total": 0,
+    "misplaced_items": 0,
+    "missing_expected_items_on_verified_accounts": 5,
+    "preexisting_uncertain_among_missing": 4,
+    "invalidations": [],
+    "read_only_jobs_succeeded": 4,
+    "draft_rows": 258,
+    "archive_rows": 3110,
+    "accounts": [
+      {
+        "credential_id": 1,
+        "draft_rows": 80,
+        "archive_rows": 1089
+      },
+      {
+        "credential_id": 3,
+        "draft_rows": 0,
+        "archive_rows": 918
+      },
+      {
+        "credential_id": 4,
+        "draft_rows": 93,
+        "archive_rows": 964
+      },
+      {
+        "credential_id": 5,
+        "draft_rows": 85,
+        "archive_rows": 139
+      }
+    ],
+    "missing_notices_auto_reuploaded": false
+  },
+  "scanu_deferred_by_user": true,
+  "api_smoke": {
+    "duplicate_report_http": 200,
+    "final_check_report_http": 200
+  },
+  "campaign_after_verification": "paused_for_missing_notice_review; Frau remains excluded by user",
+  "graphify_docs": "PASS: chunk 1/1 done, no failed semantic chunks; refreshed again after final verification outcome"
+}

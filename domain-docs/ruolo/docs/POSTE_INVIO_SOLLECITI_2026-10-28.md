@@ -165,6 +165,144 @@ successivi dello stesso account aspettano, mentre altri account avanzano;
 questo vale anche con più processi worker collegati allo stesso database.
 Il limite numerico è per processo, il lock per account è condiviso nel DB.
 
+### Retry persistenti della campagna — 2026-11-03
+
+Il controller privato della campagna usa la policy versionata
+`backend/app/modules/ruolo/services/poste_dispatch_retry.py`. Dopo timeout,
+errori di connessione, HTTP 429/5xx o ritorno al modulo di login senza un errore
+esplicito delle credenziali, pianifica tentativi senza un limite numerico.
+
+Dal 05/11/2026, per il completamento entro le 07:00, timeout, messaggi «Oops/Ops» e
+«Due bozze consecutive non create» usano un recupero rapido su tutti gli
+account della campagna. Anche quest'ultimo esito richiede riconciliazione,
+prima di proseguire con altri documenti:
+
+| Fallimenti consecutivi | Attesa dopo la fine del job fallito |
+| --- | --- |
+| 1 | 15–18 secondi |
+| 2 | 30–36 secondi |
+| 3 e successivi | 60–72 secondi |
+
+Dal 05/11 alle 07:55 CET, il ritorno al modulo di login identificato dal prefisso
+esatto `Archivio Poste Online non raggiunto dopo login:` usa invece 60/120/300
+secondi, con variazione fino al 20%: evita le precedenti attese di 30–36 minuti.
+Resta necessaria una nuova riconciliazione prima del caricamento. Gli errori
+espliciti di credenziali, OTP, CAPTCHA e blocco account continuano a richiedere
+attenzione; HTTP 429 mantiene la precedenza e il backoff prudente. I cooldown
+già pianificati per questa sola casistica sono anticipati conservando tentativo,
+job fallito, lotto, stato degli avvisi e sospensioni manuali. Nessun browser del
+worker viene interrotto. Policy verificata con 59 test, coverage righe e rami
+100%, Ruff e ratchet mirato senza nuove violazioni; ricevuta privata in
+`retry-controller/login-redirect-20261105/applied.json`.
+
+Anche gli errori di trasporto `net::ERR_*`, `connection` e `socket` usano il
+recupero 15/30/60 secondi: rimangono validi il riconoscimento prioritario di
+HTTP 429 e i blocchi per autenticazione esplicita. Verificati 62 test della
+policy con coverage righe e rami 100%; ricevuta privata in
+`retry-controller/network-retry-20261105/applied.json`.
+
+HTTP 429 mantiene sempre la policy prudente, anche quando il messaggio contiene
+anche un timeout. Gli altri errori temporanei mantengono le attese precedenti:
+
+| Fallimenti consecutivi | Attesa dopo la fine del job fallito |
+| --- | --- |
+| 1 | 2–2,4 minuti |
+| 2 | 5–6 minuti |
+| 3 | 10–12 minuti |
+| 4 | 20–24 minuti |
+| 5 e successivi | 30–36 minuti |
+
+La variazione casuale è fino al 20%. Il controller verifica le scadenze ogni
+30 secondi; code, fascia oraria della credenziale e lock possono posticipare
+l'avvio effettivo. Il successo di un job azzera la progressione. Restano le
+attese del client tra richieste e le pause dopo 25 richieste al portale.
+Questa è una scelta operativa prudente, non una cadenza certificata da Poste.
+
+Prima del retry del job, il worker prova un recupero locale degli elenchi:
+`posta_online_listing_recovery.py` riconosce le pagine «Oops/Ops» e i timeout
+di navigazione o di attesa della tabella. Attende 30–40 secondi, oltre al normale
+intervallo tra richieste, e riapre una sola volta lo stesso URL GET, preservando
+la pagina della paginazione. Il recupero ammette esclusivamente HTTPS sul dominio
+del portale e i percorsi `incorso.do` e `archivio.do`; non aggiorna moduli,
+CONTINUA, INVIA o pagamenti. Un secondo fallimento termina il job e passa alla
+policy persistente. Il successivo job usa un nuovo client/browser e rifà il
+login: non tenta di riutilizzare la sessione che ha fallito. Per ciascun job
+il runner imposta `storage_state_path=None` e `cdp_url=None`: browser e contesto
+nuovi isolano cookie, cache e storage, senza cancellare sessioni degli altri
+account o riavviare il worker. Una pagina priva
+della tabella non viene mai interpretata come un elenco vuoto.
+
+Il controllo salva `retry_wait`, numero del tentativo, job fallito, lotto e
+scadenza UTC nel file privato `control.json`. Il nuovo job conserva gli stessi
+dati nel payload; ciò permette di recuperare anche un riavvio tra commit DB e
+salvataggio del controller. Un retry avvia **riconciliazione sullo stesso
+account**, prima di ogni nuovo caricamento. Gli avvisi già sottoposti a
+CONTINUA, quelli con esito incerto, gli indirizzi sospesi e i casi eliminati
+dai colleghi non vengono rimessi automaticamente in coda per il caricamento.
+Una riconciliazione completa che lascia un documento incerto richiede ancora
+verifica, invece di autorizzare un nuovo upload.
+
+La disattivazione automatica dopo cinque errori di accesso può essere riaperta
+alla scadenza soltanto se contatore, ultimo errore della credenziale e job
+fallito coincidono e l'errore è temporaneo. Il contatore e l'errore restano
+conservati: nessun successo viene dichiarato prima di una lavorazione riuscita.
+OTP/App, CAPTCHA, credenziali esplicitamente rifiutate, blocco dell'account,
+HTTP 403 generici ed errori non classificati richiedono attenzione; le sospensioni
+manuali vengono mantenute. Il solo errore esatto `Poste Online detail:<ID> HTTP 403`
+ammette recupero rapido. Prima di accodare la riconciliazione, il controller verifica
+lotto, account e operatore del job fallito e isola il solo avviso attivo con quel
+preciso ID Poste in `address_review`, evento `archive_detail_unavailable`.
+Conserva PDF, destinatario, indirizzo, precedente verifica e chiavi anti duplicato;
+non dichiara l'avviso inviato e non lo rimette in caricamento. Gli altri avvisi
+possono continuare. Casi non attribuibili univocamente e stati protetti restano
+sospesi per verifica manuale. Gli eventi `credential_transient_retry_enabled`
+e `transient_retry_queued` riportano operatore, job e tentativo nell'audit.
+
+Il codice della policy è installato accanto al controller privato nel volume
+persistente della campagna; il servizio systemd usa quel percorso. Si riavvia
+soltanto il controller, senza interrompere i browser del worker. La modifica
+non introduce API generali di retry e non modifica il default dei normali job
+Poste fuori da questa campagna. Il limite di cinque account e INVIA manuale
+restano invariati.
+
+Il rilascio notturno del 05/11 aggiorna soltanto la copia della policy accanto al
+controller privato: nessun riavvio delle sessioni del worker o deploy generale.
+Verificati 53 test, coverage righe e rami 100%, Ruff e ratchet mirato contro il
+merge-base di `origin/main`, senza modificare baseline o soglie. Ricevuta privata
+in `retry-controller/overnight-20261105/applied.json` e sul Desktop in
+`Controllo_Poste_2026-11-04/Monitoraggio/Rilascio_notturno_20261105.json`.
+
+Il recupero separato dei fallimenti sicuramente precedenti a CONTINUA usa ora
+30/60/120 secondi, variazione deterministica 0,8–1,2 e controllo ogni minuto,
+senza limite di tentativi. I guard contro evidenze di submission, modifiche
+manuali, indirizzi assenti e avvisi già osservati su Poste restano invariati.
+Gli otto test della policy privata passano con coverage righe/rami 100%.
+Il piano del recupero include anche i 54 avvisi trasferiti da Cascinu a Serusi;
+prima dell'inclusione sono stati confrontati hash PDF, destinatario e indirizzo
+con il piano fonte originale.
+
+Alle 00:24 CET del 05/11 sono stati trasferiti a Frau altri 39 avvisi mai
+sottoposti a CONTINUA, 13 ciascuno da Salaris, Cascinu e Cadoni. Solo lotti
+sorgente senza job attivi; verifica globale senza conflitti, prova con rollback
+e commit tramite `cancel_item`, `create_lot` e accettazione degli indirizzi
+manuali già verificati. I vecchi lotti mantengono il proprio account; le nuove
+copie conservano integralmente PDF e destinatari. Il totale attivo resta 940.
+Lotto `997eb12a-8e94-4a06-a2a5-489bc2a611d0`, job bozze `1026`; anche questi
+nuovi item entrano nel piano di recupero sicuro. Ricevuta privata in
+`redistributions/balance-frau-20261105/applied.json`. I 155 test di regressione
+su retry, account, callback, anti duplicati, verifica finale e controller passano.
+
+Rilascio `poste-retry-refresh-20261103` verificato il 03/11/2026 alle 18:19 CET:
+worker healthy, hash di tutte le sorgenti controllati e configurazione a cinque
+conservata; controller attivo dal volume persistente. Avviate le prime quattro
+riconciliazioni sugli account prima sospesi; il quinto account è in attesa della
+propria scadenza. I due avvisi fermati temporaneamente per il rilascio sono stati
+ripristinati prima della ripresa. Questi dati certificano l'attivazione, non
+il successo dei successivi login o il completamento della campagna.
+Validazione: 104 test worker e 35 test della policy/controller, copertura righe
+e rami al 100% dei tre file runtime toccati, lint e complexity ratchet senza
+nuovi finding. Ricevuta in `evidence/POSTE_RETRY_REFRESH_2026-11-03.json`.
+
 I job storici di sincronizzazione e test credenziali mantengono l'accesso
 esclusivo al portale: attendono la fine dei caricamenti e, mentre lavorano,
 impediscono l'avvio di altre sessioni, preservando storage state e CDP legacy.
@@ -467,6 +605,94 @@ gli esiti incerti prima di proseguire e sospende i casi non confermati.
 Il controller privato della campagna e il monitor non sono nuove API o un
 servizio generale di GAIA. HTTP 403 sul servizio CAP e timeout/login restano
 errori da verificare; non autorizzano modifiche agli indirizzi né retry ciechi.
+
+## Controllo duplicati tra account — 2026-11-04
+
+Rilasciato in produzione il 2026-11-04 alle 11:11 UTC insieme al secondo
+controllo finale. Backend e worker includono entrambi il nuovo servizio
+`services/poste_dispatch_duplicates.py`. Non sono richieste migrazioni.
+Ricevuta e limiti operativi nella sezione di rilascio seguente.
+
+Le chiavi univoche globali `active_key` (nome avviso) e `active_source_key`
+(sollecito sorgente) impediscono già prenotazioni concorrenti su account diversi.
+L'avviso spedito conserva le chiavi; un annullamento confermato le libera.
+Il nuovo controllo non usa codice fiscale o destinatario come identità: avvisi
+con numeri diversi per la stessa persona restano distinti. Una rigenerazione
+in un altro batch non elude la chiave sul numero avviso.
+
+`GET /ruolo/tributi/poste-dispatch/duplicates` usa gli stessi permessi di lettura
+del modulo e restituisce:
+
+- `findings` e `total`: gruppi in conflitto per numero avviso o sollecito
+  sorgente, con motivi `multiple_active_items`, `cross_account_conflict` e/o
+  `multiple_portal_drafts`. Lo stesso caso può comparire per entrambe le chiavi;
+- riferimenti di lotto, elemento, account, identificativo Poste, job e operatore
+  GAIA del caricamento, quando disponibili; nessuna password o contenuto PDF;
+- `accounts`: timestamp dell'ultima lettura delle bozze, disponibilità di uno
+  snapshot completo, freschezza e verifica per ciascuno username;
+- `coverage_complete`: tutti gli account censiti hanno uno snapshot completo
+  delle bozze datato al massimo 30 minuti e non nel futuro. Non significa
+  assenza di conflitti: occorre leggere anche `findings`.
+
+Ogni lettura completa delle bozze salva anche `portal_snapshot.drafts`, con
+nomi e identificativi, compresi quelli ancora nulli. Per ciascuno username,
+normalizzato per maiuscole e spazi esterni, viene usato un solo snapshot: il
+più recente fra tutti i suoi lotti. Non si sommano le stesse bozze osservate
+da lotti diversi, né l'elemento GAIA e la sua corrispondente riga Poste. Più
+righe del portale con lo stesso nome restano distinte anche senza identificativo.
+Le credenziali disattivate e gli esiti incerti/spediti nell'outbox restano nel
+controllo. Gli elementi annullati non costituiscono nuove prenotazioni, ma una
+bozza ancora osservata sul portale rimane una prova da verificare.
+
+Gli snapshot precedenti contengono soltanto `foreign_drafts`: queste prove
+positive possono evidenziare un conflitto, ma non certificano una lettura
+completa per il nuovo report. Una nuova riconciliazione del relativo account
+aggiorna il quadro. Il report è di sola lettura e non accede al portale.
+
+Prima di CONTINUA, `mark_draft_creating` verifica nuovamente i conflitti
+nell'inventario globale e la coerenza di entrambe le chiavi di prenotazione.
+Un conflitto blocca l'avviso in `address_review`, conserva i riferimenti
+nell'evento `duplicate_upload_blocked` con attore/job e imposta
+`no_automatic_retry`. La callback impedisce CONTINUA; la successiva gestione
+del mancato invio preserva la sospensione. Il controllo non cancella bozze,
+non modifica indirizzi/PDF e non preme INVIA. Una prova positiva datata resta
+prudenzialmente bloccante finché una lettura successiva non la sostituisce.
+
+Il report confronta nomi GAIA e dati già osservati. Non certifica in tempo reale
+le sessioni degli altri account, caricamenti manuali con nomi arbitrari o
+spedizioni non ancora importate dall'archivio. `coverage_complete` riguarda
+le bozze, non una scansione completa di tutti gli archivi. Anche un report
+senza conflitti non autorizza retry ciechi di esiti incerti: prima si riconcilia.
+Le prenotazioni globali proteggono la concorrenza dei caricamenti GAIA;
+operazioni manuali esterne diventano visibili alla successiva lettura dell'account.
+
+Validazione: suite backend Poste con test specifici su bozze senza ID,
+snapshot obsoleti/parziali, account disattivati, duplicati legacy e avvisi già
+spediti; test concorrenti su PostgreSQL locale isolato (stesso sorgente,
+rigenerazione dello stesso avviso, avvisi distinti). Copertura di righe e rami
+al 100% dei tre file runtime modificati, più regressione del worker. Evidenza
+tecnica in `evidence/POSTE_DUPLICATES_2026-11-04.json`.
+
+La semplificazione successiva elimina la seconda diramazione sulla decisione
+duplicati: `mark_draft_creating` conserva i controlli di account, modalità e
+operatore; `allow_upload` sceglie e registra una sola transizione, di avvio
+oppure di sospensione, nella stessa transazione. Lo snapshot riusa un unico
+predicato SQL di lotto per leggere sia gli elementi negli stati interessati,
+sia i nomi di tutti gli elementi: un avviso ancora pronto non viene classificato
+come estraneo. Rimangono due query distinte e non vengono letti i PDF.
+
+I quattro incrementi della prima versione sono eliminati: il chiamante torna
+a ciclomatica 4 e cognitiva 3, con LOC 21→14; lo snapshot passa da LOC 40 a 33.
+La funzione che sceglie l'esito mantiene ciclomatica 8 e cognitiva 8. Sul
+perimetro dei tre file, le somme delle metriche callable scendono da
+120→119 (ciclomatica), 107→106 (cognitiva) e 427→420 (LOC). Non sono stati
+aggiunti wrapper, rinominati simboli o modificate soglie/esclusioni.
+Il ratchet completo contro `origin/main` e la sincronizzazione ordinaria su
+una copia privata completa della baseline passano senza deroghe. Anche
+`baseline-verify` sulla copia privata conferma la riproducibilità. Il confronto
+conserva le identità dei simboli che una scansione parziale non includerebbe.
+Durante il refactoring baseline del repository e produzione sono rimaste
+invariate; non è richiesta la deroga proposta per la prima versione.
 
 ## Componenti
 

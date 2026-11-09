@@ -1,5 +1,40 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-11-04 — Controllo duplicati Poste: riduzione della decisione di invio
+
+- Richiesta esplicita: risolvere i quattro incrementi della prima versione,
+  senza accettarli come debito. Una sola unità revisionabile: decisione di
+  caricamento e snapshot del lotto; modifiche Presenze e altri hotspot intatti.
+- `mark_draft_creating` mantiene ordine e messaggi dei controlli su stato,
+  account, modalità del job e operatore. `allow_upload` sceglie e registra
+  direttamente uno dei due esiti nella stessa transazione: avvio con audit
+  oppure sospensione durevole per duplicati. Eliminata la seconda diramazione
+  del chiamante sulla stessa decisione, senza aggiungere rami all'helper.
+- Lo snapshot riusa il predicato SQL del lotto, mantenendo distinta la selezione
+  per stato da quella dei nomi di tutti gli avvisi. Stessi lock e due query;
+  nessuna lettura degli allegati, nessuna modifica di API o schema.
+- Metriche prima→dopo (Cyc / Cog / LOC): `mark_draft_creating`
+  5 / 4 / 21 → 4 / 3 / 14; `allow_upload` 8 / 8 / 27 → 8 / 8 / 34;
+  `apply_drafts_snapshot` 5 / 7 / 40 → 5 / 7 / 33. Sul perimetro dei tre file:
+  somme 120→119, 107→106 e 427→420; nessun callable aggiunto o rinominato.
+  L'helper riceve esplicitamente il job e lo username già validati.
+- Esito `IMPROVED`: diminuisce la complessità totale della decisione, senza
+  trasferire rami, introdurre wrapper o ampliare esclusioni. I quattro
+  incrementi rispetto alla baseline precedente sono eliminati.
+- 141 test backend, inclusi tre casi concorrenti su PostgreSQL locale isolato,
+  e 74 regressioni worker PASS. Aggiunti tre casi di caratterizzazione per
+  autorizzazione prima della sospensione e distinzione appartenenza/stato.
+  Coverage dei tre runtime: 288 statement e 60 rami, tutti coperti; lint PASS.
+- Ratchet completo contro il merge-base `origin/main` PASS, zero finding.
+  Sincronizzazione ordinaria su copia privata completa della baseline PASS,
+  senza deroghe; `baseline-verify` sulla copia privata PASS (riproducibile).
+  Baseline del repository invariata per non assorbire le modifiche concorrenti.
+- Soglie, scanner e gate invariati. I warning preesistenti del perimetro restano
+  sei, senza nuove violation error-level. Produzione e caricamenti in pausa;
+  nessun commit, push o rilascio eseguito in questa unità.
+- Evidenza: `domain-docs/ruolo/docs/evidence/POSTE_DUPLICATES_2026-11-04.json`;
+  log di verifica privati in `/tmp/gaia-poste-complexity-20261104/`.
+
 ## 2026-11-03 — Debito accettato per estensioni Poste e campagna 2021
 
 - Dopo la verifica finale l'utente autorizza esplicitamente: «procedi lo stesso

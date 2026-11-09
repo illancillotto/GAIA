@@ -24,6 +24,7 @@ from app.modules.ruolo.poste_dispatch_schemas import (
 from app.modules.ruolo.services import poste_dispatch as service
 from app.modules.ruolo.services import poste_dispatch_accounts as accounts
 from app.modules.ruolo.services import poste_dispatch_views as views
+from app.modules.ruolo.services.poste_dispatch_duplicates import duplicate_report
 from app.modules.ruolo.services.poste_dispatch_state import DispatchConflict, DispatchNotFound
 
 MANAGE = "ruolo.tributi.manage_status"
@@ -87,6 +88,11 @@ def create_lot(
         ),
     )
     return views.lot_detail(db, lot.id)
+
+
+@router.get("/duplicates")
+def get_duplicates(db: Session = Depends(get_db)):
+    return duplicate_report(db)
 
 
 @router.get("/accounts", response_model=list[PosteDispatchAccountOut])

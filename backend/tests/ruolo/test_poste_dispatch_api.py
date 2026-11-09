@@ -148,3 +148,43 @@ def test_binding_a_historical_account_is_an_audited_manage_command(api):
     assert bound.status_code == 200 and bound.json()["credential_id"] == 1
     assert bound.json()["events"][0]["actor_username"]
     assert api.client.put(path, json={"credential_id": 1}).status_code == 409
+
+
+def test_duplicate_report_is_readable_by_viewers_and_reports_incomplete_coverage(api):
+    _create(api)
+    response = api.client.get(f"{URL}/duplicates", headers=_headers(2))
+    assert response.status_code == 200
+    report = response.json()
+    assert report["findings"] == [] and report["coverage_complete"] is False
+    assert report["accounts"][0]["poste_username"] == "account-1"
+    assert "password" not in response.text
+
+
+def test_duplicate_report_preserves_module_and_section_permissions(api):
+    response = api.client.get(f"{URL}/duplicates", headers=_headers(5))
+    assert response.status_code == 403
+
+
+def test_duplicate_report_identifies_the_other_account_and_draft(api):
+    from datetime import UTC, datetime
+    from uuid import UUID
+
+    from app.modules.ruolo.poste_dispatch_models import PosteDispatchLot
+
+    lot = _create(api)
+    with api.session() as db:
+        seed_account(db, 2, "other-poste")
+        db.add(PosteDispatchLot(
+            title="Other account", created_by=1, credential_id=2,
+            poste_username="other-poste", postal_options={},
+            portal_snapshot={"checked_at": datetime.now(UTC).isoformat(),
+                             "drafts": [{"name": lot["items"][0]["shipment_name"], "draft_id": "99"}]},
+        ))
+        assert db.get(PosteDispatchLot, UUID(lot["id"])) is not None
+        db.commit()
+    response = api.client.get(f"{URL}/duplicates")
+    assert response.status_code == 200
+    [finding] = response.json()["findings"]
+    assert finding["portal_drafts"][0]["poste_username"] == "other-poste"
+    assert finding["portal_drafts"][0]["draft_id"] == "99"
+    assert finding["items"][0]["lot_id"] == lot["id"]
