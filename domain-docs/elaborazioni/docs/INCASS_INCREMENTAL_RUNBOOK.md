@@ -167,8 +167,10 @@ Questo worker non certifica il lease degli scraper legacy non cooperanti:
 prima dell'esercizio isolare l'account incrementale e assegnare esplicitamente
 credenziali diverse agli altri pool/operatori. Il compose condivide il rate
 limiter del runtime, ma il pool export settimanale conserva il proprio file.
-Una verifica iniziale dei job attivi riduce le sovrapposizioni, senza offrire
-un mutex globale con le elaborazioni legacy che partono successivamente.
+Il dispatch ricontrolla i job legacy subito prima dell'upsert, anche dopo
+eventuali recuperi pesanti: se un job è partito durante l'acquisizione,
+rinvia il change senza consumare tentativi né scrivere dati tributari. Questi
+controlli non costituiscono un mutex globale fra tutti i processi legacy.
 
 ## Monitoraggio, recovery e rollback
 

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy import select
 
+from app.models.capacitas import CapacitasInCassSyncJob
 from app.modules.elaborazioni.capacitas.incremental import dispatch as d
 from app.modules.elaborazioni.capacitas.incremental.journal import begin_cycle
 from app.modules.elaborazioni.capacitas.incremental.models import (
@@ -280,3 +281,14 @@ def test_shared_person_company_fiscal_identity_is_never_guessed(db, owner):
     db.commit()
     with pytest.raises(SnapshotInvalid, match="ambiguous_tax_identity"):
         d.resolve_owner(db, canonical_row(raw_row()), None)
+
+
+def test_legacy_job_started_after_tick_defers_dispatch_without_consuming_retry(db, config, owner):
+    notice = seed_notice(db, owner)
+    item = change(db, config)
+    db.add(CapacitasInCassSyncJob(status="processing", mode="subjects_sync", payload_json={}))
+    db.commit()
+    assert asyncio.run(d.drain(db, HeavyClient(), active(config))) == 0
+    assert item.status == "pending" and item.attempts == 0
+    assert item.result["reason"] == "legacy_job_busy"
+    assert notice.importo_riscosso == "0,00"

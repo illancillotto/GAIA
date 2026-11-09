@@ -81,8 +81,8 @@ from app.modules.elaborazioni.capacitas.incremental.models import (
 
 ## Verifiche effettive
 
-Suite nuova: **107 passed**, coverage statement/branch **100%** su tutti gli
-11 file runtime nuovi e sull'intero `app/db/base.py`: 770 statement e 238 rami,
+Suite nuova: **108 passed**, coverage statement/branch **100%** su tutti gli
+11 file runtime nuovi e sull'intero `app/db/base.py`: conteggi nell'evidenza coverage,
 zero missing/partial branch. Include PostgreSQL temporaneo locale isolato,
 senza connessione al DB applicativo o al CED.
 
@@ -102,6 +102,8 @@ idempotenza della ricevuta, errore partitario e dead-letter, rollback DB,
 flag off/shadow/active, finestra operativa, lease concorrenti e migration
 upgrade/downgrade su SQLite e PostgreSQL. I payload/documenti pesanti vengono
 verificati attraverso il vero upsert e la vera riconciliazione canonica.
+Una verifica aggiunta in review prova anche il rinvio senza retry debt quando
+un job legacy parte dopo l'ammissione iniziale e prima dell'upsert attivo.
 
 Regressioni: **234 test passed**, con il comando seguente (warning preesistenti
 runpy e JWT nelle fixture; nessuna failure):
@@ -135,7 +137,7 @@ una riproduzione di queste failure su HEAD pulito.
 Metriche prima: i runtime esistenti esportazione/stato/runner, poi lasciati
 invariati, erano 3 file / 36 callable / zero violation. I runtime nuovi erano
 assenti. Metriche finali del perimetro incrementale più db/base.py: 12 file,
-55 callable, **zero error-level**, 30 warning. Non è un refactoring hotspot:
+55 callable, **zero error-level**, 31 warning. Non è un refactoring hotspot:
 nessuna dichiarazione di riduzione o spostamento del debito legacy.
 
 Ratchet autorevole eseguito contro `origin/main` e la baseline del merge-base

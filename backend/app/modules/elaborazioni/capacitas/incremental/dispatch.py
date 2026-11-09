@@ -4,6 +4,7 @@ from datetime import datetime
 
 from sqlalchemy import func, select, union_all
 
+from app.models.capacitas import CapacitasInCassSyncJob
 from app.modules.elaborazioni.capacitas.apps import get_capacitas_app
 from app.modules.elaborazioni.capacitas.apps.incass.parsers import parse_incass_search_result
 from app.modules.elaborazioni.capacitas.incremental.journal import pending_changes
@@ -20,7 +21,15 @@ from app.modules.elaborazioni.capacitas.incremental.normalize import (
 from app.modules.elaborazioni.capacitas.recovery_identity import audit_recovery_subjects
 from app.modules.elaborazioni.capacitas.recovery_ruolo import reconcile_subject_ruolo
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPaymentNotice, AnagraficaPerson
-from app.services.elaborazioni_capacitas_incass import _run_incass_retryable, _upsert_payment_notice
+from app.services.elaborazioni_capacitas_incass import (
+    ACTIVE_JOB_STATUSES,
+    _run_incass_retryable,
+    _upsert_payment_notice,
+)
+
+
+class SyncDeferred(RuntimeError):
+    """An ordinary sync started after admission; keep the change pending without retry debt."""
 
 
 def resolve_owner(db, row: dict, existing):
@@ -118,6 +127,15 @@ async def apply_change(db, client, change, config):
     row = notice_row(change.new)
     heavy = needs_recovery(change, existing)
     recovered = await recover_payload(client, row, existing) if heavy else None
+    if (
+        db.scalar(
+            select(CapacitasInCassSyncJob.id)
+            .where(CapacitasInCassSyncJob.status.in_(tuple(ACTIVE_JOB_STATUSES)))
+            .limit(1)
+        )
+        is not None
+    ):
+        raise SyncDeferred("legacy_job_busy")
     _upsert_payment_notice(
         db,
         subject_id=owner.subject_id,
@@ -172,6 +190,10 @@ def store_recovery(db, key, recovered) -> None:
 def record_failure(db, change_id: str, config, exc: Exception) -> None:
     db.rollback()
     change = db.get(IncrementalChange, change_id)
+    if isinstance(exc, SyncDeferred):
+        change.result = {"reason": "legacy_job_busy", "fallback": "legacy_autosync_unchanged"}
+        db.commit()
+        return
     change.attempts += 1
     permanent = isinstance(exc, SnapshotInvalid)
     change.status = "dead" if permanent or change.attempts >= config.max_attempts else "pending"
