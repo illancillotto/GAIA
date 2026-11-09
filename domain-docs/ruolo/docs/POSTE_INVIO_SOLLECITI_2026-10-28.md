@@ -19,6 +19,13 @@ rifiutare ogni invio.
 
 ## Procedura operativa
 
+Dal 6 novembre la produzione include una vista iniziale per **anno → account
+Poste**, con generazione/recupero da CF/P.IVA e preparazione automatica delle
+sole bozze dopo la verifica indirizzi. Procedura, API, limiti e verifiche sono in
+[SOLLECITI_WORKSPACE_2026-11-06.md](SOLLECITI_WORKSPACE_2026-11-06.md).
+Rilascio coordinato verificato sul CED alle 10:13 CET. La procedura seguente resta disponibile
+tramite **Storico lotti di generazione**; INVIA rimane manuale sul portale.
+
 1. Dalla sidebar Ruolo aprire **Invio solleciti** (`/ruolo/tributi/solleciti`).
    Nella scheda «Solleciti generati» aprire un lotto, controllare il PDF con
    **Anteprima avviso** e spuntare **Seleziona per Posta Online**. La selezione
@@ -151,10 +158,48 @@ Verifica locale della modifica:
 ## Caricamenti concorrenti per account — 2026-11-03
 
 Rilasciato sul CED il 03/11/2026 alle 10:48 CET come `poste-pool-20261103`,
-successivamente al rilascio `poste-accounts-20261103`. Il worker esegue fino a tre job di caricamento contemporanei,
-ciascuno con un account Poste diverso. Il limite per processo si configura con
+successivamente al rilascio `poste-accounts-20261103`, inizialmente con tre job
+contemporanei. Il limite per processo si configura con
 `POSTA_ONLINE_MAX_CONCURRENT_ACCOUNTS` (default `3`, intervallo `1–32`), esposto
 anche dal servizio Docker Compose `elaborazioni-worker-poste`.
+
+**Configurazione della campagna con cinque credenziali.** Il rilascio operativo
+`poste-pool-five-20261103` porta il limite di produzione a `5`, senza modificare
+il default del repository o il codice runtime. Ogni account mantiene al massimo
+un job attivo; account sospesi, esiti incerti e job esclusivi possono ridurre
+il parallelismo effettivo sotto cinque. Aumentare il limite non sblocca questi
+casi e non esegue INVIA.
+
+La procedura ferma il controller della campagna, richiede l'arresto del worker
+senza timeout di terminazione forzata e attende la conclusione dei job avviati.
+Ricrea soltanto `elaborazioni-worker-poste` con la stessa immagine e un override
+Compose persistente: unica differenza di configurazione, il limite da `3` a `5`.
+Verifica health, limite letto dal runtime e conservazione delle altre risorse,
+dei mount e dei container, quindi riavvia il controller. Configurazione precedente,
+override di rollback e ricevuta sono nella directory privata della release sul
+CED. I limiti del container restano 2 CPU, 3 GiB e 768 PID.
+
+Applicato il 03/11/2026 alle 17:54 CET e verificato alle 17:56 CET. Per fermare
+il lotto già avviato senza attendere tutti i suoi avvisi, due elementi ancora
+mai sottoposti a CONTINUA sono stati temporaneamente sospesi con audit. Il
+controllo di stato prima di CONTINUA ne ha impedito l'invio; i due esiti negativi
+consecutivi hanno concluso il vecchio job, il cui fallimento resta nello storico.
+Entrambi gli elementi sono stati ripristinati allo stato originale, verificando
+hash del PDF, assenza di eventi di invio e identificativi ancora vuoti. Nessuna
+modifica agli avvisi già in fase di invio. Questo è un checkpoint operativo
+della campagna, non una nuova funzione generale di pausa dei job.
+
+Worker healthy, configurazione runtime a cinque e controller riattivato sono
+stati verificati. La ricreazione Compose ha riordinato i bind mount: il controllo
+finale confronta il loro contenuto senza attribuire significato all'ordine.
+La ricevuta di rilascio documenta anche il riavvio indipendente, durante
+l'attesa, del container GaTe Mobile sync, che non è stato ricreato da questa
+operazione.
+
+La verifica locale comprende 16 test del pool esistenti e una prova operativa
+aggiuntiva con limite configurato a cinque: cinque account lavorano assieme,
+il sesto e il secondo job dello stesso account aspettano, tutti i job terminano
+e tutti i lease vengono rilasciati.
 
 `posta_online_pool.py` gestisce il pool; `posta_online_queue.py` seleziona i job;
 `posta_online_leases.py` mantiene lock di sessione PostgreSQL su connessioni

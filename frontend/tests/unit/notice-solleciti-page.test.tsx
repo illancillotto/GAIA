@@ -8,6 +8,10 @@ import { usePosteSelection } from "@/components/ruolo/solleciti/poste-selection"
 import { useBatchOverview } from "@/components/ruolo/solleciti/batch-overview";
 import { useSolleciti } from "@/components/ruolo/solleciti/workspace";
 
+// This suite characterizes the retained batch-history workflow; the default
+// year/account workspace has its own integration and browser tests.
+vi.mock("@/components/ruolo/solleciti/poste-workspace", () => ({ PosteWorkspace: ({ legacy }: { legacy: React.ReactNode }) => legacy }));
+
 const mocks = vi.hoisted(() => ({ session: vi.fn(), token: vi.fn(), list: vi.fn(), get: vi.fn(), confirm: vi.fn(), blob: vi.fn() }));
 const poste = vi.hoisted(() => ({
   listPosteAccounts: vi.fn(), bindPosteAccount: vi.fn(),
@@ -483,6 +487,26 @@ it("lists the first notices of a large batch and keeps its counters", async () =
   expect(screen.getByText("Inviato via PEC (1)")).toBeVisible();
   expect(screen.getByText("PDF non generato (1)")).toBeVisible();
   expect(within(screen.getByRole("button", { name: /Generati batch-2/ })).queryByText("2021")).toBeNull();
+});
+
+it("shows the saved Poste shipment on the generated notice card for a read-only operator", async () => {
+  const generated = generatedBatch();
+  mocks.session.mockReturnValue({ status: "ready", token: "token", currentUser: { role: "admin", enabled_modules: ["ruolo"] }, grantedSectionKeys: ["ruolo.tributi.view"] });
+  mocks.list.mockResolvedValue({ items: [generated], total: 1 });
+  mocks.get.mockResolvedValue(generated);
+  overview.getBatchOverview.mockResolvedValue([{ batch_id: "batch-2", items: [{
+    ...overviewRow("batch-2", "item-2").items[0],
+    poste_dispatches: [{ id: "shipment-1", notice_number: "02021000002", status: "sent", poste_draft_id: "POSTE-123", poste_status: "Accettato", draft_created_at: null, sent_at: "2026-11-03T10:00:00Z", tracking_number: "TRACK-123", poste_username: "synthetic-account", upload_requested_by_username: "synthetic-operator", updated_at: "2026-11-05T10:00:00Z" }],
+  }] }]);
+  render(<SollecitiPage />);
+  fireEvent.click(await screen.findByRole("button", { name: /Generati batch-2/ }));
+  const history = await screen.findByRole("region", { name: "Storico Posta Online" });
+  expect(within(history).getByText("POSTE-123")).toBeVisible();
+  expect(within(history).getByText("TRACK-123")).toBeVisible();
+  expect(within(history).getByText("Spedito")).toBeVisible();
+  expect(screen.queryByRole("checkbox", { name: "Seleziona per Posta Online", exact: true })).toBeNull();
+  expect(poste.createPosteLot).not.toHaveBeenCalled();
+  expect(poste.requestPosteJob).not.toHaveBeenCalled();
 });
 
 it("refreshes the batch list and its summary after making the missing PDFs of a year", async () => {

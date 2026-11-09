@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   listTributiPaymentImportUnmatched: vi.fn(),
   useSessionBootstrap: vi.fn(),
   listTributiReminderBatches: vi.fn(),
+  getSollecitiWorkspace: vi.fn(),
 }));
 
 function buildPaymentImportJob(overrides: Record<string, unknown> = {}) {
@@ -36,6 +37,10 @@ function buildPaymentImportJob(overrides: Record<string, unknown> = {}) {
 
 vi.mock("@/lib/auth", () => ({
   getStoredAccessToken: mocks.getStoredAccessToken,
+}));
+
+vi.mock("@/lib/ruolo-solleciti-workspace-api", () => ({
+  getSollecitiWorkspace: mocks.getSollecitiWorkspace,
 }));
 
 vi.mock("@/lib/use-session-bootstrap", () => ({
@@ -68,6 +73,7 @@ describe("Ruolo tributi import and reminders pages", () => {
   beforeEach(() => {
     mocks.useSessionBootstrap.mockReset();
     mocks.listTributiReminderBatches.mockReset();
+    mocks.getSollecitiWorkspace.mockResolvedValue({ items: [], groups: [], total: 0, page: 1, page_size: 20 });
     mocks.useSessionBootstrap.mockReturnValue({
       status: "ready",
       token: "token",
@@ -283,6 +289,10 @@ describe("Ruolo tributi import and reminders pages", () => {
     expect(screen.getByRole("heading", { name: "Invio solleciti" })).toBeInTheDocument();
     expect(screen.getByText(/INVIA lo preme sempre l'operatore su Posta Online/)).toBeInTheDocument();
     expect(screen.getByText(/^Accesso in sola lettura/)).toBeInTheDocument();
+    expect(await screen.findByText("Nessun avviso corrisponde ai filtri.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Genera o recupera PDF" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Strumenti avanzati"));
+    fireEvent.click(screen.getByRole("button", { name: "Storico lotti di generazione" }));
     expect(await screen.findByText("Nessun lotto generato.")).toBeInTheDocument();
     expect(mocks.listTributiReminderBatches).toHaveBeenCalledWith("token", 1, 50);
     expect(screen.queryByRole("navigation", { name: "Pagine lotti" })).not.toBeInTheDocument();

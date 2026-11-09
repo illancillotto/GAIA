@@ -221,12 +221,10 @@ HANDLERS = {
 
 
 def _finish(session_factory: sessionmaker, job_id: int, status: str, result: dict) -> None:
+    from app.modules.ruolo.services.poste_preparation import finish_job
+
     with session_factory() as db:
-        job = db.get(PostaOnlineRegisteredMailSyncJob, job_id)
-        job.status = status
-        job.error_detail = result.get("error")
-        job.completed_at = datetime.now(UTC)
-        job.result_json = result
+        finish_job(db, job_id, status, result)
         db.commit()
 
 

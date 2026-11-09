@@ -855,6 +855,9 @@ regole ([rigenerazione PDF](domain-docs/ruolo/docs/RUOLO_RIGENERAZIONE_PDF_2026-
 sullo stradario Poste, crea le bozze e registra le raccomandate trovate in
 archivio. INVIA lo preme sempre l'operatore su Poste; GAIA non lo chiama mai.
 Procedura e limiti: [invio solleciti Poste](domain-docs/ruolo/docs/POSTE_INVIO_SOLLECITI_2026-10-28.md).
+Dal 6 novembre è disponibile in produzione la [vista anno/account e generazione da CF/P.IVA](domain-docs/ruolo/docs/SOLLECITI_WORKSPACE_2026-11-06.md)
+prepara indirizzi e bozze con job persistenti e mantiene lo storico dei lotti.
+Rilascio coordinato verificato; la spedizione finale resta manuale sul portale Poste.
 
 Il renderer locale degli avvisi usa la palette blu `#2b5793`, con gradiente e
 fondi azzurri coordinati. Anteprima 2021 dimostrativa:

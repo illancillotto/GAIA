@@ -1,4 +1,12 @@
 # GAIA Ruolo — Product Requirements Document v1.0
+
+### Stati Poste visibili nella lista — 6 novembre
+
+Contatori globali filtrabili per stato sopra l’elenco, badge distinti e
+ID/data registrati accanto agli avvisi caricati o spediti. Si riusa lo stato
+persistito: nessuna marcatura automatica o nuova spedizione. Dettagli e audit
+nel [report](SOLLECITI_WORKSPACE_2026-11-06.md).
+
 ### Revisione UX Solleciti — pubblicata il 6 novembre alle 12:48 CET
 
 Implementata la schermata semplificata richiesta: anno e ricerca unica,
@@ -12,6 +20,16 @@ Componi; permessi e checklist invariati. Rilascio solo frontend autorizzato,
 senza abilitare trasporti o cambiare backend/worker. La sezione sotto descrive
 la prima release del mattino.
 
+### Area operativa avvisi e Posta Online — 2026-11-06
+
+In produzione dal 6 novembre è disponibile la generazione/recupero per CF/P.IVA esatto e anno,
+con vista canonica degli avvisi raggruppata prima per anno poi per account
+Poste. La preparazione accoda verifica indirizzi e bozze senza dipendere dal
+browser; l'operatore conserva controllo finale e invio manuale su Poste.
+Riconciliazione per singolo lotto o account, conflitti visibili e storico lotti
+preservato. Nessun nuovo schema o canale di invio. Stato, API, matrice test e
+limiti in [SOLLECITI_WORKSPACE_2026-11-06.md](SOLLECITI_WORKSPACE_2026-11-06.md).
+Rilasciato sul CED il 6 novembre alle 10:13 CET, con controlli autenticati di sola lettura e sei scenari browser finali superati.
 
 ### Recupero avvisi 2021 e gestori sovrapposti — 2026-10-21
 

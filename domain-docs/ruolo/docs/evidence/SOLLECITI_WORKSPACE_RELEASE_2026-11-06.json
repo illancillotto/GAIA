@@ -1,0 +1,165 @@
+{
+  "release": "solleciti-workspace-20261106",
+  "scope": "Ruolo / Solleciti workspace and Poste preparation; manual INVIA remains on Poste",
+  "authorized_by_user": true,
+  "activated_at": "2026-11-06T09:13:40.415822+00:00",
+  "post_release_verified_at": "2026-11-06T09:14:53.129830+00:00",
+  "images": {
+    "backend": "sha256:f37267a9c7cff40dc97c4d662ae9b34936fc791d3a25a4962e0674bc678e96fc",
+    "frontend": "sha256:cb2169a8fc62e5d7b5ccbc96dbe949661c9c0a32ea7d6d5f4c546afd20a406bb",
+    "elaborazioni-worker-poste": "sha256:d4e333a2dd370b64835261d784e71f58ec572777c2b104890e62970d6f723c91"
+  },
+  "runtime_manifest": {
+    "backend/app/modules/ruolo/router.py": "6b6f6254cd9cd256fa7d0f61d5217fb65e10e0b4e925b9f53d50e3dadeb15aba",
+    "backend/app/modules/ruolo/routes/solleciti_workspace_routes.py": "745e76c092ef5234f73401a317aed550a0fd6810d1b50629ce4a8cb15c93fd7c",
+    "backend/app/modules/ruolo/services/solleciti_workspace.py": "e48af08e54f5d94f4c6ee5676093b29bc16e19c78d91c019e895b2af8e2ca661",
+    "backend/app/modules/ruolo/services/solleciti_generation.py": "ef359cb0eea98174e9045caa918d07a1e1e74537778f481394108b10a0661228",
+    "backend/app/modules/ruolo/services/poste_preparation.py": "71e8dc3fb3c9c0dffb06fff114ba68f1798301f7ce5bd03306df7fee4b1655ac",
+    "frontend/src/components/ruolo/solleciti/workspace.tsx": "0802b716cd82318eaca6280af596815b9f80f6477b65fccd22e7adcde40c3b11",
+    "frontend/src/components/ruolo/solleciti/poste-workspace.tsx": "5ce450776ad7139da97870ffb35a737d60a5bf93848749e7e9aa232843d3e560",
+    "frontend/src/components/ruolo/solleciti/workspace-generation.tsx": "0cbd9399f14bcf5695a1b4d6f0ece7a340bfcb5622638cadc7a84c6bde8e33b8",
+    "frontend/src/components/ruolo/solleciti/workspace-groups.tsx": "7f35263ce7c2a4cd6cb705c02de945604c4969ea1aae1bc51ffdba60cf60cd22",
+    "frontend/src/components/ruolo/solleciti/use-poste-workspace.ts": "bc8c85f6182dd56745c8f3e2e7cae7aa4a88d35e51b615b96bf773a09425f64e",
+    "frontend/src/lib/ruolo-solleciti-workspace-api.ts": "8267ee5a51ad8f745fc0c84bbffca95cc166ca0e378b6c119f0b0e826876737b",
+    "modules/elaborazioni/worker/posta_online_dispatch_runner.py": "cd1641712f606921b13b3fb5fa878c5a67373d1bc3e6cd14c9cecb98d9f8cd12"
+  },
+  "worker_dependency_closure_from_live_backend": {
+    "app/modules/ruolo/services/notice_pdf_regeneration.py": "84e31e79f00ecbcf9a7c5d4147f36f249673f9bc55f6dbed9404db88c3381fdf",
+    "app/modules/ruolo/services/notice_recipient_identity.py": "0658e3f80646ebca98e5ce77b9bc4d82f93801a30b1c9f129c27434a24d11407"
+  },
+  "tests": {
+    "backend_candidate": 16,
+    "worker_candidate": 23,
+    "candidate_statement_branch_coverage_percent": 100,
+    "worker_real_orm_cases": {
+      "worker_real_orm_continuation": {
+        "success": true,
+        "address_review": true,
+        "failed": true,
+        "disabled_account": true
+      },
+      "duplicate_callback_no_duplicate_job": true,
+      "network": "none",
+      "synthetic_only": true
+    },
+    "canary_e2e": {
+      "startTime": "2026-11-06T09:06:43.290Z",
+      "duration": 10575.908,
+      "expected": 6,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "published_e2e": {
+      "startTime": "2026-11-06T09:13:51.264Z",
+      "duration": 11921.907,
+      "expected": 6,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "provider_calls_by_tests": false
+  },
+  "healthy": true,
+  "configuration_preserved": true,
+  "unrelated_containers_preserved": 50,
+  "http": {
+    "/login": 200,
+    "/ruolo/tributi/solleciti": 200,
+    "/ruolo/tributi/solleciti/poste": 200,
+    "/ruolo/tributi/solleciti/pec": 200,
+    "/ruolo/tributi/solleciti/email": 200,
+    "/gaia/communications": 200,
+    "/api/communications/accounts": 401,
+    "/api/ruolo/tributi/solleciti/workspace": 401,
+    "/api/ruolo/tributi/solleciti/batch-overview": 401
+  },
+  "authenticated_read_only_probe": {
+    "authenticated_workspace_read": true,
+    "canonical_total": 1112,
+    "canonical_2021": 1009,
+    "account_groups": 12,
+    "sent_history_samples_matching_database": 3,
+    "sent_rows_not_preparable": true,
+    "transaction_read_only": true,
+    "no_document_regeneration": true
+  },
+  "business_before": {
+    "revision": "20261104_1400",
+    "active_poste_jobs": 0,
+    "communications_paused": true,
+    "communication_accounts": 0,
+    "communication_messages": 0,
+    "communication_jobs": 0,
+    "dispatch_items": 1277,
+    "sent": 431,
+    "continuation_jobs": 0
+  },
+  "business_after": {
+    "revision": "20261104_1400",
+    "active_poste_jobs": 0,
+    "communications_paused": true,
+    "communication_accounts": 0,
+    "communication_messages": 0,
+    "communication_jobs": 0,
+    "dispatch_items": 1277,
+    "sent": 431,
+    "continuation_jobs": 0
+  },
+  "backup": {
+    "scope": "Full schema and affected table data; not a full tax database backup. Files with PII remain protected on CED.",
+    "tables": [
+      "alembic_version",
+      "application_users",
+      "ruolo_tributi_reminder_batches",
+      "ruolo_tributi_reminder_batch_items",
+      "ruolo_tributi_notice_numbers",
+      "ruolo_poste_dispatch_lots",
+      "ruolo_poste_dispatch_items",
+      "ruolo_poste_dispatch_events",
+      "posta_online_registered_mail_sync_jobs",
+      "ruolo_tributi_registered_mails"
+    ],
+    "clone_restore": true,
+    "backup": {
+      "schema.dump": {
+        "bytes": 1289569,
+        "sha256": "9470668caf58bf7dc4bf1f93d404384d43d541981a4a31d4f1e29e143e1c625d"
+      },
+      "affected-data.dump": {
+        "bytes": 388676188,
+        "sha256": "d6f25504b749436cb4ff7b856fa4facf09cb0db3d0cda0d6bd5efd757ea3c899"
+      }
+    }
+  },
+  "first_activation": {
+    "outcome": "AUTOMATIC_ROLLBACK_COMPLETED",
+    "reason": "Probe compared +00:00 and Z as strings instead of normalizing UTC datetimes",
+    "diagnosis": {
+      "canonical_2021": 1009,
+      "history_rows_compared": 33,
+      "fields_with_serialization_difference": [
+        "draft_created_at",
+        "sent_at",
+        "updated_at"
+      ],
+      "all_semantically_identical": true,
+      "transaction_read_only": true
+    },
+    "application_runtime_changed_to_resolve": false
+  },
+  "cleanup": {
+    "canary_removed": true,
+    "temporary_secret_envs_removed": true
+  },
+  "no_migrations": true,
+  "no_commit_or_push": true,
+  "residual_limits": [
+    "Not a real-provider transport test",
+    "Communications transport still paused",
+    "Working tree includes unrelated concurrent changes; not bundled",
+    "Backup covers full schema and listed affected data, not the full 84GB tax database",
+    "Scalability and PDF reuse limits documented in SOLLECITI_WORKSPACE_2026-11-06.md"
+  ],
+  "quality_gate": "PASS"
+}

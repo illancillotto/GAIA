@@ -31,17 +31,20 @@ for (const width of [1440, 390]) {
     await page.route("**/api/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
       let data: unknown = {};
+      if (path.endsWith("/solleciti/workspace")) data = { items: [], groups: [], total: 0, page: 1, page_size: 20 };
       if (path.endsWith("/auth/me")) data = { id: 1, username: "operatore", role: "admin", is_active: true, enabled_modules: ["ruolo"] };
       if (path.endsWith("/auth/my-permissions")) data = { sections: [], granted_keys: ["ruolo.tributi.view", "ruolo.tributi.manage_status"] };
       if (path.endsWith("/batches")) data = { items: [batch], total: 1, page: 1, page_size: 50 };
       if (path.endsWith("/batch-1")) data = batch;
+      if (path.endsWith("/solleciti/workspace")) data = { groups: [], items: [], total: 0, page: 1, page_size: 20 };
       if (path.endsWith("/candidates")) data = { items: [], total: 0, page: 1, page_size: 50 };
+      if (path.endsWith("/poste-dispatch/accounts")) data = [{ id: 7, label: "Account sintetico", username: "synthetic-account", active: true }];
       if (path.endsWith("/poste-dispatch/lots")) {
         if (route.request().method() === "POST") created = route.request().postDataJSON();
         data = route.request().method() === "POST" ? lot : { items: created ? [lot] : [], total: created ? 1 : 0, page: 1, page_size: 50 };
       }
       if (path.endsWith("/lots/lot-1")) data = lot;
-      if (path.endsWith("/batch-overview")) data = [{ batch_id: "batch-1", items: [{ item_id: "item-1", label: item.display_name, status: "generated", sendable: true, pec_sent: true, notice_number: "020210000743640", years: [2021], amount: 221.55 }] }];
+      if (path.endsWith("/batch-overview")) data = [{ batch_id: "batch-1", items: [{ item_id: "item-1", label: item.display_name, status: "generated", sendable: true, pec_sent: true, notice_number: "020210000743640", years: [2021], amount: 221.55, poste_dispatches: [{ id: "attempt-1", notice_number: "020210000743640", status: "sent", poste_draft_id: "POSTE-SYNTHETIC-123", poste_status: "Accettato", draft_created_at: "2026-11-02T10:00:00Z", sent_at: "2026-11-03T10:00:00Z", tracking_number: "TRACK-SYNTHETIC-123", upload_requested_by_username: "synthetic-operator", poste_username: "synthetic-account", updated_at: "2026-11-05T10:00:00Z" }] }] }];
       if (path.endsWith("/years/2021/status")) data = { year: 2021, total: 2, ready: 1, failed: [], missing: generatedYear ? [] : [{ label: "Rossi Mario", avviso_ids: ["avviso-2"] }] };
       if (path.endsWith("/years/2021/generate")) { generatedYear = route.request().postDataJSON(); data = { batch_id: "batch-2", generated: 1, problems: [] }; }
       if (path.endsWith("/items/item-1/download")) {
@@ -51,6 +54,8 @@ for (const width of [1440, 390]) {
       await route.fulfill({ status: 200, json: data });
     });
     await page.goto("/ruolo/tributi/solleciti?embedded=1");
+    await page.getByText("Strumenti avanzati", { exact: true }).click();
+    await page.getByRole("button", { name: "Storico lotti di generazione" }).click();
     await expect(page.getByText("Inviato via PEC", { exact: true })).toBeVisible();
     await expect(page.getByText("020210000743640")).toBeVisible();
     await expect(page.getByText("221,55 €")).toBeVisible();
@@ -63,14 +68,20 @@ for (const width of [1440, 390]) {
     await page.getByRole("button", { name: /Sollecito tributi 00048250955/ }).click();
     await expect(page.getByTitle("Anteprima avviso generato")).toHaveAttribute("src", /^blob:/);
     await expect(page.getByText("Avviso già inviato via PEC")).toBeVisible();
+    const history = page.getByRole("region", { name: "Storico Posta Online" });
+    await expect(history.getByText("POSTE-SYNTHETIC-123")).toBeVisible();
+    await expect(history.getByText("TRACK-SYNTHETIC-123")).toBeVisible();
+    await expect(history.getByText("Spedito", { exact: true })).toBeVisible();
+    await expect(history.getByText("synthetic-account")).toBeVisible();
     await expect(page.getByRole("checkbox", { name: "Seleziona per Posta Online", exact: true })).toBeChecked();
     await page.getByRole("textbox", { name: "Titolo lotto Poste" }).fill("Solleciti 2021");
+    await page.getByRole("combobox", { name: "Account Poste per la selezione" }).selectOption("7");
     await page.screenshot({ path: `/tmp/gaia-invio-solleciti-${width}.png`, fullPage: true });
     expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
     await page.getByRole("button", { name: "Carica su Poste (1)" }).click();
     await expect(page.getByRole("region", { name: "Dettaglio lotto Poste" })).toBeVisible();
     await expect(page.getByRole("tab", { name: "Posta Online" })).toHaveAttribute("aria-selected", "true");
-    expect(created).toEqual({ title: "Solleciti 2021", batch_item_ids: ["item-1"] });
+    expect(created).toEqual({ title: "Solleciti 2021", batch_item_ids: ["item-1"], credential_id: 7 });
     await page.screenshot({ path: `/tmp/gaia-invio-solleciti-poste-${width}.png`, fullPage: true });
     expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
     await page.goto("/ruolo/tributi/solleciti/poste?embedded=1");

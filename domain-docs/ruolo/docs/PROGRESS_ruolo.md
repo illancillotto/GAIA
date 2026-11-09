@@ -15,6 +15,17 @@ in archivio ma assente dal PDF; nessuna rigenerazione automatica dello storico.
 Nessun nuovo rilascio, invio o modifica tributaria. Fonti, matrice e stato:
 [report Communications](../../../docs/communications/OFFICE_TEMPLATES_2026-11-07.md).
 
+## Visibilità stati Poste — 6 novembre
+
+Audit readonly: 436 spediti, 467 caricati, 68 da preparare, 49 da verificare,
+2 in lavorazione sui 1.022 avvisi 2021. Le prime pagine apparivano tutte da
+preparare per l’ordinamento degli account. Introdotti contatori globali
+filtrabili, badge distinti e ID/data nella riga; nessun dato modificato.
+21 test pertinenti/coverage 100%, 89 regressioni e 18 smoke PASS;
+lint/typecheck/ratchet scope PASS. Frontend pubblicato alle 13:27 CET con
+configurazione e altri 52 container preservati. Dieci E2E candidata, dieci sulla release pubblicata e
+probe storico autenticato PASS; collaudo finale nel [report](SOLLECITI_WORKSPACE_2026-11-06.md).
+
 ## Revisione UX dopo il rilascio — pubblicata, 2026-11-06
 
 Su conferma esplicita realizzata la schermata semplificata: anno e ricerca

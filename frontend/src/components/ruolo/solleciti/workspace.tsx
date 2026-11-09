@@ -16,6 +16,7 @@ import { YearNoticesPanel } from "./year-notices-panel";
 import { useBatchOverview, type Overview } from "./batch-overview";
 import { BatchList, dateLabel, statusClass, statusLabel } from "./batch-list";
 import { NoticeCards } from "./notice-cards";
+import { PosteWorkspace } from "./poste-workspace";
 import type { NoticeGenerationConfirmationResponse, RuoloTributiReminderBatchResponse } from "@/types/ruolo";
 import type { PosteDispatchLotDetail } from "@/types/ruolo-poste-dispatch";
 
@@ -43,15 +44,15 @@ function SollecitiWorkspace({ token, canEdit }: { token: string; canEdit: boolea
     void posteLots.reload(lot.id);
   }
   return (
-    <RuoloModulePage title="Invio solleciti" description="Lotti generati, anteprima degli avvisi e invio con Posta Online." breadcrumb="Invio solleciti" requiredSection="ruolo.tributi.view">
+    <RuoloModulePage title="Invio solleciti" description="Consulta gli avvisi, controlla i PDF e prepara il caricamento su Posta Online." breadcrumb="Invio solleciti" requiredSection="ruolo.tributi.view">
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <SollecitiNavigation tab={tab} onChange={setTab} />
           <p className="rounded-full bg-[#eef3ea] px-4 py-2 text-xs text-[#203829]"><span className="font-semibold">Raccomandata A/R online:</span> GAIA prepara le bozze, INVIA lo preme sempre l&apos;operatore su Posta Online.</p>
         </div>
-        {!canEdit && <p className="text-sm text-slate-600">Accesso in sola lettura: per creare o rigenerare i PDF chiedi all&apos;amministratore il permesso di gestione Tributi.</p>}
+        {!canEdit && <p className="text-sm text-slate-600">Accesso in sola lettura: puoi consultare avvisi, documenti e storico.</p>}
         {tab === "generati"
-          ? <GeneratedPanel token={token} canEdit={canEdit} solleciti={solleciti} selection={selection} onLotCreated={lotCreated} />
+          ? <PosteWorkspace token={token} canEdit={canEdit} legacy={<GeneratedPanel token={token} canEdit={canEdit} solleciti={solleciti} selection={selection} onLotCreated={lotCreated} />} />
           : <PostePanel token={token} canEdit={canEdit} posteLots={posteLots} />}
       </div>
     </RuoloModulePage>

@@ -24,6 +24,10 @@ for (const width of [1440, 390]) {
     await page.route("**/api/**", async (route) => {
       const path = new URL(route.request().url()).pathname;
       let data: unknown = {};
+      if (path.endsWith("/solleciti/workspace")) data = { items: [], groups: [], total: 0, page: 1, page_size: 20 };
+      if (path.endsWith("/poste-dispatch/accounts")) data = [];
+      if (path.endsWith("/poste-dispatch/lots")) data = { items: [], total: 0, page: 1, page_size: 50 };
+      if (path.endsWith("/years/2021/status")) data = { year: 2021, total: 0, ready: 0, failed: [], missing: [] };
       if (path.endsWith("/auth/me")) data = { id: 1, username: "operatore", role: "admin", is_active: true, enabled_modules: ["ruolo"] };
       if (path.endsWith("/auth/my-permissions")) data = { sections: [], granted_keys: ["ruolo.tributi.view", "ruolo.tributi.manage_status"] };
       if (path.endsWith("/batches")) data = { items: [batch], total: 1, page: 1, page_size: 50 };
@@ -52,6 +56,8 @@ for (const width of [1440, 390]) {
       await route.fulfill({ status: 200, json: data });
     });
     await page.goto("/ruolo/tributi/solleciti?embedded=1");
+    await page.getByText("Strumenti avanzati", { exact: true }).click();
+    await page.getByRole("button", { name: "Storico lotti di generazione" }).click();
     await page.getByRole("button", { name: /Verifica 2022/ }).click();
     await expect(page.getByText("Mario Rossi")).toBeVisible();
     await page.getByRole("button", { name: "Esamina documento" }).click();

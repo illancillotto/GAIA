@@ -1,4 +1,5 @@
 """Router principale del modulo Ruolo."""
+
 from fastapi import APIRouter
 
 from app.modules.ruolo.routes.campaign_2021_routes import router as campaign_2021_router
@@ -21,6 +22,7 @@ from app.modules.ruolo.routes.reminder_batch_overview_routes import (
     router as reminder_batch_overview_router,
 )
 from app.modules.ruolo.routes.reminder_document_routes import router as reminder_document_router
+from app.modules.ruolo.routes.solleciti_workspace_routes import router as solleciti_workspace_router
 from app.modules.ruolo.routes.tributi_routes import router as tributi_router
 
 router = APIRouter()
@@ -40,3 +42,4 @@ router.include_router(notice_import_router)
 router.include_router(notice_register_router)
 router.include_router(registered_mail_router)
 router.include_router(registered_mail_document_router)
+router.include_router(solleciti_workspace_router)
