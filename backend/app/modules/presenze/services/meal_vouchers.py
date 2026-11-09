@@ -1,4 +1,4 @@
-"""Daily meal vouchers: the existing automatic rule plus an audited manual grant."""
+"""Daily meal vouchers from recognized overtime, dated profiles and audited grants."""
 
 from __future__ import annotations
 
@@ -11,18 +11,17 @@ from sqlalchemy.orm import Session
 from app.modules.presenze.models import PresenzeDailyRecord
 from app.modules.presenze.services.manual_presence import require_manual_presence
 from app.modules.presenze.services.meal_voucher_audit import record_manual_meal_voucher_change
+from app.modules.presenze.services.shift_voucher_policy import shift_voucher_profile
 from app.modules.presenze.services.shift_worker_rules import (
     shift_meal_voucher,
     shift_record_values,
-    shift_worker_type,
 )
 
 AUTOMATIC_MEAL_VOUCHER_START = date(2026, 8, 26)
-AUTOMATIC_MEAL_VOUCHER_EXTRA_MINUTES = 120
 
 
-def meal_voucher_values(record: PresenzeDailyRecord, extra_minutes: int | None) -> dict[str, Any]:
-    automatic_source = automatic_meal_voucher_source(record, extra_minutes)
+def meal_voucher_values(record: PresenzeDailyRecord, classification: Any) -> dict[str, Any]:
+    automatic_source = automatic_meal_voucher_source(record, classification)
     manual = bool(getattr(record, "meal_voucher_manual", False))
     sources = ((automatic_source, bool(automatic_source)), ("manual", manual))
     return {
@@ -35,16 +34,15 @@ def meal_voucher_values(record: PresenzeDailyRecord, extra_minutes: int | None) 
     }
 
 
-def automatic_meal_voucher_source(
-    record: PresenzeDailyRecord, extra_minutes: int | None
-) -> str | None:
+def automatic_meal_voucher_source(record: PresenzeDailyRecord, classification: Any) -> str | None:
     """Shift entitlement replaces the extra-hours rule; it never falls back to it."""
-    if shift_worker_type(record):
+    if shift_voucher_profile(record):
         return "shift" if shift_meal_voucher(record) else None
-    qualifies = (
-        record.work_date >= AUTOMATIC_MEAL_VOUCHER_START
-        and (extra_minutes or 0) >= AUTOMATIC_MEAL_VOUCHER_EXTRA_MINUTES
-    )
+    qualifies = all((
+        record.work_date >= AUTOMATIC_MEAL_VOUCHER_START,
+        (getattr(classification, "ordinary_minutes", None) or 0) > 0,
+        (getattr(classification, "extra_minutes", None) or 0) >= 120,
+    ))
     return "automatic" if qualifies else None
 
 

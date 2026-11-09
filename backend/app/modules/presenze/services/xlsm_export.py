@@ -399,7 +399,7 @@ def write_archivio_summary_values(
         extra_festive_minutes += classification.overtime_festive_minutes
         extra_night_minutes += classification.overtime_night_minutes
         extra_festive_night_minutes += classification.overtime_festive_night_minutes
-        meal_vouchers_total += meal_voucher_values(daily, classification.extra_minutes)["meal_voucher_count"]
+        meal_vouchers_total += meal_voucher_values(daily, classification)["meal_voucher_count"]
         km_total += daily.km_value or 0
         trasferta_total_minutes += daily.trasferta_minutes or 0
         if day_has_work_presence(classification):
@@ -491,7 +491,7 @@ def write_archive2_daily_values(
             "ordinary_festive" if classification.special_day else "ordinary_ferial": minutes_to_excel_hours_minutes(classification.ordinary_minutes),
             "straordinario_festive" if classification.special_day else "straordinario_ferial": minutes_to_excel_hours_minutes(classification.extra_minutes),
             "km_auto": daily.km_value,
-            "meal_vouchers": meal_voucher_values(daily, classification.extra_minutes)["meal_voucher_count"],
+            "meal_vouchers": meal_voucher_values(daily, classification)["meal_voucher_count"],
             "trasferta_hours": resolve_export_trasferta_value(daily),
             "absence_code": resolve_export_absence_code(daily) if schedule_context is not None or not day_has_work_presence(classification) else None,
             "reperibilita": resolve_export_reperibilita_value(daily),

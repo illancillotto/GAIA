@@ -126,6 +126,7 @@ def test_short_extra_rest_and_partial_absence():
     assert shift_quality(record, rows).missing_minutes == 60
     assert not shift_meal_voucher(record)
     record.justified_minutes = 60
+    record.request_status = "ACC"
     assert shift_quality(record, rows).missing_minutes == 0
     c = shift_classification(
         record,

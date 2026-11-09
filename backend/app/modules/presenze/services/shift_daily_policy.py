@@ -39,7 +39,7 @@ def shift_voucher_worked_minutes(record):
     )
 
     worked = shift_punch_minutes(record_shift_punches(record)) or 0
-    return min(worked, shift_countable_limit(record))
+    return worked
 
 
 def shift_quality_values(record, punches):

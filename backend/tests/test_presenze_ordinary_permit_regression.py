@@ -1,13 +1,15 @@
 """Ordinary permits and profile vouchers: synthetic reproductions of October incidents."""
 
-from datetime import date
+from datetime import date, time
+from types import SimpleNamespace
 
 import pytest
-from test_presenze_personnel_profiles import profile
+from test_presenze_personnel_profiles import profile, technician_day
 from test_presenze_shift_workers import punch
 
 from app.modules.presenze.models import PresenzeCollaborator, PresenzeDailyRecord
 from app.modules.presenze.services.inaz_absences import covered_inaz_absence_minutes
+from app.modules.presenze.services.meal_vouchers import meal_voucher_values
 from app.modules.presenze.services.operational_quality import build_operai_operational_quality
 from app.modules.presenze.services.ordinary_permits import (
     ordinary_permit_minutes,
@@ -15,6 +17,7 @@ from app.modules.presenze.services.ordinary_permits import (
     permit_clock,
     permit_interval,
 )
+from app.modules.presenze.services.shift_voucher_policy import shift_voucher_profile
 
 
 def permit_day(day=17, end="13:30", theory=390):
@@ -95,3 +98,50 @@ def test_interval_union_and_invalid_or_cancelled_requests():
     assert permit_clock("24:00") is None
     assert not permit_approved(None, None)
     assert not permit_approved("RIC", " ")
+
+
+@pytest.mark.parametrize("entry,exit", [("06:00", "13:00"), ("14:00", "21:00"), ("22:00", "05:00")])
+def test_dated_profile_grants_voucher_independently_of_schedule_band(entry, exit):
+    record = technician_day("OPE0613", 420)
+    record.shift_punches = [punch(entry, exit)]
+    values = meal_voucher_values(record, 0)
+    assert values["shift_worker_type"] == "none"
+    assert values["meal_voucher_shift"] and values["meal_voucher_count"] == 1
+    assert values["meal_voucher_sources"] == ["shift"]
+    assert record.schedule_code == "OPE0613"
+
+
+def test_profile_duration_revocation_travel_and_untrusted_assignment():
+    record = technician_day("OPE0613", 420)
+    record.shift_punches = [punch("06:00", "12:59")]
+    assert meal_voucher_values(record, 120)["meal_voucher_count"] == 0
+    record.shift_punches[0].exit_time = time(13)
+    record.shift_worker_source = "gate"
+    assert not shift_voucher_profile(record)
+    record.shift_worker_type = "tecnico_turnista"
+    assert shift_voucher_profile(record)
+    record.trasferta_minutes = 60
+    assert meal_voucher_values(record, 0)["meal_voucher_count"] == 0
+    record.meal_voucher_manual = True
+    assert meal_voucher_values(record, 0)["meal_voucher_count"] == 1
+    assert not shift_voucher_profile(
+        SimpleNamespace(
+            shift_worker_type="tecnico_turnista",
+            shift_worker_source="gate",
+            work_date=date(2026, 10, 1),
+        )
+    )
+
+
+def test_shift_detail_preserves_contract_date_and_travel_review():
+    from app.modules.presenze.services.shift_worker_rules import shift_quality
+
+    record = technician_day("TELEC_1", 420)
+    record.work_date = date(2026, 9, 6)
+    record.shift_punches = [punch("06:00", "13:00")]
+    record.trasferta_minutes = 60
+    result = shift_quality(record, record.shift_punches)
+    assert result.status == "ok"
+    assert not any("flessibilita" in note for note in result.notes)
+    assert any("rimborso vitto" in note for note in result.notes)
+    assert meal_voucher_values(record, 0)["meal_voucher_count"] == 0

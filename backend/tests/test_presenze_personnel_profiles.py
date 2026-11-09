@@ -300,7 +300,7 @@ def test_ope_rest_revocation_missing_theory_and_short_shift():
     quality = shift_quality(record, record.shift_punches)
     assert quality.status == "blocking" and quality.expected_minutes is None
     assert "Teorico INAZ mancante" in " ".join(quality.notes)
-    assert shift_meal_voucher(record) is False
+    assert shift_meal_voucher(record) is True  # effective attendance is independent of theory
     result = shift_classification(
         record,
         record.shift_punches,
@@ -314,7 +314,7 @@ def test_ope_rest_revocation_missing_theory_and_short_shift():
         and result.shift_ccnl is None
     )
     record.teo_minutes = 360
-    assert shift_meal_voucher(record) is False
+    assert shift_meal_voucher(record) is True
     record.personnel_profile = None
     record.shift_worker_type = "tecnico_turnista"
     assert shift_worker_type(record) is None

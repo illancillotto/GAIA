@@ -1,5 +1,96 @@
 # Buono pasto manuale da GATE — 2026-10-01
 
+## Diritto automatico — precisazione del 05/11/2026
+
+Dal 26/08/2026 il personale non turnista ha diritto al buono con ordinario
+riconosciuto maggiore di zero e almeno 120 minuti di straordinario riconosciuto
+dal calcolo GAIA. Il solo straordinario è escluso dall'automatico anche di
+sabato, domenica e festivo; ordinario non attestato non soddisfa il requisito.
+Non servono sette ore ordinarie o nove ore nette. La pausa rimane
+nel calcolo orario preesistente; il buono non sottrae una seconda mezz'ora.
+Un giorno con meno di due ore extra riconosciute resta escluso.
+
+Per turnisti acquaioli/telecontrollo e profili datati Tecnico/Turnista IMPIANTI,
+servono almeno 420 minuti effettivi, senza applicare la pausa dei diurni o
+richiedere due ore extra. Per il profilo Tecnico/Turnista il requisito segue
+il profilo, anche su OPE/SAB e altre giornate fuori dai codici di turno; una
+revoca esplicita resta rispettata. Restano i controlli su trasferta/rimborso
+vitto, la decorrenza e il massimo di un buono al giorno, anche con concessione
+manuale. I valori manuali conservano audit e semantica gia documentati.
+
+API dettaglio/matrice, XLSM e snapshot GATE usano la stessa funzione GAIA e
+i minuti ordinari/extra canonici. La modifica GATE rilasciata verifica anche
+la presenza di ordinario e la soglia dello straordinario canonico. Un valore
+export esplicito, compresi zero e null, prevale sull'importato in GATE. Caso di
+regressione: profilo Tecnico/Turnista, SAB, 06:58–10:04,
+186 minuti extra: zero buoni.
+
+La release installata della precisazione è
+`meal-voucher-ordinary-required-20261105`. Il sabato breve e la domenica con
+oltre dodici ore di solo extra sono verificati attraverso dettaglio, matrice,
+snapshot ed XLSM; per i turnisti resta la loro regola specifica.
+
+### Storico del ripristino precedente, prima della precisazione — 05/11/2026
+
+Release `meal-voucher-extra-20261105` installata su backend, gate-mobile-sync,
+presenze-worker e GATE VPS. Rimossa la verifica aggiuntiva del netto pausa;
+conservate le correzioni dei profili turnisti, la loro soglia di sette ore e
+il controllo delle trasferte. Cadoni 02/10, Casula 30/08 e Del Vais 28/09 hanno
+diritto automatico. Il report precedente e ritirato: 391 giornate non turniste
+su 71 collaboratori sono confermate spettanti nella cache attuale; altre tre
+del 03/11 hanno dati GAIA nel frattempo aggiornati e ora sotto soglia/non
+attestati rispetto alle 394 rivalutate nell'estrazione precedente; restano due giornate turniste dello stesso
+collaboratore (una sotto le sette ore, una con timbrature incomplete).
+Le 645 giornate turniste gia allineate restano riconosciute. Nessuna scrittura
+su ore, timbrature, identita o concessioni manuali.
+
+Regressioni GAIA della versione candidata PASS; modulo modificato 29 statement
+e quattro branch al 100%, nessuna esclusione. GATE: 1.806 test e cinque prove
+browser PASS, modulo modificato al 100%; typecheck, stile GAIA e ratchet PASS.
+Il rilascio mirato e gia autorizzato dall'utente; gate globale GATE ancora FAIL.
+
+### Storico superato: precedente rilascio restrittivo del 05/11/2026
+
+I conteggi delle esclusioni sotto riportati descrivono la regola ritirata e
+non devono essere utilizzati per escludere buoni dopo il ripristino.
+
+Release `meal-voucher-net-20261105-1003`, backend e sorgenti dei servizi
+`gate-mobile-sync` e `presenze-worker` aggiornati; tutti e tre healthy e con
+checksum coincidenti per gli otto file rilasciati. La versione produttiva
+XLSM conserva le altre logiche preesistenti: cambia soltanto l'argomento della
+funzione del buono. Test della versione candidata superati, con 865 statement
+e 306 branch al 100% negli otto runtime modificati, nessuna riga esclusa.
+Questo dato non certifica la coverage globale dei repository.
+
+Snapshot giornaliere e anomalie di agosto–novembre ripubblicati dai builder
+GAIA con transazione sorgente read-only: 22.484 giornaliere, otto risposte
+HTTP 200. Cache GATE verificata sui quattro mesi e sul record Cauli del
+24/10/2026: automatico false, manuale false, conteggio zero. Nessun buono
+automatico non turnista privo delle soglie ordinarie/extra nei quattro mesi.
+Ciclo outbound riuscito dal 05/11/2026 10:25:03 al 10:29:13 UTC.
+
+File operativi, log, checksum e comandi apply/rollback sono conservati su
+`serverCed:/opt/gaia/releases/meal-voucher-net-20261105-1003/`.
+`plan.json` contiene i comandi distinti per i tre servizi; gli override dei
+worker mantengono `/app` sulla directory backend della nuova release.
+
+Anche GATE VPS è stato aggiornato alla release `meal-voucher-net-20261105-1003`
+su autorizzazione esplicita dell'utente al rilascio mirato con coverage globale
+GATE FAIL dichiarata. Servizio healthy, health/readiness/console HTTP 200,
+otto verifiche sul modulo installato e asset pubblico aggiornato. Le soglie
+dei test e la policy globale non sono state modificate.
+
+Audit storico read-only su identico snapshot del database, tra la precedente
+immagine GAIA e la nuova: 13.409 giornaliere dal 26/08 al 05/11/2026, 190
+collaboratori. Esclusi 396 diritti automatici su 72 collaboratori (395 casi
+oltre al Cauli del 24/10), nessun buono manuale coinvolto. Dieci casi richiedono
+verifica delle timbrature incomplete/non valide. Ripristinati 645 diritti
+automatici GAIA di tecnici turnisti con almeno sette ore effettive. Tutti i
+1.041 esiti modificati coincidono con la cache GATE; ore e timbrature invariate.
+Il confronto non attesta buoni già erogati o riscossi.
+
+## Inserimento manuale
+
 Il contratto `GatePresenzeDailyRecordPatchRequest` accetta un booleano esplicito
 `meal_voucher_manual`. Null, stringhe e numeri sono respinti. Omettere il campo
 mantiene il buono precedente. Gli altri campi e permessi restano compatibili.
@@ -60,7 +151,6 @@ Il collaudo operativo su una persona/giornata reale resta separato.
 
 
 FINAL QUALITY GATE — PASS
-
 # Aggiornamento locale 09/11/2026: prerequisito di presenza
 
 Il candidato locale richiede almeno una timbratura persistita di entrata o

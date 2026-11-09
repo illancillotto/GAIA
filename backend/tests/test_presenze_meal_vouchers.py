@@ -38,7 +38,11 @@ from app.modules.presenze.services.xlsm_export import (
     ],
 )
 def test_daily_count_and_provenance(day, extra, manual, count, sources):
-    values = meal_voucher_values(SimpleNamespace(work_date=day, meal_voucher_manual=manual), extra)
+    record = SimpleNamespace(
+        work_date=day, meal_voucher_manual=manual,
+        shift_punches=[SimpleNamespace(entry_time=time(7), exit_time=time(16, 30))],
+    )
+    values = meal_voucher_values(record, SimpleNamespace(extra_minutes=extra, ordinary_minutes=420))
     assert values["meal_voucher_count"] == count
     assert values["meal_voucher_sources"] == sources
 

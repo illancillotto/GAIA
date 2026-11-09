@@ -1829,6 +1829,7 @@ def test_matrix_serializer_builds_default_classification_and_quality(
 def test_catasto_saturday_coverage_loads_all_collaborators_in_two_queries() -> None:
     first_collaborator_id = uuid.uuid4()
     second_collaborator_id = uuid.uuid4()
+    unworked_collaborator_id = uuid.uuid4()
     worked_record = SimpleNamespace(
         id=uuid.uuid4(),
         collaborator_id=first_collaborator_id,
@@ -1845,6 +1846,14 @@ def test_catasto_saturday_coverage_loads_all_collaborators_in_two_queries() -> N
         justified_minutes=420,
         absence_minutes=0,
     )
+    unworked_record = SimpleNamespace(
+        id=uuid.uuid4(),
+        collaborator_id=unworked_collaborator_id,
+        work_date=date(2026, 6, 6),
+        resolved_absence_cause=None,
+        justified_minutes=0,
+        absence_minutes=420,
+    )
     punch = SimpleNamespace(
         daily_record_id=worked_record.id,
         entry_time=time(7, 0),
@@ -1854,20 +1863,22 @@ def test_catasto_saturday_coverage_loads_all_collaborators_in_two_queries() -> N
         contract_kind=router.PRESENZE_CONTRACT_KIND_OPERAIO,
         operai_group=router.PRESENZE_OPERAI_GROUP_CATASTO_MAGAZZINO,
     )
-    db = _QueuedDb([worked_record, justified_record], [punch])
+    db = _QueuedDb([worked_record, justified_record, unworked_record], [punch])
 
     counts = router._build_catasto_saturday_coverage_counts(
         db,
-        [worked_record, justified_record],
+        [worked_record, justified_record, unworked_record],
         {
             first_collaborator_id: collaborator,
             second_collaborator_id: collaborator,
+            unworked_collaborator_id: collaborator,
         },
     )
 
     assert counts == {
         (first_collaborator_id, 2026, 5): 1,
         (second_collaborator_id, 2026, 6): 1,
+        (unworked_collaborator_id, 2026, 6): 0,
     }
     assert db.row_sets == []
 

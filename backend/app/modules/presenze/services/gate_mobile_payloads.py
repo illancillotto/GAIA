@@ -374,7 +374,7 @@ def _canonical_export_values(record: PresenzeDailyRecord, export: Any) -> dict[s
         "export_special_day": export.special_day,
         "export_ordinary_minutes": export.ordinary_minutes,
         "export_extra_minutes": export.extra_minutes,
-        **meal_voucher_values(record, export.extra_minutes),
+        **meal_voucher_values(record, export),
         **classification_breakdown_values(export, "export_"),
     }
 

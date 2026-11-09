@@ -17,6 +17,7 @@ from app.modules.presenze.services.shift_daily_policy import (
     shift_voucher_worked_minutes,
     shift_work_totals,
 )
+from app.modules.presenze.services.shift_voucher_policy import shift_voucher_profile
 
 SHIFT_WORKER_TYPES = {"acquaiolo", "telecontrollo", "tecnico_turnista"}
 SHIFT_EXPECTED_MINUTES = 420
@@ -75,7 +76,7 @@ def record_shift_punches(record):
 
 def shift_meal_voucher(record):
     return (
-        shift_worker_type(record) is not None
+        shift_voucher_profile(record)
         and record.work_date >= date(2026, 8, 26)
         and shift_voucher_worked_minutes(record) >= SHIFT_EXPECTED_MINUTES
         and not shift_voucher_travel_review(record)
