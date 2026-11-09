@@ -1,0 +1,746 @@
+{
+  "source": "gaia_ced_production",
+  "accounts": [
+    {
+      "downloads": 786,
+      "pdf_requests": 786,
+      "credential_id": "62a686a7-cdb4-4ab6-a6b8-74fca19a88d8",
+      "browser_starts": 2646,
+      "polling_events": 2551,
+      "polled_requests": 8,
+      "execution_starts": 3432,
+      "identity_conflicts": 0,
+      "correlation_retries": 2545,
+      "recovery_page_errors": 0,
+      "authentication_errors": 42,
+      "identity_missing_requests": 0,
+      "identity_persisted_requests": 0
+    },
+    {
+      "downloads": 0,
+      "pdf_requests": 0,
+      "credential_id": "72c48f85-6f2b-4251-8c74-c50806b4bec2",
+      "browser_starts": 116,
+      "polling_events": 0,
+      "polled_requests": 0,
+      "execution_starts": 0,
+      "identity_conflicts": 0,
+      "correlation_retries": 0,
+      "recovery_page_errors": 0,
+      "authentication_errors": 116,
+      "identity_missing_requests": 0,
+      "identity_persisted_requests": 0
+    },
+    {
+      "downloads": 655,
+      "pdf_requests": 655,
+      "credential_id": "73fb2ea0-1940-4ca0-a993-8257742a746b",
+      "browser_starts": 1716,
+      "polling_events": 1678,
+      "polled_requests": 6,
+      "execution_starts": 2380,
+      "identity_conflicts": 0,
+      "correlation_retries": 1678,
+      "recovery_page_errors": 0,
+      "authentication_errors": 14,
+      "identity_missing_requests": 0,
+      "identity_persisted_requests": 0
+    },
+    {
+      "downloads": 0,
+      "pdf_requests": 0,
+      "credential_id": "9b4ff3cf-32c2-4eb7-9eb0-1e7d4a03c691",
+      "browser_starts": 129,
+      "polling_events": 0,
+      "polled_requests": 0,
+      "execution_starts": 0,
+      "identity_conflicts": 0,
+      "correlation_retries": 0,
+      "recovery_page_errors": 0,
+      "authentication_errors": 129,
+      "identity_missing_requests": 0,
+      "identity_persisted_requests": 0
+    },
+    {
+      "downloads": 0,
+      "pdf_requests": 0,
+      "credential_id": "fb25a78c-05e9-4527-861a-46ef08081c10",
+      "browser_starts": 116,
+      "polling_events": 0,
+      "polled_requests": 0,
+      "execution_starts": 0,
+      "identity_conflicts": 0,
+      "correlation_retries": 0,
+      "recovery_page_errors": 0,
+      "authentication_errors": 116,
+      "identity_missing_requests": 0,
+      "identity_persisted_requests": 0
+    }
+  ],
+  "window_end": "2026-11-09T08:11:10+00:00",
+  "captured_at": "2026-11-09T08:11:11.370709+00:00",
+  "limitations": [
+    "Configuration and request state are snapshots at capture, not historical reconstructions.",
+    "Successful execution duration excludes preclaim authentication and queue time; both events must be in the window.",
+    "Before identity_v1 deployment, zero identity events means not instrumented, not zero missing identities.",
+    "Account availability is current calendar configuration; lease occupancy is not reconstructed.",
+    "Event counts represent operations, not independent incidents; identity counts are distinct per request and outcome."
+  ],
+  "window_start": "2026-11-02T08:11:10+00:00",
+  "campaign_kinds": [
+    "perpetual_sync",
+    "ruolo_autosync"
+  ],
+  "schema_version": 1,
+  "created_request_cohort": {
+    "total": 1527,
+    "remote_id_present": 1,
+    "remote_without_id": 12,
+    "remote_state_present": 1438
+  },
+  "configuration_at_capture": {
+    "enabled": true,
+    "accounts": [
+      {
+        "active": true,
+        "account": "72c48f85-6f2b-4251-8c74-c50806b4bec2"
+      },
+      {
+        "active": true,
+        "account": "d64fd58b-42ac-422e-ba17-b0c94d2be3b0"
+      },
+      {
+        "active": true,
+        "account": "fb25a78c-05e9-4527-861a-46ef08081c10"
+      },
+      {
+        "active": true,
+        "account": "62a686a7-cdb4-4ab6-a6b8-74fca19a88d8"
+      },
+      {
+        "active": true,
+        "account": "9b4ff3cf-32c2-4eb7-9eb0-1e7d4a03c691"
+      },
+      {
+        "active": true,
+        "account": "73fb2ea0-1940-4ca0-a993-8257742a746b"
+      },
+      {
+        "active": true,
+        "account": "2464b777-4791-497e-aa69-943692ce0543"
+      },
+      {
+        "active": true,
+        "account": "4eb39f16-d1f2-4481-8bc3-5a11029204bb"
+      },
+      {
+        "active": true,
+        "account": "4a452a74-04e2-43b6-b6ac-f75d8149c626"
+      }
+    ],
+    "batch_size": 20,
+    "active_batches": [
+      {
+        "total": 21569,
+        "failed": 2341,
+        "batch_id": "92a8816d-114a-4f9b-8ad2-fe25f46f0979",
+        "completed": 19208,
+        "credential_ids": [
+          "62a686a7-cdb4-4ab6-a6b8-74fca19a88d8",
+          "72c48f85-6f2b-4251-8c74-c50806b4bec2",
+          "fb25a78c-05e9-4527-861a-46ef08081c10",
+          "9b4ff3cf-32c2-4eb7-9eb0-1e7d4a03c691",
+          "73fb2ea0-1940-4ca0-a993-8257742a746b"
+        ]
+      }
+    ],
+    "last_planner_at": "2026-11-09T08:00:07.577686+00:00",
+    "credential_profiles": {
+      "2464b777-4791-497e-aa69-943692ce0543": {
+        "enabled": false,
+        "schedule_enabled": false,
+        "availability_schedule": {
+          "weekly": {
+            "0": [
+              {
+                "end": "07:30",
+                "start": "18:00"
+              }
+            ],
+            "1": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "2": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "3": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "4": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "5": [
+              {
+                "end": "00:00",
+                "start": "00:00"
+              }
+            ],
+            "6": [
+              {
+                "end": "00:00",
+                "start": "00:00"
+              }
+            ]
+          },
+          "timezone": "Europe/Rome",
+          "exceptions": [
+            {
+              "kind": "nth_weekday_of_month",
+              "weekday": 5,
+              "windows": [
+                {
+                  "end": "00:00",
+                  "start": "14:00"
+                }
+              ],
+              "occurrence": 1
+            }
+          ]
+        }
+      },
+      "4a452a74-04e2-43b6-b6ac-f75d8149c626": {
+        "enabled": true,
+        "schedule_enabled": true,
+        "availability_schedule": {
+          "weekly": {
+            "0": [
+              {
+                "end": "07:30",
+                "start": "18:00"
+              }
+            ],
+            "1": [
+              {
+                "end": "07:30",
+                "start": "19:00"
+              }
+            ],
+            "2": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "3": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "4": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "5": [
+              {
+                "end": "00:00",
+                "start": "00:00"
+              }
+            ],
+            "6": [
+              {
+                "end": "00:00",
+                "start": "00:00"
+              }
+            ]
+          },
+          "timezone": "Europe/Rome",
+          "exceptions": [
+            {
+              "kind": "nth_weekday_of_month",
+              "weekday": 5,
+              "windows": [
+                {
+                  "end": "00:00",
+                  "start": "14:00"
+                }
+              ],
+              "occurrence": 1
+            }
+          ]
+        }
+      },
+      "4eb39f16-d1f2-4481-8bc3-5a11029204bb": {
+        "enabled": true,
+        "schedule_enabled": true,
+        "availability_schedule": {
+          "weekly": {
+            "0": [
+              {
+                "end": "07:30",
+                "start": "18:00"
+              }
+            ],
+            "1": [
+              {
+                "end": "07:30",
+                "start": "19:00"
+              }
+            ],
+            "2": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "3": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "4": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "5": [
+              {
+                "end": "00:00",
+                "start": "00:00"
+              }
+            ],
+            "6": [
+              {
+                "end": "00:00",
+                "start": "00:00"
+              }
+            ]
+          },
+          "timezone": "Europe/Rome",
+          "exceptions": [
+            {
+              "kind": "nth_weekday_of_month",
+              "weekday": 5,
+              "windows": [
+                {
+                  "end": "00:00",
+                  "start": "14:00"
+                }
+              ],
+              "occurrence": 1
+            }
+          ]
+        }
+      },
+      "62a686a7-cdb4-4ab6-a6b8-74fca19a88d8": {
+        "enabled": true,
+        "schedule_enabled": false,
+        "availability_schedule": {
+          "weekly": {
+            "0": [
+              {
+                "end": "07:30",
+                "start": "18:00"
+              }
+            ],
+            "1": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "2": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "3": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "4": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "5": [
+              {
+                "end": "00:00",
+                "start": "00:00"
+              }
+            ],
+            "6": [
+              {
+                "end": "00:00",
+                "start": "00:00"
+              }
+            ]
+          },
+          "timezone": "Europe/Rome",
+          "exceptions": [
+            {
+              "kind": "nth_weekday_of_month",
+              "weekday": 5,
+              "windows": [
+                {
+                  "end": "00:00",
+                  "start": "14:00"
+                }
+              ],
+              "occurrence": 1
+            }
+          ]
+        }
+      },
+      "72c48f85-6f2b-4251-8c74-c50806b4bec2": {
+        "enabled": true,
+        "schedule_enabled": true,
+        "availability_schedule": {
+          "weekly": {
+            "0": [
+              {
+                "end": "07:30",
+                "start": "18:00"
+              }
+            ],
+            "1": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "2": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "3": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "4": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "5": [
+              {
+                "end": "00:00",
+                "start": "00:00"
+              }
+            ],
+            "6": [
+              {
+                "end": "00:00",
+                "start": "00:00"
+              }
+            ]
+          },
+          "timezone": "Europe/Rome",
+          "exceptions": [
+            {
+              "kind": "nth_weekday_of_month",
+              "weekday": 5,
+              "windows": [
+                {
+                  "end": "00:00",
+                  "start": "14:00"
+                }
+              ],
+              "occurrence": 1
+            }
+          ]
+        }
+      },
+      "73fb2ea0-1940-4ca0-a993-8257742a746b": {
+        "enabled": true,
+        "schedule_enabled": true,
+        "availability_schedule": {
+          "weekly": {
+            "0": [
+              {
+                "end": "07:30",
+                "start": "18:00"
+              }
+            ],
+            "1": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "2": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "3": [
+              {
+                "end": "07:30",
+                "start": "16:00"
+              }
+            ],
+            "4": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "5": [
+              {
+                "end": "00:00",
+                "start": "00:00"
+              }
+            ],
+            "6": [
+              {
+                "end": "00:00",
+                "start": "00:00"
+              }
+            ]
+          },
+          "timezone": "Europe/Rome",
+          "exceptions": [
+            {
+              "kind": "nth_weekday_of_month",
+              "weekday": 5,
+              "windows": [
+                {
+                  "end": "00:00",
+                  "start": "14:00"
+                }
+              ],
+              "occurrence": 1
+            }
+          ]
+        }
+      },
+      "9b4ff3cf-32c2-4eb7-9eb0-1e7d4a03c691": {
+        "enabled": true,
+        "schedule_enabled": true,
+        "availability_schedule": {
+          "weekly": {
+            "0": [
+              {
+                "end": "07:30",
+                "start": "18:00"
+              }
+            ],
+            "1": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "2": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "3": [
+              {
+                "end": "07:30",
+                "start": "08:00"
+              }
+            ],
+            "4": [
+              {
+                "end": "07:30",
+                "start": "08:00"
+              }
+            ],
+            "5": [
+              {
+                "end": "00:00",
+                "start": "00:00"
+              }
+            ],
+            "6": [
+              {
+                "end": "00:00",
+                "start": "00:00"
+              }
+            ]
+          },
+          "timezone": "Europe/Rome",
+          "exceptions": [
+            {
+              "kind": "nth_weekday_of_month",
+              "weekday": 5,
+              "windows": [
+                {
+                  "end": "00:00",
+                  "start": "14:00"
+                }
+              ],
+              "occurrence": 1
+            }
+          ]
+        }
+      },
+      "d64fd58b-42ac-422e-ba17-b0c94d2be3b0": {
+        "enabled": false,
+        "schedule_enabled": true,
+        "availability_schedule": {
+          "weekly": {
+            "0": [
+              {
+                "end": "07:30",
+                "start": "18:00"
+              }
+            ],
+            "1": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "2": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "3": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "4": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "5": [
+              {
+                "end": "00:00",
+                "start": "00:00"
+              }
+            ],
+            "6": [
+              {
+                "end": "00:00",
+                "start": "00:00"
+              }
+            ]
+          },
+          "timezone": "Europe/Rome",
+          "exceptions": [
+            {
+              "kind": "nth_weekday_of_month",
+              "weekday": 5,
+              "windows": [
+                {
+                  "end": "00:00",
+                  "start": "14:00"
+                }
+              ],
+              "occurrence": 1
+            }
+          ]
+        }
+      },
+      "fb25a78c-05e9-4527-861a-46ef08081c10": {
+        "enabled": true,
+        "schedule_enabled": true,
+        "availability_schedule": {
+          "weekly": {
+            "0": [
+              {
+                "end": "07:30",
+                "start": "18:00"
+              }
+            ],
+            "1": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "2": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "3": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "4": [
+              {
+                "end": "07:30",
+                "start": "15:00"
+              }
+            ],
+            "5": [
+              {
+                "end": "00:00",
+                "start": "00:00"
+              }
+            ],
+            "6": [
+              {
+                "end": "00:00",
+                "start": "00:00"
+              }
+            ]
+          },
+          "timezone": "Europe/Rome",
+          "exceptions": [
+            {
+              "kind": "nth_weekday_of_month",
+              "weekday": 5,
+              "windows": [
+                {
+                  "end": "00:00",
+                  "start": "14:00"
+                }
+              ],
+              "occurrence": 1
+            }
+          ]
+        }
+      }
+    }
+  },
+  "successful_execution_seconds": {
+    "p50": 45.408247,
+    "p95": 252.414236,
+    "mean": 75.66893220333102,
+    "sample": 1441
+  },
+  "instrumentation": "before_identity_v1",
+  "query_sha256": "d3b349ebeb6a3e031c7ac7d501c8c498b72014fe0a53c04210ce22e62b8570a1",
+  "checkout_commit": "2115dd7bb74384c7dc3b843450bd73fd76b8405f"
+}

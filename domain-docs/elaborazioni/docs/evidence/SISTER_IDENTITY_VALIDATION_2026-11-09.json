@@ -1,0 +1,135 @@
+{
+  "change_id": "sister_identity_v1",
+  "classification": "REORGANIZED_AND_CHARACTERIZED",
+  "mode": "ordinary quality ratchet; functional identity capture change, not a dedicated complexity reduction",
+  "before_source_commit": "2115dd7bb74384c7dc3b843450bd73fd76b8405f",
+  "ratchet_merge_base": "686e529ee011487e0764b9f91d023be063dbdf55",
+  "files_before": {
+    "modules/elaborazioni/worker/browser_session.py": {
+      "callables": 81,
+      "cognitive_max": 47,
+      "cognitive_sum": 435,
+      "complexity_density": 0.64673,
+      "cyclomatic_max": 19,
+      "cyclomatic_sum": 376,
+      "dependency_count": 17,
+      "imports": 17,
+      "loc": 1254,
+      "violations": [
+        {
+          "excepted": false,
+          "metric": "loc",
+          "scope": "file",
+          "severity": "error",
+          "threshold": 800,
+          "value": 1254
+        }
+      ]
+    },
+    "modules/elaborazioni/worker/sister_browser_reliability.py": {
+      "callables": 15,
+      "cognitive_max": 15,
+      "cognitive_sum": 85,
+      "complexity_density": 0.949153,
+      "cyclomatic_max": 13,
+      "cyclomatic_sum": 83,
+      "dependency_count": 13,
+      "imports": 13,
+      "loc": 177,
+      "violations": []
+    }
+  },
+  "files_after": {
+    "modules/elaborazioni/worker/browser_session.py": {
+      "callables": 81,
+      "cognitive_max": 47,
+      "cognitive_sum": 429,
+      "complexity_density": 0.650162,
+      "cyclomatic_max": 19,
+      "cyclomatic_sum": 372,
+      "dependency_count": 18,
+      "imports": 18,
+      "loc": 1232,
+      "violations": [
+        {
+          "excepted": false,
+          "metric": "loc",
+          "scope": "file",
+          "severity": "error",
+          "threshold": 800,
+          "value": 1232
+        }
+      ]
+    },
+    "modules/elaborazioni/worker/sister_browser_reliability.py": {
+      "callables": 15,
+      "cognitive_max": 15,
+      "cognitive_sum": 79,
+      "complexity_density": 0.907514,
+      "cyclomatic_max": 13,
+      "cyclomatic_sum": 78,
+      "dependency_count": 14,
+      "imports": 14,
+      "loc": 173,
+      "violations": []
+    },
+    "modules/elaborazioni/worker/sister_pdf_recovery.py": {
+      "callables": 3,
+      "cognitive_max": 7,
+      "cognitive_sum": 13,
+      "complexity_density": 0.396825,
+      "cyclomatic_max": 6,
+      "cyclomatic_sum": 12,
+      "dependency_count": 8,
+      "imports": 8,
+      "loc": 63,
+      "violations": []
+    },
+    "modules/elaborazioni/worker/sister_submission_identity.py": {
+      "callables": 8,
+      "cognitive_max": 23,
+      "cognitive_sum": 56,
+      "complexity_density": 1.010204,
+      "cyclomatic_max": 13,
+      "cyclomatic_sum": 43,
+      "dependency_count": 7,
+      "imports": 7,
+      "loc": 98,
+      "violations": []
+    },
+    "modules/elaborazioni/worker/visura_flow.py": {
+      "callables": 23,
+      "cognitive_max": 71,
+      "cognitive_sum": 147,
+      "complexity_density": 0.530864,
+      "cyclomatic_max": 30,
+      "cyclomatic_sum": 111,
+      "dependency_count": 10,
+      "imports": 10,
+      "loc": 486,
+      "violations": []
+    }
+  },
+  "scope_ratchet_findings": [],
+  "checks": {
+    "full_worker_passed": 980,
+    "full_worker_skipped": 7,
+    "final_targeted_passed": 216,
+    "coverage_basis": "final-targeted-coverage.json; fresh data, isolated process for each test file",
+    "new_files_format": "passed",
+    "lint_scope": "passed",
+    "production_sql": "verified read-only, schema 2",
+    "graphify_docs": "passed; semantic chunk 1/1 done, no warnings"
+  },
+  "log_sha256": {
+    "full-worker-final.log": "139770365b5c20f4101e416a23427b7a5525861cb073264651669e6f95cdb1d3",
+    "final-targeted-tests.log": "313d3d85ce0b6a49add49e004f7a221a7207dc8f9b94d5eb2f34bfb5afbc969d",
+    "final-targeted-coverage.json": "599ed2c213199643de06d9622e6c0821e0add8d5976971545afab620ad1e9808",
+    "ratchet-scope-all.json": "1d67579a616f328d0da92b8256b95179a1a327bffea63287750bc931b95e00f3",
+    "ratchet-global-final.json": "a2a392602a0fe6a654456052b7225b15f2902df8c9b7f00b86960a35c22cfd26",
+    "lint-scope.log": "e8173a4b96e1642bcce42bf2ec13a0a8b49c61a411fe2261858b8f0d5324d044",
+    "format-new.log": "177f260a5645724013185e4b140c7045cc39e56c0c97b120f5cb23599f85f0de",
+    "graphify-code-final.log": "18d50122b8cf781b5be0b7beb96e4e5f94c7fbaa9de5e01364038d0275d7ddd9",
+    "graphify-docs-final.log": "03cf026c6aba0ae7b939efb0a108993270cd4d05f614caf96a98f82b9cf24bec"
+  }
+}

@@ -23,7 +23,6 @@ from sister_browser_reliability import (
     RemoteStateCallback,
     SisterSessionState,
     document_not_yet_produced_error,
-    download_valid_pdf,
     is_visura_area_ready,
     raise_if_sister_server_error,
 )
@@ -34,6 +33,7 @@ from sister_exceptions import (
     SisterRequestCorrelationError,
     SisterServerError,
 )
+from sister_pdf_recovery import download_submission_pdf, poll_for_pdf
 from sister_request_rows import (
     SisterRemoteRequestRow,
     SisterRequestCorrelation,
@@ -44,6 +44,7 @@ from sister_request_rows import (
 )
 from sister_requests_navigation import find_in_requests_category, open_portal_visure_menu
 from sister_selectors import SisterSelectorsConfig
+from sister_submission_identity import accept_submitted_captcha
 from sister_visura_selection import (
     expected_request_type,
     reconfirm_visura_type,
@@ -58,7 +59,7 @@ SESSION_RECOVERY_WAIT_SEC = 120
 RICHIESTE_POLL_ATTEMPTS = 10
 RICHIESTE_POLL_INTERVAL_SEC = 30
 SISTER_BASE_URL = "https://sister3.agenziaentrate.gov.it"
-SISTER_REQUESTS_URL = f"{SISTER_BASE_URL}/Visure/ConsultazioneRichieste.do?metodo=lista&numConv=1050380&apertura=T"
+SISTER_REQUESTS_URL = f"{SISTER_BASE_URL}/Servizi/ConsultazioneRichieste.do?metodo=lista&numConv=1050380&apertura=T"
 
 
 @dataclass(slots=True)
@@ -785,20 +786,18 @@ class BrowserSession:
     async def _resolve_captcha_submission(self) -> bool:
         try:
             await self.page.wait_for_selector(self.selectors.save_button_selector, timeout=12000)
-            return self._accept_submitted_captcha("CAPTCHA accettato da SISTER")
+            return await self._accept_submitted_captcha("CAPTCHA accettato da SISTER")
         except TimeoutError:
             await self._trace_state("captcha-rejected")
             if await self.page.locator(self.selectors.save_button_selector).count() > 0:
-                return self._accept_submitted_captcha("CAPTCHA accettato da SISTER (fallback count)")
+                return await self._accept_submitted_captcha("CAPTCHA accettato da SISTER (fallback count)")
             await self._raise_if_server_error()
             await self._raise_if_document_not_yet_produced()
             logger.info("CAPTCHA rifiutato da SISTER (save button non trovato)")
             return False
 
-    def _accept_submitted_captcha(self, message: str) -> bool:
-        self._mark_remote_submitted(None)
-        logger.info(message)
-        return True
+    async def _accept_submitted_captcha(self, message: str) -> bool:
+        return await accept_submitted_captcha(self, message, SISTER_REQUESTS_URL)
 
     def _track_response(self, response: Response) -> None:
         """Registra errori HTTP e il primo riscontro remoto del submit corrente."""
@@ -808,7 +807,7 @@ class BrowserSession:
         self._session_state.mark_submitted(remote_id, SISTER_REQUESTS_URL)
 
     async def download_pdf(self, destination: Path) -> int:
-        return await download_valid_pdf(self.page, self.selectors.save_button_selector, destination)
+        return await download_submission_pdf(self, destination, SISTER_REQUESTS_URL)
 
     async def begin_request_correlation(self, request: object) -> None:
         self._request_artifact_dir = getattr(request, "artifact_dir", None)
@@ -855,33 +854,10 @@ class BrowserSession:
         tentativi, solleva SisterDocumentNotReadyError (invece del TimeoutError completo)
         per permettere alla flow di mettere la richiesta in coda e passare alla prossima.
         """
-        from sister_exceptions import SisterDocumentNotReadyError
-        url = richieste_url or SISTER_REQUESTS_URL
-        attempts = max_attempts if max_attempts is not None else RICHIESTE_POLL_ATTEMPTS
-        page = self.page
-        destination.parent.mkdir(parents=True, exist_ok=True)
-
-        for poll in range(1, attempts + 1):
-            logger.info("Poll ConsultazioneRichieste %s/%s url=%s", poll, attempts, url)
-            await page.goto(url, wait_until="domcontentloaded")
-            await page.wait_for_timeout(1500)
-            await self._trace_state(f"richieste-poll-{poll}")
-            await self._raise_if_server_error()
-            downloaded = await self._poll_correlated_request(destination, await self._poll_body_upper())
-            if downloaded is not None:
-                return downloaded
-            if poll < attempts:
-                logger.info("Documento non ancora disponibile, attesa %ss", RICHIESTE_POLL_INTERVAL_SEC)
-                await asyncio.sleep(RICHIESTE_POLL_INTERVAL_SEC)
-
-        if max_attempts is not None:
-            raise SisterDocumentNotReadyError(
-                f"Documento SISTER non disponibile dopo {attempts} poll iniziali "
-                f"({attempts * RICHIESTE_POLL_INTERVAL_SEC}s) — richiesta messa in coda"
-            )
-        raise TimeoutError(
-            f"Documento SISTER non disponibile dopo {attempts} poll "
-            f"({attempts * RICHIESTE_POLL_INTERVAL_SEC}s)"
+        return await poll_for_pdf(
+            self, destination, richieste_url or SISTER_REQUESTS_URL,
+            max_attempts if max_attempts is not None else RICHIESTE_POLL_ATTEMPTS,
+            RICHIESTE_POLL_INTERVAL_SEC, max_attempts is not None,
         )
 
 
@@ -1002,7 +978,7 @@ class BrowserSession:
     async def _raise_if_document_not_yet_produced(self) -> None:
         """Solleva DocumentNotYetProducedError se siamo su CheckRichiesta.do o equivalente."""
         error = await document_not_yet_produced_error(
-            self.page, self._session_state, SISTER_BASE_URL, SISTER_REQUESTS_URL
+            self.page, self._session_state, SISTER_REQUESTS_URL, getattr(self, "_gaia_emit_sister_telemetry", None)
         )
         if error is not None:
             raise error

@@ -1,5 +1,9 @@
 # SISTER Debug Runbook
 
+Change identità richiesta del 9 novembre (baseline e protocollo prima/dopo;
+stato rilascio nel manifest):
+[SISTER_IDENTITY_ROLLOUT_2026-11-09.md](SISTER_IDENTITY_ROLLOUT_2026-11-09.md).
+
 ## Interfaccia credenziali SISTER
 
 Nel workspace `/elaborazioni/sister`, il riquadro delle credenziali e riducibile

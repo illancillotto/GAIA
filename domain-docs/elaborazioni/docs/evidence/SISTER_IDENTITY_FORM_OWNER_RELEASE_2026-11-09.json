@@ -1,0 +1,215 @@
+{
+  "change_id": "sister_identity_v1",
+  "revision": "native_form_owner",
+  "status": "deployed_healthy_awaiting_natural_document_verification",
+  "activation_utc": "2026-11-09T10:59:34.854239641Z",
+  "first_activation_utc": "2026-11-09T10:46:39.712237195Z",
+  "plan": {
+    "release_id": "sister-identity-v1-20261109T1040",
+    "container_before": "c8ebac46383b4a5b621c97dc449f89da6e894823a8333f9a5987f1164d791f2b",
+    "image_before": "sha256:097e827af8a1a0ae45d836463b45fc781c174b4720826fb856fae9912c3d8c41",
+    "image_before_tag": "gaia-deps-python/elaborazioni-worker-visure:deps-python-20261022",
+    "rollback_tag": "gaia-sister-identity:rollback-20261109T1040",
+    "image_after_tag": "gaia-sister-identity:identity-v1-form-owner-20261109T1055",
+    "compose_project": "gaia",
+    "compose_working_directory": "/opt/gaia/releases/sister-20261006-63291539",
+    "compose_files_before": [
+      "/opt/gaia/releases/sister-20261006-63291539/compose-rollback.json",
+      "/opt/gaia/releases/deps-python-20261022/elaborazioni-worker-visure/deploy.json"
+    ],
+    "compose_override": "/opt/gaia/releases/sister-identity-v1-20261109T1040/deploy.json",
+    "source_manifest": {
+      "browser_session.py": "d253d1c1b48ee8a53e55358c8614613454761bf7cfd984f74a4cab567a9f7c9a",
+      "sister_browser_reliability.py": "66383aa1099c4c2e4be3eef9fbc115e6f65aab114834e8ba6fee9cd3d64e97d5",
+      "visura_flow.py": "728a6e0949ca6a4d1d823f9d4a3b509ac2eb8540171f9f068113f4b49e36a2af",
+      "sister_submission_identity.py": "ed8f5d155f2596c84726b23d864133e560126f1f4c755ccfff389f6551f98ed3",
+      "sister_pdf_recovery.py": "eec3ed6704bb8f49497208ed36c67cb0583e88dc9a65d1b5bc20cc1e1b82c244"
+    },
+    "prepared_at_utc": "2026-11-09T10:39:58.048606+00:00",
+    "activated_at_utc": "2026-11-09T10:59:34.854239641Z",
+    "config_changed_fields": [
+      "image"
+    ],
+    "image_after": "sha256:68156b4f755b973a8c0e424062dbdcaecf60e05b0794b9849595e6038a4ed720",
+    "drain_started_at_utc": "2026-11-09T10:57:05.064365+00:00",
+    "drain_finished_at_utc": "2026-11-09T10:59:34.051966784Z",
+    "container_after": "90afb3e81833736d48e7686b427caf4245101b7f0dcae1d5e2caca9a263b0506",
+    "config_environment_identical": true,
+    "mounts_identical": true,
+    "status": "deployed_healthy",
+    "attempts": [
+      {
+        "started_at_utc": "2026-11-09T10:44:36.659047302Z",
+        "container_id": "84605e2d252c8c459d467686a01ad98435d44861b9868f5e13d91cab288e9b95",
+        "outcome": "automatic_rollback",
+        "cause": "Mount list ordering comparison was too strict; same volume definitions and permissions.",
+        "rollback_container_id": "8484cc584a9abc6a3090f935cae9766a318befe4dd6c5a2c4b8e2737831ae827",
+        "rollback_started_at_utc": "2026-11-09T10:44:38.135340826Z"
+      }
+    ],
+    "first_activation_utc": "2026-11-09T10:46:39.712237195Z",
+    "prior_activations": [
+      {
+        "activated_at_utc": "2026-11-09T10:46:39.712237195Z",
+        "container_id": "d21405d47ffd01f60ac7a163afe742ae8f8fb6c8d45513c41ad265177673a3ef",
+        "image_id": "sha256:654bb58d80ff63f0e8ef6c47eed634f4c9b7f31f6bca6922d53e210a2fbb9fc8",
+        "revision": "initial_dom_ancestor_selector",
+        "outcome": "PDF downloaded but hidden ID missed on malformed table HTML; corrected with native form ownership",
+        "identity_missing_events": 2
+      }
+    ],
+    "expected_current_image": "sha256:654bb58d80ff63f0e8ef6c47eed634f4c9b7f31f6bca6922d53e210a2fbb9fc8",
+    "identity_revision": "native_form_owner"
+  },
+  "image_verification": {
+    "image_after_tag": "gaia-sister-identity:identity-v1-form-owner-20261109T1055",
+    "image_after": "sha256:68156b4f755b973a8c0e424062dbdcaecf60e05b0794b9849595e6038a4ed720",
+    "base_image": "sha256:654bb58d80ff63f0e8ef6c47eed634f4c9b7f31f6bca6922d53e210a2fbb9fc8",
+    "changed_files": [
+      "/app/worker/sister_submission_identity.py"
+    ],
+    "app_file_count": 3848,
+    "source_manifest": {
+      "browser_session.py": "d253d1c1b48ee8a53e55358c8614613454761bf7cfd984f74a4cab567a9f7c9a",
+      "sister_browser_reliability.py": "66383aa1099c4c2e4be3eef9fbc115e6f65aab114834e8ba6fee9cd3d64e97d5",
+      "visura_flow.py": "728a6e0949ca6a4d1d823f9d4a3b509ac2eb8540171f9f068113f4b49e36a2af",
+      "sister_submission_identity.py": "ed8f5d155f2596c84726b23d864133e560126f1f4c755ccfff389f6551f98ed3",
+      "sister_pdf_recovery.py": "eec3ed6704bb8f49497208ed36c67cb0583e88dc9a65d1b5bc20cc1e1b82c244"
+    }
+  },
+  "health_verification": {
+    "checked_at_utc": "2026-11-09T11:08:58.656687+00:00",
+    "container_id": "90afb3e81833736d48e7686b427caf4245101b7f0dcae1d5e2caca9a263b0506",
+    "image_id": "sha256:68156b4f755b973a8c0e424062dbdcaecf60e05b0794b9849595e6038a4ed720",
+    "started_at_utc": "2026-11-09T10:59:34.854239641Z",
+    "running": true,
+    "health": "healthy",
+    "restart_count": 0,
+    "source_hashes_match": true,
+    "config_environment_identical": true,
+    "mounts_identical": true
+  },
+  "live_document_verification": {
+    "requests": [],
+    "completed_pdf_with_verified_identity": 0,
+    "checked_at_utc": "2026-11-09T11:06:58.441282+00:00"
+  },
+  "verification": {
+    "targeted_tests_passed": 217,
+    "test_files": 10,
+    "coverage": {
+      "modules/elaborazioni/worker/browser_session.py": {
+        "covered_lines": 897,
+        "num_statements": 897,
+        "percent_covered": 100.0,
+        "percent_covered_display": "100",
+        "missing_lines": 0,
+        "excluded_lines": 0,
+        "percent_statements_covered": 100.0,
+        "percent_statements_covered_display": "100",
+        "num_branches": 272,
+        "num_partial_branches": 0,
+        "covered_branches": 272,
+        "missing_branches": 0,
+        "percent_branches_covered": 100.0,
+        "percent_branches_covered_display": "100"
+      },
+      "modules/elaborazioni/worker/sister_browser_reliability.py": {
+        "covered_lines": 145,
+        "num_statements": 145,
+        "percent_covered": 100.0,
+        "percent_covered_display": "100",
+        "missing_lines": 0,
+        "excluded_lines": 0,
+        "percent_statements_covered": 100.0,
+        "percent_statements_covered_display": "100",
+        "num_branches": 38,
+        "num_partial_branches": 0,
+        "covered_branches": 38,
+        "missing_branches": 0,
+        "percent_branches_covered": 100.0,
+        "percent_branches_covered_display": "100"
+      },
+      "modules/elaborazioni/worker/visura_flow.py": {
+        "covered_lines": 286,
+        "num_statements": 286,
+        "percent_covered": 100.0,
+        "percent_covered_display": "100",
+        "missing_lines": 0,
+        "excluded_lines": 2,
+        "percent_statements_covered": 100.0,
+        "percent_statements_covered_display": "100",
+        "num_branches": 88,
+        "num_partial_branches": 0,
+        "covered_branches": 88,
+        "missing_branches": 0,
+        "percent_branches_covered": 100.0,
+        "percent_branches_covered_display": "100"
+      },
+      "modules/elaborazioni/worker/sister_submission_identity.py": {
+        "covered_lines": 75,
+        "num_statements": 75,
+        "percent_covered": 100.0,
+        "percent_covered_display": "100",
+        "missing_lines": 0,
+        "excluded_lines": 0,
+        "percent_statements_covered": 100.0,
+        "percent_statements_covered_display": "100",
+        "num_branches": 26,
+        "num_partial_branches": 0,
+        "covered_branches": 26,
+        "missing_branches": 0,
+        "percent_branches_covered": 100.0,
+        "percent_branches_covered_display": "100"
+      },
+      "modules/elaborazioni/worker/sister_pdf_recovery.py": {
+        "covered_lines": 40,
+        "num_statements": 40,
+        "percent_covered": 100.0,
+        "percent_covered_display": "100",
+        "missing_lines": 0,
+        "excluded_lines": 0,
+        "percent_statements_covered": 100.0,
+        "percent_statements_covered_display": "100",
+        "num_branches": 12,
+        "num_partial_branches": 0,
+        "covered_branches": 12,
+        "missing_branches": 0,
+        "percent_branches_covered": 100.0,
+        "percent_branches_covered_display": "100"
+      }
+    },
+    "ruff": "passed",
+    "new_files_format": "passed",
+    "complexity_ratchet_findings": [],
+    "chromium_regression": "Malformed table/form: original selector fails; native form owner succeeds; unrelated orphan ID ignored.",
+    "server_image_smoke": "imports + Chromium + native owner extraction passed, isolated network=none",
+    "log_sha256": {
+      "tests.log": "87280b8a76f3aecd08940610e87ff7ba389c87dd81d304ecc4025c54bdca7500",
+      "coverage.json": "685fb8de57ef3e892c406625e1d919dc2c0617af9fdaceec9f12b473b8e085ce",
+      "ruff.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+      "ratchet.json": "34386646fce9266f7aa3f643c7a3e7c06e258b98c3d8d378f3c54ec73ca90a10",
+      "format.log": "177f260a5645724013185e4b140c7045cc39e56c0c97b120f5cb23599f85f0de",
+      "graphify-docs-final.log": "f0e2103e7e8be6caf10fafacd45502315057fe2ca056230de37a58d823a5da92"
+    },
+    "graphify_code": "passed",
+    "graphify_docs": "passed on final documentation: chunk 1/1 done, no warnings"
+  },
+  "first_revision_evidence": "SISTER_IDENTITY_RELEASE_2026-11-09.json",
+  "comparison_status": "Use pre-first-activation baseline; exclude transition until this final activation; collect seven post-activation days.",
+  "initial_live_verification": {
+    "checked_at": "2026-11-09T11:06:58.629612+00:00",
+    "captured_requests": 0,
+    "first_identity_event": null,
+    "first_recovery_event": "2026-11-09T11:01:48.331594+00:00",
+    "recovery_error_events": 0,
+    "identity_missing_events": 0,
+    "recovery_success_events": 2,
+    "identity_captured_events": 0,
+    "identity_conflict_events": 0,
+    "captured_requests_with_id_in_db": 0
+  },
+  "natural_document_check": "pending: only inherited request recovery observed during the bounded check; no new identity capture or PDF yet",
+  "post_release_snapshot": "SISTER_IDENTITY_AFTER_FORM_OWNER_2026-11-09.json",
+  "documentation_archive_on_server": "/opt/gaia/releases/sister-identity-v1-20261109T1040/form-owner/evidence/audit-docs.tar"
+}

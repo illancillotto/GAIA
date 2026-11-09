@@ -3,18 +3,12 @@ from __future__ import annotations
 import asyncio
 from dataclasses import replace
 from pathlib import Path
-import sys
 from types import SimpleNamespace
 
 import pytest
-
-
-WORKER_ROOT = Path(__file__).resolve().parents[1]
-if str(WORKER_ROOT) not in sys.path:
-    sys.path.insert(0, str(WORKER_ROOT))
+from browser_test_support import ScriptedLocator, ScriptedPage, make_session, noop_async
 
 import browser_session as browser_module
-from browser_test_support import ScriptedLocator, ScriptedPage, make_session, noop_async
 from sister_exceptions import SisterNotFoundError
 
 
@@ -334,8 +328,7 @@ def test_submit_and_resolve_captcha_paths() -> None:
     assert run(session.submit_captcha("ABCDE")) is True
     assert session._session_state.submission_callback is None
 
-    session._mark_remote_submitted = lambda _value: None
-    assert session._accept_submitted_captcha("ok") is True
+    assert run(session._accept_submitted_captcha("ok")) is True
     session._resolve_captcha_submission = BrowserSessionResolve(session)
     page.wait_selector_error = None
     assert run(session._resolve_captcha_submission()) is True

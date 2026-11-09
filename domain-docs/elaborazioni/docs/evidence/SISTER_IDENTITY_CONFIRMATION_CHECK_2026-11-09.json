@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "source": "gaia_ced_production",
+  "checked_at": "2026-11-09T11:25:27.055562+00:00",
+  "activation_utc": "2026-11-09T10:59:34.854239641Z",
+  "verification_mode": "read_only",
+  "confirmation_status": "awaiting_new_pdf",
+  "metrics_since_activation": {
+    "downloads": 0,
+    "execution_starts": 8,
+    "requests_started": 1,
+    "identity_captured": 0,
+    "identity_missing": 0,
+    "identity_conflicts": 0,
+    "recovery_success": 8,
+    "recovery_errors": 0,
+    "correlation_retries": 8
+  },
+  "html_database_document_verification": {
+    "requests": [],
+    "completed_pdf_with_verified_identity": 0
+  },
+  "previous_request_observation": {
+    "checked_at": "2026-11-09T11:24:03.017337+00:00",
+    "request_id": "dfa5d2a2-b553-44f2-8fcb-ca003ee2d482",
+    "first_submitted_at": "2026-11-08T18:07:51.245149+00:00",
+    "status": "pending",
+    "remote_id_present": false,
+    "executions_since_activation": 8
+  },
+  "limitations": [
+    "No new PDF has completed since final activation; end-to-end identity capture is not yet confirmed.",
+    "Successful recovery navigation does not prove hidden-field identity capture.",
+    "Observed executions concern a request submitted before deployment; this is not evidence of a new extractor failure.",
+    "Queue selection and scheduling causes were not investigated in this check."
+  ]
+}
