@@ -167,6 +167,12 @@ export type PresenzeDetailPunchRow = {
 };
 
 export type PresenzeDailyRecord = {
+  employment_relationship?: string | null;
+  employment_valid_from?: string | null;
+  employment_valid_to?: string | null;
+  avventizio_no_punches?: boolean;
+  attendance_note?: string | null;
+  export_absence_code?: string | null;
   shift_worker_type?: "none" | "acquaiolo" | "telecontrollo" | "tecnico_turnista";
   shift_worker_source?: "gate" | "gaia" | null;
   shift_rules_version?: string;

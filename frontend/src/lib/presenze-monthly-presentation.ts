@@ -1,10 +1,15 @@
 import type { MonthlyDay } from "./presenze-monthly-sheet";
 
+const AG_DAY_STATUS = new Map([
+  [true, { tone: "absence", label: "Assenza di timbrature (Avventizio)" }],
+  [false, { tone: "danger", label: "Da giustificare" }],
+]);
+
 // Same presentation contract in GAIA. These labels describe records, never live presence.
 export function monthlyAbsenceLabel(code: string): string {
   const labels: Record<string, string> = {
     F: "Ferie", M: "Malattia", I: "Infortunio", P: "Permesso", PST: "Permesso straordinario",
-    PS: "Permesso di servizio / sindacale", AG: "Assenza da giustificare", RS: "Riposo",
+    PS: "Permesso di servizio / sindacale", AG: "Assenza giustificata", RS: "Riposo",
     "L.104": "Permesso legge 104", DS: "Donazione sangue", RC: "Recupero / ex festività", SD: "Sospensione",
   };
   return labels[code] ?? "Causale " + code;
@@ -16,7 +21,7 @@ export function monthlyDayStatus(day: MonthlyDay, today: string) {
     ? { tone: "neutral", label: "In attesa di dati" }
     : { tone: "warning", label: "Dati mancanti" };
   const worked = Number(day.values[8]) > 0;
-  if (code === "AG") return { tone: "danger", label: "Da giustificare" };
+  if (code === "AG") return { ...AG_DAY_STATUS.get(Boolean(day.avventizioNoPunches))! };
   if (code) return { tone: code === "RS" ? "neutral" : "absence", label: (worked ? "Ore + " : "") + monthlyAbsenceLabel(code) };
   if (worked) return { tone: "work", label: "Ore registrate" };
   return day.values[8] === null

@@ -167,3 +167,37 @@ riconoscimento manuale del buono per data; qui la riga Buoni pasto e il riepilog
 mostrano il conteggio canonico 0/1, senza duplicare automatico e manuale.
 Causale normalizzata permesso_sindacale rappresentata con PS. Regole e migration:
 [implementazione Giornaliere](IMPLEMENTATION_PRESENZE_COLLABORATORI_GIORNALIERE.md#buoni-pasto-manuali-sync-operativa-e-permessi-sindacali--2026-10-01).
+
+
+## Avventizi senza timbrature — modifica locale del 6 novembre 2026
+
+L'utente ha confermato i 55 avventizi di `AVVENTIZI_INSERVIZIO.xlsx` dal
+1° gennaio al 31 dicembre 2026, in attesa delle date dei contratti e rinnovi.
+Il nuovo modello `PresenzeEmploymentPeriod` conserva periodi, hash del documento
+fonte e autore separatamente da mansioni e assegnazioni turnista. Non vengono
+creati o modificati mapping fra identità. I periodi espliciti impediscono il
+fallback a un vecchio profilo aperto fuori dalla validità contrattuale.
+
+`avventizio_absence_values` proietta AG e **Assenza di timbrature (Avventizio)**
+su giornaliere disponibili di giorni lavorativi trascorsi: teorico positivo,
+nessuna timbratura (anche incompleta), nessun lavoro, richiesta o altra assenza
+registrata. Riposi, festivi, oggi/futuro e righe mancanti restano distinti.
+La proiezione è condivisa da dettaglio, matrice, export e payload GATE e non
+modifica la giornaliera INAZ, accredita ore o aumenta le giornate pagate.
+Gli errori tecnici restano visibili; il solo residuo OREM viene coperto.
+
+La migrazione `20261106_1000` è additiva e il downgrade rifiuta una tabella
+popolata. Il lotto transazionale rifiuta conflitti di periodo, drift dei mapping
+canonici e operatori incoerenti; è stato verificato su PostgreSQL isolato anche
+in dry-run, applicazione ripetuta e rollback del dry-run.
+
+Stato: implementazione locale verificata; nessuna migrazione, importazione o
+release di questa funzione in produzione. I gate complessivi di coverage e
+complessità non sono superati. Evidenze private e piano del lotto in
+`/tmp/avventizi-ag-20261106/`; nessuna anagrafica inclusa nella documentazione.
+
+Aggiornamento del 9 novembre: riduzione delle regressioni di complessità da 17
+a 2, senza variazioni funzionali; 709 test backend e 600 frontend PASS e coverage
+del runtime toccato al 100%. I due incrementi LOC residui mantengono il blocco
+non ammesso al rilascio. Metriche, controlli aggiuntivi e limiti in
+[Avventizi: complessità e controlli](AVVENTIZI_COMPLEXITY_2026-11-09.md).

@@ -13,6 +13,7 @@ from app.modules.presenze.models import (
     PresenzeDailyPunch,
     PresenzeDailyRecord,
 )
+from app.modules.presenze.services.avventizio_absence import avventizio_absence_values
 from app.modules.presenze.services.contract_profile import (
     PRESENZE_CONTRACT_KIND_OPERAIO,
     resolve_contract_profile,
@@ -193,16 +194,11 @@ def normalize_request_prefix(value: str | None) -> str | None:
 
 
 def resolve_export_absence_code(row: PresenzeDailyRecord) -> str | None:
-    request_prefix = normalize_request_prefix(row.request_description)
-    if request_prefix:
-        legacy_code = LEGACY_ABSENCE_CODE_BY_REQUEST_PREFIX.get(request_prefix)
-        if legacy_code:
-            return legacy_code
-    if row.resolved_absence_cause:
-        legacy_code = LEGACY_ABSENCE_CODE_BY_CAUSE.get(row.resolved_absence_cause)
-        if legacy_code:
-            return legacy_code
-    return None
+    return (
+        avventizio_absence_values(row).get("export_absence_code")
+        or LEGACY_ABSENCE_CODE_BY_REQUEST_PREFIX.get(normalize_request_prefix(row.request_description))
+        or LEGACY_ABSENCE_CODE_BY_CAUSE.get(row.resolved_absence_cause)
+    )
 
 
 def day_has_work_presence(classification: DayClassification) -> bool:

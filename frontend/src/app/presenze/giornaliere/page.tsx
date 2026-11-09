@@ -442,11 +442,10 @@ function classifyCell(record: PresenzeDailyRecord): CellKind {
   if (record.operational_status === "in_analysis") return "analysis";
   if (record.operational_status === "unknown" && (record.detail_anomalies.length > 0 || record.detail_error)) return "anomaly";
   if (record.special_day) return "special";
-  if (record.resolved_absence_cause === "ferie") return "ferie";
-  if (record.resolved_absence_cause === "permesso") return "permesso";
-  if (record.resolved_absence_cause === "malattia") return "malattia";
+  // The private label map contains exactly the three classified absence kinds.
+  if (ABSENCE_PRIMARY_LABELS.has(record.resolved_absence_cause)) return record.resolved_absence_cause as CellKind;
   if ((record.ordinary_minutes ?? 0) > 0) return "worked";
-  if ((record.absence_minutes ?? 0) > 0) return "absence";
+  if ((record.absence_minutes ?? 0) > 0 || record.avventizio_no_punches) return "absence";
   return "rest";
 }
 
@@ -503,10 +502,10 @@ function analysisCellPrimaryLabel(record: PresenzeDailyRecord): string {
 }
 
 function statusCellPrimaryLabel(record: PresenzeDailyRecord, kind: CellKind): string {
-  const status = (record.detail_status ?? record.stato ?? "").trim().toLowerCase();
+  const status = record.avventizio_no_punches ? "AG" : (record.detail_status ?? record.stato ?? "").trim().toLowerCase();
   const label = STATUS_PRIMARY_LABELS.find(([fragment]) => status.includes(fragment))?.[1];
   if (label) return label;
-  if (status && !status.includes("gior") && !status.includes("regol")) return status.slice(0, 4);
+  if (status && !["gior", "regol"].some(fragment => status.includes(fragment))) return status.slice(0, 4);
   return kind === "anomaly" ? "Anom" : formatHoursCompact(record.absence_minutes);
 }
 
@@ -621,7 +620,7 @@ function formatAbsenceCause(cause: string | null | undefined): string {
     riposo: "Riposo",
     festivita: "Festivita",
     banca_ore: "Banca ore",
-    assenza_da_giustificare: "Assenza da giustificare",
+    assenza_da_giustificare: "Assenza da giustificare", assenza_giustificata: "Assenza di timbrature (Avventizio)",
   };
   return labels[cause] ?? cause.replaceAll("_", " ");
 }

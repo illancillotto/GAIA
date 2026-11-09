@@ -1,5 +1,29 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-11-09 — Proiezione Avventizi: riduzione verificata, due residui LOC
+
+- Richiesta esplicita: ridurre la complessità della feature sospesa senza
+  cambiare logica e aggiungere controlli. Una unità: proiezione dell'assenza AG
+  su dettaglio/matrice, export e mensile; resolver contratti e regola AG invariati.
+- `IMPROVED`: somme sul medesimo perimetro di nove file, inclusi nuovi callable,
+  ciclomatica 1941→1917, cognitiva 1860→1830, LOC callable 6063→6045 e LOC file
+  5806→5792. Serializer dettaglio 55/71→43/59, matrice 19/18→7/6, export 6/7→4/3.
+  Proiezione richiesta condivisa 5/4, sotto soglia; nessun trasferimento di
+  violation imperative, esclusione o modifica della baseline.
+- 55 casi aggiuntivi; 709 backend e 600 frontend PASS. Coverage dei sei runtime
+  backend 100% statement/branch, dei tre frontend 100% su tutte le metriche;
+  lint e typecheck PASS. Confronti differenziali: 20136 UI e 1792 richieste,
+  zero differenze. Dettagli e tentativi iniziali nel rapporto di dominio.
+- Ratchet autorevole `origin/main`: FAIL con 20 finding, 18 preesistenti e due
+  residui della feature, contro 17 iniziali. Restano solo schema risposta +7 LOC
+  e payload GaTe +1 LOC. Il ratchet resta FAIL, senza baseline o soglie modificate.
+- Dopo la comunicazione dei due residui l'utente richiede esplicitamente commit
+  e push: si procede con questa pubblicazione Git, mantenendo aperti i due rilievi
+  e senza certificare il gate. Nessuna autorizzazione a nuovi incrementi o deploy.
+- Checkout originale preservato; nessuna migrazione o deploy.
+  Evidenze `/tmp/gaia-avventizi-refactor-20261109/`;
+  rapporto `domain-docs/presenze/docs/AVVENTIZI_COMPLEXITY_2026-11-09.md`.
+
 ## 2026-11-04 — Controllo duplicati Poste: riduzione della decisione di invio
 
 - Richiesta esplicita: risolvere i quattro incrementi della prima versione,

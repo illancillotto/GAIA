@@ -13,6 +13,7 @@ describe("monthly presentation", () => {
     for (const [record, tone, label] of [
       [day(420), "work", "Ore registrate"], [day(0, "F"), "absence", "Ferie"],
       [day(60, "P"), "absence", "Ore + Permesso"], [day(0, "RS"), "neutral", "Riposo"],
+      [{ ...day(0, "AG"), avventizioNoPunches: true }, "absence", "Assenza di timbrature (Avventizio)"],
       [day(20, "AG"), "danger", "Da giustificare"], [day(null), "warning", "Ore non disponibili"],
       [day(), "neutral", "Nessuna ora registrata"],
       [{ ...day(), present: false }, "warning", "Dati mancanti"],

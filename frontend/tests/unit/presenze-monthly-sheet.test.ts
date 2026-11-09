@@ -98,3 +98,13 @@ describe("Giornaliera2", () => {
     expect(monthlyPaidSaturday(monthlyCalendar("2026-08")[0]!, [])).toBe(false);
   });
 });
+
+
+it("carries the avventizio AG into presentation without paid hours or days", () => {
+  const record = { work_date: "2026-10-02", export_ordinary_minutes: 0, export_extra_minutes: 0, export_absence_code: "AG", avventizio_no_punches: true };
+  const sheet = buildMonthlySheet("2026-10", [record]);
+  expect(sheet.days[1]!.avventizioNoPunches).toBe(true);
+  expect(sheet.days[1]!.values[12]).toBe("AG");
+  expect(sheet.workedDays).toBe(0);
+  expect(sheet.paidDays).toBe(0);
+});

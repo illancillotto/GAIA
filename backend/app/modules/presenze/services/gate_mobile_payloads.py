@@ -17,6 +17,7 @@ from app.modules.presenze.models import (
     PresenzeCollaborator,
     PresenzeDailyRecord,
 )
+from app.modules.presenze.services.avventizio_absence import avventizio_absence_values
 from app.modules.presenze.services.daily_details import classification_breakdown_values
 from app.modules.presenze.services.gate_inaz_details import gate_inaz_detail_values
 from app.modules.presenze.services.meal_vouchers import meal_voucher_values
@@ -276,6 +277,7 @@ def build_presenze_mobile_record_payload(
         "validated_by_user_id": record.validated_by_user_id,
         **_gate_record_feature_values(record),
         **_canonical_export_values(record, classification),
+        **avventizio_absence_values(record, classification),
     }
 
 

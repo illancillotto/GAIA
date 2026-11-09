@@ -27,6 +27,7 @@ from app.modules.presenze.schemas import (
 from app.modules.presenze.services.auto_sync import (
     get_auto_sync_config,
 )
+from app.modules.presenze.services.avventizio_absence import avventizio_absence_values
 from app.modules.presenze.services.credentials import (
     get_credential,
 )
@@ -161,15 +162,9 @@ def _serialize_daily_record(
             "monthly_night_shift_count": monthly_night_bonus["monthly_night_shift_count"] if monthly_night_bonus is not None else 0,
             "ordinary_night_bonus_threshold_met": monthly_night_bonus["ordinary_night_bonus_threshold_met"] if monthly_night_bonus is not None else False,
             "ordinary_night_bonus_rate": monthly_night_bonus["ordinary_night_bonus_rate"] if monthly_night_bonus is not None else None,
-            "request_type": record.request_type
-            or (resolve_request_type(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
-            "request_description": record.request_description
-            or (resolve_request_description(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
-            "request_status": record.request_status
-            or (resolve_request_status(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
-            "request_authorized_by": record.request_authorized_by
-            or (resolve_request_authorized_by(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
+            **_daily_record_request_values(record),
             "resolved_absence_cause": _resolved_absence_cause_for_response(record, classification),
+            **avventizio_absence_values(record, classification, operational_quality),
             "detail_title": detail.get("title"),
             "detail_status": detail.get("status"),
             "detail_programmed_schedule": detail.get("programmed_schedule"),
@@ -195,6 +190,16 @@ def _serialize_daily_record(
             "raw_payload_json": record.raw_payload_json if include_raw_payload else None,
         }
     )
+
+def _daily_record_request_values(record: PresenzeDailyRecord) -> dict[str, str | None]:
+    resolvers = {
+        "request_type": resolve_request_type,
+        "request_description": resolve_request_description,
+        "request_status": resolve_request_status,
+        "request_authorized_by": resolve_request_authorized_by,
+    }
+    payload = record.raw_payload_json if isinstance(record.raw_payload_json, dict) else {}
+    return {field: getattr(record, field) or resolver(payload) for field, resolver in resolvers.items()}
 
 def _build_collaborator_snapshot_map(
     db: Session,
@@ -396,15 +401,9 @@ def _serialize_daily_record_matrix(
             "monthly_night_shift_count": 0,
             "ordinary_night_bonus_threshold_met": False,
             "ordinary_night_bonus_rate": None,
-            "request_type": record.request_type
-            or (resolve_request_type(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
-            "request_description": record.request_description
-            or (resolve_request_description(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
-            "request_status": record.request_status
-            or (resolve_request_status(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
-            "request_authorized_by": record.request_authorized_by
-            or (resolve_request_authorized_by(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
+            **_daily_record_request_values(record),
             "resolved_absence_cause": _resolved_absence_cause_for_response(record, classification),
+            **avventizio_absence_values(record, classification, operational_quality),
             "detail_title": None,
             "detail_status": detail.get("status"),
             "detail_programmed_schedule": detail.get("programmed_schedule"),

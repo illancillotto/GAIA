@@ -6,6 +6,7 @@ export const MONTHLY_ROWS = [
   "Totale ore", "KM auto", "Trasferta", "Reperibilità", "Causale assenza",
 ] as const;
 export type MonthlyDay = {
+  avventizioNoPunches?: boolean;
   date: string; weekend: boolean; present: boolean; values: Array<number | string | null>;
 };
 export function monthlyNumber(record: MonthlyRecord, ...keys: string[]): number | null {
@@ -88,8 +89,7 @@ export function buildMonthlySheet(month: string, records: MonthlyRecord[]) {
   for (const record of records) {
     const day = days.find(item => item.date === record.work_date);
     if (!day || day.present) throw new Error("Data fuori mese o duplicata: " + String(record.work_date));
-    day.present = true;
-    day.values = monthlyValues(record);
+    Object.assign(day, { present: true, values: monthlyValues(record), avventizioNoPunches: record.avventizio_no_punches === true });
   }
   const totals = MONTHLY_ROWS.map((_, index) => {
     const values = days.filter(day => day.present).map(day => day.values[index]);

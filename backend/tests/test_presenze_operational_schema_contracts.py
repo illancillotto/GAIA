@@ -58,6 +58,7 @@ def test_manual_voucher_does_not_reset_omitted_fields():
 
 
 def test_bank_hours_update_requires_valid_sign():
+    assert schemas.PresenzeBankHoursAdjustmentUpdate(note="Reviewed").note == "Reviewed"
     assert (
         schemas.PresenzeBankHoursAdjustmentUpdate(kind="credit", delta_minutes=1).delta_minutes == 1
     )

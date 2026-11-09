@@ -670,6 +670,13 @@ class PresenzeDailyRecordResponse(PresenzeDailyRecordMealVoucherFields):
     request_status: str | None = None
     request_authorized_by: str | None = None
     resolved_absence_cause: str | None = None
+    employment_relationship: str | None = None
+    employment_valid_from: date | None = None
+    employment_valid_to: date | None = None
+    employment_source_sha256: str | None = None
+    avventizio_no_punches: bool = False
+    attendance_note: str | None = None
+    export_absence_code: str | None = None
     validation_status: str
     validated_by_user_id: int | None = None
     validated_at: datetime | None = None
