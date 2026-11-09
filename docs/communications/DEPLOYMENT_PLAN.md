@@ -47,3 +47,24 @@ il report per comandi effettivi e rollback, senza rigenerare tutti i servizi.
 Restore completo e grant sullo schema CED verificati; ruolo ristretto applicato.
 Prima dei trasporti reali restano carico/limiti contrattuali, NAS, configurazione
 provider, testi/trust/conservazione e checklist dell'ente approvati.
+
+## Addendum contatti 04/11/2026 — non eseguito
+
+Coordinare migrazione `20261104_1400` e aggiornamento dei processi web/worker:
+il nuovo resolver legge `ana_electronic_contacts`. Prima, backup dei contatti
+legacy, del registro eventuale e dell'audit; trasporti Communications disabilitati.
+Dopo la migrazione verificare i due trigger ALWAYS su PostgreSQL, riacquisire il
+piano di classificazione 2021 e applicare soltanto righe validate con API admin
+versionata. Verificare filtri per persone/aziende e separazione fra canali senza
+invii. Preservare i 14 discordanti e registrare i valori non classificati come
+`review`. Usare il ratchet completo per il gate; i finding del corpus parziale non sono
+un blocco globale, come rettificato in CONTACT_CLASSIFICATION_2026-11-04.md. Nessuna di queste operazioni è stata eseguita
+in produzione durante questa change.
+
+## Esecuzione registro recapiti — 05/11/2026
+
+Addendum contatti completato su autorizzazione: migrazione, grant SELECT worker,
+backend/worker healthy e classificazione coordinata. Quattro valori storici
+invalidi conservati esclusivamente in quarantena; campi legacy immutati.
+Backup mirato ripristinato, controlli autenticati e PDF reale PASS.
+Invii disabilitati. Dettagli e rollback: [CONTACT_RELEASE_2026-11-05](CONTACT_RELEASE_2026-11-05.md).

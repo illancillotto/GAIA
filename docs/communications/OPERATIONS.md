@@ -79,3 +79,28 @@ Layout sidebar pubblicato il 4 novembre alle 11:50 CET: elenco e composizione
 a metà desktop, campi sopra PDF. Solo frontend sostituito; backend, worker e
 stato effettivo di Posta Online preservati. Dettagli, collaudo e rollback in
 [SIDEBAR_RELEASE_2026-11-04](SIDEBAR_RELEASE_2026-11-04.md).
+
+## Classificazione PEC/email per le persone fisiche — predisposta, non rilasciata
+
+Prima dell'uso applicare la migrazione `20261104_1400` in una finestra coordinata
+backend/worker, con backup e trasporti disabilitati. Rieseguire il confronto dei
+recapiti 2021 prima del backfill: lo snapshot Excel/JSON del 04/11 non autorizza
+sovrascritture successive. L'API admin GET/PUT dei contatti usa soggetto canonico,
+tipo e stato espliciti, riferimento alla fonte e `expected_version` (0 per creare).
+Non automatizzare una scelta fra indirizzi multipli, attivare revocati o dedurre
+PEC dal dominio. I 14 discordanti restano ai colleghi per revisione.
+
+La tabella di classificazione è condivisa da aziende e persone; l'ordinaria email
+storica non prova il tipo di canale. Applicare anche le righe `unclassified/review`
+del piano validato per evitare che il vecchio campo venga usato come fallback.
+Nessun trasporto di prova è necessario alla classificazione. L'indirizzo con sintassi
+invalida va corretto o rimosso solo dopo verifica, non attivato dal piano.
+Guida e report: CONTACT_CLASSIFICATION_2026-11-04.md.
+
+## Registro recapiti operativo dal 05/11/2026
+
+Il filtro Presente usa persone e aziende: al rilascio 47 righe PEC e una email.
+Quattro valori invalidi sono in quarantena e non sono proposti. Il report
+ufficio consente di annotare recapito, canale, fonte/data ed esito; non applica
+correzioni da Excel. I 14 discordanti richiedono verifica documentata.
+Prima degli invii restano account e trasporti disabilitati: [CONTACT_RELEASE_2026-11-05](CONTACT_RELEASE_2026-11-05.md).

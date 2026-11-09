@@ -57,3 +57,13 @@ L'operatività2021 resta subordinata alle regole reali di gestione Ruolo/STEP.
 
 Il gate finale complessivo resta FAIL per i limiti della regressione generale
 dettagliati in FINAL_REVIEW.md; il100% locale non equivale a PASS globale.
+
+## Chiarimento recapiti — 04/11/2026
+
+La disponibilità dei due canali deve comprendere aziende e persone fisiche,
+tramite recapiti tipizzati collegati all'anagrafica esistente. Indirizzi non
+classificati, in revisione o revocati non devono diventare destinatari suggeriti;
+più indirizzi attivi del medesimo canale richiedono revisione. Non inferire PEC
+dal solo dominio. L'API amministrativa versionata e il resolver sono implementati
+nel checkout, con migrazione ancora da rilasciare; UI Utenze e automatismi di sync
+non inclusi. Stato e verifica 2021: CONTACT_CLASSIFICATION_2026-11-04.md.

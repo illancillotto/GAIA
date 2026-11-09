@@ -1148,3 +1148,7 @@ La sidebar PEC/email è pubblicata sul CED: elenco a sinistra e composizione
 a destra, campi sopra il PDF, con disposizione verticale su mobile.
 Quality gate specifico risolto senza deroghe; trasporti ancora disabilitati.
 [Verifiche e rilascio frontend](docs/communications/SIDEBAR_RELEASE_2026-11-04.md).
+
+Anteprima immediata solleciti PEC/email: [verifica e rilascio del 4 novembre 2026](docs/communications/SOURCE_PREVIEW_2026-11-04.md).
+
+Stato Communications del 5 novembre: [registro recapiti pubblicato e verificato](docs/communications/CONTACT_RELEASE_2026-11-05.md), trasporti ancora disabilitati.

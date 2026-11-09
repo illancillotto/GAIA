@@ -35,3 +35,21 @@ health e ricaricare nginx dopo `nginx -t`. Non usare `down` o riavvii globali,
 non riattivare Poste e non eliminare dati Communications.
 La verifica realmente eseguita degli artefatti e lo stato operativo sono nel
 [report del rilascio](DEPLOYMENT_REPORT_2026-11-04.md).
+
+## Registro contatti — addendum 04/11/2026
+
+La migrazione predisposta `20261104_1400` non modifica i campi legacy. Il downgrade
+elimina però il registro tipizzato e può riattivare i vecchi fallback: non usarlo
+come rollback ordinario. Disabilitare trasporti, conservare prima esportazione e
+audit, coordinare la versione backend/worker e verificare la revisione documentale.
+L'audit `electronic_contact_classified` resta tracciato; non cancellarlo per
+simulare che le classificazioni non siano avvenute. Nessun downgrade eseguito.
+
+## Registro recapiti 05/11/2026
+
+Rollback applicativo tramite configurazione congelata della release CED
+`communications-contacts-20261105-2`, limitato a backend e worker Communications.
+Preservare migrazione additiva, 256 classificazioni/quarantene e audit; nessun
+downgrade distruttivo o restore globale per annullare il solo codice.
+Verificare assenza di release concorrenti e health, quindi ricaricare nginx.
+Backup, checksum e dettagli: [CONTACT_RELEASE_2026-11-05](CONTACT_RELEASE_2026-11-05.md).

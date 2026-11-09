@@ -8,7 +8,7 @@ GRANT SELECT ON
     communication_jobs, communication_attempts, communication_events,
     communication_receipts, communication_controls,
     sections, role_section_permissions, user_section_permissions,
-    ana_subjects, ana_persons, ana_companies, ana_payment_notices,
+    ana_subjects, ana_persons, ana_companies, ana_payment_notices, ana_electronic_contacts,
     ruolo_avvisi, ruolo_partite, ruolo_particelle, ruolo_tributi_payments,
     ruolo_tributi_avviso_status, ruolo_tributi_notes, ruolo_tributi_special_notices,
     ruolo_tributi_special_allocations, ruolo_tributi_year_managers,

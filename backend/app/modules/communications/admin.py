@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_admin_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
+from app.modules.utenze.routes.electronic_contacts import router as contact_router
 
 from . import queue, registry, store
 from .models import (
@@ -27,6 +28,8 @@ router = APIRouter(
     tags=["communications-admin"],
     dependencies=[Depends(require_admin_user)],
 )
+
+router.include_router(contact_router)
 
 
 @router.get("/admin/accounts")

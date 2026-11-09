@@ -46,3 +46,15 @@ non significa exactly-once SMTP.
 Verifica conclusiva: contratti invariati; la nuova prova con contabilità reale
 conferma HTTP409 e assenza di job se un pagamento rende ineleggibile un avviso
 già approvato. Matrice API/permessi/errori in FINAL_REVIEW.md.
+
+## Classificazione dei recapiti — checkout 04/11/2026
+
+`GET` e `PUT /communications/admin/subjects/{subject_id}/contacts` espongono
+il registro Utenze anche per le persone fisiche. Accesso amministratore attivo,
+modulo Ruolo e sezione Tributi visibile. Scrittura con `expected_version`,
+indirizzo, canale (`pec/email/unclassified`), stato (`active/review/revoked`),
+fonte e riferimento obbligatori. Un non classificato non può essere attivo.
+Nessun comando trasmette messaggi. Endpoint non ancora rilasciati.
+
+Contratto completo e compatibilità dei campi legacy:
+[CONTACT_CLASSIFICATION_2026-11-04.md](CONTACT_CLASSIFICATION_2026-11-04.md).

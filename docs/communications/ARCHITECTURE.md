@@ -81,3 +81,12 @@ test_real_accounting_payment_blocks_an_already_reviewed_dispatch esercita il
 repository contabile reale e la frontiera Ruolo/outbox. La migrazione è ora
 misurata nel coverage con roundtrip PostgreSQL e SQLite. Matrice e limiti in
 FINAL_REVIEW.md; procedura di baseline in BASELINE_REPAIR.md.
+
+## Recapiti condivisi con Utenze (implementazione 04/11/2026 non rilasciata)
+
+`ana_electronic_contacts` appartiene al dominio Utenze e usa il soggetto canonico.
+Communications riusa `contact_columns/contact_values` per i due canali, persone
+fisiche incluse. Provenienza/versione/stato separano PEC, email e sconosciuti;
+i trigger partecipano al fence della revisione documentale. Non è una seconda
+anagrafica né una prova di validità giuridica del recapito. La migrazione non
+classifica automaticamente dati legacy. Vedi CONTACT_CLASSIFICATION_2026-11-04.md.

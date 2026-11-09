@@ -54,3 +54,20 @@ la stabilizzazione della composizione dei fixture richiedono un ciclo dedicato.
 Restano inoltre prove legacy con requisiti PostGIS/schema migrato e dipendenze
 GIS mancanti. Il gate complessivo è FAIL; il dettaglio delle corse isolate e
 la distinzione rispetto al100% del runtime Communications sono in FINAL_REVIEW.
+
+## Anteprima del 4 novembre — pubblicata, recapiti ancora separati
+
+La preview immediata è pubblicata e verificata su PDF reale. Il registro Utenze
+classificato, la migrazione 20261104_1400 e il backfill non sono inclusi nella
+patch: l'elenco PEC mostra ancora le 17 righe del campo aziende legacy.
+Riacquisire e verificare il piano dati prima di applicarlo; 14 discordanti ai
+colleghi e nessuna inferenza dal dominio. Configurazione provider e invii reali
+rimangono soggetti al collaudo autorizzato. Dettagli in SOURCE_PREVIEW_2026-11-04.md.
+
+## Aggiornamento 05/11/2026
+
+Il rilascio del registro recapiti è concluso: non è più un blocco esterno.
+Restano all'ufficio 14 soggetti discordanti e i recapiti da verificare, compresi
+quattro valori invalidi in quarantena e una PEC revocata. I dati originali
+restano invariati. Nessuna classificazione automatica dal solo dominio e
+nessun collaudo con destinatari reali. Stato verificato: [CONTACT_RELEASE_2026-11-05](CONTACT_RELEASE_2026-11-05.md).

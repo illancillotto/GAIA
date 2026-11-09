@@ -314,6 +314,7 @@ def test_worker_grants_allow_rbac_without_password_or_personal_data(postgres):
     from sqlalchemy.orm import Session
 
     from app.modules.communications.worker import _authorize_operator
+    from app.modules.utenze.services.electronic_contacts import contact_values
 
     engine, _, _ = postgres
     role = f"comm_worker_{uuid4().hex}"
@@ -355,6 +356,17 @@ def test_worker_grants_allow_rbac_without_password_or_personal_data(postgres):
                 )
             with Session(bind=connection) as db:
                 assert _authorize_operator(db, 1) is None
+                assert contact_values(db, uuid4()) == {"email": None, "pec": None}
+            for privilege in ("INSERT", "UPDATE", "DELETE"):
+                assert (
+                    connection.scalar(
+                        sa.text(
+                            "SELECT has_table_privilege(current_user, 'ana_electronic_contacts', :privilege)"
+                        ),
+                        {"privilege": privilege},
+                    )
+                    is False
+                )
             with pytest.raises(sa.exc.DBAPIError) as denied, connection.begin_nested():
                 connection.exec_driver_sql("SELECT password_hash FROM application_users")
             assert denied.value.orig.sqlstate == "42501"
@@ -362,3 +374,81 @@ def test_worker_grants_allow_rbac_without_password_or_personal_data(postgres):
         with engine.begin() as connection:
             connection.exec_driver_sql(f'DROP OWNED BY "{role}"')
             connection.exec_driver_sql(f'DROP ROLE "{role}"')
+
+
+def test_typed_contact_migration_concurrency_and_revision(postgres):
+    from app.modules.utenze.contact_models import AnagraficaElectronicContact as Contact
+    from app.modules.utenze.contact_schemas import ContactClassification
+    from app.modules.utenze.models import AnagraficaSubject
+    from app.modules.utenze.services.electronic_contacts import (
+        ContactConflict,
+        classify,
+        contact_values,
+    )
+
+    engine, factory, _ = postgres
+    with engine.begin() as connection:
+        Contact.__table__.drop(connection)
+        with Operations.context(MigrationContext.configure(connection)):
+            migration("20261104_1400_electronic_contacts.py").upgrade()
+
+        def include(item, name, kind, reflected, other):
+            return (
+                name == "ana_electronic_contacts"
+                if kind == "table"
+                else item.table.name == "ana_electronic_contacts"
+            )
+
+        assert (
+            compare_metadata(
+                MigrationContext.configure(connection, opts={"include_object": include}), metadata()
+            )
+            == []
+        )
+        triggers = connection.execute(
+            sa.text(
+                "SELECT tgname,tgenabled FROM pg_trigger WHERE tgrelid='ana_electronic_contacts'::regclass AND NOT tgisinternal"
+            )
+        ).all()
+        assert sorted(triggers) == [
+            ("gaia_notice_revision_row", "A"),
+            ("gaia_notice_revision_truncate", "A"),
+        ]
+    with factory() as db:
+        subject = AnagraficaSubject(source_name_raw="Synthetic contact", subject_type="person")
+        db.add(subject)
+        db.commit()
+        sid = subject.id
+        before = db.scalar(sa.select(NoticeGenerationRevision.revision))
+    barrier = Barrier(2)
+    payload = ContactClassification(
+        address="recipient@example.org",
+        channel="pec",
+        state="active",
+        source="synthetic",
+        evidence_reference="review synthetic",
+        expected_version=0,
+    )
+
+    def run():
+        with factory() as db:
+            barrier.wait(timeout=10)
+            try:
+                classify(db, sid, payload, 1)
+                db.commit()
+                return "saved"
+            except ContactConflict:
+                db.rollback()
+                return "conflict"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: run(), range(2)))
+    assert sorted(results) == ["conflict", "saved"]
+    with factory() as db:
+        assert db.scalar(sa.select(sa.func.count()).select_from(Contact)) == 1
+        assert db.scalar(sa.select(NoticeGenerationRevision.revision)) == before + 1
+        assert contact_values(db, sid) == {"email": None, "pec": "recipient@example.org"}
+        classify(db, sid, payload.model_copy(update={"state": "revoked", "expected_version": 1}), 1)
+        db.commit()
+        assert contact_values(db, sid)["pec"] is None
+        assert db.scalar(sa.select(NoticeGenerationRevision.revision)) == before + 2

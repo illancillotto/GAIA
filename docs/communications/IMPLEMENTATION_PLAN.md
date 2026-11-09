@@ -80,3 +80,28 @@ Dettagli e stato di pubblicazione corrente in
 
 Default recapiti per canale completato e verificato: nessuna variazione backend
 o schema. [Verifiche e pubblicazione frontend](CONTACT_FILTERS_2026-11-04.md).
+
+## Consolidamento recapiti del 04/11/2026
+
+Completati nel checkout registro Utenze, resolver condiviso, API admin e collaudo
+per PEC/email su persone e aziende. Completato audit read-only dei solleciti2021.
+Restano rilascio e migrazione `20261104_1400`, applicazione controllata del piano,
+classificazione degli sconosciuti e revisione dei discordanti. Ratchet globale
+con sette finding preesistenti riprodotti: nessuna baseline aggiornata per
+assorbirli. Stato verificabile: CONTACT_CLASSIFICATION_2026-11-04.md.
+
+## Anteprima immediata — 4 novembre 2026
+
+[x] Anteprima immediata da Componi/checkbox, hash confrontato al comando di creazione, retry e abort, test API/UI/browser. [ ] Rilascio del registro e classificazione recapiti, distinto dalla patch preview.
+
+Dettagli: [SOURCE_PREVIEW_2026-11-04](SOURCE_PREVIEW_2026-11-04.md).
+
+Pubblicazione preview completata alle 16:32:01 CET: PDF reale 2021 verificato, quattro E2E live con API simulate PASS. Registro recapiti/migrazione ancora non pubblicati; elenco PEC legacy ancora 17. Vedere SOURCE_PREVIEW_2026-11-04.md per rollback, matrice e limiti del gate.
+
+## Chiusura rilascio registro recapiti — 05/11/2026
+
+[x] Schema, integrazione, grant ristretto e classificazioni pubblicati.
+[x] Quarantena dei quattro valori invalidi, audit e report ufficio.
+[x] Verifica effettiva di liste, recapiti per entrambi i tipi di soggetto e PDF.
+[ ] Revisione discordanti e abilitazione/collaudo dei provider reali.
+La pubblicazione non abilita trasporti o caselle: vedere [CONTACT_RELEASE_2026-11-05](CONTACT_RELEASE_2026-11-05.md).

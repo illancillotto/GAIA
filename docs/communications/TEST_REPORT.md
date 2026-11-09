@@ -190,3 +190,32 @@ Default recapiti pubblicati alle 12:13 CET: quattro flussi Chromium su nginx
 di produzione PASS con API simulate, sei URL200, tre API401, frontend healthy
 e 50 container preservati. Primo tentativo annullato per rilascio concorrente,
 ripetuto dopo DEPLOYED e nuova fotografia: nessun controllo indebolito.
+
+## Classificazione contatti 04/11/2026 — backend non rilasciato
+
+169 PASS, zero skip nella suite Communications, nove test PG realmente eseguiti
+su database locale isolato. Nove runtime/migrazione: 407 statement e 72 branch,
+100%. Regressione anagrafica/parser/revisione: 193 PASS distinti. Prima corsa
+69 PASS/124 SKIP; successivamente eseguiti tutti i 125 test revisione, zero skip,
+sul PostgreSQL locale isolato (uno già passato nella prima corsa). Ruff/formato PASS. Nessun cambio frontend, E2E/build non rieseguiti.
+Il ratchet corrente riproduce sette finding già presenti su `2115dd7b`, senza
+nuovi incrementi sui callable toccati; nessun PASS globale o deploy dichiarato.
+Matrice, rischi, evidenze e audit 2021: CONTACT_CLASSIFICATION_2026-11-04.md.
+
+## Anteprima immediata — 4 novembre 2026
+
+Matrice completa, tentativi iniziali, verifiche finali e stato operativo in SOURCE_PREVIEW_2026-11-04.md. Coverage richiesta sull’intero runtime modificato, incluse le branch; nessuna esclusione aggiunta.
+
+Dettagli: [SOURCE_PREVIEW_2026-11-04](SOURCE_PREVIEW_2026-11-04.md).
+
+Pubblicazione preview completata alle 16:32:01 CET: PDF reale 2021 verificato, quattro E2E live con API simulate PASS. Registro recapiti/migrazione ancora non pubblicati; elenco PEC legacy ancora 17. Vedere SOURCE_PREVIEW_2026-11-04.md per rollback, matrice e limiti del gate.
+
+## Verifiche rilascio registro recapiti — 05/11/2026
+
+177 test Communications con nove PG reali, zero skip nel checkout. Coverage
+registro 407 statement / 72 branch al 100%, zero esclusioni. Immagine candidata:
+168 PASS / nove PG skip già eseguiti localmente. Suite recapiti estesa: 38 PASS,
+due casi nuovi di quarantena (179 casi distinti complessivi, non nuova corsa
+integrale). Ripristino mirato, migrazione e privilegi sul clone PASS; runtime
+worker ristretto, otto GET autenticati, persone/aziende e PDF reale PASS.
+Frontend invariato; suite generale storica non ricertificata. Limiti e prove: [CONTACT_RELEASE_2026-11-05](CONTACT_RELEASE_2026-11-05.md).

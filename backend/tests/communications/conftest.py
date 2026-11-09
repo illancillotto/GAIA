@@ -26,7 +26,13 @@ from app.modules.ruolo.notice_register_models import (
     NoticePosition,
     NoticeRecovery,
 )
-from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, AnagraficaSubject
+from app.modules.utenze.contact_models import AnagraficaElectronicContact
+from app.modules.utenze.models import (
+    AnagraficaAuditLog,
+    AnagraficaCompany,
+    AnagraficaPerson,
+    AnagraficaSubject,
+)
 
 
 def pdf(count=3):
@@ -41,7 +47,13 @@ def pdf(count=3):
 def metadata():
     value = dispatch_metadata()
     value.remove(value.tables["ana_subjects"])
-    for model in (AnagraficaSubject, AnagraficaPerson, AnagraficaCompany):
+    for model in (
+        AnagraficaSubject,
+        AnagraficaPerson,
+        AnagraficaCompany,
+        AnagraficaElectronicContact,
+        AnagraficaAuditLog,
+    ):
         model.__table__.to_metadata(value)
     for table in Base.metadata.tables.values():
         if table.name.startswith("communication_"):

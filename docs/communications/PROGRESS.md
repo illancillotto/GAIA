@@ -50,3 +50,34 @@ Dettagli e stato di pubblicazione corrente in
 - [x] L’altro canale resta Tutti; controlli modificabili dall’operatore.
 - [x] Test su default, primo caricamento e scelta Tutti/Assente.
 - [x] Pubblicazione frontend 12:13 CET e quattro flussi live sintetici PASS; backend/Poste del rilascio concorrente preservati, dettagli in CONTACT_FILTERS_2026-11-04.md.
+
+## 2026-11-04 — Classificazione recapiti per persone e aziende
+
+- [x] Registro Utenze per canale/stato/provenienza e API admin versionata.
+- [x] Resolver comune per elenco, filtri e fingerprint Communications, entrambi i tipi di soggetto.
+- [x] Verifica CED in sola lettura dei solleciti 2021 e report Excel privato completo.
+- [x] 169 test Communications, inclusi nove PG reali; coverage 407 statement/72 branch al 100%.
+- [ ] Rilascio/migrazione/backfill: non eseguiti. Rettifica successiva: il ratchet completo passa; i sette finding erano relativi a un corpus parziale, vedere SOURCE_PREVIEW_2026-11-04.md.
+- [ ] Classificazioni non documentate e 14 discordanti da revisione umana; nessun invio.
+
+Dettagli, matrice test, perimetro e residui in [CONTACT_CLASSIFICATION_2026-11-04.md](CONTACT_CLASSIFICATION_2026-11-04.md).
+
+## Anteprima immediata — 4 novembre 2026
+
+[x] Componi e checkbox caricano il PDF reale prima della bozza; rendering completo e hash obbligatori nella UI. [x] Test di byte equality, RBAC, failure path e browser. Stato del rilascio e verifica finale nel report dedicato.
+
+Dettagli: [SOURCE_PREVIEW_2026-11-04](SOURCE_PREVIEW_2026-11-04.md).
+
+Pubblicazione preview completata alle 16:32:01 CET: PDF reale 2021 verificato, quattro E2E live con API simulate PASS. Registro recapiti/migrazione ancora non pubblicati; elenco PEC legacy ancora 17. Vedere SOURCE_PREVIEW_2026-11-04.md per rollback, matrice e limiti del gate.
+
+## Registro recapiti — rilascio 5 novembre 2026
+
+- [x] Migrazione `20261104_1400`, backend e worker pubblicati sul CED, healthy.
+- [x] 252 classificazioni validate e quattro valori invalidi in quarantena; 256 audit.
+- [x] API autenticate: 47 righe PEC / 41 anagrafiche, una riga email.
+- [x] Confronto campi legacy delle 984 anagrafiche: invariati; PDF reale verificato.
+- [x] Report privato per l'ufficio: 14 soggetti discordanti e 191 altri recapiti.
+- [ ] Revisione umana e configurazione/collaudo autorizzato delle caselle reali.
+
+Questo stato supera le precedenti voci «registro non rilasciato». Nessun invio.
+Evidenze, tentativi e limiti: [CONTACT_RELEASE_2026-11-05](CONTACT_RELEASE_2026-11-05.md).

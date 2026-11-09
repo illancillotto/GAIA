@@ -54,3 +54,13 @@ ha esposto credenziali dei vecchi override: incidente segnalato e rotazione
 coordinata ancora da completare, come registrato in OPEN_DECISIONS e nel
 [report operativo](DEPLOYMENT_REPORT_2026-11-04.md). Nessun valore è incluso
 nei documenti o nei commit.
+
+## Registro recapiti tipizzati (checkout 04/11/2026)
+
+La classificazione richiede amministratore attivo, modulo Ruolo e vista Tributi;
+non è disponibile a chi può solo comporre. API versionata, lock dell'anagrafica,
+FK/check e audit before/after nella stessa transazione. Le fonti sono riferimenti
+a verifiche amministrative, non una certificazione automatica di titolarità.
+Nessuna verifica SMTP o invio è stata effettuata. Report 2021 con dati personali
+conservato fuori dal repository. I dati legacy misti richiedono backfill esplicito:
+la migrazione non trasforma email in PEC. CONTACT_CLASSIFICATION_2026-11-04.md.

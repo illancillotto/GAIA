@@ -20,6 +20,7 @@ from app.modules.ruolo.notice_register_models import (
 from app.modules.ruolo.poste_dispatch_models import PosteDispatchItem
 from app.modules.ruolo.services.notice_eligibility import eligibility
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson
+from app.modules.utenze.services.electronic_contacts import contact_columns, contact_values
 from app.services.nas_connector import NasConnectorError
 
 from .models import CommunicationMessage
@@ -38,12 +39,7 @@ def source_item(db, identity):
 
 
 def contacts(db, item):
-    person = db.get(AnagraficaPerson, item.subject_id) if item.subject_id else None
-    company = db.get(AnagraficaCompany, item.subject_id) if item.subject_id else None
-    return {
-        "email": person.email if person else None,
-        "pec": company.email_pec if company else None,
-    }
+    return contact_values(db, item.subject_id)
 
 
 def read_pdf(item) -> bytes:
@@ -177,7 +173,7 @@ def list_candidates(db, *, channel, filters, page, page_size):
     person, company = AnagraficaPerson, AnagraficaCompany
     year = func.replace(cast(item.years_json, String), " ", "") == "[2021]"
     query = (
-        select(item, RuoloTributiReminderBatch.title, person.email, company.email_pec)
+        select(item, RuoloTributiReminderBatch.title, *contact_columns(item.subject_id).values())
         .join(RuoloTributiReminderBatch, item.batch_id == RuoloTributiReminderBatch.id)
         .outerjoin(person, person.subject_id == item.subject_id)
         .outerjoin(company, company.subject_id == item.subject_id)
@@ -232,11 +228,11 @@ def _candidate_filters(query, filters, channel):
 
 
 def _contact_filters(query, filters, channel):
-    chosen = AnagraficaCompany.email_pec if channel == "pec" else AnagraficaPerson.email
+    columns = contact_columns(RuoloTributiReminderBatchItem.subject_id)
     fields = (
-        ("has_contact", chosen),
-        ("has_pec", AnagraficaCompany.email_pec),
-        ("has_email", AnagraficaPerson.email),
+        ("has_contact", columns[channel]),
+        ("has_pec", columns["pec"]),
+        ("has_email", columns["email"]),
     )
     for key, column in fields:
         if filters.get(key) is not None:

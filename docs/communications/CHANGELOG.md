@@ -108,3 +108,29 @@ Nessun push, PR, merge o deployment eseguito.
   di partenza; prove legacy/PostGIS/GIS non interamente verificabili.
 - Recuperate428prove PG in38processi isolati;9skip SQLite intenzionali.
  32prove schema/PostGIS e2GIS restano non verificate.
+
+## 2026-11-04 — Registro recapiti tipizzati (non rilasciato)
+
+PEC/email per aziende e persone tramite registro Utenze condiviso, selezione
+univoca e filtri coerenti, stati attivo/revisione/revocato, audit e versione.
+Migrazione `20261104_1400`, API admin e valutazione delle fonti senza inferenze
+dal dominio. Audit reale dei solleciti 2021 con report privato. Nessun backfill
+in produzione o invio; 14 discordanti preservati. Dettagli e limite del gate
+preesistente in CONTACT_CLASSIFICATION_2026-11-04.md.
+
+## Anteprima immediata — 4 novembre 2026
+
+Anteprima sorgente autenticata immediata; PDF multipagina prima della bozza, hash alla creazione, gestione risposte obsolete, SHA-256 compatibile con HTTP intranet. Nessuna modifica ai trasporti, al database o alle prenotazioni Poste nel rilascio preview.
+
+Dettagli: [SOURCE_PREVIEW_2026-11-04](SOURCE_PREVIEW_2026-11-04.md).
+
+Pubblicazione preview completata alle 16:32:01 CET: PDF reale 2021 verificato, quattro E2E live con API simulate PASS. Registro recapiti/migrazione ancora non pubblicati; elenco PEC legacy ancora 17. Vedere SOURCE_PREVIEW_2026-11-04.md per rollback, matrice e limiti del gate.
+
+## 2026-11-05 — Registro recapiti pubblicato sul CED
+
+- Migrazione additiva e resolver PEC/email per persone e aziende.
+- 252 classificazioni e quattro valori storici invalidi in quarantena, 256 audit.
+- Liste verificate: 47 righe PEC, una email; nessun invio reale.
+- Report ufficio per 14 soggetti discordanti e 191 ulteriori recapiti da verificare.
+- Snapshot configurazioni, rollback e backup mirato verificato; frontend/Poste preservati.
+- Test di quarantena per persone/aziende; documentazione in [CONTACT_RELEASE_2026-11-05](CONTACT_RELEASE_2026-11-05.md).

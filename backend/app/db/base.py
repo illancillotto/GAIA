@@ -434,6 +434,8 @@ from app.modules.communications.models import (
     CommunicationTemplate,
 )
 
+from app.modules.utenze.contact_models import AnagraficaElectronicContact
+
 from app.modules.elaborazioni.capacitas.incremental.models import (
     IncrementalChange,
     IncrementalCycle,

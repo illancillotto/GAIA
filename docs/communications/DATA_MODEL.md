@@ -35,3 +35,13 @@ failed/cancelled non sono riaperti da PATCH. Mappa autorevole: policy.TRANSITION
 accepted = accettazione PEC certificata; submitted = accettazione SMTP.
 dsn_delivered resta evento email, senza equiparazione a PEC. Nessun automatismo
 di perfezionamento giuridico. Downgrade distruttivo vietato su evidenze popolate.
+
+## Recapiti Utenze — migrazione predisposta `20261104_1400`
+
+`ana_electronic_contacts` collega `subject_id -> ana_subjects.id` e indirizzo
+normalizzato, univoci insieme. Canale PEC/email/non classificato; stato
+attivo/revisione/revocato, fonte, riferimento, versione positiva e operatore.
+Un non classificato non può essere attivo. I campi storici restano preservati.
+La classificazione scrive un audit Utenze e partecipa ai trigger di revisione
+su PostgreSQL. Nessun dato viene classificato dalla migrazione.
+Dettagli e stato non rilasciato: CONTACT_CLASSIFICATION_2026-11-04.md.
