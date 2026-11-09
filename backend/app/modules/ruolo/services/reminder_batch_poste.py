@@ -16,7 +16,9 @@ def dispatches_by_notice(db, items):
         select(
             dispatch.id,
             dispatch.notice_number,
-            dispatch.notice_number.label("delivery_reference"),
+            func.coalesce(
+                dispatch.recipient["heir_reference"].as_string(), dispatch.notice_number
+            ).label("delivery_reference"),
             dispatch.status,
             dispatch.poste_draft_id,
             dispatch.poste_status,

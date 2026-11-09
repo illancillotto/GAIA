@@ -87,7 +87,7 @@ def _groups(items, lots, snapshots) -> dict:
     groups = defaultdict(_group)
     for item in items:
         evidence = _item_evidence(item, lots[item.lot_id])
-        groups[("notice", _name(shipment_name(item.notice_number)))][
+        groups[("notice", _name(shipment_name(item.notice_number, item.recipient)))][
             "items"
         ].append(evidence)
         groups[("source", str(item.batch_item_id))]["items"].append(evidence)
@@ -155,8 +155,9 @@ def allow_upload(
     findings = duplicate_report(db)["findings"]
     conflicts = [f for f in findings if any(r["item_id"] == str(item.id) for r in f["items"])]
     valid_keys = (
-        item.active_key == item.shipment_name == shipment_name(item.notice_number)
+        item.active_key == item.shipment_name == shipment_name(item.notice_number, item.recipient)
         and item.active_source_key == str(item.batch_item_id)
+        and item.artifact_sha256 == item.recipient.get("heir_pdf_sha256", item.artifact_sha256)
     )
     if valid_keys and not conflicts:
         item.upload_requested_by_user_id = job.requested_by_user_id

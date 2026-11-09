@@ -33,6 +33,7 @@ def _items(db: Session):
         func.row_number()
         .over(
             partition_by=func.coalesce(
+                Item.payload_json["heir_delivery"]["reference"].as_string(),
                 func.nullif(number, ""),
                 cast(Item.id, String),
             ),
@@ -48,7 +49,10 @@ def _items(db: Session):
 def _assignments(db: Session):
     rows = db.execute(
         select(
-            PosteDispatchItem.notice_number.label("delivery_reference"),
+            func.coalesce(
+                PosteDispatchItem.recipient["heir_reference"].as_string(),
+                PosteDispatchItem.notice_number,
+            ).label("delivery_reference"),
             PosteDispatchItem.status,
             PosteDispatchLot.id.label("lot_id"),
             PosteDispatchLot.credential_id,
@@ -105,7 +109,7 @@ def _document(item):
 def _row(item, assignments, history):
     payload = item.payload_json or {}
     number = payload.get("notice_number")
-    reference = number
+    reference = payload.get("heir_delivery", {}).get("reference", number)
     ownership = _ownership(assignments.get(reference, []))
     document = _document(item)
     ready = document["download_url"] is not None

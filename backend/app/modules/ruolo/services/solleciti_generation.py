@@ -30,7 +30,11 @@ def generate(db, *, year, tax_code, actor_id):
             .order_by(Item.created_at, Item.id)
         )
     )
-    ready = {frozenset(item.avviso_ids_json or []): item.id for item in existing}
+    ready = {
+        frozenset(item.avviso_ids_json or []): item.id
+        for item in existing
+        if "heir_delivery" not in (item.payload_json or {})
+    }
     reused = [ready[generation._avvisi(c)] for c in candidates if generation._avvisi(c) in ready]
     missing = [c for c in candidates if generation._avvisi(c) not in ready]
     created = []

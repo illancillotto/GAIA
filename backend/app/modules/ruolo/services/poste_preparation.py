@@ -21,7 +21,12 @@ def prepare(db, *, item_ids, credential_id, actor_id):
         select(PosteDispatchItem.id)
         .join(
             RuoloTributiReminderBatchItem,
-            ("GAIA " + RuoloTributiReminderBatchItem.payload_json["notice_number"].as_string())
+            func.coalesce(
+                RuoloTributiReminderBatchItem.payload_json["heir_delivery"][
+                    "reference"
+                ].as_string(),
+                "GAIA " + RuoloTributiReminderBatchItem.payload_json["notice_number"].as_string(),
+            )
             == PosteDispatchItem.shipment_name,
         )
         .where(

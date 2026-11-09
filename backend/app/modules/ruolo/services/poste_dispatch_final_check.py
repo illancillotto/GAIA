@@ -103,7 +103,7 @@ def _expected_items(db: Session, lots) -> list[dict]:
         {
             "item_id": str(item.id),
             "notice_name": " ".join(
-                shipment_name(item.notice_number).upper().split()
+                shipment_name(item.notice_number, item.recipient).upper().split()
             ),
             "poste_username": accounts[item.lot_id],
             "status": item.status,

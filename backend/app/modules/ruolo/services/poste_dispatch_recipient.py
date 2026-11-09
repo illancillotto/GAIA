@@ -4,8 +4,13 @@ The draft must carry the same name and address printed on the letter, so both
 come from the payload that rendered the PDF.
 """
 
+import hashlib
+import json
 import re
-from typing import Any
+from typing import Any, Literal
+from uuid import UUID
+
+from pydantic import BaseModel, Field
 
 from app.modules.ruolo.services.tributi_reminder_service import _batch_address_values, _value
 
@@ -18,8 +23,29 @@ _CAP_RE = re.compile(r"^\d{5}$")
 _PROVINCE_RE = re.compile(r"^[A-Z]{2}$")
 
 
-def shipment_name(notice_number: str) -> str:
+class HeirDelivery(BaseModel):
+    """Explicitly approved recipient copy; the financial notice remains unchanged."""
+
+    kind: Literal["heir"]
+    source_item_id: UUID
+    pdf_sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+    recipient: dict[str, str]
+    reference: str = Field(min_length=1)
+
+
+def heir_shipment_name(notice_number: str, recipient: dict[str, str]) -> str:
+    identity = json.dumps(normalize_recipient(recipient), sort_keys=True, ensure_ascii=True)
+    suffix = hashlib.sha256(identity.encode("ascii")).hexdigest()[:12].upper()
+    return f"GAIA {notice_number.strip()} E{suffix}"
+
+
+def shipment_name(notice_number: str, recipient: dict[str, str] | None = None) -> str:
+    reference = (recipient or {}).get("heir_reference")
     name = f"GAIA {notice_number.strip()}"
+    if reference:
+        name = heir_shipment_name(notice_number, recipient)
+        if reference != name:
+            raise ValueError("Identità destinatario erede discordante dalla copia approvata")
     if not notice_number.strip() or len(name) > SHIPMENT_NAME_LIMIT:
         raise ValueError("Numero avviso non utilizzabile come nome spedizione Poste")
     return name
@@ -40,6 +66,16 @@ def split_name(name: str) -> tuple[str, str]:
 
 
 def recipient_from_payload(payload: dict[str, Any]) -> dict[str, str]:
+    if "heir_delivery" in payload:
+        delivery = HeirDelivery.model_validate(payload["heir_delivery"])
+        recipient = normalize_recipient(delivery.recipient)
+        recipient.update(
+            heir_reference=delivery.reference,
+            heir_source_item_id=str(delivery.source_item_id),
+            heir_pdf_sha256=delivery.pdf_sha256,
+        )
+        shipment_name(payload["notice_number"], recipient)
+        return recipient
     address = _batch_address_values(payload)
     name, extra = split_name(clean(_value(payload.get("display_name"))))
     return {

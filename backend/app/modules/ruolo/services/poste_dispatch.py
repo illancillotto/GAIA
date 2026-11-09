@@ -4,6 +4,7 @@ Each command runs in the caller's transaction. Portal work is queued as a
 Posta Online job, so only the Poste worker ever opens the portal.
 """
 
+import hashlib
 from collections.abc import Callable
 from typing import Any
 from uuid import UUID
@@ -113,10 +114,15 @@ def _new_item(lot: PosteDispatchLot, item: RuoloTributiReminderBatchItem, read: 
     if item.status != "generated":
         raise DispatchConflict(f"Sollecito {item.id} non generato in via definitiva")
     notice_number = str((item.payload_json or {}).get("notice_number") or "").strip()
-    name = recipients.shipment_name(notice_number)
     recipient = recipients.recipient_from_payload(item.payload_json or {})
+    name = recipients.shipment_name(notice_number, recipient)
     artifact = read(item)
-    if not artifact.startswith(b"%PDF") or len(artifact) > MAX_ARTIFACT_BYTES:
+    digest = hashlib.sha256(artifact).hexdigest()
+    if (
+        not artifact.startswith(b"%PDF")
+        or len(artifact) > MAX_ARTIFACT_BYTES
+        or digest != recipient.get("heir_pdf_sha256", digest)
+    ):
         raise DispatchConflict(
             f"Avviso {notice_number}: PDF non valido o oltre 7 MB (limite Poste)"
         )
@@ -254,6 +260,8 @@ def update_recipient(
         raise DispatchConflict(
             "Destinatario modificabile solo prima della bozza Poste: eliminare prima la bozza"
         )
+    if item.recipient.get("heir_reference"):
+        raise DispatchConflict("Copia erede approvata: aggiornare prima il PDF e il destinatario")
     recipient = recipients.normalize_recipient(fields)
     problems = recipients.recipient_problems(recipient)
     if problems:

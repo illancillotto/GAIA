@@ -40,7 +40,9 @@ def sendable(item: RuoloTributiReminderBatchItem) -> bool:
 
 
 def _overview_item(item, pec, dispatches):
-    number = (item.payload_json or {}).get("notice_number")
+    payload = item.payload_json or {}
+    number = payload.get("notice_number")
+    reference = payload.get("heir_delivery", {}).get("reference", number)
     return {
         "item_id": item.id,
         "label": item.display_name or item.codice_fiscale,
@@ -50,7 +52,7 @@ def _overview_item(item, pec, dispatches):
         "notice_number": number,
         "years": item.years_json or [],
         "amount": float(notice_total_amount(item.payload_json or {})),
-        "poste_dispatches": dispatches.get(number, []),
+        "poste_dispatches": dispatches.get(reference, []),
     }
 
 
