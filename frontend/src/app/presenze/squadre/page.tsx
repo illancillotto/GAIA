@@ -15,6 +15,7 @@ import {
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import type { ApplicationUser, GatePresenzeTeam, PresenzeCollaborator } from "@/types/api";
+import { TeamOrganizationHeader } from "./team-organization";
 import { TeamFormFields } from "./team-form-fields";
 import type { TeamFormState } from "./team-form-fields";
 
@@ -273,16 +274,7 @@ export default function PresenzeSquadrePage() {
           <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             {selectedTeam ? (
               <div className="space-y-6">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Squadra selezionata</p>
-                    <h2 className="mt-1 text-2xl font-semibold text-slate-950">{selectedTeam.name}</h2>
-                    <p className="mt-1 text-sm text-slate-500">Codice {selectedTeam.code || "n/d"} · Area {selectedTeam.personnel_area}</p>
-                  </div>
-                  <button className="btn-secondary" type="button" onClick={() => handleToggleTeamActive(selectedTeam)}>
-                    {selectedTeam.active ? "Disattiva" : "Riattiva"}
-                  </button>
-                </div>
+                <TeamOrganizationHeader team={selectedTeam} onToggle={handleToggleTeamActive} />
 
                 <div className="grid gap-4 xl:grid-cols-2">
                   <div className="rounded-[1.75rem] border border-slate-100 bg-slate-50/60 p-4">

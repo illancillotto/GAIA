@@ -10,6 +10,7 @@ import {
   OperazioniMetricStrip,
   OperazioniToolbar,
 } from "@/components/operazioni/collection-layout";
+import { GATE_MOBILE_CONSOLE_ROLE_OPTIONS, gateMobileConsoleRoleLabel } from "@/features/operazioni/console-roles";
 import { OperazioniModulePage } from "@/components/operazioni/operazioni-module-page";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MetricCard } from "@/components/ui/metric-card";
@@ -109,7 +110,7 @@ function initialsForOperator(operator: OperatorItem): string {
   if (parts.length === 1) {
     return parts[0].slice(0, 2).toUpperCase();
   }
-  return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 }
 
 function operatorVisualTone(operator: OperatorItem): string {
@@ -188,7 +189,7 @@ function DesktopOperatorCard({
   return (
     <button
       type="button"
-      onClick={() => (canOpenDetail ? onOpenDetail(operator) : undefined)}
+      onClick={() => onOpenDetail(operator)}
       className={cn(
         "group overflow-hidden rounded-[22px] border border-[#e6ebe5] bg-white text-left shadow-panel transition hover:-translate-y-1 hover:border-[#c9d6cd] hover:shadow-lg",
         canOpenDetail ? "cursor-pointer" : "cursor-default",
@@ -271,7 +272,7 @@ function MobileOperatorCard({
   return (
     <button
       type="button"
-      onClick={() => (canOpenDetail ? onOpenDetail(operator) : undefined)}
+      onClick={() => onOpenDetail(operator)}
       className={cn(
         "flex w-full items-center gap-2.5 rounded-[20px] border border-[#e6ebe5] bg-[linear-gradient(180deg,_#ffffff,_#fbfcfa)] px-3 py-2.5 text-left shadow-panel transition active:scale-[0.995]",
         canOpenDetail ? "cursor-pointer" : "cursor-default",
@@ -316,21 +317,6 @@ function MobileOperatorCard({
 }
 
 const PREVIEW_COUNT = 6;
-const GATE_MOBILE_CONSOLE_ROLE_OPTIONS: Array<{ value: GateMobileConsoleRole; label: string }> = [
-  { value: "console_admin", label: "Console admin" },
-  { value: "device_manager", label: "Device manager" },
-  { value: "team_manager", label: "Team manager" },
-  { value: "viewer", label: "Viewer" },
-];
-
-function gateMobileConsoleRoleLabel(role: GateMobileConsoleRole | null | undefined): string {
-  if (role === "console_admin") return "Console admin";
-  if (role === "device_manager") return "Device manager";
-  if (role === "team_manager") return "Team manager";
-  if (role === "viewer") return "Viewer";
-  return "Non assegnato";
-}
-
 function OperatorDetailModal({
   open,
   operator,
@@ -394,13 +380,10 @@ function OperatorDetailModal({
   const cards = effectiveDetail?.current_fuel_cards ?? subject.current_fuel_cards ?? [];
 
   async function handleSaveConsolePermissions(): Promise<void> {
-    if (!canManageGateMobileConsole || !effectiveDetail) {
-      return;
-    }
     setIsSavingConsolePermissions(true);
     setConsoleSaveError(null);
     try {
-      const updated = await updateGateMobileConsolePermissions(effectiveDetail.operator.id, {
+      const updated = await updateGateMobileConsolePermissions(subject.id, {
         enabled: consoleEnabled,
         role: consoleEnabled ? consoleRole : null,
       });

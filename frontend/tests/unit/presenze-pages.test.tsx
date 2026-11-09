@@ -1,3 +1,4 @@
+import { getTeamOrganizationDirectory } from "@/lib/api/presenze-team-organization";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -52,6 +53,11 @@ const mocks = vi.hoisted(() => ({
   testPresenzeCredential: vi.fn(),
   updatePresenzeSupervisorAssignment: vi.fn(),
   push: vi.fn(),
+}));
+
+vi.mock("@/lib/api/presenze-team-organization", () => ({
+  getTeamOrganizationDirectory: vi.fn().mockResolvedValue({ teams: [], units: [] }),
+  saveTeamOrganization: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -113,6 +119,7 @@ vi.mock("next/navigation", () => ({
 describe("Presenze pages", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(getTeamOrganizationDirectory).mockResolvedValue({ teams: [], units: [] });
     mocks.getStoredAccessToken.mockReturnValue("token");
     mocks.getPresenzeDashboardWorkspace.mockImplementation(async (...args: unknown[]) => {
       const [summary, syncJobs, matrix, collaborators] = await Promise.all([

@@ -63,6 +63,7 @@ from app.modules.organigramma.models import (
 from app.modules.inventory.models import WarehouseRequest
 from app.modules.dotazioni.models import DotazioneAsset, DotazioneCustody, DotazioneEvent
 from app.modules.elaborazioni.telemetry_models import SisterPortalEvent
+from app.modules.presenze.team_organization_models import PresenzeTeamOrganization
 from app.modules.presenze.mapping_audit import PresenzeCollaboratorMappingAudit
 from app.modules.presenze.dashboard_models import PresenzeDashboardSnapshot
 from app.modules.presenze.shift_worker_models import PresenzeShiftAssignment

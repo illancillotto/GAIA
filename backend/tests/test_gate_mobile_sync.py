@@ -18,6 +18,9 @@ from app.modules.operazioni.models.gate_mobile_sync_run import GateMobileSyncRun
 from app.modules.operazioni.models.organizational import OperatorProfile
 from app.modules.operazioni.models.wc_operator import WCOperator
 from app.modules.operazioni.schemas.operators import GateMobileConsoleUpdateRequest
+from app.modules.organigramma.models.org_assignment import OrgAssignment
+from app.modules.organigramma.models.org_unit import OrgUnit
+from app.modules.presenze.employment_models import PresenzeEmploymentPeriod
 from app.modules.presenze.models import (
     OrganizationTeam,
     OrganizationTeamMembership,
@@ -36,6 +39,7 @@ from app.modules.presenze.models import (
 from app.modules.presenze.personnel_profile_models import PresenzePersonnelProfile
 from app.modules.presenze.services import gate_mobile_payloads, gate_mobile_team_actions
 from app.modules.presenze.shift_worker_models import PresenzeShiftAssignment
+from app.modules.presenze.team_organization_models import PresenzeTeamOrganization
 from app.services import gate_mobile_sync as gate_mobile_sync_service
 from app.services.gate_mobile_sync import (
     build_mobile_catalog_push_payloads,
@@ -2751,7 +2755,11 @@ def _build_session() -> Session:
             PresenzeDailyPunch.__table__,
             PresenzeShiftAssignment.__table__,
             PresenzePersonnelProfile.__table__,
+            PresenzeEmploymentPeriod.__table__,
+            OrgUnit.__table__,
+            OrgAssignment.__table__,
             OrganizationTeam.__table__,
+            PresenzeTeamOrganization.__table__,
             OrganizationTeamMembership.__table__,
             OrganizationTeamSupervisorAssignment.__table__,
         ],

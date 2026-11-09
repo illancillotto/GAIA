@@ -7,8 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-
-GateMobileConsoleRole = Literal["console_admin", "device_manager", "team_manager", "viewer"]
+GateMobileConsoleRole = Literal["console_admin", "device_manager", "team_manager", "viewer", "hr_manager"]
 
 
 class OperatorFuelCardSummary(BaseModel):
@@ -82,7 +81,7 @@ class GateMobileConsoleUpdateRequest(BaseModel):
     role: GateMobileConsoleRole | None = None
 
     @model_validator(mode="after")
-    def validate_role(self) -> "GateMobileConsoleUpdateRequest":
+    def validate_role(self) -> GateMobileConsoleUpdateRequest:
         if self.enabled and self.role is None:
             raise ValueError("role is required when enabled is true")
         if not self.enabled:

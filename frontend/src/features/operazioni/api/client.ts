@@ -515,7 +515,7 @@ export async function getOperator(id: string) {
   return fetchOperazioni(`/operators/${id}`);
 }
 
-export type GateMobileConsoleRole = "console_admin" | "device_manager" | "team_manager" | "viewer";
+export type GateMobileConsoleRole = "console_admin" | "device_manager" | "team_manager" | "viewer" | "hr_manager";
 
 export interface OperatorFuelCardSummary {
   id: string;

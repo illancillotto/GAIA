@@ -40,8 +40,6 @@ from app.modules.presenze.gate_router import (
 from app.modules.presenze.models import (
     PRESENZE_CONTRACT_KIND_IMPIEGATO,
     PRESENZE_CONTRACT_KIND_OPERAIO,
-    OrganizationTeam,
-    OrganizationTeamSupervisorAssignment,
     PresenzeCollaborator,
     PresenzeDailyPunch,
     PresenzeDailyRecord,
@@ -62,19 +60,19 @@ from app.modules.presenze.schemas import (
 )
 from app.modules.presenze.services.gate_daily_record_patch import apply_gate_daily_record_patch
 from app.modules.presenze.services.gate_mobile_payloads import (
-    build_presenze_memberships_by_team,
-    build_presenze_supervisors_by_team,
-    build_presenze_team_payload,
-    json_datetime,
-    required_personnel_area,
+    build_presenze_mobile_record_payload as build_presenze_mobile_record_payload,
 )
 from app.modules.presenze.services.gate_mobile_payloads import (
-    build_presenze_mobile_record_payload as build_presenze_mobile_record_payload,
+    json_datetime,
+    required_personnel_area,
 )
 from app.modules.presenze.services.gate_mobile_team_actions import (
     TEAM_ACTION_OPERATIONS,
     apply_presenze_team_proposal,
     pending_action_gaia_user_id,
+)
+from app.modules.presenze.services.gate_mobile_team_snapshot import (
+    build_presenze_teams_push_payload,
 )
 from app.modules.presenze.services.inaz_sync_status import build_presenze_snapshot_metadata
 from app.modules.presenze.services.operai_rules import (
@@ -84,7 +82,7 @@ from app.schemas.users import normalize_email
 
 OPERATOR_UPDATE_ACTION_TYPE = "propose_operator_update"
 OPERATOR_UPDATE_OPERATIONS = {"create_operator", "update_operator", "update_operator_domains"}
-GATE_MOBILE_CONSOLE_ROLES = {"console_admin", "device_manager", "team_manager", "viewer"}
+GATE_MOBILE_CONSOLE_ROLES = {"console_admin", "device_manager", "team_manager", "viewer", "hr_manager"}
 OPERATOR_ACTIVE_STATUSES, OPERATOR_DISABLED_STATUSES = {"ACTIVE"}, {"DISABLED", "INACTIVE"}
 
 
@@ -287,32 +285,6 @@ def build_mobile_workset_push_payloads(db: Session) -> list[dict[str, Any]]:
         for item in response.worksets
     ]
 
-
-def build_presenze_teams_push_payload(db: Session, *, now: datetime | None = None) -> dict[str, Any]:
-    teams = db.scalars(select(OrganizationTeam).order_by(OrganizationTeam.name.asc())).all()
-    memberships_by_team = build_presenze_memberships_by_team(db)
-    supervisors = db.execute(
-        select(OrganizationTeamSupervisorAssignment, ApplicationUser)
-        .join(ApplicationUser, ApplicationUser.id == OrganizationTeamSupervisorAssignment.application_user_id)
-        .order_by(OrganizationTeamSupervisorAssignment.team_id.asc(), ApplicationUser.username.asc())
-    ).all()
-
-    supervisors_by_team = build_presenze_supervisors_by_team(db, supervisors)
-
-    return {
-        "schema_version": 1,
-        "source": "gaia",
-        "rules_version": RULES_VERSION,
-        "synced_from_gaia_at": (now or datetime.now(UTC)).isoformat().replace("+00:00", "Z"),
-        "teams": [
-            build_presenze_team_payload(
-                team,
-                memberships_by_team.get(str(team.id), []),
-                supervisors_by_team.get(str(team.id), []),
-            )
-            for team in teams
-        ],
-    }
 
 def build_presenze_rules_push_payload(*, now: datetime | None = None) -> dict[str, Any]:
     synced_at = now or datetime.now(UTC)

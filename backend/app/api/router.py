@@ -21,6 +21,9 @@ from app.modules.operazioni.routes.operator_invitations import (
 from app.modules.organigramma.router import router as organigramma_router
 from app.modules.presenze.gate_router import router as gate_presenze_router
 from app.modules.presenze.router import router as presenze_router
+from app.modules.presenze.team_organization_router import (
+    router as presenze_team_organization_router,
+)
 from app.modules.riordino.bootstrap import router as riordino_router
 from app.modules.ruolo.router import router as ruolo_router
 from app.modules.ruolo.routes.query_routes import (
@@ -43,6 +46,7 @@ api_router.include_router(gis_router)
 api_router.include_router(inventory_router)
 api_router.include_router(dotazioni_router)
 api_router.include_router(presenze_router)
+api_router.include_router(presenze_team_organization_router)
 api_router.include_router(gate_presenze_router)
 api_router.include_router(me_router)
 api_router.include_router(me_straordinari_period_router)

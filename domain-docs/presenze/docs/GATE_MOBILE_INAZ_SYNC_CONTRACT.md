@@ -1,5 +1,10 @@
 # Stato sincronizzazione INAZ negli snapshot GaTe Mobile
 
+Estensione locale HR del 07/11/2026: [organigramma squadre e ruolo HR](GATE_HR_ORGANIGRAMMA.md).
+Il payload squadre usa il medesimo builder per push e pull e aggiunge il legame
+canonico opzionale `organization`; il ruolo operatori `hr_manager` richiede un
+consumer GATE aggiornato prima dell'abilitazione.
+
 ## Soglia settimanale delle giornate aggiuntive — 22 settembre 2026
 
 Gli export GATE e GAIA riconoscono il sabato non lavorato soltanto con cinque
