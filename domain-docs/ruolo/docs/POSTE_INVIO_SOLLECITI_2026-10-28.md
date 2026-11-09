@@ -606,6 +606,71 @@ Il controller privato della campagna e il monitor non sono nuove API o un
 servizio generale di GAIA. HTTP 403 sul servizio CAP e timeout/login restano
 errori da verificare; non autorizzano modifiche agli indirizzi né retry ciechi.
 
+## Recupero dei mancanti della campagna 2021 — 2026-11-04
+
+La verifica operativa confronta i 942 PDF definitivi del Desktop (712 ordinari,
+230 digitali con spese) con i 940 avvisi nazionali nei lotti e i due esteri
+sospesi. Tutti i 940 hash degli allegati coincidono con gli originali. Il conteggio
+dei caricamenti comprende `draft_created` e `draft_priced`; `sent` resta distinto.
+`address_ok` indica un avviso pronto, non un caricamento completato.
+
+Su richiesta dell'operatore sono stati riabilitati con audit 330 avvisi falliti
+prima di CONTINUA, senza alcun evento di invio del documento, osservazione di
+bozza o spedizione. Per altri 37 casi è stata richiesta una nuova lettura di
+bozze e archivio completo. Queste operazioni documentano una ripresa, non il
+completamento della campagna. Otto avvisi senza indirizzo completo, i due esteri
+e i tre casi esclusi esplicitamente dall'operatore restano sospesi. Un nono
+caso senza indirizzo ha una bozza preesistente, già contrassegnata nell'audit
+come da non inviare: compare separatamente nel report privato e non deve essere
+confuso con una bozza pronta per la spedizione.
+
+Il servizio privato `gaia-poste-presubmit-recovery-20261104.service` affianca il
+controller della campagna, senza cambiare API GAIA o configurazione del worker:
+
+- rivede ogni 60 secondi soltanto fallimenti temporanei precedenti a CONTINUA;
+- applica attese di 2, 5, 10, 20 e poi 30 minuti dalla nuova failure, con una
+  variazione deterministica di ±20%, senza riabilitare un tentativo già rilasciato;
+- verifica destinatario, account, hash e contenuto dell'allegato originali,
+  validità dell'indirizzo, assenza di identificativi e di eventi di submission,
+  osservazione, spedizione, correzione manuale o cancellazione;
+- lascia terminare i job attivi del lotto e rispetta le sospensioni degli account;
+- rimette in coda un avviso mancante del perimetro nazionale solo con un nuovo
+  `draft_missing` prodotto da un job `reconcile` concluso con successo dopo la
+  richiesta di verifica della campagna del 04/11 alle 05:25 UTC. Un'eventuale
+  richiesta più recente sul singolo avviso prevale su quella generale. Lotto
+  e account del job devono coincidere con quelli del documento. La prova deve
+  seguire una lettura completa anche dell'archivio, non essere già consumata
+  e non avere successive azioni di invio o modifica manuale.
+
+Le transizioni passano dai servizi esistenti, sotto lo stesso advisory lock
+usato dal controller, e registrano attore, tentativo e prova nell'audit. Le
+operazioni di recupero non premono INVIA. Un successivo errore del portale non
+è presentato come caricamento riuscito.
+
+Il controller privato è stato corretto per una sospensione obsoleta: quando un
+lotto aveva un timeout e un altro lotto dello stesso account aveva poi successo,
+il retry sceglie ora il job fallito che coincide esattamente con il motivo della
+sospensione tecnica. Le sospensioni manuali restano protette. Il rilascio del
+04/11 alle 06:53 CET ha riavviato soltanto il controller; backup, script e ricevute
+sono nel volume privato della campagna, nelle directory `retry-controller/` e
+`recovery-20261104/`.
+
+Il controllo periodico seleziona solo metadati dei casi sospesi e usa lock
+`SKIP LOCKED` per non attendere righe già lavorate. Il PDF viene letto solo
+per verificare l'integrità di un candidato effettivamente riabilitabile; anche
+il controller differisce la lettura degli allegati durante i conteggi. Il
+servizio di recupero ha una unit systemd utente persistente.
+
+Validazione operativa: 28 test e 10 sottocasi sulle policy di attesa, le prove di
+assenza, il riferimento del timeout e il controller con schema SQLite reale.
+Non si tratta di una nuova certificazione di coverage dell'intero worker.
+Le prove isolate sul portale non hanno premuto CONTINUA: hanno riscontrato pagine
+«Oops..Something went wrong» e ritorni al login prima dell'inizializzazione del
+modulo. Nessuna modifica degli indirizzi è stata introdotta per superare questi
+errori. Il report nominativo dei mancanti resta sul Desktop e nel volume privato;
+non viene versionato nel repository. Ricevuta tecnica priva di dati dei
+destinatari in `evidence/POSTE_RECOVERY_2026-11-04.json`.
+
 ## Controllo duplicati tra account — 2026-11-04
 
 Rilasciato in produzione il 2026-11-04 alle 11:11 UTC insieme al secondo

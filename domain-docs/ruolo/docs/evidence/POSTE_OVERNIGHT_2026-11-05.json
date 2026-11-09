@@ -1,0 +1,113 @@
+{
+  "release": {
+    "at_utc": "2026-11-04T23:19:52.331089+00:00",
+    "scope": "private campaign controller snapshot only",
+    "source_sha256": "a97c6f1ae93a3beb86a8fa8a2176df9638cf7c2ede97fa262eb0568b55e74285",
+    "before_sha256": "c49dd9818d08bbc86793fed9393f4d710692a127c7afdc87326c13fa70c9fd23",
+    "recovery_delays_seconds": [
+      15,
+      30,
+      60
+    ],
+    "jitter_max_percent": 20,
+    "controller_tick_seconds": 30,
+    "no_attempt_limit": true,
+    "http429_backoff_preserved": true,
+    "archive_403_only_matching_notice_held": true,
+    "previous_item_evidence_preserved": true,
+    "manual_pauses_and_held_notices_preserved": true,
+    "worker_sessions_not_restarted": true,
+    "send_action": false,
+    "pending_deadlines_advanced": [
+      {
+        "account": "3",
+        "old_deadline": "2026-11-04T23:20:47.408805+00:00",
+        "new_deadline": "2026-11-04T23:19:59.408805+00:00"
+      },
+      {
+        "account": "5",
+        "old_deadline": "2026-11-04T23:19:52.562151+00:00",
+        "new_deadline": "2026-11-04T23:18:43.562151+00:00"
+      }
+    ],
+    "test_count": 53,
+    "line_and_branch_coverage_percent": 100
+  },
+  "presubmit": {
+    "at_utc": "2026-11-04T23:22:47.360012+00:00",
+    "sha256": "b8185157ae34a0abd7df555f193983a9e4f0a98d3003bd30a5a5191b5f4b7c36",
+    "before_sha256": "0bdad5cd8d0f865b6fe474ef59dad60bfba51f1ff1f12dd0d4da36bfe760c623",
+    "delay_seconds": [
+      30,
+      60,
+      120
+    ],
+    "jitter_factor": [
+      0.8,
+      1.2
+    ],
+    "timer_interval_seconds": 60,
+    "safety_guards_unchanged": true,
+    "proven_presubmission_only": true,
+    "new_reassigned_items_in_plan": 54,
+    "item_and_account_states_untouched": true,
+    "tests": 8,
+    "line_branch_coverage": 100,
+    "send_action": false
+  },
+  "reassignment": {
+    "at_utc": "2026-11-04T23:24:36.287449+00:00",
+    "mode": "apply",
+    "to_account": 2,
+    "send_action": false,
+    "pdfs_regenerated": false,
+    "account_states_unchanged": true,
+    "count": 39,
+    "from_account_counts": {
+      "1": 13,
+      "3": 13,
+      "5": 13
+    },
+    "new_lot_id": "997eb12a-8e94-4a06-a2a5-489bc2a611d0",
+    "address_job_cancelled": 1025,
+    "upload_job_id": 1026,
+    "global_active_count": 940,
+    "duplicate_findings": 0,
+    "committed": true
+  },
+  "validation": {
+    "retry_tests": 53,
+    "regression_tests": 155,
+    "presubmit_tests": 8,
+    "retry_statement_and_branch_coverage": 100,
+    "presubmit_statement_and_branch_coverage": 100,
+    "ruff": "PASS",
+    "make_lint_backend": "PASS",
+    "merge_base_ratchet": "PASS",
+    "baseline_commit": "686e529ee011487e0764b9f91d023be063dbdf55",
+    "baseline_changed": false
+  },
+  "completion_claim": false,
+  "send_action": false,
+  "graphify": {
+    "code": "PASS",
+    "docs": "PASS, chunk 1/1 done, no semantic failure",
+    "docs_tokens_in": 5703,
+    "docs_tokens_out": 3892
+  },
+  "last_totals": {
+    "at_utc": "2026-11-04T23:32:44.330479+00:00",
+    "loaded_confirmed": 662,
+    "ready_to_upload": 211,
+    "review_or_hold": 64,
+    "total_tracked": 940,
+    "creating": 2
+  },
+  "portal_residual_problem": "Intermittent CAP select timeouts and Oops/timeout on listings; isolated diagnostic ended without CONTINUA. Autonomous retries continue.",
+  "desktop_monitor": {
+    "timer": "gaia-poste-overnight-monitor-20261105.timer",
+    "interval_minutes": 15,
+    "read_only": true,
+    "report": "Controllo_Poste_2026-11-04/Monitoraggio/Recap_notturno_ultimo.json"
+  }
+}

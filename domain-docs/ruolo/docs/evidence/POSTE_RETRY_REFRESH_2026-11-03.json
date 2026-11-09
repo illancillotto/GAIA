@@ -1,0 +1,28 @@
+{
+  "at_utc": "2026-11-03T17:19:10.467634+00:00",
+  "worker_healthy": true,
+  "concurrency": 5,
+  "changed_sources": 2,
+  "source_hashes_verified": true,
+  "configuration_preserved": true,
+  "graceful_drain": true,
+  "controller_persistent": true,
+  "controller_sources": {
+    "poste712_supervise.py": "d13392d80900e738c470a421fdb41023cb14f57a97579fd99c4ff7127189c001",
+    "poste712_stop_supervisor.py": "91adcc0e3a3bf14dd4a50d9831b689c59e88100c6be9c1006e5704c7284f212e",
+    "poste_dispatch_retry.py": "439a31ba271a66ecb0236a4ff597c73b41d827efc0d56803ed1460728bd8e407"
+  },
+  "send_action": false,
+  "validation": {
+    "worker_regressions_passed": 104,
+    "retry_policy_and_controller_tests_passed": 35,
+    "modified_runtime_statement_coverage": 100,
+    "modified_runtime_branch_coverage": 100,
+    "complexity_ratchet_findings": 0,
+    "lint_backend": "PASS",
+    "graphify_ruolo_code": "PASS",
+    "graphify_worker_code": "PASS",
+    "graphify_ruolo_docs": "PASS"
+  },
+  "scope": "Authorized 2021 campaign controller and safe list refresh; manual INVIA preserved"
+}

@@ -19,6 +19,7 @@ from app.modules.ruolo.services.poste_dispatch_address import search_term
 from app.modules.ruolo.services.poste_dispatch_work import DraftRow, WorkItem
 from posta_online_client import POSTA_ONLINE_ARCHIVE_URL, PostaOnlineBrowserClient
 from posta_online_dispatch_portal import allows_request, parse_archive_rows, parse_draft_rows
+from posta_online_listing_recovery import load_listing
 
 logger = logging.getLogger(__name__)
 
@@ -116,11 +117,7 @@ class PostaOnlineDispatchPortal:
         )
 
     async def _list_page(self, url: str) -> None:
-        await self.client.throttle.wait(f"dispatch:{self.phase}")
-        await self.page.goto(url, wait_until="commit")
-        # The legacy page can keep navigation pending while the complete table is usable.
-        # Requiring the table also prevents a login/error page being read as an empty list.
-        await self.page.locator("#col_invio_dett").wait_for(state="attached")
+        await load_listing(self.client, url, self.phase)
 
     async def _next_list_url(self, current: str) -> str | None:
         link = self.page.locator('ul.pagination a[aria-label="Next"]')

@@ -1,0 +1,83 @@
+{
+  "checked_at_utc": "2026-11-04T15:26:15.003088+00:00",
+  "scope": "Private controller for the 942-notice campaign; no general worker policy change",
+  "production": {
+    "at_utc": "2026-11-04T15:23:48.107019+00:00",
+    "sha256": "8cf3561054f6eb635ba19257c66c848541ba17ecf1da39ddcbfd9967776feb77",
+    "previous_sha256": "4df5b0ac8ce2c3cc71ba92cbd073dfd5db9bb36ade6c74eeedd7ba91e1adf826",
+    "recovery_delays_seconds": [
+      30,
+      60,
+      120
+    ],
+    "jitter_max_percent": 20,
+    "rate_limit_backoff_preserved": true,
+    "manual_pauses_preserved": true,
+    "salaris_paused": true,
+    "worker_sessions_not_restarted": true,
+    "item_states_untouched": true,
+    "migrations": [
+      {
+        "credential_id": 2,
+        "old_deadline": "2026-11-04T15:56:18.486241+00:00",
+        "new_deadline": "2026-11-04T15:23:48.107019+00:00",
+        "attempt_preserved": 7,
+        "fresh_browser_per_job": true,
+        "send_action": false
+      }
+    ],
+    "send_action": false,
+    "receipt": "/runtime-data/ruolo/solleciti/poste-712-20261103/retry-controller/fast-policy-20261104T152348/receipt.json"
+  },
+  "read_only_production_smoke": {
+    "at_utc": "2026-11-04T15:24:38.434682+00:00",
+    "sha256": "8cf3561054f6eb635ba19257c66c848541ba17ecf1da39ddcbfd9967776feb77",
+    "read_only_smoke": {
+      "Timeout 60000ms exceeded": 144,
+      "Poste Oops: elenco temporaneamente non disponibile": 144,
+      "Due bozze consecutive non create: lavorazione interrotta": 144,
+      "Timeout HTTP 429": 2160
+    },
+    "manual_pause_preserved": true,
+    "jobs_created": 0
+  },
+  "validation": {
+    "policy_tests_passed": 40,
+    "existing_fresh_private_session_test_passed": 1,
+    "coverage": {
+      "covered_lines": 82,
+      "num_statements": 82,
+      "percent_covered": 100.0,
+      "percent_covered_display": "100",
+      "missing_lines": 0,
+      "excluded_lines": 0,
+      "percent_statements_covered": 100.0,
+      "percent_statements_covered_display": "100",
+      "num_branches": 28,
+      "num_partial_branches": 0,
+      "covered_branches": 28,
+      "missing_branches": 0,
+      "percent_branches_covered": 100.0,
+      "percent_branches_covered_display": "100"
+    },
+    "ruff_and_formatter": "PASS",
+    "make_lint_backend": "PASS",
+    "merge_base_ratchet": "PASS",
+    "baseline_commit": "686e529ee011487e0764b9f91d023be063dbdf55",
+    "baseline_modified": false,
+    "graphify_code": "PASS",
+    "graphify_docs": "PASS, chunk 1/1 done, no semantic failures"
+  },
+  "complexity": {
+    "existing_callable_metrics_unchanged": true,
+    "new_retry_delay_selection": {
+      "cognitive": 6,
+      "cyclomatic": 6
+    },
+    "warnings_before": 4,
+    "warnings_after": 4,
+    "errors_before": 0,
+    "errors_after": 0
+  },
+  "git_commit_or_push_performed": false
+}

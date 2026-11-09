@@ -1,0 +1,59 @@
+{
+  "at_utc": "2026-11-04T05:58:00+00:00",
+  "scope": "Private recovery for authorized 2021 Poste campaign; no automatic INVIA",
+  "source_pdf_count": 942,
+  "tracked_domestic_count": 940,
+  "source_hashes_matched": 940,
+  "initial_proven_presubmit_requeued": 330,
+  "fresh_reconciliation_requested": 37,
+  "tests": {
+    "passed": 28,
+    "subtests": 10,
+    "policy_line_branch_coverage_percent": 100,
+    "coverage_scope": [
+      "absence_proof.py",
+      "retry_policy.py",
+      "retry_reference.py"
+    ],
+    "not_full_worker_coverage": true
+  },
+  "services": [
+    "gaia-poste712-controller-20261103.service",
+    "gaia-poste-presubmit-recovery-20261104.service"
+  ],
+  "private_controller_release": {
+    "at_utc": "2026-11-04T05:53:46.720134+00:00",
+    "before_sha256": "d13392d80900e738c470a421fdb41023cb14f57a97579fd99c4ff7127189c001",
+    "after_sha256": "b1f014b4f79e88a304f3c70fc58cdd98034861dc1aac0fb459520e7969b5a7f4",
+    "change": "Private controller selects the failed job matching a stale transient hold; no submission repeats",
+    "tests": "24 passed, 6 subtests"
+  },
+  "graphify": {
+    "target": "graphify-ruolo-docs",
+    "semantic_chunks_done": "1/1",
+    "warnings": false
+  },
+  "runtime_scripts": {
+    "absence_proof.py": "850e735f2d9f54fdb6ddee39ba3d7f29f3d173b7f82d52849f212b4c9e326b63",
+    "retry_policy.py": "0bdad5cd8d0f865b6fe474ef59dad60bfba51f1ff1f12dd0d4da36bfe760c623",
+    "retry_reference.py": "1130cef30cae2d199c5b10ca39f288c5ea6b368e4f8486091f9ba6e79af4787e",
+    "retry_presubmit.py": "7905400e190ad481ac8f7a4c0d59499f74e671b53995b0f355371fd88c92e33e",
+    "presubmit_recovery_loop.py": "8e81e9cd1179f76d87ebef1ed55fbe6a5d973d5eb441f3b0c4e099816b8e7d84",
+    "release_absent.py": "32bf5119e218208564660017a80088e5914ef2b7895410b4728e38605d574fba"
+  },
+  "completion_claim": false,
+  "metadata_scan_verification": {
+    "metadata_item_selects": 4,
+    "candidate_artifacts_verified": 3,
+    "unnecessary_artifact_reads": 0
+  },
+  "private_controller_metadata_release": {
+    "at_utc": "2026-11-04T06:10:25.468243+00:00",
+    "before_sha256": "b1f014b4f79e88a304f3c70fc58cdd98034861dc1aac0fb459520e7969b5a7f4",
+    "after_sha256": "26e635d1dbff48fd22559f854f5287e7e7185bb035c9a9dd5b21a0604f500720",
+    "change": "Private controller defers immutable PDF blobs during metadata scans; no submission behavior changes",
+    "tests": "25 passed, 10 subtests"
+  },
+  "recovery_service_persistent": true,
+  "fresh_absence_scope": "All 940 tracked national notices, canonical successful same-lot/same-account reconcile after campaign request 2026-11-04T05:25:00+00:00; later per-item requests take precedence; consume each proof once"
+}

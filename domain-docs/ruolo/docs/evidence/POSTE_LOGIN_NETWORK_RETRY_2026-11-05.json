@@ -1,0 +1,131 @@
+{
+  "login_redirect_release": {
+    "at_utc": "2026-11-05T06:55:50.665851+00:00",
+    "scope": "private campaign controller snapshot only",
+    "source_sha256": "9342c32fec583007c773a83a4def80985523df05b3c3641f205e8f9ee325b158",
+    "before_sha256": "a97c6f1ae93a3beb86a8fa8a2176df9638cf7c2ede97fa262eb0568b55e74285",
+    "recovery_delays_seconds": [
+      15,
+      30,
+      60
+    ],
+    "login_redirect_delays_seconds": [
+      60,
+      120,
+      300
+    ],
+    "jitter_max_percent": 20,
+    "controller_tick_seconds": 30,
+    "no_attempt_limit": true,
+    "http429_backoff_preserved": true,
+    "archive_403_only_matching_notice_held": true,
+    "previous_item_evidence_preserved": true,
+    "manual_pauses_and_held_notices_preserved": true,
+    "worker_sessions_not_restarted": true,
+    "send_action": false,
+    "pending_deadlines_advanced": [
+      {
+        "account": "4",
+        "old_deadline": "2026-11-05T07:09:45.343191+00:00",
+        "new_deadline": "2026-11-05T06:44:45.343191+00:00"
+      }
+    ],
+    "test_count": 59,
+    "line_and_branch_coverage_percent": 100
+  },
+  "network_retry_release": {
+    "at_utc": "2026-11-05T06:58:44.391619+00:00",
+    "scope": "private campaign controller snapshot only",
+    "source_sha256": "57918c12ab6c0d5ec64dd8844e04e2d377c0890f8fbd27db487af9523c63edbb",
+    "before_sha256": "9342c32fec583007c773a83a4def80985523df05b3c3641f205e8f9ee325b158",
+    "recovery_delays_seconds": [
+      15,
+      30,
+      60
+    ],
+    "login_redirect_delays_seconds": [
+      60,
+      120,
+      300
+    ],
+    "network_errors_use_recovery": true,
+    "jitter_max_percent": 20,
+    "controller_tick_seconds": 30,
+    "no_attempt_limit": true,
+    "http429_backoff_preserved": true,
+    "archive_403_only_matching_notice_held": true,
+    "previous_item_evidence_preserved": true,
+    "manual_pauses_and_held_notices_preserved": true,
+    "worker_sessions_not_restarted": true,
+    "send_action": false,
+    "pending_deadlines_advanced": [
+      {
+        "account": "4",
+        "old_deadline": "2026-11-05T07:26:36.759676+00:00",
+        "new_deadline": "2026-11-05T06:57:15.759676+00:00"
+      }
+    ],
+    "test_count": 62,
+    "line_and_branch_coverage_percent": 100
+  },
+  "final_release": {
+    "at_utc": "2026-11-05T07:00:21.029636+00:00",
+    "scope": "private campaign controller snapshot only",
+    "source_sha256": "0a81200f95a08a39fa820b54150b128d934004f77ed1824401ff2d9d4c740611",
+    "before_sha256": "57918c12ab6c0d5ec64dd8844e04e2d377c0890f8fbd27db487af9523c63edbb",
+    "recovery_delays_seconds": [
+      15,
+      30,
+      60
+    ],
+    "login_redirect_delays_seconds": [
+      60,
+      120,
+      300
+    ],
+    "network_errors_use_recovery": true,
+    "jitter_max_percent": 20,
+    "controller_tick_seconds": 30,
+    "no_attempt_limit": true,
+    "http429_backoff_preserved": true,
+    "archive_403_only_matching_notice_held": true,
+    "previous_item_evidence_preserved": true,
+    "manual_pauses_and_held_notices_preserved": true,
+    "worker_sessions_not_restarted": true,
+    "send_action": false,
+    "pending_deadlines_advanced": [],
+    "test_count": 62,
+    "line_and_branch_coverage_percent": 100
+  },
+  "validation": {
+    "policy_tests": 62,
+    "regression_tests": 164,
+    "line_and_branch_coverage": 100,
+    "covered_statements": 108,
+    "covered_branches": 38,
+    "ruff": "PASS",
+    "format": "PASS",
+    "merge_base_ratchet": "PASS",
+    "baseline_commit": "686e529ee011487e0764b9f91d023be063dbdf55",
+    "baseline_modified": false,
+    "retry_selection_before": {
+      "cognitive": 12,
+      "cyclomatic": 10,
+      "loc": 10
+    },
+    "retry_selection_after": {
+      "cognitive": 11,
+      "cyclomatic": 10,
+      "loc": 9
+    },
+    "warnings_before": 8,
+    "warnings_after": 8,
+    "errors_before": 0,
+    "errors_after": 0,
+    "make_lint_backend": "PASS",
+    "graphify_code": "PASS",
+    "graphify_docs": "PASS, semantic cache reused after successful extraction"
+  },
+  "send_action": false,
+  "completion_claim": false
+}
