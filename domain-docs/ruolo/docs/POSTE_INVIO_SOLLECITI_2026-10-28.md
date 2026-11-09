@@ -977,6 +977,11 @@ correttamente la sua certificazione dello stato attuale.
 
 ## Verifiche
 
+Dal 2026-11-05 il dettaglio dei solleciti generati mostra anche lo storico Poste
+persistito (ID, date, codice raccomandata e account), comprese le copie dello
+stesso numero avviso in altri lotti. Vedi
+[contratto, test e rilascio](SOLLECITI_POSTE_HISTORY_2026-11-05.md).
+
 - **Backend.** Test in `backend/tests/ruolo/test_poste_dispatch_*.py`:
   servizi, transizioni, riconciliazione reale con il Registro (tentativo e
   tracking), API, permessi, migration up/down. È incluso il caso che ha trovato

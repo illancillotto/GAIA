@@ -1,0 +1,91 @@
+{
+  "release": "poste-status-20261106",
+  "scope": "Frontend: visible persisted Poste states, global filter counters, row badges and IDs/dates",
+  "activation": {
+    "started_at": "2026-11-06T12:26:40.907351+00:00",
+    "activated_at": "2026-11-06T12:27:12.320729+00:00",
+    "image": "sha256:c74c02c59022999160dd7ff36c1aa0d80811a1d5e41546225f4cdcf0c3d1d90e",
+    "base_image": "sha256:196463ab023f3fdf6f1913f3dd47f0bed07cc79c302e8432f565186987711929",
+    "healthy": true,
+    "configuration_preserved": true,
+    "unrelated_containers_preserved": 52,
+    "http": {
+      "/login": 200,
+      "/ruolo/tributi/solleciti": 200,
+      "/ruolo/tributi/solleciti/poste": 200,
+      "/ruolo/tributi/solleciti/pec": 200,
+      "/ruolo/tributi/solleciti/email": 200,
+      "/api/health": 200,
+      "/api/ruolo/tributi/solleciti/workspace": 401
+    },
+    "authenticated_probe": {
+      "authenticated_workspace_read": true,
+      "canonical_total": 1125,
+      "canonical_2021": 1022,
+      "account_groups": 12,
+      "sent_history_samples_matching_database": 3,
+      "sent_rows_not_preparable": true,
+      "transaction_read_only": true,
+      "no_document_regeneration": true
+    },
+    "build_matches_canary": true,
+    "no_migrations": true,
+    "no_backend_or_worker_restart": true,
+    "provider_tests_mocked": true
+  },
+  "candidate": {
+    "image": "sha256:c74c02c59022999160dd7ff36c1aa0d80811a1d5e41546225f4cdcf0c3d1d90e",
+    "manifest": {
+      "src/components/ruolo/solleciti/poste-workspace.tsx": "2b48d342b7443db9e6d478faab7d74c60b6e93fa0c35d3ecd39fa3a0b62f6857",
+      "src/components/ruolo/solleciti/workspace-status.ts": "265328a19ce29e5377e0c02fd9c51a5175848b2345c540925cab2547484a9898"
+    },
+    "e2e": {
+      "startTime": "2026-11-06T12:25:54.126Z",
+      "duration": 27518.488,
+      "expected": 10,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "unit_tests": 89,
+    "coverage": {
+      "statements": 100,
+      "branches": 100,
+      "functions": 100,
+      "lines": 100
+    },
+    "typecheck": "PASS",
+    "lint_scope": "PASS",
+    "ratchet_scope": "PASS",
+    "global_gate": "Not reassessed; previous failure17unrelatedPresenze",
+    "no_real_provider_calls": true
+  },
+  "published_e2e": {
+    "startTime": "2026-11-06T12:27:37.895Z",
+    "duration": 27215.041,
+    "expected": 10,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "audit_2021": {
+    "total": 1022,
+    "stages": {
+      "available": 68,
+      "sent": 436,
+      "draft": 467,
+      "review": 49,
+      "processing": 2
+    }
+  },
+  "no_state_backfill": true,
+  "no_real_sends": true,
+  "no_database_writes": true,
+  "quality_gate_scope": "PASS",
+  "quality_gate_global": "Not re-attested; previous FAIL on17unrelatedPresenze findings",
+  "no_commit_or_push": true,
+  "cleanup": {
+    "canary_removed": true,
+    "rollback_retained": true
+  }
+}

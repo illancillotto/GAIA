@@ -1,10 +1,11 @@
 """Per-batch summary for the «Lotti generati» list."""
 
+from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_module, require_section
@@ -18,6 +19,20 @@ router = APIRouter(
 )
 
 
+class BatchPosteDispatch(BaseModel):
+    id: UUID
+    notice_number: str
+    status: str
+    poste_draft_id: str | None
+    poste_status: str | None
+    draft_created_at: datetime | None
+    sent_at: datetime | None
+    tracking_number: str | None
+    upload_requested_by_username: str | None
+    updated_at: datetime
+    poste_username: str | None
+
+
 class BatchOverviewItem(BaseModel):
     item_id: UUID
     label: str
@@ -27,6 +42,7 @@ class BatchOverviewItem(BaseModel):
     notice_number: str | None
     years: list[int]
     amount: float
+    poste_dispatches: list[BatchPosteDispatch] = Field(default_factory=list)
 
 
 class BatchOverview(BaseModel):

@@ -1,4 +1,10 @@
 import { request } from "@/lib/api";
+import type { PosteDispatchItem } from "@/types/ruolo-poste-dispatch";
+
+export type BatchPosteDispatch = Pick<PosteDispatchItem,
+  "id" | "notice_number" | "status" | "poste_draft_id" | "poste_status" | "draft_created_at" |
+  "sent_at" | "tracking_number" | "upload_requested_by_username" | "updated_at"
+> & { poste_username: string | null };
 
 export interface BatchOverviewItem {
   item_id: string;
@@ -9,6 +15,7 @@ export interface BatchOverviewItem {
   notice_number: string | null;
   years: number[];
   amount: number;
+  poste_dispatches?: BatchPosteDispatch[];
 }
 
 export interface BatchOverview {

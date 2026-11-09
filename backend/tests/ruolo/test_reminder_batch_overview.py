@@ -1,5 +1,6 @@
 """The batch list shows which reminders can go to Poste and which avvisi inCASS already sent by PEC."""
 
+from datetime import UTC
 from pathlib import Path
 from uuid import UUID
 
@@ -71,6 +72,7 @@ def test_overview_lists_sendable_reminders_and_pec_shipments(
                     "notice_number": sent["payload_json"]["notice_number"],
                     "years": [2024],
                     "amount": 111.55,
+                    "poste_dispatches": [],
                 }
             ],
         },
@@ -86,6 +88,7 @@ def test_overview_lists_sendable_reminders_and_pec_shipments(
                     "notice_number": failed["payload_json"]["notice_number"],
                     "years": [2024],
                     "amount": 111.55,
+                    "poste_dispatches": [],
                 }
             ],
         },
@@ -104,3 +107,142 @@ def test_overview_needs_batches_and_a_known_avviso_list(tmp_path: Path, renders)
         OVERVIEW, params={"batch_id": item["batch_id"]}, headers=auth_headers()
     ).json()
     assert body[0]["items"][0]["pec_sent"] is False
+
+
+def _poste_attempt(db, item, *, status, number, created_at):
+    from datetime import datetime
+
+    from sqlalchemy import select
+
+    from app.models.application_user import ApplicationUser
+    from app.modules.ruolo.poste_dispatch_models import PosteDispatchItem, PosteDispatchLot
+
+    actor = db.scalar(select(ApplicationUser.id).limit(1))
+    lot = PosteDispatchLot(
+        title="Synthetic Poste",
+        created_by=actor,
+        postal_options={},
+        poste_username="synthetic-account",
+    )
+    db.add(lot)
+    db.flush()
+    attempt = PosteDispatchItem(
+        lot_id=lot.id,
+        batch_item_id=UUID(item["id"]),
+        notice_number=number,
+        shipment_name="GAIA " + number,
+        status=status,
+        recipient={},
+        artifact=b"synthetic-private-artifact",
+        artifact_sha256="a" * 64,
+        artifact_size=26,
+        poste_draft_id="synthetic-poste-id",
+        poste_status="Accettato" if status == "sent" else "Prezzato",
+        draft_created_at=created_at,
+        sent_at=datetime(2026, 11, 3, 10, tzinfo=UTC) if status == "sent" else None,
+        tracking_number="synthetic-tracking" if status == "sent" else None,
+        upload_requested_by_username="synthetic-operator",
+        created_at=created_at,
+    )
+    db.add(attempt)
+    db.flush()
+    return attempt
+
+
+def test_overview_shows_saved_poste_history_for_same_notice_across_batches(tmp_path, renders):
+    from datetime import datetime
+
+    from sqlalchemy import func, select
+
+    from app.modules.ruolo.poste_dispatch_models import PosteDispatchItem
+
+    current, _ = _batch(tmp_path)
+    older, _ = _batch(tmp_path / "older", tax_code="BNCLGU80A01H501Y")
+    number = current["payload_json"]["notice_number"]
+    with TestingSessionLocal() as db:
+        source = db.get(RuoloTributiReminderBatchItem, UUID(older["id"]))
+        source.payload_json = {**source.payload_json, "notice_number": number}
+        sent = _poste_attempt(
+            db,
+            older,
+            status="sent",
+            number=number,
+            created_at=datetime(2026, 11, 3, tzinfo=UTC),
+        )
+        sent_id = str(sent.id)
+        cancelled = _poste_attempt(
+            db,
+            current,
+            status="cancelled",
+            number=number,
+            created_at=datetime(2026, 11, 4, tzinfo=UTC),
+        )
+        cancelled.poste_draft_id = cancelled.poste_status = cancelled.draft_created_at = None
+        cancelled.upload_requested_by_username = None
+        _poste_attempt(
+            db,
+            current,
+            status="draft_priced",
+            number="UNRELATED-NUMBER",
+            created_at=datetime(2026, 11, 5, tzinfo=UTC),
+        )
+        db.commit()
+        before = db.scalar(select(func.count()).select_from(PosteDispatchItem))
+    response = client.get(
+        OVERVIEW,
+        params={"batch_id": [current["batch_id"], older["batch_id"]]},
+        headers=auth_headers("ruolo-tributi-viewer"),
+    )
+    assert response.status_code == 200
+    histories = [entry["items"][0]["poste_dispatches"] for entry in response.json()]
+    assert histories[0] == histories[1]
+    cancelled, sent = histories[0]
+    assert cancelled["status"] == "cancelled"
+    assert cancelled["poste_draft_id"] is None
+    assert cancelled["sent_at"] is None
+    assert sent["id"] == sent_id
+    assert sent["notice_number"] == number
+    assert sent["poste_draft_id"] == "synthetic-poste-id"
+    assert sent["tracking_number"] == "synthetic-tracking"
+    assert sent["sent_at"].startswith("2026-11-03T10:00:00")
+    assert sent["draft_created_at"].startswith("2026-11-03T00:00:00")
+    assert sent["poste_username"] == "synthetic-account"
+    assert sent["upload_requested_by_username"] == "synthetic-operator"
+    assert sent["poste_status"] == "Accettato"
+    assert "artifact" not in sent and "recipient" not in sent
+    with TestingSessionLocal() as db:
+        assert db.scalar(select(func.count()).select_from(PosteDispatchItem)) == before
+
+
+def test_poste_overview_without_notice_numbers_or_matching_shipments(tmp_path, renders):
+    from types import SimpleNamespace
+
+    from app.modules.ruolo.services.reminder_batch_poste import dispatches_by_notice
+
+    with TestingSessionLocal() as db:
+        assert dispatches_by_notice(db, []) == {}
+        assert (
+            dispatches_by_notice(
+                db,
+                [
+                    SimpleNamespace(payload_json=None),
+                    SimpleNamespace(payload_json={"notice_number": ""}),
+                ],
+            )
+            == {}
+        )
+    item, _ = _batch(tmp_path)
+    with TestingSessionLocal() as db:
+        source = db.get(RuoloTributiReminderBatchItem, UUID(item["id"]))
+        source.payload_json = None
+        source.display_name = None
+        source.years_json = None
+        source.generated_document_path = "/synthetic/not-a-pdf.txt"
+        db.commit()
+    response = client.get(OVERVIEW, params={"batch_id": item["batch_id"]}, headers=auth_headers())
+    assert response.status_code == 200
+    assert response.json()[0]["items"][0]["poste_dispatches"] == []
+    assert response.json()[0]["items"][0]["label"] == item["codice_fiscale"]
+    assert response.json()[0]["items"][0]["years"] == []
+    assert response.json()[0]["items"][0]["sendable"] is False
+    assert client.get(OVERVIEW, params={"batch_id": item["batch_id"]}).status_code == 401

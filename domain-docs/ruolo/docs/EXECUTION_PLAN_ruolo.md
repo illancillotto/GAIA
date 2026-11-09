@@ -12,6 +12,19 @@
 
 Scopo e proposta nel [report](SOLLECITI_WORKSPACE_2026-11-06.md).
 
+## Area operativa avvisi — 2026-11-06
+
+- [x] Recupero/generazione da CF/P.IVA esatto con regole Tributi esistenti.
+- [x] Vista canonica anno/account, filtri, stati, PDF e storico Poste.
+- [x] Preparazione persistente indirizzi → bozze, conservando INVIA manuale.
+- [x] Aggiornamento stati per lotto/account con job di sola riconciliazione.
+- [x] Permessi, conflitti, errori, concorrenza PostgreSQL e coverage 100%.
+- [x] Conclusione regressioni browser (6 PASS) e documentazione di evidenza finale.
+- [x] Rilascio coordinato backend/frontend/worker autorizzato e completato il 6 novembre alle 10:13 CET.
+- [x] Backup con ripristino isolato, controlli live di sola lettura e sei E2E sulla release pubblicata.
+- [x] Configurazioni preservate, canary rimosso; nessuna migrazione o chiamata ai provider nei test.
+
+Contratto e limiti nel [report dedicato](SOLLECITI_WORKSPACE_2026-11-06.md).
 
 ## Consolidamento avvisi 2021 — 2026-10-21
 

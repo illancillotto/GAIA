@@ -39,6 +39,29 @@ finding Presenze estranei; baseline invariata. Rimosso il componente gruppi,
 mantenuti gli stati in un modulo dedicato. Analisi e documentazione riallineate
 al codice; verifica browser/build e aggiornamento Graphify riportati nel report.
 
+## Area operativa avvisi per anno/account — 2026-11-06
+
+Implementata la generazione/recupero da CF/P.IVA esatto, lista canonica per
+numero avviso e gruppi anno/account con PDF, storico Poste e conflitti.
+La preparazione concatena job indirizzi → bozze in transazione; la verifica
+finale e INVIA restano manuali. Aggiornamento dal portale per lotto/account
+tramite worker, senza nuovi caricamenti. Storico lotti mantenuto.
+Backend, frontend e worker restano nel monolite e nell'infrastruttura esistente;
+nessuna migrazione o dipendenza. Verifiche finali e limiti nel
+[report dedicato](SOLLECITI_WORKSPACE_2026-11-06.md). Rilasciata sul CED il
+6 novembre alle 10:13 CET dopo autorizzazione esplicita. Nessun invio reale nei test.
+Gate locale concluso: backend 248 PASS, worker 23 PASS, frontend 5.512 PASS,
+6 E2E PASS, build/typecheck/lint/ratchet PASS e 100% statement/branch sui
+12 runtime interessati. Graphify codice e documentazione aggiornati.
+Sulle immagini CED: 16 backend e 23 worker PASS, coverage statement/branch 100%,
+sei E2E sul canary e sei sulla release pubblicata PASS. Backup delle tabelle
+coinvolte ripristinato su clone isolato. Primo tentativo annullato dal probe per
+un confronto testuale delle date UTC; diagnosi su 33 righe conferma valori
+identici, probe corretto e seconda attivazione completata. Tre servizi healthy,
+50 container estranei preservati, nessuna migrazione; PEC/email ancora in pausa.
+Il worker include due moduli già presenti nel backend live per completare la
+chiusura degli import, senza rigenerare PDF durante la continuazione.
+Nessun commit o push; working tree concorrente preservato.
 
 ## Pool caricamenti Poste per account — 2026-11-03
 

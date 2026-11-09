@@ -12,6 +12,7 @@ from app.modules.ruolo.models import (
     RuoloTributiAvvisoStatus,
     RuoloTributiReminderBatchItem,
 )
+from app.modules.ruolo.services.reminder_batch_poste import dispatches_by_notice
 from app.modules.ruolo.services.tributi_reminder_service import notice_total_amount
 
 
@@ -38,6 +39,21 @@ def sendable(item: RuoloTributiReminderBatchItem) -> bool:
     return item.status == "generated" and path.endswith(".pdf")
 
 
+def _overview_item(item, pec, dispatches):
+    number = (item.payload_json or {}).get("notice_number")
+    return {
+        "item_id": item.id,
+        "label": item.display_name or item.codice_fiscale,
+        "status": item.status,
+        "sendable": sendable(item),
+        "pec_sent": bool(_avviso_ids(item) & pec),
+        "notice_number": number,
+        "years": item.years_json or [],
+        "amount": float(notice_total_amount(item.payload_json or {})),
+        "poste_dispatches": dispatches.get(number, []),
+    }
+
+
 def batch_overview(db: Session, batch_ids: list[UUID]) -> dict[UUID, list[dict]]:
     items = db.scalars(
         select(RuoloTributiReminderBatchItem)
@@ -45,18 +61,8 @@ def batch_overview(db: Session, batch_ids: list[UUID]) -> dict[UUID, list[dict]]
         .order_by(RuoloTributiReminderBatchItem.created_at, RuoloTributiReminderBatchItem.id)
     ).all()
     pec = pec_sent_avvisi(db, set().union(*(_avviso_ids(item) for item in items)))
+    dispatches = dispatches_by_notice(db, items)
     overview: dict[UUID, list[dict]] = defaultdict(list)
     for item in items:
-        overview[item.batch_id].append(
-            {
-                "item_id": item.id,
-                "label": item.display_name or item.codice_fiscale,
-                "status": item.status,
-                "sendable": sendable(item),
-                "pec_sent": bool(_avviso_ids(item) & pec),
-                "notice_number": (item.payload_json or {}).get("notice_number"),
-                "years": item.years_json or [],
-                "amount": float(notice_total_amount(item.payload_json or {})),
-            }
-        )
+        overview[item.batch_id].append(_overview_item(item, pec, dispatches))
     return overview
