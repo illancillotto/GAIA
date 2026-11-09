@@ -1,4 +1,12 @@
 # GAIA Ruolo — Execution Plan v1.0
+
+## Visibilità stati Poste — 6 novembre
+
+- [x] Audit API/database in sola lettura e spiegazione delle prime pagine Da preparare.
+- [x] Contatori di stato globali, badge e ID/date in elenco, senza modificare stati persistiti.
+- [x] Test pertinenti e coverage 100% dei due runtime; lint, typecheck e ratchet PASS.
+- [x] Rilascio frontend mirato alle 13:27 CET; dieci E2E candidata PASS, HTTP/probe autenticato PASS. Verifica browser pubblicata nel report.
+
 ## Revisione UX successiva al rilascio — pubblicata il 6 novembre
 
 - [x] Analisi del percorso operatore e dei punti di confusione.

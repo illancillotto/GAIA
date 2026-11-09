@@ -1,6 +1,6 @@
 # Capacitas: sincronizzazione a carico ridotto
 
-## Profilo conservativo preparato l'8 ottobre
+## Profilo conservativo: preparazione e ripresa
 
 `config/capacitas/compose.conservative.yml` imposta almeno 5 secondi dopo
 ogni risposta, una richiesta globale alla volta e una sessione irrigue.
@@ -28,9 +28,11 @@ esistenti, ai tre servizi. Non eseguire un deploy dal solo Compose base.
 Una futura campagna separata deve ricevere gli stessi parametri e il
 medesimo mount della policy; l'override riguarda solo i tre servizi elencati.
 
-Il profilo e preparato e validato localmente, non applicato al CED:
-la sessione dell'8 ottobre impedisce connessioni SSH (`Operation not permitted`).
-Non avviare i recuperi sospesi per applicare questa configurazione.
+L'8 ottobre il profilo era preparato e validato localmente, ma non applicato
+al CED: la sessione impediva connessioni SSH (`Operation not permitted`).
+Il 27 ottobre e stata autorizzata la ripresa prudente: stato corrente, cause
+degli arresti e verifiche sono in
+[CAPACITAS_RIPRESA_2026-10-27.md](CAPACITAS_RIPRESA_2026-10-27.md).
 Le finestre orarie e gli intervalli di refresh restano quelli gia configurati;
 le sezioni successive descrivono il profilo precedente e il rilascio del 7 ottobre.
 
@@ -64,8 +66,8 @@ ordine. Retry, transazioni e cleanup non cambiano.
 I controtest HTTP con trasporto sintetico usano parser e scraper reali: il filtro
 degli anni precede le richieste dettagli e un anno invalido interrompe quelle
 richieste. Nessun portale o database di produzione viene contattato. Il profilo
-conservativo resta una configurazione preparata, non un deploy autorizzato da
-questo consolidamento. Evidenze e gate di ammissione sono registrati in
+conservativo al 12 ottobre restava una configurazione preparata, non un deploy
+autorizzato da quel consolidamento. Evidenze e gate di ammissione sono registrati in
 `reports/code-quality/IRRIGUE_ADMISSION_2026-10-12.md`; la campagna resta in pausa.
 
 ## Problema e comportamento

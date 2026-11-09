@@ -11,6 +11,7 @@ Non modificare worker, schema o righe template; le cancellazioni degli
 operatori restano auditabili e non vanno annullate tramite restore DB.
 Dettagli: [TEMPLATE_DELETION_RELEASE_2026-11-07.md](TEMPLATE_DELETION_RELEASE_2026-11-07.md).
 
+## Piano iniziale della piattaforma
 
 Pausa globale, trasporto false, arresto cooperativo worker. Registrare job attivi
 e Message-ID; un SMTP già accettato non può essere richiamato con rollback.

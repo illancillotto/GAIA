@@ -1,5 +1,7 @@
 # Piano di implementazione e stato
 
+Stato aggiornato al 9 novembre 2026: i modelli ufficio sono stati pubblicati alle 14:58:35 CET; le indicazioni precedenti «locale/non rilasciato» descrivono lo stato del 7 novembre. Verifiche e limiti correnti: [rapporto di rilascio](OFFICE_TEMPLATES_RELEASE_2026-11-09.md). Nessuna abilitazione degli invii reali.
+
 ## 2026-11-07 — Modelli dall'esempio dell'ufficio
 
 - [x] Analisi fonti, conferma testi/condizioni e campi del singolo avviso.

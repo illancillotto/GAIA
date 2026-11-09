@@ -631,3 +631,13 @@ Restano consentiti:
 11. Full-text search PostgreSQL
 12. Export CSV/XLSX
 13. Integrazione lettura correlazione GAIA Catasto
+
+## Recapiti elettronici tipizzati — novembre 2026
+
+Il registro `ana_electronic_contacts` distingue PEC, email e recapiti non
+classificati per lo stesso soggetto canonico, con stato, fonte, versione e
+audit. Communications riusa il resolver Utenze per elenco, filtri e fingerprint;
+la migrazione non classifica automaticamente i dati legacy. Contratto,
+concorrenza e limiti operativi in
+[Classificazione recapiti](../../../docs/communications/CONTACT_CLASSIFICATION_2026-11-04.md)
+e [rilascio verificato](../../../docs/communications/CONTACT_RELEASE_2026-11-05.md).

@@ -1,5 +1,7 @@
 # Manuale operativo
 
+Stato aggiornato al 9 novembre 2026: i modelli ufficio sono stati pubblicati alle 14:58:35 CET; le indicazioni precedenti «locale/non rilasciato» descrivono lo stato del 7 novembre. Verifiche e limiti correnti: [rapporto di rilascio](OFFICE_TEMPLATES_RELEASE_2026-11-09.md). Nessuna abilitazione degli invii reali.
+
 ## Amministrazione
 
 ### Modelli dell'ufficio per i solleciti 2021
@@ -13,6 +15,7 @@ blocca i modelli che richiedono codice utenza/PIN; non copiare credenziali
 di un'altra utenza. Condizioni, fonti e audit nel
 [report dedicato](OFFICE_TEMPLATES_2026-11-07.md). Funzione locale non rilasciata.
 
+### Account
 
 Aprire /gaia/communications come admin/super_admin. Creare account disabilitato/
 in pausa: canale/provider, indirizzo/display name, endpoint TLS, username,
@@ -33,6 +36,7 @@ all'audit della cancellazione. La numerazione non riparte da uno se si crea
 un'altra versione dello stesso codice. Azione riservata a admin/super_admin.
 Dettagli e verifiche: [TEMPLATE_DELETION_2026-11-07.md](TEMPLATE_DELETION_2026-11-07.md).
 
+### Configurazione e collaudo delle caselle
 
 Guide ufficiali consultate il 2026-11-03, HTTP200:
 

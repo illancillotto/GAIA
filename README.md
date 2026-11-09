@@ -1129,9 +1129,9 @@ Nessun deploy eseguito.
 
 ## GAIA Communications
 
-Modelli ufficio PEC/email del 7 novembre: catalogo modificabile, campi specifici
-del sollecito e verifiche PIN/PDF. Sviluppo locale, senza nuovo rilascio o invii:
-[analisi e stato](docs/communications/OFFICE_TEMPLATES_2026-11-07.md).
+Modelli ufficio PEC/email pubblicati il 9 novembre: catalogo modificabile, campi specifici
+del sollecito e verifiche PIN/PDF, senza abilitazione degli invii reali.
+[Verifiche e stato del rilascio](docs/communications/OFFICE_TEMPLATES_RELEASE_2026-11-09.md).
 
 Piattaforma PEC/email con revisione individuale e worker separato; primo ambito
 Ruolo/Tributi, solleciti definitivi2021. [Audit e indice](docs/communications/CODE_AUDIT.md),

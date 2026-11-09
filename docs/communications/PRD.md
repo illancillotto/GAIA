@@ -1,7 +1,9 @@
 # GAIA Communications — PRD
 
-Implementazione locale, collaudo sintetico; nessuna autorizzazione a produzione
-o comunicazioni reali. Primo utilizzatore: Ruolo/Tributi, solleciti definitivi
+Stato aggiornato al 9 novembre 2026: i modelli ufficio sono stati pubblicati alle 14:58:35 CET; le indicazioni precedenti «locale/non rilasciato» descrivono lo stato del 7 novembre. Verifiche e limiti correnti: [rapporto di rilascio](OFFICE_TEMPLATES_RELEASE_2026-11-09.md). Nessuna abilitazione degli invii reali.
+
+Piattaforma pubblicata sul CED; collaudo dei trasporti ancora sintetico e invii
+reali disabilitati. Il rilascio della UI non abilita le caselle. Primo utilizzatore: Ruolo/Tributi, solleciti definitivi
 esclusivamente 2021. I criteri software non certificano atti o recapiti.
 
 ## Operatori e funzioni

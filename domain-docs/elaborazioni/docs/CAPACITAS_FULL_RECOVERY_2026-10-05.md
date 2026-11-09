@@ -1,5 +1,12 @@
 # Recupero Capacitas dall'anagrafica canonica
 
+## Stato successivo
+
+Per la diagnosi degli arresti, il profilo prudente e lo stato della ripresa
+autorizzata il 27 ottobre vedere
+[CAPACITAS_RIPRESA_2026-10-27.md](CAPACITAS_RIPRESA_2026-10-27.md).
+Le evidenze del 5 ottobre sotto riportate sono storiche.
+
 ## Difetto verificato
 
 Il sync inCASS selezionava esclusivamente soggetti già presenti in
