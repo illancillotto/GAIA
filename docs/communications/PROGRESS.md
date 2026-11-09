@@ -2,7 +2,7 @@
 
 ## 2026-11-09 — Ripresa modelli ufficio
 
-Modelli PEC/email del 7 novembre ripresi su branch isolato, senza includere le modifiche locali di altre funzionalita. Rilascio mirato autorizzato dall'utente. Restano obbligatori gli accessi nello snapshot del PDF: nessun fallback ai 726 record presenti solo in archivio.
+Modelli PEC/email del 7 novembre ripresi su branch isolato, senza includere le modifiche locali di altre funzionalita. Rilascio mirato attivato alle **14:58:35 CET**, backend/frontend healthy; commit applicativo `06f6597c`. Catalogo disponibile, dati e trasporti invariati. Restano obbligatori gli accessi nello snapshot del PDF: nessun fallback ai 726 record presenti solo in archivio.
 
 Verifiche e stato del rilascio: [OFFICE_TEMPLATES_RELEASE_2026-11-09.md](OFFICE_TEMPLATES_RELEASE_2026-11-09.md).
 
