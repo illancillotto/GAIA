@@ -10,6 +10,7 @@ from app.modules.ruolo.routes.notice_import_routes import router as notice_impor
 from app.modules.ruolo.routes.notice_regeneration_routes import router as notice_regeneration_router
 from app.modules.ruolo.routes.notice_register_routes import router as notice_register_router
 from app.modules.ruolo.routes.parcel_control_routes import router as parcel_control_router
+from app.modules.ruolo.routes.parcel_history_routes import router as parcel_history_router
 from app.modules.ruolo.routes.payer_assignment_routes import router as payer_assignment_router
 from app.modules.ruolo.routes.poste_dispatch_routes import router as poste_dispatch_router
 from app.modules.ruolo.routes.query_routes import catasto_router as catasto_router
@@ -30,6 +31,7 @@ router.include_router(campaign_2021_router)
 router.include_router(import_router)
 router.include_router(query_router)
 router.include_router(parcel_control_router)
+router.include_router(parcel_history_router)
 router.include_router(tributi_router)
 router.include_router(reminder_document_router)
 router.include_router(reminder_batch_overview_router)

@@ -7,12 +7,13 @@ import { type FormEvent, type ReactNode, useEffect, useState } from "react";
 import { useAppShellContext } from "@/components/layout/app-shell-context";
 import { RuoloModulePage } from "@/components/ruolo/module-page";
 import { ParcelControlDetail } from "@/components/ruolo/parcel-control-detail";
+import { ParcelHistoryWorkspace } from "@/components/ruolo/parcel-history-workspace";
 import { CONTROL_LABELS, ParcelControlTable } from "@/components/ruolo/parcel-control-table";
 import { getStoredAccessToken } from "@/lib/auth";
 import { controlCommand, parcelControlRequest } from "@/lib/parcel-control-api";
 import type { ControlCase, ControlPage, ControlProposal, ControlRow, ControlView } from "@/types/parcel-control";
 
-const VIEWS = { all: "Storico 2011–2025", missing: "Non rilevate nel 2025", cf: "CF anomali",
+const VIEWS = { storia: "Storia delle particelle", all: "Storico 2011–2025", missing: "Non rilevate nel 2025", cf: "CF anomali",
   cases: "Pratiche aperte", visure: "Pratiche con visure", recovered: "Particelle recuperate",
   proposals: "Proposte", closed: "Concluse / escluse", annuale: "Consultazione annuale" };
 
@@ -20,7 +21,11 @@ export function ParcelControlWorkspace({ annualView }: { annualView: ReactNode }
   const params = useSearchParams();
   const explicit = params.get("vista");
   const legacy = ["anno", "comune", "foglio", "particella", "match_status", "match_reason", "unmatched_only"].some(key => params.has(key));
-  const view = explicit || (legacy ? "annuale" : "all");
+  const view = explicit || (legacy ? "annuale" : "storia");
+  return view === "storia" ? <ParcelHistoryWorkspace /> : <ParcelControlViews view={view} annualView={annualView} />;
+}
+
+function ParcelControlViews({ view, annualView }: { view: string; annualView: ReactNode }) {
   return <div className="space-y-5">
     <nav aria-label="Viste particelle" className="flex flex-wrap gap-2">{Object.entries(VIEWS).map(([key, label]) =>
       <Link key={key} href={`/ruolo/particelle?vista=${key}`} aria-current={view === key ? "page" : undefined} className="btn-secondary">{label}</Link>)}</nav>

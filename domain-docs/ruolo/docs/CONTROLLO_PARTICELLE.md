@@ -7,8 +7,12 @@ automaticamente nel database.
 
 ## Ambito
 
-Il controllo riusa `/ruolo/particelle`, senza una seconda pagina o un secondo
-servizio. L'universo storico comprende le particelle importate per il periodo
+La pagina `/ruolo/particelle` apre per default la consultazione in sola lettura
+«Storia delle particelle», descritta in [STORIA_PARTICELLE.md](STORIA_PARTICELLE.md).
+Questa consultazione legge direttamente i dati importati e non richiede un
+aggiornamento dell'indice o l'apertura di una pratica. Il controllo istruttorio
+descritto qui resta disponibile esplicitamente con `?vista=all`.
+L'universo storico del controllo comprende le particelle importate per il periodo
 2011–2025; l'annualita corrente concordata e **2025**. La consultazione annuale
 precedente resta disponibile con `?vista=annuale`; i vecchi URL con filtri
 annuali continuano ad aprire quella vista.
@@ -195,7 +199,7 @@ L'intero periodo contiene 1.192.948 righe: non e stato avviato un ricalcolo
 massivo operativo. Valutare tempi, memoria e necessita di elaborazione asincrona
 nel collaudo prima dell'attivazione.
 
-Dopo il deployment occorre aggiornare l'analisi per acquisire le annualita
+Dopo il deployment del controllo istruttorio occorre aggiornare l'analisi per acquisire le annualita
 aggiunte; le attestazioni delle annualita con firme cambiate vanno rivalutate.
 Le annualita aggiunte non sono certificate automaticamente e le attestazioni
 con firme invariate restano valide. Nessuna attestazione viene creata dal ciclo.

@@ -43,12 +43,12 @@ function practice(): ControlCase {
 }
 
 beforeEach(() => {
-  mocks.params = new URLSearchParams(); mocks.push.mockReset(); mocks.request.mockReset();
+  mocks.params = new URLSearchParams("vista=all"); mocks.push.mockReset(); mocks.request.mockReset();
   mocks.token = "token"; mocks.user = { role: "super_admin" }; mocks.keys = [];
   mocks.request.mockResolvedValue({ items: [row()], total: 51, current_year: 2025, coverage: {}, refreshed_at: "2025-01-01" });
 });
 
-test("workspace defaults to all parcels and preserves annual links", async () => {
+test("control matrix remains available explicitly and preserves annual links", async () => {
   const component = render(<ParcelControlWorkspace annualView={<p>Archivio annuale</p>} />);
   expect(await screen.findByText("ORISTANO · 1/100")).toBeInTheDocument();
   expect(screen.getByRole("columnheader", { name: "2011" })).toBeInTheDocument();

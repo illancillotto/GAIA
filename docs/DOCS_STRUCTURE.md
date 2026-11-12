@@ -217,6 +217,8 @@ compatibilita; il backend canonico e `backend/app/modules/utenze/`.
 
 ### Ruolo
 
+- `domain-docs/ruolo/docs/STORIA_PARTICELLE.md`: consultazione storica, tributi, proprieta documentata, API e limiti dell'archivio.
+- `domain-docs/ruolo/docs/CONTROLLO_PARTICELLE.md`: istruttoria e recupero posizioni, accessibili dalla vista esplicita di controllo.
 - `domain-docs/ruolo/docs/PRD_ruolo.md`
 - `domain-docs/ruolo/docs/EXECUTION_PLAN_ruolo.md`
 - `domain-docs/ruolo/docs/PROGRESS_ruolo.md`
