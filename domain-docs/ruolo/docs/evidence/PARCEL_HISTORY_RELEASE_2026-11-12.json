@@ -1,0 +1,113 @@
+{
+  "date": "2026-11-12",
+  "feature": "Parcel tax and documented cadastral ownership history",
+  "app_commit": "c99669b0dbf57b62d1b4ce4e55d035d672805cc3",
+  "verification": {
+    "backend_tests": 79,
+    "frontend_tests": 31,
+    "annual_control_api_regressions": 11,
+    "image_backend_tests": 11,
+    "e2e_canary": {
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    "e2e_production": {
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    "coverage_runtime_percent": 100,
+    "image_runtime_coverage": {
+      "covered_lines": 117,
+      "num_statements": 117,
+      "percent_covered": 100.0,
+      "percent_covered_display": "100",
+      "missing_lines": 0,
+      "excluded_lines": 0,
+      "percent_statements_covered": 100.0,
+      "percent_statements_covered_display": "100",
+      "num_branches": 20,
+      "num_partial_branches": 0,
+      "covered_branches": 20,
+      "missing_branches": 0,
+      "percent_branches_covered": 100.0,
+      "percent_branches_covered_display": "100"
+    },
+    "lint": true,
+    "typecheck": true,
+    "build": true,
+    "complexity_feature_findings": 0,
+    "complexity_inherited_presenze_findings": 20,
+    "baseline_unchanged": true,
+    "graphify_code_docs_updated": true,
+    "data_sources": "Synthetic tests; separate read-only production API probes"
+  },
+  "route_contract": {
+    "unchanged_routes": 891,
+    "added_routes": [
+      "/ruolo/particelle/storia",
+      "/ruolo/particelle/storia/{identity}"
+    ],
+    "total_routes": 893
+  },
+  "production": {
+    "started_at": "2026-11-12T17:39:55.371036+00:00",
+    "activated_at": "2026-11-12T17:40:57.356093+00:00",
+    "images": {
+      "backend": "sha256:7fd488e332380339aced4d2663ef12996a59b4668add319a0338b2a80e9c93e5",
+      "frontend": "sha256:3beebbd105ea0f11d6cfa43a9f9ec442b61b6864c9a31af6cfffaab0787e16e8"
+    },
+    "commit": "c99669b0dbf57b62d1b4ce4e55d035d672805cc3",
+    "http": {
+      "/login": 200,
+      "/ruolo/particelle": 200,
+      "/ruolo/tributi": 200,
+      "/gaia/communications": 200,
+      "/presenze/giornaliere": 200,
+      "/api/health": 200,
+      "/api/ruolo/particelle/storia": 401
+    },
+    "effective_configuration_preserved": true,
+    "schema_unchanged": true,
+    "communications_data_and_transport_unchanged": true,
+    "unchanged_other_containers": 35,
+    "probe": {
+      "readonly": true,
+      "http": {
+        "list": {
+          "status": 200,
+          "seconds": 5.005,
+          "total": 132099,
+          "items": 25
+        },
+        "detail": {
+          "status": 200,
+          "seconds": 0.116,
+          "tax_rows": 3,
+          "documents": 0
+        },
+        "filtered": {
+          "status": 200,
+          "seconds": 0.756,
+          "total": 2
+        },
+        "anonymous": 401,
+        "invalid": 422,
+        "missing": 404
+      },
+      "schema": [
+        "20261106_1000"
+      ],
+      "existing_routes": 893
+    },
+    "build_matches_canary": true
+  },
+  "limitations": [
+    "Unfiltered list measured 5-7 seconds, no concurrency benchmark",
+    "Documentary ownership chain is not certified complete",
+    "No inferred tax cessation or parcel split/merge genealogy",
+    "Legacy control API and migrations excluded from release",
+    "Inherited Presenze quality findings and GitHub dependency alerts remain"
+  ]
+}

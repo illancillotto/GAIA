@@ -1,5 +1,10 @@
 # Storia delle particelle
 
+Rilascio CED attivo dal **12 novembre 2026, 18:40:57 CET**, commit applicativo
+**`c99669b0`** pubblicato su `chore/split-changes-20261109`. Backend e frontend
+healthy; schema e impostazioni degli invii invariati. Il registro Produzione
+riporta le verifiche effettivamente concluse.
+
 ## Consultazione
 
 `/ruolo/particelle` apre la storia in sola lettura (`vista=storia`). La ricerca
@@ -137,10 +142,10 @@ produzione resta distinta dalla nuova consultazione storica.
   la UI HTML dei grafi backend/frontend e omessa automaticamente per dimensione,
   mentre JSON e report sono aggiornati.
 
-Log, coverage, screenshot e confronti completi del ciclo sono locali in
-`/tmp/gaia-parcel-history-20261112/`. Nessun rilascio operativo eseguito in
-questo ciclo; prestazioni sull'intero archivio operativo e completezza della
-catena documentale restano da collaudare dopo il rilascio.
+Log, coverage, screenshot e confronti completi della verifica iniziale sono
+locali in `/tmp/gaia-parcel-history-20261112/`. Il successivo collaudo operativo
+e il rilascio sono registrati nelle sezioni seguenti; le prove sintetiche
+non certificano la completezza della catena documentale.
 
 ## Verifica finale e preparazione del rilascio
 
@@ -176,7 +181,7 @@ Probe prospettico in sola lettura sul database operativo, con timeout SQL di
 puntuali, non un benchmark di concorrenza: l'elenco generale resta piu lento
 della ricerca filtrata. Nessun indice o dato operativo viene modificato.
 
-Il rilascio e preparato in `/opt/gaia/releases/parcel-history-20261112` partendo
+Il rilascio e stato preparato in `/opt/gaia/releases/parcel-history-20261112` partendo
 dalle immagini effettivamente attive. Si sostituiscono soltanto backend e
 frontend, con configurazione effettiva e rollback congelati. Il router remoto
 riceve soltanto l'inclusione della nuova API: non vengono attivati il vecchio
@@ -184,9 +189,9 @@ controllo istruttorio e le sue migrazioni, che non sono presenti nel runtime
 operativo. Viene riusato il modulo di identita gia versionato nel repository.
 I worker, gli invii e le loro impostazioni restano fuori dal rilascio.
 
-Le prove delle immagini candidate e l'esito di attivazione saranno registrati
-separatamente: la preparazione non costituisce un deploy riuscito. Evidenze
-locali di questo passaggio in `/tmp/gaia-parcel-release-20261112/`.
+Le prove delle immagini candidate e l'esito di attivazione sono registrati
+separatamente: la sola preparazione non costituisce un deploy riuscito.
+Evidenze locali di questo passaggio in `/tmp/gaia-parcel-release-20261112/`.
 
 ### Candidate collaudate prima dell'attivazione
 
@@ -208,3 +213,53 @@ Il canary misura 6,558 s per l'elenco generale, 0,230 s per il dettaglio e
 
 La disponibilita effettiva in produzione va letta nel registro di attivazione,
 che viene scritto soltanto dopo il cambio delle immagini e i controlli finali.
+
+## Produzione
+
+Attivazione completata alle **18:40:57 CET** del 12 novembre 2026. Backend
+`7fd488e33238`, frontend `3beebbd105ea`: entrambi healthy e identici alle
+candidate collaudate, con BUILD_ID frontend verificato. Configurazione
+effettiva, ambiente, comandi, mount, rete, risorse e healthcheck coincidono con
+quelli precedenti. **35 container estranei invariati**, compresi i worker.
+Nessuna migrazione nuova; schema sempre `20261106_1000`.
+
+Le **891 route preesistenti** sono invariate nel contratto OpenAPI; si
+aggiungono soltanto i due GET della storia. HTTP 200 per login, Particelle,
+Tributi, Communications, Presenze e health; la nuova API anonima restituisce
+401. Probe reali autenticati post-attivazione: elenco/dettaglio/ricerca 200,
+UUID non valido 422, UUID inesistente 404. Elenco generale **5,005 s**,
+dettaglio **0,116 s**, ricerca puntuale **0,756 s** nel campione rilevato.
+
+Anche sulla pagina pubblicata in `http://gaia.lan/ruolo/particelle` i **3 E2E
+Chromium PASS** verificano desktop/mobile e servizio indisponibile con retry.
+Le API dei test browser sono sintetiche e intercettate; le API reali sono
+verificate separatamente con GET in sola lettura. Nessun invio, creazione di
+pratica, richiesta SISTER o modifica di documenti. Conteggi, hash dei template
+Communications, schema, pausa e trasporto sono invariati rispetto al preflight.
+
+Configurazioni risolte, manifest e rollback sono conservati privatamente nella
+directory della release. Ripristinare soltanto backend/frontend usando i file
+`*.rollback.json`, dopo aver verificato che non sia intervenuto un rilascio
+successivo; nessun restore DB o riavvio globale. Non usare il checkout remoto
+sporco come sorgente di un nuovo deploy indiscriminato.
+
+Evidenza priva di segreti:
+[PARCEL_HISTORY_RELEASE_2026-11-12.json](evidence/PARCEL_HISTORY_RELEASE_2026-11-12.json).
+
+### Residui e limiti
+
+- Nessun runtime nuovo o modificato resta privo di copertura: target 100%
+  raggiunto senza esclusioni aggiuntive o test introdotti solo per coverage.
+- L'elenco senza filtri richiede circa 5–7 secondi nel campione operativo;
+  non e stato eseguito un benchmark di carico concorrente.
+- La catena catastale resta da verificare sui documenti: periodi mancanti,
+  genealogia di fusioni/frazionamenti e cessazione tributaria senza fonte non
+  vengono ricostruiti per inferenza.
+- Il controllo istruttorio legacy e le relative migrazioni restano fuori da
+  questa release: il collegamento esplicito esiste, ma la sua API non e
+  attivata nel runtime operativo. La nuova vista predefinita non la richiede.
+- Restano i 20 rilievi di complessita Presenze preesistenti, non peggiorati
+  dalla feature. Baseline, soglie, esclusioni e policy non vengono allargate.
+- Il push riporta otto vulnerabilita sul branch predefinito (sette high, una
+  moderate), gia segnalate nel rilascio precedente. E una notifica GitHub,
+  non un nuovo audit; dipendenze e lockfile restano invariati in questa change.
