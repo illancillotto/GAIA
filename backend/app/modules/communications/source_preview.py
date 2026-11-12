@@ -15,10 +15,14 @@ from app.core.database import get_db
 
 from . import ruolo_source
 from .policy import Conflict, Missing, pdf_pages, sha256
+from .schemas import Channel
+from .source_repair_routes import router as repair_router
+from .template_composition import preview_composition
 
 router = APIRouter(
     dependencies=[Depends(require_module("ruolo")), Depends(require_section("ruolo.tributi.view"))]
 )
+router.include_router(repair_router)
 
 
 @router.get("/ruolo/candidates/{identity}/preview")
@@ -54,3 +58,26 @@ def verify_preview(content, expected_sha256) -> int:
             "PDF modificato dopo l'anteprima: riaprire Componi e verificare il documento"
         )
     return pdf_pages(content)
+
+
+@router.get(
+    "/ruolo/candidates/{identity}/template-preview",
+    dependencies=[Depends(require_section("ruolo.tributi.manage_status"))],
+)
+def template_preview(
+    identity: UUID,
+    template_id: UUID,
+    channel: Channel,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """Render approved text from the canonical source without creating a draft."""
+    try:
+        result = preview_composition(db, identity, template_id, channel)
+    except Missing as exc:
+        raise HTTPException(404, detail=str(exc)) from exc
+    except Conflict as exc:
+        raise HTTPException(409, detail=str(exc)) from exc
+    response.headers["Cache-Control"] = "no-store, private"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return result

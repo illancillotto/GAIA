@@ -1,0 +1,40 @@
+import { act, cleanup, renderHook } from "@testing-library/react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { useSourceRepair } from "@/components/communications/use-source-repair";
+const api = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/communications-api", () => ({ communications: api }));
+beforeEach(() => { api.mockReset(); });
+afterEach(cleanup);
+it("requests a revision bound to the PDF hash, then reloads text and document", async () => {
+  api.mockResolvedValue({source_sha256:"b".repeat(64)});
+  const reload = vi.fn();
+  const { result } = renderHook(() => useSourceRepair("token", "source", "a".repeat(64), reload));
+  await act(async () => result.current.complete());
+  expect(api).toHaveBeenCalledWith("token", `/ruolo/candidates/source/complete-portal-snapshot?expected_source_sha256=${"a".repeat(64)}`, {method:"POST"});
+  expect(result.current.revision).toBe(1);
+  expect(result.current.busy).toBe(false);
+  expect(reload).toHaveBeenCalledOnce();
+});
+it.each([new Error("Archivio ambiguo"), "failure"])("keeps the original PDF on a failed revision", async error => {
+  api.mockRejectedValue(error);
+  const reload = vi.fn();
+  const { result } = renderHook(() => useSourceRepair("token", "source", "a", reload));
+  await act(async () => result.current.complete());
+  expect(result.current.error).toBe(error instanceof Error ? error.message : "Revisione PDF non riuscita");
+  expect(result.current.revision).toBe(0);
+  expect(reload).not.toHaveBeenCalled();
+});
+it.each(["success", "error"])("ignores stale %s after another source is opened", async outcome => {
+  let resolve!: () => void, reject!: () => void;
+  api.mockImplementation(() => new Promise<void>((done,fail) => {resolve=done;reject=() => fail(new Error("Old source"));}));
+  const reload = vi.fn();
+  const { result, rerender } = renderHook(({source}) => useSourceRepair("token", source, "a", reload),{initialProps:{source:"first"}});
+  act(() => {void result.current.complete();});
+  expect(result.current.busy).toBe(true);
+  rerender({source:"second"});
+  expect(result.current.busy).toBe(false);
+  expect(result.current.error).toBe("");
+  await act(async () => outcome === "success" ? resolve() : reject());
+  expect(reload).not.toHaveBeenCalled();
+  expect(result.current.revision).toBe(0);
+});

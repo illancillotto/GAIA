@@ -56,7 +56,7 @@ def _valid_saved_amount(value) -> bool:
     # Saved PDF amounts use decimal points. Reject localised/invalid values;
     # the legacy renderer's zero fallback cannot establish an amount to send.
     try:
-        return Decimal(str(value)).is_finite()
+        return Decimal(str(value).replace("EUR", "").strip()).is_finite()
     except InvalidOperation:
         return False
 

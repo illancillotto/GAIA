@@ -1,38 +1,14 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { communications } from "@/lib/communications-api";
-import type { Account, Candidate, Channel, Communication, Template } from "@/types/communications";
+import { useCandidates } from "./use-candidates";
+import type { Candidate, Channel, Communication } from "@/types/communications";
 
 export function useCommunicationsWorkspace(token: string, channel: Channel, canEdit: boolean) {
   const candidates = useCandidates(token, channel, canEdit);
   const selection = useCommunicationSelection(token, channel, candidates.reload);
   return { ...candidates, ...selection,
     status: { loading: candidates.loading, busy: selection.busy, error: selection.error || candidates.loadError } };
-}
-
-function useCandidates(token: string, channel: Channel, canEdit: boolean) {
-  const [filters, setFilters] = useState({ q: "", has_contact: "", state: "", date_from: "", date_to: "", account_id: "", batch_id: "", payment_state: "", notification_state: "", has_pec: "", has_email: "", [`has_${channel}`]: "true" });
-  const [page, setPage] = useState(1);
-  const [data, setData] = useState<{ items: Candidate[]; total: number; accounts: Account[]; templates: Template[] }>({ items: [], total: 0, accounts: [], templates: [] });
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
-  const [revision, setRevision] = useState(0);
-  const reload = useCallback(() => setRevision((value) => value + 1), []);
-  useEffect(() => {
-    let disposed = false;
-    setLoading(true); setLoadError("");
-    const query = new URLSearchParams({ channel, year: "2021", page: String(page), page_size: "25" });
-    for (const [key, value] of Object.entries(filters)) if (value) query.set(key, value);
-    Promise.all([
-      communications<{ items: Candidate[]; total: number }>(token, `/ruolo/candidates?${query}`),
-      canEdit ? communications<Account[]>(token, "/accounts") : Promise.resolve([]),
-      communications<Template[]>(token, "/templates"),
-    ]).then(([list, accounts, templates]) => {
-      if (!disposed) { setData({ ...list, accounts, templates }); setLoading(false); }
-    }).catch((error: Error) => { if (!disposed) { setLoading(false); setLoadError(error.message); } });
-    return () => { disposed = true; };
-  }, [token, channel, filters, page, canEdit, revision]);
-  return { filters, setFilters, page, setPage, data, loading, loadError, reload };
 }
 
 function useCommunicationSelection(token: string, channel: Channel, reload: () => void) {

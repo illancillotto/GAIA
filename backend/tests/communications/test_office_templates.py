@@ -52,6 +52,7 @@ def access(key, pin="0007654"):
     "payload,expected",
     [
         ({"saldo_amount": "1234.56", "notification_amount": "11.55"}, "1.246,11"),
+        ({"saldo_amount": "5462.49 EUR", "notification_amount": "11.55 EUR"}, "5.474,04"),
         ({"due_amount": "44.59"}, "56,14"),
         ({"saldo_amount": "0.00", "due_amount": "999", "notification_amount": "1"}, "1,00"),
     ],

@@ -33,8 +33,10 @@ def _composition(db, payload, source):
     if payload.template_id:
         template = registry.approved_template(db, payload.template_id, payload.channel)
         variables = ruolo_source.template_variables(source)
-        subject = subject or render_template(template.subject, variables)
-        body = body or render_template(template.body, variables)
+        rendered_subject = render_template(template.subject, variables)
+        rendered_body = render_template(template.body, variables)
+        subject = subject or rendered_subject
+        body = body or rendered_body
     if not subject or not body or "\r" in subject or "\n" in subject:
         raise Conflict("Oggetto e testo obbligatori; oggetto su una sola riga")
     return subject, body

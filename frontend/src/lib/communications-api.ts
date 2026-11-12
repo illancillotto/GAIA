@@ -5,11 +5,11 @@ import type { Attachment } from "@/types/communications";
 
 const BASE = "/communications";
 
-export function communications<T>(token: string, path: string, data?: unknown, method?: string): Promise<T> {
+export function communications<T>(token: string, path: string, data?: unknown, method?: string, signal?: AbortSignal): Promise<T> {
   return request<T>(`${BASE}${path}`, {
     method: method ?? (data === undefined ? "GET" : "POST"),
     headers: { Authorization: `Bearer ${token}`, ...(data === undefined ? {} : { "Content-Type": "application/json" }) },
-    ...(data === undefined ? {} : { body: JSON.stringify(data) }), cache: "no-store",
+    ...(data === undefined ? {} : { body: JSON.stringify(data) }), cache: "no-store", ...(signal ? { signal } : {}),
   });
 }
 

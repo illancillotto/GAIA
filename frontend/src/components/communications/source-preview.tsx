@@ -20,8 +20,8 @@ export function SourcePreview({ token, sourceId, onReady }: { token: string; sou
   const loadContent = useCallback(async () => ({ content: state.snapshot!.content.slice(0), reviewId: "" }), [state.snapshot]);
   return <section aria-label="Anteprima avviso selezionato" className="min-w-0 space-y-3 border-t pt-4">
     <h3 className="font-semibold">Anteprima PDF dell&apos;avviso</h3>
-    <p className="text-xs text-slate-600">Controlla tutte le pagine. La creazione della bozza conserva questi stessi byte; l&apos;approvazione individuale è richiesta successivamente.</p>
     {state.error ? <><p role="alert">{state.error}</p><button className="btn-secondary" onClick={() => setRetry((value) => value + 1)}>Riprova anteprima</button></> : state.snapshot ?
       <CommunicationPdfViewer token={token} messageId="" version={1} part={state.snapshot.part} loadContent={loadContent} onRendered={onRendered} canReview={false} pixelBudget={64_000_000} /> : <p role="status">Caricamento PDF dell&apos;avviso...</p>}
+    <p className="text-xs text-slate-600">Controlla tutte le pagine. La creazione della bozza conserva questi stessi byte; l&apos;approvazione individuale è richiesta successivamente.</p>
   </section>;
 }

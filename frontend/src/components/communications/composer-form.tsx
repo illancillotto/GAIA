@@ -13,15 +13,15 @@ const CHECKS = {
 export function ComposerForm({ message, accounts, canEdit, controller, children }: { message: Communication; accounts: Account[]; canEdit: boolean; controller: Controller; children?: ReactNode }) {
   const { form, editable, status, change, upload } = controller;
   return <div className="min-w-0 space-y-4 rounded-2xl border border-[#d8dfd3] bg-white p-5">
-    <fieldset disabled={!editable || status.busy} className="space-y-4">
-      <label className="block text-sm">Account mittente<select className="mt-1 w-full rounded-lg border p-2" value={form.account_id} onChange={(event) => change("account_id", event.target.value)}>
+    <fieldset disabled={!editable || status.busy} className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <label className="block min-w-0 text-sm">Account mittente<select className="mt-1 w-full rounded-lg border p-2" value={form.account_id} onChange={(event) => change("account_id", event.target.value)}>
         <option value={message.account_id}>{message.sender}</option>
         {accounts.filter((account) => account.channel === message.channel).map((account) => <option key={account.id} value={account.id}>{account.name} · {account.provider} · {account.sender}{account.paused ? " (in pausa)" : ""}</option>)}
       </select></label>
-      <label className="block text-sm">Destinatario<input className="mt-1 w-full rounded-lg border p-2" type="email" value={form.recipient} onChange={(event) => change("recipient", event.target.value)} /></label>
-      <label className="block text-sm">Oggetto<input className="mt-1 w-full rounded-lg border p-2" maxLength={250} value={form.subject} onChange={(event) => change("subject", event.target.value)} /></label>
-      <label className="block text-sm">Testo<textarea className="mt-1 min-h-28 w-full rounded-lg border p-2" maxLength={20000} value={form.body} onChange={(event) => change("body", event.target.value)} /></label>
-      <label className="block text-sm">Aggiungi allegato PDF<input className="block" type="file" accept="application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); event.target.value = ""; }} /></label>
+      <label className="block min-w-0 text-sm">Destinatario<input className="mt-1 w-full rounded-lg border p-2" type="email" value={form.recipient} onChange={(event) => change("recipient", event.target.value)} /></label>
+      <label className="block min-w-0 text-sm">Oggetto<input className="mt-1 w-full rounded-lg border p-2" maxLength={250} value={form.subject} onChange={(event) => change("subject", event.target.value)} /></label>
+      <label className="block min-w-0 text-sm sm:col-span-2 xl:col-span-3">Testo<textarea rows={3} className="mt-1 w-full rounded-lg border p-2" maxLength={20000} value={form.body} onChange={(event) => change("body", event.target.value)} /></label>
+      <label className="block min-w-0 text-sm sm:col-span-2 xl:col-span-3">Aggiungi allegato PDF<input className="block max-w-full" type="file" accept="application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); event.target.value = ""; }} /></label>
     </fieldset>
     <p className="text-sm">Allegati: {message.attachments.length} · {message.attachments.reduce((total, part) => total + part.size, 0)} byte prima della codifica MIME.</p>
     {message.channel === "email" && <p className="rounded-lg bg-sky-50 p-3 text-sm">Comunicazione di cortesia. L&apos;accettazione SMTP non attesta consegna o notifica legale.</p>}

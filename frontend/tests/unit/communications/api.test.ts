@@ -9,6 +9,9 @@ it("uses authenticated commands, default GET and explicit PATCH without cached P
   request.mockResolvedValue({ ok: true });
   await communications("token", "/accounts");
   expect(request).toHaveBeenLastCalledWith("/communications/accounts", { method: "GET", headers: { Authorization: "Bearer token" }, cache: "no-store" });
+  const controller = new AbortController();
+  await communications("token", "/accounts", undefined, undefined, controller.signal);
+  expect(request.mock.lastCall?.[1].signal).toBe(controller.signal);
   await communications("token", "/messages", { body: "text" });
   expect(request.mock.lastCall?.[1].method).toBe("POST");
   await communications("token", "/messages/id", {}, "PATCH");

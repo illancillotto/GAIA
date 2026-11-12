@@ -24,12 +24,12 @@ export function CommunicationsAccess({ channel }: { channel: Channel }) {
 
 function ChannelWorkspace({ token, channel, canEdit }: { token: string; channel: Channel; canEdit: boolean }) {
   const workspace = useCommunicationsWorkspace(token, channel, canEdit);
-  return <div className="mt-5 grid min-w-0 items-start gap-5 xl:grid-cols-2">
+  return <div className="mt-5 grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(20rem,0.85fr)_minmax(0,2fr)]">
     <CandidateFilters workspace={workspace} />
     {workspace.status.error && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-rose-800 xl:col-span-2">{workspace.status.error}</p>}
     {workspace.status.loading && <p role="status" className="xl:col-span-2">Caricamento candidati 2021...</p>}
     <CandidateTable workspace={workspace} channel={channel} canEdit={canEdit} />
-    <aside aria-label="Composizione avviso" className="min-w-0 rounded-2xl border border-[#d8dfd3] bg-[#f7f9f5] p-3 xl:sticky xl:top-4 xl:max-h-[calc(100dvh-6rem)] xl:overflow-y-auto">
+    <aside aria-label="Composizione avviso" className="min-w-0 rounded-2xl border border-[#d8dfd3] bg-[#f7f9f5] p-3">
       {workspace.message ? <CommunicationComposer key={`${workspace.message.id}:${workspace.message.version}`} token={token} message={workspace.message} accounts={workspace.data.accounts} canEdit={canEdit} onChange={workspace.setMessage} /> : <NewCommunication key={workspace.selected?.id} token={token} workspace={workspace} channel={channel} canEdit={canEdit} />}
     </aside>
   </div>;

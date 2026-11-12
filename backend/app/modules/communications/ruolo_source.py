@@ -26,8 +26,10 @@ from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson
 from app.modules.utenze.services.electronic_contacts import contact_columns, contact_values
 from app.services.nas_connector import NasConnectorError
 
+from .candidate_states import item_states, page_states
 from .models import CommunicationMessage
 from .policy import Conflict, Missing, digest, sha256
+from .source_validation import definitive_number, exclude_reconciled_poste
 
 
 def source_item(db, identity):
@@ -77,10 +79,10 @@ def _document(db, item):
         document is None
         or document.reconciled_into_id
         or document.document_number != number
-        or reservation is None
-        or reservation.status != "generated"
+        or not definitive_number(db, item, number, reservation)
     ):
         raise Conflict("Identità canonica o numero definitivo non verificati")
+    exclude_reconciled_poste(db, item)
     return document
 
 
@@ -174,13 +176,23 @@ def list_candidates(db, *, channel, filters, page, page_size):
     )
     query = _candidate_filters(query, filters, channel)
     total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
-    rows = db.execute(
-        query.order_by(item.created_at.desc(), item.id)
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    ).all()
+    rows = (
+        db.execute(
+            query.order_by(item.created_at.desc(), item.id)
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        ).all()
+        if total
+        else []
+    )
+    payment, notifications, messages = page_states(db, [row[0] for row in rows])
     return {
-        "items": [_candidate_row(db, *row) for row in rows],
+        "items": [
+            _candidate_row(
+                row, item_states(row[0], payment, notifications), messages.get(row[0].id)
+            )
+            for row in rows
+        ],
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -264,14 +276,9 @@ def _business_filters(query, filters):
     return query
 
 
-def _candidate_row(db, item, title, email, pec):
-    message = db.scalar(
-        select(CommunicationMessage)
-        .where(CommunicationMessage.source_entity_id == item.id)
-        .order_by(CommunicationMessage.created_at.desc())
-        .limit(1)
-    )
-    payment_state, notification_state = _current_states(db, item)
+def _candidate_row(row, states, message):
+    item, title, email, pec = row
+    payment_state, notification_state = states
     return {
         "id": item.id,
         "batch_id": item.batch_id,
@@ -290,19 +297,3 @@ def _candidate_row(db, item, title, email, pec):
         "message_id": message.id if message else None,
         "last_event_at": message.updated_at if message else None,
     }
-
-
-def _current_states(db, item):
-    ids = [UUID(value) for value in item.avviso_ids_json or []]
-    summaries = [repo.get_tributi_avviso(db, identity) for identity in ids]
-    payment = sorted({value["payment_status"] if value else "da_verificare" for value in summaries})
-    notifications = sorted(
-        set(
-            db.scalars(
-                select(NoticeNotification.state)
-                .join(NoticePosition, NoticePosition.document_id == NoticeNotification.document_id)
-                .where(NoticePosition.avviso_id.in_(ids))
-            )
-        )
-    )
-    return ", ".join(payment) or "da_verificare", ", ".join(notifications) or "da_verificare"

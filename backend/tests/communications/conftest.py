@@ -19,7 +19,12 @@ from app.core.database import Base, get_db
 from app.modules.communications import admin, models, registry, ruolo_source
 from app.modules.communications.router import router
 from app.modules.communications.schemas import AccountInput
-from app.modules.ruolo.models import RuoloAvviso, RuoloTributiNoticeNumber
+from app.modules.ruolo.models import (
+    RuoloAvviso,
+    RuoloTributiAvvisoStatus,
+    RuoloTributiNote,
+    RuoloTributiNoticeNumber,
+)
 from app.modules.ruolo.notice_register_models import (
     NoticeDocument,
     NoticeNotification,
@@ -53,6 +58,8 @@ def metadata():
         AnagraficaCompany,
         AnagraficaElectronicContact,
         AnagraficaAuditLog,
+        RuoloTributiAvvisoStatus,
+        RuoloTributiNote,
     ):
         model.__table__.to_metadata(value)
     for table in Base.metadata.tables.values():
@@ -159,6 +166,11 @@ def api(tmp_path, monkeypatch):
         return {"avviso": record, **summary} if record else None
 
     monkeypatch.setattr(ruolo_source.repo, "get_tributi_avviso", accounting)
+    monkeypatch.setattr(
+        ruolo_source.repo,
+        "_precompute_tributi_effective_cores",
+        lambda db, *, rows: {row[0].id: summary for row in rows},
+    )
     # Unexpected socket creation fails every test. Adapter contracts inject fake clients.
     monkeypatch.setattr(
         "socket.create_connection", lambda *a, **k: pytest.fail("Real network forbidden")

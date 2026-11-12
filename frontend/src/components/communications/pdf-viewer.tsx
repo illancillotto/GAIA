@@ -28,7 +28,7 @@ export function CommunicationPdfViewer(props: PdfViewerProps) {
     } catch { setResource((state) => ({ ...state, error: "Schermo intero non disponibile" })); }
   }
   return <section ref={root} aria-label="Documento da verificare" className="min-w-0 space-y-3 rounded-2xl border bg-white p-3">
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2 [&_.btn-secondary]:px-2 [&_.btn-secondary]:py-1 [&_.btn-secondary]:text-xs">
       <button className="btn-secondary" disabled={current <= 1} onClick={() => navigate(current - 1)}>Pagina precedente</button>
       <span aria-live="polite">{current} / {part.pages}</span>
       <button className="btn-secondary" disabled={current >= part.pages} onClick={() => navigate(current + 1)}>Pagina successiva</button>
@@ -38,10 +38,10 @@ export function CommunicationPdfViewer(props: PdfViewerProps) {
       <button className="btn-secondary" onClick={() => void fullscreen()}>Schermo intero</button>
       {resource.url && <a className="btn-secondary" href={resource.url} target="_blank" rel="noreferrer">Apri PDF in nuova scheda</a>}
     </div>
-    <p className="break-all text-xs text-slate-600">{part.filename} · {part.size} byte · v{part.version}<br />SHA-256: {part.sha256}</p>
     {resource.loading && <p role="status">Rendering di tutte le pagine...</p>}
     {resource.error && <p role="alert" className="text-rose-800">{resource.error}</p>}
     <div ref={pages} onScroll={trackPage} className="h-[70vh] min-h-80 space-y-4 overflow-auto bg-slate-100 p-2" />
+    <p className="break-all text-xs text-slate-600">{part.filename} · {part.size} byte · v{part.version}<br />SHA-256: {part.sha256}</p>
     <p className="text-xs text-slate-600">La conferma di aver controllato il contenuto integrale è richiesta separatamente nella checklist.</p>
   </section>;
 }

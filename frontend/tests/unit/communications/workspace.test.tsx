@@ -7,6 +7,7 @@ import { SollecitiNavigation } from "@/components/communications/navigation";
 import PecPage from "@/app/ruolo/tributi/solleciti/pec/page";
 import EmailPage from "@/app/ruolo/tributi/solleciti/email/page";
 import { candidate, message, account, template, session } from "./fixtures";
+const templatePreview = { subject: "Avviso", body: "Corpo", source_sha256: "a".repeat(64) };
 const mocks = vi.hoisted(() => ({ api: vi.fn(), session: vi.fn(), previewReady: true }));
 vi.mock("@/lib/communications-api", () => ({ communications: mocks.api }));
 vi.mock("@/lib/use-session-bootstrap", () => ({ useSessionBootstrap: mocks.session }));
@@ -15,9 +16,41 @@ vi.mock("@/components/communications/composer", () => ({ CommunicationComposer: 
 vi.mock("@/components/communications/source-preview", () => ({ SourcePreview: ({ onReady }: { onReady: (hash: string) => void }) => { useEffect(() => onReady(mocks.previewReady ? "a".repeat(64) : ""), [onReady]); return <><p>Anteprima immediata</p><button onClick={() => onReady("a".repeat(64))}>Completa rendering</button></>; } }));
 beforeEach(() => {
   vi.resetAllMocks(); mocks.previewReady = true; mocks.session.mockReturnValue(session);
-  mocks.api.mockImplementation((_token, path) => Promise.resolve(path.includes("candidates?") ? { items: [candidate], total: 26 } : path === "/accounts" ? [account, { ...account, channel: "email", id: "ordinary" }] : path === "/templates" ? [template, { ...template, id: "email-template", channel: "email" }] : message));
+  mocks.api.mockImplementation((_token, path) => Promise.resolve(path.includes("candidates?") ? { items: [candidate], total: 26 } : path === "/accounts" ? [account, { ...account, channel: "email", id: "ordinary" }] : path === "/templates" ? [template, { ...template, id: "email-template", channel: "email" }] : path.includes("template-preview?") ? templatePreview : message));
 });
 afterEach(cleanup);
+it.each(["pec", "email"] as const)("offers only approved %s templates and preserves the selected template in the draft", async (channel) => {
+  const available = { ...template, id: "approved", channel };
+  mocks.api.mockImplementation((_token, path) => Promise.resolve(path.includes("candidates?") ? { items: [candidate], total: 1 } : path === "/accounts" ? [account] : path === "/templates" ? [available, { ...available, id: "draft", name: "Non approvato", status: "draft" }, { ...available, id: "other", name: "Altro canale", channel: channel === "pec" ? "email" : "pec" }] : path.includes("template-preview?") ? templatePreview : message));
+  render(<CommunicationsAccess channel={channel} />);
+  fireEvent.click(await screen.findByRole("row", { name: "Apri avviso 1/2021" }));
+  const panel = screen.getByRole("complementary", { name: "Composizione avviso" });
+  const picker = within(panel).getByLabelText("Template approvato");
+  expect(within(picker).getAllByRole("option")).toHaveLength(2);
+  fireEvent.change(picker, { target: { value: "approved" } });
+  expect(picker).toHaveValue("approved");
+  expect(within(panel).getByText(/CF SYNTHETIC/)).toHaveTextContent("2021 · 10.00 €");
+  expect(within(panel).getByText(/Oggetto e testo vengono caricati/)).toBeVisible();
+  await waitFor(() => expect(within(panel).getByLabelText("Oggetto")).toHaveValue("Avviso"));
+  expect(within(panel).getByLabelText("Testo")).toHaveValue("Corpo");
+  fireEvent.change(within(panel).getByLabelText("Oggetto"), { target: { value: "Personalizzato" } });
+  fireEvent.change(picker, { target: { value: "" } });
+  expect(within(panel).getByLabelText("Oggetto")).toHaveValue("Personalizzato");
+  fireEvent.change(picker, { target: { value: "approved" } });
+  await waitFor(() => expect(within(panel).getByLabelText("Oggetto")).toHaveValue("Avviso"));
+  fireEvent.change(within(panel).getByLabelText("Oggetto"), { target: { value: "Personalizzato" } });
+  fireEvent.click(within(panel).getByText("Crea bozza e snapshot PDF"));
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("synthetic", "/messages", expect.objectContaining({ template_id: "approved", subject: "Personalizzato", body: "Corpo" })));
+});
+it("explains unavailable templates and places the PDF before the draft command", async () => {
+  mocks.api.mockImplementation((_token, path) => Promise.resolve(path.includes("candidates?") ? { items: [candidate], total: 1 } : []));
+  render(<EmailPage />);
+  fireEvent.click(await screen.findByRole("row", { name: "Apri avviso 1/2021" }));
+  expect(screen.getByText(/Nessun template EMAIL approvato disponibile/)).toHaveTextContent("Un amministratore deve creare e approvare una versione");
+  const preview = screen.getByText("Anteprima immediata");
+  const create = screen.getByText("Crea bozza e snapshot PDF");
+  expect(preview.compareDocumentPosition(create) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
 it("checks session, module and read permissions before loading any protected data", () => {
   for (const value of [{ status: "checking" }, { ...session, token: null }, { ...session, currentUser: null }, { ...session, currentUser: { ...session.currentUser, enabled_modules: [] } }, { ...session, grantedSectionKeys: [] }]) {
     mocks.session.mockReturnValue(value);
@@ -46,6 +79,7 @@ it("uses server-side filters/pagination and builds an individual draft from a ve
   fireEvent.change(screen.getByLabelText("Account", { selector: "section select" }), { target: { value: "account" } });
   fireEvent.change(screen.getByLabelText("Recapito verificato"), { target: { value: "checked@example.org" } });
   fireEvent.change(screen.getByLabelText("Template approvato"), { target: { value: "template" } });
+  await waitFor(() => expect(screen.getByLabelText("Oggetto")).toHaveValue("Avviso"));
   fireEvent.change(screen.getByLabelText("Oggetto"), { target: { value: "Personalizzato" } });
   fireEvent.change(screen.getByLabelText("Testo"), { target: { value: "Testo" } });
   fireEvent.click(screen.getByText("Crea bozza e snapshot PDF"));
@@ -186,15 +220,34 @@ it("opens preview on checkbox selection and row activation, blocking drafts unti
   mocks.previewReady = false;
   render(<PecPage />);
   fireEvent.click(await screen.findByLabelText("Seleziona 1/2021"));
+  await waitFor(() => expect(screen.getByLabelText("Oggetto")).toHaveValue("Avviso"));
   expect(screen.getByText("Anteprima immediata")).toBeInTheDocument();
   expect(screen.getByText("Crea bozza e snapshot PDF")).toBeDisabled();
   expect(mocks.api.mock.calls.some((call) => call[1] === "/messages")).toBe(false);
   fireEvent.click(screen.getByText("Completa rendering"));
-  expect(screen.getByText("Crea bozza e snapshot PDF")).toBeEnabled();
+  await waitFor(() => expect(screen.getByText("Crea bozza e snapshot PDF")).toBeEnabled());
   fireEvent.click(screen.getByLabelText("Seleziona 1/2021"));
   fireEvent.click(screen.getByRole("row", { name: "Apri avviso 1/2021" }));
   expect(screen.getByText("Anteprima immediata")).toBeInTheDocument();
   expect(screen.getByText("Crea bozza e snapshot PDF")).toBeDisabled();
+  await waitFor(() => expect(screen.getByLabelText("Oggetto")).toHaveValue("Avviso"));
+});
+
+it("shows template errors, blocks draft creation, and fills the text after retry", async () => {
+  let attempts = 0;
+  mocks.api.mockImplementation((_token, path) => {
+    if (path.includes("template-preview?")) return ++attempts === 1 ? Promise.reject(new Error("Variabile template mancante: pin_utenza")) : Promise.resolve(templatePreview);
+    return Promise.resolve(path.includes("candidates?") ? { items: [candidate], total: 1 } : path === "/templates" ? [template] : []);
+  });
+  render(<PecPage />);
+  fireEvent.click(await screen.findByLabelText("Seleziona 1/2021"));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Variabile template mancante: pin_utenza");
+  expect(screen.getByText("Crea bozza e snapshot PDF")).toBeDisabled();
+  fireEvent.click(screen.getByText("Riprova testo"));
+  await waitFor(() => expect(screen.getByText("Crea bozza e snapshot PDF")).toBeEnabled());
+  expect(screen.getByLabelText("Oggetto")).toHaveValue("Avviso");
+  expect(screen.getByLabelText("Testo")).toHaveValue("Corpo");
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 
 it("activates notice rows with Enter or Space and keeps checkbox keys and clicks independent", async () => {
@@ -206,6 +259,7 @@ it("activates notice rows with Enter or Space and keeps checkbox keys and clicks
   expect(screen.queryByLabelText("Recapito verificato")).not.toBeInTheDocument();
   fireEvent.keyDown(row, { key: "Enter" });
   expect(screen.getByLabelText("Recapito verificato")).toHaveValue(candidate.pec);
+  await waitFor(() => expect(screen.getByLabelText("Oggetto")).toHaveValue("Avviso"));
   fireEvent.change(screen.getByLabelText("Oggetto"), { target: { value: "Da conservare" } });
   fireEvent.keyDown(screen.getByLabelText("Seleziona 1/2021"), { key: "Enter" });
   expect(screen.getByLabelText("Oggetto")).toHaveValue("Da conservare");
@@ -250,4 +304,40 @@ it("blocks additional row and revision actions while loading history and recover
   fireEvent.click(screen.getByRole("button", { name: "Nuova revisione" }));
   expect(screen.getByLabelText("Recapito verificato")).toHaveValue(candidate.pec);
   expect(mocks.api.mock.calls.filter((call) => call[1].startsWith("/messages/"))).toHaveLength(1);
+});
+
+
+it("keeps incomplete text visible and reconciled Poste excluded from draft creation", async () => {
+  mocks.api.mockImplementation((_token, path) => Promise.resolve(path.includes("candidates?") ? {items:[candidate],total:1} : path === "/accounts" ? [account] : path === "/templates" ? [template] : path.includes("template-preview?") ? { ...templatePreview, body: "Accesso [Da verificare: pin_utenza]", missing_variables: ["pin_utenza"], send_blockers: ["Avviso riconciliato con Poste: invio PEC/email escluso per ora"] } : message));
+  render(<PecPage />);
+  fireEvent.click(await screen.findByLabelText("Seleziona 1/2021"));
+  await waitFor(() => expect(screen.getByLabelText("Oggetto")).toHaveValue("Avviso"));
+  expect(screen.getByLabelText("Testo")).toHaveValue("Accesso [Da verificare: pin_utenza]");
+  expect(screen.getByText(/Testo incompleto: dati mancanti/)).toBeVisible();
+  expect(screen.getByText(/Invio bloccato: Avviso riconciliato con Poste/)).toBeVisible();
+  expect(screen.getByText("Crea bozza e snapshot PDF")).toBeDisabled();
+  expect(mocks.api.mock.calls.some(([,path,request]) => path === "/messages" && request?.method === "POST")).toBe(false);
+});
+
+it("repairs the PDF explicitly, reports refusal, and reloads completed text after success", async () => {
+  let repaired = false;
+  let attempts = 0;
+  mocks.api.mockImplementation((_token, path) => {
+    if (path.includes("complete-portal-snapshot?")) {
+      if (++attempts === 1) return Promise.reject(new Error("Archivio da verificare"));
+      repaired = true;
+      return Promise.resolve({source_sha256:"a".repeat(64)});
+    }
+    return Promise.resolve(path.includes("candidates?") ? {items:[candidate],total:1} : path === "/templates" ? [template] : path === "/accounts" ? [account] : path.includes("template-preview?") ? {...templatePreview,missing_variables:repaired ? [] : ["pin_utenza"],send_blockers:[]} : message);
+  });
+  render(<PecPage />);
+  fireEvent.click(await screen.findByLabelText("Seleziona 1/2021"));
+  const repair = await screen.findByText("Crea nuova revisione PDF con credenziali");
+  fireEvent.click(repair);
+  expect(await screen.findByText("Archivio da verificare")).toBeVisible();
+  expect(screen.getByText("Crea bozza e snapshot PDF")).toBeDisabled();
+  fireEvent.click(repair);
+  await waitFor(() => expect(screen.queryByText("Testo incompleto:", {exact:false})).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.getByText("Crea bozza e snapshot PDF")).toBeEnabled());
+  expect(screen.queryByText("Archivio da verificare")).not.toBeInTheDocument();
 });
