@@ -1,6 +1,8 @@
 # Template grafici Communications — 12 novembre 2026
 
-Implementazione completata; rilascio autorizzato e candidata CED verificata.
+Implementazione completata; rilascio CED attivo dal 12 novembre 2026 alle
+**16:02:12 CET**. Commit applicativo **`75d2544d`**, pubblicato su
+`chore/split-changes-20261109`.
 La sezione Produzione registra solo operazioni effettivamente concluse.
 Nessuna migrazione, nuova dipendenza, abilitazione dei trasporti o invio reale.
 
@@ -156,6 +158,30 @@ Il gate globale Presenze resta separato dal perimetro Communications. I test
 sintetici non collaudano provider SMTP/PEC, certificati effettivi o consegna
 legale. Le decisioni esterne in OPEN_DECISIONS restano in vigore.
 
+Durante il push GitHub segnala otto vulnerabilità sul branch predefinito
+(sette high, una moderate). È una segnalazione del repository, non un audit
+eseguito in questo ciclo; nessuna dipendenza o lockfile è stata modificata.
+
 ## Produzione
 
-Candidata in preparazione: nessuna attivazione ancora registrata.
+Worker aggiornato per primo, poi backend e frontend; tutti healthy. La build
+pubblicata coincide con la candidata collaudata. Ambiente, comandi, mount,
+reti, limiti risorse e healthcheck effettivi coincidono con quelli precedenti;
+**34 container estranei preservati**, incluso il worker Poste.
+
+Otto GET pubblici rispondono HTTP 200 (pagine, health e logo); le due API admin
+anonime restano HTTP 401. Quattro GET autenticati rispondono 200; catalogo e
+funzioni di preview/riparazione già disponibili restano presenti. Il renderer
+attivo riconosce il formato grafico ed esegue escaping su dati sintetici.
+Un secondo probe dopo l’attivazione conferma gli stessi risultati.
+
+Schema `20261106_1000`, due account, otto righe template con hash integrale
+invariato, zero messaggi/autorizzazioni/ricevute e cinque job invariati. Pausa
+**true** e trasporto **false**. Nessuna migrazione, creazione/approvazione di
+un template reale, modifica di PIN o invio; avvisi riconciliati Poste esclusi.
+
+Collaudo browser sulla versione pubblicata: **14 E2E PASS**, zero failure,
+skip o flaky, desktop e mobile. Usa API/PDF sintetici intercettati, mentre le API
+reali sono verificate separatamente in sola lettura. Configurazioni di rollback
+e immagini precedenti restano nella directory privata della release.
+Evidenza senza segreti: [RICH_TEMPLATES_2026-11-12.json](evidence/RICH_TEMPLATES_2026-11-12.json).

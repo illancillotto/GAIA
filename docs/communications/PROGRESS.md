@@ -5,6 +5,9 @@
 Implementati editor a blocchi, anteprima, compilazione dei campi e MIME HTML/testo
 con logo CID. Il controllo finale include input malformati, limite di 60 blocchi,
 revoca dell’approvazione dopo una modifica e archivio MIME del worker.
+Rilascio attivo alle **16:02:12 CET**, commit applicativo `75d2544d` pubblicato.
+Backend/frontend/worker healthy, 14 E2E live PASS; schema, dati, pausa e trasporti
+invariati. Nessun invio reale.
 Matrice comportamenti/test, coverage, complessità e stato del rilascio: [Template grafici e verifica finale](RICH_TEMPLATES_2026-11-12.md).
 
 
