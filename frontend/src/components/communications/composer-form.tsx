@@ -1,4 +1,5 @@
 "use client";
+import { MessageBodyEditor } from "./message-body-editor";
 import type { ReactNode } from "react";
 import type { Account, Communication } from "@/types/communications";
 import type { useComposer } from "./use-composer";
@@ -20,7 +21,7 @@ export function ComposerForm({ message, accounts, canEdit, controller, children 
       </select></label>
       <label className="block min-w-0 text-sm">Destinatario<input className="mt-1 w-full rounded-lg border p-2" type="email" value={form.recipient} onChange={(event) => change("recipient", event.target.value)} /></label>
       <label className="block min-w-0 text-sm">Oggetto<input className="mt-1 w-full rounded-lg border p-2" maxLength={250} value={form.subject} onChange={(event) => change("subject", event.target.value)} /></label>
-      <label className="block min-w-0 text-sm sm:col-span-2 xl:col-span-3">Testo<textarea rows={3} className="mt-1 w-full rounded-lg border p-2" maxLength={20000} value={form.body} onChange={(event) => change("body", event.target.value)} /></label>
+      <div className="min-w-0 sm:col-span-2 xl:col-span-3"><MessageBodyEditor value={form.body} subject={form.subject} onChange={(body) => change("body", body)} /></div>
       <label className="block min-w-0 text-sm sm:col-span-2 xl:col-span-3">Aggiungi allegato PDF<input className="block max-w-full" type="file" accept="application/pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); event.target.value = ""; }} /></label>
     </fieldset>
     <p className="text-sm">Allegati: {message.attachments.length} · {message.attachments.reduce((total, part) => total + part.size, 0)} byte prima della codifica MIME.</p>

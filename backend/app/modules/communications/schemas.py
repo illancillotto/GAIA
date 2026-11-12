@@ -6,10 +6,13 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from email_validator import EmailNotValidError, validate_email
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
+
+from .rich_template import validate_body
 
 Channel = Literal["pec", "email"]
 Short = Annotated[str, Field(min_length=1, max_length=250)]
+Body = Annotated[str, Field(min_length=1, max_length=20000), AfterValidator(validate_body)]
 
 
 def address(value: str) -> str:
@@ -75,7 +78,7 @@ class TemplateInput(Command):
     channel: Channel
     module: Literal["ruolo"] = "ruolo"
     subject: Short
-    body: Annotated[str, Field(min_length=1, max_length=20000)]
+    body: Body
 
 
 class TemplateDeletion(Command):
@@ -89,7 +92,7 @@ class MessageCreate(Command):
     account_id: UUID | None = None
     recipient: str
     subject: Short | None = None
-    body: Annotated[str, Field(min_length=1, max_length=20000)] | None = None
+    body: Body | None = None
     template_id: UUID | None = None
     purpose: Literal["courtesy", "pec_notice"] = "courtesy"
 
@@ -104,7 +107,7 @@ class MessageChange(VersionCommand):
     account_id: UUID
     recipient: str
     subject: Short
-    body: Annotated[str, Field(min_length=1, max_length=20000)]
+    body: Body
 
     _recipient = field_validator("recipient")(address)
 

@@ -1,5 +1,17 @@
 # Rollback e ripristino
 
+## Template grafici — compatibilità dei body
+
+Un vecchio worker non interpreta `GAIA-BLOCKS/1`: non riavviarlo con dispatch
+attivo se esistono messaggi grafici. Prima di un rollback sospendere gli invii,
+conservare MIME/job e inventariare gli stati; non convertire, eliminare o
+riaccodare lo storico. Il rollback ordinario della UI/API mantiene il worker
+compatibile, oppure ripristina tutti e tre i servizi con trasporto disabilitato
+fino alla gestione esplicita dei messaggi strutturati. Nessun downgrade DB.
+Gli artefatti sono specifici della release; verificare che non ci siano rilasci
+successivi. Immagini, configurazioni e verifiche: [Template grafici e verifica finale](RICH_TEMPLATES_2026-11-12.md).
+
+
 ## Cancellazione template — rilascio 7 novembre 2026
 
 Rollback software in `/opt/gaia/releases/template-delete-20261107`:

@@ -1,12 +1,23 @@
 # Modello dati
 
+## Corpo versionato dei template e messaggi — 12 novembre 2026
+
+Nessuna nuova colonna o migrazione. `communication_templates.body` conserva
+il documento a blocchi con segnaposto; `communication_messages.body` conserva
+lo stesso formato con campi risolti e modifiche dell’operatore. Il digest
+esistente include l’intera stringa, compresi ordine, URL e blocchi logo.
+Il MIME in `communication_attempts` include entrambe le alternative e il logo
+incorporato; versioni template successive non lo rigenerano. I body privi del
+prefisso mantengono la semantica storica. Contratto: [Template grafici e verifica finale](RICH_TEMPLATES_2026-11-12.md).
+
+
 Migrazione 20261103_1200, parent 20261103_0900. Undici tabelle, UUID applicativi,
 FK verso utenti GAIA e documento Registro. Nessuna modifica a importi o formule.
 
 | Tabella | Responsabilità / vincoli |
 | --- | --- |
 | communication_accounts | TLS, username, secret_ref esterno, canale/provider, utenti/moduli/default/priorità, limiti, pausa, versione, salute e cursore IMAP |
-| communication_templates | Unique codice/versione, testo semplice, stato draft/approved/deleted e approvatore |
+| communication_templates | Unique codice/versione, body semplice o GAIA-BLOCKS/1, stato draft/approved/deleted e approvatore |
 | communication_messages | Sorgente e Registro, numero, envelope, fingerprint, versione/stato; unique active_key e technical_id |
 | communication_attachments | PDF BYTEA, nome/MIME, pagine/byte/SHA256/versione/primario, immutabile |
 | communication_reviews | Review UUID, allegato, operatore, versione messaggio, rendering |

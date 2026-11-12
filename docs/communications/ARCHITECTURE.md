@@ -1,12 +1,29 @@
 # Architettura
 
+## Template grafici — 12 novembre 2026
+
+Il formato `GAIA-BLOCKS/1` nel campo `body` esistente rappresenta da 1 a 60
+blocchi. `rich_template.py` possiede validazione, compilazione per campo e resa
+MIME; `policy.render_template` resta il renderer letterale dei testi semplici.
+Registry, anteprima e outbox usano il renderer compatibile. Gli adapter non
+eseguono HTML dell’operatore: l’HTML è generato con escaping da blocchi consentiti.
+Il worker allega il PNG ufficiale come parte related CID e mantiene il PDF
+come allegato separato; il MIME finale è archiviato prima del trasporto.
+
+Frontend: `TemplateAuthoring` gestisce form/catalogo; `TemplateEditor` e
+`TemplateBlockEditor` modificano il documento; `TemplatePreview` usa elementi
+React senza HTML libero. `MessageBodyEditor` conserva il testo compatto per i
+vecchi modelli e pannelli apribili per i grafici, lasciando il PDF sotto i campi.
+Nessuna nuova dipendenza o schema DB. Contratto e diagramma del flusso: [Template grafici e verifica finale](RICH_TEMPLATES_2026-11-12.md).
+
+
 ## Confini
 
 Il catalogo amministrativo dei modelli (`communications/template_catalog.json`)
 fornisce solo proposte modificabili e descrizioni delle variabili. Il mapping
 dei dati è nel dominio Ruolo (`services/notice_communication_fields.py`), con
 riuso delle funzioni del PDF per totale, termine e accessi. L'outbox conserva
-il testo risolto; nessuna logica tributaria negli adapter. Versioni, approvazioni,
+il corpo risolto (testo semplice o documento a blocchi versionato); nessuna logica tributaria negli adapter. Versioni, approvazioni,
 snapshot e trasporti restano quelli esistenti. Dettagli e limite sui vecchi
 documenti senza accessi: [modelli ufficio](OFFICE_TEMPLATES_2026-11-07.md).
 
@@ -22,8 +39,8 @@ caricato sul client; worker PDF distribuito localmente nella build.
 
 ## Workspace PEC/email
 
-`workspace.tsx` mantiene filtri comuni e due colonne uguali da breakpoint xl:
-elenco e sidebar sticky con scroll indipendente. `use-workspace.ts` svuota la
+`workspace.tsx` mantiene filtri comuni e due colonne da breakpoint xl:
+elenco più stretto (`0.85fr`) e composizione più ampia (`2fr`), allineati in alto. `use-workspace.ts` svuota la
 composizione precedente al cambio avviso. `composer.tsx` inserisce il viewer
 come slot di `ComposerForm`, fra campi e checklist. API, snapshot, permessi e
 workflow di autorizzazione restano quelli esistenti; nessuna nuova dipendenza.

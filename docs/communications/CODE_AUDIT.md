@@ -1,5 +1,15 @@
 # Audit del checkout — GAIA Communications
 
+## Aggiornamento editor — 12 novembre 2026
+
+`rich_template.py` valida il formato, sostituisce i soli campi testuali ed esegue
+l’escaping HTML. Il trasporto costruisce alternative MIME e immagine CID senza
+consultare un template modificabile. La bozza conserva il corpo risolto, che
+partecipa al digest di approvazione già esistente. Schemi Pydantic validano
+creazione template, creazione messaggio e modifica bozza. Nessuna migrazione.
+File, verifiche e limiti: [Template grafici e verifica finale](RICH_TEMPLATES_2026-11-12.md). L’audit successivo è storico.
+
+
 Audit iniziato il 2026-11-03 su `feature/avvisi-solleciti-2021`,
 `66b72e517fd2c9513d509001493dc5f77f4493b8`. Nessun accesso al CED,
 caselle reali o database di produzione. Le modifiche preesistenti a config,

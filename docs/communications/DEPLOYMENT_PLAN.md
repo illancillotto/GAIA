@@ -1,5 +1,18 @@
 # Preparazione al rilascio
 
+## Template grafici — rilascio coordinato 12 novembre 2026
+
+Distribuire backend, frontend e Communications worker nello stesso ciclo.
+I worker vecchi invierebbero il formato strutturato come testo, quindi vanno
+aggiornati prima di rendere disponibile l’editor. Preservare configurazioni,
+trasporto/pausa, altri servizi e stato Poste; nessuna migrazione o invio reale.
+Derivare le immagini dai runtime CED effettivi applicando solo il manifest
+verificato. Congelare immagini/configurazioni precedenti e controllare release
+concorrenti. Testare le immagini candidate e le API prima dell’attivazione;
+health, confronto configurazioni, stato dati e collaudo browser dopo il cambio.
+Procedura effettiva, esiti e rollback: [Template grafici e verifica finale](RICH_TEMPLATES_2026-11-12.md).
+
+
 ## Rilascio mirato template — 7 novembre 2026
 
 Completato su richiesta esplicita: sole immagini backend/frontend derivate dal

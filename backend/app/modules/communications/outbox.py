@@ -21,10 +21,10 @@ from .policy import (
     account_fingerprint,
     envelope_digest,
     pdf_pages,
-    render_template,
     sha256,
     verify_snapshots,
 )
+from .rich_template import render_template
 from .source_preview import verify_preview
 
 

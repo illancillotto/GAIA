@@ -1,5 +1,10 @@
 # Verifica finale del ciclo Communications — 2026-11-03
 
+Verifica corrente dei template grafici: [Template grafici e verifica finale](RICH_TEMPLATES_2026-11-12.md). Le conclusioni successive
+sono quelle del ciclo storico indicato nel titolo, non lo stato aggiornato
+editor/worker. Il gate globale e quello del perimetro sono riportati separatamente.
+
+
 ## Perimetro e stato
 
 Revisione dei commit 40b324ac, 599e1ccf e a6274cac rispetto a 9676aaa7:

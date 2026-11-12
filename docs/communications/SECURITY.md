@@ -1,5 +1,20 @@
 # Sicurezza
 
+## Template grafici — 12 novembre 2026
+
+Solo blocchi strutturati, nessun editor HTML libero, script, CSS arbitrario,
+immagine esterna o upload di logo. Il logo CBO viene da un asset versionato;
+il worker lo incorpora CID, senza richieste a siti terzi. Testi e URL sono
+escapati nell’HTML e React rende i testi come contenuto. URL limitati a HTTPS
+assoluto senza credenziali/controlli; i segnaposto sono ammessi solo nel testo.
+L’apertura di un link nell’anteprima è un’azione esplicita e usa noopener/noreferrer.
+
+Il corpo risolto può contenere il PIN: restano gli stessi permessi e requisiti
+di riservatezza dell’archivio. Nessun PIN nei log, negli eventi o nei documenti
+committati. Cambi grafici invalidano revisione/approvazione come ogni modifica
+al corpo. Limiti MIME finali comprendono HTML, logo e codifica. Prove: [Template grafici e verifica finale](RICH_TEMPLATES_2026-11-12.md).
+
+
 I modelli dell'ufficio possono includere il PIN del portale contribuenti,
 come richiesto dall'operatore. Deriva dallo snapshot cifrato univoco del PDF;
 errori di decifratura o ambiguità non espongono valori negli errori/eventi.
@@ -20,7 +35,7 @@ API admin restituisce il riferimento, mai contenuto dei secret.
 SMTP/IMAP TLS implicito o STARTTLS obbligatorio con verifica certificati.
 Errori normalizzati; testo delle eccezioni non persistito. Eventi senza
 credenziali/corpo completo. Destinatario singolo validato, niente header injection,
-CC/CCN o HTML; template senza espressioni/include/attributi eseguibili.
+CC/CCN o HTML libero; template senza espressioni/include/attributi eseguibili.
 
 Preview/originali autenticati, no-store/nosniff, nessun URL pubblico. Byte,
 pagine e pixel bounded. Approvazione hash/versione/checklist; lock, idempotenza

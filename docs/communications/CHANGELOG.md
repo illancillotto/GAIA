@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-12 — Editor dei template grafici
+
+- Logo ufficiale CBO incorporato, titoli, paragrafi, elenchi, link HTTPS e pulsanti.
+- Blocchi riordinabili, campi dell’avviso e anteprima; modello di partenza ancora modificabile.
+- Corpo strutturato versionato, compatibile con i testi precedenti; MIME HTML e testo semplice.
+- Anteprima/modifica del messaggio raccolte in pannelli apribili per lasciare spazio al PDF.
+- Salvataggio bozza, approvazione e controlli individuali invariati; nessun invio reale.
+- [Template grafici e verifica finale](RICH_TEMPLATES_2026-11-12.md). Lo stato del rilascio è registrato lì, separato dai risultati locali.
+
+
 ## 2026-11-07 — Modelli ufficio PEC/email (locale)
 
 - Catalogo amministrativo e modelli modificabili, senza salvataggio/approvazione impliciti.

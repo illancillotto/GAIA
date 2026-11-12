@@ -12,6 +12,7 @@ from email.utils import format_datetime, formataddr
 from pathlib import Path
 
 from .policy import MAX_BYTES, Conflict, now
+from .rich_template import set_message_content
 
 
 class SafeFailure(Exception):
@@ -48,7 +49,7 @@ def mime_message(message, account, attachments, technical_id):
     result["Date"] = format_datetime(now())
     result["Message-ID"] = technical_id
     result["X-GAIA-Communication-ID"] = str(message.id)
-    result.set_content(message.body, subtype="plain", charset="utf-8")
+    set_message_content(result, message.body)
     for attachment in attachments:
         result.add_attachment(
             attachment.content, maintype="application", subtype="pdf", filename=attachment.filename

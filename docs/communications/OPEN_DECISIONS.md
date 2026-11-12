@@ -21,7 +21,7 @@ Audit e stato: [OFFICE_TEMPLATES_2026-11-07.md](OFFICE_TEMPLATES_2026-11-07.md).
 | Bozze/invii portale Poste esterni al DB | Operatore | Coordinamento manuale necessario |
 | Fonte recapiti PF PEC/PG email non presente nello schema | Anagrafica/ufficio | Nessuna inferenza, inserimento e verifica espliciti |
 | NAS e firewall CED | IT/DBA | Grant verificati sul clone completo e ruolo ristretto applicato; NAS/firewall da collaudare prima dell'abilitazione dei trasporti |
-| Altre annualità/moduli e CC/CCN/HTML | Product owner | Solo Ruolo2021, destinatario singolo, testo semplice |
+| Altre annualità/moduli e CC/CCN/HTML libero | Product owner | Solo Ruolo2021, destinatario singolo; template grafici consentiti da blocchi validati |
 | Formati PEC proprietari/CMS multipli | IT/provider | Non classificati automaticamente, EML conservati |
 | Inbox preesistenti/voluminose o EML oltre32MiB | IT | Readonly, triage cursore senza eliminazione automatica |
 | Rotazione delle credenziali mostrate durante la preparazione del rilascio | IT | Incidente segnalato; rotazione coordinata ancora necessaria, nessun valore riportato in documentazione |

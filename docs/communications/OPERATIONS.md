@@ -1,5 +1,29 @@
 # Manuale operativo
 
+## Creare e usare un template grafico
+
+1. In `/gaia/communications`, compilare codice, nome, canale e oggetto oppure
+   scegliere un modello di partenza. Premere **Crea layout con logo e link**.
+2. Aggiungere **Logo ufficiale**, titoli, paragrafi, elenchi, link o pulsanti.
+   Ogni elenco usa una voce per riga. Per i link indicare etichetta e URL HTTPS
+   completo. Usare le frecce per riordinare e **Rimuovi** per eliminare un blocco.
+3. Caricare **Modelli di partenza 2021 e variabili** per abilitare il selettore
+   dei campi dell’avviso. Selezionare prima un punto del testo, poi il campo;
+   senza selezione viene aggiunto un paragrafo. Massimo 60 blocchi e 20.000
+   caratteri serializzati; al limite blocchi l’inserimento di campi è disabilitato.
+4. Controllare l’anteprima, salvare la versione bozza e approvarla dopo la
+   verifica dell’ufficio. Nessuna conversione o approvazione automatica dei modelli.
+5. In PEC/Email selezionare l’avviso. Il template unico approvato è preselezionato,
+   con oggetto/testo compilati. Aprire **Anteprima messaggio** per verificare logo,
+   link e dati; **Modifica testo e layout** per correggere. Il PDF è sotto i campi.
+6. Ogni modifica richiede nuova attestazione del rendering PDF e approvazione individuale. Il
+   messaggio viene archiviato con HTML, testo semplice e logo incorporato.
+
+I link hanno destinazioni fisse: non inserire PIN o altri segnaposto negli URL.
+Nessuna immagine caricata dall’operatore o HTML libero. Stato rilascio e limiti:
+[Template grafici e verifica finale](RICH_TEMPLATES_2026-11-12.md). Gli invii reali restano subordinati alla configurazione autorizzata.
+
+
 Stato aggiornato al 9 novembre 2026: i modelli ufficio sono stati pubblicati alle 14:58:35 CET; le indicazioni precedenti «locale/non rilasciato» descrivono lo stato del 7 novembre. Verifiche e limiti correnti: [rapporto di rilascio](OFFICE_TEMPLATES_RELEASE_2026-11-09.md). Nessuna abilitazione degli invii reali.
 
 ## Amministrazione
@@ -13,7 +37,7 @@ non salva né approva automaticamente. Nel compositore verificare i dati
 risolti e lo stesso PDF allegato. Mancanza o ambiguità dei dati di accesso
 blocca i modelli che richiedono codice utenza/PIN; non copiare credenziali
 di un'altra utenza. Condizioni, fonti e audit nel
-[report dedicato](OFFICE_TEMPLATES_2026-11-07.md). Funzione locale non rilasciata.
+[report dedicato](OFFICE_TEMPLATES_2026-11-07.md). Modelli pubblicati il 9 novembre.
 
 ### Account
 
@@ -108,12 +132,12 @@ Immagini, configurazione effettiva, backup/restore, verifiche e residui sono nel
 specifici di quella release. Non avviare lo stack intero e non riprendere Poste
 come effetto collaterale di un riavvio Communications.
 
-Layout sidebar pubblicato il 4 novembre alle 11:50 CET: elenco e composizione
-a metà desktop, campi sopra PDF. Solo frontend sostituito; backend, worker e
+Layout iniziale pubblicato il 4 novembre alle 11:50 CET; dal 12 novembre elenco
+più stretto e composizione più ampia, con campi sopra il PDF. Solo frontend sostituito; backend, worker e
 stato effettivo di Posta Online preservati. Dettagli, collaudo e rollback in
 [SIDEBAR_RELEASE_2026-11-04](SIDEBAR_RELEASE_2026-11-04.md).
 
-## Classificazione PEC/email per le persone fisiche — predisposta, non rilasciata
+## Classificazione PEC/email per le persone fisiche — procedura del 4 novembre, rilasciata il 5
 
 Prima dell'uso applicare la migrazione `20261104_1400` in una finestra coordinata
 backend/worker, con backup e trasporti disabilitati. Rieseguire il confronto dei

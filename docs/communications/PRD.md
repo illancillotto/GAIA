@@ -1,5 +1,16 @@
 # GAIA Communications — PRD
 
+## Editor implementato — 12 novembre 2026
+
+L’amministratore compone template con logo ufficiale, titoli, paragrafi, elenchi,
+link o pulsanti HTTPS; aggiunge, sposta o rimuove blocchi, inserisce campi
+catalogati e vede l’anteprima. Salvataggio bozza e approvazione sono separati.
+I modelli esistenti restano modificabili e convertibili. Nel compositore
+operativo un solo template approvato viene preselezionato e compilato;
+anteprima messaggio e modifica sono apribili senza sottrarre spazio al PDF.
+Stato implementato, collaudo e rilascio: [Template grafici e verifica finale](RICH_TEMPLATES_2026-11-12.md).
+
+
 Stato aggiornato al 9 novembre 2026: i modelli ufficio sono stati pubblicati alle 14:58:35 CET; le indicazioni precedenti «locale/non rilasciato» descrivono lo stato del 7 novembre. Verifiche e limiti correnti: [rapporto di rilascio](OFFICE_TEMPLATES_RELEASE_2026-11-09.md). Nessuna abilitazione degli invii reali.
 
 Piattaforma pubblicata sul CED; collaudo dei trasporti ancora sintetico e invii
@@ -12,8 +23,8 @@ Il gestore offre modelli di partenza PEC/email adattati all'esempio dell'ufficio
 con dati del singolo avviso, totale/termine del PDF, portale, codice utenza e
 PIN verificabili. La scelta popola un form modificabile; salvataggio draft e
 approvazione restano distinti. Fonti, audit PIN e limiti nel
-[report modelli ufficio](OFFICE_TEMPLATES_2026-11-07.md). Implementazione locale,
-non rilasciata; decisione sui vecchi PDF senza accessi pendente.
+[report modelli ufficio](OFFICE_TEMPLATES_2026-11-07.md). Modelli pubblicati il 9 novembre;
+controlli inCASS e revisione PDF con accessi aggiunti il 12 novembre (COMPOSITION_CHECKS_2026-11-12.md).
 
 - Permesso ruolo.tributi.view: elenco, storico, snapshot e ricevute del dominio.
 - Permesso ruolo.tributi.manage_status: composizione, allegati PDF, validazione,
@@ -26,8 +37,8 @@ non rilasciata; decisione sui vecchi PDF senza accessi pendente.
   conservati. Cancellazione logica, senza invii o nuove migrazioni.
 
 Solleciti offre Generati, Posta Online, PEC ed Email. Nessuna spedizione HTTP.
-La pagina PEC/email divide lo spazio desktop in due colonne uguali: elenco
-a sinistra e compositore persistente a destra. Il clic sulla riga carica i campi dell’avviso
+La pagina PEC/email divide lo spazio desktop in due colonne: elenco
+più stretto a sinistra e composizione più ampia a destra. Il clic sulla riga carica i campi dell’avviso
 selezionato; nella sidebar i campi precedono il PDF e la checklist. Su mobile
 i pannelli sono verticali. Il PDF sorgente compare subito alla selezione; la creazione della bozza ne
 verifica l’hash e crea lo snapshot immutabile. La revisione UI del 4 novembre è pubblicata sul CED dopo la risoluzione del
@@ -41,8 +52,8 @@ canale non viene escluso. L’operatore può scegliere Tutti o Assente.
 
 ## Vincoli
 
-Solo righe generated, annualità esattamente [2021], numero definitivo riservato
-e documento Registro coerente. Pagamenti, STEP, storico non chiarito, notifiche
+Solo righe generated, annualità esattamente [2021], numero definitivo GAIA
+riservato oppure identità inCASS verificata e documento Registro coerente. Pagamenti, STEP, storico non chiarito, notifiche
 e prenotazioni Poste/Communications bloccano. Riutilizzo delle regole Registro,
 nessuna nuova formula tributaria.
 
@@ -50,8 +61,8 @@ Snapshot e MIME/EML nel DB protetto. Limiti: 32 MiB, 200 pagine complessive,
 dieci PDF; limite MIME inferiore configurabile. Primo allegato obbligatorio.
 Rendering e lettura umana sono distinti; la checklist registra una dichiarazione.
 
-Email solo cortesia, testo semplice; CC/CCN e HTML disabilitati nella prima
-versione. Accettazione SMTP = submitted, mai notifica legale. PEC classificata
+Email solo cortesia. Sono supportati testo semplice e template grafici a blocchi
+con alternativa testuale; CC/CCN e HTML libero restano esclusi. Accettazione SMTP = submitted, mai notifica legale. PEC classificata
 come certificata solo con verifica CMS, CA e pin approvati.
 
 ## Accettazione

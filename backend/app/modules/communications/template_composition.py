@@ -3,7 +3,8 @@
 import re
 
 from . import registry, ruolo_source
-from .policy import Conflict, pdf_pages, render_template, sha256
+from .policy import Conflict, pdf_pages, sha256
+from .rich_template import render_template
 
 
 def preview_composition(db, identity, template_id, channel):

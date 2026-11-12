@@ -1,5 +1,11 @@
 # Piano di implementazione e stato
 
+## Stato implementato — 12 novembre 2026
+
+Il piano storico è esteso dall’editor dei template grafici. Implementazione,
+test e passaggi di rilascio effettivamente conclusi: [Template grafici e verifica finale](RICH_TEMPLATES_2026-11-12.md).
+
+
 Stato aggiornato al 9 novembre 2026: i modelli ufficio sono stati pubblicati alle 14:58:35 CET; le indicazioni precedenti «locale/non rilasciato» descrivono lo stato del 7 novembre. Verifiche e limiti correnti: [rapporto di rilascio](OFFICE_TEMPLATES_RELEASE_2026-11-09.md). Nessuna abilitazione degli invii reali.
 
 ## 2026-11-07 — Modelli dall'esempio dell'ufficio

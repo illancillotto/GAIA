@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { communications } from "@/lib/communications-api";
 import type { Template } from "@/types/communications";
-import { TemplateCatalog } from "./template-catalog";
+import { TemplateAuthoring } from "./template-authoring";
+import type { TemplateDraft } from "./use-template-catalog";
+import { TemplatePreview } from "./template-preview";
 
-const EMPTY = { code: "", name: "", channel: "pec", module: "ruolo", subject: "", body: "" };
+const EMPTY: TemplateDraft = { code: "", name: "", channel: "pec", module: "ruolo", subject: "", body: "" };
 
 export function TemplateAdministration({ token }: { token: string }) {
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -32,13 +34,8 @@ export function TemplateAdministration({ token }: { token: string }) {
   return <section className="space-y-4 rounded-2xl border bg-white p-5"><h2 className="text-lg font-semibold">Template versionati</h2>
     <p className="text-sm">Le proposte iniziali sono bozze. Approvare solo dopo la verifica dell&apos;ufficio competente. Ogni modifica crea una nuova versione; i testi già usati restano conservati.</p>
     {status.error && <p role="alert" className="text-rose-800">{status.error}</p>}
-    <ul className="space-y-3">{templates.map((template) => <li className="rounded-lg border p-3" key={template.id}><p>{template.name} · {template.channel} · v{template.version} · {template.status}</p><p className="text-sm">{template.subject}</p><pre className="whitespace-pre-wrap text-sm">{template.body}</pre><button className="btn-secondary mt-2" disabled={status.busy} onClick={() => setForm({ code: template.code, name: template.name, channel: template.channel, module: "ruolo", subject: template.subject, body: template.body })}>Crea nuova versione</button>{template.status === "draft" && <button className="btn-primary ml-2" disabled={status.busy} onClick={() => void command(template)}>Approva questa versione</button>}<button className="btn-secondary ml-2 mt-2 text-rose-800" type="button" aria-label={`Elimina ${template.name}, ${template.channel}, versione ${template.version}`} disabled={status.busy} onClick={() => void remove(template)}>Elimina</button></li>)}</ul>
-    <fieldset disabled={status.busy} className="grid gap-3 md:grid-cols-2">
-      {(["code", "name", "subject"] as const).map((key) => <label key={key}>{key === "code" ? "Codice template" : key === "name" ? "Nome template" : "Oggetto template"}<input className="block w-full rounded border p-2" value={form[key]} onChange={(event) => setForm({ ...form, [key]: event.target.value })} /></label>)}
-      <label>Canale template<select className="block rounded border p-2" value={form.channel} onChange={(event) => setForm({ ...form, channel: event.target.value })}><option value="pec">PEC</option><option value="email">Email</option></select></label>
-      <label className="md:col-span-2">Corpo template<textarea className="block min-h-40 w-full rounded border p-2" value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} /></label>
-    </fieldset>
-    <TemplateCatalog token={token} disabled={status.busy} onSelect={setForm} />
+    <ul className="space-y-3">{templates.map((template) => <li className="rounded-lg border p-3" key={template.id}><p>{template.name} · {template.channel} · v{template.version} · {template.status}</p><p className="text-sm">{template.subject}</p><details className="mt-2"><summary>Visualizza template</summary><TemplatePreview body={template.body} subject={template.subject} /></details><button className="btn-secondary mt-2" disabled={status.busy} onClick={() => setForm({ code: template.code, name: template.name, channel: template.channel, module: "ruolo", subject: template.subject, body: template.body })}>Crea nuova versione</button>{template.status === "draft" && <button className="btn-primary ml-2" disabled={status.busy} onClick={() => void command(template)}>Approva questa versione</button>}<button className="btn-secondary ml-2 mt-2 text-rose-800" type="button" aria-label={`Elimina ${template.name}, ${template.channel}, versione ${template.version}`} disabled={status.busy} onClick={() => void remove(template)}>Elimina</button></li>)}</ul>
+    <TemplateAuthoring token={token} disabled={status.busy} form={form} onChange={setForm} />
     <button className="btn-primary" disabled={status.busy} onClick={() => void command()}>Salva nuova versione bozza</button>
   </section>;
 }

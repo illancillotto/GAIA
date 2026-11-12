@@ -1,5 +1,13 @@
 # Report di collaudo iniziale — 2026-11-03
 
+## Ciclo corrente — 12 novembre 2026
+
+Il report seguente conserva le corse storiche. La matrice dei comportamenti
+introdotti dai template grafici, i risultati finali e i problemi residui sono
+in [Template grafici e verifica finale](RICH_TEMPLATES_2026-11-12.md). I test usano dati sintetici e trasporti simulati; le verifiche live
+sono in sola lettura e non costituiscono collaudo dei provider reali.
+
+
 Modelli ufficio, verifica locale del 7 novembre: **268 backend PASS** (dieci
 PostgreSQL e regressione accessi portale), **67 unit frontend**, **18 smoke**,
 **otto E2E con API mock** PASS. Cinque runtime backend 327 statement/86 branch

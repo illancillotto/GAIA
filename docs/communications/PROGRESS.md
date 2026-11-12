@@ -1,5 +1,13 @@
 # Avanzamento Communications
 
+## 2026-11-12 — Template grafici
+
+Implementati editor a blocchi, anteprima, compilazione dei campi e MIME HTML/testo
+con logo CID. Il controllo finale include input malformati, limite di 60 blocchi,
+revoca dell’approvazione dopo una modifica e archivio MIME del worker.
+Matrice comportamenti/test, coverage, complessità e stato del rilascio: [Template grafici e verifica finale](RICH_TEMPLATES_2026-11-12.md).
+
+
 ## 2026-11-09 — Modelli ufficio pubblicati
 
 Rilascio mirato autorizzato e attivato alle **14:58:35 CET**; commit applicativo `06f6597c` sul branch `feat/communications-office-templates-20261109`. Catalogo PEC/email disponibile in Communications, backend/frontend healthy. Otto E2E candidata e otto live PASS; coverage runtime del perimetro 100%. Nessun fallback PIN, template reale creato/approvato o invio. Dati, schema e stato trasporti invariati. [Rapporto completo](OFFICE_TEMPLATES_RELEASE_2026-11-09.md).

@@ -1,5 +1,23 @@
 # Contratto API
 
+## Corpo grafico — 12 novembre 2026
+
+`TemplateInput.body`, `MessageCreate.body` e `MessageChange.body` accettano una
+stringa da 1 a 20.000 caratteri. Senza prefisso è testo semplice. Con prefisso
+`GAIA-BLOCKS/1\n` è un array JSON di 1–60 blocchi. Tipi e campi esatti:
+`logo` solo `kind`; `title/paragraph/list` con `kind,text`; `link/button` anche
+`url` HTTPS assoluto, senza credenziali, controlli o variabili. Campi extra,
+tipi errati, testo vuoto o URL non ammessi restituiscono 422 nei comandi.
+Le variabili nei campi testuali usano lo stesso insieme del catalogo.
+
+`GET /ruolo/candidates/{id}/template-preview?template_id=…&channel=pec|email`
+restituisce `subject,body,source_sha256,missing_variables,send_blockers` con
+no-store/private. Per un modello grafico, `body` rimane un documento a blocchi
+risolto, non HTML. Le mancanze sono visibili nell’anteprima e continuano a
+bloccare la creazione. Un template draft/incompatibile resta 409. Le API non
+spediscono email né restituiscono URL pubblici del PIN. Esempi e matrice: [Template grafici e verifica finale](RICH_TEMPLATES_2026-11-12.md).
+
+
 Prefisso /communications (esterno normalmente /api/communications). Bearer GAIA.
 Lettura: modulo Ruolo + ruolo.tributi.view; scritture: anche manage_status.
 Amministrazione: require_admin_user. Nessuna API riceve password provider.
@@ -64,7 +82,7 @@ il registro Utenze anche per le persone fisiche. Accesso amministratore attivo,
 modulo Ruolo e sezione Tributi visibile. Scrittura con `expected_version`,
 indirizzo, canale (`pec/email/unclassified`), stato (`active/review/revoked`),
 fonte e riferimento obbligatori. Un non classificato non può essere attivo.
-Nessun comando trasmette messaggi. Endpoint non ancora rilasciati.
+Nessun comando trasmette messaggi. Endpoint rilasciati il 5 novembre; vedere CONTACT_RELEASE_2026-11-05.md.
 
 Contratto completo e compatibilità dei campi legacy:
 [CONTACT_CLASSIFICATION_2026-11-04.md](CONTACT_CLASSIFICATION_2026-11-04.md).

@@ -5,7 +5,8 @@ from uuid import uuid4
 from sqlalchemy import func, select
 
 from .models import CommunicationAccount, CommunicationJob, CommunicationTemplate
-from .policy import Conflict, Missing, now, render_template
+from .policy import Conflict, Missing, now
+from .rich_template import render_template
 from .store import event
 from .template_catalog import load_catalog
 

@@ -512,3 +512,10 @@ domain-docs/ruolo/docs/COMMUNICATIONS_SOLLECITI_2021.md.
 La chiusura di sviluppo Communications aggiunge FINAL_REVIEW.md (matrice/gate),
 PROGRESS.md (avanzamento/residui) e BASELINE_REPAIR.md (riproducibilità qualità)
 nella medesima directory docs/communications, senza nuovi moduli runtime.
+
+Il builder dei template è descritto in
+`docs/communications/RICH_TEMPLATES_2026-11-12.md`: editor e anteprima in
+`frontend/src/components/communications`, logo pubblico in
+`frontend/public/communications/official-logo.png` e rendering MIME in
+`backend/app/modules/communications/rich_template.py`. Le evidenze di rilascio
+senza segreti sono raccolte in `docs/communications/evidence/`.

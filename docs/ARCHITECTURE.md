@@ -907,3 +907,9 @@ Il rilascio mirato CED del 4 novembre preserva il monolite e attiva il worker
 autonomo con ruolo DB ristretto, pausa globale e trasporto disabilitato.
 Backend/frontend/worker healthy; configurazione, collaudo e stato nel
 [report operativo](communications/DEPLOYMENT_REPORT_2026-11-04.md).
+
+Dal ciclo del 12 novembre il body può contenere blocchi versionati per logo,
+testi, elenchi e link HTTPS fissi. API e worker condividono validazione e
+rendering; il trasporto produce alternative testo/HTML e logo CID, mantenendo
+il PDF separato. Nessuna migrazione: il formato resta nel campo body esistente.
+[Contratto, test e rilascio](communications/RICH_TEMPLATES_2026-11-12.md).

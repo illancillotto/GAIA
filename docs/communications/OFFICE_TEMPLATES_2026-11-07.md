@@ -1,5 +1,11 @@
 # Modelli PEC/email dall'esempio dell'ufficio — 7 novembre 2026
 
+Il catalogo testuale descritto qui è compatibile con l’editor grafico del
+12 novembre: può essere convertito in blocchi senza perdere il testo.
+Stato corrente: [Template grafici e verifica finale](RICH_TEMPLATES_2026-11-12.md). Le misure e decisioni successive in questo documento
+restano riferite alla data originaria.
+
+
 ## Analisi e implementazione locale
 
 L'esempio comunica l'emissione di un avviso 2025. L'operatore ha confermato

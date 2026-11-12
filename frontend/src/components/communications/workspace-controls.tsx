@@ -1,4 +1,5 @@
 "use client";
+import { MessageBodyEditor } from "./message-body-editor";
 import { SourcePreviewActions } from "./source-preview-actions";
 import { useTemplateComposition } from "./use-template-composition";
 import { useSourceRepair } from "./use-source-repair";
@@ -62,7 +63,7 @@ export function NewCommunication({ workspace, channel, canEdit, token }: { works
       <label className="block min-w-0">Recapito verificato<input type="email" className="mt-1 block w-full rounded border p-2" value={compose.recipient} onChange={(event) => setCompose({ ...compose, recipient: event.target.value })} /></label>
       <label className="block min-w-0">Template approvato<select aria-describedby="template-help" className="mt-1 block w-full rounded border p-2" value={template.templateId} onChange={(event) => template.selectTemplate(event.target.value)}><option value="">Testo personalizzato</option>{template.available.map((value) => <option key={value.id} value={value.id}>{value.name} v{value.version}</option>)}</select></label>
       <label className="block min-w-0">Oggetto<input disabled={template.loading} className="mt-1 block w-full rounded border p-2" value={compose.subject} onChange={(event) => setCompose({ ...compose, subject: event.target.value })} /></label>
-      <label className="block min-w-0 sm:col-span-2">Testo<textarea disabled={template.loading} rows={2} className="mt-1 block w-full rounded border p-2" value={compose.body} onChange={(event) => setCompose({ ...compose, body: event.target.value })} /></label>
+      <div className="min-w-0 sm:col-span-2"><MessageBodyEditor rows={2} value={compose.body} subject={compose.subject} disabled={template.loading} onChange={(body) => setCompose({ ...compose, body })} /></div>
       </div>
       <p id="template-help" className="text-xs text-slate-600">{template.available.length ? "Oggetto e testo vengono caricati con i dati dell’avviso dal template selezionato. Puoi modificarli prima di creare la bozza." : `Nessun template ${channel.toUpperCase()} approvato disponibile. Un amministratore deve creare e approvare una versione in Amministrazione comunicazioni → Template versionati. Poi usa Aggiorna stati.`}</p>
       {template.loading && <p role="status" className="text-sm">Caricamento oggetto e testo del template...</p>}

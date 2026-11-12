@@ -1,0 +1,214 @@
+{
+  "feature": "Communications graphical template builder",
+  "date": "2026-11-12",
+  "status": "CANDIDATE_VERIFIED_NOT_ACTIVATED",
+  "source_commit_before": "25aced24e1b2c879072ecd2863eed256039966b0",
+  "runtime_files": {
+    "backend/app/modules/communications/outbox.py": "eaa2708f3debf16df9f8769287700c2334f80748bf72fd6dc8877cc2d6fb42e9",
+    "backend/app/modules/communications/registry.py": "290e3d818f3c179d5162f077fd1be0d4fb98cf5d11439a64b051837ea02b4a7b",
+    "backend/app/modules/communications/rich_template.py": "f10852713809c925f046086180d46ab9805fb981f6754e84ddde68010b7475eb",
+    "backend/app/modules/communications/schemas.py": "e595ebd788a6b6917e614710be963f8536715955c4fefe008707b3250fc6ec13",
+    "backend/app/modules/communications/template_composition.py": "aad1bb91a53b7e7d44ab66c377accbe0fabd7803ad09e3ba87be9dfe564f6e6e",
+    "backend/app/modules/communications/transports.py": "2d588ba3bdadc1f3d420f1657383dd8821c277064c2256e0ad519e4e8279ceba",
+    "frontend/public/communications/official-logo.png": "87f99882e89c63438ccbfbb04cb112d03ab1a2617a1ad8d78398043349316579",
+    "frontend/src/components/communications/admin-templates.tsx": "e98f8ec486b6d3c4713cabfe69a19d9cef2d6e9ffb39bc996fdd89c0e8a30bb7",
+    "frontend/src/components/communications/composer-form.tsx": "861ad8a10536beb5d8d2679b64332216226555d5ef9ca36919c412bcb3b3259d",
+    "frontend/src/components/communications/message-body-editor.tsx": "0b44c92eded97c8a81712c8a49528066a498464b1a05fa156d9a4dabd1fb1280",
+    "frontend/src/components/communications/template-authoring.tsx": "0456f18832504a208e7eb865daa9b7f31e1a2fedeb78d0644c4c43ef6422f187",
+    "frontend/src/components/communications/template-block-editor.tsx": "56c1cc27f5bb2ece8b2a6c78270c68d0925a7496aad70fe5c1701a72446551c7",
+    "frontend/src/components/communications/template-blocks.ts": "f79fe34fadb9e47fddfafbf89862738b59e72777f9b7045558d50c7e58e83ce5",
+    "frontend/src/components/communications/template-catalog.tsx": "2946e84f5e5ce2134020b12099fc852aa3b2351b6ebc3193f1cdd7379ae4cc4b",
+    "frontend/src/components/communications/template-editor.tsx": "f2fc25d0553044b872497d41123ff59f427b66013cca60a756caa87f376777e9",
+    "frontend/src/components/communications/template-preview.tsx": "a2a18f921e1876835dbd9e7c43459e5ea1d6065d5dd6ab3fb3a584a6eba1e359",
+    "frontend/src/components/communications/use-template-catalog.ts": "d65fea7c8eafb696d0367528aee39cb388a9c0941f5231c0e26174e42d4d440d",
+    "frontend/src/components/communications/workspace-controls.tsx": "46416437f782b61e0cc0c073a1a6a4a2ae27755a3b7570606505e2b0c128d216"
+  },
+  "images": {
+    "backend": {
+      "base_image": "sha256:e2de3b67a69c37b2f6dae82830cda767f0684ac4e524dde652f160347928f109",
+      "image": "sha256:43a4cba1ce367fb4401aaf25cb8106b996a733305e4f85fe8458919faf9177bb",
+      "tag": "gaia-backend:rich-templates-20261112",
+      "changed": {
+        "app/modules/communications/outbox.py": "eaa2708f3debf16df9f8769287700c2334f80748bf72fd6dc8877cc2d6fb42e9",
+        "app/modules/communications/registry.py": "290e3d818f3c179d5162f077fd1be0d4fb98cf5d11439a64b051837ea02b4a7b",
+        "app/modules/communications/rich_template.py": "f10852713809c925f046086180d46ab9805fb981f6754e84ddde68010b7475eb",
+        "app/modules/communications/schemas.py": "e595ebd788a6b6917e614710be963f8536715955c4fefe008707b3250fc6ec13",
+        "app/modules/communications/template_composition.py": "aad1bb91a53b7e7d44ab66c377accbe0fabd7803ad09e3ba87be9dfe564f6e6e",
+        "app/modules/communications/transports.py": "2d588ba3bdadc1f3d420f1657383dd8821c277064c2256e0ad519e4e8279ceba"
+      },
+      "preserved_files_or_routes": 1015
+    },
+    "frontend": {
+      "base_image": "sha256:9bbfbb86a87289f01f5e587bc04111416a7d56d3cf0203e9af131ce0f2598b3d",
+      "image": "sha256:7f5bb180fab92130cae8a6319652dec3266e464b5d9b4298e1bc9d9f1898193d",
+      "tag": "gaia-frontend:rich-templates-20261112",
+      "changed": {
+        "public/communications/official-logo.png": "87f99882e89c63438ccbfbb04cb112d03ab1a2617a1ad8d78398043349316579",
+        "src/components/communications/admin-templates.tsx": "e98f8ec486b6d3c4713cabfe69a19d9cef2d6e9ffb39bc996fdd89c0e8a30bb7",
+        "src/components/communications/composer-form.tsx": "861ad8a10536beb5d8d2679b64332216226555d5ef9ca36919c412bcb3b3259d",
+        "src/components/communications/message-body-editor.tsx": "0b44c92eded97c8a81712c8a49528066a498464b1a05fa156d9a4dabd1fb1280",
+        "src/components/communications/template-authoring.tsx": "0456f18832504a208e7eb865daa9b7f31e1a2fedeb78d0644c4c43ef6422f187",
+        "src/components/communications/template-block-editor.tsx": "56c1cc27f5bb2ece8b2a6c78270c68d0925a7496aad70fe5c1701a72446551c7",
+        "src/components/communications/template-blocks.ts": "f79fe34fadb9e47fddfafbf89862738b59e72777f9b7045558d50c7e58e83ce5",
+        "src/components/communications/template-catalog.tsx": "2946e84f5e5ce2134020b12099fc852aa3b2351b6ebc3193f1cdd7379ae4cc4b",
+        "src/components/communications/template-editor.tsx": "f2fc25d0553044b872497d41123ff59f427b66013cca60a756caa87f376777e9",
+        "src/components/communications/template-preview.tsx": "a2a18f921e1876835dbd9e7c43459e5ea1d6065d5dd6ab3fb3a584a6eba1e359",
+        "src/components/communications/use-template-catalog.ts": "d65fea7c8eafb696d0367528aee39cb388a9c0941f5231c0e26174e42d4d440d",
+        "src/components/communications/workspace-controls.tsx": "46416437f782b61e0cc0c073a1a6a4a2ae27755a3b7570606505e2b0c128d216"
+      },
+      "preserved_files_or_routes": 196
+    },
+    "communications-worker": {
+      "base_image": "sha256:2879ad8d18a94984395b3629c10e2925e7cfb002031f7ada21cc489acfc3e095",
+      "image": "sha256:46c716d2b956b1d9da3321b1ae284ed767234064a0afff0a022aa675149f3749",
+      "tag": "gaia-communications-worker:rich-templates-20261112",
+      "changed": {
+        "app/modules/communications/admin.py": "058c1c732d91feea43a10b04023a8ead642dce29ed779f5cd19871c75472a638",
+        "app/modules/communications/candidate_states.py": "72973ceb4bc7245608ca31e8279b92ce51cfddbb67a1cd11ae7953c7684295e5",
+        "app/modules/communications/outbox.py": "eaa2708f3debf16df9f8769287700c2334f80748bf72fd6dc8877cc2d6fb42e9",
+        "app/modules/communications/registry.py": "290e3d818f3c179d5162f077fd1be0d4fb98cf5d11439a64b051837ea02b4a7b",
+        "app/modules/communications/rich_template.py": "f10852713809c925f046086180d46ab9805fb981f6754e84ddde68010b7475eb",
+        "app/modules/communications/router.py": "cd452cc4dd22ae3686eb7e097496591ac87078d36c1aabbb2f0b3d578e56b9e9",
+        "app/modules/communications/ruolo_source.py": "07d4d57c25e0c8e93c565b5050a33ebc81d93549b3ac4ac1551c55b996026044",
+        "app/modules/communications/schemas.py": "e595ebd788a6b6917e614710be963f8536715955c4fefe008707b3250fc6ec13",
+        "app/modules/communications/source_preview.py": "019ad608f9300d426f6d75c4c8a3c54f5f2a59489273cc4b46a76e4a41cbfffe",
+        "app/modules/communications/source_repair.py": "082e33661699c73b2d85babbc39bf9bf3162305ac6baef33e08d4a96204cf991",
+        "app/modules/communications/source_repair_routes.py": "d77fdf50419401453ac18e53766c8cc6a60e8b3b29b49b19cc97e3f05e564cd3",
+        "app/modules/communications/source_validation.py": "43320c2995e9214694a3114a3b9d1e85b0d5bd3687c9716e8dfeac75fadfd7a6",
+        "app/modules/communications/template_catalog.json": "ae32a6ba0e0068cd5f05dc4633e45baabc77e2f14afa734496bc43374bd5f508",
+        "app/modules/communications/template_catalog.py": "9c54939e83e163cb767c8de3ddb92f0acf2ba02682b9d56487c0f55e012d6c2b",
+        "app/modules/communications/template_composition.py": "aad1bb91a53b7e7d44ab66c377accbe0fabd7803ad09e3ba87be9dfe564f6e6e",
+        "app/modules/communications/transports.py": "2d588ba3bdadc1f3d420f1657383dd8821c277064c2256e0ad519e4e8279ceba",
+        "app/modules/ruolo/services/notice_communication_fields.py": "bfa60ce96f041085246b20b3c30e285a8cabf43cc56dbd63ba4ed61f91899f14"
+      },
+      "preserved_files_or_routes": 991
+    }
+  },
+  "tests": {
+    "backend_local": {
+      "passed": 314,
+      "skipped": 0
+    },
+    "backend_and_worker_images": {
+      "backend": {
+        "image": "sha256:43a4cba1ce367fb4401aaf25cb8106b996a733305e4f85fe8458919faf9177bb",
+        "tests": 314,
+        "coverage": {
+          "covered_lines": 618,
+          "num_statements": 618,
+          "percent_covered": 100.0,
+          "percent_covered_display": "100",
+          "missing_lines": 0,
+          "excluded_lines": 0,
+          "percent_statements_covered": 100.0,
+          "percent_statements_covered_display": "100",
+          "num_branches": 166,
+          "num_partial_branches": 0,
+          "covered_branches": 166,
+          "missing_branches": 0,
+          "percent_branches_covered": 100.0,
+          "percent_branches_covered_display": "100"
+        }
+      },
+      "communications-worker": {
+        "image": "sha256:46c716d2b956b1d9da3321b1ae284ed767234064a0afff0a022aa675149f3749",
+        "tests": 314,
+        "coverage": {
+          "covered_lines": 618,
+          "num_statements": 618,
+          "percent_covered": 100.0,
+          "percent_covered_display": "100",
+          "missing_lines": 0,
+          "excluded_lines": 0,
+          "percent_statements_covered": 100.0,
+          "percent_statements_covered_display": "100",
+          "num_branches": 166,
+          "num_partial_branches": 0,
+          "covered_branches": 166,
+          "missing_branches": 0,
+          "percent_branches_covered": 100.0,
+          "percent_branches_covered_display": "100"
+        }
+      }
+    },
+    "frontend_feature": {
+      "passed": 99,
+      "files": 11,
+      "statements": 231,
+      "branches": 183,
+      "functions": 112,
+      "lines": 160,
+      "coverage_percent": 100
+    },
+    "frontend_regression": {
+      "passed": 5712,
+      "files": 367
+    },
+    "frontend_smoke": 18,
+    "candidate_e2e": {
+      "passed": 14,
+      "failed": 0,
+      "skipped": 0
+    }
+  },
+  "quality": {
+    "backend_style": "PASS: make lint-backend BASE_REF=HEAD (7 files)",
+    "frontend_lint_typecheck_build": "PASS",
+    "complexity_scope": {
+      "base_commit": "686e529ee011487e0764b9f91d023be063dbdf55",
+      "files": [
+        "backend/app/modules/communications/outbox.py",
+        "backend/app/modules/communications/registry.py",
+        "backend/app/modules/communications/rich_template.py",
+        "backend/app/modules/communications/schemas.py",
+        "backend/app/modules/communications/template_composition.py",
+        "backend/app/modules/communications/transports.py",
+        "frontend/src/components/communications/admin-templates.tsx",
+        "frontend/src/components/communications/composer-form.tsx",
+        "frontend/src/components/communications/message-body-editor.tsx",
+        "frontend/src/components/communications/template-authoring.tsx",
+        "frontend/src/components/communications/template-block-editor.tsx",
+        "frontend/src/components/communications/template-blocks.ts",
+        "frontend/src/components/communications/template-catalog.tsx",
+        "frontend/src/components/communications/template-editor.tsx",
+        "frontend/src/components/communications/template-preview.tsx",
+        "frontend/src/components/communications/use-template-catalog.ts",
+        "frontend/src/components/communications/workspace-controls.tsx"
+      ],
+      "comparisons": {
+        "before_feature": {
+          "status": 0,
+          "findings": []
+        },
+        "after_feature": {
+          "status": 0,
+          "findings": []
+        },
+        "snapshot": {
+          "status": 0,
+          "findings": []
+        }
+      }
+    },
+    "global_ratchet": {
+      "status": "FAIL_PREEXISTING",
+      "findings": 20,
+      "domain": "Presenze",
+      "introduced_by_this_change": 0
+    },
+    "baseline_modified": false
+  },
+  "graphify": {
+    "backend": "updated",
+    "frontend": "updated with force pruning",
+    "platform_docs": "chunk 1/1 done; no failed semantic chunks",
+    "ruolo_docs": "chunk 1/1 done; no failed semantic chunks",
+    "artifacts_committed": false
+  },
+  "limitations": [
+    "SMTP/PEC provider delivery not certified by synthetic tests",
+    "Existing Next development PDF renderer issue; production PDF E2E pass",
+    "HTTPS link destinations are fixed; placeholders supported in text only"
+  ],
+  "production": null
+}

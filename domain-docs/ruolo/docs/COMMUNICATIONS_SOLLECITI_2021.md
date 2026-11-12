@@ -34,3 +34,12 @@ e avanzamento in docs/communications/PROGRESS.md. Nessun deployment.
 ## Modelli ufficio — novembre 2026
 
 Il catalogo Communications propone testi PEC/email con importo e termine del PDF 2021, bonifico, rateizzazione e accessi ICATASTO. Codice utenza/PIN provengono esclusivamente dallo snapshot del documento. Nessun recupero automatico dei 726 accessi presenti solo in archivio. Testi semplici modificabili e approvazione della versione distinta da quella del singolo messaggio. [Dettagli](../../../docs/communications/OFFICE_TEMPLATES_2026-11-07.md).
+
+Dal 12 novembre l’amministratore può comporre anche layout a blocchi con logo
+ufficiale, titoli, paragrafi, elenchi, link e pulsanti HTTPS. Le variabili si
+inseriscono nei testi, le destinazioni dei link sono fisse. In composizione
+l’anteprima messaggio e la modifica del layout si aprono su richiesta; il PDF
+dell’avviso resta sotto i campi. Ogni modifica invalida l’approvazione e richiede
+nuova verifica del PDF. Restano bloccanti i dati canonici/accessi mancanti e
+restano esclusi gli avvisi riconciliati con Poste.
+[Contratto e verifiche](../../../docs/communications/RICH_TEMPLATES_2026-11-12.md).
