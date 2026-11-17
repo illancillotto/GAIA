@@ -101,7 +101,7 @@ def _split_top_level(value: str) -> list[str]:
             depth += 1
         elif char == ")":
             depth -= 1
-        elif char == "," and depth == 0:
+        if char == "," and depth == 0:
             parts.append(value[start:index].strip())
             start = index + 1
     tail = value[start:].strip()
