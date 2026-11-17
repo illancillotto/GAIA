@@ -1,7 +1,8 @@
 """Read-only operator view: canonical notice -> reference year -> Poste account.
 
-Generation batches remain immutable history. Cancelled attempts do not assign an
-account; multiple surviving attempts are exposed as conflicts, never hidden.
+Generation batches retain archived documents as history, outside this workspace.
+Cancelled attempts do not assign an account; multiple surviving attempts are
+exposed as conflicts, never hidden.
 """
 
 from collections import Counter
@@ -42,7 +43,11 @@ def _items(db: Session):
         .label("rank"),
     ).subquery()
     return list(
-        db.scalars(select(Item).join(ranked, ranked.c.id == Item.id).where(ranked.c.rank == 1))
+        db.scalars(
+            select(Item)
+            .join(ranked, ranked.c.id == Item.id)
+            .where(ranked.c.rank == 1, Item.status != "archived")
+        )
     )
 
 
