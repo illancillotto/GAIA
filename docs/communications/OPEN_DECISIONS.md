@@ -1,9 +1,9 @@
 # Decisioni esterne e limiti
 
 Modelli ufficio del 7 novembre: contenuti, rateizzazione, IBAN e termine
-confermati dall'operatore. Il 17 novembre l’operatore ha autorizzato l’uso degli accessi univoci in archivio per il solo corpo email/PEC, senza cambiare il PDF: implementazione locale descritta in [ARCHIVE_PORTAL_ACCESS_2026-11-17.md](ARCHIVE_PORTAL_ACCESS_2026-11-17.md). Il conteggio storico di 726 non è un censimento corrente. Confronto completo richiesto dall'utente:
+confermati dall'operatore. Il 17 novembre l’operatore ha autorizzato l’uso degli accessi univoci in archivio per il solo corpo email/PEC, senza cambiare il PDF: implementazione rilasciata sul CED descritta in [ARCHIVE_PORTAL_ACCESS_2026-11-17.md](ARCHIVE_PORTAL_ACCESS_2026-11-17.md). Il conteggio storico di 726 non è un censimento corrente. Confronto completo richiesto dall'utente:
 138 PDF con PIN coincidono con archivio/snapshot, zero discordanti; 1.057 senza
-PIN nel testo (726 utenze univoche, 330 assenti, una multipla). Il recupero viene ora implementato solo per il corpo; nessuna rigenerazione automatica del PDF o distribuzione in questo ciclo. Le 93 numerazioni con versioni miste richiedono
+PIN nel testo (726 utenze univoche, 330 assenti, una multipla). Il recupero è rilasciato sul CED per il solo corpo; nessuna rigenerazione automatica del PDF o abilitazione degli invii. Le 93 numerazioni con versioni miste richiedono
 attenzione allo storico già trasmesso/caricato.
 Audit e stato: [OFFICE_TEMPLATES_2026-11-07.md](OFFICE_TEMPLATES_2026-11-07.md).
 

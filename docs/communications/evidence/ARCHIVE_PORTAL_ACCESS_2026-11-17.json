@@ -1,6 +1,6 @@
 {
   "cycle": "2026-11-17 archive portal access for email/PEC",
-  "status": "verified_release_authorized_preparing",
+  "status": "deployed_verified",
   "base_commit": "8f65d353c7ecbf9d055dcecd564b617c6278cf6e",
   "runtime_test_sha256": {
     "backend/app/modules/ruolo/services/notice_communication_fields.py": "04afc3270cda6d8e90343f879f106799dfe48c8a3d828cf086b87b90e12d1abd",
@@ -229,8 +229,8 @@
   },
   "production_mutations": false,
   "real_sends": false,
-  "deployment": false,
-  "commit": false,
+  "deployment": true,
+  "commit": "b83c4de1f14eedf6e9a216be94eec253789fa015",
   "graphify": {
     "targets": [
       "graphify-ruolo-code",
@@ -297,5 +297,95 @@
     "passed": 29,
     "failed": 0,
     "skipped": 0
+  },
+  "production_data_mutations": false,
+  "release": {
+    "started_at": "2026-11-17T12:15:35.318178+00:00",
+    "activated_at": "2026-11-17T12:16:22.644558+00:00",
+    "images": {
+      "backend": "sha256:a16af100cb26fca9da9350602b6bb43ff0c35c8e4f89746899a663c916ed76ec",
+      "frontend": "sha256:413db2878b9e63d78488396fdd7a3e4dfcd3a5fa68d310c5290c47406a5d69f7",
+      "communications-worker": "sha256:69d298841913998989e73a0508b29c163792f341ce678bd12d3091c807108ae5"
+    },
+    "http": {
+      "/login": 200,
+      "/gaia/communications": 200,
+      "/ruolo/tributi/solleciti": 200,
+      "/ruolo/tributi/solleciti/pec": 200,
+      "/ruolo/tributi/solleciti/email": 200,
+      "/presenze/giornaliere": 200,
+      "/communications/official-logo.png": 200,
+      "/api/health": 200,
+      "/api/communications/admin/templates": 401,
+      "/api/communications/admin/template-catalog": 401
+    },
+    "effective_configuration_preserved": true,
+    "unchanged_other_containers": 34,
+    "schema_unchanged": true,
+    "templates_unchanged": true,
+    "transports_unchanged": true,
+    "build_matches_canary": true,
+    "no_migrations": true,
+    "no_pdf_regeneration": true,
+    "no_real_messages": true,
+    "commit": "b83c4de1f14eedf6e9a216be94eec253789fa015",
+    "branch": "chore/split-changes-20261109",
+    "artifact_directory": "/opt/gaia/releases/archive-portal-access-20261117",
+    "authenticated_probe": {
+      "archive_portal_access": {
+        "supported": true,
+        "variables_available": true,
+        "source_payload_unchanged": true,
+        "source_path_unchanged": true,
+        "pdf_sha256": "4e6786ef509c37632c1d24c6955e374275d6247a74642623359b1408a38fee47",
+        "template_preview": 200,
+        "portal_access_source": "archive",
+        "credentials_match_archive": true,
+        "dispatch_blockers_preserved": true
+      },
+      "conditional_template_supported": true,
+      "rich_template_supported": true,
+      "counts": {
+        "communication_accounts": 2,
+        "communication_templates": 10,
+        "communication_messages": 0,
+        "communication_jobs": 5,
+        "communication_authorizations": 0,
+        "communication_receipts": 0
+      },
+      "template_rows_hash": "a070a71f7ea7a406e3a0e0737fa61ad9",
+      "schema": [
+        "20261106_1000"
+      ],
+      "http_authenticated": {
+        "/admin/templates": 200,
+        "/templates": 200,
+        "/admin/accounts": 200,
+        "/admin/monitor": 200
+      },
+      "monitor": {
+        "paused": true,
+        "transport_enabled": false
+      },
+      "catalog_supported": true,
+      "catalog": {
+        "authenticated": 200,
+        "unauthenticated": 401,
+        "sha256": "35095529c9ae64e5226c3768749b89243ca2cbe28c012d3a48d75c43fdcf7dda",
+        "codes": [
+          "sollecito_2021_ufficio_pec",
+          "sollecito_2021_ufficio_email"
+        ]
+      },
+      "delete_supported": true,
+      "template_preview_supported": true,
+      "portal_snapshot_revision_supported": true,
+      "transaction_read_only": true
+    },
+    "postdeploy_browser_e2e": {
+      "passed": 29,
+      "failed": 0,
+      "skipped": 0
+    }
   }
 }

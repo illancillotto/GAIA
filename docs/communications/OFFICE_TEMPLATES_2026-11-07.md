@@ -1,6 +1,6 @@
 # Modelli PEC/email dall'esempio dell'ufficio — 7 novembre 2026
 
-Aggiornamento successivo, implementato localmente e non ancora distribuito: il recupero dall’archivio univoco per CF valido integra il corpo email/PEC quando manca lo snapshot PDF, lasciando il documento invariato. Le limitazioni al solo snapshot e i risultati di rilascio sotto descrivono il ciclo storico. [Accessi ICATASTO dall’archivio — 17 novembre](ARCHIVE_PORTAL_ACCESS_2026-11-17.md).
+Aggiornamento successivo, rilasciato sul CED il 17 novembre 2026: il recupero dall’archivio univoco per CF valido integra il corpo email/PEC quando manca lo snapshot PDF, lasciando il documento invariato. Le limitazioni al solo snapshot e i risultati di rilascio sotto descrivono il ciclo storico. [Accessi ICATASTO dall’archivio — 17 novembre](ARCHIVE_PORTAL_ACCESS_2026-11-17.md).
 
 Il catalogo testuale descritto qui è compatibile con l’editor grafico del
 12 novembre: può essere convertito in blocchi senza perdere il testo.

@@ -1,6 +1,6 @@
 # Invio PEC/email dei solleciti2021
 
-## Integrazione archivio — 17 novembre 2026, implementata non distribuita
+## Integrazione archivio — 17 novembre 2026, rilasciata sul CED
 
 Email e PEC condividono il recupero degli accessi univoci per CF valido quando lo snapshot PDF è assente/null/vuoto. Il compositore indica la provenienza. Snapshot già presenti non vengono sostituiti; ambiguità o PIN non decifrabili mantengono l’omissione del blocco. Corpo congelato nella bozza, PDF e payload documentale invariati. [Contratto, test e gate](../../../docs/communications/ARCHIVE_PORTAL_ACCESS_2026-11-17.md).
 
@@ -25,19 +25,19 @@ approvato dall'ufficio; email solo cortesia. Nessun reinvio di uncertain.
 
 Documentazione autorevole: docs/communications (audit, API, operazioni,
 collaudo, deployment/rollback). Nessun inventario/collaudo su dati di produzione
-o caselle reali effettuato. Trasporto disabilitato per default.
+o caselle reali effettuato nel ciclo originario. Il controllo in sola lettura del 17 novembre è descritto nel report aggiornato sopra. Trasporto tuttora disabilitato.
 
-## Verifica finale
+## Verifica finale storica — 3 novembre 2026
 
 La prova con get_tributi_avviso reale conferma che il default2021 resta in
 gestione STEP e che un pagamento persistito dopo review blocca l'accodamento.
 La configurazione interna usata nei test è esclusivamente sintetica: nessun
 override tributario reale. Matrice completa in docs/communications/FINAL_REVIEW.md
-e avanzamento in docs/communications/PROGRESS.md. Nessun deployment.
+e avanzamento in docs/communications/PROGRESS.md. Nessun deployment nel ciclo originario; il rilascio CED del 17 novembre è descritto sopra.
 
 ## Modelli ufficio — novembre 2026
 
-Il catalogo Communications propone testi PEC/email con importo e termine del PDF 2021, bonifico, rateizzazione e accessi ICATASTO. Codice utenza/PIN provengono prioritariamente dallo snapshot del documento. Il ciclo successivo del 17 novembre implementa localmente il recupero dall’archivio univoco per CF valido, per il solo messaggio e senza cambiare il PDF; il conteggio 726 appartiene all’audit storico. Testi semplici modificabili e approvazione della versione distinta da quella del singolo messaggio. [Dettagli](../../../docs/communications/OFFICE_TEMPLATES_2026-11-07.md).
+Il catalogo Communications propone testi PEC/email con importo e termine del PDF 2021, bonifico, rateizzazione e accessi ICATASTO. Codice utenza/PIN provengono prioritariamente dallo snapshot del documento. Il ciclo successivo del 17 novembre rilascia sul CED il recupero dall’archivio univoco per CF valido, per il solo messaggio e senza cambiare il PDF; il conteggio 726 appartiene all’audit storico. Testi semplici modificabili e approvazione della versione distinta da quella del singolo messaggio. [Dettagli](../../../docs/communications/OFFICE_TEMPLATES_2026-11-07.md).
 
 Dal 12 novembre l’amministratore può comporre anche layout a blocchi con logo
 ufficiale, titoli, paragrafi, elenchi, link e pulsanti HTTPS. Le variabili si

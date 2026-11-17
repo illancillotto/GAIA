@@ -1,6 +1,6 @@
 # Sicurezza
 
-## Integrazione archivio — implementata localmente, non distribuita
+## Integrazione archivio — rilasciata sul CED il 17 novembre 2026
 
 Il recupero per email/PEC è autorizzato dal ciclo del 17 novembre: nessuna ricerca per nome, email o identificatori fra namespace. Si riusa la validazione del CF e la regola dell’utenza unica. Snapshot presenti ma corrotti/ambigui e accessi archivio non decifrabili restano esclusi. La query non scrive; il payload cifrato del documento e il PDF non sono aggiornati. Il PIN viene decifrato durante la composizione e compare nel corpo privato già previsto, mai nei nuovi metadati di provenienza, eventi o report. Le modifiche successive dell’archivio non sostituiscono il corpo già salvato e revisionato. [Accessi ICATASTO dall’archivio — 17 novembre](ARCHIVE_PORTAL_ACCESS_2026-11-17.md).
 

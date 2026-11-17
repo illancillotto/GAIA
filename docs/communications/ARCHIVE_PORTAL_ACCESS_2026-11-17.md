@@ -1,9 +1,9 @@
 # Accessi ICATASTO dall’archivio nel corpo email/PEC — 17 novembre 2026
 
-Stato: implementazione verificata; **commit, push e deploy autorizzati nel seguito del 17 novembre**, rilascio in preparazione. Nessuna scrittura
-sui dati operativi, rigenerazione PDF, approvazione o spedizione reale.
-Il ciclo è autorizzato per integrare codice utenza/PIN nel messaggio quando il
-PDF definitivo non contiene lo snapshot degli accessi.
+Stato: **rilasciato sul CED il 17/11/2026 alle 13:16:22 CET**. Commit applicativo
+`b83c4de1f14eedf6e9a216be94eec253789fa015`, pushato su `chore/split-changes-20261109`.
+Codice utenza/PIN integrati nel messaggio quando manca lo snapshot documentale.
+PDF e dati operativi invariati; nessun invio reale o abilitazione dei trasporti.
 
 ## Contratto implementato
 
@@ -63,7 +63,7 @@ Nessun login al portale o collaudo SMTP/PEC reale è stato eseguito.
 
 Tutte le prove applicative del perimetro passano sul checkout isolato di HEAD
 iniziale più questa modifica. I 12 file runtime/test coincidono byte per byte
-con quelli del working tree condiviso. Nessuna prova usa credenziali reali.
+con quelli del working tree condiviso. Le suite isolate usano dati e credenziali sintetici.
 
 | Controllo | Esito |
 | --- | --- |
@@ -145,19 +145,21 @@ ordinario del tool; JSON e report sono aggiornati.
 
 ## Stato operativo e limiti
 
-La versione CED continua a usare lo snapshot documentale fino a un rilascio
-separato. L’accesso univoco disponibile in archivio non rimuove eventuali
-prenotazioni o stati di spedizione dell’avviso; la gestione del Registro rimane
-necessaria. I conteggi storici dell’audit del 7 novembre non sono un censimento
-corrente degli accessi o degli avvisi eleggibili.
+La versione CED comprende il recupero degli accessi dall’archivio. Il controllo
+autenticato in sola lettura sull’avviso oggetto della richiesta conferma
+codice/PIN disponibili nel corpo dell’anteprima, provenienza `archive`, PDF
+byte-identico, payload/percorso originali e blocchi di spedizione preservati.
+Non vengono riportate credenziali o dati personali nelle evidenze versionate.
 
-La richiesta iniziale condizionava il commit a tutti i gate verdi: per questo
-la prima chiusura ha lasciato la modifica non committata. Nel seguito del
-17 novembre l’utente ha richiesto commit, push e deploy. La pubblicazione viene
-preparata verificando che i 10 finding preesistenti restino identici e che tutti
-i test applicativi e i controlli della modifica siano superati. Non si dichiara
-verde il gate formale e non si modifica la baseline per assorbire il debito.
-Il rilascio resta mirato ai tre servizi Communications, senza abilitare invii.
+L’accesso univoco non rimuove prenotazioni o stati di spedizione dell’avviso;
+la gestione del Registro rimane necessaria. I conteggi storici del 7 novembre
+non sono un censimento corrente degli accessi o degli avvisi eleggibili.
+
+Resta aperto il debito di qualità preesistente: dieci finding identici alla
+base e baseline non riproducibile. Non sono emersi nuovi finding o peggioramenti;
+il gate formale non viene dichiarato verde e la baseline non è stata aggiornata.
+Il rilascio richiesto nel seguito del 17 novembre è limitato ai tre servizi
+Communications e mantiene i trasporti disabilitati.
 
 ## Verifica delle immagini candidate
 
@@ -167,4 +169,22 @@ e route estranei al perimetro. Backend e worker candidati passano ciascuno
 coverage 100% dei tre file completi (227 statement, 66 branch).
 Il frontend candidato passa tutti i 29 E2E Communications, desktop/mobile.
 Configurazioni effettive e immagini precedenti sono conservate per rollback.
-L’attivazione resta successiva al commit e al push del codice verificato.
+L’attivazione è stata eseguita dopo il commit e il push del codice verificato.
+
+## Verifica del rilascio CED
+
+Attivazione completata il 17/11/2026 alle 13:16:22 CET, dal commit `b83c4de1f14eedf6e9a216be94eec253789fa015`.
+Release remota: `/opt/gaia/releases/archive-portal-access-20261117`.
+Backend, frontend e worker sono healthy sulle immagini identificate
+nell’evidenza JSON. Configurazioni effettive, altri container, schema DB,
+versioni dei template, catalogo e conteggi Communications risultano preservati.
+Il BUILD_ID frontend coincide con quello della candidata collaudata.
+
+I dieci controlli HTTP post-deploy passano: pagine e health 200; endpoint
+amministrativi protetti 401 senza autenticazione. I 29 E2E Communications
+passano anche sulla build servita dal CED (dati e API sintetici intercettati,
+zero failure/skip). La verifica autenticata del caso reale è esclusivamente
+in lettura. Nessun messaggio, job o autorizzazione è stato creato; nessuna
+migrazione, modifica di credenziali, rigenerazione PDF o invio SMTP/PEC reale.
+Monitor ancora `paused=true`, `transport_enabled=false`. Immagini/configurazioni
+precedenti e procedura di rollback restano nella directory privata di release.

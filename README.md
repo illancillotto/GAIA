@@ -1129,7 +1129,7 @@ Nessun deploy eseguito.
 
 ## GAIA Communications
 
-Integrazione locale del 17 novembre: accessi ICATASTO dall’archivio univoco per il solo corpo email/PEC quando manca lo snapshot PDF; documento invariato e corpo salvato nella bozza. [Contratto, verifiche e limiti](docs/communications/ARCHIVE_PORTAL_ACCESS_2026-11-17.md). Nessun deployment in questo ciclo.
+Integrazione rilasciata sul CED il 17 novembre: accessi ICATASTO dall’archivio univoco per il solo corpo email/PEC quando manca lo snapshot PDF; documento invariato e corpo salvato nella bozza. [Contratto, verifiche e limiti](docs/communications/ARCHIVE_PORTAL_ACCESS_2026-11-17.md). Backend, frontend e worker aggiornati; trasporti ancora disabilitati.
 
 Modelli ufficio PEC/email pubblicati il 9 novembre: catalogo modificabile, campi specifici
 del sollecito e verifiche PIN/PDF, senza abilitazione degli invii reali.

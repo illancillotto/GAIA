@@ -1,6 +1,6 @@
 # GAIA Communications — PRD
 
-## Accessi archivio nel corpo — implementazione locale 17 novembre 2026
+## Accessi archivio nel corpo — rilascio CED del 17 novembre 2026
 
 PEC ed email possono integrare codice utenza e PIN dall’archivio univoco per CF valido se lo snapshot PDF manca. Il compositore indica la provenienza; il corpo salvato nella bozza mantiene i dati revisionati. PDF, importi, numero e storico documentale non cambiano. Snapshot presenti restano prioritari, inclusi gli stati invalidi che non consentono recuperi sostitutivi. [Accessi ICATASTO dall’archivio — 17 novembre](ARCHIVE_PORTAL_ACCESS_2026-11-17.md).
 

@@ -1,6 +1,6 @@
 # Architettura
 
-## Accessi per email/PEC — implementazione locale 17 novembre 2026
+## Accessi per email/PEC — rilasciati sul CED il 17 novembre 2026
 
 `notice_communication_fields.template_variables(item, db=...)` conserva la precedenza dello snapshot PDF. Solo se lo snapshot manca, è null o è una lista vuota, usa `with_portal_access` con il CF valido del destinatario: una sola utenza, codice/PIN numerici e PIN decifrabile. Snapshot preesistenti malformati, multipli o corrotti non vengono sostituiti. Anteprima e creazione bozza condividono il resolver; `portal_access_source` indica `document`, `archive` o `unavailable`. La bozza conserva il corpo materializzato; revisione, MIME e worker usano quel corpo senza ricaricare gli accessi. PDF, relativo hash e payload documentale restano invariati. [Accessi ICATASTO dall’archivio — 17 novembre](ARCHIVE_PORTAL_ACCESS_2026-11-17.md).
 
