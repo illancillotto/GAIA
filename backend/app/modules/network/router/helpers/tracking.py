@@ -377,19 +377,7 @@ def _build_tracked_subject_activity_summary(
         )
         total_events += 1
         matched_on, matched_value = match
-        bytes_in = 0
-        bytes_out = 0
-        if subject.entity_type == "device" and subject.value:
-            bytes_in, bytes_out, _ = _extract_event_traffic(event, device_ip=subject.value)
-        else:
-            try:
-                bytes_out = max(int(str(parsed.get("bytes_sent", 0)).strip()), 0)
-            except (TypeError, ValueError):
-                bytes_out = 0
-            try:
-                bytes_in = max(int(str(parsed.get("bytes_received", 0)).strip()), 0)
-            except (TypeError, ValueError):
-                bytes_in = 0
+        bytes_in, bytes_out = _tracked_activity_traffic(subject, event, parsed)
 
         total_bytes_in += bytes_in
         total_bytes_out += bytes_out
@@ -459,6 +447,26 @@ def _build_tracked_subject_activity_summary(
         top_detection_tags=[tag for tag, _ in detection_counter.most_common(4)],
         recent_events=matched_events,
     )
+
+
+def _tracked_activity_traffic(
+    subject: NetworkTrackedSubject, event: NetworkFirewallEvent, parsed: dict[str, Any],
+) -> tuple[int, int]:
+    bytes_in = 0
+    bytes_out = 0
+    if subject.entity_type == "device" and subject.value:
+        bytes_in, bytes_out, _ = _extract_event_traffic(event, device_ip=subject.value)
+    else:
+        try:
+            bytes_out = max(int(str(parsed.get("bytes_sent", 0)).strip()), 0)
+        except (TypeError, ValueError):
+            bytes_out = 0
+        try:
+            bytes_in = max(int(str(parsed.get("bytes_received", 0)).strip()), 0)
+        except (TypeError, ValueError):
+            bytes_in = 0
+
+    return bytes_in, bytes_out
 
 
 def _serialize_tracked_subject(

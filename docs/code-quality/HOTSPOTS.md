@@ -578,6 +578,16 @@ Audit baseline globale e ordine delle tranche:
 | reorganized | `frontend/src/lib/api.ts` | facciata su 15 moduli; cognitive sum/max `545/54`, cyclomatic sum/max `851/30` | `REORGANIZED_AND_CHARACTERIZED`; 450 export preservati, coverage completa, warning file-level residuo in `network.ts` |
 | reorganized | `backend/app/modules/utenze/router.py` | facade package + route modules; cognitive sum/max `409/39`, cyclomatic sum/max `403/28` | `REORGANIZED_AND_CHARACTERIZED`; OpenAPI identica, coverage 100%, warning LOC residuo in `routes/support.py` |
 
+## 2026-11-17 — Contatori traffico attivita soggetti Network
+
+- `_build_tracked_subject_activity_summary` in `network/router/helpers/tracking.py`:
+  `reduced`, cognitive/cyclomatic/LOC/nesting68/32/133/4→48/25/121/3.
+  Helper traffico14/8/17/3 sotto soglia; file cognitiva174→168, decisioni115
+  invariate. Error3 invariati, Warning1→0. 248test prima/dopo, full-file100%,
+  8000scenari equivalenti e cinque mutanti respinti. Restano tre Error nel
+  summary; dettaglio in `NETWORK_ACTIVITY_TRAFFIC_2026-11-17.md`. Gate globale
+  resta ambiguo su Tributi, non assorbito tramite baseline o matcher.
+
 ## 2026-11-17 — Proiezione elementi timeline ARP Network
 
 - `_build_arp_timeline` in `network/router/helpers/tracking.py`: `closed`,

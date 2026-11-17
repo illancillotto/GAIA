@@ -1,5 +1,45 @@
 # Progress - GAIA Code Complexity Program
 
+## 2026-11-17 — Contatori traffico attivita soggetti Network
+
+- Obiettivo generale attivo: proseguire le ondate di riduzione. Turno precedente
+  completato con progresso verificato; singolo hotspot sul riepilogo attivita
+  in `network/router/helpers/tracking.py`, HEAD ce9968b6. Runtime precedente
+  verificato per hash; modifiche Ruolo/Elaborazioni concorrenti preservate.
+- Prima summary cognitive/cyclomatic/LOC/nesting68/32/133/4; file cognitiva174,
+  tre Error e un Warning. Separare solo conversione dei contatori traffico.
+  Preservare percorso device, letture ripetute subject.value, ordine sent poi
+  received, str/strip/int/clamp, catch esclusivo TypeError/ValueError, query,
+  matching, detection, aggregati, limite dettagli ed errori.
+- Test prima del runtime e artefatti isolati in
+  `/tmp/gaia-network-activity-traffic-refactor-20261117/`.
+- `IMPROVED`: summary cognitive/cyclomatic/LOC/nesting68/32/133/4→48/25/121/3;
+  helper traffico14/8/17/3 sotto tutte le soglie. File cognitiva174→168,
+  ciclomatica136→137, callable21→22, decisioni115 invariate, LOC444→449.
+  Error3 invariati, Warning1→0; nessuna violation trasferita. Restano tre
+  Error nel summary, non dichiarato sotto soglia.
+- 248test PASS prima/dopo,23casi nuovi; zero skip/failure/error nei due XML.
+  Full-file statement/branch100% prima242/242 e96/96, dopo245/245 e96/96,
+  zero esclusioni/missing/partial. Nessun test esistente modificato o indebolito.
+- Differenziale8000scenari equivalente per payload completo, SQL, errori,
+  clock, trace ordinato di subject/event/get/str e chiamate detection/traffic/
+  label. Venti altri AST e ventuno firme preservati. Cinque mutanti respinti:
+  clamp omesso, str saltato, guardia device falsey rimossa, catch ampliato,
+  ordine contatori scambiato. Candidato applicato identico al freeze verificato.
+- Ratchet mirato origin/main PASS prima/dopo, merge-base686e529e. Globale
+  conserva exit2 per l'ambiguita Tributi useEffect[0]<callback>,10candidati.
+  Baseline/soglie/scope/eccezioni immutati, nessuna sync/verify o modifica matcher.
+- Report completi1961file: callable22625→22626, Error1900 invariati,
+  Warning2953→2952; varia solo tracking.py, nessun parse/exception error.
+  Dalla ripresa diciannove slice: -18Error/-21Warning/-126cognitiva aggregata.
+- Lint-backend243file, Ruff runtime/test, format nuovo test e diff-check PASS.
+  Graphify Network Make475nodi/1194archi; platform docs e verifica chunk nel
+  checkpoint finale. Nessuna failure nuova; warning JWT API preesistenti.
+  Rapporto `NETWORK_ACTIVITY_TRAFFIC_2026-11-17.md`.
+- Hash delle slice precedenti, baseline e report condivisi preservati.
+  Nessun commit/push/deploy o secondo hotspot in questo turno; obiettivo
+  generale attivo, debito residuo del summary candidato per review successiva.
+
 ## 2026-11-17 — Proiezione elementi timeline ARP Network
 
 - Turno precedente concluso con progresso verificato; singolo follow-up di
