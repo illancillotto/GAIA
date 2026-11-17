@@ -31,7 +31,10 @@ e acquisizione ricevute restano invariati.
 
 ## Rilascio
 
-Candidata pronta, attivazione ancora da registrare. Un solo file runtime
+Pubblicato sul CED il **17 novembre 2026 alle 09:36:22 CET**, commit applicativo
+`ac288c6ba3e763fbb632adef079dc0d694e97998`, branch `chore/split-changes-20261109`.
+Immagine `sha256:4687a014294aabefb8ed4446c9093741b17ddd4bb8c4830176f95be3d1cd0b94`.
+Un solo file runtime
 applicato alla sorgente del frontend effettivamente online (rilascio navigazione),
 con tutte le 196 route preservate. Nessun file concorrente del working tree
 incluso nell'immagine. Release privata CED:
@@ -44,3 +47,16 @@ estranei, con rollback automatico in caso di fallimento. Nessuna migrazione,
 modifica backend o riattivazione trasporti.
 
 [Evidenze verificabili](evidence/ACCOUNT_PANEL_2026-11-17.json).
+
+## Verifica dopo il deploy
+
+Tutti i **25 E2E ripetuti sul live passano**, zero failure/skip/flaky.
+Frontend, backend e worker Communications healthy. Build pubblicata identica
+alla candidata, configurazione effettiva preservata e 36 altri container
+invariati. Login, amministrazione, solleciti PEC/email e health API rispondono
+200; API amministrativa anonima ancora 401. Nessun invio o scrittura di
+configurazione reale: i test browser usano esclusivamente API sintetiche.
+
+Restano separati il debito storico di complessità e gli otto avvisi dipendenze
+preesistenti segnalati da GitHub (sette high, uno moderate). Nessuna dipendenza
+o baseline è stata modificata da questa change.
