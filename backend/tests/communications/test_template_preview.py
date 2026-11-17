@@ -54,6 +54,7 @@ def test_preview_renders_canonical_variables_without_writes_or_accounts(api, cha
             "source_sha256": sha256(pdf()),
             "missing_variables": [],
             "send_blockers": [],
+            "portal_access_source": "unavailable",
         }
     statements = []
 

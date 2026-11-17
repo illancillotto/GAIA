@@ -1,5 +1,7 @@
 # Template grafici Communications — 12 novembre 2026
 
+Aggiornamento successivo, implementato localmente e non ancora distribuito: il recupero dall’archivio univoco per CF valido integra il corpo email/PEC quando manca lo snapshot PDF, lasciando il documento invariato. Le limitazioni al solo snapshot e i risultati di rilascio sotto descrivono il ciclo storico. [Accessi ICATASTO dall’archivio — 17 novembre](ARCHIVE_PORTAL_ACCESS_2026-11-17.md).
+
 Implementazione completata; rilascio CED attivo dal 12 novembre 2026 alle
 **16:02:12 CET**. Commit applicativo **`75d2544d`**, pubblicato su
 `chore/split-changes-20261109`.

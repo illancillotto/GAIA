@@ -1,5 +1,7 @@
 # Verifica finale del ciclo Communications — 2026-11-03
 
+Verifica del ciclo successivo sull’integrazione degli accessi archivio: [Accessi ICATASTO dall’archivio — 17 novembre](ARCHIVE_PORTAL_ACCESS_2026-11-17.md). I risultati sotto appartengono alla chiusura originaria e non certificano il nuovo ciclo.
+
 Verifica corrente dei template grafici: [Template grafici e verifica finale](RICH_TEMPLATES_2026-11-12.md). Le conclusioni successive
 sono quelle del ciclo storico indicato nel titolo, non lo stato aggiornato
 editor/worker. Il gate globale e quello del perimetro sono riportati separatamente.

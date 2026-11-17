@@ -109,3 +109,17 @@ it("shows incomplete template text and independent dispatch blockers without all
   expect(result.current.blocked).toContain("riconciliato con Poste");
   expect(result.current.ready).toBe(false);
 });
+
+it("tracks archive provenance and clears it when the operator chooses manual text or another source", async () => {
+  api.mockResolvedValue({ ...preview, portal_access_source: "archive" });
+  const { result, rerender } = renderHook(useComposition, { initialProps: initial });
+  await waitFor(() => expect(result.current.ready).toBe(true));
+  expect(result.current.portalSource).toBe("archive");
+  act(() => result.current.selectTemplate(""));
+  expect(result.current.portalSource).toBe("");
+  api.mockResolvedValue({ ...preview, portal_access_source: "document" });
+  act(() => result.current.selectTemplate("template"));
+  rerender({ ...initial, sourceId: "other" });
+  await waitFor(() => expect(result.current.ready).toBe(true));
+  expect(result.current.portalSource).toBe("document");
+});

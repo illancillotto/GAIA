@@ -913,3 +913,7 @@ testi, elenchi e link HTTPS fissi. API e worker condividono validazione e
 rendering; il trasporto produce alternative testo/HTML e logo CID, mantenendo
 il PDF separato. Nessuna migrazione: il formato resta nel campo body esistente.
 [Contratto, test e rilascio](communications/RICH_TEMPLATES_2026-11-12.md).
+
+## Accessi ICATASTO nel messaggio — 17 novembre 2026
+
+Implementazione locale: resolver Ruolo condiviso fra anteprima e bozza email/PEC; precedenza snapshot PDF, recupero da archivio univoco per CF valido solo se manca. Provenienza visibile, PDF/payload invariati, corpo persistito nella bozza senza aggiornamenti automatici successivi. [Contratto, matrice test e limiti dei gate](communications/ARCHIVE_PORTAL_ACCESS_2026-11-17.md). Nessun deployment o invio reale nel ciclo.

@@ -1,4 +1,4 @@
-"""Communication fields from the saved notice, using the same rules as its PDF."""
+"""Saved notice fields and unique archive access for the communication body only."""
 
 from decimal import Decimal, InvalidOperation
 
@@ -9,6 +9,7 @@ from app.modules.ruolo.services.notice_payment_deadline import front_payment_due
 from app.modules.ruolo.services.taxpayer_portal_access import (
     PORTAL_ACCESS_KEY,
     printable_portal_access,
+    with_portal_access,
 )
 from app.modules.ruolo.services.tributi_reminder_service import (
     REGISTERED_MAIL_NOTIFICATION_AMOUNT,
@@ -18,7 +19,7 @@ from app.modules.ruolo.services.tributi_reminder_service import (
 from app.services.elaborazioni_credentials import ElaborazioneCredentialConfigurationError
 
 
-def template_variables(item) -> dict[str, str]:
+def template_variables(item, *, db=None) -> dict[str, str]:
     payload = item.payload_json or {}
     variables = {
         "contribuente_nome": item.display_name or item.codice_fiscale,
@@ -32,10 +33,31 @@ def template_variables(item) -> dict[str, str]:
         "termine_pagamento": front_payment_due_phrase(
             payload, item.years_json, _gaia_bollettino_due_date
         ),
-        **_portal_fields(payload),
+        **_portal_fields(_communication_payload(item, db)),
         **_document_amount(payload),
     }
     return variables
+
+
+def _communication_payload(item, db):
+    payload = item.payload_json or {}
+    # An existing malformed, ambiguous or corrupt snapshot must never be replaced silently.
+    if db is None or payload.get(PORTAL_ACCESS_KEY) not in (None, []):
+        return payload
+    try:
+        candidate = with_portal_access(db, [{"codice_fiscale": item.codice_fiscale}])[0]
+    except UnicodeError:
+        # Corrupt archive ciphertext must omit the optional section, not fail the preview.
+        return payload
+    return {**payload, PORTAL_ACCESS_KEY: candidate[PORTAL_ACCESS_KEY]}
+
+
+def portal_access_source(item, variables) -> str:
+    if not {"codice_utenza", "pin_utenza"} <= variables.keys():
+        return "unavailable"
+    if (item.payload_json or {}).get(PORTAL_ACCESS_KEY):
+        return "document"
+    return "archive"
 
 
 def _document_amount(payload) -> dict[str, str]:
@@ -62,7 +84,7 @@ def _valid_saved_amount(value) -> bool:
 
 
 def _portal_fields(payload) -> dict[str, str]:
-    # Use the encrypted snapshot already bound to this PDF, never a fresh CF lookup.
+    # Validate the selected encrypted snapshot identically for document and archive access.
     entries = payload.get(PORTAL_ACCESS_KEY) or []
     if not isinstance(entries, list) or len(entries) != 1 or not isinstance(entries[0], dict):
         return {}

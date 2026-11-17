@@ -1,5 +1,9 @@
 # Avanzamento Communications
 
+## 2026-11-17 — Credenziali archivio per il messaggio
+
+Implementato localmente il recupero dell’utenza univoca per CF valido quando manca lo snapshot del documento, con precedenza dei dati documentali, provenienza visibile e corpo persistito immutabile rispetto ad aggiornamenti dell’archivio. PDF e payload originali preservati. [Accessi ICATASTO dall’archivio — 17 novembre](ARCHIVE_PORTAL_ACCESS_2026-11-17.md) contiene matrice comportamenti/test, coverage, metriche e limiti dei gate. Nessun deployment CED o invio reale.
+
 ## 2026-11-17 — Correzione navigazione amministrazione
 
 Associazione esplicita di `/gaia/communications` a Ruolo nella shell.

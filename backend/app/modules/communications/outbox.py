@@ -32,7 +32,7 @@ def _composition(db, payload, source):
     subject, body = payload.subject, payload.body
     if payload.template_id:
         template = registry.approved_template(db, payload.template_id, payload.channel)
-        variables = ruolo_source.template_variables(source)
+        variables = ruolo_source.template_variables(source, db=db)
         rendered_subject = render_template(template.subject, variables)
         rendered_body = render_template(template.body, variables)
         subject = subject or rendered_subject

@@ -6,7 +6,7 @@ import type { Channel, Template } from "@/types/communications";
 import type { useCommunicationsWorkspace } from "./use-workspace";
 
 type Workspace = ReturnType<typeof useCommunicationsWorkspace>;
-type Preview = { subject: string; body: string; source_sha256: string; missing_variables?: string[]; send_blockers?: string[] };
+type Preview = { subject: string; body: string; source_sha256: string; missing_variables?: string[]; send_blockers?: string[]; portal_access_source?: string };
 type Props = {
   token: string; sourceId: string; channel: Channel; templates: Template[];
   compose: Workspace["compose"]; setCompose: Workspace["setCompose"];
@@ -18,24 +18,24 @@ export function useTemplateComposition({ token, sourceId, channel, templates, co
   const templateId = choice ?? (available.length === 1 ? available[0].id : "");
   const key = `${sourceId}:${templateId}`;
   const [revision, setRevision] = useState(0);
-  const [status, setStatus] = useState({ key: "", loading: false, error: "", sha: "", incomplete: "", blocked: "" });
+  const [status, setStatus] = useState({ key: "", loading: false, error: "", sha: "", incomplete: "", blocked: "", portalSource: "" });
 
   useEffect(() => {
     setCompose((current) => ({ ...current, template_id: templateId }));
-    if (![sourceId, templateId].every(Boolean)) { setStatus({ key, loading: false, error: "", sha: "", incomplete: "", blocked: "" }); return; }
+    if (![sourceId, templateId].every(Boolean)) { setStatus({ key, loading: false, error: "", sha: "", incomplete: "", blocked: "", portalSource: "" }); return; }
     let disposed = false;
-    setStatus({ key, loading: true, error: "", sha: "", incomplete: "", blocked: "" });
+    setStatus({ key, loading: true, error: "", sha: "", incomplete: "", blocked: "", portalSource: "" });
     setCompose((current) => ({ ...current, subject: "", body: "" }));
     const query = new URLSearchParams({ template_id: templateId, channel });
     communications<Preview>(token, `/ruolo/candidates/${sourceId}/template-preview?${query}`)
       .then((preview) => {
         if (disposed) return;
         setCompose((current) => ({ ...current, subject: preview.subject, body: preview.body }));
-        const details = Object.assign({ missing_variables: [], send_blockers: [] }, preview);
-        setStatus({ key, loading: false, error: "", sha: preview.source_sha256, incomplete: details.missing_variables.join(", "), blocked: details.send_blockers.join(" · ") });
+        const details = Object.assign({ missing_variables: [], send_blockers: [], portal_access_source: "" }, preview);
+        setStatus({ key, loading: false, error: "", sha: preview.source_sha256, incomplete: details.missing_variables.join(", "), blocked: details.send_blockers.join(" · "), portalSource: details.portal_access_source });
       })
       .catch((error: unknown) => {
-        if (!disposed) setStatus({ key, loading: false, error: error instanceof Error ? error.message : "Testo del template non disponibile", sha: "", incomplete: "", blocked: "" });
+        if (!disposed) setStatus({ key, loading: false, error: error instanceof Error ? error.message : "Testo del template non disponibile", sha: "", incomplete: "", blocked: "", portalSource: "" });
       });
     return () => { disposed = true; };
   }, [token, sourceId, channel, templateId, key, revision, setCompose]);
@@ -48,5 +48,5 @@ export function useTemplateComposition({ token, sourceId, channel, templates, co
   const error = pdfChanged ? "Il PDF è cambiato durante la composizione: riapri l’avviso e ricontrolla il testo." : status.error;
   const loading = Boolean(templateId) && (status.key !== key || status.loading);
   const ready = !templateId || [status.key === key, !loading, !error, !status.incomplete, !status.blocked, status.sha === compose.expected_source_sha256].every(Boolean);
-  return { available, templateId, selectTemplate, loading, error, incomplete: status.incomplete, blocked: status.blocked, ready, retry: () => setRevision((value) => value + 1) };
+  return { available, templateId, selectTemplate, loading, error, incomplete: status.incomplete, blocked: status.blocked, portalSource: status.portalSource, ready, retry: () => setRevision((value) => value + 1) };
 }

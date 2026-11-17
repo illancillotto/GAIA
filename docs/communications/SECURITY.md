@@ -1,9 +1,13 @@
 # Sicurezza
 
+## Integrazione archivio — implementata localmente, non distribuita
+
+Il recupero per email/PEC è autorizzato dal ciclo del 17 novembre: nessuna ricerca per nome, email o identificatori fra namespace. Si riusa la validazione del CF e la regola dell’utenza unica. Snapshot presenti ma corrotti/ambigui e accessi archivio non decifrabili restano esclusi. La query non scrive; il payload cifrato del documento e il PDF non sono aggiornati. Il PIN viene decifrato durante la composizione e compare nel corpo privato già previsto, mai nei nuovi metadati di provenienza, eventi o report. Le modifiche successive dell’archivio non sostituiscono il corpo già salvato e revisionato. [Accessi ICATASTO dall’archivio — 17 novembre](ARCHIVE_PORTAL_ACCESS_2026-11-17.md).
+
 ## Condizioni dei blocchi — 17 novembre 2026
 
 ICATASTO è un valore enumerato, non un'espressione eseguibile. Usa i dati già
-validati dal resolver dello snapshot PDF, senza lookup o fallback. Se manca
+validati dal resolver: snapshot PDF prioritario; se assente, accesso univoco dell’archivio per CF valido del destinatario. Se manca
 un accesso, il blocco è omesso anche dal testo semplice e gli eventuali logo
 e link condizionali non sono incorporati. I segnaposto di anteprima non
 soddisfano la condizione. Struttura e URL restano validati anche nei blocchi
@@ -26,7 +30,7 @@ al corpo. Limiti MIME finali comprendono HTML, logo e codifica. Prove: [Template
 
 
 I modelli dell'ufficio possono includere il PIN del portale contribuenti,
-come richiesto dall'operatore. Deriva dallo snapshot cifrato univoco del PDF;
+come richiesto dall'operatore. Deriva dallo snapshot cifrato univoco del PDF oppure dall’archivio canonico se quello snapshot manca;
 errori di decifratura o ambiguità non espongono valori negli errori/eventi.
 Il corpo risolto è conservato in chiaro nell'archivio privato come PDF/MIME:
 è un artefatto sensibile, non un secret provider né un campo cifrato separato.

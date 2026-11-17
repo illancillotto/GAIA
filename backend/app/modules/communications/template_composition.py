@@ -2,6 +2,8 @@
 
 import re
 
+from app.modules.ruolo.services.notice_communication_fields import portal_access_source
+
 from . import registry, ruolo_source
 from .policy import Conflict, pdf_pages, sha256
 from .rich_template import render_template, select_body
@@ -15,7 +17,7 @@ def preview_composition(db, identity, template_id, channel):
     content = ruolo_source.read_pdf(source)
     pdf_pages(content)
     digest = sha256(content)
-    variables = ruolo_source.template_variables(source)
+    variables = ruolo_source.template_variables(source, db=db)
     body = select_body(template.body, variables)
     required = set(re.findall(r"\{\{\s*([a-z_]+)\s*\}\}", template.subject + body))
     missing = sorted(required - variables.keys())
@@ -26,6 +28,7 @@ def preview_composition(db, identity, template_id, channel):
         "source_sha256": digest,
         "missing_variables": missing,
         "send_blockers": send_blockers(db, identity, digest),
+        "portal_access_source": portal_access_source(source, variables),
     }
 
 

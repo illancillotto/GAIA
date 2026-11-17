@@ -1,5 +1,11 @@
 # Manuale operativo
 
+## Accessi dall’archivio per PEC ed email — nuova implementazione locale
+
+Se lo snapshot del documento non contiene accessi, il compositore cerca automaticamente l’utenza univoca dell’archivio per il CF valido del contribuente. Con codice/PIN validi il blocco ICATASTO viene compilato e una nota indica la provenienza dall’archivio e il PDF invariato. Controllare il testo prima della bozza e seguire la revisione individuale ordinaria. La bozza conserva i valori osservati; un aggiornamento successivo dell’archivio non modifica il messaggio salvato.
+
+Se manca l’utenza, esistono più utenze o il PIN non è utilizzabile, il blocco condizionale resta omesso; variabili obbligatorie fuori dal blocco continuano a impedire la bozza. Uno snapshot documentale presente ma invalido non attiva il recupero. Non occorre usare **Crea nuova revisione PDF con credenziali** per integrare soltanto il messaggio. Pagamenti, prenotazioni e notifiche mantengono i propri blocchi. [Accessi ICATASTO dall’archivio — 17 novembre](ARCHIVE_PORTAL_ACCESS_2026-11-17.md). Nessun rilascio CED o invio reale in questo ciclo.
+
 ## Navigazione amministrazione — 17 novembre 2026
 
 Da **Invio solleciti → PEC/Email**, il collegamento **Amministrazione

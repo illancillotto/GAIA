@@ -31,6 +31,7 @@ from app.modules.ruolo.notice_register_models import (
     NoticePosition,
     NoticeRecovery,
 )
+from app.modules.ruolo.portal_access_models import RuoloTaxpayerPortalAccess
 from app.modules.utenze.contact_models import AnagraficaElectronicContact
 from app.modules.utenze.models import (
     AnagraficaAuditLog,
@@ -60,6 +61,7 @@ def metadata():
         AnagraficaAuditLog,
         RuoloTributiAvvisoStatus,
         RuoloTributiNote,
+        RuoloTaxpayerPortalAccess,
     ):
         model.__table__.to_metadata(value)
     for table in Base.metadata.tables.values():

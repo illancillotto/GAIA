@@ -1,5 +1,12 @@
 # Piano di implementazione e stato
 
+## 2026-11-17 — Accessi archivio nel corpo email/PEC
+
+- [x] Resolver condiviso fra anteprima e bozza, precedenza documentale e recupero univoco per CF valido.
+- [x] Provenienza visibile, PDF/payload immutati e corpo congelato nella bozza.
+- [x] Test pertinenti per PEC/email, blocchi/testo semplice, esclusioni e trasporto simulato.
+- Stato dei gate e limiti: [Accessi ICATASTO dall’archivio — 17 novembre](ARCHIVE_PORTAL_ACCESS_2026-11-17.md). Nessun deployment o invio reale.
+
 ## 2026-11-17 — ICATASTO condizionale
 
 - [x] Condizione tipizzata, selezione prima dei placeholder, snapshot materializzato.

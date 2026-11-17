@@ -19,6 +19,25 @@ beforeEach(() => {
   mocks.api.mockImplementation((_token, path) => Promise.resolve(path.includes("candidates?") ? { items: [candidate], total: 26 } : path === "/accounts" ? [account, { ...account, channel: "email", id: "ordinary" }] : path === "/templates" ? [template, { ...template, id: "email-template", channel: "email" }] : path.includes("template-preview?") ? templatePreview : message));
 });
 afterEach(cleanup);
+
+it.each(["pec", "email"] as const)("explains archive access in the %s message and keeps the existing PDF preview", async (channel) => {
+  const body = "Utenza 0001234 PIN: 0007654";
+  mocks.api.mockImplementation((_token, path) => Promise.resolve(
+    path.includes("candidates?") ? { items: [candidate], total: 1 }
+      : path === "/accounts" ? [{ ...account, channel }]
+      : path === "/templates" ? [{ ...template, channel }]
+      : path.includes("template-preview?") ? { ...templatePreview, body, portal_access_source: "archive" }
+      : message
+  ));
+  render(<CommunicationsAccess channel={channel} />);
+  fireEvent.click(await screen.findByRole("row", { name: "Apri avviso 1/2021" }));
+  expect(await screen.findByText(/Codice utenza e PIN ICATASTO recuperati dall’archivio GAIA/)).toHaveTextContent("il PDF allegato resta invariato");
+  expect(screen.getByLabelText("Testo")).toHaveValue(body);
+  expect(screen.getByText("Anteprima immediata")).toBeVisible();
+  fireEvent.click(screen.getByText("Crea bozza e snapshot PDF"));
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("synthetic", "/messages", expect.objectContaining({ body, expected_source_sha256: "a".repeat(64) })));
+  expect(mocks.api.mock.calls.some(([, path]) => path.includes("complete-portal-snapshot"))).toBe(false);
+});
 it.each(["pec", "email"] as const)("offers only approved %s templates and preserves the selected template in the draft", async (channel) => {
   const available = { ...template, id: "approved", channel };
   mocks.api.mockImplementation((_token, path) => Promise.resolve(path.includes("candidates?") ? { items: [candidate], total: 1 } : path === "/accounts" ? [account] : path === "/templates" ? [available, { ...available, id: "draft", name: "Non approvato", status: "draft" }, { ...available, id: "other", name: "Altro canale", channel: channel === "pec" ? "email" : "pec" }] : path.includes("template-preview?") ? templatePreview : message));

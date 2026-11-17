@@ -1,0 +1,301 @@
+{
+  "cycle": "2026-11-17 archive portal access for email/PEC",
+  "status": "verified_release_authorized_preparing",
+  "base_commit": "8f65d353c7ecbf9d055dcecd564b617c6278cf6e",
+  "runtime_test_sha256": {
+    "backend/app/modules/ruolo/services/notice_communication_fields.py": "04afc3270cda6d8e90343f879f106799dfe48c8a3d828cf086b87b90e12d1abd",
+    "backend/app/modules/communications/template_composition.py": "c62c24bafa565cf45dfa82819508f980950206fde036aa07cf9d317878fb2ff9",
+    "backend/app/modules/communications/outbox.py": "4c776228d49b6a064703f1f7072bd63f9ca4e84ea6cffb24b9ef3dbf262f4e94",
+    "frontend/src/components/communications/use-template-composition.ts": "c2a1626e58ac1ba472041bf95f02f4d53270b509843bd7611a9e1bda197776eb",
+    "frontend/src/components/communications/workspace-controls.tsx": "a8c3cffc643ce19e35c942194f8b722191edd299b6551e0036e2de9c1b93c53a",
+    "frontend/src/components/communications/portal-access-note.tsx": "32900f9fa5940de13f0aa7a7cae6d8ac014a4a2c0798a7ce788b8f5ea8a6b3bf",
+    "backend/tests/communications/test_archive_portal_access.py": "e7cb3e510ecaf0dfdbde0d8b6aa13c3f1d1812dfa5ff2bfc049fe9d06bf2f9c2",
+    "backend/tests/communications/conftest.py": "ee2acd1cf46aea42e0e012f11c3122238ce61ad892fca2ade1adc8ca7b49e0c9",
+    "backend/tests/communications/test_template_preview.py": "faffdd8541cc0f4ca010bb872feb9c566d3e03d13e95dc238ea6109c4fffa15b",
+    "frontend/tests/unit/communications/template-composition.test.tsx": "60554004cac50e74b446cd1d79ec257790d9d4675fb82944022ed7a43120ae84",
+    "frontend/tests/unit/communications/workspace.test.tsx": "dbf1ca9892d02efbe6cc87e962e1bedb8364d3dce8ebfe7f1df20f9105456dba",
+    "frontend/tests/e2e/communications-archive-access.spec.ts": "1044c6599b7d1fd252cb47011e7fb97e77d7b088517d2b71fb333cf01269cbc6"
+  },
+  "backend_tests": {
+    "tests": 397,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "backend_coverage": {
+    "covered_lines": 227,
+    "num_statements": 227,
+    "percent_covered": 100.0,
+    "percent_covered_display": "100",
+    "missing_lines": 0,
+    "excluded_lines": 0,
+    "percent_statements_covered": 100.0,
+    "percent_statements_covered_display": "100",
+    "num_branches": 66,
+    "num_partial_branches": 0,
+    "covered_branches": 66,
+    "missing_branches": 0,
+    "percent_branches_covered": 100.0,
+    "percent_branches_covered_display": "100"
+  },
+  "frontend_unit": {
+    "tests": 112,
+    "statements": 108,
+    "branches": 78,
+    "functions": 52,
+    "lines": 67,
+    "coverage_percent": 100
+  },
+  "frontend_regression": {
+    "tests": 5740,
+    "files": 370
+  },
+  "browser_e2e": {
+    "tests": 29,
+    "failures": 0,
+    "skipped": 0,
+    "new_archive_tests": 4
+  },
+  "tooling_tests": 270,
+  "smoke_tests": 18,
+  "lint_frontend_legacy_warnings": 35,
+  "ratchet": {
+    "base_ref": "origin/main",
+    "merge_base": "686e529ee011487e0764b9f91d023be063dbdf55",
+    "exit_code": 1,
+    "findings": 10,
+    "findings_identical_to_clean_initial_HEAD": true,
+    "new_findings": 0,
+    "baseline_changed": false
+  },
+  "baseline_verify": {
+    "completed": true,
+    "baseline_reproducible_ignoring_timestamp_commit": false,
+    "make_exit_code": 2,
+    "cli_exit_code": 1,
+    "baseline_synchronized": false,
+    "first_attempt_exit_code": 143
+  },
+  "runtime_metrics_before": {
+    "backend/app/modules/communications/outbox.py": {
+      "callables": 12,
+      "cognitive_max": 13,
+      "cognitive_sum": 66,
+      "complexity_density": 0.476534,
+      "cyclomatic_max": 11,
+      "cyclomatic_sum": 66,
+      "dependency_count": 8,
+      "imports": 8,
+      "loc": 277,
+      "violations": []
+    },
+    "backend/app/modules/communications/template_composition.py": {
+      "callables": 2,
+      "cognitive_max": 5,
+      "cognitive_sum": 10,
+      "complexity_density": 0.575758,
+      "cyclomatic_max": 5,
+      "cyclomatic_sum": 9,
+      "dependency_count": 4,
+      "imports": 4,
+      "loc": 33,
+      "violations": []
+    },
+    "backend/app/modules/ruolo/services/notice_communication_fields.py": {
+      "callables": 5,
+      "cognitive_max": 15,
+      "cognitive_sum": 37,
+      "complexity_density": 1.138462,
+      "cyclomatic_max": 13,
+      "cyclomatic_sum": 37,
+      "dependency_count": 7,
+      "imports": 7,
+      "loc": 65,
+      "violations": []
+    },
+    "frontend/src/components/communications/use-template-composition.ts": {
+      "callables": 14,
+      "cognitive_max": 14,
+      "cognitive_sum": 25,
+      "complexity_density": 1.297872,
+      "cyclomatic_max": 14,
+      "cyclomatic_sum": 36,
+      "dependency_count": 4,
+      "imports": 4,
+      "loc": 47,
+      "useEffect": 1,
+      "useReducer": 0,
+      "useState": 2,
+      "violations": []
+    },
+    "frontend/src/components/communications/workspace-controls.tsx": {
+      "callables": 37,
+      "cognitive_max": 14,
+      "cognitive_sum": 36,
+      "complexity_density": 1.452055,
+      "cyclomatic_max": 14,
+      "cyclomatic_sum": 70,
+      "dependency_count": 6,
+      "imports": 6,
+      "loc": 73,
+      "useEffect": 0,
+      "useReducer": 0,
+      "useState": 0,
+      "violations": []
+    }
+  },
+  "runtime_metrics_after": {
+    "backend/app/modules/communications/outbox.py": {
+      "callables": 12,
+      "cognitive_max": 13,
+      "cognitive_sum": 66,
+      "complexity_density": 0.476534,
+      "cyclomatic_max": 11,
+      "cyclomatic_sum": 66,
+      "dependency_count": 8,
+      "imports": 8,
+      "loc": 277,
+      "violations": []
+    },
+    "backend/app/modules/communications/template_composition.py": {
+      "callables": 2,
+      "cognitive_max": 5,
+      "cognitive_sum": 10,
+      "complexity_density": 0.542857,
+      "cyclomatic_max": 5,
+      "cyclomatic_sum": 9,
+      "dependency_count": 5,
+      "imports": 5,
+      "loc": 35,
+      "violations": []
+    },
+    "backend/app/modules/ruolo/services/notice_communication_fields.py": {
+      "callables": 7,
+      "cognitive_max": 15,
+      "cognitive_sum": 51,
+      "complexity_density": 1.246914,
+      "cyclomatic_max": 13,
+      "cyclomatic_sum": 50,
+      "dependency_count": 7,
+      "imports": 7,
+      "loc": 81,
+      "violations": []
+    },
+    "frontend/src/components/communications/portal-access-note.tsx": {
+      "callables": 1,
+      "cognitive_max": 1,
+      "cognitive_sum": 1,
+      "complexity_density": 1.0,
+      "cyclomatic_max": 2,
+      "cyclomatic_sum": 2,
+      "dependency_count": 0,
+      "imports": 0,
+      "loc": 3,
+      "useEffect": 0,
+      "useReducer": 0,
+      "useState": 0,
+      "violations": []
+    },
+    "frontend/src/components/communications/use-template-composition.ts": {
+      "callables": 14,
+      "cognitive_max": 14,
+      "cognitive_sum": 25,
+      "complexity_density": 1.297872,
+      "cyclomatic_max": 14,
+      "cyclomatic_sum": 36,
+      "dependency_count": 4,
+      "imports": 4,
+      "loc": 47,
+      "useEffect": 1,
+      "useReducer": 0,
+      "useState": 2,
+      "violations": []
+    },
+    "frontend/src/components/communications/workspace-controls.tsx": {
+      "callables": 37,
+      "cognitive_max": 14,
+      "cognitive_sum": 36,
+      "complexity_density": 1.413333,
+      "cyclomatic_max": 14,
+      "cyclomatic_sum": 70,
+      "dependency_count": 7,
+      "imports": 7,
+      "loc": 75,
+      "useEffect": 0,
+      "useReducer": 0,
+      "useState": 0,
+      "violations": []
+    }
+  },
+  "production_mutations": false,
+  "real_sends": false,
+  "deployment": false,
+  "commit": false,
+  "graphify": {
+    "targets": [
+      "graphify-ruolo-code",
+      "graphify-backend",
+      "graphify-frontend",
+      "graphify-ruolo-docs",
+      "graphify-platform-docs"
+    ],
+    "docs_model": "gpt-6-luna",
+    "semantic_chunks_completed": true,
+    "failed_semantic_chunks": 0,
+    "graphs_versioned": false
+  },
+  "release_authorized": true,
+  "legacy_quality_findings_explicitly_reported": true,
+  "candidate_images": {
+    "backend": "sha256:a16af100cb26fca9da9350602b6bb43ff0c35c8e4f89746899a663c916ed76ec",
+    "frontend": "sha256:413db2878b9e63d78488396fdd7a3e4dfcd3a5fa68d310c5290c47406a5d69f7",
+    "communications-worker": "sha256:69d298841913998989e73a0508b29c163792f341ce678bd12d3091c807108ae5"
+  },
+  "candidate_image_tests": {
+    "backend": {
+      "image": "sha256:a16af100cb26fca9da9350602b6bb43ff0c35c8e4f89746899a663c916ed76ec",
+      "tests": 397,
+      "coverage": {
+        "covered_lines": 227,
+        "num_statements": 227,
+        "percent_covered": 100.0,
+        "percent_covered_display": "100",
+        "missing_lines": 0,
+        "excluded_lines": 0,
+        "percent_statements_covered": 100.0,
+        "percent_statements_covered_display": "100",
+        "num_branches": 66,
+        "num_partial_branches": 0,
+        "covered_branches": 66,
+        "missing_branches": 0,
+        "percent_branches_covered": 100.0,
+        "percent_branches_covered_display": "100"
+      }
+    },
+    "communications-worker": {
+      "image": "sha256:69d298841913998989e73a0508b29c163792f341ce678bd12d3091c807108ae5",
+      "tests": 397,
+      "coverage": {
+        "covered_lines": 227,
+        "num_statements": 227,
+        "percent_covered": 100.0,
+        "percent_covered_display": "100",
+        "missing_lines": 0,
+        "excluded_lines": 0,
+        "percent_statements_covered": 100.0,
+        "percent_statements_covered_display": "100",
+        "num_branches": 66,
+        "num_partial_branches": 0,
+        "covered_branches": 66,
+        "missing_branches": 0,
+        "percent_branches_covered": 100.0,
+        "percent_branches_covered_display": "100"
+      }
+    }
+  },
+  "candidate_browser_e2e": {
+    "passed": 29,
+    "failed": 0,
+    "skipped": 0
+  }
+}

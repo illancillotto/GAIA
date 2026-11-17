@@ -503,3 +503,7 @@ restore completo, migrazione, ruolo ristretto e backend/frontend/worker healthy.
 PEC/email pubblicati con trasporti disabilitati; caselle e collaudo reale residui.
 Prove realmente concluse e attività residue nel
 [report operativo](communications/DEPLOYMENT_REPORT_2026-11-04.md).
+
+## Accessi ICATASTO nel messaggio — 17 novembre 2026
+
+Implementazione locale: resolver Ruolo condiviso fra anteprima e bozza email/PEC; precedenza snapshot PDF, recupero da archivio univoco per CF valido solo se manca. Provenienza visibile, PDF/payload invariati, corpo persistito nella bozza senza aggiornamenti automatici successivi. [Contratto, matrice test e limiti dei gate](communications/ARCHIVE_PORTAL_ACCESS_2026-11-17.md). Nessun deployment o invio reale nel ciclo.

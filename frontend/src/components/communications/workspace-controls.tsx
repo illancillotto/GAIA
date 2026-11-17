@@ -3,6 +3,7 @@ import { MessageBodyEditor } from "./message-body-editor";
 import { SourcePreviewActions } from "./source-preview-actions";
 import { useTemplateComposition } from "./use-template-composition";
 import { useSourceRepair } from "./use-source-repair";
+import { PortalAccessNote } from "./portal-access-note";
 import type { Candidate, Channel } from "@/types/communications";
 import type { useCommunicationsWorkspace } from "./use-workspace";
 type Workspace = ReturnType<typeof useCommunicationsWorkspace>;
@@ -66,6 +67,7 @@ export function NewCommunication({ workspace, channel, canEdit, token }: { works
       <div className="min-w-0 sm:col-span-2"><MessageBodyEditor rows={2} value={compose.body} subject={compose.subject} disabled={template.loading} onChange={(body) => setCompose({ ...compose, body })} /></div>
       </div>
       <p id="template-help" className="text-xs text-slate-600">{template.available.length ? "Oggetto e testo vengono caricati con i dati dell’avviso dal template selezionato. Puoi modificarli prima di creare la bozza." : `Nessun template ${channel.toUpperCase()} approvato disponibile. Un amministratore deve creare e approvare una versione in Amministrazione comunicazioni → Template versionati. Poi usa Aggiorna stati.`}</p>
+      <PortalAccessNote source={template.portalSource} />
       {template.loading && <p role="status" className="text-sm">Caricamento oggetto e testo del template...</p>}
       {template.error && <div role="alert" className="text-sm text-rose-800">{template.error} <button className="btn-secondary" onClick={template.retry}>Riprova testo</button></div>}
       {template.incomplete && <p role="alert" className="text-sm text-amber-900">Testo incompleto: dati mancanti nel documento ({template.incomplete}). Verifica i dati e il PDF prima di creare la bozza.</p>}
