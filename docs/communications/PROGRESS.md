@@ -1,5 +1,10 @@
 # Avanzamento Communications
 
+## 2026-11-17 — Correzione navigazione amministrazione
+
+Associazione esplicita di `/gaia/communications` a Ruolo nella shell.
+Test di regressione e copertura full-file: [rapporto del ciclo](NAVIGATION_FIX_2026-11-17.md).
+
 ## 2026-11-17 — Blocchi ICATASTO condizionali
 
 Implementati selezione sui dati canonici, inserimento guidato di testo/link,

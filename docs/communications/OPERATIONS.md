@@ -1,5 +1,12 @@
 # Manuale operativo
 
+## Navigazione amministrazione — 17 novembre 2026
+
+Da **Invio solleciti → PEC/Email**, il collegamento **Amministrazione
+comunicazioni** apre `/gaia/communications` mantenendo il modulo **Ruolo**,
+il relativo menu e l’indicatore attivo, anche dopo un ricaricamento e nel menu
+mobile. L’accesso amministrativo resta riservato ad admin/super_admin.
+
 ## Sezione ICATASTO facoltativa — 17 novembre 2026
 
 Nel layout premere **+ Servizio ICATASTO**: vengono aggiunti un paragrafo con

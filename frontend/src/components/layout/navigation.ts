@@ -164,6 +164,7 @@ const platformModules: PlatformModule[] = [
   },
   {
     href: "/ruolo",
+    aliases: ["/gaia/communications"],
     label: "Ruolo",
     icon: CalendarIcon,
     isVisible: (currentUser) => hasUserModuleAccess(currentUser, "ruolo"),
@@ -192,7 +193,7 @@ function isAdministrativeRole(role: string | undefined): boolean {
 
 export function getCurrentModuleKey(pathname: string): CurrentModuleKey {
   const routes: [string, CurrentModuleKey][] = [
-    ["/gaia/users", "gaia"], ["/me", "me"], ["/nas-control", "nas_control"],
+    ["/gaia/users", "gaia"], ["/gaia/communications", "ruolo"], ["/me", "me"], ["/nas-control", "nas_control"],
     ["/elaborazioni", "elaborazioni"], ["/gis", "gis"], ["/catasto", "catasto"],
     ["/utenze", "utenze"], ["/anagrafica", "utenze"], ["/network", "network"],
     ["/inventory", "inventory"], ["/dotazioni", "dotazioni"], ["/operazioni", "operazioni"],

@@ -54,6 +54,8 @@ describe("layout navigation helpers", () => {
   test("maps every supported route to the expected current module key", () => {
     const cases = [
       ["/gaia/users", "gaia"],
+      ["/gaia/communications", "ruolo"],
+      ["/gaia/communications/", "ruolo"],
       ["/me", "me"],
       ["/nas-control", "nas_control"],
       ["/elaborazioni", "elaborazioni"],
@@ -125,6 +127,20 @@ describe("layout navigation helpers", () => {
     expect(getActivePlatformModule("/gis", gisUser)?.label).toBe("GIS Platform");
     expect(getActivePlatformModule("/gis/catalogo/layers", gisUser)?.label).toBe("GIS Platform");
     expect(getActivePlatformModule("/unknown", gisUser)).toBeUndefined();
+  });
+
+  test("keeps communications administration in Ruolo without granting module access", () => {
+    const admin = buildUser({ role: "admin", enabled_modules: ["accessi", "ruolo"] });
+    for (const pathname of ["/gaia/communications", "/gaia/communications/"]) {
+      const state = getSidebarState(admin, pathname);
+      expect(state.currentModuleKey).toBe("ruolo");
+      expect(state.currentModuleLabel).toBe("Ruolo");
+      expect(getActivePlatformModule(pathname, admin)?.href).toBe("/ruolo");
+      expect(getModuleSections(state).flatMap((section) => section.items)).toContainEqual(
+        expect.objectContaining({ href: "/ruolo/tributi/solleciti", label: "Invio solleciti" }),
+      );
+      expect(getActivePlatformModule(pathname, buildUser({ enabled_modules: ["accessi"] }))).toBeUndefined();
+    }
   });
 
   test("derives admin quick links and admin capability flags", () => {

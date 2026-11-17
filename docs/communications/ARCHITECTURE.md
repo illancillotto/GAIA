@@ -1,5 +1,13 @@
 # Architettura
 
+## Appartenenza della pagina amministrativa — 17 novembre 2026
+
+`frontend/src/components/layout/navigation.ts` associa `/gaia/communications`
+a Ruolo in `getCurrentModuleKey` e negli alias di `platformModules`. Sidebar,
+menu mobile, selettore moduli e navigazione superiore usano così la stessa
+appartenenza. URL e controlli di autorizzazione della pagina restano invariati;
+l’alias non concede accesso al modulo.
+
 ## Selezione condizionale — 17 novembre 2026
 
 `rich_template.select_body` valuta la sola condizione ICATASTO sui dati

@@ -1,0 +1,87 @@
+{
+  "base_commit": "d7842edf7d6878ac0bf078b48c4e985acb6eacc8",
+  "runtime_files": [
+    "frontend/src/components/layout/navigation.ts"
+  ],
+  "unit_targeted": 149,
+  "coverage": {
+    "statements": [
+      55,
+      55
+    ],
+    "branches": [
+      54,
+      54
+    ],
+    "functions": [
+      26,
+      26
+    ],
+    "lines": [
+      53,
+      53
+    ]
+  },
+  "ratchet_findings": [],
+  "complexity": {
+    "cognitive_sum": [
+      63,
+      63
+    ],
+    "cyclomatic_sum": [
+      65,
+      65
+    ],
+    "legacy_violations": [
+      3,
+      3
+    ],
+    "file_loc": [
+      477,
+      478
+    ]
+  },
+  "candidate_e2e": {
+    "navigation": {
+      "startTime": "2026-11-17T07:43:48.728Z",
+      "duration": 5809.871,
+      "expected": 4,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "loading": {
+      "startTime": "2026-11-17T07:44:21.809Z",
+      "duration": 5977.312,
+      "expected": 3,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    },
+    "regression": {
+      "startTime": "2026-11-17T07:43:49.938Z",
+      "duration": 21087.939,
+      "expected": 16,
+      "skipped": 0,
+      "unexpected": 0,
+      "flaky": 0
+    }
+  },
+  "prepared": {
+    "base_image": "sha256:0bb439c89adb9ee592e954e6d475fbc08fd064b82a3aff6a6675aff6eee03fa8",
+    "image": "sha256:0f58c17deec4928f564d44c240c83d86bf80341385ccb2f315aa0636044c4afc",
+    "tag": "gaia-frontend:communications-navigation-20261117",
+    "changed": {
+      "src/components/layout/navigation.ts": "1ff7e2380de6707136750b55717cbd9f8fb40dd7a4e171a0fb7b234bc8c292bf"
+    },
+    "preserved_files_or_routes": 196
+  },
+  "lint_targeted": true,
+  "typecheck": true,
+  "smoke_tests": 18,
+  "graphify": {
+    "frontend": "updated",
+    "platform_docs": "chunk 1/1 done; no semantic failures"
+  },
+  "unit_regression_workspace": 5733
+}

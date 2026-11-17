@@ -79,6 +79,7 @@ describe("Sidebar mobile drawer", () => {
   test("maps routes to the expected current module key and label", () => {
     const cases = [
       ["/gaia/users", "gaia", "Utenti GAIA"],
+      ["/gaia/communications", "ruolo", "Ruolo"],
       ["/me", "me", "La mia attività"],
       ["/nas-control", "nas_control", "NAS Control"],
       ["/elaborazioni", "elaborazioni", "Elaborazioni"],

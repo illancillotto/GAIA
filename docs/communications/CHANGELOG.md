@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-17 — Amministrazione comunicazioni nel modulo Ruolo
+
+- Corretto il menu NAS mostrato aprendo l’amministrazione dai solleciti PEC/email.
+- Sidebar, indicatore del modulo e navigazione superiore mantengono Ruolo.
+- Regressione coperta anche con menu mobile e ricaricamento della pagina.
+- [Verifiche e rilascio](NAVIGATION_FIX_2026-11-17.md).
+
 ## 2026-11-17 — Sezione ICATASTO facoltativa
 
 - Paragrafo e pulsante omessi se manca codice utenza o PIN dello snapshot PDF.
