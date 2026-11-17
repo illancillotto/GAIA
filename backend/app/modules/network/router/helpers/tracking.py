@@ -19,6 +19,15 @@ from app.modules.network.models import (
     NetworkScanDevice,
     NetworkTrackedSubject,
 )
+from app.modules.network.router.helpers.arp_timeline import (
+    _arp_rapid_reappearances as _arp_rapid_reappearances,
+)
+from app.modules.network.router.helpers.arp_timeline import (
+    _arp_suspicious_reasons as _arp_suspicious_reasons,
+)
+from app.modules.network.router.helpers.arp_timeline import (
+    _build_arp_timeline_item,
+)
 from app.modules.network.router.helpers.devices import _resolve_device_label
 from app.modules.network.router.helpers.endpoints import (
     _extract_event_traffic,
@@ -26,7 +35,6 @@ from app.modules.network.router.helpers.endpoints import (
 )
 from app.modules.network.schemas import (
     NetworkArpTimelineItem,
-    NetworkArpTimelineObservation,
     NetworkTrackedSubjectActivityEvent,
     NetworkTrackedSubjectActivitySummary,
     NetworkTrackedSubjectResponse,
@@ -71,62 +79,7 @@ def _build_arp_timeline(
 
     timeline: list[NetworkArpTimelineItem] = []
     for scope_key, items in grouped.items():
-        items_desc = sorted(items, key=lambda item: (item.observed_at, item.id), reverse=True)
-        items_asc = list(reversed(items_desc))
-        distinct_ips = list(dict.fromkeys(item.ip_address for item in items_desc if item.ip_address))
-        distinct_macs = list(dict.fromkeys(item.mac_address for item in items_desc if item.mac_address))
-        rapid_reappearances = 0
-        previous_online_at: datetime | None = None
-        for item in items_asc:
-            observed_at = item.observed_at if item.observed_at.tzinfo is not None else item.observed_at.replace(tzinfo=UTC)
-            if item.status == "online":
-                if previous_online_at and observed_at - previous_online_at <= timedelta(hours=2):
-                    rapid_reappearances += 1
-                previous_online_at = observed_at
-        suspicious_reasons: list[str] = []
-        if len(distinct_macs) > 1:
-            suspicious_reasons.append("same_ip_multiple_macs")
-        if len(distinct_ips) > 1 and items_desc[0].mac_address:
-            suspicious_reasons.append("same_mac_multiple_ips")
-        if rapid_reappearances > 1:
-            suspicious_reasons.append("rapid_reappearances")
-
-        device = devices_by_id.get(items_desc[0].device_id) if items_desc[0].device_id is not None else None
-        resolved_label = _resolve_device_label(device)[0] if device is not None else items_desc[0].display_name or items_desc[0].hostname or items_desc[0].ip_address
-        ip_counts = Counter(item.ip_address for item in items_desc if item.ip_address)
-        mac_counts = Counter(item.mac_address for item in items_desc if item.mac_address)
-        timeline.append(
-            NetworkArpTimelineItem(
-                scope_key=scope_key,
-                scope_type="device" if items_desc[0].device_id is not None else "ip",
-                device_id=items_desc[0].device_id,
-                resolved_label=resolved_label,
-                primary_ip_address=ip_counts.most_common(1)[0][0] if ip_counts else None,
-                primary_mac_address=mac_counts.most_common(1)[0][0] if mac_counts else None,
-                first_observed_at=items_asc[0].observed_at,
-                last_observed_at=items_desc[0].observed_at,
-                observations_count=len(items_desc),
-                online_appearances=sum(1 for item in items_desc if item.status == "online"),
-                offline_appearances=sum(1 for item in items_desc if item.status != "online"),
-                distinct_ip_addresses=distinct_ips,
-                distinct_mac_addresses=distinct_macs,
-                rapid_reappearances=rapid_reappearances,
-                suspicious_reasons=suspicious_reasons,
-                observations=[
-                    NetworkArpTimelineObservation(
-                        observed_at=item.observed_at,
-                        scan_id=item.scan_id,
-                        device_id=item.device_id,
-                        ip_address=item.ip_address,
-                        mac_address=item.mac_address,
-                        status=item.status,
-                        resolved_label=resolved_label,
-                        hostname=item.hostname,
-                    )
-                    for item in items_desc[:6]
-                ],
-            )
-        )
+        timeline.append(_build_arp_timeline_item(scope_key, items, devices_by_id, _resolve_device_label))
 
     timeline.sort(
         key=lambda item: (
@@ -155,16 +108,20 @@ def _normalize_tracked_value(entity_type: str, value: str) -> str:
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid IP address: {value}") from exc
     if entity_type == "domain":
-        parsed_hostname = urlparse(normalized).hostname if "://" in normalized else normalized
-        hostname = (parsed_hostname or normalized).strip().rstrip(".").lower()
-        if not hostname:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid domain value")
-        return hostname
+        return _normalize_tracked_domain(normalized)
     if entity_type == "url":
         if not normalized:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid URL value")
         return normalized
     return normalized
+
+
+def _normalize_tracked_domain(normalized: str) -> str:
+    parsed_hostname = urlparse(normalized).hostname if "://" in normalized else normalized
+    hostname = (parsed_hostname or normalized).strip().rstrip(".").lower()
+    if not hostname:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid domain value")
+    return hostname
 
 
 def _find_matching_device_for_legacy_ip_subject(db: Session, subject: NetworkTrackedSubject) -> NetworkDevice | None:
@@ -192,11 +149,7 @@ def _reconcile_legacy_ip_tracked_subject(db: Session, subject: NetworkTrackedSub
         )
     )
     if canonical is not None:
-        if not canonical.label and subject.label:
-            canonical.label = subject.label
-        if not canonical.notes and subject.notes:
-            canonical.notes = subject.notes
-        canonical.is_active = canonical.is_active or subject.is_active
+        _merge_legacy_tracked_subject_metadata(canonical, subject)
         canonical.device_id = device.id
         canonical.value = device.ip_address
         db.add(canonical)
@@ -209,6 +162,16 @@ def _reconcile_legacy_ip_tracked_subject(db: Session, subject: NetworkTrackedSub
     subject.value = device.ip_address
     db.add(subject)
     return subject, True
+
+
+def _merge_legacy_tracked_subject_metadata(
+    canonical: NetworkTrackedSubject, subject: NetworkTrackedSubject,
+) -> None:
+    if not canonical.label and subject.label:
+        canonical.label = subject.label
+    if not canonical.notes and subject.notes:
+        canonical.notes = subject.notes
+    canonical.is_active = canonical.is_active or subject.is_active
 
 
 def _reconcile_legacy_ip_tracked_subjects(db: Session) -> None:
@@ -271,31 +234,53 @@ def _match_tracked_subject_against_event(
     parsed: dict[str, Any],
 ) -> tuple[str, str] | None:
     if subject.entity_type == "device":
-        if subject.device_id and (event.device_id == subject.device_id or event.src_ip == subject.value or event.dst_ip == subject.value):
-            return "device", subject.value
-        return None
+        return _match_tracked_device_event(subject, event)
     if subject.entity_type == "ip":
-        if event.src_ip == subject.normalized_value:
-            return "src_ip", subject.normalized_value
-        if event.dst_ip == subject.normalized_value:
-            return "dst_ip", subject.normalized_value
-        return None
+        return _match_tracked_ip_event(subject, event)
     if subject.entity_type == "domain":
-        domain = parsed.get("domain")
-        candidate = None
-        if isinstance(domain, str) and domain.strip():
-            candidate = domain.strip().lower()
-        else:
-            raw_url = parsed.get("url")
-            if isinstance(raw_url, str) and raw_url.strip():
-                candidate = (urlparse(raw_url.strip()).hostname or "").lower()
+        candidate = _tracked_event_domain(parsed)
         if candidate and candidate == subject.normalized_value:
             return "domain", candidate
         return None
     if subject.entity_type == "url":
-        raw_url = parsed.get("url")
-        if isinstance(raw_url, str) and raw_url.strip() == subject.normalized_value:
-            return "url", raw_url.strip()
+        return _match_tracked_url_event(subject, parsed)
+    return None
+
+
+def _match_tracked_device_event(
+    subject: NetworkTrackedSubject, event: NetworkFirewallEvent,
+) -> tuple[str, str] | None:
+    if subject.device_id and (event.device_id == subject.device_id or event.src_ip == subject.value or event.dst_ip == subject.value):
+        return "device", subject.value
+    return None
+
+
+def _match_tracked_ip_event(
+    subject: NetworkTrackedSubject, event: NetworkFirewallEvent,
+) -> tuple[str, str] | None:
+    if event.src_ip == subject.normalized_value:
+        return "src_ip", subject.normalized_value
+    if event.dst_ip == subject.normalized_value:
+        return "dst_ip", subject.normalized_value
+    return None
+
+
+def _match_tracked_url_event(
+    subject: NetworkTrackedSubject, parsed: dict[str, Any],
+) -> tuple[str, str] | None:
+    raw_url = parsed.get("url")
+    if isinstance(raw_url, str) and raw_url.strip() == subject.normalized_value:
+        return "url", raw_url.strip()
+    return None
+
+
+def _tracked_event_domain(parsed: dict[str, Any]) -> str | None:
+    domain = parsed.get("domain")
+    if isinstance(domain, str) and domain.strip():
+        return domain.strip().lower()
+    raw_url = parsed.get("url")
+    if isinstance(raw_url, str) and raw_url.strip():
+        return (urlparse(raw_url.strip()).hostname or "").lower()
     return None
 
 

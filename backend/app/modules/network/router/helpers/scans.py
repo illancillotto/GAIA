@@ -25,11 +25,7 @@ def _serialize_scan(scan_id: int, scan: object, db: Session) -> NetworkScanRespo
 
 
 def _serialize_scan_device(device: NetworkScanDevice, db: Session) -> NetworkScanDeviceResponse:
-    reference_device = None
-    if device.device_id:
-        reference_device = db.get(NetworkDevice, device.device_id)
-    if reference_device is None and device.ip_address:
-        reference_device = db.scalar(select(NetworkDevice).where(NetworkDevice.ip_address == device.ip_address))
+    reference_device = _find_scan_reference_device(device, db)
     resolved_label, label_source = (
         _resolve_device_label(reference_device)
         if reference_device is not None
@@ -60,6 +56,15 @@ def _serialize_scan_device(device: NetworkScanDevice, db: Session) -> NetworkSca
         "observed_at": device.observed_at,
     }
     return NetworkScanDeviceResponse.model_validate(payload)
+
+
+def _find_scan_reference_device(device: NetworkScanDevice, db: Session) -> NetworkDevice | None:
+    reference_device = None
+    if device.device_id:
+        reference_device = db.get(NetworkDevice, device.device_id)
+    if reference_device is None and device.ip_address:
+        reference_device = db.scalar(select(NetworkDevice).where(NetworkDevice.ip_address == device.ip_address))
+    return reference_device
 
 
 # fmt: on

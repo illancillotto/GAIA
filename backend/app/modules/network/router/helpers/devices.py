@@ -102,22 +102,30 @@ def _extract_rdap_entity_names(payload: dict[str, Any]) -> list[str]:
         return names
 
     for entity in entities:
-        if not isinstance(entity, dict):
-            continue
-        vcard = entity.get("vcardArray")
-        if not (isinstance(vcard, list) and len(vcard) == 2 and isinstance(vcard[1], list)):
-            continue
-        for item in vcard[1]:
-            if (
-                isinstance(item, list)
-                and len(item) >= 4
-                and item[0] in {"fn", "org"}
-                and isinstance(item[3], str)
-                and item[3].strip()
-            ):
-                names.append(item[3].strip())
-                break
+        names.extend(_rdap_entity_names(entity))
     return list(dict.fromkeys(names))
+
+
+def _rdap_entity_names(entity: Any) -> list[str]:
+    if not isinstance(entity, dict):
+        return []
+    vcard = entity.get("vcardArray")
+    if not (isinstance(vcard, list) and len(vcard) == 2 and isinstance(vcard[1], list)):
+        return []
+    for item in vcard[1]:
+        if _is_rdap_name_item(item):
+            return [item[3].strip()]
+    return []
+
+
+def _is_rdap_name_item(item: Any) -> bool:
+    return bool(
+        isinstance(item, list)
+        and len(item) >= 4
+        and item[0] in {"fn", "org"}
+        and isinstance(item[3], str)
+        and item[3].strip()
+    )
 
 
 def _summarize_ip_whois(ip_address: str) -> NetworkIpWhoisResponse:
@@ -163,8 +171,10 @@ def _summarize_ip_whois(ip_address: str) -> NetworkIpWhoisResponse:
             external_url=external_url,
         )
 
-    start_address = payload.get("startAddress")
-    end_address = payload.get("endAddress")
+    return _rdap_response(parsed_ip, payload, external_url)
+
+
+def _rdap_address_range(start_address: Any, end_address: Any) -> list[str]:
     cidr: list[str] = []
     if isinstance(start_address, str) and isinstance(end_address, str):
         try:
@@ -172,11 +182,27 @@ def _summarize_ip_whois(ip_address: str) -> NetworkIpWhoisResponse:
         except ValueError:
             cidr = []
 
+    return cidr
+
+
+def _rdap_text(payload: dict[str, Any], field: str) -> str | None:
+    return payload.get(field) if isinstance(payload.get(field), str) else None
+
+
+def _rdap_response(
+    parsed_ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
+    payload: dict[str, Any],
+    external_url: str,
+) -> NetworkIpWhoisResponse:
+    start_address = payload.get("startAddress")
+    end_address = payload.get("endAddress")
+    cidr = _rdap_address_range(start_address, end_address)
+
     entity_names = _extract_rdap_entity_names(payload)
     label = entity_names[0] if entity_names else None
-    network_name = payload.get("name") if isinstance(payload.get("name"), str) else None
-    handle = payload.get("handle") if isinstance(payload.get("handle"), str) else None
-    country = payload.get("country") if isinstance(payload.get("country"), str) else None
+    network_name = _rdap_text(payload, "name")
+    handle = _rdap_text(payload, "handle")
+    country = _rdap_text(payload, "country")
 
     return NetworkIpWhoisResponse(
         ip_address=str(parsed_ip),

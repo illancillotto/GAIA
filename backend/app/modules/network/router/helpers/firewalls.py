@@ -1,4 +1,5 @@
 from collections import Counter
+from collections.abc import Iterable, Mapping
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -40,6 +41,18 @@ _EXPECTED_SOPHOS_LOG_FAMILIES: list[tuple[str, str]] = [
     ("authentication", "Authentication"),
     ("system", "System"),
 ]
+
+
+# Rules retain family priority and ordered event/log-type/component searches.
+_SOPHOS_LOG_FAMILY_RULES = (
+    ("firewall", "firewall.", (("log_type", "firewall"),)),
+    ("vpn", None, (("event_type", "vpn"), ("log_type", "vpn"), ("log_component", "vpn"))),
+    ("ips", None, (("event_type", "ips"), ("log_type", "intrusion"), ("log_type", "ips"), ("log_component", "ips"))),
+    ("authentication", None, (("event_type", "auth"), ("log_type", "authentication"), ("log_component", "authentication"))),
+    ("system", ("system_health.", "event.gui."), (("log_type", "system"), ("log_component", "system"))),
+    ("content_filtering", "content_filtering.", ()),
+    ("anti-virus", "anti-virus.", (("event_type", "anti-virus"),)),
+)
 
 
 def _serialize_alert(alert: NetworkAlert) -> NetworkAlertResponse:
@@ -153,21 +166,24 @@ def _classify_sophos_log_family_from_values(*, event_type: str, parsed: dict[str
     log_component = str(parsed.get("log_component") or "").strip().lower()
     event_type = event_type.lower()
 
-    if event_type.startswith("firewall.") or "firewall" in log_type:
-        return "firewall"
-    if "vpn" in event_type or "vpn" in log_type or "vpn" in log_component:
-        return "vpn"
-    if "ips" in event_type or "intrusion" in log_type or "ips" in log_type or "ips" in log_component:
-        return "ips"
-    if "auth" in event_type or "authentication" in log_type or "authentication" in log_component:
-        return "authentication"
-    if event_type.startswith(("system_health.", "event.gui.")) or "system" in log_type or "system" in log_component:
-        return "system"
-    if event_type.startswith("content_filtering."):
-        return "content_filtering"
-    if event_type.startswith("anti-virus.") or "anti-virus" in event_type:
-        return "anti-virus"
+    return _sophos_family_from_normalized_values(event_type, log_type, log_component)
+
+
+def _sophos_family_from_normalized_values(event_type: str, log_type: str, log_component: str) -> str:
+    values = {"event_type": event_type, "log_type": log_type, "log_component": log_component}
+    for family, prefix, terms in _SOPHOS_LOG_FAMILY_RULES:
+        if prefix is not None and event_type.startswith(prefix):
+            return family
+        if _sophos_log_terms_match(values, terms):
+            return family
     return event_type.split(".", 1)[0] if "." in event_type else event_type or "other"
+
+
+def _sophos_log_terms_match(values: Mapping[str, str], terms: tuple[tuple[str, str], ...]) -> bool:
+    for field, term in terms:
+        if term in values[field]:
+            return True
+    return False
 
 
 def _build_firewall_log_coverage_summary(
@@ -191,10 +207,30 @@ def _build_firewall_log_coverage_summary(
         .execution_options(stream_results=True, yield_per=1000)
     )
 
+    grouped, event_type_counts, total_events = _aggregate_firewall_log_rows(event_rows.mappings())
+    expected_families, additional_families = _firewall_log_family_statuses(grouped)
+    return NetworkFirewallLogCoverageSummary(
+        firewall_id=firewall.id,
+        window_hours=window_hours,
+        generated_at=datetime.now(UTC),
+        total_events=total_events,
+        expected_families=expected_families,
+        additional_families=additional_families,
+        missing_expected_families=[item.family_key for item in expected_families if item.status == "missing"],
+        top_event_types=[
+            NetworkStatisticsCountItem(key=event_type, label=event_type, count=count)
+            for event_type, count in event_type_counts.most_common(6)
+        ],
+    )
+
+
+def _aggregate_firewall_log_rows(
+    rows: Iterable[Mapping[str, Any]],
+) -> tuple[dict[str, dict[str, Any]], Counter[str], int]:
     grouped: dict[str, dict[str, Any]] = {}
     event_type_counts: Counter[str] = Counter()
     total_events = 0
-    for row in event_rows.mappings():
+    for row in rows:
         event_type = row["event_type"]
         observed_at = row["last_observed_at"]
         events_count = int(row["events_count"] or 0)
@@ -210,13 +246,28 @@ def _build_firewall_log_coverage_summary(
         )
         total_events += events_count
         event_type_counts[event_type] += events_count
-        bucket["count"] += events_count
-        if bucket["last_observed_at"] is None or observed_at > bucket["last_observed_at"]:
-            bucket["last_observed_at"] = observed_at
-        if event_type not in bucket["example_seen"] and len(bucket["examples"]) < 3:
-            bucket["examples"].append(event_type)
-            bucket["example_seen"].add(event_type)
+        _accumulate_firewall_log_family(bucket, event_type, events_count, observed_at)
 
+    return grouped, event_type_counts, total_events
+
+
+def _accumulate_firewall_log_family(
+    bucket: dict[str, Any],
+    event_type: str,
+    events_count: int,
+    observed_at: datetime,
+) -> None:
+    bucket["count"] += events_count
+    if bucket["last_observed_at"] is None or observed_at > bucket["last_observed_at"]:
+        bucket["last_observed_at"] = observed_at
+    if event_type not in bucket["example_seen"] and len(bucket["examples"]) < 3:
+        bucket["examples"].append(event_type)
+        bucket["example_seen"].add(event_type)
+
+
+def _firewall_log_family_statuses(
+    grouped: dict[str, dict[str, Any]],
+) -> tuple[list[NetworkFirewallLogFamilyStatus], list[NetworkFirewallLogFamilyStatus]]:
     expected_keys = {family_key for family_key, _ in _EXPECTED_SOPHOS_LOG_FAMILIES}
     expected_families = [
         NetworkFirewallLogFamilyStatus(
@@ -243,19 +294,7 @@ def _build_firewall_log_coverage_summary(
         for family_key, data in sorted(grouped.items(), key=lambda item: item[1]["count"], reverse=True)
         if family_key not in expected_keys
     ]
-    return NetworkFirewallLogCoverageSummary(
-        firewall_id=firewall.id,
-        window_hours=window_hours,
-        generated_at=datetime.now(UTC),
-        total_events=total_events,
-        expected_families=expected_families,
-        additional_families=additional_families,
-        missing_expected_families=[item.family_key for item in expected_families if item.status == "missing"],
-        top_event_types=[
-            NetworkStatisticsCountItem(key=event_type, label=event_type, count=count)
-            for event_type, count in event_type_counts.most_common(6)
-        ],
-    )
+    return expected_families, additional_families
 
 
 # fmt: on

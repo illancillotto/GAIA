@@ -1,20 +1,26 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import json
 import time
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.modules.network.models import NetworkFirewall, NetworkFirewallMetric
+from app.modules.network.models import NetworkFirewallMetric
+from app.modules.network.services import (
+    CommunityData,
+    ContextData,
+    ObjectIdentity,
+    ObjectType,
+    SnmpEngine,
+    UdpTransportTarget,
+    get_cmd,
+)
 from app.modules.network.sophos import _coerce_utc, _json_dumps, upsert_network_firewall
 from app.modules.network.sophos_runtime import get_sophos_runtime_policy
-from app.modules.network.services import CommunityData, ContextData, ObjectIdentity, ObjectType, SnmpEngine, UdpTransportTarget, get_cmd
-
-UTC = timezone.utc
 
 STANDARD_OIDS: list[dict[str, Any]] = [
     {"key": "sys_name", "oid": "1.3.6.1.2.1.1.5.0", "mode": "text"},
@@ -47,20 +53,25 @@ def _load_custom_oids() -> list[dict[str, Any]]:
         return []
     result: list[dict[str, Any]] = []
     for item in raw:
-        if not isinstance(item, dict):
-            continue
-        key = item.get("key")
-        oid = item.get("oid")
-        if isinstance(key, str) and key.strip() and isinstance(oid, str) and oid.strip():
-            result.append(
-                {
-                    "key": key.strip(),
-                    "oid": oid.strip(),
-                    "mode": item.get("mode") if isinstance(item.get("mode"), str) else "text",
-                    "unit": item.get("unit") if isinstance(item.get("unit"), str) else None,
-                }
-            )
+        normalized = _normalize_custom_oid(item)
+        if normalized is not None:
+            result.append(normalized)
     return result
+
+
+def _normalize_custom_oid(item: Any) -> dict[str, Any] | None:
+    if not isinstance(item, dict):
+        return None
+    key = item.get("key")
+    oid = item.get("oid")
+    if not (isinstance(key, str) and key.strip() and isinstance(oid, str) and oid.strip()):
+        return None
+    return {
+        "key": key.strip(),
+        "oid": oid.strip(),
+        "mode": item.get("mode") if isinstance(item.get("mode"), str) else "text",
+        "unit": item.get("unit") if isinstance(item.get("unit"), str) else None,
+    }
 
 
 def _coerce_metric_value(raw_value: str, mode: str) -> tuple[float | None, str | None]:

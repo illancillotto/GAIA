@@ -578,6 +578,162 @@ Audit baseline globale e ordine delle tranche:
 | reorganized | `frontend/src/lib/api.ts` | facciata su 15 moduli; cognitive sum/max `545/54`, cyclomatic sum/max `851/30` | `REORGANIZED_AND_CHARACTERIZED`; 450 export preservati, coverage completa, warning file-level residuo in `network.ts` |
 | reorganized | `backend/app/modules/utenze/router.py` | facade package + route modules; cognitive sum/max `409/39`, cyclomatic sum/max `403/28` | `REORGANIZED_AND_CHARACTERIZED`; OpenAPI identica, coverage 100%, warning LOC residuo in `routes/support.py` |
 
+## 2026-11-17 — Proiezione elementi timeline ARP Network
+
+- `_build_arp_timeline` in `network/router/helpers/tracking.py`: `closed`,
+  cognitiva/ciclomatica/LOC35/22/83→7/7/42. Proiezione e helper in
+  `helpers/arp_timeline.py` tutti sotto soglia; aggregati cognitiva221→208,
+  decisioni141 invariate, Error6→3, Warning1 invariato. 225test prima/dopo e
+  finali, full-file100% su entrambi i runtime,6000timeline equivalenti e cinque
+  mutanti respinti. Resta il riepilogo attivita68/32/133/4, non avviato.
+  Dettagli in `NETWORK_ARP_PROJECTION_2026-11-17.md`; gate globale ancora
+  ambiguo su Tributi, baseline e soglie intatte.
+
+## 2026-11-17 — Anomalie temporali timeline ARP Network
+
+- `_build_arp_timeline` in `network/router/helpers/tracking.py`: `reduced`,
+  cognitiva/ciclomatica/LOC/nesting63/33/96/4→35/22/83/1. Helper riapparizioni
+  e motivi sotto soglia; file cognitiva230→221, Warning2→1, Error6 invariati.
+  217test prima/dopo full-file100%,6000timeline equivalenti e cinque mutanti
+  respinti. Restano tre Error nel builder e debito invariato nel riepilogo
+  attivita. Dettagli in `NETWORK_ARP_ANOMALIES_2026-11-17.md`.
+
+## 2026-11-17 — Riferimento dispositivo scansione Network
+
+- `_serialize_scan_device` in `network/router/helpers/scans.py`: `closed`,
+  cognitiva/ciclomatica12/12→7/8, helper lookup5/5 sotto soglia. Warning1→0,
+  Error0 invariati; tutti i callable sotto soglia. Cognitiva file12 e decisioni11
+  invariate, nessuna riduzione aggregata rivendicata. 89test prima/dopo
+  full-file100%,16000scenari equivalenti e cinque mutanti respinti.
+  Dettagli in `NETWORK_SCAN_REFERENCE_2026-11-17.md`.
+
+## 2026-11-17 — Classificazione famiglie log Sophos
+
+- `_classify_sophos_log_family_from_values` in `network/router/helpers/firewalls.py`:
+  `closed`, cognitiva/ciclomatica38/33→5/6; regole ordinate e due helper sotto
+  soglia. File cognitiva64→46, decisioni55→38, Error2→0, Warning0 invariati:
+  tutti i callable sotto soglia. 136test prima/dopo full-file100%,25000scenari
+  equivalenti e cinque mutanti respinti. Dettagli in
+  `NETWORK_SOPHOS_FAMILIES_2026-11-17.md`.
+
+## 2026-11-17 — Contatori traffico evento Network
+
+- `_extract_event_traffic` in `network/router/helpers/endpoints.py`: `closed`,
+  cognitiva/ciclomatica12/12→4/5, helper contatori8/8 sotto soglia. Warning1→0,
+  Error0 invariati; file interamente sotto soglia. Cognitiva aggregata31 e
+  decisioni26 invariate, nessuna riduzione aggregata rivendicata. 145test
+  prima/dopo full-file100%,18000scenari equivalenti e cinque mutanti respinti.
+  Dettagli in `NETWORK_EVENT_TRAFFIC_2026-11-17.md`.
+
+## 2026-11-17 — Riconciliazione soggetti IP legacy Network
+
+- `_reconcile_legacy_ip_tracked_subject` in `network/router/helpers/tracking.py`:
+  `closed`, cognitiva/ciclomatica17/11→2/3; helper fusione metadati10/9 sotto
+  soglia. File cognitiva235→230, Error6 invariati, Warning4→2, decisioni141
+  invariate. 198test prima/dopo full-file100%,12000scenari equivalenti e quattro
+  mutanti respinti. Residuo timeline ARP e riepilogo attivita invariato;
+  dettagli in `NETWORK_LEGACY_RECONCILIATION_2026-11-17.md`.
+
+## 2026-11-17 — Matching soggetti tracciati Network
+
+- `_match_tracked_subject_against_event` in `network/router/helpers/tracking.py`:
+  `closed`, cognitiva/ciclomatica50/27→10/8, quattro helper sotto soglia.
+  File cognitiva250→235, Error8→6, Warning4 invariati, decisioni141 invariate.
+  160test prima/dopo full-file100%,25000scenari equivalenti, quattro mutanti
+  respinti. Residuo timeline/riconciliazione/attivita invariato; dettagli in
+  `NETWORK_TRACKED_MATCHING_2026-11-17.md`. Ratchet mirato PASS; gate globale
+  resta ambiguo su Tributi, fuori slice.
+
+## 2026-11-17 — Normalizzazione soggetti tracciati Network
+
+- `_normalize_tracked_value` in `network/router/helpers/tracking.py`: `closed`,
+  cognitiva/ciclomatica17/11→10/7, helper dominio4/5 sotto soglia. File
+  cognitiva253→250, Error8 invariati, Warning6→4. 117test prima/dopo full-file100%,
+  30000casi equivalenti. Residuo tracking invariato; dettagli in
+  `NETWORK_TRACKED_NORMALIZATION_2026-11-17.md`.
+
+## 2026-11-17 — OID SNMP personalizzati
+
+- `_load_custom_oids` in `network/sophos_snmp.py`: `closed`, cognitiva/ciclomatica
+  21/13→7/6, helper9/9 sotto soglia. File cognitiva75→70, Error1 invariato,
+  Warning4→2. 133test prima/dopo full-file100%, 20000configurazioni equivalenti.
+  Residuo async/polling/parametri record invariato; dettagli in
+  `NETWORK_CUSTOM_OIDS_2026-11-17.md`.
+
+## 2026-11-17 — Riepilogo traffico dispositivo Network
+
+- `_build_device_traffic_summary` in `network/router/helpers/traffic.py`: `closed`,
+  cognitiva/ciclomatica32/18→6/5, LOC99→47; cinque helper sotto soglia.
+  File cognitiva281→270, Error6→3, Warning1 invariato. 170 test prima/dopo
+  full-file100%, 5000 scenari equivalenti. Resta riepilogo statistiche rete
+  invariato; dettagli in `NETWORK_DEVICE_TRAFFIC_2026-11-17.md`.
+
+## 2026-11-17 — Suggerimento nome peer Network
+
+- `_extract_peer_hint` in `network/router/helpers/traffic.py`: `closed`,
+  cognitiva/ciclomatica15/13→6/6, due Warning eliminati; parser condiviso e
+  helper URL sotto soglia. File cognitiva286→281, Error6 invariati,
+  Warning3→1. 154 test prima/dopo full-file100%, 16000 confronti equivalenti.
+  Residuo riepiloghi traffico/statistiche invariato; dettagli in
+  `NETWORK_PEER_HINT_2026-11-17.md`.
+
+## 2026-11-17 — Risoluzione nome peer Network
+
+- `_resolve_peer_label` in `network/router/helpers/traffic.py`: `closed`,
+  cognitiva/ciclomatica 56/32→9/7, nesting4→2, quattro helper sotto soglia.
+  File cognitiva297→286, Error8→6, Warning4→3. Residuo traffico/statistiche
+  e peer hint invariato. 118 test prima/dopo full-file100%, 15000 confronti
+  equivalenti; dettagli in `NETWORK_PEER_RESOLUTION_2026-11-17.md`.
+
+## 2026-11-17 — Riepilogo copertura log firewall Network
+
+- `_build_firewall_log_coverage_summary` in `network/router/helpers/firewalls.py`:
+  `reduced`, cognitiva/ciclomatica/LOC 22/16/84→2/3/35; tre helper sotto soglia.
+  Cognitiva aggregata file 68→64, Error 4→2, Warning 1→0. Restano due Error
+  nel classificatore Sophos, invariato. 84 test prima/dopo full-file 100%,
+  12000 confronti equivalenti. Dettagli in `NETWORK_LOG_COVERAGE_2026-11-17.md`.
+
+## 2026-11-17 — Risposta WHOIS Network
+
+- `_summarize_ip_whois` in `network/router/helpers/devices.py`: `reduced`,
+  cognitiva/ciclomatica 27/20→9/8; costruzione risposta, intervallo e campi
+  testuali sotto soglia. File cognitiva 57→55, Error 2→0, Warning 2→1.
+  Resta serializer LOC 55 invariato. 141 test prima/dopo, full-file 100%,
+  10000 confronti equivalenti. Evidenze in `NETWORK_WHOIS_RESPONSE_2026-11-17.md`.
+
+## 2026-11-17 — Nomi entita RDAP Network
+
+- `_extract_rdap_entity_names` in `network/router/helpers/devices.py`: `reduced`,
+  cognitiva/ciclomatica 24/15→2/3. Helper entita 9/8 e predicato 5/6 sotto
+  soglia; file cognitiva 65→57, Error 3→2, Warning 3→2. Resta debito WHOIS
+  e serializer, invariato. 105 test prima/dopo, full-file 100%; evidenze in
+  `NETWORK_RDAP_NAMES_2026-11-17.md`.
+
+## 2026-11-17 — Fallback nomi endpoint firewall Network
+
+- `_resolve_firewall_event_endpoint_labels` in `network/router/helpers/endpoints.py`:
+  `reduced`, cognitiva/ciclomatica 18/15→8/7. Helper condiviso 5/5 sotto
+  soglia; file cognitiva 36→31 e ciclomatica 34→31, Error 1→0, Warning 2→1.
+  Resta `_extract_event_traffic` cyc 12, fuori slice. 36 test prima/dopo
+  full-file 100%, 11 API PASS e letture ORM verificate. Evidenze in
+  `NETWORK_ENDPOINT_LABELS_2026-11-17.md`.
+
+## 2026-11-17 — Separatori WKT Catasto
+
+- `_split_top_level` in `catasto/services/geometry_serialization.py`: `closed`,
+  cognitiva 17→13 e nesting 4→3. File cognitiva 67→63, Warning 2→0;
+  ciclomatica, LOC e numero di callable invariati. Nessuna violation residua
+  nel file. 28 test full-file 100% prima/dopo; due test API aggiuntivi PASS.
+  Evidenze in `GEOMETRY_SPLITTER_2026-11-17.md`.
+
+## 2026-11-17 — Raggruppamento avvisi per pagatore
+
+- `reassign_candidates` in `ruolo/services/payer_assignments.py`: `reduced`,
+  cognitive/cyclomatic 18/11→13/9. Helper gruppi 3/3 sotto soglia;
+  cognitiva file 52→50, Warning 4→2, nessun debito trasferito.
+- Residuo fuori slice: `assign`, cyclomatic 11 e parametri 6 (due Warning).
+  Nessuna nuova iterazione aperta. Evidenze in `PAYER_GROUPING_2026-11-17.md`.
+
 ## Dati da aggiungere dopo la Fase 1
 
 | Percorso | Max cognitive | Max cyclomatic | Densita | Violazioni | Churn 90d | Rischio | Priorita |

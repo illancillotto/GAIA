@@ -16,6 +16,7 @@ from app.core.datetime_compat import UTC
 from app.modules.network.models import (
     NetworkDevice,
     NetworkFirewallEvent,
+    NetworkTrackedSubject,
 )
 from app.modules.network.router.helpers.devices import _resolve_device_label
 from app.modules.network.router.helpers.endpoints import _extract_event_traffic
@@ -45,22 +46,24 @@ from app.modules.network.sophos import (
 # fmt: off
 
 def _extract_peer_hint(event: NetworkFirewallEvent, *, peer_ip: str | None) -> str | None:
-    raw_payload = metadata_sources_to_dict(event.raw_payload) or {}
-    parsed = raw_payload.get("parsed") if isinstance(raw_payload, dict) else None
-    parsed = parsed if isinstance(parsed, dict) else {}
+    parsed = _extract_firewall_event_parsed(event)
 
     domain = parsed.get("domain")
     if isinstance(domain, str) and domain.strip():
         return domain.strip()
 
-    url = parsed.get("url")
-    if isinstance(url, str) and url.strip():
-        hostname = urlparse(url.strip()).hostname
-        if hostname:
-            return hostname
+    hostname = _peer_url_hostname(parsed.get("url"))
+    if hostname:
+        return hostname
 
     if peer_ip:
         return _resolve_peer_label(peer_ip)
+    return None
+
+
+def _peer_url_hostname(url: Any) -> str | None:
+    if isinstance(url, str) and url.strip():
+        return urlparse(url.strip()).hostname
     return None
 
 
@@ -82,6 +85,12 @@ def _resolve_peer_label(ip_address: str | None) -> str | None:
     except OSError:
         pass
 
+    return _resolve_peer_rdap_label(ip_address, parsed_ip)
+
+
+def _resolve_peer_rdap_label(
+    ip_address: str, parsed_ip: ipaddress.IPv4Address | ipaddress.IPv6Address,
+) -> str | None:
     if parsed_ip.is_private or parsed_ip.is_loopback or parsed_ip.is_link_local or parsed_ip.is_multicast:
         return None
 
@@ -91,23 +100,16 @@ def _resolve_peer_label(ip_address: str | None) -> str | None:
     except (urllib.error.URLError, TimeoutError, ValueError, OSError):
         return None
 
+    return _peer_rdap_label(payload)
+
+
+def _peer_rdap_label(payload: dict[str, Any]) -> str | None:
     entities = payload.get("entities")
     if isinstance(entities, list):
         for entity in entities:
-            if not isinstance(entity, dict):
-                continue
-            vcard = entity.get("vcardArray")
-            if not (isinstance(vcard, list) and len(vcard) == 2 and isinstance(vcard[1], list)):
-                continue
-            for item in vcard[1]:
-                if (
-                    isinstance(item, list)
-                    and len(item) >= 4
-                    and item[0] == "fn"
-                    and isinstance(item[3], str)
-                    and item[3].strip()
-                ):
-                    return item[3].strip()
+            names = _peer_rdap_entity_names(entity)
+            if names:
+                return names[0]
 
     for key in ("name", "handle"):
         value = payload.get(key)
@@ -116,21 +118,32 @@ def _resolve_peer_label(ip_address: str | None) -> str | None:
     return None
 
 
+def _peer_rdap_entity_names(entity: Any) -> list[str]:
+    if not isinstance(entity, dict):
+        return []
+    vcard = entity.get("vcardArray")
+    if not (isinstance(vcard, list) and len(vcard) == 2 and isinstance(vcard[1], list)):
+        return []
+    for item in vcard[1]:
+        if _is_peer_rdap_name(item):
+            return [item[3].strip()]
+    return []
+
+
+def _is_peer_rdap_name(item: Any) -> bool:
+    return bool(
+        isinstance(item, list)
+        and len(item) >= 4
+        and item[0] == "fn"
+        and isinstance(item[3], str)
+        and item[3].strip()
+    )
+
+
 def _build_device_traffic_summary(db: Session, device: NetworkDevice, *, window_hours: int = 24) -> NetworkDeviceTrafficSummary:
     window_start = datetime.now(timezone.utc) - timedelta(hours=window_hours)  # noqa: UP017 - preserve legacy AST
     tracked_subjects = _get_active_tracked_subject_map(db)
-    events = db.scalars(
-        select(NetworkFirewallEvent)
-        .where(
-            NetworkFirewallEvent.observed_at >= window_start,
-            or_(
-                NetworkFirewallEvent.device_id == device.id,
-                NetworkFirewallEvent.src_ip == device.ip_address,
-                NetworkFirewallEvent.dst_ip == device.ip_address,
-            ),
-        )
-        .order_by(NetworkFirewallEvent.observed_at.desc())
-    ).all()
+    events = _device_traffic_events(db, device, window_start)
 
     if not events:
         return NetworkDeviceTrafficSummary(window_hours=window_hours)
@@ -141,8 +154,7 @@ def _build_device_traffic_summary(db: Session, device: NetworkDevice, *, window_
     recent_events: list[NetworkDeviceTrafficEventSummary] = []
     total_bytes_in = 0
     total_bytes_out = 0
-    allowed_events = 0
-    blocked_events = 0
+    event_outcomes: Counter[str] = Counter()
 
     for event in events:
         bytes_in, bytes_out, peer_ip = _extract_event_traffic(event, device_ip=device.ip_address)
@@ -158,41 +170,108 @@ def _build_device_traffic_summary(db: Session, device: NetworkDevice, *, window_
         total_bytes_in += bytes_in
         total_bytes_out += bytes_out
 
-        lowered_type = event.event_type.lower()
-        if "allow" in lowered_type:
-            allowed_events += 1
-        if "deny" in lowered_type or "block" in lowered_type or "drop" in lowered_type:
-            blocked_events += 1
+        event_outcomes.update(_device_traffic_event_outcomes(event.event_type))
 
-        if peer_ip:
-            peer_entry = peer_totals[peer_ip]
-            peer_entry["events_count"] += 1
-            peer_entry["bytes_in"] += bytes_in
-            peer_entry["bytes_out"] += bytes_out
-            if peer_label_hint:
-                peer_entry["labels"][peer_label_hint] += 1
+        _accumulate_device_traffic_peer(peer_totals, (bytes_in, bytes_out, peer_ip), peer_label_hint)
 
         if len(recent_events) < 8:
             recent_events.append(
-                NetworkDeviceTrafficEventSummary(
-                    id=event.id,
-                    event_type=event.event_type,
-                    severity=event.severity,
-                    protocol=event.protocol,
-                    src_ip=event.src_ip,
-                    dst_ip=event.dst_ip,
-                    peer_ip=peer_ip,
-                    peer_label=peer_label_hint,
-                    bytes_in=bytes_in,
-                    bytes_out=bytes_out,
-                    observed_at=event.observed_at,
-                    tracked_peer_ip_subject_id=tracked_peer_ip_subject.id if tracked_peer_ip_subject else None,
-                    tracked_peer_label_subject_id=tracked_domain_subject.id if tracked_domain_subject else None,
-                    tracked_url_subject_id=tracked_url_subject.id if tracked_url_subject else None,
+                _serialize_device_traffic_event(
+                    event, (bytes_in, bytes_out, peer_ip), peer_label_hint,
+                    (tracked_peer_ip_subject, tracked_domain_subject, tracked_url_subject),
                 )
             )
 
-    top_peers = [
+    top_peers = _device_traffic_peers(peer_totals, tracked_subjects)
+
+    return NetworkDeviceTrafficSummary(
+        window_hours=window_hours,
+        total_events=len(events),
+        allowed_events=event_outcomes["allowed"],
+        blocked_events=event_outcomes["blocked"],
+        bytes_in=total_bytes_in,
+        bytes_out=total_bytes_out,
+        last_observed_at=events[0].observed_at,
+        top_peers=top_peers,
+        recent_events=recent_events,
+    )
+
+
+def _device_traffic_events(
+    db: Session, device: NetworkDevice, window_start: datetime,
+) -> list[NetworkFirewallEvent]:
+    return db.scalars(
+        select(NetworkFirewallEvent)
+        .where(
+            NetworkFirewallEvent.observed_at >= window_start,
+            or_(
+                NetworkFirewallEvent.device_id == device.id,
+                NetworkFirewallEvent.src_ip == device.ip_address,
+                NetworkFirewallEvent.dst_ip == device.ip_address,
+            ),
+        )
+        .order_by(NetworkFirewallEvent.observed_at.desc())
+    ).all()
+
+
+def _device_traffic_event_outcomes(event_type: str) -> list[str]:
+    lowered_type = event_type.lower()
+    outcomes: list[str] = []
+    if "allow" in lowered_type:
+        outcomes.append("allowed")
+    if "deny" in lowered_type or "block" in lowered_type or "drop" in lowered_type:
+        outcomes.append("blocked")
+    return outcomes
+
+
+def _accumulate_device_traffic_peer(
+    peer_totals: dict[str, dict[str, Any]],
+    traffic_values: tuple[int, int, str | None],
+    peer_label_hint: str | None,
+) -> None:
+    bytes_in, bytes_out, peer_ip = traffic_values
+    if peer_ip:
+        peer_entry = peer_totals[peer_ip]
+        peer_entry["events_count"] += 1
+        peer_entry["bytes_in"] += bytes_in
+        peer_entry["bytes_out"] += bytes_out
+        if peer_label_hint:
+            peer_entry["labels"][peer_label_hint] += 1
+
+
+def _serialize_device_traffic_event(
+    event: NetworkFirewallEvent,
+    traffic_values: tuple[int, int, str | None],
+    peer_label_hint: str | None,
+    tracked_matches: tuple[
+        NetworkTrackedSubject | None, NetworkTrackedSubject | None, NetworkTrackedSubject | None,
+    ],
+) -> NetworkDeviceTrafficEventSummary:
+    bytes_in, bytes_out, peer_ip = traffic_values
+    tracked_peer_ip_subject, tracked_domain_subject, tracked_url_subject = tracked_matches
+    return NetworkDeviceTrafficEventSummary(
+        id=event.id,
+        event_type=event.event_type,
+        severity=event.severity,
+        protocol=event.protocol,
+        src_ip=event.src_ip,
+        dst_ip=event.dst_ip,
+        peer_ip=peer_ip,
+        peer_label=peer_label_hint,
+        bytes_in=bytes_in,
+        bytes_out=bytes_out,
+        observed_at=event.observed_at,
+        tracked_peer_ip_subject_id=tracked_peer_ip_subject.id if tracked_peer_ip_subject else None,
+        tracked_peer_label_subject_id=tracked_domain_subject.id if tracked_domain_subject else None,
+        tracked_url_subject_id=tracked_url_subject.id if tracked_url_subject else None,
+    )
+
+
+def _device_traffic_peers(
+    peer_totals: dict[str, dict[str, Any]],
+    tracked_subjects: dict[tuple[str, str], NetworkTrackedSubject],
+) -> list[NetworkDeviceTrafficPeerSummary]:
+    return [
         NetworkDeviceTrafficPeerSummary(
             ip_address=ip_address,
             label=max(values["labels"].items(), key=lambda item: item[1])[0] if values["labels"] else _resolve_peer_label(ip_address),
@@ -211,18 +290,6 @@ def _build_device_traffic_summary(db: Session, device: NetworkDevice, *, window_
             reverse=True,
         )[:5]
     ]
-
-    return NetworkDeviceTrafficSummary(
-        window_hours=window_hours,
-        total_events=len(events),
-        allowed_events=allowed_events,
-        blocked_events=blocked_events,
-        bytes_in=total_bytes_in,
-        bytes_out=total_bytes_out,
-        last_observed_at=events[0].observed_at,
-        top_peers=top_peers,
-        recent_events=recent_events,
-    )
 
 
 def _counter_to_items(counter: Counter[str], *, labels: dict[str, str] | None = None, limit: int = 6) -> list[NetworkStatisticsCountItem]:

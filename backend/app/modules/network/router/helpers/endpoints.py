@@ -41,15 +41,35 @@ def _resolve_firewall_event_endpoint_labels(
         return src_label, dst_label
 
     linked_label = _resolve_device_label(linked_device)[0]
-    if not src_label and src_ip and src_ip == linked_device.ip_address:
-        src_label = linked_label
-    if not dst_label and dst_ip and dst_ip == linked_device.ip_address:
-        dst_label = linked_label
-    return src_label, dst_label
+    return (
+        _linked_endpoint_label(src_label, src_ip, linked_device, linked_label),
+        _linked_endpoint_label(dst_label, dst_ip, linked_device, linked_label),
+    )
+
+
+def _linked_endpoint_label(
+    current_label: str | None,
+    ip_address: str | None,
+    linked_device: NetworkDevice,
+    linked_label: str | None,
+) -> str | None:
+    if not current_label and ip_address and ip_address == linked_device.ip_address:
+        return linked_label
+    return current_label
 
 
 def _extract_event_traffic(event: NetworkFirewallEvent, *, device_ip: str) -> tuple[int, int, str | None]:
-    raw_payload = metadata_sources_to_dict(event.raw_payload) or {}
+    bytes_sent, bytes_received = _event_traffic_counters(event.raw_payload)
+
+    if event.src_ip == device_ip:
+        return bytes_received, bytes_sent, event.dst_ip
+    if event.dst_ip == device_ip:
+        return bytes_sent, bytes_received, event.src_ip
+    return 0, 0, event.dst_ip or event.src_ip
+
+
+def _event_traffic_counters(raw_payload: str | None) -> tuple[int, int]:
+    raw_payload = metadata_sources_to_dict(raw_payload) or {}
     parsed = raw_payload.get("parsed") if isinstance(raw_payload, dict) else None
     parsed = parsed if isinstance(parsed, dict) else {}
 
@@ -61,14 +81,7 @@ def _extract_event_traffic(event: NetworkFirewallEvent, *, device_ip: str) -> tu
         except (TypeError, ValueError):
             return 0
 
-    bytes_sent = _to_int(parsed.get("bytes_sent"))
-    bytes_received = _to_int(parsed.get("bytes_received"))
-
-    if event.src_ip == device_ip:
-        return bytes_received, bytes_sent, event.dst_ip
-    if event.dst_ip == device_ip:
-        return bytes_sent, bytes_received, event.src_ip
-    return 0, 0, event.dst_ip or event.src_ip
+    return _to_int(parsed.get("bytes_sent")), _to_int(parsed.get("bytes_received"))
 
 
 # fmt: on
