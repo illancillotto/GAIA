@@ -1,5 +1,16 @@
 # Preparazione al rilascio
 
+## Blocchi ICATASTO — 17 novembre 2026
+
+Rilascio selettivo di backend, frontend e Communications worker, con immagini
+derivate dai runtime effettivi CED e manifest limitato ai file verificati.
+Aggiornare prima il worker, poi API e UI; conservare configurazioni, mount,
+reti, risorse, pausa e trasporti. Nessuna migrazione o conversione dei template
+reali. Richiedere test delle immagini candidate, build di produzione con PDF,
+confronto dei byte, controllo release concorrenti e verifiche dopo il cambio.
+Percorsi, immagini e stato effettivamente raggiunto sono registrati nel
+[rapporto del ciclo](CONDITIONAL_TEMPLATES_2026-11-17.md).
+
 ## Template grafici — rilascio coordinato 12 novembre 2026
 
 Distribuire backend, frontend e Communications worker nello stesso ciclo.

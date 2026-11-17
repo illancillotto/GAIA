@@ -1,5 +1,12 @@
 # Avanzamento Communications
 
+## 2026-11-17 — Blocchi ICATASTO condizionali
+
+Implementati selezione sui dati canonici, inserimento guidato di testo/link,
+conversione dei modelli ufficio e anteprima coerente. Verifica e rilascio
+autorizzato in corso; stato reale, matrice dei test e limiti nel
+[rapporto del ciclo](CONDITIONAL_TEMPLATES_2026-11-17.md).
+
 ## 2026-11-12 — Template grafici
 
 Implementati editor a blocchi, anteprima, compilazione dei campi e MIME HTML/testo

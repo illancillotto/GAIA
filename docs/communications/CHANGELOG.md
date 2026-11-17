@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-17 — Sezione ICATASTO facoltativa
+
+- Paragrafo e pulsante omessi se manca codice utenza o PIN dello snapshot PDF.
+- Condizione selezionabile per blocco; anteprima valutata prima dei segnaposto.
+- Conversione esplicita dei modelli ufficio, senza riscrivere lo storico.
+- Righe vuote incollate non creano blocchi vuoti; limiti e controlli invariati.
+- [Verifiche e stato del rilascio](CONDITIONAL_TEMPLATES_2026-11-17.md).
+
 ## 2026-11-12 — Editor dei template grafici
 
 - Logo ufficiale CBO incorporato, titoli, paragrafi, elenchi, link HTTPS e pulsanti.

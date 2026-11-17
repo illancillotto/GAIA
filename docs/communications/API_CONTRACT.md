@@ -1,5 +1,18 @@
 # Contratto API
 
+## Blocchi condizionali — 17 novembre 2026
+
+Ogni tipo di blocco ammette il campo opzionale `condition: "icatasto"`, unico
+valore consentito. Il blocco viene incluso solo se `codice_utenza` e
+`pin_utenza` canonici sono entrambi stringhe non vuote; assenza, null e soli
+spazi lo escludono. Struttura e URL sono validati anche per contenuti nascosti.
+Anteprima e composizione restituiscono solo i blocchi inclusi, senza `condition`;
+se tutti sono esclusi, il renderer restituisce testo vuoto. Restano i limiti
+esistenti dei comandi sul corpo finale. Il MIME rifiuta condizioni irrisolte.
+Le variabili dei blocchi esclusi non figurano in `missing_variables`; quelle
+richieste altrove mantengono i controlli. Le condizioni sono valutate prima
+dei segnaposto `[Da verificare: ...]`. Nessun endpoint o permesso nuovo.
+
 ## Corpo grafico — 12 novembre 2026
 
 `TemplateInput.body`, `MessageCreate.body` e `MessageChange.body` accettano una

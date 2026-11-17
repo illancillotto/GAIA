@@ -1,0 +1,312 @@
+{
+  "feature": "Communications conditional ICATASTO blocks",
+  "date": "2026-11-17",
+  "status": "CANDIDATE_VERIFIED_NOT_DEPLOYED",
+  "source_head_before": "d867f17d5211ebd552a79d3a9eeec8aa4d081a25",
+  "runtime_files": {
+    "backend/app/modules/communications/rich_template.py": "79172fb4864efab47a605e3ab18425f17563bbc42d3e97cd6819dfca01653511",
+    "backend/app/modules/communications/template_composition.py": "54ad0baaf62e6bfeddc0b3f4b6ceec08ce7b9590d4ad1aece8a329478163ac44",
+    "frontend/src/components/communications/icatasto-blocks.tsx": "1c746a4741793f0d2090f5e9d78e84484db483b440075f9361e23973b8947a6c",
+    "frontend/src/components/communications/template-blocks.ts": "8d9da39f5042689414b805880ff64d26fb84c0c560a3b730699537092bdd3b62",
+    "frontend/src/components/communications/template-editor.tsx": "810ff1f3c4c3dc1fd481f8dee64109afdab2d2e2318ddd5a9c34f8cadb9f82dc",
+    "frontend/src/components/communications/template-block-editor.tsx": "a9edfeebc1102de6dda08bbbf1ff5aac8ab212f99fdbf25430184ee248d0722e",
+    "frontend/src/components/communications/template-preview.tsx": "d39f5190e9b22cf27ffd4dd2453c7ea1c918ea218f8217594513889036aa4958",
+    "frontend/src/components/communications/message-body-editor.tsx": "f8a5467d136a0b03dd714605680e6ebf6284505b99ade5a614f1a2b09ffd77eb"
+  },
+  "images": {
+    "backend": {
+      "base_image": "sha256:7fd488e332380339aced4d2663ef12996a59b4668add319a0338b2a80e9c93e5",
+      "image": "sha256:340b18dc873e29618c31bab62fe86fccc5739e49966dda40d7da2f41c458a616",
+      "tag": "gaia-backend:icatasto-blocks-20261117",
+      "changed": {
+        "app/modules/communications/rich_template.py": "79172fb4864efab47a605e3ab18425f17563bbc42d3e97cd6819dfca01653511",
+        "app/modules/communications/template_composition.py": "54ad0baaf62e6bfeddc0b3f4b6ceec08ce7b9590d4ad1aece8a329478163ac44"
+      },
+      "preserved_files_or_routes": 1023
+    },
+    "frontend": {
+      "base_image": "sha256:3beebbd105ea0f11d6cfa43a9f9ec442b61b6864c9a31af6cfffaab0787e16e8",
+      "image": "sha256:0bb439c89adb9ee592e954e6d475fbc08fd064b82a3aff6a6675aff6eee03fa8",
+      "tag": "gaia-frontend:icatasto-blocks-20261117",
+      "changed": {
+        "src/components/communications/icatasto-blocks.tsx": "1c746a4741793f0d2090f5e9d78e84484db483b440075f9361e23973b8947a6c",
+        "src/components/communications/message-body-editor.tsx": "f8a5467d136a0b03dd714605680e6ebf6284505b99ade5a614f1a2b09ffd77eb",
+        "src/components/communications/template-block-editor.tsx": "a9edfeebc1102de6dda08bbbf1ff5aac8ab212f99fdbf25430184ee248d0722e",
+        "src/components/communications/template-blocks.ts": "8d9da39f5042689414b805880ff64d26fb84c0c560a3b730699537092bdd3b62",
+        "src/components/communications/template-editor.tsx": "810ff1f3c4c3dc1fd481f8dee64109afdab2d2e2318ddd5a9c34f8cadb9f82dc",
+        "src/components/communications/template-preview.tsx": "d39f5190e9b22cf27ffd4dd2453c7ea1c918ea218f8217594513889036aa4958"
+      },
+      "preserved_files_or_routes": 196
+    },
+    "communications-worker": {
+      "base_image": "sha256:46c716d2b956b1d9da3321b1ae284ed767234064a0afff0a022aa675149f3749",
+      "image": "sha256:01dfa8f7f3097e676a217660ba506f8fa0ca3fd023157bdb6b62fa88bc4d3be3",
+      "tag": "gaia-communications-worker:icatasto-blocks-20261117",
+      "changed": {
+        "app/modules/communications/rich_template.py": "79172fb4864efab47a605e3ab18425f17563bbc42d3e97cd6819dfca01653511",
+        "app/modules/communications/template_composition.py": "54ad0baaf62e6bfeddc0b3f4b6ceec08ce7b9590d4ad1aece8a329478163ac44"
+      },
+      "preserved_files_or_routes": 1006
+    }
+  },
+  "backend_local": {
+    "passed": 341,
+    "skipped": 0,
+    "coverage": {
+      "covered_lines": 138,
+      "num_statements": 138,
+      "percent_covered": 100.0,
+      "percent_covered_display": "100",
+      "missing_lines": 0,
+      "excluded_lines": 0,
+      "percent_statements_covered": 100.0,
+      "percent_statements_covered_display": "100",
+      "num_branches": 54,
+      "num_partial_branches": 0,
+      "covered_branches": 54,
+      "missing_branches": 0,
+      "percent_branches_covered": 100.0,
+      "percent_branches_covered_display": "100"
+    }
+  },
+  "image_tests": {
+    "backend": {
+      "image": "sha256:340b18dc873e29618c31bab62fe86fccc5739e49966dda40d7da2f41c458a616",
+      "tests": 341,
+      "coverage": {
+        "covered_lines": 138,
+        "num_statements": 138,
+        "percent_covered": 100.0,
+        "percent_covered_display": "100",
+        "missing_lines": 0,
+        "excluded_lines": 0,
+        "percent_statements_covered": 100.0,
+        "percent_statements_covered_display": "100",
+        "num_branches": 54,
+        "num_partial_branches": 0,
+        "covered_branches": 54,
+        "missing_branches": 0,
+        "percent_branches_covered": 100.0,
+        "percent_branches_covered_display": "100"
+      }
+    },
+    "communications-worker": {
+      "image": "sha256:01dfa8f7f3097e676a217660ba506f8fa0ca3fd023157bdb6b62fa88bc4d3be3",
+      "tests": 341,
+      "coverage": {
+        "covered_lines": 138,
+        "num_statements": 138,
+        "percent_covered": 100.0,
+        "percent_covered_display": "100",
+        "missing_lines": 0,
+        "excluded_lines": 0,
+        "percent_statements_covered": 100.0,
+        "percent_statements_covered_display": "100",
+        "num_branches": 54,
+        "num_partial_branches": 0,
+        "covered_branches": 54,
+        "missing_branches": 0,
+        "percent_branches_covered": 100.0,
+        "percent_branches_covered_display": "100"
+      }
+    }
+  },
+  "frontend": {
+    "feature_tests": 106,
+    "regression_tests": 5733,
+    "regression_files": 370,
+    "smoke_tests": 18,
+    "runtime_files": 6,
+    "coverage_percent": 100,
+    "statements": 103,
+    "branches": 90,
+    "functions": 45,
+    "lines": 74
+  },
+  "e2e_candidate": {
+    "startTime": "2026-11-17T07:02:23.657Z",
+    "duration": 28862.297,
+    "expected": 19,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "quality": {
+    "tool_tests": 270,
+    "lint_backend": "PASS",
+    "lint_frontend": "PASS_WITH_35_LEGACY_WARNINGS",
+    "typecheck": "PASS",
+    "build": "PASS",
+    "scope_ratchet": "PASS",
+    "scope_findings": [],
+    "global_findings_before": 20,
+    "global_findings_after": 20,
+    "global_findings_identical": true,
+    "new_findings": 0,
+    "baseline_reproducible_on_head": false,
+    "baseline_update": "REJECTED_65_PREEXISTING_FINDINGS_OUTSIDE_CHANGED_FILES",
+    "baseline_modified": false,
+    "shared_tree_limitation": "Unrelated Tributi page has ambiguous matching; full candidate comparison performed in isolated HEAD+feature worktree"
+  },
+  "complexity": {
+    "backend/app/modules/communications/rich_template.py": {
+      "callables": 14,
+      "cognitive_max": 15,
+      "cognitive_sum": 74,
+      "complexity_density": 0.986577,
+      "cyclomatic_max": 13,
+      "cyclomatic_sum": 73,
+      "dependency_count": 7,
+      "imports": 7,
+      "loc": 149,
+      "violations": []
+    },
+    "backend/app/modules/communications/template_composition.py": {
+      "callables": 2,
+      "cognitive_max": 5,
+      "cognitive_sum": 10,
+      "complexity_density": 0.575758,
+      "cyclomatic_max": 5,
+      "cyclomatic_sum": 9,
+      "dependency_count": 4,
+      "imports": 4,
+      "loc": 33,
+      "violations": []
+    },
+    "frontend/src/components/communications/icatasto-blocks.tsx": {
+      "callables": 10,
+      "cognitive_max": 4,
+      "cognitive_sum": 9,
+      "complexity_density": 0.903226,
+      "cyclomatic_max": 5,
+      "cyclomatic_sum": 19,
+      "dependency_count": 2,
+      "imports": 2,
+      "loc": 31,
+      "useEffect": 0,
+      "useReducer": 0,
+      "useState": 0,
+      "violations": []
+    },
+    "frontend/src/components/communications/message-body-editor.tsx": {
+      "callables": 2,
+      "cognitive_max": 1,
+      "cognitive_sum": 1,
+      "complexity_density": 0.333333,
+      "cyclomatic_max": 2,
+      "cyclomatic_sum": 3,
+      "dependency_count": 3,
+      "imports": 3,
+      "loc": 12,
+      "useEffect": 0,
+      "useReducer": 0,
+      "useState": 0,
+      "violations": []
+    },
+    "frontend/src/components/communications/template-block-editor.tsx": {
+      "callables": 6,
+      "cognitive_max": 6,
+      "cognitive_sum": 6,
+      "complexity_density": 0.818182,
+      "cyclomatic_max": 7,
+      "cyclomatic_sum": 12,
+      "dependency_count": 2,
+      "imports": 2,
+      "loc": 22,
+      "useEffect": 0,
+      "useReducer": 0,
+      "useState": 0,
+      "violations": []
+    },
+    "frontend/src/components/communications/template-blocks.ts": {
+      "callables": 4,
+      "cognitive_max": 10,
+      "cognitive_sum": 16,
+      "complexity_density": 1.5,
+      "cyclomatic_max": 8,
+      "cyclomatic_sum": 17,
+      "dependency_count": 0,
+      "imports": 0,
+      "loc": 22,
+      "useEffect": 0,
+      "useReducer": 0,
+      "useState": 0,
+      "violations": []
+    },
+    "frontend/src/components/communications/template-editor.tsx": {
+      "callables": 19,
+      "cognitive_max": 14,
+      "cognitive_sum": 26,
+      "complexity_density": 1.326531,
+      "cyclomatic_max": 12,
+      "cyclomatic_sum": 39,
+      "dependency_count": 5,
+      "imports": 5,
+      "loc": 49,
+      "useEffect": 0,
+      "useReducer": 0,
+      "useState": 0,
+      "violations": []
+    },
+    "frontend/src/components/communications/template-preview.tsx": {
+      "callables": 4,
+      "cognitive_max": 15,
+      "cognitive_sum": 17,
+      "complexity_density": 1.333333,
+      "cyclomatic_max": 10,
+      "cyclomatic_sum": 15,
+      "dependency_count": 2,
+      "imports": 2,
+      "loc": 24,
+      "useEffect": 0,
+      "useReducer": 0,
+      "useState": 0,
+      "violations": []
+    }
+  },
+  "production_before": {
+    "rich_template_supported": true,
+    "counts": {
+      "communication_accounts": 2,
+      "communication_templates": 8,
+      "communication_messages": 0,
+      "communication_jobs": 5,
+      "communication_authorizations": 0,
+      "communication_receipts": 0
+    },
+    "template_rows_hash": "57f13b42b7e307616e5f7223ad46619c",
+    "schema": [
+      "20261106_1000"
+    ],
+    "http_authenticated": {
+      "/admin/templates": 200,
+      "/templates": 200,
+      "/admin/accounts": 200,
+      "/admin/monitor": 200
+    },
+    "monitor": {
+      "paused": true,
+      "transport_enabled": false
+    },
+    "catalog_supported": true,
+    "catalog": {
+      "authenticated": 200,
+      "unauthenticated": 401,
+      "sha256": "35095529c9ae64e5226c3768749b89243ca2cbe28c012d3a48d75c43fdcf7dda",
+      "codes": [
+        "sollecito_2021_ufficio_pec",
+        "sollecito_2021_ufficio_email"
+      ]
+    },
+    "delete_supported": true,
+    "template_preview_supported": true,
+    "portal_snapshot_revision_supported": true,
+    "transaction_read_only": true
+  },
+  "release_directory": "/opt/gaia/releases/icatasto-blocks-20261117",
+  "limits": [
+    "Next development PDF error reproduced on previous code; production candidate all 19 E2E pass",
+    "Provider SMTP/PEC tests synthetic; no real messages",
+    "Existing approved templates require explicit conversion to a new version"
+  ]
+}

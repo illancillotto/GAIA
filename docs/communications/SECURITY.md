@@ -1,5 +1,15 @@
 # Sicurezza
 
+## Condizioni dei blocchi — 17 novembre 2026
+
+ICATASTO è un valore enumerato, non un'espressione eseguibile. Usa i dati già
+validati dal resolver dello snapshot PDF, senza lookup o fallback. Se manca
+un accesso, il blocco è omesso anche dal testo semplice e gli eventuali logo
+e link condizionali non sono incorporati. I segnaposto di anteprima non
+soddisfano la condizione. Struttura e URL restano validati anche nei blocchi
+nascosti; il MIME rifiuta condizioni non risolte. Permessi, approvazioni e
+riservatezza delle credenziali restano quelli esistenti.
+
 ## Template grafici — 12 novembre 2026
 
 Solo blocchi strutturati, nessun editor HTML libero, script, CSS arbitrario,

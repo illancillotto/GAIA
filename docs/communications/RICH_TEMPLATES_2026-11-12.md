@@ -6,6 +6,53 @@ Implementazione completata; rilascio CED attivo dal 12 novembre 2026 alle
 La sezione Produzione registra solo operazioni effettivamente concluse.
 Nessuna migrazione, nuova dipendenza, abilitazione dei trasporti o invio reale.
 
+## Prima implementazione locale — blocchi ICATASTO, 16 novembre 2026
+
+La verifica finale e lo stato del ciclo successivo sono nel
+[rapporto del 17 novembre](CONDITIONAL_TEMPLATES_2026-11-17.md).
+I numeri di questa sezione descrivono la prima verifica locale.
+
+Questa estensione è implementata nel checkout e non fa parte del rilascio
+del 12 novembre descritto sotto. Nell'editor template **+ Servizio ICATASTO**
+inserisce un paragrafo modificabile con anno, codice utenza e PIN e un pulsante
+HTTPS verso il portale ufficiale. Entrambi hanno la condizione **Solo con codice
+utenza e PIN ICATASTO disponibili**, selezionabile anche sui singoli altri blocchi.
+Se manca anche uno solo dei due valori, entrambi i blocchi sono omessi.
+
+Per aggiornare un modello ufficio già approvato: **Crea nuova versione** →
+**Crea layout con logo e link** → revisione → **Salva nuova versione bozza** →
+approvazione esplicita. La conversione separa i paragrafi e riconosce la sezione
+con `SERVIZIO ICATASTO`, `{{codice_utenza}}`, `{{pin_utenza}}` e `{{url_portale}}`:
+il paragrafo diventa condizionale e il segnaposto URL è sostituito da un pulsante.
+I testi oltre il limite di 60 blocchi restano in un unico paragrafo per la
+revisione manuale. Le versioni esistenti non vengono riscritte automaticamente.
+
+Il formato resta `GAIA-BLOCKS/1`: il campo opzionale `condition` ammette solo
+`"icatasto"`. La valutazione usa esclusivamente le credenziali canoniche dello
+snapshot PDF e avviene prima dei segnaposto di anteprima. I blocchi esclusi non
+producono variabili mancanti; le variabili obbligatorie fuori da essi mantengono
+i controlli precedenti. La bozza materializzata non conserva `condition`.
+Il trasporto rifiuta blocchi con condizioni non risolte, mentre l'editor del
+messaggio composto non permette di aggiungerle. URL e struttura sono validati
+anche per blocchi che saranno nascosti. Nessun fallback o recupero PIN nuovo.
+
+Verifiche locali: suite Communications backend **324 PASS**, **10 skip**
+preesistenti; frontend **105 PASS**. Coverage statement/branch dei due runtime
+backend e tutte le metriche dei sei runtime frontend: **100%**. Typecheck,
+lint mirato e ratchet contro `origin/main` sul perimetro: PASS, nessun finding.
+Metriche: nessuna nuova violazione, cinque warning prima/dopo. Il renderer
+resta a massimo ciclomatico/cognitivo **13/15**, la composizione **5/5**; il
+nuovo modulo UI ha massimo **4/3**. Baseline non modificata.
+I due E2E editor desktop/mobile passano, inclusi salvataggio della condizione,
+nuova versione e assenza di overflow; screenshot mobile ispezionato. I due
+E2E di composizione PDF falliscono nel server Next development con
+`Object.defineProperty called on non-object`, prima del rendering canvas.
+La stessa failure è riprodotta su entrambi i viewport in una copia isolata
+di `HEAD` (`d867f17d`), senza queste modifiche: limite preesistente del collaudo
+locale, non risolto da questa feature. `make lint-backend` passa. Grafi backend,
+frontend e documentazione piattaforma aggiornati.
+Evidenze di lavoro e report completi: `/tmp/gaia-icatasto-template/`.
+
 ## Comportamento implementato
 
 In `/gaia/communications`, **Crea layout con logo e link** converte il testo

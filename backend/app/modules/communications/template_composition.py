@@ -4,7 +4,7 @@ import re
 
 from . import registry, ruolo_source
 from .policy import Conflict, pdf_pages, sha256
-from .rich_template import render_template
+from .rich_template import render_template, select_body
 
 
 def preview_composition(db, identity, template_id, channel):
@@ -16,12 +16,13 @@ def preview_composition(db, identity, template_id, channel):
     pdf_pages(content)
     digest = sha256(content)
     variables = ruolo_source.template_variables(source)
-    required = set(re.findall(r"\{\{\s*([a-z_]+)\s*\}\}", template.subject + template.body))
+    body = select_body(template.body, variables)
+    required = set(re.findall(r"\{\{\s*([a-z_]+)\s*\}\}", template.subject + body))
     missing = sorted(required - variables.keys())
     prepared = {**variables, **{key: f"[Da verificare: {key}]" for key in missing}}
     return {
         "subject": render_template(template.subject, prepared),
-        "body": render_template(template.body, prepared),
+        "body": render_template(body, prepared),
         "source_sha256": digest,
         "missing_variables": missing,
         "send_blockers": send_blockers(db, identity, digest),

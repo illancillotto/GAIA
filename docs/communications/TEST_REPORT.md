@@ -1,5 +1,12 @@
 # Report di collaudo iniziale — 2026-11-03
 
+## Verifica del 17 novembre 2026
+
+La matrice dei comportamenti condizionali, le misure full-file e le prove
+su PostgreSQL e immagini candidate sono nel
+[rapporto ICATASTO](CONDITIONAL_TEMPLATES_2026-11-17.md). I risultati delle
+sezioni seguenti restano le evidenze storiche dei rispettivi rilasci.
+
 ## Ciclo corrente — 12 novembre 2026
 
 Il report seguente conserva le corse storiche. La matrice dei comportamenti

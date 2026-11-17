@@ -1,5 +1,16 @@
 # Rollback e ripristino
 
+## Condizioni ICATASTO — 17 novembre 2026
+
+Il backend precedente rifiuta `condition` nei template. Se sono state create
+versioni condizionali dopo il rilascio, prima del rollback inventariarle e
+impedirne l'uso fino al ripristino del renderer compatibile; non cancellarle
+o riscriverle tramite SQL. I messaggi composti non contengono condizioni e
+mantengono il formato grafico già supportato. Usare i soli file di rollback
+della release verificata, controllare immagini correnti e release concorrenti,
+conservare dati, pausa e trasporti. Nessun downgrade DB, restore o reinvio.
+[Artefatti ed esito](CONDITIONAL_TEMPLATES_2026-11-17.md).
+
 ## Template grafici — compatibilità dei body
 
 Un vecchio worker non interpreta `GAIA-BLOCKS/1`: non riavviarlo con dispatch

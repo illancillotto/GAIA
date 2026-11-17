@@ -40,6 +40,17 @@ ufficiale, titoli, paragrafi, elenchi, link e pulsanti HTTPS. Le variabili si
 inseriscono nei testi, le destinazioni dei link sono fisse. In composizione
 l’anteprima messaggio e la modifica del layout si aprono su richiesta; il PDF
 dell’avviso resta sotto i campi. Ogni modifica invalida l’approvazione e richiede
-nuova verifica del PDF. Restano bloccanti i dati canonici/accessi mancanti e
+nuova verifica del PDF. Restano bloccanti i dati canonici obbligatori mancanti e
 restano esclusi gli avvisi riconciliati con Poste.
 [Contratto e verifiche](../../../docs/communications/RICH_TEMPLATES_2026-11-12.md).
+
+## Blocchi ICATASTO condizionali — 17 novembre 2026
+
+L'editor aggiunge paragrafo e pulsante ICATASTO con visibilità condizionata
+alla presenza di entrambi i valori canonici `codice_utenza` e `pin_utenza`.
+Se manca uno dei due, il blocco viene omesso da anteprima, bozza e MIME senza
+bloccare la composizione per quei soli segnaposto. Le variabili richieste
+altrove restano obbligatorie. Nessun recupero PIN o modifica del PDF.
+La conversione esplicita dei modelli ufficio prepara una nuova versione da
+revisionare e approvare; non cambia catalogo originale o modelli già approvati.
+[Verifiche e stato reale del rilascio](../../../docs/communications/CONDITIONAL_TEMPLATES_2026-11-17.md).

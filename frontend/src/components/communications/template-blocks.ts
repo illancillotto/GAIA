@@ -1,7 +1,7 @@
 export const BLOCK_PREFIX = "GAIA-BLOCKS/1\n";
 export const BLOCK_LABELS = { logo: "Logo ufficiale", title: "Titolo", paragraph: "Paragrafo", list: "Elenco", link: "Link", button: "Pulsante" };
 export type BlockKind = keyof typeof BLOCK_LABELS;
-export type TemplateBlock = { kind: BlockKind; text?: string; url?: string };
+export type TemplateBlock = { kind: BlockKind; text?: string; url?: string; condition?: "icatasto" };
 
 export function readBlocks(body: string): TemplateBlock[] | null {
   if (!body.startsWith(BLOCK_PREFIX)) return null;

@@ -39,19 +39,26 @@ for (const width of [1440, 390]) {
     await page.getByRole("button", { name: "+ Pulsante", exact: true }).click();
     await page.getByLabel("Testo blocco 3").fill("Consulta la tua posizione");
     await page.getByLabel("URL blocco 3").fill("https://incatasto.servizicapacitas.com/pages/main.aspx?cons=090");
+    await page.getByRole("button", { name: "+ Servizio ICATASTO", exact: true }).click();
+    await expect(page.getByLabel("Solo con codice utenza e PIN ICATASTO disponibili").nth(3)).toBeChecked();
+    await expect(page.getByLabel("Solo con codice utenza e PIN ICATASTO disponibili").nth(4)).toBeChecked();
     const preview = page.getByRole("region", { name: "Anteprima messaggio" });
     await expect(preview.getByRole("img")).toBeVisible();
     await expect(preview.getByRole("link", { name: "Consulta la tua posizione" })).toHaveAttribute("href", /https:\/\/incatasto/);
     await expect(preview.getByRole("img")).toHaveJSProperty("naturalWidth", 1400);
+    await expect(preview.getByRole("link", { name: "Accedi al SERVIZIO ICATASTO" })).toBeVisible();
+    await expect(preview.getByText(/Se manca uno dei due dati/)).toHaveCount(2);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.screenshot({ path: `/tmp/gaia-templates-rich-${width}.png`, fullPage: true });
     await page.getByRole("button", { name: "Salva nuova versione bozza", exact: true }).click();
     await expect(page.getByLabel("Codice template")).toHaveValue("");
     expect(templates).toHaveLength(1);
     const blocks = JSON.parse((templates[0].body as string).slice("GAIA-BLOCKS/1\n".length));
-    expect(blocks.map((block: { kind: string }) => block.kind)).toEqual(["logo", "paragraph", "button"]);
+    expect(blocks.map((block: { kind: string }) => block.kind)).toEqual(["logo", "paragraph", "button", "paragraph", "button"]);
+    expect(blocks.slice(3).every((block: { condition?: string }) => block.condition === "icatasto")).toBe(true);
     await page.getByRole("button", { name: "Crea nuova versione", exact: true }).click();
     await expect(page.getByLabel("URL blocco 3")).toHaveValue("https://incatasto.servizicapacitas.com/pages/main.aspx?cons=090");
+    await expect(page.getByLabel("Solo con codice utenza e PIN ICATASTO disponibili").nth(3)).toBeChecked();
     expect(errors).toEqual([]);
   });
 

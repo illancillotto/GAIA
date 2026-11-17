@@ -4,10 +4,11 @@ import { useRef } from "react";
 import { BLOCK_LABELS, readBlocks, writeBlocks, type TemplateBlock, type BlockKind } from "./template-blocks";
 import { TemplateBlockEditor } from "./template-block-editor";
 import { TemplatePreview } from "./template-preview";
+import { convertToBlocks, IcatastoInsert } from "./icatasto-blocks";
 
-type Props = { value: string; onChange: (value: string) => void; label?: string; subject?: string; disabled?: boolean; variables?: Record<string, string> };
+type Props = { value: string; onChange: (value: string) => void; label?: string; subject?: string; disabled?: boolean; variables?: Record<string, string>; allowConditions?: boolean };
 
-export function TemplateEditor({ value, onChange, label = "Corpo template", subject, disabled, variables = {} }: Props) {
+export function TemplateEditor({ value, onChange, label = "Corpo template", subject, disabled, variables = {}, allowConditions = true }: Props) {
   const blocks = readBlocks(value);
   const focus = useRef<{ index: number; start: number; end: number }>({ index: -1, start: 0, end: 0 });
   function update(index: number, changes: Partial<TemplateBlock>) {
@@ -35,9 +36,11 @@ export function TemplateEditor({ value, onChange, label = "Corpo template", subj
     <fieldset disabled={disabled} className="min-w-0 space-y-3">
       <legend className="mb-2 font-medium">{label}</legend>
       {!blocks ? <><label className="block text-sm">{label}<textarea className="mt-1 block min-h-40 w-full rounded border p-2" maxLength={20000} value={value} onSelect={(event) => { focus.current = { index: -1, start: event.currentTarget.selectionStart, end: event.currentTarget.selectionEnd }; }} onChange={(event) => onChange(event.target.value)} /></label>
-        <button type="button" className="btn-secondary" onClick={() => onChange(writeBlocks([{ kind: "paragraph", text: value }]))}>Crea layout con logo e link</button></> : <>
+        <button type="button" className="btn-secondary" onClick={() => onChange(convertToBlocks(value))}>Crea layout con logo e link</button><p className="text-xs text-slate-600">La conversione rende condizionale la sezione ICATASTO dei modelli ufficio e aggiunge il link al portale.</p></> : <>
         <div className="flex flex-wrap gap-2" aria-label="Aggiungi blocco">{Object.entries(BLOCK_LABELS).map(([kind, name]) => <button type="button" className="btn-secondary" key={kind} disabled={blocks.length >= 60} onClick={() => add(kind as BlockKind)}>+ {name}</button>)}</div>
+        {allowConditions && <IcatastoInsert blocks={blocks} onChange={onChange} />}
         {blocks.map((block, index) => <TemplateBlockEditor key={index} block={block} index={index} count={blocks.length}
+          allowConditions={allowConditions}
           update={(changes) => update(index, changes)} move={(step) => move(index, step)}
           remove={() => onChange(writeBlocks(blocks.filter((_, position) => position !== index)))}
           select={(start, end) => { focus.current = { index, start, end }; }} />)}

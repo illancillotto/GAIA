@@ -1,5 +1,14 @@
 # Piano di implementazione e stato
 
+## 2026-11-17 — ICATASTO condizionale
+
+- [x] Condizione tipizzata, selezione prima dei placeholder, snapshot materializzato.
+- [x] Inserimento testo/pulsante e conversione esplicita dei modelli ufficio.
+- [x] Test pertinenti di API, MIME, authoring e limiti; E2E su build produzione.
+- [ ] Completare verifica immagini e pubblicazione autorizzata con controlli live.
+
+[Stato effettivo e limiti](CONDITIONAL_TEMPLATES_2026-11-17.md).
+
 ## Stato implementato — 12 novembre 2026
 
 Il piano storico è esteso dall’editor dei template grafici. Implementazione,

@@ -1,5 +1,16 @@
 # Architettura
 
+## Selezione condizionale — 17 novembre 2026
+
+`rich_template.select_body` valuta la sola condizione ICATASTO sui dati
+canonici dello snapshot PDF, prima di compilare i testi. `template_composition`
+usa la stessa selezione prima di rilevare variabili mancanti e inserire i
+segnaposto di anteprima. La resa MIME richiede blocchi già materializzati.
+`icatasto-blocks.tsx` gestisce inserimento paragrafo/pulsante, conversione dei
+testi ufficio, selettore della condizione e indicazione in anteprima.
+L'editor del messaggio composto non espone comandi per aggiungere condizioni.
+Nessun nuovo lookup delle credenziali, parser di espressioni o schema dati.
+
 ## Template grafici — 12 novembre 2026
 
 Il formato `GAIA-BLOCKS/1` nel campo `body` esistente rappresenta da 1 a 60

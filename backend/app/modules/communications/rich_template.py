@@ -55,10 +55,39 @@ def validate_block(block):
     if kind in {"link", "button"}:
         fields.add("url")
         validate_destination(block.get("url"))
-    if set(block) != fields:
+    if set(block) != fields | condition_fields(block):
         raise ValueError("Campi del blocco non validi")
     if kind != "logo" and (not isinstance(block["text"], str) or not block["text"].strip()):
         raise ValueError("Compilare il testo di ogni blocco")
+
+
+def condition_fields(block):
+    if "condition" not in block:
+        return set()
+    if block["condition"] != "icatasto":
+        raise ValueError("Condizione del blocco non valida")
+    return {"condition"}
+
+
+def include_block(block, variables):
+    if "condition" not in block:
+        return True
+    return all(
+        isinstance(variables.get(key), str) and variables[key].strip()
+        for key in ("codice_utenza", "pin_utenza")
+    )
+
+
+def select_body(body, variables):
+    """Resolve conditions from source data before adding any preview placeholders."""
+    if not body.startswith(PREFIX):
+        return body
+    blocks = [
+        {key: value for key, value in block.items() if key != "condition"}
+        for block in decode(body)
+        if include_block(block, variables)
+    ]
+    return PREFIX + json.dumps(blocks, ensure_ascii=False) if blocks else ""
 
 
 def validate_destination(url):
@@ -79,9 +108,10 @@ def substitute(body, replace):
 
 def render_template(body, variables):
     """Render each text field separately, preserving JSON even for quoted taxpayer names."""
-    if not body.startswith(PREFIX):
-        return render_plain(body, variables)
     try:
+        body = select_body(body, variables)
+        if not body.startswith(PREFIX):
+            return render_plain(body, variables)
         return substitute(body, lambda text: render_plain(text, variables))
     except ValueError as exc:
         raise Conflict(str(exc)) from exc
@@ -113,10 +143,17 @@ def block_content(block):
     return text, f"<{tag}>{safe}</{tag}>"
 
 
+def resolved_blocks(body):
+    blocks = decode(body)
+    if any("condition" in block for block in blocks):
+        raise Conflict("Comporre i blocchi condizionali con i dati dell'avviso prima dell'invio")
+    return blocks
+
+
 def email_content(body):
     if not body.startswith(PREFIX):
         return body, None, False
-    blocks = decode(body)
+    blocks = resolved_blocks(body)
     parts = [block_content(block) for block in blocks]
     html = (
         '<!doctype html><html lang="it"><head><meta charset="utf-8"></head>'

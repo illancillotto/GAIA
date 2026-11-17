@@ -1,6 +1,7 @@
 "use client";
 
 import { readBlocks, safeLink, type TemplateBlock } from "./template-blocks";
+import { ConditionalPreview } from "./icatasto-blocks";
 
 export function TemplatePreview({ body, subject }: { body: string; subject?: string }) {
   const blocks = readBlocks(body);
@@ -8,7 +9,7 @@ export function TemplatePreview({ body, subject }: { body: string; subject?: str
     <h3 className="font-semibold">Anteprima messaggio</h3>
     {subject && <p className="break-words border-b pb-3 text-sm"><strong>Oggetto: </strong>{subject}</p>}
     <div className="space-y-4 break-words rounded-lg bg-white p-5 text-slate-800">
-      {blocks ? blocks.map((block, index) => <PreviewBlock key={index} block={block} />) : <p className="whitespace-pre-wrap">{body}</p>}
+      {blocks ? blocks.map((block, index) => <ConditionalPreview key={index} block={block}><PreviewBlock block={block} /></ConditionalPreview>) : <p className="whitespace-pre-wrap">{body}</p>}
     </div>
     <p className="text-xs text-slate-600">I campi tra doppie parentesi verranno compilati con i dati dell’avviso. Il messaggio include anche una versione testuale.</p>
   </section>;

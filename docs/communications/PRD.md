@@ -1,5 +1,16 @@
 # GAIA Communications — PRD
 
+## Sezione ICATASTO facoltativa — 17 novembre 2026
+
+**+ Servizio ICATASTO** inserisce testo e pulsante modificabili, entrambi
+visibili solo con codice utenza e PIN disponibili. La medesima condizione
+si può applicare agli altri blocchi. Se manca anche un dato, la sezione viene
+omessa senza richiedere il recupero delle credenziali. I campi obbligatori nel
+resto del messaggio mantengono i controlli. La conversione dei modelli ufficio
+riconosce la sezione portale e prepara una nuova versione da revisionare;
+non modifica versioni approvate o messaggi storici.
+[Verifica e rilascio](CONDITIONAL_TEMPLATES_2026-11-17.md).
+
 ## Editor implementato — 12 novembre 2026
 
 L’amministratore compone template con logo ufficiale, titoli, paragrafi, elenchi,

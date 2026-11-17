@@ -1,5 +1,27 @@
 # Manuale operativo
 
+## Sezione ICATASTO facoltativa — 17 novembre 2026
+
+Nel layout premere **+ Servizio ICATASTO**: vengono aggiunti un paragrafo con
+anno, codice utenza e PIN e un pulsante verso il portale ufficiale. Testo e
+link sono modificabili. La casella **Solo con codice utenza e PIN ICATASTO
+disponibili**, già selezionata per entrambi, si può applicare anche agli altri
+blocchi. Se manca anche uno solo dei due valori, il relativo blocco non sarà
+incluso nel messaggio; l'anteprima del template spiega la condizione, mentre
+quella del singolo avviso mostra il risultato effettivo.
+
+Per i modelli ufficio già approvati: **Crea nuova versione** → **Crea layout
+con logo e link** → revisione → **Salva nuova versione bozza** → approvazione.
+La conversione riconosce il paragrafo con SERVIZIO ICATASTO e i tre segnaposto
+utenza/PIN/URL, lo rende condizionale e sostituisce l'URL con un pulsante.
+Paragrafi personalizzati e testi fuori da quella sezione restano normali;
+controllare sempre l'anteprima. Righe separatrici vuote non creano blocchi vuoti.
+Oltre 60 blocchi il testo rimane in un paragrafo per la revisione manuale.
+Il pulsante ICATASTO richiede due posti liberi. Le versioni approvate e il
+catalogo originale non vengono convertiti automaticamente. Le variabili
+utenza/PIN richieste fuori dai blocchi condizionali restano obbligatorie.
+[Stato del rilascio e verifiche](CONDITIONAL_TEMPLATES_2026-11-17.md).
+
 ## Creare e usare un template grafico
 
 1. In `/gaia/communications`, compilare codice, nome, canale e oggetto oppure

@@ -1,5 +1,13 @@
 # Modello dati
 
+## Condizioni ICATASTO — 17 novembre 2026
+
+Nessuna migrazione. `communication_templates.body` può contenere blocchi con
+`condition: "icatasto"`. La composizione omette i blocchi non applicabili e
+rimuove la condizione dagli altri prima di salvare `communication_messages.body`.
+Lo snapshot resta quindi indipendente dalle versioni template successive.
+Nessuna riscrittura automatica dei template approvati o dei messaggi storici.
+
 ## Corpo versionato dei template e messaggi — 12 novembre 2026
 
 Nessuna nuova colonna o migrazione. `communication_templates.body` conserva
