@@ -1,0 +1,71 @@
+{
+  "runtime_files": [
+    "frontend/src/components/communications/admin-accounts.tsx"
+  ],
+  "base_commit": "f6386073c89435c80cb94550d78f6aae87a59e3b",
+  "unit_tests": 13,
+  "coverage": {
+    "statements": [
+      55,
+      55
+    ],
+    "branches": [
+      38,
+      38
+    ],
+    "functions": [
+      29,
+      29
+    ],
+    "lines": [
+      36,
+      36
+    ]
+  },
+  "smoke_tests": 18,
+  "lint": true,
+  "typecheck": true,
+  "authoritative_ratchet": {
+    "base_ref": "origin/main",
+    "findings": []
+  },
+  "head_diagnostic": [
+    {
+      "baseline": 34,
+      "delta": 5,
+      "metric": "loc",
+      "path": "frontend/src/components/communications/admin-accounts.tsx",
+      "reason": "legacy_metric_regression",
+      "symbol": "AccountAdministration",
+      "value": 39
+    },
+    {
+      "baseline": 4,
+      "delta": 1,
+      "metric": "loc",
+      "path": "frontend/src/components/communications/admin-accounts.tsx",
+      "reason": "legacy_metric_regression",
+      "symbol": "edit",
+      "value": 5
+    }
+  ],
+  "baseline_modified": false,
+  "candidate_e2e": {
+    "startTime": "2026-11-17T08:33:35.977Z",
+    "duration": 32107.094,
+    "expected": 25,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "prepared": {
+    "base_image": "sha256:0f58c17deec4928f564d44c240c83d86bf80341385ccb2f315aa0636044c4afc",
+    "image": "sha256:4687a014294aabefb8ed4446c9093741b17ddd4bb8c4830176f95be3d1cd0b94",
+    "tag": "gaia-frontend:communications-account-panel-20261117",
+    "changed": {
+      "src/components/communications/admin-accounts.tsx": "9ba9419d863f4b9a449aaa05b14a72e6a2c71bca72990fa1024fd8baa10ce505"
+    },
+    "preserved_files_or_routes": 196
+  },
+  "deployment_status": "prepared"
+}

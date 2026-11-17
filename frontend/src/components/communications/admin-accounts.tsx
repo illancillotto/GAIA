@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { communications } from "@/lib/communications-api";
 
 type Configuration = {
@@ -21,6 +21,7 @@ const TEXT_FIELDS = { name: "Nome account", provider: "Provider", sender: "Indir
 const NUMBERS = { smtp_port: "Porta SMTP", imap_port: "Porta IMAP", priority: "Priorità", max_bytes: "Limite MIME in byte", hourly_limit: "Invii massimi per ora" } as const;
 
 export function AccountAdministration({ token }: { token: string }) {
+  const editor = useRef<HTMLDetailsElement>(null);
   const [accounts, setAccounts] = useState<Stored[]>([]);
   const [selected, setSelected] = useState<Stored | null>(null);
   const [form, setForm] = useState<Configuration>(EMPTY);
@@ -28,6 +29,7 @@ export function AccountAdministration({ token }: { token: string }) {
   const reload = useCallback(async () => setAccounts(await communications<Stored[]>(token, "/admin/accounts")), [token]);
   useEffect(() => { void reload().catch((error: Error) => setStatus({ busy: false, error: error.message, notice: "" })); }, [reload]);
   function edit(account: Stored) {
+    editor.current!.open = true;
     setSelected(account);
     setForm(Object.fromEntries(Object.keys(EMPTY).map((key) => [key, account[key as keyof Configuration]])) as Configuration);
   }
@@ -48,10 +50,13 @@ export function AccountAdministration({ token }: { token: string }) {
   return <section className="space-y-4 rounded-2xl border bg-white p-5"><h2 className="text-lg font-semibold">Account e provider</h2>
     {status.error && <p role="alert" className="text-rose-800">{status.error}</p>}{status.notice && <p role="status">{status.notice}</p>}
     <AccountTable accounts={accounts} busy={status.busy} edit={edit} command={command} />
-    <h3 className="font-semibold">{selected ? "Modifica account" : "Nuovo account"}</h3>
+    <details ref={editor} className="rounded-xl border border-slate-200">
+    <summary className="cursor-pointer rounded-xl px-4 py-3 font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">{selected ? "Modifica account" : "Nuovo account"}</summary>
+    <div className="space-y-4 border-t border-slate-200 p-4">
     <p className="text-sm text-slate-600">Indicare gli endpoint pubblicati dal provider per lo specifico contratto. Il secret è un file montato esclusivamente al worker: qui si salva il riferimento, mai la password. Configurare un account non autorizza connessioni reali.</p>
     <AccountFields form={form} setForm={setForm} busy={status.busy} />
     <button className="btn-primary" disabled={status.busy} onClick={() => void save()}>Salva configurazione</button><button className="btn-secondary ml-2" onClick={() => { setSelected(null); setForm(EMPTY); }}>Nuovo account</button>
+    </div></details>
   </section>;
 }
 

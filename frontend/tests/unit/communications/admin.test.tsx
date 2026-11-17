@@ -21,6 +21,7 @@ it("guards administration before reading account settings", () => {
 it("creates, edits and versions accounts, configures TLS/auth/routing and queues tests without secrets", async () => {
   render(<AccountAdministration token="token" />);
   await screen.findByText("Modifica");
+  fireEvent.click(screen.getByText("Nuovo account", { selector: "summary" }));
   for (const [label, value] of [["Nome account", "Casella"], ["Provider", "Alternative"], ["Indirizzo mittente", "office@example.org"], ["Nome visualizzato", "Office"], ["Host SMTP verificato", "smtp.example.org"], ["Host IMAP verificato", "imap.example.org"], ["Username", "office"], ["Riferimento secret esterno", "external-file"], ["Porta SMTP", "587"], ["Porta IMAP", "143"], ["Priorità", "10"], ["Limite MIME in byte", "10000"], ["Invii massimi per ora", "10"], ["Canale", "email"], ["smtp_encryption", "starttls"], ["imap_encryption", "starttls"], ["Autenticazione", "oauth2"], ["ID utenti autorizzati (vuoto: tutti i gestori Tributi)", "1,2"]]) fireEvent.change(screen.getByLabelText(label), { target: { value } });
   fireEvent.change(screen.getByLabelText(/ID utenti/), { target: { value: "" } });
   for (const label of ["Account abilitato", "Invii in pausa", "Predefinito generale del canale", "Predefinito Ruolo per questo canale"]) fireEvent.click(screen.getByLabelText(label));
@@ -45,6 +46,7 @@ it("shows enabled/live account metadata and pausing, and reports all account com
   mocks.api.mockResolvedValue([{ ...stored, active: true, paused: false, last_test_at: "today", last_sync_at: "today" }]);
   render(<AccountAdministration token="token" />);
   await screen.findByText("Pausa account");
+  fireEvent.click(screen.getByText("Nuovo account", { selector: "summary" }));
   for (const failure of [new Error("denied"), "error"]) {
     mocks.api.mockRejectedValue(failure);
     fireEvent.click(screen.getByText("Pausa account"));
@@ -52,6 +54,28 @@ it("shows enabled/live account metadata and pausing, and reports all account com
     fireEvent.click(screen.getByText("Salva configurazione"));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(failure instanceof Error ? "denied" : "Salvataggio fallito"));
   }
+});
+it("keeps account creation collapsed, preserves draft input on toggle, and opens existing accounts for editing", async () => {
+  render(<AccountAdministration token="token" />);
+  const edit = await screen.findByRole("button", { name: "Modifica" });
+  const toggle = screen.getByText("Nuovo account", { selector: "summary" });
+  const name = screen.getByLabelText("Nome account");
+  expect(name).not.toBeVisible();
+  expect(edit).toBeVisible();
+  fireEvent.click(toggle);
+  expect(name).toBeVisible();
+  fireEvent.change(name, { target: { value: "Bozza account" } });
+  fireEvent.click(toggle);
+  expect(name).not.toBeVisible();
+  fireEvent.click(toggle);
+  expect(name).toBeVisible();
+  expect(name).toHaveValue("Bozza account");
+  fireEvent.click(toggle);
+  fireEvent.click(edit);
+  expect(screen.getByText("Modifica account", { selector: "summary" })).toBeVisible();
+  expect(name).toBeVisible();
+  expect(name).toHaveValue("Synthetic");
+  expect(mocks.api).toHaveBeenCalledTimes(1);
 });
 it("creates a fresh version and approves only draft templates", async () => {
   render(<TemplateAdministration token="token" />);

@@ -42,6 +42,9 @@ controlli inCASS e revisione PDF con accessi aggiunti il 12 novembre (COMPOSITIO
   approvazione individuale, accodamento e annullamento consentito.
 - Admin/super_admin: account, endpoint, utenti autorizzati, template versionati,
   test asincroni, pause e monitoraggio. Secret provisionati fuori da DB/UI.
+  Il modulo «Nuovo account» parte chiuso in un pannello espandibile; chiuderlo
+  conserva i valori inseriti. «Modifica» apre automaticamente il pannello con
+  la configurazione dell'account selezionato, lasciando sempre visibile l'elenco.
 - Ogni versione template può essere eliminata dall'amministratore dopo una
   conferma che identifica nome, canale, codice e versione. Scompare dalle
   selezioni future; testi e messaggi già creati, altre versioni e audit restano
