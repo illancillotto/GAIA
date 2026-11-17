@@ -83,5 +83,39 @@
     "frontend": "updated",
     "platform_docs": "chunk 1/1 done; no semantic failures"
   },
-  "unit_regression_workspace": 5733
+  "unit_regression_workspace": 5733,
+  "activation": {
+    "started_at": "2026-11-17T07:46:59.235272+00:00",
+    "activated_at": "2026-11-17T07:47:16.846106+00:00",
+    "image": "sha256:0f58c17deec4928f564d44c240c83d86bf80341385ccb2f315aa0636044c4afc",
+    "http": {
+      "/login": 200,
+      "/gaia/communications": 200,
+      "/ruolo/tributi/solleciti/pec": 200,
+      "/ruolo/tributi/solleciti/email": 200,
+      "/api/health": 200,
+      "/api/communications/admin/templates": 401
+    },
+    "effective_configuration_preserved": true,
+    "unchanged_other_containers": 36,
+    "build_matches_canary": true,
+    "commit": "4f1aa77698ead7bf11fa1c2eec93f6ab287763b7"
+  },
+  "preexisting_github_dependency_alerts": {
+    "high": 7,
+    "moderate": 1
+  },
+  "live_e2e": {
+    "startTime": "2026-11-17T07:47:41.269Z",
+    "duration": 22552.488999999998,
+    "expected": 23,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "final_health": {
+    "frontend": "healthy",
+    "backend": "healthy",
+    "communications-worker": "healthy"
+  }
 }

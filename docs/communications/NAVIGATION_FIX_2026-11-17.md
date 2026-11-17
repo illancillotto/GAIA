@@ -39,10 +39,18 @@ app-shell e `tests/unit/communications`, con
 
 ## Rilascio
 
-Build candidata e verifiche browser superate. Attivazione in preparazione.
-Il rilascio riguarda esclusivamente
-il frontend; sorgente di partenza uguale al frontend pubblicato nel ciclo ICATASTO,
-con il solo overlay di `navigation.ts`. Stato finale registrato dopo l’attivazione.
+Commit applicativo `4f1aa776` pubblicato sul branch `chore/split-changes-20261109`.
+Frontend attivato su CED alle **08:47:16 CET**, immagine `sha256:0f58c17deec4928f564d44c240c83d86bf80341385ccb2f315aa0636044c4afc`.
+Healthcheck superato e build identica alla candidata. Configurazione effettiva
+preservata; tutti i 36 altri container invariati, compresi backend e worker.
+Controlli HTTP su login, amministrazione, solleciti PEC/email e health API PASS;
+API amministrativa non autenticata ancora 401. Nessuna migrazione o invio reale.
+Tutti i **23 E2E ripetuti sul live** superati, zero failure/skipped/flaky.
+Frontend, backend e worker healthy nella verifica finale.
+
+Sorgente di partenza uguale al frontend del rilascio ICATASTO, con il solo overlay
+di `navigation.ts`; non sono state incluse le altre modifiche del working tree.
+[Evidenze verificabili](evidence/NAVIGATION_FIX_2026-11-17.json).
 
 ## Limiti residui
 
@@ -50,3 +58,6 @@ Il gate del perimetro modificato passa; il repository conserva debito di
 complessità e warning legacy. La baseline globale era già stale nel ciclo
 ICATASTO: questo fix non la rigenera né assorbe debito non correlato. I test
 browser usano dati sintetici; non inviano comunicazioni reali.
+
+Il push segnala otto avvisi dipendenze preesistenti sul branch predefinito
+(sette high e uno moderate); nessuna dipendenza modificata da questo fix.

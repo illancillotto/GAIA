@@ -3,6 +3,8 @@
 ## 2026-11-17 — Correzione navigazione amministrazione
 
 Associazione esplicita di `/gaia/communications` a Ruolo nella shell.
+Commit `4f1aa776` pubblicato e frontend rilasciato alle **08:47:16 CET**;
+healthy, configurazione e 36 altri container preservati. Tutti i 23 E2E live PASS.
 Test di regressione e copertura full-file: [rapporto del ciclo](NAVIGATION_FIX_2026-11-17.md).
 
 ## 2026-11-17 — Blocchi ICATASTO condizionali
