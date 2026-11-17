@@ -1,0 +1,79 @@
+{
+  "runtime_files": [
+    "frontend/src/components/communications/admin-templates.tsx"
+  ],
+  "base_commit": "82bda868",
+  "unit_tests": 109,
+  "coverage": {
+    "statements": [
+      35,
+      35
+    ],
+    "branches": [
+      16,
+      16
+    ],
+    "functions": [
+      13,
+      13
+    ],
+    "lines": [
+      25,
+      25
+    ]
+  },
+  "smoke_tests": 18,
+  "lint": true,
+  "typecheck": true,
+  "authoritative_ratchet": {
+    "base_ref": "origin/main",
+    "baseline_commit": "686e529ee011487e0764b9f91d023be063dbdf55",
+    "findings": []
+  },
+  "component_metrics": {
+    "cyclomatic": [
+      10,
+      11
+    ],
+    "cognitive": [
+      11,
+      12
+    ],
+    "loc": [
+      30,
+      37
+    ],
+    "warnings_after": 1,
+    "errors_after": 0
+  },
+  "baseline_modified": false,
+  "before_e2e": {
+    "stats": {
+      "startTime": "2026-11-17T09:25:20.175Z",
+      "duration": 186358.561,
+      "expected": 0,
+      "skipped": 0,
+      "unexpected": 2,
+      "flaky": 0
+    },
+    "expected_failure": "Missing Modifica template button in previous live version"
+  },
+  "candidate_e2e": {
+    "startTime": "2026-11-17T09:28:51.079Z",
+    "duration": 32876.761999999995,
+    "expected": 25,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "prepared": {
+    "base_image": "sha256:4687a014294aabefb8ed4446c9093741b17ddd4bb8c4830176f95be3d1cd0b94",
+    "image": "sha256:aec8c602da0f533be8cb5c692b61b6b77f69a54efb8b592fe926878da6c22a06",
+    "tag": "gaia-frontend:communications-template-edit-20261117",
+    "changed": {
+      "src/components/communications/admin-templates.tsx": "b2d0294cbf6b10d869ddfffbc1a71dd2b8a95af4291bcd030896812c5077bf31"
+    },
+    "preserved_files_or_routes": 196
+  },
+  "deployment_status": "candidate_verified"
+}

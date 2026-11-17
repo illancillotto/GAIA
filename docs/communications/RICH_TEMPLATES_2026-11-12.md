@@ -19,7 +19,7 @@ HTTPS verso il portale ufficiale. Entrambi hanno la condizione **Solo con codice
 utenza e PIN ICATASTO disponibili**, selezionabile anche sui singoli altri blocchi.
 Se manca anche uno solo dei due valori, entrambi i blocchi sono omessi.
 
-Per aggiornare un modello ufficio già approvato: **Crea nuova versione** →
+Per aggiornare un modello ufficio già approvato: **Modifica template** →
 **Crea layout con logo e link** → revisione → **Salva nuova versione bozza** →
 approvazione esplicita. La conversione separa i paragrafi e riconosce la sezione
 con `SERVIZIO ICATASTO`, `{{codice_utenza}}`, `{{pin_utenza}}` e `{{url_portale}}`:

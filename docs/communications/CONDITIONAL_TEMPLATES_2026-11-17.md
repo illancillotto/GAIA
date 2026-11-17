@@ -22,7 +22,7 @@ produce un'anteprima vuota, ma non può creare una bozza priva di testo.
 Il MIME rifiuta condizioni non risolte. L'editor del messaggio già composto
 non offre comandi per introdurle.
 
-**Crea nuova versione → Crea layout con logo e link** converte esplicitamente
+**Modifica template → Crea layout con logo e link** converte esplicitamente
 il modello ufficio: riconosce il paragrafo SERVIZIO ICATASTO con i tre campi
 utenza/PIN/URL, lo rende condizionale e sostituisce il segnaposto URL con un
 pulsante. Il resto del testo è conservato in paragrafi normali. Separatori

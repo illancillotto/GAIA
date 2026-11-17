@@ -79,7 +79,7 @@ it("keeps account creation collapsed, preserves draft input on toggle, and opens
 });
 it("creates a fresh version and approves only draft templates", async () => {
   render(<TemplateAdministration token="token" />);
-  fireEvent.click(await screen.findByText("Crea nuova versione"));
+  fireEvent.click(await screen.findByText("Modifica template"));
   for (const [label, value] of [["Codice template", "new-code"], ["Nome template", "New name"], ["Oggetto template", "New subject"], ["Canale template", "email"], ["Corpo template", "New body"]]) fireEvent.change(screen.getByLabelText(label), { target: { value } });
   fireEvent.click(screen.getByText("Salva nuova versione bozza"));
   await waitFor(() => expect(screen.getByText("Salva nuova versione bozza")).toBeEnabled());
@@ -92,6 +92,44 @@ it("creates a fresh version and approves only draft templates", async () => {
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(failure instanceof Error ? "invalid" : "Operazione fallita"));
   }
 });
+it("opens an approved saved template in the editor and saves changes as a separate draft", async () => {
+  const saved = { ...template, status: "approved" };
+  mocks.api.mockResolvedValue([saved]);
+  render(<TemplateAdministration token="token" />);
+  fireEvent.click(await screen.findByRole("button", { name: `Modifica template ${saved.name}, ${saved.channel}, versione ${saved.version}` }));
+  expect(screen.getByRole("heading", { name: `Editor template: ${saved.name}` })).toHaveFocus();
+  expect(screen.getByLabelText("Codice template")).toHaveValue(saved.code);
+  expect(screen.getByLabelText("Corpo template")).toHaveValue(saved.body);
+  expect(mocks.api).toHaveBeenCalledTimes(1);
+  fireEvent.change(screen.getByLabelText("Oggetto template"), { target: { value: "Oggetto aggiornato" } });
+  fireEvent.change(screen.getByLabelText("Corpo template"), { target: { value: "Testo aggiornato" } });
+  fireEvent.click(screen.getByText("Salva nuova versione bozza"));
+  await waitFor(() => expect(mocks.api).toHaveBeenCalledWith("token", "/templates", {
+    code: saved.code, name: saved.name, channel: saved.channel, module: "ruolo", subject: "Oggetto aggiornato", body: "Testo aggiornato",
+  }));
+  await waitFor(() => expect(screen.getByLabelText("Codice template")).toHaveValue(""));
+  expect(saved.body).toBe(template.body);
+  expect(saved.status).toBe("approved");
+  expect(mocks.api.mock.calls.filter(call => call[2] !== undefined)).toHaveLength(1);
+});
+it("edits a saved clickable link with live preview and cancels without changing the saved template", async () => {
+  const body = 'GAIA-BLOCKS/1\n[{"kind":"link","text":"Portale","url":"https://example.org/original"}]';
+  mocks.api.mockResolvedValue([{ ...template, body, status: "draft" }]);
+  render(<TemplateAdministration token="token" />);
+  fireEvent.click(await screen.findByText("Modifica template"));
+  expect(screen.getByLabelText("URL blocco 1")).toHaveValue("https://example.org/original");
+  fireEvent.change(screen.getByLabelText("URL blocco 1"), { target: { value: "https://example.org/updated" } });
+  expect(screen.getAllByRole("link", { name: "Portale" }).map(link => link.getAttribute("href"))).toEqual([
+    "https://example.org/original", "https://example.org/updated",
+  ]);
+  fireEvent.click(screen.getByText("Annulla modifiche"));
+  expect(screen.getByLabelText("Codice template")).toHaveValue("");
+  expect(screen.getByLabelText("Corpo template")).toHaveValue("");
+  expect(screen.getByRole("heading", { name: "Editor template: nuovo modello" })).toBeVisible();
+  fireEvent.click(screen.getByText("Modifica template"));
+  expect(screen.getByLabelText("URL blocco 1")).toHaveValue("https://example.org/original");
+  expect(mocks.api).toHaveBeenCalledTimes(1);
+});
 it.each(["draft", "approved"])("asks confirmation before deleting a %s template and permits cancelling", async (status) => {
   mocks.api.mockResolvedValue([{ ...template, status }]);
   const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
@@ -101,7 +139,7 @@ it.each(["draft", "approved"])("asks confirmation before deleting a %s template 
   expect(confirm).toHaveBeenCalledWith(expect.stringContaining("«Template sintetico» (PEC, codice synthetic, versione 1)"));
   expect(confirm).toHaveBeenCalledWith(expect.stringContaining("I messaggi già creati e lo storico resteranno conservati"));
   expect(mocks.api).toHaveBeenCalledTimes(1);
-  expect(screen.getByText("Crea nuova versione")).toBeEnabled();
+  expect(screen.getByText("Modifica template")).toBeEnabled();
 });
 it("deletes only the confirmed version, disables actions during deletion, and reloads the list", async () => {
   vi.spyOn(window, "confirm").mockReturnValue(true);
@@ -143,7 +181,7 @@ it("reports a failed reload after deletion and allows an idempotent retry", asyn
   expect(button).toBeEnabled();
   mocks.api.mockResolvedValueOnce({}).mockResolvedValueOnce([]);
   fireEvent.click(button);
-  await waitFor(() => expect(screen.queryByText("Crea nuova versione")).not.toBeInTheDocument());
+  await waitFor(() => expect(screen.queryByText("Modifica template")).not.toBeInTheDocument());
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 it("reports initial account and template load errors without hiding them", async () => {

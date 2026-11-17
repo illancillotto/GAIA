@@ -17,7 +17,7 @@ blocchi. Se manca anche uno solo dei due valori, il relativo blocco non sarà
 incluso nel messaggio; l'anteprima del template spiega la condizione, mentre
 quella del singolo avviso mostra il risultato effettivo.
 
-Per i modelli ufficio già approvati: **Crea nuova versione** → **Crea layout
+Per i modelli ufficio già approvati: **Modifica template** → **Crea layout
 con logo e link** → revisione → **Salva nuova versione bozza** → approvazione.
 La conversione riconosce il paragrafo con SERVIZIO ICATASTO e i tre segnaposto
 utenza/PIN/URL, lo rende condizionale e sostituisce l'URL con un pulsante.
@@ -56,6 +56,21 @@ Nessuna immagine caricata dall’operatore o HTML libero. Stato rilascio e limit
 Stato aggiornato al 9 novembre 2026: i modelli ufficio sono stati pubblicati alle 14:58:35 CET; le indicazioni precedenti «locale/non rilasciato» descrivono lo stato del 7 novembre. Verifiche e limiti correnti: [rapporto di rilascio](OFFICE_TEMPLATES_RELEASE_2026-11-09.md). Nessuna abilitazione degli invii reali.
 
 ## Amministrazione
+
+### Modificare un template salvato
+
+Nell'elenco **Template versionati**, premere **Modifica template** sulla versione
+interessata, anche se già approvata. Il modello viene caricato e il focus passa
+all'editor, che mostra il nome corrente. Modificare oggetto e corpo; per i
+modelli grafici sono modificabili anche logo, blocchi e URL HTTPS di link e
+pulsanti, con anteprima immediata. Per un testo semplice usare **Crea layout
+con logo e link** se occorrono questi elementi grafici.
+
+**Salva nuova versione bozza**, mantenendo lo stesso codice, crea una versione
+successiva; non sovrascrive l'originale né i messaggi già creati. La nuova bozza
+richiede **Approva questa versione** prima dell'uso negli invii. Cambiare codice
+crea una famiglia di template diversa. **Annulla modifiche** svuota l'editor
+senza salvare o cambiare il template originale.
 
 ### Modelli dell'ufficio per i solleciti 2021
 

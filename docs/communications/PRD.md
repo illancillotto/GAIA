@@ -45,6 +45,10 @@ controlli inCASS e revisione PDF con accessi aggiunti il 12 novembre (COMPOSITIO
   Il modulo «Nuovo account» parte chiuso in un pannello espandibile; chiuderlo
   conserva i valori inseriti. «Modifica» apre automaticamente il pannello con
   la configurazione dell'account selezionato, lasciando sempre visibile l'elenco.
+- I template salvati, bozze e approvati, sono riapribili con «Modifica template»:
+  l'editor riceve contenuti e focus e mostra il modello corrente. Annulla svuota
+  l'editor senza scritture; salva con lo stesso codice crea una nuova bozza da
+  approvare, conservando versioni precedenti e messaggi già creati.
 - Ogni versione template può essere eliminata dall'amministratore dopo una
   conferma che identifica nome, canale, codice e versione. Scompare dalle
   selezioni future; testi e messaggi già creati, altre versioni e audit restano

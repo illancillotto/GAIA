@@ -56,9 +56,24 @@ for (const width of [1440, 390]) {
     const blocks = JSON.parse((templates[0].body as string).slice("GAIA-BLOCKS/1\n".length));
     expect(blocks.map((block: { kind: string }) => block.kind)).toEqual(["logo", "paragraph", "button", "paragraph", "button"]);
     expect(blocks.slice(3).every((block: { condition?: string }) => block.condition === "icatasto")).toBe(true);
-    await page.getByRole("button", { name: "Crea nuova versione", exact: true }).click();
+    await page.getByRole("button", { name: /^Modifica template/ }).click();
+    await expect(page.getByRole("heading", { name: "Editor template: Template grafico" })).toBeFocused();
     await expect(page.getByLabel("URL blocco 3")).toHaveValue("https://incatasto.servizicapacitas.com/pages/main.aspx?cons=090");
     await expect(page.getByLabel("Solo con codice utenza e PIN ICATASTO disponibili").nth(3)).toBeChecked();
+    const originalBody = templates[0].body;
+    await page.getByLabel("URL blocco 3").fill("https://example.org/nuovo-portale");
+    expect(templates).toHaveLength(1);
+    await page.getByRole("button", { name: "Salva nuova versione bozza", exact: true }).click();
+    await expect(page.getByLabel("Codice template")).toHaveValue("");
+    expect(templates).toHaveLength(2);
+    expect(templates[0].body).toBe(originalBody);
+    expect(templates[1]).toMatchObject({ code: templates[0].code, version: 2, status: "draft" });
+    expect(templates[1].body).toContain("https://example.org/nuovo-portale");
+    await page.getByRole("button", { name: "Modifica template Template grafico, pec, versione 2", exact: true }).click();
+    await expect(page.getByLabel("URL blocco 3")).toHaveValue("https://example.org/nuovo-portale");
+    await page.getByRole("button", { name: "Annulla modifiche", exact: true }).click();
+    await expect(page.getByLabel("Codice template")).toHaveValue("");
+    expect(templates).toHaveLength(2);
     expect(errors).toEqual([]);
   });
 
