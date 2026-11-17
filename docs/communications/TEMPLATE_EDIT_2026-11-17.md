@@ -56,7 +56,9 @@ make graphify-platform-docs
 
 ## Rilascio
 
-Candidata verificata, in attesa di attivazione. Immagine:
+Pubblicato sul CED il **17 novembre 2026 alle 10:32:01 CET**, commit applicativo
+`a6421cff23dbf2d4674fe7b34047742f06f89965`, branch
+`chore/split-changes-20261109`. Immagine:
 `sha256:aec8c602da0f533be8cb5c692b61b6b77f69a54efb8b592fe926878da6c22a06`.
 Un solo file runtime sovrapposto alla sorgente del frontend effettivamente live
 (rilascio pannello account); tutte le 196 route preservate. Le modifiche
@@ -68,10 +70,19 @@ configurazione e container estranei, con rollback automatico in caso di errore.
 
 [Evidenze verificabili](evidence/TEMPLATE_EDIT_2026-11-17.json).
 
+## Verifica dopo il deploy
+
+Tutti i **25 E2E ripetuti sul live passano**, zero failure/skip/flaky. Frontend,
+backend e worker Communications healthy. Build pubblicata identica alla
+candidata, configurazione effettiva preservata e 36 altri container invariati.
+Login, amministrazione, solleciti PEC/email e health API rispondono 200;
+l’API amministrativa anonima continua a rispondere 401. Nessun invio reale.
+
 ## Limiti della verifica
 
 Il 100% riguarda il file runtime modificato, non l’intero repository. I test
 browser verificano la UI servita dalla build reale con API sintetiche, non una
 nuova transazione sui dati di produzione. Nessun problema bloccante rilevato
 nel perimetro; restano separati il debito storico di complessità e gli avvisi
-sulle dipendenze preesistenti. Nessuna dipendenza è stata modificata.
+sulle dipendenze preesistenti segnalati da GitHub al push: otto, di cui sette
+high e uno moderate. Nessuna dipendenza è stata modificata.
