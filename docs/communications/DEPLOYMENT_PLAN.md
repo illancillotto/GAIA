@@ -2,6 +2,9 @@
 
 ## Blocchi ICATASTO — 17 novembre 2026
 
+Rilascio completato alle **08:12:55 CET**, commit `33190582`. I passaggi sotto
+descrivono la procedura verificata, non un deploy ancora da eseguire.
+
 Rilascio selettivo di backend, frontend e Communications worker, con immagini
 derivate dai runtime effettivi CED e manifest limitato ai file verificati.
 Aggiornare prima il worker, poi API e UI; conservare configurazioni, mount,

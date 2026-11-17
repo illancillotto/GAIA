@@ -1,7 +1,7 @@
 {
   "feature": "Communications conditional ICATASTO blocks",
   "date": "2026-11-17",
-  "status": "CANDIDATE_VERIFIED_NOT_DEPLOYED",
+  "status": "DEPLOYED_VERIFIED",
   "source_head_before": "d867f17d5211ebd552a79d3a9eeec8aa4d081a25",
   "runtime_files": {
     "backend/app/modules/communications/rich_template.py": "79172fb4864efab47a605e3ab18425f17563bbc42d3e97cd6819dfca01653511",
@@ -308,5 +308,145 @@
     "Next development PDF error reproduced on previous code; production candidate all 19 E2E pass",
     "Provider SMTP/PEC tests synthetic; no real messages",
     "Existing approved templates require explicit conversion to a new version"
-  ]
+  ],
+  "source_commit": "33190582f7950548a25df35aaad8a3be519ef039",
+  "deployment": {
+    "started_at": "2026-11-17T07:12:08.280989+00:00",
+    "activated_at": "2026-11-17T07:12:55.403629+00:00",
+    "images": {
+      "backend": "sha256:340b18dc873e29618c31bab62fe86fccc5739e49966dda40d7da2f41c458a616",
+      "frontend": "sha256:0bb439c89adb9ee592e954e6d475fbc08fd064b82a3aff6a6675aff6eee03fa8",
+      "communications-worker": "sha256:01dfa8f7f3097e676a217660ba506f8fa0ca3fd023157bdb6b62fa88bc4d3be3"
+    },
+    "http": {
+      "/login": 200,
+      "/gaia/communications": 200,
+      "/ruolo/tributi/solleciti": 200,
+      "/ruolo/tributi/solleciti/pec": 200,
+      "/ruolo/tributi/solleciti/email": 200,
+      "/presenze/giornaliere": 200,
+      "/communications/official-logo.png": 200,
+      "/api/health": 200,
+      "/api/communications/admin/templates": 401,
+      "/api/communications/admin/template-catalog": 401
+    },
+    "effective_configuration_preserved": true,
+    "unchanged_other_containers": 34,
+    "schema_unchanged": true,
+    "templates_unchanged": true,
+    "transports_unchanged": true,
+    "build_matches_canary": true,
+    "no_migrations": true,
+    "no_real_template_deletion": true,
+    "no_real_messages": true,
+    "commit": "33190582f7950548a25df35aaad8a3be519ef039",
+    "authenticated_probe": {
+      "conditional_template_supported": true,
+      "rich_template_supported": true,
+      "counts": {
+        "communication_accounts": 2,
+        "communication_templates": 8,
+        "communication_messages": 0,
+        "communication_jobs": 5,
+        "communication_authorizations": 0,
+        "communication_receipts": 0
+      },
+      "template_rows_hash": "57f13b42b7e307616e5f7223ad46619c",
+      "schema": [
+        "20261106_1000"
+      ],
+      "http_authenticated": {
+        "/admin/templates": 200,
+        "/templates": 200,
+        "/admin/accounts": 200,
+        "/admin/monitor": 200
+      },
+      "monitor": {
+        "paused": true,
+        "transport_enabled": false
+      },
+      "catalog_supported": true,
+      "catalog": {
+        "authenticated": 200,
+        "unauthenticated": 401,
+        "sha256": "35095529c9ae64e5226c3768749b89243ca2cbe28c012d3a48d75c43fdcf7dda",
+        "codes": [
+          "sollecito_2021_ufficio_pec",
+          "sollecito_2021_ufficio_email"
+        ]
+      },
+      "delete_supported": true,
+      "template_preview_supported": true,
+      "portal_snapshot_revision_supported": true,
+      "transaction_read_only": true
+    }
+  },
+  "post_release_read_only_probe": {
+    "conditional_template_supported": true,
+    "rich_template_supported": true,
+    "counts": {
+      "communication_accounts": 2,
+      "communication_templates": 8,
+      "communication_messages": 0,
+      "communication_jobs": 5,
+      "communication_authorizations": 0,
+      "communication_receipts": 0
+    },
+    "template_rows_hash": "57f13b42b7e307616e5f7223ad46619c",
+    "schema": [
+      "20261106_1000"
+    ],
+    "http_authenticated": {
+      "/admin/templates": 200,
+      "/templates": 200,
+      "/admin/accounts": 200,
+      "/admin/monitor": 200
+    },
+    "monitor": {
+      "paused": true,
+      "transport_enabled": false
+    },
+    "catalog_supported": true,
+    "catalog": {
+      "authenticated": 200,
+      "unauthenticated": 401,
+      "sha256": "35095529c9ae64e5226c3768749b89243ca2cbe28c012d3a48d75c43fdcf7dda",
+      "codes": [
+        "sollecito_2021_ufficio_pec",
+        "sollecito_2021_ufficio_email"
+      ]
+    },
+    "delete_supported": true,
+    "template_preview_supported": true,
+    "portal_snapshot_revision_supported": true,
+    "transaction_read_only": true
+  },
+  "e2e_live": {
+    "startTime": "2026-11-17T07:13:10.043Z",
+    "duration": 28015.835,
+    "expected": 19,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "graphify": {
+    "backend": "updated",
+    "frontend": "updated",
+    "ruolo_docs": "chunk 1/1 done; no semantic failures",
+    "platform_docs": "chunk 1/1 done; no semantic failures; final release documentation updated"
+  },
+  "final_health": {
+    "backend": {
+      "image": "sha256:340b18dc873e29618c31bab62fe86fccc5739e49966dda40d7da2f41c458a616",
+      "healthy": true
+    },
+    "frontend": {
+      "image": "sha256:0bb439c89adb9ee592e954e6d475fbc08fd064b82a3aff6a6675aff6eee03fa8",
+      "healthy": true
+    },
+    "communications-worker": {
+      "image": "sha256:01dfa8f7f3097e676a217660ba506f8fa0ca3fd023157bdb6b62fa88bc4d3be3",
+      "healthy": true
+    }
+  }
 }

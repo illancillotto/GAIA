@@ -3,8 +3,10 @@
 ## 2026-11-17 — Blocchi ICATASTO condizionali
 
 Implementati selezione sui dati canonici, inserimento guidato di testo/link,
-conversione dei modelli ufficio e anteprima coerente. Verifica e rilascio
-autorizzato in corso; stato reale, matrice dei test e limiti nel
+conversione dei modelli ufficio e anteprima coerente. Commit `33190582`,
+push e rilascio CED completati alle **08:12:55 CET**; backend/frontend/worker
+healthy, configurazioni/dati invariati e 34 altri container preservati.
+341 test backend per immagine e coverage full-file 100%; matrice e limiti nel
 [rapporto del ciclo](CONDITIONAL_TEMPLATES_2026-11-17.md).
 
 ## 2026-11-12 — Template grafici

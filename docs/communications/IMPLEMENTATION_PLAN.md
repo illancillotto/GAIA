@@ -5,7 +5,7 @@
 - [x] Condizione tipizzata, selezione prima dei placeholder, snapshot materializzato.
 - [x] Inserimento testo/pulsante e conversione esplicita dei modelli ufficio.
 - [x] Test pertinenti di API, MIME, authoring e limiti; E2E su build produzione.
-- [ ] Completare verifica immagini e pubblicazione autorizzata con controlli live.
+- [x] Verifica immagini e pubblicazione autorizzata con controlli live, 08:12:55 CET.
 
 [Stato effettivo e limiti](CONDITIONAL_TEMPLATES_2026-11-17.md).
 

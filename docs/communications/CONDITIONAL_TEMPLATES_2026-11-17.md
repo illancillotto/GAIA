@@ -1,8 +1,8 @@
 # Blocchi ICATASTO condizionali — 17 novembre 2026
 
-Stato: candidata verificata; pubblicazione e attivazione autorizzate in preparazione.
-Il rilascio effettivo sarà registrato soltanto dopo i controlli della produzione.
-Nessuna migrazione, modifica delle credenziali canoniche
+Stato: **rilasciato sul CED il 17 novembre 2026 alle 08:12:55 CET**.
+Commit applicativo `33190582f7950548a25df35aaad8a3be519ef039`, pubblicato su
+`chore/split-changes-20261109`. Nessuna migrazione o modifica delle credenziali canoniche
 o approvazione automatica dei template.
 
 ## Comportamento implementato
@@ -90,7 +90,8 @@ refactoring dichiarato come riduzione della complessità.
 Evidenze locali: `/tmp/gaia-icatasto-release-20261117/`. Il manifest congela
 gli otto file runtime, con test aggiuntivi, documentazione e report separati.
 Le modifiche preesistenti a Tributi, worker Poste, configurazioni e report
-di complessità non appartengono a questa change e non saranno pubblicate.
+di complessità non appartengono a questa change e sono state preservate,
+senza includerle nel commit o nelle immagini distribuite.
 Evidenza versionata priva di segreti:
 [CONDITIONAL_TEMPLATES_2026-11-17.json](evidence/CONDITIONAL_TEMPLATES_2026-11-17.json).
 
@@ -129,10 +130,45 @@ il frontend mantiene tutte le 196 route della build precedente.
 Configurazioni risolte e immagini precedenti sono conservate privatamente.
 Non riportare environment o credenziali dai file `*.before.json`/Compose.
 
-Attivazione prevista: worker, backend, frontend, con controllo concorrenza,
+Attivazione eseguita: worker, backend, frontend, con controllo concorrenza,
 health, configurazioni effettive e reload nginx dopo `nginx -t`. Non usare
 `down`, rebuild globali o riavvii dei worker estranei. Verificare API protette,
 schema, hash template, conteggi, pausa/trasporti e identità della build.
 Per rollback usare i file `*.rollback.json` soltanto in assenza di release
 successive, preservando dati e compatibilità dei template condizionali;
 vedere [ROLLBACK_PLAN](ROLLBACK_PLAN.md).
+
+## Produzione verificata
+
+Grafi backend, frontend, documentazione piattaforma e dominio Ruolo aggiornati
+con i target Make dedicati. Entrambe le estrazioni docs completano
+`chunk 1/1 done`, senza chunk semantici falliti; grafi esclusi dai commit.
+
+Anche sulla versione pubblicata tutti i **19 E2E Communications passano**,
+zero failure, skip o flaky. Il browser usa API/PDF sintetici intercettati;
+le API reali sono verificate separatamente in sola lettura.
+
+Backend `340b18dc873e`, frontend `0bb439c89adb` e worker Communications
+`01dfa8f7f309`: tutti healthy. La build frontend pubblicata coincide con la
+candidata collaudata. Configurazioni effettive (environment, comandi, mount,
+reti e limiti risorse) coincidono con quelle precedenti; **34 container
+estranei preservati**, incluso Poste. `nginx -t` e reload completati.
+
+Otto GET pubblici rispondono 200, comprese health e logo; le due API admin
+anonime restano 401. Quattro API autenticate rispondono 200. Il renderer attivo
+include/omette correttamente i blocchi usando credenziali esclusivamente
+sintetiche nel probe in memoria. Una seconda verifica autenticata in sola
+lettura conferma lo stesso risultato.
+
+Schema `20261106_1000`, due account, otto template con hash integrale invariato,
+zero messaggi/autorizzazioni/ricevute e cinque job invariati. Pausa **true**,
+trasporto **false**: nessun invio, creazione o approvazione di template reale.
+Gli operatori possono convertire una versione esistente con il flusso descritto
+in [OPERATIONS](OPERATIONS.md), poi revisionarla e approvarla esplicitamente.
+
+GitHub segnala al push otto vulnerabilità del branch predefinito (sette high,
+una moderate), già segnalate nel rilascio precedente. Nessuna dipendenza è
+cambiata in questa feature. Restano aperti il debito storico di complessità,
+la baseline non riproducibile e il problema PDF limitato a Next development;
+non sono nuove regressioni della modifica. Il collaudo provider SMTP/PEC reale
+resta esterno alle prove sintetiche e non è stato eseguito.
