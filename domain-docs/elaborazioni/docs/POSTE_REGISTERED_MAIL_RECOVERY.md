@@ -1,5 +1,12 @@
 # Recupero dettagli raccomandate Poste
 
+Per le 536 spedizioni già marcate `sent` nei cinque account, il recupero di
+tracking e ricevute avviato nel novembre 2026 è descritto in
+[Recupero esiti e ricevute degli invii](POSTE_SENT_EVIDENCE_RECOVERY.md).
+È uno strumento standalone con evidenze private: non aggiorna automaticamente
+la UI, non certifica consegna dalla sola accettazione e non sostituisce il
+recupero storico del job 9 descritto qui sotto.
+
 ## Job 9 sul CED
 
 Il job 9 e ancora `cancelled` al 2026-09-25 e non si avvia automaticamente. Il suo
