@@ -4,6 +4,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from itertools import chain
 from typing import Any
 
 from sqlalchemy import delete, or_, select
@@ -16,7 +17,11 @@ from app.models.catasto_phase1 import (
     CatParticella,
     CatUtenzaIrrigua,
 )
-from app.modules.catasto.models.domande_irrigue import CatDomandaIrrigua, CatDomandaIrriguaParticella
+from app.modules.catasto.models.domande_irrigue import (
+    CatDomandaIrrigua,
+    CatDomandaIrriguaParticella,
+)
+from app.modules.catasto.services.domande_irrigue_anomaly_queries import iter_anomaly_scan_data
 from app.modules.catasto.services.domande_irrigue_import_validation import valid_year_rows
 
 DIR_ANOMALIA_SUPERFICIE_COLTURA = "DIR-01-superficie_coltura_superata"
@@ -137,42 +142,24 @@ def persist_capacitas_domande_irrigue_batch(
 
 
 def scan_domande_irrigue_anomalies(db: Session, *, anno: int | None = None) -> DomandeIrrigueAnomalySummary:
-    domanda_query = select(CatDomandaIrrigua)
-    detail_query = select(CatDomandaIrriguaParticella, CatDomandaIrrigua, CatParticella).join(
-        CatDomandaIrrigua, CatDomandaIrriguaParticella.domanda_id == CatDomandaIrrigua.id
-    ).outerjoin(CatParticella, CatDomandaIrriguaParticella.particella_id == CatParticella.id)
-    if anno is not None:
-        domanda_query = domanda_query.where(CatDomandaIrrigua.anno == anno)
-        detail_query = detail_query.where(CatDomandaIrrigua.anno == anno)
-
-    domande = db.execute(domanda_query).scalars().all()
-    detail_rows = db.execute(detail_query).all()
-    opened = 0
-    updated = 0
+    scanned_domande = scanned_particelle = opened = updated = 0
     active_keys: set[tuple[str, int | None, str | None]] = set()
-
-    for payload in _surface_anomaly_payloads(detail_rows):
-        active_keys.add(_anomalia_payload_identity(payload))
-        if _upsert_anomalia(db, payload):
-            opened += 1
-        else:
-            updated += 1
-
-    details_by_domanda_id = _group_details_by_domanda(detail_rows)
-    for domanda in domande:
-        payload = _deadline_anomaly_payload(domanda, details_by_domanda_id.get(domanda.id, []))
-        if payload is None:
-            continue
-        active_keys.add(_anomalia_payload_identity(payload))
-        if _upsert_anomalia(db, payload):
-            opened += 1
-        else:
-            updated += 1
+    for domande, detail_rows in iter_anomaly_scan_data(db, anno):
+        scanned_domande += len(domande)
+        scanned_particelle += len(detail_rows)
+        details = _group_details_by_domanda(detail_rows)
+        deadlines = (_deadline_anomaly_payload(row, details.get(row.id, [])) for row in domande)
+        for payload in filter(None, chain(_surface_anomaly_payloads(detail_rows), deadlines)):
+            active_keys.add(_anomalia_payload_identity(payload))
+            inserted = _upsert_anomalia(db, payload)
+            opened += int(inserted)
+            updated += int(not inserted)
+        db.flush()
     closed = _close_stale_domande_irrigue_anomalies(db, anno=anno, active_keys=active_keys)
 
     return DomandeIrrigueAnomalySummary(
-        scanned_domande=len(domande),
-        scanned_particelle=len(detail_rows),
+        scanned_domande=scanned_domande,
+        scanned_particelle=scanned_particelle,
         opened=opened,
         updated=updated,
         closed=closed,

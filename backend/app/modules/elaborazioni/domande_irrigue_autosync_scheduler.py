@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
 import logging
 from collections.abc import Callable, Generator
@@ -264,6 +265,11 @@ async def _run_job_wrapper(get_db: Callable[[], Any]) -> None:
                 next(generator)
 
 
+def _run_job_in_executor(get_db: Callable[[], Any]) -> None:
+    """Keep database creation, work and cleanup off the scheduler's event loop."""
+    asyncio.run(_run_job_wrapper(get_db))
+
+
 async def register_domande_irrigue_autosync_scheduler(
     scheduler: AsyncIOScheduler,
     get_db: Callable[[], Any],
@@ -272,7 +278,7 @@ async def register_domande_irrigue_autosync_scheduler(
         logger.info("Domande irrigue autosync scheduler disabilitato")
         return
     scheduler.add_job(
-        _run_job_wrapper,
+        _run_job_in_executor,
         trigger=IntervalTrigger(
             minutes=settings.capacitas_domande_irrigue_autosync_interval_minutes,
             timezone="UTC",
