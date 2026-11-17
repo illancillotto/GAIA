@@ -315994,6 +315994,90 @@
       "violations": []
     },
     {
+      "cognitive": 7,
+      "cyclomatic": 6,
+      "end_line": 34,
+      "fingerprint": "97e8a73a49c19120",
+      "kind": "function",
+      "line": 27,
+      "loc": 8,
+      "name": "_tracking_failure",
+      "nesting": 2,
+      "params": 1,
+      "path": "modules/elaborazioni/worker/posta_online_delivery.py",
+      "violations": []
+    },
+    {
+      "cognitive": 1,
+      "cyclomatic": 2,
+      "end_line": 40,
+      "fingerprint": "18a6d382ff6ac94a",
+      "kind": "function",
+      "line": 37,
+      "loc": 4,
+      "name": "tracking_code",
+      "nesting": 1,
+      "params": 1,
+      "path": "modules/elaborazioni/worker/posta_online_delivery.py",
+      "violations": []
+    },
+    {
+      "cognitive": 6,
+      "cyclomatic": 6,
+      "end_line": 58,
+      "fingerprint": "23e8df2d7cf41ef2",
+      "kind": "async_function",
+      "line": 43,
+      "loc": 15,
+      "name": "read_tracking",
+      "nesting": 1,
+      "params": 2,
+      "path": "modules/elaborazioni/worker/posta_online_delivery.py",
+      "violations": []
+    },
+    {
+      "cognitive": 9,
+      "cyclomatic": 9,
+      "end_line": 85,
+      "fingerprint": "ddd13ae3af11fac5",
+      "kind": "function",
+      "line": 61,
+      "loc": 25,
+      "name": "receipt_form",
+      "nesting": 1,
+      "params": 2,
+      "path": "modules/elaborazioni/worker/posta_online_delivery.py",
+      "violations": []
+    },
+    {
+      "cognitive": 8,
+      "cyclomatic": 8,
+      "end_line": 100,
+      "fingerprint": "fd7d87083bd2beee",
+      "kind": "function",
+      "line": 88,
+      "loc": 13,
+      "name": "validate_receipt",
+      "nesting": 1,
+      "params": 2,
+      "path": "modules/elaborazioni/worker/posta_online_delivery.py",
+      "violations": []
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "end_line": 117,
+      "fingerprint": "b7c4bbc1073f7f15",
+      "kind": "async_function",
+      "line": 103,
+      "loc": 15,
+      "name": "read_acceptance_receipt",
+      "nesting": 1,
+      "params": 3,
+      "path": "modules/elaborazioni/worker/posta_online_delivery.py",
+      "violations": []
+    },
+    {
       "cognitive": 0,
       "cyclomatic": 1,
       "end_line": 61,
@@ -329363,6 +329447,146 @@
       "nesting": 0,
       "params": 3,
       "path": "modules/elaborazioni/worker/tests/test_posta_online_cooldown.py",
+      "violations": []
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "end_line": 40,
+      "fingerprint": "b3fddba7c50563ad",
+      "kind": "function",
+      "line": 21,
+      "loc": 20,
+      "name": "pdf_bytes",
+      "nesting": 0,
+      "params": 1,
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_delivery.py",
+      "violations": []
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "end_line": 52,
+      "fingerprint": "c73b0f0513cb30d0",
+      "kind": "function",
+      "line": 43,
+      "loc": 10,
+      "name": "test_tracking_uses_the_observed_read_endpoint_and_preserves_provider_evidence",
+      "nesting": 0,
+      "params": 0,
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_delivery.py",
+      "violations": []
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "end_line": 68,
+      "fingerprint": "283b88791eb41296",
+      "kind": "function",
+      "line": 64,
+      "loc": 5,
+      "name": "test_invalid_tracking_never_makes_a_request",
+      "nesting": 0,
+      "params": 1,
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_delivery.py",
+      "violations": []
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "end_line": 89,
+      "fingerprint": "f6e0dcb55ab46a63",
+      "kind": "function",
+      "line": 83,
+      "loc": 7,
+      "name": "test_unavailable_tracking_is_never_retried_or_reported_as_delivery",
+      "nesting": 0,
+      "params": 2,
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_delivery.py",
+      "violations": []
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "end_line": 112,
+      "fingerprint": "5c461ad602267ce4",
+      "kind": "function",
+      "line": 92,
+      "loc": 21,
+      "name": "test_receipt_form_uses_only_the_observed_acceptance_action_and_checks_identity",
+      "nesting": 0,
+      "params": 0,
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_delivery.py",
+      "violations": []
+    },
+    {
+      "cognitive": 3,
+      "cyclomatic": 4,
+      "end_line": 125,
+      "fingerprint": "7c4b654e5a7f121a",
+      "kind": "function",
+      "line": 115,
+      "loc": 11,
+      "name": "test_pdf_must_really_contain_the_expected_tracking",
+      "nesting": 1,
+      "params": 0,
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_delivery.py",
+      "violations": []
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "end_line": 134,
+      "fingerprint": "c57a438c2c716003",
+      "kind": "function",
+      "line": 128,
+      "loc": 7,
+      "name": "test_empty_pdf_text_cannot_certify_a_receipt",
+      "nesting": 0,
+      "params": 0,
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_delivery.py",
+      "violations": []
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "end_line": 142,
+      "fingerprint": "76002f89a5b2f017",
+      "kind": "function",
+      "line": 138,
+      "loc": 5,
+      "name": "test_tracking_embedded_in_another_number_cannot_certify_identity",
+      "nesting": 0,
+      "params": 1,
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_delivery.py",
+      "violations": []
+    },
+    {
+      "cognitive": 2,
+      "cyclomatic": 3,
+      "end_line": 169,
+      "fingerprint": "97da049e203f907c",
+      "kind": "function",
+      "line": 153,
+      "loc": 16,
+      "name": "test_tracking_challenge_is_distinguished_from_other_errors",
+      "nesting": 1,
+      "params": 1,
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_delivery.py",
+      "violations": []
+    },
+    {
+      "cognitive": 0,
+      "cyclomatic": 1,
+      "end_line": 194,
+      "fingerprint": "b49cc2cc585ce2c1",
+      "kind": "function",
+      "line": 172,
+      "loc": 23,
+      "name": "test_receipt_read_is_throttled_and_never_retried",
+      "nesting": 0,
+      "params": 0,
+      "path": "modules/elaborazioni/worker/tests/test_posta_online_delivery.py",
       "violations": []
     },
     {
@@ -373710,6 +373934,18 @@
         }
       ]
     },
+    "modules/elaborazioni/worker/posta_online_delivery.py": {
+      "callables": 6,
+      "cognitive_max": 9,
+      "cognitive_sum": 33,
+      "complexity_density": 0.690722,
+      "cyclomatic_max": 9,
+      "cyclomatic_sum": 34,
+      "dependency_count": 5,
+      "imports": 5,
+      "loc": 97,
+      "violations": []
+    },
     "modules/elaborazioni/worker/posta_online_dispatch.py": {
       "callables": 21,
       "cognitive_max": 9,
@@ -374398,6 +374634,18 @@
       "dependency_count": 5,
       "imports": 5,
       "loc": 23,
+      "violations": []
+    },
+    "modules/elaborazioni/worker/tests/test_posta_online_delivery.py": {
+      "callables": 10,
+      "cognitive_max": 3,
+      "cognitive_sum": 5,
+      "complexity_density": 0.117647,
+      "cyclomatic_max": 4,
+      "cyclomatic_sum": 15,
+      "dependency_count": 9,
+      "imports": 9,
+      "loc": 170,
       "violations": []
     },
     "modules/elaborazioni/worker/tests/test_posta_online_dispatch.py": {
@@ -375145,10 +375393,10 @@
       "violations": []
     }
   },
-  "generated_at": "2026-11-04T11:01:40.637284+00:00",
+  "generated_at": "2026-11-17T07:36:14.953515+00:00",
   "provenance": {
-    "repo_root": "/tmp/gaia-communications-sidebar-20261104",
-    "source_commit": "f7bb4d9fa9ab38c2f2c94123c7a136cca80ddba7",
+    "repo_root": "/tmp/gaia-poste-release-20261117",
+    "source_commit": "31790da278c28c0a9a65025a66a73c2337bef647",
     "tool": "tools/code_quality/complexity.py"
   },
   "schema_version": 2,
@@ -375168,7 +375416,7 @@
       "**/fixtures/**",
       "**/__snapshots__/**"
     ],
-    "files": 1870,
+    "files": 1872,
     "include": [
       "backend/app/**/*.py",
       "frontend/src/**/*.js",
@@ -375178,5 +375426,5 @@
       "modules/elaborazioni/worker/**/*.py"
     ]
   },
-  "source_commit": "f7bb4d9fa9ab38c2f2c94123c7a136cca80ddba7"
+  "source_commit": "31790da278c28c0a9a65025a66a73c2337bef647"
 }
