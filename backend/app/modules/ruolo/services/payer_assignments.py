@@ -188,16 +188,24 @@ def reassign_candidates(db: Session, candidates: list[dict[str, Any]]) -> list[d
     result: list[dict[str, Any]] = []
     for candidate in candidates:
         own = [avviso for avviso in candidate["avvisi"] if avviso["id"] not in payers]
-        by_payer: dict[uuid.UUID, list[dict[str, Any]]] = {}
-        for avviso in candidate["avvisi"]:
-            if avviso["id"] in payers:
-                by_payer.setdefault(payers[avviso["id"]][1].subject_id, []).append(avviso)
+        by_payer = _avvisi_by_payer(candidate["avvisi"], payers)
         if own:
             result.append(candidate if not by_payer else with_avvisi(candidate, own))
         for avvisi in by_payer.values():
             assignment, payer = payers[avvisi[0]["id"]]
             result.append(_payer_candidate(candidate, avvisi, assignment, payer))
     return result
+
+
+def _avvisi_by_payer(
+    avvisi: list[dict[str, Any]],
+    payers: dict[uuid.UUID, tuple[RuoloTributiPayerAssignment, Payer]],
+) -> dict[uuid.UUID, list[dict[str, Any]]]:
+    by_payer: dict[uuid.UUID, list[dict[str, Any]]] = {}
+    for avviso in avvisi:
+        if avviso["id"] in payers:
+            by_payer.setdefault(payers[avviso["id"]][1].subject_id, []).append(avviso)
+    return by_payer
 
 
 def _payer_candidate(
