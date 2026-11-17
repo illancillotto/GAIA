@@ -109,8 +109,8 @@ rilascio, e i file estranei nel workspace principale sono preservati.
 - Ratchet globale del branch di rilascio contro `origin/main` **PASS**, zero
   finding; nessuna soglia o esclusione modificata. La sincronizzazione della
   baseline aggiunge esclusivamente il nuovo modulo worker e i suoi test:
-  nessun record legacy modificato o rimosso. La riproducibilità è verificata
-  prima del commit.
+  nessun record legacy modificato o rimosso. `make complexity-baseline-verify`
+  **PASS** prima del commit: baseline riproducibile.
 - Canary reale: ricevuta di accettazione account 2 verificata con parser PDF
   e rendering visuale. Il parser finale ha validato tutti i 246 PDF già
   acquisiti sul CED, verificando tracking e SHA-256 senza alterare le evidenze.
@@ -147,6 +147,12 @@ La strategia e i gate coverage del repository restano invariati.
 
 ## Stato del rilascio
 
+Deploy completato e verificato il **17 novembre 2026**, commit runtime
+`879df2213d19552cb1ec7a25dee3930aba57ec63`, pubblicato sul branch
+`fix/poste-evidence-release-20261117`. Copia attiva in `tools/` corrispondente
+al commit per entrambi gli SHA-256; backup della versione precedente in
+`backups/before-879df2213d19552cb1ec7a25dee3930aba57ec63/`.
+
 Il rilascio è limitato a `posta_online_delivery.py` e
 `poste_recover_sent_evidence.py`, con archivio immutabile per commit sotto
 `/opt/gaia/runtime-data/poste-refresh-20261112/releases/` e copia operativa in
@@ -154,11 +160,14 @@ Il rilascio è limitato a `posta_online_delivery.py` e
 assenza di processi di recupero attivi prima di sostituirla. Non cambia
 l'immagine del worker, non richiede restart o migrazioni e non aggiorna la UI.
 
-Smoke previsto: esecuzione `--phase plan` in sola lettura sul database,
-confronto con le 536 identità congelate e validazione locale delle 246 ricevute
-esistenti con il client finale, senza richieste a Poste. Non riavviare il
-tracking finché resta la richiesta CAPTCHA. Il successo dello smoke non
-significa che siano state recuperate tutte le spedizioni.
+Smoke eseguito sia dalla release versionata sia dalla copia attiva:
+`--phase plan` in sola lettura sul database, **536 identità coerenti** con il
+piano congelato. Il client effettivamente importato da `tools/` ha validato
+le **246 ricevute**, inclusi tracking e SHA-256; ripresa verificata con 289
+ricevute e 517 tracking non tentati. Nessuna richiesta a Poste durante lo smoke.
+Il manifest privato `deployment.json` della release riporta `status=verified`.
+Il recupero non è stato riavviato e la consegna dei restanti invii non è provata.
+Non riavviare il tracking finché resta la richiesta CAPTCHA.
 
 ```bash
 docker exec -e PYTHONPATH=/runtime-data/poste-refresh-20261112/tools:/app/worker:/app/backend \
