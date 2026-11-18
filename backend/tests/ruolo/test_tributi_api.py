@@ -44,11 +44,6 @@ if "geoalchemy2.shape" not in sys.modules:
     sys.modules["geoalchemy2"] = geoalchemy2_module
     sys.modules["geoalchemy2.shape"] = geoalchemy2_shape_module
 
-if "shapefile" not in sys.modules:
-    shapefile_module = ModuleType("shapefile")
-    shapefile_module.Reader = object
-    sys.modules["shapefile"] = shapefile_module
-
 try:
     import pypdf  # noqa: F401
 except ModuleNotFoundError:

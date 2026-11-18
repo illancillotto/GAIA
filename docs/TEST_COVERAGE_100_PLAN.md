@@ -1196,3 +1196,13 @@ test saltato. Le dipendenze `pymupdf`/`zxing-cpp` sono fissate in
 `scripts/ruolo/requirements-verify-td896.txt`; il job `backend.yml` le
 installa ed esegue il target, e scatta anche su `scripts/ruolo/**` e
 `tests/ruolo/**`. Il gate copre solo lo script, non il renderer PDF.
+
+## Suite Ruolo e tipi spaziali
+
+Il job backend usa PostgreSQL 16 con PostGIS 3.4, come il servizio di progetto.
+Per riprodurre la suite impostare `GAIA_TEST_POSTGRES_URL` su un database di
+test dedicato con l’estensione PostGIS installata nello schema `public`. La
+fixture degli avvisi crea tutte le tabelle in uno schema univoco per test e
+consulta anche `public` per i tipi e le funzioni PostGIS. Il test delle
+geometrie verifica i tre sottotipi e il loro SRID sul database, oltre alla
+rappresentazione testuale su SQLite.

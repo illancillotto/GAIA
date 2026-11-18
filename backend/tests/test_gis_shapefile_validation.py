@@ -142,6 +142,12 @@ def test_reader_failures_remain_validation_errors(failure):
         assert isinstance(cause, Exception)
         assert caught.value.detail == f"GIS shapefile validation failed: {cause}"
         if failure == "record_encoding":
-            assert isinstance(cause, UnicodeDecodeError)
+            # pyshp 3 wraps undecodable field bytes in its DBF-specific error.
+            if isinstance(cause, UnicodeDecodeError):
+                assert cause.object[cause.start : cause.end] == b"\xe0"
+            else:
+                assert isinstance(cause, shapefile.dbfFileException)
+                assert "decode" in str(cause).lower()
+                assert "citt" in str(cause)
         elif failure == "unknown_encoding":
             assert isinstance(cause, LookupError)

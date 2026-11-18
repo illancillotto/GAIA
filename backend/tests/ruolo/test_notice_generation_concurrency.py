@@ -77,11 +77,12 @@ def generation_engine():
     engine = create_engine(
         url,
         connect_args={
-            "options": f"-csearch_path={schema} -clock_timeout=3000 -cstatement_timeout=10000"
+            "options": f"-csearch_path={schema},public -clock_timeout=3000 -cstatement_timeout=10000"
         },
     )
     try:
-        _metadata().create_all(engine)
+        # Always create our own tables, even if names are also visible in public.
+        _metadata().create_all(engine, checkfirst=False)
         yield engine
     finally:
         engine.dispose()

@@ -32,7 +32,15 @@ def test_export_migration_matches_models_and_roundtrips(generation_engine):
                     column["name"]
                     for column in inspect(connection).get_columns(model.__tablename__)
                 } == set(model.__table__.columns.keys())
-            assert compare_metadata(MigrationContext.configure(connection), _metadata()) == []
+            inspector = inspect(connection)
+            local_tables = set(inspector.get_table_names(schema=inspector.default_schema_name))
+            context = MigrationContext.configure(
+                connection,
+                opts={"include_name": lambda name, kind, _: kind != "table" or name in local_tables},
+            )
+            assert compare_metadata(context, _metadata()) == []
             migration.downgrade()
-            assert NoticeGenerationExport.__tablename__ not in inspect(connection).get_table_names()
+            assert not inspect(connection).has_table(
+                NoticeGenerationExport.__tablename__, schema=inspector.default_schema_name
+            )
             migration.upgrade()

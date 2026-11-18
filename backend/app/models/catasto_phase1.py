@@ -4,35 +4,26 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, JSON, Numeric, String, Text, Uuid, UniqueConstraint, func, text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.types import TypeDecorator
 
 from app.core.database import Base
-
-try:
-    from geoalchemy2 import Geometry  # type: ignore
-except Exception:  # pragma: no cover
-    Geometry = None  # type: ignore[misc,assignment]
-
-
-class GeometryCompat(TypeDecorator):
-    def __init__(self, geometry_type: str) -> None:
-        super().__init__()
-        self.geometry_type = geometry_type
-
-    impl = Text
-    cache_ok = True
-
-    def load_dialect_impl(self, dialect):
-        if dialect.name == "postgresql" and Geometry is not None:
-            return dialect.type_descriptor(Geometry(self.geometry_type, srid=4326))
-        return dialect.type_descriptor(Text())
-
-
-MULTIPOLYGON_4326 = GeometryCompat("MULTIPOLYGON")
-POINT_4326 = GeometryCompat("POINT")
-LINESTRING_4326 = GeometryCompat("LINESTRING")
+from app.models.spatial_types import LINESTRING_4326, MULTIPOLYGON_4326, POINT_4326
 
 
 class CatImportBatch(Base):
@@ -53,7 +44,7 @@ class CatImportBatch(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("application_users.id"), nullable=True)
 
-    utenze: Mapped[list["CatUtenzaIrrigua"]] = relationship(back_populates="batch", cascade="all, delete-orphan")
+    utenze: Mapped[list[CatUtenzaIrrigua]] = relationship(back_populates="batch", cascade="all, delete-orphan")
 
 
 class CatSchemaContributo(Base):
@@ -65,7 +56,7 @@ class CatSchemaContributo(Base):
     tipo_calcolo: Mapped[str] = mapped_column(String(20), default="fisso", nullable=False)
     attivo: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    aliquote: Mapped[list["CatAliquota"]] = relationship(back_populates="schema", cascade="all, delete-orphan")
+    aliquote: Mapped[list[CatAliquota]] = relationship(back_populates="schema", cascade="all, delete-orphan")
 
 
 class CatAliquota(Base):
@@ -77,7 +68,7 @@ class CatAliquota(Base):
     aliquota: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    schema: Mapped["CatSchemaContributo"] = relationship(back_populates="aliquote")
+    schema: Mapped[CatSchemaContributo] = relationship(back_populates="aliquote")
 
 
 class CatDistretto(Base):
@@ -96,16 +87,16 @@ class CatDistretto(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    coefficienti: Mapped[list["CatDistrettoCoefficiente"]] = relationship(
+    coefficienti: Mapped[list[CatDistrettoCoefficiente]] = relationship(
         back_populates="distretto", cascade="all, delete-orphan"
     )
-    geometry_versions: Mapped[list["CatDistrettoGeometryVersion"]] = relationship(
+    geometry_versions: Mapped[list[CatDistrettoGeometryVersion]] = relationship(
         back_populates="distretto", cascade="all, delete-orphan"
     )
-    meter_reading_imports: Mapped[list["CatMeterReadingImport"]] = relationship(
+    meter_reading_imports: Mapped[list[CatMeterReadingImport]] = relationship(
         back_populates="distretto", cascade="all, delete-orphan"
     )
-    meter_readings: Mapped[list["CatMeterReading"]] = relationship(
+    meter_readings: Mapped[list[CatMeterReading]] = relationship(
         back_populates="distretto", cascade="all, delete-orphan"
     )
 
@@ -137,8 +128,8 @@ class CatDeliveryPoint(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    meter_readings: Mapped[list["CatMeterReading"]] = relationship(back_populates="delivery_point")
-    delivery_point_mappings: Mapped[list["CatMeterReadingDeliveryPointMapping"]] = relationship(
+    meter_readings: Mapped[list[CatMeterReading]] = relationship(back_populates="delivery_point")
+    delivery_point_mappings: Mapped[list[CatMeterReadingDeliveryPointMapping]] = relationship(
         back_populates="delivery_point", cascade="all, delete-orphan"
     )
 
@@ -216,7 +207,7 @@ class CatDistrettoGeometryVersion(Base):
     is_current: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    distretto: Mapped["CatDistretto"] = relationship(back_populates="geometry_versions")
+    distretto: Mapped[CatDistretto] = relationship(back_populates="geometry_versions")
 
 
 class CatDistrettoCoefficiente(Base):
@@ -228,7 +219,7 @@ class CatDistrettoCoefficiente(Base):
     ind_spese_fisse: Mapped[Decimal] = mapped_column(Numeric(6, 4), nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    distretto: Mapped["CatDistretto"] = relationship(back_populates="coefficienti")
+    distretto: Mapped[CatDistretto] = relationship(back_populates="coefficienti")
 
 
 class CatComune(Base):
@@ -282,11 +273,11 @@ class CatParticella(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    utenze: Mapped[list["CatUtenzaIrrigua"]] = relationship(back_populates="particella_record")
-    anomalie: Mapped[list["CatAnomalia"]] = relationship(back_populates="particella")
-    consorzio_units: Mapped[list["CatConsorzioUnit"]] = relationship(back_populates="particella_record")
-    comune: Mapped["CatComune | None"] = relationship(foreign_keys=[comune_id])
-    gis_saved_selection_items: Mapped[list["CatGisSavedSelectionItem"]] = relationship(
+    utenze: Mapped[list[CatUtenzaIrrigua]] = relationship(back_populates="particella_record")
+    anomalie: Mapped[list[CatAnomalia]] = relationship(back_populates="particella")
+    consorzio_units: Mapped[list[CatConsorzioUnit]] = relationship(back_populates="particella_record")
+    comune: Mapped[CatComune | None] = relationship(foreign_keys=[comune_id])
+    gis_saved_selection_items: Mapped[list[CatGisSavedSelectionItem]] = relationship(
         back_populates="particella_record"
     )
 
@@ -355,7 +346,7 @@ class CatAdeParticella(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    source_run: Mapped["CatAdeSyncRun | None"] = relationship(back_populates="particelle")
+    source_run: Mapped[CatAdeSyncRun | None] = relationship(back_populates="particelle")
 
 
 class CatAdeSyncRun(Base):
@@ -380,8 +371,8 @@ class CatAdeSyncRun(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    particelle: Mapped[list["CatAdeParticella"]] = relationship(back_populates="source_run")
-    alignment_audit_runs: Mapped[list["CatAdeAlignmentAuditRun"]] = relationship(back_populates="ade_run")
+    particelle: Mapped[list[CatAdeParticella]] = relationship(back_populates="source_run")
+    alignment_audit_runs: Mapped[list[CatAdeAlignmentAuditRun]] = relationship(back_populates="ade_run")
 
 
 class CatAdeAlignmentAuditRun(Base):
@@ -406,8 +397,8 @@ class CatAdeAlignmentAuditRun(Base):
     completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    ade_run: Mapped["CatAdeSyncRun"] = relationship(back_populates="alignment_audit_runs")
-    changes: Mapped[list["CatAdeAlignmentAuditChange"]] = relationship(
+    ade_run: Mapped[CatAdeSyncRun] = relationship(back_populates="alignment_audit_runs")
+    changes: Mapped[list[CatAdeAlignmentAuditChange]] = relationship(
         back_populates="audit_run",
         cascade="all, delete-orphan",
     )
@@ -439,7 +430,7 @@ class CatAdeAlignmentAuditChange(Base):
     after_state_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    audit_run: Mapped["CatAdeAlignmentAuditRun"] = relationship(back_populates="changes")
+    audit_run: Mapped[CatAdeAlignmentAuditRun] = relationship(back_populates="changes")
 
 
 class CatGisSavedSelection(Base):
@@ -460,7 +451,7 @@ class CatGisSavedSelection(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    items: Mapped[list["CatGisSavedSelectionItem"]] = relationship(
+    items: Mapped[list[CatGisSavedSelectionItem]] = relationship(
         back_populates="selection",
         cascade="all, delete-orphan",
         order_by="CatGisSavedSelectionItem.position",
@@ -484,8 +475,8 @@ class CatGisSavedSelectionItem(Base):
     source_row_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
     source_ref: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
-    selection: Mapped["CatGisSavedSelection"] = relationship(back_populates="items")
-    particella_record: Mapped["CatParticella"] = relationship(back_populates="gis_saved_selection_items")
+    selection: Mapped[CatGisSavedSelection] = relationship(back_populates="items")
+    particella_record: Mapped[CatParticella] = relationship(back_populates="gis_saved_selection_items")
 
 
 class CatParticellaHistory(Base):
@@ -551,14 +542,14 @@ class CatUtenzaIrrigua(Base):
     anomalia_importi: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    batch: Mapped["CatImportBatch"] = relationship(back_populates="utenze")
+    batch: Mapped[CatImportBatch] = relationship(back_populates="utenze")
     # Keep the textual cadastral identifier on `particella`; use a distinct ORM
     # relationship name to avoid shadowing the column attribute.
-    particella_record: Mapped["CatParticella | None"] = relationship(back_populates="utenze")
-    anomalie: Mapped[list["CatAnomalia"]] = relationship(back_populates="utenza")
-    occupancies: Mapped[list["CatConsorzioOccupancy"]] = relationship(back_populates="utenza_record")
-    intestatari_annuali: Mapped[list["CatUtenzaIntestatario"]] = relationship(back_populates="utenza_record")
-    comune: Mapped["CatComune | None"] = relationship(foreign_keys=[comune_id])
+    particella_record: Mapped[CatParticella | None] = relationship(back_populates="utenze")
+    anomalie: Mapped[list[CatAnomalia]] = relationship(back_populates="utenza")
+    occupancies: Mapped[list[CatConsorzioOccupancy]] = relationship(back_populates="utenza_record")
+    intestatari_annuali: Mapped[list[CatUtenzaIntestatario]] = relationship(back_populates="utenza_record")
+    comune: Mapped[CatComune | None] = relationship(foreign_keys=[comune_id])
 
     @property
     def ha_anomalie(self) -> bool:
@@ -627,16 +618,16 @@ class CatConsorzioUnit(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    particella_record: Mapped["CatParticella | None"] = relationship(back_populates="consorzio_units")
-    comune: Mapped["CatComune | None"] = relationship(foreign_keys=[comune_id])
-    source_comune: Mapped["CatComune | None"] = relationship(foreign_keys=[source_comune_id])
-    segments: Mapped[list["CatConsorzioUnitSegment"]] = relationship(
+    particella_record: Mapped[CatParticella | None] = relationship(back_populates="consorzio_units")
+    comune: Mapped[CatComune | None] = relationship(foreign_keys=[comune_id])
+    source_comune: Mapped[CatComune | None] = relationship(foreign_keys=[source_comune_id])
+    segments: Mapped[list[CatConsorzioUnitSegment]] = relationship(
         back_populates="unit", cascade="all, delete-orphan"
     )
-    occupancies: Mapped[list["CatConsorzioOccupancy"]] = relationship(
+    occupancies: Mapped[list[CatConsorzioOccupancy]] = relationship(
         back_populates="unit", cascade="all, delete-orphan"
     )
-    terreno_rows: Mapped[list["CatCapacitasTerrenoRow"]] = relationship(back_populates="unit")
+    terreno_rows: Mapped[list[CatCapacitasTerrenoRow]] = relationship(back_populates="unit")
 
 
 class CatConsorzioUnitSegment(Base):
@@ -663,8 +654,8 @@ class CatConsorzioUnitSegment(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    unit: Mapped["CatConsorzioUnit"] = relationship(back_populates="segments")
-    occupancies: Mapped[list["CatConsorzioOccupancy"]] = relationship(back_populates="segment")
+    unit: Mapped[CatConsorzioUnit] = relationship(back_populates="segments")
+    occupancies: Mapped[list[CatConsorzioOccupancy]] = relationship(back_populates="segment")
 
 
 class CatConsorzioOccupancy(Base):
@@ -700,9 +691,9 @@ class CatConsorzioOccupancy(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    unit: Mapped["CatConsorzioUnit"] = relationship(back_populates="occupancies")
-    segment: Mapped["CatConsorzioUnitSegment | None"] = relationship(back_populates="occupancies")
-    utenza_record: Mapped["CatUtenzaIrrigua | None"] = relationship(back_populates="occupancies")
+    unit: Mapped[CatConsorzioUnit] = relationship(back_populates="occupancies")
+    segment: Mapped[CatConsorzioUnitSegment | None] = relationship(back_populates="occupancies")
+    utenza_record: Mapped[CatUtenzaIrrigua | None] = relationship(back_populates="occupancies")
 
 
 class CatCapacitasTerrenoRow(Base):
@@ -734,8 +725,8 @@ class CatCapacitasTerrenoRow(Base):
     collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    unit: Mapped["CatConsorzioUnit | None"] = relationship(back_populates="terreno_rows")
-    detail_snapshots: Mapped[list["CatCapacitasTerrenoDetail"]] = relationship(back_populates="terreno_row")
+    unit: Mapped[CatConsorzioUnit | None] = relationship(back_populates="terreno_rows")
+    detail_snapshots: Mapped[list[CatCapacitasTerrenoDetail]] = relationship(back_populates="terreno_row")
 
 
 class CatCapacitasGridSnapshot(Base):
@@ -758,7 +749,7 @@ class CatCapacitasGridSnapshot(Base):
     imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    rows: Mapped[list["CatCapacitasGridRow"]] = relationship(back_populates="snapshot", cascade="all, delete-orphan")
+    rows: Mapped[list[CatCapacitasGridRow]] = relationship(back_populates="snapshot", cascade="all, delete-orphan")
 
 
 class CatCapacitasGridRow(Base):
@@ -810,9 +801,9 @@ class CatCapacitasGridRow(Base):
     raw_payload_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    snapshot: Mapped["CatCapacitasGridSnapshot"] = relationship(back_populates="rows")
-    unit: Mapped["CatConsorzioUnit | None"] = relationship()
-    occupancy: Mapped["CatConsorzioOccupancy | None"] = relationship()
+    snapshot: Mapped[CatCapacitasGridSnapshot] = relationship(back_populates="rows")
+    unit: Mapped[CatConsorzioUnit | None] = relationship()
+    occupancy: Mapped[CatConsorzioOccupancy | None] = relationship()
 
 
 class CatCapacitasCertificato(Base):
@@ -836,7 +827,7 @@ class CatCapacitasCertificato(Base):
     collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    intestatari_snapshots: Mapped[list["CatCapacitasIntestatario"]] = relationship(
+    intestatari_snapshots: Mapped[list[CatCapacitasIntestatario]] = relationship(
         back_populates="certificato", cascade="all, delete-orphan"
     )
 
@@ -866,7 +857,7 @@ class CatCapacitasIntestatario(Base):
     collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    certificato: Mapped["CatCapacitasCertificato"] = relationship(back_populates="intestatari_snapshots")
+    certificato: Mapped[CatCapacitasCertificato] = relationship(back_populates="intestatari_snapshots")
 
 
 class CatUtenzaIntestatario(Base):
@@ -904,7 +895,7 @@ class CatUtenzaIntestatario(Base):
     raw_payload_json: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    utenza_record: Mapped["CatUtenzaIrrigua"] = relationship(back_populates="intestatari_annuali")
+    utenza_record: Mapped[CatUtenzaIrrigua] = relationship(back_populates="intestatari_annuali")
 
 
 class CatMeterReadingImport(Base):
@@ -927,8 +918,8 @@ class CatMeterReadingImport(Base):
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error_report: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
 
-    distretto: Mapped["CatDistretto | None"] = relationship(back_populates="meter_reading_imports")
-    readings: Mapped[list["CatMeterReading"]] = relationship(
+    distretto: Mapped[CatDistretto | None] = relationship(back_populates="meter_reading_imports")
+    readings: Mapped[list[CatMeterReading]] = relationship(
         back_populates="import_record", cascade="all, delete-orphan"
     )
 
@@ -1009,10 +1000,10 @@ class CatMeterReading(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    import_record: Mapped["CatMeterReadingImport | None"] = relationship(back_populates="readings")
-    distretto: Mapped["CatDistretto | None"] = relationship(back_populates="meter_readings")
-    delivery_point: Mapped["CatDeliveryPoint | None"] = relationship(back_populates="meter_readings")
-    manual_audits: Mapped[list["CatMeterReadingManualAudit"]] = relationship(
+    import_record: Mapped[CatMeterReadingImport | None] = relationship(back_populates="readings")
+    distretto: Mapped[CatDistretto | None] = relationship(back_populates="meter_readings")
+    delivery_point: Mapped[CatDeliveryPoint | None] = relationship(back_populates="meter_readings")
+    manual_audits: Mapped[list[CatMeterReadingManualAudit]] = relationship(
         back_populates="meter_reading", cascade="all, delete-orphan"
     )
 
@@ -1030,7 +1021,7 @@ class CatMeterReadingManualAudit(Base):
     new_values: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
 
-    meter_reading: Mapped["CatMeterReading"] = relationship(back_populates="manual_audits")
+    meter_reading: Mapped[CatMeterReading] = relationship(back_populates="manual_audits")
 
 
 class CatMeterReadingDeliveryPointMapping(Base):
@@ -1057,7 +1048,7 @@ class CatMeterReadingDeliveryPointMapping(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    delivery_point: Mapped["CatDeliveryPoint"] = relationship(back_populates="delivery_point_mappings")
+    delivery_point: Mapped[CatDeliveryPoint] = relationship(back_populates="delivery_point_mappings")
 
 
 class CatDeliveryPointsImportConfig(Base):
@@ -1112,7 +1103,7 @@ class CatCapacitasTerrenoDetail(Base):
     collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
-    terreno_row: Mapped["CatCapacitasTerrenoRow | None"] = relationship(back_populates="detail_snapshots")
+    terreno_row: Mapped[CatCapacitasTerrenoRow | None] = relationship(back_populates="detail_snapshots")
 
 
 class CatAnomalia(Base):
@@ -1135,8 +1126,8 @@ class CatAnomalia(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    particella: Mapped["CatParticella | None"] = relationship(back_populates="anomalie")
-    utenza: Mapped["CatUtenzaIrrigua | None"] = relationship(back_populates="anomalie")
+    particella: Mapped[CatParticella | None] = relationship(back_populates="anomalie")
+    utenza: Mapped[CatUtenzaIrrigua | None] = relationship(back_populates="anomalie")
 
 
 __all__ = [
@@ -1148,26 +1139,26 @@ __all__ = [
     "CatCapacitasIntestatario",
     "CatCapacitasTerrenoDetail",
     "CatCapacitasTerrenoRow",
-    "CatDistretto",
-    "CatDistrettoGeometryVersion",
-    "CatDistrettoCoefficiente",
+    "CatConsorzioOccupancy",
+    "CatConsorzioUnit",
+    "CatConsorzioUnitSegment",
     "CatDeliveryPoint",
     "CatDeliveryPointsImportConfig",
     "CatDeliveryPointsImportJob",
-    "CatDuiCurrent",
+    "CatDistretto",
+    "CatDistrettoCoefficiente",
+    "CatDistrettoGeometryVersion",
     "CatDui2026Current",
+    "CatDuiCurrent",
+    "CatGisSavedSelection",
+    "CatGisSavedSelectionItem",
+    "CatImportBatch",
+    "CatIntestatario",
     "CatIrrigationCanal",
     "CatMeterReading",
     "CatMeterReadingDeliveryPointMapping",
     "CatMeterReadingImport",
     "CatMeterReadingManualAudit",
-    "CatGisSavedSelection",
-    "CatGisSavedSelectionItem",
-    "CatConsorzioOccupancy",
-    "CatConsorzioUnit",
-    "CatConsorzioUnitSegment",
-    "CatImportBatch",
-    "CatIntestatario",
     "CatParticella",
     "CatParticellaGisFlag",
     "CatParticellaHistory",

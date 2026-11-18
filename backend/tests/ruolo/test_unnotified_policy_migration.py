@@ -69,7 +69,9 @@ config = Config()
 config.set_main_option("script_location", sys.argv[1])
 scripts = ScriptDirectory.from_config(config)
 paths = [("20261019_1400", "20261005_1500"), ("20261019_1500", "20261019_1400"), ("20261019_1500", "20261007_1800")]
-print(json.dumps([scripts.get_heads()] + [
+head_histories = [[rev.revision for rev in scripts.iterate_revisions(head, "base")]
+                  for head in scripts.get_heads()]
+print(json.dumps([head_histories] + [
     [step.revision.revision for step in scripts._upgrade_revs(target, current)]
     for target, current in paths
 ]))
@@ -82,9 +84,13 @@ print(json.dumps([scripts.get_heads()] + [
         check=False,
     )
     assert process.returncode == 0, process.stderr
-    heads, isolated, remaining, current = json.loads(process.stdout)
-    # Later migrations may follow the merge; the history must still have a single head.
-    assert len(heads) == 1
+    histories, isolated, remaining, current = json.loads(process.stdout)
+    # Both independent branches inherit the Tributi merge and may advance separately.
+    assert all("20261019_1500" in history for history in histories)
+    assert sorted(("20261107_0900" in h, "20261109_1000" in h) for h in histories) == [
+        (False, True),
+        (True, False),
+    ]
     assert isolated == ["20261019_1400"]
     assert remaining == [
         "20261006_1200",
