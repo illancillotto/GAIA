@@ -296,7 +296,7 @@ describe("campaign Utenze detail page characterization", () => {
     mocks.getUtenzeSubject.mockResolvedValue(company);
     render(<UtenzeSubjectDetailPage />);
     expect(await screen.findByText("Acme SRL")).toBeInTheDocument();
-    expect(screen.getByLabelText("Ragione sociale")).toHaveValue("Acme SRL");
+    await waitFor(() => expect(screen.getByLabelText("Ragione sociale")).toHaveValue("Acme SRL"));
     expect(screen.getByTestId("breadcrumb")).toHaveTextContent("12345678901");
     expect(screen.queryByTestId("anpr")).not.toBeInTheDocument();
   });

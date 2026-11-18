@@ -1,8 +1,21 @@
 import { expect, test } from "@playwright/test";
 import { collaborator, dailyRecord } from "./presenze-operations.fixtures";
 
+const workedDay = {
+  ...dailyRecord,
+  work_date: "2026-08-26",
+  punches: [{
+    id: "00000000-0000-0000-0000-000000000301",
+    daily_record_id: dailyRecord.id,
+    sequence: 1,
+    entry_time: "08:00",
+    exit_time: "15:00",
+    terminal_label: null,
+  }],
+};
+
 test("manual voucher and background INAZ correction survive refresh without double count", async ({ page }) => {
-  let record = { ...dailyRecord, work_date: "2026-08-26", meal_voucher_manual: false, meal_voucher_automatic: true, meal_voucher_count: 1, meal_voucher_sources: ["automatic"], effective_extra_minutes: 120, operational_status: "blocking", operational_missing_minutes: 60, detail_anomalies: [{ anomaliagiornata: "OREM-Ore mancanti" }] };
+  let record = { ...workedDay, meal_voucher_manual: false, meal_voucher_automatic: true, meal_voucher_count: 1, meal_voucher_sources: ["automatic"], effective_extra_minutes: 120, operational_status: "blocking", operational_missing_minutes: 60, detail_anomalies: [{ anomaliagiornata: "OREM-Ore mancanti" }] };
   let job: Record<string, unknown> | null = null;
   let queued = 0;
   let saved = 0;
@@ -114,7 +127,7 @@ test("shift assignment reports conflicts, refreshes the month and respects GATE 
 
 
 test("an owner without global scope cannot submit employee-wide shift assignments", async ({ page }) => {
-  const record = { ...dailyRecord, work_date: "2026-08-26", owner_user_id: 12, shift_worker_type: "none" };
+  const record = { ...workedDay, owner_user_id: 12, shift_worker_type: "none" };
   let submissions = 0;
   await page.addInitScript(() => window.localStorage.setItem("gaia.access_token", "owner-test-session"));
   await page.route("**/api/**", async route => {
