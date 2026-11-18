@@ -1,11 +1,11 @@
 import ipaddress
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlparse
 
 from fastapi import HTTPException, status
-from sqlalchemy import or_, select
+from sqlalchemy import Select, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.datetime_compat import UTC
@@ -19,6 +19,7 @@ from app.modules.network.models import (
     NetworkScanDevice,
     NetworkTrackedSubject,
 )
+from app.modules.network.router.helpers.activity_stats import TrackedActivityStats
 from app.modules.network.router.helpers.arp_timeline import (
     _arp_rapid_reappearances as _arp_rapid_reappearances,
 )
@@ -28,7 +29,10 @@ from app.modules.network.router.helpers.arp_timeline import (
 from app.modules.network.router.helpers.arp_timeline import (
     _build_arp_timeline_item,
 )
-from app.modules.network.router.helpers.devices import _resolve_device_label
+from app.modules.network.router.helpers.devices import (
+    _resolve_device_label,
+    _serialize_scan_history,
+)
 from app.modules.network.router.helpers.endpoints import (
     _extract_event_traffic,
     _resolve_firewall_event_endpoint_labels,
@@ -327,40 +331,12 @@ def _build_tracked_subject_activity_summary(
     limit: int = 25,
 ) -> NetworkTrackedSubjectActivitySummary:
     window_start = datetime.now(timezone.utc) - timedelta(hours=window_hours)  # noqa: UP017 - preserve legacy AST
-    event_query = select(NetworkFirewallEvent).where(NetworkFirewallEvent.observed_at >= window_start)
-    if subject.entity_type == "device" and subject.device_id and subject.value:
-        event_query = event_query.where(
-            or_(
-                NetworkFirewallEvent.device_id == subject.device_id,
-                NetworkFirewallEvent.src_ip == subject.value,
-                NetworkFirewallEvent.dst_ip == subject.value,
-            )
-        )
-    elif subject.entity_type == "ip":
-        event_query = event_query.where(
-            or_(
-                NetworkFirewallEvent.src_ip == subject.normalized_value,
-                NetworkFirewallEvent.dst_ip == subject.normalized_value,
-            )
-        )
-    elif subject.entity_type in {"domain", "url"}:
-        event_query = event_query.where(NetworkFirewallEvent.raw_payload.ilike(f"%{subject.normalized_value}%"))
+    event_query = _tracked_activity_event_query(subject, window_start)
 
     events = db.scalars(event_query.order_by(NetworkFirewallEvent.observed_at.desc())).all()
 
     matched_events: list[NetworkTrackedSubjectActivityEvent] = []
-    total_events = 0
-    allowed_events = 0
-    blocked_events = 0
-    suspicious_events = 0
-    vpn_suspected_events = 0
-    proxy_suspected_events = 0
-    tor_suspected_events = 0
-    encrypted_dns_events = 0
-    total_bytes_in = 0
-    total_bytes_out = 0
-    last_observed_at: datetime | None = None
-    detection_counter: Counter[str] = Counter()
+    stats = TrackedActivityStats()
     watchlist_entries = _active_detection_watchlist_entries(db)
 
     for event in events:
@@ -375,31 +351,13 @@ def _build_tracked_subject_activity_summary(
             parsed,
             watchlist_entries=watchlist_entries,
         )
-        total_events += 1
+        stats.total_events += 1
         matched_on, matched_value = match
         bytes_in, bytes_out = _tracked_activity_traffic(subject, event, parsed)
 
-        total_bytes_in += bytes_in
-        total_bytes_out += bytes_out
-        if last_observed_at is None:
-            last_observed_at = event.observed_at
-
-        lowered_type = event.event_type.lower()
-        if "allow" in lowered_type:
-            allowed_events += 1
-        if "deny" in lowered_type or "denied" in lowered_type or "block" in lowered_type or "drop" in lowered_type:
-            blocked_events += 1
-        if detection_tags:
-            suspicious_events += 1
-            detection_counter.update(detection_tags)
-            if "vpn_suspected" in detection_tags:
-                vpn_suspected_events += 1
-            if "proxy_suspected" in detection_tags:
-                proxy_suspected_events += 1
-            if "tor_suspected" in detection_tags:
-                tor_suspected_events += 1
-            if "encrypted_dns" in detection_tags:
-                encrypted_dns_events += 1
+        stats.record_traffic(event, bytes_in, bytes_out)
+        stats.record_event_type(event.event_type)
+        stats.record_detection_tags(detection_tags)
 
         if len(matched_events) < limit:
             src_label, dst_label = _resolve_firewall_event_endpoint_labels(
@@ -431,22 +389,32 @@ def _build_tracked_subject_activity_summary(
                 )
             )
 
-    return NetworkTrackedSubjectActivitySummary(
-        window_hours=window_hours,
-        total_events=total_events,
-        allowed_events=allowed_events,
-        blocked_events=blocked_events,
-        suspicious_events=suspicious_events,
-        vpn_suspected_events=vpn_suspected_events,
-        proxy_suspected_events=proxy_suspected_events,
-        tor_suspected_events=tor_suspected_events,
-        encrypted_dns_events=encrypted_dns_events,
-        bytes_in=total_bytes_in,
-        bytes_out=total_bytes_out,
-        last_observed_at=last_observed_at,
-        top_detection_tags=[tag for tag, _ in detection_counter.most_common(4)],
-        recent_events=matched_events,
-    )
+    return stats.build_summary(window_hours, matched_events)
+
+
+def _tracked_activity_event_query(
+    subject: NetworkTrackedSubject, window_start: datetime,
+) -> Select[tuple[NetworkFirewallEvent]]:
+    event_query = select(NetworkFirewallEvent).where(NetworkFirewallEvent.observed_at >= window_start)
+    if subject.entity_type == "device" and subject.device_id and subject.value:
+        event_query = event_query.where(
+            or_(
+                NetworkFirewallEvent.device_id == subject.device_id,
+                NetworkFirewallEvent.src_ip == subject.value,
+                NetworkFirewallEvent.dst_ip == subject.value,
+            )
+        )
+    elif subject.entity_type == "ip":
+        event_query = event_query.where(
+            or_(
+                NetworkFirewallEvent.src_ip == subject.normalized_value,
+                NetworkFirewallEvent.dst_ip == subject.normalized_value,
+            )
+        )
+    elif subject.entity_type in {"domain", "url"}:
+        event_query = event_query.where(NetworkFirewallEvent.raw_payload.ilike(f"%{subject.normalized_value}%"))
+
+    return event_query
 
 
 def _tracked_activity_traffic(
@@ -495,18 +463,7 @@ def _serialize_tracked_subject(
         created_at=subject.created_at,
         updated_at=subject.updated_at,
         activity_summary=_build_tracked_subject_activity_summary(db, subject, window_hours=window_hours) if include_activity_summary else None,
-        scan_history=[
-            {
-                "scan_id": item.scan_id,
-                "observed_at": item.observed_at,
-                "status": item.status,
-                "hostname": item.hostname,
-                "ip_address": item.ip_address,
-                "mac_address": item.mac_address,
-                "open_ports": item.open_ports,
-            }
-            for item in scan_history
-        ],
+        scan_history=_serialize_scan_history(scan_history),
     )
 
 

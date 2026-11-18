@@ -1,5 +1,7 @@
 """Freeze tracked IP/domain/URL normalization and error boundaries."""
 
+from ipaddress import IPv6Address
+
 import pytest
 from fastapi import HTTPException
 
@@ -11,7 +13,9 @@ from app.modules.network.router.helpers import tracking
     [
         ("ip", " 192.168.1.1 ", "192.168.1.1"),
         ("ip", " 2001:4860:0000:0000:0000:0000:0000:8888 ", "2001:4860::8888"),
-        ("ip", "::ffff:192.0.2.1", "::ffff:c000:201"),
+        # Python versions differ in how they render the mapped IPv4 suffix.
+        ("ip", "::ffff:192.0.2.1", str(IPv6Address("::ffff:c000:201"))),
+        ("ip", "::ffff:c000:201", str(IPv6Address("::ffff:192.0.2.1"))),
         ("ip", "fe80::1%eth0", "fe80::1%eth0"),
         ("domain", " Example.COM... ", "example.com"),
         ("domain", " HTTPS://User:pass@Example.COM:bad/path?q=1 ", "example.com"),

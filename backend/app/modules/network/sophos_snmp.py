@@ -97,6 +97,10 @@ async def _snmp_get_values_async(host: str, port: int, community: str, oids: lis
     )
     if error_indication or error_status:
         return {}
+    return _decode_snmp_values(oids, var_binds)
+
+
+def _decode_snmp_values(oids: list[dict[str, Any]], var_binds: Any) -> dict[str, str]:
     oid_map = {item["oid"]: item["key"] for item in oids}
     values: dict[str, str] = {}
     for name, value in var_binds:

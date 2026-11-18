@@ -4,7 +4,7 @@ import logging
 import queue
 import socketserver
 import threading
-from typing import Callable
+from collections.abc import Callable
 
 from sqlalchemy.orm import Session
 
@@ -87,25 +87,28 @@ class SophosSyslogListener:
     def handle_message(self, message: str, client_ip: str | None = None) -> None:
         db = self._session_factory()
         try:
-            policy = get_sophos_runtime_policy(db)
-            if not policy.syslog_should_ingest:
-                logger.debug(
-                    "Skipping Sophos syslog ingest from %s because runtime policy disabled processing (window=%s).",
-                    client_ip or "unknown",
-                    policy.is_within_window,
-                )
-                return
-            ingest_sophos_syslog(
-                db,
-                message=message,
-                firewall_name=self._firewall_name,
-                management_ip=self._management_ip or client_ip,
-            )
+            self._ingest_message(db, message, client_ip)
         except Exception:
             logger.exception("Failed to ingest Sophos syslog message from %s", client_ip or "unknown")
             db.rollback()
         finally:
             db.close()
+
+    def _ingest_message(self, db: Session, message: str, client_ip: str | None) -> None:
+        policy = get_sophos_runtime_policy(db)
+        if not policy.syslog_should_ingest:
+            logger.debug(
+                "Skipping Sophos syslog ingest from %s because runtime policy disabled processing (window=%s).",
+                client_ip or "unknown",
+                policy.is_within_window,
+            )
+            return
+        ingest_sophos_syslog(
+            db,
+            message=message,
+            firewall_name=self._firewall_name,
+            management_ip=self._management_ip or client_ip,
+        )
 
 
 class _SophosSyslogUDPHandler(socketserver.BaseRequestHandler):

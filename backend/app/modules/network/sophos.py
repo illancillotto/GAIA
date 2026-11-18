@@ -1,19 +1,24 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 import json
 import logging
 import re
 import shlex
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.modules.network.detection import default_watchlist_items, event_detection_tags
-from app.modules.network.models import NetworkAlert, NetworkDetectionWatchlist, NetworkDevice, NetworkFirewall, NetworkFirewallEvent
+from app.modules.network.models import (
+    NetworkAlert,
+    NetworkDetectionWatchlist,
+    NetworkDevice,
+    NetworkFirewall,
+    NetworkFirewallEvent,
+)
 
-UTC = timezone.utc
 _KV_PATTERN = re.compile(r"([A-Za-z0-9_]+)=(\".*?\"|'.*?'|\S+)")
 _SEVERITY_WEIGHTS = {"info": 0, "warning": 1, "danger": 2, "critical": 3}
 _SYSLOG_PREFIX_PATTERN = re.compile(
@@ -85,16 +90,19 @@ def _active_watchlist_entries(db: Session) -> list[tuple[str, str, str, str]]:
     return [(item.category, item.rule_mode, item.match_type, item.pattern) for item in items]
 
 
+def _unquote_syslog_value(value: str) -> str:
+    if value[:1] not in {'"', "'"} or value[-1:] != value[:1]:
+        return value
+    try:
+        return shlex.split(value)[0]
+    except ValueError:
+        return value[1:-1]
+
+
 def parse_sophos_syslog_message(message: str) -> dict[str, str]:
     parsed: dict[str, str] = {}
     for key, raw_value in _KV_PATTERN.findall(message):
-        value = raw_value
-        if value[:1] in {'"', "'"} and value[-1:] == value[:1]:
-            try:
-                value = shlex.split(value)[0]
-            except ValueError:
-                value = value[1:-1]
-        parsed[key] = value
+        parsed[key] = _unquote_syslog_value(raw_value)
     return parsed
 
 

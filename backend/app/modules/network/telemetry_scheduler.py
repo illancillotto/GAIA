@@ -2,16 +2,19 @@ from __future__ import annotations
 
 import inspect
 import logging
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import suppress
-from typing import Any, Callable
+from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from app.core.config import settings
 from app.core.database import engine
-from app.modules.network.telemetry_rollups import prune_network_firewall_events, refresh_network_firewall_hourly_rollups
+from app.modules.network.telemetry_rollups import (
+    prune_network_firewall_events,
+    refresh_network_firewall_hourly_rollups,
+)
 
 logger = logging.getLogger(__name__)
 NETWORK_TELEMETRY_ROLLUP_LOCK_KEY = 2200615
@@ -32,12 +35,7 @@ async def _run_job_wrapper(get_db: Callable[[], Any]) -> None:
         lock_acquired = True
         if engine.dialect.name == "postgresql":
             lock_connection = engine.raw_connection()
-            cursor = lock_connection.cursor()
-            try:
-                cursor.execute("SELECT pg_try_advisory_lock(%s)", (NETWORK_TELEMETRY_ROLLUP_LOCK_KEY,))
-                lock_acquired = bool(cursor.fetchone()[0])
-            finally:
-                cursor.close()
+            lock_acquired = _try_acquire_telemetry_lock(lock_connection)
         if not lock_acquired:
             logger.info("Network telemetry rollup job skipped because another worker already holds the execution lock")
             return
@@ -57,17 +55,30 @@ async def _run_job_wrapper(get_db: Callable[[], Any]) -> None:
             if inspect.isawaitable(result):
                 await result
         if lock_connection is not None:
-            with suppress(Exception):
-                cursor = lock_connection.cursor()
-                try:
-                    cursor.execute("SELECT pg_advisory_unlock(%s)", (NETWORK_TELEMETRY_ROLLUP_LOCK_KEY,))
-                finally:
-                    cursor.close()
-            with suppress(Exception):
-                lock_connection.close()
+            _release_telemetry_lock(lock_connection)
         if generator is not None:
             with suppress(StopIteration):
                 next(generator)
+
+
+def _try_acquire_telemetry_lock(lock_connection: Any) -> bool:
+    cursor = lock_connection.cursor()
+    try:
+        cursor.execute("SELECT pg_try_advisory_lock(%s)", (NETWORK_TELEMETRY_ROLLUP_LOCK_KEY,))
+        return bool(cursor.fetchone()[0])
+    finally:
+        cursor.close()
+
+
+def _release_telemetry_lock(lock_connection: Any) -> None:
+    with suppress(Exception):
+        cursor = lock_connection.cursor()
+        try:
+            cursor.execute("SELECT pg_advisory_unlock(%s)", (NETWORK_TELEMETRY_ROLLUP_LOCK_KEY,))
+        finally:
+            cursor.close()
+    with suppress(Exception):
+        lock_connection.close()
 
 
 async def register_network_telemetry_scheduler(scheduler: AsyncIOScheduler, get_db: Callable[[], Any]) -> None:

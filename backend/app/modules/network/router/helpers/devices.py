@@ -2,6 +2,7 @@ import ipaddress
 import json
 import urllib.error
 import urllib.request
+from collections.abc import Iterable
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -78,21 +79,25 @@ def _serialize_device(
         "assigned_user": _serialize_assigned_user(device.assigned_user) if device.assigned_user else None,
         "retired_at": device.retired_at,
         "positions": [DevicePositionResponse.model_validate(position) for position in positions or []],
-        "scan_history": [
-            {
-                "scan_id": item.scan_id,
-                "observed_at": item.observed_at,
-                "status": item.status,
-                "hostname": item.hostname,
-                "ip_address": item.ip_address,
-                "mac_address": item.mac_address,
-                "open_ports": item.open_ports,
-            }
-            for item in scan_history or []
-        ],
+        "scan_history": _serialize_scan_history(scan_history or []),
         "traffic_summary": traffic_summary,
     }
     return NetworkDeviceResponse.model_validate(payload)
+
+
+def _serialize_scan_history(items: Iterable[NetworkScanDevice]) -> list[dict[str, Any]]:
+    return [
+        {
+            "scan_id": item.scan_id,
+            "observed_at": item.observed_at,
+            "status": item.status,
+            "hostname": item.hostname,
+            "ip_address": item.ip_address,
+            "mac_address": item.mac_address,
+            "open_ports": item.open_ports,
+        }
+        for item in items
+    ]
 
 
 def _extract_rdap_entity_names(payload: dict[str, Any]) -> list[str]:

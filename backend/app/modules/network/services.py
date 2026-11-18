@@ -238,10 +238,8 @@ def _guess_operating_system(open_ports: Iterable[int]) -> str | None:
     port_set = set(open_ports)
     if 3389 in port_set:
         return "Windows"
-    if 445 in port_set and 22 in port_set:
-        return "Linux/Unix server"
     if 445 in port_set:
-        return "Windows or SMB appliance"
+        return "Linux/Unix server" if 22 in port_set else "Windows or SMB appliance"
     if 22 in port_set:
         return "Linux/Unix"
     if 80 in port_set or 443 in port_set:
@@ -605,18 +603,23 @@ def _classify_http_identity(title: str | None, server: str | None, device_name: 
     return vendor, model_name, operating_system
 
 
+def _follow_http_meta_refresh(client: Any, response: Any, body: str, follow_url: str) -> tuple[Any, str]:
+    try:
+        refresh_response = client.get(follow_url, headers={"User-Agent": "GAIA-Network-Monitor/1.0"})
+        if refresh_response.status_code < 500:
+            response = refresh_response
+            body = refresh_response.text
+    except Exception:
+        pass
+    return response, body
+
+
 def _resolve_http_metadata(ip_address: str, open_ports: Iterable[int]) -> EnrichmentMetadata:
     if httpx is None:
         return EnrichmentMetadata()
 
     ports = set(open_ports)
-    candidates: list[tuple[str, int]] = []
-    if 80 in ports:
-        candidates.append(("http", 80))
-    if 443 in ports:
-        candidates.append(("https", 443))
-    if not candidates:
-        return EnrichmentMetadata()
+    candidates = [(scheme, port) for scheme, port in (("http", 80), ("https", 443)) if port in ports]
 
     for scheme, port in candidates:
         base_url = f"{scheme}://{ip_address}:{port}/"
@@ -632,13 +635,7 @@ def _resolve_http_metadata(ip_address: str, open_ports: Iterable[int]) -> Enrich
                 refresh_target = _extract_meta_refresh_target(body)
                 if refresh_target:
                     follow_url = refresh_target if refresh_target.startswith("http") else f"{scheme}://{ip_address}:{port}{refresh_target}"
-                    try:
-                        refresh_response = client.get(follow_url, headers={"User-Agent": "GAIA-Network-Monitor/1.0"})
-                        if refresh_response.status_code < 500:
-                            response = refresh_response
-                            body = refresh_response.text
-                    except Exception:
-                        pass
+                    response, body = _follow_http_meta_refresh(client, response, body, follow_url)
         except Exception:
             continue
 
@@ -921,16 +918,8 @@ def discover_hosts(
 
     if scan_type == "arp":
         discovered = _run_nmap_arp_scan(resolved_range)
-        if discovered:
-            return discovered
-
-        discovered = _run_scapy_scan(resolved_range)
-        if discovered:
-            return discovered
-
-        return _fallback_hosts()
-
-    discovered = _run_nmap_scan(resolved_range, resolved_ports)
+    else:
+        discovered = _run_nmap_scan(resolved_range, resolved_ports)
     if discovered:
         return discovered
 
@@ -978,13 +967,13 @@ def _build_diff(previous_items: list[NetworkScanDevice], current_items: list[Net
     for key in keys:
         before = previous_map.get(key)
         after = current_map.get(key)
-        if before is None and after is not None:
+        if before is None:
             new_items.append({"key": key, "before": None, "after": after, "change_type": "new"})
             continue
-        if before is not None and after is None:
+        if after is None:
             missing_items.append({"key": key, "before": before, "after": None, "change_type": "missing"})
             continue
-        if before is not None and after is not None and _snapshot_payload_changed(before, after):
+        if _snapshot_payload_changed(before, after):
             changed_items.append({"key": key, "before": before, "after": after, "change_type": "changed"})
 
     summary = {

@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.api.deps import require_active_user
 from app.core.database import get_db
@@ -112,15 +113,8 @@ def create_tracked_subject(
 ) -> NetworkTrackedSubjectResponse:
     _require_network_module(current_user)
 
-    device: NetworkDevice | None = None
-    value = payload.value.strip() if payload.value else None
-    normalized_value = value
-    if payload.entity_type == "device":
-        device = db.get(NetworkDevice, payload.device_id)
-        if device is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
-        normalized_value = str(device.id)
-        value = device.ip_address
+    device, value, normalized_value = _resolve_tracking_target(db, payload)
+    if device is not None:
         legacy_subject = db.scalar(
             select(NetworkTrackedSubject).where(
                 NetworkTrackedSubject.entity_type == "ip",
@@ -132,19 +126,7 @@ def create_tracked_subject(
             reconciled_subject, _ = _reconcile_legacy_ip_tracked_subject(db, legacy_subject)
             db.commit()
             db.refresh(reconciled_subject)
-            if payload.label is not None:
-                reconciled_subject.label = payload.label or None
-            if payload.notes is not None:
-                reconciled_subject.notes = payload.notes or None
-            reconciled_subject.is_active = True
-            db.add(reconciled_subject)
-            db.commit()
-            db.refresh(reconciled_subject)
-            return _serialize_tracked_subject(db, reconciled_subject, include_activity_summary=False)
-    else:
-        if value is None:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Missing tracking value")
-        normalized_value = _normalize_tracked_value(payload.entity_type, value)
+            return _reactivate_tracked_subject(db, reconciled_subject, payload)
 
     existing = db.scalar(
         select(NetworkTrackedSubject).where(
@@ -153,18 +135,7 @@ def create_tracked_subject(
         )
     )
     if existing is not None:
-        if payload.label is not None:
-            existing.label = payload.label or None
-        if payload.notes is not None:
-            existing.notes = payload.notes or None
-        existing.is_active = True
-        if device is not None:
-            existing.device_id = device.id
-            existing.value = device.ip_address
-        db.add(existing)
-        db.commit()
-        db.refresh(existing)
-        return _serialize_tracked_subject(db, existing, include_activity_summary=False)
+        return _reactivate_tracked_subject(db, existing, payload, device)
 
     subject = NetworkTrackedSubject(
         entity_type=payload.entity_type,
@@ -176,6 +147,46 @@ def create_tracked_subject(
         device_id=device.id if device is not None else None,
         created_by_user_id=current_user.id,
     )
+    db.add(subject)
+    db.commit()
+    db.refresh(subject)
+    return _serialize_tracked_subject(db, subject, include_activity_summary=False)
+
+
+def _resolve_tracking_target(
+    db: Session,
+    payload: NetworkTrackedSubjectCreateRequest,
+) -> tuple[NetworkDevice | None, str | None, str | None]:
+    device: NetworkDevice | None = None
+    value = payload.value.strip() if payload.value else None
+    normalized_value = value
+    if payload.entity_type == "device":
+        device = db.get(NetworkDevice, payload.device_id)
+        if device is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
+        normalized_value = str(device.id)
+        value = device.ip_address
+    else:
+        if value is None:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Missing tracking value")
+        normalized_value = _normalize_tracked_value(payload.entity_type, value)
+    return device, value, normalized_value
+
+
+def _reactivate_tracked_subject(
+    db: Session,
+    subject: NetworkTrackedSubject,
+    payload: NetworkTrackedSubjectCreateRequest,
+    device: NetworkDevice | None = None,
+) -> NetworkTrackedSubjectResponse:
+    if payload.label is not None:
+        subject.label = payload.label or None
+    if payload.notes is not None:
+        subject.notes = payload.notes or None
+    subject.is_active = True
+    if device is not None:
+        subject.device_id = device.id
+        subject.value = device.ip_address
     db.add(subject)
     db.commit()
     db.refresh(subject)
@@ -312,77 +323,91 @@ def get_vpn_bypass_summary(
         search=None,
         entity_type=None,
     )
-    suspicious_subjects = 0
-    vpn_subjects = 0
-    proxy_subjects = 0
-    tor_subjects = 0
-    encrypted_dns_subjects = 0
-    total_suspicious_events = 0
+    counts = {
+        "suspicious_subjects": 0,
+        "vpn_subjects": 0,
+        "proxy_subjects": 0,
+        "tor_subjects": 0,
+        "encrypted_dns_subjects": 0,
+        "total_suspicious_events": 0,
+    }
     for subject in subjects:
-        activity = subject.activity_summary or NetworkTrackedSubjectActivitySummary(window_hours=window_hours)
-        if activity.suspicious_events > 0:
-            suspicious_subjects += 1
-            total_suspicious_events += activity.suspicious_events
-        if activity.vpn_suspected_events > 0:
-            vpn_subjects += 1
-        if activity.proxy_suspected_events > 0:
-            proxy_subjects += 1
-        if activity.tor_suspected_events > 0:
-            tor_subjects += 1
-        if activity.encrypted_dns_events > 0:
-            encrypted_dns_subjects += 1
+        _accumulate_bypass_subject(counts, subject, window_hours)
 
-    open_alerts = db.scalar(
-        select(func.count()).select_from(NetworkAlert).where(
-            NetworkAlert.status == "open",
-            NetworkAlert.alert_type.in_([
-                "VPN_BYPASS_SUSPECTED",
-                "VPN_BYPASS_TRANSIENT_DEVICE",
-                "ARP_EPHEMERAL_DEVICE",
-                "ARP_MAC_CHANGE_SUSPECTED",
-                "ARP_IP_ROTATION_SUSPECTED",
-            ]),
-        )
-    ) or 0
-    transient_device_alerts = db.scalar(
-        select(func.count()).select_from(NetworkAlert).where(
-            NetworkAlert.status == "open",
-            NetworkAlert.alert_type == "VPN_BYPASS_TRANSIENT_DEVICE",
-        )
-    ) or 0
-    arp_ephemeral_alerts = db.scalar(
-        select(func.count()).select_from(NetworkAlert).where(
-            NetworkAlert.status == "open",
-            NetworkAlert.alert_type == "ARP_EPHEMERAL_DEVICE",
-        )
-    ) or 0
-    arp_identity_alerts = db.scalar(
-        select(func.count()).select_from(NetworkAlert).where(
-            NetworkAlert.status == "open",
-            NetworkAlert.alert_type == "ARP_MAC_CHANGE_SUSPECTED",
-        )
-    ) or 0
-    arp_spoofing_alerts = db.scalar(
-        select(func.count()).select_from(NetworkAlert).where(
-            NetworkAlert.status == "open",
-            NetworkAlert.alert_type == "ARP_IP_ROTATION_SUSPECTED",
-        )
-    ) or 0
-    watchlist_rules = db.scalar(select(func.count()).select_from(NetworkDetectionWatchlist)) or 0
+    alert_counts = _get_bypass_alert_counts(db)
     return NetworkVpnBypassSummary(
-        total_subjects=suspicious_subjects,
-        vpn_subjects=vpn_subjects,
-        proxy_subjects=proxy_subjects,
-        tor_subjects=tor_subjects,
-        encrypted_dns_subjects=encrypted_dns_subjects,
-        total_suspicious_events=total_suspicious_events,
-        open_alerts=open_alerts,
-        transient_device_alerts=transient_device_alerts,
-        arp_ephemeral_alerts=arp_ephemeral_alerts,
-        arp_identity_alerts=arp_identity_alerts,
-        arp_spoofing_alerts=arp_spoofing_alerts,
-        watchlist_rules=watchlist_rules,
+        total_subjects=counts["suspicious_subjects"],
+        vpn_subjects=counts["vpn_subjects"],
+        proxy_subjects=counts["proxy_subjects"],
+        tor_subjects=counts["tor_subjects"],
+        encrypted_dns_subjects=counts["encrypted_dns_subjects"],
+        total_suspicious_events=counts["total_suspicious_events"],
+        **alert_counts,
     )
+
+
+def _accumulate_bypass_subject(
+    counts: dict[str, int], subject: NetworkTrackedSubjectResponse, window_hours: int,
+) -> None:
+    activity = subject.activity_summary or NetworkTrackedSubjectActivitySummary(window_hours=window_hours)
+    if activity.suspicious_events > 0:
+        counts["suspicious_subjects"] += 1
+        counts["total_suspicious_events"] += activity.suspicious_events
+    if activity.vpn_suspected_events > 0:
+        counts["vpn_subjects"] += 1
+    if activity.proxy_suspected_events > 0:
+        counts["proxy_subjects"] += 1
+    if activity.tor_suspected_events > 0:
+        counts["tor_subjects"] += 1
+    if activity.encrypted_dns_events > 0:
+        counts["encrypted_dns_subjects"] += 1
+
+
+def _get_bypass_alert_counts(db: Session) -> dict[str, int]:
+    open_alerts = _count_open_bypass_alerts(
+        db,
+        NetworkAlert.alert_type.in_([
+            "VPN_BYPASS_SUSPECTED",
+            "VPN_BYPASS_TRANSIENT_DEVICE",
+            "ARP_EPHEMERAL_DEVICE",
+            "ARP_MAC_CHANGE_SUSPECTED",
+            "ARP_IP_ROTATION_SUSPECTED",
+        ]),
+    )
+    transient_device_alerts = _count_open_bypass_alerts(
+        db,
+        NetworkAlert.alert_type == "VPN_BYPASS_TRANSIENT_DEVICE",
+    )
+    arp_ephemeral_alerts = _count_open_bypass_alerts(
+        db,
+        NetworkAlert.alert_type == "ARP_EPHEMERAL_DEVICE",
+    )
+    arp_identity_alerts = _count_open_bypass_alerts(
+        db,
+        NetworkAlert.alert_type == "ARP_MAC_CHANGE_SUSPECTED",
+    )
+    arp_spoofing_alerts = _count_open_bypass_alerts(
+        db,
+        NetworkAlert.alert_type == "ARP_IP_ROTATION_SUSPECTED",
+    )
+    watchlist_rules = db.scalar(select(func.count()).select_from(NetworkDetectionWatchlist)) or 0
+    return {
+        "open_alerts": open_alerts,
+        "transient_device_alerts": transient_device_alerts,
+        "arp_ephemeral_alerts": arp_ephemeral_alerts,
+        "arp_identity_alerts": arp_identity_alerts,
+        "arp_spoofing_alerts": arp_spoofing_alerts,
+        "watchlist_rules": watchlist_rules,
+    }
+
+
+def _count_open_bypass_alerts(db: Session, alert_filter: ColumnElement[bool]) -> int:
+    return db.scalar(
+        select(func.count()).select_from(NetworkAlert).where(
+            NetworkAlert.status == "open",
+            alert_filter,
+        )
+    ) or 0
 
 
 @router.get("/vpn-bypass/arp-timeline", response_model=list[NetworkArpTimelineItem])

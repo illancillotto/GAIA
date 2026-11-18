@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
@@ -132,10 +132,7 @@ def patch_device(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
 
     updates = payload.model_dump(exclude_unset=True)
-    if "assigned_user_id" in updates and updates["assigned_user_id"] is not None:
-        assigned_user = db.get(ApplicationUser, updates["assigned_user_id"])
-        if assigned_user is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assigned user not found")
+    _validate_device_assignee(db, updates)
     if updates.get("lifecycle_state") == "retired":
         updates["assigned_user_id"] = None
         updates["is_monitored"] = False
@@ -157,6 +154,13 @@ def patch_device(
     )
 
 
+def _validate_device_assignee(db: Session, updates: dict[str, Any]) -> None:
+    if "assigned_user_id" in updates and updates["assigned_user_id"] is not None:
+        assigned_user = db.get(ApplicationUser, updates["assigned_user_id"])
+        if assigned_user is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assigned user not found")
+
+
 @router.post("/devices/bulk-update", response_model=NetworkDeviceBulkUpdateResponse)
 def bulk_update_devices(
     payload: NetworkDeviceBulkUpdateRequest,
@@ -172,12 +176,7 @@ def bulk_update_devices(
 
     notes_append = payload.notes_append.strip() if payload.notes_append else None
     for device in devices:
-        if payload.is_known_device is not None:
-            device.is_known_device = payload.is_known_device
-        if payload.location_hint is not None:
-            device.location_hint = payload.location_hint or None
-        if notes_append:
-            device.notes = f"{device.notes}\n{notes_append}".strip() if device.notes else notes_append
+        _apply_device_bulk_fields(device, payload, notes_append)
         sync_network_device_alert_state(db, device)
         db.add(device)
 
@@ -189,6 +188,17 @@ def bulk_update_devices(
         updated_count=len(devices),
         items=[_serialize_device(device) for device in devices],
     )
+
+
+def _apply_device_bulk_fields(
+    device: NetworkDevice, payload: NetworkDeviceBulkUpdateRequest, notes_append: str | None,
+) -> None:
+    if payload.is_known_device is not None:
+        device.is_known_device = payload.is_known_device
+    if payload.location_hint is not None:
+        device.location_hint = payload.location_hint or None
+    if notes_append:
+        device.notes = f"{device.notes}\n{notes_append}".strip() if device.notes else notes_append
 
 
 @router.put("/devices/{device_id}/position", response_model=DevicePositionResponse)

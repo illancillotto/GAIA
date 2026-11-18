@@ -13,7 +13,10 @@ from app.modules.network.models import (
     NetworkFirewallEvent,
     NetworkTrackedSubject,
 )
-from app.modules.network.router.helpers.devices import _resolve_device_label
+from app.modules.network.router.helpers.devices import (
+    _resolve_device_label,
+    _serialize_scan_history,
+)
 from app.modules.network.router.helpers.endpoints import (
     _extract_event_traffic,
     _resolve_firewall_event_endpoint_labels,
@@ -106,18 +109,7 @@ def _build_inferred_tracked_subjects(
                 device_id = device.id
                 device_label = _resolve_device_label(device)[0]
                 resolved_label = device_label
-                scan_history = [
-                    {
-                        "scan_id": item.scan_id,
-                        "observed_at": item.observed_at,
-                        "status": item.status,
-                        "hostname": item.hostname,
-                        "ip_address": item.ip_address,
-                        "mac_address": item.mac_address,
-                        "open_ports": item.open_ports,
-                    }
-                    for item in get_device_scan_history(db, device.id, limit=8)
-                ]
+                scan_history = _serialize_scan_history(get_device_scan_history(db, device.id, limit=8))
             bucket = {
                 "id": _synthetic_subject_id(candidate_type, normalized_value),
                 "entity_type": candidate_type,
@@ -423,18 +415,7 @@ def _build_inferred_assigned_arp_subjects(
                     ),
                     window_hours=window_hours,
                 ),
-                scan_history=[
-                    {
-                        "scan_id": item.scan_id,
-                        "observed_at": item.observed_at,
-                        "status": item.status,
-                        "hostname": item.hostname,
-                        "ip_address": item.ip_address,
-                        "mac_address": item.mac_address,
-                        "open_ports": item.open_ports,
-                    }
-                    for item in get_device_scan_history(db, device.id, limit=8)
-                ],
+                scan_history=_serialize_scan_history(get_device_scan_history(db, device.id, limit=8)),
             )
         )
     return items
