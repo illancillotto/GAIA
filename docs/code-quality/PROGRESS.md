@@ -12629,3 +12629,21 @@ cambi di comportamento, una per hotspot.
   sincronizzata: il comando baseline rifiuterebbe quella regressione estranea.
 - Debito residuo invariato: `getModuleSections` cyclomatic 26/cognitive 49,
   `AvvisoDetailPage` 32/36, `PartitaCard` 19/18/88. Nessun'altra slice avviata.
+
+### 2026-11-18 — integrazione delle modifiche Presenze
+
+Il confronto con il merge-base `686e529e` rilevava 20 regressioni in nove
+file. Le quattro unità seguenti conservano i contratti di calendario, scrittura
+sotto lock, serializzazione e autorizzazione del buono manuale.
+
+| Unità | Misura prima e dopo | Verifica |
+| --- | --- | --- |
+| Calendario operai | `classify_daily_record` da 56/50 a 55/49 (cognitiva/ciclomatica). La policy del giorno passa da 6 a 5 parametri e riceve template e regole valide insieme. | 144 test mirati. Copertura statement e branch integrale su policy giornaliera, policy di calendario e motore di classificazione. |
+| Modifiche giornaliere web e GaTe | Route web da 29 a 26 LOC, patch GaTe da 14 a 10, audit del buono da 9 a 7. La verifica della timbratura avviene sulla giornata già bloccata. | 183 test, incluse concorrenza e revoca su PostgreSQL. Copertura integrale del servizio condiviso e della verifica di presenza. |
+| Contratti giornalieri | I modelli giornalieri risiedono nel modulo dedicato e restano importabili dalla facade. Il builder mobile passa da 33 a 30 LOC. | Confrontate le firme JSON Schema ordinate dei 99 modelli esposti. 205 test di serializzazione, dominio e migrazione passati. |
+| Controllo buono pasto | La cognitiva del componente passa da 23 a 7 e quella di `toggle` da 12 a 8. Rendering e scrittura usano la stessa regola di abilitazione. | Test del componente con copertura di 25 statement, 28 branch e 7 funzioni. |
+
+Il ratchet globale sulla baseline del merge-base passa prima della
+sincronizzazione. Le soglie, le eccezioni e il matcher sono quelli della
+candidata iniziale. La riorganizzazione dei modelli giornalieri è classificata
+`REORGANIZED_AND_CHARACTERIZED`.
