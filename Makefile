@@ -178,7 +178,7 @@ test-worker:
 	trap 'rm -rf "$$data_dir"' EXIT INT TERM; \
 	find "$$worker_dir/tests" -maxdepth 1 -type f -name 'test_*.py' -print | sort > "$$data_dir/test-files"; \
 	test -s "$$data_dir/test-files"; \
-	export PYTHONPATH="$$root/backend:$$worker_dir$${PYTHONPATH:+:$$PYTHONPATH}"; \
+	export PYTHONPATH="$$root/backend:$$worker_dir:$$root$${PYTHONPATH:+:$$PYTHONPATH}"; \
 	export COVERAGE_FILE="$$data_dir/.coverage"; \
 	while IFS= read -r test_file; do \
 		relative_test="$${test_file#$$worker_dir/}"; \
