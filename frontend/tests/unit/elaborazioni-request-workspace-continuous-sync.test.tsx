@@ -176,8 +176,7 @@ describe("ElaborazioneRequestWorkspace continuous sync", () => {
   test("uses compact mobile grids for AutoSync monitoring and configuration", async () => {
     render(<ContinuousCatastoSyncPanel />);
 
-    await screen.findByText("Attività AutoSync");
-    expect(screen.getByTestId("autosync-dashboard-shell")).toHaveClass("p-3");
+    expect(await screen.findByTestId("autosync-dashboard-shell")).toHaveClass("p-3");
     expect(screen.getByTestId("autosync-summary-metrics")).toHaveClass("grid-cols-2");
     expect(screen.getByTestId("autosync-scope-coverage")).toHaveClass("grid-cols-2");
     expect(screen.getByTestId("autosync-configuration-content")).toHaveClass("p-4");
