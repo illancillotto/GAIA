@@ -1206,3 +1206,9 @@ fixture degli avvisi crea tutte le tabelle in uno schema univoco per test e
 consulta anche `public` per i tipi e le funzioni PostGIS. Il test delle
 geometrie verifica i tre sottotipi e il loro SRID sul database, oltre alla
 rappresentazione testuale su SQLite.
+
+La CI crea nel servizio effimero i database `communications_test` e
+`parcel_history_test`, richiesti dalle rispettive fixture. Il job passa i
+relativi URL alla suite backend e usa `gaia_test` per gli schemi isolati
+WhatsApp, Poste e SISTER. Le prove di outbox e coda esercitano i lock e
+la concorrenza reali prima del gate di copertura per file.
