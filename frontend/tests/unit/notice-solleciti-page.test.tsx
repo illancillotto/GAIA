@@ -583,7 +583,12 @@ it("opens only the first previews of a large batch", async () => {
   expect(screen.getAllByRole("button", { name: "Chiudi anteprima" })).toHaveLength(5);
   fireEvent.click(screen.getByRole("button", { name: "Anteprima avviso" }));
   expect(screen.getAllByRole("button", { name: "Chiudi anteprima" })).toHaveLength(6);
-  expect(mocks.blob).toHaveBeenLastCalledWith("/ruolo/tributi/solleciti/items/item-5/download", expect.objectContaining({ method: "GET" }));
+  await waitFor(() => {
+    expect(mocks.blob).toHaveBeenLastCalledWith(
+      "/ruolo/tributi/solleciti/items/item-5/download",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
 });
 
 it("selects and unselects a whole batch within the Poste cap", () => {

@@ -245,7 +245,7 @@ describe("MePageContent", () => {
     render(<MePageContent initialTab="presenze" />);
 
     expect(await screen.findByRole("heading", { name: "Calendario mensile giornaliere" })).toBeInTheDocument();
-    expect(screen.getByText("Lun")).toBeInTheDocument();
+    expect(await screen.findByText("Lun")).toBeInTheDocument();
     expect(screen.getByText("Dom")).toBeInTheDocument();
     expect(screen.getByText("Ord 7.0 h")).toBeInTheDocument();
 

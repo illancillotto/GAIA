@@ -537,6 +537,7 @@ describe("R22 shared messages, cross-command and route races", () => {
   test("candidate command and empty guard preserve success; next nonempty save clears messages", async () => {
     await ready(); edit(); setPath("/initial/path"); savePath();
     await screen.findByText(pathMessage);
+    await screen.findByRole("button", { name: "Modifica" });
     edit();
     api.getUtenzeSubjectNasCandidates.mockRejectedValueOnce(new Error("Candidate failure after success"));
     search(); await screen.findByText("Candidate failure after success");
@@ -557,6 +558,7 @@ describe("R22 shared messages, cross-command and route races", () => {
   test("next import clears prior save success/error immediately", async () => {
     await ready(); edit(); setPath("/initial/path"); savePath();
     await screen.findByText(pathMessage);
+    await screen.findByRole("button", { name: "Modifica" });
     edit(); setPath(""); savePath();
     const pending = deferred<AnagraficaSubjectImportResult>();
     api.importUtenzeSubjectFromNas.mockReturnValueOnce(pending.promise);
